@@ -36,7 +36,7 @@ MergeTreeCNCHDataDumper::MergeTreeCNCHDataDumper(
 {
 }
 
-void MergeTreeCNCHDataDumper::writeDataFileHeader(WriteBuffer & to, MutableMergeTreeDataPartCNCHPtr & part)
+void MergeTreeCNCHDataDumper::writeDataFileHeader(WriteBuffer & to, MutableMergeTreeDataPartCNCHPtr & part) const
 {
     writeString(magic_code, to);
     writeIntBinary(version.toUnderType(), to);
@@ -44,7 +44,7 @@ void MergeTreeCNCHDataDumper::writeDataFileHeader(WriteBuffer & to, MutableMerge
     writeNull(MERGE_TREE_STORAGE_CNCH_DATA_HEADER_SIZE - to.count(), to);
 }
 
-void MergeTreeCNCHDataDumper::writeDataFileFooter(WriteBuffer & to, const CNCHDataMeta & meta)
+void MergeTreeCNCHDataDumper::writeDataFileFooter(WriteBuffer & to, const CNCHDataMeta & meta) const
 {
     writeIntBinary(meta.index_offset, to);
     writeIntBinary(meta.index_size, to);
@@ -105,7 +105,7 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
     const IMutableMergeTreeDataPartPtr & local_part,
     [[maybe_unused]]const HDFSConnectionParams & hdfs_params,
     bool is_temp_prefix,
-    const DiskPtr & remote_disk)
+    const DiskPtr & remote_disk) const
 {
     /// Load the local part checksum
     if (!local_part->deleted)
@@ -397,7 +397,7 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
     return new_part;
 }
 
-NamesAndTypesList MergeTreeCNCHDataDumper::getKeyColumns()
+NamesAndTypesList MergeTreeCNCHDataDumper::getKeyColumns() const
 {
     Names sort_key_columns_vec = data.getInMemoryMetadata().getSortingKeyColumns();
     std::set<String> key_columns(sort_key_columns_vec.cbegin(), sort_key_columns_vec.cend());
