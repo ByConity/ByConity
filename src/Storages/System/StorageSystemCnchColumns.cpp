@@ -69,15 +69,15 @@ void StorageSystemCnchColumns::fillData(MutableColumns & res_columns, ContextPtr
                     StoragePtr storage
                         = Catalog::CatalogFactory::getTableByDefinition(mutable_context, db, table_name, create_query);
 
-                    StorageMetadataPtr metadata = storage->getInMemoryMetadataPtr();
+                    StorageMetadataPtr metadata_snapshot = storage->getInMemoryMetadataPtr();
 
-                    cols_required_for_partition_key = metadata->getColumnsRequiredForPartitionKey();
-                    cols_required_for_sorting_key = metadata->getColumnsRequiredForSortingKey();
-                    cols_required_for_primary_key = metadata->getColumnsRequiredForPrimaryKey();
-                    cols_required_for_sampling = metadata->getColumnsRequiredForSampling();
+                    columns = metadata_snapshot->getColumns();
+
+                    cols_required_for_partition_key = metadata_snapshot->getColumnsRequiredForPartitionKey();
+                    cols_required_for_sorting_key = metadata_snapshot->getColumnsRequiredForSortingKey();
+                    cols_required_for_primary_key = metadata_snapshot->getColumnsRequiredForPrimaryKey();
+                    cols_required_for_sampling = metadata_snapshot->getColumnsRequiredForSampling();
                     column_sizes = storage->getColumnSizes();
-                    if (auto storage_concrete = dynamic_cast<const MergeTreeData *>(storage.get()))
-                        column_sizes = storage_concrete->getColumnSizes();
                 }
 
                 for (const auto & column : columns)
