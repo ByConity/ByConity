@@ -172,7 +172,7 @@ DumpedData CnchDataWriter::dumpCnchParts(
     {
         dump_pool.scheduleOrThrowOnError([&, i]() {
             auto & temp_staged_part = temp_staged_parts[i];
-            auto staged_part = dumper.dumpTempPart(temp_staged_part, context->getHdfsConnectionParams(), false, part_disks[i]);
+            auto staged_part = dumper.dumpTempPart(temp_staged_part, context->getHdfsConnectionParams(), false, part_disks[i + temp_parts.size()]);
             LOG_TRACE(storage.getLogger(), "Dumped part {}", temp_staged_part->name);
             result.staged_parts[i] = std::move(staged_part);
         });
