@@ -12,12 +12,7 @@ $CLICKHOUSE_CLIENT --multiquery <<'EOF'
 DROP TABLE IF EXISTS test_attach_detached_from_self;
 CREATE TABLE test_attach_detached_from_self (key Int, value Int) ENGINE = CnchMergeTree() PARTITION BY key ORDER BY (key, value);
 
-INSERT INTO test_attach_detached_from_self VALUES(0, 0);
-INSERT INTO test_attach_detached_from_self VALUES(0, 1);
-INSERT INTO test_attach_detached_from_self VALUES(0, 2);
-INSERT INTO test_attach_detached_from_self VALUES(1, 0);
-INSERT INTO test_attach_detached_from_self VALUES(1, 1);
-INSERT INTO test_attach_detached_from_self VALUES(1, 2);
+INSERT INTO test_attach_detached_from_self VALUES(0, 0) (0, 1) (0, 2) (1, 0) (1, 1) (1, 2);
 
 SELECT '---';
 SELECT * FROM test_attach_detached_from_self ORDER BY (key, value);

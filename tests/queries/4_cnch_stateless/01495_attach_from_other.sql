@@ -7,12 +7,7 @@ DROP TABLE IF EXISTS test_attach_other_tbl_detached_dest;
 CREATE TABLE test_attach_other_tbl_detached_src (key Int, value Int) ENGINE = CnchMergeTree() PARTITION BY (key) ORDER BY (key, value);
 CREATE TABLE test_attach_other_tbl_detached_dest (key Int, value Int) ENGINE = CnchMergeTree() PARTITION BY (key) ORDER BY (key, value);
 
-INSERT INTO test_attach_other_tbl_detached_src VALUES (0, 0);
-INSERT INTO test_attach_other_tbl_detached_src VALUES (0, 1);
-INSERT INTO test_attach_other_tbl_detached_src VALUES (0, 2);
-INSERT INTO test_attach_other_tbl_detached_src VALUES (1, 0);
-INSERT INTO test_attach_other_tbl_detached_src VALUES (1, 1);
-INSERT INTO test_attach_other_tbl_detached_src VALUES (1, 2);
+INSERT INTO test_attach_other_tbl_detached_src VALUES (0, 0) (0, 1) (0, 2) (1, 0) (1, 1) (1, 2);
 
 SELECT '---';
 SELECT * FROM test_attach_other_tbl_detached_src ORDER BY (key, value);
@@ -46,12 +41,7 @@ DROP TABLE IF EXISTS test_attach_from_others_active_1;
 CREATE TABLE test_attach_from_others_active_0(key Int, value Int) ENGINE = CnchMergeTree() partition by key ORDER BY (key, value);
 CREATE TABLE test_attach_from_others_active_1(key Int, value Int) ENGINE = CnchMergeTree() partition by key ORDER BY (key, value);
 
-INSERT INTO test_attach_from_others_active_0 VALUES(0, 0);
-INSERT INTO test_attach_from_others_active_0 VALUES(0, 1);
-INSERT INTO test_attach_from_others_active_0 VALUES(0, 2);
-INSERT INTO test_attach_from_others_active_0 VALUES(1, 0);
-INSERT INTO test_attach_from_others_active_0 VALUES(1, 1);
-INSERT INTO test_attach_from_others_active_0 VALUES(1, 2);
+INSERT INTO test_attach_from_others_active_0 VALUES (0, 0) (0, 1) (0, 2) (1, 0) (1, 1) (1, 2);
 
 SELECT '---';
 SELECT * FROM test_attach_from_others_active_0 ORDER BY (key, value);
@@ -78,10 +68,8 @@ DROP TABLE IF EXISTS test_replace_from_others_active_1;
 CREATE TABLE test_replace_from_others_active_0(key Int, value Int) ENGINE = CnchMergeTree() partition by key ORDER BY (key, value);
 CREATE TABLE test_replace_from_others_active_1(key Int, value Int) ENGINE = CnchMergeTree() partition by key ORDER BY (key, value);
 
-INSERT INTO test_replace_from_others_active_0 VALUES(0, 0);
-INSERT INTO test_replace_from_others_active_0 VALUES(1, 1);
-INSERT INTO test_replace_from_others_active_1 VALUES(0, 2);
-INSERT INTO test_replace_from_others_active_1 VALUES(1, 3);
+INSERT INTO test_replace_from_others_active_0 VALUES(0, 0) (1, 1);
+INSERT INTO test_replace_from_others_active_1 VALUES(0, 2) (1, 3);
 
 SELECT '---';
 SELECT * FROM test_replace_from_others_active_0 ORDER BY (key, value);
