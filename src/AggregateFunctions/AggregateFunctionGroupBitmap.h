@@ -18,7 +18,7 @@ template <typename T, typename Data>
 class AggregateFunctionBitmap final : public IAggregateFunctionDataHelper<Data, AggregateFunctionBitmap<T, Data>>
 {
 public:
-    AggregateFunctionBitmap(const DataTypePtr & type)
+    explicit AggregateFunctionBitmap(const DataTypePtr & type)
         : IAggregateFunctionDataHelper<Data, AggregateFunctionBitmap<T, Data>>({type}, {})
     {
     }
@@ -55,7 +55,7 @@ template <typename T, typename Data, typename Policy>
 class AggregateFunctionBitmapL2 final : public IAggregateFunctionDataHelper<Data, AggregateFunctionBitmapL2<T, Data, Policy>>
 {
 public:
-    AggregateFunctionBitmapL2(const DataTypePtr & type)
+    explicit AggregateFunctionBitmapL2(const DataTypePtr & type)
         : IAggregateFunctionDataHelper<Data, AggregateFunctionBitmapL2<T, Data, Policy>>({type}, {})
     {
     }
@@ -105,9 +105,17 @@ public:
         }
     }
 
-    void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf) const override { this->data(place).rbs.write(buf); }
+    void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf) const override
+    {
+        DB::writeBoolText(this->data(place).init, buf);
+        this->data(place).rbs.write(buf);
+    }
 
-    void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, Arena *) const override { this->data(place).rbs.read(buf); }
+    void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, Arena *) const override
+    {
+        DB::readBoolText(this->data(place).init, buf);
+        this->data(place).rbs.read(buf);
+    }
 
     void insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
