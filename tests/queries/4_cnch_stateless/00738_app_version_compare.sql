@@ -339,26 +339,7 @@ drop table test_app_version;
 
 
 create table test_app_version (version_1 String, version_2 String) Engine = CnchMergeTree order by tuple();
-insert into test_app_version values ('', '');
-insert into test_app_version values ('0', '0');
-insert into test_app_version values ('.', '6.4');
-insert into test_app_version values ('1.', '1.');
-insert into test_app_version values ('1.', '1.4');
-insert into test_app_version values ('1.', '1..');
-insert into test_app_version values ('9.0.1', '');
-insert into test_app_version values ('.1.', '1..');
-insert into test_app_version values ('123', '123');
-insert into test_app_version values ('1234', '123');
-insert into test_app_version values ('6.4', '6.4.');
-insert into test_app_version values ('9.0.1', '123');
-insert into test_app_version values ('6.4', '6.4.0');
-insert into test_app_version values ('6.4.0', '6.4');
-insert into test_app_version values ('0.7.1', '0.6.0');
-insert into test_app_version values ('10.0.0.1', '10.0.');
-insert into test_app_version values ('10.0.', '10.0.0.1');
-insert into test_app_version values ('9.0.1', '10.0.0.1');
-insert into test_app_version values ('10.0.0.1', '10.0.0');
-insert into test_app_version values ('10.0.0.1', '10.0.0.1');
+insert into test_app_version values ('', '') ('0', '0') ('.', '6.4') ('1.', '1.') ('1.', '1.4') ('1.', '1..') ('9.0.1', '') ('.1.', '1..') ('123', '123') ('1234', '123') ('6.4', '6.4.') ('9.0.1', '123') ('6.4', '6.4.0') ('6.4.0', '6.4') ('0.7.1', '0.6.0') ('10.0.0.1', '10.0.') ('10.0.', '10.0.0.1') ('9.0.1', '10.0.0.1') ('10.0.0.1', '10.0.0') ('10.0.0.1', '10.0.0.1');
 
 select 38;
 select version_1, '=',  version_2, AppVersionCompare(version_1, version_2,  '=') from test_app_version order by version_1, version_2;
