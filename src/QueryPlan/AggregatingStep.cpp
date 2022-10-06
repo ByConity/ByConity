@@ -4,6 +4,8 @@
 #include <Processors/Merges/AggregatingSortedTransform.h>
 #include <Processors/Merges/FinishAggregatingInOrderTransform.h>
 #include <Processors/QueryPipeline.h>
+#include <Processors/ResizeProcessor.h>
+#include <Processors/Transforms/CopyTransform.h>
 #include <Processors/Transforms/AggregatingInOrderTransform.h>
 #include <Processors/Transforms/AggregatingTransform.h>
 #include <Processors/Transforms/CubeTransform.h>
@@ -38,6 +40,24 @@ static ITransformingStep::Traits getTraits()
         {
             .preserves_number_of_rows = false,
         }};
+}
+
+static Block appendGroupingColumn(Block block, const GroupingSetsParamsList & params)
+{
+    if (params.empty())
+        return block;
+
+    Block res;
+
+    size_t rows = block.rows();
+    auto column = ColumnUInt64::create(rows);
+
+    res.insert({ColumnPtr(std::move(column)), std::make_shared<DataTypeUInt64>(), "__grouping_set"});
+
+    for (auto & col : block)
+        res.insert(std::move(col));
+
+    return res;
 }
 
 Aggregator::Params AggregatingStep::createParams(Block header_before_aggregation, AggregateDescriptions aggregates, Names group_by_keys)
@@ -84,6 +104,7 @@ AggregatingStep::AggregatingStep(
     const DataStream & input_stream_,
     Names keys_,
     Aggregator::Params params_,
+    GroupingSetsParamsList grouping_sets_params_,
     bool final_,
     size_t max_block_size_,
     size_t merge_threads_,
@@ -95,9 +116,10 @@ AggregatingStep::AggregatingStep(
     bool rollup_,
     NameToNameMap groupings_,
     bool)
-    : ITransformingStep(input_stream_, params_.getHeader(final_), getTraits(), false)
+    : ITransformingStep(input_stream_, appendGroupingColumn(params_.getHeader(final_), grouping_sets_params_), getTraits(), false)
     , keys(std::move(keys_))
     , params(std::move(params_))
+    , grouping_sets_params(std::move(grouping_sets_params_))
     , final(final_)
     , max_block_size(max_block_size_)
     , merge_threads(merge_threads_)
@@ -116,7 +138,7 @@ AggregatingStep::AggregatingStep(
 void AggregatingStep::setInputStreams(const DataStreams & input_streams_)
 {
     input_streams = input_streams_;
-    output_stream->header = params.getHeader(final);
+    output_stream->header = appendGroupingColumn(params.getHeader(final), grouping_sets_params);
 
     for (const auto & item : input_streams[0].header)
         if (groupings.contains(item.name))
@@ -222,6 +244,149 @@ void AggregatingStep::transformPipeline(QueryPipeline & pipeline, const BuildQue
       * 2. An aggregation is done with store of temporary data on the disk, and they need to be merged in a memory efficient way.
       */
     auto transform_params = std::make_shared<AggregatingTransformParams>(std::move(new_params), agg_final);
+
+    if (!grouping_sets_params.empty())
+    {
+        const size_t grouping_sets_size = grouping_sets_params.size();
+
+        const size_t streams = pipeline.getNumStreams();
+
+        auto input_header = pipeline.getHeader();
+        pipeline.transform([&](OutputPortRawPtrs ports)
+        {
+            Processors copiers;
+            copiers.reserve(ports.size());
+
+            for (auto * port : ports)
+            {
+                auto copier = std::make_shared<CopyTransform>(input_header, grouping_sets_size);
+                connect(*port, copier->getInputPort());
+                copiers.push_back(copier);
+            }
+
+            return copiers;
+        });
+
+        pipeline.transform([&](OutputPortRawPtrs ports)
+        {
+            assert(streams * grouping_sets_size == ports.size());
+            Processors processors;
+            for (size_t i = 0; i < grouping_sets_size; ++i)
+            {
+                Aggregator::Params params_for_set
+                {
+                    transform_params->params.src_header,
+                    grouping_sets_params[i].used_keys,
+                    transform_params->params.aggregates,
+                    transform_params->params.overflow_row,
+                    transform_params->params.max_rows_to_group_by,
+                    transform_params->params.group_by_overflow_mode,
+                    transform_params->params.group_by_two_level_threshold,
+                    transform_params->params.group_by_two_level_threshold_bytes,
+                    transform_params->params.max_bytes_before_external_group_by,
+                    transform_params->params.empty_result_for_aggregation_by_empty_set,
+                    transform_params->params.tmp_volume,
+                    transform_params->params.max_threads,
+                    transform_params->params.min_free_disk_space,
+                    transform_params->params.compile_aggregate_expressions,
+                    transform_params->params.min_count_to_compile_aggregate_expression
+                };
+                auto transform_params_for_set = std::make_shared<AggregatingTransformParams>(std::move(params_for_set), final);
+
+                if (streams > 1)
+                {
+                    auto many_data = std::make_shared<ManyAggregatedData>(streams);
+                    for (size_t j = 0; j < streams; ++j)
+                    {
+                        auto aggregation_for_set = std::make_shared<AggregatingTransform>(input_header, transform_params_for_set, many_data, j, merge_threads, temporary_data_merge_threads);
+                        // For each input stream we have `grouping_sets_size` copies, so port index
+                        // for transform #j should skip ports of first (j-1) streams.
+                        connect(*ports[i + grouping_sets_size * j], aggregation_for_set->getInputs().front());
+                        ports[i + grouping_sets_size * j] = &aggregation_for_set->getOutputs().front();
+                        processors.push_back(aggregation_for_set);
+                    }
+                }
+                else
+                {
+                    auto aggregation_for_set = std::make_shared<AggregatingTransform>(input_header, transform_params_for_set);
+                    connect(*ports[i], aggregation_for_set->getInputs().front());
+                    ports[i] = &aggregation_for_set->getOutputs().front();
+                    processors.push_back(aggregation_for_set);
+                }
+            }
+
+            if (streams > 1)
+            {
+                OutputPortRawPtrs new_ports;
+                new_ports.reserve(grouping_sets_size);
+
+                for (size_t i = 0; i < grouping_sets_size; ++i)
+                {
+                    size_t output_it = i;
+                    auto resize = std::make_shared<ResizeProcessor>(ports[output_it]->getHeader(), streams, 1);
+                    auto & inputs = resize->getInputs();
+
+                    for (auto input_it = inputs.begin(); input_it != inputs.end(); output_it += grouping_sets_size, ++input_it)
+                        connect(*ports[output_it], *input_it);
+                    new_ports.push_back(&resize->getOutputs().front());
+                    processors.push_back(resize);
+                }
+
+                ports.swap(new_ports);
+            }
+
+            assert(ports.size() == grouping_sets_size);
+            auto output_header = transform_params->getHeader();
+
+            for (size_t set_counter = 0; set_counter < grouping_sets_size; ++set_counter)
+            {
+                const auto & header = ports[set_counter]->getHeader();
+
+                /// Here we create a DAG which fills missing keys and adds `__grouping_set` column
+                auto dag = std::make_shared<ActionsDAG>(header.getColumnsWithTypeAndName());
+                ActionsDAG::NodeRawConstPtrs index;
+                index.reserve(output_header.columns() + 1);
+
+                auto grouping_col = ColumnConst::create(ColumnUInt64::create(1, set_counter), 0);
+                const auto * grouping_node = &dag->addColumn(
+                    {ColumnPtr(std::move(grouping_col)), std::make_shared<DataTypeUInt64>(), "__grouping_set"});
+
+                grouping_node = &dag->materializeNode(*grouping_node);
+                index.push_back(grouping_node);
+
+                size_t missign_column_index = 0;
+                const auto & missing_columns = grouping_sets_params[set_counter].missing_keys;
+
+                for (size_t i = 0; i < output_header.columns(); ++i)
+                {
+                    auto & col = output_header.getByPosition(i);
+                    if (missign_column_index < missing_columns.size() && missing_columns[missign_column_index] == i)
+                    {
+                        ++missign_column_index;
+                        auto column = ColumnConst::create(col.column->cloneResized(1), 0);
+                        const auto * node = &dag->addColumn({ColumnPtr(std::move(column)), col.type, col.name});
+                        node = &dag->materializeNode(*node);
+                        index.push_back(node);
+                    }
+                    else
+                        index.push_back(dag->getIndex()[header.getPositionByName(col.name)]);
+                }
+
+                dag->getIndex().swap(index);
+                auto expression = std::make_shared<ExpressionActions>(dag, build_settings.getActionsSettings());
+                auto transform = std::make_shared<ExpressionTransform>(header, expression);
+
+                connect(*ports[set_counter], transform->getInputPort());
+                processors.emplace_back(std::move(transform));
+            }
+
+            return processors;
+        });
+
+        aggregating = collector.detachProcessors(0);
+        return;
+    }
+
 
     if (group_by_info)
     {
@@ -428,6 +593,13 @@ void AggregatingStep::serialize(WriteBuffer & buf) const
         writeStringBinary(item.first, buf);
         writeStringBinary(item.second, buf);
     }
+
+    writeVarUInt(grouping_sets_params.size(), buf);
+    for (const auto & grouping_sets_param : grouping_sets_params)
+    {
+        writeBinary(grouping_sets_param.used_keys, buf);
+        writeBinary(grouping_sets_param.missing_keys, buf);
+    }
 }
 
 QueryPlanStepPtr AggregatingStep::deserialize(ReadBuffer & buf, ContextPtr context)
@@ -478,10 +650,22 @@ QueryPlanStepPtr AggregatingStep::deserialize(ReadBuffer & buf, ContextPtr conte
         readStringBinary(v, buf);
         groupings[k] = v;
     }
+
+    readVarUInt(size, buf);
+    GroupingSetsParamsList grouping_sets_params_;
+    for (size_t i = 0; i < size; ++i)
+    {
+        GroupingSetsParams param;
+        readBinary(param.used_keys, buf);
+        readBinary(param.used_keys, buf);
+        grouping_sets_params_.emplace_back(param);
+    }
+
     auto step = std::make_unique<AggregatingStep>(
         input_stream,
         keys,
         params,
+        grouping_sets_params_,
         final,
         max_block_size,
         merge_threads,

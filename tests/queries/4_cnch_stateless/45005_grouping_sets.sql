@@ -1,14 +1,9 @@
-set enable_optimizer=1;
-
 DROP DATABASE IF EXISTS test;
-
-
 
 DROP TABLE IF EXISTS grouping_sets;
 
 CREATE TABLE grouping_sets(`a` String, `b` Int32, `s` Int32)
     ENGINE = CnchMergeTree()
-    PARTITION BY `a`
     PRIMARY KEY `a`
     ORDER BY `a`
     SETTINGS index_granularity = 8192;
@@ -30,6 +25,7 @@ from(
 
 SELECT a, b+b, sum(s), count() from grouping_sets GROUP BY GROUPING SETS(a, b+b) ORDER BY a, b+b;
 
-SELECT a, b, sum(s), count() from grouping_sets GROUP BY a, b WITH GROUPING SETS ORDER BY a, b;
+-- WITH GROUPING SETS only support with optimizer
+-- SELECT a, b, sum(s), count() from grouping_sets GROUP BY a, b WITH GROUPING SETS ORDER BY a, b;
 
 DROP TABLE grouping_sets;

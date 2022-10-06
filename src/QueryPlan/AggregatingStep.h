@@ -13,6 +13,20 @@ using AggregatingTransformParamsPtr = std::shared_ptr<AggregatingTransformParams
 class WriteBuffer;
 class ReadBuffer;
 
+struct GroupingSetsParams
+{
+    GroupingSetsParams() = default;
+
+    GroupingSetsParams(ColumnNumbers used_keys_, ColumnNumbers missing_keys_) : used_keys(std::move(used_keys_)), missing_keys(std::move(missing_keys_)) { }
+
+    ColumnNumbers used_keys;
+    ColumnNumbers missing_keys;
+};
+
+using GroupingSetsParamsList = std::vector<GroupingSetsParams>;
+
+Block appendGroupingSetColumn(Block header);
+
 /// Aggregation. See AggregatingTransform.
 class AggregatingStep : public ITransformingStep
 {
@@ -20,6 +34,7 @@ public:
     AggregatingStep(
         const DataStream & input_stream_,
         Aggregator::Params params_,
+        GroupingSetsParamsList grouping_sets_params_,
         bool final_,
         size_t max_block_size_,
         size_t merge_threads_,
@@ -31,6 +46,7 @@ public:
             input_stream_,
             Names(),
             std::move(params_),
+            std::move(grouping_sets_params_),
             final_,
             max_block_size_,
             merge_threads_,
@@ -53,6 +69,7 @@ public:
             input_stream_,
             keys_,
             createParams(input_stream_.header, aggregates_, keys_),
+            GroupingSetsParamsList{},
             final_,
             0,
             0,
@@ -71,6 +88,7 @@ public:
         const DataStream & input_stream_,
         Names keys_,
         Aggregator::Params params_,
+        GroupingSetsParamsList grouping_sets_params_,
         bool final_,
         size_t max_block_size_,
         size_t merge_threads_,
@@ -113,6 +131,7 @@ private:
     Poco::Logger * log = &Poco::Logger::get("TableScanStep");
     Names keys;
     Aggregator::Params params;
+    GroupingSetsParamsList grouping_sets_params;
     bool final;
 
     size_t max_block_size;
