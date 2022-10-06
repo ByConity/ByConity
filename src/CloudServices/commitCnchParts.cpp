@@ -154,12 +154,14 @@ DumpedData CnchDataWriter::dumpCnchParts(
     MergeTreeCNCHDataDumper dumper(storage);
 
     watch.restart();
-    ThreadPool dump_pool(std::min(16UL, std::max(temp_staged_parts.size(), temp_parts.size())));
+    ThreadPool dump_pool(std::min(
+        static_cast<size_t>(storage.getSettings()->cnch_parallel_dumping_threads), std::max(temp_staged_parts.size(), temp_parts.size())));
     result.parts.resize(temp_parts.size());
+    /// TODO: only use pool if > 1 parts
     for (size_t i = 0; i < temp_parts.size(); ++i)
     {
         dump_pool.scheduleOrThrowOnError([&, i]() {
-            auto & temp_part = temp_parts[i];
+            const auto & temp_part = temp_parts[i];
             auto dumped_part = dumper.dumpTempPart(temp_part, context->getHdfsConnectionParams(), false, part_disks[i]);
             LOG_TRACE(storage.getLogger(), "Dumped part {}", temp_part->name);
             result.parts[i] = std::move(dumped_part);
@@ -168,15 +170,18 @@ DumpedData CnchDataWriter::dumpCnchParts(
     dump_pool.wait();
     // TODO: dump all bitmaps to one file to avoid creating too many small files on vfs
     result.bitmaps = dumpDeleteBitmaps(storage, temp_bitmaps);
+    result.staged_parts.resize(temp_staged_parts.size());
     for (size_t i = 0; i < temp_staged_parts.size(); ++i)
     {
         dump_pool.scheduleOrThrowOnError([&, i]() {
-            auto & temp_staged_part = temp_staged_parts[i];
-            auto staged_part = dumper.dumpTempPart(temp_staged_part, context->getHdfsConnectionParams(), false, part_disks[i + temp_parts.size()]);
-            LOG_TRACE(storage.getLogger(), "Dumped part {}", temp_staged_part->name);
+            const auto & temp_staged_part = temp_staged_parts[i];
+            auto staged_part
+                = dumper.dumpTempPart(temp_staged_part, context->getHdfsConnectionParams(), false, part_disks[i + temp_parts.size()]);
+            LOG_TRACE(storage.getLogger(), "Dumped staged part {}", temp_staged_part->name);
             result.staged_parts[i] = std::move(staged_part);
         });
     }
+    dump_pool.wait();
 
     LOG_DEBUG(
         storage.getLogger(),
