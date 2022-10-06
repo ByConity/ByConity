@@ -8,9 +8,7 @@
 #include <unordered_map>
 #include <mutex>
 
-namespace DB
-{
-namespace DaemonManager
+namespace DB::DaemonManager
 {
 
 class DaemonJobServerBGThread;
@@ -127,6 +125,7 @@ public:
     Result start();
     Result stop(bool force = false);
     Result remove(CnchBGThreadAction remove_type);
+    Result wakeup();
     bool sync(const ServerInfo & server_info);
 
     struct SyncAction
@@ -145,7 +144,7 @@ public:
 
 private:
     bool executeSyncAction(const SyncAction &);
-private:
+
     const StorageID storage_id;
     DaemonJobServerBGThread & daemon_job;
     CnchBGThreadStatus status;
@@ -156,6 +155,4 @@ private:
     mutable std::mutex mutex;
 };
 
-} // end namespace DaemonManager
-} // end namespace DB
-
+}

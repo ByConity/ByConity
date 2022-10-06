@@ -619,4 +619,21 @@ UInt32 CnchServerClient::reportDeduperHeartbeat(const StorageID & cnch_storage_i
 
     return response.code();
 }
+
+void CnchServerClient::executeOptimize(const StorageID & storage_id, const String & partition_id, bool enable_try)
+{
+    brpc::Controller cntl;
+    Protos::ExecuteOptimizeQueryReq request;
+    Protos::ExecuteOptimizeQueryResp response;
+
+    RPCHelpers::fillStorageID(storage_id, *request.mutable_storage_id());
+    request.set_partition_id(partition_id);
+    request.set_enable_try(enable_try);
+
+    stub->executeOptimize(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+}
+
 }

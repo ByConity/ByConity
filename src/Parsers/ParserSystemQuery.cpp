@@ -200,6 +200,7 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
 
         case Type::STOP_MERGES:
         case Type::START_MERGES:
+        case Type::REMOVE_MERGES:
         {
             String storage_policy_str;
             String volume_str;
@@ -224,6 +225,13 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
             res->volume = volume_str;
             if (res->volume.empty() && res->storage_policy.empty())
                 parseDatabaseAndTableName(pos, expected, res->database, res->table);
+            break;
+        }
+        case Type::START_GC:
+        case Type::STOP_GC:
+        case Type::FORCE_GC:
+        {
+            parseDatabaseAndTableName(pos, expected, res->database, res->table);
             break;
         }
 
@@ -287,7 +295,7 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
                 }
                 else
                     res->meta_ops.operation = MetastoreOperation::DROP_ALL_KEY;
-                
+
                 if (!parseDatabaseAndTableName(pos, expected, res->database, res->table))
                     return false;
             }
