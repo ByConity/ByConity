@@ -1,4 +1,4 @@
-
+SELECT '--General--';
 SELECT bitmapToArray(bitmapBuild([1, 2, 3, 4, 5]));
 SELECT bitmapToArray(bitmapAnd(bitmapBuild([1,2,3]),bitmapBuild([3,4,5])));
 SELECT bitmapToArray(bitmapOr(bitmapBuild([1,2,3]),bitmapBuild([3,4,5])));
@@ -13,6 +13,7 @@ SELECT bitmapAndCardinality(bitmapBuild([100, 200, 500]), bitmapBuild(CAST([100,
 SELECT bitmapToArray(bitmapAnd(bitmapBuild([100, 200, 500]), bitmapBuild(CAST([100, 200], 'Array(UInt16)'))));
 
 -- between column and expression test
+SELECT '--Bitmap V1--';
 DROP TABLE IF EXISTS bitmap_column_expr_test_community;
 CREATE TABLE bitmap_column_expr_test_community
 (
@@ -31,6 +32,7 @@ SELECT bitmapAndCardinality( z, bitmapBuild(cast([19,7] AS Array(UInt32))) ) FRO
 SELECT bitmapCardinality(bitmapAnd(bitmapBuild(cast([19,7] AS Array(UInt32))), z )) FROM bitmap_column_expr_test_community;
 SELECT bitmapCardinality(bitmapAnd(z, bitmapBuild(cast([19,7] AS Array(UInt32))))) FROM bitmap_column_expr_test_community;
 
+SELECT '--Bitmap V2--';
 DROP TABLE IF EXISTS bitmap_column_expr_test_community2;
 CREATE TABLE bitmap_column_expr_test_community2
 (
@@ -61,6 +63,7 @@ DROP TABLE IF EXISTS bitmap_test;
 DROP TABLE IF EXISTS bitmap_column_expr_test_community;
 DROP TABLE IF EXISTS bitmap_column_expr_test_community2;
 
+SELECT '--Bitmap Functions--';
 -- bitmapHasAny:
 ---- Empty
 SELECT bitmapHasAny(bitmapBuild([1, 2, 3, 5]), bitmapBuild(emptyArrayUInt8()));

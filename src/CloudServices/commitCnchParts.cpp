@@ -14,6 +14,7 @@
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Transaction/CnchWorkerTransaction.h>
 #include <Transaction/TxnTimestamp.h>
+#include "Disks/IDisk.h"
 
 namespace DB
 {
@@ -108,19 +109,33 @@ DumpedData CnchDataWriter::dumpCnchParts(
 
     auto txn_id = curr_txn->getTransactionID();
 
-    // write undo buffer first before dump to vfs
-    UndoResources undo_resources;
-    for (const auto & part : temp_parts)
+    /// Write undo buffer first before dump to vfs
+    std::vector<UndoResource> undo_resources;
+    undo_resources.reserve(temp_parts.size() + temp_bitmaps.size() + temp_staged_parts.size());
+    /// For local parts and stage parts, the remote parts can be at different disk,
+    /// so we record the disk name of each part in the undo buffer.
+    /// For the delete bitmap, it's always be dumped to the default disk
+    std::vector<DiskPtr> part_disks;
+    part_disks.reserve(temp_parts.size() + temp_staged_parts.size());
+    for (auto & part : temp_parts)
     {
         String part_name = part->info.getPartNameWithHintMutation();
-        undo_resources.emplace_back(txn_id, UndoResourceType::Part, part_name, part_name + "/");
+        auto disk = storage.getStoragePolicy()->getAnyDisk();
+        undo_resources.emplace_back(txn_id, UndoResourceType::Part, part_name, part_name + '/');
+        undo_resources.back().setDiskName(disk->getName());
+        part_disks.emplace_back(std::move(disk));
     }
-    for (const auto & bitmap : temp_bitmaps)
+    for (auto & bitmap : temp_bitmaps)
+    {
         undo_resources.emplace_back(bitmap->getUndoResource(txn_id));
-    for (const auto & staged_part : temp_staged_parts)
+    }
+    for (auto & staged_part : temp_staged_parts)
     {
         String part_name = staged_part->info.getPartNameWithHintMutation();
-        undo_resources.emplace_back(txn_id, UndoResourceType::StagedPart, part_name, part_name + "/");
+        auto disk = storage.getStoragePolicy()->getAnyDisk();
+        undo_resources.emplace_back(txn_id, UndoResourceType::StagedPart, part_name, part_name + '/');
+        undo_resources.back().setDiskName(disk->getName());
+        part_disks.emplace_back(std::move(disk));
     }
 
     try
@@ -134,24 +149,33 @@ DumpedData CnchDataWriter::dumpCnchParts(
         throw;
     }
 
-    /// Dump to shared storage
+    /// Parallel dumping to shared storage
     DumpedData result;
     MergeTreeCNCHDataDumper dumper(storage);
 
     watch.restart();
-    for (const auto & temp_part : temp_parts)
+    ThreadPool dump_pool(std::min(16UL, std::max(temp_staged_parts.size(), temp_parts.size())));
+    result.parts.resize(temp_parts.size());
+    for (size_t i = 0; i < temp_parts.size(); ++i)
     {
-        auto dumped_part = dumper.dumpTempPart(temp_part, context->getHdfsConnectionParams());
-        LOG_TRACE(storage.getLogger(), "Dumped part {}", temp_part->name);
-        result.parts.push_back(std::move(dumped_part));
+        dump_pool.scheduleOrThrowOnError([&, i]() {
+            auto & temp_part = temp_parts[i];
+            auto dumped_part = dumper.dumpTempPart(temp_part, context->getHdfsConnectionParams(), false, part_disks[i]);
+            LOG_TRACE(storage.getLogger(), "Dumped part {}", temp_part->name);
+            result.parts[i] = std::move(dumped_part);
+        });
     }
-    // TODO dump all bitmaps to one file to avoid creating too many small files on vfs
+    dump_pool.wait();
+    // TODO: dump all bitmaps to one file to avoid creating too many small files on vfs
     result.bitmaps = dumpDeleteBitmaps(storage, temp_bitmaps);
-    for (const auto & temp_staged_part : temp_staged_parts)
+    for (size_t i = 0; i < temp_staged_parts.size(); ++i)
     {
-        auto staged_part = dumper.dumpTempPart(temp_staged_part, context->getHdfsConnectionParams());
-        LOG_TRACE(storage.getLogger(), "Dumped staged part {}", temp_staged_part->name);
-        result.staged_parts.push_back(std::move(staged_part));
+        dump_pool.scheduleOrThrowOnError([&, i]() {
+            auto & temp_staged_part = temp_staged_parts[i];
+            auto staged_part = dumper.dumpTempPart(temp_staged_part, context->getHdfsConnectionParams(), false, part_disks[i]);
+            LOG_TRACE(storage.getLogger(), "Dumped part {}", temp_staged_part->name);
+            result.staged_parts[i] = std::move(staged_part);
+        });
     }
 
     LOG_DEBUG(
