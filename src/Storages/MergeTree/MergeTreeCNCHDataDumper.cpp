@@ -100,6 +100,8 @@ size_t MergeTreeCNCHDataDumper::check(MergeTreeDataPartCNCHPtr remote_part, cons
     return data_files_size;
 }
 
+static constexpr auto TMP_PREFIX = "tmp_dump_";
+
 /// Dump local part to vfs
 MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
     const IMutableMergeTreeDataPartPtr & local_part,
@@ -107,65 +109,25 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
     bool is_temp_prefix,
     const DiskPtr & remote_disk) const
 {
-    /// Load the local part checksum
-    if (!local_part->deleted)
-    {
-        local_part->loadColumnsChecksumsIndexes(true, false);
-        local_part->prepared_checksums = local_part->getChecksums();
-        local_part->prepared_index = local_part->getIndex();
-    }
-
-    const String TMP_PREFIX = "tmp_dump_";
-    String partition_id = local_part->info.partition_id;
-    Int64 min_block = local_part->info.min_block;
-    Int64 max_block = local_part->info.max_block;
-    UInt32 merge_tree_level = local_part->info.level;
-    Int64 mutation = local_part->info.mutation;
-    Int64 hint_mutation = local_part->info.hint_mutation;
-    MergeTreePartInfo new_part_info(partition_id, min_block, max_block, merge_tree_level, mutation, hint_mutation);
-    new_part_info.storage_type = StorageType::ByteHDFS;
+    MergeTreePartInfo new_part_info(
+        local_part->info.partition_id,
+        local_part->info.min_block,
+        local_part->info.max_block,
+        local_part->info.level,
+        local_part->info.mutation,
+        local_part->info.hint_mutation,
+        StorageType::ByteHDFS);
 
     String part_name = new_part_info.getPartName();
-    String relative_path;
-    if(is_temp_prefix)
-        relative_path = TMP_PREFIX + new_part_info.getPartNameWithHintMutation();
-    else
-        relative_path = new_part_info.getPartNameWithHintMutation();
+    String relative_path
+        = is_temp_prefix ? TMP_PREFIX + new_part_info.getPartNameWithHintMutation() : new_part_info.getPartNameWithHintMutation();
 
     DiskPtr disk = remote_disk == nullptr ? data.getStoragePolicy()->getAnyDisk() : remote_disk;
     VolumeSingleDiskPtr volume = std::make_shared<SingleDiskVolume>("temp_volume", disk);
-    MutableMergeTreeDataPartCNCHPtr new_part = std::make_shared<MergeTreeDataPartCNCH>(
-        data, part_name, new_part_info, volume, relative_path
-    );
-    new_part->partition.assign(local_part->partition);
-    if (local_part->prepared_checksums)
-    {
-        new_part->prepared_checksums = std::make_shared<MergeTreeDataPartChecksums>(*local_part->prepared_checksums);
-        new_part->prepared_checksums->storage_type = StorageType::ByteHDFS;
-    }
-    new_part->minmax_idx = local_part->minmax_idx;
-    new_part->rows_count = local_part->rows_count;
-    /// TODO:
-    new_part->loadIndexGranularity(local_part->getMarksCount(), local_part->index_granularity.getIndexGranularities());
-    new_part->setColumns(local_part->getColumns());
-    // new_part->setPreparedIndex(local_part->getPreparedIndex());
-    new_part->has_bitmap = local_part->has_bitmap.load();
-    new_part->deleted = local_part->deleted;
-    new_part->bucket_number = local_part->bucket_number;
-    /// TODO:
-    // new_part->bytes_on_disk = local_part->bytes_on_disk.load();
-    new_part->table_definition_hash = data.getTableHashForClusterBy();
-    new_part->columns_commit_time = local_part->columns_commit_time;
-    new_part->mutation_commit_time = local_part->mutation_commit_time;
-    new_part->min_unique_key = local_part->min_unique_key;
-    new_part->max_unique_key = local_part->max_unique_key;
-    /// TODO:
-    // new_part->setAesEncrypter(local_part->getAesEncrypter());
-    new_part->secondary_txn_id = local_part->secondary_txn_id;
-    new_part->covered_parts_count = local_part->covered_parts_count;
-    new_part->covered_parts_size = local_part->covered_parts_size;
-    new_part->covered_parts_rows = local_part->covered_parts_rows;
-    new_part->delete_bitmap = local_part->delete_bitmap;
+    MutableMergeTreeDataPartCNCHPtr new_part
+        = std::make_shared<MergeTreeDataPartCNCH>(data, part_name, new_part_info, volume, relative_path);
+    new_part->fromLocalPart(*local_part);
+    assert(local_part->checksums_ptr != nullptr);
 
     String new_part_rel_path = new_part->getFullRelativePath();
     if (disk->exists(new_part_rel_path))
@@ -180,39 +142,44 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
     /// Here, we clear meta files in checksums.
     auto erase_file_in_checksums = [new_part](const String & file_name)
     {
-        if(new_part->prepared_checksums == nullptr)
+        if (new_part->checksums_ptr == nullptr)
             return;
 
-        auto file = new_part->prepared_checksums->files.find(file_name);
-        if(file != new_part->prepared_checksums->files.end())
-            new_part->prepared_checksums->files.erase(file_name);
+        new_part->checksums_ptr->files.erase(file_name);
     };
     erase_file_in_checksums("ttl.txt");
     erase_file_in_checksums("count.txt");
     erase_file_in_checksums("columns.txt");
     erase_file_in_checksums("partition.dat");
     MergeTreeDataPartChecksum index_checksum;
-    if (new_part->prepared_checksums && new_part->prepared_checksums->files.find("primary.idx") != new_part->prepared_checksums->files.end())
-        index_checksum = new_part->prepared_checksums->files.at("primary.idx");
+    if (new_part->checksums_ptr && new_part->checksums_ptr->files.find("primary.idx") != new_part->checksums_ptr->files.end())
+        index_checksum = new_part->checksums_ptr->files.at("primary.idx");
     erase_file_in_checksums("primary.idx");
-    size_t minmax_idx_size = data.minmax_idx_column_types.size();
-    for (size_t i = 0; i < minmax_idx_size; ++i)
+
+    /// remove minmax index in checksums
     {
-        String file_name = "minmax_" + escapeForFileName(data.minmax_idx_columns[i]) + ".idx";
-        erase_file_in_checksums(file_name);
+        auto metadata_snapshot = data.getInMemoryMetadataPtr();
+        const auto & partition_key = metadata_snapshot->getPartitionKey();
+        auto minmax_column_names = data.getMinMaxColumnsNames(partition_key);
+        for (const auto & minmax_column_name : minmax_column_names)
+        {
+            String minmax_file_name = "minmax_" + escapeForFileName(minmax_column_name) + ".idx";
+            erase_file_in_checksums(minmax_file_name);
+        }
     }
+
     MergeTreeDataPartChecksum uki_checksum; /// unique key index checksum
-    if (new_part->prepared_checksums && new_part->prepared_checksums->files.find("unique_key.idx") != new_part->prepared_checksums->files.end())
-        uki_checksum = new_part->prepared_checksums->files.at("unique_key.idx");
+    if (new_part->checksums_ptr && new_part->checksums_ptr->files.find("unique_key.idx") != new_part->checksums_ptr->files.end())
+        uki_checksum = new_part->checksums_ptr->files.at("unique_key.idx");
     erase_file_in_checksums("unique_key.idx");
 
     std::vector<MergeTreeDataPartChecksums::FileChecksums::value_type *> reordered_checksums;
 
     /// Data files offset
     size_t data_file_offset = MERGE_TREE_STORAGE_CNCH_DATA_HEADER_SIZE;
-    if (new_part->prepared_checksums)
+    if (new_part->checksums_ptr)
     {
-        auto & checksums_files = new_part->prepared_checksums->files;
+        auto & checksums_files = new_part->checksums_ptr->files;
         reordered_checksums.reserve(checksums_files.size());
 
         ///TODO: fix IDataType::SubstreamPath
@@ -244,7 +211,6 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
         for (auto & file : reordered_checksums)
         {
             file->second.file_offset = data_file_offset;
-            file->second.mutation = mutation;
             data_file_offset += file->second.file_size;
         }
     }
@@ -265,7 +231,7 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
         const DiskPtr& local_part_disk = local_part->volume->getDisk();
         LOG_DEBUG(log, "Getting local disk {} at {}\n", local_part_disk->getName(), local_part_disk->getPath());
 
-        if (new_part->prepared_checksums)
+        if (new_part->checksums_ptr)
         {
             for (auto * file_ptr : reordered_checksums)
             {
@@ -318,10 +284,10 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
         off_t checksums_offset = index_offset + index_size;
         size_t checksums_size = 0;
         uint128 checksums_hash;
-        if (new_part->prepared_checksums)
+        if (new_part->checksums_ptr)
         {
             HashingWriteBuffer checksums_hashing(*data_out);
-            new_part->prepared_checksums->write(checksums_hashing);
+            new_part->checksums_ptr->write(checksums_hashing);
             checksums_hashing.next();
             ///TODO: fix getPositionInFile
             checksums_size = data_out->getPositionInFile() - checksums_offset;
@@ -387,7 +353,7 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
         data_out->sync();
     }
 
-    size_t bytes_on_disk = check(new_part, new_part->prepared_checksums, meta);
+    size_t bytes_on_disk = check(new_part, new_part->checksums_ptr, meta);
 
     new_part->modification_time = time(nullptr);
     /// Merge fetcher may use this value to calculate segment size,

@@ -43,7 +43,6 @@ public:
 
     void setBlockID(UInt64 * block_id_) { block_id = block_id_; }
 
-    static void updatePartData(MutableMergeTreeDataPartCNCHPtr part, bool set_column_mutation = false);
     static UInt32 collectNewParts(MutableMergeTreeDataPartsCNCHVector const& parts_);
 
     UInt32 getSize() const override { return parts.size() + delete_bitmaps.size(); }

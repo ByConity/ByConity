@@ -94,22 +94,6 @@ UInt32 InsertAction::collectNewParts() const
     return collectNewParts(parts);
 }
 
-void InsertAction::updatePartData(MutableMergeTreeDataPartCNCHPtr part , bool set_column_mutation)
-{
-    if (set_column_mutation)
-    {
-        if (part->prepared_checksums)
-        {
-            for (auto & file : part->prepared_checksums->files)
-                file.second.mutation = part->info.mutation;
-        }
-        else
-        {
-            throw Exception("part " + part->name + " without prepared checksums", ErrorCodes::LOGICAL_ERROR);
-        }
-    }
-}
-
 UInt32 InsertAction::collectNewParts(MutableMergeTreeDataPartsCNCHVector const & parts_)
 {
     UInt32 size = 0;

@@ -133,6 +133,42 @@ bool MergeTreeDataPartCNCH::operator > (const MergeTreeDataPartCNCH & r) const
         return false;
 }
 
+void MergeTreeDataPartCNCH::fromLocalPart(const IMergeTreeDataPart & local_part)
+{
+    partition.assign(local_part.partition);
+    if (local_part.checksums_ptr)
+    {
+        checksums_ptr = std::make_shared<MergeTreeDataPartChecksums>(*local_part.checksums_ptr);
+        checksums_ptr->storage_type = StorageType::ByteHDFS;
+    }
+    else
+    {
+        /// anywhy we need a checksums
+        checksums_ptr = std::make_shared<MergeTreeDataPartChecksums>();
+        checksums_ptr->storage_type = StorageType::ByteHDFS;
+    }
+    minmax_idx = local_part.minmax_idx;
+    rows_count = local_part.rows_count;
+    loadIndexGranularity(local_part.getMarksCount(), local_part.index_granularity.getIndexGranularities());
+    setColumns(local_part.getColumns());
+    index = local_part.index;
+    has_bitmap = local_part.has_bitmap.load();
+    deleted = local_part.deleted;
+    bucket_number = local_part.bucket_number;
+    table_definition_hash = storage.getTableHashForClusterBy();
+    columns_commit_time = local_part.columns_commit_time;
+    mutation_commit_time = local_part.mutation_commit_time;
+    min_unique_key = local_part.min_unique_key;
+    max_unique_key = local_part.max_unique_key;
+    /// TODO:
+    // setAesEncrypter(local_part.getAesEncrypter());
+    secondary_txn_id = local_part.secondary_txn_id;
+    covered_parts_count = local_part.covered_parts_count;
+    covered_parts_size = local_part.covered_parts_size;
+    covered_parts_rows = local_part.covered_parts_rows;
+    delete_bitmap = local_part.delete_bitmap;
+}
+
 String MergeTreeDataPartCNCH::getFileNameForColumn(const NameAndTypePair & column) const
 {
     String filename;
