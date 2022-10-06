@@ -19,7 +19,7 @@ INSERT INTO alter_compression_codec VALUES('2018-01-01', 5, '5');
 INSERT INTO alter_compression_codec VALUES('2018-01-01', 6, '6');
 SELECT * FROM alter_compression_codec ORDER BY id;
 
-OPTIMIZE TABLE alter_compression_codec FINAL;
+OPTIMIZE TABLE alter_compression_codec;
 SELECT * FROM alter_compression_codec ORDER BY id;
 
 SET allow_suspicious_codecs = 1;
@@ -28,7 +28,7 @@ SELECT compression_codec FROM system.columns WHERE database = currentDatabase() 
 
 INSERT INTO alter_compression_codec VALUES('2018-01-01', 7, '7');
 INSERT INTO alter_compression_codec VALUES('2018-01-01', 8, '8');
-OPTIMIZE TABLE alter_compression_codec FINAL;
+OPTIMIZE TABLE alter_compression_codec;
 SELECT * FROM alter_compression_codec ORDER BY id;
 
 ALTER TABLE alter_compression_codec MODIFY COLUMN alter_column FixedString(100);
