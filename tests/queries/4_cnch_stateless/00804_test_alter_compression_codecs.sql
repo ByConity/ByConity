@@ -71,7 +71,7 @@ ALTER TABLE large_alter_table_00804 MODIFY COLUMN data CODEC(NONE, LZ4, LZ4HC, Z
 
 SELECT compression_codec FROM system.columns WHERE database = currentDatabase() AND table = 'large_alter_table_00804' AND name = 'data';
 
-DETACH TABLE large_alter_table_00804;
+DETACH TABLE large_alter_table_00804 PERMANENTLY;
 ATTACH TABLE large_alter_table_00804;
 
 INSERT INTO store_of_hash_00804 SELECT sum(cityHash64(*)) FROM large_alter_table_00804;
