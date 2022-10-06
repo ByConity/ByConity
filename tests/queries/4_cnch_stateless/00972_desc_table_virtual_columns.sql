@@ -1,5 +1,5 @@
 -- No virtual columns should be output in DESC TABLE query.
-use default;
+
 DROP TABLE IF EXISTS upyachka;
 CREATE TABLE upyachka (x UInt64) Engine = CnchMergeTree ORDER BY tuple();
 
