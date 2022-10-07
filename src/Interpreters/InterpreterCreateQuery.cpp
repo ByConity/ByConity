@@ -96,6 +96,7 @@ namespace ErrorCodes
     extern const int NOT_IMPLEMENTED;
     extern const int UNKNOWN_TABLE;
     extern const int CNCH_TRANSACTION_NOT_INITIALIZED;
+    extern const int SUPPORT_IS_DISABLED;
 }
 
 namespace fs = std::filesystem;
@@ -1062,6 +1063,18 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
         }
 
         assertOrSetUUID(create, database);
+    }
+
+    /// CnchKafka table should be allowed to be created on worker
+    if (create.storage && startsWith(create.storage->engine->name, "Cnch")
+        && !startsWith(create.storage->engine->name, "CnchKafka") && database->getEngineName() != "Cnch")
+    {
+        throw Exception(
+            ErrorCodes::SUPPORT_IS_DISABLED,
+            "Table engine {} is not allowed to create in database engine {}",
+            create.storage->engine->name,
+            database->getEngineName()
+        );
     }
 
     if (create.replace_table)
