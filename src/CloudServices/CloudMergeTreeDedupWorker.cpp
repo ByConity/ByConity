@@ -159,19 +159,9 @@ void CloudMergeTreeDedupWorker::iterate()
         ? CnchDedupHelper::DedupScope::Partitions(sorted_partitions)
         : CnchDedupHelper::DedupScope::Table();
 
-    std::vector<LockInfoPtr> locks_to_acquire
-        = CnchDedupHelper::getLocksToAcquire(scope, txn->getTransactionID(), storage, /*timeout_ms*/ 10000);
     Stopwatch watch;
-    for (auto & lock_info : locks_to_acquire)
-    {
-        if (!txn->tryLock(lock_info))
-        {
-            LOG_WARNING(log, "failed to acquire lock for dedup txn, retry later");
-            interval_scheduler.has_excep_or_timeout = true;
-            return;
-        }
-    }
-    LOG_TRACE(log, "Acquired all {} locks in {} ms", locks_to_acquire.size(), watch.elapsedMilliseconds());
+    CnchLockHolder cnch_lock(*context, CnchDedupHelper::getLocksToAcquire(scope, txn->getTransactionID(), storage, /*timeout_ms*/ 10000));
+    cnch_lock.lock();
 
     /// get staged parts again after acquired the locks
     ts = context->getTimestamp(); /// must get a new ts after locks are acquired
@@ -229,7 +219,6 @@ void CloudMergeTreeDedupWorker::iterate()
     LOG_DEBUG(log, "publishing took {} ms", watch.elapsedMilliseconds());
 
     txn->commitV2();
-    txn->unlock(); /// note that all the acquired locks will also be unlocked during txn's dtor
     LOG_INFO(log, "Committed dedup txn {}", txn->getTransactionID().toUInt64());
 
     interval_scheduler.calNextScheduleTime(min_staged_part_timestamp, context->getTimestamp());

@@ -8,7 +8,6 @@
 #include <Transaction/Actions/IAction.h>
 #include <bthread/mutex.h>
 #include <cppkafka/cppkafka.h>
-#include <Transaction/CnchLock.h>
 #include <Transaction/IntentLock.h>
 #include <Core/BackgroundSchedulePool.h>
 #include <Interpreters/Context.h>
@@ -44,11 +43,7 @@ public:
     {
     }
 
-    virtual ~ICnchTransaction()
-    {
-        if (report_lock_heartbeat_task)
-            report_lock_heartbeat_task->deactivate();
-    }
+    virtual ~ICnchTransaction() = default;
 
     ICnchTransaction(const ICnchTransaction &) = delete;
     ICnchTransaction & operator=(const ICnchTransaction &) = delete;
@@ -94,11 +89,6 @@ public:
     }
 
     // IntentLockPtr createIntentLock(const LockEntity & entity, const Strings & intent_names = {});
-    void lock(LockInfoPtr lockInfo);
-    bool tryLock(LockInfoPtr lockInfo);
-
-    // unlock should be invoked after txn commit
-    void unlock();
 
     // If transaction is initiated by worker, record the worker's host and port
     void setCreator(String creator_) { creator = std::move(creator_); }
@@ -138,9 +128,6 @@ public:
 
     void setInsertionLabel(InsertionLabelPtr label) { insertion_label = std::move(label); }
     const InsertionLabelPtr & getInsertionLabel() const { return insertion_label; }
-
-    static constexpr auto default_lock_expire_duration = std::chrono::milliseconds(30000);
-    void setLockExpireDuration(std::chrono::milliseconds expire_duration) { lock_expire_duration = expire_duration; }
 
 public:
     // Commit API for 2PC, internally calls precommit() and commit()
@@ -186,10 +173,6 @@ protected:
     void setStatus(CnchTransactionStatus status);
     void setTransactionRecord(TransactionRecord record);
 
-private:
-    void reportLockHeartBeat();
-    void reportLockHeartBeatTask();
-
 protected:
     /// Transaction still needs global context because the query context will expired after query is finished, but
     /// the transaction still running even query is finished.
@@ -206,11 +189,7 @@ protected:
 private:
     String creator;
     mutable bthread::RecursiveMutex mutex;
-    mutable std::mutex cnch_lock_mutex;
-    CnchLockPtrs cnch_locks;
-    BackgroundSchedulePool::TaskHolder report_lock_heartbeat_task;
-    static constexpr UInt64 heartbeat_interval = 5000;
-    std::chrono::milliseconds lock_expire_duration{default_lock_expire_duration};
+
     Poco::Logger * log{&Poco::Logger::get("ICnchTransaction")};
     mutable std::mutex database_cache_mutex;
     std::map<String, DatabasePtr> database_cache;

@@ -304,7 +304,6 @@ TxnTimestamp CnchServerTransaction::rollback()
         tryLogCurrentException(log, __PRETTY_FUNCTION__);
     }
 
-    unlock();
     return ts;
 }
 
@@ -346,7 +345,6 @@ TxnTimestamp CnchServerTransaction::abort()
         }
     }
 
-    unlock();
     return txn_record.commitTs();
 }
 

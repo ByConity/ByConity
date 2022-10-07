@@ -35,6 +35,7 @@
 #include <Storages/StorageMaterializedView.h>
 #include <Storages/VirtualColumnUtils.h>
 #include <Transaction/getCommitted.h>
+#include <Transaction/CnchLock.h>
 
 #include <Catalog/DataModelPartWrapper_fwd.h>
 #include <Core/NamesAndTypes.h>
@@ -1159,16 +1160,9 @@ void StorageCnchMergeTree::executeDedupForRepair(const ASTPtr & partition, Conte
         scope = CnchDedupHelper::DedupScope::Partitions(partitions);
     }
 
-    std::vector<LockInfoPtr> locks_to_acquire = CnchDedupHelper::getLocksToAcquire(
-        scope, txn->getTransactionID(), *this, /*timeout_ms*/10000);
-    Stopwatch lock_watch;
-    for (auto & lock_info : locks_to_acquire)
-    {
-        if (!txn->tryLock(lock_info))
-            throw Exception(ErrorCodes::CNCH_LOCK_ACQUIRE_FAILED, "Failed to acquire lock for txn {}", txn->getTransactionID().toString());
-    }
-    LOG_DEBUG(log, "Acquired all {} locks in {} ms", locks_to_acquire.size(), lock_watch.elapsedMilliseconds());
-    lock_watch.restart();
+    CnchLockHolder cnch_lock(
+        *getContext(), CnchDedupHelper::getLocksToAcquire(scope, txn->getTransactionID(), *this, /*timeout_ms*/ 10000));
+    cnch_lock.lock();
 
     TxnTimestamp ts = getContext()->getTimestamp();
     MergeTreeDataPartsCNCHVector visible_parts = CnchDedupHelper::getVisiblePartsToDedup(scope, *this, ts);
@@ -1180,7 +1174,6 @@ void StorageCnchMergeTree::executeDedupForRepair(const ASTPtr & partition, Conte
         cnch_writer.publishStagedParts(/*staged_parts*/{}, bitmaps_to_dump);
 
     txn->commitV2();
-    txn->unlock();
 }
 
 void StorageCnchMergeTree::collectResource(ContextPtr local_context, ServerDataPartsVector & parts, const String & local_table_name, const std::set<Int64> & required_bucket_numbers)

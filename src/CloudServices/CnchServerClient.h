@@ -5,6 +5,7 @@
 #include <Storages/IStorage_fwd.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Transaction/ICnchTransaction.h>
+#include <Transaction/CnchLock.h>
 #include <WorkerTasks/ManipulationType.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
