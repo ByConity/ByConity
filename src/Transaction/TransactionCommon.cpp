@@ -112,12 +112,12 @@ void UndoResource::clean(Catalog::Catalog & , [[maybe_unused]]MergeTreeMetaBase 
     {
         throw Exception("Disk " + diskName() + " not found. This should only happens in testing or unstable environment. If this exception is on production, there's a bug", ErrorCodes::LOGICAL_ERROR);
     }
-    
+
     if (type() == UndoResourceType::Part || type() == UndoResourceType::DeleteBitmap || type() == UndoResourceType::StagedPart)
     {
         const auto & resource_relative_path = placeholders(1);
         String rel_path = storage->getRelativeDataPath() + resource_relative_path;
-        if (disk->exists(rel_path)) 
+        if (disk->exists(rel_path))
         {
             LOG_DEBUG(log, "Will remove undo path {}", disk->getPath() + rel_path);
             disk->removeRecursive(rel_path);
