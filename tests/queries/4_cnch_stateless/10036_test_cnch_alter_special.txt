@@ -1,6 +1,6 @@
 -- step 1
 -- test CLEAR_MAP_KEY, should wait for alter done.
-SET allow_alter_with_unfinished_task = 1;
+
 drop table if exists alter_map;
 create table alter_map (id Int32, x Map(String, String), p_date Date) Engine = CnchMergeTree partition by p_date order by p_date;
 insert into alter_map values (1, {'a': 'test_before', 'b': 'bd', 'c': 'ce'}, '20210222');
@@ -30,7 +30,7 @@ insert into alter_rename values (5, 5, 'abc', '20210222');
 
 -- step 2
 -- test clear_map_key
-SET allow_alter_with_unfinished_task = 1;
+
 select * from alter_map order by id;
 
 -- test build bitmap
