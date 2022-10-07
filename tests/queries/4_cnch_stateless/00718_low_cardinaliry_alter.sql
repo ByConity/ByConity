@@ -1,4 +1,4 @@
-SET allow_alter_with_unfinished_task = 1;
+
 
 drop table if exists tab;
 create table tab (a String, b LowCardinality(UInt32)) engine = CnchMergeTree order by a;

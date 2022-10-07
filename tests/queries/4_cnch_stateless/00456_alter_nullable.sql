@@ -1,4 +1,3 @@
-SET allow_alter_with_unfinished_task = 1;
 
 DROP TABLE IF EXISTS nullable_alter;
 CREATE TABLE nullable_alter (d Date DEFAULT '2000-01-01', x String) ENGINE = CnchMergeTree() PARTITION BY toYYYYMM(d) ORDER BY d SETTINGS index_granularity = 1;
