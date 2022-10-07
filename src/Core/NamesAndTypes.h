@@ -121,7 +121,7 @@ public:
 };
 
 using NamesAndTypesListPtr = std::shared_ptr<NamesAndTypesList>;
-
+using NamesAndTypesLists = std::vector<NamesAndTypesList>;
 }
 
 namespace std

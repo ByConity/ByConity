@@ -3,22 +3,7 @@
 DROP TABLE IF EXISTS ppl3;
 CREATE TABLE ppl3 (id Int, department String, onboard_date String, age Int) ENGINE = CnchMergeTree() ORDER BY tuple();
 
-INSERT INTO ppl3 VALUES('1', 'data', '2019-01-01', '20');
-INSERT INTO ppl3 VALUES('2', 'data', '2019-03-01', '21');
-INSERT INTO ppl3 VALUES('3', 'data', '2019-02-01', '29');
-INSERT INTO ppl3 VALUES('4', 'data', '2019-03-01', '23');
-INSERT INTO ppl3 VALUES('5', 'data', '2019-04-01', '22');
-INSERT INTO ppl3 VALUES('6', 'payment', '2019-01-01', '20');
-INSERT INTO ppl3 VALUES('7', 'payment', '2019-02-01', '20');
-INSERT INTO ppl3 VALUES('8', 'payment', '2019-04-01', '21');
-INSERT INTO ppl3 VALUES('9', 'payment', '2019-05-01', '23');
-INSERT INTO ppl3 VALUES('10', 'solution', '2019-08-01', '22');
-INSERT INTO ppl3 VALUES('11', 'solution', '2019-08-01', '24');
-INSERT INTO ppl3 VALUES('12', 'solution', '2019-09-01', '25');
-INSERT INTO ppl3 VALUES('13', 'ML', '2019-03-01', '21');
-INSERT INTO ppl3 VALUES('14', 'ML', '2019-12-01', '22');
-INSERT INTO ppl3 VALUES('15', 'ML', '2019-03-01', '24');
-INSERT INTO ppl3 VALUES('16', 'ML', '2019-02-01', '25');
+INSERT INTO ppl3 VALUES('1', 'data', '2019-01-01', '20') ('2', 'data', '2019-03-01', '21') ('3', 'data', '2019-02-01', '29') ('4', 'data', '2019-03-01', '23') ('5', 'data', '2019-04-01', '22') ('6', 'payment', '2019-01-01', '20') ('7', 'payment', '2019-02-01', '20') ('8', 'payment', '2019-04-01', '21') ('9', 'payment', '2019-05-01', '23') ('10', 'solution', '2019-08-01', '22') ('11', 'solution', '2019-08-01', '24') ('12', 'solution', '2019-09-01', '25') ('13', 'ML', '2019-03-01', '21') ('14', 'ML', '2019-12-01', '22') ('15', 'ML', '2019-03-01', '24') ('16', 'ML', '2019-02-01', '25');
 
 
 

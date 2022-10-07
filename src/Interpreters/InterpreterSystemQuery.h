@@ -59,13 +59,18 @@ private:
 
     AccessRightsElements getRequiredAccessForDDLOnCluster() const;
     void startStopAction(StorageActionBlockType action_type, bool start);
-    void startOrStopConsume(const StorageID & table_id, ASTSystemQuery::Type type);
+    void startOrStopConsume(ASTSystemQuery::Type type);
 
     void executeMetastoreCmd(ASTSystemQuery & query) const;
 
     void executeDedup(const ASTSystemQuery & query);
 
     void dropChecksumsCache(const StorageID & table_id) const;
+
+    BlockIO executeCnchCommand(ASTSystemQuery & query, ContextMutablePtr & system_context);
+    BlockIO executeLocalCommand(ASTSystemQuery & query, ContextMutablePtr & system_context);
+
+    void executeBGTaskInCnchServer(ContextMutablePtr & system_context, ASTSystemQuery::Type type) const;
 
     // clear Broken Table infos
     void clearBrokenTables(ContextMutablePtr & system_context) const;

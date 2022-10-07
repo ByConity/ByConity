@@ -221,6 +221,49 @@ Result BackgroundJob::remove(CnchBGThreadAction remove_type)
     return {exception_str, ret};
 }
 
+Result BackgroundJob::wakeup()
+{
+    String exception_str{"action failed"};
+    CnchBGThreadStatus curr_status;
+    String host_port_copy;
+    {
+        std::lock_guard<std::mutex> lock_guard(mutex);
+        curr_status = status;
+        host_port_copy = host_port;
+    }
+
+    if (curr_status != CnchBGThreadStatus::Running)
+    {
+        LOG_WARNING(
+            log,
+            "Do nothing because backgroud job: {} at server {} not in {} status",
+            storage_id.getNameForLogs(), host_port, toString(status));
+
+        return {"BackgroundJob {} is not running" , false};
+    }
+
+    bool ret = false;
+    try
+    {
+        ret = daemon_job.getBgJobExecutor().wakeup(getBGJobInfo());
+    }
+    catch (...)
+    {
+        exception_str = getCurrentExceptionMessage(true);
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+    }
+
+    if (!ret)
+    {
+        LOG_WARNING(
+            log,
+            "Failed to wakeup backgroud job: {} at server {}",
+            storage_id.getNameForLogs(), host_port_copy
+        );
+    }
+    return {exception_str, ret};
+}
+
 std::optional<BackgroundJob::SyncAction> BackgroundJob::getSyncAction(const ServerInfo & server_info) const
 {
     const std::vector<String> & restarted_servers = server_info.restarted_servers;
@@ -271,10 +314,7 @@ std::optional<BackgroundJob::SyncAction> BackgroundJob::getSyncAction(const Serv
                 storage_id.getNameForLogs(), host_port);
 
             need_start = true;
-            if (server_restarted || server_died)
-                need_remove = false;
-            else
-                need_remove = true;
+            need_remove = !(server_restarted || server_died);
         }
     }
 

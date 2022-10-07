@@ -3,10 +3,7 @@
 #include <Interpreters/Context_fwd.h>
 #include <CloudServices/CnchBGThreadCommon.h>
 
-namespace DB
-{
-
-namespace DaemonManager
+namespace DB::DaemonManager
 {
 
 struct BGJobInfo;
@@ -17,7 +14,8 @@ public:
     virtual bool stop(const BGJobInfo & info) = 0;
     virtual bool remove(const BGJobInfo & info) = 0;
     virtual bool drop(const BGJobInfo & info) = 0;
-    virtual ~IBackgroundJobExecutor() {}
+    virtual bool wakeup(const BGJobInfo & info) = 0;
+    virtual ~IBackgroundJobExecutor() = default;
 };
 
 class BackgroundJobExecutor : public IBackgroundJobExecutor
@@ -33,11 +31,10 @@ public:
     bool stop(const BGJobInfo & info) override;
     bool remove(const BGJobInfo & info) override;
     bool drop(const BGJobInfo & info) override;
+    bool wakeup(const BGJobInfo & info) override;
 private:
     const Context & context;
     const CnchBGThreadType type;
 };
 
-} // end namespace DaemonManager
-
-} // end namespace DB
+}

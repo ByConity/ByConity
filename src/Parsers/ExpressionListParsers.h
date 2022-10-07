@@ -564,6 +564,23 @@ public:
     using IParserDialectBase::IParserDialectBase;
 };
 
+class ParserGroupingSetsExpressionList : public IParserDialectBase
+{
+protected:
+    const char * getName() const override { return "grouping sets expression"; }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
+};
+
+class ParserGroupingSetsExpressionListElements : public IParserDialectBase
+{
+protected:
+    const char * getName() const override { return "grouping sets expression elements"; }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
+};
 
 /// Parser for key-value pair, where value can be list of pairs.
 class ParserKeyValuePair : public IParserDialectBase

@@ -687,8 +687,6 @@ Result DaemonJobServerBGThread::executeJobAction(const StorageID & storage_id, C
         case CnchBGThreadAction::Remove:
         case CnchBGThreadAction::Drop:
         {
-            if ((action != CnchBGThreadAction::Remove) && (action != CnchBGThreadAction::Drop))
-                throw Exception("action is not Remove or Drop, this is coding mistake", ErrorCodes::LOGICAL_ERROR);
             auto bg_ptr = getBackgroundJob(uuid);
             if (!bg_ptr)
             {
@@ -745,8 +743,7 @@ Result DaemonJobServerBGThread::executeJobAction(const StorageID & storage_id, C
                 if (res.second)
                     bg_ptr = res.first->second;
                 else
-                    return {"Failed to insert this uuid to background_jobs, "
-                        "the jobs probably has been started recently", false};
+                    return {"Failed to insert this uuid to background_jobs, the jobs probably has been started recently", false};
             }
 
             if (bg_ptr)
@@ -767,8 +764,7 @@ Result DaemonJobServerBGThread::executeJobAction(const StorageID & storage_id, C
                     bool server_died = checkIfServerDied(servers, current_host_port);
                     if (!server_died)
                     {
-                        LOG_INFO(log, "remove bg job: {} in {} before start new job",
-                            storage_id.getNameForLogs(), current_host_port);
+                        LOG_INFO(log, "remove bg job: {} in {} before start new job", storage_id.getNameForLogs(), current_host_port);
                         Result res = bg_ptr->remove(CnchBGThreadAction::Remove);
                         if (!res.res)
                             return res;
@@ -778,15 +774,41 @@ Result DaemonJobServerBGThread::executeJobAction(const StorageID & storage_id, C
             }
             break;
         }
-        default:
+        case CnchBGThreadAction::Wakeup:
         {
-            return {
-                "Unknown action to execute: " + storage_id.getNameForLogs() + " " + toString(action),
-                false
-            };
+            auto bg_ptr = getBackgroundJob(uuid);
+            if (!bg_ptr)
+            {
+                auto error_msg = fmt::format("bg job doesn't exist for table: {} hence, stop wakeup", storage_id.getNameForLogs());
+                return {error_msg, false};
+            }
+            else
+                return bg_ptr->wakeup();
         }
     }
     return {"", false};
+}
+
+void DaemonJobServerBGThread::executeOptimize(const StorageID & storage_id, const String & partition_id, bool enable_try) const
+{
+    auto bg_ptr = getBackgroundJob(storage_id.uuid);
+    if (!bg_ptr)
+    {
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "bg job doesn't exist for table: {}, stop wakeup", storage_id.getNameForLogs());
+    }
+
+    auto info = bg_ptr->getBGJobInfo();
+
+    if (info.status != CnchBGThreadStatus::Running)
+    {
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Can't execute optimize, because background job: {} at server {} in {} status",
+            storage_id.getNameForLogs(), info.host_port, toString(info.status));
+    }
+
+    CnchServerClientPtr server_client = getContext()->getCnchServerClient(info.host_port);
+    server_client->executeOptimize(storage_id, partition_id, enable_try);
 }
 
 BackgroundJobs DaemonJobServerBGThread::fetchCnchBGThreadStatus()

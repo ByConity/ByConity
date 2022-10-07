@@ -45,4 +45,10 @@ bool BackgroundJobExecutor::drop(const BGJobInfo & info)
     return true;
 }
 
+bool BackgroundJobExecutor::wakeup(const BGJobInfo & info)
+{
+    executeServerBGThreadAction(info, CnchBGThreadAction::Wakeup, context, type);
+    return true;
+}
+
 } // end namespace DB::DaemonManager
