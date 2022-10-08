@@ -1,11 +1,12 @@
 #pragma once
 #include <Common/ConfigurationCommon.h>
+#include <Coordination/Defines.h>
 
 namespace DB
 {
 #define RM_CONFIG_FIELDS_LIST(M) \
     M(UInt64, port, "", 9000, ConfigFlag::Default, "desc: rpc port") \
-    M(String, election_path, "", "rm_election_path_default", ConfigFlag::Default, "") \
+    M(String, election_path, "", RESOURCE_MANAGER_ELECTION_DEFAULT_PATH, ConfigFlag::Default, "") \
     M(UInt64, init_client_tries, "", 3, ConfigFlag::Default, "") \
     M(UInt64, init_client_retry_interval_ms, "", 3000, ConfigFlag::Default, "") \
     M(UInt64, max_retry_times, "", 3, ConfigFlag::Default, "") \
