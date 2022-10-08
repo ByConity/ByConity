@@ -91,7 +91,9 @@ ServiceEndpoints ServiceDiscoveryLocal::lookupEndpoints(const String & psm_name)
         res.emplace_back(ServiceEndpoint{endpoint.host, 0, endpoint.tags});
         if (endpoint.ports.count("PORT0"))
             res.back().port = std::stoi(endpoint.ports.at("PORT0"));
-        for (const auto & [name, port]: endpoint.tags)
+        for (const auto & [name, tag]: endpoint.tags)
+            res.back().tags.emplace(name, tag);
+        for (const auto & [name, port]: endpoint.ports) /// add ports to tags.
             res.back().tags.emplace(name, port);
         res.back().tags.emplace("hostname", endpoint.hostname);
     }

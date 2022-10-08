@@ -22,6 +22,7 @@ namespace fs = std::filesystem;
 
 namespace DB::ErrorCodes
 {
+    extern const int BAD_ARGUMENTS;
     extern const int LOGICAL_ERROR;
     extern const int NOT_IMPLEMENTED;
 }
@@ -213,7 +214,11 @@ struct ZooKeeperArgs
         if (hosts.empty())
         {
             for (const auto & endpoint: endpoints)
-                hosts.push_back(endpoint.tags.count("secure") ? "secure://" : "" + endpoint.host + std::to_string(endpoint.port));
+            {
+                if (!endpoint.tags.count("PORT2"))
+                    throw DB::Exception(DB::ErrorCodes::BAD_ARGUMENTS, "Can't find `PORT2`(Keeper TCP port) from service_discovery");
+                hosts.push_back(endpoint.tags.count("secure") ? "secure://" : "" + endpoint.host + ":" + endpoint.tags.at("PORT2"));
+            }
         }
         else if (!endpoints.empty())
         {
