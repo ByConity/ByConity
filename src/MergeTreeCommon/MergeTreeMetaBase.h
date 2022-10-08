@@ -309,11 +309,6 @@ public:
 
     bool is_custom_partitioned = false;
 
-    ///TODO: MOCK FOR MergeTreeDataDumper
-    ExpressionActionsPtr minmax_idx_expr;
-    Names minmax_idx_columns;
-    DataTypes minmax_idx_column_types;
-
     /// Used only for old syntax tables. Never changes after init.
     Int64 minmax_idx_date_column_pos = -1; /// In a common case minmax index includes a date column.
     Int64 minmax_idx_time_column_pos = -1; /// In other cases, minmax index often includes a dateTime column.

@@ -199,11 +199,6 @@ public:
     String name;
     MergeTreePartInfo info;
 
-    /// MOCK for MergeTreeCNCHDataDumper
-    IndexPtr prepared_index;
-
-    ChecksumsPtr prepared_checksums;
-
     std::atomic<bool> has_bitmap {false};
 
     /// Part unique identifier.
@@ -379,10 +374,6 @@ public:
     String getFullPath() const;
 
     String getMvccFullPath(const String & file_name) const;
-
-    /// MOCK for MergeTreeCNCHDataDumper
-    // void setPreparedIndex(IndexPtr index_) { prepared_index = std::move(index_); }
-    // const IndexPtr & getPreparedIndex() const { return prepared_index; }
 
     /// Moves a part to detached/ directory and adds prefix to its name
     void renameToDetached(const String & prefix) const;

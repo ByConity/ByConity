@@ -48,6 +48,9 @@ public:
     bool operator < (const MergeTreeDataPartCNCH & r) const;
     bool operator > (const MergeTreeDataPartCNCH & r) const;
 
+    /// for dump
+    void fromLocalPart(const IMergeTreeDataPart & local_part);
+
     bool isStoredOnDisk() const override { return true; }
 
     bool supportsVerticalMerge() const override { return true; }

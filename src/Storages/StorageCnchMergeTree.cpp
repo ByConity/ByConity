@@ -1641,10 +1641,11 @@ StorageCnchMergeTree * StorageCnchMergeTree::checkStructureAndGetCnchMergeTree(c
 
     auto metadata = getInMemoryMetadataPtr();
     auto src_metadata = src_data->getInMemoryMetadataPtr();
+    Names minmax_column_names = getMinMaxColumnsNames(metadata->getPartitionKey());
 
     /// Columns order matters if table havs more than one minmax index column.
     if (!metadata->getColumns().getAllPhysical().isCompatableWithKeyColumns(
-        src_metadata->getColumns().getAllPhysical(), minmax_idx_columns))
+        src_metadata->getColumns().getAllPhysical(), minmax_column_names))
     {
         throw Exception("Tables have different structure", ErrorCodes::INCOMPATIBLE_COLUMNS);
     }
