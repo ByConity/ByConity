@@ -188,9 +188,7 @@ DatabaseTablesIteratorPtr DatabaseCnch::getTablesIterator(ContextPtr local_conte
     Strings names = local_context->getCnchCatalog()->getTablesInDB(getDatabaseName());
     std::for_each(names.begin(), names.end(), [this, &local_context, &tables](const String & name) {
         StoragePtr storage = tryGetTableImpl(name, local_context);
-        if (!storage)
-            throw Exception("Can't get storage for table " + name, ErrorCodes::UNKNOWN_TABLE);
-        if (storage->is_detached || storage->is_dropped)
+        if (!storage || storage->is_detached || storage->is_dropped)
             return;
         /// debug
         StorageID storage_id = storage->getStorageID();
