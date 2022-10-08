@@ -121,7 +121,7 @@ void TSOServer::initialize(Poco::Util::Application & self)
 
     log = &logger();
 
-    DB::registerServiceDiscovery();
+    registerServiceDiscovery();
 
     const char * consul_http_host = getenv("CONSUL_HTTP_HOST");
     const char * consul_http_port = getenv("CONSUL_HTTP_PORT");
@@ -130,35 +130,6 @@ void TSOServer::initialize(Poco::Util::Application & self)
 
     tso_window = config().getInt("tso_service.tso_window_ms", 3000);  /// 3 seconds
     tso_max_retry_count = config().getInt("tso_service.tso_max_retry_count", 3); // TSOV: see if can keep or remove
-
-    service_discovery = ServiceDiscoveryFactory::instance().create(config());
-
-    // as shared by devops  "consul mode is for in-house k8s cluster, dns mode is for on-cloud k8s cluster. local mode is for local test and CI"
-    if (service_discovery->getType() != ServiceDiscoveryMode::LOCAL)
-    {
-        const char * rpc_port = getenv("PORT0");
-        const std::string & tso_host = getHostIPFromEnv();
-
-        if (rpc_port != nullptr && (!tso_host.empty()))
-        {
-            tso_port = std::stoi(std::string{rpc_port});
-            host_port = createHostPortString(tso_host, tso_port);
-        }
-    }
-    else
-    {
-        // use non obvious default values so that when there is an error retrieving values out of config, we can spot it quickly
-        tso_port = config().getUInt("tso_service.port", 7070);
-        host_port = createHostPortString(config().getString("service_discovery.tso.node.host", "127.0.0.2"), tso_port);
-    }
-
-    if (host_port.empty())
-        LOG_WARNING(log, "Hostport is empty. Please set PORT0 and TSO_IP env variables for consul/dns mode. For local mode, check cnch-server.xml");
-    else
-        LOG_TRACE(log, "hostport : {}", host_port);
-
-    proxy_ptr = std::make_shared<TSOProxy>(TSOConfig{config()});
-    tso_service = std::make_shared<TSOImpl>();
 }
 
 void TSOServer::syncTSO()
@@ -404,7 +375,37 @@ int TSOServer::main(const std::vector<std::string> &)
     global_context = Context::createGlobal(shared_context.get());
 
     global_context->makeGlobalContext();
+    global_context->initServiceDiscoveryClient();
     global_context->setApplicationType(Context::ApplicationType::TSO);
+
+    auto service_discovery = global_context->getServiceDiscoveryClient();
+
+    // as shared by devops  "consul mode is for in-house k8s cluster, dns mode is for on-cloud k8s cluster. local mode is for local test and CI"
+    if (service_discovery->getType() != ServiceDiscoveryMode::LOCAL)
+    {
+        const char * rpc_port = getenv("PORT0");
+        const std::string & tso_host = getHostIPFromEnv();
+
+        if (rpc_port != nullptr && (!tso_host.empty()))
+        {
+            tso_port = std::stoi(std::string{rpc_port});
+            host_port = createHostPortString(tso_host, tso_port);
+        }
+    }
+    else
+    {
+        // use non obvious default values so that when there is an error retrieving values out of config, we can spot it quickly
+        tso_port = config().getUInt("tso_service.port", 7070);
+        host_port = createHostPortString(config().getString("service_discovery.tso.node.host", "127.0.0.2"), tso_port);
+    }
+
+    if (host_port.empty())
+        LOG_WARNING(log, "host_port is empty. Please set PORT0 and TSO_IP env variables for consul/dns mode. For local mode, check cnch-server.xml");
+    else
+        LOG_TRACE(log, "host_port: {}", host_port);
+
+    proxy_ptr = std::make_shared<TSOProxy>(TSOConfig{config()});
+    tso_service = std::make_shared<TSOImpl>();
 
     Poco::ThreadPool server_pool(3, config().getUInt("max_connections", 1024));
     if (config().has("keeper_server"))

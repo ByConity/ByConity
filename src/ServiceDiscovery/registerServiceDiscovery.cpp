@@ -1,12 +1,12 @@
-#include "registerServiceDiscovery.h"
-#include "ServiceDiscoveryFactory.h"
+#include <ServiceDiscovery/registerServiceDiscovery.h>
+#include <ServiceDiscovery/ServiceDiscoveryFactory.h>
 
 namespace DB
 {
+
 void registerServiceDiscoveryLocal(ServiceDiscoveryFactory & factory);
 void registerServiceDiscoveryConsul(ServiceDiscoveryFactory & factory);
 void registerServiceDiscoveryDNS(ServiceDiscoveryFactory & factory);
-
 
 void registerServiceDiscovery()
 {

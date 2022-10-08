@@ -91,9 +91,6 @@ private:
     Poco::Timer timer;
     Poco::TimerCallback<TSOServer> callback;
 
-    using ServiceDiscoveryClientPtr = std::shared_ptr<IServiceDiscovery>;
-    mutable ServiceDiscoveryClientPtr service_discovery;
-
     ContextMutablePtr global_context;
 
     std::shared_ptr<KeeperDispatcher> keeper_dispatcher;

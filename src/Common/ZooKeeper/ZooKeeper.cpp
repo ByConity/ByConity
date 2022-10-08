@@ -177,7 +177,7 @@ struct ZooKeeperArgs
         implementation = "zookeeper";
         for (const auto & key : keys)
         {
-            if (endpoints.empty() && startsWith(key, "node"))
+            if (startsWith(key, "node"))
             {
                 hosts.push_back(
                         (config.getBool(config_name + "." + key + ".secure", false) ? "secure://" : "") +
@@ -210,9 +210,14 @@ struct ZooKeeperArgs
         }
 
         /// get Zookeeper node from service_discovery
-        for (const auto & endpoint: endpoints)
+        if (hosts.empty())
         {
-            hosts.push_back(endpoint.tags.count("secure") ? "secure://" : "" + endpoint.host + std::to_string(endpoint.port));
+            for (const auto & endpoint: endpoints)
+                hosts.push_back(endpoint.tags.count("secure") ? "secure://" : "" + endpoint.host + std::to_string(endpoint.port));
+        }
+        else if (!endpoints.empty())
+        {
+            LOG_WARNING(&Poco::Logger::get("Zookeeper"), "Get Zookeeper node from config and service_discovery. Will use the first one");
         }
 
         if (!chroot.empty())

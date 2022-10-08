@@ -182,9 +182,9 @@ void FourLetterCommandFactory::initializeWhiteList(KeeperDispatcher & keeper_dis
         }
         else
         {
-            if (auto code = commands.contains(IFourLetterCommand::toCode(token)))
+            if (commands.contains(IFourLetterCommand::toCode(token)))
             {
-                white_list.push_back(code);
+                white_list.push_back(IFourLetterCommand::toCode(token));
             }
             else
             {
