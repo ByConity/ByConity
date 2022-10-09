@@ -7,6 +7,8 @@
 #include <Transaction/ICnchTransaction.h>
 #include <WorkerTasks/ManipulationList.h>
 
+#include <condition_variable>
+
 namespace DB
 {
 
@@ -29,6 +31,8 @@ struct ManipulationTaskRecord
     std::unique_ptr<ManipulationListEntry> manipulation_entry;
     bool try_execute{false};
 
+    bool remove_task{false};
+
     String task_id;
     TransactionCnchPtr transaction;
 
@@ -44,7 +48,7 @@ struct ManipulationTaskRecord
 
 struct FutureManipulationTask
 {
-    FutureManipulationTask(CnchMergeMutateThread & p, ManipulationType t) : parent(p), record(std::make_shared<ManipulationTaskRecord>(p))
+    FutureManipulationTask(CnchMergeMutateThread & p, ManipulationType t) : parent(p), record(std::make_unique<ManipulationTaskRecord>(p))
     {
         record->type = t;
     }
@@ -66,13 +70,13 @@ struct FutureManipulationTask
     TxnTimestamp calcColumnsCommitTime() const;
     FutureManipulationTask & assignSourceParts(ServerDataPartsVector && parts);
     FutureManipulationTask & prepareTransaction();
-    std::shared_ptr<ManipulationTaskRecord> moveRecord();
+    std::unique_ptr<ManipulationTaskRecord> moveRecord();
 
     CnchMergeMutateThread & parent;
 
     bool try_execute{false};
 
-    std::shared_ptr<ManipulationTaskRecord> record;
+    std::unique_ptr<ManipulationTaskRecord> record;
     ServerDataPartsVector parts;
     std::optional<CnchMergeTreeMutationEntry> mutation_entry;
 };
@@ -89,7 +93,7 @@ struct MergeSelectionMetrics
 class CnchMergeMutateThread : public ICnchBGThread
 {
     using TaskRecord = ManipulationTaskRecord;
-    using TaskRecordPtr = std::shared_ptr<TaskRecord>;
+    using TaskRecordPtr = std::unique_ptr<TaskRecord>;
 
     friend struct ManipulationTaskRecord;
     friend struct FutureManipulationTask;
@@ -106,6 +110,8 @@ public:
 
     String triggerPartMerge(StoragePtr & istorage, const String & partition_id, bool aggressive, bool try_select, bool try_execute);
 
+    void waitTasksFinish(const std::vector<String> & task_ids, UInt64 timeout_ms);
+
 private:
     void preStart() override;
 
@@ -119,18 +125,16 @@ private:
 
     bool tryMergeParts(StoragePtr & istorage, StorageCnchMergeTree & storage);
     bool trySelectPartsToMerge(StoragePtr & istorage, StorageCnchMergeTree & storage, MergeSelectionMetrics & metrics);
-    void submitFutureManipulationTask(FutureManipulationTask & future_task);
+    String submitFutureManipulationTask(FutureManipulationTask & future_task);
 
     // Mutate
     bool tryMutateParts(StoragePtr & istorage, StorageCnchMergeTree & storage);
     void parseMutationEntries(const Strings & all_mutations, std::lock_guard<std::mutex> &);
     void removeMutationEntry(const TxnTimestamp & commit_ts, bool recluster_finish, std::lock_guard<std::mutex> &);
 
-    void removeTaskImpl(const String & task_id, TaskRecordPtr * out_task_record, std::lock_guard<std::mutex> & lock);
+    void removeTaskImpl(const String & task_id, std::lock_guard<std::mutex> & lock);
 
     CnchWorkerClientPtr getWorker(ManipulationType type, const ServerDataPartsVector & all_parts);
-
-    bool isPartsCacheValid(const StorageCnchMergeTree & cnch_table);
 
     bool needCollectExtendedMergeMetrics();
 
@@ -144,6 +148,7 @@ private:
     NameSet currently_merging_mutating_parts;
 
     std::mutex task_records_mutex;
+    std::condition_variable task_records_cv;
     std::unordered_map<String, TaskRecordPtr> task_records;
 
     std::mutex try_merge_parts_mutex; /// protect tryMergeParts(), triggerPartMerge()
@@ -171,6 +176,8 @@ private:
     String vw_name;
     String pick_worker_algo;
     CnchWorkerClientPoolPtr worker_pool;
+
+    std::atomic_bool shutdown_called{false};
 
     /// Index for round-robin strategy when picking worker.
     std::atomic<size_t> merge_worker_round_robin_index = 0;

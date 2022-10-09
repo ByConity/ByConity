@@ -8,12 +8,14 @@
 namespace DB::DaemonManager
 {
 DaemonManagerClient::DaemonManagerClient(String host_port)
-    : RpcClientBase(getName(), std::move(host_port)), stub_ptr(std::make_unique<Protos::DaemonManagerService_Stub>(&getChannel()))
+    : RpcClientBase(getName(), std::move(host_port))
+    , stub_ptr(std::make_unique<Protos::DaemonManagerService_Stub>(&getChannel()))
 {
 }
 
 DaemonManagerClient::DaemonManagerClient(HostWithPorts host_ports_)
-    : RpcClientBase(getName(), std::move(host_ports_)), stub_ptr(std::make_unique<Protos::DaemonManagerService_Stub>(&getChannel()))
+    : RpcClientBase(getName(), std::move(host_ports_))
+    , stub_ptr(std::make_unique<Protos::DaemonManagerService_Stub>(&getChannel()))
 {
 }
 
@@ -67,10 +69,7 @@ std::optional<BGJobInfo> DaemonManagerClient::getDMBGJobInfo(const UUID & storag
     };
 }
 
-void DaemonManagerClient::controlDaemonJob(
-    const StorageID & storage_id,
-    CnchBGThreadType job_type,
-    CnchBGThreadAction action)
+void DaemonManagerClient::controlDaemonJob(const StorageID & storage_id, CnchBGThreadType job_type, CnchBGThreadAction action)
 {
     brpc::Controller cntl;
     Protos::ControlDaemonJobReq req;
@@ -86,7 +85,7 @@ void DaemonManagerClient::controlDaemonJob(
     RPCHelpers::checkResponse(resp);
 }
 
-void DaemonManagerClient::forwardOptimizeQuery(const StorageID & storage_id, const String & partition_id, bool enable_try)
+void DaemonManagerClient::forwardOptimizeQuery(const StorageID & storage_id, const String & partition_id, bool enable_try, bool mutations_sync, UInt64 timeout_ms)
 {
     brpc::Controller cntl;
     Protos::ForwardOptimizeQueryReq req;
@@ -95,6 +94,14 @@ void DaemonManagerClient::forwardOptimizeQuery(const StorageID & storage_id, con
     RPCHelpers::fillStorageID(storage_id, *req.mutable_storage_id());
     req.set_partition_id(partition_id);
     req.set_enable_try(enable_try);
+    req.set_mutations_sync(mutations_sync);
+
+    if (mutations_sync && timeout_ms)
+    {
+        /// set timeout for sync mode.
+        cntl.set_timeout_ms(timeout_ms);
+        req.set_timeout_ms(timeout_ms);
+    }
 
     stub_ptr->ForwardOptimizeQuery(&cntl, &req, &resp, nullptr);
 

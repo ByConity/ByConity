@@ -620,7 +620,7 @@ UInt32 CnchServerClient::reportDeduperHeartbeat(const StorageID & cnch_storage_i
     return response.code();
 }
 
-void CnchServerClient::executeOptimize(const StorageID & storage_id, const String & partition_id, bool enable_try)
+void CnchServerClient::executeOptimize(const StorageID & storage_id, const String & partition_id, bool enable_try, bool mutations_sync, UInt64 timeout_ms)
 {
     brpc::Controller cntl;
     Protos::ExecuteOptimizeQueryReq request;
@@ -629,6 +629,13 @@ void CnchServerClient::executeOptimize(const StorageID & storage_id, const Strin
     RPCHelpers::fillStorageID(storage_id, *request.mutable_storage_id());
     request.set_partition_id(partition_id);
     request.set_enable_try(enable_try);
+    request.set_mutations_sync(mutations_sync);
+
+    if (mutations_sync && timeout_ms)
+    {
+        cntl.set_timeout_ms(timeout_ms);
+        request.set_timeout_ms(timeout_ms);
+    }
 
     stub->executeOptimize(&cntl, &request, &response, nullptr);
 

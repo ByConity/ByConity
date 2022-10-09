@@ -805,13 +805,15 @@ bool StorageCnchMergeTree::optimize(const ASTPtr & query, const StorageMetadataP
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "FINAL is disabled because it is dangerous");
 
     auto bg_thread = query_context->tryGetCnchBGThread(CnchBGThreadType::MergeMutate, getStorageID());
+    auto timeout_ms = query_context->getSettingsRef().max_execution_time.totalMilliseconds();
 
     if (!bg_thread)
     {
         auto daemon_manage_client = getContext()->getDaemonManagerClient();
         if (!partition)
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Can't forward optimize query, you should specify partition");
-        daemon_manage_client->forwardOptimizeQuery(getStorageID(), getPartitionIDFromQuery(partition, query_context), enable_try);
+        auto enable_sync = query_context->getSettingsRef().mutations_sync;
+        daemon_manage_client->forwardOptimizeQuery(getStorageID(), getPartitionIDFromQuery(partition, query_context), enable_try, enable_sync, timeout_ms);
         return true;
     }
 
@@ -824,8 +826,16 @@ bool StorageCnchMergeTree::optimize(const ASTPtr & query, const StorageMetadataP
 
     auto istorage = shared_from_this();
     auto * merge_mutate_thread = dynamic_cast<CnchMergeMutateThread*>(bg_thread.get());
+    std::vector<String> task_ids;
     for (const auto & partition_id : partition_ids)
-        merge_mutate_thread->triggerPartMerge(istorage, partition_id, final, enable_try, false);
+    {
+        auto task_id = merge_mutate_thread->triggerPartMerge(istorage, partition_id, final, enable_try, false);
+        if (!task_id.empty())
+            task_ids.push_back(task_id);
+    }
+
+    if (query_context->getSettingsRef().mutations_sync != 0)
+        merge_mutate_thread->waitTasksFinish(task_ids, timeout_ms);
 
     return true;
 }
