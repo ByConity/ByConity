@@ -790,7 +790,6 @@ struct KeeperStorageCreateRequestProcessor final : public KeeperStorageRequestPr
     KeeperStorage::ResponsesForSessions
     processWatches(KeeperStorage::Watches & watches, KeeperStorage::Watches & list_watches) const override
     {
-        std::cerr << "processWatches in KeeperStorageCreateRequestProcessor" << std::endl;
         return processWatchesImpl(zk_request->getPath(), watches, list_watches, Coordination::Event::CREATED);
     }
 
@@ -809,10 +808,9 @@ struct KeeperStorageCreateRequestProcessor final : public KeeperStorageRequestPr
 
         auto parent_path = PathUtils::parentPath(request.path);
         auto parent_node = storage.uncommitted_state.getNode(parent_path);
-        std::cerr << "## request path: " << request.path << " parent_path: " << parent_path << " res: " << bool(parent_node) << std::endl;
+
         if (parent_node == nullptr)
             return {KeeperStorage::Delta{zxid, Coordination::Error::ZNONODE}};
-
         else if (parent_node->stat.ephemeralOwner != 0)
             return {KeeperStorage::Delta{zxid, Coordination::Error::ZNOCHILDRENFOREPHEMERALS}};
 

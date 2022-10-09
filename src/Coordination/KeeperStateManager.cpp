@@ -40,12 +40,18 @@ std::vector<KeeperEndpoint> parseKeeperEndpointsFromServiceDiscovery(const Poco:
     std::vector<KeeperEndpoint> result;
 
     auto service_discovery = ServiceDiscoveryFactory::instance().get(config);
+    /// TODO: fallback to service_discovery.tso.psm
     auto psm = config.getString("service_discovery.keeper.psm");
     auto endpoints = service_discovery->lookupEndpoints(psm);
 
     for (auto & endpoint: endpoints)
     {
-        result.emplace_back(KeeperEndpoint{endpoint.host, endpoint.port, std::stoi(endpoint.tags.at("id"))});
+        if (!endpoint.tags.count("PORT1"))
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Can't find `PORT1`(Keeper interserver port) from service_discovery");
+        if (!endpoint.tags.count("id"))
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Can't find `id`(Raft instance id) from service_discovery");
+
+        result.emplace_back(KeeperEndpoint{endpoint.host, std::stoi(endpoint.tags.at("PORT1")), std::stoi(endpoint.tags.at("id"))});
         if (auto it = endpoint.tags.find("priority"); it != endpoint.tags.end())
             result.back().priority = std::stoi(it->second);
         if (auto it = endpoint.tags.find("can_become_leader"); it != endpoint.tags.end())

@@ -22,6 +22,7 @@ namespace fs = std::filesystem;
 
 namespace DB::ErrorCodes
 {
+    extern const int BAD_ARGUMENTS;
     extern const int LOGICAL_ERROR;
     extern const int NOT_IMPLEMENTED;
 }
@@ -177,7 +178,7 @@ struct ZooKeeperArgs
         implementation = "zookeeper";
         for (const auto & key : keys)
         {
-            if (endpoints.empty() && startsWith(key, "node"))
+            if (startsWith(key, "node"))
             {
                 hosts.push_back(
                         (config.getBool(config_name + "." + key + ".secure", false) ? "secure://" : "") +
@@ -210,9 +211,18 @@ struct ZooKeeperArgs
         }
 
         /// get Zookeeper node from service_discovery
-        for (const auto & endpoint: endpoints)
+        if (hosts.empty())
         {
-            hosts.push_back(endpoint.tags.count("secure") ? "secure://" : "" + endpoint.host + std::to_string(endpoint.port));
+            for (const auto & endpoint: endpoints)
+            {
+                if (!endpoint.tags.count("PORT2"))
+                    throw DB::Exception(DB::ErrorCodes::BAD_ARGUMENTS, "Can't find `PORT2`(Keeper TCP port) from service_discovery");
+                hosts.push_back(endpoint.tags.count("secure") ? "secure://" : "" + endpoint.host + ":" + endpoint.tags.at("PORT2"));
+            }
+        }
+        else if (!endpoints.empty())
+        {
+            LOG_WARNING(&Poco::Logger::get("Zookeeper"), "Get Zookeeper node from config and service_discovery. Will use the first one");
         }
 
         if (!chroot.empty())

@@ -15,7 +15,11 @@ class LeaderElectionBase
 public:
     explicit LeaderElectionBase(size_t wait_ms_): wait_ms(wait_ms_) {}
 
-    virtual ~LeaderElectionBase() = default;
+    virtual ~LeaderElectionBase()
+    {
+        if (restart_task)
+            restart_task->deactivate();
+    }
 
     virtual void onLeader() = 0;
     virtual void exitLeaderElection() = 0;
@@ -33,7 +37,7 @@ public:
     {
         try
         {
-            if (!current_zookeeper || !current_zookeeper->expired())
+            if (!current_zookeeper || current_zookeeper->expired())
             {
                 exitLeaderElection();
                 enterLeaderElection();

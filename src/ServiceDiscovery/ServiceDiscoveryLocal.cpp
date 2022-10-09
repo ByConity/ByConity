@@ -82,15 +82,18 @@ HostWithPortsVec ServiceDiscoveryLocal::lookup(const String & psm_name, Componen
 ServiceEndpoints ServiceDiscoveryLocal::lookupEndpoints(const String & psm_name)
 {
     if (!exists(psm_name))
-        throw Exception("psm:" + psm_name + " not exists in service registry.", ErrorCodes::SD_PSM_NOT_EXISTS);
+        throw Exception("psm: " + psm_name + " not exists in service registry.", ErrorCodes::SD_PSM_NOT_EXISTS);
 
     auto endpoints = table.at(psm_name);
     ServiceEndpoints res;
     for (const auto & endpoint: endpoints)
     {
         res.emplace_back(ServiceEndpoint{endpoint.host, 0, endpoint.tags});
-        res.back().port = std::stoi(endpoint.ports.at("PORT0"));
-        for (const auto & [name, port]: endpoint.tags)
+        if (endpoint.ports.count("PORT0"))
+            res.back().port = std::stoi(endpoint.ports.at("PORT0"));
+        for (const auto & [name, tag]: endpoint.tags)
+            res.back().tags.emplace(name, tag);
+        for (const auto & [name, port]: endpoint.ports) /// add ports to tags.
             res.back().tags.emplace(name, port);
         res.back().tags.emplace("hostname", endpoint.hostname);
     }

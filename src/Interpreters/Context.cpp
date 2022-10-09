@@ -2126,9 +2126,9 @@ zkutil::ZooKeeperPtr Context::getZooKeeper() const
         const auto & config = shared->zookeeper_config ? *shared->zookeeper_config : getConfigRef();
         ServiceEndpoints endpoints;
         if (getConfigRef().has("service_discovery.keeper"))
-            endpoints = getServiceDiscoveryClient()->lookupEndpoints("service_discovery.keeper.psm");
+            endpoints = getServiceDiscoveryClient()->lookupEndpoints(getConfigRef().getString("service_discovery.keeper.psm"));
         else if (getConfigRef().has("service_discovery.tso"))
-            endpoints = getServiceDiscoveryClient()->lookupEndpoints("service_discovery.tso.psm");
+            endpoints = getServiceDiscoveryClient()->lookupEndpoints(getConfigRef().getString("service_discovery.tso.psm"));
 
         if (!shared->zookeeper)
             shared->zookeeper = std::make_shared<zkutil::ZooKeeper>(config, "zookeeper", getZooKeeperLog(), endpoints);
