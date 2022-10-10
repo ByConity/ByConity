@@ -4,6 +4,7 @@
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
 #include <Storages/StorageCloudMergeTree.h>
 #include <Transaction/ICnchTransaction.h>
+#include <Transaction/CnchLock.h>
 #include <WorkerTasks/CloudUniqueMergeTreeMergeTask.h>
 #include <WorkerTasks/MergeTreeDataMerger.h>
 
@@ -226,20 +227,9 @@ void CloudUniqueMergeTreeMergeTask::executeImpl()
     {
         partition_lock->setPartition(partition_id);
     }
-    bool lock_success = false;
-    int num_try = 10;
-    while (num_try--)
-    {
-        if (txn->tryLock(partition_lock))
-        {
-            lock_success = true;
-            LOG_DEBUG(log, "Merge task {} acquired lock in {} ms", params.task_id, lock_watch.elapsedMilliseconds());
-            break;
-        }
-    }
-
-    if (!lock_success)
-        throw Exception("Failed to acquire lock for merge task " + params.task_id, ErrorCodes::ABORTED);
+    auto ctx = getContext();
+    CnchLockHolder cnch_lock(*ctx, {std::move(partition_lock)});
+    cnch_lock.lock();
 
     lock_watch.restart();
 
@@ -254,7 +244,6 @@ void CloudUniqueMergeTreeMergeTask::executeImpl()
     cnch_writer.commitDumpedParts(dumped_data);
     /// TODO: make sure txn is rollbacked and lock is released
 
-    txn->unlock();
     LOG_INFO(
         log,
         "Merge task {} succeed in {} ms (with {} ms holding lock)",

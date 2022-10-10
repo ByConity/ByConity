@@ -1,44 +1,37 @@
 #pragma once
 
+#include <Core/BackgroundSchedulePool.h>
 #include <Interpreters/StorageID.h>
 #include <Transaction/LockRequest.h>
+#include <boost/core/noncopyable.hpp>
+#include <Transaction/TxnTimestamp.h>
 
 namespace DB
 {
 class Context;
-class CnchServerClient;
-using CnchServerClientPtr = std::shared_ptr<CnchServerClient>;
 
-class CnchLock
+class CnchLockHolder : private boost::noncopyable
 {
 public:
-    explicit CnchLock(LockInfoPtr info)
-        : lock_info(std::move(info))
-    {
-    }
+    explicit CnchLockHolder(const Context & global_context_, std::vector<LockInfoPtr> && elems);
+    ~CnchLockHolder();
 
-    ~CnchLock();
-    CnchLock(const CnchLock &) = delete;
-    CnchLock & operator=(const CnchLock &) = delete;
-
-    const String & getHostPort() { return host_with_rpc; }
-
-    bool tryLock(const Context & context);
-    void lock(const Context & context);
+    void lock();
     void unlock();
-    bool isLocked();
-
-    // the lock will not be released when CnchLock object gets destroied
-    void setKeepAlive(bool alive) { keep_alive = alive; }
+    void setLockExpireDuration(std::chrono::milliseconds expire_duration) { lock_expire_duration = expire_duration; }
 
 private:
-    bool keep_alive{false};
-    std::atomic<bool> locked{false};
-    LockInfoPtr lock_info;
-    String host_with_rpc;
-    CnchServerClientPtr client;
+    void reportLockHeartBeatTask();
+    void reportLockHeartBeat();
+
+    const Context & global_context;
+    TxnTimestamp txn_id;
+    BackgroundSchedulePool::TaskHolder report_lock_heartbeat_task;
+
+    class CnchLock;
+    std::vector<std::unique_ptr<CnchLock>> cnch_locks;
+
+    std::chrono::milliseconds lock_expire_duration{30000};
 };
 
-using CnchLockPtr = std::unique_ptr<CnchLock>;
-using CnchLockPtrs = std::vector<CnchLockPtr>;
 }

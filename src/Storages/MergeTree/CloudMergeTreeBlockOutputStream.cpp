@@ -300,13 +300,8 @@ void CloudMergeTreeBlockOutputStream::writeSuffixForUpsert()
     std::vector<LockInfoPtr> locks_to_acquire
         = CnchDedupHelper::getLocksToAcquire(scope, txn->getTransactionID(), storage, /*timeout_ms*/ 10000);
     Stopwatch lock_watch;
-    for (auto & lock_info : locks_to_acquire)
-    {
-        if (!txn->tryLock(lock_info))
-            throw Exception(ErrorCodes::CNCH_LOCK_ACQUIRE_FAILED, "Failed to acquire lock for txn {}", txn->getTransactionID().toString());
-    }
-    LOG_DEBUG(log, "Acquired all {} locks in {} ms", locks_to_acquire.size(), lock_watch.elapsedMilliseconds());
-    lock_watch.restart();
+    CnchLockHolder cnch_lock(*context, std::move(locks_to_acquire));
+    cnch_lock.lock();
 
     ts = context->getTimestamp(); /// must get a new ts after locks are acquired
     MergeTreeDataPartsCNCHVector visible_parts = CnchDedupHelper::getVisiblePartsToDedup(scope, *cnch_table, ts);
@@ -325,7 +320,6 @@ void CloudMergeTreeBlockOutputStream::writeSuffixForUpsert()
 
     watch.restart();
     txn->commitV2();
-    txn->unlock();
     LOG_INFO(
         log,
         "Committed transaction {} in {} ms (with {} ms holding lock)",

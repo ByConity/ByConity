@@ -117,7 +117,6 @@ TxnTimestamp CnchWorkerTransaction::commit()
     setStatus(CnchTransactionStatus::Finished);
     LOG_DEBUG(log, "Successfully committed transaction {} with ts {}\n", txn_record.txnID().toUInt64(), commit_ts.toString());
 
-    unlock();
     return commit_ts;
 }
 
@@ -142,7 +141,6 @@ TxnTimestamp CnchWorkerTransaction::rollback()
         tryLogCurrentException(log, __PRETTY_FUNCTION__);
     }
 
-    unlock();
     return ts;
 }
 

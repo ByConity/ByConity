@@ -224,6 +224,7 @@ void LockManager::unlock(LockRequest * request)
 
 void LockManager::lock(const LockInfoPtr & info, const Context & context)
 {
+    LOG_DEBUG(log, "Acquire lock for txn {}", info->txn_id);
     assert(info->lock_id != 0);
     // register transaction in LockManager
     UInt64 txn_id = UInt64(info->txn_id);
@@ -268,6 +269,8 @@ void LockManager::lock(const LockInfoPtr & info, const Context & context)
 
 void LockManager::unlock(const LockInfoPtr & info)
 {
+    LOG_DEBUG(log, "Release lock for txn {}", info->txn_id);
+
     const UInt64 txn_id = info->txn_id.toUInt64();
     const LockID lock_id = info->lock_id;
 
