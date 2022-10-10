@@ -71,13 +71,14 @@ jobs:
           - mkdir /test_output/foundationdb && cp /opt/tiger/foundationdb/logs/* /test_output/foundationdb/. || true
           - bash /home/code/.codebase/ci_scripts/common_component/copy_core_to_shared.sh || true # copy core to artifact folder
           - bash /home/code/.codebase/ci_scripts/common_component/copy_case_stdout_to_shared.sh || true # copy stdout to artifact folder
+          - mv /test_output /Artifacts  && tar --warning=no-file-changed -zcf  /Artifacts.tar.gz /Artifacts/*  || true
           - bash /home/code/.codebase/ci_scripts/common_component/block_ci.sh || true # check block_ci_flag
       - &upload_artifact
         name: Upload Artifact
         uses: actions/upload-artifact
         inputs:
           name: Artifacts
-          path: /test_output
+          path: /Artifacts.tar.gz
       - &analyse_result
         name: Analyse Result
         commands:

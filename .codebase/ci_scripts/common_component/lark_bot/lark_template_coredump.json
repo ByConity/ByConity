@@ -5,7 +5,7 @@
    "header":{
       "template":"red",
       "title":{
-         "content":"  📢 Cordedump detected in your MR",
+         "content":"  📢 Cordedump detected in MR",
          "tag":"plain_text"
       }
    },
@@ -13,8 +13,26 @@
       "zh_cn":[
          {
             "tag":"div",
+            "text_align": "left",
             "text":{
-               "content":"Hi <at email=xinghe.shangguan@bytedance.com></at>, please take action for below ***core.*** files from your MR \n\uD83D\uDCC4 ***corefile***：[core.xxx.1,core.xxx.2,core.xxx.3]  ",
+               "content":"Hi <at email=yin.li@bytedance.com></at>, please take action for below ***core.*** files from your MR",
+               "tag":"lark_md"
+            }
+
+         },
+         {
+            "tag":"div",
+            "text_align": "left",
+            "text":{
+               "content":"gdb information xxxxxxxx ",
+               "tag":"plain_text"
+            }
+         },
+                  {
+            "tag":"div",
+            "text_align": "left",
+            "text":{
+               "content":"**only limited gdb info in the card, please check full log in CI artifacts.** ",
                "tag":"lark_md"
             }
          },

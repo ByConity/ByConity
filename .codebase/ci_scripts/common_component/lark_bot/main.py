@@ -117,16 +117,17 @@ def send_dump_message_card(data):
 
     # update body
     lark_message_card['header']['title']['content'] = message_title
-    lark_message_card['i18n_elements']['zh_cn'][0]['text'][
-        'content'] = f"Hi {content_at}, please take action for below files generated from your MR \n{content_core}\n\n{peek_gdb_info}"
-    lark_message_card['i18n_elements']['zh_cn'][1]['fields'][0]['text']['content'] = f"**🗂️ Test Name**：{test_name}"
-    lark_message_card['i18n_elements']['zh_cn'][1]['fields'][1]['text']['content'] = f"**📅 Datetime**：{date_time}"
+    lark_message_card['i18n_elements']['zh_cn'][0]['text']['content'] = f"Hi {content_at}, please take action for below files generated from your MR \n {content_core}"
+    lark_message_card['i18n_elements']['zh_cn'][1]['text']['content'] = f"{peek_gdb_info}"
+
+    lark_message_card['i18n_elements']['zh_cn'][3]['fields'][0]['text']['content'] = f"**🗂️ Test Name**：{test_name}"
+    lark_message_card['i18n_elements']['zh_cn'][3]['fields'][1]['text']['content'] = f"**📅 Datetime**：{date_time}"
 
     if mr_link:
-        lark_message_card['i18n_elements']['zh_cn'][2]['actions'][0]['url'] = mr_link
+        lark_message_card['i18n_elements']['zh_cn'][4]['actions'][0]['url'] = mr_link
     else:
-        lark_message_card['i18n_elements']['zh_cn'][2]['actions'][0]['text']['content'] = 'Check Cron Jobs'
-        lark_message_card['i18n_elements']['zh_cn'][2]['actions'][0]['url'] = "https://code.byted.org/dp/ClickHouse/+/pipelines?trigger=cron"
+        lark_message_card['i18n_elements']['zh_cn'][4]['actions'][0]['text']['content'] = 'Check Cron Jobs'
+        lark_message_card['i18n_elements']['zh_cn'][4]['actions'][0]['url'] = "https://code.byted.org/dp/ClickHouse/+/pipelines?trigger=cron"
 
     print("lark_message_card dict is:", lark_message_card)
 
@@ -181,9 +182,11 @@ def get_mr_link():
 
 
 def peek_gdb_info(base_dir='/shared/'):
+
     lst = []
     max_number_of_file = 3
     counter = 0
+
     for filepath, dirnames, filenames in os.walk(base_dir):
         for filename in filenames:
             if filename.endswith('.gdb_info_extracted') and counter <= max_number_of_file:
@@ -195,7 +198,6 @@ def peek_gdb_info(base_dir='/shared/'):
     if lst:
         for line in lst:
             string += line
-        string += '**only limited gdb info in the card, please check full log in CI artifacts.**'
 
     return string
 
@@ -218,6 +220,6 @@ if __name__ == "__main__":
         print('no alert will be sent to user due to no coredump or minidump file')
         exit(0)
 
-    data = get_mr_owner(), get_mr_test_name(), get_current_datetime(), corefile_list, minidump_file_list, get_mr_link(), peek_gdb_info()
+    data = get_mr_owner(), get_mr_test_name(), get_current_datetime(), corefile_list, minidump_file_list, get_mr_link(), peek_gdb_info(args.coredump_path)
 
     send_dump_message_card(data)
