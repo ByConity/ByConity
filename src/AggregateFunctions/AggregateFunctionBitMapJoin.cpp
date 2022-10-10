@@ -71,7 +71,7 @@ namespace
     createAggregateFunctionBitMapJoin(const String & name, const DataTypes & argument_types, const Array & parameters, const Settings *)
     {
         if (argument_types.size() < 4)
-            throw Exception("AggregateFunction " + name + " needs at least four arguments", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("AggregateFunction " + name + " needs at least four arguments", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         /// 3 params means default bitmap operation (AND) and default join type (INNER) is configured, and
         /// 5 params means default thread_numuber (32)

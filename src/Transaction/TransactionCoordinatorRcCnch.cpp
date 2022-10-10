@@ -28,6 +28,8 @@ namespace ErrorCodes
 {
     // extern const int BAD_CAST;
     extern const int LOGICAL_ERROR;
+    extern const int CNCH_TRANSACTION_NOT_INITIALIZED;
+    extern const int CNCH_TRANSACTION_HAS_BEEN_CREATED;
 }
 
 TransactionCnchPtr TransactionCoordinatorRcCnch::createTransaction(const CreateTransactionOption & opt)
@@ -69,7 +71,7 @@ TransactionCnchPtr TransactionCoordinatorRcCnch::createTransaction(const CreateT
     {
         std::lock_guard<std::mutex> lock(list_mutex);
         if (!active_txn_list.emplace(txn_id, txn).second)
-            throw Exception("Transaction (txn_id: " + txn_id.toString() + ") has been created", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Transaction (txn_id: " + txn_id.toString() + ") has been created", ErrorCodes::CNCH_TRANSACTION_HAS_BEEN_CREATED);
     }
 
     if (!txn->isReadOnly() && txn->isSecondary() && opt.initiator != CnchTransactionInitiator::Txn)
@@ -114,7 +116,7 @@ TransactionCnchPtr TransactionCoordinatorRcCnch::getTransaction(const TxnTimesta
     auto it = active_txn_list.find(txnID);
     if (it == active_txn_list.end())
     {
-        throw Exception("Transaction " + txnID.toString() + " not found", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Transaction " + txnID.toString() + " not found", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
     }
 
     return it->second;

@@ -742,7 +742,7 @@ void InterpreterCreateQuery::setEngine(ASTCreateQuery & create) const
                 ErrorCodes::INCORRECT_QUERY);
 
         /// CnchHive only when create table need to check hive schema.
-        if(create.storage->engine->name == "CnchHive")
+        if(create.storage && create.storage->engine && create.storage->engine->name == "CnchHive")
             create.create = true;
 
         return;

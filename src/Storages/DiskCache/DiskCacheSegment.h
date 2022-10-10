@@ -8,6 +8,7 @@
 #include <Storages/MarkCache.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Storages/MergeTree/MergeTreeMarksLoader.h>
+#include <Storages/IStorage_fwd.h>
 
 namespace DB
 {
@@ -38,6 +39,7 @@ private:
     void initSourceBufferIfNecessary();
 
     IMergeTreeDataPartPtr data_part;
+    ConstStoragePtr storage;
     String stream_name;
     String extension;
 
