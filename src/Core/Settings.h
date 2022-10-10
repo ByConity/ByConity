@@ -590,6 +590,9 @@ class IColumn;
     M(Bool, debug_plan_generation, false, "Enable complex query mode to split plan to distributed stages", 0)\
     M(Bool, send_plan_segment_by_brpc, true, "Whether to send plan segment by BRPC", 0)\
     \
+    /** Brpc config **/\
+    M(Bool, enable_brpc_builtin_services, true, "Whether to enable brpc builtin services", 0)\
+    \
     /** Settings used for BITENGINE */ \
     M(Bool, decode_bitengine_bitmap, false, "Whether to decode bitmap column if it is encoded.", 0) \
     M(Bool, use_encoded_bitmap, true, "Whether to decode bitmap column if it is encoded.", 0) \
