@@ -1,6 +1,6 @@
 set -x
 # copy core file to shared folder
-CORE_FILE_PATH='/'
+CORE_FILE_PATH='/test_output/'
 ARTIFACT_FOLDER_PATH='/test_output/coredump'
 MINIDUMP_FILE_PATH='/test_output/'
 
