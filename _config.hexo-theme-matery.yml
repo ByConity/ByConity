@@ -1,7 +1,7 @@
 # main menu navigation url and icon
 # 配置菜单导航的名称、路径和图标icon.
 menu:
-  Index:
+  Home:
     url: /
     icon: fas fa-home
   # Tags:
@@ -10,18 +10,24 @@ menu:
   # Categories:
   #   url: /categories
   #   icon: fas fa-bookmark
-  Blog:
-    url: /blog
-    icon: fas fa-bookmark
+  Projects:
+    url: /projects
+    icon: fas fa-tags
   Docs:
     url: /docs
     icon: fas fa-archive
+  Blog:
+    url: /blog
+    icon: fas fa-bookmark
+  Community:
+    url: /blog
+    icon: fas fa-user-circle
   # Archives:
   #   url: /archives
   #   icon: fas fa-archive
-  About:
-    url: /about
-    icon: fas fa-user-circle
+  # About:
+  #   url: /about
+  #   icon: fas fa-user-circle
   # Contact:
   #   url: /contact
   #   icon: fas fa-comments
@@ -74,6 +80,7 @@ dream:
   showTitle: true
   title: 一二三四五六七八九十
   text: 一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十
+  features: true
 
 # Whether to display the musics.
 # 是否在首页显示音乐.
@@ -574,8 +581,8 @@ subtitle:
   startDelay: 300 # 开始延迟
   typeSpeed: 100 # 打字速度
   backSpeed: 50 # 删除速度
-  sub1: 一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十
-  sub2: 一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十
+  sub1: ByConity 是分布式的云原生SQL数仓引擎，擅长交互式查询和即席查询，具有支持多表关联复杂查询、集群扩容无感、离线批数据和实时数据流统一汇总等特点。
+  sub2: ByConity 是分布式的云原生SQL数仓引擎，擅长交互式查询和即席查询，具有支持多表关联复杂查询、集群扩容无感、离线批数据和实时数据流统一汇总等特点。
 
 # 手机二级菜单.
 navMenu:
@@ -639,3 +646,21 @@ bbtime:
  appId: # 你的appId
  appKey: # 你的appKey
  serverURLs: # https://你的api
+
+# custom - features.
+features:
+  -
+    img:
+      url: theme.home.features.archimg.url
+      title: theme.home.features.archimg.title
+  -
+    cards:
+      - 
+        title: theme.home.features.feature.0.title
+        text: theme.home.features.feature.0.text
+      - 
+        title: theme.home.features.feature.1.title
+        text: theme.home.features.feature.1.text
+      - 
+        title: theme.home.features.feature.2.title
+        text: theme.home.features.feature.2.text

@@ -17,6 +17,10 @@
                         <%- partial('_widget/dream') %>
                     <% } %>
 
+                    <% if (theme.features && theme.features.length) { %>
+                        <%- partial('_widget/features') %>
+                    <% } %>
+
                     <% if (theme.music.enable && !theme.music.fixed) { %>
                         <%- partial('_widget/music') %>
                         <% } %>
