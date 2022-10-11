@@ -848,7 +848,7 @@ void ActionsMatcher::visit(const ASTFunction & node, const ASTPtr & ast, Data & 
         bool should_update_bitmap_index_info = data.bitmap_index_info && !data.bitmap_index_info->index_names.count(node.getColumnName());
         size_t arg_size = node.arguments->children.size();
         if (arg_size % 2 != 0)
-            throw Exception("The number of arguments is wrong in arraySet function", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("The number of arguments is wrong in arraySet function", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
 
         // to check const arguments. if the only_consts is true, arraySetCheck should make set if and only if the i and i + 2 is const literal

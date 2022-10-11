@@ -3877,9 +3877,10 @@ namespace Catalog
                 break;
         }
 
-        auto & table = table_versions.back();
-        if (table_versions.empty() || (Status::isDeleted(table->status()) && !with_deleted))
+        if (table_versions.empty() || (Status::isDeleted(table_versions.back()->status()) && !with_deleted))
             return {};
+
+        auto & table = table_versions.back();
 
         /// collect all previous version's definition
         if (with_prev_versions)
