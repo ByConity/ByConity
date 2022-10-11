@@ -19,7 +19,7 @@ DiskCacheSegment::DiskCacheSegment(
     const String & extension_)
     : IDiskCacheSegment(segment_number_, segment_size_)
     , data_part(data_part_)
-    , storage(data_part_->storage.shared_from_this())
+    , storage(data_part_->storage.shared_from_this()) /// Need to extend the lifetime of storage because disk cache can run async
     , stream_name(stream_name_)
     , extension(extension_)
     , marks_loader(
