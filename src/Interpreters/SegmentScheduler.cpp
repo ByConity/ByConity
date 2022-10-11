@@ -73,16 +73,8 @@ SegmentScheduler::insertPlanSegments(const String & query_id, PlanSegmentTree * 
     auto server_resource = query_context->tryGetCnchServerResource();
     if (server_resource)
     {
-        const auto & worker_group = query_context->tryGetCurrentWorkerGroup();
-        if (worker_group)
-        {
-            /// TODO: we can skip some worker
-            /// TODO: sendResource should support sending worker in batch
-            for (const auto & host : worker_group->getHostWithPortsVec())
-            {
-                server_resource->sendResource(query_context, host);
-            }
-        }
+        /// TODO: we can skip some worker
+        server_resource->sendResource(query_context);
     }
 
     scheduler(query_id, query_context, dag_ptr);
