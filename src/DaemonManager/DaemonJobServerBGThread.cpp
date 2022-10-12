@@ -789,7 +789,7 @@ Result DaemonJobServerBGThread::executeJobAction(const StorageID & storage_id, C
     return {"", false};
 }
 
-void DaemonJobServerBGThread::executeOptimize(const StorageID & storage_id, const String & partition_id, bool enable_try) const
+void DaemonJobServerBGThread::executeOptimize(const StorageID & storage_id, const String & partition_id, bool enable_try, bool mutations_sync, UInt64 timeout_ms) const
 {
     auto bg_ptr = getBackgroundJob(storage_id.uuid);
     if (!bg_ptr)
@@ -808,7 +808,7 @@ void DaemonJobServerBGThread::executeOptimize(const StorageID & storage_id, cons
     }
 
     CnchServerClientPtr server_client = getContext()->getCnchServerClient(info.host_port);
-    server_client->executeOptimize(storage_id, partition_id, enable_try);
+    server_client->executeOptimize(storage_id, partition_id, enable_try, mutations_sync, timeout_ms);
 }
 
 BackgroundJobs DaemonJobServerBGThread::fetchCnchBGThreadStatus()

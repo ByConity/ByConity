@@ -58,7 +58,6 @@ void executeManipulationTask(ManipulationTaskParams params, ContextPtr context)
         if (!params.storage)
             throw Exception("No storage in manipulate task parameters", ErrorCodes::LOGICAL_ERROR);
 
-        params.assignSourceParts(CnchPartsHelper::calcVisibleParts(params.source_data_parts, false));
         auto task = params.storage->manipulate(params, context);
         task->execute();
 

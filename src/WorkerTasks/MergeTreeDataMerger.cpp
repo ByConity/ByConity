@@ -199,7 +199,6 @@ void MergeTreeDataMerger::prepareNewParts()
     /// TODO uuid
     new_data_part->setColumns(storage_columns);
     new_data_part->partition.assign(params.source_data_parts.front()->partition);
-    new_data_part->checksums_ptr = std::make_shared<MergeTreeData::DataPart::Checksums>();
     new_data_part->is_temp = true;
 
     /// TODO: support TTL ?
@@ -207,7 +206,7 @@ void MergeTreeDataMerger::prepareNewParts()
     /// CNCH fields
     new_data_part->columns_commit_time = params.columns_commit_time;
     /// use max_mutation_commit_time
-    /// because we will remove outdated columns, indices, build bitmap indices, skip indices if need when merge new parts.
+    /// because we will remove outdated columns, indices, bitmap indices, skip indices if need when merge new parts.
     TxnTimestamp mutation_commit_time = 0;
     for (const auto & part : params.source_data_parts)
         mutation_commit_time = std::max(mutation_commit_time, part->mutation_commit_time);

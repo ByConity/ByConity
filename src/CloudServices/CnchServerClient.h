@@ -105,7 +105,7 @@ public:
 
     UInt32 reportDeduperHeartbeat(const StorageID & cnch_storage_id, const String & worker_table_name);
 
-    void executeOptimize(const StorageID & storage_id, const String & partition_id, bool enable_try);
+    void executeOptimize(const StorageID & storage_id, const String & partition_id, bool enable_try, bool mutations_sync, UInt64 timeout_ms);
 private:
     std::unique_ptr<Protos::CnchServerService_Stub> stub;
 };
