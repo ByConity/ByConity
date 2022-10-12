@@ -6,7 +6,6 @@ CREATE TABLE unique_with_version_bad1 (event_time DateTime, id UInt64, m1 UInt32
 ALTER TABLE unique_with_version_bad1 DROP COLUMN m1; -- { serverError 44 }
 ALTER TABLE unique_with_version_bad1 RENAME COLUMN m1 to a1; -- { serverError 44 }
 ALTER TABLE unique_with_version_bad1 MODIFY COLUMN m1 String; -- { serverError 44 }
-ALTER TABLE unique_with_version_bad1 CLEAR COLUMN m1 in partition '2021-01-01'; -- { serverError 48 }
 
 -- Test use not exist as version column
 CREATE TABLE unique_with_version_bad2 (event_time DateTime, id UInt64, m1 UInt32, m2 UInt64) ENGINE = CnchMergeTree(unknown) PARTITION BY toDate(event_time) ORDER BY id UNIQUE KEY id; -- { serverError 16 }

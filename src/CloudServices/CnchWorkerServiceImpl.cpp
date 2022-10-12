@@ -525,6 +525,7 @@ void CnchWorkerServiceImpl::createDedupWorker(
             try
             {
                 // CurrentThread::attachQueryContext(*context);
+                context->setSetting("default_database_engine", String("Memory"));
                 executeQuery(query, context);
                 LOG_INFO(log, "Created local table {}", storage_id.getFullTableName());
 

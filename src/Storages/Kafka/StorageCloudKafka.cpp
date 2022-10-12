@@ -853,9 +853,7 @@ void dropConsumerTables(ContextMutablePtr context, const String & db_name, const
 void createConsumerTables(const std::vector<String> & create_table_commands, ContextMutablePtr global_context)
 {
     auto create_context = Context::createCopy(global_context);
-    auto setting = create_context->getSettings();
-    setting.default_database_engine.value = DefaultDatabaseEngine::Memory;
-    create_context->setSettings(setting);
+    create_context->setSetting("default_database_engine", String("Memory"));
 
     ParserCreateQuery parser;
     for (const auto & cmd : create_table_commands)

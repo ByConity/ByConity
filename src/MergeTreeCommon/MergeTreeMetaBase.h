@@ -490,6 +490,13 @@ protected:
 
     void checkTTLExpressions(const StorageInMemoryMetadata & new_metadata, const StorageInMemoryMetadata & old_metadata) const;
 
+    /// Check if the ALTER can be performed:
+    /// - all needed columns are present.
+    /// - all type conversions can be done.
+    /// - columns corresponding to primary key, indices, sign, sampling expression and date are not affected.
+    /// If something is wrong, throws an exception.
+    void checkAlterInCnchServer(const AlterCommands & commands, ContextPtr local_context) const;
+
     /// If there is no part in the partition with ID `partition_id`, returns empty ptr. Should be called under the lock.
     DataPartPtr getAnyPartInPartition(const String & partition_id, DataPartsLock & data_parts_lock) const;
 

@@ -3,7 +3,7 @@ DROP TABLE IF EXISTS u10107_common;
 CREATE TABLE u10107_common (d Date, k1 String, k2 Int64, k3 String, c1 Int64, c2 String, c3 Float64) ENGINE = CnchMergeTree() PARTITION BY d ORDER BY k1 UNIQUE KEY (k2, sipHash64(k3));
 
 -- drop key column is not allowed
-ALTER TABLE u10107_common DROP COLUMN k1; -- { serverError 44 }
+ALTER TABLE u10107_common DROP COLUMN k1; -- { serverError 47 }
 ALTER TABLE u10107_common DROP COLUMN k2; -- { serverError 44 }
 ALTER TABLE u10107_common DROP COLUMN k3; -- { serverError 44 }
 ALTER TABLE u10107_common DROP COLUMN c3;
@@ -17,7 +17,6 @@ INSERT INTO u10107_common VALUES ('20210103', 'k1', 3, 'k3', 30, '3');
 -- modify/rename/clear key column is not allowed
 ALTER TABLE u10107_common MODIFY COLUMN k2 String; -- { serverError 44 }
 ALTER TABLE u10107_common RENAME COLUMN k2 TO k4; -- { serverError 44 }
-ALTER TABLE u10107_common CLEAR COLUMN k2 IN PARTITION '2021-01-01'; -- { serverError 48 }
 
 -- add column with default values
 ALTER TABLE u10107_common ADD COLUMN c3 String DEFAULT 'N/A';
@@ -38,18 +37,6 @@ SELECT * FROM u10107_common ORDER BY d, k2;
 ALTER TABLE u10107_common COMMENT COLUMN c4 'comment for c4';
 SELECT 'After comment c4';
 DESC u10107_common;
-
--- modify column
-ALTER TABLE u10107_common MODIFY COLUMN c1 String;
-SELECT 'After modify c1 to string';
-DESC u10107_common;
-INSERT INTO u10107_common VALUES ('20210101', 'k1', 1, 'k3', 'c1', 1);
-SELECT * FROM u10107_common ORDER BY d, k2;
-
-ALTER TABLE u10107_common MODIFY COLUMN c1 Int64;
-SELECT 'After modify c1 back to int64';
-DESC u10107_common;
-SELECT * FROM u10107_common ORDER BY d, k2;
 
 -- rename column
 ALTER TABLE u10107_common RENAME COLUMN c1 TO c3;

@@ -47,9 +47,6 @@ StorageInMemoryMetadata::StorageInMemoryMetadata(const StorageInMemoryMetadata &
     , settings_changes(other.settings_changes ? other.settings_changes->clone() : nullptr)
     , select(other.select)
     , comment(other.comment)
-    , version_type(other.version_type)
-    , extra_column_name(other.extra_column_name)
-    , extra_column_size(other.extra_column_size)
 {
 }
 
@@ -76,9 +73,6 @@ StorageInMemoryMetadata & StorageInMemoryMetadata::operator=(const StorageInMemo
         settings_changes.reset();
     select = other.select;
     comment = other.comment;
-    version_type = other.version_type;
-    extra_column_name = other.extra_column_name;
-    extra_column_size = other.extra_column_size;
     return *this;
 }
 

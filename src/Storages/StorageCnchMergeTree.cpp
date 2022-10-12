@@ -1239,10 +1239,10 @@ void StorageCnchMergeTree::filterPartsInExplicitTransaction(ServerDataPartsVecto
     getCommittedServerDataParts(data_parts, start_time, &(*local_context->getCnchCatalog()));
 }
 
-void StorageCnchMergeTree::checkAlterIsPossible(const AlterCommands & /*commands*/, ContextPtr /*local_context*/) const
+void StorageCnchMergeTree::checkAlterIsPossible(const AlterCommands & commands, ContextPtr local_context) const
 {
-    //checkAlterInCnchServer(commands, local_context);
-    //checkAlterSettings(commands);
+    checkAlterInCnchServer(commands, local_context);
+    checkAlterSettings(commands);
 }
 
 void StorageCnchMergeTree::checkAlterPartitionIsPossible(
@@ -1373,6 +1373,69 @@ void StorageCnchMergeTree::alter(const AlterCommands & commands, ContextPtr loca
 
     txn->commitV1();
     LOG_TRACE(log, "Updated shared metadata in Catalog.");
+}
+
+void StorageCnchMergeTree::checkAlterSettings(const AlterCommands & commands) const
+{
+    static std::set<String> supported_settings = {
+        "cnch_vw_default",
+        "cnch_vw_read",
+        "cnch_vw_write",
+        "cnch_vw_task",
+
+        /// Setting for memory buffer
+        "cnch_enable_memory_buffer",
+        "cnch_memory_buffer_size",
+        "min_time_memory_buffer_to_flush",
+        "max_time_memory_buffer_to_flush",
+        "min_bytes_memory_buffer_to_flush",
+        "max_bytes_memory_buffer_to_flush",
+        "min_rows_memory_buffer_to_flush",
+        "max_rows_memory_buffer_to_flush",
+        "max_block_size_in_memory_buffer",
+        "max_bytes_to_write_wal",
+        "enable_flush_buffer_with_multi_threads",
+        "max_flush_threads_num",
+
+        "insertion_label_ttl",
+        "enable_local_disk_cache",
+        "enable_preload_parts",
+
+        "enable_addition_bg_task",
+        "max_addition_bg_task_num",
+        "max_addition_mutation_task_num",
+        "max_partition_for_multi_select",
+
+        "cnch_merge_parts_cache_timeout",
+        "cnch_merge_parts_cache_min_count",
+        "cnch_merge_enable_batch_select",
+        "cnch_merge_max_total_rows_to_merge",
+        "cnch_merge_only_realtime_partition",
+        "cnch_merge_pick_worker_algo",
+    };
+
+    /// Check whether the value is legal for Setting.
+    /// For example, we have a setting item, `SettingBool setting_test`
+    /// If you submit a Alter query: "Alter table test modify setting setting_test='abc'"
+    /// Then, it will throw an Exception here, because we can't convert string 'abc' to a Bool.
+    auto settings_copy = *getSettings();
+
+    for (auto & command : commands)
+    {
+        if (command.type != AlterCommand::MODIFY_SETTING)
+            continue;
+
+        for (auto & change : command.settings_changes)
+        {
+            if (!supported_settings.count(change.name))
+                throw Exception("Setting " + change.name + " cannot be modified", ErrorCodes::SUPPORT_IS_DISABLED);
+
+            if (getInMemoryMetadataPtr()->hasUniqueKey() && change.name == "cnch_enable_memory_buffer" && change.value.get<Int64>() == 1)
+                throw Exception("Table with UNIQUE KEY doesn't support memory buffer", ErrorCodes::SUPPORT_IS_DISABLED);
+
+            settings_copy.set(change.name, change.value);
+        }
+    }
 }
 
 void StorageCnchMergeTree::truncate(

@@ -221,14 +221,12 @@ void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Perm
     /// Fill permuted underlying columns for unique key
     Block unique_key_block;
     NameSet unique_key_underlying_columns;
-    String extra_column_name;
-    size_t extra_column_size = 0;
+    String version_column_name;
     if (settings.enable_disk_based_key_index)
     {
         auto required_columns = metadata_snapshot->getColumnsRequiredForUniqueKey();
         unique_key_underlying_columns.insert(required_columns.begin(), required_columns.end());
-        extra_column_name = metadata_snapshot->extra_column_name;
-        extra_column_size = metadata_snapshot->extra_column_size;
+        version_column_name = data_part->storage.merging_params.version_column;
     }
 
     auto it = columns_list.begin();
@@ -236,7 +234,7 @@ void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Perm
     {
         const ColumnWithTypeAndName & column = block.getByName(it->name);
         const bool part_of_unique_key = unique_key_underlying_columns.count(column.name) > 0;
-        const bool is_extra_column = !extra_column_name.empty() && (column.name == extra_column_name);
+        const bool is_extra_column = !version_column_name.empty() && (column.name == version_column_name);
 
         if (permutation)
         {
@@ -374,12 +372,9 @@ void MergeTreeDataPartWriterWide::writeToTempUniqueKeyIndex(Block & block, size_
     rocksdb::WriteOptions opts;
     opts.disableWAL = true;
 
-    String extra_column_name = metadata_snapshot->extra_column_name;
-    size_t extra_column_size = metadata_snapshot->extra_column_size;
-
-    const ColumnWithTypeAndName * extra_column = nullptr;
-    if (!extra_column_name.empty())
-        extra_column = &block.getByName(extra_column_name);
+    ColumnPtr version_column;
+    if (data_part->storage.merging_params.hasExplicitVersionColumn())
+        version_column = block.getByName(data_part->storage.merging_params.version_column).column;
 
     size_t rows = block.rows();
     for (size_t i = 0; i < rows; ++i)
@@ -391,15 +386,9 @@ void MergeTreeDataPartWriterWide::writeToTempUniqueKeyIndex(Block & block, size_
         auto rid = static_cast<UInt32>(first_rid + i);
         PutVarint32(&value, rid);
 
-        if (extra_column)
-        {
-            /// append extra column data at the end of value
-            if (extra_column_size == 8) /// handle explicit version column
-            {
-                UInt64 version = extra_column->column->getUInt(i);
-                value.append(reinterpret_cast<char *>(&version), extra_column_size);
-            }
-        }
+        /// Handle explicit version column
+        if (version_column)
+            PutFixed64(&value, version_column->getUInt(i));
 
         auto status = temp_index.Put(opts, key_buf.str(), value);
         if (!status.ok())
@@ -453,12 +442,9 @@ void MergeTreeDataPartWriterWide::writeFinalUniqueKeyIndexFile(IndexFile::IndexF
                 serializations.emplace(col.name, col.type->getDefaultSerialization());
         }
 
-        String extra_column_name = metadata_snapshot->extra_column_name;
-        size_t extra_column_size = metadata_snapshot->extra_column_size;
-
-        const ColumnWithTypeAndName * extra_column = nullptr;
-        if (!extra_column_name.empty())
-            extra_column = &buffered_unique_key_block.getByName(extra_column_name);
+        ColumnPtr version_column;
+        if (data_part->storage.merging_params.hasExplicitVersionColumn())
+            version_column = buffered_unique_key_block.getByName(data_part->storage.merging_params.version_column).column;
 
         for (UInt32 rid = 0, size = buffered_unique_key_block.rows(); rid < size; ++rid)
         {
@@ -469,15 +455,9 @@ void MergeTreeDataPartWriterWide::writeFinalUniqueKeyIndexFile(IndexFile::IndexF
             String value;
             PutVarint32(&value, static_cast<UInt32>(idx));
 
-            if (extra_column)
-            {
-                /// append extra column data at the end of value
-                if (extra_column_size == 8) /// handle explicit version column
-                {
-                    UInt64 version = extra_column->column->getUInt(idx); /// must use correct index, not rid
-                    value.append(reinterpret_cast<char *>(&version), extra_column_size);
-                }
-            }
+            /// Handle explicit version column
+            if (version_column)
+                PutFixed64(&value, version_column->getUInt(idx)); /// must use correct index, not rid
 
             status = index_writer.Add(key_buf.str(), value);
             if (!status.ok())

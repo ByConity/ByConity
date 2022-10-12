@@ -54,12 +54,6 @@ struct StorageInMemoryMetadata
 
     String comment;
 
-    UInt8 version_type{0};
-    static constexpr UInt8 flag_explicit_version = 1 << 0;
-    static constexpr UInt8 flag_partition_as_version = 1 << 1;
-    String extra_column_name;
-    size_t extra_column_size = 0;
-
     StorageInMemoryMetadata() = default;
 
     StorageInMemoryMetadata(const StorageInMemoryMetadata & other);

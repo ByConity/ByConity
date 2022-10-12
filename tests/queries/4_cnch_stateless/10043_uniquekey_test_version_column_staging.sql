@@ -8,6 +8,9 @@ INSERT INTO unique_with_version_staging VALUES ('2020-10-29 23:40:00', 10001, '1
 INSERT INTO unique_with_version_staging VALUES ('2020-10-30 00:05:00', 10001, '10001A', 1, 100), ('2020-10-30 00:05:00', 10002, '10002A', 2, 200);
 INSERT INTO unique_with_version_staging VALUES ('2020-10-29 23:40:00', 10001, '10001A', 5, 500), ('2020-10-29 23:40:00', 10002, '10002A', 2, 200);
 
+SYSTEM STOP DEDUP WORKER unique_with_version_staging;
+SYSTEM START DEDUP WORKER unique_with_version_staging;
+
 -- Catalog in CI are slow
 SELECT sleep(3) FORMAT Null;
 SELECT sleep(3) FORMAT Null;
