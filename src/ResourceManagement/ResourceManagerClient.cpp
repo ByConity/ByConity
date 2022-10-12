@@ -1,5 +1,6 @@
 #include <ResourceManagement/ResourceManagerClient.h>
 
+#include <Common/ZooKeeper/ZooKeeper.h>
 #include <Protos/RPCHelpers.h>
 #include <Protos/data_models.pb.h>
 #include <Protos/resource_manager_rpc.pb.h>
@@ -13,38 +14,51 @@
 namespace DB::ErrorCodes
 {
 extern const int RESOURCE_MANAGER_NO_AVAILABLE_WORKER;
+extern const int NOT_A_LEADER;
 }
 
 namespace DB::ResourceManagement
 {
 
-ResourceManagerClient::ResourceManagerClient(ContextPtr global_context_, const String & election_ns_, const String & election_point_)
-    : RpcLeaderClientBase(getName(), DB::ResourceManagement::fetchByteJournalLeader(global_context_, election_ns_, election_point_))
+ResourceManagerClient::ResourceManagerClient(ContextPtr global_context_, const String & election_path_)
+    : RpcLeaderClientBase(getName(), DB::ResourceManagement::fetchLeaderFromKeeper(global_context_, election_path_))
     , WithContext(global_context_)
     , stub(std::make_unique<Protos::ResourceManagerService_Stub>(&getChannel()))
-    , election_ns(election_ns_)
-    , election_point(election_point_)
+    , election_path(election_path_)
 {
 }
 
-String fetchByteJournalLeader([[maybe_unused]] ContextPtr context, [[maybe_unused]] String election_ns, [[maybe_unused]] String election_point)
+/// FIXME: (zuochuang.zema) also need PSM mode for RM. fetchAddressFromKeeperOrPSM
+String fetchLeaderFromKeeper(ContextPtr context, const String & election_path)
 {
-    // TODO(zuochuang.zema) MERGE bj
-    #if BYTEJOURNAL_AVAILABLE
-    auto leader_addr = getResult(context->getByteJournalClient()->GetLeaderInfo(election_ns, election_point)).addr;
-    LOG_DEBUG(
-        &Logger::get("fetchRMByteJournalLeader"),
-        "fetched rm_leader_host_port from Bytejournal : [" << leader_addr << "] namespace [" << election_ns << "] election point ["
-                                                           << election_point << "]");
-    return leader_addr;
-    #endif
+    if (!context->hasZooKeeper())
+    {
+        /// TODO: (zuochuang.zema) PSM mode.
+        return "";
+    }
 
-    return "127.0.0.1:18989";
+    auto current_zookeeper = context->getZooKeeper();
+    if (!current_zookeeper->exists(election_path))
+    {
+        return "";
+    }
+
+    auto children = current_zookeeper->getChildren(election_path);
+    if (children.empty())
+        throw Exception(ErrorCodes::NOT_A_LEADER, "Can't get current rm-leader, leader election path {} is empty", election_path);
+
+    std::sort(children.begin(), children.end());
+    auto current_leader_node = election_path + "/" + children.front();
+    String current_leader = current_zookeeper->get(current_leader_node);
+    if (current_leader.empty())
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Can't get current rm-leader, leader_node `{}` in keeper is empty.", current_leader_node);
+    
+    return current_leader;
 }
 
-String ResourceManagerClient::fetchByteJournalLeader() const
+String ResourceManagerClient::fetchLeaderFromKeeper() const
 {
-    return DB::ResourceManagement::fetchByteJournalLeader(getContext(), election_ns, election_point);
+    return DB::ResourceManagement::fetchLeaderFromKeeper(getContext(), election_path);
 }
 
 ResourceManagerClient::~ResourceManagerClient()
