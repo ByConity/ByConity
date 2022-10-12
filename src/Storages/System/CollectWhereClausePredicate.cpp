@@ -7,44 +7,7 @@
 
 namespace DB
 {
-    // collects columns and values for WHERE condition with AND and EQUALS (case insesitive)
-    // e.g for query "select ... where db = 'x' ", method will return {'db' : 'x'} map
-    void collectWhereClausePredicate(const ASTPtr & ast, std::map<String,String> & columns_to_values, const ContextPtr & context)
-    {
-        static String column_name;
-        if (!ast)
-            return;
-
-        if (ASTFunction * func = ast->as<ASTFunction>())
-        {
-            if (func->name == "equals" || func->name == "and")
-            {
-                for (auto & arg : func->arguments->children)
-                {
-                    collectWhereClausePredicate(arg, columns_to_values, context); // recurse in a depth first fashion
-                }
-            }
-            else if (func->name == "currentDatabase")
-            {
-                auto db = evaluateConstantExpressionForDatabaseName(ast, context);
-                columns_to_values.emplace(column_name, db->as<const ASTLiteral &>().value.get<String>());
-            }
-        }
-        else if (ASTIdentifier * identifier = ast->as<ASTIdentifier>())
-        {
-            column_name = identifier->name();
-        }
-        else if (ASTLiteral * literal = ast->as<ASTLiteral>())
-        {
-            if (literal->value.getType() == Field::Types::String)
-            {
-                columns_to_values.emplace(column_name,literal->value.get<String>());
-            }
-        }
-    }
-
-
-    std::pair<String,String> collectWhereEqualClausePredicate(const ASTPtr & ast)
+    std::pair<String,String> collectWhereEqualClausePredicate(const ASTPtr & ast, const ContextPtr & context)
     {
         std::pair<String,String> res;
         if (!ast)
@@ -58,9 +21,19 @@ namespace DB
             return res;
 
         const auto * column_name = func->arguments->children[0]->as<ASTIdentifier>();
-        const auto * column_value = func->arguments->children[1]->as<ASTLiteral>();
+        if (!column_name)
+            return res;
 
-        if (!column_name || !column_value)
+        const ASTPtr ast_value = func->arguments->children[1];
+        const ASTFunction * function_value = ast_value->as<ASTFunction>();
+        if (function_value && function_value->name == "currentDatabase")
+        {
+            ASTPtr db_ast = evaluateConstantExpressionForDatabaseName(ast_value , context);
+            return std::make_pair(column_name->name(), db_ast->as<const ASTLiteral &>().value.get<String>());
+        }
+
+        const auto * column_value = ast_value->as<ASTLiteral>();
+        if (!column_value)
             return res;
 
         if (column_value->value.getType() != Field::Types::String)
@@ -69,7 +42,7 @@ namespace DB
         return std::make_pair(column_name->name(), column_value->value.get<String>());
     }
 
-    std::map<String,String> collectWhereANDClausePredicate(const ASTPtr & ast)
+    std::map<String,String> collectWhereANDClausePredicate(const ASTPtr & ast, const ContextPtr & context)
     {
         std::map<String,String> res;
         if (!ast)
@@ -82,15 +55,15 @@ namespace DB
         else if ((func->name == "and") && func->arguments)
         {
             const auto children = func->arguments->children;
-            std::for_each(children.begin(), children.end(), [& res] (const auto & child) {
-                std::pair<String, String> p = collectWhereEqualClausePredicate(child);
+            std::for_each(children.begin(), children.end(), [& res, & context] (const auto & child) {
+                std::pair<String, String> p = collectWhereEqualClausePredicate(child, context);
                 if (!p.first.empty())
                     res.insert(p);
             });
         }
         else if (func->name == "equals")
         {
-            auto p = collectWhereEqualClausePredicate(ast);
+            auto p = collectWhereEqualClausePredicate(ast, context);
             if (!p.first.empty())
                 res.insert(p);
         }
@@ -101,7 +74,7 @@ namespace DB
     // collects columns and values for WHERE condition with OR, AND and EQUALS (case insesitive)
     // e.g for query "select ... where ((db = 'db') AND (name = 'name1')) OR ((db = 'db') AND (name = 'name2')) ", method will return a vector {'name':'name1', 'db':'db'}, {'db' : 'db', 'name':'name2'}
     // if a value of column is not a string, it will has value as an empty string
-    std::vector<std::map<String,String>> collectWhereORClausePredicate(const ASTPtr & ast)
+    std::vector<std::map<String,String>> collectWhereORClausePredicate(const ASTPtr & ast, const ContextPtr & context)
     {
         std::vector<std::map<String,String>> res;
         if (!ast)
@@ -114,21 +87,21 @@ namespace DB
         if ((func->name == "or") && func->arguments)
         {
             const auto children = func->arguments->children;
-            std::for_each(children.begin(), children.end(), [& res] (const auto & child) {
-                std::map<String,String> m = collectWhereANDClausePredicate(child);
+            std::for_each(children.begin(), children.end(), [& res, & context] (const auto & child) {
+                std::map<String,String> m = collectWhereANDClausePredicate(child, context);
                 if (!m.empty())
                     res.push_back(m);
             });
         }
         else if (func->name == "and")
         {
-            std::map<String,String> m = collectWhereANDClausePredicate(ast);
+            std::map<String,String> m = collectWhereANDClausePredicate(ast, context);
             if (!m.empty())
                 res.push_back(m);
         }
         else if (func->name == "equals")
         {
-            auto p = collectWhereEqualClausePredicate(ast);
+            auto p = collectWhereEqualClausePredicate(ast, context);
             if (!p.first.empty())
                 res.push_back(std::map<String, String>{p});
         }

@@ -53,6 +53,9 @@ public:
     std::string getExchangeStatusAddress() const { return addBracketsIfIpv6(host) + ':' + std::to_string(exchange_status_port); }
 
     const std::string & getHost() const { return host; }
+    uint16_t getTCPPort() const { return tcp_port; }
+    uint16_t getHTTPPort() const { return http_port; }
+    uint16_t getRPCPort() const { return rpc_port; }
     std::string toDebugString() const;
 
     static HostWithPorts fromRPCAddress(const std::string & s);
