@@ -727,9 +727,10 @@ class IColumn;
     M(String, utc_time_interval_stop_clone, "", "A list of UTC time, every two elements consist an interval which stop clone", 0) \
     M(Bool, remote_query_memory_table, false, "Query remote memory table", 0) \
     \
-    /* Transaction */ \
+    /* Transaction and catalog */ \
     M(Bool, ignore_duplicate_insertion_label, true, "Throw an exception if false", 0) \
     M(Bool, bypass_ddl_db_lock, false, "Bypass locking database while creating tables", 0) \
+    M(Bool, prefer_cnch_catalog, false, "Force using cnch catalog to get table first when resolving database and table", 0) \
     /** The section above is for obsolete settings. Do not add anything there. */\
 
 // End of COMMON_SETTINGS

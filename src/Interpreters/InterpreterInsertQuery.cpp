@@ -30,8 +30,8 @@
 #include <Storages/StorageCloudMergeTree.h>
 #include <Storages/HDFS/ReadBufferFromByteHDFS.h>
 #include <TableFunctions/TableFunctionFactory.h>
-#include "Common/tests/gtest_global_context.h"
 #include <Common/checkStackSize.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/QueryLog.h>
 #include <Interpreters/TranslateQualifiedNamesVisitor.h>
 #include <Interpreters/getTableExpressions.h>
@@ -219,7 +219,7 @@ BlockIO InterpreterInsertQuery::execute()
         size_t out_streams_size = 1;
         if (query.select)
         {
-            auto insert_select_context = Context::createCopy(context);
+            auto insert_select_context = Context::createCopy(getContext());
             /// Cannot use trySetVirtualWarehouseAndWorkerGroup, because it only works in server node
             if (auto * cloud_table = dynamic_cast<StorageCloudMergeTree *>(table.get()))
             {
@@ -248,6 +248,13 @@ BlockIO InterpreterInsertQuery::execute()
                     && std::all_of(selects.begin(), selects.end(), isTrivialSelect);
             }
 
+            if (insert_select_context->getServerType() == ServerType::cnch_worker)
+            {
+                Settings new_settings = insert_select_context->getSettings();
+                new_settings.prefer_cnch_catalog = true;
+                insert_select_context->setSettings(std::move(new_settings));
+            }
+
             if (is_trivial_insert_select)
             {
                 /** When doing trivial INSERT INTO ... SELECT ... FROM table,
@@ -256,7 +263,7 @@ BlockIO InterpreterInsertQuery::execute()
                   * to avoid unnecessary squashing.
                   */
 
-                Settings new_settings = getContext()->getSettings();
+                Settings new_settings = insert_select_context->getSettings();
 
                 new_settings.max_threads = std::max<UInt64>(1, settings.max_insert_threads);
 
