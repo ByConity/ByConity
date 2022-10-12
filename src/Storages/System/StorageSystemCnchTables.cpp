@@ -112,7 +112,7 @@ Pipe StorageSystemCnchTables::read(
     /// Add `name` column.
     MutableColumnPtr name_column_mut = ColumnString::create();
     /// Add `uuid` column
-    MutableColumnPtr uuid_column_mut = ColumnUInt128::create();
+    MutableColumnPtr uuid_column_mut = ColumnUUID::create();
     /// ADD 'index' column
     MutableColumnPtr index_column_mut = ColumnUInt64::create();
 

@@ -104,6 +104,7 @@
 #include <Storages/System/StorageSystemWorkers.h>
 #include <Storages/System/StorageSystemWorkerGroups.h>
 #include <Storages/System/StorageSystemVirtualWarehouses.h>
+#include <Storages/System/StorageSystemCnchTableHost.h>
 
 namespace DB
 {
@@ -216,6 +217,7 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
     attach<StorageSystemWorkerGroups>(system_database, "worker_groups");
     attach<StorageSystemVirtualWarehouses>(system_database, "virtual_warehouses");
     attach<StorageSystemCnchStagedParts>(system_database, "cnch_staged_parts");
+    attach<StorageSystemCnchTableHost>(system_database, "cnch_table_host");
 }
 
 void attachSystemTablesAsync(IDatabase & system_database, AsynchronousMetrics & async_metrics)
