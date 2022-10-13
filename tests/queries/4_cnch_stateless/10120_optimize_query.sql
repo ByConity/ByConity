@@ -10,6 +10,7 @@ INSERT INTO test_optimize VALUES(3, '3');
 INSERT INTO test_optimize VALUES(4, '4');
 INSERT INTO test_optimize VALUES(5, '5');
 
+SYSTEM START MERGES test_optimize;
 OPTIMIZE TABLE test_optimize PARTITION ID 'all';
 
 SELECT * FROM test_optimize;
