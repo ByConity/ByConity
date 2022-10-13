@@ -4,8 +4,8 @@
 
 # Site
 title: ByConity
-subtitle: 'ByConity Subtitle'
-description: 'ByConity description'
+subtitle: 'theme.home.header.subtitle'
+description: 'theme.home.header.description'
 keywords: 'ByConity keywords'
 author: ByteDance Inc.
 language: 

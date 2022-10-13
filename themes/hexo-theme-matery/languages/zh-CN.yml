@@ -72,9 +72,12 @@ pleaseFollowReprintPolicy: 复制成功，请遵循本文的转载规则
 checkPolicy: 查看
 theme:
   home:
+    header:
+      subtitle: ByConity
+      description: ByConity 是分布式的云原生SQL数仓引擎，擅长交互式查询和即席查询，具有支持多表关联复杂查询、集群扩容无感、离线批数据和实时数据流统一汇总等特点。
     subtitle:
-      sub1: home_subtitle_sub1中文
-      sub2: home_subtitle_sub2中文
+      sub1: ByConity 是分布式的云原生SQL数仓引擎，擅长交互式查询和即席查询，具有支持多表关联复杂查询、集群扩容无感、离线批数据和实时数据流统一汇总等特点。
+      sub2: ByConity 是分布式的云原生SQL数仓引擎，擅长交互式查询和即席查询，具有支持多表关联复杂查询、集群扩容无感、离线批数据和实时数据流统一汇总等特点。
     dream:
       title: theme.home.dream.title中文
       text: theme.home.dream.text中文

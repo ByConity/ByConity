@@ -72,9 +72,12 @@ pleaseFollowReprintPolicy: Copied successfully, please follow the reprint policy
 checkPolicy: more
 theme:
   home:
+    header:
+      subtitle: ByConity
+      description: ByConity is a distributed cloud-native SQL data warehouse engine, that excels in interactive queries and Ad-Hoc queries, featuring support for querying multiple tables, cluster expansion without sensation, and unified aggregation of offline batch data and real-time data streams.
     subtitle:
-      sub1: home_subtitle_sub1
-      sub2: home_subtitle_sub2
+      sub1: ByConity is a distributed cloud-native SQL data warehouse engine, that excels in interactive queries and Ad-Hoc queries, featuring support for querying multiple tables, cluster expansion without sensation, and unified aggregation of offline batch data and real-time data streams.
+      sub2: ByConity is a distributed cloud-native SQL data warehouse engine, that excels in interactive queries and Ad-Hoc queries, featuring support for querying multiple tables, cluster expansion without sensation, and unified aggregation of offline batch data and real-time data streams.
     dream:
       title: theme.home.dream.title123
       text: theme.home.dream.text123
@@ -84,11 +87,11 @@ theme:
         title: Hello image
       feature:
         - 
-          title: 高性能低成本
-          text: 支持在海量数据规模下，通过向量化执行引擎、列式存储和 CBO+RBO 优化器达成亚秒级查询响应能力。同时超高压缩比率帮助用户节省大量存储空间，降低磁盘成本。
+          title: High Performance, Low Cost
+          text: Support sub-second query response capability under massive data scale through vectorized execution engine, columnar storage and CBO+RBO optimizer. At the same time, the ultra-high compression ratio helps users save a lot of storage space and reduce disk costs.
         - 
-          title: 多种场景统一支持
-          text: 支持实时数据流和离线批数据写入，具有交互式事物能力和多表关联查询能力，既可以满足线上系统的交互式查询需求，也可以满足后台实时监控、报表大屏等。
+          title: Unified Support for Multiple Scenarios
+          text: Supports real-time data streaming and offline batch data writing with interactive things capability and multi-table associative query capability, which can meet the interactive query needs of online systems as well as backend real-time monitoring, report big screen, etc.
         - 
-          title: 生态友好
-          text: 兼容 ClickHouse 大多数接口和工具，支持 Kafka、 Spark、Flink 等多种数据导入，也支持 Superset，Tableau 等数据可视化工具。
+          title: Eco-friendly
+          text: Compatible with most ClickHouse interfaces and tools, supports Kafka, Spark, Flink and many other data imports, also supports Superset, Tableau and other data visualization tools.

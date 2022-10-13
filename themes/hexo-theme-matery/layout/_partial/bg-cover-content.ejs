@@ -3,7 +3,7 @@
         <div class="brand">
             <div class="title center-align">
                 <% if (config.subtitle && config.subtitle.length > 0) { %>
-                <%= config.subtitle %>
+                    <%= __(config.subtitle) %>
                 <% } else { %>
                     subtitle
                 <% } %>
@@ -25,7 +25,7 @@
                     });
                 </script>
                 <% } else { %>
-                    <%= config.description %>
+                    <%= __(config.description) %>
                 <% } %>
             </div>
         </div>
