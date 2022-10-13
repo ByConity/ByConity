@@ -282,24 +282,24 @@ jobs:
   #     - *upload_artifact
   #     - *analyse_result_ignore_fail
 
-  BackwardCompability:
-    <<: *default_test
-    name: CNCH - BackwardCompability
-    image: hub.byted.org/bytehouse/clickhouse-stateful-test:gdb12.1v1
-    steps:
-      - *action_checkout
-      - *download_scm_binary
-      - name: Run BackwardCompability
-        commands:
-          - bash /home/code/.codebase/ci_scripts/cnch_config/2_backward_compability/cluster_up.sh
-          - cp -r /home/code/docker/test/certificate/* ./
-          - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
-          - export ADDITIONAL_OPTIONS='--jobs 2'
-          - /bin/bash run_cnch.sh
+  # BackwardCompability:
+  #   <<: *default_test
+  #   name: CNCH - BackwardCompability
+  #   image: hub.byted.org/bytehouse/clickhouse-stateful-test:gdb12.1v1
+  #   steps:
+  #     - *action_checkout
+  #     - *download_scm_binary
+  #     - name: Run BackwardCompability
+  #       commands:
+  #         - bash /home/code/.codebase/ci_scripts/cnch_config/2_backward_compability/cluster_up.sh
+  #         - cp -r /home/code/docker/test/certificate/* ./
+  #         - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
+  #         - export ADDITIONAL_OPTIONS='--jobs 2'
+  #         - /bin/bash run_cnch.sh
 
-      - *after_test
-      - *upload_artifact
-      - *analyse_result
+  #     - *after_test
+  #     - *upload_artifact
+  #     - *analyse_result
 
 #  StressTest:
 #    <<: *default_test
