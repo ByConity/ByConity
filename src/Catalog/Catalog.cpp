@@ -1978,7 +1978,8 @@ namespace Catalog
                 res = StorageDictionary::create(
                     storage_id,
                     std::move(abstract_dictionary_configuration),
-                    local_context);
+                    local_context,
+                    true);
             },
             ProfileEvents::GetDictionarySuccess,
             ProfileEvents::GetDictionaryFailed);

@@ -2,6 +2,7 @@
 
 #include <Catalog/Catalog.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/ExternalDictionariesLoader.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/formatAST.h>
@@ -62,6 +63,11 @@ void DatabaseCnch::createTable(ContextPtr local_context, const String & table_na
     txn->appendAction(std::move(create_table));
     txn->commitV1();
     LOG_TRACE(log, "Successfully create table {} in query {}", table_name, local_context->getCurrentQueryId());
+    if (table->isDictionary())
+    {
+        local_context->getExternalDictionariesLoader().reloadConfig("CnchCatalogRepository");
+        LOG_TRACE(log, "Successfully add dictionary config for {}", table_name, local_context->getCurrentQueryId());
+    }
 }
 
 void DatabaseCnch::dropTable(ContextPtr local_context, const String & table_name, bool no_delay)

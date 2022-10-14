@@ -13,9 +13,6 @@ $CLICKHOUSE_CLIENT --query="INSERT INTO test.table_for_flat_dict SELECT number, 
 $CLICKHOUSE_CLIENT --query="DROP DICTIONARY IF EXISTS test.dict_flat;"
 $CLICKHOUSE_CLIENT --query="CREATE DICTIONARY test.dict_flat(id UInt64, a UInt64 DEFAULT 0, b Int32 DEFAULT -1, c String DEFAULT 'none') PRIMARY KEY id SOURCE(CLICKHOUSE(HOST '$CLICKHOUSE_HOST' PORT '$CLICKHOUSE_PORT_TCP' USER 'default' TABLE 'table_for_flat_dict' PASSWORD '' DB 'test')) LIFETIME(MIN 1000 MAX 2000) LAYOUT(FLAT());"
 
-$CLICKHOUSE_CLIENT --query="SELECT sleep(3) FORMAT Null;"
-$CLICKHOUSE_CLIENT --query="SELECT sleep(3) FORMAT Null;"
-
 $CLICKHOUSE_CLIENT --query="SELECT dictGetInt32('test.dict_flat', 'b', toUInt64(1));"
 $CLICKHOUSE_CLIENT --query="SELECT dictGetInt32('test.dict_flat', 'b', toUInt64(4));"
 $CLICKHOUSE_CLIENT --query="SELECT dictGetUInt64('test.dict_flat', 'a', toUInt64(5));"

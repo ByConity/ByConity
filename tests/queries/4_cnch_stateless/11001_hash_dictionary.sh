@@ -12,8 +12,6 @@ $CLICKHOUSE_CLIENT --query="INSERT INTO test.table_for_hash_dict SELECT number, 
 
 $CLICKHOUSE_CLIENT --query="DROP DICTIONARY IF EXISTS test.dict_hash;"
 $CLICKHOUSE_CLIENT --query="CREATE DICTIONARY test.dict_hash(id UInt64, a UInt64 DEFAULT 0, b Int32 DEFAULT -1, c String DEFAULT 'none') PRIMARY KEY id SOURCE(CLICKHOUSE(HOST '$CLICKHOUSE_HOST' PORT '$CLICKHOUSE_PORT_TCP' USER 'default' TABLE 'table_for_hash_dict' PASSWORD '' DB 'test')) LIFETIME(MIN 1000 MAX 2000) LAYOUT(HASHED());"
-$CLICKHOUSE_CLIENT --query="SELECT sleep(3) FORMAT Null;"
-$CLICKHOUSE_CLIENT --query="SELECT sleep(3) FORMAT Null;"
 
 $CLICKHOUSE_CLIENT --query="SELECT dictGetInt32('test.dict_hash', 'b', toUInt64(1));"
 $CLICKHOUSE_CLIENT --query="SELECT dictGetInt32('test.dict_hash', 'b', toUInt64(4));"
