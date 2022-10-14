@@ -89,8 +89,6 @@ void CnchWorkerServiceImpl::submitManipulationTask(
         params.txn_id = request->txn_id();
         params.columns_commit_time = request->columns_commit_time();
         params.is_bucket_table = request->is_bucket_table();
-        auto all_parts = createPartVectorFromModelsForSend<IMutableMergeTreeDataPartPtr>(*data, request->source_parts());
-        params.assignParts(all_parts);
 
         if (params.type == ManipulationType::Mutate)
         {
@@ -101,12 +99,14 @@ void CnchWorkerServiceImpl::submitManipulationTask(
         }
 
         auto remote_address = addBracketsIfIpv6(rpc_context->getClientInfo().current_address.host().toString()) + ':' + toString(params.rpc_port);
+        auto all_parts = createPartVectorFromModelsForSend<IMutableMergeTreeDataPartPtr>(*data, request->source_parts());
 
         LOG_DEBUG(log, "Received manipulation from {} :{}", remote_address, params.toDebugString());
 
         ThreadFromGlobalPool([p = std::move(params), c = std::move(rpc_context), all_parts = std::move(all_parts), data]() mutable {
             /// CurrentThread::attachQueryContext(c);
             data->loadDataParts(all_parts, 0);
+            p.assignParts(std::move(all_parts));
             executeManipulationTask(p, c);
         }).detach();
     }
