@@ -7,7 +7,9 @@ SELECT * FROM multidimensional;
 ALTER TABLE multidimensional ADD COLUMN t Tuple(String, Array(Nullable(String)), Tuple(UInt32, Date));
 INSERT INTO multidimensional (t) VALUES (('Hello', ['World', NULL], (123, '2000-01-01')));
 SELECT * FROM multidimensional ORDER BY t;
-OPTIMIZE TABLE multidimensional;
+
+SYSTEM START MERGES multidimensional;
+OPTIMIZE TABLE multidimensional SETTINGS mutations_sync = 1;
 SELECT * FROM multidimensional ORDER BY t;
 
 DROP TABLE multidimensional;

@@ -811,10 +811,9 @@ bool StorageCnchMergeTree::optimize(const ASTPtr & query, const StorageMetadataP
     if (!bg_thread)
     {
         auto daemon_manage_client = getContext()->getDaemonManagerClient();
-        if (!partition)
-            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Can't forward optimize query, you should specify partition");
         auto enable_sync = query_context->getSettingsRef().mutations_sync;
-        daemon_manage_client->forwardOptimizeQuery(getStorageID(), getPartitionIDFromQuery(partition, query_context), enable_try, enable_sync, timeout_ms);
+        auto partition_id = partition ? getPartitionIDFromQuery(partition, query_context) : "all";
+        daemon_manage_client->forwardOptimizeQuery(getStorageID(), partition_id, enable_try, enable_sync, timeout_ms);
         return true;
     }
 
