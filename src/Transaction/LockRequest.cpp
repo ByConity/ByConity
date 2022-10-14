@@ -4,6 +4,7 @@
 #include <Common/Exception.h>
 #include <Core/UUID.h>
 #include <IO/WriteHelpers.h>
+#include <IO/Operators.h>
 #include <Transaction/LockDefines.h>
 #include <Protos/RPCHelpers.h>
 
@@ -89,6 +90,16 @@ LockStatus LockRequest::getStatus() const
     return status;
 }
 
+String LockRequest::toDebugString() const
+{
+    Protos::DataModelLockField field_model;
+    field_model.ParseFromString(entity);
+    WriteBufferFromOwnString buf;
+    buf << "LockRequest{txn_id: " << txn_id.toString() << ", entity: " << field_model.ShortDebugString() << ", level: " << toString(level)
+        << ", mode: " << toString(mode) << ", timeout: " << timeout << '}';
+    return buf.str();
+}
+
 void LockRequest::setLockResult(LockStatus lockStatus, LockRequestItor it)
 {
     {
@@ -115,7 +126,7 @@ bool LockRequest::wait()
     return cv.wait_for(lk, std::chrono::milliseconds(timeout), [this]() { return status == LockStatus::LOCK_OK; });
 }
 
-LockLevel LockInfo::getLockLevel() {
+LockLevel LockInfo::getLockLevel() const {
     if (hasPartition())
     {
         return LockLevel::PARTITION;
@@ -172,5 +183,23 @@ const LockRequestPtrs & LockInfo::getLockRequests()
     }
 
     return requests;
+}
+
+String LockInfo::toDebugString() const
+{
+    WriteBufferFromOwnString buf;
+    buf << "LockInfo{txn_id: " << txn_id.toString() << ", lock_id: " << lock_id << ", level: " << toString(getLockLevel())
+        << ", mode: " << toString(lock_mode) << ", timeout: " << timeout << ", uuid: " << table_uuid;
+    if (hasBucket())
+    {
+        buf << ", bucket: " << bucket;
+    }
+
+    if (hasPartition())
+    {
+        buf << ", partition: " << partition;
+    }
+    buf << '}';
+    return buf.str();
 }
 }

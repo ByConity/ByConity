@@ -32,6 +32,7 @@ public:
     const String & getEntity() const { return entity; }
     LockRequestItor getRequestItor() const;
     LockStatus getStatus() const;
+    String toDebugString() const;
 
     void setLockResult(LockStatus status, LockRequestItor it);
     void setStatus(LockStatus status_);
@@ -80,12 +81,13 @@ public:
 public:
     LockInfo(TxnTimestamp txn_id_) : txn_id(txn_id_) { }
 
-    LockLevel getLockLevel();
+    LockLevel getLockLevel() const;
 
     const LockRequestPtrs & getLockRequests();
 
     bool hasBucket() const { return bucket >= 0; }
     bool hasPartition() const { return !partition.empty(); }
+    String toDebugString() const;
 
     inline LockInfo & setTxnID(TxnTimestamp txn_id_)
     {
