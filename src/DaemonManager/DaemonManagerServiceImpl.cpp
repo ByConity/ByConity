@@ -151,7 +151,7 @@ void DaemonManagerServiceImpl::ForwardOptimizeQuery(
 
         auto daemon_job = daemon_jobs[CnchBGThreadType::MergeMutate];
 
-        daemon_job->executeOptimize(storage_id, request->partition_id(), request->enable_try());
+        daemon_job->executeOptimize(storage_id, request->partition_id(), request->enable_try(), request->mutations_sync(), request->timeout_ms());
     }
     catch (...)
     {

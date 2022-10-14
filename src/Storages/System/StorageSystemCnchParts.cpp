@@ -13,6 +13,7 @@
 #include <Storages/VirtualColumnUtils.h>
 #include <Transaction/ICnchTransaction.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
+#include <Storages/System/CollectWhereClausePredicate.h>
 #include <TSO/TSOClient.h>
 #include <fmt/format.h>
 #include <map>
@@ -135,19 +136,54 @@ void StorageSystemCnchParts::fillData(MutableColumns & res_columns, ContextPtr c
     std::vector<std::pair<String, String>> tables;
 
     ASTPtr where_expression = query_info.query->as<ASTSelectQuery>()->where();
-    std::map<String, String> column_to_value;
 
-    collectWhereClausePredicate(where_expression, column_to_value, context);
+    const std::vector<std::map<String,String>> value_by_column_names = collectWhereORClausePredicate(where_expression, context);
+    bool enable_filter_by_table = false;
+    bool enable_filter_by_partition = false;
+    String only_selected_db;
+    String only_selected_table;
+    String only_selected_partition_id;
+
+    if (value_by_column_names.size() == 1)
+    {
+        const auto value_by_column_name = value_by_column_names.at(0);
+        auto db_it = value_by_column_name.find("database");
+        auto table_it = value_by_column_name.find("table");
+        auto partition_it = value_by_column_name.find("partition_id");
+        if ((db_it != value_by_column_name.end()) &&
+             (table_it != value_by_column_name.end())
+            )
+        {
+            only_selected_db = db_it->second;
+            only_selected_table = table_it->second;
+            enable_filter_by_table = true;
+
+            LOG_TRACE(&Poco::Logger::get("StorageSystemCnchParts"),
+                    "filtering from catalog by table with db name {} and table name {}",
+                    only_selected_db, only_selected_table);
+        }
+
+        if (partition_it != value_by_column_name.end())
+        {
+            only_selected_partition_id = partition_it->second;
+            enable_filter_by_partition = true;
+
+            LOG_TRACE(&Poco::Logger::get("StorageSystemCnchParts"),
+                    "filtering from catalog by partition with partition name {}",
+                    only_selected_partition_id);
+        }
+    }
+
+    if (!(enable_filter_by_partition || enable_filter_by_table))
+        LOG_TRACE(&Poco::Logger::get("StorageSystemCnchParts"), "doesn't do any filtering from catalog");
+
     // check for required structure of WHERE clause for cnch_parts
-    auto database_it = column_to_value.find("database");
-    auto table_it = column_to_value.find("table");
-    auto partition_it = column_to_value.find("partition_id");
-    if (database_it == column_to_value.end() || table_it == column_to_value.end())
+    if (!enable_filter_by_table)
     {
         tables = filterTables(context, query_info);
     }
     else
-        tables.emplace_back(database_it->second, table_it->second);
+        tables.emplace_back(only_selected_db, only_selected_table);
 
     TransactionCnchPtr cnch_txn = context->getCurrentTransaction();
     TxnTimestamp start_time = cnch_txn ? cnch_txn->getStartTime() : TxnTimestamp{context->getTimestamp()};
@@ -164,8 +200,8 @@ void StorageSystemCnchParts::fillData(MutableColumns & res_columns, ContextPtr c
         if (!cnch_merge_tree)
             throw Exception("Table system.cnch_parts only support CnchMergeTree engine", ErrorCodes::LOGICAL_ERROR);
 
-        auto all_parts = partition_it != column_to_value.end()
-            ? cnch_catalog->getServerDataPartsInPartitions(table, {partition_it->second}, start_time, nullptr)
+        auto all_parts = enable_filter_by_partition
+            ? cnch_catalog->getServerDataPartsInPartitions(table, {only_selected_partition_id}, start_time, nullptr)
             : cnch_catalog->getAllServerDataParts(table, start_time, nullptr);
 
         ServerDataPartsVector visible_alone_drop_ranges;

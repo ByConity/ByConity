@@ -244,6 +244,8 @@ private:
         return uuid.toUnderType().items[0] >> (64 - bits_for_first_level);
     }
 
+    inline bool preferCnchCatalog(const ContextPtr & context) const;
+
     struct TableMarkedAsDropped
     {
         StorageID table_id = StorageID::createEmpty();

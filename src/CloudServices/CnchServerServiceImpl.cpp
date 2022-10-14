@@ -885,7 +885,12 @@ void CnchServerServiceImpl::executeOptimize(
         auto istorage = database_catalog.getTable(storage_id, getContext());
 
         auto * merge_mutate_thread = dynamic_cast<CnchMergeMutateThread *>(bg_thread.get());
-        merge_mutate_thread->triggerPartMerge(istorage, partition_id, false, enable_try, false);
+        auto task_id = merge_mutate_thread->triggerPartMerge(istorage, partition_id, false, enable_try, false);
+        if (request->mutations_sync())
+        {
+            auto timeout = request->has_timeout_ms() ? request->timeout_ms() : 0;
+            merge_mutate_thread->waitTasksFinish({task_id}, timeout);
+        }
     }
     catch (...)
     {

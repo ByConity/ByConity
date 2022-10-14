@@ -4212,9 +4212,8 @@ void Context::initResourceManagerClient()
 {
     LOG_DEBUG(&Poco::Logger::get("Context"), "Initialising Resource Manager Client");
     const auto & root_config = getRootConfig();
+    String election_path = root_config.resource_manager.election_path.value;
 
-    const auto & election_ns = root_config.bytejournal.name_space;
-    String election_point = root_config.bytejournal.cnch_prefix.value + "rm_election_point";
     const auto & max_retry_count = root_config.resource_manager.init_client_tries;
     const auto & retry_interval_ms = root_config.resource_manager.init_client_retry_interval_ms;
 
@@ -4225,15 +4224,13 @@ void Context::initResourceManagerClient()
         try
         {
             auto lock = getLock();
-            shared->rm_client = std::make_shared<ResourceManagerClient>(getGlobalContext(), election_ns, election_point);
+            shared->rm_client = std::make_shared<ResourceManagerClient>(getGlobalContext(), election_path);
             LOG_DEBUG(&Poco::Logger::get("Context"), "Initialised Resource Manager Client on try: {}", retry_count);
             return;
         }
         catch (...)
         {
-            tryLogCurrentException(&Poco::Logger::get("Context"), __PRETTY_FUNCTION__);
-
-            LOG_DEBUG(&Poco::Logger::get("Context"), "Failed to initialise Resource Manager Client on try: {}", retry_count);
+            tryLogCurrentException("Context::initResourceManagerClient", __PRETTY_FUNCTION__);
             usleep(retry_interval_ms * 1000);
         }
     } while (retry_count++ < max_retry_count);

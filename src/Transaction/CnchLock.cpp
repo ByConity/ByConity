@@ -87,7 +87,7 @@ CnchLockHolder::CnchLockHolder(const Context & global_context_, std::vector<Lock
 {
     assert(!elems.empty());
     txn_id = elems.front()->txn_id;
-    assert(txn_id.toUInt64() != 0);
+    assert(txn_id);
     for (const auto & info : elems)
     {
         assert(txn_id == info->txn_id);

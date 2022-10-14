@@ -28,7 +28,7 @@ namespace ResourceManagement
 {
 struct WorkerNode;
 
-String fetchByteJournalLeader(ContextPtr context, String election_ns, String election_point);
+String fetchLeaderFromKeeper(ContextPtr context, const String & election_path);
 
 class ResourceManagerClient : public RpcLeaderClientBase, protected WithContext
 {
@@ -36,7 +36,7 @@ class ResourceManagerClient : public RpcLeaderClientBase, protected WithContext
 public:
     static String getName() { return "ResourceManagerClient"; }
 
-    ResourceManagerClient(ContextPtr global_context_, const String & election_ns_, const String & election_point_);
+    ResourceManagerClient(ContextPtr global_context_, const String & election_path_);
     ~ResourceManagerClient() override;
 
     void getVirtualWarehouse(const std::string & name, VirtualWarehouseData & vw_data);
@@ -66,10 +66,9 @@ private:
     using Stub = Protos::ResourceManagerService_Stub;
     mutable RWLock leader_mutex = RWLockImpl::create();
     std::unique_ptr<Stub> stub;
-    String election_ns;
-    String election_point;
+    String election_path;
 
-    String fetchByteJournalLeader() const;
+    String fetchLeaderFromKeeper() const;
 
     RWLockImpl::LockHolder getReadLock() const
     {
@@ -115,23 +114,7 @@ private:
                 }
 
                 if (response.has_is_leader() && response.is_leader())
-                {
                     return true;
-                }
-                else
-                {
-                    auto lock = getWriteLock();
-
-                    if (!response.has_leader_host_port() || response.leader_host_port() == leader_host_port)
-                    {
-                        if (response.leader_host_port().empty())
-                            LOG_DEBUG(log, "RM response does not contain an elected RM leader");
-                        throw Exception("There is currently no alive elected RM leader.", ErrorCodes::RESOURCE_MANAGER_NO_LEADER_ELECTED);
-                    }
-
-                    LOG_DEBUG(log, "Updating RM Leader to " + response.leader_host_port() + " based on RMResponse");
-                    stub = std::make_unique<Stub>(&updateChannel(response.leader_host_port()));
-                }
             }
             catch (const Exception & e)
             {
@@ -142,18 +125,19 @@ private:
                     throw;
 
                 tryLogDebugCurrentException(__PRETTY_FUNCTION__);
-                auto lock = getWriteLock();
-                auto new_leader = fetchByteJournalLeader();
-                if (new_leader.empty() || new_leader == leader_host_port)
-                {
-                    LOG_DEBUG(log, "There is no active elected RM leader");
-                    throw;
-                }
-                else
-                {
-                    LOG_DEBUG(log, "Updating RM Leader to " + new_leader + " based on ByteJournal");
-                    stub = std::make_unique<Stub>(&updateChannel(new_leader));
-                }
+            }
+
+            auto lock = getWriteLock();
+            auto new_leader = fetchLeaderFromKeeper();
+            if (new_leader.empty())
+            {
+                LOG_ERROR(log, "There is no active elected RM leader");
+                throw;
+            }
+            else
+            {
+                LOG_DEBUG(log, "Updating RM Leader to " + new_leader);
+                stub = std::make_unique<Stub>(&updateChannel(new_leader));
             }
         } while (retry_count++ < max_retry_count);
 

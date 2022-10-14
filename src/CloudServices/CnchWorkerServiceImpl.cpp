@@ -90,9 +90,7 @@ void CnchWorkerServiceImpl::submitManipulationTask(
         params.columns_commit_time = request->columns_commit_time();
         params.is_bucket_table = request->is_bucket_table();
         auto all_parts = createPartVectorFromModelsForSend<IMutableMergeTreeDataPartPtr>(*data, request->source_parts());
-
-        data->loadDataParts(all_parts, false);
-        params.assignParts(std::move(all_parts));
+        params.assignParts(all_parts);
 
         if (params.type == ManipulationType::Mutate)
         {
@@ -106,8 +104,9 @@ void CnchWorkerServiceImpl::submitManipulationTask(
 
         LOG_DEBUG(log, "Received manipulation from {} :{}", remote_address, params.toDebugString());
 
-        ThreadFromGlobalPool([p = std::move(params), c = std::move(rpc_context)] {
+        ThreadFromGlobalPool([p = std::move(params), c = std::move(rpc_context), all_parts = std::move(all_parts), data]() mutable {
             /// CurrentThread::attachQueryContext(c);
+            data->loadDataParts(all_parts, 0);
             executeManipulationTask(p, c);
         }).detach();
     }
@@ -511,7 +510,7 @@ void CnchWorkerServiceImpl::createDedupWorker(
     try
     {
         auto storage_id = RPCHelpers::createStorageID(request->table());
-        auto query = request->create_table_query();
+        const auto & query = request->create_table_query();
         auto host_ports = RPCHelpers::createHostWithPorts(request->host_ports());
 
         auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
@@ -534,12 +533,12 @@ void CnchWorkerServiceImpl::createDedupWorker(
                     throw Exception(
                         "Unique cloud table " + storage_id.getFullTableName() + " doesn't exist.",
                         ErrorCodes::LOGICAL_ERROR);
-                auto cloud_table = dynamic_cast<StorageCloudMergeTree *>(storage.get());
+                auto * cloud_table = dynamic_cast<StorageCloudMergeTree *>(storage.get());
                 if (!cloud_table)
                     throw Exception(
                         "convert to StorageCloudMergeTree from table failed: " + storage_id.getFullTableName(), ErrorCodes::LOGICAL_ERROR);
 
-                auto deduper = cloud_table->getDedupWorker();
+                auto * deduper = cloud_table->getDedupWorker();
                 deduper->setServerHostWithPorts(host_ports);
                 LOG_DEBUG(log, "Success to create deuper table: {}", storage->getStorageID().getNameForLogs());
             }
@@ -568,7 +567,7 @@ void CnchWorkerServiceImpl::dropDedupWorker(
         auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
 
         ASTPtr query = std::make_shared<ASTDropQuery>();
-        auto drop_query = static_cast<ASTDropQuery*>(query.get());
+        auto * drop_query = query->as<ASTDropQuery>();
         drop_query->kind = ASTDropQuery::Drop;
         drop_query->if_exists = true;
         drop_query->database = storage_id.database_name;
@@ -602,11 +601,11 @@ void CnchWorkerServiceImpl::getDedupWorkerStatus(
 
         if (!storage)
             throw Exception("Unique cloud table " + storage_id.getFullTableName() + " doesn't exist.", ErrorCodes::LOGICAL_ERROR);
-        auto cloud_table = dynamic_cast<StorageCloudMergeTree *>(storage.get());
+        auto * cloud_table = dynamic_cast<StorageCloudMergeTree *>(storage.get());
         if (!cloud_table)
             throw Exception("convert to StorageCloudMergeTree from table failed: " + storage_id.getFullTableName(), ErrorCodes::LOGICAL_ERROR);
 
-        auto deduper = cloud_table->getDedupWorker();
+        auto * deduper = cloud_table->getDedupWorker();
         DedupWorkerStatus status = deduper->getDedupWorkerStatus();
         response->set_is_active(deduper->isActive());
         if (response->is_active())

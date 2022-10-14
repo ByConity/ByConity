@@ -216,8 +216,6 @@ int DaemonManager::main(const std::vector<std::string> &)
     global_context->initCatalog(catalog_conf, config().getString("catalog.name_space", "default"));
     global_context->initServiceDiscoveryClient();
     global_context->initCnchServerClientPool(config().getString("service_discovery.server.psm", "data.cnch.server"));
-
-    //global_context->initByteJournalClient();
     global_context->initTSOClientPool(config().getString("service_discovery.tso.psm", "data.cnch.tso"));
 
     global_context->setCnchTopologyMaster();

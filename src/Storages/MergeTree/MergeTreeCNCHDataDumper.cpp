@@ -127,7 +127,6 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
     MutableMergeTreeDataPartCNCHPtr new_part
         = std::make_shared<MergeTreeDataPartCNCH>(data, part_name, new_part_info, volume, relative_path);
     new_part->fromLocalPart(*local_part);
-    assert(local_part->checksums_ptr != nullptr);
 
     String new_part_rel_path = new_part->getFullRelativePath();
     if (disk->exists(new_part_rel_path))

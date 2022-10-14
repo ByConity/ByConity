@@ -13,6 +13,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int INCORRECT_QUERY;
+    extern const int UNSUPPORTED_PARAMETER;
 }
 NamesAndTypesList StorageSystemCnchStagedParts::getNamesAndTypes()
 {
@@ -61,32 +62,47 @@ void StorageSystemCnchStagedParts::fillData(MutableColumns & res_columns, Contex
     if (context->getServerType() != ServerType::cnch_server || !cnch_catalog)
         throw Exception("Table system.cnch_staged_parts only support cnch_server", ErrorCodes::NOT_IMPLEMENTED);
 
-    ASTPtr where_expression = query_info.query->as<ASTSelectQuery>()->where();
-    std::map<String, String> column_to_value;
-
-    DB::collectWhereClausePredicate(where_expression, column_to_value, context);
     // check for required structure of WHERE clause for cnch_staged_parts
-    auto database_it = column_to_value.find("database");
-    auto table_it = column_to_value.find("table");
-    if (database_it == column_to_value.end() || table_it == column_to_value.end())
+    ASTPtr where_expression = query_info.query->as<ASTSelectQuery>()->where();
+    const std::vector<std::map<String,String>> value_by_column_names = collectWhereORClausePredicate(where_expression, context);
+
+    String only_selected_db;
+    String only_selected_table;
+    bool enable_filter_by_table = false;
+
+    if (value_by_column_names.size() == 1)
     {
-        throw Exception(
-            "Please check if the query has required columns and condition : 'database' AND 'table' .Eg. select * from "
-            "system.cnch_staged_parts WHERE database = 'some_name' AND table = 'another_name'.... ",
-            ErrorCodes::INCORRECT_QUERY);
+        const auto value_by_column_name = value_by_column_names.at(0);
+        auto db_it = value_by_column_name.find("database");
+        auto table_it = value_by_column_name.find("table");
+        if ((db_it != value_by_column_name.end()) &&
+            (table_it != value_by_column_name.end()))
+        {
+            only_selected_db = db_it->second;
+            only_selected_table = table_it->second;
+            enable_filter_by_table = true;
+            LOG_TRACE(&Poco::Logger::get("StorageSystemCnchStagedParts"),
+                    "filtering from catalog by table with db name {} and table name {}",
+                    only_selected_db, only_selected_table);
+        }
     }
 
+    if (!enable_filter_by_table)
+        throw Exception(
+            "Please check if where condition follow this form "
+            "system.cnch_staged_parts WHERE database = 'some_name' AND table = 'another_name'",
+            ErrorCodes::INCORRECT_QUERY);
     TransactionCnchPtr cnch_txn = context->getCurrentTransaction();
     TxnTimestamp start_time = cnch_txn ? cnch_txn->getStartTime() : TxnTimestamp{context->getTimestamp()};
 
-    DB::StoragePtr table = cnch_catalog->tryGetTable(*context, database_it->second, table_it->second, start_time);
+    DB::StoragePtr table = cnch_catalog->tryGetTable(*context, only_selected_db, only_selected_table, start_time);
     if (!table)
         return;
 
     auto * data = dynamic_cast<StorageCnchMergeTree *>(table.get());
 
     if (!data || !data->getInMemoryMetadataPtr()->hasUniqueKey())
-        throw Exception("Table system.cnch_staged_parts only support CnchMergeTree unique engine", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Table system.cnch_staged_parts only support CnchMergeTree unique engine", ErrorCodes::UNSUPPORTED_PARAMETER);
 
     auto all_parts = CnchPartsHelper::toIMergeTreeDataPartsVector(cnch_catalog->getStagedParts(table, start_time));
     auto visible_parts = CnchPartsHelper::calcVisibleParts(all_parts, false);
@@ -104,8 +120,8 @@ void StorageSystemCnchStagedParts::fillData(MutableColumns & res_columns, Contex
             res_columns[col_num++]->insert(out.str());
         }
         res_columns[col_num++]->insert(all_parts[i]->name);
-        res_columns[col_num++]->insert(database_it->second);
-        res_columns[col_num++]->insert(table_it->second);
+        res_columns[col_num++]->insert(only_selected_db);
+        res_columns[col_num++]->insert(only_selected_table);
 
         /// all_parts and visible_parts are both ordered by info.
         /// For each part within all_parts, we find the first part greater than or equal to it in visible_parts,

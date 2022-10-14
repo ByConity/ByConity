@@ -5,9 +5,7 @@
 #include <Common/RpcClientPool.h>
 #include <common/logger_useful.h>
 
-namespace DB
-{
-namespace DaemonManager
+namespace DB::DaemonManager
 {
 
 BackgroundJob::BackgroundJob(StorageID storage_id_, DaemonJobServerBGThread & daemon_job_)
@@ -362,5 +360,4 @@ void BackgroundJob::setExpectedStatus(CnchBGThreadStatus status_)
     expected_status = status_;
 }
 
-} // end namespace Daemon Manager
-} // end namespace DB
+}

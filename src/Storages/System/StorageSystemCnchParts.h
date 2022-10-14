@@ -7,7 +7,6 @@
 #include <Parsers/ASTLiteral.h>
 #include <vector>
 #include <Core/Field.h>
-#include <Storages/System/CollectWhereClausePredicate.h>
 
 namespace DB
 {

@@ -305,7 +305,7 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
 
     DatabasePtr database{};
 
-    if (use_cnch_catalog)
+    if (preferCnchCatalog(context_))
         database = tryGetDatabaseCnch(table_id.getDatabaseName(), context_);
 
     if (!database)
@@ -395,7 +395,7 @@ DatabasePtr DatabaseCatalog::detachDatabase(ContextPtr local_context, const Stri
 
     DatabasePtr db{};
 
-    if (use_cnch_catalog)
+    if (preferCnchCatalog(local_context))
         db = tryGetDatabaseCnch(database_name, local_context);
 
     if (!db)
@@ -469,7 +469,7 @@ DatabasePtr DatabaseCatalog::tryGetDatabase(const String & database_name, Contex
 {
     assert(!database_name.empty());
 
-    if (use_cnch_catalog)
+    if (preferCnchCatalog(local_context))
     {
         DatabasePtr database_cnch = tryGetDatabaseCnch(database_name, local_context);
         if (database_cnch)
@@ -678,7 +678,7 @@ std::unique_ptr<DatabaseCatalog> DatabaseCatalog::database_catalog;
 
 DatabaseCatalog::DatabaseCatalog(ContextMutablePtr global_context_)
     : WithMutableContext(global_context_), log(&Poco::Logger::get("DatabaseCatalog"))
-    , use_cnch_catalog{global_context_->getServerType() == ServerType::cnch_server || global_context_->getServerType() == ServerType::cnch_worker}
+    , use_cnch_catalog{global_context_->getServerType() == ServerType::cnch_server}
 {
     TemporaryLiveViewCleaner::init(global_context_);
 }
@@ -1132,7 +1132,7 @@ DatabasePtr DatabaseCatalog::tryGetDatabaseCnch(const String & database_name, Co
         return res;
     auto catalog = getContext()->tryGetCnchCatalog();
     if (catalog)
-        res = catalog->getDatabase(database_name, getContext(), TxnTimestamp::maxTS());
+        res = catalog->getDatabase(database_name, getContext(), txn ? txn->getStartTime() : TxnTimestamp::maxTS());
     if (res && txn)
         txn->addDatabaseIntoCache(res);
     return res;
@@ -1216,4 +1216,8 @@ DDLGuard::~DDLGuard()
     releaseTableLock();
 }
 
+inline bool DatabaseCatalog::preferCnchCatalog(const ContextPtr & local_context) const
+{
+    return use_cnch_catalog || local_context->getSettingsRef().prefer_cnch_catalog;
+}
 }
