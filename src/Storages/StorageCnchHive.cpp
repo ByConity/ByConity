@@ -250,7 +250,7 @@ void StorageCnchHive::checkSortByKey()
             }
 
             if (i >= sortcols.size())
-                throw Exception("CnchHive hiveBucket col doesn't match .", ErrorCodes::BAD_ARGUMENTS);
+                throw Exception("CnchHive sorting col doesn't match .", ErrorCodes::BAD_ARGUMENTS);
         }
     }
 }
@@ -302,6 +302,12 @@ void StorageCnchHive::checkClusterByKey()
     }
 
     const auto & hivebucket_cols = (*table).sd.bucketCols;
+    LOG_TRACE(log, " hivebucket_cols size = {}", hivebucket_cols.size());
+
+    for (const auto & col : hivebucket_cols)
+        LOG_TRACE(log, " hivebucket_cols col = {}", col);
+
+
     if (cluster_by_ast)
     {
         auto cluster_by_expr_list_local = extractKeyExpressionList(cluster_by_ast->children.front());
@@ -324,8 +330,9 @@ void StorageCnchHive::checkClusterByKey()
         for (size_t i = 0; i < cluster_by_expr_size; ++i)
         {
             const String clustering_key_column = cluster_by_expr_list_local->children[i]->getColumnName();
+            LOG_TRACE(log, " clustering_key_column = {}", clustering_key_column);
             auto it = std::find(hivebucket_cols.begin(), hivebucket_cols.end(), clustering_key_column);
-            if (it != hivebucket_cols.end())
+            if (it == hivebucket_cols.end())
                 throw Exception(
                     "CnchHive hiveBucket col doesn't match . clustering_key_column is not hiveBucket col" + clustering_key_column + " .",
                     ErrorCodes::BAD_ARGUMENTS);
@@ -415,19 +422,6 @@ HiveDataPartsCNCHVector StorageCnchHive::selectPartsToRead(
 HivePartitionVector StorageCnchHive::selectPartitionsByPredicate(
     ContextPtr local_context, const SelectQueryInfo & query_info, std::shared_ptr<HiveMetastoreClient> & hms_client)
 {
-    // // HivePartitionVector result;
-    // HivePartitionVector all;
-    // // ASTSelectQuery & select_ast = typeid_cast<ASTSelectQuery &>(*query_info.query);
-
-    // all = hms_client->getPartitionList(shared_from_this(), remote_database, remote_table, getFullTablePath());
-    // LOG_TRACE(log, "CnchHive getPartitionList size is {}", all.size());
-
-    // // result = eliminatePartitions(all, context, query_info, optimizer);
-
-    // // LOG_TRACE(log, "CnchHive after purn get PartitionList size is " << result.size());
-
-    // return all;
-
     HivePartitionVector result;
     HivePartitionVector all;
     ASTSelectQuery & select_ast = typeid_cast<ASTSelectQuery &>(*query_info.query);
@@ -592,8 +586,11 @@ HiveDataPartsCNCHVector StorageCnchHive::getDataPartsInPartitions(
     HiveDataPartsCNCHVector hive_files;
     std::mutex hive_files_mutex;
 
-    if (num_streams > partitions.size())
+    if (num_streams == 1 &&  partitions.size() > num_streams)
         num_streams = partitions.size();
+
+    LOG_TRACE(log, " num_streams size = {} partitions size = {}", num_streams, partitions.size());
+
 
     ThreadPool thread_pool(num_streams);
     // ExceptionHandler exception_handler;
@@ -666,6 +663,8 @@ void StorageCnchHive::read(
     const size_t /*max_block_size*/,
     unsigned num_streams)
 {
+    LOG_TRACE(log, " read  num_streams = {}", num_streams);
+
     auto data_parts = prepareReadContext(column_names, metadata_snapshot, query_info, local_context, num_streams);
     Block header = InterpreterSelectQuery(query_info.query, local_context, SelectQueryOptions(processed_stage)).getSampleBlock();
 
