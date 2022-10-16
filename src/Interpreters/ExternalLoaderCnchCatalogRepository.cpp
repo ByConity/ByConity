@@ -176,11 +176,14 @@ std::optional<UUID> ExternalLoaderCnchCatalogRepository::resolveDictionaryName(c
     StorageID storage_id = (name.find('.') == std::string::npos) ? StorageID{current_database_name, name} : ExternalLoaderCnchCatalogRepository::parseStorageID(name);
     CnchCatalogDictionaryCache & cache = context->getCnchCatalogDictionaryCache();
     std::optional<UUID> res = cache.findUUID(storage_id);
-    if (!res)
+    if ((!res) && (context->getServerType() == ServerType::cnch_worker))
     {
         cache.loadFromCatalog();
-        context->getExternalDictionariesLoader().reloadConfig("CnchCatalogRepository");
+        res = cache.findUUID(storage_id);
+        if (res)
+            context->getExternalDictionariesLoader().reloadConfig("CnchCatalogRepository");
     }
-    return cache.findUUID(storage_id);
+
+    return res;
 }
 }

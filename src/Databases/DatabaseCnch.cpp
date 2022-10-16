@@ -98,6 +98,8 @@ void DatabaseCnch::dropTable(ContextPtr local_context, const String & table_name
     auto drop_action = txn->createAction<DDLDropAction>(std::move(params), std::vector{std::move(storage)});
     txn->appendAction(std::move(drop_action));
     txn->commitV1();
+    if (is_dictionary)
+        local_context->getExternalDictionariesLoader().reloadConfig("CnchCatalogRepository");
 }
 
 void DatabaseCnch::drop(ContextPtr local_context)
@@ -155,6 +157,9 @@ void DatabaseCnch::detachTablePermanently(ContextPtr local_context, const String
     auto detach_action = txn->createAction<DDLDropAction>(std::move(params), std::vector{storage});
     txn->appendAction(std::move(detach_action));
     txn->commitV1();
+
+    if (is_dictionary)
+        local_context->getExternalDictionariesLoader().reloadConfig("CnchCatalogRepository");
 }
 
 ASTPtr DatabaseCnch::getCreateDatabaseQuery() const
