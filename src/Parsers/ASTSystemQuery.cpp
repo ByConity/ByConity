@@ -147,6 +147,10 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "CLEAR BROKEN TABLES";
         case Type::DEDUP:
             return "DEDUP";
+        case Type::START_DEDUP_WORKER:
+            return "START DEDUP WORKER";
+        case Type::STOP_DEDUP_WORKER:
+            return "STOP DEDUP WORKER";
         case Type::UNKNOWN:
         case Type::END:
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown SYSTEM query command");

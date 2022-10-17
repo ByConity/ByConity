@@ -55,9 +55,9 @@ void replaceCnchWithCloud(ASTCreateQuery & create_query, const String & new_tabl
     engine->arguments = std::make_shared<ASTExpressionList>();
     engine->arguments->children.push_back(std::make_shared<ASTIdentifier>(cnch_db));
     engine->arguments->children.push_back(std::make_shared<ASTIdentifier>(cnch_table));
-    // if (storage->unique_key && storage->engine->arguments && storage->engine->arguments->children.size())
-    //     /// NOTE: Used to pass the version column for unique table here.
-    //     engine->arguments->children.push_back(storage->engine->arguments->children[0]);
+    if (storage->unique_key && storage->engine->arguments && storage->engine->arguments->children.size())
+        /// NOTE: Used to pass the version column for unique table here.
+        engine->arguments->children.push_back(storage->engine->arguments->children[0]);
     storage->set(storage->engine, engine);
 }
 

@@ -140,8 +140,8 @@ void MergeTreeDataMerger::prepareColumnNamesAndTypes()
         std::copy(index_columns_vec.cbegin(), index_columns_vec.cend(), std::inserter(key_columns, key_columns.end()));
 
         /// also need version column when building unique key index file
-        if (!metadata_snapshot->extra_column_name.empty())
-            key_columns.insert(metadata_snapshot->extra_column_name);
+        if (!merging_params.hasExplicitVersionColumn())
+            key_columns.insert(merging_params.version_column);
     }
 
     /// Force sign column for Collapsing mode

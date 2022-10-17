@@ -21,7 +21,4 @@ DROP TABLE IF EXISTS u10100_bad_key_type;
 
 CREATE TABLE u10100_bad_key_type (k Float32, v Int32) ENGINE = CnchMergeTree ORDER BY v UNIQUE KEY k; -- { serverError 44 }
 CREATE TABLE u10100_bad_key_type (k Float64, v Int32) ENGINE = CnchMergeTree ORDER BY v UNIQUE KEY k; -- { serverError 44 }
-CREATE TABLE u10100_bad_key_type (k Decimal32(2), v Int32) ENGINE = CnchMergeTree ORDER BY v UNIQUE KEY k; -- { serverError 44 }
-CREATE TABLE u10100_bad_key_type (k Decimal64(10), v Int32) ENGINE = CnchMergeTree ORDER BY v UNIQUE KEY k; -- { serverError 44 }
 CREATE TABLE u10100_bad_key_type (k Array(String), v Int32) ENGINE = CnchMergeTree ORDER BY v UNIQUE KEY k; -- { serverError 44 }
-CREATE TABLE u10100_bad_key_type (k LowCardinality(String), v Int32) ENGINE = CnchMergeTree ORDER BY v UNIQUE KEY k; -- { serverError 44 }

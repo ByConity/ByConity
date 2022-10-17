@@ -16,9 +16,9 @@ system start dedup worker u10113_rename;
 SELECT sleep(3) FORMAT Null; 
 SELECT sleep(3) FORMAT Null; 
 SELECT sleep(3) FORMAT Null; 
-SELECT 'dedup worker status:', database, table, is_active from system.cnch_dedup_workers where database='test' and table='u10113_rename';
-SELECT '#staged parts:', count() FROM system.cnch_staged_parts where database='test' and table = 'u10113_rename' and to_publish;
-SELECT '#parts:', count() FROM system.cnch_parts where database='test' and table='u10113_rename' and active;
+SELECT 'dedup worker status:', table, is_active from system.cnch_dedup_workers where database=currentDatabase() and table='u10113_rename';
+SELECT '#staged parts:', count() FROM system.cnch_staged_parts where database=currentDatabase() and table = 'u10113_rename' and to_publish;
+SELECT '#parts:', count() FROM system.cnch_parts where database=currentDatabase() and table='u10113_rename' and active;
 SELECT * FROM u10113_rename order by k1, k2;
 
 SELECT '-- rename in same database and insert some values';
@@ -29,8 +29,8 @@ SELECT '-- after rename --';
 SELECT sleep(3) FORMAT Null; 
 SELECT sleep(3) FORMAT Null; 
 SELECT sleep(3) FORMAT Null; 
-SELECT '#staged parts:', count() FROM system.cnch_staged_parts where database='test' and table = 'u10113_rename2' and to_publish;
-SELECT '#parts:', count() FROM system.cnch_parts where database='test' and table='u10113_rename2' and active;
+SELECT '#staged parts:', count() FROM system.cnch_staged_parts where database=currentDatabase() and table = 'u10113_rename2' and to_publish;
+SELECT '#parts:', count() FROM system.cnch_parts where database=currentDatabase() and table='u10113_rename2' and active;
 SELECT * FROM u10113_rename2 order by k1, k2;
 
 DROP TABLE IF EXISTS u10113_rename;

@@ -97,6 +97,7 @@
 #include <Storages/System/StorageSystemCnchDictionaries.h>
 #include <Storages/System/StorageSystemCnchTables.h>
 #include <Storages/System/StorageSystemCnchDatabasesHistory.h>
+#include <Storages/System/StorageSystemCnchDedupWorkers.h>
 #include <Storages/System/StorageSystemCnchManipulations.h>
 #include <Storages/System/StorageSystemGlobalGCManager.h>
 #include <Storages/System/StorageSystemDMBGJobs.h>
@@ -222,6 +223,7 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
     attach<StorageSystemVirtualWarehouses>(system_database, "virtual_warehouses");
     attach<StorageSystemCnchStagedParts>(system_database, "cnch_staged_parts");
     attach<StorageSystemCnchTableHost>(system_database, "cnch_table_host");
+    attach<StorageSystemCnchDedupWorkers>(system_database, "cnch_dedup_workers");
 }
 
 void attachSystemTablesAsync(IDatabase & system_database, AsynchronousMetrics & async_metrics)

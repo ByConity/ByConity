@@ -1,5 +1,5 @@
 -- before rename --
-dedup worker status:	test	u10113_rename	1
+dedup worker status:	u10113_rename	1
 #staged parts:	0
 #parts:	2
 0	100	1	a	1

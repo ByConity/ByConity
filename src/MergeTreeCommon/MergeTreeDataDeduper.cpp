@@ -164,7 +164,7 @@ namespace
                 max_pos = rows_with_key.size() - 1;
             else
             {
-                /*************************************************************************************************************************
+            /*************************************************************************************************************************
              * When there has version and delete_flag, need to handle the following cases between multiple invisible parts:
              * 1. force delete: when version is set to zero, it means that force delete ignoring version
              *    e.g.(in order)  unique key      version      value       _delete_flag_

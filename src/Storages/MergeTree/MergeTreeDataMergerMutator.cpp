@@ -987,7 +987,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
         storage_columns,
         metadata_snapshot->getSortingKey().expression,
         metadata_snapshot->getUniqueKey().expression,
-        metadata_snapshot->extra_column_name,
+        merging_params.version_column,
         metadata_snapshot->getSecondaryIndices(),
         metadata_snapshot->getProjections(),
         merging_params,

@@ -439,7 +439,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         throw Exception(msg, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
     }
 
-    if (is_extended_storage_def)
+    if (is_extended_storage_def && !args.storage_def->unique_key)
     {
         /// Allow expressions in engine arguments.
         /// In new syntax argument can be literal or identifier or array/tuple of identifiers.
