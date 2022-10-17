@@ -534,29 +534,28 @@
                 </ports>
             </node>
         </daemon_manager>
-<!--        <resource_manager>-->
-<!--            <psm>data.cnch.resource_manager</psm>-->
-<!--            &lt;!&ndash; For dns &ndash;&gt;-->
-<!--            <service>cnch-resourcemanager</service>-->
-<!--            <headless_service>cnch-resourcemanager-headless</headless_service>-->
-<!--            &lt;!&ndash; For local test &ndash;&gt;-->
-<!--            <node>-->
-<!--                <host>ip_address_replace_me</host>-->
-<!--                <hostname>rm0</hostname>-->
-<!--                <ports>-->
-<!--                    &lt;!&ndash; RPC/Primary &ndash;&gt;-->
-<!--                    <port><name>PORT0</name><value>8989</value></port>-->
-<!--                </ports>-->
-<!--            </node>-->
-<!--            <node>-->
-<!--                <host>ip_address_replace_me</host>-->
-<!--                <hostname>rm0</hostname>-->
-<!--                <ports>-->
-<!--                    &lt;!&ndash; RPC/Primary &ndash;&gt;-->
-<!--                    <port><name>PORT0</name><value>8990</value></port>-->
-<!--                </ports>-->
-<!--            </node>-->
-<!--        </resource_manager>-->
+        <resource_manager>
+            <psm>data.cnch.resource_manager</psm>
+            <!-- For dns -->
+            <service>cnch-resourcemanager</service>
+            <headless_service>cnch-resourcemanager-headless</headless_service>
+            <!-- For local test -->
+            <node>
+                <host>ip_address_replace_me</host>
+                <hostname>rm0</hostname>
+                <ports>
+                    <!-- RPC/Primary -->
+                    <port><name>PORT0</name><value>8989</value></port>
+                </ports>
+            </node>
+            <!-- <node>
+                <host>ip_address_replace_me</host>
+                <hostname>rm0</hostname>
+                <ports>
+                    <port><name>PORT0</name><value>8990</value></port>
+                </ports>
+            </node> -->
+        </resource_manager>
         <vw>
             <psm>data.cnch.vw_default</psm>
             <!-- For local test -->
@@ -667,39 +666,11 @@
         </daemon_jobs>
     </daemon_manager>
 
-<!--    <resource_manager>-->
-<!--        <port>8989</port>-->
-<!--        <init_client_tries>3</init_client_tries>-->
-<!--        <init_client_retry_interval_ms>3000</init_client_retry_interval_ms>-->
-<!--        <check_leader_info_interval_ms>1000</check_leader_info_interval_ms>-->
-<!--        <wait_before_become_leader_ms>3000</wait_before_become_leader_ms>-->
-<!--        <max_retry_times>3</max_retry_times>-->
-<!--        <lost_worker_timeout_seconds>60</lost_worker_timeout_seconds>-->
-<!--        <vws>-->
-<!--            <vw>-->
-<!--                <name>vw_default</name>-->
-<!--                <type>Default</type>-->
-<!--                <num_workers>1</num_workers>-->
-<!--                <worker_groups>-->
-<!--                    <worker_group>-->
-<!--                        <name>default</name>-->
-<!--                        <type>Physical</type>-->
-<!--                    </worker_group>-->
-<!--                </worker_groups>-->
-<!--            </vw>-->
-<!--            <vw>-->
-<!--                <name>vw_write</name>-->
-<!--                <type>Write</type>-->
-<!--                <num_workers>1</num_workers>-->
-<!--                <worker_groups>-->
-<!--                    <worker_group>-->
-<!--                        <name>write</name>-->
-<!--                        <type>Physical</type>-->
-<!--                    </worker_group>-->
-<!--                </worker_groups>-->
-<!--            </vw>-->
-<!--        </vws>-->
-<!--    </resource_manager>-->
+    <resource_manager>
+        <init_client_tries>3</init_client_tries>
+        <init_client_retry_interval_ms>3000</init_client_retry_interval_ms>
+        <max_retry_times>3</max_retry_times>
+    </resource_manager>
 
     <bytepond>
         <port>9381</port>

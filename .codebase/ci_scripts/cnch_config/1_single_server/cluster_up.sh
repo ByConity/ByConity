@@ -51,8 +51,8 @@ ASAN_OPTIONS=halt_on_error=false,log_path=/test_output/tso0/asan.tso0.log nohup 
 #sleep 2
 #ASAN_OPTIONS=halt_on_error=false,log_path=/test_output/tso2/asan.tso2.log nohup /clickhouse/bin/tso-server --config-file  ${APP_ROOT}/.codebase/ci_scripts/cnch_config/1_single_server/config/tso2.xml >/dev/null 2>&1 &
 sleep 2
-#ASAN_OPTIONS=halt_on_error=false,log_path=/test_output/resource-manager0/asan.rm0.log nohup /clickhouse/bin/resource_manager --config-file  ${APP_ROOT}/.codebase/ci_scripts/cnch_config/1_single_server/config/rm0.xml  >/dev/null 2>&1 &
-#sleep 2
+ASAN_OPTIONS=halt_on_error=false,log_path=/test_output/resource-manager0/asan.rm0.log nohup /clickhouse/bin/resource-manager --config-file  ${APP_ROOT}/.codebase/ci_scripts/cnch_config/1_single_server/config/rm0.xml  >/dev/null 2>&1 &
+sleep 2
 #ASAN_OPTIONS=halt_on_error=false,log_path=/test_output/resource-manager1/asan.rm1.log nohup /clickhouse/bin/resource_manager --config-file  ${APP_ROOT}/.codebase/ci_scripts/cnch_config/1_single_server/config/rm1.xml  >/dev/null 2>&1 &
 #sleep 2
 ASAN_OPTIONS=halt_on_error=false,log_path=/test_output/server/asan.server.log nohup /clickhouse/bin/clickhouse-server --config-file  ${APP_ROOT}/.codebase/ci_scripts/cnch_config/1_single_server/config/server.xml >/dev/null 2>&1 &

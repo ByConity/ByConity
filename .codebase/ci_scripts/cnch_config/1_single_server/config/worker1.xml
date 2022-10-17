@@ -544,35 +544,35 @@
                 </ports>
             </node>
         </vw>
-<!--        <resource_manager>-->
-<!--            <psm>data.cnch.resource_manager</psm>-->
-<!--            &lt;!&ndash; For dns &ndash;&gt;-->
-<!--            <service>cnch-resourcemanager</service>-->
-<!--            <headless_service>cnch-resourcemanager-headless</headless_service>-->
-<!--            &lt;!&ndash; For local test &ndash;&gt;-->
-<!--            <node>-->
-<!--                <host>ip_address_replace_me</host>-->
-<!--                <hostname>rm0</hostname>-->
-<!--                <ports>-->
-<!--                    &lt;!&ndash; RPC/Primary &ndash;&gt;-->
-<!--                    <port><name>PORT0</name><value>8989</value></port>-->
-<!--                </ports>-->
-<!--            </node>-->
-<!--            <node>-->
-<!--                <host>ip_address_replace_me</host>-->
-<!--                <hostname>rm0</hostname>-->
-<!--                <ports>-->
-<!--                    &lt;!&ndash; RPC/Primary &ndash;&gt;-->
-<!--                    <port><name>PORT0</name><value>8990</value></port>-->
-<!--                </ports>-->
-<!--            </node>-->
-<!--        </resource_manager>-->
+        <resource_manager>
+            <psm>data.cnch.resource_manager</psm>
+            <!-- For dns -->
+            <service>cnch-resourcemanager</service>
+            <headless_service>cnch-resourcemanager-headless</headless_service>
+            <!-- For local test -->
+            <node>
+                <host>ip_address_replace_me</host>
+                <hostname>rm0</hostname>
+                <ports>
+                    <!-- RPC/Primary -->
+                    <port><name>PORT0</name><value>8989</value></port>
+                </ports>
+            </node>
+            <!-- <node>
+                <host>ip_address_replace_me</host>
+                <hostname>rm0</hostname>
+                <ports>
+                    <port><name>PORT0</name><value>8990</value></port>
+                </ports>
+            </node> -->
+        </resource_manager>
     </service_discovery>
 
-    <!-- <resource_manager> -->
-    <!--     <init_client_tries>3</init_client_tries> -->
-    <!--     <init_client_retry_interval_ms>3000</init_client_retry_interval_ms> -->
-    <!-- </resource_manager> -->
+    <resource_manager>
+        <init_client_tries>3</init_client_tries>
+        <init_client_retry_interval_ms>3000</init_client_retry_interval_ms>
+        <max_retry_times>3</max_retry_times>
+    </resource_manager>
 
     <catalog>
         <name_space>random_suffix_replace_me</name_space>

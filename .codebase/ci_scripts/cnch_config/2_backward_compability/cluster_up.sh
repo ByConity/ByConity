@@ -45,6 +45,8 @@ CLICKHOUSE_WATCHDOG_ENABLE=0
 # start services
 ASAN_OPTIONS=halt_on_error=false,log_path=/test_output/tso0/asan.tso0.log nohup /clickhouse/bin/tso-server --config-file ${APP_ROOT}/.codebase/ci_scripts/cnch_config/2_backward_compability/config/tso0.xml >/dev/null 2>&1 &
 sleep 6
+ASAN_OPTIONS=halt_on_error=false,log_path=/test_output/rm0/asan.rm0.log nohup /clickhouse/bin/resource-manager --config-file ${APP_ROOT}/.codebase/ci_scripts/cnch_config/2_backward_compability/config/rm0.xml >/dev/null 2>&1 &
+sleep 2
 ASAN_OPTIONS=halt_on_error=false,log_path=/test_output/server/asan.server.log nohup /clickhouse/bin/clickhouse-server --config-file  ${APP_ROOT}/.codebase/ci_scripts/cnch_config/2_backward_compability/config/server.xml >/dev/null 2>&1 &
 sleep 2
 ASAN_OPTIONS=halt_on_error=false,log_path=/test_output/vw-default/asan.worker-default.log WORKER_ID='default-worker-0' WORKER_GROUP_ID='default' VIRTUAL_WAREHOUSE_ID='vw_default' nohup  /clickhouse/bin/clickhouse-server --config-file   ${APP_ROOT}/.codebase/ci_scripts/cnch_config/2_backward_compability/config/worker0.xml >/dev/null 2>&1 &

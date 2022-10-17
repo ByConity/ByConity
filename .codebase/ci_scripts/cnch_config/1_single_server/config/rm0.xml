@@ -5,15 +5,15 @@
     <logger>
         <!-- Possible levels: https://github.com/pocoproject/poco/blob/develop/Foundation/include/Poco/Logger.h#L105 -->
         <level>trace</level>
-        <log>/test_output/daemon-manager/daemon-manager.log</log>
-        <errorlog>/test_output/daemon-manager/daemon-manager.err.log</errorlog>
-        <testlog>/test_output/daemon-manager/daemon-manager.test.log</testlog>
+        <log>/test_output/resource-manager/resource-manager.log</log>
+        <errorlog>/test_output/resource-manager/resource-manager.err.log</errorlog>
+        <testlog>/test_output/resource-manager/resource-manager.test.log</testlog>
         <size>1000M</size>
         <count>10</count>
         <!-- <console>1</console> --> <!-- Default behavior is autodetection (log to console if not daemon mode and is tty) -->
     </logger>
     <!--display_name>production</display_name--> <!-- It is the name that will be shown in the client -->
-    <rpc_port>8090</rpc_port>
+    <!-- <rpc_port>8989</rpc_port> -->
 
     <cnch_data_retention_time_in_sec>60</cnch_data_retention_time_in_sec>
     <background_schedule_pool_size>10</background_schedule_pool_size>
@@ -172,75 +172,32 @@
         </vw>
     </service_discovery>
 
-    <daemon_manager>
-        <port>8090</port>
-        <daemon_jobs>
-            <job>
-                <name>PART_GC</name>
-                <interval>10000</interval>
-                <disable>false</disable>
-            </job>
-            <job>
-                <name>PART_MERGE</name>
-                <interval>10000</interval>
-                <disable>false</disable>
-            </job>
-            <job>
-                <name>CONSUMER</name>
-                <interval>10000</interval>
-                <disable>true</disable>
-            </job>
-            <job>
-                <name>DEDUP_WORKER</name>
-                <interval>10000</interval>
-                <disable>true</disable>
-            </job>
-            <job>
-                <name>PART_CLUSTERING</name>
-                <interval>10000</interval>
-                <disable>true</disable>
-            </job>
-            <job>
-                <name>GLOBAL_GC</name>
-                <interval>5000</interval>
-                <disable>true</disable>
-            </job>
-            <job>
-                <name>TXN_GC</name>
-                <interval>600000</interval>
-                <disable>false</disable>
-            </job>
-        </daemon_jobs>
-    </daemon_manager>
-    <storage_configuration>
-        <disks>
-            <default></default>
-            <server_local_disk1>
-                <path>/data01/minh.dao/CHwp/CHdata/cnch-ce/server/data/0/</path>
-            </server_local_disk1>
-            <server_hdfs_disk0>
-                <path>/user/minh.dao/clickhouse/cnch-ce/</path>
-                <type>bytehdfs</type>
-            </server_hdfs_disk0>
-        </disks>
-        <policies>
-            <default>
-                <volumes>
-                    <local>
-                        <default>default</default>
-                        <disk>default</disk>
-                        <disk>server_local_disk1</disk>
-                    </local>
-                </volumes>
-            </default>
-            <cnch_default_hdfs>
-                <volumes>
-                    <hdfs>
-                        <default>server_hdfs_disk0</default>
-                        <disk>server_hdfs_disk0</disk>
-                    </hdfs>
-                </volumes>
-            </cnch_default_hdfs>
-        </policies>
-    </storage_configuration>
+    <resource_manager>
+        <port>8989</port>
+        <vws>
+           <vw>
+               <name>vw_default</name>
+               <type>Default</type>
+               <num_workers>1</num_workers>
+               <worker_groups>
+                   <worker_group>
+                       <name>default</name>
+                       <type>Physical</type>
+                   </worker_group>
+               </worker_groups>
+           </vw>
+           <vw>
+               <name>vw_write</name>
+               <type>Write</type>
+               <num_workers>1</num_workers>
+               <worker_groups>
+                   <worker_group>
+                       <name>write</name>
+                       <type>Physical</type>
+                   </worker_group>
+               </worker_groups>
+           </vw>
+        </vws>
+    </resource_manager>
+
 </yandex>

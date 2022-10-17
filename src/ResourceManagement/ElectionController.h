@@ -39,6 +39,7 @@ private:
 
     Poco::Logger * log = &Poco::Logger::get("ElectionController");
     ResourceManagerController & rm_controller;
+    bool enable_leader_election{false};
     std::atomic_bool is_leader{false};
     
 };

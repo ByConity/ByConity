@@ -42,8 +42,6 @@ public:
 
     void initialize();
 
-    void setConfig(const ConfigurationPtr & config);
-
     auto & getResourceTracker() { return *resource_tracker; }
     auto & getVirtualWarehouseManager() { return *vw_manager; }
     auto & getWorkerGroupManager() { return *group_manager; }
@@ -68,7 +66,6 @@ public:
         std::lock_guard<std::mutex> * wg_lock = nullptr);
 
 private:
-    ConfigurationPtr config;
     Poco::Logger * log{nullptr};
 
     std::unique_ptr<ResourceTracker> resource_tracker;

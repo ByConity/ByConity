@@ -2,6 +2,7 @@
 
 #include <ResourceManagement/CommonData.h>
 #include <Common/RWLock.h>
+#include <Common/Configurations.h>
 #include <CloudServices/RpcLeaderClientBase.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Context_fwd.h>
@@ -28,15 +29,16 @@ namespace ResourceManagement
 {
 struct WorkerNode;
 
-String fetchLeaderFromKeeper(ContextPtr context, const String & election_path);
+String fetchRMAddressByPSM(ContextPtr context);
+String fetchRMAddressFromKeeper(ContextPtr context);
 
-class ResourceManagerClient : public RpcLeaderClientBase, protected WithContext
+class ResourceManagerClient : public WithContext, public RpcLeaderClientBase
 {
     friend class ResourceReporterTask;
 public:
     static String getName() { return "ResourceManagerClient"; }
 
-    ResourceManagerClient(ContextPtr global_context_, const String & election_path_);
+    ResourceManagerClient(ContextPtr global_context_);
     ~ResourceManagerClient() override;
 
     void getVirtualWarehouse(const std::string & name, VirtualWarehouseData & vw_data);
@@ -66,9 +68,8 @@ private:
     using Stub = Protos::ResourceManagerService_Stub;
     mutable RWLock leader_mutex = RWLockImpl::create();
     std::unique_ptr<Stub> stub;
-    String election_path;
 
-    String fetchLeaderFromKeeper() const;
+    String fetchRMAddress() const;
 
     RWLockImpl::LockHolder getReadLock() const
     {
@@ -100,10 +101,8 @@ private:
     template <typename RMResponse, typename RpcFunc>
     bool callToLeaderWrapper(RMResponse & response, RpcFunc & rpc_func)
     {
-        auto & config = getContext()->getConfigRef();
-        auto max_retry_count = config.getInt("resource_manager.max_retry_count", 3);
-
-        int retry_count = 0;
+        auto max_retry_count = getContext()->getRootConfig().resource_manager.max_retry_times.value;
+        size_t retry_count = 0;
         do
         {
             try
@@ -113,6 +112,7 @@ private:
                     rpc_func(stub);
                 }
 
+                /// Finish the process with true flag if the response is from the leader and no exception thrown.
                 if (response.has_is_leader() && response.is_leader())
                     return true;
             }
@@ -128,12 +128,13 @@ private:
             }
 
             auto lock = getWriteLock();
-            auto new_leader = fetchLeaderFromKeeper();
+            auto new_leader = fetchRMAddress();
             if (new_leader.empty())
             {
                 LOG_ERROR(log, "There is no active elected RM leader");
-                throw;
+                throw Exception("No active RM leader", ErrorCodes::RESOURCE_MANAGER_NO_LEADER_ELECTED);
             }
+            /// Update leader address and retry in case of any exception.
             else
             {
                 LOG_DEBUG(log, "Updating RM Leader to " + new_leader);

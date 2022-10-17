@@ -98,22 +98,14 @@ int ResourceManager::main(const std::vector<std::string> &)
     global_context->setApplicationType(Context::ApplicationType::SERVER);
     global_context->initRootConfig(config());
 
-
     global_context->initServiceDiscoveryClient();
 
     /// Initialize catalog
     Catalog::CatalogConfig catalog_conf(config());
     auto name_space = config().getString("catalog.name_space", "default");
     global_context->initCatalog(catalog_conf, name_space);
-    // TODO(zuochuang.zema): MERGE bytejournal
-    // global_context->initByteJournalClient();
 
     auto rm_controller = std::make_shared<RM::ResourceManagerController>(global_context);
-
-    rm_controller->setConfig(loaded_config.configuration);
-
-    // FIXME: (zuochuang.zema) RM-LeaderElection
-    rm_controller->initialize();
 
     SCOPE_EXIT({
         rm_controller.reset();

@@ -1,13 +1,14 @@
 #include <ResourceManagement/ResourceManagerController.h>
 
 #include <Catalog/Catalog.h>
+#include <Common/Configurations.h>
+#include <Core/UUID.h>
 #include <Interpreters/Context.h>
 #include <Poco/Util/Application.h>
 #include <ResourceManagement/ElectionController.h>
 #include <ResourceManagement/ResourceTracker.h>
 #include <ResourceManagement/VirtualWarehouseManager.h>
 #include <ResourceManagement/WorkerGroupManager.h>
-#include <Core/UUID.h>
 #include <ResourceManagement/WorkerGroupResourceCoordinator.h>
 
 #include <ResourceManagement/ElectionController.h>
@@ -17,6 +18,7 @@ namespace DB::ErrorCodes
 {
     extern const int KNOWN_WORKER_GROUP;
     extern const int RESOURCE_MANAGER_ILLEGAL_CONFIG;
+    extern const int RESOURCE_MANAGER_REMOVE_WORKER_ERROR;
     extern const int VIRTUAL_WAREHOUSE_NOT_INITIALIZED;
     extern const int WORKER_GROUP_NOT_FOUND;
 }
@@ -44,10 +46,11 @@ Catalog::CatalogPtr ResourceManagerController::getCnchCatalog()
 
 void ResourceManagerController::createVWsFromConfig()
 {
+    const auto & config = getContext()->getConfigRef();
     Poco::Util::AbstractConfiguration::Keys config_keys;
 
     String prefix = "resource_manager.vws";
-    config->keys(prefix, config_keys);
+    config.keys(prefix, config_keys);
     String prefix_key;
 
     for (const String & key: config_keys)
@@ -55,18 +58,18 @@ void ResourceManagerController::createVWsFromConfig()
         prefix_key = prefix + "." + key;
         if (key.find("vw") == 0)
         {
-            if (!config->has(prefix_key + ".name"))
+            if (!config.has(prefix_key + ".name"))
             {
                 LOG_WARNING(log, "Virtual Warehouse specified in config without name");
                 continue;
             }
-            String name = config->getString(prefix_key + ".name");
-            if (!config->has(prefix_key + ".type"))
+            String name = config.getString(prefix_key + ".name");
+            if (!config.has(prefix_key + ".type"))
             {
                 LOG_WARNING(log, "Virtual Warehouse " + name + " specified in config without type");
                 continue;
             }
-            if (!config->has(prefix_key + ".num_workers"))
+            if (!config.has(prefix_key + ".num_workers"))
             {
                 LOG_WARNING(log, "Virtual Warehouse " + name + " specified in config without num_workers");
                 continue;
@@ -75,12 +78,12 @@ void ResourceManagerController::createVWsFromConfig()
             if (vw_manager->tryGetVirtualWarehouse(name))
             {
                 LOG_DEBUG(log, "Virtual warehouse " + name + " already exists, skipping creation");
-                if (config->has(prefix_key + ".worker_groups"))
+                if (config.has(prefix_key + ".worker_groups"))
                     createWorkerGroupsFromConfig(prefix_key + ".worker_groups", name);
                 continue;
             }
             VirtualWarehouseSettings vw_settings;
-            auto type_str = config->getString(prefix_key + ".type", "Unknown");
+            auto type_str = config.getString(prefix_key + ".type", "Unknown");
             vw_settings.type = ResourceManagement::toVirtualWarehouseType(&type_str[0]);
             if (vw_settings.type == VirtualWarehouseType::Unknown)
             {
@@ -88,15 +91,15 @@ void ResourceManagerController::createVWsFromConfig()
                 continue;
             }
 
-            vw_settings.num_workers = config->getInt(prefix_key + ".num_workers", 0);
-            vw_settings.min_worker_groups = config->getInt(prefix_key + ".min_worker_groups", 0);
-            vw_settings.max_worker_groups = config->getInt(prefix_key + ".max_worker_groups", 0);
-            vw_settings.max_concurrent_queries = config->getInt(prefix_key + ".max_concurrent_queries", 0);
-            vw_settings.auto_suspend = config->getInt(prefix_key + ".auto_suspend", 0);
-            vw_settings.auto_resume = config->getInt(prefix_key + ".auto_resume", 1);
+            vw_settings.num_workers = config.getInt(prefix_key + ".num_workers", 0);
+            vw_settings.min_worker_groups = config.getInt(prefix_key + ".min_worker_groups", 0);
+            vw_settings.max_worker_groups = config.getInt(prefix_key + ".max_worker_groups", 0);
+            vw_settings.max_concurrent_queries = config.getInt(prefix_key + ".max_concurrent_queries", 0);
+            vw_settings.auto_suspend = config.getInt(prefix_key + ".auto_suspend", 0);
+            vw_settings.auto_resume = config.getInt(prefix_key + ".auto_resume", 1);
 
             vw_manager->createVirtualWarehouse(name, vw_settings, false);
-            if (config->has(prefix_key + ".worker_groups"))
+            if (config.has(prefix_key + ".worker_groups"))
                 createWorkerGroupsFromConfig(prefix_key + ".worker_groups", name);
             LOG_DEBUG(log, "Created virtual warehouse " + name + " using config");
         }
@@ -107,8 +110,9 @@ void ResourceManagerController::createVWsFromConfig()
 void ResourceManagerController::createWorkerGroupsFromConfig(const String & prefix, const String & vw_name)
 {
     Poco::Util::AbstractConfiguration::Keys config_keys;
+    const auto & config = getContext()->getConfigRef();
 
-    config->keys(prefix, config_keys);
+    config.keys(prefix, config_keys);
     String prefix_key;
 
     auto vw_lock  = vw_manager->getLock();
@@ -119,35 +123,35 @@ void ResourceManagerController::createWorkerGroupsFromConfig(const String & pref
         prefix_key = prefix + "." + key;
         if (key.find("worker_group") == 0)
         {
-            if (!config->has(prefix_key + ".name"))
+            if (!config.has(prefix_key + ".name"))
             {
                 LOG_WARNING(log, "Worker Group specified in config without name");
                 continue;
             }
-            String name = config->getString(prefix_key + ".name");
+            String name = config.getString(prefix_key + ".name");
             if (group_manager->tryGetWorkerGroupImpl(name, &vw_lock, &wg_lock))
             {
                 LOG_DEBUG(log, "Worker group " + name + " already exists, skipping creation");
                 continue;
             }
-            if (!config->has(prefix_key + ".type"))
+            if (!config.has(prefix_key + ".type"))
             {
                 LOG_WARNING(log, "Worker Group " + name + " specified in config without type");
                 continue;
             }
             WorkerGroupData group_data;
             group_data.id = name;
-            auto type_str = config->getString(prefix_key + ".type", "Unknown");
+            auto type_str = config.getString(prefix_key + ".type", "Unknown");
             group_data.type = ResourceManagement::toWorkerGroupType(&type_str[0]);
             if (group_data.type == WorkerGroupType::Unknown)
             {
                 LOG_WARNING(log, "Unknown worker group type " + type_str + ". Type should be of Physical, Shared or Composite");
                 continue;
             }
-            if (config->has(prefix_key + ".psm"))
-                group_data.psm = config->getString(prefix_key + ".psm");
-            if (config->has(prefix_key + ".shared_group"))
-                group_data.linked_id = config->getString(prefix_key + ".shared_group");
+            if (config.has(prefix_key + ".psm"))
+                group_data.psm = config.getString(prefix_key + ".psm");
+            if (config.has(prefix_key + ".shared_group"))
+                group_data.linked_id = config.getString(prefix_key + ".shared_group");
 
             createWorkerGroup(name, false, vw_name, group_data, &vw_lock, &wg_lock);
             LOG_DEBUG(log, "Created worker group " + name + " in Virtual Warehouse " + vw_name + " using config");
@@ -239,11 +243,6 @@ void ResourceManagerController::initialize()
     }
 }
 
-void ResourceManagerController::setConfig(const ConfigurationPtr & config_)
-{
-    config = config_;
-}
-
 void ResourceManagerController::registerWorkerNode(const WorkerNodeResourceData & data)
 {
     if (data.worker_group_id.empty())
@@ -298,13 +297,13 @@ void ResourceManagerController::registerWorkerNode(const WorkerNodeResourceData 
 void ResourceManagerController::removeWorkerNode(const std::string & worker_id, const std::string & vw_name, const std::string & group_id)
 {
     if (group_id.empty() || vw_name.empty())
-        throw Exception("The vw_name and group_id must not be empty.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("The vw_name and group_id must not be empty.", ErrorCodes::RESOURCE_MANAGER_REMOVE_WORKER_ERROR);
 
     auto vw_lock = vw_manager->getLock();
     auto wg_lock = group_manager->getLock();
     auto group = group_manager->tryGetWorkerGroupImpl(group_id, &vw_lock, &wg_lock);
     if (!group)
-        throw Exception("The worker group " + group_id + " not exists!", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("The worker group " + group_id + " not exists!", ErrorCodes::RESOURCE_MANAGER_REMOVE_WORKER_ERROR);
     group->removeNode(worker_id);
 }
 

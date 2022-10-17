@@ -64,7 +64,7 @@ HostWithPortsVec ServiceDiscoveryLocal::lookup(const String & psm_name, Componen
             res.push_back(std::move(host_with_ports));
         }
     }
-    else if (type == ComponentType::TSO || type == ComponentType::DAEMON_MANAGER)
+    else if (type == ComponentType::TSO || type == ComponentType::DAEMON_MANAGER || type == ComponentType::RESOURCE_MANAGER)
     {
         for (auto & ep : endpoints)
         {

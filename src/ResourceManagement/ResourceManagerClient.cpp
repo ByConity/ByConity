@@ -1,64 +1,102 @@
 #include <ResourceManagement/ResourceManagerClient.h>
 
+#include <Common/Configurations.h>
 #include <Common/ZooKeeper/ZooKeeper.h>
 #include <Protos/RPCHelpers.h>
 #include <Protos/data_models.pb.h>
 #include <Protos/resource_manager_rpc.pb.h>
 #include <ResourceManagement/CommonData.h>
 #include <ResourceManagement/WorkerNode.h>
+#include <ServiceDiscovery/IServiceDiscovery.h>
 
 #include <brpc/channel.h>
 #include <brpc/controller.h>
+#include <common/logger_useful.h>
 
 
 namespace DB::ErrorCodes
 {
+extern const int RESOURCE_MANAGER_ILLEGAL_CONFIG;
 extern const int RESOURCE_MANAGER_NO_AVAILABLE_WORKER;
+extern const int RESOURCE_MANAGER_NOT_FOUND;
 extern const int NOT_A_LEADER;
 }
 
 namespace DB::ResourceManagement
 {
 
-ResourceManagerClient::ResourceManagerClient(ContextPtr global_context_, const String & election_path_)
-    : RpcLeaderClientBase(getName(), DB::ResourceManagement::fetchLeaderFromKeeper(global_context_, election_path_))
-    , WithContext(global_context_)
+ResourceManagerClient::ResourceManagerClient(ContextPtr global_context_)
+    : WithContext(global_context_)
+    , RpcLeaderClientBase(getName(), fetchRMAddress())
     , stub(std::make_unique<Protos::ResourceManagerService_Stub>(&getChannel()))
-    , election_path(election_path_)
 {
 }
 
-/// FIXME: (zuochuang.zema) also need PSM mode for RM. fetchAddressFromKeeperOrPSM
-String fetchLeaderFromKeeper(ContextPtr context, const String & election_path)
+String fetchRMAddressByPSM(ContextPtr context)
 {
-    if (!context->hasZooKeeper())
+    auto sd = context->getServiceDiscoveryClient();
+    if (!sd)
     {
-        /// TODO: (zuochuang.zema) PSM mode.
-        return "";
+        throw Exception("Can't initialise RM client in PSM mode as the SD client is null.", ErrorCodes::RESOURCE_MANAGER_ILLEGAL_CONFIG);
     }
+    auto psm = context->getRootConfig().service_discovery.resource_manager_psm.value;
+    auto addresses = sd->lookup(psm, ComponentType::RESOURCE_MANAGER);
+    if (addresses.empty())
+    {
+        throw Exception("No RM instance found with psm: " + psm, ErrorCodes::RESOURCE_MANAGER_ILLEGAL_CONFIG);
+    }
+    if (addresses.size() > 1)
+    {
+        std::stringstream ss;
+        ss << psm << ": ";
+        for (const auto & address : addresses)
+        {
+            ss << address.getRPCAddress() << " ";
+        }
+        throw Exception("Only one instance is allowed in PSM mode, but multiple instances found: " + ss.str(), ErrorCodes::RESOURCE_MANAGER_ILLEGAL_CONFIG);
+    }
+    return addresses[0].getRPCAddress();
+}
 
+String fetchRMAddressFromKeeper(ContextPtr context)
+{
     auto current_zookeeper = context->getZooKeeper();
+    auto election_path = context->getRootConfig().resource_manager.election_path.value;
     if (!current_zookeeper->exists(election_path))
     {
-        return "";
+        LOG_DEBUG(&Poco::Logger::get("ResourceManagerClient"), "election_path {} not exists in zookeeper now, fallback to PSM mode.", election_path);
+        return fetchRMAddressByPSM(context);
     }
 
     auto children = current_zookeeper->getChildren(election_path);
     if (children.empty())
-        throw Exception(ErrorCodes::NOT_A_LEADER, "Can't get current rm-leader, leader election path {} is empty", election_path);
+    {
+        throw Exception(ErrorCodes::NOT_A_LEADER, "Can't get current RM leader, leader election path {} is empty", election_path);
+    }
 
     std::sort(children.begin(), children.end());
     auto current_leader_node = election_path + "/" + children.front();
     String current_leader = current_zookeeper->get(current_leader_node);
     if (current_leader.empty())
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Can't get current rm-leader, leader_node `{}` in keeper is empty.", current_leader_node);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Can't get current RM leader, leader_node `{}` in keeper is empty.", current_leader_node);
     
     return current_leader;
 }
 
-String ResourceManagerClient::fetchLeaderFromKeeper() const
+/// @brief Fetch RM address from Keeper or PSM service discovery.
+/// @return the RM's ip:port .
+/// @throw Exception if can not fetch address from either Keeper or PSM mode.
+String ResourceManagerClient::fetchRMAddress() const
 {
-    return DB::ResourceManagement::fetchLeaderFromKeeper(getContext(), election_path);
+    auto context = getContext();
+    /// Option A. fetch by PSM mode.
+    if (!context->hasZooKeeper())
+    {
+        return fetchRMAddressByPSM(context);
+    }
+
+    /// Option B. fetch from Keeper.
+    return fetchRMAddressFromKeeper(context);
 }
 
 ResourceManagerClient::~ResourceManagerClient()

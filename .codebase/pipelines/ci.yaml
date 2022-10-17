@@ -34,9 +34,8 @@ jobs:
       PATH: "$PATH:/opt/tiger/yarn_deploy/hadoop/bin:/opt/tiger/consul_deploy/bin/go:/clickhouse/bin:/clickhouse/usr/breakpad/bin:/opt/tiger/bvc/bin:/opt/tiger/foundationdb/bin"
       LD_LIBRARY_PATH: "/clickhouse/lib/:$LD_LIBRARY_PATH"
       MY_HOST_IP: "127.0.0.1"
-      MY_HOST_IPV6: "::1"
       BYTED_HOST_IP: "127.0.0.1"
-      BYTED_HOST_IPV6: "::1"
+
     runs-on:
       spec: m1.4xlarge
       env: online

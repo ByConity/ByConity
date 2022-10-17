@@ -15,6 +15,7 @@ namespace DB
     M(Bool, enable_auto_resource_sharing, "", false, ConfigFlag::Default, "") \
     M(UInt64, auto_resource_sharing_task_interval_ms, "", 5000, ConfigFlag::Default, "") \
     M(UInt64, worker_register_visible_granularity_sec, "", 5, ConfigFlag::Default, "change workers' state from Registering to Running every N seconds to avoid changing worker topology frequently.") \
+    M(UInt64, lost_worker_timeout_seconds, "", 10, ConfigFlag::Default, "") \
 
 DECLARE_CONFIG_DATA(RMConfigurationData, RM_CONFIG_FIELDS_LIST)
 struct RMConfiguration final : public RMConfigurationData
@@ -25,12 +26,9 @@ struct RMConfiguration final : public RMConfigurationData
     M(String, mode, "", "local", ConfigFlag::Recommended, "") \
     M(String, server_psm, "server.psm", "data.cnch.server", ConfigFlag::Recommended, "") \
     M(String, vw_psm, "vw.psm", "data.cnch.vw", ConfigFlag::Recommended, "") \
-    M(String, catalog_psm, "catalog.psm", "data.cnch.catalog", ConfigFlag::Recommended, "") \
     M(String, tso_psm, "tso.psm", "data.cnch.tso", ConfigFlag::Recommended, "") \
     M(String, daemon_manager_psm, "daemon_manager.psm", "data.cnch.daemon_manager", ConfigFlag::Recommended, "") \
-    M(String, resource_manager_host, "resource_manager.node.host", "127.0.0.1", ConfigFlag::Default, "") \
     M(String, resource_manager_psm, "resource_manager.psm", "data.cnch.resource_manager", ConfigFlag::Default, "") \
-    M(String, bytepond_psm, "bytepond.psm", "data.cnch.bytepond", ConfigFlag::Default, "")
 
 DECLARE_CONFIG_DATA(SDConfigurationData, SD_CONFIG_FIELDS_LIST)
 

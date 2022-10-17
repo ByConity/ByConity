@@ -77,7 +77,6 @@ bool ResourceReporterTask::sendHeartbeat()
     data.id = getenv("WORKER_ID");
     data.vw_name = getenv("VIRTUAL_WAREHOUSE_ID");
     data.worker_group_id = getenv("WORKER_GROUP_ID");
-    // TODO: Handle failure
     return resource_manager->reportResourceUsage(data);
 }
 
@@ -90,15 +89,20 @@ void ResourceReporterTask::sendRegister()
     data.id = getenv("WORKER_ID");
     data.vw_name = getenv("VIRTUAL_WAREHOUSE_ID");
     data.worker_group_id = getenv("WORKER_GROUP_ID");
-    // TODO: Handle failure
     resource_manager->registerWorker(data);
 }
 
 void ResourceReporterTask::sendRemove()
 {
     auto resource_manager = getContext()->getResourceManagerClient();
-    // TODO: Handle failure
-    resource_manager->removeWorker(getenv("WORKER_ID"), getenv("VIRTUAL_WAREHOUSE_ID"), getenv("WORKER_GROUP_ID"));
+    try
+    {
+        resource_manager->removeWorker(getenv("WORKER_ID"), getenv("VIRTUAL_WAREHOUSE_ID"), getenv("WORKER_GROUP_ID"));
+    }
+    catch (...)
+    {
+        tryLogCurrentException("ResourceReporter::sendRemove", "Failed to unregister from RM " + resource_manager->leader_host_port);
+    }
 }
 
 void ResourceReporterTask::start()
