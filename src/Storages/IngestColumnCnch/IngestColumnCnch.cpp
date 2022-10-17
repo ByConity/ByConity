@@ -86,14 +86,21 @@ String reconstructAlterQuery(
     };
 
     const String prepared_suffix = "_" + suffix;
-    return fmt::format("ALTER TABLE {}.{} INGEST PARTITION {} COLUMNS {} KEY {} FROM {}.{}",
+    String query_first_part = fmt::format("ALTER TABLE {}.{} INGEST PARTITION {} COLUMNS {}",
         backQuoteIfNeed(target_storage_id.getDatabaseName() + prepared_suffix),
         backQuoteIfNeed(target_storage_id.getTableName() + prepared_suffix),
         queryToString(command.partition),
-        get_comma_separated(command.column_names),
-        get_comma_separated(command.key_names),
+        get_comma_separated(command.column_names));
+
+
+    String query_key_part = (command.key_names.empty()) ? "" :
+        fmt::format("KEY {}", get_comma_separated(command.key_names));
+
+    String query_end_part = fmt::format(" FROM {}.{}",
         backQuoteIfNeed(source_storage_id.getDatabaseName() + prepared_suffix),
         backQuoteIfNeed(source_storage_id.getTableName() + prepared_suffix));
+
+    return fmt::format("{} {} {}", query_first_part, query_key_part, query_end_part);
 }
 
 Names getOrderedKeys(const Names & names_to_order, const StorageInMemoryMetadata & meta_data)
