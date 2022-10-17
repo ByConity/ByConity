@@ -152,9 +152,11 @@ std::pair<const char *, MainFunc> clickhouse_applications[] =
     {"hash-binary", mainEntryClickHouseHashBinary},
 #if ENABLE_CLICKHOUSE_DAEMON_MANAGER
     {"daemon-manager", mainEntryClickHouseDaemonManager},
+    {"daemon_manager", mainEntryClickHouseDaemonManager},
 #endif
 #if ENABLE_CLICKHOUSE_RESOURCE_MANAGER
     {"resource-manager", mainEntryClickHouseResourceManager},
+    {"resource_manager", mainEntryClickHouseResourceManager},
 #endif
 #if ENABLE_CLICKHOUSE_TSO_SERVER
     {"tso-server", mainEntryClickHouseTSOServer},
