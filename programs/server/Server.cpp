@@ -561,17 +561,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         global_context->initVirtualWarehousePool();
         global_context->initServiceDiscoveryClient();
-        // global_context->initByteJournalClient();
         global_context->initCatalog(catalog_conf, config().getString("catalog.name_space", "default"));
-        global_context->initTSOClientPool(config().getString("service_discovery.tso.psm", "default"));
-        global_context->initDaemonManagerClientPool(config().getString("service_discovery.daemon_manager.psm", "default"));
-        // global_context->initBytepondClientPool(root_config.service_discovery.bytepond_psm);
+        global_context->initTSOClientPool(root_config.service_discovery.tso_psm);
+        global_context->initDaemonManagerClientPool(root_config.service_discovery.daemon_manager_psm);
         global_context->initCnchServerClientPool(root_config.service_discovery.server_psm);
-
         if (root_config.service_discovery.resource_manager_psm.existed)
             global_context->initResourceManagerClient();
         else
-            LOG_DEBUG(log, "Not initialising Resource Manager Client");
+            LOG_DEBUG(log, "Not initialising Resource Manager Client as the psm is empty.");
 
         global_context->initCnchWorkerClientPools();
         auto & worker_pools = global_context->getCnchWorkerClientPools();
@@ -1049,12 +1046,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Disk cache for unique key index
     size_t unique_key_index_file_cache_size = config().getUInt64("unique_key_index_disk_cache_max_bytes", 53687091200); /// 50GB
     global_context->setUniqueKeyIndexFileCache(unique_key_index_file_cache_size);
-
-    if (global_context->getServerType() == ServerType::cnch_server || global_context->getServerType() == ServerType::cnch_worker)
-    {
-        /// Rely on schedule pool config
-        global_context->initCnchBGThreads();
-    }
 
 #if USE_HDFS
     /// Init hdfs user
@@ -1669,6 +1660,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         //     /// TODO status service
 
+        }
+
+        if (global_context->getServerType() == ServerType::cnch_server || global_context->getServerType() == ServerType::cnch_worker)
+        {
+            /// Rely on schedule pool config.
+            /// Make sure exchange_port is set before init bg threads.
+            global_context->initCnchBGThreads();
         }
 
         for (auto & server : *servers)

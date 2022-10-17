@@ -136,9 +136,9 @@ std::string HostWithPorts::toDebugString() const
     if (tcp_port != 0)
         wb << " tcp/" << tcp_port;
     if (exchange_port != 0)
-        wb << " exc/" << tcp_port;
+        wb << " exc/" << exchange_port;
     if (exchange_status_port != 0)
-        wb << " exs/" << tcp_port;
+        wb << " exs/" << exchange_status_port;
     wb << '}';
 
     return wb.str();

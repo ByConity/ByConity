@@ -45,8 +45,8 @@ ContextPtr ResourceTracker::getContext() const
 void ResourceTracker::clearLostWorkers()
 {
     time_t time_now = time(nullptr);
-    auto timeout = getContext()->getConfigRef().getUInt("resource_manager.lost_worker_timeout_seconds", 60);
-    auto timeout_threshold = time_now - timeout;
+    size_t timeout = getContext()->getRootConfig().resource_manager.lost_worker_timeout_seconds.value;
+    time_t timeout_threshold = time_now - timeout;
 
     std::lock_guard lock(node_mutex);
     auto it = worker_nodes.begin();
@@ -54,10 +54,10 @@ void ResourceTracker::clearLostWorkers()
     {
         if (it->second->last_update_time < timeout_threshold)
         {
-            LOG_TRACE(log, "Removing worker node {}: {}, last updated {} seconds ago.", 
+            LOG_DEBUG(log, "Removing worker {}: {}, last updated about {} seconds ago.", 
                             it->second->worker_group_id, 
                             it->second->getID(), 
-                            std::to_string(time(nullptr) - it->second->last_update_time));
+                            time_now - it->second->last_update_time);
             try
             {
                 rm_controller.removeWorkerNode(it->second->getID(), it->second->vw_name, it->second->worker_group_id);

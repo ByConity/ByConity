@@ -12,6 +12,11 @@
 #include <ServiceDiscovery/IServiceDiscovery.h>
 #include <Storages/PartCacheManager.h>
 
+namespace DB::ErrorCodes
+{
+extern const int RESOURCE_MANAGER_INIT_ERROR;
+}
+
 namespace DB::ResourceManagement
 {
 
@@ -20,12 +25,51 @@ ElectionController::ElectionController(ResourceManagerController & rm_controller
     , LeaderElectionBase(getContext()->getRootConfig().resource_manager.check_leader_info_interval_ms)
     , rm_controller(rm_controller_)
 {
-    enterLeaderElection();
+    enable_leader_election = getContext()->hasZooKeeper();
+    if (!enable_leader_election)
+    {
+        LOG_INFO(log, "RM is running in Single instance mode as ZooKeeper is not enabled. The current RM will become leader and should be the only instance.");
+        onLeader();
+        return;
+    }
+
+    startLeaderElection(getContext()->getSchedulePool());
 }
 
 ElectionController::~ElectionController() 
 {
     shutDown();
+}
+
+void ElectionController::onLeader()
+{
+    auto current_address = getContext()->getHostWithPorts().getRPCAddress();
+    LOG_INFO(log, "Starting leader callback for " + current_address);
+
+    /// Sleep to prevent multiple leaders from appearing at the same time
+    std::this_thread::sleep_for(std::chrono::milliseconds(wait_ms));
+
+    /// Make sure get all needed metadata from KV store before becoming leader.
+    if (!pullState())
+    {
+        if (!enable_leader_election)
+        {
+            /// We have no way to trigger a new onLeader action in Single instance mode.
+            /// So we need to restart the process if we encounter any error.
+            throw Exception("Failed to pull metadata from KV store in Single instance mode, please check the metadata service and restart RM.", ErrorCodes::RESOURCE_MANAGER_INIT_ERROR);
+        }
+        is_leader = false;
+        exitLeaderElection();
+    }
+    else
+    {
+        LOG_INFO(log, "Current RM node " + current_address + " has become leader.");
+        if (getContext()->getRootConfig().resource_manager.enable_auto_resource_sharing)
+        {
+            rm_controller.getWorkerGroupResourceCoordinator().start();
+        }
+        is_leader = true;
+    }
 }
 
 void ElectionController::enterLeaderElection()
@@ -50,31 +94,6 @@ void ElectionController::enterLeaderElection()
     catch (...)
     {
         tryLogCurrentException(__PRETTY_FUNCTION__);
-    }
-}
-
-void ElectionController::onLeader()
-{
-    auto current_address = getContext()->getHostWithPorts().getRPCAddress();
-    LOG_INFO(log, "Starting leader callback for " + current_address);
-
-    /// Sleep to prevent multiple leaders from appearing at the same time
-    std::this_thread::sleep_for(std::chrono::milliseconds(wait_ms));
-
-    /// Make sure get all needed metadata from KV store before becoming leader.
-    if (!pullState())
-    {
-        is_leader = false;
-        exitLeaderElection();
-    }
-    else
-    {
-        LOG_INFO(log, "Current RM node " + current_address + " has become leader.");
-        if (getContext()->getRootConfig().resource_manager.enable_auto_resource_sharing)
-        {
-            rm_controller.getWorkerGroupResourceCoordinator().start();
-        }
-        is_leader = true;
     }
 }
 

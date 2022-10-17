@@ -99,29 +99,28 @@
                 </ports>
             </node>
         </daemon_manager>
-<!--        <resource_manager>-->
-<!--            <psm>data.cnch.resource_manager</psm>-->
-<!--            &lt;!&ndash; For dns &ndash;&gt;-->
-<!--            <service>cnch-resourcemanager</service>-->
-<!--            <headless_service>cnch-resourcemanager-headless</headless_service>-->
-<!--            &lt;!&ndash; For local test &ndash;&gt;-->
-<!--            <node>-->
-<!--                <host>ip_address_replace_me</host>-->
-<!--                <hostname>rm0</hostname>-->
-<!--                <ports>-->
-<!--                    &lt;!&ndash; RPC/Primary &ndash;&gt;-->
-<!--                    <port><name>PORT0</name><value>8989</value></port>-->
-<!--                </ports>-->
-<!--            </node>-->
-<!--            <node>-->
-<!--                <host>ip_address_replace_me</host>-->
-<!--                <hostname>rm0</hostname>-->
-<!--                <ports>-->
-<!--                    &lt;!&ndash; RPC/Primary &ndash;&gt;-->
-<!--                    <port><name>PORT0</name><value>8990</value></port>-->
-<!--                </ports>-->
-<!--            </node>-->
-<!--        </resource_manager>-->
+        <resource_manager>
+            <psm>data.cnch.resource_manager</psm>
+            <!-- For dns -->
+            <service>cnch-resourcemanager</service>
+            <headless_service>cnch-resourcemanager-headless</headless_service>
+            <!-- For local test -->
+            <node>
+                <host>ip_address_replace_me</host>
+                <hostname>rm0</hostname>
+                <ports>
+                    <!-- RPC/Primary -->
+                    <port><name>PORT0</name><value>8989</value></port>
+                </ports>
+            </node>
+            <!-- <node>
+                <host>ip_address_replace_me</host>
+                <hostname>rm0</hostname>
+                <ports>
+                    <port><name>PORT0</name><value>8990</value></port>
+                </ports>
+            </node> -->
+        </resource_manager>
         <vw>
             <psm>data.cnch.vw_default</psm>
             <!-- For local test -->

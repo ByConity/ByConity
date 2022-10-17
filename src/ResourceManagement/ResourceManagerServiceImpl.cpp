@@ -93,7 +93,7 @@ void ResourceManagerServiceImpl::registerWorkerNode(
 
         auto data = WorkerNodeResourceData::createFromProto(request->resource_data());
         rm_controller.registerWorkerNode(data);
-        LOG_TRACE(&Poco::Logger::get("ResourceManagerServiceImpl"), "Register worker {}", data.toDebugString());
+        LOG_TRACE(&Poco::Logger::get("ResourceManagerServiceImpl"), "Register worker {} - {}", data.host_ports.toDebugString(), data.toDebugString());
     }
     catch (...)
     {

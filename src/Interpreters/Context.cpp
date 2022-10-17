@@ -4212,8 +4212,6 @@ void Context::initResourceManagerClient()
 {
     LOG_DEBUG(&Poco::Logger::get("Context"), "Initialising Resource Manager Client");
     const auto & root_config = getRootConfig();
-    String election_path = root_config.resource_manager.election_path.value;
-
     const auto & max_retry_count = root_config.resource_manager.init_client_tries;
     const auto & retry_interval_ms = root_config.resource_manager.init_client_retry_interval_ms;
 
@@ -4224,7 +4222,7 @@ void Context::initResourceManagerClient()
         try
         {
             auto lock = getLock();
-            shared->rm_client = std::make_shared<ResourceManagerClient>(getGlobalContext(), election_path);
+            shared->rm_client = std::make_shared<ResourceManagerClient>(getGlobalContext());
             LOG_DEBUG(&Poco::Logger::get("Context"), "Initialised Resource Manager Client on try: {}", retry_count);
             return;
         }
