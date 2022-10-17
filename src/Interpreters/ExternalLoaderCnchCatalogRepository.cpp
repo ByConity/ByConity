@@ -1,4 +1,5 @@
 #include "ExternalLoaderCnchCatalogRepository.h"
+#include <Interpreters/ExternalDictionariesLoader.h>
 #include <Interpreters/Context.h>
 #include <Catalog/Catalog.h>
 #include <Common/Status.h>
@@ -92,7 +93,6 @@ LoadablesConfigurationPtr CnchCatalogDictionaryCache::load(const String & uuid_s
     const ASTCreateQuery & create_query = ast->as<ASTCreateQuery &>();
     DictionaryConfigurationPtr abstract_dictionary_configuration =
         getDictionaryConfigurationFromAST(create_query, context, d->database());
-    abstract_dictionary_configuration->setBool("is_cnch_dictionary", true);
 
     return abstract_dictionary_configuration;
 }
@@ -174,7 +174,16 @@ StorageID ExternalLoaderCnchCatalogRepository::parseStorageID(const std::string 
 std::optional<UUID> ExternalLoaderCnchCatalogRepository::resolveDictionaryName(const std::string & name, const std::string & current_database_name, ContextPtr context)
 {
     StorageID storage_id = (name.find('.') == std::string::npos) ? StorageID{current_database_name, name} : ExternalLoaderCnchCatalogRepository::parseStorageID(name);
-    const CnchCatalogDictionaryCache & cache = context->getCnchCatalogDictionaryCache();
-    return cache.findUUID(storage_id);
+    CnchCatalogDictionaryCache & cache = context->getCnchCatalogDictionaryCache();
+    std::optional<UUID> res = cache.findUUID(storage_id);
+    if ((!res) && (context->getServerType() == ServerType::cnch_worker))
+    {
+        cache.loadFromCatalog();
+        res = cache.findUUID(storage_id);
+        if (res)
+            context->getExternalDictionariesLoader().reloadConfig("CnchCatalogRepository");
+    }
+
+    return res;
 }
 }

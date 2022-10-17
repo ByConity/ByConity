@@ -96,7 +96,8 @@ private:
     StorageDictionary(
         const StorageID & table_id_,
         LoadablesConfigurationPtr dictionary_configuration_,
-        ContextPtr context_);
+        ContextPtr context_,
+        bool is_cnch_dictionary);
 };
 
 }

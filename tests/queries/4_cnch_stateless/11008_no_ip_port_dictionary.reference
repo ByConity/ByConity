@@ -1,11 +1,4 @@
 NOT_LOADED
--100
--1
-6
-0
-database
-a
-LOADED
 -- select from table column b
 1	-100
 2	4
@@ -27,3 +20,10 @@ LOADED
 4	a
 5	columns
 6	a
+-100
+-1
+6
+0
+database
+a
+LOADED

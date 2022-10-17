@@ -2,6 +2,7 @@
 
 #include <Catalog/Catalog.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/ExternalDictionariesLoader.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/formatAST.h>
@@ -62,6 +63,11 @@ void DatabaseCnch::createTable(ContextPtr local_context, const String & table_na
     txn->appendAction(std::move(create_table));
     txn->commitV1();
     LOG_TRACE(log, "Successfully create table {} in query {}", table_name, local_context->getCurrentQueryId());
+    if (table->isDictionary())
+    {
+        local_context->getExternalDictionariesLoader().reloadConfig("CnchCatalogRepository");
+        LOG_TRACE(log, "Successfully add dictionary config for {}", table_name, local_context->getCurrentQueryId());
+    }
 }
 
 void DatabaseCnch::dropTable(ContextPtr local_context, const String & table_name, bool no_delay)
@@ -92,6 +98,8 @@ void DatabaseCnch::dropTable(ContextPtr local_context, const String & table_name
     auto drop_action = txn->createAction<DDLDropAction>(std::move(params), std::vector{std::move(storage)});
     txn->appendAction(std::move(drop_action));
     txn->commitV1();
+    if (is_dictionary)
+        local_context->getExternalDictionariesLoader().reloadConfig("CnchCatalogRepository");
 }
 
 void DatabaseCnch::drop(ContextPtr local_context)
@@ -149,6 +157,9 @@ void DatabaseCnch::detachTablePermanently(ContextPtr local_context, const String
     auto detach_action = txn->createAction<DDLDropAction>(std::move(params), std::vector{storage});
     txn->appendAction(std::move(detach_action));
     txn->commitV1();
+
+    if (is_dictionary)
+        local_context->getExternalDictionariesLoader().reloadConfig("CnchCatalogRepository");
 }
 
 ASTPtr DatabaseCnch::getCreateDatabaseQuery() const
