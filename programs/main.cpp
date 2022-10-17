@@ -158,6 +158,7 @@ std::pair<const char *, MainFunc> clickhouse_applications[] =
 #endif
 #if ENABLE_CLICKHOUSE_TSO_SERVER
     {"tso-server", mainEntryClickHouseTSOServer},
+    {"tso_server", mainEntryClickHouseTSOServer},
 #endif
 };
 
