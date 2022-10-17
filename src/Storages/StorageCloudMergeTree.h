@@ -11,6 +11,10 @@ namespace DB
 
 class CloudMergeTreeDedupWorker;
 using CloudMergeTreeDedupWorkerPtr = std::unique_ptr<CloudMergeTreeDedupWorker>;
+namespace IngestColumnCnch
+{
+    struct IngestPartitionParam;
+}
 
 class StorageCloudMergeTree final : public shared_ptr_helper<StorageCloudMergeTree>, public MergeTreeCloudData
 {
@@ -60,6 +64,14 @@ public:
 
     ManipulationTaskPtr manipulate(const ManipulationTaskParams & params, ContextPtr task_context) override;
     void checkMutationIsPossible(const MutationCommands & commands, const Settings & settings) const override;
+    void checkAlterPartitionIsPossible(const PartitionCommands & commands, const StorageMetadataPtr & metadata_snapshot, const Settings & settings) const override;
+
+    Pipe alterPartition(
+        const StorageMetadataPtr & /* metadata_snapshot */,
+        const PartitionCommands & /* commands */,
+        ContextPtr /* context */) override;
+
+    void ingestPartition(const StorageMetadataPtr &, const PartitionCommand & command, ContextPtr local_context);
 
     std::set<Int64> getRequiredBucketNumbers() const { return required_bucket_numbers; }
     void setRequiredBucketNumbers(std::set<Int64> & required_bucket_numbers_) { required_bucket_numbers = required_bucket_numbers_; }

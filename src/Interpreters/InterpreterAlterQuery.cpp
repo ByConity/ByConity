@@ -54,7 +54,7 @@ BlockIO InterpreterAlterQuery::execute()
     auto table_id = getContext()->resolveStorageID(alter, Context::ResolveOrdinary);
     query_ptr->as<ASTAlterQuery &>().database = table_id.database_name;
 
-    DatabasePtr database = DatabaseCatalog::instance().getDatabase(table_id.database_name);
+    DatabasePtr database = DatabaseCatalog::instance().getDatabase(table_id.database_name, getContext());
     if (typeid_cast<DatabaseReplicated *>(database.get())
         && !getContext()->getClientInfo().is_replicated_database_internal)
     {

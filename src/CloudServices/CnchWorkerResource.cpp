@@ -9,6 +9,7 @@
 #include <Parsers/parseQuery.h>
 #include <Poco/Logger.h>
 #include <Storages/IStorage.h>
+#include <Databases/DatabaseMemory.h>
 #include <Storages/StorageFactory.h>
 
 
@@ -100,10 +101,18 @@ void CnchWorkerResource::executeCreateQuery(ContextMutablePtr context, const Str
     StoragePtr res = StorageFactory::instance().get(ast_create_query, "", context, context->getGlobalContext(), columns, constraints, false);
     res->startup();
 
-    auto lock = getLock();
-    cloud_tables.emplace(std::make_pair(database_name, table_name), res);
+    {
+        auto lock = getLock();
+        cloud_tables.emplace(std::make_pair(database_name, table_name), res);
+        auto it = memory_databases.find(database_name);
+        if (it == memory_databases.end())
+        {
+            DatabasePtr database = std::make_shared<DatabaseMemory>(database_name, context->getGlobalContext());
+            memory_databases.insert(std::make_pair(database_name, std::move(database)));
+        }
+    }
 
-    LOG_DEBUG(&Poco::Logger::get("WorkerResource"), "Successfully create cloud table {}", res->getStorageID().getNameForLogs());
+    LOG_DEBUG(&Poco::Logger::get("WorkerResource"), "Successfully create cloud table {} and database {}", res->getStorageID().getNameForLogs(), database_name);
 }
 
 StoragePtr CnchWorkerResource::getTable(const StorageID & table_id) const
@@ -119,6 +128,17 @@ StoragePtr CnchWorkerResource::getTable(const StorageID & table_id) const
     return {};
 }
 
+DatabasePtr CnchWorkerResource::getDatabase(const String & database_name) const
+{
+    auto lock = getLock();
+
+    auto it = memory_databases.find(database_name);
+    if (it != memory_databases.end())
+        return it->second;
+
+    return {};
+}
+
 bool CnchWorkerResource::isCnchTableInWorker(const StorageID & table_id) const
 {
     auto lock = getLock();
@@ -129,6 +149,7 @@ void CnchWorkerResource::clearResource()
 {
     auto lock = getLock();
     cloud_tables.clear();
+    memory_databases.clear();
     cnch_tables.clear();
     worker_table_names.clear();
 }

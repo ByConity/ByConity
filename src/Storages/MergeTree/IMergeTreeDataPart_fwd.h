@@ -15,6 +15,7 @@ using IMergeTreeMutableDataPartPtr = std::shared_ptr<IMergeTreeDataPart>;
 using IMergeTreeDataPartsVector = std::vector<IMergeTreeDataPartPtr>;
 using IMutableMergeTreeDataPartPtr = std::shared_ptr<IMergeTreeDataPart>;
 using IMutableMergeTreeDataPartsVector = std::vector<IMutableMergeTreeDataPartPtr>;
+/// end Deprecated
 
 using Roaring = roaring::Roaring;
 using DeleteBitmapPtr = std::shared_ptr<Roaring>;

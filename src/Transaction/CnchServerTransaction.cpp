@@ -240,7 +240,7 @@ TxnTimestamp CnchServerTransaction::commit()
                     ProfileEvents::increment(ProfileEvents::CnchTxnCommitted);
                     ProfileEvents::increment(ProfileEvents::CnchTxnFinishedTransactionRecord);
                     LOG_DEBUG(log, "Successfully committed transaction {} at {}\n", txn_record.txnID().toUInt64(), commit_ts);
-                    // unlock();
+                    //unlock();
                     return commit_ts;
                 }
                 else // CAS failed

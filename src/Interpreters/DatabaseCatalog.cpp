@@ -720,9 +720,22 @@ void DatabaseCatalog::shutdown()
 DatabasePtr DatabaseCatalog::getDatabase(const String & database_name, ContextPtr local_context) const
 {
     String resolved_database = local_context->resolveDatabase(database_name);
-    DatabasePtr res = tryGetDatabaseCnch(database_name, local_context);
-    if (res)
-        return res;
+
+    if (local_context->getServerType() == ServerType::cnch_worker)
+    {
+        if (auto worker_resource = local_context->tryGetCnchWorkerResource())
+        {
+            if (auto database = worker_resource->getDatabase(resolved_database))
+                return database;
+        }
+    }
+
+    if (preferCnchCatalog(local_context))
+    {
+        DatabasePtr res = tryGetDatabaseCnch(database_name, local_context);
+        if (res)
+            return res;
+    }
 
     return getDatabase(resolved_database);
 }

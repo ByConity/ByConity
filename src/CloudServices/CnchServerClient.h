@@ -88,6 +88,7 @@ public:
     void controlCnchBGThread(const StorageID & storage_id, CnchBGThreadType type, CnchBGThreadAction action);
     void cleanTransaction(const TransactionRecord & txn_record);
     std::set<UUID> getDeletingTablesInGlobalGC();
+    bool removeMergeMutateTasksOnPartition(const StorageID &, const String &);
 
     void acquireLock(const LockInfoPtr & info);
     void releaseLock(const LockInfoPtr & info);

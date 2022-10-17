@@ -9,6 +9,7 @@
 #include <CloudServices/DedupWorkerStatus.h>
 #include <WorkerTasks/ManipulationList.h>
 #include <WorkerTasks/ManipulationTaskParams.h>
+
 #include <brpc/channel.h>
 #include <brpc/controller.h>
 

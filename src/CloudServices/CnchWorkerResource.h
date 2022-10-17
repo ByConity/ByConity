@@ -2,6 +2,7 @@
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/StorageID.h>
 #include <Storages/IStorage_fwd.h>
+#include <Databases/IDatabase.h>
 
 #include <unordered_map>
 #include <unordered_set>
@@ -18,6 +19,7 @@ class CnchWorkerResource
 public:
     void executeCreateQuery(ContextMutablePtr context, const String & create_query, bool skip_if_exists = false);
     StoragePtr getTable(const StorageID & table_id) const;
+    DatabasePtr getDatabase(const String & database_name) const;
     bool isCnchTableInWorker(const StorageID & table_id) const;
 
     void clearResource();
@@ -42,6 +44,7 @@ private:
     mutable std::mutex mutex;
 
     std::unordered_map<DatabaseAndTableName, StoragePtr, DatabaseAndTableNameHash> cloud_tables;
+    std::unordered_map<String, DatabasePtr> memory_databases;
 
     /// for offloading query
     std::unordered_set<DatabaseAndTableName, DatabaseAndTableNameHash> cnch_tables;

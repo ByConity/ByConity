@@ -352,4 +352,72 @@ String CnchStorageCommonHelper::getCreateQueryForCloudTable(
     return statement_buf.str();
 }
 
+String CnchStorageCommonHelper::getCreateQueryForCloudTable(
+    const String & query,
+    const String & local_table_name,
+    const String & local_database_name,
+    const ContextPtr & context,
+    bool enable_staging_area,
+    const std::optional<StorageID> & cnch_storage_id) const
+{
+    ParserCreateQuery parser;
+    ASTPtr ast = parseQuery(parser, query.data(), query.data() + query.size(), "", 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
+
+    auto & create_query = ast->as<ASTCreateQuery &>();
+    create_query.table = local_table_name;
+    create_query.database = local_database_name;
+
+    auto * storage = create_query.storage;
+
+    auto engine = std::make_shared<ASTFunction>();
+    engine->name = storage->engine->name.replace(0, strlen("Cnch"), "Cloud");
+    engine->arguments = std::make_shared<ASTExpressionList>();
+    engine->arguments->children.emplace_back(std::make_shared<ASTIdentifier>(cnch_storage_id.value_or(table_id).getDatabaseName()));
+    engine->arguments->children.emplace_back(std::make_shared<ASTIdentifier>(cnch_storage_id.value_or(table_id).getTableName()));
+
+    /// NOTE: Used to pass the version column for unique table here.
+    if (storage->unique_key && storage->engine->arguments && !storage->engine->arguments->children.empty())
+        engine->arguments->children.push_back(storage->engine->arguments->children[0]);
+    storage->set(storage->engine, engine);
+
+    if (engine->name == "CloudMergeTree")  /// table settings for *MergeTree engines
+    {
+        modifyOrAddSetting(create_query, "cnch_temporary_table", Field(UInt64(1)));
+
+        if (enable_staging_area)
+            modifyOrAddSetting(create_query, "cloud_enable_staging_area", Field(UInt64(1)));
+    }
+    else if(engine->name == "CnchHive")
+    {
+        modifyOrAddSetting(create_query, "cnch_temporary_table", Field(UInt64(1)));
+    }
+
+    /// query settings
+    auto query_settings = std::make_shared<ASTSetQuery>();
+    query_settings->is_standalone = false;
+
+    if (context)
+        query_settings->changes = context->getSettingsRef().getChangedSettings();
+
+    if (create_query.settings_ast)
+    {
+        auto & settings_ast = create_query.settings_ast->as<ASTSetQuery &>();
+        if (!query_settings->changes.empty())
+        {
+            for (const auto & change: settings_ast.changes)
+                modifyOrAddSetting(*query_settings, change.name, std::move(change.value));
+        }
+        else
+            query_settings->changes = std::move(settings_ast.changes);
+    }
+
+    if (!query_settings->changes.empty())
+        create_query.setOrReplaceAST(create_query.settings_ast, query_settings);
+
+    WriteBufferFromOwnString statement_buf;
+    formatAST(create_query, statement_buf, false);
+    writeChar('\n', statement_buf);
+    return statement_buf.str();
+}
+
 }
