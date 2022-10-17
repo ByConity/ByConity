@@ -46,7 +46,12 @@ public:
         lock_info->lock_id = context.getTimestamp();
         String host_with_rpc = server.getRPCAddress();
 
-        if (isLocalServer(host_with_rpc, std::to_string(context.getRPCPort())))
+        bool is_local = isLocalServer(host_with_rpc, std::to_string(context.getRPCPort()));
+        LOG_DEBUG(
+            &Poco::Logger::get("CnchLockManagerClient"),
+            "try lock {}, target server: {}", lock_info->toDebugString(), (is_local ? "local" : host_with_rpc));
+
+        if (is_local)
         {
             LockManager::instance().lock(lock_info, context);
         }
@@ -101,7 +106,7 @@ CnchLockHolder::~CnchLockHolder()
 void CnchLockHolder::lock()
 {
     Stopwatch watch;
-    SCOPE_EXIT({ LOG_DEBUG(&Poco::Logger::get("CnchLock"), "acquire {} locks in {}", cnch_locks.size(), watch.elapsedMilliseconds()); });
+    SCOPE_EXIT({ LOG_DEBUG(&Poco::Logger::get("CnchLock"), "acquire {} locks in {} ms", cnch_locks.size(), watch.elapsedMilliseconds()); });
 
     for (const auto & lock : cnch_locks)
     {

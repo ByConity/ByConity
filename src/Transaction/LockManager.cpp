@@ -174,6 +174,8 @@ bool LockContext::lockedBySameTxn(const TxnTimestamp & txn_id)
 
 LockStatus LockManager::lock(LockRequest * request, const Context & context)
 {
+    LOG_DEBUG(log, "lock request: " + request->toDebugString());
+
     auto level = to_underlying(request->getLevel());
     std::vector<TxnTimestamp> current_granted_txns;
     LockMapStripe & stripe = lock_maps[level].getStripe(request->getEntity());
@@ -207,6 +209,7 @@ LockStatus LockManager::lock(LockRequest * request, const Context & context)
 
 void LockManager::unlock(LockRequest * request)
 {
+    LOG_DEBUG(log, "unlock request: " + request->toDebugString());
     auto level = to_underlying(request->getLevel());
     LockMapStripe & stripe = lock_maps[level].getStripe(request->getEntity());
     {
@@ -224,7 +227,7 @@ void LockManager::unlock(LockRequest * request)
 
 void LockManager::lock(const LockInfoPtr & info, const Context & context)
 {
-    LOG_DEBUG(log, "Acquire lock for txn {}", info->txn_id);
+    LOG_DEBUG(log, "try lock: " + info->toDebugString());
     assert(info->lock_id != 0);
     // register transaction in LockManager
     UInt64 txn_id = UInt64(info->txn_id);
@@ -269,7 +272,7 @@ void LockManager::lock(const LockInfoPtr & info, const Context & context)
 
 void LockManager::unlock(const LockInfoPtr & info)
 {
-    LOG_DEBUG(log, "Release lock for txn {}", info->txn_id);
+    LOG_DEBUG(log, "unlock: " + info->toDebugString());
 
     const UInt64 txn_id = info->txn_id.toUInt64();
     const LockID lock_id = info->lock_id;
