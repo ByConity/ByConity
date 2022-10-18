@@ -66,7 +66,7 @@ struct ParserSettings
     };
 
     const static inline ParserSettingsImpl ANSI {
-        .parse_literal_as_decimal = false,
+        .parse_literal_as_decimal = true,
         .parse_with_alias = false,
         .parse_outer_join_with_using = false,
         .parse_nested_alias = false
