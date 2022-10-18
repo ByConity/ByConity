@@ -188,7 +188,7 @@ void registerDiskHDFS(DiskFactory & factory)
             metadata_path, config);
     };
 
-    factory.registerDiskType("hdfs", creator);
+    factory.registerDiskType("communityhdfs", creator);
 }
 
 }
