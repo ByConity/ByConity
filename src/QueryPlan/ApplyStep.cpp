@@ -45,8 +45,13 @@ DataTypePtr ApplyStep::getAssignmentDataType() const
                     return column.type->canBeInsideNullable() ? makeNullable(column.type) : column.type;
             throw Exception("Unknown data type for column " + assignment.first, ErrorCodes::LOGICAL_ERROR);
         }
-        default:
-            throw Exception("Unexpected subquery type", ErrorCodes::LOGICAL_ERROR);
+        case ApplyStep::SubqueryType::QUANTIFIED_COMPARISON: {
+            auto argument_name = assignment.second->children[0]->as<ASTIdentifier>()->name();
+            for (const auto & column : input_streams[0].header)
+                if (column.name == argument_name)
+                    return column.type->isNullable() ? makeNullable(std::make_shared<DataTypeUInt8>()) : std::make_shared<DataTypeUInt8>();
+            throw Exception("Unknown data type for column " + argument_name, ErrorCodes::LOGICAL_ERROR);
+        }
     }
 }
 

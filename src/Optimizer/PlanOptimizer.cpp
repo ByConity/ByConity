@@ -84,6 +84,8 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         std::make_shared<RemoveCorrelatedExistsSubquery>(),
         std::make_shared<RemoveUnCorrelatedScalarSubquery>(),
         std::make_shared<RemoveCorrelatedScalarSubquery>(),
+        std::make_shared<RemoveUnCorrelatedQuantifiedComparisonSubquery>(),
+        std::make_shared<RemoveCorrelatedQuantifiedComparisonSubquery>(),
 
         // rules after subquery removed, DO NOT change !!!.
         std::make_shared<IterativeRewriter>(Rules::pushDownLimitRules(), "PushDownLimit"),

@@ -3,6 +3,7 @@
 #include <Interpreters/Context.h>
 #include <Optimizer/Rewriter/Rewriter.h>
 #include <QueryPlan/SimplePlanRewriter.h>
+#include <QueryPlan/TranslationMap.h>
 
 namespace DB
 {
@@ -235,6 +236,49 @@ class UnCorrelatedExistsSubqueryVisitor : public SimplePlanRewriter<Void>
 {
 public:
     UnCorrelatedExistsSubqueryVisitor(ContextMutablePtr context_, CTEInfo & cte_info_) : SimplePlanRewriter(context_, cte_info_) { }
+    PlanNodePtr visitApplyNode(ApplyNode &, Void &) override;
+};
+
+/**
+ * Pattern match
+ *
+ * 1 correlation columns not exist
+ * 2 subquery is quantified comparison subquery
+ */
+class RemoveUnCorrelatedQuantifiedComparisonSubquery : public Rewriter
+{
+public:
+    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    String name() const override { return "RemoveUnCorrelatedQuantifiedComparisonSubquery"; }
+};
+
+class UnCorrelatedQuantifiedComparisonSubqueryVisitor : public SimplePlanRewriter<Void>
+{
+public:
+    UnCorrelatedQuantifiedComparisonSubqueryVisitor(ContextMutablePtr context_, CTEInfo & cte_info) : SimplePlanRewriter(context_, cte_info) { }
+private:
+    PlanNodePtr visitApplyNode(ApplyNode &, Void &) override;
+};
+
+/**
+ * Pattern match
+ *
+ * 1 correlation columns exist
+ * 2 subquery is quantified comparison subquery
+ */
+class RemoveCorrelatedQuantifiedComparisonSubquery : public Rewriter
+{
+public:
+    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    String name() const override { return "RemoveCorrelatedQuantifiedComparisonSubquery"; }
+};
+
+class CorrelatedQuantifiedComparisonSubqueryVisitor : public SimplePlanRewriter<Void>
+{
+public:
+    CorrelatedQuantifiedComparisonSubqueryVisitor(ContextMutablePtr context_, CTEInfo & cte_info) : SimplePlanRewriter(context_, cte_info) { }
+
+private:
     PlanNodePtr visitApplyNode(ApplyNode &, Void &) override;
 };
 

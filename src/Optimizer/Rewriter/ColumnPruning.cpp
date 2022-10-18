@@ -171,6 +171,12 @@ PlanNodePtr ColumnPruningVisitor::visitApplyNode(ApplyNode & node, NameSet & req
             left_require.insert(in_left.name());
         }
     }
+    else if(ast && ast->as<ASTQuantifiedComparison>())
+    {
+        auto & qc = ast->as<ASTQuantifiedComparison &>();
+        ASTIdentifier & qc_left = qc.children[0]->as<ASTIdentifier &>();
+        left_require.insert(qc_left.name());
+    }
 
     auto left = VisitorUtil::accept(node.getChildren()[0], *this, left_require);
 

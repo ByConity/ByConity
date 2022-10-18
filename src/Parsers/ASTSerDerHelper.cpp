@@ -69,6 +69,7 @@
 #include <Parsers/ASTWatchQuery.h>
 #include <Parsers/ASTWindowDefinition.h>
 #include <Parsers/ASTWithElement.h>
+#include <Parsers/ASTQuantifiedComparison.h>
 
 #include <Core/Types.h>
 #include <IO/ReadHelpers.h>

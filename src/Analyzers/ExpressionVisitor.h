@@ -30,6 +30,7 @@ protected:
     virtual R visitInSubquery(ASTPtr & node, ASTFunction & ast, C & visitor_context) { return visitFunction(node, ast, visitor_context); }
     virtual R visitExistsSubquery(ASTPtr & node, ASTFunction & ast, C & visitor_context) { return visitFunction(node, ast, visitor_context); }
     virtual R visitScalarSubquery(ASTPtr & node, ASTSubquery & ast, C & visitor_context) { return visitExpression(node, ast, visitor_context); }
+    virtual R visitQuantifiedComparisonSubquery(ASTPtr & node, ASTQuantifiedComparison & ast, C & visitor_context) { return visitExpression(node, ast, visitor_context); }
 
 public:
     explicit ExpressionVisitor(ContextPtr context_): context(context_) {}
@@ -83,6 +84,11 @@ public:
             default:
                 throw Exception("unknown function type", ErrorCodes::NOT_IMPLEMENTED);
         }
+    }
+
+    R visitASTQuantifiedComparison(ASTPtr & node, C & visitor_context) final
+    {
+        return visitQuantifiedComparisonSubquery(node, node->as<ASTQuantifiedComparison &>(), visitor_context);
     }
 };
 
@@ -142,6 +148,13 @@ protected:
         process(ast.children[0]);
     }
 
+    void visitQuantifiedComparisonSubquery(ASTPtr &, ASTQuantifiedComparison & ast, const Void &) override
+    {
+        process(ast.children[0]);
+        auto subquery = ast.children[1];
+        process(subquery->children[0]);
+    }
+
 public:
     ExpressionTraversalIncludeSubqueryVisitor(ExpressionVisitor<UserContext> & user_visitor_, UserContext & user_context_, Analysis & analysis_, ContextPtr context_):
         ExpressionVisitor(context_), analysis(analysis_), user_visitor(user_visitor_), user_context(user_context_) {}
@@ -149,7 +162,7 @@ public:
     void process(ASTPtr & node, const Void & traversal_context) override
     {
         // node is expression AST
-        if (node->as<ASTIdentifier>() || node->as<ASTFunction>() || node->as<ASTLiteral>() || node->as<ASTSubquery>() || node->as<ASTFieldReference>())
+        if (node->as<ASTIdentifier>() || node->as<ASTFunction>() || node->as<ASTLiteral>() || node->as<ASTSubquery>() || node->as<ASTFieldReference>() || node->as<ASTQuantifiedComparison>())
             user_visitor.process(node, user_context);
 
         return ASTVisitorUtil::accept(node, *this, traversal_context);

@@ -90,6 +90,7 @@ public:
     ASTPtr visitASTFieldReference(ASTPtr & node, const Void &) override;
     ASTPtr visitASTFunction(ASTPtr & node, const Void &) override;
     ASTPtr visitASTSubquery(ASTPtr & node, const Void &) override;
+    ASTPtr visitASTQuantifiedComparison(ASTPtr & node, const Void &) override;
 
     TranslationMapVisitor(Analysis & analysis_, const TranslationMap & translation_map_)
         : analysis(analysis_),
@@ -243,6 +244,13 @@ ASTPtr TranslationMapVisitor::visitASTFunction(ASTPtr & node, const Void &)
             return makeASTFunction("lambda", function_args.at(0), process(function_args.at(1)));
         }
 
+        throw Exception("Ast should be planned to symbols before translating", ErrorCodes::LOGICAL_ERROR);
+    });
+}
+
+ASTPtr TranslationMapVisitor::visitASTQuantifiedComparison(ASTPtr & node, const Void &)
+{
+    return preferToUseMapped(node, [&](ASTPtr & ) -> ASTPtr {
         throw Exception("Ast should be planned to symbols before translating", ErrorCodes::LOGICAL_ERROR);
     });
 }

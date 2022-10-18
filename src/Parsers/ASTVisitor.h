@@ -36,6 +36,7 @@
 #include <Parsers/ASTWindowDefinition.h>
 #include <Parsers/ASTFieldReference.h>
 #include <Parsers/ASTSelectIntersectExceptQuery.h>
+#include <Parsers/ASTQuantifiedComparison.h>
 #include <Parsers/IAST.h>
 #include <QueryPlan/Void.h>
 
