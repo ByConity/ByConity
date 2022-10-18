@@ -17,6 +17,13 @@
 
 namespace DB
 {
+
+static ASTPtr getEmptySetResult(const QuantifierType & quantifier_type);
+static ASTPtr getBoundComparisons(const String & left, const String & minValue, const String & maxValue, const ASTQuantifiedComparison & qc_ast);
+static bool shouldCompareValueWithLowerBound(const ASTQuantifiedComparison & qc_ast);
+static void makeAggDescriptionsMinMaxCountCount2(AggregateDescriptions & aggregate_descriptions, ContextMutablePtr & context, String & min_value, String & max_value,
+                                                 String & count_all_value, String & count_non_null_value, PlanNodePtr & subquery_ptr, Names & qc_right);
+
 namespace ErrorCodes
 {
     extern const int REMOVE_SUBQUERY_ERROR;
@@ -357,19 +364,7 @@ PlanNodePtr CorrelatedInSubqueryVisitor::visitApplyNode(ApplyNode & node, Void &
     auto unique_id_node = std::make_shared<AssignUniqueIdNode>(context->nextNodeId(), std::move(unique_id_step), PlanNodes{input_ptr});
 
     // try to get the un-correlation part of subquery
-    PlanNodePtr source;
-    if (subquery_ptr->getStep()->getType() == IQueryPlanStep::Type::Filter)
-        source = subquery_ptr;
-
-    // safe check
-    else if (!subquery_ptr->getChildren().empty())
-        source = subquery_ptr->getChildren()[0];
-    else
-    {
-        throw Exception(
-            "Correlated In subquery de-correlation error, correlation filter not exists: " + printVector(correlation),
-            ErrorCodes::REMOVE_SUBQUERY_ERROR);
-    }
+    PlanNodePtr source = subquery_ptr;
 
     std::optional<DecorrelationResult> result = Decorrelation::decorrelateFilters(source, correlation, *context);
     if (!result.has_value())
@@ -425,7 +420,6 @@ PlanNodePtr CorrelatedInSubqueryVisitor::visitApplyNode(ApplyNode & node, Void &
         output.emplace_back(NameAndTypePair{item.name, item.type});
         right_names.emplace_back(item.name);
     }
-    std::pair<Names, Names> key_pairs = result_value.extractJoinClause(correlation);
 
     const auto & in_assignment = apply_step.getAssignment();
     const auto & in_fun = in_assignment.second->as<ASTFunction &>();
@@ -434,11 +428,6 @@ PlanNodePtr CorrelatedInSubqueryVisitor::visitApplyNode(ApplyNode & node, Void &
 
     Names in_left{fun_left.name()};
     Names in_right{fun_right.name()};
-
-    if (!(in_left.size() == 1 && in_right.size() == 1))
-    {
-        throw Exception("Correlated in subquery only only support one column", ErrorCodes::NOT_IMPLEMENTED);
-    }
 
     String probe_symbol = in_left[0];
     String build_symbol = in_right[0];
@@ -766,16 +755,8 @@ PlanNodePtr CorrelatedExistsSubqueryVisitor::visitApplyNode(ApplyNode & node, Vo
     PlanNodePtr input_ptr = apply_ptr->getChildren()[0];
     PlanNodePtr subquery_ptr = apply_ptr->getChildren()[1];
 
-    // try to get the un-correlation part of subquery
-    PlanNodePtr source;
-    if (subquery_ptr->getStep()->getType() == IQueryPlanStep::Type::Filter)
-    {
-        source = subquery_ptr;
-    }
-    else
-    {
-        source = subquery_ptr->getChildren()[0];
-    }
+    PlanNodePtr source = subquery_ptr;
+
     std::optional<DecorrelationResult> result = Decorrelation::decorrelateFilters(source, correlation, *context);
     if (!result.has_value())
     {
@@ -1169,6 +1150,393 @@ PlanNodePtr UnCorrelatedExistsSubqueryVisitor::visitApplyNode(ApplyNode & node, 
     // Exists function has been rewritten into "exists" symbols
     // if exists values is true, then condition match, else not match.
     return std::make_shared<JoinNode>(context->nextNodeId(), std::move(join_step), PlanNodes{input_ptr, project_exists_symbol_node});
+}
+
+void RemoveUnCorrelatedQuantifiedComparisonSubquery::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+{
+    UnCorrelatedQuantifiedComparisonSubqueryVisitor visitor{context, plan.getCTEInfo()};
+    Void v;
+    auto result = VisitorUtil::accept(plan.getPlanNode(), visitor, v);
+    plan.update(result);
+}
+
+PlanNodePtr UnCorrelatedQuantifiedComparisonSubqueryVisitor::visitApplyNode(ApplyNode & node, Void & v)
+{
+    PlanNodePtr apply_ptr = visitPlanNode(node, v);
+    auto & apply_step = *node.getStep();
+
+    if (apply_step.getSubqueryType() != ApplyStep::SubqueryType::QUANTIFIED_COMPARISON)
+    {
+        return apply_ptr;
+    }
+
+    auto & correlation = apply_step.getCorrelation();
+    if (!correlation.empty())
+    {
+        return apply_ptr;
+    }
+
+    PlanNodePtr input_ptr = apply_ptr->getChildren()[0];
+    PlanNodePtr subquery_ptr = apply_ptr->getChildren()[1];
+
+    const DataStream & left_data_stream = input_ptr->getStep()->getOutputStream();
+    const DataStream & right_data_stream = subquery_ptr->getStep()->getOutputStream();
+
+    auto & qc_assignment = apply_step.getAssignment();
+    auto & qc_ast = qc_assignment.second->as<ASTQuantifiedComparison &>();
+    ASTIdentifier & qc_child_left = qc_ast.children[0]->as<ASTIdentifier &>();
+    ASTIdentifier & qc_child_right = qc_ast.children[1]->as<ASTIdentifier &>();
+    const QuantifierType & quantifier_type = qc_ast.quantifier_type;
+    Names qc_left{qc_child_left.name()};
+    Names qc_right{qc_child_right.name()};
+
+    //step1 :
+    //// build aggregation descriptions
+    String min_value, max_value, count_all_value, count_non_null_value;
+    AggregateDescriptions aggregate_descriptions;
+
+    makeAggDescriptionsMinMaxCountCount2(aggregate_descriptions, context, min_value, max_value, count_all_value, count_non_null_value, subquery_ptr, qc_right);
+
+    Names keys;
+    auto agg_step = std::make_shared<AggregatingStep>(right_data_stream, keys, aggregate_descriptions, true);
+    auto agg_node
+        = std::make_shared<AggregatingNode>(context->nextNodeId(), std::move(agg_step), PlanNodes{subquery_ptr});
+
+    //step2 : construct a join node to replace apply node
+    const DataStream & agg_data_stream = agg_node->getStep()->getOutputStream();
+    DataStreams streams = {left_data_stream, agg_data_stream};
+    auto left_header = left_data_stream.header;
+    auto right_header = agg_data_stream.header;
+    NamesAndTypes  output;
+    for (const auto & item : left_header)
+    {
+        output.emplace_back(NameAndTypePair{item.name, item.type});
+    }
+    for (const auto & item : right_header)
+    {
+        output.emplace_back(NameAndTypePair{item.name, item.type});
+    }
+
+    auto join_step = std::make_shared<JoinStep>(
+        streams,
+        DataStream{.header = output},
+        ASTTableJoin::Kind::Cross,
+        ASTTableJoin::Strictness::All,
+        Names{},
+        Names{},
+        PredicateConst::TRUE_VALUE,
+        false,
+        std::nullopt,
+        ASOF::Inequality::GreaterOrEquals,
+        DistributionType::UNKNOWN);
+    PlanNodePtr join_node
+        = std::make_shared<JoinNode>(context->nextNodeId(), std::move(join_step), PlanNodes{input_ptr, agg_node});
+
+    // step 3: compute function result, project it as a bool symbol.
+    // A > ALL B  => if (isNull(a), NULL, multiIf (count_non_null_value = 0, 1, count_all_value = count_non_null_value, if (a > max_value, 1, 0), NULL));
+    // A >= ALL B  => if (isNull(a), NULL, multiIf (count_non_null_value = 0, 1, count_all_value = count_non_null_value, if (a >= max_value, 1, 0), NULL));
+    // A > ANY B  => if (isNull(a), NULL, multiIf (count_non_null_value = 0, 0, count_all_value = count_non_null_value, if (a > min_value, 1, 0), NULL));
+    // A >= ANY B  => if (isNull(a), NULL, multiIf (count_non_null_value = 0, 0, count_all_value = count_non_null_value, if (a >= min_value, 1, 0), NULL));
+
+    // A < ALL B  => if (isNull(a), NULL, multiIf (count_non_null_value = 0, 1, count_all_value = count_non_null_value, if (a < min_value, 1, 0), NULL));
+    // A <= ALL B  => if (isNull(a), NULL, multiIf (count_non_null_value = 0, 1, count_all_value = count_non_null_value, if (a <= min_value, 1, 0), NULL));
+    // A < ANY B  => if (isNull(a), NULL, multiIf (count_non_null_value = 0, 0, count_all_value = count_non_null_value, if (a < max_value, 1, 0), NULL));
+    // A <= ANY B  => if (isNull(a), NULL, multiIf (count_non_null_value = 0, 0, count_all_value = count_non_null_value, if (a <= max_value, 1, 0), NULL));
+
+    // A = ALL B  => if(isNull(a), NULL, multiIf (count_non_null_value = 0, 1, count_all_value = count_non_null_value, if ((min_value = max_value) AND (a = max_value), 1, 0), NULL));
+    // A != ANY B <=> !(A = ALL B)
+    Assignments qc_assignments;
+    NameToType qc_name_to_type;
+    for (auto & column : input_ptr->getStep()->getOutputStream().header)
+    {
+        Assignment join_column{column.name, std::make_shared<ASTIdentifier>(column.name)};
+        qc_assignments.emplace_back(join_column);
+        qc_name_to_type[column.name] = column.type;
+    }
+
+    ASTPtr empty_set_result = getEmptySetResult(quantifier_type);
+
+    ASTPtr comparison_with_extreme_value = getBoundComparisons(qc_child_left.name() , min_value,max_value, qc_ast);
+
+    //if the number of right table is 0(countAllValue == 0), then output 'emptySetResult'
+    ASTPtr right_num_is_zero = makeASTFunction("equals", std::make_shared<ASTIdentifier>(count_all_value), std::make_shared<ASTLiteral>(0u));
+
+    //If right TABLE contains the values NULL ,e.g.({100.00, NULL, 300.00}), the expression is UNKNOWN: when NULLs are involved, ALL/ANY is UNKNOWN.
+    ASTPtr not_involve_null = makeASTFunction("equals", std::make_shared<ASTIdentifier>(count_all_value), std::make_shared<ASTIdentifier>(count_non_null_value));
+
+    ASTPtr multi_if = makeASTFunction("multiIf", right_num_is_zero, empty_set_result, not_involve_null, comparison_with_extreme_value, std::make_shared<ASTLiteral>(Null{}));
+
+    // if left is NULL, then result is null
+    ASTPtr left_is_null = makeASTFunction("isNull", std::make_shared<ASTIdentifier>(qc_child_left));
+
+    Assignment qc_ass{apply_step.getAssignment().first, makeASTFunction("if", left_is_null, std::make_shared<ASTLiteral>(Null{}), multi_if)};
+    qc_assignments.emplace_back(qc_ass);
+    qc_name_to_type[apply_step.getAssignment().first] = std::make_shared<DataTypeUInt8>();
+
+    auto project_step = std::make_shared<ProjectionStep>(join_node->getStep()->getOutputStream(), qc_assignments, qc_name_to_type);
+    auto project_node = std::make_shared<ProjectionNode>(context->nextNodeId(), std::move(project_step), PlanNodes{join_node});
+    return project_node;
+}
+
+void RemoveCorrelatedQuantifiedComparisonSubquery::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+{
+    CorrelatedQuantifiedComparisonSubqueryVisitor visitor{context, plan.getCTEInfo()};
+    Void v;
+    auto result = VisitorUtil::accept(plan.getPlanNode(), visitor, v);
+    plan.update(result);
+}
+
+PlanNodePtr CorrelatedQuantifiedComparisonSubqueryVisitor::visitApplyNode(ApplyNode & node, Void & v)
+{
+    PlanNodePtr apply_ptr = visitPlanNode(node, v);
+    auto & apply_step = *node.getStep();
+
+    if (apply_step.getSubqueryType() != ApplyStep::SubqueryType::QUANTIFIED_COMPARISON)
+    {
+        return apply_ptr;
+    }
+
+    auto correlation = apply_step.getCorrelation();
+    if (correlation.empty())
+    {
+        return apply_ptr;
+    }
+
+    PlanNodePtr input_ptr = apply_ptr->getChildren()[0];
+    PlanNodePtr subquery_ptr = apply_ptr->getChildren()[1];
+
+    //step1 : Assign unique id symbol for join left
+    String unique = context->getSymbolAllocator()->newSymbol("assign_unique_id_symbol");
+    auto unique_id_step = std::make_unique<AssignUniqueIdStep>(input_ptr->getStep()->getOutputStream(), unique);
+    auto unique_id_node = std::make_shared<AssignUniqueIdNode>(context->nextNodeId(), std::move(unique_id_step), PlanNodes{input_ptr});
+
+    // try to get the un-correlation part of subquery
+    PlanNodePtr source = subquery_ptr;
+
+    std::optional<DecorrelationResult> result = Decorrelation::decorrelateFilters(source, correlation, *context);
+    if (!result.has_value())
+    {
+        throw Exception(
+            "Correlated quantified comparison subquery de-correlation error, correlation filter not exists: " + printVector(correlation),
+            ErrorCodes::REMOVE_SUBQUERY_ERROR);
+    }
+
+    DecorrelationResult & result_value = result.value();
+    PlanNodePtr decorrelation_source = result_value.node;
+    std::pair<Names, Names> correlation_predicate = result_value.extractJoinClause(correlation);
+    const DataStream & decorrelation_output = decorrelation_source->getStep()->getOutputStream();
+
+    // step 2 : Assign non null symbol with default value 1.
+    Assignments assignments;
+    NameToType name_to_type;
+    for (auto & column : decorrelation_output.header)
+    {
+        Assignment ass{column.name, std::make_shared<ASTIdentifier>(column.name)};
+        assignments.emplace_back(ass);
+        name_to_type[column.name] = column.type;
+    }
+
+    String non_null = context->getSymbolAllocator()->newSymbol("build_side_non_null_symbol");
+    ASTPtr value = std::make_shared<ASTLiteral>(1u);
+    Assignment ass{non_null, value};
+    assignments.emplace_back(ass);
+    name_to_type[non_null] = std::make_shared<DataTypeUInt8>();
+
+    auto expression_step = std::make_shared<ProjectionStep>(decorrelation_source->getStep()->getOutputStream(), assignments, name_to_type);
+    auto expression_node
+        = std::make_shared<ProjectionNode>(context->nextNodeId(), std::move(expression_step), PlanNodes{decorrelation_source});
+
+    // step 3 : construct a JoinNode to replace ApplyNode
+    const PlanNodePtr & join_left = unique_id_node;
+    const PlanNodePtr & join_right = expression_node;
+    const DataStream & left_data_stream = join_left->getStep()->getOutputStream();
+    const DataStream & right_data_stream = join_right->getStep()->getOutputStream();
+    DataStreams streams = {left_data_stream, right_data_stream};
+    auto left_header = left_data_stream.header;
+    auto right_header = right_data_stream.header;
+    NamesAndTypes output;
+    Names left_names;
+    Names right_names;
+    for (const auto & item : left_header)
+    {
+        output.emplace_back(NameAndTypePair{item.name, item.type});
+        left_names.emplace_back(item.name);
+    }
+    for (const auto & item : right_header)
+    {
+        output.emplace_back(NameAndTypePair{item.name, item.type});
+        right_names.emplace_back(item.name);
+    }
+
+    auto & qc_assignment = apply_step.getAssignment();
+    auto & quantified_comparison = qc_assignment.second->as<ASTQuantifiedComparison &>();
+    ASTIdentifier & qc_child_left = quantified_comparison.children[0]->as<ASTIdentifier &>();
+    ASTIdentifier & qc_child_right = quantified_comparison.children[1]->as<ASTIdentifier &>();
+
+    Names qc_left{qc_child_left.name()};
+    Names qc_right{qc_child_right.name()};
+
+    String probe_symbol = qc_left[0];
+    String build_symbol = qc_right[0];
+
+    std::vector<ConstASTPtr> filter = result->extractFilter();
+    ASTPtr join_filter = PredicateUtils::combineConjuncts(filter);
+
+    auto join_step = std::make_shared<JoinStep>(
+        streams,
+        DataStream{.header = output},
+        ASTTableJoin::Kind::Left,
+        ASTTableJoin::Strictness::All,
+        correlation_predicate.first,
+        correlation_predicate.second,
+        join_filter,
+        false,
+        std::nullopt,
+        ASOF::Inequality::GreaterOrEquals,
+        DistributionType::UNKNOWN);
+    PlanNodePtr join_node = std::make_shared<JoinNode>(context-> nextNodeId(), std::move(join_step), PlanNodes{join_left, join_right});
+
+    // step4 : project min_value, max_value, count_all_value, count_non_null_value, whether_num_of_matching_join_result_is_zero which group by left_header's colomns
+    String min_value, max_value, count_all_value, count_non_null_value;
+    AggregateDescriptions aggregate_descriptions;
+
+    makeAggDescriptionsMinMaxCountCount2(aggregate_descriptions, context, min_value, max_value, count_all_value, count_non_null_value, subquery_ptr, qc_right);
+
+    AggregateFunctionProperties properties;
+    String num_of_matching_is_zero_symbol = context->getSymbolAllocator()->newSymbol("whether_num_of_matching_join_result_is_zero");
+    AggregateDescription count_if_agg_desc = {
+        .function = AggregateFunctionFactory::instance().get("count",{std::make_shared<DataTypeUInt8>()},Array(), properties),
+        .parameters = Array(),
+        .argument_names = Names{non_null},
+        .column_name = num_of_matching_is_zero_symbol
+    };
+    aggregate_descriptions.emplace_back(count_if_agg_desc);
+
+    Names keys;
+    for (const auto & item : left_header)
+    {
+        keys.emplace_back(item.name);
+    }
+
+    auto count_step = std::make_shared<AggregatingStep>(join_node->getStep()->getOutputStream(), keys, aggregate_descriptions, true);
+    auto count_node = std::make_shared<AggregatingNode>(context->nextNodeId(), std::move(count_step), PlanNodes{join_node});
+
+    // step5 : project match values;
+    Assignments qc_assignments;
+    NameToType qc_name_to_type;
+    for (auto & column : input_ptr->getStep()->getOutputStream().header)
+    {
+        Assignment join_column{column.name, std::make_shared<ASTIdentifier>(column.name)};
+        qc_assignments.emplace_back(join_column);
+        qc_name_to_type[column.name] = column.type;
+    }
+    ASTPtr empty_set_result = getEmptySetResult(quantified_comparison.quantifier_type);
+
+    ASTPtr comparison_with_extreme_value = getBoundComparisons(qc_child_left.name() , min_value, max_value, quantified_comparison);
+
+    //if the number of right table is 0(num_of_matching_is_zero_symbol == 0), then output 'emptySetResult'
+    ASTPtr right_num_is_zero = makeASTFunction("equals", std::make_shared<ASTIdentifier>(num_of_matching_is_zero_symbol), std::make_shared<ASTLiteral>(0u));
+
+    //If right TABLE contains the values NULL ,e.g.({100.00, NULL, 300.00}), the expression is UNKNOWN: when NULLs are involved, ALL/ANY is UNKNOWN.
+    ASTPtr not_involve_null = makeASTFunction("equals", std::make_shared<ASTIdentifier>(count_all_value), std::make_shared<ASTIdentifier>(count_non_null_value));
+
+    ASTPtr multi_if = makeASTFunction("multiIf", right_num_is_zero, empty_set_result, not_involve_null, comparison_with_extreme_value, std::make_shared<ASTLiteral>(Null{}));
+
+    // if left is NULL, then result is null
+    ASTPtr left_is_null = makeASTFunction("isNull", std::make_shared<ASTIdentifier>(qc_child_left));
+
+    Assignment qc_ass{apply_step.getAssignment().first, makeASTFunction("if", left_is_null, std::make_shared<ASTLiteral>(Null{}), multi_if)};
+    qc_assignments.emplace_back(qc_ass);
+    qc_name_to_type[apply_step.getAssignment().first] = std::make_shared<DataTypeUInt8>();
+
+    auto project_step = std::make_shared<ProjectionStep>(count_node->getStep()->getOutputStream(), qc_assignments, qc_name_to_type);
+    auto project_node = std::make_shared<ProjectionNode>(context->nextNodeId(), std::move(project_step), PlanNodes{count_node});
+    return project_node;
+}
+
+ASTPtr getEmptySetResult(const QuantifierType & quantifier_type)
+{
+    if(quantifier_type == QuantifierType::ALL)
+    {
+        return std::make_shared<ASTLiteral>(1u);
+    }
+    return std::make_shared<ASTLiteral>(0u);
+}
+
+ASTPtr getBoundComparisons(const String & left, const String & minValue, const String & maxValue, const ASTQuantifiedComparison & qc_ast)
+{
+    if(qc_ast.comparator == "equals" && qc_ast.quantifier_type == QuantifierType::ALL)
+    {
+        // A = ALL B <=> min B = max B && A = min B
+        ConstASTs combine_filters{
+            makeASTFunction("equals", std::make_shared<ASTIdentifier>(minValue), std::make_shared<ASTIdentifier>(maxValue)),
+            makeASTFunction("equals", std::make_shared<ASTIdentifier>(left), std::make_shared<ASTIdentifier>(maxValue))};
+        return PredicateUtils::combineConjuncts(combine_filters);
+    }
+    else if (qc_ast.comparator == "notEquals" && qc_ast.quantifier_type == QuantifierType::ANY)
+    {
+        // A != ANY B <=> !(A = ALL B)
+        // A <> ANY B <=> min B <> max B || A <> min B <=> !(min B = max B && A = min B) <=> !(A = ALL B)
+        // "A <> ANY B" is equivalent to "NOT (A = ALL B)" so add a rewrite for the initial quantifiedComparison to notAll
+        ConstASTs combine_filters{
+            makeASTFunction("equals", std::make_shared<ASTIdentifier>(minValue), std::make_shared<ASTIdentifier>(maxValue)),
+            makeASTFunction("equals", std::make_shared<ASTIdentifier>(left), std::make_shared<ASTIdentifier>(maxValue))};
+        return makeASTFunction("not", PredicateUtils::combineConjuncts(combine_filters));
+    }
+    // A < ALL B <=> A < min B
+    // A > ALL B <=> A > max B
+    // A < ANY B <=> A < max B
+    // A > ANY B <=> A > min B
+    const String & boundValue = shouldCompareValueWithLowerBound(qc_ast) ? minValue : maxValue;
+    return makeASTFunction(qc_ast.comparator, std::make_shared<ASTIdentifier>(left), std::make_shared<ASTIdentifier>(boundValue));
+
+}
+
+bool shouldCompareValueWithLowerBound(const ASTQuantifiedComparison & qc_ast)
+{
+    bool is_all = qc_ast.quantifier_type == QuantifierType::ALL;
+    bool is_less = qc_ast.comparator == "less" || qc_ast.comparator == "lessOrEquals";
+    return  is_all == is_less;
+}
+
+void makeAggDescriptionsMinMaxCountCount2(AggregateDescriptions & aggregate_descriptions, ContextMutablePtr & context, String & min_value, String & max_value,
+                                          String & count_all_value, String & count_non_null_value, PlanNodePtr & subquery_ptr, Names & qc_right)
+{
+    min_value = context->getSymbolAllocator()->newSymbol("min_value");
+    max_value = context->getSymbolAllocator()->newSymbol("max_value");
+    count_all_value = context->getSymbolAllocator()->newSymbol("count_all_value");
+    count_non_null_value = context->getSymbolAllocator()->newSymbol("count_non_null_value");
+    DataTypes argument_types = {subquery_ptr->getOutputNamesToTypes()[qc_right[0]]};
+
+    AggregateFunctionProperties properties;
+    AggregateDescription min_agg_desc = {
+        .function = AggregateFunctionFactory::instance().get("min", argument_types, Array(), properties),
+        .parameters = Array(),
+        .argument_names = qc_right,
+        .column_name = min_value
+    };
+    AggregateDescription max_agg_desc = {
+        .function = AggregateFunctionFactory::instance().get("max", argument_types, Array(), properties),
+        .parameters = Array(),
+        .argument_names = qc_right,
+        .column_name = max_value
+    };
+    AggregateDescription count_all_value_agg_desc = {
+        .function = AggregateFunctionFactory::instance().get("count", {}, Array(), properties),
+        .parameters = Array(),
+        .argument_names = {},
+        .column_name = count_all_value
+    };
+    AggregateDescription count_non_null_value_agg_desc = {
+        .function = AggregateFunctionFactory::instance().get("count", argument_types, Array(), properties),
+        .parameters = Array(),
+        .argument_names = qc_right,
+        .column_name = count_non_null_value
+    };
+    aggregate_descriptions.emplace_back(min_agg_desc);
+    aggregate_descriptions.emplace_back(max_agg_desc);
+    aggregate_descriptions.emplace_back(count_all_value_agg_desc);
+    aggregate_descriptions.emplace_back(count_non_null_value_agg_desc);
 }
 
 }

@@ -32,6 +32,7 @@ public:
     bool visitASTIdentifier(ASTPtr & node, QueryUseOptimizerContext &) override;
     bool visitASTFunction(ASTPtr & node, QueryUseOptimizerContext &) override;
     bool visitASTOrderByElement(ASTPtr & node, QueryUseOptimizerContext &) override;
+    bool visitASTQuantifiedComparison(ASTPtr & node, QueryUseOptimizerContext &) override;
 
 private:
     void collectWithTableNames(ASTSelectQuery & query, NameSet & with_tables);

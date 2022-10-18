@@ -143,6 +143,7 @@ private:
     void planScalarSubquery(PlanBuilder & builder, const ASTPtr & scalar_subquery);
     void planInSubquery(PlanBuilder & builder, const ASTPtr & node);
     void planExistsSubquery(PlanBuilder & builder, const ASTPtr & node);
+    void planQuantifiedComparisonSubquery(PlanBuilder & builder, const ASTPtr & node);
     RelationPlan combineSubqueryOutputsToTuple(const RelationPlan & plan, const ASTPtr & subquery);
 
     /// plan UNION/INTERSECT/EXCEPT
@@ -164,6 +165,8 @@ private:
     SizeLimits extractDistinctSizeLimits();
     std::pair<UInt64, UInt64> getLimitLengthAndOffset(ASTSelectQuery & query);
     PlanBuilder toPlanBuilder(const RelationPlan & plan, ScopePtr scope);
+
+    void processSubqueryArgs(PlanBuilder & builder, ASTs & children, String & rhs_symbol, String & lhs_symbol, RelationPlan & rhs_plan);
 };
 
 namespace
@@ -1610,12 +1613,18 @@ namespace
             exists_subqueries.push_back(node);
         }
 
+        void visitQuantifiedComparisonSubquery(ASTPtr & node, ASTQuantifiedComparison & , const Void &) override
+        {
+            quantified_comparison_subqueries.push_back(node);
+        }
+
     public:
         using ExpressionVisitor<const Void>::ExpressionVisitor;
 
         std::vector<ASTPtr> scalar_subqueries;
         std::vector<ASTPtr> in_subqueries;
         std::vector<ASTPtr> exists_subqueries;
+        std::vector<ASTPtr> quantified_comparison_subqueries;
     };
 
 }
@@ -1632,6 +1641,8 @@ void QueryPlannerVisitor::planSubqueryExpression(PlanBuilder & builder, ASTSelec
         planInSubquery(builder, in_subquery);
     for (auto & exists_subquery: extract_visitor.exists_subqueries)
         planExistsSubquery(builder, exists_subquery);
+    for (auto & quantified_comparison_subquery : extract_visitor.quantified_comparison_subqueries)
+        planQuantifiedComparisonSubquery(builder, quantified_comparison_subquery);
 }
 
 void QueryPlannerVisitor::planScalarSubquery(PlanBuilder & builder, const ASTPtr & scalar_subquery)
@@ -1678,28 +1689,10 @@ void QueryPlannerVisitor::planInSubquery(PlanBuilder & builder, const ASTPtr & n
 
     auto & function = node->as<ASTFunction &>();
 
-    // process lhs
-    auto & lhs_ast = function.arguments->children.at(0);
-    builder.appendProjection(lhs_ast);
-    auto lhs_symbol = builder.translateToSymbol(lhs_ast);
-
-    if (auto coerced_type = analysis.getTypeCoercion(lhs_ast))
-    {
-        auto mapping = coerceTypesForSymbols(builder, {{lhs_symbol, coerced_type}}, false);
-        lhs_symbol = mapping.at(lhs_symbol);
-    }
-
-    // process rhs
-    auto & rhs_ast = function.arguments->children.at(1);
-    RelationPlan rhs_plan = QueryPlanner::planQuery(rhs_ast, builder.translation, analysis, context, cte_plans);
-    rhs_plan = combineSubqueryOutputsToTuple(rhs_plan, rhs_ast);
-
-    if (auto coerced_type = analysis.getTypeCoercion(rhs_ast))
-    {
-        rhs_plan = coerceTypeForSubquery(rhs_plan, coerced_type);
-    }
-
-    String rhs_symbol = rhs_plan.getFirstPrimarySymbol();
+    //process two children of function
+    RelationPlan rhs_plan;
+    String rhs_symbol, lhs_symbol;
+    processSubqueryArgs(builder, function.arguments->children, rhs_symbol, lhs_symbol, rhs_plan);
 
     // Add Apply Step
     String apply_output_symbol = context->getSymbolAllocator()->newSymbol("_in_subquery");
@@ -1758,6 +1751,63 @@ void QueryPlannerVisitor::planExistsSubquery(PlanBuilder & builder, const ASTPtr
     builder.addStep(std::move(apply_step), {builder.getRoot(), subquery_plan.getRoot()});
     builder.withAdditionalMapping(node, apply_output_symbol);
     PRINT_PLAN(builder.plan, plan_exists_subquery);
+}
+
+void QueryPlannerVisitor::planQuantifiedComparisonSubquery(PlanBuilder & builder, const ASTPtr & node)
+{
+    if (builder.canTranslateToSymbol(node))
+        return;
+
+    auto & quantified_comparison = node->as<ASTQuantifiedComparison &>();
+
+    //process two children of quantified_comparison
+    RelationPlan rhs_plan;
+    String rhs_symbol, lhs_symbol;
+    processSubqueryArgs(builder, quantified_comparison.children, rhs_symbol, lhs_symbol, rhs_plan);
+
+    String apply_output_symbol;
+    std::shared_ptr<ApplyStep> apply_step;
+    // A = ANY B <=> A IN B
+    // A <> ALL B <=> (A notIn B)
+    bool comparator_is_equals = quantified_comparison.comparator == "equals";
+    bool quantifier_is_all = quantified_comparison.quantifier_type == QuantifierType::ALL;
+    bool comparator_is_range_op = quantified_comparison.comparator != "equals" && quantified_comparison.comparator != "notEquals";
+    if (comparator_is_range_op || comparator_is_equals == quantifier_is_all)
+    {
+        apply_output_symbol = context->getSymbolAllocator()->newSymbol("_quantified_comparison_subquery");
+        Assignment quantified_comparison_assignment{
+            apply_output_symbol,
+            makeASTQuantifiedComparison(quantified_comparison.comparator, quantified_comparison.quantifier_type,
+                                        ASTs{toSymbolRef(lhs_symbol), toSymbolRef(rhs_symbol)})};
+
+        apply_step = std::make_shared<ApplyStep>(
+            DataStreams {builder.getCurrentDataStream(), rhs_plan.getRoot()->getCurrentDataStream()},
+            builder.getOutputNames(),
+            ApplyStep::ApplyType::CROSS,
+            ApplyStep::SubqueryType::QUANTIFIED_COMPARISON,
+            quantified_comparison_assignment);
+    }
+    else
+    {
+        String function_name = "in";
+        if (!comparator_is_equals)
+            function_name = "notIn";
+        apply_output_symbol = context->getSymbolAllocator()->newSymbol("_in_subquery");
+        Assignment in_assignment{
+            apply_output_symbol,
+            makeASTFunction(
+                function_name, ASTs{toSymbolRef(lhs_symbol), toSymbolRef(rhs_symbol)})};
+        apply_step = std::make_shared<ApplyStep>(
+            DataStreams {builder.getCurrentDataStream(), rhs_plan.getRoot()->getCurrentDataStream()},
+            builder.getOutputNames(),
+            ApplyStep::ApplyType::CROSS,
+            ApplyStep::SubqueryType::IN,
+            in_assignment);
+    }
+
+    builder.addStep(std::move(apply_step), {builder.getRoot(), rhs_plan.getRoot()});
+    builder.withAdditionalMapping(node, apply_output_symbol);
+    PRINT_PLAN(builder.plan, plan_quantified_comparison_subquery);
 }
 
 RelationPlan QueryPlannerVisitor::combineSubqueryOutputsToTuple(const RelationPlan & plan, const ASTPtr & subquery)
@@ -2009,4 +2059,30 @@ std::pair<UInt64, UInt64> QueryPlannerVisitor::getLimitLengthAndOffset(ASTSelect
 
     return {length, offset};
 }
+
+void QueryPlannerVisitor::processSubqueryArgs(PlanBuilder & builder, ASTs & children, String & rhs_symbol, String & lhs_symbol, RelationPlan & rhs_plan)
+{
+    //process lhs
+    auto & lhs_ast = children.at(0);
+    builder.appendProjection(lhs_ast);
+    lhs_symbol = builder.translateToSymbol(lhs_ast);
+
+    if (auto coerced_type = analysis.getTypeCoercion(lhs_ast))
+    {
+        auto mapping = coerceTypesForSymbols(builder, {{lhs_symbol, coerced_type}}, false);
+        lhs_symbol = mapping.at(lhs_symbol);
+    }
+
+    // process rhs
+    auto & rhs_ast = children.at(1);
+    rhs_plan = QueryPlanner::planQuery(rhs_ast, builder.translation, analysis, context, cte_plans);
+    rhs_plan = combineSubqueryOutputsToTuple(rhs_plan, rhs_ast);
+
+    if (auto coerced_type = analysis.getTypeCoercion(rhs_ast))
+    {
+        rhs_plan = coerceTypeForSubquery(rhs_plan, coerced_type);
+    }
+    rhs_symbol = rhs_plan.getFirstPrimarySymbol();
+}
+
 }

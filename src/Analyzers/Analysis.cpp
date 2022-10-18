@@ -191,6 +191,11 @@ std::vector<ASTPtr> & Analysis::getExistsSubqueries(ASTSelectQuery & select_quer
     return exists_subqueries[&select_query];
 }
 
+std::vector<ASTPtr> & Analysis::getQuantifiedComparisonSubqueries(ASTSelectQuery & select_query)
+{
+    return quantified_comparison_subqueries[&select_query];
+}
+
 void Analysis::registerCTE(ASTSubquery & subquery)
 {
     auto clone = std::make_shared<ASTSubquery>(subquery);

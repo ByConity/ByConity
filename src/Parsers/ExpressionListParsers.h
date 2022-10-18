@@ -125,24 +125,25 @@ private:
     Operators_t overlapping_operators_to_skip = { (const char *[]){ nullptr } };
     ParserPtr first_elem_parser;
     ParserPtr remaining_elem_parser;
+    bool allow_any_all_operators = false;
 
 public:
     /** `operators_` - allowed operators and their corresponding functions
       */
-    ParserLeftAssociativeBinaryOperatorList(Operators_t operators_, ParserPtr && first_elem_parser_)
-        : operators(operators_), first_elem_parser(std::move(first_elem_parser_))
+    ParserLeftAssociativeBinaryOperatorList(Operators_t operators_, ParserPtr && first_elem_parser_,  bool allow_any_all_operators_ = false)
+        : operators(operators_), first_elem_parser(std::move(first_elem_parser_)), allow_any_all_operators(allow_any_all_operators_)
     {
     }
 
-    ParserLeftAssociativeBinaryOperatorList(Operators_t operators_, Operators_t overlapping_operators_to_skip_, ParserPtr && first_elem_parser_)
-        : operators(operators_), overlapping_operators_to_skip(overlapping_operators_to_skip_), first_elem_parser(std::move(first_elem_parser_))
+    ParserLeftAssociativeBinaryOperatorList(Operators_t operators_, Operators_t overlapping_operators_to_skip_, ParserPtr && first_elem_parser_,  bool allow_any_all_operators_ = false)
+        : operators(operators_), overlapping_operators_to_skip(overlapping_operators_to_skip_), first_elem_parser(std::move(first_elem_parser_)), allow_any_all_operators(allow_any_all_operators_)
     {
     }
 
     ParserLeftAssociativeBinaryOperatorList(Operators_t operators_, ParserPtr && first_elem_parser_,
-        ParserPtr && remaining_elem_parser_)
+        ParserPtr && remaining_elem_parser_,  bool allow_any_all_operators_ = false)
         : operators(operators_), first_elem_parser(std::move(first_elem_parser_)),
-          remaining_elem_parser(std::move(remaining_elem_parser_))
+          remaining_elem_parser(std::move(remaining_elem_parser_)), allow_any_all_operators(allow_any_all_operators_)
     {
     }
 
@@ -380,7 +381,7 @@ class ParserComparisonExpression : public IParserDialectBase
 private:
     static const char * operators[];
     static const char * overlapping_operators_to_skip[];
-    ParserLeftAssociativeBinaryOperatorList operator_parser {operators, overlapping_operators_to_skip, std::make_unique<ParserBetweenExpression>(dt)};
+    ParserLeftAssociativeBinaryOperatorList operator_parser {operators, overlapping_operators_to_skip, std::make_unique<ParserBetweenExpression>(dt), true};
 
 protected:
     const char * getName() const  override{ return "comparison expression"; }

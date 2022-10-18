@@ -279,7 +279,8 @@ std::optional<DecorrelationResult> DecorrelationVisitor::visitProjectionNode(Pro
         }
 
         NamesAndTypes input_stream_columns;
-        NameToType name_to_type;
+        NameToType name_to_type = node.getOutputNamesToTypes();
+
         for (auto & add_ass : add_assignments)
         {
             const auto & input_name_and_types = node.getStep()->getInputStreams()[0].header;

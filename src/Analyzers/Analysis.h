@@ -246,7 +246,9 @@ struct Analysis
 
     ListMultimap<ASTSelectQuery *, ASTPtr> exists_subqueries;
     std::vector<ASTPtr> & getExistsSubqueries(ASTSelectQuery & select_query);
-    // TODO: support qualified comparison subquery
+
+    ListMultimap<ASTSelectQuery *, ASTPtr> quantified_comparison_subqueries;
+    std::vector<ASTPtr> & getQuantifiedComparisonSubqueries(ASTSelectQuery & select_query);
 
     // CTE(common table expressions)
     ASTMap<CTEAnalysis> common_table_expressions;

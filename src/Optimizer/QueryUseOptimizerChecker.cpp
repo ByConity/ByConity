@@ -203,6 +203,11 @@ bool QueryUseOptimizerVisitor::visitASTFunction(ASTPtr & node, QueryUseOptimizer
     return visitNode(node, query_with_plan_context);
 }
 
+bool QueryUseOptimizerVisitor::visitASTQuantifiedComparison(ASTPtr & node, QueryUseOptimizerContext & query_with_plan_context)
+{
+    return visitNode(node, query_with_plan_context);
+}
+
 bool QueryUseOptimizerVisitor::visitASTOrderByElement(ASTPtr & node, QueryUseOptimizerContext &)
 {
     auto & order_by = node->as<ASTOrderByElement &>();

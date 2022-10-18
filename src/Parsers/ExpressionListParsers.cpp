@@ -6,6 +6,7 @@
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseIntervalKind.h>
 #include <Parsers/ParserUnionQueryElement.h>
+#include <Parsers/ASTQuantifiedComparison.h>
 #include <Common/StringUtils/StringUtils.h>
 
 
@@ -255,44 +256,79 @@ bool ParserLeftAssociativeBinaryOperatorList::parseImpl(Pos & pos, ASTPtr & node
             /// the function corresponding to the operator
             auto function = std::make_shared<ASTFunction>();
 
+            /// the ast of quantified comparison
+            auto quantified_comparison = std::make_shared<ASTQuantifiedComparison>();
+
             /// function arguments
             auto exp_list = std::make_shared<ASTExpressionList>();
 
             ASTPtr elem;
-            if (!(remaining_elem_parser ? remaining_elem_parser : first_elem_parser)->parse(pos, elem, expected))
+            QuantifierType quantified_type_node = QuantifierType::ANY;
+            bool have_quantifier_comparison =  false;
+            if (allow_any_all_operators && ParserKeyword("ANY").ignore(pos, expected))
+            {
+                quantified_type_node = QuantifierType::ANY;
+                have_quantifier_comparison = true;
+            }
+            else if (allow_any_all_operators && ParserKeyword("ALL").ignore(pos, expected))
+            {
+                quantified_type_node = QuantifierType::ALL;
+                have_quantifier_comparison = true;
+            }
+            else if (allow_any_all_operators && ParserKeyword("SOME").ignore(pos, expected))
+            {
+                quantified_type_node = QuantifierType::SOME;
+                have_quantifier_comparison = true;
+            }
+            else if (!(remaining_elem_parser ? remaining_elem_parser : first_elem_parser)->parse(pos, elem, expected))
                 return false;
 
-            /// the first argument of the function is the previous element, the second is the next one
-            function->name = it[1];
-            function->arguments = exp_list;
-            function->children.push_back(exp_list);
+            if (allow_any_all_operators && have_quantifier_comparison && !ParserSubquery().parse(pos, elem, expected))
+                return false;
 
-            exp_list->children.push_back(node);
-            exp_list->children.push_back(elem);
+            if (!have_quantifier_comparison)
+            {
+                /// the first argument of the function is the previous element, the second is the next one
+                function->name = it[1];
+                function->arguments = exp_list;
+                function->children.push_back(exp_list);
 
-            /** special exception for the access operator to the element of the array `x[y]`, which
+                exp_list->children.push_back(node);
+                exp_list->children.push_back(elem);
+
+                /** special exception for the access operator to the element of the array `x[y]`, which
               * contains the infix part '[' and the suffix ''] '(specified as' [')
               */
-            if (0 == strcmp(it[0], "["))
+                if (0 == strcmp(it[0], "["))
+                {
+                    if (pos->type != TokenType::ClosingSquareBracket)
+                        return false;
+                    ++pos;
+                }
+
+                // Special handling mapElement function map[key]
+                if (0 == strcmp(it[0], "{"))
+                {
+                    if (pos->type != TokenType::ClosingCurlyBrace)
+                        return false;
+                    ++pos;
+                }
+
+
+                /// Left associative operator chain is parsed as a tree: ((((1 + 1) + 1) + 1) + 1)...
+                /// We must account it's depth - otherwise we may end up with stack overflow later - on destruction of AST.
+                pos.increaseDepth();
+                node = function;
+            }
+            else
             {
-                if (pos->type != TokenType::ClosingSquareBracket)
-                    return false;
-                ++pos;
+                quantified_comparison->comparator = it[1];
+                quantified_comparison->quantifier_type = quantified_type_node;
+                quantified_comparison->children.push_back(node);
+                quantified_comparison->children.push_back(elem);
+                node = quantified_comparison;
             }
 
-            // Special handling mapElement function map[key]
-            if (0 == strcmp(it[0], "{"))
-            {
-                if (pos->type != TokenType::ClosingCurlyBrace)
-                    return false;
-                ++pos;
-            }
-
-
-            /// Left associative operator chain is parsed as a tree: ((((1 + 1) + 1) + 1) + 1)...
-            /// We must account it's depth - otherwise we may end up with stack overflow later - on destruction of AST.
-            pos.increaseDepth();
-            node = function;
         }
     }
 

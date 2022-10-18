@@ -53,6 +53,7 @@ public:
     ColumnWithTypeAndName visitASTFieldReference(ASTPtr & node, const Void &) override;
     ColumnWithTypeAndName visitASTLiteral(ASTPtr & node, const Void &) override;
     ColumnWithTypeAndName visitASTOrderByElement(ASTPtr & node, const Void &) override;
+    ColumnWithTypeAndName visitASTQuantifiedComparison(ASTPtr & node, const Void &) override;
 
     ExprAnalyzerVisitor(ContextMutablePtr context_, Analysis & analysis_, ScopePtr scope_, ExprAnalyzerOptions options_):
         context(std::move(context_)),
@@ -119,6 +120,8 @@ private:
     std::pair<AggregateFunctionPtr, Array> resolveAggregateFunction(ASTFunction & function);
     DataTypePtr handleSubquery(const ASTPtr & subquery);
     ColumnWithTypeAndName handleResolvedField(ASTPtr & node, const ResolvedField & field);
+
+    void processSubqueryArgsWithCoercion(ASTPtr & lhs_ast, ASTPtr & rhs_ast);
 };
 
 DataTypePtr ExprAnalyzer::analyze(ASTPtr expression,
@@ -234,6 +237,17 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::visitASTFunction(ASTPtr & node, const
 
     throw Exception(ex);
 }
+
+ColumnWithTypeAndName ExprAnalyzerVisitor::visitASTQuantifiedComparison(ASTPtr & node, const Void &)
+{
+    auto  quantified_comparison = std::dynamic_pointer_cast<ASTQuantifiedComparison>(node);
+    auto & lhs_ast = quantified_comparison->children[0];
+    auto & rhs_ast = quantified_comparison->children[1];
+    processSubqueryArgsWithCoercion(lhs_ast, rhs_ast);
+    analysis.quantified_comparison_subqueries[options.select_query].push_back(quantified_comparison);
+    return {nullptr, std::make_shared<DataTypeUInt8>(), ""};
+}
+
 
 ColumnWithTypeAndName ExprAnalyzerVisitor::visitASTSubquery(ASTPtr & node, const Void &)
 {
@@ -474,6 +488,23 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeInSubquery(ASTFunctionPtr & fu
 {
     auto & lhs_ast = function->arguments->children[0];
     auto & rhs_ast = function->arguments->children[1];
+    processSubqueryArgsWithCoercion(lhs_ast, rhs_ast);
+    analysis.in_subqueries[options.select_query].push_back(function);
+    return {nullptr, std::make_shared<DataTypeUInt8>(), ""};
+}
+
+ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeExistsSubquery(ASTFunctionPtr & function)
+{
+    if (function->children.size() != 1)
+        throw Exception("Invalid exists subquery expression: " + serializeAST(*function), ErrorCodes::SYNTAX_ERROR);
+
+    handleSubquery(function->arguments->children[0]);
+    analysis.exists_subqueries[options.select_query].push_back(function);
+    return {nullptr, std::make_shared<DataTypeUInt8>(), ""};
+}
+
+void ExprAnalyzerVisitor::processSubqueryArgsWithCoercion(ASTPtr & lhs_ast, ASTPtr & rhs_ast)
+{
     auto lhs_type = process(lhs_ast).type;
     auto rhs_type = handleSubquery(rhs_ast);
 
@@ -489,19 +520,6 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeInSubquery(ASTFunctionPtr & fu
         if (!rhs_type->equals(*super_type))
             analysis.setTypeCoercion(rhs_ast, super_type);
     }
-
-    analysis.in_subqueries[options.select_query].push_back(function);
-    return {nullptr, std::make_shared<DataTypeUInt8>(), ""};
-}
-
-ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeExistsSubquery(ASTFunctionPtr & function)
-{
-    if (function->children.size() != 1)
-        throw Exception("Invalid exists subquery expression: " + serializeAST(*function), ErrorCodes::SYNTAX_ERROR);
-
-    handleSubquery(function->arguments->children[0]);
-    analysis.exists_subqueries[options.select_query].push_back(function);
-    return {nullptr, std::make_shared<DataTypeUInt8>(), ""};
 }
 
 std::pair<AggregateFunctionPtr, Array> ExprAnalyzerVisitor::resolveAggregateFunction(ASTFunction & function)
