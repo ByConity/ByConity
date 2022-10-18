@@ -9,7 +9,7 @@ void onSettingChanged(Settings *s)
     bool ansi = static_cast<DialectType>(s->dialect_type) == DialectType::ANSI;
 
     // optimizer settings
-    s->enable_optimizer = true;
+    s->enable_optimizer = ansi;
 
     // community settings
     s->join_use_nulls = ansi;
