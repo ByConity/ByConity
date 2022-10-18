@@ -810,4 +810,11 @@
         <max_retry>1</max_retry>
     </udf_processor>
 
+    <query_log>
+        <database>system</database>
+        <table>query_log</table>
+        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+        <partition_by>event_date</partition_by>
+    </query_log>
+
 </yandex>

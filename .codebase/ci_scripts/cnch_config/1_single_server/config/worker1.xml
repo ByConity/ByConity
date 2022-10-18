@@ -684,4 +684,10 @@
 
     <!-- JUMP for jump hash, RING for ring hash, MULTI_PROBE for multi probe hash -->
     <part_allocator_algorithm>JUMP</part_allocator_algorithm>
+    <query_log>
+        <database>system</database>
+        <table>query_log</table>
+        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+        <partition_by>event_date</partition_by>
+    </query_log>
 </yandex>

@@ -819,8 +819,8 @@ public:
     size_t sum_index_columns = 0;
     size_t sum_ordinary_columns = 0;
 
-    ColumnSizeEstimator(const MergeTreeData::DataPart::ColumnToSize & map_, const Names & key_columns, const Names & ordinary_columns)
-        : map(map_)
+    ColumnSizeEstimator(MergeTreeData::DataPart::ColumnToSize && map_, const Names & key_columns, const Names & ordinary_columns)
+        : map(std::move(map_))
     {
         for (const auto & name : key_columns)
             if (!map.count(name)) map[name] = 0;
@@ -1074,7 +1074,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
         for (const MergeTreeData::DataPartPtr & part : parts)
             part->accumulateColumnSizes(merged_column_to_size);
 
-        column_sizes = ColumnSizeEstimator(merged_column_to_size, merging_column_names, gathering_column_names);
+        column_sizes = ColumnSizeEstimator(std::move(merged_column_to_size), merging_column_names, gathering_column_names);
 
         if (data.getSettings()->fsync_part_directory)
             sync_guard = disk->getDirectorySyncGuard(new_part_tmp_path);
