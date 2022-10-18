@@ -121,7 +121,7 @@ MergeTreeMutableDataPartsVector CloudMergeTreeBlockOutputStream::convertBlockInt
     LOG_DEBUG(storage.getLogger(), "size of part_blocks {}", part_blocks.size());
 
     auto txn_id = context->getCurrentTransactionID();
-    auto block_id = use_inner_block_id ? increment.get() : context->getTimestamp();
+
     // Get all blocks of partition by expression
     for (auto & block_with_partition : part_blocks)
     {
@@ -159,6 +159,8 @@ MergeTreeMutableDataPartsVector CloudMergeTreeBlockOutputStream::convertBlockInt
             for (auto & [name, _] : metadata_snapshot->getFuncColumns())
                 if (bucketed_block_with_partition.block.has(name))
                     bucketed_block_with_partition.block.erase(name);
+
+            auto block_id = use_inner_block_id ? increment.get() : context->getTimestamp();
 
             MergeTreeMutableDataPartPtr temp_part
                 = writer.writeTempPart(bucketed_block_with_partition, metadata_snapshot, context, block_id, txn_id);

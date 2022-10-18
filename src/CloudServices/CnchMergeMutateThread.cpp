@@ -711,7 +711,7 @@ String CnchMergeMutateThread::submitFutureManipulationTask(FutureManipulationTas
     params.txn_id = transaction_id.toUInt64();
     /// storage info
     params.create_table_query = cnch_table.genCreateTableQueryForWorker("");
-    /// params.is_bucket_table = cnch_table.isBucketTable();
+    params.is_bucket_table = cnch_table.isBucketTable();
     /// parts
     params.assignSourceParts(future_task.parts);
     params.columns_commit_time = future_task.calcColumnsCommitTime();
@@ -1010,9 +1010,6 @@ bool CnchMergeMutateThread::tryMutateParts([[maybe_unused]] StoragePtr & istorag
         finish_mutation_partitions.clear();
         current_mutate_entry = std::make_optional<CnchMergeTreeMutationEntry>(entry);
     }
-
-    if (current_mutate_entry->isReclusterMutation()/* && !getContext()->getTableReclusterTaskStatus(storage_id)*/)
-        return false;
 
     auto generate_tasks = [&](const ServerDataPartsVector & visible_parts, const NameSet & merging_mutating_parts_snapshot)
     {

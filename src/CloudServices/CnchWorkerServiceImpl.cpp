@@ -90,7 +90,7 @@ void CnchWorkerServiceImpl::submitManipulationTask(
         params.columns_commit_time = request->columns_commit_time();
         params.is_bucket_table = request->is_bucket_table();
 
-        if (params.type == ManipulationType::Mutate)
+        if (params.type == ManipulationType::Mutate || params.type == ManipulationType::Clustering)
         {
             params.mutation_commit_time = request->mutation_commit_time();
             auto read_buf = ReadBufferFromString(request->mutate_commands());

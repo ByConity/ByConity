@@ -897,10 +897,10 @@ std::optional<MutationCommand> AlterCommand::tryConvertToMutationCommand(Storage
         result.column_name = column_name;
         result.map_keys = map_keys;
     }
-    // else if (type == MODIFY_CLUSTER_BY)
-    // {
-    //     result.type = MutationCommand::Type::RECLUSTER;
-    // }
+    else if (type == MODIFY_CLUSTER_BY)
+    {
+        result.type = MutationCommand::Type::RECLUSTER;
+    }
 
     result.ast = ast->clone();
     apply(metadata, context);

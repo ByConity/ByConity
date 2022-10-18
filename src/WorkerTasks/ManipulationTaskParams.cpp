@@ -42,6 +42,9 @@ String ManipulationTaskParams::toDebugString() const
     if (columns_commit_time)
         oss << " columns_commit_time: " << columns_commit_time;
 
+    if (mutation_commit_time)
+        oss << " mutation_commit_time: " << mutation_commit_time;
+
     return oss.str();
 }
 

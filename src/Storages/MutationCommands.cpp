@@ -168,6 +168,14 @@ std::optional<MutationCommand> MutationCommand::parse(ASTAlterCommand * command,
         res.map_keys = command->map_keys;
         return res;
     }
+    else if (parse_alter_commands && command->type == ASTAlterCommand::MODIFY_CLUSTER_BY)
+    {
+        MutationCommand res;
+        res.ast = command->ptr();
+        res.type = MutationCommand::Type::RECLUSTER;
+        return res;
+    }
+
     return {};
 }
 

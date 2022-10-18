@@ -38,6 +38,7 @@ struct MutationCommand
         MATERIALIZE_TTL,
         RENAME_COLUMN,
         CLEAR_MAP_KEY,
+        RECLUSTER,
     };
 
     Type type = EMPTY;
