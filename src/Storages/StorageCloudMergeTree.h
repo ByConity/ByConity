@@ -22,11 +22,6 @@ public:
 
     std::string getName() const override { return "CloudMergeTree"; }
 
-    bool supportsSampling() const override { return true; }
-    bool supportsFinal() const override { return true; }
-    bool supportsPrewhere() const override { return true; }
-    bool supportsIndexForIn() const override { return true; }
-    bool supportsMapImplicitColumn() const override { return true; }
     StoragePolicyPtr getLocalStoragePolicy() const override;
 
     void startup() override;

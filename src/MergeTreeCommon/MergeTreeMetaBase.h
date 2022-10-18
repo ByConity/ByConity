@@ -155,6 +155,10 @@ public:
     }
 
     bool supportsSubcolumns() const override { return true; }
+    bool supportsPrewhere() const override { return true; }
+    bool supportsSampling() const override { return true; }
+    bool supportsIndexForIn() const override { return true; }
+    bool supportsMapImplicitColumn() const override { return true; }
 
     NamesAndTypesList getVirtuals() const override;
 
