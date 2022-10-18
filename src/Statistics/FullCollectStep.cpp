@@ -1,10 +1,10 @@
 #include <type_traits>
 #include <Statistics/CollectStep.h>
-#include <Statistics/CommonTools.h>
 #include <Statistics/ParseUtils.h>
 #include <Statistics/StatsCpcSketch.h>
 #include <Statistics/StatsNdvBuckets.h>
 #include <Statistics/TableHandler.h>
+#include <Statistics/TypeUtils.h>
 #include <boost/noncopyable.hpp>
 #include <fmt/format.h>
 

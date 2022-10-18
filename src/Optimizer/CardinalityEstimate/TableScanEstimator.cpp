@@ -62,7 +62,7 @@ std::optional<PlanNodeStatisticsPtr> TableScanEstimator::estimate(
 
     PlanNodeStatisticsPtr plan_node_stats;
     try {
-        Statistics::StatisticsCollector collector(context, catalog, table_info_opt.value(), 0);
+        Statistics::StatisticsCollector collector(context, catalog, table_info_opt.value());
         collector.readFromCatalog(columns);
         auto plan_node_stats_opt = collector.toPlanNodeStatistics();
         if (!plan_node_stats_opt.has_value())

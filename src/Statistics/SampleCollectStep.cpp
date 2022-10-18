@@ -1,11 +1,11 @@
 #include <numeric>
 #include <type_traits>
 #include <Statistics/CollectStep.h>
-#include <Statistics/CommonTools.h>
 #include <Statistics/ParseUtils.h>
 #include <Statistics/ScaleAlgorithm.h>
 #include <Statistics/StatsCpcSketch.h>
 #include <Statistics/StatsNdvBucketsExtend.h>
+#include <Statistics/TypeUtils.h>
 #include <boost/noncopyable.hpp>
 #include <fmt/format.h>
 
@@ -240,11 +240,6 @@ private:
     ColumnCollectConfig config;
 };
 
-String getSampleTail(const Settings & settings)
-{
-    auto sample_tail_with_space = fmt::format(FMT_STRING(" SAMPLE {}"), settings.statistics_sample_row_count);
-    return sample_tail_with_space;
-}
 
 // bucket_bounds_search is to calculate bucket index of the histogram for an element
 // this will generate the following sql, calculating result for ndv
@@ -272,10 +267,11 @@ String getSampleTail(const Settings & settings)
 //
 // this sql is slow
 String constructThirdSql(
-    const Settings & settings,
+    const CollectorSettings & settings,
     const StatsTableIdentifier & table_info,
     const NameAndTypePair & col_desc,
-    const BucketBounds & bucket_bounds)
+    const BucketBounds & bucket_bounds,
+    const String & sample_tail)
 {
     auto config = get_column_config(settings, col_desc.type);
     auto wrapped_col_name = getWrappedColumnName(config, col_desc.name);
@@ -283,7 +279,6 @@ String constructThirdSql(
 
     auto tag_sql = fmt::format(FMT_STRING("bucket_bounds_search('{}', `{}`)"), bounds_b64, wrapped_col_name);
     auto mark_sql = fmt::format(FMT_STRING("uniq(cityHash64({}))"), virtual_mark_id);
-    auto sample_tail = getSampleTail(settings);
     auto inner_sql = fmt::format(
         FMT_STRING("select {} as __tmp_tag, {} as __tmp_mark_cnt, count(*) as __tmp_freq from {} {} group by {}"),
         tag_sql,
@@ -303,6 +298,21 @@ class StatisticsCollectorStepSample : public CollectStep
 public:
     explicit StatisticsCollectorStepSample(StatisticsCollector & core_) : CollectStep(core_) { }
 
+    String getSampleTail()
+    {
+        auto row_count = handler_context.full_count;
+        const auto & settings = handler_context.settings;
+
+        if (settings.sample_ratio * row_count < settings.sample_row_count)
+        {
+            return fmt::format(FMT_STRING(" SAMPLE {}"), settings.sample_row_count);
+        }
+        else
+        {
+            return fmt::format(FMT_STRING(" SAMPLE {}"), settings.sample_ratio);
+        }
+    }
+
     void firstCollectStep(const ColumnDescVector & cols_desc)
     {
         TableHandler table_handler(table_info);
@@ -314,9 +324,7 @@ public:
         }
 
         auto sql = table_handler.getFullSql();
-        auto sample_tail_with_space = fmt::format(
-            FMT_STRING(" SAMPLE {} SETTINGS enable_deterministic_sample_by_range=1"),
-            catalog->getSettingsRef().statistics_sample_row_count);
+        auto sample_tail_with_space = getSampleTail();
 
         sql += sample_tail_with_space;
 
@@ -359,7 +367,7 @@ public:
         if (to_collect)
         {
             auto sql = table_handler.getFullSql();
-            sql += getSampleTail(catalog->getSettingsRef());
+            sql += getSampleTail();
 
             auto helper = SubqueryHelper::create(context, sql);
             auto block = getOnlyRowFrom(helper);
@@ -376,7 +384,7 @@ public:
         for (auto & col_desc : cols_desc)
         {
             auto & col_data = handler_context.columns_data.at(col_desc.name);
-            auto full_sql = constructThirdSql(catalog->getSettingsRef(), table_info, col_desc, *col_data.bucket_bounds);
+            auto full_sql = constructThirdSql(handler_context.settings, table_info, col_desc, *col_data.bucket_bounds, getSampleTail());
             LOG_INFO(&Poco::Logger::get("thirdSampleColumnHandler"), full_sql);
             auto helper = SubqueryHelper::create(context, full_sql);
             Block block;
@@ -446,6 +454,7 @@ public:
     {
         // TODO: split them into several columns step
         collectTable();
+
         firstCollectStep(cols_desc);
 
         auto unhandled_cols = collectSecondStep(cols_desc);

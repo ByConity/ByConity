@@ -14,6 +14,7 @@ public:
     // usually need to std::move
     virtual void put(const StatsTableIdentifier & table_id, StatsData && data) = 0;
     virtual void drop(const StatsTableIdentifier & table_id) = 0;
+    virtual void dropColumns(const StatsTableIdentifier & table_id, const ColumnDescVector & cols_desc) = 0;
     virtual ~CachedStatsProxy() = default;
 };
 

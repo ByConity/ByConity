@@ -1,11 +1,12 @@
 #pragma once
 #include <Statistics/BucketBounds.h>
 #include <Statistics/CatalogAdaptor.h>
-#include <Statistics/CommonTools.h>
+#include <Statistics/CollectorSettings.h>
 #include <Statistics/StatisticsCommon.h>
 #include <Statistics/StatsCpcSketch.h>
 #include <Statistics/StatsNdvBucketsResult.h>
 #include <Statistics/TableHandler.h>
+#include <Statistics/TypeUtils.h>
 
 namespace DB::Statistics
 {
@@ -28,7 +29,7 @@ struct ColumnCollectConfig
     bool need_minmax = false;
 };
 
-inline ColumnCollectConfig get_column_config(const Settings & settings, const DataTypePtr & type)
+inline ColumnCollectConfig get_column_config(const CollectorSettings & settings, const DataTypePtr & type)
 {
     ColumnCollectConfig config;
     config.need_count = true;
@@ -36,11 +37,11 @@ inline ColumnCollectConfig get_column_config(const Settings & settings, const Da
     config.need_histogram = true;
     config.need_minmax = true;
 
-    if (!settings.statistics_collect_histogram)
+    if (!settings.collect_histogram)
     {
         config.need_histogram = false;
     }
-    else if (!settings.statistics_collect_floating_histogram)
+    else if (!settings.collect_floating_histogram)
     {
         if (isFloat(type) || isDecimal(type))
         {

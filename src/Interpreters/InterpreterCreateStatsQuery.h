@@ -7,11 +7,6 @@
 
 namespace DB
 {
-class Context;
-
-// @return: row_count, elapsed_time,
-Int64 collectStatsOnTable(ContextPtr context, const Statistics::StatsTableIdentifier & table_info);
-
 class InterpreterCreateStatsQuery : public IInterpreter, WithContext
 {
 public:

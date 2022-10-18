@@ -3,6 +3,7 @@
 #include <Parsers/ExpressionListParsers.h>
 #include <Parsers/ParserPartition.h>
 #include <Parsers/ParserStatsQuery.h>
+#include <Common/FieldVisitorConvertToNumber.h>
 
 namespace DB
 {
@@ -34,7 +35,7 @@ public:
 protected:
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override
     {
-        ParserUnsignedInteger number_p;
+        typename SimpleWithSpecifierInfo::ParserType number_p;
         ParserKeyword s_specifier(SimpleWithSpecifierInfo::Specifier);
 
         if (!number_p.parse(pos, node, expected))
@@ -50,27 +51,22 @@ protected:
     }
 };
 
-struct ParserCreateStatsQueryBucketsSpecifierInfo
+struct ParserCreateStatsQuerySampleRowsSpecifierInfo
 {
-    static constexpr auto Name = "CreateStat query buckets specifier";
-    static constexpr auto Specifier = "BUCKETS";
+    using ParserType = ParserUnsignedInteger;
+    static constexpr auto Name = "CreateStat query sample rows specifier";
+    static constexpr auto Specifier = "ROWS";
 };
 
-struct ParserCreateStatsQueryTopnSpecifierInfo
+struct ParserCreateStatsQuerySampleRatioSpecifierInfo
 {
-    static constexpr auto Name = "CreateStat query topn specifier";
-    static constexpr auto Specifier = "TOPN";
+    using ParserType = ParserNumber;
+    static constexpr auto Name = "CreateStat query sample ratio specifier";
+    static constexpr auto Specifier = "Ratio";
 };
 
-struct ParserCreateStatsQuerySamplesSpecifierInfo
-{
-    static constexpr auto Name = "CreateStat query samples specifier";
-    static constexpr auto Specifier = "SAMPLES";
-};
-
-using ParserCreateStatsQueryBucketsSpecifier = ParserCreateStatsQuerySimpleSpecifier<ParserCreateStatsQueryBucketsSpecifierInfo>;
-using ParserCreateStatsQueryTopnSpecifier = ParserCreateStatsQuerySimpleSpecifier<ParserCreateStatsQueryTopnSpecifierInfo>;
-using ParserCreateStatsQuerySamplesSpecifier = ParserCreateStatsQuerySimpleSpecifier<ParserCreateStatsQuerySamplesSpecifierInfo>;
+using ParserCreateStatsQuerySampleRowsSpecifier = ParserCreateStatsQuerySimpleSpecifier<ParserCreateStatsQuerySampleRowsSpecifierInfo>;
+using ParserCreateStatsQuerySampleRatioSpecifier = ParserCreateStatsQuerySimpleSpecifier<ParserCreateStatsQuerySampleRatioSpecifierInfo>;
 
 Int64 getValueFromUInt64Literal(const ASTPtr & node)
 {
@@ -82,6 +78,24 @@ Int64 getValueFromUInt64Literal(const ASTPtr & node)
             throw Exception("Value exceed limit", ErrorCodes::SYNTAX_ERROR);
 
         return static_cast<Int64>(val);
+    }
+    else
+        throw Exception("Not a literal node", ErrorCodes::SYNTAX_ERROR);
+}
+
+Float64 getValueFromNumberLiteral(const ASTPtr & node)
+{
+    if (auto * literal = node->as<ASTLiteral>())
+    {
+        try
+        {
+            double val = applyVisitor(FieldVisitorConvertToNumber<Float64>(), literal->value);
+            return val;
+        }
+        catch (...)
+        {
+            throw Exception("Not a literal node", ErrorCodes::SYNTAX_ERROR);
+        }
     }
     else
         throw Exception("Not a literal node", ErrorCodes::SYNTAX_ERROR);
@@ -110,27 +124,48 @@ bool ParserCreateStatsQuery::parseSuffix(Pos & pos, Expected & expected, IAST & 
     if (s_with.ignore(pos, expected))
     {
         auto parse_specifier = [&pos, &expected, &create_stats_ast] {
-            ParserCreateStatsQueryBucketsSpecifier buckets_p;
-            ParserCreateStatsQueryTopnSpecifier topn_p;
-            ParserCreateStatsQuerySamplesSpecifier samples_p;
+            ParserKeyword s_sample("SAMPLE");
+            ParserKeyword s_fullscan("FULLSCAN");
             ASTPtr node;
 
-            if (buckets_p.parse(pos, node, expected))
+            if (s_fullscan.ignore(pos, expected))
             {
-                create_stats_ast.buckets = getValueFromUInt64Literal(node);
+                if (create_stats_ast.sample_type != SampleType::Default)
+                    return false; // duplicate
+                create_stats_ast.sample_type = SampleType::FullScan;
+                return true;
             }
-            else if (topn_p.parse(pos, node, expected))
+            else if (s_sample.ignore(pos, expected))
             {
-                create_stats_ast.topn = getValueFromUInt64Literal(node);
-            }
-            else if (samples_p.parse(pos, node, expected))
-            {
-                create_stats_ast.samples = getValueFromUInt64Literal(node);
+                if (create_stats_ast.sample_type != SampleType::Default)
+                    return false; // duplicate
+
+                create_stats_ast.sample_type = SampleType::Sample;
+                ParserCreateStatsQuerySampleRowsSpecifier rows_p;
+                ParserCreateStatsQuerySampleRatioSpecifier ratio_p;
+                while (true)
+                {
+                    if (rows_p.parse(pos, node, expected))
+                    {
+                        if (create_stats_ast.sample_rows)
+                            return false; // duplicate
+                        create_stats_ast.sample_rows = getValueFromUInt64Literal(node);
+                    }
+                    else if (ratio_p.parse(pos, node, expected))
+                    {
+                        if (create_stats_ast.sample_ratio)
+                            return false; // duplicate
+                        create_stats_ast.sample_ratio = getValueFromNumberLiteral(node);
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+                return true;
             }
             else
                 return false;
-
-            return true;
         };
 
         if (!ParserList::parseUtil(pos, expected, parse_specifier, dummy_p, false))

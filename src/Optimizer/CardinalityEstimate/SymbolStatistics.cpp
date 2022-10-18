@@ -1,7 +1,7 @@
 #include <Optimizer/CardinalityEstimate/SymbolStatistics.h>
 
+#include <Statistics/TypeUtils.h>
 #include <Common/FieldVisitorConvertToNumber.h>
-#include <Statistics/CommonTools.h>
 
 namespace DB
 {

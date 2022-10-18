@@ -7,6 +7,7 @@
 #include <Protos/optimizer_statistics.pb.h>
 #include <Statistics/Base64.h>
 #include <Statistics/CatalogAdaptor.h>
+#include <Statistics/CollectorSettings.h>
 #include <Statistics/StatisticsCollectorObjects.h>
 #include <common/logger_useful.h>
 
@@ -22,24 +23,26 @@ public:
     using TableStats = StatisticsImpl::TableStats;
     using ColumnStats = StatisticsImpl::ColumnStats;
     using ColumnStatsMap = StatisticsImpl::ColumnStatsMap;
-    using ColumnName = String;
 
-    StatisticsCollector(ContextPtr context_, CatalogAdaptorPtr catalog_, const StatsTableIdentifier & table_info_, UInt64 timestamp_)
-        : context(context_), catalog(catalog_), table_info(table_info_), timestamp(timestamp_)
+    StatisticsCollector(
+        ContextPtr context_, CatalogAdaptorPtr catalog_, const StatsTableIdentifier & table_info_, const CollectorSettings & settings_)
+        : context(context_), catalog(catalog_), table_info(table_info_), settings(settings_)
     {
-        String str;
-        auto & settings = catalog->getSettingsRef();
-        collect_debug_level = settings.statistics_collect_debug_level;
         logger = &Poco::Logger::get("StatisticsLogger" + table_info.getDbTableName());
     }
 
-    void collectFull();
+    // use default settings
+    StatisticsCollector(ContextPtr context_, CatalogAdaptorPtr catalog_, const StatsTableIdentifier & table_info_)
+        : StatisticsCollector(context_, catalog_, table_info_, CollectorSettings(context_->getSettingsRef()))
+    {
+    }
+
     void collect(const ColumnDescVector & col_names);
 
     void writeToCatalog();
     void readAllFromCatalog();
-    void readFromCatalog(const ColumnDescVector & cols_desc);
     void readFromCatalog(const std::vector<String> & cols_name);
+    void readFromCatalogImpl(const ColumnDescVector & cols_desc);
 
     std::optional<PlanNodeStatisticsPtr> toPlanNodeStatistics() const;
 
@@ -53,15 +56,12 @@ private:
     Poco::Logger * logger;
     CatalogAdaptorPtr catalog;
     StatsTableIdentifier table_info;
-    [[maybe_unused]] UInt64 timestamp;
 
     // table stats
     TableStats table_stats;
 
     // column stats
     ColumnStatsMap columns_stats;
-
-
-    int collect_debug_level = 0;
+    CollectorSettings settings;
 };
 }

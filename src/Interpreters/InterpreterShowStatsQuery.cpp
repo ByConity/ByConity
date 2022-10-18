@@ -9,9 +9,11 @@
 #include <Statistics/StatisticsCollector.h>
 #include <Statistics/StatsColumnBasic.h>
 #include <Statistics/StatsTableBasic.h>
+#include <Statistics/TypeUtils.h>
 #include <Statistics/serde_extend.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <Poco/Timestamp.h>
+
 namespace DB
 {
 namespace ErrorCodes
@@ -23,13 +25,23 @@ namespace ErrorCodes
 }
 using namespace Statistics;
 
-std::vector<FormattedOutputData>
-getTableFormattedOutput(ContextPtr context, CatalogAdaptorPtr catalog, const StatsTableIdentifier & table_info)
+std::vector<FormattedOutputData> getTableFormattedOutput(
+    ContextPtr context, CatalogAdaptorPtr catalog, const StatsTableIdentifier & table_info, const std::vector<String> & column_names)
 {
     std::vector<FormattedOutputData> results;
-    auto ts = 0;
-    StatisticsCollector collector_impl(context, catalog, table_info, ts);
-    collector_impl.readAllFromCatalog();
+    StatisticsCollector collector_impl(context, catalog, table_info);
+    ColumnDescVector cols_desc;
+    if (column_names.empty())
+    {
+        cols_desc = catalog->getCollectableColumns(table_info);
+    }
+    else
+    {
+        cols_desc = filterCollectableColumns(catalog->getCollectableColumns(table_info), column_names, true);
+    }
+
+    collector_impl.readFromCatalogImpl(cols_desc);
+
     auto plannode_stats_opt = collector_impl.toPlanNodeStatistics();
     if (!plannode_stats_opt.has_value())
     {
@@ -46,9 +58,8 @@ getTableFormattedOutput(ContextPtr context, CatalogAdaptorPtr catalog, const Sta
         results.emplace_back(std::move(fod));
     }
 
-    auto columns = catalog->getCollectableColumns(table_info);
     auto symbols = plannode_stats->getSymbolStatistics();
-    for (auto & col : columns)
+    for (auto & col : cols_desc)
     {
         auto symbol_iter = symbols.find(col.name);
         if (symbol_iter == symbols.end())
@@ -80,7 +91,6 @@ getTableFormattedOutput(ContextPtr context, CatalogAdaptorPtr catalog, const Sta
 
 void writeDbStats(ContextPtr context, const String & db_name, const String & path)
 {
-    auto ts = 0;
     Protos::DbStats db_stats;
     db_stats.set_db_name(db_name);
     db_stats.set_version(PROTO_VERSION);
@@ -88,7 +98,7 @@ void writeDbStats(ContextPtr context, const String & db_name, const String & pat
     auto tables = catalog->getAllTablesID(db_name);
     for (auto & table : tables)
     {
-        StatisticsCollector collector(context, catalog, table, ts);
+        StatisticsCollector collector(context, catalog, table);
         collector.readAllFromCatalog();
         auto table_collection = collector.getTableStats().writeToCollection();
         if (table_collection.empty())
@@ -142,7 +152,6 @@ void writeDbStatsToJson(ContextPtr context, const String & db_name, const String
 
 void readDbStats(ContextPtr context, const String & original_db_name, const String & path)
 {
-    auto ts = 0;
     std::ifstream fin(path, std::ios::binary);
     Protos::DbStats db_stats;
     db_stats.ParseFromIstream(&fin);
@@ -172,7 +181,8 @@ void readDbStats(ContextPtr context, const String & original_db_name, const Stri
             continue;
         }
 
-        StatisticsCollector collector(context, catalog, table_id_opt.value(), ts);
+        StatisticsCollector collector(context, catalog, table_id_opt.value());
+
         {
             StatsCollection collection;
             for (auto & [k, v] : table_pb.blobs())
@@ -240,7 +250,7 @@ BlockIO InterpreterShowStatsQuery::executeTable()
 
     for (auto & table_info : tables)
     {
-        auto fods = getTableFormattedOutput(context, catalog, table_info);
+        auto fods = getTableFormattedOutput(context, catalog, table_info, query->columns);
         // adjust here to change the order
         auto block = outputFormattedBlock(fods, {"identifier", "type", "count", "null_count", "ndv", "min", "max", "has_histogram"});
         blocks.emplace_back(std::move(block));
@@ -293,19 +303,20 @@ std::vector<FormattedOutputData> getColumnFormattedOutput(const String & full_co
 }
 
 BlocksList getColumnsFormattedOutput(
-    ContextPtr context, CatalogAdaptorPtr catalog, const StatsTableIdentifier & table_info, std::vector<String> target_columns = {})
+    ContextPtr context, CatalogAdaptorPtr catalog, const StatsTableIdentifier & table_info, const std::vector<String> & target_columns)
 {
-    auto ts = 0;
-    StatisticsCollector collector_impl(context, catalog, table_info, ts);
+    StatisticsCollector collector_impl(context, catalog, table_info);
 
     if (!target_columns.empty())
     {
+        auto cols_desc = filterCollectableColumns(catalog->getCollectableColumns(table_info), target_columns, true);
         collector_impl.readFromCatalog(target_columns);
     }
     else
     {
         collector_impl.readAllFromCatalog();
     }
+
     auto plannode_stats_opt = collector_impl.toPlanNodeStatistics();
     if (!plannode_stats_opt.has_value())
     {
@@ -343,6 +354,7 @@ BlocksList getColumnsFormattedOutput(
     return blocks;
 }
 
+
 BlockIO InterpreterShowStatsQuery::executeColumn()
 {
     auto query = query_ptr->as<const ASTShowStatsQuery>();
@@ -353,17 +365,22 @@ BlockIO InterpreterShowStatsQuery::executeColumn()
     auto catalog = Statistics::createCatalogAdaptor(context);
 
     BlocksList blocks;
-    if (tables.size() == 1 && !query->column.empty())
+    if (!query->columns.empty())
     {
+        if (tables.size() != 1)
+        {
+            throw Exception("columns specifier is supported only for single table", ErrorCodes::BAD_ARGUMENTS);
+        }
+
         auto table_info = tables[0];
-        auto new_blocks = getColumnsFormattedOutput(context, catalog, table_info, {query->column});
+        auto new_blocks = getColumnsFormattedOutput(context, catalog, table_info, query->columns);
         blocks.splice(blocks.end(), std::move(new_blocks));
     }
     else
     {
         for (auto & table_info : tables)
         {
-            auto new_blocks = getColumnsFormattedOutput(context, catalog, table_info);
+            auto new_blocks = getColumnsFormattedOutput(context, catalog, table_info, {});
             blocks.splice(blocks.end(), std::move(new_blocks));
         }
     }

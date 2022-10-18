@@ -27,8 +27,7 @@ PVar tableJson(ContextPtr context, const String & db_name, const String & table_
     Poco::JSON::Object::Ptr json = new Poco::JSON::Object(true);
     auto catalog = createCatalogAdaptor(context);
     auto Tabledentifier = catalog->getTableIdByName(db_name, table_name);
-    auto ts = 0;
-    StatisticsCollector collector(context, catalog, Tabledentifier.value(), ts);
+    StatisticsCollector collector(context, catalog, Tabledentifier.value());
     collector.readAllFromCatalog();
     auto table_collection = collector.getTableStats().writeToCollection();
     if (table_collection.empty())
@@ -263,12 +262,12 @@ void loadStats(ContextPtr context, const String & path)
             logger->warning(msg);
             continue;
         }
-        UInt64 ts = 0;
         PVar table_var = it.second;
         PObject table_object = *table_var.extract<PObject::Ptr>();
 
         //traverse TableBasic;
-        StatisticsCollector collector{context, catalog, table_id_opt.value(), ts};
+        StatisticsCollector collector(context, catalog, table_id_opt.value());
+
         {
             StatsCollection collection;
             //            auto tag = static_cast<StatisticsTag>(1);

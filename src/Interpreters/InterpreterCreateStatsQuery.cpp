@@ -8,6 +8,7 @@
 #include <Protos/optimizer_statistics.pb.h>
 #include <Statistics/StatisticsCollector.h>
 #include <Statistics/StatsTableBasic.h>
+#include <Statistics/TypeUtils.h>
 #include <Common/Stopwatch.h>
 
 
@@ -19,6 +20,7 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
     extern const int UNKNOWN_TABLE;
     extern const int INCORRECT_DATA;
+    extern const int PARAMETER_OUT_OF_BOUND;
 }
 using namespace Statistics;
 
@@ -92,12 +94,41 @@ static Block constructInfoBlock(ContextPtr context, const CollectTarget & target
     return block;
 }
 
-// return row_count
-Int64 collectStatsOnTarget(ContextPtr context, const CollectTarget & collect_target)
+// slice CollectTarget to multiple if column_size is larger than max_columns
+static std::vector<CollectTarget> sliceTargets(UInt64 max_columns, std::vector<CollectTarget> old_targets)
 {
-    auto ts = 0;
+    if (max_columns < 1)
+    {
+        throw Exception("Incorrect max columns, should be at least 1", ErrorCodes::PARAMETER_OUT_OF_BOUND);
+    }
+
+    std::vector<CollectTarget> result;
+    for (auto & target : old_targets)
+    {
+        if (target.columns_desc.size() <= max_columns)
+        {
+            result.emplace_back(std::move(target));
+            continue;
+        }
+
+        auto target_size = target.columns_desc.size();
+        for (size_t col = 0; col < target_size; col += max_columns)
+        {
+            auto col_next = std::min(col + max_columns, target_size);
+            auto beg_iter = std::make_move_iterator(target.columns_desc.begin() + col);
+            auto end_iter = std::make_move_iterator(target.columns_desc.begin() + col_next);
+            auto sub_columns = ColumnDescVector(beg_iter, end_iter);
+            result.emplace_back(CollectTarget{target.table_identifier, std::move(sub_columns)});
+        }
+    }
+    return result;
+}
+
+// return row_count
+Int64 collectStatsOnTarget(ContextPtr context, const CollectorSettings & settings, const CollectTarget & collect_target)
+{
     auto catalog = createCatalogAdaptor(context);
-    StatisticsCollector impl(context, catalog, collect_target.table_identifier, ts);
+    StatisticsCollector impl(context, catalog, collect_target.table_identifier, settings);
     impl.collect(collect_target.columns_desc);
 
     impl.writeToCatalog();
@@ -106,21 +137,13 @@ Int64 collectStatsOnTarget(ContextPtr context, const CollectTarget & collect_tar
     return row_count;
 }
 
-// return row_count
-Int64 collectStatsOnTable(ContextPtr context, const StatsTableIdentifier & identifier)
-{
-    auto catalog = createCatalogAdaptor(context);
-    auto cols_desc = catalog->getCollectableColumns(identifier);
-    return collectStatsOnTarget(context, CollectTarget{identifier, cols_desc});
-}
-
 namespace
 {
     class CreateStatsBlockInputStream : public IBlockInputStream, WithContext
     {
     public:
-        CreateStatsBlockInputStream(ContextPtr context_, std::vector<CollectTarget> collect_targets_)
-            : WithContext(context_), collect_targets(std::move(collect_targets_))
+        CreateStatsBlockInputStream(ContextPtr context_, const CollectorSettings & settings_, std::vector<CollectTarget> collect_targets_)
+            : WithContext(context_), settings(settings_), collect_targets(std::move(collect_targets_))
         {
         }
         String getName() const override { return "Statistics"; }
@@ -151,7 +174,7 @@ namespace
 
             try
             {
-                auto row_count = collectStatsOnTarget(context, collect_target);
+                auto row_count = collectStatsOnTarget(context, settings, collect_target);
                 auto elapsed_time = watch.elapsedSeconds();
                 return constructInfoBlock(context, collect_target, std::to_string(row_count), elapsed_time);
             }
@@ -171,10 +194,10 @@ namespace
 
     private:
         std::map<String, String> error_infos;
+        CollectorSettings settings;
         std::vector<CollectTarget> collect_targets;
         size_t counter = 0;
     };
-
 }
 
 BlockIO InterpreterCreateStatsQuery::execute()
@@ -199,7 +222,15 @@ BlockIO InterpreterCreateStatsQuery::execute()
                 // skip when if_not_exists is on
                 continue;
             }
-            valid_targets.emplace_back(CollectTarget{table, catalog->getCollectableColumns(table)});
+            CollectTarget target{.table_identifier = table};
+            if (query->columns.empty())
+                target.columns_desc = catalog->getCollectableColumns(table);
+            else
+            {
+                target.columns_desc = filterCollectableColumns(catalog->getCollectableColumns(table), query->columns);
+            }
+
+            valid_targets.emplace_back(std::move(target));
         }
     }
 
@@ -208,10 +239,32 @@ BlockIO InterpreterCreateStatsQuery::execute()
         return {};
     }
 
+    valid_targets = sliceTargets(context->getSettingsRef().statistics_batch_max_columns, std::move(valid_targets));
+
     catalog->checkHealth(/*is_write=*/true);
+    CollectorSettings settings(context->getSettingsRef());
+    using SampleType = ASTCreateStatsQuery::SampleType;
+
+    if (query->sample_type == SampleType::FullScan)
+    {
+        settings.enable_sample = false;
+    }
+    else if (query->sample_type == SampleType::Sample)
+    {
+        settings.enable_sample = true;
+        if (query->sample_rows)
+        {
+            settings.sample_row_count = *query->sample_rows;
+        }
+
+        if (query->sample_ratio)
+        {
+            settings.sample_ratio = *query->sample_ratio;
+        }
+    }
 
     BlockIO io;
-    io.in = std::make_shared<CreateStatsBlockInputStream>(context, std::move(valid_targets));
+    io.in = std::make_shared<CreateStatsBlockInputStream>(context, settings, std::move(valid_targets));
     return io;
 }
 

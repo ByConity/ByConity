@@ -26,15 +26,20 @@ BlockIO InterpreterDropStatsQuery::execute()
 
     auto proxy = Statistics::createCachedStatsProxy(catalog);
     auto db = context->resolveDatabase(query->database);
-    std::vector<StatsTableIdentifier> tables;
     if (query->target_all)
     {
+        std::vector<StatsTableIdentifier> tables;
         if (!DatabaseCatalog::instance().isDatabaseExist(db))
         {
             auto msg = fmt::format(FMT_STRING("Unknown database ({})"), db);
             throw Exception(msg, ErrorCodes::UNKNOWN_DATABASE);
         }
         tables = catalog->getAllTablesID(db);
+        for (auto & table : tables)
+        {
+            proxy->drop(table);
+            catalog->invalidateClusterStatsCache(table);
+        }
     }
     else
     {
@@ -44,14 +49,21 @@ BlockIO InterpreterDropStatsQuery::execute()
             auto msg = "Unknown Table (" + query->table + ") in database (" + db + ")";
             throw Exception(msg, ErrorCodes::UNKNOWN_TABLE);
         }
-        tables.push_back(table_info_opt.value());
+        auto table = table_info_opt.value();
+
+        if (!query->columns.empty())
+        {
+            auto cols_desc = filterCollectableColumns(catalog->getCollectableColumns(table), query->columns, true);
+            proxy->dropColumns(table, cols_desc);
+            catalog->invalidateClusterStatsCache(table);
+        }
+        else
+        {
+            proxy->drop(table);
+            catalog->invalidateClusterStatsCache(table);
+        }
     }
 
-    for (auto & table : tables)
-    {
-        proxy->drop(table);
-        catalog->invalidateClusterStatsCache(table);
-    }
 
     return {};
 }

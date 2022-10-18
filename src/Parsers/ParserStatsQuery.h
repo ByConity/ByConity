@@ -4,6 +4,7 @@
 #include <Parsers/ASTStatsQuery.h>
 #include <Parsers/CommonParsers.h>
 #include <Parsers/ExpressionElementParsers.h>
+#include <Parsers/ExpressionListParsers.h>
 #include <Parsers/IParserBase.h>
 #include <Parsers/parseDatabaseAndTableName.h>
 
@@ -26,6 +27,7 @@ class ParserStatsQueryBase : public IParserBase
 {
 public:
     [[nodiscard]] const char * getName() const override { return ParserName::Name; }
+    using SampleType = ASTCreateStatsQuery::SampleType;
 
 protected:
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override
@@ -33,7 +35,8 @@ protected:
         ParserKeyword s_query_prefix(QueryInfo::QueryPrefix);
         ParserKeyword s_all("ALL");
         ParserKeyword s_on("ON");
-        ParserKeyword s_at_column("AT COLUMN");
+        ParserToken open(TokenType::OpeningRoundBracket);
+        ParserToken close(TokenType::ClosingRoundBracket);
         ParserIdentifier p_column_name;
 
         auto query = std::make_shared<QueryAstClass>();
@@ -58,16 +61,25 @@ protected:
         {
             if (!parseDatabaseAndTableName(pos, expected, query->database, query->table))
                 return false;
-        }
 
-        if (s_at_column.ignore(pos, expected))
-        {
-            ASTPtr column_name;
+            // parse columns
+            if (open.ignore(pos, expected))
+            {
+                auto parse_id = [&query, &pos, &expected] {
+                    ASTPtr identifier;
+                    if (!ParserIdentifier(true).parse(pos, identifier, expected))
+                        return false;
 
-            if (!p_column_name.parse(pos, column_name, expected))
-                return false;
+                    query->columns.emplace_back(getIdentifierName(identifier));
+                    return true;
+                };
 
-            query->column = getIdentifierName(column_name);
+                if (!ParserList::parseUtil(pos, expected, parse_id, false))
+                    return false;
+
+                if (!close.ignore(pos, expected))
+                    return false;
+            }
         }
 
         if (s_on.ignore(pos, expected))

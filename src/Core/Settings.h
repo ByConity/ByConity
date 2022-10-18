@@ -630,10 +630,10 @@ class IColumn;
     M(Bool, statistics_collect_floating_histogram, true, "Collect histogram for float/double/Decimal columns", 0) \
     M(Bool, statistics_collect_floating_histogram_ndv, true, "Collect histogram ndv for float/double/Decimal columns", 0) \
     M(UInt64, statistics_collect_string_size_limit_for_histogram, 64, "Collect string histogram only for avg_size <= string_size_limit, since it's unnecessary to collect stats for text", 0) \
-    M(Bool, statistics_enable_sample, false, "Enable sampling for statistics", 0) \
-    M(UInt64, statistics_sample_row_threshold, 100'000'000, "Row threshold for samping", 0) \
-    M(UInt64, statistics_sample_row_count, 40'000'000, "Row threshold for samping", 0) \
-    M(UInt64, statistics_sample_histogram_enable_ndv_threshold, 2000, "When sampling, collect histogram only when ndv <= threshold", 0) \
+    M(Bool, statistics_enable_sample, false, "Use sampling for statistics", 0) \
+    M(UInt64, statistics_sample_row_count, 40'000'000, "Minimal row count for sampling", 0) \
+    M(Float, statistics_sample_ratio, 0.1, "Ratio for sampling", 0) \
+    M(UInt64, statistics_batch_max_columns, 30, "Max column size in a batch when collecting stats", 0) \
     M(Float, cost_calculator_table_scan_weight, 1, "Table scan cost weight for cost calculator", 0) \
     M(Float, cost_calculator_aggregating_weight, 7, "Aggregate output weight for cost calculator", 0) \
     M(Float, cost_calculator_join_probe_weight, 0.5, "Join probe side weight for cost calculator", 0) \

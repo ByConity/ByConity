@@ -1,11 +1,15 @@
 #pragma once
+#include <Core/NameToType.h>
+#include <Core/NamesAndTypes.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <Statistics/CommonErrorCodes.h>
+#include <fmt/format.h>
 
 // use namespace to avoid name pollution
 namespace DB::Statistics
 {
+using ColumnDescVector = NamesAndTypes;
 
 struct DecayVerboseResult
 {
@@ -73,6 +77,38 @@ inline bool isCollectableType(const DataTypePtr & raw_type)
     {
         return false;
     }
+}
+
+inline ColumnDescVector filterCollectableColumns(
+    const ColumnDescVector & collectable, const std::vector<String> & target_columns, bool exception_on_unsupported = false)
+{
+    NameToType name_to_type;
+    ColumnDescVector result;
+    std::vector<String> unsupported_columns;
+
+    for (const auto & elem : collectable)
+        name_to_type.emplace(elem.name, elem.type);
+
+    for (const auto & col_name : target_columns)
+    {
+        if (name_to_type.count(col_name))
+        {
+            auto type = name_to_type[col_name];
+            result.emplace_back(col_name, type);
+        }
+        else
+        {
+            unsupported_columns.emplace_back(col_name);
+        }
+    }
+
+    if (exception_on_unsupported && !unsupported_columns.empty())
+    {
+        auto err_msg = fmt::format(FMT_STRING("columns ({}) not exist or is not collectable"), fmt::join(unsupported_columns, ", "));
+        throw Exception(err_msg, ErrorCodes::BAD_ARGUMENTS);
+    }
+
+    return result;
 }
 
 }

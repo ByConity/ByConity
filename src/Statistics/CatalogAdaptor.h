@@ -4,11 +4,11 @@
 #include <unordered_set>
 #include <Statistics/StatisticsBase.h>
 #include <Statistics/StatsTableIdentifier.h>
+#include <Statistics/TypeUtils.h>
 #include <Storages/IStorage.h>
 
 namespace DB::Statistics
 {
-using ColumnDescVector = NamesAndTypes;
 class CatalogAdaptor
 {
 public:
@@ -16,6 +16,8 @@ public:
     virtual StatsData readStatsData(const StatsTableIdentifier & table) = 0;
     virtual StatsCollection readSingleStats(const StatsTableIdentifier & table, const std::optional<String> & column_name) = 0;
     virtual void writeStatsData(const StatsTableIdentifier & table, const StatsData & stats_data) = 0;
+
+    virtual void dropStatsColumnData(const StatsTableIdentifier & table, const ColumnDescVector & cols_desc) = 0;
     virtual void dropStatsData(const StatsTableIdentifier & table) = 0;
     virtual void dropStatsDataAll(const String & database) = 0;
 
