@@ -1,5 +1,5 @@
 SET enable_multiple_tables_for_cnch_parts = 1;
-
+use test;
 DROP TABLE IF EXISTS bucket;
 DROP TABLE IF EXISTS bucket2;
 DROP TABLE IF EXISTS bucket3;
@@ -41,9 +41,9 @@ SELECT partition FROM system.cnch_parts where database = currentDatabase() and t
 
 
 ALTER TABLE bucket MODIFY CLUSTER BY age INTO 3 BUCKETS;
--- TODO: to uncomment after clustering task. Expected bucket number value is 1
--- SELECT * FROM bucket ORDER BY name FORMAT CSV;
--- SELECT bucket_number FROM system.cnch_parts where database = currentDatabase() and table = 'bucket' FORMAT CSV;
+INSERT INTO bucket VALUES ('jane', 10);
+SELECT * FROM bucket ORDER BY name FORMAT CSV;
+SELECT bucket_number FROM system.cnch_parts where database = currentDatabase() and table = 'bucket' and active FORMAT CSV;
 
 -- DROP bucket table definition, INSERT, ensure new part's bucket number is -1
 ALTER TABLE bucket3 DROP CLUSTER;

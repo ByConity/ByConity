@@ -38,82 +38,93 @@ ServerSelectPartsDecision selectPartsToMerge(
     /// Check it once and don't check each part (this is bad for performance).
     /// bool has_volumes_with_disabled_merges = storage_policy->hasAnyVolumeWithDisabledMerges();
 
-    const String * prev_partition_id = nullptr;
-    /// Previous part only in boundaries of partition frame
-    const ServerDataPartPtr * prev_part = nullptr;
-
     size_t parts_selected_precondition = 0;
-    for (const auto & part : data_parts)
+
+    // split parts into buckets if current table is bucket table.
+    std::unordered_map<Int64, ServerDataPartsVector> buckets;
+    if (data.isBucketTable())
+        groupPartsByBucketNumber(data, buckets, data_parts);
+    else
+        buckets.emplace(0, data_parts);
+
+    for (auto & bucket: buckets)
     {
-        const String & partition_id = part->info().partition_id;
+        const String * prev_partition_id = nullptr;
+        /// Previous part only in boundaries of partition frame
+        const ServerDataPartPtr * prev_part = nullptr;
 
-        if (!prev_partition_id || partition_id != *prev_partition_id)
+        for (const auto & part : bucket.second)
         {
-            if (parts_ranges.empty() || !parts_ranges.back().empty())
-                parts_ranges.emplace_back();
+            const String & partition_id = part->info().partition_id;
 
-            /// New partition frame.
-            prev_partition_id = &partition_id;
-            prev_part = nullptr;
-        }
-
-        /// Check predicate only for the first part in each range.
-        if (!prev_part)
-        {
-            /* Parts can be merged with themselves for TTL needs for example.
-            * So we have to check if this part is currently being inserted with quorum and so on and so forth.
-            * Obviously we have to check it manually only for the first part
-            * of each partition because it will be automatically checked for a pair of parts. */
-            if (!can_merge_callback(nullptr, part))
-                continue;
-
-            /// This part can be merged only with next parts (no prev part exists), so start
-            /// new interval if previous was not empty.
-            if (!parts_ranges.back().empty())
-                parts_ranges.emplace_back();
-        }
-        else
-        {
-            /// If we cannot merge with previous part we had to start new parts
-            /// interval (in the same partition)
-            if (!can_merge_callback(*prev_part, part))
+            if (!prev_partition_id || partition_id != *prev_partition_id)
             {
-                /// Now we have no previous part
+                if (parts_ranges.empty() || !parts_ranges.back().empty())
+                    parts_ranges.emplace_back();
+
+                /// New partition frame.
+                prev_partition_id = &partition_id;
                 prev_part = nullptr;
+            }
 
-                /// Mustn't be empty
-                assert(!parts_ranges.back().empty());
-
-                /// Some parts cannot be merged with previous parts and also cannot be merged with themselves,
-                /// for example, merge is already assigned for such parts, or they participate in quorum inserts
-                /// and so on.
-                /// Also we don't start new interval here (maybe all next parts cannot be merged and we don't want to have empty interval)
+            /// Check predicate only for the first part in each range.
+            if (!prev_part)
+            {
+                /* Parts can be merged with themselves for TTL needs for example.
+                * So we have to check if this part is currently being inserted with quorum and so on and so forth.
+                * Obviously we have to check it manually only for the first part
+                * of each partition because it will be automatically checked for a pair of parts. */
                 if (!can_merge_callback(nullptr, part))
                     continue;
 
-                /// Starting new interval in the same partition
-                parts_ranges.emplace_back();
+                /// This part can be merged only with next parts (no prev part exists), so start
+                /// new interval if previous was not empty.
+                if (!parts_ranges.back().empty())
+                    parts_ranges.emplace_back();
             }
+            else
+            {
+                /// If we cannot merge with previous part we had to start new parts
+                /// interval (in the same partition)
+                if (!can_merge_callback(*prev_part, part))
+                {
+                    /// Now we have no previous part
+                    prev_part = nullptr;
+
+                    /// Mustn't be empty
+                    assert(!parts_ranges.back().empty());
+
+                    /// Some parts cannot be merged with previous parts and also cannot be merged with themselves,
+                    /// for example, merge is already assigned for such parts, or they participate in quorum inserts
+                    /// and so on.
+                    /// Also we don't start new interval here (maybe all next parts cannot be merged and we don't want to have empty interval)
+                    if (!can_merge_callback(nullptr, part))
+                        continue;
+
+                    /// Starting new interval in the same partition
+                    parts_ranges.emplace_back();
+                }
+            }
+
+            IMergeSelector::Part part_info;
+            part_info.size = part->part_model().size();
+            part_info.rows = part->rowsCount();
+            time_t part_commit_time = TxnTimestamp(part->getCommitTime()).toSecond();
+            part_info.age = current_time > part_commit_time ? current_time - part_commit_time : 0;
+            part_info.level = part->info().level;
+            part_info.data = &part;
+            /// TODO:
+            /// part_info.ttl_infos = &part->ttl_infos;
+            /// part_info.compression_codec_desc = part->default_codec->getFullCodecDesc();
+            /// part_info.shall_participate_in_merges = has_volumes_with_disabled_merges ? part->shallParticipateInMerges(storage_policy) : true;
+            part_info.shall_participate_in_merges = true;
+
+            ++parts_selected_precondition;
+
+            parts_ranges.back().emplace_back(part_info);
+
+            prev_part = &part;
         }
-
-        IMergeSelector::Part part_info;
-        part_info.size = part->part_model().size();
-        part_info.rows = part->rowsCount();
-        time_t part_commit_time = TxnTimestamp(part->getCommitTime()).toSecond();
-        part_info.age = current_time > part_commit_time ? current_time - part_commit_time : 0;
-        part_info.level = part->info().level;
-        part_info.data = &part;
-        /// TODO:
-        /// part_info.ttl_infos = &part->ttl_infos;
-        /// part_info.compression_codec_desc = part->default_codec->getFullCodecDesc();
-        /// part_info.shall_participate_in_merges = has_volumes_with_disabled_merges ? part->shallParticipateInMerges(storage_policy) : true;
-        part_info.shall_participate_in_merges = true;
-
-        ++parts_selected_precondition;
-
-        parts_ranges.back().emplace_back(part_info);
-
-        prev_part = &part;
     }
 
     if (parts_selected_precondition == 0)
@@ -207,6 +218,22 @@ ServerSelectPartsDecision selectPartsToMerge(
     }
 
     return ServerSelectPartsDecision::SELECTED;
+}
+
+
+void groupPartsByBucketNumber(const MergeTreeMetaBase & data, std::unordered_map<Int64, ServerDataPartsVector> & grouped_buckets, const ServerDataPartsVector & data_parts)
+{
+    auto table_definition_hash = data.getTableHashForClusterBy();
+    for (const auto & part : data_parts)
+    {
+        /// Can only merge those already been clustered parts.
+        if (part->part_model().table_definition_hash() != table_definition_hash)
+            continue;
+        if (auto it = grouped_buckets.find(part->part_model().bucket_number()); it != grouped_buckets.end())
+            it->second.push_back(part);
+        else
+            grouped_buckets.emplace(part->part_model().bucket_number(), ServerDataPartsVector{part});
+    }
 }
 
 }

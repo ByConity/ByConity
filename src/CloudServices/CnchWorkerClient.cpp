@@ -48,7 +48,7 @@ void CnchWorkerClient::submitManipulationTask(
         request.set_create_table_query(params.create_table_query);
     fillPartsModelForSend(storage, params.source_parts, *request.mutable_source_parts());
 
-    if (params.type == ManipulationType::Mutate)
+    if (params.type == ManipulationType::Mutate || params.type == ManipulationType::Clustering)
     {
         request.set_mutation_commit_time(params.mutation_commit_time);
         WriteBufferFromString write_buf(*request.mutable_mutate_commands());

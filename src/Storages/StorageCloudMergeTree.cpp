@@ -16,6 +16,7 @@
 #include <Storages/MutationCommands.h>
 #include <WorkerTasks/CloudMergeTreeMutateTask.h>
 #include <WorkerTasks/CloudMergeTreeMergeTask.h>
+#include <WorkerTasks/CloudMergeTreeReclusterTask.h>
 #include <WorkerTasks/CloudUniqueMergeTreeMergeTask.h>
 #include <WorkerTasks/ManipulationTaskParams.h>
 #include <WorkerTasks/ManipulationType.h>
@@ -125,6 +126,9 @@ ManipulationTaskPtr StorageCloudMergeTree::manipulate(const ManipulationTaskPara
             break;
         case ManipulationType::Mutate:
             task = std::make_shared<CloudMergeTreeMutateTask>(*this, input_params, task_context);
+            break;
+        case ManipulationType::Clustering:
+            task = std::make_shared<CloudMergeTreeReclusterTask>(*this, input_params, task_context);
             break;
         default:
             throw Exception("Unsupported manipulation task: " + String(typeToString(input_params.type)), ErrorCodes::NOT_IMPLEMENTED);

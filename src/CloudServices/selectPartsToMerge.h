@@ -26,4 +26,10 @@ ServerSelectPartsDecision selectPartsToMerge(
     bool enable_batch_select,
     bool merge_with_ttl_allowed,
     Poco::Logger * log);
+
+/**
+* Group data parts by bucket number
+*/
+void groupPartsByBucketNumber(const MergeTreeMetaBase & data, std::unordered_map<Int64, ServerDataPartsVector> & grouped_buckets, const ServerDataPartsVector & parts);
+
 }

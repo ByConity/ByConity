@@ -19,6 +19,7 @@
 #include <CloudServices/DedupWorkerStatus.h>
 #include <WorkerTasks/ManipulationType.h>
 #include <Storages/Kafka/CnchKafkaConsumeManager.h>
+#include <Storages/PartCacheManager.h>
 
 namespace DB
 {
@@ -622,7 +623,34 @@ void CnchServerServiceImpl::getTableInfo(
     Protos::GetTableInfoResp * response,
     google::protobuf::Closure * done)
 {
+    RPCHelpers::serviceHandler(
+        done,
+        response,
+        [request = request, response = response, done = done, gc = getContext(), log = log] {
+            brpc::ClosureGuard done_guard(done);
+
+            try
+            {
+                auto part_cache_manager = gc->getPartCacheManager();
+                for (auto & table_id : request->table_ids())
+                {
+                    UUID uuid(stringToUUID(table_id.uuid()));
+                    Protos::DataModelTableInfo * table_info = response->add_table_infos();
+                    table_info->set_database(table_id.database());
+                    table_info->set_table(table_id.name());
+                    table_info->set_last_modification_time(part_cache_manager->getTableLastUpdateTime(uuid));
+                    table_info->set_cluster_status(part_cache_manager->getTableClusterStatus(uuid));
+                }
+            }
+            catch (...)
+            {
+                tryLogCurrentException(log, __PRETTY_FUNCTION__);
+                RPCHelpers::handleException(response->mutable_exception());
+            }
+        }
+    );
 }
+
 void CnchServerServiceImpl::invalidateBytepond(
     google::protobuf::RpcController * cntl,
     const Protos::InvalidateBytepondReq * request,

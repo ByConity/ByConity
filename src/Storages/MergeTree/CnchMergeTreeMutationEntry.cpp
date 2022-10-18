@@ -53,10 +53,10 @@ CnchMergeTreeMutationEntry CnchMergeTreeMutationEntry::parse(const String & str)
 
 bool CnchMergeTreeMutationEntry::isReclusterMutation() const
 {
-    // if (commands.size() == 1 && commands[0].type==MutationCommand::Type::RECLUSTER)
-    //     return true;
-    // else
-    return false;
+    if (commands.size() == 1 && commands[0].type==MutationCommand::Type::RECLUSTER)
+        return true;
+    else
+        return false;
 }
 
 }
