@@ -426,7 +426,7 @@ void OptimizeInput::execute()
             Property output_prop;
             if (group_expr->getStep()->getType() == IQueryPlanStep::Type::CTERef)
             {
-                const auto cte_step = dynamic_cast<const CTERefStep *>(group_expr->getStep().get());
+                const auto * cte_step = dynamic_cast<const CTERefStep *>(group_expr->getStep().get());
                 CTEId cte_id = cte_step->getId();
                 auto cte_def_group = context->getOptimizerContext().getMemo().getCTEDefGroupByCTEId(cte_id);
                 auto cte_global_property = CTEDescription::createCTEDefGlobalProperty(context->getRequiredProp(), cte_id);
@@ -507,7 +507,14 @@ void OptimizeInput::execute()
                         auto cte_def_group = context->getOptimizerContext().getMemo().getCTEDefGroupByCTEId(cte_id);
                         auto cte_global_property = CTEDescription::createCTEDefGlobalProperty(actual, cte_id, cte_def_group->getCTESet());
                         auto cte_best_expr = cte_def_group->getBestExpression(cte_global_property);
-                        cur_total_cost += cte_best_expr->getCost();
+                        double cost = cte_best_expr->getCost();
+
+                        // todo: remove this, add cost for join build side. dirty hack for cte.
+                        if (group_expr->getStep()->getType() == IQueryPlanStep::Type::Join) {
+                            cost *= context->getOptimizerContext().getContext()->getSettingsRef()
+                                        .cost_calculator_cte_weight_for_join_build_side;
+                        }
+                        cur_total_cost += cost;
                     }
                 }
             }
