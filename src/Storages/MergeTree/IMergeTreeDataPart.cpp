@@ -353,7 +353,8 @@ IMergeTreeDataPart::IMergeTreeDataPart(
     const VolumePtr & volume_,
     const std::optional<String> & relative_path_,
     Type part_type_,
-    const IMergeTreeDataPart * parent_part_)
+    const IMergeTreeDataPart * parent_part_,
+    IStorage::StorageLocation location_)
     : storage(storage_)
     , name(name_)
     , info(MergeTreePartInfo::fromPartName(name_, storage.format_version))
@@ -363,6 +364,7 @@ IMergeTreeDataPart::IMergeTreeDataPart(
     , versions(std::make_shared<MergeTreeDataPartVersions>(storage.getSettings()))
     , part_type(part_type_)
     , parent_part(parent_part_)
+    , location(location_)
 {
     if (parent_part)
         state = State::Committed;
@@ -377,7 +379,8 @@ IMergeTreeDataPart::IMergeTreeDataPart(
     const VolumePtr & volume_,
     const std::optional<String> & relative_path_,
     Type part_type_,
-    const IMergeTreeDataPart * parent_part_)
+    const IMergeTreeDataPart * parent_part_,
+    IStorage::StorageLocation location_)
     : storage(storage_)
     , name(name_)
     , info(info_)
@@ -387,6 +390,7 @@ IMergeTreeDataPart::IMergeTreeDataPart(
     , versions(std::make_shared<MergeTreeDataPartVersions>(storage.getSettings()))
     , part_type(part_type_)
     , parent_part(parent_part_)
+    , location(location_)
 {
     if (parent_part)
         state = State::Committed;
@@ -712,7 +716,7 @@ String IMergeTreeDataPart::getFullPath() const
     if (relative_path.empty())
         throw Exception("Part relative_path cannot be empty. It's bug.", ErrorCodes::LOGICAL_ERROR);
 
-    return fs::path(storage.getFullPathOnDisk(volume->getDisk())) / (parent_part ? parent_part->relative_path : "") / relative_path / "";
+    return fs::path(storage.getFullPathOnDisk(location, volume->getDisk())) / (parent_part ? parent_part->relative_path : "") / relative_path / "";
 }
 
 String IMergeTreeDataPart::getFullRelativePath() const
@@ -720,7 +724,7 @@ String IMergeTreeDataPart::getFullRelativePath() const
     if (relative_path.empty())
         throw Exception("Part relative_path cannot be empty. It's bug.", ErrorCodes::LOGICAL_ERROR);
 
-    return fs::path(storage.relative_data_path) / (parent_part ? parent_part->relative_path : "") / relative_path / "";
+    return fs::path(storage.getRelativeDataPath(location)) / (parent_part ? parent_part->relative_path : "") / relative_path / "";
 }
 
 String IMergeTreeDataPart::getMvccFullPath(const String & file_name) const
@@ -1255,7 +1259,7 @@ void IMergeTreeDataPart::renameTo(const String & new_relative_path, bool remove_
     assertOnDisk();
 
     String from = getFullRelativePath();
-    String to = fs::path(storage.relative_data_path) / (parent_part ? parent_part->relative_path : "") / new_relative_path / "";
+    String to = fs::path(storage.getRelativeDataPath(location)) / (parent_part ? parent_part->relative_path : "") / new_relative_path / "";
 
     if (!volume->getDisk()->exists(from))
         throw Exception("Part directory " + fullPath(volume->getDisk(), from) + " doesn't exist. Most likely it is a logical error.", ErrorCodes::FILE_DOESNT_EXIST);
@@ -1378,8 +1382,8 @@ void IMergeTreeDataPart::remove() const
       * And a race condition can happen that will lead to "File not found" error here.
       */
 
-    fs::path from = fs::path(storage.relative_data_path) / relative_path;
-    fs::path to = fs::path(storage.relative_data_path) / ("delete_tmp_" + name);
+    fs::path from = fs::path(storage.getRelativeDataPath(location)) / relative_path;
+    fs::path to = fs::path(storage.getRelativeDataPath(location)) / ("delete_tmp_" + name);
     // TODO directory delete_tmp_<name> is never removed if server crashes before returning from this function
 
     auto disk = volume->getDisk();
@@ -1621,7 +1625,7 @@ void IMergeTreeDataPart::renameToDetached(const String & prefix) const
 
 void IMergeTreeDataPart::makeCloneInDetached(const String & prefix, const StorageMetadataPtr & /*metadata_snapshot*/) const
 {
-    String destination_path = fs::path(storage.relative_data_path) / getRelativePathForDetachedPart(prefix);
+    String destination_path = fs::path(storage.getRelativeDataPath(location)) / getRelativePathForDetachedPart(prefix);
 
     /// Backup is not recursive (max_level is 0), so do not copy inner directories
     localBackup(volume->getDisk(), getFullRelativePath(), destination_path, 0);
@@ -1645,7 +1649,7 @@ void IMergeTreeDataPart::makeCloneOnDisk(const DiskPtr & disk, const String & di
     if (directory_name.empty())
         throw Exception("Can not clone data part " + name + " to empty directory.", ErrorCodes::LOGICAL_ERROR);
 
-    String path_to_clone = fs::path(storage.relative_data_path) / directory_name / "";
+    String path_to_clone = fs::path(storage.getRelativeDataPath(location)) / directory_name / "";
 
     if (disk->exists(fs::path(path_to_clone) / relative_path))
     {

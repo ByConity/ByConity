@@ -77,7 +77,7 @@ MutableDataPartPtr buildPartFromMeta(const MergeTreeMetaBase & storage, const St
     if (!MergeTreePartInfo::tryParsePartName(part_name, &part_info, storage.format_version))
         throw Exception("Cannot parse part info from name : " + part_name, ErrorCodes::BROKEN_META_DATA);
 
-    DiskPtr disk_ptr = storage.getStoragePolicy()->getDiskByID(part_data.disk_id());
+    DiskPtr disk_ptr = storage.getStoragePolicy(IStorage::StorageLocation::MAIN)->getDiskByID(part_data.disk_id());
     if (!disk_ptr)
         throw Exception("Cannot get the disk with id '" + std::to_string(part_data.disk_id()) + "' for part : " + part_name, ErrorCodes::UNKNOWN_DISK);
 
@@ -188,7 +188,7 @@ MutableDataPartPtr createPartFromRaw(const MergeTreeMetaBase & storage, const St
     auto pos = key.rfind('_');
     String part_name = key.substr(0, pos);
     String disk_name = unescapeForDiskName(key.substr(pos + 1));
-    DiskPtr disk_ptr = storage.getStoragePolicy()->getDiskByName(disk_name);
+    DiskPtr disk_ptr = storage.getStoragePolicy(IStorage::StorageLocation::MAIN)->getDiskByName(disk_name);
     if (!disk_ptr)
         throw Exception("Cannot get the disk with name '" + disk_name + "' for part : " + part_name, ErrorCodes::UNKNOWN_DISK);
 

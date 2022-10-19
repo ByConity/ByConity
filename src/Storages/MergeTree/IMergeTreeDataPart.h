@@ -87,7 +87,8 @@ public:
         const VolumePtr & volume,
         const std::optional<String> & relative_path,
         Type part_type_,
-        const IMergeTreeDataPart * parent_part_);
+        const IMergeTreeDataPart * parent_part_,
+        IStorage::StorageLocation location_);
 
     IMergeTreeDataPart(
         const MergeTreeMetaBase & storage_,
@@ -95,7 +96,8 @@ public:
         const VolumePtr & volume,
         const std::optional<String> & relative_path,
         Type part_type_,
-        const IMergeTreeDataPart * parent_part_);
+        const IMergeTreeDataPart * parent_part_,
+        IStorage::StorageLocation location_);
 
     virtual MergeTreeReaderPtr getReader(
         const NamesAndTypesList & columns_,
@@ -551,6 +553,8 @@ protected:
     /// to prevent checksums_ptr from being modified and corvered by multiple threads.
     mutable std::mutex checksums_mutex;
     mutable std::mutex index_mutex;
+
+    const IStorage::StorageLocation location;
 
     void removeIfNeeded();
 

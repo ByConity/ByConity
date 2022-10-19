@@ -104,11 +104,11 @@ DeleteBitmapMetaPtr LocalDeleteBitmap::dump(const MergeTreeMetaBase & storage) c
             PODArray<char> buf(size);
             size = bitmap->write(buf.data());
             {
-                DiskPtr disk = storage.getStoragePolicy()->getAnyDisk();
-                String dir_rel_path = fs::path(storage.getRelativeDataPath()) / deleteBitmapDirRelativePath(model->partition_id());
+                DiskPtr disk = storage.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
+                String dir_rel_path = fs::path(storage.getRelativeDataPath(IStorage::StorageLocation::MAIN)) / deleteBitmapDirRelativePath(model->partition_id());
                 disk->createDirectories(dir_rel_path);
 
-                String file_rel_path = fs::path(storage.getRelativeDataPath()) / deleteBitmapFileRelativePath(*model);
+                String file_rel_path = fs::path(storage.getRelativeDataPath(IStorage::StorageLocation::MAIN)) / deleteBitmapFileRelativePath(*model);
                 auto out = disk->writeFile(file_rel_path);
                 auto * data_out = dynamic_cast<WriteBufferFromHDFS *>(out.get());
                 if (!data_out)
@@ -180,8 +180,8 @@ void DeleteBitmapMeta::removeFile()
 {
     if (model->has_file_size())
     {
-        DiskPtr disk = storage.getStoragePolicy()->getAnyDisk();
-        String rel_file_path = fs::path(storage.getRelativeDataPath()) / deleteBitmapFileRelativePath(*model);
+        DiskPtr disk = storage.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
+        String rel_file_path = fs::path(storage.getRelativeDataPath(IStorage::StorageLocation::MAIN)) / deleteBitmapFileRelativePath(*model);
         if (likely(disk->exists(rel_file_path)))
         {
             disk->removeFile(rel_file_path);
@@ -235,7 +235,7 @@ void deserializeDeleteBitmapInfo(const MergeTreeMetaBase & storage, const DataMo
         {
             PODArray<char> buf(meta->file_size());
             String path
-                = fs::path(storage.getFullPathOnDisk(storage.getStoragePolicy()->getAnyDisk())) / deleteBitmapFileRelativePath(*meta);
+                = fs::path(storage.getFullPathOnDisk(IStorage::StorageLocation::MAIN, storage.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk())) / deleteBitmapFileRelativePath(*meta);
             ReadBufferFromByteHDFS in(
                 path,
                 /*pread=*/false,

@@ -205,8 +205,12 @@ struct Settings;
     /* Metastore settings */\
     M(Bool, enable_metastore, true, "Use KV metastore to manage data parts.", 0) \
     M(Bool, enable_persistent_checksum, false, "Persist checksums of part in memory. If set to false, checksums will be managed by a global cache to save memory.", 0) \
-    /* Storage settings */\
-    M(String, cnch_local_storage_policy, "default", "Storage policy used to store local temp data", 0) \
+    /** Obsolete settings. Kept for backward compatibility only. */ \
+    M(UInt64, min_relative_delay_to_yield_leadership, 120, "Obsolete setting, does nothing.", 0) \
+    M(UInt64, check_delay_period, 60, "Obsolete setting, does nothing.", 0) \
+    M(Bool, allow_floating_point_partition_key, false, "Allow floating point as partition key", 0) \
+    \
+    M(String, cnch_auxility_storage_policy, "default", "Storage policy used to store local temp data", 0) \
     \
     M(Bool, enable_local_disk_cache, true, "Enable local disk cache", 0) \
     \
@@ -250,7 +254,7 @@ struct MergeTreeSettings : public BaseSettings<MergeTreeSettingsTraits>
     static bool isReadonlySetting(const String & name)
     {
         return name == "index_granularity" || name == "index_granularity_bytes" || name == "write_final_mark"
-            || name == "enable_mixed_granularity_parts" || name == "cnch_local_storage_policy";
+            || name == "enable_mixed_granularity_parts" || name == "cnch_auxility_storage_policy";
     }
 
     static bool isPartFormatSetting(const String & name)

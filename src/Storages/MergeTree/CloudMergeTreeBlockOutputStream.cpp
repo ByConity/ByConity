@@ -27,15 +27,13 @@ CloudMergeTreeBlockOutputStream::CloudMergeTreeBlockOutputStream(
     MergeTreeMetaBase & storage_,
     StorageMetadataPtr metadata_snapshot_,
     ContextPtr context_,
-    const StoragePolicyPtr & local_policy_,
-    const String & local_rel_path_,
     bool to_staging_area_)
     : storage(storage_)
     , log(storage.getLogger())
     , metadata_snapshot(std::move(metadata_snapshot_))
     , context(std::move(context_))
     , to_staging_area(to_staging_area_)
-    , writer(storage, local_policy_, local_rel_path_)
+    , writer(storage)
     , cnch_writer(storage, context, ManipulationType::Insert)
 {
     if (!metadata_snapshot->hasUniqueKey() && to_staging_area)

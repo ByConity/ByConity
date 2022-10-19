@@ -143,8 +143,8 @@ StorageCnchMergeTree::StorageCnchMergeTree(
         [](const String &) {})
     , CnchStorageCommonHelper(table_id_, getDatabaseName(), getTableName())
 {
-    local_store_volume = getContext()->getStoragePolicy(getSettings()->cnch_local_storage_policy.toString());
-    relative_local_store_path = fs::path("store");
+    auxility_storage_policy = getContext()->getStoragePolicy(getSettings()->cnch_auxility_storage_policy.toString());
+    relative_auxility_storage_path = fs::path("store") / UUIDHelpers::UUIDToString(table_id_.uuid) / "";
     format_version = MERGE_TREE_CHCH_DATA_STORAGTE_VERSION;
 }
 
@@ -774,7 +774,7 @@ StorageCnchMergeTree::write(const ASTPtr & query, const StorageMetadataPtr & met
     else
     {
         return std::make_shared<CloudMergeTreeBlockOutputStream>(
-            *this, metadata_snapshot, local_context, local_store_volume, relative_local_store_path, enable_staging_area);
+            *this, metadata_snapshot, local_context, enable_staging_area);
     }
 }
 
@@ -1485,13 +1485,13 @@ void StorageCnchMergeTree::dropPartsImpl(ServerDataPartsVector& svr_parts_to_dro
             throw Exception("detach partition command is not supported on unique table", ErrorCodes::NOT_IMPLEMENTED);
 
         /// XXX: Detach parts will break MVCC: queries and tasks which reference those parts will fail.
-        // VolumePtr hdfs_volume = getStoragePolicy()->local_store_volume();
+        // VolumePtr hdfs_volume = getStoragePolicy(IStorage::StorageLocation::MAIN)->local_store_volume();
 
         // Create detached directory first
-        Disks disks = getStoragePolicy()->getDisks();
+        Disks disks = getStoragePolicy(IStorage::StorageLocation::MAIN)->getDisks();
         for (DiskPtr& disk : disks)
         {
-            disk->createDirectories(getRelativeDataPath() + "/detached");
+            disk->createDirectories(getRelativeDataPath(IStorage::StorageLocation::MAIN) + "/detached");
         }
 
         ThreadPool pool(std::min(parts_to_drop.size(), 16UL));
@@ -1520,10 +1520,11 @@ void StorageCnchMergeTree::dropPartsImpl(ServerDataPartsVector& svr_parts_to_dro
         auto drop_part_info = part->info();
         drop_part_info.level += 1;
         drop_part_info.mutation = txn->getPrimaryTransactionID().toUInt64();
-        auto disk = getStoragePolicy()->getAnyDisk();
+        auto disk = getStoragePolicy(IStorage::StorageLocation::AUXILITY)->getAnyDisk();
         auto single_disk_volume = std::make_shared<SingleDiskVolume>("volume_" + drop_part_info.getPartName(), disk);
         String drop_part_name = drop_part_info.getPartName();
-        auto drop_part = createPart(drop_part_name, MergeTreeDataPartType::WIDE, drop_part_info, single_disk_volume, drop_part_name);
+        auto drop_part = createPart(drop_part_name, MergeTreeDataPartType::WIDE, drop_part_info,
+            single_disk_volume, drop_part_name, nullptr, StorageLocation::AUXILITY);
         drop_part->partition.assign(part->partition());
         drop_part->deleted = true;
 
@@ -1569,10 +1570,11 @@ StorageCnchMergeTree::MutableDataPartsVector StorageCnchMergeTree::createDropRan
     for (auto && [partition_id, info] : partition_infos)
     {
         MergeTreePartInfo drop_range_info(partition_id, 0, info.max_block, MergeTreePartInfo::MAX_LEVEL, txn->getPrimaryTransactionID(), 0 /* must be zero */);
-        auto disk = getStoragePolicy()->getAnyDisk();
+        auto disk = getStoragePolicy(IStorage::StorageLocation::AUXILITY)->getAnyDisk();
         auto single_disk_volume = std::make_shared<SingleDiskVolume>("volume_" + drop_range_info.getPartName(), disk);
         String drop_part_name = drop_range_info.getPartName();
-        auto drop_range = createPart(drop_part_name, MergeTreeDataPartType::WIDE, drop_range_info, single_disk_volume, drop_part_name);
+        auto drop_range = createPart(drop_part_name, MergeTreeDataPartType::WIDE, drop_range_info,
+            single_disk_volume, drop_part_name, nullptr, StorageLocation::AUXILITY);
         drop_range->partition.assign(info.value);
         drop_range->deleted = true;
         drop_range->covered_parts_rows = info.rows_count;
@@ -1590,14 +1592,18 @@ StorageCnchMergeTree::MutableDataPartsVector StorageCnchMergeTree::createDropRan
     return drop_ranges;
 }
 
-StoragePolicyPtr StorageCnchMergeTree::getLocalStoragePolicy() const
+StoragePolicyPtr StorageCnchMergeTree::getStoragePolicy(StorageLocation location) const
 {
-    return local_store_volume;
+    return location == StorageLocation::MAIN ?
+        MergeTreeMetaBase::getStoragePolicy(location) :
+        auxility_storage_policy;
 }
 
-const String & StorageCnchMergeTree::getLocalStorePath() const
+const String& StorageCnchMergeTree::getRelativeDataPath(StorageLocation location) const
 {
-    return relative_local_store_path;
+    return location == StorageLocation::MAIN ?
+        MergeTreeMetaBase::getRelativeDataPath(location) :
+        relative_auxility_storage_path;
 }
 
 Block StorageCnchMergeTree::getBlockWithVirtualPartitionColumns(const std::vector<std::shared_ptr<MergeTreePartition>> & partition_list) const
@@ -1740,8 +1746,8 @@ StorageCnchMergeTree * StorageCnchMergeTree::checkStructureAndGetCnchMergeTree(c
         throw Exception("Tables have different format_version", ErrorCodes::BAD_ARGUMENTS);
 
     // check root path of source and destination table
-    Disks tgt_disks = getStoragePolicy()->getDisks();
-    Disks src_disks = src_data->getStoragePolicy()->getDisks();
+    Disks tgt_disks = getStoragePolicy(IStorage::StorageLocation::MAIN)->getDisks();
+    Disks src_disks = src_data->getStoragePolicy(IStorage::StorageLocation::MAIN)->getDisks();
     std::set<String> tgt_path_set;
     for (const DiskPtr& disk : tgt_disks)
     {

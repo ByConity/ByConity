@@ -52,7 +52,7 @@ public:
     bool supportsFinal() const override { return true; }
     bool supportsPrewhere() const override { return true; }
     bool supportsSubcolumns() const override { return true; }
-    StoragePolicyPtr getStoragePolicy() const override;
+    StoragePolicyPtr getStoragePolicy(IStorage::StorageLocation location) const override;
 
     bool isRemote() const override { return true; }
     bool supportsMapImplicitColumn() const override { return true; }

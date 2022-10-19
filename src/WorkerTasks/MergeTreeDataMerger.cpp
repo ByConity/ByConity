@@ -184,7 +184,7 @@ void MergeTreeDataMerger::prepareNewParts()
     /// Check directory
     String new_part_tmp_path = TMP_PREFIX + toString(UInt64(context->getCurrentCnchStartTime())) + '-' + new_part_name;
     DiskPtr disk = space_reservation->getDisk();
-    String new_part_tmp_rel_path = data.getRelativeDataPath() + "/" + new_part_tmp_path;
+    String new_part_tmp_rel_path = data.getRelativeDataPath(IStorage::StorageLocation::AUXILITY) + "/" + new_part_tmp_path;
 
     if (disk->exists(new_part_tmp_rel_path))
         throw Exception("Directory " + fullPath(disk, new_part_tmp_rel_path) + " already exists", ErrorCodes::DIRECTORY_ALREADY_EXISTS);
@@ -193,7 +193,9 @@ void MergeTreeDataMerger::prepareNewParts()
     /// Create new data part object
     auto single_disk_volume = std::make_shared<SingleDiskVolume>("volume_" + new_part_name, disk, 0);
     auto part_info = MergeTreePartInfo::fromPartName(new_part_name, data.format_version);
-    new_data_part = std::make_shared<MergeTreeDataPartWide>(data, new_part_name, part_info, single_disk_volume, new_part_tmp_path);
+    new_data_part = std::make_shared<MergeTreeDataPartWide>(data, new_part_name,
+        part_info, single_disk_volume, new_part_tmp_path, nullptr,
+        IStorage::StorageLocation::AUXILITY);
 
     /// Common fields
     /// TODO uuid
@@ -681,7 +683,7 @@ void MergeTreeDataMerger::finalizePart()
 MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart()
 {
     const auto & parts = params.source_data_parts;
-    space_reservation = data.reserveSpaceOnLocal(estimateNeededDiskSpace(parts));
+    space_reservation = data.reserveSpace(estimateNeededDiskSpace(parts), IStorage::StorageLocation::AUXILITY);
 
     /// TODO: do we need to support (1) TTL merge ? (2) deduplicate
 

@@ -71,7 +71,7 @@ UInt64 MergeTreeDataMutator::getMaxSourcePartSizeForMutation() const
     size_t busy_threads_in_pool = CurrentMetrics::values[CurrentMetrics::BackgroundPoolTask].load(std::memory_order_relaxed);
 
     /// DataPart can be store only at one disk. Get maximum reservable free space at all disks.
-    UInt64 disk_space = data.getStoragePolicy()->getMaxUnreservedFreeSpace();
+    UInt64 disk_space = data.getStoragePolicy(IStorage::StorageLocation::MAIN)->getMaxUnreservedFreeSpace();
 
     /// Allow mutations only if there are enough threads, leave free threads for merges else
     if (busy_threads_in_pool <= 1
@@ -184,7 +184,7 @@ IMutableMergeTreeDataPartsVector MergeTreeDataMutator::mutatePartsToTemporaryPar
     for (const auto & part : params.source_data_parts)
     {
         auto estimated_space_for_result = static_cast<size_t>(part->getBytesOnDisk() * DISK_USAGE_COEFFICIENT_TO_RESERVE);
-        ReservationPtr reserved_space = table->reserveSpaceOnLocal(estimated_space_for_result);  // TODO: calc estimated_space_for_result
+        ReservationPtr reserved_space = table->reserveSpace(estimated_space_for_result, IStorage::StorageLocation::AUXILITY);  // TODO: calc estimated_space_for_result
         new_partial_parts.push_back(
             mutatePartToTemporaryPart(part, metadata_snapshot, *params.mutation_commands, manipulation_entry, params.txn_id, context, reserved_space, holder));
         new_partial_parts.back()->columns_commit_time = params.columns_commit_time;
@@ -291,7 +291,8 @@ IMutableMergeTreeDataPartPtr MergeTreeDataMutator::mutatePartToTemporaryPart(
     auto single_disk_volume = std::make_shared<SingleDiskVolume>("volume_" + source_part->name, space_reservation->getDisk(), 0);
     auto new_part_name = new_part_info.getPartName();
     auto new_data_part = data.createPart(
-        new_part_name, MergeTreeDataPartType::WIDE, new_part_info, single_disk_volume, "tmp_mut_" + new_part_name);
+        new_part_name, MergeTreeDataPartType::WIDE, new_part_info, single_disk_volume, "tmp_mut_" + new_part_name,
+        nullptr, IStorage::StorageLocation::AUXILITY);
 
     new_data_part->uuid = source_part->uuid;
     new_data_part->is_temp = true;
@@ -865,7 +866,7 @@ void MergeTreeDataMutator::writeWithProjections(
             if (projection_block)
             {
                 projection_parts[projection.name].emplace_back(
-                    MergeTreeDataWriter::writeTempProjectionPart(data, log, projection_block, projection, new_data_part.get(), ++block_num));
+                    MergeTreeDataWriter::writeTempProjectionPart(data, log, projection_block, projection, new_data_part.get(), ++block_num, IStorage::StorageLocation::MAIN));
             }
         }
 
@@ -882,7 +883,7 @@ void MergeTreeDataMutator::writeWithProjections(
         if (projection_block)
         {
             projection_parts[projection.name].emplace_back(
-                MergeTreeDataWriter::writeTempProjectionPart(data, log, projection_block, projection, new_data_part.get(), ++block_num));
+                MergeTreeDataWriter::writeTempProjectionPart(data, log, projection_block, projection, new_data_part.get(), ++block_num, IStorage::StorageLocation::MAIN));
         }
     }
 

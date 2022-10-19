@@ -798,7 +798,7 @@ MergeTreeData::MutableDataPartPtr Fetcher::fetchPart(
         readUUIDText(part_uuid, in);
 
     auto storage_id = data.getStorageID();
-    String new_part_path = part_type == "InMemory" ? "memory" : fs::path(data.getFullPathOnDisk(reservation->getDisk())) / part_name / "";
+    String new_part_path = part_type == "InMemory" ? "memory" : fs::path(data.getFullPathOnDisk(IStorage::StorageLocation::MAIN, reservation->getDisk())) / part_name / "";
     auto entry = data.getContext()->getReplicatedFetchList().insert(
         storage_id.getDatabaseName(), storage_id.getTableName(),
         part_info.partition_id, part_name, new_part_path,
@@ -1068,7 +1068,7 @@ MergeTreeData::MutableDataPartPtr Fetcher::downloadPartToDisk(
         throw Exception("Logical error: tmp_prefix and part_name cannot be empty or contain '.' or '/' characters.", ErrorCodes::LOGICAL_ERROR);
 
     String part_relative_path = String(to_detached ? "detached/" : "") + tmp_prefix + part_name;
-    String part_download_path = data.getRelativeDataPath() + part_relative_path + "/";
+    String part_download_path = data.getRelativeDataPath(IStorage::StorageLocation::MAIN) + part_relative_path + "/";
 
     if (disk->exists(part_download_path))
     {
@@ -1149,7 +1149,7 @@ MergeTreeData::MutableDataPartPtr Fetcher::downloadPartToS3(
     String tmp_prefix = tmp_prefix_.empty() ? TMP_PREFIX : tmp_prefix_;
 
     String part_relative_path = String(to_detached ? "detached/" : "") + tmp_prefix + part_name;
-    String part_download_path = fs::path(data.getRelativeDataPath()) / part_relative_path / "";
+    String part_download_path = fs::path(data.getRelativeDataPath(IStorage::StorageLocation::MAIN)) / part_relative_path / "";
 
     if (disk->exists(part_download_path))
         throw Exception("Directory " + fullPath(disk, part_download_path) + " already exists.", ErrorCodes::DIRECTORY_ALREADY_EXISTS);

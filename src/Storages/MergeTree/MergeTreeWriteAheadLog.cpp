@@ -29,7 +29,7 @@ MergeTreeWriteAheadLog::MergeTreeWriteAheadLog(
     : storage(storage_)
     , disk(disk_)
     , name(name_)
-    , path(storage.getRelativeDataPath() + name_)
+    , path(storage.getRelativeDataPath(IStorage::StorageLocation::MAIN) + name_)
     , pool(storage.getContext()->getSchedulePool())
 {
     init();
@@ -113,7 +113,7 @@ void MergeTreeWriteAheadLog::rotate(const std::unique_lock<std::mutex> &)
         + toString(min_block_number) + "_"
         + toString(max_block_number) + WAL_FILE_EXTENSION;
 
-    disk->replaceFile(path, storage.getRelativeDataPath() + new_name);
+    disk->replaceFile(path, storage.getRelativeDataPath(IStorage::StorageLocation::MAIN) + new_name);
     storage.addWriteAheadLog(new_name, disk);
     init();
 }

@@ -4422,7 +4422,7 @@ std::shared_ptr<Statistics::StatisticsMemoryStore> Context::getStatisticsMemoryS
 
 String Context::getDefaultCnchPolicyName() const
 {
-    return getConfigRef().getString("cnch_default_policy", "cnch_default_hdfs");
+    return getConfigRef().getString("storage_configuration.cnch_default_policy", "cnch_default_hdfs");
 }
 
 }

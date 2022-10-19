@@ -902,8 +902,13 @@ void StorageDistributed::truncate(const ASTPtr &, const StorageMetadataPtr &, Co
     LOG_DEBUG(log, "Removed");
 }
 
-StoragePolicyPtr StorageDistributed::getStoragePolicy() const
+StoragePolicyPtr StorageDistributed::getStoragePolicy(IStorage::StorageLocation location) const
 {
+    if (unlikely(location == IStorage::StorageLocation::AUXILITY))
+    {
+        throw Exception("Get auxility storage policy is not supported",
+            ErrorCodes::LOGICAL_ERROR);
+    }
     return storage_policy;
 }
 

@@ -515,9 +515,9 @@ public:
 
     /// Choose disk with max available free space
     /// Reserves 0 bytes
-    ReservationPtr makeEmptyReservationOnLargestDisk() const { return getStoragePolicy()->makeEmptyReservationOnLargestDisk(); }
+    ReservationPtr makeEmptyReservationOnLargestDisk() const { return getStoragePolicy(IStorage::StorageLocation::MAIN)->makeEmptyReservationOnLargestDisk(); }
 
-    Disks getDisksByType(DiskType::Type type) const { return getStoragePolicy()->getDisksByType(type); }
+    Disks getDisksByType(DiskType::Type type) const { return getStoragePolicy(IStorage::StorageLocation::MAIN)->getDisksByType(type); }
 
     /// Get count of total merges with TTL in MergeList (system.merges) for all
     /// tables (not only current table).

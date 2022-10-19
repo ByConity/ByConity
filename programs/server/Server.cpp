@@ -488,6 +488,77 @@ void checkForUsersNotInMainConfig(
 #endif
 }
 
+namespace
+{
+
+void removeCfg(Poco::Util::AbstractConfiguration& cfg, const String& root)
+{
+    Poco::Util::AbstractConfiguration::Keys keys;
+    cfg.keys(root, keys);
+
+    for (const std::string& key : keys)
+    {
+        std::string path = root + "." + key;
+
+        removeCfg(cfg, path);
+        cfg.remove(path);
+    }
+}
+
+void copyCfg(Poco::Util::AbstractConfiguration& cfg, const String& src_root, const String& tgt_root)
+{
+    if (src_root == tgt_root)
+    {
+        throw Exception(fmt::format("Can't copy config from {} to {}",
+            src_root, tgt_root), ErrorCodes::BAD_ARGUMENTS);
+    }
+
+    Poco::Util::AbstractConfiguration::Keys keys;
+    cfg.keys(src_root, keys);
+
+    for (const std::string& key : keys)
+    {
+        std::string src_path = src_root + "." + key;
+        std::string tgt_path = tgt_root + "." + key;
+
+        cfg.setString(tgt_path, cfg.getRawString(src_path));
+
+        copyCfg(cfg, src_path, tgt_path);
+    }
+}
+
+}
+
+/// Backward compatability code
+void Server::initStorageCfgIfNeeded()
+{
+    auto& cfg = config();
+
+    Poco::Util::AbstractConfiguration::Keys policy_keys;
+    cfg.keys("storage_configuration.policies", policy_keys);
+    /// If it only have one default storage policy and two volume, one named local,
+    /// one named hdfs, convert it into two storagepolicy, one for default, which
+    /// contains local disk, one for cnch_default_hdfs
+    if (policy_keys.size() == 1 && policy_keys.front() == "default")
+    {
+        Poco::Util::AbstractConfiguration::Keys volume_keys;
+        cfg.keys("storage_configuration.policies.default.volumes", volume_keys);
+
+        if (std::find(volume_keys.begin(), volume_keys.end(), "local") != volume_keys.end()
+            && std::find(volume_keys.begin(), volume_keys.end(), "hdfs") != volume_keys.end())
+        {
+            std::string cnch_storage_policy = "storage_configuration.policies."
+                + global_context->getDefaultCnchPolicyName();
+            cfg.setString(cnch_storage_policy, "");
+            cfg.setString(cnch_storage_policy + ".volumes", "");
+            cfg.setString(cnch_storage_policy + ".volumes.remote", "");
+
+            copyCfg(cfg, "storage_configuration.policies.default.volumes.hdfs",
+                cnch_storage_policy + ".volumes.remote");
+            removeCfg(cfg, "storage_configuration.policies.default.volumes.hdfs");
+        }
+    }
+}
 
 int Server::main(const std::vector<std::string> & /*args*/)
 {
@@ -751,6 +822,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
     static ServerErrorHandler error_handler;
     Poco::ErrorHandler::set(&error_handler);
 
+    /// Modify raw configuration for backward compatability
+    initStorageCfgIfNeeded();
+
     /// Initialize DateLUT early, to not interfere with running time of first query.
     LOG_DEBUG(log, "Initializing DateLUT.");
     DateLUT::instance();
@@ -944,7 +1018,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 global_context->reloadAuxiliaryZooKeepersConfigIfChanged(config);
             }
 
-            global_context->updateStorageConfiguration(*config);
+            // Disable storage configuration reload
+            // global_context->updateStorageConfiguration(*config);
             global_context->updateInterserverCredentials(*config);
 
             global_context->setMergeSchedulerSettings(*config);

@@ -431,7 +431,7 @@ protected:
 
                 if (columns_mask[src_index++])
                 {
-                    auto policy = table ? table->getStoragePolicy() : nullptr;
+                    auto policy = table ? table->getStoragePolicy(IStorage::StorageLocation::MAIN) : nullptr;
                     if (policy)
                         res_columns[res_index++]->insert(policy->getName());
                     else

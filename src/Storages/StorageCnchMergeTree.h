@@ -20,7 +20,14 @@ public:
 
     std::string getName() const override { return "Cnch" + merging_params.getModeName() + "MergeTree";}
 
-    StoragePolicyPtr getLocalStoragePolicy() const override;
+    bool supportsSampling() const override { return true; }
+    bool supportsFinal() const override { return true; }
+    bool supportsPrewhere() const override { return true; }
+    bool supportsIndexForIn() const override { return true; }
+    bool supportsMapImplicitColumn() const override { return true; }
+
+    StoragePolicyPtr getStoragePolicy(StorageLocation location) const override;
+    const String& getRelativeDataPath(StorageLocation location) const override;
 
     bool isRemote() const override { return true; }
 
@@ -158,8 +165,8 @@ protected:
 
 private:
     /// To store some temporary data for cnch
-    StoragePolicyPtr local_store_volume;
-    String relative_local_store_path;
+    StoragePolicyPtr auxility_storage_policy;
+    String relative_auxility_storage_path;
 
     CheckResults checkDataCommon(const ASTPtr & query, ContextPtr local_context, ServerDataPartsVector & parts);
 
