@@ -24,7 +24,7 @@ public:
     using ColumnStatsMap = StatisticsImpl::ColumnStatsMap;
     using ColumnName = String;
 
-    StatisticsCollector(ContextPtr context_, CatalogAdaptorPtr catalog_, const StatsTableIdentifier & table_info_, TxnTimestamp timestamp_)
+    StatisticsCollector(ContextPtr context_, CatalogAdaptorPtr catalog_, const StatsTableIdentifier & table_info_, UInt64 timestamp_)
         : context(context_), catalog(catalog_), table_info(table_info_), timestamp(timestamp_)
     {
         String str;
@@ -53,7 +53,7 @@ private:
     Poco::Logger * logger;
     CatalogAdaptorPtr catalog;
     StatsTableIdentifier table_info;
-    [[maybe_unused]] TxnTimestamp timestamp;
+    [[maybe_unused]] UInt64 timestamp;
 
     // table stats
     TableStats table_stats;

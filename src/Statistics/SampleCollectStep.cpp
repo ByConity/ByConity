@@ -12,7 +12,7 @@
 namespace DB::Statistics
 {
 
-static const String virtual_mark_id = "cityHash64(blockNumber(), getHostWithPorts()), intDiv(rowNumberInBlock(), 8192)";
+static const String virtual_mark_id = "cityHash64(blockNumber(), _part_uuid), intDiv(rowNumberInBlock(), 8192)";
 
 // cpc is like HyperLogLog, kll is to calculate bucket bounds for equal-height histogram
 // this fetch data via the following sql:

@@ -1,6 +1,5 @@
 #pragma once
 #include <Protos/optimizer_statistics.pb.h>
-#include <Transaction/TxnTimestamp.h>
 
 namespace DB
 {

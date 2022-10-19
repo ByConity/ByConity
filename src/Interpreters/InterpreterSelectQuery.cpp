@@ -456,7 +456,8 @@ InterpreterSelectQuery::InterpreterSelectQuery(
 
         if (!options.only_analyze)
         {
-            if (query.sampleSize() && (input || input_pipe || !storage || !storage->supportsSampling()))
+            auto range_sampling = context->getSettingsRef().enable_deterministic_sample_by_range || context->getSettingsRef().enable_sample_by_range;
+            if (query.sampleSize() && (input || input_pipe || !storage || (!range_sampling && !storage->supportsSampling())))
                 throw Exception("Illegal SAMPLE: table doesn't support sampling", ErrorCodes::SAMPLING_NOT_SUPPORTED);
 
             if (query.final() && (input || input_pipe || !storage || !storage->supportsFinal()))
