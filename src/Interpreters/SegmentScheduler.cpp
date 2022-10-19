@@ -13,7 +13,7 @@
 #include <Interpreters/SegmentScheduler.h>
 #include <Parsers/queryToString.h>
 #include <Processors/Exchange/DataTrans/RpcClient.h>
-#include <Processors/Exchange/DataTrans/RpcClientFactory.h>
+#include <Processors/Exchange/DataTrans/RpcChannelPool.h>
 #include <Protos/plan_segment_manager.pb.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Common/HostWithPorts.h>
@@ -151,7 +151,7 @@ void SegmentScheduler::cancelWorkerPlanSegments(const String & query_id, const D
     for (const auto & addr : dag_ptr->plan_send_addresses)
     {
         auto address = extractExchangeStatusHostPort(addr);
-        std::shared_ptr<RpcClient> rpc_client = RpcClientFactory::getInstance().getClient(address, false);
+        std::shared_ptr<RpcClient> rpc_client = RpcChannelPool::getInstance().getClient(address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
         Protos::PlanSegmentManagerService_Stub manager(&rpc_client->getChannel());
         brpc::Controller cntl;
         Protos::CancelQueryRequest request;

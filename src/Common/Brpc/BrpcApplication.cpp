@@ -1,5 +1,8 @@
+#include <fmt/core.h>
+#include <Poco/DateTime.h>
+#include <Poco/DateTimeFormatter.h>
 #include <Common/Brpc/BrpcApplication.h>
-#include <Common/Brpc/BrpcChannelConfigHolder.h>
+#include <Common/Brpc/BrpcChannelPoolConfigHolder.h>
 #include <Common/Brpc/BrpcGflagsConfigHolder.h>
 #include <Common/Brpc/BrpcPocoLogSink.h>
 
@@ -45,9 +48,11 @@ void BrpcApplication::initialize(const RawConfig & app_conf)
 
     for (const auto & item : holder_map)
     {
-        item.second->init(brpc_config->createView(item.first));
+        item.second->init(brpc_config);
     }
-    LOG_INFO(logger, "Brpc is initialized with {} config holders", holder_map.size());
+    std::cout << Poco::DateTimeFormatter::format(Poco::DateTime(), "%Y.%m.%d %H:%M:%S.%i")
+              << " <Info> BrpcApplication::initialize Brpc is initialized with {} config holders" << holder_map.size() << " config holders"
+              << std::endl;
 }
 
 BrpcApplication::ConfigHolderMap BrpcApplication::snapshotConfigHolderMap()
@@ -71,15 +76,16 @@ void BrpcApplication::reloadConfig(const RawConfig & app_conf)
 
     for (const auto & item : holders_snapshot)
     {
-        item.second->reload(brpc_config->createView(item.first));
+        item.second->reload(brpc_config);
     }
-    LOG_INFO(logger, "Reload brpc config with {} config holders", holders_snapshot.size());
+    std::cout << Poco::DateTimeFormatter::format(Poco::DateTime(), "%Y.%m.%d %H:%M:%S.%i")
+              << fmt::format(" <Info> Reload brpc config with {} config holders", holders_snapshot.size()) << std::endl;
 }
 
 void BrpcApplication::initBuildinConfigHolders()
 {
     registerNamedConfigHolder(std::make_shared<BrpcGflagsConfigHolder>());
-    registerNamedConfigHolder(std::make_shared<BrpcChannelConfigHolder>());
+    registerNamedConfigHolder(std::make_shared<BrpcChannelPoolConfigHolder>());
 }
 
 

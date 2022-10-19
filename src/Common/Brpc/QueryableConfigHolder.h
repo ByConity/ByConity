@@ -6,6 +6,9 @@
 #include <butil/containers/doubly_buffered_data.h>
 #include <Common/Brpc/NamedConfigHolder.h>
 #include <common/logger_useful.h>
+#include <iostream>
+#include <Poco/DateTime.h>
+#include <Poco/DateTimeFormatter.h>
 
 namespace DB
 {
@@ -27,11 +30,13 @@ struct SetConfigFn
 /// reloading config is much slower. It's very suitable for config which have
 /// a lot of concurrent read-only ops from many threads and occasional modifications of data.
 /// As a side effect, QueryableConfigHolder store a thread-local data.
+
+/// held by BrpcApplication(singleton), use std::cout for log
 template <typename TDerived, typename TConfig, typename TDelete = std::default_delete<TConfig>>
 class QueryableConfigHolder : public NamedConfigHolder<TDerived, TConfig, TDelete>
 {
 public:
-    explicit QueryableConfigHolder() {this->logger = &Poco::Logger::get("QueryableConfigHolder");}
+    explicit QueryableConfigHolder() {}
 
     void init(RawConfAutoPtr raw_conf_ptr) override;
 
@@ -45,7 +50,6 @@ private:
     butil::DoublyBufferedData<TConfig *> doubly_buffered_config;
     mutable std::mutex conf_mutex;
     TConfig * modifyInternalConfig(TConfig * new_conf);
-    Poco::Logger * logger;
     using ConfigScopedPtr = typename butil::DoublyBufferedData<TConfig *>::ScopedPtr;
 };
 
@@ -61,7 +65,8 @@ void QueryableConfigHolder<TDerived, TConfig, TDelete>::init(RawConfAutoPtr raw_
     if (unlikely(old_conf_ptr != nullptr))
     {
         TDelete()(old_conf_ptr);
-        LOG_ERROR(logger, TDerived::name + " config has value before init, name");
+        std::cout << Poco::DateTimeFormatter::format(Poco::DateTime(), "%Y.%m.%d %H:%M:%S.%i") << " <Error> "
+                  << "QueryableConfigHolder::init " << TDerived::name + " config has value before init, name";
     }
 
     this->afterInit(new_conf);
@@ -102,7 +107,6 @@ void QueryableConfigHolder<TDerived, TConfig, TDelete>::reload(RawConfAutoPtr ra
 template <typename TDerived, typename TConfig, typename TDelete>
 QueryableConfigHolder<TDerived, TConfig, TDelete>::~QueryableConfigHolder()
 {
-    LOG_INFO(logger, TDerived::name + " destroyed");
 }
 
 
