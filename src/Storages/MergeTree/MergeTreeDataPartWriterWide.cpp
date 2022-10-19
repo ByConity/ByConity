@@ -230,6 +230,18 @@ void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Perm
         const ColumnWithTypeAndName & column = block.getByName(it->name);
         const bool part_of_unique_key = unique_key_underlying_columns.count(column.name) > 0;
         const bool is_extra_column = !version_column_name.empty() && (column.name == version_column_name);
+        if (!rows_count && column.column->lowCardinality())
+        {
+            // check lc switch at the very beginning
+            auto const *lc = typeid_cast<const ColumnLowCardinality *>(column.column.get());
+            if (lc->isFullState())
+            {
+                auto const *lc_type = typeid_cast<const DataTypeLowCardinality *>(column.type.get());
+                // lc full column need switch type
+                NameAndTypePair pair(column.name,  lc_type->getFullLowCardinalityTypePtr());
+                updateWriterStream(pair);
+            }
+        }
 
         if (permutation)
         {
