@@ -103,8 +103,7 @@ protected:
     const String cnch_table_name;
 
 private:
-    // To store some temporary data for cnch
-    StoragePolicyPtr auxility_storage_policy;
+    // Relative path to auxility storage disk root
     String relative_auxility_storage_path;
 
     std::set<Int64> required_bucket_numbers;

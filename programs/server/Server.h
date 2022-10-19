@@ -69,8 +69,6 @@ private:
 
     using CreateServerFunc = std::function<void(UInt16)>;
     void createServer(const std::string & listen_host, const char * port_name, bool listen_try, CreateServerFunc && func) const;
-
-    void initStorageCfgIfNeeded();
 };
 
 }

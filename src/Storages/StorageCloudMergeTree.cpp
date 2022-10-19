@@ -53,8 +53,7 @@ StorageCloudMergeTree::StorageCloudMergeTree(
     , cnch_database_name(std::move(cnch_database_name_))
     , cnch_table_name(std::move(cnch_table_name_))
 {
-    auxility_storage_policy = getContext()->getStoragePolicy(getSettings()->cnch_auxility_storage_policy.toString());
-    relative_auxility_storage_path = fs::path("store") / UUIDHelpers::UUIDToString(table_id_.uuid) / "";
+    relative_auxility_storage_path = fs::path("auxility_store") / UUIDHelpers::UUIDToString(table_id_.uuid) / "";
 
     format_version = MERGE_TREE_CHCH_DATA_STORAGTE_VERSION;
 
@@ -235,9 +234,10 @@ MutationCommands StorageCloudMergeTree::getFirstAlterMutationCommandsForPart(con
 
 StoragePolicyPtr StorageCloudMergeTree::getStoragePolicy(StorageLocation location) const
 {
-    return location == StorageLocation::MAIN ?
-        MergeTreeMetaBase::getStoragePolicy(location) :
-        auxility_storage_policy;
+    String policy_name = (location == StorageLocation::MAIN ?
+        getSettings()->storage_policy :
+        getContext()->getCnchAuxilityPolicyName());
+    return getContext()->getStoragePolicy(policy_name);
 }
 
 const String& StorageCloudMergeTree::getRelativeDataPath(StorageLocation location) const

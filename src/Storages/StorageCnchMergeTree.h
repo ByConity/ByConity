@@ -164,8 +164,7 @@ protected:
         std::unique_ptr<MergeTreeSettings> settings_);
 
 private:
-    /// To store some temporary data for cnch
-    StoragePolicyPtr auxility_storage_policy;
+    // Relative path to auxility storage disk root
     String relative_auxility_storage_path;
 
     CheckResults checkDataCommon(const ASTPtr & query, ContextPtr local_context, ServerDataPartsVector & parts);

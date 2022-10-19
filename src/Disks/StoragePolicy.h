@@ -122,9 +122,10 @@ using StoragePoliciesMap = std::map<String, StoragePolicyPtr>;
 class StoragePolicySelector
 {
 public:
-    StoragePolicySelector(const Poco::Util::AbstractConfiguration & config, const String & config_prefix, DiskSelectorPtr disks);
+    StoragePolicySelector(const Poco::Util::AbstractConfiguration & config, const String & config_prefix,
+        DiskSelectorPtr disks, const String& default_cnch_policy_name);
 
-    StoragePolicySelectorPtr updateFromConfig(const Poco::Util::AbstractConfiguration & config, const String & config_prefix, DiskSelectorPtr disks) const;
+    StoragePolicySelectorPtr updateFromConfig(const Poco::Util::AbstractConfiguration & config, const String & config_prefix, DiskSelectorPtr disks, const String& default_cnch_policy_name) const;
 
     /// Policy by name
     StoragePolicyPtr get(const String & name) const;

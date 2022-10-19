@@ -1,6 +1,7 @@
 #include "Server.h"
 
 #include <filesystem>
+#include <limits>
 #include <memory>
 #include <errno.h>
 #include <pwd.h>
@@ -367,6 +368,40 @@ Poco::Net::SocketAddress Server::socketBindListen(Poco::Net::ServerSocket & sock
     return address;
 }
 
+static String generateTempDataPathToRemove()
+{
+    using namespace std::chrono;
+    return "remove_auxility_store_" + toString(duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count());
+}
+
+static void clearOldStoreDirectory(const DisksMap& disk_map)
+{
+    for (const auto& [name, disk] : disk_map)
+    {
+        if (disk->getType() != DiskType::Type::Local)
+        {
+            continue;
+        }
+
+        for (auto iter = disk->iterateDirectory(""); iter->isValid(); iter->next())
+        {
+            if (!startsWith(iter->name(), "remove_auxility_store_"))
+                continue;
+
+            try
+            {
+                LOG_DEBUG(&Poco::Logger::get(__func__), "Removing {} from disk {}",
+                    String(fs::path(disk->getPath()) / iter->path()), disk->getName());
+                disk->removeRecursive(iter->path());
+            }
+            catch (...)
+            {
+                tryLogCurrentException(__PRETTY_FUNCTION__);
+            }
+        }
+    }
+}
+
 void Server::createServer(const std::string & listen_host, const char * port_name, bool listen_try, CreateServerFunc && func) const
 {
     /// For testing purposes, user may omit tcp_port or http_port or https_port in configuration file.
@@ -488,78 +523,6 @@ void checkForUsersNotInMainConfig(
 #endif
 }
 
-namespace
-{
-
-void removeCfg(Poco::Util::AbstractConfiguration& cfg, const String& root)
-{
-    Poco::Util::AbstractConfiguration::Keys keys;
-    cfg.keys(root, keys);
-
-    for (const std::string& key : keys)
-    {
-        std::string path = root + "." + key;
-
-        removeCfg(cfg, path);
-        cfg.remove(path);
-    }
-}
-
-void copyCfg(Poco::Util::AbstractConfiguration& cfg, const String& src_root, const String& tgt_root)
-{
-    if (src_root == tgt_root)
-    {
-        throw Exception(fmt::format("Can't copy config from {} to {}",
-            src_root, tgt_root), ErrorCodes::BAD_ARGUMENTS);
-    }
-
-    Poco::Util::AbstractConfiguration::Keys keys;
-    cfg.keys(src_root, keys);
-
-    for (const std::string& key : keys)
-    {
-        std::string src_path = src_root + "." + key;
-        std::string tgt_path = tgt_root + "." + key;
-
-        cfg.setString(tgt_path, cfg.getRawString(src_path));
-
-        copyCfg(cfg, src_path, tgt_path);
-    }
-}
-
-}
-
-/// Backward compatability code
-void Server::initStorageCfgIfNeeded()
-{
-    auto& cfg = config();
-
-    Poco::Util::AbstractConfiguration::Keys policy_keys;
-    cfg.keys("storage_configuration.policies", policy_keys);
-    /// If it only have one default storage policy and two volume, one named local,
-    /// one named hdfs, convert it into two storagepolicy, one for default, which
-    /// contains local disk, one for cnch_default_hdfs
-    if (policy_keys.size() == 1 && policy_keys.front() == "default")
-    {
-        Poco::Util::AbstractConfiguration::Keys volume_keys;
-        cfg.keys("storage_configuration.policies.default.volumes", volume_keys);
-
-        if (std::find(volume_keys.begin(), volume_keys.end(), "local") != volume_keys.end()
-            && std::find(volume_keys.begin(), volume_keys.end(), "hdfs") != volume_keys.end())
-        {
-            std::string cnch_storage_policy = "storage_configuration.policies."
-                + global_context->getDefaultCnchPolicyName();
-            cfg.setString(cnch_storage_policy, "");
-            cfg.setString(cnch_storage_policy + ".volumes", "");
-            cfg.setString(cnch_storage_policy + ".volumes.remote", "");
-
-            copyCfg(cfg, "storage_configuration.policies.default.volumes.hdfs",
-                cnch_storage_policy + ".volumes.remote");
-            removeCfg(cfg, "storage_configuration.policies.default.volumes.hdfs");
-        }
-    }
-}
-
 int Server::main(const std::vector<std::string> & /*args*/)
 {
     Poco::Logger * log = &logger();
@@ -627,6 +590,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         current_raw_sd_config = config().getRawString("service_discovery");
     }
+
     /// Initialize components in server or worker.
     if (global_context->getServerType() == ServerType::cnch_server || global_context->getServerType() == ServerType::cnch_worker)
     {
@@ -822,9 +786,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     static ServerErrorHandler error_handler;
     Poco::ErrorHandler::set(&error_handler);
 
-    /// Modify raw configuration for backward compatability
-    initStorageCfgIfNeeded();
-
     /// Initialize DateLUT early, to not interfere with running time of first query.
     LOG_DEBUG(log, "Initializing DateLUT.");
     DateLUT::instance();
@@ -1018,8 +979,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 global_context->reloadAuxiliaryZooKeepersConfigIfChanged(config);
             }
 
-            // Disable storage configuration reload
-            // global_context->updateStorageConfiguration(*config);
+            global_context->updateStorageConfiguration(*config);
             global_context->updateInterserverCredentials(*config);
 
             global_context->setMergeSchedulerSettings(*config);
@@ -1138,7 +1098,35 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     HDFSConnectionParams hdfs_params = HDFSConnectionParams::parseHdfsFromConfig(config());
     global_context->setHdfsConnectionParams(hdfs_params);
+#endif
 
+    // Clear old store data in the background
+    ThreadFromGlobalPool clear_old_data;
+    bool is_cnch = global_context->getServerType() == ServerType::cnch_server || global_context->getServerType() == ServerType::cnch_worker;
+    if (is_cnch)
+    {
+        DisksMap disk_map = global_context->getDisksMap();
+        String store_relative_path = "auxility_store/";
+        for (const auto& [name, disk] : disk_map)
+        {
+            if (disk->getType() == DiskType::Type::Local && disk->exists(store_relative_path))
+            {
+                String temp_store_path = generateTempDataPathToRemove();
+                disk->moveDirectory(store_relative_path, temp_store_path);
+                disk->createDirectories(store_relative_path);
+            }
+        }
+
+        clear_old_data = ThreadFromGlobalPool([disks = std::move(disk_map)] { clearOldStoreDirectory(disks); });
+    }
+
+    /// Make sure that scope guard is created instantly after thread
+    SCOPE_EXIT({
+        if (clear_old_data.joinable())
+            clear_old_data.join();
+    });
+
+#if USE_HDFS
     /// TODO: @rmq
     /// set the value of has_hdfs_disk as cnch-dev.
     bool has_hdfs_disk = false;
