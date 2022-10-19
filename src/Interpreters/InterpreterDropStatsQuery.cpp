@@ -21,11 +21,12 @@ BlockIO InterpreterDropStatsQuery::execute()
     auto context = getContext();
     auto query = query_ptr->as<const ASTDropStatsQuery>();
     auto catalog = Statistics::createCatalogAdaptor(context);
-    auto db = context->resolveDatabase(query->database);
+
+    catalog->checkHealth(/*is_write=*/true);
+
     auto proxy = Statistics::createCachedStatsProxy(catalog);
-
+    auto db = context->resolveDatabase(query->database);
     std::vector<StatsTableIdentifier> tables;
-
     if (query->target_all)
     {
         if (!DatabaseCatalog::instance().isDatabaseExist(db))

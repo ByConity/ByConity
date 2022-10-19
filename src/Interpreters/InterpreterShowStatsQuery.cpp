@@ -372,26 +372,30 @@ BlockIO InterpreterShowStatsQuery::executeColumn()
     return res;
 }
 
-BlockIO InterpreterShowStatsQuery::execute()
+static bool isSpecialFunction(const String & name)
+{
+    static std::set<String> specials({"__save", "__load", "__jsonsave", "__jsonload"});
+    return specials.count(name);
+}
+
+void InterpreterShowStatsQuery::executeSpecial()
 {
     auto query = query_ptr->as<const ASTShowStatsQuery>();
     auto context = getContext();
     auto catalog = Statistics::createCatalogAdaptor(context);
-    if (query->kind == StatsQueryKind::COLUMN_STATS)
+
+    // refactor this into an explicit command
+    if (query->table == "__save")
     {
-        // throw Exception("unimplemented", ErrorCodes::LOGICAL_ERROR);
-        return executeColumn();
-    }
-    else if (!query->target_all && boost::starts_with(query->table, "__save"))
-    {
+        catalog->checkHealth(/*is_write=*/false);
         auto db_name = context->resolveDatabase(query->database);
         auto path = context->getSettingsRef().graphviz_path.toString() + "/" + db_name + ".bin";
 
         writeDbStats(context, db_name, path);
-        return {};
     }
-    else if (!query->target_all && boost::starts_with(query->table, "__load"))
+    else if (query->table == "__load")
     {
+        catalog->checkHealth(/*is_write=*/true);
         auto db_name = query->database;
         if (db_name.empty())
             db_name = context->getCurrentDatabase();
@@ -402,19 +406,19 @@ BlockIO InterpreterShowStatsQuery::execute()
         }
 
         readDbStats(context, db_name, path);
-        return {};
     }
-    else if (!query->target_all && boost::starts_with(query->table, "__jsonsave"))
+    else if (query->table == "__jsonsave")
     {
+        catalog->checkHealth(/*is_write=*/false);
         auto db_name = query->database;
         if (db_name.empty())
             db_name = context->getCurrentDatabase();
         auto path = context->getSettingsRef().graphviz_path.toString() + "/" + db_name + ".json";
         writeDbStatsToJson(context, db_name, path);
-        return {};
     }
-    else if (!query->target_all && boost::starts_with(query->table, "__jsonload"))
+    else if (query->table == "__jsonload")
     {
+        catalog->checkHealth(/*is_write=*/true);
         auto db_name = query->database;
         if (db_name.empty())
             db_name = context->getCurrentDatabase();
@@ -425,11 +429,33 @@ BlockIO InterpreterShowStatsQuery::execute()
         }
 
         loadStats(context, path);
-        return {};
     }
     else
     {
+        throw Exception("unknown special action: " + query->table, ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
+BlockIO InterpreterShowStatsQuery::execute()
+{
+    auto query = query_ptr->as<const ASTShowStatsQuery>();
+    auto context = getContext();
+    auto catalog = Statistics::createCatalogAdaptor(context);
+
+    if (isSpecialFunction(query->table))
+    {
+        executeSpecial();
+        return {};
+    }
+    else if (query->kind == StatsQueryKind::COLUMN_STATS)
+    {
+        catalog->checkHealth(/*is_write=*/false);
         // throw Exception("unimplemented", ErrorCodes::LOGICAL_ERROR);
+        return executeColumn();
+    }
+    else
+    {
+        catalog->checkHealth(/*is_write=*/false);
         return executeTable();
     }
 }

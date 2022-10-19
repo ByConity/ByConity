@@ -19,6 +19,7 @@ public:
 private:
     BlockIO executeTable();
     BlockIO executeColumn();
+    void executeSpecial();
 
     ASTPtr query_ptr;
 };

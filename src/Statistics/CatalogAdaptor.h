@@ -42,9 +42,9 @@ public:
         return false;
     }
 
+    virtual void checkHealth(bool is_write) { (void)is_write; }
     virtual ~CatalogAdaptor() = default;
 };
-
 
 using CatalogAdaptorPtr = std::shared_ptr<CatalogAdaptor>;
 using ConstCatalogAdaptorPtr = std::shared_ptr<const CatalogAdaptor>;

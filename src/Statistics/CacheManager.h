@@ -5,7 +5,7 @@
 #include <Statistics/StatisticsBase.h>
 #include <Statistics/StatsTableIdentifier.h>
 #include <Poco/ExpireLRUCache.h>
-#include "Common/HashTable/Hash.h"
+#include <Common/HashTable/Hash.h>
 
 namespace DB::Statistics
 {

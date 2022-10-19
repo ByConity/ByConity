@@ -1,13 +1,14 @@
-#include "InterpreterCreateStatsQuery.h"
+#include <variant>
+#include <Columns/ColumnsNumber.h>
+#include <DataStreams/IBlockInputStream.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <Interpreters/InterpreterCreateStatsQuery.h>
+#include <Parsers/ASTStatsQuery.h>
 #include <Protos/optimizer_statistics.pb.h>
-#include "Common/Stopwatch.h"
-#include "Columns/ColumnsNumber.h"
-#include "DataStreams/IBlockInputStream.h"
-#include "DataTypes/DataTypeString.h"
-#include "DataTypes/DataTypesNumber.h"
-#include "Parsers/ASTStatsQuery.h"
-#include "Statistics/StatisticsCollector.h"
-#include "Statistics/StatsTableBasic.h"
+#include <Statistics/StatisticsCollector.h>
+#include <Statistics/StatsTableBasic.h>
+#include <Common/Stopwatch.h>
 
 
 namespace DB
@@ -17,6 +18,7 @@ namespace ErrorCodes
     extern const int NOT_IMPLEMENTED;
     extern const int LOGICAL_ERROR;
     extern const int UNKNOWN_TABLE;
+    extern const int INCORRECT_DATA;
 }
 using namespace Statistics;
 
@@ -28,7 +30,12 @@ static auto getTableIdentifier(ContextPtr context, const QueryType * query)
     if (query->target_all)
     {
         auto db = context->getCurrentDatabase();
-        return catalog->getAllTablesID(db);
+        tables = catalog->getAllTablesID(db);
+        if (tables.empty())
+        {
+            auto err_msg = fmt::format(FMT_STRING("current database `{}` has no tables"), db);
+            LOG_WARNING(&Poco::Logger::get("CreateStats"), err_msg);
+        }
     }
     else
     {
@@ -51,7 +58,7 @@ struct CollectTarget
     ColumnDescVector columns_desc;
 };
 
-static Block constructInfoBlock(ContextPtr context, const CollectTarget & target, std::optional<int64_t> row_count_opt, double time)
+static Block constructInfoBlock(ContextPtr context, const CollectTarget & target, String row_count_or_error, double time)
 {
     Block block;
     auto append_str_column = [&](String header, String value) {
@@ -77,7 +84,7 @@ static Block constructInfoBlock(ContextPtr context, const CollectTarget & target
 
     append_str_column("table_name", target.table_identifier.getTableName());
     append_num_column("column_count", target.columns_desc.size());
-    append_str_column("row_count", row_count_opt.has_value() ? std::to_string(row_count_opt.value()) : "FAILED");
+    append_str_column("row_count_or_error", row_count_or_error);
     if (context->getSettingsRef().create_stats_time_output)
     {
         append_num_column("elapsed_time", time);
@@ -85,33 +92,22 @@ static Block constructInfoBlock(ContextPtr context, const CollectTarget & target
     return block;
 }
 
-// return block contains table_name, row_count, elapsed_time
-std::tuple<Int64, double> collectStatsOnTarget(ContextPtr context, const CollectTarget & collect_target)
+// return row_count
+Int64 collectStatsOnTarget(ContextPtr context, const CollectTarget & collect_target)
 {
-    Stopwatch watch;
-    try
-    {
-        auto ts = 0;
-        auto catalog = createCatalogAdaptor(context);
-        StatisticsCollector impl(context, catalog, collect_target.table_identifier, ts);
-        impl.collect(collect_target.columns_desc);
+    auto ts = 0;
+    auto catalog = createCatalogAdaptor(context);
+    StatisticsCollector impl(context, catalog, collect_target.table_identifier, ts);
+    impl.collect(collect_target.columns_desc);
 
-        impl.writeToCatalog();
-        auto row_count = impl.getTableStats().basic->getRowCount();
-        auto elapsed_time = watch.elapsedSeconds();
+    impl.writeToCatalog();
+    auto row_count = impl.getTableStats().basic->getRowCount();
 
-        return std::make_tuple(row_count, elapsed_time);
-    }
-    catch (...)
-    {
-        auto logger = &Poco::Logger::get("CreateStats");
-        tryLogCurrentException(logger, "Error while collecting statistics on table " + collect_target.table_identifier.getTableName());
-    }
-    auto elapsed_time = watch.elapsedSeconds();
-    return std::make_tuple(0, elapsed_time);
+    return row_count;
 }
 
-std::tuple<UInt64, double> collectStatsOnTable(ContextPtr context, const StatsTableIdentifier & identifier)
+// return row_count
+Int64 collectStatsOnTable(ContextPtr context, const StatsTableIdentifier & identifier)
 {
     auto catalog = createCatalogAdaptor(context);
     auto cols_desc = catalog->getCollectableColumns(identifier);
@@ -134,18 +130,47 @@ namespace
         Block readImpl() override
         {
             auto context = getContext();
+            Stopwatch watch;
             if (counter >= collect_targets.size())
             {
-                return {};
+                if (error_infos.empty())
+                {
+                    // succeed
+                    return {};
+                }
+                // handle errors
+                String total_error;
+                for (const auto & [k, v] : error_infos)
+                {
+                    total_error += fmt::format(FMT_STRING("when collecting table {} having the following error: {}\n"), k, v);
+                }
+                throw Exception(total_error, ErrorCodes::INCORRECT_DATA);
             }
-            auto collect_target = collect_targets.at(counter);
 
-            auto [row_count, elapsed_time] = collectStatsOnTarget(context, collect_target);
-            ++counter;
-            return constructInfoBlock(context, collect_target, row_count, elapsed_time);
+            auto collect_target = collect_targets.at(counter++);
+
+            try
+            {
+                auto row_count = collectStatsOnTarget(context, collect_target);
+                auto elapsed_time = watch.elapsedSeconds();
+                return constructInfoBlock(context, collect_target, std::to_string(row_count), elapsed_time);
+            }
+            catch (...)
+            {
+                auto logger = &Poco::Logger::get("CreateStats");
+                auto elapsed_time = watch.elapsedSeconds();
+                auto err_info_with_stack = getCurrentExceptionMessage(true);
+                LOG_ERROR(logger, err_info_with_stack);
+
+                auto err_info = getCurrentExceptionMessage(false);
+                error_infos.emplace(collect_target.table_identifier.getDbTableName(), err_info_with_stack);
+
+                return constructInfoBlock(context, collect_target, err_info, elapsed_time);
+            }
         }
 
     private:
+        std::map<String, String> error_infos;
         std::vector<CollectTarget> collect_targets;
         size_t counter = 0;
     };
@@ -177,6 +202,14 @@ BlockIO InterpreterCreateStatsQuery::execute()
             valid_targets.emplace_back(CollectTarget{table, catalog->getCollectableColumns(table)});
         }
     }
+
+    if (valid_targets.empty())
+    {
+        return {};
+    }
+
+    catalog->checkHealth(/*is_write=*/true);
+
     BlockIO io;
     io.in = std::make_shared<CreateStatsBlockInputStream>(context, std::move(valid_targets));
     return io;
