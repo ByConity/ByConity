@@ -52,9 +52,15 @@ void DatabaseCnch::createTable(ContextPtr local_context, const String & table_na
         throw Exception("Cnch transaction is not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
     if (!query->as<ASTCreateQuery>())
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Query is not create query");
+
+    // Disable create table as function for cnch database first.
+    // Todo: add proper support for this new feature
     auto create_query = query->as<ASTCreateQuery &>();
+    if (!create_query.storage && create_query.as_table_function)
+        throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "create table as table function is not supported under cnch database");
+
     if ((!create_query.is_dictionary) && (!create_query.isView()) &&
-        (!startsWith(create_query.storage->engine->name, "Cnch")))
+        (!create_query.storage->engine || !startsWith(create_query.storage->engine->name, "Cnch")))
         throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "Cnch database only suport creating Cnch tables");
 
     String statement = serializeAST(*query);
