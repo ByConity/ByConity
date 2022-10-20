@@ -116,7 +116,6 @@ ASTPtr CnchStorageCommonHelper::rewriteSelectQuery(const ASTPtr & query, const s
     data.distributed_table = DatabaseAndTableWithAlias(*getTableExpression(query->as<ASTSelectQuery &>(), 0));
     data.remote_table.database = database;
     data.remote_table.table = table;
-    data.rename = true;
     RestoreQualifiedNamesVisitor(data).visit(modified_query_ast);
 
     return modified_query_ast;
