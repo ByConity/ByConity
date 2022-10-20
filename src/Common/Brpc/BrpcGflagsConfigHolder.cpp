@@ -7,7 +7,7 @@ namespace DB
 {
 static std::unordered_map<std::string, std::string> configurable_brpc_gflags /* NOLINT */
     {/// Number of event dispatcher
-     {"event_dispatcher_num", "8"},
+     {"event_dispatcher_num", "2"},
      /// Max unwritten bytes in each socket, if the limit is reached
      {"socket_max_unwritten_bytes", "1073741824"},
      /// Set the recv buffer size of socket if this value is positive
@@ -16,7 +16,7 @@ static std::unordered_map<std::string, std::string> configurable_brpc_gflags /* 
      {"socket_send_buffer_size", ""},
      /// Defer close of connections for so many seconds even if the connection
      /// is not used by anyone. Close immediately for non-positive values
-     {"defer_close_second", ""},
+     {"defer_close_second", "60"},
      /// Try to return free memory to system every so many seconds
      /// values <= 0 disables this feature
      {"free_memory_to_system_interval", ""},
