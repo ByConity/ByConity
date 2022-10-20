@@ -133,8 +133,21 @@ ActionsDAGPtr IQueryPlanStep::createExpressionActions(
     auto settings = context->getSettingsRef();
     SizeLimits size_limits_for_set(settings.max_rows_in_set, settings.max_bytes_in_set, settings.set_overflow_mode);
     auto actions = std::make_shared<ActionsDAG>(source);
+    const NamesAndTypesList aggregation_keys;
+    const ColumnNumbersList grouping_set_keys;
     ActionsVisitor::Data visitor_data(
-        context, size_limits_for_set, 0, source, std::move(actions), prepared_sets, subqueries_for_sets, true, false, false, false);
+        context,
+        size_limits_for_set,
+        0,
+        source,
+        std::move(actions),
+        prepared_sets,
+        subqueries_for_sets,
+        true,
+        false,
+        false,
+        false,
+        {aggregation_keys, grouping_set_keys, GroupByKind::NONE});
     ActionsVisitor(visitor_data).visit(ast);
     actions = visitor_data.getActions();
 

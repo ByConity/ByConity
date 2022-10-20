@@ -31,6 +31,15 @@ using DataTypes = std::vector<DataTypePtr>;
 struct NameAndTypePair;
 class SerializationInfo;
 
+struct DataTypeWithConstInfo
+{
+    DataTypePtr type;
+    bool is_const;
+};
+
+using DataTypesWithConstInfo = std::vector<DataTypeWithConstInfo>;
+
+
 #define TYPE_MAP_KV_STORE_FLAG      0x01
 #define TYPE_BITENGINE_ENCODE_FLAG  0x02
 #define TYPE_SECURITY_FLAG          0x04

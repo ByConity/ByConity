@@ -13,6 +13,8 @@
 
 #include <Columns/IColumn.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeString.h>
+#include <Functions/FunctionsConversion.h>
 
 #include <Interpreters/ArrayJoinAction.h>
 #include <Interpreters/Context.h>
@@ -248,15 +250,26 @@ void ExpressionAnalyzer::analyzeAggregation()
         {
             if (select_query->groupBy())
             {
-                NameSet unique_keys;
+                NameToIndexMap unique_keys;
                 ASTs & group_asts = select_query->groupBy()->children;
+
+                if (select_query->group_by_with_rollup)
+                    group_by_kind = GroupByKind::ROLLUP;
+                else if (select_query->group_by_with_cube)
+                    group_by_kind = GroupByKind::CUBE;
+                else if (select_query->group_by_with_grouping_sets && group_asts.size() > 1)
+                    group_by_kind = GroupByKind::GROUPING_SETS;
+                else
+                    group_by_kind = GroupByKind::ORDINARY;
 
                 /// For GROUPING SETS with multiple groups we always add virtual __grouping_set column
                 /// With set number, which is used as an additional key at the stage of merging aggregating data.
-                if (select_query->group_by_with_grouping_sets && group_asts.size() > 1)
+                if (group_by_kind != GroupByKind::ORDINARY)
                     aggregated_columns.emplace_back("__grouping_set", std::make_shared<DataTypeUInt64>());
 
-                for (ssize_t i = 0; i < ssize_t(group_asts.size()); ++i)
+                bool ansi_enabled = getContext()->getSettingsRef().dialect_type == DialectType::ANSI;
+
+                for (ssize_t i = 0; i < static_cast<ssize_t>(group_asts.size()); ++i)
                 {
                     ssize_t size = group_asts.size();
 
@@ -267,6 +280,7 @@ void ExpressionAnalyzer::analyzeAggregation()
                         group_elements_ast = group_ast_element->children;
 
                         NamesAndTypesList grouping_set_list;
+                        ColumnNumbers grouping_set_indexes_list;
 
                         for (ssize_t j = 0; j < ssize_t(group_elements_ast.size()); ++j)
                         {
@@ -301,22 +315,30 @@ void ExpressionAnalyzer::analyzeAggregation()
                                 }
                             }
 
-                            NameAndTypePair key{column_name, node->result_type};
+                            /// When ANSI mode is on, aggregation keys must be nullable.
+                            NameAndTypePair key{column_name,
+                                                ansi_enabled ? makeNullable(node->result_type) : node->result_type};
 
                             grouping_set_list.push_back(key);
 
                             /// Aggregation keys are unique.
-                            if (!unique_keys.count(key.name))
+                            if (!unique_keys.contains(key.name))
                             {
-                                unique_keys.insert(key.name);
+                                unique_keys[key.name] = aggregation_keys.size();
+                                grouping_set_indexes_list.push_back(aggregation_keys.size());
                                 aggregation_keys.push_back(key);
 
                                 /// Key is no longer needed, therefore we can save a little by moving it.
                                 aggregated_columns.push_back(std::move(key));
                             }
+                            else
+                            {
+                                grouping_set_indexes_list.push_back(unique_keys[key.name]);
+                            }
                         }
 
                         aggregation_keys_list.push_back(std::move(grouping_set_list));
+                        aggregation_keys_indexes_list.push_back(std::move(grouping_set_indexes_list));
                     }
                     else
                     {
@@ -345,18 +367,27 @@ void ExpressionAnalyzer::analyzeAggregation()
                             }
                         }
 
-                        NameAndTypePair key{column_name, node->result_type};
+                        /// When ANSI mode is on, aggregation keys must be nullable.
+                        NameAndTypePair key{column_name,
+                                            ansi_enabled ? makeNullable(node->result_type) : node->result_type};
 
                         /// Aggregation keys are uniqued.
-                        if (!unique_keys.count(key.name))
+                        if (!unique_keys.contains(key.name))
                         {
-                            unique_keys.insert(key.name);
+                            unique_keys[key.name] = aggregation_keys.size();
                             aggregation_keys.push_back(key);
 
                             /// Key is no longer needed, therefore we can save a little by moving it.
                             aggregated_columns.push_back(std::move(key));
                         }
                     }
+                }
+
+                if (!select_query->group_by_with_grouping_sets)
+                {
+                    auto & list = aggregation_keys_indexes_list.emplace_back();
+                    for (size_t i = 0; i < aggregation_keys.size(); ++i)
+                        list.push_back(i);
                 }
 
                 if (group_asts.empty())
@@ -560,7 +591,7 @@ void SelectQueryExpressionAnalyzer::makeSetsForIndex(const ASTPtr & node)
 }
 
 
-void ExpressionAnalyzer::getRootActions(const ASTPtr & ast, bool no_subqueries, ActionsDAGPtr & actions, bool only_consts)
+void ExpressionAnalyzer::getRootActions(const ASTPtr & ast, bool no_makeset_for_subqueries, ActionsDAGPtr & actions, bool only_consts)
 {
     LogAST log;
     ActionsVisitor::Data visitor_data(
@@ -571,10 +602,11 @@ void ExpressionAnalyzer::getRootActions(const ASTPtr & ast, bool no_subqueries, 
         std::move(actions),
         prepared_sets,
         subqueries_for_sets,
-        no_subqueries,
-        false,
+        no_makeset_for_subqueries,
+        false /* no_makeset */,
         only_consts,
-        !isRemoteStorage(),
+        !isRemoteStorage() /* create_source_for_in */,
+        getAggregationKeysInfo(),
         bitmap_index_info);
     ActionsVisitor(visitor_data, log.stream()).visit(ast);
     actions = visitor_data.getActions();
@@ -595,12 +627,14 @@ void ExpressionAnalyzer::getRootActionsNoMakeSet(const ASTPtr & ast, bool no_sub
         no_subqueries,
         true,
         only_consts,
-        !isRemoteStorage());
+        !isRemoteStorage(),
+        getAggregationKeysInfo());
     ActionsVisitor(visitor_data, log.stream()).visit(ast);
     actions = visitor_data.getActions();
 }
 
-void ExpressionAnalyzer::getRootActionsForHaving(const ASTPtr & ast, bool no_subqueries, ActionsDAGPtr & actions, bool only_consts)
+void ExpressionAnalyzer::getRootActionsForHaving(
+    const ASTPtr & ast, bool no_makeset_for_subqueries, ActionsDAGPtr & actions, bool only_consts)
 {
     LogAST log;
     ActionsVisitor::Data visitor_data(
@@ -611,10 +645,11 @@ void ExpressionAnalyzer::getRootActionsForHaving(const ASTPtr & ast, bool no_sub
         std::move(actions),
         prepared_sets,
         subqueries_for_sets,
-        no_subqueries,
-        false,
+        no_makeset_for_subqueries,
+        false /* no_makeset */,
         only_consts,
-        true);
+        true /* create_source_for_in */,
+        getAggregationKeysInfo());
     ActionsVisitor(visitor_data, log.stream()).visit(ast);
     actions = visitor_data.getActions();
 }
@@ -1248,6 +1283,28 @@ bool SelectQueryExpressionAnalyzer::appendGroupBy(
             step.addRequiredOutput(ast->getColumnName());
             getRootActions(ast, only_types, step.actions());
         }
+    }
+
+    /// When ANSI mode is on, converts group keys into nullable types if they are not. The purpose of conversion is to
+    /// ensure that (default) values of empty keys are NULLs with the modifiers as GROUPING SETS, ROLLUP and CUBE.
+    /// The conversion occurs before the aggregation to adapt different aggregation variants.
+    if (getContext()->getSettingsRef().dialect_type == DialectType::ANSI)
+    {
+        const auto & src_columns = step.actions()->getResultColumns();
+        ColumnsWithTypeAndName dst_columns;
+        dst_columns.reserve(src_columns.size());
+
+        for (const auto &src: src_columns)
+        {
+            dst_columns.emplace_back(src.column, makeNullable(src.type), src.name);
+        }
+
+        auto nullify_dag = ActionsDAG::makeConvertingActions(
+                src_columns, dst_columns, ActionsDAG::MatchColumnsMode::Position);
+
+        auto ret = ActionsDAG::merge(std::move(*step.actions()), std::move(*nullify_dag));
+
+        step.actions().swap(ret);
     }
 
     if (optimize_aggregation_in_order)

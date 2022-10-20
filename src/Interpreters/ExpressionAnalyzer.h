@@ -2,6 +2,7 @@
 
 #include <Columns/FilterDescription.h>
 #include <DataStreams/IBlockStream_fwd.h>
+#include <Interpreters/ActionsVisitor.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <Interpreters/SubqueryForSet.h>
@@ -67,6 +68,7 @@ struct ExpressionAnalyzerData
     bool has_aggregation = false;
     NamesAndTypesList aggregation_keys;
     NamesAndTypesLists aggregation_keys_list;
+    ColumnNumbersList aggregation_keys_indexes_list;
     bool has_const_aggregation_keys = false;
     AggregateDescriptions aggregate_descriptions;
 
@@ -77,6 +79,8 @@ struct ExpressionAnalyzerData
 
     /// All new temporary tables obtained by performing the GLOBAL IN/JOIN subqueries.
     TemporaryTablesMapping external_tables;
+
+    GroupByKind group_by_kind = GroupByKind::NONE;
 };
 
 
@@ -200,6 +204,11 @@ protected:
     const ASTSelectQuery * getSelectQuery() const;
 
     bool isRemoteStorage() const { return syntax->is_remote_storage; }
+
+    AggregationKeysInfo getAggregationKeysInfo() const noexcept
+    {
+        return { aggregation_keys, aggregation_keys_indexes_list, group_by_kind };
+    }
 };
 
 class SelectQueryExpressionAnalyzer;

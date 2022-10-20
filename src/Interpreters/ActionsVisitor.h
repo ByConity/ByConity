@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Core/ColumnNumbers.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/InDepthNodeVisitor.h>
 #include <Interpreters/PreparedSets.h>
@@ -107,6 +108,42 @@ class ASTIdentifier;
 class ASTFunction;
 class ASTLiteral;
 
+enum class GroupByKind
+{
+    NONE,
+    ORDINARY,
+    ROLLUP,
+    CUBE,
+    GROUPING_SETS,
+};
+
+/*
+ * This class stores information about aggregation keys used in GROUP BY clause.
+ * It's used for providing information about aggregation to GROUPING function
+ * implementation.
+*/
+struct AggregationKeysInfo
+{
+    AggregationKeysInfo(
+        std::reference_wrapper<const NamesAndTypesList> aggregation_keys_,
+        std::reference_wrapper<const ColumnNumbersList> grouping_set_keys_,
+        GroupByKind group_by_kind_)
+        : aggregation_keys(aggregation_keys_)
+        , grouping_set_keys(grouping_set_keys_)
+        , group_by_kind(group_by_kind_)
+    {}
+
+    AggregationKeysInfo(const AggregationKeysInfo &) = default;
+    AggregationKeysInfo(AggregationKeysInfo &&) = default;
+
+    // Names and types of all used keys
+    const NamesAndTypesList & aggregation_keys;
+    // Indexes of aggregation keys used in each grouping set (only for GROUP BY GROUPING SETS)
+    const ColumnNumbersList & grouping_set_keys;
+
+    GroupByKind group_by_kind;
+};
+
 /// Collect ExpressionAction from AST. Returns PreparedSets and SubqueriesForSets too.
 class ActionsMatcher
 {
@@ -126,6 +163,7 @@ public:
         bool create_source_for_in;
         size_t visit_depth;
         ScopeStack actions_stack;
+        AggregationKeysInfo aggregation_keys_info;
 
         using BitMapIndexInfoPtr = std::shared_ptr<BitMapIndexInfo>;
         BitMapIndexInfoPtr bitmap_index_info;
@@ -149,6 +187,7 @@ public:
             bool no_makeset_,
             bool only_consts_,
             bool create_source_for_in_,
+            AggregationKeysInfo aggregation_keys_info_,
             BitMapIndexInfoPtr bitmap_index_info_ = nullptr);
 
         /// Does result of the calculation already exists in the block.
