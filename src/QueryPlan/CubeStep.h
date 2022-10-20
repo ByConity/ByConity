@@ -29,6 +29,7 @@ public:
     void setInputStreams(const DataStreams & input_streams_) override;
 
 private:
+    size_t keys_size;
     AggregatingTransformParamsPtr params;
 };
 

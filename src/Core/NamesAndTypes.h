@@ -116,6 +116,9 @@ public:
     /// Try to get column by name, return empty optional if column not found
     std::optional<NameAndTypePair> tryGetByName(const std::string & name) const;
 
+    /// Try to get column position by name, returns number of columns if column isn't found
+    size_t getPosByName(const std::string & name) const noexcept;
+
     void serialize(WriteBuffer & buf) const;
     void deserialize(ReadBuffer & buf);
 };
