@@ -79,7 +79,9 @@ void CnchKafkaConsumeManager::stop()
 
 void CnchKafkaConsumeManager::initConsumerScheduler()
 {
-    auto storage = DatabaseCatalog::instance().getTable(storage_id, getContext());
+    /// DatabaseCatalog::getTable API requires transaction in params context
+    ///auto storage = DatabaseCatalog::instance().getTable(storage_id, getContext());
+    auto storage = catalog->getTable(*createQueryContext(), storage_id.database_name, storage_id.table_name, getContext()->getTimestamp());
     auto *kafka_table = dynamic_cast<StorageCnchKafka*>(storage.get());
     if (!kafka_table)
         throw Exception("Expected StorageCnchKafka, but got: " + storage->getName(), ErrorCodes::LOGICAL_ERROR);
@@ -227,7 +229,7 @@ bool CnchKafkaConsumeManager::checkDependencies(const StorageID & storage_id_)
     /// check each dependence, including target table and its dependencies
     for (const auto & dependence : catalog_dependencies)
     {
-        auto table = DatabaseCatalog::instance().getTable(dependence, createQueryContext());
+        auto table = catalog->getTable(*createQueryContext(), dependence.database_name, dependence.table_name, getContext()->getTimestamp());
         if (!table)
         {
             LOG_WARNING(log, "table {} not found", dependence.getNameForLogs());
@@ -267,7 +269,6 @@ CnchKafkaConsumeManager::ConsumerDependencies CnchKafkaConsumeManager::getDepend
     const StorageID & storage_id_)
 {
     auto query_context = createQueryContext();
-    auto storage = DatabaseCatalog::instance().getTable(storage_id_, query_context);
 
     ConsumerDependencies init_dependencies;
     auto start_time = getContext()->getTimestamp();
@@ -276,6 +277,7 @@ CnchKafkaConsumeManager::ConsumerDependencies CnchKafkaConsumeManager::getDepend
     if (!catalog_client)
         throw Exception("get catalog client failed", ErrorCodes::LOGICAL_ERROR);
 
+    auto storage = catalog_client->getTable(*query_context, storage_id_.database_name, storage_id_.table_name, start_time);
     auto all_views_from_catalog = catalog_client->getAllViewsOn(*query_context, storage, start_time);
     if (all_views_from_catalog.empty())
         return {};
