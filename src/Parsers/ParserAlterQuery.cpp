@@ -518,6 +518,14 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
             command->type = ASTAlterCommand::DROP_CONSTRAINT;
             command->detach = false;
         }
+        else if (s_detach_partition_where.ignore(pos, expected))
+	{
+            if (!parser_exp_elem.parse(pos, command->predicate, expected))
+		return false;
+
+            command->type = ASTAlterCommand::DROP_PARTITION_WHERE;
+            command->detach = true;
+        }	    
         else if (s_detach_partition.ignore(pos, expected))
         {
             if (!parser_partition.parse(pos, command->partition, expected))
@@ -533,14 +541,6 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
 
             command->type = ASTAlterCommand::DROP_PARTITION;
             command->part = true;
-            command->detach = true;
-        }
-        else if (s_detach_partition_where.ignore(pos, expected))
-        {
-            if (!parser_exp_elem.parse(pos, command->predicate, expected))
-                return false;
-
-            command->type = ASTAlterCommand::DROP_PARTITION_WHERE;
             command->detach = true;
         }
         else if (s_attach_detached_partition.ignore(pos, expected))
