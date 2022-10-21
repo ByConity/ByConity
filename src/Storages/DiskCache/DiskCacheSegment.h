@@ -18,12 +18,20 @@ class MergeTreeReaderStream;
 class DiskCacheSegment : public IDiskCacheSegment
 {
 public:
+    struct FileOffsetAndSize
+    {
+        off_t file_offset;
+        size_t file_size;
+    };
     DiskCacheSegment(
         UInt32 segment_number_,
         UInt32 segment_size_,
         const IMergeTreeDataPartPtr & data_part_,
+        const FileOffsetAndSize & mrk_file_pos,
+        size_t marks_count_,
         const String & stream_name_,
-        const String & extension_);
+        const String & extension_,
+        const FileOffsetAndSize & stream_file_pos);
 
     static String
     getSegmentKey(const StorageID& storage_id, const String& part_name,
@@ -33,18 +41,16 @@ public:
     void cacheToDisk(IDiskCache & cache) override;
 
 private:
-    size_t getSegmentStartOffset();
-    size_t getSegmentEndOffset();
-
-    void initSourceBufferIfNecessary();
-
     IMergeTreeDataPartPtr data_part;
-    ConstStoragePtr storage;
+    UUID uuid;
+    FileOffsetAndSize mrk_file_pos;
+    size_t marks_count;
+
     String stream_name;
     String extension;
+    FileOffsetAndSize stream_file_pos;
 
     MergeTreeMarksLoader marks_loader;
-    std::unique_ptr<CompressedReadBufferFromFile> source_buffer;
 };
 
 }

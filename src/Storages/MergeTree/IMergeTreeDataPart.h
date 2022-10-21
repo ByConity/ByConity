@@ -374,7 +374,7 @@ public:
     /// Returns full path to part dir
     String getFullPath() const;
 
-    String getMvccFullPath(const String & file_name) const;
+    IMergeTreeDataPartPtr getMvccDataPart(const String & file_name) const;
 
     /// Moves a part to detached/ directory and adds prefix to its name
     void renameToDetached(const String & prefix) const;

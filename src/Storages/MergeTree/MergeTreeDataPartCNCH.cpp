@@ -514,9 +514,7 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_un
         /// insert checksum files from previous part if it's not in current checksums
         for (const auto & [name, file] : prev_checksums->files)
         {
-            auto [it, inserted] = checksums->files.emplace(name, file);
-            if (inserted)
-                it->second.mutation = prev_part->info.mutation;
+            checksums->files.emplace(name, file);
         }
     }
 

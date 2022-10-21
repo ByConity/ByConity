@@ -368,47 +368,58 @@ void MergeTreeReaderCNCH::addStreamsIfNoBurden(
         if (!data_file_exists)
             return;
 
+        IMergeTreeDataPartPtr source_data_part = data_part->getMvccDataPart(stream_name + DATA_FILE_EXTENSION);
+        String mark_file_name = source_data_part->index_granularity_info.getMarksFilePath(stream_name);
+        LOG_DEBUG(
+            log,
+            "Adding stream for reading {} from disk {}, mark_file_name: {}",
+            source_data_part->name, source_data_part->volume->getDisk()->getName(), mark_file_name);
+
+        /// data file
+        String data_path = source_data_part->getFullRelativePath() + "data";
+        off_t data_file_offset = source_data_part->getFileOffsetOrZero(stream_name + DATA_FILE_EXTENSION);
+        size_t data_file_size = source_data_part->getFileSizeOrZero(stream_name + DATA_FILE_EXTENSION);
+
+        /// mark file
+        String mark_path = source_data_part->getFullRelativePath() + "data";
+        off_t mark_file_offset = source_data_part->getFileOffsetOrZero(mark_file_name);
+        size_t mark_file_size = source_data_part->getFileSizeOrZero(mark_file_name);
+
+        if (segment_cache_strategy)
+        {
+            // Cache segment if necessary
+            IDiskCacheSegmentsVector segments
+                = segment_cache_strategy->getCacheSegments(segment_cache_strategy->transferRangesToSegments<DiskCacheSegment>(
+                    all_mark_ranges,
+                    source_data_part,
+                    DiskCacheSegment::FileOffsetAndSize{mark_file_offset, mark_file_size},
+                    source_data_part->getMarksCount(),
+                    stream_name,
+                    DATA_FILE_EXTENSION,
+                    DiskCacheSegment::FileOffsetAndSize{data_file_offset, data_file_size}));
+            segment_cache->cacheSegmentsToLocalDisk(segments);
+        }
+
         std::function<MergeTreeReaderStreamUniquePtr()> stream_builder = [=, this]() {
-            size_t cache_segment_size = 1;
-            if (segment_cache_strategy)
-            {
-                // Cache segment if necessary
-                IDiskCacheSegmentsVector segments = segment_cache_strategy->getCacheSegments(
-                    segment_cache_strategy->transferRangesToSegments<DiskCacheSegment>(
-                        all_mark_ranges, data_part, stream_name, DATA_FILE_EXTENSION));
-                segment_cache->cacheSegmentsToLocalDisk(segments);
-            }
-
-            String source_data_rel_path = data_part->getMvccFullPath(stream_name + DATA_FILE_EXTENSION) + "data";
-            String mark_file_name = data_part->index_granularity_info.getMarksFilePath(stream_name);
-            LOG_DEBUG(
-                log,
-                "Adding stream for reading {} from disk {}, mark_file_nam: {}",
-                source_data_rel_path, data_part->volume->getDisk()->getName(), mark_file_name);
-
             return std::make_unique<MergeTreeReaderStreamWithSegmentCache>(
-                data_part->storage.getStorageID(),
-                data_part->get_name(),
+                source_data_part->storage.getStorageID(),
+                source_data_part->get_name(),
                 stream_name,
-                data_part->volume->getDisk(),
-                data_part->getMarksCount(),
-                source_data_rel_path,
-                data_part->getFileOffsetOrZero(stream_name + DATA_FILE_EXTENSION),
-                data_part->getFileSizeOrZero(stream_name + DATA_FILE_EXTENSION),
-                source_data_rel_path,
-                data_part->getFileOffsetOrZero(mark_file_name),
-                data_part->getFileSizeOrZero(mark_file_name),
+                source_data_part->volume->getDisk(),
+                source_data_part->getMarksCount(),
+                data_path, data_file_offset, data_file_size,
+                mark_path, mark_file_offset, mark_file_size,
                 all_mark_ranges, settings, mark_cache, uncompressed_cache,
                 segment_cache.get(),
-                cache_segment_size,
-                &(data_part->index_granularity_info),
+                segment_cache_strategy->getSegmentSize(),
+                &(source_data_part->index_granularity_info),
                 profile_callback, clock_type
             );
+            // TODO: here we can use the pointer to source_data_part's index_granularity_info, because *source_data_part will not be destoryed
         };
 
         // Check if mark is present
-        auto mark_cache_key = mark_cache->hash(
-            fullPath(data_part->volume->getDisk(), data_part->getFullRelativePath() + "data") + ":" + stream_name);
+        auto mark_cache_key = mark_cache->hash(fullPath(source_data_part->volume->getDisk(), mark_path) + ":" + stream_name);
 
         if (mark_cache->get(mark_cache_key))
         {
