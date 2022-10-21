@@ -21,6 +21,7 @@ public:
     bool m_settings{false};
     bool changed{false};
     bool temporary{false};
+    bool history{false};   // if set true, will show databases/tables in trash.
 
     String cluster_str;
     String from;

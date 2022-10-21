@@ -544,7 +544,7 @@ namespace Catalog
                     auto dic_ptrs = meta_proxy->getDictionariesInDB(name_space, database);
 
                     String trashBD_name = database + "_" + std::to_string(ts.toUInt64());
-
+                    LOG_DEBUG(log, "Drop database {} with {} tables and {} dictionaries in it.", database, table_id_ptrs.size(), dic_ptrs.size()); 
                     for (auto & table_id_ptr : table_id_ptrs)
                     {
                         checkCanbeDropped(*table_id_ptr, true);

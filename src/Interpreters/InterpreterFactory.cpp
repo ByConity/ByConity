@@ -11,6 +11,7 @@
 #include <Parsers/ASTCreateWorkerGroupQuery.h>
 #include <Parsers/ASTDropAccessEntityQuery.h>
 #include <Parsers/ASTDropQuery.h>
+#include <Parsers/ASTUndropQuery.h>
 #include <Parsers/ASTDropWarehouseQuery.h>
 #include <Parsers/ASTDropWorkerGroupQuery.h>
 #include <Parsers/ASTInsertQuery.h>
@@ -60,6 +61,7 @@
 #include <Interpreters/InterpreterDropWarehouseQuery.h>
 #include <Interpreters/InterpreterDropWorkerGroupQuery.h>
 #include <Interpreters/InterpreterDropQuery.h>
+#include <Interpreters/InterpreterUndropQuery.h>
 #include <Interpreters/InterpreterDumpInfoQueryUseOptimizer.h>
 #include <Interpreters/InterpreterExistsQuery.h>
 #include <Interpreters/InterpreterExplainQuery.h>
@@ -177,6 +179,10 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     else if (query->as<ASTDropQuery>())
     {
         return std::make_unique<InterpreterDropQuery>(query, context);
+    }
+    else if (query->as<ASTUndropQuery>())
+    {
+        return std::make_unique<InterpreterUndropQuery>(query, context);
     }
     else if (query->as<ASTRenameQuery>())
     {

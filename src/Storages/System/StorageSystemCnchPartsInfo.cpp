@@ -63,6 +63,9 @@ Pipe StorageSystemCnchPartsInfo::read(
     Poco::Logger * log = &Poco::Logger::get("SystemPartsInfo");
     ClusterProxy::SelectStreamFactory stream_factory = ClusterProxy::SelectStreamFactory(
         header, QueryProcessingStage::Complete, StorageID{"system", "cnch_parts_info_local"}, Scalars{}, false, {});
+
+    //set cluster in query_info
+    query_info.cluster = context->mockCnchServersCluster();
     ClusterProxy::executeQuery(query_plan, stream_factory, log, ast, context, query_info, nullptr, {}, nullptr);
     return query_plan.convertToPipe(QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context));
 }

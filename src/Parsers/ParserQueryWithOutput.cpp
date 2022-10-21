@@ -27,6 +27,7 @@
 #include <Parsers/ParserStatsQuery.h>
 #include <Parsers/ParserDumpInfoQuery.h>
 #include <Parsers/ParserReproduceQuery.h>
+#include <Parsers/ParserUndropQuery.h>
 
 namespace DB
 {
@@ -42,6 +43,7 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     ParserAlterQuery alter_p(dt);
     ParserRenameQuery rename_p;
     ParserDropQuery drop_p;
+    ParserUndropQuery undrop_p;
     ParserCheckQuery check_p(dt);
     ParserOptimizeQuery optimize_p(dt);
     ParserKillQueryQuery kill_query_p(dt);
@@ -75,6 +77,7 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
         || alter_p.parse(pos, query, expected)
         || rename_p.parse(pos, query, expected)
         || drop_p.parse(pos, query, expected)
+        || undrop_p.parse(pos, query, expected)
         || check_p.parse(pos, query, expected)
         || kill_query_p.parse(pos, query, expected)
         || optimize_p.parse(pos, query, expected)
