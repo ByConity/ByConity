@@ -524,6 +524,9 @@ int TSOServer::main(const std::vector<std::string> &)
         /// otherwise the reloading may pass a changed config to some destroyed parts of ContextSharedPart.
         // main_config_reloader.reset();
 
+        if (restart_task)
+            restart_task->deactivate();
+        
         global_context->shutdown();
 
         LOG_DEBUG(log, "Waiting for current connections to Keeper to finish.");
