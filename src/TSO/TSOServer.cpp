@@ -40,6 +40,7 @@ namespace DB
 
 namespace ErrorCodes
 {
+    extern const int TSO_INTERNAL_ERROR;
     extern const int NETWORK_ERROR;
 }
 
@@ -485,7 +486,7 @@ int TSOServer::main(const std::vector<std::string> &)
     if (server.AddService(tso_service.get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0)
     {
         LOG_ERROR(log, "Failed to add rpc service.");
-        exit(-1);
+        throw Exception("Failed to add rpc service.", ErrorCodes::TSO_INTERNAL_ERROR);
     }
     LOG_INFO(log, "Added rpc service");
 
@@ -496,7 +497,7 @@ int TSOServer::main(const std::vector<std::string> &)
     if (server.Start(brpc_listen_interface.c_str(), &options) != 0)
     {
         LOG_ERROR(log, "Failed to start TSO server on address: {}", brpc_listen_interface);
-        exit(-1);
+        throw Exception("Failed to start TSO server on address: " + brpc_listen_interface, ErrorCodes::TSO_INTERNAL_ERROR);
     }
 
     LOG_INFO(log, "TSO Service start on address {}", brpc_listen_interface);

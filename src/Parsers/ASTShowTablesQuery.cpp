@@ -38,7 +38,8 @@ void ASTShowTablesQuery::formatQueryImpl(const FormatSettings & settings, Format
 {
     if (databases)
     {
-        settings.ostr << (settings.hilite ? hilite_keyword : "") << "SHOW DATABASES" << (settings.hilite ? hilite_none : "");
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << "SHOW DATABASES" << (settings.hilite ? hilite_none : "")
+            << (history ? " HISTORY" : "");
         formatLike(settings);
         formatLimit(settings, state, frame);
 
@@ -64,7 +65,7 @@ void ASTShowTablesQuery::formatQueryImpl(const FormatSettings & settings, Format
     else
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << "SHOW " << (temporary ? "TEMPORARY " : "") <<
-             (dictionaries ? "DICTIONARIES" : "TABLES") << (settings.hilite ? hilite_none : "");
+             (dictionaries ? "DICTIONARIES" : "TABLES") << (history ? " HISTORY" : "") << (settings.hilite ? hilite_none : "");
 
         if (!from.empty())
             settings.ostr << (settings.hilite ? hilite_keyword : "") << " FROM " << (settings.hilite ? hilite_none : "")
