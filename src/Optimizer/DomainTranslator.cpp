@@ -547,7 +547,7 @@ std::optional<Field> DomainVisitor::canImplicitCoerceValue(Field & value, DataTy
     }
     else if (from_id == TypeIndex::String)
     {
-        if (to_id == TypeIndex::Date || to_id == TypeIndex::DateTime || to_id == TypeIndex::Date32 || to_id == TypeIndex::DateTime64
+        if (to_id == TypeIndex::Date || to_id == TypeIndex::DateTime /*|| to_id == TypeIndex::Date32*/ || to_id == TypeIndex::DateTime64
             || to_id == TypeIndex::Time)
         {
             return getConvertFieldToType(value, from_type, to_type);
