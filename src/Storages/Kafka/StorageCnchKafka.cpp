@@ -176,15 +176,16 @@ void StorageCnchKafka::alter(const AlterCommands & commands, ContextPtr local_co
 bool StorageCnchKafka::tableIsActive() const
 {
     auto catalog = getGlobalContext()->getCnchCatalog();
-    return catalog->getTableActiveness(catalog->getTable(*getContext(), getDatabaseName(), getTableName()),
-                                       TxnTimestamp::maxTS());
+    const auto ts = getContext()->getTimestamp();
+    return catalog->getTableActiveness(catalog->getTable(*getContext(), getDatabaseName(), getTableName(), ts),
+                                       ts);
 }
 
 /// TODO: merge logic of `checkDependencies` in KafkaConsumeManager
 StoragePtr StorageCnchKafka::tryGetTargetTable()
 {
     auto catalog = getGlobalContext()->getCnchCatalog();
-    auto views = catalog->getAllViewsOn(*getGlobalContext(), shared_from_this(), TxnTimestamp::maxTS());
+    auto views = catalog->getAllViewsOn(*getGlobalContext(), shared_from_this(), getContext()->getTimestamp());
     if (views.size() > 1)
         throw Exception("CnchKafka should only support ONE MaterializedView table now, but got "
                         + toString(views.size()), ErrorCodes::LOGICAL_ERROR);
