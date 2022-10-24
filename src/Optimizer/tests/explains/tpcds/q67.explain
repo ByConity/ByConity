@@ -1,4 +1,5 @@
 Projection est. 100 rows
+│     Expressions: [d_moy, d_qoy, d_year, i_brand, i_category, i_class, i_product_name, s_store_id], rk:=`expr#rank() OVER (PARTITION BY i_category ORDER BY sumsales DESC)`, sumsales:=`expr#sum(coalesce(multiply(ss_sales_price, ss_quantity), 0))`
 └─ Limit est. 100 rows
    │     Limit: 100
    └─ Sorting est. 469106634 rows

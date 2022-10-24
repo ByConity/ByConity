@@ -1,4 +1,5 @@
 Projection est. 100 rows
+│     Expressions: [i_item_desc, i_item_id, s_store_id, s_store_name], catalog_sales_quantity:=`expr#sum(cs_quantity)`, store_returns_quantity:=`expr#sum(sr_return_quantity)`, store_sales_quantity:=`expr#sum(ss_quantity)`
 └─ Limit est. 100 rows
    │     Limit: 100
    └─ Sorting est. 218914318 rows

@@ -1,4 +1,5 @@
 Projection est. 1 rows
+│     Expressions: order count:=`expr#uniqExact(ws_order_number)`, total net profit:=`expr#sum(ws_net_profit)`, total shipping cost:=`expr#sum(ws_ext_ship_cost)`
 └─ Limit est. 1 rows
    │     Limit: 100
    └─ Sorting est. 1 rows

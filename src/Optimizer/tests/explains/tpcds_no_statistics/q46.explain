@@ -1,4 +1,5 @@
 Projection est. 100 rows
+│     Expressions: [c_first_name, c_last_name, ss_ticket_number], amt:=`expr#sum(ss_coupon_amt)`, bought_city:=ca_city, ca_city:=ca_city_1, profit:=`expr#sum(ss_net_profit)`
 └─ Limit est. 100 rows
    │     Limit: 100
    └─ Sorting est. ? rows

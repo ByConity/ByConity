@@ -1,4 +1,5 @@
 Projection est. 1 rows
+│     Expressions: revenue:=`expr#sum(multiply(l_extendedprice, minus(1, l_discount)))`
 └─ MergingAggregated est. 1 rows
    └─ Gather Exchange est. 1 rows
       └─ Aggregating est. 1 rows
@@ -14,8 +15,10 @@ Projection est. 1 rows
                │  └─ Filter est. 214489 rows
                │     │     Condition: (l_shipmode IN ('AIR', 'AIR REG')) AND (l_shipinstruct = 'DELIVER IN PERSON')
                │     └─ TableScan tpch.lineitem est. 6001215 rows
+               │              Outputs: [l_discount, l_extendedprice, l_partkey, l_quantity, l_shipinstruct, l_shipmode]
                └─ Repartition Exchange est. 200000 rows
                   │     Partition by: {p_partkey}
                   └─ Filter est. 200000 rows
-                     │     p_size >= 1
+                     │     Condition: p_size >= 1
                      └─ TableScan tpch.part est. 200000 rows
+                              Outputs: [p_brand, p_container, p_partkey, p_size]

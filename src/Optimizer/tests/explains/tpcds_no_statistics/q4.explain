@@ -1,4 +1,5 @@
 Projection est. 100 rows
+│     Expressions: customer_first_name:=c_first_name_7, customer_id:=c_customer_id_7, customer_last_name:=c_last_name_7, customer_preferred_cust_flag:=c_preferred_cust_flag_7
 └─ Limit est. 100 rows
    │     Limit: 100
    └─ Sorting est. ? rows

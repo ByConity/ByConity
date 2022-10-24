@@ -1,10 +1,11 @@
 Projection est. 100 rows
+│     Expressions: multiply(divide(CAST(promotions, 'Nullable(decimal(15, 4))'), CAST(plus(total, 1), 'Nullable(decimal(15, 4))')), 100):=`expr#multiply(divide(CAST(promotions, 'Nullable(decimal(15, 4))'), CAST(plus(total, 1), 'Nullable(decimal(15, 4))')), 100)`, promotions:=`expr#sum(ss_ext_sales_price)`, total:=`expr#sum(ss_ext_sales_price)_1`
 └─ Limit est. 100 rows
    │     Limit: 100
    └─ Sorting est. ? rows
       │     Order by: {expr#sum(ss_ext_sales_price) asc, expr#sum(ss_ext_sales_price)_1 asc}
       └─ Projection est. ? rows
-         │     Expressions: [expr#sum(ss_ext_sales_price), expr#sum(ss_ext_sales_price)_1], expr#multiply(divide(CAST(promotions, 'decimal(15, 4)'), CAST(total, 'decimal(15, 4)')), 100):=(CAST(`expr#sum(ss_ext_sales_price)`, 'decimal(15, 4)') / CAST(`expr#sum(ss_ext_sales_price)_1`, 'decimal(15, 4)')) * 100
+         │     Expressions: [expr#sum(ss_ext_sales_price), expr#sum(ss_ext_sales_price)_1], expr#multiply(divide(CAST(promotions, 'Nullable(decimal(15, 4))'), CAST(plus(total, 1), 'Nullable(decimal(15, 4))')), 100):=(CAST(`expr#sum(ss_ext_sales_price)`, 'Nullable(decimal(15, 4))') / CAST(`expr#sum(ss_ext_sales_price)_1` + 1, 'Nullable(decimal(15, 4))')) * 100
          └─ Inner Join est. ? rows
             │     Condition: 
             ├─ MergingAggregated est. ? rows

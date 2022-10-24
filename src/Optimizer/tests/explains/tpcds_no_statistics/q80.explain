@@ -1,4 +1,5 @@
 Projection est. 100 rows
+│     Expressions: channel:=`expr#'store channel'_1`, id:=`expr#concat('store', store_id)_1`, profit:=`expr#sum(profit)`, returns:=`expr#sum(returns)`, sales:=`expr#sum(sales)`
 └─ Limit est. 100 rows
    │     Limit: 100
    └─ Sorting est. ? rows

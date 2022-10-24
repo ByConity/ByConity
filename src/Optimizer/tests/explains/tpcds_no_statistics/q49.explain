@@ -1,4 +1,5 @@
 Projection est. 100 rows
+│     Expressions: channel:=`expr#'web'_1`, currency_rank:=`expr#rank() OVER (ORDER BY currency_ratio ASC)_3`, item:=ws_item_sk_1, return_rank:=`expr#rank() OVER (ORDER BY return_ratio ASC)_3`, return_ratio:=`expr#divide(CAST(sum(coalesce(wr.wr_return_quantity, 0)), 'decimal(15, 4)'), CAST(sum(coalesce(ws.ws_quantity, 0)), 'decimal(15, 4)'))_1`
 └─ Limit est. 100 rows
    │     Limit: 100
    └─ Sorting est. ? rows

@@ -1,4 +1,5 @@
 Projection est. 100 rows
+│     Expressions: [cd_credit_rating, cd_dep_college_count, cd_dep_count, cd_dep_employed_count, cd_education_status, cd_gender, cd_marital_status, cd_purchase_estimate], cnt1:=`expr#count()`, cnt2:=`expr#count()`, cnt3:=`expr#count()`, cnt4:=`expr#count()`, cnt5:=`expr#count()`, cnt6:=`expr#count()`
 └─ Limit est. 100 rows
    │     Limit: 100
    └─ Sorting est. 121331 rows

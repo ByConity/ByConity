@@ -1,4 +1,5 @@
 Projection est. 100 rows
+│     Expressions: [ca_city, ca_zip], sum(ws_sales_price):=`expr#sum(ws_sales_price)`
 └─ Limit est. 100 rows
    │     Limit: 100
    └─ Sorting est. 7514717 rows

@@ -1,4 +1,5 @@
 Projection est. 100 rows
+│     Expressions: i_manufact_id:=i_manufact_id_6, total_sales:=`expr#sum(total_sales)`
 └─ Limit est. 100 rows
    │     Limit: 100
    └─ Sorting est. 2985 rows

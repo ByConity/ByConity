@@ -1,4 +1,5 @@
 Projection est. 100 rows
+│     Expressions: channel:=`expr#'store'_1`, i_brand_id:=i_brand_id_21, i_category_id:=i_category_id_21, i_class_id:=i_class_id_21, sum(number_sales):=`expr#sum(number_sales)`, sum(sales):=`expr#sum(sales)`
 └─ Limit est. 100 rows
    │     Limit: 100
    └─ Sorting est. ? rows
@@ -539,6 +540,7 @@ Projection est. 100 rows
                                                    └─ TableScan tpcds.date_dim est. ? rows
                                                             Outputs: d_date_sk_20:=d_date_sk, d_year_20:=d_year
 Projection est. 100 rows
+│     Expressions: ly_brand:=i_brand_id_29, ly_category:=i_category_id_29, ly_channel:=`expr#'store'_3`, ly_class:=i_class_id_29, ly_number_sales:=`expr#count()_5`, ly_sales:=`expr#sum(multiply(ss_quantity, ss_list_price))_3`, ty_brand:=i_brand_id_22, ty_category:=i_category_id_22, ty_channel:=`expr#'store'_2`, ty_class:=i_class_id_22, ty_number_sales:=`expr#count()_4`, ty_sales:=`expr#sum(multiply(ss_quantity, ss_list_price))_2`
 └─ Limit est. 100 rows
    │     Limit: 100
    └─ Sorting est. ? rows

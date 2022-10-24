@@ -1,4 +1,5 @@
 Projection est. 100 rows
+│     Expressions: [s_store_id, s_store_name], fri_sales:=`expr#sum(multiIf(equals(d_day_name, 'Friday'), ss_sales_price, NULL))`, mon_sales:=`expr#sum(multiIf(equals(d_day_name, 'Monday'), ss_sales_price, NULL))`, sat_sales:=`expr#sum(multiIf(equals(d_day_name, 'Saturday'), ss_sales_price, NULL))`, sun_sales:=`expr#sum(multiIf(equals(d_day_name, 'Sunday'), ss_sales_price, NULL))`, thu_sales:=`expr#sum(multiIf(equals(d_day_name, 'Thursday'), ss_sales_price, NULL))`, tue_sales:=`expr#sum(multiIf(equals(d_day_name, 'Tuesday'), ss_sales_price, NULL))`, wed_sales:=`expr#sum(multiIf(equals(d_day_name, 'Wednesday'), ss_sales_price, NULL))`
 └─ Limit est. 100 rows
    │     Limit: 100
    └─ Sorting est. 1305 rows

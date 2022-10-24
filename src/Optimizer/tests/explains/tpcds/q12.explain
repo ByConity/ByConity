@@ -1,4 +1,5 @@
 Projection est. 100 rows
+│     Expressions: [i_category, i_class, i_current_price, i_item_desc, i_item_id], itemrevenue:=`expr#sum(ws_ext_sales_price)`, revenueratio:=`expr#divide(multiply(sum(ws_ext_sales_price), 100), sum(sum(ws_ext_sales_price)) OVER (PARTITION BY i_class))`
 └─ Limit est. 100 rows
    │     Limit: 100
    └─ Sorting est. 3380582 rows

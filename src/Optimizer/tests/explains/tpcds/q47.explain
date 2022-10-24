@@ -1,4 +1,5 @@
 Projection est. 100 rows
+│     Expressions: [d_moy, d_year, i_brand, i_category, s_company_name, s_store_name], avg_monthly_sales:=`expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)`, nsum:=`expr#sum(ss_sales_price)_2`, psum:=`expr#sum(ss_sales_price)_1`, sum_sales:=`expr#sum(ss_sales_price)`
 └─ Limit est. 100 rows
    │     Limit: 100
    └─ Sorting est. 140356800000 rows
@@ -9,9 +10,9 @@ Projection est. 100 rows
             └─ Projection est. 140356800000 rows
                │     Expressions: [d_moy, d_year, expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year), expr#sum(ss_sales_price), expr#sum(ss_sales_price)_1, expr#sum(ss_sales_price)_2, i_brand, i_category, s_company_name, s_store_name], expr#minus(sum_sales, avg_monthly_sales):=`expr#sum(ss_sales_price)` - `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)`
                └─ Inner Join est. 140356800000 rows
-                  │     Condition: expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_3 == minus(expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_2, 1)_1, i_brand == i_brand_2, i_category == i_category_2, s_company_name == s_company_name_2, s_store_name == s_store_name_2
+                  │     Condition: CAST(expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC), 'Int64') == minus(expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_2, 1), i_brand == i_brand_2, i_category == i_category_2, s_company_name == s_company_name_2, s_store_name == s_store_name_2
                   ├─ Projection est. 233928000 rows
-                  │  │     Expressions: [d_moy, d_year, expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year), expr#sum(ss_sales_price), expr#sum(ss_sales_price)_1, i_brand, i_category, s_company_name, s_store_name], expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_3:=cast(`expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)`, 'Int128')
+                  │  │     Expressions: [d_moy, d_year, expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year), expr#sum(ss_sales_price), expr#sum(ss_sales_price)_1, i_brand, i_category, s_company_name, s_store_name], CAST(expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC), 'Int64'):=CAST(`expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)`, 'Int64')
                   │  └─ Inner Join est. 233928000 rows
                   │     │     Condition: i_brand_1 == i_brand, i_category_1 == i_category, plus(expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_1, 1) == expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC), s_company_name_1 == s_company_name, s_store_name_1 == s_store_name
                   │     ├─ Projection est. 433200 rows
@@ -54,7 +55,7 @@ Projection est. 100 rows
                   │     │                       └─ TableScan tpcds.store est. 1002 rows
                   │     │                                Outputs: s_company_name_1:=s_company_name, s_store_name_1:=s_store_name, s_store_sk_1:=s_store_sk
                   │     └─ Filter est. 389880 rows
-                  │        │     Condition: (multiIf(`expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)` > 0, abs(`expr#sum(ss_sales_price)` - `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)`) / `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)`, NULL) > '0.1') AND (`expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)` > 0.) AND (d_year = 1999)
+                  │        │     Condition: (multiIf(`expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)` > 0, abs(`expr#sum(ss_sales_price)` - `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)`) / `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)`, NULL) > cast('0.1', 'Decimal(2, 1)')) AND (`expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)` > 0.) AND (d_year = 1999)
                   │        └─ Window est. 433200 rows
                   │           └─ Window est. 433200 rows
                   │              └─ Repartition Exchange est. 433200 rows
@@ -95,7 +96,7 @@ Projection est. 100 rows
                   │                                         Outputs: [s_company_name, s_store_name, s_store_sk]
                   └─ Broadcast Exchange est. 433200 rows
                      └─ Projection est. 433200 rows
-                        │     Expressions: [expr#sum(ss_sales_price)_2, i_brand_2, i_category_2, s_company_name_2, s_store_name_2], minus(expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_2, 1)_1:=cast(`expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_2` - 1, 'Int128')
+                        │     Expressions: [expr#sum(ss_sales_price)_2, i_brand_2, i_category_2, s_company_name_2, s_store_name_2], minus(expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_2, 1):=`expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_2` - 1
                         └─ Window est. 433200 rows
                            └─ Repartition Exchange est. 433200 rows
                               │     Partition by: {i_brand_2, i_category_2, s_company_name_2, s_store_name_2}

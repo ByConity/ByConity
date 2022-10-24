@@ -1,4 +1,5 @@
 Projection est. 100 rows
+│     Expressions: d_date:=`expr#multiIf(isNotNull(web.d_date), web.d_date, store.d_date)`, item_sk:=`expr#multiIf(isNotNull(web.item_sk), web.item_sk, store.item_sk)`, store_cumulative:=`expr#max(store_sales) OVER (PARTITION BY item_sk ORDER BY d_date ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)`, store_sales:=`expr#sum(sum(ss_sales_price)) OVER (PARTITION BY ss_item_sk ORDER BY d_date ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)`, web_cumulative:=`expr#max(web_sales) OVER (PARTITION BY item_sk ORDER BY d_date ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)`, web_sales:=`expr#sum(sum(ws_sales_price)) OVER (PARTITION BY ws_item_sk ORDER BY d_date ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)`
 └─ Limit est. 100 rows
    │     Limit: 100
    └─ Sorting est. ? rows

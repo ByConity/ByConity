@@ -1,4 +1,5 @@
 Projection est. 100 rows
+│     Expressions: [s_name], numwait:=`expr#count()`
 └─ Limit est. 100 rows
    │     Limit: 100
    └─ Sorting est. 8005 rows

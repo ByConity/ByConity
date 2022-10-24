@@ -1,4 +1,5 @@
 Projection est. 100 rows
+│     Expressions: [c_first_name, c_last_name, ss_ticket_number], bought_city:=ca_city, ca_city:=ca_city_1, extended_price:=`expr#sum(ss_ext_sales_price)`, extended_tax:=`expr#sum(ss_ext_tax)`, list_price:=`expr#sum(ss_ext_list_price)`
 └─ Limit est. 100 rows
    │     Limit: 100
    └─ Sorting est. 1880821 rows
