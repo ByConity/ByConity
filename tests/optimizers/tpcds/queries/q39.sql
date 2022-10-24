@@ -1,5 +1,6 @@
-with inv as (select w_warehouse_name,w_warehouse_sk,i_item_sk,d_moy
-       ,stdev,mean, if(mean = 0, null, (stdev/mean)) cov
+with inv as
+(select w_warehouse_name,w_warehouse_sk,i_item_sk,d_moy
+       ,stdev,mean, case mean when 0 then null else stdev/mean end cov
  from(select w_warehouse_name,w_warehouse_sk,i_item_sk,d_moy
             ,stddev_samp(inv_quantity_on_hand) stdev,avg(inv_quantity_on_hand) mean
       from inventory
@@ -11,7 +12,7 @@ with inv as (select w_warehouse_name,w_warehouse_sk,i_item_sk,d_moy
         and inv_date_sk = d_date_sk
         and d_year =2001
       group by w_warehouse_name,w_warehouse_sk,i_item_sk,d_moy) foo
- where if(mean = 0, 0, (stdev/mean)) > 1)
+ where case mean when 0 then 0 else stdev/mean end > 1)
 select inv1.w_warehouse_sk,inv1.i_item_sk,inv1.d_moy,inv1.mean, inv1.cov
         ,inv2.w_warehouse_sk,inv2.i_item_sk,inv2.d_moy,inv2.mean, inv2.cov
 from inv inv1,inv inv2
@@ -26,7 +27,7 @@ order by inv1.w_warehouse_sk,inv1.i_item_sk,inv1.d_moy,inv1.mean,inv1.cov
 
 with inv as
 (select w_warehouse_name,w_warehouse_sk,i_item_sk,d_moy
-       ,stdev,mean, if(mean = 0, null, (stdev/mean)) cov
+       ,stdev,mean, case mean when 0 then null else stdev/mean end cov
  from(select w_warehouse_name,w_warehouse_sk,i_item_sk,d_moy
             ,stddev_samp(inv_quantity_on_hand) stdev,avg(inv_quantity_on_hand) mean
       from inventory
@@ -38,7 +39,7 @@ with inv as
         and inv_date_sk = d_date_sk
         and d_year =2001
       group by w_warehouse_name,w_warehouse_sk,i_item_sk,d_moy) foo
- where if(mean = 0, 0, (stdev/mean)) > 1)
+ where case mean when 0 then 0 else stdev/mean end > 1)
 select inv1.w_warehouse_sk,inv1.i_item_sk,inv1.d_moy,inv1.mean, inv1.cov
         ,inv2.w_warehouse_sk,inv2.i_item_sk,inv2.d_moy,inv2.mean, inv2.cov
 from inv inv1,inv inv2

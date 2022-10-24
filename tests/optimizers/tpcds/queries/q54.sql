@@ -42,8 +42,8 @@ with my_customers as (
                                  from   date_dim where d_year = 1998 and d_moy = 12)
  group by c_customer_sk
  )
- ,
- segments as (select cast((revenue/50) as int) as segment
+ , segments as
+ (select cast((revenue/50) as int) as segment
   from   my_revenue
  )
  select  segment, count(*) as num_customers, segment*50 as segment_base

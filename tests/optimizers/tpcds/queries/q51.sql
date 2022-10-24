@@ -1,4 +1,3 @@
-set join_use_nulls=1;
 WITH web_v1 as (
 select
   ws_item_sk item_sk, d_date,
@@ -10,7 +9,7 @@ where ws_sold_date_sk=d_date_sk
   and d_month_seq between 1200 and 1200+11
   and ws_item_sk is not NULL
 group by ws_item_sk, d_date),
- store_v1 as (
+store_v1 as (
 select
   ss_item_sk item_sk, d_date,
   sum(sum(ss_sales_price))

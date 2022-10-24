@@ -1,4 +1,4 @@
-with v1 as (
+with v1 as(
  select i_category, i_brand,
         cc_name,
         d_year, d_moy,
@@ -22,11 +22,11 @@ with v1 as (
        )
  group by i_category, i_brand,
           cc_name , d_year, d_moy),
- v2 as (
- select v1.i_category i_category, v1.i_brand i_brand, v1.cc_name cc_name
-        ,v1.d_year d_year, v1.d_moy d_moy
-        ,v1.avg_monthly_sales avg_monthly_sales
-        ,v1.sum_sales sum_sales, v1_lag.sum_sales psum, v1_lead.sum_sales nsum
+ v2 as(
+ select v1.i_category, v1.i_brand, v1.cc_name
+        ,v1.d_year, v1.d_moy
+        ,v1.avg_monthly_sales
+        ,v1.sum_sales, v1_lag.sum_sales psum, v1_lead.sum_sales nsum
  from v1, v1 v1_lag, v1 v1_lead
  where v1.i_category = v1_lag.i_category and
        v1.i_category = v1_lead.i_category and
@@ -35,7 +35,7 @@ with v1 as (
        v1. cc_name = v1_lag. cc_name and
        v1. cc_name = v1_lead. cc_name and
        v1.rn = v1_lag.rn + 1 and
-       cast(v1.rn, 'Int64') = v1_lead.rn - 1)
+       v1.rn = v1_lead.rn - 1)
   select  *
  from v2
  where  d_year = 1999 and

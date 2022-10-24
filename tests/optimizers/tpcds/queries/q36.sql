@@ -19,7 +19,7 @@
  and s_store_sk  = ss_store_sk
  and s_state in ('TN','TN','TN','TN',
                  'TN','TN','TN','TN')
- group by i_category,i_class with rollup
+ group by rollup(i_category,i_class)
  order by
    lochierarchy desc
   ,case when lochierarchy = 0 then i_category end

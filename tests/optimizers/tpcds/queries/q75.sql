@@ -1,4 +1,4 @@
-WITH  all_sales as (
+WITH all_sales AS (
         SELECT d_year
         ,i_brand_id
         ,i_class_id
@@ -62,6 +62,6 @@ WITH  all_sales as (
         AND curr_yr.i_manufact_id=prev_yr.i_manufact_id
         AND curr_yr.d_year=2002
         AND prev_yr.d_year=2002-1
-        AND curr_yr.sales_cnt/prev_yr.sales_cnt<0.9
+        AND CAST(curr_yr.sales_cnt AS DECIMAL(17,2))/CAST(prev_yr.sales_cnt AS DECIMAL(17,2))<0.9
         ORDER BY sales_cnt_diff,sales_amt_diff
         limit 100;

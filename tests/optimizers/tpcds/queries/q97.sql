@@ -1,3 +1,6 @@
+
+
+
 with ssci as (
 select ss_customer_sk customer_sk
       ,ss_item_sk item_sk
@@ -6,7 +9,7 @@ where ss_sold_date_sk = d_date_sk
   and d_month_seq between 1200 and 1200 + 11
 group by ss_customer_sk
         ,ss_item_sk),
- csci as (
+csci as(
  select cs_bill_customer_sk customer_sk
       ,cs_item_sk item_sk
 from catalog_sales,date_dim
