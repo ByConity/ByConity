@@ -129,7 +129,7 @@ public:
                 ") ENGINE=Memory();");
 
         if (DatabaseCatalog::instance().tryGetDatabase("foodmart"))
-            DatabaseCatalog::instance().detachDatabase("foodmart", true, false);
+            DatabaseCatalog::instance().detachDatabase(session_context, "foodmart", true, false);
 
         auto database = std::make_shared<DatabaseMemory>("foodmart", session_context);
         DatabaseCatalog::instance().attachDatabase("foodmart", database);

@@ -402,7 +402,7 @@ struct WhichDataType
     constexpr bool isEnum() const { return isEnum8() || isEnum16(); }
 
     constexpr bool isDate() const { return idx == TypeIndex::Date; }
-    constexpr bool isDate32() const { return false; }
+    constexpr bool isDate32() const { return false; } // TODO: date32
     constexpr bool isTime() const { return idx == TypeIndex::Time; }
     constexpr bool isDateTime() const { return idx == TypeIndex::DateTime; }
     constexpr bool isDateTime64() const { return idx == TypeIndex::DateTime64; }
