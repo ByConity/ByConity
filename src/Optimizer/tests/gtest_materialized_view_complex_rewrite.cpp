@@ -23,6 +23,10 @@ public:
         tester = std::make_shared<BaseMaterializedViewTest>(settings);
     }
 
+    void SetUp() override {
+        GTEST_SKIP() << "Skipping all tests for this fixture";
+    }
+
     static MaterializedViewRewriteTester sql(const String & materialize, const String & query)
     {
         return tester->sql(materialize, query);
