@@ -1,11 +1,11 @@
 Projection est. 100 rows
-│     Expressions: am_pm_ratio:=`expr#divide(CAST(amc, 'decimal(15, 4)'), CAST(plus(pmc, 1), 'decimal(15, 4)'))`
+│     Expressions: am_pm_ratio:=`expr#divide(CAST(amc, 'decimal(15, 4)'), CAST(pmc, 'decimal(15, 4)'))`
 └─ Limit est. 100 rows
    │     Limit: 100
    └─ Sorting est. ? rows
-      │     Order by: {expr#divide(CAST(amc, 'decimal(15, 4)'), CAST(plus(pmc, 1), 'decimal(15, 4)')) asc}
+      │     Order by: {expr#divide(CAST(amc, 'decimal(15, 4)'), CAST(pmc, 'decimal(15, 4)')) asc}
       └─ Projection est. ? rows
-         │     Expressions: expr#divide(CAST(amc, 'decimal(15, 4)'), CAST(plus(pmc, 1), 'decimal(15, 4)')):=CAST(`expr#count()`, 'decimal(15, 4)') / CAST(`expr#count()_1` + 1, 'decimal(15, 4)')
+         │     Expressions: expr#divide(CAST(amc, 'decimal(15, 4)'), CAST(pmc, 'decimal(15, 4)')):=CAST(`expr#count()`, 'decimal(15, 4)') / CAST(`expr#count()_1`, 'decimal(15, 4)')
          └─ Inner Join est. ? rows
             │     Condition: 
             ├─ MergingAggregated est. 1 rows

@@ -10,7 +10,7 @@ Projection est. 1 rows
             └─ Projection est. 1 rows
                │     Expressions: [expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manufact_id), expr#sum(ss_sales_price), i_manufact_id]
                └─ Filter est. 1 rows
-                  │     Condition: multiIf(CAST(`expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manufact_id)`, 'Float64') > 0, CAST(abs(`expr#sum(ss_sales_price)` - `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manufact_id)`), 'Float64') / CAST(`expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manufact_id)`, 'Float64'), NULL) > cast('0.1', 'Decimal(2, 1)')
+                  │     Condition: multiIf(`expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manufact_id)` > 0, abs(`expr#sum(ss_sales_price)` - `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manufact_id)`) / `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manufact_id)`, NULL) > cast('0.1', 'Decimal(2, 1)')
                   └─ Window est. 1 rows
                      └─ Repartition Exchange est. 1 rows
                         │     Partition by: {i_manufact_id}

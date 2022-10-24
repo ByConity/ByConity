@@ -11,7 +11,7 @@ Projection est. 100 rows
                │     Expressions: [d_year_3, d_year_7, expr#sum(sales_cnt), expr#sum(sales_cnt)_1, i_brand_id_3, i_category_id_3, i_class_id_3, i_manufact_id_3], expr#minus(curr_yr.sales_amt, prev_yr.sales_amt):=`expr#sum(sales_amt)` - `expr#sum(sales_amt)_1`, expr#minus(curr_yr.sales_cnt, prev_yr.sales_cnt):=`expr#sum(sales_cnt)` - `expr#sum(sales_cnt)_1`
                └─ Inner Join est. 17044060824 rows
                   │     Condition: i_brand_id_3 == i_brand_id_7, i_category_id_3 == i_category_id_7, i_class_id_3 == i_class_id_7, i_manufact_id_3 == i_manufact_id_7
-                  │     Filter: (`expr#sum(sales_cnt)` / `expr#sum(sales_cnt)_1`) < cast('0.9', 'Decimal(2, 1)')
+                  │     Filter: (CAST(`expr#sum(sales_cnt)`, 'DECIMAL(17, 2)') / CAST(`expr#sum(sales_cnt)_1`, 'DECIMAL(17, 2)')) < cast('0.9', 'Decimal(2, 1)')
                   ├─ Repartition Exchange est. 2238516 rows
                   │  │     Partition by: {i_brand_id_3, i_category_id_3, i_class_id_3, i_manufact_id_3}
                   │  └─ MergingAggregated est. 2238516 rows
