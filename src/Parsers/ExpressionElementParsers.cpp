@@ -2346,6 +2346,11 @@ bool ParserClusterByElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
             expected.add(pos, "required SPLIT_NUMBER > 0");
             return false;
         }
+        else if (split_number_value < total_bucket_number)
+        {
+            expected.add(pos, "required SPLIT_NUMBER >= BUCKET_NUMBER");
+            return false;
+        }
     }
 
     // check if WITH_RANGE is present
