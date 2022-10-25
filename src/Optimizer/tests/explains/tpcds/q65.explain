@@ -13,7 +13,7 @@ Projection est. 100 rows
                │  │     Partition by: {ss_item_sk_1}
                │  └─ Inner Join est. 148598128 rows
                │     │     Condition: ss_store_sk_1 == s_store_sk
-               │     │     Filter: `expr#sum(ss_sales_price)_1` <= (cast('0.1', 'Decimal(2, 1)') * `expr#avg(revenue)`)
+               │     │     Filter: `expr#sum(ss_sales_price)_1` <= ('0.1' * `expr#avg(revenue)`)
                │     ├─ MergingAggregated est. 148598128 rows
                │     │  └─ Repartition Exchange est. 148598128 rows
                │     │     │     Partition by: {ss_item_sk_1, ss_store_sk_1}

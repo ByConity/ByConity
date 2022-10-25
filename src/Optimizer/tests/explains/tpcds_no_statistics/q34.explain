@@ -46,7 +46,7 @@ Projection est. ? rows
             │                 └─ Repartition Exchange est. ? rows
             │                    │     Partition by: {hd_demo_sk}
             │                    └─ Filter est. ? rows
-            │                       │     Condition: (hd_buy_potential IN ('>10000', 'Unknown')) AND (multiIf(hd_vehicle_count > 0, hd_dep_count / hd_vehicle_count, NULL) > cast('1.2', 'Decimal(2, 1)')) AND (hd_vehicle_count > 0)
+            │                       │     Condition: (hd_buy_potential IN ('>10000', 'Unknown')) AND (hd_vehicle_count > 0) AND (multiIf(hd_vehicle_count > 0, hd_dep_count / hd_vehicle_count, NULL) > '1.2')
             │                       └─ TableScan tpcds.household_demographics est. ? rows
             │                                Outputs: [hd_buy_potential, hd_demo_sk, hd_dep_count, hd_vehicle_count]
             └─ Repartition Exchange est. ? rows

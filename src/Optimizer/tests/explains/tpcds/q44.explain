@@ -25,7 +25,7 @@ Projection est. 100 rows
                │     │     │        └─ Gather Exchange est. ? rows
                │     │     │           └─ Inner Join est. ? rows
                │     │     │              │     Condition: 
-               │     │     │              │     Filter: `expr#avg(ss_net_profit)` > (cast('0.9', 'Decimal(2, 1)') * `expr#avg(ss_net_profit)_1`)
+               │     │     │              │     Filter: `expr#avg(ss_net_profit)` > ('0.9' * `expr#avg(ss_net_profit)_1`)
                │     │     │              ├─ MergingAggregated est. 597 rows
                │     │     │              │  └─ Repartition Exchange est. 597 rows
                │     │     │              │     │     Partition by: {ss_item_sk}
@@ -60,7 +60,7 @@ Projection est. 100 rows
                │     │              └─ Gather Exchange est. ? rows
                │     │                 └─ Inner Join est. ? rows
                │     │                    │     Condition: 
-               │     │                    │     Filter: `expr#avg(ss_net_profit)_2` > (cast('0.9', 'Decimal(2, 1)') * `expr#avg(ss_net_profit)_3`)
+               │     │                    │     Filter: `expr#avg(ss_net_profit)_2` > ('0.9' * `expr#avg(ss_net_profit)_3`)
                │     │                    ├─ MergingAggregated est. 597 rows
                │     │                    │  └─ Repartition Exchange est. 597 rows
                │     │                    │     │     Partition by: {ss_item_sk_2}

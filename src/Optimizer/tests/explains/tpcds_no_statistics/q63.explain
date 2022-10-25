@@ -10,7 +10,7 @@ Projection est. 100 rows
             └─ Projection est. ? rows
                │     Expressions: [expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manager_id), expr#sum(ss_sales_price), i_manager_id]
                └─ Filter est. ? rows
-                  │     Condition: multiIf(`expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manager_id)` > 0, abs(`expr#sum(ss_sales_price)` - `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manager_id)`) / `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manager_id)`, NULL) > cast('0.1', 'Decimal(2, 1)')
+                  │     Condition: multiIf(`expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manager_id)` > 0, abs(`expr#sum(ss_sales_price)` - `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manager_id)`) / `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manager_id)`, NULL) > '0.1'
                   └─ Window est. ? rows
                      └─ Repartition Exchange est. ? rows
                         │     Partition by: {i_manager_id}

@@ -17,7 +17,7 @@ Projection est. 100 rows
                   │     Partition by: {sr_customer_sk}
                   └─ Inner Join est. 1948518 rows
                      │     Condition: sr_store_sk == s_store_sk
-                     │     Filter: `expr#sum(sr_return_amt)` > (`expr#avg(ctr_total_return)` * cast('1.2', 'Decimal(2, 1)'))
+                     │     Filter: `expr#sum(sr_return_amt)` > (`expr#avg(ctr_total_return)` * '1.2')
                      ├─ MergingAggregated est. 4319858 rows
                      │  └─ Repartition Exchange est. 4319858 rows
                      │     │     Partition by: {sr_customer_sk, sr_store_sk}

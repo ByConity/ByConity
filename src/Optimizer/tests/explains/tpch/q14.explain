@@ -1,5 +1,5 @@
 Projection est. 1 rows
-│     Expressions: promo_revenue:=(cast('100.00', 'Decimal(5, 2)') * `expr#sum(multiIf(like(p_type, 'PROMO%'), multiply(l_extendedprice, minus(1, l_discount)), 0))`) / `expr#sum(multiply(l_extendedprice, minus(1, l_discount)))`
+│     Expressions: promo_revenue:=('100.00' * `expr#sum(multiIf(like(p_type, 'PROMO%'), multiply(l_extendedprice, minus(1, l_discount)), 0))`) / `expr#sum(multiply(l_extendedprice, minus(1, l_discount)))`
 └─ MergingAggregated est. 1 rows
    └─ Gather Exchange est. 1 rows
       └─ Aggregating est. 1 rows

@@ -17,7 +17,7 @@ Projection est. 100 rows
                         │     Aggregates: expr#count():=AggNull(count)()
                         └─ Inner Join est. ? rows
                            │     Condition: i_category == i_category_1
-                           │     Filter: i_current_price > (cast('1.2', 'Decimal(2, 1)') * `expr#avg(j.i_current_price)`)
+                           │     Filter: i_current_price > ('1.2' * `expr#avg(j.i_current_price)`)
                            ├─ Repartition Exchange est. ? rows
                            │  │     Partition by: {i_category}
                            │  └─ Inner Join est. ? rows

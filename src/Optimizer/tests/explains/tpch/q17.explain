@@ -1,5 +1,5 @@
 Projection est. 1 rows
-│     Expressions: avg_yearly:=`expr#sum(l_extendedprice)` / cast('7.0', 'Decimal(2, 1)')
+│     Expressions: avg_yearly:=`expr#sum(l_extendedprice)` / '7.0'
 └─ MergingAggregated est. 1 rows
    └─ Gather Exchange est. 1 rows
       └─ Aggregating est. 1 rows
@@ -7,7 +7,7 @@ Projection est. 1 rows
          │     Aggregates: expr#sum(l_extendedprice):=AggNull(sum)(l_extendedprice)
          └─ Inner Join est. 5975 rows
             │     Condition: l_partkey == l_partkey_1
-            │     Filter: l_quantity < (cast('0.2', 'Decimal(2, 1)') * `expr#avg(l_quantity)`)
+            │     Filter: l_quantity < ('0.2' * `expr#avg(l_quantity)`)
             ├─ TableScan tpch.lineitem est. 6001215 rows
             │        Outputs: [l_extendedprice, l_partkey, l_quantity]
             └─ Broadcast Exchange est. 198 rows

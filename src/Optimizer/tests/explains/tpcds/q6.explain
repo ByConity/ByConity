@@ -67,7 +67,7 @@ Projection est. 45 rows
                               │     Partition by: {i_item_sk}
                               └─ Inner Join est. 330000 rows
                                  │     Condition: i_category == i_category_1
-                                 │     Filter: i_current_price > (cast('1.2', 'Decimal(2, 1)') * `expr#avg(j.i_current_price)`)
+                                 │     Filter: i_current_price > ('1.2' * `expr#avg(j.i_current_price)`)
                                  ├─ TableScan tpcds.item est. 300000 rows
                                  │        Outputs: [i_category, i_current_price, i_item_sk]
                                  └─ Broadcast Exchange est. 11 rows

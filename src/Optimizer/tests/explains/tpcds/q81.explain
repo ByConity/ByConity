@@ -13,7 +13,7 @@ Projection est. 100 rows
                │  │     Partition by: {cr_returning_customer_sk}
                │  └─ Inner Join est. 1394336 rows
                │     │     Condition: ca_state == ca_state_2
-               │     │     Filter: `expr#sum(cr_return_amt_inc_tax)` > (`expr#avg(ctr_total_return)` * cast('1.2', 'Decimal(2, 1)'))
+               │     │     Filter: `expr#sum(cr_return_amt_inc_tax)` > (`expr#avg(ctr_total_return)` * '1.2')
                │     ├─ MergingAggregated est. 1394336 rows
                │     │  └─ Repartition Exchange est. 1394336 rows
                │     │     │     Partition by: {ca_state, cr_returning_customer_sk}

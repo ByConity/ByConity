@@ -38,7 +38,7 @@ Projection est. 100 rows
                               │     └─ Repartition Exchange est. ? rows
                               │        │     Partition by: {i_item_sk}
                               │        └─ Filter est. ? rows
-                              │           │     Condition: (i_current_price <= 1.4900000095367432) AND (i_current_price >= 0.9900000095367432)
+                              │           │     Condition: (i_current_price <= 1.49) AND (i_current_price >= 0.99)
                               │           └─ TableScan tpcds.item est. ? rows
                               │                    Outputs: [i_current_price, i_item_id, i_item_sk]
                               └─ Repartition Exchange est. ? rows

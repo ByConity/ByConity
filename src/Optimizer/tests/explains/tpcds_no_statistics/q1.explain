@@ -9,7 +9,7 @@ Projection est. 100 rows
             │     Order by: {c_customer_id asc}
             └─ Inner Join est. ? rows
                │     Condition: s_store_sk == sr_store_sk_1
-               │     Filter: `expr#sum(sr_return_amt)` > (`expr#avg(ctr_total_return)` * cast('1.2', 'Decimal(2, 1)'))
+               │     Filter: `expr#sum(sr_return_amt)` > (`expr#avg(ctr_total_return)` * '1.2')
                ├─ Repartition Exchange est. ? rows
                │  │     Partition by: {s_store_sk}
                │  └─ Inner Join est. ? rows

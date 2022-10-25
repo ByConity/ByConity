@@ -55,7 +55,7 @@ Projection est. 100 rows
                   │     │                       └─ TableScan tpcds.store est. 1002 rows
                   │     │                                Outputs: s_company_name_1:=s_company_name, s_store_name_1:=s_store_name, s_store_sk_1:=s_store_sk
                   │     └─ Filter est. 389880 rows
-                  │        │     Condition: (multiIf(`expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)` > 0, abs(`expr#sum(ss_sales_price)` - `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)`) / `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)`, NULL) > cast('0.1', 'Decimal(2, 1)')) AND (`expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)` > 0.) AND (d_year = 1999)
+                  │        │     Condition: (multiIf(`expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)` > 0, abs(`expr#sum(ss_sales_price)` - `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)`) / `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)`, NULL) > '0.1') AND (`expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)` > 0.) AND (d_year = 1999)
                   │        └─ Window est. 433200 rows
                   │           └─ Window est. 433200 rows
                   │              └─ Repartition Exchange est. 433200 rows

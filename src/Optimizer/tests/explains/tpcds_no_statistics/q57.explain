@@ -16,7 +16,7 @@ Projection est. 100 rows
                   │  └─ Inner Join est. ? rows
                   │     │     Condition: cc_name == cc_name_1, expr#rank() OVER (PARTITION BY i_category, i_brand, cc_name ORDER BY d_year ASC, d_moy ASC) == plus(expr#rank() OVER (PARTITION BY i_category, i_brand, cc_name ORDER BY d_year ASC, d_moy ASC)_1, 1), i_brand == i_brand_1, i_category == i_category_1
                   │     ├─ Filter est. ? rows
-                  │     │  │     Condition: (`expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year)` > 0.) AND (multiIf(`expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year)` > 0, abs(`expr#sum(cs_sales_price)` - `expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year)`) / `expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year)`, NULL) > cast('0.1', 'Decimal(2, 1)')) AND (d_year = 1999)
+                  │     │  │     Condition: (`expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year)` > 0.) AND (multiIf(`expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year)` > 0, abs(`expr#sum(cs_sales_price)` - `expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year)`) / `expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year)`, NULL) > '0.1') AND (d_year = 1999)
                   │     │  └─ Window est. ? rows
                   │     │     └─ Window est. ? rows
                   │     │        └─ Repartition Exchange est. ? rows

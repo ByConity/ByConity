@@ -36,7 +36,7 @@ Projection est. 400 rows
                         │  │     Partition by: {l_partkey}
                         │  └─ Inner Join est. 38331 rows
                         │     │     Condition: l_partkey == ps_partkey, l_suppkey == ps_suppkey
-                        │     │     Filter: ps_availqty > (cast('0.5', 'Decimal(2, 1)') * `expr#sum(l_quantity)`)
+                        │     │     Filter: ps_availqty > ('0.5' * `expr#sum(l_quantity)`)
                         │     ├─ MergingAggregated est. 36374 rows
                         │     │  └─ Repartition Exchange est. 36374 rows
                         │     │     │     Partition by: {l_partkey, l_suppkey}

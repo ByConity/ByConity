@@ -11,7 +11,7 @@ Projection est. 100 rows
                │     Aggregates: expr#sum(ws_ext_discount_amt):=AggNull(sum)(ws_ext_discount_amt)
                └─ Inner Join est. ? rows
                   │     Condition: i_item_sk == ws_item_sk_1
-                  │     Filter: ws_ext_discount_amt > (cast('1.3', 'Decimal(2, 1)') * `expr#avg(ws_ext_discount_amt)`)
+                  │     Filter: ws_ext_discount_amt > ('1.3' * `expr#avg(ws_ext_discount_amt)`)
                   ├─ Repartition Exchange est. ? rows
                   │  │     Partition by: {i_item_sk}
                   │  └─ Inner Join est. ? rows

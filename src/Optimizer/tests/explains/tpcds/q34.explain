@@ -53,7 +53,7 @@ Projection est. 5986797 rows
                                     │     Expressions: [hd_buy_potential, hd_demo_sk, hd_dep_count, hd_vehicle_count]
                                     │     Dynamic Filters Builder: {hd_demo_sk}
                                     └─ Filter est. 1600 rows
-                                       │     Condition: (hd_buy_potential IN ('>10000', 'Unknown')) AND (multiIf(hd_vehicle_count > 0, hd_dep_count / hd_vehicle_count, NULL) > cast('1.2', 'Decimal(2, 1)')) AND (hd_vehicle_count > 0)
+                                       │     Condition: (hd_buy_potential IN ('>10000', 'Unknown')) AND (hd_vehicle_count > 0) AND (multiIf(hd_vehicle_count > 0, hd_dep_count / hd_vehicle_count, NULL) > '1.2')
                                        └─ TableScan tpcds.household_demographics est. 7200 rows
                                                 Outputs: [hd_buy_potential, hd_demo_sk, hd_dep_count, hd_vehicle_count]
 note: Dynamic Filter is applied for 6 times.

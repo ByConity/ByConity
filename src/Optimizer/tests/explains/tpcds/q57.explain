@@ -55,7 +55,7 @@ Projection est. 100 rows
                   │     │                       └─ TableScan tpcds.call_center est. 42 rows
                   │     │                                Outputs: cc_call_center_sk_1:=cc_call_center_sk, cc_name_1:=cc_name
                   │     └─ Filter est. 818748 rows
-                  │        │     Condition: (`expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year)` > 0.) AND (multiIf(`expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year)` > 0, abs(`expr#sum(cs_sales_price)` - `expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year)`) / `expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year)`, NULL) > cast('0.1', 'Decimal(2, 1)')) AND (d_year = 1999)
+                  │        │     Condition: (`expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year)` > 0.) AND (multiIf(`expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year)` > 0, abs(`expr#sum(cs_sales_price)` - `expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year)`) / `expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year)`, NULL) > '0.1') AND (d_year = 1999)
                   │        └─ Window est. 909720 rows
                   │           └─ Window est. 909720 rows
                   │              └─ Repartition Exchange est. 909720 rows
