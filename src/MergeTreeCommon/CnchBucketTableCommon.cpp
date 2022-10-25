@@ -142,6 +142,7 @@ ColumnPtr createBucketNumberColumn(Block & block, const Int64 & split_number, co
     auto num_rows = block.rows();
     Int64 bucket_number = -1;
     Int64 shard_ratio = split_number / total_shard_num;
+    shard_ratio = shard_ratio == 0 ? 1 : shard_ratio;
     for(size_t i = 0; i < num_rows; i++)
     {
         auto current_split_value = split_value_column->getInt(i);
