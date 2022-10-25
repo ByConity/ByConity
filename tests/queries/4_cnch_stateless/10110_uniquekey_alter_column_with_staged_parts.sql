@@ -5,8 +5,8 @@ CREATE TABLE u10110_common (d Date, k1 String, k2 Int64, k3 String, c1 Int64, c2
 
 -- drop key column is not allowed
 ALTER TABLE u10110_common DROP COLUMN k1; -- { serverError 47 }
-ALTER TABLE u10110_common DROP COLUMN k2; -- { serverError 44 }
-ALTER TABLE u10110_common DROP COLUMN k3; -- { serverError 44 }
+ALTER TABLE u10110_common DROP COLUMN k2; -- { serverError 524 }
+ALTER TABLE u10110_common DROP COLUMN k3; -- { serverError 524 }
 ALTER TABLE u10110_common DROP COLUMN c3;
 SELECT 'After drop c3, table description:';
 DESC u10110_common;
@@ -25,8 +25,8 @@ SELECT * FROM u10110_common ORDER BY d, k2;
 
 
 -- modify/rename/clear key column is not allowed
-ALTER TABLE u10110_common MODIFY COLUMN k2 String; -- { serverError 44 }
-ALTER TABLE u10110_common RENAME COLUMN k2 TO k4; -- { serverError 44 }
+ALTER TABLE u10110_common MODIFY COLUMN k2 String; -- { serverError 524 }
+ALTER TABLE u10110_common RENAME COLUMN k2 TO k4; -- { serverError 524 }
 
 -- add column with default values
 SELECT '';
