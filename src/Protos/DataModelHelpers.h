@@ -230,6 +230,8 @@ LockInfoPtr createLockInfoFromModel(const Protos::DataModelLockInfo & model);
 
 DataModelPartWrapperPtr createPartWrapperFromModel(const MergeTreeMetaBase & storage, const Protos::DataModelPart & part_model);
 
+DataModelPartWrapperPtr createPartWrapperFromModelBasic(const Protos::DataModelPart & part_model);
+
 ServerDataPartsVector createServerPartsFromModels(const MergeTreeMetaBase & storage, const pb::RepeatedPtrField<Protos::DataModelPart> & parts_model);
 
 ServerDataPartsVector createServerPartsFromDataParts(const MergeTreeMetaBase & storage, const MergeTreeDataPartsCNCHVector & parts);

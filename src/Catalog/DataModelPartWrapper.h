@@ -69,7 +69,9 @@ public:
 
     bool isEmpty() const;
     UInt64 rowsCount() const;
+    UInt64 size() const;
     bool isPartial() const;
+    bool isDropRangePart() const;
     bool deleted() const;
     const Protos::DataModelPart & part_model() const;
     const std::shared_ptr<IMergeTreeDataPart::MinMaxIndex> & minmax_idx() const;

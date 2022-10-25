@@ -24,6 +24,7 @@
 #include <Transaction/TxnTimestamp.h>
 #include <Transaction/getCommitted.h>
 #include <CloudServices/CnchServerClient.h>
+#include <CloudServices/CnchPartsHelper.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <Protos/RPCHelpers.h>
 #include <Storages/StorageCnchMergeTree.h>
@@ -3673,39 +3674,93 @@ namespace Catalog
     std::unordered_map<String, PartitionMetricsPtr> Catalog::getTablePartitionMetricsFromMetastore(const String & table_uuid)
     {
         std::unordered_map<String, PartitionMetricsPtr> partition_map;
+        /// calculate metrics partition by partition.
+        auto calculate_metrics_by_partion = [&](std::unordered_map<String, Protos::DataModelPart> & parts, bool calc_visibility) {
+            PartitionMetricsPtr res = std::make_shared<PartitionMetrics>();
+            /// when there is drop range in this partition, we need to calculate visibility.
+            if (calc_visibility)
+            {
+                ServerDataPartsVector server_parts;
+                server_parts.reserve(parts.size());
+                for (auto it = parts.begin(); it != parts.end(); it++)
+                {
+                    DataModelPartWrapperPtr part_model_wrapper = createPartWrapperFromModelBasic(it->second);
+                    server_parts.push_back(std::make_shared<ServerDataPart>(std::move(part_model_wrapper)));
+                }
+                auto visible_parts = CnchPartsHelper::calcVisibleParts(server_parts, false);
+                for (auto s_part : visible_parts)
+                    res->update(*(s_part->part_model_wrapper->part_model));
+            }
+            else
+            {
+                for (auto it = parts.begin(); it != parts.end(); it++)
+                {
+                    /// for those block only has deleted part, just ignore them because the covered part may be already removed by GC
+                    if (it->second.deleted())
+                        continue;
+
+                    res->update(it->second);
+                }
+            }
+
+            return res;
+        };
+
         runWithMetricSupport(
             [&] {
                 Stopwatch watch;
                 SCOPE_EXIT({
                     LOG_DEBUG(
-                        log, "getTablePartitionMetrics for table {} elapsed: {} ms", table_uuid, watch.elapsedMilliseconds());
+                        log, "getTablePartitionMetrics for table {}  elapsed: {}ms", table_uuid, watch.elapsedMilliseconds());
                 });
 
                 IMetaStore::IteratorPtr it = meta_proxy->getPartsInRange(name_space, table_uuid, "");
+                std::unordered_map<String, Protos::DataModelPart> block_name_to_part;
+                String current_partition = "";
+                bool need_calculate_visibility = false;
+                PartitionMetricsPtr current_metrics = std::make_shared<PartitionMetrics>();
                 while (it->next())
                 {
                     Protos::DataModelPart part_model;
                     part_model.ParseFromString(it->value());
                     const String & partition_id = part_model.part_info().partition_id();
-                    auto is_partial_part = part_model.part_info().hint_mutation();
+
+                    if (current_partition != partition_id)
+                    {
+                        if (!block_name_to_part.empty())
+                        {
+                            PartitionMetricsPtr metrics = calculate_metrics_by_partion(block_name_to_part, need_calculate_visibility);
+                            partition_map.emplace(current_partition, metrics);
+                        }
+
+                        block_name_to_part.clear();
+                        need_calculate_visibility = false;
+                        current_partition = partition_id;
+                    }
+
+                    auto part_info = createPartInfoFromModel(part_model.part_info());
                     /// skip partial part.
-                    if (is_partial_part)
+                    if (part_info->hint_mutation)
                         continue;
-                    auto found = partition_map.find(partition_id);
-                    if (found != partition_map.end())
-                    {
-                        found->second->total_parts_size += part_model.size();
-                        found->second->total_rows_count += part_model.rows_count();
-                        found->second->total_parts_number += 1;
-                    }
+
+                    /// if there is any drop range in current partition , we need calculate visibility when computing metrics later
+                    if (part_model.deleted() && part_info->level == MergeTreePartInfo::MAX_LEVEL)
+                        need_calculate_visibility = true;
+
+                    String block_name = part_info->getBlockName();
+                    auto it = block_name_to_part.find(block_name);
+                    /// When there are parts with same block ID, it means the part has been marked as deleted (Remember, we have filter out partial part).
+                    /// So we can safely remove them from container since we don't need count in those parts.
+                    if (it != block_name_to_part.end())
+                        block_name_to_part.erase(it);
                     else
-                    {
-                        PartitionMetricsPtr partition_info_ptr = std::make_shared<PartitionMetrics>();
-                        partition_info_ptr->total_parts_size += part_model.size();
-                        partition_info_ptr->total_rows_count += part_model.rows_count();
-                        partition_info_ptr->total_parts_number += 1;
-                        partition_map.emplace(partition_id, partition_info_ptr);
-                    }
+                        block_name_to_part.emplace(block_name, part_model);
+                }
+
+                if (!block_name_to_part.empty())
+                {
+                    PartitionMetricsPtr metrics = calculate_metrics_by_partion(block_name_to_part, need_calculate_visibility);
+                    partition_map.emplace(current_partition, metrics);
                 }
             },
             ProfileEvents::GetTablePartitionMetricsFromMetastoreSuccess,

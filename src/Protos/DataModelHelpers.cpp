@@ -28,6 +28,25 @@ namespace ErrorCodes
 
 DataModelPartWrapperPtr createPartWrapperFromModel(const MergeTreeMetaBase & storage, const Protos::DataModelPart & part_model)
 {
+    DataModelPartWrapperPtr part_model_wrapper = createPartWrapperFromModelBasic(part_model);
+
+    /// Partition and Minmax index
+    ReadBufferFromString partition_minmax_buf(part_model.partition_minmax());
+    if (unlikely(storage.format_version < MERGE_TREE_DATA_MIN_FORMAT_VERSION_WITH_CUSTOM_PARTITIONING))
+        throw Exception("MergeTree data format is too old", ErrorCodes::FORMAT_VERSION_TOO_OLD);
+
+    part_model_wrapper->partition.load(storage, partition_minmax_buf);
+    if (part_model_wrapper->part_model->rows_count() > 0)
+    {
+        part_model_wrapper->minmax_idx = std::make_shared<IMergeTreeDataPart::MinMaxIndex>();
+        part_model_wrapper->minmax_idx->load(storage, partition_minmax_buf);
+    }
+
+    return part_model_wrapper;
+}
+
+DataModelPartWrapperPtr createPartWrapperFromModelBasic(const Protos::DataModelPart & part_model)
+{
     DataModelPartWrapperPtr part_model_wrapper = std::make_shared<DataModelPartWrapper>();
 
     part_model_wrapper->info = createPartInfoFromModel(part_model.part_info());
@@ -48,18 +67,6 @@ DataModelPartWrapperPtr createPartWrapperFromModel(const MergeTreeMetaBase & sto
         throw Exception("min unique key of non empty part must be non empty", ErrorCodes::LOGICAL_ERROR);
     if (inside_part_model.has_max_unique_key() && inside_part_model.max_unique_key().empty() && inside_part_model.rows_count() > 0)
         throw Exception("max unique key of non empty part must be non empty", ErrorCodes::LOGICAL_ERROR);
-
-    /// Partition and Minmax index
-    ReadBufferFromString partition_minmax_buf(part_model.partition_minmax());
-    if (unlikely(storage.format_version < MERGE_TREE_DATA_MIN_FORMAT_VERSION_WITH_CUSTOM_PARTITIONING))
-        throw Exception("MergeTree data format is too old", ErrorCodes::FORMAT_VERSION_TOO_OLD);
-
-    part_model_wrapper->partition.load(storage, partition_minmax_buf);
-    if (inside_part_model.rows_count() > 0)
-    {
-        part_model_wrapper->minmax_idx = std::make_shared<IMergeTreeDataPart::MinMaxIndex>();
-        part_model_wrapper->minmax_idx->load(storage, partition_minmax_buf);
-    }
 
     return part_model_wrapper;
 }
