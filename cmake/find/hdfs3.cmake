@@ -14,6 +14,9 @@ endif()
 option(USE_INTERNAL_HDFS3_LIBRARY "Set to FALSE to use system HDFS3 instead of bundled (experimental - set to OFF on your own risk)"
        ON) # We don't know any linux distribution with package for it
 
+option (USE_BYTEDANCE_LIBHDFS3 "Use libhdfs3 maintained by Bytedance" ON)
+
+
 if(NOT EXISTS "${ClickHouse_SOURCE_DIR}/contrib/libhdfs3/include/hdfs/hdfs.h")
     if(USE_INTERNAL_HDFS3_LIBRARY)
         message(WARNING "submodule contrib/libhdfs3 is missing. to fix try run: \n git submodule update --init --recursive")
