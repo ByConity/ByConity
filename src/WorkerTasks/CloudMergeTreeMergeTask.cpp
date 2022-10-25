@@ -69,6 +69,9 @@ void CloudMergeTreeMergeTask::executeImpl()
         drop_part->partition.assign(part->partition);
         drop_part->bucket_number = part->bucket_number;
         drop_part->deleted = true;
+        /// rows_count and bytes_on_disk is required for parts info statistics.
+        drop_part->covered_parts_rows = part->rows_count;
+        drop_part->covered_parts_size = part->bytes_on_disk;
         temp_parts.push_back(std::move(drop_part));
     }
 

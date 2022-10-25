@@ -112,7 +112,9 @@ void ServerDataPart::serializeDeleteBitmapMetas([[maybe_unused]] const MergeTree
 
 UInt64 ServerDataPart::rowsCount() const { return part_model_wrapper->part_model->rows_count(); }
 bool ServerDataPart::isEmpty() const { return part_model_wrapper->part_model->rows_count() == 0; }
+UInt64 ServerDataPart::size() const { return part_model_wrapper->part_model->size();}
 bool ServerDataPart::isPartial() const { return part_model_wrapper->info->hint_mutation; }
+bool ServerDataPart::isDropRangePart() const { return deleted() && part_model_wrapper->info->min_block == 0 && part_model_wrapper->info->level == MergeTreePartInfo::MAX_LEVEL;}
 bool ServerDataPart::deleted() const { return part_model_wrapper->part_model->deleted(); }
 const Protos::DataModelPart & ServerDataPart::part_model() const { return *part_model_wrapper->part_model; }
 const MergeTreePartInfo & ServerDataPart::info() const { return *part_model_wrapper->info; }
