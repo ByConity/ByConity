@@ -272,3 +272,6 @@
 [submodule "contrib/udns"]
 	path = contrib/udns
 	url = git@code.byted.org:dp/udns
+[submodule "contrib/libhdfs3-open"]
+	path = contrib/libhdfs3-open
+	url = git@code.byted.org:dp/libhdfs3-open.git
