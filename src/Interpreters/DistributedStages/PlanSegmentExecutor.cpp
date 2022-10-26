@@ -17,7 +17,7 @@
 #include <Processors/Exchange/DataTrans/Local/LocalBroadcastChannel.h>
 #include <Processors/Exchange/DataTrans/Local/LocalChannelOptions.h>
 #include <Processors/Exchange/DataTrans/RpcClient.h>
-#include <Processors/Exchange/DataTrans/RpcClientFactory.h>
+#include <Processors/Exchange/DataTrans/RpcChannelPool.h>
 #include <Processors/Exchange/ExchangeDataKey.h>
 #include <Processors/Exchange/ExchangeOptions.h>
 #include <Processors/Exchange/ExchangeSource.h>
@@ -33,6 +33,7 @@
 #include <QueryPlan/GraphvizPrinter.h>
 #include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <QueryPlan/QueryPlan.h>
+#include <Common/Brpc/BrpcChannelPoolOptions.h>
 #include <Common/CurrentThread.h>
 #include <Common/Exception.h>
 #include <Common/ThreadStatus.h>
@@ -401,7 +402,7 @@ void PlanSegmentExecutor::sendSegmentStatus(const RuntimeSegmentsStatus & status
             return;
         auto address = extractExchangeStatusHostPort(plan_segment->getCoordinatorAddress());
 
-        std::shared_ptr<RpcClient> rpc_client = RpcClientFactory::getInstance().getClient(address);
+        std::shared_ptr<RpcClient> rpc_client = RpcChannelPool::getInstance().getClient(address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
         Protos::PlanSegmentManagerService_Stub manager(&rpc_client->getChannel());
         brpc::Controller cntl;
         Protos::SendPlanSegmentStatusRequest request;
