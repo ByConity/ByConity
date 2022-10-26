@@ -58,6 +58,7 @@ option (ENABLE_CLICKHOUSE_TSO_SERVER "Service that produces globally consistent 
 option (ENABLE_CLICKHOUSE_DAEMON_MANAGER "Service that manage background jobs in clickhouse" ${ENABLE_CLICKHOUSE_ALL})
 option (ENABLE_CLICKHOUSE_PART_TOOLKIT "Enable part_toolkit" ${ENABLE_CLICKHOUSE_ALL})
 option (ENABLE_CLICKHOUSE_RESOURCE_MANAGER "Service that manage worker resources" ${ENABLE_CLICKHOUSE_ALL})
+option (ENABLE_CLICKHOUSE_META_INSPECTOR "Enable meta-inspector in CNCH" ${ENABLE_CLICKHOUSE_ALL})
 
 if (NOT USE_NURAFT)
     # RECONFIGURE_MESSAGE_LEVEL should not be used here,
@@ -258,6 +259,7 @@ add_subdirectory (git-import)
 add_subdirectory (bash-completion)
 add_subdirectory (tso)
 add_subdirectory (part-toolkit)
+add_subdirectory (meta-inspector)
 
 if (ENABLE_CLICKHOUSE_KEEPER)
     add_subdirectory (keeper)
@@ -289,7 +291,8 @@ if (CLICKHOUSE_ONE_SHARED)
     ${CLICKHOUSE_GIT_IMPORT_SOURCES}
     ${CLICKHOUSE_ODBC_BRIDGE_SOURCES}
     ${CLICKHOUSE_KEEPER_SOURCES}
-    ${CLICKHOUSE_PART_TOOLKIT_SOURCES})
+    ${CLICKHOUSE_PART_TOOLKIT_SOURCES}
+    ${CLICKHOUSE_META_INSPECTOR_SOURCES})
 
     target_link_libraries(clickhouse-lib
       ${CLICKHOUSE_SERVER_LINK}
@@ -305,7 +308,8 @@ if (CLICKHOUSE_ONE_SHARED)
       ${CLICKHOUSE_ODBC_BRIDGE_LINK}
       ${CLICKHOUSE_KEEPER_LINK}
       ${CLICKHOUSE_KEEPER_CONVERTER_LINK}
-      ${CLICKHOUSE_PART_TOOLKIT_LINK})
+      ${CLICKHOUSE_PART_TOOLKIT_LINK}
+      ${CLICKHOUSE_META_INSPECTOR_LINK})
 
     target_include_directories(clickhouse-lib
       ${CLICKHOUSE_SERVER_INCLUDE}
@@ -339,6 +343,7 @@ if (CLICKHOUSE_SPLIT_BINARY)
         clickhouse-git-import
         clickhouse-copier
         clickhouse-part-toolkit
+        clickhouse-meta-inspector
     )
 
     if (ENABLE_CLICKHOUSE_ODBC_BRIDGE)
@@ -416,6 +421,9 @@ else ()
     if (ENABLE_CLICKHOUSE_PART_TOOLKIT)
         clickhouse_target_link_split_lib(clickhouse part-toolkit)
     endif ()
+    if (ENABLE_CLICKHOUSE_META_INSPECTOR)
+        clickhouse_target_link_split_lib(clickhouse meta-inspector)
+    endif()
 
     set (CLICKHOUSE_BUNDLE)
     if (ENABLE_CLICKHOUSE_SERVER)
@@ -506,6 +514,11 @@ else ()
         install (FILES "${CMAKE_CURRENT_BINARY_DIR}/clickhouse-part-toolkit" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
         list(APPEND CLICKHOUSE_BUNDLE clickhouse-part-toolkit)
     endif ()
+    if (ENABLE_CLICKHOUSE_META_INSPECTOR)
+        add_custom_target (clickhouse-meta-inspector ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-meta-inspector DEPENDS clickhouse)
+        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/clickhouse-meta-inspector" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
+        list(APPEND CLICKHOUSE_BUNDLE clickhouse-meta-inspector)
+    endif()
     if (ENABLE_CLICKHOUSE_RESOURCE_MANAGER)
         add_custom_target (resource-manager ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse resource-manager DEPENDS clickhouse)
         install (FILES "${CMAKE_CURRENT_BINARY_DIR}/resource-manager" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
