@@ -35,7 +35,8 @@ enum ServiceType
     server = 1,
     worker = 2,
     tso = 3,
-    daemon_manager = 4
+    daemon_manager = 4,
+    resource_manager = 5,
 };
 
 struct ServicePair
