@@ -81,6 +81,17 @@ ServiceDiscoveryDNS::ServiceDiscoveryDNS(const Poco::Util::AbstractConfiguration
             .headlessServiceName = headlessServiceName
         };
     }
+    if (config.hasProperty("service_discovery.resource_manager"))
+    {
+        String psm = config.getString("service_discovery.resource_manager.psm");
+        String serviceName = config.getString("service_discovery.resource_manager.service");
+        String headlessServiceName = config.getString("service_discovery.resource_manager.headless_service");
+        serviceMap[psm] = ServicePair{
+            .serviceType = ServiceType::resource_manager,
+            .serviceName = serviceName,
+            .headlessServiceName = headlessServiceName
+        };
+    }
 }
 
 // TODO: consider adding a bool parameter need_hostname to reduce unnecessary resolve hostname call.
