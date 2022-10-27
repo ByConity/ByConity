@@ -53,12 +53,6 @@ ManipulationListElement::ManipulationListElement(const ManipulationTaskParams & 
         }
     }
 
-    /// Each merge is executed into separate background processing pool thread
-    /// we disable memory_tracker in cnchMergeThread, since it may cause coredump,
-    /// https://bytedance.feishu.cn/docs/doccnB8WZRmgu0054sksJpZjG2d
-    if (!disable_memory_tracker)
-        background_thread_memory_tracker = CurrentThread::getMemoryTracker();
-
     memory_tracker.setDescription("Manipulation");
 
     /// Let's try to copy memory related settings from the query,
@@ -74,10 +68,14 @@ ManipulationListElement::ManipulationListElement(const ManipulationTaskParams & 
         memory_tracker.setOrRaiseHardLimit(parent_query_memory_tracker->getHardLimit());
     }
 
-    /// Each merge is executed into separate background processing pool thread
-    background_thread_memory_tracker = CurrentThread::getMemoryTracker();
+    /// Each merge is executed into separate background processing pool thread.
+    /// We disable memory_tracker in CnchMergeMutateThread, since it may cause coredump.
+    if (!disable_memory_tracker)
+        background_thread_memory_tracker = CurrentThread::getMemoryTracker();
+
     if (background_thread_memory_tracker)
     {
+        memory_tracker.setMetric(CurrentMetrics::MemoryTrackingForMerges);
         background_thread_memory_tracker_prev_parent = background_thread_memory_tracker->getParent();
         background_thread_memory_tracker->setParent(&memory_tracker);
     }
