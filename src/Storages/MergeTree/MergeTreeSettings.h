@@ -205,14 +205,29 @@ struct Settings;
     /* Metastore settings */\
     M(Bool, enable_metastore, true, "Use KV metastore to manage data parts.", 0) \
     M(Bool, enable_persistent_checksum, false, "Persist checksums of part in memory. If set to false, checksums will be managed by a global cache to save memory.", 0) \
-    /** Obsolete settings. Kept for backward compatibility only. */ \
-    M(UInt64, min_relative_delay_to_yield_leadership, 120, "Obsolete setting, does nothing.", 0) \
-    M(UInt64, check_delay_period, 60, "Obsolete setting, does nothing.", 0) \
-    M(Bool, allow_floating_point_partition_key, false, "Allow floating point as partition key", 0) \
-    \
+    /* Storage settings */\
     M(String, cnch_local_storage_policy, "default", "Storage policy used to store local temp data", 0) \
     \
     M(Bool, enable_local_disk_cache, true, "Enable local disk cache", 0) \
+    \
+    /* Renamed settings - cannot be ignored */\
+    M(Bool, enable_nullable_sorting_key, false, "Alias of `allow_nullable_key`", 0) \
+    \
+    /*************************************************************************************/ \
+    /** Obsolete settings. Kept for backward compatibility only, or will add usage later */ \
+    M(UInt64, min_relative_delay_to_yield_leadership, 120, "Obsolete setting, does nothing.", 0) \
+    M(UInt64, check_delay_period, 60, "Obsolete setting, does nothing.", 0) \
+    M(Bool, allow_floating_point_partition_key, false, "Allow floating point as partition key", 0) \
+    /** Set to current max_rows in merge_scheduler to avoid generating too many merge tasks when disable merge_scheduler */ \
+    M(UInt64, cnch_merge_max_total_rows_to_merge, 15000000, "", 0) \
+    M(Bool, cnch_merge_only_realtime_partition, false, "", 0) \
+    /** RM - using RM, RoundRobin: - local round robin strategy */ \
+    M(String, cnch_merge_pick_worker_algo, "RM", "", 0) \
+    /** BitEngine related settings */  \
+    M(Bool, bitengine_discard_source_bitmap, false, "", 0) \
+    M(Bool, bitengine_use_key_string, false, "", 0) \
+    M(Bool, bitengine_use_key_int, true, "", 0) \
+    M(String, underlying_dictionary_tables, "{}", "", 0)  \
     \
     /// Settings that should not change after the creation of a table.
 #define APPLY_FOR_IMMUTABLE_MERGE_TREE_SETTINGS(M) \

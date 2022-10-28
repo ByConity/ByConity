@@ -91,7 +91,7 @@ MergeTreeMetaBase::MergeTreeMetaBase(
     // , primary_index_cache(context_->getDiskPrimaryKeyIndexCache())
 {
     const auto & settings = getSettings();
-    allow_nullable_key = attach_ || settings->allow_nullable_key;
+    allow_nullable_key = attach_ || settings->allow_nullable_key || settings->enable_nullable_sorting_key;
     if (!date_column_name.empty())
     {
         try

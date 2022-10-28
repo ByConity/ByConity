@@ -46,7 +46,6 @@ MergeTreeCloudData::MergeTreeCloudData(
         false  /// attach
     )
 {
-    allow_nullable_key = getSettings()->allow_nullable_key;
 }
 
 void MergeTreeCloudData::addPreparedPart(MutableDataPartPtr & part, DataPartsLock & lock)
