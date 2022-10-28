@@ -16,6 +16,7 @@ namespace DB
 {
 /// The BrpcApplication class initializes the logging and configs for brpc framework;
 ///  It also manager the lifecycle of brpc servers and clients;
+/// Singleton class, use std::cout for log
 class BrpcApplication : public boost::noncopyable
 {
 public:

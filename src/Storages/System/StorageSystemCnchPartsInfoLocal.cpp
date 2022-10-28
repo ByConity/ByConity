@@ -136,7 +136,7 @@ Pipe StorageSystemCnchPartsInfoLocal::read(
                 {
                     auto entry = active_tables[(*filtered_index_column)[current_task].get<UInt64>()];
                     PartitionData & metrics_data = metrics_collection[current_task];
-                    storage = context->tryGetCnchTable(entry->database, entry->table);
+                    storage = DatabaseCatalog::instance().getTable({entry->database, entry->table}, context);
                     if (storage)
                         cache_manager->getTablePartitionMetrics(*storage, metrics_data, require_partition_info);
                 }

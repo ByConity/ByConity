@@ -2,7 +2,7 @@
 
 #include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
 #include <Interpreters/SegmentScheduler.h>
-#include <Processors/Exchange/DataTrans/RpcClientFactory.h>
+#include <Processors/Exchange/DataTrans/RpcChannelPool.h>
 
 namespace DB
 {
@@ -125,7 +125,7 @@ void RuntimeFilterService::transferRuntimeFilter(
                 for (const auto & address : worker_addresses)
                 {
                     String host_port = extractExchangeStatusHostPort(address);
-                    std::shared_ptr<RpcClient> rpc_client = RpcClientFactory::getInstance().getClient(host_port, true);
+                    std::shared_ptr<RpcClient> rpc_client = RpcChannelPool::getInstance().getClient(host_port, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
                     std::shared_ptr<DB::Protos::RuntimeFilterService_Stub> command_service
                         = std::make_shared<Protos::RuntimeFilterService_Stub>(&rpc_client->getChannel());
                     auto * controller = new brpc::Controller;

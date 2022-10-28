@@ -7,7 +7,7 @@ namespace DB
 {
 static std::unordered_map<std::string, std::string> configurable_brpc_gflags /* NOLINT */
     {/// Number of event dispatcher
-     {"event_dispatcher_num", "8"},
+     {"event_dispatcher_num", "2"},
      /// Max unwritten bytes in each socket, if the limit is reached
      {"socket_max_unwritten_bytes", "1073741824"},
      /// Set the recv buffer size of socket if this value is positive
@@ -16,7 +16,7 @@ static std::unordered_map<std::string, std::string> configurable_brpc_gflags /* 
      {"socket_send_buffer_size", ""},
      /// Defer close of connections for so many seconds even if the connection
      /// is not used by anyone. Close immediately for non-positive values
-     {"defer_close_second", ""},
+     {"defer_close_second", "60"},
      /// Try to return free memory to system every so many seconds
      /// values <= 0 disables this feature
      {"free_memory_to_system_interval", ""},
@@ -37,13 +37,14 @@ static std::unordered_set<std::string> reconfigurable_brpc_gflags /* NOLINT */
 void BrpcGflagsConfigHolder::afterInit(const RawConfig * config_ptr)
 {
     Poco::Util::AbstractConfiguration::Keys config_keys;
-    config_ptr->keys(config_keys);
+    config_ptr->keys(name, config_keys);
 
     for(const auto & entry: configurable_brpc_gflags)
     {
         auto config_val = entry.second;
-        if(config_ptr->hasProperty(entry.first)){
-            config_val = config_ptr->getString(entry.first);
+        auto tag = this->name + "." + entry.first;
+        if(config_ptr->hasProperty(tag)){
+            config_val = config_ptr->getString(tag);
         }
         if (config_val.empty()) continue;
         LOG_INFO(logger, "Set brpc gflags [ {} : {} ]", entry.first, config_val);
@@ -61,13 +62,14 @@ bool BrpcGflagsConfigHolder::hasChanged(const RawConfig *, const RawConfig *)
 void BrpcGflagsConfigHolder::onChange(const RawConfig * old_conf_ptr, const RawConfig * new_conf_ptr)
 {
     Poco::Util::AbstractConfiguration::Keys config_keys;
-    new_conf_ptr->keys(config_keys);
+    new_conf_ptr->keys(name, config_keys);
     for (const auto & key : config_keys)
     {
+        auto tag = this->name + "." + key;
         if (reconfigurable_brpc_gflags.find(key) != reconfigurable_brpc_gflags.end())
         {
-            auto new_config_val = new_conf_ptr->getString(key);
-            std::string old_config_val = old_conf_ptr ? old_conf_ptr->getString(key, "NULL") : "NULL";
+            auto new_config_val = new_conf_ptr->getString(tag);
+            std::string old_config_val = old_conf_ptr ? old_conf_ptr->getString(tag, "NULL") : "NULL";
             if (new_config_val == old_config_val)
                 continue;
             auto result = GFLAGS_NAMESPACE::SetCommandLineOption(key.c_str(), new_config_val.c_str());

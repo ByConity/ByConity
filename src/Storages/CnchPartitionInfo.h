@@ -2,17 +2,46 @@
 
 #include <atomic>
 #include <Core/Types.h>
+#include <Protos/data_models.pb.h>
+#include <Storages/MergeTree/MergeTreePartInfo.h>
 #include <Storages/MergeTree/MergeTreePartition.h>
 
 namespace DB
 {
 struct PartitionMetrics
 {
-    std::atomic<UInt64> total_parts_size {0};
-    std::atomic<UInt64> total_parts_number {0};
-    std::atomic<UInt64> total_rows_count {0};
+    std::atomic_int64_t total_parts_size{0};
+    std::atomic_int64_t total_parts_number{0};
+    std::atomic_int64_t total_rows_count{0};
 
-    bool validateMetrics() { return true; }
+    void update(const Protos::DataModelPart & part_model)
+    {
+        auto is_partial_part = part_model.part_info().hint_mutation();
+        /// do not count partial part
+        if (is_partial_part)
+            return;
+
+        auto is_deleted_part = part_model.has_deleted() && part_model.deleted();
+
+        /// To minimize costs, we don't calculate part visibility when updating PartitionMetrics. For those parts marked as delete,
+        /// just subtract them from statistics. And the non-deleted parts added into statistics. The non-deleted parts are added into
+        /// statistics. For drop range, we have save all coreved parts info into it, it can be processed as deleted part directly.
+
+        if (is_deleted_part)
+        {
+            total_rows_count -= (part_model.has_covered_parts_rows() ? part_model.covered_parts_rows() : part_model.rows_count());
+            total_parts_size -= (part_model.has_covered_parts_size() ? part_model.covered_parts_size() : part_model.size());
+            total_parts_number -= (part_model.has_covered_parts_count() ? part_model.covered_parts_count() : 1);
+        }
+        else
+        {
+            total_rows_count += part_model.rows_count();
+            total_parts_size += part_model.size();
+            total_parts_number += 1;
+        }
+    }
+
+    bool validateMetrics() { return total_rows_count >= 0 && total_parts_size >= 0 && total_parts_number >= 0; }
 };
 
 enum class CacheStatus

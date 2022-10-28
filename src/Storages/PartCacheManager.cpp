@@ -453,7 +453,7 @@ void PartCacheManager::invalidPartCache(const UUID & uuid, const DataPartsVector
 
     /// TODO: optimized the lock here.
     std::unordered_map<String, DataPartsVector> partition_to_parts;
-    for (const auto & part : parts)
+    for (auto & part : parts)
     {
         const String & partition_id = part->info.partition_id;
         auto it = partition_to_parts.find(partition_id);
@@ -470,45 +470,17 @@ void PartCacheManager::invalidPartCache(const UUID & uuid, const DataPartsVector
 
     auto lock = meta_ptr->writeLock();
 
-    UInt64 ts = getContext()->tryGetTimestamp(__PRETTY_FUNCTION__);
-
-    for (auto & partition_to_part : partition_to_parts)
+    for (auto it = partition_to_parts.begin(); it != partition_to_parts.end(); it++)
     {
-        auto cached = part_cache_ptr->get({uuid, partition_to_part.first});
+        auto cached = part_cache_ptr->get({uuid, it->first});
 
-        PartitionMetricsPtr partition_metrics{nullptr};
-        auto found = meta_ptr->partitions.find(partition_to_part.first);
-        if (found != meta_ptr->partitions.end())
-            partition_metrics = found->second->metrics_ptr;
-
-        for (auto & part : partition_to_part.second)
+        for (auto & part : it->second)
         {
             if (cached)
             {
                 auto got = cached->find(part->name);
                 if (got != cached->end())
                     cached->erase(got);
-            }
-
-            if (partition_metrics && !part->deleted && !part->isPartial())
-            {
-                meta_ptr->metrics_last_update_time = ts;
-                if (partition_metrics->total_parts_number < 1
-                    || partition_metrics->total_parts_size < part->bytes_on_disk
-                    || partition_metrics->total_rows_count < part->rows_count)
-                {
-                    partition_metrics->total_parts_number = 0;
-                    partition_metrics->total_parts_size = 0;
-                    partition_metrics->total_rows_count = 0;
-                    meta_ptr->partition_metrics_loaded =false;
-                    break;
-                }
-                else
-                {
-                    partition_metrics->total_parts_number -= 1;
-                    partition_metrics->total_parts_size -= part->bytes_on_disk;
-                    partition_metrics->total_rows_count -= part->rows_count;
-                }
             }
         }
     }
@@ -533,12 +505,12 @@ void PartCacheManager::insertDataPartsIntoCache(const IStorage & table, const pb
             auto partition_ptr = createParitionFromMetaString(storage, part_model.partition_minmax());
             String partition_id = partition_ptr->getID(storage);
             Catalog::PartitionMap::iterator it = meta_ptr->partitions.emplace(partition_id, std::make_shared<CnchPartitionInfo>(partition_ptr)).first;
-            if (should_update_metrics && !part_model.part_info().hint_mutation() && (!part_model.has_deleted() || !part_model.deleted()))
+            if (should_update_metrics)
             {
                 meta_ptr->metrics_last_update_time = ts;
-                it->second->metrics_ptr->total_parts_number += 1;
-                it->second->metrics_ptr->total_parts_size += part_model.size();
-                it->second->metrics_ptr->total_rows_count += part_model.rows_count();
+                it->second->metrics_ptr->update(part_model);
+                if (!it->second->metrics_ptr->validateMetrics())
+                    meta_ptr->partition_metrics_loaded = false;
             }
             /// insert into cache directly if cache status of current partition is not UINIT;
             if (it->second->cache_status != CacheStatus::UINIT)
@@ -581,7 +553,7 @@ void PartCacheManager::reloadPartitionMetrics(const UUID & uuid, const TableMeta
             table_meta->partition_metrics_loaded = true;
             /// reset load_parts_by_partition if parts number of current table is less than 5 million;
             if (table_meta->load_parts_by_partition && total_parts_number<5000000)
-                table_meta->partition_metrics_loaded = false;
+                table_meta->load_parts_by_partition = false;
         }
     }
     catch (...)

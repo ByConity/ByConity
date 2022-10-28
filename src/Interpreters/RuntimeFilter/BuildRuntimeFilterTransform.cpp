@@ -1,9 +1,10 @@
 #include <Interpreters/RuntimeFilter/BuildRuntimeFilterTransform.h>
 
 #include <Processors/Exchange/DataTrans/RpcClient.h>
-#include <Processors/Exchange/DataTrans/RpcClientFactory.h>
+#include <Processors/Exchange/DataTrans/RpcChannelPool.h>
 #include <Protos/runtime_filter.pb.h>
 #include <brpc/server.h>
+#include <Common/Brpc/BrpcChannelPoolOptions.h>
 
 namespace DB
 {
@@ -117,7 +118,7 @@ void RuntimeFilterConsumer::transferRuntimeFilter(const RuntimeFilterPtr & runti
     auto * response = new Protos::TransferRuntimeFilterResponse;
     auto * controller = new brpc::Controller;
     Protos::TransferRuntimeFilterRequest request;
-    std::shared_ptr<RpcClient> rpc_client = RpcClientFactory::getInstance().getClient(extractExchangeStatusHostPort(coordinator_address));
+    std::shared_ptr<RpcClient> rpc_client = RpcChannelPool::getInstance().getClient(extractExchangeStatusHostPort(coordinator_address), BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
     Protos::RuntimeFilterService_Stub runtime_filter_service(&rpc_client->getChannel());
     request.set_query_id(query_id);
     request.set_filter_id(filter_id);

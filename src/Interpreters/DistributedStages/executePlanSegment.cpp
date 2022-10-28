@@ -13,7 +13,7 @@
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/SegmentScheduler.h>
 #include <Processors/Exchange/DataTrans/Brpc/WriteBufferFromBrpcBuf.h>
-#include <Processors/Exchange/DataTrans/RpcClientFactory.h>
+#include <Processors/Exchange/DataTrans/RpcChannelPool.h>
 #include <Protos/plan_segment_manager.pb.h>
 #include <brpc/callback.h>
 #include <brpc/controller.h>
@@ -122,7 +122,7 @@ static void OnSendPlanSegmentCallback(Protos::ExecutePlanSegmentResponse * respo
 void executePlanSegmentRemotely(const PlanSegment & plan_segment, ContextPtr context, bool async)
 {
     auto execute_address = extractExchangeStatusHostPort(plan_segment.getCurrentAddress());
-    auto rpc_channel = RpcClientFactory::getInstance().getClient(execute_address);
+    auto rpc_channel = RpcChannelPool::getInstance().getClient(execute_address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
     Protos::PlanSegmentManagerService_Stub manager_stub(&rpc_channel->getChannel());
     Protos::ExecutePlanSegmentRequest request;
     request.set_brpc_protocol_revision(DBMS_BRPC_PROTOCOL_VERSION);

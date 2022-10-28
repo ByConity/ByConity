@@ -254,7 +254,7 @@ void MetastoreProxy::createUDF(const String & name_space, const DB::Protos::Data
     }
     catch (Exception & e)
     {
-        if (e.code() == bytekv::sdk::Errorcode::CAS_FAILED) {
+        if (e.code() == ErrorCodes::METASTORE_COMMIT_CAS_FAILURE) {
             throw Exception("UDF with function name - " + name + " in database - " +  database + " already exists.", ErrorCodes::FUNCTION_ALREADY_EXISTS);
         }
         throw e;
@@ -937,10 +937,11 @@ bool MetastoreProxy::writeIntent(const String & name_space, const String & inten
     }
     catch (Exception & e)
     {
-        if (e.code() == bytekv::sdk::Errorcode::CAS_FAILED)
+        if (e.code() == ErrorCodes::METASTORE_COMMIT_CAS_FAILURE)
         {
             for (auto & [index, new_value] : resp.puts)
             {
+                std::cout << "cas failed key: " << new_value << std::endl;
                 cas_failed_list.push_back(new_value);
             }
         }
@@ -966,7 +967,7 @@ bool MetastoreProxy::resetIntent(const String & name_space, const String & inten
     }
     catch (const Exception & e)
     {
-        if (e.code() == bytekv::sdk::Errorcode::CAS_FAILED)
+        if (e.code() == ErrorCodes::METASTORE_COMMIT_CAS_FAILURE)
             return false;
         else
             throw;
@@ -1022,7 +1023,7 @@ void MetastoreProxy::clearIntents(const String & name_space, const String & inte
             }
             catch (const Exception & e)
             {
-                if (e.code() == bytekv::sdk::Errorcode::CAS_FAILED)
+                if (e.code() == ErrorCodes::METASTORE_COMMIT_CAS_FAILURE)
                     LOG_WARNING(log, "CAS fail when cleaning the intent: " + intent_names[idx]);
                 else
                     throw e;
