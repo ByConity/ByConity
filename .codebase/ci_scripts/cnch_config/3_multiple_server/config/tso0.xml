@@ -42,7 +42,7 @@
     <keep_alive_timeout>3</keep_alive_timeout>
 
     <!-- Maximum number of concurrent queries. -->
-    <max_concurrent_queries>100</max_concurrent_queries>
+    <max_concurrent_queries>200</max_concurrent_queries>
 
     <!-- Set limit on number of open files (default: maximum). This setting makes sense on Mac OS X because getrlimit() fails to retrieve
          correct maximum value. -->
@@ -108,22 +108,6 @@
          Values for substitutions are specified in /yandex/name_of_substitution elements in that file.
       -->
 
-    <!-- ZooKeeper is used to store metadata about replicas, when using Replicated tables.
-         Optional. If you don't use replicated tables, you could omit that.
-
-         See https://clickhouse.yandex/docs/en/table_engines/replication/
-      -->
-    <!-- <zookeeper incl="zookeeper-servers" optional="true" /> -->
-
-    <!--
-    <zookeeper>
-        <node index="1">
-            <host>10.25.182.208</host>
-            <port>2181</port>
-        </node>
-    </zookeeper>
-    -->
-
     <!-- Substitutions for parameters of replicated tables.
           Optional. If you don't use replicated tables, you could omit that.
 
@@ -184,7 +168,51 @@
                     <port><name>PORT6</name><value>9500</value></port>
                 </ports>
             </node>
+            <node>
+                <host>ip_address_replace_me</host>
+                <hostname>server1</hostname>
+                <ports>
+                    <port><name>PORT0</name><value>11000</value></port>
+                    <port><name>PORT1</name><value>11001</value></port>
+                    <port><name>PORT2</name><value>11002</value></port>
+                    <port><name>PORT5</name><value>11005</value></port>
+                    <port><name>PORT6</name><value>11006</value></port>
+                </ports>
+            </node>
         </server>
+        <keeper>
+            <psm>data.cnch.keeper</psm>
+            <!-- dns is not support now -->
+            <node>
+                <host>ip_address_replace_me</host>
+                 <hostname>keeper0</hostname>
+                <id>1</id> <!-- id should be integer -->
+                <ports>
+                    <!-- interserver port -->
+                    <port><name>PORT1</name><value>9440</value></port>
+                    <!-- tcp port -->
+                    <port><name>PORT2</name><value>9181</value></port>
+                </ports>
+            </node>
+            <node>
+                <host>ip_address_replace_me</host>
+                 <hostname>keeper1</hostname>
+                <id>2</id>
+                <ports>
+                    <port><name>PORT1</name><value>9441</value></port>
+                    <port><name>PORT2</name><value>9182</value></port>
+                </ports>
+            </node>
+            <node>
+                <host>ip_address_replace_me</host>
+                 <hostname>keeper2</hostname>
+                <id>3</id>
+                <ports>
+                    <port><name>PORT1</name><value>9442</value></port>
+                    <port><name>PORT2</name><value>9183</value></port>
+                </ports>
+            </node>
+        </keeper>
         <tso>
             <psm>data.cnch.tso</psm>
             <!-- For dns -->
@@ -197,6 +225,22 @@
                 <ports>
                     <!-- RPC/Primary -->
                     <port><name>PORT0</name><value>8080</value></port>
+                </ports>
+            </node>
+            <node>
+                <host>ip_address_replace_me</host>
+                <hostname>tso1</hostname>
+                <ports>
+                    <!-- RPC/Primary -->
+                    <port><name>PORT0</name><value>8081</value></port>
+                </ports>
+            </node>
+            <node>
+                <host>ip_address_replace_me</host>
+                <hostname>tso2</hostname>
+                <ports>
+                    <!-- RPC/Primary -->
+                    <port><name>PORT0</name><value>8082</value></port>
                 </ports>
             </node>
         </tso>
@@ -299,18 +343,18 @@
         <use_fallback>true</use_fallback>
     </tso_service>
 
-    <data_paths>
-        <data_path>
-            <level>0</level>
-                <path>/cnch/cnch_test/server/data/</path>
-                <type>local</type>
-        </data_path>
-        <data_path>
-                <level>1</level>
-                <path>/user/cnch_ci/random_suffix_replace_me/</path>
-                <type>hdfs</type>
-        </data_path>
-    </data_paths>
+    <path>/cnch/cnch_test/keeper0/</path>
+    <keeper_server>
+        <tcp_port>9181</tcp_port> <!-- tcp port, Receive request (like Zookeeper) -->
+        <server_id>1</server_id>  <!-- should be uniq, used in leader-election -->
+        <log_storage_path>/cnch/cnch_test/keeper0/log</log_storage_path>
+        <snapshot_storage_path>/cnch/cnch_test/keeper0/snapshots</snapshot_storage_path>
 
-    <hdfs_nnproxy>data.bytehouse.nnproxy-hostnetwork.service.lf</hdfs_nnproxy>
+        <coordination_settings>
+            <operation_timeout_ms>10000</operation_timeout_ms>
+            <session_timeout_ms>30000</session_timeout_ms>
+            <raft_logs_level>information</raft_logs_level>
+            <compress_logs>1</compress_logs>
+        </coordination_settings>
+    </keeper_server>
 </yandex>

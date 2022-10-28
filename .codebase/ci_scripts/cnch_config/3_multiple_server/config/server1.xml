@@ -1,24 +1,23 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
   NOTE: User and query level settings are set up in "users.xml" file.
---><yandex>
+-->
+<yandex>
     <logger>
         <!-- Possible levels: https://github.com/pocoproject/poco/blob/develop/Foundation/include/Poco/Logger.h#L105 -->
         <level>trace</level>
-        <log>/test_output/server/server.log</log>
-        <errorlog>/test_output/server/server.err.log</errorlog>
-        <testlog>/test_output/server/server.test.log</testlog>
+        <log>/test_output/server1/server.log</log>
+        <errorlog>/test_output/server1/server.err.log</errorlog>
+        <testlog>/test_output/server1/server.test.log</testlog>
         <size>1000M</size>
         <count>10</count>
         <!-- <console>1</console> --> <!-- Default behavior is autodetection (log to console if not daemon mode and is tty) -->
     </logger>
-    <!--display_name>production</display_name--> <!-- It is the name that will be shown in the client -->
-    <http_port>8123</http_port>
-    <rpc_port>8223</rpc_port>
-    <tcp_port>9000</tcp_port>
-    <ha_tcp_port>10000</ha_tcp_port>
-    <exchange_port>9400</exchange_port>
-    <exchange_status_port>9500</exchange_status_port>
+    <tcp_port>11000</tcp_port>
+    <rpc_port>11001</rpc_port>
+    <http_port>11002</http_port>
+    <exchange_port>11005</exchange_port>
+    <exchange_status_port>11006</exchange_status_port>
 
     <!-- For HTTPS and SSL over native protocol. -->
     <!--
@@ -93,7 +92,7 @@
     -->
 
     <!-- Port for communication between replicas. Used for data exchange. -->
-    <interserver_http_port>9009</interserver_http_port>
+    <interserver_http_port>11009</interserver_http_port>
 
     <!-- Hostname that is used by other replicas to request this server.
          If not specified, than it is determined analoguous to 'hostname -f' command.
@@ -105,7 +104,6 @@
 
     <!-- Listen specified host. use :: (wildcard IPv6 address), if you want to accept connections both with IPv4 and IPv6 from everywhere. -->
     <listen_host>::</listen_host>
-<!--    <listen_host>0.0.0.0</listen_host>-->
     <!-- Default values - try listen localhost on ipv4 and ipv6: -->
     <!--
     <listen_host>::1</listen_host>
@@ -146,7 +144,7 @@
     <resource_usage_sync_interval>5</resource_usage_sync_interval>
 
     <!-- Path to data directory, with trailing slash. -->
-    <path>/clickhouse/cnch_test/server/</path>
+    <path>/clickhouse/cnch_test/server1/</path>
 
     <!-- Path to temporary data for processing hard queries. -->
     <tmp_path>/clickhouse/cnch_test/server/tmp/</tmp_path>
@@ -154,7 +152,7 @@
     <!-- Directory with user provided files that are accessible by 'file' table function. -->
 
     <!-- Path to configuration file with users, access rights, profiles of settings, quotas. -->
-    <users_config>/home/code/.codebase/ci_scripts/cnch_config/1_single_server/config/users.xml</users_config>
+    <users_config>/home/code/.codebase/ci_scripts/cnch_config/3_multiple_server/config/users.xml</users_config>
 
     <!-- Default profile of settings. -->
     <default_profile>default</default_profile>
@@ -247,20 +245,6 @@
          By default, path to file with substitutions is /etc/metrika.xml. It could be changed in config in 'include_from' element.
          Values for substitutions are specified in /yandex/name_of_substitution elements in that file.
       -->
-
-    <!-- ZooKeeper is used to store metadata about replicas, when using Replicated tables.
-         Optional. If you don't use replicated tables, you could omit that.
-
-         See https://clickhouse.yandex/docs/en/table_engines/replication/
-      -->
-   <!-- <zookeeper incl="zookeeper-servers" optional="true" /> -->
-
-<!--   <zookeeper>-->
-<!--        <node index="1">-->
-<!--            <host>10.25.182.208</host>-->
-<!--            <port>2181</port>-->
-<!--        </node>-->
-<!--    </zookeeper>-->
 
     <!-- Substitutions for parameters of replicated tables.
           Optional. If you don't use replicated tables, you could omit that.
@@ -503,7 +487,51 @@
                     <port><name>PORT6</name><value>9500</value></port>
                 </ports>
             </node>
+            <node>
+                <host>ip_address_replace_me</host>
+                <hostname>server1</hostname>
+                <ports>
+                    <port><name>PORT0</name><value>11000</value></port>
+                    <port><name>PORT1</name><value>11001</value></port>
+                    <port><name>PORT2</name><value>11002</value></port>
+                    <port><name>PORT5</name><value>11005</value></port>
+                    <port><name>PORT6</name><value>11006</value></port>
+                </ports>
+            </node>
         </server>
+        <keeper>
+            <psm>data.cnch.keeper</psm>
+            <!-- dns is not support now -->
+            <node>
+                <host>ip_address_replace_me</host>
+                 <hostname>keeper0</hostname>
+                <id>1</id> <!-- id should be integer -->
+                <ports>
+                    <!-- interserver port -->
+                    <port><name>PORT1</name><value>9440</value></port>
+                    <!-- tcp port -->
+                    <port><name>PORT2</name><value>9181</value></port>
+                </ports>
+            </node>
+            <node>
+                <host>ip_address_replace_me</host>
+                 <hostname>keeper1</hostname>
+                <id>2</id>
+                <ports>
+                    <port><name>PORT1</name><value>9441</value></port>
+                    <port><name>PORT2</name><value>9182</value></port>
+                </ports>
+            </node>
+            <node>
+                <host>ip_address_replace_me</host>
+                 <hostname>keeper2</hostname>
+                <id>3</id>
+                <ports>
+                    <port><name>PORT1</name><value>9442</value></port>
+                    <port><name>PORT2</name><value>9183</value></port>
+                </ports>
+            </node>
+        </keeper>
         <tso>
             <psm>data.cnch.tso</psm>
             <!-- For dns -->
@@ -516,6 +544,22 @@
                 <ports>
                     <!-- RPC/Primary -->
                     <port><name>PORT0</name><value>8080</value></port>
+                </ports>
+            </node>
+            <node>
+                <host>ip_address_replace_me</host>
+                <hostname>tso1</hostname>
+                <ports>
+                    <!-- RPC/Primary -->
+                    <port><name>PORT0</name><value>8081</value></port>
+                </ports>
+            </node>
+            <node>
+                <host>ip_address_replace_me</host>
+                <hostname>tso2</hostname>
+                <ports>
+                    <!-- RPC/Primary -->
+                    <port><name>PORT0</name><value>8082</value></port>
                 </ports>
             </node>
         </tso>
@@ -747,30 +791,10 @@
         <flush_interval_milliseconds>7500</flush_interval_milliseconds>
     </kafka_log>
 
-    <bytejournal>
-        <log_dir>/shared/server/log/logs_bytejournal</log_dir>
-        <uri>bytejournal://10.145.105.86:8767,10.145.105.164:8767,10.145.105.149:8767?meta_type=sorteddb&amp;is_consul=false</uri>
-        <metrics_prefix>cnch</metrics_prefix>
-        <namespace>cnch_test</namespace>
-        <cnch_prefix>cnch_ci_random_suffix_replace_me_</cnch_prefix> <!-- add a random suffix to avoid same Bytejournal key names-->
-        <retention_ms>14400000</retention_ms>
-        <max_write_throughput_bytes>1073741824</max_write_throughput_bytes>
-        <!-- For bytejournal audit logs . Can be one of following : [none,native,databus]. https://jira.bytedance.com/browse/CNCH-270 -->
-        <metadata_audit_type>none</metadata_audit_type>
-        <max_rollover_size>536870912</max_rollover_size>  <!-- 512MiB -->
-    </bytejournal>
-
     <server_leader_election>
         <check_leader_info_interval_ms>1000</check_leader_info_interval_ms>
         <wait_before_become_leader_ms>3000</wait_before_become_leader_ms>
         <max_retry_times>3</max_retry_times>
-        <bytejournal>
-            <renewal_interval_ms>1000</renewal_interval_ms>
-            <polling_interval_ms>1000</polling_interval_ms>
-            <error_retry_interval_ms>1000</error_retry_interval_ms>
-            <lease_interval_ms>3000</lease_interval_ms>
-            <failover_interval_ms>5000</failover_interval_ms>
-        </bytejournal>
     </server_leader_election>
 
     <!-- JUMP for jump hash, RING for ring hash, MULTI_PROBE for multi probe hash -->

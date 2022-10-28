@@ -1,0 +1,262 @@
+<?xml version="1.0"?>
+<!--
+  NOTE: User and query level settings are set up in "users.xml" file.
+-->
+<yandex>
+    <logger>
+        <!-- Possible levels: https://github.com/pocoproject/poco/blob/develop/Foundation/include/Poco/Logger.h#L105 -->
+        <level>trace</level>
+        <log>/test_output/resource-manager/resource-manager.log</log>
+        <errorlog>/test_output/resource-manager/resource-manager.err.log</errorlog>
+        <testlog>/test_output/resource-manager/resource-manager.test.log</testlog>
+        <size>1000M</size>
+        <count>10</count>
+        <!-- <console>1</console> --> <!-- Default behavior is autodetection (log to console if not daemon mode and is tty) -->
+    </logger>
+    <!--display_name>production</display_name--> <!-- It is the name that will be shown in the client -->
+    <!-- <rpc_port>8989</rpc_port> -->
+
+    <cnch_data_retention_time_in_sec>60</cnch_data_retention_time_in_sec>
+    <background_schedule_pool_size>10</background_schedule_pool_size>
+
+    <!-- Path to data directory, with trailing slash. -->
+    <path>/clickhouse/cnch_test/rm0/</path>
+
+    <catalog>
+        <name_space>random_suffix_replace_me</name_space>
+    </catalog>
+
+    <catalog_service>
+        <!--Metastore storage type, support `bytekv` and `fdb`-->
+        <type>fdb</type>
+        <bytekv>
+            <service_name>bytedance.bytekv.cnch_meta.service.lf</service_name>
+            <cluster_name>cnch_meta</cluster_name>
+            <name_space>bytekv_cnch_build</name_space>
+            <table_name>cnch_meta_for_build</table_name>
+        </bytekv>
+        <fdb>
+            <cluster_file>fdb_cluster_config_path_replace_me</cluster_file>>
+        </fdb>
+    </catalog_service>
+
+    <service_discovery>
+        <!--Service Discovery local/consul/dns -->
+        <mode>local</mode>
+        <cluster>default</cluster>
+        <disable_cache>false</disable_cache>
+        <cache_timeout>5</cache_timeout>
+        <server>
+            <psm>data.cnch.server</psm>
+            <!-- For dns -->
+            <service>cnch-server</service>
+            <headless_service>cnch-server-headless</headless_service>
+            <!-- For local test -->
+            <node>
+                <host>ip_address_replace_me</host>
+                <hostname>server0</hostname>
+                <ports>
+                    <!-- TCP/Primary -->
+                    <port><name>PORT0</name><value>9000</value></port>
+                    <!-- RPC -->
+                    <port><name>PORT1</name><value>8223</value></port>
+                    <!-- HTTP -->
+                    <port><name>PORT2</name><value>8123</value></port>
+                    <!-- TCP_SECURE -->
+                    <port><name>PORT3</name><value>9002</value></port>
+                    <!-- HTTPS_PORT -->
+                    <port><name>PORT4</name><value>8125</value></port>
+                    <!-- Exchange Stream Port-->
+                    <port><name>PORT5</name><value>9400</value></port>
+                    <!-- Exchange Status Port-->
+                    <port><name>PORT6</name><value>9500</value></port>
+                </ports>
+            </node>
+            <node>
+                <host>ip_address_replace_me</host>
+                <hostname>server1</hostname>
+                <ports>
+                    <port><name>PORT0</name><value>11000</value></port>
+                    <port><name>PORT1</name><value>11001</value></port>
+                    <port><name>PORT2</name><value>11002</value></port>
+                    <port><name>PORT5</name><value>11005</value></port>
+                    <port><name>PORT6</name><value>11006</value></port>
+                </ports>
+            </node>
+        </server>
+        <keeper>
+            <psm>data.cnch.keeper</psm>
+            <!-- dns is not support now -->
+            <node>
+                <host>ip_address_replace_me</host>
+                 <hostname>keeper0</hostname>
+                <id>1</id> <!-- id should be integer -->
+                <ports>
+                    <!-- interserver port -->
+                    <port><name>PORT1</name><value>9440</value></port>
+                    <!-- tcp port -->
+                    <port><name>PORT2</name><value>9181</value></port>
+                </ports>
+            </node>
+            <node>
+                <host>ip_address_replace_me</host>
+                 <hostname>keeper1</hostname>
+                <id>2</id>
+                <ports>
+                    <port><name>PORT1</name><value>9441</value></port>
+                    <port><name>PORT2</name><value>9182</value></port>
+                </ports>
+            </node>
+            <node>
+                <host>ip_address_replace_me</host>
+                 <hostname>keeper2</hostname>
+                <id>3</id>
+                <ports>
+                    <port><name>PORT1</name><value>9442</value></port>
+                    <port><name>PORT2</name><value>9183</value></port>
+                </ports>
+            </node>
+        </keeper>
+        <tso>
+            <psm>data.cnch.tso</psm>
+            <!-- For dns -->
+            <service>cnch-tso</service>
+            <headless_service>cnch-tso-headless</headless_service>
+            <!-- For local test -->
+            <node>
+                <host>ip_address_replace_me</host>
+                <hostname>tso0</hostname>
+                <ports>
+                    <!-- RPC/Primary -->
+                    <port><name>PORT0</name><value>8080</value></port>
+                </ports>
+            </node>
+            <node>
+                <host>ip_address_replace_me</host>
+                <hostname>tso1</hostname>
+                <ports>
+                    <port><name>PORT0</name><value>8081</value></port>
+                </ports>
+            </node>
+            <node>
+                <host>ip_address_replace_me</host>
+                <hostname>tso2</hostname>
+                <ports>
+                    <port><name>PORT0</name><value>8082</value></port>
+                </ports>
+            </node>
+        </tso>
+        <daemon_manager>
+            <psm>data.cnch.daemon_manager</psm>
+            <!-- For dns -->
+            <service>cnch-daemonmanager</service>
+            <headless_service>cnch-daemonmanager-headless</headless_service>
+            <!-- For local test -->
+            <node>
+                <host>ip_address_replace_me</host>
+                <hostname>dm0</hostname>
+                <ports>
+                    <!-- RPC/Primary -->
+                    <port><name>PORT0</name><value>8090</value></port>
+                </ports>
+            </node>
+        </daemon_manager>
+        <resource_manager>
+            <psm>data.cnch.resource_manager</psm>
+            <!-- For dns -->
+            <service>cnch-resourcemanager</service>
+            <headless_service>cnch-resourcemanager-headless</headless_service>
+            <!-- For local test -->
+            <node>
+                <host>ip_address_replace_me</host>
+                <hostname>rm0</hostname>
+                <ports>
+                    <!-- RPC/Primary -->
+                    <port><name>PORT0</name><value>8989</value></port>
+                </ports>
+            </node>
+            <!-- <node>
+                <host>ip_address_replace_me</host>
+                <hostname>rm0</hostname>
+                <ports>
+                    <port><name>PORT0</name><value>8990</value></port>
+                </ports>
+            </node> -->
+        </resource_manager>
+        <vw>
+            <psm>data.cnch.vw_default</psm>
+            <!-- For local test -->
+            <node>
+                <vw_name>vw_default</vw_name>
+                <host>ip_address_replace_me</host>
+                <hostname>vw_default0</hostname>
+                <ports>
+                    <!-- TCP/Primary -->
+                    <port><name>PORT0</name><value>9001</value></port>
+                    <!-- RPC -->
+                    <port><name>PORT1</name><value>8224</value></port>
+                    <!-- HTTP -->
+                    <port><name>PORT2</name><value>8124</value></port>
+                    <!-- TCP_SECURE -->
+                    <port><name>PORT3</name><value>9003</value></port>
+                    <!-- HTTPS_PORT -->
+                    <port><name>PORT4</name><value>8126</value></port>
+                    <!-- Exchange Stream Port-->
+                    <port><name>PORT5</name><value>9410</value></port>
+                    <!-- Exchange Status Port-->
+                    <port><name>PORT6</name><value>9510</value></port>
+                </ports>
+            </node>
+            <node>
+                <vw_name>vw_write</vw_name>
+                <host>ip_address_replace_me</host>
+                <hostname>vw_write0</hostname>
+                <ports>
+                    <!-- TCP/Primary -->
+                    <port><name>PORT0</name><value>9001</value></port>
+                    <!-- RPC -->
+                    <port><name>PORT1</name><value>8224</value></port>
+                    <!-- HTTP -->
+                    <port><name>PORT2</name><value>8124</value></port>
+                    <!-- TCP_SECURE -->
+                    <port><name>PORT3</name><value>9003</value></port>
+                    <!-- HTTPS_PORT -->
+                    <port><name>PORT4</name><value>8126</value></port>
+                    <!-- Exchange Stream Port-->
+                    <port><name>PORT5</name><value>9410</value></port>
+                    <!-- Exchange Status Port-->
+                    <port><name>PORT6</name><value>9510</value></port>
+                </ports>
+            </node>
+        </vw>
+    </service_discovery>
+
+    <resource_manager>
+        <port>8989</port>
+        <vws>
+           <vw>
+               <name>vw_default</name>
+               <type>Default</type>
+               <num_workers>1</num_workers>
+               <worker_groups>
+                   <worker_group>
+                       <name>default</name>
+                       <type>Physical</type>
+                   </worker_group>
+               </worker_groups>
+           </vw>
+           <vw>
+               <name>vw_write</name>
+               <type>Write</type>
+               <num_workers>1</num_workers>
+               <worker_groups>
+                   <worker_group>
+                       <name>write</name>
+                       <type>Physical</type>
+                   </worker_group>
+               </worker_groups>
+           </vw>
+        </vws>
+    </resource_manager>
+
+</yandex>

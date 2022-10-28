@@ -353,17 +353,7 @@
         <fdb>
             <cluster_file>/path/to/fdb/cluster_config</cluster_file>
         </fdb>
-        <bytejournal>
-            <renewal_interval_ms>1000</renewal_interval_ms>
-            <polling_interval_ms>1000</polling_interval_ms>
-            <error_retry_interval_ms>1000</error_retry_interval_ms>
-            <lease_interval_ms>3000</lease_interval_ms>
-            <failover_interval_ms>4000</failover_interval_ms>
-            <election_point_key>tso_election_point_canh_1_1</election_point_key>
-        </bytejournal>
         <tso_window_ms>3000</tso_window_ms>
-
-        <tso_get_leader_info_interval_ms>0</tso_get_leader_info_interval_ms>
         <tso_max_retry_count>3</tso_max_retry_count>
     </tso_service>
 
