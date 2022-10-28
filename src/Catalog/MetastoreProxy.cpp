@@ -845,7 +845,7 @@ std::vector<std::pair<String, UInt64>> MetastoreProxy::getTransactionRecords(con
         return {};
 
     Strings txn_keys;
-    txn_keys.reserve(txn_keys.size());
+    txn_keys.reserve(txn_ids.size());
     for (const auto & txn_id : txn_ids)
         txn_keys.push_back(transactionRecordKey(name_space, txn_id.toUInt64()));
 
