@@ -120,9 +120,14 @@ public:
     /// For mysql
     UInt64 connection_id = 0;
 
+    UInt32 brpc_protocol_major_version = 0;
     /// For brpc inter server communication protocol
+<<<<<<< HEAD
     UInt16 rpc_port = 0;
     UInt32 brpc_protocol_version = 0;
+=======
+    UInt32 brpc_protocol_minor_version = 0;
+>>>>>>> eaf774c32ce... add brpc major version
 
     /// Client type
     ClientType client_type = ClientType::UNKNOWN;
