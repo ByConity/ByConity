@@ -191,6 +191,12 @@ private:
 
     void ingestPartition(const struct PartitionCommand & command, const ContextPtr local_context);
 
+    /// Check if the ALTER can be performed:
+    /// - all needed columns are present.
+    /// - all type conversions can be done.
+    /// - columns corresponding to primary key, indices, sign, sampling expression and date are not affected.
+    /// If something is wrong, throws an exception.
+    void checkAlterInCnchServer(const AlterCommands & commands, ContextPtr local_context) const;
 };
 
 struct PrepareContextResult

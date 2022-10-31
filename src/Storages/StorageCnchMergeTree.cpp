@@ -1,4 +1,5 @@
 #include <Storages/StorageCnchMergeTree.h>
+#include <DataTypes/DataTypeEnum.h>
 
 #include <Catalog/Catalog.h>
 #include <CloudServices/CnchCreateQueryHelper.h>
@@ -22,9 +23,11 @@
 #include <Interpreters/VirtualWarehousePool.h>
 #include <Interpreters/trySetVirtualWarehouse.h>
 #include <Interpreters/evaluateConstantExpression.h>
+#include <Interpreters/inplaceBlockConversions.h>
 #include <MergeTreeCommon/CnchBucketTableCommon.h>
 #include <MergeTreeCommon/MergeTreeDataDeduper.h>
 #include <Parsers/ASTCheckQuery.h>
+#include <Parsers/ASTSetQuery.h>
 #include <Parsers/ASTOptimizeQuery.h>
 #include <Parsers/queryToString.h>
 #include <Storages/AlterCommands.h>
@@ -83,6 +86,8 @@ namespace ErrorCodes
     extern const int BUCKET_TABLE_ENGINE_MISMATCH;
     extern const int INCOMPATIBLE_COLUMNS;
     extern const int CNCH_LOCK_ACQUIRE_FAILED;
+    extern const int ALTER_OF_COLUMN_IS_FORBIDDEN;
+    extern const int READONLY_SETTING;
 }
 
 /// Get basic select query to read from prepared pipe: remove prewhere, sampling, offset, final
@@ -1236,6 +1241,369 @@ void StorageCnchMergeTree::filterPartsInExplicitTransaction(ServerDataPartsVecto
             && check_success_txn(part->part_model_wrapper->part_model->secondary_txn_id()));
     });
     getCommittedServerDataParts(data_parts, start_time, &(*local_context->getCnchCatalog()));
+}
+
+namespace
+{
+
+/// Conversion that is allowed for serializable key (primary key, sorting key).
+/// Key should be serialized in the same way after conversion.
+/// NOTE: The list is not complete.
+bool isSafeForKeyConversion(const IDataType * from, const IDataType * to)
+{
+    if (from->getName() == to->getName())
+        return true;
+
+    /// Enums are serialized in partition key as numbers - so conversion from Enum to number is Ok.
+    /// But only for types of identical width because they are serialized as binary in minmax index.
+    /// But not from number to Enum because Enum does not necessarily represents all numbers.
+
+    if (const auto * from_enum8 = typeid_cast<const DataTypeEnum8 *>(from))
+    {
+        if (const auto * to_enum8 = typeid_cast<const DataTypeEnum8 *>(to))
+            return to_enum8->contains(*from_enum8);
+        if (typeid_cast<const DataTypeInt8 *>(to))
+            return true;    // NOLINT
+        return false;
+    }
+
+    if (const auto * from_enum16 = typeid_cast<const DataTypeEnum16 *>(from))
+    {
+        if (const auto * to_enum16 = typeid_cast<const DataTypeEnum16 *>(to))
+            return to_enum16->contains(*from_enum16);
+        if (typeid_cast<const DataTypeInt16 *>(to))
+            return true;    // NOLINT
+        return false;
+    }
+
+    if (const auto * from_lc = typeid_cast<const DataTypeLowCardinality *>(from))
+        return from_lc->getDictionaryType()->equals(*to);
+
+    if (const auto * to_lc = typeid_cast<const DataTypeLowCardinality *>(to))
+        return to_lc->getDictionaryType()->equals(*from);
+
+    return false;
+}
+/// Special check for alters of VersionedCollapsingMergeTree version column
+void checkVersionColumnTypesConversion(const IDataType * old_type, const IDataType * new_type, const String column_name)
+{
+    /// Check new type can be used as version
+    if (!new_type->canBeUsedAsVersion())
+        throw Exception("Cannot alter version column " + backQuoteIfNeed(column_name) +
+            " to type " + new_type->getName() +
+            " because version column must be of an integer type or of type Date or DateTime"
+            , ErrorCodes::ALTER_OF_COLUMN_IS_FORBIDDEN);
+
+    auto which_new_type = WhichDataType(new_type);
+    auto which_old_type = WhichDataType(old_type);
+
+    /// Check alter to different sign or float -> int and so on
+    if ((which_old_type.isInt() && !which_new_type.isInt())
+        || (which_old_type.isUInt() && !which_new_type.isUInt())
+        || (which_old_type.isDate() && !which_new_type.isDate())
+        || (which_old_type.isDateTime() && !which_new_type.isDateTime())
+        || (which_old_type.isFloat() && !which_new_type.isFloat()))
+    {
+        throw Exception("Cannot alter version column " + backQuoteIfNeed(column_name) +
+            " from type " + old_type->getName() +
+            " to type " + new_type->getName() + " because new type will change sort order of version column." +
+            " The only possible conversion is expansion of the number of bytes of the current type."
+            , ErrorCodes::ALTER_OF_COLUMN_IS_FORBIDDEN);
+    }
+
+    /// Check alter to smaller size: UInt64 -> UInt32 and so on
+    if (new_type->getSizeOfValueInMemory() < old_type->getSizeOfValueInMemory())
+    {
+        throw Exception("Cannot alter version column " + backQuoteIfNeed(column_name) +
+            " from type " + old_type->getName() +
+            " to type " + new_type->getName() + " because new type is smaller than current in the number of bytes." +
+            " The only possible conversion is expansion of the number of bytes of the current type."
+            , ErrorCodes::ALTER_OF_COLUMN_IS_FORBIDDEN);
+    }
+}
+}
+
+void StorageCnchMergeTree::checkAlterInCnchServer(const AlterCommands & commands, ContextPtr local_context) const
+{
+    StorageInMemoryMetadata new_metadata = getInMemoryMetadata();
+    StorageInMemoryMetadata old_metadata = getInMemoryMetadata();
+
+    const auto & settings = local_context->getSettingsRef();
+
+    if (!settings.allow_non_metadata_alters)
+    {
+        auto mutation_commands = commands.getMutationCommands(new_metadata, settings.materialize_ttl_after_modify, getContext());
+
+        if (!mutation_commands.empty())
+            throw Exception(ErrorCodes::ALTER_OF_COLUMN_IS_FORBIDDEN, "The following alter commands: '{}' will modify data on disk, but setting `allow_non_metadata_alters` is disabled", queryToString(mutation_commands.ast()));
+    }
+    commands.apply(new_metadata, getContext());
+
+    /// Set of columns that shouldn't be altered.
+    NameSet columns_alter_type_forbidden;
+
+    /// Primary key columns can be ALTERed only if they are used in the key as-is
+    /// (and not as a part of some expression) and if the ALTER only affects column metadata.
+    NameSet columns_alter_type_metadata_only;
+
+    /// Columns to check that the type change is safe for partition key.
+    NameSet columns_alter_type_check_safe_for_partition;
+
+    if (old_metadata.hasPartitionKey())
+    {
+        /// Forbid altering columns inside partition key expressions because it can change partition ID format.
+        auto partition_key_expr = old_metadata.getPartitionKey().expression;
+        for (const auto & action : partition_key_expr->getActions())
+        {
+            for (const auto * child : action.node->children)
+                columns_alter_type_forbidden.insert(child->result_name);
+        }
+
+        /// But allow to alter columns without expressions under certain condition.
+        for (const String & col : partition_key_expr->getRequiredColumns())
+            columns_alter_type_check_safe_for_partition.insert(col);
+    }
+
+    if (old_metadata.hasUniqueKey())
+    {
+        for (const String & col : old_metadata.getColumnsRequiredForUniqueKey())
+            columns_alter_type_forbidden.insert(col);
+
+        if (!merging_params.version_column.empty())
+            columns_alter_type_forbidden.insert(merging_params.version_column);
+    }
+
+    for (const auto & index : old_metadata.getSecondaryIndices())
+    {
+        for (const String & col : index.expression->getRequiredColumns())
+            columns_alter_type_forbidden.insert(col);
+    }
+
+    if (old_metadata.hasSortingKey())
+    {
+        auto old_sorting_key_expr = old_metadata.getSortingKey().expression;
+        for (const auto & action : old_sorting_key_expr->getActions())
+        {
+            for (const auto * child : action.node->children)
+                columns_alter_type_forbidden.insert(child->result_name);
+        }
+        for (const String & col : old_sorting_key_expr->getRequiredColumns())
+            columns_alter_type_metadata_only.insert(col);
+
+        /// We don't process sample_by_ast separately because it must be among the primary key columns
+        /// and we don't process primary_key_expr separately because it is a prefix of sorting_key_expr.
+    }
+    if (!merging_params.sign_column.empty())
+        columns_alter_type_forbidden.insert(merging_params.sign_column);
+
+    /// All of the above.
+    NameSet columns_in_keys;
+    columns_in_keys.insert(columns_alter_type_forbidden.begin(), columns_alter_type_forbidden.end());
+    columns_in_keys.insert(columns_alter_type_metadata_only.begin(), columns_alter_type_metadata_only.end());
+    columns_in_keys.insert(columns_alter_type_check_safe_for_partition.begin(), columns_alter_type_check_safe_for_partition.end());
+
+    NameSet dropped_columns;
+
+    std::map<String, const IDataType *> old_types;
+    for (const auto & column : old_metadata.getColumns().getAllPhysical())
+        old_types.emplace(column.name, column.type.get());
+
+    NameSet columns_already_in_alter;
+    auto all_mutations = getContext()->getCnchCatalog()->getAllMutations(getStorageID());
+
+    for (auto & mutation: all_mutations)
+    {
+        auto entry = CnchMergeTreeMutationEntry::parse(mutation);
+
+        for (auto command: entry.commands)
+        {
+            if (!command.column_name.empty())
+                columns_already_in_alter.emplace(command.column_name);
+        }
+    }
+
+    NamesAndTypesList columns_to_check_conversion;
+    auto name_deps = getDependentViewsByColumn(local_context);
+
+    for (const AlterCommand & command : commands)
+    {
+        /// Just validate partition expression
+        if (command.partition)
+        {
+            getPartitionIDFromQuery(command.partition, getContext());
+        }
+
+        if (command.column_name == merging_params.version_column)
+        {
+            /// Some type changes for version column is allowed despite it's a part of sorting key
+            if (command.type == AlterCommand::MODIFY_COLUMN)
+            {
+                const IDataType * new_type = command.data_type.get();
+                const IDataType * old_type = old_types[command.column_name];
+
+                if (new_type)
+                    checkVersionColumnTypesConversion(old_type, new_type, command.column_name);
+
+                /// No other checks required
+                continue;
+            }
+            else if (command.type == AlterCommand::DROP_COLUMN)
+            {
+                throw Exception(
+                    "Trying to ALTER DROP version " + backQuoteIfNeed(command.column_name) + " column",
+                    ErrorCodes::ALTER_OF_COLUMN_IS_FORBIDDEN);
+            }
+            else if (command.type == AlterCommand::RENAME_COLUMN)
+            {
+                throw Exception(
+                    "Trying to ALTER RENAME version " + backQuoteIfNeed(command.column_name) + " column",
+                    ErrorCodes::ALTER_OF_COLUMN_IS_FORBIDDEN);
+            }
+        }
+
+        if (command.type == AlterCommand::MODIFY_ORDER_BY && !is_custom_partitioned)
+        {
+            throw Exception(
+                "ALTER MODIFY ORDER BY is not supported for default-partitioned tables created with the old syntax",
+                ErrorCodes::BAD_ARGUMENTS);
+        }
+        if (command.type == AlterCommand::MODIFY_TTL && !is_custom_partitioned)
+        {
+            throw Exception(
+                "ALTER MODIFY TTL is not supported for default-partitioned tables created with the old syntax",
+                ErrorCodes::BAD_ARGUMENTS);
+        }
+        if (command.type == AlterCommand::MODIFY_SAMPLE_BY)
+        {
+            if (!is_custom_partitioned)
+                throw Exception(
+                    "ALTER MODIFY SAMPLE BY is not supported for default-partitioned tables created with the old syntax",
+                    ErrorCodes::BAD_ARGUMENTS);
+
+            checkSampleExpression(new_metadata, getSettings()->compatibility_allow_sampling_expression_not_in_primary_key);
+        }
+        if (command.type == AlterCommand::ADD_INDEX && !is_custom_partitioned)
+        {
+            throw Exception(
+                "ALTER ADD INDEX is not supported for tables with the old syntax",
+                ErrorCodes::BAD_ARGUMENTS);
+        }
+        if (command.type == AlterCommand::ADD_PROJECTION && !is_custom_partitioned)
+        {
+            throw Exception(
+                "ALTER ADD PROJECTION is not supported for tables with the old syntax",
+                ErrorCodes::BAD_ARGUMENTS);
+        }
+        if (command.type == AlterCommand::RENAME_COLUMN)
+        {
+            if (columns_in_keys.count(command.column_name))
+            {
+                throw Exception(
+                    "Trying to ALTER RENAME key " + backQuoteIfNeed(command.column_name) + " column which is a part of key expression",
+                    ErrorCodes::ALTER_OF_COLUMN_IS_FORBIDDEN);
+            }
+        }
+        else if (command.type == AlterCommand::DROP_COLUMN)
+        {
+            if (columns_in_keys.count(command.column_name))
+            {
+                throw Exception(
+                    "Trying to ALTER DROP key " + backQuoteIfNeed(command.column_name) + " column which is a part of key expression",
+                    ErrorCodes::ALTER_OF_COLUMN_IS_FORBIDDEN);
+            }
+
+            if (command.clear)
+                throw Exception(ErrorCodes::NOT_IMPLEMENTED, "CLEAR COLUMN is not supported by storage {}", getName());
+
+            if (!command.clear)
+            {
+                const auto & deps_mv = name_deps[command.column_name];
+                if (!deps_mv.empty())
+                {
+                    throw Exception(
+                        "Trying to ALTER DROP column " + backQuoteIfNeed(command.column_name) + " which is referenced by materialized view "
+                            + toString(deps_mv),
+                        ErrorCodes::ALTER_OF_COLUMN_IS_FORBIDDEN);
+                }
+            }
+
+
+            if (command.partition_predicate)
+                throw Exception(ErrorCodes::NOT_IMPLEMENTED, "CLEAR COLUMN IN PARTITION WHERE is not supported by storage {}", getName());
+
+            dropped_columns.emplace(command.column_name);
+        }
+        else if (command.isRequireMutationStage(getInMemoryMetadata()))
+        {
+            /// This alter will override data on disk. Let's check that it doesn't
+            /// modify immutable column.
+            if (columns_alter_type_forbidden.count(command.column_name))
+                throw Exception("ALTER of key column " + backQuoteIfNeed(command.column_name) + " is forbidden",
+                    ErrorCodes::ALTER_OF_COLUMN_IS_FORBIDDEN);
+
+            if (command.type == AlterCommand::MODIFY_COLUMN)
+            {
+                if (columns_alter_type_check_safe_for_partition.count(command.column_name))
+                {
+                    auto it = old_types.find(command.column_name);
+
+                    assert(it != old_types.end());
+                    if (!isSafeForKeyConversion(it->second, command.data_type.get()))
+                        throw Exception("ALTER of partition key column " + backQuoteIfNeed(command.column_name) + " from type "
+                                + it->second->getName() + " to type " + command.data_type->getName()
+                                + " is not safe because it can change the representation of partition key",
+                            ErrorCodes::ALTER_OF_COLUMN_IS_FORBIDDEN);
+                }
+
+                if (columns_alter_type_metadata_only.count(command.column_name))
+                {
+                    auto it = old_types.find(command.column_name);
+                    assert(it != old_types.end());
+                    if (!isSafeForKeyConversion(it->second, command.data_type.get()))
+                        throw Exception("ALTER of key column " + backQuoteIfNeed(command.column_name) + " from type "
+                                    + it->second->getName() + " to type " + command.data_type->getName()
+                                    + " is not safe because it can change the representation of primary key",
+                            ErrorCodes::ALTER_OF_COLUMN_IS_FORBIDDEN);
+                }
+
+                if (old_metadata.getColumns().has(command.column_name))
+                {
+                    columns_to_check_conversion.push_back(
+                        new_metadata.getColumns().getPhysical(command.column_name));
+                }
+            }
+        }
+    }
+
+    checkProperties(new_metadata, old_metadata);
+    checkTTLExpressions(new_metadata, old_metadata);
+
+    if (!columns_to_check_conversion.empty())
+    {
+        auto old_header = old_metadata.getSampleBlock();
+        performRequiredConversions(old_header, columns_to_check_conversion, getContext());
+    }
+
+    for (const auto & part : getDataPartsVector())
+    {
+        bool at_least_one_column_rest = false;
+        for (const auto & column : part->getColumns())
+        {
+            if (!dropped_columns.count(column.name))
+            {
+                at_least_one_column_rest = true;
+                break;
+            }
+        }
+        if (!at_least_one_column_rest)
+        {
+            std::string postfix;
+            if (dropped_columns.size() > 1)
+                postfix = "s";
+            throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                "Cannot drop or clear column{} '{}', because all columns in part '{}' will be removed from disk. Empty parts are not allowed", postfix, boost::algorithm::join(dropped_columns, ", "), part->name);
+        }
+    }
 }
 
 void StorageCnchMergeTree::checkAlterIsPossible(const AlterCommands & commands, ContextPtr local_context) const
