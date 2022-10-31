@@ -588,11 +588,6 @@ void PartCacheManager::loadActiveTables()
         return;
     LOG_DEBUG(&Poco::Logger::get("PartCacheManager"), "Reloading {} active tables.", tables_meta.size());
 
-    /// prepare session context to create storage from metadata.
-    auto session_context = Context::createCopy(getContext()->getGlobalContext());
-    session_context->makeSessionContext();
-    session_context->makeQueryContext();
-
     auto rpc_port = getContext()->getRPCPort();
     for (auto & table_meta : tables_meta)
     {
@@ -602,7 +597,7 @@ void PartCacheManager::loadActiveTables()
         auto entry = getTableMeta(RPCHelpers::createUUID(table_meta.uuid()));
         if (!entry)
         {
-            StoragePtr table = Catalog::CatalogFactory::getTableByDataModel(session_context, &table_meta);
+            StoragePtr table = Catalog::CatalogFactory::getTableByDataModel(getContext(), &table_meta);
 
             auto host_port = getContext()->getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(table->getStorageUUID()), true);
             if (host_port.empty())

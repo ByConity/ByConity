@@ -507,8 +507,6 @@ struct ContextSharedPart
             dictionaries_xmls.reset();
             dictionaries_cnch_catalog.reset();
 
-            cnch_txn_coordinator.reset();
-
             cnch_bg_threads_array.reset();
             cnch_txn_coordinator.reset();
 
