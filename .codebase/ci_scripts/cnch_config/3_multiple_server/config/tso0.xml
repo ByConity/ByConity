@@ -273,6 +273,13 @@
                     <port><name>PORT0</name><value>8989</value></port>
                 </ports>
             </node>
+            <node>
+                <host>ip_address_replace_me</host>
+                <hostname>rm1</hostname>
+                <ports>
+                    <port><name>PORT0</name><value>8990</value></port>
+                </ports>
+            </node>
         </resource_manager>
         <vw>
             <psm>data.cnch.vw_default</psm>
@@ -329,7 +336,7 @@
     <tso_service>
         <port>8080</port>
         <!--Metastore storage type, support `bytekv` and `fdb`-->
-        <type>bytekv</type>
+        <type>fdb</type>
         <bytekv>
             <service_name>bytedance.bytekv.cnch_meta.service.lf</service_name>
             <cluster_name>cnch_meta</cluster_name>
@@ -337,6 +344,9 @@
             <table_name>cnch_tso_build</table_name>
             <key_name>tso</key_name>
         </bytekv>
+        <fdb>
+            <cluster_file>fdb_cluster_config_path_replace_me</cluster_file>>
+        </fdb>
         <tso_window_ms>3000</tso_window_ms>
         <tso_max_retry_count>3</tso_max_retry_count>
         <!-- If use_fallback is true, read_only transactions during TSO unavailability will succeed but there is a small risk the returned result is incorrect -->

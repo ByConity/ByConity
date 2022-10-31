@@ -608,13 +608,13 @@
                     <port><name>PORT0</name><value>8989</value></port>
                 </ports>
             </node>
-            <!-- <node>
+            <node>
                 <host>ip_address_replace_me</host>
-                <hostname>rm0</hostname>
+                <hostname>rm1</hostname>
                 <ports>
                     <port><name>PORT0</name><value>8990</value></port>
                 </ports>
-            </node> -->
+            </node>
         </resource_manager>
     </service_discovery>
 
