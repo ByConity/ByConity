@@ -32,7 +32,7 @@ public:
 
     ~CnchServerManager() override;
 
-    void dumpServerStatus();
+    bool isLeader() {return is_leader;}
 
     void shutDown();
     void partialShutdown();

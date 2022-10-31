@@ -227,14 +227,11 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
                 parseDatabaseAndTableName(pos, expected, res->database, res->table);
             break;
         }
+
         case Type::START_GC:
         case Type::STOP_GC:
         case Type::FORCE_GC:
-        {
-            parseDatabaseAndTableName(pos, expected, res->database, res->table);
-            break;
-        }
-
+        case Type::DROP_CNCH_PART_CACHE:
         case Type::STOP_TTL_MERGES:
         case Type::START_TTL_MERGES:
         case Type::STOP_MOVES:

@@ -44,6 +44,7 @@ public:
         DROP_UNCOMPRESSED_CACHE,
         DROP_MMAP_CACHE,
         DROP_CHECKSUMS_CACHE,
+        DROP_CNCH_PART_CACHE,
 #if USE_EMBEDDED_COMPILER
         DROP_COMPILED_EXPRESSION_CACHE,
 #endif
@@ -94,6 +95,7 @@ public:
         DEDUP, // dedup db.table [partition partition_expr] for repair
         START_DEDUP_WORKER,
         STOP_DEDUP_WORKER,
+        DUMP_SERVER_STATUS,
         END
     };
 

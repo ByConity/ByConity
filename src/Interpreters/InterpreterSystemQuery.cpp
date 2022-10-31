@@ -8,6 +8,9 @@
 #include <Common/ThreadPool.h>
 #include <Common/escapeForFileName.h>
 #include <Common/ShellCommand.h>
+#include <MergeTreeCommon/CnchServerTopology.h>
+#include <MergeTreeCommon/CnchServerManager.h>
+#include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <CloudServices/CnchBGThreadCommon.h>
 #include <DaemonManager/DaemonManagerClient.h>
 #include <Interpreters/Context.h>
@@ -43,6 +46,7 @@
 #include <Storages/StorageFactory.h>
 #include <Storages/Kafka/StorageCnchKafka.h>
 #include <Storages/MergeTree/ChecksumsCache.h>
+#include <Storages/PartCacheManager.h>
 #include <Parsers/ASTDropQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/formatAST.h>
@@ -427,6 +431,12 @@ BlockIO InterpreterSystemQuery::executeCnchCommand(ASTSystemQuery & query, Conte
             break;
         case Type::DEDUP:
             executeDedup(query);
+            break;
+        case Type::DUMP_SERVER_STATUS:
+            dumpCnchServerManagerStatus();
+            break;
+        case Type::DROP_CNCH_PART_CACHE:
+            dropCnchPartCache(query);
             break;
         default:
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "System command {} is not supported in CNCH", ASTSystemQuery::typeToString(query.type));
@@ -918,6 +928,26 @@ void InterpreterSystemQuery::executeDedup(const ASTSystemQuery & query)
     else
     {
         throw Exception("Table " + query.database + "." + query.table + " is not a CnchMergeTree", ErrorCodes::BAD_ARGUMENTS);
+    }
+}
+
+void InterpreterSystemQuery::dumpCnchServerManagerStatus()
+{
+    bool is_leader = getContext()->getCnchServerManager()->isLeader();
+    auto current_topology = getContext()->getCnchTopologyMaster()->getCurrentTopology();
+    LOG_DEBUG(log, "\nCurrent node is leader: {};\nCurrent topology: {}", is_leader, dumpTopologies(current_topology));
+}
+
+void InterpreterSystemQuery::dropCnchPartCache(ASTSystemQuery & query)
+{
+    if (!query.database.empty() && !query.table.empty())
+    {
+        auto storage = DatabaseCatalog::instance().getTable(StorageID{query.database, query.table}, getContext());
+        if (storage)
+        {
+            getContext()->getPartCacheManager()->invalidPartCache(storage->getStorageUUID());
+            LOG_DEBUG(log, "Dropped cnch part cache of table {}.{}", query.database, query.table);
+        }
     }
 }
 

@@ -65,6 +65,10 @@ private:
 
     void executeDedup(const ASTSystemQuery & query);
 
+    void dumpCnchServerManagerStatus();
+
+    void dropCnchPartCache(ASTSystemQuery & query);
+
     void dropChecksumsCache(const StorageID & table_id) const;
 
     BlockIO executeCnchCommand(ASTSystemQuery & query, ContextMutablePtr & system_context);
