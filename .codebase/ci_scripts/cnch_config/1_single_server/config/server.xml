@@ -697,11 +697,8 @@
     </bytepond>
     <tso_service>
         <port>8080</port>
-        <http>
-            <port>8081</port>
-        </http>
         <!--Metastore storage type, support `bytekv` and `fdb`-->
-        <type>bytekv</type>
+        <type>fdb</type>
         <bytekv>
             <service_name>bytedance.bytekv.cnch_meta.service.lf</service_name>
             <cluster_name>cnch_meta</cluster_name>
@@ -709,16 +706,10 @@
             <table_name>cnch_tso_build</table_name>
             <key_name>tso</key_name>
         </bytekv>
-        <bytejournal>
-            <renewal_interval_ms>1000</renewal_interval_ms>
-            <polling_interval_ms>1000</polling_interval_ms>
-            <error_retry_interval_ms>1000</error_retry_interval_ms>
-            <lease_interval_ms>3000</lease_interval_ms>
-            <failover_interval_ms>4000</failover_interval_ms>
-        </bytejournal>
+        <fdb>
+            <cluster_file>fdb_cluster_config_path_replace_me</cluster_file>>
+        </fdb>
         <tso_window_ms>3000</tso_window_ms>
-        <!-- If tso_get_leader_info_interval_ms == 0, then TSO don't need to sleep after being elected as leader -->
-        <tso_get_leader_info_interval_ms>0</tso_get_leader_info_interval_ms>
         <tso_max_retry_count>3</tso_max_retry_count>
         <!-- If use_fallback is true, read_only transactions during TSO unavailability will succeed but there is a small risk the returned result is incorrect -->
         <use_fallback>true</use_fallback>
