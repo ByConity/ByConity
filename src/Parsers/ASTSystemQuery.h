@@ -93,6 +93,7 @@ public:
         METASTORE,
         CLEAR_BROKEN_TABLES,
         DEDUP, // dedup db.table [partition partition_expr] for repair
+        SYNC_DEDUP_WORKER,
         START_DEDUP_WORKER,
         STOP_DEDUP_WORKER,
         DUMP_SERVER_STATUS,

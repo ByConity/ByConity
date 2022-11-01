@@ -160,7 +160,10 @@ void CloudMergeTreeDedupWorker::iterate()
         : CnchDedupHelper::DedupScope::Table();
 
     Stopwatch watch;
-    CnchLockHolder cnch_lock(*context, CnchDedupHelper::getLocksToAcquire(scope, txn->getTransactionID(), storage, /*timeout_ms*/ 10000));
+    CnchLockHolder cnch_lock(
+        *context,
+        CnchDedupHelper::getLocksToAcquire(
+            scope, txn->getTransactionID(), storage, storage.getSettings()->dedup_acquire_lock_timeout.value.totalMilliseconds()));
     cnch_lock.lock();
 
     /// get staged parts again after acquired the locks

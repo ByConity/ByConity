@@ -994,13 +994,14 @@ MergeTreeDataPartsCNCHVector StorageCnchMergeTree::getUniqueTableMeta(TxnTimesta
     return res;
 }
 
-MergeTreeDataPartsCNCHVector StorageCnchMergeTree::getStagedParts(const TxnTimestamp & ts, const NameSet * partitions)
+MergeTreeDataPartsCNCHVector StorageCnchMergeTree::getStagedParts(const TxnTimestamp & ts, const NameSet * partitions, bool skip_delete_bitmap)
 {
     auto catalog = getContext()->getCnchCatalog();
     MergeTreeDataPartsCNCHVector staged_parts = catalog->getStagedParts(shared_from_this(), ts, partitions);
     auto res = CnchPartsHelper::calcVisibleParts(staged_parts, /*collect_on_chain*/ false);
 
-    getDeleteBitmapMetaForStagedParts(res, getContext(), ts);
+    if (!skip_delete_bitmap)
+        getDeleteBitmapMetaForStagedParts(res, getContext(), ts);
     return res;
 }
 
@@ -1174,7 +1175,9 @@ void StorageCnchMergeTree::executeDedupForRepair(const ASTPtr & partition, Conte
     }
 
     CnchLockHolder cnch_lock(
-        *getContext(), CnchDedupHelper::getLocksToAcquire(scope, txn->getTransactionID(), *this, /*timeout_ms*/ 10000));
+        *getContext(),
+        CnchDedupHelper::getLocksToAcquire(
+            scope, txn->getTransactionID(), *this, getSettings()->dedup_acquire_lock_timeout.value.totalMilliseconds()));
     cnch_lock.lock();
 
     TxnTimestamp ts = getContext()->getTimestamp();
@@ -1187,6 +1190,23 @@ void StorageCnchMergeTree::executeDedupForRepair(const ASTPtr & partition, Conte
         cnch_writer.publishStagedParts(/*staged_parts*/{}, bitmaps_to_dump);
 
     txn->commitV2();
+}
+
+void StorageCnchMergeTree::waitForStagedPartsToPublish(ContextPtr local_context)
+{
+    UInt64 wait_timeout_seconds = local_context->getSettingsRef().receive_timeout.value.totalSeconds();
+    Stopwatch timer;
+    size_t staged_parts_cnt = 0;
+    do
+    {
+        staged_parts_cnt = getStagedParts(local_context->getTimestamp(), /* partitions = */ nullptr, /* skip_delete_bitmap = */ true).size();
+        if (!staged_parts_cnt)
+            return;
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    } while (timer.elapsedSeconds() < wait_timeout_seconds);
+    LOG_WARNING(
+        log,
+        "There are still " + toString(staged_parts_cnt) + " staged parts to be published after " + toString(wait_timeout_seconds) + "s.");
 }
 
 void StorageCnchMergeTree::collectResource(ContextPtr local_context, ServerDataPartsVector & parts, const String & local_table_name, const std::set<Int64> & required_bucket_numbers)

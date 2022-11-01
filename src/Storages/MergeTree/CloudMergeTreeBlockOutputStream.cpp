@@ -297,8 +297,8 @@ void CloudMergeTreeBlockOutputStream::writeSuffixForUpsert()
         ? CnchDedupHelper::DedupScope::Partitions(sorted_partitions)
         : CnchDedupHelper::DedupScope::Table();
 
-    std::vector<LockInfoPtr> locks_to_acquire
-        = CnchDedupHelper::getLocksToAcquire(scope, txn->getTransactionID(), storage, /*timeout_ms*/ 10000);
+    std::vector<LockInfoPtr> locks_to_acquire = CnchDedupHelper::getLocksToAcquire(
+        scope, txn->getTransactionID(), storage, storage.getSettings()->dedup_acquire_lock_timeout.value.totalMilliseconds());
     Stopwatch lock_watch;
     CnchLockHolder cnch_lock(*context, std::move(locks_to_acquire));
     cnch_lock.lock();

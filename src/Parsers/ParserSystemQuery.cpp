@@ -246,6 +246,7 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
         case Type::STOP_CONSUME:
         case Type::RESTART_CONSUME:
         case Type::DROP_CHECKSUMS_CACHE:
+        case Type::SYNC_DEDUP_WORKER:
         case Type::START_DEDUP_WORKER:
         case Type::STOP_DEDUP_WORKER:
             parseDatabaseAndTableName(pos, expected, res->database, res->table);

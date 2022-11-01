@@ -12,10 +12,7 @@ INSERT INTO u10113_rename VALUES (0, 100, 1, 'a', 1), (1, 101, 1, 'b', 1), (2, 1
 INSERT INTO u10113_rename VALUES (3, 103, 1, 'b', 1), (4, 104, 2, 'b', 1), (5, 105, 2, 'a', 1);
 
 SELECT '-- before rename --';
-system start dedup worker u10113_rename;
-SELECT sleep(3) FORMAT Null; 
-SELECT sleep(3) FORMAT Null; 
-SELECT sleep(3) FORMAT Null; 
+system sync dedup worker u10113_rename;
 SELECT 'dedup worker status:', table, is_active from system.cnch_dedup_workers where database=currentDatabase() and table='u10113_rename';
 SELECT '#staged parts:', count() FROM system.cnch_staged_parts where database=currentDatabase() and table = 'u10113_rename' and to_publish;
 SELECT '#parts:', count() FROM system.cnch_parts where database=currentDatabase() and table='u10113_rename' and active;
@@ -26,9 +23,7 @@ RENAME TABLE u10113_rename TO u10113_rename2;
 INSERT INTO u10113_rename2 VALUES (6, 106, 3, 'a', 1), (7, 107, 3, 'b', 1), (8, 108, 2, 'a', 1);
 
 SELECT '-- after rename --';
-SELECT sleep(3) FORMAT Null; 
-SELECT sleep(3) FORMAT Null; 
-SELECT sleep(3) FORMAT Null; 
+system sync dedup worker u10113_rename2;
 SELECT '#staged parts:', count() FROM system.cnch_staged_parts where database=currentDatabase() and table = 'u10113_rename2' and to_publish;
 SELECT '#parts:', count() FROM system.cnch_parts where database=currentDatabase() and table='u10113_rename2' and active;
 SELECT * FROM u10113_rename2 order by k1, k2;

@@ -8,25 +8,13 @@ INSERT INTO unique_with_version_staging VALUES ('2020-10-29 23:40:00', 10001, '1
 INSERT INTO unique_with_version_staging VALUES ('2020-10-30 00:05:00', 10001, '10001A', 1, 100), ('2020-10-30 00:05:00', 10002, '10002A', 2, 200);
 INSERT INTO unique_with_version_staging VALUES ('2020-10-29 23:40:00', 10001, '10001A', 5, 500), ('2020-10-29 23:40:00', 10002, '10002A', 2, 200);
 
-SYSTEM STOP DEDUP WORKER unique_with_version_staging;
-SYSTEM START DEDUP WORKER unique_with_version_staging;
-
 -- Catalog in CI are slow
-SELECT sleep(3) FORMAT Null;
-SELECT sleep(3) FORMAT Null;
-SELECT sleep(3) FORMAT Null;
-SELECT sleep(3) FORMAT Null;
-SELECT sleep(3) FORMAT Null;
-SELECT sleep(3) FORMAT Null;
-SELECT sleep(3) FORMAT Null;
-SELECT sleep(3) FORMAT Null;
+SYSTEM SYNC DEDUP WORKER unique_with_version_staging;
 SELECT event_time, id, s, m1, m2 FROM unique_with_version_staging ORDER BY event_time, id;
 
 INSERT INTO unique_with_version_staging VALUES ('2020-10-29 23:50:00', 10001, '10001B', 8, 800), ('2020-10-29 23:50:00', 10002, '10002B', 5, 500), ('2020-10-29 23:55:00', 10001, '10001C', 10, 1000), ('2020-10-29 23:55:00', 10002, '10002C', 7, 700);
 
-SELECT sleep(3) FORMAT Null;
-SELECT sleep(3) FORMAT Null;
-SELECT sleep(3) FORMAT Null;
+SYSTEM SYNC DEDUP WORKER unique_with_version_staging;
 SELECT event_time, id, s, m1, m2 FROM unique_with_version_staging ORDER BY event_time, id;
 
 DROP TABLE IF EXISTS unique_with_version_staging;

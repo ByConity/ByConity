@@ -149,6 +149,8 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "CLEAR BROKEN TABLES";
         case Type::DEDUP:
             return "DEDUP";
+        case Type::SYNC_DEDUP_WORKER:
+            return "SYNC DEDUP WORKER";
         case Type::START_DEDUP_WORKER:
             return "START DEDUP WORKER";
         case Type::STOP_DEDUP_WORKER:
