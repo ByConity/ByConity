@@ -53,6 +53,8 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "DROP MMAP CACHE";
         case Type::DROP_CHECKSUMS_CACHE:
             return "DROP CHECKSUMS CACHE";
+        case Type::DROP_CNCH_PART_CACHE:
+            return "DROP CNCH PART CACHE";
 #if USE_EMBEDDED_COMPILER
         case Type::DROP_COMPILED_EXPRESSION_CACHE:
             return "DROP COMPILED EXPRESSION CACHE";
@@ -151,6 +153,8 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "START DEDUP WORKER";
         case Type::STOP_DEDUP_WORKER:
             return "STOP DEDUP WORKER";
+        case Type::DUMP_SERVER_STATUS:
+            return "DUMP SERVER STATUS";
         case Type::UNKNOWN:
         case Type::END:
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown SYSTEM query command");
@@ -247,9 +251,10 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
             || type == Type::SYNC_REPLICA
             || type == Type::FLUSH_DISTRIBUTED
             || type == Type::RELOAD_DICTIONARY
-             || type == Type::START_CONSUME
-             || type == Type::STOP_CONSUME
-             || type == Type::RESTART_CONSUME)
+            || type == Type::START_CONSUME
+            || type == Type::STOP_CONSUME
+            || type == Type::RESTART_CONSUME
+            || type == Type::DROP_CNCH_PART_CACHE)
     {
         print_database_table();
     }

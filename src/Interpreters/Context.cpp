@@ -3907,6 +3907,9 @@ void Context::setCnchServerManager()
 std::shared_ptr<CnchServerManager> Context::getCnchServerManager() const
 {
     auto lock = getLock();
+    if (!shared->server_manager)
+        throw Exception("Server manager is not initiailized.", ErrorCodes::LOGICAL_ERROR);
+
     return shared->server_manager;
 }
 
@@ -3922,6 +3925,9 @@ void Context::setCnchTopologyMaster()
 std::shared_ptr<CnchTopologyMaster> Context::getCnchTopologyMaster() const
 {
     auto lock = getLock();
+    if (!shared->topology_master)
+        throw Exception("Topology master is not initialized.", ErrorCodes::LOGICAL_ERROR);
+
     return shared->topology_master;
 }
 

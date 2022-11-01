@@ -207,20 +207,6 @@ void CnchServerManager::setLeaderStatus()
     LOG_DEBUG(log , "Successfully set leader status.");
 }
 
-void CnchServerManager::dumpServerStatus()
-{
-    std::stringstream ss;
-    ss << "[leader selection result] : \n"
-       << "is_leader : " << is_leader << "\n"
-       << "[current cached topology] : \n";
-
-    {
-        std::unique_lock<std::mutex> lock(topology_mutex);
-        ss << dumpTopologies(cached_topologies);
-    }
-    LOG_DEBUG(log, "Dump server status : \n{}",ss.str());
-}
-
 void CnchServerManager::shutDown()
 {
     try
