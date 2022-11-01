@@ -22,8 +22,9 @@ MergeTreeDataPartInMemory::MergeTreeDataPartInMemory(
         const String & name_,
         const VolumePtr & volume_,
         const std::optional<String> & relative_path_,
-        const IMergeTreeDataPart * parent_part_)
-    : IMergeTreeDataPart(storage_, name_, volume_, relative_path_, Type::IN_MEMORY, parent_part_)
+        const IMergeTreeDataPart * parent_part_,
+        IStorage::StorageLocation location_)
+    : IMergeTreeDataPart(storage_, name_, volume_, relative_path_, Type::IN_MEMORY, parent_part_, location_)
 {
     default_codec = CompressionCodecFactory::instance().get("NONE", {});
 }
@@ -34,8 +35,9 @@ MergeTreeDataPartInMemory::MergeTreeDataPartInMemory(
         const MergeTreePartInfo & info_,
         const VolumePtr & volume_,
         const std::optional<String> & relative_path_,
-        const IMergeTreeDataPart * parent_part_)
-    : IMergeTreeDataPart(storage_, name_, info_, volume_, relative_path_, Type::IN_MEMORY, parent_part_)
+        const IMergeTreeDataPart * parent_part_,
+        IStorage::StorageLocation location_)
+    : IMergeTreeDataPart(storage_, name_, info_, volume_, relative_path_, Type::IN_MEMORY, parent_part_, location_)
 {
     default_codec = CompressionCodecFactory::instance().get("NONE", {});
 }
@@ -101,7 +103,7 @@ void MergeTreeDataPartInMemory::flushToDisk(const String & base_path, const Stri
 void MergeTreeDataPartInMemory::makeCloneInDetached(const String & prefix, const StorageMetadataPtr & metadata_snapshot) const
 {
     String detached_path = getRelativePathForDetachedPart(prefix);
-    flushToDisk(storage.getRelativeDataPath(), detached_path, metadata_snapshot);
+    flushToDisk(storage.getRelativeDataPath(IStorage::StorageLocation::MAIN), detached_path, metadata_snapshot);
 }
 
 void MergeTreeDataPartInMemory::renameTo(const String & new_relative_path, bool /* remove_new_dir_if_exists */) const

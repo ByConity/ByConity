@@ -120,7 +120,7 @@ DumpedData CnchDataWriter::dumpCnchParts(
     for (auto & part : temp_parts)
     {
         String part_name = part->info.getPartNameWithHintMutation();
-        auto disk = storage.getStoragePolicy()->getAnyDisk();
+        auto disk = storage.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
         undo_resources.emplace_back(txn_id, UndoResourceType::Part, part_name, part_name + '/');
         undo_resources.back().setDiskName(disk->getName());
         part_disks.emplace_back(std::move(disk));
@@ -132,7 +132,7 @@ DumpedData CnchDataWriter::dumpCnchParts(
     for (auto & staged_part : temp_staged_parts)
     {
         String part_name = staged_part->info.getPartNameWithHintMutation();
-        auto disk = storage.getStoragePolicy()->getAnyDisk();
+        auto disk = storage.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
         undo_resources.emplace_back(txn_id, UndoResourceType::StagedPart, part_name, part_name + '/');
         undo_resources.back().setDiskName(disk->getName());
         part_disks.emplace_back(std::move(disk));

@@ -42,10 +42,9 @@ class MergeTreeDataWriter
 {
 public:
     // use dest_policy_ to reserve space if specificed
-    explicit MergeTreeDataWriter(MergeTreeMetaBase & data_, const StoragePolicyPtr& dest_policy_ = nullptr,
-        const String& base_rel_path_ = ""):
-            data(data_), destination_policy(dest_policy_), base_rel_path(base_rel_path_),
-            log(&Poco::Logger::get(data.getLogName() + " (Writer)")) {}
+    explicit MergeTreeDataWriter(MergeTreeMetaBase & data_, IStorage::StorageLocation location = IStorage::StorageLocation::MAIN):
+        data(data_), write_location(location),
+        log(&Poco::Logger::get(data.getLogName() + " (Writer)")) {}
 
     /** Split the block to blocks, each of them must be written as separate part.
       *  (split rows by partition)
@@ -73,8 +72,7 @@ public:
         const ProjectionDescription & projection,
         const IMergeTreeDataPart * parent_part,
         size_t block_num,
-        const StoragePolicyPtr& dest_policy = nullptr,
-        const String& base_rel_path = "");
+        IStorage::StorageLocation location);
 
     Block mergeBlock(const Block & block, SortDescription sort_description, Names & partition_key_columns, IColumn::Permutation *& permutation);
 
@@ -88,8 +86,7 @@ private:
 
     MergeTreeMetaBase & data;
 
-    StoragePolicyPtr destination_policy;
-    String base_rel_path;
+    IStorage::StorageLocation write_location;
 
     Poco::Logger * log;
 };

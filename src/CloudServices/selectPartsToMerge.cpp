@@ -33,7 +33,7 @@ ServerSelectPartsDecision selectPartsToMerge(
 
     IMergeSelector::PartsRanges parts_ranges;
 
-    /// StoragePolicyPtr storage_policy = data.getStoragePolicy();
+    /// StoragePolicyPtr storage_policy = data.getStoragePolicy(IStorage::StorageLocation::MAIN);
     /// Volumes with stopped merges are extremely rare situation.
     /// Check it once and don't check each part (this is bad for performance).
     /// bool has_volumes_with_disabled_merges = storage_policy->hasAnyVolumeWithDisabledMerges();

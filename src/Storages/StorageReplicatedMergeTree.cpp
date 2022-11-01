@@ -1449,7 +1449,7 @@ MergeTreeData::MutableDataPartPtr StorageReplicatedMergeTree::attachPartHelperFo
     const MergeTreePartInfo actual_part_info = MergeTreePartInfo::fromPartName(entry.new_part_name, format_version);
     const String part_new_name = actual_part_info.getPartName();
 
-    for (const DiskPtr & disk : getStoragePolicy()->getDisks())
+    for (const DiskPtr & disk : getStoragePolicy(IStorage::StorageLocation::MAIN)->getDisks())
         for (const auto it = disk->iterateDirectory(fs::path(relative_data_path) / "detached/"); it->isValid(); it->next())
         {
             MergeTreePartInfo part_info;
@@ -1699,7 +1699,7 @@ bool StorageReplicatedMergeTree::tryExecuteMerge(const LogEntry & entry)
     for (auto & part_ptr : parts)
     {
         ttl_infos.update(part_ptr->ttl_infos);
-        max_volume_index = std::max(max_volume_index, getStoragePolicy()->getVolumeIndexByDisk(part_ptr->volume->getDisk()));
+        max_volume_index = std::max(max_volume_index, getStoragePolicy(IStorage::StorageLocation::MAIN)->getVolumeIndexByDisk(part_ptr->volume->getDisk()));
     }
     auto table_lock = lockForShare(RWLockImpl::NO_QUERY, storage_settings_ptr->lock_acquire_timeout_for_background_operations);
 
@@ -4619,7 +4619,7 @@ bool StorageReplicatedMergeTree::optimize(
             for (const DataPartPtr & part : data_parts)
                 partition_ids.emplace(part->info.partition_id);
 
-            UInt64 disk_space = getStoragePolicy()->getMaxUnreservedFreeSpace();
+            UInt64 disk_space = getStoragePolicy(IStorage::StorageLocation::MAIN)->getMaxUnreservedFreeSpace();
 
             for (const String & partition_id : partition_ids)
             {
@@ -4685,7 +4685,7 @@ bool StorageReplicatedMergeTree::optimize(
                 }
                 else
                 {
-                    UInt64 disk_space = getStoragePolicy()->getMaxUnreservedFreeSpace();
+                    UInt64 disk_space = getStoragePolicy(IStorage::StorageLocation::MAIN)->getMaxUnreservedFreeSpace();
                     String partition_id = getPartitionIDFromQuery(partition, query_context);
                     select_decision = merger_mutator.selectAllPartsToMergeWithinPartition(
                         future_merged_part, disk_space, can_merge, partition_id, final, metadata_snapshot, &disable_reason, query_context->getSettingsRef().optimize_skip_merged_partitions);
@@ -6571,11 +6571,11 @@ void StorageReplicatedMergeTree::movePartitionToTable(const StoragePtr & dest_ta
     if (!dest_table_storage)
         throw Exception("Table " + getStorageID().getNameForLogs() + " supports movePartitionToTable only for ReplicatedMergeTree family of table engines."
                         " Got " + dest_table->getName(), ErrorCodes::NOT_IMPLEMENTED);
-    if (dest_table_storage->getStoragePolicy() != this->getStoragePolicy())
+    if (dest_table_storage->getStoragePolicy(IStorage::StorageLocation::MAIN) != this->getStoragePolicy(IStorage::StorageLocation::MAIN))
         throw Exception("Destination table " + dest_table_storage->getStorageID().getNameForLogs() +
                         " should have the same storage policy of source table " + getStorageID().getNameForLogs() + ". " +
-                        getStorageID().getNameForLogs() + ": " + this->getStoragePolicy()->getName() + ", " +
-                        getStorageID().getNameForLogs() + ": " + dest_table_storage->getStoragePolicy()->getName(), ErrorCodes::UNKNOWN_POLICY);
+                        getStorageID().getNameForLogs() + ": " + this->getStoragePolicy(IStorage::StorageLocation::MAIN)->getName() + ", " +
+                        getStorageID().getNameForLogs() + ": " + dest_table_storage->getStoragePolicy(IStorage::StorageLocation::MAIN)->getName(), ErrorCodes::UNKNOWN_POLICY);
 
     auto dest_metadata_snapshot = dest_table->getInMemoryMetadataPtr();
     auto metadata_snapshot = getInMemoryMetadataPtr();
@@ -7471,7 +7471,7 @@ bool StorageReplicatedMergeTree::createEmptyPartInsteadOfLost(zkutil::ZooKeeperP
 
     NamesAndTypesList columns = metadata_snapshot->getColumns().getAllPhysical().filter(block.getNames());
     ReservationPtr reservation = reserveSpacePreferringTTLRules(metadata_snapshot, 0, move_ttl_infos, time(nullptr), 0, true);
-    VolumePtr volume = getStoragePolicy()->getVolume(0);
+    VolumePtr volume = getStoragePolicy(IStorage::StorageLocation::MAIN)->getVolume(0);
 
     IMergeTreeDataPart::MinMaxIndex minmax_idx;
     minmax_idx.update(block, getMinMaxColumnsNames(metadata_snapshot->getPartitionKey()));

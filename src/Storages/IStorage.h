@@ -586,8 +586,17 @@ public:
     /// Returns data paths if storage supports it, empty vector otherwise.
     virtual Strings getDataPaths() const { return {}; }
 
+    /// Table's data are divide into two category, one is main storage, which stores
+    /// actual table data, other one is auxility storage, which used to store some temporary
+    /// data. For example, cnch use hdfs/s3 as main storage to store table data,
+    /// and use auxility storage to write temporary data or cache files
+    enum class StorageLocation
+    {
+        MAIN,
+        AUXILITY
+    };
     /// Returns storage policy if storage supports it.
-    virtual StoragePolicyPtr getStoragePolicy() const { return {}; }
+    virtual StoragePolicyPtr getStoragePolicy(StorageLocation) const { return {}; }
 
     /// If it is possible to quickly determine exact number of rows in the table at this moment of time, then return it.
     /// Used for:

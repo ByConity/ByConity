@@ -100,11 +100,11 @@ void UndoResource::clean(Catalog::Catalog & , [[maybe_unused]]MergeTreeMetaBase 
     if (diskName().empty())
     {
         // For cnch, this storage policy should only contains one disk
-        disk = storage->getStoragePolicy()->getAnyDisk();
+        disk = storage->getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
     }
     else
     {
-        disk = storage->getStoragePolicy()->getDiskByName(diskName());
+        disk = storage->getStoragePolicy(IStorage::StorageLocation::MAIN)->getDiskByName(diskName());
     }
 
     /// This can happen in testing environment when disk name may change time to time
@@ -116,7 +116,7 @@ void UndoResource::clean(Catalog::Catalog & , [[maybe_unused]]MergeTreeMetaBase 
     if (type() == UndoResourceType::Part || type() == UndoResourceType::DeleteBitmap || type() == UndoResourceType::StagedPart)
     {
         const auto & resource_relative_path = placeholders(1);
-        String rel_path = storage->getRelativeDataPath() + resource_relative_path;
+        String rel_path = storage->getRelativeDataPath(IStorage::StorageLocation::MAIN) + resource_relative_path;
         if (disk->exists(rel_path))
         {
             LOG_DEBUG(log, "Will remove undo path {}", disk->getPath() + rel_path);

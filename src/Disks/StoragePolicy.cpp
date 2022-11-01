@@ -357,7 +357,8 @@ bool StoragePolicy::containsVolume(const String & volume_name) const
 StoragePolicySelector::StoragePolicySelector(
     const Poco::Util::AbstractConfiguration & config,
     const String & config_prefix,
-    DiskSelectorPtr disks)
+    DiskSelectorPtr disks,
+    const String& default_cnch_policy_name)
 {
     Poco::Util::AbstractConfiguration::Keys keys;
     config.keys(config_prefix, keys);
@@ -385,12 +386,33 @@ StoragePolicySelector::StoragePolicySelector(
         auto default_policy = std::make_shared<StoragePolicy>(DEFAULT_STORAGE_POLICY_NAME, config, config_prefix + "." + DEFAULT_STORAGE_POLICY_NAME, disks);
         policies.emplace(DEFAULT_STORAGE_POLICY_NAME, std::move(default_policy));
     }
+
+    /// Backward compatability code for cnch
+    if (policies.size() == 1)
+    {
+        StoragePolicyPtr policy = policies.begin()->second;
+
+        if (policy->getVolumes().size() == 2
+            && policy->getVolumeByName("local") != nullptr
+            && policy->getVolumeByName("hdfs") != nullptr)
+        {
+            auto default_policy = std::make_shared<StoragePolicy>(DEFAULT_STORAGE_POLICY_NAME,
+                std::vector<VolumePtr>({policy->getVolumeByName("local")}), 0);
+            auto remote_policy = std::make_shared<StoragePolicy>(default_cnch_policy_name,
+                std::vector<VolumePtr>({policy->getVolumeByName("hdfs")}), 0);
+
+            policies.clear();
+
+            policies[default_policy->getName()] = default_policy;
+            policies[remote_policy->getName()] = remote_policy;
+        }
+    }
 }
 
 
-StoragePolicySelectorPtr StoragePolicySelector::updateFromConfig(const Poco::Util::AbstractConfiguration & config, const String & config_prefix, DiskSelectorPtr disks) const
+StoragePolicySelectorPtr StoragePolicySelector::updateFromConfig(const Poco::Util::AbstractConfiguration & config, const String & config_prefix, DiskSelectorPtr disks, const String& default_cnch_policy_name) const
 {
-    std::shared_ptr<StoragePolicySelector> result = std::make_shared<StoragePolicySelector>(config, config_prefix, disks);
+    std::shared_ptr<StoragePolicySelector> result = std::make_shared<StoragePolicySelector>(config, config_prefix, disks, default_cnch_policy_name);
 
     /// First pass, check.
     for (const auto & [name, policy] : policies)

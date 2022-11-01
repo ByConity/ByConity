@@ -192,8 +192,9 @@ IMergeTreeMutableDataPartPtr createEmptyTempPart(
 
     auto single_disk_volume = std::make_shared<SingleDiskVolume>("volume_" + part->name, reserved_space->getDisk(), 0);
 
-    auto new_partial_part = data.createPart(
-        part->name, MergeTreeDataPartType::WIDE, new_part_info, single_disk_volume, "tmp_mut_" + part->name);
+    auto new_partial_part = data.createPart(part->name, MergeTreeDataPartType::WIDE,
+        new_part_info, single_disk_volume, "tmp_mut_" + part->name,
+        nullptr, IStorage::StorageLocation::AUXILITY);
 
     new_partial_part->uuid = part->uuid;
     new_partial_part->is_temp = true;
@@ -412,7 +413,8 @@ MergeTreeMutableDataPartPtr ingestPart(
 
     auto estimated_space_for_result = static_cast<size_t>(ingest_part->getBytesOnDisk());
 
-    ReservationPtr reserved_space = target_table.reserveSpaceOnLocal(estimated_space_for_result);
+    ReservationPtr reserved_space = target_table.reserveSpace(estimated_space_for_result,
+        IStorage::StorageLocation::AUXILITY);
     auto new_partial_part = createEmptyTempPart(target_table, ingest_part, ingest_column_names, reserved_space, *context);
     auto disk = new_partial_part->volume->getDisk();
     String new_part_tmp_path = new_partial_part->getFullRelativePath();

@@ -1194,7 +1194,7 @@ void InterpreterSystemQuery::fetchParts(const ASTSystemQuery & query, const Stor
             // clean tmp directory, which is created during fetching part from remote
             for (const auto & disk: disks)
             {
-                Poco::File local_tmp_path(fullPath(disk, fs::path(merge_tree_storage->getRelativeDataPath()) / part_relative_path));
+                Poco::File local_tmp_path(fullPath(disk, fs::path(merge_tree_storage->getRelativeDataPath(IStorage::StorageLocation::MAIN)) / part_relative_path));
                 local_tmp_path.remove(true);
             }
         });
@@ -1206,7 +1206,7 @@ void InterpreterSystemQuery::fetchParts(const ASTSystemQuery & query, const Stor
         {
             try
             {
-                fetched = dumper.fetchPartsFromRemote(disks, remote_path, fs::path(merge_tree_storage->getRelativeDataPath()) / part_relative_path);
+                fetched = dumper.fetchPartsFromRemote(disks, remote_path, fs::path(merge_tree_storage->getRelativeDataPath(IStorage::StorageLocation::MAIN)) / part_relative_path);
                 break;
             }
             catch (Exception & e)

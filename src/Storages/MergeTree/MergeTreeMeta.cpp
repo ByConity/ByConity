@@ -43,7 +43,7 @@ std::pair<MergeTreeMeta::MutableDataPartsVector, PartNamesWithDisks> MergeTreeMe
         {
             LOG_ERROR(log, "Failed to build part from metadata with key '{}'. Will remove it from metastore. (Error : {})", iterPtr->key(), e.what());
             /// add unloaded parts for later reloading from file system.
-            DiskPtr disk_ptr = storage.getStoragePolicy()->getDiskByID(part_data.disk_id());
+            DiskPtr disk_ptr = storage.getStoragePolicy(IStorage::StorageLocation::MAIN)->getDiskByID(part_data.disk_id());
             if (disk_ptr)
                 unloaded_parts.emplace_back(part_name, disk_ptr);
             
@@ -114,7 +114,7 @@ PartNamesWithDisks MergeTreeMeta::getWriteAheadLogs(const MergeTreeMetaBase & st
     while(iterPtr->hasNext() && startsWith(iterPtr->key(), wal_prefix))
     {
         String wal_file_name = iterPtr->key().substr(wal_prefix.size());
-        DiskPtr disk_ptr = storage.getStoragePolicy()->getDiskByID(std::stoull(iterPtr->value()));
+        DiskPtr disk_ptr = storage.getStoragePolicy(IStorage::StorageLocation::MAIN)->getDiskByID(std::stoull(iterPtr->value()));
         if (disk_ptr)
             wals.emplace_back(wal_file_name, disk_ptr);
         else
@@ -266,7 +266,7 @@ std::pair<MergeTreeMeta::MutableDataPartsVector, PartNamesWithDisks> MergeTreeMe
             auto pos = key.rfind('_');
             String part_name = key.substr(0, pos);
             String disk_name = unescapeForDiskName(key.substr(pos + 1));
-            DiskPtr disk_ptr = storage.getStoragePolicy()->getDiskByName(disk_name);
+            DiskPtr disk_ptr = storage.getStoragePolicy(IStorage::StorageLocation::MAIN)->getDiskByName(disk_name);
             if (disk_ptr)
                 unloaded_parts.emplace_back(part_name, disk_ptr);
             LOG_WARNING(log, "Broken meta info for part {}", part_name);

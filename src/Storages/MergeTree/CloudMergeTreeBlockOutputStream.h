@@ -22,8 +22,6 @@ public:
         MergeTreeMetaBase & storage_,
         StorageMetadataPtr metadata_snapshot_,
         ContextPtr context_,
-        const StoragePolicyPtr & local_policy_,
-        const String & local_rel_path_,
         bool to_staging_area_ = false);
 
     Block getHeader() const override;

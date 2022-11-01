@@ -246,7 +246,9 @@ void registerDiskByteHDFS(DiskFactory & factory)
         return std::make_shared<DiskByteHDFS>(name, path, hdfs_params);
     };
 
+    // Consider both hdfs & bytehdfs to internal hdfs
     factory.registerDiskType("bytehdfs", creator);
+    factory.registerDiskType("hdfs", creator);
 }
 
 }

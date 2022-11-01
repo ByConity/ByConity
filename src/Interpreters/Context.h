@@ -1030,8 +1030,6 @@ public:
     StoragePoliciesMap getPoliciesMap() const;
     DisksMap getDisksMap() const;
     void updateStorageConfiguration(Poco::Util::AbstractConfiguration & config);
-    void updateStorageConfigurationForCNCH(Poco::Util::AbstractConfiguration & config) const;
-
 
     /// Provides storage politics schemes
     StoragePolicyPtr getStoragePolicy(const String & name) const;
@@ -1250,6 +1248,7 @@ public:
     PartAllocator getPartAllocationAlgo() const;
 
     String getDefaultCnchPolicyName() const;
+    String getCnchAuxilityPolicyName() const;
 
 private:
     std::unique_lock<std::recursive_mutex> getLock() const;

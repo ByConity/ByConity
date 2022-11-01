@@ -70,18 +70,22 @@ public:
     virtual MergeTreeDataPartType choosePartType(size_t bytes_uncompressed, size_t rows_count) const;
     virtual MergeTreeDataPartType choosePartTypeOnDisk(size_t bytes_uncompressed, size_t rows_count) const;
 
-    /// After this method setColumns must be called
-    MutableDataPartPtr createPart(const String & name,
-        MergeTreeDataPartType type, const MergeTreePartInfo & part_info,
-        const VolumePtr & volume, const String & relative_path, const IMergeTreeDataPart * parent_part = nullptr) const;
+    /// After this method setColumns must be called, part will store in main storage
+    /// by default
+    MutableDataPartPtr createPart(const String & name, MergeTreeDataPartType type,
+        const MergeTreePartInfo & part_info, const VolumePtr & volume,
+        const String & relative_path, const IMergeTreeDataPart * parent_part = nullptr,
+        StorageLocation location = StorageLocation::MAIN) const;
 
     /// Create part, that already exists on filesystem.
     /// After this methods 'loadColumnsChecksumsIndexes' must be called.
-    MutableDataPartPtr createPart(const String & name,
-        const VolumePtr & volume, const String & relative_path, const IMergeTreeDataPart * parent_part = nullptr) const;
+    MutableDataPartPtr createPart(const String & name, const VolumePtr & volume,
+        const String & relative_path, const IMergeTreeDataPart * parent_part = nullptr,
+        StorageLocation location = StorageLocation::MAIN) const;
 
     MutableDataPartPtr createPart(const String & name, const MergeTreePartInfo & part_info,
-        const VolumePtr & volume, const String & relative_path, const IMergeTreeDataPart * parent_part = nullptr) const;
+        const VolumePtr & volume, const String & relative_path, const IMergeTreeDataPart * parent_part = nullptr,
+        StorageLocation locaiton = StorageLocation::MAIN) const;
 
     /// Parameters for various modes.
     struct MergingParams
@@ -142,8 +146,9 @@ public:
     /// Names
     std::string getName() const override { return "MergeTreeMetaBase"; }
 
-    StoragePolicyPtr getStoragePolicy() const override;
-    virtual StoragePolicyPtr getLocalStoragePolicy() const;
+    StoragePolicyPtr getStoragePolicy(StorageLocation location) const override;
+    virtual const String& getRelativeDataPath(StorageLocation location) const;
+    virtual void setRelativeDataPath(StorageLocation location, const String& rel_path);
 
     bool supportsFinal() const override
     {
@@ -254,16 +259,13 @@ public:
         return storage_settings.get();
     }
 
-    String getRelativeDataPath() const { return relative_data_path; }
-
     /// Get table path on disk
-    String getFullPathOnDisk(const DiskPtr & disk) const;
+    String getFullPathOnDisk(StorageLocation location, const DiskPtr & disk) const;
 
     ReservationPtr reserveSpace(UInt64 expected_size, VolumePtr & volume) const;
 
     /// Reserves space at least 1MB.
-    ReservationPtr reserveSpace(UInt64 expected_size) const;
-    ReservationPtr reserveSpaceOnLocal(UInt64 expected_size) const;
+    ReservationPtr reserveSpace(UInt64 expected_size, StorageLocation location = StorageLocation::MAIN) const;
 
     /// Reserves space at least 1MB on specific disk or volume.
     static ReservationPtr reserveSpace(UInt64 expected_size, SpacePtr space);
@@ -277,7 +279,8 @@ public:
         time_t time_of_move,
         size_t min_volume_index = 0,
         bool is_insert = false,
-        DiskPtr selected_disk = nullptr) const;
+        DiskPtr selected_disk = nullptr,
+        StorageLocation location = StorageLocation::MAIN) const;
 
     ReservationPtr tryReserveSpacePreferringTTLRules(
         const StorageMetadataPtr & metadata_snapshot,
@@ -286,11 +289,13 @@ public:
         time_t time_of_move,
         size_t min_volume_index = 0,
         bool is_insert = false,
-        DiskPtr selected_disk = nullptr) const;
+        DiskPtr selected_disk = nullptr,
+        StorageLocation location = StorageLocation::MAIN) const;
 
     /// Returns destination disk or volume for the TTL rule according to current storage policy
     /// 'is_insert' - is TTL move performed on new data part insert.
-    SpacePtr getDestinationForMoveTTL(const TTLDescription & move_ttl, bool is_insert = false) const;
+    SpacePtr getDestinationForMoveTTL(const TTLDescription & move_ttl,
+        bool is_insert = false, StorageLocation location = StorageLocation::MAIN) const;
 
     /// Checks if given part already belongs destination disk or volume for the
     /// TTL rule.
@@ -377,10 +382,6 @@ protected:
     friend class BitEngineDictionaryManager;
 
     bool require_part_metadata;
-
-    /// Relative path data, changes during rename for ordinary databases use
-    /// under lockForShare if rename is possible.
-    String relative_data_path;
 
     /// Current column sizes in compressed and uncompressed form.
     ColumnSizeByName column_sizes;
@@ -514,6 +515,10 @@ private:
     // Record all query ids which access the table. It's guarded by `query_id_set_mutex` and is always mutable.
     mutable std::set<String> query_id_set;
     mutable std::mutex query_id_set_mutex;
+
+    /// Relative path data, changes during rename for ordinary databases use
+    /// under lockForShare if rename is possible.
+    String relative_data_path;
 };
 
  /// EOF

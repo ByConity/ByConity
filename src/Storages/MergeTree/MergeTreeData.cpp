@@ -165,7 +165,7 @@ MergeTreeData::MergeTreeData(
     const auto settings = getSettings();
     enable_metastore = settings->enable_metastore;
 
-    if (relative_data_path.empty())
+    if (getRelativeDataPath(IStorage::StorageLocation::MAIN).empty())
         throw Exception("MergeTree storages require data path", ErrorCodes::INCORRECT_FILE_NAME);
 
     /// Check sanity of MergeTreeSettings. Only when table is created.
@@ -214,7 +214,7 @@ MergeTreeData::MergeTreeData(
 
     /// If not choose any
     if (version_file.first.empty())
-        version_file = {fs::path(relative_data_path) / MergeTreeData::FORMAT_VERSION_FILE_NAME, getStoragePolicy()->getAnyDisk()};
+        version_file = {fs::path(getRelativeDataPath(IStorage::StorageLocation::MAIN)) / MergeTreeData::FORMAT_VERSION_FILE_NAME, getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk()};
 
     bool version_file_exists = version_file.second->exists(version_file.first);
 
@@ -244,9 +244,9 @@ MergeTreeData::MergeTreeData(
             if (!bitengine_dictionary_manager)
             {
                 String db_tbl  = getStorageID().getFullNameNotQuoted();
-                String bitengine_dictionary_path = getRelativeDataPath() + MergeTreeData::BITENGINE_DICTIONARY_DIR_NAME;
-                auto bitengine_disk = getStoragePolicy()->getAnyDisk();
-                bitengine_disk->createDirectories(fs::path(relative_data_path) / MergeTreeData::BITENGINE_DICTIONARY_DIR_NAME);
+                String bitengine_dictionary_path = getRelativeDataPath(IStorage::StorageLocation::MAIN) + MergeTreeData::BITENGINE_DICTIONARY_DIR_NAME;
+                auto bitengine_disk = getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
+                bitengine_disk->createDirectories(fs::path(getRelativeDataPath(IStorage::StorageLocation::MAIN)) / MergeTreeData::BITENGINE_DICTIONARY_DIR_NAME);
                 bitengine_dictionary_manager =
                     std::make_shared<BitEngineDictionaryManager>(db_tbl, bitengine_disk->getName(), bitengine_dictionary_path, getContext());
                 LOG_DEBUG(log, "Successfully created a BitEngineDictionary of column {}", item.name);
@@ -282,7 +282,7 @@ MergeTreeData::~MergeTreeData()
 
 void MergeTreeData::checkStoragePolicy(const StoragePolicyPtr & new_storage_policy) const
 {
-    const auto old_storage_policy = getStoragePolicy();
+    const auto old_storage_policy = getStoragePolicy(IStorage::StorageLocation::MAIN);
     old_storage_policy->checkCompatibleWith(new_storage_policy);
 }
 
@@ -418,15 +418,15 @@ bool MergeTreeData::preLoadDataParts(bool skip_sanity_checks)
     bool res = false;
     // try to find the old version metastore;
     String old_version_meta_path;
-    auto disks = getStoragePolicy()->getDisks();
+    auto disks = getStoragePolicy(IStorage::StorageLocation::MAIN)->getDisks();
     for (auto disk_it = disks.begin(); disk_it != disks.end(); ++disk_it)
     {
         DiskPtr disk_ptr = *disk_it;
-        for (auto it = disk_ptr->iterateDirectory(relative_data_path); it->isValid(); it->next())
+        for (auto it = disk_ptr->iterateDirectory(getRelativeDataPath(IStorage::StorageLocation::MAIN)); it->isValid(); it->next())
         {
             if (it->name() == "catalog.db")
             {
-                old_version_meta_path = disk_ptr->getPath() + relative_data_path;
+                old_version_meta_path = disk_ptr->getPath() + getRelativeDataPath(IStorage::StorageLocation::MAIN);
                 break;
             }
         }
@@ -548,10 +548,10 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
         PartNamesWithDisks part_names_with_disks;
         PartNamesWithDisks wal_name_with_disks;
 
-        auto disks = getStoragePolicy()->getDisks();
+        auto disks = getStoragePolicy(IStorage::StorageLocation::MAIN)->getDisks();
 
         /// Only check if user did touch storage configuration for this table.
-        if (!getStoragePolicy()->isDefaultPolicy() && !skip_sanity_checks)
+        if (!getStoragePolicy(IStorage::StorageLocation::MAIN)->isDefaultPolicy() && !skip_sanity_checks)
         {
             /// Check extra parts at different disks, in order to not allow to miss data parts at undefined disks.
             std::unordered_set<String> defined_disk_names;
@@ -560,9 +560,9 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
 
             for (const auto & [disk_name, disk] : getContext()->getDisksMap())
             {
-                if (defined_disk_names.count(disk_name) == 0 && disk->exists(relative_data_path))
+                if (defined_disk_names.count(disk_name) == 0 && disk->exists(getRelativeDataPath(IStorage::StorageLocation::MAIN)))
                 {
-                    for (const auto it = disk->iterateDirectory(relative_data_path); it->isValid(); it->next())
+                    for (const auto it = disk->iterateDirectory(getRelativeDataPath(IStorage::StorageLocation::MAIN)); it->isValid(); it->next())
                     {
                         MergeTreePartInfo part_info;
                         if (MergeTreePartInfo::tryParsePartName(it->name(), &part_info, format_version))
@@ -577,7 +577,7 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
         for (auto disk_it = disks.rbegin(); disk_it != disks.rend(); ++disk_it)
         {
             auto disk_ptr = *disk_it;
-            for (auto it = disk_ptr->iterateDirectory(relative_data_path); it->isValid(); it->next())
+            for (auto it = disk_ptr->iterateDirectory(getRelativeDataPath(IStorage::StorageLocation::MAIN)); it->isValid(); it->next())
             {
                 /// Skip temporary directories, file 'format_version.txt' and directory 'detached'.
                 if (startsWith(it->name(), "tmp") || it->name() == MergeTreeData::FORMAT_VERSION_FILE_NAME || it->name() == MergeTreeData::DETACHED_DIR_NAME)
@@ -717,11 +717,11 @@ void MergeTreeData::loadPartsFromFileSystem(PartNamesWithDisks part_names_with_d
             auto part = createPart(part_name, part_info, single_disk_volume, part_name);
             bool broken = false;
 
-            String part_path = fs::path(relative_data_path) / part_name;
+            String part_path = fs::path(getRelativeDataPath(IStorage::StorageLocation::MAIN)) / part_name;
             String marker_path = fs::path(part_path) / IMergeTreeDataPart::DELETE_ON_DESTROY_MARKER_FILE_NAME;
             if (part_disk_ptr->exists(marker_path))
             {
-                LOG_WARNING(log, "Detaching stale part {}{}, which should have been deleted after a move. That can only happen after unclean restart of ClickHouse after move of a part having an operation blocking that stale copy of part.", getFullPathOnDisk(part_disk_ptr), part_name);
+                LOG_WARNING(log, "Detaching stale part {}{}, which should have been deleted after a move. That can only happen after unclean restart of ClickHouse after move of a part having an operation blocking that stale copy of part.", getFullPathOnDisk(IStorage::StorageLocation::MAIN, part_disk_ptr), part_name);
                 std::lock_guard loading_lock(mutex);
                 broken_parts_to_detach.push_back(part);
                 ++suspicious_broken_parts;
@@ -752,7 +752,7 @@ void MergeTreeData::loadPartsFromFileSystem(PartNamesWithDisks part_names_with_d
             /// Ignore broken parts that can appear as a result of hard server restart.
             if (broken)
             {
-                LOG_ERROR(log, "Detaching broken part {}{}. If it happened after update, it is likely because of backward incompability. You need to resolve this manually", getFullPathOnDisk(part_disk_ptr), part_name);
+                LOG_ERROR(log, "Detaching broken part {}{}. If it happened after update, it is likely because of backward incompability. You need to resolve this manually", getFullPathOnDisk(IStorage::StorageLocation::MAIN, part_disk_ptr), part_name);
                 std::lock_guard loading_lock(mutex);
                 broken_parts_to_detach.push_back(part);
                 ++suspicious_broken_parts;
@@ -764,7 +764,7 @@ void MergeTreeData::loadPartsFromFileSystem(PartNamesWithDisks part_names_with_d
             else
                 has_adaptive_parts.store(true, std::memory_order_relaxed);
 
-            part->modification_time = part_disk_ptr->getLastModified(fs::path(relative_data_path) / part_name).epochTime();
+            part->modification_time = part_disk_ptr->getLastModified(fs::path(getRelativeDataPath(IStorage::StorageLocation::MAIN)) / part_name).epochTime();
             /// Assume that all parts are Committed, covered parts will be detected and marked as Outdated later
             part->setState(DataPartState::Committed);
 
@@ -1143,17 +1143,17 @@ void MergeTreeData::clearOldWriteAheadLogs()
         return false;
     };
 
-    auto disks = getStoragePolicy()->getDisks();
+    auto disks = getStoragePolicy(IStorage::StorageLocation::MAIN)->getDisks();
     for (auto disk_it = disks.rbegin(); disk_it != disks.rend(); ++disk_it)
     {
         auto disk_ptr = *disk_it;
-        for (auto it = disk_ptr->iterateDirectory(relative_data_path); it->isValid(); it->next())
+        for (auto it = disk_ptr->iterateDirectory(getRelativeDataPath(IStorage::StorageLocation::MAIN)); it->isValid(); it->next())
         {
             auto min_max_block_number = MergeTreeWriteAheadLog::tryParseMinMaxBlockNumber(it->name());
             if (min_max_block_number && is_range_on_disk(min_max_block_number->first, min_max_block_number->second))
             {
                 LOG_DEBUG(log, "Removing from filesystem the outdated WAL file " + it->name());
-                disk_ptr->removeFile(relative_data_path + it->name());
+                disk_ptr->removeFile(getRelativeDataPath(IStorage::StorageLocation::MAIN) + it->name());
                 removeWriteAheadLog(it->name());
             }
         }
@@ -1175,7 +1175,7 @@ void MergeTreeData::clearEmptyParts()
 
 void MergeTreeData::rename(const String & new_table_path, const StorageID & new_table_id)
 {
-    auto disks = getStoragePolicy()->getDisks();
+    auto disks = getStoragePolicy(IStorage::StorageLocation::MAIN)->getDisks();
 
     for (const auto & disk : disks)
     {
@@ -1187,7 +1187,7 @@ void MergeTreeData::rename(const String & new_table_path, const StorageID & new_
     {
         auto new_table_path_parent = parentPath(new_table_path);
         disk->createDirectories(new_table_path_parent);
-        disk->moveDirectory(relative_data_path, new_table_path);
+        disk->moveDirectory(getRelativeDataPath(IStorage::StorageLocation::MAIN), new_table_path);
     }
 
     /// move metastore dir if exists. make sure metastore closed before moving
@@ -1207,7 +1207,7 @@ void MergeTreeData::rename(const String & new_table_path, const StorageID & new_
     if (bitengine_dictionary_manager)
         bitengine_dictionary_manager->close();
 
-    relative_data_path = new_table_path;
+    setRelativeDataPath(StorageLocation::MAIN, new_table_path);
     renameInMemory(new_table_id);
 
     /// reopen metastore to make table be ready for use.
@@ -1216,8 +1216,8 @@ void MergeTreeData::rename(const String & new_table_path, const StorageID & new_
 
     if (bitengine_dictionary_manager)
     {
-        String new_bitengine_dictionary_path = getRelativeDataPath() + BITENGINE_DICTIONARY_DIR_NAME;
-        auto bitengine_disk = getStoragePolicy()->getAnyDisk();
+        String new_bitengine_dictionary_path = getRelativeDataPath(IStorage::StorageLocation::MAIN) + BITENGINE_DICTIONARY_DIR_NAME;
+        auto bitengine_disk = getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
         bitengine_disk->createDirectories(new_bitengine_dictionary_path);
 
         bitengine_dictionary_manager->rename(new_table_id.getFullNameNotQuoted(), new_bitengine_dictionary_path);
@@ -1270,12 +1270,12 @@ void MergeTreeData::dropAllData()
     }
 
     /// remove metastore if exists. make sure the metastore is closed before remove metadata.
-    String metastore_path = getContext()->getMetastorePath() + getRelativeDataPath();
+    String metastore_path = getContext()->getMetastorePath() + getRelativeDataPath(IStorage::StorageLocation::MAIN);
     if (fs::exists(metastore_path))
     {
         if (metastore)
             metastore->closeMetastore();
-        fs::remove_all(getContext()->getMetastorePath() + getRelativeDataPath());
+        fs::remove_all(getContext()->getMetastorePath() + getRelativeDataPath(IStorage::StorageLocation::MAIN));
     }
 
     setDataVolume(0, 0, 0);
@@ -1744,7 +1744,7 @@ void MergeTreeData::changeSettings(
             if (change.name == "storage_policy")
             {
                 StoragePolicyPtr new_storage_policy = getContext()->getStoragePolicy(change.value.safeGet<String>());
-                StoragePolicyPtr old_storage_policy = getStoragePolicy();
+                StoragePolicyPtr old_storage_policy = getStoragePolicy(IStorage::StorageLocation::MAIN);
 
                 /// StoragePolicy of different version or name is guaranteed to have different pointer
                 if (new_storage_policy != old_storage_policy)
@@ -1760,15 +1760,15 @@ void MergeTreeData::changeSettings(
                     for (const String & disk_name : all_diff_disk_names)
                     {
                         auto disk = new_storage_policy->getDiskByName(disk_name);
-                        if (disk->exists(relative_data_path))
+                        if (disk->exists(getRelativeDataPath(IStorage::StorageLocation::MAIN)))
                             throw Exception("New storage policy contain disks which already contain data of a table with the same name", ErrorCodes::LOGICAL_ERROR);
                     }
 
                     for (const String & disk_name : all_diff_disk_names)
                     {
                         auto disk = new_storage_policy->getDiskByName(disk_name);
-                        disk->createDirectories(relative_data_path);
-                        disk->createDirectories(fs::path(relative_data_path) / MergeTreeData::DETACHED_DIR_NAME);
+                        disk->createDirectories(getRelativeDataPath(IStorage::StorageLocation::MAIN));
+                        disk->createDirectories(fs::path(getRelativeDataPath(IStorage::StorageLocation::MAIN)) / MergeTreeData::DETACHED_DIR_NAME);
                     }
                     /// FIXME how would that be done while reloading configuration???
 
@@ -2821,9 +2821,9 @@ void MergeTreeData::movePartitionToDisk(const ASTPtr & partition, const String &
     else
         parts = getDataPartsVectorInPartition(MergeTreeDataPartState::Committed, partition_id);
 
-    auto disk = getStoragePolicy()->getDiskByName(name);
+    auto disk = getStoragePolicy(IStorage::StorageLocation::MAIN)->getDiskByName(name);
     if (!disk)
-        throw Exception("Disk " + name + " does not exists on policy " + getStoragePolicy()->getName(), ErrorCodes::UNKNOWN_DISK);
+        throw Exception("Disk " + name + " does not exists on policy " + getStoragePolicy(IStorage::StorageLocation::MAIN)->getName(), ErrorCodes::UNKNOWN_DISK);
 
     parts.erase(std::remove_if(parts.begin(), parts.end(), [&](auto part_ptr)
         {
@@ -2866,9 +2866,9 @@ void MergeTreeData::movePartitionToVolume(const ASTPtr & partition, const String
     else
         parts = getDataPartsVectorInPartition(MergeTreeDataPartState::Committed, partition_id);
 
-    auto volume = getStoragePolicy()->getVolumeByName(name);
+    auto volume = getStoragePolicy(IStorage::StorageLocation::MAIN)->getVolumeByName(name);
     if (!volume)
-        throw Exception("Volume " + name + " does not exists on policy " + getStoragePolicy()->getName(), ErrorCodes::UNKNOWN_DISK);
+        throw Exception("Volume " + name + " does not exists on policy " + getStoragePolicy(IStorage::StorageLocation::MAIN)->getName(), ErrorCodes::UNKNOWN_DISK);
 
     if (parts.empty())
         throw Exception("Nothing to move (сheck that the partition exists).", ErrorCodes::NO_SUCH_DATA_PART);
@@ -3241,11 +3241,11 @@ MergeTreeData::MutableDataPartsVector MergeTreeData::tryLoadPartsToAttach(const 
         LOG_DEBUG(log, "Looking for parts for partition {} in {}", partition_id, source_dir);
         ActiveDataPartSet active_parts(format_version);
 
-        const auto disks = getStoragePolicy()->getDisks();
+        const auto disks = getStoragePolicy(IStorage::StorageLocation::MAIN)->getDisks();
 
         for (const auto & disk : disks)
         {
-            for (auto it = disk->iterateDirectory(relative_data_path + source_dir); it->isValid(); it->next())
+            for (auto it = disk->iterateDirectory(getRelativeDataPath(IStorage::StorageLocation::MAIN) + source_dir); it->isValid(); it->next())
             {
                 const String & name = it->name();
                 MergeTreePartInfo part_info;
@@ -3272,8 +3272,8 @@ MergeTreeData::MutableDataPartsVector MergeTreeData::tryLoadPartsToAttach(const 
 
             if (!containing_part.empty() && containing_part != name)
                 // TODO maybe use PartsTemporaryRename here?
-                disk->moveDirectory(fs::path(relative_data_path) / source_dir / name,
-                    fs::path(relative_data_path) / source_dir / ("inactive_" + name));
+                disk->moveDirectory(fs::path(getRelativeDataPath(IStorage::StorageLocation::MAIN)) / source_dir / name,
+                    fs::path(getRelativeDataPath(IStorage::StorageLocation::MAIN)) / source_dir / ("inactive_" + name));
             else if (in_preattach)
                 renamed_parts.addPart(name, name);
             else
@@ -3900,15 +3900,15 @@ MergeTreeData & MergeTreeData::checkStructureAndGetMergeTreeData(
 
 String MergeTreeData::getMetastorePath() const
 {
-    return getContext()->getMetastorePath() + getRelativeDataPath();
+    return getContext()->getMetastorePath() + getRelativeDataPath(IStorage::StorageLocation::MAIN);
 }
 
 DiskPtr MergeTreeData::getDiskForPart(const String & part_name, const String & additional_path) const
 {
-    const auto disks = getStoragePolicy()->getDisks();
+    const auto disks = getStoragePolicy(IStorage::StorageLocation::MAIN)->getDisks();
 
     for (const DiskPtr & disk : disks)
-        for (auto it = disk->iterateDirectory(relative_data_path + additional_path); it->isValid(); it->next())
+        for (auto it = disk->iterateDirectory(getRelativeDataPath(IStorage::StorageLocation::MAIN) + additional_path); it->isValid(); it->next())
             if (it->name() == part_name)
                 return disk;
 
@@ -3920,25 +3920,25 @@ std::optional<String> MergeTreeData::getFullRelativePathForPart(const String & p
 {
     auto disk = getDiskForPart(part_name, additional_path);
     if (disk)
-        return relative_data_path + additional_path;
+        return getRelativeDataPath(IStorage::StorageLocation::MAIN) + additional_path;
     return {};
 }
 
 Strings MergeTreeData::getDataPaths() const
 {
     Strings res;
-    auto disks = getStoragePolicy()->getDisks();
+    auto disks = getStoragePolicy(IStorage::StorageLocation::MAIN)->getDisks();
     for (const auto & disk : disks)
-        res.push_back(getFullPathOnDisk(disk));
+        res.push_back(getFullPathOnDisk(IStorage::StorageLocation::MAIN, disk));
     return res;
 }
 
 MergeTreeData::PathsWithDisks MergeTreeData::getRelativeDataPathsWithDisks() const
 {
     PathsWithDisks res;
-    auto disks = getStoragePolicy()->getDisks();
+    auto disks = getStoragePolicy(IStorage::StorageLocation::MAIN)->getDisks();
     for (const auto & disk : disks)
-        res.emplace_back(relative_data_path, disk);
+        res.emplace_back(getRelativeDataPath(IStorage::StorageLocation::MAIN), disk);
     return res;
 }
 
@@ -4010,7 +4010,7 @@ PartitionCommandsResultInfo MergeTreeData::freezePartitionsByMatcher(
     String backup_name = (!with_name.empty() ? escapeForFileName(with_name) : toString(increment));
     String backup_path = fs::path(shadow_path) / backup_name / "";
 
-    for (const auto & disk : getStoragePolicy()->getDisks())
+    for (const auto & disk : getStoragePolicy(IStorage::StorageLocation::MAIN)->getDisks())
         disk->onFreeze(backup_path);
 
     PartitionCommandsResultInfo result;
@@ -4025,9 +4025,9 @@ PartitionCommandsResultInfo MergeTreeData::freezePartitionsByMatcher(
 
         part->volume->getDisk()->createDirectories(backup_path);
 
-        String backup_part_path = fs::path(backup_path) / relative_data_path / part->relative_path;
+        String backup_part_path = fs::path(backup_path) / getRelativeDataPath(IStorage::StorageLocation::MAIN) / part->relative_path;
         if (auto part_in_memory = asInMemoryPart(part))
-            part_in_memory->flushToDisk(fs::path(backup_path) / relative_data_path, part->relative_path, metadata_snapshot);
+            part_in_memory->flushToDisk(fs::path(backup_path) / getRelativeDataPath(IStorage::StorageLocation::MAIN), part->relative_path, metadata_snapshot);
         else
             localBackup(part->volume->getDisk(), part->getFullRelativePath(), backup_part_path);
 
@@ -4067,13 +4067,13 @@ PartitionCommandsResultInfo MergeTreeData::unfreezeAll(
 
 PartitionCommandsResultInfo MergeTreeData::unfreezePartitionsByMatcher(MatcherFn matcher, const String & backup_name, ContextPtr)
 {
-    auto backup_path = fs::path("shadow") / escapeForFileName(backup_name) / relative_data_path;
+    auto backup_path = fs::path("shadow") / escapeForFileName(backup_name) / getRelativeDataPath(IStorage::StorageLocation::MAIN);
 
     LOG_DEBUG(log, "Unfreezing parts by path {}", backup_path.generic_string());
 
     PartitionCommandsResultInfo result;
 
-    for (const auto & disk : getStoragePolicy()->getDisks())
+    for (const auto & disk : getStoragePolicy(IStorage::StorageLocation::MAIN)->getDisks())
     {
         if (!disk->exists(backup_path))
             continue;
@@ -4239,7 +4239,7 @@ bool MergeTreeData::scheduleDataMovingJob(IBackgroundJobExecutor & executor)
 
 bool MergeTreeData::areBackgroundMovesNeeded() const
 {
-    auto policy = getStoragePolicy();
+    auto policy = getStoragePolicy(IStorage::StorageLocation::MAIN);
 
     if (policy->getVolumes().size() > 1)
         return true;
@@ -4318,9 +4318,9 @@ MergeTreeData::CurrentlyMovingPartsTaggerPtr MergeTreeData::checkPartsForMove(co
 
         auto reserved_disk = reservation->getDisk();
 
-        if (reserved_disk->exists(relative_data_path + part->name))
+        if (reserved_disk->exists(getRelativeDataPath(IStorage::StorageLocation::MAIN) + part->name))
             throw Exception(
-                "Move is not possible: " + fullPath(reserved_disk, relative_data_path + part->name) + " already exists",
+                "Move is not possible: " + fullPath(reserved_disk, getRelativeDataPath(IStorage::StorageLocation::MAIN) + part->name) + " already exists",
                 ErrorCodes::DIRECTORY_ALREADY_EXISTS);
 
         if (currently_moving_parts.count(part) || partIsAssignedToBackgroundOperation(part))
@@ -4448,7 +4448,7 @@ ReservationPtr MergeTreeData::balancedReservation(
     if (tagger_ptr && min_bytes_to_rebalance_partition_over_jbod > 0 && part_size >= min_bytes_to_rebalance_partition_over_jbod)
     try
     {
-        const auto & disks = getStoragePolicy()->getVolume(max_volume_index)->getDisks();
+        const auto & disks = getStoragePolicy(IStorage::StorageLocation::MAIN)->getVolume(max_volume_index)->getDisks();
         std::map<String, size_t> disk_occupation;
         std::map<String, std::vector<String>> disk_parts_for_logging;
         for (const auto & disk : disks)
@@ -4570,9 +4570,9 @@ ReservationPtr MergeTreeData::balancedReservation(
                     time(nullptr),
                     max_volume_index,
                     is_insert,
-                    getStoragePolicy()->getDiskByName(selected_disk_name));
+                    getStoragePolicy(IStorage::StorageLocation::MAIN)->getDiskByName(selected_disk_name));
             else
-                reserved_space = tryReserveSpace(part_size, getStoragePolicy()->getDiskByName(selected_disk_name));
+                reserved_space = tryReserveSpace(part_size, getStoragePolicy(IStorage::StorageLocation::MAIN)->getDiskByName(selected_disk_name));
 
             if (reserved_space)
             {
@@ -4602,12 +4602,12 @@ ReservationPtr MergeTreeData::balancedReservation(
 
 void MergeTreeData::searchAllPartsOnFilesystem(std::map<String, DiskPtr> & parts_with_disks, std::map<String, DiskPtr> & wal_with_disks) const
 {
-    auto disks = getStoragePolicy()->getDisks();
+    auto disks = getStoragePolicy(IStorage::StorageLocation::MAIN)->getDisks();
 
     for (auto disk_it = disks.rbegin(); disk_it != disks.rend(); ++disk_it)
     {
         auto disk_ptr = *disk_it;
-        for (auto it = disk_ptr->iterateDirectory(relative_data_path); it->isValid(); it->next())
+        for (auto it = disk_ptr->iterateDirectory(getRelativeDataPath(IStorage::StorageLocation::MAIN)); it->isValid(); it->next())
         {
             /// Skip temporary directories, file 'format_version.txt', WAL and directory 'detached'.
             if (startsWith(it->name(), "tmp") || it->name() == MergeTreeData::FORMAT_VERSION_FILE_NAME

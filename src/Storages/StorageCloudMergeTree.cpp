@@ -53,8 +53,8 @@ StorageCloudMergeTree::StorageCloudMergeTree(
     , cnch_database_name(std::move(cnch_database_name_))
     , cnch_table_name(std::move(cnch_table_name_))
 {
-    local_store_volume = getContext()->getStoragePolicy(getSettings()->cnch_local_storage_policy.toString());
-    relative_local_store_path = fs::path("store");
+    relative_auxility_storage_path = fs::path("auxility_store") / UUIDHelpers::UUIDToString(table_id_.uuid) / "";
+
     format_version = MERGE_TREE_CHCH_DATA_STORAGTE_VERSION;
 
     if (getInMemoryMetadataPtr()->hasUniqueKey() && getSettings()->cloud_enable_dedup_worker)
@@ -109,8 +109,7 @@ Pipe StorageCloudMergeTree::read(
 
 BlockOutputStreamPtr StorageCloudMergeTree::write(const ASTPtr &, const StorageMetadataPtr & metadata_snapshot, ContextPtr local_context)
 {
-    return std::make_shared<CloudMergeTreeBlockOutputStream>(*this, metadata_snapshot, std::move(local_context),
-        local_store_volume, relative_local_store_path);
+    return std::make_shared<CloudMergeTreeBlockOutputStream>(*this, metadata_snapshot, std::move(local_context));
 }
 
 ManipulationTaskPtr StorageCloudMergeTree::manipulate(const ManipulationTaskParams & input_params, ContextPtr task_context)
@@ -233,9 +232,19 @@ MutationCommands StorageCloudMergeTree::getFirstAlterMutationCommandsForPart(con
     return {};
 }
 
-StoragePolicyPtr StorageCloudMergeTree::getLocalStoragePolicy() const
+StoragePolicyPtr StorageCloudMergeTree::getStoragePolicy(StorageLocation location) const
 {
-    return local_store_volume;
+    String policy_name = (location == StorageLocation::MAIN ?
+        getSettings()->storage_policy :
+        getContext()->getCnchAuxilityPolicyName());
+    return getContext()->getStoragePolicy(policy_name);
+}
+
+const String& StorageCloudMergeTree::getRelativeDataPath(StorageLocation location) const
+{
+    return location == StorageLocation::MAIN ?
+        MergeTreeMetaBase::getRelativeDataPath(location) :
+        relative_auxility_storage_path;
 }
 
 ASTs StorageCloudMergeTree::convertBucketNumbersToAstLiterals(const ASTPtr where_expression, ContextPtr local_context) const

@@ -493,10 +493,10 @@ CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromTable
 
     // Table's detached directory in every disk form a single source
     // and should calculate visible parts together
-    Disks remote_disks = tbl.getStoragePolicy()->getDisks();
+    Disks remote_disks = tbl.getStoragePolicy(IStorage::StorageLocation::MAIN)->getDisks();
     for (const DiskPtr& disk : remote_disks)
     {
-        String src_rel_path = std::filesystem::path(tbl.getRelativeDataPath())
+        String src_rel_path = std::filesystem::path(tbl.getRelativeDataPath(IStorage::StorageLocation::MAIN))
             / "detached" / "";
         source.units.emplace_back(disk, src_rel_path);
     }
@@ -672,7 +672,7 @@ void CnchAttachProcessor::collectPartsFromUnit(const StorageCnchMergeTree& tbl,
                     // so, have a relative path here
                     founded_parts.push_back(std::make_shared<MergeTreeDataPartCNCH>(
                         tbl, iter->name(), volume,
-                        relativePathTo(tbl.getRelativeDataPath(), current_entry_path)));
+                        relativePathTo(tbl.getRelativeDataPath(IStorage::StorageLocation::MAIN), current_entry_path)));
                 }
             }
             else
@@ -765,7 +765,7 @@ std::pair<String, DiskPtr> CnchAttachProcessor::findBestDiskForHDFSPath(
     UInt32 max_match_depth = 0;
     String rel_path_on_disk;
 
-    Disks disks = target_tbl.getStoragePolicy()->getDisks();
+    Disks disks = target_tbl.getStoragePolicy(IStorage::StorageLocation::MAIN)->getDisks();
     for (const DiskPtr& disk : disks)
     {
         std::pair<UInt32, String> res = prefix_match(disk->getPath(), from_path);
@@ -779,7 +779,7 @@ std::pair<String, DiskPtr> CnchAttachProcessor::findBestDiskForHDFSPath(
 
     if (best_disk == nullptr)
     {
-        best_disk = target_tbl.getStoragePolicy()->getVolume(0)->getDefaultDisk();
+        best_disk = target_tbl.getStoragePolicy(IStorage::StorageLocation::MAIN)->getVolume(0)->getDefaultDisk();
         // Since currently table will assume it's data in disk_root/{table_uuid},
         // Use a relative path to hack here...
         // Currently we use default disk, maybe use disk with most prefix?
@@ -864,10 +864,10 @@ MutableMergeTreeDataPartsCNCHVector CnchAttachProcessor::prepareParts(
     prepared_parts.resize(total_parts_count);
 
     // Create target directory first
-    Disks disks = target_tbl.getStoragePolicy()->getDisks();
+    Disks disks = target_tbl.getStoragePolicy(IStorage::StorageLocation::MAIN)->getDisks();
     for (const DiskPtr& disk : disks)
     {
-        disk->createDirectories(target_tbl.getRelativeDataPath());
+        disk->createDirectories(target_tbl.getRelativeDataPath(IStorage::StorageLocation::MAIN));
     }
 
     // Write rename record to kv first
@@ -878,7 +878,7 @@ MutableMergeTreeDataPartsCNCHVector CnchAttachProcessor::prepareParts(
             IMergeTreeDataPartPtr part = part_and_info.first;
             MergeTreePartInfo part_info = part_and_info.second;
             String part_name = part_info.getPartNameWithHintMutation();
-            String target_path = std::filesystem::path(target_tbl.getRelativeDataPath())
+            String target_path = std::filesystem::path(target_tbl.getRelativeDataPath(IStorage::StorageLocation::MAIN))
                 / part_name / "";
             attach_ctx.writeRenameRecord(part->volume->getDefaultDisk(), part->getFullRelativePath(),
                 target_path);
@@ -897,7 +897,7 @@ MutableMergeTreeDataPartsCNCHVector CnchAttachProcessor::prepareParts(
         {
             worker_pool.scheduleOrThrowOnError([&prepared_parts, table_def_hash, offset, part = part_and_info.first, part_info = part_and_info.second, this]() {
                 String part_name = part_info.getPartNameWithHintMutation();
-                String target_path = std::filesystem::path(target_tbl.getRelativeDataPath())
+                String target_path = std::filesystem::path(target_tbl.getRelativeDataPath(IStorage::StorageLocation::MAIN))
                     / part_name / "";
                 part->volume->getDisk()->moveDirectory(part->getFullRelativePath(), target_path);
 

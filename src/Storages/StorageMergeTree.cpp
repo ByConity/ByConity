@@ -360,7 +360,7 @@ StorageMergeTree::CurrentlyMergingPartsTagger::CurrentlyMergingPartsTagger(
         for (auto & part_ptr : future_part_.parts)
         {
             ttl_infos.update(part_ptr->ttl_infos);
-            max_volume_index = std::max(max_volume_index, storage.getStoragePolicy()->getVolumeIndexByDisk(part_ptr->volume->getDisk()));
+            max_volume_index = std::max(max_volume_index, storage.getStoragePolicy(IStorage::StorageLocation::MAIN)->getVolumeIndexByDisk(part_ptr->volume->getDisk()));
         }
 
         reserved_space = storage.balancedReservation(
@@ -414,12 +414,12 @@ Int64 StorageMergeTree::startMutation(const MutationCommands & commands, String 
 {
     /// Choose any disk, because when we load mutations we search them at each disk
     /// where storage can be placed. See loadMutations().
-    auto disk = getStoragePolicy()->getAnyDisk();
+    auto disk = getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
     Int64 version;
     {
         std::lock_guard lock(currently_processing_in_background_mutex);
 
-        MergeTreeMutationEntry entry(commands, disk, relative_data_path, insert_increment.get());
+        MergeTreeMutationEntry entry(commands, disk, getRelativeDataPath(IStorage::StorageLocation::MAIN), insert_increment.get());
         version = increment.get();
         entry.commit(version);
         mutation_file_name = entry.file_name;
@@ -757,7 +757,7 @@ std::shared_ptr<StorageMergeTree::MergeMutateSelectedEntry> StorageMergeTree::se
     {
         while (true)
         {
-            UInt64 disk_space = getStoragePolicy()->getMaxUnreservedFreeSpace();
+            UInt64 disk_space = getStoragePolicy(IStorage::StorageLocation::MAIN)->getMaxUnreservedFreeSpace();
             select_decision = merger_mutator.selectAllPartsToMergeWithinPartition(
                 future_part, disk_space, can_merge, partition_id, final, metadata_snapshot, out_disable_reason, optimize_skip_merged_partitions, merge_scheduler.get());
             auto timeout_ms = getSettings()->lock_acquire_timeout_for_background_operations.totalMilliseconds();
@@ -1523,11 +1523,11 @@ void StorageMergeTree::movePartitionToTable(const StoragePtr & dest_table, const
     if (!dest_table_storage)
         throw Exception("Table " + getStorageID().getNameForLogs() + " supports movePartitionToTable only for MergeTree family of table engines."
                         " Got " + dest_table->getName(), ErrorCodes::NOT_IMPLEMENTED);
-    if (dest_table_storage->getStoragePolicy() != this->getStoragePolicy())
+    if (dest_table_storage->getStoragePolicy(IStorage::StorageLocation::MAIN) != this->getStoragePolicy(IStorage::StorageLocation::MAIN))
         throw Exception("Destination table " + dest_table_storage->getStorageID().getNameForLogs() +
                        " should have the same storage policy of source table " + getStorageID().getNameForLogs() + ". " +
-                       getStorageID().getNameForLogs() + ": " + this->getStoragePolicy()->getName() + ", " +
-                       dest_table_storage->getStorageID().getNameForLogs() + ": " + dest_table_storage->getStoragePolicy()->getName(), ErrorCodes::UNKNOWN_POLICY);
+                       getStorageID().getNameForLogs() + ": " + this->getStoragePolicy(IStorage::StorageLocation::MAIN)->getName() + ", " +
+                       dest_table_storage->getStorageID().getNameForLogs() + ": " + dest_table_storage->getStoragePolicy(IStorage::StorageLocation::MAIN)->getName(), ErrorCodes::UNKNOWN_POLICY);
 
     auto dest_metadata_snapshot = dest_table->getInMemoryMetadataPtr();
     auto metadata_snapshot = getInMemoryMetadataPtr();

@@ -114,15 +114,15 @@ bool executeGlobalGC(const Protos::DataModelTable & table, const Context & conte
         if (mergetree)
         {
             LOG_DEBUG(log, "Remove data path for table {}", storage_id.getNameForLogs());
-            StoragePolicyPtr remote_storage_policy = mergetree->getStoragePolicy();
+            StoragePolicyPtr remote_storage_policy = mergetree->getStoragePolicy(IStorage::StorageLocation::MAIN);
             Disks remote_disks = remote_storage_policy->getDisks();
-            const String & relative_path = mergetree->getRelativeDataPath();
+            const String & relative_path = mergetree->getRelativeDataPath(IStorage::StorageLocation::MAIN);
             cleanDisks(remote_disks, relative_path, log);
 
-            StoragePolicyPtr local_storage_policy = mergetree->getLocalStoragePolicy();
-            Disks local_disks = local_storage_policy->getDisks();
-            //const String local_store_path = mergetree->getLocalStorePath();
-            cleanDisks(local_disks, relative_path, log);
+            // StoragePolicyPtr local_storage_policy = mergetree->getLocalStoragePolicy();
+            // Disks local_disks = local_storage_policy->getDisks();
+            // //const String local_store_path = mergetree->getLocalStorePath();
+            // cleanDisks(local_disks, relative_path, log);
 
             LOG_DEBUG(log, "Remove background job statues for table {}", storage_id.getNameForLogs());
             catalog->dropBGJobStatuses(storage_id.uuid);

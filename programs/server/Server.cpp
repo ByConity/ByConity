@@ -1,6 +1,7 @@
 #include "Server.h"
 
 #include <filesystem>
+#include <limits>
 #include <memory>
 #include <errno.h>
 #include <pwd.h>
@@ -367,6 +368,40 @@ Poco::Net::SocketAddress Server::socketBindListen(Poco::Net::ServerSocket & sock
     return address;
 }
 
+static String generateTempDataPathToRemove()
+{
+    using namespace std::chrono;
+    return "remove_auxility_store_" + toString(duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count());
+}
+
+static void clearOldStoreDirectory(const DisksMap& disk_map)
+{
+    for (const auto& [name, disk] : disk_map)
+    {
+        if (disk->getType() != DiskType::Type::Local)
+        {
+            continue;
+        }
+
+        for (auto iter = disk->iterateDirectory(""); iter->isValid(); iter->next())
+        {
+            if (!startsWith(iter->name(), "remove_auxility_store_"))
+                continue;
+
+            try
+            {
+                LOG_DEBUG(&Poco::Logger::get(__func__), "Removing {} from disk {}",
+                    String(fs::path(disk->getPath()) / iter->path()), disk->getName());
+                disk->removeRecursive(iter->path());
+            }
+            catch (...)
+            {
+                tryLogCurrentException(__PRETTY_FUNCTION__);
+            }
+        }
+    }
+}
+
 void Server::createServer(const std::string & listen_host, const char * port_name, bool listen_try, CreateServerFunc && func) const
 {
     /// For testing purposes, user may omit tcp_port or http_port or https_port in configuration file.
@@ -488,7 +523,6 @@ void checkForUsersNotInMainConfig(
 #endif
 }
 
-
 int Server::main(const std::vector<std::string> & /*args*/)
 {
     Poco::Logger * log = &logger();
@@ -556,6 +590,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         current_raw_sd_config = config().getRawString("service_discovery");
     }
+
     /// Initialize components in server or worker.
     if (global_context->getServerType() == ServerType::cnch_server || global_context->getServerType() == ServerType::cnch_worker)
     {
@@ -1063,7 +1098,35 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     HDFSConnectionParams hdfs_params = HDFSConnectionParams::parseHdfsFromConfig(config());
     global_context->setHdfsConnectionParams(hdfs_params);
+#endif
 
+    // Clear old store data in the background
+    ThreadFromGlobalPool clear_old_data;
+    bool is_cnch = global_context->getServerType() == ServerType::cnch_server || global_context->getServerType() == ServerType::cnch_worker;
+    if (is_cnch)
+    {
+        DisksMap disk_map = global_context->getDisksMap();
+        String store_relative_path = "auxility_store/";
+        for (const auto& [name, disk] : disk_map)
+        {
+            if (disk->getType() == DiskType::Type::Local && disk->exists(store_relative_path))
+            {
+                String temp_store_path = generateTempDataPathToRemove();
+                disk->moveDirectory(store_relative_path, temp_store_path);
+                disk->createDirectories(store_relative_path);
+            }
+        }
+
+        clear_old_data = ThreadFromGlobalPool([disks = std::move(disk_map)] { clearOldStoreDirectory(disks); });
+    }
+
+    /// Make sure that scope guard is created instantly after thread
+    SCOPE_EXIT({
+        if (clear_old_data.joinable())
+            clear_old_data.join();
+    });
+
+#if USE_HDFS
     /// TODO: @rmq
     /// set the value of has_hdfs_disk as cnch-dev.
     bool has_hdfs_disk = false;

@@ -166,7 +166,7 @@ void FutureMergedMutatedPart::assign(MergeTreeData::DataPartsVector parts_, Merg
 
 void FutureMergedMutatedPart::updatePath(const MergeTreeMetaBase & storage, const ReservationPtr & reservation)
 {
-    path = storage.getFullPathOnDisk(reservation->getDisk()) + name + "/";
+    path = storage.getFullPathOnDisk(IStorage::StorageLocation::MAIN, reservation->getDisk()) + name + "/";
 }
 
 MergeTreeDataMergerMutator::MergeTreeDataMergerMutator(MergeTreeMetaBase & data_, size_t background_pool_size_)
@@ -205,7 +205,7 @@ UInt64 MergeTreeDataMergerMutator::getMaxSourcePartsSizeForMerge(size_t pool_siz
             data_settings->max_bytes_to_merge_at_max_space_in_pool,
             static_cast<double>(free_entries) / data_settings->number_of_free_entries_in_pool_to_lower_max_size_of_merge);
 
-    return std::min(max_size, static_cast<UInt64>(data.getStoragePolicy()->getMaxUnreservedFreeSpace() / DISK_USAGE_COEFFICIENT_TO_SELECT));
+    return std::min(max_size, static_cast<UInt64>(data.getStoragePolicy(IStorage::StorageLocation::MAIN)->getMaxUnreservedFreeSpace() / DISK_USAGE_COEFFICIENT_TO_SELECT));
 }
 
 
@@ -215,7 +215,7 @@ UInt64 MergeTreeDataMergerMutator::getMaxSourcePartSizeForMutation() const
     size_t busy_threads_in_pool = CurrentMetrics::values[CurrentMetrics::BackgroundPoolTask].load(std::memory_order_relaxed);
 
     /// DataPart can be store only at one disk. Get maximum reservable free space at all disks.
-    UInt64 disk_space = data.getStoragePolicy()->getMaxUnreservedFreeSpace();
+    UInt64 disk_space = data.getStoragePolicy(IStorage::StorageLocation::MAIN)->getMaxUnreservedFreeSpace();
 
     /// Allow mutations only if there are enough threads, leave free threads for merges else
     if (busy_threads_in_pool <= 1
@@ -249,7 +249,7 @@ SelectPartsDecision MergeTreeDataMergerMutator::selectPartsToMerge(
 
     IMergeSelector::PartsRanges parts_ranges;
 
-    StoragePolicyPtr storage_policy = data.getStoragePolicy();
+    StoragePolicyPtr storage_policy = data.getStoragePolicy(IStorage::StorageLocation::MAIN);
     /// Volumes with stopped merges are extremely rare situation.
     /// Check it once and don't check each part (this is bad for performance).
     bool has_volumes_with_disabled_merges = storage_policy->hasAnyVolumeWithDisabledMerges();
@@ -436,7 +436,7 @@ SelectPartsDecision MergeTreeDataMergerMutator::selectPartsToMergeMulti(
 
     IMergeSelector::PartsRanges parts_ranges;
 
-    StoragePolicyPtr storage_policy = data.getStoragePolicy();
+    StoragePolicyPtr storage_policy = data.getStoragePolicy(IStorage::StorageLocation::MAIN);
     /// Volumes with stopped merges are extremely rare situation.
     /// Check it once and don't check each part (this is bad for performance).
     bool has_volumes_with_disabled_merges = storage_policy->hasAnyVolumeWithDisabledMerges();
@@ -2507,7 +2507,7 @@ void MergeTreeDataMergerMutator::writeWithProjections(
             if (projection_block)
             {
                 projection_parts[projection.name].emplace_back(
-                    MergeTreeDataWriter::writeTempProjectionPart(data, log, projection_block, projection, new_data_part.get(), ++block_num));
+                    MergeTreeDataWriter::writeTempProjectionPart(data, log, projection_block, projection, new_data_part.get(), ++block_num, IStorage::StorageLocation::MAIN));
             }
         }
 
@@ -2524,7 +2524,7 @@ void MergeTreeDataMergerMutator::writeWithProjections(
         if (projection_block)
         {
             projection_parts[projection.name].emplace_back(
-                MergeTreeDataWriter::writeTempProjectionPart(data, log, projection_block, projection, new_data_part.get(), ++block_num));
+                MergeTreeDataWriter::writeTempProjectionPart(data, log, projection_block, projection, new_data_part.get(), ++block_num, IStorage::StorageLocation::MAIN));
         }
     }
 

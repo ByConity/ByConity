@@ -205,8 +205,6 @@ struct Settings;
     /* Metastore settings */\
     M(Bool, enable_metastore, true, "Use KV metastore to manage data parts.", 0) \
     M(Bool, enable_persistent_checksum, false, "Persist checksums of part in memory. If set to false, checksums will be managed by a global cache to save memory.", 0) \
-    /* Storage settings */\
-    M(String, cnch_local_storage_policy, "default", "Storage policy used to store local temp data", 0) \
     \
     M(Bool, enable_local_disk_cache, true, "Enable local disk cache", 0) \
     \
@@ -250,7 +248,7 @@ struct MergeTreeSettings : public BaseSettings<MergeTreeSettingsTraits>
     static bool isReadonlySetting(const String & name)
     {
         return name == "index_granularity" || name == "index_granularity_bytes" || name == "write_final_mark"
-            || name == "enable_mixed_granularity_parts" || name == "cnch_local_storage_policy";
+            || name == "enable_mixed_granularity_parts";
     }
 
     static bool isPartFormatSetting(const String & name)

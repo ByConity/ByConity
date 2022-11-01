@@ -79,7 +79,6 @@ MergeTreeMetaBase::MergeTreeMetaBase(
     , unique_key_index_cache(getContext()->getUniqueKeyIndexCache())
     , merging_params(merging_params_)
     , require_part_metadata(require_part_metadata_)
-    , relative_data_path(relative_data_path_)
     , broken_part_callback(broken_part_callback_)
     , log_name(table_id_.getNameForLogs())
     , log(&Poco::Logger::get(log_name))
@@ -87,6 +86,7 @@ MergeTreeMetaBase::MergeTreeMetaBase(
     , pinned_part_uuids(std::make_shared<PinnedPartUUIDs>())
     , data_parts_by_info(data_parts_indexes.get<TagByInfo>())
     , data_parts_by_state_and_info(data_parts_indexes.get<TagByStateAndInfo>())
+    , relative_data_path(relative_data_path_)
     /// FIXME: add after supporting primary key index cache
     // , primary_index_cache(context_->getDiskPrimaryKeyIndexCache())
 {
@@ -143,9 +143,34 @@ MergeTreeMetaBase::MergeTreeMetaBase(
     storage_address = fmt::format("{}", fmt::ptr(this));
 }
 
-StoragePolicyPtr MergeTreeMetaBase::getStoragePolicy() const
+StoragePolicyPtr MergeTreeMetaBase::getStoragePolicy(StorageLocation location) const
 {
+    if (unlikely(location == StorageLocation::AUXILITY))
+    {
+        throw Exception("Get auxility storage policy is not supported",
+            ErrorCodes::LOGICAL_ERROR);
+    }
     return getContext()->getStoragePolicy(getSettings()->storage_policy);
+}
+
+const String& MergeTreeMetaBase::getRelativeDataPath(StorageLocation location) const
+{
+    if (unlikely(location == StorageLocation::AUXILITY))
+    {
+        throw Exception("Get auxility relative data path is not supported",
+            ErrorCodes::LOGICAL_ERROR);
+    }
+    return relative_data_path;
+}
+
+void MergeTreeMetaBase::setRelativeDataPath(StorageLocation location, const String& rel_path)
+{
+    if (unlikely(location == StorageLocation::AUXILITY))
+    {
+        throw Exception("Set auxility relative data path is not supported",
+            ErrorCodes::LOGICAL_ERROR);
+    }
+    relative_data_path = rel_path;
 }
 
 static void checkKeyExpression(const ExpressionActions & expr, const Block & sample_block, const String & key_name, bool allow_nullable_key)
@@ -539,7 +564,7 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeMetaBase::cloneAndLoadDataPartOnS
 {
     /// Check that the storage policy contains the disk where the src_part is located.
     bool does_storage_policy_allow_same_disk = false;
-    for (const DiskPtr & disk : getStoragePolicy()->getDisks())
+    for (const DiskPtr & disk : getStoragePolicy(IStorage::StorageLocation::MAIN)->getDisks())
     {
         if (disk->getName() == src_part->volume->getDisk()->getName())
         {
@@ -566,7 +591,7 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeMetaBase::cloneAndLoadDataPartOnS
     /// If source part is in memory, flush it to disk and clone it already in on-disk format
     if (auto src_part_in_memory = asInMemoryPart(src_part))
     {
-        const auto & src_relative_data_path = src_part_in_memory->storage.getRelativeDataPath();
+        const auto & src_relative_data_path = src_part_in_memory->storage.getRelativeDataPath(IStorage::StorageLocation::MAIN);
         auto flushed_part_path = src_part_in_memory->getRelativePathForPrefix(tmp_part_prefix);
         src_part_in_memory->flushToDisk(src_relative_data_path, flushed_part_path, metadata_snapshot);
         src_part_path = fs::path(src_relative_data_path) / flushed_part_path / "";
@@ -586,9 +611,9 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeMetaBase::cloneAndLoadDataPartOnS
     return dst_data_part;
 }
 
-String MergeTreeMetaBase::getFullPathOnDisk(const DiskPtr & disk) const
+String MergeTreeMetaBase::getFullPathOnDisk(StorageLocation location, const DiskPtr & disk) const
 {
-    return disk->getPath() + relative_data_path;
+    return disk->getPath() + getRelativeDataPath(location);
 }
 
 NamesAndTypesList MergeTreeMetaBase::getVirtuals() const
@@ -743,17 +768,23 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeMetaBase::createPart(
     const MergeTreePartInfo & part_info,
     const VolumePtr & volume,
     const String & relative_path,
-    const IMergeTreeDataPart * parent_part) const
+    const IMergeTreeDataPart * parent_part,
+    StorageLocation location) const
 {
     switch (type.getValue())
     {
         case MergeTreeDataPartType::COMPACT:
-            return std::make_shared<MergeTreeDataPartCompact>(*this, name, part_info, volume, relative_path, parent_part);
+            return std::make_shared<MergeTreeDataPartCompact>(*this, name, part_info, volume, relative_path, parent_part, location);
         case MergeTreeDataPartType::WIDE:
-            return std::make_shared<MergeTreeDataPartWide>(*this, name, part_info, volume, relative_path, parent_part);
+            return std::make_shared<MergeTreeDataPartWide>(*this, name, part_info, volume, relative_path, parent_part, location);
         case MergeTreeDataPartType::IN_MEMORY:
-            return std::make_shared<MergeTreeDataPartInMemory>(*this, name, part_info, volume, relative_path, parent_part);
+            return std::make_shared<MergeTreeDataPartInMemory>(*this, name, part_info, volume, relative_path, parent_part, location);
         case MergeTreeDataPartType::CNCH:
+            if (location != StorageLocation::MAIN)
+            {
+                throw Exception("Create CNCH part in auxility storage is forbidden",
+                    ErrorCodes::LOGICAL_ERROR);
+            }
             return std::make_shared<MergeTreeDataPartCNCH>(*this, name, part_info, volume, relative_path);
         case MergeTreeDataPartType::UNKNOWN:
             throw Exception("Unknown type of part " + relative_path, ErrorCodes::UNKNOWN_PART_TYPE);
@@ -774,18 +805,21 @@ static MergeTreeDataPartType getPartTypeFromMarkExtension(const String & mrk_ext
     throw Exception("Can't determine part type, because of unknown mark extension " + mrk_ext, ErrorCodes::UNKNOWN_PART_TYPE);
 }
 
-MergeTreeMetaBase::MutableDataPartPtr MergeTreeMetaBase::createPart(
-    const String & name, const VolumePtr & volume, const String & relative_path, const IMergeTreeDataPart * parent_part) const
+MergeTreeMetaBase::MutableDataPartPtr MergeTreeMetaBase::createPart(const String & name,
+    const VolumePtr & volume, const String & relative_path, const IMergeTreeDataPart * parent_part,
+    StorageLocation location) const
 {
-    return createPart(name, MergeTreePartInfo::fromPartName(name, format_version), volume, relative_path, parent_part);
+    return createPart(name, MergeTreePartInfo::fromPartName(name, format_version),
+        volume, relative_path, parent_part, location);
 }
 
-MergeTreeMetaBase::MutableDataPartPtr MergeTreeMetaBase::createPart(
-    const String & name, const MergeTreePartInfo & part_info,
-    const VolumePtr & volume, const String & relative_path, const IMergeTreeDataPart * parent_part) const
+MergeTreeMetaBase::MutableDataPartPtr MergeTreeMetaBase::createPart(const String & name,
+    const MergeTreePartInfo & part_info, const VolumePtr & volume,
+    const String & relative_path, const IMergeTreeDataPart * parent_part,
+    StorageLocation location) const
 {
     MergeTreeDataPartType type;
-    auto full_path = fs::path(relative_data_path) / (parent_part ? parent_part->relative_path : "") / relative_path / "";
+    auto full_path = fs::path(getRelativeDataPath(location)) / (parent_part ? parent_part->relative_path : "") / relative_path / "";
     auto mrk_ext = MergeTreeIndexGranularityInfo::getMarksExtensionFromFilesystem(volume->getDisk(), full_path);
 
     if (mrk_ext)
@@ -796,7 +830,7 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeMetaBase::createPart(
         type = choosePartTypeOnDisk(0, 0);
     }
 
-    return createPart(name, type, part_info, volume, relative_path, parent_part);
+    return createPart(name, type, part_info, volume, relative_path, parent_part, location);
 }
 
 MergeTreeMetaBase::DataParts MergeTreeMetaBase::getDataParts(const DataPartStates & affordable_states) const
@@ -1023,15 +1057,10 @@ inline ReservationPtr checkAndReturnReservation(UInt64 expected_size, Reservatio
 
 }
 
-ReservationPtr MergeTreeMetaBase::reserveSpace(UInt64 expected_size) const
+ReservationPtr MergeTreeMetaBase::reserveSpace(UInt64 expected_size, StorageLocation location) const
 {
     expected_size = std::max(RESERVATION_MIN_ESTIMATION_SIZE, expected_size);
-    return getStoragePolicy()->reserveAndCheck(expected_size);
-}
-
-ReservationPtr MergeTreeMetaBase::reserveSpaceOnLocal(UInt64 expected_size) const
-{
-    return getLocalStoragePolicy()->reserveAndCheck(std::max(RESERVATION_MIN_ESTIMATION_SIZE, expected_size));
+    return getStoragePolicy(location)->reserveAndCheck(expected_size);
 }
 
 ReservationPtr MergeTreeMetaBase::reserveSpace(UInt64 expected_size, SpacePtr space)
@@ -1054,12 +1083,13 @@ ReservationPtr MergeTreeMetaBase::reserveSpacePreferringTTLRules(
     time_t time_of_move,
     size_t min_volume_index,
     bool is_insert,
-    DiskPtr selected_disk) const
+    DiskPtr selected_disk,
+    StorageLocation location) const
 {
     expected_size = std::max(RESERVATION_MIN_ESTIMATION_SIZE, expected_size);
 
     ReservationPtr reservation = tryReserveSpacePreferringTTLRules(
-        metadata_snapshot, expected_size, ttl_infos, time_of_move, min_volume_index, is_insert, selected_disk);
+        metadata_snapshot, expected_size, ttl_infos, time_of_move, min_volume_index, is_insert, selected_disk, location);
 
     return checkAndReturnReservation(expected_size, std::move(reservation));
 }
@@ -1071,7 +1101,8 @@ ReservationPtr MergeTreeMetaBase::tryReserveSpacePreferringTTLRules(
     time_t time_of_move,
     size_t min_volume_index,
     bool is_insert,
-    DiskPtr selected_disk) const
+    DiskPtr selected_disk,
+    StorageLocation location) const
 {
     expected_size = std::max(RESERVATION_MIN_ESTIMATION_SIZE, expected_size);
 
@@ -1081,7 +1112,7 @@ ReservationPtr MergeTreeMetaBase::tryReserveSpacePreferringTTLRules(
 
     if (move_ttl_entry)
     {
-        SpacePtr destination_ptr = getDestinationForMoveTTL(*move_ttl_entry, is_insert);
+        SpacePtr destination_ptr = getDestinationForMoveTTL(*move_ttl_entry, is_insert, location);
         if (!destination_ptr)
         {
             if (move_ttl_entry->destination_type == DataDestinationType::VOLUME)
@@ -1111,14 +1142,14 @@ ReservationPtr MergeTreeMetaBase::tryReserveSpacePreferringTTLRules(
         reservation = selected_disk->reserve(expected_size);
 
     if (!reservation)
-        reservation = getStoragePolicy()->reserve(expected_size, min_volume_index);
+        reservation = getStoragePolicy(location)->reserve(expected_size, min_volume_index);
 
     return reservation;
 }
 
-SpacePtr MergeTreeMetaBase::getDestinationForMoveTTL(const TTLDescription & move_ttl, bool is_insert) const
+SpacePtr MergeTreeMetaBase::getDestinationForMoveTTL(const TTLDescription & move_ttl, bool is_insert, StorageLocation location) const
 {
-    auto policy = getStoragePolicy();
+    auto policy = getStoragePolicy(location);
     if (move_ttl.destination_type == DataDestinationType::VOLUME)
     {
         auto volume = policy->getVolumeByName(move_ttl.destination_name);
@@ -1152,7 +1183,7 @@ SpacePtr MergeTreeMetaBase::getDestinationForMoveTTL(const TTLDescription & move
 
 bool MergeTreeMetaBase::isPartInTTLDestination(const TTLDescription & ttl, const IMergeTreeDataPart & part) const
 {
-    auto policy = getStoragePolicy();
+    auto policy = getStoragePolicy(IStorage::StorageLocation::MAIN);
     if (ttl.destination_type == DataDestinationType::VOLUME)
     {
         for (const auto & disk : policy->getVolumeByName(ttl.destination_name)->getDisks())
@@ -1388,12 +1419,6 @@ void MergeTreeMetaBase::removePartContributionToColumnSizes(const DataPartPtr & 
         log_subtract(total_column_size.data_uncompressed, part_column_size.data_uncompressed, ".data_uncompressed");
         log_subtract(total_column_size.marks, part_column_size.marks, ".marks");
     }
-}
-
-
-StoragePolicyPtr MergeTreeMetaBase::getLocalStoragePolicy() const
-{
-    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Not implemented for MergeTreeMetaBase");
 }
 
 bool MergeTreeMetaBase::isPrimaryOrMinMaxKeyColumnPossiblyWrappedInFunctions(
