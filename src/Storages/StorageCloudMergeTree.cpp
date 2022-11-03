@@ -109,7 +109,8 @@ Pipe StorageCloudMergeTree::read(
 
 BlockOutputStreamPtr StorageCloudMergeTree::write(const ASTPtr &, const StorageMetadataPtr & metadata_snapshot, ContextPtr local_context)
 {
-    return std::make_shared<CloudMergeTreeBlockOutputStream>(*this, metadata_snapshot, std::move(local_context));
+    bool enable_staging_area = metadata_snapshot->hasUniqueKey() && bool(local_context->getSettingsRef().enable_staging_area_for_write);
+    return std::make_shared<CloudMergeTreeBlockOutputStream>(*this, metadata_snapshot, std::move(local_context), enable_staging_area);
 }
 
 ManipulationTaskPtr StorageCloudMergeTree::manipulate(const ManipulationTaskParams & input_params, ContextPtr task_context)
