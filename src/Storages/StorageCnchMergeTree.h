@@ -87,7 +87,7 @@ public:
 
     /// return table's committed staged parts (excluding deleted ones).
     /// if partitions != null, ignore staged parts not belong to `partitions`.
-    MergeTreeDataPartsCNCHVector getStagedParts(const TxnTimestamp & ts, const NameSet * partitions = nullptr);
+    MergeTreeDataPartsCNCHVector getStagedParts(const TxnTimestamp & ts, const NameSet * partitions = nullptr, bool skip_delete_bitmap = false);
 
     /// Pre-condition: "parts" should have been sorted in part info order
     void getDeleteBitmapMetaForParts(const MergeTreeDataPartsCNCHVector & parts, ContextPtr context, TxnTimestamp start_time);
@@ -97,6 +97,9 @@ public:
 
     /// Used by the "SYSTEM DEDUP" command to repair unique table by removing duplicate keys in visible parts.
     void executeDedupForRepair(const ASTPtr & partition, ContextPtr context);
+
+    /// Used by the "SYSTEM SYNC DEDUP WORKER" command to wait for all staged parts to publish
+    void waitForStagedPartsToPublish(ContextPtr context);
 
     // Allocate parts to workers before we want to do some calculation on the parts, support non-select query.
     void allocateParts(ContextPtr local_context, ServerDataPartsVector & parts, WorkerGroupHandle & worker_group);

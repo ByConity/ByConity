@@ -35,9 +35,7 @@ SELECT 'After add c3, table description:';
 DESC u10110_common;
 SELECT 'start dedup worker and check whether staged part has added column c2';
 system start dedup worker u10110_common;
-SELECT sleep(3) FORMAT Null; 
-SELECT sleep(3) FORMAT Null; 
-SELECT sleep(3) FORMAT Null; 
+system sync dedup worker u10110_common;
 SELECT '#staged parts:', count() FROM system.cnch_staged_parts where database=currentDatabase() and table = 'u10110_common' and to_publish;
 SELECT * FROM u10110_common ORDER BY d, k2;
 
@@ -53,9 +51,7 @@ SELECT 'After drop c2, c3 and add c4 int32, table description:';
 DESC u10110_common;
 SELECT 'start dedup worker and check whether staged part has applied alter commands';
 system start dedup worker u10110_common;
-SELECT sleep(3) FORMAT Null; 
-SELECT sleep(3) FORMAT Null; 
-SELECT sleep(3) FORMAT Null; 
+system sync dedup worker u10110_common;
 SELECT '#staged parts:', count() FROM system.cnch_staged_parts where database=currentDatabase() and table = 'u10110_common' and to_publish;
 SELECT * FROM u10110_common ORDER BY d, k2;
 

@@ -76,6 +76,8 @@ private:
 
     void executeBGTaskInCnchServer(ContextMutablePtr & system_context, ASTSystemQuery::Type type) const;
 
+    void executeSyncDedupWorker(ContextMutablePtr & system_context) const;
+
     // clear Broken Table infos
     void clearBrokenTables(ContextMutablePtr & system_context) const;
 

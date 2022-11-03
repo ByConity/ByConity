@@ -438,6 +438,9 @@ BlockIO InterpreterSystemQuery::executeCnchCommand(ASTSystemQuery & query, Conte
         case Type::DROP_CNCH_PART_CACHE:
             dropCnchPartCache(query);
             break;
+        case Type::SYNC_DEDUP_WORKER:
+            executeSyncDedupWorker(system_context);
+            break;
         default:
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "System command {} is not supported in CNCH", ASTSystemQuery::typeToString(query.type));
     }
@@ -567,6 +570,20 @@ void InterpreterSystemQuery::executeBGTaskInCnchServer(ContextMutablePtr & syste
         default:
             throw Exception("Unknown command type " + toString(ASTSystemQuery::typeToString(type)), ErrorCodes::LOGICAL_ERROR);
     }
+}
+
+void InterpreterSystemQuery::executeSyncDedupWorker(ContextMutablePtr & system_context) const
+{
+    if (table_id.empty())
+        throw Exception("Table name should be specified for control background task", ErrorCodes::BAD_ARGUMENTS);
+
+    auto storage = DatabaseCatalog::instance().getTable(table_id, system_context);
+
+        auto cnch_storage = dynamic_cast<StorageCnchMergeTree *>(storage.get());
+    if (!cnch_storage)
+        throw Exception("StorageCnchMergeTree is expected, but got " + storage->getName(), ErrorCodes::BAD_ARGUMENTS);
+
+    cnch_storage->waitForStagedPartsToPublish(system_context);
 }
 
 void InterpreterSystemQuery::startOrStopConsume(ASTSystemQuery::Type type)
