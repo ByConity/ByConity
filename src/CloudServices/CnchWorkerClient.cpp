@@ -358,8 +358,7 @@ void CnchWorkerClient::submitKafkaConsumeTask(const KafkaTaskCommand & command)
     }
     if (command.type == KafkaTaskCommand::START_CONSUME)
     {
-        request.set_cnch_database(command.cnch_database_name);
-        request.set_cnch_table(command.cnch_table_name);
+        RPCHelpers::fillStorageID(command.cnch_storage_id, *request.mutable_cnch_storage_id());
     }
 
     stub->submitKafkaConsumeTask(&cntl, &request, &response, nullptr);

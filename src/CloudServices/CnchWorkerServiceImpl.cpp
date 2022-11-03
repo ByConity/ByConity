@@ -657,10 +657,9 @@ void CnchWorkerServiceImpl::submitKafkaConsumeTask(
 
         if (command->type == KafkaTaskCommand::START_CONSUME)
         {
-            if (request->cnch_database().empty() || request->cnch_table().empty())
-                throw Exception("cnch_database & cnch_table are required while starting consumer", ErrorCodes::BAD_ARGUMENTS);
-            command->cnch_database_name = request->cnch_database();
-            command->cnch_table_name = request->cnch_table();
+            command->cnch_storage_id = RPCHelpers::createStorageID(request->cnch_storage_id());
+            if (command->cnch_storage_id.empty())
+                throw Exception("cnch_storage_id is required while starting consumer", ErrorCodes::BAD_ARGUMENTS);
 
             command->assigned_consumer = request->assigned_consumer();
 

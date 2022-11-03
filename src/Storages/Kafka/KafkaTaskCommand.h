@@ -4,6 +4,7 @@
 #if USE_RDKAFKA
 
 #include <Core/Types.h>
+#include <Interpreters/StorageID.h>
 
 #include <cppkafka/cppkafka.h>
 
@@ -24,8 +25,7 @@ struct KafkaTaskCommand
     UInt16 rpc_port{0};
 
     /// database name and table name of StorageCnchKafka
-    String cnch_database_name;
-    String cnch_table_name;
+    StorageID cnch_storage_id{StorageID::createEmpty()};
     String local_database_name;
     String local_table_name;
 

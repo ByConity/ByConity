@@ -390,7 +390,7 @@ static String replaceCreateTableQuery(ContextPtr context, String & query, const 
     {
         auto engine = std::make_shared<ASTFunction>();
         const String & engine_name = create_query.storage->engine->name;
-        if (engine_name == "CnchMergeTree")
+        if (engine_name.starts_with("Cnch") && engine_name.ends_with("MergeTree"))
         {
             engine->name = String(create_query.storage->engine->name).replace(0, strlen("Cnch"), "Cloud");
             engine->arguments = std::make_shared<ASTExpressionList>();
@@ -406,6 +406,9 @@ static String replaceCreateTableQuery(ContextPtr context, String & query, const 
     }
 
     create_query.table = new_table_name;
+
+    /// It's not allowed to create multi tables with same uuid on Cnch-Worker side now
+    create_query.uuid = UUIDHelpers::Nil;
 
     if (enable_staging_area)
     {
@@ -430,6 +433,7 @@ static String replaceCreateTableQuery(ContextPtr context, String & query, const 
     auto & create_query = ast->as<ASTCreateQuery &>();
     create_query.table += table_suffix;
     create_query.to_table_id.table_name += table_suffix;
+    create_query.uuid = UUIDHelpers::Nil;
 
     auto & inner_query = create_query.select->list_of_selects->children.at(0);
     if (!inner_query)
@@ -445,7 +449,7 @@ static String replaceCreateTableQuery(ContextPtr context, String & query, const 
 void CnchKafkaConsumeManager::checkConsumerStatus(ConsumerInfo & info)
 {
     StorageID worker_storage_id(storage_id.getDatabaseName(),
-                                storage_id.getTableName() + info.table_suffix, storage_id.uuid);
+                                storage_id.getTableName() + info.table_suffix/* , storage_id.uuid */);
 
     CnchConsumerStatus status;
     try
@@ -520,10 +524,9 @@ void CnchKafkaConsumeManager::dispatchConsumerToWorker(StorageCnchKafka & kafka_
     command.type = KafkaTaskCommand::START_CONSUME;
     command.task_id = toString(info.index);
     command.rpc_port = getContext()->getRPCPort();
-    command.cnch_database_name = kafka_table.getDatabaseName();
-    command.cnch_table_name = kafka_table.getTableName();
-    command.local_database_name = command.cnch_database_name;
-    command.local_table_name = command.cnch_table_name + table_suffix;
+    command.cnch_storage_id = kafka_table.getStorageID();
+    command.local_database_name = command.cnch_storage_id.database_name;
+    command.local_table_name = command.cnch_storage_id.table_name + table_suffix;
     command.create_table_commands.push_back(create_kafka_query);
 
     StoragePtr target_table;
@@ -543,10 +546,10 @@ void CnchKafkaConsumeManager::dispatchConsumerToWorker(StorageCnchKafka & kafka_
 
             auto create_target_query = target_table->getCreateTableSql();
             /// FIXME: bool enable_staging_area = cloud_table_has_unique_key && kafka_table.getSettings().enable_staging_area;
-            ///replaceCreateTableQuery(getContext(), create_target_query, target_table->getTableName() + table_suffix, true, false);
-            command.create_table_commands.push_back(
-                cnch_merge->getCreateQueryForCloudTable(create_target_query, target_table->getTableName() + table_suffix));
-            ////command.create_table_commands.push_back(create_target_query);
+            replaceCreateTableQuery(getContext(), create_target_query, target_table->getTableName() + table_suffix, true, false);
+            //command.create_table_commands.push_back(
+            //    cnch_merge->getCreateQueryForCloudTable(create_target_query, target_table->getTableName() + table_suffix));
+            command.create_table_commands.push_back(create_target_query);
 
             /// replace mv table
             command.create_table_commands.push_back(replaceMaterializedViewQuery(mv, this->storage_id, table_suffix));
