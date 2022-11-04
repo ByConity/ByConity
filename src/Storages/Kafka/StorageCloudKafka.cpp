@@ -47,10 +47,11 @@ StorageCloudKafka::StorageCloudKafka
      ContextMutablePtr context_,
      const ColumnsDescription &columns_,
      const ConstraintsDescription &constraints_,
+     const ASTPtr setting_changes_,
      const KafkaSettings &settings_,
      const String &server_client_host_,
      UInt16 server_client_rpc_port_)
-     : IStorageCnchKafka(table_id_, context_, settings_, columns_, constraints_),
+     : IStorageCnchKafka(table_id_, context_, setting_changes_, settings_, columns_, constraints_),
      settings_adjustments(createSettingsAdjustments()),
      server_client_address(HostWithPorts::fromRPCAddress(addBracketsIfIpv6(server_client_host_) + ':' + toString(server_client_rpc_port_))),
        log(&Poco::Logger::get(table_id_.getNameForLogs()  + " (StorageCloudKafka)")),

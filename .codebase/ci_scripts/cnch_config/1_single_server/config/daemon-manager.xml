@@ -188,7 +188,7 @@
             <job>
                 <name>CONSUMER</name>
                 <interval>10000</interval>
-                <disable>true</disable>
+                <disable>false</disable>
             </job>
             <job>
                 <name>DEDUP_WORKER</name>

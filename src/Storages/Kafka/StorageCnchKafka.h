@@ -45,6 +45,7 @@ protected:
         ContextMutablePtr context_,
         const ColumnsDescription & columns_,
         const ConstraintsDescription & constraints_,
+        const ASTPtr setting_changes_,
         const KafkaSettings & settings
     );
 };

@@ -119,6 +119,7 @@ protected:
         ContextMutablePtr context_,
         const ColumnsDescription & columns_,
         const ConstraintsDescription & constraints_,
+        const ASTPtr setting_changes_,
         const KafkaSettings & settings_,
         const String & server_client_host_,
         UInt16 server_client_rpc_port_

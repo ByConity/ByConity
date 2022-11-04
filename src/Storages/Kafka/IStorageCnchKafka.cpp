@@ -24,6 +24,7 @@ namespace ErrorCodes
 IStorageCnchKafka::IStorageCnchKafka
     (const StorageID &table_id_,
      ContextMutablePtr context_,
+     const ASTPtr setting_changes_,
      const KafkaSettings &settings_,
      const ColumnsDescription & columns_,
      const ConstraintsDescription & constraints_)
@@ -34,6 +35,7 @@ IStorageCnchKafka::IStorageCnchKafka
     StorageInMemoryMetadata storage_metadata;
     storage_metadata.setColumns(columns_);
     storage_metadata.setConstraints(constraints_);
+    storage_metadata.setSettingsChanges(setting_changes_);
     setInMemoryMetadata(storage_metadata);
 
     checkAndLoadingSettings(settings);
