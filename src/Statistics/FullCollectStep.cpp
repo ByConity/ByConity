@@ -23,9 +23,10 @@ public:
 
     std::vector<String> getSqls() override
     {
-        auto wrapped_col_name = getWrappedColumnName(config, col_name);
+        auto quote_col_name = backQuoteIfNeed(col_name);
+        auto wrapped_col_name = getWrappedColumnName(config, quote_col_name);
 
-        auto count_sql = fmt::format(FMT_STRING("count({})"), col_name);
+        auto count_sql = fmt::format(FMT_STRING("count({})"), quote_col_name);
         auto ndv_sql = fmt::format(FMT_STRING("cpc({})"), wrapped_col_name);
         auto histogram_sql = fmt::format(FMT_STRING("kll({})"), wrapped_col_name);
         // to estimate ndv
@@ -46,8 +47,6 @@ public:
 
     void parse(const Block & block, size_t index_offset) override
     {
-        auto wrapped_col_name = getWrappedColumnName(config, col_name);
-
         // count(col)
         auto nonnull_count = static_cast<double>(getSingleValue<UInt64>(block, index_offset + 0));
         // cpc(col)
@@ -122,7 +121,8 @@ public:
 
     std::vector<String> getSqls() override
     {
-        auto wrapped_col_name = getWrappedColumnName(config, col_name);
+        auto quote_col_name = backQuoteIfNeed(col_name);
+        auto wrapped_col_name = getWrappedColumnName(config, quote_col_name);
 
         auto bounds_b64 = base64Encode(bucket_bounds->serialize());
 

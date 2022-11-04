@@ -11,6 +11,7 @@ struct CollectorSettings
     bool enable_sample;
     UInt64 sample_row_count;
     double sample_ratio;
+    StatisticsAccurateSampleNdvMode accurate_sample_ndv;
 
     explicit CollectorSettings(const Settings & settings)
     {
@@ -21,6 +22,7 @@ struct CollectorSettings
         enable_sample = settings.statistics_enable_sample;
         sample_row_count = settings.statistics_sample_row_count;
         sample_ratio = settings.statistics_sample_ratio;
+        accurate_sample_ndv = settings.statistics_accurate_sample_ndv;
     }
 };
 

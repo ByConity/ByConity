@@ -221,4 +221,13 @@ enum class CTEMode
 };
 
 DECLARE_SETTING_ENUM(CTEMode)
+
+enum class StatisticsAccurateSampleNdvMode
+{
+    NEVER,
+    AUTO,
+    ALWAYS,
+};
+
+DECLARE_SETTING_ENUM(StatisticsAccurateSampleNdvMode)
 }

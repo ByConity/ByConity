@@ -636,6 +636,7 @@ class IColumn;
     M(Bool, statistics_enable_sample, false, "Use sampling for statistics", 0) \
     M(UInt64, statistics_sample_row_count, 40'000'000, "Minimal row count for sampling", 0) \
     M(Float, statistics_sample_ratio, 0.1, "Ratio for sampling", 0) \
+    M(StatisticsAccurateSampleNdvMode, statistics_accurate_sample_ndv, StatisticsAccurateSampleNdvMode::AUTO, "Mode of accurate sample ndv to estimate full ndv", 0) \
     M(UInt64, statistics_batch_max_columns, 30, "Max column size in a batch when collecting stats", 0) \
     M(Float, cost_calculator_table_scan_weight, 1, "Table scan cost weight for cost calculator", 0) \
     M(Float, cost_calculator_aggregating_weight, 7, "Aggregate output weight for cost calculator", 0) \

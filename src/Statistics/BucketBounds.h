@@ -4,6 +4,7 @@
 #include <string_view>
 #include <DataTypes/DataTypeString.h>
 #include <Statistics/SerdeDataType.h>
+#include <Statistics/SerdeUtils.h>
 
 namespace DB::Statistics
 {
@@ -33,6 +34,13 @@ public:
     BucketBounds(BucketBounds &&) = default;
     BucketBounds & operator=(const BucketBounds &) = default;
     BucketBounds & operator=(BucketBounds &&) = default;
+
+    static SerdeDataType getSerdeDataTypeFromBlob(std::string_view raw_blob)
+    {
+        auto [serde_data_type, tail] = parseBlobWithHeader(raw_blob);
+        (void)tail;
+        return serde_data_type;
+    }
 
     virtual SerdeDataType getSerdeDataType() const = 0;
 
