@@ -11,9 +11,6 @@ jobs:
       spec: m1.4xlarge
       env: online
     steps:
-      - uses: actions/checkout
-        inputs:
-          depth: 1
       - uses: actions/scm
         id: scm_build
         inputs:
@@ -35,6 +32,7 @@ jobs:
       LD_LIBRARY_PATH: "/clickhouse/lib/:$LD_LIBRARY_PATH"
       MY_HOST_IP: "127.0.0.1"
       BYTED_HOST_IP: "127.0.0.1"
+      RUNTIME_IDC_NAME: "lf"
 
     runs-on:
       spec: m1.4xlarge
@@ -44,6 +42,9 @@ jobs:
         uses: actions/checkout
         inputs:
           depth: 1
+      - &doas
+        id: doas
+        uses: actions/doas
       - &download_scm_binary
         name: Download From SCM
         commands:
@@ -88,6 +89,7 @@ jobs:
     name: CE - Problematic - FuntionalStateless
     steps:
       - *action_checkout
+      - *doas
       - *download_scm_binary
       - name: Run CE Problematic FuntionalStateless
         ignore-error: true
@@ -109,6 +111,7 @@ jobs:
     name: CNCH - FuntionalStateless
     steps:
       - *action_checkout
+      - *doas
       - *download_scm_binary
       - name: Run CNCH FuntionalStateless
         continue-on-error: true
@@ -127,6 +130,7 @@ jobs:
     name: CNCH - FuntionalStateless IPV6
     steps:
       - *action_checkout
+      - *doas
       - *download_scm_binary
       - name: Run CNCH FuntionalStateless IPv6
         ignore-error: true
@@ -146,6 +150,7 @@ jobs:
     name: CNCH - Problematic - FuntionalStateless
     steps:
       - *action_checkout
+      - *doas
       - *download_scm_binary
       - name: Run CNCH Problematic FuntionalStateless
         ignore-error: true
@@ -219,6 +224,7 @@ jobs:
     steps:
       - *action_checkout
       - *download_scm_binary
+      - *doas
       - name: Run CertificateStateful
         continue-on-error: false
         commands:

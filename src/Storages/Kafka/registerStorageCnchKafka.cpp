@@ -56,6 +56,7 @@ static StoragePtr createStorageCnchKafka(const StorageFactory::Arguments & args)
                 args.getContext(),
                 args.columns,
                 args.constraints,
+                args.storage_def->settings->ptr(),
                 kafka_settings,
                 server_client_host,
                 server_client_rpc_port);
@@ -67,6 +68,7 @@ static StoragePtr createStorageCnchKafka(const StorageFactory::Arguments & args)
                 args.getContext(),
                 args.columns,
                 args.constraints,
+                args.storage_def->settings->ptr(),
                 kafka_settings
                 );
     }

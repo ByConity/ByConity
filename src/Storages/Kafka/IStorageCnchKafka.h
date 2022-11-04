@@ -52,6 +52,7 @@ protected:
     IStorageCnchKafka(
         const StorageID &table_id_,
         ContextMutablePtr context_,
+        const ASTPtr setting_changes_,
         const KafkaSettings &settings,
         const ColumnsDescription & columns_,
         const ConstraintsDescription & constraints_

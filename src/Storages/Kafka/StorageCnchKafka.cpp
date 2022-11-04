@@ -39,8 +39,9 @@ StorageCnchKafka::StorageCnchKafka(
     ContextMutablePtr context_,
     const ColumnsDescription & columns_,
     const ConstraintsDescription & constraints_,
+    const ASTPtr setting_changes_,
     const KafkaSettings & settings_)
-    : IStorageCnchKafka(table_id_, context_, settings_, columns_, constraints_),
+    : IStorageCnchKafka(table_id_, context_, setting_changes_, settings_, columns_, constraints_),
       log(&Poco::Logger::get(table_id_.getNameForLogs()  + " (StorageCnchKafka)"))
 {
 }

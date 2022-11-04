@@ -70,10 +70,12 @@ void CnchServerServiceImpl::commitParts(
                 auto & database_catalog = DatabaseCatalog::instance();
                 StorageID table_id(req->database(), req->table());
                 auto storage = database_catalog.tryGetTable(table_id, rpc_context);
+                if (!storage)
+                    throw Exception("Table " + table_id.getFullTableName() + " not found while committing parts", ErrorCodes::LOGICAL_ERROR);
 
                 auto * cnch = dynamic_cast<MergeTreeMetaBase *>(storage.get());
                 if (!cnch)
-                    throw Exception("Table is not of MergeTree class", ErrorCodes::BAD_ARGUMENTS);
+                    throw Exception("MergeTree is expected, but got " + storage->getName() + " for " + table_id.getFullTableName(), ErrorCodes::BAD_ARGUMENTS);
 
                 auto parts = createPartVectorFromModels<MutableMergeTreeDataPartCNCHPtr>(*cnch, req->parts(), &req->paths());
                 auto staged_parts = createPartVectorFromModels<MutableMergeTreeDataPartCNCHPtr>(*cnch, req->staged_parts(), &req->staged_parts_paths());
