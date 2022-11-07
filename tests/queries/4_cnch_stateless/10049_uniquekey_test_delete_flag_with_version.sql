@@ -45,7 +45,7 @@ select * from delete_by_unique_key_with_version order by event_time, product_id,
 drop table if exists delete_by_unique_key_with_version;
 
 select '-----------------------------------------------------';
-select 'test enable stagin area';
+select 'test enable staging area';
 set enable_staging_area_for_write = 1;
 CREATE table delete_by_unique_key_with_version(
     `event_time` DateTime,
@@ -80,15 +80,17 @@ select 'select unique table count()';
 select count() from delete_by_unique_key_with_version;
 
 select '';
-set enable_staging_area_for_write = 0;
 insert into delete_by_unique_key_with_version (event_time, product_id, amount, revenue, version) values ('2021-07-13 19:50:01', 10002, 5, 5000, 2),('2021-07-14 19:50:00', 10003, 2, 200, 1);
 select 'insert data with lower version which has just been deleted';
-select 'select unique table';
+SYSTEM START DEDUP WORKER delete_by_unique_key_with_version;
+SYSTEM SYNC DEDUP WORKER delete_by_unique_key_with_version;
+select 'start dedup worker and select unique table';
 select * from delete_by_unique_key_with_version order by event_time, product_id, amount;
 
 select '';
 insert into delete_by_unique_key_with_version (event_time, product_id, amount, revenue, _delete_flag_) select event_time, product_id, amount, revenue, 1 as _delete_flag_ from delete_by_unique_key_with_version where revenue >= 500;
 select 'delete data with ignoring version whose revenue is bigger than 500 using insert select, write to another replica';
+SYSTEM SYNC DEDUP WORKER delete_by_unique_key_with_version;
 select 'select unique table';
 select * from delete_by_unique_key_with_version order by event_time, product_id, amount;
 
