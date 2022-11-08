@@ -6,15 +6,30 @@
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/Kafka/StorageCnchKafka.h>
-#include <Storages/StorageMaterializedView.h>
+#include <CloudServices/CnchServerClientPool.h>
 
 namespace DB::DaemonManager
 {
 
+DaemonJobServerBGThread::DaemonJobServerBGThread(
+    ContextMutablePtr global_context_,
+    CnchBGThreadType type_,
+    std::unique_ptr<IBackgroundJobExecutor> bg_job_executor_,
+    std::unique_ptr<IBGJobStatusPersistentStoreProxy> status_persistent_store_proxy,
+    std::unique_ptr<ITargetServerCalculator> target_server_calculator_)
+    : DaemonJob(std::move(global_context_), type_),
+      status_persistent_store{std::move(status_persistent_store_proxy)},
+      bg_job_executor{std::move(bg_job_executor_)},
+      target_server_calculator{std::move(target_server_calculator_)}
+{}
+
 void DaemonJobServerBGThread::init()
 {
     background_jobs = fetchCnchBGThreadStatus();
+    status_persistent_store =
+        std::make_unique<BGJobStatusInCatalog::CatalogBGJobStatusPersistentStoreProxy>(getContext()->getCnchCatalog(), type);
     bg_job_executor = std::make_unique<BackgroundJobExecutor>(*getContext(), getType());
+    target_server_calculator = std::make_unique<TargetServerCalculator>(*getContext(), getType(), getLog());
     DaemonJob::init();
 }
 
@@ -167,7 +182,7 @@ std::map<String, UInt64> fetchServerStartTimes(Context & context, CnchTopologyMa
     return ret;
 }
 
-std::vector<String> DaemonJobServerBGThread::findRestartServers(const std::map<String, UInt64> & new_server_start_time)
+std::vector<String> DaemonJobServerBGThread::updateServerStartTimeAndFindRestartServers(const std::map<String, UInt64> & new_server_start_time)
 {
     std::vector<String> ret;
     std::for_each(new_server_start_time.begin(), new_server_start_time.end(),
@@ -233,7 +248,7 @@ ServerInfo DaemonJobServerBGThread::findServerInfo(
     ret.target_host_map = getAllTargetServerForBGJob(bg_jobs, getContext()->getTimestamp(), *this);
     if (ret.target_host_map.empty())
         return ret;
-    ret.restarted_servers = findRestartServers(new_server_start_times);
+    ret.restarted_servers = updateServerStartTimeAndFindRestartServers(new_server_start_times);
     return ret;
 }
 
@@ -286,7 +301,7 @@ UpdateResult getUpdateBGJobs(
                 bool server_died = checkIfServerDied(alive_servers, it->second->getHostPort());
                 if (!server_died)
                 {
-                    Result ret = it->second->remove(CnchBGThreadAction::Drop);
+                    Result ret = it->second->remove(CnchBGThreadAction::Drop, false);
                     if (ret.res)
                         remove_uuids.insert(uuid);
                 }
@@ -325,17 +340,16 @@ void syncServerBGJob(
     {
         if (job_from_server.storage_id != storage_id)
         {
-            LOG_ERROR(log, "syncServerBGJob: server storage_id is different, error in program logic {}"
-                , job_from_server.storage_id.getNameForLogs());
+            LOG_ERROR(log, "syncServerBGJob: server storage_id is different, error in program logic {}",
+                job_from_server.storage_id.getNameForLogs());
             continue;
         }
 
         if (job_from_server.host_port != job_from_dm_host_port)
         {
-            LOG_INFO(log, "syncServerBGJob: remove {} from {}", storage_id.getNameForLogs(), job_from_server.host_port);
-
-            BackgroundJob temp_job{storage_id, job_from_server.status, daemon_job, job_from_server.host_port};
-            temp_job.remove(CnchBGThreadAction::Remove);
+            LOG_INFO(log, "syncServerBGJob: remove {} from {}",
+                storage_id.getNameForLogs(), job_from_server.host_port);
+            daemon_job.getBgJobExecutor().remove(storage_id, job_from_server.host_port);
         }
         else
         {
@@ -348,7 +362,7 @@ void syncServerBGJob(
         if (job_from_dm_status == CnchBGThreadStatus::Running)
         {
             LOG_INFO(log, "syncServerBGJob: same host port job size is empty while the job in DM is running, start job");
-            job_from_dm->start();
+            job_from_dm->start(false);
         }
     }
     else if (same_host_port_jobs.size() > 1)
@@ -362,13 +376,13 @@ void syncServerBGJob(
                 && (same_host_port_job.status != CnchBGThreadStatus::Running))
         {
             LOG_INFO(log, "syncServerBGJob: job from dm is running but job from server isn't, start job");
-            job_from_dm->start();
+            job_from_dm->start(false);
         }
         else if ((job_from_dm_status == CnchBGThreadStatus::Stopped)
                 && (same_host_port_job.status == CnchBGThreadStatus::Running))
         {
             LOG_INFO(log, "syncServerBGJob: job from dm isn't running but job from server is, stop job");
-            job_from_dm->stop(true);
+            job_from_dm->stop(true, false);
         }
     }
 }
@@ -390,7 +404,7 @@ void runMissingAndRemoveDuplicateJob(
                 {
                     LOG_INFO(log, "There is no running job for missing_job {} in server, will run this missing job",
                         job->getStorageID().getNameForLogs());
-                    job->start();
+                    job->start(false);
                 }
             }
             else if (count == 1)
@@ -482,7 +496,6 @@ size_t checkLivenessIfNeed(
     runMissingAndRemoveDuplicateJob(daemon_job, check_bg_jobs, bg_jobs_from_server.value());
     return counter + 1;
 }
-
 
 /// every failed call on BackgroundJob in this function will be retried on next time
 bool DaemonJobServerBGThread::executeImpl()
@@ -594,9 +607,7 @@ bool DaemonJobServerBGThread::executeImpl()
         /// Scope for CacheClearer
         watch.restart();
         // fetch statuses in batch
-        BGJobStatusInCatalog::CatalogBGJobStatusPersistentStoreProxy::CacheClearer cache_clearer;
-        if (isBGJobStatusStoreInCatalog())
-            cache_clearer = status_persistent_store->fetchStatusesIntoCache();
+        auto cache_clearer = status_persistent_store->fetchStatusesIntoCache();
         milliseconds = watch.elapsedMilliseconds();
         if (milliseconds >= SLOW_EXECUTION_THRESHOLD_MS)
             LOG_DEBUG(log, "fetch bg job statuses took {} ms.", milliseconds);
@@ -635,12 +646,7 @@ bool DaemonJobServerBGThread::executeImpl()
 
 CnchServerClientPtr DaemonJobServerBGThread::getTargetServer(const StorageID & storage_id, UInt64 ts) const
 {
-    Context & context = *getContext();
-    ts = (ts == 0) ? context.getTimestamp() : ts;
-    auto target_server = context.getCnchTopologyMaster()->getTargetServer(toString(storage_id.uuid), ts, true);
-    if (target_server.empty())
-        return nullptr;
-    return context.getCnchServerClientPool().get(target_server);
+    return target_server_calculator->getTargetServer(storage_id, ts);
 }
 
 BGJobInfos DaemonJobServerBGThread::getBGJobInfos() const
@@ -675,7 +681,7 @@ BackgroundJobPtr DaemonJobServerBGThread::getBackgroundJob(const UUID & uuid) co
     return nullptr;
 }
 
-/// called from BRPC server, execute synchonously, no retry
+/// called from BRPC server, execute synchonously, no retry, persist job status to persistent storage
 Result DaemonJobServerBGThread::executeJobAction(const StorageID & storage_id, CnchBGThreadAction action)
 {
     Context & context = *getContext();
@@ -713,7 +719,9 @@ Result DaemonJobServerBGThread::executeJobAction(const StorageID & storage_id, C
                     return {"", true};
                 }
                 else
-                    return bg_ptr->remove(action);
+                {
+                    return bg_ptr->remove(action, true);
+                }
             }
         }
         case CnchBGThreadAction::Stop:
@@ -730,7 +738,7 @@ Result DaemonJobServerBGThread::executeJobAction(const StorageID & storage_id, C
                     return {"", true};
             }
             if (bg_ptr)
-                return bg_ptr->stop();
+                return bg_ptr->stop(false, true);
             break;
         }
         case CnchBGThreadAction::Start:
@@ -765,12 +773,12 @@ Result DaemonJobServerBGThread::executeJobAction(const StorageID & storage_id, C
                     if (!server_died)
                     {
                         LOG_INFO(log, "remove bg job: {} in {} before start new job", storage_id.getNameForLogs(), current_host_port);
-                        Result res = bg_ptr->remove(CnchBGThreadAction::Remove);
+                        Result res = bg_ptr->remove(CnchBGThreadAction::Remove, false);
                         if (!res.res)
                             return res;
                     }
                 }
-                return bg_ptr->start();
+                return bg_ptr->start(true);
             }
             break;
         }
@@ -789,7 +797,7 @@ Result DaemonJobServerBGThread::executeJobAction(const StorageID & storage_id, C
     return {"", false};
 }
 
-void DaemonJobServerBGThread::executeOptimize(const StorageID & storage_id, const String & partition_id, bool enable_try, bool mutations_sync, UInt64 timeout_ms) const
+void DaemonJobForMergeMutate::executeOptimize(const StorageID & storage_id, const String & partition_id, bool enable_try, bool mutations_sync, UInt64 timeout_ms) const
 {
     auto bg_ptr = getBackgroundJob(storage_id.uuid);
     if (!bg_ptr)
@@ -842,8 +850,7 @@ BackgroundJobs DaemonJobServerBGThread::fetchCnchBGThreadStatus()
                         // remove a duplicate running task
                         try
                         {
-                            BackgroundJob duplicate_job(storage_id, CnchBGThreadStatus::Running, *this, cnch_server->getRPCAddress());
-                            duplicate_job.remove(CnchBGThreadAction::Remove);
+                            getBgJobExecutor().remove(storage_id, cnch_server->getRPCAddress());
                         }
                         catch (...)
                         {
@@ -862,8 +869,7 @@ BackgroundJobs DaemonJobServerBGThread::fetchCnchBGThreadStatus()
                     // remove duplicate stop task
                     try
                     {
-                        BackgroundJob duplicate_job(storage_id, CnchBGThreadStatus::Stopped, *this, cnch_server->getRPCAddress());
-                        duplicate_job.remove(CnchBGThreadAction::Remove);
+                        getBgJobExecutor().remove(storage_id, cnch_server->getRPCAddress());
                     }
                     catch (...)
                     {
@@ -880,103 +886,29 @@ BackgroundJobs DaemonJobServerBGThread::fetchCnchBGThreadStatus()
     return ret;
 }
 
-CnchServerClientPtr DaemonJobServerBGThreadConsumer::getTargetServer(const StorageID & storage_id, UInt64) const
+bool isCnchMergeTree(const StoragePtr & storage)
 {
-    Context & context = *getContext();
-    auto catalog = context.getCnchCatalog();
-    /// Consume manager should be on the same server as the target table
-    auto kafka_storage = catalog->tryGetTableByUUID(context, UUIDHelpers::UUIDToString(storage_id.uuid), TxnTimestamp::maxTS());
-    if (!kafka_storage)
-    {
-        LOG_WARNING(log, "Cannot get table by UUID for {}, return empty target server", storage_id.getNameForLogs());
-        return nullptr;
-    }
-    auto dependencies = catalog->getAllViewsOn(context, kafka_storage, TxnTimestamp::maxTS());
-    if (dependencies.empty())
-    {
-        LOG_WARNING(log, "No dependencies found for {}, return empty target server", storage_id.getNameForLogs());
-        return nullptr;
-    }
-    if (dependencies.size() > 1)
-    {
-        LOG_ERROR(log, "More than one MV found for {}", storage_id.getNameForLogs());
-        return nullptr;
-    }
-
-    auto * mv_table = dynamic_cast<StorageMaterializedView*>(dependencies[0].get());
-    if (!mv_table)
-    {
-        LOG_ERROR(log, "Unknown MV table {}", dependencies[0]->getTableName());
-        return nullptr;
-    }
-
-    /// XXX: We cannot get target table from context here, we may store target table storageID in MV later
-    auto cnch_table = catalog->tryGetTable(context, mv_table->getTargetDatabaseName(), mv_table->getTargetTableName(), TxnTimestamp::maxTS());
-    if (!cnch_table)
-    {
-        LOG_ERROR(log, "Target table not found for MV {}.{}",
-                        mv_table->getTargetDatabaseName(), mv_table->getTargetTableName());
-        return nullptr;
-    }
-
-    auto * cnch_storage = dynamic_cast<StorageCnchMergeTree*>(cnch_table.get());
-    if (!cnch_storage)
-    {
-        LOG_ERROR(log, "Target table should be CnchMergeTree for {}", storage_id.getNameForLogs());
-        return nullptr;
-    }
-    /// TODO: refactor this function
-    auto target_server = context.getCnchTopologyMaster()->getTargetServer(toString(cnch_storage->getStorageUUID()), true);
-    if (target_server.empty())
-        return nullptr;
-
-    return context.getCnchServerClientPool().get(target_server);
+    return dynamic_cast<StorageCnchMergeTree *>(storage.get()) != nullptr;
 }
 
-
-template <CnchBGThreadType T, class F>
-struct DaemonJobForCnchMergeTree : public DaemonJobServerBGThread
+bool isCnchKafka(const StoragePtr & storage)
 {
-    DaemonJobForCnchMergeTree(ContextMutablePtr global_context_) : DaemonJobServerBGThread(global_context_, T) { }
-    bool isTargetTable(const StoragePtr & storage) const override { return F::apply(storage); }
-};
+    return dynamic_cast<StorageCnchKafka *>(storage.get()) != nullptr;
+}
 
-struct IsCnchMergeTree
+bool isCnchUniqueTableAndNeedDedup(const StoragePtr & storage)
 {
-    static bool apply(const StoragePtr & storage) { return dynamic_cast<StorageCnchMergeTree *>(storage.get()) != nullptr; }
-};
-
-template <CnchBGThreadType T, class F>
-struct DaemonJobForCnchKafka : public DaemonJobServerBGThreadConsumer
-{
-    DaemonJobForCnchKafka(ContextMutablePtr global_context_) : DaemonJobServerBGThreadConsumer(global_context_, T) { }
-    bool isTargetTable(const StoragePtr & storage) const override { return F::apply(storage); }
-};
-
-struct IsCnchKafka
-{
-    static bool apply(const StoragePtr & storage)
-    {
-        return dynamic_cast<StorageCnchKafka *>(storage.get()) != nullptr;
-    }
-};
-
-struct IsCnchUniqueTableAndNeedDedup
-{
-    static bool apply(const StoragePtr & storage)
-    {
-        auto t = dynamic_cast<StorageCnchMergeTree *>(storage.get());
-        return t && t->getInMemoryMetadataPtr()->hasUniqueKey();
-    }
-};
+    auto t = dynamic_cast<StorageCnchMergeTree *>(storage.get());
+    return t && t->getInMemoryMetadataPtr()->hasUniqueKey();
+}
 
 void registerServerBGThreads(DaemonFactory & factory)
 {
-    factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnchMergeTree<CnchBGThreadType::PartGC, IsCnchMergeTree>>("PART_GC");
-    factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnchMergeTree<CnchBGThreadType::MergeMutate, IsCnchMergeTree>>("PART_MERGE");
-    factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnchMergeTree<CnchBGThreadType::Clustering, IsCnchMergeTree>>("PART_CLUSTERING");
-    factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnchKafka<CnchBGThreadType::Consumer, IsCnchKafka>>("CONSUMER");
-    factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnchMergeTree<CnchBGThreadType::DedupWorker, IsCnchUniqueTableAndNeedDedup>>("DEDUP_WORKER");
+    factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnch<CnchBGThreadType::PartGC, isCnchMergeTree>>("PART_GC");
+    factory.registerDaemonJobForBGThreadInServer<DaemonJobForMergeMutate>("PART_MERGE");
+    factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnch<CnchBGThreadType::Clustering, isCnchMergeTree>>("PART_CLUSTERING");
+    factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnch<CnchBGThreadType::Consumer, isCnchKafka>>("CONSUMER");
+    factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnch<CnchBGThreadType::DedupWorker, isCnchUniqueTableAndNeedDedup>>("DEDUP_WORKER");
 }
 
 }

@@ -30,7 +30,8 @@ namespace BGJobStatusInCatalog
                 IBGJobStatusPersistentStoreProxy * proxy = nullptr;
         };
 
-        virtual CnchBGThreadStatus createStatusIfNotExist(const StorageID & storage_id, CnchBGThreadStatus init_status) const = 0;
+        /// return non-empty result if there is status already exist
+        virtual std::optional<CnchBGThreadStatus> createStatusIfNotExist(const StorageID & storage_id, CnchBGThreadStatus init_status) const = 0;
         virtual void setStatus(const UUID & table_uuid, CnchBGThreadStatus status) const = 0;
         virtual CnchBGThreadStatus getStatus(const UUID & table_uuid,  bool use_cache) const = 0;
         virtual CacheClearer fetchStatusesIntoCache() = 0;
@@ -47,7 +48,7 @@ namespace BGJobStatusInCatalog
     public:
         CatalogBGJobStatusPersistentStoreProxy(std::shared_ptr<Catalog::Catalog>, CnchBGThreadType);
 
-        CnchBGThreadStatus createStatusIfNotExist(const StorageID & storage_id, CnchBGThreadStatus init_status) const override;
+        std::optional<CnchBGThreadStatus> createStatusIfNotExist(const StorageID & storage_id, CnchBGThreadStatus init_status) const override;
         void setStatus(const UUID & table_uuid, CnchBGThreadStatus status) const override;
         CnchBGThreadStatus getStatus(const UUID & table_uuid, bool use_cache) const override;
         CacheClearer fetchStatusesIntoCache() override;

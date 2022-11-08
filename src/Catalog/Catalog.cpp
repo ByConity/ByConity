@@ -389,8 +389,8 @@ namespace ProfileEvents
     extern const Event GetBGJobStatusFailed;
     extern const Event GetBGJobStatusesSuccess;
     extern const Event GetBGJobStatusesFailed;
-    extern const Event DropBGJobStatusesSuccess;
-    extern const Event DropBGJobStatusesFailed;
+    extern const Event DropBGJobStatusSuccess;
+    extern const Event DropBGJobStatusFailed;
 }
 
 namespace DB
@@ -1081,48 +1081,6 @@ namespace Catalog
             },
             ProfileEvents::GetAllViewsOnSuccess,
             ProfileEvents::GetAllViewsOnFailed);
-        return res;
-    }
-
-    void Catalog::setTableActiveness(const StoragePtr & storage, const bool is_active, const TxnTimestamp & ts)
-    {
-        runWithMetricSupport(
-            [&] {
-                /// get latest table version.
-                String uuid = UUIDHelpers::UUIDToString(storage->getStorageID().uuid);
-                auto table = tryGetTableFromMetastore(uuid, ts.toUInt64());
-
-                if (!table)
-                    throw Exception("Cannot get table by UUID : " + uuid, ErrorCodes::CATALOG_SERVICE_INTERNAL_ERROR);
-
-                LOG_DEBUG(log, "Modify table activeness to {} ", (is_active ? "active" : "inactive"));
-                table->set_status(Status::setInActive(table->status(), is_active));
-                /// directly rewrite the old table metadata rather than adding a new version
-                meta_proxy->updateTable(name_space, uuid, table->SerializeAsString(), table->commit_time());
-            },
-            ProfileEvents::SetTableActivenessSuccess,
-            ProfileEvents::SetTableActivenessFailed);
-    }
-
-    bool Catalog::getTableActiveness(const StoragePtr & storage, const TxnTimestamp & ts)
-    {
-        bool res;
-        runWithMetricSupport(
-            [&] {
-                String uuid = UUIDHelpers::UUIDToString(storage->getStorageID().uuid);
-                /// get latest table version.
-                auto table = tryGetTableFromMetastore(uuid, ts.toUInt64());
-                if (table)
-                {
-                    res = !Status::isInActive(table->status());
-                }
-                else
-                {
-                    throw Exception("Cannot get table metadata by UUID : " + uuid, ErrorCodes::CATALOG_SERVICE_INTERNAL_ERROR);
-                }
-            },
-            ProfileEvents::GetTableActivenessSuccess,
-            ProfileEvents::GetTableActivenessFailed);
         return res;
     }
 
@@ -3614,15 +3572,15 @@ namespace Catalog
         return res;
     }
 
-    void Catalog::dropBGJobStatuses(const UUID & table_uuid)
+    void Catalog::dropBGJobStatus(const UUID & table_uuid, CnchBGThreadType type)
     {
         runWithMetricSupport(
             [&] {
-                    meta_proxy->dropBGJobStatuses(
-                        name_space, UUIDHelpers::UUIDToString(table_uuid));
+                    meta_proxy->dropBGJobStatus(
+                        name_space, UUIDHelpers::UUIDToString(table_uuid), type);
                 },
-            ProfileEvents::DropBGJobStatusesSuccess,
-            ProfileEvents::DropBGJobStatusesFailed);
+            ProfileEvents::DropBGJobStatusSuccess,
+            ProfileEvents::DropBGJobStatusFailed);
     }
 
     void Catalog::setTablePreallocateVW(const UUID & table_uuid, const String vw)

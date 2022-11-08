@@ -11,24 +11,31 @@ namespace DB::DaemonManager
 BackgroundJob::BackgroundJob(StorageID storage_id_, DaemonJobServerBGThread & daemon_job_)
     : storage_id{std::move(storage_id_)}, daemon_job{daemon_job_}, status{CnchBGThreadStatus::Stopped}, expected_status{CnchBGThreadStatus::Running}, host_port{}, log{daemon_job_.getLog()}
 {
-    if (!log)
-        throw Exception("log is nullptr", ErrorCodes::LOGICAL_ERROR);
+    std::optional<CnchBGThreadStatus> stored_status = daemon_job.getStatusPersistentStore().createStatusIfNotExist(storage_id, CnchBGThreadStatus::Running);
+    if (stored_status)
+    {
+        status = *stored_status;
+        expected_status = *stored_status;
+    }
 }
 
 BackgroundJob::BackgroundJob(StorageID storage_id_, CnchBGThreadStatus status_, DaemonJobServerBGThread & daemon_job_, String host_port_)
         : storage_id{std::move(storage_id_)}, daemon_job{daemon_job_}, status{status_}, expected_status{status_}, host_port{std::move(host_port_)}, log{daemon_job_.getLog()}
 {
-    if (!log)
-        throw Exception("log is nullptr", ErrorCodes::LOGICAL_ERROR);
+    std::optional<CnchBGThreadStatus> stored_status = daemon_job.getStatusPersistentStore().createStatusIfNotExist(storage_id, status);
+    if (stored_status)
+        expected_status = *stored_status;
 }
 
-Result BackgroundJob::start()
+Result BackgroundJob::start(bool write_status_to_persisent_store)
 {
     String exception_str{"action failed"};
     // start() can be called even when the status is Running
     CnchServerClientPtr cnch_server = nullptr;
     try
     {
+        if (write_status_to_persisent_store)
+            daemon_job.getStatusPersistentStore().setStatus(storage_id.uuid, CnchBGThreadStatus::Running);
         cnch_server = daemon_job.getTargetServer(storage_id, 0);
     }
     catch (const Exception & e)
@@ -103,9 +110,23 @@ Result BackgroundJob::start()
     return {exception_str, ret};
 }
 
-Result BackgroundJob::stop(bool force)
+Result BackgroundJob::stop(bool force, bool write_status_to_persisent_store)
 {
     String exception_str{"action failed"};
+    if (write_status_to_persisent_store)
+    {
+        try
+        {
+            daemon_job.getStatusPersistentStore().setStatus(storage_id.uuid, CnchBGThreadStatus::Stopped);
+        }
+        catch (...)
+        {
+            exception_str = getCurrentExceptionMessage(true);
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            return {exception_str, false};
+        }
+    }
+
     CnchBGThreadStatus old_status;
     CnchBGThreadStatus old_expected_status;
     String host_port_copy;
@@ -125,6 +146,15 @@ Result BackgroundJob::stop(bool force)
             "Do nothing because backgroud job: {} at server {} already stopped",
             storage_id.getNameForLogs(), host_port);
 
+        return {"", true};
+    }
+
+    if (host_port_copy.empty())
+    {
+        LOG_DEBUG(
+            log,
+            "Successful Stop without rpc call for background job: {} because host_port is empty",
+            storage_id.getNameForLogs());
         return {"", true};
     }
 
@@ -153,13 +183,28 @@ Result BackgroundJob::stop(bool force)
     return {exception_str, ret};
 }
 
-Result BackgroundJob::remove(CnchBGThreadAction remove_type)
+Result BackgroundJob::remove(CnchBGThreadAction remove_type, bool write_status_to_persisent_store)
 {
     if ((remove_type != CnchBGThreadAction::Remove) &&
         (remove_type != CnchBGThreadAction::Drop))
         throw Exception("remove type is not remove or drop, this is a coding mistake", ErrorCodes::LOGICAL_ERROR);
 
     String exception_str{"action failed"};
+
+    if (write_status_to_persisent_store)
+    {
+        try
+        {
+            daemon_job.getStatusPersistentStore().setStatus(storage_id.uuid, CnchBGThreadStatus::Removed);
+        }
+        catch (...)
+        {
+            exception_str = getCurrentExceptionMessage(true);
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            return {exception_str, false};
+        }
+    }
+
     CnchBGThreadStatus old_status;
     CnchBGThreadStatus old_expected_status;
     String host_port_copy;
@@ -268,55 +313,75 @@ std::optional<BackgroundJob::SyncAction> BackgroundJob::getSyncAction(const Serv
     const std::vector<String> & alive_servers = server_info.alive_servers;
     bool need_start = false;
     bool need_remove = false;
+    bool need_stop = false;
     bool clear_host_port = false;
 
     {
         std::lock_guard<std::mutex> lock_guard(mutex);
-        bool server_restarted =
-            (restarted_servers.end() != std::find(restarted_servers.begin(), restarted_servers.begin(), host_port));
-        bool server_died =
-            (alive_servers.end() == std::find(alive_servers.begin(), alive_servers.end(), host_port));
+        bool server_restarted = (
+            (!host_port.empty()) &&
+            (restarted_servers.end() !=
+                std::find(restarted_servers.begin(), restarted_servers.end(), host_port))
+        );
+        bool server_died = (
+            (!host_port.empty()) &&
+            (alive_servers.end() == std::find(alive_servers.begin(), alive_servers.end(), host_port))
+        );
 
         if (status != CnchBGThreadStatus::Running)
         {
-            if ((server_restarted || server_died) && !host_port.empty())
+            if (server_restarted || server_died)
                 clear_host_port = true;
 
             if (status == expected_status)
-                return BackgroundJob::SyncAction{false, false, clear_host_port};
+                return BackgroundJob::SyncAction{false, false, false, clear_host_port};
             else
                 return BackgroundJob::SyncAction{
                     (expected_status == CnchBGThreadStatus::Running),
                     (expected_status == CnchBGThreadStatus::Removed),
+                    false,
                     clear_host_port
                 };
         }
 
-
+        need_stop = (expected_status == CnchBGThreadStatus::Stopped);
         if (server_restarted || server_died)
         {
             clear_host_port = true;
-            need_start = true;
-            need_remove = false;
+            if (!need_stop)
+            {
+                need_start = true;
+                need_remove = false;
+            }
+            else
+            {
+                need_start = false;
+                need_remove = false;
+            }
         }
 
-        auto it = server_info.target_host_map.find(storage_id.uuid);
-        if (
-            (it != server_info.target_host_map.end()) &&
-            (it->second != host_port)
-           )
+        if (!need_stop)
         {
-            LOG_INFO(
-                log,
-                "Target host change for: {} , this bg jobs will be moved from {} to new target host",
-                storage_id.getNameForLogs(), host_port);
-
-            need_start = true;
-            need_remove = !(server_restarted || server_died);
+            auto it = server_info.target_host_map.find(storage_id.uuid);
+            if (
+                (it != server_info.target_host_map.end()) &&
+                (it->second != host_port)
+               )
+            {
+                LOG_INFO(
+                    log,
+                    "Target host change for: {} , this bg jobs will be moved from {} to new target host"
+                    , storage_id.getNameForLogs(), host_port);
+                need_start = true;
+                if (server_restarted || server_died)
+                    need_remove = false;
+                else
+                    need_remove = true;
+            }
         }
     }
 
-    return BackgroundJob::SyncAction{need_start, need_remove, clear_host_port};
+    return BackgroundJob::SyncAction{need_start, need_remove, need_stop, clear_host_port};
 }
 
 bool BackgroundJob::executeSyncAction(const BackgroundJob::SyncAction & action)
@@ -328,9 +393,16 @@ bool BackgroundJob::executeSyncAction(const BackgroundJob::SyncAction & action)
         host_port.clear();
     }
 
+    if (action.need_stop)
+    {
+        Result ret = stop(false, false);
+        if (!ret.res)
+            return false;
+    }
+
     if (action.need_remove)
     {
-        Result ret = remove(CnchBGThreadAction::Remove);
+        Result ret = remove(CnchBGThreadAction::Remove, false);
         if (!ret.res)
             return false;
     }
@@ -338,7 +410,7 @@ bool BackgroundJob::executeSyncAction(const BackgroundJob::SyncAction & action)
     if (action.need_start)
     {
         setExpectedStatus(CnchBGThreadStatus::Running);
-        Result ret = start();
+        Result ret = start(false);
         if (!ret.res)
             return false;
     }
@@ -348,6 +420,9 @@ bool BackgroundJob::executeSyncAction(const BackgroundJob::SyncAction & action)
 
 bool BackgroundJob::sync(const ServerInfo & server_info)
 {
+    CnchBGThreadStatus store_status = daemon_job.getStatusPersistentStore().getStatus(storage_id.uuid, true);
+    setExpectedStatus(store_status);
+
     std::optional<BackgroundJob::SyncAction> action = getSyncAction(server_info);
     if (!action)
         return false;

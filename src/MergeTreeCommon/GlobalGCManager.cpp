@@ -1,5 +1,6 @@
 #include <MergeTreeCommon/GlobalGCManager.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
+#include <Storages/Kafka/StorageCnchKafka.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Protos/RPCHelpers.h>
 #include <Common/Status.h>
@@ -84,6 +85,19 @@ void cleanDisks(const Disks & disks, const String & relative_path, Poco::Logger 
     }
 }
 
+void dropBGStatusesInCatalogForCnchMergeTree(UUID uuid, Catalog::Catalog * catalog)
+{
+    catalog->dropBGJobStatus(uuid, CnchBGThreadType::Clustering);
+    catalog->dropBGJobStatus(uuid, CnchBGThreadType::MergeMutate);
+    catalog->dropBGJobStatus(uuid, CnchBGThreadType::PartGC);
+    catalog->dropBGJobStatus(uuid, CnchBGThreadType::DedupWorker);
+}
+
+void dropBGStatusInCatalogForCnchKafka(UUID uuid, Catalog::Catalog * catalog)
+{
+    catalog->dropBGJobStatus(uuid, CnchBGThreadType::Consumer);
+}
+
 } /// end anonymous namespace
 
 bool executeGlobalGC(const Protos::DataModelTable & table, const Context & context, Poco::Logger * log)
@@ -125,8 +139,11 @@ bool executeGlobalGC(const Protos::DataModelTable & table, const Context & conte
             // cleanDisks(local_disks, relative_path, log);
 
             LOG_DEBUG(log, "Remove background job statues for table {}", storage_id.getNameForLogs());
-            catalog->dropBGJobStatuses(storage_id.uuid);
+            dropBGStatusesInCatalogForCnchMergeTree(storage_id.uuid, catalog.get());
         }
+
+        if (StorageCnchKafka * kafka_storage = dynamic_cast<StorageCnchKafka *>(storage.get()))
+            dropBGStatusInCatalogForCnchKafka(storage_id.uuid, catalog.get());
 
         /// delete metadata of data parts
         LOG_DEBUG(log, "Remove data parts meta for table {}", storage_id.getNameForLogs());

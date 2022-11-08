@@ -149,9 +149,10 @@ void DaemonManagerServiceImpl::ForwardOptimizeQuery(
                 ErrorCodes::LOGICAL_ERROR,
                 "No daemon job found for MergeMutate, this may always be caused by lack of config");
 
-        auto daemon_job = daemon_jobs[CnchBGThreadType::MergeMutate];
+        auto daemon_job = daemon_jobs.at(CnchBGThreadType::MergeMutate);
+        const DaemonJobForMergeMutate * daemon_job_for_merge_mutate = dynamic_cast<DaemonJobForMergeMutate *>(daemon_job.get());
 
-        daemon_job->executeOptimize(storage_id, request->partition_id(), request->enable_try(), request->mutations_sync(), request->timeout_ms());
+        daemon_job_for_merge_mutate->executeOptimize(storage_id, request->partition_id(), request->enable_try(), request->mutations_sync(), request->timeout_ms());
     }
     catch (...)
     {

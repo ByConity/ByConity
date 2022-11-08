@@ -13,6 +13,7 @@ set(CLICKHOUSE_DAEMONMANAGER_SOURCE
         ${CMAKE_CURRENT_SOURCE_DIR}/BGJobStatusInCatalog.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/DaemonJobServerBGThread.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/DaemonJobGlobalGC.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/TargetServerCalculator.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/FixCatalogMetaDataTask.cpp
         )
 

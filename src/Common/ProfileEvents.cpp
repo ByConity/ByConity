@@ -673,8 +673,8 @@
     M(GetBGJobStatusFailed, "") \
     M(GetBGJobStatusesSuccess, "") \
     M(GetBGJobStatusesFailed, "") \
-    M(DropBGJobStatusesSuccess, "") \
-    M(DropBGJobStatusesFailed, "") \
+    M(DropBGJobStatusSuccess, "") \
+    M(DropBGJobStatusFailed, "") \
 
 namespace ProfileEvents
 {

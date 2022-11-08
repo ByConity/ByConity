@@ -177,9 +177,11 @@ void StorageCnchKafka::alter(const AlterCommands & commands, ContextPtr local_co
 bool StorageCnchKafka::tableIsActive() const
 {
     auto catalog = getGlobalContext()->getCnchCatalog();
-    const auto ts = getContext()->getTimestamp();
-    return catalog->getTableActiveness(catalog->getTable(*getContext(), getDatabaseName(), getTableName(), ts),
-                                       ts);
+    std::optional<CnchBGThreadStatus> thread_status = catalog->getBGJobStatus(getStorageUUID(), CnchBGThreadType::Consumer);
+    if ((!thread_status) ||
+        (*thread_status == CnchBGThreadStatus::Running))
+        return true;
+    return false;
 }
 
 /// TODO: merge logic of `checkDependencies` in KafkaConsumeManager
