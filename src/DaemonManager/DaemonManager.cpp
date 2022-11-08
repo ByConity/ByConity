@@ -227,6 +227,8 @@ int DaemonManager::main(const std::vector<std::string> &)
     HDFSConnectionParams hdfs_params = HDFSConnectionParams::parseHdfsFromConfig(config());
     global_context->setHdfsConnectionParams(hdfs_params);
 
+    /// Temporary solution to solve the problem with Disk initialization
+    fs::create_directories(path + "disks/");
 
     LOG_INFO(log, "Global context initialized.");
 
