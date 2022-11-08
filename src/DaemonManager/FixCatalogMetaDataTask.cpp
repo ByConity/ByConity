@@ -27,11 +27,9 @@ void createMissingUUIDDictionaryModel(ContextPtr context)
     catalog->createDictionary(StorageID{database, table}, create_query);
 }
 
-void fixCatalogMetaData(ContextPtr context, Poco::Logger * log)
-{
-    LOG_INFO(log, "execute fixing Catalog Metadata task");
-    std::shared_ptr<Catalog::Catalog> catalog = context->getCnchCatalog();
 
+void fixDictionary(Catalog::Catalog * catalog, Poco::Logger * log)
+{
     Catalog::Catalog::DataModelDictionaries all = catalog->getAllDictionaries();
     std::for_each(all.begin(), all.end(),
         [& catalog, log] (const DB::Protos::DataModelDictionary & model)
@@ -45,6 +43,13 @@ void fixCatalogMetaData(ContextPtr context, Poco::Logger * log)
                 catalog->fixDictionary(model.database(), model.name());
             }
         });
+}
+
+void fixCatalogMetaData(ContextPtr context, Poco::Logger * log)
+{
+    LOG_INFO(log, "execute fixing Catalog Metadata task");
+    std::shared_ptr<Catalog::Catalog> catalog = context->getCnchCatalog();
+    fixDictionary(catalog.get(), log);
 }
 
 } /// end namespace DaemonManager

@@ -137,6 +137,10 @@ public:
 
     std::vector<StoragePtr> getAllViewsOn(const Context & session_context, const StoragePtr & storage, const TxnTimestamp & ts);
 
+    void setTableActiveness(const StoragePtr & storage, const bool is_active, const TxnTimestamp & ts);
+    /// return true if table is active, false otherwise
+    bool getTableActiveness(const StoragePtr & storage, const TxnTimestamp & ts);
+
     ///data parts related interface
     ServerDataPartsVector getServerDataPartsInPartitions(const StoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, const Context * session_context);
 
