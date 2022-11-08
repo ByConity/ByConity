@@ -733,8 +733,9 @@ Result DaemonJobServerBGThread::executeJobAction(const StorageID & storage_id, C
             if (!bg_ptr)
             {
                 LOG_INFO(log, "bg job doesn't exist for uuid: {} hence, create a stop job", storage_id.getNameForLogs());
+                auto new_job = std::make_pair(uuid, std::make_shared<BackgroundJob>(storage_id, CnchBGThreadStatus::Stopped, *this, ""));
                 std::unique_lock lock(bg_jobs_mutex);
-                auto res = background_jobs.insert(std::make_pair(uuid, std::make_shared<BackgroundJob>(storage_id, CnchBGThreadStatus::Stopped, *this, "")));
+                auto res = background_jobs.insert(std::move(new_job));
                 if (!res.second)
                     bg_ptr = res.first->second;
                 else
@@ -749,8 +750,9 @@ Result DaemonJobServerBGThread::executeJobAction(const StorageID & storage_id, C
             auto bg_ptr = getBackgroundJob(uuid);
             if (!bg_ptr)
             {
+                auto new_job = std::make_pair(uuid, std::make_shared<BackgroundJob>(storage_id, *this));
                 std::unique_lock lock(bg_jobs_mutex);
-                auto res = background_jobs.insert(std::make_pair(uuid, std::make_shared<BackgroundJob>(storage_id, *this)));
+                auto res = background_jobs.insert(new_job);
                 if (res.second)
                     bg_ptr = res.first->second;
                 else
