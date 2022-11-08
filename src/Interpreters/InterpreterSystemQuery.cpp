@@ -603,12 +603,10 @@ void InterpreterSystemQuery::startOrStopConsume(ASTSystemQuery::Type type)
     switch (type)
     {
         case Type::START_CONSUME:
-            catalog->setTableActiveness(storage, true, TxnTimestamp::maxTS());
             daemon_manager->controlDaemonJob(cnch_kafka->getStorageID(), CnchBGThreadType::Consumer, CnchBGThreadAction::Start);
             break;
         case Type::STOP_CONSUME:
             daemon_manager->controlDaemonJob(cnch_kafka->getStorageID(), CnchBGThreadType::Consumer, CnchBGThreadAction::Stop);
-            catalog->setTableActiveness(storage, false, TxnTimestamp::maxTS());
             break;
         case Type::RESTART_CONSUME:
             daemon_manager->controlDaemonJob(cnch_kafka->getStorageID(), CnchBGThreadType::Consumer, CnchBGThreadAction::Stop);

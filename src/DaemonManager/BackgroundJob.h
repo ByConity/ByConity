@@ -59,6 +59,7 @@ class BackgroundJob
         - if status is Removed. It will be destroyed later by DaemonJob.
         - never hold lock while call other function
         - use mutex whenever access: host_port, status, expected_status, last_start_time
+        - The persistent job status only created at ctor and only change by user command, it will be cleaned by globalGC job
 */
 public:
     BackgroundJob(StorageID storage_id_, DaemonJobServerBGThread & daemon_job_);
@@ -122,9 +123,9 @@ public:
 
     void setExpectedStatus(CnchBGThreadStatus status);
 
-    Result start();
-    Result stop(bool force = false);
-    Result remove(CnchBGThreadAction remove_type);
+    Result start(bool write_status_to_persisent_store);
+    Result stop(bool force_send_rpc, bool write_status_to_persisent_store);
+    Result remove(CnchBGThreadAction remove_type, bool write_status_to_persisent_store);
     Result wakeup();
     bool sync(const ServerInfo & server_info);
 
@@ -132,6 +133,7 @@ public:
     {
         bool need_start = false;
         bool need_remove = false;
+        bool need_stop = false;
         bool clear_host_port = false;
     };
     std::optional<BackgroundJob::SyncAction> getSyncAction(const ServerInfo &) const;

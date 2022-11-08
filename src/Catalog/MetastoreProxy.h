@@ -58,6 +58,9 @@ namespace DB::Catalog
 #define TABLE_CLUSTER_STATUS "TCS_"
 #define CLUSTER_BG_JOB_STATUS "CLUSTER_BGJS_"
 #define MERGE_BG_JOB_STATUS "MERGE_BGJS_"
+#define PARTGC_BG_JOB_STATUS "PARTGC_BGJS_"
+#define CONSUMER_BG_JOB_STATUS "CONSUMER_BGJS_"
+#define DEDUPWORKER_BG_JOB_STATUS "DEDUPWORKER_BGJS_"
 #define PREALLOCATE_VW "PVW_"
 #define DICTIONARY_STORE_PREFIX "DIC_"
 #define RESOURCE_GROUP_PREFIX "RG_"
@@ -400,6 +403,36 @@ public:
         return allMergeBGJobStatusKeyPrefix(name_space) + uuid;
     }
 
+    static std::string allPartGCBGJobStatusKeyPrefix(const std::string & name_space)
+    {
+        return escapeString(name_space) + '_' + PARTGC_BG_JOB_STATUS;
+    }
+
+    static std::string partGCBGJobStatusKey(const std::string & name_space, const std::string & uuid)
+    {
+        return allPartGCBGJobStatusKeyPrefix(name_space) + uuid;
+    }
+
+    static std::string allConsumerBGJobStatusKeyPrefix(const std::string & name_space)
+    {
+        return escapeString(name_space) + '_' + CONSUMER_BG_JOB_STATUS;
+    }
+
+    static std::string consumerBGJobStatusKey(const std::string & name_space, const std::string & uuid)
+    {
+        return allConsumerBGJobStatusKeyPrefix(name_space) + uuid;
+    }
+
+    static std::string allDedupWorkerBGJobStatusKeyPrefix(const std::string & name_space)
+    {
+        return escapeString(name_space) + '_' + DEDUPWORKER_BG_JOB_STATUS;
+    }
+
+    static std::string dedupWorkerBGJobStatusKey(const std::string & name_space, const std::string & uuid)
+    {
+        return allDedupWorkerBGJobStatusKeyPrefix(name_space) + uuid;
+    }
+
     static UUID parseUUIDFromBGJobStatusKey(const std::string & key);
 
     static std::string preallocateVW(const std::string & name_space, const std::string & uuid)
@@ -659,7 +692,7 @@ public:
 
     std::unordered_map<UUID, CnchBGThreadStatus> getBGJobStatuses(const String & name_space, CnchBGThreadType type);
 
-    void dropBGJobStatuses(const String & name_space, const String & uuid);
+    void dropBGJobStatus(const String & name_space, const String & uuid, CnchBGThreadType type);
 
     void setTablePreallocateVW(const String & name_space, const String & uuid, const String & vw);
     void getTablePreallocateVW(const String & name_space, const String & uuid, String & vw);

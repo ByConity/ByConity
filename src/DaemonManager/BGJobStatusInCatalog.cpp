@@ -50,13 +50,13 @@ CatalogBGJobStatusPersistentStoreProxy::CatalogBGJobStatusPersistentStoreProxy(
     : catalog{std::move(catalog_)}, statuses_cache{}, type{type_}
 {}
 
-CnchBGThreadStatus CatalogBGJobStatusPersistentStoreProxy::createStatusIfNotExist(const StorageID & storage_id, CnchBGThreadStatus init_status) const
+std::optional<CnchBGThreadStatus> CatalogBGJobStatusPersistentStoreProxy::createStatusIfNotExist(const StorageID & storage_id, CnchBGThreadStatus init_status) const
 {
     std::optional<CnchBGThreadStatus> status = catalog->getBGJobStatus(storage_id.uuid, type);
     if (!status)
     {
         setStatus(storage_id.uuid, init_status);
-        return init_status;
+        return {};
     }
     else
     {
@@ -85,7 +85,6 @@ CnchBGThreadStatus CatalogBGJobStatusPersistentStoreProxy::getStatus(const UUID 
     }
 
     throw Exception("getStatus without using cache, this is developer mistake", ErrorCodes::LOGICAL_ERROR);
-    /// return catalog->getBGJobStatus(table_uuid, type);
 }
 
 IBGJobStatusPersistentStoreProxy::CacheClearer CatalogBGJobStatusPersistentStoreProxy::fetchStatusesIntoCache()

@@ -137,10 +137,6 @@ public:
 
     std::vector<StoragePtr> getAllViewsOn(const Context & session_context, const StoragePtr & storage, const TxnTimestamp & ts);
 
-    void setTableActiveness(const StoragePtr & storage, const bool is_active, const TxnTimestamp & ts);
-    /// return true if table is active, false otherwise
-    bool getTableActiveness(const StoragePtr & storage, const TxnTimestamp & ts);
-
     ///data parts related interface
     ServerDataPartsVector getServerDataPartsInPartitions(const StoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, const Context * session_context);
 
@@ -409,7 +405,7 @@ public:
     void setBGJobStatus(const UUID & table_uuid, CnchBGThreadType type, CnchBGThreadStatus status);
     std::optional<CnchBGThreadStatus> getBGJobStatus(const UUID & table_uuid, CnchBGThreadType type);
     std::unordered_map<UUID, CnchBGThreadStatus> getBGJobStatuses(CnchBGThreadType type);
-    void dropBGJobStatuses(const UUID & table_uuid);
+    void dropBGJobStatus(const UUID & table_uuid, CnchBGThreadType type);
 
     void setTablePreallocateVW(const UUID & table_uuid, const String vw);
     void getTablePreallocateVW(const UUID & table_uuid, String & vw);

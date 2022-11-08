@@ -6,11 +6,10 @@
 #include <DaemonManager/DMDefines.h>
 #include <DaemonManager/DaemonHelper.h>
 #include <DaemonManager/BackgroudJobExecutor.h>
+#include <DaemonManager/TargetServerCalculator.h>
 #include <DaemonManager/BGJobStatusInCatalog.h>
 #include <CloudServices/CnchBGThreadCommon.h>
 #include <CloudServices/CnchServerClient.h>
-#include <CloudServices/CnchServerClientPool.h>
-#include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <Protos/RPCHelpers.h>
 #include <Common/Status.h>
 
@@ -40,44 +39,44 @@ class DaemonJobServerBGThread : public DaemonJob
 {
 public:
     using DaemonJob::DaemonJob;
-    DaemonJobServerBGThread(ContextMutablePtr global_context_, CnchBGThreadType type_, std::unique_ptr<IBackgroundJobExecutor> bg_job_executor_);
     void init() override;
-    virtual CnchServerClientPtr getTargetServer(const StorageID &, UInt64) const;
+    CnchServerClientPtr getTargetServer(const StorageID &, UInt64) const;
     void setStorageCache(StorageCache * cache_) { cache = cache_; }
     StorageCache * getStorageCache() { return cache; }
     void setLivenessCheckInterval(size_t interval) { liveness_check_interval = interval; }
     BackgroundJobPtr getBackgroundJob(const UUID & uuid) const;
     BGJobInfos getBGJobInfos() const;
-    IBackgroundJobExecutor & getBgJobExecutor() const { return *bg_job_executor; }
     Result executeJobAction(const StorageID & storage_id, CnchBGThreadAction action);
-    void executeOptimize(const StorageID & storage_id, const String & partition_id, bool enable_try, bool mutations_sync, UInt64 timeout_ms) const;
     virtual bool isTargetTable(const StoragePtr &) const { return false; }
-    virtual bool isBGJobStatusStoreInCatalog() const { return false; }
+    IBackgroundJobExecutor & getBgJobExecutor() const { return *bg_job_executor; }
+
+    /// for unit test
+    DaemonJobServerBGThread(ContextMutablePtr global_context_, CnchBGThreadType type_,
+        std::unique_ptr<IBackgroundJobExecutor> bg_job_executor_,
+        std::unique_ptr<IBGJobStatusPersistentStoreProxy> js_persistent_store_proxy,
+        std::unique_ptr<ITargetServerCalculator> target_server_calculator);
+
+    IBGJobStatusPersistentStoreProxy & getStatusPersistentStore() const { return *status_persistent_store; }
+    std::vector<String> updateServerStartTimeAndFindRestartServers(const std::map<String, UInt64> &);
+
 protected:
     bool executeImpl() override;
     ServerInfo findServerInfo(const std::map<String, UInt64> &, const BackgroundJobs &);
-    std::vector<String> findRestartServers(const std::map<String, UInt64> &);
     BackgroundJobs fetchCnchBGThreadStatus();
 
     BackgroundJobs background_jobs;
     mutable std::shared_mutex bg_jobs_mutex;
     std::map<String, UInt64> server_start_times;
-    StorageCache * cache = nullptr;
-    std::unique_ptr<IBGJobStatusPersistentStoreProxy> status_persistent_store{};
     size_t counter_for_liveness_check = 1;
     size_t liveness_check_interval = LIVENESS_CHECK_INTERVAL;
 private:
+    StorageCache * cache = nullptr;
+    std::unique_ptr<IBGJobStatusPersistentStoreProxy> status_persistent_store{};
     std::unique_ptr<IBackgroundJobExecutor> bg_job_executor;
+    std::unique_ptr<ITargetServerCalculator> target_server_calculator;
 };
 
 using DaemonJobServerBGThreadPtr = std::shared_ptr<DaemonJobServerBGThread>;
-
-class DaemonJobServerBGThreadConsumer : public DaemonJobServerBGThread
-{
-public:
-    using DaemonJobServerBGThread::DaemonJobServerBGThread;
-    CnchServerClientPtr getTargetServer(const StorageID &, UInt64) const override;
-};
 
 std::unordered_map<UUID, StorageID> getUUIDsFromCatalog(DaemonJobServerBGThread & daemon_job);
 
@@ -115,5 +114,20 @@ void runMissingAndRemoveDuplicateJob(
     DaemonJobServerBGThread &,
     BackgroundJobs &,
     const std::unordered_multimap<UUID, BGJobInfoFromServer> &);
+
+template <CnchBGThreadType T, bool (*isTargetTableF)(const StoragePtr &)>
+struct DaemonJobForCnch : public DaemonJobServerBGThread
+{
+    DaemonJobForCnch(ContextMutablePtr global_context_) : DaemonJobServerBGThread(global_context_, T) { }
+    bool isTargetTable(const StoragePtr & storage) const override { return isTargetTableF(storage); }
+};
+
+bool isCnchMergeTree(const StoragePtr & storage);
+
+struct DaemonJobForMergeMutate : public DaemonJobForCnch<CnchBGThreadType::MergeMutate, isCnchMergeTree>
+{
+    using DaemonJobForCnch<CnchBGThreadType::MergeMutate, isCnchMergeTree>::DaemonJobForCnch;
+    void executeOptimize(const StorageID & storage_id, const String & partition_id, bool enable_try, bool mutations_sync, UInt64 timeout_ms) const;
+};
 
 } /// end namespace DB::DaemonManager

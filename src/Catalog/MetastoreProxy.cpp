@@ -1298,6 +1298,21 @@ void MetastoreProxy::setBGJobStatus(const String & name_space, const String & uu
             mergeBGJobStatusKey(name_space, uuid),
             String{BGJobStatusInCatalog::serializeToChar(status)}
         );
+    else if (type == CnchBGThreadType::PartGC)
+        metastore_ptr->put(
+            partGCBGJobStatusKey(name_space, uuid),
+            String{BGJobStatusInCatalog::serializeToChar(status)}
+        );
+    else if (type == CnchBGThreadType::Consumer)
+        metastore_ptr->put(
+            consumerBGJobStatusKey(name_space, uuid),
+            String{BGJobStatusInCatalog::serializeToChar(status)}
+        );
+    else if (type == CnchBGThreadType::DedupWorker)
+        metastore_ptr->put(
+            dedupWorkerBGJobStatusKey(name_space, uuid),
+            String{BGJobStatusInCatalog::serializeToChar(status)}
+        );
     else
         throw Exception(String{"persistent status is not support for "} + toString(type), ErrorCodes::LOGICAL_ERROR);
 }
@@ -1309,6 +1324,12 @@ std::optional<CnchBGThreadStatus> MetastoreProxy::getBGJobStatus(const String & 
         metastore_ptr->get(clusterBGJobStatusKey(name_space, uuid), status_store_data);
     else if (type == CnchBGThreadType::MergeMutate)
         metastore_ptr->get(mergeBGJobStatusKey(name_space, uuid), status_store_data);
+    else if (type == CnchBGThreadType::PartGC)
+        metastore_ptr->get(partGCBGJobStatusKey(name_space, uuid), status_store_data);
+    else if (type == CnchBGThreadType::Consumer)
+        metastore_ptr->get(consumerBGJobStatusKey(name_space, uuid), status_store_data);
+    else if (type == CnchBGThreadType::DedupWorker)
+        metastore_ptr->get(dedupWorkerBGJobStatusKey(name_space, uuid), status_store_data);
     else
         throw Exception(String{"persistent status is not support for "} + toString(type), ErrorCodes::LOGICAL_ERROR);
 
@@ -1335,6 +1356,12 @@ std::unordered_map<UUID, CnchBGThreadStatus> MetastoreProxy::getBGJobStatuses(co
                 return metastore_ptr->getByPrefix(allClusterBGJobStatusKeyPrefix(name_space));
             else if (type == CnchBGThreadType::MergeMutate)
                 return metastore_ptr->getByPrefix(allMergeBGJobStatusKeyPrefix(name_space));
+            else if (type == CnchBGThreadType::PartGC)
+                return metastore_ptr->getByPrefix(allPartGCBGJobStatusKeyPrefix(name_space));
+            else if (type == CnchBGThreadType::Consumer)
+                return metastore_ptr->getByPrefix(allConsumerBGJobStatusKeyPrefix(name_space));
+            else if (type == CnchBGThreadType::DedupWorker)
+                return metastore_ptr->getByPrefix(allDedupWorkerBGJobStatusKeyPrefix(name_space));
             else
                 throw Exception(String{"persistent status is not support for "} + toString(type), ErrorCodes::LOGICAL_ERROR);
         };
@@ -1354,10 +1381,28 @@ std::unordered_map<UUID, CnchBGThreadStatus> MetastoreProxy::getBGJobStatuses(co
     return res;
 }
 
-void MetastoreProxy::dropBGJobStatuses(const String & name_space, const String & uuid)
+void MetastoreProxy::dropBGJobStatus(const String & name_space, const String & uuid, CnchBGThreadType type)
 {
-    metastore_ptr->drop(clusterBGJobStatusKey(name_space, uuid));
-    metastore_ptr->drop(mergeBGJobStatusKey(name_space, uuid));
+    switch (type)
+    {
+        case CnchBGThreadType::Clustering:
+            metastore_ptr->drop(clusterBGJobStatusKey(name_space, uuid));
+            break;
+        case CnchBGThreadType::MergeMutate:
+            metastore_ptr->drop(mergeBGJobStatusKey(name_space, uuid));
+            break;
+        case CnchBGThreadType::PartGC:
+            metastore_ptr->drop(partGCBGJobStatusKey(name_space, uuid));
+            break;
+        case CnchBGThreadType::Consumer:
+            metastore_ptr->drop(consumerBGJobStatusKey(name_space, uuid));
+            break;
+        case CnchBGThreadType::DedupWorker:
+            metastore_ptr->drop(dedupWorkerBGJobStatusKey(name_space, uuid));
+            break;
+        default:
+            throw Exception(String{"persistent status is not support for "} + toString(type), ErrorCodes::LOGICAL_ERROR);
+    }
 }
 
 void MetastoreProxy::setTablePreallocateVW(const String & name_space, const String & uuid, const String & vw)

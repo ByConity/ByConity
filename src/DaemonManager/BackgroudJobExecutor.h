@@ -2,6 +2,7 @@
 
 #include <Interpreters/Context_fwd.h>
 #include <CloudServices/CnchBGThreadCommon.h>
+#include <Interpreters/StorageID.h>
 
 namespace DB::DaemonManager
 {
@@ -10,11 +11,18 @@ struct BGJobInfo;
 class IBackgroundJobExecutor
 {
 public:
-    virtual bool start(const BGJobInfo & info) = 0;
-    virtual bool stop(const BGJobInfo & info) = 0;
-    virtual bool remove(const BGJobInfo & info) = 0;
-    virtual bool drop(const BGJobInfo & info) = 0;
-    virtual bool wakeup(const BGJobInfo & info) = 0;
+    bool start(const BGJobInfo & info);
+    bool stop(const BGJobInfo & info);
+    bool remove(const BGJobInfo & info);
+    bool drop(const BGJobInfo & info);
+    bool wakeup(const BGJobInfo & info);
+
+    virtual bool start(const StorageID & storage_id, const String & host_port) = 0;
+    virtual bool stop(const StorageID & storage_id, const String & host_port) = 0;
+    virtual bool remove(const StorageID & storage_id, const String & host_port) = 0;
+    virtual bool drop(const StorageID & storage_id, const String & host_port) = 0;
+    virtual bool wakeup(const StorageID & storage_id, const String & host_port) = 0;
+
     virtual ~IBackgroundJobExecutor() = default;
 };
 
@@ -27,11 +35,11 @@ public:
     BackgroundJobExecutor(BackgroundJobExecutor &&) = delete;
     BackgroundJobExecutor & operator = (const BackgroundJobExecutor &) = delete;
     BackgroundJobExecutor & operator = (BackgroundJobExecutor &&) = delete;
-    bool start(const BGJobInfo & info) override;
-    bool stop(const BGJobInfo & info) override;
-    bool remove(const BGJobInfo & info) override;
-    bool drop(const BGJobInfo & info) override;
-    bool wakeup(const BGJobInfo & info) override;
+    bool start(const StorageID & storage_id, const String & host_port) override;
+    bool stop(const StorageID & storage_id, const String & host_port) override;
+    bool remove(const StorageID & storage_id, const String & host_port) override;
+    bool drop(const StorageID & storage_id, const String & host_port) override;
+    bool wakeup(const StorageID & storage_id, const String & host_port) override;
 private:
     const Context & context;
     const CnchBGThreadType type;

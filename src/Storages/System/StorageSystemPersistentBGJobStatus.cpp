@@ -27,6 +27,9 @@ namespace DB
         const std::vector<CnchBGThreadType> types {
             CnchBGThreadType::MergeMutate,
             CnchBGThreadType::Clustering,
+            CnchBGThreadType::PartGC,
+            CnchBGThreadType::Consumer,
+            CnchBGThreadType::DedupWorker
         };
 
         std::shared_ptr<Catalog::Catalog> catalog = context->getCnchCatalog();
