@@ -510,13 +510,12 @@ void StorageCnchMergeTree::filterPartsByPartition(
     size_t prev_sz = parts.size();
     size_t empty = 0, partition_minmax = 0, minmax_idx = 0, part_value = 0;
     std::erase_if(parts, [&](const auto & part) {
-        // if (part->isEmpty()) /// FIXME: partial part is empty now.
-        // {
-        //     ++empty;
-        //     return true;
-        // }
-        // else
-        if (partition_pruner && partition_pruner->canBePruned(*part))
+        if (part->isEmpty())
+        {
+            ++empty;
+            return true;
+        }
+        else if (partition_pruner && partition_pruner->canBePruned(*part))
         {
             ++partition_minmax;
             return true;
