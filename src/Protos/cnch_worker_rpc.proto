@@ -55,11 +55,10 @@ message SubmitKafkaConsumeTaskReq
 
   required string database = 4;
   required string table = 5;
-  optional string cnch_database = 6;
-  optional string cnch_table = 7;
-  required uint64 assigned_consumer = 8;
-  repeated string create_table_command = 9;
-  repeated TopicPartitionModel tpl = 10;
+  optional StorageID cnch_storage_id = 6;
+  required uint64 assigned_consumer = 7;
+  repeated string create_table_command = 8;
+  repeated TopicPartitionModel tpl = 9;
 }
 
 message SubmitKafkaConsumeTaskResp

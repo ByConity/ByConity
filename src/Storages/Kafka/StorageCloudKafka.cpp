@@ -486,7 +486,9 @@ bool StorageCloudKafka::streamToViews(/* required_column_names */)
 
     try
     {
-        auto txn = std::make_shared<CnchWorkerTransaction>(consume_context, server_client, getStorageID(), assigned_consumer_index);
+        auto table_id = getStorageID();
+        table_id.uuid = cnch_storage_id.uuid;
+        auto txn = std::make_shared<CnchWorkerTransaction>(consume_context, server_client, table_id, assigned_consumer_index);
         consume_context->setCurrentTransaction(txn);
     }
     catch (...)
@@ -626,7 +628,7 @@ bool StorageCloudKafka::checkDependencies(const String &database_name, const Str
     /// otherwise check if each dependency is ready one by one
     for (const auto & db_tab : dependencies)
     {
-        auto table = DatabaseCatalog::instance().tryGetTable(db_tab, getContext());
+        auto table = DatabaseCatalog::instance().tryGetTable({db_tab.database_name, db_tab.table_name}, getContext());
         if (!table)
             return false;
 
@@ -718,8 +720,8 @@ KafkaLogElement StorageCloudKafka::createKafkaLog(KafkaLogElement::Type type, si
     KafkaLogElement elem;
     elem.event_type = type;
     elem.event_time = time(nullptr);
-    elem.cnch_database = cnch_database_name;
-    elem.cnch_table = cnch_table_name;
+    elem.cnch_database = cnch_storage_id.database_name;
+    elem.cnch_table = cnch_storage_id.table_name;
     elem.database = getDatabaseName();
     elem.table = getTableName();
     elem.consumer = toString(consumer_index);
@@ -806,7 +808,7 @@ void dropConsumerTables(ContextMutablePtr context, const String & db_name, const
     {
         for (auto & db_tb : dependencies)
         {
-            auto table = DatabaseCatalog::instance().getTable(db_tb, context);
+            auto table = DatabaseCatalog::instance().getTable({db_tb.database_name, db_tb.table_name}, context);
             if (auto *mv = dynamic_cast<StorageMaterializedView*>(table.get()))
             {
                 tables_to_drop.emplace(backQuoteIfNeed(mv->getDatabaseName()) + "." + backQuoteIfNeed(mv->getTableName()));
@@ -887,8 +889,7 @@ void executeKafkaConsumeTaskImpl(const KafkaTaskCommand & command, ContextMutabl
     switch (command.type)
     {
         case KafkaTaskCommand::Type::START_CONSUME:
-            storage->setCnchDatabaseName(command.cnch_database_name);
-            storage->setCnchTableName(command.cnch_table_name);
+            storage->setCnchStorageID(command.cnch_storage_id);
             storage->startConsume(command.assigned_consumer, command.tpl);
             break;
         case KafkaTaskCommand::Type::STOP_CONSUME:

@@ -31,8 +31,7 @@ public:
     void startup() override;
     void shutdown() override;
 
-    void setCnchDatabaseName(const String & name) { cnch_database_name = name; }
-    void setCnchTableName(const String & name) { cnch_table_name = name; }
+    void setCnchStorageID(const StorageID & storage_id) { cnch_storage_id = storage_id; }
 
     void startConsume(size_t consumer_index, const cppkafka::TopicPartitionList & tpl);
     void stopConsume();
@@ -75,8 +74,7 @@ private:
     String last_exception;
     UInt64 rdkafka_exception_times{0};
 
-    String cnch_database_name;
-    String cnch_table_name;
+    StorageID cnch_storage_id{StorageID::createEmpty()};
     bool cloud_table_has_unique_key{false};
 
     BackgroundSchedulePool::TaskHolder check_staged_area_task;
