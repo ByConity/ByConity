@@ -20,9 +20,9 @@ namespace DB
 {
 
 bool createDatabaseInCatalog(
-    ContextPtr global_context,
+    const ContextPtr & global_context,
     const String & database_name,
-    Poco::Logger& logger)
+    Poco::Logger * log)
 {
     bool ret = true;
     try
@@ -33,19 +33,19 @@ bool createDatabaseInCatalog(
         {
             try
             {
-                LOG_INFO(&logger, "Creating database {} in catalog", database_name);
+                LOG_INFO(log, "Creating database {} in catalog", database_name);
                 catalog->createDatabase(database_name, UUIDHelpers::generateV4(), start_time, start_time);
             }
             catch (Exception & e)
             {
-                LOG_WARNING(&logger, "Failed to create database {}, got exception {}", database_name, e.message());
+                LOG_WARNING(log, "Failed to create database {}, got exception {}", database_name, e.message());
                 ret = false;
             }
         }
     }
     catch (Exception & e)
     {
-        LOG_WARNING(&logger, "Unable to get timestamp, got exception: {}", e.message());
+        LOG_WARNING(log, "Unable to get timestamp, got exception: {}", e.message());
         ret = false;
     }
 
@@ -161,141 +161,24 @@ String makeAlterColumnQuery(const String& database, const String& table, const B
     return {};
 }
 
-AlterTTLType getAlterTTLType(const String& ttl, StoragePtr& storage, Poco::Logger& logger)
-{
-    auto merge_tree_storage = dynamic_pointer_cast<MergeTreeMetaBase>(storage);
-    if (merge_tree_storage)
-    {
-        ParserExpression expression_parser;
-        ASTPtr ttl_table;
-        Expected expected;
-        Tokens tokens(ttl.data(), ttl.data() + ttl.size(), ttl.size());
-        IParser::Pos token_iterator(tokens, DBMS_DEFAULT_MAX_PARSER_DEPTH);
-
-        auto parsed = expression_parser.parse(token_iterator, ttl_table, expected);
-        String merge_storage_ttl;
-
-        if (parsed && merge_tree_storage->getInMemoryMetadataPtr()->getTableTTLs().definition_ast)
-        {
-            merge_storage_ttl = queryToString(merge_tree_storage->getInMemoryMetadataPtr()->getTableTTLs().definition_ast);
-            merge_storage_ttl.erase(std::remove(merge_storage_ttl.begin(), merge_storage_ttl.end(), '`'),
-                                    merge_storage_ttl.end());
-        }
-
-        if (!ttl.empty() && !(merge_tree_storage->getInMemoryMetadataPtr()->getTableTTLs().definition_ast))
-        {
-            return AlterTTLType::add_ttl;
-        }
-        else if (!ttl.empty()
-                && (parsed && merge_tree_storage->getInMemoryMetadataPtr()->getTableTTLs().definition_ast &&
-                    (queryToString(ttl_table) != merge_storage_ttl)))
-        {
-            return AlterTTLType::modify_ttl;
-        }
-        else if (ttl.empty() && merge_tree_storage->getInMemoryMetadataPtr()->getTableTTLs().definition_ast)
-        {
-            return AlterTTLType::delete_ttl;
-        }
-    }
-    else
-    {
-        LOG_DEBUG(&logger, "Non-MergeTreeMetaBase storage found. This should not happen.");
-    }
-    return AlterTTLType::none;
-}
-
-String makeAlterTTLQuery(const String & database, const String & table, const String & ttl, AlterTTLType type, Poco::Logger& logger)
-{
-    switch (type)
-    {
-        case AlterTTLType::add_ttl:
-            LOG_DEBUG(&logger, "Generating query to add TTL");
-            return "ALTER TABLE " + database + "." +  table + " MODIFY TTL " + ttl;
-        case AlterTTLType::modify_ttl:
-            LOG_DEBUG(&logger, "Generating query to modify TTL");
-            return "ALTER TABLE " + database + "." +  table + " MODIFY TTL " + ttl;
-        case AlterTTLType::delete_ttl:
-            LOG_DEBUG(&logger, "Generating query to delete TTL");
-            return "ALTER TABLE " + database + "." +  table + " REMOVE TTL";
-        default:
-            return "";
-    }
-}
-
-String makeAlterSettingsQuery(
-    const String & database,
-    const String & table,
-    StoragePtr storage,
-    const SettingsChanges & changes,
-    Poco::Logger & logger)
-{
-    ParserCreateQuery parser;
-    auto create_query_string = storage->getCreateTableSql();
-    ASTPtr ast = parseQuery(parser, create_query_string, "for table " + table, 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
-    auto ast_create_query = ast->as<ASTCreateQuery &>();
-
-    auto & storage_settings = ast_create_query.storage->settings->changes;
-
-    String alter_query = "ALTER TABLE " + database + "." + table + " MODIFY SETTING ";
-
-    bool has_change = false;
-
-    for (const auto & change : changes)
-    {
-        auto it = std::find_if(storage_settings.begin(), storage_settings.end(), [&change](auto & c) { return c.name == change.name; });
-        if ((it != storage_settings.end() && it->value != change.value)
-        || it == storage_settings.end())
-        {
-            has_change = true;
-            // FIXME: Also allow for other change values if needed
-            UInt64 uint_val;
-            String str_val;
-            if (change.value.tryGet<UInt64>(uint_val))
-                alter_query +=  change.name + " = " + std::to_string(uint_val) + ", ";
-            else if (change.value.tryGet<String>(str_val))
-                alter_query +=  change.name + " = " + str_val + ", ";
-            else
-                LOG_DEBUG(&logger, "Encountered unexpected setting type in alter settings query"+ String(change.value.getTypeName()));
-        }
-    }
-
-    if (alter_query.ends_with(", "))
-        alter_query = alter_query.substr(0, alter_query.length() - 2);
-
-    if (has_change)
-        return alter_query;
-    else
-        return String{};
-}
-
 bool createCnchTable(
     ContextPtr global_context,
     const String & database,
     const String & table,
-    const String & query,
-    Poco::Logger & logger)
+    ASTPtr & create_query_ast,
+    Poco::Logger * log)
 {
     bool ret = true;
     ParserCreateQuery parser;
     const String table_description = database + "." + table;
-    ASTPtr ast = parseQuery(parser, query, 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
-    if (!ast)
-    {
-        LOG_ERROR(&logger, "Failed to create CNCH table {}, failed to parse create query: {}", table_description, query);
-        return false;
-    }
 
     auto query_context = Context::createCopy(global_context);
     query_context->makeSessionContext();
     query_context->makeQueryContext();
 
-    auto & create = ast->as<ASTCreateQuery &>();
+    auto & create = create_query_ast->as<ASTCreateQuery &>();
     create.uuid = UUIDHelpers::generateV4();
-
-    WriteBufferFromOwnString statement_buf;
-    formatAST(create, statement_buf, false);
-    writeChar('\n', statement_buf);
-    String create_table_sql = statement_buf.str();
+    String create_table_sql = queryToString(create);
 
     auto & txn_coordinator = global_context->getCnchTransactionCoordinator();
     TransactionCnchPtr txn = txn_coordinator.createTransaction(CreateTransactionOption().setContext(query_context));
@@ -310,7 +193,7 @@ bool createCnchTable(
     }
     catch (Exception & e)
     {
-        LOG_WARNING(&logger, "Failed to create CNCH table " + table_description + ", got exception: " + e.message());
+        LOG_WARNING(log, "Failed to create CNCH table {}, got exception: {}", table_description, e.message());
         ret = false;
     }
 
@@ -322,15 +205,15 @@ bool prepareCnchTable(
     ContextPtr global_context,
     const String & database,
     const String & table,
-    const String & create_query,
-    Poco::Logger& logger)
+    ASTPtr & create_query_ast,
+    Poco::Logger * log)
 {
     auto catalog = global_context->getCnchCatalog();
 
     if (!catalog->isTableExists(database, table, TxnTimestamp::maxTS()))
     {
-        LOG_INFO(&Poco::Logger::get("CnchSystemLog"), "Creating CNCH System log table: {}.{}", database, table);
-        return createCnchTable(global_context, database, table, create_query, logger);
+        LOG_INFO(log, "Creating CNCH System log table: {}.{}", database, table);
+        return createCnchTable(global_context, database, table, create_query_ast, log);
     }
 
     return true;
@@ -341,9 +224,7 @@ bool syncTableSchema(
     const String & database,
     const String & table,
     const Block & expected_block,
-    const String & ttl,
-    const SettingsChanges & expected_settings,
-    Poco::Logger& logger)
+    Poco::Logger * log)
 {
     bool ret = true;
     auto catalog = global_context->getCnchCatalog();
@@ -359,7 +240,7 @@ bool syncTableSchema(
     }
     catch (Exception & e)
     {
-        LOG_WARNING(&logger, "Failed to get CNCH table " + database + "." + table + ", got exception: " + e.message());
+        LOG_WARNING(log, "Failed to get CNCH table {}.{}, got exception: {}", database, table, e.message());
         ret = false;
     }
 
@@ -378,7 +259,7 @@ bool syncTableSchema(
                     TransactionCnchPtr txn = global_context->getCnchTransactionCoordinator().createTransaction();
                     if (txn)
                     {
-                            LOG_INFO(&logger, "execute alter query: " + alter_query);
+                            LOG_INFO(log, "execute alter query: " + alter_query);
                             query_context->setCurrentTransaction(txn);
                             InterpreterAlterQuery intepreter_alter_query{ast, query_context};
                             intepreter_alter_query.execute();
@@ -388,7 +269,7 @@ bool syncTableSchema(
             }
             catch (Exception & e)
             {
-                LOG_WARNING(&logger, "Failed to alter table for cnch system log, got exception: " + e.message());
+                LOG_WARNING(log, "Failed to alter table for cnch system log, got exception: " + e.message());
                 return false;
             }
             return true;
@@ -403,20 +284,6 @@ bool syncTableSchema(
                 ret &= execute_alter_query(alter_query);
             }
         }
-
-        // Alter table's TTL if the existing one is different
-        auto alter_ttl_type = getAlterTTLType(ttl, storage, logger);
-        if (alter_ttl_type != AlterTTLType::none)
-        {
-            ret &= execute_alter_query(makeAlterTTLQuery(database, table, ttl, alter_ttl_type, logger));
-        }
-
-        auto alter_settings_query = makeAlterSettingsQuery(database, table, storage, expected_settings, logger);
-        if (!alter_settings_query.empty())
-        {
-            ret &= execute_alter_query(alter_settings_query);
-        }
-
     }
     else
         ret = false;
@@ -428,7 +295,7 @@ bool createView(
     ContextPtr global_context,
     const String & database,
     const String & table,
-    Poco::Logger& logger)
+    Poco::Logger * log)
 {
     bool ret = true;
 
@@ -443,11 +310,11 @@ bool createView(
         ASTPtr create_view_ast = parseQuery(create_parser, create_view_query, 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
         InterpreterCreateQuery create_interpreter(create_view_ast, query_context);
         create_interpreter.execute();
-        LOG_INFO(&logger, "Create view with query " + create_view_query + " successful!");
+        LOG_INFO(log, "Create view with query {} successful!", create_view_query);
     }
     catch (Exception & e)
     {
-        LOG_DEBUG(&logger, "Failed to create view for " + database + "." + table + ", met exception " + e.message());
+        LOG_DEBUG(log, "Failed to create view for {}.{}, met exception {}", database, table, e.message());
         ret = false;
     }
     return ret;

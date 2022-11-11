@@ -125,9 +125,9 @@ public:
 
     void setWorkerGroupForTable(const String & db, const String & name, const String & worker_group, UInt64 worker_topology_hash);
 
-    StoragePtr getTable(const Context & query_context, const String & database, const String & name, const TxnTimestamp & ts = 0);
+    StoragePtr getTable(const Context & query_context, const String & database, const String & name, const TxnTimestamp & ts = TxnTimestamp::maxTS());
 
-    StoragePtr tryGetTable(const Context & query_context, const String & database, const String & name, const TxnTimestamp & ts = 0);
+    StoragePtr tryGetTable(const Context & query_context, const String & database, const String & name, const TxnTimestamp & ts = TxnTimestamp::maxTS());
 
     StoragePtr tryGetTableByUUID(const Context & query_context, const String & uuid, const TxnTimestamp & ts, bool with_delete = false);
 

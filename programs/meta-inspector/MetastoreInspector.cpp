@@ -2,6 +2,7 @@
 #include <Poco/Util/Application.h>
 #include <Catalog/MetastoreByteKVImpl.h>
 #include <Catalog/MetastoreFDBImpl.h>
+#include <Catalog/StringHelper.h>
 #include <Catalog/CatalogConfig.h>
 #include <Protos/data_models.pb.h>
 #include <common/LineReader.h>
@@ -125,7 +126,7 @@ class MetastoreInspector : public Poco::Util::Application
 public:
     MetastoreInspector() = default;
 
-protected:	
+protected:
     void defineOptions(Poco::Util::OptionSet & options) override
     {
         options.addOption(
@@ -180,7 +181,7 @@ protected:
 
         if (config().has("exec"))
             is_interactive = false;
-        
+
         if (!is_interactive)
         {
             std::string input_cmd = config().getString("exec");
@@ -251,7 +252,7 @@ private:
         try
         {
             MetaCommand cmd = MetaCommand::parse(command);
-            std::string full_key = name_space + cmd.key;
+            std::string full_key = Catalog::escapeString(name_space) + cmd.key;
             switch (cmd.type)
             {
                 case MetaCommandType::HELP:
@@ -300,7 +301,7 @@ private:
             std::cout << e.message() << std::endl;
         }
     }
-    
+
     std::string name_space = "default";
     MetastorePtr metastore_ptr;
 };

@@ -8,7 +8,7 @@
 #include <Databases/DatabasesCommon.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DatabaseCatalog.h>
-///#include <Interpreters/CnchSystemLog.h>
+#include <Interpreters/CnchSystemLog.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
@@ -701,12 +701,12 @@ std::vector<KafkaConsumerRunningInfo> CnchKafkaConsumeManager::getConsumerInfos(
     return res;
 }
 
-void CnchKafkaConsumeManager::logExceptionToCnchKafkaLog(String /* msg */, bool /* deduplicate */)
+void CnchKafkaConsumeManager::logExceptionToCnchKafkaLog(String msg, bool deduplicate)
 {
-    ///constexpr auto MSG_AGE_THRESHOLD_IN_SECOND = 60;
+    constexpr auto MSG_AGE_THRESHOLD_IN_SECOND = 60;
     try
     {
-        /* auto cloud_kafka_log = getContext()->getCloudKafkaLog();
+        auto cloud_kafka_log = getContext()->getCloudKafkaLog();
         if (!cloud_kafka_log)
             return;
         if (deduplicate)
@@ -731,7 +731,7 @@ void CnchKafkaConsumeManager::logExceptionToCnchKafkaLog(String /* msg */, bool 
             }
         }
         else
-            cloud_kafka_log->logException(storage_id, std::move(msg), "ConsumeManager"); */
+            cloud_kafka_log->logException(storage_id, std::move(msg), "ConsumeManager");
     }
     catch (...)
     {

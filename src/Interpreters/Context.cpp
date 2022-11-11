@@ -467,7 +467,8 @@ struct ContextSharedPart
         if (system_logs)
             system_logs->shutdown();
 
-        cnch_system_logs.reset();
+        if (cnch_system_logs)
+            cnch_system_logs->shutdown();
 
         DatabaseCatalog::shutdown();
 
@@ -475,6 +476,7 @@ struct ContextSharedPart
         meta_checker = BackgroundSchedulePool::TaskHolder(nullptr);
 
         std::unique_ptr<SystemLogs> delete_system_logs;
+        std::unique_ptr<CnchSystemLogs> delete_cnch_system_logs;
         {
             auto lock = std::lock_guard(mutex);
 
@@ -513,6 +515,7 @@ struct ContextSharedPart
             cnch_txn_coordinator.reset();
 
             delete_system_logs = std::move(system_logs);
+            delete_cnch_system_logs = std::move(cnch_system_logs);
             embedded_dictionaries.reset();
             external_dictionaries_loader.reset();
             cnch_catalog_dict_cache.reset();
@@ -537,6 +540,7 @@ struct ContextSharedPart
 
         /// Can be removed w/o context lock
         delete_system_logs.reset();
+        delete_cnch_system_logs.reset();
     }
 
     bool hasTraceCollector() const
@@ -2747,7 +2751,8 @@ std::shared_ptr<ServerPartLog> Context::getServerPartLog() const
 
 void Context::initializeCnchSystemLogs()
 {
-    if (shared->server_type == ServerType::cnch_daemon_manager)
+    if ((shared->server_type != ServerType::cnch_server) &&
+        (shared->server_type != ServerType::cnch_worker))
         return;
     auto lock = getLock();
     shared->cnch_system_logs = std::make_unique<CnchSystemLogs>(getGlobalContext());
@@ -2760,7 +2765,7 @@ std::shared_ptr<QueryMetricLog> Context::getQueryMetricsLog() const
     if (!shared->cnch_system_logs)
         return {};
 
-    return std::atomic_load_explicit(&shared->cnch_system_logs->query_metrics, std::memory_order_relaxed);
+    return shared->cnch_system_logs->getQueryMetricLog();
 }
 
 void Context::insertQueryMetricsElement(const QueryMetricElement & element)
@@ -2780,10 +2785,10 @@ std::shared_ptr<QueryWorkerMetricLog> Context::getQueryWorkerMetricsLog() const
 {
     auto lock = getLock();
 
-    if (!shared->cnch_system_logs || !shared->cnch_system_logs->query_worker_metrics)
+    if (!shared->cnch_system_logs)
         return {};
 
-    return shared->cnch_system_logs->query_worker_metrics;
+    return shared->cnch_system_logs->getQueryWorkerMetricLog();
 }
 
 void Context::insertQueryWorkerMetricsElement(const QueryWorkerMetricElement & element)
@@ -2863,6 +2868,14 @@ std::shared_ptr<KafkaLog> Context::getKafkaLog() const
     return shared->system_logs->kafka_log;
 }
 
+std::shared_ptr<CloudKafkaLog> Context::getCloudKafkaLog() const
+{
+    auto lock = getLock();
+    if (!shared->cnch_system_logs)
+        return {};
+
+    return shared->cnch_system_logs->getKafkaLog();
+}
 
 std::shared_ptr<MutationLog> Context::getMutationLog() const
 {

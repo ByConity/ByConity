@@ -28,6 +28,17 @@
 #include <Common/ThreadPool.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/Util/AbstractConfiguration.h>
+#include <Storages/StorageFactory.h>
+#include <Storages/StorageCnchMergeTree.h>
+#include <Parsers/ParserQueryWithOutput.h>
+#include <Transaction/CnchWorkerTransaction.h>
+#include <Transaction/ICnchTransaction.h>
+#include <Transaction/TransactionCoordinatorRcCnch.h>
+#include <CloudServices/CnchServerClient.h>
+#include <Common/serverLocality.h>
+#include <CloudServices/CnchCreateQueryHelper.h>
+#include <Catalog/Catalog.h>
+#include <MergeTreeCommon/CnchTopologyMaster.h>
 
 
 namespace DB
@@ -58,9 +69,13 @@ namespace DB
     };
     */
 
+
 namespace ErrorCodes
 {
     extern const int TIMEOUT_EXCEEDED;
+    extern const int SYSTEM_ERROR;
+    extern const int UNKNOWN_TABLE;
+    extern const int LOGICAL_ERROR;
 }
 
 #define DBMS_SYSTEM_LOG_QUEUE_SIZE 1048576
@@ -135,7 +150,7 @@ struct SystemLogs
 
 
 template <typename LogElement>
-class SystemLog : public ISystemLog, private boost::noncopyable, WithContext
+class SystemLog : public ISystemLog, protected boost::noncopyable, protected WithContext
 {
 public:
     using Self = SystemLog;
@@ -186,7 +201,6 @@ public:
 protected:
     Poco::Logger * log;
 
-private:
     /* Saving thread data */
     const StorageID table_id;
     const String storage_def;
@@ -224,7 +238,7 @@ private:
     void prepareTable() override;
 
     /// flushImpl can be executed only in saving_thread.
-    void flushImpl(const std::vector<LogElement> & to_flush, uint64_t to_flush_end);
+    virtual void flushImpl(const std::vector<LogElement> & to_flush, uint64_t to_flush_end);
 };
 
 
@@ -619,5 +633,309 @@ ASTPtr SystemLog<LogElement>::getCreateTableQuery(ParserSettingsImpl dt)
 
     return create;
 }
+
+template<typename TLogElement>
+class CnchSystemLog : public SystemLog<TLogElement>
+{
+public:
+    using LogElement = TLogElement;
+private:
+    using SystemLog<LogElement>::mutex;
+    using SystemLog<LogElement>::table;
+    using SystemLog<LogElement>::table_id;
+    using SystemLog<LogElement>::is_shutdown;
+    using SystemLog<LogElement>::getContext;
+    using SystemLog<LogElement>::context;
+protected:
+    using SystemLog<LogElement>::log;
+
+public:
+    CnchSystemLog(ContextPtr global_context_,
+        const String & database_name_,
+        const String & table_name_,
+        const String & cnch_table_name_,
+        size_t flush_interval_milliseconds_);
+
+    String getDatabaseName() const
+    {
+        return this->database_name;
+    }
+
+    String getTableName() const
+    {
+        return this->table_name;
+    }
+
+    void stop()
+    {
+        std::unique_lock lock(mutex);
+        is_stop = true;
+    }
+
+    void resume();
+protected:
+    const String cnch_table_name;
+    UUID uuid;
+    bool is_stop = false;
+
+    void prepareTable() override;
+
+    /// flushImpl can be executed only in saving_thread.
+    void flushImpl(const std::vector<LogElement> & to_flush, uint64_t to_flush_end) override;
+
+    virtual StoragePtr createCloudMergeTreeInMemory(const StoragePtr & storage) const;
+private:
+    /// indicate the target table is not found to signal between prepareTable and flushImpl
+    void writeToCnchTable(Block & block, ContextMutablePtr query_context);
+};
+
+template <typename LogElement>
+CnchSystemLog<LogElement>::CnchSystemLog(ContextPtr global_context_,
+    const String & database_name_,
+    const String & table_name_,
+    const String & cnch_table_name_,
+    size_t flush_interval_milliseconds_)
+    : SystemLog<LogElement>(global_context_, database_name_, table_name_, "", flush_interval_milliseconds_),
+      cnch_table_name{cnch_table_name_}
+{
+    StoragePtr cnch_table = getContext()->getCnchCatalog()->getTable(*getContext(), database_name_, cnch_table_name, TxnTimestamp::maxTS());
+    uuid = cnch_table->getStorageUUID();
+
+    if (global_context_->getServerType() == ServerType::cnch_server)
+        table = std::move(cnch_table);
+    else
+        table = createCloudMergeTreeInMemory(cnch_table);
+}
+
+template <typename LogElement>
+void CnchSystemLog<LogElement>::flushImpl(const std::vector<LogElement> & to_flush, uint64_t to_flush_end)
+{
+    try
+    {
+        LOG_TRACE(log, "Flushing system log, {} entries to flush up to offset {}",
+            to_flush.size(), to_flush_end);
+
+        /// We check for existence of the table and create it as needed at every
+        /// flush. This is done to allow user to drop the table at any moment
+        /// (new empty table will be created automatically). BTW, flush method
+        /// is called from single thread.
+        prepareTable();
+
+        ColumnsWithTypeAndName log_element_columns;
+        auto log_element_names_and_types = LogElement::getNamesAndTypes();
+
+        for (auto name_and_type : log_element_names_and_types)
+            log_element_columns.emplace_back(name_and_type.type, name_and_type.name);
+
+        Block block(std::move(log_element_columns));
+
+        MutableColumns columns = block.mutateColumns();
+        for (const auto & elem : to_flush)
+            elem.appendToBlock(columns);
+
+        block.setColumns(std::move(columns));
+
+        /// We write to table indirectly, using InterpreterInsertQuery.
+        /// This is needed to support DEFAULT-columns in table.
+        size_t retry_count = 3;
+        while (retry_count--)
+        {
+            try
+            {
+                auto insert_context = Context::createCopy(context);
+                insert_context->makeQueryContext();
+                writeToCnchTable(block, insert_context);
+                break;
+            }
+            catch (...)
+            {
+                LOG_WARNING(log, "Failed to flush to CNCH table, try {}", retry_count);
+                tryLogCurrentException(__PRETTY_FUNCTION__);
+            }
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+    }
+
+    {
+        std::lock_guard lock(mutex);
+        this->flushed_up_to = to_flush_end;
+        this->is_force_prepare_tables = false;
+        this->flush_event.notify_all();
+    }
+
+    LOG_TRACE(log, "Flushed system log up to offset {}", to_flush_end);
+}
+
+template <typename LogElement>
+void CnchSystemLog<LogElement>::prepareTable()
+{
+    {
+        std::unique_lock lock(mutex);
+        if (is_stop)
+            return;
+    }
+
+    String description = table_id.getNameForLogs();
+    StoragePtr cnch_storage{};
+    bool table_not_found = false;
+
+    try
+    {
+        cnch_storage = getContext()->getCnchCatalog()->getTable(*getContext(), table_id.database_name, cnch_table_name, TxnTimestamp::maxTS());
+    }
+    catch (Exception & e)
+    {
+        /// do not need to log exception if table not found.
+        if (e.code() == ErrorCodes::UNKNOWN_TABLE)
+            table_not_found = true;
+        else
+            tryLogDebugCurrentException(__PRETTY_FUNCTION__);
+    }
+
+    if (!cnch_storage)
+    {
+        if (table_not_found)
+        {
+            LOG_DEBUG(log, "Table {} no longer exists, stop log", description);
+            std::unique_lock lock(mutex);
+            is_stop = true;
+            table.reset();
+        }
+        else
+            LOG_DEBUG(log, "Table {} was not found due to an unexpected exception.", description);
+    }
+    else
+    {
+        auto metadata_columns = cnch_storage->getInMemoryMetadataPtr()->getColumns();
+        auto old_query = InterpreterCreateQuery::formatColumns(metadata_columns);
+
+        auto ordinary_columns = LogElement::getNamesAndTypes();
+        auto alias_columns = LogElement::getNamesAndAliases();
+        auto current_query = InterpreterCreateQuery::formatColumns(ordinary_columns, alias_columns,
+                                                                   ParserSettings::valueOf(getContext()->getSettingsRef().dialect_type));
+
+        if (old_query->getTreeHash() != current_query->getTreeHash())
+        {
+            LOG_WARNING(log, "Existing table {} has changed, shutting down log", description);
+            std::unique_lock lock(mutex);
+            is_shutdown = true;
+            table.reset();
+        }
+    }
+}
+
+template <typename LogElement>
+void CnchSystemLog<LogElement>::writeToCnchTable(Block & block, ContextMutablePtr query_context)
+{
+    {
+        std::unique_lock lock(mutex);
+        if (is_stop)
+            return;
+        if (!table)
+            return;
+    }
+
+    std::unique_ptr<ASTInsertQuery> insert = std::make_unique<ASTInsertQuery>();
+    insert->table_id = table_id;
+    ASTPtr query_ptr(insert.release());
+
+    auto host_with_port = getContext()->getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(uuid), false);
+    auto host_address = host_with_port.getHost();
+    auto host_port = host_with_port.rpc_port;
+    auto server_client = query_context->getCnchServerClient(host_address, host_port);
+    if (!server_client)
+        throw Exception("Failed to get ServerClient", ErrorCodes::SYSTEM_ERROR);
+
+    TransactionCnchPtr cnch_txn;
+    if (query_context->getServerType() == ServerType::cnch_server
+        && isLocalServer(host_with_port.getRPCAddress(), std::to_string(getContext()->getRPCPort())))
+    {
+        cnch_txn = query_context->getCnchTransactionCoordinator().createTransaction();
+        query_context->setCurrentTransaction(cnch_txn);
+    }
+    else
+    {
+        LOG_DEBUG(log, "Using table host server for committing: {}", server_client->getRPCAddress());
+        cnch_txn = std::make_shared<CnchWorkerTransaction>(query_context, server_client);
+        query_context->setCurrentTransaction(cnch_txn);
+    }
+
+    {
+        SCOPE_EXIT({
+            try
+            {
+                if (dynamic_pointer_cast<CnchServerTransaction>(cnch_txn))
+                    query_context->getCnchTransactionCoordinator().finishTransaction(cnch_txn);
+            }
+            catch (...)
+            {
+                tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            }
+        });
+
+        auto & client_info = query_context->getClientInfo();
+        auto host_ports = server_client->getHostWithPorts();
+        auto current_addr_port = client_info.current_address.port();
+
+        client_info.current_address =
+            Poco::Net::SocketAddress(createHostPortString(host_ports.getHost(), current_addr_port));
+        client_info.rpc_port = host_ports.rpc_port;
+
+        BlockOutputStreamPtr stream = table->write(query_ptr, table->getInMemoryMetadataPtr(), query_context);
+
+        stream->writePrefix();
+        stream->write(block);
+        stream->writeSuffix();
+
+        if (dynamic_pointer_cast<CnchWorkerTransaction>(cnch_txn))
+        {
+            cnch_txn->commitV2();
+        }
+    }
+}
+
+template <typename LogElement>
+void CnchSystemLog<LogElement>::resume()
+{
+    if ((getContext()->getServerType() == ServerType::cnch_server) && (!table))
+    {
+        StoragePtr cnch_table = getContext()->getCnchCatalog()->getTable(*getContext(), table_id.database_name, cnch_table_name, TxnTimestamp::maxTS());
+        std::unique_lock lock(mutex);
+        table = std::move(cnch_table);
+    }
+
+    std::unique_lock lock(mutex);
+    is_stop = false;
+}
+
+template <typename LogElement>
+StoragePtr CnchSystemLog<LogElement>::createCloudMergeTreeInMemory(const StoragePtr & storage) const
+{
+    ContextPtr context = getContext();
+    StorageCnchMergeTree * cnch_storage = dynamic_cast<StorageCnchMergeTree *>(storage.get());
+    if (!cnch_storage)
+        throw Exception("The target storage has to be CnchMergeTree", ErrorCodes::LOGICAL_ERROR);
+
+    auto create_query = cnch_storage->getCreateQueryForCloudTable(cnch_storage->getCreateTableSql(), table_id.getTableName(), context, false);
+
+    const char * begin = create_query.data();
+    const char * end = create_query.data() + create_query.size();
+    ParserQueryWithOutput parser{end};
+    const auto & settings = getContext()->getSettingsRef();
+    ASTPtr ast_query = parseQuery(parser, begin, end, "CreateCloudTable", settings.max_query_size, settings.max_parser_depth);
+
+    auto & ast_create_query = ast_query->as<ASTCreateQuery &>();
+
+    ColumnsDescription columns = InterpreterCreateQuery::getColumnsDescription(*ast_create_query.columns_list->columns, context, /* attach= */ true);
+
+    ContextMutablePtr mutable_context = Context::createCopy(context);
+    StoragePtr res = StorageFactory::instance().get(ast_create_query, "", mutable_context, mutable_context->getGlobalContext(), columns, {}, false);
+    return res;
+}
+
 
 }

@@ -119,9 +119,6 @@ public:
     /** Get a list of column names separated by commas. */
     std::string dumpNames() const;
 
-    /** Get a list of column names followed by DataType. Designed for use in query strings */
-    std::string dumpForQuery() const;
-
     /** List of names, types and lengths of columns. Designed for debugging. */
     std::string dumpStructure() const;
 

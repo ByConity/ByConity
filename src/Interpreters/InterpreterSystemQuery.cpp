@@ -58,6 +58,9 @@
 #include <algorithm>
 #include <unistd.h>
 #include <Interpreters/QueryExchangeLog.h>
+#include <Interpreters/CnchSystemLog.h>
+#include <Interpreters/CnchQueryMetrics/QueryMetricLog.h>
+#include <Interpreters/CnchQueryMetrics/QueryWorkerMetricLog.h>
 
 #if !defined(ARCADIA_BUILD)
 #    include "config_core.h"
@@ -390,6 +393,13 @@ BlockIO InterpreterSystemQuery::execute()
             );
             break;
         }
+        case Type::FLUSH_CNCH_LOG:
+        case Type::STOP_CNCH_LOG:
+        case Type::RESUME_CNCH_LOG:
+        {
+            executeActionOnCNCHLog(query.table, query.type);
+            break;
+        }
         case Type::METASTORE:
             executeMetastoreCmd(query);
             break;
@@ -400,13 +410,14 @@ BlockIO InterpreterSystemQuery::execute()
             system_context->stopResourceGroup();
             break;
         default:
-            break;
+        {
+            if (getContext()->getServerType() == ServerType::cnch_server)
+                return executeCnchCommand(query, system_context);
+            return executeLocalCommand(query, system_context);
+        }
     }
 
-    if (getContext()->getServerType() == ServerType::cnch_server)
-        return executeCnchCommand(query, system_context);
-
-    return executeLocalCommand(query, system_context);
+    return BlockIO{};
 }
 
 BlockIO InterpreterSystemQuery::executeCnchCommand(ASTSystemQuery & query, ContextMutablePtr & system_context)
@@ -1270,4 +1281,50 @@ void InterpreterSystemQuery::fetchParts(const ASTSystemQuery & query, const Stor
 
 }
 
+namespace
+{
+
+template<typename T>
+void executeActionOnCNCHLogImpl(std::shared_ptr<T> cnch_log, ASTSystemQuery::Type type, const String & table_name , Poco::Logger * log)
+{
+    using Type = ASTSystemQuery::Type;
+    if (cnch_log)
+    {
+        switch(type)
+        {
+            case Type::FLUSH_CNCH_LOG:
+                cnch_log->flush(true);
+                LOG_INFO(log, "flush cnch log for {}", table_name);
+                break;
+            case Type::STOP_CNCH_LOG:
+                cnch_log->stop();
+                LOG_INFO(log, "stop cnch log for {}", table_name);
+                break;
+            case Type::RESUME_CNCH_LOG:
+                cnch_log->resume();
+                LOG_INFO(log, "resume cnch log for {}", table_name);
+                break;
+            default:
+                throw Exception("invalid action on log", ErrorCodes::LOGICAL_ERROR);
+        }
+    }
+}
+}
+
+void InterpreterSystemQuery::executeActionOnCNCHLog(const String & table_name, ASTSystemQuery::Type type)
+{
+    if (table_name == CNCH_SYSTEM_LOG_KAFKA_LOG_TABLE_NAME)
+        executeActionOnCNCHLogImpl(getContext()->getCloudKafkaLog(), type, table_name, log);
+    else if (table_name == CNCH_SYSTEM_LOG_QUERY_METRICS_TABLE_NAME)
+        executeActionOnCNCHLogImpl(getContext()->getQueryMetricsLog(), type, table_name, log);
+    else if (table_name == CNCH_SYSTEM_LOG_QUERY_WORKER_METRICS_TABLE_NAME)
+        executeActionOnCNCHLogImpl(getContext()->getQueryWorkerMetricsLog(), type, table_name, log);
+    else
+        throw Exception(ErrorCodes::BAD_ARGUMENTS,
+            "there is no log corresponding to table name {}, available names are {}, {}, {}",
+            table_name,
+            CNCH_SYSTEM_LOG_KAFKA_LOG_TABLE_NAME,
+            CNCH_SYSTEM_LOG_QUERY_METRICS_TABLE_NAME,
+            CNCH_SYSTEM_LOG_QUERY_WORKER_METRICS_TABLE_NAME);
+}
 }
