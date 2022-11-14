@@ -6,7 +6,6 @@
 #include <Common/ProfileEvents.h>
 #include <Common/CurrentMetrics.h>
 #include <common/logger_useful.h>
-#include "ServiceDiscovery/IServiceDiscovery.h"
 #include <mutex>
 
 namespace ProfileEvents
@@ -172,6 +171,51 @@ HostWithPortsVec ServiceDiscoveryDNS::lookup(const String & psm_name, ComponentT
 
     /// sequence by virtual part feature.
     std::sort(res.begin(), res.end(), [](const HostWithPorts &x, const HostWithPorts &y) { return (x.id < y.id);} );
+
+    return res;
+}
+
+/// Lookup zookeeper(tso) endpoints
+ServiceDiscoveryDNS::Endpoints ServiceDiscoveryDNS::lookupEndpoints(const String & psm_name)
+{
+    if (serviceMap.find(psm_name) == serviceMap.end())
+        throw Exception("psm not exist: " + psm_name, ErrorCodes::SD_PSM_NOT_EXISTS);
+
+    auto service_pair = serviceMap[psm_name];
+    Endpoints res;
+    auto client = std::make_shared<DNSClient>();
+
+    // conduct an A4 dns query.
+    auto hosts = resolveHost(client, service_pair.headlessServiceName);
+    // hosts size is 0 only when a4 domain does not exists.
+    // we can return empty result to user earlier.;
+    if(hosts.empty())
+    {
+        LOG_DEBUG(log, "lookupEndpoints " + psm_name + " returns empty result");
+        return {};
+    }
+
+    auto port1 = resolvePort(client, service_pair.serviceName, "PORT1");
+    auto port2 = resolvePort(client, service_pair.serviceName, "PORT2");
+
+    if (port1 <= 0 || port2 <= 0)
+    {
+        ProfileEvents::increment(ProfileEvents::SDRequestFailed);
+        throw Exception("lookupEndpoints [" + psm_name + "] returns invalid port value", ErrorCodes::SD_UPSTREAM_ISSUE);
+    }
+
+    for (auto & host : hosts)
+    {
+        String hostname = resolveHostname(client, host);
+        /// TODO: (zuochuang.zema) any other way to get customized tags based on DNS mode.
+        auto keeper_id = hostname.substr(hostname.length() - 1, 1);
+        res.emplace_back(ServiceEndpoint{host, 0, {}});
+
+        res.back().tags.emplace("id", keeper_id);
+        res.back().tags.emplace("PORT1", std::to_string(port1));
+        res.back().tags.emplace("PORT2", std::to_string(port2));
+        res.back().tags.emplace("hostname", hostname);
+    }
 
     return res;
 }
