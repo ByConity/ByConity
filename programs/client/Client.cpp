@@ -282,12 +282,14 @@ private:
         context->setQueryParameters(query_parameters);
 
         /// settings and limits could be specified in config file, but passed settings has higher priority
+        SettingsChanges config_settings;
         for (const auto & setting : context->getSettingsRef().allUnchanged())
         {
             const auto & name = setting.getName();
             if (config().has(name))
-                context->setSetting(name, config().getString(name));
+                config_settings.emplace_back(name, Settings::stringToValueUtil(name, config().getString(name)));
         }
+        context->applySettingsChanges(config_settings);
 
         /// Set path for format schema files
         if (config().has("format_schema_path"))
@@ -1671,14 +1673,16 @@ private:
         {
             if (const auto * set_query = parsed_query->as<ASTSetQuery>())
             {
+                SettingsChanges changes;
                 /// Save all changes in settings to avoid losing them if the connection is lost.
                 for (const auto & change : set_query->changes)
                 {
                     if (change.name == "profile")
                         current_profile = change.value.safeGet<String>();
                     else
-                        context->applySettingChange(change);
+                        changes.emplace_back(change);
                 }
+                context->applySettingsChanges(changes);
             }
 
             if (const auto * use_query = parsed_query->as<ASTUseQuery>())
@@ -2668,7 +2672,7 @@ public:
         }
 
         context->makeGlobalContext();
-        context->setSettings(cmd_settings);
+        context->applySettingsChanges(cmd_settings.changes());
 
         /// Copy settings-related program options to config.
         /// TODO: Is this code necessary?

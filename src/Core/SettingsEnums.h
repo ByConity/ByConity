@@ -187,12 +187,8 @@ struct SettingFieldDialectType
         SettingFieldDialectType(Traits::fromString(f.safeGet<const String &>())) {}
 
     SettingFieldDialectType& operator =(DialectType x) {
-        if (x != value) {
-            value = x;
-            changed = true;
-            pending = true;
-        }
-
+        value = x;
+        changed = true;
         return *this;
     }
     SettingFieldDialectType& operator =(const Field & f) {

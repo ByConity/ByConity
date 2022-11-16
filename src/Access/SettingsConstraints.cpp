@@ -209,8 +209,9 @@ bool SettingsConstraints::checkImpl(const Settings & current_settings, SettingCh
             return false;
     }
 
+    /* remove logic of checking if setting value is unchanged, as it will mess up dialect_type related logic*/
     Field current_value, new_value;
-    if (current_settings.tryGet(setting_name, current_value))
+    if ((setting_name == "allow_ddl" || setting_name == "readonly") && current_settings.tryGet(setting_name, current_value))
     {
         /// Setting isn't checked if value has not changed.
         if (change.value == current_value)
