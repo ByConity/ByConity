@@ -396,6 +396,15 @@ static String replaceCreateTableQuery(ContextPtr context, String & query, const 
             engine->arguments = std::make_shared<ASTExpressionList>();
             engine->arguments->children.push_back(std::make_shared<ASTIdentifier>(create_query.database));
             engine->arguments->children.push_back(std::make_shared<ASTIdentifier>(create_query.table));
+
+            /// set cnch uuid for CloudMergeTree to commit data on worker side
+            if (!storage->settings)
+            {
+                storage->set(storage->settings, std::make_shared<ASTSetQuery>());
+                storage->settings->is_standalone = false;
+            }
+            storage->settings->changes.push_back(SettingChange{"cnch_table_uuid",
+                                                Field(static_cast<String>(UUIDHelpers::UUIDToString(create_query.uuid)))});
         }
         else if (engine_name == "CnchKafka")
             engine->name = String(create_query.storage->engine->name).replace(0, strlen("Cnch"), "Cloud");
@@ -412,11 +421,6 @@ static String replaceCreateTableQuery(ContextPtr context, String & query, const 
 
     if (enable_staging_area)
     {
-        if (!storage->settings)
-        {
-            storage->set(storage->settings, std::make_shared<ASTSetQuery>());
-            storage->settings->is_standalone = false;
-        }
         storage->settings->changes.push_back(SettingChange{"cloud_enable_staging_area", Field(static_cast<UInt64>(1))});
     }
 

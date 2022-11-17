@@ -44,7 +44,9 @@ StorageCloudMergeTree::StorageCloudMergeTree(
     std::unique_ptr<MergeTreeSettings> settings_)
     : MergeTreeCloudData( // NOLINT
         table_id_,
-        relative_data_path_.empty() ? UUIDHelpers::UUIDToString(table_id_.uuid) : relative_data_path_,
+        relative_data_path_.empty()
+            ? (settings_->cnch_table_uuid.value.empty() ? UUIDHelpers::UUIDToString(table_id_.uuid) : settings_->cnch_table_uuid.value)
+            : relative_data_path_,
         metadata_,
         context_,
         date_column_name_,
@@ -53,7 +55,11 @@ StorageCloudMergeTree::StorageCloudMergeTree(
     , cnch_database_name(std::move(cnch_database_name_))
     , cnch_table_name(std::move(cnch_table_name_))
 {
-    relative_auxility_storage_path = fs::path("auxility_store") / UUIDHelpers::UUIDToString(table_id_.uuid) / "";
+    const String cnch_uuid = getSettings()->cnch_table_uuid.value;
+    if (cnch_uuid.empty())
+        relative_auxility_storage_path = fs::path("auxility_store") / UUIDHelpers::UUIDToString(table_id_.uuid) / "";
+    else
+        relative_auxility_storage_path = fs::path("auxility_store") / cnch_uuid / "";
 
     format_version = MERGE_TREE_CHCH_DATA_STORAGTE_VERSION;
 
