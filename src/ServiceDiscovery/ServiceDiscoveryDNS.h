@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <Poco/Logger.h>
 #include <mutex>
+#include <string>
 
 namespace DB
 {
@@ -51,6 +52,8 @@ class ServiceDiscoveryDNS : public IServiceDiscovery
 public:
     using DNSClient = dns::DNSResolver;
     using DNSClientPtr = std::shared_ptr<dns::DNSResolver>;
+    using Endpoint = cpputil::consul::ServiceEndpoint;
+    using Endpoints = std::vector<Endpoint>;
 
     ServiceDiscoveryDNS(const Poco::Util::AbstractConfiguration & config);
 
@@ -59,6 +62,7 @@ public:
     ServiceDiscoveryMode getType() const override { return ServiceDiscoveryMode::DNS; }
 
     HostWithPortsVec lookup(const String & psm_name, ComponentType type, const String & vw_name = "") override;
+    Endpoints lookupEndpoints(const String & psm_name) override;
 
     WorkerGroupMap lookupWorkerGroupsInVW(const String & psm, const String & vw_name) override;
 

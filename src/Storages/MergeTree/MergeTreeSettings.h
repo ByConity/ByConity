@@ -147,11 +147,11 @@ struct Settings;
     /** Minimal amount of bytes to enable O_DIRECT in merge (0 - disabled, "", 0) */                                 \
     M(UInt64, max_parallel_threads_for_bitmap, 16, "", 0) \
                                                                                                               \
-    /** If true, replicated tables would prefer to merge locally rather than                                  |
+    /** If true, replicated tables would prefer to merge locally rather than                                  |\
       * fetching of merged part from replica */                                                               \
     M(Bool, prefer_merge_than_fetch, false, "", 0) \
     M(Bool, heuristic_part_source_replica_lookup, true, "", 0) \
-    /** Using in ingest partition function. If true, we'll insert default when                                |
+    /** Using in ingest partition function. If true, we'll insert default when                                |\
       * the user have not provided values for some rows of a column */                                        \
     M(Bool, ingest_default_column_value_if_not_provided, true, "", 0) \
     M(Bool, enable_ingest_wide_part, false, "", 0) \
@@ -227,6 +227,9 @@ struct Settings;
     M(Bool, bitengine_use_key_string, false, "", 0) \
     M(Bool, bitengine_use_key_int, true, "", 0) \
     M(String, underlying_dictionary_tables, "{}", "", 0)  \
+    \
+    /** uuid of CnchMergeTree, as we won't use uuid in CloudMergeTree */ \
+    M(String, cnch_table_uuid, "", "Used for CloudMergeTree to get uuid of Cnch Table for ingestion task, like Kafka", 0) \
     \
     /// Settings that should not change after the creation of a table.
 #define APPLY_FOR_IMMUTABLE_MERGE_TREE_SETTINGS(M) \

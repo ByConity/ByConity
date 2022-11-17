@@ -40,6 +40,7 @@
 #include <Interpreters/ExternalLoaderXMLConfigRepository.h>
 #include <Core/Settings.h>
 #include <Core/SettingsQuirks.h>
+#include <Core/AnsiSettings.h>
 #include <Access/AccessControlManager.h>
 #include <Access/ContextAccess.h>
 #include <Access/Credentials.h>
@@ -234,6 +235,7 @@ namespace ErrorCodes
     extern const int RESOURCE_MANAGER_NO_LEADER_ELECTED;
     extern const int CNCH_SERVER_NOT_FOUND;
     extern const int NOT_A_LEADER;
+    extern const int INVALID_SETTING_VALUE;
 }
 
 /** Set of known objects (environment), that could be used in query.
@@ -1007,7 +1009,7 @@ void Context::setUser(const Credentials & credentials, const Poco::Net::SocketAd
     current_roles.clear();
     use_default_roles = true;
 
-    setSettings(*access->getDefaultSettings());
+    applySettingsChanges(access->getDefaultSettings()->changes());
 }
 
 void Context::setUser(const String & name, const String & password, const Poco::Net::SocketAddress & address)
@@ -1396,10 +1398,49 @@ void Context::applySettingChange(const SettingChange & change)
 void Context::applySettingsChanges(const SettingsChanges & changes)
 {
     auto lock = getLock();
+
+    // set ansi related settings first, as they may be overwritten explicitly later
+    std::optional<String> dialect_type_opt;
+    std::function<void(const SettingsChanges &)> find_dialect_type_if_any = [&](const SettingsChanges & setting_changes)
+    {
+        for (const auto & change: setting_changes)
+        {
+            if (change.name == "profile")
+            {
+                auto value_str = change.value.safeGet<String>();
+                find_dialect_type_if_any(*getAccessControlManager().getProfileSettings(value_str));
+            }
+
+            if (change.name == "dialect_type")
+            {
+                auto value_str = change.value.safeGet<String>();
+
+                if (!dialect_type_opt)
+                    dialect_type_opt = value_str;
+                else if (*dialect_type_opt != value_str)
+                    throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Multiple dialect_type value found");
+            }
+        }
+    };
+
+    find_dialect_type_if_any(changes);
+
+    // skip if a previous setting change is in process
+    bool apply_ansi_related_settings = dialect_type_opt && !settings.dialect_type.pending;
+
+    if (apply_ansi_related_settings)
+    {
+        setSetting("dialect_type", *dialect_type_opt);
+        ANSI::onSettingChanged(&settings);
+        settings.dialect_type.pending = true;
+    }
+
     for (const SettingChange & change : changes)
         applySettingChange(change);
     applySettingsQuirks(settings);
-    ANSI::onSettingChanged(&settings);
+
+    if (apply_ansi_related_settings)
+        settings.dialect_type.pending = false;
 }
 
 

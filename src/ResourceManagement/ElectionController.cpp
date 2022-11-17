@@ -43,7 +43,9 @@ ElectionController::~ElectionController()
 
 void ElectionController::onLeader()
 {
-    auto current_address = getContext()->getHostWithPorts().getRPCAddress();
+    auto port = getContext()->getRootConfig().resource_manager.port.value;
+    const std::string & rm_host = getHostIPFromEnv();
+    auto current_address = createHostPortString(rm_host, port);
     LOG_INFO(log, "Starting leader callback for " + current_address);
 
     /// Sleep to prevent multiple leaders from appearing at the same time
@@ -76,7 +78,9 @@ void ElectionController::enterLeaderElection()
 {
     try
     {
-        auto current_address = getContext()->getHostWithPorts().getRPCAddress();
+        auto port = getContext()->getRootConfig().resource_manager.port.value;
+        const std::string & rm_host = getHostIPFromEnv();
+        auto current_address = createHostPortString(rm_host, port);
         auto election_path = getContext()->getRootConfig().resource_manager.election_path.value;
 
         current_zookeeper = getContext()->getZooKeeper();
