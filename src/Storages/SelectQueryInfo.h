@@ -6,7 +6,6 @@
 #include <Core/Names.h>
 #include <Storages/ProjectionsDescription.h>
 #include <Interpreters/AggregateDescription.h>
-#include <Interpreters/BitMapIndexHelper.h>
 #include <Interpreters/Context_fwd.h>
 #include <memory>
 
@@ -53,7 +52,6 @@ struct PrewhereInfo
     String prewhere_column_name;
     bool remove_prewhere_column = false;
     bool need_filter = false;
-    bool has_bitmap_index = false;
 
     PrewhereInfo() = default;
     explicit PrewhereInfo(ActionsDAGPtr prewhere_actions_, String prewhere_column_name_)
@@ -153,8 +151,6 @@ struct SelectQueryInfo
     ReadInOrderOptimizerPtr order_optimizer;
     /// Can be modified while reading from storage
     InputOrderInfoPtr input_order_info;
-
-    BitMapIndexInfoPtr bitmap_index_info;
 
     /// Prepared sets are used for indices by storage engine.
     /// Example: x IN (1, 2, 3)

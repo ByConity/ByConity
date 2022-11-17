@@ -9,7 +9,6 @@
 #include <Storages/MergeTree/MergeTreeIndexReader.h>
 #include <Storages/MergeTree/KeyCondition.h>
 #include <Storages/MergeTree/MergeTreeDataPartUUID.h>
-#include <Storages/MergeTree/MergeTreeBitmapIndex.h>
 #include <Storages/ReadInOrderOptimizer.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
@@ -806,84 +805,6 @@ DataTypes MergeTreeDataSelectExecutor::get_set_element_types(const NamesAndTypes
     return set_element_types;
 }
 
-bool MergeTreeDataSelectExecutor::extractBitmapIndexImpl
-    (
-        const SelectQueryInfo&    queryInfo,
-        const ASTPtr&             expr,
-        const MergeTreeMetaBase&  data_,
-        std::map<String, SetPtr>& bitmap_index_map
-    )
-{
-    bool ref = false;
-    if (!expr) return false;
-
-    if (const ASTFunction * function = typeid_cast<const ASTFunction *>(expr.get()))
-    {
-        if (function->name == "and")
-        {
-            for (auto& c : function->arguments->children)
-            {
-                ref |= extractBitmapIndexImpl(queryInfo, c, data_, bitmap_index_map);
-            }
-        }
-        else if (function->name == "in" || function->name == "equals")
-        {
-            String column_name = function->arguments->children[0]->getColumnName();
-            if (!data_.getInMemoryMetadata().getColumns().has(column_name))
-                return false;
-            try
-            {
-                auto column_info = data_.getInMemoryMetadata().getColumns().get(column_name);
-                if (MergeTreeBitmapIndex::isMarkBitmapIndexColumn(column_info.type))
-                {
-                    auto left_arg = function->arguments->children.front().get();
-                    auto right_arg = function->arguments->children.back().get();
-                    if (!left_arg->as<ASTIdentifier>() || right_arg->as<ASTIdentifier>())
-                        throw Exception("Invalid arguments of function " + function->name, ErrorCodes::LOGICAL_ERROR);
-
-                    NamesAndTypesList source_columns = queryInfo.syntax_analyzer_result->source_columns;
-                    String left_arg_column_name = left_arg->getColumnName();
-                    DataTypes set_element_types = get_set_element_types(source_columns, left_arg_column_name);
-                    auto set_key = PreparedSetKey::forLiteral(*right_arg, set_element_types);
-
-                    auto it = queryInfo.sets.find(set_key);
-                    if (it != queryInfo.sets.end())
-                    {
-                        bitmap_index_map[column_info.name] = it->second;
-                        ref = true;
-                    }
-                }
-            }
-            catch(...)
-            {
-                // do nothing if column_name not exist in part
-            }
-        }
-    }
-
-
-    return ref;
-}
-
-bool MergeTreeDataSelectExecutor::extractBitmapIndex(const SelectQueryInfo & queryInfo,
-                        const MergeTreeMetaBase & data_,
-                        std::map<String, SetPtr> & bitmap_index_map)
-{
-    bool ref = false;
-    const ASTSelectQuery & select = typeid_cast<const ASTSelectQuery&>(*queryInfo.query);
-
-    ref |= extractBitmapIndexImpl(queryInfo,
-                                  select.where(),
-                                  data_,
-                                  bitmap_index_map);
-
-    ref |= extractBitmapIndexImpl(queryInfo,
-                                  select.prewhere(),
-                                  data_,
-                                  bitmap_index_map);
-    return ref;
-}
-
 RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipIndexes(
     MergeTreeMetaBase::DataPartsVector && parts,
     StorageMetadataPtr metadata_snapshot,
@@ -895,19 +816,12 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
     size_t num_streams,
     ReadFromMergeTree::IndexStats & index_stats,
     bool use_skip_indexes,
-    const MergeTreeMetaBase & data_,
+    const MergeTreeMetaBase & /*data_*/,
     bool use_sampling,
     RelativeSize relative_sample_size)
 {
     RangesInDataParts parts_with_ranges(parts.size());
     const Settings & settings = context->getSettingsRef();
-
-    bool enable_mark_bitmap_index = settings.enable_mark_bitmap_index;
-    std::map<String, SetPtr> bitmap_index_map;
-
-    /// extract BitmapIndex
-    if (enable_mark_bitmap_index)
-        extractBitmapIndex(query_info, data_, bitmap_index_map);
 
     /// Let's start analyzing all useful indices
 
@@ -1439,8 +1353,7 @@ QueryPlanPtr MergeTreeDataSelectExecutor::readFromParts(
         sample_factor_column_queried,
         map_column_keys_column_queried,
         max_block_numbers_to_read,
-        log,
-        query_info.bitmap_index_info
+        log
     );
 
     QueryPlanPtr plan = std::make_unique<QueryPlan>();

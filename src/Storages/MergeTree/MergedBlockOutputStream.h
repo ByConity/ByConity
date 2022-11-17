@@ -15,8 +15,6 @@ class MergedBlockOutputStream final : public IMergedBlockOutputStream
 public:
     struct WriteSettings
     {
-        bool enable_build_ab_index = true;
-        bool enable_build_index_in_alter = false;
         bool only_recode = false;
         bool bitengine_encode_without_lock = false;
     };

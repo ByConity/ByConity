@@ -13,7 +13,6 @@
 #include <Storages/DiskCache/DiskCacheSegment.h>
 #include <Storages/MergeTree/IMergeTreeReader.h>
 #include <Storages/MergeTree/MergeTreeDataPartWide.h>
-#include <Storages/MergeTree/MergeTreeBitMapIndexReader.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <Storages/MergeTree/MergeTreeReaderStreamWithSegmentCache.h>
 #include <bits/types/clockid_t.h>
@@ -60,13 +59,12 @@ MergeTreeReaderCNCH::MergeTreeReaderCNCH(
     MarkCache * mark_cache_,
     const MarkRanges & mark_ranges_,
     const MergeTreeReaderSettings & settings_,
-    MergeTreeBitMapIndexReader * bitmap_index_reader_,
     const ValueSizeMap & avg_value_size_hints_,
     const ReadBufferFromFileBase::ProfileCallback & profile_callback_,
     clockid_t clock_type_)
     : IMergeTreeReader(
         data_part_, columns_, metadata_snapshot_, uncompressed_cache_,
-        mark_cache_, mark_ranges_, settings_, avg_value_size_hints_, bitmap_index_reader_)
+        mark_cache_, mark_ranges_, settings_, avg_value_size_hints_)
     , log(&Poco::Logger::get("MergeTreeReaderCNCH(" + data_part_->get_name() + ")"))
 
 {
@@ -185,25 +183,6 @@ size_t MergeTreeReaderCNCH::readRows(size_t from_mark, bool continue_reading, si
         /// NOTE: positions for all streams must be kept in sync.
         /// In particular, even if for some streams there are no rows to be read,
         /// you must ensure that no seeks are skipped and at this point they all point to to_mark.
-
-        if (bitmap_index_reader && bitmap_index_reader->validIndexReader())
-        {
-            size_t bitmap_rows_read = bitmap_index_reader->read(from_mark, continue_reading, max_rows_to_read, res_columns);
-#ifndef NDEBUG
-            String output_names;
-            for (const auto & output_name: bitmap_index_reader->getOutputColumnNames())
-                output_names += " " + output_name;
-            LOG_TRACE(log, "read bitmap index file: {} for part: {}", output_names, this->data_part->name);
-#endif
-            // If there is only bitmap_index columns, rows_read may be zero.
-            if (read_rows == 0)
-                read_rows = bitmap_rows_read;
-
-            if (read_rows != bitmap_rows_read)
-            {
-                throw Exception("Mismatch rows read from bitmap_index_reader: " + toString(read_rows) + " : " + toString(bitmap_rows_read), ErrorCodes::LOGICAL_ERROR);
-            }
-        }
     }
     catch (Exception & e)
     {

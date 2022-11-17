@@ -49,16 +49,9 @@ BloomFilterV2::BloomFilterV2(size_t size, size_t default_hashes)
     init(size, default_hashes);
 }
 
-bool isBloomFilterEnabled(const NameAndTypePair & ntp)
+bool isBloomFilterEnabled(const NameAndTypePair &)
 {
-    // FIXME: bloom filter knob should be marked somewhere, e.g. in DataType
-    //if (ntp.name == "ab_version" &&
-    //        typeid_cast<const DataTypeArray *>(ntp.type.get()))
-    //{
-    //    return true;
-    //}
-    //return false;
-    return ntp.type->isBloomSet();
+    return false;
 }
 
 void interpreterSetAsIndexes(const Set & set, std::vector<std::vector<size_t>> & res, size_t numSlot, size_t numHash)

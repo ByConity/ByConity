@@ -1,7 +1,6 @@
 #include <Storages/MergeTree/MergeTreeSelectProcessor.h>
 #include <Storages/MergeTree/MergeTreeBaseSelectProcessor.h>
 #include <Storages/MergeTree/IMergeTreeReader.h>
-#include <Storages/MergeTree/MergeTreeBitMapIndexReader.h>
 #include <Interpreters/Context.h>
 
 
@@ -25,7 +24,6 @@ MergeTreeSelectProcessor::MergeTreeSelectProcessor(
     MarkRanges mark_ranges_,
     bool use_uncompressed_cache_,
     const PrewhereInfoPtr & prewhere_info_,
-    const BitMapIndexInfoPtr & bitmap_index_info_,
     ExpressionActionsSettings actions_settings,
     bool check_columns_,
     const MergeTreeReaderSettings & reader_settings_,
@@ -43,7 +41,6 @@ MergeTreeSelectProcessor::MergeTreeSelectProcessor(
     delete_bitmap{std::move(delete_bitmap_)},
     all_mark_ranges(std::move(mark_ranges_)),
     part_index_in_query(part_index_in_query_),
-    bitmap_index_info(bitmap_index_info_),
     check_columns(check_columns_)
 {
     /// Let's estimate total number of rows for progress bar.
@@ -102,20 +99,13 @@ try
 
         if (prewhere_info)
         {
-            bitmap_index_reader = BitMapIndexHelper::getBitMapIndexReader(data_part->getFullPath(), bitmap_index_info, data_part->index_granularity, task->mark_ranges);
-            // current bitmap index only support in wide format
-            if (prewhere_info->has_bitmap_index && data_part->getType() == MergeTreeDataPartType::Value::WIDE)
-            {
-                prepareForBitMapIndexFunctions(bitmap_index_info, task_columns.pre_columns, task_columns.columns);
-            }
             pre_reader = data_part->getReader(
                 task_columns.pre_columns,
                 metadata_snapshot,
                 all_mark_ranges,
                 owned_uncompressed_cache.get(),
                 owned_mark_cache.get(),
-                reader_settings,
-                bitmap_index_reader.get());
+                reader_settings);
         }
     }
 

@@ -36,11 +36,6 @@ namespace DB
 class AlterCommands;
 class MergeTreePartsMover;
 class Context;
-class BitmapTracker;
-class MergeTreeBitmapIndex;
-class MergeTreeMarkBitmapIndex;
-using MergeTreeBitmapIndexPtr = std::shared_ptr<MergeTreeBitmapIndex>;
-using MergeTreeMarkBitmapIndexPtr = std::shared_ptr<MergeTreeMarkBitmapIndex>;
 
 struct JobAndPool;
 class DiskUniqueKeyIndexCache;
@@ -124,9 +119,6 @@ public:
     using DataParts = std::set<DataPartPtr, LessDataPart>;
     using DataPartsVector = std::vector<DataPartPtr>;
 
-    MergeTreeBitmapIndexPtr getMergeTreeBitmapIndex() const { return bitmap_index; }
-    MergeTreeMarkBitmapIndexPtr getMergeTreeMarkBitmapIndex() const { return mark_bitmap_index; }
-    void addPartForBackgroundTask(const DataPartPtr & part, const Context & context_, bool without_recode = false);
     bool supportsMapImplicitColumn() const override { return true; }
 
     /// Auxiliary object to add a set of parts into the working set in two steps:
@@ -595,12 +587,6 @@ protected:
     friend class StorageReplicatedMergeTree;
     friend class MergeTreeDataWriter;
     friend class BitEngineDictionaryManager;
-
-    // manage all bitmap index related task
-    MergeTreeBitmapIndexPtr bitmap_index;
-
-    // manage all mark bitmap index related task
-    MergeTreeMarkBitmapIndexPtr mark_bitmap_index;
 
     MergeTreePartsMover parts_mover;
 

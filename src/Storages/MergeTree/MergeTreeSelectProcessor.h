@@ -28,7 +28,6 @@ public:
         MarkRanges mark_ranges,
         bool use_uncompressed_cache,
         const PrewhereInfoPtr & prewhere_info,
-        const BitMapIndexInfoPtr & bitmap_index_info,
         ExpressionActionsSettings actions_settings,
         bool check_columns,
         const MergeTreeReaderSettings & reader_settings,
@@ -67,8 +66,6 @@ private:
     size_t total_marks_count = 0;
     /// Value of _part_index virtual column (used only in SelectExecutor)
     size_t part_index_in_query = 0;
-
-    const BitMapIndexInfoPtr bitmap_index_info;
 
     bool check_columns;
     bool is_first_task = true;

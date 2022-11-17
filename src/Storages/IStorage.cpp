@@ -273,19 +273,6 @@ UInt64 IStorage::getPartColumnsCommitTime(const NamesAndTypesList &search_part_c
     return 0;
 }
 
-void IStorage::checkHasCompressedAndBloomColumns(bool & has_compressed, bool & has_bitmap) const
-{
-    has_compressed = false;
-    has_bitmap = false;
-
-    for (auto name_and_type : getInMemoryMetadata().getColumns().getAllPhysical())
-    {
-        has_compressed |= name_and_type.type->isCompression();
-        has_bitmap |= name_and_type.type->isBloomSet();
-        has_bitmap |= name_and_type.type->isBitmapIndex();
-    }
-}
-
 std::string PrewhereInfo::dump() const
 {
     WriteBufferFromOwnString ss;

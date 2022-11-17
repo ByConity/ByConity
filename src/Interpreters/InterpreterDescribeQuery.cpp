@@ -98,7 +98,7 @@ BlockInputStreamPtr InterpreterDescribeQuery::executeImpl()
         size_t i = 0;
         res_columns[i++]->insert(column.name);
         res_columns[i++]->insert(column.type->getName());
-        res_columns[i++]->insert(/*String(column.type->isBloomSet() || column.type->isBitmapIndex()? "B" : "") +*/ String(column.type->isMapKVStore() ? "K" : ""));
+        res_columns[i++]->insert(String(column.type->isMapKVStore() ? "K" : ""));
 
 
         if (column.default_desc.expression)

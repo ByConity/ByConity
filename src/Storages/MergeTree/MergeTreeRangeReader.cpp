@@ -530,8 +530,7 @@ MergeTreeRangeReader::MergeTreeRangeReader(
     MergeTreeRangeReader * prev_reader_,
     const PrewhereExprInfo * prewhere_info_,
     ImmutableDeleteBitmapPtr delete_bitmap_,
-    bool last_reader_in_chain_,
-    bool has_bitmap_index_)
+    bool last_reader_in_chain_)
     : merge_tree_reader(merge_tree_reader_)
     , index_granularity(&(merge_tree_reader->data_part->index_granularity))
     , prev_reader(prev_reader_)
@@ -539,7 +538,6 @@ MergeTreeRangeReader::MergeTreeRangeReader(
     , delete_bitmap(delete_bitmap_)
     , last_reader_in_chain(last_reader_in_chain_)
     , is_initialized(true)
-    , has_bitmap_index(has_bitmap_index_)
 {
     if (prev_reader)
         sample_block = prev_reader->getSampleBlock();
@@ -561,7 +559,7 @@ MergeTreeRangeReader::MergeTreeRangeReader(
         size_t rows = sample_block.rows();
         if (prewhere_info->prewhere_actions)
             prewhere_info->prewhere_actions->execute(sample_block, rows, true);
-        if (!sample_block && !has_bitmap_index)
+        if (!sample_block)
             sample_block.insert({DataTypeUInt8().createColumnConst(rows, 0), std::make_shared<DataTypeUInt8>(), "_dummy"});
 
         if (prewhere_info->remove_prewhere_column)
@@ -684,7 +682,7 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::read(size_t max_rows, Mar
             /// We must filter block before adding columns to read_result.block
 
             /// Fill missing columns before filtering because some arrays from Nested may have empty data.
-            merge_tree_reader->fillMissingColumns(columns, should_evaluate_missing_defaults, num_read_rows, !has_bitmap_index);
+            merge_tree_reader->fillMissingColumns(columns, should_evaluate_missing_defaults, num_read_rows);
 
             if (read_result.getFilter())
                 filterColumns(columns, read_result.getFilter()->getData());
@@ -696,7 +694,7 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::read(size_t max_rows, Mar
             /// If block is empty, we still may need to add missing columns.
             /// In that case use number of rows in result block and don't filter block.
             if (num_rows)
-                merge_tree_reader->fillMissingColumns(columns, should_evaluate_missing_defaults, num_rows, !has_bitmap_index);
+                merge_tree_reader->fillMissingColumns(columns, should_evaluate_missing_defaults, num_rows);
         }
 
         if (!columns.empty())
@@ -727,7 +725,7 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::read(size_t max_rows, Mar
                 merge_tree_reader->evaluateMissingDefaults(block, columns);
             }
             /// If columns not empty, then apply on-fly alter conversions if any required
-            merge_tree_reader->performRequiredConversions(columns, !has_bitmap_index);
+            merge_tree_reader->performRequiredConversions(columns);
         }
 
         read_result.columns.reserve(read_result.columns.size() + columns.size());
@@ -743,14 +741,14 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::read(size_t max_rows, Mar
         {
             bool should_evaluate_missing_defaults;
             merge_tree_reader->fillMissingColumns(read_result.columns, should_evaluate_missing_defaults,
-                                                  read_result.num_rows, !has_bitmap_index);
+                                                  read_result.num_rows);
 
             /// If some columns absent in part, then evaluate default values
             if (should_evaluate_missing_defaults)
                 merge_tree_reader->evaluateMissingDefaults({}, read_result.columns);
 
             /// If result not empty, then apply on-fly alter conversions if any required
-            merge_tree_reader->performRequiredConversions(read_result.columns, !has_bitmap_index);
+            merge_tree_reader->performRequiredConversions(read_result.columns);
         }
         else
             read_result.columns.clear();
@@ -1055,7 +1053,7 @@ void MergeTreeRangeReader::executePrewhereActionsAndFilterColumns(ReadResult & r
     const auto & header = merge_tree_reader->getColumns();
     size_t num_columns = header.size();
 
-    if (!prewhere_info->has_bitmap_index && (result.columns.size() != num_columns))
+    if ((result.columns.size() != num_columns))
         throw Exception("Invalid number of columns passed to MergeTreeRangeReader. "
                         "Expected " + toString(num_columns) + ", "
                         "got " + toString(result.columns.size()), ErrorCodes::LOGICAL_ERROR);
@@ -1116,16 +1114,7 @@ void MergeTreeRangeReader::executePrewhereActionsAndFilterColumns(ReadResult & r
                 block.setColumns(columns);
         }
 
-        // prewhere is arraySetCheck
-        if (prewhere_info->has_bitmap_index && (pos == result.columns.size() - 1))
-        {
-            block.insert({result.columns[pos], DataTypeFactory::instance().get(getTypeName(result.columns[pos]->getDataType())), prewhere_info->prewhere_column_name});
-            ++pos;
-        }
-        else
-        {
-            prewhere_info->prewhere_actions->execute(block);
-        }
+        prewhere_info->prewhere_actions->execute(block);
 
         prewhere_column_pos = block.getPositionByName(prewhere_info->prewhere_column_name);
 

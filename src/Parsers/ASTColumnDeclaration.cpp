@@ -80,21 +80,6 @@ void ASTColumnDeclaration::formatImpl(const FormatSettings & settings, FormatSta
         settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "") << "COMPRESSION"  << (settings.hilite ? hilite_none : "");
     }
 
-    if (flags & TYPE_BLOOM_FLAG)
-    {
-        settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "") << "BLOOM"  << (settings.hilite ? hilite_none : "");
-    }
-
-    if (flags & TYPE_BITMAP_INDEX_FLAG)
-    {
-        settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "") << "BitmapIndex"  << (settings.hilite ? hilite_none : "");
-    }
-
-    if (flags & TYPE_MARK_BITMAP_INDEX_FALG)
-    {
-        settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "") << "MarkBitmapIndex"  << (settings.hilite ? hilite_none : "");
-    }
-
     if (flags & TYPE_SECURITY_FLAG)
     {
         settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "") << "SECURITY"  << (settings.hilite ? hilite_none : "");

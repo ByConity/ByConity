@@ -208,16 +208,6 @@ Names IDataType::getSpecialColumnFiles(const String & prefix, bool throw_excepti
 {
     Names files;
 
-    if (isBloomSet())
-    {
-        files.push_back(prefix + BLOOM_FILTER_FILE_EXTENSION);
-        files.push_back(prefix + RANGE_BLOOM_FILTER_FILE_EXTENSION);
-    }
-    if (isBitmapIndex() || isBloomSet())
-    {
-        files.push_back(prefix + AB_IDX_EXTENSION);
-        files.push_back(prefix + AB_IRK_EXTENSION);
-    }
     if (isCompression())
     {
         files.push_back(prefix + COMPRESSION_DATA_FILE_EXTENSION);

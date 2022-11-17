@@ -1,7 +1,6 @@
 #include <Storages/MergeTree/IMergeTreeReader.h>
 #include <Storages/MergeTree/MergeTreeReadPool.h>
 #include <Storages/MergeTree/MergeTreeThreadSelectBlockInputProcessor.h>
-#include <Storages/MergeTree/MergeTreeBitMapIndexReader.h>
 #include <Interpreters/Context.h>
 
 namespace DB
@@ -18,7 +17,6 @@ MergeTreeThreadSelectBlockInputProcessor::MergeTreeThreadSelectBlockInputProcess
     const StorageMetadataPtr & metadata_snapshot_,
     const bool use_uncompressed_cache_,
     const PrewhereInfoPtr & prewhere_info_,
-    const BitMapIndexInfoPtr & bitmap_index_info_,
     ExpressionActionsSettings actions_settings,
     const MergeTreeReaderSettings & reader_settings_,
     const Names & virt_column_names_)
@@ -28,8 +26,7 @@ MergeTreeThreadSelectBlockInputProcessor::MergeTreeThreadSelectBlockInputProcess
         preferred_block_size_bytes_, preferred_max_column_in_block_size_bytes_,
         reader_settings_, use_uncompressed_cache_, virt_column_names_},
     thread{thread_},
-    pool{pool_},
-    bitmap_index_info{bitmap_index_info_}
+    pool{pool_}
 {
     /// round min_marks_to_read up to nearest multiple of block_size expressed in marks
     /// If granularity is adaptive it doesn't make sense
@@ -59,7 +56,6 @@ bool MergeTreeThreadSelectBlockInputProcessor::getNewTask()
           */
         reader.reset();
         pre_reader.reset();
-        bitmap_index_reader.reset();
         return false;
     }
 
@@ -84,17 +80,11 @@ bool MergeTreeThreadSelectBlockInputProcessor::getNewTask()
         owned_mark_cache = storage.getContext()->getMarkCache();
 
         reader = task->data_part->getReader(task->columns, metadata_snapshot, rest_mark_ranges,
-            owned_uncompressed_cache.get(), owned_mark_cache.get(), reader_settings, prewhere_info ? nullptr : bitmap_index_reader.get(),
+            owned_uncompressed_cache.get(), owned_mark_cache.get(), reader_settings,
             IMergeTreeReader::ValueSizeMap{},  profile_callback);
 
         if (prewhere_info)
         {
-            bitmap_index_reader = BitMapIndexHelper::getBitMapIndexReader(task->data_part->getFullPath(), bitmap_index_info, task->data_part->index_granularity, task->mark_ranges);
-            // current bitmap index only support in wide format
-            if (prewhere_info->has_bitmap_index && task->data_part->getType() == MergeTreeDataPartType::Value::WIDE)
-            {
-                prepareForBitMapIndexFunctions(bitmap_index_info, task->pre_columns, task->columns);
-            }
             pre_reader = task->data_part->getReader(
                 task->pre_columns,
                 metadata_snapshot,
@@ -102,7 +92,6 @@ bool MergeTreeThreadSelectBlockInputProcessor::getNewTask()
                 owned_uncompressed_cache.get(),
                 owned_mark_cache.get(),
                 reader_settings,
-                bitmap_index_reader.get(),
                 IMergeTreeReader::ValueSizeMap{},
                 profile_callback);
         }
@@ -121,14 +110,11 @@ bool MergeTreeThreadSelectBlockInputProcessor::getNewTask()
                 owned_uncompressed_cache.get(),
                 owned_mark_cache.get(),
                 reader_settings,
-                nullptr,
                 reader->getAvgValueSizeHints(),
                 profile_callback);
 
             if (prewhere_info)
             {
-                bitmap_index_reader
-                    = BitMapIndexHelper::getBitMapIndexReader(task->data_part->getFullPath(), bitmap_index_info, task->data_part->index_granularity, task->mark_ranges);
                 pre_reader = task->data_part->getReader(
                     task->pre_columns,
                     metadata_snapshot,
@@ -136,7 +122,6 @@ bool MergeTreeThreadSelectBlockInputProcessor::getNewTask()
                     owned_uncompressed_cache.get(),
                     owned_mark_cache.get(),
                     reader_settings,
-                    bitmap_index_reader.get(),
                     reader->getAvgValueSizeHints(),
                     profile_callback);
             }
