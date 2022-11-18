@@ -5,6 +5,7 @@
 #include <IO/WriteBufferFromString.h>
 #include <IO/Operators.h>
 #include <Common/Exception.h>
+#include <common/getFQDNOrHostName.h>
 
 namespace DB
 {
@@ -41,7 +42,7 @@ const std::string & getHostIPFromEnv()
                 return my_ipv4;
         }
 
-        return std::string{};
+        return getIPOrFQDNOrHostName();
     };
 
     static std::string host_ip = get_host_ip_lambda();
