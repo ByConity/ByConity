@@ -12,6 +12,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int MULTIPLE_STREAMS_REQUIRED;
+    extern const int UNEXPECTED_DATA_AFTER_PARSED_VALUE;
     extern const int NOT_IMPLEMENTED;
 }
 
@@ -225,4 +226,17 @@ void ISerialization::deserializeMemComparable(IColumn &, ReadBuffer &) const
 {
     throw Exception("Serialization type doesn't support mem-comparable encoding", ErrorCodes::NOT_IMPLEMENTED);
 }
+
+void ISerialization::throwUnexpectedDataAfterParsedValue(IColumn & column, ReadBuffer & istr, const FormatSettings & settings, const String & type_name) const
+{
+    WriteBufferFromOwnString ostr;
+    serializeText(column, column.size() - 1, ostr, settings);
+    throw Exception(
+        ErrorCodes::UNEXPECTED_DATA_AFTER_PARSED_VALUE,
+        "Unexpected data '{}' after parsed {} value '{}'",
+        std::string(istr.position(), std::min(size_t(10), istr.available())),
+        type_name,
+        ostr.str());
+}
+
 }

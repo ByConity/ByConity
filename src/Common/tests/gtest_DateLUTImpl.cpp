@@ -79,8 +79,13 @@ FailuresCount countFailures(const ::testing::TestResult & test_result)
 TEST(DateLUTTest, makeDayNumTest)
 {
     const DateLUTImpl & lut = DateLUT::instance("UTC");
-    EXPECT_EQ(0, lut.makeDayNum(2500, 12, 25));
-    EXPECT_EQ(0, lut.makeDayNum(1924, 12, 31));
+    EXPECT_EQ(0, lut.makeDayNum(1899, 12, 31));
+    EXPECT_EQ(-1, lut.makeDayNum(1899, 12, 31, -1));
+    EXPECT_EQ(-25567, lut.makeDayNum(1900, 1, 1));
+    EXPECT_EQ(-16436, lut.makeDayNum(1925, 1, 1));
+    EXPECT_EQ(0, lut.makeDayNum(1970, 1, 1));
+    EXPECT_EQ(120529, lut.makeDayNum(2300, 12, 31));
+    EXPECT_EQ(120529, lut.makeDayNum(2500, 12, 25));
 }
 
 
@@ -115,7 +120,7 @@ TEST(DateLUTTest, TimeValuesInMiddleOfRange)
     EXPECT_EQ(lut.toSecond(time), 11 /*unsigned*/);
     EXPECT_EQ(lut.toMinute(time), 20 /*unsigned*/);
     EXPECT_EQ(lut.toStartOfMinute(time), 1568650800 /*time_t*/);
-    EXPECT_EQ(lut.toStartOfFiveMinute(time), 1568650800 /*time_t*/);
+    EXPECT_EQ(lut.toStartOfFiveMinutes(time), 1568650800 /*time_t*/);
     EXPECT_EQ(lut.toStartOfFifteenMinutes(time), 1568650500 /*time_t*/);
     EXPECT_EQ(lut.toStartOfTenMinutes(time), 1568650800 /*time_t*/);
     EXPECT_EQ(lut.toStartOfHour(time), 1568649600 /*time_t*/);
@@ -175,7 +180,7 @@ TEST(DateLUTTest, TimeValuesAtLeftBoderOfRange)
     EXPECT_EQ(lut.toSecond(time), 0 /*unsigned*/);
     EXPECT_EQ(lut.toMinute(time), 0 /*unsigned*/);
     EXPECT_EQ(lut.toStartOfMinute(time), 0 /*time_t*/);
-    EXPECT_EQ(lut.toStartOfFiveMinute(time), 0 /*time_t*/);
+    EXPECT_EQ(lut.toStartOfFiveMinutes(time), 0 /*time_t*/);
     EXPECT_EQ(lut.toStartOfFifteenMinutes(time), 0 /*time_t*/);
     EXPECT_EQ(lut.toStartOfTenMinutes(time), 0 /*time_t*/);
     EXPECT_EQ(lut.toStartOfHour(time), 0 /*time_t*/);
@@ -236,7 +241,7 @@ TEST(DateLUTTest, TimeValuesAtRightBoderOfRangeOfOldLUT)
     EXPECT_EQ(lut.toMinute(time), 17 /*unsigned*/);
     EXPECT_EQ(lut.toSecond(time), 53 /*unsigned*/);
     EXPECT_EQ(lut.toStartOfMinute(time), 4294343820 /*time_t*/);
-    EXPECT_EQ(lut.toStartOfFiveMinute(time), 4294343700 /*time_t*/);
+    EXPECT_EQ(lut.toStartOfFiveMinutes(time), 4294343700 /*time_t*/);
     EXPECT_EQ(lut.toStartOfFifteenMinutes(time), 4294343700 /*time_t*/);
     EXPECT_EQ(lut.toStartOfTenMinutes(time), 4294343400 /*time_t*/);
     EXPECT_EQ(lut.toStartOfHour(time), 4294342800 /*time_t*/);

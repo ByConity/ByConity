@@ -1081,12 +1081,12 @@ public:
         const DataTypeTuple * right_tuple = checkAndGetDataType<DataTypeTuple>(arguments[1].get());
 
         bool both_represented_by_number = arguments[0]->isValueRepresentedByNumber() && arguments[1]->isValueRepresentedByNumber();
-        bool has_date = left.isDate() || right.isDate();
+        bool has_date = left.isDateOrDate32() || right.isDateOrDate32();
 
         if (!((both_represented_by_number && !has_date)   /// Do not allow to compare date and number.
             || (left.isStringOrFixedString() || right.isStringOrFixedString())  /// Everything can be compared with string by conversion.
             /// You can compare the date, datetime, or datatime64 and an enumeration with a constant string.
-            || ((left.isDate() || left.isDateTime() || left.isDateTime64()) && (right.isDate() || right.isDateTime() || right.isDateTime64()) && left.idx == right.idx) /// only date vs date, or datetime vs datetime
+            || ((left.isDateOrDate32() || left.isDateTime() || left.isDateTime64()) && (right.isDateOrDate32() || right.isDateTime() || right.isDateTime64()) && left.idx == right.idx) /// only date vs date, or datetime vs datetime
             || (left.isUUID() && right.isUUID())
             || (left.isEnum() && right.isEnum() && arguments[0]->getName() == arguments[1]->getName()) /// only equivalent enum type values can be compared against
             || (left_tuple && right_tuple && left_tuple->getElements().size() == right_tuple->getElements().size())
@@ -1179,8 +1179,8 @@ public:
         const bool left_is_float = which_left.isFloat();
         const bool right_is_float = which_right.isFloat();
 
-        bool date_and_datetime = (which_left.idx != which_right.idx) && (which_left.isDate() || which_left.isDateTime() || which_left.isDateTime64())
-            && (which_right.isDate() || which_right.isDateTime() || which_right.isDateTime64());
+        bool date_and_datetime = (which_left.idx != which_right.idx) && (which_left.isDateOrDate32() || which_left.isDateTime() || which_left.isDateTime64())
+            && (which_right.isDateOrDate32() || which_right.isDateTime() || which_right.isDateTime64());
 
         ColumnPtr res;
         if (left_is_num && right_is_num && !date_and_datetime)
@@ -1224,7 +1224,7 @@ public:
         else if ((isColumnedAsDecimal(left_type) || isColumnedAsDecimal(right_type))
                  // Comparing Date and DateTime64 requires implicit conversion,
                  // otherwise Date is treated as number.
-                 && !(date_and_datetime && (isDate(left_type) || isDate(right_type))))
+                 && !(date_and_datetime && (isDateOrDate32(left_type) || isDateOrDate32(right_type))))
         {
             /// Check does another data type is comparable to Decimal, includes Int and Float.
             if (!allowDecimalComparison(left_type, right_type) && !date_and_datetime)

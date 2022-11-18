@@ -216,6 +216,16 @@ ColumnPtr fillColumnWithRandomData(
             fillBufferWithRandomData(reinterpret_cast<char *>(column->getData().data()), limit * sizeof(UInt16), rng);
             return column;
         }
+        case TypeIndex::Date32:
+        {
+            auto column = ColumnInt32::create();
+            column->getData().resize(limit);
+
+            for (size_t i = 0; i < limit; ++i)
+                column->getData()[i] = (rng() % static_cast<UInt64>(DATE_LUT_SIZE)) - DAYNUM_OFFSET_EPOCH;
+
+            return column;
+        }
         case TypeIndex::UInt32: [[fallthrough]];
         case TypeIndex::DateTime:
         {

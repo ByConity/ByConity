@@ -269,6 +269,9 @@ public:
     static ColumnPtr getFromSubstreamsCache(SubstreamsCache * cache, const SubstreamPath & path);
 
     static bool isSpecialCompressionAllowed(const SubstreamPath & path);
+
+protected:
+    [[noreturn]] void throwUnexpectedDataAfterParsedValue(IColumn & column, ReadBuffer & istr, const FormatSettings &, const String & type_name) const;
 };
 
 using SerializationPtr = std::shared_ptr<const ISerialization>;

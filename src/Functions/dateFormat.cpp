@@ -229,6 +229,8 @@ public:
 
     static FunctionPtr create(const ContextPtr) { return std::make_shared<FunctionDateFormat>(); }
 
+    explicit FunctionDateFormat() : FunctionFormatDateTime(false) {}
+
     String getName() const override { return name; }
 
     bool useDefaultImplementationForConstants() const override { return true; }

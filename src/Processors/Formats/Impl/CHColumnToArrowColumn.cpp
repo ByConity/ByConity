@@ -356,6 +356,28 @@ namespace DB
         }
     }
 
+    static void fillArrowArrayWithDate32ColumnData(
+        ColumnPtr write_column,
+        const PaddedPODArray<UInt8> * null_bytemap,
+        const String & format_name,
+        arrow::ArrayBuilder* array_builder,
+        size_t start,
+        size_t end)
+    {
+        const PaddedPODArray<Int32> & internal_data = assert_cast<const ColumnVector<Int32> &>(*write_column).getData();
+        arrow::Date32Builder & builder = assert_cast<arrow::Date32Builder &>(*array_builder);
+        arrow::Status status;
+
+        for (size_t value_i = start; value_i < end; ++value_i)
+        {
+            if (null_bytemap && (*null_bytemap)[value_i])
+                status = builder.AppendNull();
+            else
+                status = builder.Append(internal_data[value_i]);
+            checkStatus(status, write_column->getName(), format_name);
+        }
+    }
+
     static void fillArrowArray(
         const String & column_name,
         ColumnPtr & column,
@@ -393,6 +415,10 @@ namespace DB
         else if ("DateTime" == column_type_name)
         {
             fillArrowArrayWithDateTimeColumnData(column, null_bytemap, format_name, array_builder, start, end);
+        }
+        else if ("Date32" == column_type_name)
+        {
+            fillArrowArrayWithDate32ColumnData(column, null_bytemap, format_name, array_builder, start, end);
         }
         else if ("Array" == column_type_name)
         {

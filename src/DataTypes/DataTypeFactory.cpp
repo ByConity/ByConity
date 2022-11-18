@@ -228,6 +228,7 @@ DataTypeFactory::DataTypeFactory()
     registerDataTypeNumbers(*this);
     registerDataTypeDecimal(*this);
     registerDataTypeDate(*this);
+    registerDataTypeDate32(*this);
     registerDataTypeTime(*this);
     registerDataTypeDateTime(*this);
     registerDataTypeString(*this);

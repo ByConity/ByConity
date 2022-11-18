@@ -1,5 +1,6 @@
 #pragma once
 #include <DataTypes/DataTypeDate.h>
+#include <DataTypes/DataTypeDate32.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <Functions/CustomWeekTransforms.h>
@@ -35,60 +36,54 @@ public:
     {
         if (arguments.size() == 1)
         {
-            if (!isDate(arguments[0].type) && !isDateTime(arguments[0].type) && !isDateTime64(arguments[0].type))
+            if (!isDate(arguments[0].type) && !isDate32(arguments[0].type)
+                && !isDateTime(arguments[0].type) && !isDateTime64(arguments[0].type))
                 throw Exception(
                     "Illegal type " + arguments[0].type->getName() + " of argument of function " + getName()
-                        + ". Should be a date or a date with time",
+                        + ". Must be Date, Date32, DateTime or DateTime64.",
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
         else if (arguments.size() == 2)
         {
-            if (!isDate(arguments[0].type) && !isDateTime(arguments[0].type) && !isDateTime64(arguments[0].type))
+            if (!isDate(arguments[0].type) && !isDate32(arguments[0].type)
+                && !isDateTime(arguments[0].type) && !isDateTime64(arguments[0].type))
                 throw Exception(
-                    "Illegal type " + arguments[0].type->getName() + " of argument of function " + getName()
-                        + ". Should be a date or a date with time",
+                    "Illegal type " + arguments[0].type->getName() + " of 1st argument of function " + getName()
+                        + ". Must be Date, Date32, DateTime or DateTime64.",
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
             if (!isUInt8(arguments[1].type))
                 throw Exception(
-                    "Function " + getName()
-                        + " supports 1 or 2 or 3 arguments. The 1st argument "
-                          "must be of type Date or DateTime. The 2nd argument (optional) must be "
-                          "a constant UInt8 with week mode. The 3rd argument (optional) must be "
-                          "a constant string with timezone name",
+                        "Illegal type of 2nd (optional) argument of function " + getName()
+                        + ". Must be constant UInt8 (week mode).",
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
         else if (arguments.size() == 3)
         {
-            if (!isDate(arguments[0].type) && !isDateTime(arguments[0].type) && !isDateTime64(arguments[0].type))
+            if (!isDate(arguments[0].type) && !isDate32(arguments[0].type)
+                && !isDateTime(arguments[0].type) && !isDateTime64(arguments[0].type))
                 throw Exception(
                     "Illegal type " + arguments[0].type->getName() + " of argument of function " + getName()
-                        + ". Should be a date or a date with time",
+                        + ". Must be Date, Date32, DateTime or DateTime64.",
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
             if (!isUInt8(arguments[1].type))
                 throw Exception(
-                    "Function " + getName()
-                        + " supports 1 or 2 or 3 arguments. The 1st argument "
-                          "must be of type Date or DateTime. The 2nd argument (optional) must be "
-                          "a constant UInt8 with week mode. The 3rd argument (optional) must be "
-                          "a constant string with timezone name",
+                        "Illegal type of 2nd (optional) argument of function " + getName()
+                        + ". Must be constant UInt8 (week mode).",
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
             if (!isString(arguments[2].type))
                 throw Exception(
-                    "Function " + getName()
-                        + " supports 1 or 2 or 3 arguments. The 1st argument "
-                          "must be of type Date or DateTime. The 2nd argument (optional) must be "
-                          "a constant UInt8 with week mode. The 3rd argument (optional) must be "
-                          "a constant string with timezone name",
+                        "Illegal type of 3rd (optional) argument of function " + getName()
+                        + ". Must be constant string (timezone name).",
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-            if (isDate(arguments[0].type) && std::is_same_v<ToDataType, DataTypeDate>)
-                throw Exception(
-                    "The timezone argument of function " + getName() + " is allowed only when the 1st argument has the type DateTime",
+            if ((isDate(arguments[0].type) || isDate32(arguments[0].type))
+                && (std::is_same_v<ToDataType, DataTypeDate> || std::is_same_v<ToDataType, DataTypeDate32>))                throw Exception(
+                    "The timezone argument of function " + getName() + " is allowed only when the 1st argument has the type DateTime or DateTime64.",
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
         else
             throw Exception(
                 "Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
-                    + ", should be 1 or 2 or 3",
+                    + ", expected 1, 2 or 3.",
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         return std::make_shared<ToDataType>();
@@ -105,6 +100,9 @@ public:
         if (which.isDate())
             return CustomWeekTransformImpl<DataTypeDate, ToDataType>::execute(
                 arguments, result_type, input_rows_count, Transform{});
+        else if (which.isDate32())
+            return CustomWeekTransformImpl<DataTypeDate32, ToDataType>::execute(
+                arguments, result_type, input_rows_count, Transform{});
         else if (which.isDateTime())
             return CustomWeekTransformImpl<DataTypeDateTime, ToDataType>::execute(
                 arguments, result_type, input_rows_count, Transform{});
@@ -115,9 +113,9 @@ public:
                 TransformDateTime64<Transform>{assert_cast<const DataTypeDateTime64 *>(from_type)->getScale()});
         }
         else
-            throw Exception(
-                "Illegal type " + arguments[0].type->getName() + " of argument of function " + getName(),
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                "Illegal type {} of argument of function {}",
+                arguments[0].type->getName(), this->getName());
     }
 
 
@@ -148,6 +146,12 @@ public:
                     == Transform::FactorTransform::execute(UInt16(right.get<UInt64>()), date_lut)
                 ? is_monotonic
                 : is_not_monotonic;
+        }
+        else if (checkAndGetDataType<DataTypeDate32>(&type))
+        {
+            return Transform::FactorTransform::execute(Int32(left.get<UInt64>()), date_lut)
+                   == Transform::FactorTransform::execute(Int32(right.get<UInt64>()), date_lut)
+                   ? is_monotonic : is_not_monotonic;
         }
         else
         {

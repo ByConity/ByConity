@@ -1,3 +1,5 @@
+SET adaptive_type_cast=1;
+
 DROP TABLE IF EXISTS codecTest;
 
 CREATE TABLE codecTest (

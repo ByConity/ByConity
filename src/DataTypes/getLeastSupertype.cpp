@@ -278,18 +278,19 @@ DataTypePtr getLeastSupertype(const DataTypes & types, bool allow_extended_conve
     /// For Date and DateTime/DateTime64, the common type is DateTime/DateTime64. No other types are compatible.
     {
         UInt32 have_date = type_ids.count(TypeIndex::Date);
+        UInt32 have_date32 = type_ids.count(TypeIndex::Date32);
         UInt32 have_datetime = type_ids.count(TypeIndex::DateTime);
         UInt32 have_datetime64 = type_ids.count(TypeIndex::DateTime64);
         UInt32 have_time = type_ids.count(TypeIndex::Time);
 
-        if (have_date || have_datetime || have_datetime64 || have_time)
+        if (have_date || have_date32 || have_datetime || have_datetime64 || have_time)
         {
-            bool all_date_or_datetime = type_ids.size() == (have_date + have_datetime + have_datetime64 + have_time);
+            bool all_date_or_datetime = type_ids.size() == (have_date + have_date32 + have_datetime + have_datetime64 + have_time);
             if (!all_date_or_datetime)
                 throw Exception(getExceptionMessagePrefix(types) + " because some of them are Date/DateTime/DateTime64 and some of them are not",
                     ErrorCodes::NO_COMMON_TYPE);
 
-            if (have_datetime64 == 0 && have_time == 0)
+            if (have_datetime64 == 0 && have_date32 == 0 && have_time == 0)
             {
                 for (const auto & type : types)
                 {
@@ -298,6 +299,22 @@ DataTypePtr getLeastSupertype(const DataTypes & types, bool allow_extended_conve
                 }
 
                 return std::make_shared<DataTypeDateTime>();
+            }
+
+            /// For Date and Date32, the common type is Date32
+            if (have_datetime == 0 && have_datetime64 == 0)
+            {
+                for (const auto & type : types)
+                {
+                    if (isDate32(type))
+                        return type;
+                }
+            }
+
+            /// For Datetime and Date32, the common type is Datetime64
+            if (have_datetime == 1 && have_date32 == 1 && have_datetime64 == 0)
+            {
+                return std::make_shared<DataTypeDateTime64>(0);
             }
 
             size_t max_scale_date_time_index;

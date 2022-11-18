@@ -167,9 +167,17 @@ Field convertFieldToTypeImpl(const Field & src, const IDataType & type, const ID
     {
         return static_cast<UInt16>(static_cast<const DataTypeDateTime &>(*from_type_hint).getTimeZone().toDayNum(src.get<UInt64>()).toUnderType());
     }
+    else if (which_type.isDate32() && which_from_type.isDateTime())
+    {
+        return static_cast<Int32>(static_cast<const DataTypeDateTime &>(*from_type_hint).getTimeZone().toDayNum(src.get<UInt64>()).toUnderType());
+    }
     else if (which_type.isDateTime() && which_from_type.isDate())
     {
         return static_cast<const DataTypeDateTime &>(type).getTimeZone().fromDayNum(DayNum(src.get<UInt64>()));
+    }
+    else if (which_type.isDateTime() && which_from_type.isDate32())
+    {
+        return static_cast<const DataTypeDateTime &>(type).getTimeZone().fromDayNum(DayNum(src.get<Int32>()));
     }
     else if (type.isValueRepresentedByNumber() && src.getType() != Field::Types::String)
     {
@@ -204,6 +212,12 @@ Field convertFieldToTypeImpl(const Field & src, const IDataType & type, const ID
             return src;
         }
 
+        if (which_type.isDate32() && src.getType() == Field::Types::Int64)
+        {
+            /// We don't need any conversion Int64 is under type of Date32
+            return src;
+        }
+
         if (which_type.isDateTime64() && src.getType() == Field::Types::Decimal64)
         {
             /// Already in needed type.
@@ -211,7 +225,7 @@ Field convertFieldToTypeImpl(const Field & src, const IDataType & type, const ID
         }
 
         if (which_type.isDateTime64()
-            && (which_from_type.isNativeInt() || which_from_type.isNativeUInt() || which_from_type.isDate() || which_from_type.isDateTime() || which_from_type.isDateTime64()))
+            && (which_from_type.isNativeInt() || which_from_type.isNativeUInt() || which_from_type.isDateOrDate32() || which_from_type.isDateTime() || which_from_type.isDateTime64()))
         {
             const auto scale = static_cast<const DataTypeDateTime64 &>(type).getScale();
             const auto decimal_value = DecimalUtils::decimalFromComponents<DateTime64>(src.reinterpret<Int64>(), 0, scale);

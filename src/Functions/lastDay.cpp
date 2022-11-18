@@ -1,16 +1,17 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/DateTimeTransforms.h>
-#include <Functions/FunctionDateOrDateTimeToSomething.h>
+#include <Functions/FunctionDateOrDateTimeToDateOrDate32.h>
 
 namespace DB
 {
 
-using FunctionLastDay = FunctionDateOrDateTimeToSomething<DataTypeDate, LastDayImpl>;
+using FunctionLastDay = FunctionDateOrDateTimeToDateOrDate32<ToLastDayOfMonthImpl>;
 
 void registerFunctionLastDay(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionLastDay>();
-    factory.registerAlias("last_day", LastDayImpl::name);
+    factory.registerAlias("last_day", ToLastDayOfMonthImpl::name, FunctionFactory::CaseInsensitive);
+    factory.registerAlias("lastDay", ToLastDayOfMonthImpl::name);
 }
 
 }

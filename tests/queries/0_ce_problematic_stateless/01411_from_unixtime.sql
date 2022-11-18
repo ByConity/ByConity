@@ -1,3 +1,4 @@
+SET adaptive_type_cast=1;
 SELECT formatDateTime(FROM_UNIXTIME(123), '%Y-%m-%d %R:%S', 'UTC');
 SELECT formatDateTime(FROM_UNIXTIME(123456789), '%Y-%m-%d %R:%S', 'UTC');
 SELECT formatDateTime(FROM_UNIXTIME(6457477432), '%Y-%m-%d %R:%S', 'UTC');
