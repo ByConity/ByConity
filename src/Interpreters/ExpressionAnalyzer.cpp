@@ -149,7 +149,6 @@ ExpressionAnalyzer::ExpressionAnalyzer(
     , query(query_)
     , settings(getContext()->getSettings())
     , subquery_depth(subquery_depth_)
-    , bitmap_index_info(std::make_shared<BitMapIndexInfo>())
     , syntax(syntax_analyzer_result_)
 {
     /// Cache prepared sets because we might run analysis multiple times
@@ -606,8 +605,7 @@ void ExpressionAnalyzer::getRootActions(const ASTPtr & ast, bool no_makeset_for_
         false /* no_makeset */,
         only_consts,
         !isRemoteStorage() /* create_source_for_in */,
-        getAggregationKeysInfo(),
-        bitmap_index_info);
+        getAggregationKeysInfo());
     ActionsVisitor(visitor_data, log.stream()).visit(ast);
     actions = visitor_data.getActions();
 }

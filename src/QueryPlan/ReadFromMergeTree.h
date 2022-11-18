@@ -1,7 +1,6 @@
 #pragma once
 #include <QueryPlan/ISourceStep.h>
 #include <Storages/MergeTree/RangesInDataPart.h>
-#include <Interpreters/BitMapIndexHelper.h>
 
 namespace DB
 {
@@ -70,8 +69,7 @@ public:
         bool sample_factor_column_queried_,
         bool map_column_keys_column_queried_,
         std::shared_ptr<PartitionIdToMaxBlock> max_block_numbers_to_read_,
-        Poco::Logger * log_,
-        BitMapIndexInfoPtr bitmap_index_info_
+        Poco::Logger * log_
     );
 
     String getName() const override { return "ReadFromMergeTree"; }
@@ -98,7 +96,6 @@ private:
     const MergeTreeMetaBase & data;
     SelectQueryInfo query_info;
     PrewhereInfoPtr prewhere_info;
-    BitMapIndexInfoPtr bitmap_index_info;
     ExpressionActionsSettings actions_settings;
 
     StorageMetadataPtr metadata_snapshot;

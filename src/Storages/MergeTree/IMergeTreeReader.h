@@ -28,8 +28,7 @@ public:
         MarkCache * mark_cache_,
         const MarkRanges & all_mark_ranges_,
         const MergeTreeReaderSettings & settings_,
-        const ValueSizeMap & avg_value_size_hints_ = ValueSizeMap{},
-        MergeTreeBitMapIndexReader * bitmap_index_reader = nullptr);
+        const ValueSizeMap & avg_value_size_hints_ = ValueSizeMap{});
 
     /// Return the number of rows has been read or zero if there is no columns to read.
     /// If continue_reading is true, continue reading from last state, otherwise seek to from_mark
@@ -59,8 +58,6 @@ public:
     {
         return all_mark_ranges.front().begin;
     }
-
-    bool hasBitmapIndexReader() const { return bitmap_index_reader != nullptr; }
 
     const NameSet & getBitmapOutputColumns();
 
@@ -125,9 +122,6 @@ protected:
     Serializations serializations;
 
     friend class MergeTreeRangeReader::DelayedStream;
-
-    // Special handling arraySetCheck (pushdown in reader), and utilize bitmap-index as index-only scan
-    MergeTreeBitMapIndexReader * bitmap_index_reader = nullptr;
 
 private:
     /// Alter conversions, which must be applied on fly if required

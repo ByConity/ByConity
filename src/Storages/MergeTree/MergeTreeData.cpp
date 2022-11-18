@@ -45,8 +45,6 @@
 #include <Storages/MergeTree/localBackup.h>
 #include <Storages/MergeTree/ChecksumsCache.h>
 #include <Storages/MergeTree/BitEngineDictionary/BitEngineDictionaryManager.h>
-#include <Storages/MergeTree/MergeTreeBitmapIndex.h>
-#include <Storages/MergeTree/MergeTreeMarkBitmapIndex.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/VirtualColumnUtils.h>
@@ -154,8 +152,6 @@ MergeTreeData::MergeTreeData(
         require_part_metadata_,
         attach,
         std::move(broken_part_callback_))
-    , bitmap_index(std::make_shared<MergeTreeBitmapIndex>(*this))
-    , mark_bitmap_index(std::make_shared<MergeTreeMarkBitmapIndex>(*this))
     , parts_mover(this)
     , replicated_fetches_throttler(std::make_shared<Throttler>(
           getSettings()->max_replicated_fetches_network_bandwidth, getContext()->getReplicatedFetchesThrottler()))
@@ -1719,15 +1715,6 @@ void MergeTreeData::checkMutationIsPossible(const MutationCommands & commands, c
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "It's not allowed to execute multiple FASTDELETE commands");
     if (num_fast_deletes && commands.size() != 1)
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "It's not allowed to execute FASTDELETE with other commands");
-}
-
-void MergeTreeData::addPartForBackgroundTask(const DataPartPtr & part, const Context & context_, bool /*without_recode*/)
-{
-    if (context_.getSettingsRef().enable_async_build_bitmap_in_attach)
-        bitmap_index->addPartForBitMapIndex(part);
-
-    if (context_.getSettingsRef().enable_async_build_mark_bitmap_in_attach)
-        mark_bitmap_index->addPartForBitMapIndex(part);
 }
 
 void MergeTreeData::changeSettings(

@@ -102,24 +102,6 @@ void ColumnDescription::writeText(WriteBuffer & buf) const
             DB::writeText("ENCRYPT", buf);
             flag ^= TYPE_ENCRYPT_FLAG;
         }
-        else if (flag & TYPE_BLOOM_FLAG)
-        {
-            writeChar('\t', buf);
-            DB::writeText("BLOOM", buf);
-            flag ^= TYPE_BLOOM_FLAG;
-        }
-        else if (flag & TYPE_BITMAP_INDEX_FLAG)
-        {
-            writeChar('\t', buf);
-            DB::writeText("BitmapIndex", buf);
-            flag ^= TYPE_BITMAP_INDEX_FLAG;
-        }
-        else if (flag & TYPE_MARK_BITMAP_INDEX_FALG)
-        {
-            writeChar('\t', buf);
-            DB::writeText("MarkBitmapIndex", buf);
-            flag ^= TYPE_MARK_BITMAP_INDEX_FALG;
-        }
         else if (flag & TYPE_MAP_KV_STORE_FLAG)
         {
             writeChar('\t', buf);

@@ -8,7 +8,6 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/sortBlock.h>
 #include <Storages/IndexFile/FilterPolicy.h>
-#include <Storages/MergeTree/MergeTreeBitmapIndex.h>
 #include <Storages/MergeTree/MergeTreeDataPartWriterWide.h>
 #include <Storages/MergeTree/MergeTreeSuffix.h>
 #include <rocksdb/db.h>
@@ -110,26 +109,6 @@ MergeTreeDataPartWriterWide::MergeTreeDataPartWriterWide(
             addByteMapStreams({it}, parseMapNameFromImplicitColName(it.name), default_codec->getFullCodecDesc());
         else
             addStreams(it, columns.getCodecDescOrDefault(it.name, default_codec));
-
-        if (MergeTreeBitmapIndex::isBitmapIndexColumn(it.type))
-        {
-            IndexParams bitmap_params(storage.getSettings()->enable_build_ab_index,
-                                      false,
-                                      storage.getSettings()->enable_run_optimization,
-                                      storage.getSettings()->max_parallel_threads_for_bitmap,
-                                      storage.getSettings()->index_granularity);
-            addBitmapIndexes(data_part->volume->getDisk()->getPath() + "/" + part_path, it.name, *it.type, bitmap_params);
-        }
-
-        if (MergeTreeBitmapIndex::isMarkBitmapIndexColumn(it.type))
-        {
-            IndexParams bitmap_params(storage.getSettings()->enable_build_ab_index,
-                                      false,
-                                      storage.getSettings()->enable_run_optimization,
-                                      storage.getSettings()->max_parallel_threads_for_bitmap,
-                                      storage.getSettings()->index_granularity);
-            addMarkBitmapIndexes(data_part->volume->getDisk()->getPath() + "/" + part_path, it.name, *it.type, bitmap_params);
-        }
     }
 }
 
@@ -266,42 +245,6 @@ void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Perm
             if (part_of_unique_key || is_extra_column)
                 unique_key_block.insert(column);
             writeColumn(*it, *column.column, offset_columns, granules_to_write);
-        }
-
-        if (!column_bitmap_indexes.empty())
-        {
-            String bitmap_index_name = ISerialization::getFileNameForStream(it->name, {});
-            if (column_bitmap_indexes.count(bitmap_index_name))
-            {
-                auto * index = column_bitmap_indexes[bitmap_index_name].get();
-                // Go through all input and write to bloom filter if needed
-                if (index)
-                {
-                    if (index->bitmap_index)
-                        index->bitmap_index->asyncAppendColumnData(column.column);
-
-                    if (index->only_write_bitmap_index)
-                        return;
-                }
-            }
-        }
-
-        if (!column_mark_bitmap_indexes.empty())
-        {
-            String bitmap_index_name = ISerialization::getFileNameForStream(it->name, {});
-            if (column_mark_bitmap_indexes.count(bitmap_index_name))
-            {
-                auto * index = column_mark_bitmap_indexes[bitmap_index_name].get();
-                // Go through all input and write to bloom filter if needed
-                if (index)
-                {
-                    if (index->bitmap_index)
-                        index->bitmap_index->asyncAppendColumnData(column.column);
-
-                    if (index->only_write_bitmap_index)
-                        return;
-                }
-            }
         }
     }
 
@@ -775,50 +718,6 @@ void MergeTreeDataPartWriterWide::finish(IMergeTreeDataPart::Checksums & checksu
             const_cast<MergeTreeData::DataPart *>(data_part.get())->min_unique_key = file_info.smallest_key;
             const_cast<MergeTreeData::DataPart *>(data_part.get())->max_unique_key = file_info.largest_key;
         }
-    }
-
-    for (auto & column_bitmap_indexe : column_bitmap_indexes)
-    {
-        // TODO dongyifeng fix it when merge metadata
-//        if (column_bitmap_indexe.second->bitmap_index)
-//            data_part->metainfo->has_bitmap = true;
-
-        if (column_bitmap_indexe.second->only_write_bitmap_index)
-        {
-            if (column_bitmap_indexe.second->bitmap_index)
-            {
-                column_bitmap_indexe.second->bitmap_index->finalize();
-                column_bitmap_indexe.second->bitmap_index->addToChecksums(checksums);
-                continue;
-            }
-        }
-        column_bitmap_indexe.second->finalize();
-        /// It brings performance degradation if sync files here.
-        /// column_bloom_filter.second->sync();
-        // We need to add it to checksum so that bloom filter could be replicated in ReplicatedMergeTree engine
-        column_bitmap_indexe.second->addToChecksums(checksums);
-    }
-
-    for (auto & column_mark_bitmap_index : column_mark_bitmap_indexes)
-    {
-        // TODO dongyifeng fix it when merge metadata
-        //        if (column_mark_bitmap_index.second->bitmap_index)
-        //            data_part->metainfo->has_mark_bitmap = true;
-
-        if (column_mark_bitmap_index.second->only_write_bitmap_index)
-        {
-            if (column_mark_bitmap_index.second->bitmap_index)
-            {
-                column_mark_bitmap_index.second->bitmap_index->finalize();
-                column_mark_bitmap_index.second->bitmap_index->addToChecksums(checksums);
-                continue;
-            }
-        }
-        column_mark_bitmap_index.second->finalize();
-        /// It brings performance degradation if sync files here.
-        /// column_bloom_filter.second->sync();
-        // We need to add it to checksum so that bloom filter could be replicated in ReplicatedMergeTree engine
-        column_mark_bitmap_index.second->addToChecksums(checksums);
     }
 }
 

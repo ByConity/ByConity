@@ -24,7 +24,6 @@ MergeTreeReverseSelectProcessor::MergeTreeReverseSelectProcessor(
     MarkRanges mark_ranges_,
     bool use_uncompressed_cache_,
     const PrewhereInfoPtr & prewhere_info_,
-    const BitMapIndexInfoPtr & bitmap_index_info_,
     ExpressionActionsSettings actions_settings,
     bool check_columns,
     const MergeTreeReaderSettings & reader_settings_,
@@ -42,8 +41,7 @@ MergeTreeReverseSelectProcessor::MergeTreeReverseSelectProcessor(
     delete_bitmap{std::move(delete_bitmap_)},
     all_mark_ranges(std::move(mark_ranges_)),
     part_index_in_query(part_index_in_query_),
-    path(data_part->getFullRelativePath()),
-    bitmap_index_info(bitmap_index_info_)
+    path(data_part->getFullRelativePath())
 {
     /// Let's estimate total number of rows for progress bar.
     for (const auto & range : all_mark_ranges)

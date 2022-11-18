@@ -32,7 +32,6 @@ struct PrewhereExprInfo
     String prewhere_column_name;
     bool remove_prewhere_column = false;
     bool need_filter = false;
-    bool has_bitmap_index = false;
 };
 
 /// MergeTreeReader iterator which allows sequential reading for arbitrary number of rows between pairs of marks in the same part.
@@ -46,8 +45,7 @@ public:
         MergeTreeRangeReader * prev_reader_,
         const PrewhereExprInfo * prewhere_info_,
         ImmutableDeleteBitmapPtr delete_bitmap_,
-        bool last_reader_in_chain_,
-        bool has_bitmap_index = false);
+        bool last_reader_in_chain_);
 
     MergeTreeRangeReader() = default;
 
@@ -250,7 +248,6 @@ private:
 
     bool last_reader_in_chain = false;
     bool is_initialized = false;
-    bool has_bitmap_index = false;
 };
 
 }

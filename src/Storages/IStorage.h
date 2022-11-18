@@ -152,8 +152,6 @@ public:
     /// Returns true if the blocks shouldn't be pushed to associated views on insert.
     virtual bool noPushingToViews() const { return false; }
 
-    void checkHasCompressedAndBloomColumns(bool & has_compressed, bool & has_bitmap) const;
-
     /// Read query returns streams which automatically distribute data between themselves.
     /// So, it's impossible for one stream run out of data when there is data in other streams.
     /// Example is StorageSystemNumbers.

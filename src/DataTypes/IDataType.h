@@ -44,10 +44,7 @@ using DataTypesWithConstInfo = std::vector<DataTypeWithConstInfo>;
 #define TYPE_BITENGINE_ENCODE_FLAG  0x02
 #define TYPE_SECURITY_FLAG          0x04
 #define TYPE_ENCRYPT_FLAG           0x08
-#define TYPE_BLOOM_FLAG             0x10
 #define TYPE_COMPRESSION_FLAG       0x20
-#define TYPE_BITMAP_INDEX_FLAG      0x40
-#define TYPE_MARK_BITMAP_INDEX_FALG 0x80
 
 /** Properties of data type.
   *
@@ -290,8 +287,6 @@ public:
             flags ^= flag;
     }
 
-    bool isBloomSet() const { return flags & TYPE_BLOOM_FLAG;}
-
     bool isCompression() const { return flags & TYPE_COMPRESSION_FLAG;}
 
     bool isSecurity() const { return flags & TYPE_SECURITY_FLAG;}
@@ -310,10 +305,6 @@ public:
     bool isMapKVStore() const { return flags & TYPE_MAP_KV_STORE_FLAG;}
 
     bool isEncrypt() const { return flags & TYPE_ENCRYPT_FLAG; }
-
-    bool isBitmapIndex() const { return flags & TYPE_BITMAP_INDEX_FLAG; }
-
-    bool isMarkBitmapIndex() const { return flags & TYPE_MARK_BITMAP_INDEX_FALG; }
 
     Names getSpecialColumnFiles(const String & name, bool throw_exception) const;
 

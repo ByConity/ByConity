@@ -124,18 +124,6 @@ void NamesAndTypesList::readText(ReadBuffer & buf)
             {
                 const_cast<IDataType *>(it.type.get())->setFlags(TYPE_SECURITY_FLAG);
             }
-            else if (options == "BLOOM")
-            {
-                const_cast<IDataType *>(it.type.get())->setFlags(TYPE_BLOOM_FLAG);
-            }
-            else if (options == "BitmapIndex")
-            {
-                const_cast<IDataType *>(it.type.get())->setFlags(TYPE_BITMAP_INDEX_FLAG);
-            }
-            else if (options == "MarkBitmapIndex")
-            {
-                const_cast<IDataType *>(it.type.get())->setFlags(TYPE_MARK_BITMAP_INDEX_FALG);
-            }
             else if (options == "KV")
             {
                 const_cast<IDataType *>(it.type.get())->setFlags(TYPE_MAP_KV_STORE_FLAG);
@@ -186,24 +174,6 @@ void NamesAndTypesList::writeText(WriteBuffer & buf) const
                 writeChar('\t', buf);
                 writeString("SECURITY", buf);
                 flag ^= TYPE_SECURITY_FLAG;
-            }
-            else if (flag & TYPE_BLOOM_FLAG)
-            {
-                writeChar('\t', buf);
-                writeString("BLOOM", buf);
-                flag ^= TYPE_BLOOM_FLAG;
-            }
-            else if (flag & TYPE_BITMAP_INDEX_FLAG)
-            {
-                writeChar('\t', buf);
-                writeString("BitmapIndex", buf);
-                flag ^= TYPE_BITMAP_INDEX_FLAG;
-            }
-            else if (flag & TYPE_MARK_BITMAP_INDEX_FALG)
-            {
-                writeChar('\t', buf);
-                writeString("MarkBitmapIndex", buf);
-                flag ^= TYPE_MARK_BITMAP_INDEX_FALG;
             }
             else if (flag & TYPE_MAP_KV_STORE_FLAG)
             {

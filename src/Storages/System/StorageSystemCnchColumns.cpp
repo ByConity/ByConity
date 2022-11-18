@@ -88,8 +88,7 @@ void StorageSystemCnchColumns::fillData(MutableColumns & res_columns, ContextPtr
                     res_columns[res_index++]->insert(column.name);
                     res_columns[res_index++]->insert(table_uuid);
                     res_columns[res_index++]->insert(column.type->getName());
-                    res_columns[res_index++]->insert(String(
-                        column.type->isBloomSet() || column.type->isBitmapIndex() ? "B" : "")); /// what do bloom set mean here , taken from clickhouse system.columns
+                    res_columns[res_index++]->insert(String("")); /// what do bloom set mean here , taken from clickhouse system.columns
 
                     if (column.default_desc.expression)
                     {

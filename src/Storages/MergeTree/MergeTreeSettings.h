@@ -138,16 +138,11 @@ struct Settings;
     \
     /** ByteDance settings */ \
     \
-    /* Bitmap index settings */        \
-    /* TODO doongyifeng change it to false    */                    \
-    M(Bool, enable_build_ab_index, true, "", 0) \
-    M(Bool, enable_build_bitmap_index, true, "", 0) \
     M(Bool, enable_run_optimization, true, "", 0) \
     M(UInt64, delta_merge_interval, 60, "", 0) \
     /** Minimal amount of bytes to enable O_DIRECT in merge (0 - disabled, "", 0) */                                 \
-    M(UInt64, max_parallel_threads_for_bitmap, 16, "", 0) \
-                                                                                                              \
-    /** If true, replicated tables would prefer to merge locally rather than                                  |\
+    \
+    /** If true, replicated tables would prefer to merge locally rather than                                  |
       * fetching of merged part from replica */                                                               \
     M(Bool, prefer_merge_than_fetch, false, "", 0) \
     M(Bool, heuristic_part_source_replica_lookup, true, "", 0) \
@@ -162,7 +157,6 @@ struct Settings;
     M(Bool, only_use_ttl_of_metadata, true, "", 0) \
                                                                                                               \
     M(Bool, enable_download_partition, false, "", 0) \
-    M(Bool, build_bitmap_index_in_merge, false, "", 0) \
     M(UInt64, max_memory_usage_for_merge, 0, "", 0) \
     M(String, storage_policy_name, "default", "", 0) \
     M(Bool, offline_overwrite_realtime, 0, "", 0) \

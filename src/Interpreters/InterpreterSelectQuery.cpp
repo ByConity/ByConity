@@ -2018,7 +2018,6 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
 
         if (prewhere_info)
             query_info.prewhere_info = prewhere_info;
-        query_info.bitmap_index_info = query_analyzer->getBitMapIndexInfo();
 
         /// Create optimizer with prepared actions.
         /// Maybe we will need to calc input_order_info later, e.g. while reading from StorageMerge.

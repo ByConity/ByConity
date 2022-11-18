@@ -7,8 +7,8 @@
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
-#include <Storages/MergeTree/ColumnBitmapIndex.h>
 #include <Disks/IDisk.h>
+#include <Storages/MergeTree/MergeTreeData.h>
 
 
 namespace DB
@@ -58,16 +58,6 @@ protected:
     const bool with_final_mark;
 
     MutableColumns index_columns;
-
-    // added by bitmap index
-    using ColumnBitmapIndexes = std::map<String, std::unique_ptr<ColumnBitmapIndex>>;
-    using ColumnMarkBitmapIndexes = std::map<String, std::unique_ptr<ColumnMarkBitmapIndex>>;
-
-    void addBitmapIndexes(const String & path, const String & name, const IDataType & type, const IndexParams & bitmap_params = IndexParams());
-    void addMarkBitmapIndexes(const String & path, const String & name, const IDataType & type, const IndexParams & bitmap_params = IndexParams());
-
-    ColumnBitmapIndexes column_bitmap_indexes;
-    ColumnMarkBitmapIndexes column_mark_bitmap_indexes;
 };
 
 }

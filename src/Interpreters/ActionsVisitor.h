@@ -5,7 +5,6 @@
 #include <Interpreters/InDepthNodeVisitor.h>
 #include <Interpreters/PreparedSets.h>
 #include <Interpreters/SubqueryForSet.h>
-#include <Interpreters/BitMapIndexHelper.h>
 #include <Parsers/IAST.h>
 #include <Parsers/ASTExpressionList.h>
 
@@ -165,9 +164,6 @@ public:
         ScopeStack actions_stack;
         AggregationKeysInfo aggregation_keys_info;
 
-        using BitMapIndexInfoPtr = std::shared_ptr<BitMapIndexInfo>;
-        BitMapIndexInfoPtr bitmap_index_info;
-
         /*
          * Remember the last unique column suffix to avoid quadratic behavior
          * when we add lots of column with same prefix. One counter for all
@@ -187,8 +183,7 @@ public:
             bool no_makeset_,
             bool only_consts_,
             bool create_source_for_in_,
-            AggregationKeysInfo aggregation_keys_info_,
-            BitMapIndexInfoPtr bitmap_index_info_ = nullptr);
+            AggregationKeysInfo aggregation_keys_info_);
 
         /// Does result of the calculation already exists in the block.
         bool hasColumn(const String & column_name) const;

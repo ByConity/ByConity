@@ -9,7 +9,6 @@
 #include <Interpreters/inplaceBlockConversions.h>
 #include <Storages/MergeTree/IMergeTreeReader.h>
 #include <Storages/MergeTree/MergeTreeSuffix.h>
-#include <Storages/MergeTree/MergeTreeBitMapIndexReader.h>
 #include <Common/typeid_cast.h>
 
 
@@ -34,8 +33,7 @@ IMergeTreeReader::IMergeTreeReader(
     MarkCache * mark_cache_,
     const MarkRanges & all_mark_ranges_,
     const MergeTreeReaderSettings & settings_,
-    const ValueSizeMap & avg_value_size_hints_,
-    MergeTreeBitMapIndexReader * bitmap_index_reader_)
+    const ValueSizeMap & avg_value_size_hints_)
     : data_part(data_part_)
     , avg_value_size_hints(avg_value_size_hints_)
     , columns(columns_)
@@ -46,7 +44,6 @@ IMergeTreeReader::IMergeTreeReader(
     , storage(data_part_->storage)
     , metadata_snapshot(metadata_snapshot_)
     , all_mark_ranges(all_mark_ranges_)
-    , bitmap_index_reader(bitmap_index_reader_)
     , alter_conversions(storage.getAlterConversionsForPart(data_part))
 {
     if (settings.convert_nested_to_subcolumns)
@@ -479,13 +476,6 @@ bool IMergeTreeReader::checkBitEngineColumn(const NameAndTypePair & column) cons
 {
     return storage.isBitEngineMode() && !settings.read_source_bitmap
         && isBitmap64(column.type) && column.type->isBitEngineEncode();
-}
-
-const NameSet & IMergeTreeReader::getBitmapOutputColumns()
-{
-    if (hasBitmapIndexReader())
-        return bitmap_index_reader->getOutputColumnNames();
-    throw Exception("bitmap index reader is nullptr", ErrorCodes::LOGICAL_ERROR);
 }
 
 }
