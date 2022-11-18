@@ -803,7 +803,7 @@ void InterpreterExplainQuery::explainUsingOptimizer(const ASTPtr & ast, WriteBuf
         single_line = true;
     }
     else
-        buffer << PlanPrinter::textLogicalPlan(*query_plan, true, true, costs);
+        buffer << PlanPrinter::textLogicalPlan(*query_plan, context, true, true, costs);
 }
 
 }

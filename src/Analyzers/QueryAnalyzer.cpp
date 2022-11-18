@@ -8,6 +8,7 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeNothing.h>
+#include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <Interpreters/QueryAliasesVisitor.h>
 #include <Interpreters/QueryNormalizer.h>
@@ -69,6 +70,7 @@ public:
         , use_ansi_semantic(context->getSettingsRef().dialect_type == DialectType::ANSI)
         , enable_shared_cte(context->getSettingsRef().cte_mode != CTEMode::INLINED)
         , enable_implicit_type_conversion(context->getSettingsRef().enable_implicit_type_conversion)
+        , allow_extended_conversion(context->getSettingsRef().allow_extended_type_conversion)
     {}
 
 private:
@@ -78,6 +80,7 @@ private:
     const bool use_ansi_semantic;
     const bool enable_shared_cte;
     const bool enable_implicit_type_conversion;
+    const bool allow_extended_conversion;
 
     void analyzeSetOperation(ASTPtr & node, ASTs & selects);
 
@@ -250,7 +253,7 @@ void QueryAnalyzerVisitor::analyzeSetOperation(ASTPtr & node, ASTs & selects)
                 elem_types.push_back(analysis.getOutputDescription(*select)[column_idx].type);
 
             // promote output type to super type if necessary
-            auto output_type = getLeastSupertype(elem_types);
+            auto output_type = getLeastSupertype(elem_types, allow_extended_conversion);
             output_desc.emplace_back(first_input_desc[column_idx].name, output_type);
         }
     }
@@ -683,7 +686,17 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinUsing(ASTTableJoin & table_join, Scope
             }
             else if (enable_implicit_type_conversion)
             {
-                output_type = getLeastSupertype({left_type, right_type});
+                try
+                {
+                    output_type = getLeastSupertype({left_type, right_type}, allow_extended_conversion);
+                }
+                catch (DB::Exception & ex)
+                {
+                    throw Exception(
+                        "Type mismatch of columns to JOIN by: " + left_type->getName() + " at left, " + right_type->getName() + " at right. "
+                            + "Can't get supertype: " + ex.message(),
+                        ErrorCodes::TYPE_MISMATCH);
+                }
             }
 
             if (!output_type)
@@ -764,7 +777,17 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinUsing(ASTTableJoin & table_join, Scope
             }
             else if (enable_implicit_type_conversion)
             {
-                output_type = getLeastSupertype({left_type, right_type});
+                try
+                {
+                    output_type = getLeastSupertype({left_type, right_type}, allow_extended_conversion);
+                }
+                catch (DB::Exception & ex)
+                {
+                    throw Exception(
+                        "Type mismatch of columns to JOIN by: " + left_type->getName() + " at left, " + right_type->getName() + " at right. "
+                            + "Can't get supertype: " + ex.message(),
+                        ErrorCodes::TYPE_MISMATCH);
+                }
             }
 
             if (!output_type)
@@ -945,7 +968,17 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinOn(ASTTableJoin & table_join, ScopePtr
 
                             if (enable_implicit_type_conversion)
                             {
-                                super_type = getLeastSupertype({left_type, right_type});
+                                try
+                                {
+                                    super_type = getLeastSupertype({left_type, right_type}, allow_extended_conversion);
+                                }
+                                catch (DB::Exception & ex)
+                                {
+                                    throw Exception(
+                                        "Type mismatch of columns to JOIN by: " + left_type->getName() + " at left, " + right_type->getName() + " at right. "
+                                            + "Can't get supertype: " + ex.message(),
+                                        ErrorCodes::TYPE_MISMATCH);
+                                }
                                 if (!left_type->equals(*super_type))
                                     left_coercion = super_type;
                                 if (!right_type->equals(*super_type))
@@ -1028,9 +1061,9 @@ void QueryAnalyzerVisitor::analyzeWhere(ASTSelectQuery & select_query, ScopePtr 
         .subquerySupport(ExprAnalyzerOptions::SubquerySupport::CORRELATED);
     auto filter_type = ExprAnalyzer::analyze(select_query.where(), source_scope, context, analysis, expr_options);
 
-    if (auto nonnull_type = removeNullable(filter_type))
+    if (auto inner_type = removeNullable(removeLowCardinality(filter_type)))
     {
-        if (!nonnull_type->equals(DataTypeUInt8()) && !nonnull_type->equals(DataTypeNothing()))
+        if (!inner_type->equals(DataTypeUInt8()) && !inner_type->equals(DataTypeNothing()))
             throw Exception("Illegal type " + filter_type->getName() + " for WHERE. Must be UInt8 or Nullable(UInt8).",
                             ErrorCodes::ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER);
     }
@@ -1155,7 +1188,7 @@ void QueryAnalyzerVisitor::analyzeGroupBy(ASTSelectQuery & select_query, ASTs & 
     if (select_query.groupBy())
     {
         bool allow_group_by_position = context->getSettingsRef().enable_replace_group_by_literal_to_symbol
-            && !select_query.group_by_with_rollup && !select_query.group_by_with_cube /* && !select_query.group_by_with_grouping_sets */;
+            && !select_query.group_by_with_rollup && !select_query.group_by_with_cube && !select_query.group_by_with_grouping_sets;
 
         auto analyze_grouping_set = [&](ASTs & grouping_expr_list)
         {
@@ -1195,29 +1228,15 @@ void QueryAnalyzerVisitor::analyzeGroupBy(ASTSelectQuery & select_query, ASTs & 
             grouping_expressions.insert(grouping_expressions.end(), analyzed_grouping_set.begin(), analyzed_grouping_set.end());
         };
 
-        /*
         if (select_query.group_by_with_grouping_sets)
         {
             for (auto & grouping_set_element: select_query.groupBy()->children)
-            {
-                if (auto * func = grouping_set_element->as<ASTFunction>(); func && func->name == "tuple")
-                {
-                    analyze_grouping_set(func->arguments->children);
-                }
-                else
-                {
-                    ASTs grouping_expr_list {grouping_set_element};
-                    analyze_grouping_set(grouping_expr_list);
-                }
-            }
+                analyze_grouping_set(grouping_set_element->children);
         }
         else
         {
             analyze_grouping_set(select_query.groupBy()->children);
         }
-        */
-
-        analyze_grouping_set(select_query.groupBy()->children);
     }
 
     analysis.group_by_results[&select_query] = GroupByAnalysis {std::move(grouping_expressions), std::move(grouping_sets)};
@@ -1564,7 +1583,7 @@ void QueryAnalyzerVisitor::verifyAggregate(ASTSelectQuery & select_query, ScopeP
         if (!analysis.getGroupingOperations(select_query).empty())
         {
             auto & representative = analysis.getGroupingOperations(select_query)[0];
-            throw Exception("Invalid grouping operation: " + serializeAST(*representative), ErrorCodes::ILLEGAL_AGGREGATION);
+            throw Exception("Invalid grouping operation: " + serializeAST(*representative), ErrorCodes::BAD_ARGUMENTS);
         }
 
         return;
@@ -1585,11 +1604,9 @@ void QueryAnalyzerVisitor::verifyAggregate(ASTSelectQuery & select_query, ScopeP
     if (auto & grouping_ops = analysis.getGroupingOperations(select_query); !grouping_ops.empty())
     {
         for (const auto & grouping_op: grouping_ops)
-        {
-            auto grouping_op_arg = grouping_op->arguments->children[0];
-            if (!grouping_expressions.count(grouping_op_arg))
-                throw Exception("Invalid grouping operation: " + serializeAST(*grouping_op), ErrorCodes::ILLEGAL_AGGREGATION);
-        }
+            for (const auto & grouping_op_arg: grouping_op->arguments->children)
+                if (!grouping_expressions.count(grouping_op_arg))
+                    throw Exception("Invalid grouping operation: " + serializeAST(*grouping_op), ErrorCodes::BAD_ARGUMENTS);
     }
 
     // verify no reference to non grouping fields after aggregate

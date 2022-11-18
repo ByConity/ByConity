@@ -7,11 +7,6 @@
 
 namespace DB
 {
-class Context;
-
-// @return: row_count, elapsed_time,
-std::tuple<UInt64, double> collectStatsOnTable(ContextPtr context, const Statistics::StatsTableIdentifier & table_info);
-
 class InterpreterCreateStatsQuery : public IInterpreter, WithContext
 {
 public:

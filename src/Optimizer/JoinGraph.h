@@ -23,7 +23,7 @@ public:
     /**
      * Builds JoinGraph containing plan node.
      */
-    static JoinGraph build(const PlanNodePtr & plan_ptr, ContextMutablePtr & context, bool support_cross_join = true, bool use_equality = false);
+    static JoinGraph build(const PlanNodePtr & plan_ptr, ContextMutablePtr & context, bool support_cross_join = true, bool use_equality = false, bool ignore_columns_not_join_condition = false);
 
     JoinGraph(
         PlanNodes nodes_,
@@ -51,12 +51,12 @@ public:
         PlanNodeId new_root,
         bool contains_cross_join_);
 
-    std::vector<ConstASTPtr> getFilters() { return filter; }
+    const std::vector<ConstASTPtr> & getFilters() const { return filter; }
     PlanNodeId getRootId() const { return root; }
-    bool isEmpty() { return nodes.empty(); }
-    size_t size() { return nodes.size(); }
+    bool isEmpty() const { return nodes.empty(); }
+    size_t size() const { return nodes.size(); }
     PlanNodePtr getNode(int index) { return nodes.at(index); }
-    PlanNodes & getNodes() { return nodes; }
+    const PlanNodes & getNodes() const { return nodes; }
     std::vector<Edge> & getEdges(const PlanNodePtr & node) { return edges[node->getId()]; }
     const std::map<PlanNodeId, std::vector<Edge>> & getEdges() const { return edges; }
     bool isContainsCrossJoin() const { return contains_cross_join; }
@@ -104,22 +104,30 @@ struct JoinGraphContext
     }
 
     std::unordered_map<String, PlanNodePtr> symbol_sources = {};
-    UnionFind union_find = {};
+    UnionFind<String> union_find = {};
     bool use_equality;
+    bool ignore_columns_not_join_condition;
     ContextMutablePtr & context;
 };
 
-class JoinGraphVisitor : public PlanNodeVisitor<JoinGraph, JoinGraphContext>
+class JoinGraphVisitor : public PlanNodeVisitor<JoinGraph, NameSet>
 {
 public:
-    explicit JoinGraphVisitor(bool support_cross_join_) : support_cross_join(support_cross_join_) { }
-    JoinGraph visitPlanNode(PlanNodeBase &, JoinGraphContext &) override;
-    JoinGraph visitJoinNode(JoinNode &, JoinGraphContext &) override;
-    JoinGraph visitFilterNode(FilterNode &, JoinGraphContext &) override;
-    JoinGraph visitProjectionNode(ProjectionNode &, JoinGraphContext &) override;
+    explicit JoinGraphVisitor(JoinGraphContext & join_graph_context_, bool support_cross_join_, bool ignore_columns_not_join_condition_)
+        : join_graph_context(join_graph_context_)
+        , support_cross_join(support_cross_join_)
+        , ignore_columns_not_join_condition(ignore_columns_not_join_condition_)
+    {
+    }
+    JoinGraph visitPlanNode(PlanNodeBase &, NameSet &) override;
+    JoinGraph visitJoinNode(JoinNode &, NameSet &) override;
+    JoinGraph visitFilterNode(FilterNode &, NameSet &) override;
+    JoinGraph visitProjectionNode(ProjectionNode &, NameSet &) override;
 
 private:
-    bool support_cross_join;
+    JoinGraphContext & join_graph_context;
+    const bool support_cross_join;
+    const bool ignore_columns_not_join_condition;
 };
 
 }

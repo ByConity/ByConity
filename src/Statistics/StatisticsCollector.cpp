@@ -6,39 +6,30 @@
 #include <Statistics/CacheManager.h>
 #include <Statistics/CachedStatsProxy.h>
 #include <Statistics/CollectStep.h>
-#include <Statistics/CommonTools.h>
 #include <Statistics/StatisticsCollector.h>
 #include <Statistics/StatsNdvBucketsImpl.h>
 #include <Statistics/SubqueryHelper.h>
+#include <Statistics/TypeUtils.h>
 #include <boost/algorithm/string/join.hpp>
 #include <common/logger_useful.h>
 
 namespace DB::Statistics
 {
 
-
-void StatisticsCollector::collectFull()
-{
-    auto columns_desc = catalog->getCollectableColumns(table_info);
-    collect(columns_desc);
-}
-
-void StatisticsCollector::collect(const ColumnDescVector & col_names)
+void StatisticsCollector::collect(const ColumnDescVector & cols_desc)
 {
     auto step = [&] {
-        if (catalog->getSettingsRef().statistics_enable_sample)
+        if (settings.enable_sample)
         {
-            std::unique_ptr<CollectStep> createStatisticsCollectorStepSample(StatisticsCollector & core);
             return createStatisticsCollectorStepSample(*this);
         }
         else
         {
-            std::unique_ptr<CollectStep> createStatisticsCollectorStepFull(StatisticsCollector & core);
             return createStatisticsCollectorStepFull(*this);
         }
     }();
 
-    step->collect(col_names);
+    step->collect(cols_desc);
     step->writeResult(table_stats, columns_stats);
 }
 
@@ -72,23 +63,12 @@ void StatisticsCollector::readAllFromCatalog()
 
 void StatisticsCollector::readFromCatalog(const std::vector<String> & cols_name)
 {
-    ColumnDescVector cols_desc;
-    auto full_cols_desc = catalog->getCollectableColumns(table_info);
-    std::unordered_set<String> valid_set(cols_name.begin(), cols_name.end());
-    for (const auto & col_desc : full_cols_desc)
-    {
-        if (valid_set.count(col_desc.name))
-        {
-            cols_desc.emplace_back(col_desc);
-        }
-    }
-
-    this->readFromCatalog(cols_desc);
+    auto cols_desc = filterCollectableColumns(catalog->getCollectableColumns(table_info), cols_name);
+    this->readFromCatalogImpl(cols_desc);
 }
 
-void StatisticsCollector::readFromCatalog(const ColumnDescVector & cols_desc)
+void StatisticsCollector::readFromCatalogImpl(const ColumnDescVector & cols_desc)
 {
-    Stopwatch watch;
     auto proxy = createCachedStatsProxy(catalog);
     auto data = proxy->get(table_info, true, cols_desc);
     if (data.table_stats.empty() && data.column_stats.empty())
@@ -146,8 +126,8 @@ std::optional<PlanNodeStatisticsPtr> StatisticsCollector::toPlanNodeStatistics()
                 auto bucket = std::make_shared<Bucket>(symbol->min, symbol->max, symbol->ndv, nonnull_count, true, true);
                 symbol->histogram.emplaceBackBucket(std::move(bucket));
             }
+            result->updateSymbolStatistics(col, symbol);
         }
-        result->updateSymbolStatistics(col, symbol);
     }
     return result;
 }

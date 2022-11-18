@@ -3,6 +3,7 @@
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnsNumber.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/castColumn.h>
 #include <Common/typeid_cast.h>
 #include <Common/assert_cast.h>
@@ -33,9 +34,15 @@ namespace
 /// and the NULL value, with a NULL condition treated as false.
 class FunctionMultiIf final : public FunctionIfBase
 {
+private:
+    bool allow_extended_conversion;
 public:
     static constexpr auto name = "multiIf";
-    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionMultiIf>(); }
+    static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionMultiIf>(context); }
+
+    explicit FunctionMultiIf(ContextPtr context):
+        allow_extended_conversion(context->getSettingsRef().allow_extended_type_conversion)
+    {}
 
     String getName() const override { return name; }
     bool isVariadic() const override { return true; }
@@ -103,7 +110,7 @@ public:
             types_of_branches.emplace_back(arg);
         });
 
-        return getLeastSupertype(types_of_branches);
+        return getLeastSupertype(types_of_branches, allow_extended_conversion);
     }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & args, const DataTypePtr & result_type, size_t input_rows_count) const override

@@ -9,6 +9,7 @@
 #include <Storages/IStorage.h>
 
 #include <vector>
+#include <list>
 #include <memory>
 
 namespace DB
@@ -18,7 +19,6 @@ struct FieldDescription;
 using FieldDescriptions = std::vector<FieldDescription>;
 struct Scope;
 using ScopePtr = const Scope *;
-using ScopeOwnerPtr = std::unique_ptr<Scope>;
 
 namespace ErrorCodes
 {
@@ -217,7 +217,7 @@ private:
 
 struct ScopeFactory
 {
-    std::vector<ScopeOwnerPtr> scopes;
+    std::list<Scope> scopes;
 
     ScopePtr createScope(Scope::ScopeType type, ScopePtr parent, bool query_boundary, FieldDescriptions field_descriptions);
     ScopePtr createLambdaScope(ScopePtr parent, FieldDescriptions field_descriptions);

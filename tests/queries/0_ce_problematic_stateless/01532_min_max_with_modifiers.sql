@@ -15,4 +15,4 @@ FROM
 (
     SELECT arrayJoin([1, 2]) AS x
 ) 
-GROUP BY x WITH ROLLUP;
+GROUP BY x WITH ROLLUP order by x;

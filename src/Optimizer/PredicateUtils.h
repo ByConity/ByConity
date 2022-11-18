@@ -65,6 +65,7 @@ public:
 
     static ASTPtr combineConjuncts(const std::vector<ConstASTPtr> & predicates);
     static ASTPtr combineDisjuncts(const std::vector<ConstASTPtr> & predicates);
+    static ASTPtr combineDisjunctsWithDefault(const std::vector<ConstASTPtr> & predicates, const ASTPtr & default_ast);
     static ASTPtr combinePredicates(const String & fun, std::vector<ConstASTPtr> predicates);
 
     static bool isTruePredicate(const ConstASTPtr & predicate);
@@ -75,6 +76,16 @@ public:
     static bool isJoinClause(ConstASTPtr expression, std::set<String> & left_symbols, std::set<String> & right_symbols, ContextMutablePtr & context);
     static bool
     isJoinClauseUnmodified(std::set<std::pair<String, String>> & join_clauses, const Names & left_keys, const Names & right_keys);
+
+    /**
+     * @return residue expression if source expression is stronger than target,
+     *         {@code true} if it is equal to target,
+     *         {@code null} f it is weaker than target.
+     */
+    static ASTPtr splitPredicates(const ConstASTPtr & source, const ConstASTPtr & target);
+
+    static std::pair<std::vector<std::pair<ConstASTPtr, ConstASTPtr>>, std::vector<ConstASTPtr>>
+    extractEqualPredicates(const std::vector<ConstASTPtr> & predicates);
 
 private:
     static String flip(const String & fun_name);

@@ -1,6 +1,7 @@
 #include <Optimizer/Utils.h>
 
 #include <Functions/FunctionFactory.h>
+#include <Interpreters/AggregateDescription.h>
 #include <Optimizer/ExpressionExtractor.h>
 #include <Optimizer/SymbolsExtractor.h>
 #include <Parsers/ASTIdentifier.h>
@@ -93,6 +94,21 @@ std::unordered_map<String, String> computeIdentityTranslations(Assignments & ass
     return output_to_input;
 }
 
+ASTPtr extractAggregateToFunction(const AggregateDescription & aggregate_description)
+{
+    const auto function = std::make_shared<ASTFunction>();
+    function->name = aggregate_description.function->getName();
+    function->arguments = std::make_shared<ASTExpressionList>();
+    function->parameters = std::make_shared<ASTExpressionList>();
+    function->children.push_back(function->arguments);
+    for (auto & argument : aggregate_description.argument_names)
+        function->arguments->children.emplace_back(std::make_shared<ASTIdentifier>(argument));
+    for (auto & parameter : aggregate_description.parameters)
+        function->parameters->children.emplace_back(std::make_shared<ASTLiteral>(parameter));
+    return function;
+}
+
+
 bool checkFunctionName(const ASTFunction & function, const String & expect_name)
 {
     if (function.name == expect_name)
@@ -123,6 +139,38 @@ bool ConstASTPtrOrdering::operator()(const ConstASTPtr & predicate_1, const Cons
         return sub_expression_size_1 < sub_expression_size_2;
 
     return predicate_1->getColumnName() < predicate_2->getColumnName();
+}
+
+//Determine whether it is NAN
+bool isFloatingPointNaN(const DataTypePtr & type, const Field & value)
+{
+    TypeIndex type_id = type->getTypeId();
+
+    if (type_id == TypeIndex::Float32)
+        return std::isnan(value.get<Float64>());
+
+    if (type_id == TypeIndex::Float64)
+        return std::isnan(value.get<Float64>());
+
+    return false;
+}
+
+String flipOperator(const String & name)
+{
+    if (name == "equals")
+        return name;
+    if (name == "notEquals")
+        return name;
+    if (name == "less")
+        return "greater";
+    if (name == "lessOrEquals")
+        return "greaterOrEquals";
+    if (name == "greater")
+        return "less";
+    if (name == "greaterOrEquals")
+        return "lessOrEquals";
+
+    throw Exception("Unsupported comparison", DB::ErrorCodes::LOGICAL_ERROR);
 }
 
 }

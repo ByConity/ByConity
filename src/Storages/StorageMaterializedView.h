@@ -71,6 +71,7 @@ public:
 
     StoragePtr getTargetTable() const;
     StoragePtr tryGetTargetTable() const;
+    StorageID getTargetTableId() const { return target_table_id; }
 
     String getTargetDatabaseName() const { return target_table_id.database_name;  }
     String getTargetTableName() const { return target_table_id.table_name;  }

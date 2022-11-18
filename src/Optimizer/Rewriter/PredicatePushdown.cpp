@@ -2,6 +2,8 @@
 #include <Optimizer/Rewriter/PredicatePushdown.h>
 
 #include <Analyzers/TypeAnalyzer.h>
+#include <DataTypes/getLeastSupertype.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <Optimizer/DynamicFilters.h>
 #include <Optimizer/EqualityInference.h>
 #include <Optimizer/ExpressionDeterminism.h>
@@ -10,6 +12,7 @@
 #include <Optimizer/ExpressionInterpreter.h>
 #include <Optimizer/SymbolUtils.h>
 #include <Optimizer/Utils.h>
+#include <Optimizer/makeCastFunction.h>
 #include <Parsers/formatAST.h>
 #include <QueryPlan/AggregatingStep.h>
 #include <QueryPlan/AssignUniqueIdStep.h>
@@ -372,13 +375,15 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
                                                                                              : equality.arguments->getChildren()[1];
             ASTPtr & right_expression = (left_aligned_comparison && right_aligned_comparison) ? equality.arguments->getChildren()[1]
                                                                                               : equality.arguments->getChildren()[0];
-            String left_symbol = left_expression->getColumnName();
+            String left_symbol = left_expression->as<ASTIdentifier>() ?
+                left_expression->getColumnName() : context->getSymbolAllocator()->newSymbol(left_expression->getColumnName());
             if (!left_symbols.contains(left_symbol))
             {
                 left_assignments.emplace_back(left_symbol, left_expression);
                 left_types[left_symbol] = left_type_analyzer.getType(left_expression);
             }
-            String right_symbol = right_expression->getColumnName();
+            String right_symbol = right_expression->as<ASTIdentifier>() ?
+                right_expression->getColumnName() : context->getSymbolAllocator()->newSymbol(right_expression->getColumnName());
             if (!right_symbols.contains(right_symbol))
             {
                 right_assignments.emplace_back(right_symbol, right_expression);
@@ -482,12 +487,74 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
         output.emplace_back(NameAndTypePair{item.name, item.type});
     }
 
+    // cast extracted join keys to super type
     Names left_keys;
     Names right_keys;
-    for (const auto & clause : join_clauses)
     {
-        left_keys.emplace_back(clause.first);
-        right_keys.emplace_back(clause.second);
+        bool need_project_left = false;
+        bool need_project_right = false;
+        Assignments left_project_assignments;
+        NameToType left_project_types = left_source_expression_node->getOutputNamesToTypes();
+        Assignments right_project_assignments;
+        NameToType right_project_types = right_source_expression_node->getOutputNamesToTypes();
+        const bool allow_extended_type_conversion = context->getSettingsRef().allow_extended_type_conversion;
+
+        auto put_identities = [](Assignments & assignments, const Names & input_symbols)
+        {
+            for (const auto & symbol: input_symbols)
+                assignments.emplace_back(symbol, std::make_shared<ASTIdentifier>(symbol));
+        };
+
+        put_identities(left_project_assignments, left_source_expression_node->getOutputNames());
+        put_identities(right_project_assignments, right_source_expression_node->getOutputNames());
+
+        for (const auto & clause : join_clauses)
+        {
+            String left_key = clause.first;
+            String right_key = clause.second;
+            auto left_type = left_project_types.at(left_key);
+            auto right_type = right_project_types.at(right_key);
+            auto res_type = getLeastSupertype({left_type, right_type}, allow_extended_type_conversion);
+
+            auto add_join_key = [&](
+                                    const auto & name,
+                                    const auto & type,
+                                    auto & keys,
+                                    auto & assignments,
+                                    auto & name_to_type,
+                                    auto & need_project)
+            {
+                if (removeNullable(res_type)->equals(*removeNullable(type)))
+                    keys.emplace_back(name);
+                else
+                {
+                    auto casted_name = context->getSymbolAllocator()->newSymbol(name);
+                    assignments.emplace_back(casted_name, makeCastFunction(std::make_shared<ASTIdentifier>(name), res_type));
+                    name_to_type[casted_name] = res_type;
+                    keys.emplace_back(casted_name);
+                    need_project = true;
+                }
+            };
+
+            add_join_key(left_key, left_type, left_keys, left_project_assignments, left_project_types, need_project_left);
+            add_join_key(right_key, right_type, right_keys, right_project_assignments, right_project_types, need_project_right);
+        }
+
+        if (need_project_left)
+        {
+            auto left_project_step
+                = std::make_shared<ProjectionStep>(left_source_expression_node->getStep()->getOutputStream(), left_project_assignments, left_project_types);
+            left_source_expression_node
+                = std::make_shared<ProjectionNode>(context->nextNodeId(), std::move(left_project_step), PlanNodes{left_source_expression_node});
+        }
+
+        if (need_project_right)
+        {
+            auto right_project_step
+                = std::make_shared<ProjectionStep>(right_source_expression_node->getStep()->getOutputStream(), right_project_assignments, right_project_types);
+            right_source_expression_node
+                = std::make_shared<ProjectionNode>(context->nextNodeId(), std::move(right_project_step), PlanNodes{right_source_expression_node});
+        }
     }
 
     ASTPtr new_join_filter = PredicateUtils::combineConjuncts(join_filters);
@@ -749,7 +816,7 @@ PlanNodePtr PredicateVisitor::visitCTERefNode(CTERefNode & node, PredicateContex
         if (PredicateUtils::isTruePredicate(cte_step->getFilter()))
         {
             auto optimized_expression = ExpressionInterpreter::optimizePredicate(
-                PredicateUtils::combineDisjuncts(common_filters), context, cte_def->getStep()->getOutputStream().header.getNamesAndTypes());
+                PredicateUtils::combineDisjuncts(common_filters), cte_def->getStep()->getOutputStream().header.getNamesToTypes(), context);
             PredicateContext cte_predicate_context{
                 .predicate = optimized_expression, .extra_predicate_for_simplify_outer_join = PredicateConst::TRUE_VALUE};
             cte_def = VisitorUtil::accept(cte_def, *this, cte_predicate_context);
@@ -1125,19 +1192,21 @@ void PredicateVisitor::tryNormalizeOuterToInnerJoin(JoinNode & node, const Const
     if (strictness != Strictness::All && strictness != Strictness::Any)
         return;
 
-    auto build_symbols = [](const PlanNodePtr & source) {
-        NameSet result;
-        auto source_output = source->getStep()->getOutputStream().header.getNamesAndTypes();
-        std::transform(
-            source_output.begin(), source_output.end(), std::inserter(result, result.begin()), std::mem_fn(&NameAndTypePair::name));
+    auto column_types = step.getOutputStream().header.getNamesToTypes();
+
+    auto build_symbols = [&](const PlanNodePtr & source) {
+        std::unordered_map<String, Field> result;
+
+        // note we cannot use type information of `source` node as outer join will change the column types of non-outer side
+        for (const auto & name: source->getStep()->getOutputStream().header.getNames())
+            if (column_types.count(name))
+                result.emplace(name, column_types.at(name)->getDefault());
 
         return result;
     };
 
-    NameSet left_symbols = build_symbols(node.getChildren()[0]);
-    NameSet right_symbols = build_symbols(node.getChildren()[1]);
-
-    auto column_types = step.getOutputStream().header.getNamesAndTypes();
+    std::unordered_map<String, Field> left_symbols = build_symbols(node.getChildren()[0]);
+    std::unordered_map<String, Field> right_symbols = build_symbols(node.getChildren()[1]);
 
     if (isRightOrFull(kind) && canConvertOuterToInner(left_symbols, inherited_predicate, context, column_types))
     {
@@ -1155,26 +1224,18 @@ void PredicateVisitor::tryNormalizeOuterToInnerJoin(JoinNode & node, const Const
 }
 
 bool PredicateVisitor::canConvertOuterToInner(
-    const NameSet & inner_symbols_for_outer_join,
+    const std::unordered_map<String, Field> & inner_symbols_for_outer_join,
     const ConstASTPtr & inherited_predicate,
     ContextMutablePtr context,
-    const NamesAndTypes & column_types)
+    const NameToType & column_types)
 {
-    IdentifierResolver inner_symbols_resolver
-        = [&inner_symbols_for_outer_join](const ASTIdentifier & ast, const IDataType & type) -> std::optional<Field> {
-        if (inner_symbols_for_outer_join.contains(ast.name()))
-            return type.getDefault();
-        else
-            return std::nullopt;
-    };
-
+    auto interpreter = ExpressionInterpreter::optimizedInterpreter(column_types, inner_symbols_for_outer_join, context);
     for (auto & conjunct : PredicateUtils::extractConjuncts(inherited_predicate))
     {
-        auto result = ExpressionInterpreter::optimizePredicate(conjunct, context, column_types, inner_symbols_resolver);
-
-        if (auto * lit = result->as<ASTLiteral>())
+        auto result = interpreter.evaluateConstantExpression(conjunct);
+        if (result.has_value())
         {
-            auto & val = lit->value;
+            auto & val = result->second;
             if (val.isNull() || !applyVisitor(FieldVisitorConvertToNumber<bool>(), val))
                 return true;
         }
@@ -1254,6 +1315,12 @@ ASTPtr EffectivePredicateVisitor::visitProjectionNode(ProjectionNode & node, Con
         // skip NULL
         if (value->as<ASTLiteral>() && value->as<ASTLiteral &>().value.isNull())
             continue;
+
+        // skip id_1 := cast(id, SomeType)
+        if (const auto * func = value->as<ASTFunction>())
+            if (Poco::toLower(func->name) == "cast" && func->arguments->children[0]->as<ASTIdentifier>())
+                continue;
+
         non_identity_assignments.emplace_back(assignment);
         newly_assigned_symbols.emplace(symbol);
     }

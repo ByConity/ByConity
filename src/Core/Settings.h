@@ -551,6 +551,9 @@ class IColumn;
     M(Milliseconds, meta_sync_task_interval_ms, 1*60*60*1000, "Interval of background schedule task for metasore synchronization", 0)\
     M(Bool, enable_fetch_part_incrementally, true, "Whether to enable fetching part incrementally", 0) \
     M(String, blocklist_for_merge_thread_regex, "", "A blacklist for merge thread, to prevent the generation of MergeTasks for some tables.", 0) \
+    M(Bool, decimal_division_use_extended_scale, false, "If enabled, the result scale of decimal division is determined by: max(6, S1)", 0) \
+    M(Bool, decimal_arithmetic_promote_storage, false, "Promote storage for some cases of decimal arithmetic operation(e.g. Decimal32 * Decimal32 -> Decimal64)", 0) \
+    M(Bool, allow_extended_type_conversion, false, "When enabled, implicit type conversion is allowed for more input types(e.g. UInt64 & Ints, Decimal & Float, Float & Int64)", 0) \
     \
     /** settings in cnch **/ \
     M(UInt64, cnch_data_retention_time_in_sec, 3*24*60*60, "Waiting time when dropped table or database is actually removed.", 0) \
@@ -630,10 +633,11 @@ class IColumn;
     M(Bool, statistics_collect_floating_histogram, true, "Collect histogram for float/double/Decimal columns", 0) \
     M(Bool, statistics_collect_floating_histogram_ndv, true, "Collect histogram ndv for float/double/Decimal columns", 0) \
     M(UInt64, statistics_collect_string_size_limit_for_histogram, 64, "Collect string histogram only for avg_size <= string_size_limit, since it's unnecessary to collect stats for text", 0) \
-    M(Bool, statistics_enable_sample, false, "Enable sampling for statistics", 0) \
-    M(UInt64, statistics_sample_row_threshold, 100'000'000, "Row threshold for samping", 0) \
-    M(UInt64, statistics_sample_row_count, 40'000'000, "Row threshold for samping", 0) \
-    M(UInt64, statistics_sample_histogram_enable_ndv_threshold, 2000, "When sampling, collect histogram only when ndv <= threshold", 0) \
+    M(Bool, statistics_enable_sample, false, "Use sampling for statistics", 0) \
+    M(UInt64, statistics_sample_row_count, 40'000'000, "Minimal row count for sampling", 0) \
+    M(Float, statistics_sample_ratio, 0.1, "Ratio for sampling", 0) \
+    M(StatisticsAccurateSampleNdvMode, statistics_accurate_sample_ndv, StatisticsAccurateSampleNdvMode::AUTO, "Mode of accurate sample ndv to estimate full ndv", 0) \
+    M(UInt64, statistics_batch_max_columns, 30, "Max column size in a batch when collecting stats", 0) \
     M(Float, cost_calculator_table_scan_weight, 1, "Table scan cost weight for cost calculator", 0) \
     M(Float, cost_calculator_aggregating_weight, 7, "Aggregate output weight for cost calculator", 0) \
     M(Float, cost_calculator_join_probe_weight, 0.5, "Join probe side weight for cost calculator", 0) \
@@ -645,8 +649,9 @@ class IColumn;
     M(String, graphviz_path, "/tmp/plan/", "The path of graphviz plan", 0) \
     M(Bool, eliminate_cross_joins, true, "Whether eliminate cross joins", 0) \
     M(Bool, enable_rewrite_alias_in_select, true, "Whether rewrite alias in select", 0) \
-    M(UInt64, iterative_optimizer_timeout, 3000, "Max running time of a single iterative optimizer in ms", 0) \
-    M(UInt64, cascades_optimizer_timeout, 3000, "Max running time of a single cascades optimizer in ms", 0) \
+    M(UInt64, iterative_optimizer_timeout, 10000, "Max running time of a single iterative optimizer in ms", 0) \
+    M(UInt64, cascades_optimizer_timeout, 10000, "Max running time of a single cascades optimizer in ms", 0) \
+    M(UInt64, plan_optimizer_timeout, 600000, "Max running time of a plan rewriter optimizer in ms", 0) \
     M(Bool, enable_nested_loop_join, true, "Whether enable nest loop join for outer join with filter", 0)\
     M(Bool, enable_cbo, true, "Whether enable CBO", 0) \
     M(Bool, enum_replicate, true, "Enum replicate join", 0) \
@@ -676,6 +681,7 @@ class IColumn;
     M(Bool, enable_simplify_expression, true, "Whether enable simplify predicates", 0) \
     M(Bool, enable_unwarp_cast_in, true, "Whether enable unwrap cast function", 0) \
     M(Bool, enable_common_predicate_rewrite, true, "Whether enable common predicate rewrite", 0) \
+    M(Bool, enable_windows_reorder, true, "Reorder adjacent windows to decrease exchange", 0) \
     M(Bool, enable_swap_predicate_rewrite, true, "Whether enable swap predicate rewrite", 0) \
     M(Bool, enable_equivalences, true, "Whether enable using equivalences when property match", 0) \
     M(Bool, enable_replace_group_by_literal_to_symbol, false, "Replace group by literal to symbol", 0) \
@@ -683,6 +689,13 @@ class IColumn;
     M(Bool, enable_push_partial_agg, true, "Whether enable push partial agg", 0) \
     M(Bool, enforce_all_join_to_any_join, false, "Whether enforce all join to any join", 0) \
     M(Bool, enable_implicit_type_conversion, true, "Whether enable implicit type conversion for JOIN, Set operation, IN subquery", 0) \
+    M(Bool, enable_redundant_sort_removal, true, "Whether enable ignore redundant sort in subquery", 0) \
+    M(Bool, enable_materialized_view_rewrite, false, "Whether enable materialized view based rewriter for query", 0) \
+    M(Bool, enable_materialized_view_ast_rewrite, false, "Whether enable materialized view based rewriter for query", 0) \
+    M(Bool, enable_materialized_view_rewrite_verbose_log, false, "Whether enable materialized view based rewriter for query", 0) \
+    M(Bool, enable_materialized_view_join_rewriting, false, "Whether enable materialized view based rewriter for query using join materialized views", 0) \
+    M(Bool, enable_sharding_optimize, false, "Whether enable sharding optimization, eg. local join", 0) \
+    M(Bool, enable_filter_window_to_partition_topn, true, "Filter window to partition topn", 0) \
     /** Exchange setttings */ \
     M(UInt64, exchange_parallel_size, 1, "Exchange parallel size", 0) \
     M(UInt64, exchange_source_pipeline_threads, 16, "Recommend number of threads for pipeline which reading data from exchange, ingoned if exchange need keep data order", 0) \

@@ -11,6 +11,7 @@
 #include <Functions/IFunction.h>
 #include <Statistics/BucketBoundsImpl.h>
 #include <Statistics/TypeMacros.h>
+#include <Statistics/TypeUtils.h>
 #include <Common/typeid_cast.h>
 
 
@@ -39,7 +40,12 @@ public:
     {
         (void)result_type;
         assert(arguments.size() == 2);
-        auto data_column = checkAndGetColumn<ColumnVector<T>>(arguments[1].column.get());
+        auto raw_data_column = arguments[1].column;
+        auto data_column = checkAndGetColumn<ColumnVector<T>>(raw_data_column.get());
+        if (!data_column)
+        {
+            throw Exception(fmt::format(FMT_STRING("Unsupported Column: {}"), arguments[1].name), ErrorCodes::NOT_IMPLEMENTED);
+        }
         auto & data_container = data_column->getData();
 
         auto out_column = ColumnUInt16::create(input_rows_count);
@@ -61,11 +67,13 @@ template <typename T>
 class FunctionBucketBoundsSearch final : public IFunctionBase
 {
 public:
-    FunctionBucketBoundsSearch()
+    FunctionBucketBoundsSearch(const DB::ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type_)
     {
-        arguments_types.push_back(std::make_shared<DataTypeString>());
-        arguments_types.push_back(std::make_shared<DataTypeNumber<T>>());
-        result_type = std::make_shared<DataTypeUInt16>();
+        for (const auto & arg : arguments)
+        {
+            arguments_types.push_back(arg.type);
+        }
+        result_type = result_type_;
     }
 
     String getName() const override { return "bucket_bounds_search"; }
@@ -109,7 +117,7 @@ public:
         };
     }
 
-    FunctionBasePtr buildImpl(const DB::ColumnsWithTypeAndName & arguments, const DB::DataTypePtr &) const override
+    FunctionBasePtr buildImpl(const DB::ColumnsWithTypeAndName & arguments, const DB::DataTypePtr & result_type) const override
     {
         if (arguments.size() != 2)
         {
@@ -120,13 +128,15 @@ public:
             throw Exception("the first arguments must be base64 format of bucket bounds", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
 
-        switch (arguments[1].type->getTypeId())
+        auto b64 = arguments[0].column->getDataAt(0).operator std::string_view();
+        auto blob_header = base64Decode(b64.substr(0, 8));
+        auto serde_data_type = BucketBounds::getSerdeDataTypeFromBlob(blob_header);
+        switch (serde_data_type)
         {
 #define HANDLE_CASE(TYPE) \
-    case TypeIndex::TYPE: { \
-        return std::make_unique<FunctionBucketBoundsSearch<TYPE>>(); \
+    case SerdeDataType::TYPE: { \
+        return std::make_shared<FunctionBucketBoundsSearch<TYPE>>(arguments, result_type); \
     }
-
             FIXED_TYPE_ITERATE(HANDLE_CASE)
 #undef HANDLE_CASE
             default:

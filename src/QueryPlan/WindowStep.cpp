@@ -88,7 +88,7 @@ void WindowStep::transformPipeline(QueryPipeline & pipeline,
         partial_sorting_step.transformPipeline(pipeline, s);
         MergeSortingStep merge_sorting_step{input_stream, window_description.full_sort_description, 0};
         merge_sorting_step.transformPipeline(pipeline, s);
-        MergingSortedStep merging_sorted_step{input_stream, window_description.full_sort_description, s.context->getSettingsRef().max_threads, 0};
+        MergingSortedStep merging_sorted_step{input_stream, window_description.full_sort_description, s.context->getSettingsRef().max_block_size, 0};
         merging_sorted_step.transformPipeline(pipeline, s);
     }
 

@@ -10,19 +10,23 @@ namespace DB
 class PropertyDeriver
 {
 public:
-    static Property deriveProperty(ConstQueryPlanStepPtr step);
-    static Property deriveProperty(ConstQueryPlanStepPtr step, Property & input_property);
-    static Property deriveProperty(ConstQueryPlanStepPtr step, PropertySet & input_properties);
+    static Property deriveProperty(ConstQueryPlanStepPtr step, Context & context);
+    static Property deriveProperty(ConstQueryPlanStepPtr step, Property & input_property, Context & context);
+    static Property deriveProperty(ConstQueryPlanStepPtr step, PropertySet & input_properties, Context & context);
+    static Property deriveStorageProperty(const StoragePtr& storage, Context & context);
 };
 
 class DeriverContext
 {
 public:
-    explicit DeriverContext(PropertySet input_properties_) : input_properties(std::move(input_properties_)) { }
+    DeriverContext(PropertySet input_properties_, Context & context_)
+        : input_properties(std::move(input_properties_)), context(context_) { }
     PropertySet getInput() { return input_properties; }
+    Context & getContext() { return context; }
 
 private:
     PropertySet input_properties;
+    Context & context;
 };
 
 class DeriverVisitor : public StepVisitor<Property, DeriverContext>
@@ -45,6 +49,7 @@ public:
     Property visitValuesStep(const ValuesStep &, DeriverContext &) override;
     Property visitLimitStep(const LimitStep &, DeriverContext & context) override;
     Property visitLimitByStep(const LimitByStep &, DeriverContext & context) override;
+    Property visitSortingStep(const SortingStep &, DeriverContext & context) override;
     Property visitMergeSortingStep(const MergeSortingStep &, DeriverContext & context) override;
     Property visitPartialSortingStep(const PartialSortingStep &, DeriverContext & context) override;
     Property visitMergingSortedStep(const MergingSortedStep &, DeriverContext & context) override;

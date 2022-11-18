@@ -115,7 +115,12 @@ template <> inline constexpr bool UseLeftDecimal<DataTypeDecimal<Decimal128>, Da
 template <> inline constexpr bool UseLeftDecimal<DataTypeDecimal<Decimal128>, DataTypeDecimal<Decimal64>> = true;
 template <> inline constexpr bool UseLeftDecimal<DataTypeDecimal<Decimal64>, DataTypeDecimal<Decimal32>> = true;
 
-template <template <typename, typename> class Operation, typename LeftDataType, typename RightDataType>
+template <typename T> struct NextDecimal { using Result = InvalidType; };
+template <> struct NextDecimal<DataTypeDecimal<Decimal32>> { using Result = DataTypeDecimal<Decimal64>; };
+template <> struct NextDecimal<DataTypeDecimal<Decimal64>> { using Result = InvalidType; }; // not promote for Decimal64, due to the performance penalty of Int64 -> Int128
+template <> struct NextDecimal<DataTypeDecimal<Decimal128>> { using Result = DataTypeDecimal<Decimal256>; };
+
+template <template <typename, typename> class Operation, typename LeftDataType, typename RightDataType, bool allow_decimal_promote_storage>
 struct BinaryOperationTraits
 {
     using T0 = typename LeftDataType::FieldType;
@@ -126,15 +131,27 @@ private: /// it's not correct for Decimal
 public:
     static constexpr bool allow_decimal = IsOperation<Operation>::allow_decimal;
 
+    static constexpr bool is_div = IsOperation<Operation>::division;
+    static constexpr bool is_div_or_mul = IsOperation<Operation>::multiply || IsOperation<Operation>::division;
+
+    template <typename U>
+    static constexpr bool promote_decimal_storage = allow_decimal_promote_storage && !std::is_same_v<typename NextDecimal<U>::Result, InvalidType>;
+
     /// Appropriate result type for binary operator on numeric types. "Date" can also mean
     /// DateTime, but if both operands are Dates, their type must be the same (e.g. Date - DateTime is invalid).
     using ResultDataType = Switch<
         /// Decimal cases
         Case<!allow_decimal && (IsDataTypeDecimal<LeftDataType> || IsDataTypeDecimal<RightDataType>), InvalidType>,
+        Case<is_div_or_mul && IsDataTypeDecimal<LeftDataType> && std::is_same_v<LeftDataType, RightDataType> && promote_decimal_storage<LeftDataType>,
+             typename NextDecimal<LeftDataType>::Result>,
         Case<IsDataTypeDecimal<LeftDataType> && IsDataTypeDecimal<RightDataType> && UseLeftDecimal<LeftDataType, RightDataType>, LeftDataType>,
         Case<IsDataTypeDecimal<LeftDataType> && IsDataTypeDecimal<RightDataType>, RightDataType>,
-        Case<IsDataTypeDecimal<LeftDataType> && IsIntegralOrExtended<RightDataType>, LeftDataType>,
-        Case<IsDataTypeDecimal<RightDataType> && IsIntegralOrExtended<LeftDataType>, RightDataType>,
+        Case<IsDataTypeDecimal<LeftDataType> && IsIntegralOrExtended<RightDataType>,
+             Switch<Case<is_div && promote_decimal_storage<LeftDataType>, typename NextDecimal<LeftDataType>::Result>,
+                    Case<true, LeftDataType>>>,
+        Case<IsDataTypeDecimal<RightDataType> && IsIntegralOrExtended<LeftDataType>,
+             Switch<Case<is_div && promote_decimal_storage<RightDataType>, typename NextDecimal<RightDataType>::Result>,
+                    Case<true, RightDataType>>>,
 
         /// e.g Decimal +-*/ Float, least(Decimal, Float), greatest(Decimal, Float) = Float64
         Case<IsOperation<Operation>::allow_decimal && IsDataTypeDecimal<LeftDataType> && IsFloatingPoint<RightDataType>,
@@ -325,7 +342,7 @@ public:
         else
             size = a.size();
 
-        if constexpr (is_plus_minus_compare)
+        if constexpr (is_plus_minus_compare || is_division)
         {
             if (scale_a != 1)
             {
@@ -368,15 +385,6 @@ public:
             }
 
         }
-        else if constexpr (is_division && is_decimal_b)
-        {
-            for (size_t i = 0; i < size; ++i)
-                c[i] = applyScaledDiv<is_decimal_a>(
-                    unwrap<op_case, OpCase::LeftConstant>(a, i),
-                    unwrap<op_case, OpCase::RightConstant>(b, i),
-                    scale_a);
-            return;
-        }
 
         for (size_t i = 0; i < size; ++i)
             c[i] = apply(
@@ -390,9 +398,7 @@ public:
         static_assert(!IsDecimalNumber<A>);
         static_assert(!IsDecimalNumber<B>);
 
-        if constexpr (is_division && is_decimal_b)
-            return applyScaledDiv<is_decimal_a>(a, b, scale_a);
-        else if constexpr (is_plus_minus_compare)
+        if constexpr (is_plus_minus_compare || is_division)
         {
             if (scale_a != 1)
                 return applyScaled<true>(a, b, scale_a);
@@ -446,7 +452,7 @@ private:
     template <bool scale_left, bool may_check_overflow = true>
     static NO_SANITIZE_UNDEFINED NativeResultType applyScaled(NativeResultType a, NativeResultType b, NativeResultType scale)
     {
-        static_assert(is_plus_minus_compare || is_multiply);
+        static_assert(is_plus_minus_compare || is_multiply || is_division);
         NativeResultType res;
 
         if constexpr (check_overflow && may_check_overflow)
@@ -477,31 +483,6 @@ private:
 
         return res;
     }
-
-    template <bool is_decimal_a>
-    static NO_SANITIZE_UNDEFINED NativeResultType applyScaledDiv(NativeResultType a, NativeResultType b, NativeResultType scale)
-    {
-        if constexpr (is_division)
-        {
-            if constexpr (check_overflow)
-            {
-                bool overflow = false;
-                if constexpr (!is_decimal_a)
-                    overflow |= common::mulOverflow(scale, scale, scale);
-                overflow |= common::mulOverflow(a, scale, a);
-                if (overflow)
-                    throw Exception("Decimal math overflow", ErrorCodes::DECIMAL_OVERFLOW);
-            }
-            else
-            {
-                if constexpr (!is_decimal_a)
-                    scale *= scale;
-                a *= scale;
-            }
-
-            return Op::template apply<NativeResultType>(a, b);
-        }
-    }
 };
 }
 
@@ -518,6 +499,8 @@ class FunctionBinaryArithmetic : public IFunction
 
     ContextPtr context;
     bool check_decimal_overflow = true;
+    bool allow_decimal_promote_storage = false;
+    bool use_extended_scale_for_decimal_division = false;
 
     template <typename F>
     static bool castType(const IDataType * type, F && f)
@@ -850,7 +833,7 @@ class FunctionBinaryArithmetic : public IFunction
             OpImpl::template process<op_case, left_decimal, right_decimal>(left, right, vec_res, scale_a, scale_b);
     }
 
-    template <class LeftDataType, class RightDataType, class ResultDataType,
+    template <bool allow_decimal_promote_storage, class LeftDataType, class RightDataType, class ResultDataType,
               class L, class R, class CL, class CR>
     ColumnPtr executeNumericWithDecimal(
         const L & left, const R & right,
@@ -874,31 +857,37 @@ class FunctionBinaryArithmetic : public IFunction
 
         typename ColVecResult::MutablePtr col_res = nullptr;
 
-        const ResultDataType type = decimalResultType<is_multiply, is_division>(left, right);
+        const ResultDataType type = decimalResultType<is_multiply, is_division, allow_decimal_promote_storage>(left, right, use_extended_scale_for_decimal_division);
 
         const ResultType scale_a = [&]
         {
-            if constexpr (IsDataTypeDecimal<RightDataType> && is_division)
-                return right.getScaleMultiplier(); // the division impl uses only the scale_a
-            else
+            if constexpr (is_division)
             {
-                if constexpr (is_multiply)
-                    // the decimal impl uses scales, but if the result is decimal, both of the arguments are decimal,
-                    // so they would multiply correctly, so we need to scale the result to the neutral element (1).
-                    // The explicit type is needed as the int (in contrast with float) can't be implicitly converted
-                    // to decimal.
-                    return ResultType{1};
-                else
-                    return type.scaleFactorFor(left, false);
+                ResultType scale{1};
+
+                if constexpr (IsDataTypeDecimal<RightDataType>)
+                    scale = right.getScaleMultiplier();
+
+                scale *= type.scaleFactorFor(left);
+
+                return scale;
             }
+            else if constexpr (is_multiply)
+                // the decimal impl uses scales, but if the result is decimal, both of the arguments are decimal,
+                // so they would multiply correctly, so we need to scale the result to the neutral element (1).
+                // The explicit type is needed as the int (in contrast with float) can't be implicitly converted
+                // to decimal.
+                return ResultType{1};
+            else
+                return type.scaleFactorFor(left);
         }();
 
         const ResultType scale_b = [&]
         {
-            if constexpr (is_multiply)
+            if constexpr (is_multiply || is_division)
                 return ResultType{1};
             else
-                return type.scaleFactorFor(right, is_division);
+                return type.scaleFactorFor(right);
         }();
 
         /// non-vector result
@@ -951,7 +940,9 @@ public:
 
     explicit FunctionBinaryArithmetic(ContextPtr context_)
     :   context(context_),
-        check_decimal_overflow(decimalCheckArithmeticOverflow(context))
+        check_decimal_overflow(decimalCheckArithmeticOverflow(context)),
+        allow_decimal_promote_storage(decimalArithmeticPromoteStorage(context)),
+        use_extended_scale_for_decimal_division(decimalDivisionUseExtendedScale(context))
     {}
 
     String getName() const override { return name; }
@@ -963,7 +954,8 @@ public:
         return getReturnTypeImplStatic(arguments, context);
     }
 
-    static DataTypePtr getReturnTypeImplStatic(const DataTypes & arguments, ContextPtr context)
+    template <bool allow_decimal_promote_storage>
+    static DataTypePtr getReturnTypeImplStaticTemplate(const DataTypes & arguments, ContextPtr context)
     {
         /// Special case when multiply aggregate function state
         if (isAggregateMultiply(arguments[0], arguments[1]))
@@ -1010,7 +1002,7 @@ public:
         }
 
         DataTypePtr type_res;
-
+        const bool decimal_division_use_extended_scale = decimalDivisionUseExtendedScale(context);
         const bool valid = castBothTypes(arguments[0].get(), arguments[1].get(), [&](const auto & left, const auto & right)
         {
             using LeftDataType = std::decay_t<decltype(left)>;
@@ -1032,22 +1024,18 @@ public:
             }
             else
             {
-                using ResultDataType = typename BinaryOperationTraits<Op, LeftDataType, RightDataType>::ResultDataType;
+                using ResultDataType = typename BinaryOperationTraits<Op, LeftDataType, RightDataType, allow_decimal_promote_storage>::ResultDataType;
 
                 if constexpr (!std::is_same_v<ResultDataType, InvalidType>)
                 {
-                    if constexpr (IsDataTypeDecimal<LeftDataType> && IsDataTypeDecimal<RightDataType>)
-                    {
-                        ResultDataType result_type = decimalResultType<is_multiply, is_division>(left, right);
-                        type_res = std::make_shared<ResultDataType>(result_type.getPrecision(), result_type.getScale());
-                    }
-                    else if constexpr ((IsDataTypeDecimal<LeftDataType> && IsFloatingPoint<RightDataType>) ||
+                    if constexpr ((IsDataTypeDecimal<LeftDataType> && IsFloatingPoint<RightDataType>) ||
                         (IsDataTypeDecimal<RightDataType> && IsFloatingPoint<LeftDataType>))
                         type_res = std::make_shared<DataTypeFloat64>();
-                    else if constexpr (IsDataTypeDecimal<LeftDataType>)
-                        type_res = std::make_shared<LeftDataType>(left.getPrecision(), left.getScale());
-                    else if constexpr (IsDataTypeDecimal<RightDataType>)
-                        type_res = std::make_shared<RightDataType>(right.getPrecision(), right.getScale());
+                    else if constexpr (IsDataTypeDecimal<LeftDataType> || IsDataTypeDecimal<RightDataType>)
+                    {
+                        ResultDataType result_type = decimalResultType<is_multiply, is_division, allow_decimal_promote_storage>(left, right, decimal_division_use_extended_scale);
+                        type_res = std::make_shared<ResultDataType>(result_type.getPrecision(), result_type.getScale());
+                    }
                     else if constexpr (std::is_same_v<ResultDataType, DataTypeDateTime>)
                     {
                         // Special case for DateTime: binary OPS should reuse timezone
@@ -1077,6 +1065,14 @@ public:
             " and " + arguments[1]->getName() +
             " of arguments of function " + String(name),
             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
+
+    static DataTypePtr getReturnTypeImplStatic(const DataTypes & arguments, ContextPtr context)
+    {
+        if (decimalArithmeticPromoteStorage(context))
+            return getReturnTypeImplStaticTemplate<true>(arguments, context);
+        else
+            return getReturnTypeImplStaticTemplate<false>(arguments, context);
     }
 
     ColumnPtr executeFixedString(const ColumnsWithTypeAndName & arguments) const
@@ -1164,12 +1160,12 @@ public:
         return nullptr;
     }
 
-    template <typename A, typename B>
+    template <bool allow_decimal_promote_storage, typename A, typename B>
     ColumnPtr executeNumeric(const ColumnsWithTypeAndName & arguments, const A & left, const B & right) const
     {
         using LeftDataType = std::decay_t<decltype(left)>;
         using RightDataType = std::decay_t<decltype(right)>;
-        using ResultDataType = typename BinaryOperationTraits<Op, LeftDataType, RightDataType>::ResultDataType;
+        using ResultDataType = typename BinaryOperationTraits<Op, LeftDataType, RightDataType, allow_decimal_promote_storage>::ResultDataType;
 
         if constexpr (std::is_same_v<ResultDataType, InvalidType>)
             return nullptr;
@@ -1214,7 +1210,7 @@ public:
 
             if constexpr (IsDataTypeDecimal<ResultDataType>)
             {
-                return executeNumericWithDecimal<LeftDataType, RightDataType, ResultDataType>(
+                return executeNumericWithDecimal<allow_decimal_promote_storage, LeftDataType, RightDataType, ResultDataType>(
                     left, right,
                     col_left_const, col_right_const,
                     col_left, col_right,
@@ -1324,7 +1320,13 @@ public:
                     return (res = executeFixedString(arguments)) != nullptr;
             }
             else
-                return (res = executeNumeric(arguments, left, right)) != nullptr;
+            {
+                if (allow_decimal_promote_storage)
+                    res = executeNumeric<true>(arguments, left, right);
+                else
+                    res = executeNumeric<false>(arguments, left, right);
+                return res != nullptr;
+            }
         });
 
         if (!valid)
@@ -1342,7 +1344,8 @@ public:
     }
 
 #if USE_EMBEDDED_COMPILER
-    bool isCompilableImpl(const DataTypes & arguments) const override
+    template<bool allow_decimal_promote_storage>
+    bool isCompilableImplTemplate(const DataTypes & arguments) const
     {
         if (2 != arguments.size())
             return false;
@@ -1355,14 +1358,23 @@ public:
                 return false;
             else
             {
-                using ResultDataType = typename BinaryOperationTraits<Op, LeftDataType, RightDataType>::ResultDataType;
+                using ResultDataType = typename BinaryOperationTraits<Op, LeftDataType, RightDataType, allow_decimal_promote_storage>::ResultDataType;
                 using OpSpec = Op<typename LeftDataType::FieldType, typename RightDataType::FieldType>;
                 return !std::is_same_v<ResultDataType, InvalidType> && !IsDataTypeDecimal<ResultDataType> && OpSpec::compilable;
             }
         });
     }
 
-    llvm::Value * compileImpl(llvm::IRBuilderBase & builder, const DataTypes & types, Values values) const override
+    bool isCompilableImpl(const DataTypes & arguments) const override
+    {
+        if (allow_decimal_promote_storage)
+            return isCompilableImplTemplate<true>(arguments);
+        else
+            return isCompilableImplTemplate<false>(arguments);
+    }
+
+    template<bool allow_decimal_promote_storage>
+    llvm::Value * compileImplTemplate(llvm::IRBuilderBase & builder, const DataTypes & types, Values values) const
     {
         assert(2 == types.size() && 2 == values.size());
 
@@ -1373,7 +1385,7 @@ public:
             using RightDataType = std::decay_t<decltype(right)>;
             if constexpr (!std::is_same_v<DataTypeFixedString, LeftDataType> && !std::is_same_v<DataTypeFixedString, RightDataType>)
             {
-                using ResultDataType = typename BinaryOperationTraits<Op, LeftDataType, RightDataType>::ResultDataType;
+                using ResultDataType = typename BinaryOperationTraits<Op, LeftDataType, RightDataType, allow_decimal_promote_storage>::ResultDataType;
                 using OpSpec = Op<typename LeftDataType::FieldType, typename RightDataType::FieldType>;
                 if constexpr (!std::is_same_v<ResultDataType, InvalidType> && !IsDataTypeDecimal<ResultDataType> && OpSpec::compilable)
                 {
@@ -1388,6 +1400,14 @@ public:
             return false;
         });
         return result;
+    }
+
+    llvm::Value * compileImpl(llvm::IRBuilderBase & builder, const DataTypes & types, Values values) const override
+    {
+        if (allow_decimal_promote_storage)
+            return compileImplTemplate<true>(builder, types, values);
+        else
+            return compileImplTemplate<false>(builder, types, values);
     }
 #endif
 

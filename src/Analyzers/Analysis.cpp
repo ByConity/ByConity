@@ -320,4 +320,9 @@ const std::vector<SubColumnIDSet> & Analysis::getUsedSubColumns(const IAST & tab
     return used_sub_columns[&table_ast];
 }
 
+void Analysis::addNonDeterministicFunctions(IAST & ast)
+{
+    non_deterministic_functions.insert(&ast);
+}
+
 }

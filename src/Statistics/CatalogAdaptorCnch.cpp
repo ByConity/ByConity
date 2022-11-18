@@ -2,7 +2,7 @@
 #include <Interpreters/executeQuery.h>
 #include <Statistics/CacheManager.h>
 #include <Statistics/CatalogAdaptor.h>
-#include <Statistics/CommonTools.h>
+#include <Statistics/TypeUtils.h>
 #include <Statistics/SubqueryHelper.h>
 #include <boost/algorithm/string.hpp>
 
@@ -16,6 +16,7 @@ public:
     StatsData readStatsData(const StatsTableIdentifier & table) override;
     StatsCollection readSingleStats(const StatsTableIdentifier & table, const std::optional<String> & column_name) override;
     void writeStatsData(const StatsTableIdentifier & table, const StatsData & stats_data) override;
+    void dropStatsColumnData(const StatsTableIdentifier & table, const ColumnDescVector & cols_desc) override;
     void dropStatsData(const StatsTableIdentifier & table) override;
     void dropStatsDataAll(const String & database) override;
 
@@ -111,6 +112,21 @@ void CatalogAdaptorCnch::writeStatsData(const StatsTableIdentifier & table, cons
         catalog->updateColumnStatistics(uuid_str, col_name, stats_col);
     }
 }
+
+void CatalogAdaptorCnch::dropStatsColumnData(const StatsTableIdentifier & table, const ColumnDescVector & cols_desc) 
+{
+    auto uuid_str = UUIDHelpers::UUIDToString(table.getUUID());
+    for (auto & desc : cols_desc)
+    {
+        auto col_name = desc.name;
+        auto tags = catalog->getAvailableColumnStatisticsTags(uuid_str, col_name);
+        if (!tags.empty())
+        {
+            catalog->removeColumnStatistics(uuid_str, col_name, tags);
+        }
+    }
+}
+
 void CatalogAdaptorCnch::dropStatsData(const StatsTableIdentifier & table)
 {
     auto uuid_str = UUIDHelpers::UUIDToString(table.getUUID());

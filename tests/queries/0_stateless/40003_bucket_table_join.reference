@@ -1,0 +1,12 @@
+Gather Exchange est. ? rows
+└─ Projection est. ? rows
+   │     Expressions: count():=`expr#count()`
+   └─ Aggregating est. ? rows
+      │     Group by: {p_date}
+      │     Aggregates: expr#count():=AggNull(count)()
+      └─ Inner Join est. ? rows
+         │     Condition: event_date == p_date, hash_uid == hash_uid_1
+         ├─ TableScan test.table_misc est. ? rows
+         │        Outputs: [event_date, hash_uid]
+         └─ TableScan test.daily_misc est. ? rows
+                  Outputs: [p_date], hash_uid_1:=hash_uid

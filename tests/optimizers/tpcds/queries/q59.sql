@@ -1,5 +1,5 @@
-with
- wss as(select d_week_seq,
+with wss as
+ (select d_week_seq,
         ss_store_sk,
         sum(case when (d_day_name='Sunday') then ss_sales_price else null end) sun_sales,
         sum(case when (d_day_name='Monday') then ss_sales_price else null end) mon_sales,

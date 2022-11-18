@@ -1,5 +1,10 @@
 #pragma once
 
+#include <Core/Names.h>
+#include <Core/SortDescription.h>
+#include <Core/Types.h>
+#include <Optimizer/Equivalences.h>
+
 #include <map>
 #include <utility>
 #include <vector>
@@ -7,13 +12,15 @@
 #include <Core/SortDescription.h>
 #include <Core/Types.h>
 #include <Functions/FunctionsHashing.h>
+#include <Parsers/IAST_fwd.h>
+#include <Analyzers/ASTEquals.h>
 
 namespace DB
 {
 class Property;
 using PropertySet = std::vector<Property>;
 using PropertySets = std::vector<PropertySet>;
-class Equivalences;
+using SymbolEquivalences = Equivalences<String>;
 
 using CTEId = UInt32;
 
@@ -53,11 +60,13 @@ public:
         Names columns_ = {},
         bool require_handle_ = false,
         UInt64 buckets_ = 0,
+        ASTPtr sharding_expr_ = nullptr,
         bool enforce_round_robin_ = true)
         : handle(handle_)
         , columns(std::move(columns_))
         , require_handle(require_handle_)
         , buckets(buckets_)
+        , sharding_expr(sharding_expr_)
         , enforce_round_robin(enforce_round_robin_)
     {
     }
@@ -65,19 +74,24 @@ public:
     enum Handle getPartitioningHandle() const { return handle; }
     const Names & getPartitioningColumns() const { return columns; }
     UInt64 getBuckets() const { return buckets; }
+    ASTPtr getSharingExpr() const { return sharding_expr; }
     bool isEnforceRoundRobin() const { return enforce_round_robin; }
     void setEnforceRoundRobin(bool enforce_round_robin_) { enforce_round_robin = enforce_round_robin_; }
     bool isRequireHandle() const { return require_handle; }
     void setRequireHandle(bool require_handle_) { require_handle = require_handle_; }
+    ASTPtr getSharingExpr() { return sharding_expr; }
+
+
     Partitioning translate(const std::unordered_map<String, String> & identities) const;
-    Partitioning normalize(const Equivalences & equivalences) const;
+    Partitioning normalize(const SymbolEquivalences & symbol_equivalences) const;
     bool satisfy(const Partitioning &) const;
+    bool isPartitionOn(const Partitioning &) const;
 
     size_t hash() const;
     bool operator==(const Partitioning & other) const
     {
         return handle == other.handle && columns == other.columns && require_handle == other.require_handle && buckets == other.buckets
-            && enforce_round_robin == other.enforce_round_robin;
+            && enforce_round_robin == other.enforce_round_robin && ASTEquality::compareTree(sharding_expr, other.sharding_expr);
     }
     String toString() const;
 
@@ -86,6 +100,7 @@ private:
     Names columns;
     bool require_handle;
     UInt64 buckets;
+    ASTPtr sharding_expr;
     bool enforce_round_robin;
 };
 
@@ -245,6 +260,7 @@ public:
     void setCTEDescriptions(CTEDescriptions descriptions) { cte_descriptions = std::move(descriptions); }
 
     Property translate(const std::unordered_map<String, String> & identities) const;
+    Property normalize(const SymbolEquivalences & symbol_equivalences) const;
 
     bool operator==(const Property & other) const
     {

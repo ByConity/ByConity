@@ -6,7 +6,7 @@ namespace DB::Statistics
 {
 
 CollectStep::CollectStep(DB::Statistics::StatisticsCollector & core_)
-    : core(core_), table_info(core_.table_info), catalog(core_.catalog), context(core_.context), handler_context(context->getSettingsRef())
+    : core(core_), table_info(core_.table_info), catalog(core_.catalog), context(core_.context), handler_context(core_.settings)
 {
 }
 

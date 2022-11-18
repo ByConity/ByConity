@@ -1,18 +1,19 @@
 #include <numeric>
 #include <type_traits>
+#include <Columns/ColumnNullable.h>
 #include <Statistics/CollectStep.h>
-#include <Statistics/CommonTools.h>
 #include <Statistics/ParseUtils.h>
 #include <Statistics/ScaleAlgorithm.h>
 #include <Statistics/StatsCpcSketch.h>
 #include <Statistics/StatsNdvBucketsExtend.h>
+#include <Statistics/TypeUtils.h>
 #include <boost/noncopyable.hpp>
 #include <fmt/format.h>
 
 namespace DB::Statistics
 {
 
-static const String virtual_mark_id = "cityHash64(blockNumber(), getHostWithPorts()), intDiv(rowNumberInBlock(), 8192)";
+static const String virtual_mark_id = "cityHash64(blockNumber(), _part_uuid), intDiv(rowNumberInBlock(), 8192)";
 
 // cpc is like HyperLogLog, kll is to calculate bucket bounds for equal-height histogram
 // this fetch data via the following sql:
@@ -35,9 +36,10 @@ public:
 
     std::vector<String> getSqls() override
     {
-        auto wrapped_col_name = getWrappedColumnName(config, col_name);
+        auto quote_col_name = backQuoteIfNeed(col_name);
+        auto wrapped_col_name = getWrappedColumnName(config, quote_col_name);
 
-        auto count_sql = fmt::format(FMT_STRING("count({})"), col_name);
+        auto count_sql = fmt::format(FMT_STRING("count({})"), quote_col_name);
         auto ndv_sql = fmt::format(FMT_STRING("cpc({})"), wrapped_col_name);
         auto block_ndv_sql = fmt::format(FMT_STRING("cpc(cityHash64({}, {}))"), wrapped_col_name, virtual_mark_id);
         auto histogram_sql = fmt::format(FMT_STRING("kll({})"), wrapped_col_name);
@@ -84,22 +86,47 @@ public:
         {
             double sample_ndv = getNdvFromBase64(ndv_b64);
             double block_ndv = getNdvFromBase64(block_ndv_b64);
-            sample_ndv = std::min(sample_ndv, sample_nonnull_count);
             block_ndv = std::min(block_ndv, sample_nonnull_count);
-            sample_ndv = std::min(sample_ndv, block_ndv);
 
             result.nonnull_count = scaleCount(full_count, sample_row_count, sample_nonnull_count);
 
+            // ensure it's a valid value
+            sample_ndv = std::min(block_ndv, sample_ndv);
             auto estimated_ndv = scaleNdv(full_count, sample_row_count, sample_ndv, block_ndv);
-            // 0.98 is hyperloglog error rate
-            auto estimated_ndv_with_error = scaleNdv(full_count, sample_row_count, sample_ndv * 0.98, block_ndv);
+            // 0.02 is hyperloglog error rate
+            constexpr double err_rate = 0.02;
+            auto sample_ndv_lb = std::min(block_ndv, sample_ndv * (1 - err_rate));
+            auto estimated_ndv_lower_bound = scaleNdv(full_count, sample_row_count, sample_ndv_lb, block_ndv);
+            auto sample_ndv_ub = std::min(block_ndv, sample_ndv * (1 + err_rate));
+            auto estimated_ndv_upper_bound = scaleNdv(full_count, sample_row_count, sample_ndv_ub, block_ndv);
 
             LOG_INFO(
                 &Poco::Logger::get("ThirdSampleColumnHandler"),
-                fmt::format(FMT_STRING("estimated_ndv={}, estimated_ndv_with_error={}"), estimated_ndv, estimated_ndv_with_error));
+                fmt::format(
+                    FMT_STRING("estimated_ndv={}, estimated_ndv_low_bound={}, estimated_ndv_upper_bound={}"),
+                    estimated_ndv,
+                    estimated_ndv_lower_bound,
+                    estimated_ndv_upper_bound));
 
-            // ensure error of estimated ndv less than 30% due to HyperLogLog
-            if (estimated_ndv <= 1.3 * estimated_ndv_with_error)
+            bool use_accurate = false;
+            switch (handler_context.settings.accurate_sample_ndv) 
+            {
+                case StatisticsAccurateSampleNdvMode::AUTO:
+                    // when error of estimated ndv more than 30% due to HyperLogLog,
+                    // that is, low_bound is less than 70% of the upper bound
+                    // use accurate sample ndv
+                    // this case happens when full_ndv > k * sample_size, where k is a constant
+                    use_accurate = estimated_ndv_lower_bound < estimated_ndv_upper_bound * 0.7;
+                    break;
+                case StatisticsAccurateSampleNdvMode::ALWAYS:
+                    use_accurate = true;
+                    break;
+                case StatisticsAccurateSampleNdvMode::NEVER:
+                    use_accurate = false;
+                    break;
+            }
+
+            if (!use_accurate)
             {
                 result.ndv_value_opt = estimated_ndv;
             }
@@ -177,7 +204,8 @@ public:
 
     std::vector<String> getSqls() override
     {
-        auto wrapped_col_name = getWrappedColumnName(config, col_name);
+        auto quote_col_name = backQuoteIfNeed(col_name);
+        auto wrapped_col_name = getWrappedColumnName(config, quote_col_name);
 
         auto bounds_b64 = base64Encode(bucket_bounds->serialize());
 
@@ -240,11 +268,6 @@ private:
     ColumnCollectConfig config;
 };
 
-String getSampleTail(const Settings & settings)
-{
-    auto sample_tail_with_space = fmt::format(FMT_STRING(" SAMPLE {}"), settings.statistics_sample_row_count);
-    return sample_tail_with_space;
-}
 
 // bucket_bounds_search is to calculate bucket index of the histogram for an element
 // this will generate the following sql, calculating result for ndv
@@ -272,18 +295,19 @@ String getSampleTail(const Settings & settings)
 //
 // this sql is slow
 String constructThirdSql(
-    const Settings & settings,
+    const CollectorSettings & settings,
     const StatsTableIdentifier & table_info,
     const NameAndTypePair & col_desc,
-    const BucketBounds & bucket_bounds)
+    const BucketBounds & bucket_bounds,
+    const String & sample_tail)
 {
-    auto config = get_column_config(settings, col_desc.type);
-    auto wrapped_col_name = getWrappedColumnName(config, col_desc.name);
+    auto data_type = decayDataType(col_desc.type);
+    auto config = get_column_config(settings, data_type);
+    auto wrapped_col_name = getWrappedColumnName(config, backQuoteIfNeed(col_desc.name));
     auto bounds_b64 = base64Encode(bucket_bounds.serialize());
 
-    auto tag_sql = fmt::format(FMT_STRING("bucket_bounds_search('{}', `{}`)"), bounds_b64, wrapped_col_name);
+    auto tag_sql = fmt::format(FMT_STRING("bucket_bounds_search('{}', {})"), bounds_b64, wrapped_col_name);
     auto mark_sql = fmt::format(FMT_STRING("uniq(cityHash64({}))"), virtual_mark_id);
-    auto sample_tail = getSampleTail(settings);
     auto inner_sql = fmt::format(
         FMT_STRING("select {} as __tmp_tag, {} as __tmp_mark_cnt, count(*) as __tmp_freq from {} {} group by {}"),
         tag_sql,
@@ -297,11 +321,40 @@ String constructThirdSql(
     return full_sql;
 }
 
+static ColumnPtr getNestedColumn(ColumnPtr column)
+{
+    if (column->lowCardinality())
+    {
+        column = column->convertToFullColumnIfLowCardinality();
+    }
+
+    if (column->isNullable())
+    {
+        return checkAndGetColumn<ColumnNullable>(*column)->getNestedColumnPtr();
+    }
+
+    return column;
+}
 
 class StatisticsCollectorStepSample : public CollectStep
 {
 public:
     explicit StatisticsCollectorStepSample(StatisticsCollector & core_) : CollectStep(core_) { }
+
+    String getSampleTail()
+    {
+        auto row_count = handler_context.full_count;
+        const auto & settings = handler_context.settings;
+
+        if (settings.sample_ratio * row_count < settings.sample_row_count)
+        {
+            return fmt::format(FMT_STRING(" SAMPLE {}"), settings.sample_row_count);
+        }
+        else
+        {
+            return fmt::format(FMT_STRING(" SAMPLE {}"), settings.sample_ratio);
+        }
+    }
 
     void firstCollectStep(const ColumnDescVector & cols_desc)
     {
@@ -314,9 +367,7 @@ public:
         }
 
         auto sql = table_handler.getFullSql();
-        auto sample_tail_with_space = fmt::format(
-            FMT_STRING(" SAMPLE {} SETTINGS enable_deterministic_sample_by_range=1"),
-            catalog->getSettingsRef().statistics_sample_row_count);
+        auto sample_tail_with_space = getSampleTail();
 
         sql += sample_tail_with_space;
 
@@ -359,7 +410,7 @@ public:
         if (to_collect)
         {
             auto sql = table_handler.getFullSql();
-            sql += getSampleTail(catalog->getSettingsRef());
+            sql += getSampleTail();
 
             auto helper = SubqueryHelper::create(context, sql);
             auto block = getOnlyRowFrom(helper);
@@ -376,7 +427,7 @@ public:
         for (auto & col_desc : cols_desc)
         {
             auto & col_data = handler_context.columns_data.at(col_desc.name);
-            auto full_sql = constructThirdSql(catalog->getSettingsRef(), table_info, col_desc, *col_data.bucket_bounds);
+            auto full_sql = constructThirdSql(handler_context.settings, table_info, col_desc, *col_data.bucket_bounds, getSampleTail());
             LOG_INFO(&Poco::Logger::get("thirdSampleColumnHandler"), full_sql);
             auto helper = SubqueryHelper::create(context, full_sql);
             Block block;
@@ -395,25 +446,29 @@ public:
                     continue;
                 }
 
+                // tag is bucket index
+                auto col_tag = block.getByPosition(0).column;
+                auto nested_col_tag = getNestedColumn(col_tag);
+                auto nested_col_ndv = getNestedColumn(block.getByPosition(1).column);
+                auto nested_col_block_ndv = getNestedColumn(block.getByPosition(2).column);
+                auto nested_col_count = getNestedColumn(block.getByPosition(3).column);
+
                 for (size_t index = 0; index < block.rows(); ++index)
                 {
-                    // tag is bucket index
-                    auto tag_col = block.getByPosition(0).column;
-
                     // when it is null, record null count
-                    if (tag_col->isNullAt(index))
+                    if (col_tag->isNullAt(index))
                     {
-                        sample_null_count = block.getByPosition(3).column->getUInt(index);
+                        sample_null_count = nested_col_count->getUInt(index);
                         continue;
                     }
-                    auto tag = block.getByPosition(0).column->getUInt(index);
+                    auto tag = nested_col_tag->getUInt(index);
                     if (tag >= num_buckets)
                     {
                         throw Exception("unexpected tag", ErrorCodes::LOGICAL_ERROR);
                     }
-                    sample_ndvs[tag] = block.getByPosition(1).column->getUInt(index);
-                    sample_block_ndvs[tag] = block.getByPosition(2).column->getUInt(index);
-                    sample_counts[tag] = block.getByPosition(3).column->getUInt(index);
+                    sample_ndvs[tag] = nested_col_ndv->getUInt(index);
+                    sample_block_ndvs[tag] = nested_col_block_ndv->getUInt(index);
+                    sample_counts[tag] = nested_col_count->getUInt(index);
                 }
             }
 
@@ -446,6 +501,7 @@ public:
     {
         // TODO: split them into several columns step
         collectTable();
+
         firstCollectStep(cols_desc);
 
         auto unhandled_cols = collectSecondStep(cols_desc);

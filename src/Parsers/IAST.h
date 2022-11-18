@@ -119,7 +119,8 @@ class ReadBuffer;
     M(ASTDumpInfoQuery) \
     M(ASTReproduceQuery) \
     M(ASTPartToolKit) \
-    M(ASTQuantifiedComparison)
+    M(ASTQuantifiedComparison) \
+    M(ASTTableColumnReference)
 #define ENUM_TYPE(ITEM) ITEM,
 
 enum class ASTType : UInt8
@@ -366,7 +367,7 @@ public:
 
     void cloneChildren();
 
-    virtual void serialize(WriteBuffer &) const { throw Exception("Not implement serialize of " + getID(), ErrorCodes::NOT_IMPLEMENTED); } 
+    virtual void serialize(WriteBuffer &) const { throw Exception("Not implement serialize of " + getID(), ErrorCodes::NOT_IMPLEMENTED); }
     virtual void deserializeImpl(ReadBuffer &) { throw Exception("Not implement deserializeImpl AST", ErrorCodes::NOT_IMPLEMENTED); }
     static ASTPtr deserialize(ReadBuffer &) { throw Exception("Not implement deserialize AST", ErrorCodes::NOT_IMPLEMENTED); }
 

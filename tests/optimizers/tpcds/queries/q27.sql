@@ -14,7 +14,7 @@
        cd_education_status = 'College' and
        d_year = 2002 and
        s_state in ('TN','TN', 'TN', 'TN', 'TN', 'TN')
- group by i_item_id, s_state with rollup
+ group by rollup (i_item_id, s_state)
  order by i_item_id
          ,s_state
  limit 100;

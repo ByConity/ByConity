@@ -33,11 +33,13 @@
 #include <QueryPlan/JoinStep.h>
 #include <QueryPlan/LimitByStep.h>
 #include <QueryPlan/LimitStep.h>
+#include <QueryPlan/SortingStep.h>
 #include <QueryPlan/MergeSortingStep.h>
 #include <QueryPlan/MergingAggregatedStep.h>
 #include <QueryPlan/MergingSortedStep.h>
 #include <QueryPlan/OffsetStep.h>
 #include <QueryPlan/PartialSortingStep.h>
+#include <QueryPlan/PartitionTopNStep.h>
 #include <QueryPlan/PlanSegmentSourceStep.h>
 #include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/QueryCacheStep.h>

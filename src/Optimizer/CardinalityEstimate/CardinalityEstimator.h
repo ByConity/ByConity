@@ -55,6 +55,7 @@ public:
     PlanNodeStatisticsPtr visitValuesStep(const ValuesStep & step, CardinalityContext &) override;
     PlanNodeStatisticsPtr visitLimitStep(const LimitStep & step, CardinalityContext & context) override;
     PlanNodeStatisticsPtr visitLimitByStep(const LimitByStep & step, CardinalityContext & context) override;
+    PlanNodeStatisticsPtr visitSortingStep(const SortingStep &, CardinalityContext & context) override;
     PlanNodeStatisticsPtr visitMergeSortingStep(const MergeSortingStep &, CardinalityContext & context) override;
     PlanNodeStatisticsPtr visitPartialSortingStep(const PartialSortingStep &, CardinalityContext & context) override;
     PlanNodeStatisticsPtr visitMergingSortedStep(const MergingSortedStep &, CardinalityContext & context) override;
@@ -64,6 +65,7 @@ public:
     PlanNodeStatisticsPtr visitEnforceSingleRowStep(const EnforceSingleRowStep & step, CardinalityContext & context) override;
     PlanNodeStatisticsPtr visitAssignUniqueIdStep(const AssignUniqueIdStep & step, CardinalityContext & context) override;
     PlanNodeStatisticsPtr visitCTERefStep(const CTERefStep & step, CardinalityContext & context) override;
+    PlanNodeStatisticsPtr visitPartitionTopNStep(const PartitionTopNStep & step, CardinalityContext & context) override;
 };
 
 class PlanCardinalityVisitor : public PlanNodeVisitor<PlanNodeStatisticsPtr, CardinalityContext>

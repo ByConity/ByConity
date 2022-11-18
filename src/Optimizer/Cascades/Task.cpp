@@ -8,6 +8,7 @@
 #include <Optimizer/Property/PropertyEnforcer.h>
 #include <Optimizer/Property/PropertyMatcher.h>
 #include <Optimizer/Rule/Rule.h>
+#include <QueryPlan/JoinStep.h>
 
 namespace DB
 {
@@ -342,15 +343,52 @@ void OptimizeInput::execute()
                     || first_props.getNodePartitioning().getPartitioningHandle() == Partitioning::Handle::BUCKET_TABLE)
                 {
                     match = true;
+                    auto left_equivalences = context->getMemo().getGroupById(group_expr->getChildrenGroups()[0])->getEquivalences();
+                    auto right_equivalences = context->getMemo().getGroupById(group_expr->getChildrenGroups()[1])->getEquivalences();
+                    NameToNameSetMap right_join_key_to_left;
+                    if (auto join_step = dynamic_cast<const JoinStep *>(group_expr->getStep().get()))
+                    {
+                        auto left_rep_map = left_equivalences->representMap();
+                        auto right_rep_map = right_equivalences->representMap();
+                        for (size_t join_key_index = 0; join_key_index < join_step->getLeftKeys().size(); ++join_key_index)
+                        {
+                            auto left_key = join_step->getLeftKeys()[join_key_index];
+                            auto right_key = join_step->getRightKeys()[join_key_index];
+                            left_key = left_rep_map.count(left_key) ? left_rep_map.at(left_key) : left_key;
+                            right_key = right_rep_map.count(right_key) ? right_rep_map.at(right_key) : right_key;
+                            right_join_key_to_left[right_key].insert(left_key);
+                        }
+                    }
+
                     auto first_handle = first_props.getNodePartitioning().getPartitioningHandle();
                     auto first_bucket_count = first_props.getNodePartitioning().getBuckets();
+                    auto first_sharding_expr = first_props.getNodePartitioning().getSharingExpr();
+                    const auto first_partition_column
+                        = first_props.getNodePartitioning().normalize(*left_equivalences).getPartitioningColumns();
+
                     for (size_t actual_prop_index = 1; actual_prop_index < actual_input_props.size(); ++actual_prop_index)
                     {
-                        if (actual_input_props[actual_prop_index].getNodePartitioning().getPartitioningHandle() != first_handle
-                            || actual_input_props[actual_prop_index].getNodePartitioning().getBuckets() != first_bucket_count)
+                        auto translated_prop = actual_input_props[actual_prop_index].normalize(*right_equivalences);
+                        if (translated_prop.getNodePartitioning().getPartitioningHandle() != first_handle
+                            || translated_prop.getNodePartitioning().getBuckets() != first_bucket_count
+                            || !ASTEquality::compareTree(translated_prop.getNodePartitioning().getSharingExpr(), first_sharding_expr))
                         {
                             match = false;
                             break;
+                        }
+                        const auto & transformed_partition_cols = translated_prop.getNodePartitioning().getPartitioningColumns();
+                        if (transformed_partition_cols.size() != first_partition_column.size())
+                        {
+                            match = false;
+                            break;
+                        }
+                        for (size_t col_index = 0; col_index < transformed_partition_cols.size(); col_index++)
+                        {
+                            if (right_join_key_to_left[transformed_partition_cols[col_index]].count(first_partition_column[col_index]) == 0)
+                            {
+                                match = false;
+                                break;
+                            }
                         }
                     }
                 }
@@ -383,7 +421,7 @@ void OptimizeInput::execute()
             }
             else
             {
-                output_prop = PropertyDeriver::deriveProperty(group_expr->getStep(), actual_input_props);
+                output_prop = PropertyDeriver::deriveProperty(group_expr->getStep(), actual_input_props, *context->getOptimizerContext().getContext());
             }
 
             // Not need to do pruning here because it has been done when we get the
@@ -407,7 +445,7 @@ void OptimizeInput::execute()
                 // add remote exchange
                 remote_exchange
                     = PropertyEnforcer::enforceNodePartitioning(group_expr, require, actual, *context->getOptimizerContext().getContext());
-                actual = PropertyDeriver::deriveProperty(remote_exchange->getStep(), actual);
+                actual = PropertyDeriver::deriveProperty(remote_exchange->getStep(), actual, *context->getOptimizerContext().getContext());
                 // add cost
                 cur_total_cost += CostCalculator::calculate(
                                       remote_exchange->getStep(),
@@ -428,7 +466,7 @@ void OptimizeInput::execute()
                 // add local exchange
                 local_exchange = PropertyEnforcer::enforceStreamPartitioning(
                     remote_exchange ? remote_exchange : group_expr, require, actual, *context->getOptimizerContext().getContext());
-                actual = PropertyDeriver::deriveProperty(local_exchange->getStep(), actual);
+                actual = PropertyDeriver::deriveProperty(local_exchange->getStep(), actual, *context->getOptimizerContext().getContext());
                 // add cost
                 cur_total_cost += CostCalculator::calculate(
                                       local_exchange->getStep(),

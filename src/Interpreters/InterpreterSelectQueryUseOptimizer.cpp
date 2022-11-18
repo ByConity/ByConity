@@ -16,6 +16,7 @@ QueryPlanPtr InterpreterSelectQueryUseOptimizer::buildQueryPlan()
 {
     context->createPlanNodeIdAllocator();
     context->createSymbolAllocator();
+    context->createOptimizerMetrics();
 
     query_ptr = QueryRewriter::rewrite(query_ptr, context);
 

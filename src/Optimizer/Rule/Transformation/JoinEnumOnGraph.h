@@ -2,6 +2,7 @@
 #include <Functions/FunctionsHashing.h>
 #include <Optimizer/PredicateUtils.h>
 #include <Optimizer/Rule/Rule.h>
+#include <Optimizer/Equivalences.h>
 #include <QueryPlan/JoinStep.h>
 #include <boost/dynamic_bitset.hpp>
 
@@ -28,57 +29,6 @@ private:
     bool support_filter;
 };
 
-struct UnionFind
-{
-    std::unordered_map<String, String> parent;
-
-    UnionFind() = default;
-
-    UnionFind(const UnionFind & left, const UnionFind & right)
-    {
-        parent.insert(left.parent.begin(), left.parent.end());
-        parent.insert(right.parent.begin(), right.parent.end());
-    }
-
-    String find(const String & v)
-    {
-        if (!parent.contains(v))
-            parent[v] = v;
-        if (v == parent[v])
-            return v;
-        return parent[v] = find(parent[v]);
-    }
-
-    void add(String a, String b)
-    {
-        a = find(a);
-        b = find(b);
-        if (a != b)
-        {
-            parent[b] = a;
-        }
-    }
-
-    std::vector<std::unordered_set<String>> getSets()
-    {
-        std::vector<std::unordered_set<String>> result;
-        std::unordered_map<String, size_t> parent_to_index;
-
-        for (auto & item : parent)
-        {
-            auto p = find(item.first);
-            if (!parent_to_index.contains(p))
-            {
-                parent_to_index[p] = result.size();
-                result.emplace_back();
-            }
-            result[parent_to_index[p]].insert(item.first);
-        }
-
-        return result;
-    }
-};
-
 class JoinSet
 {
 public:
@@ -101,13 +51,13 @@ public:
     bool operator==(const JoinSet & rhs) const { return groups == rhs.groups; }
     bool operator!=(const JoinSet & rhs) const { return !(rhs == *this); }
 
-    UnionFind & getUnionFind() { return union_find; }
+    UnionFind<String> & getUnionFind() { return union_find; }
 
     const ASTPtr & getFilter() const { return filter; }
 
 private:
     std::vector<GroupId> groups;
-    UnionFind union_find;
+    UnionFind<String> union_find;
     ASTPtr filter;
 };
 

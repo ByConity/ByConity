@@ -1,4 +1,5 @@
 #include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <Functions/FunctionFactory.h>
 
@@ -8,7 +9,7 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int TOO_FEW_ARGUMENTS_FOR_FUNCTION;
+    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 }
 
 namespace
@@ -26,75 +27,78 @@ public:
     bool isVariadic() const override { return true; }
     size_t getNumberOfArguments() const override { return 0; }
     String getName() const override { return name; }
+    bool useDefaultImplementationForNulls() const override { return false; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & args) const override
     {
-        if (args.empty())
-            throw Exception{"Function " + getName() + " expects at least 1 arguments",
-                ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION};
+        if (args.size() < 4 || args.size() % 2 != 0)
+            throw Exception{"Invalid number of arguments for function " + getName(),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH};
 
-        /// See the comments in executeImpl() to understand why we actually have to
-        /// get the return type of a transform function.
+        auto for_conditions = [&args](auto && f) {
+            size_t conditions_end = args.size() - 1;
+            f(args[0]);
+            for (size_t i = 1; i < conditions_end; i += 2)
+                f(args[i]);
+        };
 
-        /// Get the types of the arrays that we pass to the transform function.
-        DataTypes dst_array_types;
+        auto for_branches = [&args](auto && f) {
+            size_t branches_end = args.size();
+            for (size_t i = 2; i < branches_end; i += 2)
+                f(args[i]);
+            f(args.back());
+        };
 
-        for (size_t i = 2; i < args.size() - 1; i += 2)
-            dst_array_types.push_back(args[i]);
+        DataTypes types_of_conditions;
+        types_of_conditions.reserve(args.size() / 2);
+        for_conditions([&](const DataTypePtr & arg) {
+            types_of_conditions.emplace_back(arg);
+        });
 
-        return getLeastSupertype(dst_array_types);
+        auto condition_super_type = getLeastSupertype(types_of_conditions);
+
+        DataTypes types_of_branches;
+        types_of_branches.reserve(args.size() / 2);
+
+        for_branches([&](const DataTypePtr & arg) {
+            types_of_branches.emplace_back(arg);
+        });
+
+        return getLeastSupertype(types_of_branches);
     }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & args, const DataTypePtr & result_type, size_t input_rows_count) const override
     {
-        if (args.empty())
-            throw Exception{"Function " + getName() + " expects at least 1 argument",
-                ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION};
+        /// Leverage function multiIf
+        /// transform: expr, case1, then1, case2, then2, ... caseN, thenN, else
+        ///        to: multiIf(expr = case1, then1, expr = case2, then2, ..., expr = caseN, thenN, else)
 
-        /// In the following code, we turn the construction:
-        /// CASE expr WHEN val[0] THEN branch[0] ... WHEN val[N-1] then branch[N-1] ELSE branchN
-        /// into the construction transform(expr, src, dest, branchN)
-        /// where:
-        /// src = [val[0], val[1], ..., val[N-1]]
-        /// dst = [branch[0], ..., branch[N-1]]
-        /// then we perform it.
+        if (args.size() < 4 || args.size() % 2 != 0)
+            throw Exception{"Invalid number of arguments for function " + getName(),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH};
 
-        /// Create the arrays required by the transform function.
-        ColumnsWithTypeAndName src_array_elems;
-        DataTypes src_array_types;
+        auto multi_if = FunctionFactory::instance().get("multiIf", context);
+        auto equals = FunctionFactory::instance().get("equals", context);
+        auto eq_type = std::make_shared<DataTypeUInt8>();
 
-        ColumnsWithTypeAndName dst_array_elems;
-        DataTypes dst_array_types;
+        ColumnsWithTypeAndName eq_args(2);
+        ColumnsWithTypeAndName v;
 
-        for (size_t i = 1; i < (args.size() - 1); ++i)
-        {
-            if (i % 2)
-            {
-                src_array_elems.push_back(args[i]);
-                src_array_types.push_back(args[i].type);
-            }
-            else
-            {
-                dst_array_elems.push_back(args[i]);
-                dst_array_types.push_back(args[i].type);
-            }
+        eq_args[0] =args[0]; /* push expr */
+        v.reserve(args.size() - 1);
+
+        /* prepare (expr = caseX, thenX) pair */
+        for (size_t i = 1; i < args.size() - 1; i += 2) {
+            eq_args[1] = args[i]; /* push current case */
+
+            v.push_back({equals->build(eq_args)->execute(eq_args, eq_type, input_rows_count), eq_type, ""});
+            v.push_back(args[i + 1]);
         }
 
-        DataTypePtr src_array_type = std::make_shared<DataTypeArray>(getLeastSupertype(src_array_types));
-        DataTypePtr dst_array_type = std::make_shared<DataTypeArray>(getLeastSupertype(dst_array_types));
+        /* last else condition */
+        v.push_back(args.back());
 
-        ColumnWithTypeAndName src_array_col{nullptr, src_array_type, ""};
-        ColumnWithTypeAndName dst_array_col{nullptr, dst_array_type, ""};
-
-        auto fun_array = FunctionFactory::instance().get("array", context);
-
-        src_array_col.column = fun_array->build(src_array_elems)->execute(src_array_elems, src_array_type, input_rows_count);
-        dst_array_col.column = fun_array->build(dst_array_elems)->execute(dst_array_elems, dst_array_type, input_rows_count);
-
-        /// Execute transform.
-        ColumnsWithTypeAndName transform_args{args.front(), src_array_col, dst_array_col, args.back()};
-        return FunctionFactory::instance().get("transform", context)->build(transform_args)
-            ->execute(transform_args, result_type, input_rows_count);
+        return multi_if->build(v)->execute(v, result_type, input_rows_count);
     }
 
 private:

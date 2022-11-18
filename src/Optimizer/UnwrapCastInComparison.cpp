@@ -18,12 +18,13 @@ const static auto type_string = std::make_shared<DataTypeString>(); // NOLINT(ce
 const static auto type_int32 = std::make_shared<DataTypeInt32>(); // NOLINT(cert-err58-cpp)
 const static auto type_int64 = std::make_shared<DataTypeInt64>(); // NOLINT(cert-err58-cpp)
 
-ASTPtr unwrapCastInComparison(const ConstASTPtr & expression, ContextMutablePtr context, const NamesAndTypes & column_types)
+ASTPtr unwrapCastInComparison(const ConstASTPtr & expression, ContextMutablePtr context, const NameToType & column_types)
 {
     UnwrapCastInComparisonVisitor unwrap_cast_visitor;
     auto type_analyzer = TypeAnalyzer::create(context, column_types);
     UnwrapCastInComparisonContext unwrap_cast_context{
         .context = context,
+        .column_types = column_types,
         .type_analyzer = type_analyzer,
     };
     return ASTVisitorUtil::accept(expression->clone(), unwrap_cast_visitor, unwrap_cast_context);
@@ -43,15 +44,14 @@ ASTPtr UnwrapCastInComparisonVisitor::visitASTFunction(ASTPtr & node, UnwrapCast
     if (!cast || !isConversionFunction(*cast))
         return rewriteArgs(function, context);
 
-    ExpressionInterpreterSettings settings{.identifier_resolver = ExpressionInterpreter::no_op_resolver};
-    auto evaluate_result = ExpressionInterpreter::evaluate(right, context.context, context.type_analyzer, settings);
+    auto evaluate_result = ExpressionInterpreter::evaluateConstantExpression(right, context.column_types, context.context);
 
     // rhs is not a literal
-    if (std::holds_alternative<ASTPtr>(evaluate_result.second))
+    if (!evaluate_result.has_value())
         return rewriteArgs(function, context);
 
-    auto & literal = std::get<Field>(evaluate_result.second);
-    DataTypePtr & literal_type = evaluate_result.first;
+    auto & literal = evaluate_result->second;
+    DataTypePtr & literal_type = evaluate_result->first;
 
     if (literal.isNull() || isNaNOrInf(literal, literal_type))
         return rewriteArgs(function, context, true);
@@ -220,7 +220,10 @@ static const char * toXXXFunctionPrefixes[]
        "toUUID",
        "toFixedString",
        "toDate",
+       // "toDate32", // TODO: date32
        "toDateTime",
+       "toDateTime32", // alias to toDateTime
+       // "toDateTime64",  // TODO: not implemented since it requires decimal scale
        "toDecimal32",
        "toDecimal64",
        "toDecimal128",

@@ -11,7 +11,7 @@ namespace DB
 class QueryRewriter
 {
 public:
-    static ASTPtr rewrite(ASTPtr query, ContextMutablePtr context);
+    static ASTPtr rewrite(ASTPtr query, ContextMutablePtr context, bool enable_materialized_view = true);
 };
 
 }

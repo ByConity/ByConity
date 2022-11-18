@@ -1,7 +1,7 @@
 #include <Optimizer/CardinalityEstimate/SymbolStatistics.h>
 
+#include <Statistics/TypeUtils.h>
 #include <Common/FieldVisitorConvertToNumber.h>
-#include <Statistics/CommonTools.h>
 
 namespace DB
 {
@@ -51,10 +51,11 @@ bool SymbolStatistics::isString() const
     return tmp_type->getTypeId() == TypeIndex::String || tmp_type->getTypeId() == TypeIndex::FixedString;
 }
 
-bool SymbolStatistics::isDate() const
+bool SymbolStatistics::isImplicitConvertableFromString()
 {
     auto tmp_type = Statistics::decayDataType(type);
-    return tmp_type->getTypeId() == TypeIndex::Date;
+    // currently support date, date32, datetime32/64
+    return isDateOrDateTime(tmp_type) || isTime(tmp_type);
 }
 
 double SymbolStatistics::toDouble(const Field & literal)
@@ -364,5 +365,4 @@ Poco::JSON::Object::Ptr SymbolStatistics::toJson() const
     }
     return json;
 }
-
 }

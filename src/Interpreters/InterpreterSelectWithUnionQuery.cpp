@@ -156,7 +156,7 @@ InterpreterSelectWithUnionQuery::InterpreterSelectWithUnionQuery(
         for (size_t query_num = 0; query_num < num_children; ++query_num)
             headers[query_num] = nested_interpreters[query_num]->getSampleBlock();
 
-        result_header = getCommonHeaderForUnion(headers);
+        result_header = getCommonHeaderForUnion(headers, context->getSettingsRef().allow_extended_type_conversion);
     }
 
     /// InterpreterSelectWithUnionQuery ignores limits if all nested interpreters ignore limits.
@@ -174,7 +174,7 @@ InterpreterSelectWithUnionQuery::InterpreterSelectWithUnionQuery(
 
 }
 
-Block InterpreterSelectWithUnionQuery::getCommonHeaderForUnion(const Blocks & headers)
+Block InterpreterSelectWithUnionQuery::getCommonHeaderForUnion(const Blocks & headers, bool allow_extended_conversion)
 {
     size_t num_selects = headers.size();
     Block common_header = headers.front();
@@ -198,7 +198,7 @@ Block InterpreterSelectWithUnionQuery::getCommonHeaderForUnion(const Blocks & he
             columns[i] = &headers[i].getByPosition(column_num);
 
         ColumnWithTypeAndName & result_elem = common_header.getByPosition(column_num);
-        result_elem = getLeastSuperColumn(columns);
+        result_elem = getLeastSuperColumn(columns, allow_extended_conversion);
     }
 
     return common_header;

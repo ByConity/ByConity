@@ -14,6 +14,7 @@
 namespace DB
 {
 class ProjectionStep;
+struct AggregateDescription;
 
 namespace Utils
 {
@@ -27,6 +28,7 @@ namespace Utils
     bool isIdentity(const Assignments & assignments);
     bool isIdentity(const ProjectionStep & project);
     std::unordered_map<String, String> computeIdentityTranslations(Assignments & assignments);
+    ASTPtr extractAggregateToFunction(const AggregateDescription & agg_descr);
 
     // this method is used to deal with function names which are case-insensitive or have an alias to.
     // should be called after `registerFunctions`
@@ -48,6 +50,36 @@ namespace Utils
     {
         bool operator()(const ConstASTPtr & predicate_1, const ConstASTPtr & predicate_2) const;
     };
+
+    //Determine whether it is NAN
+    bool isFloatingPointNaN(const DataTypePtr & type, const Field & value);
+
+    String flipOperator(const String & name);
+
+    template <typename T>
+    static std::vector<std::vector<T>> powerSet(std::vector<T> set)
+    {
+        /*set_size of power set of a set with set_size
+        n is (2**n -1)*/
+        size_t pow_set_size = pow(2, set.size());
+        size_t counter, j;
+
+        /*Run from counter 111..1 to 000..1 */
+        std::vector<std::vector<T>> power_set;
+        for (counter = pow_set_size - 1; counter > 0; counter--)
+        {
+            std::vector<T> subset;
+            for (j = 0; j < set.size(); j++)
+            {
+                /* Check if jth bit in the counter is set
+                If set then print jth element from set */
+                if (counter & (1 << j))
+                    subset.emplace_back(set[j]);
+            }
+            power_set.emplace_back(subset);
+        }
+        return power_set;
+    }
 
 }
 

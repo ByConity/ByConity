@@ -1,5 +1,5 @@
-with
- ssr as (select s_store_id,
+with ssr as
+ (select s_store_id,
         sum(sales_price) as sales,
         sum(profit) as profit,
         sum(return_amt) as returns,
@@ -9,14 +9,14 @@ with
             ss_sold_date_sk  as date_sk,
             ss_ext_sales_price as sales_price,
             ss_net_profit as profit,
-            cast(0 as Nullable(Float64)) as return_amt,
-            cast(0 as Nullable(Float64)) as net_loss
+            cast(0 as decimal(7,2)) as return_amt,
+            cast(0 as decimal(7,2)) as net_loss
     from store_sales
     union all
     select sr_store_sk as store_sk,
            sr_returned_date_sk as date_sk,
-           cast(0 as Nullable(Float64)) as sales_price,
-           cast(0 as Nullable(Float64)) as profit,
+           cast(0 as decimal(7,2)) as sales_price,
+           cast(0 as decimal(7,2)) as profit,
            sr_return_amt as return_amt,
            sr_net_loss as net_loss
     from store_returns
@@ -29,8 +29,8 @@ with
        and store_sk = s_store_sk
  group by s_store_id)
  ,
-
- csr as (select cp_catalog_page_id,
+ csr as
+ (select cp_catalog_page_id,
         sum(sales_price) as sales,
         sum(profit) as profit,
         sum(return_amt) as returns,
@@ -40,14 +40,14 @@ with
             cs_sold_date_sk  as date_sk,
             cs_ext_sales_price as sales_price,
             cs_net_profit as profit,
-            cast(0 as Nullable(Float64)) as return_amt,
-            cast(0 as Nullable(Float64)) as net_loss
+            cast(0 as decimal(7,2)) as return_amt,
+            cast(0 as decimal(7,2)) as net_loss
     from catalog_sales
     union all
     select cr_catalog_page_sk as page_sk,
            cr_returned_date_sk as date_sk,
-           cast(0 as Nullable(Float64)) as sales_price,
-           cast(0 as Nullable(Float64)) as profit,
+           cast(0 as decimal(7,2)) as sales_price,
+           cast(0 as decimal(7,2)) as profit,
            cr_return_amount as return_amt,
            cr_net_loss as net_loss
     from catalog_returns
@@ -60,8 +60,8 @@ with
        and page_sk = cp_catalog_page_sk
  group by cp_catalog_page_id)
  ,
-
- wsr as (select web_site_id,
+ wsr as
+ (select web_site_id,
         sum(sales_price) as sales,
         sum(profit) as profit,
         sum(return_amt) as returns,
@@ -71,14 +71,14 @@ with
             ws_sold_date_sk  as date_sk,
             ws_ext_sales_price as sales_price,
             ws_net_profit as profit,
-            cast(0 as Nullable(Float64)) as return_amt,
-            cast(0 as Nullable(Float64)) as net_loss
+            cast(0 as decimal(7,2)) as return_amt,
+            cast(0 as decimal(7,2)) as net_loss
     from web_sales
     union all
     select ws_web_site_sk as wsr_web_site_sk,
            wr_returned_date_sk as date_sk,
-           cast(0 as Nullable(Float64)) as sales_price,
-           cast(0 as Nullable(Float64)) as profit,
+           cast(0 as decimal(7,2)) as sales_price,
+           cast(0 as decimal(7,2)) as profit,
            wr_return_amt as return_amt,
            wr_net_loss as net_loss
     from web_returns left outer join web_sales on
@@ -119,7 +119,7 @@ with
         , (profit - profit_loss) as profit
  from   wsr
  ) x
- group by channel, id with rollup
+ group by rollup (channel, id)
  order by channel
          ,id
 limit 100;

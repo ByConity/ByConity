@@ -5,7 +5,7 @@
 namespace DB
 {
 bool PropertyMatcher::matchNodePartitioning(
-    const Context & context, Partitioning & required, const Partitioning & actual, const Equivalences & equivalences)
+    const Context & context, Partitioning & required, const Partitioning & actual, const SymbolEquivalences & equivalences)
 {
     if (required.getPartitioningHandle() == Partitioning::Handle::ARBITRARY)
         return true;
@@ -21,7 +21,7 @@ bool PropertyMatcher::matchNodePartitioning(
 }
 
 bool PropertyMatcher::matchStreamPartitioning(
-    const Context &, const Partitioning & required, const Partitioning & actual, const Equivalences & equivalences)
+    const Context &, const Partitioning & required, const Partitioning & actual, const SymbolEquivalences & equivalences)
 {
     if (required.getPartitioningHandle() == Partitioning::Handle::ARBITRARY)
         return true;

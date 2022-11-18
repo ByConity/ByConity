@@ -10,7 +10,7 @@ namespace DB::Statistics
 class StatsCpcSketch : public StatisticsBase
 {
 public:
-    static constexpr auto default_lg_k = 19;
+    static constexpr auto default_lg_k = 12;
     static constexpr auto tag = StatisticsTag::CpcSketch;
     StatsCpcSketch() : data(default_lg_k) { }
 

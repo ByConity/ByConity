@@ -8,6 +8,7 @@
 #include <Interpreters/WindowDescription.h>
 #include <Optimizer/PredicateUtils.h>
 #include <Optimizer/makeCastFunction.h>
+#include <Optimizer/Utils.h>
 #include <QueryPlan/AggregatingStep.h>
 #include <QueryPlan/ApplyStep.h>
 #include <QueryPlan/DistinctStep.h>
@@ -20,6 +21,7 @@
 #include <QueryPlan/JoinStep.h>
 #include <QueryPlan/LimitByStep.h>
 #include <QueryPlan/LimitStep.h>
+#include <QueryPlan/SortingStep.h>
 #include <QueryPlan/MergingSortedStep.h>
 #include <QueryPlan/MergeSortingStep.h>
 #include <QueryPlan/PartialSortingStep.h>
@@ -1093,41 +1095,52 @@ void QueryPlannerVisitor::planAggregate(PlanBuilder & builder, ASTSelectQuery & 
 
     // build grouping operations
     // TODO: grouping function only work, when group by with rollup?
-    NameToNameMap grouping_operations_descs;
+    GroupingDescriptions grouping_operations_descs;
     for (auto & grouping_op : analysis.getGroupingOperations(select_query))
-    {
-        auto arg_symbol = builder.translateToSymbol(grouping_op->arguments->children[0]);
-        String output_symbol;
-
-        if (!grouping_operations_descs.count(arg_symbol))
+        if (!mappings_for_aggregate.count(grouping_op))
         {
-            output_symbol = context->getSymbolAllocator()->newSymbol(grouping_op);
-            grouping_operations_descs.emplace(arg_symbol, output_symbol);
-        }
-        else
-        {
-            output_symbol = grouping_operations_descs.at(arg_symbol);
-        }
+            GroupingDescription description;
 
-        mappings_for_aggregate.emplace(grouping_op, output_symbol);
-    }
+            for (const auto & argument: grouping_op->arguments->children)
+                description.argument_names.emplace_back(builder.translateToSymbol(argument));
+
+            description.output_name = context->getSymbolAllocator()->newSymbol(grouping_op);
+
+            mappings_for_aggregate.emplace(grouping_op, description.output_name);
+            grouping_operations_descs.emplace_back(std::move(description));
+        }
 
     // collect group by keys & prune invisible columns
-    Names grouping_keys;
-    {
-        NameSet grouping_key_set;
-        FieldSymbolInfos visible_fields(builder.getFieldSymbolInfos().size());
-        AstToSymbol complex_expressions = createScopeAwaredASTMap<String>(analysis);
+    Names keys_for_all_group;
+    NameSet key_set_for_all_group;
+    GroupingSetsParamsList grouping_sets_params;
+    FieldSymbolInfos visible_fields(builder.getFieldSymbolInfos().size());
+    AstToSymbol complex_expressions = createScopeAwaredASTMap<String>(analysis);
 
-        for (auto & grouping_expr: group_by_analysis.grouping_expressions)
+    auto process_grouping_set = [&](const ASTs & grouping_set) {
+        Names keys_for_this_group;
+        NameSet key_set_for_this_group;
+
+        for (const auto & grouping_expr: grouping_set)
         {
             auto symbol = builder.translateToSymbol(grouping_expr);
+            bool new_global_key = false;
 
-            // skip duplicated grouping key
-            if (grouping_key_set.emplace(symbol).second)
+            if (!key_set_for_all_group.count(symbol))
             {
-                grouping_keys.push_back(symbol);
+                keys_for_all_group.push_back(symbol);
+                key_set_for_all_group.insert(symbol);
+                new_global_key = true;
+            }
 
+            if (!key_set_for_this_group.count(symbol))
+            {
+                keys_for_this_group.push_back(symbol);
+                key_set_for_this_group.insert(symbol);
+            }
+
+            if (new_global_key)
+            {
                 if (auto col_ref = analysis.tryGetColumnReference(grouping_expr);
                     col_ref && builder.isLocalScope(col_ref->scope))
                 {
@@ -1148,16 +1161,44 @@ void QueryPlannerVisitor::planAggregate(PlanBuilder & builder, ASTSelectQuery & 
                 }
             }
         }
-        builder.withNewMappings(visible_fields, complex_expressions);
+
+        grouping_sets_params.emplace_back(std::move(keys_for_this_group));
+    };
+
+    for (const auto & grouping_set : group_by_analysis.grouping_sets)
+        process_grouping_set(grouping_set);
+
+    builder.withNewMappings(visible_fields, complex_expressions);
+
+    if (select_query.group_by_with_rollup)
+    {
+        grouping_sets_params.clear();
+        auto key_size = keys_for_all_group.size();
+        for (size_t set_size = 0; set_size <= key_size; set_size++)
+        {
+            auto end = keys_for_all_group.begin();
+            std::advance(end, set_size);
+            Names keys_for_this_group{keys_for_all_group.begin(), end};
+            grouping_sets_params.emplace_back(std::move(keys_for_this_group));        
+        }
+    }
+
+    if (select_query.group_by_with_cube)
+    {
+        grouping_sets_params.clear();
+        for (auto keys_for_this_group : Utils::powerSet(keys_for_all_group))
+        {
+            grouping_sets_params.emplace_back(std::move(keys_for_this_group));        
+        }
+        grouping_sets_params.emplace_back(GroupingSetsParams{});        
     }
 
     auto agg_step = std::make_shared<AggregatingStep>(
         builder.getCurrentDataStream(),
-        grouping_keys,
-        aggregate_descriptions,
+        std::move(keys_for_all_group),
+        std::move(aggregate_descriptions),
+        select_query.group_by_with_grouping_sets || grouping_sets_params.size() > 1 ? std::move(grouping_sets_params) : GroupingSetsParamsList{},
         true,
-        select_query.group_by_with_cube,
-        select_query.group_by_with_rollup,
         grouping_operations_descs,
         select_query.group_by_with_totals);
 
@@ -1351,14 +1392,8 @@ void QueryPlannerVisitor::planOrderBy(PlanBuilder & builder, ASTSelectQuery & se
         limit = limit_length + limit_offset;
     }
 
-    auto partial_sorting = std::make_shared<PartialSortingStep>(builder.getCurrentDataStream(), sort_description, limit);
-    builder.addStep(std::move(partial_sorting));
-
-    auto merge_sorting_step = std::make_shared<MergeSortingStep>(builder.getCurrentDataStream(), sort_description, limit);
-    builder.addStep(std::move(merge_sorting_step));
-
-    auto merging_sorted_step = std::make_shared<MergingSortedStep>(builder.getCurrentDataStream(), sort_description, context->getSettingsRef().max_threads, limit);
-    builder.addStep(std::move(merging_sorted_step));
+    auto sorting_step = std::make_shared<SortingStep>(builder.getCurrentDataStream(), sort_description, limit, false);
+    builder.addStep(std::move(sorting_step));
     PRINT_PLAN(builder.plan, plan_order_by);
 }
 

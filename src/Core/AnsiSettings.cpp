@@ -9,7 +9,7 @@ void onSettingChanged(Settings *s)
     bool ansi = static_cast<DialectType>(s->dialect_type) == DialectType::ANSI;
 
     // optimizer settings
-    s->enable_optimizer = true;
+    s->enable_optimizer = ansi;
 
     // community settings
     s->join_use_nulls = ansi;
@@ -21,6 +21,9 @@ void onSettingChanged(Settings *s)
     s->data_type_default_nullable = ansi;
     s->enable_replace_group_by_literal_to_symbol = ansi;
     s->enable_replace_order_by_literal_to_symbol = ansi;
+    s->decimal_division_use_extended_scale = ansi;
+    s->decimal_arithmetic_promote_storage = ansi;
+    s->allow_extended_type_conversion = ansi;
 }
 
 }

@@ -1,11 +1,10 @@
 #pragma once
 
+#include <sstream>
 #include <Parsers/ASTQueryWithOnCluster.h>
 #include <Parsers/ASTQueryWithTableAndOutput.h>
 #include <Parsers/IAST.h>
 #include <Common/quoteString.h>
-
-#include <sstream>
 
 namespace DB
 {
@@ -23,6 +22,8 @@ enum class StatsQueryKind
 };
 
 String formatStatsQueryKind(StatsQueryKind kind);
+struct CreateStatsQueryInfo;
+
 
 template <typename StatsQueryInfo>
 class ASTStatsQueryBase : public ASTQueryWithTableAndOutput, public ASTQueryWithOnCluster
@@ -31,7 +32,7 @@ public:
     StatsQueryKind kind = StatsQueryKind::ALL_STATS;
     // whether this query target at a single table or all tables
     bool target_all = false;
-    String column;
+    std::vector<String> columns;
 
     String getID(char delim) const override
     {
@@ -47,10 +48,14 @@ public:
             res << delim << table;
         }
 
-        if (!column.empty())
-            res << delim << column;
+        if (!columns.empty())
+        {
+            for (auto & col : columns)
+            {
+                res << delim << col;
+            }
+        }
 
-        getStatsQueryIDSuffix(res, delim);
         return res.str();
     }
 
@@ -70,28 +75,40 @@ public:
     }
 
 protected:
-    void formatQueryImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override
+    // CREATE/DROP/SHOW STATS/COLUMN_STATS
+    void formatQueryPrefix(const FormatSettings & settings, FormatState &, FormatStateStacked) const
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << StatsQueryInfo::QueryPrefix << ' ' << formatStatsQueryKind(kind)
-                      << (settings.hilite ? hilite_none : "") << ' ';
+                      << (settings.hilite ? hilite_none : "");
+    }
 
+    // ALL/<db_table_name> AT COLUMNS (<col1>, <col2>)
+    void formatQueryMiddle(const FormatSettings & settings, FormatState &, FormatStateStacked) const
+    {
+        settings.ostr << ' ';
         if (target_all)
             settings.ostr << (settings.hilite ? hilite_keyword : "") << "ALL" << (settings.hilite ? hilite_none : "");
         else
+        {
             settings.ostr << (settings.hilite ? hilite_identifier : "") << (!database.empty() ? backQuoteIfNeed(database) + "." : "")
                           << backQuoteIfNeed(table) << (settings.hilite ? hilite_none : "");
-
-        if (!column.empty())
-            settings.ostr << (settings.hilite ? hilite_keyword : "") << " AT COLUMN " << (settings.hilite ? hilite_none : "")
-                          << (settings.hilite ? hilite_identifier : "") << backQuoteIfNeed(column) << (settings.hilite ? hilite_none : "");
+            if (!columns.empty())
+            {
+                settings.ostr << (settings.hilite ? hilite_keyword : "") << " (" << (settings.hilite ? hilite_none : "");
+                settings.ostr << fmt::format(FMT_STRING("{}"), fmt::join(columns, ", "));
+                settings.ostr << (settings.hilite ? hilite_keyword : "") << ")" << (settings.hilite ? hilite_none : "");
+            }
+        }
 
         formatOnCluster(settings);
-        formatStatsQuerySuffix(settings, state, frame);
     }
 
-    virtual void getStatsQueryIDSuffix(std::ostringstream &, char) const { }
-
-    virtual void formatStatsQuerySuffix(const FormatSettings &, FormatState &, FormatStateStacked) const { }
+    // maybe override if this is not sufficient
+    void formatQueryImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override
+    {
+        formatQueryPrefix(settings, state, frame);
+        formatQueryMiddle(settings, state, frame);
+    }
 };
 
 struct CreateStatsQueryInfo
@@ -120,15 +137,21 @@ class ASTCreateStatsQuery : public ASTStatsQueryBase<CreateStatsQueryInfo>
 public:
     ASTPtr partition;
     bool if_not_exists = false;
-    std::optional<Int64> buckets;
-    std::optional<Int64> topn;
-    std::optional<Int64> samples;
+    enum class SampleType
+    {
+        Default = 0,
+        FullScan = 1,
+        Sample = 2
+    };
+    SampleType sample_type = SampleType::Default;
+    std::optional<Int64> sample_rows = std::nullopt;
+    std::optional<double> sample_ratio = std::nullopt;
 
     ASTPtr clone() const override;
+    String getID(char delim) const override;
 
 protected:
-    void getStatsQueryIDSuffix(std::ostringstream &, char) const override;
-    void formatStatsQuerySuffix(const FormatSettings &, FormatState &, FormatStateStacked) const override;
+    void formatQueryImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
 };
 
 }

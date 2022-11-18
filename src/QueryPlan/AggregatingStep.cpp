@@ -1,6 +1,8 @@
 #include <memory>
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Functions/IFunctionAdaptors.h>
+#include <Functions/grouping.h>
 #include <Processors/Merges/AggregatingSortedTransform.h>
 #include <Processors/Merges/FinishAggregatingInOrderTransform.h>
 #include <Processors/QueryPipeline.h>
@@ -23,6 +25,7 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <common/logger_useful.h>
+#include "Core/SettingsEnums.h"
 #include <DataStreams/IBlockInputStream.h>
 
 namespace DB
@@ -42,6 +45,65 @@ static ITransformingStep::Traits getTraits()
         }};
 }
 
+void computeGroupingFunctions(QueryPipeline & pipeline, const GroupingDescriptions & groupings, const Names & keys,
+                              const GroupingSetsParamsList & grouping_set_params, const BuildQueryPipelineSettings & build_settings)
+{
+    if (groupings.empty())
+        return;
+
+    const bool ansi_mode = build_settings.context->getSettingsRef().dialect_type == DialectType::ANSI;
+    auto actions = std::make_shared<ActionsDAG>(pipeline.getHeader().getColumnsWithTypeAndName());
+    ActionsDAG::NodeRawConstPtrs index = actions->getIndex();
+    ActionsDAG::NodeRawConstPtrs children;
+
+    if (!grouping_set_params.empty())
+        children.push_back(&actions->findInIndex("__grouping_set"));
+
+    auto get_key_index = [&] (const String & key)
+    {
+        return std::find(keys.begin(), keys.end(), key) - keys.begin();
+    };
+
+    ColumnNumbersList grouping_sets_indices;
+    for (const auto & param: grouping_set_params)
+    {
+        ColumnNumbers indices;
+
+        if (!param.used_keys.empty() || !param.missing_keys.empty())
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Unable to calculate grouping functions by prepared grouping set param");
+
+        for (const auto & key_name: param.used_key_names)
+            indices.push_back(get_key_index(key_name));
+
+        grouping_sets_indices.emplace_back(std::move(indices));
+    }
+
+    for (const auto & grouping: groupings)
+    {
+        ColumnNumbers arguments_indexes;
+
+        for (const auto & arg: grouping.argument_names)
+            arguments_indexes.push_back(get_key_index(arg));
+
+        if (!grouping_set_params.empty()) // GROUPING SETS, ROLLUP, CUBE
+            index.push_back(&actions->addFunction(
+                std::make_shared<FunctionToOverloadResolverAdaptor>(
+                    std::make_shared<FunctionGroupingForGroupingSets>(
+                        std::move(arguments_indexes), grouping_sets_indices, ansi_mode)),
+                children, grouping.output_name));
+        else // ORDINARY
+            index.push_back(&actions->addFunction(
+                std::make_shared<FunctionToOverloadResolverAdaptor>(
+                    std::make_shared<FunctionGroupingOrdinary>(
+                        std::move(arguments_indexes), ansi_mode)),
+                children, grouping.output_name));
+    }
+
+    actions->getIndex().swap(index);
+    auto expression = std::make_shared<ExpressionActions>(actions, build_settings.getActionsSettings());
+    pipeline.addSimpleTransform([&](const Block & header) { return std::make_shared<ExpressionTransform>(header, expression); });
+}
+
 Block appendGroupingSetColumn(Block header)
 {
     Block res;
@@ -53,21 +115,32 @@ Block appendGroupingSetColumn(Block header)
     return res;
 }
 
-static Block appendGroupingColumn(Block block, const GroupingSetsParamsList & params)
+static Block appendGroupingColumns(Block block, const GroupingSetsParamsList & grouping_set_params, const GroupingDescriptions & groupings, bool final)
 {
-    if (params.empty())
-        return block;
-
     Block res;
 
-    size_t rows = block.rows();
-    auto column = ColumnUInt64::create(rows);
+    if (!grouping_set_params.empty())
+    {
+        size_t rows = block.rows();
+        auto column = ColumnUInt64::create(rows);
 
-    res.insert({ColumnPtr(std::move(column)), std::make_shared<DataTypeUInt64>(), "__grouping_set"});
+        res.insert({ColumnPtr(std::move(column)), std::make_shared<DataTypeUInt64>(), "__grouping_set"});
+    }
 
     for (auto & col : block)
         res.insert(std::move(col));
 
+    if (final) /* TODO: @jingpeng remove `rollup` check if rollup can be rewritten to grouping sets */
+    {
+        for (const auto & grouping: groupings)
+        {
+            DataTypePtr type;
+
+            type = std::make_shared<DataTypeUInt64>();
+
+            res.insert({std::move(type), grouping.output_name});
+        }
+    }
     return res;
 }
 
@@ -110,6 +183,43 @@ Aggregator::Params AggregatingStep::createParams(Block header_before_aggregation
         header_before_aggregation, keys, aggregates, false, 0, OverflowMode::THROW, 0, 0, 0, false, nullptr, 0, 0, false, 0);
 }
 
+GroupingSetsParamsList AggregatingStep::prepareGroupingSetsParams() const
+{
+    bool is_prepared = std::any_of(grouping_sets_params.cbegin(), grouping_sets_params.cend(),
+                                   [](const auto & p) { return !p.used_keys.empty() || !p.missing_keys.empty(); });
+
+    if (is_prepared)
+        return grouping_sets_params;
+
+    ColumnNumbers all_keys_index;
+    const auto & input_header = input_streams.front().header;
+
+    for (const auto & key : keys)
+        all_keys_index.push_back(input_header.getPositionByName(key));
+
+    GroupingSetsParamsList result;
+
+    for (const auto & param: grouping_sets_params)
+    {
+        ColumnNumbers used_indexes;
+        std::unordered_set<size_t> used_indexes_set;
+        for (const auto & key_name : param.used_key_names)
+        {
+            used_indexes.push_back(input_header.getPositionByName(key_name));
+            used_indexes_set.insert(used_indexes.back());
+        }
+
+        ColumnNumbers missing_indexes;
+        for (size_t i = 0; i < all_keys_index.size(); ++i)
+        {
+            if (!used_indexes_set.count(all_keys_index[i]))
+                missing_indexes.push_back(i);
+        }
+        result.emplace_back(std::move(used_indexes), std::move(missing_indexes));
+    }
+
+    return result;
+}
 
 AggregatingStep::AggregatingStep(
     const DataStream & input_stream_,
@@ -123,11 +233,9 @@ AggregatingStep::AggregatingStep(
     bool storage_has_evenly_distributed_read_,
     InputOrderInfoPtr group_by_info_,
     SortDescription group_by_sort_description_,
-    bool cube_,
-    bool rollup_,
-    NameToNameMap groupings_,
+    GroupingDescriptions groupings_,
     bool)
-    : ITransformingStep(input_stream_, appendGroupingColumn(params_.getHeader(final_), grouping_sets_params_), getTraits(), false)
+    : ITransformingStep(input_stream_, appendGroupingColumns(params_.getHeader(final_), grouping_sets_params_, groupings_, final_), getTraits(), false)
     , keys(std::move(keys_))
     , params(std::move(params_))
     , grouping_sets_params(std::move(grouping_sets_params_))
@@ -138,8 +246,6 @@ AggregatingStep::AggregatingStep(
     , storage_has_evenly_distributed_read(storage_has_evenly_distributed_read_)
     , group_by_info(std::move(group_by_info_))
     , group_by_sort_description(std::move(group_by_sort_description_))
-    , cube(cube_)
-    , rollup(rollup_)
     , groupings(groupings_)
 {
     //    final = final && !totals && !cube & !rollup;
@@ -149,13 +255,8 @@ AggregatingStep::AggregatingStep(
 void AggregatingStep::setInputStreams(const DataStreams & input_streams_)
 {
     input_streams = input_streams_;
-    output_stream->header = appendGroupingColumn(params.getHeader(final), grouping_sets_params);
-
-    for (const auto & item : input_streams[0].header)
-        if (groupings.contains(item.name))
-        {
-            output_stream->header.insert(ColumnWithTypeAndName{std::make_shared<DataTypeUInt8>(), groupings[item.name]});
-        }
+    // TODO: what if input_streams and params->getHeader() are inconsistent?
+    output_stream->header = appendGroupingColumns(params.getHeader(final), grouping_sets_params, groupings, final);
 }
 
 void AggregatingStep::transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings & build_settings)
@@ -241,7 +342,7 @@ void AggregatingStep::transformPipeline(QueryPipeline & pipeline, const BuildQue
 
     /// Forget about current totals and extremes. They will be calculated again after aggregation if needed.
     pipeline.dropTotalsAndExtremes();
-    bool agg_final = final && !cube && !rollup;
+    bool agg_final = final;
 
     bool allow_to_use_two_level_group_by = pipeline.getNumStreams() > 1 || new_params.max_bytes_before_external_group_by != 0;
     if (!allow_to_use_two_level_group_by)
@@ -258,25 +359,29 @@ void AggregatingStep::transformPipeline(QueryPipeline & pipeline, const BuildQue
 
     if (!grouping_sets_params.empty())
     {
-        const size_t grouping_sets_size = grouping_sets_params.size();
+        const auto prepared_sets_params = prepareGroupingSetsParams();
+        const size_t grouping_sets_size = prepared_sets_params.size();
 
         const size_t streams = pipeline.getNumStreams();
 
         auto input_header = pipeline.getHeader();
-        pipeline.transform([&](OutputPortRawPtrs ports)
+
+        if (grouping_sets_size > 1)
         {
-            Processors copiers;
-            copiers.reserve(ports.size());
+            pipeline.transform([&](OutputPortRawPtrs ports) {
+                Processors copiers;
+                copiers.reserve(ports.size());
 
-            for (auto * port : ports)
-            {
-                auto copier = std::make_shared<CopyTransform>(input_header, grouping_sets_size);
-                connect(*port, copier->getInputPort());
-                copiers.push_back(copier);
-            }
+                for (auto * port : ports)
+                {
+                    auto copier = std::make_shared<CopyTransform>(input_header, grouping_sets_size);
+                    connect(*port, copier->getInputPort());
+                    copiers.push_back(copier);
+                }
 
-            return copiers;
-        });
+                return copiers;
+            });
+        }
 
         pipeline.transform([&](OutputPortRawPtrs ports)
         {
@@ -287,7 +392,7 @@ void AggregatingStep::transformPipeline(QueryPipeline & pipeline, const BuildQue
                 Aggregator::Params params_for_set
                 {
                     transform_params->params.src_header,
-                    grouping_sets_params[i].used_keys,
+                    prepared_sets_params[i].used_keys,
                     transform_params->params.aggregates,
                     transform_params->params.overflow_row,
                     transform_params->params.max_rows_to_group_by,
@@ -295,7 +400,8 @@ void AggregatingStep::transformPipeline(QueryPipeline & pipeline, const BuildQue
                     transform_params->params.group_by_two_level_threshold,
                     transform_params->params.group_by_two_level_threshold_bytes,
                     transform_params->params.max_bytes_before_external_group_by,
-                    transform_params->params.empty_result_for_aggregation_by_empty_set,
+                    /// Return empty result when aggregating without keys on empty set, if ansi
+                    settings.dialect_type == DialectType::ANSI ? true : transform_params->params.empty_result_for_aggregation_by_empty_set,
                     transform_params->params.tmp_volume,
                     transform_params->params.max_threads,
                     transform_params->params.min_free_disk_space,
@@ -309,7 +415,7 @@ void AggregatingStep::transformPipeline(QueryPipeline & pipeline, const BuildQue
                     auto many_data = std::make_shared<ManyAggregatedData>(streams);
                     for (size_t j = 0; j < streams; ++j)
                     {
-                        auto aggregation_for_set = std::make_shared<AggregatingTransform>(input_header, transform_params_for_set, many_data, j, merge_threads, temporary_data_merge_threads);
+                        auto aggregation_for_set = std::make_shared<AggregatingTransform>(input_header, transform_params_for_set, many_data, j, merge_max_threads, temporary_data_merge_threads);
                         // For each input stream we have `grouping_sets_size` copies, so port index
                         // for transform #j should skip ports of first (j-1) streams.
                         connect(*ports[i + grouping_sets_size * j], aggregation_for_set->getInputs().front());
@@ -366,7 +472,7 @@ void AggregatingStep::transformPipeline(QueryPipeline & pipeline, const BuildQue
                 index.push_back(grouping_node);
 
                 size_t missign_column_index = 0;
-                const auto & missing_columns = grouping_sets_params[set_counter].missing_keys;
+                const auto & missing_columns = prepared_sets_params[set_counter].missing_keys;
 
                 for (size_t i = 0; i < output_header.columns(); ++i)
                 {
@@ -393,6 +499,9 @@ void AggregatingStep::transformPipeline(QueryPipeline & pipeline, const BuildQue
 
             return processors;
         });
+
+        if (final)
+            computeGroupingFunctions(pipeline, groupings, keys, grouping_sets_params, build_settings);
 
         aggregating = collector.detachProcessors(0);
         return;
@@ -481,74 +590,8 @@ void AggregatingStep::transformPipeline(QueryPipeline & pipeline, const BuildQue
         aggregating = collector.detachProcessors(0);
     }
 
-
-    auto cube_src_header = pipeline.getHeader();
-    ColumnNumbers cube_key_index;
-    for (const auto & name : keys)
-        cube_key_index.push_back(cube_src_header.getPositionByName(name));
-
-    Aggregator::Params cube_params(
-        cube_src_header,
-        cube_key_index,
-        new_aggregates,
-        false,
-        new_params.max_rows_to_group_by,
-        new_params.group_by_overflow_mode,
-        0,
-        0,
-        new_params.max_bytes_before_external_group_by,
-        new_params.empty_result_for_aggregation_by_empty_set,
-        new_params.tmp_volume,
-        new_params.max_threads,
-        new_params.min_free_disk_space,
-        new_params.compile_aggregate_expressions,
-        new_params.min_count_to_compile_aggregate_expression);
-
-    auto cube_transform_params = std::make_shared<AggregatingTransformParams>(cube_params, true);
-
-    if (rollup)
-    {
-        pipeline.resize(1);
-        if (groupings.empty())
-        {
-            pipeline.addSimpleTransform([&](const Block & header, QueryPipeline::StreamType stream_type) -> ProcessorPtr {
-                if (stream_type == QueryPipeline::StreamType::Totals)
-                    return nullptr;
-
-                return std::make_shared<RollupTransform>(header, cube_transform_params);
-            });
-        }
-        else
-        {
-            auto agg_header = pipeline.getHeader();
-            ColumnNumbers grouping_index;
-            Names names;
-            for (const auto & item : agg_header.getNames())
-                if (groupings.contains(item))
-                {
-                    grouping_index.emplace_back(agg_header.getPositionByName(item));
-                    names.emplace_back(groupings.at(item));
-                }
-
-            pipeline.addSimpleTransform([&](const Block & header, QueryPipeline::StreamType stream_type) -> ProcessorPtr {
-                if (stream_type == QueryPipeline::StreamType::Totals)
-                    return nullptr;
-
-                return std::make_shared<RollupWithGroupingTransform>(header, cube_transform_params, grouping_index, names);
-            });
-        }
-    }
-
-    if (cube)
-    {
-        pipeline.resize(1);
-        pipeline.addSimpleTransform([&](const Block & header, QueryPipeline::StreamType stream_type) -> ProcessorPtr {
-            if (stream_type == QueryPipeline::StreamType::Totals)
-                return nullptr;
-
-            return std::make_shared<CubeTransform>(header, cube_transform_params);
-        });
-    }
+    if (final)
+        computeGroupingFunctions(pipeline, groupings, keys, grouping_sets_params, build_settings);
 }
 
 void AggregatingStep::describeActions(FormatSettings & settings) const
@@ -596,18 +639,17 @@ void AggregatingStep::serialize(WriteBuffer & buf) const
     serializeSortDescription(group_by_sort_description, buf);
 
     serializeStrings(keys, buf);
-    writeBinary(cube, buf);
-    writeBinary(rollup, buf);
     writeVarUInt(groupings.size(), buf);
     for (const auto & item : groupings)
     {
-        writeStringBinary(item.first, buf);
-        writeStringBinary(item.second, buf);
+        writeBinary(item.argument_names, buf);
+        writeStringBinary(item.output_name, buf);
     }
 
     writeVarUInt(grouping_sets_params.size(), buf);
     for (const auto & grouping_sets_param : grouping_sets_params)
     {
+        writeBinary(grouping_sets_param.used_key_names, buf);
         writeBinary(grouping_sets_param.used_keys, buf);
         writeBinary(grouping_sets_param.missing_keys, buf);
     }
@@ -645,21 +687,16 @@ QueryPlanStepPtr AggregatingStep::deserialize(ReadBuffer & buf, ContextPtr conte
 
 
     auto keys = deserializeStrings(buf);
-    bool cube;
-    readBinary(cube, buf);
-    bool rollup;
-    readBinary(rollup, buf);
 
     size_t size;
     readVarUInt(size, buf);
-    NameToNameMap groupings;
+    GroupingDescriptions groupings;
     for (size_t i = 0; i < size; ++i)
     {
-        String k;
-        readStringBinary(k, buf);
-        String v;
-        readStringBinary(v, buf);
-        groupings[k] = v;
+        GroupingDescription item;
+        readBinary(item.argument_names, buf);
+        readStringBinary(item.output_name, buf);
+        groupings.emplace_back(std::move(item));
     }
 
     readVarUInt(size, buf);
@@ -667,8 +704,9 @@ QueryPlanStepPtr AggregatingStep::deserialize(ReadBuffer & buf, ContextPtr conte
     for (size_t i = 0; i < size; ++i)
     {
         GroupingSetsParams param;
+        readBinary(param.used_key_names, buf);
         readBinary(param.used_keys, buf);
-        readBinary(param.used_keys, buf);
+        readBinary(param.missing_keys, buf);
         grouping_sets_params_.emplace_back(param);
     }
 
@@ -684,8 +722,6 @@ QueryPlanStepPtr AggregatingStep::deserialize(ReadBuffer & buf, ContextPtr conte
         storage_has_evenly_distributed_read,
         group_by_info,
         group_by_sort_description,
-        cube,
-        rollup,
         groupings);
 
     step->setStepDescription(step_description);
@@ -694,7 +730,7 @@ QueryPlanStepPtr AggregatingStep::deserialize(ReadBuffer & buf, ContextPtr conte
 std::shared_ptr<IQueryPlanStep> AggregatingStep::copy(ContextPtr) const
 {
     //  todo
-    return std::make_shared<AggregatingStep>(input_streams[0], keys, params.aggregates, final, cube, rollup, groupings);
+    return std::make_shared<AggregatingStep>(input_streams[0], keys, params.aggregates, grouping_sets_params, final, groupings);
 }
 
 }

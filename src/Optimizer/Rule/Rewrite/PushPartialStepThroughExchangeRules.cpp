@@ -15,7 +15,7 @@ namespace DB
 PatternPtr PushPartialAggThroughExchange::getPattern() const
 {
     return Patterns::aggregating()
-        ->matchingStep<AggregatingStep>([](const AggregatingStep & step) { return /*!step.isTotals() && */!step.isRollup() && !step.isCube() && step.isFinal(); })
+        ->matchingStep<AggregatingStep>([](const AggregatingStep & step) { return /*!step.isTotals() && */step.isFinal(); })
         ->withSingle(
             // todo jp: support push through union
             Patterns::exchange()->matchingStep<ExchangeStep>([](const ExchangeStep & step) { return step.getInputStreams().size() == 1; }));
@@ -56,9 +56,8 @@ TransformResult PushPartialAggThroughExchange::transformImpl(PlanNodePtr node, c
         exchange_child->getStep()->getOutputStream(),
         step->getKeys(),
         step->getAggregates(),
+        step->getGroupingSetsParams(),
         false,
-        step->isCube(),
-        step->isRollup(),
         step->getGroupings());
 
     auto exchange_step = std::make_unique<ExchangeStep>(
@@ -78,6 +77,11 @@ TransformResult PushPartialAggThroughExchange::transformImpl(PlanNodePtr node, c
     PlanNodes exchange{exchange_node};
     auto exchange_header = exchange_node->getStep()->getOutputStream().header;
     ColumnNumbers keys;
+    if (!step->getGroupingSetsParams().empty())
+    {
+        keys.push_back(exchange_header.getPositionByName("__grouping_set"));
+    }
+
     for (const auto & key : step->getKeys())
     {
         keys.emplace_back(exchange_header.getPositionByName(key));
@@ -93,6 +97,9 @@ TransformResult PushPartialAggThroughExchange::transformImpl(PlanNodePtr node, c
     // TODO check
     QueryPlanStepPtr final_agg = std::make_shared<MergingAggregatedStep>(
         exchange_node->getStep()->getOutputStream(),
+        step->getKeys(),
+        step->getGroupingSetsParams(),
+        step->getGroupings(),
         transform_params,
         false,
         context.context->getSettingsRef().max_threads,
@@ -103,13 +110,13 @@ TransformResult PushPartialAggThroughExchange::transformImpl(PlanNodePtr node, c
 
 PatternPtr PushPartialSortingThroughExchange::getPattern() const
 {
-    return Patterns::partialSorting()->withSingle(Patterns::exchange()->matchingStep<ExchangeStep>(
+    return Patterns::sorting()->withSingle(Patterns::exchange()->matchingStep<ExchangeStep>(
         [](const ExchangeStep & step) { return step.getExchangeMode() == ExchangeMode::GATHER; }));
 }
 
 TransformResult PushPartialSortingThroughExchange::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
 {
-    const auto * step = dynamic_cast<const PartialSortingStep *>(node->getStep().get());
+    const auto * step = dynamic_cast<const SortingStep *>(node->getStep().get());
     auto old_exchange_node = node->getChildren()[0];
     const auto * old_exchange_step = dynamic_cast<const ExchangeStep *>(old_exchange_node->getStep().get());
 
@@ -117,7 +124,7 @@ TransformResult PushPartialSortingThroughExchange::transformImpl(PlanNodePtr nod
     for (size_t index = 0; index < old_exchange_node->getChildren().size(); index++)
     {
         auto exchange_child = old_exchange_node->getChildren()[index];
-        if (dynamic_cast<MergeSortingNode *>(exchange_child.get()))
+        if (dynamic_cast<SortingNode *>(exchange_child.get()))
         {
             return {};
         }
@@ -130,30 +137,23 @@ TransformResult PushPartialSortingThroughExchange::transformImpl(PlanNodePtr nod
             new_sort_desc.emplace_back(new_desc);
         }
 
-        auto before_exchange_partial_sort
-            = std::make_unique<PartialSortingStep>(exchange_child->getStep()->getOutputStream(), new_sort_desc, step->getLimit());
+        auto before_exchange_sort
+            = std::make_unique<SortingStep>(exchange_child->getStep()->getOutputStream(), new_sort_desc, step->getLimit(), true);
         PlanNodes children{exchange_child};
-        auto before_exchange_partial_sort_node = PlanNodeBase::createPlanNode(
-            context.context->nextNodeId(), std::move(before_exchange_partial_sort), children, node->getStatistics());
-        auto before_exchange_merge_sort = std::make_unique<MergeSortingStep>(
-            before_exchange_partial_sort_node->getStep()->getOutputStream(), new_sort_desc, step->getLimit());
-        auto before_exchange_merge_sort_node = PlanNodeBase::createPlanNode(
-            context.context->nextNodeId(),
-            std::move(before_exchange_merge_sort),
-            PlanNodes{before_exchange_partial_sort_node},
-            node->getStatistics());
-        exchange_children.emplace_back(before_exchange_merge_sort_node);
+        auto before_exchange_sort_node = PlanNodeBase::createPlanNode(
+            context.context->nextNodeId(), std::move(before_exchange_sort), children, node->getStatistics());
+        exchange_children.emplace_back(before_exchange_sort_node);
     }
 
     auto exchange_step = old_exchange_step->copy(context.context);
     auto exchange_node = PlanNodeBase::createPlanNode(
         context.context->nextNodeId(), std::move(exchange_step), exchange_children, old_exchange_node->getStatistics());
 
-    QueryPlanStepPtr new_partial_sort = step->copy(context.context);
+    QueryPlanStepPtr final_sort = step->copy(context.context);
     PlanNodes exchange{exchange_node};
-    auto new_partial_sort_node
-        = PlanNodeBase::createPlanNode(context.context->nextNodeId(), std::move(new_partial_sort), exchange, node->getStatistics());
-    return new_partial_sort_node;
+    auto final_sort_node
+        = PlanNodeBase::createPlanNode(context.context->nextNodeId(), std::move(final_sort), exchange, node->getStatistics());
+    return final_sort_node;
 }
 
 static bool isLimitNeeded(const LimitStep & limit, const PlanNodePtr & node)

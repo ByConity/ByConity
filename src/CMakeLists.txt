@@ -251,6 +251,7 @@ add_object_library(clickhouse_optimizer_iterative Optimizer/Iterative)
 add_object_library(clickhouse_optimizer_costmodel Optimizer/CostModel)
 add_object_library(clickhouse_optimizer_cardinality Optimizer/CardinalityEstimate)
 add_object_library(clickhouse_optimizer_cascades Optimizer/Cascades)
+add_object_library(clickhouse_optimizer_materialized_view Optimizer/MaterializedView)
 add_object_library(clickhouse_optimizer_rule Optimizer/Rule)
 add_object_library(clickhouse_optimizer_rule_transformation Optimizer/Rule/Transformation)
 add_object_library(clickhouse_optimizer_rule_implementation Optimizer/Rule/Implementation)
@@ -606,6 +607,7 @@ if (ENABLE_TESTS AND USE_GTEST)
         -Wno-suggest-override
         -Wno-suggest-destructor-override
         -Wno-gnu-zero-variadic-macro-arguments
+        -Wno-unreachable-code
     )
 
     target_link_libraries(unit_tests_dbms PRIVATE

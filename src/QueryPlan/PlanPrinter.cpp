@@ -5,6 +5,8 @@
 #include <Optimizer/PredicateConst.h>
 #include <Optimizer/PredicateUtils.h>
 #include <Optimizer/Utils.h>
+#include <Optimizer/OptimizerMetrics.h>
+#include <AggregateFunctions/AggregateFunctionNull.h>
 #include <Poco/JSON/Object.h>
 #include <Parsers/formatAST.h>
 #include <QueryPlan/QueryPlan.h>
@@ -13,9 +15,31 @@
 
 namespace DB
 {
+namespace
+{
+template <class V>
+std::string join(const V & v, const String & sep, const String & prefix = {}, const String & suffix = {})
+{
+    std::stringstream out;
+    out << prefix;
+    if (!v.empty())
+    {
+        auto it = v.begin();
+        out << *it;
+        for (++it; it != v.end(); ++it)
+            out << sep << *it;
+    }
+    out << suffix;
+    return out.str();
+}
+}
 
 std::string PlanPrinter::textLogicalPlan(
-    QueryPlan & plan, bool print_stats, bool verbose, PlanCostMap costs)
+    QueryPlan & plan,
+    ContextMutablePtr context,
+    bool print_stats,
+    bool verbose,
+    PlanCostMap costs)
 {
     TextPrinter printer{print_stats, verbose, costs};
     auto output = printer.printLogicalPlan(*plan.getPlanNode());
@@ -43,7 +67,7 @@ std::string PlanPrinter::textLogicalPlan(
     size_t dynamic_filters = 0;
     for (auto & filter : filter_nodes)
     {
-        auto filter_step = dynamic_cast<const FilterStep *>(filter->getStep().get());
+        const auto * filter_step = dynamic_cast<const FilterStep *>(filter->getStep().get());
         auto filters = DynamicFilters::extractDynamicFilters(filter_step->getFilter());
         dynamic_filters += filters.first.size();
     }
@@ -57,6 +81,19 @@ std::string PlanPrinter::textLogicalPlan(
 
     if (cte_nodes > 0)
         output += "note: CTE(Common Table Expression) is applied for " + std::to_string(cte_nodes) + " times.\n";
+
+    auto & optimizer_metrics = context->getOptimizerMetrics();
+    if (optimizer_metrics && !optimizer_metrics->getUsedMaterializedViews().empty())
+    {
+        output += "note: Materialized Views is applied for " + std::to_string(optimizer_metrics->getUsedMaterializedViews().size())
+            + " times: ";
+        const auto & views = optimizer_metrics->getUsedMaterializedViews();
+        auto it = views.begin();
+        output += it->getDatabaseName() + "." + it->getTableName();
+        for (++it; it != views.end(); ++it)
+            output += ", " + it->getDatabaseName() + "." + it->getTableName();
+        output += ".";
+    }
 
     return output;
 }
@@ -204,12 +241,47 @@ std::string PlanPrinter::TextPrinter::printDetail(PlanNodeBase & plan, const Tex
         }
     }
 
+    if (verbose && plan.getStep()->getType() == IQueryPlanStep::Type::Sorting)
+    {
+        auto sort = dynamic_cast<const SortingStep *>(plan.getStep().get());
+        std::vector<String> sort_columns;
+        for (auto & desc : sort->getSortDescription())
+            sort_columns.emplace_back(
+                desc.column_name + (desc.direction == -1 ? " desc" : " asc") + (desc.nulls_direction == -1 ? " nulls_last" : ""));
+        out << intent.detailIntent() << "Order by: " << join(sort_columns, ", ", "{", "}");
+    }
+
+
+    if (verbose && plan.getStep()->getType() == IQueryPlanStep::Type::Limit)
+    {
+        const auto * limit = dynamic_cast<const LimitStep *>(plan.getStep().get());
+        out << intent.detailIntent();
+        if (limit->getLimit())
+            out << "Limit: " << limit->getLimit();
+        if (limit->getOffset())
+            out << "Offset: " << limit->getOffset();
+    }
+
     if (verbose && plan.getStep()->getType() == IQueryPlanStep::Type::Aggregating)
     {
         const auto * agg = dynamic_cast<const AggregatingStep *>(plan.getStep().get());
         auto keys = agg->getKeys();
         std::sort(keys.begin(), keys.end());
         out << intent.detailIntent() << "Group by: " << join(keys, ", ", "{", "}");
+
+        std::vector<String> aggregates;
+        for (const auto & desc : agg->getAggregates())
+        {
+            std::stringstream ss;
+            String func_name = desc.function->getName();
+            auto type_name = String(typeid(desc.function.get()).name());
+            if (type_name.find("AggregateFunctionNull"))
+                func_name = String("AggNull(").append(std::move(func_name)).append(")");
+            ss << desc.column_name << ":=" << func_name << join(desc.argument_names, "," ,"(", ")");
+            aggregates.emplace_back(ss.str());
+        }
+        if (!aggregates.empty())
+            out << intent.detailIntent() << "Aggregates: " << join(aggregates, ", ");
     }
 
     if (verbose && plan.getStep()->getType() == IQueryPlanStep::Type::Exchange)
@@ -228,7 +300,7 @@ std::string PlanPrinter::TextPrinter::printDetail(PlanNodeBase & plan, const Tex
         const auto * filter = dynamic_cast<const FilterStep *>(plan.getStep().get());
         auto filters = DynamicFilters::extractDynamicFilters(filter->getFilter());
         if (!filters.second.empty())
-            out << intent.detailIntent() << serializeAST(*PredicateUtils::combineConjuncts(filters.second));
+            out << intent.detailIntent() << "Condition: " << serializeAST(*PredicateUtils::combineConjuncts(filters.second));
         if (!filters.first.empty())
         {
             std::vector<std::string> dynamic_filters;
@@ -243,6 +315,26 @@ std::string PlanPrinter::TextPrinter::printDetail(PlanNodeBase & plan, const Tex
     {
         const auto * projection = dynamic_cast<const ProjectionStep *>(plan.getStep().get());
 
+        std::vector<String> identities;
+        std::vector<String> assignments;
+
+        for (const auto & assignment : projection->getAssignments())
+            if (Utils::isIdentity(assignment))
+                identities.emplace_back(assignment.first);
+            else
+                assignments.emplace_back(assignment.first + ":=" + serializeAST(*assignment.second));
+
+        std::sort(assignments.begin(), assignments.end());
+        if (!identities.empty())
+        {
+            std::stringstream ss;
+            std::sort(identities.begin(), identities.end());
+            ss << join(identities, ", ", "[", "]");
+            assignments.insert(assignments.begin(), ss.str());
+        }
+
+        out << intent.detailIntent() << "Expressions: " << join(assignments, ", ");
+
         if (!projection->getDynamicFilters().empty())
         {
             std::vector<std::string> dynamic_filters;
@@ -251,6 +343,29 @@ std::string PlanPrinter::TextPrinter::printDetail(PlanNodeBase & plan, const Tex
             std::sort(dynamic_filters.begin(), dynamic_filters.end());
             out << intent.detailIntent() << "Dynamic Filters Builder: " << join(dynamic_filters, ",", "{", "}");
         }
+    }
+
+    if (verbose && plan.getStep()->getType() == IQueryPlanStep::Type::TableScan)
+    {
+        const auto * table_scan = dynamic_cast<const TableScanStep *>(plan.getStep().get());
+        std::vector<String> identities;
+        std::vector<String> assignments;
+        for (const auto & name_with_alias : table_scan->getColumnAlias())
+            if (name_with_alias.second == name_with_alias.first)
+                identities.emplace_back(name_with_alias.second);
+            else
+                assignments.emplace_back(name_with_alias.second + ":=" + name_with_alias.first);
+
+        std::sort(assignments.begin(), assignments.end());
+        if (!identities.empty())
+        {
+            std::stringstream ss;
+            std::sort(identities.begin(), identities.end());
+            ss << join(identities, ", ", "[", "]");
+            assignments.insert(assignments.begin(), ss.str());
+        }
+
+        out << intent.detailIntent() << "Outputs: " << join(assignments, ", ");
     }
     return out.str();
 }

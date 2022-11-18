@@ -34,6 +34,8 @@ namespace ErrorCodes
     extern const int BAD_ARGUMENTS;
     extern const int UNKNOWN_IDENTIFIER;
     extern const int ILLEGAL_AGGREGATION;
+    extern const int TOO_FEW_ARGUMENTS_FOR_FUNCTION;
+    extern const int TOO_MANY_ARGUMENTS_FOR_FUNCTION;
 }
 
 class ExprAnalyzerVisitor : public ASTVisitor<ColumnWithTypeAndName, const Void>
@@ -61,6 +63,7 @@ public:
         options(std::move(options_)),
         use_ansi_semantic(context->getSettingsRef().dialect_type == DialectType::ANSI),
         enable_implicit_type_conversion(context->getSettingsRef().enable_implicit_type_conversion),
+        allow_extended_conversion(context->getSettingsRef().allow_extended_type_conversion),
         scopes({scope_})
     {}
 
@@ -72,6 +75,7 @@ private:
     const ExprAnalyzerOptions options;
     const bool use_ansi_semantic;
     const bool enable_implicit_type_conversion;
+    const bool allow_extended_conversion;
 
     std::vector<ScopePtr> scopes;
     // whether we are in an aggregate function
@@ -329,6 +333,8 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeOrdinaryFunction(ASTFunctionPt
             exitLambda();
 
             auto resolved_lambda_type = std::make_shared<DataTypeFunction>(lambda_type->getArgumentTypes(), lambda_ret_type);
+            // since we don't call `process` for lambda argument, register its type manually
+            analysis.setExpressionType(arguments[index], resolved_lambda_type);
             processed_arguments[index] = {nullptr, resolved_lambda_type,""};
         }
     }
@@ -375,8 +381,12 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeOrdinaryFunction(ASTFunctionPt
         }
     }
 
-    if (!function_base->isDeterministicInScopeOfQuery() || !function_base->isSuitableForConstantFolding())
+    if (!function_base->isDeterministicInScopeOfQuery() || !function_base->isDeterministicInScopeOfQuery()
+        || !function_base->isSuitableForConstantFolding())
+    {
+        analysis.addNonDeterministicFunctions(*function);
         context->setFunctionDeterministic(function->name, false);
+    }
     return {nullptr, function_base->getResultType(), ""};
 }
 
@@ -471,17 +481,17 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeGroupingOperation(ASTFunctionP
 
     in_aggregate = true;
 
-    if (!function->arguments)
-        throw Exception("Grouping operation doesn't have argument", ErrorCodes::BAD_ARGUMENTS);
+    if (!function->arguments || function->arguments->children.empty())
+        throw Exception(ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION, "Function GROUPING expects at least one argument");
 
-    if (function->arguments->children.size() != 1)
-        throw Exception("Grouping operation should have exact 1 argument", ErrorCodes::BAD_ARGUMENTS);
+    if (function->arguments->children.size() > 64)
+        throw Exception(ErrorCodes::TOO_MANY_ARGUMENTS_FOR_FUNCTION, "Function GROUPING can have up to 64 arguments, but {} provided", function->arguments->children.size());
 
-    process(function->arguments->children.front());
+    processNodes(function->arguments->children);
 
     analysis.grouping_operations[options.select_query].push_back(function);
     in_aggregate = false;
-    return {nullptr, std::make_shared<DataTypeUInt8>(), ""};
+    return {nullptr, std::make_shared<DataTypeUInt64>(), ""};
 }
 
 ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeInSubquery(ASTFunctionPtr & function)
@@ -512,7 +522,7 @@ void ExprAnalyzerVisitor::processSubqueryArgsWithCoercion(ASTPtr & lhs_ast, ASTP
     {
         DataTypePtr super_type = nullptr;
         if (enable_implicit_type_conversion)
-            super_type = getLeastSupertype({lhs_type, rhs_type});
+            super_type = getLeastSupertype({lhs_type, rhs_type}, allow_extended_conversion);
         if (!super_type)
             throw Exception("Incompatible types for IN prediacte", ErrorCodes::TYPE_MISMATCH);
         if (!lhs_type->equals(*super_type))

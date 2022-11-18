@@ -703,8 +703,8 @@ bool ParserTupleElementExpression::parseImpl(Pos & pos, ASTPtr & node, Expected 
 
 ParserExpressionWithOptionalAlias::ParserExpressionWithOptionalAlias(bool allow_alias_without_as_keyword, ParserSettingsImpl t, bool is_table_function)
     : IParserDialectBase(t), impl(std::make_unique<ParserWithOptionalAlias>(
-        is_table_function ? ParserPtr(std::make_unique<ParserTableFunctionExpression>(dt)) : ParserPtr(std::make_unique<ParserExpression>(dt)),
-        allow_alias_without_as_keyword, dt))
+                                 is_table_function ? ParserPtr(std::make_unique<ParserTableFunctionExpression>(dt)) : ParserPtr(std::make_unique<ParserExpression>(dt)),
+                                 allow_alias_without_as_keyword, dt))
 {
 }
 

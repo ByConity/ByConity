@@ -43,13 +43,28 @@ static std::optional<PlanNodePtr> tryPushJoinThroughLeftProjection(
     SymbolMapper symbol_mapper = SymbolMapper::symbolMapper(projection_mapping);
     auto mapped_join = symbol_mapper.map(*join_step);
 
-    // construct projection
-    Assignments assignments = project_step->getAssignments();
-    NameToType name_to_type = project_step->getNameToType();
+    // construct post projection(assignments including symbols which are not join outputs will be pruned)
+    auto join_outputs = mapped_join->getOutputStream().header.getNameSet();
+    Assignments assignments;
+    NameToType name_to_type;
+    const auto & old_name_to_type = project_step->getNameToType();
+
+    for (const auto & old_assignment: project_step->getAssignments())
+    {
+        if (join_outputs.count(old_assignment.second->as<ASTIdentifier &>().name()))
+        {
+            assignments.emplace_back(old_assignment);
+            name_to_type[old_assignment.first] = old_name_to_type.at(old_assignment.first);
+        }
+    }
+
     for (const auto & name_and_type : join_right_node->getStep()->getOutputStream().header)
     {
-        assignments.emplace_back(name_and_type.name, std::make_shared<ASTIdentifier>(name_and_type.name));
-        name_to_type.emplace(name_and_type.name, name_and_type.type);
+        if (join_outputs.count(name_and_type.name))
+        {
+            assignments.emplace_back(name_and_type.name, std::make_shared<ASTIdentifier>(name_and_type.name));
+            name_to_type.emplace(name_and_type.name, name_and_type.type);
+        }
     }
     auto new_project_step
         = std::make_shared<ProjectionStep>(join_step->getOutputStream(), assignments, name_to_type, project_step->isFinalProject());
@@ -92,13 +107,28 @@ static std::optional<PlanNodePtr> tryPushJoinThroughRightProjection(
     SymbolMapper symbol_mapper = SymbolMapper::symbolMapper(projection_mapping);
     auto mapped_join = symbol_mapper.map(*join_step);
 
-    // construct projection
-    Assignments assignments{project_step->getAssignments().begin(), project_step->getAssignments().end()};
-    NameToType name_to_type{project_step->getNameToType().begin(), project_step->getNameToType().end()};
+    // construct post projection(assignments including symbols which are not join outputs will be pruned)
+    auto join_outputs = mapped_join->getOutputStream().header.getNameSet();
+    Assignments assignments;
+    NameToType name_to_type;
+    const auto & old_name_to_type = project_step->getNameToType();
+
+    for (const auto & old_assignment: project_step->getAssignments())
+    {
+        if (join_outputs.count(old_assignment.second->as<ASTIdentifier &>().name()))
+        {
+            assignments.emplace_back(old_assignment);
+            name_to_type[old_assignment.first] = old_name_to_type.at(old_assignment.first);
+        }
+    }
+
     for (const auto & name_and_type : join_left_node->getStep()->getOutputStream().header)
     {
-        assignments.emplace_back(name_and_type.name, std::make_shared<ASTIdentifier>(name_and_type.name));
-        name_to_type.emplace(name_and_type.name, name_and_type.type);
+        if (join_outputs.count(name_and_type.name))
+        {
+            assignments.emplace_back(name_and_type.name, std::make_shared<ASTIdentifier>(name_and_type.name));
+            name_to_type.emplace(name_and_type.name, name_and_type.type);
+        }
     }
     auto new_project_step
         = std::make_shared<ProjectionStep>(join_step->getOutputStream(), assignments, name_to_type, project_step->isFinalProject());

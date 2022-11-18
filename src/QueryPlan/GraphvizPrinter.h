@@ -45,6 +45,7 @@ public:
     Void visitValuesNode(ValuesNode & node, PrinterContext & context) override;
     Void visitLimitNode(LimitNode & node, PrinterContext & context) override;
     Void visitLimitByNode(LimitByNode & node, PrinterContext & context) override;
+    Void visitSortingNode(SortingNode & node, PrinterContext & context) override;
     Void visitMergeSortingNode(MergeSortingNode & node, PrinterContext & context) override;
     Void visitPartialSortingNode(PartialSortingNode & node, PrinterContext & context) override;
     Void visitMergingSortedNode(MergingSortedNode & node, PrinterContext & context) override;
@@ -56,6 +57,7 @@ public:
     Void visitAssignUniqueIdNode(AssignUniqueIdNode & node, PrinterContext & context) override;
     Void visitWindowNode(WindowNode & node, PrinterContext & context) override;
     Void visitCTERefNode(CTERefNode & node, PrinterContext & context) override;
+    Void visitPartitionTopNNode(PartitionTopNNode & node, PrinterContext & context) override;
 
 private:
     void printCTEDefNode(CTEId cte_id);
@@ -104,6 +106,7 @@ public:
     Void visitValuesNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitLimitNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitLimitByNode(QueryPlan::Node * node, PrinterContext & context) override;
+    Void visitSortingNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitMergeSortingNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitPartialSortingNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitMergingSortedNode(QueryPlan::Node * node, PrinterContext & context) override;
@@ -114,6 +117,7 @@ public:
     Void visitEnforceSingleRowNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitAssignUniqueIdNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitWindowNode(QueryPlan::Node * node, PrinterContext & context) override;
+    Void visitPartitionTopNNode(QueryPlan::Node * node, PrinterContext & context) override;
 
 private:
     std::stringstream & out;
@@ -151,6 +155,7 @@ public:
     static String printValuesStep(const ValuesStep & step);
     static String printLimitStep(const LimitStep & step);
     static String printLimitByStep(const LimitByStep & step);
+    static String printSortingStep(const SortingStep & step);
     static String printMergeSortingStep(const MergeSortingStep & step);
     static String printPartialSortingStep(const PartialSortingStep & step);
     static String printMergingSortedStep(const MergingSortedStep & step);
@@ -160,6 +165,7 @@ public:
     static String printAssignUniqueIdStep(const AssignUniqueIdStep & step);
     static String printWindowStep(const WindowStep & step);
     static String printCTERefStep(const CTERefStep & node);
+    static String printPartitionTopNStep(const PartitionTopNStep & node);
 
 private:
     static String printFilter(const ConstASTPtr & filter);

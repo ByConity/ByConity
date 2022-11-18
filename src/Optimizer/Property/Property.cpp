@@ -1,7 +1,7 @@
 #include <Optimizer/Property/Property.h>
 
 #include <Functions/FunctionsHashing.h>
-#include <Optimizer/Equivalences.h>
+#include <Optimizer/SymbolEquivalencesDeriver.h>
 
 namespace DB
 {
@@ -23,21 +23,48 @@ bool Partitioning::satisfy(const Partitioning & requirement) const
 {
     if (requirement.require_handle)
         return getPartitioningHandle() == requirement.getPartitioningHandle() && getBuckets() == requirement.getBuckets()
-            && getPartitioningColumns() == requirement.getPartitioningColumns();
+            && getPartitioningColumns() == requirement.getPartitioningColumns()
+            && ASTEquality::compareTree(sharding_expr, requirement.sharding_expr);
 
     switch (requirement.getPartitioningHandle())
     {
         case Handle::FIXED_HASH:
-            return getPartitioningColumns() == requirement.getPartitioningColumns();
+            return getPartitioningColumns() == requirement.getPartitioningColumns() || this->isPartitionOn(requirement);
         default:
             return getPartitioningHandle() == requirement.getPartitioningHandle() && getBuckets() == requirement.getBuckets()
-                && getPartitioningColumns() == requirement.getPartitioningColumns();
+                && getPartitioningColumns() == requirement.getPartitioningColumns()
+                && ASTEquality::compareTree(sharding_expr, requirement.sharding_expr);
     }
 }
 
-Partitioning Partitioning::normalize(const Equivalences & equivalences) const
+bool Partitioning::isPartitionOn(const Partitioning & requirement) const
 {
-    auto mapping = equivalences.representMap();
+    auto actual_columns = getPartitioningColumns();
+    auto required_columns = requirement.getPartitioningColumns();
+    std::unordered_set<std::string> required_columns_set;
+
+    if (actual_columns.empty())
+        return false;
+
+    for (auto & required_column : required_columns)
+    {
+        required_columns_set.insert(required_column);
+    }
+
+    for (auto & actual_column : actual_columns)
+    {
+        if (!required_columns_set.count(actual_column))
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+Partitioning Partitioning::normalize(const SymbolEquivalences & symbol_equivalences) const
+{
+    auto mapping = symbol_equivalences.representMap();
     for (const auto & item : columns)
     {
         if (!mapping.contains(item))
@@ -56,7 +83,7 @@ Partitioning Partitioning::translate(const std::unordered_map<String, String> & 
             translate_columns.emplace_back(identities.at(column));
         else // note: don't discard column
             translate_columns.emplace_back(column);
-    return Partitioning{handle, translate_columns, require_handle, buckets, enforce_round_robin};
+    return Partitioning{handle, translate_columns, require_handle, buckets, sharding_expr, enforce_round_robin};
 }
 
 String Partitioning::toString() const
@@ -190,6 +217,14 @@ Property Property::translate(const std::unordered_map<String, String> & identiti
     Property result{node_partitioning.translate(identities), stream_partitioning.translate(identities), sorting.translate(identities)};
     result.setPreferred(preferred);
     result.setCTEDescriptions(cte_descriptions.translate(identities));
+    return result;
+}
+
+Property Property::normalize(const SymbolEquivalences & symbol_equivalences) const
+{
+    Property result{node_partitioning.normalize(symbol_equivalences), stream_partitioning.normalize(symbol_equivalences), sorting};
+    result.setPreferred(preferred);
+    result.setCTEDescriptions(cte_descriptions);
     return result;
 }
 

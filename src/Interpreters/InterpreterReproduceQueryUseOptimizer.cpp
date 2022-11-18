@@ -60,7 +60,7 @@ BlockIO InterpreterReproduceQueryUseOptimizer::execute()
         auto query_plan = plan(ast);
         CardinalityEstimator::estimate(*query_plan, context);
         std::unordered_map<PlanNodeId, double> costs = CostCalculator::calculate(*query_plan, *context);
-        explain = DB::PlanPrinter::textLogicalPlan(*query_plan, true, true, costs);
+        explain = DB::PlanPrinter::textLogicalPlan(*query_plan, context, true, true, costs);
     }
     auto explain_column = ColumnString::create();
     std::istringstream ss(explain);
@@ -96,6 +96,7 @@ QueryPlanPtr InterpreterReproduceQueryUseOptimizer::plan(ASTPtr ast)
         throw Exception("ast is null in reproduce", ErrorCodes::LOGICAL_ERROR);
     context->createPlanNodeIdAllocator();
     context->createSymbolAllocator();
+    context->createOptimizerMetrics();
 
     ast = QueryRewriter::rewrite(ast, context);
     AnalysisPtr ast_result = QueryAnalyzer::analyze(ast, context);

@@ -179,6 +179,12 @@ PlanNodeStatisticsPtr CardinalityVisitor::visitLimitByStep(const LimitByStep & s
     return stats;
 }
 
+PlanNodeStatisticsPtr CardinalityVisitor::visitSortingStep(const SortingStep &, CardinalityContext & context)
+{
+    PlanNodeStatisticsPtr child_stats = context.children_stats[0];
+    return child_stats;
+}
+
 PlanNodeStatisticsPtr CardinalityVisitor::visitMergeSortingStep(const MergeSortingStep &, CardinalityContext & context)
 {
     PlanNodeStatisticsPtr child_stats = context.children_stats[0];
@@ -192,6 +198,12 @@ PlanNodeStatisticsPtr CardinalityVisitor::visitPartialSortingStep(const PartialS
 }
 
 PlanNodeStatisticsPtr CardinalityVisitor::visitMergingSortedStep(const MergingSortedStep &, CardinalityContext & context)
+{
+    PlanNodeStatisticsPtr child_stats = context.children_stats[0];
+    return child_stats;
+}
+
+PlanNodeStatisticsPtr CardinalityVisitor::visitPartitionTopNStep(const PartitionTopNStep &, CardinalityContext & context)
 {
     PlanNodeStatisticsPtr child_stats = context.children_stats[0];
     return child_stats;

@@ -37,7 +37,7 @@ public:
 
 std::shared_ptr<DB::CorrectnessPlanTest> CorrectnessPlanTesting::tester;
 
-TEST_F(CorrectnessPlanTesting, DISABLED_generate)
+TEST_F(CorrectnessPlanTesting, generate)
 {
     if (!AbstractPlanTestSuite::enforce_regenerate())
         GTEST_SKIP() << "skip generate. set env REGENERATE=1 to regenerate explains.";
@@ -57,7 +57,27 @@ TEST_F(CorrectnessPlanTesting, DISABLED_generate)
     }
 }
 
-TEST_F(CorrectnessPlanTesting, DISABLED_q1)
+TEST_F(CorrectnessPlanTesting, q1)
 {
     EXPECT_TRUE(equals(explain("q1"), expected("q1")));
+}
+
+TEST_F(CorrectnessPlanTesting, q2)
+{
+    EXPECT_TRUE(equals(explain("q2"), expected("q2")));
+}
+
+TEST_F(CorrectnessPlanTesting, q3)
+{
+    EXPECT_TRUE(equals(explain("q3"), expected("q3")));
+}
+
+TEST_F(CorrectnessPlanTesting, q4)
+{
+    EXPECT_TRUE(equals(explain("q4"), expected("q4")));
+}
+
+TEST_F(CorrectnessPlanTesting, q5)
+{
+    EXPECT_TRUE(equals(explain("q5"), expected("q5")));
 }

@@ -40,6 +40,7 @@ TableJoin::TableJoin(const Settings & settings, VolumePtr tmp_volume_)
     , partial_merge_join_left_table_buffer_bytes(settings.partial_merge_join_left_table_buffer_bytes)
     , max_files_to_merge(settings.join_on_disk_max_files_to_merge)
     , temporary_files_codec(settings.temporary_files_codec)
+    , allow_extended_conversion(settings.allow_extended_type_conversion)
     , tmp_volume(tmp_volume_)
 {
 }
@@ -414,7 +415,7 @@ bool TableJoin::inferJoinKeyCommonType(const NamesAndTypesList & left, const Nam
         DataTypePtr supertype;
         try
         {
-            supertype = DB::getLeastSupertype({ltype->second, rtype->second});
+            supertype = DB::getLeastSupertype({ltype->second, rtype->second}, allow_extended_conversion);
         }
         catch (DB::Exception & ex)
         {

@@ -17,10 +17,12 @@
 #include <QueryPlan/JoinStep.h>
 #include <QueryPlan/LimitByStep.h>
 #include <QueryPlan/LimitStep.h>
+#include <QueryPlan/SortingStep.h>
 #include <QueryPlan/MergeSortingStep.h>
 #include <QueryPlan/MergingAggregatedStep.h>
 #include <QueryPlan/MergingSortedStep.h>
 #include <QueryPlan/PartialSortingStep.h>
+#include <QueryPlan/PartitionTopNStep.h>
 #include <QueryPlan/PlanVisitor.h>
 #include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/QueryPlan.h>
@@ -49,6 +51,7 @@ static std::unordered_map<IQueryPlanStep::Type, std::string> NODE_COLORS = {
     {IQueryPlanStep::Type::Aggregating, "chartreuse3"},
     {IQueryPlanStep::Type::MergingAggregated, "chartreuse3"},
     {IQueryPlanStep::Type::Window, "darkolivegreen4"},
+    {IQueryPlanStep::Type::PartitionTopN, "darkolivegreen4"},
     {IQueryPlanStep::Type::Union, "turquoise4"},
     {IQueryPlanStep::Type::Intersect, "turquoise4"},
     {IQueryPlanStep::Type::Except, "turquoise4"},
@@ -59,6 +62,7 @@ static std::unordered_map<IQueryPlanStep::Type, std::string> NODE_COLORS = {
     {IQueryPlanStep::Type::Values, "deepskyblue"},
     {IQueryPlanStep::Type::Limit, "gray83"},
     {IQueryPlanStep::Type::LimitBy, "gray83"},
+    {IQueryPlanStep::Type::Sorting, "aliceblue"},
     {IQueryPlanStep::Type::MergeSorting, "aliceblue"},
     {IQueryPlanStep::Type::PartialSorting, "aliceblue"},
     {IQueryPlanStep::Type::MergingSorted, "aliceblue"},
@@ -247,6 +251,15 @@ Void PlanNodePrinter::visitLimitByNode(LimitByNode & node, PrinterContext & cont
     return visitChildren(node, context);
 }
 
+Void PlanNodePrinter::visitSortingNode(SortingNode & node, PrinterContext & context)
+{
+    String label{"SortingNode"};
+    auto step = *node.getStep();
+    String color{NODE_COLORS[step.getType()]};
+    printNode(node, label, StepPrinter::printSortingStep(step), color, context);
+    return visitChildren(node, context);
+}
+
 Void PlanNodePrinter::visitMergeSortingNode(MergeSortingNode & node, PrinterContext & context)
 {
     String label{"MergeSortingNode"};
@@ -357,6 +370,15 @@ Void PlanNodePrinter::visitWindowNode(WindowNode & node, PrinterContext & contex
     String color{NODE_COLORS[step.getType()]};
     String label{"WindowNode"};
     printNode(node, label, StepPrinter::printWindowStep(step), color, context);
+    return visitChildren(node, context);
+}
+
+Void PlanNodePrinter::visitPartitionTopNNode(PartitionTopNNode & node, PrinterContext & context)
+{
+    auto step = *node.getStep();
+    String color{NODE_COLORS[step.getType()]};
+    String label{"PartitionTopNNode"};
+    printNode(node, label, StepPrinter::printPartitionTopNStep(step), color, context);
     return visitChildren(node, context);
 }
 
@@ -620,6 +642,16 @@ Void PlanSegmentNodePrinter::visitMergeSortingNode(QueryPlan::Node * node, Print
     return visitChildren(node, context);
 }
 
+Void PlanSegmentNodePrinter::visitSortingNode(QueryPlan::Node * node, PrinterContext & context)
+{
+    auto & stepPtr = node->step;
+    String label{"SortingNode"};
+    auto & step = dynamic_cast<const SortingStep &>(*stepPtr);
+    String color{NODE_COLORS[stepPtr->getType()]};
+    printNode(node, label, StepPrinter::printSortingStep(step), color, context);
+    return visitChildren(node, context);
+}
+
 Void PlanSegmentNodePrinter::visitPartialSortingNode(QueryPlan::Node * node, PrinterContext & context)
 {
     auto & step_ptr = node->step;
@@ -727,6 +759,16 @@ Void PlanSegmentNodePrinter::visitWindowNode(QueryPlan::Node * node, PrinterCont
     String label{"WindowNode"};
     String color{NODE_COLORS.at(step_ptr->getType())};
     printNode(node, label, StepPrinter::printWindowStep(step), color, context);
+    return visitChildren(node, context);
+}
+
+Void PlanSegmentNodePrinter::visitPartitionTopNNode(QueryPlan::Node * node, PrinterContext & context)
+{
+    auto & step_ptr = node->step;
+    auto & step = dynamic_cast<const PartitionTopNStep &>(*step_ptr);
+    String label{"PartitionTopNNode"};
+    String color{NODE_COLORS.at(step_ptr->getType())};
+    printNode(node, label, StepPrinter::printPartitionTopNStep(step), color, context);
     return visitChildren(node, context);
 }
 
@@ -1066,6 +1108,37 @@ String StepPrinter::printAggregatingStep(const AggregatingStep & step)
         }
         details << "\\n";
     }
+
+    if (step.isGroupingSet())
+    {
+        details << "|";
+        details << "Grouping Set\\n";
+        for (const auto & set : step.getGroupingSetsParams())
+        {
+            details << "( ";
+            for (const auto & name : set.used_key_names)
+            {
+                details << name << ", ";
+            }
+            details << ") ";
+        }
+    }
+
+    if (!step.getGroupings().empty())
+    {
+        details << "|";
+        details << "Grouping\\n";
+        for (const auto & set : step.getGroupings())
+        {
+            details << set.output_name << ':';
+            for (auto arg : set.argument_names)
+            {
+                details << arg<< ',';
+            }
+            details << "; ";
+        }
+    }
+
     details << "|";
     details << "Output\\n";
     for (const auto & column : step.getOutputStream().header)
@@ -1076,12 +1149,6 @@ String StepPrinter::printAggregatingStep(const AggregatingStep & step)
     if (step.isFinal())
         details << "|"
                 << "final";
-    if (step.isCube())
-        details << "|"
-                << "cube";
-    if (step.isRollup())
-        details << "|"
-                << "rollup";
     //    if (step.isTotals())
     //        details << "|"
     //                << "totals";
@@ -1128,6 +1195,22 @@ String StepPrinter::printMergingAggregatedStep(const MergingAggregatedStep & ste
         }
         details << "\\n";
     }
+
+    if (!step.getGroupings().empty())
+    {
+        details << "|";
+        details << "Grouping\\n";
+        for (const auto & set : step.getGroupings())
+        {
+            details << set.output_name << ':';
+            for (auto arg : set.argument_names)
+            {
+                details << arg<< ',';
+            }
+            details << "; ";
+        }
+    }
+
     if (step.getParams()->final)
         details << "|"
                 << "final";
@@ -1388,6 +1471,27 @@ String StepPrinter::printMergeSortingStep(const MergeSortingStep & step)
     return details.str();
 }
 
+String StepPrinter::printSortingStep(const SortingStep & step)
+{
+    std::stringstream details;
+    details << "Order By:\\n";
+    auto & descs = step.getSortDescription();
+    for (auto & desc : descs)
+    {
+        details << desc.column_name << " " << desc.direction << " " << desc.nulls_direction << "\\n";
+    }
+    details << "|";
+    details << "Limit: " << step.getLimit();
+    details << "|";
+    details << "Output |";
+    for (auto & column : step.getOutputStream().header)
+    {
+        details << column.name << ":";
+        details << column.type->getName() << "\\n";
+    }
+    return details.str();
+}
+
 String StepPrinter::printPartialSortingStep(const PartialSortingStep & step)
 {
     std::stringstream details;
@@ -1552,6 +1656,38 @@ String StepPrinter::printCTERefStep(const CTERefStep & step)
         details << column.type->getName() << "\\n";
     }
 
+    return details.str();
+}
+
+String StepPrinter::printPartitionTopNStep(const PartitionTopNStep & step)
+{
+    std::stringstream details;
+    details << "Partition";
+    for (auto & desc : step.getPartition())
+    {
+        details << desc << ", ";
+    }
+    details << "|";
+
+    details << "Order by";
+    for (auto & desc : step.getOrderBy())
+    {
+        details << desc << ", ";
+    }
+    details << "|";
+
+    details << step.getModel();
+    details << "|";
+
+    details << "Limit: " << step.getLimit();
+    details << "|";
+
+    details << "Output |";
+    for (auto & column : step.getOutputStream().header)
+    {
+        details << column.name << ":";
+        details << column.type->getName() << "\\n";
+    }
     return details.str();
 }
 

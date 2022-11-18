@@ -1,12 +1,19 @@
+#include <algorithm>
+#include <memory>
 #include <Optimizer/Property/PropertyDeriver.h>
 
+#include <Core/Names.h>
+#include <Optimizer/ExpressionRewriter.h>
+#include <Optimizer/Property/Property.h>
+#include <Optimizer/SymbolsExtractor.h>
 #include <Optimizer/Utils.h>
 #include <QueryPlan/ExchangeStep.h>
 #include <QueryPlan/FilterStep.h>
 #include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/UnionStep.h>
-#include "Core/Names.h"
-#include "Optimizer/Property/Property.h"
+#include <Storages/StorageDistributed.h>
+#include <Parsers/ASTLiteral.h>
+#include <Parsers/IAST_fwd.h>
 
 namespace DB
 {
@@ -15,24 +22,24 @@ namespace ErrorCodes
     extern const int OPTIMIZER_NONSUPPORT;
 }
 
-Property PropertyDeriver::deriveProperty(ConstQueryPlanStepPtr step)
+Property PropertyDeriver::deriveProperty(ConstQueryPlanStepPtr step, Context & context)
 {
     PropertySet property_set;
-    return deriveProperty(step, property_set);
+    return deriveProperty(step, property_set, context);
 }
 
-Property PropertyDeriver::deriveProperty(ConstQueryPlanStepPtr step, Property & input_property)
+Property PropertyDeriver::deriveProperty(ConstQueryPlanStepPtr step, Property & input_property, Context & context)
 {
     PropertySet input_properties = std::vector<Property>();
     input_properties.emplace_back(input_property);
-    return deriveProperty(step, input_properties);
+    return deriveProperty(step, input_properties, context);
 }
 
-Property PropertyDeriver::deriveProperty(ConstQueryPlanStepPtr step, PropertySet & input_properties)
+Property PropertyDeriver::deriveProperty(ConstQueryPlanStepPtr step, PropertySet & input_properties, Context & context)
 {
-    DeriverContext context{input_properties};
+    DeriverContext deriver_context{input_properties, context};
     static DeriverVisitor visitor{};
-    auto result = VisitorUtil::accept(step, visitor, context);
+    auto result = VisitorUtil::accept(step, visitor, deriver_context);
 
     CTEDescriptions cte_descriptions;
     for (auto & property : input_properties)
@@ -42,6 +49,51 @@ Property PropertyDeriver::deriveProperty(ConstQueryPlanStepPtr step, PropertySet
         result.setCTEDescriptions(cte_descriptions);
 
     return result;
+}
+
+Property PropertyDeriver::deriveStorageProperty(const StoragePtr & storage, Context & context)
+{
+    if (storage->getStorageID().getDatabaseName() == "system")
+    {
+        return Property{Partitioning(Partitioning::Handle::SINGLE), Partitioning(Partitioning::Handle::ARBITRARY)};
+    }
+
+    if (context.getSettingsRef().enable_sharding_optimize)
+    {
+        if (const auto * distribute_table = dynamic_cast<const StorageDistributed *>(storage.get()))
+        {
+            auto sharding_key = distribute_table->getShardingKey();
+            auto symbols = SymbolsExtractor::extract(sharding_key);
+
+            ConstASTMap expression_map;
+            size_t index = 0;
+            for (auto symbol : symbols)
+            {
+                ASTPtr name = std::make_shared<ASTIdentifier>(symbol);
+                ASTPtr id = std::make_shared<ASTLiteral>(Field(index));
+                expression_map[name] = id;
+                index++;
+            }
+
+            ASTPtr rewritten = ExpressionRewriter::rewrite(sharding_key, expression_map);
+
+            if (!symbols.empty())
+            {
+                Names partition_keys{symbols.begin(), symbols.end()};
+                std::sort(partition_keys.begin(), partition_keys.end());
+                return Property{
+                    Partitioning{
+                        Partitioning::Handle::BUCKET_TABLE,
+                        partition_keys,
+                        true,
+                        distribute_table->getShardCount(),
+                        rewritten},
+                    Partitioning{}};
+            }
+        }
+    }
+
+    return Property{Partitioning(Partitioning::Handle::UNKNOWN), Partitioning(Partitioning::Handle::UNKNOWN)};
 }
 
 Property DeriverVisitor::visitStep(const IQueryPlanStep &, DeriverContext & context)
@@ -146,7 +198,7 @@ Property DeriverVisitor::visitUnionStep(const UnionStep & step, DeriverContext &
     std::vector<Property> transformed_children_prop;
     const auto & output_to_inputs = step.getOutToInputs();
     size_t index = 0;
-    for(const auto & child_prop : context.getInput())
+    for (const auto & child_prop : context.getInput())
     {
         NameToNameMap mapping;
         for (const auto & output_to_input : output_to_inputs)
@@ -233,21 +285,13 @@ Property DeriverVisitor::visitRemoteExchangeSourceStep(const RemoteExchangeSourc
     return context.getInput()[0];
 }
 
-Property DeriverVisitor::visitTableScanStep(const TableScanStep & step, DeriverContext &)
+Property DeriverVisitor::visitTableScanStep(const TableScanStep & step, DeriverContext & context)
 {
-    //    Sorting sorting;
-    //    if (auto sorting_key_ast = step.getStorage()->getSortingKeyAST())
-    //    {
-    //        for (const auto & item : sorting_key_ast->getChildren())
-    //            sorting.emplace_back(SortColumn(item->getColumnName(), SortOrder::ASC_NULLS_FIRST));
-    //    }
-    //
-    if (step.getDatabase() == "system")
-    {
-        return Property{Partitioning(Partitioning::Handle::SINGLE), Partitioning(Partitioning::Handle::ARBITRARY)};
-    }
+    NameToNameMap translation;
+    for (const auto & item : step.getColumnAlias())
+        translation.emplace(item.first, item.second);
 
-    return Property{Partitioning(Partitioning::Handle::UNKNOWN), Partitioning(Partitioning::Handle::UNKNOWN)};
+    return PropertyDeriver::deriveStorageProperty(step.getStorage(), context.getContext()).translate(translation);
 }
 
 Property DeriverVisitor::visitReadNothingStep(const ReadNothingStep &, DeriverContext &)
@@ -266,6 +310,11 @@ Property DeriverVisitor::visitLimitStep(const LimitStep &, DeriverContext & cont
 }
 
 Property DeriverVisitor::visitLimitByStep(const LimitByStep &, DeriverContext & context)
+{
+    return context.getInput()[0];
+}
+
+Property DeriverVisitor::visitSortingStep(const SortingStep &, DeriverContext & context)
 {
     return context.getInput()[0];
 }
@@ -331,16 +380,16 @@ Property DeriverVisitor::visitAssignUniqueIdStep(const AssignUniqueIdStep &, Der
 
 Property DeriverVisitor::visitCTERefStep(const CTERefStep &, DeriverContext &)
 {
-//    // CTERefStep output property can not be determined locally, it has been determined globally,
-//    //  Described in CTEDescription of property. If They don't match, we just ignore required property.
-//    // eg, input required property: <Repartition[B], CTE(0)=Repartition[A]> don't match,
-//    //    we ignore local required property Repartition[B] and prefer global property Repartition[A].
-//    CTEId cte_id = step.getId();
-//    Property cte_required_property = context.getRequiredProperty().getCTEDescriptions().at(cte_id).toProperty();
-//
-//    auto output_prop = cte_required_property.translate(step.getReverseOutputColumns());
-//    output_prop.getCTEDescriptions().emplace(cte_id, cte_required_property);
-//    return output_prop;
+    //    // CTERefStep output property can not be determined locally, it has been determined globally,
+    //    //  Described in CTEDescription of property. If They don't match, we just ignore required property.
+    //    // eg, input required property: <Repartition[B], CTE(0)=Repartition[A]> don't match,
+    //    //    we ignore local required property Repartition[B] and prefer global property Repartition[A].
+    //    CTEId cte_id = step.getId();
+    //    Property cte_required_property = context.getRequiredProperty().getCTEDescriptions().at(cte_id).toProperty();
+    //
+    //    auto output_prop = cte_required_property.translate(step.getReverseOutputColumns());
+    //    output_prop.getCTEDescriptions().emplace(cte_id, cte_required_property);
+    //    return output_prop;
     throw Exception("CTERefStep is not supported", ErrorCodes::OPTIMIZER_NONSUPPORT);
 }
 }

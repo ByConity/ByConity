@@ -71,8 +71,8 @@ PropertySets DeterminerVisitor::visitJoinStep(const JoinStep & step, DeterminerC
             right_keys_asof.emplace_back(right_keys[i]);
         }
 
-        Property left{Partitioning{Partitioning::Handle::FIXED_HASH, left_keys_asof, false, 0, true}};
-        Property right{Partitioning{Partitioning::Handle::FIXED_HASH, right_keys_asof, false, 0, false}};
+        Property left{Partitioning{Partitioning::Handle::FIXED_HASH, left_keys_asof, false, 0, nullptr, true}};
+        Property right{Partitioning{Partitioning::Handle::FIXED_HASH, right_keys_asof, false, 0, nullptr, false}};
         PropertySet set;
         set.emplace_back(left);
         set.emplace_back(right);
@@ -95,8 +95,8 @@ PropertySets DeterminerVisitor::visitJoinStep(const JoinStep & step, DeterminerC
         return {set};
     }
 
-    Property left{Partitioning{Partitioning::Handle::FIXED_HASH, left_keys, false, 0, true}};
-    Property right{Partitioning{Partitioning::Handle::FIXED_HASH, right_keys, false, 0, false}};
+    Property left{Partitioning{Partitioning::Handle::FIXED_HASH, left_keys, false, 0, nullptr, true}};
+    Property right{Partitioning{Partitioning::Handle::FIXED_HASH, right_keys, false, 0, nullptr, false}};
     PropertySet set;
     set.emplace_back(left);
     set.emplace_back(right);
@@ -105,10 +105,10 @@ PropertySets DeterminerVisitor::visitJoinStep(const JoinStep & step, DeterminerC
 
 PropertySets DeterminerVisitor::visitAggregatingStep(const AggregatingStep & step, DeterminerContext &)
 {
-   if (/*step.isTotals() || */step.isCube() || step.isRollup())
-   {
-       return {{Property{Partitioning{Partitioning::Handle::SINGLE}}}};
-   }
+//    if (/*step.isTotals() || */)
+//    {
+//        return {{Property{Partitioning{Partitioning::Handle::SINGLE}}}};
+//    }
 
     auto keys = step.getKeys();
     if (keys.empty())
@@ -117,17 +117,24 @@ PropertySets DeterminerVisitor::visitAggregatingStep(const AggregatingStep & ste
         set.emplace_back(Property{Partitioning{Partitioning::Handle::SINGLE}});
         return {set};
     }
-    std::vector<String> group_bys;
-    for (const auto & key : keys)
-    {
-        group_bys.emplace_back(key);
-    }
-    PropertySet set;
-    set.emplace_back(Property{Partitioning{
+
+    PropertySets sets;
+
+    sets.emplace_back(PropertySet{Property{Partitioning{
         Partitioning::Handle::FIXED_HASH,
-        group_bys,
-    }});
-    return {set};
+        keys,
+    }}});
+
+    if (step.isGroupingSet())
+    {
+        keys.emplace_back("__grouping_set");
+        sets.emplace_back(PropertySet{Property{Partitioning{
+            Partitioning::Handle::FIXED_HASH,
+            keys,
+        }}});
+    }
+
+    return sets;
 }
 
 PropertySets DeterminerVisitor::visitMergingAggregatedStep(const MergingAggregatedStep & step, DeterminerContext &)
@@ -213,6 +220,10 @@ PropertySets DeterminerVisitor::visitLimitStep(const LimitStep & step, Determine
 PropertySets DeterminerVisitor::visitLimitByStep(const LimitByStep & node, DeterminerContext & context)
 {
     return visitStep(node, context);
+}
+PropertySets DeterminerVisitor::visitSortingStep(const SortingStep &, DeterminerContext &)
+{
+    return {{Property{Partitioning{Partitioning::Handle::SINGLE}}}};
 }
 PropertySets DeterminerVisitor::visitMergeSortingStep(const MergeSortingStep &, DeterminerContext &)
 {

@@ -308,7 +308,7 @@ PlanNodePtr ColumnPruningVisitor::visitAggregatingNode(AggregatingNode & node, N
     
 
     auto agg_step = std::make_shared<AggregatingStep>(
-        child->getStep()->getOutputStream(), step->getKeys(), aggs, step->isFinal(), step->isCube(), step->isRollup(), step->getGroupings()
+        child->getStep()->getOutputStream(), step->getKeys(), aggs, step->getGroupingSetsParams(), step->isFinal(), step->getGroupings()
         //        step->getHaving(),
         //        step->getInteresteventsInfoList()
     );
@@ -316,6 +316,18 @@ PlanNodePtr ColumnPruningVisitor::visitAggregatingNode(AggregatingNode & node, N
     PlanNodes children{child};
     auto agg_node = AggregatingNode::createPlanNode(context->nextNodeId(), std::move(agg_step), children, node.getStatistics());
     return agg_node;
+}
+
+PlanNodePtr ColumnPruningVisitor::visitSortingNode(SortingNode & node, NameSet & require)
+{
+    const auto * step = node.getStep().get();
+    for (const auto & item : step->getSortDescription())
+    {
+        require.insert(item.column_name);
+    }
+    auto child = VisitorUtil::accept(node.getChildren()[0], *this, require);
+    auto sort_step = std::make_shared<SortingStep>(child->getStep()->getOutputStream(), step->getSortDescription(), step->getLimit(), step->isPartial());
+    return SortingNode::createPlanNode(context->nextNodeId(), std::move(sort_step), PlanNodes{child}, node.getStatistics());
 }
 
 PlanNodePtr ColumnPruningVisitor::visitMergeSortingNode(MergeSortingNode & node, NameSet & require)
@@ -399,9 +411,22 @@ PlanNodePtr ColumnPruningVisitor::visitJoinNode(JoinNode & node, NameSet & requi
     /// must have one output column
     if (output_header.empty())
     {
-        output_header.emplace_back(step->getOutputStream().header.getByPosition(0));
-        left_require.insert(step->getOutputStream().header.getByPosition(0).name);
-        left = VisitorUtil::accept(node.getChildren()[0], *this, left_require);
+        if (left_header.columns() != 0)
+        {
+            output_header.emplace_back(left_header.getByPosition(0));
+            left_require.insert(left_header.getByPosition(0).name);
+            left = VisitorUtil::accept(node.getChildren()[0], *this, left_require);
+        }
+        else if (right_header.columns() != 0)
+        {
+            output_header.emplace_back(right_header.getByPosition(0));
+            right_require.insert(right_header.getByPosition(0).name);
+            right = VisitorUtil::accept(node.getChildren()[1], *this, right_require);
+        }
+        else
+        {
+            throw Exception("Join no input symbols", ErrorCodes::LOGICAL_ERROR);
+        }
     }
 
     // column pruning can't change the output type of join.

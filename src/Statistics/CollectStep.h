@@ -1,5 +1,6 @@
 #pragma once
 #include <memory>
+#include <Statistics/CollectorSettings.h>
 #include <Statistics/ParseUtils.h>
 #include <Statistics/StatisticsCollectorObjects.h>
 #include <Statistics/StatsTableIdentifier.h>
@@ -24,9 +25,9 @@ struct HandlerColumnData
 
 struct HandlerContext : boost::noncopyable
 {
-    HandlerContext(const Settings & settings_) : settings(settings_) { }
+    HandlerContext(const CollectorSettings & settings_) : settings(settings_) { }
 
-    const Settings & settings;
+    const CollectorSettings & settings;
     double full_count = 0;
     std::optional<double> query_row_count;
     std::unordered_map<String, HandlerColumnData> columns_data;
@@ -56,8 +57,6 @@ public:
     using TableStats = StatisticsImpl::TableStats;
     using ColumnStats = StatisticsImpl::ColumnStats;
     using ColumnStatsMap = StatisticsImpl::ColumnStatsMap;
-    using ColumnName = String;
-
 
     explicit CollectStep(StatisticsCollector & core_);
 
@@ -76,5 +75,6 @@ protected:
     HandlerContext handler_context;
 };
 
-
+std::unique_ptr<CollectStep> createStatisticsCollectorStepSample(StatisticsCollector & core);
+std::unique_ptr<CollectStep> createStatisticsCollectorStepFull(StatisticsCollector & core);
 }

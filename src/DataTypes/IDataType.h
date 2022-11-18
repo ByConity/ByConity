@@ -402,10 +402,12 @@ struct WhichDataType
     constexpr bool isEnum() const { return isEnum8() || isEnum16(); }
 
     constexpr bool isDate() const { return idx == TypeIndex::Date; }
+    constexpr bool isDate32() const { return false; } // TODO: date32
     constexpr bool isTime() const { return idx == TypeIndex::Time; }
     constexpr bool isDateTime() const { return idx == TypeIndex::DateTime; }
     constexpr bool isDateTime64() const { return idx == TypeIndex::DateTime64; }
-    bool isDateOrDateTime() const { return isDate() || isDateTime() || isDateTime64(); }
+    constexpr bool isDateOrDate32() const { return isDate() || isDate32(); }
+    constexpr bool isDateOrDateTime() const { return isDate() || isDate32() || isDateTime() || isDateTime64(); }
 
     constexpr bool isString() const { return idx == TypeIndex::String; }
     constexpr bool isFixedString() const { return idx == TypeIndex::FixedString; }
@@ -430,6 +432,12 @@ struct WhichDataType
 
 template <typename T>
 inline bool isDate(const T & data_type) { return WhichDataType(data_type).isDate(); }
+template <typename T>
+inline bool isDate32(const T & data_type) { return WhichDataType(data_type).isDate32(); }
+template <typename T>
+inline bool isDateOrDate32(const T & data_type) { return WhichDataType(data_type).isDateOrDate32(); }
+template <typename T>
+inline bool isDateOrDateTime(const T & data_type) { return WhichDataType(data_type).isDateOrDateTime(); }
 template <typename T>
 inline bool isTime(const T & data_type) { return WhichDataType(data_type).isTime(); }
 template <typename T>
@@ -500,7 +508,7 @@ inline bool isColumnedAsNumber(const T & data_type)
 {
     WhichDataType which(data_type);
     return which.isInt() || which.isUInt() || which.isFloat()
-          || which.isDate() || which.isDateTime()
+          || which.isDate() || which.isDate32() || which.isDateTime()
           || which.isDateTime64() || which.isUUID()
           || which.isTime();
 }

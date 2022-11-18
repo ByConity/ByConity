@@ -17,15 +17,16 @@ void registerFunctionInvalidateStatsCache(FunctionFactory & factory)
     factory.registerFunction<FunctionInvalidateStatsCache>();
 }
 
-ColumnPtr FunctionInvalidateStatsCache::executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const
+ColumnPtr FunctionInvalidateStatsCache::executeImpl(
+    const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const
 {
     std::vector<String> identifier_names;
-    for (const auto& pr: arguments)
+    for (const auto & pr : arguments)
     {
         const IColumn * raw_col = pr.column.get();
         if (!isColumnConst(*raw_col))
             throw Exception("The argument of function " + getName() + " must be constant.", ErrorCodes::ILLEGAL_COLUMN);
-        const auto* col = dynamic_cast<const ColumnConst *>(raw_col);
+        const auto * col = dynamic_cast<const ColumnConst *>(raw_col);
         if (!col)
             throw Exception("The argument of function " + getName() + " must be constant.", ErrorCodes::ILLEGAL_COLUMN);
 
@@ -42,11 +43,14 @@ ColumnPtr FunctionInvalidateStatsCache::executeImpl(const ColumnsWithTypeAndName
 
     if (!table_identifier_opt.has_value())
     {
-        throw Exception("Table " + identifier_names[0] + "." + identifier_names[1] + " not found", ErrorCodes::UNKNOWN_TABLE);
+        // DO NOTHING
+        LOG_INFO(&Poco::Logger::get("invalidateStatsCache"), "Table " + identifier_names[0] + "." + identifier_names[1] + " not found, skip cache clear");
     }
-
-    // a single function will clear one server
-    catalog->invalidateServerStatsCache(*table_identifier_opt);
+    else
+    {
+        // a single function will clear one server
+        catalog->invalidateServerStatsCache(*table_identifier_opt);
+    }
 
     return result_type->createColumnConst(input_rows_count, 0);
 }

@@ -48,7 +48,7 @@ private:
 
     std::vector<std::unique_ptr<IInterpreterUnionOrSelectQuery>> nested_interpreters;
 
-    static Block getCommonHeaderForUnion(const Blocks & headers);
+    static Block getCommonHeaderForUnion(const Blocks & headers, bool allow_extended_conversion);
 
     Block getCurrentChildResultHeader(const ASTPtr & ast_ptr_, const Names & required_result_column_names);
 

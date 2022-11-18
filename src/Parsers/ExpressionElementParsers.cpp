@@ -1529,11 +1529,47 @@ bool ParserNull::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         return false;
 }
 
+static bool all_digits(const char *buf)
+{
+    char c;
+
+    while ((c = *buf++)) {
+        if (c < '0' || c > '9')
+            return false;
+    }
+    return true;
+}
+
+static const char *get_decimal_pt(const char *buf)
+{
+    const char *pt = nullptr;
+    char c = *buf++;
+
+    if (c < '0' || c > '9')
+        return nullptr;
+
+    while ((c = *buf)) {
+        if (c == '.') {
+            /* invalid decimal with second point */
+            if (pt)
+                return nullptr;
+
+            /* first point */
+            pt = buf++;
+            continue;
+        }
+
+        if (c < '0' || c > '9')
+            return nullptr;
+
+        buf++;
+    }
+    return pt;
+}
 
 bool ParserNumber::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     const char * data_begin = pos->begin;
-    const char * data_end = pos->end;
     Pos literal_begin = pos;
     bool negative = false;
     size_t sz;
@@ -1569,7 +1605,7 @@ bool ParserNumber::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     memcpy(buf, pos->begin, sz);
     buf[sz] = 0;
 
-    if (dt.parse_literal_as_decimal && !!(dot = strchr(buf, '.')))
+    if (dt.parse_literal_as_decimal && !!(dot = get_decimal_pt(buf)))
     {
         /* parse as decimal */
         UInt32 integral = dot - buf;
@@ -1583,6 +1619,9 @@ bool ParserNumber::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
             expected.add(pos, "number");
             return false;
         }
+
+        if (precision < DecimalUtils::max_precision<Decimal64>)
+            precision = DecimalUtils::max_precision<Decimal64>;
 
         /* validate all numbers */
         for (size_t i = 0; i < sz; i++) {
@@ -1606,7 +1645,7 @@ bool ParserNumber::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         function_node->arguments = list;
         function_node->children.push_back(function_node->arguments);
 
-        auto literal = std::make_shared<ASTLiteral>(String(data_begin, data_end - data_begin));
+        auto literal = std::make_shared<ASTLiteral>(String(data_begin, pos->begin - data_begin + sz));
         node = createFunctionCast(literal, function_node);
         ++pos;
         return true;
@@ -1635,12 +1674,39 @@ bool ParserNumber::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
     errno = 0;
     UInt64 uint_value = std::strtoull(buf, &pos_integer, 0);
-    if (pos_integer == pos_double && errno != ERANGE && (!negative || uint_value <= (1ULL << 63)))
+    if (pos_integer == pos_double && errno != ERANGE)
     {
-        if (negative)
+        if (!negative)
+            res = uint_value;
+        else if (uint_value <= (1ULL << 63))
             res = static_cast<Int64>(-uint_value);
         else
-            res = uint_value;
+            res = -static_cast<Int128>(uint_value);
+    }
+    else if (all_digits(buf))
+    {
+        /* try to parse integer as Int128/256 and UInt256 */
+        ReadBufferFromMemory rb(data_begin, pos->begin - data_begin + sz);
+        constexpr int int256_max_digits = 77;
+        Int512 val;
+
+        if (negative) {
+            if (sz <= int256_max_digits && tryReadIntText(val, rb)) {
+                if (std::numeric_limits<Int128>::min() <= val)
+                    res = static_cast<Int128>(val);
+                else if (std::numeric_limits<Int256>::min() <= val)
+                    res = static_cast<Int256>(val);
+            }
+        } else {
+            if (sz <= (int256_max_digits + 1) && tryReadIntText(val, rb)) {
+                if (val <= std::numeric_limits<Int128>::max())
+                    res = static_cast<Int128>(val);
+                else if (val <= std::numeric_limits<Int256>::max())
+                    res = static_cast<Int256>(val);
+                else if (val <= std::numeric_limits<UInt256>::max())
+                    res = static_cast<UInt256>(val);
+            }
+        }
     }
 
     auto literal = std::make_shared<ASTLiteral>(res);

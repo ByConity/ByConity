@@ -16,11 +16,12 @@ namespace DB
  * to the constant side, e.g. given x::UInt8, `CAST(x, 'Int32') > 10` can be
  * rewritten to `x > CAST(10, 'UInt8')`.
  */
-ASTPtr unwrapCastInComparison(const ConstASTPtr & expression, ContextMutablePtr context, const NamesAndTypes & column_types);
+ASTPtr unwrapCastInComparison(const ConstASTPtr & expression, ContextMutablePtr context, const NameToType & column_types);
 
 struct UnwrapCastInComparisonContext
 {
     ContextMutablePtr context;
+    NameToType column_types;
     const TypeAnalyzer & type_analyzer;
 };
 

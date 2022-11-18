@@ -3,6 +3,7 @@
 #include <Analyzers/ExecutePrewhereSubqueryVisitor.h>
 #include <Analyzers/ImplementFunctionVisitor.h>
 #include <Analyzers/ReplaceViewWithSubqueryVisitor.h>
+#include <Analyzers/CheckAliasVisitor.h>
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <Interpreters/ApplyWithSubqueryVisitor.h>
 #include <Interpreters/ApplyWithAliasVisitor.h>
@@ -164,6 +165,12 @@ namespace
         ApplyWithSubqueryVisitor::visit(query);
         GraphvizPrinter::printAST(query, context, std::to_string(graphviz_index++) + "-AST-expand-cte");
     }
+
+    void checkAlias(ASTPtr & query)
+    {
+        CheckAliasVisitor().visit(query);
+    }
+
 
     void expandView(ASTPtr & query, ContextMutablePtr context)
     {
@@ -363,7 +370,7 @@ namespace
         QueryAliasesNoSubqueriesVisitor(aliases).visit(select.select());
 
         CrossToInnerJoinVisitor::Data cross_to_inner{tables, aliases, database};
-        cross_to_inner.cross_to_inner_join_rewrite = settings.cross_to_inner_join_rewrite;
+        cross_to_inner.cross_to_inner_join_rewrite = false;
         CrossToInnerJoinVisitor(cross_to_inner).visit(query);
 
         JoinToSubqueryTransformVisitor::Data join_to_subs_data{tables, settings.dialect_type, aliases};
@@ -492,8 +499,9 @@ namespace
     }
 }
 
-ASTPtr QueryRewriter::rewrite(ASTPtr query, ContextMutablePtr context)
+ASTPtr QueryRewriter::rewrite(ASTPtr query, ContextMutablePtr context, bool enable_materialized_view)
 {
+    (void) enable_materialized_view;
     graphviz_index = GraphvizPrinter::PRINT_AST_INDEX;
     GraphvizPrinter::printAST(query, context, std::to_string(graphviz_index++) + "-AST-init");
 
@@ -503,6 +511,7 @@ ASTPtr QueryRewriter::rewrite(ASTPtr query, ContextMutablePtr context)
         expandCte(query, context);
         expandView(query, context);
         normalizeUnion(query, context); // queries in union may not be normalized, hence normalize them here
+        checkAlias(query);
 
         /// Expression rewriting
         markTupleLiteralsAsLegacy(query, context);

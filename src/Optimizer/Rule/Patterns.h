@@ -28,6 +28,7 @@ inline PatternPtr tableScan() { return typeOf(IQueryPlanStep::Type::TableScan); 
 inline PatternPtr readNothing() { return typeOf(IQueryPlanStep::Type::ReadNothing); }
 inline PatternPtr limit() { return typeOf(IQueryPlanStep::Type::Limit); }
 inline PatternPtr limitBy() { return typeOf(IQueryPlanStep::Type::LimitBy); }
+inline PatternPtr sorting() { return typeOf(IQueryPlanStep::Type::Sorting); }
 inline PatternPtr mergeSorting() { return typeOf(IQueryPlanStep::Type::MergeSorting); }
 inline PatternPtr partialSorting() { return typeOf(IQueryPlanStep::Type::PartialSorting); }
 inline PatternPtr mergingSorted() { return typeOf(IQueryPlanStep::Type::MergingSorted); }

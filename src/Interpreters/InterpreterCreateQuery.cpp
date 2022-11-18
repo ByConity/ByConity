@@ -40,6 +40,7 @@
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/InterpreterInsertQuery.h>
 #include <Interpreters/AddDefaultDatabaseVisitor.h>
+#include <Interpreters/join_common.h>
 
 #include <Access/AccessRightsElement.h>
 
@@ -1019,7 +1020,7 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
     {
         // Expand CTE before filling default database
         ApplyWithSubqueryVisitor().visit(*create.select);
-        AddDefaultDatabaseVisitor visitor(current_database);
+        AddDefaultDatabaseVisitor visitor(getContext(), current_database);
         visitor.visit(*create.select);
     }
 

@@ -1,5 +1,5 @@
-with
- cross_items as (select i_item_sk ss_item_sk
+with  cross_items as
+ (select i_item_sk ss_item_sk
  from item,
  (select iss.i_brand_id brand_id
      ,iss.i_class_id class_id
@@ -34,8 +34,8 @@ with
       and i_class_id = class_id
       and i_category_id = category_id
 ),
-
- avg_sales as (select avg(quantity*list_price) average_sales
+ avg_sales as
+ (select avg(quantity*list_price) average_sales
   from (select ss_quantity quantity
              ,ss_list_price list_price
        from store_sales
@@ -96,12 +96,12 @@ with
        group by i_brand_id,i_class_id,i_category_id
        having sum(ws_quantity*ws_list_price) > (select average_sales from avg_sales)
  ) y
- group by channel, i_brand_id,i_class_id,i_category_id with rollup
+ group by rollup (channel, i_brand_id,i_class_id,i_category_id)
  order by channel,i_brand_id,i_class_id,i_category_id
 limit 100;
  
- with
- cross_items as (select i_item_sk ss_item_sk
+ with  cross_items as
+ (select i_item_sk ss_item_sk
  from item,
  (select iss.i_brand_id brand_id
      ,iss.i_class_id class_id
@@ -136,7 +136,8 @@ limit 100;
       and i_class_id = class_id
       and i_category_id = category_id
 ),
- avg_sales as (select avg(quantity*list_price) average_sales
+ avg_sales as
+(select avg(quantity*list_price) average_sales
   from (select ss_quantity quantity
              ,ss_list_price list_price
        from store_sales

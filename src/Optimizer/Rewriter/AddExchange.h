@@ -64,6 +64,7 @@ public:
     ExchangeResult visitValuesNode(ValuesNode & node, ExchangeContext &) override;
     ExchangeResult visitLimitNode(LimitNode & node, ExchangeContext & cxt) override;
     ExchangeResult visitLimitByNode(LimitByNode & node, ExchangeContext & cxt) override;
+    ExchangeResult visitSortingNode(SortingNode & node, ExchangeContext & cxt) override;
     ExchangeResult visitMergeSortingNode(MergeSortingNode & node, ExchangeContext & cxt) override;
     ExchangeResult visitPartialSortingNode(PartialSortingNode & node, ExchangeContext & cxt) override;
     ExchangeResult visitMergingSortedNode(MergingSortedNode & node, ExchangeContext & cxt) override;
@@ -95,7 +96,7 @@ private:
      * @param result child with it's output property.
      * @return node with it's output property.
      */
-    static ExchangeResult rebaseAndDeriveProperties(const PlanNodePtr & node, ExchangeResult & result);
+    static ExchangeResult rebaseAndDeriveProperties(const PlanNodePtr & node, ExchangeResult & result, Context & cxt);
 
     /**
      * Replace children first, then derive the output property.
@@ -104,7 +105,7 @@ private:
      * @param results children with it's output property.
      * @return node with it's output property.
      */
-    static ExchangeResult rebaseAndDeriveProperties(const PlanNodePtr & node, std::vector<ExchangeResult> & results);
+    static ExchangeResult rebaseAndDeriveProperties(const PlanNodePtr & node, std::vector<ExchangeResult> & results, Context & cxt);
 
     /**
      * Derive the actual property of node.
@@ -113,7 +114,7 @@ private:
      * @param inputProperty the actual property of child node.
      * @return node with it's actual property.
      */
-    static ExchangeResult deriveProperties(const PlanNodePtr & node, Property & inputProperty);
+    static ExchangeResult deriveProperties(const PlanNodePtr & node, Property & inputProperty, Context & cxt);
 
     /**
      * Derive the actual property of node.
@@ -122,7 +123,7 @@ private:
      * @param inputProperties the actual property of child node.
      * @return node with it's actual property.
      */
-    static ExchangeResult deriveProperties(const PlanNodePtr & node, PropertySet & inputProperties);
+    static ExchangeResult deriveProperties(const PlanNodePtr & node, PropertySet & inputProperties, Context & cxt);
 
     ExchangeResult enforceNodeAndStream(PlanNodeBase & node, ExchangeContext & cxt);
     ExchangeResult enforceNode(PlanNodeBase & node, ExchangeContext & cxt);

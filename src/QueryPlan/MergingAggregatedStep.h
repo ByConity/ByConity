@@ -1,5 +1,6 @@
 #pragma once
 #include <QueryPlan/ITransformingStep.h>
+#include <QueryPlan/AggregatingStep.h>
 #include <DataStreams/SizeLimits.h>
 #include <Processors/Transforms/AggregatingTransform.h>
 
@@ -19,6 +20,17 @@ public:
         size_t max_threads_,
         size_t memory_efficient_merge_threads_);
 
+    // used by optimizer
+    MergingAggregatedStep(
+        const DataStream & input_stream_,
+        Names keys_,
+        GroupingSetsParamsList grouping_sets_params_,
+        GroupingDescriptions groupings_,
+        AggregatingTransformParamsPtr params_,
+        bool memory_efficient_aggregation_,
+        size_t max_threads_,
+        size_t memory_efficient_merge_threads_);
+
     String getName() const override { return "MergingAggregated"; }
 
     Type getType() const override { return Type::MergingAggregated; }
@@ -32,6 +44,7 @@ public:
 
     const Names & getKeys() const { return keys; }
     const AggregateDescriptions & getAggregates() const { return params->params.aggregates; }
+    const GroupingDescriptions & getGroupings() const { return groupings; }
 
     void serialize(WriteBuffer & buf) const override;
     static QueryPlanStepPtr deserialize(ReadBuffer & buf, ContextPtr);
@@ -40,6 +53,8 @@ public:
 
 private:
     Names keys;
+    GroupingSetsParamsList grouping_sets_params;
+    GroupingDescriptions groupings;
     AggregatingTransformParamsPtr params;
     bool memory_efficient_aggregation;
     size_t max_threads;

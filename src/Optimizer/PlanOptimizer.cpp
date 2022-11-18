@@ -6,13 +6,16 @@
 #include <Optimizer/Rewriter/AddDynamicFilters.h>
 #include <Optimizer/Rewriter/AddExchange.h>
 #include <Optimizer/Rewriter/ColumnPruning.h>
+#include <Optimizer/Rewriter/RemoveRedundantSort.h>
 #include <Optimizer/Rewriter/PredicatePushdown.h>
 #include <Optimizer/Rewriter/RemoveApply.h>
+#include <Optimizer/Rewriter/RemoveUnusedCTE.h>
 #include <Optimizer/Rewriter/SimpleReorderJoin.h>
 #include <Optimizer/Rewriter/SimplifyCrossJoin.h>
 #include <Optimizer/Rewriter/UnifyJoinOutputs.h>
 #include <Optimizer/Rewriter/UnifyNullableType.h>
 #include <Optimizer/Rewriter/RemoveUnusedCTE.h>
+#include <Optimizer/Rewriter/MaterializedViewRewriter.h>
 #include <Optimizer/Rule/Rules.h>
 #include <QueryPlan/GraphvizPrinter.h>
 #include <QueryPlan/PlanPattern.h>
@@ -23,6 +26,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int OPTIMIZER_NONSUPPORT;
+    extern const int OPTIMIZER_TIMEOUT;
 }
 
 const Rewriters & PlanOptimizer::getSimpleRewriters()
@@ -32,17 +36,25 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
         std::make_shared<ColumnPruning>(),
         std::make_shared<IterativeRewriter>(Rules::normalizeExpressionRules(), "NormalizeExpression"),
         std::make_shared<IterativeRewriter>(Rules::simplifyExpressionRules(), "SimplifyExpression"),
+        std::make_shared<IterativeRewriter>(Rules::mergePredicatesRules(), "MergePredicates"),
         std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
         std::make_shared<IterativeRewriter>(Rules::pushDownLimitRules(), "PushDownLimit"),
         std::make_shared<IterativeRewriter>(Rules::distinctToAggregateRules(), "DistinctToAggregate"),
 
+        std::make_shared<RemoveRedundantSort>(),
         std::make_shared<PredicatePushdown>(),
 
         // normalize plan after predicate push down
         std::make_shared<ColumnPruning>(),
         std::make_shared<IterativeRewriter>(Rules::simplifyExpressionRules(), "SimplifyExpression"),
+        std::make_shared<IterativeRewriter>(Rules::mergePredicatesRules(), "MergePredicates"),
         std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
         std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
+
+        //add reorder adjacent windows
+        std::make_shared<IterativeRewriter>(Rules::swapAdjacentRules(),"SwapAdjacent"),
+
+        std::make_shared<MaterializedViewRewriter>(),
 
         // add exchange
         std::make_shared<AddExchange>(),
@@ -92,12 +104,15 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         std::make_shared<IterativeRewriter>(Rules::distinctToAggregateRules(), "DistinctToAggregate"),
         std::make_shared<IterativeRewriter>(Rules::pushAggRules(), "PushAggregateThroughJoin"),
 
+        std::make_shared<RemoveRedundantSort>(),
+
         // subquery remove may generate outer join, make sure data type is correct.
         std::make_shared<ColumnPruning>(),
         std::make_shared<UnifyNullableType>(),
 
         // predicate push down
         std::make_shared<IterativeRewriter>(Rules::simplifyExpressionRules(), "SimplifyExpression"),
+        std::make_shared<IterativeRewriter>(Rules::mergePredicatesRules(), "MergePredicates"),
         std::make_shared<PredicatePushdown>(),
 
         // predicate push down may convert outer-join to inner-join, make sure data type is correct.
@@ -117,6 +132,7 @@ const Rewriters & PlanOptimizer::getFullRewriters()
 
         // simple join order (primary for large joins reorder)
         std::make_shared<IterativeRewriter>(Rules::simplifyExpressionRules(), "SimplifyExpression"),
+        std::make_shared<IterativeRewriter>(Rules::mergePredicatesRules(), "MergePredicates"),
         std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
         std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
         std::make_shared<IterativeRewriter>(Rules::normalizeExpressionRules(), "NormalizeExpression"),
@@ -129,10 +145,17 @@ const Rewriters & PlanOptimizer::getFullRewriters()
 
         // prepare for cascades
         std::make_shared<IterativeRewriter>(Rules::simplifyExpressionRules(), "SimplifyExpression"),
+        std::make_shared<IterativeRewriter>(Rules::mergePredicatesRules(), "MergePredicates"),
         std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
         std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
         std::make_shared<IterativeRewriter>(Rules::normalizeExpressionRules(), "NormalizeExpression"),
         std::make_shared<UnifyJoinOutputs>(),
+
+        //add reorder adjacent windows
+        std::make_shared<IterativeRewriter>(Rules::swapAdjacentRules(),"SwapAdjacent"),
+
+        //
+        std::make_shared<MaterializedViewRewriter>(),
 
         // Cost-based optimizer
         std::make_shared<CascadesOptimizer>(),
@@ -168,16 +191,31 @@ void PlanOptimizer::optimize(QueryPlan & plan, ContextMutablePtr context)
     // Check init plan to satisfy with :
     // 1 Symbol exist check
     PlanCheck::checkInitPlan(plan, context);
+    auto start = std::chrono::high_resolution_clock::now();
 
     auto rewrite = [&](const Rewriters & rewriters) {
-        for (const auto & rewriter : rewriters)
+        for (auto & rewriter : rewriters)
         {
-            auto start = std::chrono::high_resolution_clock::now();
+            auto rewriter_begin = std::chrono::high_resolution_clock::now();
             rewriter->rewrite(plan, context);
-            auto end = std::chrono::high_resolution_clock::now();
-            auto ms_int = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+            auto now = std::chrono::high_resolution_clock::now();
+            UInt64 elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - start).count();
+            UInt64 single_rewriter_duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - rewriter_begin).count();
+
+            if (single_rewriter_duration >= 1000)
+                LOG_WARNING(
+                    &Poco::Logger::get("PlanOptimizer"),
+                    "the execute time of " + rewriter->name() + " rewriter greater than or equal to 1 second");
+
             GraphvizPrinter::printLogicalPlan(
-                plan, context, std::to_string(i++) + "_" + rewriter->name() + "_" + std::to_string(ms_int.count()) + "ms");
+                plan, context, std::to_string(i++) + "_" + rewriter->name() + "_" + std::to_string(single_rewriter_duration) + "ms");
+
+            if (elapsed >= context->getSettingsRef().plan_optimizer_timeout)
+            {
+                throw Exception(
+                    "PlanOptimizer exhausted the time limit of " + std::to_string(context->getSettingsRef().plan_optimizer_timeout) + " ms",
+                    ErrorCodes::OPTIMIZER_TIMEOUT);
+            }
         }
     };
 

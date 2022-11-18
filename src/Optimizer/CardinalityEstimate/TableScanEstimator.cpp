@@ -15,36 +15,15 @@ namespace ErrorCodes
 
 PlanNodeStatisticsPtr TableScanEstimator::estimate(ContextMutablePtr context, const TableScanStep & step)
 {
-    auto catalog = Statistics::createCatalogAdaptor(context);
-    auto table_info_opt = catalog->getTableIdByName(step.getDatabase(), step.getTable());
-    if (!table_info_opt.has_value())
+    auto plan_node_stats_opt = estimate(context, step.getStorageID(), step.getColumnNames());
+    if (!plan_node_stats_opt.has_value())
     {
-        // TODO: give a warning here?
         return nullptr;
     }
-
-    PlanNodeStatisticsPtr plan_node_stats;
-    try {
-        auto ts = 0;
-        Statistics::StatisticsCollector collector(context, catalog, table_info_opt.value(), ts);
-        collector.readFromCatalog(step.getColumnNames());
-        auto plan_node_stats_opt = collector.toPlanNodeStatistics();
-        if (!plan_node_stats_opt.has_value())
-        {
-            return nullptr;
-        }
-        plan_node_stats = std::move(plan_node_stats_opt.value());
-    } 
-    catch(...)
-    {
-        auto logger = &Poco::Logger::get("TableScanEstimator");
-        tryLogCurrentException(logger);
-        return nullptr; 
-    }
-    
+    auto plan_node_stats = std::move(plan_node_stats_opt.value());
 
     NameToNameMap alias_to_column;
-    for (auto & item : step.getColumnAlias())
+    for (const auto & item : step.getColumnAlias())
     {
         alias_to_column[item.second] = item.first;
     }
@@ -69,4 +48,37 @@ PlanNodeStatisticsPtr TableScanEstimator::estimate(ContextMutablePtr context, co
 
     return plan_node_stats;
 }
+
+std::optional<PlanNodeStatisticsPtr> TableScanEstimator::estimate(
+    ContextMutablePtr context, const StorageID & storage_id, const Names & columns)
+{
+    auto catalog = Statistics::createCatalogAdaptor(context);
+    auto table_info_opt = catalog->getTableIdByName(storage_id.getDatabaseName(), storage_id.getTableName());
+    if (!table_info_opt.has_value())
+    {
+        // TODO: give a warning here?
+        return std::nullopt;
+    }
+
+    PlanNodeStatisticsPtr plan_node_stats;
+    try {
+        Statistics::StatisticsCollector collector(context, catalog, table_info_opt.value());
+        collector.readFromCatalog(columns);
+        auto plan_node_stats_opt = collector.toPlanNodeStatistics();
+        if (!plan_node_stats_opt.has_value())
+        {
+            return std::nullopt;
+        }
+        plan_node_stats = std::move(plan_node_stats_opt.value());
+    }
+    catch(...)
+    {
+        auto * logger = &Poco::Logger::get("TableScanEstimator");
+        tryLogCurrentException(logger);
+        return std::nullopt;
+    }
+
+    return plan_node_stats;
+}
+
 }

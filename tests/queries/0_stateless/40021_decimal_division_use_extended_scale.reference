@@ -1,0 +1,110 @@
+-- { echo }
+
+-- Decimal / Decimal
+SELECT 1.2::Decimal32(2) / 0.6::Decimal32(1), toTypeName(1.2::Decimal32(2) / 0.6::Decimal32(1)) SETTINGS decimal_division_use_extended_scale = 0;
+2.00	Decimal(9, 2)
+SELECT 1.2::Decimal32(2) / 0.6::Decimal32(1), toTypeName(1.2::Decimal32(2) / 0.6::Decimal32(1)) SETTINGS decimal_division_use_extended_scale = 1;
+2.000000	Decimal(9, 6)
+SELECT 1.2::Decimal32(2) / 0.6::Decimal32(2), toTypeName(1.2::Decimal32(2) / 0.6::Decimal32(2)) SETTINGS decimal_division_use_extended_scale = 0;
+2.00	Decimal(9, 2)
+SELECT 1.2::Decimal32(2) / 0.6::Decimal32(2), toTypeName(1.2::Decimal32(2) / 0.6::Decimal32(2)) SETTINGS decimal_division_use_extended_scale = 1;
+2.000000	Decimal(9, 6)
+SELECT 1.2::Decimal32(2) / 6::Decimal32(0), toTypeName(1.2::Decimal32(2) / 6::Decimal32(0)) SETTINGS decimal_division_use_extended_scale = 0;
+0.20	Decimal(9, 2)
+SELECT 1.2::Decimal32(2) / 6::Decimal32(0), toTypeName(1.2::Decimal32(2) / 6::Decimal32(0)) SETTINGS decimal_division_use_extended_scale = 1;
+0.200000	Decimal(9, 6)
+SELECT 1.2::Decimal32(7) / 0.6::Decimal32(1), toTypeName(1.2::Decimal32(7) / 0.6::Decimal32(1)) SETTINGS decimal_division_use_extended_scale = 0;
+2.0000000	Decimal(9, 7)
+SELECT 1.2::Decimal32(7) / 0.6::Decimal32(1), toTypeName(1.2::Decimal32(7) / 0.6::Decimal32(1)) SETTINGS decimal_division_use_extended_scale = 1;
+2.0000000	Decimal(9, 7)
+SELECT 1.2::Decimal64(7) / 0.6::Decimal64(7), toTypeName(1.2::Decimal64(7) / 0.6::Decimal64(7)) SETTINGS decimal_division_use_extended_scale = 0;
+2.0000000	Decimal(18, 7)
+SELECT 1.2::Decimal64(7) / 0.6::Decimal64(7), toTypeName(1.2::Decimal64(7) / 0.6::Decimal64(7)) SETTINGS decimal_division_use_extended_scale = 1;
+2.0000000	Decimal(18, 7)
+SELECT 1.2::Decimal64(2) / 0.6::Decimal32(1), toTypeName(1.2::Decimal64(2) / 0.6::Decimal32(1)) SETTINGS decimal_division_use_extended_scale = 0;
+2.00	Decimal(18, 2)
+SELECT 1.2::Decimal64(2) / 0.6::Decimal32(1), toTypeName(1.2::Decimal64(2) / 0.6::Decimal32(1)) SETTINGS decimal_division_use_extended_scale = 1;
+2.000000	Decimal(18, 6)
+SELECT 1.2::Decimal64(7) / 0.6::Decimal32(1), toTypeName(1.2::Decimal64(7) / 0.6::Decimal32(1)) SETTINGS decimal_division_use_extended_scale = 0;
+2.0000000	Decimal(18, 7)
+SELECT 1.2::Decimal64(7) / 0.6::Decimal32(1), toTypeName(1.2::Decimal64(7) / 0.6::Decimal32(1)) SETTINGS decimal_division_use_extended_scale = 1;
+2.0000000	Decimal(18, 7)
+SELECT 1.2::Decimal32(2) / 0.6::Decimal64(1), toTypeName(1.2::Decimal32(2) / 0.6::Decimal64(1)) SETTINGS decimal_division_use_extended_scale = 0;
+2.00	Decimal(18, 2)
+SELECT 1.2::Decimal32(2) / 0.6::Decimal64(1), toTypeName(1.2::Decimal32(2) / 0.6::Decimal64(1)) SETTINGS decimal_division_use_extended_scale = 1;
+2.000000	Decimal(18, 6)
+SELECT 1.2::Decimal32(7) / 0.6::Decimal64(1), toTypeName(1.2::Decimal32(7) / 0.6::Decimal64(1)) SETTINGS decimal_division_use_extended_scale = 0;
+2.0000000	Decimal(18, 7)
+SELECT 1.2::Decimal32(7) / 0.6::Decimal64(1), toTypeName(1.2::Decimal32(7) / 0.6::Decimal64(1)) SETTINGS decimal_division_use_extended_scale = 1;
+2.0000000	Decimal(18, 7)
+-- Decimal / Integral
+SELECT 1.2::Decimal32(2) / 6::Int32, toTypeName(1.2::Decimal32(2) / 6::Int32) SETTINGS decimal_division_use_extended_scale = 0;
+0.20	Decimal(9, 2)
+SELECT 1.2::Decimal32(2) / 6::Int32, toTypeName(1.2::Decimal32(2) / 6::Int32) SETTINGS decimal_division_use_extended_scale = 1;
+0.200000	Decimal(9, 6)
+SELECT 1.2::Decimal32(7) / 6::Int32, toTypeName(1.2::Decimal32(7) / 6::Int32) SETTINGS decimal_division_use_extended_scale = 0;
+0.2000000	Decimal(9, 7)
+SELECT 1.2::Decimal32(7) / 6::Int32, toTypeName(1.2::Decimal32(7) / 6::Int32) SETTINGS decimal_division_use_extended_scale = 1;
+0.2000000	Decimal(9, 7)
+SELECT 12::Decimal32(0) / 6::Int32, toTypeName(12::Decimal32(0) / 6::Int32) SETTINGS decimal_division_use_extended_scale = 0;
+2	Decimal(9, 0)
+SELECT 12::Decimal32(0) / 6::Int32, toTypeName(12::Decimal32(0) / 6::Int32) SETTINGS decimal_division_use_extended_scale = 1;
+2.000000	Decimal(9, 6)
+SELECT 1.2::Decimal64(2) / 6::Int32, toTypeName(1.2::Decimal64(2) / 6::Int32) SETTINGS decimal_division_use_extended_scale = 0;
+0.20	Decimal(18, 2)
+SELECT 1.2::Decimal64(2) / 6::Int32, toTypeName(1.2::Decimal64(2) / 6::Int32) SETTINGS decimal_division_use_extended_scale = 1;
+0.200000	Decimal(18, 6)
+SELECT 1.2::Decimal64(7) / 6::Int32, toTypeName(1.2::Decimal64(7) / 6::Int32) SETTINGS decimal_division_use_extended_scale = 0;
+0.2000000	Decimal(18, 7)
+SELECT 1.2::Decimal64(7) / 6::Int32, toTypeName(1.2::Decimal64(7) / 6::Int32) SETTINGS decimal_division_use_extended_scale = 1;
+0.2000000	Decimal(18, 7)
+SELECT 12::Decimal64(0) / 6::Int32, toTypeName(12::Decimal64(0) / 6::Int32) SETTINGS decimal_division_use_extended_scale = 0;
+2	Decimal(18, 0)
+SELECT 12::Decimal64(0) / 6::Int32, toTypeName(12::Decimal64(0) / 6::Int32) SETTINGS decimal_division_use_extended_scale = 1;
+2.000000	Decimal(18, 6)
+-- Integral / Decimal
+SELECT 12::Int32 / 0.6::Decimal32(1), toTypeName(12::Int32 / 0.6::Decimal32(1)) SETTINGS decimal_division_use_extended_scale = 0;
+20.0	Decimal(9, 1)
+SELECT 12::Int32 / 0.6::Decimal32(1), toTypeName(12::Int32 / 0.6::Decimal32(1)) SETTINGS decimal_division_use_extended_scale = 1;
+20.000000	Decimal(9, 6)
+SELECT 12::Int32 / 6::Decimal32(0), toTypeName(12::Int32 / 6::Decimal32(0)) SETTINGS decimal_division_use_extended_scale = 0;
+2	Decimal(9, 0)
+SELECT 12::Int32 / 6::Decimal32(0), toTypeName(12::Int32 / 6::Decimal32(0)) SETTINGS decimal_division_use_extended_scale = 1;
+2.000000	Decimal(9, 6)
+SELECT 12::Int32 / 0.6::Decimal64(1), toTypeName(12::Int32 / 0.6::Decimal64(1)) SETTINGS decimal_division_use_extended_scale = 0;
+20.0	Decimal(18, 1)
+SELECT 12::Int32 / 0.6::Decimal64(1), toTypeName(12::Int32 / 0.6::Decimal64(1)) SETTINGS decimal_division_use_extended_scale = 1;
+20.000000	Decimal(18, 6)
+SELECT 12::Int32 / 0.6::Decimal64(7), toTypeName(12::Int32 / 0.6::Decimal64(7)) SETTINGS decimal_division_use_extended_scale = 0;
+20.0000000	Decimal(18, 7)
+SELECT 12::Int32 / 0.6::Decimal64(7), toTypeName(12::Int32 / 0.6::Decimal64(7)) SETTINGS decimal_division_use_extended_scale = 1;
+20.0000000	Decimal(18, 7)
+SELECT 12::Int32 / 6::Decimal64(0), toTypeName(12::Int32 / 6::Decimal64(0)) SETTINGS decimal_division_use_extended_scale = 0;
+2	Decimal(18, 0)
+SELECT 12::Int32 / 6::Decimal64(0), toTypeName(12::Int32 / 6::Decimal64(0)) SETTINGS decimal_division_use_extended_scale = 1;
+2.000000	Decimal(18, 6)
+-- other operations should not be affected
+SELECT 1.2::Decimal32(2) + 0.6::Decimal32(1), toTypeName(1.2::Decimal32(2) + 0.6::Decimal32(1)) SETTINGS decimal_division_use_extended_scale = 0;
+1.80	Decimal(9, 2)
+SELECT 1.2::Decimal32(2) + 0.6::Decimal32(1), toTypeName(1.2::Decimal32(2) + 0.6::Decimal32(1)) SETTINGS decimal_division_use_extended_scale = 1;
+1.80	Decimal(9, 2)
+SELECT 1.2::Decimal32(2) - 0.6::Decimal32(1), toTypeName(1.2::Decimal32(2) - 0.6::Decimal32(1)) SETTINGS decimal_division_use_extended_scale = 0;
+0.60	Decimal(9, 2)
+SELECT 1.2::Decimal32(2) - 0.6::Decimal32(1), toTypeName(1.2::Decimal32(2) - 0.6::Decimal32(1)) SETTINGS decimal_division_use_extended_scale = 1;
+0.60	Decimal(9, 2)
+SELECT 1.2::Decimal32(2) * 0.6::Decimal32(1), toTypeName(1.2::Decimal32(2) * 0.6::Decimal32(1)) SETTINGS decimal_division_use_extended_scale = 0;
+0.720	Decimal(9, 3)
+SELECT 1.2::Decimal32(2) * 0.6::Decimal32(1), toTypeName(1.2::Decimal32(2) * 0.6::Decimal32(1)) SETTINGS decimal_division_use_extended_scale = 1;
+0.720	Decimal(9, 3)
+SELECT 1.2::Decimal64(7) + 0.6::Decimal64(7), toTypeName(1.2::Decimal64(7) + 0.6::Decimal64(7)) SETTINGS decimal_division_use_extended_scale = 0;
+1.8000000	Decimal(18, 7)
+SELECT 1.2::Decimal64(7) + 0.6::Decimal64(7), toTypeName(1.2::Decimal64(7) + 0.6::Decimal64(7)) SETTINGS decimal_division_use_extended_scale = 1;
+1.8000000	Decimal(18, 7)
+SELECT 1.2::Decimal64(7) - 0.6::Decimal64(7), toTypeName(1.2::Decimal64(7) - 0.6::Decimal64(7)) SETTINGS decimal_division_use_extended_scale = 0;
+0.6000000	Decimal(18, 7)
+SELECT 1.2::Decimal64(7) - 0.6::Decimal64(7), toTypeName(1.2::Decimal64(7) - 0.6::Decimal64(7)) SETTINGS decimal_division_use_extended_scale = 1;
+0.6000000	Decimal(18, 7)
+SELECT 1.2::Decimal64(7) * 0.6::Decimal64(7), toTypeName(1.2::Decimal64(7) * 0.6::Decimal64(7)) SETTINGS decimal_division_use_extended_scale = 0;
+0.72000000000000	Decimal(18, 14)
+SELECT 1.2::Decimal64(7) * 0.6::Decimal64(7), toTypeName(1.2::Decimal64(7) * 0.6::Decimal64(7)) SETTINGS decimal_division_use_extended_scale = 1;
+0.72000000000000	Decimal(18, 14)

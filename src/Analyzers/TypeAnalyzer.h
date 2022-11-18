@@ -9,6 +9,9 @@
 
 namespace DB
 {
+
+using ExpressionTypes = std::unordered_map<ASTPtr, DataTypePtr>;
+
 /**
  * AST type analyzer.
  *
@@ -26,8 +29,10 @@ public:
     // ```
     static DataTypePtr getType(const ConstASTPtr & expr, ContextMutablePtr context, const NamesAndTypes & input_types);
 
+    static TypeAnalyzer create(ContextMutablePtr context, const NameToType & input_types);
     static TypeAnalyzer create(ContextMutablePtr context, const NamesAndTypes & input_types);
     DataTypePtr getType(const ConstASTPtr & expr) const;
+    ExpressionTypes getExpressionTypes(const ConstASTPtr & expr) const;
 
 private:
     TypeAnalyzer(ContextMutablePtr context_, Scope && scope_) : context(std::move(context_)), scope(std::move(scope_)) { }

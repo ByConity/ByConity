@@ -12,6 +12,8 @@
 #include <Optimizer/Rule/Rewrite/PushThroughExchangeRules.h>
 #include <Optimizer/Rule/Rewrite/RemoveRedundantRules.h>
 #include <Optimizer/Rule/Rewrite/SimplifyExpressionRules.h>
+#include <Optimizer/Rule/Rewrite/SwapAdjacenRules.h>
+#include <Optimizer/Rule/Rewrite/FilterWindowToPartitionTopN.h>
 
 namespace DB
 {
@@ -39,6 +41,12 @@ std::vector<RulePtr> Rules::simplifyExpressionRules()
         std::make_shared<SimplifyExpressionRewriteRule>()};
 }
 
+std::vector<RulePtr> Rules::mergePredicatesRules()
+{
+    return {
+        std::make_shared<MergePredicatesUsingDomainTranslator>()};
+}
+
 std::vector<RulePtr> Rules::inlineProjectionRules()
 {
     // todo@kaixi: remove InlineProjectionIntoJoin
@@ -55,6 +63,7 @@ std::vector<RulePtr> Rules::pushPartialStepRules()
         std::make_shared<PushPartialAggThroughExchange>(),
         std::make_shared<PushPartialSortingThroughExchange>(),
         std::make_shared<PushPartialLimitThroughExchange>(),
+        std::make_shared<FilterWindowToPartitionTopN>(),
         std::make_shared<PushDynamicFilterBuilderThroughExchange>()};
 }
 
@@ -95,6 +104,11 @@ std::vector<RulePtr> Rules::distinctToAggregateRules()
 std::vector<RulePtr> Rules::pushIntoTableScanRules()
 {
     return {std::make_shared<PushLimitIntoTableScan>(), std::make_shared<PushFilterIntoTableScan>()};
+}
+
+std::vector<RulePtr> Rules::swapAdjacentRules()
+{
+    return {std::make_shared<SwapAdjacentWindows>()};
 }
 
 }

@@ -4,10 +4,10 @@
 #include <string>
 #include <Statistics/CacheManager.h>
 #include <Statistics/CatalogAdaptor.h>
-#include <Statistics/CommonTools.h>
 #include <Statistics/SerdeUtils.h>
 #include <Statistics/StatisticsCollector.h>
 #include <Statistics/StatisticsMemoryStore.h>
+#include <Statistics/TypeUtils.h>
 #include <boost/noncopyable.hpp>
 #include <fmt/format.h>
 #include <common/logger_useful.h>
@@ -124,6 +124,24 @@ public:
             }
         }
     }
+
+    void dropStatsColumnData(const StatsTableIdentifier & table, const ColumnDescVector & cols_desc) override
+    {
+        auto & sms = getStatisticsMemoryStore();
+        std::unique_lock lck(sms.mtx);
+        auto key = table.getUniqueKey();
+        if (sms.entries.count(key))
+        {
+            auto & entry = sms.entries.at(key);
+            if (!entry)
+                return;
+            for (auto & col_desc : cols_desc)
+            {
+                entry->data.column_stats.erase(col_desc.name);
+            }
+        }
+    }
+
     void dropStatsData(const StatsTableIdentifier & table) override
     {
         auto & sms = getStatisticsMemoryStore();

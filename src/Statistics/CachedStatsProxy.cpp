@@ -1,6 +1,6 @@
 #include <Statistics/CacheManager.h>
 #include <Statistics/CachedStatsProxy.h>
-#include <Statistics/CommonTools.h>
+#include <Statistics/TypeUtils.h>
 #include <Poco/SharedPtr.h>
 
 namespace DB::Statistics
@@ -34,6 +34,10 @@ public:
     }
     void put(const StatsTableIdentifier & table_id, StatsData && data) override { catalog->writeStatsData(table_id, data); }
     void drop(const StatsTableIdentifier & table_id) override { catalog->dropStatsData(table_id); }
+    void dropColumns(const StatsTableIdentifier & table_id, const ColumnDescVector & cols_desc) override
+    {
+        catalog->dropStatsColumnData(table_id, cols_desc);
+    }
 
 private:
     CatalogAdaptorPtr catalog;
@@ -49,6 +53,7 @@ public:
     StatsData get(const StatsTableIdentifier & table_id, bool table_info, const ColumnDescVector & columns) override;
     void put(const StatsTableIdentifier & table_id, StatsData && data) override;
     void drop(const StatsTableIdentifier & table_id) override;
+    void dropColumns(const StatsTableIdentifier & table_id, const ColumnDescVector & cols_desc) override;
 
 private:
     CatalogAdaptorPtr catalog;
@@ -109,6 +114,12 @@ void CachedStatsProxyImpl::put(const StatsTableIdentifier & table_id, StatsData 
 void CachedStatsProxyImpl::drop(const StatsTableIdentifier & table_id)
 {
     catalog->dropStatsData(table_id);
+}
+
+void CachedStatsProxyImpl::dropColumns(
+    const DB::Statistics::StatsTableIdentifier & table_id, const DB::Statistics::ColumnDescVector & cols_desc)
+{
+    catalog->dropStatsColumnData(table_id, cols_desc);
 }
 
 

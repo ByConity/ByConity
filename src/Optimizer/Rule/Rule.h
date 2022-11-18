@@ -94,6 +94,10 @@ enum class RuleType : UInt32
     INNER_JOIN_REORDER,
 
     MERGE_AGGREGATINGS,
+    SWAP_WINDOWS,
+    MERGE_PREDICATES_USING_DOMAIN_TRANSLATOR,
+
+    FILTER_WINDOW_TO_PARTITION_TOPN,
 
     // Implementation
     SET_JOIN_DISTRIBUTION,
@@ -101,7 +105,8 @@ enum class RuleType : UInt32
     NUM_RULES,
 
     INITIAL,
-    UNDEFINED
+    UNDEFINED,
+
 };
 
 class TransformResult;

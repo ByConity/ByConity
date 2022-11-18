@@ -9,12 +9,14 @@
 namespace DB
 {
 
-/**
- * LiteralEncoder encode a Field to an AST without losing its type, which means it will add type cast if necessary.
- */
 class LiteralEncoder
 {
 public:
-    static ASTPtr encode(const Field & field, const DataTypePtr & type, ContextMutablePtr context);
+    // create an ASTLiteral by a Field and its desired type
+    static ASTPtr encode(Field field, const DataTypePtr & type, ContextMutablePtr context);
+
+    // create an ASTLiteral for a comparison expression e.g. symbol_x = ASTLiteral(`field`),
+    // param `type` is the type of symbol_x
+    static ASTPtr encodeForComparisonExpr(Field field, const DataTypePtr & type, ContextMutablePtr context);
 };
 }

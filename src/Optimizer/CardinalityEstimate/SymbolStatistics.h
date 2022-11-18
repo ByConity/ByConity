@@ -86,7 +86,8 @@ public:
     bool isNullable() const { return type->isNullable(); }
     bool isNumber() const;
     bool isString() const;
-    bool isDate() const;
+
+    bool isImplicitConvertableFromString();
 
     double toDouble(const Field & literal);
     String toString(const Field & literal);

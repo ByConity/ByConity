@@ -15,16 +15,47 @@ String formatStatsQueryKind(StatsQueryKind kind)
         throw Exception("Not supported kind of stats query kind.", ErrorCodes::SYNTAX_ERROR);
 }
 
-void ASTCreateStatsQuery::getStatsQueryIDSuffix(std::ostringstream & res, char delim) const
+String ASTCreateStatsQuery::getID(char delim) const
 {
-    if (buckets)
-        res << delim << "buckets=" << *buckets;
+    std::ostringstream res;
 
-    if (topn)
-        res << delim << "topn=" << *topn;
+    res << CreateStatsQueryInfo::QueryPrefix << delim << formatStatsQueryKind(kind);
 
-    if (samples)
-        res << delim << "samples=" << *samples;
+    if (if_not_exists)
+        res << delim << "ifNotExists";
+
+    if (!target_all)
+    {
+        if (!database.empty())
+            res << delim << database;
+
+        res << delim << table;
+    }
+
+    if (!columns.empty())
+    {
+        for (auto & col : columns)
+        {
+            res << delim << col;
+        }
+    }
+
+    if (sample_type == SampleType::FullScan)
+    {
+        res << delim << "fullScan";
+    }
+    else if (sample_type == SampleType::Sample)
+    {
+        res << delim << "sample";
+
+        if (sample_rows)
+            res << delim << "rows=" << *sample_rows;
+
+        if (sample_ratio)
+            res << delim << "ratio=" << *sample_ratio;
+    }
+
+    return res.str();
 }
 
 ASTPtr ASTCreateStatsQuery::clone() const
@@ -42,8 +73,17 @@ ASTPtr ASTCreateStatsQuery::clone() const
     return res;
 }
 
-void ASTCreateStatsQuery::formatStatsQuerySuffix(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
+void ASTCreateStatsQuery::formatQueryImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
 {
+    formatQueryPrefix(settings, state, frame);
+
+    if (if_not_exists)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << " IF NOT EXISTS" << (settings.hilite ? hilite_none : "");
+    }
+
+    formatQueryMiddle(settings, state, frame);
+
     if (partition)
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << " PARTITION " << (settings.hilite ? hilite_none : "");
@@ -59,22 +99,26 @@ void ASTCreateStatsQuery::formatStatsQuerySuffix(const FormatSettings & settings
         }
     };
 
-    if (buckets)
+    if (sample_type == SampleType::FullScan)
     {
         printWithIfNeeded();
-        settings.ostr << ' ' << *buckets << " BUCKETS";
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << " FULLSCAN" << (settings.hilite ? hilite_none : "");
     }
-
-    if (topn)
+    else if (sample_type == SampleType::Sample)
     {
         printWithIfNeeded();
-        settings.ostr << ' ' << *topn << " TOPN";
-    }
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << " SAMPLE" << (settings.hilite ? hilite_none : "");
+        if (sample_rows)
+        {
+            settings.ostr << ' ' << *sample_rows;
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << " ROWS" << (settings.hilite ? hilite_none : "");
+        }
 
-    if (samples)
-    {
-        printWithIfNeeded();
-        settings.ostr << ' ' << *samples << " SAMPLES";
+        if (sample_ratio)
+        {
+            settings.ostr << ' ' << *sample_ratio;
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << " RATIO" << (settings.hilite ? hilite_none : "");
+        }
     }
 }
 

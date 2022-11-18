@@ -119,7 +119,12 @@ IMPLEMENT_SETTING_ENUM(DialectType, ErrorCodes::BAD_ARGUMENTS,
      {"ANSI",       DialectType::ANSI}})
 
 IMPLEMENT_SETTING_ENUM(CTEMode, ErrorCodes::BAD_ARGUMENTS,
-                       {{"INLINED", CTEMode::INLINED},
-                        {"SHARED", CTEMode::SHARED},
-                        {"AUTO", CTEMode::AUTO}})
+    {{"INLINED", CTEMode::INLINED},
+     {"SHARED", CTEMode::SHARED},
+     {"AUTO", CTEMode::AUTO}})
+
+IMPLEMENT_SETTING_ENUM(StatisticsAccurateSampleNdvMode, ErrorCodes::BAD_ARGUMENTS,
+    {{"NEVER", StatisticsAccurateSampleNdvMode::NEVER},
+     {"AUTO", StatisticsAccurateSampleNdvMode::AUTO},
+     {"ALWAYS", StatisticsAccurateSampleNdvMode::ALWAYS}})
 }
