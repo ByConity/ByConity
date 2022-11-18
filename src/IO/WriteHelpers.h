@@ -733,6 +733,11 @@ inline void writeDateText(DayNum date, WriteBuffer & buf)
     writeDateText<delimiter>(LocalDate(date), buf);
 }
 
+template <char delimiter = '-'>
+inline void writeDateText(ExtendedDayNum date, WriteBuffer & buf)
+{
+    writeDateText<delimiter>(LocalDate(date), buf);
+}
 
 /// In the format YYYY-MM-DD HH:MM:SS
 template <char date_delimeter = '-', char time_delimeter = ':', char between_date_time_delimiter = ' '>
@@ -797,6 +802,23 @@ inline void writeDateTimeText(DateTime64 datetime64, UInt32 scale, WriteBuffer &
     scale = scale > MaxScale ? MaxScale : scale;
 
     auto components = DecimalUtils::split(datetime64, scale);
+    /// Case1:
+    /// -127914467.877
+    /// => whole = -127914467, fraction = 877(After DecimalUtils::split)
+    /// => new whole = -127914468(1965-12-12 12:12:12), new fraction = 1000 - 877 = 123(.123)
+    /// => 1965-12-12 12:12:12.123
+    ///
+    /// Case2:
+    /// -0.877
+    /// => whole = 0, fractional = -877(After DecimalUtils::split)
+    /// => whole = -1(1969-12-31 23:59:59), fractional = 1000 + (-877) = 123(.123)
+    using T = typename DateTime64::NativeType;
+    if (datetime64.value < 0 && components.fractional)
+    {
+        components.fractional = DecimalUtils::scaleMultiplier<T>(scale) + (components.whole ? T(-1) : T(1)) * components.fractional;
+        --components.whole;
+    }
+
     writeDateTimeText<date_delimeter, time_delimeter, between_date_time_delimiter>(LocalDateTime(components.whole, time_zone), buf);
 
     if (scale > 0)
@@ -979,6 +1001,8 @@ void writeText(Decimal<T> x, UInt32 scale, WriteBuffer & ostr)
     {
         writeChar('.', ostr);
         part = DecimalUtils::getFractionalPart(x, scale);
+        if (part < 0)
+            part *= T(-1);
         String fractional = decimalFractional(part, scale);
         ostr.write(fractional.data(), scale);
     }

@@ -637,6 +637,16 @@ inline ReturnType readDateTextImpl(LocalDate & date, ReadBuffer & buf)
         return readDateTextFallback<ReturnType>(date, buf);
 }
 
+inline void convertToDayNum(DayNum & date, ExtendedDayNum & from)
+{
+    if (unlikely(from < 0))
+        date = 0;
+    else if (unlikely(from > 0xFFFF))
+        date = 0xFFFF;
+    else
+        date = from;
+}
+
 template <typename ReturnType = void>
 inline ReturnType readDateTextImpl(DayNum & date, ReadBuffer & buf)
 {
@@ -649,7 +659,24 @@ inline ReturnType readDateTextImpl(DayNum & date, ReadBuffer & buf)
     else if (!readDateTextImpl<ReturnType>(local_date, buf))
         return false;
 
-    date = DateLUT::instance().makeDayNum(local_date.year(), local_date.month(), local_date.day());
+    ExtendedDayNum ret = DateLUT::instance().makeDayNum(local_date.year(), local_date.month(), local_date.day());
+    convertToDayNum(date,ret);
+    return ReturnType(true);
+}
+
+template <typename ReturnType = void>
+inline ReturnType readDateTextImpl(ExtendedDayNum & date, ReadBuffer & buf)
+{
+    static constexpr bool throw_exception = std::is_same_v<ReturnType, void>;
+
+    LocalDate local_date;
+
+    if constexpr (throw_exception)
+        readDateTextImpl<ReturnType>(local_date, buf);
+    else if (!readDateTextImpl<ReturnType>(local_date, buf))
+        return false;
+    /// When the parameter is out of rule or out of range, Date32 uses 1925-01-01 as the default value (-DateLUT::instance().getDayNumOffsetEpoch(), -16436) and Date uses 1970-01-01.
+    date = DateLUT::instance().makeDayNum(local_date.year(), local_date.month(), local_date.day(), -static_cast<Int32>(DateLUT::instance().getDayNumOffsetEpoch()));
     return ReturnType(true);
 }
 
@@ -664,12 +691,22 @@ inline void readDateText(DayNum & date, ReadBuffer & buf)
     readDateTextImpl<void>(date, buf);
 }
 
+inline void readDateText(ExtendedDayNum & date, ReadBuffer & buf)
+{
+    readDateTextImpl<void>(date, buf);
+}
+
 inline bool tryReadDateText(LocalDate & date, ReadBuffer & buf)
 {
     return readDateTextImpl<bool>(date, buf);
 }
 
 inline bool tryReadDateText(DayNum & date, ReadBuffer & buf)
+{
+    return readDateTextImpl<bool>(date, buf);
+}
+
+inline bool tryReadDateText(ExtendedDayNum & date, ReadBuffer & buf)
 {
     return readDateTextImpl<bool>(date, buf);
 }
@@ -908,27 +945,47 @@ inline ReturnType readDateTimeTextImpl(DateTime64 & datetime64, UInt32 scale, Re
         return ReturnType(false);
     }
 
+    int negative_multiplier = 1;
+
     DB::DecimalUtils::DecimalComponents<DateTime64> components{static_cast<DateTime64::NativeType>(whole), 0};
 
-    if (!parseFractionalSeconds(components.fractional, scale, buf) && whole >= 9908870400LL)
+    if (parseFractionalSeconds(components.fractional, scale, buf))
+    {
+        /// Fractional part (subseconds) is treated as positive by users
+        /// (as DateTime64 itself is a positive, although underlying decimal is negative)
+        /// setting fractional part to be negative when whole is 0 results in wrong value,
+        /// so we multiply result by -1.
+        if (components.whole < 0 && components.fractional != 0)
+        {
+            const auto scale_multiplier = DecimalUtils::scaleMultiplier<DateTime64::NativeType>(scale);
+            ++components.whole;
+            components.fractional = scale_multiplier - components.fractional;
+            if (!components.whole)
+            {
+                negative_multiplier = -1;
+            }
+        }
+    }
+    /// 9908870400 is time_t value for 2184-01-01 UTC (a bit over the last year supported by DateTime64)
+    else if (whole >= 9908870400LL)
     {
         /// Unix timestamp with subsecond precision, already scaled to integer.
         /// For disambiguation we support only time since 2001-09-09 01:46:40 UTC and less than 30 000 years in future.
-
-        for (size_t i = 0; i < scale; ++i)
-        {
-            components.fractional *= 10;
-            components.fractional += components.whole % 10;
-            components.whole /= 10;
-        }
+        components.fractional =  components.whole % common::exp10_i32(scale);
+        components.whole = components.whole / common::exp10_i32(scale);
     }
 
-    // If it has been parsed by any other path, it will have incorect result.
+    // If it has NOT been parsed by any other path, it will have incorrect result.
     if (!ignoreTimezoneOffset(buf)) {
         return ReturnType(false);
     }
 
-    datetime64 = DecimalUtils::decimalFromComponents<DateTime64>(components, scale);
+    if constexpr (std::is_same_v<ReturnType, void>)
+        datetime64 = DecimalUtils::decimalFromComponents<DateTime64>(components, scale);
+    else
+        DecimalUtils::tryGetDecimalFromComponents<DateTime64>(components, scale, datetime64);
+
+    datetime64 *= negative_multiplier;
 
     return ReturnType(true);
 }

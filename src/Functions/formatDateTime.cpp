@@ -280,9 +280,19 @@ public:
         }
     };
 
+private:
+    bool adaptive_cast;
+
+public:
     static constexpr auto name = Name::name;
 
-    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionFormatDateTimeImpl>(); }
+    static FunctionPtr create(ContextPtr context)
+    {
+        return std::make_shared<FunctionFormatDateTimeImpl>(context->getSettingsRef().adaptive_type_cast);
+    }
+
+    explicit FunctionFormatDateTimeImpl(bool adaptive) : adaptive_cast(adaptive)
+    {}
 
     String getName() const override
     {
@@ -355,7 +365,18 @@ public:
                 if (!castType(arguments[0].type.get(), [&](const auto & type)
                     {
                         using FromDataType = std::decay_t<decltype(type)>;
-                        res = ConvertImpl<FromDataType, DataTypeDateTime, Name>::execute(arguments, result_type, input_rows_count);
+                        if constexpr (std::is_same_v<FromDataType, DataTypeInt64> || std::is_same_v<FromDataType, DataTypeUInt64>)
+                        {
+                            if (adaptive_cast)
+                                res = ConvertImpl<FromDataType, DataTypeDateTime, Name, ConvertDefaultBehaviorTag, true>::execute(
+                                        arguments, result_type, input_rows_count);
+                            else
+                                res = ConvertImpl<FromDataType, DataTypeDateTime, Name, ConvertDefaultBehaviorTag, false>::execute(
+                                        arguments, result_type, input_rows_count);
+                        }
+                        else
+                            res = ConvertImpl<FromDataType, DataTypeDateTime, Name>::execute(arguments, result_type, input_rows_count);
+
                         return true;
                     }))
                 {

@@ -1,3 +1,5 @@
+SET adaptive_type_cast=1;
+
 DROP TABLE IF EXISTS tdm;
 DROP TABLE IF EXISTS tdm2;
 CREATE TABLE tdm (x DateTime) ENGINE = MergeTree ORDER BY x SETTINGS write_final_mark = 0;

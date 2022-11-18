@@ -47,6 +47,7 @@ void registerFunctionsSQLJSON(FunctionFactory &);
 void registerFunctionToJSONString(FunctionFactory &);
 void registerFunctionsConsistentHashing(FunctionFactory & factory);
 void registerFunctionsUnixTimestamp64(FunctionFactory & factory);
+void registerFromUnixTimestampMilli(FunctionFactory & factory);
 void registerFunctionBitHammingDistance(FunctionFactory & factory);
 void registerFunctionTupleHammingDistance(FunctionFactory & factory);
 void registerFunctionsStringHash(FunctionFactory & factory);
@@ -120,6 +121,7 @@ void registerFunctions()
     registerFunctionsIntrospection(factory);
     registerFunctionsConsistentHashing(factory);
     registerFunctionsUnixTimestamp64(factory);
+    registerFromUnixTimestampMilli(factory);
     registerFunctionBitHammingDistance(factory);
     registerFunctionTupleHammingDistance(factory);
     registerFunctionsStringHash(factory);

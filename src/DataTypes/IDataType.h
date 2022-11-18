@@ -402,12 +402,12 @@ struct WhichDataType
     constexpr bool isEnum() const { return isEnum8() || isEnum16(); }
 
     constexpr bool isDate() const { return idx == TypeIndex::Date; }
-    constexpr bool isDate32() const { return false; } // TODO: date32
+    constexpr bool isDate32() const { return idx == TypeIndex::Date32; }
     constexpr bool isTime() const { return idx == TypeIndex::Time; }
     constexpr bool isDateTime() const { return idx == TypeIndex::DateTime; }
     constexpr bool isDateTime64() const { return idx == TypeIndex::DateTime64; }
+    bool isDateOrDateTime() const { return isDate() || isDateTime() || isDateTime64(); }
     constexpr bool isDateOrDate32() const { return isDate() || isDate32(); }
-    constexpr bool isDateOrDateTime() const { return isDate() || isDate32() || isDateTime() || isDateTime64(); }
 
     constexpr bool isString() const { return idx == TypeIndex::String; }
     constexpr bool isFixedString() const { return idx == TypeIndex::FixedString; }
@@ -577,6 +577,7 @@ template <typename T>
 class DataTypeNumber;
 
 class DataTypeDate;
+class DataTypeDate32;
 class DataTypeTime;
 class DataTypeDateTime;
 class DataTypeDateTime64;
@@ -588,6 +589,7 @@ template <> inline constexpr bool IsDataTypeDecimal<DataTypeTime> = true;
 template <typename T> constexpr bool IsDataTypeNumber<DataTypeNumber<T>> = true;
 
 template <> inline constexpr bool IsDataTypeDateOrDateTime<DataTypeDate> = true;
+template <> inline constexpr bool IsDataTypeDateOrDateTime<DataTypeDate32> = true;
 template <> inline constexpr bool IsDataTypeDateOrDateTime<DataTypeDateTime> = true;
 template <> inline constexpr bool IsDataTypeDateOrDateTime<DataTypeDateTime64> = true;
 template <> inline constexpr bool IsDataTypeDateOrDateTime<DataTypeTime> = true;

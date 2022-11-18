@@ -1,13 +1,13 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/DateTimeTransforms.h>
-#include <Functions/FunctionDateOrDateTimeToSomething.h>
+#include <Functions/FunctionDateOrDateTimeToDateOrDate32.h>
 
 
 namespace DB
 {
 
-using FunctionToStartOfMonth = FunctionDateOrDateTimeToSomething<DataTypeDate, ToStartOfMonthImpl>;
-using FunctionToStartOfBiMonth = FunctionDateOrDateTimeToSomething<DataTypeDate, ToStartOfBiMonthImpl>;
+using FunctionToStartOfMonth = FunctionDateOrDateTimeToDateOrDate32<ToStartOfMonthImpl>;
+using FunctionToStartOfBiMonth = FunctionDateOrDateTimeToDateOrDate32<ToStartOfBiMonthImpl>;
 
 void registerFunctionToStartOfMonth(FunctionFactory & factory)
 {

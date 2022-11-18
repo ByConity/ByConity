@@ -584,8 +584,8 @@ class FunctionBinaryArithmetic : public IFunction
     static FunctionOverloadResolverPtr
     getFunctionForIntervalArithmetic(const DataTypePtr & type0, const DataTypePtr & type1, ContextPtr context)
     {
-        bool first_is_date_or_datetime = isDate(type0) || isDateTime(type0) || isDateTime64(type0) || isTime(type0);
-        bool second_is_date_or_datetime = isDate(type1) || isDateTime(type1) || isDateTime64(type1) || isTime(type1);
+        bool first_is_date_or_datetime = isDateOrDate32(type0) || isDateTime(type0) || isDateTime64(type0) || isTime(type0);
+        bool second_is_date_or_datetime = isDateOrDate32(type1) || isDateTime(type1) || isDateTime64(type1) || isTime(type1);
 
         /// Exactly one argument must be Date or DateTime
         if (first_is_date_or_datetime == second_is_date_or_datetime)
@@ -622,7 +622,7 @@ class FunctionBinaryArithmetic : public IFunction
         }
         else
         {
-            if (isDate(type_time))
+            if (isDateOrDate32(type_time))
                 function_name = is_plus ? "addDays" : "subtractDays";
             else
                 function_name = is_plus ? "addSeconds" : "subtractSeconds";
@@ -777,7 +777,7 @@ class FunctionBinaryArithmetic : public IFunction
         ColumnsWithTypeAndName new_arguments = arguments;
 
         /// Interval argument must be second.
-        if (isDate(arguments[1].type) || isDateTime(arguments[1].type)
+        if (isDateOrDate32(arguments[1].type) || isDateTime(arguments[1].type)
             || isDateTime64(arguments[1].type) || isTime(arguments[1].type))
             std::swap(new_arguments[0], new_arguments[1]);
 
@@ -984,7 +984,7 @@ public:
                 new_arguments[i].type = arguments[i];
 
             /// Interval argument must be second.
-            if (isDate(new_arguments[1].type) || isDateTime(new_arguments[1].type)
+            if (isDateOrDate32(new_arguments[1].type) || isDateTime(new_arguments[1].type)
                 || isDateTime64(new_arguments[1].type) || isTime(new_arguments[1].type))
                 std::swap(new_arguments[0], new_arguments[1]);
 

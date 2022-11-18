@@ -1,4 +1,5 @@
 -- this test cannot pass without the new DFA matching algorithm of sequenceMatch
+SET adaptive_type_cast=1;
 
 DROP TABLE IF EXISTS sequence;
 

@@ -129,6 +129,8 @@ class IColumn;
     M(Bool, distributed_aggregation_memory_efficient, true, "Is the memory-saving mode of distributed aggregation enabled.", 0) \
     M(UInt64, aggregation_memory_efficient_merge_threads, 0, "Number of threads to use for merge intermediate aggregation results in memory efficient mode. When bigger, then more memory is consumed. 0 means - same as 'max_threads'.", 0) \
     \
+    M(Bool, enable_extended_results_for_datetime_functions, false, "Enable date functions like toLastDayOfMonth return Date32 results (instead of Date results) for Date32/DateTime64 arguments.", 0) \
+    \
     M(UInt64, max_parallel_replicas, 1, "The maximum number of replicas of each shard used when the query is executed. For consistency (to get different parts of the same partition), this option only works for the specified sampling key. The lag of the replicas is not controlled.", 0) \
     M(UInt64, parallel_replicas_count, 0, "", 0) \
     M(UInt64, parallel_replica_offset, 0, "", 0) \
@@ -545,6 +547,7 @@ class IColumn;
     M(String, virtual_warehouse_write, "", "The write vw name set by user on which the query run", 0) \
     M(String, vw_schedule_algo, "Unknown", "algorithm for picking a worker group from vw. {Random(1),LocalRoundRobin(2),LocalLowCpu(3),LocalLowMem(4),LocalLowDisk(5),GlobalRoundRobin(102),GlobalLowCpu(103),GlobalLowMem(104),GlobalLowDisk(105)}", 0) \
     M(DialectType, dialect_type, DialectType::CLICKHOUSE, "Dialect type, e.g. CLICKHOUSE, ANSI", 0) \
+    M(Bool, adaptive_type_cast, false, "Performs type cast operations adaptively, according to the value", 0) \
     M(Bool, tealimit_order_keep, false, "Whether tealimit output keep order by clause", 0)\
     M(UInt64, early_limit_for_map_virtual_columns, 0, "Enable early limit while quering _map_column_keys column", 0)\
     M(Bool, skip_nullinput_notnull_col, false, "Skip null value in JSON for not null column", 0)\

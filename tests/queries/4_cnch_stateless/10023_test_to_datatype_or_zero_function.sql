@@ -66,7 +66,7 @@ select cast(1623974400, 'Date');
 select cast(1623974400, 'DateTime(\'UTC\')');
 select cast(1623974400, 'DateTime64(3, \'UTC\')');
 select cast(1623974400000, 'Date');
-select cast(1623974400000, 'DateTime(\'UTC\')');
+select cast(1623974400000, 'DateTime(\'UTC\')') settings adaptive_type_cast=1;
 select cast(18796, 'Date');
 select cast(18796, 'DateTime(\'UTC\')');
 select cast(18796, 'DateTime64(3, \'UTC\')');
