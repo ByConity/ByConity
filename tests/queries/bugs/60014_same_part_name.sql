@@ -1,3 +1,5 @@
+CREATE DATABASE IF NOT EXISTS test;
+
 DROP TABLE IF EXISTS test.test_ci;
 
 CREATE TABLE test.test_ci
@@ -5,7 +7,7 @@ CREATE TABLE test.test_ci
     `name` String,
     `id` Bigint
 )
-ENGINE = CnchHive(`thrift://10.112.121.82:9301`, `cnchhive_ci_test`, `ci_test`)
+ENGINE = CnchHive(`data.olap.cnch_hms.service.lf`, `cnch_hive_external_table`, `ci_test`)
 PARTITION BY id;
 
 -- table test_ci in different partition exist same part name

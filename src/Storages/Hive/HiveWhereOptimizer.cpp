@@ -23,7 +23,7 @@ HiveWhereOptimizer::HiveWhereOptimizer(const SelectQueryInfo & query_info_, Cont
 {
     if (const auto & cnchhive = dynamic_cast<const StorageCnchHive *>(storage.get()))
     {
-        NamesAndTypesList available_real_columns = cnchhive->getColumns().getAllPhysical();
+        NamesAndTypesList available_real_columns = cnchhive->getInMemoryMetadataPtr()->getColumns().getAllPhysical();
         for (const NameAndTypePair & col : available_real_columns)
             table_columns.insert(col.name);
 

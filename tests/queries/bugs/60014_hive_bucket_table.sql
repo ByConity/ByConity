@@ -1,10 +1,12 @@
+CREATE DATABASE IF NOT EXISTS test;
+
 DROP TABLE IF EXISTS test.hive_bucket_test;
 CREATE TABLE test.hive_bucket_test
 (
     id int,
     name String,
     date String
-)ENGINE = CnchHive(`thrift://10.112.121.82:9301`, `test_tiger`, `hive_bucket_test`)
+)ENGINE = CnchHive(`data.olap.cnch_hms.service.lf`, `test_tiger`, `hive_bucket_test`)
 PARTITION BY (date)
 CLUSTER BY id INTO 4 BUCKETS
 ORDER BY name;

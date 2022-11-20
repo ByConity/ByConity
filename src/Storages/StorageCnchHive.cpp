@@ -84,6 +84,12 @@ StorageCnchHive::StorageCnchHive(
     metadata.setColumns(columns_);
     metadata.setConstraints(constraints_);
 
+    for(const auto & col : columns_)
+    {
+        LOG_TRACE(log, " StorageCnchHive : col name {}  table name {}, database name{} ", col.name, table_id_.table_name, table_id_.database_name);
+
+    }
+
     setInMemoryMetadata(metadata);
 
     //only when create table, need to check schema and storage format.
@@ -149,7 +155,11 @@ void StorageCnchHive::setProperties()
     if (!partition_by_ast)
         throw Exception("PARTITION BY cannot be empty", ErrorCodes::BAD_ARGUMENTS);
 
-    auto all_columns = getColumns().getAllPhysical();
+    size_t col_size = getColumns().size();
+
+    LOG_TRACE(log, " setProperties col_size : {}  remote_database_name {} remote_table_name {}", col_size, remote_database, remote_table);
+
+    auto all_columns = getInMemoryMetadataPtr()->getColumns().getAllPhysical();
     partition_key_expr_list = extractKeyExpressionList(partition_by_ast);
     if (!partition_key_expr_list->children.empty())
     {
@@ -231,7 +241,7 @@ void StorageCnchHive::checkSortByKey()
 
     if (!sorting_key_expr_list_local->children.empty())
     {
-        auto all_columns = getColumns().getAllPhysical();
+        auto all_columns = getInMemoryMetadataPtr()->getColumns().getAllPhysical();
         auto sorting_key_syntax = TreeRewriter(getContext()).analyze(sorting_key_expr_list_local, all_columns);
         auto sorting_key_expr_local = ExpressionAnalyzer(sorting_key_expr_list_local, sorting_key_syntax, getContext()).getActions(false);
 
@@ -271,7 +281,7 @@ void StorageCnchHive::checkPartitionByKey()
 
     if (!partition_key_expr_list_local->children.empty())
     {
-        auto all_columns = getColumns().getAllPhysical();
+        auto all_columns = getInMemoryMetadataPtr()->getColumns().getAllPhysical();
         auto partition_key_syntax = TreeRewriter(getContext()).analyze(partition_key_expr_list_local, all_columns);
         auto partition_key_expr_local
             = ExpressionAnalyzer(partition_key_expr_list_local, partition_key_syntax, getContext()).getActions(false);
@@ -314,7 +324,7 @@ void StorageCnchHive::checkClusterByKey()
         if (cluster_by_expr_list_local->children.size() != hivebucket_cols.size())
             throw Exception("CnchHive hiveBucket doesn't match.", ErrorCodes::BAD_ARGUMENTS);
 
-        auto all_columns = getColumns().getAllPhysical();
+        auto all_columns = getInMemoryMetadataPtr()->getColumns().getAllPhysical();
         auto cluster_by_key_syntax = TreeRewriter(getContext()).analyze(cluster_by_expr_list_local, all_columns);
         auto cluster_by_key_expr_local
             = ExpressionAnalyzer(cluster_by_expr_list_local, cluster_by_key_syntax, getContext()).getActions(false);

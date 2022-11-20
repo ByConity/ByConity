@@ -44,7 +44,7 @@ void ReadFromCnchHive::initializePipeline(QueryPipeline & pipeline, const BuildQ
         return;
     }
 
-    LOG_TRACE(log, " data_parts size = {}", data_parts.size());
+    LOG_TRACE(log, " data_parts size = {} num_streams {}", data_parts.size(), num_streams);
 
     Pipe pipe;
 
@@ -55,7 +55,7 @@ void ReadFromCnchHive::initializePipeline(QueryPipeline & pipeline, const BuildQ
         parts_with_row_groups[part_index].total_row_groups = part->getTotalRowGroups();
     };
 
-    size_t num_threads = std::min(size_t(num_streams), data_parts.size());
+    size_t num_threads = std::max(size_t(num_streams), data_parts.size());
     if (num_threads <= 1)
     {
         for (size_t part_index = 0; part_index < data_parts.size(); ++part_index)
