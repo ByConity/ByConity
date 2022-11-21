@@ -103,8 +103,6 @@ public:
         const String & password,
         const String & interserver_scheme);
 
-    void fetchBitEngineDictionary(const String & replica_path);
-
     /// You need to stop the data transfer.
     ActionBlocker blocker;
 

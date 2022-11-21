@@ -227,9 +227,6 @@ private:
     void dropPartition(const ASTPtr & partition, bool detach, ContextPtr context) override;
     void dropPartsImpl(DataPartsVector && parts_to_remove, bool detach);
     PartitionCommandsResultInfo attachPartition(const ASTPtr & partition, const StorageMetadataPtr & metadata_snapshot, bool part, ContextPtr context) override;
-    FutureMergedMutatedPart transformPartToFuturePart(const DataPartPtr & part);
-    void bitengineRecodePartition(const ASTPtr & partition, bool detach, ContextPtr query_context, bool can_skip = false) override;
-    void bitengineRecodePartitionWhere(const ASTPtr & predicate, bool detach, ContextPtr query_context, bool can_skip = false) override;
 
     void ingestPartition(const PartitionCommand & command, ContextPtr context) override;
     void replacePartitionFrom(const StoragePtr & source_table, const ASTPtr & partition, bool replace, ContextPtr context) override;

@@ -74,7 +74,6 @@ public:
     bool replace_view{false}; /// CREATE OR REPLACE VIEW
     bool ignore_replicated{false};
     bool ignore_async{false};
-    bool ignore_bitengine_encode{false};
     bool ignore_ttl{false};
 
     ASTColumns * columns_list = nullptr;

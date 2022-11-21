@@ -161,8 +161,6 @@ struct Settings;
     M(String, storage_policy_name, "default", "", 0) \
     M(Bool, offline_overwrite_realtime, 0, "", 0) \
     M(Bool, enable_async_init_metasotre, false, "", 0) \
-    M(UInt64, bitengine_split_index, 0, "", 0) \
-    M(Float, bitengine_encode_loss_rate, 0.1, "", 0) \
     M(Bool, cnch_temporary_table, false, "", 0) \
     M(MaxThreads, cnch_parallel_prefetching, 0, "", 0) \
                                                                                                               \
@@ -216,11 +214,6 @@ struct Settings;
     M(Bool, cnch_merge_only_realtime_partition, false, "", 0) \
     /** RM - using RM, RoundRobin: - local round robin strategy */ \
     M(String, cnch_merge_pick_worker_algo, "RM", "", 0) \
-    /** BitEngine related settings */  \
-    M(Bool, bitengine_discard_source_bitmap, false, "", 0) \
-    M(Bool, bitengine_use_key_string, false, "", 0) \
-    M(Bool, bitengine_use_key_int, true, "", 0) \
-    M(String, underlying_dictionary_tables, "{}", "", 0)  \
     \
     /** uuid of CnchMergeTree, as we won't use uuid in CloudMergeTree */ \
     M(String, cnch_table_uuid, "", "Used for CloudMergeTree to get uuid of Cnch Table for ingestion task, like Kafka", 0) \

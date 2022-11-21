@@ -61,16 +61,8 @@ MergedColumnOnlyOutputStream::MergedColumnOnlyOutputStream(
     , header(header_)
 {
     NamesAndTypesList columns_list;
-    if (write_settings.bitengine_settings.only_recode)
-    {
-        for (auto & it : header.getNamesAndTypesList())
-        {
-            if (isBitmap64(it.type) && it.type->isBitEngineEncode())
-                columns_list.emplace_back(it.name + BITENGINE_COLUMN_EXTENSION, it.type);
-        }
-    }
-    else
-        columns_list = header.getNamesAndTypesList();
+    
+    columns_list = header.getNamesAndTypesList();
 
     writer = data_part->getWriter(
         std::move(columns_list),

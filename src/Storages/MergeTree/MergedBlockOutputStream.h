@@ -16,7 +16,6 @@ public:
     struct WriteSettings
     {
         bool only_recode = false;
-        bool bitengine_encode_without_lock = false;
     };
 
     MergedBlockOutputStream(

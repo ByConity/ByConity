@@ -44,7 +44,6 @@
 #include <Storages/MergeTree/checkDataPart.h>
 #include <Storages/MergeTree/localBackup.h>
 #include <Storages/MergeTree/ChecksumsCache.h>
-#include <Storages/MergeTree/BitEngineDictionary/BitEngineDictionaryManager.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/VirtualColumnUtils.h>
@@ -88,13 +87,6 @@ namespace CurrentMetrics
     extern const Metric DelayedInserts;
     extern const Metric BackgroundMovePoolTask;
 }
-
-
-namespace
-{
-    constexpr UInt64 RESERVATION_MIN_ESTIMATION_SIZE = 1u * 1024u * 1024u; /// 1MB
-}
-
 
 namespace DB
 {
@@ -231,25 +223,6 @@ MergeTreeData::MergeTreeData(
         format_version = read_format_version;
         if (!buf->eof())
             throw Exception("Bad version file: " + fullPath(version_file.second, version_file.first), ErrorCodes::CORRUPTED_DATA);
-    }
-
-    for (const auto & item : getInMemoryMetadataPtr()->getColumns().getAllPhysical())
-    {
-        if (isBitmap64(item.type) && item.type->isBitEngineEncode())
-        {
-            if (!bitengine_dictionary_manager)
-            {
-                String db_tbl  = getStorageID().getFullNameNotQuoted();
-                String bitengine_dictionary_path = getRelativeDataPath(IStorage::StorageLocation::MAIN) + MergeTreeData::BITENGINE_DICTIONARY_DIR_NAME;
-                auto bitengine_disk = getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
-                bitengine_disk->createDirectories(fs::path(getRelativeDataPath(IStorage::StorageLocation::MAIN)) / MergeTreeData::BITENGINE_DICTIONARY_DIR_NAME);
-                bitengine_dictionary_manager =
-                    std::make_shared<BitEngineDictionaryManager>(db_tbl, bitengine_disk->getName(), bitengine_dictionary_path, getContext());
-                LOG_DEBUG(log, "Successfully created a BitEngineDictionary of column {}", item.name);
-            }
-
-            bitengine_dictionary_manager->reload(item.name);
-        }
     }
 
     if (format_version < min_format_version)
@@ -1200,24 +1173,12 @@ void MergeTreeData::rename(const String & new_table_path, const StorageID & new_
     if (!getStorageID().hasUUID())
         getContext()->dropCaches();
 
-    if (bitengine_dictionary_manager)
-        bitengine_dictionary_manager->close();
-
     setRelativeDataPath(StorageLocation::MAIN, new_table_path);
     renameInMemory(new_table_id);
 
     /// reopen metastore to make table be ready for use.
     if (enable_metastore)
         metastore = std::make_shared<MergeTreeMeta>(getMetastorePath(), log_name);
-
-    if (bitengine_dictionary_manager)
-    {
-        String new_bitengine_dictionary_path = getRelativeDataPath(IStorage::StorageLocation::MAIN) + BITENGINE_DICTIONARY_DIR_NAME;
-        auto bitengine_disk = getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
-        bitengine_disk->createDirectories(new_bitengine_dictionary_path);
-
-        bitengine_dictionary_manager->rename(new_table_id.getFullNameNotQuoted(), new_bitengine_dictionary_path);
-    }
 }
 
 void MergeTreeData::dropAllData()
@@ -1227,9 +1188,6 @@ void MergeTreeData::dropAllData()
     auto lock = lockParts();
 
     LOG_TRACE(log, "dropAllData: removing data from memory.");
-
-    if (bitengine_dictionary_manager)
-        bitengine_dictionary_manager->drop();
 
     DataPartsVector all_parts(data_parts_by_info.begin(), data_parts_by_info.end());
 
@@ -3046,16 +3004,6 @@ Pipe MergeTreeData::alterPartition(
                 current_command_results = unfreezeAll(command.with_name, query_context, lock);
             }
             break;
-            case PartitionCommand::PREATTACH_PARTITION:
-                bitengineRecodePartition(command.partition, true, query_context, true);
-                break;
-            case PartitionCommand::BITENGINE_RECODE_PARTITION:
-                bitengineRecodePartition(command.partition, command.detach, query_context, false);
-                break;
-            case PartitionCommand::BITENGINE_RECODE_PARTITION_WHERE:
-                bitengineRecodePartitionWhere(command.partition, command.detach, query_context, false);
-                break;
-
             case PartitionCommand::INGEST_PARTITION:
             {
                 ingestPartition(command, query_context);
@@ -3085,20 +3033,6 @@ Pipe MergeTreeData::alterPartition(
 void MergeTreeData::movePartitionFrom(const StoragePtr &, const ASTPtr &, ContextPtr)
 {
     throw Exception("movePartitionFrom is not supported by " + getName(), ErrorCodes::NOT_IMPLEMENTED);
-}
-
-void MergeTreeData::preattachPartition(const ASTPtr & partition, ContextPtr query_context)
-{
-    bitengineRecodePartition(partition, true, query_context, true);
-}
-
-void MergeTreeData::bitengineRecodePartition(const ASTPtr & , bool , ContextPtr , bool )
-{
-    throw Exception(" MergeTreeData::bitengineRecodePartition is not implemented!", ErrorCodes::NOT_IMPLEMENTED);
-}
-void MergeTreeData::bitengineRecodePartitionWhere(const ASTPtr & , bool , ContextPtr , bool )
-{
-    throw Exception(" MergeTreeData::bitengineRecodePartitionWhere is not implemented!", ErrorCodes::NOT_IMPLEMENTED);
 }
 
 MergeTreeData::DataPartsVector

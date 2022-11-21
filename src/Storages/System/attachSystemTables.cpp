@@ -48,9 +48,6 @@
 #include <Storages/System/StorageSystemDDLWorkerQueue.h>
 #include <Storages/System/StorageSystemKafkaTables.h>
 
-#include <Storages/System/StorageSystemBitEngine.h>
-#include <Storages/System/StorageSystemBitEngineDict.h>
-
 #if !defined(ARCADIA_BUILD)
     #include <Storages/System/StorageSystemLicenses.h>
     #include <Storages/System/StorageSystemTimeZones.h>
@@ -151,8 +148,6 @@ void attachSystemTablesLocal(IDatabase & system_database)
     attach<StorageSystemPrivileges>(system_database, "privileges");
     attach<StorageSystemErrors>(system_database, "errors");
     attach<StorageSystemDataSkippingIndices>(system_database, "data_skipping_indices");
-    attach<StorageSystemBitEngine>(system_database, "bitengine");
-    attach<StorageSystemBitEngineDict>(system_database, "bitengine_dict");
     attach<StorageSystemManipulations>(system_database, "manipulations");
 #if !defined(ARCADIA_BUILD)
     attach<StorageSystemLicenses>(system_database, "licenses");

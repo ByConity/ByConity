@@ -20,10 +20,6 @@ constexpr auto AB_IRK_EXTENSION = ".ark";
 constexpr auto MARK_BITMAP_IDX_EXTENSION = ".m_adx";
 constexpr auto MARK_BITMAP_IRK_EXTENSION = ".m_ark";
 
-constexpr auto BITENGINE_COLUMN_EXTENSION = "_encoded_bitmap";
-constexpr auto BITENGINE_DATA_FILE_EXTENSION = "_encoded_bitmap.bin";
-constexpr auto BITENGINE_DATA_MARKS_EXTENSION = "_encoded_bitmap.mrk2";
-
 constexpr auto DELETE_BITMAP_FILE_EXTENSION = ".del";
 constexpr auto DELETE_BITMAP_FILE_NAME = "delete.del";
 
@@ -36,8 +32,4 @@ constexpr auto UNIQUE_ROW_STORE_META_NAME = "row_store.meta";
 
 bool isEngineReservedWord(const String & column);
 
-/// Type `ONLY_SOURCE` is used in encoding and select, it's **DEFAULT** type
-/// Type `ONLY_ENCODE` used in BitEngine parts merge
-/// Type `BOTH` is used in BitEngineDictionaryManager::checkEncodedPart
-enum BitEngineReadType { ONLY_SOURCE, ONLY_ENCODE, BOTH, };
 }

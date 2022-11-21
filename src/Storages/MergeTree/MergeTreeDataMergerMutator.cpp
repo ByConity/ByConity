@@ -1313,7 +1313,6 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
             /*can_use_adaptive_granularity = */ new_data_part->index_granularity_info.is_adaptive,
             /* rewrite_primary_key = */false,
             /*blocks_are_granules_size = */ false,
-            /*skip_bitengine_encode = */ true,
             context->getSettingsRef().optimize_map_column_serialization);
 
         for (size_t column_num = 0, gathering_column_names_size = gathering_column_names.size(); column_num < gathering_column_names_size;
@@ -1325,15 +1324,14 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
             Float64 progress_before = merge_entry->progress.load(std::memory_order_relaxed);
 
             MergeStageProgress column_progress(progress_before, column_sizes->columnWeight(column_name));
-            auto mergeFunc = [&](const Names & column_names_, const String & name_,
-                                 BitEngineReadType bitengine_read_type = BitEngineReadType::ONLY_SOURCE) {
+            auto mergeFunc = [&](const Names & column_names_, const String & name_) {
                 for (size_t part_num = 0; part_num < parts.size(); ++part_num)
                 {
                     /// FIXME(UNIQUE KEY): set delete bitmap from snapshot
                     auto column_part_source = std::make_shared<MergeTreeSequentialSource>(
                         data, metadata_snapshot, parts[part_num], /*delete_bitmap*/nullptr, column_names_, read_with_direct_io,
                         /*take_column_types_from_storage*/true,
-                        /*quiet=*/ false, /*bitengine_read_type= */ bitengine_read_type);
+                        /*quiet=*/ false);
 
                     column_part_source->setProgressCallback(MergeProgressCallback(merge_entry, watch_prev_elapsed, column_progress));
 
@@ -1348,7 +1346,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
                 ColumnGathererStream column_gathered_stream(name_, column_part_streams, rows_sources_read_buf,
                     context->getSettingsRef().enable_low_cardinality_merge_new_algo,
                     context->getSettingsRef().low_cardinality_distinct_threshold,
-                    /*block_preferred_size_ =*/ DEFAULT_BLOCK_SIZE, bitengine_read_type);
+                    /*block_preferred_size_ =*/ DEFAULT_BLOCK_SIZE);
 
                 MergedColumnOnlyOutputStream column_to(
                     new_data_part,
@@ -1473,15 +1471,6 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
             else
             {
                 mergeFunc(column_names, column_name);
-
-                /// column_names in merge come from storage schema, unfortunately no encoded bitmap column.
-                /// The 3rd arg `ONLY_ENCODE` tells the input stream and output stream to replace the bitmap column
-                /// in storage with the encoded bitmap column in part. That's to say, the following mergeFunc merges
-                /// the encoded bitmap column in part actually, and the above merges bitmap column in storage
-                if (isBitmap64(column_type) && column_type->isBitEngineEncode())
-                {
-                    mergeFunc(column_names, column_name, BitEngineReadType::ONLY_ENCODE);
-                }
             }
         }
     }

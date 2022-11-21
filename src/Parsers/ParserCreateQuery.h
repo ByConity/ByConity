@@ -135,7 +135,6 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
     ParserKeyword s_security{"SECURITY"};
     ParserKeyword s_encrypt{"ENCRYPT"};
     ParserKeyword s_kv{"KV"};
-    ParserKeyword s_bitengine_encode{"BitEngineEncode"};
     ParserTernaryOperatorExpression expr_parser(dt); /* decimal type can use float as default value */
     ParserStringLiteral string_literal_parser;
     ParserCodec codec_parser;
@@ -225,8 +224,6 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
 
         if (s_kv.ignore(pos, expected))
             inner_flags |= TYPE_MAP_KV_STORE_FLAG;
-        if (s_bitengine_encode.ignore(pos, expected))
-            inner_flags |= TYPE_BITENGINE_ENCODE_FLAG;
         if (s_encrypt.ignore(pos, expected))
             inner_flags |= TYPE_ENCRYPT_FLAG;
         if (s_security.ignore(pos, expected))

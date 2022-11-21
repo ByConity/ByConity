@@ -31,27 +31,13 @@ MergedBlockOutputStream::MergedBlockOutputStream(
         data_part->index_granularity_info.is_adaptive,
         /* rewrite_primary_key = */ true,
         blocks_are_granules_size,
-        /* skip_bitengine_encode(default)*/false,
         optimize_map_column_serialization,
         /* enable_disk_based_key_index = */ metadata_snapshot->hasUniqueKey());
 
     if (!part_path.empty())
         volume->getDisk()->createDirectories(part_path);
 
-    if (storage.isBitEngineMode())
-    {
-        auto new_columns_list = columns_list;
-        NamesAndTypesList bitengine_columns;
-        for (auto & it : columns_list)
-        {
-            if (isBitmap64(it.type) && it.type->isBitEngineEncode())
-                bitengine_columns.emplace_back(it.name + BITENGINE_COLUMN_EXTENSION, it.type);
-        }
-        new_columns_list.insert(new_columns_list.end(), bitengine_columns.begin(), bitengine_columns.end());
-        writer = data_part->getWriter(new_columns_list, metadata_snapshot, skip_indices, default_codec, writer_settings);
-    }
-    else
-        writer = data_part->getWriter(columns_list, metadata_snapshot, skip_indices, default_codec, writer_settings);
+    writer = data_part->getWriter(columns_list, metadata_snapshot, skip_indices, default_codec, writer_settings);
 
     if (metadata_snapshot->hasUniqueKey())
     {

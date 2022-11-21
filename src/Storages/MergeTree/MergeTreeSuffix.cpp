@@ -6,9 +6,7 @@ namespace DB
 
 bool isEngineReservedWord(const String & column)
 {
-    if (endsWith(column, COMPRESSION_COLUMN_EXTENSION)
-        || endsWith(column, BITENGINE_COLUMN_EXTENSION)
-        )
+    if (endsWith(column, COMPRESSION_COLUMN_EXTENSION))
         return true;
     return false;
 }

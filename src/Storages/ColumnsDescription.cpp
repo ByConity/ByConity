@@ -108,12 +108,6 @@ void ColumnDescription::writeText(WriteBuffer & buf) const
             DB::writeText("KV", buf);
             flag ^= TYPE_MAP_KV_STORE_FLAG;
         }
-        else if (flag & TYPE_BITENGINE_ENCODE_FLAG)
-        {
-            writeChar('\t', buf);
-            DB::writeText("BitEngineEncode", buf);
-            flag ^= TYPE_BITENGINE_ENCODE_FLAG;
-        }
         else if (flag & TYPE_SECURITY_FLAG)
         {
             writeChar('\t', buf);

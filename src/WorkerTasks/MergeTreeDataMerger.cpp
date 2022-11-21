@@ -657,7 +657,6 @@ void MergeTreeDataMerger::gatherColumns()
         /*can_use_adaptive_granularity = */ new_data_part->index_granularity_info.is_adaptive,
         /* rewrite_primary_key = */ false,
         /*blocks_are_granules_size = */ false,
-        /*skip_bitengine_encode = */ true,
         context->getSettingsRef().optimize_map_column_serialization);
 
     for (auto & [column_name, column_type] : gathering_columns)
