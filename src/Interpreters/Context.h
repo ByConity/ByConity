@@ -103,6 +103,7 @@ class AsynchronousMetricLog;
 class OpenTelemetrySpanLog;
 class MutationLog;
 class KafkaLog;
+class CloudKafkaLog;
 class ProcessorsProfileLog;
 class ZooKeeperLog;
 class QueryMetricLog;
@@ -996,6 +997,7 @@ public:
     std::shared_ptr<OpenTelemetrySpanLog> getOpenTelemetrySpanLog() const;
     std::shared_ptr<MutationLog> getMutationLog() const;
     std::shared_ptr<KafkaLog> getKafkaLog() const;
+    std::shared_ptr<CloudKafkaLog> getCloudKafkaLog() const;
     std::shared_ptr<ProcessorsProfileLog> getProcessorsProfileLog() const;
     std::shared_ptr<ZooKeeperLog> getZooKeeperLog() const;
 

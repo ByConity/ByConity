@@ -156,9 +156,4 @@ void QueryWorkerMetricElement::write(WriteBuffer & out) const
     writeStringBinary(version_scm, out);
 }
 
-bool QueryWorkerMetricLog::needFlush(size_t elapsed_time_ms, size_t)
-{
-    return (elapsed_time_ms >= flush_interval_milliseconds);
-}
-
 }

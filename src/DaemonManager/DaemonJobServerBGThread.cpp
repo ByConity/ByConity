@@ -23,8 +23,11 @@ DaemonJobServerBGThread::DaemonJobServerBGThread(
       target_server_calculator{std::move(target_server_calculator_)}
 {}
 
+void fixKafkaActiveStatuses(DaemonJobServerBGThread * daemon_job);
 void DaemonJobServerBGThread::init()
 {
+    if (getType() == CnchBGThreadType::Consumer)
+        fixKafkaActiveStatuses(this);
     background_jobs = fetchCnchBGThreadStatus();
     status_persistent_store =
         std::make_unique<BGJobStatusInCatalog::CatalogBGJobStatusPersistentStoreProxy>(getContext()->getCnchCatalog(), type);
@@ -730,8 +733,9 @@ Result DaemonJobServerBGThread::executeJobAction(const StorageID & storage_id, C
             if (!bg_ptr)
             {
                 LOG_INFO(log, "bg job doesn't exist for uuid: {} hence, create a stop job", storage_id.getNameForLogs());
+                auto new_job = std::make_pair(uuid, std::make_shared<BackgroundJob>(storage_id, CnchBGThreadStatus::Stopped, *this, ""));
                 std::unique_lock lock(bg_jobs_mutex);
-                auto res = background_jobs.insert(std::make_pair(uuid, std::make_shared<BackgroundJob>(storage_id, CnchBGThreadStatus::Stopped, *this, "")));
+                auto res = background_jobs.insert(std::move(new_job));
                 if (!res.second)
                     bg_ptr = res.first->second;
                 else
@@ -746,8 +750,9 @@ Result DaemonJobServerBGThread::executeJobAction(const StorageID & storage_id, C
             auto bg_ptr = getBackgroundJob(uuid);
             if (!bg_ptr)
             {
+                auto new_job = std::make_pair(uuid, std::make_shared<BackgroundJob>(storage_id, *this));
                 std::unique_lock lock(bg_jobs_mutex);
-                auto res = background_jobs.insert(std::make_pair(uuid, std::make_shared<BackgroundJob>(storage_id, *this)));
+                auto res = background_jobs.insert(new_job);
                 if (res.second)
                     bg_ptr = res.first->second;
                 else
@@ -909,6 +914,49 @@ void registerServerBGThreads(DaemonFactory & factory)
     factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnch<CnchBGThreadType::Clustering, isCnchMergeTree>>("PART_CLUSTERING");
     factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnch<CnchBGThreadType::Consumer, isCnchKafka>>("CONSUMER");
     factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnch<CnchBGThreadType::DedupWorker, isCnchUniqueTableAndNeedDedup>>("DEDUP_WORKER");
+}
+
+void fixKafkaActiveStatuses(DaemonJobServerBGThread * daemon_job)
+{
+    Poco::Logger * log = daemon_job->getLog();
+    ContextMutablePtr context = daemon_job->getContext();
+    std::shared_ptr<Catalog::Catalog> catalog = context->getCnchCatalog();
+    auto data_models = catalog->getAllTables();
+    for (const auto & data_model : data_models)
+    {
+        if (Status::isDetached(data_model.status()) || Status::isDeleted(data_model.status()))
+            continue;
+
+        try
+        {
+            StoragePtr storage = Catalog::CatalogFactory::getTableByDefinition(
+                        daemon_job->getContext(),
+                        data_model.database(),
+                        data_model.name(),
+                        data_model.definition());
+
+            if (!storage)
+            {
+                LOG_WARNING(log, "Fail to get storagePtr for {}.{}", data_model.database(), data_model.name());
+                continue;
+            }
+
+            if (daemon_job->isTargetTable(storage))
+            {
+                if (!catalog->getTableActiveness(storage, TxnTimestamp::maxTS()))
+                {
+                    LOG_INFO(log, "Found table {}.{} is inactive", data_model.database(), data_model.name());
+                    catalog->setBGJobStatus(storage->getStorageID().uuid, CnchBGThreadType::Consumer, CnchBGThreadStatus::Stopped);
+                    catalog->setTableActiveness(storage, true, TxnTimestamp::maxTS());
+                }
+            }
+        }
+        catch (Exception & e)
+        {
+            LOG_WARNING(log, "Fail to construct storage for {}.{}. Error: ", data_model.database(), data_model.name(), e.message());
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        }
+    }
 }
 
 }

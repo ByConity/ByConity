@@ -8,7 +8,7 @@
 #include <DataStreams/OneBlockInputStream.h>
 #include <DataStreams/ConvertingBlockInputStream.h>
 #include <Interpreters/addMissingDefaults.h>
-/// #include <Interpreters/CnchSystemLog.h>
+#include <Interpreters/CnchSystemLog.h>
 #include <Storages/Kafka/KafkaConsumeInfo.h>
 #include <DataTypes/DataTypeString.h>
 #include <Processors/Formats/IRowInputFormat.h>
@@ -62,7 +62,7 @@ CnchKafkaBlockInputStream::~CnchKafkaBlockInputStream()
     /// Some metrics to system.kafka_log
     if (auto kafka_log = context->getKafkaLog())
     {
-        ///auto cloud_kafka_log = context->getCloudKafkaLog();
+        auto cloud_kafka_log = context->getCloudKafkaLog();
         try
         {
             auto *read_buf = delimited_buffer->subBufferAs<CnchReadBufferFromKafkaConsumer>();
@@ -76,8 +76,8 @@ CnchKafkaBlockInputStream::~CnchKafkaBlockInputStream()
             kafka_poll_log.metric = read_buf->getReadMessages();
             kafka_poll_log.bytes = read_buf->getReadBytes();
             kafka_log->add(kafka_poll_log);
-            ///if (cloud_kafka_log)
-            ///    cloud_kafka_log->add(kafka_poll_log);
+            if (cloud_kafka_log)
+                cloud_kafka_log->add(kafka_poll_log);
 
             if (read_buf->getEmptyMessages() > 0)
             {
@@ -86,8 +86,8 @@ CnchKafkaBlockInputStream::~CnchKafkaBlockInputStream()
                 kafka_empty_log.duration_ms = duration_ms;
                 kafka_empty_log.metric = read_buf->getEmptyMessages();
                 kafka_log->add(kafka_empty_log);
-                ///if (cloud_kafka_log)
-                ///    cloud_kafka_log->add(kafka_empty_log);
+                if (cloud_kafka_log)
+                    cloud_kafka_log->add(kafka_empty_log);
             }
 
             IRowInputFormat * row_input = nullptr;
@@ -107,8 +107,8 @@ CnchKafkaBlockInputStream::~CnchKafkaBlockInputStream()
                 kafka_parse_log.bytes = row_input->getErrorBytes();
                 kafka_parse_log.has_error = true;
                 kafka_log->add(kafka_parse_log);
-                ///if (cloud_kafka_log)
-                ///    cloud_kafka_log->add(kafka_parse_log);
+                if (cloud_kafka_log)
+                    cloud_kafka_log->add(kafka_parse_log);
             }
         }
         catch (...)
@@ -168,7 +168,7 @@ void CnchKafkaBlockInputStream::readPrefixImpl()
 
     auto child = FormatFactory::instance().getInput(storage.settings.format.value,
                                                  *delimited_buffer, non_virtual_header, context, max_block_size);
-    
+
     ///FIXME: Add default value if column has `DEFAULT` expression and no data read from topic
     //if (need_add_defaults)
     //    addChild(std::make_shared<AddingDefaultsBlockInputStream>(child, storage.getColumns().getDefaults(), context));

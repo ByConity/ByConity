@@ -96,6 +96,7 @@ struct QueryWorkerMetricElement
     {}
     static std::string name() {return "QueryWorkerMetric"; }
     static NamesAndTypesList getNamesAndTypes();
+    static NamesAndAliases getNamesAndAliases() { return {}; }
     void appendToBlock(MutableColumns & columns) const;
 
     void read(ReadBuffer & in);
@@ -171,8 +172,6 @@ inline QueryWorkerMetricElement createQueryWorkerMetricElement(const Protos::Que
 class QueryWorkerMetricLog : public CnchSystemLog<QueryWorkerMetricElement>
 {
     using CnchSystemLog<QueryWorkerMetricElement>::CnchSystemLog;
-
-    bool needFlush(size_t elapsed_time_ms, size_t record_cnt) override;
 };
 
 }

@@ -133,6 +133,12 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "START DISTRIBUTED SENDS";
         case Type::FLUSH_LOGS:
             return "FLUSH LOGS";
+        case Type::FLUSH_CNCH_LOG:
+            return "FLUSH CNCH LOG";
+        case Type::STOP_CNCH_LOG:
+            return "STOP CNCH LOG";
+        case Type::RESUME_CNCH_LOG:
+            return "RESUME CNCH LOG";
         case Type::RESTART_DISK:
             return "RESTART DISK";
         case Type::START_CONSUME:

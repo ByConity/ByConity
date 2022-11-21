@@ -125,9 +125,9 @@ public:
 
     void setWorkerGroupForTable(const String & db, const String & name, const String & worker_group, UInt64 worker_topology_hash);
 
-    StoragePtr getTable(const Context & query_context, const String & database, const String & name, const TxnTimestamp & ts = 0);
+    StoragePtr getTable(const Context & query_context, const String & database, const String & name, const TxnTimestamp & ts = TxnTimestamp::maxTS());
 
-    StoragePtr tryGetTable(const Context & query_context, const String & database, const String & name, const TxnTimestamp & ts = 0);
+    StoragePtr tryGetTable(const Context & query_context, const String & database, const String & name, const TxnTimestamp & ts = TxnTimestamp::maxTS());
 
     StoragePtr tryGetTableByUUID(const Context & query_context, const String & uuid, const TxnTimestamp & ts, bool with_delete = false);
 
@@ -136,6 +136,10 @@ public:
     Strings getTablesInDB(const String & database);
 
     std::vector<StoragePtr> getAllViewsOn(const Context & session_context, const StoragePtr & storage, const TxnTimestamp & ts);
+
+    void setTableActiveness(const StoragePtr & storage, const bool is_active, const TxnTimestamp & ts);
+    /// return true if table is active, false otherwise
+    bool getTableActiveness(const StoragePtr & storage, const TxnTimestamp & ts);
 
     ///data parts related interface
     ServerDataPartsVector getServerDataPartsInPartitions(const StoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, const Context * session_context);

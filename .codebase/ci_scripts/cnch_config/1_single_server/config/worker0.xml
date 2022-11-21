@@ -641,15 +641,14 @@
     <cnch_kafka_log>
         <database>cnch_system</database>
         <table>cnch_kafka_log</table>
-        <flush_max_row_count>10000</flush_max_row_count>
-        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+        <flush_interval_milliseconds>30000</flush_interval_milliseconds>
+        <partition_by>event_date</partition_by>
     </cnch_kafka_log>
 
     <kafka_log>
         <database>system</database>
         <table>kafka_log</table>
-        <!-- shorten interval of flushing kafka_log, which should only be set in CI -->
-        <flush_interval_milliseconds>3500</flush_interval_milliseconds>
+        <flush_interval_milliseconds>30000</flush_interval_milliseconds>
     </kafka_log>
 
     <bytejournal>

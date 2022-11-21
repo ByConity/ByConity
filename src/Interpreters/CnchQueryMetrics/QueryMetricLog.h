@@ -102,6 +102,7 @@ struct QueryMetricElement
     {}
     static std::string name() {return "QueryMetric"; }
     static NamesAndTypesList getNamesAndTypes();
+    static NamesAndAliases getNamesAndAliases() { return {}; }
     void appendToBlock(MutableColumns & columns) const;
 
     static void appendClientInfo(const ClientInfo & client_info, MutableColumns & columns, size_t & i);
@@ -111,7 +112,6 @@ class QueryMetricLog : public CnchSystemLog<QueryMetricElement>
 {
 public:
     using CnchSystemLog<QueryMetricElement>::CnchSystemLog;
-    bool needFlush(size_t elapsed_time_ms, size_t record_cnt) override;
 };
 
 }

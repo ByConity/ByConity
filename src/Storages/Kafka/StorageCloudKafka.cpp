@@ -13,7 +13,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <Interpreters/loadMetadata.h>
-///#include <Interpreters/CnchSystemLog.h>
+#include <Interpreters/CnchSystemLog.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Parsers/ParserDropQuery.h>
@@ -220,8 +220,8 @@ cppkafka::Configuration StorageCloudKafka::createConsumerConfiguration()
                                             kafka_error_log.has_error = true;
                                             kafka_error_log.last_exception = msg;
                                             kafka_log->add(kafka_error_log);
-                                            //if (auto cloud_kafka_log = getContext()->getCloudKafkaLog())
-                                            ///    cloud_kafka_log->add(kafka_error_log);
+                                            if (auto cloud_kafka_log = getContext()->getCloudKafkaLog())
+                                                cloud_kafka_log->add(kafka_error_log);
 
                                             std::lock_guard lock(table_status_mutex);
                                             last_exception = kafka_error_log.last_exception;
@@ -379,8 +379,8 @@ void StorageCloudKafka::streamThread()
             kafka_error_log.has_error = true;
             kafka_error_log.last_exception = getCurrentExceptionMessage(false);
             kafka_log->add(kafka_error_log);
-            ///if (auto cloud_kafka_log = getContext()->getCloudKafkaLog())
-            ///    cloud_kafka_log->add(kafka_error_log);
+            if (auto cloud_kafka_log = getContext()->getCloudKafkaLog())
+                cloud_kafka_log->add(kafka_error_log);
 
             std::lock_guard lock(table_status_mutex);
             last_exception = kafka_error_log.last_exception;
@@ -534,8 +534,8 @@ bool StorageCloudKafka::streamToViews(/* required_column_names */)
                 kafka_filter_log.metric = origin_rows - written_rows;
                 if (auto kafka_log = getContext()->getKafkaLog())
                     kafka_log->add(kafka_filter_log);
-                ///if (auto cloud_kafka_log = getContext()->getCloudKafkaLog())
-                ///    cloud_kafka_log->add(kafka_filter_log);
+                if (auto cloud_kafka_log = getContext()->getCloudKafkaLog())
+                    cloud_kafka_log->add(kafka_filter_log);
             }
         }
     }
@@ -587,8 +587,8 @@ void StorageCloudKafka::streamCopyData(IBlockInputStream &from, IBlockOutputStre
         kafka_write_log.duration_ms = watch.elapsedMilliseconds();
         if (auto kafka_log = getContext()->getKafkaLog())
             kafka_log->add(kafka_write_log);
-        ///if (auto cloud_kafka_log = getContext()->getCloudKafkaLog())
-        ///    cloud_kafka_log->add(kafka_write_log);
+        if (auto cloud_kafka_log = getContext()->getCloudKafkaLog())
+            cloud_kafka_log->add(kafka_write_log);
 
         commit_rows += kafka_write_log.metric;
         commit_bytes += kafka_write_log.bytes;
@@ -610,8 +610,8 @@ void StorageCloudKafka::streamCopyData(IBlockInputStream &from, IBlockOutputStre
     kafka_commit_log.duration_ms = watch.elapsedMilliseconds();
     if (auto kafka_log = getContext()->getKafkaLog())
         kafka_log->add(kafka_commit_log);
-    ///if (auto cloud_kafka_log = getContext()->getCloudKafkaLog())
-    ///    cloud_kafka_log->add(kafka_commit_log);
+    if (auto cloud_kafka_log = getContext()->getCloudKafkaLog())
+        cloud_kafka_log->add(kafka_commit_log);
 
     from.readSuffix();
 }

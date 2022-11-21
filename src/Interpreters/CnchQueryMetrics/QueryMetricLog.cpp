@@ -115,11 +115,6 @@ void QueryMetricElement::appendToBlock(MutableColumns & columns) const
     columns[i++]->insert(VERSION_SCM);
 }
 
-bool QueryMetricLog::needFlush(size_t elapsed_time_ms, size_t)
-{
-    return (elapsed_time_ms >= flush_interval_milliseconds);
-}
-
 void QueryMetricElement::appendClientInfo(const ClientInfo & client_info, MutableColumns & columns, size_t & i)
 {
     columns[i++]->insert(client_info.current_user);

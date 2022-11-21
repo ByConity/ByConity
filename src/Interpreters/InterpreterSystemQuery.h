@@ -85,6 +85,8 @@ private:
 
     /// fetch part from remote storage and attach to target table.
     void fetchParts(const ASTSystemQuery & query, const StorageID & table_id, ContextPtr local_context);
+
+    void executeActionOnCNCHLog(const String & table, ASTSystemQuery::Type type);
 };
 
 
