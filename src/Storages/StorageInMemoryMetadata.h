@@ -195,8 +195,7 @@ struct StorageInMemoryMetadata
     /// Storage metadata. StorageID required only for more clear exception
     /// message.
     Block getSampleBlockForColumns(
-        const Names & column_names, const NamesAndTypesList & virtuals = {}, const StorageID & storage_id = StorageID::createEmpty(),
-        BitEngineReadType bitengine_read_type = BitEngineReadType::ONLY_SOURCE) const;
+        const Names & column_names, const NamesAndTypesList & virtuals = {}, const StorageID & storage_id = StorageID::createEmpty()) const;
 
     /// Returns structure with partition key.
     const KeyDescription & getPartitionKey() const;

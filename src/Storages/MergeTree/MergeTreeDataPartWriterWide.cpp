@@ -183,11 +183,6 @@ void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Perm
         fillIndexGranularity(index_granularity_for_block, block.rows());
     }
 
-    if (storage.isBitEngineMode() && !settings.bitengine_settings.skip_bitengine_encode)
-    {
-        /// encode bitmap column by BitEngine dictionary if needed
-        writeImplicitColumnForBitEngine(const_cast<Block &>(block));
-    }
     auto granules_to_write = getGranulesToWrite(index_granularity, block.rows(), getCurrentMark(), rows_written_in_last_mark);
 
     auto offset_columns = written_offset_columns ? *written_offset_columns : WrittenOffsetColumns{};

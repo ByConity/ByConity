@@ -586,7 +586,6 @@ protected:
     friend struct ReplicatedMergeTreeTableMetadata;
     friend class StorageReplicatedMergeTree;
     friend class MergeTreeDataWriter;
-    friend class BitEngineDictionaryManager;
 
     MergeTreePartsMover parts_mover;
 
@@ -655,10 +654,6 @@ protected:
                             const ASTPtr & /*sharding_expression*/,
                             const ASTPtr & /*predicate*/,
                             const ContextPtr & /*query_context*/) { throw Exception("Sample Partition not implement", ErrorCodes::NOT_IMPLEMENTED); }
-
-    void preattachPartition(const ASTPtr & partition, ContextPtr context);
-    virtual void bitengineRecodePartition(const ASTPtr & partition, bool detach, ContextPtr context, bool can_skip);
-    virtual void bitengineRecodePartitionWhere(const ASTPtr & predicate, bool detach, ContextPtr context, bool can_skip);
 
     void writePartLog(
         PartLogElement::Type type,

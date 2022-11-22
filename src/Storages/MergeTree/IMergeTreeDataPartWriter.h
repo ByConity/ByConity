@@ -34,8 +34,6 @@ public:
 
     virtual void write(const Block & block, const IColumn::Permutation * permutation) = 0;
 
-    void writeImplicitColumnForBitEngine(Block & block);
-
     virtual void finish(IMergeTreeDataPart::Checksums & checksums, bool sync) = 0;
 
     /// In case of low cardinality fall-back, during write need update the stream, use the proper

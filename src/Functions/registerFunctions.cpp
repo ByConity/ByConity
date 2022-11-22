@@ -13,7 +13,6 @@ void registerFunctionsTuple(FunctionFactory &);
 void registerFunctionsMap(FunctionFactory &);
 void registerFunctionsByteMap(FunctionFactory &);
 void registerFunctionsBitmap(FunctionFactory &);
-void registerFunctionsBitEngine(FunctionFactory &);
 void registerFunctionsBloomFilter(FunctionFactory &);
 void registerFunctionsCoding(FunctionFactory &);
 void registerFunctionsComparison(FunctionFactory &);
@@ -86,7 +85,6 @@ void registerFunctions()
 #endif
 #if !defined(ARCADIA_BUILD)
     registerFunctionsBitmap(factory);
-    registerFunctionsBitEngine(factory);
 #endif
     registerFunctionsBloomFilter(factory);
     registerFunctionsCoding(factory);

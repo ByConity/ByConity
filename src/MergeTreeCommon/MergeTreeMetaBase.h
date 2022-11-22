@@ -17,21 +17,17 @@ namespace DB
 
 class MutationCommands;
 
-class IBitEngineDictionaryManager;
-
 class MergeTreeMetaBase : public IStorage, public WithMutableContext, public MergeTreeDataPartTypeHelper
 {
 public:
     constexpr static auto FORMAT_VERSION_FILE_NAME = "format_version.txt";
     constexpr static auto DETACHED_DIR_NAME = "detached";
-    constexpr static auto BITENGINE_DICTIONARY_DIR_NAME = "bitmap_dictionary";
 
     /// Function to call if the part is suspected to contain corrupt data.
     using BrokenPartCallback = std::function<void (const String &)>;
 
     using PinnedPartUUIDsPtr = std::shared_ptr<const PinnedPartUUIDs>;
 
-    using BitEngineDictionaryManagerPtr = std::shared_ptr<IBitEngineDictionaryManager>;
     using MetaStorePtr = std::shared_ptr<MergeTreeMeta>;
 
     /// Alter conversions which should be applied on-fly for part. Build from of
@@ -363,11 +359,6 @@ public:
     /// Overridden in StorageReplicatedMergeTree
     virtual bool unlockSharedData(const IMergeTreeDataPart &) const { return true; }
 
-    // bitengine dictionary mananger
-    BitEngineDictionaryManagerPtr bitengine_dictionary_manager;
-    inline bool isBitEngineMode() const { return bitengine_dictionary_manager != nullptr; }
-    bool isBitEngineEncodeColumn(const String & name) const;
-
     bool isBucketTable() const override { return getInMemoryMetadata().isClusterByKeyDefined(); }
     UInt64 getTableHashForClusterBy() const override; // to compare table engines efficiently
 
@@ -379,7 +370,6 @@ protected:
     friend struct ReplicatedMergeTreeTableMetadata;
     friend class StorageReplicatedMergeTree;
     friend class MergeTreeDataWriter;
-    friend class BitEngineDictionaryManager;
 
     bool require_part_metadata;
 

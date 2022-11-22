@@ -659,15 +659,6 @@ void MergeTreeMetaBase::removeQueryId(const String & query_id) const
         query_id_set.erase(query_id);
 }
 
-bool MergeTreeMetaBase::isBitEngineEncodeColumn([[maybe_unused]] const String & name) const
-{
-    //TODO (liuhaoqiang)
-    auto column = getInMemoryMetadataPtr()->getColumns().getAllPhysical().tryGetByName(name);
-    if (column.has_value())
-        return column.value().type->isBitEngineEncode();
-    return false;
-}
-
 DataTypePtr MergeTreeMetaBase::getPartitionValueType() const
 {
     DataTypePtr partition_value_type;
@@ -725,10 +716,6 @@ Block MergeTreeMetaBase::getBlockWithVirtualPartColumns(const DataPartsVector & 
 
 MergeTreeDataPartType MergeTreeMetaBase::choosePartType(size_t bytes_uncompressed, size_t rows_count) const
 {
-    // TODO (liuhaoqiang) should remove this in future
-    if (isBitEngineMode())
-        return MergeTreeDataPartType::WIDE;
-
     // FIXME (UNIQUE KEY): for altering unique table, we only expect the part to be wide
     if (getInMemoryMetadataPtr()->hasUniqueKey())
         return MergeTreeDataPartType::WIDE;

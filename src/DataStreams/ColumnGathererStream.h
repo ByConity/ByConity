@@ -60,8 +60,7 @@ class ColumnGathererStream : public IBlockInputStream
 public:
     ColumnGathererStream(
         const String & column_name_, const BlockInputStreams & source_streams, ReadBuffer & row_sources_buf_,
-        bool enable_low_cardinality_merge_new_algo_ = true, size_t fallback_threshold = 0, size_t block_preferred_size_ = DEFAULT_BLOCK_SIZE,
-        BitEngineReadType bitengine_read_type = BitEngineReadType::ONLY_SOURCE);
+        bool enable_low_cardinality_merge_new_algo_ = true, size_t fallback_threshold = 0, size_t block_preferred_size_ = DEFAULT_BLOCK_SIZE);
 
     String getName() const override { return "ColumnGatherer"; }
 

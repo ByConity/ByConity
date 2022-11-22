@@ -454,7 +454,6 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     ParserKeyword s_ignore("IGNORE");
     ParserKeyword s_replicated("REPLICATED");
     ParserKeyword s_async("ASYNC");
-    ParserKeyword s_bitengine_encode("BITENGINEENCODE");
     ParserKeyword s_ttl("TTL");
     ParserToken s_dot(TokenType::Dot);
     ParserToken s_lparen(TokenType::OpeningRoundBracket);
@@ -483,7 +482,6 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     bool is_temporary = false;
     bool ignore_replicated = false;
     bool ignore_async = false;
-    bool ignore_bitengine_encode = false;
     bool ignore_ttl = false;
 
     if (s_create.ignore(pos, expected))
@@ -609,16 +607,9 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
                         temp = s_ttl.ignore(pos, expected);
                         if (temp) option = ignore_ttl = true;
 
-                        option |= s_bitengine_encode.ignore(pos, expected);
-                        // As for online tmp table created by 'CREATE TABLE tabl_x as tabl_y IGNORE ...',
-                        // this attribute is always set true for not encoding a tmp table so as to
-                        // protect the local table away from a wrong dictionary
-                        ignore_bitengine_encode = true;
-
                     } while (option);
                     
-                    if (!ignore_replicated && !ignore_async && !ignore_ttl
-                        /* && !ignore_bitengine_encode */)
+                    if (!ignore_replicated && !ignore_async && !ignore_ttl)
                         return false;
                 }
 
@@ -643,7 +634,6 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     query->temporary = is_temporary;
     query->ignore_replicated = ignore_replicated;
     query->ignore_async = ignore_async;
-    query->ignore_bitengine_encode = ignore_bitengine_encode;
     query->ignore_ttl = ignore_ttl;
 
     query->database = table_id.database_name;

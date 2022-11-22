@@ -244,11 +244,6 @@ NameAndTypePair IMergeTreeReader::getColumnFromPart(const NameAndTypePair & requ
         return {String(it->first), subcolumn_name, type, subcolumn_type};
     }
 
-    if (checkBitEngineColumn({String(it->first), *it->second}))
-    {
-        return {String(it->first).append(BITENGINE_COLUMN_EXTENSION), type};
-    }
-
     return {String(it->first), type};
 }
 
@@ -470,12 +465,6 @@ void IMergeTreeReader::readData(
 
     serialization->deserializeBinaryBulkWithMultipleStreams(column, max_rows_to_read, deserialize_settings, deserialize_state, &cache);
     IDataType::updateAvgValueSizeHint(*column, avg_value_size_hint);
-}
-
-bool IMergeTreeReader::checkBitEngineColumn(const NameAndTypePair & column) const
-{
-    return storage.isBitEngineMode() && !settings.read_source_bitmap
-        && isBitmap64(column.type) && column.type->isBitEngineEncode();
 }
 
 }

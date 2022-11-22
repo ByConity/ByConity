@@ -662,9 +662,6 @@ InterpreterCreateQuery::TableProperties InterpreterCreateQuery::setProperties(AS
     else
         throw Exception("Incorrect CREATE query: required list of column descriptions or AS section or SELECT.", ErrorCodes::INCORRECT_QUERY);
 
-    if (create.ignore_bitengine_encode)
-        processIgnoreBitEngineEncode(properties.columns);
-
     /// Even if query has list of columns, canonicalize it (unfold Nested columns).
     if (!create.columns_list)
         create.set(create.columns_list, std::make_shared<ASTColumns>());
@@ -1477,17 +1474,6 @@ void InterpreterCreateQuery::extendQueryLogElemImpl(QueryLogElement & elem, cons
         String database = backQuoteIfNeed(as_database_saved.empty() ? getContext()->getCurrentDatabase() : as_database_saved);
         elem.query_databases.insert(database);
         elem.query_tables.insert(database + "." + backQuoteIfNeed(as_table_saved));
-    }
-}
-
-void InterpreterCreateQuery::processIgnoreBitEngineEncode(ColumnsDescription & columns) const
-{
-    for (auto & column : columns)
-    {
-        if (column.type->isBitEngineEncode())
-        {
-            const_cast<IDataType *>(column.type.get())->resetFlags(TYPE_BITENGINE_ENCODE_FLAG);
-        }
     }
 }
 

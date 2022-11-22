@@ -213,11 +213,6 @@ Names IDataType::getSpecialColumnFiles(const String & prefix, bool throw_excepti
         files.push_back(prefix + COMPRESSION_DATA_FILE_EXTENSION);
         files.push_back(prefix + COMPRESSION_MARKS_FILE_EXTENSION);
     }
-    if (isBitEngineEncode())
-    {
-        files.push_back(prefix + BITENGINE_DATA_FILE_EXTENSION);
-        files.push_back(prefix + BITENGINE_DATA_MARKS_EXTENSION);
-    }
     if (throw_exception && (isSecurity() || lowCardinality() || isMapKVStore() || isEncrypt()))
     {
         // not support , throw exception instead.

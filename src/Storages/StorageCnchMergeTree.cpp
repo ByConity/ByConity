@@ -1709,10 +1709,6 @@ Pipe StorageCnchMergeTree::alterPartition(
                 ingestPartition(command, current_query_context);
                 break;
 
-            case PartitionCommand::PREATTACH_PARTITION:
-                // preattachPartition(query, command, query_context);
-                break;
-
             default:
                 IStorage::alterPartition(metadata_snapshot, commands, current_query_context);
         }
