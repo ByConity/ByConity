@@ -59,8 +59,8 @@ BlockIO InterpreterCreateWorkerGroupQuery::execute()
         }
     }
 
-    // auto rm_client = getContext()->getResourceManagerClient();
-    // rm_client->createWorkerGroup(create_query.worker_group_id, create_query.if_not_exists, create_query.vw_name, worker_group_data);
+    auto rm_client = getContext()->getResourceManagerClient();
+    rm_client->createWorkerGroup(create_query.worker_group_id, create_query.if_not_exists, create_query.vw_name, worker_group_data);
 
     return {};
 }

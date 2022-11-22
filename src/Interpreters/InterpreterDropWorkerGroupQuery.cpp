@@ -11,10 +11,10 @@ InterpreterDropWorkerGroupQuery::InterpreterDropWorkerGroupQuery(const ASTPtr & 
 
 BlockIO InterpreterDropWorkerGroupQuery::execute()
 {
-    // auto & drop_query = query_ptr->as<ASTDropWorkerGroupQuery &>();
+    auto & drop_query = query_ptr->as<ASTDropWorkerGroupQuery &>();
 
-    // auto rm_client = getContext()->getResourceManagerClient();
-    // rm_client->dropWorkerGroup(drop_query.worker_group_id, drop_query.if_exists);
+    auto rm_client = getContext()->getResourceManagerClient();
+    rm_client->dropWorkerGroup(drop_query.worker_group_id, drop_query.if_exists);
 
     return {};
 }
