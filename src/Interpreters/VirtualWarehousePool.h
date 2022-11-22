@@ -19,7 +19,7 @@ class Context;
 class VirtualWarehousePool : protected ConcurrentMapForCreating<std::string, VirtualWarehouseHandleImpl>, protected WithContext, private boost::noncopyable
 {
 public:
-    VirtualWarehousePool(Context & context_);
+    VirtualWarehousePool(ContextPtr global_context_);
 
     VirtualWarehouseHandle get(const String & vw_name);
 

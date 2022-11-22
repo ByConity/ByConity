@@ -933,31 +933,33 @@ ConfigurationPtr Context::getUsersConfig()
     return shared->users_config;
 }
 
-void Context::initResourceGroupManager(const ConfigurationPtr & config)
+void Context::initResourceGroupManager([[maybe_unused]] const ConfigurationPtr & config)
 {
-    if (!config->has("resource_groups"))
-    {
-        LOG_DEBUG(&Poco::Logger::get("Context"), "No config found. Not creating Resource Group Manager");
-        return ;
-    }
-    auto resource_group_manager_type = config->getRawString("resource_groups.type", "vw");
-    if (resource_group_manager_type == "vw")
-    {
-        if (!getResourceManagerClient())
-        {
-            LOG_ERROR(&Poco::Logger::get("Context"), "Cannot create VW Resource Group Manager since Resource Manager client is not initialised.");
-            return;
-        }
-        LOG_DEBUG(&Poco::Logger::get("Context"), "Creating VW Resource Group Manager");
-        shared->resource_group_manager = std::make_shared<VWResourceGroupManager>(getGlobalContext());
-    }
-    else if (resource_group_manager_type == "internal")
-    {
-        LOG_DEBUG(&Poco::Logger::get("Context"), "Creating Internal Resource Group Manager");
-        shared->resource_group_manager = std::make_shared<InternalResourceGroupManager>();
-    }
-    else
-        throw Exception("Unknown Resource Group Manager type", ErrorCodes::UNKNOWN_ELEMENT_IN_CONFIG);
+    LOG_DEBUG(&Poco::Logger::get(__PRETTY_FUNCTION__), "Skip initialize resource group");
+
+    // if (!config->has("resource_groups"))
+    // {
+    //     LOG_DEBUG(&Poco::Logger::get("Context"), "No config found. Not creating Resource Group Manager");
+    //     return ;
+    // }
+    // auto resource_group_manager_type = config->getRawString("resource_groups.type", "vw");
+    // if (resource_group_manager_type == "vw")
+    // {
+    //     if (!getResourceManagerClient())
+    //     {
+    //         LOG_ERROR(&Poco::Logger::get("Context"), "Cannot create VW Resource Group Manager since Resource Manager client is not initialised.");
+    //         return;
+    //     }
+    //     LOG_DEBUG(&Poco::Logger::get("Context"), "Creating VW Resource Group Manager");
+    //     shared->resource_group_manager = std::make_shared<VWResourceGroupManager>(getGlobalContext());
+    // }
+    // else if (resource_group_manager_type == "internal")
+    // {
+    //     LOG_DEBUG(&Poco::Logger::get("Context"), "Creating Internal Resource Group Manager");
+    //     shared->resource_group_manager = std::make_shared<InternalResourceGroupManager>();
+    // }
+    // else
+    //     throw Exception("Unknown Resource Group Manager type", ErrorCodes::UNKNOWN_ELEMENT_IN_CONFIG);
 }
 
 void Context::setResourceGroup(const IAST * ast)
@@ -2516,10 +2518,9 @@ const RemoteHostFilter & Context::getRemoteHostFilter() const
 
 HostWithPorts Context::getHostWithPorts() const
 {
-    bool use_dns = (getServiceDiscoveryClient()->getName() == "dns");
     auto * id_cstr = std::getenv("WORKER_ID");
     const auto & ip_cstr = getHostIPFromEnv();
-    String id = (use_dns || nullptr == id_cstr) ? DNSResolver::instance().getHostName() : String(id_cstr);
+    String id = (nullptr == id_cstr) ? DNSResolver::instance().getHostName() : String(id_cstr);
     String host = (ip_cstr.empty()) ? DNSResolver::instance().getHostName() : String(ip_cstr);
 
     return HostWithPorts{
@@ -4129,7 +4130,7 @@ String Context::getVirtualWarehousePSM() const
 
 void Context::initVirtualWarehousePool()
 {
-    shared->vw_pool = std::make_unique<VirtualWarehousePool>(*this);
+    shared->vw_pool = std::make_unique<VirtualWarehousePool>(getGlobalContext());
 }
 
 VirtualWarehousePool & Context::getVirtualWarehousePool() const

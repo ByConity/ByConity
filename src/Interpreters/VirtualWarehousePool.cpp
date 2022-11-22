@@ -16,8 +16,8 @@ namespace ErrorCodes
     extern const int BRPC_HOST_DOWN;
 }
 
-VirtualWarehousePool::VirtualWarehousePool(Context & context_)
-    : WithContext(context_.getGlobalContext()), log(&Poco::Logger::get("VirtualWarehousePool"))
+VirtualWarehousePool::VirtualWarehousePool(ContextPtr global_context_)
+    : WithContext(global_context_), log(&Poco::Logger::get("VirtualWarehousePool"))
 {
 }
 
