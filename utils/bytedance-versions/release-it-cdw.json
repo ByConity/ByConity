@@ -1,0 +1,26 @@
+{
+    "plugins": {
+        "@release-it/bumper": {
+            "in": {
+                "file": "utils/bytedance-versions/CDW.VERSION",
+                "type": "text/plain"
+            },
+            "out": {
+                "file": "utils/bytedance-versions/CDW.VERSION",
+                "type": "text/plain"
+            }
+        }
+    },
+    "git": {
+        "commitMessage": "chore: release cdw-${version}",
+        "tagName": "cdw-${version}"
+    },
+    "hooks": {
+        "after:release":[
+            "npx auto-changelog --prepend -o CHANGELOG.CDW.md --template utils/bytedance-versions/auto-changelog.hbs --merge-url https://code.byted.org/dp/ClickHouse/merge_requests/{id} --tag-pattern 'cdw-\\d+\\.\\d+\\.\\d+' --starting-version cdw-${version}",
+            "python3 utils/bytedance-versions/prune-changelog.py CHANGELOG.CDW.md",
+            "git add CHANGELOG.CDW.md && git commit -m 'update CHANGELOG.CDW.md for cdw-${version}'",
+            "git tag -d cdw-${version} && git tag cdw-${version}"
+        ]
+    }
+}
