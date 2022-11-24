@@ -84,6 +84,12 @@ StorageCnchHive::StorageCnchHive(
     metadata.setColumns(columns_);
     metadata.setConstraints(constraints_);
 
+    for(const auto & col : columns_)
+    {
+        LOG_TRACE(log, " StorageCnchHive : col name {}  table name {}, database name{} ", col.name, table_id_.table_name, table_id_.database_name);
+
+    }
+
     setInMemoryMetadata(metadata);
 
     //only when create table, need to check schema and storage format.
@@ -149,7 +155,11 @@ void StorageCnchHive::setProperties()
     if (!partition_by_ast)
         throw Exception("PARTITION BY cannot be empty", ErrorCodes::BAD_ARGUMENTS);
 
-    auto all_columns = getColumns().getAllPhysical();
+    size_t col_size = getColumns().size();
+
+    LOG_TRACE(log, " setProperties col_size : {}  remote_database_name {} remote_table_name {}", col_size, remote_database, remote_table);
+
+    auto all_columns = getInMemoryMetadataPtr()->getColumns().getAllPhysical();
     partition_key_expr_list = extractKeyExpressionList(partition_by_ast);
     if (!partition_key_expr_list->children.empty())
     {
@@ -231,7 +241,7 @@ void StorageCnchHive::checkSortByKey()
 
     if (!sorting_key_expr_list_local->children.empty())
     {
-        auto all_columns = getColumns().getAllPhysical();
+        auto all_columns = getInMemoryMetadataPtr()->getColumns().getAllPhysical();
         auto sorting_key_syntax = TreeRewriter(getContext()).analyze(sorting_key_expr_list_local, all_columns);
         auto sorting_key_expr_local = ExpressionAnalyzer(sorting_key_expr_list_local, sorting_key_syntax, getContext()).getActions(false);
 
@@ -250,7 +260,7 @@ void StorageCnchHive::checkSortByKey()
             }
 
             if (i >= sortcols.size())
-                throw Exception("CnchHive hiveBucket col doesn't match .", ErrorCodes::BAD_ARGUMENTS);
+                throw Exception("CnchHive sorting col doesn't match .", ErrorCodes::BAD_ARGUMENTS);
         }
     }
 }
@@ -271,7 +281,7 @@ void StorageCnchHive::checkPartitionByKey()
 
     if (!partition_key_expr_list_local->children.empty())
     {
-        auto all_columns = getColumns().getAllPhysical();
+        auto all_columns = getInMemoryMetadataPtr()->getColumns().getAllPhysical();
         auto partition_key_syntax = TreeRewriter(getContext()).analyze(partition_key_expr_list_local, all_columns);
         auto partition_key_expr_local
             = ExpressionAnalyzer(partition_key_expr_list_local, partition_key_syntax, getContext()).getActions(false);
@@ -302,13 +312,19 @@ void StorageCnchHive::checkClusterByKey()
     }
 
     const auto & hivebucket_cols = (*table).sd.bucketCols;
+    LOG_TRACE(log, " hivebucket_cols size = {}", hivebucket_cols.size());
+
+    for (const auto & col : hivebucket_cols)
+        LOG_TRACE(log, " hivebucket_cols col = {}", col);
+
+
     if (cluster_by_ast)
     {
         auto cluster_by_expr_list_local = extractKeyExpressionList(cluster_by_ast->children.front());
         if (cluster_by_expr_list_local->children.size() != hivebucket_cols.size())
             throw Exception("CnchHive hiveBucket doesn't match.", ErrorCodes::BAD_ARGUMENTS);
 
-        auto all_columns = getColumns().getAllPhysical();
+        auto all_columns = getInMemoryMetadataPtr()->getColumns().getAllPhysical();
         auto cluster_by_key_syntax = TreeRewriter(getContext()).analyze(cluster_by_expr_list_local, all_columns);
         auto cluster_by_key_expr_local
             = ExpressionAnalyzer(cluster_by_expr_list_local, cluster_by_key_syntax, getContext()).getActions(false);
@@ -324,8 +340,9 @@ void StorageCnchHive::checkClusterByKey()
         for (size_t i = 0; i < cluster_by_expr_size; ++i)
         {
             const String clustering_key_column = cluster_by_expr_list_local->children[i]->getColumnName();
+            LOG_TRACE(log, " clustering_key_column = {}", clustering_key_column);
             auto it = std::find(hivebucket_cols.begin(), hivebucket_cols.end(), clustering_key_column);
-            if (it != hivebucket_cols.end())
+            if (it == hivebucket_cols.end())
                 throw Exception(
                     "CnchHive hiveBucket col doesn't match . clustering_key_column is not hiveBucket col" + clustering_key_column + " .",
                     ErrorCodes::BAD_ARGUMENTS);
@@ -415,19 +432,6 @@ HiveDataPartsCNCHVector StorageCnchHive::selectPartsToRead(
 HivePartitionVector StorageCnchHive::selectPartitionsByPredicate(
     ContextPtr local_context, const SelectQueryInfo & query_info, std::shared_ptr<HiveMetastoreClient> & hms_client)
 {
-    // // HivePartitionVector result;
-    // HivePartitionVector all;
-    // // ASTSelectQuery & select_ast = typeid_cast<ASTSelectQuery &>(*query_info.query);
-
-    // all = hms_client->getPartitionList(shared_from_this(), remote_database, remote_table, getFullTablePath());
-    // LOG_TRACE(log, "CnchHive getPartitionList size is {}", all.size());
-
-    // // result = eliminatePartitions(all, context, query_info, optimizer);
-
-    // // LOG_TRACE(log, "CnchHive after purn get PartitionList size is " << result.size());
-
-    // return all;
-
     HivePartitionVector result;
     HivePartitionVector all;
     ASTSelectQuery & select_ast = typeid_cast<ASTSelectQuery &>(*query_info.query);
@@ -592,8 +596,11 @@ HiveDataPartsCNCHVector StorageCnchHive::getDataPartsInPartitions(
     HiveDataPartsCNCHVector hive_files;
     std::mutex hive_files_mutex;
 
-    if (num_streams > partitions.size())
+    if (num_streams == 1 &&  partitions.size() > num_streams)
         num_streams = partitions.size();
+
+    LOG_TRACE(log, " num_streams size = {} partitions size = {}", num_streams, partitions.size());
+
 
     ThreadPool thread_pool(num_streams);
     // ExceptionHandler exception_handler;
@@ -666,6 +673,8 @@ void StorageCnchHive::read(
     const size_t /*max_block_size*/,
     unsigned num_streams)
 {
+    LOG_TRACE(log, " read  num_streams = {}", num_streams);
+
     auto data_parts = prepareReadContext(column_names, metadata_snapshot, query_info, local_context, num_streams);
     Block header = InterpreterSelectQuery(query_info.query, local_context, SelectQueryOptions(processed_stage)).getSampleBlock();
 

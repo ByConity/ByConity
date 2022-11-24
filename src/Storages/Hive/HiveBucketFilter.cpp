@@ -12,7 +12,6 @@
 #include <Parsers/queryToString.h>
 #include <Storages/Hive/HiveBucketFilter.h>
 
-
 namespace DB
 {
 namespace ErrorCodes
@@ -52,18 +51,48 @@ Int64 getBuckHashCode(DataTypePtr & type, ColumnPtr & column, String & name)
 {
     DataTypePtr striped_type = type->isNullable() ? static_cast<const DataTypeNullable *>(type.get())->getNestedType() : type;
     Int64 hashcode = 0;
+    LOG_TRACE(&Poco::Logger::get("getBuckHashCode"), " bucket col type = {}", striped_type->getName());
     if (WhichDataType(striped_type).isString())
     {
         hashcode = hashBytes(name, 1, name.length() - 1);
     }
-    else if (WhichDataType(striped_type).isNativeUInt() || WhichDataType(striped_type).isInt())
+    else if (WhichDataType(striped_type).isInt8() || WhichDataType(striped_type).isInt16() || WhichDataType(striped_type).isInt32())
     {
         hashcode = column->getInt(0);
+        LOG_TRACE(&Poco::Logger::get("getBuckHashCode"), " int  bucket value = {}", hashcode);
+    }
+    else if (WhichDataType(striped_type).isUInt8() || WhichDataType(striped_type).isUInt16() || WhichDataType(striped_type).isUInt32())
+    {
+        hashcode = column->getUInt(0);
+        LOG_TRACE(&Poco::Logger::get("getBuckHashCode"), " UInt bucket value = {}", hashcode);
+    }
+    else if (WhichDataType(striped_type).isUInt64())
+    {
+        UInt64 bigint_value = column->getUInt(0);
+        hashcode = ((bigint_value >> 32) ^ bigint_value);
+        LOG_TRACE(&Poco::Logger::get("getBuckHashCode"), "UInt64 bucket value = {}, hashcode = ", bigint_value, hashcode);
     }
     else if (WhichDataType(striped_type).isInt64())
     {
-        Int64 bigintvalue = column->getInt(0);
-        hashcode = ((bigintvalue >> 32) ^ bigintvalue);
+        Int64 bigint_value = column->getInt(0);
+        UInt64 cast_bigint_value = static_cast<UInt64>(bigint_value);
+        hashcode = ((cast_bigint_value >> 32) ^ cast_bigint_value);
+        LOG_TRACE(
+            &Poco::Logger::get("getBuckHashCode"),
+            "bigint bucket value = bigintValue {}, cast_bigint_value = = {} hashcode = {}",
+            bigint_value,
+            cast_bigint_value,
+            hashcode);
+    }
+    else if (WhichDataType(striped_type).isFloat32())
+    {
+        hashcode = column->getInt(0);
+        LOG_TRACE(&Poco::Logger::get("getBuckHashCode"), "Float32 bucket value = {}", hashcode);
+    }
+    else if (WhichDataType(striped_type).isDate())
+    {
+        hashcode = column->getInt(0);
+        LOG_TRACE(&Poco::Logger::get("getBuckHashCode"), "Date bucket value = {}", hashcode);
     }
     else
     {
@@ -85,7 +114,11 @@ ColumnPtr createColumnWithHiveHash(Block & block, const Block & bucket_columns, 
         auto col = column.column;
         auto name = column.name;
 
-        // LOG_TRACE(&Logger::get("createColumnWithHiveHash"), " createColumnWithHiveHash bucket_column_type type = " << bucket_column_type->getName() << " col name: " << name);
+        LOG_TRACE(
+            &Poco::Logger::get("createColumnWithHiveHash"),
+            " createColumnWithHiveHash bucket_column_type type = {} col name = {}",
+            bucket_column_type->getName(),
+            name);
         Int64 hashcode = getHiveBucket(bucket_column_type, col, name, total_bucket_num);
         result_column->insertValue(hashcode);
     }
@@ -101,6 +134,8 @@ ASTs extractBucketColumnExpression(const ASTs & conditions, Names bucket_columns
 
     for (const auto & condition : conditions)
     {
+        LOG_TRACE(&Poco::Logger::get("getBuckHashCode"), " condition: {}", queryToString(condition));
+
         const auto & ast_func = typeid_cast<const ASTFunction *>(condition.get());
         if (!ast_func)
             continue;

@@ -1,3 +1,5 @@
+CREATE DATABASE IF NOT EXISTS test;
+
 DROP TABLE IF EXISTS test.hive_bucket_test;
 CREATE TABLE test.hive_bucket_test
 (

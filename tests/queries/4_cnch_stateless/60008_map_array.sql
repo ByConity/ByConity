@@ -1,3 +1,4 @@
+CREATE DATABASE IF NOT EXISTS test;
 DROP TABLE IF EXISTS test.hive_external_table_5;
 CREATE  TABLE test.hive_external_table_5
 (

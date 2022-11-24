@@ -1,3 +1,5 @@
+CREATE DATABASE IF NOT EXISTS test;
+
 DROP TABLE IF EXISTS test.hive_type_char_test;
 
 CREATE  TABLE test.hive_type_char_test

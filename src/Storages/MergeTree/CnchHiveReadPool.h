@@ -57,7 +57,7 @@ private:
 
     BackoffState backoff_state;
 
-    void fillPerThreadInfo(const size_t & threads, const size_t & sum_row_groups);
+    void fillPerThreadInfo(const size_t & threads, const size_t & sum_row_groups, RowGroupsInDataParts data_parts);
 
     struct ThreadTask
     {

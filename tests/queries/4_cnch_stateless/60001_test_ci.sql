@@ -1,3 +1,5 @@
+CREATE DATABASE IF NOT EXISTS test;
+
 DROP TABLE IF EXISTS test.test_ci;
 
 CREATE TABLE test.test_ci
