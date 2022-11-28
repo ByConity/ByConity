@@ -30,7 +30,7 @@ RecvDataPacket LocalBroadcastChannel::recv(UInt32 timeout_ms)
     Stopwatch s;
     Chunk recv_chunk;
 
-    BroadcastStatus * current_status_ptr = broadcast_status.load(std::memory_order_relaxed);
+    BroadcastStatus * current_status_ptr = broadcast_status.load(std::memory_order_acquire);
     /// Positive status code means that we should close immediately and negative code means we should conusme all in flight data before close
     if (current_status_ptr->code > 0)
         return *current_status_ptr;
@@ -44,7 +44,7 @@ RecvDataPacket LocalBroadcastChannel::recv(UInt32 timeout_ms)
             return RecvDataPacket(std::move(recv_chunk));
         }
         else
-            return RecvDataPacket(*broadcast_status.load(std::memory_order_relaxed));
+            return RecvDataPacket(*broadcast_status.load(std::memory_order_acquire));
     }
 
     BroadcastStatus current_status = finish(
