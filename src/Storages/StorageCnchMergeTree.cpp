@@ -1523,15 +1523,15 @@ void StorageCnchMergeTree::checkAlterInCnchServer(const AlterCommands & commands
         }
         else if (command.type == AlterCommand::DROP_COLUMN)
         {
+            if (command.clear)
+                throw Exception(ErrorCodes::NOT_IMPLEMENTED, "CLEAR COLUMN is not supported by storage {}", getName());
+
             if (columns_in_keys.count(command.column_name))
             {
                 throw Exception(
                     "Trying to ALTER DROP key " + backQuoteIfNeed(command.column_name) + " column which is a part of key expression",
                     ErrorCodes::ALTER_OF_COLUMN_IS_FORBIDDEN);
             }
-
-            if (command.clear)
-                throw Exception(ErrorCodes::NOT_IMPLEMENTED, "CLEAR COLUMN is not supported by storage {}", getName());
 
             if (!command.clear)
             {

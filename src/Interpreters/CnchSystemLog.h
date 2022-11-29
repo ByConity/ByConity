@@ -11,14 +11,13 @@ class QueryMetricLog;
 class QueryWorkerMetricLog;
 
 // Query metrics definitions
-constexpr auto CNCH_SYSTEM_LOG_DB_NAME = "cnch_system";
 constexpr auto CNCH_SYSTEM_LOG_QUERY_METRICS_TABLE_NAME = "query_metrics";
 constexpr auto CNCH_SYSTEM_LOG_QUERY_WORKER_METRICS_TABLE_NAME = "query_worker_metrics";
 constexpr auto CNCH_SYSTEM_LOG_KAFKA_LOG_TABLE_NAME = "cnch_kafka_log";
 
 static inline bool isQueryMetricsTable(const String & database, const String & table)
 {
-    return (database == CNCH_SYSTEM_LOG_DB_NAME || database == "system") &&
+    return (database == CNCH_SYSTEM_LOG_DB_NAME || database == DatabaseCatalog::SYSTEM_DATABASE) &&
             (table == CNCH_SYSTEM_LOG_QUERY_METRICS_TABLE_NAME ||
             table == CNCH_SYSTEM_LOG_QUERY_WORKER_METRICS_TABLE_NAME);
 }
