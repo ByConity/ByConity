@@ -286,26 +286,6 @@ message GetDedupWorkerStatusResp
   optional int64 last_exception_time = 15;
 }
 
-message SubmitIngestPartitionTaskReq
-{
-  optional string task_id = 1;
-  optional uint64 txn_id = 2;
-  required uint32 rpc_port = 3;
-  optional string query_id = 4;
-  optional string partition_id = 5;
-  repeated string ingest_column_names = 6;
-  repeated string ordered_key_names = 7;
-  optional string create_target_table_query = 8;
-  optional string create_source_table_query = 9;
-  repeated DataModelPart source_parts = 10;
-  repeated DataModelPart target_parts = 11;
-}
-
-message SubmitIngestPartitionTaskResp
-{
-  optional string exception = 1;
-}
-
 message SendCreateQueryReq
 {
   required uint64 txn_id = 1;
@@ -428,8 +408,6 @@ service CnchWorkerService
   rpc createDedupWorker(CreateDedupWorkerReq) returns (CreateDedupWorkerResp);
   rpc dropDedupWorker(DropDedupWorkerReq) returns (DropDedupWorkerResp);
   rpc getDedupWorkerStatus(GetDedupWorkerStatusReq) returns (GetDedupWorkerStatusResp);
-
-  rpc submitIngestPartitionTask(SubmitIngestPartitionTaskReq) returns (SubmitIngestPartitionTaskResp);
 
   rpc sendCreateQuery(SendCreateQueryReq) returns (SendCreateQueryResp);
   rpc sendQueryDataParts(SendDataPartsReq) returns (SendDataPartsResp);

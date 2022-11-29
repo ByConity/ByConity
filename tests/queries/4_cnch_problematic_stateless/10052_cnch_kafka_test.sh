@@ -53,11 +53,12 @@ sleep 2
 $CLICKHOUSE_CLIENT --query "SELECT num_consumers FROM system.kafka_tables WHERE database = 'test' AND name = 'kafka_consumer'"
 
 # Consuming: twice of flush_interval_milliseconds for kafka_log to ensure read kafka_log
-sleep 21
+sleep 11
 
-# Check consumption result (TODO: cnch_system.cnch_kafka_log is not implemented now)
+# Check consumption result
 $CLICKHOUSE_CLIENT --query "SELECT count() > 0 FROM test.kafka_store"
-#$CNCH_WRITE_WORKER_CLIENT --query "SELECT count() > 0 FROM system.kafka_log WHERE cnch_database = 'test' AND cnch_table = 'kafka_consumer' AND event_type='PARSE_ERROR'"
+$CNCH_WRITE_WORKER_CLIENT --query "SYSTEM FLUSH CNCH LOG system.cnch_kafka_log"
+$CLICKHOUSE_CLIENT --query "SELECT count() > 0 FROM system.cnch_kafka_log WHERE cnch_database = 'test' AND cnch_table = 'kafka_consumer' AND event_type='PARSE_ERROR'"
 
 # Check offset (TODO: implement it after supporting system.cnch_kafka_tables)
 #assign=`$CLICKHOUSE_CLIENT --query "SELECT consumer_partitions FROM system.kafka_tables WHERE database = 'test' AND name = 'kafka_consumer'"`

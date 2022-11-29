@@ -784,8 +784,8 @@
     <cnch_kafka_log>
         <database>cnch_system</database>
         <table>cnch_kafka_log</table>
-        <flush_max_row_count>10000</flush_max_row_count>
-        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+        <flush_interval_milliseconds>30000</flush_interval_milliseconds>
+        <engine>ENGINE = CnchMergeTree PARTITION BY event_date ORDER BY event_time TTL event_date + INTERVAL 31 DAY</engine>
     </cnch_kafka_log>
 
     <kafka_log>

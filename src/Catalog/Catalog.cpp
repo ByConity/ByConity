@@ -1439,8 +1439,7 @@ namespace Catalog
             [&] {
                 const auto host_port
                     = context.getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(storage->getStorageID().uuid), true);
-                auto res = isLocalServer(host_port.getRPCAddress(), std::to_string(context.getRPCPort()));
-                outRes = res;
+                outRes = isLocalServer(host_port.getRPCAddress(), std::to_string(context.getRPCPort()));
             },
             ProfileEvents::IsHostServerSuccess,
             ProfileEvents::IsHostServerFailed);

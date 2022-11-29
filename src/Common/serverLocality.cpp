@@ -8,7 +8,7 @@ bool isLocalServer(const std::string & target, const std::string & port)
 {
     try
     {
-        size_t pos = target.find_last_of(':');
+        const size_t pos = target.find_last_of(':');
         if (std::string::npos == pos)
         {
             LOG_ERROR(&Poco::Logger::get(__PRETTY_FUNCTION__),
@@ -16,11 +16,16 @@ bool isLocalServer(const std::string & target, const std::string & port)
             return false;
         }
 
-        std::string target_ip = DB::DNSResolver::instance().resolveHost(target.substr(0, pos)).toString();
-        std::string target_port = target.substr(pos+1, std::string::npos);
+        const std::string target_port = target.substr(pos+1, std::string::npos);
 
         if (target_port != port)
             return false;
+
+        const std::string target_host = target.substr(0, pos);
+        if (target_host.empty())
+            return false;
+
+        const std::string target_ip = DB::DNSResolver::instance().resolveHost(target_host).toString();
 
         if ((target_ip == "127.0.0.1") || (target_ip == "::1") || (target_ip == getIPOrFQDNOrHostName()))
         {

@@ -242,6 +242,8 @@ protected:
 };
 
 
+constexpr auto CNCH_SYSTEM_LOG_DB_NAME = "cnch_system";
+
 template <typename LogElement>
 SystemLog<LogElement>::SystemLog(
     ContextPtr context_,
@@ -254,7 +256,7 @@ SystemLog<LogElement>::SystemLog(
     , storage_def(storage_def_)
     , flush_interval_milliseconds(flush_interval_milliseconds_)
 {
-    assert(database_name_ == DatabaseCatalog::SYSTEM_DATABASE);
+    assert((database_name_ == DatabaseCatalog::SYSTEM_DATABASE) || (database_name_ == CNCH_SYSTEM_LOG_DB_NAME));
     log = &Poco::Logger::get("SystemLog (" + database_name_ + "." + table_name_ + ")");
 }
 
