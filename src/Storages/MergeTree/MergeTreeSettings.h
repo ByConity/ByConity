@@ -209,6 +209,7 @@ struct Settings;
     M(UInt64, min_relative_delay_to_yield_leadership, 120, "Obsolete setting, does nothing.", 0) \
     M(UInt64, check_delay_period, 60, "Obsolete setting, does nothing.", 0) \
     M(Bool, allow_floating_point_partition_key, false, "Allow floating point as partition key", 0) \
+    M(Bool, cnch_enable_memory_buffer, false, "", 0) \
     /** Set to current max_rows in merge_scheduler to avoid generating too many merge tasks when disable merge_scheduler */ \
     M(UInt64, cnch_merge_max_total_rows_to_merge, 15000000, "", 0) \
     M(Bool, cnch_merge_only_realtime_partition, false, "", 0) \
