@@ -841,7 +841,7 @@ public:
     FileProgressCallback getFileProgressCallback() const { return file_progress_callback; }
 
     void setProcessListEntry(std::shared_ptr<ProcessListEntry> process_list_entry_);
-    std::weak_ptr<ProcessListEntry> getProcessListEntry();
+    std::weak_ptr<ProcessListEntry> getProcessListEntry() const;
 
     /** Set in executeQuery and InterpreterSelectQuery. Then it is used in IBlockInputStream,
       *  to update and monitor information about the total number of resources spent for the query.

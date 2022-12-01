@@ -1666,8 +1666,8 @@ Pipe StorageCnchMergeTree::alterPartition(
     if (unlikely(!query_context->getCurrentTransaction()))
         throw Exception("Transaction is not set", ErrorCodes::LOGICAL_ERROR);
 
-    // if (forwardQueryToServerIfNeeded(query_context, getStorageUUID()))
-    //     return {};
+    if (forwardQueryToServerIfNeeded(query_context, getStorageUUID()))
+        return {};
 
     auto current_query_context = Context::createCopy(query_context);
 
@@ -1719,7 +1719,6 @@ Pipe StorageCnchMergeTree::alterPartition(
 void StorageCnchMergeTree::alter(const AlterCommands & commands, ContextPtr local_context, TableLockHolder & /*table_lock_holder*/)
 {
     auto table_id = getStorageID();
-
     StorageInMemoryMetadata new_metadata = getInMemoryMetadata();
     StorageInMemoryMetadata old_metadata = getInMemoryMetadata();
 
@@ -1825,8 +1824,6 @@ void StorageCnchMergeTree::truncate(
     ContextPtr local_context,
     TableExclusiveLockHolder &)
 {
-    //if (forwardQueryToServerIfNeeded(local_context, getStorageUUID()))
-    //    return;
     PartitionCommand command;
     command.type = PartitionCommand::DROP_PARTITION_WHERE;
     command.partition = std::make_shared<ASTLiteral>(Field(UInt8(1)));
