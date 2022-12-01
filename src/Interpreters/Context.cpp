@@ -1763,7 +1763,7 @@ void Context::setProcessListEntry(std::shared_ptr<ProcessListEntry> process_list
         process_list_elem = nullptr;
 }
 
-std::weak_ptr<ProcessListEntry> Context::getProcessListEntry()
+std::weak_ptr<ProcessListEntry> Context::getProcessListEntry() const
 {
     return process_list_entry;
 }

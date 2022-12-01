@@ -18,6 +18,7 @@
 #include <Parsers/parseQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/formatAST.h>
+#include <Core/Protocol.h>
 
 namespace DB
 {
@@ -419,4 +420,39 @@ String CnchStorageCommonHelper::getCreateQueryForCloudTable(
     return statement_buf.str();
 }
 
+bool CnchStorageCommonHelper::forwardQueryToServerIfNeeded(ContextPtr query_context, const UUID & storage_uuid) const
+{
+    auto host_port = query_context->getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(storage_uuid), false);
+    if (isLocalServer(host_port.getRPCAddress(), std::to_string(query_context->getRPCPort())))
+        return false;
+
+    auto process_list_entry = query_context->getProcessListEntry().lock();
+    if (!process_list_entry)
+        return false;
+    // set current transaction as read_only to skip cleanTxn
+    query_context->getCurrentTransaction()->setReadOnly(true);
+    const auto & query_client_info = query_context->getClientInfo();
+    const auto query_status = process_list_entry->get().getInfo();
+    auto timeouts = ConnectionTimeouts::getTCPTimeoutsWithoutFailover(query_context->getSettingsRef());
+    Connection connection(
+        host_port.getHost(),
+        host_port.tcp_port,
+        /*default_database=*/table_id.getDatabaseName(),
+        query_client_info.current_user,
+        query_client_info.current_password,
+        /*cluster=*/"",
+        /*cluster_secret=*/"",
+        /*client_name=*/"QueryForwarding",
+        Protocol::Compression::Disable,
+        Protocol::Secure::Disable);
+
+    const String & query = query_status.query;
+    LOG_DEBUG(
+        &Poco::Logger::get("CnchStorageCommonHelper"), "Send query `{}` to server {}", query, host_port.toDebugString());
+    RemoteBlockInputStream stream(connection, query, {}, query_context);
+    NullBlockOutputStream output({});
+
+    copyData(stream, output);
+    return true;
+}
 }
