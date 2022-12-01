@@ -1,8 +1,7 @@
-CREATE DATABASE IF NOT EXISTS test;
 
-DROP TABLE IF EXISTS test.hive_type_dec_test;
+DROP TABLE IF EXISTS hive_type_dec_test;
 
-CREATE TABLE test.hive_type_dec_test
+CREATE TABLE hive_type_dec_test
 (
     id Nullable(Bigint),
     dec1 Nullable(Decimal(10,0)),
@@ -12,6 +11,6 @@ CREATE TABLE test.hive_type_dec_test
 ENGINE = CnchHive(`data.olap.cnch_hms.service.lf`, `cnchhive_ci`, `hive_type_dec_test`)
 PARTITION BY (date);
 
-SELECT dec1, count(dec1), dec2, count(dec2) FROM test.hive_type_dec_test GROUP BY dec1, dec2 ORDER BY dec1;
+SELECT dec1, count(dec1), dec2, count(dec2) FROM hive_type_dec_test GROUP BY dec1, dec2 ORDER BY dec1;
 
-DROP TABLE IF EXISTS test.hive_type_dec_test;
+DROP TABLE IF EXISTS hive_type_dec_test;

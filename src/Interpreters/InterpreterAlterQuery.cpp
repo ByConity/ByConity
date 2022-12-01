@@ -160,7 +160,7 @@ BlockIO InterpreterAlterQuery::execute()
 
     if (!alter_commands.empty())
     {
-        if (!cnch_table_lock->isLocked())
+        if (cnch_table_lock && !cnch_table_lock->isLocked())
             cnch_table_lock->lock();
         StorageInMemoryMetadata metadata = table->getInMemoryMetadata();
         alter_commands.validate(table->getStorageID(), metadata, getContext());

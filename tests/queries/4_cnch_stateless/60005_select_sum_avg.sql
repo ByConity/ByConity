@@ -1,6 +1,5 @@
-CREATE DATABASE IF NOT EXISTS test;
-DROP TABLE IF EXISTS test.hive_external_table_3_03;
-CREATE TABLE test.hive_external_table_3_03
+DROP TABLE IF EXISTS hive_external_table_3_03;
+CREATE TABLE hive_external_table_3_03
 (
     app_id Bigint,
     action_type Nullable(String),
@@ -12,6 +11,6 @@ CREATE TABLE test.hive_external_table_3_03
 ENGINE = CnchHive(`data.olap.cnch_hms.service.lf`, `cnchhive_ci`, `hive_external_table_3`)
 PARTITION BY (date, live_id, app_name);
 
-SELECT sum(app_id), count(*), avg(commodity_id) FROM test.hive_external_table_3_03;
+SELECT sum(app_id), count(*), avg(commodity_id) FROM hive_external_table_3_03;
 
-DROP TABLE IF EXISTS test.hive_external_table_3_03;
+DROP TABLE IF EXISTS hive_external_table_3_03;
