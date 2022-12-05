@@ -1,14 +1,15 @@
-#include <Interpreters/InJoinSubqueriesPreprocessor.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DatabaseAndTableWithAlias.h>
 #include <Interpreters/IdentifierSemantic.h>
 #include <Interpreters/InDepthNodeVisitor.h>
-#include <Storages/StorageCnchMergeTree.h>
-#include <Storages/StorageDistributed.h>
+#include <Interpreters/InJoinSubqueriesPreprocessor.h>
+#include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
-#include <Parsers/ASTFunction.h>
+#include <Storages/StorageCnchHive.h>
+#include <Storages/StorageCnchMergeTree.h>
+#include <Storages/StorageDistributed.h>
 #include <Common/typeid_cast.h>
 
 
@@ -211,7 +212,6 @@ private:
                 if (!renamed.empty()) //-V547
                     data.renamed_tables.emplace_back(table_expression, std::move(renamed));
             }
-            
         }
     }
 };
@@ -262,11 +262,13 @@ void InJoinSubqueriesPreprocessor::visit(ASTPtr & ast) const
 bool InJoinSubqueriesPreprocessor::CheckShardsAndTables::hasAtLeastTwoShards(const IStorage & table) const
 {
     const StorageDistributed * distributed = dynamic_cast<const StorageDistributed *>(&table);
-    const StorageCnchMergeTree * cnch = dynamic_cast<const StorageCnchMergeTree *>(&table);
-    if (!distributed && !cnch)
+    const StorageCnchMergeTree * cnch_merge_tree = dynamic_cast<const StorageCnchMergeTree *>(&table);
+    const StorageCnchHive * cnch_hive = dynamic_cast<const StorageCnchHive *>(&table);
+
+    if (!distributed && !cnch_merge_tree && !cnch_hive)
         return false;
 
-    return cnch || distributed->getShardCount() >= 2;
+    return cnch_merge_tree || cnch_hive || distributed->getShardCount() >= 2;
 }
 
 

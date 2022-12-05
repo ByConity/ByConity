@@ -3,6 +3,7 @@
 #include <Storages/Hive/HiveDataSelectExecutor.h>
 #include <Storages/MergeTree/CnchHiveReadPool.h>
 #include <Storages/MergeTree/CnchHiveThreadSelectBlockInputProcessor.h>
+#include <common/scope_guard_safe.h>
 
 namespace DB
 {
@@ -65,16 +66,17 @@ void ReadFromCnchHive::initializePipeline(QueryPipeline & pipeline, const BuildQ
     {
         /// Parallel loading of data parts.
         ThreadPool pool(num_threads);
-        // ExceptionHandler handler;
+
         for (size_t part_index = 0; part_index < data_parts.size(); ++part_index)
-            pool.scheduleOrThrow([&, part_index, thread_group = CurrentThread::getGroup()] {
-                SCOPE_EXIT(if (thread_group) CurrentThread::detachQueryIfNotDetached(););
+            pool.scheduleOrThrowOnError([&, part_index, thread_group = CurrentThread::getGroup()] {
+                SCOPE_EXIT_SAFE(if (thread_group) CurrentThread::detachQueryIfNotDetached(););
                 if (thread_group)
                     CurrentThread::attachTo(thread_group);
+
                 process(parts_with_row_groups, part_index);
             });
+
         pool.wait();
-        // handler.throwIfException();
     }
 
     pipe = spreadRowGroupsAmongStreams(context, std::move(parts_with_row_groups), num_streams, real_column_names, max_block_size);
