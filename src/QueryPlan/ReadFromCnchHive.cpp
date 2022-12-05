@@ -50,16 +50,16 @@ void ReadFromCnchHive::initializePipeline(QueryPipeline & pipeline, const BuildQ
 
     RowGroupsInDataParts parts_with_row_groups{data_parts.begin(), data_parts.end()};
 
-    auto process = [&](int part_index) {
+    auto process = [&](RowGroupsInDataParts data_parts_with_row_groups, int part_index) {
         const auto & part = data_parts[part_index];
-        parts_with_row_groups[part_index].total_row_groups = part->getTotalRowGroups();
+        data_parts_with_row_groups[part_index].total_row_groups = part->getTotalRowGroups();
     };
 
-    size_t num_threads = std::max(size_t(num_streams), data_parts.size());
+    size_t num_threads = std::min(size_t(num_streams), data_parts.size());
     if (num_threads <= 1)
     {
         for (size_t part_index = 0; part_index < data_parts.size(); ++part_index)
-            process(part_index);
+            process(parts_with_row_groups, part_index);
     }
     else
     {
@@ -71,7 +71,7 @@ void ReadFromCnchHive::initializePipeline(QueryPipeline & pipeline, const BuildQ
                 SCOPE_EXIT(if (thread_group) CurrentThread::detachQueryIfNotDetached(););
                 if (thread_group)
                     CurrentThread::attachTo(thread_group);
-                process(part_index);
+                process(parts_with_row_groups, part_index);
             });
         pool.wait();
         // handler.throwIfException();

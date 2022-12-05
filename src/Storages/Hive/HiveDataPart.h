@@ -107,6 +107,10 @@ public:
     mutable std::vector<MinMaxIndexPtr> split_minmax_idxes;
     std::atomic<bool> split_minmax_idxes_loaded{false};
 
+    mutable std::atomic<bool> initialized{false};
+
+    mutable std::mutex mutex;
+
     mutable std::unique_ptr<ReadBufferFromByteHDFS> in;
     mutable std::unique_ptr<parquet::arrow::FileReader> reader;
     mutable std::map<String, size_t> parquet_column_positions;

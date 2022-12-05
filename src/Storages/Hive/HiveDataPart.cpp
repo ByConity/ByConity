@@ -78,8 +78,16 @@ void HiveDataPart::loadSplitMinMaxIndexes()
 
 size_t HiveDataPart::getTotalRowGroups() const
 {
-    if (!reader)
-        prepareReader();
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        if (!reader)
+        {
+            LOG_TRACE(&Poco::Logger::get("HiveDataPart"), " prepareReader part name = {}", name);
+            prepareReader();
+        }
+    }
+
+    LOG_TRACE(&Poco::Logger::get("HiveDataPart"), "after prepareReader part name = {}", name);
 
     auto meta = reader->parquet_reader()->metadata();
     return meta->num_row_groups();
