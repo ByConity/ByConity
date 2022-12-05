@@ -239,11 +239,10 @@ void CloudMergeTreeBlockOutputStream::writeSuffixForInsert()
     }
     else if (dynamic_pointer_cast<CnchWorkerTransaction>(txn))
     {
-        txn->setMainTableUUID(storage.getStorageUUID());
-
         auto kafka_table_id = txn->getKafkaTableID();
         if (!kafka_table_id.empty())
         {
+            txn->setMainTableUUID(UUIDHelpers::toUUID(storage.getSettings()->cnch_table_uuid.value));
             Stopwatch watch;
             txn->commitV2();
             LOG_TRACE(
@@ -262,7 +261,13 @@ void CloudMergeTreeBlockOutputStream::writeSuffixForUpsert()
     auto txn = context->getCurrentTransaction();
     if (!txn)
         throw Exception("Transaction is not set", ErrorCodes::LOGICAL_ERROR);
-    txn->setMainTableUUID(storage.getStorageUUID());
+
+    /// prefer to get cnch table uuid from settings as CloudMergeTree has no uuid for Kafka task
+    String uuid_str = storage.getSettings()->cnch_table_uuid.value;
+    if (uuid_str.empty())
+        uuid_str = UUIDHelpers::UUIDToString(storage.getStorageUUID());
+
+    txn->setMainTableUUID(UUIDHelpers::toUUID(uuid_str));
     if (auto worker_txn = dynamic_pointer_cast<CnchWorkerTransaction>(txn); worker_txn && !worker_txn->tryGetServerClient())
     {
         /// case: server initiated "insert select/infile" txn, need to set server client here in order to commit from worker
@@ -281,7 +286,7 @@ void CloudMergeTreeBlockOutputStream::writeSuffixForUpsert()
     auto catalog = context->getCnchCatalog();
     /// must use cnch table to construct staged parts.
     TxnTimestamp ts = context->getTimestamp();
-    auto table = catalog->tryGetTableByUUID(*context, UUIDHelpers::UUIDToString(storage.getStorageUUID()), ts);
+    auto table = catalog->tryGetTableByUUID(*context, uuid_str, ts);
     if (!table)
         throw Exception("Table " + storage.getStorageID().getNameForLogs() + " has been dropped", ErrorCodes::ABORTED);
     auto cnch_table = dynamic_pointer_cast<StorageCnchMergeTree>(table);

@@ -50,13 +50,22 @@ EOF
 # Start consume
 start_consume_time=$(date +%s%3N)
 sleep 2
+# 1. Check running consumer number, result should be '1'
 $CLICKHOUSE_CLIENT --query "SELECT num_consumers FROM system.kafka_tables WHERE database = 'test' AND name = 'kafka_consumer'"
 
 # Consuming: twice of flush_interval_milliseconds for kafka_log to ensure read kafka_log
-sleep 11
+sleep 21
 
-# Check consumption result
+# 2. Check consumption result, result should be '1'
 $CLICKHOUSE_CLIENT --query "SELECT count() > 0 FROM test.kafka_store"
+
+# Alter kafka table (TODO: support forward Alter query to target server)
+$CLICKHOUSE_CLIENT --query "ALTER TABLE test.kafka_consumer MODIFY SETTING kafka_num_consumers = 2"
+sleep 3
+# 3. Check running consumer number after ALTER, result should be '2'
+$CLICKHOUSE_CLIENT --query "SELECT num_consumers FROM system.kafka_tables WHERE database = 'test' AND name = 'kafka_consumer'"
+
+# 4. Check cnch_system.cnch_kafka_log, result should be '1'
 $CNCH_WRITE_WORKER_CLIENT --query "SYSTEM FLUSH CNCH LOG system.cnch_kafka_log"
 $CLICKHOUSE_CLIENT --query "SELECT count() > 0 FROM system.cnch_kafka_log WHERE cnch_database = 'test' AND cnch_table = 'kafka_consumer' AND event_type='PARSE_ERROR'"
 
@@ -68,11 +77,6 @@ $CLICKHOUSE_CLIENT --query "SELECT count() > 0 FROM system.cnch_kafka_log WHERE 
 #else
 #    echo "Offsets committed"
 #fi
-
-# Alter kafka table (TODO: support forward Alter query to target server)
-#$CLICKHOUSE_CLIENT --query "ALTER TABLE test.kafka_consumer MODIFY SETTING kafka_num_consumers = 2"
-#sleep 2
-#$CLICKHOUSE_CLIENT --query "SELECT num_consumers FROM system.kafka_tables WHERE database = 'test' AND name = 'kafka_consumer'"
 
 #END
 $CLICKHOUSE_CLIENT --query "SYSTEM STOP CONSUME test.kafka_consumer"
