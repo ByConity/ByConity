@@ -84,7 +84,17 @@ MarkCache::MappedPtr MergeTreeMarksLoader::loadMarksImpl()
                         UUIDHelpers::UUIDToString(storage_uuid), part_name, stream_name, 0, index_granularity_info.marks_file_extension);
                     auto [local_cache_disk, local_cache_path] = disk_cache->get(mrk_seg_key);
                     if (local_cache_disk && local_cache_disk->exists(local_cache_path))
-                        return local_cache_disk->readFile(local_cache_path, {.buffer_size = mark_file_size});
+                    {
+                        LOG_DEBUG(&Poco::Logger::get(__func__), "load from local disk {}, mrk_path {}", local_cache_disk->getPath(), local_cache_path);
+                        size_t cached_mark_file_size = local_cache_disk->getFileSize(local_cache_path);
+                        if (expected_file_size != cached_mark_file_size)
+                            throw Exception(
+                                "Bad size of marks file on disk cache'" + fullPath(local_cache_disk, local_cache_path) + "' for stream '"
+                                    + stream_name + "': " + std::to_string(cached_mark_file_size)
+                                    + ", must be: " + std::to_string(expected_file_size),
+                                ErrorCodes::CORRUPTED_DATA);
+                        return local_cache_disk->readFile(local_cache_path, {.buffer_size = cached_mark_file_size});
+                    }
                 }
                 catch (...)
                 {

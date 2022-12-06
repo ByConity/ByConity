@@ -727,13 +727,8 @@ String IMergeTreeDataPart::getFullRelativePath() const
     return fs::path(storage.getRelativeDataPath(location)) / (parent_part ? parent_part->relative_path : "") / relative_path / "";
 }
 
-String IMergeTreeDataPart::getMvccFullPath(const String & file_name) const
+IMergeTreeDataPartPtr IMergeTreeDataPart::getMvccDataPart(const String & file_name) const
 {
-    /// For base part
-    if (!isPartial())
-        return getFullPath();
-
-    /// For delta part
     auto checksums = getChecksums();
     auto it = checksums->files.find(file_name);
     if (it == checksums->files.end())
@@ -749,7 +744,7 @@ String IMergeTreeDataPart::getMvccFullPath(const String & file_name) const
                 file_name, file_mutation, relative_path);
 
         if (file_mutation == part->info.mutation)
-            return part->getFullPath();
+            return part;
         else if (file_mutation > part->info.mutation)
             throw Exception(
                 ErrorCodes::LOGICAL_ERROR,
