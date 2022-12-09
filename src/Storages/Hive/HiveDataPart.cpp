@@ -78,11 +78,19 @@ void HiveDataPart::loadSplitMinMaxIndexes()
 
 size_t HiveDataPart::getTotalRowGroups() const
 {
-    if (!reader)
-        prepareReader();
+    size_t res;
+    {
+        std::lock_guard lock(mutex);
+        if (!reader)
+            prepareReader();
 
-    auto meta = reader->parquet_reader()->metadata();
-    return meta->num_row_groups();
+        auto meta = reader->parquet_reader()->metadata();
+        if (meta)
+            res = meta->num_row_groups();
+        else
+            throw Exception("Unexpected error of getTotalRowGroups. because of meta is NULL", ErrorCodes::LOGICAL_ERROR);
+    }
+    return res;
 }
 
 void HiveDataPart::prepareReader() const
