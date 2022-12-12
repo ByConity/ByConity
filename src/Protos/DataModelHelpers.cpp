@@ -97,8 +97,12 @@ createPartFromModelCommon(const MergeTreeMetaBase & storage, const Protos::DataM
     part->rows_count = part_model.rows_count();
     if (!part_model.has_marks_count())
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Cnch parts must have mark count");
-    std::vector<size_t> index_granularities(part_model.index_granularities().begin(), part_model.index_granularities().end());
-    part->loadIndexGranularity(part_model.marks_count(), index_granularities);
+    if (!part->isPartial() || !part->isEmpty())
+    {
+        /// Partial & empty part will be load later
+        std::vector<size_t> index_granularities(part_model.index_granularities().begin(), part_model.index_granularities().end());
+        part->loadIndexGranularity(part_model.marks_count(), index_granularities);
+    }
     part->deleted = part_model.has_deleted() && part_model.deleted();
     part->bucket_number = part_model.bucket_number();
     part->table_definition_hash = part_model.table_definition_hash();

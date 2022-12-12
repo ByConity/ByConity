@@ -521,7 +521,7 @@ void StorageCnchMergeTree::filterPartsByPartition(
             return true;
         }
         else if (
-            minmax_idx_condition && part->minmax_idx()
+            minmax_idx_condition && part->minmax_idx() /*When part is partial, row_counts can be 0 and minmax_idx is null*/
             && !minmax_idx_condition->checkInHyperrectangle(part->minmax_idx()->hyperrectangle, minmax_columns_types).can_be_true)
         {
             ++minmax_idx;
@@ -1876,7 +1876,7 @@ void StorageCnchMergeTree::dropPartsImpl(ServerDataPartsVector& svr_parts_to_dro
         ThreadPool pool(std::min(parts_to_drop.size(), 16UL));
         auto callback = [&] (const DataPartPtr & part)
         {
-            pool.scheduleOrThrow([part, &txn, &local_context, this] {
+            pool.scheduleOrThrowOnError([part, &txn, &local_context, this] {
                 UndoResource ub(txn->getTransactionID(), UndoResourceType::FileSystem, part->getFullRelativePath(), part->getRelativePathForDetachedPart(""));
                 ub.setDiskName(part->volume->getDisk()->getName());
                 local_context->getCnchCatalog()->writeUndoBuffer(UUIDHelpers::UUIDToString(getStorageUUID()), txn->getTransactionID(), {ub});

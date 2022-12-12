@@ -191,6 +191,15 @@ void MergeTreeDataPartCNCH::loadIndexGranularity(size_t marks_count, [[maybe_unu
     if (index_granularity.isInitialized())
         return;
 
+    if (isPartial() && isEmpty())
+    {
+        auto base_part = getBasePart();
+        if (!base_part->index_granularity.isInitialized())
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Index granularity of base part must be ready before loading partial part index granularity");
+        index_granularity = base_part->index_granularity;
+        return;
+    }
+
     if (index_granularity_info.is_adaptive)
     {
         // load from disk
@@ -223,7 +232,6 @@ void MergeTreeDataPartCNCH::loadColumnsChecksumsIndexes([[maybe_unused]] bool re
     MemoryTracker::BlockerInThread temporarily_disable_memory_tracker(VariableContext::Global);
     getChecksums();
     loadIndexGranularity();
-    // getIndex();
 
     /// FIXME:
     default_codec = CompressionCodecFactory::instance().getDefaultCodec();
@@ -392,6 +400,7 @@ void MergeTreeDataPartCNCH::loadIndex()
 {
     if (isPartial())
     {
+        /// Partial parts may not have index; primary columns never get altered, so getting index from base parts
         auto base_part = getBasePart();
         index = base_part->getIndex();
         return;
@@ -587,10 +596,12 @@ void MergeTreeDataPartCNCH::loadIndexGranularity()
     if (index_granularity.isInitialized())
         return;
 
-    String full_path = getFullRelativePath();
+
     auto checksums = getChecksums();
     index_granularity_info.changeGranularityIfRequired(*checksums);
 
+
+    String full_path = getFullRelativePath();
     if (columns_ptr->empty())
         throw Exception("No columns in part " + name, ErrorCodes::NO_FILE_IN_DATA_PART);
 

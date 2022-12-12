@@ -228,27 +228,30 @@ void MergeTreeCloudData::unloadOldPartsByTimestamp(Int64 expired_ts)
 
 void MergeTreeCloudData::loadDataPartsInParallel(MutableDataPartsVector & parts)
 {
-    auto cnch_parallel_prefetching = getSettings()->cnch_parallel_prefetching;
     if (parts.empty())
         return;
-    // if (cnch_parallel_prefetching == 1 || parts.size() < 4)
-    //     return;
 
-    MutableDataPartsVector parts_without_cache;
-    for (auto & part : parts)
-    {
-        /// TODO: if (!part->hasChecksumsCache())
-        parts_without_cache.push_back(part);
-    }
+    auto cnch_parallel_prefetching = getSettings()->cnch_parallel_prefetching ? getSettings()->cnch_parallel_prefetching : 16;
 
-    // if (parts_without_cache.size() < 4)
-    //     return;
+    MutableDataPartsVector partial_parts;
+    // auto it = std::remove_if(parts.begin(), parts.end(), [](const auto & part) { return part->isPartial(); });
+    // std::copy(it, parts.end(), std::back_inserter(partial_parts));
+    // parts.erase(it, parts.end());
 
-    size_t pool_size = std::min(parts_without_cache.size(), UInt64(cnch_parallel_prefetching));
     /// load checksums and index_granularity in parallel
     std::atomic<bool> has_adaptive_parts = false;
     std::atomic<bool> has_non_adaptive_parts = false;
-    runOverPartsInParallel(parts_without_cache, pool_size, [&](auto & part) {
+    size_t pool_size = std::min(parts.size(), UInt64(cnch_parallel_prefetching));
+    runOverPartsInParallel(parts, pool_size, [&](auto & part) {
+        part->loadColumnsChecksumsIndexes(false, false);
+        if (part->index_granularity_info.is_adaptive)
+            has_adaptive_parts.store(true, std::memory_order_relaxed);
+        else
+            has_non_adaptive_parts.store(true, std::memory_order_relaxed);
+    });
+
+    pool_size = std::min(partial_parts.size(), UInt64(cnch_parallel_prefetching));
+    runOverPartsInParallel(partial_parts, pool_size, [&](auto & part) {
         part->loadColumnsChecksumsIndexes(false, false);
         if (part->index_granularity_info.is_adaptive)
             has_adaptive_parts.store(true, std::memory_order_relaxed);
@@ -267,18 +270,21 @@ void MergeTreeCloudData::loadDataPartsInParallel(MutableDataPartsVector & parts)
 void MergeTreeCloudData::runOverPartsInParallel(
     MutableDataPartsVector & parts, size_t threads_num, const std::function<void(MutableDataPartPtr &)> & op)
 {
-    size_t num_per_thread = parts.size() / threads_num;
-    size_t remain = parts.size() % num_per_thread;
+
+    if (parts.empty()) return;
+    if (threads_num <= 1)
+    {
+        for (auto & part : parts)
+            op(part);
+        return;
+    }
 
     ThreadPool thread_pool(threads_num);
-    for (size_t i = 0, start = 0; i < threads_num; ++i)
+    for (auto & part : parts)
     {
-        size_t end = start + num_per_thread + (i < remain ? 1 : 0);
-        thread_pool.scheduleOrThrowOnError([&parts, start, end, op] {
-            for (size_t p = start; p < end; ++p)
-                op(parts[p]);
+        thread_pool.scheduleOrThrowOnError([&part, &op] {
+            op(part);
         });
-        start = end;
     }
     thread_pool.wait();
 }
