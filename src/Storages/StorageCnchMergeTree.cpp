@@ -521,7 +521,7 @@ void StorageCnchMergeTree::filterPartsByPartition(
             return true;
         }
         else if (
-            minmax_idx_condition
+            minmax_idx_condition && part->minmax_idx()
             && !minmax_idx_condition->checkInHyperrectangle(part->minmax_idx()->hyperrectangle, minmax_columns_types).can_be_true)
         {
             ++minmax_idx;
