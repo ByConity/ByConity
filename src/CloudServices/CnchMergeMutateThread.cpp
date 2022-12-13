@@ -263,7 +263,10 @@ void CnchMergeMutateThread::runHeartbeatTask()
     {
         std::lock_guard lock(task_records_mutex);
         for (auto & [task_id, task] : task_records)
-            worker_with_tasks[task->worker].push_back(task->task_id);
+        {
+            if (task->worker)
+                worker_with_tasks[task->worker].push_back(task->task_id);
+        }
     }
 
     auto on_failure = [this, &root_config](std::unordered_map<String, TaskRecordPtr>::iterator it, std::lock_guard<std::mutex> & lock) {
