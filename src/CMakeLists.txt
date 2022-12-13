@@ -374,6 +374,7 @@ target_link_libraries(clickhouse_common_io
             ${ZLIB_LIBRARIES}
             pcg_random
             Poco::Foundation
+            Poco::ZIP
             roaring
             ${LIBNUMA_LIBRARY}
             ${CPPKMS_LIBRARIES}
