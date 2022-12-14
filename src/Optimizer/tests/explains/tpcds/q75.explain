@@ -1,8 +1,8 @@
 Projection est. 100 rows
-│     Expressions: curr_yr_cnt:=`expr#sum(sales_cnt)`, i_brand_id:=i_brand_id_3, i_category_id:=i_category_id_3, i_class_id:=i_class_id_3, i_manufact_id:=i_manufact_id_3, prev_year:=d_year_7, prev_yr_cnt:=`expr#sum(sales_cnt)_1`, sales_amt_diff:=`expr#minus(curr_yr.sales_amt, prev_yr.sales_amt)`, sales_cnt_diff:=`expr#minus(curr_yr.sales_cnt, prev_yr.sales_cnt)`, year:=d_year_3
+│     Expressions: curr_yr_cnt:=`expr#sum(sales_cnt)_1`, i_brand_id:=i_brand_id_4, i_category_id:=i_category_id_4, i_class_id:=i_class_id_4, i_manufact_id:=i_manufact_id_4, prev_year:=d_year_5, prev_yr_cnt:=`expr#sum(sales_cnt)_2`, sales_amt_diff:=`expr#minus(curr_yr.sales_amt, prev_yr.sales_amt)`, sales_cnt_diff:=`expr#minus(curr_yr.sales_cnt, prev_yr.sales_cnt)`, year:=d_year_4
 └─ Limit est. 100 rows
    │     Limit: 100
-   └─ Sorting est. 17044060824 rows
+   └─ Sorting est. 34088121648 rows
       │     Order by: {expr#minus(curr_yr.sales_cnt, prev_yr.sales_cnt) asc, expr#minus(curr_yr.sales_amt, prev_yr.sales_amt) asc}
       │     Limit: 100
       └─ Gather Exchange est. 17044060824 rows
