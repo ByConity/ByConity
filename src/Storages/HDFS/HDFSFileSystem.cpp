@@ -844,7 +844,7 @@ HDFSConnectionParams HDFSConnectionParams::parseHdfsFromConfig(
     else
     {
         // this is a nnproxy.
-        return HDFSConnectionParams(CONN_NNPROXY, hdfs_user, hdfs_nnproxy);
+        return HDFSConnectionParams();
     }
     // return defaultNNProxy();
 }

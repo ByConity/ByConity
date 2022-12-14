@@ -1,5 +1,6 @@
 #include "ConnectionParameters.h"
 #include "QueryFuzzer.h"
+#include "Storages/HDFS/HDFSCommon.h"
 #include "Suggest.h"
 #include "TestHint.h"
 
@@ -315,6 +316,9 @@ private:
 
         HDFSConnectionParams hdfs_params = HDFSConnectionParams::parseHdfsFromConfig(config());
         context->setHdfsConnectionParams(hdfs_params);
+        if(hdfs_params.conn_type == HDFSConnectionParams::CONN_DUMMY) {
+           std::cerr << "HDFS is not initialized" << std::endl; 
+        }
 #endif
     }
 
