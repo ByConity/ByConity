@@ -25,11 +25,19 @@ class IDiskCache
 {
 public:
     explicit IDiskCache(Context & context_, VolumePtr volume_, const DiskCacheSettings & settings);
-    virtual ~IDiskCache();
+    virtual ~IDiskCache()
+    {
+        try
+        {
+            shutdown();
+        }
+        catch (...) {}
+    }
 
     IDiskCache(const IDiskCache &) = delete;
     IDiskCache & operator=(const IDiskCache &) = delete;
 
+    void shutdown();
     void asyncLoad();
 
     /// set segment name in cache and write value to disk cache
@@ -49,15 +57,16 @@ public:
 
     void cacheSegmentsToLocalDisk(IDiskCacheSegmentsVector hit_segments);
 
-    VolumePtr getStorageVolume() const { return storage_volume; }
+    VolumePtr getStorageVolume() const { return volume; }
     ThrottlerPtr getDiskCacheThrottler() const { return disk_cache_throttler; }
     Poco::Logger * getLogger() const { return log; }
 
 protected:
     Context & context;
-    VolumePtr storage_volume;
+    VolumePtr volume;
+    DiskCacheSettings settings;
     ThrottlerPtr disk_cache_throttler;
-    size_t random_drop_threshold;
+    std::atomic<bool> shutdown_called {false};
     BackgroundSchedulePool::TaskHolder sync_task;
 
 private:
