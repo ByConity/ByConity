@@ -377,7 +377,6 @@ target_link_libraries(clickhouse_common_io
             Poco::ZIP
             roaring
             ${LIBNUMA_LIBRARY}
-            ${CPPKMS_LIBRARIES}
             ipdb
             maxminddb
         PRIVATE

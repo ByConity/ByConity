@@ -42,8 +42,6 @@ public:
     SerializationPtr doGetDefaultSerialization() const override;
     Field stringToVisitorField(const String& ins) const override;
     String stringToVisitorString(const String & ins) const override;
-
-    void checkFlags(UInt8 /*flag*/) const override { /* do nothing */}
 };
 
 }

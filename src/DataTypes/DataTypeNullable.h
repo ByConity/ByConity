@@ -48,8 +48,6 @@ public:
 
     const DataTypePtr & getNestedType() const { return nested_data_type; }
 
-    void checkFlags(UInt8 flag) const override { return nested_data_type->checkFlags(flag); }
-
 private:
     SerializationPtr doGetDefaultSerialization() const override;
 

@@ -403,9 +403,6 @@ struct ContextSharedPart
     mutable UniqueKeyIndexFileCachePtr unique_key_index_file_cache;     /// Shared file cache of unique key indexes
     mutable UniqueKeyIndexCachePtr unique_key_index_cache;              /// Shared object cache of unique key indexes
 
-    using KMSKeyCache = std::unordered_map<String, String>;
-    mutable KMSKeyCache kms_cache;
-
     CpuSetScaleManagerPtr cpu_set_scale_manager;
 
     bool shutdown_called = false;
@@ -3726,24 +3723,6 @@ void Context::setMetaChecker()
 void Context::setMetaCheckerStatus(bool stop)
 {
     shared->stop_sync = stop;
-}
-
-String Context::getKMSKeyCache(const String & config_name) const
-{
-    auto lock = getLock();
-
-    auto it = shared->kms_cache.find(config_name);
-
-    if (it != shared->kms_cache.end())
-        return it->second;
-    else
-        return {};
-}
-
-void Context::addKMSKeyCache(const String & config_name, const String & key) const
-{
-    auto lock = getLock();
-    shared->kms_cache[config_name] = key;
 }
 
 void Context::setChecksumsCache(size_t cache_size_in_bytes)

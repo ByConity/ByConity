@@ -125,12 +125,6 @@ Names IDataType::getSubcolumnNames() const
     return Names(std::make_move_iterator(res.begin()), std::make_move_iterator(res.end()));
 }
 
-void IDataType::checkFlags(UInt8 flag) const
-{
-    if (flag & TYPE_ENCRYPT_FLAG)
-        throw Exception("DataType " + getName() + " doesn't support ENCRYPT property.", ErrorCodes::NOT_IMPLEMENTED);
-}
-
 void IDataType::insertDefaultInto(IColumn & column) const
 {
     column.insertDefault();
@@ -213,11 +207,11 @@ Names IDataType::getSpecialColumnFiles(const String & prefix, bool throw_excepti
         files.push_back(prefix + COMPRESSION_DATA_FILE_EXTENSION);
         files.push_back(prefix + COMPRESSION_MARKS_FILE_EXTENSION);
     }
-    if (throw_exception && (isSecurity() || lowCardinality() || isMapKVStore() || isEncrypt()))
+    if (throw_exception && (lowCardinality() || isMapKVStore()))
     {
         // not support , throw exception instead.
         throw Exception(
-            "Mutate (FastDelete) " + getName() + " (with speicial attribution) is not support", ErrorCodes::UNSUPPORTED_PARAMETER);
+            "Mutate (FastDelete) " + getName() + " (with special attribution) is not support", ErrorCodes::UNSUPPORTED_PARAMETER);
     }
 
     return files;

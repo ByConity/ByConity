@@ -1066,17 +1066,6 @@ void ReadFromMergeTree::initializePipeline(QueryPipeline & pipeline, const Build
             result_projection = ActionsDAG::merge(std::move(*result_projection), std::move(*actions));
     };
 
-    if (metadata_snapshot->hasEncryptColumn())
-    {
-        auto columns = metadata_snapshot->getEncryptColumns();
-
-        auto remove_begin = std::remove_if(columns.begin(), columns.end(), [&](auto & column) { return !cur_header.has(column.name); });
-        columns.erase(remove_begin, columns.end());
-
-        if (!columns.empty())
-            append_actions(ActionsDAG::makeDecryptColumnsActions(columns));
-    }
-
     /// By the way, if a distributed query or query to a Merge table is made, then the `_sample_factor` column can have different values.
     if (sample_factor_column_queried)
     {

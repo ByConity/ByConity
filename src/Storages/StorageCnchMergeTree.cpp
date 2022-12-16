@@ -1724,10 +1724,10 @@ void StorageCnchMergeTree::alter(const AlterCommands & commands, ContextPtr loca
 
     TransactionCnchPtr txn = local_context->getCurrentTransaction();
     auto action = txn->createAction<DDLAlterAction>(shared_from_this());
-    auto alter_act = action->as<DDLAlterAction>();
-    alter_act->setMutationCommands(commands.getMutationCommands(old_metadata, false, local_context));
+    auto & alter_act = action->as<DDLAlterAction &>();
+    alter_act.setMutationCommands(commands.getMutationCommands(old_metadata, false, local_context));
 
-    commands.apply(table_id, new_metadata, local_context);
+    commands.apply(new_metadata, local_context);
     checkColumnsValidity(new_metadata.columns);
 
     {
@@ -1740,9 +1740,9 @@ void StorageCnchMergeTree::alter(const AlterCommands & commands, ContextPtr loca
             local_context->getSettingsRef().max_parser_depth);
 
         applyMetadataChangesToCreateQuery(ast, new_metadata);
-        alter_act->setNewSchema(queryToString(ast));
+        alter_act.setNewSchema(queryToString(ast));
 
-        LOG_DEBUG(log, "new schema for alter query: {}", alter_act->getNewSchema());
+        LOG_DEBUG(log, "new schema for alter query: {}", alter_act.getNewSchema());
         txn->appendAction(action);
     }
 

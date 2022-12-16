@@ -124,8 +124,6 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserKeyword s_comment("COMMENT");
     ParserKeyword s_codec("CODEC");
     ParserKeyword s_ttl("TTL");
-    ParserKeyword s_encrypt("ENCRYPT");
-    ParserKeyword s_security("SECURITY");
 
     ParserKeyword s_remove_ttl("REMOVE TTL");
 
@@ -522,7 +520,7 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
 
             command->type = ASTAlterCommand::DROP_PARTITION_WHERE;
             command->detach = true;
-        }	    
+        }
         else if (s_detach_partition.ignore(pos, expected))
         {
             if (!parser_partition.parse(pos, command->partition, expected))
@@ -814,10 +812,6 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
                     command->remove_property = "CODEC";
                 else if (s_ttl.ignore(pos, expected))
                     command->remove_property = "TTL";
-                else if (s_encrypt.ignore(pos, expected))
-                    command->remove_property = "ENCRYPT";
-                else if (s_security.ignore(pos, expected))
-                    command->remove_property = "SECURITY";
                 else
                     return false;
             }

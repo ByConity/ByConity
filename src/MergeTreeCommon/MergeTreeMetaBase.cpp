@@ -198,9 +198,6 @@ static void checkKeyExpression(const ExpressionActions & expr, const Block & sam
 
         if (!allow_nullable_key && element.type->isNullable())
             throw Exception{key_name + " key cannot contain nullable columns", ErrorCodes::ILLEGAL_COLUMN};
-
-        if (element.type->isEncrypt())
-            throw Exception{key_name + " key cannot contain encrypt columns", ErrorCodes::ILLEGAL_COLUMN};
     }
 }
 

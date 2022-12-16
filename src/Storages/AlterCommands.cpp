@@ -62,10 +62,6 @@ AlterCommand::RemoveProperty removePropertyFromString(const String & property)
         return AlterCommand::RemoveProperty::CODEC;
     else if (property == "TTL")
         return AlterCommand::RemoveProperty::TTL;
-    else if (property == "ENCRYPT")
-        return AlterCommand::RemoveProperty::ENCRYPT;
-    else if (property == "SECURITY")
-        return AlterCommand::RemoveProperty::SECURITY;
 
     throw Exception(ErrorCodes::BAD_ARGUMENTS, "Cannot remove unknown property '{}'", property);
 }
@@ -431,10 +427,6 @@ void AlterCommand::apply(StorageInMemoryMetadata & metadata, ContextPtr context)
             else if (to_remove == RemoveProperty::TTL)
             {
                 column.ttl.reset();
-            }
-            else if (to_remove == RemoveProperty::SECURITY)
-            {
-                column.type->resetFlags(TYPE_SECURITY_FLAG);
             }
             else
             {
@@ -1035,11 +1027,6 @@ void AlterCommands::apply(StorageInMemoryMetadata & metadata, ContextPtr context
     metadata = std::move(metadata_copy);
 }
 
-void AlterCommands::apply(const StorageID &, StorageInMemoryMetadata & metadata, ContextPtr context) const
-{
-    apply(metadata, context);
-}
-
 void AlterCommands::prepare(const StorageInMemoryMetadata & metadata)
 {
     auto columns = metadata.columns;
@@ -1081,7 +1068,7 @@ void AlterCommands::prepare(const StorageInMemoryMetadata & metadata)
     prepared = true;
 }
 
-void AlterCommands::validate(const StorageID & storage_id, const StorageInMemoryMetadata & metadata, ContextPtr context) const
+void AlterCommands::validate(const StorageInMemoryMetadata & metadata, ContextPtr context) const
 {
     auto all_columns = metadata.columns;
     /// Default expression for all added/modified columns
@@ -1191,27 +1178,6 @@ void AlterCommands::validate(const StorageID & storage_id, const StorageInMemory
                         ErrorCodes::BAD_ARGUMENTS,
                         "Column {} doesn't have COMMENT, cannot remove it",
                         backQuote(column_name));
-                if (command.to_remove == AlterCommand::RemoveProperty::ENCRYPT)
-                    throw Exception(
-                        ErrorCodes::BAD_ARGUMENTS,
-                        "ENCRYPT property is not changeable");
-                if (command.to_remove == AlterCommand::RemoveProperty::SECURITY)
-                {
-                    if (!column_from_table.type->isSecurity())
-                        throw Exception(
-                            ErrorCodes::BAD_ARGUMENTS,
-                            "Column {} doesn't have SECURITY, cannot remove it",
-                            backQuote(column_name));
-
-                    auto config_name = storage_id.getFullNameNotQuoted();
-                }
-            }
-
-            const auto & column = all_columns.get(column_name);
-            /// check alter encrypt columns
-            if (column.type->isEncrypt() || (command.data_type && command.data_type->isEncrypt()))
-            {
-                throw Exception("Not support modifying encrypt property " + column_name, ErrorCodes::ILLEGAL_COLUMN);
             }
 
             modified_columns.emplace(column_name);

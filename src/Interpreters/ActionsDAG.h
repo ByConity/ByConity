@@ -62,9 +62,6 @@ public:
         /// Function arrayJoin. Specially separated because it changes the number of rows.
         ARRAY_JOIN,
         FUNCTION,
-        /// Encrypt data
-        ENCRYPT,
-        DECRYPT,
     };
 
     static const char * typeToString(ActionType type);
@@ -104,7 +101,7 @@ public:
         bool has_function;
 
         void serialize(WriteBuffer & buf) const;
-        static Node deserialize(ReadBuffer & buf, ContextPtr context); 
+        static Node deserialize(ReadBuffer & buf, ContextPtr context);
     };
 
     /// NOTE: std::list is an implementation detail.
@@ -146,8 +143,6 @@ public:
     const Node & addColumn(ColumnWithTypeAndName column);
     const Node & addAlias(const Node & child, std::string alias);
     const Node & addArrayJoin(const Node & child, std::string result_name);
-    const Node & addEncrypt(const Node & child);
-    const Node & addDecrypt(const Node & child);
     const Node & addFunction(
             const FunctionOverloadResolverPtr & function,
             NodeRawConstPtrs children,
@@ -241,9 +236,6 @@ public:
 
     /// Create expression which add const column and then materialize it.
     static ActionsDAGPtr makeAddingColumnActions(ColumnWithTypeAndName column);
-
-    static ActionsDAGPtr makeEncryptColumnsActions(const ColumnsWithTypeAndName & columns);
-    static ActionsDAGPtr makeDecryptColumnsActions(const ColumnsWithTypeAndName & columns);
 
     /// Create ActionsDAG which represents expression equivalent to applying first and second actions consequently.
     /// Is used to replace `(first -> second)` expression chain to single `merge(first, second)` expression.

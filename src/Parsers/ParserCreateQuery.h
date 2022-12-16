@@ -132,8 +132,6 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
     ParserKeyword s_ttl{"TTL"};
     ParserKeyword s_remove{"REMOVE"};
     ParserKeyword s_compression{"COMPRESSION"};
-    ParserKeyword s_security{"SECURITY"};
-    ParserKeyword s_encrypt{"ENCRYPT"};
     ParserKeyword s_kv{"KV"};
     ParserTernaryOperatorExpression expr_parser(dt); /* decimal type can use float as default value */
     ParserStringLiteral string_literal_parser;
@@ -224,10 +222,6 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
 
         if (s_kv.ignore(pos, expected))
             inner_flags |= TYPE_MAP_KV_STORE_FLAG;
-        if (s_encrypt.ignore(pos, expected))
-            inner_flags |= TYPE_ENCRYPT_FLAG;
-        if (s_security.ignore(pos, expected))
-            inner_flags |= TYPE_SECURITY_FLAG;
         if (s_compression.ignore(pos, expected))
             inner_flags |= TYPE_COMPRESSION_FLAG;
 

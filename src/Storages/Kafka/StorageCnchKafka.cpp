@@ -152,7 +152,7 @@ void StorageCnchKafka::alter(const AlterCommands & commands, ContextPtr local_co
     }
 
     /// Apply alter commands to metadata
-    new_commands.apply(getStorageID(), new_metadata, local_context);
+    new_commands.apply(new_metadata, local_context);
 
     /// Apply alter commands to create-sql
     {

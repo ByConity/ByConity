@@ -430,7 +430,7 @@ private:
     std::shared_ptr<SymbolAllocator> symbol_allocator = nullptr;
     std::shared_ptr<Statistics::StatisticsMemoryStore> stats_memory_store = nullptr;
     std::shared_ptr<OptimizerMetrics> optimizer_metrics = nullptr;
-    
+
     std::unordered_map<std::string, bool> function_deterministic;
 public:
     // Top-level OpenTelemetry trace context for the query. Makes sense only for a query context.
@@ -1119,9 +1119,6 @@ public:
     void setDeleteBitmapCache(size_t cache_size_in_bytes);
     std::shared_ptr<DeleteBitmapCache> getDeleteBitmapCache() const;
 
-    String getKMSKeyCache(const String & config_name) const;
-    void addKMSKeyCache(const String & config_name, const String & key) const;
-
     PlanNodeIdAllocatorPtr & getPlanNodeIdAllocator() { return id_allocator; }
     UInt32 nextNodeId() { return id_allocator->nextId(); }
     void createPlanNodeIdAllocator();
@@ -1132,7 +1129,7 @@ public:
 
     void createOptimizerMetrics();
     OptimizerMetricsPtr & getOptimizerMetrics() { return optimizer_metrics; }
- 
+
     void setFunctionDeterministic(const std::string & fun_name, bool deterministic)
     {
         function_deterministic[fun_name] = deterministic;

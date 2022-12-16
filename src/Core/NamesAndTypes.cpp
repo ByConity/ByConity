@@ -110,19 +110,11 @@ void NamesAndTypesList::readText(ReadBuffer & buf)
         {
             if (options == "KV")
             {
-                const_cast<IDataType *>(it.type.get())->setFlags(TYPE_MAP_KV_STORE_FLAG);
+                it.type->setFlags(TYPE_MAP_KV_STORE_FLAG);
             }
             else if(options == "COMPRESSION")
             {
-                const_cast<IDataType *>(it.type.get())->setFlags(TYPE_COMPRESSION_FLAG);
-            }
-            else if(options == "SECURITY")
-            {
-                const_cast<IDataType *>(it.type.get())->setFlags(TYPE_SECURITY_FLAG);
-            }
-            else if (options == "KV")
-            {
-                const_cast<IDataType *>(it.type.get())->setFlags(TYPE_MAP_KV_STORE_FLAG);
+                it.type->setFlags(TYPE_COMPRESSION_FLAG);
             }
             else
             {
@@ -160,12 +152,6 @@ void NamesAndTypesList::writeText(WriteBuffer & buf) const
                 writeChar('\t', buf);
                 writeString("COMPRESSION", buf);
                 flag ^= TYPE_COMPRESSION_FLAG;
-            }
-            else if (flag & TYPE_SECURITY_FLAG)
-            {
-                writeChar('\t', buf);
-                writeString("SECURITY", buf);
-                flag ^= TYPE_SECURITY_FLAG;
             }
             else if (flag & TYPE_MAP_KV_STORE_FLAG)
             {
@@ -219,7 +205,7 @@ bool NamesAndTypesList::isCompatableWithKeyColumns(const NamesAndTypesList & rhs
     {
         NameSet keys(keys_columns.begin(), keys_columns.end());
         NamesAndTypes k1, k2;
-        for (const NameAndTypePair & column : *this) 
+        for (const NameAndTypePair & column : *this)
         {
             if (keys.count(column.name))
                 k1.push_back(column);

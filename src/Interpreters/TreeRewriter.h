@@ -79,7 +79,6 @@ struct TreeRewriterResult
         const StorageMetadataPtr & metadata_snapshot_ = {},
         bool add_special = true);
 
-    void checkSecurityColumns(const ContextPtr & context);
     void collectSourceColumns(bool add_special);
     void collectUsedColumns(const ASTPtr & query, bool is_select);
     Names requiredSourceColumns() const { return required_source_columns.getNames(); }

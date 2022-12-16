@@ -41,8 +41,8 @@ using DataTypesWithConstInfo = std::vector<DataTypeWithConstInfo>;
 
 
 #define TYPE_MAP_KV_STORE_FLAG      0x01
-#define TYPE_SECURITY_FLAG          0x04
-#define TYPE_ENCRYPT_FLAG           0x08
+#define TYPE_SECURITY_FLAG          0x04  /// unused
+#define TYPE_ENCRYPT_FLAG           0x08  /// unused
 #define TYPE_COMPRESSION_FLAG       0x20
 
 /** Properties of data type.
@@ -279,16 +279,7 @@ public:
       */
     virtual bool canBeInsideNullable() const { return false; }
 
-    void setFlags(UInt8 flag) { flags |= flag; }
-
-    void resetFlags(UInt8 flag) {
-        if (flags & flag)
-            flags ^= flag;
-    }
-
     bool isCompression() const { return flags & TYPE_COMPRESSION_FLAG;}
-
-    bool isSecurity() const { return flags & TYPE_SECURITY_FLAG;}
 
     virtual bool lowCardinality() const { return false; }
 
@@ -303,9 +294,7 @@ public:
 
     bool isMapKVStore() const { return flags & TYPE_MAP_KV_STORE_FLAG;}
 
-    bool isEncrypt() const { return flags & TYPE_ENCRYPT_FLAG; }
-
-    Names getSpecialColumnFiles(const String & name, bool throw_exception) const;
+    Names getSpecialColumnFiles(const String & prefix, bool throw_exception) const;
 
     virtual bool canBeMapKeyType() const { return false; }
     virtual bool canBeMapValueType() const { return false; }
@@ -316,16 +305,12 @@ public:
     virtual String stringToVisitorString(const String &) const;
 
     UInt8 getFlags() const { return flags; }
-    void setFlags(UInt8 flag) const { checkFlags(flag); flags |= flag; }
-    void resetFlags(UInt8 flag) const 
-    { 
-      checkFlags(flag); 
-      
-      if (flags & flag)
-        flags ^= flag; 
+    void setFlags(UInt8 flag) const { flags |= flag; }
+    void resetFlags(UInt8 flag) const
+    {
+        if (flags & flag)
+            flags ^= flag;
     }
-
-    virtual void checkFlags(UInt8 flag) const;
 
 protected:
     friend class DataTypeFactory;

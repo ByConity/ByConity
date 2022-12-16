@@ -46,10 +46,6 @@ const char * ActionsDAG::typeToString(ActionsDAG::ActionType type)
             return "ArrayJoin";
         case ActionType::FUNCTION:
             return "Function";
-        case ActionType::ENCRYPT:
-            return "ENCRYPT";
-        case ActionType::DECRYPT:
-            return "DECRYPT";
     }
 
     __builtin_unreachable();
@@ -83,9 +79,9 @@ void ActionsDAG::Node::serialize(WriteBuffer & buf) const
 
     /// children
     writeBinary(children.size(), buf);
-    for (auto & child : children)
+    for (const auto & child : children)
         writeBinary(child->id, buf);
-    
+
     serializeEnum(type, buf);
 
     writeBinary(result_name, buf);
@@ -289,28 +285,6 @@ const ActionsDAG::Node & ActionsDAG::addArrayJoin(const Node & child, std::strin
     node.type = ActionType::ARRAY_JOIN;
     node.result_type = array_type->getNestedType();
     node.result_name = std::move(result_name);
-    node.children.emplace_back(&child);
-
-    return addNode(std::move(node));
-}
-
-const ActionsDAG::Node & ActionsDAG::addEncrypt(const Node & child)
-{
-    Node node;
-    node.type = ActionType::ENCRYPT;
-    node.result_type = child.result_type;
-    node.result_name = child.result_name;
-    node.children.emplace_back(&child);
-
-    return addNode(std::move(node));
-}
-
-const ActionsDAG::Node & ActionsDAG::addDecrypt(const Node & child)
-{
-    Node node;
-    node.type = ActionType::DECRYPT;
-    node.result_type = child.result_type;
-    node.result_name = child.result_name;
     node.children.emplace_back(&child);
 
     return addNode(std::move(node));
@@ -643,13 +617,6 @@ static ColumnWithTypeAndName executeActionForHeader(const ActionsDAG::Node * nod
 
         case ActionsDAG::ActionType::INPUT:
         {
-            break;
-        }
-
-        case ActionsDAG::ActionType::ENCRYPT:
-        case ActionsDAG::ActionType::DECRYPT:
-        {
-            res_column.column = arguments.at(0).column;
             break;
         }
     }
@@ -1076,12 +1043,6 @@ std::string ActionsDAG::dumpDAG() const
             case ActionsDAG::ActionType::INPUT:
                 out << "INPUT ";
                 break;
-            case ActionsDAG::ActionType::ENCRYPT:
-                out << "ENCRYPT ";
-                break;
-            case ActionsDAG::ActionType::DECRYPT:
-                out << "DECRYPT ";
-                break;
         }
 
         out << "(";
@@ -1313,28 +1274,6 @@ ActionsDAGPtr ActionsDAG::makeAddingColumnActions(ColumnWithTypeAndName column)
 
     adding_column_action->index.push_back(&alias_node);
     return adding_column_action;
-}
-
-ActionsDAGPtr ActionsDAG::makeEncryptColumnsActions(const ColumnsWithTypeAndName & columns)
-{
-    auto encrypt_action = std::make_shared<ActionsDAG>();
-    for (const auto & column : columns)
-    {
-        const auto & encrypt_node = encrypt_action->addEncrypt(encrypt_action->addInput(column));
-        encrypt_action->index.push_back(&encrypt_node);
-    }
-    return encrypt_action;
-}
-
-ActionsDAGPtr ActionsDAG::makeDecryptColumnsActions(const ColumnsWithTypeAndName & columns)
-{
-    auto decrypt_action = std::make_shared<ActionsDAG>();
-    for (const auto & column : columns)
-    {
-        const auto & decrypt_node = decrypt_action->addDecrypt(decrypt_action->addInput(column));
-        decrypt_action->index.push_back(&decrypt_node);
-    }
-    return decrypt_action;
 }
 
 ActionsDAGPtr ActionsDAG::merge(ActionsDAG && first, ActionsDAG && second)

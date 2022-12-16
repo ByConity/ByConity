@@ -123,11 +123,6 @@ public:
         if (!columns.get<1>().modify(it, std::forward<F>(f)))
             throw Exception("Cannot modify ColumnDescription for column " + column_name + ": column name cannot be changed", ErrorCodes::LOGICAL_ERROR);
 
-        if (it->type->isSecurity())
-            has_security_column = true;
-
-        updateColumnProperty();
-
         modifyColumnOrder(column_name, after_column, first);
     }
 
@@ -167,20 +162,6 @@ public:
         return columns.empty();
     }
 
-    bool hasEncryptColumn() const
-    {
-        return has_encrypt_column;
-    }
-
-    bool hasSecurityColumn() const
-    {
-        return has_security_column;
-    }
-
-    void updateColumnProperty();
-
-    ColumnsWithTypeAndName getEncryptColumns() const;
-
     /// Keep the sequence of columns and allow to lookup by name.
     using ColumnsContainer = boost::multi_index_container<
         ColumnDescription,
@@ -197,8 +178,6 @@ public:
 private:
     ColumnsContainer columns;
     SubcolumnsContainter subcolumns;
-    bool has_encrypt_column = false;
-    bool has_security_column = false;
 
     void modifyColumnOrder(const String & column_name, const String & after_column, bool first);
     void addSubcolumnsToList(NamesAndTypesList & source_list) const;

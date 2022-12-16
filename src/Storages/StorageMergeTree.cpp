@@ -290,7 +290,7 @@ void StorageMergeTree::alter(
     String mutation_file_name;
     Int64 mutation_version = -1;
 
-    commands.apply(table_id, new_metadata, local_context);
+    commands.apply(new_metadata, local_context);
 
     checkColumnsValidity(new_metadata.columns);
 
