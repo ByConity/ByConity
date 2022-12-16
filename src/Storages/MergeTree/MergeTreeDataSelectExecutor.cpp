@@ -1698,8 +1698,12 @@ void MergeTreeDataSelectExecutor::selectPartsToRead(
         if (part_values && part_values->find(part->name) == part_values->end())
             continue;
 
-        // if (part->isEmpty())
-        //     continue;
+        /// Need use base part to run partition prunning here because partial part can be empty; partition columns will never be ALTERED
+        /// So the partition minmax expression of base part and partial part is exactly the same
+        part = part->getBasePart().get();
+
+        if (part->isEmpty())
+            continue;
 
         if (max_block_numbers_to_read)
         {
@@ -1763,6 +1767,8 @@ void MergeTreeDataSelectExecutor::selectPartsToReadWithUUIDFilter(
             const auto * part = part_or_projection->isProjectionPart() ? part_or_projection->getParentPart() : part_or_projection.get();
             if (part_values && part_values->find(part->name) == part_values->end())
                 continue;
+            
+            part = part->getBasePart().get();
 
             if (part->isEmpty())
                 continue;

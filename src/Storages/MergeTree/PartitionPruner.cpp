@@ -6,7 +6,7 @@ namespace DB
 
 bool PartitionPruner::canBePruned(const DataPart & part)
 {
-    if (part.isEmpty())
+    if (part.isEmpty() && !part.isPartial())
         return true;
     const auto & partition_id = part.info.partition_id;
     bool is_valid;
