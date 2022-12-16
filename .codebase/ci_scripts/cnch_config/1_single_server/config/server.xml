@@ -741,7 +741,7 @@
         <database>cnch_system</database>
         <table>cnch_kafka_log</table>
         <flush_interval_milliseconds>30000</flush_interval_milliseconds>
-        <partition_by>event_date</partition_by>
+        <engine>ENGINE = CnchMergeTree PARTITION BY event_date ORDER BY event_time TTL event_date + INTERVAL 31 DAY</engine>
     </cnch_kafka_log>
 
     <kafka_log>
