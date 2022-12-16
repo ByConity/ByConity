@@ -7,30 +7,67 @@
 #include <Common/tests/gtest_global_context.h>
 #include <Common/tests/gtest_utils.h>
 #include <Common/filesystemHelpers.h>
+#include "Core/Defines.h"
+#include "Disks/VolumeJBOD.h"
+#include "IO/LimitReadBuffer.h"
+#include "IO/ReadBufferFromFile.h"
+#include "IO/copyData.h"
 
 namespace fs = std::filesystem;
 
-void generateData(const String & base_path, int depth, int num_per_level, std::string partial_name, std::vector<std::string> & names)
+namespace DB
 {
+
+template<bool IS_V1_FORMAT>
+void generateData(const DiskPtr & disk, int depth, int num_per_level, Strings & names, Strings & partial_key) {
     static int counter = 0;
-    if (depth == 0)
-    {
-        for (int i = 0; i < num_per_level; i++)
-        {
-            std::string cache_name = partial_name + std::to_string(counter++) + ".bin";
-            FS::createFile(base_path + cache_name);
+    if (depth == 0) {
+        for (int i = 0; i < num_per_level; i++) {
+            partial_key.push_back(std::to_string(counter++));
+
+            String cache_name;
+            std::filesystem::path rel_path;
+            cache_name = fmt::format("{}.{}", fmt::join(partial_key, "/"), "bin");
+            if constexpr (IS_V1_FORMAT)
+            {
+                rel_path = DiskCacheLRU::getRelativePath(DiskCacheLRU::hash(cache_name));
+            }
+            else
+            {
+                rel_path = std::filesystem::path("disk_cache") / cache_name;
+            }
+            partial_key.pop_back();
+
+            disk->createDirectories(rel_path.parent_path());
+            WriteBufferFromFile writer(std::filesystem::path(disk->getPath()) / rel_path);
+            String content = String(std::abs(random()) % 100, 'a');
+            writer.write(content.data(), content.size());
             names.push_back(cache_name);
         }
-    }
-    else
-    {
-        for (int i = 0; i < num_per_level; i++)
-        {
-            String dir_name = partial_name + std::to_string(counter++) + "/";
-            fs::create_directories(base_path + dir_name);
-            generateData(base_path, depth - 1, num_per_level, dir_name, names);
+    } else {
+        for (int i = 0; i < num_per_level; i++) {
+            partial_key.push_back(std::to_string(counter++));
+            generateData<IS_V1_FORMAT>(disk, depth - 1, num_per_level, names, partial_key);
+            partial_key.pop_back();
         }
     }
+}
+
+Strings generateData(const DiskPtr & disk, int depth, int num_per_level)
+{
+    Strings seg_names;
+    Strings partial_name;
+    generateData<true>(disk, depth, num_per_level, seg_names, partial_name);
+    return seg_names;
+}
+
+Strings generateOldData(const DiskPtr & disk, int depth, int num_per_level)
+{
+    Strings seg_names;
+    Strings partial_name;
+    generateData<false>(disk, depth, num_per_level, seg_names, partial_name);
+    return seg_names;
+}
 }
 
 DB::VolumePtr newSingleDiskVolume()
@@ -40,6 +77,15 @@ DB::VolumePtr newSingleDiskVolume()
     return std::make_shared<DB::SingleDiskVolume>("single_disk", std::move(disk), 0);
 }
 
+DB::VolumePtr newDualDiskVolume()
+{
+    fs::create_directory("tmp/local1/");
+    fs::create_directory("tmp/local2/");
+    DB::Disks disks;
+    disks.emplace_back(std::make_shared<DB::DiskLocal>("local1", "tmp/local1/", 0));
+    disks.emplace_back(std::make_shared<DB::DiskLocal>("local2", "tmp/local2/", 0));
+    return std::make_shared<DB::VolumeJBOD>("dual_disk", disks, disks.front()->getName(), 0, false);
+}
 // TODO: more volume
 
 class DiskCacheTest : public testing::Test
@@ -62,31 +108,28 @@ public:
 
 TEST_F(DiskCacheTest, Collect)
 {
-    auto volume = newSingleDiskVolume();
+    auto volume = newDualDiskVolume();
     int total_cache_num = 0;
-    std::vector<std::pair<std::string, std::vector<std::string>>> metas;
+    std::vector<std::pair<DB::DiskPtr, std::vector<std::string>>> metas;
     for (const DB::DiskPtr & disk : volume->getDisks())
     {
-        String disk_cache_dir = disk->getPath() + "disk_cache/";
-        std::vector<std::string> metas_in_disk;
-        generateData(disk_cache_dir, 3, 2, {}, metas_in_disk);
-        metas.push_back({disk->getName(), metas_in_disk});
+        std::vector<String> metas_in_disk = generateData(disk, 3, 4);
+        metas.push_back({disk, metas_in_disk});
         total_cache_num += metas_in_disk.size();
     }
 
-    DB::DiskCacheSettings settings{
-        .lru_max_size = 100000000,
-        .random_drop_threshold = 80,
-        .mapping_bucket_size = 8,
-        .lru_update_interval = 5,
-        .cache_base_path = "disk_cache/"};
+    DB::DiskCacheSettings settings;
     DB::DiskCacheLRU cache(*getContext().context, volume, settings);
     cache.load();
     EXPECT_EQ(cache.getKeyCount(), total_cache_num);
 
-    // for (const auto& meta_in_disk : metas) {
-    //     for (const String& name : meta_in_disk.second) {
-    //         EXPECT_EQ(cache.get(name), disk->getPath() + "disk_cache/" + name);
-    //     }
-    // }
+    for (const auto & meta_in_disk : metas) {
+        auto disk = meta_in_disk.first;
+        for (const String & name : meta_in_disk.second) {
+            auto [cache_disk, cached_file] = cache.get(name);
+            ASSERT_TRUE(!cached_file.empty());
+            ASSERT_TRUE(cache_disk->getName() == disk->getName());
+            ASSERT_TRUE(cache_disk->exists(cached_file));
+        }
+    }
 }

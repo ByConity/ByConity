@@ -42,7 +42,7 @@ public:
 
 private:
     IMergeTreeDataPartPtr data_part;
-    UUID uuid;
+    ConstStoragePtr storage;
     FileOffsetAndSize mrk_file_pos;
     size_t marks_count;
 

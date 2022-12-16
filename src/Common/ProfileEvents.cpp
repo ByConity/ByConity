@@ -288,6 +288,9 @@
     M(DiskCacheAcquireStatsLock, "Total time for acquire table stats lock") \
     M(DiskCacheScheduleCacheTaskMicroSeconds, "Total time for schedule disk cache task") \
     M(DiskCacheUpdateStatsMicroSeconds, "Total time for update disk cache statistics") \
+    M(DiskCacheGetMetaMicroSeconds, "Total time for disk cache get operations") \
+    M(DiskCacheGetTotalOps, "Total count of disk cache get operations") \
+    M(DiskCacheSetTotalOps, "Total count of disk cache set operations") \
     \
     M(CnchTxnAborted, "Total number of aborted transactions (excludes preempting transactions)") \
     M(CnchTxnCommitted, "Total number of committed transactions") \

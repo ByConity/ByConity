@@ -2,6 +2,7 @@
 
 #include <Storages/DiskCache/IDiskCacheSegment.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
+#include "Storages/IStorage_fwd.h"
 
 namespace DB
 {
@@ -17,6 +18,7 @@ public:
 
 private:
     IMergeTreeDataPartPtr data_part;
+    ConstStoragePtr storage;
     String segment_name;
 };
 
@@ -30,6 +32,7 @@ public:
 
 private:
     IMergeTreeDataPartPtr data_part;
+    ConstStoragePtr storage;
     String segment_name;
 };
 

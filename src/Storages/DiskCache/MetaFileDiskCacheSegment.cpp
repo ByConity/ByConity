@@ -12,6 +12,7 @@ namespace DB
 ChecksumsDiskCacheSegment::ChecksumsDiskCacheSegment(IMergeTreeDataPartPtr data_part_)
     : IDiskCacheSegment(0, 0)
     , data_part(std::move(data_part_))
+    , storage(data_part->storage.shared_from_this())
     , segment_name(formatSegmentName(
           UUIDHelpers::UUIDToString(data_part->storage.getStorageUUID()), data_part->name, "", segment_number, "checksums.txt"))
 {
@@ -40,6 +41,7 @@ void ChecksumsDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache)
 PrimaryIndexDiskCacheSegment::PrimaryIndexDiskCacheSegment(IMergeTreeDataPartPtr data_part_)
     : IDiskCacheSegment(0, 0)
     , data_part(std::move(data_part_))
+    , storage(data_part->storage.shared_from_this())
     , segment_name(formatSegmentName(
           UUIDHelpers::UUIDToString(data_part->storage.getStorageUUID()), data_part->name, "", segment_number, "primary.idx"))
 {

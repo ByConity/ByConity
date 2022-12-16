@@ -21,7 +21,7 @@ DiskCacheSegment::DiskCacheSegment(
     const FileOffsetAndSize & stream_file_pos_)
     : IDiskCacheSegment(segment_number_, segment_size_)
     , data_part(data_part_)
-    , uuid(data_part_->storage.getStorageUUID())
+    , storage(data_part_->storage.shared_from_this()) /// Need to extend the lifetime of storage because disk cache can run async
     , mrk_file_pos(mrk_file_pos_)
     , marks_count(marks_count_)
     , stream_name(stream_name_)
@@ -50,7 +50,7 @@ String DiskCacheSegment::getSegmentKey(
 String DiskCacheSegment::getSegmentName() const
 {
     return formatSegmentName(
-        UUIDHelpers::UUIDToString(uuid), data_part->name, stream_name, segment_number, extension);
+        UUIDHelpers::UUIDToString(storage->getStorageUUID()), data_part->name, stream_name, segment_number, extension);
 }
 
 void DiskCacheSegment::cacheToDisk(IDiskCache & disk_cache)
@@ -108,7 +108,7 @@ void DiskCacheSegment::cacheToDisk(IDiskCache & disk_cache)
         /// cache mark segment
         data_file->seek(mrk_file_pos.file_offset);
         LimitReadBuffer marks_value(*data_file, mrk_file_pos.file_size, false);
-        String marks_key = formatSegmentName(UUIDHelpers::UUIDToString(uuid), data_part->name, stream_name, 0, MARKS_FILE_EXTENSION);
+        String marks_key = formatSegmentName(UUIDHelpers::UUIDToString(storage->getStorageUUID()), data_part->name, stream_name, 0, MARKS_FILE_EXTENSION);
         disk_cache.set(marks_key, marks_value, mrk_file_pos.file_size);
     }
     catch (...)
