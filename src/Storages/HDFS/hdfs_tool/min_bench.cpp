@@ -482,7 +482,7 @@ protected:
         (void)thread_id;
 
         std::shared_ptr<ThreadTimeStatistics> stats = std::make_unique<ThreadTimeStatistics>();
-        HDFSConnectionParams params(HDFSConnectionParams::CONN_NNPROXY, "clickhouse", nnproxy_);
+        HDFSConnectionParams params =  HDFSConnectionParams::parseFromMisusedNNProxyStr(nnproxy_);
         ReadBufferFromByteHDFS reader(bench_file_path_, true, params, step_size_);
 
         size_t buffer_offset = 0;

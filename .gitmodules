@@ -238,6 +238,11 @@
 [submodule "contrib/libhdfs3"]
 	path = contrib/libhdfs3
 	url = git@code.byted.org:dp/libhdfs3.git
+
+[submodule "contrib/libhdfs3-open"]
+	path = contrib/libhdfs3-open
+	url = git@code.byted.org:dp/libhdfs3-open.git
+
 [submodule "contrib/boost"]
 	path = contrib/boost
 	url = https://github.com/ClickHouse-Extras/boost.git

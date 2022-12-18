@@ -849,6 +849,26 @@ HDFSConnectionParams HDFSConnectionParams::parseHdfsFromConfig(
     // return defaultNNProxy();
 }
 
+HDFSConnectionParams HDFSConnectionParams::parseFromMisusedNNProxyStr(String hdfs_nnproxy,String hdfs_user)
+{
+    if (hdfs_nnproxy.find("://") != String::npos)
+    {
+        // this could be a cfs or hdfs uri like cfs://preonline.com:65212/
+        const Poco::URI proxy_uri(addSchemeOnNeed(hdfs_nnproxy, "hdfs://"));
+        HDFSConnectionType conn_type = isCfsScheme(proxy_uri.getScheme()) ? CONN_CFS : CONN_HDFS;
+        String host = proxy_uri.getHost();
+        int port = proxy_uri.getPort() == 0 ? 65212 : proxy_uri.getPort();
+        return HDFSConnectionParams(conn_type, hdfs_user, {{host, port}});
+    }
+    else
+    {
+        // this is a nnproxy.
+        return HDFSConnectionParams(CONN_NNPROXY, hdfs_user, hdfs_nnproxy);
+    }
+
+}
+
+
 void HDFSConnectionParams::lookupOnNeed()
 {
     if (conn_type != CONN_NNPROXY)

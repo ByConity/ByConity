@@ -270,7 +270,11 @@ if (USE_INTERNAL_PROTOBUF_LIBRARY)
 endif ()
 
 if (USE_INTERNAL_HDFS3_LIBRARY)
-    add_subdirectory(libhdfs3-cmake)
+    if(USE_BYTEDANCE_LIBHDFS3)
+        add_subdirectory(libhdfs3-cmake)
+    else()
+        add_subdirectory(libhdfs3-open-cmake)
+    endif()
 endif ()
 
 if (USE_INTERNAL_GRPC_LIBRARY)
