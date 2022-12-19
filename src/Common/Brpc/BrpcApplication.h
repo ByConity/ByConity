@@ -33,6 +33,7 @@ public:
     std::shared_ptr<T> getConfigHolderByType();
 
 private:
+    ::logging::LogSink * old_sink;
     Poco::Logger * logger;
     ConfigHolderMap config_holder_map;
     mutable std::mutex holder_map_mutex;
