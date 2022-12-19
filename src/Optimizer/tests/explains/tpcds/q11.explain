@@ -2,22 +2,22 @@ Projection est. 100 rows
 │     Expressions: customer_first_name:=c_first_name_4, customer_id:=c_customer_id_4, customer_last_name:=c_last_name_4, customer_preferred_cust_flag:=c_preferred_cust_flag_4
 └─ Limit est. 100 rows
    │     Limit: 100
-   └─ Sorting est. 242049690714 rows
-      │     Order by: {c_customer_id_5 asc, c_first_name_5 asc, c_last_name_5 asc, c_preferred_cust_flag_5 asc}
+   └─ Sorting est. 5809051819940 rows
+      │     Order by: {c_customer_id_4 asc, c_first_name_4 asc, c_last_name_4 asc, c_preferred_cust_flag_4 asc}
       │     Limit: 100
-      └─ Gather Exchange est. 242049690714 rows
-         └─ Sorting est. 242049690714 rows
-            │     Order by: {c_customer_id_5 asc, c_first_name_5 asc, c_last_name_5 asc, c_preferred_cust_flag_5 asc}
+      └─ Gather Exchange est. 5809051819940 rows
+         └─ Sorting est. 5809051819940 rows
+            │     Order by: {c_customer_id_4 asc, c_first_name_4 asc, c_last_name_4 asc, c_preferred_cust_flag_4 asc}
             │     Limit: 100
-            └─ Inner Join est. 1626312194445 rows
-               │     Condition: c_customer_id_11 == c_customer_id_5
-               │     Filter: multiIf(`expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))_5` > 0, `expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))_7` / `expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))_5`, '0.0') > multiIf(`expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))_1` > 0, `expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))_3` / `expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))_1`, '0.0')
-               ├─ Inner Join est. 5982022117 rows
-               │  │     Condition: c_customer_id_2 == c_customer_id_11
-               │  ├─ Repartition Exchange est. 503956639 rows
-               │  │  │     Partition by: {c_customer_id_2}
-               │  │  └─ Projection est. 503956639 rows
-               │  │     │     Expressions: c_customer_id_2:=c_customer_id, expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))_1:=`expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))`
+            └─ Inner Join est. 5809051818254 rows
+               │     Condition: c_customer_id_4 == c_customer_id_3
+               │     Filter: multiIf(`expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))_4` > 0, `expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))_5` / `expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))_4`, '0.0') > multiIf(`expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))_2` > 0, `expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))_3` / `expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))_2`, '0.0')
+               ├─ Inner Join est. 8315699833 rows
+               │  │     Condition: c_customer_id_4 == c_customer_id_5
+               │  ├─ Repartition Exchange est. 559951822 rows
+               │  │  │     Partition by: {c_customer_id_4}
+               │  │  └─ Projection est. 1261003902 rows
+               │  │     │     Expressions: c_customer_id_4:=c_customer_id, c_first_name_4:=c_first_name, c_last_name_4:=c_last_name, c_preferred_cust_flag_4:=c_preferred_cust_flag, expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))_3:=`expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))`
                │  │     └─ Filter est. 503956639 rows
                │  │        │     Condition: (d_year = 2002) OR (`expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))` > 0.)
                │  │        └─ MergingAggregated est. 559951822 rows

@@ -3,11 +3,11 @@ Projection est. 100 rows
 └─ Limit est. 100 rows
    │     Limit: 100
    └─ Sorting est. ? rows
-      │     Order by: {c_customer_id_5 asc, c_first_name_5 asc, c_last_name_5 asc, c_preferred_cust_flag_5 asc}
+      │     Order by: {c_customer_id_4 asc, c_first_name_4 asc, c_last_name_4 asc, c_preferred_cust_flag_4 asc}
       │     Limit: 100
       └─ Gather Exchange est. ? rows
          └─ Sorting est. ? rows
-            │     Order by: {c_customer_id_5 asc, c_first_name_5 asc, c_last_name_5 asc, c_preferred_cust_flag_5 asc}
+            │     Order by: {c_customer_id_4 asc, c_first_name_4 asc, c_last_name_4 asc, c_preferred_cust_flag_4 asc}
             │     Limit: 100
             └─ Inner Join est. ? rows
                │     Condition: c_customer_id_3 == c_customer_id_6

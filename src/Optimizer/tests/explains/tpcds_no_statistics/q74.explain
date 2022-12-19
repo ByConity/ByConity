@@ -3,11 +3,11 @@ Projection est. 100 rows
 └─ Limit est. 100 rows
    │     Limit: 100
    └─ Sorting est. ? rows
-      │     Order by: {c_customer_id_5 asc, c_customer_id_5 asc, c_customer_id_5 asc}
+      │     Order by: {c_customer_id_4 asc, c_customer_id_4 asc, c_customer_id_4 asc}
       │     Limit: 100
       └─ Gather Exchange est. ? rows
          └─ Sorting est. ? rows
-            │     Order by: {c_customer_id_5 asc, c_customer_id_5 asc, c_customer_id_5 asc}
+            │     Order by: {c_customer_id_4 asc, c_customer_id_4 asc, c_customer_id_4 asc}
             │     Limit: 100
             └─ Inner Join est. ? rows
                │     Condition: c_customer_id_3 == c_customer_id_6
@@ -65,7 +65,7 @@ Repartition Exchange est. ? rows
    └─ Projection est. ? rows
       │     Expressions: [c_customer_id_1, c_first_name_1, c_last_name_1, d_year_1, expr#sum(ws_net_paid)], expr#'w':='w'
       └─ Filter est. ? rows
-         │     Condition: (d_year_1 = 2002) OR (`expr#sum(ws_net_paid)` > 0.)
+         │     Condition: (`expr#sum(ws_net_paid)` > 0.) OR (d_year_1 = 2002)
          └─ MergingAggregated est. ? rows
             └─ Repartition Exchange est. ? rows
                │     Partition by: {c_customer_id_1, c_first_name_1, c_last_name_1, d_year_1}
