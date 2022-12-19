@@ -108,6 +108,13 @@ void RuntimeFilter::initAggregator(const Block & stream_header)
         settings.min_free_disk_space_for_temporary_data,
         settings.compile_aggregate_expressions,
         settings.min_count_to_compile_aggregate_expression);
+
+    /* The order must be maintained since aggregator will be accessed in
+     * data_variants' destructor */
+    if (data_variants)
+        data_variants.reset();
+    data_variants = std::make_shared<AggregatedDataVariants>();
+
     if (aggregator)
         aggregator.reset();
     aggregator = std::make_shared<Aggregator>(params);
@@ -122,10 +129,6 @@ void RuntimeFilter::initAggregator(const Block & stream_header)
     if (!key_columns.empty())
         key_columns.clear();
     key_columns.resize(params.keys_size);
-
-    if (data_variants)
-        data_variants.reset();
-    data_variants = std::make_shared<AggregatedDataVariants>();
 }
 
 void RuntimeFilter::merge(RuntimeFilter & other_filter)
