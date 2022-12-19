@@ -820,24 +820,26 @@ HDFSConnectionParams HDFSConnectionParams::parseHdfsFromConfig(
     {
         return HDFSConnectionParams(CONN_HA, hdfs_user, config.getString(hdfs_ha_key));
     }
-
-    // hdfs_nnproxy could refer to both cfs and nnproxy.
-    String hdfs_nnproxy = config.getString(hdfs_nnproxy_key, "nnproxy");
-    if (hdfs_nnproxy.find("://") != String::npos)
+    else if (config.has(hdfs_nnproxy_key))
     {
-        // this could be a cfs or hdfs uri like cfs://preonline.com:65212/
-        const Poco::URI proxy_uri(addSchemeOnNeed(hdfs_nnproxy, "hdfs://"));
-        HDFSConnectionType conn_type = isCfsScheme(proxy_uri.getScheme()) ? CONN_CFS : CONN_HDFS;
-        String host = proxy_uri.getHost();
-        int port = proxy_uri.getPort() == 0 ? 65212 : proxy_uri.getPort();
-        return HDFSConnectionParams(conn_type, hdfs_user, {{host, port}});
+        // hdfs_nnproxy could refer to both cfs and nnproxy.
+        String hdfs_nnproxy = config.getString(hdfs_nnproxy_key, "nnproxy");
+        if (hdfs_nnproxy.find("://") != String::npos)
+        {
+            // this could be a cfs or hdfs uri like cfs://preonline.com:65212/
+            const Poco::URI proxy_uri(addSchemeOnNeed(hdfs_nnproxy, "hdfs://"));
+            HDFSConnectionType conn_type = isCfsScheme(proxy_uri.getScheme()) ? CONN_CFS : CONN_HDFS;
+            String host = proxy_uri.getHost();
+            int port = proxy_uri.getPort() == 0 ? 65212 : proxy_uri.getPort();
+            return HDFSConnectionParams(conn_type, hdfs_user, {{host, port}});
+        }
+        else
+        {
+            // this is a nnproxy.
+             return HDFSConnectionParams(CONN_NNPROXY, hdfs_user, hdfs_nnproxy);
+        }
     }
-    else
-    {
-        // this is a nnproxy.
-        return HDFSConnectionParams();
-    }
-    // return defaultNNProxy();
+    return HDFSConnectionParams();
 }
 
 HDFSConnectionParams HDFSConnectionParams::parseFromMisusedNNProxyStr(String hdfs_nnproxy,String hdfs_user)
