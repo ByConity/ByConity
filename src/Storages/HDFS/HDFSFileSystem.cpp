@@ -313,7 +313,8 @@ int HDFSFileSystem::getNextFd(const std::string& path) {
     }
 
     // acquire the flag_ lock
-    while (fd_to_hdfs_file[index] != nullptr) {
+    while (fd_to_hdfs_file[index + SKIP_FD_NUM] != nullptr)
+    {
         index = (index + 1) % MAX_FD_NUM;
     }
     // unlock the flag_
@@ -326,7 +327,7 @@ int HDFSFileSystem::getNextFd(const std::string& path) {
 // delay release owing to cpu cache flush
 int HDFSFileSystem::close(const int fd)
 {
-    if (fd < SKIP_FD_NUM || fd >= MAX_FD_NUM)
+    if (fd < SKIP_FD_NUM || fd >= MAX_FD_NUM + SKIP_FD_NUM)
     {
         throw Exception("Illegal HDFS fd", ErrorCodes::PARAMETER_OUT_OF_BOUND);
     }
