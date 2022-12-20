@@ -62,6 +62,17 @@ std::unordered_map<String, DataPartsCnchVector> assignCnchParts(const WorkerGrou
             reportStats(ret, "Bounded-load Consistent Hash", worker_group->getRing().size());
             return ret;
         }
+        case Context::PartAllocator::STRICT_RING_CONSISTENT_HASH:
+        {
+            if (!worker_group->hasRing())
+            {
+                LOG_WARNING(&Poco::Logger::get("Strict Consistent Hash"), "Attempt to use ring-base consistent hash, but ring is empty; fall back to jump");
+                return assignCnchPartsWithJump(worker_group->getWorkerIDVec(), parts);
+            }
+            auto ret = assignCnchPartsWithStrictBoundedHash(worker_group->getRing(), parts, true);
+            reportStats(ret, "Strict Consistent Hash", worker_group->getRing().size());
+            return ret;
+        }
     }
 }
 
@@ -113,6 +124,27 @@ std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithRingAndBalanc
 
     LOG_INFO(&Poco::Logger::get("Consistent Hash"),
              "Finish allocate part with bounded ring based hash policy, # of overloaded parts {}.", exceed_parts.size());
+    return ret;
+}
+
+// 1 round approach
+template <typename DataPartsCnchVector>
+std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithStrictBoundedHash(const ConsistentHashRing & ring, const DataPartsCnchVector & parts, bool strict)
+{
+    LOG_INFO(&Poco::Logger::get("Strict Bounded Consistent Hash"), "Start to allocate part with bounded ring based hash policy under strict mode " + std::to_string(strict) + ".");
+    std::unordered_map<String, DataPartsCnchVector> ret;
+    size_t cap_limit = 0;
+    std::unordered_map<String, UInt64> stats;
+
+    for (size_t i = 0; i < parts.size(); ++i)
+    {
+        auto & part = parts[i];
+        cap_limit = ring.getCapLimit(i + 1, strict);
+        auto hostname = ring.findAndRebalance(part->get_info().getBasicPartName(), cap_limit, stats);
+        ret[hostname].emplace_back(part);
+    }
+
+    LOG_INFO(&Poco::Logger::get("Strict Bounded Consistent Hash"), "Finish allocate part with strict bounded ring based hash policy under strict mode " + std::to_string(strict) + ".");
     return ret;
 }
 
