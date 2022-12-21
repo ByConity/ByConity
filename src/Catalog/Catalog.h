@@ -347,7 +347,7 @@ public:
 
     DataModelTables getAllTables();
 
-    MetastoreByteKVImpl::IteratorPtr getTrashTableIDIterator(uint32_t iterator_internal_batch_size);
+    IMetaStore::IteratorPtr getTrashTableIDIterator(uint32_t iterator_internal_batch_size);
 
     DataModelUDFs getAllUDFs(const String &database_name, const String &function_name);
 

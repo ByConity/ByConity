@@ -328,7 +328,7 @@ Strings MetastoreProxy::getAllDependence(const String & name_space, const String
 }
 
 
-MetastoreByteKVImpl::IteratorPtr MetastoreProxy::getTrashTableIDIterator(const String & name_space, uint32_t iterator_internal_batch_size)
+IMetaStore::IteratorPtr MetastoreProxy::getTrashTableIDIterator(const String & name_space, uint32_t iterator_internal_batch_size)
 {
     return metastore_ptr->getByPrefix(tableTrashPrefix(name_space), 0, iterator_internal_batch_size);
 }
@@ -912,12 +912,8 @@ std::pair<bool, String> MetastoreProxy::MetastoreProxy::updateTransactionRecordW
     }
 }
 
-void MetastoreProxy::setTransactionRecord(const String & name_space, const UInt64 & txn_id, const String & txn_data, UInt64 ttl)
+void MetastoreProxy::setTransactionRecord(const String & name_space, const UInt64 & txn_id, const String & txn_data, UInt64 /*ttl*/)
 {
-    if (ttl && dynamic_cast<MetastoreByteKVImpl *>(metastore_ptr.get()))
-    {
-        return dynamic_cast<MetastoreByteKVImpl *>(metastore_ptr.get())->putTTL(transactionRecordKey(name_space, txn_id), txn_data, ttl);
-    }
     return metastore_ptr->put(transactionRecordKey(name_space, txn_id), txn_data);
 }
 

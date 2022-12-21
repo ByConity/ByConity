@@ -1,6 +1,5 @@
 #include <Core/Settings.h>
 #include <Core/NamesAndTypes.h>
-#include <Common/KMSClient.h>
 
 #include <Interpreters/TreeRewriter.h>
 #include <Interpreters/LogicalExpressionsOptimizer.h>
@@ -715,9 +714,6 @@ void TreeRewriterResult::checkSecurityColumns(const ContextPtr & context)
 
         if (security_key.empty())
             throw Exception("Permission Denied. security_key is missed when query security column: " + column.name, ErrorCodes::UNKNOWN_IDENTIFIER);
-
-        if (!KMSClient::instance().auth(security_config_name, security_key, context))
-            throw Exception("Permission Denied. Mismatched key when query security column: " + column.name, ErrorCodes::UNKNOWN_IDENTIFIER);
 
         /// just check any security column is OK.
         break;

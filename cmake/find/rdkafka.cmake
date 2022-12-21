@@ -9,7 +9,7 @@ endif()
 
 option (USE_INTERNAL_RDKAFKA_LIBRARY "Set to FALSE to use system librdkafka instead of the bundled" ${NOT_UNBUNDLED})
 
-option (USE_BYTEDANCE_RDKAFKA "Use librdkafka maintained by ByteDance" ON)
+option (USE_BYTEDANCE_RDKAFKA "Use librdkafka maintained by ByteDance" OFF)
 
 if (NOT EXISTS "${ClickHouse_SOURCE_DIR}/contrib/cppkafka/CMakeLists.txt")
     if(USE_INTERNAL_RDKAFKA_LIBRARY)

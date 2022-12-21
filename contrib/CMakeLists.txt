@@ -161,18 +161,11 @@ if (USE_INTERNAL_UDNS_LIBRARY)
 endif ()
 
 
-if (USE_INTERNAL_RDKAFKA_LIBRARY)
-    if (USE_BYTEDANCE_RDKAFKA)
-        add_subdirectory (librdkafka-cmake)
-    else()
-        add_subdirectory (librdkafka-origin-cmake)
-    endif()
-
-    target_include_directories(rdkafka BEFORE PRIVATE ${ZLIB_INCLUDE_DIR})
-    if(OPENSSL_INCLUDE_DIR)
-        target_include_directories(rdkafka BEFORE PRIVATE ${OPENSSL_INCLUDE_DIR})
-    endif()
-endif ()
+add_subdirectory (librdkafka-cmake)
+target_include_directories(rdkafka BEFORE PRIVATE ${ZLIB_INCLUDE_DIR})
+if(OPENSSL_INCLUDE_DIR)
+    target_include_directories(rdkafka BEFORE PRIVATE ${OPENSSL_INCLUDE_DIR})
+endif()
 
 if (USE_RDKAFKA)
     add_subdirectory (cppkafka-cmake)

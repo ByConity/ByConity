@@ -1,5 +1,4 @@
 #include <Compression/CompressionFactory.h>
-#include <Common/KMSClient.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
@@ -1036,22 +1035,9 @@ void AlterCommands::apply(StorageInMemoryMetadata & metadata, ContextPtr context
     metadata = std::move(metadata_copy);
 }
 
-void AlterCommands::apply(const StorageID & storage_id, StorageInMemoryMetadata & metadata, ContextPtr context) const
+void AlterCommands::apply(const StorageID &, StorageInMemoryMetadata & metadata, ContextPtr context) const
 {
-    bool before_has_security_column = metadata.hasSecurityColumn();
     apply(metadata, context);
-    bool after_has_security_column = metadata.hasSecurityColumn();
-
-    if (before_has_security_column && !after_has_security_column)
-    {
-        auto config_name = storage_id.getFullNameNotQuoted();
-        KMSClient::instance().deleteKmsConfig(config_name);
-    }
-    else if (!before_has_security_column && after_has_security_column)
-    {
-        auto config_name = storage_id.getFullNameNotQuoted();
-        KMSClient::instance().createKmsConfig(config_name);
-    }
 }
 
 void AlterCommands::prepare(const StorageInMemoryMetadata & metadata)
@@ -1218,12 +1204,6 @@ void AlterCommands::validate(const StorageID & storage_id, const StorageInMemory
                             backQuote(column_name));
 
                     auto config_name = storage_id.getFullNameNotQuoted();
-
-                    if (!KMSClient::instance().auth(config_name, context->getSettingsRef().encrypt_key.value, context))
-                        throw Exception(
-                            ErrorCodes::BAD_ARGUMENTS,
-                            "Permission Denied. Mismatched key when alter security column: {}.",
-                            backQuote(column_name));
                 }
             }
 
@@ -1232,13 +1212,6 @@ void AlterCommands::validate(const StorageID & storage_id, const StorageInMemory
             if (column.type->isEncrypt() || (command.data_type && command.data_type->isEncrypt()))
             {
                 throw Exception("Not support modifying encrypt property " + column_name, ErrorCodes::ILLEGAL_COLUMN);
-            }
-            /// check alter security columns
-            else if (column.type->isSecurity())
-            {
-                auto config_name = storage_id.getFullNameNotQuoted();
-                if (!KMSClient::instance().auth(config_name, context->getSettingsRef().encrypt_key.value, context))
-                    throw Exception("Permission Denied. Mismatched key when alter security column: " + column.name, ErrorCodes::ILLEGAL_COLUMN);
             }
 
             modified_columns.emplace(column_name);

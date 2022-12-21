@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Catalog/CatalogConfig.h>
-#include <Catalog/MetastoreByteKVImpl.h>
+//#include <Catalog/MetastoreByteKVImpl.h>
 #include <Catalog/MetastoreFDBImpl.h>
 #include <Catalog/StringHelper.h>
 #include <Protos/data_models.pb.h>
@@ -85,15 +85,6 @@ public:
         if (config.type == StoreType::FDB)
         {
             metastore_ptr = std::make_shared<MetastoreFDBImpl>(config.fdb_conf.cluster_conf_path);
-        }
-        else if (config.type == StoreType::BYTEKV)
-        {
-            metastore_ptr = std::make_shared<MetastoreByteKVImpl>(
-                config.bytekv_conf.service_name,
-                config.bytekv_conf.cluster_name,
-                config.bytekv_conf.name_space,
-                config.bytekv_conf.table_name
-            );
         }
         else
         {
@@ -603,7 +594,7 @@ public:
     Strings getUDFsMetaByName(const String & name_space, const std::unordered_set<String> &function_names);
     std::vector<std::shared_ptr<Protos::TableIdentifier>> getAllTablesId(const String & name_space, const String & db = "");
     Strings getAllDependence(const String & name_space, const String & uuid);
-    MetastoreByteKVImpl::IteratorPtr getTrashTableIDIterator(const String & name_space, uint32_t iterator_internal_batch_size);
+    IMetaStore::IteratorPtr getTrashTableIDIterator(const String & name_space, uint32_t iterator_internal_batch_size);
     std::vector<std::shared_ptr<Protos::TableIdentifier>> getTrashTableID(const String & name_space);
     std::shared_ptr<Protos::TableIdentifier> getTrashTableID(const String & name_space, const String & database, const String & table, const UInt64 & ts);
     std::vector<std::shared_ptr<Protos::TableIdentifier>> getTablesFromTrash(const String & name_space, const String & database);

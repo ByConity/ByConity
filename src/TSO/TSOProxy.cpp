@@ -1,5 +1,5 @@
 #include <TSO/TSOProxy.h>
-#include <TSO/TSOMetaByteKVImpl.h>
+//#include <TSO/TSOMetaByteKVImpl.h>
 #include <TSO/TSOMetaFDBImpl.h>
 
 namespace DB
@@ -15,16 +15,7 @@ namespace TSO
 
 TSOProxy::TSOProxy(const TSOConfig & config)
 {
-    if (config.type == StoreType::BYTEKV)
-    {
-        metastore_ptr = std::make_shared<TSOMetaByteKVImpl>(
-            config.bytekv_conf.service_name,
-            config.bytekv_conf.cluster_name,
-            config.bytekv_conf.name_space,
-            config.bytekv_conf.table_name,
-            config.key_name);
-    }
-    else if (config.type == StoreType::FDB)
+    if (config.type == StoreType::FDB)
     {
         metastore_ptr = std::make_shared<TSOMetaFDBImpl>(config.fdb_conf.cluster_conf_path, config.key_name);
     }

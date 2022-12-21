@@ -1,5 +1,4 @@
 #include <Interpreters/Set.h>
-#include <Common/KMSClient.h>
 #include <Common/ProfileEvents.h>
 #include <Interpreters/ArrayJoinAction.h>
 #include <Interpreters/ExpressionActions.h>
@@ -455,7 +454,7 @@ static void executeAction(const ExpressionActions::Action & action, ExecutionCon
             auto & res_column = columns[action.result_position];
             res_column.type = action.node->result_type;
             res_column.name = action.node->result_name;
-            res_column.column = KMSClient::encryptColumn(columns[action.arguments.front().pos], dry_run);
+            res_column.column = columns[action.arguments.front().pos].column;
             break;
         }
 
@@ -464,7 +463,7 @@ static void executeAction(const ExpressionActions::Action & action, ExecutionCon
             auto & res_column = columns[action.result_position];
             res_column.type = action.node->result_type;
             res_column.name = action.node->result_name;
-            res_column.column = KMSClient::decryptColumn(columns[action.arguments.front().pos], dry_run);
+            res_column.column = columns[action.arguments.front().pos].column;
             break;
         }
     }

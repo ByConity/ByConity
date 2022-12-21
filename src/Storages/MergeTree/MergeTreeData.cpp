@@ -54,7 +54,6 @@
 #include <Common/escapeForFileName.h>
 #include <Common/quoteString.h>
 #include <Common/typeid_cast.h>
-#include <Common/KMSClient.h>
 
 #include <boost/range/adaptor/filtered.hpp>
 #include <boost/algorithm/string/join.hpp>
@@ -232,10 +231,6 @@ MergeTreeData::MergeTreeData(
                 "MergeTree data format version on disk doesn't support custom partitioning",
                 ErrorCodes::METADATA_MISMATCH);
     }
-
-    if (!attach && metadata_.hasSecurityColumn())
-        KMSClient::instance().createKmsConfig(getStorageID().getFullNameNotQuoted());
-
     String reason;
     if (!canUsePolymorphicParts(*settings, &reason) && !reason.empty())
         LOG_WARNING(log, "{} Settings 'min_rows_for_wide_part', 'min_bytes_for_wide_part', "
@@ -1233,10 +1228,6 @@ void MergeTreeData::dropAllData()
     }
 
     setDataVolume(0, 0, 0);
-
-    /// Remove security config in kms.
-    if (getInMemoryMetadata().hasSecurityColumn())
-        KMSClient::instance().deleteKmsConfig(getStorageID().getFullNameNotQuoted());
 
     LOG_TRACE(log, "dropAllData: done.");
 }

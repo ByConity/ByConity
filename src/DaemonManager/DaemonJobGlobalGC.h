@@ -20,7 +20,7 @@ public:
 protected:
     bool executeImpl() override;
 private:
-    Catalog::MetastoreByteKVImpl::IteratorPtr trash_table_it;
+    Catalog::IMetaStore::IteratorPtr trash_table_it;
     std::vector<DB::Protos::DataModelTable> tables_need_gc;
 };
 

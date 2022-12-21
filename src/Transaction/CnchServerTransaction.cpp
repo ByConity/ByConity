@@ -261,13 +261,10 @@ TxnTimestamp CnchServerTransaction::commit()
                 }
             }
         }
-        catch (const Exception & e)
+        catch (const Exception &)
         {
-            if (e.code() != bytekv::sdk::Errorcode::REQUEST_TIMEOUT || !retry)
-            {
-                ProfileEvents::increment(ProfileEvents::CnchTxnCommitV2Failed);
-                throw;
-            }
+            ProfileEvents::increment(ProfileEvents::CnchTxnCommitV2Failed);
+            throw;
         }
 
         LOG_WARNING(log, "Catch bytekv request timeout exception. Will try to update transaction record again, number of retries remains: {}\n", retry);

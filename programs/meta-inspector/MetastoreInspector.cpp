@@ -1,6 +1,6 @@
 
 #include <Poco/Util/Application.h>
-#include <Catalog/MetastoreByteKVImpl.h>
+//#include <Catalog/MetastoreByteKVImpl.h>
 #include <Catalog/MetastoreFDBImpl.h>
 #include <Catalog/StringHelper.h>
 #include <Catalog/CatalogConfig.h>
@@ -231,15 +231,6 @@ private:
         if (catalog_conf.type == Catalog::StoreType::FDB)
         {
             metastore_ptr = std::make_shared<Catalog::MetastoreFDBImpl>(catalog_conf.fdb_conf.cluster_conf_path);
-        }
-        else if (catalog_conf.type == Catalog::StoreType::BYTEKV)
-        {
-            metastore_ptr = std::make_shared<Catalog::MetastoreByteKVImpl>(
-                catalog_conf.bytekv_conf.service_name,
-                catalog_conf.bytekv_conf.cluster_name,
-                catalog_conf.bytekv_conf.name_space,
-                catalog_conf.bytekv_conf.table_name
-            );
         }
         else
         {

@@ -1,3 +1,4 @@
+#if 0
 #include <Catalog/MetastoreByteKVImpl.h>
 #include <Catalog/CatalogUtils.h>
 #include <iostream>
@@ -345,7 +346,7 @@ int MetastoreByteKVImpl::toCommonErrorCode(const Errorcode & code)
     {
     case Errorcode::CAS_FAILED :
         return ErrorCodes::METASTORE_COMMIT_CAS_FAILURE;
-    
+
     default:
         return code;
     }
@@ -354,3 +355,4 @@ int MetastoreByteKVImpl::toCommonErrorCode(const Errorcode & code)
 
 }
 }
+#endif

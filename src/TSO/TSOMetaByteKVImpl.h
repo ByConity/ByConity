@@ -1,3 +1,4 @@
+#if 0
 #pragma once
 
 #include <bytekv4cpp/bytekv/client.h>
@@ -104,3 +105,4 @@ private:
 }
 
 }
+#endif

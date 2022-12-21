@@ -1,3 +1,4 @@
+#if 0
 #pragma once
 
 #include <Catalog/IMetastore.h>
@@ -107,3 +108,4 @@ private:
 
 
 }
+#endif

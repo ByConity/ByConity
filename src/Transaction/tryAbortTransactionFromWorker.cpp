@@ -26,38 +26,28 @@ TransactionRecord tryAbortTransactionFromWorker(const Context & context, const T
         int retry = MAX_ABORT_RETRY;
         do
         {
-            try
-            {
-                TransactionRecord target_record = cur_txn_record;
-                target_record.setStatus(CnchTransactionStatus::Aborted).setCommitTs(commit_ts).setMainTableUUID(txn->getMainTableUUID());
+            TransactionRecord target_record = cur_txn_record;
+            target_record.setStatus(CnchTransactionStatus::Aborted).setCommitTs(commit_ts).setMainTableUUID(txn->getMainTableUUID());
 
-                bool success = catalog->setTransactionRecord(cur_txn_record, target_record);
-                cur_txn_record = std::move(target_record);
-                bool could_return = true;
+            bool success = catalog->setTransactionRecord(cur_txn_record, target_record);
+            cur_txn_record = std::move(target_record);
+            bool could_return = true;
 
-                if (success)
-                    LOG_INFO(log, "Worker aborts txn {} successfully\n", txn_id.toUInt64());
-                else if (cur_txn_record.status() == CnchTransactionStatus::Finished)
-                    LOG_INFO(log, "Txn {} is already finished, can't abort\n", txn_id.toUInt64());
-                else if (cur_txn_record.status() == CnchTransactionStatus::Aborted)
-                    LOG_INFO(log, "Txn {} is already aborted\n", txn_id.toUInt64());
-                else if (cur_txn_record.status() == CnchTransactionStatus::Unknown)
-                    LOG_WARNING(log, "Txn {} is deleted from KV, can't abort\n", txn_id.toUInt64());
-                else
-                    could_return = false;
+            if (success)
+                LOG_INFO(log, "Worker aborts txn {} successfully\n", txn_id.toUInt64());
+            else if (cur_txn_record.status() == CnchTransactionStatus::Finished)
+                LOG_INFO(log, "Txn {} is already finished, can't abort\n", txn_id.toUInt64());
+            else if (cur_txn_record.status() == CnchTransactionStatus::Aborted)
+                LOG_INFO(log, "Txn {} is already aborted\n", txn_id.toUInt64());
+            else if (cur_txn_record.status() == CnchTransactionStatus::Unknown)
+                LOG_WARNING(log, "Txn {} is deleted from KV, can't abort\n", txn_id.toUInt64());
+            else
+                could_return = false;
 
-                if (could_return)
-                    return cur_txn_record;
-                else
-                    LOG_WARNING(log, "Failed to abort merge txn, current record is {}. Will retry {} times\n", cur_txn_record.toString(), retry);
-            }
-            catch (const Exception & e)
-            {
-                /// retry if catalog request timeouts and we still have retry budget
-                if (e.code() != bytekv::sdk::Errorcode::REQUEST_TIMEOUT || !retry)
-                    throw;
-                LOG_WARNING(log, "KV request to abort txn {} timeouts. Will retry {} tims\n", txn_id.toString(), retry);
-            }
+            if (could_return)
+                return cur_txn_record;
+            else
+                LOG_WARNING(log, "Failed to abort merge txn, current record is {}. Will retry {} times\n", cur_txn_record.toString(), retry);
             std::this_thread::sleep_for(std::chrono::milliseconds(200 * (MAX_ABORT_RETRY - retry)));
         }
         while (retry-- > 0);

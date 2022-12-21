@@ -3180,9 +3180,9 @@ namespace Catalog
         return res;
     }
 
-    MetastoreByteKVImpl::IteratorPtr Catalog::getTrashTableIDIterator(uint32_t iterator_internal_batch_size)
+    IMetaStore::IteratorPtr Catalog::getTrashTableIDIterator(uint32_t iterator_internal_batch_size)
     {
-        MetastoreByteKVImpl::IteratorPtr res;
+        IMetaStore::IteratorPtr res;
         runWithMetricSupport(
             [&] { res = meta_proxy->getTrashTableIDIterator(name_space, iterator_internal_batch_size); },
             ProfileEvents::GetTrashTableIDIteratorSuccess,
