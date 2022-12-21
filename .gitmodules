@@ -219,8 +219,8 @@
 	path = contrib/consul
 	url = git@code.byted.org:cpputil/consul.git
 [submodule "contrib/librdkafka"]
-	path = contrib/librdkafka
-	url = git@code.byted.org:dp/librdkafka.git
+   path = contrib/librdkafka
+   url = https://github.com/ClickHouse/librdkafka.git
 [submodule "contrib/cassandra"]
 	path = contrib/cassandra
 	url = git@code.byted.org:dp/cassandra.git
