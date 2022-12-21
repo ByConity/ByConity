@@ -139,6 +139,7 @@
 [submodule "contrib/msgpack-c"]
 	path = contrib/msgpack-c
 	url = https://github.com/msgpack/msgpack-c
+    branch = cpp_master
 [submodule "contrib/libcpuid"]
 	path = contrib/libcpuid
 	url = https://github.com/ClickHouse-Extras/libcpuid.git
@@ -217,15 +218,9 @@
 [submodule "contrib/consul"]
 	path = contrib/consul
 	url = git@code.byted.org:cpputil/consul.git
-[submodule "contrib/librdkafka-origin"]
-	path = contrib/librdkafka-origin
-	url = git@code.byted.org:dp/librdkafka-origin.git
 [submodule "contrib/librdkafka"]
 	path = contrib/librdkafka
 	url = git@code.byted.org:dp/librdkafka.git
-[submodule "contrib/infsec"]
-	path = contrib/infsec
-	url = git@code.byted.org:cpputil/infsec.git
 [submodule "contrib/cassandra"]
 	path = contrib/cassandra
 	url = git@code.byted.org:dp/cassandra.git
@@ -249,10 +244,6 @@
 [submodule "contrib/breakpad"]
 	path = contrib/breakpad
 	url = git@code.byted.org:dp/breakpad.git
-[submodule "contrib/cppkms"]
-	path = contrib/cppkms
-	url = git@code.byted.org:security/cppkms.git
-	branch = support_platform
 [submodule "contrib/ipdb"]
 	path = contrib/ipdb
 	url = git@code.byted.org:dp/ipdb-c.git
@@ -265,9 +256,6 @@
 [submodule "contrib/numactl"]
 	path = contrib/numactl
 	url = git@code.byted.org:dp/numactl.git
-[submodule "contrib/bytekv4cpp"]
-	path = contrib/bytekv4cpp
-	url = git@code.byted.org:dp/bytekv4cpp.git
 [submodule "contrib/benchmark"]
 	path = contrib/benchmark
 	url = https://github.com/google/benchmark.git
