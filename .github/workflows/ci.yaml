@@ -1,0 +1,185 @@
+name: CI
+on:
+  # Triggers the workflow on push or pull request events but only for the "main" branch
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  scm_build:
+    name: Build binary
+    container: vivekscl/test:latest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v2
+      - name: Build binary with build_bin.sh
+        env:
+          CUSTOM_CMAKE_BUILD_TYPE: "Release"
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          ./build_bin.sh
+
+  CeFuntionalStateless:
+    name: CE - FuntionalStateless
+    container: vivekscl/test:stateless-test
+    needs: [scm_build]
+    env:
+      CONSUL_HTTP_HOST: "10.8.156.215"
+      CONSUL_HTTP_PORT: "2280"
+      PATH: "$PATH:/opt/tiger/yarn_deploy/hadoop/bin:/opt/tiger/consul_deploy/bin/go:/clickhouse/bin:/clickhouse/usr/breakpad/bin:/opt/tiger/bvc/bin:/opt/tiger/foundationdb/bin"
+      LD_LIBRARY_PATH: "/clickhouse/lib/:$LD_LIBRARY_PATH"
+      MY_HOST_IP: "127.0.0.1"
+      BYTED_HOST_IP: "127.0.0.1"
+      RUNTIME_IDC_NAME: "lf"
+
+    runs-on: ubuntu-latest
+    steps:
+      - name: action_checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+      - name: start fdb
+        run: |
+          echo $(pwd)
+          cd /
+          CLICKHOUSE_PREFIX="clickhouse"
+          mkdir -p $CLICKHOUSE_PREFIX
+          bash /home/code/docker/test/foundationdb/start_fdb.sh
+      - name: Run CE FuntionalStateless
+        continue-on-error: true
+        run: |
+          cd /
+          export ADDITIONAL_OPTIONS='--jobs 1 --run ce_stateless'
+          cp -r /home/code/docker/test/stateless/* .
+          /bin/bash run.sh
+      - name: After test
+        continue-on-error: true
+        run: |
+          mkdir /test_output/foundationdb && cp /opt/tiger/foundationdb/logs/* /test_output/foundationdb/. || true
+          bash /home/code/.codebase/ci_scripts/common_component/copy_core_to_shared.sh || true # copy core to artifact folder
+          bash /home/code/.codebase/ci_scripts/common_component/copy_case_stdout_to_shared.sh || true # copy stdout to artifact folder
+          mv /test_output /Artifacts  && tar --warning=no-file-changed -zcf  /Artifacts.tar.gz /Artifacts/*  || true
+          bash /home/code/.codebase/ci_scripts/common_component/block_ci.sh || true # check block_ci_flag
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: Artifacts
+          path: /Artifacts.tar.gz
+      - name: Analyse Result
+        run:
+          /bin/bash /home/code/docker/test/result.sh
+
+#  CeProblematicFuntionalStateless:
+#    <<: *default_test
+#    name: CE - Problematic - FuntionalStateless
+#    steps:
+#      - *action_checkout
+#      - *download_scm_binary
+#      - name: Run CE Problematic FuntionalStateless
+#        ignore-error: true
+#        commands:
+#          - cd /
+#          - cp -r /home/code/docker/test/stateless/* .
+#          - export ADDITIONAL_OPTIONS='--jobs 1 --run ce_problematic_stateless --testname'   # enable optimizer for test
+#          - /bin/bash run.sh
+#      - *after_test
+#      - *upload_artifact
+#      - &analyse_result_ignore_fail
+#        name: Analyse Result
+#        ignore-error: true
+#        commands:
+#          - /bin/bash /home/code/docker/test/result.sh
+#
+#  CnchFuntionalStateless:
+#    <<: *default_test
+#    name: CNCH - FuntionalStateless
+#    steps:
+#      - *action_checkout
+#      - *doas
+#      - *download_scm_binary
+#      - name: Run CNCH FuntionalStateless
+#        continue-on-error: true
+#        commands:
+#          - bash /home/code/.codebase/ci_scripts/cnch_config/1_single_server/cluster_up.sh
+#          - bash /home/code/docker/test/foundationdb/show_fdb.sh
+#          - export ADDITIONAL_OPTIONS='--jobs 4 --run cnch_stateless'
+#          - cp -r /home/code/docker/test/stateless/* .
+#          - /bin/bash run_cnch.sh
+#      - *after_test
+#      - *upload_artifact
+#      - *analyse_result
+#
+#  CnchFuntionalStatelessIPV6:
+#    <<: *default_test
+#    name: CNCH - FuntionalStateless IPV6
+#    steps:
+#      - *action_checkout
+#      - *doas
+#      - *download_scm_binary
+#      - name: Run CNCH FuntionalStateless IPv6
+#        ignore-error: true
+#        commands:
+#          - export ENABLE_IPV6=1
+#          - bash /home/code/.codebase/ci_scripts/cnch_config/1_single_server/cluster_up.sh
+#          - bash /home/code/docker/test/foundationdb/show_fdb.sh
+#          - export ADDITIONAL_OPTIONS='--jobs 1 --run cnch_stateless'
+#          - cp -r /home/code/docker/test/stateless/* .
+#          - /bin/bash run_cnch.sh
+#      - *after_test
+#      - *upload_artifact
+#      - *analyse_result_ignore_fail
+#
+#  CnchFuntionalStatelessProblematic:
+#    <<: *default_test
+#    name: CNCH - Problematic - FuntionalStateless
+#    steps:
+#      - *action_checkout
+#      - *doas
+#      - *download_scm_binary
+#      - name: Run CNCH Problematic FuntionalStateless
+#        ignore-error: true
+#        commands:
+#          - bash /home/code/.codebase/ci_scripts/cnch_config/1_single_server/cluster_up.sh
+#          - export ADDITIONAL_OPTIONS='--jobs 1 --run cnch_problematic_stateless'
+#          - cp -r /home/code/docker/test/stateless/* .
+#          - /bin/bash run_cnch.sh
+#      - *after_test
+#      - *upload_artifact
+#      - *analyse_result_ignore_fail
+#
+#  CertificateStateful:
+#    <<: *default_test
+#    name: CNCH - CertificateStateful
+#    image: hub.byted.org/bytehouse/clickhouse-stateful-test:gdb12.1v1
+#    steps:
+#      - *action_checkout
+#      - *download_scm_binary
+#      - *doas
+#      - name: Run CertificateStateful
+#        continue-on-error: false
+#        commands:
+#          - cd /
+#          - cp -r /home/code/docker/test/certificate/* ./
+#          - |
+#            bash /home/code/.codebase/ci_scripts/cnch_config/1_single_server/cluster_up.sh
+#            bash /home/code/docker/test/foundationdb/show_fdb.sh
+#
+#            echo "Load tables for certificate"
+#            python3 load_certificate_tables.py --suite-path /home/code/tests/queries/3_1_certificate_aeolus_bp_edu &
+#            python3 load_certificate_tables.py --suite-path /home/code/tests/queries/3_2_certificate_aeolus_delta &
+#            python3 load_certificate_tables.py --suite-path /home/code/tests/queries/3_3_certificate_datarocks &
+#            python3 load_certificate_tables.py --suite-path /home/code/tests/queries/3_4_certificate_deepinsight &
+#            python3 load_certificate_tables.py --suite-path /home/code/tests/queries/3_5_certificate_ecom_data &
+#            python3 load_certificate_tables.py --suite-path /home/code/tests/queries/3_6_certificate_libra_hl &
+#            python3 load_certificate_tables.py --suite-path /home/code/tests/queries/3_7_certificate_motor_dzx &
+#            wait
+#            echo "Load tables for certificates done"
+#
+#          - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
+#          - export ADDITIONAL_OPTIONS='--jobs 1'
+#          - /bin/bash run_cnch.sh
+#      - *after_test
+#      - *upload_artifact
+#      - *analyse_result
