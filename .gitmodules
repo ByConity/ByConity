@@ -214,16 +214,16 @@
 	url = https://github.com/ClickHouse-Extras/libpqxx.git
 [submodule "contrib/croaring"]
 	path = contrib/croaring
-	url = git@code.byted.org:dp/CRoaring.git
+	url = git@github.com:ByConity/CRoaring.git
 [submodule "contrib/librdkafka"]
    path = contrib/librdkafka
    url = https://github.com/ClickHouse/librdkafka.git
 [submodule "contrib/cassandra"]
 	path = contrib/cassandra
-	url = git@code.byted.org:dp/cassandra.git
+	url = git@github.com:ByConity/cassandra.git
 [submodule "contrib/incubator-brpc"]
 	path = contrib/incubator-brpc
-	url = git@code.byted.org:dp/brpc.git
+	url = git@github.com:ByConity/incubator-brpc.git
 	branch = brpc1p3
 [submodule "contrib/gflags"]
 	path = contrib/gflags
@@ -244,10 +244,10 @@
 	url = https://github.com/google/breakpad.git
 [submodule "contrib/ipdb"]
 	path = contrib/ipdb
-	url = https://github.com/ipipdotnet/ipdb-c.git
+	url = git@github.com:ByConity/ipdb-c.git
 [submodule "contrib/maxminddb"]
 	path = contrib/maxminddb
-	url = https://github.com/maxmind/libmaxminddb.git
+	url = git@github.com:ByConity/libmaxminddb.git
 [submodule "contrib/json-c"]
 	path = contrib/json-c
 	url = https://github.com/json-c/json-c.git
