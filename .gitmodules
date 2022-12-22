@@ -229,7 +229,7 @@
 	url = git@code.byted.org:dp/brpc.git
 [submodule "contrib/gflags"]
 	path = contrib/gflags
-	url = git@code.byted.org:dp/gflags.git
+	url = https://github.com/gflags/gflags.git
 [submodule "contrib/libhdfs3"]
 	path = contrib/libhdfs3
 	url = git@code.byted.org:dp/libhdfs3.git
