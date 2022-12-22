@@ -227,6 +227,7 @@
 [submodule "contrib/incubator-brpc"]
 	path = contrib/incubator-brpc
 	url = git@code.byted.org:dp/brpc.git
+	branch = brpc1p3
 [submodule "contrib/gflags"]
 	path = contrib/gflags
 	url = https://github.com/gflags/gflags.git

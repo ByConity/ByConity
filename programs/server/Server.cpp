@@ -1694,7 +1694,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             }
             brpc::ServerOptions stream_options;
             stream_options.idle_timeout_sec = -1;
-            stream_options.name = "stm";
+            stream_options.server_info_name = "stm";
             stream_options.has_builtin_services = enable_brpc_builtin_services;
             if (rpc_servers[0]->Start(global_context->getExchangePort(), &stream_options) != 0) {
                 throw Exception("Fail to start BrpcExchangeReceiverRegistryService", ErrorCodes::LOGICAL_ERROR) ;
@@ -1702,7 +1702,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
             brpc::ServerOptions command_options;
             command_options.idle_timeout_sec = -1;
-            command_options.name = "cmd";
+            command_options.server_info_name = "cmd";
             command_options.has_builtin_services = enable_brpc_builtin_services;
             if (rpc_servers[1]->Start(global_context->getExchangeStatusPort(), &command_options) != 0) {
                 throw Exception("Fail to start PlanSegmentManagerRpcService", ErrorCodes::LOGICAL_ERROR) ;
@@ -1752,7 +1752,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
                 std::string host_port = createHostPortString(listen, rpc_port);
                 brpc::ServerOptions options;
-                options.name = "def";
+                options.server_info_name = "def";
                 options.has_builtin_services = enable_brpc_builtin_services;
                 if (0 != rpc_server->Start(host_port.c_str(), &options))
                 {
