@@ -1,0 +1,19 @@
+insert
+4	4
+optimize
+10	2
+start merge after alter
+12	2
+optimize
+12	2
+insert
+14	4
+optimize
+7	2
+10	1
+gc1
+5	2
+5	1
+gc2
+3	2
+1	1

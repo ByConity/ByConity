@@ -1,0 +1,44 @@
+4	98
+3	889
+2	64
+1	64
+4	98
+3	889
+2	64
+1	64
+test.aggregate_view	1	0	0	SELECT app_id, event_name, event_date, sumState(cost) AS sum_cost, maxState(duration) AS max_duration FROM test.event_metric_local GROUP BY app_id, event_name, event_date	
+{"database": "test", "table": "event_metric_local", "dependencies": ["test.aggregate_view"], "partition_keys": ["toDate(event_date)"], "base_rows": 4, "view_rows": 4, "base_rows": 4, "view_rows": 4, "recommend_mv_index_granularity": 8192, "dimensions": ["app_id", "event_name", "event_date"], "dimension_aliases": ["", "", ""], "metrics": ["sum(cost)", "max(duration)"], "metric_aliases": ["sum_cost", "max_duration"], "where": "", "group_by": ["app_id", "event_name", "event_date"]}
+test.aggregate_view	1	0	0	SELECT app_id, event_name, event_date, sumState(cost) AS sum_cost, maxState(duration) AS max_duration FROM test.event_metric_local GROUP BY app_id, event_name, event_date	
+{"database": "test", "table": "event_metric_local", "dependencies": ["test.aggregate_view"], "partition_keys": ["toDate(event_date)"], "base_rows": 4, "view_rows": 4, "base_rows": 4, "view_rows": 4, "recommend_mv_index_granularity": 8192, "dimensions": ["app_id", "event_name", "event_date"], "dimension_aliases": ["", "", ""], "metrics": ["sum(cost)", "max(duration)"], "metric_aliases": ["sum_cost", "max_duration"], "where": "", "group_by": ["app_id", "event_name", "event_date"]}
+2	send	2021-11-30	476	64
+1	show	2021-11-30	44	64
+4	slide	2021-11-30	123	98
+3	show	2021-11-30	87	889
+2	send	2021-11-30	476	64
+1	show	2021-11-30	44	64
+4	slide	2021-11-30	123	98
+3	show	2021-11-30	87	889
+2	send	2021-11-30	476	64
+1	show	2021-11-30	44	64
+4	slide	2021-11-30	123	98
+3	show	2021-11-30	87	889
+2	send	2021-11-30	476	64
+1	show	2021-11-30	44	64
+4	slide	2021-11-30	123	98
+3	show	2021-11-30	87	889
+4	slide	123
+2	send	476
+1	show	44
+3	show	87
+4	slide	123
+2	send	476
+1	show	44
+3	show	87
+4	slide	123
+2	send	476
+1	show	44
+3	show	87
+4	slide	123
+2	send	476
+1	show	44
+3	show	87

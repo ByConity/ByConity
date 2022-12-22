@@ -1,0 +1,46 @@
+CREATE DATABASE IF NOT EXISTS test;
+
+DROP TABLE IF EXISTS python_udf;
+CREATE TABLE python_udf
+(
+    `event_id` UInt8,
+    `timestamp` Date,
+    `timestamp_d` DateTime('Europe/Moscow')
+)
+ENGINE = CnchMergeTree()
+ORDER BY timestamp;
+
+INSERT INTO python_udf (timestamp, event_id, timestamp_d) VALUES (1546300800, 1, 1546300800), ('2019-01-01', 2, '2019-01-01 00:00:00'), ('2019-01-02', 3, '2019-01-02 00:00:00'), (1546300900, 1, 1546300900);
+
+
+DROP FUNCTION IF EXISTS test_python_date;
+DROP FUNCTION IF EXISTS test_python_datetime;
+
+CREATE FUNCTION test_python_date RETURNS Date LANGUAGE PYTHON AS
+$code$
+from iudf import IUDF
+from overload import overload
+
+class test_python_date(IUDF):
+    @overload
+    def process(a):
+        return a + 6500
+$code$;
+
+CREATE FUNCTION test_python_datetime RETURNS DateTime LANGUAGE PYTHON AS
+$code$
+from iudf import IUDF
+from overload import overload
+
+class test_python_datetime(IUDF):
+    @overload
+    def process(a):
+        return a+1000
+$code$;
+
+select timestamp_d+1000, timestamp+6500, test_python_datetime(timestamp_d), test_python_date(timestamp) from python_udf;
+
+DROP FUNCTION IF EXISTS test_python_date;
+DROP FUNCTION IF EXISTS test_python_datetime;
+
+DROP TABLE python_udf;

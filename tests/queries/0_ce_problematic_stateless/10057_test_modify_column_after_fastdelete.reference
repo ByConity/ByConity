@@ -1,0 +1,6 @@
+after fastdelete
+8	36	36
+after modify column
+id	UInt64						
+s	UInt64						
+8	36	36

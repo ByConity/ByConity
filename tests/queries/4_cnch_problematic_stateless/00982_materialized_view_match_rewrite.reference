@@ -1,0 +1,17 @@
+1	show	2021-11-29	44	64
+2	send	2021-11-30	476	64
+3	show	2021-11-30	87	889
+4	slide	2021-11-30	123	98
+1	show	2021-11-29	44	64
+2	send	2021-11-30	476	64
+3	show	2021-11-30	87	889
+4	slide	2021-11-30	123	98
+1	show	44
+2	send	476
+3	show	87
+4	slide	123
+1	show	44
+2	send	476
+3	show	87
+4	slide	123
+{"database": "test", "table": "event_metric", "dependencies": ["aggregate_view"], "partition_keys": ["toDate(event_date)"], "base_rows": 3, "view_rows": 3, "recommend_mv_index_granularity": 8192, "dimensions": ["app_id", "event_name", "event_date"], "dimension_aliases": ["", "", ""], "metrics": ["sum(cost)", "max(duration)"], "metric_aliases": ["sum_cost", "max_duration"], "where": "", "group_by": ["app_id", "event_name", "event_date"]}

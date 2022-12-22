@@ -1,0 +1,23 @@
+localhost	9000	0		0	0
+=====describe local table=====
+TYPE	Nullable(String)						
+CODE	Nullable(Int32)						
+VALUE	Nullable(Int32)						
+=====describe distributed table=====
+TYPE	Nullable(String)						
+CODE	Nullable(Int32)						
+VALUE	Nullable(Int32)						
+=====query local table=====
+TYPE_A	10	100
+TYPE_B	20	\N
+TYPE_A	40	500
+TYPE_B	50	700
+TYPE_C	60	\N
+TYPE_C	\N	300
+=====query distributed table=====
+TYPE_A	10	100
+TYPE_B	20	\N
+TYPE_A	40	500
+TYPE_B	50	700
+TYPE_C	60	\N
+TYPE_C	\N	300

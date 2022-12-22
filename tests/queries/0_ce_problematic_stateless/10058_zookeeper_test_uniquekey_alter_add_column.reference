@@ -1,0 +1,26 @@
+-----------------------------------
+r1	2021-01-10	10001
+r2	2021-01-10	10001
+-----------------------------------
+r1	2021-01-10	10001	0	0	1970-01-01
+r1	2022-02-22	10002	1	2	2021-01-12
+r2	2021-01-10	10001	0	0	1970-01-01
+r2	2022-02-22	10002	1	2	2021-01-12
+-----------------------------------
+r1	2021-01-10	10001	1	2	2021-01-12
+r1	2022-02-22	10002	1	2	2021-01-12
+r1	2022-02-22	10004	1	2	2021-01-12
+r2	2021-01-10	10001	1	2	2021-01-12
+r2	2022-02-22	10002	1	2	2021-01-12
+r2	2022-02-22	10004	1	2	2021-01-12
+-----------------------------------
+CREATE TABLE test.alter_add_column_t1\n(\n    `d` Date,\n    `id` UInt64,\n    `col1` UInt32,\n    `col2` UInt64,\n    `col3` Date\n)\nENGINE = HaUniqueMergeTree(\'/clickhouse/tables/test/add_columns\', \'r1\')\nPARTITION BY d\nORDER BY id\nUNIQUE KEY id\nSETTINGS ha_unique_update_log_sleep_ms = 10, ha_unique_replay_log_sleep_ms = 10, ha_unique_checkpoint_attempt_interval = 10, ha_unique_checkpoint_min_logs = 0, ha_unique_replay_log_add_delay = 10, index_granularity = 8192
+CREATE TABLE test.alter_add_column_t2\n(\n    `d` Date,\n    `id` UInt64,\n    `col1` UInt32,\n    `col2` UInt64,\n    `col3` Date\n)\nENGINE = HaUniqueMergeTree(\'/clickhouse/tables/test/add_columns\', \'r2\')\nPARTITION BY d\nORDER BY id\nUNIQUE KEY id\nSETTINGS ha_unique_update_log_sleep_ms = 10, ha_unique_replay_log_sleep_ms = 10, ha_unique_checkpoint_attempt_interval = 10, ha_unique_checkpoint_min_logs = 0, ha_unique_replay_log_add_delay = 10, replicated_can_become_leader = 0, index_granularity = 8192
+-----------------------------------
+optimize table final
+r1	2021-01-10	10001	1	2	2021-01-12
+r1	2022-02-22	10002	1	2	2021-01-12
+r1	2022-02-22	10004	1	2	2021-01-12
+r2	2021-01-10	10001	1	2	2021-01-12
+r2	2022-02-22	10002	1	2	2021-01-12
+r2	2022-02-22	10004	1	2	2021-01-12

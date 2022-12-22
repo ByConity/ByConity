@@ -1,0 +1,769 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  NOTE: User and query level settings are set up in "users.xml" file.
+--><yandex>
+    <logger>
+        <!-- Possible levels: https://github.com/pocoproject/poco/blob/develop/Foundation/include/Poco/Logger.h#L105 -->
+        <level>trace</level>
+        <log>/test_output/server/server.log</log>
+        <errorlog>/test_output/server/server.err.log</errorlog>
+        <testlog>/test_output/server/server.test.log</testlog>
+        <size>1000M</size>
+        <count>10</count>
+        <!-- <console>1</console> --> <!-- Default behavior is autodetection (log to console if not daemon mode and is tty) -->
+    </logger>
+    <!--display_name>production</display_name--> <!-- It is the name that will be shown in the client -->
+    <http_port>8123</http_port>
+    <rpc_port>8223</rpc_port>
+    <tcp_port>9000</tcp_port>
+    <ha_tcp_port>10000</ha_tcp_port>
+    <exchange_port>9400</exchange_port>
+    <exchange_status_port>9500</exchange_status_port>
+
+    <!-- For HTTPS and SSL over native protocol. -->
+    <!--
+    <https_port>8443</https_port>
+    <tcp_port_secure>9440</tcp_port_secure>
+    -->
+
+    <!-- Used with https_port and tcp_port_secure. Full ssl options list: https://github.com/ClickHouse-Extras/poco/blob/master/NetSSL_OpenSSL/include/Poco/Net/SSLManager.h#L71 -->
+    <openSSL>
+        <server> <!-- Used for https server AND secure tcp port -->
+            <!-- openssl req -subj "/CN=localhost" -new -newkey rsa:2048 -days 365 -nodes -x509 -keyout /etc/clickhouse-server/server.key -out /etc/clickhouse-server/server.crt -->
+            <certificateFile>/etc/clickhouse-server/server.crt</certificateFile>
+            <privateKeyFile>/etc/clickhouse-server/server.key</privateKeyFile>
+            <!-- openssl dhparam -out /etc/clickhouse-server/dhparam.pem 4096 -->
+            <dhParamsFile>/etc/clickhouse-server/dhparam.pem</dhParamsFile>
+            <verificationMode>none</verificationMode>
+            <loadDefaultCAFile>true</loadDefaultCAFile>
+            <cacheSessions>true</cacheSessions>
+            <disableProtocols>sslv2,sslv3</disableProtocols>
+            <preferServerCiphers>true</preferServerCiphers>
+        </server>
+
+        <client> <!-- Used for connecting to https dictionary source -->
+            <loadDefaultCAFile>true</loadDefaultCAFile>
+            <cacheSessions>true</cacheSessions>
+            <disableProtocols>sslv2,sslv3</disableProtocols>
+            <preferServerCiphers>true</preferServerCiphers>
+            <!-- Use for self-signed: <verificationMode>none</verificationMode> -->
+            <invalidCertificateHandler>
+                <!-- Use for self-signed: -->
+                <name>AcceptCertificateHandler</name>
+                <!-- <name>RejectCertificateHandler</name> -->
+            </invalidCertificateHandler>
+        </client>
+    </openSSL>
+
+    <storage_configuration>
+        <disks>
+            <default></default>
+            <server_local_disk1>
+                <path>/cnch/cnch_test/server/data/</path>
+            </server_local_disk1>
+            <server_hdfs_disk0>
+                <path>/user/ducle.canh/cnch_backward_compability/</path>
+                <type>bytehdfs</type>
+            </server_hdfs_disk0>
+        </disks>
+        <policies>
+            <default>
+                <volumes>
+                    <local>
+                        <default>default</default>
+                        <disk>default</disk>
+                        <disk>server_local_disk1</disk>
+                    </local>
+                </volumes>
+            </default>
+            <cnch_default_hdfs>
+                <volumes>
+                    <hdfs>
+                        <default>server_hdfs_disk0</default>
+                        <disk>server_hdfs_disk0</disk>
+                    </hdfs>
+                </volumes>
+            </cnch_default_hdfs>
+        </policies>
+    </storage_configuration>
+
+    <!-- Default root page on http[s] server. For example load UI from https://tabix.io/ when opening http://localhost:8123 -->
+    <!--
+    <http_server_default_response><![CDATA[<html ng-app="SMI2"><head><base href="http://ui.tabix.io/"></head><body><div ui-view="" class="content-ui"></div><script src="http://loader.tabix.io/master.js"></script></body></html>]]></http_server_default_response>
+    -->
+
+    <!-- Port for communication between replicas. Used for data exchange. -->
+    <interserver_http_port>9009</interserver_http_port>
+
+    <!-- Hostname that is used by other replicas to request this server.
+         If not specified, than it is determined analoguous to 'hostname -f' command.
+         This setting could be used to switch replication to another network interface.
+      -->
+    <!--
+    <interserver_http_host>example.yandex.ru</interserver_http_host>
+    -->
+
+    <!-- Listen specified host. use :: (wildcard IPv6 address), if you want to accept connections both with IPv4 and IPv6 from everywhere. -->
+    <listen_host>::</listen_host>
+<!--    <listen_host>0.0.0.0</listen_host>-->
+    <!-- Default values - try listen localhost on ipv4 and ipv6: -->
+    <!--
+    <listen_host>::1</listen_host>
+    <listen_host>127.0.0.1</listen_host>
+    -->
+    <!-- Don't exit if ipv6 or ipv4 unavailable, but listen_host with this protocol specified -->
+    <listen_try>1</listen_try>
+
+    <!-- Allow listen on same address:port -->
+    <!-- <listen_reuse_port>0</listen_reuse_port> -->
+
+    <!-- <listen_backlog>64</listen_backlog> -->
+
+    <max_connections>4096</max_connections>
+    <keep_alive_timeout>3</keep_alive_timeout>
+
+    <!-- Maximum number of concurrent queries. -->
+    <max_concurrent_queries>200</max_concurrent_queries>
+
+    <!-- Set limit on number of open files (default: maximum). This setting makes sense on Mac OS X because getrlimit() fails to retrieve
+         correct maximum value. -->
+    <!-- <max_open_files>262144</max_open_files> -->
+
+    <!-- Size of cache of uncompressed blocks of data, used in tables of MergeTree family.
+         In bytes. Cache is single for server. Memory is allocated only on demand.
+         Cache is used when 'use_uncompressed_cache' user setting turned on (off by default).
+         Uncompressed cache is advantageous only for very short queries and in rare cases.
+      -->
+    <uncompressed_cache_size>8589934592</uncompressed_cache_size>
+
+    <!-- Approximate size of mark cache, used in tables of MergeTree family.
+         In bytes. Cache is single for server. Memory is allocated only on demand.
+         You should not lower this value.
+      -->
+    <mark_cache_size>5368709120</mark_cache_size>
+
+    <!-- Interval to sync Virtual Warehouse resource usage from Daemon Manager-->
+    <resource_usage_sync_interval>5</resource_usage_sync_interval>
+
+    <!-- Path to data directory, with trailing slash. -->
+    <path>/clickhouse/cnch_test/server/</path>
+
+    <!-- Path to temporary data for processing hard queries. -->
+    <tmp_path>/clickhouse/cnch_test/server/tmp/</tmp_path>
+
+    <!-- Directory with user provided files that are accessible by 'file' table function. -->
+
+    <!-- Path to configuration file with users, access rights, profiles of settings, quotas. -->
+    <users_config>/home/code/.codebase/ci_scripts/cnch_config/1_single_server/config/users.xml</users_config>
+
+    <!-- Default profile of settings. -->
+    <default_profile>default</default_profile>
+
+    <!-- System profile of settings. This settings are used by internal processes (Buffer storage, Distibuted DDL worker and so on). -->
+    <!-- <system_profile>default</system_profile> -->
+
+    <!-- Default database. -->
+    <default_database>default</default_database>
+
+    <!-- Server time zone could be set here.
+
+         Time zone is used when converting between String and DateTime types,
+          when printing DateTime in text formats and parsing DateTime from text,
+          it is used in date and time related functions, if specific time zone was not passed as an argument.
+
+         Time zone is specified as identifier from IANA time zone database, like UTC or Africa/Abidjan.
+         If not specified, system time zone at server startup is used.
+
+         Please note, that server could display time zone alias instead of specified name.
+         Example: W-SU is an alias for Europe/Moscow and Zulu is an alias for UTC.
+    -->
+    <timezone>Europe/Moscow</timezone>
+
+    <!-- You can specify umask here (see "man umask"). Server will apply it on startup.
+         Number is always parsed as octal. Default umask is 027 (other users cannot read logs, data files, etc; group can only read).
+    -->
+    <!-- <umask>022</umask> -->
+
+    <!-- Perform mlockall after startup to lower first queries latency
+          and to prevent clickhouse executable from being paged out under high IO load.
+         Enabling this option is recommended but will lead to increased startup time for up to a few seconds.
+    -->
+    <mlock_executable>false</mlock_executable>
+
+    <!-- Configuration of clusters that could be used in Distributed tables.
+         https://clickhouse.yandex/docs/en/table_engines/distributed/
+      -->
+    <remote_servers incl="clickhouse_remote_servers">
+        <!-- Test only shard config for testing distributed storage -->
+        <test_shard_localhost>
+            <shard>
+                <replica>
+                    <host>localhost</host>
+                    <port>9000</port>
+                </replica>
+            </shard>
+        </test_shard_localhost>
+        <test_cluster_two_shards_localhost>
+             <shard>
+                 <replica>
+                     <host>localhost</host>
+                     <port>9000</port>
+                 </replica>
+             </shard>
+             <shard>
+                 <replica>
+                     <host>localhost</host>
+                     <port>9000</port>
+                 </replica>
+             </shard>
+         </test_cluster_two_shards_localhost>
+        <test_shard_localhost_secure>
+            <shard>
+                <replica>
+                    <host>localhost</host>
+                    <port>9440</port>
+                    <secure>1</secure>
+                </replica>
+            </shard>
+        </test_shard_localhost_secure>
+        <test_unavailable_shard>
+            <shard>
+                <replica>
+                    <host>localhost</host>
+                    <port>9000</port>
+                </replica>
+            </shard>
+            <shard>
+                <replica>
+                    <host>localhost</host>
+                    <port>1</port>
+                </replica>
+            </shard>
+        </test_unavailable_shard>
+    </remote_servers>
+
+
+    <!-- If element has 'incl' attribute, then for it's value will be used corresponding substitution from another file.
+         By default, path to file with substitutions is /etc/metrika.xml. It could be changed in config in 'include_from' element.
+         Values for substitutions are specified in /yandex/name_of_substitution elements in that file.
+      -->
+
+    <!-- ZooKeeper is used to store metadata about replicas, when using Replicated tables.
+         Optional. If you don't use replicated tables, you could omit that.
+
+         See https://clickhouse.yandex/docs/en/table_engines/replication/
+      -->
+   <!-- <zookeeper incl="zookeeper-servers" optional="true" /> -->
+
+<!--   <zookeeper>-->
+<!--        <node index="1">-->
+<!--            <host>10.25.182.208</host>-->
+<!--            <port>2181</port>-->
+<!--        </node>-->
+<!--    </zookeeper>-->
+
+    <!-- Substitutions for parameters of replicated tables.
+          Optional. If you don't use replicated tables, you could omit that.
+
+         See https://clickhouse.yandex/docs/en/table_engines/replication/#creating-replicated-tables
+      -->
+    <macros incl="macros" optional="true" />
+
+
+    <!-- Reloading interval for embedded dictionaries, in seconds. Default: 3600. -->
+    <builtin_dictionaries_reload_interval>3600</builtin_dictionaries_reload_interval>
+
+
+    <!-- Maximum session timeout, in seconds. Default: 3600. -->
+    <max_session_timeout>3600</max_session_timeout>
+
+    <!-- Default session timeout, in seconds. Default: 60. -->
+    <default_session_timeout>60</default_session_timeout>
+
+    <resource_usage_sync_interval>5</resource_usage_sync_interval>
+    <!-- Server resource usage entry timeout. Outdated entries are deleted -->
+    <server_resource_usage_timeout_seconds>15</server_resource_usage_timeout_seconds>
+
+    <!-- Sending data to Graphite for monitoring. Several sections can be defined. -->
+    <!--
+        interval - send every X second
+        root_path - prefix for keys
+        hostname_in_path - append hostname to root_path (default = true)
+        metrics - send data from table system.metrics
+        events - send data from table system.events
+        asynchronous_metrics - send data from table system.asynchronous_metrics
+    -->
+    <!--
+    <graphite>
+        <host>localhost</host>
+        <port>42000</port>
+        <timeout>0.1</timeout>
+        <interval>60</interval>
+        <root_path>one_min</root_path>
+        <hostname_in_path>true</hostname_in_path>
+
+        <metrics>true</metrics>
+        <events>true</events>
+        <asynchronous_metrics>true</asynchronous_metrics>
+    </graphite>
+    <graphite>
+        <host>localhost</host>
+        <port>42000</port>
+        <timeout>0.1</timeout>
+        <interval>1</interval>
+        <root_path>one_sec</root_path>
+
+        <metrics>true</metrics>
+        <events>true</events>
+        <asynchronous_metrics>false</asynchronous_metrics>
+    </graphite>
+    -->
+
+    <!-- Query metrics log. Used only for queries with setting enable_query_level_profiling = 1 -->
+    <!-- query_metrics>
+        <database>cnch_system</database>
+        <table>query_metrics</table>
+        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+    </query_metrics>
+    -->
+
+    <!-- Query worker metrics. Database and table name must be identical in cnch-server.xml and cnch-worker.xml -->
+    <!-- query_worker_metrics>
+        <database>cnch_system</database>
+        <table>query_worker_metrics</table>
+    </query_worker_metrics>
+    -->
+
+    <!-- Virtual Warehouse Queue related settings -->
+    <!-- Time interval before a server's resource usage is removed on Daemon Manager-->
+    <!-- <server_resource_usage_timeout_seconds>15</server_resource_usage_timeout_seconds> -->
+    <!-- Time interval before a virtual warehouse's resource usages and ResourceGroup object are removed due to inactivity -->
+    <!-- <vw_unused_expiry_seconds>3600</vw_unused_expiry_seconds> -->
+
+    <!-- Serve endpoint for Prometheus monitoring. -->
+    <!--
+        endpoint - mertics path (relative to root, statring with "/")
+        port - port to setup server. If not defined or 0 than http_port used
+        metrics - send data from table system.metrics
+        events - send data from table system.events
+        asynchronous_metrics - send data from table system.asynchronous_metrics
+    -->
+    <!--
+    <prometheus>
+        <endpoint>/metrics</endpoint>
+        <port>0</port>
+        <metrics>true</metrics>
+        <events>true</events>
+        <asynchronous_metrics>true</asynchronous_metrics>
+        <part_metrics>false</part_metrics>
+    </prometheus>
+    -->
+
+
+    <!-- Query log. Used only for queries with setting log_queries = 1. -->
+    <!-- Uncomment if use part log.
+         Part log contains information about all actions with parts in MergeTree tables (creation, deletion, merges, downloads).
+    <part_log>
+        <database>system</database>
+        <table>part_log</table>
+        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+    </part_log>
+    -->
+
+
+    <!-- Parameters for embedded dictionaries, used in Yandex.Metrica.
+         See https://clickhouse.yandex/docs/en/dicts/internal_dicts/
+    -->
+
+    <!-- Path to file with region hierarchy. -->
+    <!-- <path_to_regions_hierarchy_file>/opt/geo/regions_hierarchy.txt</path_to_regions_hierarchy_file> -->
+
+    <!-- Path to directory with files containing names of regions -->
+    <!-- <path_to_regions_names_files>/opt/geo/</path_to_regions_names_files> -->
+
+
+    <!-- Configuration of external dictionaries. See:
+         https://clickhouse.yandex/docs/en/dicts/external_dicts/
+    -->
+    <dictionaries_config>*_dictionary.xml</dictionaries_config>
+
+    <!-- Uncomment if you want data to be compressed 30-100% better.
+         Don't do that if you just started using ClickHouse.
+      -->
+    <compression incl="clickhouse_compression">
+    <!--
+        <!- - Set of variants. Checked in order. Last matching case wins. If nothing matches, lz4 will be used. - ->
+        <case>
+
+            <!- - Conditions. All must be satisfied. Some conditions may be omitted. - ->
+            <min_part_size>10000000000</min_part_size>        <!- - Min part size in bytes. - ->
+            <min_part_size_ratio>0.01</min_part_size_ratio>   <!- - Min size of part relative to whole table size. - ->
+
+            <!- - What compression method to use. - ->
+            <method>zstd</method>
+        </case>
+    -->
+    </compression>
+
+    <!-- Allow to execute distributed DDL queries (CREATE, DROP, ALTER, RENAME) on cluster.
+         Works only if ZooKeeper is enabled. Comment it if such functionality isn't required. -->
+    <distributed_ddl>
+        <!-- Path in ZooKeeper to queue with DDL queries -->
+        <path>/clickhouse/task_queue/ddl</path>
+
+        <!-- Settings from this profile will be used to execute DDL queries -->
+        <!-- <profile>default</profile> -->
+    </distributed_ddl>
+
+    <!-- Settings to fine tune MergeTree tables. See documentation in source code, in MergeTreeSettings.h -->
+    <!--
+    <merge_tree>
+        <max_suspicious_broken_parts>5</max_suspicious_broken_parts>
+    </merge_tree>
+    -->
+
+    <!-- Protection from accidental DROP.
+         If size of a MergeTree table is greater than max_table_size_to_drop (in bytes) than table could not be dropped with any DROP query.
+         If you want do delete one table and don't want to restart clickhouse-server, you could create special file <clickhouse-path>/flags/force_drop_table and make DROP once.
+         By default max_table_size_to_drop is 50GB; max_table_size_to_drop=0 allows to DROP any tables.
+         The same for max_partition_size_to_drop.
+         Uncomment to disable protection.
+    -->
+    <!-- <max_table_size_to_drop>0</max_table_size_to_drop> -->
+    <!-- <max_partition_size_to_drop>0</max_partition_size_to_drop> -->
+
+    <!-- Example of parameters for GraphiteMergeTree table engine -->
+    <graphite_rollup_example>
+        <pattern>
+            <regexp>click_cost</regexp>
+            <function>any</function>
+            <retention>
+                <age>0</age>
+                <precision>3600</precision>
+            </retention>
+            <retention>
+                <age>86400</age>
+                <precision>60</precision>
+            </retention>
+        </pattern>
+        <default>
+            <function>max</function>
+            <retention>
+                <age>0</age>
+                <precision>60</precision>
+            </retention>
+            <retention>
+                <age>3600</age>
+                <precision>300</precision>
+            </retention>
+            <retention>
+                <age>86400</age>
+                <precision>3600</precision>
+            </retention>
+        </default>
+    </graphite_rollup_example>
+
+    <!-- Directory in <clickhouse-path> containing schema files for various input formats.
+         The directory will be created if it doesn't exist.
+      -->
+    <format_schema_path>/cnch/cnch_test/server/format_schemas/</format_schema_path>
+
+    <!-- Uncomment to disable ClickHouse internal DNS caching. -->
+    <!-- <disable_internal_dns_cache>1</disable_internal_dns_cache> -->
+
+    <service_discovery>
+        <!--Service Discovery local/consul/dns -->
+        <mode>local</mode>
+        <cluster>default</cluster>
+        <disable_cache>false</disable_cache>
+        <cache_timeout>5</cache_timeout>
+        <server>
+            <psm>data.cnch.server</psm>
+            <!-- For dns -->
+            <service>cnch-server</service>
+            <headless_service>cnch-server-headless</headless_service>
+            <!-- For local test -->
+            <node>
+                <host>ip_address_replace_me</host>
+                <hostname>server0</hostname>
+                <ports>
+                    <!-- TCP/Primary -->
+                    <port><name>PORT0</name><value>9000</value></port>
+                    <!-- RPC -->
+                    <port><name>PORT1</name><value>8223</value></port>
+                    <!-- HTTP -->
+                    <port><name>PORT2</name><value>8123</value></port>
+                    <!-- TCP_SECURE -->
+                    <port><name>PORT3</name><value>9002</value></port>
+                    <!-- HTTPS_PORT -->
+                    <port><name>PORT4</name><value>8125</value></port>
+                    <!-- Exchange Stream Port-->
+                    <port><name>PORT5</name><value>9400</value></port>
+                    <!-- Exchange Status Port-->
+                    <port><name>PORT6</name><value>9500</value></port>
+                </ports>
+            </node>
+        </server>
+        <tso>
+            <psm>data.cnch.tso</psm>
+            <!-- For dns -->
+            <service>cnch-tso</service>
+            <headless_service>cnch-tso-headless</headless_service>
+            <!-- For local test -->
+            <node>
+                <host>ip_address_replace_me</host>
+                <hostname>tso0</hostname>
+                <ports>
+                    <!-- RPC/Primary -->
+                    <port><name>PORT0</name><value>8080</value></port>
+                </ports>
+            </node>
+        </tso>
+        <daemon_manager>
+            <psm>data.cnch.daemon_manager</psm>
+            <!-- For dns -->
+            <service>cnch-daemonmanager</service>
+            <headless_service>cnch-daemonmanager-headless</headless_service>
+            <!-- For local test -->
+            <node>
+                <host>ip_address_replace_me</host>
+                <hostname>dm0</hostname>
+                <ports>
+                    <!-- RPC/Primary -->
+                    <port><name>PORT0</name><value>8090</value></port>
+                </ports>
+            </node>
+        </daemon_manager>
+        <resource_manager>
+            <psm>data.cnch.resource_manager</psm>
+            <!-- For dns -->
+            <service>cnch-resourcemanager</service>
+            <headless_service>cnch-resourcemanager-headless</headless_service>
+            <!-- For local test -->
+            <node>
+                <host>ip_address_replace_me</host>
+                <hostname>rm0</hostname>
+                <ports>
+                    <!-- RPC/Primary -->
+                    <port><name>PORT0</name><value>8989</value></port>
+                </ports>
+            </node>
+            <!-- <node>
+                <host>ip_address_replace_me</host>
+                <hostname>rm0</hostname>
+                <ports>
+                    <port><name>PORT0</name><value>8990</value></port>
+                </ports>
+            </node> -->
+        </resource_manager>
+        <vw>
+            <psm>data.cnch.vw_default</psm>
+            <!-- For local test -->
+            <node>
+                <vw_name>vw_default</vw_name>
+                <host>ip_address_replace_me</host>
+                <hostname>vw_default0</hostname>
+                <ports>
+                    <!-- TCP/Primary -->
+                    <port><name>PORT0</name><value>9001</value></port>
+                    <!-- RPC -->
+                    <port><name>PORT1</name><value>8224</value></port>
+                    <!-- HTTP -->
+                    <port><name>PORT2</name><value>8124</value></port>
+                    <!-- TCP_SECURE -->
+                    <port><name>PORT3</name><value>9003</value></port>
+                    <!-- HTTPS_PORT -->
+                    <port><name>PORT4</name><value>8126</value></port>
+                    <!-- Exchange Stream Port-->
+                    <port><name>PORT5</name><value>9410</value></port>
+                    <!-- Exchange Status Port-->
+                    <port><name>PORT6</name><value>9510</value></port>
+                </ports>
+            </node>
+            <node>
+                <vw_name>vw_write</vw_name>
+                <host>ip_address_replace_me</host>
+                <hostname>vw_write0</hostname>
+                <ports>
+                    <!-- TCP/Primary -->
+                    <port><name>PORT0</name><value>8132</value></port>
+                    <!-- RPC -->
+                    <port><name>PORT1</name><value>8131</value></port>
+                    <!-- HTTP -->
+                    <port><name>PORT2</name><value>8130</value></port>
+                    <!-- TCP_SECURE -->
+                    <port><name>PORT3</name><value>8132</value></port>
+                    <!-- HTTPS_PORT -->
+                    <port><name>PORT4</name><value>8130</value></port>
+                    <!-- Exchange Stream Port-->
+                    <port><name>PORT5</name><value>8134</value></port>
+                    <!-- Exchange Status Port-->
+                    <port><name>PORT6</name><value>8135</value></port>
+                </ports>
+            </node>
+        </vw>
+    </service_discovery>
+
+    <catalog>
+        <name_space>ci_baseline_backward_compability</name_space>
+    </catalog>
+    <cnch_type>server</cnch_type>
+
+    <catalog_service>
+        <!--Metastore storage type, support `bytekv` and `fdb`-->
+        <type>bytekv</type>
+        <bytekv>
+            <service_name>bytedance.bytekv.bytekv_default</service_name>
+            <cluster_name>bytekv_default</cluster_name>
+            <name_space>bytekv_cnch_dev</name_space>
+            <table_name>cnch_metastore_hz_dev</table_name>
+        </bytekv>
+    </catalog_service>
+
+    <daemon_manager>
+        <port>8090</port>
+        <http>
+            <port>8091</port>
+            <receive_timeout>1800</receive_timeout>
+            <send_timeout>1800</send_timeout>
+        </http>
+        <workload_thread_interval_ms>1000</workload_thread_interval_ms>
+        <daemon_jobs>
+            <job>
+                <name>PART_GC</name>
+                <!-- Interval in millisecond -->
+                <interval>10000</interval>
+            </job>
+            <job>
+                <name>PART_MERGE</name>
+                <!-- Interval in millisecond -->
+                <interval>10000</interval>
+            </job>
+            <job>
+                <name>CONSUMER</name>
+                <!-- Interval in millisecond -->
+                <interval>10000</interval>
+            </job>
+            <job>
+                <name>MEMORY_BUFFER</name>
+                <!-- Interval in millisecond -->
+                <interval>3000</interval>
+            </job>
+            <job>
+                <name>DEDUP_WORKER</name>
+                <!-- Interval in millisecond -->
+                <interval>10000</interval>
+            </job>
+            <job>
+                <name>GLOBAL_GC</name>
+                <!-- Interval in millisecond -->
+                <interval>5000</interval>
+            </job>
+            <job>
+                <name>TXN_GC</name>
+                <!-- Interval in millisecond -->
+                <interval>600000</interval>
+            </job>
+        </daemon_jobs>
+    </daemon_manager>
+
+    <resource_manager>
+        <init_client_tries>3</init_client_tries>
+        <init_client_retry_interval_ms>3000</init_client_retry_interval_ms>
+        <max_retry_times>3</max_retry_times>
+    </resource_manager>
+
+    <tso_service>
+        <port>8080</port>
+        <!--Metastore storage type, support `bytekv` and `fdb`-->
+        <type>bytekv</type>
+        <bytekv>
+            <service_name>bytedance.bytekv.cnch_meta.service.lf</service_name>
+            <cluster_name>cnch_meta</cluster_name>
+            <name_space>bytekv_cnch_build</name_space>
+            <table_name>cnch_tso_build</table_name>
+            <key_name>tso</key_name>
+        </bytekv>
+        <tso_window_ms>3000</tso_window_ms>
+        <tso_max_retry_count>3</tso_max_retry_count>
+        <!-- If use_fallback is true, read_only transactions during TSO unavailability will succeed but there is a small risk the returned result is incorrect -->
+        <use_fallback>true</use_fallback>
+    </tso_service>
+
+    <hdfs_nnproxy>data.bytehouse.nnproxy-hostnetwork.service.lf</hdfs_nnproxy>
+
+    <bytedance_kafka>
+        <owner>renqiang.0429</owner>
+        <prefer_service>dcleader</prefer_service>
+        <psm>aeolus.clickhouse.ch_helper</psm>
+        <team>data-dp-olap</team>
+    </bytedance_kafka>
+
+    <cnch_kafka_log>
+        <database>cnch_system</database>
+        <table>cnch_kafka_log</table>
+        <flush_interval_milliseconds>30000</flush_interval_milliseconds>
+        <engine>ENGINE = CnchMergeTree PARTITION BY event_date ORDER BY event_time TTL event_date + INTERVAL 31 DAY</engine>
+    </cnch_kafka_log>
+
+    <kafka_log>
+        <database>system</database>
+        <table>kafka_log</table>
+        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+    </kafka_log>
+
+    <bytejournal>
+        <log_dir>/shared/server/log/logs_bytejournal</log_dir>
+        <uri>bytejournal://10.145.105.86:8767,10.145.105.164:8767,10.145.105.149:8767?meta_type=sorteddb&amp;is_consul=false</uri>
+        <metrics_prefix>cnch</metrics_prefix>
+        <namespace>cnch_test</namespace>
+        <cnch_prefix>cnch_ci_random_suffix_replace_me_</cnch_prefix> <!-- add a random suffix to avoid same Bytejournal key names-->
+        <retention_ms>14400000</retention_ms>
+        <max_write_throughput_bytes>1073741824</max_write_throughput_bytes>
+        <!-- For bytejournal audit logs . Can be one of following : [none,native,databus]. https://jira.bytedance.com/browse/CNCH-270 -->
+        <metadata_audit_type>none</metadata_audit_type>
+        <max_rollover_size>536870912</max_rollover_size>  <!-- 512MiB -->
+    </bytejournal>
+
+    <server_leader_election>
+        <check_leader_info_interval_ms>1000</check_leader_info_interval_ms>
+        <wait_before_become_leader_ms>3000</wait_before_become_leader_ms>
+        <max_retry_times>3</max_retry_times>
+        <bytejournal>
+            <renewal_interval_ms>1000</renewal_interval_ms>
+            <polling_interval_ms>1000</polling_interval_ms>
+            <error_retry_interval_ms>1000</error_retry_interval_ms>
+            <lease_interval_ms>3000</lease_interval_ms>
+            <failover_interval_ms>5000</failover_interval_ms>
+        </bytejournal>
+    </server_leader_election>
+
+    <!-- JUMP for jump hash, RING for ring hash, MULTI_PROBE for multi probe hash -->
+    <part_allocator_algorithm>JUMP</part_allocator_algorithm>
+    <global_gc>
+        <threadpool_max_size>3</threadpool_max_size>
+        <threadpool_max_free_threads>1</threadpool_max_free_threads>
+        <threadpool_max_queue_size>60</threadpool_max_queue_size>
+    </global_gc>
+
+    <!-- Shared config directory between UDF container and cnch container -->
+    <udf_path>/cnch/cnch_test/server/user_defined</udf_path>
+
+    <udf_manager_server>
+        <timeout_ms>20000</timeout_ms>
+        <max_retry>1</max_retry>
+    </udf_manager_server>
+
+    <udf_processor>
+        <count>3</count>
+        <!-- This config directory is not shared -->
+        <!-- Its used for socket communication between udf manager and udf processors -->
+        <uds_path>/cnch/cnch_test/server/udf_processor</uds_path>
+        <timeout_ms>10000</timeout_ms>
+        <max_retry>1</max_retry>
+    </udf_processor>
+    <enable_cnch_topology_master>0</enable_cnch_topology_master>
+    <enable_part_cache>0</enable_part_cache>
+    <enable_cnch_storage_cache>0</enable_cnch_storage_cache>
+    <enable_server_manager>0</enable_server_manager>
+</yandex>

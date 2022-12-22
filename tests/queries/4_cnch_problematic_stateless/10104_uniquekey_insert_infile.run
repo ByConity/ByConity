@@ -1,0 +1,88 @@
+"""Ugly code to generate some test data"""
+import random
+import copy
+
+
+class Chunk:
+
+    def __init__(self, d, limit=10, replace=False):
+        self.generate(d, limit, replace)
+
+    def generate(self, d, limit, replace):
+        d *= 10
+        self.d_ = d
+        self.date_ = "2021-03-28"
+        self.replace_ = replace
+        self.inserts_ = []
+        self.raw_ = []
+        if replace:
+            self.data_ = [random.randrange(0, d + 10) for x in range(0, limit)]
+            self.raw_ = copy.deepcopy(self.data_)
+        else:
+            self.data_ = [d + x for x in range(0, limit)]
+            self.raw_ = copy.deepcopy(self.data_)
+
+        for i in range(0, limit):
+            insert = "('2021-03-28', {d}, {val})".format(d=d + i,
+                                                         val=self.data_[i])
+            if i < limit - 1:
+                insert += ", "
+            self.inserts_.append(insert)
+
+    def get_d(self):
+        return int(self.d_ / 10)
+
+    def replace_chunk(self, chunk):
+        new_data = chunk.data_
+        assert len(new_data) < len(self.data_)
+        self.data_ = new_data + self.data_[len(new_data):]
+
+    def dump_sql(self):
+        res = "INSERT INTO unique_merge VALUES " + ' '.join(
+            x for x in self.inserts_) + ";"
+        if self.replace_:
+            res += "  --- Upsert sql"
+        return res
+
+    def dump_data(self, li):
+        res = ""
+        for i in range(len(li)):
+            res += self.date_ + "\t" + str(self.d_ + i) + "\t" + str(
+                li[i]) + "\n"
+        return res
+
+    def dump_right_data(self):
+        if self.replace_:
+            return ""
+        return self.dump_data(self.data_)
+
+    def dump_raw_data(self):
+        return self.dump_data(self.raw_)
+
+
+def main():
+    li = []
+    mp = {}
+
+    for i in range(0, 100):
+        li.append(Chunk(i))
+        mp[i] = li[-1]
+        if i and i % 3 == 0:
+            p = random.randrange(0, i)
+            assert p < len(mp)
+            li.append(
+                Chunk(mp[p].get_d(), limit=random.randrange(1, 5),
+                      replace=True))
+            mp[p].replace_chunk(li[-1])
+
+    with open("10104_uniquekey_test_insert_infile.data", "w") as f:
+        for x in li:
+            f.write(x.dump_raw_data())
+
+    with open("10104_uniquekey_test_insert_infile.reference", "w") as f:
+        for x in li:
+            f.write(x.dump_right_data())
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,25 @@
+CREATE DATABASE IF NOT EXISTS test;
+
+DROP FUNCTION IF EXISTS py_script_9;
+
+CREATE FUNCTION py_script_9
+RETURNS Date
+LANGUAGE PYTHON AS
+$code$
+from iudf import IUDF
+from overload import overload
+
+class py_script_9(IUDF):
+    @overload
+    def process(a):
+        return a + 1
+
+    @overload
+    def process(a, b):
+        return a + b
+$code$;
+
+select py_script_9(number) from numbers(10);
+select py_script_9(number, 100) from numbers(10);
+
+DROP FUNCTION IF EXISTS py_script_9;

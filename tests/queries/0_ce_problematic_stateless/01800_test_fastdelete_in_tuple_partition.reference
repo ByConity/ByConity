@@ -1,0 +1,41 @@
+2021-01-01	1	18	a
+2021-01-01	1	19	f
+2021-01-01	2	20	b
+2021-01-01	2	21	c
+2021-01-02	3	22	a
+2021-01-02	3	23	b
+
+fast delete age in partition id 20210101-1 where age = 17
+2021-01-01	1	18	a
+2021-01-01	1	19	f
+2021-01-01	2	20	b
+2021-01-01	2	21	c
+2021-01-02	3	22	a
+2021-01-02	3	23	b
+
+fast delete use wrong partition id
+2021-01-01	1	18	a
+2021-01-01	1	19	f
+2021-01-01	2	20	b
+2021-01-01	2	21	c
+2021-01-02	3	22	a
+2021-01-02	3	23	b
+
+fast delete age in partition id 20210101-1 where age = 18
+2021-01-01	1	19	f
+2021-01-01	2	20	b
+2021-01-01	2	21	c
+2021-01-02	3	22	a
+2021-01-02	3	23	b
+
+fast delete age where id = 2
+2021-01-01	1	19	f
+2021-01-02	3	22	a
+2021-01-02	3	23	b
+
+fast delete age in partition (2021-01-02,3) where event = b
+2021-01-01	1	19	f
+2021-01-02	3	22	a
+
+fast delete age where event = f
+2021-01-02	3	22	a
