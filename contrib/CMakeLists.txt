@@ -151,11 +151,6 @@ if (USE_INTERNAL_MINIZIP_LIBRARY)
     add_subdirectory(minizip)
 endif ()
 
-if (USE_INTERNAL_CONSUL_LIBRARY)
-    add_subdirectory(consul-cmake)
-endif ()
-
-
 if (USE_INTERNAL_UDNS_LIBRARY)
     add_subdirectory(udns-cmake)
 endif ()

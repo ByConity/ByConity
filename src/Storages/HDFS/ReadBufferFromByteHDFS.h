@@ -26,7 +26,6 @@
 #if USE_HDFS
 #include <hdfs/hdfs.h>
 #include <hdfs/HdfsEvent.h>
-#include <consul/bridge.h>
 #include <random>
 #include <shared_mutex>
 
@@ -131,7 +130,7 @@ namespace ErrorCodes
             }
 
 
-            int getFD() const 
+            int getFD() const
             {
                 return -1;
             }
@@ -143,7 +142,7 @@ namespace ErrorCodes
 
             off_t seek(off_t offset, int whence = SEEK_SET) override
             {
-               return doSeek(offset, whence); 
+               return doSeek(offset, whence);
             }
 
             off_t getPosition() override
@@ -156,9 +155,9 @@ namespace ErrorCodes
         private:
             void tryConnect();
             off_t doSeek(off_t offset, int whence) ;
-            
+
             /// Get the position of the file corresponding to the data in buffer.
-            off_t getPositionInFile() 
+            off_t getPositionInFile()
             {
                 return offset_in_current_file - (working_buffer.end() - pos);
             }

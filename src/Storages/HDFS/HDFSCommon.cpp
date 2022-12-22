@@ -6,7 +6,6 @@
 #include <Common/ShellCommand.h>
 #include <Common/Exception.h>
 #include <Common/formatIPv6.h>
-#include <consul/bridge.h>
 #include <random>
 #include <IO/WriteBufferFromString.h>
 #include <IO/Operators.h>
@@ -211,17 +210,6 @@ std::pair<std::string, size_t> getNameNodeNNProxy(const std::string & nnproxy)
             if (retry++ > 2)
                 throw Exception("No available nnproxy " + nnproxy, ErrorCodes::NETWORK_ERROR);
             nnproxys = sd_consul->lookup(nnproxy, ComponentType::NNPROXY);
-        } while (nnproxys.empty());
-    }
-    else
-    {
-        int retry = 0;
-        do
-        {
-            if (retry++ > 2)
-                throw Exception("No available nnproxy " + nnproxy, ErrorCodes::NETWORK_ERROR);
-            auto endpoints = cpputil::consul::lookup_name(nnproxy);
-            nnproxys = ServiceDiscoveryConsul::formatResult(endpoints, ComponentType::NNPROXY);
         } while (nnproxys.empty());
     }
 

@@ -4,7 +4,7 @@
 #include <Common/Exception.h>
 #include <common/logger_useful.h>
 #include <ServiceDiscovery/ServiceDiscoveryFactory.h>
-#include <consul/bridge.h>
+#include <ServiceDiscovery/ServiceDiscoveryHelper.h>
 #include <IO/ReadHelpers.h>
 #include <Common/ProfileEvents.h>
 #include <Common/CurrentMetrics.h>
@@ -45,46 +45,6 @@ ServiceDiscoveryConsul::ServiceDiscoveryConsul(const Poco::Util::AbstractConfigu
     if (config.hasProperty("service_discovery.cache_timeout"))
         cache_timeout = config.getUInt("service_discovery.cache_timeout");
 
-}
-
-cpputil::consul::ServiceDiscovery get_consul_client()
-{
-    static cpputil::consul::ServiceDiscovery consul_client;
-
-    int i = 0;
-    while (consul_client.init_failed() && i++ < 3)
-    {
-        consul_client = cpputil::consul::ServiceDiscovery();
-        if (consul_client.init_failed())
-            usleep(1500 * 1000);
-    }
-
-    if (consul_client.init_failed())
-    {
-        throw Exception("Failed to init Consul client", ErrorCodes::SD_FAILED_TO_INIT_CONSUL_CLIENT);
-    }
-
-    consul_client.setLookupAddrFamily("");
-    consul_client.setLookupUnique("");
-    const char* ipv4 = getenv("BYTED_HOST_IP");
-    const char* ipv6 = getenv("BYTED_HOST_IPV6");
-    const bool v4 = ipv4 && ipv4[0];
-    const bool v6 = ipv6 && ipv6[0];
-    if (v4 && v6)
-    {
-        consul_client.setLookupAddrFamily("dual-stack");
-        consul_client.setLookupUnique("v6");
-    }
-    else if (v6)
-    {
-        consul_client.setLookupAddrFamily("v6");
-    }
-    else if (v4)
-    {
-        consul_client.setLookupAddrFamily("v4");
-    }
-
-    return consul_client;
 }
 
 HostWithPortsVec ServiceDiscoveryConsul::lookup(const String & psm_name, ComponentType type, const String & vw_name)
@@ -173,40 +133,9 @@ ServiceDiscoveryConsul::Endpoints ServiceDiscoveryConsul::fetchEndpointsFromCach
     }
 }
 
-ServiceDiscoveryConsul::Endpoints ServiceDiscoveryConsul::fetchEndpointsFromUpstream(const String & psm_name, const String & vw_name)
+ServiceDiscoveryConsul::Endpoints ServiceDiscoveryConsul::fetchEndpointsFromUpstream(const String &, const String &)
 {
-    auto retry_count = 2;
-    while (retry_count >= 0)
-    {
-        try
-        {
-            ProfileEvents::increment(ProfileEvents::SDRequestUpstream);
-            CurrentMetrics::Increment metric_increment{CurrentMetrics::CnchSDRequestsUpstream};
-            // by calling translate_one, we get endpoints from consul
-            Endpoints res;
-            for(auto & e : get_consul_client().translateName(psm_name))
-            {
-                // kick out endpoint that doesn't belong to this cluster as earily as possible
-                if(!passCheckCluster(e))
-                    continue;
-                // kick out endpoint that doesn't belong to this vw_name as earily as possible
-                if(!vw_name.empty() && !passCheckVwName(e, vw_name))
-                    continue;
-                res.emplace_back(e);
-            }
-            return res;
-        }
-        catch (Exception & e)
-        {
-            ProfileEvents::increment(ProfileEvents::SDRequestUpstreamFailed);
-            LOG_WARNING(log, "Try " + std::to_string(3 - retry_count)
-                        + ": Error looking up from consul " + e.displayText());
-            --retry_count;
-            usleep(10000); // sleep for 10ms
-        }
-    }
-
-    throw Exception("Unable to get endpoints from consul", ErrorCodes::NETWORK_ERROR);
+    return {};
 }
 
 HostWithPortsVec ServiceDiscoveryConsul::formatResult(const Endpoints & eps, ComponentType type)

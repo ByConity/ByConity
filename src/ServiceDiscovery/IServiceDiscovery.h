@@ -4,7 +4,7 @@
 #include <Core/Types.h>
 #include <Common/Exception.h>
 #include <Common/HostWithPorts.h>
-#include <consul/discovery.h>
+#include <ServiceDiscovery/ServiceDiscoveryHelper.h>
 
 namespace DB
 {

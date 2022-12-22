@@ -1,5 +1,5 @@
 #include <ServiceDiscovery/ServiceDiscoveryFactory.h>
-#include <ServiceDiscovery/ServiceDiscoveryConsul.h>
+//#include <ServiceDiscovery/ServiceDiscoveryConsul.h>
 #include <Poco/String.h>
 #include <Common/Exception.h>
 
@@ -31,14 +31,6 @@ ServiceDiscoveryClientPtr ServiceDiscoveryFactory::create(const Poco::Util::Abst
 
     if (!sd_clients.emplace(sd->getType(), sd).second)
         throw Exception("ServiceDiscoveryFactory: try to create a duplicate " + sd_type + " service discovery client", ErrorCodes::LOGICAL_ERROR);
-
-    /// We need SD Consul client for handling consul usage, i.e. for nnproxy, kms
-    if (sd->getType() != ServiceDiscoveryMode::CONSUL)
-    {
-        ServiceDiscoveryClientPtr sd_consul = std::make_shared<ServiceDiscoveryConsul>(config);
-        if (!sd_clients.emplace(sd_consul->getType(), sd_consul).second)
-            throw Exception("ServiceDiscoveryFactory: try to create a duplicate " + sd_type + " service discovery client", ErrorCodes::LOGICAL_ERROR);
-    }
 
     return sd;
 }

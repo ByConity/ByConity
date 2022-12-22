@@ -579,7 +579,6 @@ find_contrib_lib(cityhash)
 
 find_contrib_lib(farmhash)
 find_contrib_lib(minizip)
-find_contrib_lib(consul)
 find_contrib_lib(udns)
 include(cmake/find_gflags.cmake)
 

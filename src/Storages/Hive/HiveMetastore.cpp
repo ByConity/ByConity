@@ -15,7 +15,6 @@
 #include <Storages/Hive/HiveMetastore.h>
 #include <Storages/StorageCnchHive.h>
 #include <boost/algorithm/string.hpp>
-#include <consul/bridge.h>
 #include <hivemetastore/hive_metastore_types.h>
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/transport/TSocket.h>
@@ -706,24 +705,7 @@ HiveMetastoreClientFactory::createThriftHiveMetastoreClient(const String & name,
     auto port = hms_url.getPort();
 
     if (host.empty() || port == 0)
-    {
-        std::vector<cpputil::consul::ServiceEndpoint> hms_endpoints;
-        int retry = 0;
-        do
-        {
-            if (retry++ > 2)
-                throw Exception("No available hivemetatsore psm " + name, ErrorCodes::NETWORK_ERROR);
-            hms_endpoints = cpputil::consul::lookup_name(name);
-        } while (hms_endpoints.empty());
-
-        std::vector<cpputil::consul::ServiceEndpoint> sample;
-        std::sample(hms_endpoints.begin(), hms_endpoints.end(), std::back_inserter(sample), 1, std::mt19937{std::random_device{}()});
-        for (const auto & service : sample)
-        {
-            host = service.host;
-            port = service.port;
-        }
-    }
+        throw Exception("host empty or port is 0 ", ErrorCodes::LOGICAL_ERROR);
 
     LOG_TRACE(&Poco::Logger::get("HiveMetastoreClientFactory"), "CnchHive connect HiveMetastore host: {} {}", host, port);
     std::shared_ptr<TSocket> socket = std::make_shared<TSocket>(host, port);

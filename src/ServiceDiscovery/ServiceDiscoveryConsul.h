@@ -1,10 +1,10 @@
 #pragma once
 #include <ServiceDiscovery/IServiceDiscovery.h>
 #include <ServiceDiscovery/ServiceDiscoveryCache.h>
-#include <consul/discovery.h>
 #include <Poco/Util/AbstractConfiguration.h>
 #include <memory>
 #include <Poco/Logger.h>
+#include <ServiceDiscovery/ServiceDiscoveryHelper.h>
 
 namespace DB
 {
@@ -55,3 +55,4 @@ public:
 };
 
 }
+

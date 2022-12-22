@@ -380,15 +380,11 @@ target_link_libraries(clickhouse_common_io
             ipdb
             maxminddb
         PRIVATE
-            ${CONSUL_LIBRARIES}
             ${UDNS_LIBRARIES}
 
 )
 
 target_include_directories(clickhouse_common_io SYSTEM PUBLIC ${UDNS_INCLUDE_DIR})
-target_include_directories(clickhouse_common_io SYSTEM PUBLIC ${CONSUL_INCLUDE_DIR})
-# dbms_target_link_libraries(PUBLIC ${CONSUL_LIBRARIES})
-# dbms_target_include_directories(SYSTEM BEFORE PUBLIC ${CONSUL_INCLUDE_DIR})
 
 # dbms_target_link_libraries(PUBLIC ch_contrib::abseil_swiss_tables)
 

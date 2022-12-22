@@ -6,9 +6,9 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Poco/Util/AbstractConfiguration.h>
 #include <ServiceDiscovery/ServiceDiscoveryFactory.h>
+#include <ServiceDiscovery/ServiceDiscoveryHelper.h>
 
 #include <sstream>
-#include <consul/discovery.h>
 
 namespace ProfileEvents
 {
