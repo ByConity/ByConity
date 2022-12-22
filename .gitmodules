@@ -246,13 +246,13 @@
 	url = https://github.com/google/breakpad.git
 [submodule "contrib/ipdb"]
 	path = contrib/ipdb
-	url = git@code.byted.org:dp/ipdb-c.git
+	url = https://github.com/ipipdotnet/ipdb-c.git
 [submodule "contrib/maxminddb"]
 	path = contrib/maxminddb
-	url = git@code.byted.org:dp/libmaxminddb.git
+	url = https://github.com/maxmind/libmaxminddb.git
 [submodule "contrib/json-c"]
 	path = contrib/json-c
-	url = git@code.byted.org:dp/json-c.git
+	url = https://github.com/json-c/json-c.git
 [submodule "contrib/numactl"]
 	path = contrib/numactl
 	url = https://github.com/numactl/numactl.git

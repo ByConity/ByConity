@@ -1,9 +1,6 @@
 set (SRCS
 ${ClickHouse_SOURCE_DIR}/contrib/hivemetastore/hive_metastore_constants.h
 ${ClickHouse_SOURCE_DIR}/contrib/hivemetastore/hive_metastore_constants.cpp
-${ClickHouse_SOURCE_DIR}/contrib/hivemetastore/FacebookService.h
-${ClickHouse_SOURCE_DIR}/contrib/hivemetastore/FacebookService.cpp
-${ClickHouse_SOURCE_DIR}/contrib/hivemetastore/fb303_types.h
 ${ClickHouse_SOURCE_DIR}/contrib/hivemetastore/hive_metastore_types.h
 ${ClickHouse_SOURCE_DIR}/contrib/hivemetastore/hive_metastore_types.cpp
 ${ClickHouse_SOURCE_DIR}/contrib/hivemetastore/ThriftHiveMetastore.h
