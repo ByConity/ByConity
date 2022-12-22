@@ -1,6 +1,4 @@
 if(ENABLE_TESTS)
-add_executable(tso_bytekv_test bytekv_test.cpp)
-target_link_libraries(tso_bytekv_test PRIVATE tso_lib dbms)
 
 add_executable(tso_client_test client_test.cpp)
 target_link_libraries(tso_client_test PRIVATE tso_lib dbms)

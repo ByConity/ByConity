@@ -204,25 +204,7 @@ int main(int argc, char** argv) {
     std::string type = options["type"].as<std::string>();
     std::string config_file = options["config"].as<std::string>();
 
-    if (type == "bytekv")
-    {
-        std::ifstream in(config_file);
-        Poco::XML::InputSource input_source{in};
-        Poco::AutoPtr<Poco::Util::AbstractConfiguration> xmlConfig = new Poco::Util::XMLConfiguration{&input_source};
-        if (!xmlConfig->has("catalog_service"))
-        {
-            std::cerr << "config file doesn't include catalog_service tag" << std::endl;
-            return -1;
-        }
-
-        metastore_ptr = std::make_shared<DB::Catalog::MetastoreByteKVImpl>(
-            xmlConfig->getString("catalog_service.bytekv.service_name"),
-            xmlConfig->getString("catalog_service.bytekv.cluster_name"),
-            xmlConfig->getString("catalog_service.bytekv.name_space"),
-            xmlConfig->getString("catalog_service.bytekv.table_name")
-        );
-    }
-    else if (type == "fdb")
+    if (type == "fdb")
     {
         metastore_ptr = std::make_shared<DB::Catalog::MetastoreFDBImpl>(config_file);
     }
