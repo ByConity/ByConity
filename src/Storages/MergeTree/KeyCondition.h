@@ -310,7 +310,7 @@ public:
         DataTypePtr current_type,
         bool single_point = false);
 
-    bool matchesExactContinuousRange() const;
+    bool matchesExactContinuousRange(const DataTypes & data_types) const;
 
 private:
     /// The expression is stored as Reverse Polish Notation.

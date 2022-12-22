@@ -206,6 +206,7 @@ struct Settings;
     /** Settings for parts cache on server for MergeTasks. Cache speed up the task scheduling. */             \
     M(UInt64, cnch_merge_parts_cache_timeout, 10 * 60, "", 0)                                  \
     M(UInt64, cnch_merge_parts_cache_min_count, 1000, "", 0)                                                  \
+    M(UInt64, cnch_merge_max_total_rows_to_merge, 50000000, "", 0) \
     \
     /* Unique table related settings */\
     M(Bool, cloud_enable_staging_area, false, "", 0) \
@@ -232,7 +233,6 @@ struct Settings;
     M(Bool, allow_floating_point_partition_key, false, "Allow floating point as partition key", 0) \
     M(Bool, cnch_enable_memory_buffer, false, "", 0) \
     /** Set to current max_rows in merge_scheduler to avoid generating too many merge tasks when disable merge_scheduler */ \
-    M(UInt64, cnch_merge_max_total_rows_to_merge, 15000000, "", 0) \
     M(Bool, cnch_merge_only_realtime_partition, false, "", 0) \
     /** RM - using RM, RoundRobin: - local round robin strategy */ \
     M(String, cnch_merge_pick_worker_algo, "RM", "", 0) \
