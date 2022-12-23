@@ -228,13 +228,9 @@
 [submodule "contrib/gflags"]
 	path = contrib/gflags
 	url = https://github.com/gflags/gflags.git
-[submodule "contrib/libhdfs3"]
-	path = contrib/libhdfs3
-	url = git@code.byted.org:dp/libhdfs3.git
-
 [submodule "contrib/libhdfs3-open"]
 	path = contrib/libhdfs3-open
-	url = git@code.byted.org:dp/libhdfs3-open.git
+	url = git@github.com:ByConity/libhdfs3-open.git
 
 [submodule "contrib/boost"]
 	path = contrib/boost
