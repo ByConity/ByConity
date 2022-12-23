@@ -30,7 +30,7 @@ git config http.postBuffer 524288000
 git submodule sync
 git config --global http.sslVerify "false"
 # Note: Don't use proxy for GitHub
- http_proxy=http://sys-proxy-rd-relay.byted.org:8118 https_proxy=http://sys-proxy-rd-relay.byted.org:8118 no_proxy=.byted.org
+# http_proxy=http://sys-proxy-rd-relay.byted.org:8118 https_proxy=http://sys-proxy-rd-relay.byted.org:8118 no_proxy=.byted.org
 git submodule update --init --recursive
 
 #export CMAKE_BUILD_TYPE=${CUSTOM_CMAKE_BUILD_TYPE:-RelWithDebInfo}
