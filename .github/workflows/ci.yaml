@@ -18,7 +18,8 @@ jobs:
         env:
           CUSTOM_CMAKE_BUILD_TYPE: "Release"
         run: |
-          cd "$GITHUB_WORKSPACE"
+          git -C "$GITHUB_WORKSPACE" submodule sync
+          git -C "$GITHUB_WORKSPACE" submodule update --init --recursive
           ./build_bin.sh
 
   CeFuntionalStateless:
