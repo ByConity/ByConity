@@ -17,7 +17,7 @@ set(LIBBREAKPAD_CLIENT_SRCS
     ${BREAKPAD_SRC_DIR}/client/linux/minidump_writer/linux_ptrace_dumper.cc
     ${BREAKPAD_SRC_DIR}/client/linux/minidump_writer/minidump_writer.cc
     ${BREAKPAD_SRC_DIR}/client/minidump_file_writer.cc
-    ${BREAKPAD_SRC_DIR}/common/convert_UTF.c
+    ${BREAKPAD_SRC_DIR}/common/convert_UTF.cc
     ${BREAKPAD_SRC_DIR}/common/md5.cc
     ${BREAKPAD_SRC_DIR}/common/string_conversion.cc
     ${BREAKPAD_SRC_DIR}/common/linux/elf_core_dump.cc
