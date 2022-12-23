@@ -216,8 +216,8 @@
 	path = contrib/croaring
 	url = git@github.com:ByConity/CRoaring.git
 [submodule "contrib/librdkafka"]
-   path = contrib/librdkafka
-   url = https://github.com/ClickHouse/librdkafka.git
+	path = contrib/librdkafka
+	url = https://github.com/ClickHouse/librdkafka.git
 [submodule "contrib/cassandra"]
 	path = contrib/cassandra
 	url = git@github.com:ByConity/cassandra.git
@@ -228,14 +228,6 @@
 [submodule "contrib/gflags"]
 	path = contrib/gflags
 	url = https://github.com/gflags/gflags.git
-[submodule "contrib/libhdfs3"]
-	path = contrib/libhdfs3
-	url = git@code.byted.org:dp/libhdfs3.git
-
-[submodule "contrib/libhdfs3-open"]
-	path = contrib/libhdfs3-open
-	url = git@code.byted.org:dp/libhdfs3-open.git
-
 [submodule "contrib/boost"]
 	path = contrib/boost
 	url = https://github.com/ClickHouse-Extras/boost.git
@@ -258,8 +250,20 @@
 	path = contrib/benchmark
 	url = https://github.com/google/benchmark.git
 [submodule "contrib/hivemetastore"]
-   path = contrib/hivemetastore
-   url = https://github.com/ClickHouse/hive-metastore.git
+	path = contrib/hivemetastore
+	url = https://github.com/ClickHouse/hive-metastore.git
 [submodule "contrib/udns"]
 	path = contrib/udns
 	url = https://github.com/ortclib/udns.git
+[submodule "contrib/aws-c-event-stream"]
+	path = contrib/aws-c-event-stream
+	url = https://github.com/ClickHouse-Extras/aws-c-event-stream.git
+[submodule "contrib/aws-c-common"]
+	path = contrib/aws-c-common
+	url = https://github.com/ClickHouse-Extras/aws-c-common.git
+[submodule "contrib/aws-checksums"]
+	path = contrib/aws-checksums
+	url = https://github.com/ClickHouse-Extras/aws-checksums.git
+[submodule "contrib/libhdfs3-open"]
+	path = contrib/libhdfs3-open
+	url = https://github.com/ClickHouse/libhdfs3.git
