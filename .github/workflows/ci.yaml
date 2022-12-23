@@ -2,9 +2,9 @@ name: CI
 on:
   # Triggers the workflow on push or pull request events but only for the "main" branch
   push:
-    branches: [ "main" ]
+    branches: [ "cnch-ce-merge-open-source" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "cnch-ce-merge-open-source" ]
 
 jobs:
   scm_build:
