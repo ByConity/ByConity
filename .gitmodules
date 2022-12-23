@@ -214,24 +214,23 @@
 	url = https://github.com/ClickHouse-Extras/libpqxx.git
 [submodule "contrib/croaring"]
 	path = contrib/croaring
-	url = git@github.com:ByConity/CRoaring.git
+	url = https://github.com/ByConity/CRoaring.git
 [submodule "contrib/librdkafka"]
-   path = contrib/librdkafka
-   url = https://github.com/ClickHouse/librdkafka.git
+	path = contrib/librdkafka
+	url = https://github.com/ClickHouse/librdkafka.git
 [submodule "contrib/cassandra"]
 	path = contrib/cassandra
-	url = git@github.com:ByConity/cassandra.git
+	url = https://github.com/ByConity/cassandra.git
 [submodule "contrib/incubator-brpc"]
 	path = contrib/incubator-brpc
-	url = git@github.com:ByConity/incubator-brpc.git
+	url = https://github.com/ByConity/incubator-brpc.git
 	branch = brpc1p3
 [submodule "contrib/gflags"]
 	path = contrib/gflags
 	url = https://github.com/gflags/gflags.git
 [submodule "contrib/libhdfs3-open"]
 	path = contrib/libhdfs3-open
-	url = git@github.com:ByConity/libhdfs3-open.git
-
+	url = https://github.com/ByConity/libhdfs3-open.git
 [submodule "contrib/boost"]
 	path = contrib/boost
 	url = https://github.com/ClickHouse-Extras/boost.git
@@ -240,22 +239,22 @@
 	url = https://github.com/google/breakpad.git
 [submodule "contrib/ipdb"]
 	path = contrib/ipdb
-	url = git@github.com:ByConity/ipdb-c.git
+	url = https://github.com/ByConity/ipdb-c.git
 [submodule "contrib/maxminddb"]
 	path = contrib/maxminddb
-	url = git@github.com:ByConity/libmaxminddb.git
+	url = https://github.com/ByConity/libmaxminddb.git
 [submodule "contrib/json-c"]
 	path = contrib/json-c
 	url = https://github.com/json-c/json-c.git
 [submodule "contrib/numactl"]
 	path = contrib/numactl
-	url = git@github.com:ByConity/numactl.git
+	url = https://github.com/ByConity/numactl.git
 [submodule "contrib/benchmark"]
 	path = contrib/benchmark
 	url = https://github.com/google/benchmark.git
 [submodule "contrib/hivemetastore"]
-   path = contrib/hivemetastore
-   url = https://github.com/ClickHouse/hive-metastore.git
+	path = contrib/hivemetastore
+	url = https://github.com/ClickHouse/hive-metastore.git
 [submodule "contrib/udns"]
 	path = contrib/udns
 	url = https://github.com/ortclib/udns.git
