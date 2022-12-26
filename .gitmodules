@@ -236,7 +236,7 @@
 	url = https://github.com/ClickHouse-Extras/boost.git
 [submodule "contrib/breakpad"]
 	path = contrib/breakpad
-	url = https://github.com/google/breakpad.git
+	url = https://github.com/ByConity/breakpad.git
 [submodule "contrib/ipdb"]
 	path = contrib/ipdb
 	url = https://github.com/ByConity/ipdb-c.git
