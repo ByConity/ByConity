@@ -1,5 +1,4 @@
 #include <Common/config.h>
-#if !USE_BYTEDANCE_RDKAFKA
 
 #include <Storages/Kafka/StorageKafka.h>
 #include <Storages/Kafka/parseSyslogLevel.h>
@@ -818,4 +817,3 @@ Names StorageKafka::getVirtualColumnNames() const
 
 }
 
-#endif
