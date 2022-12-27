@@ -1,21 +1,12 @@
-# Contributing to ClickHouse
+# Contributing to ByConity
 
-ClickHouse is an open project, and you can contribute to it in many ways. You can help with ideas, code, or documentation. We appreciate any efforts that help us to make the project better.
+ByC is an open project, and you can contribute to it in many ways. You can help with ideas, code, or documentation. We appreciate any efforts that help us to make the project better.
 
 Thank you.
 
-## Technical Info
-
-We have a [developer's guide](https://clickhouse.yandex/docs/en/development/developer_instruction/) for writing code for ClickHouse. Besides this guide, you can find [Overview of ClickHouse Architecture](https://clickhouse.yandex/docs/en/development/architecture/) and instructions on how to build ClickHouse in different environments.
-
-If you want to contribute to documentation, read the [Contributing to ClickHouse Documentation](docs/README.md) guide.
-
 ## Legal Info
 
-In order for us (YANDEX LLC) to accept patches and other contributions from you, you may adopt our Yandex Contributor License Agreement (the "**CLA**"). The current version of the CLA you may find here:
-1) https://yandex.ru/legal/cla/?lang=en (in English) and
-2) https://yandex.ru/legal/cla/?lang=ru (in Russian).
-
+In order for us to accept patches and other contributions from you, you may adopt our License Agreement 
 By adopting the CLA, you state the following:
 
 * You obviously wish and are willingly licensing your contributions to us for our open source projects under the terms of the CLA,
@@ -29,11 +20,10 @@ If you agree with these principles, please read and adopt our CLA. By providing 
 If you have already adopted terms and conditions of the CLA, you are able to provide your contributes. When you submit your pull request, please add the following information into it:
 
 ```
-I hereby agree to the terms of the CLA available at: [link].
+I hereby agree to the terms of the CLA available at:
 ```
 
 Replace the bracketed text as follows:
-* [link] is the link at the current version of the CLA (you may add here a link https://yandex.ru/legal/cla/?lang=en (in English) or a link https://yandex.ru/legal/cla/?lang=ru (in Russian).
 
 It is enough to provide us such notification once.
 
