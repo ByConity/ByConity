@@ -83,7 +83,6 @@ size_t MergeTreeReaderCNCH::readRows(size_t from_mark, bool continue_reading, si
 {
     if (!continue_reading)
         next_row_number_to_read = data_part->index_granularity.getMarkStartingRow(from_mark);
-    LOG_DEBUG(log, "Start reading from mark {}, row {}", from_mark, next_row_number_to_read);
 
     size_t read_rows = 0;
     try
@@ -144,7 +143,6 @@ size_t MergeTreeReaderCNCH::readRows(size_t from_mark, bool continue_reading, si
                 ///  if offsets are not empty and were already read, but elements are empty.
                 if (!column->empty())
                     read_rows = std::max(read_rows, column->size() - column_size_before_reading);
-                LOG_DEBUG(&Poco::Logger::get("MergeTreeDataPartCNCH"), "Read {} rows for column {} - {}", read_rows, name, type->getName());
             }
             catch (Exception & e)
             {
@@ -236,7 +234,6 @@ void MergeTreeReaderCNCH::initializeStreamForColumnIfNoBurden(
     FileStreamBuilders * stream_builders)
 {
     auto column_from_part = getColumnFromPart(column);
-    LOG_DEBUG(log, "Initialize stream for columns {}", column_from_part.name);
     if (column_from_part.type->isMap() && !column_from_part.type->isMapKVStore())
     {
         // Scan the directory to get all implicit columns(stream) for the map type
@@ -362,7 +359,6 @@ void MergeTreeReaderCNCH::addStreamsIfNoBurden(
             return;
 
         String file_name = file_name_getter(stream_name, substream_path);
-        LOG_DEBUG(log, "Will read file: {}", file_name);
         bool data_file_exists = data_part->getChecksums()->files.count(file_name + DATA_FILE_EXTENSION);
 
         if (!data_file_exists)
@@ -370,10 +366,6 @@ void MergeTreeReaderCNCH::addStreamsIfNoBurden(
 
         IMergeTreeDataPartPtr source_data_part = data_part->getMvccDataPart(stream_name + DATA_FILE_EXTENSION);
         String mark_file_name = source_data_part->index_granularity_info.getMarksFilePath(stream_name);
-        LOG_DEBUG(
-            log,
-            "Adding stream for reading {} from disk {}, mark_file_name: {}",
-            source_data_part->name, source_data_part->volume->getDisk()->getName(), mark_file_name);
 
         /// data file
         String data_path = source_data_part->getFullRelativePath() + "data";

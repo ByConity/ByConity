@@ -85,7 +85,7 @@ MarkCache::MappedPtr MergeTreeMarksLoader::loadMarksImpl()
                     auto [local_cache_disk, local_cache_path] = disk_cache->get(mrk_seg_key);
                     if (local_cache_disk && local_cache_disk->exists(local_cache_path))
                     {
-                        LOG_DEBUG(&Poco::Logger::get(__func__), "load from local disk {}, mrk_path {}", local_cache_disk->getPath(), local_cache_path);
+                        LOG_TRACE(&Poco::Logger::get(__func__), "load from local disk {}, mrk_path {}", local_cache_disk->getPath(), local_cache_path);
                         size_t cached_mark_file_size = local_cache_disk->getFileSize(local_cache_path);
                         if (expected_file_size != cached_mark_file_size)
                             throw Exception(
