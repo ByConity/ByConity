@@ -1,8 +1,6 @@
-CREATE DATABASE IF NOT EXISTS test;
+DROP TABLE IF EXISTS test_same_part;
 
-DROP TABLE IF EXISTS test.test_ci;
-
-CREATE TABLE test.test_ci
+CREATE TABLE test_same_part
 (
     `name` String,
     `id` Bigint
@@ -13,6 +11,6 @@ PARTITION BY id;
 -- table test_ci in different partition exist same part name
 -- maybe this sql cannot fullly explain this issue
 -- TODO: use system table show the same part
-SELECT * FROM test.test_ci ORDER BY name;
+SELECT * FROM test_same_part ORDER BY name;
 
-DROP TABLE IF EXISTS test.test_ci;
+DROP TABLE IF EXISTS test_same_part;
