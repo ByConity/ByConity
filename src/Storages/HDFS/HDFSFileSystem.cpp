@@ -261,7 +261,7 @@ void HDFSFileSystem::reconnect() const
         fs = new_fs;
     }
 
-    LOG_DEBUG(&Poco::Logger::get("HDFSFileSystem"), "Reconnect host: {}", host.data());
+    LOG_TRACE(&Poco::Logger::get("HDFSFileSystem"), "Reconnect host: {}", host.data());
 }
 
 void HDFSFileSystem::reconnectIfNecessary() const
