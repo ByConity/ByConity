@@ -4,6 +4,7 @@
 #include <QueryPlan/PlanNode.h>
 
 #include <unordered_map>
+#include <optional>
 
 namespace DB
 {
@@ -13,8 +14,7 @@ namespace DB
 class SymbolTransformMap
 {
 public:
-    static SymbolTransformMap buildFrom(PlanNodeBase & plan);
-
+    static std::optional<SymbolTransformMap> buildFrom(PlanNodeBase & plan);
 //    SymbolTransformMap(const SymbolTransformMap &) = default;
 //    SymbolTransformMap & operator=(const SymbolTransformMap &) = default;
 //    SymbolTransformMap(SymbolTransformMap &&) = default;

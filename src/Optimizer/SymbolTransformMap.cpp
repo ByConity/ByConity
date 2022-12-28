@@ -16,7 +16,7 @@ public:
         for (const auto & aggregate_description : agg_step->getAggregates())
         {
             auto function = Utils::extractAggregateToFunction(aggregate_description);
-            symbol_to_expressions.emplace(aggregate_description.column_name, function);
+            addSymbolExpressionMapping(aggregate_description.column_name, function);
         }
         return visitChildren(node, context);
     }
@@ -33,7 +33,7 @@ public:
         {
             if (Utils::isIdentity(assignment))
                 continue;
-            symbol_to_expressions.emplace(assignment.first, assignment.second);
+            addSymbolExpressionMapping(assignment.first, assignment.second);
             // if (const auto * function = dynamic_cast<const ASTFunction *>(assignment.second.get()))
             // {
             //     if (function->name == "cast" && TypeCoercion::compatible)
@@ -53,7 +53,7 @@ public:
         for (const auto & item : table_step->getColumnAlias())
         {
             auto column_reference = std::make_shared<ASTTableColumnReference>(table_step->getStorage(), item.first);
-            symbol_to_expressions.emplace(item.second, column_reference);
+            addSymbolExpressionMapping(item.second, column_reference);
         }
         return Void{};
     }
@@ -68,6 +68,15 @@ public:
 public:
     std::unordered_map<String, ConstASTPtr> symbol_to_expressions;
     std::unordered_map<String, ConstASTPtr> symbol_to_cast_lossless_expressions;
+    bool valid = true;
+
+    void addSymbolExpressionMapping(const String & symbol, ConstASTPtr expr)
+    {
+        // violation may happen when matching the root node, which may contain duplicate
+        // symbol names with other plan nodes. e.g. select sum(amount) as amount
+        if (!symbol_to_expressions.emplace(symbol, std::move(expr)).second)
+            valid = false;
+    }
 };
 
 class SymbolTransformMap::Rewriter : public SimpleExpressionRewriter<Void>
@@ -100,12 +109,15 @@ private:
     std::unordered_map<String, ConstASTPtr> & expression_lineage;
 };
 
-SymbolTransformMap SymbolTransformMap::buildFrom(PlanNodeBase & plan)
+std::optional<SymbolTransformMap> SymbolTransformMap::buildFrom(PlanNodeBase & plan)
 {
     Visitor visitor;
     Void context;
     VisitorUtil::accept(plan, visitor, context);
-    return SymbolTransformMap{visitor.symbol_to_expressions, visitor.symbol_to_cast_lossless_expressions};
+    std::optional<SymbolTransformMap> ret;
+    if (visitor.valid)
+        ret = SymbolTransformMap{visitor.symbol_to_expressions, visitor.symbol_to_cast_lossless_expressions};
+    return ret;
 }
 
 ASTPtr SymbolTransformMap::inlineReferences(const ConstASTPtr & expression) const

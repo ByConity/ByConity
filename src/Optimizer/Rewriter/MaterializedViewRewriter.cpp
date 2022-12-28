@@ -328,7 +328,7 @@ protected:
             ? dynamic_pointer_cast<const AggregatingStep>(top_aggregate_node->getStep())
             : std::shared_ptr<const AggregatingStep>{};
 
-        std::optional<const SymbolTransformMap> query_map; // lazy initialization later
+        std::optional<SymbolTransformMap> query_map; // lazy initialization later
 
         for (const auto & view : related_materialized_views)
             if (auto result = match(
@@ -356,7 +356,7 @@ protected:
         PlanNodeBase & query,
         const JoinGraph & query_join_graph,
         const std::vector<ConstASTPtr> & query_other_predicates,
-        std::optional<const SymbolTransformMap> & query_map,
+        std::optional<SymbolTransformMap> & query_map,
         const std::shared_ptr<const AggregatingStep> & query_aggregate,
         const JoinGraph & view_join_graph,
         const std::vector<ConstASTPtr> & view_other_predicates,
@@ -393,7 +393,14 @@ protected:
             view_predicates.second.emplace_back(predicate);
 
         if (!query_map)
-            query_map.emplace(SymbolTransformMap::buildFrom(query)); // lazy initialization here.
+        {
+            query_map = SymbolTransformMap::buildFrom(query); // lazy initialization here.
+            if (!query_map)
+            {
+                add_failure_message("query transform map invalid, maybe has duplicate symbols");
+                return {};
+            }
+        }
 
         // 1-2. generate table mapping from join graph
         // If a table is used multiple times, we will create multiple mappings,
