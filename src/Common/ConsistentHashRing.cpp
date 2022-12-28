@@ -26,11 +26,11 @@ void ConsistentHashRing::insert(const String & node)
     }
 }
 
-size_t ConsistentHashRing::getCapLimit(size_t num_parts) const
+size_t ConsistentHashRing::getCapLimit(size_t num_parts, bool strict) const
 {
     size_t num_nodes = size();
     double load = load_factor;
-    if (num_parts <= num_nodes)
+    if (strict || num_parts <= num_nodes)
         load = 1;
     return std::ceil((num_parts * load) / num_nodes);
 }

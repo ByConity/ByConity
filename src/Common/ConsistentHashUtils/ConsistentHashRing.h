@@ -95,7 +95,7 @@ public:
     void erase(const String & node);
 
     /// Calculate cap limit
-    size_t getCapLimit(size_t num_parts) const;
+    size_t getCapLimit(size_t num_parts, bool strict = false) const;
 
     /// Find the node to put the part on the ring
     virtual String find(const String & key) const;

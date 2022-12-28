@@ -381,24 +381,9 @@ int TSOServer::main(const std::vector<std::string> &)
 
     auto service_discovery = global_context->getServiceDiscoveryClient();
 
-    // as shared by devops  "consul mode is for in-house k8s cluster, dns mode is for on-cloud k8s cluster. local mode is for local test and CI"
-    if (service_discovery->getType() != ServiceDiscoveryMode::LOCAL)
-    {
-        const char * rpc_port = getenv("PORT0");
-        const std::string & tso_host = getHostIPFromEnv();
-
-        if (rpc_port != nullptr && (!tso_host.empty()))
-        {
-            tso_port = std::stoi(std::string{rpc_port});
-            host_port = createHostPortString(tso_host, tso_port);
-        }
-    }
-    else
-    {
-        // use non obvious default values so that when there is an error retrieving values out of config, we can spot it quickly
-        tso_port = config().getUInt("tso_service.port", 7070);
-        host_port = createHostPortString(config().getString("service_discovery.tso.node.host", "127.0.0.2"), tso_port);
-    }
+    tso_port = config().getUInt("tso_service.port", 7070);
+    const std::string & tso_host = getHostIPFromEnv();
+    host_port = createHostPortString(tso_host, tso_port);
 
     if (host_port.empty())
         LOG_WARNING(log, "host_port is empty. Please set PORT0 and TSO_IP env variables for consul/dns mode. For local mode, check cnch-server.xml");

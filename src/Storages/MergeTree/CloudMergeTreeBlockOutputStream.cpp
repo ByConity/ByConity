@@ -293,6 +293,19 @@ void CloudMergeTreeBlockOutputStream::writeSuffixForUpsert()
     if (!cnch_table)
         throw Exception("Table " + storage.getStorageID().getNameForLogs() + " is not cnch merge tree", ErrorCodes::LOGICAL_ERROR);
 
+    if (preload_parts.empty())
+    {
+        Stopwatch watch;
+        txn->commitV2();
+        LOG_INFO(
+            log,
+            "Committed transaction {} in {} ms, preload_parts is empty",
+            txn->getTransactionID(),
+            watch.elapsedMilliseconds(),
+            preload_parts.size());
+        return;
+    }
+
     /// acquire locks for all the written partitions
     NameOrderedSet sorted_partitions;
     for (auto & part : preload_parts)

@@ -68,19 +68,17 @@ ManipulationTaskRecord::~ManipulationTaskRecord()
 {
     try
     {
-        if (remove_task)
-            parent.tryRemoveTask(task_id);
-
-        if (type == ManipulationType::Merge)
-            --parent.running_merge_tasks;
-        else
-            --parent.running_mutation_tasks;
-
         if (!try_execute && !parts.empty())
         {
             std::lock_guard lock(parent.currently_merging_mutating_parts_mutex);
             for (auto & part : parts)
                 parent.currently_merging_mutating_parts.erase(part->name());
+        }
+
+        {
+            std::lock_guard lock(parent.currently_synchronous_tasks_mutex);
+            parent.currently_synchronous_tasks.erase(task_id);
+            parent.currently_synchronous_tasks_cv.notify_all();
         }
 
         if (transaction)
@@ -115,7 +113,6 @@ FutureManipulationTask & FutureManipulationTask::assignSourceParts(ServerDataPar
     {
         LOG_DEBUG(&Poco::Logger::get("MergeMutateDEBUG"), "assignSourceParts part {} name {}", static_cast<const void*>(part.get()), part->name());
     }
-
 
     /// flatten the parts
     CnchPartsHelper::flattenPartsVector(parts_);
@@ -264,8 +261,7 @@ void CnchMergeMutateThread::runHeartbeatTask()
         std::lock_guard lock(task_records_mutex);
         for (auto & [task_id, task] : task_records)
         {
-            if (task->worker)
-                worker_with_tasks[task->worker].push_back(task->task_id);
+            worker_with_tasks[task->worker].push_back(task->task_id);
         }
     }
 
@@ -342,6 +338,13 @@ void CnchMergeMutateThread::runImpl()
             std::lock_guard lock(currently_merging_mutating_parts_mutex);
             currently_merging_mutating_parts.clear();
         }
+
+        {
+            std::lock_guard lock(currently_synchronous_tasks_mutex);
+            currently_synchronous_tasks.clear();
+            currently_synchronous_tasks_cv.notify_all();
+        }
+
         {
             std::lock_guard lock(task_records_mutex);
             /// If thread_start_time is not equal to that in catalog. The MergeMutateThread will stop running and wait to be removed or scheduled again.
@@ -353,7 +356,6 @@ void CnchMergeMutateThread::runImpl()
                 fetched_thread_start_time,
                 task_records.size());
             task_records.clear();
-            task_records_cv.notify_all();
         }
         return;
     }
@@ -646,7 +648,7 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
     return true;
 }
 
-String CnchMergeMutateThread::submitFutureManipulationTask(FutureManipulationTask & future_task)
+String CnchMergeMutateThread::submitFutureManipulationTask(FutureManipulationTask & future_task, bool maybe_sync_task)
 {
     auto local_context = getContext();
 
@@ -671,7 +673,7 @@ String CnchMergeMutateThread::submitFutureManipulationTask(FutureManipulationTas
         partition_lock->setPartition(partition_id);
 
         if (transaction->tryLock(partition_lock))
-            LOG_DEBUG(log, "Acquired lock in succesful for partition " << partition_id);
+            LOG_DEBUG(log, "Acquired lock in successful for partition " << partition_id);
         else
         {
             throw Exception("Failed to acquire lock for partition " + partition_id, ErrorCodes::CNCH_LOCK_ACQUIRE_FAILED);
@@ -745,6 +747,12 @@ String CnchMergeMutateThread::submitFutureManipulationTask(FutureManipulationTas
                 ++running_mutation_tasks;
         }
 
+        if (maybe_sync_task)
+        {
+            std::lock_guard lock(currently_synchronous_tasks_mutex);
+            currently_synchronous_tasks.emplace(params.task_id);
+        }
+
         worker_client->submitManipulationTask(cnch_table, params, transaction_id, transaction->getStartTime());
         LOG_DEBUG(log, "Submitted manipulation task to {}, {}", worker_client->getHostWithPorts().toDebugString(), params.toDebugString());
     }
@@ -813,7 +821,7 @@ String CnchMergeMutateThread::triggerPartMerge(
         }
 
         return submitFutureManipulationTask(
-            FutureManipulationTask(*this, ManipulationType::Merge).setTryExecute(try_execute).assignSourceParts(std::move(res.front())));
+            FutureManipulationTask(*this, ManipulationType::Merge).setTryExecute(try_execute).assignSourceParts(std::move(res.front())), true);
     }
 
     return {};
@@ -827,7 +835,7 @@ void CnchMergeMutateThread::waitTasksFinish(const std::vector<String> & task_ids
         std::unique_lock lock(task_records_mutex);
         if (!timeout_ms)
         {
-            task_records_cv.wait(lock, [&]() { return !shutdown_called && !task_records.count(task_id); });
+            currently_synchronous_tasks_cv.wait(lock, [&]() { return !shutdown_called && !currently_synchronous_tasks.count(task_id); });
         }
         else
         {
@@ -835,12 +843,15 @@ void CnchMergeMutateThread::waitTasksFinish(const std::vector<String> & task_ids
             if (escaped_time >= timeout_ms)
                 throw Exception(ErrorCodes::TIMEOUT_EXCEEDED, "Timeout when wait MergeMutateTask `{}` finished", task_id);
 
-            task_records_cv.wait_for(
+            currently_synchronous_tasks_cv.wait_for(
                 lock,
                 std::chrono::milliseconds(timeout_ms - escaped_time),
-                [&]() { return !shutdown_called && !task_records.count(task_id); });
+                [&]() { return !shutdown_called && !currently_synchronous_tasks.count(task_id); });
         }
     }
+
+    if (shutdown_called)
+        throw Exception(ErrorCodes::ABORTED, "Tasks maybe canceled due to server shutdown");
 }
 
 void CnchMergeMutateThread::tryRemoveTask(const String & task_id)
@@ -849,14 +860,21 @@ void CnchMergeMutateThread::tryRemoveTask(const String & task_id)
     removeTaskImpl(task_id, lock);
 }
 
-void CnchMergeMutateThread::removeTaskImpl(const String & task_id, std::lock_guard<std::mutex> &)
+void CnchMergeMutateThread::removeTaskImpl(const String & task_id, std::lock_guard<std::mutex> &, TaskRecordPtr * out_task_record)
 {
     auto it = task_records.find(task_id);
     if (it == task_records.end())
-        return; /// XXX: should throw here ?
+        return;
+
+    if (it->second->type == ManipulationType::Merge)
+        --running_merge_tasks;
+    else
+        --running_mutation_tasks;
+
+    if (out_task_record)
+        *out_task_record = std::move(it->second);
 
     task_records.erase(it);
-    task_records_cv.notify_all();
 }
 
 void CnchMergeMutateThread::finishTask(const String & task_id, const MergeTreeDataPartPtr & merged_part, std::function<void()> && commit_parts)
@@ -871,8 +889,7 @@ void CnchMergeMutateThread::finishTask(const String & task_id, const MergeTreeDa
         auto it = task_records.find(task_id);
         if (it == task_records.end())
             throw Exception(ErrorCodes::ABORTED, "Task {} not found in this node.", task_id);
-        curr_task = std::move(it->second);
-        curr_task->remove_task = true; /// TODO: refactor me
+        removeTaskImpl(task_id, lock, &curr_task);
     }
 
     if (local_context->getRootConfig().debug_disable_merge_commit.safeGet())
@@ -940,8 +957,6 @@ void CnchMergeMutateThread::finishTask(const String & task_id, const MergeTreeDa
     LOG_TRACE(log, "Finish manipulation task {}", task_id);
 
     updatePartCache(curr_task->parts.front()->info().partition_id, curr_task->parts.size());
-    // if (curr_task->type == ManipulationType::Merge)
-    //     updateMergedParts(curr_task->parts);
 }
 
 CnchWorkerClientPtr CnchMergeMutateThread::getWorker(ManipulationType type, [[maybe_unused]] const ServerDataPartsVector & all_parts)

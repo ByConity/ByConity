@@ -125,14 +125,14 @@ private:
 
     bool tryMergeParts(StoragePtr & istorage, StorageCnchMergeTree & storage);
     bool trySelectPartsToMerge(StoragePtr & istorage, StorageCnchMergeTree & storage, MergeSelectionMetrics & metrics);
-    String submitFutureManipulationTask(FutureManipulationTask & future_task);
+    String submitFutureManipulationTask(FutureManipulationTask & future_task, bool maybe_sync_task = false);
 
     // Mutate
     bool tryMutateParts(StoragePtr & istorage, StorageCnchMergeTree & storage);
     void parseMutationEntries(const Strings & all_mutations, std::lock_guard<std::mutex> &);
     void removeMutationEntry(const TxnTimestamp & commit_ts, bool recluster_finish, std::lock_guard<std::mutex> &);
 
-    void removeTaskImpl(const String & task_id, std::lock_guard<std::mutex> & lock);
+    void removeTaskImpl(const String & task_id, std::lock_guard<std::mutex> & lock, TaskRecordPtr * out_task_record = nullptr);
 
     CnchWorkerClientPtr getWorker(ManipulationType type, const ServerDataPartsVector & all_parts);
 
@@ -147,8 +147,11 @@ private:
     std::mutex currently_merging_mutating_parts_mutex;
     NameSet currently_merging_mutating_parts;
 
+    std::condition_variable currently_synchronous_tasks_cv; /// for waitTasksFinish function
+    std::mutex currently_synchronous_tasks_mutex;
+    NameSet currently_synchronous_tasks;
+
     std::mutex task_records_mutex;
-    std::condition_variable task_records_cv;
     std::unordered_map<String, TaskRecordPtr> task_records;
 
     std::mutex try_merge_parts_mutex; /// protect tryMergeParts(), triggerPartMerge()

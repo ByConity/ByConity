@@ -21,6 +21,7 @@ BrpcApplication::BrpcApplication()
 
 BrpcApplication::~BrpcApplication()
 {
+    delete ::logging::SetLogSink(old_sink);
     std::lock_guard<std::mutex> guard(holder_map_mutex);
     config_holder_map.clear();
 }
@@ -35,9 +36,7 @@ void BrpcApplication::initBrpcLog()
 {
     int bprc_log_priority = poco2BrpcLogPriority(logger->getLevel());
     ::logging::SetMinLogLevel(bprc_log_priority);
-    ::logging::LogSink * poco_sink = new BrpcPocoLogSink();
-    ::logging::LogSink * old_sink = ::logging::SetLogSink(poco_sink);
-    delete old_sink;
+    old_sink = ::logging::SetLogSink(new BrpcPocoLogSink());
 }
 
 

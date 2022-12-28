@@ -429,7 +429,7 @@
         <flush_interval_milliseconds>7500</flush_interval_milliseconds>
     </cnch_kafka_log>
 
-    <part_allocation_algorithm>1</part_allocation_algorithm>
+    <part_allocation_algorithm>2</part_allocation_algorithm>
     <consistent_hash_ring>
         <num_replicas>16</num_replicas>
         <num_probes>21</num_probes>

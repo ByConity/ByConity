@@ -4338,6 +4338,7 @@ Context::PartAllocator Context::getPartAllocationAlgo() const
         {
             case 0: return PartAllocator::JUMP_CONSISTENT_HASH;
             case 1: return PartAllocator::RING_CONSISTENT_HASH;
+            case 2: return PartAllocator::STRICT_RING_CONSISTENT_HASH;
             default: return PartAllocator::JUMP_CONSISTENT_HASH;
         }
     }
@@ -4347,6 +4348,7 @@ Context::PartAllocator Context::getPartAllocationAlgo() const
     {
         case 0: return PartAllocator::JUMP_CONSISTENT_HASH;
         case 1: return PartAllocator::RING_CONSISTENT_HASH;
+        case 2: return PartAllocator::STRICT_RING_CONSISTENT_HASH;
         default: return PartAllocator::JUMP_CONSISTENT_HASH;
     }
 }

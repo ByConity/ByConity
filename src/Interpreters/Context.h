@@ -1250,6 +1250,7 @@ public:
     {
         JUMP_CONSISTENT_HASH = 0,
         RING_CONSISTENT_HASH = 1,
+        STRICT_RING_CONSISTENT_HASH = 2,
     };
     PartAllocator getPartAllocationAlgo() const;
 
