@@ -33,6 +33,7 @@ struct RewriterCandidate
 {
     StorageID view_database_and_table_name;
     StorageID target_database_and_table_name;
+    ASTPtr query_prewhere_expr;
     std::optional<PlanNodeStatisticsPtr> target_table_estimated_stats;
     NamesWithAliases table_output_columns;
     Assignments assignments;
@@ -85,6 +86,7 @@ struct JoinGraphMatchResult
     std::unordered_map<TableInputRef, std::vector<TableInputRef>, TableInputRefHash, TableInputRefEqual> query_to_view_table_mappings;
     std::vector<TableInputRef> view_missing_tables;
     std::unordered_map<String, std::shared_ptr<ASTTableColumnReference>> view_missing_columns;
+    std::unordered_map<TableInputRef, const TableScanStep *, TableInputRefHash, TableInputRefEqual> query_table_scans;
 };
 
 using TableInputRefMap = std::unordered_map<TableInputRef, TableInputRef, TableInputRefHash, TableInputRefEqual>;
@@ -123,6 +125,25 @@ public:
             return it->second->clone();
         return SimpleExpressionRewriter::visitNode(node, context);
     }
+};
+
+class AddTableInputRefRewriter : public SimpleExpressionRewriter<const Void>
+{
+public:
+    static ASTPtr rewrite(ASTPtr expression, StoragePtr storage)
+    {
+        AddTableInputRefRewriter rewriter(storage);
+        return ASTVisitorUtil::accept(expression, rewriter, {});
+    }
+
+    ASTPtr visitASTIdentifier(ASTPtr & node, const Void &) override
+    {
+        return std::make_shared<ASTTableColumnReference>(storage, node->as<ASTIdentifier&>().name());
+    }
+
+    AddTableInputRefRewriter(StoragePtr storage_): storage(std::move(storage_)) {}
+private:
+    StoragePtr storage;
 };
 
 /**
@@ -597,9 +618,33 @@ protected:
                 table_columns_with_aliases.emplace_back(it->second, column);
             }
 
+            bool single_table = query_to_view_table_mappings.size() == 1;
+
+            // keep prewhere info for single table rewriting
+            ASTPtr query_prewhere_expr;
+            if (single_table)
+            {
+                const auto & query_table_ref = query_to_view_table_mappings.begin()->first;
+                const auto & view_table_ref = query_to_view_table_mappings.begin()->second;
+                const auto * query_table_scan = join_graph_match_result->query_table_scans.at(query_table_ref);
+                if (query_table_scan->getQueryInfo().query)
+                {
+                    auto & select_query = query_table_scan->getQueryInfo().query->as<ASTSelectQuery &>();
+                    if (select_query.prewhere())
+                    {
+                        // rewrite base table column to mv table column
+                        auto normalized_prewhere = AddTableInputRefRewriter::rewrite(select_query.getPrewhere() /* clone */, view_table_ref.storage);
+                        auto rewritten_prewhere = rewriteExpression(normalized_prewhere, view_output_columns_map, view_outputs);
+                        if (rewritten_prewhere)
+                            query_prewhere_expr = *rewritten_prewhere;
+                    }
+                }
+            }
+
             return RewriterCandidate{
                 view_storage_id,
                 target_storage_id,
+                query_prewhere_expr,
                 it_stats->second,
                 table_columns_with_aliases,
                 assignments,
@@ -761,6 +806,7 @@ protected:
         std::unordered_map<TableInputRef, std::vector<TableInputRef>, TableInputRefHash, TableInputRefEqual> table_mapping;
         std::vector<TableInputRef> view_missing_tables;
         std::unordered_map<String, std::shared_ptr<ASTTableColumnReference>> view_missing_columns;
+        std::unordered_map<TableInputRef, const TableScanStep *, TableInputRefHash, TableInputRefEqual> query_table_scans;
         for (auto & item : query_table_map)
         {
             auto & query_table_refs = item.second;
@@ -791,10 +837,13 @@ protected:
             }
 
             for (auto & query_table_ref : query_table_refs)
+            {
                 table_mapping[query_table_ref.second] = view_table_refs;
+                query_table_scans[query_table_ref.second] = dynamic_cast<const TableScanStep *>(query_table_ref.first->getStep().get());
+            }
         }
 
-        return JoinGraphMatchResult{table_mapping, view_missing_tables, view_missing_columns};
+        return JoinGraphMatchResult{table_mapping, view_missing_tables, view_missing_columns, query_table_scans};
     }
 
     /**
@@ -1053,7 +1102,7 @@ protected:
     PlanNodePtr constructEquivalentPlan(const RewriterCandidate & candidate)
     {
         // table scan
-        auto plan = planTableScan(candidate.target_database_and_table_name, candidate.table_output_columns);
+        auto plan = planTableScan(candidate.target_database_and_table_name, candidate.table_output_columns, candidate.query_prewhere_expr);
 
         // where
         if (candidate.compensation_predicate != PredicateConst::TRUE_VALUE)
@@ -1074,7 +1123,8 @@ protected:
 
     PlanNodePtr planTableScan(
         const StorageID & target_database_and_table_name,
-        const NamesWithAliases & columns_with_aliases)
+        const NamesWithAliases & columns_with_aliases,
+        ASTPtr query_prewhere_expr)
     {
         const auto select_expression_list = std::make_shared<ASTExpressionList>();
         select_expression_list->children.reserve(columns_with_aliases.size());
@@ -1087,6 +1137,9 @@ protected:
         generated_query->setExpression(ASTSelectQuery::Expression::SELECT, select_expression_list);
         query_info.query = generated_query;
 
+        if (query_prewhere_expr)
+            generated_query->setExpression(ASTSelectQuery::Expression::PREWHERE, std::move(query_prewhere_expr));
+            
         UInt64 max_block_size = context->getSettingsRef().max_block_size;
         if (!max_block_size)
             throw Exception("Setting 'max_block_size' cannot be zero", ErrorCodes::PARAMETER_OUT_OF_BOUND);
