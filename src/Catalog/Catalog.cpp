@@ -1250,14 +1250,15 @@ namespace Catalog
                     }
                     else
                     {
+                        source = "PartCache";
                         res = context.getPartCacheManager()->getOrSetServerDataPartsInPartitions(
                             *storage,
                             partitions,
                             [&](const Strings & required_partitions, const Strings & full_partitions) {
+                                source = "KV(miss cache)";
                                 return getDataPartsMetaFromMetastore(storage, required_partitions, full_partitions, ts);
                             },
                             ts.toUInt64());
-                        source = "PartCache";
                     }
                 }
                 else
@@ -1296,11 +1297,13 @@ namespace Catalog
 
                 LOG_DEBUG(
                     log,
-                    "Elapsed {}ms to get {} parts for table : {} , source : {}"
+                    "Elapsed {}ms to get {} parts in {} partitions for table : {} , source : {}, ts : {}"
                     ,watch.elapsedMilliseconds()
                     ,res.size()
+                    ,partitions.size()
                     ,storage->getStorageID().getNameForLogs()
-                    ,source);
+                    ,source
+                    ,ts.toString());
                 outRes = res;
             },
             ProfileEvents::GetServerDataPartsInPartitionsSuccess,
