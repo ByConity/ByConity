@@ -58,7 +58,7 @@ class ServerPartLog : public SystemLog<ServerPartLogElement>
 {
     using SystemLog<ServerPartLogElement>::SystemLog;
 public:
-    static bool addNewParts(const Context & context, ServerPartLogElement::Type type, const MutableMergeTreeDataPartsCNCHVector & parts, UInt64 txn_id, UInt8 error);
+    static bool addNewParts(const ContextPtr & local_context, ServerPartLogElement::Type type, const MutableMergeTreeDataPartsCNCHVector & parts, UInt64 txn_id, UInt8 error);
 };
 
 }
