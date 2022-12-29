@@ -19,12 +19,10 @@ if (ENABLE_BRPC)
     if (BRPC_LIBRARY AND BRPC_INCLUDE_DIR)
         set (USE_BRPC 1)
     elseif (NOT MISSING_INTERNAL_BRPC_LIBRARY)
-        set (BRPC_INCLUDE_DIR ${CMAKE_CURRENT_BINARY_DIR}/contrib/incubator-brpc/output/include/)
         set (USE_INTERNAL_BRPC_LIBRARY 1)
-        set (BRPC_LIBRARY brpc)
         set (USE_BRPC 1)
     endif ()
 
 endif()
 
-message (STATUS "Using brpc=${USE_BRPC}: ${BRPC_INCLUDE_DIR} : ${BRPC_LIBRARY}")
+message (STATUS "Using brpc=${USE_BRPC}")
