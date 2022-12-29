@@ -316,9 +316,6 @@ private:
 
         HDFSConnectionParams hdfs_params = HDFSConnectionParams::parseHdfsFromConfig(config());
         context->setHdfsConnectionParams(hdfs_params);
-        if(hdfs_params.conn_type == HDFSConnectionParams::CONN_DUMMY) {
-           std::cerr << "HDFS is not initialized" << std::endl; 
-        }
 #endif
     }
 
