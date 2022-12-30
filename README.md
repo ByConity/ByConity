@@ -78,3 +78,22 @@ A minimal ByConity cluster include:
 - A ByConity daemon manager to manage background jobs that run in server
 
 We have packed all the setup step inside this docker-compose [file](https://github.com/ByConity/byconity-docker) so you can bring up a test cluster within few commands.
+
+## Run ByConity Locally
+Assuming you have already setup [FDB](https://apple.github.io/foundationdb/local-dev.html) and [HDFS](https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-common/ClusterSetup.html) locally:
+1. Modify the template config
+2. Run the local deployment script to run all the components
+
+### Modify the template config
+The config templates can be found in deploy/template
+
+### Run the local deployment script
+1. Make sure you have python3.9 version installed
+2. Install missing libraries if any. For example:
+   1. `pip3.9 install psutils`
+3. (Optional) Modify templates in `deploy/template`
+4. Run tmux in another terminal
+5. Run the deploy script in a separate terminal. template_paths and program_dir args are compulsory
+   1. `cd ByConity/deploy`
+   2. `python3.9 deploy.py --template_paths template/byconity-server.xml template/byconity-worker.xml --program_dir /home/ByConity/build/programs`
+   3. There are other arguments for the script. For example, you can run 2 servers with argument `-s 2`
