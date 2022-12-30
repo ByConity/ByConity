@@ -11,8 +11,9 @@ ByConity is using a large number of mature OLAP technologies, such as column sto
 ByConity is built on top of [ClickHouse](https://github.com/ClickHouse/ClickHouse). We appreciate the excellent work of the ClickHouse team.
 
 ## Build ByConity
+The easiest way to build ByConity is built in [docker](https://github.com/ByConity/ByConity/tree/master/docker/builder)
 
-ByConity can be built the following operating systems:
+It can also be built the following operating systems:
 
 - Linux
 
