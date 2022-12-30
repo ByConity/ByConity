@@ -87,7 +87,7 @@ Assuming you have [FDB](https://apple.github.io/foundationdb/local-dev.html) and
 ### Modify the template config
 The config templates can be found in deploy/template. You should replace the following in in `byconity-server.xml` and `byconity-worker.xml`:
 1. `Path_To_FDB` with path to your FoundationDB `fdb.cluster` file path
-2. `HOST:PORT` with the host and port of your HDFS cluster
+2. `HOST:PORT` with the host and port of your name node in your HDFS cluster
 ```xml
     <catalog_service>
         <type>fdb</type>
@@ -105,6 +105,7 @@ The config templates can be found in deploy/template. You should replace the fol
         <tso_window_ms>3000</tso_window_ms>
         <tso_max_retry_count>3</tso_max_retry_count>
     </tso_service>
+    ...
     <hdfs_nnproxy>hdfs://HOST:PORT</hdfs_nnproxy>
 
 ```
