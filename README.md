@@ -80,20 +80,41 @@ A minimal ByConity cluster include:
 We have packed all the setup step inside this docker-compose [file](https://github.com/ByConity/byconity-docker) so you can bring up a test cluster within few commands.
 
 ## Run ByConity Locally
-Assuming you have already setup [FDB](https://apple.github.io/foundationdb/local-dev.html) and [HDFS](https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-common/ClusterSetup.html) locally:
+Assuming you have [FDB](https://apple.github.io/foundationdb/local-dev.html) and [HDFS](https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-common/ClusterSetup.html) set up and running locally:
 1. Modify the template config
 2. Run the local deployment script to run all the components
 
 ### Modify the template config
-The config templates can be found in deploy/template
+The config templates can be found in deploy/template. You should replace the following in in `byconity-server.xml` and `byconity-worker.xml`:
+1. `Path_To_FDB` with path to your FoundationDB `fdb.cluster` file path
+2. `HOST:PORT` with the host and port of your HDFS cluster
+```xml
+    <catalog_service>
+        <type>fdb</type>
+        <fdb>
+            <cluster_file>/Path_To_FDB/fdb.cluster</cluster_file>
+        </fdb>
+    </catalog_service>
+    ...
+    <tso_service>
+        <port>49963</port>
+        <type>fdb</type>
+        <fdb>
+            <cluster_file>/Path_To_FDB/fdb.cluster</cluster_file>
+        </fdb>
+        <tso_window_ms>3000</tso_window_ms>
+        <tso_max_retry_count>3</tso_max_retry_count>
+    </tso_service>
+    <hdfs_nnproxy>hdfs://HOST:PORT</hdfs_nnproxy>
+
+```
 
 ### Run the local deployment script
-1. Make sure you have python3.9 version installed
+1. Make sure you have `python3.9` and `tmux` installed
 2. Install missing libraries if any. For example:
    1. `pip3.9 install psutils`
-3. (Optional) Modify templates in `deploy/template`
-4. Run tmux in another terminal
-5. Run the deploy script in a separate terminal. template_paths and program_dir args are compulsory
+3. Run tmux in another terminal
+4. Run the deploy script in a separate terminal. `template_paths` and `program_dir` args are compulsory
    1. `cd ByConity/deploy`
    2. `python3.9 deploy.py --template_paths template/byconity-server.xml template/byconity-worker.xml --program_dir /home/ByConity/build/programs`
    3. There are other arguments for the script. For example, you can run 2 servers with argument `-s 2`
