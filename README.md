@@ -29,7 +29,7 @@ The following packages are required:
 
 ```
 sudo apt-get update
-sudo apt-get install git cmake ccache python3 ninja-build libssl-dev
+sudo apt-get install git cmake ccache python3 ninja-build
 
 # install llvm 12
 sudo apt install lsb-release wget software-properties-common gnupg # pre-requisites of llvm.sh
