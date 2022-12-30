@@ -1,4 +1,4 @@
-Allows to build ClickHouse in Docker.
+Allows to build ByConity in Docker.
 This is useful if you have an old OS distribution and you don't want to build fresh gcc or clang from sources.
 
 Usage:
