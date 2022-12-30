@@ -26,7 +26,6 @@ The following packages are required:
 - Ninja
 - C++ compiler: clang-11 or clang-12
 - Linker: lld
-- Third-Party Library: openssl
 
 ```
 sudo apt-get update
