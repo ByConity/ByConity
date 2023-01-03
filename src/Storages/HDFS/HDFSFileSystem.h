@@ -66,7 +66,7 @@ public:
 
     inline hdfsFile getHDFSFileByFd(int fd) const
     {
-        if (fd < SKIP_FD_NUM || fd >= MAX_FD_NUM)
+        if (fd < SKIP_FD_NUM || fd >= MAX_FD_NUM + SKIP_FD_NUM)
         {
             throw Exception("Illegal HDFS fd", ErrorCodes::PARAMETER_OUT_OF_BOUND);
         }

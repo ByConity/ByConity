@@ -56,19 +56,20 @@ void MultiPartitionExchangeSink::consume(Chunk chunk)
 
     IColumn::Selector partition_selector;
     RepartitionTransform::PartitionStartPoints partition_start_points;
-    std::tie(partition_selector, partition_start_points)
-        = RepartitionTransform::doDefaultRepartition(partition_num, chunk, header, repartition_keys);
+    std::tie(partition_selector, partition_start_points) = RepartitionTransform::doRepartition(
+        partition_num, chunk, header, repartition_keys, repartition_func, RepartitionTransform::REPARTITION_FUNC_RESULT_TYPE);
 
     const auto &  columns = chunk.getColumns();
     for (size_t i = 0; i < column_num; i++)
     {
+        auto materialized_column = columns[i]->convertToFullColumnIfConst();
         for (size_t j = 0; j < partition_num; ++j)
         {
             size_t from = partition_start_points[j];
             size_t length = partition_start_points[j + 1] - from;
             if (length == 0)
                 continue; // no data for this partition continue;
-            buffered_senders[j].appendSelective(i, *columns[i], partition_selector, from, length);
+            buffered_senders[j].appendSelective(i, *materialized_column, partition_selector, from, length);
         }
     }
 

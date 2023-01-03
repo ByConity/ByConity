@@ -48,14 +48,16 @@ MaterializedViewStructure::buildFrom(StorageMaterializedView & view, PlanNodePtr
         other_predicates.insert(other_predicates.end(), having_predicates.begin(), having_predicates.end());
     }
 
-    SymbolTransformMap symbol_map = SymbolTransformMap::buildFrom(*query);
+    auto symbol_map = SymbolTransformMap::buildFrom(*query);
+    if (!symbol_map)
+        return {};
 
     ExpressionEquivalences expression_equivalences;
     auto predicates = PredicateUtils::extractEqualPredicates(join_graph.getFilters());
     for (const auto & predicate : predicates.first)
     {
-        auto left_symbol_lineage = symbol_map.inlineReferences(predicate.first);
-        auto right_symbol_lineage = symbol_map.inlineReferences(predicate.second);
+        auto left_symbol_lineage = symbol_map->inlineReferences(predicate.first);
+        auto right_symbol_lineage = symbol_map->inlineReferences(predicate.second);
         expression_equivalences.add(left_symbol_lineage, right_symbol_lineage);
     }
 
@@ -99,7 +101,7 @@ MaterializedViewStructure::buildFrom(StorageMaterializedView & view, PlanNodePtr
         view.getTargetTableId(),
         std::move(join_graph),
         std::move(other_predicates),
-        std::move(symbol_map),
+        std::move(*symbol_map),
         std::move(output_columns),
         std::move(output_columns_to_table_columns_map),
         std::move(expression_equivalences),

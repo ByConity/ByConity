@@ -59,7 +59,7 @@ void SinglePartitionExchangeSink::consume(Chunk chunk)
     const auto & columns = chunk.getColumns();
     for (size_t i = 0; i < column_num; i++)
     {
-        buffered_sender.appendSelective(i, *columns[i], partition_selector, from, length);
+        buffered_sender.appendSelective(i, *columns[i]->convertToFullColumnIfConst(), partition_selector, from, length);
     }
     auto status = buffered_sender.flush(false);
     if (status.code != BroadcastStatusCode::RUNNING)

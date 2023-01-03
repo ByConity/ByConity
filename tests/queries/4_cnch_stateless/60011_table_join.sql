@@ -7,7 +7,7 @@ CREATE table join_test_left
     score float,
     date String
 )
-ENGINE = CnchHive(`data.olap.cnch_hms.service.lf`, `cnchhive_ci`, `join_test_left`)
+ENGINE = CnchHive(`data.olap.cnch_hms.service.lf`, `cnch_hive_external_table`, `join_test_left`)
 PARTITION by date;
 
 
@@ -20,7 +20,7 @@ CREATE table join_test_right
     develop String,
     date    String
 )
-ENGINE = CnchHive(`data.olap.cnch_hms.service.lf`, `cnchhive_ci`, `join_test_right`)
+ENGINE = CnchHive(`data.olap.cnch_hms.service.lf`, `cnch_hive_external_table`, `join_test_right`)
 PARTITION by date;
 
 select * from join_test_left l  all inner join  join_test_right r  on l.id = r.id order by l.id ;

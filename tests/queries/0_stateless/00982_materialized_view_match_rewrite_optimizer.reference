@@ -9,6 +9,15 @@ Projection est. ? rows
 note: Materialized Views is applied for 1 times: test.mv_define.
 11	285	300
 21	80	100
+1.2 test duplicate names
+Projection est. ? rows
+│     Expressions: [deptno], commission:=`sum(commission)`, salary:=`sum(salary)`
+└─ Gather Exchange est. ? rows
+   └─ Projection est. ? rows
+      │     Expressions: [deptno, sum(commission), sum(salary)]
+      └─ TableScan test.mv_data est. ? rows
+               Outputs: [deptno, sum(commission), sum(salary)]
+note: Materialized Views is applied for 1 times: test.mv_data.
 2-1. test filter rewrite
 Projection est. ? rows
 │     Expressions: [name], x:=empid

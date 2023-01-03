@@ -83,6 +83,12 @@ from (select deptno, salary, 100 as k
 group by deptno
 order by deptno;
 
+select '1.2 test duplicate names';
+explain select deptno, sum(salary) as salary, sum(commission) as commission
+from (select deptno, salary, commission, 100 as k
+      from emps)
+group by deptno;
+
 -- 2. test filter rewrite
 DROP TABLE IF EXISTS test.mv_data_local;
 DROP TABLE IF EXISTS test.mv_data;

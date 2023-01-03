@@ -30,7 +30,7 @@ public:
         ChunkInfoPtr origin_chunk_info;
     };
 
-    explicit RepartitionTransform(
+    RepartitionTransform(
         const Block & header_, size_t partition_num_, ColumnNumbers repartition_keys_, ExecutableFunctionPtr repartition_func_);
 
     String getName() const override { return "RepartitionTransform"; }
@@ -46,9 +46,6 @@ public:
         const ColumnNumbers & repartition_keys,
         ExecutableFunctionPtr repartition_func,
         const DataTypePtr & result_type);
-
-    static std::pair<IColumn::Selector, PartitionStartPoints>
-    doDefaultRepartition(size_t partition_num, const Chunk & chunk, const Block & header, const ColumnNumbers & repartition_keys);
 
     static ExecutableFunctionPtr getDefaultRepartitionFunction(const ColumnsWithTypeAndName & arguments, ContextPtr context);
 

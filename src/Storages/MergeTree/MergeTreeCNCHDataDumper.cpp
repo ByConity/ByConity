@@ -58,8 +58,6 @@ void MergeTreeCNCHDataDumper::writeDataFileFooter(WriteBuffer & to, const CNCHDa
     writeIntBinary(meta.unique_key_index_offset, to);
     writeIntBinary(meta.unique_key_index_size, to);
     writeIntBinary(meta.unique_key_index_checksum, to);
-    /// TODO: FIX write related function
-    // writePODBinary(meta.key, to);
     writeNull(MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE - sizeof(meta), to);
 }
 
@@ -181,7 +179,6 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
         auto & checksums_files = new_part->checksums_ptr->files;
         reordered_checksums.reserve(checksums_files.size());
 
-        ///TODO: fix IDataType::SubstreamPath
         std::unordered_set<String> key_streams;
         ISerialization::SubstreamPath path;
         for (const auto & k_it : getKeyColumns())
@@ -219,7 +216,7 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
     String data_file_rel_path = joinPaths({new_part_rel_path, "data"});
     CNCHDataMeta meta;
     {
-        LOG_DEBUG(log, "Writing part {} to {}", new_part->name, new_part_rel_path);
+        LOG_TRACE(log, "Writing part {} to {}", new_part->name, new_part_rel_path);
         auto out = disk->writeFile(data_file_rel_path);
         auto * data_out = dynamic_cast<WriteBufferFromHDFS *>(out.get());
         if (!data_out)
@@ -228,7 +225,7 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
         writeDataFileHeader(*data_out, new_part);
 
         const DiskPtr& local_part_disk = local_part->volume->getDisk();
-        LOG_DEBUG(log, "Getting local disk {} at {}\n", local_part_disk->getName(), local_part_disk->getPath());
+        LOG_TRACE(log, "Getting local disk {} at {}\n", local_part_disk->getName(), local_part_disk->getPath());
 
         if (new_part->checksums_ptr)
         {
@@ -240,8 +237,6 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
                 String file_full_path = local_part->getFullPath() + file.first;
                 if (!local_part_disk->exists(file_rel_path))
                     throw Exception("Fail to dump local file: " + file_rel_path + " be cause file doesn't exists", ErrorCodes::FILE_DOESNT_EXIST);
-
-                LOG_TRACE(log, "Dumping file {}...\n", file_rel_path);
 
                 ReadBufferFromFile from(file_full_path);
                 copyData(from, *data_out);
@@ -268,8 +263,6 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
             index_size = index_checksum.file_size;
             index_hash = index_checksum.file_hash;
             data_out->next();
-            LOG_TRACE(log, "Index offset {}, size {}, hash {}-{}\n", index_offset, index_size, index_hash.first, index_hash.second);
-            ///TODO: fix getPositionInFile
             if (index_offset + index_size != static_cast<UInt64>(data_out->getPositionInFile()))
             {
                 throw Exception(
@@ -288,10 +281,8 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
             HashingWriteBuffer checksums_hashing(*data_out);
             new_part->checksums_ptr->write(checksums_hashing);
             checksums_hashing.next();
-            ///TODO: fix getPositionInFile
             checksums_size = data_out->getPositionInFile() - checksums_offset;
             checksums_hash = checksums_hashing.getHash();
-            LOG_TRACE(log, "Checksum offset {}, size {}, hash {}-{}\n", checksums_offset, checksums_size, checksums_hash.first, checksums_hash.second);
             if (checksums_offset + checksums_size != static_cast<UInt64>(data_out->getPositionInFile()))
             {
                  throw Exception("checksums.txt in data part "  + part_name + " check error, checksum offset: " +
@@ -306,13 +297,10 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
         uint128 meta_info_hash;
         {
             HashingWriteBuffer meta_info_hashing(*data_out);
-            /// TODO fix writePartBinary
             writePartBinary(*new_part, meta_info_hashing);
             meta_info_hashing.next();
-            ///TODO: fix getPositionInFile
             meta_info_size = data_out->getPositionInFile() - meta_info_offset;
             meta_info_hash = meta_info_hashing.getHash();
-            LOG_TRACE(log, "Meta info offset {}, size {}, hash {}-{}\n", meta_info_offset, meta_info_size, meta_info_hash.first, meta_info_hash.second);
             if (meta_info_offset + meta_info_size != static_cast<UInt64>(data_out->getPositionInFile()))
             {
                  throw Exception("meta info in data part "  + part_name + " check error, meta offset: " +
@@ -334,13 +322,6 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
             copyData(from, *data_out);
             data_out->next();
         }
-
-        /// TODO : fix AesKeyByteArray
-        // AesEncrypt::AesKeyByteArray key {};
-        // if(new_part->storage.settings.encrypt_table)
-        // {
-        //     key = new_part->getAesEncrypter()->getKeyByteArray();
-        // }
 
         /// Data footer
         meta = CNCHDataMeta{index_offset, index_size, index_hash,
@@ -366,14 +347,13 @@ NamesAndTypesList MergeTreeCNCHDataDumper::getKeyColumns() const
 {
     Names sort_key_columns_vec = data.getInMemoryMetadata().getSortingKeyColumns();
     std::set<String> key_columns(sort_key_columns_vec.cbegin(), sort_key_columns_vec.cend());
-    /// TODO : fix skip_indices
-    // for (const auto & index : data.skip_indices)
-    // {
-    //     Names index_columns_vec = index->expr->getRequiredColumns();
-    //     std::copy(index_columns_vec.cbegin(), index_columns_vec.cend(), std::inserter(key_columns, key_columns.end()));
-    // }
+    for (const auto & index : data.getInMemoryMetadata().getSecondaryIndices())
+    {
+        const auto & index_columns_vec = index.column_names;
+        std::copy(index_columns_vec.cbegin(), index_columns_vec.cend(), std::inserter(key_columns, key_columns.end()));
+    }
 
-    auto & merging_params = data.merging_params;
+    const auto & merging_params = data.merging_params;
 
     /// Force sign column for Collapsing mode
     if (merging_params.mode == MergeTreeMetaBase::MergingParams::Collapsing)
@@ -388,7 +368,6 @@ NamesAndTypesList MergeTreeCNCHDataDumper::getKeyColumns() const
         key_columns.emplace(merging_params.sign_column);
 
     NamesAndTypesList merging_columns;
-    /// TODO: fix getColumns
     auto all_columns = data.getInMemoryMetadata().getColumns().getAllPhysical();
     for (const auto & column : all_columns)
     {

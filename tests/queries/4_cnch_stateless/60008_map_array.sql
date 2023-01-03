@@ -6,7 +6,7 @@ CREATE  TABLE hive_external_table_5
     zset Map(String, double),
     date String
 )
-ENGINE = CnchHive(`data.olap.cnch_hms.service.lf`, `cnchhive_ci`, `hive_external_table_5`)
+ENGINE = CnchHive(`data.olap.cnch_hms.service.lf`, `cnch_hive_external_table`, `hive_external_table_map`)
 PARTITION BY (date);
 
 SELECT * FROM hive_external_table_5 where date > '20211013' and date < '20211016' ORDER BY id, value;

@@ -57,7 +57,7 @@ void CloudMergeTreeMergeTask::executeImpl()
             part->info.min_block,
             part->info.max_block,
             part->info.level + 1,
-            part->info.mutation,
+            getContext()->getCurrentTransactionID().toUInt64(),
             0 /* must be zero for drop part */);
 
         reserved_spaces.emplace_back(cloud_table.reserveSpace(0)); /// Drop part is empty part.

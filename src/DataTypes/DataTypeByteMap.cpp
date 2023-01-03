@@ -39,6 +39,7 @@ DataTypeByteMap::DataTypeByteMap(const DataTypePtr & keyType_, const DataTypePtr
     key_store_type = std::make_shared<DataTypeArray>(key_type);
     value_store_type = std::make_shared<DataTypeArray>(value_type);
     implicit_column_value_type = makeNullableForMapValue(value_type);
+    nested = std::make_shared<DataTypeArray>(std::make_shared<DataTypeTuple>(DataTypes{key_type, value_type}, Names{"key", "value"}));
 }
 
 SerializationPtr DataTypeByteMap::doGetDefaultSerialization() const
