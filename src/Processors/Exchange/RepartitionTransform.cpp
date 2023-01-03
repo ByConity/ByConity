@@ -66,63 +66,17 @@ std::pair<IColumn::Selector, RepartitionTransform::PartitionStartPoints> Reparti
 
     for (size_t i = 0; i < input_rows_count; ++i)
     {
-        if (!hash_result->isNullable())
-            partition_index[i] = hash_result->get64(i) % partition_num;
-        else
-            partition_index[i] = hash_result->isNullAt(i) ? 0 : hash_result->get64(i) % partition_num;
+        partition_index[i] = hash_result->get64(i) % partition_num;
     }
 
-    for (size_t i = 0; i < input_rows_count; ++i)
-        partition_row_idx_start_points[partition_index[i]]++;
-
-    // make partition_row_idx_start_points[partition_num] = input_rows_count
-    for (size_t i = 1; i <= partition_num; ++i)
+    if (hash_result->isNullable())
     {
-        partition_row_idx_start_points[i] += partition_row_idx_start_points[i - 1];
+        for (size_t i = 0; i < input_rows_count; ++i)
+        {
+            if (hash_result->isNullAt(i))
+                partition_index[i] = 0;
+        }
     }
-
-    for (size_t i = input_rows_count; i-- > 0;)
-    {
-        repartition_selector[partition_row_idx_start_points[partition_index[i]] - 1] = i;
-        partition_row_idx_start_points[partition_index[i]]--;
-    }
-    return std::make_pair(std::move(repartition_selector), std::move(partition_row_idx_start_points));
-}
-
-
-std::pair<IColumn::Selector, RepartitionTransform::PartitionStartPoints> RepartitionTransform::doDefaultRepartition(
-    size_t partition_num, const Chunk & chunk, const Block & header, const ColumnNumbers & repartition_keys)
-{
-    auto input_rows_count = chunk.getNumRows();
-    const auto & columns = chunk.getColumns();
-    WeakHash32 hash(input_rows_count);
-
-    for (const auto & column_number : repartition_keys)
-        columns[column_number]->updateWeakHash32(hash);
-
-    const auto & hash_data = hash.getData();
-    IColumn::Selector selector_column(input_rows_count);
-
-    for (size_t row = 0; row < input_rows_count; ++row)
-    {
-        selector_column[row] = hash_data[row]; /// [0, 2^32)
-        selector_column[row] *= partition_num; /// [0, partition_num * 2^32), selector stores 64 bit values.
-        selector_column[row] >>= 32u; /// [0, partition_num)
-    }
-
-    ColumnsWithTypeAndName arguments;
-    arguments.reserve(repartition_keys.size());
-    for (size_t key_idx : repartition_keys)
-    {
-        const auto & type_and_name = header.getByPosition(key_idx);
-        arguments.emplace_back(ColumnWithTypeAndName(columns[key_idx], type_and_name.type, type_and_name.name));
-    }
-
-
-    PartitionStartPoints partition_row_idx_start_points(partition_num + 1, 0);
-
-    IColumn::Selector repartition_selector(input_rows_count, 0);
-    PODArrayWithStackMemory<UInt32, 32> partition_index(input_rows_count, 0);
 
     for (size_t i = 0; i < input_rows_count; ++i)
         partition_row_idx_start_points[partition_index[i]]++;

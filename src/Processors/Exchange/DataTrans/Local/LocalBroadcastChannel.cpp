@@ -84,7 +84,7 @@ BroadcastStatus LocalBroadcastChannel::finish(BroadcastStatusCode status_code, S
 
     BroadcastStatus * new_status_ptr = new BroadcastStatus(status_code, false, message);
 
-    if (broadcast_status.compare_exchange_strong(current_status_ptr, new_status_ptr, std::memory_order_release, std::memory_order_relaxed))
+    if (broadcast_status.compare_exchange_strong(current_status_ptr, new_status_ptr, std::memory_order_release, std::memory_order_acquire))
     {
         LOG_INFO(
             logger,

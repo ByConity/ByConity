@@ -34,12 +34,16 @@
 #include <DataTypes/DataTypeFixedString.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeTuple.h>
+#include <DataTypes/DataTypeMap.h>
+#include <DataTypes/DataTypeByteMap.h>
 #include <Columns/ColumnsNumber.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnTuple.h>
+#include <Columns/ColumnMap.h>
+#include <Columns/ColumnByteMap.h>
 #include <Functions/IFunction.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/TargetSpecific.h>
@@ -1117,6 +1121,71 @@ private:
     }
 
     template <bool first>
+    void executeTuple(const IDataType * type, const IColumn * column, typename ColumnVector<ToType>::Container & vec_to) const
+    {
+        if (const ColumnTuple * tuple = typeid_cast<const ColumnTuple *>(column))
+        {
+            const auto & tuple_columns = tuple->getColumns();
+            const DataTypes & tuple_types = typeid_cast<const DataTypeTuple &>(*type).getElements();
+            size_t tuple_size = tuple_columns.size();
+            for (size_t i = 0; i < tuple_size; ++i)
+                executeAny<first>(tuple_types[i].get(), tuple_columns[i].get(), vec_to);
+        }
+        else if (const ColumnTuple * tuple_const = checkAndGetColumnConstData<ColumnTuple>(column))
+        {
+            const auto & tuple_columns = tuple_const->getColumns();
+            const DataTypes & tuple_types = typeid_cast<const DataTypeTuple &>(*type).getElements();
+            size_t tuple_size = tuple_columns.size();
+            for (size_t i = 0; i < tuple_size; ++i)
+            {
+                auto tmp = ColumnConst::create(tuple_columns[i], column->size());
+                executeAny<first>(tuple_types[i].get(), tmp.get(), vec_to);
+            }
+        }
+        else
+            throw Exception(
+                "Illegal column " + column->getName() + " of first argument of function " + getName(), ErrorCodes::ILLEGAL_COLUMN);
+    }
+
+    template <bool first>
+    void executeMap(const IDataType * type, const IColumn * column, typename ColumnVector<ToType>::Container & vec_to) const
+    {
+        const IDataType * nested_type = typeid_cast<const DataTypeMap *>(type)->getNestedType().get();
+        if (const auto * col_map = checkAndGetColumn<ColumnMap>(column))
+        {
+            executeArray<first>(nested_type, &col_map->getNestedColumn(), vec_to);
+        }
+        else if (const ColumnConst * col_from_const = checkAndGetColumnConst<ColumnMap>(column))
+        {
+            /// NOTE: here, of course, you can do without the materialization of the column.
+            ColumnPtr full_column = col_from_const->convertToFullColumn();
+            executeMap<first>(type, &*full_column, vec_to);
+        }
+        else
+            throw Exception(
+                "Illegal column " + column->getName() + " of first argument of function " + getName(), ErrorCodes::ILLEGAL_COLUMN);
+    }
+
+    template <bool first>
+    void executeByteMap(const IDataType * type, const IColumn * column, typename ColumnVector<ToType>::Container & vec_to) const
+    {
+        const IDataType * nested_type = typeid_cast<const DataTypeByteMap *>(type)->getNestedType().get();
+        if (const auto * col_map = checkAndGetColumn<ColumnByteMap>(column))
+        {
+            executeArray<first>(nested_type, col_map->getNestedColumnPtr().get(), vec_to);
+        }
+        else if (const ColumnConst * col_from_const = checkAndGetColumnConst<ColumnMap>(column))
+        {
+            /// NOTE: here, of course, you can do without the materialization of the column.
+            ColumnPtr full_column = col_from_const->convertToFullColumn();
+            executeByteMap<first>(type, &*full_column, vec_to);
+        }
+        else
+            throw Exception(
+                "Illegal column " + column->getName() + " of first argument of function " + getName(), ErrorCodes::ILLEGAL_COLUMN);
+    }
+
+    template <bool first>
     void executeAny(const IDataType * from_type, const IColumn * icolumn, typename ColumnVector<ToType>::Container & vec_to) const
     {
         WhichDataType which(from_type);
@@ -1149,6 +1218,9 @@ private:
         else if (which.isString()) executeString<first>(icolumn, vec_to);
         else if (which.isFixedString()) executeString<first>(icolumn, vec_to);
         else if (which.isArray()) executeArray<first>(from_type, icolumn, vec_to);
+        else if (which.isTuple()) executeTuple<first>(from_type, icolumn, vec_to);
+        else if (which.isMap()) executeMap<first>(from_type, icolumn, vec_to);
+        else if (which.isByteMap()) executeByteMap<first>(from_type, icolumn, vec_to);
         else
             executeGeneric<first>(icolumn, vec_to);
     }

@@ -28,6 +28,9 @@ private:
     DataTypePtr key_store_type;
     DataTypePtr value_store_type;
 
+    /// 'nested' is an Array(Tuple(key_type, value_type))
+    DataTypePtr nested;
+
 public:
     static constexpr bool is_parametric = true;
 
@@ -74,6 +77,7 @@ public:
     const DataTypePtr & getValueType() const { return value_type; }
     const DataTypePtr & getValueTypeForImplicitColumn() const { return implicit_column_value_type; }
     const DataTypePtr & getMapStoreType(const String & name) const;
+    const DataTypePtr & getNestedType() const { return nested; }
 
     SerializationPtr doGetDefaultSerialization() const override;
 };

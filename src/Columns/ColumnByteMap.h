@@ -3,6 +3,7 @@
 #include <Columns/IColumn.h>
 #include <Columns/ColumnVector.h>
 #include <Columns/ColumnArray.h>
+#include <Columns/ColumnTuple.h>
 #include <DataTypes/DataTypeByteMap.h>
 #include <map>
 
@@ -143,6 +144,11 @@ public:
 
     IColumn & getOffsetsColumn() {return offsets->assumeMutableRef();}
     const IColumn & getOffsetsColumn() const {return *offsets;}
+
+    ColumnPtr getNestedColumnPtr() const
+    {
+        return ColumnArray::create(ColumnTuple::create(Columns{key_column, value_column}), offsets);
+    }
 
     Offsets& ALWAYS_INLINE getOffsets()
     {
