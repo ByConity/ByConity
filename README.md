@@ -10,6 +10,19 @@ ByConity is using a large number of mature OLAP technologies, such as column sto
 
 ByConity is built on top of [ClickHouse](https://github.com/ClickHouse/ClickHouse). We appreciate the excellent work of the ClickHouse team.
 
+## Try ByConity
+You can quickly bring up a ByConity playground by following this simple [guide](https://github.com/ByConity/byconity-docker). 
+
+A minimal ByConity cluster include:
+- A [FoundationDB](https://www.foundationdb.org/) database cluster to store meta data.
+- A [HDFS](https://hadoop.apache.org/docs/r1.2.1/hdfs_design.html) cluster to store data.
+- A ByConity server to receive request from clients.
+- A ByConity read worker to carry execution of read requests forward from server.
+- A ByConity write worker to carry execution of write requests forward from server.
+- A ByConity TSO server to provide timestamp
+- A ByConity daemon manager to manage background jobs that run in server
+
+
 ## Build ByConity
 The easiest way to build ByConity is built in [docker](https://github.com/ByConity/ByConity/tree/master/docker/builder)
 
@@ -29,7 +42,7 @@ The following packages are required:
 
 ```
 sudo apt-get update
-sudo apt-get install git cmake ccache python3 ninja-build
+sudo apt-get install git cmake ccache python3 ninja-build libssl-dev libsnappy-dev apt-transport-https
 
 # install llvm 12
 sudo apt install lsb-release wget software-properties-common gnupg # pre-requisites of llvm.sh
@@ -66,21 +79,8 @@ daemon_manager       # byconity daemon manager
 resource_manager     # byconity resource manager
 ```
 
-## Try ByConity
-
-A minimal ByConity cluster include:
-- A [FoundationDB](https://www.foundationdb.org/) database cluster to store meta data.
-- A [HDFS](https://hadoop.apache.org/docs/r1.2.1/hdfs_design.html) cluster to store data.
-- A ByConity server to receive request from clients.
-- A ByConity read worker to carry execution of read requests forward from server.
-- A ByConity write worker to carry execution of write requests forward from server.
-- A ByConity TSO server to provide timestamp
-- A ByConity daemon manager to manage background jobs that run in server
-
-We have packed all the setup step inside this docker-compose [file](https://github.com/ByConity/byconity-docker) so you can bring up a test cluster within few commands.
-
 ## Run ByConity Locally
-Assuming you have [FDB](https://apple.github.io/foundationdb/local-dev.html) and [HDFS](https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-common/ClusterSetup.html) set up and running locally:
+Assuming you have [FoundationDB](https://apple.github.io/foundationdb/local-dev.html) and [HDFS](https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-common/ClusterSetup.html) set up and running locally:
 1. Modify the template config
 2. Run the local deployment script to run all the components
 
