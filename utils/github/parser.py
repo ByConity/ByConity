@@ -38,7 +38,7 @@ class Description:
                 category = stripped
                 next_category = False
 
-            if stripped == 'I hereby agree to the terms of the CLA available at: https://yandex.ru/legal/cla/?lang=en':
+            if stripped == 'I hereby agree to the terms of the CLA available at: [placeholder]':
                 self.legal = True
 
             category_headers = (
