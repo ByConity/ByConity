@@ -55,7 +55,7 @@ namespace
             child_->Next();
             SkipFilteredForward();
         }
-        
+
         void NextUntil(const Slice & target, bool & exact_match) override
         {
             child_->NextUntil(target, exact_match);
@@ -65,7 +65,7 @@ namespace
                 exact_match = false;
             }
         }
-        
+
         void Prev() override
         {
             child_->Prev();
