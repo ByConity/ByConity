@@ -4,6 +4,7 @@
 #include <common/range.h>
 #include <Interpreters/castColumn.h>
 #include <DataTypes/DataTypeNothing.h>
+#include <DataTypes/DataTypeFactory.h>
 
 #ifdef __SSE2__
 #include <emmintrin.h>
@@ -204,6 +205,12 @@ void MergeTreeRangeReader::Stream::toNextMark()
         throw Exception("Trying to read from mark " + toString(current_mark) + ", but total marks count " + toString(total_marks_count), ErrorCodes::LOGICAL_ERROR);
 
     offset_after_current_mark = 0;
+}
+
+size_t MergeTreeRangeReader::Stream::position() const
+{
+    size_t num_rows_before_current_mark = index_granularity->getMarkStartingRow(current_mark);
+    return num_rows_before_current_mark + offset_after_current_mark;
 }
 
 size_t MergeTreeRangeReader::Stream::read(Columns & columns, size_t num_rows, bool skip_remaining_rows_in_current_granule)
@@ -522,11 +529,13 @@ MergeTreeRangeReader::MergeTreeRangeReader(
     IMergeTreeReader * merge_tree_reader_,
     MergeTreeRangeReader * prev_reader_,
     const PrewhereExprInfo * prewhere_info_,
+    ImmutableDeleteBitmapPtr delete_bitmap_,
     bool last_reader_in_chain_)
     : merge_tree_reader(merge_tree_reader_)
     , index_granularity(&(merge_tree_reader->data_part->index_granularity))
     , prev_reader(prev_reader_)
     , prewhere_info(prewhere_info_)
+    , delete_bitmap(delete_bitmap_)
     , last_reader_in_chain(last_reader_in_chain_)
     , is_initialized(true)
 {
@@ -547,11 +556,26 @@ MergeTreeRangeReader::MergeTreeRangeReader(
             sample_block.erase(prewhere_info->row_level_column_name);
         }
 
+        size_t rows = sample_block.rows();
         if (prewhere_info->prewhere_actions)
-            prewhere_info->prewhere_actions->execute(sample_block, true);
+            prewhere_info->prewhere_actions->execute(sample_block, rows, true);
+        if (!sample_block)
+            sample_block.insert({DataTypeUInt8().createColumnConst(rows, 0), std::make_shared<DataTypeUInt8>(), "_dummy"});
 
         if (prewhere_info->remove_prewhere_column)
-            sample_block.erase(prewhere_info->prewhere_column_name);
+        {
+            if (sample_block.has(prewhere_info->prewhere_column_name))
+                sample_block.erase(prewhere_info->prewhere_column_name);
+        }
+        else
+        {
+            if (!sample_block.has(prewhere_info->prewhere_column_name))
+            {
+                const auto & prewhere_actions = prewhere_info->prewhere_actions->getActions();
+                const auto * last_action_node = prewhere_actions[prewhere_actions.size()-1].node;
+                sample_block.insert({last_action_node->result_type->createColumn(),last_action_node->result_type, prewhere_info->prewhere_column_name});
+            }
+        }
     }
 }
 
@@ -739,7 +763,15 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::read(size_t max_rows, Mar
     if (read_result.num_rows == 0)
         return read_result;
 
-    executePrewhereActionsAndFilterColumns(read_result);
+    if (prewhere_info)
+    {
+        executePrewhereActionsAndFilterColumns(read_result);
+    }
+    else if (!prev_reader && read_result.getFilter())
+    {
+        filterColumns(read_result.columns, read_result.getFilter()->getData());
+        read_result.num_rows = read_result.countBytesInResultFilter(read_result.getFilter()->getData());
+    }
 
     return read_result;
 }
@@ -749,6 +781,13 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t 
 {
     ReadResult result;
     result.columns.resize(merge_tree_reader->getColumns().size());
+
+    ColumnUInt8::MutablePtr delete_filter_column;
+    bool delete_filter_always_true = true;
+    if (delete_bitmap)
+    {
+        delete_filter_column = ColumnUInt8::create(max_rows, 1);
+    }
 
     /// Stream is lazy. result.num_added_rows is the number of rows added to block which is not equal to
     /// result.num_rows_read until call to stream.finalize(). Also result.num_added_rows may be less than
@@ -772,12 +811,46 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t 
             if (!merge_tree_reader->canReadIncompleteGranules())
                 current_space = stream.ceilRowsToCompleteGranules(space_left);
 
-            auto rows_to_read = std::min(current_space, stream.numPendingRowsInCurrentGranule());
+            const auto unread_rows_in_current_granule = stream.numPendingRowsInCurrentGranule();
+            auto rows_to_read = std::min(current_space, unread_rows_in_current_granule);
 
-            bool last = rows_to_read == space_left;
-            result.addRows(stream.read(result.columns, rows_to_read, !last));
-            result.addGranule(rows_to_read);
-            space_left = (rows_to_read > space_left ? 0 : space_left - rows_to_read);
+            auto read_pos = stream.position();
+            auto read_end = read_pos + rows_to_read;
+            /// Skip the current granule if all the pending rows have been deleted
+            /// TODO: maybe it's better to prune deleted granules when constructing the mark ranges
+            if (rows_to_read == unread_rows_in_current_granule &&
+                delete_bitmap && delete_bitmap->containsRange(read_pos, read_end))
+            {
+                /// all pending rows in current granule has been deleted, skip it
+                stream.skip(rows_to_read);
+                result.addGranule(0);
+            }
+            /// Otherwise read the next `rows_to_read` rows (maybe < unread_rows_in_current_granule) from
+            /// the current granule and prepare the delete filter that'll be used later to remove deleted rows
+            else
+            {
+                /// populate delete filter for this granule
+                if (delete_bitmap)
+                {
+                    UInt8 * filter_start = delete_filter_column->getData().data() + max_rows - space_left;
+                    auto iter = delete_bitmap->begin();
+                    auto end = delete_bitmap->end();
+                    iter.equalorlarger(read_pos);
+                    auto saved_iter = iter;
+                    while (iter != end && *iter < read_end)
+                    {
+                        filter_start[*iter - read_pos] = 0;
+                        iter++;
+                    }
+                    if (iter != saved_iter)
+                        delete_filter_always_true = false;
+                }
+
+                bool last = rows_to_read == space_left;
+                result.addRows(stream.read(result.columns, rows_to_read, !last));
+                result.addGranule(rows_to_read);
+                space_left = (rows_to_read > space_left ? 0 : space_left - rows_to_read);
+            }
         }
     }
 
@@ -785,6 +858,14 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t 
 
     /// Last granule may be incomplete.
     result.adjustLastGranule();
+
+    if (delete_bitmap && !delete_filter_always_true)
+    {
+        /// filter size must match column size
+        delete_filter_column->getData().resize(result.numReadRows());
+        ColumnPtr filter_column = std::move(delete_filter_column);
+        result.setFilter(filter_column);
+    }
 
     return result;
 }
@@ -896,6 +977,74 @@ static ColumnPtr combineFilters(ColumnPtr first, ColumnPtr second)
     return mut_first;
 }
 
+static ColumnPtr combineFilterEqualSize(ColumnPtr first, ColumnPtr second)
+{
+    /// Use first filter to only fiter the rows not been filted in second filter.
+    /// in other words, do a & operation like: first = first & second
+    ConstantFilterDescription second_const_descr(*second);
+
+    checkCombinedFiltersSize(first->size(), second->size());
+
+    if (second_const_descr.always_true)
+        return first;
+
+    if (second_const_descr.always_false)
+        return second;
+
+    FilterDescription first_descr(*first);
+    FilterDescription second_descr(*second);
+
+    MutableColumnPtr mut_first;
+    if (first_descr.data_holder)
+        mut_first = IColumn::mutate(std::move(first_descr.data_holder));
+    else
+        mut_first = IColumn::mutate(std::move(first));
+
+    auto dst = typeid_cast<ColumnUInt8 *>(mut_first.get())->getData().data();
+    auto end = dst + second->size();
+    auto src = second_descr.data->data();
+
+    /// TODO @canhld:
+    /// 1. can use aligned load/store?
+    /// 2. can be more efficient with bit unpacking instructions
+    /// Notes: when using simd instructions, we use `while(dst < end)` without guarding because we assume
+    /// that the columns data is padded right at least 32 bytes, look at PODArray implementation.
+
+#if defined (__AVX2__)
+    while (dst < end)
+    {
+        /// *dst &= val
+        _mm256_storeu_si256(
+            reinterpret_cast<__m256i *>(dst),
+            _mm256_and_si256(
+                _mm256_loadu_si256(reinterpret_cast<const __m256i *>(dst)), _mm256_loadu_si256(reinterpret_cast<const __m256i *>(src))));
+        dst += 32; /// assume using POD Array with 32 bytes padding data
+        src += 32;
+    }
+#elif defined (__SSE2__)
+    while (dst < end)
+    {
+        /// *dst &= val
+        _mm_storeu_si128(
+            reinterpret_cast<__m128i *>(dst),
+            _mm_and_si128(
+                _mm_loadu_si128(reinterpret_cast<const __m128i *>(dst)), _mm_loadu_si128(reinterpret_cast<const __m128i *>(src))));
+        dst += 16; /// assume using POD Array with 32 bytes padding data
+        src += 16;
+    }
+#endif
+
+    /// guard in case no SIMD instructions are available
+    while (dst < end)
+    {
+        *reinterpret_cast<UInt64 *>(dst) &= *reinterpret_cast<const UInt64 *>(src);
+        dst += 8;
+        src += 8;
+    }
+
+    return mut_first;
+}
+
 void MergeTreeRangeReader::executePrewhereActionsAndFilterColumns(ReadResult & result)
 {
     if (!prewhere_info)
@@ -904,7 +1053,7 @@ void MergeTreeRangeReader::executePrewhereActionsAndFilterColumns(ReadResult & r
     const auto & header = merge_tree_reader->getColumns();
     size_t num_columns = header.size();
 
-    if (result.columns.size() != num_columns)
+    if ((result.columns.size() != num_columns))
         throw Exception("Invalid number of columns passed to MergeTreeRangeReader. "
                         "Expected " + toString(num_columns) + ", "
                         "got " + toString(result.columns.size()), ErrorCodes::LOGICAL_ERROR);
@@ -943,6 +1092,20 @@ void MergeTreeRangeReader::executePrewhereActionsAndFilterColumns(ReadResult & r
             row_level_filter = block.getByPosition(row_level_filter_pos).column;
             block.erase(row_level_filter_pos);
 
+            if (result.getFilter())
+            {
+                /// NOTE: 1 means keep this row, 0 means delete this row
+                /// we first use the row_level_filter (if any) to filter the block, then
+                /// execute prewhere_actions to create the `filter` on already filtered block.
+                //
+                /// thus row_level_filter's size always equal to the original block's size.
+                /// filter's size might be small if row_level_filter exists
+                ///
+                /// in essential, deleted_bitmap is also a row_level_filter, so here we combine them together.
+                /// row_level_filter &= delete_bitmap
+                row_level_filter = combineFilterEqualSize(std::move(row_level_filter), result.getFilterHolder());
+            }
+
             auto columns = block.getColumns();
             filterColumns(columns, row_level_filter);
             if (columns.empty())
@@ -965,10 +1128,11 @@ void MergeTreeRangeReader::executePrewhereActionsAndFilterColumns(ReadResult & r
 
     if (result.getFilter())
     {
-        /// TODO: implement for prewhere chain.
-        /// In order to do it we need combine filter and result.filter, where filter filters only '1' in result.filter.
-        throw Exception("MergeTreeRangeReader chain with several prewhere actions in not implemented.",
-                        ErrorCodes::LOGICAL_ERROR);
+        if (filter && !row_level_filter)
+        {
+            /// filter &= delete_bitmap
+            filter = combineFilterEqualSize(std::move(filter), result.getFilterHolder());
+        }
     }
 
     if (filter && row_level_filter)

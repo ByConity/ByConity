@@ -51,6 +51,12 @@ class IAggregateFunction;
 using AggregateFunctionPtr = std::shared_ptr<const IAggregateFunction>;
 struct AggregateFunctionProperties;
 
+const UInt32 EventMask[]=
+    {1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192,
+     16384, 32768, 65536, 131072, 262144, 524288, 1048576, 2097152,
+     4194304, 8388608, 16777216, 33554432, 67108864, 134217728, 268435456,
+     536870912, 1073741824, 2147483648};
+
 /** Aggregate functions interface.
   * Instances of classes with this interface do not contain the data itself for aggregation,
   *  but contain only metadata (description) of the aggregate function,
@@ -67,6 +73,8 @@ public:
 
     /// Get main function name.
     virtual String getName() const = 0;
+
+    virtual bool handleNullItSelf() const { return false; }
 
     /// Get the result type.
     virtual DataTypePtr getReturnType() const = 0;
@@ -119,6 +127,11 @@ public:
 
     /// Returns true if a function requires Arena to handle own states (see add(), merge(), deserialize()).
     virtual bool allocatesMemoryInArena() const = 0;
+
+    /// To calculate step result and store it back to aggregation states
+    virtual inline bool needCalculateStep(AggregateDataPtr) const {return true;}
+
+    virtual void calculateStepResult(AggregateDataPtr, size_t, size_t, bool, Arena *) const {}
 
     /// Inserts results into a column. This method might modify the state (e.g.
     /// sort an array), so must be called once, from single thread. The state

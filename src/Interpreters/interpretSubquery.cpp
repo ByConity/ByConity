@@ -1,4 +1,5 @@
 #include <Common/typeid_cast.h>
+#include <Interpreters/trySetVirtualWarehouse.h>
 #include <IO/WriteHelpers.h>
 
 #include <Storages/IStorage.h>
@@ -65,6 +66,8 @@ std::shared_ptr<InterpreterSelectWithUnionQuery> interpretSubquery(
     subquery_settings.max_result_bytes = 0;
     /// The calculation of `extremes` does not make sense and is not necessary (if you do it, then the `extremes` of the subquery can be taken instead of the whole query).
     subquery_settings.extremes = false;
+    /// subquery should not be executed in perfect-shard mode.
+    subquery_settings.distributed_perfect_shard = 0;
     subquery_context->setSettings(subquery_settings);
 
     auto subquery_options = options.subquery();
@@ -77,6 +80,7 @@ std::shared_ptr<InterpreterSelectWithUnionQuery> interpretSubquery(
         query = select_with_union_query;
 
         select_with_union_query->list_of_selects = std::make_shared<ASTExpressionList>();
+        select_with_union_query->children.push_back(select_with_union_query->list_of_selects);
 
         const auto select_query = std::make_shared<ASTSelectQuery>();
         select_with_union_query->list_of_selects->children.push_back(select_query);
@@ -112,6 +116,7 @@ std::shared_ptr<InterpreterSelectWithUnionQuery> interpretSubquery(
         subquery_options.removeDuplicates();
     }
 
+    trySetVirtualWarehouseAndWorkerGroup(query, subquery_context);
     return std::make_shared<InterpreterSelectWithUnionQuery>(query, subquery_context, subquery_options, required_source_columns);
 }
 

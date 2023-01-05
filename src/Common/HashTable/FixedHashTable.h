@@ -29,6 +29,14 @@ struct FixedHashTableCell
     void setZero() { full = false; }
     static constexpr bool need_zero_value_storage = false;
 
+     /// Serialization, in binary and text form.
+    void write(DB::WriteBuffer & wb) const         { DB::writeBinary(full, wb); }
+    void writeText(DB::WriteBuffer & wb) const     { DB::writeText(full, wb); }
+
+    /// Deserialization, in binary and text form.
+    void read(DB::ReadBuffer & rb)                 { DB::readBinary(full, rb); }
+    void readText(DB::ReadBuffer & rb)             { DB::readText(full, rb); }
+
     /// This Cell is only stored inside an iterator. It's used to accommodate the fact
     ///  that the iterator based API always provide a reference to a continuous memory
     ///  containing the Key. As a result, we have to instantiate a real Key field.
@@ -384,7 +392,7 @@ public:
         {
             if (!ptr->isZero(*this))
             {
-                DB::writeVarUInt(ptr - buf);
+                DB::writeVarUInt(ptr - buf, wb);
                 ptr->write(wb);
             }
         }
@@ -426,7 +434,7 @@ public:
             DB::readVarUInt(place_value, rb);
             Cell x;
             x.read(rb);
-            new (&buf[place_value]) Cell(x, *this);
+            new (&buf[place_value]) Cell({}, *this);
         }
     }
 
@@ -448,7 +456,7 @@ public:
             Cell x;
             DB::assertChar(',', rb);
             x.readText(rb);
-            new (&buf[place_value]) Cell(x, *this);
+            new (&buf[place_value]) Cell({}, *this);
         }
     }
 

@@ -11,7 +11,7 @@ namespace ErrorCodes
 {
     extern const int INVALID_JOIN_ON_EXPRESSION;
     extern const int AMBIGUOUS_COLUMN_NAME;
-    extern const int SYNTAX_ERROR;
+    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
     extern const int NOT_IMPLEMENTED;
     extern const int LOGICAL_ERROR;
 }
@@ -65,11 +65,11 @@ void CollectJoinOnKeysMatcher::visit(const ASTFunction & func, const ASTPtr & as
         throw Exception("JOIN ON does not support OR. Unexpected '" + queryToString(ast) + "'", ErrorCodes::NOT_IMPLEMENTED);
 
     ASOF::Inequality inequality = ASOF::getInequality(func.name);
-    if (func.name == "equals" || inequality != ASOF::Inequality::None)
+    if (func.name == "equals" || func.name == "notEquals" || inequality != ASOF::Inequality::None)
     {
         if (func.arguments->children.size() != 2)
             throw Exception("Function " + func.name + " takes two arguments, got '" + func.formatForErrorMessage() + "' instead",
-                            ErrorCodes::SYNTAX_ERROR);
+                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
     }
     else
         throw Exception("Expected equality or inequality, got '" + queryToString(ast) + "'", ErrorCodes::INVALID_JOIN_ON_EXPRESSION);
@@ -81,11 +81,8 @@ void CollectJoinOnKeysMatcher::visit(const ASTFunction & func, const ASTPtr & as
         auto table_numbers = getTableNumbers(ast, left, right, data);
         data.addJoinKeys(left, right, table_numbers);
     }
-    else if (inequality != ASOF::Inequality::None)
+    else if (inequality != ASOF::Inequality::None && data.is_asof)
     {
-        if (!data.is_asof)
-            throw Exception("JOIN ON inequalities are not supported. Unexpected '" + queryToString(ast) + "'",
-                            ErrorCodes::NOT_IMPLEMENTED);
 
         if (data.asof_left_key || data.asof_right_key)
             throw Exception("ASOF JOIN expects exactly one inequality in ON section. Unexpected '" + queryToString(ast) + "'",
@@ -96,6 +93,14 @@ void CollectJoinOnKeysMatcher::visit(const ASTFunction & func, const ASTPtr & as
         auto table_numbers = getTableNumbers(ast, left, right, data);
 
         data.addAsofJoinKeys(left, right, table_numbers, inequality);
+    }
+    else
+    {
+        ASTPtr left = func.arguments->children.at(0);
+        ASTPtr right = func.arguments->children.at(1);
+        auto table_numbers = getTableNumbers(ast, left, right, data);
+        data.addJoinKeys(left, right, table_numbers);
+        data.is_nest_loop_join = true;
     }
 }
 

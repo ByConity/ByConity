@@ -83,7 +83,7 @@ std::optional<AlterCommand> AlterCommand::parse(const ASTAlterCommand * command_
         command.column_name = ast_col_decl.name;
         if (ast_col_decl.type)
         {
-            command.data_type = data_type_factory.get(ast_col_decl.type);
+            command.data_type = data_type_factory.get(ast_col_decl.type, ast_col_decl.flags);
         }
         if (ast_col_decl.default_expression)
         {
@@ -126,6 +126,8 @@ std::optional<AlterCommand> AlterCommand::parse(const ASTAlterCommand * command_
 
         if (command_ast->partition)
             command.partition = command_ast->partition;
+        else if (command_ast->predicate)
+            command.partition_predicate = command_ast->predicate;
         return command;
     }
     else if (command_ast->type == ASTAlterCommand::MODIFY_COLUMN)
@@ -140,7 +142,7 @@ std::optional<AlterCommand> AlterCommand::parse(const ASTAlterCommand * command_
 
         if (ast_col_decl.type)
         {
-            command.data_type = data_type_factory.get(ast_col_decl.type);
+            command.data_type = data_type_factory.get(ast_col_decl.type, ast_col_decl.flags);
         }
 
         if (ast_col_decl.default_expression)
@@ -186,6 +188,21 @@ std::optional<AlterCommand> AlterCommand::parse(const ASTAlterCommand * command_
         command.ast = command_ast->clone();
         command.type = AlterCommand::MODIFY_ORDER_BY;
         command.order_by = command_ast->order_by;
+        return command;
+    }
+    else if (command_ast->type == ASTAlterCommand::MODIFY_CLUSTER_BY)
+    {
+        AlterCommand command;
+        command.ast = command_ast->clone();
+        command.type = AlterCommand::MODIFY_CLUSTER_BY;
+        command.cluster_by = command_ast->cluster_by;
+        return command;
+    }
+    else if (command_ast->type == ASTAlterCommand::DROP_CLUSTER)
+    {
+        AlterCommand command;
+        command.ast = command_ast->clone();
+        command.type = AlterCommand::DROP_CLUSTER;
         return command;
     }
     else if (command_ast->type == ASTAlterCommand::MODIFY_SAMPLE_BY)
@@ -345,6 +362,15 @@ std::optional<AlterCommand> AlterCommand::parse(const ASTAlterCommand * command_
         command.if_exists = command_ast->if_exists;
         return command;
     }
+    else if (command_ast->type == ASTAlterCommand::CLEAR_MAP_KEY)
+    {
+        AlterCommand command;
+        command.ast = command_ast->clone();
+        command.type = AlterCommand::CLEAR_MAP_KEY;
+        command.column_name = command_ast->column->as<ASTIdentifier &>().name();
+        command.map_keys = command_ast->map_keys;
+        return command;
+    }
     else
         return {};
 }
@@ -442,6 +468,14 @@ void AlterCommand::apply(StorageInMemoryMetadata & metadata, ContextPtr context)
         /// Recalculate key with new order_by expression.
         sorting_key.recalculateWithNewAST(order_by, metadata.columns, context);
     }
+    else if (type == MODIFY_CLUSTER_BY)
+    {
+        metadata.cluster_by_key.recalculateClusterByKeyWithNewAST(cluster_by, metadata.columns, context);
+    }
+    else if (type == DROP_CLUSTER)
+    {
+        metadata.cluster_by_key = KeyDescription{};
+    }
     else if (type == MODIFY_SAMPLE_BY)
     {
         metadata.sampling_key.recalculateWithNewAST(sample_by, metadata.columns, context);
@@ -492,6 +526,10 @@ void AlterCommand::apply(StorageInMemoryMetadata & metadata, ContextPtr context)
         }
 
         metadata.secondary_indices.emplace(insert_it, IndexDescription::getIndexFromAST(index_decl, metadata.columns, context));
+    }
+    else if (type == CLEAR_MAP_KEY)
+    {
+        /// This have no relation to changing the list of columns.
     }
     else if (type == DROP_INDEX)
     {
@@ -637,6 +675,9 @@ void AlterCommand::apply(StorageInMemoryMetadata & metadata, ContextPtr context)
         if (metadata.isPartitionKeyDefined())
             rename_visitor.visit(metadata.partition_key.definition_ast);
 
+        if (metadata.isClusterByKeyDefined())
+            rename_visitor.visit(metadata.partition_key.definition_ast);
+
         for (auto & index : metadata.secondary_indices)
             rename_visitor.visit(index.definition_ast);
     }
@@ -724,8 +765,16 @@ bool AlterCommand::isRequireMutationStage(const StorageInMemoryMetadata & metada
     if (isRemovingProperty() || type == REMOVE_TTL)
         return false;
 
-    if (type == DROP_COLUMN || type == DROP_INDEX || type == DROP_PROJECTION || type == RENAME_COLUMN)
+    /// CLEAR COLUMN IN PARTITION WHERE command will be handled separately.
+    if (type == DROP_COLUMN && partition_predicate)
+        return false;
+
+    if (type == DROP_COLUMN || type == DROP_INDEX || type == DROP_PROJECTION || type == RENAME_COLUMN || type == CLEAR_MAP_KEY)
         return true;
+
+    if (type == MODIFY_CLUSTER_BY)
+        return true;
+
 
     if (type != MODIFY_COLUMN || data_type == nullptr)
         return false;
@@ -833,6 +882,16 @@ std::optional<MutationCommand> AlterCommand::tryConvertToMutationCommand(Storage
         result.column_name = column_name;
         result.rename_to = rename_to;
     }
+    else if (type == CLEAR_MAP_KEY)
+    {
+        result.type = MutationCommand::Type::CLEAR_MAP_KEY;
+        result.column_name = column_name;
+        result.map_keys = map_keys;
+    }
+    else if (type == MODIFY_CLUSTER_BY)
+    {
+        result.type = MutationCommand::Type::RECLUSTER;
+    }
 
     result.ast = ast->clone();
     apply(metadata, context);
@@ -866,6 +925,8 @@ String alterTypeToString(const AlterCommand::Type type)
         return "MODIFY COLUMN";
     case AlterCommand::Type::MODIFY_ORDER_BY:
         return "MODIFY ORDER BY";
+    case AlterCommand::Type::MODIFY_CLUSTER_BY:
+        return "MODIFY CLUSTER BY";
     case AlterCommand::Type::MODIFY_SAMPLE_BY:
         return "MODIFY SAMPLE BY";
     case AlterCommand::Type::MODIFY_TTL:
@@ -912,6 +973,9 @@ void AlterCommands::apply(StorageInMemoryMetadata & metadata, ContextPtr context
     /// And in partition key expression
     if (metadata_copy.partition_key.definition_ast != nullptr)
         metadata_copy.partition_key.recalculateWithNewAST(metadata_copy.partition_key.definition_ast, metadata_copy.columns, context);
+
+    if (metadata_copy.cluster_by_key.definition_ast != nullptr)
+        metadata_copy.cluster_by_key.recalculateClusterByKeyWithNewAST(metadata_copy.cluster_by_key.definition_ast, metadata.columns, context);
 
     // /// And in sample key expression
     if (metadata_copy.sampling_key.definition_ast != nullptr)
@@ -963,7 +1027,6 @@ void AlterCommands::apply(StorageInMemoryMetadata & metadata, ContextPtr context
     metadata = std::move(metadata_copy);
 }
 
-
 void AlterCommands::prepare(const StorageInMemoryMetadata & metadata)
 {
     auto columns = metadata.columns;
@@ -995,7 +1058,8 @@ void AlterCommands::prepare(const StorageInMemoryMetadata & metadata)
         }
         else if (command.type == AlterCommand::DROP_COLUMN
                 || command.type == AlterCommand::COMMENT_COLUMN
-                || command.type == AlterCommand::RENAME_COLUMN)
+                || command.type == AlterCommand::RENAME_COLUMN
+                || command.type == AlterCommand::CLEAR_MAP_KEY)
         {
             if (!has_column && command.if_exists)
                 command.ignore = true;
@@ -1027,8 +1091,7 @@ void AlterCommands::validate(const StorageInMemoryMetadata & metadata, ContextPt
             }
 
             if (!command.data_type)
-                throw Exception{"Data type have to be specified for column " + backQuote(column_name) + " to add",
-                                ErrorCodes::BAD_ARGUMENTS};
+                throw Exception{"Data type have to be specified for column " + backQuote(column_name) + " to add", ErrorCodes::BAD_ARGUMENTS};
 
             if (command.codec)
                 CompressionCodecFactory::instance().validateCodecAndGetPreprocessedAST(command.codec, command.data_type, !context->getSettingsRef().allow_suspicious_codecs, context->getSettingsRef().allow_experimental_codecs);
@@ -1052,6 +1115,7 @@ void AlterCommands::validate(const StorageInMemoryMetadata & metadata, ContextPt
 
             if (command.codec)
                 CompressionCodecFactory::instance().validateCodecAndGetPreprocessedAST(command.codec, command.data_type, !context->getSettingsRef().allow_suspicious_codecs, context->getSettingsRef().allow_experimental_codecs);
+
             auto column_default = all_columns.getDefault(column_name);
             if (column_default)
             {
@@ -1114,7 +1178,6 @@ void AlterCommands::validate(const StorageInMemoryMetadata & metadata, ContextPt
                         ErrorCodes::BAD_ARGUMENTS,
                         "Column {} doesn't have COMMENT, cannot remove it",
                         backQuote(column_name));
-
             }
 
             modified_columns.emplace(column_name);
@@ -1142,8 +1205,8 @@ void AlterCommands::validate(const StorageInMemoryMetadata & metadata, ContextPt
                                     ErrorCodes::ILLEGAL_COLUMN);
                         }
                     }
+                    all_columns.remove(command.column_name);
                 }
-                all_columns.remove(command.column_name);
             }
             else if (!command.if_exists)
                 throw Exception(
@@ -1229,6 +1292,28 @@ void AlterCommands::validate(const StorageInMemoryMetadata & metadata, ContextPt
         {
             throw Exception{"Table doesn't have any table TTL expression, cannot remove", ErrorCodes::BAD_ARGUMENTS};
         }
+        else if (command.type == AlterCommand::CLEAR_MAP_KEY)
+        {
+            if (!all_columns.has(command.column_name))
+            {
+                if (!command.if_exists)
+                    throw Exception("Wrong column name. Cannot find column " + command.column_name + " to clear map keys", ErrorCodes::ILLEGAL_COLUMN);
+            }
+            else
+            {
+                const auto & column = all_columns.get(command.column_name);
+                if (!column.type->isMap())
+                {
+                    throw Exception("Not support clear keys on column " + command.column_name + " with type " + column.type->getName(),
+                            ErrorCodes::ILLEGAL_COLUMN);
+                }
+                else if (column.type->isMapKVStore())
+                {
+                    throw Exception("Not support clear keys on column " + command.column_name + " with type " + column.type->getName() + " KV store",
+                                    ErrorCodes::ILLEGAL_COLUMN);
+                }
+            }
+        }
 
         /// Collect default expressions for MODIFY and ADD comands
         if (command.type == AlterCommand::MODIFY_COLUMN || command.type == AlterCommand::ADD_COLUMN)
@@ -1305,8 +1390,10 @@ MutationCommands AlterCommands::getMutationCommands(StorageInMemoryMetadata meta
 {
     MutationCommands result;
     for (const auto & alter_cmd : *this)
+    {
         if (auto mutation_cmd = alter_cmd.tryConvertToMutationCommand(metadata, context); mutation_cmd)
             result.push_back(*mutation_cmd);
+    }
 
     if (materialize_ttl)
     {

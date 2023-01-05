@@ -19,6 +19,8 @@ public:
     /** Get the text that identifies this element. */
     String getID(char delim) const override { return "UseQuery" + (delim + database); }
 
+    ASTType getType() const override { return ASTType::ASTUseQuery; }
+
     ASTPtr clone() const override { return std::make_shared<ASTUseQuery>(*this); }
 
 protected:

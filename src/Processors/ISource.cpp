@@ -53,7 +53,7 @@ void ISource::work()
         if (auto chunk = tryGenerate())
         {
             current_chunk.chunk = std::move(*chunk);
-            if (current_chunk.chunk)
+            if (current_chunk.chunk || current_chunk.chunk.getChunkInfo())
                 has_input = true;
         }
         else

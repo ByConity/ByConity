@@ -31,10 +31,10 @@ private:
 public:
     static DataTypeFactory & instance();
 
-    DataTypePtr get(const String & full_name) const;
-    DataTypePtr get(const String & family_name, const ASTPtr & parameters) const;
-    DataTypePtr get(const ASTPtr & ast) const;
-    DataTypePtr getCustom(DataTypeCustomDescPtr customization) const;
+    DataTypePtr get(const String & full_name, const UInt8 flags = 0) const;
+    DataTypePtr get(const String & family_name, const ASTPtr & parameters, const UInt8 flags = 0) const;
+    DataTypePtr get(const ASTPtr & ast, const UInt8 flags = 0) const;
+    DataTypePtr getCustom(DataTypeCustomDescPtr customization, const UInt8 flags = 0) const;
 
     /// Register a type family by its name.
     void registerDataType(const String & family_name, Value creator, CaseSensitiveness case_sensitiveness = CaseSensitive);
@@ -69,6 +69,8 @@ private:
 void registerDataTypeNumbers(DataTypeFactory & factory);
 void registerDataTypeDecimal(DataTypeFactory & factory);
 void registerDataTypeDate(DataTypeFactory & factory);
+void registerDataTypeDate32(DataTypeFactory & factory);
+void registerDataTypeTime(DataTypeFactory & factory);
 void registerDataTypeDateTime(DataTypeFactory & factory);
 void registerDataTypeString(DataTypeFactory & factory);
 void registerDataTypeFixedString(DataTypeFactory & factory);
@@ -76,6 +78,7 @@ void registerDataTypeEnum(DataTypeFactory & factory);
 void registerDataTypeArray(DataTypeFactory & factory);
 void registerDataTypeTuple(DataTypeFactory & factory);
 void registerDataTypeMap(DataTypeFactory & factory);
+void registerDataTypeByteMap(DataTypeFactory & factory);
 void registerDataTypeNullable(DataTypeFactory & factory);
 void registerDataTypeNothing(DataTypeFactory & factory);
 void registerDataTypeUUID(DataTypeFactory & factory);
@@ -86,5 +89,7 @@ void registerDataTypeLowCardinality(DataTypeFactory & factory);
 void registerDataTypeDomainIPv4AndIPv6(DataTypeFactory & factory);
 void registerDataTypeDomainSimpleAggregateFunction(DataTypeFactory & factory);
 void registerDataTypeDomainGeo(DataTypeFactory & factory);
+void registerDataTypeBitMap64(DataTypeFactory & factory);
+void registerDataTypeSet(DataTypeFactory & factory);
 
 }

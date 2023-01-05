@@ -10,6 +10,7 @@
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeMap.h>
+#include <DataTypes/DataTypeByteMap.h>
 #include <common/DateLUTImpl.h>
 #include <common/types.h>
 #include <Core/Block.h>
@@ -20,9 +21,13 @@
 #include <Columns/ColumnLowCardinality.h>
 #include <Columns/ColumnUnique.h>
 #include <Columns/ColumnMap.h>
+#include <Columns/ColumnByteMap.h>
 #include <Interpreters/castColumn.h>
 #include <algorithm>
 #include <fmt/format.h>
+#include "common/logger_useful.h"
+#include <DataTypes/NestedUtils.h>
+#include <Common/escapeForFileName.h>
 
 
 namespace DB
@@ -53,6 +58,7 @@ namespace DB
 
             {arrow::Type::BOOL, "UInt8"},
             {arrow::Type::DATE32, "Date"},
+            {arrow::Type::DATE32, "Date32"},
             {arrow::Type::DATE64, "DateTime"},
             {arrow::Type::TIMESTAMP, "DateTime"},
 
@@ -145,9 +151,36 @@ namespace DB
     }
 
 /// Arrow stores Parquet::DATE in Int32, while ClickHouse stores Date in UInt16. Therefore, it should be checked before saving
-    static void fillColumnWithDate32Data(std::shared_ptr<arrow::ChunkedArray> & arrow_column, IColumn & internal_column)
+static void fillColumnWithDate32Data(std::shared_ptr<arrow::ChunkedArray> & arrow_column, IColumn & internal_column)
+{
+    PaddedPODArray<UInt16> & column_data = assert_cast<ColumnVector<UInt16> &>(internal_column).getData();
+    column_data.reserve(arrow_column->length());
+
+    for (size_t chunk_i = 0, num_chunks = static_cast<size_t>(arrow_column->num_chunks()); chunk_i < num_chunks; ++chunk_i)
     {
-        PaddedPODArray<UInt16> & column_data = assert_cast<ColumnVector<UInt16> &>(internal_column).getData();
+        arrow::Date32Array & chunk = static_cast<arrow::Date32Array &>(*(arrow_column->chunk(chunk_i)));
+
+        for (size_t value_i = 0, length = static_cast<size_t>(chunk.length()); value_i < length; ++value_i)
+        {
+            UInt32 days_num = static_cast<UInt32>(chunk.Value(value_i));
+            if (days_num > DATE_LUT_MAX_DAY_NUM)
+            {
+                // TODO: will it rollback correctly?
+                throw Exception
+                    {
+                        fmt::format("Input value {} of a column \"{}\" is greater than max allowed Date value, which is {}", days_num, internal_column.getName(), DATE_LUT_MAX_DAY_NUM),
+                        ErrorCodes::VALUE_IS_OUT_OF_RANGE_OF_DATA_TYPE
+                    };
+            }
+
+            column_data.emplace_back(days_num);
+        }
+    }
+}
+
+    static void fillDate32ColumnWithDate32Data(std::shared_ptr<arrow::ChunkedArray> & arrow_column, IColumn & internal_column)
+    {
+        PaddedPODArray<Int32> & column_data = assert_cast<ColumnVector<Int32> &>(internal_column).getData();
         column_data.reserve(arrow_column->length());
 
         for (size_t chunk_i = 0, num_chunks = static_cast<size_t>(arrow_column->num_chunks()); chunk_i < num_chunks; ++chunk_i)
@@ -156,8 +189,8 @@ namespace DB
 
             for (size_t value_i = 0, length = static_cast<size_t>(chunk.length()); value_i < length; ++value_i)
             {
-                UInt32 days_num = static_cast<UInt32>(chunk.Value(value_i));
-                if (days_num > DATE_LUT_MAX_DAY_NUM)
+                Int32 days_num = static_cast<Int32>(chunk.Value(value_i));
+                if (days_num > DATE_LUT_MAX_EXTEND_DAY_NUM)
                 {
                     // TODO: will it rollback correctly?
                     throw Exception
@@ -328,7 +361,14 @@ namespace DB
                 fillColumnWithBooleanData(arrow_column, internal_column);
                 break;
             case arrow::Type::DATE32:
-                fillColumnWithDate32Data(arrow_column, internal_column);
+                if (WhichDataType(internal_column.getDataType()).isUInt16())
+                {
+                    fillColumnWithDate32Data(arrow_column, internal_column);
+                }
+                else
+                {
+                    fillDate32ColumnWithDate32Data(arrow_column, internal_column);
+                }
                 break;
             case arrow::Type::DATE64:
                 fillColumnWithDate64Data(arrow_column, internal_column);
@@ -354,13 +394,28 @@ namespace DB
                     array_vector.emplace_back(std::move(chunk));
                 }
                 auto arrow_nested_column = std::make_shared<arrow::ChunkedArray>(array_vector);
-
+#ifdef USE_COMMUNITY_MAP
                 ColumnArray & column_array = arrow_column->type()->id() == arrow::Type::MAP
                     ? assert_cast<ColumnMap &>(internal_column).getNestedColumn()
                     : assert_cast<ColumnArray &>(internal_column);
 
                 readColumnFromArrowColumn(arrow_nested_column, column_array.getData(), column_name, format_name, false, dictionary_values);
                 fillOffsetsFromArrowListColumn(arrow_column, column_array.getOffsetsColumn());
+#else
+                ColumnPtr bytemap_nested = nullptr;
+                /// For ColumnByteMap, construct an ColumnArray to mock nested column in ColumnMap so that can use the same logic as ColumnMap.
+                if (arrow_column->type()->id() == arrow::Type::MAP)
+                {
+                    ColumnByteMap & map_column = assert_cast<ColumnByteMap &>(internal_column);
+                    bytemap_nested = ColumnArray::create(ColumnTuple::create(Columns{map_column.getKeyPtr(), map_column.getValuePtr()}), map_column.getOffsetsPtr());
+                }
+                ColumnArray & column_array = bytemap_nested
+                    ? assert_cast<ColumnArray &>(*(bytemap_nested->assumeMutable()))
+                    : assert_cast<ColumnArray &>(internal_column);
+
+                readColumnFromArrowColumn(arrow_nested_column, column_array.getData(), column_name, format_name, false, dictionary_values);
+                fillOffsetsFromArrowListColumn(arrow_column, column_array.getOffsetsColumn());
+#endif
                 break;
             }
             case arrow::Type::STRUCT:
@@ -506,7 +561,7 @@ namespace DB
             const auto & dict_type = lc_type ? lc_type->getDictionaryType() : column_type;
             return std::make_shared<DataTypeLowCardinality>(getInternalType(arrow_dict_type->value_type(), dict_type, column_name, format_name));
         }
-
+#ifdef USE_COMMUNITY_MAP
         if (arrow_type->id() == arrow::Type::MAP)
         {
             const auto * arrow_map_type = typeid_cast<arrow::MapType *>(arrow_type.get());
@@ -519,9 +574,34 @@ namespace DB
                 getInternalType(arrow_map_type->item_type(), map_type->getValueType(), column_name, format_name)
                 );
         }
+#else
+        if (arrow_type->id() == arrow::Type::MAP)
+        {
+            const auto * arrow_map_type = typeid_cast<arrow::MapType *>(arrow_type.get());
+            const auto * map_type = typeid_cast<const DataTypeByteMap *>(column_type.get());
+            if (!map_type)
+                throw Exception{fmt::format("Cannot convert arrow MAP type to a not Map ClickHouse type {}.", column_type->getName()), ErrorCodes::CANNOT_CONVERT_TYPE};
 
-        if (const auto * internal_type_it = std::find_if(arrow_type_to_internal_type.begin(), arrow_type_to_internal_type.end(),
-                                                              [=](auto && elem) { return elem.first == arrow_type->id(); });
+            return std::make_shared<DataTypeByteMap>(
+                getInternalType(arrow_map_type->key_type(), map_type->getKeyType(), column_name, format_name),
+                getInternalType(arrow_map_type->item_type(), map_type->getValueType(), column_name, format_name)
+                );
+        }
+#endif
+
+        auto filter = [=](auto && elem)
+        {
+            auto which = WhichDataType(column_type);
+            if (arrow_type->id() == arrow::Type::DATE32 && which.isDateOrDate32())
+            {
+                return (strcmp(elem.second, "Date") == 0 && which.isDate()) || (strcmp(elem.second, "Date32") == 0 && which.isDate32());
+            }
+            else
+            {
+                return elem.first == arrow_type->id();
+            }
+        };
+        if (const auto * internal_type_it = std::find_if(arrow_type_to_internal_type.begin(), arrow_type_to_internal_type.end(), filter);
             internal_type_it != arrow_type_to_internal_type.end())
         {
             return DataTypeFactory::instance().get(internal_type_it->second);
@@ -533,7 +613,11 @@ namespace DB
             };
     }
 
-    ArrowColumnToCHColumn::ArrowColumnToCHColumn(const Block & header_, std::shared_ptr<arrow::Schema> schema_, const std::string & format_name_) : header(header_), format_name(format_name_)
+    ArrowColumnToCHColumn::ArrowColumnToCHColumn(
+        const Block & header_,
+        std::shared_ptr<arrow::Schema> schema_,
+        const std::string & format_name_,
+        const std::map<String, String> & partition_kv_) : header(header_), format_name(format_name_), partition_kv(partition_kv_)
     {
         for (const auto & field : schema_->fields())
         {
@@ -565,11 +649,44 @@ namespace DB
         {
             const ColumnWithTypeAndName & header_column = header.getByPosition(column_i);
 
+            String column_name = header_column.name;
+            String nested_table_name = Nested::extractTableName(header_column.name);
+            LOG_TRACE(&Poco::Logger::get("ArrowColumnToCHColumn"), " ArrowColumnToCHColumn column_name = {}", column_name);
             if (name_to_column_ptr.find(header_column.name) == name_to_column_ptr.end())
-                // TODO: What if some columns were not presented? Insert NULLs? What if a column is not nullable?
-                throw Exception{fmt::format("Column \"{}\" is not presented in input data.", header_column.name),
-                                ErrorCodes::THERE_IS_NO_COLUMN};
+            {
+                // // TODO: What if some columns were not presented? Insert NULLs? What if a column is not nullable?
+                // throw Exception{fmt::format("Column \"{}\" is not presented in input data.", header_column.name),
+                //                 ErrorCodes::THERE_IS_NO_COLUMN};
 
+                auto partition_column = partition_kv.find(column_name);
+                if (partition_column != partition_kv.end())
+                {
+                    auto column_type = header_column.type;
+                    ColumnWithTypeAndName column;
+                    column.name = column_name;
+                    column.type = column_type;
+                    Field value = partition_column->second;
+                    if (!isString(column_type))
+                        value = column_type->stringToVisitorField(partition_column->second);
+                    MutableColumnPtr col = column.type->createColumn();
+                    for(int i = 0; i < table->num_rows(); ++i)
+                        col->insert(value);
+                    column.column = std::move(col);
+                    num_rows = column.column->size();
+                    columns_list.push_back(std::move(column.column));
+                    continue;
+                }
+                else if (name_to_column_ptr.contains(nested_table_name))
+                {
+                    column_name = nested_table_name;
+                }
+                else
+                {
+                    column_name = escapeForFileName(column_name);
+                    if (name_to_column_ptr.find(column_name) == name_to_column_ptr.end())
+                        continue;
+                }
+            }
             std::shared_ptr<arrow::ChunkedArray> arrow_column = name_to_column_ptr[header_column.name];
 
             DataTypePtr & internal_type = name_to_internal_type[header_column.name];
@@ -584,6 +701,7 @@ namespace DB
             column.column = castColumn(column, header_column.type);
             column.type = header_column.type;
             num_rows = column.column->size();
+
             columns_list.push_back(std::move(column.column));
         }
 

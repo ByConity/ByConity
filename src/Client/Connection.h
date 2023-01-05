@@ -4,6 +4,7 @@
 
 #include <Poco/Net/StreamSocket.h>
 
+#include <Common/HostWithPorts.h>
 #include <Common/Throttler.h>
 #if !defined(ARCADIA_BUILD)
 #   include <Common/config.h>
@@ -22,6 +23,7 @@
 
 #include <Interpreters/TablesStatus.h>
 #include <Interpreters/Context_fwd.h>
+#include <Interpreters/ClientInfo.h>
 
 #include <Compression/ICompressionCodec.h>
 
@@ -34,6 +36,9 @@ namespace DB
 class ClientInfo;
 class Pipe;
 struct Settings;
+struct QueryWorkerMetricElement;
+using QueryWorkerMetricElementPtr = std::shared_ptr<QueryWorkerMetricElement>;
+using QueryWorkerMetricElements = std::vector<QueryWorkerMetricElementPtr>;
 
 /// Struct which represents data we are going to send for external table.
 struct ExternalTableData
@@ -54,6 +59,9 @@ class Connection;
 using ConnectionPtr = std::shared_ptr<Connection>;
 using Connections = std::vector<ConnectionPtr>;
 
+class PlanSegment;
+using PlanSegmentPtr = std::unique_ptr<PlanSegment>;
+
 
 /// Packet that could be received from server.
 struct Packet
@@ -66,6 +74,7 @@ struct Packet
     Progress progress;
     BlockStreamProfileInfo profile_info;
     std::vector<UUID> part_uuids;
+    QueryWorkerMetricElements query_worker_metric_elements;
 
     Packet() : type(Protocol::Server::Hello) {}
 };
@@ -91,10 +100,16 @@ public:
         const String & client_name_,
         Protocol::Compression compression_,
         Protocol::Secure secure_,
-        Poco::Timespan sync_request_timeout_ = Poco::Timespan(DBMS_DEFAULT_SYNC_REQUEST_TIMEOUT_SEC, 0))
+        Poco::Timespan sync_request_timeout_ = Poco::Timespan(DBMS_DEFAULT_SYNC_REQUEST_TIMEOUT_SEC, 0),
+        UInt16 exchange_port_ = 0,
+        UInt16 exchange_status_port_ = 0,
+        UInt16 rpc_port_ = 0)
         :
         host(host_), port(port_), default_database(default_database_),
         user(user_), password(password_),
+        exchange_port(exchange_port_),
+        exchange_status_port(exchange_status_port_),
+        rpc_port(rpc_port_),
         cluster(cluster_),
         cluster_secret(cluster_secret_),
         client_name(client_name_),
@@ -139,6 +154,19 @@ public:
     const String & getHost() const;
     UInt16 getPort() const;
     const String & getDefaultDatabase() const;
+    const String & getUser() const;
+    const String & getPassword() const;
+    UInt16 getExchangePort() const;
+    UInt16 getExchangeStatusPort() const;
+
+    HostWithPorts getHostWithPorts() const
+    {
+        HostWithPorts res{host};
+        res.rpc_port = rpc_port;
+        res.tcp_port = port;
+        res.id = "virtual_id";
+        return res;
+    }
 
     Protocol::Compression getCompression() const { return compression; }
 
@@ -151,6 +179,25 @@ public:
         const Settings * settings = nullptr,
         const ClientInfo * client_info = nullptr,
         bool with_pending_data = false);
+
+    /// send cnch query
+    void sendCnchQuery(
+        UInt64 txn_id,
+        const ConnectionTimeouts & timeouts,
+        const String & query,
+        const String & query_id_ = "",
+        UInt64 stage = QueryProcessingStage::Complete,
+        const Settings * settings = nullptr,
+        const ClientInfo * client_info = nullptr,
+        bool with_pending_data = false,
+        ClientInfo::ClientType client_type = ClientInfo::ClientType::UNKNOWN,
+        UInt16 server_rpc_port = 0);
+
+    void sendPlanSegment(
+        const ConnectionTimeouts & timeouts,
+        const PlanSegment * plan_segment,
+        const Settings * settings = nullptr,
+        const ClientInfo * client_info = nullptr);
 
     void sendCancel();
     /// Send block of data; if name is specified, server will write it to external (temporary) table of that name.
@@ -197,6 +244,8 @@ public:
       */
     void disconnect();
 
+    void tryConnect(const ConnectionTimeouts & timeouts);
+
     size_t outBytesCount() const { return out ? out->count() : 0; }
     size_t inBytesCount() const { return in ? in->count() : 0; }
 
@@ -216,6 +265,9 @@ private:
     String default_database;
     String user;
     String password;
+    UInt16 exchange_port;
+    UInt16 exchange_status_port;
+    UInt16 rpc_port;
 
     /// For inter-server authorization
     String cluster;
@@ -316,6 +368,7 @@ private:
     std::unique_ptr<Exception> receiveException() const;
     Progress receiveProgress() const;
     BlockStreamProfileInfo receiveProfileInfo() const;
+    QueryWorkerMetricElements receiveQueryWorkerMetrics();
 
     void initInputBuffers();
     void initBlockInput();

@@ -7,6 +7,9 @@
 
 #include <Parsers/ASTFunction.h>
 
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
+
 namespace DB
 {
 
@@ -66,6 +69,41 @@ std::optional<size_t> tryChooseTable(const ASTIdentifier & identifier, const std
 
 }
 
+void IdentifierSemanticImpl::serialize(WriteBuffer & buf) const
+{
+    writeBinary(special, buf);
+    writeBinary(can_be_alias, buf);
+    writeBinary(covered, buf);
+    if (membership)
+    {
+        writeBinary(true, buf);
+        writeBinary(membership.value(), buf);
+    }
+    else
+        writeBinary(false, buf);
+
+    writeBinary(table, buf);
+    writeBinary(legacy_compound, buf);
+}
+
+void IdentifierSemanticImpl::deserialize(ReadBuffer & buf)
+{
+    readBinary(special, buf);
+    readBinary(can_be_alias, buf);
+    readBinary(covered, buf);
+
+    bool has_member;
+    readBinary(has_member, buf);
+    if (has_member){
+        size_t member_tmp;
+        readBinary(member_tmp, buf);
+        membership = member_tmp;
+    }
+
+    readBinary(table, buf);
+    readBinary(legacy_compound, buf);
+}
+
 std::optional<String> IdentifierSemantic::getColumnName(const ASTIdentifier & node)
 {
     if (!node.semantic->special)
@@ -101,6 +139,11 @@ void IdentifierSemantic::coverName(ASTIdentifier & identifier, const String & al
 bool IdentifierSemantic::canBeAlias(const ASTIdentifier & identifier)
 {
     return identifier.semantic->can_be_alias;
+}
+
+bool IdentifierSemantic::isSpecial(const ASTIdentifier & identifier)
+{
+    return identifier.semantic->special;
 }
 
 void IdentifierSemantic::setMembership(ASTIdentifier & identifier, size_t table_pos)
@@ -309,6 +352,14 @@ std::vector<ASTPtr> collectConjunctions(const ASTPtr & node)
     std::vector<ASTPtr> members;
     collectConjunctions(node, members);
     return members;
+}
+
+void IdentifierSemantic::setColumnTableName(ASTIdentifier & identifier, const String & table)
+{
+    identifier.name_parts = {table, identifier.shortName()};
+    identifier.resetFullName();
+    identifier.semantic->table = table;
+    identifier.semantic->legacy_compound = true;
 }
 
 }

@@ -2,6 +2,7 @@
 
 #include <Columns/FilterDescription.h>
 #include <DataStreams/IBlockStream_fwd.h>
+#include <Interpreters/ActionsVisitor.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <Interpreters/SubqueryForSet.h>
@@ -65,6 +66,8 @@ struct ExpressionAnalyzerData
 
     bool has_aggregation = false;
     NamesAndTypesList aggregation_keys;
+    NamesAndTypesLists aggregation_keys_list;
+    ColumnNumbersList aggregation_keys_indexes_list;
     bool has_const_aggregation_keys = false;
     AggregateDescriptions aggregate_descriptions;
 
@@ -75,6 +78,8 @@ struct ExpressionAnalyzerData
 
     /// All new temporary tables obtained by performing the GLOBAL IN/JOIN subqueries.
     TemporaryTablesMapping external_tables;
+
+    GroupByKind group_by_kind = GroupByKind::NONE;
 };
 
 
@@ -169,6 +174,9 @@ protected:
     const std::vector<const ASTFunction *> & aggregates() const { return syntax->aggregates; }
     /// Find global subqueries in the GLOBAL IN/JOIN sections. Fills in external_tables.
     void initGlobalSubqueriesAndExternalTables(bool do_global);
+    void checkQuery();
+    void checkSampleOptimizeIsLegal();
+    void checkSample(ASTPtr & ast, std::map<String, size_t> & sampled_table);
 
     ArrayJoinActionPtr addMultipleArrayJoinAction(ActionsDAGPtr & actions, bool is_left) const;
 
@@ -193,6 +201,11 @@ protected:
     const ASTSelectQuery * getSelectQuery() const;
 
     bool isRemoteStorage() const { return syntax->is_remote_storage; }
+
+    AggregationKeysInfo getAggregationKeysInfo() const noexcept
+    {
+        return { aggregation_keys, aggregation_keys_indexes_list, group_by_kind };
+    }
 };
 
 class SelectQueryExpressionAnalyzer;
@@ -216,6 +229,8 @@ struct ExpressionAnalysisResult
     bool optimize_read_in_order = false;
     bool optimize_aggregation_in_order = false;
     bool join_has_delayed_stream = false;
+
+    bool use_grouping_set_key = false;
 
     ActionsDAGPtr before_array_join;
     ArrayJoinActionPtr array_join;
@@ -309,8 +324,19 @@ public:
     bool hasGlobalSubqueries() { return has_global_subqueries; }
     bool hasTableJoin() const { return syntax->ast_join; }
 
+    /// When there is only one group in GROUPING SETS
+    /// it is a special case that is equal to GROUP BY, i.e.:
+    ///
+    ///     GROUPING SETS ((a, b)) -> GROUP BY a, b
+    ///
+    /// But it is rewritten by GroupingSetsRewriterVisitor to GROUP BY,
+    /// so instead of aggregation_keys_list.size() > 1,
+    /// !aggregation_keys_list.empty() can be used.
+    bool useGroupingSetKey() const { return aggregation_keys_list.size() > 1; }
+
     const NamesAndTypesList & aggregationKeys() const { return aggregation_keys; }
     bool hasConstAggregationKeys() const { return has_const_aggregation_keys; }
+    const NamesAndTypesLists & aggregationKeysList() const { return aggregation_keys_list; }
     const AggregateDescriptions & aggregates() const { return aggregate_descriptions; }
 
     const PreparedSets & getPreparedSets() const { return prepared_sets; }

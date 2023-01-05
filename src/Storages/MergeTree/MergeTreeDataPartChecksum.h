@@ -6,6 +6,7 @@
 #include <Disks/IDisk.h>
 #include <IO/ReadBuffer.h>
 #include <IO/WriteBuffer.h>
+#include <Storages/MergeTree/MergeTreeDataPartVersions.h>
 
 
 class SipHash;
@@ -13,16 +14,22 @@ class SipHash;
 
 namespace DB
 {
+using StorageType = DiskType::Type;
 
 /// Checksum of one file.
 struct MergeTreeDataPartChecksum
 {
     using uint128 = CityHash_v1_0_2::uint128;
 
+    UInt64 file_offset {};
     UInt64 file_size {};
     uint128 file_hash {};
 
     bool is_compressed = false;
+    /// MOCK for MergeTreeCNCHDataDumper
+    bool is_deleted = false;
+    Int64 mutation = 0;
+
     UInt64 uncompressed_size {};
     uint128 uncompressed_hash {};
 
@@ -46,7 +53,12 @@ struct MergeTreeDataPartChecksums
 
     /// The order is important.
     using FileChecksums = std::map<String, Checksum>;
+    using Versions = std::shared_ptr<MergeTreeDataPartVersions>;
     FileChecksums files;
+
+    StorageType storage_type = StorageType::Local ;
+
+    Versions versions = std::make_shared<MergeTreeDataPartVersions>(false);
 
     void addFile(const String & file_name, UInt64 file_size, Checksum::uint128 file_hash);
 
@@ -64,6 +76,9 @@ struct MergeTreeDataPartChecksums
     /// Otherwise, it compares only the checksums of the files.
     void checkEqual(const MergeTreeDataPartChecksums & rhs, bool have_uncompressed) const;
 
+    /// Return if the checksums of the target column are same.
+    bool isEqual(const MergeTreeDataPartChecksums & rhs, const String & col_name) const;
+
     static bool isBadChecksumsErrorCode(int code);
 
     /// Checks that the directory contains all the needed files of the correct size. Does not check the checksum.
@@ -76,6 +91,11 @@ struct MergeTreeDataPartChecksums
     bool readV2(ReadBuffer & in);
     bool readV3(ReadBuffer & in);
     bool readV4(ReadBuffer & from);
+    /// CNCH
+    bool readV5(ReadBuffer & in);
+    bool readV6(ReadBuffer & in);
+    // CNCH, encryption
+    bool readV7(ReadBuffer & in);
 
     void write(WriteBuffer & to) const;
 
@@ -91,6 +111,8 @@ struct MergeTreeDataPartChecksums
     static MergeTreeDataPartChecksums deserializeFrom(const String & s);
 
     UInt64 getTotalSizeOnDisk() const;
+
+    Strings collectFilesForMapColumnNotKV(const String & map_column) const;
 };
 
 

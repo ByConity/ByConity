@@ -5,9 +5,13 @@
 #if USE_HDFS
 #include <Common/ShellCommand.h>
 #include <Common/Exception.h>
+#include <Common/formatIPv6.h>
+#include <random>
 #include <IO/WriteBufferFromString.h>
 #include <IO/Operators.h>
 #include <common/logger_useful.h>
+#include <ServiceDiscovery/ServiceDiscoveryFactory.h>
+#include <ServiceDiscovery/ServiceDiscoveryConsul.h>
 
 
 namespace DB
@@ -44,9 +48,9 @@ void HDFSBuilderWrapper::loadFromConfig(const Poco::Util::AbstractConfiguration 
             need_kinit = true;
             hadoop_kerberos_principal = config.getString(key_path);
 
-#if USE_INTERNAL_HDFS3_LIBRARY
-            hdfsBuilderSetPrincipal(hdfs_builder, hadoop_kerberos_principal.c_str());
-#endif
+// #if USE_INTERNAL_HDFS3_LIBRARY
+//             hdfsBuilderSetPrincipal(hdfs_builder, hadoop_kerberos_principal.c_str());
+// #endif
 
             continue;
         }
@@ -71,7 +75,7 @@ void HDFSBuilderWrapper::loadFromConfig(const Poco::Util::AbstractConfiguration 
         key_name = boost::replace_all_copy(key, "_", ".");
 
         const auto & [k,v] = keep(key_name, config.getString(key_path));
-        hdfsBuilderConfSetStr(hdfs_builder, k.c_str(), v.c_str());
+        hdfsBuilderConfSetStr(get(), k.c_str(), v.c_str());
     }
 }
 
@@ -116,22 +120,24 @@ void HDFSBuilderWrapper::runKinit()
 
 HDFSBuilderWrapper createHDFSBuilder(const String & uri_str, const Poco::Util::AbstractConfiguration & config)
 {
-    const Poco::URI uri(uri_str);
-    const auto & host = uri.getHost();
-    auto port = uri.getPort();
-    const String path = "//";
-    if (host.empty())
-        throw Exception("Illegal HDFS URI: " + uri.toString(), ErrorCodes::BAD_ARGUMENTS);
 
-    HDFSBuilderWrapper builder;
+    HDFSConnectionParams hdfs_params = HDFSConnectionParams::parseHdfsFromConfig(config);
+    const Poco::URI uri(uri_str);
+    // const auto & host = uri.getHost();
+    // auto port = uri.getPort();
+    // const String path = "//";
+    // if (host.empty())
+    //     throw Exception("Illegal HDFS URI: " + uri.toString(), ErrorCodes::BAD_ARGUMENTS);
+
+    HDFSBuilderWrapper builder(hdfs_params.createBuilder(uri));
     if (builder.get() == nullptr)
         throw Exception("Unable to create builder to connect to HDFS: " +
             uri.toString() + " " + String(hdfsGetLastError()),
             ErrorCodes::NETWORK_ERROR);
 
-    hdfsBuilderConfSetStr(builder.get(), "input.read.timeout", "60000"); // 1 min
-    hdfsBuilderConfSetStr(builder.get(), "input.write.timeout", "60000"); // 1 min
-    hdfsBuilderConfSetStr(builder.get(), "input.connect.timeout", "60000"); // 1 min
+    // hdfsBuilderConfSetStr(builder.get(), "input.read.timeout", "60000"); // 1 min
+    // hdfsBuilderConfSetStr(builder.get(), "input.write.timeout", "60000"); // 1 min
+    // hdfsBuilderConfSetStr(builder.get(), "input.connect.timeout", "60000"); // 1 min
 
     String user_info = uri.getUserInfo();
     String user;
@@ -146,11 +152,12 @@ HDFSBuilderWrapper createHDFSBuilder(const String & uri_str, const Poco::Util::A
         hdfsBuilderSetUserName(builder.get(), user.c_str());
     }
 
-    hdfsBuilderSetNameNode(builder.get(), host.c_str());
-    if (port != 0)
-    {
-        hdfsBuilderSetNameNodePort(builder.get(), port);
-    }
+    // The namenode is already set in hdfs_params.createBuilder();
+    // hdfsBuilderSetNameNode(builder.get(), host.c_str());
+    // if (port != 0)
+    // {
+    //     hdfsBuilderSetNameNodePort(builder.get(), port);
+    // }
 
     if (config.has(HDFSBuilderWrapper::CONFIG_PREFIX))
     {
@@ -183,13 +190,81 @@ std::mutex HDFSBuilderWrapper::kinit_mtx;
 
 HDFSFSPtr createHDFSFS(hdfsBuilder * builder)
 {
-    HDFSFSPtr fs(hdfsBuilderConnect(builder));
+    HDFSFSPtr fs(hdfsBuilderConnect(builder), detail::HDFSFsDeleter());
     if (fs == nullptr)
         throw Exception("Unable to connect to HDFS: " + String(hdfsGetLastError()),
             ErrorCodes::NETWORK_ERROR);
 
     return fs;
 }
+
+std::pair<std::string, size_t> getNameNodeNNProxy(const std::string & nnproxy)
+{
+    HostWithPortsVec nnproxys;
+    auto sd_consul = ServiceDiscoveryFactory::instance().tryGet(ServiceDiscoveryMode::CONSUL);
+    if (sd_consul)
+    {
+        int retry = 0;
+        do
+        {
+            if (retry++ > 2)
+                throw Exception("No available nnproxy " + nnproxy, ErrorCodes::NETWORK_ERROR);
+            nnproxys = sd_consul->lookup(nnproxy, ComponentType::NNPROXY);
+        } while (nnproxys.empty());
+    }
+
+    HostWithPortsVec sample;
+    int num_retry = 3;
+    while (true)
+    {
+        std::sample(nnproxys.begin(), nnproxys.end(), std::back_inserter(sample), 1, std::mt19937{std::random_device{}()});
+        if (!sample.empty() && num_retry-- > 0)
+        {
+            if (brokenNNs.isBrokenNN(sample[0].getHost())) continue;
+        }
+        break;
+    }
+    std::string host{};
+    size_t port{};
+    for (const auto & service : sample)
+    {
+        host = service.getHost();
+        port = service.tcp_port;
+    }
+
+    host = normalizeHost(host);
+
+    return {host, port};
+};
+
+HDFSBuilderPtr createHDFSBuilder(const Poco::URI & uri, const std::string hdfs_user, const std::string nnproxy)
+{
+    auto host = uri.getHost();
+    auto port = uri.getPort();
+
+    if (host.empty() || port == 0)
+    {
+        std::tie(host, port) = getNameNodeNNProxy(nnproxy);
+    }
+    else
+    {
+        host = normalizeHost(host);
+    }
+
+    HDFSBuilderPtr builder(hdfsNewBuilder());
+    if (builder == nullptr)
+        throw Exception("Unable to create builder to connect to HDFS: " + uri.toString() + " " + std::string(hdfsGetLastError()),
+            ErrorCodes::NETWORK_ERROR);
+    hdfsBuilderConfSetStr(builder.get(), "input.read.timeout", "60000"); // 1 min
+    hdfsBuilderConfSetStr(builder.get(), "input.write.timeout", "60000"); // 1 min
+    hdfsBuilderConfSetStr(builder.get(), "input.connect.timeout", "60000"); // 1 min
+
+    hdfsBuilderSetNameNode(builder.get(), host.c_str());
+    hdfsBuilderSetNameNodePort(builder.get(), port);
+    hdfsBuilderSetUserName(builder.get(), hdfs_user.c_str());
+    return builder;
+}
+
 
 }
 

@@ -22,7 +22,7 @@ namespace DB
 class ArrowColumnToCHColumn
 {
 public:
-    ArrowColumnToCHColumn(const Block & header_, std::shared_ptr<arrow::Schema> schema_, const std::string & format_name_);
+    ArrowColumnToCHColumn(const Block & header_, std::shared_ptr<arrow::Schema> schema_, const std::string & format_name_, const std::map<String, String> & partition_kv = {});
 
     void arrowTableToCHChunk(Chunk & res, std::shared_ptr<arrow::Table> & table);
 
@@ -58,6 +58,8 @@ private:
     /// To avoid converting dictionary from Arrow Dictionary
     /// to LowCardinality every chunk we save it and reuse.
     std::unordered_map<std::string, ColumnPtr> dictionary_values;
+
+    const std::map<String, String> partition_kv;
 };
 }
 #endif

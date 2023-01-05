@@ -22,19 +22,21 @@ public:
     static constexpr auto DATA_FILE_NAME_WITH_EXTENSION = "data.bin";
 
     MergeTreeDataPartCompact(
-        const MergeTreeData & storage_,
+        const MergeTreeMetaBase & storage_,
         const String & name_,
         const MergeTreePartInfo & info_,
         const VolumePtr & volume_,
         const std::optional<String> & relative_path_ = {},
-        const IMergeTreeDataPart * parent_part_ = nullptr);
+        const IMergeTreeDataPart * parent_part_ = nullptr,
+        IStorage::StorageLocation location_ = IStorage::StorageLocation::MAIN);
 
     MergeTreeDataPartCompact(
-        MergeTreeData & storage_,
+        MergeTreeMetaBase & storage_,
         const String & name_,
         const VolumePtr & volume_,
         const std::optional<String> & relative_path_ = {},
-        const IMergeTreeDataPart * parent_part_ = nullptr);
+        const IMergeTreeDataPart * parent_part_ = nullptr,
+        IStorage::StorageLocation location_ = IStorage::StorageLocation::MAIN);
 
     MergeTreeReaderPtr getReader(
         const NamesAndTypesList & columns,
@@ -60,9 +62,24 @@ public:
 
     String getFileNameForColumn(const NameAndTypePair & /* column */) const override { return DATA_FILE_NAME; }
 
+    void loadIndexGranularity(const size_t marks_count, const std::vector<size_t> & index_granularities) override;
+
     ~MergeTreeDataPartCompact() override;
 
+    size_t getColumnsWithoutByteMapColSize() const { return columns_without_bytemap_col_size; }
+
+    void setColumnsPtr(const NamesAndTypesListPtr & new_columns_ptr) override;
+
+    /// Due to all columns except for ByteMap columns are written into one file. It's necessary to hold the column position without ByteMap column.
+    std::optional<size_t> getColumnPositionWithoutMap(const String & column_name) const;
+
 private:
+
+    size_t columns_without_bytemap_col_size;
+
+    /// In compact parts order of columns without map col is necessary, only valid for compact part.
+    NameToNumber column_name_to_position_without_map;
+
     void checkConsistency(bool require_part_metadata) const override;
 
     /// Loads marks index granularity into memory

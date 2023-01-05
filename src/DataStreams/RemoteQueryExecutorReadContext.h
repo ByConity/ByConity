@@ -20,8 +20,6 @@ class Socket;
 namespace DB
 {
 
-class MultiplexedConnections;
-
 class RemoteQueryExecutorReadContext
 {
 public:

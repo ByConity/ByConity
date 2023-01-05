@@ -16,9 +16,9 @@ bool ParserDictionaryAttributeDeclaration::parseImpl(Pos & pos, ASTPtr & node, E
     ParserKeyword s_hierarchical{"HIERARCHICAL"};
     ParserKeyword s_injective{"INJECTIVE"};
     ParserKeyword s_is_object_id{"IS_OBJECT_ID"};
-    ParserLiteral default_parser;
-    ParserArrayOfLiterals array_literals_parser;
-    ParserTernaryOperatorExpression expression_parser;
+    ParserLiteral default_parser(dt);
+    ParserArrayOfLiterals array_literals_parser(dt);
+    ParserTernaryOperatorExpression expression_parser(dt);
 
     /// mandatory attribute name
     ASTPtr name;
@@ -109,7 +109,7 @@ bool ParserDictionaryAttributeDeclaration::parseImpl(Pos & pos, ASTPtr & node, E
 
 bool ParserDictionaryAttributeDeclarationList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
-    return ParserList(std::make_unique<ParserDictionaryAttributeDeclaration>(),
+    return ParserList(std::make_unique<ParserDictionaryAttributeDeclaration>(dt),
         std::make_unique<ParserToken>(TokenType::Comma), false)
         .parse(pos, node, expected);
 }

@@ -1,4 +1,5 @@
 #include <Parsers/ASTNameTypePair.h>
+#include <Parsers/ASTSerDerHelper.h>
 #include <Common/quoteString.h>
 #include <IO/Operators.h>
 
@@ -27,6 +28,25 @@ void ASTNameTypePair::formatImpl(const FormatSettings & settings, FormatState & 
 
     settings.ostr << indent_str << backQuoteIfNeed(name) << ' ';
     type->formatImpl(settings, state, frame);
+}
+
+void ASTNameTypePair::serialize(WriteBuffer & buf) const
+{
+    writeBinary(name, buf);
+    serializeAST(type, buf);
+}
+
+void ASTNameTypePair::deserializeImpl(ReadBuffer & buf)
+{
+    readBinary(name, buf);
+    type = deserializeASTWithChildren(children, buf);
+}
+
+ASTPtr ASTNameTypePair::deserialize(ReadBuffer & buf)
+{
+    auto name_type = std::make_shared<ASTNameTypePair>();
+    name_type->deserializeImpl(buf);
+    return name_type;
 }
 
 }

@@ -8,6 +8,7 @@ endif ()
 option (ENABLE_CLICKHOUSE_ALL "Enable all ClickHouse modes by default" ON)
 
 option (ENABLE_CLICKHOUSE_SERVER "Server mode (main mode)" ${ENABLE_CLICKHOUSE_ALL})
+option (ENABLE_CLICKHOUSE_WORKER "Worker mode (main mode)" ${ENABLE_CLICKHOUSE_ALL})
 option (ENABLE_CLICKHOUSE_CLIENT "Client mode (interactive tui/shell that connects to the server)"
     ${ENABLE_CLICKHOUSE_ALL})
 
@@ -52,6 +53,12 @@ option (ENABLE_CLICKHOUSE_GIT_IMPORT "A tool to analyze Git repositories"
 option (ENABLE_CLICKHOUSE_KEEPER "ClickHouse alternative to ZooKeeper" ${ENABLE_CLICKHOUSE_ALL})
 
 option (ENABLE_CLICKHOUSE_KEEPER_CONVERTER "Util allows to convert ZooKeeper logs and snapshots into clickhouse-keeper snapshot" ${ENABLE_CLICKHOUSE_ALL})
+
+option (ENABLE_CLICKHOUSE_TSO_SERVER "Service that produces globally consistent timestamps" ${ENABLE_CLICKHOUSE_ALL})
+option (ENABLE_CLICKHOUSE_DAEMON_MANAGER "Service that manage background jobs in clickhouse" ${ENABLE_CLICKHOUSE_ALL})
+option (ENABLE_CLICKHOUSE_PART_TOOLKIT "Enable part_toolkit" ${ENABLE_CLICKHOUSE_ALL})
+option (ENABLE_CLICKHOUSE_RESOURCE_MANAGER "Service that manage worker resources" ${ENABLE_CLICKHOUSE_ALL})
+option (ENABLE_CLICKHOUSE_META_INSPECTOR "Enable meta-inspector in CNCH" ${ENABLE_CLICKHOUSE_ALL})
 
 if (NOT USE_NURAFT)
     # RECONFIGURE_MESSAGE_LEVEL should not be used here,
@@ -160,6 +167,24 @@ else()
     message(STATUS "ClickHouse keeper-converter mode: OFF")
 endif()
 
+if (ENABLE_CLICKHOUSE_DAEMON_MANAGER)
+    message(STATUS "ClickHouse daemon-manager mode: ON")
+else()
+    message(STATUS "ClickHouse daemon-manager mode: OFF")
+endif()
+
+if (ENABLE_CLICKHOUSE_RESOURCE_MANAGER)
+    message(STATUS "ClickHouse resource-manager mode: ON")
+else()
+    message(STATUS "ClickHouse resource-manager mode: OFF")
+endif()
+
+if (ENABLE_CLICKHOUSE_TSO_SERVER)
+    message(STATUS "ClickHouse tso-server mode: ON")
+else()
+    message(STATUS "ClickHouse tso-server mode: OFF")
+endif()
+
 if(NOT (MAKE_STATIC_LIBRARIES OR SPLIT_SHARED_LIBRARIES))
     set(CLICKHOUSE_ONE_SHARED ON)
 endif()
@@ -172,6 +197,11 @@ macro(clickhouse_target_link_split_lib target name)
     else()
         target_link_libraries(${target} PRIVATE clickhouse-lib)
     endif()
+endmacro()
+
+macro(cnch_program_add name)
+    clickhouse_program_add_library(${name})
+    clickhouse_program_add_executable(${name} "")
 endmacro()
 
 macro(clickhouse_program_link_split_binary name)
@@ -227,6 +257,9 @@ add_subdirectory (obfuscator)
 add_subdirectory (install)
 add_subdirectory (git-import)
 add_subdirectory (bash-completion)
+add_subdirectory (tso)
+add_subdirectory (part-toolkit)
+add_subdirectory (meta-inspector)
 
 if (ENABLE_CLICKHOUSE_KEEPER)
     add_subdirectory (keeper)
@@ -258,7 +291,8 @@ if (CLICKHOUSE_ONE_SHARED)
     ${CLICKHOUSE_GIT_IMPORT_SOURCES}
     ${CLICKHOUSE_ODBC_BRIDGE_SOURCES}
     ${CLICKHOUSE_KEEPER_SOURCES}
-    ${CLICKHOUSE_KEEPER_CONVERTER_SOURCES})
+    ${CLICKHOUSE_PART_TOOLKIT_SOURCES}
+    ${CLICKHOUSE_META_INSPECTOR_SOURCES})
 
     target_link_libraries(clickhouse-lib
       ${CLICKHOUSE_SERVER_LINK}
@@ -273,7 +307,9 @@ if (CLICKHOUSE_ONE_SHARED)
       ${CLICKHOUSE_GIT_IMPORT_LINK}
       ${CLICKHOUSE_ODBC_BRIDGE_LINK}
       ${CLICKHOUSE_KEEPER_LINK}
-      ${CLICKHOUSE_KEEPER_CONVERTER_LINK})
+      ${CLICKHOUSE_KEEPER_CONVERTER_LINK}
+      ${CLICKHOUSE_PART_TOOLKIT_LINK}
+      ${CLICKHOUSE_META_INSPECTOR_LINK})
 
     target_include_directories(clickhouse-lib
       ${CLICKHOUSE_SERVER_INCLUDE}
@@ -306,6 +342,8 @@ if (CLICKHOUSE_SPLIT_BINARY)
         clickhouse-obfuscator
         clickhouse-git-import
         clickhouse-copier
+        clickhouse-part-toolkit
+        clickhouse-meta-inspector
     )
 
     if (ENABLE_CLICKHOUSE_ODBC_BRIDGE)
@@ -380,6 +418,12 @@ else ()
     if (ENABLE_CLICKHOUSE_INSTALL)
         clickhouse_target_link_split_lib(clickhouse install)
     endif ()
+    if (ENABLE_CLICKHOUSE_PART_TOOLKIT)
+        clickhouse_target_link_split_lib(clickhouse part-toolkit)
+    endif ()
+    if (ENABLE_CLICKHOUSE_META_INSPECTOR)
+        clickhouse_target_link_split_lib(clickhouse meta-inspector)
+    endif()
 
     set (CLICKHOUSE_BUNDLE)
     if (ENABLE_CLICKHOUSE_SERVER)
@@ -387,6 +431,13 @@ else ()
         install (FILES "${CMAKE_CURRENT_BINARY_DIR}/clickhouse-server" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
         list(APPEND CLICKHOUSE_BUNDLE clickhouse-server)
     endif ()
+
+    if (ENABLE_CLICKHOUSE_WORKER)
+        add_custom_target (clickhouse-worker ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-worker DEPENDS clickhouse)
+        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/clickhouse-worker" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
+        list(APPEND CLICKHOUSE_BUNDLE clickhouse-worker)
+    endif () 
+
     if (ENABLE_CLICKHOUSE_CLIENT)
         add_custom_target (clickhouse-client ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-client DEPENDS clickhouse)
         install (FILES "${CMAKE_CURRENT_BINARY_DIR}/clickhouse-client" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
@@ -441,6 +492,40 @@ else ()
         add_custom_target (clickhouse-keeper-converter ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-keeper-converter DEPENDS clickhouse)
         install (FILES "${CMAKE_CURRENT_BINARY_DIR}/clickhouse-keeper-converter" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
         list(APPEND CLICKHOUSE_BUNDLE clickhouse-keeper-converter)
+    endif ()
+    if (ENABLE_CLICKHOUSE_TSO_SERVER)
+        add_custom_target (tso-server ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse tso-server DEPENDS clickhouse)
+        install (FILES ${CMAKE_CURRENT_BINARY_DIR}/tso-server DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
+        list(APPEND CLICKHOUSE_BUNDLE tso-server)
+        add_custom_target (tso_server ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse tso_server DEPENDS clickhouse)
+        install (FILES ${CMAKE_CURRENT_BINARY_DIR}/tso_server DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
+        list(APPEND CLICKHOUSE_BUNDLE tso_server)
+    endif ()
+    if (ENABLE_CLICKHOUSE_DAEMON_MANAGER)
+        add_custom_target (daemon-manager ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse daemon-manager DEPENDS clickhouse)
+        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/daemon-manager" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
+        list(APPEND CLICKHOUSE_BUNDLE daemon-manager)
+        add_custom_target (daemon_manager ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse daemon_manager DEPENDS clickhouse)
+        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/daemon_manager" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
+        list(APPEND CLICKHOUSE_BUNDLE daemon_manager)
+    endif ()
+    if (ENABLE_CLICKHOUSE_PART_TOOLKIT)
+        add_custom_target (clickhouse-part-toolkit ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-part-toolkit DEPENDS clickhouse)
+        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/clickhouse-part-toolkit" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
+        list(APPEND CLICKHOUSE_BUNDLE clickhouse-part-toolkit)
+    endif ()
+    if (ENABLE_CLICKHOUSE_META_INSPECTOR)
+        add_custom_target (clickhouse-meta-inspector ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-meta-inspector DEPENDS clickhouse)
+        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/clickhouse-meta-inspector" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
+        list(APPEND CLICKHOUSE_BUNDLE clickhouse-meta-inspector)
+    endif()
+    if (ENABLE_CLICKHOUSE_RESOURCE_MANAGER)
+        add_custom_target (resource-manager ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse resource-manager DEPENDS clickhouse)
+        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/resource-manager" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
+        list(APPEND CLICKHOUSE_BUNDLE resource-manager)
+        add_custom_target (resource_manager ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse resource_manager DEPENDS clickhouse)
+        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/resource_manager" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
+        list(APPEND CLICKHOUSE_BUNDLE resource_manager)
     endif ()
 
     install (TARGETS clickhouse RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)

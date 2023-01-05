@@ -103,10 +103,10 @@ void QueryPipeline::addTransform(ProcessorPtr transform, InputPort * totals, Inp
     pipe.addTransform(std::move(transform), totals, extremes);
 }
 
-void QueryPipeline::transform(const Transformer & transformer)
+void QueryPipeline::transform(const Transformer & transformer, size_t sink_num)
 {
     checkInitializedAndNotCompleted();
-    pipe.transform(transformer);
+    pipe.transform(transformer, sink_num);
 }
 
 void QueryPipeline::setSinks(const Pipe::ProcessorGetterWithStreamKind & getter)
@@ -231,6 +231,7 @@ QueryPipeline QueryPipeline::unitePipelines(
     /// Note: it may be > than settings.max_threads, so we should apply this limit again.
     bool will_limit_max_threads = true;
     size_t max_threads = 0;
+    size_t min_threads = 0;
     Pipes pipes;
 
     for (auto & pipeline_ptr : pipelines)
@@ -242,6 +243,7 @@ QueryPipeline QueryPipeline::unitePipelines(
         pipes.emplace_back(std::move(pipeline.pipe));
 
         max_threads += pipeline.max_threads;
+        min_threads += pipeline.min_threads;
         will_limit_max_threads = will_limit_max_threads && pipeline.max_threads != 0;
 
         /// If one of pipelines uses more threads then current limit, will keep it.
@@ -258,6 +260,7 @@ QueryPipeline QueryPipeline::unitePipelines(
         pipeline.setMaxThreads(max_threads);
         pipeline.limitMaxThreads(max_threads_limit);
     }
+    pipeline.setMinThreads(min_threads);
 
     return pipeline;
 }
@@ -351,6 +354,7 @@ std::unique_ptr<QueryPipeline> QueryPipeline::joinPipelines(
     left->pipe.holder = std::move(right->pipe.holder);
     left->pipe.header = left->pipe.output_ports.front()->getHeader();
     left->pipe.max_parallel_streams = std::max(left->pipe.max_parallel_streams, right->pipe.max_parallel_streams);
+    left->min_threads = std::max(left->min_threads, right->min_threads);
     return left;
 }
 

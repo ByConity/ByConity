@@ -6,7 +6,7 @@
 namespace DB
 {
 
-class ParserQuery : public IParserBase
+class ParserQuery : public IParserDialectBase
 {
 private:
     const char * end;
@@ -15,7 +15,7 @@ private:
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 
 public:
-    explicit ParserQuery(const char * end_) : end(end_) {}
+    explicit ParserQuery(const char * end_, ParserSettingsImpl t = ParserSettings::CLICKHOUSE) : IParserDialectBase(t), end(end_) {}
 };
 
 }

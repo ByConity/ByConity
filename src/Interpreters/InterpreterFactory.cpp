@@ -1,4 +1,5 @@
 #include <Parsers/ASTAlterQuery.h>
+#include <Parsers/ASTAlterWarehouseQuery.h>
 #include <Parsers/ASTCheckQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTCreateUserQuery.h>
@@ -6,13 +7,19 @@
 #include <Parsers/ASTCreateQuotaQuery.h>
 #include <Parsers/ASTCreateRowPolicyQuery.h>
 #include <Parsers/ASTCreateSettingsProfileQuery.h>
+#include <Parsers/ASTCreateWarehouseQuery.h>
+#include <Parsers/ASTCreateWorkerGroupQuery.h>
 #include <Parsers/ASTDropAccessEntityQuery.h>
 #include <Parsers/ASTDropQuery.h>
+#include <Parsers/ASTUndropQuery.h>
+#include <Parsers/ASTDropWarehouseQuery.h>
+#include <Parsers/ASTDropWorkerGroupQuery.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTKillQueryQuery.h>
 #include <Parsers/ASTOptimizeQuery.h>
 #include <Parsers/ASTRenameQuery.h>
 #include <Parsers/ASTSelectQuery.h>
+#include <Parsers/ASTSelectIntersectExceptQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTSetQuery.h>
 #include <Parsers/ASTSetRoleQuery.h>
@@ -23,15 +30,23 @@
 #include <Parsers/ASTShowPrivilegesQuery.h>
 #include <Parsers/ASTShowProcesslistQuery.h>
 #include <Parsers/ASTShowTablesQuery.h>
+#include <Parsers/ASTShowWarehousesQuery.h>
 #include <Parsers/ASTUseQuery.h>
 #include <Parsers/ASTExplainQuery.h>
+#include <Parsers/ASTDumpInfoQuery.h>
+#include <Parsers/ASTReproduceQuery.h>
 #include <Parsers/TablePropertiesQueriesASTs.h>
 #include <Parsers/ASTWatchQuery.h>
 #include <Parsers/ASTGrantQuery.h>
 #include <Parsers/MySQL/ASTCreateQuery.h>
+#include <Parsers/ASTRefreshQuery.h>
+#include <Parsers/ASTStatsQuery.h>
 
 #include <Interpreters/Context.h>
+#include <Interpreters/DistributedStages/InterpreterDistributedStages.h>
+
 #include <Interpreters/InterpreterAlterQuery.h>
+#include <Interpreters/InterpreterAlterWarehouseQuery.h>
 #include <Interpreters/InterpreterCheckQuery.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/InterpreterCreateQuotaQuery.h>
@@ -39,18 +54,27 @@
 #include <Interpreters/InterpreterCreateRowPolicyQuery.h>
 #include <Interpreters/InterpreterCreateSettingsProfileQuery.h>
 #include <Interpreters/InterpreterCreateUserQuery.h>
+#include <Interpreters/InterpreterCreateWarehouseQuery.h>
+#include <Interpreters/InterpreterCreateWorkerGroupQuery.h>
 #include <Interpreters/InterpreterDescribeQuery.h>
 #include <Interpreters/InterpreterDropAccessEntityQuery.h>
+#include <Interpreters/InterpreterDropWarehouseQuery.h>
+#include <Interpreters/InterpreterDropWorkerGroupQuery.h>
 #include <Interpreters/InterpreterDropQuery.h>
+#include <Interpreters/InterpreterUndropQuery.h>
+#include <Interpreters/InterpreterDumpInfoQueryUseOptimizer.h>
 #include <Interpreters/InterpreterExistsQuery.h>
 #include <Interpreters/InterpreterExplainQuery.h>
+#include <Interpreters/InterpreterExternalDDLQuery.h>
 #include <Interpreters/InterpreterFactory.h>
 #include <Interpreters/InterpreterGrantQuery.h>
 #include <Interpreters/InterpreterInsertQuery.h>
 #include <Interpreters/InterpreterKillQueryQuery.h>
 #include <Interpreters/InterpreterOptimizeQuery.h>
+#include <Interpreters/InterpreterRefreshQuery.h>
 #include <Interpreters/InterpreterRenameQuery.h>
 #include <Interpreters/InterpreterSelectQuery.h>
+#include <Interpreters/InterpreterSelectQueryUseOptimizer.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/InterpreterSetQuery.h>
 #include <Interpreters/InterpreterSetRoleQuery.h>
@@ -62,11 +86,16 @@
 #include <Interpreters/InterpreterShowPrivilegesQuery.h>
 #include <Interpreters/InterpreterShowProcesslistQuery.h>
 #include <Interpreters/InterpreterShowTablesQuery.h>
+#include <Interpreters/InterpreterShowWarehousesQuery.h>
 #include <Interpreters/InterpreterSystemQuery.h>
+#include <Interpreters/InterpreterReproduceQueryUseOptimizer.h>
 #include <Interpreters/InterpreterUseQuery.h>
 #include <Interpreters/InterpreterWatchQuery.h>
-#include <Interpreters/InterpreterExternalDDLQuery.h>
 #include <Interpreters/OpenTelemetrySpanLog.h>
+#include <Optimizer/QueryUseOptimizerChecker.h>
+#include <Interpreters/InterpreterCreateStatsQuery.h>
+#include <Interpreters/InterpreterDropStatsQuery.h>
+#include <Interpreters/InterpreterShowStatsQuery.h>
 
 #include <Parsers/ASTSystemQuery.h>
 
@@ -89,6 +118,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int UNKNOWN_TYPE_OF_QUERY;
+    extern const int NOT_IMPLEMENTED;
 }
 
 
@@ -98,16 +128,43 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
 
     ProfileEvents::increment(ProfileEvents::Query);
 
+    DistributedStagesSettings distributed_stages_settings = InterpreterDistributedStages::extractDistributedStagesSettings(query, context);
+
+    bool use_distributed_stages = (distributed_stages_settings.enable_distributed_stages) && !options.is_internal;
+
+    if (use_distributed_stages)
+    {
+        if (!context->getComplexQueryActive())
+            throw Exception("Server config missing exchange_status_port and exchange_port cannot execute query with enable_distributed_stages enabled",
+                            ErrorCodes::LOGICAL_ERROR);
+
+        if (query->as<ASTSelectQuery>() || query->as<ASTSelectWithUnionQuery>())
+            return std::make_unique<InterpreterDistributedStages>(query, context);
+    }
+
     if (query->as<ASTSelectQuery>())
     {
+        if (QueryUseOptimizerChecker::check(query, context)) {
+            return std::make_unique<InterpreterSelectQueryUseOptimizer>(query, context, options);
+        }
         /// This is internal part of ASTSelectWithUnionQuery.
         /// Even if there is SELECT without union, it is represented by ASTSelectWithUnionQuery with single ASTSelectQuery as a child.
         return std::make_unique<InterpreterSelectQuery>(query, context, options);
     }
     else if (query->as<ASTSelectWithUnionQuery>())
     {
+        if (QueryUseOptimizerChecker::check(query, context)) {
+            return std::make_unique<InterpreterSelectQueryUseOptimizer>(query, context, options);
+        }
         ProfileEvents::increment(ProfileEvents::SelectQuery);
         return std::make_unique<InterpreterSelectWithUnionQuery>(query, context, options);
+    }
+    else if (query->as<ASTSelectIntersectExceptQuery>())
+    {
+        if (QueryUseOptimizerChecker::check(query, context)) {
+            return std::make_unique<InterpreterSelectQueryUseOptimizer>(query, context, options);
+        }
+        throw Exception("Intersect & except requires optimizer enabled.(SET enable_optimizer=1)", ErrorCodes::NOT_IMPLEMENTED);
     }
     else if (query->as<ASTInsertQuery>())
     {
@@ -122,6 +179,10 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     else if (query->as<ASTDropQuery>())
     {
         return std::make_unique<InterpreterDropQuery>(query, context);
+    }
+    else if (query->as<ASTUndropQuery>())
+    {
+        return std::make_unique<InterpreterUndropQuery>(query, context);
     }
     else if (query->as<ASTRenameQuery>())
     {
@@ -263,6 +324,59 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     else if (query->as<ASTExternalDDLQuery>())
     {
         return std::make_unique<InterpreterExternalDDLQuery>(query, context);
+    }
+    else if (query->as<ASTRefreshQuery>())
+    {
+        return std::make_unique<InterpreterRefreshQuery>(query, context);
+    }
+        else if (query->as<ASTAlterWarehouseQuery>())
+    {
+        return std::make_unique<InterpreterAlterWarehouseQuery>(query, context);
+    }
+    else if (query->as<ASTCreateWarehouseQuery>())
+    {
+        return std::make_unique<InterpreterCreateWarehouseQuery>(query, context);
+    }
+    else if (query->as<ASTDropWarehouseQuery>())
+    {
+        return std::make_unique<InterpreterDropWarehouseQuery>(query, context);
+    }
+    else if (query->as<ASTShowWarehousesQuery>())
+    {
+        return std::make_unique<InterpreterShowWarehousesQuery>(query, context);
+    }
+    else if (query->as<ASTCreateWorkerGroupQuery>())
+    {
+        return std::make_unique<InterpreterCreateWorkerGroupQuery>(query, context);
+    }
+    else if (query->as<ASTDropWorkerGroupQuery>())
+    {
+        return std::make_unique<InterpreterDropWorkerGroupQuery>(query, context);
+    }
+    else if (query->as<ASTCreateStatsQuery>())
+    {
+        return std::make_unique<InterpreterCreateStatsQuery>(query, context);
+    }
+    else if (query->as<ASTDropStatsQuery>())
+    {
+        return std::make_unique<InterpreterDropStatsQuery>(query, context);
+    }
+    else if (query->as<ASTShowStatsQuery>())
+    {
+        return std::make_unique<InterpreterShowStatsQuery>(query, context);
+    }
+    else if (query->as<ASTDumpInfoQuery>())
+    {
+        if (QueryUseOptimizerChecker::check(query, context))
+        {
+            return std::make_unique<InterpreterDumpInfoQueryUseOptimizer>(query, context);
+        }
+        else
+            throw Exception("Not support dump query, because it's optimizer check fail.", ErrorCodes::UNKNOWN_TYPE_OF_QUERY);
+    }
+    else if (query->as<ASTReproduceQuery>())
+    {
+        return std::make_unique<InterpreterReproduceQueryUseOptimizer>(query, context);
     }
     else
     {

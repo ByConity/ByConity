@@ -26,6 +26,11 @@ public:
 
     DataTypePtr getReturnType() const override
     {
+        // temp fix
+        if (argument_types.empty())
+            throw Exception("AggregateFunctionNothing must have arguments", ErrorCodes::LOGICAL_ERROR);
+        if (!argument_types.front())
+            throw Exception("AggregateFunctionNothing must have a non-null argument", ErrorCodes::LOGICAL_ERROR);
         return argument_types.front();
     }
 

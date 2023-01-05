@@ -5,17 +5,25 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/queryToString.h>
-#include <Processors/QueryPlan/DistinctStep.h>
-#include <Processors/QueryPlan/ExpressionStep.h>
-#include <Processors/QueryPlan/IQueryPlanStep.h>
-#include <Processors/QueryPlan/QueryPlan.h>
-#include <Processors/QueryPlan/UnionStep.h>
-#include <Processors/QueryPlan/LimitStep.h>
-#include <Processors/QueryPlan/OffsetStep.h>
-#include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
+#include <Parsers/ASTTEALimit.h>
+#include <Parsers/ASTOrderByElement.h>
+#include <Parsers/ASTSubquery.h>
+#include <Processors/Executors/PullingAsyncPipelineExecutor.h>
+
+#include <Storages/StorageMemory.h>
+
+#include <QueryPlan/DistinctStep.h>
+#include <QueryPlan/ExpressionStep.h>
+#include <QueryPlan/IQueryPlanStep.h>
+#include <QueryPlan/QueryPlan.h>
+#include <QueryPlan/UnionStep.h>
+#include <QueryPlan/LimitStep.h>
+#include <QueryPlan/OffsetStep.h>
+#include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Common/typeid_cast.h>
 
 #include <Interpreters/InDepthNodeVisitor.h>
+#include <Interpreters/executeQuery.h>
 
 #include <algorithm>
 
@@ -148,7 +156,7 @@ InterpreterSelectWithUnionQuery::InterpreterSelectWithUnionQuery(
         for (size_t query_num = 0; query_num < num_children; ++query_num)
             headers[query_num] = nested_interpreters[query_num]->getSampleBlock();
 
-        result_header = getCommonHeaderForUnion(headers);
+        result_header = getCommonHeaderForUnion(headers, context->getSettingsRef().allow_extended_type_conversion);
     }
 
     /// InterpreterSelectWithUnionQuery ignores limits if all nested interpreters ignore limits.
@@ -166,7 +174,7 @@ InterpreterSelectWithUnionQuery::InterpreterSelectWithUnionQuery(
 
 }
 
-Block InterpreterSelectWithUnionQuery::getCommonHeaderForUnion(const Blocks & headers)
+Block InterpreterSelectWithUnionQuery::getCommonHeaderForUnion(const Blocks & headers, bool allow_extended_conversion)
 {
     size_t num_selects = headers.size();
     Block common_header = headers.front();
@@ -190,7 +198,7 @@ Block InterpreterSelectWithUnionQuery::getCommonHeaderForUnion(const Blocks & he
             columns[i] = &headers[i].getByPosition(column_num);
 
         ColumnWithTypeAndName & result_elem = common_header.getByPosition(column_num);
-        result_elem = getLeastSuperColumn(columns);
+        result_elem = getLeastSuperColumn(columns, allow_extended_conversion);
     }
 
     return common_header;
@@ -210,8 +218,10 @@ InterpreterSelectWithUnionQuery::buildCurrentChildInterpreter(const ASTPtr & ast
 {
     if (ast_ptr_->as<ASTSelectWithUnionQuery>())
         return std::make_unique<InterpreterSelectWithUnionQuery>(ast_ptr_, context, options, current_required_result_column_names);
-    else
+    else if (ast_ptr_->as<ASTSelectQuery>())
         return std::make_unique<InterpreterSelectQuery>(ast_ptr_, context, options, current_required_result_column_names);
+    else
+        throw Exception("Unrecognized Query kind", ErrorCodes::NOT_IMPLEMENTED);
 }
 
 InterpreterSelectWithUnionQuery::~InterpreterSelectWithUnionQuery() = default;
@@ -305,6 +315,25 @@ void InterpreterSelectWithUnionQuery::buildQueryPlan(QueryPlan & query_plan)
 
 }
 
+void InterpreterSelectWithUnionQuery::checkQueryCache(QueryPlan & query_plan)
+{
+    if (!context->getSettings().enable_query_cache)
+        return;
+
+    auto query_cache_step = std::make_unique<QueryCacheStep>(query_plan.getCurrentDataStream(), query_ptr, context, options.to_stage);
+    query_cache_step->setStepDescription("QUERY CACHE");
+
+    if (!query_cache_step->isValidQuery())
+        return;
+
+    if (query_cache_step->hitCache())
+    {
+        QueryPlan empty_query_plan;
+        query_plan = std::move(empty_query_plan);
+    }
+    query_plan.addStep(std::move(query_cache_step));
+}
+
 BlockIO InterpreterSelectWithUnionQuery::execute()
 {
     BlockIO res;
@@ -312,11 +341,17 @@ BlockIO InterpreterSelectWithUnionQuery::execute()
     QueryPlan query_plan;
     buildQueryPlan(query_plan);
 
+    checkQueryCache(query_plan);
+
     auto pipeline = query_plan.buildQueryPipeline(
         QueryPlanOptimizationSettings::fromContext(context),
         BuildQueryPipelineSettings::fromContext(context));
 
-    res.pipeline = std::move(*pipeline);
+    // FIXME: Handle TEALimit
+    if (unlikely(query_ptr->as<ASTSelectWithUnionQuery>()->tealimit))
+        res.pipeline = executeTEALimit(pipeline);
+    else
+        res.pipeline = std::move(*pipeline);
     res.pipeline.addInterpreterContext(context);
 
     return res;
@@ -327,6 +362,169 @@ void InterpreterSelectWithUnionQuery::ignoreWithTotals()
 {
     for (auto & interpreter : nested_interpreters)
         interpreter->ignoreWithTotals();
+}
+
+QueryPipeline InterpreterSelectWithUnionQuery::executeTEALimit(QueryPipelinePtr & pipeline)
+{
+    const ASTSelectWithUnionQuery & ast = query_ptr->as<ASTSelectWithUnionQuery&>();
+
+    // Create implicit storage to buffer pre tealimit results
+    NamesAndTypesList columns = result_header.getNamesAndTypesList();
+    auto temporary_table = TemporaryTableHolder(context->getQueryContext(), ColumnsDescription{columns}, {});
+    
+    String implicit_name  = "_TEALIMITDATA";
+
+    auto storage = temporary_table.getTable();
+    BlockOutputStreamPtr output = storage->write(ASTPtr(), storage->getInMemoryMetadataPtr(), context);
+
+    PullingAsyncPipelineExecutor executor(*pipeline);
+    Block block;
+
+    output->writePrefix();
+    while(executor.pull(block, context->getSettingsRef().interactive_delay / 1000))
+    {
+        if (block) output->write(block);
+    }
+    output->writeSuffix();
+
+    // Query level temporary table
+    context->getQueryContext()->addExternalTable(implicit_name, std::move(temporary_table));
+
+    // Construct the internal SQL
+    //
+    // select t,  g_0, g_1, ...., g_n, cnt_0 ,..., cnt_n from misc_online_all WHERE xxx group by t, g0, g_1...gn
+    // TEALIMIT N /*METRIC cnt_0, ..., cnt_n*/ GROUP (g_0, ... , g_n) ORDER EXPR(cnt_0, ... cnt_n) ASC|DESC
+    //
+    // select t, g_0, g_1, ..., cnt_0, ..., cnt_n from implicit_storage where
+    // （g_0, ..., g_n) in (select g_0, ...., g_n from implicit_storage
+    //  group by g_0, ..., g_n order by EXPR(sum(cnt_0), ..., sum(cnt_n)) ASC|DESC LIMIT N)
+    //
+    //
+    std::stringstream postQuery;
+    postQuery << "SELECT ";
+
+    auto implicit_select_expr_list = std::make_shared<ASTExpressionList>();
+    for (const auto& column : columns)
+    {
+        implicit_select_expr_list->children.emplace_back(std::make_shared<ASTIdentifier>(column.name));
+    }
+    postQuery << queryToString(*implicit_select_expr_list) << " FROM  " << implicit_name << " WHERE ";
+
+    bool tealimit_order_keep = context->getSettingsRef().tealimit_order_keep;
+
+    auto tea_limit =  dynamic_cast<ASTTEALimit*>(ast.tealimit.get());
+    String g_list_str = queryToString(*tea_limit->group_expr_list);
+    postQuery << "(" << g_list_str << ") IN (";
+    // SUBQUERY
+    postQuery << "SELECT " << g_list_str << " FROM  " << implicit_name << " GROUP BY "
+              << g_list_str;
+
+    postQuery << " ORDER BY ";
+    auto o_list = tea_limit->order_expr_list->clone(); // will rewrite
+    ASTs& elems = o_list->children;
+
+    // Check Whether order list is in group by list, if yes, we don't add implicit
+    // SUM clause
+    auto nodeInGroup = [&](ASTPtr group_expr_list, const ASTPtr & node) -> bool
+    {
+        if (!tealimit_order_keep) return false;
+
+         // special handling group (g0, g1), case where group expr is tuple function, step forward
+         // to get g0, g1
+         if (group_expr_list->children.size() == 1)
+         {
+            const auto * tupleFunc = group_expr_list->children[0]->as<ASTFunction>();
+            if (tupleFunc && tupleFunc->name == "tuple")
+            {
+                group_expr_list = group_expr_list->children[0]->children[0];
+            }
+         }
+
+         for (auto & g : group_expr_list->children)
+         {
+             if (node->getAliasOrColumnName() == g->getAliasOrColumnName())
+             {
+                 return true;
+             }
+         }
+         return false;
+    };
+
+    bool comma  = false;
+    for (auto & elem : elems)
+    {
+        auto orderCol = elem->children.front();
+
+        if (!nodeInGroup(tea_limit->group_expr_list, orderCol))
+        {
+            // check if orderCol is ASTFunction or ASTIdentifier, rewrite it
+            const ASTFunction * func = orderCol->as<ASTFunction>();
+            const ASTIdentifier * identifier = orderCol->as<ASTIdentifier>();
+            if (identifier)
+            {
+                auto sum_function = std::make_shared<ASTFunction>();
+                sum_function->name = "SUM";
+                sum_function->arguments = std::make_shared<ASTExpressionList>();
+                sum_function->children.push_back(sum_function->arguments);
+                sum_function->arguments->children.push_back(orderCol);
+
+                // ORDER BY SUM()
+                elem->children[0] = std::move(sum_function);
+            }
+            else if (func)
+            {
+                size_t numArgs = func->arguments->children.size();
+                for (size_t i = 0; i< numArgs; i++)
+                {
+                    auto& iArg = func->arguments->children[i];
+                    if (nodeInGroup(tea_limit->group_expr_list, iArg)) continue;
+                    auto sum_function = std::make_shared<ASTFunction>();
+                    sum_function->name = "SUM";
+                    sum_function->arguments = std::make_shared<ASTExpressionList>();
+                    sum_function->children.push_back(sum_function->arguments);
+                    sum_function->arguments->children.push_back(iArg);
+
+                    // inplace replace EXPR with new argument
+                    func->arguments->children[i] = std::move(sum_function);
+                }
+            }
+            else
+            {
+                throw Exception("TEALimit unhandled " + queryToString(*elem), ErrorCodes::LOGICAL_ERROR);
+            }
+        }
+
+        const ASTOrderByElement & order_by_elem = elem->as<ASTOrderByElement &>();
+
+        if (comma) postQuery << ", ";
+        comma = true; // skip the first one
+        postQuery << serializeAST(order_by_elem, true);
+    }
+
+    postQuery << " LIMIT ";
+    if (tea_limit->limit_offset)
+    {
+        postQuery << serializeAST(*tea_limit->limit_offset, true) << ", ";
+    }
+    postQuery << serializeAST(*tea_limit->limit_value, true);
+    postQuery << ")";
+
+    //@user-profile, TEALIMIT output need respect order by info
+    if (tealimit_order_keep)
+    {
+        comma = false;
+        postQuery << " ORDER BY ";
+        for (auto &elem : tea_limit->order_expr_list->children)
+        {
+            if (comma) postQuery << ", ";
+            comma = true;
+            postQuery<< serializeAST(*elem, true);
+        }
+    }
+
+    // evaluate the internal SQL and get the result
+    return executeQuery(postQuery.str(), context->getQueryContext(), true).pipeline;
+
 }
 
 }

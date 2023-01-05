@@ -16,10 +16,10 @@
 
 #include <Processors/Pipe.h>
 #include <Processors/Transforms/MaterializingTransform.h>
-#include <Processors/QueryPlan/ExpressionStep.h>
-#include <Processors/QueryPlan/SettingQuotaAndLimitsStep.h>
-#include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
-#include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
+#include <QueryPlan/ExpressionStep.h>
+#include <QueryPlan/SettingQuotaAndLimitsStep.h>
+#include <QueryPlan/BuildQueryPipelineSettings.h>
+#include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 
 namespace DB
 {

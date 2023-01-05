@@ -5,6 +5,7 @@
 #include <Core/Names.h>
 #include <Storages/AlterCommands.h>
 #include <Storages/IStorage.h>
+#include <Storages/MergeTree/MergeScheduler.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeDataSelectExecutor.h>
 #include <Storages/MergeTree/MergeTreeDataWriter.h>
@@ -37,6 +38,8 @@ public:
     bool supportsParallelInsert() const override { return true; }
 
     bool supportsIndexForIn() const override { return true; }
+
+    bool supportsClearColumnInPartitionWhere() const override { return true; }
 
     Pipe read(
         const Names & column_names,
@@ -97,6 +100,9 @@ public:
     bool scheduleDataProcessingJob(IBackgroundJobExecutor & executor) override;
 
     MergeTreeDeduplicationLog * getDeduplicationLog() { return deduplication_log.get(); }
+
+    void attachPartsInDirectory(const PartNamesWithDisks & parts_with_disk, const String & relative_path, ContextPtr local_context) override;
+
 private:
 
     /// Mutex and condvar for synchronous mutations wait
@@ -126,11 +132,15 @@ private:
     /// This set have to be used with `currently_processing_in_background_mutex`.
     DataParts currently_merging_mutating_parts;
 
+    using MergeSchedulerPtr = std::unique_ptr<MergeScheduler>;
+    MergeSchedulerPtr merge_scheduler = nullptr;
 
     std::map<String, MergeTreeMutationEntry> current_mutations_by_id;
     std::multimap<Int64, MergeTreeMutationEntry &> current_mutations_by_version;
 
     std::atomic<bool> shutdown_called {false};
+
+    std::atomic<bool> ingesting{false};
 
     void loadMutations();
 
@@ -218,6 +228,7 @@ private:
     void dropPartsImpl(DataPartsVector && parts_to_remove, bool detach);
     PartitionCommandsResultInfo attachPartition(const ASTPtr & partition, const StorageMetadataPtr & metadata_snapshot, bool part, ContextPtr context) override;
 
+    void ingestPartition(const PartitionCommand & command, ContextPtr context) override;
     void replacePartitionFrom(const StoragePtr & source_table, const ASTPtr & partition, bool replace, ContextPtr context) override;
     void movePartitionToTable(const StoragePtr & dest_table, const ASTPtr & partition, ContextPtr context) override;
     bool partIsAssignedToBackgroundOperation(const DataPartPtr & part) const override;

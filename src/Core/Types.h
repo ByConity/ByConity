@@ -6,6 +6,7 @@
 #include <common/strong_typedef.h>
 #include <common/extended_types.h>
 #include <common/defines.h>
+#include <roaring64map.hh>
 
 
 namespace DB
@@ -14,6 +15,8 @@ namespace DB
 /// Data types for representing elementary values from a database in RAM.
 
 struct Null {};
+struct NegativeInfinity {};
+struct PositiveInfinity {};
 
 /// Ignore strange gcc warning https://gcc.gnu.org/bugzilla/show_bug.cgi?id=55776
 #if !defined(__clang__)
@@ -39,6 +42,7 @@ enum class TypeIndex
     Float32,
     Float64,
     Date,
+    Date32,
     DateTime,
     DateTime64,
     String,
@@ -59,6 +63,9 @@ enum class TypeIndex
     AggregateFunction,
     LowCardinality,
     Map,
+    ByteMap,
+    BitMap64,
+    Time,
 };
 #if !defined(__clang__)
 #pragma GCC diagnostic pop
@@ -72,6 +79,38 @@ using Int256 = ::Int256;
 
 STRONG_TYPEDEF(UInt128, UUID)
 
+using BitMap64 = roaring::Roaring64Map;
+
+struct PairInt64
+{
+    /// This naming assumes little endian.
+    UInt64 low;
+    UInt64 high;
+
+    PairInt64() = default;
+    explicit PairInt64(const UInt64 low_, const UInt64 high_) : low(low_), high(high_) {}
+    explicit PairInt64(const UInt64 rhs) : low(rhs), high() {}
+
+    auto tuple() const { return std::tie(high, low); }
+
+    bool inline operator== (const PairInt64 rhs) const { return tuple() == rhs.tuple(); }
+    bool inline operator!= (const PairInt64 rhs) const { return tuple() != rhs.tuple(); }
+    bool inline operator<  (const PairInt64 rhs) const { return tuple() < rhs.tuple(); }
+    bool inline operator<= (const PairInt64 rhs) const { return tuple() <= rhs.tuple(); }
+    bool inline operator>  (const PairInt64 rhs) const { return tuple() > rhs.tuple(); }
+    bool inline operator>= (const PairInt64 rhs) const { return tuple() >= rhs.tuple(); }
+
+    template <typename T> bool inline operator== (const T rhs) const { return *this == PairInt64(rhs); }
+    template <typename T> bool inline operator!= (const T rhs) const { return *this != PairInt64(rhs); }
+    template <typename T> bool inline operator>= (const T rhs) const { return *this >= PairInt64(rhs); }
+    template <typename T> bool inline operator>  (const T rhs) const { return *this >  PairInt64(rhs); }
+    template <typename T> bool inline operator<= (const T rhs) const { return *this <= PairInt64(rhs); }
+    template <typename T> bool inline operator<  (const T rhs) const { return *this <  PairInt64(rhs); }
+
+    template <typename T> explicit operator T() const { return static_cast<T>(low); }
+
+    PairInt64 & operator= (const UInt64 rhs) { low = rhs; high = 0; return *this; }
+};
 
 template <typename T> constexpr const char * TypeName = "";
 
@@ -237,6 +276,12 @@ template <> inline constexpr bool OverBigInt<UInt256> = true;
 template <> inline constexpr bool OverBigInt<Decimal128> = true;
 template <> inline constexpr bool OverBigInt<Decimal256> = true;
 
+template <typename T>
+constexpr bool IsNumberMemComparable = !OverBigInt<T>;
+template <> inline constexpr bool IsNumberMemComparable<Float32> = false;
+template <> inline constexpr bool IsNumberMemComparable<Float64> = false;
+
+
 inline constexpr const char * getTypeName(TypeIndex idx)
 {
     switch (idx)
@@ -257,6 +302,8 @@ inline constexpr const char * getTypeName(TypeIndex idx)
         case TypeIndex::Float32:    return "Float32";
         case TypeIndex::Float64:    return "Float64";
         case TypeIndex::Date:       return "Date";
+        case TypeIndex::Date32:     return "Date32";
+        case TypeIndex::Time:       return "Time";
         case TypeIndex::DateTime:   return "DateTime";
         case TypeIndex::DateTime64: return "DateTime64";
         case TypeIndex::String:     return "String";
@@ -277,6 +324,8 @@ inline constexpr const char * getTypeName(TypeIndex idx)
         case TypeIndex::AggregateFunction: return "AggregateFunction";
         case TypeIndex::LowCardinality: return "LowCardinality";
         case TypeIndex::Map:        return "Map";
+        case TypeIndex::ByteMap:    return "Map";
+        case TypeIndex::BitMap64:  return "BitMap64";
     }
 
     __builtin_unreachable();

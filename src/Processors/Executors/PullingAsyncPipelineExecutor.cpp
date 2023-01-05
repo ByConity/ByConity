@@ -112,8 +112,8 @@ bool PullingAsyncPipelineExecutor::pull(Chunk & chunk, uint64_t milliseconds)
 
     data->rethrowExceptionIfHas();
 
-    bool is_execution_finished = lazy_format ? lazy_format->isFinished()
-                                             : data->is_finished.load();
+    bool is_execution_finished
+        = (!data->executor->checkTimeLimitSoft()) || (lazy_format ? lazy_format->isFinished() : data->is_finished.load());
 
     if (is_execution_finished)
     {
@@ -127,6 +127,7 @@ bool PullingAsyncPipelineExecutor::pull(Chunk & chunk, uint64_t milliseconds)
     if (lazy_format)
     {
         chunk = lazy_format->getChunk(milliseconds);
+        // data->rethrowExceptionIfHas();
         return true;
     }
 
@@ -174,9 +175,8 @@ void PullingAsyncPipelineExecutor::cancel()
     if (data && !data->is_finished && data->executor)
         data->executor->cancel();
 
-    /// Finish lazy format. Otherwise thread.join() may hung.
-    if (lazy_format && !lazy_format->isFinished())
-        lazy_format->finish();
+    /// The following code is needed to rethrow exception from PipelineExecutor.
+    /// It could have been thrown from pull(), but we will not likely call it again.
 
     /// Join thread here to wait for possible exception.
     if (data && data->thread.joinable())
@@ -232,6 +232,18 @@ BlockStreamProfileInfo & PullingAsyncPipelineExecutor::getProfileInfo()
     std::call_once(flag, []() { profile_info.getRowsBeforeLimit(); });
 
     return profile_info;
+}
+
+PipelineExecutorPtr PullingAsyncPipelineExecutor::getPipelineExecutor()
+{
+    if (data)
+        return data->executor;
+    return {};
+}
+
+void PullingAsyncPipelineExecutor::rethrowExceptionIfHas()
+{
+    data->rethrowExceptionIfHas();
 }
 
 }

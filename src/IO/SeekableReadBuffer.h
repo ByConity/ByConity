@@ -19,7 +19,7 @@ public:
      * @param whence Seek mode (@see SEEK_SET, @see SEEK_CUR).
      * @return New position from the begging of underlying buffer / file.
      */
-    virtual off_t seek(off_t off, int whence) = 0;
+    virtual off_t seek(off_t off, int whence = SEEK_SET) = 0;
 
     /**
      * Keep in mind that seekable buffer may encounter eof() once and the working buffer

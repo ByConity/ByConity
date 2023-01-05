@@ -32,7 +32,10 @@ String InterpreterShowTablesQuery::getRewrittenQuery()
     if (query.databases)
     {
         WriteBufferFromOwnString rewritten_query;
-        rewritten_query << "SELECT name FROM system.databases";
+        if (query.history)
+            rewritten_query << "SELECT * FROM system.cnch_databases_history";
+        else
+            rewritten_query << "SELECT name FROM system.databases";
 
         if (!query.like.empty())
         {
@@ -111,7 +114,15 @@ String InterpreterShowTablesQuery::getRewrittenQuery()
     if (query.dictionaries)
         rewritten_query << "dictionaries ";
     else
-        rewritten_query << "tables ";
+    {
+        if (query.history)
+        {
+            rewritten_query.restart();
+            rewritten_query << "SELECT name, uuid, delete_time FROM system.cnch_tables_history ";
+        }
+        else
+            rewritten_query << "tables ";
+    }
 
     rewritten_query << "WHERE ";
 

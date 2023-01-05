@@ -1,6 +1,7 @@
 #include <DataTypes/FieldToDataType.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeMap.h>
+#include <DataTypes/DataTypeByteMap.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypesDecimal.h>
 #include <DataTypes/DataTypeString.h>
@@ -8,6 +9,7 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeUUID.h>
+#include <DataTypes/DataTypeBitMap64.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <Common/Exception.h>
@@ -19,12 +21,23 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int EMPTY_DATA_PASSED;
+    extern const int LOGICAL_ERROR;
 }
 
 
 DataTypePtr FieldToDataType::operator() (const Null &) const
 {
     return std::make_shared<DataTypeNullable>(std::make_shared<DataTypeNothing>());
+}
+
+DataTypePtr FieldToDataType::operator() (const NegativeInfinity &) const
+{
+    throw Exception("It's invalid to have -inf literals in SQL", ErrorCodes::LOGICAL_ERROR);
+}
+
+DataTypePtr FieldToDataType::operator() (const PositiveInfinity &) const
+{
+    throw Exception("It's invalid to have +inf literals in SQL", ErrorCodes::LOGICAL_ERROR);
 }
 
 DataTypePtr FieldToDataType::operator() (const UInt64 & x) const
@@ -146,10 +159,33 @@ DataTypePtr FieldToDataType::operator() (const Map & map) const
     return std::make_shared<DataTypeMap>(getLeastSupertype(key_types), getLeastSupertype(value_types));
 }
 
+DataTypePtr FieldToDataType::operator() (const ByteMap & map) const
+{
+    DataTypePtr keyType, valueType;
+
+    if (map.empty())
+    {
+        keyType = std::make_shared<DataTypeNothing>();
+        valueType = std::make_shared<DataTypeNothing>();
+    }
+    else
+    {
+        keyType = applyVisitor(FieldToDataType(), map[0].first);
+        valueType = applyVisitor(FieldToDataType(), map[0].second);
+    }
+
+    return std::make_shared<DataTypeByteMap>(keyType, valueType);
+}
+
 DataTypePtr FieldToDataType::operator() (const AggregateFunctionStateData & x) const
 {
     const auto & name = static_cast<const AggregateFunctionStateData &>(x).name;
     return DataTypeFactory::instance().get(name);
+}
+
+DataTypePtr FieldToDataType::operator() (const BitMap64 &) const
+{
+    return std::make_shared<DataTypeBitMap64>();
 }
 
 }

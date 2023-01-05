@@ -22,6 +22,14 @@ struct FixedClearableHashTableCell
     bool isZero(const State & state) const { return version != state.version; }
     void setZero() { version = 0; }
 
+    /// Serialization, in binary and text form.
+    void write(DB::WriteBuffer & wb) const         { DB::writeBinary(version, wb); }
+    void writeText(DB::WriteBuffer & wb) const     { DB::writeText(version, wb); }
+
+    /// Deserialization, in binary and text form.
+    void read(DB::ReadBuffer & rb)                 { DB::readBinary(version, rb); }
+    void readText(DB::ReadBuffer & rb)             { DB::readText(version, rb); }
+
     struct CellExt
     {
         Key key;

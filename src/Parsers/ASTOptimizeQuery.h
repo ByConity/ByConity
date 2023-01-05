@@ -21,12 +21,16 @@ public:
     bool deduplicate = false;
     /// Deduplicate by columns.
     ASTPtr deduplicate_by_columns;
+    /// take a try
+    bool enable_try = false;
 
     /** Get the text that identifies this element. */
     String getID(char delim) const override
     {
         return "OptimizeQuery" + (delim + database) + delim + table + (final ? "_final" : "") + (deduplicate ? "_deduplicate" : "");
     }
+
+    ASTType getType() const override { return ASTType::ASTOptimizeQuery; }
 
     ASTPtr clone() const override
     {

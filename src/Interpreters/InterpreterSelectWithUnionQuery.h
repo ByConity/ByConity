@@ -2,6 +2,7 @@
 
 #include <Core/QueryProcessingStage.h>
 #include <Interpreters/IInterpreterUnionOrSelectQuery.h>
+#include <QueryPlan/QueryCacheStep.h>
 
 namespace DB
 {
@@ -29,6 +30,8 @@ public:
 
     BlockIO execute() override;
 
+    QueryPipeline executeTEALimit(QueryPipelinePtr& );
+
     bool ignoreLimits() const override { return options.ignore_limits; }
     bool ignoreQuota() const override { return options.ignore_quota; }
 
@@ -40,9 +43,12 @@ public:
     virtual void ignoreWithTotals() override;
 
 private:
+
+    void checkQueryCache(QueryPlan & query_plan);
+
     std::vector<std::unique_ptr<IInterpreterUnionOrSelectQuery>> nested_interpreters;
 
-    static Block getCommonHeaderForUnion(const Blocks & headers);
+    static Block getCommonHeaderForUnion(const Blocks & headers, bool allow_extended_conversion);
 
     Block getCurrentChildResultHeader(const ASTPtr & ast_ptr_, const Names & required_result_column_names);
 

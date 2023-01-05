@@ -54,7 +54,7 @@ bool ParserDeclarePartition::parseImpl(IParser::Pos & pos, ASTPtr & node, Expect
     ASTPtr in_expression;
     ASTPtr partition_name;
 
-    ParserExpression p_expression;
+    ParserExpression p_expression(ParserSettings::CLICKHOUSE);
     ParserIdentifier p_identifier;
 
     if (!p_identifier.parse(pos, partition_name, expected))
@@ -82,8 +82,8 @@ bool ParserDeclarePartition::parseImpl(IParser::Pos & pos, ASTPtr & node, Expect
             OptionDescribe("COMMENT", "comment", std::make_shared<ParserStringLiteral>()),
             OptionDescribe("DATA DIRECTORY", "data_directory", std::make_shared<ParserStringLiteral>()),
             OptionDescribe("INDEX DIRECTORY", "index_directory", std::make_shared<ParserStringLiteral>()),
-            OptionDescribe("MAX_ROWS", "max_rows", std::make_shared<ParserLiteral>()),
-            OptionDescribe("MIN_ROWS", "min_rows", std::make_shared<ParserLiteral>()),
+            OptionDescribe("MAX_ROWS", "max_rows", std::make_shared<ParserLiteral>(ParserSettings::CLICKHOUSE)),
+            OptionDescribe("MIN_ROWS", "min_rows", std::make_shared<ParserLiteral>(ParserSettings::CLICKHOUSE)),
             OptionDescribe("TABLESPACE", "tablespace", std::make_shared<ParserIdentifier>()),
         }
     };

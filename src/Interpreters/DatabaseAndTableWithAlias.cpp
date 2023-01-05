@@ -45,10 +45,11 @@ DatabaseAndTableWithAlias::DatabaseAndTableWithAlias(const ASTTableExpression & 
         alias = table_expression.table_function->tryGetAlias();
     else if (table_expression.subquery)
     {
+        const auto & database_of_view = table_expression.subquery->as<const ASTSubquery &>().database_of_view;
         const auto & cte_name = table_expression.subquery->as<const ASTSubquery &>().cte_name;
         if (!cte_name.empty())
         {
-            database = current_database;
+            database = !database_of_view.empty() ? database_of_view : current_database;
             table = cte_name;
         }
         alias = table_expression.subquery->tryGetAlias();

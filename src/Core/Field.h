@@ -37,6 +37,7 @@ using NearestFieldType = typename NearestFieldTypeImpl<T>::Type;
 class Field;
 using FieldVector = std::vector<Field, AllocatorWithMemoryTracking<Field>>;
 
+using ByteMap = std::vector<std::pair<Field, Field>, AllocatorWithMemoryTracking<std::pair<Field, Field> > >;
 /// Array and Tuple use the same storage type -- FieldVector, but we declare
 /// distinct types for them, so that the caller can choose whether it wants to
 /// construct a Field of Array or a Tuple type. An alternative approach would be
@@ -218,8 +219,12 @@ template <> struct NearestFieldTypeImpl<Tuple> { using Type = Tuple; };
 template <> struct NearestFieldTypeImpl<Map> { using Type = Map; };
 template <> struct NearestFieldTypeImpl<bool> { using Type = UInt64; };
 template <> struct NearestFieldTypeImpl<Null> { using Type = Null; };
+template <> struct NearestFieldTypeImpl<ByteMap> { using Type = ByteMap; };
+template <> struct NearestFieldTypeImpl<NegativeInfinity> { using Type = NegativeInfinity; };
+template <> struct NearestFieldTypeImpl<PositiveInfinity> { using Type = PositiveInfinity; };
 
 template <> struct NearestFieldTypeImpl<AggregateFunctionStateData> { using Type = AggregateFunctionStateData; };
+template <> struct NearestFieldTypeImpl<BitMap64> { using Type = BitMap64; };
 
 // For enum types, use the field type that corresponds to their underlying type.
 template <typename T>
@@ -269,6 +274,12 @@ public:
             Int256  = 25,
             Map = 26,
             UUID = 27,
+            ByteMap = 28,
+            BitMap64 = 29,
+
+            // Special types for index analysis
+            NegativeInfinity = 254,
+            PositiveInfinity = 255,
         };
 
         static const char * toString(Which which)
@@ -276,6 +287,8 @@ public:
             switch (which)
             {
                 case Null:    return "Null";
+                case NegativeInfinity: return "-Inf";
+                case PositiveInfinity: return "+Inf";
                 case UInt64:  return "UInt64";
                 case UInt128: return "UInt128";
                 case UInt256: return "UInt256";
@@ -288,11 +301,13 @@ public:
                 case Array:   return "Array";
                 case Tuple:   return "Tuple";
                 case Map:     return "Map";
+                case ByteMap:     return "Map";
                 case Decimal32:  return "Decimal32";
                 case Decimal64:  return "Decimal64";
                 case Decimal128: return "Decimal128";
                 case Decimal256: return "Decimal256";
                 case AggregateFunctionState: return "AggregateFunctionState";
+                case BitMap64: return "BitMap64";
             }
 
             throw Exception("Bad type of Field", ErrorCodes::BAD_TYPE_OF_FIELD);
@@ -404,7 +419,10 @@ public:
     Types::Which getType() const { return which; }
     const char * getTypeName() const { return Types::toString(which); }
 
-    bool isNull() const { return which == Types::Null; }
+    // Non-valued field are all denoted as Null
+    bool isNull() const { return which == Types::Null || which == Types::NegativeInfinity || which == Types::PositiveInfinity; }
+    bool isNegativeInfinity() const { return which == Types::NegativeInfinity; }
+    bool isPositiveInfinity() const { return which == Types::PositiveInfinity; }
 
 
     template <typename T>
@@ -459,7 +477,10 @@ public:
 
         switch (which)
         {
-            case Types::Null:    return false;
+            case Types::Null:
+            case Types::NegativeInfinity:
+            case Types::PositiveInfinity:
+                return false;
             case Types::UInt64:  return get<UInt64>()  < rhs.get<UInt64>();
             case Types::UInt128: return get<UInt128>() < rhs.get<UInt128>();
             case Types::UInt256: return get<UInt256>() < rhs.get<UInt256>();
@@ -472,11 +493,13 @@ public:
             case Types::Array:   return get<Array>()   < rhs.get<Array>();
             case Types::Tuple:   return get<Tuple>()   < rhs.get<Tuple>();
             case Types::Map:     return get<Map>()     < rhs.get<Map>();
+            case Types::ByteMap:    return get<ByteMap>()     < rhs.get<ByteMap>();
             case Types::Decimal32:  return get<DecimalField<Decimal32>>()  < rhs.get<DecimalField<Decimal32>>();
             case Types::Decimal64:  return get<DecimalField<Decimal64>>()  < rhs.get<DecimalField<Decimal64>>();
             case Types::Decimal128: return get<DecimalField<Decimal128>>() < rhs.get<DecimalField<Decimal128>>();
             case Types::Decimal256: return get<DecimalField<Decimal256>>() < rhs.get<DecimalField<Decimal256>>();
             case Types::AggregateFunctionState:  return get<AggregateFunctionStateData>() < rhs.get<AggregateFunctionStateData>();
+            case Types::BitMap64: throw Exception("Not support", ErrorCodes::NOT_IMPLEMENTED);
         }
 
         throw Exception("Bad type of Field", ErrorCodes::BAD_TYPE_OF_FIELD);
@@ -496,7 +519,10 @@ public:
 
         switch (which)
         {
-            case Types::Null:    return true;
+            case Types::Null:
+            case Types::NegativeInfinity:
+            case Types::PositiveInfinity:
+                return true;
             case Types::UInt64:  return get<UInt64>()  <= rhs.get<UInt64>();
             case Types::UInt128: return get<UInt128>() <= rhs.get<UInt128>();
             case Types::UInt256: return get<UInt256>() <= rhs.get<UInt256>();
@@ -509,11 +535,13 @@ public:
             case Types::Array:   return get<Array>()   <= rhs.get<Array>();
             case Types::Tuple:   return get<Tuple>()   <= rhs.get<Tuple>();
             case Types::Map:     return get<Map>()     <= rhs.get<Map>();
+            case Types::ByteMap:    return get<ByteMap>()     <= rhs.get<ByteMap>();
             case Types::Decimal32:  return get<DecimalField<Decimal32>>()  <= rhs.get<DecimalField<Decimal32>>();
             case Types::Decimal64:  return get<DecimalField<Decimal64>>()  <= rhs.get<DecimalField<Decimal64>>();
             case Types::Decimal128: return get<DecimalField<Decimal128>>() <= rhs.get<DecimalField<Decimal128>>();
             case Types::Decimal256: return get<DecimalField<Decimal256>>() <= rhs.get<DecimalField<Decimal256>>();
             case Types::AggregateFunctionState:  return get<AggregateFunctionStateData>() <= rhs.get<AggregateFunctionStateData>();
+            case Types::BitMap64: throw Exception("Not support", ErrorCodes::NOT_IMPLEMENTED);
         }
 
         throw Exception("Bad type of Field", ErrorCodes::BAD_TYPE_OF_FIELD);
@@ -533,8 +561,11 @@ public:
 
         switch (which)
         {
-            case Types::Null:    return true;
-            case Types::UInt64:  return get<UInt64>() == rhs.get<UInt64>();
+            case Types::Null:
+            case Types::NegativeInfinity:
+            case Types::PositiveInfinity:
+                return true;
+            case Types::UInt64: return get<UInt64>() == rhs.get<UInt64>();
             case Types::Int64:   return get<Int64>() == rhs.get<Int64>();
             case Types::Float64:
             {
@@ -546,6 +577,7 @@ public:
             case Types::Array:   return get<Array>()   == rhs.get<Array>();
             case Types::Tuple:   return get<Tuple>()   == rhs.get<Tuple>();
             case Types::Map:     return get<Map>()     == rhs.get<Map>();
+            case Types::ByteMap:     return get<ByteMap>()     == rhs.get<ByteMap>();
             case Types::UInt128: return get<UInt128>() == rhs.get<UInt128>();
             case Types::UInt256: return get<UInt256>() == rhs.get<UInt256>();
             case Types::Int128:  return get<Int128>()  == rhs.get<Int128>();
@@ -555,6 +587,7 @@ public:
             case Types::Decimal128: return get<DecimalField<Decimal128>>() == rhs.get<DecimalField<Decimal128>>();
             case Types::Decimal256: return get<DecimalField<Decimal256>>() == rhs.get<DecimalField<Decimal256>>();
             case Types::AggregateFunctionState:  return get<AggregateFunctionStateData>() == rhs.get<AggregateFunctionStateData>();
+	        case Types::BitMap64: return get<BitMap64>() == rhs.get<BitMap64>();
         }
 
         throw Exception("Bad type of Field", ErrorCodes::BAD_TYPE_OF_FIELD);
@@ -573,6 +606,8 @@ public:
         switch (field.which)
         {
             case Types::Null:    return f(field.template get<Null>());
+            case Types::NegativeInfinity:    return f(field.template get<NegativeInfinity>());
+            case Types::PositiveInfinity:    return f(field.template get<PositiveInfinity>());
 // gcc 8.2.1
 #if !defined(__clang__)
 #pragma GCC diagnostic push
@@ -590,11 +625,13 @@ public:
             case Types::Array:   return f(field.template get<Array>());
             case Types::Tuple:   return f(field.template get<Tuple>());
             case Types::Map:     return f(field.template get<Map>());
+            case Types::ByteMap:     return f(field.template get<ByteMap>());
             case Types::Decimal32:  return f(field.template get<DecimalField<Decimal32>>());
             case Types::Decimal64:  return f(field.template get<DecimalField<Decimal64>>());
             case Types::Decimal128: return f(field.template get<DecimalField<Decimal128>>());
             case Types::Decimal256: return f(field.template get<DecimalField<Decimal256>>());
             case Types::AggregateFunctionState: return f(field.template get<AggregateFunctionStateData>());
+            case Types::BitMap64: return f(field.template get<BitMap64>());
 #if !defined(__clang__)
 #pragma GCC diagnostic pop
 #endif
@@ -610,7 +647,7 @@ private:
     std::aligned_union_t<DBMS_MIN_FIELD_SIZE - sizeof(Types::Which),
         Null, UInt64, UInt128, UInt256, Int64, Int128, Int256, UUID, Float64, String, Array, Tuple, Map,
         DecimalField<Decimal32>, DecimalField<Decimal64>, DecimalField<Decimal128>, DecimalField<Decimal256>,
-        AggregateFunctionStateData
+        AggregateFunctionStateData, BitMap64
         > storage;
 
     Types::Which which;
@@ -706,8 +743,14 @@ private:
             case Types::Map:
                 destroy<Map>();
                 break;
+            case Types::ByteMap:
+                destroy<ByteMap>();
+                break;
             case Types::AggregateFunctionState:
                 destroy<AggregateFunctionStateData>();
+                break;
+            case Types::BitMap64:
+                destroy<BitMap64>();
                 break;
             default:
                  break;
@@ -731,6 +774,8 @@ using Row = std::vector<Field>;
 
 
 template <> struct Field::TypeToEnum<Null>    { static const Types::Which value = Types::Null; };
+template <> struct Field::TypeToEnum<NegativeInfinity>    { static const Types::Which value = Types::NegativeInfinity; };
+template <> struct Field::TypeToEnum<PositiveInfinity>    { static const Types::Which value = Types::PositiveInfinity; };
 template <> struct Field::TypeToEnum<UInt64>  { static const Types::Which value = Types::UInt64; };
 template <> struct Field::TypeToEnum<UInt128> { static const Types::Which value = Types::UInt128; };
 template <> struct Field::TypeToEnum<UInt256> { static const Types::Which value = Types::UInt256; };
@@ -749,8 +794,12 @@ template <> struct Field::TypeToEnum<DecimalField<Decimal128>>{ static const Typ
 template <> struct Field::TypeToEnum<DecimalField<Decimal256>>{ static const Types::Which value = Types::Decimal256; };
 template <> struct Field::TypeToEnum<DecimalField<DateTime64>>{ static const Types::Which value = Types::Decimal64; };
 template <> struct Field::TypeToEnum<AggregateFunctionStateData>{ static const Types::Which value = Types::AggregateFunctionState; };
+template <> struct Field::TypeToEnum<ByteMap>     { static const Types::Which value = Types::ByteMap; };
+template <> struct Field::TypeToEnum<BitMap64>{ static const Types::Which value = Types::BitMap64; };
 
 template <> struct Field::EnumToType<Field::Types::Null>    { using Type = Null; };
+template <> struct Field::EnumToType<Field::Types::NegativeInfinity>    { using Type = NegativeInfinity; };
+template <> struct Field::EnumToType<Field::Types::PositiveInfinity>    { using Type = PositiveInfinity; };
 template <> struct Field::EnumToType<Field::Types::UInt64>  { using Type = UInt64; };
 template <> struct Field::EnumToType<Field::Types::UInt128> { using Type = UInt128; };
 template <> struct Field::EnumToType<Field::Types::UInt256> { using Type = UInt256; };
@@ -768,6 +817,8 @@ template <> struct Field::EnumToType<Field::Types::Decimal64> { using Type = Dec
 template <> struct Field::EnumToType<Field::Types::Decimal128> { using Type = DecimalField<Decimal128>; };
 template <> struct Field::EnumToType<Field::Types::Decimal256> { using Type = DecimalField<Decimal256>; };
 template <> struct Field::EnumToType<Field::Types::AggregateFunctionState> { using Type = DecimalField<AggregateFunctionStateData>; };
+template <> struct Field::EnumToType<Field::Types::ByteMap>     { using Type = ByteMap; };
+template <> struct Field::EnumToType<Field::Types::BitMap64> { using Type = BitMap64; };
 
 inline constexpr bool isInt64OrUInt64FieldType(Field::Types::Which t)
 {
@@ -846,7 +897,9 @@ T safeGet(Field & field)
 template <> inline constexpr const char * TypeName<Array> = "Array";
 template <> inline constexpr const char * TypeName<Tuple> = "Tuple";
 template <> inline constexpr const char * TypeName<Map> = "Map";
+template <> inline constexpr const char * TypeName<ByteMap> = "Map";
 template <> inline constexpr const char * TypeName<AggregateFunctionStateData> = "AggregateFunctionState";
+template <> inline constexpr const char * TypeName<BitMap64> = "BitMap64";
 
 
 template <typename T>
@@ -953,10 +1006,21 @@ inline void writeText(const DecimalField<T> & value, WriteBuffer & buf)
     writeText(value.getValue(), value.getScale(), buf);
 }
 
+void readBinary(BitMap64 & x, ReadBuffer & buf);
+[[noreturn]] inline void readText(BitMap64 &, ReadBuffer &) { throw Exception("Cannot read BitMap64.", ErrorCodes::NOT_IMPLEMENTED); }
+[[noreturn]] inline void readQuoted(BitMap64 &, ReadBuffer &) { throw Exception("Cannot read BitMap64.", ErrorCodes::NOT_IMPLEMENTED); }
+
+void writeBinary(const BitMap64 & x, WriteBuffer & buf);
+[[noreturn]] inline void writeQuoted(const BitMap64 &, WriteBuffer &) { throw Exception("Cannot write BitMap64 quoted.", ErrorCodes::NOT_IMPLEMENTED); }
+
 template <typename T>
 void readQuoted(DecimalField<T> & x, ReadBuffer & buf);
 
 void writeFieldText(const Field & x, WriteBuffer & buf);
+
+void readFieldBinary(Field & field, ReadBuffer & buf);
+
+void writeFieldBinary(const Field & field, WriteBuffer & buf);
 
 [[noreturn]] inline void writeQuoted(const Tuple &, WriteBuffer &) { throw Exception("Cannot write Tuple quoted.", ErrorCodes::NOT_IMPLEMENTED); }
 
@@ -985,4 +1049,3 @@ struct fmt::formatter<DB::Field>
         return format_to(ctx.out(), "{}", toString(x));
     }
 };
-

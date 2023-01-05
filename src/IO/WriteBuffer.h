@@ -61,7 +61,7 @@ public:
     /** it is desirable in the derived classes to place the next() call in the destructor,
       * so that the last data is written
       */
-    virtual ~WriteBuffer() = default;
+    virtual ~WriteBuffer() override = default;
 
     inline void nextIfAtEnd()
     {

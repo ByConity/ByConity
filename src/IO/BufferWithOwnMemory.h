@@ -8,6 +8,8 @@
 #include <Common/Exception.h>
 #include <Core/Defines.h>
 
+#include <IO/BufferBase.h>
+
 
 namespace ProfileEvents
 {
@@ -44,6 +46,11 @@ struct Memory : boost::noncopyable, Allocator
     }
 
     ~Memory()
+    {
+        dealloc();
+    }
+
+    void freeResource()
     {
         dealloc();
     }
@@ -145,6 +152,21 @@ public:
     {
         Base::set(existing_memory ? existing_memory : memory.data(), size);
         Base::padded = !existing_memory;
+    }
+
+    virtual void deepCopyTo(BufferBase& target) const override
+    {
+        Base::deepCopyTo(target);
+        BufferWithOwnMemory<Base>& explicitTarget = dynamic_cast<BufferWithOwnMemory<Base>& >(target);
+        // copy memory
+        explicitTarget.memory.resize(memory.size());
+        std::memcpy(explicitTarget.memory.m_data, memory.m_data, memory.size());
+    }
+
+    void freeResource() override
+    {
+        memory.freeResource();
+        Base::freeResource();
     }
 };
 

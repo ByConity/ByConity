@@ -3,6 +3,7 @@
 #include <sys/stat.h>
 #include <pwd.h>
 #include <Common/ClickHouseRevision.h>
+#include <Common/Config/ConfigReloader.h>
 #include <Server/ProtocolServerAdapter.h>
 #include <Common/DNSResolver.h>
 #include <Interpreters/DNSCacheUpdater.h>
@@ -19,6 +20,7 @@
 #include <Common/getMultipleKeysFromConfig.h>
 #include <filesystem>
 #include <IO/UseSSL.h>
+#include <Coordination/FourLetterCommand.h>
 
 #if !defined(ARCADIA_BUILD)
 #   include "config_core.h"
@@ -64,6 +66,7 @@ namespace ErrorCodes
     extern const int NETWORK_ERROR;
     extern const int MISMATCHING_USERS_FOR_PROCESS_AND_DATA;
     extern const int FAILED_TO_GETPWUID;
+    extern const int LOGICAL_ERROR;
 }
 
 namespace
@@ -253,6 +256,18 @@ std::string Keeper::getDefaultConfigFileName() const
     return "keeper_config.xml";
 }
 
+void Keeper::handleCustomArguments(const std::string & arg, [[maybe_unused]] const std::string & value) // NOLINT
+{
+    if (arg == "force-recovery")
+    {
+        assert(value.empty());
+        config().setBool("keeper_server.force_recovery", true);
+        return;
+    }
+
+    throw Exception(ErrorCodes::LOGICAL_ERROR, "Invalid argument {} provided", arg);
+}
+
 void Keeper::defineOptions(Poco::Util::OptionSet & options)
 {
     options.addOption(
@@ -265,6 +280,12 @@ void Keeper::defineOptions(Poco::Util::OptionSet & options)
             .required(false)
             .repeatable(false)
             .binding("version"));
+    options.addOption(
+        Poco::Util::Option("force-recovery", "force-recovery", "Force recovery mode allowing Keeper to overwrite cluster configuration without quorum")
+        .required(false)
+        .repeatable(false)
+        .noArgument()
+        .callback(Poco::Util::OptionCallback<Keeper>(this, &Keeper::handleCustomArguments)));
     BaseDaemon::defineOptions(options);
 }
 
@@ -326,7 +347,7 @@ int Keeper::main(const std::vector<std::string> & /*args*/)
         }
     }
 
-    const Settings & settings = global_context->getSettingsRef();
+    std::string include_from_path = config().getString("include_from", "/etc/metrika.xml");
 
     GlobalThreadPool::initialize(config().getUInt("max_thread_pool_size", 100));
 
@@ -355,8 +376,10 @@ int Keeper::main(const std::vector<std::string> & /*args*/)
 
     auto servers = std::make_shared<std::vector<ProtocolServerAdapter>>();
 
-    /// Initialize test keeper RAFT. Do nothing if no nu_keeper_server in config.
-    global_context->initializeKeeperStorageDispatcher();
+    /// Initialize keeper RAFT. Do nothing if no keeper_server in config.
+    global_context->initializeKeeperDispatcher(/* start_async = */false);
+    FourLetterCommandFactory::registerCommands(*global_context->getKeeperDispatcher());
+
     for (const auto & listen_host : listen_hosts)
     {
         /// TCP Keeper
@@ -365,14 +388,13 @@ int Keeper::main(const std::vector<std::string> & /*args*/)
         {
             Poco::Net::ServerSocket socket;
             auto address = socketBindListen(socket, listen_host, port);
-            socket.setReceiveTimeout(settings.receive_timeout);
-            socket.setSendTimeout(settings.send_timeout);
+            socket.setReceiveTimeout(config().getUInt64("keeper_server.socket_receive_timeout_sec", DBMS_DEFAULT_RECEIVE_TIMEOUT_SEC));
+            socket.setSendTimeout(config().getUInt64("keeper_server.socket_send_timeout_sec", DBMS_DEFAULT_SEND_TIMEOUT_SEC));
             servers->emplace_back(
                 port_name,
+                "Keeper (tcp): " + address.toString(),
                 std::make_unique<Poco::Net::TCPServer>(
                     new KeeperTCPHandlerFactory(*this, false), server_pool, socket, new Poco::Net::TCPServerParams));
-
-            LOG_INFO(log, "Listening for connections to Keeper (tcp): {}", address.toString());
         });
 
         const char * secure_port_name = "keeper_server.tcp_port_secure";
@@ -381,10 +403,11 @@ int Keeper::main(const std::vector<std::string> & /*args*/)
 #if USE_SSL
             Poco::Net::SecureServerSocket socket;
             auto address = socketBindListen(socket, listen_host, port, /* secure = */ true);
-            socket.setReceiveTimeout(settings.receive_timeout);
-            socket.setSendTimeout(settings.send_timeout);
+            socket.setReceiveTimeout(config().getUInt64("keeper_server.socket_receive_timeout_sec", DBMS_DEFAULT_RECEIVE_TIMEOUT_SEC));
+            socket.setSendTimeout(config().getUInt64("keeper_server.socket_send_timeout_sec", DBMS_DEFAULT_SEND_TIMEOUT_SEC));
             servers->emplace_back(
                 secure_port_name,
+                "Keeper with secure protocol (tcp_secure): " + address.toString(),
                 std::make_unique<Poco::Net::TCPServer>(
                     new KeeperTCPHandlerFactory(*this, true), server_pool, socket, new Poco::Net::TCPServerParams));
             LOG_INFO(log, "Listening for connections to Keeper with secure protocol (tcp_secure): {}", address.toString());
@@ -397,10 +420,32 @@ int Keeper::main(const std::vector<std::string> & /*args*/)
     }
 
     for (auto & server : *servers)
+    {
         server.start();
+        LOG_INFO(log, "Listening for {}", server.getDescription());
+    }
+
+    zkutil::EventPtr unused_event = std::make_shared<Poco::Event>();
+    zkutil::ZooKeeperNodeCache unused_cache([] { return nullptr; });
+    /// ConfigReloader have to strict parameters which are redundant in our case
+    auto main_config_reloader = std::make_unique<ConfigReloader>(
+        config_path,
+        include_from_path,
+        config().getString("path", ""),
+        std::move(unused_cache),
+        unused_event,
+        [&](ConfigurationPtr config, bool /* initial_loading */)
+        {
+            if (config->has("keeper_server"))
+                global_context->updateKeeperConfiguration(*config);
+        },
+        /* already_loaded = */ false);  /// Reload it right now (initial loading)
 
     SCOPE_EXIT({
         LOG_INFO(log, "Shutting down.");
+        /// Stop reloading of the main config. This must be done before `global_context->shutdown()` because
+        /// otherwise the reloading may pass a changed config to some destroyed parts of ContextSharedPart.
+        main_config_reloader.reset();
 
         global_context->shutdown();
 
@@ -425,7 +470,7 @@ int Keeper::main(const std::vector<std::string> & /*args*/)
         else
             LOG_INFO(log, "Closed connections to Keeper.");
 
-        global_context->shutdownKeeperStorageDispatcher();
+        global_context->shutdownKeeperDispatcher();
 
         /// Wait server pool to avoid use-after-free of destroyed context in the handlers
         server_pool.joinAll();
@@ -447,6 +492,7 @@ int Keeper::main(const std::vector<std::string> & /*args*/)
 
 
     buildLoggers(config(), logger());
+    main_config_reloader->start();
 
     LOG_INFO(log, "Ready for connections.");
 

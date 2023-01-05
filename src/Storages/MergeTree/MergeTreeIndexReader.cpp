@@ -5,16 +5,29 @@ namespace DB
 {
 
 MergeTreeIndexReader::MergeTreeIndexReader(
-    MergeTreeIndexPtr index_, MergeTreeData::DataPartPtr part_, size_t marks_count_, const MarkRanges & all_mark_ranges_,
+    MergeTreeIndexPtr index_,
+    MergeTreeData::DataPartPtr part_,
+    size_t marks_count_,
+    const MarkRanges & all_mark_ranges_,
     MergeTreeReaderSettings settings)
-    : index(index_), stream(
-        part_->volume->getDisk(),
-        part_->getFullRelativePath() + index->getFileName(), ".idx", marks_count_,
-        all_mark_ranges_,
-        std::move(settings), nullptr, nullptr,
-        part_->getFileSizeOrZero(index->getFileName() + ".idx"),
-        &part_->index_granularity_info,
-        ReadBufferFromFileBase::ProfileCallback{}, CLOCK_MONOTONIC_COARSE)
+    : index(index_)
+    , stream(
+          part_->volume->getDisk(),
+          part_->getFullRelativePath() + index->getFileName(),
+          index->getFileName(),
+          ".idx",
+          marks_count_,
+          all_mark_ranges_,
+          std::move(settings),
+          nullptr,
+          nullptr,
+          &part_->index_granularity_info,
+          ReadBufferFromFileBase::ProfileCallback{},
+          CLOCK_MONOTONIC_COARSE,
+          part_->getFileOffsetOrZero(index->getFileName() + ".idx"),
+          part_->getFileSizeOrZero(index->getFileName() + ".idx"),
+          part_->getFileOffsetOrZero(index->getFileName() + part_->getMarksFileExtension()),
+          part_->getFileSizeOrZero(index->getFileName() + part_->getMarksFileExtension()))
 {
     stream.seekToStart();
 }

@@ -4,43 +4,48 @@
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeRangeReader.h>
 #include <Storages/MergeTree/MergeTreeIndexGranularityInfo.h>
+#include <Storages/MergeTree/IMergeTreeReaderStream.h>
 #include <Compression/CachedCompressedReadBuffer.h>
 #include <Compression/CompressedReadBufferFromFile.h>
 #include <Storages/MergeTree/MergeTreeIOSettings.h>
 #include <Storages/MergeTree/MergeTreeMarksLoader.h>
+#include "Storages/MergeTree/IMergeTreeReaderStream.h"
 
 
 namespace DB
 {
 
 /// Class for reading a single column (or index).
-class MergeTreeReaderStream
+class MergeTreeReaderStream: public IMergeTreeReaderStream
 {
 public:
     MergeTreeReaderStream(
         DiskPtr disk_,
-        const String & path_prefix_, const String & data_file_extension_, size_t marks_count_,
+        const String & path_prefix_, const String & stream_name_, const String & data_file_extension_, 
+        size_t marks_count_,
         const MarkRanges & all_mark_ranges,
         const MergeTreeReaderSettings & settings_,
         MarkCache * mark_cache, UncompressedCache * uncompressed_cache,
-        size_t file_size, const MergeTreeIndexGranularityInfo * index_granularity_info_,
-        const ReadBufferFromFileBase::ProfileCallback & profile_callback, clockid_t clock_type);
+        const MergeTreeIndexGranularityInfo * index_granularity_info_,
+        const ReadBufferFromFileBase::ProfileCallback & profile_callback, clockid_t clock_type,
+        off_t data_file_offset_, size_t data_file_size_,
+        off_t mark_file_offset_, size_t mark_file_size_);
 
-    void seekToMark(size_t index);
-
-    void seekToStart();
-
-    ReadBuffer * data_buffer;
+    virtual void seekToStart() override;
+    virtual void seekToMark(size_t index) override;
 
 private:
     DiskPtr disk;
     std::string path_prefix;
+    std::string stream_name;
     std::string data_file_extension;
 
     size_t marks_count;
 
     MarkCache * mark_cache;
     bool save_marks_in_cache;
+
+    off_t data_file_offset;
 
     const MergeTreeIndexGranularityInfo * index_granularity_info;
 

@@ -43,8 +43,13 @@ Block IBlockInputStream::read()
     if (!info.started)
     {
         info.total_stopwatch.start();
+        info.cpu_thread_stopwatch.start();
         info.started = true;
     }
+
+    /// start of read
+    UInt64 start_ns = info.total_stopwatch.elapsed();
+    UInt64 start_cpu_ns = info.cpu_thread_stopwatch.elapsed();
 
     Block res;
 
@@ -92,6 +97,10 @@ Block IBlockInputStream::read()
     }
 #endif
 
+    /// end of read, update wall time and cpu thread time of current stream
+    info.wall_time_ns += info.total_stopwatch.elapsed() - start_ns;
+    info.cpu_time_ns += info.cpu_thread_stopwatch.elapsed() - start_cpu_ns;
+
     return res;
 }
 
@@ -105,6 +114,16 @@ void IBlockInputStream::readPrefix()
         throw Exception("readPrefix is called twice for " + getName() + " stream", ErrorCodes::LOGICAL_ERROR);
 #endif
 
+    if (!info.started)
+    {
+        info.total_stopwatch.start();
+        info.cpu_thread_stopwatch.start();
+        info.started = true;
+    }
+    /// start of read
+    UInt64 start_ns = info.total_stopwatch.elapsed();
+    UInt64 start_cpu_ns = info.cpu_thread_stopwatch.elapsed();
+
     readPrefixImpl();
 
     forEachChild([&] (IBlockInputStream & child)
@@ -112,6 +131,10 @@ void IBlockInputStream::readPrefix()
         child.readPrefix();
         return false;
     });
+
+    /// end of read, update wall time and cpu thread time of current stream
+    info.wall_time_ns += info.total_stopwatch.elapsed() - start_ns;
+    info.cpu_time_ns += info.cpu_thread_stopwatch.elapsed() - start_cpu_ns;
 }
 
 
@@ -124,6 +147,10 @@ void IBlockInputStream::readSuffix()
         throw Exception("readSuffix is called twice for " + getName() + " stream", ErrorCodes::LOGICAL_ERROR);
 #endif
 
+    /// start of read
+    UInt64 start_ns = info.total_stopwatch.elapsed();
+    UInt64 start_cpu_ns = info.cpu_thread_stopwatch.elapsed();
+
     forEachChild([&] (IBlockInputStream & child)
     {
         child.readSuffix();
@@ -131,6 +158,10 @@ void IBlockInputStream::readSuffix()
     });
 
     readSuffixImpl();
+
+    /// end of read, update wall time and cpu thread time of current stream
+    info.wall_time_ns += info.total_stopwatch.elapsed() - start_ns;
+    info.cpu_time_ns += info.cpu_thread_stopwatch.elapsed() - start_cpu_ns;
 }
 
 
@@ -202,7 +233,7 @@ void IBlockInputStream::updateExtremes(Block & block)
 
 bool IBlockInputStream::checkTimeLimit() const
 {
-    return limits.speed_limits.checkTimeLimit(info.total_stopwatch.elapsed(), limits.timeout_overflow_mode);
+    return limits.speed_limits.checkTimeLimit(info.total_stopwatch, limits.timeout_overflow_mode);
 }
 
 

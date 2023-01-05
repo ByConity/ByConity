@@ -74,6 +74,82 @@ namespace ErrorCodes
 }
 }
 
+// Allocator used for STL container which will track memory usage
+template<typename T>
+class TrackAllocator
+{
+public :
+    using value_type = T;
+    using pointer = value_type *;
+    using const_pointer = const value_type *;
+    using reference = value_type &;
+    using const_reference = const value_type &;
+    using size_type = std::size_t;
+    using difference_type = std::ptrdiff_t;
+
+    // convert an TrackAllocator<T> to TrackAllocator<U>
+    template<typename U>
+    struct Rebind
+    {
+        using other = TrackAllocator<U>;
+    };
+
+    inline TrackAllocator() = default;
+    inline ~TrackAllocator() = default;
+    inline TrackAllocator(TrackAllocator const&) = default;
+    template<typename U>
+    inline explicit TrackAllocator(TrackAllocator<U> const&) {}
+
+    // address
+    inline pointer address(reference r) { return &r;  }
+    inline const_pointer address(const_reference r) { return &r;  }
+
+    // memory allocation/deallocate
+    inline pointer allocate(size_type cnt)
+    {
+        size_type bytes = cnt * sizeof (T);
+        CurrentMemoryTracker::alloc(bytes);
+        return reinterpret_cast<pointer>(::operator new(bytes));
+    }
+    inline void deallocate(pointer p, size_type size)
+    {
+        CurrentMemoryTracker::free(size*sizeof(T));
+        ::operator delete(p);
+    }
+
+    // size
+    inline size_type maxSize() const
+    {
+        return std::numeric_limits<size_type>::max() / sizeof(T);
+    }
+
+    // construction/destruction
+    inline void construct(pointer p, const T& t) { new(p) T(t);  }
+    inline void destroy(pointer p) { p->~T();  }
+
+    inline bool operator==(TrackAllocator const&) { return true;  }
+    inline bool operator!=(TrackAllocator const& a) { return !operator==(a);  }
+
+#ifndef NDEBUG
+    /// In debug builds, request mmap() at random addresses (a kind of ASLR), to
+    /// reproduce more memory stomping bugs. Note that Linux doesn't do it by
+    /// default. This may lead to worse TLB performance.
+    void * getMmapHint()
+    {
+#if !defined(__APPLE__)
+        //         return reinterpret_cast<void *>(std::uniform_int_distribution<intptr_t>(0x100000000000UL, 0x700000000000UL)(thread_local_rng));
+        // #else
+        return nullptr;
+#endif
+    }
+#else
+    void * getMmapHint()
+    {
+        return nullptr;
+    }
+#endif
+};    //    end of class Allocator
+
 /** Responsible for allocating / freeing memory. Used, for example, in PODArray, Arena.
   * Also used in hash tables.
   * The interface is different from std::allocator

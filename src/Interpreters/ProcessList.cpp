@@ -14,6 +14,11 @@
 #include <common/logger_useful.h>
 #include <chrono>
 
+namespace ProfileEvents
+{
+    extern const Event UserTimeMicroseconds;
+    extern const Event SystemTimeMicroseconds;
+}
 
 namespace DB
 {
@@ -23,6 +28,8 @@ namespace ErrorCodes
     extern const int TOO_MANY_SIMULTANEOUS_QUERIES;
     extern const int QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING;
     extern const int LOGICAL_ERROR;
+    extern const int TIMEOUT_EXCEEDED;
+    extern const int QUERY_WAS_CANCELLED;
 }
 
 
@@ -51,7 +58,8 @@ static bool isUnlimitedQuery(const IAST * ast)
             return false;
 
         if (auto database_and_table = getDatabaseAndTable(*ast_select, 0))
-            return database_and_table->database == "system" && database_and_table->table == "processes";
+            return database_and_table->database == "system" &&
+                (database_and_table->table == "processes" || database_and_table->table == "resource_groups");
 
         return false;
     }
@@ -60,7 +68,7 @@ static bool isUnlimitedQuery(const IAST * ast)
 }
 
 
-ProcessList::EntryPtr ProcessList::insert(const String & query_, const IAST * ast, ContextPtr query_context)
+ProcessList::EntryPtr ProcessList::insert(const String & query_, const IAST * ast, ContextPtr query_context, bool force)
 {
     EntryPtr res;
 
@@ -71,6 +79,17 @@ ProcessList::EntryPtr ProcessList::insert(const String & query_, const IAST * as
         throw Exception("Query id cannot be empty", ErrorCodes::LOGICAL_ERROR);
 
     bool is_unlimited_query = isUnlimitedQuery(ast);
+
+    IResourceGroup::Container::iterator group_it;
+    IResourceGroup * resource_group = nullptr;
+    if (!is_unlimited_query)
+    {
+        const_cast<Context *>(query_context.get())->setResourceGroup(ast);
+        /// FIXME(xuruiliang): change getResourceGroup to const getResourceGroup
+        resource_group = const_cast<Context *>(query_context.get())->tryGetResourceGroup();
+    }
+    if (resource_group != nullptr)
+        group_it = resource_group->run(query_, *query_context);
 
     {
         std::unique_lock lock(mutex);
@@ -138,7 +157,7 @@ ProcessList::EntryPtr ProcessList::insert(const String & query_, const IAST * as
 
                 if (running_query != user_process_list->second.queries.end())
                 {
-                    if (!settings.replace_running_query)
+                    if (!force && !settings.replace_running_query)
                         throw Exception("Query with id = " + client_info.current_query_id + " is already running.",
                             ErrorCodes::QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING);
 
@@ -174,7 +193,8 @@ ProcessList::EntryPtr ProcessList::insert(const String & query_, const IAST * as
         }
 
         auto process_it = processes.emplace(processes.end(),
-            query_context, query_, client_info, priorities.insert(settings.priority));
+            query_context, query_, client_info, priorities.insert(settings.priority),
+            resource_group == nullptr ? nullptr : resource_group->insert(group_it));
 
         res = std::make_shared<Entry>(*this, process_it);
 
@@ -230,6 +250,9 @@ ProcessList::EntryPtr ProcessList::insert(const String & query_, const IAST * as
             total_network_throttler = std::make_shared<Throttler>(settings.max_network_bandwidth_for_all_users);
         }
     }
+
+    if (resource_group != nullptr)
+        (*group_it)->query_status = &res->get();
 
     return res;
 }
@@ -288,16 +311,27 @@ ProcessListEntry::~ProcessListEntry()
 
 
 QueryStatus::QueryStatus(
-    ContextPtr context_, const String & query_, const ClientInfo & client_info_, QueryPriorities::Handle && priority_handle_)
+    ContextPtr context_,
+    const String & query_,
+    const ClientInfo & client_info_,
+    QueryPriorities::Handle && priority_handle_,
+    IResourceGroup::Handle && resource_group_handle_)
     : WithContext(context_)
     , query(query_)
     , client_info(client_info_)
     , priority_handle(std::move(priority_handle_))
+    , resource_group_handle(std::move(resource_group_handle_))
     , num_queries_increment{CurrentMetrics::Query}
 {
+    auto settings = getContext()->getSettings();
+    limits.max_execution_time = settings.max_execution_time;
+    overflow_mode = settings.timeout_overflow_mode;
 }
 
-QueryStatus::~QueryStatus() = default;
+QueryStatus::~QueryStatus()
+{
+    assert(executors.empty());
+}
 
 void QueryStatus::setQueryStreams(const BlockIO & io)
 {
@@ -306,6 +340,11 @@ void QueryStatus::setQueryStreams(const BlockIO & io)
     query_stream_in = io.in;
     query_stream_out = io.out;
     query_streams_status = QueryStreamsStatus::Initialized;
+}
+
+void QueryStatus::setQueryRewriteByView(const String & rewrite_query)
+{
+    query_rewrite_by_view = rewrite_query;
 }
 
 void QueryStatus::releaseQueryStreams()
@@ -345,6 +384,22 @@ bool QueryStatus::tryGetQueryStreams(BlockInputStreamPtr & in, BlockOutputStream
 
 CancellationCode QueryStatus::cancelQuery(bool kill)
 {
+    {
+        std::lock_guard lock(executors_mutex);
+        if (!executors.empty())
+        {
+            if (is_killed.load())
+                return CancellationCode::CancelSent;
+
+            is_killed.store(true);
+
+            for (auto * e : executors)
+                e->cancel();
+
+            return CancellationCode::CancelSent;
+        }
+    }
+    
     /// Streams are destroyed, and ProcessListElement will be deleted from ProcessList soon. We need wait a little bit
     if (streamsAreReleased())
         return CancellationCode::CancelSent;
@@ -364,6 +419,79 @@ CancellationCode QueryStatus::cancelQuery(bool kill)
     /// Query is not even started
     is_killed.store(true);
     return CancellationCode::CancelSent;
+}
+
+void QueryStatus::addPipelineExecutor(PipelineExecutor * e)
+{
+    std::lock_guard lock(executors_mutex);
+    assert(std::find(executors.begin(), executors.end(), e) == executors.end());
+    executors.push_back(e);
+}
+
+void QueryStatus::removePipelineExecutor(PipelineExecutor * e)
+{
+    std::lock_guard lock(executors_mutex);
+    assert(std::find(executors.begin(), executors.end(), e) != executors.end());
+    std::erase_if(executors, [e](PipelineExecutor * x) { return x == e; });
+}
+
+void QueryStatus::dumpPipelineInfo(PipelineExecutor * e)
+{
+    pipeline_info += e->dumpPipeline();
+}
+
+bool QueryStatus::checkCpuTimeLimit(String node_name)
+{
+    if (is_killed.load())
+        return false;
+
+    // query thread group Counters.
+    if (thread_group != nullptr)
+    {
+        UInt64 total_query_cpu_micros = thread_group->performance_counters[ProfileEvents::SystemTimeMicroseconds]
+                + thread_group->performance_counters[ProfileEvents::UserTimeMicroseconds];
+        UInt64 thread_cpu_micros = CurrentThread::getProfileEvents()[ProfileEvents::SystemTimeMicroseconds]
+                + CurrentThread::getProfileEvents()[ProfileEvents::UserTimeMicroseconds];
+
+        double total_query_cpu_seconds = total_query_cpu_micros * 1.0 / 1000000;
+        double thread_cpu_seconds = thread_cpu_micros * 1.0 / 1000000;
+
+        ContextPtr context = thread_group->query_context.lock();
+        const Settings & settings = context->getSettingsRef();
+        LOG_TRACE(&Poco::Logger::get("ThreadStatus"), "node {} checkCpuTimeLimit thread cpu secs = {}, total cpu secs = {}, max = {}",
+                    node_name, thread_cpu_seconds, total_query_cpu_seconds, settings.max_query_cpu_second);
+        if (settings.max_query_cpu_second > 0 && total_query_cpu_micros > settings.max_query_cpu_second * 1000000)
+        {
+            switch (overflow_mode)
+            {
+                case OverflowMode::THROW:
+                    throw Exception("Timeout exceeded: elapsed " + toString(total_query_cpu_seconds)
+                                  + " seconds, maximum: " + toString(static_cast<double>(settings.max_query_cpu_second)), ErrorCodes::TIMEOUT_EXCEEDED);
+                case OverflowMode::BREAK:
+                    return true;
+                default:
+                    throw Exception("Logical error: unknown overflow mode", ErrorCodes::LOGICAL_ERROR);
+            }
+        }
+    }
+
+    return true;
+}
+
+bool QueryStatus::checkTimeLimit()
+{
+    if (is_killed.load())
+        throw Exception("Query was cancelled", ErrorCodes::QUERY_WAS_CANCELLED);
+
+    return limits.checkTimeLimit(watch, overflow_mode);
+}
+
+bool QueryStatus::checkTimeLimitSoft()
+{
+    if (is_killed.load())
+        return false;
+
+    return limits.checkTimeLimit(watch, OverflowMode::BREAK);
 }
 
 
@@ -424,9 +552,13 @@ QueryStatusInfo QueryStatus::getInfo(bool get_thread_list, bool get_profile_even
     QueryStatusInfo res{};
 
     res.query             = query;
+    /// TODO @canh: fix me for union query
     res.client_info       = client_info;
+    res.query_rewrite_by_view = query_rewrite_by_view;
     res.elapsed_seconds   = watch.elapsedSeconds();
     res.is_cancelled      = is_killed.load(std::memory_order_relaxed);
+    /// FIXME: Support it after we have disk cache value in Progress
+    // res.disk_cache_bytes  = progress_in.disk_cache_bytes;
     res.read_rows         = progress_in.read_rows;
     res.read_bytes        = progress_in.read_bytes;
     res.total_rows        = progress_in.total_rows_to_read;
@@ -434,6 +566,9 @@ QueryStatusInfo QueryStatus::getInfo(bool get_thread_list, bool get_profile_even
     /// TODO: Use written_rows and written_bytes when real time progress is implemented
     res.written_rows      = progress_out.read_rows;
     res.written_bytes     = progress_out.read_bytes;
+    res.written_duration  = progress_out.written_elapsed_milliseconds;
+
+    res.operator_level    = pipeline_info;
 
     if (thread_group)
     {

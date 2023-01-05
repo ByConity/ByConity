@@ -27,6 +27,7 @@ namespace ErrorCodes
     extern const int CANNOT_STATVFS;
     extern const int PATH_ACCESS_DENIED;
     extern const int CANNOT_CREATE_FILE;
+    extern const int BAD_ARGUMENTS;
 }
 
 
@@ -154,6 +155,26 @@ bool symlinkStartsWith(const String & path, const String & prefix_path)
 
     return symlinkStartsWith(filesystem_path, filesystem_prefix_path);
 }
+
+String joinPaths(const std::vector<String>& components, bool add_post_slash)
+{
+    String result;
+    for (size_t i = 0; i < components.size(); i++)
+    {
+        if (components[i].empty())
+        {
+            continue;
+        }
+        result.append(components[i]);
+        if (result.back() != '/' && (i != components.size() - 1 || add_post_slash))
+        {
+            result.push_back('/');
+        }
+    }
+
+    return result;
+}
+
 }
 
 
@@ -224,4 +245,6 @@ void setModificationTime(const std::string & path, time_t time)
     if (utime(path.c_str(), &tb) != 0)
         DB::throwFromErrnoWithPath("Cannot set modification time for file: " + path, path, DB::ErrorCodes::PATH_ACCESS_DENIED);
 }
+
+
 }

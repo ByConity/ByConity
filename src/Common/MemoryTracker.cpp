@@ -207,7 +207,10 @@ void MemoryTracker::allocImpl(Int64 size, bool throw_if_memory_exceeded)
     {
         BlockerInThread untrack_lock(VariableContext::Global);
         DB::TraceCollector::collect(DB::TraceType::Memory, StackTrace(), size);
-        setOrRaiseProfilerLimit((will_be + profiler_step - 1) / profiler_step * profiler_step);
+        if (profiler_step == 0)
+            setOrRaiseProfilerLimit(will_be);
+        else
+            setOrRaiseProfilerLimit((will_be + profiler_step - 1) / profiler_step * profiler_step);
     }
 
     std::bernoulli_distribution sample(sample_probability);

@@ -3,6 +3,7 @@
 #include <Core/QueryProcessingStage.h>
 #include <DataStreams/BlockIO.h>
 #include <Processors/QueryPipeline.h>
+#include <Interpreters/SegmentScheduler.h>
 
 namespace DB
 {
@@ -18,7 +19,8 @@ void executeQuery(
     bool allow_into_outfile,            /// If true and the query contains INTO OUTFILE section, redirect output to that file.
     ContextMutablePtr context,                 /// DB, tables, data types, storage engines, functions, aggregate functions...
     std::function<void(const String &, const String &, const String &, const String &)> set_result_details, /// If a non-empty callback is passed, it will be called with the query id, the content-type, the format, and the timezone.
-    const std::optional<FormatSettings> & output_format_settings = std::nullopt /// Format settings for output format, will be calculated from the context if not set.
+    const std::optional<FormatSettings> & output_format_settings = std::nullopt, /// Format settings for output format, will be calculated from the context if not set.
+    bool internal = false /// If a query is a internal which cannot be inserted into processlist.
 );
 
 

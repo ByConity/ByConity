@@ -32,7 +32,8 @@ void registerFunctionsConversion(FunctionFactory & factory)
     factory.registerFunction<FunctionToDate>();
     /// MysQL compatibility alias.
     factory.registerFunction<FunctionToDate>("DATE", FunctionFactory::CaseInsensitive);
-
+    factory.registerFunction<FunctionToDate32>();
+    factory.registerFunction<FunctionToTime>();
     factory.registerFunction<FunctionToDateTime>();
     factory.registerFunction<FunctionToDateTime32>();
     factory.registerFunction<FunctionToDateTime64>();
@@ -62,6 +63,7 @@ void registerFunctionsConversion(FunctionFactory & factory)
     factory.registerFunction<FunctionToFloat32OrZero>();
     factory.registerFunction<FunctionToFloat64OrZero>();
     factory.registerFunction<FunctionToDateOrZero>();
+    factory.registerFunction<FunctionToDate32OrZero>();
     factory.registerFunction<FunctionToDateTimeOrZero>();
     factory.registerFunction<FunctionToDateTime64OrZero>();
 
@@ -71,6 +73,7 @@ void registerFunctionsConversion(FunctionFactory & factory)
     factory.registerFunction<FunctionToDecimal256OrZero>();
 
     factory.registerFunction<FunctionToUUIDOrZero>();
+    factory.registerFunction<FunctionToFixedStringOrZero>();
 
     factory.registerFunction<FunctionToUInt8OrNull>();
     factory.registerFunction<FunctionToUInt16OrNull>();
@@ -87,6 +90,7 @@ void registerFunctionsConversion(FunctionFactory & factory)
     factory.registerFunction<FunctionToFloat32OrNull>();
     factory.registerFunction<FunctionToFloat64OrNull>();
     factory.registerFunction<FunctionToDateOrNull>();
+    factory.registerFunction<FunctionToDate32OrNull>();
     factory.registerFunction<FunctionToDateTimeOrNull>();
     factory.registerFunction<FunctionToDateTime64OrNull>();
 
@@ -96,6 +100,7 @@ void registerFunctionsConversion(FunctionFactory & factory)
     factory.registerFunction<FunctionToDecimal256OrNull>();
 
     factory.registerFunction<FunctionToUUIDOrNull>();
+    factory.registerFunction<FunctionToFixedStringOrNull>();
 
     factory.registerFunction<FunctionParseDateTimeBestEffort>();
     factory.registerFunction<FunctionParseDateTimeBestEffortOrZero>();

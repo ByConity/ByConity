@@ -136,6 +136,11 @@ private:
     const WriteMode mode;
 };
 
+UInt64 DiskMemory::getID() const
+{
+    return static_cast<UInt64>(std::hash<String>{}(DiskType::toString(getType())) ^ std::hash<String>{}(getName()));
+}
+
 
 ReservationPtr DiskMemory::reserve(UInt64 /*bytes*/)
 {
@@ -313,7 +318,7 @@ void DiskMemory::replaceFileImpl(const String & from_path, const String & to_pat
     files.insert(std::move(node));
 }
 
-std::unique_ptr<ReadBufferFromFileBase> DiskMemory::readFile(const String & path, size_t /*buf_size*/, size_t, size_t, size_t, MMappedFileCache *) const
+std::unique_ptr<ReadBufferFromFileBase> DiskMemory::readFile(const String & path, const ReadSettings&) const
 {
     std::lock_guard lock(mutex);
 
@@ -324,7 +329,7 @@ std::unique_ptr<ReadBufferFromFileBase> DiskMemory::readFile(const String & path
     return std::make_unique<ReadIndirectBuffer>(path, iter->second.data);
 }
 
-std::unique_ptr<WriteBufferFromFileBase> DiskMemory::writeFile(const String & path, size_t buf_size, WriteMode mode)
+std::unique_ptr<WriteBufferFromFileBase> DiskMemory::writeFile(const String & path, const WriteSettings& settings)
 {
     std::lock_guard lock(mutex);
 
@@ -339,7 +344,7 @@ std::unique_ptr<WriteBufferFromFileBase> DiskMemory::writeFile(const String & pa
         files.emplace(path, FileData{FileType::File});
     }
 
-    return std::make_unique<WriteIndirectBuffer>(this, path, mode, buf_size);
+    return std::make_unique<WriteIndirectBuffer>(this, path, settings.mode, settings.buffer_size);
 }
 
 void DiskMemory::removeFile(const String & path)

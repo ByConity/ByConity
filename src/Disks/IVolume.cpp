@@ -50,8 +50,26 @@ IVolume::IVolume(
         }
     }
 
+    if (config.has(config_prefix + ".default"))
+    {
+        default_disk_name = config.getString(config_prefix + ".default");
+    }
+
     if (disks.empty())
         throw Exception("Volume must contain at least one disk", ErrorCodes::NO_ELEMENTS_IN_CONFIG);
+}
+
+DiskPtr IVolume::getDefaultDisk() const
+{
+    for (const DiskPtr& disk : disks)
+    {
+        if (disk->getName() == default_disk_name)
+        {
+            return disk;
+        }
+    }
+    throw Exception("Default disk " + default_disk_name + " not exists",
+        ErrorCodes::LOGICAL_ERROR);
 }
 
 UInt64 IVolume::getMaxUnreservedFreeSpace() const

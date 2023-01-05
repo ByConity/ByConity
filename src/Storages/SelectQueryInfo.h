@@ -6,7 +6,7 @@
 #include <Core/Names.h>
 #include <Storages/ProjectionsDescription.h>
 #include <Interpreters/AggregateDescription.h>
-
+#include <Interpreters/Context_fwd.h>
 #include <memory>
 
 namespace DB
@@ -58,6 +58,9 @@ struct PrewhereInfo
             : prewhere_actions(std::move(prewhere_actions_)), prewhere_column_name(std::move(prewhere_column_name_)) {}
 
     std::string dump() const;
+
+    void serialize(WriteBuffer & buf) const;
+    static PrewhereInfoPtr deserialize(ReadBuffer & buf, ContextPtr context);
 };
 
 /// Helper struct to store all the information about the filter expression.
@@ -87,12 +90,17 @@ struct InputOrderInfo
     InputOrderInfo(const SortDescription & order_key_prefix_descr_, int direction_)
         : order_key_prefix_descr(order_key_prefix_descr_), direction(direction_) {}
 
+    InputOrderInfo() = default;
+
     bool operator ==(const InputOrderInfo & other) const
     {
         return order_key_prefix_descr == other.order_key_prefix_descr && direction == other.direction;
     }
 
     bool operator !=(const InputOrderInfo & other) const { return !(*this == other); }
+
+    void serialize(WriteBuffer & buf) const;
+    void deserialize(ReadBuffer & buf);
 };
 
 class IMergeTreeDataPart;
@@ -157,6 +165,12 @@ struct SelectQueryInfo
     std::optional<ProjectionCandidate> projection;
     bool ignore_projections = false;
     bool is_projection_query = false;
+    
+    /// Read from local table
+    bool read_local_table = true;
+
+    void serialize(WriteBuffer &) const;
+    void deserialize(ReadBuffer &);
 };
 
 }

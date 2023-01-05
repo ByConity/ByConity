@@ -19,11 +19,15 @@ bool ParserExplainQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserKeyword s_syntax("SYNTAX");
     ParserKeyword s_pipeline("PIPELINE");
     ParserKeyword s_plan("PLAN");
+    ParserKeyword s_view("VIEW");
+    ParserKeyword s_element("ELEMENT");
+    ParserKeyword s_plansegment("PLANSEGMENT");
+    ParserKeyword s_opt_plan("OPT_PLAN");
+
 
     if (s_explain.ignore(pos, expected))
     {
         kind = ASTExplainQuery::QueryPlan;
-
         if (s_ast.ignore(pos, expected))
             kind = ASTExplainQuery::ExplainKind::ParsedAST;
         else if (s_syntax.ignore(pos, expected))
@@ -32,6 +36,14 @@ bool ParserExplainQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
             kind = ASTExplainQuery::ExplainKind::QueryPipeline;
         else if (s_plan.ignore(pos, expected))
             kind = ASTExplainQuery::ExplainKind::QueryPlan; //-V1048
+        else if (s_view.ignore(pos, expected))
+            kind = ASTExplainQuery::ExplainKind::MaterializedView;
+        else if (s_element.ignore(pos, expected))
+            kind = ASTExplainQuery::ExplainKind::QueryElement;
+        else if (s_plansegment.ignore(pos, expected))
+            kind = ASTExplainQuery::ExplainKind::PlanSegment;
+        else if (s_opt_plan.ignore(pos, expected))
+            kind = ASTExplainQuery::ExplainKind::OptimizerPlan;
     }
     else
         return false;
@@ -49,19 +61,19 @@ bool ParserExplainQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
             pos = begin;
     }
 
-    ParserCreateTableQuery create_p;
-    ParserSelectWithUnionQuery select_p;
+    ParserCreateTableQuery create_p(dt);
+    ParserSelectWithUnionQuery select_p(dt);
     ASTPtr query;
     if (kind == ASTExplainQuery::ExplainKind::ParsedAST)
     {
-        ParserQuery p(end);
+        ParserQuery p(end, dt);
         if (p.parse(pos, query, expected))
             explain_query->setExplainedQuery(std::move(query));
         else
             return false;
     }
     else if (select_p.parse(pos, query, expected) ||
-        create_p.parse(pos, query, expected))
+             create_p.parse(pos, query, expected))
         explain_query->setExplainedQuery(std::move(query));
     else
         return false;

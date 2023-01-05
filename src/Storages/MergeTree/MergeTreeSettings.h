@@ -27,7 +27,8 @@ struct Settings;
     M(UInt64, index_granularity, 8192, "How many rows correspond to one primary key value.", 0) \
     \
     /** Data storing format settings. */ \
-    M(UInt64, min_bytes_for_wide_part, 10485760, "Minimal uncompressed size in bytes to create part in wide format instead of compact", 0) \
+    /* For backward compatibility, do not use compact part */ \
+    M(UInt64, min_bytes_for_wide_part, /*10485760*/ 0, "Minimal uncompressed size in bytes to create part in wide format instead of compact", 0) \
     M(UInt64, min_rows_for_wide_part, 0, "Minimal number of rows to create part in wide format instead of compact", 0) \
     M(UInt64, min_bytes_for_compact_part, 0, "Experimental. Minimal uncompressed size in bytes to create part in compact format instead of saving it in RAM", 0) \
     M(UInt64, min_rows_for_compact_part, 0, "Experimental. Minimal number of rows to create part in compact format instead of saving it in RAM", 0) \
@@ -111,7 +112,7 @@ struct Settings;
     M(Bool, use_minimalistic_part_header_in_zookeeper, true, "Store part header (checksums and columns) in a compact format and a single part znode instead of separate znodes (<part>/columns and <part>/checksums). This can dramatically reduce snapshot size in ZooKeeper. Before enabling check that all replicas support new format.", 0) \
     M(UInt64, finished_mutations_to_keep, 100, "How many records about mutations that are done to keep. If zero, then keep all of them.", 0) \
     M(UInt64, min_merge_bytes_to_use_direct_io, 10ULL * 1024 * 1024 * 1024, "Minimal amount of bytes to enable O_DIRECT in merge (0 - disabled).", 0) \
-    M(UInt64, index_granularity_bytes, 10 * 1024 * 1024, "Approximate amount of bytes in single granule (0 - disabled).", 0) \
+    M(UInt64, index_granularity_bytes, /*10 * 1024 * 1024*/ 0, "Approximate amount of bytes in single granule (0 - disabled).", 0) \
     M(UInt64, min_index_granularity_bytes, 1024, "Minimum amount of bytes in single granule.", 1024) \
     M(Int64, merge_with_ttl_timeout, 3600 * 4, "Minimal time in seconds, when merge with delete TTL can be repeated.", 0) \
     M(Int64, merge_with_recompression_ttl_timeout, 3600 * 4, "Minimal time in seconds, when merge with recompression TTL can be repeated.", 0) \
@@ -130,15 +131,94 @@ struct Settings;
     M(UInt64, max_concurrent_queries, 0, "Max number of concurrently executed queries related to the MergeTree table (0 - disabled). Queries will still be limited by other max_concurrent_queries settings.", 0) \
     M(UInt64, min_marks_to_honor_max_concurrent_queries, 0, "Minimal number of marks to honor the MergeTree-level's max_concurrent_queries (0 - disabled). Queries will still be limited by other max_concurrent_queries settings.", 0) \
     M(UInt64, min_bytes_to_rebalance_partition_over_jbod, 0, "Minimal amount of bytes to enable part rebalance over JBOD array (0 - disabled).", 0) \
-    \
+    M(Bool, enable_compact_map_data, false, "Enable usage of compact map impl, this parameter is invalid in replicated engine", 0) \
     /** Experimental/work in progress feature. Unsafe for production. */ \
     M(UInt64, part_moves_between_shards_enable, 0, "Experimental/Incomplete feature to move parts between shards. Does not take into account sharding expressions.", 0) \
     M(UInt64, part_moves_between_shards_delay_seconds, 30, "Time to wait before/after moving parts between shards.", 0) \
     \
-    /** Obsolete settings. Kept for backward compatibility only. */ \
+    /** ByteDance settings */ \
+    \
+    M(Bool, enable_run_optimization, true, "", 0) \
+    M(UInt64, delta_merge_interval, 60, "", 0) \
+    /** Minimal amount of bytes to enable O_DIRECT in merge (0 - disabled, "", 0) */                                 \
+    \
+    /** If true, replicated tables would prefer to merge locally rather than                                  |
+      * fetching of merged part from replica */                                                               \
+    M(Bool, prefer_merge_than_fetch, false, "", 0) \
+    M(Bool, heuristic_part_source_replica_lookup, true, "", 0) \
+    /** Using in ingest partition function. If true, we'll insert default when                                |\
+      * the user have not provided values for some rows of a column */                                        \
+    M(Bool, ingest_default_column_value_if_not_provided, true, "", 0) \
+    M(Bool, enable_ingest_wide_part, false, "", 0) \
+    /** detach partition lightweight rename directory instead of makeClone */                                 \
+    M(Bool, light_detach_partition, false, "", 0) \
+    M(Bool, ha_fast_create_table, false, "", 0) \
+    M(UInt64, zk_local_diff_threshold, 12, "", 0) \
+    M(Bool, only_use_ttl_of_metadata, true, "", 0) \
+                                                                                                              \
+    M(Bool, enable_download_partition, false, "", 0) \
+    M(UInt64, max_memory_usage_for_merge, 0, "", 0) \
+    M(String, storage_policy_name, "default", "", 0) \
+    M(Bool, offline_overwrite_realtime, 0, "", 0) \
+    M(Bool, enable_async_init_metasotre, false, "", 0) \
+    M(Bool, cnch_temporary_table, false, "", 0) \
+    M(MaxThreads, cnch_parallel_prefetching, 0, "", 0) \
+                                                                                                              \
+    M(Bool, disable_block_output, false, "", 0) \
+    M(UInt64, min_drop_ranges_to_enable_cleanup, 365, "", 0) \
+    M(Seconds, drop_ranges_lifetime, 60 * 60  * 36, "", 0) \
+    \
+    M(String, cnch_vw_default, "vw_default", "", 0) \
+    M(String, cnch_vw_read, "vw_read", "", 0) \
+    M(String, cnch_vw_write, "vw_write", "", 0) \
+    M(String, cnch_vw_task, "vw_task", "", 0) \
+    \
+    M(UInt64, time_travel_retention_days, 0, "", 0) \
+    M(UInt64, insertion_label_ttl, 8400 * 2, "", 0) \
+    \
+    M(Bool, cnch_merge_enable_batch_select, false, "", 0)                                                     \
+    M(Bool, enable_addition_bg_task, false, "", 0) \
+    M(Int64, max_addition_bg_task_num, 200, "", 0) \
+    M(Int64, max_addition_mutation_task_num, 10, "", 0) \
+    M(Int64, max_partition_for_multi_select, 3, "", 0) \
+    \
+    /** Settings for parts cache on server for MergeTasks. Cache speed up the task scheduling. */             \
+    M(UInt64, cnch_merge_parts_cache_timeout, 10 * 60, "", 0)                                  \
+    M(UInt64, cnch_merge_parts_cache_min_count, 1000, "", 0)                                                  \
+    \
+    /* Unique table related settings */\
+    M(Bool, cloud_enable_staging_area, false, "", 0) \
+    M(Bool, cloud_enable_dedup_worker, false, "", 0) \
+    M(UInt64, dedup_worker_max_heartbeat_interval, 16, "", 0) \
+    M(Bool, partition_level_unique_keys, true, "", 0) \
+    M(UInt64, staged_part_lifetime_threshold_ms_to_block_kafka_consume, 10000, "", 0) \
+    M(Seconds, dedup_acquire_lock_timeout, 300, "", 0) \
+    M(MaxThreads, cnch_parallel_dumping_threads, 8, "", 0) \
+    \
+    /* Metastore settings */\
+    M(Bool, enable_metastore, true, "Use KV metastore to manage data parts.", 0) \
+    M(Bool, enable_persistent_checksum, false, "Persist checksums of part in memory. If set to false, checksums will be managed by a global cache to save memory.", 0) \
+    \
+    M(Bool, enable_local_disk_cache, true, "Enable local disk cache", 0) \
+    \
+    /* Renamed settings - cannot be ignored */\
+    M(Bool, enable_nullable_sorting_key, false, "Alias of `allow_nullable_key`", 0) \
+    \
+    /*************************************************************************************/ \
+    /** Obsolete settings. Kept for backward compatibility only, or will add usage later */ \
     M(UInt64, min_relative_delay_to_yield_leadership, 120, "Obsolete setting, does nothing.", 0) \
     M(UInt64, check_delay_period, 60, "Obsolete setting, does nothing.", 0) \
     M(Bool, allow_floating_point_partition_key, false, "Allow floating point as partition key", 0) \
+    M(Bool, cnch_enable_memory_buffer, false, "", 0) \
+    /** Set to current max_rows in merge_scheduler to avoid generating too many merge tasks when disable merge_scheduler */ \
+    M(UInt64, cnch_merge_max_total_rows_to_merge, 15000000, "", 0) \
+    M(Bool, cnch_merge_only_realtime_partition, false, "", 0) \
+    /** RM - using RM, RoundRobin: - local round robin strategy */ \
+    M(String, cnch_merge_pick_worker_algo, "RM", "", 0) \
+    \
+    /** uuid of CnchMergeTree, as we won't use uuid in CloudMergeTree */ \
+    M(String, cnch_table_uuid, "", "Used for CloudMergeTree to get uuid of Cnch Table for ingestion task, like Kafka", 0) \
+    \
     /// Settings that should not change after the creation of a table.
 #define APPLY_FOR_IMMUTABLE_MERGE_TREE_SETTINGS(M) \
     M(index_granularity)

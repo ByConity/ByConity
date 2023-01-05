@@ -1,4 +1,5 @@
 #include <Storages/MergeTree/AllMergeSelector.h>
+#include <Storages/MergeTree/MergeScheduler.h>
 
 #include <cmath>
 
@@ -8,7 +9,8 @@ namespace DB
 
 AllMergeSelector::PartsRange AllMergeSelector::select(
     const PartsRanges & parts_ranges,
-    const size_t /*max_total_size_to_merge*/)
+    const size_t /*max_total_size_to_merge*/,
+    [[maybe_unused]] MergeScheduler * merge_scheduler)
 {
     size_t min_partition_size = 0;
     PartsRanges::const_iterator best_partition;

@@ -18,14 +18,15 @@
 #include <Storages/MergeTree/ActiveDataPartSet.h>
 #include <Storages/AlterCommands.h>
 #include <Storages/PartitionCommands.h>
+#include <Storages/IngestPartition.h>
 #include <Storages/MergeTree/MergeTreeBlockOutputStream.h>
 #include <Storages/MergeTree/MergeTreeDataPartInMemory.h>
 #include <Storages/MergeTree/PartitionPruner.h>
 #include <Storages/MergeTree/MergeList.h>
 #include <Storages/MergeTree/checkDataPart.h>
 #include <Processors/Pipe.h>
-#include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
-#include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
+#include <QueryPlan/BuildQueryPipelineSettings.h>
+#include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <optional>
 
 namespace CurrentMetrics
@@ -83,6 +84,7 @@ StorageMergeTree::StorageMergeTree(
     , merger_mutator(*this, getContext()->getSettingsRef().background_pool_size)
     , background_executor(*this, getContext())
     , background_moves_executor(*this, getContext())
+    , merge_scheduler(std::make_unique<MergeScheduler>(getContext(), getSettings()->max_replicated_merges_in_queue))
 
 {
     loadDataParts(has_force_restore_data_flag);
@@ -209,7 +211,17 @@ Pipe StorageMergeTree::read(
 
 std::optional<UInt64> StorageMergeTree::totalRows(const Settings &) const
 {
-    return getTotalActiveSizeInRows();
+    // not using total_active_size_rows because it doesn't consider delete bitmap
+    // return getTotalActiveSizeInRows();
+    auto parts = getDataPartsVector({DataPartState::Committed});
+    UInt64 res = 0;
+    for (auto & part : parts)
+    {
+        if (part->isEmpty())
+            continue;
+        res += part->rows_count;
+    }
+    return res;
 }
 
 std::optional<UInt64> StorageMergeTree::totalRowsByPartitionPredicate(const SelectQueryInfo & query_info, ContextPtr local_context) const
@@ -272,9 +284,15 @@ void StorageMergeTree::alter(
     StorageInMemoryMetadata new_metadata = getInMemoryMetadata();
     StorageInMemoryMetadata old_metadata = getInMemoryMetadata();
     auto maybe_mutation_commands = commands.getMutationCommands(new_metadata, local_context->getSettingsRef().materialize_ttl_after_modify, local_context);
+    /// Handle CLEAR COLUMN IN PARTITION WHERE command seperately.
+    handleClearColumnInPartitionWhere(maybe_mutation_commands, commands);
+
     String mutation_file_name;
     Int64 mutation_version = -1;
+
     commands.apply(new_metadata, local_context);
+
+    checkColumnsValidity(new_metadata.columns);
 
     /// This alter can be performed at new_metadata level only
     if (commands.isSettingsAlter())
@@ -341,7 +359,7 @@ StorageMergeTree::CurrentlyMergingPartsTagger::CurrentlyMergingPartsTagger(
         for (auto & part_ptr : future_part_.parts)
         {
             ttl_infos.update(part_ptr->ttl_infos);
-            max_volume_index = std::max(max_volume_index, storage.getStoragePolicy()->getVolumeIndexByDisk(part_ptr->volume->getDisk()));
+            max_volume_index = std::max(max_volume_index, storage.getStoragePolicy(IStorage::StorageLocation::MAIN)->getVolumeIndexByDisk(part_ptr->volume->getDisk()));
         }
 
         reserved_space = storage.balancedReservation(
@@ -395,12 +413,12 @@ Int64 StorageMergeTree::startMutation(const MutationCommands & commands, String 
 {
     /// Choose any disk, because when we load mutations we search them at each disk
     /// where storage can be placed. See loadMutations().
-    auto disk = getStoragePolicy()->getAnyDisk();
+    auto disk = getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
     Int64 version;
     {
         std::lock_guard lock(currently_processing_in_background_mutex);
 
-        MergeTreeMutationEntry entry(commands, disk, relative_data_path, insert_increment.get());
+        MergeTreeMutationEntry entry(commands, disk, getRelativeDataPath(IStorage::StorageLocation::MAIN), insert_increment.get());
         version = increment.get();
         entry.commit(version);
         mutation_file_name = entry.file_name;
@@ -592,11 +610,13 @@ std::vector<MergeTreeMutationStatus> StorageMergeTree::getMutationsStatus() cons
             result.push_back(MergeTreeMutationStatus
             {
                 entry.file_name,
+                {},  /// query_id
                 buf.str(),
                 entry.create_time,
                 block_numbers_map,
                 parts_to_do_names,
                 /* is_done = */parts_to_do_names.empty(),
+                {}, /// finish_time
                 entry.latest_failed_part,
                 entry.latest_fail_time,
                 entry.latest_fail_reason,
@@ -726,7 +746,8 @@ std::shared_ptr<StorageMergeTree::MergeMutateSelectedEntry> StorageMergeTree::se
                 max_source_parts_size,
                 can_merge,
                 merge_with_ttl_allowed,
-                out_disable_reason);
+                out_disable_reason,
+                merge_scheduler.get());
         }
         else if (out_disable_reason)
             *out_disable_reason = "Current value of max_source_parts_size is zero";
@@ -735,9 +756,9 @@ std::shared_ptr<StorageMergeTree::MergeMutateSelectedEntry> StorageMergeTree::se
     {
         while (true)
         {
-            UInt64 disk_space = getStoragePolicy()->getMaxUnreservedFreeSpace();
+            UInt64 disk_space = getStoragePolicy(IStorage::StorageLocation::MAIN)->getMaxUnreservedFreeSpace();
             select_decision = merger_mutator.selectAllPartsToMergeWithinPartition(
-                future_part, disk_space, can_merge, partition_id, final, metadata_snapshot, out_disable_reason, optimize_skip_merged_partitions);
+                future_part, disk_space, can_merge, partition_id, final, metadata_snapshot, out_disable_reason, optimize_skip_merged_partitions, merge_scheduler.get());
             auto timeout_ms = getSettings()->lock_acquire_timeout_for_background_operations.totalMilliseconds();
             auto timeout = std::chrono::milliseconds(timeout_ms);
 
@@ -843,7 +864,8 @@ bool StorageMergeTree::mergeSelectedParts(
     Stopwatch stopwatch;
     MutableDataPartPtr new_part;
 
-    auto merge_list_entry = getContext()->getMergeList().insert(getStorageID(), future_part);
+    const Settings & settings = getContext()->getSettingsRef();
+    auto merge_list_entry = getContext()->getMergeList().insert(getStorageID(), future_part, settings);
 
     auto write_part_log = [&] (const ExecutionStatus & execution_status)
     {
@@ -937,6 +959,7 @@ std::shared_ptr<StorageMergeTree::MergeMutateSelectedEntry> StorageMergeTree::se
         }
 
         size_t current_ast_elements = 0;
+        size_t mutation_version = 0;
         for (auto it = mutations_begin_it; it != mutations_end_it; ++it)
         {
             size_t commands_size = 0;
@@ -946,7 +969,8 @@ std::shared_ptr<StorageMergeTree::MergeMutateSelectedEntry> StorageMergeTree::se
                 if (command.type != MutationCommand::Type::DROP_COLUMN
                     && command.type != MutationCommand::Type::DROP_INDEX
                     && command.type != MutationCommand::Type::DROP_PROJECTION
-                    && command.type != MutationCommand::Type::RENAME_COLUMN)
+                    && command.type != MutationCommand::Type::RENAME_COLUMN
+                    && command.type != MutationCommand::Type::CLEAR_MAP_KEY)
                 {
                     commands_for_size_validation.push_back(command);
                 }
@@ -976,14 +1000,22 @@ std::shared_ptr<StorageMergeTree::MergeMutateSelectedEntry> StorageMergeTree::se
             if (current_ast_elements + commands_size >= max_ast_elements)
                 break;
 
+            bool require_independent_execution = it->second.commands.requireIndependentExecution();
+            if (require_independent_execution && !commands.empty())
+                break;
+
             current_ast_elements += commands_size;
             commands.insert(commands.end(), it->second.commands.begin(), it->second.commands.end());
+            mutation_version = it->first;
+
+            if (require_independent_execution)
+                break;
         }
 
         if (!commands.empty())
         {
             auto new_part_info = part->info;
-            new_part_info.mutation = current_mutations_by_version.rbegin()->first;
+            new_part_info.mutation = mutation_version;
 
             future_part.parts.push_back(part);
             future_part.part_info = new_part_info;
@@ -1002,7 +1034,8 @@ bool StorageMergeTree::mutateSelectedPart(const StorageMetadataPtr & metadata_sn
 {
     auto & future_part = merge_mutate_entry.future_part;
 
-    auto merge_list_entry = getContext()->getMergeList().insert(getStorageID(), future_part);
+    const Settings & settings = getContext()->getSettingsRef();
+    auto merge_list_entry = getContext()->getMergeList().insert(getStorageID(), future_part, settings);
     Stopwatch stopwatch;
     MutableDataPartPtr new_part;
 
@@ -1101,6 +1134,26 @@ bool StorageMergeTree::scheduleDataProcessingJob(IBackgroundJobExecutor & execut
         return true;
     }
     return false;
+}
+
+void StorageMergeTree::attachPartsInDirectory(const PartNamesWithDisks & parts_with_disk, const String & relative_path, ContextPtr local_context)
+{
+    LOG_DEBUG(log, "Attaching [] parts in path {}", parts_with_disk.size(), relative_path);
+
+    if (parts_with_disk.empty())
+        return;
+
+    MutableDataPartsVector loaded_parts = tryLoadPartsInPathToAttach(parts_with_disk, relative_path);
+
+    for (size_t i = 0; i < loaded_parts.size(); ++i)
+    {
+        LOG_INFO(log, "Attaching part {}", loaded_parts[i]->name);
+        renameTempPartAndAdd(loaded_parts[i], &increment);
+        LOG_INFO(log, "Finished attaching part");
+    }
+
+    /// New parts with other data may appear in place of deleted parts.
+    local_context->dropCaches();
 }
 
 Int64 StorageMergeTree::getCurrentMutationVersion(
@@ -1469,11 +1522,11 @@ void StorageMergeTree::movePartitionToTable(const StoragePtr & dest_table, const
     if (!dest_table_storage)
         throw Exception("Table " + getStorageID().getNameForLogs() + " supports movePartitionToTable only for MergeTree family of table engines."
                         " Got " + dest_table->getName(), ErrorCodes::NOT_IMPLEMENTED);
-    if (dest_table_storage->getStoragePolicy() != this->getStoragePolicy())
+    if (dest_table_storage->getStoragePolicy(IStorage::StorageLocation::MAIN) != this->getStoragePolicy(IStorage::StorageLocation::MAIN))
         throw Exception("Destination table " + dest_table_storage->getStorageID().getNameForLogs() +
                        " should have the same storage policy of source table " + getStorageID().getNameForLogs() + ". " +
-                       getStorageID().getNameForLogs() + ": " + this->getStoragePolicy()->getName() + ", " +
-                       dest_table_storage->getStorageID().getNameForLogs() + ": " + dest_table_storage->getStoragePolicy()->getName(), ErrorCodes::UNKNOWN_POLICY);
+                       getStorageID().getNameForLogs() + ": " + this->getStoragePolicy(IStorage::StorageLocation::MAIN)->getName() + ", " +
+                       dest_table_storage->getStorageID().getNameForLogs() + ": " + dest_table_storage->getStoragePolicy(IStorage::StorageLocation::MAIN)->getName(), ErrorCodes::UNKNOWN_POLICY);
 
     auto dest_metadata_snapshot = dest_table->getInMemoryMetadataPtr();
     auto metadata_snapshot = getInMemoryMetadataPtr();
@@ -1514,7 +1567,7 @@ void StorageMergeTree::movePartitionToTable(const StoragePtr & dest_table, const
             auto src_data_parts_lock = lockParts();
             auto dest_data_parts_lock = dest_table_storage->lockParts();
 
-            std::mutex mutex;
+            std::shared_mutex mutex;
             DataPartsLock lock(mutex);
 
             for (MutableDataPartPtr & part : dst_parts)
@@ -1532,6 +1585,43 @@ void StorageMergeTree::movePartitionToTable(const StoragePtr & dest_table, const
     catch (...)
     {
         PartLog::addNewParts(getContext(), dst_parts, watch.elapsed(), ExecutionStatus::fromCurrentException());
+        throw;
+    }
+}
+
+void StorageMergeTree::ingestPartition(const PartitionCommand & command, ContextPtr query_context)
+{
+    String from_database = query_context->resolveDatabase(command.from_database);
+    auto source_table = DatabaseCatalog::instance().getTable({from_database, command.from_table}, query_context);
+
+    if (!source_table) return;
+
+    auto partition = command.partition;
+    auto column_names = command.column_names;
+    auto key_names = command.key_names;
+
+    LOG_TRACE(log, "INGEST PARTITION {} from {} with columns {} and keys {}",
+                    queryToString(partition),
+                    source_table->getStorageID().getFullTableName(),
+                    std::to_string(column_names.size()),
+                    std::to_string(key_names.size()));
+
+    bool old_val = false;
+    if (!ingesting.compare_exchange_strong(old_val, true, std::memory_order_seq_cst, std::memory_order_relaxed))
+        throw Exception("only one ongoing ingesting task is accepted, please wait for the current task to complete.", ErrorCodes::LOGICAL_ERROR);
+
+    try
+    {
+        auto merge_mutate_blocker = stopMergesAndWait();
+        auto ingest_partition = std::make_shared<IngestPartition>(shared_from_this(), source_table, partition, column_names, key_names, increment.get(), query_context);
+        ingest_partition->ingestPartition();
+
+        // reset to false
+        ingesting = false;
+    }
+    catch (...)
+    {
+        ingesting = false;
         throw;
     }
 }
@@ -1580,9 +1670,9 @@ CheckResults StorageMergeTree::checkData(const ASTPtr & query, ContextPtr local_
             try
             {
                 auto calculated_checksums = checkDataPart(part, false);
-                calculated_checksums.checkEqual(part->checksums, true);
-                auto out = disk->writeFile(tmp_checksums_path, 4096);
-                part->checksums.write(*out);
+                calculated_checksums.checkEqual(*(part->getChecksums()), true);
+                auto out = disk->writeFile(tmp_checksums_path, {.buffer_size = 4096});
+                part->getChecksums()->write(*out);
                 disk->moveFile(tmp_checksums_path, checksums_path);
                 results.emplace_back(part->name, true, "Checksums recounted and written to disk.");
             }

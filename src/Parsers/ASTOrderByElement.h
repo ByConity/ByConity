@@ -25,6 +25,8 @@ public:
 
     String getID(char) const override { return "OrderByElement"; }
 
+    ASTType getType() const override { return ASTType::ASTOrderByElement; }
+
     ASTPtr clone() const override
     {
         auto clone = std::make_shared<ASTOrderByElement>(*this);
@@ -33,6 +35,10 @@ public:
     }
 
     void updateTreeHashImpl(SipHash & hash_state) const override;
+
+    void serialize(WriteBuffer & buf) const override;
+    void deserializeImpl(ReadBuffer & buf) override;
+    static ASTPtr deserialize(ReadBuffer & buf);
 
 protected:
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;

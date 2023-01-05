@@ -12,6 +12,8 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int MULTIPLE_STREAMS_REQUIRED;
+    extern const int UNEXPECTED_DATA_AFTER_PARSED_VALUE;
+    extern const int NOT_IMPLEMENTED;
 }
 
 String ISerialization::Substream::toString() const
@@ -37,6 +39,12 @@ String ISerialization::Substream::toString() const
             return "SparseElements";
         case SparseOffsets:
             return "SparseOffsets";
+        case MapKeyElements:
+            return "MapKeyElements";
+        case MapValueElements:
+            return "MapValueElements";
+        case MapSizes:
+            return "MapSizes";
     }
 
     __builtin_unreachable();
@@ -111,14 +119,17 @@ static String getNameForSubstreamPath(
     using Substream = ISerialization::Substream;
 
     size_t array_level = 0;
+    size_t null_level = 0;
     for (const auto & elem : path)
     {
         if (elem.type == Substream::NullMap)
-            stream_name += ".null";
+            stream_name += ".null" + (null_level > 0 ? toString(null_level): "");
         else if (elem.type == Substream::ArraySizes)
             stream_name += ".size" + toString(array_level);
         else if (elem.type == Substream::ArrayElements)
             ++array_level;
+        else if (elem.type == Substream::NullableElements)
+            ++null_level;
         else if (elem.type == Substream::DictionaryKeys)
             stream_name += ".dict";
         else if (elem.type == Substream::SparseOffsets)
@@ -132,6 +143,18 @@ static String getNameForSubstreamPath(
             stream_name += (escape_tuple_delimiter && elem.escape_tuple_delimiter ?
                 escapeForFileName(".") : ".") + escapeForFileName(elem.tuple_element_name);
         }
+        else if (elem.type == Substream::MapKeyElements)
+        {
+            ++array_level;
+            stream_name += "%2Ekey";
+        }
+        else if (elem.type == Substream::MapValueElements)
+        {
+            ++array_level;
+            stream_name += "%2Evalue";
+        }
+        else if (elem.type == Substream::MapSizes)
+            stream_name += ".size" + toString(array_level);
     }
 
     return stream_name;
@@ -192,6 +215,28 @@ bool ISerialization::isSpecialCompressionAllowed(const SubstreamPath & path)
             return false;
     }
     return true;
+}
+
+void ISerialization::serializeMemComparable(const IColumn &, size_t, WriteBuffer &) const
+{
+    throw Exception("Serialization type doesn't support mem-comparable encoding", ErrorCodes::NOT_IMPLEMENTED);
+}
+
+void ISerialization::deserializeMemComparable(IColumn &, ReadBuffer &) const
+{
+    throw Exception("Serialization type doesn't support mem-comparable encoding", ErrorCodes::NOT_IMPLEMENTED);
+}
+
+void ISerialization::throwUnexpectedDataAfterParsedValue(IColumn & column, ReadBuffer & istr, const FormatSettings & settings, const String & type_name) const
+{
+    WriteBufferFromOwnString ostr;
+    serializeText(column, column.size() - 1, ostr, settings);
+    throw Exception(
+        ErrorCodes::UNEXPECTED_DATA_AFTER_PARSED_VALUE,
+        "Unexpected data '{}' after parsed {} value '{}'",
+        std::string(istr.position(), std::min(size_t(10), istr.available())),
+        type_name,
+        ostr.str());
 }
 
 }

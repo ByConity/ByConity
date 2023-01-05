@@ -10,7 +10,7 @@ namespace DB
 {
 
 class Block;
-class MergeTreeData;
+class MergeTreeMetaBase;
 struct FormatSettings;
 struct MergeTreeDataPartChecksums;
 struct StorageInMemoryMetadata;
@@ -30,14 +30,16 @@ public:
     /// For month-based partitioning.
     explicit MergeTreePartition(UInt32 yyyymm) : value(1, yyyymm) {}
 
-    String getID(const MergeTreeData & storage) const;
+    String getID(const MergeTreeMetaBase & storage) const;
     String getID(const Block & partition_key_sample) const;
 
-    void serializeText(const MergeTreeData & storage, WriteBuffer & out, const FormatSettings & format_settings) const;
+    void serializeText(const MergeTreeMetaBase & storage, WriteBuffer & out, const FormatSettings & format_settings) const;
 
-    void load(const MergeTreeData & storage, const DiskPtr & disk, const String & part_path);
-    void store(const MergeTreeData & storage, const DiskPtr & disk, const String & part_path, MergeTreeDataPartChecksums & checksums) const;
+    void load(const MergeTreeMetaBase & storage, const DiskPtr & disk, const String & part_path);
+    void load(const MergeTreeMetaBase & storage, ReadBuffer & buf);
+    void store(const MergeTreeMetaBase & storage, const DiskPtr & disk, const String & part_path, MergeTreeDataPartChecksums & checksums) const;
     void store(const Block & partition_key_sample, const DiskPtr & disk, const String & part_path, MergeTreeDataPartChecksums & checksums) const;
+    void store(const MergeTreeMetaBase & storage, WriteBuffer & buf) const;
 
     void assign(const MergeTreePartition & other) { value = other.value; }
 
@@ -48,6 +50,11 @@ public:
 
     /// Make a modified partition key with substitution from modulo to moduloLegacy. Used in paritionPruner.
     static KeyDescription adjustPartitionKey(const StorageMetadataPtr & metadata_snapshot, ContextPtr context);
+
+    /** ----------------------- COMPATIBLE CODE BEGIN-------------------------- */
+    /*  compatible with old metastore. remove this later  */
+    void read(const MergeTreeMetaBase & storage, ReadBuffer & buffer);
+    /*  -----------------------  COMPATIBLE CODE END -------------------------- */
 };
 
 }

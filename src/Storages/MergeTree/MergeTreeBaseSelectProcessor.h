@@ -2,7 +2,7 @@
 
 #include <DataStreams/IBlockInputStream.h>
 #include <Storages/MergeTree/MergeTreeBlockReadUtils.h>
-#include <Storages/MergeTree/MergeTreeData.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Storages/SelectQueryInfo.h>
 
 #include <Processors/Sources/SourceWithProgress.h>
@@ -21,7 +21,7 @@ class MergeTreeBaseSelectProcessor : public SourceWithProgress
 public:
     MergeTreeBaseSelectProcessor(
         Block header,
-        const MergeTreeData & storage_,
+        const MergeTreeMetaBase & storage_,
         const StorageMetadataPtr & metadata_snapshot_,
         const PrewhereInfoPtr & prewhere_info_,
         ExpressionActionsSettings actions_settings,
@@ -56,7 +56,7 @@ protected:
     void initializeRangeReaders(MergeTreeReadTask & task);
 
 protected:
-    const MergeTreeData & storage;
+    const MergeTreeMetaBase & storage;
     StorageMetadataPtr metadata_snapshot;
 
     PrewhereInfoPtr prewhere_info;

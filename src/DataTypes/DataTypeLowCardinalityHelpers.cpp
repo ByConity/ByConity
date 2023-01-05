@@ -42,6 +42,9 @@ DataTypePtr recursiveRemoveLowCardinality(const DataTypePtr & type)
     if (const auto * low_cardinality_type = typeid_cast<const DataTypeLowCardinality *>(type.get()))
         return low_cardinality_type->getDictionaryType();
 
+    if (const auto * low_cardinality_type = typeid_cast<const DataTypeFullLowCardinality *>(type.get()))
+        return low_cardinality_type->getDictionaryType();
+
     return type;
 }
 

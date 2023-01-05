@@ -28,6 +28,8 @@ public:
             throw Exception("Disk path must end with '/', but '" + disk_path + "' doesn't.", ErrorCodes::LOGICAL_ERROR);
     }
 
+    UInt64 getID() const override;
+
     const String & getName() const override { return name; }
 
     const String & getPath() const override { return disk_path; }
@@ -72,16 +74,11 @@ public:
 
     std::unique_ptr<ReadBufferFromFileBase> readFile(
         const String & path,
-        size_t buf_size,
-        size_t estimated_size,
-        size_t aio_threshold,
-        size_t mmap_threshold,
-        MMappedFileCache * mmap_cache) const override;
+        const ReadSettings& settings) const override;
 
     std::unique_ptr<WriteBufferFromFileBase> writeFile(
         const String & path,
-        size_t buf_size,
-        WriteMode mode) override;
+        const WriteSettings& settings) override;
 
     void removeFile(const String & path) override;
     void removeFileIfExists(const String & path) override;

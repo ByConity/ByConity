@@ -3,9 +3,9 @@
 #include <Storages/MergeTree/IMergedBlockOutputStream.h>
 #include <Columns/ColumnArray.h>
 
-
 namespace DB
 {
+class MergeTreeDataPartWriterWide;
 
 /** To write one part.
   * The data refers to one partition, and is written in one part.
@@ -13,18 +13,25 @@ namespace DB
 class MergedBlockOutputStream final : public IMergedBlockOutputStream
 {
 public:
+    struct WriteSettings
+    {
+        bool only_recode = false;
+    };
+
     MergedBlockOutputStream(
         const MergeTreeDataPartPtr & data_part,
         const StorageMetadataPtr & metadata_snapshot_,
         const NamesAndTypesList & columns_list_,
         const MergeTreeIndices & skip_indices,
         CompressionCodecPtr default_codec_,
-        bool blocks_are_granules_size = false);
+        bool blocks_are_granules_size = false,
+        bool optimize_map_column_serialization_ = false);
 
     Block getHeader() const override { return metadata_snapshot->getSampleBlock(); }
 
     /// If the data is pre-sorted.
     void write(const Block & block) override;
+    void write(const Block & block, const WriteSettings & write_settings);
 
     /** If the data is not sorted, but we have previously calculated the permutation, that will sort it.
       * This method is used to save RAM, since you do not need to keep two blocks at once - the original one and the sorted one.
@@ -39,6 +46,9 @@ public:
             bool sync = false,
             const NamesAndTypesList * total_columns_list = nullptr,
             MergeTreeData::DataPart::Checksums * additional_column_checksums = nullptr);
+
+    size_t getRowsCount() const { return rows_count; }
+    void updateWriterStream(const NameAndTypePair &pair) override;
 
 private:
     /** If `permutation` is given, it rearranges the values in the columns when writing.

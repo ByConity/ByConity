@@ -20,6 +20,8 @@ namespace ErrorCodes
 
 bool decimalCheckComparisonOverflow(ContextPtr context);
 bool decimalCheckArithmeticOverflow(ContextPtr context);
+bool decimalArithmeticPromoteStorage(ContextPtr context);
+bool decimalDivisionUseExtendedScale(ContextPtr context);
 
 inline UInt32 leastDecimalPrecisionFor(TypeIndex int_type)
 {
@@ -126,7 +128,7 @@ public:
 
     /// @returns multiplier for U to become T with correct scale
     template <typename U>
-    T scaleFactorFor(const DataTypeDecimalBase<U> & x, bool) const
+    T scaleFactorFor(const DataTypeDecimalBase<U> & x) const
     {
         if (getScale() < x.getScale())
             throw Exception("Decimal result's scale is less than argument's one", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
@@ -135,10 +137,8 @@ public:
     }
 
     template <typename U>
-    T scaleFactorFor(const DataTypeNumber<U> & , bool is_multiply_or_divisor) const
+    T scaleFactorFor(const DataTypeNumber<U> &) const
     {
-        if (is_multiply_or_divisor)
-            return T(1);
         return getScaleMultiplier();
     }
 
@@ -164,24 +164,24 @@ inline const DataTypeDecimalBase<T> * checkDecimalBase(const IDataType & data_ty
     return nullptr;
 }
 
-template <bool is_multiply, bool is_division, typename T, typename U, template <typename> typename DecimalType>
-inline auto decimalResultType(const DecimalType<T> & tx, const DecimalType<U> & ty)
+template <bool is_multiply, bool is_division, bool allow_promote_storage, typename T, typename U, template <typename> typename DecimalType>
+inline auto decimalResultType(const DecimalType<T> & tx, const DecimalType<U> & ty, bool use_extended_scale)
 {
-    const auto result_trait = DecimalUtils::binaryOpResult<is_multiply, is_division>(tx, ty);
+    const auto result_trait = DecimalUtils::binaryOpResult<is_multiply, is_division, allow_promote_storage>(tx, ty, use_extended_scale);
     return DecimalType<typename decltype(result_trait)::FieldType>(result_trait.precision, result_trait.scale);
 }
 
-template <bool is_multiply, bool is_division, typename T, typename U, template <typename> typename DecimalType>
-inline const DecimalType<T> decimalResultType(const DecimalType<T> & tx, const DataTypeNumber<U> & ty)
+template <bool is_multiply, bool is_division, bool allow_promote_storage, typename T, typename U, template <typename> typename DecimalType>
+inline auto decimalResultType(const DecimalType<T> & tx, const DataTypeNumber<U> & ty, bool use_extended_scale)
 {
-    const auto result_trait = DecimalUtils::binaryOpResult<is_multiply, is_division>(tx, ty);
+    const auto result_trait = DecimalUtils::binaryOpResult<is_multiply, is_division, allow_promote_storage>(tx, ty, use_extended_scale);
     return DecimalType<typename decltype(result_trait)::FieldType>(result_trait.precision, result_trait.scale);
 }
 
-template <bool is_multiply, bool is_division, typename T, typename U, template <typename> typename DecimalType>
-inline const DecimalType<U> decimalResultType(const DataTypeNumber<T> & tx, const DecimalType<U> & ty)
+template <bool is_multiply, bool is_division, bool allow_promote_storage, typename T, typename U, template <typename> typename DecimalType>
+inline auto decimalResultType(const DataTypeNumber<T> & tx, const DecimalType<U> & ty, bool use_extended_scale)
 {
-    const auto result_trait = DecimalUtils::binaryOpResult<is_multiply, is_division>(tx, ty);
+    const auto result_trait = DecimalUtils::binaryOpResult<is_multiply, is_division, allow_promote_storage>(tx, ty, use_extended_scale);
     return DecimalType<typename decltype(result_trait)::FieldType>(result_trait.precision, result_trait.scale);
 }
 

@@ -1,5 +1,5 @@
 #include <Storages/MergeTree/MergeTreePartition.h>
-#include <Storages/MergeTree/MergeTreeData.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
 #include <IO/HashingWriteBuffer.h>
 #include <Common/FieldVisitors.h>
@@ -41,6 +41,16 @@ namespace
         void operator() (const Null &) const
         {
             UInt8 type = Field::Types::Null;
+            hash.update(type);
+        }
+        void operator() (const NegativeInfinity &) const
+        {
+            UInt8 type = Field::Types::NegativeInfinity;
+            hash.update(type);
+        }
+        void operator() (const PositiveInfinity &) const
+        {
+            UInt8 type = Field::Types::PositiveInfinity;
             hash.update(type);
         }
         void operator() (const UInt64 & x) const
@@ -123,6 +133,12 @@ namespace
             for (const auto & elem : x)
                 applyVisitor(*this, elem);
         }
+
+        [[ noreturn ]] void operator() (const ByteMap & ) const
+        {
+            throw Exception("Map hash not implemented", ErrorCodes::NOT_IMPLEMENTED);
+        }
+
         void operator() (const DecimalField<Decimal32> & x) const
         {
             UInt8 type = Field::Types::Decimal32;
@@ -156,15 +172,24 @@ namespace
             hash.update(x.data.size());
             hash.update(x.data.data(), x.data.size());
         }
+        void operator() (const BitMap64 & x) const
+        {
+            UInt8 type = Field::Types::BitMap64;
+            hash.update(type);
+            hash.update(x.cardinality());
+
+            for (roaring::Roaring64MapSetBitForwardIterator it(x); it != x.end(); ++it)
+                applyVisitor(*this, Field(*it));
+        }
     };
 }
 
 static std::unique_ptr<ReadBufferFromFileBase> openForReading(const DiskPtr & disk, const String & path)
 {
-    return disk->readFile(path, std::min(size_t(DBMS_DEFAULT_BUFFER_SIZE), disk->getFileSize(path)));
+    return disk->readFile(path, {.buffer_size = std::min(size_t(DBMS_DEFAULT_BUFFER_SIZE), disk->getFileSize(path))});
 }
 
-String MergeTreePartition::getID(const MergeTreeData & storage) const
+String MergeTreePartition::getID(const MergeTreeMetaBase & storage) const
 {
     return getID(storage.getInMemoryMetadataPtr()->getPartitionKey().sample_block);
 }
@@ -227,7 +252,7 @@ String MergeTreePartition::getID(const Block & partition_key_sample) const
     return result;
 }
 
-void MergeTreePartition::serializeText(const MergeTreeData & storage, WriteBuffer & out, const FormatSettings & format_settings) const
+void MergeTreePartition::serializeText(const MergeTreeMetaBase & storage, WriteBuffer & out, const FormatSettings & format_settings) const
 {
     auto metadata_snapshot = storage.getInMemoryMetadataPtr();
     const auto & partition_key_sample = metadata_snapshot->getPartitionKey().sample_block;
@@ -242,7 +267,7 @@ void MergeTreePartition::serializeText(const MergeTreeData & storage, WriteBuffe
         const DataTypePtr & type = partition_key_sample.getByPosition(0).type;
         auto column = type->createColumn();
         column->insert(value[0]);
-        type->getDefaultSerialization()->serializeText(*column, 0, out, format_settings);
+        type->getDefaultSerialization()->serializeTextQuoted(*column, 0, out, format_settings);
     }
     else
     {
@@ -263,7 +288,7 @@ void MergeTreePartition::serializeText(const MergeTreeData & storage, WriteBuffe
     }
 }
 
-void MergeTreePartition::load(const MergeTreeData & storage, const DiskPtr & disk, const String & part_path)
+void MergeTreePartition::load(const MergeTreeMetaBase & storage, const DiskPtr & disk, const String & part_path)
 {
     auto metadata_snapshot = storage.getInMemoryMetadataPtr();
     if (!metadata_snapshot->hasPartitionKey())
@@ -277,7 +302,19 @@ void MergeTreePartition::load(const MergeTreeData & storage, const DiskPtr & dis
         partition_key_sample.getByPosition(i).type->getDefaultSerialization()->deserializeBinary(value[i], *file);
 }
 
-void MergeTreePartition::store(const MergeTreeData & storage, const DiskPtr & disk, const String & part_path, MergeTreeDataPartChecksums & checksums) const
+void MergeTreePartition::load(const MergeTreeMetaBase & storage, ReadBuffer & buf)
+{
+    auto metadata_snapshot = storage.getInMemoryMetadataPtr();
+    if (!metadata_snapshot->hasPartitionKey())
+        return;
+
+    const auto & partition_key_sample = adjustPartitionKey(metadata_snapshot, storage.getContext()).sample_block;
+    value.resize(partition_key_sample.columns());
+    for (size_t i = 0; i < partition_key_sample.columns(); ++i)
+        partition_key_sample.getByPosition(i).type->getDefaultSerialization()->deserializeBinary(value[i], buf);
+}
+
+void MergeTreePartition::store(const MergeTreeMetaBase & storage, const DiskPtr & disk, const String & part_path, MergeTreeDataPartChecksums & checksums) const
 {
     auto metadata_snapshot = storage.getInMemoryMetadataPtr();
     const auto & partition_key_sample = adjustPartitionKey(metadata_snapshot, storage.getContext()).sample_block;
@@ -298,6 +335,18 @@ void MergeTreePartition::store(const Block & partition_key_sample, const DiskPtr
     checksums.files["partition.dat"].file_size = out_hashing.count();
     checksums.files["partition.dat"].file_hash = out_hashing.getHash();
     out->finalize();
+}
+
+void MergeTreePartition::store(const MergeTreeMetaBase & storage, WriteBuffer & buf) const
+{
+    auto metadata_snapshot = storage.getInMemoryMetadataPtr();
+    const auto & partition_key_sample = adjustPartitionKey(metadata_snapshot, storage.getContext()).sample_block;
+
+    if (!partition_key_sample)
+        return;
+    
+    for (size_t i = 0; i < value.size(); ++i)
+        partition_key_sample.getByPosition(i).type->getDefaultSerialization()->serializeBinary(value[i], buf);
 }
 
 void MergeTreePartition::create(const StorageMetadataPtr & metadata_snapshot, Block block, size_t row, ContextPtr context)
@@ -350,5 +399,35 @@ KeyDescription MergeTreePartition::adjustPartitionKey(const StorageMetadataPtr &
 
     return partition_key;
 }
+
+/** ----------------------- COMPATIBLE CODE BEGIN-------------------------- */
+/*  compatible with old metastore. remove this later  */
+
+#define META_FIELD_DELIMITER '\0'
+void MergeTreePartition::read(const MergeTreeMetaBase & storage, ReadBuffer & buffer)
+{
+    auto metadata_snapshot = storage.getInMemoryMetadataPtr();
+    /// If there is no partition key add 0 as partition row size
+    if (!metadata_snapshot->hasPartitionKey())
+    {
+        size_t partition_row_size;
+        readText(partition_row_size, buffer);
+        assertChar(META_FIELD_DELIMITER, buffer);
+        return;
+    }
+
+    /// firstly, read partition row size.
+    size_t partition_row_size;
+    readText(partition_row_size, buffer);
+    assertChar(META_FIELD_DELIMITER, buffer);
+    if (!partition_row_size)
+        return;
+
+    const auto & partition_key_sample = adjustPartitionKey(metadata_snapshot, storage.getContext()).sample_block;
+    value.resize(partition_key_sample.columns());
+    for (size_t i = 0; i < partition_key_sample.columns(); ++i)
+        partition_key_sample.getByPosition(i).type->getDefaultSerialization()->deserializeBinary(value[i], buffer);
+}
+/*  -----------------------  COMPATIBLE CODE END -------------------------- */
 
 }

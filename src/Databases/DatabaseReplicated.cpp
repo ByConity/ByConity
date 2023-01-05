@@ -430,7 +430,7 @@ static UUID getTableUUIDIfReplicated(const String & metadata, ContextPtr context
     if (!looks_like_replicated)
         return UUIDHelpers::Nil;
 
-    ParserCreateQuery parser;
+    ParserCreateQuery parser(ParserSettings::valueOf(context->getSettingsRef().dialect_type));
     auto size = context->getSettingsRef().max_query_size;
     auto depth = context->getSettingsRef().max_parser_depth;
     ASTPtr query = parseQuery(parser, metadata, size, depth);
@@ -597,9 +597,11 @@ void DatabaseReplicated::recoverLostReplica(const ZooKeeperPtr & current_zookeep
             continue;
         }
 
-        auto query_ast = parseQueryFromMetadataInZooKeeper(name_and_meta.first, name_and_meta.second);
-        LOG_INFO(log, "Executing {}", serializeAST(*query_ast));
         auto create_query_context = make_query_context();
+        auto query_ast = parseQueryFromMetadataInZooKeeper(name_and_meta.first, name_and_meta.second,
+                                                           ParserSettings::valueOf(create_query_context->getSettingsRef().dialect_type));
+
+        LOG_INFO(log, "Executing {}", serializeAST(*query_ast));
         InterpreterCreateQuery(query_ast, create_query_context).execute();
     }
 
@@ -655,9 +657,9 @@ std::map<String, String> DatabaseReplicated::tryGetConsistentMetadataSnapshot(co
     return table_name_to_metadata;
 }
 
-ASTPtr DatabaseReplicated::parseQueryFromMetadataInZooKeeper(const String & node_name, const String & query)
+ASTPtr DatabaseReplicated::parseQueryFromMetadataInZooKeeper(const String & node_name, const String & query, ParserSettingsImpl dt)
 {
-    ParserCreateQuery parser;
+    ParserCreateQuery parser(dt);
     String description = "in ZooKeeper " + zookeeper_path + "/metadata/" + node_name;
     auto ast = parseQuery(parser, query, description, 0, getContext()->getSettingsRef().max_parser_depth);
 

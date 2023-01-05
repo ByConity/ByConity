@@ -282,6 +282,7 @@ public:
     /// (for functions like isNull(x))
     virtual ColumnNumbers getArgumentsThatDontImplyNullableReturnType(size_t number_of_arguments [[maybe_unused]]) const { return {}; }
 
+    friend class ExpressionInterpreter;
 protected:
 
     virtual FunctionBasePtr buildImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type) const = 0;
@@ -328,7 +329,7 @@ private:
 using FunctionOverloadResolverPtr = std::shared_ptr<IFunctionOverloadResolver>;
 
 /// Old function interface. Check documentation in IFunction.h.
-/// If client do not need statefull properties it can implement this interface.
+/// If client do not need stateful properties it can implement this interface.
 class IFunction
 {
 public:

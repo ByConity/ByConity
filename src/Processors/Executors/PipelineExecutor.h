@@ -30,7 +30,8 @@ public:
     /// During pipeline execution new processors can appear. They will be added to existing set.
     ///
     /// Explicit graph representation is built in constructor. Throws if graph is not correct.
-    explicit PipelineExecutor(Processors & processors_, QueryStatus * elem = nullptr);
+    explicit PipelineExecutor(Processors & processors_, QueryStatus * elem = nullptr, bool need_processors_profiles_ = false);
+    ~PipelineExecutor();
 
     /// Execute pipeline in multiple threads. Must be called once.
     /// In case of exception during execution throws any occurred.
@@ -43,12 +44,23 @@ public:
 
     const Processors & getProcessors() const { return processors; }
 
+    const ExecutingGraphPtr & getExecutingGraph() const { return graph; }
+
     /// Cancel execution. May be called from another thread.
     void cancel();
+
+    /// Checks the query time limits (cancelled or timeout). Throws on cancellation or when time limit is reached and the query uses "break"
+    bool checkTimeLimit();
+    /// Same as checkTimeLimit but it never throws. It returns false on cancellation or time limit reached
+    [[nodiscard]] bool checkTimeLimitSoft();
+
+    String dumpPipeline() const;
 
 private:
     Processors & processors;
     std::mutex processors_mutex;
+    
+    bool need_processors_profiles;
 
     ExecutingGraphPtr graph;
 
@@ -158,7 +170,7 @@ private:
     void executeSingleThread(size_t thread_num, size_t num_threads);
     void finish();
 
-    String dumpPipeline() const;
+    void dumpPipelineToFile(const String & suffix) const;
 };
 
 using PipelineExecutorPtr = std::shared_ptr<PipelineExecutor>;

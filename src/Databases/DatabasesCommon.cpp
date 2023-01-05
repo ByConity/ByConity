@@ -1,14 +1,16 @@
 #include <Databases/DatabasesCommon.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/Context.h>
+#include <Parsers/ASTCreateQuery.h>
+#include <Catalog/Catalog.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/formatAST.h>
 #include <Storages/StorageDictionary.h>
 #include <Storages/StorageFactory.h>
+#include <Storages/StorageMaterializedView.h>
 #include <Common/typeid_cast.h>
 #include <Common/escapeForFileName.h>
 #include <TableFunctions/TableFunctionFactory.h>
-
 
 namespace DB
 {
@@ -18,6 +20,32 @@ namespace ErrorCodes
     extern const int TABLE_ALREADY_EXISTS;
     extern const int UNKNOWN_TABLE;
     extern const int UNKNOWN_DATABASE;
+}
+
+String getTableDefinitionFromCreateQuery(const ASTPtr & query, bool attach)
+{
+    ASTPtr query_clone = query->clone();
+    auto & create = query_clone->as<ASTCreateQuery &>();
+
+    /// We remove everything that is not needed for ATTACH from the query.
+    create.attach = attach;
+    create.as_database.clear();
+    create.as_table.clear();
+    create.if_not_exists = false;
+    create.is_populate = false;
+    create.replace_view = false;
+
+    /// For views it is necessary to save the SELECT query itself, for the rest - on the contrary
+    if (!create.is_ordinary_view && !create.is_materialized_view)
+        create.select = nullptr;
+
+    create.format = nullptr;
+    create.out_file = nullptr;
+
+    WriteBufferFromOwnString statement_stream;
+    formatAST(create, statement_stream, false);
+    statement_stream << '\n';
+    return statement_stream.str();
 }
 
 DatabaseWithOwnTablesBase::DatabaseWithOwnTablesBase(const String & name_, const String & logger, ContextPtr context_)
@@ -145,6 +173,18 @@ void DatabaseWithOwnTablesBase::shutdown()
     tables.clear();
 }
 
+std::map<String, String> DatabaseWithOwnTablesBase::getBrokenTables()
+{
+    std::lock_guard lock(mutex);
+    return brokenTables;
+}
+
+void DatabaseWithOwnTablesBase::clearBrokenTables()
+{
+    std::lock_guard lock(mutex);
+    brokenTables.clear();
+}
+
 DatabaseWithOwnTablesBase::~DatabaseWithOwnTablesBase()
 {
     try
@@ -164,6 +204,28 @@ StoragePtr DatabaseWithOwnTablesBase::getTableUnlocked(const String & table_name
         return it->second;
     throw Exception(ErrorCodes::UNKNOWN_TABLE, "Table {}.{} doesn't exist",
                     backQuote(database_name), backQuote(table_name));
+}
+
+std::vector<StoragePtr> getViews(const StorageID & storage_id, const ContextPtr & context)
+{
+    std::vector<StoragePtr> views;
+    auto storage = DatabaseCatalog::instance().getTable(storage_id, context);
+    auto start_time = context->getTimestamp();
+    auto catalog_client = context->getCnchCatalog();
+    if (!catalog_client)
+        throw Exception("get catalog client failed", ErrorCodes::LOGICAL_ERROR);
+    auto all_views_from_catalog = catalog_client->getAllViewsOn(*context, storage, start_time);
+    for (auto & dependence : all_views_from_catalog)
+    {
+        auto table = DatabaseCatalog::instance().tryGetTable(
+            dependence->getStorageID(), context);
+        if (table)
+        {
+            if (dynamic_cast<StorageMaterializedView*>(table.get()))
+                views.emplace_back(table);
+        }
+    }
+    return views;
 }
 
 }

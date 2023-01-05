@@ -81,7 +81,6 @@ private:
     std::vector<size_t> attempts_to_deduce_template_cached;
     std::vector<size_t> rows_parsed_using_template;
 
-    ParserExpression parser;
     ConstantExpressionTemplates templates;
     ConstantExpressionTemplate::Cache templates_cache;
 

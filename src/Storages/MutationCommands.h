@@ -26,15 +26,19 @@ struct MutationCommand
     {
         EMPTY,     /// Not used.
         DELETE,
+        FAST_DELETE,
         UPDATE,
         MATERIALIZE_INDEX,
         MATERIALIZE_PROJECTION,
+        ADD_COLUMN, /// For detecting conflicts
         READ_COLUMN, /// Read column and apply conversions (MODIFY COLUMN alter query).
         DROP_COLUMN,
         DROP_INDEX,
         DROP_PROJECTION,
         MATERIALIZE_TTL,
         RENAME_COLUMN,
+        CLEAR_MAP_KEY,
+        RECLUSTER,
     };
 
     Type type = EMPTY;
@@ -49,8 +53,11 @@ struct MutationCommand
     String index_name;
     String projection_name;
 
-    /// For MATERIALIZE INDEX, UPDATE and DELETE.
+    /// For MATERIALIZE INDEX, UPDATE and DELETE/FASTDELETE.
     ASTPtr partition;
+
+    /// For CLEAR MAP KEYS
+    ASTPtr map_keys;
 
     /// For reads, drops and etc.
     String column_name;
@@ -62,6 +69,9 @@ struct MutationCommand
     /// Column rename_to
     String rename_to;
 
+    /// For FASTDELETE columns
+    ASTPtr columns;
+
     /// If parse_alter_commands, than consider more Alter commands as mutation commands
     static std::optional<MutationCommand> parse(ASTAlterCommand * command, bool parse_alter_commands = false);
 };
@@ -72,8 +82,29 @@ class MutationCommands : public std::vector<MutationCommand>
 public:
     std::shared_ptr<ASTExpressionList> ast() const;
 
+    bool willMutateData() const;
+
+    /// whether current commands can be executed together with other commands
+    bool requireIndependentExecution() const;
+
+    bool allOf(MutationCommand::Type type) const;
+
     void writeText(WriteBuffer & out) const;
     void readText(ReadBuffer & in);
+    bool changeSchema() const
+    {
+        for (const auto & command : *this)
+        {
+            if (command.type != MutationCommand::EMPTY &&
+                /* command.type != MutationCommand::BUILD_BITMAP && */
+                command.type != MutationCommand::CLEAR_MAP_KEY &&
+                command.type != MutationCommand::MATERIALIZE_INDEX /* &&
+                command.type != MutationCommand::DROP_BUILD_BITMAP */)
+
+                return true;
+        }
+        return false;
+    }
 };
 
 }

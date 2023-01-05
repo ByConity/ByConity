@@ -13,6 +13,25 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
+const char * metaOpsToString(MetastoreOperation opt)
+{
+    switch (opt)
+    {
+        case MetastoreOperation::SYNC:
+            return "SYNC";
+        case MetastoreOperation::START_AUTO_SYNC:
+            return "START AUTO SYNC";
+        case MetastoreOperation::STOP_AUTO_SYNC:
+            return "STOP AUTO SYNC";
+        case MetastoreOperation::DROP_ALL_KEY:
+            return "DROP";
+        case MetastoreOperation::DROP_BY_KEY:
+            return "DROP BY KEY";
+        default:
+            throw Exception("Unknown metastore operation.", ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
 
 const char * ASTSystemQuery::typeToString(Type type)
 {
@@ -32,6 +51,10 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "DROP UNCOMPRESSED CACHE";
         case Type::DROP_MMAP_CACHE:
             return "DROP MMAP CACHE";
+        case Type::DROP_CHECKSUMS_CACHE:
+            return "DROP CHECKSUMS CACHE";
+        case Type::DROP_CNCH_PART_CACHE:
+            return "DROP CNCH PART CACHE";
 #if USE_EMBEDDED_COMPILER
         case Type::DROP_COMPILED_EXPRESSION_CACHE:
             return "DROP COMPILED EXPRESSION CACHE";
@@ -52,6 +75,10 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "SYNC REPLICA";
         case Type::FLUSH_DISTRIBUTED:
             return "FLUSH DISTRIBUTED";
+        case Type::START_RESOURCE_GROUP:
+            return "START RESOURCE GROUP";
+        case Type::STOP_RESOURCE_GROUP:
+            return "STOP RESOURCE GROUP";
         case Type::RELOAD_DICTIONARY:
             return "RELOAD DICTIONARY";
         case Type::RELOAD_DICTIONARIES:
@@ -64,12 +91,22 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "RELOAD EMBEDDED DICTIONARIES";
         case Type::RELOAD_CONFIG:
             return "RELOAD CONFIG";
+        case Type::RELOAD_FORMAT_SCHEMA:
+            return "RELOAD FORMAT SCHEMA";
         case Type::RELOAD_SYMBOLS:
             return "RELOAD SYMBOLS";
         case Type::STOP_MERGES:
             return "STOP MERGES";
         case Type::START_MERGES:
             return "START MERGES";
+        case Type::REMOVE_MERGES:
+            return "REMOVE MERGES";
+        case Type::START_GC:
+            return "START GC";
+        case Type::STOP_GC:
+            return "STOP GC";
+        case Type::FORCE_GC:
+            return "FORCE GC";
         case Type::STOP_TTL_MERGES:
             return "STOP TTL MERGES";
         case Type::START_TTL_MERGES:
@@ -96,15 +133,45 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "START DISTRIBUTED SENDS";
         case Type::FLUSH_LOGS:
             return "FLUSH LOGS";
+        case Type::FLUSH_CNCH_LOG:
+            return "FLUSH CNCH LOG";
+        case Type::STOP_CNCH_LOG:
+            return "STOP CNCH LOG";
+        case Type::RESUME_CNCH_LOG:
+            return "RESUME CNCH LOG";
         case Type::RESTART_DISK:
             return "RESTART DISK";
-        default:
-            throw Exception("Unknown SYSTEM query command", ErrorCodes::LOGICAL_ERROR);
+        case Type::START_CONSUME:
+            return "START CONSUME";
+        case Type::STOP_CONSUME:
+            return "STOP CONSUME";
+        case Type::RESTART_CONSUME:
+            return "RESTART CONSUME";
+        case Type::FETCH_PARTS:
+            return "FETCH PARTS INTO";
+        case Type::METASTORE:
+            return "METASTORE";
+        case Type::CLEAR_BROKEN_TABLES:
+            return "CLEAR BROKEN TABLES";
+        case Type::DEDUP:
+            return "DEDUP";
+        case Type::SYNC_DEDUP_WORKER:
+            return "SYNC DEDUP WORKER";
+        case Type::START_DEDUP_WORKER:
+            return "START DEDUP WORKER";
+        case Type::STOP_DEDUP_WORKER:
+            return "STOP DEDUP WORKER";
+        case Type::DUMP_SERVER_STATUS:
+            return "DUMP SERVER STATUS";
+        case Type::UNKNOWN:
+        case Type::END:
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown SYSTEM query command");
     }
+    __builtin_unreachable();
 }
 
 
-void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const
+void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
 {
     settings.ostr << (settings.hilite ? hilite_keyword : "") << "SYSTEM ";
     settings.ostr << typeToString(type) << (settings.hilite ? hilite_none : "");
@@ -154,6 +221,15 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState &, 
                       << (settings.hilite ? hilite_none : "");
     };
 
+    auto print_metastore_options = [&]
+    {
+        settings.ostr << " " << (settings.hilite ? hilite_keyword : "") << metaOpsToString(meta_ops.operation);
+        if (!meta_ops.drop_key.empty())
+        {
+            settings.ostr << " " << quoteString(meta_ops.drop_key);
+        }
+    };
+
     if (!cluster.empty())
         formatOnCluster(settings);
 
@@ -170,7 +246,8 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState &, 
         || type == Type::STOP_REPLICATION_QUEUES
         || type == Type::START_REPLICATION_QUEUES
         || type == Type::STOP_DISTRIBUTED_SENDS
-        || type == Type::START_DISTRIBUTED_SENDS)
+        || type == Type::START_DISTRIBUTED_SENDS
+        || type == Type::DROP_CHECKSUMS_CACHE)
     {
         if (!table.empty())
             print_database_table();
@@ -181,7 +258,11 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState &, 
             || type == Type::RESTORE_REPLICA
             || type == Type::SYNC_REPLICA
             || type == Type::FLUSH_DISTRIBUTED
-            || type == Type::RELOAD_DICTIONARY)
+            || type == Type::RELOAD_DICTIONARY
+            || type == Type::START_CONSUME
+            || type == Type::STOP_CONSUME
+            || type == Type::RESTART_CONSUME
+            || type == Type::DROP_CNCH_PART_CACHE)
     {
         print_database_table();
     }
@@ -196,6 +277,47 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState &, 
             << (settings.hilite ? hilite_keyword : "") << " SECOND"
             << (settings.hilite ? hilite_none : "");
     }
+    else if (type == Type::FETCH_PARTS)
+    {
+        print_database_table();
+        settings.ostr << " ";
+        target_path->formatImpl(settings, state, frame);
+    }
+    else if (type == Type::METASTORE)
+    {
+        print_metastore_options();
+        if (meta_ops.operation > MetastoreOperation::STOP_AUTO_SYNC)
+            print_database_table();
+    }
+    else if (type == Type::DEDUP)
+    {
+        print_database_table();
+        if (partition)
+        {
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << " PARTITION " << (settings.hilite ? hilite_none : "");
+            partition->formatImpl(settings, state, frame);
+        }
+        settings.ostr << " FOR REPAIR";
+    }
+}
+
+ASTPtr ASTSystemQuery::clone() const
+{
+    auto res = std::make_shared<ASTSystemQuery>(*this);
+    res->children.clear();
+
+    if (predicate)
+    {
+        res->predicate = predicate->clone();
+        res->children.push_back(res->predicate);
+    }
+    if (values_changes)
+    {
+        res->values_changes = values_changes->clone();
+        res->children.push_back(res->values_changes);
+    }
+
+    return res;
 }
 
 

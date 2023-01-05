@@ -14,10 +14,13 @@
 #include <Storages/SelectQueryDescription.h>
 #include <Storages/StorageInMemoryMetadata.h>
 #include <Storages/TableLockHolder.h>
+#include <Disks/IDisk.h>
 #include <Common/ActionLock.h>
 #include <Common/Exception.h>
 #include <Common/RWLock.h>
 #include <Common/TypePromotion.h>
+#include <Common/HostWithPorts.h>
+#include <Transaction/TxnTimestamp.h>
 
 #include <optional>
 #include <shared_mutex>
@@ -38,10 +41,16 @@ class ASTInsertQuery;
 
 struct Settings;
 
+using StorageType = DiskType::Type;
+
 class AlterCommands;
 class MutationCommands;
 struct PartitionCommand;
 using PartitionCommands = std::vector<PartitionCommand>;
+
+struct ManipulationTaskParams;
+class ManipulationTask;
+using ManipulationTaskPtr = std::shared_ptr<ManipulationTask>;
 
 class IProcessor;
 using ProcessorPtr = std::shared_ptr<IProcessor>;
@@ -61,7 +70,12 @@ struct StreamLocalLimits;
 class EnabledQuota;
 struct SelectQueryInfo;
 
+struct ManipulationTaskParams;
+
 using NameDependencies = std::unordered_map<String, std::vector<String>>;
+
+using PartNamesWithDisks = std::vector<std::pair<String, DiskPtr>>;
+using PartNamesWithDiskNames = std::vector<std::pair<String, String>>;
 
 struct ColumnSize
 {
@@ -101,6 +115,9 @@ public:
 
     /// The name of the table.
     StorageID getStorageID() const;
+    std::string getTableName() const { return storage_id.table_name; }
+    std::string getDatabaseName() const { return storage_id.database_name; }
+    UUID getStorageUUID() const { return storage_id.uuid; }
 
     /// Returns true if the storage receives data from a remote server or servers.
     virtual bool isRemote() const { return false; }
@@ -125,6 +142,9 @@ public:
 
     /// Returns true if the storage supports parallel insert.
     virtual bool supportsParallelInsert() const { return false; }
+
+    /// Return true if the storage use MAP flattened model. i.e. MergeTree for now
+    virtual bool supportsMapImplicitColumn() const { return false; }
 
     /// Returns true if the storage supports deduplication of inserted data blocks.
     virtual bool supportsDeduplication() const { return false; }
@@ -185,6 +205,15 @@ public:
 
     NameDependencies getDependentViewsByColumn(ContextPtr context) const;
 
+    /// Check whether column names and data types are valid. If not, throw Exception.
+    virtual void checkColumnsValidity([[maybe_unused]] const ColumnsDescription & columns) const {}
+
+    void setCreateTableSql(String sql) { create_table_sql = std::move(sql); }
+    String getCreateTableSql() const { return create_table_sql; }
+
+    virtual bool isBucketTable() const {return false;}
+    virtual UInt64 getTableHashForClusterBy() const {return 0;}
+
 protected:
     /// Returns whether the column is virtual - by default all columns are real.
     /// Initially reserved virtual column name may be shadowed by real column.
@@ -199,6 +228,9 @@ private:
     /// Multiversion storage metadata. Allows to read/write storage metadata
     /// without locks.
     MultiVersionStorageMetadataPtr metadata;
+
+    /// cnch specific members
+    String create_table_sql;
 
     RWLockImpl::LockHolder tryLockTimed(
         const RWLock & rwlock, RWLockImpl::Type type, const String & query_id, const std::chrono::milliseconds & acquire_timeout) const;
@@ -317,6 +349,18 @@ public:
         size_t /*max_block_size*/,
         unsigned /*num_streams*/);
 
+    /// A version of read that creating ReadFromStorageStep for Distributed Stages Mode.
+    virtual void read(
+        QueryPlan & query_plan,
+        const Names & /*column_names*/,
+        const StorageMetadataPtr & /*metadata_snapshot*/,
+        SelectQueryInfo & /*query_info*/,
+        ContextPtr /*context*/,
+        QueryProcessingStage::Enum /*processed_stage*/,
+        size_t /*max_block_size*/,
+        unsigned /*num_streams*/,
+        bool /*distributed_stages_*/);
+
     /** Writes the data to a table.
       * Receives a description of the query, which can contain information about the data write method.
       * Returns an object by which you can write data sequentially.
@@ -345,6 +389,11 @@ public:
         ContextPtr /*context*/)
     {
         return nullptr;
+    }
+
+    virtual HostWithPortsVec getWriteWorkers(const ASTPtr & /*query*/, ContextPtr /*context*/)
+    {
+        throw Exception("Method getWriteWorker is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
     /** Delete the table data. Called before deleting the directory with the data.
@@ -441,6 +490,11 @@ public:
         throw Exception("Mutations are not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
+    virtual ManipulationTaskPtr manipulate(const ManipulationTaskParams &, ContextPtr)
+    {
+        throw Exception("Manipulation task are not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
     /** If the table have to do some complicated work on startup,
       *  that must be postponed after creation of table object
       *  (like launching some background threads),
@@ -489,6 +543,14 @@ public:
 
     std::atomic<bool> is_dropped{false};
 
+    virtual void setUpdateTimeNow()
+    {
+        UInt64 now_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+        update_time.store(now_time, std::memory_order_relaxed);
+    }
+    virtual void setUpdateTime(UInt64 update_time_) { update_time.store(update_time_, std::memory_order_relaxed); }
+    virtual UInt64 getTableUpdateTime() const { return update_time.load(std::memory_order_relaxed); }
+
     /// Does table support index for IN sections
     virtual bool supportsIndexForIn() const { return false; }
 
@@ -510,6 +572,11 @@ public:
     /// We do not use mutex because it is not very important that the size could change during the operation.
     virtual void checkPartitionCanBeDropped(const ASTPtr & /*partition*/) {}
 
+    virtual Poco::Logger* getLogger() const
+    {
+        throw Exception("Method getLogger is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
     /// Returns true if Storage may store some data on disk.
     /// NOTE: may not be equivalent to !getDataPaths().empty()
     virtual bool storesDataOnDisk() const { return false; }
@@ -517,8 +584,17 @@ public:
     /// Returns data paths if storage supports it, empty vector otherwise.
     virtual Strings getDataPaths() const { return {}; }
 
+    /// Table's data are divide into two category, one is main storage, which stores
+    /// actual table data, other one is auxility storage, which used to store some temporary
+    /// data. For example, cnch use hdfs/s3 as main storage to store table data,
+    /// and use auxility storage to write temporary data or cache files
+    enum class StorageLocation
+    {
+        MAIN,
+        AUXILITY
+    };
     /// Returns storage policy if storage supports it.
-    virtual StoragePolicyPtr getStoragePolicy() const { return {}; }
+    virtual StoragePolicyPtr getStoragePolicy(StorageLocation) const { return {}; }
 
     /// If it is possible to quickly determine exact number of rows in the table at this moment of time, then return it.
     /// Used for:
@@ -556,7 +632,21 @@ public:
     /// Does not takes underlying Storage (if any) into account.
     virtual std::optional<UInt64> lifetimeBytes() const { return {}; }
 
+    void serialize(WriteBuffer & buf) const;
+    static StoragePtr deserialize(ReadBuffer & buf, const ContextPtr & context);
+
+    bool is_detached{false};
+
+    TxnTimestamp commit_time;
+    /// Parts metadata columns mapping related
+    NamesAndTypesListPtr part_columns = std::make_shared<NamesAndTypesList>();
+    std::map<UInt64, NamesAndTypesListPtr> previous_versions_part_columns;
+    NamesAndTypesListPtr getPartColumns(const UInt64 & columns_commit_time) const;
+    UInt64 getPartColumnsCommitTime(const NamesAndTypesList & search_part_columns) const;
+
 private:
+    std::atomic<UInt64> update_time{0};
+
     /// Lock required for alter queries (lockForAlter). Always taken for write
     /// (actually can be replaced with std::mutex, but for consistency we use
     /// RWLock). Allows to execute only one simultaneous alter query. Also it

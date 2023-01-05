@@ -6,11 +6,13 @@ namespace DB
 {
 
 
-class ParserSelectWithUnionQuery : public IParserBase
+class ParserSelectWithUnionQuery : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "SELECT query, possibly with UNION"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 }

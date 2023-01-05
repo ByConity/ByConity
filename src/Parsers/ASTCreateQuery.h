@@ -21,6 +21,8 @@ public:
     IAST * partition_by = nullptr;
     IAST * primary_key = nullptr;
     IAST * order_by = nullptr;
+    IAST * cluster_by = nullptr;
+    IAST * unique_key = nullptr;
     IAST * sample_by = nullptr;
     IAST * ttl_table = nullptr;
     IAST * comment = nullptr;
@@ -28,6 +30,8 @@ public:
 
 
     String getID(char) const override { return "Storage definition"; }
+
+    ASTType getType() const override { return ASTType::ASTStorage; }
 
     ASTPtr clone() const override;
 
@@ -48,6 +52,8 @@ public:
 
     String getID(char) const override { return "Columns definition"; }
 
+    ASTType getType() const override { return ASTType::ASTColumns; }
+
     ASTPtr clone() const override;
 
     void formatImpl(const FormatSettings & s, FormatState & state, FormatStateStacked frame) const override;
@@ -59,12 +65,17 @@ class ASTCreateQuery : public ASTQueryWithTableAndOutput, public ASTQueryWithOnC
 {
 public:
     bool attach{false};    /// Query ATTACH TABLE, not CREATE TABLE.
+    bool create{false};     /// for CnchHive CREATE TABLE check schema flag.
     bool if_not_exists{false};
     bool is_ordinary_view{false};
     bool is_materialized_view{false};
     bool is_live_view{false};
     bool is_populate{false};
     bool replace_view{false}; /// CREATE OR REPLACE VIEW
+    bool ignore_replicated{false};
+    bool ignore_async{false};
+    bool ignore_ttl{false};
+
     ASTColumns * columns_list = nullptr;
     ASTExpressionList * tables = nullptr;
 
@@ -92,6 +103,8 @@ public:
 
     /** Get the text that identifies this element. */
     String getID(char delim) const override { return (attach ? "AttachQuery" : "CreateQuery") + (delim + database) + delim + table; }
+
+    ASTType getType() const override { return ASTType::ASTCreateQuery; }
 
     ASTPtr clone() const override;
 

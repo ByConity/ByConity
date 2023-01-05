@@ -46,7 +46,10 @@ bool ZstdInflatingReadBuffer::nextImpl()
     size_t ret = ZSTD_decompressStream(dctx, &output, &input);
     if (ZSTD_isError(ret))
         throw Exception(
-            ErrorCodes::ZSTD_DECODER_FAILED, "Zstd stream decoding failed: error code: {}; zstd version: {}", ret, ZSTD_VERSION_STRING);
+            ErrorCodes::ZSTD_DECODER_FAILED, "Zstd stream encoding failed: error code: {}; zstd version: {}", ZSTD_getErrorName(ret), ZSTD_VERSION_STRING);
+
+    /// Check that something has changed after decompress (input or output position)
+    assert(in->eof() || output.pos > 0 || in->position() < in->buffer().begin() + input.pos);
 
     in->position() = in->buffer().begin() + input.pos;
     working_buffer.resize(output.pos);

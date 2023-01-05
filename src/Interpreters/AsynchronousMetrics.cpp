@@ -12,6 +12,7 @@
 #include <Storages/MarkCache.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/StorageReplicatedMergeTree.h>
+#include <Storages/MergeTree/ChecksumsCache.h>
 #include <IO/UncompressedCache.h>
 #include <IO/MMappedFileCache.h>
 #include <IO/ReadHelpers.h>
@@ -512,6 +513,14 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
         if (auto mmap_cache = getContext()->getMMappedFileCache())
         {
             new_values["MMapCacheCells"] = mmap_cache->count();
+        }
+    }
+
+    {
+        if (auto checksum_cache = getContext()->getChecksumsCache())
+        {
+            new_values["ChecksumsCacheCells"] = checksum_cache->weight();
+            new_values["ChecksumsCacheBytes"] = checksum_cache->count();
         }
     }
 
@@ -1154,7 +1163,7 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
     }
 
     {
-        auto databases = DatabaseCatalog::instance().getDatabases();
+        auto databases = DatabaseCatalog::instance().getNonCnchDatabases();
 
         size_t max_queue_size = 0;
         size_t max_inserts_in_queue = 0;

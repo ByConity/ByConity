@@ -49,7 +49,7 @@ void SourceWithProgress::setProcessListElement(QueryStatus * elem)
 
 void SourceWithProgress::work()
 {
-    if (!limits.speed_limits.checkTimeLimit(total_stopwatch.elapsed(), limits.timeout_overflow_mode))
+    if (!limits.speed_limits.checkTimeLimit(total_stopwatch, limits.timeout_overflow_mode))
     {
         cancel();
     }
@@ -135,6 +135,8 @@ void SourceWithProgress::progress(const Progress & value)
             CurrentThread::updatePerformanceCounters();
             last_profile_events_update_time = total_elapsed_microseconds;
         }
+
+        process_list_elem->checkCpuTimeLimit("SourceWithProgress");
 
         /// Should be done in PipelineExecutor.
         /// It is here for compatibility with IBlockInputsStream.

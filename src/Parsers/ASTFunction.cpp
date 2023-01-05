@@ -8,11 +8,13 @@
 #include <IO/Operators.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
+#include <IO/ReadHelpers.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSubquery.h>
 #include <Parsers/ASTWithAlias.h>
+#include <Parsers/ASTSerDerHelper.h>
 
 
 namespace DB
@@ -108,30 +110,42 @@ void ASTFunction::updateTreeHashImpl(SipHash & hash_state) const
 }
 
 
-ASTPtr ASTFunction::toLiteral() const
+template <typename Container>
+static ASTPtr createLiteral(const ASTs & arguments)
 {
-    if (!arguments) return {};
+    Container container;
 
-    if (name == "array")
+    for (const auto & arg : arguments)
     {
-        Array array;
-
-        for (const auto & arg : arguments->children)
+        if (const auto * literal = arg->as<ASTLiteral>())
         {
-            if (auto * literal = arg->as<ASTLiteral>())
-                array.push_back(literal->value);
-            else if (auto * func = arg->as<ASTFunction>())
-            {
-                if (auto func_literal = func->toLiteral())
-                    array.push_back(func_literal->as<ASTLiteral>()->value);
-            }
+            container.push_back(literal->value);
+        }
+        else if (auto * func = arg->as<ASTFunction>())
+        {
+            if (auto func_literal = func->toLiteral())
+                container.push_back(func_literal->as<ASTLiteral>()->value);
             else
-                /// Some of the Array arguments is not literal
                 return {};
         }
-
-        return std::make_shared<ASTLiteral>(array);
+        else
+            /// Some of the Array or Tuple arguments is not literal
+            return {};
     }
+
+    return std::make_shared<ASTLiteral>(container);
+}
+
+ASTPtr ASTFunction::toLiteral() const
+{
+    if (!arguments)
+        return {};
+
+    if (name == "array")
+        return createLiteral<Array>(arguments->children);
+
+    if (name == "tuple")
+        return createLiteral<Tuple>(arguments->children);
 
     return {};
 }
@@ -403,6 +417,15 @@ void ASTFunction::formatImplWithoutAlias(const FormatSettings & settings, Format
                 }
             }
 
+            if (!written && 0 == strcmp(name.c_str(), "mapElement"))
+            {
+                arguments->children[0]->formatImpl(settings, state, nested_need_parens);
+                settings.ostr << (settings.hilite ? hilite_operator : "") << '{' << (settings.hilite ? hilite_none : "");
+                arguments->children[1]->formatImpl(settings, state, nested_need_parens);
+                settings.ostr << (settings.hilite ? hilite_operator : "") << '}' << (settings.hilite ? hilite_none : "");
+                written = true;
+            }
+
             if (!written && 0 == strcmp(name.c_str(), "lambda"))
             {
                 /// Special case: one-element tuple in lhs of lambda is printed as its element.
@@ -555,6 +578,39 @@ void ASTFunction::formatImplWithoutAlias(const FormatSettings & settings, Format
         window_definition->formatImpl(settings, state, frame);
         settings.ostr << ")";
     }
+}
+
+void ASTFunction::serialize(WriteBuffer & buf) const
+{
+    ASTWithAlias::serialize(buf);
+
+    writeBinary(name, buf);
+    serializeAST(arguments, buf);
+    serializeAST(parameters, buf);
+    writeBinary(is_window_function, buf);
+    writeBinary(window_name, buf);
+    serializeAST(window_definition, buf);
+    writeBinary(no_empty_args, buf);
+}
+
+void ASTFunction::deserializeImpl(ReadBuffer & buf)
+{
+    ASTWithAlias::deserializeImpl(buf);
+
+    readBinary(name, buf);
+    arguments = deserializeASTWithChildren(children, buf);
+    parameters = deserializeASTWithChildren(children, buf);
+    readBinary(is_window_function, buf);
+    readBinary(window_name, buf);
+    window_definition = deserializeASTWithChildren(children, buf);
+    readBinary(no_empty_args, buf);
+}
+
+ASTPtr ASTFunction::deserialize(ReadBuffer & buf)
+{
+    auto function = std::make_shared<ASTFunction>();
+    function->deserializeImpl(buf);
+    return function;
 }
 
 }

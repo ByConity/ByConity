@@ -33,6 +33,8 @@ public:
 
     String getID(char) const override { return "TTLElement"; }
 
+    ASTType getType() const override { return ASTType::ASTTTLElement; }
+
     ASTPtr clone() const override;
 
     const ASTPtr ttl() const { return getExpression(ttl_expr_pos); }

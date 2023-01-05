@@ -230,7 +230,7 @@ void DiskS3::moveFile(const String & from_path, const String & to_path, bool sen
     fs::rename(fs::path(metadata_path) / from_path, fs::path(metadata_path) / to_path);
 }
 
-std::unique_ptr<ReadBufferFromFileBase> DiskS3::readFile(const String & path, size_t buf_size, size_t, size_t, size_t, MMappedFileCache *) const
+std::unique_ptr<ReadBufferFromFileBase> DiskS3::readFile(const String & path, const ReadSettings& rd_settings) const
 {
     auto settings = current_settings.get();
     auto metadata = readMeta(path);
@@ -238,14 +238,14 @@ std::unique_ptr<ReadBufferFromFileBase> DiskS3::readFile(const String & path, si
     LOG_DEBUG(log, "Read from file by path: {}. Existing S3 objects: {}",
         backQuote(metadata_path + path), metadata.remote_fs_objects.size());
 
-    auto reader = std::make_unique<ReadIndirectBufferFromS3>(settings->client, bucket, metadata, settings->s3_max_single_read_retries, buf_size);
+    auto reader = std::make_unique<ReadIndirectBufferFromS3>(settings->client, bucket, metadata, settings->s3_max_single_read_retries, rd_settings.buffer_size);
     return std::make_unique<SeekAvoidingReadBuffer>(std::move(reader), settings->min_bytes_for_seek);
 }
 
-std::unique_ptr<WriteBufferFromFileBase> DiskS3::writeFile(const String & path, size_t buf_size, WriteMode mode)
+std::unique_ptr<WriteBufferFromFileBase> DiskS3::writeFile(const String & path, const WriteSettings& wr_settings)
 {
     auto settings = current_settings.get();
-    auto metadata = readOrCreateMetaForWriting(path, mode);
+    auto metadata = readOrCreateMetaForWriting(path, wr_settings.mode);
 
     /// Path to store new S3 object.
     auto s3_path = getRandomName();
@@ -261,7 +261,7 @@ std::unique_ptr<WriteBufferFromFileBase> DiskS3::writeFile(const String & path, 
     }
 
     LOG_DEBUG(log, "{} to file by path: {}. S3 path: {}",
-              mode == WriteMode::Rewrite ? "Write" : "Append", backQuote(metadata_path + path), remote_fs_root_path + s3_path);
+              wr_settings.mode == WriteMode::Rewrite ? "Write" : "Append", backQuote(metadata_path + path), remote_fs_root_path + s3_path);
 
     auto s3_buffer = std::make_unique<WriteBufferFromS3>(
         settings->client,
@@ -270,7 +270,7 @@ std::unique_ptr<WriteBufferFromFileBase> DiskS3::writeFile(const String & path, 
         settings->s3_min_upload_part_size,
         settings->s3_max_single_part_upload_size,
         std::move(object_metadata),
-        buf_size);
+        wr_settings.buffer_size);
 
     return std::make_unique<WriteIndirectBufferFromRemoteFS<WriteBufferFromS3>>(std::move(s3_buffer), std::move(metadata), s3_path);
 }

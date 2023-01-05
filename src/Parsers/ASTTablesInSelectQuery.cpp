@@ -1,8 +1,12 @@
 #include <Parsers/ASTTablesInSelectQuery.h>
 
 #include <Parsers/ASTExpressionList.h>
+#include <Parsers/ASTSerDerHelper.h>
 #include <Common/SipHash.h>
 #include <IO/Operators.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
+#include <QueryPlan/PlanSerDerHelper.h>
 
 
 namespace DB
@@ -41,6 +45,37 @@ ASTPtr ASTTableExpression::clone() const
     return res;
 }
 
+void ASTTableExpression::serialize(WriteBuffer & buf) const
+{
+    serializeAST(database_and_table_name, buf);
+    serializeAST(table_function, buf);
+    serializeAST(subquery, buf);
+
+    writeBinary(final, buf);
+
+    serializeAST(sample_size, buf);
+    serializeAST(sample_offset, buf);
+}
+
+void ASTTableExpression::deserializeImpl(ReadBuffer & buf)
+{
+    database_and_table_name = deserializeASTWithChildren(children, buf);
+    table_function = deserializeASTWithChildren(children, buf);
+    subquery = deserializeASTWithChildren(children, buf);
+
+    readBinary(final, buf);
+
+    sample_size = deserializeASTWithChildren(children, buf);
+    sample_offset = deserializeASTWithChildren(children, buf);
+}
+
+ASTPtr ASTTableExpression::deserialize(ReadBuffer & buf)
+{
+    auto expression = std::make_shared<ASTTableExpression>();
+    expression->deserializeImpl(buf);
+    return expression;
+}
+
 void ASTTableJoin::updateTreeHashImpl(SipHash & hash_state) const
 {
     hash_state.update(locality);
@@ -60,6 +95,33 @@ ASTPtr ASTTableJoin::clone() const
     return res;
 }
 
+void ASTTableJoin::serialize(WriteBuffer & buf) const
+{
+    serializeEnum(locality, buf);
+    serializeEnum(strictness, buf);
+    serializeEnum(kind, buf);
+
+    serializeAST(using_expression_list, buf);
+    serializeAST(on_expression, buf);
+}
+
+void ASTTableJoin::deserializeImpl(ReadBuffer & buf)
+{
+    deserializeEnum(locality, buf);
+    deserializeEnum(strictness, buf);
+    deserializeEnum(kind, buf);
+
+    using_expression_list = deserializeASTWithChildren(children, buf);
+    on_expression = deserializeASTWithChildren(children, buf);
+}
+
+ASTPtr ASTTableJoin::deserialize(ReadBuffer & buf)
+{
+    auto table_join = std::make_shared<ASTTableJoin>();
+    table_join->deserializeImpl(buf);
+    return table_join;
+}
+
 void ASTArrayJoin::updateTreeHashImpl(SipHash & hash_state) const
 {
     hash_state.update(kind);
@@ -76,6 +138,25 @@ ASTPtr ASTArrayJoin::clone() const
     return res;
 }
 
+void ASTArrayJoin::serialize(WriteBuffer & buf) const
+{
+    serializeEnum(kind, buf);
+    serializeAST(expression_list, buf);
+}
+
+void ASTArrayJoin::deserializeImpl(ReadBuffer & buf)
+{
+    deserializeEnum(kind, buf);
+    expression_list = deserializeASTWithChildren(children, buf);
+}
+
+ASTPtr ASTArrayJoin::deserialize(ReadBuffer & buf)
+{
+    auto array_join = std::make_shared<ASTArrayJoin>();
+    array_join->deserializeImpl(buf);
+    return array_join;
+}
+
 ASTPtr ASTTablesInSelectQueryElement::clone() const
 {
     auto res = std::make_shared<ASTTablesInSelectQueryElement>(*this);
@@ -88,6 +169,27 @@ ASTPtr ASTTablesInSelectQueryElement::clone() const
     return res;
 }
 
+void ASTTablesInSelectQueryElement::serialize(WriteBuffer & buf) const
+{
+    serializeAST(table_join, buf);
+    serializeAST(table_expression, buf);
+    serializeAST(array_join, buf);
+}
+
+void ASTTablesInSelectQueryElement::deserializeImpl(ReadBuffer & buf)
+{
+    table_join = deserializeASTWithChildren(children, buf);
+    table_expression = deserializeASTWithChildren(children, buf);
+    array_join = deserializeASTWithChildren(children, buf);
+}
+
+ASTPtr ASTTablesInSelectQueryElement::deserialize(ReadBuffer & buf)
+{
+    auto element = std::make_shared<ASTTablesInSelectQueryElement>();
+    element->deserializeImpl(buf);
+    return element;
+}
+
 ASTPtr ASTTablesInSelectQuery::clone() const
 {
     const auto res = std::make_shared<ASTTablesInSelectQuery>(*this);
@@ -97,6 +199,23 @@ ASTPtr ASTTablesInSelectQuery::clone() const
         res->children.emplace_back(child->clone());
 
     return res;
+}
+
+void ASTTablesInSelectQuery::serialize(WriteBuffer & buf) const
+{
+    serializeASTs(children, buf);
+}
+
+void ASTTablesInSelectQuery::deserializeImpl(ReadBuffer & buf)
+{
+    children = deserializeASTs(buf);
+}
+
+ASTPtr ASTTablesInSelectQuery::deserialize(ReadBuffer & buf)
+{
+    auto tables = std::make_shared<ASTTablesInSelectQuery>();
+    tables->deserializeImpl(buf);
+    return tables;
 }
 
 #undef CLONE

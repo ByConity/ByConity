@@ -39,6 +39,17 @@ public:
     /// so you need to compute a hash of n complete pieces and one incomplete
     void calculateHash(DB::BufferBase::Position data, size_t len);
 
+    virtual void deepCopyTo(/*IHashingBuffer<Buffer>*/BufferBase & target) const override
+    {
+        // copy base class
+        BufferWithOwnMemory<Buffer>::deepCopyTo(target);
+
+        IHashingBuffer<Buffer> & explicitTarget = dynamic_cast<IHashingBuffer<Buffer>& >(target);
+        explicitTarget.block_pos = block_pos;
+        explicitTarget.block_size = block_size;
+        explicitTarget.state = state;
+    }
+
 protected:
     size_t block_pos;
     size_t block_size;
@@ -81,6 +92,16 @@ public:
     {
         next();
         return IHashingBuffer<WriteBuffer>::getHash();
+    }
+
+    //@ByteMap
+    virtual void deepCopyTo(/*HashingWriteBuffer*/BufferBase& target) const override
+    {
+        // invoke base class's method
+        HashingWriteBuffer & explicitTarget = dynamic_cast<HashingWriteBuffer&>(target);
+        IHashingBuffer<WriteBuffer>::deepCopyTo(explicitTarget);
+
+        out.deepCopyTo(explicitTarget.out);
     }
 };
 

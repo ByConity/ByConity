@@ -23,7 +23,17 @@ public:
     String getName() const override { return "BlocksList"; }
 
 protected:
-    Block getHeader() const override { return list.empty() ? Block() : *list.begin(); }
+    Block getHeader() const override
+    {
+        if (list.empty())
+        {
+            return {};
+        }
+        else
+        {
+            return list.front().cloneEmpty();
+        }
+    }
 
     Block readImpl() override
     {

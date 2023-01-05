@@ -5,6 +5,7 @@
 #include <Interpreters/StorageID.h>
 #include <Parsers/queryToString.h>
 #include <IO/Operators.h>
+#include <DataTypes/MapHelpers.h>
 
 
 namespace DB
@@ -97,6 +98,11 @@ const String & ASTIdentifier::name() const
     return full_name;
 }
 
+const std::vector<String> & ASTIdentifier::nameParts() const
+{
+    return name_parts;
+}
+
 void ASTIdentifier::formatImplWithoutAlias(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
 {
     auto format_element = [&](const String & elem_name)
@@ -124,6 +130,15 @@ void ASTIdentifier::formatImplWithoutAlias(const FormatSettings & settings, Form
             else
                 format_element(name_parts[i]);
         }
+    }
+    else if (is_implicit_map_key)
+    {
+        //print __c__k as c{k}
+        String map_col = parseMapNameFromImplicitColName(name());
+        settings.ostr << (settings.hilite ? hilite_identifier : "");
+        settings.writeIdentifier(map_col);
+        settings.ostr << "{" << parseKeyNameFromImplicitColName(name(), map_col) << "}";
+        settings.ostr << (settings.hilite ? hilite_none : "");
     }
     else
     {
@@ -161,6 +176,42 @@ void ASTIdentifier::resetFullName()
     full_name = name_parts[0];
     for (size_t i = 1; i < name_parts.size(); ++i)
         full_name += '.' + name_parts[i];
+}
+
+void ASTIdentifier::serialize(WriteBuffer & buf) const
+{
+    ASTWithAlias::serialize(buf);
+
+    writeBinary(full_name, buf);
+    writeBinary(name_parts, buf);
+    if (semantic)
+    {
+        writeBinary(true, buf);
+        semantic->serialize(buf);
+    }
+}
+
+void ASTIdentifier::deserializeImpl(ReadBuffer & buf)
+{
+    ASTWithAlias::deserializeImpl(buf);
+
+    readBinary(full_name, buf);
+    readBinary(name_parts, buf);
+
+    bool has_semantic;
+    readBinary(has_semantic, buf);
+    if (has_semantic)
+    {
+        semantic = std::make_shared<IdentifierSemanticImpl>();
+        semantic->deserialize(buf);
+    }
+}
+
+ASTPtr ASTIdentifier::deserialize(ReadBuffer & buf)
+{
+    auto identifier = std::make_shared<ASTIdentifier>();
+    identifier->deserializeImpl(buf);
+    return identifier;
 }
 
 ASTTableIdentifier::ASTTableIdentifier(const String & table_name, std::vector<ASTPtr> && name_params)
@@ -203,7 +254,12 @@ String ASTTableIdentifier::getDatabaseName() const
 
 void ASTTableIdentifier::resetTable(const String & database_name, const String & table_name)
 {
-    auto identifier = std::make_shared<ASTTableIdentifier>(database_name, table_name);
+    std::shared_ptr<ASTTableIdentifier> identifier;
+    if (database_name.empty())
+        identifier = std::make_shared<ASTTableIdentifier>(table_name);
+    else
+        identifier = std::make_shared<ASTTableIdentifier>(database_name, table_name);
+
     full_name.swap(identifier->full_name);
     name_parts.swap(identifier->name_parts);
     uuid = identifier->uuid;
@@ -213,6 +269,27 @@ void ASTTableIdentifier::updateTreeHashImpl(SipHash & hash_state) const
 {
     hash_state.update(uuid);
     IAST::updateTreeHashImpl(hash_state);
+}
+
+void ASTTableIdentifier::serialize(WriteBuffer & buf) const
+{
+    ASTIdentifier::serialize(buf);
+
+    //writeBinary(uuid, buf);
+}
+
+void ASTTableIdentifier::deserializeImpl(ReadBuffer & buf)
+{
+    ASTIdentifier::deserializeImpl(buf);
+
+    //readBinary(uuid, buf);
+}
+
+ASTPtr ASTTableIdentifier::deserialize(ReadBuffer & buf)
+{
+    auto identifier = std::make_shared<ASTTableIdentifier>();
+    identifier->deserializeImpl(buf);
+    return identifier;
 }
 
 String getIdentifierName(const IAST * ast)

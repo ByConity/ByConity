@@ -16,6 +16,10 @@ NO_TASK_TIMEOUT_SIGN = "All tests have finished"
 
 RETRIES_SIGN = "Some tests were restarted"
 
+ASAN_FAIL = "asan check failed"
+
+SERVER_HEALTH_CHECK = "Server does not respond to health check"
+
 def process_test_log(log_path):
     total = 0
     skipped = 0
@@ -23,6 +27,8 @@ def process_test_log(log_path):
     failed = 0
     success = 0
     hung = False
+    asan_fail = False
+    server_health_check = False
     retries = False
     task_timeout = True
     test_results = []
@@ -35,6 +41,10 @@ def process_test_log(log_path):
                 hung = True
             if RETRIES_SIGN in line:
                 retries = True
+            if ASAN_FAIL in line:
+                asan_fail = True
+            if SERVER_HEALTH_CHECK in line:
+                server_health_check = True
             if any(sign in line for sign in (OK_SIGN, FAIL_SIGN, UNKNOWN_SIGN, SKIPPED_SIGN)):
                 test_name = line.split(' ')[2].split(':')[0]
 
@@ -62,7 +72,7 @@ def process_test_log(log_path):
                 else:
                     success += int(OK_SIGN in line)
                     test_results.append((test_name, "OK", test_time))
-    return total, skipped, unknown, failed, success, hung, task_timeout, retries, test_results
+    return total, skipped, unknown, failed, success, hung, asan_fail, server_health_check, task_timeout, retries, test_results
 
 def process_result(result_path):
     test_results = []
@@ -78,20 +88,20 @@ def process_result(result_path):
         state = "error"
 
     if result_path and os.path.exists(result_path):
-        total, skipped, unknown, failed, success, hung, task_timeout, retries, test_results = process_test_log(result_path)
+        total, skipped, unknown, failed, success, hung, asan_fail, server_health_check, task_timeout, retries, test_results = process_test_log(result_path)
         is_flacky_check = 1 < int(os.environ.get('NUM_TRIES', 1))
         # If no tests were run (success == 0) it indicates an error (e.g. server did not start or crashed immediately)
         # But it's Ok for "flaky checks" - they can contain just one test for check which is marked as skipped.
         if failed != 0 or unknown != 0 or (success == 0 and (not is_flacky_check)):
-            state = "failure"
+            state = "test failed"
 
         if hung:
             description = "Some queries hung, "
-            state = "failure"
+            state = "test failed"
             test_results.append(("Some queries hung", "FAIL", "0"))
         elif task_timeout:
             description = "Timeout, "
-            state = "failure"
+            state = "test failed"
             test_results.append(("Timeout", "FAIL", "0"))
         elif retries:
             description = "Some tests restarted, "
@@ -99,16 +109,33 @@ def process_result(result_path):
         else:
             description = ""
 
-        description += "fail: {}, passed: {}".format(failed, success)
+        if failed > 0 :
+            description += " 1.Case(s) failed, summary: fail: {}, passed: {}".format(failed, success)
+        else:
+            description += " 1.All cases pass, summary: fail: {}, passed: {}".format(failed, success)
         if skipped != 0:
             description += ", skipped: {}".format(skipped)
         if unknown != 0:
             description += ", unknown: {}".format(unknown)
+
+        description += "."
+
     else:
-        state = "failure"
+        state = "test failed"
         description = "Output log doesn't exist"
         test_results = []
 
+    if asan_fail:
+        description += " 2.Asan failed, asan error detected after test finished, please check detailed log by downloading a copy of log at ARTIFACTS/sanitizer_log_output or searching keywords \"asan error found in\" Run ******Test step "
+        state = "test failed"
+        if test_results is []:
+            test_results.append(("Asan filed", "FAIL", "0"))
+    
+    if server_health_check:
+        description += "Server does not respond to health check, Please check the log"
+        state = "test failed"
+        test_results.append(("Server health check failed", "FAIL", "0"))
+    print(state, description)
     return state, description, test_results
 
 
@@ -117,7 +144,7 @@ def write_results(results_file, status_file, results, status):
         out = csv.writer(f, delimiter='\t')
         out.writerows(results)
     with open(status_file, 'w') as f:
-        out = csv.writer(f, delimiter='\t')
+        out = csv.writer(f, delimiter='\t',quoting=csv.QUOTE_NONE, escapechar=' ')
         out.writerow(status)
 
 

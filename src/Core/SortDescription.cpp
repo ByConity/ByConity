@@ -1,10 +1,65 @@
 #include <Core/SortDescription.h>
 #include <Core/Block.h>
 #include <IO/Operators.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Common/JSONBuilder.h>
+#include <Columns/Collator.h>
 
 namespace DB
 {
+
+void FillColumnDescription::serialize(WriteBuffer & buffer) const
+{
+    writeFieldBinary(fill_from, buffer);
+    writeFieldBinary(fill_to, buffer);
+    writeFieldBinary(fill_step, buffer);
+}
+
+void FillColumnDescription::deserialize(ReadBuffer & buffer)
+{
+    readFieldBinary(fill_from, buffer);
+    readFieldBinary(fill_to, buffer);
+    readFieldBinary(fill_step, buffer);
+}
+
+void SortColumnDescription::serialize(WriteBuffer & buffer) const
+{
+    writeBinary(column_name, buffer);
+    writeBinary(column_number, buffer);
+    writeBinary(direction, buffer);
+    writeBinary(nulls_direction, buffer);
+
+    if (!collator)
+        writeBinary(false, buffer);
+    else
+    {
+        writeBinary(true, buffer);
+        writeBinary(collator->getLocale(), buffer);
+    }
+    writeBinary(with_fill, buffer);
+    fill_description.serialize(buffer);
+}
+
+void SortColumnDescription::deserialize(ReadBuffer & buffer)
+{
+    readBinary(column_name, buffer);
+    readBinary(column_number, buffer);
+    readBinary(direction, buffer);
+    readBinary(nulls_direction, buffer);
+
+    bool has_collator = false;
+    readBinary(has_collator, buffer);
+    if (has_collator)
+    {
+        String locale;
+        readBinary(locale, buffer);
+
+        collator = std::make_shared<Collator>(locale);
+    }
+    readBinary(with_fill, buffer);
+    fill_description.deserialize(buffer);
+}
 
 void dumpSortDescription(const SortDescription & description, const Block & header, WriteBuffer & out)
 {
@@ -72,6 +127,22 @@ JSONBuilder::ItemPtr explainSortDescription(const SortDescription & description,
     }
 
     return json_array;
+}
+
+void serializeSortDescription(const SortDescription & sort_descriptions, WriteBuffer & buffer)
+{
+    writeBinary(sort_descriptions.size(), buffer);
+    for (const auto & sort_description : sort_descriptions)
+        sort_description.serialize(buffer);
+}
+
+void deserializeSortDescription(SortDescription & sort_descriptions, ReadBuffer & buffer)
+{
+    size_t sort_size;
+    readBinary(sort_size, buffer);
+    sort_descriptions.resize(sort_size);
+    for (size_t i = 0; i < sort_size; ++i)
+        sort_descriptions[i].deserialize(buffer);
 }
 
 }

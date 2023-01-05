@@ -21,6 +21,7 @@ public:
     bool m_settings{false};
     bool changed{false};
     bool temporary{false};
+    bool history{false};   // if set true, will show databases/tables in trash.
 
     String cluster_str;
     String from;
@@ -34,6 +35,8 @@ public:
 
     /** Get the text that identifies this element. */
     String getID(char) const override { return "ShowTables"; }
+
+    ASTType getType() const override { return ASTType::ASTShowTablesQuery; }
 
     ASTPtr clone() const override;
 

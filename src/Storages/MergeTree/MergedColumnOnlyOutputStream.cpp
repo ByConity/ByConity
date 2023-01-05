@@ -17,7 +17,8 @@ MergedColumnOnlyOutputStream::MergedColumnOnlyOutputStream(
     const MergeTreeIndices & indices_to_recalc,
     WrittenOffsetColumns * offset_columns_,
     const MergeTreeIndexGranularity & index_granularity,
-    const MergeTreeIndexGranularityInfo * index_granularity_info)
+    const MergeTreeIndexGranularityInfo * index_granularity_info,
+    bool is_merge)
     : IMergedBlockOutputStream(data_part, metadata_snapshot_)
     , header(header_)
 {
@@ -43,7 +44,42 @@ MergedColumnOnlyOutputStream::MergedColumnOnlyOutputStream(
         throw Exception("MergedColumnOnlyOutputStream supports only parts stored on disk", ErrorCodes::NOT_IMPLEMENTED);
 
     writer_on_disk->setWrittenOffsetColumns(offset_columns_);
+    writer_on_disk->setMergeStatus(is_merge);
 }
+
+MergedColumnOnlyOutputStream::MergedColumnOnlyOutputStream(
+    const MergeTreeDataPartPtr & data_part,
+    const StorageMetadataPtr & metadata_snapshot_,
+    const MergeTreeWriterSettings & write_settings,
+    const Block & header_,
+    CompressionCodecPtr default_codec,
+    const MergeTreeIndices & indices_to_recalc,
+    WrittenOffsetColumns * offset_columns_,
+    const MergeTreeIndexGranularity & index_granularity,
+    bool is_merge)
+    : IMergedBlockOutputStream(data_part, metadata_snapshot_)
+    , header(header_)
+{
+    NamesAndTypesList columns_list;
+    
+    columns_list = header.getNamesAndTypesList();
+
+    writer = data_part->getWriter(
+        std::move(columns_list),
+        metadata_snapshot_,
+        indices_to_recalc,
+        default_codec,
+        write_settings,
+        index_granularity);
+
+    auto * writer_on_disk = dynamic_cast<MergeTreeDataPartWriterOnDisk *>(writer.get());
+    if (!writer_on_disk)
+        throw Exception("MergedColumnOnlyOutputStream supports only parts stored on disk", ErrorCodes::NOT_IMPLEMENTED);
+
+    writer_on_disk->setWrittenOffsetColumns(offset_columns_);
+    writer_on_disk->setMergeStatus(is_merge);
+}
+
 
 void MergedColumnOnlyOutputStream::write(const Block & block)
 {
@@ -71,8 +107,8 @@ MergedColumnOnlyOutputStream::writeSuffixAndGetChecksums(
     for (const auto & [projection_name, projection_part] : new_part->getProjectionParts())
         checksums.addFile(
             projection_name + ".proj",
-            projection_part->checksums.getTotalSizeOnDisk(),
-            projection_part->checksums.getTotalChecksumUInt128());
+            projection_part->getChecksums()->getTotalSizeOnDisk(),
+            projection_part->getChecksums()->getTotalChecksumUInt128());
 
     auto columns = new_part->getColumns();
 
@@ -84,5 +120,11 @@ MergedColumnOnlyOutputStream::writeSuffixAndGetChecksums(
     new_part->setColumns(columns);
     return checksums;
 }
+
+void MergedColumnOnlyOutputStream::updateWriterStream(const NameAndTypePair &pair)
+{
+    writer->updateWriterStream(pair);
+}
+
 
 }

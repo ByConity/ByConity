@@ -21,7 +21,7 @@
 
             [1]: https://github.com/pocoproject/poco/blob/poco-1.9.4-release/Foundation/include/Poco/Logger.h#L105-L114
         -->
-        <level>trace</level>
+        <level>debug</level>
         <log>/var/log/clickhouse-server/clickhouse-server.log</log>
         <errorlog>/var/log/clickhouse-server/clickhouse-server.err.log</errorlog>
         <!-- Rotation policy
@@ -80,6 +80,11 @@
          See also 'tcp_port_secure' for secure connections.
     -->
     <tcp_port>9000</tcp_port>
+
+    <!-- port for exchange and its status -->
+    <exchange_port>9300</exchange_port>
+    <exchange_status_port>9400</exchange_status_port>
+    <ha_tcp_port>9800</ha_tcp_port>
 
     <!-- Compatibility with MySQL protocol.
          ClickHouse will pretend to be MySQL for applications connecting to this port.
@@ -620,6 +625,8 @@
                 <replica>
                     <host>localhost</host>
                     <port>9000</port>
+                    <exchange_port>9300</exchange_port>
+                    <exchange_status_port>9400</exchange_status_port>
                     <!-- Optional. Priority of the replica for load_balancing. Default: 1 (less value has more priority). -->
                     <!-- <priority>1</priority> -->
                 </replica>
@@ -630,12 +637,16 @@
                  <replica>
                      <host>localhost</host>
                      <port>9000</port>
+                     <exchange_port>9300</exchange_port>
+                     <exchange_status_port>9400</exchange_status_port>
                  </replica>
              </shard>
              <shard>
                  <replica>
                      <host>localhost</host>
                      <port>9000</port>
+                     <exchange_port>9300</exchange_port>
+                     <exchange_status_port>9400</exchange_status_port>
                  </replica>
              </shard>
         </test_cluster_two_shards_localhost>
@@ -644,12 +655,16 @@
                 <replica>
                     <host>127.0.0.1</host>
                     <port>9000</port>
+                    <exchange_port>9300</exchange_port>
+                    <exchange_status_port>9400</exchange_status_port>
                 </replica>
             </shard>
             <shard>
                 <replica>
                     <host>127.0.0.2</host>
                     <port>9000</port>
+                    <exchange_port>9300</exchange_port>
+                    <exchange_status_port>9400</exchange_status_port>
                 </replica>
             </shard>
         </test_cluster_two_shards>
@@ -659,6 +674,8 @@
                 <replica>
                     <host>127.0.0.1</host>
                     <port>9000</port>
+                    <exchange_port>9300</exchange_port>
+                    <exchange_status_port>9400</exchange_status_port>
                 </replica>
             </shard>
             <shard>
@@ -666,6 +683,8 @@
                 <replica>
                     <host>127.0.0.2</host>
                     <port>9000</port>
+                    <exchange_port>9300</exchange_port>
+                    <exchange_status_port>9400</exchange_status_port>
                 </replica>
             </shard>
         </test_cluster_two_shards_internal_replication>
@@ -675,6 +694,8 @@
                     <host>localhost</host>
                     <port>9440</port>
                     <secure>1</secure>
+                    <exchange_port>9300</exchange_port>
+                    <exchange_status_port>9400</exchange_status_port>
                 </replica>
             </shard>
         </test_shard_localhost_secure>
@@ -683,12 +704,16 @@
                 <replica>
                     <host>localhost</host>
                     <port>9000</port>
+                    <exchange_port>9300</exchange_port>
+                    <exchange_status_port>9400</exchange_status_port>
                 </replica>
             </shard>
             <shard>
                 <replica>
                     <host>localhost</host>
                     <port>1</port>
+                    <exchange_port>9300</exchange_port>
+                    <exchange_status_port>9400</exchange_status_port>
                 </replica>
             </shard>
         </test_unavailable_shard>
@@ -955,6 +980,15 @@
         <flush_interval_milliseconds>1000</flush_interval_milliseconds>
     </crash_log>
 
+    <!-- Profiling on Processors level. -->
+    <processors_profile_log>
+        <database>system</database>
+        <table>processors_profile_log</table>
+
+        <partition_by>toYYYYMM(event_date)</partition_by>
+        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+    </processors_profile_log>
+
     <!-- Parameters for embedded dictionaries, used in Yandex.Metrica.
          See https://clickhouse.yandex/docs/en/dicts/internal_dicts/
     -->
@@ -1156,4 +1190,5 @@
 
     <!-- Uncomment to disable ClickHouse internal DNS caching. -->
     <!-- <disable_internal_dns_cache>1</disable_internal_dns_cache> -->
+    <hdfs_nnproxy>data.bytehouse.nnproxy-hostnetwork.service.lf</hdfs_nnproxy>
 </yandex>

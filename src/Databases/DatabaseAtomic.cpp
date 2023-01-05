@@ -501,7 +501,7 @@ void DatabaseAtomic::tryCreateMetadataSymlink()
     }
 }
 
-void DatabaseAtomic::renameDatabase(const String & new_name)
+void DatabaseAtomic::renameDatabase(ContextPtr /*context*/, const String & new_name)
 {
     /// CREATE, ATTACH, DROP, DETACH and RENAME DATABASE must hold DDLGuard
     try

@@ -124,6 +124,20 @@ bool checkStringCaseInsensitive(const char * s, ReadBuffer & buf)
 }
 
 
+void readStringRefsBinary(StringRefs & v, ReadBuffer & buf, Arena& arena, size_t MAX_VECTOR_SIZE)
+{
+    size_t size = 0;
+    readVarUInt(size, buf);
+
+    if (size > MAX_VECTOR_SIZE)
+        throw Poco::Exception("Too large vector size.");
+
+    v.resize(size);
+    for (size_t i = 0; i < size; ++i)
+        v[i] = readStringBinaryInto(arena, buf);
+}
+
+
 void assertString(const char * s, ReadBuffer & buf)
 {
     if (!checkString(s, buf))
@@ -240,6 +254,27 @@ void readString(String & s, ReadBuffer & buf)
 
 template void readStringInto<PaddedPODArray<UInt8>>(PaddedPODArray<UInt8> & s, ReadBuffer & buf);
 
+template <typename Vector>
+void readWordInto(Vector & s, ReadBuffer & buf)
+{
+    while (!buf.eof())
+    {
+        char * next_pos = find_first_symbols<'\t', '\n', ' '>(buf.position(), buf.buffer().end());
+
+        appendToStringOrVector(s, buf, next_pos);
+        buf.position() = next_pos;
+
+        if (buf.hasPendingData())
+            return;
+        s += buf.position()++;
+    }
+}
+
+void readWord(String & s, ReadBuffer & buf)
+{
+    s.clear();
+    readWordInto(s, buf);
+}
 
 template <typename Vector>
 void readStringUntilEOFInto(Vector & s, ReadBuffer & buf)
@@ -251,6 +286,10 @@ void readStringUntilEOFInto(Vector & s, ReadBuffer & buf)
     }
 }
 
+UInt128 stringToUUID(const String & str)
+{
+    return parseFromString<UUID>(str);
+}
 
 void readStringUntilEOF(String & s, ReadBuffer & buf)
 {
@@ -762,15 +801,18 @@ ReturnType readDateTextFallback(LocalDate & date, ReadBuffer & buf)
     auto error = []
     {
         if constexpr (throw_exception)
-            throw Exception("Cannot parse date: value is too short", ErrorCodes::CANNOT_PARSE_DATE);
+            throw Exception("Cannot parse date: value is too short. You can use toDateOrZero() or toDateOrNull() if you want to avoid throwing exceptions when parsing fails",
+                            ErrorCodes::CANNOT_PARSE_DATE);
         return ReturnType(false);
     };
 
     auto ignore_delimiter = [&]
     {
-        if (!buf.eof() && !isNumericASCII(*buf.position()))
+        if (!buf.eof())
         {
-            ++buf.position();
+            /// support YYYYMMDD
+            if (!isNumericASCII(*buf.position()))
+                ++buf.position();
             return true;
         }
         else
@@ -887,7 +929,15 @@ ReturnType readDateTimeTextFallback(time_t & datetime, ReadBuffer & buf, const D
     }
     else
     {
-        if (s_pos - s >= 5)
+        if (s_pos - s == 8)
+        {
+            /// YYYYMMDD, not very efficient.
+            UInt16 year = (s[0] - '0') * 1000 + (s[1] - '0') * 100 + (s[2] - '0') * 10 + (s[3] - '0');
+            UInt8 month = (s[4] - '0') * 10 + (s[5] - '0');
+            UInt8 day = (s[6] - '0') * 10 + (s[7] - '0');
+            datetime = date_lut.makeDateTime(year, month, day, 0, 0, 0);
+        }
+        else if (s_pos - s >= 5)
         {
             /// Not very efficient.
             datetime = 0;

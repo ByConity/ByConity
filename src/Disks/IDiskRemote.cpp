@@ -140,6 +140,12 @@ void IDiskRemote::Metadata::save(bool sync)
         buf.sync();
 }
 
+UInt64 IDiskRemote::getID() const
+{
+    /// TODO: Should use remote_fs_root_path instead of metadata_path?
+    return static_cast<UInt64>(std::hash<String>{}(DiskType::toString(getType())) ^ std::hash<String>{}(getPath()));
+}
+
 IDiskRemote::Metadata IDiskRemote::readOrCreateMetaForWriting(const String & path, WriteMode mode)
 {
     bool exist = exists(path);

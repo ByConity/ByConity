@@ -195,6 +195,8 @@ public:
     /// Enable calculation of minimums and maximums by the result columns.
     void enableExtremes() { enabled_extremes = true; }
 
+    const BlockInputStreams & getChildren() { return children; }
+
 protected:
     /// Order is important: `table_locks` must be destroyed after `children` so that tables from
     /// which child streams read are protected by the locks during the lifetime of the child streams.

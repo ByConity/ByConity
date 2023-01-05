@@ -30,6 +30,7 @@ public:
         const TableWithColumnNamesAndTypes & right_table;
         const Aliases & aliases;
         const bool is_asof{false};
+        bool is_nest_loop_join{false};
         ASTPtr asof_left_key{};
         ASTPtr asof_right_key{};
         bool has_some{false};

@@ -357,7 +357,7 @@ DistributedBlockOutputStream::runWritingJob(DistributedBlockOutputStream::JobRep
                     job.connection_entry->setThrottler(throttler);
 
                 job.stream = std::make_shared<RemoteBlockOutputStream>(
-                    *job.connection_entry, timeouts, query_string, settings, context->getClientInfo());
+                    *job.connection_entry, timeouts, query_string, settings, context->getClientInfo(), context);
                 job.stream->writePrefix();
             }
 
@@ -648,7 +648,7 @@ void DistributedBlockOutputStream::writeToShard(const Block & block, const std::
     /// and keep monitor thread out from reading incomplete data
     std::string first_file_tmp_path;
 
-    auto reservation = storage.getStoragePolicy()->reserveAndCheck(block.bytes());
+    auto reservation = storage.getStoragePolicy(IStorage::StorageLocation::MAIN)->reserveAndCheck(block.bytes());
     const auto disk = reservation->getDisk();
     auto disk_path = disk->getPath();
     auto data_path = storage.getRelativeDataPath();

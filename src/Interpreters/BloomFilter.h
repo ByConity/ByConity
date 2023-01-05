@@ -53,6 +53,12 @@ public:
 
     /// For debug.
     UInt64 isEmpty() const;
+    size_t getSize() const { return size; }
+
+    void merge(const BloomFilter & bf);
+    void deserialize(ReadBuffer & read_buf);
+    void serializeToBuffer(WriteBuffer & write_buf) const;
+
 
     friend bool operator== (const BloomFilter & a, const BloomFilter & b);
 private:

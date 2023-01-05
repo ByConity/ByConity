@@ -9,6 +9,23 @@
 namespace DB
 {
 
+template <typename T> inline std::optional<IDataType::Range> getRangeForNumeric()
+{
+    return IDataType::Range{std::numeric_limits<T>::min(), std::numeric_limits<T>::max()};
+}
+
+// Float32 doesn't have a well-defined range, because of Inf, -Inf, NaN.
+template <> inline std::optional<IDataType::Range> getRangeForNumeric<Float32>()
+{
+    return std::nullopt;
+}
+
+// Float64 doesn't have a well-defined range, because of Inf, -Inf, NaN.
+template <> inline std::optional<IDataType::Range> getRangeForNumeric<Float64>()
+{
+    return std::nullopt;
+}
+
 template <typename T>
 class DataTypeNumber final : public DataTypeNumberBase<T>
 {
@@ -30,6 +47,12 @@ class DataTypeNumber final : public DataTypeNumberBase<T>
     SerializationPtr doGetDefaultSerialization() const override
     {
         return std::make_shared<SerializationNumber<T>>();
+    }
+
+public:
+    std::optional<IDataType::Range> getRange() const override
+    {
+        return getRangeForNumeric<T>();
     }
 };
 

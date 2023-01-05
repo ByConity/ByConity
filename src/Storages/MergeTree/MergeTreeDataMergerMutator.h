@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Storages/MergeTree/MergeTreeData.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Storages/MutationCommands.h>
 #include <atomic>
 #include <functional>
@@ -15,6 +15,7 @@ namespace DB
 {
 
 class MergeProgressCallback;
+class MergeScheduler;
 
 enum class SelectPartsDecision
 {
@@ -31,27 +32,26 @@ struct FutureMergedMutatedPart
     String path;
     MergeTreeDataPartType type;
     MergeTreePartInfo part_info;
-    MergeTreeData::DataPartsVector parts;
+    MergeTreeMetaBase::DataPartsVector parts;
     MergeType merge_type = MergeType::REGULAR;
 
     const MergeTreePartition & getPartition() const { return parts.front()->partition; }
 
     FutureMergedMutatedPart() = default;
-
-    explicit FutureMergedMutatedPart(MergeTreeData::DataPartsVector parts_)
+    explicit FutureMergedMutatedPart(MergeTreeMetaBase::DataPartsVector parts_)
     {
         assign(std::move(parts_));
     }
 
-    FutureMergedMutatedPart(MergeTreeData::DataPartsVector parts_, MergeTreeDataPartType future_part_type)
+    FutureMergedMutatedPart(MergeTreeMetaBase::DataPartsVector parts_, MergeTreeDataPartType future_part_type)
     {
         assign(std::move(parts_), future_part_type);
     }
 
-    void assign(MergeTreeData::DataPartsVector parts_);
-    void assign(MergeTreeData::DataPartsVector parts_, MergeTreeDataPartType future_part_type);
+    void assign(MergeTreeMetaBase::DataPartsVector parts_);
+    void assign(MergeTreeMetaBase::DataPartsVector parts_, MergeTreeDataPartType future_part_type);
 
-    void updatePath(const MergeTreeData & storage, const ReservationPtr & reservation);
+    void updatePath(const MergeTreeMetaBase & storage, const ReservationPtr & reservation);
 };
 
 
@@ -61,9 +61,9 @@ struct FutureMergedMutatedPart
 class MergeTreeDataMergerMutator
 {
 public:
-    using AllowedMergingPredicate = std::function<bool (const MergeTreeData::DataPartPtr &, const MergeTreeData::DataPartPtr &, String *)>;
+    using AllowedMergingPredicate = std::function<bool (const MergeTreeMetaBase::DataPartPtr &, const MergeTreeMetaBase::DataPartPtr &, String *)>;
 
-    MergeTreeDataMergerMutator(MergeTreeData & data_, size_t background_pool_size);
+    MergeTreeDataMergerMutator(MergeTreeMetaBase & data_, size_t background_pool_size);
 
     /** Get maximum total size of parts to do merge, at current moment of time.
       * It depends on number of free threads in background_pool and amount of free space in disk.
@@ -93,7 +93,19 @@ public:
         size_t max_total_size_to_merge,
         const AllowedMergingPredicate & can_merge,
         bool merge_with_ttl_allowed,
-        String * out_disable_reason = nullptr);
+        String * out_disable_reason = nullptr,
+        MergeScheduler * merge_scheduler = nullptr);
+
+    SelectPartsDecision selectPartsToMergeMulti(
+        std::vector<FutureMergedMutatedPart> & future_parts,
+        const MergeTreeMetaBase::DataPartsVector & data_parts,
+        bool aggressive,
+        size_t max_total_size_to_merge,
+        const AllowedMergingPredicate & can_merge,
+        bool merge_with_ttl_allowed,
+        String * out_disable_reason = nullptr,
+        MergeScheduler * merge_scheduler = nullptr,
+        const bool enable_batch_select = false);
 
     /** Select all the parts in the specified partition for merge, if possible.
       * final - choose to merge even a single part - that is, allow to merge one part "with itself",
@@ -108,7 +120,8 @@ public:
         bool final,
         const StorageMetadataPtr & metadata_snapshot,
         String * out_disable_reason = nullptr,
-        bool optimize_skip_merged_partitions = false);
+        bool optimize_skip_merged_partitions = false,
+        MergeScheduler * merge_scheduler = nullptr);
 
     /** Merge the parts.
       * If `reservation != nullptr`, now and then reduces the size of the reserved space
@@ -120,7 +133,8 @@ public:
       * time_of_merge - the time when the merge was assigned.
       * Important when using ReplicatedGraphiteMergeTree to provide the same merge on replicas.
       */
-    MergeTreeData::MutableDataPartPtr mergePartsToTemporaryPart(
+
+    MergeTreeMetaBase::MutableDataPartPtr mergePartsToTemporaryPart(
         const FutureMergedMutatedPart & future_part,
         const StorageMetadataPtr & metadata_snapshot,
         MergeListEntry & merge_entry,
@@ -130,12 +144,12 @@ public:
         const ReservationPtr & space_reservation,
         bool deduplicate,
         const Names & deduplicate_by_columns,
-        const MergeTreeData::MergingParams & merging_params,
+        const MergeTreeMetaBase::MergingParams & merging_params,
         const IMergeTreeDataPart * parent_part = nullptr,
         const String & prefix = "");
 
     /// Mutate a single data part with the specified commands. Will create and return a temporary part.
-    MergeTreeData::MutableDataPartPtr mutatePartToTemporaryPart(
+    MergeTreeMetaBase::MutableDataPartPtr mutatePartToTemporaryPart(
         const FutureMergedMutatedPart & future_part,
         const StorageMetadataPtr & metadata_snapshot,
         const MutationCommands & commands,
@@ -145,26 +159,25 @@ public:
         const ReservationPtr & space_reservation,
         TableLockHolder & table_lock_holder);
 
-    MergeTreeData::DataPartPtr renameMergedTemporaryPart(
-        MergeTreeData::MutableDataPartPtr & new_data_part,
-        const MergeTreeData::DataPartsVector & parts,
+    MergeTreeMetaBase::DataPartPtr renameMergedTemporaryPart(
+        MergeTreeMetaBase::MutableDataPartPtr & new_data_part,
+        const MergeTreeMetaBase::DataPartsVector & parts,
         MergeTreeData::Transaction * out_transaction = nullptr);
 
-
     /// The approximate amount of disk space needed for merge or mutation. With a surplus.
-    static size_t estimateNeededDiskSpace(const MergeTreeData::DataPartsVector & source_parts);
+    static size_t estimateNeededDiskSpace(const MergeTreeMetaBase::DataPartsVector & source_parts);
 
 private:
     /** Select all parts belonging to the same partition.
       */
-    MergeTreeData::DataPartsVector selectAllPartsFromPartition(const String & partition_id);
+    MergeTreeMetaBase::DataPartsVector selectAllPartsFromPartition(const String & partition_id);
 
     /** Split mutation commands into two parts:
       * First part should be executed by mutations interpreter.
       * Other is just simple drop/renames, so they can be executed without interpreter.
       */
     static void splitMutationCommands(
-        MergeTreeData::DataPartPtr part,
+        MergeTreeMetaBase::DataPartPtr part,
         const MutationCommands & commands,
         MutationCommands & for_interpreter,
         MutationCommands & for_file_renames);
@@ -173,7 +186,11 @@ private:
     /// source_part and return set of files, that have to be removed or renamed
     /// from filesystem and in-memory checksums. Ordered result is important,
     /// because we can apply renames that affects each other: x -> z, y -> x.
-    static NameToNameVector collectFilesForRenames(MergeTreeData::DataPartPtr source_part, const MutationCommands & commands_for_removes, const String & mrk_extension);
+    static NameToNameVector collectFilesForRenames(MergeTreeMetaBase::DataPartPtr source_part, const MutationCommands & commands_for_removes, const String & mrk_extension);
+
+    /// Collect necessary implicit files for clear map key commands.
+    /// If the part enables compact map data and all implicit keys of the map column has been removed, the compacted file need to remove too.
+    static NameSet collectFilesForClearMapKey(MergeTreeMetaBase::DataPartPtr source_part, const MutationCommands & commands);
 
     /// Files, that we don't need to remove and don't need to hardlink, for example columns.txt and checksums.txt.
     /// Because we will generate new versions of them after we perform mutation.
@@ -182,11 +199,12 @@ private:
         const Block & updated_header,
         const std::set<MergeTreeIndexPtr> & indices_to_recalc,
         const String & mrk_extension,
-        const std::set<MergeTreeProjectionPtr> & projections_to_recalc);
+        const std::set<MergeTreeProjectionPtr> & projections_to_recalc,
+        bool update_delete_bitmap);
 
     /// Get the columns list of the resulting part in the same order as storage_columns.
     static NamesAndTypesList getColumnsForNewDataPart(
-        MergeTreeData::DataPartPtr source_part,
+        MergeTreeMetaBase::DataPartPtr source_part,
         const Block & updated_header,
         NamesAndTypesList storage_columns,
         const MutationCommands & commands_for_removes);
@@ -211,16 +229,16 @@ private:
         const StorageMetadataPtr & metadata_snapshot,
         ContextPtr context,
         const NameSet & materialized_indices,
-        const MergeTreeData::DataPartPtr & source_part);
+        const MergeTreeMetaBase::DataPartPtr & source_part);
 
     static std::set<MergeTreeProjectionPtr> getProjectionsToRecalculate(
         const NameSet & updated_columns,
         const StorageMetadataPtr & metadata_snapshot,
         const NameSet & materialized_projections,
-        const MergeTreeData::DataPartPtr & source_part);
+        const MergeTreeMetaBase::DataPartPtr & source_part);
 
     void writeWithProjections(
-        MergeTreeData::MutableDataPartPtr new_data_part,
+        MergeTreeMetaBase::MutableDataPartPtr new_data_part,
         const StorageMetadataPtr & metadata_snapshot,
         const MergeTreeProjections & projections_to_build,
         BlockInputStreamPtr mutating_stream,
@@ -234,10 +252,11 @@ private:
 
     /// Override all columns of new part using mutating_stream
     void mutateAllPartColumns(
-        MergeTreeData::MutableDataPartPtr new_data_part,
+        MergeTreeMetaBase::MutableDataPartPtr new_data_part,
         const StorageMetadataPtr & metadata_snapshot,
         const MergeTreeIndices & skip_indices,
         const MergeTreeProjections & projections_to_build,
+        const MutationCommands & commands_for_removes,
         BlockInputStreamPtr mutating_stream,
         time_t time_of_mutation,
         const CompressionCodecPtr & compression_codec,
@@ -255,7 +274,7 @@ private:
         const std::set<MergeTreeIndexPtr> & indices_to_recalc,
         const std::set<MergeTreeProjectionPtr> & projections_to_recalc,
         const Block & mutation_header,
-        MergeTreeData::MutableDataPartPtr new_data_part,
+        MergeTreeMetaBase::MutableDataPartPtr new_data_part,
         BlockInputStreamPtr mutating_stream,
         time_t time_of_mutation,
         const CompressionCodecPtr & compression_codec,
@@ -266,15 +285,16 @@ private:
         TableLockHolder & holder,
         ContextPtr context);
 
+
+public :
     /// Initialize and write to disk new part fields like checksums, columns,
     /// etc.
     static void finalizeMutatedPart(
         const MergeTreeDataPartPtr & source_part,
-        MergeTreeData::MutableDataPartPtr new_data_part,
+        MergeTreeMetaBase::MutableDataPartPtr new_data_part,
         bool need_remove_expired_values,
         const CompressionCodecPtr & codec);
 
-public :
     /** Is used to cancel all merges and mutations. On cancel() call all currently running actions will throw exception soon.
       * All new attempts to start a merge or mutation will throw an exception until all 'LockHolder' objects will be destroyed.
       */
@@ -284,18 +304,16 @@ public :
 private:
 
     MergeAlgorithm chooseMergeAlgorithm(
-        const MergeTreeData::DataPartsVector & parts,
+        const MergeTreeMetaBase::DataPartsVector & parts,
         size_t rows_upper_bound,
         const NamesAndTypesList & gathering_columns,
         bool deduplicate,
         bool need_remove_expired_values,
-        const MergeTreeData::MergingParams & merging_params) const;
+        const MergeTreeMetaBase::MergingParams & merging_params) const;
 
     bool checkOperationIsNotCanceled(const MergeListEntry & merge_entry) const;
 
-
-private:
-    MergeTreeData & data;
+    MergeTreeMetaBase & data;
     const size_t background_pool_size;
 
     Poco::Logger * log;

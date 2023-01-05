@@ -27,6 +27,9 @@ public:
     std::shared_ptr<ASTRolesOrUsersSet> grantees;
 
     String getID(char) const override;
+
+    ASTType getType() const override { return ASTType::ASTGrantQuery; }
+
     ASTPtr clone() const override;
     void formatImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const override;
     void replaceEmptyDatabase(const String & current_database);

@@ -39,6 +39,7 @@
 #include <Interpreters/ClusterProxy/SelectStreamFactory.h>
 #include <Interpreters/ClusterProxy/executeQuery.h>
 #include <Interpreters/Cluster.h>
+#include <Interpreters/AddDefaultDatabaseVisitor.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/InterpreterAlterQuery.h>
 #include <Interpreters/InterpreterDescribeQuery.h>
@@ -53,9 +54,9 @@
 #include <Interpreters/getTableExpressions.h>
 #include <Functions/IFunction.h>
 
-#include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
-#include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
-#include <Processors/QueryPlan/ReadFromPreparedSource.h>
+#include <QueryPlan/BuildQueryPipelineSettings.h>
+#include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
+#include <QueryPlan/ReadFromPreparedSource.h>
 #include <Processors/Sources/NullSource.h>
 #include <Processors/Sources/SourceFromInputStream.h>
 #include <Processors/NullSink.h>
@@ -126,7 +127,7 @@ namespace
 
 /// select query has database, table and table function names as AST pointers
 /// Creates a copy of query, changes database, table and table function names.
-ASTPtr rewriteSelectQuery(const ASTPtr & query, const std::string & database, const std::string & table, ASTPtr table_function_ptr = nullptr)
+ASTPtr rewriteSelectQuery(ContextPtr context, const ASTPtr & query, const std::string & remote_database, const std::string & remote_table, ASTPtr table_function_ptr = nullptr)
 {
     auto modified_query_ast = query->clone();
 
@@ -140,7 +141,7 @@ ASTPtr rewriteSelectQuery(const ASTPtr & query, const std::string & database, co
     if (table_function_ptr)
         select_query.addTableFunction(table_function_ptr);
     else
-        select_query.replaceDatabaseAndTable(database, table);
+        select_query.replaceDatabaseAndTable(remote_database, remote_table);
 
     /// Restore long column names (cause our short names are ambiguous).
     /// TODO: aliased table functions & CREATE TABLE AS table function cases
@@ -148,11 +149,19 @@ ASTPtr rewriteSelectQuery(const ASTPtr & query, const std::string & database, co
     {
         RestoreQualifiedNamesVisitor::Data data;
         data.distributed_table = DatabaseAndTableWithAlias(*getTableExpression(query->as<ASTSelectQuery &>(), 0));
-        data.remote_table.database = database;
-        data.remote_table.table = table;
-        data.rename = true;
+        data.remote_table.database = remote_database;
+        data.remote_table.table = remote_table;
         RestoreQualifiedNamesVisitor(data).visit(modified_query_ast);
     }
+
+    /// To make local JOIN works, default database should be added to table names.
+    /// But only for JOIN section, since the following should work using default_database:
+    /// - SELECT * FROM d WHERE value IN (SELECT l.value FROM l) ORDER BY value
+    ///   (see 01487_distributed_in_not_default_db)
+    AddDefaultDatabaseVisitor visitor(context, context->getCurrentDatabase(),
+        /* only_replace_current_database_function_= */false,
+        /* only_replace_in_join_= */false);
+    visitor.visit(modified_query_ast);
 
     return modified_query_ast;
 }
@@ -416,6 +425,7 @@ StorageDistributed::StorageDistributed(
     , log(&Poco::Logger::get("StorageDistributed (" + id_.table_name + ")"))
     , owned_cluster(std::move(owned_cluster_))
     , cluster_name(getContext()->getMacros()->expand(cluster_name_))
+    , sharding_key(sharding_key_)
     , has_sharding_key(sharding_key_)
     , relative_data_path(relative_data_path_)
     , distributed_settings(distributed_settings_)
@@ -591,7 +601,7 @@ void StorageDistributed::read(
     const unsigned /*num_streams*/)
 {
     const auto & modified_query_ast = rewriteSelectQuery(
-        query_info.query, remote_database, remote_table, remote_table_function_ptr);
+        local_context, query_info.query, remote_database, remote_table, remote_table_function_ptr);
 
     Block header =
         InterpreterSelectQuery(query_info.query, local_context, SelectQueryOptions(processed_stage).analyze()).getSampleBlock();
@@ -716,7 +726,8 @@ QueryPipelinePtr StorageDistributed::distributedWrite(const ASTInsertQuery & que
         return nullptr;
     }
 
-    if (settings.parallel_distributed_insert_select == PARALLEL_DISTRIBUTED_INSERT_SELECT_ALL)
+    if (settings.parallel_distributed_insert_select == PARALLEL_DISTRIBUTED_INSERT_SELECT_ALL
+        || settings.distributed_perfect_shard)
     {
         new_query->table_id = StorageID(getRemoteDatabaseName(), getRemoteTableName());
     }
@@ -727,6 +738,8 @@ QueryPipelinePtr StorageDistributed::distributedWrite(const ASTInsertQuery & que
     std::vector<std::unique_ptr<QueryPipeline>> pipelines;
 
     String new_query_str = queryToString(new_query);
+    LOG_TRACE(log, "Parallel insert query: {}", new_query_str);
+
     for (size_t shard_index : collections::range(0, shards_info.size()))
     {
         const auto & shard_info = shards_info[shard_index];
@@ -899,8 +912,13 @@ void StorageDistributed::truncate(const ASTPtr &, const StorageMetadataPtr &, Co
     LOG_DEBUG(log, "Removed");
 }
 
-StoragePolicyPtr StorageDistributed::getStoragePolicy() const
+StoragePolicyPtr StorageDistributed::getStoragePolicy(IStorage::StorageLocation location) const
 {
+    if (unlikely(location == IStorage::StorageLocation::AUXILITY))
+    {
+        throw Exception("Get auxility storage policy is not supported",
+            ErrorCodes::LOGICAL_ERROR);
+    }
     return storage_policy;
 }
 

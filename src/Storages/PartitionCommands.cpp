@@ -3,11 +3,15 @@
 #include <Storages/DataDestinationType.h>
 #include <Parsers/ASTAlterQuery.h>
 #include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTFunction.h>
+#include <Parsers/ASTLiteral.h>
 #include <Core/ColumnWithTypeAndName.h>
 #include <DataTypes/DataTypeString.h>
+#include <DataTypes/MapHelpers.h>
 #include <Processors/Chunk.h>
 #include <Processors/Pipe.h>
 #include <Processors/Sources/SourceFromSingleChunk.h>
+#include <Interpreters/IdentifierSemantic.h>
 
 
 namespace DB
@@ -26,6 +30,7 @@ std::optional<PartitionCommand> PartitionCommand::parse(const ASTAlterCommand * 
         res.type = DROP_PARTITION;
         res.partition = command_ast->partition;
         res.detach = command_ast->detach;
+        res.cascading = command_ast->cascading;
         res.part = command_ast->part;
         return res;
     }
@@ -37,12 +42,35 @@ std::optional<PartitionCommand> PartitionCommand::parse(const ASTAlterCommand * 
         res.part = command_ast->part;
         return res;
     }
+    else if (command_ast->type == ASTAlterCommand::DROP_PARTITION_WHERE)
+    {
+        PartitionCommand res;
+        res.type = DROP_PARTITION_WHERE;
+        res.partition = command_ast->predicate;
+        res.cascading = command_ast->cascading;
+        res.detach = command_ast->detach;
+        return res;
+    }
     else if (command_ast->type == ASTAlterCommand::ATTACH_PARTITION)
     {
         PartitionCommand res;
         res.type = ATTACH_PARTITION;
         res.partition = command_ast->partition;
         res.part = command_ast->part;
+        res.parts = command_ast->parts;
+        res.replace = command_ast->replace;
+        res.from_zookeeper_path = command_ast->from;
+        return res;
+    }
+    else if (command_ast->type == ASTAlterCommand::ATTACH_DETACHED_PARTITION)
+    {
+        PartitionCommand res;
+        res.type = ATTACH_DETACHED_PARTITION;
+        res.partition = command_ast->partition;
+        res.replace = command_ast->replace;
+        res.attach_from_detached = command_ast->attach_from_detached;
+        res.from_database = command_ast->from_database;
+        res.from_table = command_ast->from_table;
         return res;
     }
     else if (command_ast->type == ASTAlterCommand::MOVE_PARTITION)
@@ -74,14 +102,95 @@ std::optional<PartitionCommand> PartitionCommand::parse(const ASTAlterCommand * 
             res.move_destination_name = command_ast->move_destination_name;
         return res;
     }
+    else if (command_ast->type == ASTAlterCommand::MOVE_PARTITION_FROM)
+    {
+        PartitionCommand res;
+        res.type = MOVE_PARTITION_FROM;
+        res.partition = command_ast->partition;
+        res.from_database = command_ast->from_database;
+        res.from_table = command_ast->from_table;
+        return res;
+    }
     else if (command_ast->type == ASTAlterCommand::REPLACE_PARTITION)
     {
         PartitionCommand res;
         res.type = REPLACE_PARTITION;
         res.partition = command_ast->partition;
         res.replace = command_ast->replace;
+        res.cascading = command_ast->cascading;
         res.from_database = command_ast->from_database;
         res.from_table = command_ast->from_table;
+        res.from_zookeeper_path = command_ast->from;
+        return res;
+    }
+    else if (command_ast->type == ASTAlterCommand::REPLACE_PARTITION_WHERE)
+    {
+        PartitionCommand res;
+        res.type = REPLACE_PARTITION_WHERE;
+        res.partition = command_ast->predicate;
+        res.replace = command_ast->replace;
+        res.cascading = command_ast->cascading;
+        res.from_database = command_ast->from_database;
+        res.from_table = command_ast->from_table;
+        return res;
+    }
+    else if (command_ast->type == ASTAlterCommand::INGEST_PARTITION)
+    {
+        PartitionCommand res;
+        res.type = INGEST_PARTITION;
+        res.partition = command_ast->partition;
+
+        const auto & column_expr_list = command_ast->columns->as<ASTExpressionList &>();
+        for (const auto & child : column_expr_list.children)
+        {
+            if (auto * identifier = child->as<ASTIdentifier>())
+            {
+                res.column_names.push_back(identifier->name());
+                continue;
+            }
+            else if (auto * function = child->as<ASTFunction>())
+            {
+                if (startsWith(Poco::toLower(function->name), "mapelement") && function->arguments->children.size() == 2)
+                {
+                    ASTIdentifier * map_col = function->arguments->children[0]->as<ASTIdentifier>();
+                    ASTLiteral * key_lit = function->arguments->children[1]->as<ASTLiteral>(); // Constant Literal
+                    ASTFunction * key_func = function->arguments->children[1]->as<ASTFunction>(); // for constant foldable functions' case
+
+                    if (map_col && !IdentifierSemantic::isSpecial(*map_col))
+                    {
+                        String key_name;
+                        if (key_lit) // key is literal
+                            key_name = key_lit->getColumnName();
+                        else if (key_func)
+                            throw Exception("Invalid map key for Ingestion", ErrorCodes::BAD_ARGUMENTS);
+
+                        if (!key_name.empty())
+                        {
+                            res.column_names.push_back(getImplicitColNameForMapKey(map_col->name(), key_name));
+                            continue;
+                        }
+                    }
+                }
+            }
+
+            throw Exception("Illegal column: " + child->getColumnName(), ErrorCodes::BAD_ARGUMENTS);
+        }
+
+        if (command_ast->keys)
+        {
+            const auto & key_expr_list = command_ast->keys->as<ASTExpressionList &>();
+            for (const auto & child : key_expr_list.children)
+            {
+                if (auto * identifier = child->as<ASTIdentifier>())
+                    res.key_names.push_back(identifier->name());
+                else
+                    throw Exception("Illegal key: " + child->getColumnName(), ErrorCodes::BAD_ARGUMENTS);
+            }
+        }
+
+        res.from_database = command_ast->from_database;
+        res.from_table = command_ast->from_table;
+
         return res;
     }
     else if (command_ast->type == ASTAlterCommand::FETCH_PARTITION)
@@ -91,6 +200,23 @@ std::optional<PartitionCommand> PartitionCommand::parse(const ASTAlterCommand * 
         res.partition = command_ast->partition;
         res.from_zookeeper_path = command_ast->from;
         res.part = command_ast->part;
+        return res;
+    }
+    else if (command_ast->type == ASTAlterCommand::FETCH_PARTITION_WHERE)
+    {
+        PartitionCommand res;
+        res.type = FETCH_PARTITION_WHERE;
+        res.partition = command_ast->predicate;
+        res.from_zookeeper_path = command_ast->from;
+        return res;
+    }
+    else if (command_ast->type == ASTAlterCommand::REPAIR_PARTITION)
+    {
+        PartitionCommand res;
+        res.type = REPAIR_PARTITION;
+        res.part = command_ast->part;
+        res.partition = command_ast->partition;
+        res.from_zookeeper_path = command_ast->from;
         return res;
     }
     else if (command_ast->type == ASTAlterCommand::FREEZE_PARTITION)
@@ -123,6 +249,16 @@ std::optional<PartitionCommand> PartitionCommand::parse(const ASTAlterCommand * 
         res.with_name = command_ast->with_name;
         return res;
     }
+    else if(command_ast->type == ASTAlterCommand::SAMPLE_PARTITION_WHERE)
+    {
+        PartitionCommand res;
+        res.type = SAMPLE_PARTITION_WHERE;
+        res.sharding_exp = command_ast->with_sharding_exp;
+        res.partition = command_ast->predicate;
+        res.from_database = command_ast->from_database;
+        res.from_table = command_ast->from_table;
+        return res;
+    }
     else
         return {};
 }
@@ -138,11 +274,18 @@ std::string PartitionCommand::typeToString() const
             return "ATTACH PARTITION";
     case PartitionCommand::Type::MOVE_PARTITION:
         return "MOVE PARTITION";
+    case PartitionCommand::Type::MOVE_PARTITION_FROM:
+        return "MOVE PARTITION FROM";
     case PartitionCommand::Type::DROP_PARTITION:
         if (detach)
             return "DETACH PARTITION";
         else
             return "DROP PARTITION";
+    case PartitionCommand::Type::DROP_PARTITION_WHERE:
+        if (detach)
+            return "DETACH PARTITION WHERE";
+        else
+            return "DROP PARTITION WHERE";
     case PartitionCommand::Type::DROP_DETACHED_PARTITION:
         if (part)
             return "DROP DETACHED PART";
@@ -153,6 +296,8 @@ std::string PartitionCommand::typeToString() const
             return "FETCH PART";
         else
             return "FETCH PARTITION";
+    case PartitionCommand::Type::FETCH_PARTITION_WHERE:
+        return "FETCH PARTITION WHERE";
     case PartitionCommand::Type::FREEZE_ALL_PARTITIONS:
         return "FREEZE ALL";
     case PartitionCommand::Type::FREEZE_PARTITION:
@@ -163,6 +308,8 @@ std::string PartitionCommand::typeToString() const
         return "UNFREEZE ALL";
     case PartitionCommand::Type::REPLACE_PARTITION:
         return "REPLACE PARTITION";
+    case PartitionCommand::Type::INGEST_PARTITION:
+        return "INGEST PARTITION";
     default:
         throw Exception("Uninitialized partition command", ErrorCodes::LOGICAL_ERROR);
     }
@@ -223,4 +370,9 @@ Pipe convertCommandsResultToSource(const PartitionCommandsResultInfo & commands_
     return Pipe(std::make_shared<SourceFromSingleChunk>(std::move(header), std::move(chunk)));
 }
 
+bool partitionCommandHasWhere(const PartitionCommand & command)
+{
+    return command.type == PartitionCommand::Type::DROP_PARTITION_WHERE || command.type == PartitionCommand::Type::FETCH_PARTITION_WHERE
+        || command.type == PartitionCommand::Type::REPLACE_PARTITION_WHERE || command.type == PartitionCommand::Type::SAMPLE_PARTITION_WHERE;
+}
 }

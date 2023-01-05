@@ -30,11 +30,13 @@ protected:
  *         ReplicatedMergeTree('/path', 'replica')
  * Result of parsing - ASTFunction with or without parameters.
  */
-class ParserIdentifierWithParameters : public IParserBase
+class ParserIdentifierWithParameters : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "identifier with parameters"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 template <typename NameParser>
@@ -78,20 +80,23 @@ protected:
 };
 
 /** List of table names. */
-class ParserNameList : public IParserBase
+class ParserNameList : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "name list"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 
 template <typename NameParser>
-class IParserColumnDeclaration : public IParserBase
+class IParserColumnDeclaration : public IParserDialectBase
 {
 public:
-    explicit IParserColumnDeclaration(bool require_type_ = true, bool allow_null_modifiers_ = false, bool check_keywords_after_name_ = false)
-    : require_type(require_type_)
+    explicit IParserColumnDeclaration(ParserSettingsImpl t, bool require_type_ = true, bool allow_null_modifiers_ = false, bool check_keywords_after_name_ = false)
+    : IParserDialectBase(t)
+    , require_type(require_type_)
     , allow_null_modifiers(allow_null_modifiers_)
     , check_keywords_after_name(check_keywords_after_name_)
     {
@@ -126,10 +131,12 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
     ParserKeyword s_codec{"CODEC"};
     ParserKeyword s_ttl{"TTL"};
     ParserKeyword s_remove{"REMOVE"};
-    ParserTernaryOperatorExpression expr_parser;
+    ParserKeyword s_compression{"COMPRESSION"};
+    ParserKeyword s_kv{"KV"};
+    ParserTernaryOperatorExpression expr_parser(dt); /* decimal type can use float as default value */
     ParserStringLiteral string_literal_parser;
     ParserCodec codec_parser;
-    ParserExpression expression_parser;
+    ParserExpression expression_parser(ParserSettings::CLICKHOUSE); /* Use CK dialect to parse TTL */
 
     /// mandatory column name
     ASTPtr name;
@@ -208,12 +215,32 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
             return false;
     }
 
+    UInt8 flags = 0;
+    while (true)
+    {
+        UInt8 inner_flags = 0;
+
+        if (s_kv.ignore(pos, expected))
+            inner_flags |= TYPE_MAP_KV_STORE_FLAG;
+        if (s_compression.ignore(pos, expected))
+            inner_flags |= TYPE_COMPRESSION_FLAG;
+
+        if (!inner_flags)
+            break;
+
+        if (flags & inner_flags)
+            return false;
+
+        flags |= inner_flags;
+    }
+
+    column_declaration->flags = flags;
+
     if (s_codec.ignore(pos, expected))
     {
         if (!codec_parser.parse(pos, codec_expression, expected))
             return false;
     }
-
     if (s_ttl.ignore(pos, expected))
     {
         if (!expression_parser.parse(pos, ttl_expression, expected))
@@ -258,85 +285,102 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
     return true;
 }
 
-class ParserColumnDeclarationList : public IParserBase
+class ParserColumnDeclarationList : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "column declaration list"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 
 /** name BY expr TYPE typename(arg1, arg2, ...) GRANULARITY value */
-class ParserIndexDeclaration : public IParserBase
+class ParserIndexDeclaration : public IParserDialectBase
 {
-public:
-    ParserIndexDeclaration() {}
-
 protected:
     const char * getName() const override { return "index declaration"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
-class ParserConstraintDeclaration : public IParserBase
+class ParserConstraintDeclaration : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "constraint declaration"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
-class ParserProjectionDeclaration : public IParserBase
+class ParserProjectionDeclaration : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "projection declaration"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
-class ParserTablePropertyDeclaration : public IParserBase
+class ParserTablePropertyDeclaration : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "table property (column, index, constraint) declaration"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 
-class ParserIndexDeclarationList : public IParserBase
+class ParserIndexDeclarationList : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "index declaration list"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
-class ParserConstraintDeclarationList : public IParserBase
+class ParserConstraintDeclarationList : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "constraint declaration list"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
-class ParserProjectionDeclarationList : public IParserBase
+class ParserProjectionDeclarationList : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "projection declaration list"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 
-class ParserTablePropertiesDeclarationList : public IParserBase
+class ParserTablePropertiesDeclarationList : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "columns or indices declaration list"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 
 /**
-  * ENGINE = name [PARTITION BY expr] [ORDER BY expr] [PRIMARY KEY expr] [SAMPLE BY expr] [SETTINGS name = value, ...]
+  * ENGINE = name [PARTITION BY expr] [ORDER BY expr] [PRIMARY KEY expr] [UNIQUE KEY expr] [SAMPLE BY expr] [SETTINGS name = value, ...]
   */
-class ParserStorage : public IParserBase
+class ParserStorage : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "storage definition"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 /** Query like this:
@@ -356,45 +400,55 @@ protected:
   * CREATE|ATTACH TABLE [IF NOT EXISTS] [db.]name [UUID 'uuid'] [ON CLUSTER cluster] AS ENGINE = engine SELECT ...
   *
   */
-class ParserCreateTableQuery : public IParserBase
+class ParserCreateTableQuery : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "CREATE TABLE or ATTACH TABLE query"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 /// CREATE|ATTACH LIVE VIEW [IF NOT EXISTS] [db.]name [UUID 'uuid'] [TO [db.]name] AS SELECT ...
-class ParserCreateLiveViewQuery : public IParserBase
+class ParserCreateLiveViewQuery : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "CREATE LIVE VIEW query"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 /// CREATE|ATTACH DATABASE db [ENGINE = engine]
-class ParserCreateDatabaseQuery : public IParserBase
+class ParserCreateDatabaseQuery : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "CREATE DATABASE query"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 /// CREATE[OR REPLACE]|ATTACH [[MATERIALIZED] VIEW] | [VIEW]] [IF NOT EXISTS] [db.]name [UUID 'uuid'] [TO [db.]name] [ENGINE = engine] [POPULATE] AS SELECT ...
-class ParserCreateViewQuery : public IParserBase
+class ParserCreateViewQuery : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "CREATE VIEW query"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 /// Parses complete dictionary create query. Uses ParserDictionary and
 /// ParserDictionaryAttributeDeclaration. Produces ASTCreateQuery.
 /// CREATE DICTIONARY [IF NOT EXISTS] [db.]name (attrs) PRIMARY KEY key SOURCE(s(params)) LAYOUT(l(params)) LIFETIME([min v1 max] v2) [RANGE(min v1 max v2)]
-class ParserCreateDictionaryQuery : public IParserBase
+class ParserCreateDictionaryQuery : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "CREATE DICTIONARY"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 
@@ -421,11 +475,13 @@ protected:
   * Or:
   * CREATE[OR REPLACE]|ATTACH [[MATERIALIZED] VIEW] | [VIEW]] [IF NOT EXISTS] [db.]name [TO [db.]name] [ENGINE = engine] [POPULATE] AS SELECT ...
   */
-class ParserCreateQuery : public IParserBase
+class ParserCreateQuery : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "CREATE TABLE or ATTACH TABLE query"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 }

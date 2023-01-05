@@ -6,7 +6,9 @@
 #include <Interpreters/CancellationCode.h>
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/QueryPriorities.h>
+#include <ResourceGroup/IResourceGroupManager.h>
 #include <Storages/IStorage_fwd.h>
+#include <bthread/mtx_cv_base.h>
 #include <Poco/Condition.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/CurrentThread.h>
@@ -15,12 +17,9 @@
 #include <Common/Stopwatch.h>
 #include <Common/Throttler.h>
 
-#include <condition_variable>
 #include <list>
 #include <map>
 #include <memory>
-#include <mutex>
-#include <shared_mutex>
 #include <unordered_map>
 
 
@@ -52,13 +51,16 @@ struct QueryStatusInfo
 {
     String query;
     double elapsed_seconds;
+    size_t disk_cache_bytes;
     size_t read_rows;
     size_t read_bytes;
     size_t total_rows;
     size_t written_rows;
     size_t written_bytes;
+    size_t written_duration;
     Int64 memory_usage;
     Int64 peak_memory_usage;
+    String operator_level;
     ClientInfo client_info;
     bool is_cancelled;
 
@@ -67,6 +69,7 @@ struct QueryStatusInfo
     std::shared_ptr<ProfileEvents::Counters> profile_counters;
     std::shared_ptr<Settings> query_settings;
     std::string current_database;
+    String query_rewrite_by_view;
 };
 
 /// Query and information about its execution.
@@ -91,7 +94,13 @@ protected:
     /// Progress of output stream
     Progress progress_out;
 
+    /// Used to externally check for the query time limits
+    /// They are saved in the constructor to limit the overhead of each call to checkTimeLimit()
+    ExecutionSpeedLimits limits;
+    OverflowMode overflow_mode;
+
     QueryPriorities::Handle priority_handle;
+    IResourceGroup::Handle resource_group_handle;
 
     CurrentMetrics::Increment num_queries_increment{CurrentMetrics::Query};
 
@@ -101,7 +110,13 @@ protected:
     /// Be careful using it. For example, queries field of ProcessListForUser could be modified concurrently.
     const ProcessListForUser * getUserProcessList() const { return user_process_list; }
 
-    mutable std::mutex query_streams_mutex;
+
+    mutable bthread::Mutex executors_mutex;
+
+    /// Array of PipelineExecutors to be cancelled when a cancelQuery is received
+    std::vector<PipelineExecutor *> executors;
+
+    mutable bthread::Mutex query_streams_mutex;
 
     /// Streams with query results, point to BlockIO from executeQuery()
     /// This declaration is compatible with notes about BlockIO::process_list_entry:
@@ -120,13 +135,18 @@ protected:
 
     ProcessListForUser * user_process_list = nullptr;
 
+    String query_rewrite_by_view;
+
+    String pipeline_info;
+
 public:
 
     QueryStatus(
         ContextPtr context_,
         const String & query_,
         const ClientInfo & client_info_,
-        QueryPriorities::Handle && priority_handle_);
+        QueryPriorities::Handle && priority_handle_,
+        IResourceGroup::Handle && resource_group_handle_);
 
     ~QueryStatus();
 
@@ -171,6 +191,8 @@ public:
     /// Copies pointers to in/out streams
     void setQueryStreams(const BlockIO & io);
 
+    void setQueryRewriteByView(const String & rewrite_query);
+
     /// Frees in/out streams
     void releaseQueryStreams();
 
@@ -183,6 +205,22 @@ public:
     CancellationCode cancelQuery(bool kill);
 
     bool isKilled() const { return is_killed; }
+
+    /// Adds a pipeline to the QueryStatus
+    void addPipelineExecutor(PipelineExecutor * e);
+
+    /// Removes a pipeline to the QueryStatus
+    void removePipelineExecutor(PipelineExecutor * e);
+
+    /// Dump pipeline info to `opeator_level` of QueryStatusInfo
+    void dumpPipelineInfo(PipelineExecutor * e);
+
+    bool checkCpuTimeLimit(String node_name);
+    /// Checks the query time limits (cancelled or timeout)
+    bool checkTimeLimit();
+    /// Same as checkTimeLimit but it never throws
+    [[nodiscard]] bool checkTimeLimitSoft();
+    Int64 getUsedMemory() const { return thread_group == nullptr ? 0 : thread_group->memory_tracker.get(); }
 };
 
 
@@ -271,8 +309,8 @@ public:
 protected:
     friend class ProcessListEntry;
 
-    mutable std::mutex mutex;
-    mutable std::condition_variable have_space;        /// Number of currently running queries has become less than maximum.
+    mutable bthread::Mutex mutex;
+    mutable bthread::ConditionVariable have_space;        /// Number of currently running queries has become less than maximum.
 
     /// List of queries
     Container processes;
@@ -287,6 +325,9 @@ protected:
     /// Limit network bandwidth for all users
     ThrottlerPtr total_network_throttler;
 
+    /// Limit network bandwidth for hdfs download
+    ThrottlerPtr hdfs_download_network_throttler;
+
     /// Call under lock. Finds process with specified current_user and current_query_id.
     QueryStatus * tryGetProcessListElement(const String & current_query_id, const String & current_user);
 
@@ -298,7 +339,7 @@ public:
       * If timeout is passed - throw an exception.
       * Don't count KILL QUERY queries.
       */
-    EntryPtr insert(const String & query_, const IAST * ast, ContextPtr query_context);
+    EntryPtr insert(const String & query_, const IAST * ast, ContextPtr query_context, bool force = false);
 
     /// Number of currently executing queries.
     size_t size() const { return processes.size(); }
@@ -319,6 +360,8 @@ public:
     CancellationCode sendCancelToQuery(const String & current_query_id, const String & current_user, bool kill = false);
 
     void killAllQueries();
+
+    ThrottlerPtr getHDFSDownloadThrottler() const { return hdfs_download_network_throttler; }
 };
 
 }

@@ -37,6 +37,8 @@ using Databases = std::map<String, std::shared_ptr<IDatabase>>;
 using ViewDependencies = std::map<StorageID, std::set<StorageID>>;
 using Dependencies = std::vector<StorageID>;
 
+using MemoryTableDependencies = std::map<StorageID, std::set<StorageID>>;
+using MemoryTableInfo = std::pair<StoragePtr, bool>;
 
 /// Allows executing DDL query only in one thread.
 /// Puts an element into the map, locks tables's mutex, counts how much threads run parallel query on the table,
@@ -144,16 +146,18 @@ public:
     DatabasePtr getSystemDatabase() const;
 
     void attachDatabase(const String & database_name, const DatabasePtr & database);
-    DatabasePtr detachDatabase(const String & database_name, bool drop = false, bool check_empty = true);
+    DatabasePtr detachDatabase(ContextPtr local_context, const String & database_name, bool drop = false, bool check_empty = true);
     void updateDatabaseName(const String & old_name, const String & new_name);
 
     /// database_name must be not empty
     DatabasePtr getDatabase(const String & database_name) const;
+    DatabasePtr tryGetDatabase(const String & database_name, ContextPtr local_context) const;
     DatabasePtr tryGetDatabase(const String & database_name) const;
     DatabasePtr getDatabase(const UUID & uuid) const;
     DatabasePtr tryGetDatabase(const UUID & uuid) const;
     bool isDatabaseExist(const String & database_name) const;
     Databases getDatabases() const;
+    Databases getNonCnchDatabases() const;
 
     /// Same as getDatabase(const String & database_name), but if database_name is empty, current database of local_context is used
     DatabasePtr getDatabase(const String & database_name, ContextPtr local_context) const;
@@ -174,6 +178,10 @@ public:
     void addDependency(const StorageID & from, const StorageID & where);
     void removeDependency(const StorageID & from, const StorageID & where);
     Dependencies getDependencies(const StorageID & from) const;
+
+    void addMemoryTableDependency(const StorageID & local_table_id, const StorageID & memory_table_id);
+    void removeMemoryTableDependency(const StorageID & local_table_id);
+    std::optional<MemoryTableInfo> tryGetDependencyMemoryTable(const StorageID & local_table_id, ContextPtr local_context) const;
 
     /// For Materialized and Live View
     void updateDependency(const StorageID & old_from, const StorageID & old_where,const StorageID & new_from, const StorageID & new_where);
@@ -197,7 +205,7 @@ public:
 
     static String getPathForUUID(const UUID & uuid);
 
-    DatabaseAndTable tryGetByUUID(const UUID & uuid) const;
+    DatabaseAndTable tryGetByUUID(const UUID & uuid, const ContextPtr & local_context) const;
 
     String getPathForDroppedMetadata(const StorageID & table_id) const;
     void enqueueDroppedTableCleanup(StorageID table_id, StoragePtr table, String dropped_metadata_path, bool ignore_delay = false);
@@ -213,6 +221,11 @@ private:
     explicit DatabaseCatalog(ContextMutablePtr global_context_);
     void assertDatabaseExistsUnlocked(const String & database_name) const;
     void assertDatabaseDoesntExistUnlocked(const String & database_name) const;
+
+    DatabasePtr tryGetDatabaseCnch(const String & database_name) const;
+    DatabasePtr tryGetDatabaseCnch(const String & database_name, ContextPtr context) const;
+    DatabasePtr tryGetDatabaseCnch(const UUID & uuid) const;
+    Databases getDatabaseCnchs() const;
 
     void shutdownImpl();
 
@@ -230,6 +243,8 @@ private:
     {
         return uuid.toUnderType().items[0] >> (64 - bits_for_first_level);
     }
+
+    inline bool preferCnchCatalog(const ContextPtr & context) const;
 
     struct TableMarkedAsDropped
     {
@@ -252,6 +267,7 @@ private:
     mutable std::mutex databases_mutex;
 
     ViewDependencies view_dependencies;
+    MemoryTableDependencies memory_table_dependencies;
 
     Databases databases;
     UUIDToDatabaseMap db_uuid_map;
@@ -279,6 +295,7 @@ private:
     static constexpr time_t default_drop_delay_sec = 8 * 60;
     time_t drop_delay_sec = default_drop_delay_sec;
     std::condition_variable wait_table_finally_dropped;
+    const bool use_cnch_catalog;
 };
 
 }

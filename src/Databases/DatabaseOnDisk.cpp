@@ -93,7 +93,7 @@ std::pair<String, StoragePtr> createTableFromAST(
 }
 
 
-String getObjectDefinitionFromCreateQuery(const ASTPtr & query)
+String getObjectDefinitionFromCreateQuery(const ASTPtr & query, std::optional<bool> attach)
 {
     ASTPtr query_clone = query->clone();
     auto * create = query_clone->as<ASTCreateQuery>();
@@ -107,6 +107,8 @@ String getObjectDefinitionFromCreateQuery(const ASTPtr & query)
 
     if (!create->is_dictionary)
         create->attach = true;
+    if (attach.has_value())
+        create->attach = *attach;
 
     /// We remove everything that is not needed for ATTACH from the query.
     assert(!create->temporary);
@@ -166,7 +168,7 @@ void applyMetadataChangesToCreateQuery(const ASTPtr & query, const StorageInMemo
         ASTStorage & storage_ast = *ast_create_query.storage;
 
         bool is_extended_storage_def
-            = storage_ast.partition_by || storage_ast.primary_key || storage_ast.order_by || storage_ast.sample_by || storage_ast.settings;
+            = storage_ast.partition_by || storage_ast.primary_key || storage_ast.order_by || storage_ast.unique_key || storage_ast.sample_by || storage_ast.settings || storage_ast.cluster_by;
 
         if (is_extended_storage_def)
         {
@@ -176,8 +178,16 @@ void applyMetadataChangesToCreateQuery(const ASTPtr & query, const StorageInMemo
             if (metadata.primary_key.definition_ast)
                 storage_ast.set(storage_ast.primary_key, metadata.primary_key.definition_ast);
 
+            if (metadata.unique_key.definition_ast)
+                storage_ast.set(storage_ast.unique_key, metadata.unique_key.definition_ast);
+
             if (metadata.sampling_key.definition_ast)
                 storage_ast.set(storage_ast.sample_by, metadata.sampling_key.definition_ast);
+
+            if (!metadata.cluster_by_key.definition_ast)
+                storage_ast.cluster_by = nullptr;
+            else
+                storage_ast.set(storage_ast.cluster_by, metadata.cluster_by_key.definition_ast);
 
             if (metadata.table_ttl.definition_ast)
                 storage_ast.set(storage_ast.ttl_table, metadata.table_ttl.definition_ast);
@@ -358,6 +368,11 @@ void DatabaseOnDisk::dropTable(ContextPtr local_context, const String & table_na
         fs::path table_data_dir(local_context->getPath() + table_data_path_relative);
         if (fs::exists(table_data_dir))
             fs::remove_all(table_data_dir);
+
+        /// remove metastore
+        fs::path table_metastore_dir(local_context->getMetastorePath() + table_data_path_relative);
+        if (fs::exists(table_metastore_dir))
+            fs::remove_all(table_metastore_dir);
     }
     catch (...)
     {
@@ -460,6 +475,9 @@ void DatabaseOnDisk::renameTable(
         throw Exception{Exception::CreateFromPocoTag{}, e};
     }
 
+    /// remove metastore of old table.
+    fs::remove_all(getContext()->getMetastorePath() + table_data_relative_path);
+
     /// Now table data are moved to new database, so we must add metadata and attach table to new database
     to_database.createTable(local_context, to_table_name, table, attach_query);
 
@@ -518,7 +536,7 @@ ASTPtr DatabaseOnDisk::getCreateDatabaseQuery() const
         /// Handle databases (such as default) for which there are no database.sql files.
         /// If database.sql doesn't exist, then engine is Ordinary
         String query = "CREATE DATABASE " + backQuoteIfNeed(getDatabaseName()) + " ENGINE = Ordinary";
-        ParserCreateQuery parser;
+        ParserCreateQuery parser(ParserSettings::valueOf(settings.dialect_type));
         ast = parseQuery(parser, query.data(), query.data() + query.size(), "", 0, settings.max_parser_depth);
     }
 
@@ -656,7 +674,7 @@ ASTPtr DatabaseOnDisk::parseQueryFromMetadata(
     }
 
     auto settings = local_context->getSettingsRef();
-    ParserCreateQuery parser;
+    ParserCreateQuery parser(ParserSettings::valueOf(settings.dialect_type));
     const char * pos = query.data();
     std::string error_message;
     auto ast = tryParseQuery(parser, pos, pos + query.size(), error_message, /* hilite = */ false,

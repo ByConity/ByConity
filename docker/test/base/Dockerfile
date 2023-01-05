@@ -3,7 +3,7 @@ FROM ubuntu:20.04
 
 ENV DEBIAN_FRONTEND=noninteractive LLVM_VERSION=11
 
-RUN sed -i 's|http://archive|http://ru.archive|g' /etc/apt/sources.list
+RUN sed -i 's|http://archive|http://cn.archive|g' /etc/apt/sources.list
 
 RUN apt-get update \
     && apt-get install ca-certificates lsb-release wget gnupg apt-transport-https \
@@ -49,17 +49,30 @@ RUN apt-get update \
         pkg-config \
         tzdata \
         pv \
+        vim \
         --yes --no-install-recommends
 
+# Upgrade to gdb 11.2
+RUN apt-get update \
+    && apt-get install libgmp-dev \
+        build-essential \
+        --yes --no-install-recommends
+
+RUN wget https://ftp.gnu.org/gnu/gdb/gdb-11.2.tar.gz \
+    && tar -xvzf gdb-11.2.tar.gz \
+    && cd gdb-11.2 \
+    && ./configure && make && make install \
+    && cd .. && rm -rf gdb-11.2.tar.gz gdb-11.2
+
 # Sanitizer options for services (clickhouse-server)
-RUN echo "TSAN_OPTIONS='verbosity=1000 halt_on_error=1 history_size=7'" >> /etc/environment; \
+RUN echo "TSAN_OPTIONS='verbosity=1000 halt_on_error=0 history_size=7'" >> /etc/environment; \
   echo "UBSAN_OPTIONS='print_stacktrace=1'" >> /etc/environment; \
   echo "MSAN_OPTIONS='abort_on_error=1 poison_in_dtor=1'" >> /etc/environment; \
   echo "LSAN_OPTIONS='suppressions=/usr/share/clickhouse-test/config/lsan_suppressions.txt'" >> /etc/environment; \
   ln -s /usr/lib/llvm-${LLVM_VERSION}/bin/llvm-symbolizer /usr/bin/llvm-symbolizer;
 # Sanitizer options for current shell (not current, but the one that will be spawned on "docker run")
 # (but w/o verbosity for TSAN, otherwise test.reference will not match)
-ENV TSAN_OPTIONS='halt_on_error=1 history_size=7'
+ENV TSAN_OPTIONS='halt_on_error=0 history_size=7'
 ENV UBSAN_OPTIONS='print_stacktrace=1'
 ENV MSAN_OPTIONS='abort_on_error=1 poison_in_dtor=1'
 

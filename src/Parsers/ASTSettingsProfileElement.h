@@ -24,8 +24,15 @@ public:
     bool empty() const { return parent_profile.empty() && setting_name.empty(); }
 
     String getID(char) const override { return "SettingsProfileElement"; }
+
+    ASTType getType() const override { return ASTType::ASTSettingsProfileElement; }
+
     ASTPtr clone() const override { return std::make_shared<ASTSettingsProfileElement>(*this); }
     void formatImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const override;
+
+    void serialize(WriteBuffer & buf) const override;
+    void deserializeImpl(ReadBuffer & buf) override;
+    static ASTPtr deserialize(ReadBuffer & buf);
 };
 
 
@@ -40,9 +47,16 @@ public:
     bool empty() const;
 
     String getID(char) const override { return "SettingsProfileElements"; }
+
+    ASTType getType() const override { return ASTType::ASTSettingsProfileElements; }
+
     ASTPtr clone() const override { return std::make_shared<ASTSettingsProfileElements>(*this); }
     void formatImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const override;
 
     void setUseInheritKeyword(bool use_inherit_keyword_);
+
+    void serialize(WriteBuffer & buf) const override;
+    void deserializeImpl(ReadBuffer & buf) override;
+    static ASTPtr deserialize(ReadBuffer & buf);
 };
 }

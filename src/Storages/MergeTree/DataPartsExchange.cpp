@@ -12,8 +12,15 @@
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/NetException.h>
+#include <Common/createHardLink.h>
 #include <IO/createReadBufferFromFileBase.h>
+#include <IO/LimitReadBuffer.h>
 #include <common/scope_guard.h>
+#include <Parsers/parseQuery.h>
+#include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/MapHelpers.h>
+
+#include <Poco/File.h>
 #include <Poco/Net/HTTPRequest.h>
 
 
@@ -40,6 +47,8 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
     extern const int S3_ERROR;
     extern const int INCORRECT_PART_TYPE;
+    extern const int SYNTAX_ERROR;
+    extern const int FORMAT_VERSION_TOO_OLD;
 }
 
 namespace DataPartsExchange
@@ -88,15 +97,41 @@ struct ReplicatedFetchReadCallback
 }
 
 
-Service::Service(StorageReplicatedMergeTree & data_) :
-    data(data_), log(&Poco::Logger::get(data.getLogName() + " (Replicated PartsService)")) {}
+Service::Service(MergeTreeData & data_, const StoragePtr & storage_)
+    : data(data_), storage(storage_), log(&Poco::Logger::get(data.getLogName() + " (Replicated PartsService)"))
+{
+}
 
 std::string Service::getId(const std::string & node_id) const
 {
     return getEndpointId(node_id);
 }
 
-void Service::processQuery(const HTMLForm & params, ReadBuffer & /*body*/, WriteBuffer & out, HTTPServerResponse & response)
+void Service::processQuery(const HTMLForm & params, ReadBuffer & body, WriteBuffer & out, HTTPServerResponse & response)
+{
+    String qtype = params.get("qtype", "FetchPart");
+
+    if (qtype == "FetchPart")
+    {
+        bool incrementally = params.get("fetch_part_incrementally", "false") == "true";
+        processQueryPart(params, body, out, response, incrementally);
+    }
+    else if (qtype == "FetchList")
+    {
+        processQueryPartList(params, body, out, response);
+    }
+    else if (qtype == "checkExist")
+    {
+        processQueryExist(params, body, out, response);
+    }
+    else
+    {
+        throw Exception("Not support qtype: " + qtype, ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
+void Service::processQueryPart(
+    const HTMLForm & params, [[maybe_unused]]ReadBuffer & body, WriteBuffer & out, HTTPServerResponse & response, bool incrementally)
 {
     int client_protocol_version = parse<int>(params.get("client_protocol_version", "0"));
 
@@ -123,6 +158,8 @@ void Service::processQuery(const HTMLForm & params, ReadBuffer & /*body*/, Write
 
     /// We pretend to work as older server version, to be sure that client will correctly process our version
     response.addCookie({"server_protocol_version", toString(std::min(client_protocol_version, REPLICATION_PROTOCOL_VERSION_WITH_PARTS_PROJECTION))});
+    if (incrementally)
+        response.addCookie({"fetch_part_incrementally", "true"});
 
     ++total_sends;
     SCOPE_EXIT({--total_sends;});
@@ -153,7 +190,7 @@ void Service::processQuery(const HTMLForm & params, ReadBuffer & /*body*/, Write
         CurrentMetrics::Increment metric_increment{CurrentMetrics::ReplicatedSend};
 
         if (client_protocol_version >= REPLICATION_PROTOCOL_VERSION_WITH_PARTS_SIZE)
-            writeBinary(part->checksums.getTotalSizeOnDisk(), out);
+            writeBinary(part->getChecksums()->getTotalSizeOnDisk(), out);
 
         if (client_protocol_version >= REPLICATION_PROTOCOL_VERSION_WITH_PARTS_SIZE_AND_TTL_INFOS)
         {
@@ -195,14 +232,14 @@ void Service::processQuery(const HTMLForm & params, ReadBuffer & /*body*/, Write
             if (isInMemoryPart(part))
                 sendPartFromMemory(part, out, projections);
             else
-                sendPartFromDisk(part, out, client_protocol_version, projections);
+                sendPartFromDisk(part, body, out, client_protocol_version, incrementally, projections);
         }
         else
         {
             if (isInMemoryPart(part))
                 sendPartFromMemory(part, out);
             else
-                sendPartFromDisk(part, out, client_protocol_version);
+                sendPartFromDisk(part, body, out, client_protocol_version, incrementally);
         }
     }
     catch (const NetException &)
@@ -224,6 +261,69 @@ void Service::processQuery(const HTMLForm & params, ReadBuffer & /*body*/, Write
     }
 }
 
+/// Only return local data parts.
+void Service::processQueryPartList(const HTMLForm & params, [[maybe_unused]]ReadBuffer & body, WriteBuffer & out, [[maybe_unused]]HTTPServerResponse & response)
+{
+    StoragePtr owned_storage = storage.lock();
+    if (!owned_storage)
+        throw Exception("The table was already dropped", ErrorCodes::UNKNOWN_TABLE);
+
+    MergeTreeData::DataPartsVector data_parts;
+
+    if (String filter = params.get("filter"); !filter.empty())
+    {
+        ParserExpression p_expr(ParserSettings::CLICKHOUSE);
+        auto predicate = parseQuery(p_expr, filter, 0, 0);
+        if (!predicate)
+            throw Exception("Failed to parse filter of fetch list, may be a logic error: " + filter, ErrorCodes::SYNTAX_ERROR);
+
+        data_parts = data.getPartsByPredicate(predicate);
+    }
+    else
+    {
+        String partition_id = params.get("id");
+
+        LOG_TRACE(log, "Sending parts namelist");
+        // Get committed parts based on id
+        if (partition_id == "all")
+        {
+            data_parts = data.getDataPartsVector();
+        }
+        else
+        {
+            data_parts = data.getDataPartsVectorInPartition(MergeTreeDataPartState::Committed, partition_id);
+        }
+
+        data_parts.erase(
+            std::remove_if(data_parts.begin(), data_parts.end(), [](auto & part) { return part->info.isFakeDropRangePart(); }),
+            data_parts.end());
+    }
+
+    size_t numParts = data_parts.size();
+
+    writeBinary(numParts, out);
+
+    for (auto& part : data_parts)
+    {
+        // Write the names into response
+        writeStringBinary(part->name, out);
+    }
+}
+
+void Service::processQueryExist(
+    const HTMLForm & params,
+    [[maybe_unused]] ReadBuffer & body,
+    WriteBuffer & out,
+    [[maybe_unused]] HTTPServerResponse & response)
+{
+    String part_name = params.get("part");
+    auto part = data.getPartIfExists(
+        part_name, {MergeTreeDataPartState::PreCommitted, MergeTreeDataPartState::Committed, MergeTreeDataPartState::Outdated});
+
+    UInt8 exist = (part ? 'Y' : 'N');
+    writeBinary(exist, out);
+}
+
 void Service::sendPartFromMemory(
     const MergeTreeData::DataPartPtr & part, WriteBuffer & out, const std::map<String, std::shared_ptr<IMergeTreeDataPart>> & projections)
 {
@@ -236,7 +336,7 @@ void Service::sendPartFromMemory(
             throw Exception("Projection " + name + " of part " + part->name + " is not stored in memory", ErrorCodes::LOGICAL_ERROR);
 
         writeStringBinary(name, out);
-        projection->checksums.write(out);
+        projection->getChecksums()->write(out);
         NativeBlockOutputStream block_out(out, 0, projection_sample_block);
         block_out.write(part_in_memory->block);
     }
@@ -246,7 +346,7 @@ void Service::sendPartFromMemory(
         throw Exception("Part " + part->name + " is not stored in memory", ErrorCodes::LOGICAL_ERROR);
 
     NativeBlockOutputStream block_out(out, 0, metadata_snapshot->getSampleBlock());
-    part->checksums.write(out);
+    part->getChecksums()->write(out);
     block_out.write(part_in_memory->block);
 
     data.getSendsThrottler()->add(part_in_memory->block.bytes());
@@ -254,12 +354,14 @@ void Service::sendPartFromMemory(
 
 MergeTreeData::DataPart::Checksums Service::sendPartFromDisk(
     const MergeTreeData::DataPartPtr & part,
+    ReadBuffer & body, 
     WriteBuffer & out,
     int client_protocol_version,
+    bool incrementally,
     const std::map<String, std::shared_ptr<IMergeTreeDataPart>> & projections)
 {
     /// We'll take a list of files from the list of checksums.
-    MergeTreeData::DataPart::Checksums checksums = part->checksums;
+    MergeTreeData::DataPart::Checksums checksums = *(part->getChecksums());
     /// Add files that are not in the checksum list.
     auto file_names_without_checksums = part->getFileNamesWithoutChecksums();
     for (const auto & file_name : file_names_without_checksums)
@@ -280,32 +382,135 @@ MergeTreeData::DataPart::Checksums Service::sendPartFromDisk(
         if (it != projections.end())
         {
             writeStringBinary(name, out);
-            MergeTreeData::DataPart::Checksums projection_checksum = sendPartFromDisk(it->second, out, client_protocol_version);
+            MergeTreeData::DataPart::Checksums projection_checksum = sendPartFromDisk(it->second, body, out, client_protocol_version, incrementally);
             data_checksums.addFile(name + ".proj", projection_checksum.getTotalSizeOnDisk(), projection_checksum.getTotalChecksumUInt128());
         }
-        else if (part->checksums.has(name + ".proj"))
+        else if (part->getChecksums()->has(name + ".proj"))
         {
             // We don't send this projection, just add out checksum to bypass the following check
-            const auto & our_checksum = part->checksums.files.find(name + ".proj")->second;
+            const auto & our_checksum = part->getChecksums()->files.find(name + ".proj")->second;
             data_checksums.addFile(name + ".proj", our_checksum.file_size, our_checksum.file_hash);
         }
     }
 
+    // receiver needs to know the parameter
+    bool enable_compact_map_data = part->versions->enable_compact_map_data;
+
+    /// Old version part checksums of fetcher
+    MergeTreeData::DataPart::Checksums old_checksums;
+    if (incrementally && !old_checksums.read(body))
+    {
+        throw Exception("Checksums format is too old", ErrorCodes::FORMAT_VERSION_TOO_OLD);
+    }
+    MergeTreeData::DataPart::Checksums skip_copy_checksums;
+
+    for (auto it = checksums.files.begin(); it != checksums.files.end();)
+    {
+        String file_name = it->first;
+
+        // Do not send files with dictionary compression.
+        // It has two purposes:
+        // 1. Reduce write amplification
+        // 2. If the server shutdown when column is being recoded. We can recode the part when the server
+        // is restarted. If we send compression column, we cannot distinguish a correct recoded part from a
+        // broken part.
+        if (endsWith(file_name, COMPRESSION_DATA_FILE_EXTENSION) || endsWith(file_name, COMPRESSION_MARKS_FILE_EXTENSION))
+        {
+            MergeTreeData::DataPart::Checksum checksum = it->second;
+            data_checksums.addFile(file_name, checksum.file_size, checksum.file_hash);
+            it = checksums.files.erase(it);
+        }
+        else
+        {
+            if (enable_compact_map_data && isMapImplicitKeyNotKV(file_name))
+                ++it;
+            else
+            {
+                /// Check if this column can directly create hard link in fetcher.
+                if (incrementally && file_name != "checksums.txt" && file_name != "columns.txt"
+                    && checksums.isEqual(old_checksums, file_name))
+                {
+                    MergeTreeData::DataPart::Checksum checksum = it->second;
+                    skip_copy_checksums.addFile(file_name, checksum.file_size, checksum.file_hash);
+                    it = checksums.files.erase(it);
+                    continue;
+                }
+                ++it;
+            }
+        }
+    }
+
     writeBinary(checksums.files.size(), out);
-    for (const auto & it : checksums.files)
+    writeBoolText(enable_compact_map_data, out);
+    
+    using pair = std::pair<String, MergeTreeDataPartChecksum>;
+    std::vector<pair> checksumsVector;
+
+    for (auto it = checksums.files.begin(); it != checksums.files.end(); it++)
+        checksumsVector.emplace_back(*it);
+
+    if (enable_compact_map_data)
+    {
+        // when enabling compact map data, it needs to sort the checksum.files, because all implicit columns of a map column need to transfer by order.
+        sort(checksumsVector.begin(), checksumsVector.end(), [](const pair &x, const pair &y) -> int {
+            return x.second.file_offset < y.second.file_offset;
+        });
+    }
+
+    if (incrementally)
+    {
+        /// Handle columns which only need to be created hard link in fetcher
+        writeBinary(skip_copy_checksums.files.size(), out);
+        for (auto it = skip_copy_checksums.files.begin(); it != skip_copy_checksums.files.end(); ++it)
+        {
+            String file_name = it->first;
+            UInt64 size = it->second.file_size;
+            MergeTreeDataPartChecksum::uint128 hash = it->second.file_hash;
+            writeStringBinary(file_name, out);
+            writeBinary(size, out);
+            writePODBinary(hash, out);
+            if (blocker.isCancelled())
+                throw Exception("Transferring part to replica was cancelled", ErrorCodes::ABORTED);
+
+            if (file_name != "checksums.txt" && file_name != "columns.txt")
+                data_checksums.addFile(file_name, size, hash);
+        }
+    }
+
+    for (const auto & it : checksumsVector)
     {
         String file_name = it.first;
+        String path;
+        UInt64 size;
 
-        String path = fs::path(part->getFullRelativePath()) / file_name;
+        if (enable_compact_map_data && isMapImplicitKeyNotKV(file_name))
+        {
+            path = fs::path(part->getFullRelativePath()) / getMapFileNameFromImplicitFileName(file_name);
+            size = it.second.file_size;
+        }
+        else
+        {
+            path = fs::path(part->getFullRelativePath()) / file_name;
+            size = disk->getFileSize(path);
+        }
 
-        UInt64 size = disk->getFileSize(path);
-
-        writeStringBinary(it.first, out);
+        writeStringBinary(file_name, out);
         writeBinary(size, out);
 
-        auto file_in = disk->readFile(path);
         HashingWriteBuffer hashing_out(out);
-        copyDataWithThrottler(*file_in, hashing_out, blocker.getCounter(), data.getSendsThrottler());
+        if (enable_compact_map_data && isMapImplicitKeyNotKV(file_name))
+        {
+            UInt64 offset = it.second.file_offset;
+            auto file_in = disk->readFile(path);
+            file_in->seek(offset);
+            LimitReadBuffer limit_file_in(*file_in, size, false);
+            copyDataWithThrottler(limit_file_in, hashing_out, blocker.getCounter(), data.getSendsThrottler());
+        }
+        else
+        {
+            auto file_in = disk->readFile(path);
+            copyDataWithThrottler(*file_in, hashing_out, blocker.getCounter(), data.getSendsThrottler());
+        }
 
         if (blocker.isCancelled())
             throw Exception("Transferring part to replica was cancelled", ErrorCodes::ABORTED);
@@ -319,14 +524,14 @@ MergeTreeData::DataPart::Checksums Service::sendPartFromDisk(
             data_checksums.addFile(file_name, hashing_out.count(), hashing_out.getHash());
     }
 
-    part->checksums.checkEqual(data_checksums, false);
+    part->getChecksums()->checkEqual(data_checksums, false);
     return data_checksums;
 }
 
 void Service::sendPartS3Metadata(const MergeTreeData::DataPartPtr & part, WriteBuffer & out)
 {
     /// We'll take a list of files from the list of checksums.
-    MergeTreeData::DataPart::Checksums checksums = part->checksums;
+    MergeTreeData::DataPart::Checksums checksums = *(part->getChecksums());
     /// Add files that are not in the checksum list.
     auto file_names_without_checksums = part->getFileNamesWithoutChecksums();
     for (const auto & file_name : file_names_without_checksums)
@@ -359,7 +564,7 @@ void Service::sendPartS3Metadata(const MergeTreeData::DataPartPtr & part, WriteB
         writeStringBinary(it.first, out);
         writeBinary(file_size, out);
 
-        auto file_in = createReadBufferFromFileBase(metadata_file, 0, 0, 0, nullptr, DBMS_DEFAULT_BUFFER_SIZE);
+        auto file_in = createReadBufferFromFileBase(metadata_file, {});
         HashingWriteBuffer hashing_out(out);
         copyDataWithThrottler(*file_in, hashing_out, blocker.getCounter(), data.getSendsThrottler());
         if (blocker.isCancelled())
@@ -400,7 +605,8 @@ MergeTreeData::MutableDataPartPtr Fetcher::fetchPart(
     const String & tmp_prefix_,
     std::optional<CurrentlySubmergingEmergingTagger> * tagger_ptr,
     bool try_use_s3_copy,
-    const DiskPtr disk_s3)
+    const DiskPtr disk_s3,
+    bool incrementally)
 {
     if (blocker.isCancelled())
         throw Exception("Fetching of part was cancelled", ErrorCodes::ABORTED);
@@ -408,6 +614,10 @@ MergeTreeData::MutableDataPartPtr Fetcher::fetchPart(
     /// Validation of the input that may come from malicious replica.
     auto part_info = MergeTreePartInfo::fromPartName(part_name, data.format_version);
     const auto data_settings = data.getSettings();
+
+    MergeTreeData::DataPartPtr old_version_part = nullptr;
+    if (incrementally)
+        old_version_part = data.getOldVersionPartIfExists(part_name);
 
     Poco::URI uri;
     uri.setScheme(interserver_scheme);
@@ -418,7 +628,8 @@ MergeTreeData::MutableDataPartPtr Fetcher::fetchPart(
         {"endpoint",                getEndpointId(replica_path)},
         {"part",                    part_name},
         {"client_protocol_version", toString(REPLICATION_PROTOCOL_VERSION_WITH_PARTS_PROJECTION)},
-        {"compress",                "false"}
+        {"compress",                "false"},
+        {"fetch_part_incrementally", old_version_part ? "true": "false"}
     });
 
     if (try_use_s3_copy && disk_s3 && disk_s3->getType() != DB::DiskType::Type::S3)
@@ -454,10 +665,15 @@ MergeTreeData::MutableDataPartPtr Fetcher::fetchPart(
         creds.setPassword(password);
     }
 
+    auto out_stream_callback = [&](std::ostream & stream_out) {
+        if (old_version_part)
+            stream_out << old_version_part->getChecksums()->getSerializedString();
+    };
+
     PooledReadWriteBufferFromHTTP in{
         uri,
         Poco::Net::HTTPRequest::HTTP_POST,
-        {},
+        out_stream_callback,
         timeouts,
         creds,
         DBMS_DEFAULT_BUFFER_SIZE,
@@ -466,6 +682,10 @@ MergeTreeData::MutableDataPartPtr Fetcher::fetchPart(
     };
 
     int server_protocol_version = parse<int>(in.getResponseCookie("server_protocol_version", "0"));
+    
+    auto fetch_part_incrementally = in.getResponseCookie("fetch_part_incrementally", "false");
+    if (old_version_part && fetch_part_incrementally == "false")
+        old_version_part = nullptr;
 
     int send_s3 = parse<int>(in.getResponseCookie("send_s3_metadata", "0"));
 
@@ -530,7 +750,7 @@ MergeTreeData::MutableDataPartPtr Fetcher::fetchPart(
                 throw;
             /// Try again but without S3 copy
             return fetchPart(metadata_snapshot, context, part_name, replica_path, host, port, timeouts,
-                user, password, interserver_scheme, throttler, to_detached, tmp_prefix_, nullptr, false);
+                user, password, interserver_scheme, throttler, to_detached, tmp_prefix_, nullptr, false, nullptr, incrementally);
         }
     }
 
@@ -578,7 +798,7 @@ MergeTreeData::MutableDataPartPtr Fetcher::fetchPart(
         readUUIDText(part_uuid, in);
 
     auto storage_id = data.getStorageID();
-    String new_part_path = part_type == "InMemory" ? "memory" : fs::path(data.getFullPathOnDisk(reservation->getDisk())) / part_name / "";
+    String new_part_path = part_type == "InMemory" ? "memory" : fs::path(data.getFullPathOnDisk(IStorage::StorageLocation::MAIN, reservation->getDisk())) / part_name / "";
     auto entry = data.getContext()->getReplicatedFetchList().insert(
         storage_id.getDatabaseName(), storage_id.getTableName(),
         part_info.partition_id, part_name, new_part_path,
@@ -594,7 +814,55 @@ MergeTreeData::MutableDataPartPtr Fetcher::fetchPart(
     MergeTreeData::DataPart::Checksums checksums;
     return part_type == "InMemory"
         ? downloadPartToMemory(part_name, part_uuid, metadata_snapshot, context, std::move(reservation), in, projections, throttler)
-        : downloadPartToDisk(part_name, replica_path, to_detached, tmp_prefix_, sync, reservation->getDisk(), in, projections, checksums, throttler);
+        : downloadPartToDisk(part_name, replica_path, to_detached, tmp_prefix_, sync, reservation->getDisk(), in, projections, checksums, throttler, old_version_part);
+}
+
+Strings Fetcher::fetchPartList(
+    const String & partition_id,
+    const String & filter,
+    const String & endpoint_str,
+    const String & host,
+    int port,
+    const ConnectionTimeouts & timeouts,
+    const String & user,
+    const String & password,
+    const String & interserver_scheme)
+{
+    Strings res;
+
+    Poco::URI uri;
+    uri.setScheme(interserver_scheme);
+    uri.setScheme("http");
+    uri.setHost(host);
+    uri.setPort(port);
+    uri.setQueryParameters(
+        {{"qtype", "FetchList"},
+         {"endpoint", getEndpointId(endpoint_str)},
+         {"id", partition_id},
+         {"filter", filter},
+         {"compress", "false"}});
+
+    Poco::Net::HTTPBasicCredentials creds{};
+    if (!user.empty())
+    {
+        creds.setUsername(user);
+        creds.setPassword(password);
+    }
+
+    ReadWriteBufferFromHTTP in{uri, Poco::Net::HTTPRequest::HTTP_POST, {}, timeouts, 0, creds};
+
+    //TODO: add Metrics to track such sync process.
+
+    size_t num_parts = 0;
+    readBinary(num_parts, in);
+
+    for (size_t i = 0; i < num_parts; i++)
+    {
+        res.emplace_back();
+        readStringBinary(res.back(), in);
+    }
+
+    return res;
 }
 
 MergeTreeData::MutableDataPartPtr Fetcher::downloadPartToMemory(
@@ -643,7 +911,7 @@ MergeTreeData::MutableDataPartPtr Fetcher::downloadPartToMemory(
         part_out.writePrefix();
         part_out.write(block);
         part_out.writeSuffixAndFinalizePart(new_projection_part);
-        new_projection_part->checksums.checkEqual(checksums, /* have_uncompressed = */ true);
+        new_projection_part->getChecksums()->checkEqual(checksums, /* have_uncompressed = */ true);
         new_data_part->addProjectionPart(projection_name, std::move(new_projection_part));
     }
 
@@ -666,7 +934,7 @@ MergeTreeData::MutableDataPartPtr Fetcher::downloadPartToMemory(
     part_out.writePrefix();
     part_out.write(block);
     part_out.writeSuffixAndFinalizePart(new_data_part);
-    new_data_part->checksums.checkEqual(checksums, /* have_uncompressed = */ true);
+    new_data_part->getChecksums()->checkEqual(checksums, /* have_uncompressed = */ true);
 
     return new_data_part;
 }
@@ -678,18 +946,64 @@ void Fetcher::downloadBaseOrProjectionPartToDisk(
     DiskPtr disk,
     PooledReadWriteBufferFromHTTP & in,
     MergeTreeData::DataPart::Checksums & checksums,
-    ThrottlerPtr throttler) const
+    ThrottlerPtr throttler,
+    const MergeTreeData::DataPartPtr & old_version_part) const
 {
     size_t files;
     readBinary(files, in);
 
+    bool enable_compact_map_data;
+    readBoolText(enable_compact_map_data, in);
+
+    if (old_version_part)
+    {
+        size_t skip_copy_files;
+        readBinary(skip_copy_files, in);
+
+        for (size_t i = 0; i < skip_copy_files; ++i)
+        {
+            String stream_name;
+            UInt64 file_size;
+            MergeTreeDataPartChecksum::uint128 expected_hash;
+
+            readStringBinary(stream_name, in);
+            readBinary(file_size, in);
+            readPODBinary(expected_hash, in);
+
+            Poco::Path source(old_version_part->getFullPath() + stream_name);
+            Poco::Path destination(fs::path(disk->getPath()) / fs::path(part_download_path) / stream_name);
+            createHardLink(source.toString(), destination.toString());
+
+            if (blocker.isCancelled())
+            {
+                /// NOTE The is_cancelled flag also makes sense to check every time you read over the network,
+                /// performing a poll with a not very large timeout.
+                /// And now we check it only between read chunks (in the `copyData` function).
+                disk->removeRecursive(part_download_path);
+                throw Exception("Fetching of part was cancelled", ErrorCodes::ABORTED);
+            }
+
+            if (stream_name != "checksums.txt" && stream_name != "columns.txt")
+                checksums.addFile(stream_name, file_size, expected_hash);
+        }
+    }
+
     for (size_t i = 0; i < files; ++i)
     {
-        String file_name;
+        String stream_name;
         UInt64 file_size;
 
-        readStringBinary(file_name, in);
+        readStringBinary(stream_name, in);
         readBinary(file_size, in);
+
+        // When enable compact map data and the stream is implicit column, the file stream need to append.
+        bool need_append = false;
+        String file_name = stream_name;
+        if (enable_compact_map_data && isMapImplicitKeyNotKV(stream_name))
+        {
+            need_append = true;
+            file_name = getMapFileNameFromImplicitFileName(stream_name);
+        }
 
         /// File must be inside "absolute_part_path" directory.
         /// Otherwise malicious ClickHouse replica may force us to write to arbitrary path.
@@ -699,7 +1013,8 @@ void Fetcher::downloadBaseOrProjectionPartToDisk(
                 " This may happen if we are trying to download part from malicious replica or logical error.",
                 ErrorCodes::INSECURE_PATH);
 
-        auto file_out = disk->writeFile(fs::path(part_download_path) / file_name);
+        auto file_out = disk->writeFile(
+            fs::path(part_download_path) / file_name, {.mode = need_append ? WriteMode::Append : WriteMode::Rewrite});
         HashingWriteBuffer hashing_out(*file_out);
         copyDataWithThrottler(in, hashing_out, file_size, blocker.getCounter(), throttler);
 
@@ -716,13 +1031,13 @@ void Fetcher::downloadBaseOrProjectionPartToDisk(
         readPODBinary(expected_hash, in);
 
         if (expected_hash != hashing_out.getHash())
-            throw Exception("Checksum mismatch for file " + fullPath(disk, (fs::path(part_download_path) / file_name).string()) + " transferred from " + replica_path,
+            throw Exception("Checksum mismatch for file " + fullPath(disk, (fs::path(part_download_path) / stream_name).string()) + " transferred from " + replica_path,
                 ErrorCodes::CHECKSUM_DOESNT_MATCH);
 
-        if (file_name != "checksums.txt" &&
-            file_name != "columns.txt" &&
-            file_name != IMergeTreeDataPart::DEFAULT_COMPRESSION_CODEC_FILE_NAME)
-            checksums.addFile(file_name, file_size, expected_hash);
+        if (stream_name != "checksums.txt" &&
+            stream_name != "columns.txt" &&
+            stream_name != IMergeTreeDataPart::DEFAULT_COMPRESSION_CODEC_FILE_NAME)
+            checksums.addFile(stream_name, file_size, expected_hash);
 
         if (sync)
             hashing_out.sync();
@@ -739,7 +1054,8 @@ MergeTreeData::MutableDataPartPtr Fetcher::downloadPartToDisk(
     PooledReadWriteBufferFromHTTP & in,
     size_t projections,
     MergeTreeData::DataPart::Checksums & checksums,
-    ThrottlerPtr throttler)
+    ThrottlerPtr throttler,
+    const MergeTreeData::DataPartPtr & old_version_part)
 {
     static const String TMP_PREFIX = "tmp-fetch_";
     String tmp_prefix = tmp_prefix_.empty() ? TMP_PREFIX : tmp_prefix_;
@@ -752,11 +1068,13 @@ MergeTreeData::MutableDataPartPtr Fetcher::downloadPartToDisk(
         throw Exception("Logical error: tmp_prefix and part_name cannot be empty or contain '.' or '/' characters.", ErrorCodes::LOGICAL_ERROR);
 
     String part_relative_path = String(to_detached ? "detached/" : "") + tmp_prefix + part_name;
-    String part_download_path = data.getRelativeDataPath() + part_relative_path + "/";
+    String part_download_path = data.getRelativeDataPath(IStorage::StorageLocation::MAIN) + part_relative_path + "/";
 
     if (disk->exists(part_download_path))
     {
-        LOG_WARNING(log, "Directory {} already exists, probably result of a failed fetch. Will remove it before fetching part.",
+        LOG_WARNING(
+            log,
+            "Directory {} already exists, probably result of a failed fetch. Will remove it before fetching part.",
             fullPath(disk, part_download_path));
         disk->removeRecursive(part_download_path);
     }
@@ -776,13 +1094,20 @@ MergeTreeData::MutableDataPartPtr Fetcher::downloadPartToDisk(
         MergeTreeData::DataPart::Checksums projection_checksum;
         disk->createDirectories(part_download_path + projection_name + ".proj/");
         downloadBaseOrProjectionPartToDisk(
-            replica_path, part_download_path + projection_name + ".proj/", sync, disk, in, projection_checksum, throttler);
+            replica_path,
+            part_download_path + projection_name + ".proj/",
+            sync,
+            disk,
+            in,
+            projection_checksum,
+            throttler,
+            old_version_part);
         checksums.addFile(
             projection_name + ".proj", projection_checksum.getTotalSizeOnDisk(), projection_checksum.getTotalChecksumUInt128());
     }
 
     // Download the base part
-    downloadBaseOrProjectionPartToDisk(replica_path, part_download_path, sync, disk, in, checksums, throttler);
+    downloadBaseOrProjectionPartToDisk(replica_path, part_download_path, sync, disk, in, checksums, throttler, old_version_part);
 
     assertEOF(in);
     auto volume = std::make_shared<SingleDiskVolume>("volume_" + part_name, disk, 0);
@@ -790,7 +1115,7 @@ MergeTreeData::MutableDataPartPtr Fetcher::downloadPartToDisk(
     new_data_part->is_temp = true;
     new_data_part->modification_time = time(nullptr);
     new_data_part->loadColumnsChecksumsIndexes(true, false);
-    new_data_part->checksums.checkEqual(checksums, false);
+    new_data_part->getChecksums()->checkEqual(checksums, false);
     return new_data_part;
 }
 
@@ -824,7 +1149,7 @@ MergeTreeData::MutableDataPartPtr Fetcher::downloadPartToS3(
     String tmp_prefix = tmp_prefix_.empty() ? TMP_PREFIX : tmp_prefix_;
 
     String part_relative_path = String(to_detached ? "detached/" : "") + tmp_prefix + part_name;
-    String part_download_path = fs::path(data.getRelativeDataPath()) / part_relative_path / "";
+    String part_download_path = fs::path(data.getRelativeDataPath(IStorage::StorageLocation::MAIN)) / part_relative_path / "";
 
     if (disk->exists(part_download_path))
         throw Exception("Directory " + fullPath(disk, part_download_path) + " already exists.", ErrorCodes::DIRECTORY_ALREADY_EXISTS);

@@ -26,6 +26,8 @@ public:
     String getName() const override { return input_format->getName(); }
     Block getHeader() const override { return input_format->getPort().getHeader(); }
 
+    InputFormatPtr getInputFormatPtr() const { return input_format; }
+
     void cancel(bool kill) override
     {
         input_format->cancel();

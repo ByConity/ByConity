@@ -6,11 +6,13 @@
 /// Available events. Add something here as you wish.
 #define APPLY_FOR_EVENTS(M) \
     M(Query, "Number of queries to be interpreted and potentially executed. Does not include queries that failed to parse or were rejected due to AST size limits, quota limits or limits on the number of simultaneously running queries. May include internal queries initiated by ClickHouse itself. Does not count subqueries.") \
+    M(VwQuery, "Number of queries started to be interpreted and maybe executed that belongs to a virtual warehouse.") \
     M(SelectQuery, "Same as Query, but only for SELECT queries.") \
     M(InsertQuery, "Same as Query, but only for INSERT queries.") \
     M(FailedQuery, "Number of failed queries.") \
     M(FailedSelectQuery, "Same as FailedQuery, but only for SELECT queries.") \
     M(FailedInsertQuery, "Same as FailedQuery, but only for INSERT queries.") \
+    M(InsufficientConcurrencyQuery, "Number of queries that are cancelled due to insufficient concurrency") \
     M(QueryTimeMicroseconds, "Total time of all queries.") \
     M(SelectQueryTimeMicroseconds, "Total time of SELECT queries.") \
     M(InsertQueryTimeMicroseconds, "Total time of INSERT queries.") \
@@ -42,6 +44,10 @@
     M(TableFunctionExecute, "") \
     M(MarkCacheHits, "") \
     M(MarkCacheMisses, "") \
+    M(QueryCacheHits, "") \
+    M(QueryCacheMisses, "") \
+    M(ChecksumsCacheHits, "") \
+    M(ChecksumsCacheMisses, "") \
     M(CreatedReadBufferOrdinary, "") \
     M(CreatedReadBufferAIO, "") \
     M(CreatedReadBufferAIOFailed, "") \
@@ -96,6 +102,13 @@
     M(ZooKeeperBytesSent, "") \
     M(ZooKeeperBytesReceived, "") \
     \
+    M(StorageMemoryFlush, "") \
+    M(StorageMemoryErrorOnFlush, "") \
+    M(StorageMemoryPassedAllMinThresholds, "") \
+    M(StorageMemoryPassedTimeMaxThreshold, "") \
+    M(StorageMemoryPassedRowsMaxThreshold, "") \
+    M(StorageMemoryPassedBytesMaxThreshold, "") \
+    \
     M(DistributedConnectionFailTry, "Total count when distributed connection fails with retry") \
     M(DistributedConnectionMissingTable, "") \
     M(DistributedConnectionStaleReplica, "") \
@@ -118,6 +131,7 @@
     M(SlowRead, "Number of reads from a file that were slow. This indicate system overload. Thresholds are controlled by read_backoff_* settings.") \
     M(ReadBackoff, "Number of times the number of query processing threads was lowered due to slow reads.") \
     \
+    M(ReplicaYieldLeadership, "Number of times Replicated table was yielded its leadership due to large replication lag relative to other replicas.") \
     M(ReplicaPartialShutdown, "How many times Replicated table has to deinitialize its state due to session expiration in ZooKeeper. The state is reinitialized every time when ZooKeeper is available again.") \
     \
     M(SelectedParts, "Number of data parts selected to read from a MergeTree table.") \
@@ -248,7 +262,422 @@
     M(S3WriteRequestsThrottling, "Number of 429 and 503 errors in POST, DELETE, PUT and PATCH requests to S3 storage.") \
     M(S3WriteRequestsRedirects, "Number of redirects in POST, DELETE, PUT and PATCH requests to S3 storage.") \
     M(QueryMemoryLimitExceeded, "Number of times when memory limit exceeded for query.") \
-
+    M(MarkBitmapIndexReadMicroseconds, "Total time spent in reading mark bitmap index.") \
+    \
+    M(SDRequest, "Number requests sent to SD") \
+    M(SDRequestFailed, "Number requests sent to SD that failed") \
+    M(SDRequestUpstream, "Number requests sent to SD upstream") \
+    M(SDRequestUpstreamFailed, "Number requests sent to SD upstream that failed") \
+    \
+    M(WriteBufferFromHdfsWriteBytes, "")\
+    M(HDFSWriteElapsedMilliseconds, "")\
+    M(WriteBufferFromHdfsWrite, "")\
+    M(WriteBufferFromHdfsWriteFailed, "")\
+    M(HdfsFileOpen, "")\
+    M(ReadBufferFromHdfsRead, "")\
+    M(ReadBufferFromHdfsReadFailed, "")\
+    M(ReadBufferFromHdfsReadBytes, "")\
+    M(HDFSReadElapsedMilliseconds, "")\
+    M(HDFSSeek, "")\
+    M(HDFSSeekElapsedMicroseconds, "")\
+    M(HdfsGetBlkLocMicroseconds, "Total number of millisecons spent to call getBlockLocations") \
+    M(HdfsSlowNodeCount, "Total number of millisecons spent to call getBlockLocations") \
+    M(HdfsFailedNodeCount, "Total number of millisecons spent to call getBlockLocations")     \
+    \
+    M(DiskCacheGetMicroSeconds, "Total time for disk cache get operation") \
+    M(DiskCacheAcquireStatsLock, "Total time for acquire table stats lock") \
+    M(DiskCacheScheduleCacheTaskMicroSeconds, "Total time for schedule disk cache task") \
+    M(DiskCacheUpdateStatsMicroSeconds, "Total time for update disk cache statistics") \
+    M(DiskCacheGetMetaMicroSeconds, "Total time for disk cache get operations") \
+    M(DiskCacheGetTotalOps, "Total count of disk cache get operations") \
+    M(DiskCacheSetTotalOps, "Total count of disk cache set operations") \
+    \
+    M(CnchTxnAborted, "Total number of aborted transactions (excludes preempting transactions)") \
+    M(CnchTxnCommitted, "Total number of committed transactions") \
+    M(CnchTxnExpired, "Total number of expired transactions") \
+    M(CnchTxnReadTxnCreated, "Total number of read only transaction created") \
+    M(CnchTxnWriteTxnCreated, "Total number of write transaction created") \
+    M(CnchTxnCommitV1Failed, "Number of commitV1 failures") \
+    M(CnchTxnCommitV2Failed, "Number of commitV2 failures") \
+    M(CnchTxnCommitV1ElapsedMilliseconds, "Total number of milliseconds spent to commitV1") \
+    M(CnchTxnCommitV2ElapsedMilliseconds, "Total number of milliseconds spent to commitV2") \
+    M(CnchTxnPrecommitElapsedMilliseconds, "Total number of milliseconds spent to preempt tranasctions") \
+    M(CnchTxnCommitKVElapsedMilliseconds, "Total number of milliseconds spent to commit transaction in catalog") \
+    M(CnchTxnCleanFailed, "Number of times clean a transaction was failed") \
+    M(CnchTxnCleanElapsedMilliseconds, "Total number of milliseconds spent to clean transactions") \
+    M(CnchTxnAllTransactionRecord, "Total number of transaction records") \
+    M(CnchTxnFinishedTransactionRecord, "Total number of finished transaction records") \
+    \
+    M(IntentLockElapsedMilliseconds, "Total time spent to acquire intent locks") \
+    M(IntentLockWriteIntentElapsedMilliseconds, "Total time spent to write intents") \
+    M(IntentLockPreemptionElapsedMilliseconds, "Total time spent to preempt conflict locks") \
+    M(TsCacheCheckElapsedMilliseconds, "Total number of milliseconds spent to check in Timestamp cache") \
+    M(TsCacheUpdateElapsedMilliseconds, "Total number of milliseconds spent to update in Timestamp cache") \
+    M(CatalogConstructorSuccess, "") \
+    M(CatalogConstructorFailed, "") \
+    M(CatalogTime, "Total time spent getting data parts from Catalog") \
+    M(TotalPartitions, "Number of total partitions") \
+    M(PrunedPartitions, "Number of pruned partitions") \
+    M(UpdateTableStatisticsSuccess, "") \
+    M(UpdateTableStatisticsFailed, "") \
+    M(GetTableStatisticsSuccess, "") \
+    M(GetTableStatisticsFailed, "") \
+    M(GetAvailableTableStatisticsTagsSuccess, "") \
+    M(GetAvailableTableStatisticsTagsFailed, "") \
+    M(RemoveTableStatisticsSuccess, "") \
+    M(RemoveTableStatisticsFailed, "") \
+    M(UpdateColumnStatisticsSuccess, "") \
+    M(UpdateColumnStatisticsFailed, "") \
+    M(GetColumnStatisticsSuccess, "") \
+    M(GetColumnStatisticsFailed, "") \
+    M(GetAvailableColumnStatisticsTagsSuccess, "") \
+    M(GetAvailableColumnStatisticsTagsFailed, "") \
+    M(RemoveColumnStatisticsSuccess, "") \
+    M(RemoveColumnStatisticsFailed, "") \
+    M(CreateDatabaseSuccess, "") \
+    M(CreateDatabaseFailed, "") \
+    M(GetDatabaseSuccess, "") \
+    M(GetDatabaseFailed, "") \
+    M(IsDatabaseExistsSuccess, "") \
+    M(IsDatabaseExistsFailed, "") \
+    M(DropDatabaseSuccess, "") \
+    M(DropDatabaseFailed, "") \
+    M(RenameDatabaseSuccess, "") \
+    M(RenameDatabaseFailed, "") \
+    M(CreateTableSuccess, "") \
+    M(CreateTableFailed, "") \
+    M(DropTableSuccess, "") \
+    M(DropTableFailed, "") \
+    M(CreateUDFSuccess, "") \
+    M(CreateUDFFailed, "") \
+    M(DropUDFSuccess, "") \
+    M(DropUDFFailed, "") \
+    M(DetachTableSuccess, "") \
+    M(DetachTableFailed, "") \
+    M(AttachTableSuccess, "") \
+    M(AttachTableFailed, "") \
+    M(IsTableExistsSuccess, "") \
+    M(IsTableExistsFailed, "") \
+    M(AlterTableSuccess, "") \
+    M(AlterTableFailed, "") \
+    M(RenameTableSuccess, "") \
+    M(RenameTableFailed, "") \
+    M(SetWorkerGroupForTableSuccess, "") \
+    M(SetWorkerGroupForTableFailed, "") \
+    M(GetTableSuccess, "") \
+    M(GetTableFailed, "") \
+    M(TryGetTableSuccess, "") \
+    M(TryGetTableFailed, "") \
+    M(TryGetTableByUUIDSuccess, "") \
+    M(TryGetTableByUUIDFailed, "") \
+    M(GetTableByUUIDSuccess, "") \
+    M(GetTableByUUIDFailed, "") \
+    M(GetTablesInDBSuccess, "") \
+    M(GetTablesInDBFailed, "") \
+    M(GetAllViewsOnSuccess, "") \
+    M(GetAllViewsOnFailed, "") \
+    M(SetTableActivenessSuccess, "") \
+    M(SetTableActivenessFailed, "") \
+    M(GetTableActivenessSuccess, "") \
+    M(GetTableActivenessFailed, "") \
+    M(GetServerDataPartsInPartitionsSuccess, "") \
+    M(GetServerDataPartsInPartitionsFailed, "") \
+    M(GetAllServerDataPartsSuccess, "") \
+    M(GetAllServerDataPartsFailed, "") \
+    M(GetDataPartsByNamesSuccess, "") \
+    M(GetDataPartsByNamesFailed, "") \
+    M(GetStagedDataPartsByNamesSuccess, "") \
+    M(GetStagedDataPartsByNamesFailed, "") \
+    M(GetAllDeleteBitmapsSuccess, "") \
+    M(GetAllDeleteBitmapsFailed, "") \
+    M(GetStagedPartsSuccess, "") \
+    M(GetStagedPartsFailed, "") \
+    M(GetDeleteBitmapsInPartitionsSuccess, "") \
+    M(GetDeleteBitmapsInPartitionsFailed, "") \
+    M(GetDeleteBitmapByKeysSuccess, "") \
+    M(GetDeleteBitmapByKeysFailed, "") \
+    M(AddDeleteBitmapsSuccess, "") \
+    M(AddDeleteBitmapsFailed, "") \
+    M(RemoveDeleteBitmapsSuccess, "") \
+    M(RemoveDeleteBitmapsFailed, "") \
+    M(FinishCommitSuccess, "") \
+    M(FinishCommitFailed, "") \
+    M(GetKafkaOffsetsVoidSuccess, "") \
+    M(GetKafkaOffsetsVoidFailed, "") \
+    M(GetKafkaOffsetsTopicPartitionListSuccess, "") \
+    M(GetKafkaOffsetsTopicPartitionListFailed, "") \
+    M(ClearOffsetsForWholeTopicSuccess, "") \
+    M(ClearOffsetsForWholeTopicFailed, "") \
+    M(DropAllPartSuccess, "") \
+    M(DropAllPartFailed, "") \
+    M(GetPartitionListSuccess, "") \
+    M(GetPartitionListFailed, "") \
+    M(GetPartitionsFromMetastoreSuccess, "") \
+    M(GetPartitionsFromMetastoreFailed, "") \
+    M(GetPartitionIDsSuccess, "") \
+    M(GetPartitionIDsFailed, "") \
+    M(CreateDictionarySuccess, "") \
+    M(CreateDictionaryFailed, "") \
+    M(GetCreateDictionarySuccess, "") \
+    M(GetCreateDictionaryFailed, "") \
+    M(DropDictionarySuccess, "") \
+    M(DropDictionaryFailed, "") \
+    M(DetachDictionarySuccess, "") \
+    M(DetachDictionaryFailed, "") \
+    M(AttachDictionarySuccess, "") \
+    M(AttachDictionaryFailed, "") \
+    M(GetDictionariesInDBSuccess, "") \
+    M(GetDictionariesInDBFailed, "") \
+    M(GetDictionarySuccess, "") \
+    M(GetDictionaryFailed, "") \
+    M(IsDictionaryExistsSuccess, "") \
+    M(IsDictionaryExistsFailed, "") \
+    M(TryLockPartInKVSuccess, "") \
+    M(TryLockPartInKVFailed, "") \
+    M(UnLockPartInKVSuccess, "") \
+    M(UnLockPartInKVFailed, "") \
+    M(TryResetAndLockConflictPartsInKVSuccess, "") \
+    M(TryResetAndLockConflictPartsInKVFailed, "") \
+    M(CreateTransactionRecordSuccess, "") \
+    M(CreateTransactionRecordFailed, "") \
+    M(RemoveTransactionRecordSuccess, "") \
+    M(RemoveTransactionRecordFailed, "") \
+    M(RemoveTransactionRecordsSuccess, "") \
+    M(RemoveTransactionRecordsFailed, "") \
+    M(GetTransactionRecordSuccess, "") \
+    M(GetTransactionRecordFailed, "") \
+    M(TryGetTransactionRecordSuccess, "") \
+    M(TryGetTransactionRecordFailed, "") \
+    M(SetTransactionRecordSuccess, "") \
+    M(SetTransactionRecordFailed, "") \
+    M(SetTransactionRecordWithRequestsSuccess, "") \
+    M(SetTransactionRecordWithRequestsFailed, "") \
+    M(SetTransactionRecordCleanTimeSuccess, "") \
+    M(SetTransactionRecordCleanTimeFailed, "") \
+    M(SetTransactionRecordStatusWithOffsetsSuccess, "") \
+    M(SetTransactionRecordStatusWithOffsetsFailed, "") \
+    M(RollbackTransactionSuccess, "") \
+    M(RollbackTransactionFailed, "") \
+    M(WriteIntentsSuccess, "") \
+    M(WriteIntentsFailed, "") \
+    M(TryResetIntentsIntentsToResetSuccess, "") \
+    M(TryResetIntentsIntentsToResetFailed, "") \
+    M(TryResetIntentsOldIntentsSuccess, "") \
+    M(TryResetIntentsOldIntentsFailed, "") \
+    M(ClearIntentsSuccess, "") \
+    M(ClearIntentsFailed, "") \
+    M(WritePartsSuccess, "") \
+    M(WritePartsFailed, "") \
+    M(SetCommitTimeSuccess, "") \
+    M(SetCommitTimeFailed, "") \
+    M(ClearPartsSuccess, "") \
+    M(ClearPartsFailed, "") \
+    M(WriteUndoBufferConstResourceSuccess, "") \
+    M(WriteUndoBufferConstResourceFailed, "") \
+    M(WriteUndoBufferNoConstResourceSuccess, "") \
+    M(WriteUndoBufferNoConstResourceFailed, "") \
+    M(ClearUndoBufferSuccess, "") \
+    M(ClearUndoBufferFailed, "") \
+    M(GetUndoBufferSuccess, "") \
+    M(GetUndoBufferFailed, "") \
+    M(GetAllUndoBufferSuccess, "") \
+    M(GetAllUndoBufferFailed, "") \
+    M(GetTransactionRecordsSuccess, "") \
+    M(GetTransactionRecordsFailed, "") \
+    M(GetTransactionRecordsTxnIdsSuccess, "") \
+    M(GetTransactionRecordsTxnIdsFailed, "") \
+    M(GetTransactionRecordsForGCSuccess, "") \
+    M(GetTransactionRecordsForGCFailed, "") \
+    M(ClearZombieIntentSuccess, "") \
+    M(ClearZombieIntentFailed, "") \
+    M(WriteFilesysLockSuccess, "") \
+    M(WriteFilesysLockFailed, "") \
+    M(GetFilesysLockSuccess, "") \
+    M(GetFilesysLockFailed, "") \
+    M(ClearFilesysLockDirSuccess, "") \
+    M(ClearFilesysLockDirFailed, "") \
+    M(ClearFilesysLockTxnIdSuccess, "") \
+    M(ClearFilesysLockTxnIdFailed, "") \
+    M(GetAllFilesysLockSuccess, "") \
+    M(GetAllFilesysLockFailed, "") \
+    M(InsertTransactionSuccess, "") \
+    M(InsertTransactionFailed, "") \
+    M(RemoveTransactionSuccess, "") \
+    M(RemoveTransactionFailed, "") \
+    M(GetActiveTransactionsSuccess, "") \
+    M(GetActiveTransactionsFailed, "") \
+    M(UpdateServerWorkerGroupSuccess, "") \
+    M(UpdateServerWorkerGroupFailed, "") \
+    M(GetWorkersInWorkerGroupSuccess, "") \
+    M(GetWorkersInWorkerGroupFailed, "") \
+    M(GetTableByIDSuccess, "") \
+    M(GetTableByIDFailed, "") \
+    M(GetTablesByIDSuccess, "") \
+    M(GetTablesByIDFailed, "") \
+    M(GetAllDataBasesSuccess, "") \
+    M(GetAllDataBasesFailed, "") \
+    M(GetAllTablesSuccess, "") \
+    M(GetAllTablesFailed, "") \
+    M(GetTrashTableIDIteratorSuccess, "") \
+    M(GetTrashTableIDIteratorFailed, "") \
+    M(GetAllUDFsSuccess, "") \
+    M(GetAllUDFsFailed, "") \
+    M(GetUDFByNameSuccess, "") \
+    M(GetUDFByNameFailed, "") \
+    M(GetTrashTableIDSuccess, "") \
+    M(GetTrashTableIDFailed, "") \
+    M(GetTablesInTrashSuccess, "") \
+    M(GetTablesInTrashFailed, "") \
+    M(GetDatabaseInTrashSuccess, "") \
+    M(GetDatabaseInTrashFailed, "") \
+    M(GetAllTablesIDSuccess, "") \
+    M(GetAllTablesIDFailed, "") \
+    M(GetTableIDByNameSuccess, "") \
+    M(GetTableIDByNameFailed, "") \
+    M(GetAllWorkerGroupsSuccess, "") \
+    M(GetAllWorkerGroupsFailed, "") \
+    M(GetAllDictionariesSuccess, "") \
+    M(GetAllDictionariesFailed, "") \
+    M(ClearDatabaseMetaSuccess, "") \
+    M(ClearDatabaseMetaFailed, "") \
+    M(ClearTableMetaForGCSuccess, "") \
+    M(ClearTableMetaForGCFailed, "") \
+    M(ClearDataPartsMetaSuccess, "") \
+    M(ClearDataPartsMetaFailed, "") \
+    M(ClearStagePartsMetaSuccess, "") \
+    M(ClearStagePartsMetaFailed, "") \
+    M(ClearDataPartsMetaForTableSuccess, "") \
+    M(ClearDataPartsMetaForTableFailed, "") \
+    M(GetSyncListSuccess, "") \
+    M(GetSyncListFailed, "") \
+    M(ClearSyncListSuccess, "") \
+    M(ClearSyncListFailed, "") \
+    M(GetServerPartsByCommitTimeSuccess, "") \
+    M(GetServerPartsByCommitTimeFailed, "") \
+    M(CreateRootPathSuccess, "") \
+    M(CreateRootPathFailed, "") \
+    M(DeleteRootPathSuccess, "") \
+    M(DeleteRootPathFailed, "") \
+    M(GetAllRootPathSuccess, "") \
+    M(GetAllRootPathFailed, "") \
+    M(CreateMutationSuccess, "") \
+    M(CreateMutationFailed, "") \
+    M(RemoveMutationSuccess, "") \
+    M(RemoveMutationFailed, "") \
+    M(GetAllMutationsStorageIdSuccess, "") \
+    M(GetAllMutationsStorageIdFailed, "") \
+    M(GetAllMutationsSuccess, "") \
+    M(GetAllMutationsFailed, "") \
+    M(SetTableClusterStatusSuccess, "") \
+    M(SetTableClusterStatusFailed, "") \
+    M(GetTableClusterStatusSuccess, "") \
+    M(GetTableClusterStatusFailed, "") \
+    M(IsTableClusteredSuccess, "") \
+    M(IsTableClusteredFailed, "") \
+    M(SetTablePreallocateVWSuccess, "") \
+    M(SetTablePreallocateVWFailed, "") \
+    M(GetTablePreallocateVWSuccess, "") \
+    M(GetTablePreallocateVWFailed, "") \
+    M(GetTablePartitionMetricsSuccess, "") \
+    M(GetTablePartitionMetricsFailed, "") \
+    M(GetTablePartitionMetricsFromMetastoreSuccess, "") \
+    M(GetTablePartitionMetricsFromMetastoreFailed, "") \
+    M(UpdateTopologiesSuccess, "") \
+    M(UpdateTopologiesFailed, "") \
+    M(GetTopologiesSuccess, "") \
+    M(GetTopologiesFailed, "") \
+    M(GetTrashDBVersionsSuccess, "") \
+    M(GetTrashDBVersionsFailed, "") \
+    M(UndropDatabaseSuccess, "") \
+    M(UndropDatabaseFailed, "") \
+    M(GetTrashTableVersionsSuccess, "") \
+    M(GetTrashTableVersionsFailed, "") \
+    M(UndropTableSuccess, "") \
+    M(UndropTableFailed, "") \
+    M(UpdateResourceGroupSuccess, "") \
+    M(UpdateResourceGroupFailed, "") \
+    M(GetResourceGroupSuccess, "") \
+    M(GetResourceGroupFailed, "") \
+    M(RemoveResourceGroupSuccess, "") \
+    M(RemoveResourceGroupFailed, "") \
+    M(GetInsertionLabelKeySuccess, "") \
+    M(GetInsertionLabelKeyFailed, "") \
+    M(PrecommitInsertionLabelSuccess, "") \
+    M(PrecommitInsertionLabelFailed, "") \
+    M(CommitInsertionLabelSuccess, "") \
+    M(CommitInsertionLabelFailed, "") \
+    M(TryCommitInsertionLabelSuccess, "") \
+    M(TryCommitInsertionLabelFailed, "") \
+    M(AbortInsertionLabelSuccess, "") \
+    M(AbortInsertionLabelFailed, "") \
+    M(GetInsertionLabelSuccess, "") \
+    M(GetInsertionLabelFailed, "") \
+    M(RemoveInsertionLabelSuccess, "") \
+    M(RemoveInsertionLabelFailed, "") \
+    M(RemoveInsertionLabelsSuccess, "") \
+    M(RemoveInsertionLabelsFailed, "") \
+    M(ScanInsertionLabelsSuccess, "") \
+    M(ScanInsertionLabelsFailed, "") \
+    M(ClearInsertionLabelsSuccess, "") \
+    M(ClearInsertionLabelsFailed, "") \
+    M(CreateVirtualWarehouseSuccess, "") \
+    M(CreateVirtualWarehouseFailed, "") \
+    M(AlterVirtualWarehouseSuccess, "") \
+    M(AlterVirtualWarehouseFailed, "") \
+    M(TryGetVirtualWarehouseSuccess, "") \
+    M(TryGetVirtualWarehouseFailed, "") \
+    M(ScanVirtualWarehousesSuccess, "") \
+    M(ScanVirtualWarehousesFailed, "") \
+    M(DropVirtualWarehouseSuccess, "") \
+    M(DropVirtualWarehouseFailed, "") \
+    M(CreateWorkerGroupSuccess, "") \
+    M(CreateWorkerGroupFailed, "") \
+    M(UpdateWorkerGroupSuccess, "") \
+    M(UpdateWorkerGroupFailed, "") \
+    M(TryGetWorkerGroupSuccess, "") \
+    M(TryGetWorkerGroupFailed, "") \
+    M(ScanWorkerGroupsSuccess, "") \
+    M(ScanWorkerGroupsFailed, "") \
+    M(DropWorkerGroupSuccess, "") \
+    M(DropWorkerGroupFailed, "") \
+    M(GetNonHostUpdateTimestampFromByteKVSuccess, "") \
+    M(GetNonHostUpdateTimestampFromByteKVFailed, "") \
+    M(MaskingPolicyExistsSuccess, "") \
+    M(MaskingPolicyExistsFailed, "") \
+    M(GetMaskingPoliciesSuccess, "") \
+    M(GetMaskingPoliciesFailed, "") \
+    M(PutMaskingPolicySuccess, "") \
+    M(PutMaskingPolicyFailed, "") \
+    M(TryGetMaskingPolicySuccess, "") \
+    M(TryGetMaskingPolicyFailed, "") \
+    M(GetMaskingPolicySuccess, "") \
+    M(GetMaskingPolicyFailed, "") \
+    M(GetAllMaskingPolicySuccess, "") \
+    M(GetAllMaskingPolicyFailed, "") \
+    M(GetMaskingPolicyAppliedTablesSuccess, "") \
+    M(GetMaskingPolicyAppliedTablesFailed, "") \
+    M(GetAllMaskingPolicyAppliedTablesSuccess, "") \
+    M(GetAllMaskingPolicyAppliedTablesFailed, "") \
+    M(DropMaskingPoliciesSuccess, "") \
+    M(DropMaskingPoliciesFailed, "") \
+    M(IsHostServerSuccess, "") \
+    M(IsHostServerFailed, "") \
+    M(CnchReadSizeFromDiskCache, "") \
+    M(CnchReadSizeFromRemote, "") \
+    M(CnchReadDataMicroSeconds,"") \
+    M(CnchAddStreamsElapsedMilliseconds,"") \
+    M(CnchAddStreamsParallelTasks,"") \
+    M(CnchAddStreamsParallelElapsedMilliseconds,"") \
+    M(CnchAddStreamsSequentialTasks,"") \
+    M(CnchAddStreamsSequentialElapsedMilliseconds,"") \
+    M(SetBGJobStatusSuccess, "") \
+    M(SetBGJobStatusFailed, "") \
+    M(GetBGJobStatusSuccess, "") \
+    M(GetBGJobStatusFailed, "") \
+    M(GetBGJobStatusesSuccess, "") \
+    M(GetBGJobStatusesFailed, "") \
+    M(DropBGJobStatusSuccess, "") \
+    M(DropBGJobStatusFailed, "") \
 
 namespace ProfileEvents
 {

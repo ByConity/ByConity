@@ -5,10 +5,12 @@
 #include <Storages/MergeTree/MergeTreeBlockReadUtils.h>
 #include <Columns/FilterDescription.h>
 #include <Common/typeid_cast.h>
+#include <Common/escapeForFileName.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeUUID.h>
 #include <DataTypes/DataTypeArray.h>
+#include <DataTypes/MapHelpers.h>
 #include <Processors/Transforms/AggregatingTransform.h>
 
 
@@ -24,7 +26,7 @@ namespace ErrorCodes
 
 MergeTreeBaseSelectProcessor::MergeTreeBaseSelectProcessor(
     Block header,
-    const MergeTreeData & storage_,
+    const MergeTreeMetaBase & storage_,
     const StorageMetadataPtr & metadata_snapshot_,
     const PrewhereInfoPtr & prewhere_info_,
     ExpressionActionsSettings actions_settings,
@@ -93,27 +95,30 @@ Chunk MergeTreeBaseSelectProcessor::generate()
 
 void MergeTreeBaseSelectProcessor::initializeRangeReaders(MergeTreeReadTask & current_task)
 {
+    if (metadata_snapshot->hasUniqueKey() && !task->delete_bitmap)
+        throw Exception("Expected delete bitmap exists for a unique table part: " + task->data_part->name, ErrorCodes::LOGICAL_ERROR);
+
     if (prewhere_info)
     {
         if (reader->getColumns().empty())
         {
-            current_task.range_reader = MergeTreeRangeReader(pre_reader.get(), nullptr, prewhere_actions.get(), true);
+            current_task.range_reader = MergeTreeRangeReader(pre_reader.get(), nullptr, prewhere_actions.get(), task->delete_bitmap, true);
         }
         else
         {
             MergeTreeRangeReader * pre_reader_ptr = nullptr;
             if (pre_reader != nullptr)
             {
-                current_task.pre_range_reader = MergeTreeRangeReader(pre_reader.get(), nullptr, prewhere_actions.get(), false);
+                current_task.pre_range_reader = MergeTreeRangeReader(pre_reader.get(), nullptr, prewhere_actions.get(), task->delete_bitmap, false);
                 pre_reader_ptr = &current_task.pre_range_reader;
             }
 
-            current_task.range_reader = MergeTreeRangeReader(reader.get(), pre_reader_ptr, nullptr, true);
+            current_task.range_reader = MergeTreeRangeReader(reader.get(), pre_reader_ptr, nullptr, task->delete_bitmap, true);
         }
     }
     else
     {
-        current_task.range_reader = MergeTreeRangeReader(reader.get(), nullptr, nullptr, true);
+        current_task.range_reader = MergeTreeRangeReader(reader.get(), nullptr, nullptr, task->delete_bitmap, true);
     }
 }
 
@@ -218,7 +223,6 @@ Chunk MergeTreeBaseSelectProcessor::readFromPart()
     return readFromPartImpl();
 }
 
-
 namespace
 {
     /// Simple interfaces to insert virtual columns.
@@ -247,7 +251,7 @@ static void injectVirtualColumnsImpl(
     const Names & virtual_columns)
 {
     /// add virtual columns
-    /// Except _sample_factor, which is added from the outside.
+    /// Except _sample_factor and _part_row_number, which is added from the outside.
     if (!virtual_columns.empty())
     {
         if (unlikely(rows && !task))
@@ -292,6 +296,26 @@ static void injectVirtualColumnsImpl(
                     column = DataTypeUUID().createColumn();
 
                 inserter.insertUUIDColumn(column, virtual_column_name);
+            }
+            else if (virtual_column_name == "_part_map_files")
+            {
+                ColumnPtr column;
+                auto type = std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>());
+                if (rows)
+                {
+                    NameSet key_set;
+                    for (auto & [file, _] : task->data_part->getChecksums()->files)
+                    {
+                        if (startsWith(file, getMapSeparator()) && !isMapBaseFile(file))
+                            key_set.insert(unescapeForFileName(file));
+                    }
+
+                    column = type->createColumnConst(rows, Array(key_set.begin(), key_set.end()))->convertToFullColumnIfConst();
+                }
+                else
+                    column = type->createColumn();
+
+                inserter.insertArrayOfStringsColumn(column, virtual_column_name);
             }
             else if (virtual_column_name == "_partition_id")
             {

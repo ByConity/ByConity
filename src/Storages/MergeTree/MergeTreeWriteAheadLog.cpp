@@ -29,7 +29,7 @@ MergeTreeWriteAheadLog::MergeTreeWriteAheadLog(
     : storage(storage_)
     , disk(disk_)
     , name(name_)
-    , path(storage.getRelativeDataPath() + name_)
+    , path(storage.getRelativeDataPath(IStorage::StorageLocation::MAIN) + name_)
     , pool(storage.getContext()->getSchedulePool())
 {
     init();
@@ -51,7 +51,7 @@ MergeTreeWriteAheadLog::~MergeTreeWriteAheadLog()
 
 void MergeTreeWriteAheadLog::init()
 {
-    out = disk->writeFile(path, DBMS_DEFAULT_BUFFER_SIZE, WriteMode::Append);
+    out = disk->writeFile(path, {.mode = WriteMode::Append});
 
     /// Small hack: in NativeBlockOutputStream header is used only in `getHeader` method.
     /// To avoid complex logic of changing it during ALTERs we leave it empty.
@@ -81,6 +81,12 @@ void MergeTreeWriteAheadLog::addPart(DataPartInMemoryPtr & part)
     block_out->flush();
     sync(lock);
 
+    if (!has_sync_to_metastore)
+    {
+        storage.addWriteAheadLog(name, disk);
+        has_sync_to_metastore = true;
+    }
+
     auto max_wal_bytes = storage.getSettings()->write_ahead_log_max_bytes;
     if (out->count() > max_wal_bytes)
         rotate(lock);
@@ -107,7 +113,8 @@ void MergeTreeWriteAheadLog::rotate(const std::unique_lock<std::mutex> &)
         + toString(min_block_number) + "_"
         + toString(max_block_number) + WAL_FILE_EXTENSION;
 
-    disk->replaceFile(path, storage.getRelativeDataPath() + new_name);
+    disk->replaceFile(path, storage.getRelativeDataPath(IStorage::StorageLocation::MAIN) + new_name);
+    storage.addWriteAheadLog(new_name, disk);
     init();
 }
 
@@ -116,7 +123,7 @@ MergeTreeData::MutableDataPartsVector MergeTreeWriteAheadLog::restore(const Stor
     std::unique_lock lock(write_mutex);
 
     MergeTreeData::MutableDataPartsVector parts;
-    auto in = disk->readFile(path, DBMS_DEFAULT_BUFFER_SIZE);
+    auto in = disk->readFile(path);
     NativeBlockInputStream block_in(*in, 0);
     NameSet dropped_parts;
 

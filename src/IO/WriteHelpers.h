@@ -46,9 +46,14 @@
 namespace DB
 {
 
+static const ssize_t NULL_ARRAY_SZ = 256;
+
+extern "C" const char null_array[NULL_ARRAY_SZ];
+
 namespace ErrorCodes
 {
     extern const int CANNOT_PRINT_FLOAT_OR_DOUBLE_NUMBER;
+    extern const int LOGICAL_ERROR;
 }
 
 
@@ -728,6 +733,11 @@ inline void writeDateText(DayNum date, WriteBuffer & buf)
     writeDateText<delimiter>(LocalDate(date), buf);
 }
 
+template <char delimiter = '-'>
+inline void writeDateText(ExtendedDayNum date, WriteBuffer & buf)
+{
+    writeDateText<delimiter>(LocalDate(date), buf);
+}
 
 /// In the format YYYY-MM-DD HH:MM:SS
 template <char date_delimeter = '-', char time_delimeter = ':', char between_date_time_delimiter = ' '>
@@ -792,12 +802,54 @@ inline void writeDateTimeText(DateTime64 datetime64, UInt32 scale, WriteBuffer &
     scale = scale > MaxScale ? MaxScale : scale;
 
     auto components = DecimalUtils::split(datetime64, scale);
+    /// Case1:
+    /// -127914467.877
+    /// => whole = -127914467, fraction = 877(After DecimalUtils::split)
+    /// => new whole = -127914468(1965-12-12 12:12:12), new fraction = 1000 - 877 = 123(.123)
+    /// => 1965-12-12 12:12:12.123
+    ///
+    /// Case2:
+    /// -0.877
+    /// => whole = 0, fractional = -877(After DecimalUtils::split)
+    /// => whole = -1(1969-12-31 23:59:59), fractional = 1000 + (-877) = 123(.123)
+    using T = typename DateTime64::NativeType;
+    if (datetime64.value < 0 && components.fractional)
+    {
+        components.fractional = DecimalUtils::scaleMultiplier<T>(scale) + (components.whole ? T(-1) : T(1)) * components.fractional;
+        --components.whole;
+    }
+
     writeDateTimeText<date_delimeter, time_delimeter, between_date_time_delimiter>(LocalDateTime(components.whole, time_zone), buf);
 
     if (scale > 0)
     {
         buf.write(fractional_time_delimiter);
         writeDateTime64FractionalText<DateTime64>(components.fractional, scale, buf);
+    }
+}
+
+/// In the format HH:MM:SS.NNNNNNNNN, according to SQL standard.
+template <char time_delimeter = ':', char fractional_time_delimiter = '.'>
+inline void writeTimeText(Decimal64 time, UInt32 scale, WriteBuffer & buf)
+{
+    static constexpr UInt32 MaxScale = DecimalUtils::max_precision<Decimal64>;
+    scale = scale > MaxScale ? MaxScale : scale;
+
+    auto components = DecimalUtils::split(time, scale);
+    memcpy(buf.position(), &digits100[(components.whole/3600) * 2], 2);
+    buf.position() += 2;
+    *buf.position() = time_delimeter;
+    ++buf.position();
+    memcpy(buf.position(), &digits100[((components.whole/60) % 60) * 2], 2);
+    buf.position() += 2;
+    *buf.position() = time_delimeter;
+    ++buf.position();
+    memcpy(buf.position(), &digits100[(components.whole % 60) * 2], 2);
+    buf.position() += 2;
+    if (scale > 0)
+    {
+        buf.write(fractional_time_delimiter);
+        writeDateTime64FractionalText<Decimal64>(components.fractional, scale, buf);
     }
 }
 
@@ -869,6 +921,16 @@ inline void writeBinary(const Decimal256 & x, WriteBuffer & buf) { writePODBinar
 inline void writeBinary(const LocalDate & x, WriteBuffer & buf) { writePODBinary(x, buf); }
 inline void writeBinary(const LocalDateTime & x, WriteBuffer & buf) { writePODBinary(x, buf); }
 inline void writeBinary(const UUID & x, WriteBuffer & buf) { writePODBinary(x, buf); }
+inline void writeBinary(const PairInt64 & x, WriteBuffer & buf)
+{
+    writeBinary(x.low, buf);
+    writeBinary(x.high, buf);
+}
+inline void writeBinary(const std::pair<String, String> & x, WriteBuffer & buf)
+{
+    writeBinary(x.first, buf);
+    writeBinary(x.second, buf);
+}
 
 /// Methods for outputting the value in text form for a tab-separated format.
 template <typename T>
@@ -894,6 +956,7 @@ inline void writeText(const DayNum & x, WriteBuffer & buf) { writeDateText(Local
 inline void writeText(const LocalDate & x, WriteBuffer & buf) { writeDateText(x, buf); }
 inline void writeText(const LocalDateTime & x, WriteBuffer & buf) { writeDateTimeText(x, buf); }
 inline void writeText(const UUID & x, WriteBuffer & buf) { writeUUIDText(x, buf); }
+inline void writeText(const BitMap64 & x, WriteBuffer & buf) { writeText(x.toString(), buf); }
 
 template <typename T>
 String decimalFractional(const T & x, UInt32 scale)
@@ -938,6 +1001,8 @@ void writeText(Decimal<T> x, UInt32 scale, WriteBuffer & ostr)
     {
         writeChar('.', ostr);
         part = DecimalUtils::getFractionalPart(x, scale);
+        if (part < 0)
+            part *= T(-1);
         String fractional = decimalFractional(part, scale);
         ostr.write(fractional.data(), scale);
     }
@@ -1107,5 +1172,21 @@ struct PcgSerializer
 };
 
 void writePointerHex(const void * ptr, WriteBuffer & buf);
+
+inline void writeNull(ssize_t size, WriteBuffer & buf)
+{
+    if (unlikely(size < 0))
+        throw Exception("writeNull: negative size", ErrorCodes::LOGICAL_ERROR);
+
+    while (size) {
+        if (size <= NULL_ARRAY_SZ) {
+            buf.write(null_array, size);
+            break;
+        }
+
+        buf.write(null_array, NULL_ARRAY_SZ);
+        size -= NULL_ARRAY_SZ;
+    }
+}
 
 }

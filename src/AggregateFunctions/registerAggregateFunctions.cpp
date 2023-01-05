@@ -1,7 +1,7 @@
 #include <AggregateFunctions/registerAggregateFunctions.h>
 
-#include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionCombinatorFactory.h>
+#include <AggregateFunctions/AggregateFunctionFactory.h>
 
 
 namespace DB
@@ -49,6 +49,42 @@ void registerAggregateFunctionMannWhitney(AggregateFunctionFactory &);
 void registerAggregateFunctionWelchTTest(AggregateFunctionFactory &);
 void registerAggregateFunctionStudentTTest(AggregateFunctionFactory &);
 void registerAggregateFunctionSequenceNextNode(AggregateFunctionFactory &);
+void registerAggregateFunctionMergeStreamStack(AggregateFunctionFactory &);
+void registerAggregateFunctionSessionSplit(AggregateFunctionFactory &);
+void registerAggregateFunctionSessionAnalysis(AggregateFunctionFactory & factory);
+void registerAggregateFunctionRetention4(AggregateFunctionFactory &);
+void registerAggregateFunctionRetention2(AggregateFunctionFactory &);
+void registerAggregateFunctionRetentionLoss(AggregateFunctionFactory &);
+void registerAggregateFunctionGenArray(AggregateFunctionFactory & factory);
+void registerAggregateFunctionGenArrayMonth(AggregateFunctionFactory & factory);
+void registerAggregateFunctionAttributionAnalysis(AggregateFunctionFactory &);
+void registerAggregateFunctionAttributionAnalysisMerge(AggregateFunctionFactory &);
+void registerAggregateFunctionAttributionCorrelationMerge(AggregateFunctionFactory &);
+void registerAggregateFunctionFinderFunnel(AggregateFunctionFactory & factory);
+void registerAggregateFunctionFinderGroupFunnel(AggregateFunctionFactory & factory);
+void registerAggregateFunctionFunnelRep(AggregateFunctionFactory & factory);
+void registerAggregateFunctionFunnelRep2(AggregateFunctionFactory & factory);
+void registerAggregateFunctionFunnelRep3(AggregateFunctionFactory & factory);
+void registerAggregateFunctionUserDistribution(AggregateFunctionFactory & factory);
+void registerAggregateFunctionUserDistributionMonthly(AggregateFunctionFactory & factory);
+void registerAggregateFunctionLastRangeCount(AggregateFunctionFactory & factory);
+void registerAggregateFunctionSlideMatchCount(AggregateFunctionFactory & factory);
+void registerAggregateFunctionFrequency(AggregateFunctionFactory & factory);
+void registerAggregateFunctionPathSplit(AggregateFunctionFactory & factory);
+void registerAggregateFunctionPathCount(AggregateFunctionFactory & factory);
+void registerAggregateFunctionXirr(AggregateFunctionFactory & factory);
+void registerAggregateFunctionsBitmapLogic(AggregateFunctionFactory & factory);
+void registerAggregateFunctionsBitmapFromColumn(AggregateFunctionFactory &);
+void registerAggregateFunctionsBitmapColumnDiff(AggregateFunctionFactory & factory);
+void registerAggregateFunctionsBitmapExpressionCalculation(AggregateFunctionFactory & factory);
+void registerAggregateFunctionsBitmapMaxLevel(AggregateFunctionFactory & factory);
+void registerAggregateFunctionsBitMapJoin(AggregateFunctionFactory & factory);
+void registerAggregateFunctionsBitMapJoinAndCard(AggregateFunctionFactory & factory);
+void registerAggregateFunctionCpcSketch(AggregateFunctionFactory & factory);
+void registerAggregateFunctionKllSketch(AggregateFunctionFactory & factory);
+void registerAggregateFunctionNdvBuckets(AggregateFunctionFactory & factory);
+void registerAggregateFunctionNdvBucketsExtend(AggregateFunctionFactory & factory);
+void registerAggregateFunctionNothing(AggregateFunctionFactory & factory);
 
 class AggregateFunctionCombinatorFactory;
 void registerAggregateFunctionCombinatorIf(AggregateFunctionCombinatorFactory &);
@@ -61,6 +97,7 @@ void registerAggregateFunctionCombinatorNull(AggregateFunctionCombinatorFactory 
 void registerAggregateFunctionCombinatorOrFill(AggregateFunctionCombinatorFactory &);
 void registerAggregateFunctionCombinatorResample(AggregateFunctionCombinatorFactory &);
 void registerAggregateFunctionCombinatorDistinct(AggregateFunctionCombinatorFactory &);
+void registerAggregateFunctionCombinatorStack(AggregateFunctionCombinatorFactory &);
 
 void registerWindowFunctions(AggregateFunctionFactory & factory);
 
@@ -113,10 +150,46 @@ void registerAggregateFunctions()
         registerAggregateFunctionSequenceNextNode(factory);
         registerAggregateFunctionWelchTTest(factory);
         registerAggregateFunctionStudentTTest(factory);
+        registerAggregateFunctionMergeStreamStack(factory);
+        registerAggregateFunctionSessionSplit(factory);
+        registerAggregateFunctionSessionAnalysis(factory);
+        registerAggregateFunctionRetention4(factory);
+        registerAggregateFunctionRetention2(factory);
+        registerAggregateFunctionRetentionLoss(factory);
+        registerAggregateFunctionGenArray(factory);
+        registerAggregateFunctionGenArrayMonth(factory);
+        registerAggregateFunctionAttributionAnalysis(factory);
+        registerAggregateFunctionAttributionAnalysisMerge(factory);
+        registerAggregateFunctionAttributionCorrelationMerge(factory);
+        registerAggregateFunctionFinderFunnel(factory);
+        registerAggregateFunctionFinderGroupFunnel(factory);
+        registerAggregateFunctionFunnelRep(factory);
+        registerAggregateFunctionFunnelRep2(factory);
+        registerAggregateFunctionFunnelRep3(factory);
+        registerAggregateFunctionUserDistribution(factory);
+        registerAggregateFunctionUserDistributionMonthly(factory);
+        registerAggregateFunctionLastRangeCount(factory);
+        registerAggregateFunctionSlideMatchCount(factory);
+        registerAggregateFunctionFrequency(factory);
+        registerAggregateFunctionPathSplit(factory);
+        registerAggregateFunctionPathCount(factory);
+        registerAggregateFunctionXirr(factory);
 
         registerWindowFunctions(factory);
 
         registerAggregateFunctionIntervalLengthSum(factory);
+        registerAggregateFunctionsBitmapFromColumn(factory);
+        registerAggregateFunctionsBitmapLogic(factory);
+        registerAggregateFunctionsBitmapColumnDiff(factory);
+        registerAggregateFunctionsBitmapExpressionCalculation(factory);
+        registerAggregateFunctionsBitmapMaxLevel(factory);
+        registerAggregateFunctionsBitMapJoin(factory);
+        registerAggregateFunctionsBitMapJoinAndCard(factory);
+        registerAggregateFunctionCpcSketch(factory);
+        registerAggregateFunctionKllSketch(factory);
+        registerAggregateFunctionNdvBuckets(factory);
+        registerAggregateFunctionNdvBucketsExtend(factory);
+        registerAggregateFunctionNothing(factory);
     }
 
     {
@@ -132,6 +205,7 @@ void registerAggregateFunctions()
         registerAggregateFunctionCombinatorOrFill(factory);
         registerAggregateFunctionCombinatorResample(factory);
         registerAggregateFunctionCombinatorDistinct(factory);
+        registerAggregateFunctionCombinatorStack(factory);
     }
 }
 

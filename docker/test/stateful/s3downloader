@@ -77,6 +77,7 @@ if __name__ == "__main__":
     parser.add_argument('--dataset-names', required=True, nargs='+', choices=list(AVAILABLE_DATASETS.keys()))
     parser.add_argument('--url-prefix', default=DEFAULT_URL)
     parser.add_argument('--clickhouse-data-path', default='/var/lib/clickhouse/')
+    parser.add_argument('--use-local-dataset', default='')
 
     args = parser.parse_args()
     datasets = args.dataset_names
@@ -86,7 +87,10 @@ if __name__ == "__main__":
         temp_archive_path = _get_temp_file_name()
         try:
             download_url_for_dataset = build_url(args.url_prefix, dataset)
-            dowload_with_progress(download_url_for_dataset, temp_archive_path)
+            if not args.use_local_dataset:
+                dowload_with_progress(download_url_for_dataset, temp_archive_path)
+            else:
+                temp_archive_path = os.path.join(args.use_local_dataset, f"{dataset}_v1.tar") # get dataset from docker image or local
             unpack_to_clickhouse_directory(temp_archive_path, args.clickhouse_data_path)
         except Exception as ex:
             logging.info("Some exception occured %s", str(ex))

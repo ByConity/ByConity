@@ -58,7 +58,11 @@ public:
     size_t getSizeOfValueInMemory() const override { return n; }
     bool isCategorial() const override { return true; }
     bool canBeInsideNullable() const override { return true; }
+    bool canBeMapKeyType() const override { return true; }
+    bool canBeMapValueType() const override { return true; }
     bool canBeInsideLowCardinality() const override { return true; }
+    Field stringToVisitorField(const String& ins) const override;
+    String stringToVisitorString(const String & ins) const override;
 
     /// Makes sure that the length of a newly inserted string to `chars` is equal to getN().
     /// If the length is less than getN() the function will add zero characters up to getN().

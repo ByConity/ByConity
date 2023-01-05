@@ -30,3 +30,4 @@ if (ENABLE_FUZZING)
     add_executable (columns_description_fuzzer columns_description_fuzzer.cpp)
     target_link_libraries (columns_description_fuzzer PRIVATE dbms ${LIB_FUZZING_ENGINE})
 endif ()
+

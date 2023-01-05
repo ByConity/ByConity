@@ -17,8 +17,8 @@ bool ParserOptimizeQueryColumnsSpecification::parseImpl(Pos & pos, ASTPtr & node
     // we can't actually modify content of the columns for deduplication.
     const auto allowed_transformers = ParserColumnsTransformers::ColumnTransformers{ParserColumnsTransformers::ColumnTransformer::EXCEPT};
 
-    return ParserColumnsMatcher(allowed_transformers).parse(pos, node, expected)
-        || ParserAsterisk(allowed_transformers).parse(pos, node, expected)
+    return ParserColumnsMatcher(dt, allowed_transformers).parse(pos, node, expected)
+        || ParserAsterisk(dt, allowed_transformers).parse(pos, node, expected)
         || ParserIdentifier(false).parse(pos, node, expected);
 }
 
@@ -32,7 +32,7 @@ bool ParserOptimizeQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expecte
     ParserKeyword s_by("BY");
     ParserToken s_dot(TokenType::Dot);
     ParserIdentifier name_p;
-    ParserPartition partition_p;
+    ParserPartition partition_p(dt);
 
     ASTPtr database;
     ASTPtr table;
@@ -72,7 +72,7 @@ bool ParserOptimizeQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expecte
     ASTPtr deduplicate_by_columns;
     if (deduplicate && s_by.ignore(pos, expected))
     {
-        if (!ParserList(std::make_unique<ParserOptimizeQueryColumnsSpecification>(), std::make_unique<ParserToken>(TokenType::Comma), false)
+        if (!ParserList(std::make_unique<ParserOptimizeQueryColumnsSpecification>(dt), std::make_unique<ParserToken>(TokenType::Comma), false)
                 .parse(pos, deduplicate_by_columns, expected))
             return false;
     }

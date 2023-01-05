@@ -48,6 +48,9 @@ add_subdirectory (murmurhash)
 add_subdirectory (replxx-cmake)
 add_subdirectory (unixodbc-cmake)
 add_subdirectory (nanodbc-cmake)
+add_subdirectory (jsonc-cmake)
+add_subdirectory (ipdb-cmake)
+add_subdirectory (maxminddb-cmake)
 
 if (USE_YAML_CPP)
     add_subdirectory (yaml-cpp-cmake)
@@ -144,13 +147,20 @@ if (ENABLE_MYSQL AND USE_INTERNAL_MYSQL_LIBRARY)
     mysql_support()
 endif ()
 
-if (USE_INTERNAL_RDKAFKA_LIBRARY)
-    add_subdirectory (librdkafka-cmake)
-    target_include_directories(rdkafka BEFORE PRIVATE ${ZLIB_INCLUDE_DIR})
-    if(OPENSSL_INCLUDE_DIR)
-        target_include_directories(rdkafka BEFORE PRIVATE ${OPENSSL_INCLUDE_DIR})
-    endif()
+if (USE_INTERNAL_MINIZIP_LIBRARY)
+    add_subdirectory(minizip)
 endif ()
+
+if (USE_INTERNAL_UDNS_LIBRARY)
+    add_subdirectory(udns-cmake)
+endif ()
+
+
+add_subdirectory (librdkafka-cmake)
+target_include_directories(rdkafka BEFORE PRIVATE ${ZLIB_INCLUDE_DIR})
+if(OPENSSL_INCLUDE_DIR)
+    target_include_directories(rdkafka BEFORE PRIVATE ${OPENSSL_INCLUDE_DIR})
+endif()
 
 if (USE_RDKAFKA)
     add_subdirectory (cppkafka-cmake)
@@ -243,11 +253,12 @@ if (USE_INTERNAL_BROTLI_LIBRARY)
 endif ()
 
 if (USE_INTERNAL_PROTOBUF_LIBRARY)
+    set(HAVE_ZLIB 1)
     add_subdirectory(protobuf-cmake)
 endif ()
 
 if (USE_INTERNAL_HDFS3_LIBRARY)
-    add_subdirectory(libhdfs3-cmake)
+    add_subdirectory(libhdfs3-open-cmake)
 endif ()
 
 if (USE_INTERNAL_GRPC_LIBRARY)
@@ -269,6 +280,10 @@ endif()
 
 if (USE_SIMDJSON)
     add_subdirectory (simdjson-cmake)
+endif()
+
+if (USE_BREAKPAD)
+    add_subdirectory(breakpad-cmake)
 endif()
 
 if (USE_FASTOPS)
@@ -327,5 +342,21 @@ if (USE_NURAFT)
   add_subdirectory(nuraft-cmake)
 endif()
 
+if (USE_INTERNAL_GFLAGS_LIBRARY)
+    add_subdirectory (gflags)
+endif ()
+
 add_subdirectory(fast_float)
 
+add_subdirectory(incubator-brpc)
+if(OPENSSL_INCLUDE_DIR)
+    target_include_directories(brpc-static BEFORE PRIVATE ${OPENSSL_INCLUDE_DIR})
+endif()
+
+if (ENABLE_BENCHMARK)
+    add_subdirectory(benchmark)
+endif()
+
+add_subdirectory(numactl-cmake)
+add_subdirectory(foundationdb)
+add_subdirectory(hivemetastore-cmake)

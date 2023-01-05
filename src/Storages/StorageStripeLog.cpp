@@ -145,9 +145,9 @@ private:
             started = true;
 
             String data_file_path = storage.table_path + "data.bin";
-            size_t buffer_size = std::min(max_read_buffer_size, storage.disk->getFileSize(data_file_path));
+            size_t rd_buffer_size = std::min(max_read_buffer_size, storage.disk->getFileSize(data_file_path));
 
-            data_in.emplace(storage.disk->readFile(data_file_path, buffer_size));
+            data_in.emplace(storage.disk->readFile(data_file_path, {.buffer_size = rd_buffer_size}));
             block_in.emplace(*data_in, 0, index_begin, index_end);
         }
     }
@@ -163,11 +163,11 @@ public:
         , metadata_snapshot(metadata_snapshot_)
         , lock(std::move(lock_))
         , data_out_file(storage.table_path + "data.bin")
-        , data_out_compressed(storage.disk->writeFile(data_out_file, DBMS_DEFAULT_BUFFER_SIZE, WriteMode::Append))
+        , data_out_compressed(storage.disk->writeFile(data_out_file, {.mode = WriteMode::Append}))
         , data_out(std::make_unique<CompressedWriteBuffer>(
             *data_out_compressed, CompressionCodecFactory::instance().getDefaultCodec(), storage.max_compress_block_size))
         , index_out_file(storage.table_path + "index.mrk")
-        , index_out_compressed(storage.disk->writeFile(index_out_file, DBMS_DEFAULT_BUFFER_SIZE, WriteMode::Append))
+        , index_out_compressed(storage.disk->writeFile(index_out_file, {.mode = WriteMode::Append}))
         , index_out(std::make_unique<CompressedWriteBuffer>(*index_out_compressed))
         , block_out(*data_out, 0, metadata_snapshot->getSampleBlock(), false, index_out.get(), storage.disk->getFileSize(data_out_file))
     {
@@ -344,7 +344,7 @@ Pipe StorageStripeLog::read(
         return Pipe(std::make_shared<NullSource>(metadata_snapshot->getSampleBlockForColumns(column_names, getVirtuals(), getStorageID())));
     }
 
-    CompressedReadBufferFromFile index_in(disk->readFile(index_file, 4096));
+    CompressedReadBufferFromFile index_in(disk->readFile(index_file, {.buffer_size = 4096}));
     std::shared_ptr<const IndexForNativeFormat> index{std::make_shared<IndexForNativeFormat>(index_in, column_names_set)};
 
     size_t size = index->blocks.size();

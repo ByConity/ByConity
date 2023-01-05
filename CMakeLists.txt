@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.3)
+cmake_minimum_required(VERSION 3.17)
 
 foreach(policy
         CMP0023
@@ -333,13 +333,21 @@ endif()
 set(COMPILER_FLAGS "${COMPILER_FLAGS}")
 
 set (CMAKE_BUILD_COLOR_MAKEFILE          ON)
-set (CMAKE_CXX_FLAGS                     "${CMAKE_CXX_FLAGS} ${COMPILER_FLAGS} ${PLATFORM_EXTRA_CXX_FLAG} ${COMMON_WARNING_FLAGS} ${CXX_WARNING_FLAGS}")
+set (CMAKE_CXX_FLAGS                     "${CMAKE_CXX_FLAGS} -fno-omit-frame-pointer ${COMPILER_FLAGS} ${PLATFORM_EXTRA_CXX_FLAG} ${COMMON_WARNING_FLAGS} ${CXX_WARNING_FLAGS}")
 set (CMAKE_CXX_FLAGS_RELWITHDEBINFO      "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -O3 ${CMAKE_CXX_FLAGS_ADD}")
 set (CMAKE_CXX_FLAGS_DEBUG               "${CMAKE_CXX_FLAGS_DEBUG} -O0 -g3 -ggdb3 -fno-inline ${CMAKE_CXX_FLAGS_ADD}")
 
-set (CMAKE_C_FLAGS                       "${CMAKE_C_FLAGS} ${COMPILER_FLAGS} ${COMMON_WARNING_FLAGS} ${CMAKE_C_FLAGS_ADD}")
+set (CMAKE_C_FLAGS                       "${CMAKE_C_FLAGS} -fno-omit-frame-pointer ${COMPILER_FLAGS} ${COMMON_WARNING_FLAGS} ${CMAKE_C_FLAGS_ADD}")
 set (CMAKE_C_FLAGS_RELWITHDEBINFO        "${CMAKE_C_FLAGS_RELWITHDEBINFO} -O3 ${CMAKE_C_FLAGS_ADD}")
 set (CMAKE_C_FLAGS_DEBUG                 "${CMAKE_C_FLAGS_DEBUG} -O0 -g3 -ggdb3 -fno-inline ${CMAKE_C_FLAGS_ADD}")
+
+# Ignored if `lldb` is used
+option(NO_LIMIT_DEBUG_INFO "Add no-limit-debug-info to compile flags.")
+if (NO_LIMIT_DEBUG_INFO)
+    set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fno-limit-debug-info")
+    set (CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -fno-limit-debug-info")
+endif()
+
 
 if (COMPILER_CLANG)
     if (OS_DARWIN)
@@ -440,6 +448,12 @@ elseif (OS_FREEBSD)
     include(cmake/freebsd/default_libs.cmake)
 endif ()
 
+# Determine whether to use community map implementation
+option (USE_COMMUNITY_MAP "Use clickhouse community map implmentation"  OFF)
+if (USE_COMMUNITY_MAP)
+    add_definitions(-DUSE_COMMUNITY_MAP)
+endif (USE_COMMUNITY_MAP)
+
 ######################################
 ### Add targets below this comment ###
 ######################################
@@ -499,6 +513,7 @@ include (GNUInstallDirs)
 include (cmake/contrib_finder.cmake)
 
 find_contrib_lib(double-conversion) # Must be before parquet
+include (cmake/lib_name.cmake)
 include (cmake/find/ssl.cmake)
 include (cmake/find/ldap.cmake) # after ssl
 include (cmake/find/icu.cmake)
@@ -540,6 +555,8 @@ include (cmake/find/rocksdb.cmake)
 include (cmake/find/libpqxx.cmake)
 include (cmake/find/nuraft.cmake)
 include (cmake/find/yaml-cpp.cmake)
+include (cmake/find/json-c.cmake)
+include (cmake/find/libnuma.cmake)
 
 if(NOT USE_INTERNAL_PARQUET_LIBRARY)
     set (ENABLE_ORC OFF CACHE INTERNAL "")
@@ -552,11 +569,18 @@ include (cmake/find/cassandra.cmake)
 include (cmake/find/sentry.cmake)
 include (cmake/find/stats.cmake)
 include (cmake/find/datasketches.cmake)
+include (cmake/find_gflags.cmake)
+include (cmake/find/brpc.cmake)
+include (cmake/find/breakpad.cmake)
+include (cmake/find/benchmark.cmake)
+include (cmake/find/hivemetastore.cmake)
 
 set (USE_INTERNAL_CITYHASH_LIBRARY ON CACHE INTERNAL "")
 find_contrib_lib(cityhash)
 
 find_contrib_lib(farmhash)
+find_contrib_lib(minizip)
+find_contrib_lib(udns)
 
 if (ENABLE_TESTS)
     include (cmake/find/gtest.cmake)

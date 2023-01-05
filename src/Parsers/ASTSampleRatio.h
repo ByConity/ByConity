@@ -26,12 +26,17 @@ public:
 
     String getID(char delim) const override { return "SampleRatio" + (delim + toString(ratio)); }
 
+    ASTType getType() const override { return ASTType::ASTSampleRatio; }
+
     ASTPtr clone() const override { return std::make_shared<ASTSampleRatio>(*this); }
 
     static String toString(BigNum num);
     static String toString(Rational ratio);
 
     void formatImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const override;
+
+    void serialize(WriteBuffer & buf) const override;
+    static ASTPtr deserialize(ReadBuffer & buf);
 };
 
 }

@@ -29,6 +29,8 @@ struct AlterCommand
         MODIFY_COLUMN,
         COMMENT_COLUMN,
         MODIFY_ORDER_BY,
+        MODIFY_CLUSTER_BY,
+        DROP_CLUSTER,
         MODIFY_SAMPLE_BY,
         ADD_INDEX,
         DROP_INDEX,
@@ -42,6 +44,7 @@ struct AlterCommand
         MODIFY_QUERY,
         RENAME_COLUMN,
         REMOVE_TTL,
+        CLEAR_MAP_KEY,
     };
 
     /// Which property user wants to remove from column
@@ -56,7 +59,7 @@ struct AlterCommand
         /// Other properties
         COMMENT,
         CODEC,
-        TTL
+        TTL,
     };
 
     Type type = UNKNOWN;
@@ -65,6 +68,9 @@ struct AlterCommand
 
     /// For DROP/CLEAR COLUMN/INDEX ... IN PARTITION
     ASTPtr partition;
+
+    /// For CLEAR COLUMN IN PARTITION WHERE
+    ASTPtr partition_predicate;
 
     /// For ADD and MODIFY, a new column type.
     DataTypePtr data_type = nullptr;
@@ -89,6 +95,9 @@ struct AlterCommand
 
     /// For MODIFY_ORDER_BY
     ASTPtr order_by = nullptr;
+
+    /// For MODIFY_CLUSTER_BY
+    ASTPtr cluster_by = nullptr;
 
     /// For MODIFY_SAMPLE_BY
     ASTPtr sample_by = nullptr;
@@ -136,6 +145,9 @@ struct AlterCommand
 
     /// Target column name
     String rename_to;
+
+    /// For CLEAR MAP KEYS
+    ASTPtr map_keys;
 
     /// What to remove from column (or TTL)
     RemoveProperty to_remove = RemoveProperty::NO_PROPERTY;

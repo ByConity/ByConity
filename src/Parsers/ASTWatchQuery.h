@@ -28,6 +28,8 @@ public:
     ASTWatchQuery() = default;
     String getID(char) const override { return "WatchQuery_" + database + "_" + table; }
 
+    ASTType getType() const override { return ASTType::ASTWatchQuery; }
+
     ASTPtr clone() const override
     {
         std::shared_ptr<ASTWatchQuery> res = std::make_shared<ASTWatchQuery>(*this);

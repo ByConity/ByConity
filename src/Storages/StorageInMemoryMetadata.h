@@ -1,12 +1,13 @@
 #pragma once
 
+#include <DataTypes/DataTypeFactory.h>
 #include <Parsers/IAST_fwd.h>
 #include <Storages/ColumnDependency.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/ConstraintsDescription.h>
 #include <Storages/IndicesDescription.h>
-#include <Storages/ProjectionsDescription.h>
 #include <Storages/KeyDescription.h>
+#include <Storages/ProjectionsDescription.h>
 #include <Storages/SelectQueryDescription.h>
 #include <Storages/TTLDescription.h>
 
@@ -31,6 +32,8 @@ struct StorageInMemoryMetadata
     mutable const ProjectionDescription * selected_projection{};
     /// PARTITION BY expression. Currently supported for MergeTree only.
     KeyDescription partition_key;
+    /// CLUSTER BY expression. Currently supported for MergeTree only.
+    KeyDescription cluster_by_key;
     /// PRIMARY KEY expression. If absent, than equal to order_by_ast.
     KeyDescription primary_key;
     /// ORDER BY expression. Required field for all MergeTree tables
@@ -38,6 +41,8 @@ struct StorageInMemoryMetadata
     KeyDescription sorting_key;
     /// SAMPLE BY expression. Supported for MergeTree only.
     KeyDescription sampling_key;
+    /// UNIQUE KEY expression. Supported for MergeTree only.
+    KeyDescription unique_key;
     /// Separate ttl expressions for columns
     TTLColumnsDescription column_ttls_by_name;
     /// TTL expressions for table (Move and Rows)
@@ -81,6 +86,8 @@ struct StorageInMemoryMetadata
     void setPrimaryKey(const KeyDescription & primary_key_);
     /// Set sampling key for storage (methods below, are just wrappers for this struct).
     void setSamplingKey(const KeyDescription & sampling_key_);
+    /// Set unique key for storage (methods below, are just wrappers for this struct).
+    void setUniqueKey(const KeyDescription & unique_key_);
 
     /// Set common table TTLs
     void setTableTTLs(const TTLTableDescription & table_ttl_);
@@ -126,6 +133,8 @@ struct StorageInMemoryMetadata
     TTLDescription getRowsTTL() const;
     bool hasRowsTTL() const;
 
+    bool hasPartitionLevelTTL() const;
+
     TTLDescriptions getRowsWhereTTLs() const;
     bool hasAnyRowsWhereTTL() const;
 
@@ -146,11 +155,11 @@ struct StorageInMemoryMetadata
     /// indices, TTL expressions) if we update @updated_columns set of columns.
     ColumnDependencies getColumnDependencies(const NameSet & updated_columns) const;
 
-    /// Block with ordinary + materialized columns.
-    Block getSampleBlock() const;
+    /// Block with ordinary + materialized columns + functional columns(if include_func_columns is true).
+    Block getSampleBlock(bool include_func_columns = false) const;
 
-    /// Block with ordinary columns.
-    Block getSampleBlockNonMaterialized() const;
+    /// Block with ordinary columns + functional columns(if include_func_columns is true).
+    Block getSampleBlockNonMaterialized(bool include_func_columns = false) const;
 
     /// Block with ordinary + materialized + virtuals. Virtuals have to be
     /// explicitly specified, because they are part of Storage type, not
@@ -158,12 +167,32 @@ struct StorageInMemoryMetadata
     Block getSampleBlockWithVirtuals(const NamesAndTypesList & virtuals) const;
 
 
+    /// Unique table reserved names
+    static constexpr auto DELETE_FLAG_COLUMN_NAME = "_delete_flag_";
+
+    /// Functional columns can not be specified by create query and can not be queried, but can be contained in insert query, including INSERT and INSERT SELECT operations.
+    NamesAndTypesList getFuncColumns() const
+    {
+        if (hasUniqueKey())
+        {
+            NamesAndTypesList res;
+            /// When the user specifies this column in the "insert query", it will be considered as a delete operation based on the unique key if the value of this column is true(not zero).
+            res.emplace_back(DELETE_FLAG_COLUMN_NAME, DataTypeFactory::instance().get("UInt8"));
+            return res;
+        }
+        else
+        {
+            return {};
+        }
+    }
+
     /// Block with ordinary + materialized + aliases + virtuals. Virtuals have
     /// to be explicitly specified, because they are part of Storage type, not
     /// Storage metadata. StorageID required only for more clear exception
     /// message.
     Block getSampleBlockForColumns(
         const Names & column_names, const NamesAndTypesList & virtuals = {}, const StorageID & storage_id = StorageID::createEmpty()) const;
+
     /// Returns structure with partition key.
     const KeyDescription & getPartitionKey() const;
     /// Returns ASTExpressionList of partition key expression for storage or nullptr if there is none.
@@ -174,6 +203,20 @@ struct StorageInMemoryMetadata
     bool hasPartitionKey() const;
     /// Returns column names that need to be read to calculate partition key.
     Names getColumnsRequiredForPartitionKey() const;
+
+    /// Returns structure with cluster by key.
+    const KeyDescription & getClusterByKey() const;
+    /// Returns ASTExpressionList of cluster by key expression for storage or nullptr if there is none.
+    ASTPtr getClusterByKeyAST() const { return cluster_by_key.definition_ast; }
+    /// Storage has user-defined (in CREATE query) cluster by key.
+    bool isClusterByKeyDefined() const;
+    /// Storage has cluster by key.
+    bool hasClusterByKey() const;
+    /// Returns column names that need to be read to calculate cluster by key.
+    Names getColumnsForClusterByKey() const;
+    Int64 getBucketNumberFromClusterByKey() const;
+    Int64 getSplitNumberFromClusterByKey() const;
+    bool getWithRangeFromClusterByKey() const;
 
     /// Returns structure with sorting key.
     const KeyDescription & getSortingKey() const;
@@ -218,6 +261,23 @@ struct StorageInMemoryMetadata
     /// * y', 'toStartOfMonth(date)', etc.
     Names getPrimaryKeyColumns() const;
 
+    /// Returns structure with unique key.
+    const KeyDescription & getUniqueKey() const;
+    /// Returns ASTExpressionList of unique key expression for storage or nullptr if there is none.
+    ASTPtr getUniqueKeyAST() const { return primary_key.definition_ast; }
+    /// Storage has user-defined (in CREATE query) sorting key.
+    bool isUniqueKeyDefined() const;
+    /// Storage has unique key (maybe part of some other key). It means, that
+    /// it contains at least one column.
+    bool hasUniqueKey() const;
+    /// Returns column names that need to be read to calculate unique key.
+    Names getColumnsRequiredForUniqueKey() const;
+    /// Returns columns names in unique key specified by. For example: 'a', 'x
+    /// * y', 'toStartOfMonth(date)', etc.
+    Names getUniqueKeyColumns() const;
+    /// Returns the unique key expression
+    ExpressionActionsPtr getUniqueKeyExpression() const;
+
     /// Storage settings
     ASTPtr getSettingsChanges() const;
     bool hasSettingsChanges() const { return settings_changes != nullptr; }
@@ -240,6 +300,9 @@ struct StorageInMemoryMetadata
     /// contains only the columns of the table, and all the columns are different.
     /// If |need_all| is set, then checks that all the columns of the table are in the block.
     void check(const Block & block, bool need_all = false) const;
+
+    /// check if there exist map column
+    bool hasMapColumn() const;
 };
 
 using StorageMetadataPtr = std::shared_ptr<const StorageInMemoryMetadata>;

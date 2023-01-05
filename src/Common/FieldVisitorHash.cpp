@@ -14,6 +14,18 @@ void FieldVisitorHash::operator() (const Null &) const
     hash.update(type);
 }
 
+void FieldVisitorHash::operator() (const NegativeInfinity &) const
+{
+    UInt8 type = Field::Types::NegativeInfinity;
+    hash.update(type);
+}
+
+void FieldVisitorHash::operator() (const PositiveInfinity &) const
+{
+    UInt8 type = Field::Types::PositiveInfinity;
+    hash.update(type);
+}
+
 void FieldVisitorHash::operator() (const UInt64 & x) const
 {
     UInt8 type = Field::Types::UInt64;
@@ -84,6 +96,11 @@ void FieldVisitorHash::operator() (const Map & x) const
         applyVisitor(*this, elem);
 }
 
+void FieldVisitorHash::operator() ([[maybe_unused]] const ByteMap & x) const
+{
+    throw Exception("FieldVisitorHash Map type not implemented!", ErrorCodes::NOT_IMPLEMENTED);
+}
+
 void FieldVisitorHash::operator() (const Array & x) const
 {
     UInt8 type = Field::Types::Array;
@@ -144,6 +161,16 @@ void FieldVisitorHash::operator() (const Int256 & x) const
     UInt8 type = Field::Types::Int256;
     hash.update(type);
     hash.update(x);
+}
+
+void FieldVisitorHash::operator() (const BitMap64 & x) const
+{
+    UInt8 type = Field::Types::BitMap64;
+    hash.update(type);
+    hash.update(x.cardinality());
+
+    for (roaring::Roaring64MapSetBitForwardIterator it(x); it != x.end(); ++it)
+        applyVisitor(*this, Field(*it));
 }
 
 }

@@ -31,6 +31,8 @@ public:
     String getID(char) const override { return "ColumnsMatcher"; }
     ASTPtr clone() const override;
 
+    ASTType getType() const override { return ASTType::ASTColumnsMatcher; }
+
     void appendColumnName(WriteBuffer & ostr) const override;
     void setPattern(String pattern);
     bool isColumnMatching(const String & column_name) const;

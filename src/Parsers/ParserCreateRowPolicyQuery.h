@@ -21,10 +21,11 @@ namespace DB
   *      [WITH CHECK {condition | NONE}] [,...]
   *      [TO {role [,...] | ALL | ALL EXCEPT role [,...]}]
   */
-class ParserCreateRowPolicyQuery : public IParserBase
+class ParserCreateRowPolicyQuery : public IParserDialectBase
 {
 public:
     void useAttachMode(bool attach_mode_ = true) { attach_mode = attach_mode_; }
+    using IParserDialectBase::IParserDialectBase;
 
 protected:
     const char * getName() const override { return "CREATE ROW POLICY or ALTER ROW POLICY query"; }

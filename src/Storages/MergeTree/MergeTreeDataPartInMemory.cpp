@@ -18,24 +18,26 @@ namespace ErrorCodes
 
 
 MergeTreeDataPartInMemory::MergeTreeDataPartInMemory(
-       MergeTreeData & storage_,
+       MergeTreeMetaBase & storage_,
         const String & name_,
         const VolumePtr & volume_,
         const std::optional<String> & relative_path_,
-        const IMergeTreeDataPart * parent_part_)
-    : IMergeTreeDataPart(storage_, name_, volume_, relative_path_, Type::IN_MEMORY, parent_part_)
+        const IMergeTreeDataPart * parent_part_,
+        IStorage::StorageLocation location_)
+    : IMergeTreeDataPart(storage_, name_, volume_, relative_path_, Type::IN_MEMORY, parent_part_, location_)
 {
     default_codec = CompressionCodecFactory::instance().get("NONE", {});
 }
 
 MergeTreeDataPartInMemory::MergeTreeDataPartInMemory(
-        const MergeTreeData & storage_,
+        const MergeTreeMetaBase & storage_,
         const String & name_,
         const MergeTreePartInfo & info_,
         const VolumePtr & volume_,
         const std::optional<String> & relative_path_,
-        const IMergeTreeDataPart * parent_part_)
-    : IMergeTreeDataPart(storage_, name_, info_, volume_, relative_path_, Type::IN_MEMORY, parent_part_)
+        const IMergeTreeDataPart * parent_part_,
+        IStorage::StorageLocation location_)
+    : IMergeTreeDataPart(storage_, name_, info_, volume_, relative_path_, Type::IN_MEMORY, parent_part_, location_)
 {
     default_codec = CompressionCodecFactory::instance().get("NONE", {});
 }
@@ -77,7 +79,7 @@ void MergeTreeDataPartInMemory::flushToDisk(const String & base_path, const Stri
     auto new_data_part = storage.createPart(name, new_type, info, volume, new_relative_path);
 
     new_data_part->uuid = uuid;
-    new_data_part->setColumns(columns);
+    new_data_part->setColumns(getColumns());
     new_data_part->partition.value = partition.value;
     new_data_part->minmax_idx = minmax_idx;
 
@@ -91,7 +93,7 @@ void MergeTreeDataPartInMemory::flushToDisk(const String & base_path, const Stri
 
     auto compression_codec = storage.getContext()->chooseCompressionCodec(0, 0);
     auto indices = MergeTreeIndexFactory::instance().getMany(metadata_snapshot->getSecondaryIndices());
-    MergedBlockOutputStream out(new_data_part, metadata_snapshot, columns, indices, compression_codec);
+    MergedBlockOutputStream out(new_data_part, metadata_snapshot, *columns_ptr, indices, compression_codec);
     out.writePrefix();
     out.write(block);
     out.writeSuffixAndFinalizePart(new_data_part);
@@ -100,7 +102,7 @@ void MergeTreeDataPartInMemory::flushToDisk(const String & base_path, const Stri
 void MergeTreeDataPartInMemory::makeCloneInDetached(const String & prefix, const StorageMetadataPtr & metadata_snapshot) const
 {
     String detached_path = getRelativePathForDetachedPart(prefix);
-    flushToDisk(storage.getRelativeDataPath(), detached_path, metadata_snapshot);
+    flushToDisk(storage.getRelativeDataPath(IStorage::StorageLocation::MAIN), detached_path, metadata_snapshot);
 }
 
 void MergeTreeDataPartInMemory::renameTo(const String & new_relative_path, bool /* remove_new_dir_if_exists */) const
@@ -110,11 +112,12 @@ void MergeTreeDataPartInMemory::renameTo(const String & new_relative_path, bool 
 
 void MergeTreeDataPartInMemory::calculateEachColumnSizes(ColumnSizeByName & each_columns_size, ColumnSize & total_size) const
 {
-    auto it = checksums.files.find("data.bin");
-    if (it != checksums.files.end())
+    auto checksums = getChecksums();
+    auto it = checksums->files.find("data.bin");
+    if (it != checksums->files.end())
         total_size.data_uncompressed += it->second.uncompressed_size;
 
-    for (const auto & column : columns)
+    for (const auto & column : *columns_ptr)
         each_columns_size[column.name].data_uncompressed += block.getByName(column.name).column->byteSize();
 }
 

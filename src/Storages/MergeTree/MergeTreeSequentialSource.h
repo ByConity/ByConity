@@ -1,6 +1,6 @@
 #pragma once
 #include <Processors/Sources/SourceWithProgress.h>
-#include <Storages/MergeTree/MergeTreeData.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Storages/MergeTree/IMergeTreeReader.h>
 #include <Storages/MergeTree/MarkRange.h>
 #include <memory>
@@ -12,10 +12,22 @@ namespace DB
 class MergeTreeSequentialSource : public SourceWithProgress
 {
 public:
+    /// NOTE: in case you want to read part with row id included, please add extra `_part_row_number` to
+    /// the columns you want to read.
     MergeTreeSequentialSource(
-        const MergeTreeData & storage_,
+        const MergeTreeMetaBase & storage_,
         const StorageMetadataPtr & metadata_snapshot_,
-        MergeTreeData::DataPartPtr data_part_,
+        MergeTreeMetaBase::DataPartPtr data_part_,
+        Names columns_to_read_,
+        bool read_with_direct_io_,
+        bool take_column_types_from_storage,
+        bool quiet = false);
+
+    MergeTreeSequentialSource(
+        const MergeTreeMetaBase & storage_,
+        const StorageMetadataPtr & metadata_snapshot_,
+        MergeTreeMetaBase::DataPartPtr data_part_,
+        ImmutableDeleteBitmapPtr delete_bitmap_,
         Names columns_to_read_,
         bool read_with_direct_io_,
         bool take_column_types_from_storage,
@@ -34,14 +46,16 @@ protected:
 
 private:
 
-    const MergeTreeData & storage;
+    const MergeTreeMetaBase & storage;
     StorageMetadataPtr metadata_snapshot;
 
     /// Data part will not be removed if the pointer owns it
-    MergeTreeData::DataPartPtr data_part;
+    MergeTreeMetaBase::DataPartPtr data_part;
+    ImmutableDeleteBitmapPtr delete_bitmap;
 
     /// Columns we have to read (each Block from read will contain them)
     Names columns_to_read;
+    bool continue_reading = false;
 
     /// Should read using direct IO
     bool read_with_direct_io;
@@ -61,6 +75,8 @@ private:
 private:
     /// Closes readers and unlock part locks
     void finish();
+    size_t currentMarkStart() const { return data_part->index_granularity.getMarkStartingRow(current_mark); }
+    size_t currentMarkEnd() const { return data_part->index_granularity.getMarkStartingRow(current_mark + 1); }
 };
 
 }

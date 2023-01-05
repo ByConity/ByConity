@@ -71,6 +71,10 @@ public:
 
             SparseElements,
             SparseOffsets,
+
+            MapKeyElements,
+            MapValueElements,
+            MapSizes,
         };
         Type type;
 
@@ -239,6 +243,17 @@ public:
     virtual void serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings &) const = 0;
     virtual void deserializeTextJSON(IColumn & column, ReadBuffer & istr, const FormatSettings &) const = 0;
 
+    /** Text serialization intended for memory comparasion.
+      */
+    /// A mem-comparable encoding guarantees that we can compare encoded value using memcmp without decoding
+    virtual bool supportMemComparableEncoding() const { return false; }
+    /// Serialize one value of a column into mem-comparable format.
+    /// Throws exception when supportMemComparableEncoding() == false
+    virtual void serializeMemComparable(const IColumn & column, size_t row_num, WriteBuffer & ostr) const;
+    /// Deserialize one value from mem-comparable format and insert into a column.
+    /// Throws exception when supportMemComparableEncoding() == false
+    virtual void deserializeMemComparable(IColumn & column, ReadBuffer & istr) const;
+
     /** Text serialization for putting into the XML format.
       */
     virtual void serializeTextXML(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings & settings) const
@@ -254,6 +269,9 @@ public:
     static ColumnPtr getFromSubstreamsCache(SubstreamsCache * cache, const SubstreamPath & path);
 
     static bool isSpecialCompressionAllowed(const SubstreamPath & path);
+
+protected:
+    [[noreturn]] void throwUnexpectedDataAfterParsedValue(IColumn & column, ReadBuffer & istr, const FormatSettings &, const String & type_name) const;
 };
 
 using SerializationPtr = std::shared_ptr<const ISerialization>;

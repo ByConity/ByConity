@@ -21,6 +21,7 @@ NamesAndTypesList StorageSystemMutations::getNamesAndTypes()
         { "database",                   std::make_shared<DataTypeString>() },
         { "table",                      std::make_shared<DataTypeString>() },
         { "mutation_id",                std::make_shared<DataTypeString>() },
+        { "query_id",                   std::make_shared<DataTypeString>() },
         { "command",                    std::make_shared<DataTypeString>() },
         { "create_time",                std::make_shared<DataTypeDateTime>() },
         { "block_numbers.partition_id", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>()) },
@@ -131,6 +132,7 @@ void StorageSystemMutations::fillData(MutableColumns & res_columns, ContextPtr c
             res_columns[col_num++]->insert(table);
 
             res_columns[col_num++]->insert(status.id);
+            res_columns[col_num++]->insert(status.query_id);
             res_columns[col_num++]->insert(status.command);
             res_columns[col_num++]->insert(UInt64(status.create_time));
             res_columns[col_num++]->insert(block_partition_ids);

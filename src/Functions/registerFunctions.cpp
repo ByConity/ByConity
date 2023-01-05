@@ -11,7 +11,9 @@ void registerFunctionsArithmetic(FunctionFactory &);
 void registerFunctionsArray(FunctionFactory &);
 void registerFunctionsTuple(FunctionFactory &);
 void registerFunctionsMap(FunctionFactory &);
+void registerFunctionsByteMap(FunctionFactory &);
 void registerFunctionsBitmap(FunctionFactory &);
+void registerFunctionsBloomFilter(FunctionFactory &);
 void registerFunctionsCoding(FunctionFactory &);
 void registerFunctionsComparison(FunctionFactory &);
 void registerFunctionsConditional(FunctionFactory &);
@@ -44,6 +46,7 @@ void registerFunctionsSQLJSON(FunctionFactory &);
 void registerFunctionToJSONString(FunctionFactory &);
 void registerFunctionsConsistentHashing(FunctionFactory & factory);
 void registerFunctionsUnixTimestamp64(FunctionFactory & factory);
+void registerFromUnixTimestampMilli(FunctionFactory & factory);
 void registerFunctionBitHammingDistance(FunctionFactory & factory);
 void registerFunctionTupleHammingDistance(FunctionFactory & factory);
 void registerFunctionsStringHash(FunctionFactory & factory);
@@ -53,6 +56,8 @@ void registerFunctionBayesAB(FunctionFactory &);
 #endif
 void registerFunctionTid(FunctionFactory & factory);
 void registerFunctionLogTrace(FunctionFactory & factory);
+void registerFunctionTopoFindDown(FunctionFactory &);
+void registerFunctionDtsPartition(FunctionFactory &);
 
 #if USE_SSL
 void registerFunctionEncrypt(FunctionFactory & factory);
@@ -62,6 +67,10 @@ void registerFunctionAESDecryptMysql(FunctionFactory & factory);
 
 #endif
 
+void registerInternalFunctionDynamicFilter(FunctionFactory &);
+void registerFunctionBucketBoundsSearch(FunctionFactory & factory);
+void registerFunctionGetHostWithPorts(FunctionFactory & factory);
+
 void registerFunctions()
 {
     auto & factory = FunctionFactory::instance();
@@ -69,10 +78,15 @@ void registerFunctions()
     registerFunctionsArithmetic(factory);
     registerFunctionsArray(factory);
     registerFunctionsTuple(factory);
+#ifdef USE_COMMUNITY_MAP
     registerFunctionsMap(factory);
+#else
+    registerFunctionsByteMap(factory);
+#endif
 #if !defined(ARCADIA_BUILD)
     registerFunctionsBitmap(factory);
 #endif
+    registerFunctionsBloomFilter(factory);
     registerFunctionsCoding(factory);
     registerFunctionsComparison(factory);
     registerFunctionsConditional(factory);
@@ -105,6 +119,7 @@ void registerFunctions()
     registerFunctionsIntrospection(factory);
     registerFunctionsConsistentHashing(factory);
     registerFunctionsUnixTimestamp64(factory);
+    registerFromUnixTimestampMilli(factory);
     registerFunctionBitHammingDistance(factory);
     registerFunctionTupleHammingDistance(factory);
     registerFunctionsStringHash(factory);
@@ -122,6 +137,12 @@ void registerFunctions()
 #endif
     registerFunctionTid(factory);
     registerFunctionLogTrace(factory);
+    registerFunctionTopoFindDown(factory);
+    registerInternalFunctionDynamicFilter(factory);
+    registerFunctionBucketBoundsSearch(factory);
+    registerFunctionGetHostWithPorts(factory);
+
+    registerFunctionDtsPartition(factory);
 }
 
 }

@@ -11,10 +11,12 @@
 #include <Interpreters/Cluster.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InternalTextLogsQueue.h>
+#include <Interpreters/CnchQueryMetrics/QueryWorkerMetricLog.h>
 #include <IO/ConnectionTimeoutsContext.h>
 #include <Common/FiberStack.h>
 #include <Client/MultiplexedConnections.h>
 #include <Client/HedgedConnections.h>
+#include <CloudServices/CnchServerResource.h>
 #include <Storages/MergeTree/MergeTreeDataPartUUID.h>
 
 namespace DB
@@ -37,7 +39,7 @@ RemoteQueryExecutor::RemoteQueryExecutor(
 {
     create_connections = [this, &connection, throttler]()
     {
-        return std::make_unique<MultiplexedConnections>(connection, context->getSettingsRef(), throttler);
+        return std::make_unique<MultiplexedConnections>(connection, context, context->getSettingsRef(), throttler);
     };
 }
 
@@ -50,7 +52,7 @@ RemoteQueryExecutor::RemoteQueryExecutor(
     , scalars(scalars_), external_tables(external_tables_), stage(stage_), task_iterator(task_iterator_)
 {
     create_connections = [this, connections_, throttler]() mutable {
-        return std::make_unique<MultiplexedConnections>(std::move(connections_), context->getSettingsRef(), throttler);
+        return std::make_unique<MultiplexedConnections>(std::move(connections_), context, context->getSettingsRef(), throttler);
     };
 }
 
@@ -89,7 +91,7 @@ RemoteQueryExecutor::RemoteQueryExecutor(
         else
             connection_entries = pool->getMany(timeouts, &current_settings, pool_mode);
 
-        return std::make_unique<MultiplexedConnections>(std::move(connection_entries), current_settings, throttler);
+        return std::make_unique<MultiplexedConnections>(std::move(connection_entries), context, current_settings, throttler);
     };
 }
 
@@ -191,6 +193,7 @@ void RemoteQueryExecutor::sendQuery()
             connections->sendIgnoredPartUUIDs(duplicated_part_uuids);
     }
 
+    connections->sendResource();
     connections->sendQuery(timeouts, query, query_id, stage, modified_client_info, true);
 
     established = false;
@@ -342,6 +345,10 @@ std::optional<Block> RemoteQueryExecutor::processPacket(Packet packet)
                 profile_info_callback(packet.profile_info);
             break;
 
+        case Protocol::Server::QueryMetrics:
+            parseQueryWorkerMetrics(packet.query_worker_metric_elements);
+            break;
+
         case Protocol::Server::Totals:
             totals = packet.block;
             break;
@@ -408,29 +415,42 @@ void RemoteQueryExecutor::finish(std::unique_ptr<ReadContext> * read_context)
     tryCancel("Cancelling query because enough data has been read", read_context);
 
     /// Get the remaining packets so that there is no out of sync in the connections to the replicas.
-    Packet packet = connections->drain();
-    switch (packet.type)
+    while (connections->hasActiveConnections())
     {
-        case Protocol::Server::EndOfStream:
-            finished = true;
-            break;
+        Packet packet = connections->drain();
+        switch (packet.type)
+        {
+            case Protocol::Server::ProfileInfo:
+                LOG_DEBUG(log, "Receive ProfileInfo");
+                // info.setFrom(packet.profile_info, true);
+                // initOwnProfileInfo();
+                break;
 
-        case Protocol::Server::Log:
-            /// Pass logs from remote server to client
-            if (auto log_queue = CurrentThread::getInternalTextLogsQueue())
-                log_queue->pushBlock(std::move(packet.block));
-            break;
+            case Protocol::Server::QueryMetrics:
+                parseQueryWorkerMetrics(packet.query_worker_metric_elements);
+                break;
 
-        case Protocol::Server::Exception:
-            got_exception_from_replica = true;
-            packet.exception->rethrow();
-            break;
+            case Protocol::Server::EndOfStream:
+                finished = true;
+                break;
 
-        default:
-            got_unknown_packet_from_replica = true;
-            throw Exception(ErrorCodes::UNKNOWN_PACKET_FROM_SERVER, "Unknown packet {} from one of the following replicas: {}",
-                toString(packet.type),
-                connections->dumpAddresses());
+            case Protocol::Server::Log:
+                /// Pass logs from remote server to client
+                if (auto log_queue = CurrentThread::getInternalTextLogsQueue())
+                    log_queue->pushBlock(std::move(packet.block));
+                break;
+
+            case Protocol::Server::Exception:
+                got_exception_from_replica = true;
+                packet.exception->rethrow();
+                break;
+
+            default:
+                got_unknown_packet_from_replica = true;
+                throw Exception(ErrorCodes::UNKNOWN_PACKET_FROM_SERVER, "Unknown packet {} from one of the following replicas: {}",
+                    toString(packet.type),
+                    connections->dumpAddresses());
+        }
     }
 }
 
@@ -533,6 +553,28 @@ bool RemoteQueryExecutor::isQueryPending() const
 bool RemoteQueryExecutor::hasThrownException() const
 {
     return got_exception_from_replica || got_unknown_packet_from_replica;
+}
+
+void RemoteQueryExecutor::parseQueryWorkerMetrics(const QueryWorkerMetricElements & elements)
+{
+    for (const auto & element : elements)
+    {
+        /// The extended_info metrics are only used in INSERT SELECT/ INSERT INFILE cases, you may consider these values as metrics of the write worker.
+        extended_info.read_rows += element->read_rows;
+        extended_info.read_bytes += element->read_bytes;
+        extended_info.read_cached_bytes += element->read_cached_bytes;
+
+        extended_info.written_rows += element->write_rows;
+        extended_info.written_bytes += element->write_bytes;
+        extended_info.written_duration += element->write_duration;
+
+        extended_info.runtime_latency += element->runtime_latency;
+
+        if (context->getServerType() == ServerType::cnch_server)  /// For cnch server, directly push elements to the buffer
+            context->getQueryContext()->insertQueryWorkerMetricsElement(*element);
+        else if (context->getServerType() == ServerType::cnch_worker)  /// For cnch aggre worker, store the elements and forward them to cnch server
+            context->getQueryContext()->addQueryWorkerMetricElements(std::move(element));
+    }
 }
 
 }

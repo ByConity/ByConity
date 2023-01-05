@@ -2,13 +2,14 @@
 
 #include <optional>
 #include <common/types.h>
+#include "Storages/MergeTree/MergeTreePartition.h"
 #include <Storages/MergeTree/MergeTreeDataPartType.h>
 #include <Disks/IDisk.h>
 
 namespace DB
 {
 
-class MergeTreeData;
+class MergeTreeMetaBase;
 
 /// Meta information about index granularity
 struct MergeTreeIndexGranularityInfo
@@ -26,9 +27,10 @@ public:
     /// Approximate bytes size of one granule
     size_t index_granularity_bytes = 0;
 
-    MergeTreeIndexGranularityInfo(const MergeTreeData & storage, MergeTreeDataPartType type_);
+    MergeTreeIndexGranularityInfo(const MergeTreeMetaBase & storage, MergeTreeDataPartType type_);
 
     void changeGranularityIfRequired(const DiskPtr & disk, const String & path_to_part);
+    void changeGranularityIfRequired(const MergeTreeDataPartChecksums & checksums);
 
     String getMarksFilePath(const String & path_prefix) const
     {
@@ -38,11 +40,15 @@ public:
     size_t getMarkSizeInBytes(size_t columns_num = 1) const;
 
     static std::optional<std::string> getMarksExtensionFromFilesystem(const DiskPtr & disk, const String & path_to_part);
+    static std::optional<std::string> getMarksExtensionFromChecksums(const MergeTreeDataPartChecksums & checksums);
+
+    void setAdaptive(size_t index_granularity_bytes_);
+    void setNonAdaptive();
+
+    bool has_disk_cache = false;
 
 private:
     MergeTreeDataPartType type;
-    void setAdaptive(size_t index_granularity_bytes_);
-    void setNonAdaptive();
 };
 
 constexpr inline auto getNonAdaptiveMrkExtension() { return ".mrk"; }

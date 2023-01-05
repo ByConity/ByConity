@@ -148,17 +148,38 @@ Coordination::WatchCallback BackgroundSchedulePoolTaskInfo::getWatchCallback()
      };
 }
 
+String BackgroundSchedulePoolTaskInfo::dumpStatus()
+{
+    std::stringstream ss;
+    ss << "BackgroundSchedulePool task info: " << "\n";
+    ss << "Status: deactivated-" << deactivated << ", scheduled-" << scheduled << ", delayed-"
+       << delayed << ", executing-" << executing << "\n";
+    ss << "Pool thread size -" << pool.threads.size() << ", current queue size-" << pool.queue.size() << "\n";
+    return ss.str();
+}
 
-BackgroundSchedulePool::BackgroundSchedulePool(size_t size_, CurrentMetrics::Metric tasks_metric_, const char *thread_name_)
+BackgroundSchedulePool::BackgroundSchedulePool(size_t size_, CurrentMetrics::Metric tasks_metric_, const char *thread_name_, CpuSetPtr cpu_set_)
     : size(size_)
     , tasks_metric(tasks_metric_)
     , thread_name(thread_name_)
+    , cpu_set(std::move(cpu_set_))
 {
     LOG_INFO(&Poco::Logger::get("BackgroundSchedulePool/" + thread_name), "Create BackgroundSchedulePool with {} threads", size);
 
-    threads.resize(size);
-    for (auto & thread : threads)
-        thread = ThreadFromGlobalPool([this] { threadFunction(); });
+    threads.reserve(size);
+    for (size_t i = 0; i < size; ++i)
+    {
+        auto thread = ThreadFromGlobalPool([this] { threadFunction(); });
+        if (cpu_set != nullptr)
+        {
+            size_t tid = thread.gettid();
+            if (tid == 0)
+                LOG_WARNING(&Poco::Logger::get("BackgroundSchedulePool"), "get tid: 0");
+            else
+                cpu_set->addTask(tid);
+        }
+        threads.push_back(std::move(thread));
+    }
 
     delayed_thread = ThreadFromGlobalPool([this] { delayExecutionThreadFunction(); });
 }
@@ -178,8 +199,19 @@ BackgroundSchedulePool::~BackgroundSchedulePool()
         delayed_thread.join();
 
         LOG_TRACE(&Poco::Logger::get("BackgroundSchedulePool/" + thread_name), "Waiting for threads to finish.");
+
+        std::vector<size_t> tids;
         for (auto & thread : threads)
+        {
+            tids.emplace_back(thread.gettid());
             thread.join();
+        }
+        if (nullptr != cpu_set)
+        {
+            auto & cgroup_manager = CGroupManagerFactory::instance();
+            auto system_cpuset = cgroup_manager.getSystemCpuSet();
+            system_cpuset->addTasks(tids);
+        }
     }
     catch (...)
     {

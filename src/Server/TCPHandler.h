@@ -12,6 +12,7 @@
 #include <DataStreams/BlockIO.h>
 #include <Interpreters/InternalTextLogsQueue.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/DistributedStages/PlanSegment.h>
 
 #include "IServer.h"
 
@@ -53,6 +54,8 @@ struct QueryState
 
     /// Query text.
     String query;
+    /// PlanSegment, unique pointer, life span is only held in query stage.
+    PlanSegmentPtr plan_segment;
     /// Streams of blocks, that are processing the query.
     BlockIO io;
 
@@ -171,6 +174,8 @@ private:
     void receiveHello();
     bool receivePacket();
     void receiveQuery();
+    void receiveCnchQuery();
+    void receivePlanSegment();
     void receiveIgnoredPartUUIDs();
     String receiveReadTaskResponseAssumeLocked();
     bool receiveData(bool scalar);
@@ -205,6 +210,7 @@ private:
     void sendPartUUIDs();
     void sendReadTaskRequestAssumeLocked();
     void sendProfileInfo(const BlockStreamProfileInfo & info);
+    void sendQueryWorkerMetrics();
     void sendTotals(const Block & totals);
     void sendExtremes(const Block & extremes);
 

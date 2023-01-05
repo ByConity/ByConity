@@ -98,6 +98,11 @@ public:
         s += length;
     }
 
+    void insertRangeSelective(const IColumn & /*src*/, const Selector & /*selector*/, size_t /*selector_start*/, size_t length) override
+    {
+        s += length;
+    }
+
     ColumnPtr filter(const Filter & filt, ssize_t /*result_size_hint*/) const override
     {
         return cloneDummy(countBytesInFilter(filt));

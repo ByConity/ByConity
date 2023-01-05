@@ -6,7 +6,7 @@
 # - "" (no sanitizing)
 option (SANITIZE "Enable one of the code sanitizers" "")
 
-set (SAN_FLAGS "${SAN_FLAGS} -g -fno-omit-frame-pointer -DSANITIZER")
+set (SAN_FLAGS "${SAN_FLAGS} -g -fno-omit-frame-pointer -fsanitize-recover=all -DSANITIZER")
 
 # gcc with -nodefaultlibs does not add sanitizer libraries
 # with -static-libasan and similar

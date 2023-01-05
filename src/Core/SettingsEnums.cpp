@@ -91,7 +91,9 @@ IMPLEMENT_SETTING_ENUM_WITH_RENAME(LogQueriesType, ErrorCodes::BAD_ARGUMENTS,
 
 IMPLEMENT_SETTING_ENUM_WITH_RENAME(DefaultDatabaseEngine, ErrorCodes::BAD_ARGUMENTS,
     {{"Ordinary", DefaultDatabaseEngine::Ordinary},
-     {"Atomic",   DefaultDatabaseEngine::Atomic}})
+     {"Atomic",   DefaultDatabaseEngine::Atomic},
+     {"Cnch",     DefaultDatabaseEngine::Cnch},
+     {"Memory",   DefaultDatabaseEngine::Memory}})
 
 IMPLEMENT_SETTING_MULTI_ENUM(MySQLDataTypesSupport, ErrorCodes::UNKNOWN_MYSQL_DATATYPES_SUPPORT_LEVEL,
     {{"decimal",    MySQLDataTypesSupport::DECIMAL},
@@ -111,4 +113,18 @@ IMPLEMENT_SETTING_ENUM(DistributedDDLOutputMode, ErrorCodes::BAD_ARGUMENTS,
 IMPLEMENT_SETTING_ENUM(HandleKafkaErrorMode, ErrorCodes::BAD_ARGUMENTS,
     {{"default",      HandleKafkaErrorMode::DEFAULT},
      {"stream",       HandleKafkaErrorMode::STREAM}})
+
+IMPLEMENT_SETTING_ENUM(DialectType, ErrorCodes::BAD_ARGUMENTS,
+    {{"CLICKHOUSE", DialectType::CLICKHOUSE},
+     {"ANSI",       DialectType::ANSI}})
+
+IMPLEMENT_SETTING_ENUM(CTEMode, ErrorCodes::BAD_ARGUMENTS,
+    {{"INLINED", CTEMode::INLINED},
+     {"SHARED", CTEMode::SHARED},
+     {"AUTO", CTEMode::AUTO}})
+
+IMPLEMENT_SETTING_ENUM(StatisticsAccurateSampleNdvMode, ErrorCodes::BAD_ARGUMENTS,
+    {{"NEVER", StatisticsAccurateSampleNdvMode::NEVER},
+     {"AUTO", StatisticsAccurateSampleNdvMode::AUTO},
+     {"ALWAYS", StatisticsAccurateSampleNdvMode::ALWAYS}})
 }

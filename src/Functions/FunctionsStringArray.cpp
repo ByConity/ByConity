@@ -13,6 +13,7 @@ void registerFunctionsStringArray(FunctionFactory & factory)
     factory.registerFunction<FunctionSplitByString>();
     factory.registerFunction<FunctionSplitByRegexp>();
     factory.registerFunction<FunctionArrayStringConcat>();
+    factory.registerFunction<FunctionHiveSplit>(FunctionFactory::CaseInsensitive);
 }
 
 }

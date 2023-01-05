@@ -1,6 +1,6 @@
 #include <Parsers/ASTExpressionList.h>
+#include <Parsers/ASTSerDerHelper.h>
 #include <IO/Operators.h>
-
 
 namespace DB
 {
@@ -26,7 +26,15 @@ void ASTExpressionList::formatImpl(const FormatSettings & settings, FormatState 
             settings.ostr << ' ';
         }
 
-        (*it)->formatImpl(settings, state, frame);
+        if (frame.surround_each_list_element_with_parens)
+            settings.ostr << "(";
+
+        FormatStateStacked frame_nested = frame;
+        frame_nested.surround_each_list_element_with_parens = false;
+        (*it)->formatImpl(settings, state, frame_nested);
+
+        if (frame.surround_each_list_element_with_parens)
+            settings.ostr << ")";
     }
 }
 
@@ -41,6 +49,7 @@ void ASTExpressionList::formatImplMultiline(const FormatSettings & settings, For
     }
 
     ++frame.indent;
+
     for (ASTs::const_iterator it = children.begin(); it != children.end(); ++it)
     {
         if (it != children.begin())
@@ -54,8 +63,32 @@ void ASTExpressionList::formatImplMultiline(const FormatSettings & settings, For
 
         FormatStateStacked frame_nested = frame;
         frame_nested.expression_list_always_start_on_new_line = false;
+        frame_nested.surround_each_list_element_with_parens = false;
+
         (*it)->formatImpl(settings, state, frame_nested);
+
+        if (frame.surround_each_list_element_with_parens)
+            settings.ostr << ")";
     }
+}
+
+void ASTExpressionList::serialize(WriteBuffer & buf) const
+{
+    writeBinary(separator, buf);
+    serializeASTs(children, buf);
+}
+
+void ASTExpressionList::deserializeImpl(ReadBuffer & buf)
+{
+    readBinary(separator, buf);
+    children = deserializeASTs(buf);
+}
+
+ASTPtr ASTExpressionList::deserialize(ReadBuffer & buf)
+{
+    auto expression = std::make_shared<ASTExpressionList>();
+    expression->deserializeImpl(buf);
+    return expression;
 }
 
 }

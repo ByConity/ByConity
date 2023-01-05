@@ -33,7 +33,6 @@ public:
     BlockOutputStreamPtr write(const ASTPtr &, const StorageMetadataPtr &, ContextPtr) override { throwNotAllowed(); }
 
     NamesAndTypesList getVirtuals() const override;
-    ColumnSizeByName getColumnSizes() const override;
 
     StoragePtr getNested() const override { return nested_storage; }
 

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <common/types.h>
-
+#include <Core/ProtocolDefines.h>
 
 namespace DB
 {
@@ -79,7 +79,9 @@ namespace Protocol
             ReadTaskRequest = 13,     /// String (UUID) describes a request for which next task is needed
                                       /// This is such an inverted logic, where server sends requests
                                       /// And client returns back response
-            MAX = ReadTaskRequest,
+            QueryMetrics = 14,        /// Query metrics in cnch worker side
+            MAX = QueryMetrics,
+
         };
 
         /// NOTE: If the type of packet argument would be Enum, the comparison packet >= 0 && packet < 10
@@ -102,7 +104,8 @@ namespace Protocol
                 "Log",
                 "TableColumns",
                 "PartUUIDs",
-                "ReadTaskRequest"
+                "ReadTaskRequest",
+                "QueryMetrics"
             };
             return packet <= MAX
                 ? data[packet]
@@ -139,8 +142,10 @@ namespace Protocol
             Scalar = 7,              /// A block of data (compressed or not).
             IgnoredPartUUIDs = 8,    /// List of unique parts ids to exclude from query processing
             ReadTaskResponse = 9,     /// TODO:
+            PlanSegment = 10,
+            CnchQuery = 11,
 
-            MAX = ReadTaskResponse,
+            MAX = CnchQuery,
         };
 
         inline const char * toString(UInt64 packet)
@@ -156,6 +161,8 @@ namespace Protocol
                 "Scalar",
                 "IgnoredPartUUIDs",
                 "ReadTaskResponse",
+                "PlanSegment",
+                "CnchQuery"
             };
             return packet <= MAX
                 ? data[packet]
@@ -176,7 +183,6 @@ namespace Protocol
         Disable = 0,
         Enable = 1,
     };
-
 }
 
 }

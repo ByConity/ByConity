@@ -1,5 +1,7 @@
 #include <queue>
 #include <IO/WriteBufferFromString.h>
+#include <IO/WriteBufferFromFile.h>
+#include <Processors/printPipeline.h>
 #include <Common/EventCounter.h>
 #include <Common/CurrentThread.h>
 #include <Common/setThreadName.h>
@@ -8,6 +10,7 @@
 #include <Processors/printPipeline.h>
 #include <Processors/ISource.h>
 #include <Interpreters/ProcessList.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/OpenTelemetrySpanLog.h>
 #include <common/scope_guard_safe.h>
 
@@ -34,14 +37,17 @@ static bool checkCanAddAdditionalInfoToException(const DB::Exception & exception
            && exception.code() != ErrorCodes::QUERY_WAS_CANCELLED;
 }
 
-PipelineExecutor::PipelineExecutor(Processors & processors_, QueryStatus * elem)
+PipelineExecutor::PipelineExecutor(Processors & processors_, QueryStatus * elem, bool need_processors_profiles_)
     : processors(processors_)
+    , need_processors_profiles(need_processors_profiles_)
     , cancelled(false)
     , finished(false)
     , num_processing_executors(0)
     , expand_pipeline_task(nullptr)
     , process_list_element(elem)
 {
+    if (process_list_element)
+        need_processors_profiles = process_list_element->getContext()->getSettingsRef().log_processors_profiles;
     try
     {
         graph = std::make_unique<ExecutingGraph>(processors);
@@ -57,6 +63,20 @@ PipelineExecutor::PipelineExecutor(Processors & processors_, QueryStatus * elem)
 
         throw;
     }
+
+    if (process_list_element)
+    {
+        // Add the pipeline to the QueryStatus at the end to avoid issues if other things throw
+        // as that would leave the executor "linked"
+        process_list_element->addPipelineExecutor(this);
+    }
+}
+
+PipelineExecutor::~PipelineExecutor()
+{
+    if (process_list_element)
+        process_list_element->removePipelineExecutor(this);
+
 }
 
 void PipelineExecutor::addChildlessProcessorsToStack(Stack & stack)
@@ -213,7 +233,35 @@ bool PipelineExecutor::prepareProcessor(UInt64 pid, size_t thread_number, Queue 
 
         try
         {
-            node.last_processor_status = node.processor->prepare(node.updated_input_ports, node.updated_output_ports);
+            // node.last_processor_status = node.processor->prepare(node.updated_input_ports, node.updated_output_ports);
+            auto & processor = *node.processor;
+            IProcessor::Status last_status = node.last_processor_status;
+            IProcessor::Status status = processor.prepare(node.updated_input_ports, node.updated_output_ports);
+            node.last_processor_status = status;
+
+            if (need_processors_profiles)
+            {
+                /// NeedData
+                if (last_status != IProcessor::Status::NeedData && status == IProcessor::Status::NeedData)
+                {
+                    processor.input_wait_watch.restart();
+                }
+                else if (last_status == IProcessor::Status::NeedData && status != IProcessor::Status::NeedData)
+                {
+                    processor.input_wait_elapsed_us += processor.input_wait_watch.elapsedMicroseconds();
+                }
+
+                /// PortFull
+                if (last_status != IProcessor::Status::PortFull && status == IProcessor::Status::PortFull)
+                {
+                    processor.output_wait_watch.restart();
+                }
+                else if (last_status == IProcessor::Status::PortFull && status != IProcessor::Status::PortFull)
+                {
+                    processor.output_wait_elapsed_us += processor.output_wait_watch.elapsedMicroseconds();
+                }
+            }
+            //LOG_TRACE(log, "prepare processor: {}, {}, {}, {}", pid, node.processor->getName(), thread_number, IProcessor::statusToName(node.last_processor_status));
         }
         catch (...)
         {
@@ -391,6 +439,7 @@ void PipelineExecutor::finish()
 
 void PipelineExecutor::execute(size_t num_threads)
 {
+    checkTimeLimit();
     try
     {
         executeImpl(num_threads);
@@ -439,10 +488,33 @@ bool PipelineExecutor::executeStep(std::atomic_bool * yield_flag)
     return false;
 }
 
+bool PipelineExecutor::checkTimeLimitSoft()
+{
+    if (process_list_element)
+    {
+        bool continuing = process_list_element->checkTimeLimitSoft();
+        // We call cancel here so that all processors are notified and tasks waken up
+        // so that the "break" is faster and doesn't wait for long events
+        if (!continuing)
+            cancel();
+        return continuing;
+    }
+
+    return true;
+}
+
+bool PipelineExecutor::checkTimeLimit()
+{
+    bool continuing = checkTimeLimitSoft();
+    if (!continuing)
+        process_list_element->checkTimeLimit(); // Will throw if needed
+
+    return continuing;
+}
+
 void PipelineExecutor::finalizeExecution()
 {
-    if (process_list_element && process_list_element->isKilled())
-        throw Exception("Query was cancelled", ErrorCodes::QUERY_WAS_CANCELLED);
+    checkTimeLimit();
 
     if (cancelled)
         return;
@@ -457,6 +529,11 @@ void PipelineExecutor::finalizeExecution()
             break;
         }
     }
+
+    LOG_TRACE(log, "Pipeline: {}", dumpPipeline());
+
+    if (process_list_element)
+        process_list_element->dumpPipelineInfo(this);
 
     if (!all_processors_finished)
         throw Exception("Pipeline stuck. Current state:\n" + dumpPipeline(), ErrorCodes::LOGICAL_ERROR);
@@ -579,14 +656,19 @@ void PipelineExecutor::executeStepImpl(size_t thread_num, size_t num_threads, st
             addJob(node);
 
             {
+                std::optional<Stopwatch> execution_time_watch;
 #ifndef NDEBUG
-                Stopwatch execution_time_watch;
-#endif
-
+                execution_time_watch.emplace();
+#else
+                if (need_processors_profiles)
+                    execution_time_watch.emplace();
+#endif  
                 node->job();
 
+                if (need_processors_profiles)
+                    node->processor->elapsed_us += execution_time_watch->elapsedMicroseconds();
 #ifndef NDEBUG
-                context->execution_time_ns += execution_time_watch.elapsed();
+                context->execution_time_ns += execution_time_watch->elapsed();
 #endif
             }
 
@@ -594,6 +676,9 @@ void PipelineExecutor::executeStepImpl(size_t thread_num, size_t num_threads, st
                 cancel();
 
             if (finished)
+                break;
+            
+            if (!checkTimeLimitSoft())
                 break;
 
 #ifndef NDEBUG
@@ -849,6 +934,24 @@ String PipelineExecutor::dumpPipeline() const
     out.finalize();
 
     return out.str();
+}
+
+void PipelineExecutor::dumpPipelineToFile(const String & suffix) const
+{
+    if (process_list_element)
+    {
+        if (process_list_element->getContext())
+        {
+            String query_id = process_list_element->getContext()->getCurrentQueryId();
+            String pipeline_log_path = process_list_element->getContext()->getPipelineLogpath();
+            String file_path = pipeline_log_path + "/" + query_id + "_" + suffix + ".dot";
+
+            auto pipeline_string = dumpPipeline();
+            WriteBufferFromFile buf(file_path);
+            buf.write(pipeline_string.c_str(), pipeline_string.size());
+            buf.close();
+        }
+    }
 }
 
 }

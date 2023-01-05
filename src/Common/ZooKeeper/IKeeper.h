@@ -2,6 +2,7 @@
 
 #include <common/types.h>
 #include <Common/Exception.h>
+#include <Coordination/KeeperConstants.h>
 
 #include <vector>
 #include <memory>
@@ -34,23 +35,31 @@ struct ACL
     int32_t permissions;
     String scheme;
     String id;
+
+    bool operator<(const ACL & other) const
+    {
+        return std::tuple(permissions, scheme, id)
+            < std::tuple(other.permissions, other.scheme, other.id);
+    }
 };
 
 using ACLs = std::vector<ACL>;
 
 struct Stat
 {
-    int64_t czxid;
-    int64_t mzxid;
-    int64_t ctime;
-    int64_t mtime;
-    int32_t version;
-    int32_t cversion;
-    int32_t aversion;
-    int64_t ephemeralOwner;
-    int32_t dataLength;
-    int32_t numChildren;
-    int64_t pzxid;
+    int64_t czxid{0};
+    int64_t mzxid{0};
+    int64_t ctime{0};
+    int64_t mtime{0};
+    int32_t version{0};
+    int32_t cversion{0};
+    int32_t aversion{0};
+    int64_t ephemeralOwner{0}; /// NOLINT
+    int32_t dataLength{0}; /// NOLINT
+    int32_t numChildren{0}; /// NOLINT
+    int64_t pzxid{0};
+
+    bool operator==(const Stat &) const = default;
 };
 
 enum class Error : int32_t
@@ -102,7 +111,6 @@ bool isHardwareError(Error code);
 bool isUserError(Error code);
 
 const char * errorMessage(Error code);
-
 
 struct Request;
 using RequestPtr = std::shared_ptr<Request>;
@@ -273,6 +281,13 @@ struct SetResponse : virtual Response
     Stat stat;
 
     size_t bytesSize() const override { return sizeof(stat); }
+};
+
+enum class ListRequestType : uint8_t
+{
+    ALL,
+    PERSISTENT_ONLY,
+    EPHEMERAL_ONLY
 };
 
 struct ListRequest : virtual Request
@@ -468,6 +483,7 @@ public:
 
     virtual void list(
         const String & path,
+        ListRequestType list_request_type,
         ListCallback callback,
         WatchCallback watch) = 0;
 
@@ -479,6 +495,8 @@ public:
     virtual void multi(
         const Requests & requests,
         MultiCallback callback) = 0;
+
+    virtual DB::KeeperApiVersion getApiVersion() = 0;
 
     /// Expire session and finish all pending requests
     virtual void finalize() = 0;

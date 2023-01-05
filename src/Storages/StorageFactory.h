@@ -44,6 +44,7 @@ public:
         const ColumnsDescription & columns;
         const ConstraintsDescription & constraints;
         bool attach;
+        bool create;  /// for CnchHive
         bool has_force_restore_data_flag;
         const String & comment;
 

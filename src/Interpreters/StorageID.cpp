@@ -1,4 +1,5 @@
 #include <Interpreters/StorageID.h>
+#include <Interpreters/Context.h>
 #include <Parsers/ASTQueryWithTableAndOutput.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Common/quoteString.h>
@@ -6,6 +7,7 @@
 #include <IO/ReadHelpers.h>
 #include <Interpreters/DatabaseAndTableWithAlias.h>
 #include <Poco/Util/AbstractConfiguration.h>
+#include <Storages/IStorage.h>
 
 namespace DB
 {
@@ -118,6 +120,35 @@ String StorageID::getInternalDictionaryName() const
     if (database_name.empty())
         return table_name;
     return database_name + "." + table_name;
+}
+
+void StorageID::serialize(WriteBuffer & buffer) const
+{
+    writeBinary(database_name, buffer);
+    writeBinary(table_name, buffer);
+    writeBinary(uuid, buffer);
+}
+
+StorageID StorageID::deserialize(ReadBuffer & buffer, ContextPtr context)
+{
+    String database_name;
+    readBinary(database_name, buffer);
+
+    String table_name;
+    readBinary(table_name, buffer);
+
+    UUID uuid;
+    readBinary(uuid, buffer);
+
+    if (table_name.empty() && uuid == UUIDHelpers::Nil)
+    {
+        return StorageID("_dummy", "_dummy", uuid);
+    }
+    auto storage_id_recv = StorageID(database_name, table_name, uuid);
+    StoragePtr storage = DatabaseCatalog::instance().getTable({storage_id_recv.database_name, storage_id_recv.table_name}, context);
+    if (storage)
+        storage_id_recv = storage->getStorageID();
+    return storage_id_recv;
 }
 
 }

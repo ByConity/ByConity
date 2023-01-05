@@ -123,6 +123,7 @@ private:
 
     /// Sugar constructor.
     ColumnVector(std::initializer_list<T> il) : data{il} {}
+    explicit ColumnVector(Container && data_): data(std::move(data_)) {}
 
 public:
     bool isNumeric() const override { return is_arithmetic_v<T>; }
@@ -281,6 +282,8 @@ public:
     }
 
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
+
+    void insertRangeSelective(const IColumn & src, const IColumn::Selector & selector, size_t selector_start, size_t length) override;
 
     ColumnPtr filter(const IColumn::Filter & filt, ssize_t result_size_hint) const override;
 

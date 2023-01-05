@@ -5,8 +5,12 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTOrderByElement.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <Parsers/ASTSerDerHelper.h>
 #include <Interpreters/StorageID.h>
 #include <IO/Operators.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
+#include <queue>
 
 
 namespace DB
@@ -56,6 +60,31 @@ ASTPtr ASTSelectQuery::clone() const
 #undef CLONE
 
     return res;
+}
+
+void ASTSelectQuery::collectAllTables(std::vector<ASTPtr>& all_tables, bool & has_table_functions) const
+{
+    // BFS ASTSelectQuery and get all Tables;
+    std::queue<const IAST*> q;
+    q.push(this);
+    while (!q.empty())
+    {
+        auto & n = q.front();
+        for (const auto& c : n->children)
+        {
+            q.push(c.get());
+        }
+
+        if (const ASTTableExpression* tbl = typeid_cast<const ASTTableExpression *>(n))
+        {
+            if (tbl->database_and_table_name)
+                all_tables.push_back(tbl->database_and_table_name);
+            else if (tbl->table_function)
+                has_table_functions = true;
+        }
+
+        q.pop();
+    }
 }
 
 
@@ -114,9 +143,12 @@ void ASTSelectQuery::formatImpl(const FormatSettings & s, FormatState & state, F
     if (groupBy())
     {
         s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "GROUP BY" << (s.hilite ? hilite_none : "");
-        s.one_line
+        if (!group_by_with_grouping_sets)
+        {
+            s.one_line
             ? groupBy()->formatImpl(s, state, frame)
             : groupBy()->as<ASTExpressionList &>().formatImplMultiline(s, state, frame);
+        }
     }
 
     if (group_by_with_rollup)
@@ -124,6 +156,18 @@ void ASTSelectQuery::formatImpl(const FormatSettings & s, FormatState & state, F
 
     if (group_by_with_cube)
         s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << (s.one_line ? "" : "    ") << "WITH CUBE" << (s.hilite ? hilite_none : "");
+
+    if (group_by_with_grouping_sets)
+    {
+        frame.surround_each_list_element_with_parens = true;
+        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << (s.one_line ? "" : "    ") << "GROUPING SETS" << (s.hilite ? hilite_none : "");
+        s.ostr << " (";
+        s.one_line
+        ? groupBy()->formatImpl(s, state, frame)
+        : groupBy()->as<ASTExpressionList &>().formatImplMultiline(s, state, frame);
+        s.ostr << ")";
+        frame.surround_each_list_element_with_parens = false;
+    }
 
     if (group_by_with_totals)
         s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << (s.one_line ? "" : "    ") << "WITH TOTALS" << (s.hilite ? hilite_none : "");
@@ -451,6 +495,94 @@ void ASTSelectQuery::setFinal() // NOLINT method can be made const
         throw Exception(ErrorCodes::LOGICAL_ERROR, "There is no table expression, it's a bug");
 
     tables_element.table_expression->as<ASTTableExpression &>().final = true;
+}
+
+void ASTSelectQuery::serialize(WriteBuffer & buf) const
+{
+    writeBinary(distinct, buf);
+    writeBinary(group_by_with_totals, buf);
+    writeBinary(group_by_with_rollup, buf);
+    writeBinary(group_by_with_cube, buf);
+    writeBinary(group_by_with_constant_keys, buf);
+    writeBinary(limit_with_ties, buf);
+
+    ASTPtr ast = nullptr;
+#define SERIALIZE_EXPRESSION(expr) \
+    ast = getExpression(expr, false); \
+    serializeAST(ast, buf);
+
+    SERIALIZE_EXPRESSION(Expression::WITH)
+    SERIALIZE_EXPRESSION(Expression::SELECT)
+    SERIALIZE_EXPRESSION(Expression::TABLES)
+    SERIALIZE_EXPRESSION(Expression::PREWHERE)
+    SERIALIZE_EXPRESSION(Expression::WHERE)
+    SERIALIZE_EXPRESSION(Expression::GROUP_BY)
+    SERIALIZE_EXPRESSION(Expression::HAVING)
+    SERIALIZE_EXPRESSION(Expression::WINDOW)
+    SERIALIZE_EXPRESSION(Expression::ORDER_BY)
+    SERIALIZE_EXPRESSION(Expression::LIMIT_BY_OFFSET)
+    SERIALIZE_EXPRESSION(Expression::LIMIT_BY_LENGTH)
+    SERIALIZE_EXPRESSION(Expression::LIMIT_BY)
+    SERIALIZE_EXPRESSION(Expression::LIMIT_OFFSET)
+    SERIALIZE_EXPRESSION(Expression::LIMIT_LENGTH)
+    SERIALIZE_EXPRESSION(Expression::SETTINGS)
+
+#undef SERIALIZE_EXPRESSION
+}
+
+void ASTSelectQuery::deserializeImpl(ReadBuffer & buf)
+{
+    children.clear();
+    positions.clear();
+
+    readBinary(distinct, buf);
+    readBinary(group_by_with_totals, buf);
+    readBinary(group_by_with_rollup, buf);
+    readBinary(group_by_with_cube, buf);
+    readBinary(group_by_with_constant_keys, buf);
+    readBinary(limit_with_ties, buf);
+
+
+#define DESERIALIZE_EXPRESSION(expr) \
+    { \
+        auto ast = deserializeAST(buf); \
+        if (ast) setExpression(expr, std::move(ast)); \
+    }
+
+    DESERIALIZE_EXPRESSION(Expression::WITH)
+    DESERIALIZE_EXPRESSION(Expression::SELECT)
+    DESERIALIZE_EXPRESSION(Expression::TABLES)
+    DESERIALIZE_EXPRESSION(Expression::PREWHERE)
+    DESERIALIZE_EXPRESSION(Expression::WHERE)
+    DESERIALIZE_EXPRESSION(Expression::GROUP_BY)
+    DESERIALIZE_EXPRESSION(Expression::HAVING)
+    DESERIALIZE_EXPRESSION(Expression::WINDOW)
+    DESERIALIZE_EXPRESSION(Expression::ORDER_BY)
+    DESERIALIZE_EXPRESSION(Expression::LIMIT_BY_OFFSET)
+    DESERIALIZE_EXPRESSION(Expression::LIMIT_BY_LENGTH)
+    DESERIALIZE_EXPRESSION(Expression::LIMIT_BY)
+    DESERIALIZE_EXPRESSION(Expression::LIMIT_OFFSET)
+    DESERIALIZE_EXPRESSION(Expression::LIMIT_LENGTH)
+    DESERIALIZE_EXPRESSION(Expression::SETTINGS)
+
+#undef DESERIALIZE_EXPRESSION
+}
+
+ASTPtr ASTSelectQuery::deserialize(ReadBuffer & buf)
+{
+    auto select = std::make_shared<ASTSelectQuery>();
+    select->deserializeImpl(buf);
+    return select;
+}
+
+std::vector<ASTSelectQuery::Expression> ASTSelectQuery::getExpressionTypes() const
+{
+    std::vector<Expression> expression_types(positions.size());
+
+    for (const auto & [type, index]: positions)
+        expression_types[index] = type;
+
+    return expression_types;
 }
 
 }

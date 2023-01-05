@@ -261,6 +261,11 @@ try
     if (mark_cache_size)
         global_context->setMarkCache(mark_cache_size);
 
+    /// Size of cache for query. It is not necessary.
+    size_t query_cache_size = config().getUInt64("query_cache_size", 1000000);
+    if (query_cache_size)
+        global_context->setQueryCache(query_cache_size);
+
     /// A cache for mmapped files.
     size_t mmap_cache_size = config().getUInt64("mmap_cache_size", 1000);   /// The choice of default is arbitrary.
     if (mmap_cache_size)
@@ -278,6 +283,16 @@ try
     DatabaseCatalog::instance().attachDatabase(default_database, std::make_shared<DatabaseMemory>(default_database, global_context));
     global_context->setCurrentDatabase(default_database);
     applyCmdOptions(global_context);
+
+    /// init metastore and disk path
+    {
+        String path = global_context->getPath();
+        std::string metastore_path = config().getString("metastore_path", fs::path(path) / "metastore/");
+        global_context->setMetastorePath(metastore_path);
+        fs::create_directories(metastore_path);
+
+        fs::create_directories(fs::path(path) / "disks/");
+    }
 
     if (config().has("path"))
     {
@@ -369,7 +384,7 @@ void LocalServer::processQueries()
     const auto & settings = global_context->getSettingsRef();
 
     std::vector<String> queries;
-    auto parse_res = splitMultipartQuery(queries_str, queries, settings.max_query_size, settings.max_parser_depth);
+    auto parse_res = splitMultipartQuery(queries_str, queries, settings.max_query_size, settings.max_parser_depth, ParserSettings::valueOf(settings.dialect_type));
 
     if (!parse_res.second)
         throw Exception("Cannot parse and execute the following part of query: " + String(parse_res.first), ErrorCodes::SYNTAX_ERROR);

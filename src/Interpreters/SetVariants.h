@@ -253,6 +253,17 @@ struct SetVariantsTemplate: public Variant
         M(nullable_keys256)     \
         M(hashed)
 
+    #define APPLY_FOR_SET_VARIANTS_WITHOUT_STRING(M) \
+        M(key8)                 \
+        M(key16)                \
+        M(key32)                \
+        M(key64)                \
+        M(keys128)              \
+        M(keys256)              \
+        M(nullable_keys128)     \
+        M(nullable_keys256)     \
+        M(hashed)
+
     #define M(NAME) using Variant::NAME;
         APPLY_FOR_SET_VARIANTS(M)
     #undef M

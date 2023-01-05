@@ -235,7 +235,7 @@ public:
     /// Get UUID of database.
     virtual UUID getUUID() const { return UUIDHelpers::Nil; }
 
-    virtual void renameDatabase(const String & /*new_name*/)
+    virtual void renameDatabase(ContextPtr /*context*/, const String & /*nnew_name*/)
     {
         throw Exception(getEngineName() + ": RENAME DATABASE is not supported", ErrorCodes::NOT_IMPLEMENTED);
     }
@@ -265,6 +265,10 @@ public:
 
     /// Delete data and metadata stored inside the database, if exists.
     virtual void drop(ContextPtr /*context*/) {}
+
+    /// tables marked as broken if can not be loaded when instance startup.
+    virtual std::map<String, String> getBrokenTables() {return {};}
+    virtual void clearBrokenTables() {}
 
     virtual ~IDatabase() = default;
 

@@ -37,6 +37,8 @@ public:
     /** Get the text that identifies this element. */
     String getID(char) const override { return "Rename"; }
 
+    ASTType getType() const override { return ASTType::ASTRenameQuery; }
+
     ASTPtr clone() const override
     {
         auto res = std::make_shared<ASTRenameQuery>(*this);

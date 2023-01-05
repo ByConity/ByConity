@@ -5,6 +5,8 @@
 #include <common/types.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
+#include <IO/ReadSettings.h>
+#include <IO/WriteSettings.h>
 #include <Disks/Executor.h>
 #include <Disks/DiskType.h>
 
@@ -35,15 +37,6 @@ using Reservations = std::vector<ReservationPtr>;
 class ReadBufferFromFileBase;
 class WriteBufferFromFileBase;
 class MMappedFileCache;
-
-/**
- * Mode of opening a file for write.
- */
-enum class WriteMode
-{
-    Rewrite,
-    Append
-};
 
 /**
  * Provide interface for reservation.
@@ -87,6 +80,9 @@ class IDisk : public Space
 public:
     /// Default constructor.
     explicit IDisk(std::unique_ptr<Executor> executor_ = std::make_unique<SyncExecutor>()) : executor(std::move(executor_)) { }
+
+    /// calculate unique id (which is presented by uint64_t) for each disk based on the disk type and path.
+    virtual UInt64 getID() const = 0;
 
     /// Root path for all files stored on the disk.
     /// It's not required to be a local filesystem path.
@@ -154,17 +150,12 @@ public:
     /// Open the file for read and return ReadBufferFromFileBase object.
     virtual std::unique_ptr<ReadBufferFromFileBase> readFile(
         const String & path,
-        size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
-        size_t estimated_size = 0,
-        size_t aio_threshold = 0,
-        size_t mmap_threshold = 0,
-        MMappedFileCache * mmap_cache = nullptr) const = 0;
+        const ReadSettings& settings = {}) const = 0;
 
     /// Open the file for write and return WriteBufferFromFileBase object.
     virtual std::unique_ptr<WriteBufferFromFileBase> writeFile(
         const String & path,
-        size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
-        WriteMode mode = WriteMode::Rewrite) = 0;
+        const WriteSettings& settings = {}) = 0;
 
     /// Remove file. Throws exception if file doesn't exists or it's a directory.
     virtual void removeFile(const String & path) = 0;

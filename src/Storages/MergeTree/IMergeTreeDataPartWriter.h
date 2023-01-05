@@ -4,10 +4,11 @@
 #include <IO/WriteBufferFromFileBase.h>
 #include <Compression/CompressedWriteBuffer.h>
 #include <IO/HashingWriteBuffer.h>
-#include <Storages/MergeTree/MergeTreeData.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
 #include <Disks/IDisk.h>
+#include <Storages/MergeTree/MergeTreeData.h>
 
 
 namespace DB
@@ -35,13 +36,19 @@ public:
 
     virtual void finish(IMergeTreeDataPart::Checksums & checksums, bool sync) = 0;
 
+    /// In case of low cardinality fall-back, during write need update the stream, use the proper
+    /// data type. It's also can serve other data type. Currently only support update stream for local disk.
+    /// Details can refer to  MergeTreeDataPartWriterWide::updateWriterStream
+    virtual void updateWriterStream(const NameAndTypePair &pair);
+
+
     Columns releaseIndexColumns();
     const MergeTreeIndexGranularity & getIndexGranularity() const { return index_granularity; }
 
 protected:
 
     const MergeTreeData::DataPartPtr data_part;
-    const MergeTreeData & storage;
+    const MergeTreeMetaBase & storage;
     const StorageMetadataPtr metadata_snapshot;
     const NamesAndTypesList columns_list;
     const MergeTreeWriterSettings settings;

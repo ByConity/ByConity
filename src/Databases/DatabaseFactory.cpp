@@ -4,6 +4,7 @@
 #include <Databases/DatabaseReplicated.h>
 #include <Databases/DatabaseDictionary.h>
 #include <Databases/DatabaseLazy.h>
+#include <Databases/DatabaseCnch.h>
 #include <Databases/DatabaseMemory.h>
 #include <Databases/DatabaseOrdinary.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -106,10 +107,10 @@ DatabasePtr DatabaseFactory::getImpl(const ASTCreateQuery & create, const String
 
     bool has_unexpected_element = engine_define->engine->parameters || engine_define->partition_by ||
                                   engine_define->primary_key || engine_define->order_by ||
-                                  engine_define->sample_by;
+                                  engine_define->sample_by || engine_define->unique_key;
     bool may_have_settings = endsWith(engine_name, "MySQL") || engine_name == "Replicated" || engine_name == "MaterializedPostgreSQL";
     if (has_unexpected_element || (!may_have_settings && engine_define->settings))
-        throw Exception("Database engine " + engine_name + " cannot have parameters, primary_key, order_by, sample_by, settings",
+        throw Exception("Database engine " + engine_name + " cannot have parameters, primary_key, order_by, unique_key, sample_by, settings",
                         ErrorCodes::UNKNOWN_ELEMENT_IN_AST);
 
     if (engine_name == "Ordinary")
@@ -120,6 +121,9 @@ DatabasePtr DatabaseFactory::getImpl(const ASTCreateQuery & create, const String
         return std::make_shared<DatabaseMemory>(database_name, context);
     else if (engine_name == "Dictionary")
         return std::make_shared<DatabaseDictionary>(database_name, context);
+    else if (engine_name == "Cnch")
+        return std::make_shared<DatabaseCnch>(database_name, uuid, context);
+
 
 #if USE_MYSQL
 

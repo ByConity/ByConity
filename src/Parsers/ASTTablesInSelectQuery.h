@@ -57,6 +57,12 @@ struct ASTTableExpression : public IAST
     ASTPtr clone() const override;
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
     void updateTreeHashImpl(SipHash & hash_state) const override;
+
+    ASTType getType() const override { return ASTType::ASTTableExpression; }
+
+    void serialize(WriteBuffer & buf) const override;
+    void deserializeImpl(ReadBuffer & buf) override;
+    static ASTPtr deserialize(ReadBuffer & buf);
 };
 
 
@@ -106,10 +112,16 @@ struct ASTTableJoin : public IAST
     String getID(char) const override { return "TableJoin"; }
     ASTPtr clone() const override;
 
+    ASTType getType() const override { return ASTType::ASTTableJoin; }
+
     void formatImplBeforeTable(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const;
     void formatImplAfterTable(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const;
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
     void updateTreeHashImpl(SipHash & hash_state) const override;
+
+    void serialize(WriteBuffer & buf) const override;
+    void deserializeImpl(ReadBuffer & buf) override;
+    static ASTPtr deserialize(ReadBuffer & buf);
 };
 
 inline bool isLeft(ASTTableJoin::Kind kind)         { return kind == ASTTableJoin::Kind::Left; }
@@ -122,6 +134,11 @@ inline bool isRightOrFull(ASTTableJoin::Kind kind)  { return kind == ASTTableJoi
 inline bool isLeftOrFull(ASTTableJoin::Kind kind)   { return kind == ASTTableJoin::Kind::Left  || kind == ASTTableJoin::Kind::Full; }
 inline bool isInnerOrRight(ASTTableJoin::Kind kind) { return kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::Right; }
 
+inline bool isAll(ASTTableJoin::Strictness strictness)  { return strictness == ASTTableJoin::Strictness::All; }
+inline bool isAny(ASTTableJoin::Strictness strictness)  { return strictness == ASTTableJoin::Strictness::Any; }
+inline bool isSemi(ASTTableJoin::Strictness strictness) { return strictness == ASTTableJoin::Strictness::Semi; }
+inline bool isAnti(ASTTableJoin::Strictness strictness) { return strictness == ASTTableJoin::Strictness::Anti; }
+inline bool isAsof(ASTTableJoin::Strictness strictness) { return strictness == ASTTableJoin::Strictness::Asof; }
 
 /// Specification of ARRAY JOIN.
 struct ASTArrayJoin : public IAST
@@ -142,6 +159,12 @@ struct ASTArrayJoin : public IAST
     ASTPtr clone() const override;
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
     void updateTreeHashImpl(SipHash & hash_state) const override;
+
+    ASTType getType() const override { return ASTType::ASTArrayJoin; }
+
+    void serialize(WriteBuffer & buf) const override;
+    void deserializeImpl(ReadBuffer & buf) override;
+    static ASTPtr deserialize(ReadBuffer & buf);
 };
 
 
@@ -158,7 +181,14 @@ struct ASTTablesInSelectQueryElement : public IAST
     using IAST::IAST;
     String getID(char) const override { return "TablesInSelectQueryElement"; }
     ASTPtr clone() const override;
+
+    ASTType getType() const override { return ASTType::ASTTablesInSelectQueryElement; }
+
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
+
+    void serialize(WriteBuffer & buf) const override;
+    void deserializeImpl(ReadBuffer & buf) override;
+    static ASTPtr deserialize(ReadBuffer & buf);
 };
 
 
@@ -168,7 +198,14 @@ struct ASTTablesInSelectQuery : public IAST
     using IAST::IAST;
     String getID(char) const override { return "TablesInSelectQuery"; }
     ASTPtr clone() const override;
+
+    ASTType getType() const override { return ASTType::ASTTablesInSelectQuery; }
+
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
+
+    void serialize(WriteBuffer & buf) const override;
+    void deserializeImpl(ReadBuffer & buf) override;
+    static ASTPtr deserialize(ReadBuffer & buf);
 };
 
 }

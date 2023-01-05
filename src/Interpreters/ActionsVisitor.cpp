@@ -1,6 +1,7 @@
 #include <Common/quoteString.h>
 #include <Common/typeid_cast.h>
 
+#include <Functions/grouping.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsMiscellaneous.h>
 
@@ -12,6 +13,7 @@
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeLowCardinality.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/FieldToDataType.h>
 
 #include <Columns/ColumnSet.h>
@@ -52,6 +54,8 @@ namespace ErrorCodes
     extern const int INCORRECT_ELEMENT_OF_SET;
     extern const int BAD_ARGUMENTS;
     extern const int DUPLICATE_COLUMN;
+    extern const int TOO_FEW_ARGUMENTS_FOR_FUNCTION;
+    extern const int TOO_MANY_ARGUMENTS_FOR_FUNCTION;
 }
 
 static NamesAndTypesList::iterator findColumn(const String & name, NamesAndTypesList & cols)
@@ -350,7 +354,7 @@ SetPtr makeExplicitSet(
 
     auto column_name = left_arg->getColumnName();
     const auto & dag_node = actions.findInIndex(column_name);
-    const DataTypePtr & left_arg_type = dag_node.result_type;
+    DataTypePtr left_arg_type = dag_node.result_type;
 
     DataTypes set_element_types = {left_arg_type};
     const auto * left_tuple_type = typeid_cast<const DataTypeTuple *>(left_arg_type.get());
@@ -431,10 +435,18 @@ public:
 };
 
 ActionsMatcher::Data::Data(
-    ContextPtr context_, SizeLimits set_size_limit_, size_t subquery_depth_,
-    const NamesAndTypesList & source_columns_, ActionsDAGPtr actions_dag,
-    PreparedSets & prepared_sets_, SubqueriesForSets & subqueries_for_sets_,
-    bool no_subqueries_, bool no_makeset_, bool only_consts_, bool create_source_for_in_)
+    ContextPtr context_,
+    SizeLimits set_size_limit_,
+    size_t subquery_depth_,
+    const NamesAndTypesList & source_columns_,
+    ActionsDAGPtr actions_dag,
+    PreparedSets & prepared_sets_,
+    SubqueriesForSets & subqueries_for_sets_,
+    bool no_subqueries_,
+    bool no_makeset_,
+    bool only_consts_,
+    bool create_source_for_in_,
+    AggregationKeysInfo aggregation_keys_info_)
     : WithContext(context_)
     , set_size_limit(set_size_limit_)
     , subquery_depth(subquery_depth_)
@@ -447,6 +459,7 @@ ActionsMatcher::Data::Data(
     , create_source_for_in(create_source_for_in_)
     , visit_depth(0)
     , actions_stack(std::move(actions_dag), context_)
+    , aggregation_keys_info(aggregation_keys_info_)
     , next_unique_suffix(actions_stack.getLastActions().getIndex().size() + 1)
 {
 }
@@ -760,6 +773,23 @@ void ActionsMatcher::visit(const ASTIdentifier & identifier, const ASTPtr &, Dat
     }
 }
 
+static bool checkIdentifier(const ASTPtr & node)
+{
+    if (!node)
+        return false;
+
+    if (node->as<ASTIdentifier>())
+        return true;
+
+    for (const auto & child : node->children)
+    {
+        if (checkIdentifier(child))
+            return true;
+    }
+
+    return false;
+}
+
 void ActionsMatcher::visit(const ASTFunction & node, const ASTPtr & ast, Data & data)
 {
     auto column_name = ast->getColumnName();
@@ -780,6 +810,63 @@ void ActionsMatcher::visit(const ASTFunction & node, const ASTPtr & ast, Data & 
         if (!data.only_consts)
             data.addArrayJoin(arg->getColumnName(), column_name);
 
+        return;
+    }
+
+    if (node.name == "grouping")
+    {
+        if (data.only_consts)
+            return; // Can not perform constant folding, because this function can be executed only after GROUP BY
+
+        size_t arguments_size = node.arguments->children.size();
+        if (arguments_size == 0)
+            throw Exception(ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION, "Function GROUPING expects at least one argument");
+        if (arguments_size > 64)
+            throw Exception(ErrorCodes::TOO_MANY_ARGUMENTS_FOR_FUNCTION, "Function GROUPING can have up to 64 arguments, but {} provided", arguments_size);
+        auto keys_info = data.aggregation_keys_info;
+        auto aggregation_keys_number = keys_info.aggregation_keys.size();
+
+        ColumnNumbers arguments_indexes;
+        for (auto const & arg : node.arguments->children)
+        {
+            size_t pos = keys_info.aggregation_keys.getPosByName(arg->getColumnName());
+            if (pos == aggregation_keys_number)
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Argument of GROUPING function {} is not a part of GROUP BY clause", arg->getColumnName());
+            arguments_indexes.push_back(pos);
+        }
+
+        const bool ansi_mode = data.getContext()->getSettingsRef().dialect_type == DialectType::ANSI;
+        switch (keys_info.group_by_kind)
+        {
+            case GroupByKind::GROUPING_SETS: {
+                data.addFunction(std::make_shared<FunctionToOverloadResolverAdaptor>(
+                                         std::make_shared<FunctionGroupingForGroupingSets>(std::move(arguments_indexes),
+                                                                                           keys_info.grouping_set_keys, ansi_mode)),
+                                 {"__grouping_set"}, column_name);
+                break;
+            }
+            case GroupByKind::ROLLUP:
+                data.addFunction(std::make_shared<FunctionToOverloadResolverAdaptor>(
+                                         std::make_shared<FunctionGroupingForRollup>(std::move(arguments_indexes),
+                                                                                     aggregation_keys_number, ansi_mode)),
+                                 {"__grouping_set"}, column_name);
+                break;
+            case GroupByKind::CUBE: {
+                data.addFunction(std::make_shared<FunctionToOverloadResolverAdaptor>(
+                        std::make_shared<FunctionGroupingForCube>(std::move(arguments_indexes), aggregation_keys_number,
+                                                                  ansi_mode)), {"__grouping_set"}, column_name);
+                break;
+            }
+            case GroupByKind::ORDINARY: {
+                data.addFunction(std::make_shared<FunctionToOverloadResolverAdaptor>(
+                                         std::make_shared<FunctionGroupingOrdinary>(std::move(arguments_indexes), ansi_mode)), {},
+                                 column_name);
+                break;
+            }
+            default:
+                throw Exception(ErrorCodes::LOGICAL_ERROR,
+                                "Unexpected kind of GROUP BY clause for GROUPING function: {}", keys_info.group_by_kind);
+        }
         return;
     }
 
@@ -1108,7 +1195,7 @@ void ActionsMatcher::visit(const ASTLiteral & literal, const ASTPtr & /* ast */,
     data.addColumn(std::move(column));
 }
 
-SetPtr ActionsMatcher::makeSet(const ASTFunction & node, Data & data, bool no_subqueries)
+SetPtr ActionsMatcher::makeSet(const ASTFunction & node, Data & data, bool no_subqueries, bool create_ordered_set)
 {
     /** You need to convert the right argument to a set.
       * This can be a table name, a value, a value enumeration, or a subquery.
@@ -1185,7 +1272,7 @@ SetPtr ActionsMatcher::makeSet(const ASTFunction & node, Data & data, bool no_su
         const auto & index = data.actions_stack.getLastActionsIndex();
         if (index.contains(left_in_operand->getColumnName()))
             /// An explicit enumeration of values in parentheses.
-            return makeExplicitSet(&node, last_actions, false, data.getContext(), data.set_size_limit, data.prepared_sets);
+            return makeExplicitSet(&node, last_actions, create_ordered_set, data.getContext(), data.set_size_limit, data.prepared_sets);
         else
             return {};
     }

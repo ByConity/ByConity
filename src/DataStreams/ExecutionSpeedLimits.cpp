@@ -3,6 +3,7 @@
 #include <Common/ProfileEvents.h>
 #include <Common/CurrentThread.h>
 #include <IO/WriteHelpers.h>
+#include <IO/ReadHelpers.h>
 #include <common/sleep.h>
 
 namespace ProfileEvents
@@ -104,16 +105,47 @@ static bool handleOverflowMode(OverflowMode mode, const String & message, int co
     }
 }
 
-bool ExecutionSpeedLimits::checkTimeLimit(UInt64 elapsed_ns, OverflowMode overflow_mode) const
+bool ExecutionSpeedLimits::checkTimeLimit(const Stopwatch & stopwatch, OverflowMode overflow_mode) const
 {
-    if (max_execution_time != 0
-        && elapsed_ns > static_cast<UInt64>(max_execution_time.totalMicroseconds()) * 1000)
-        return handleOverflowMode(overflow_mode,
+    if (max_execution_time != 0)
+    {
+        auto elapsed_ns = stopwatch.elapsed();
+
+        if (elapsed_ns > static_cast<UInt64>(max_execution_time.totalMicroseconds()) * 1000)
+            return handleOverflowMode(overflow_mode,
                                   "Timeout exceeded: elapsed " + toString(static_cast<double>(elapsed_ns) / 1000000000ULL)
                                   + " seconds, maximum: " + toString(max_execution_time.totalMicroseconds() / 1000000.0),
                                   ErrorCodes::TIMEOUT_EXCEEDED);
+    }
 
     return true;
+}
+
+void ExecutionSpeedLimits::serialize(WriteBuffer & buf) const
+{
+    writeBinary(min_execution_rps, buf);
+    writeBinary(max_execution_rps, buf);
+    writeBinary(min_execution_bps, buf);
+    writeBinary(max_execution_bps, buf);
+
+    writeBinary(Int64(max_execution_time.milliseconds()), buf);
+    writeBinary(Int64(timeout_before_checking_execution_speed.milliseconds()), buf);
+}
+
+void ExecutionSpeedLimits::deserialize(ReadBuffer & buf)
+{
+    readBinary(min_execution_rps, buf);
+    readBinary(max_execution_rps, buf);
+    readBinary(min_execution_bps, buf);
+    readBinary(max_execution_bps, buf);
+
+    Int64 max_execution_time_tmp;
+    readBinary(max_execution_time_tmp, buf);
+    max_execution_time = Poco::Timespan(max_execution_time_tmp);
+
+    Int64 timeout_before_checking_execution_speed_tmp;
+    readBinary(timeout_before_checking_execution_speed_tmp, buf);
+    timeout_before_checking_execution_speed = Poco::Timespan(timeout_before_checking_execution_speed_tmp);
 }
 
 }

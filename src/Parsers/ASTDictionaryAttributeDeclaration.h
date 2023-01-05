@@ -27,6 +27,8 @@ public:
 
     String getID(char delim) const override { return "DictionaryAttributeDeclaration" + (delim + name); }
 
+    ASTType getType() const override { return ASTType::ASTDictionaryAttributeDeclaration; }
+
     ASTPtr clone() const override;
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
 };

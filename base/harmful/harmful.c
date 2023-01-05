@@ -85,7 +85,7 @@ TRAP(getprotoent)
 TRAP(getpwent)
 TRAP(getpwent_r)
 TRAP(getpwnam)
-TRAP(getpwuid)
+//TRAP(getpwuid)
 TRAP(getservbyname)
 TRAP(getservbyport)
 TRAP(getservent)
@@ -201,14 +201,14 @@ TRAP(dlerror) // Used by tsan
 TRAP(ftw)
 TRAP(getc_unlocked)
 //TRAP(getenv) // Ok at program startup
-TRAP(inet_ntoa)
+// TRAP(inet_ntoa) // Used by udns
 TRAP(lgamma)
 TRAP(lgammaf)
 TRAP(lgammal)
 TRAP(nftw)
 TRAP(nl_langinfo)
 TRAP(putc_unlocked)
-TRAP(rand)
+//TRAP(rand)
 /** In  the current POSIX.1 specification (POSIX.1-2008), readdir() is not required to be thread-safe.  However, in modern
   * implementations (including the glibc implementation), concurrent calls to readdir() that specify different directory streams
   * are thread-safe.  In cases where multiple threads must read from the same directory stream, using readdir() with external

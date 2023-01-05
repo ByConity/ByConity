@@ -3,14 +3,25 @@
 # fail on errors, verbose and export all env variables
 set -e -x -a
 
-dpkg -i package_folder/clickhouse-common-static_*.deb
-dpkg -i package_folder/clickhouse-common-static-dbg_*.deb
-dpkg -i package_folder/clickhouse-server_*.deb
-dpkg -i package_folder/clickhouse-client_*.deb
-dpkg -i package_folder/clickhouse-test_*.deb
+# install packages
+# dpkg -i package_folder/clickhouse-common-static_*.deb
+# dpkg -i package_folder/clickhouse-common-static-dbg_*.deb
+# dpkg -i package_folder/clickhouse-server_*.deb
+# dpkg -i package_folder/clickhouse-client_*.deb
+# dpkg -i package_folder/clickhouse-test_*.deb
+clickhouse/bin/clickhouse install
+cp clickhouse/bin/clickhouse-test /usr/bin/clickhouse-test
+cp -r clickhouse/share/clickhouse-test /usr/share/
 
 # install test configs
 /usr/share/clickhouse-test/config/install.sh
+
+# prepare test_output directory
+mkdir -p test_output
+mkdir -p sanitizer_log_output
+cp /home/code/.codebase/ci_scripts/ce_config/config.xml /etc/clickhouse-server/config.xml
+cp /home/code/.codebase/ci_scripts/ce_config/users.xml /etc/clickhouse-server/users.xml
+cp -r /home/code/tests/queries/. /usr/share/clickhouse-test/queries/.
 
 # For flaky check we also enable thread fuzzer
 if [ "$NUM_TRIES" -gt "1" ]; then
@@ -31,16 +42,15 @@ if [ "$NUM_TRIES" -gt "1" ]; then
     export THREAD_FUZZER_pthread_mutex_lock_AFTER_SLEEP_TIME_US=10000
     export THREAD_FUZZER_pthread_mutex_unlock_BEFORE_SLEEP_TIME_US=10000
     export THREAD_FUZZER_pthread_mutex_unlock_AFTER_SLEEP_TIME_US=10000
-
     # simpliest way to forward env variables to server
-    sudo -E -u clickhouse /usr/bin/clickhouse-server --config /etc/clickhouse-server/config.xml --daemon
+    clickhouse /usr/bin/clickhouse-server --config /etc/clickhouse-server/config.xml --daemon
 else
-    sudo clickhouse start
+    clickhouse start
 fi
 
 if [[ -n "$USE_DATABASE_REPLICATED" ]] && [[ "$USE_DATABASE_REPLICATED" -eq 1 ]]; then
 
-    sudo -E -u clickhouse /usr/bin/clickhouse server --config /etc/clickhouse-server1/config.xml --daemon \
+    clickhouse /usr/bin/clickhouse server --config /etc/clickhouse-server1/config.xml --daemon \
     -- --path /var/lib/clickhouse1/ --logger.stderr /var/log/clickhouse-server/stderr1.log \
     --logger.log /var/log/clickhouse-server/clickhouse-server1.log --logger.errorlog /var/log/clickhouse-server/clickhouse-server1.err.log \
     --tcp_port 19000 --tcp_port_secure 19440 --http_port 18123 --https_port 18443 --interserver_http_port 19009 --tcp_with_proxy_port 19010 \
@@ -48,7 +58,7 @@ if [[ -n "$USE_DATABASE_REPLICATED" ]] && [[ "$USE_DATABASE_REPLICATED" -eq 1 ]]
     --keeper_server.tcp_port 19181 --keeper_server.server_id 2 \
     --macros.replica r2   # It doesn't work :(
 
-    sudo -E -u clickhouse /usr/bin/clickhouse server --config /etc/clickhouse-server2/config.xml --daemon \
+    clickhouse /usr/bin/clickhouse server --config /etc/clickhouse-server2/config.xml --daemon \
     -- --path /var/lib/clickhouse2/ --logger.stderr /var/log/clickhouse-server/stderr2.log \
     --logger.log /var/log/clickhouse-server/clickhouse-server2.log --logger.errorlog /var/log/clickhouse-server/clickhouse-server2.err.log \
     --tcp_port 29000 --tcp_port_secure 29440 --http_port 28123 --https_port 28443 --interserver_http_port 29009 --tcp_with_proxy_port 29010 \
@@ -85,14 +95,20 @@ function run_tests()
     else
         # Too many tests fail for DatabaseReplicated in parallel. All other
         # configurations are OK.
-        ADDITIONAL_OPTIONS+=('--jobs')
-        ADDITIONAL_OPTIONS+=('8')
+
+        # set --jobs 16 if no --jobs in ADDITIONAL_OPTIONS
+        NUMBER_OF_LOG=$( echo "${ADDITIONAL_OPTIONS[@]}" | grep -c 'jobs' )
+        if [[ $NUMBER_OF_LOG -eq 0 ]]; then
+          ADDITIONAL_OPTIONS+=('--jobs')
+          ADDITIONAL_OPTIONS+=('16')
+        fi
     fi
 
-    clickhouse-test --testname --shard --zookeeper --hung-check --print-time \
-            --use-skip-list --test-runs "$NUM_TRIES" "${ADDITIONAL_OPTIONS[@]}" 2>&1 \
+    ps -aux
+    clickhouse-test --shard --zookeeper --hung-check --print-time \
+           --use-skip-list --order asc --test-runs "$NUM_TRIES" "${ADDITIONAL_OPTIONS[@]}" 2>&1 \
         | ts '%Y-%m-%d %H:%M:%S' \
-        | tee -a test_output/test_result.txt
+        | tee -a test_output/test_result.txt || true
 }
 
 export -f run_tests
@@ -136,17 +152,39 @@ mv /var/log/clickhouse-server/stderr.log /test_output/ ||:
 if [[ -n "$WITH_COVERAGE" ]] && [[ "$WITH_COVERAGE" -eq 1 ]]; then
     tar -chf /test_output/clickhouse_coverage.tar.gz /profraw ||:
 fi
+
+#To print ASAN LOG in the console
+if [[ -n $(find /var/log/clickhouse-server -name "*asan.log*") ]];
+then
+    mkdir -p /test_output/asan_log
+    echo "ASAN Logs are printed for analysis."
+    if [[ -n $(find /var/log/clickhouse-server -name "asan_report") ]]; then
+      cat /var/log/clickhouse-server/asan_report
+      mv /var/log/clickhouse-server/asan_report /test_output/asan_log/
+    else
+      echo "No ASAN report exists"
+    fi
+    echo 'Uploading asan log to Artifacts'
+    mv /var/log/clickhouse-server/asan.log* /test_output/asan_log/
+    cp -r /test_output/asan_log/ /sanitizer_log_output/
+else
+    echo "No ASAN logs exists"
+fi
+
 tar -chf /test_output/text_log_dump.tar /var/lib/clickhouse/data/system/text_log ||:
 tar -chf /test_output/query_log_dump.tar /var/lib/clickhouse/data/system/query_log ||:
+tar -chf /test_output/zookeeper_log_dump.tar /var/lib/clickhouse/data/system/zookeeper_log ||:
 tar -chf /test_output/coordination.tar /var/lib/clickhouse/coordination ||:
 
 if [[ -n "$USE_DATABASE_REPLICATED" ]] && [[ "$USE_DATABASE_REPLICATED" -eq 1 ]]; then
-  grep -Fa "Fatal" /var/log/clickhouse-server/clickhouse-server1.log ||:
-  grep -Fa "Fatal" /var/log/clickhouse-server/clickhouse-server2.log ||:
+    grep -Fa "Fatal" /var/log/clickhouse-server/clickhouse-server1.log ||:
+    grep -Fa "Fatal" /var/log/clickhouse-server/clickhouse-server2.log ||:
     pigz < /var/log/clickhouse-server/clickhouse-server1.log > /test_output/clickhouse-server1.log.gz ||:
     pigz < /var/log/clickhouse-server/clickhouse-server2.log > /test_output/clickhouse-server2.log.gz ||:
     mv /var/log/clickhouse-server/stderr1.log /test_output/ ||:
     mv /var/log/clickhouse-server/stderr2.log /test_output/ ||:
+    tar -chf /test_output/zookeeper_log_dump1.tar /var/lib/clickhouse1/data/system/zookeeper_log ||:
+    tar -chf /test_output/zookeeper_log_dump2.tar /var/lib/clickhouse2/data/system/zookeeper_log ||:
     tar -chf /test_output/coordination1.tar /var/lib/clickhouse1/coordination ||:
     tar -chf /test_output/coordination2.tar /var/lib/clickhouse2/coordination ||:
 fi

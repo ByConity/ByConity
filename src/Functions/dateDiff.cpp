@@ -59,6 +59,23 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
+        if (arguments.size() < 2 || arguments.size() > 4)
+            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
+                + toString(arguments.size()) + ", should be 2(hive format), 3 or 4",
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+        auto is_date_or_datetime = [](const DataTypePtr & type) { return isDate(type) || isDateTime(type) || isDateTime64(type); };
+
+        // format hive
+        if (is_date_or_datetime(arguments[0]) && is_date_or_datetime(arguments[1]))
+        {
+            if (arguments.size() == 3 && !isString(arguments[2]))
+                throw Exception("Third argument for function " + getName() + " (timezone)(hive format) must be String", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+            format_hive = true;
+            return std::make_shared<DataTypeInt64>();
+        }
+
         if (arguments.size() != 3 && arguments.size() != 4)
             throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
                 + toString(arguments.size()) + ", should be 3 or 4",
@@ -68,11 +85,11 @@ public:
             throw Exception("First argument for function " + getName() + " (unit) must be String",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if (!isDate(arguments[1]) && !isDateTime(arguments[1]) && !isDateTime64(arguments[1]))
+        if (!is_date_or_datetime(arguments[1]))
             throw Exception("Second argument for function " + getName() + " must be Date or DateTime",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if (!isDate(arguments[2]) && !isDateTime(arguments[2]) && !isDateTime64(arguments[2]))
+        if (!is_date_or_datetime(arguments[2]))
             throw Exception("Third argument for function " + getName() + " must be Date or DateTime",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
@@ -84,24 +101,40 @@ public:
     }
 
     bool useDefaultImplementationForConstants() const override { return true; }
-    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {0, 3}; }
+
+    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override
+    {
+        if (format_hive)
+            return {2};
+        else
+            return {0, 3};
+    }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
     {
-        const auto * unit_column = checkAndGetColumnConst<ColumnString>(arguments[0].column.get());
-        if (!unit_column)
-            throw Exception("First argument for function " + getName() + " must be constant String", ErrorCodes::ILLEGAL_COLUMN);
+        String unit = "day";
 
-        String unit = Poco::toLower(unit_column->getValue<String>());
+        if (!format_hive)
+        {
+            const auto * unit_column = checkAndGetColumnConst<ColumnString>(arguments[0].column.get());
+            if (!unit_column)
+                throw Exception("First argument for function " + getName() + " must be constant String", ErrorCodes::ILLEGAL_COLUMN);
 
-        const IColumn & x = *arguments[1].column;
-        const IColumn & y = *arguments[2].column;
+            unit = Poco::toLower(unit_column->getValue<String>());
+        }
+
+        size_t x_idx = 1 - format_hive;
+        size_t y_idx = 2 - format_hive;
+        size_t zone_idx = 3 - format_hive;
+
+        const IColumn & x = *arguments[x_idx].column;
+        const IColumn & y = *arguments[y_idx].column;
 
         size_t rows = input_rows_count;
         auto res = ColumnInt64::create(rows);
 
-        const auto & timezone_x = extractTimeZoneFromFunctionArguments(arguments, 3, 1);
-        const auto & timezone_y = extractTimeZoneFromFunctionArguments(arguments, 3, 2);
+        const auto & timezone_x = extractTimeZoneFromFunctionArguments(arguments, zone_idx, x_idx);
+        const auto & timezone_y = extractTimeZoneFromFunctionArguments(arguments, zone_idx, y_idx);
 
         if (unit == "year" || unit == "yy" || unit == "yyyy")
             dispatchForColumns<ToRelativeYearNumImpl>(x, y, timezone_x, timezone_y, res->getData());
@@ -256,6 +289,10 @@ private:
         else
             return v;
     }
+
+    /// support dateDiff format like hive
+    /// dateDiff(Date/DateTime, Date/DateTime [, TimeZone])
+    mutable bool format_hive = false;
 };
 
 }

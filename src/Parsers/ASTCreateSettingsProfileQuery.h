@@ -37,6 +37,9 @@ public:
     std::shared_ptr<ASTRolesOrUsersSet> to_roles;
 
     String getID(char) const override;
+
+    ASTType getType() const override { return ASTType::ASTCreateSettingsProfileQuery; }
+
     ASTPtr clone() const override;
     void formatImpl(const FormatSettings & format, FormatState &, FormatStateStacked) const override;
     void replaceCurrentUserTag(const String & current_user_name) const;

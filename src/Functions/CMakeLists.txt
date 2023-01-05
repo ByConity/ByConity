@@ -23,6 +23,7 @@ target_link_libraries(clickhouse_functions
         dbms
         metrohash
         murmurhash
+        biginteger
 
     PRIVATE
         ${ZLIB_LIBRARIES}

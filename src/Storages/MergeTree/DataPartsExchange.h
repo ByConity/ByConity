@@ -29,13 +29,17 @@ namespace DataPartsExchange
 class Service final : public InterserverIOEndpoint
 {
 public:
-    explicit Service(StorageReplicatedMergeTree & data_);
+    explicit Service(MergeTreeData & data_, const StoragePtr & storage_);
 
     Service(const Service &) = delete;
     Service & operator=(const Service &) = delete;
 
     std::string getId(const std::string & node_id) const override;
     void processQuery(const HTMLForm & params, ReadBuffer & body, WriteBuffer & out, HTTPServerResponse & response) override;
+
+    void processQueryPart(const HTMLForm & params, ReadBuffer & body, WriteBuffer & out, HTTPServerResponse & response, bool incrementally);
+    void processQueryPartList(const HTMLForm & params, ReadBuffer & body, WriteBuffer & out, HTTPServerResponse & response);
+    void processQueryExist(const HTMLForm & params, ReadBuffer & body, WriteBuffer & out, HTTPServerResponse & response);
 
 private:
     MergeTreeData::DataPartPtr findPart(const String & name);
@@ -46,15 +50,18 @@ private:
 
     MergeTreeData::DataPart::Checksums sendPartFromDisk(
         const MergeTreeData::DataPartPtr & part,
+        ReadBuffer & body, 
         WriteBuffer & out,
         int client_protocol_version,
+        bool incrementally,
         const std::map<String, std::shared_ptr<IMergeTreeDataPart>> & projections = {});
 
     void sendPartS3Metadata(const MergeTreeData::DataPartPtr & part, WriteBuffer & out);
 
     /// StorageReplicatedMergeTree::shutdown() waits for all parts exchange handlers to finish,
     /// so Service will never access dangling reference to storage
-    StorageReplicatedMergeTree & data;
+    MergeTreeData & data;
+    std::weak_ptr<IStorage> storage;
     Poco::Logger * log;
 };
 
@@ -82,7 +89,19 @@ public:
         const String & tmp_prefix_ = "",
         std::optional<CurrentlySubmergingEmergingTagger> * tagger_ptr = nullptr,
         bool try_use_s3_copy = true,
-        const DiskPtr disk_s3 = nullptr);
+        const DiskPtr disk_s3 = nullptr,
+        bool incrementally = false);
+
+    Strings fetchPartList(
+        const String & partition_id,
+        const String & filter,
+        const String & endpoint_str,
+        const String & host,
+        int port,
+        const ConnectionTimeouts & timeouts,
+        const String & user,
+        const String & password,
+        const String & interserver_scheme);
 
     /// You need to stop the data transfer.
     ActionBlocker blocker;
@@ -95,7 +114,8 @@ private:
             DiskPtr disk,
             PooledReadWriteBufferFromHTTP & in,
             MergeTreeData::DataPart::Checksums & checksums,
-            ThrottlerPtr throttler) const;
+            ThrottlerPtr throttler,
+            const MergeTreeData::DataPartPtr & old_version_part = nullptr) const;
 
 
     MergeTreeData::MutableDataPartPtr downloadPartToDisk(
@@ -108,7 +128,8 @@ private:
             PooledReadWriteBufferFromHTTP & in,
             size_t projections,
             MergeTreeData::DataPart::Checksums & checksums,
-            ThrottlerPtr throttler);
+            ThrottlerPtr throttler,
+            const MergeTreeData::DataPartPtr & old_version_part = nullptr);
 
     MergeTreeData::MutableDataPartPtr downloadPartToMemory(
             const String & part_name,

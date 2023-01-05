@@ -1,13 +1,16 @@
 #include <Processors/Transforms/RollupTransform.h>
 #include <Processors/Transforms/TotalsHavingTransform.h>
+#include <QueryPlan/AggregatingStep.h>
 
 namespace DB
 {
 
-RollupTransform::RollupTransform(Block header, AggregatingTransformParamsPtr params_)
-    : IAccumulatingTransform(std::move(header), params_->getHeader())
+RollupTransform::RollupTransform(Block header, AggregatingTransformParamsPtr params_, bool add_grouping_set_column_)
+    : IAccumulatingTransform(std::move(header),
+                             add_grouping_set_column_ ? appendGroupingSetColumn(params_->getHeader()) : params_->getHeader())
     , params(std::move(params_))
     , keys(params->params.keys)
+    , add_grouping_set_column(add_grouping_set_column_)
 {
 }
 
@@ -57,6 +60,8 @@ Chunk RollupTransform::generate()
     }
 
     finalizeChunk(gen_chunk);
+    if (add_grouping_set_column && !gen_chunk.empty())
+        gen_chunk.addColumn(0, ColumnUInt64::create(gen_chunk.getNumRows(), set_counter++));
     return gen_chunk;
 }
 

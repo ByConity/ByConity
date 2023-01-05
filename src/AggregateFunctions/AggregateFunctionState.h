@@ -101,6 +101,11 @@ public:
         return nested_func->allocatesMemoryInArena();
     }
 
+    bool handleNullItSelf() const override
+    {
+        return nested_func->handleNullItSelf();
+    }
+
     AggregateFunctionPtr getNestedFunction() const override { return nested_func; }
 };
 

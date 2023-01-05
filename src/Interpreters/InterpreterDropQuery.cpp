@@ -10,6 +10,8 @@
 #include <Common/escapeForFileName.h>
 #include <Common/quoteString.h>
 #include <Common/typeid_cast.h>
+#include <Transaction/IntentLock.h>
+#include <Transaction/ICnchTransaction.h>
 #include <Databases/DatabaseReplicated.h>
 
 #if !defined(ARCADIA_BUILD)
@@ -34,6 +36,8 @@ namespace ErrorCodes
     extern const int UNKNOWN_TABLE;
     extern const int NOT_IMPLEMENTED;
     extern const int INCORRECT_QUERY;
+    extern const int SUPPORT_IS_DISABLED;
+    extern const int CNCH_TRANSACTION_NOT_INITIALIZED;
 }
 
 
@@ -115,6 +119,15 @@ BlockIO InterpreterDropQuery::executeToTableImpl(ASTDropQuery & query, DatabaseP
 
     if (database && table)
     {
+        IntentLockPtr table_lock;
+        if (database->getEngineName().starts_with("Cnch"))
+        {
+            auto txn = getContext()->getCurrentTransaction();
+            if (!txn)
+                throw Exception("Transaction not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
+            table_lock = txn->createIntentLock(IntentLock::TB_LOCK_PREFIX, database->getDatabaseName(), table->getTableName());
+            table_lock->lock();
+        }
         auto & ast_drop_query = query.as<ASTDropQuery &>();
 
         if (ast_drop_query.is_view && !table->isView())
@@ -298,10 +311,20 @@ BlockIO InterpreterDropQuery::executeToDatabaseImpl(const ASTDropQuery & query, 
 {
     const auto & database_name = query.database;
     auto ddl_guard = DatabaseCatalog::instance().getDDLGuard(database_name, "");
+    IntentLockPtr db_lock;
 
     database = tryGetDatabase(database_name, query.if_exists);
+
     if (database)
     {
+        if (database->getEngineName().starts_with("Cnch"))
+        {
+            auto txn = getContext()->getCurrentTransaction();
+            if (!txn)
+                throw Exception("Transaction not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
+            db_lock = txn->createIntentLock(IntentLock::DB_LOCK_PREFIX, database_name);
+            db_lock->lock();
+        }
         if (query.kind == ASTDropQuery::Kind::Truncate)
         {
             throw Exception("Unable to truncate database", ErrorCodes::SYNTAX_ERROR);
@@ -359,7 +382,7 @@ BlockIO InterpreterDropQuery::executeToDatabaseImpl(const ASTDropQuery & query, 
                 database->assertCanBeDetached(true);
 
             /// DETACH or DROP database itself
-            DatabaseCatalog::instance().detachDatabase(database_name, drop, database->shouldBeEmptyOnDetach());
+            DatabaseCatalog::instance().detachDatabase(getContext(), database_name, drop, database->shouldBeEmptyOnDetach());
         }
     }
 

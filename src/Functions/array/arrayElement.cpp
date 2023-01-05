@@ -5,6 +5,7 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeMap.h>
+#include <DataTypes/DataTypeByteMap.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Core/ColumnNumbers.h>
 #include <Columns/ColumnArray.h>
@@ -1008,6 +1009,9 @@ DataTypePtr FunctionArrayElement::getReturnTypeImpl(const DataTypes & arguments)
 {
     if (const auto * map_type = checkAndGetDataType<DataTypeMap>(arguments[0].get()))
         return map_type->getValueType();
+
+    if (const auto * byte_map_type = checkAndGetDataType<DataTypeByteMap>(arguments[0].get()))
+        return byte_map_type->getValueType();
 
     const auto * array_type = checkAndGetDataType<DataTypeArray>(arguments[0].get());
     if (!array_type)

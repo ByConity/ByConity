@@ -62,12 +62,27 @@ int mainEntryClickHouseKeeper(int argc, char ** argv);
 #if ENABLE_CLICKHOUSE_KEEPER
 int mainEntryClickHouseKeeperConverter(int argc, char ** argv);
 #endif
+#if ENABLE_CLICKHOUSE_PART_TOOLKIT
+int mainEntryClickhousePartToolkit(int argc, char ** argv);
+#endif
+#if ENABLE_CLICKHOUSE_META_INSPECTOR
+int mainEntryClickhouseMetaInspector(int argc, char ** argv);
+#endif
 #if ENABLE_CLICKHOUSE_INSTALL
 int mainEntryClickHouseInstall(int argc, char ** argv);
 int mainEntryClickHouseStart(int argc, char ** argv);
 int mainEntryClickHouseStop(int argc, char ** argv);
 int mainEntryClickHouseStatus(int argc, char ** argv);
 int mainEntryClickHouseRestart(int argc, char ** argv);
+#endif
+#if ENABLE_CLICKHOUSE_DAEMON_MANAGER
+int mainEntryClickHouseDaemonManager(int argc, char ** argv);
+#endif
+#if ENABLE_CLICKHOUSE_RESOURCE_MANAGER
+int mainEntryClickHouseResourceManager(int argc, char ** argv);
+#endif
+#if ENABLE_CLICKHOUSE_TSO_SERVER
+int mainEntryClickHouseTSOServer(int argc, char ** argv);
 #endif
 
 int mainEntryClickHouseHashBinary(int, char **)
@@ -125,6 +140,14 @@ std::pair<const char *, MainFunc> clickhouse_applications[] =
 #if ENABLE_CLICKHOUSE_KEEPER_CONVERTER
     {"keeper-converter", mainEntryClickHouseKeeperConverter},
 #endif
+#if ENABLE_CLICKHOUSE_PART_TOOLKIT
+    {"part-toolkit", mainEntryClickhousePartToolkit},
+    {"part-writer", mainEntryClickhousePartToolkit},
+    {"part-converter", mainEntryClickhousePartToolkit},
+#endif
+#if ENABLE_CLICKHOUSE_META_INSPECTOR
+    {"meta-inspector", mainEntryClickhouseMetaInspector},
+#endif
 #if ENABLE_CLICKHOUSE_INSTALL
     {"install", mainEntryClickHouseInstall},
     {"start", mainEntryClickHouseStart},
@@ -133,6 +156,18 @@ std::pair<const char *, MainFunc> clickhouse_applications[] =
     {"restart", mainEntryClickHouseRestart},
 #endif
     {"hash-binary", mainEntryClickHouseHashBinary},
+#if ENABLE_CLICKHOUSE_DAEMON_MANAGER
+    {"daemon-manager", mainEntryClickHouseDaemonManager},
+    {"daemon_manager", mainEntryClickHouseDaemonManager},
+#endif
+#if ENABLE_CLICKHOUSE_RESOURCE_MANAGER
+    {"resource-manager", mainEntryClickHouseResourceManager},
+    {"resource_manager", mainEntryClickHouseResourceManager},
+#endif
+#if ENABLE_CLICKHOUSE_TSO_SERVER
+    {"tso-server", mainEntryClickHouseTSOServer},
+    {"tso_server", mainEntryClickHouseTSOServer},
+#endif
 };
 
 
@@ -162,7 +197,8 @@ bool isClickhouseApp(const std::string & app_suffix, std::vector<char *> & argv)
 
     /// Use app if clickhouse binary is run through symbolic link with name clickhouse-app
     std::string app_name = "clickhouse-" + app_suffix;
-    return !argv.empty() && (app_name == argv[0] || endsWith(argv[0], "/" + app_name));
+    return !argv.empty() && (app_name == argv[0] || endsWith(argv[0], "/" + app_name) ||
+                             app_suffix == argv[0] || endsWith(argv[0], "/" + app_suffix));
 }
 
 

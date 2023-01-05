@@ -4,7 +4,7 @@
 #include <cstddef>
 #include <common/types.h>
 
-#include <Core/Defines.h>
+#include <Core/ProtocolDefines.h>
 #include <Common/Stopwatch.h>
 
 
@@ -82,10 +82,15 @@ struct Progress
     std::atomic<size_t> written_rows {0};
     std::atomic<size_t> written_bytes {0};
 
+    std::atomic<size_t> written_elapsed_milliseconds {0};
+
     Progress() = default;
 
-    Progress(size_t read_rows_, size_t read_bytes_, size_t total_rows_to_read_ = 0)
-        : read_rows(read_rows_), read_bytes(read_bytes_), total_rows_to_read(total_rows_to_read_) {}
+    Progress(size_t read_rows_, size_t read_bytes_, size_t total_rows_to_read_ = 0, size_t written_elapsed_milliseconds_ = 0)
+        : read_rows(read_rows_)
+        , read_bytes(read_bytes_)
+        , total_rows_to_read(total_rows_to_read_)
+        , written_elapsed_milliseconds(written_elapsed_milliseconds_) {}
 
     explicit Progress(ReadProgress read_progress)
         : read_rows(read_progress.read_rows), read_bytes(read_progress.read_bytes), total_rows_to_read(read_progress.total_rows_to_read) {}

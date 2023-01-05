@@ -22,6 +22,8 @@
 #include <boost/range/algorithm_ext/push_back.hpp>
 
 #include <algorithm>
+#include <common/logger_useful.h>
+#include <Transaction/TransactionCoordinatorRcCnch.h>
 
 
 namespace DB
@@ -32,6 +34,7 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
     extern const int INCORRECT_QUERY;
     extern const int NOT_IMPLEMENTED;
+    extern const int CNCH_TRANSACTION_NOT_INITIALIZED;
 }
 
 
@@ -44,7 +47,6 @@ BlockIO InterpreterAlterQuery::execute()
     BlockIO res;
     const auto & alter = query_ptr->as<ASTAlterQuery &>();
 
-
     if (!alter.cluster.empty())
         return executeDDLQueryOnCluster(query_ptr, getContext(), getRequiredAccess());
 
@@ -52,7 +54,7 @@ BlockIO InterpreterAlterQuery::execute()
     auto table_id = getContext()->resolveStorageID(alter, Context::ResolveOrdinary);
     query_ptr->as<ASTAlterQuery &>().database = table_id.database_name;
 
-    DatabasePtr database = DatabaseCatalog::instance().getDatabase(table_id.database_name);
+    DatabasePtr database = DatabaseCatalog::instance().getDatabase(table_id.database_name, getContext());
     if (typeid_cast<DatabaseReplicated *>(database.get())
         && !getContext()->getClientInfo().is_replicated_database_internal)
     {
@@ -62,11 +64,24 @@ BlockIO InterpreterAlterQuery::execute()
     }
 
     StoragePtr table = DatabaseCatalog::instance().getTable(table_id, getContext());
+
     auto alter_lock = table->lockForAlter(getContext()->getCurrentQueryId(), getContext()->getSettingsRef().lock_acquire_timeout);
+    IntentLockPtr cnch_table_lock;
     auto metadata_snapshot = table->getInMemoryMetadataPtr();
 
+    if (database->getEngineName() == "Cnch")
+    {
+        auto cnch_txn = getContext()->getCurrentTransaction();
+
+        if (!cnch_txn)
+            throw Exception("Cnch transaction is not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
+
+        LOG_INFO(&Poco::Logger::get("InterpreterAlterQuery"), "Waiting for cnch_lock for " + table_id.database_name + "." + table_id.table_name + ".");
+        cnch_table_lock = cnch_txn->createIntentLock(IntentLock::TB_LOCK_PREFIX, table->getStorageID().database_name, table->getStorageID().table_name);
+    }
+
     /// Add default database to table identifiers that we can encounter in e.g. default expressions, mutation expression, etc.
-    AddDefaultDatabaseVisitor visitor(table_id.getDatabaseName());
+    AddDefaultDatabaseVisitor visitor(getContext(), table_id.getDatabaseName());
     ASTPtr command_list_ptr = alter.command_list->ptr();
     visitor.visit(command_list_ptr);
 
@@ -108,9 +123,12 @@ BlockIO InterpreterAlterQuery::execute()
 
     if (!mutation_commands.empty())
     {
+        if (cnch_table_lock)
+            throw Exception("Mutation is not supported in Cnch now.", ErrorCodes::NOT_IMPLEMENTED);
         table->checkMutationIsPossible(mutation_commands, getContext()->getSettingsRef());
         MutationsInterpreter(table, metadata_snapshot, mutation_commands, getContext(), false).validate();
         table->mutate(mutation_commands, getContext());
+        table->setUpdateTimeNow();
     }
 
     if (!partition_commands.empty())
@@ -119,10 +137,13 @@ BlockIO InterpreterAlterQuery::execute()
         auto partition_commands_pipe = table->alterPartition(metadata_snapshot, partition_commands, getContext());
         if (!partition_commands_pipe.empty())
             res.pipeline.init(std::move(partition_commands_pipe));
+        table->setUpdateTimeNow();
     }
 
     if (!live_view_commands.empty())
     {
+        if (cnch_table_lock)
+            throw Exception("Live view is not supported in Cnch now.", ErrorCodes::NOT_IMPLEMENTED);
         live_view_commands.validate(*table);
         for (const LiveViewCommand & command : live_view_commands)
         {
@@ -134,20 +155,23 @@ BlockIO InterpreterAlterQuery::execute()
                     break;
             }
         }
+        table->setUpdateTimeNow();
     }
 
     if (!alter_commands.empty())
     {
+        if (cnch_table_lock && !cnch_table_lock->isLocked())
+            cnch_table_lock->lock();
         StorageInMemoryMetadata metadata = table->getInMemoryMetadata();
         alter_commands.validate(metadata, getContext());
         alter_commands.prepare(metadata);
         table->checkAlterIsPossible(alter_commands, getContext());
         table->alter(alter_commands, getContext(), alter_lock);
+        table->setUpdateTimeNow();
     }
 
     return res;
 }
-
 
 AccessRightsElements InterpreterAlterQuery::getRequiredAccess() const
 {
@@ -206,6 +230,12 @@ AccessRightsElements InterpreterAlterQuery::getRequiredAccessForCommand(const AS
         case ASTAlterCommand::MODIFY_ORDER_BY:
         {
             required_access.emplace_back(AccessType::ALTER_ORDER_BY, database, table);
+            break;
+        }
+        case ASTAlterCommand::MODIFY_CLUSTER_BY:
+        case ASTAlterCommand::DROP_CLUSTER:
+        {
+            required_access.emplace_back(AccessType::ALTER_CLUSTER_BY, database, table);
             break;
         }
         case ASTAlterCommand::MODIFY_SAMPLE_BY:
@@ -277,12 +307,15 @@ AccessRightsElements InterpreterAlterQuery::getRequiredAccessForCommand(const AS
             break;
         }
         case ASTAlterCommand::ATTACH_PARTITION:
+        case ASTAlterCommand::ATTACH_DETACHED_PARTITION:
         {
             required_access.emplace_back(AccessType::INSERT, database, table);
             break;
         }
         case ASTAlterCommand::DELETE:
+        case ASTAlterCommand::FAST_DELETE:
         case ASTAlterCommand::DROP_PARTITION:
+        case ASTAlterCommand::DROP_PARTITION_WHERE:
         case ASTAlterCommand::DROP_DETACHED_PARTITION:
         {
             required_access.emplace_back(AccessType::ALTER_DELETE, database, table);
@@ -309,15 +342,34 @@ AccessRightsElements InterpreterAlterQuery::getRequiredAccessForCommand(const AS
             }
             break;
         }
+        case ASTAlterCommand::MOVE_PARTITION_FROM:
+        {
+            required_access.emplace_back(AccessType::SELECT | AccessType::ALTER_DELETE, command.from_database, command.from_table);
+            required_access.emplace_back(AccessType::INSERT, database, table);
+            break;
+        }
         case ASTAlterCommand::REPLACE_PARTITION:
+        case ASTAlterCommand::REPLACE_PARTITION_WHERE:
         {
             required_access.emplace_back(AccessType::SELECT, command.from_database, command.from_table);
             required_access.emplace_back(AccessType::ALTER_DELETE | AccessType::INSERT, database, table);
             break;
         }
+        case ASTAlterCommand::INGEST_PARTITION:
+        {
+            required_access.emplace_back(AccessType::SELECT, command.from_database, command.from_table);
+            required_access.emplace_back(AccessType::SELECT | AccessType::INSERT, database, table);
+            break;
+        }
         case ASTAlterCommand::FETCH_PARTITION:
+        case ASTAlterCommand::FETCH_PARTITION_WHERE:
         {
             required_access.emplace_back(AccessType::ALTER_FETCH_PARTITION, database, table);
+            break;
+        }
+        case ASTAlterCommand::REPAIR_PARTITION:
+        {
+            required_access.emplace_back(AccessType::ALTER_REPAIR_PARTITION, database, table);
             break;
         }
         case ASTAlterCommand::FREEZE_PARTITION: [[fallthrough]];
@@ -343,7 +395,30 @@ AccessRightsElements InterpreterAlterQuery::getRequiredAccessForCommand(const AS
             required_access.emplace_back(AccessType::ALTER_RENAME_COLUMN, database, table, column_name());
             break;
         }
+        case ASTAlterCommand::CLEAR_MAP_KEY:
+        {
+            required_access.emplace_back(AccessType::ALTER_CLEAR_MAP_KEY, database, table, column_name());
+            break;
+        }
+        case ASTAlterCommand::SAMPLE_PARTITION_WHERE:
+        {
+            required_access.emplace_back(AccessType::SELECT | AccessType::INSERT, command.from_database, command.from_table);
+            required_access.emplace_back(AccessType::SELECT | AccessType::INSERT, database, table);
+            break;
+        }
         case ASTAlterCommand::NO_TYPE: break;
+        case ASTAlterCommand::BUILD_BITMAP_OF_PARTITION_WHERE:
+        case ASTAlterCommand::BUILD_BITMAP_OF_PARTITION:
+        case ASTAlterCommand::DROP_BITMAP_OF_PARTITION_WHERE:
+        case ASTAlterCommand::DROP_BITMAP_OF_PARTITION:
+        case ASTAlterCommand::BUILD_MARK_BITMAP_OF_PARTITION_WHERE:
+        case ASTAlterCommand::BUILD_MARK_BITMAP_OF_PARTITION:
+        case ASTAlterCommand::DROP_MARK_BITMAP_OF_PARTITION_WHERE:
+        case ASTAlterCommand::DROP_MARK_BITMAP_OF_PARTITION:
+        {
+            required_access.emplace_back(AccessType::ALTER_MODIFY_COLUMN, database, table, column_name_from_col_decl());
+            break;
+        }
     }
 
     return required_access;

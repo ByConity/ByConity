@@ -95,7 +95,7 @@ private:
     struct Stream
     {
         Stream(const DiskPtr & disk, const String & data_path, size_t max_read_buffer_size_, size_t file_size)
-            : plain(file_size ? disk->readFile(data_path, std::min(max_read_buffer_size_, file_size)) : std::make_unique<ReadBuffer>(nullptr, 0)),
+            : plain(file_size ? disk->readFile(data_path, {.buffer_size = std::min(max_read_buffer_size_, file_size)}) : std::make_unique<ReadBuffer>(nullptr, 0)),
             limited(std::make_unique<LimitReadBuffer>(*plain, file_size, false)),
             compressed(*limited)
         {
@@ -245,7 +245,7 @@ private:
     struct Stream
     {
         Stream(const DiskPtr & disk, const String & data_path, CompressionCodecPtr codec, size_t max_compress_block_size) :
-            plain(disk->writeFile(data_path, max_compress_block_size, WriteMode::Append)),
+            plain(disk->writeFile(data_path, {.buffer_size = max_compress_block_size, .mode = WriteMode::Append})),
             compressed(*plain, std::move(codec), max_compress_block_size)
         {
         }

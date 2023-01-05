@@ -9,11 +9,13 @@ namespace DB
 {
 
 
-class ParserArray : public IParserBase
+class ParserArray : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "array"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 
@@ -21,21 +23,25 @@ protected:
   *  or if there is a SELECT subquery in parenthesis, then this subquery returned in `node`;
   *  otherwise returns `tuple` function from the contents of brackets.
   */
-class ParserParenthesisExpression : public IParserBase
+class ParserParenthesisExpression : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "parenthesized expression"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 
 /** The SELECT subquery is in parenthesis.
   */
-class ParserSubquery : public IParserBase
+class ParserSubquery : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "SELECT subquery"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 
@@ -74,7 +80,7 @@ protected:
 
 /** *, t.*, db.table.*, COLUMNS('<regular expression>') APPLY(...) or EXCEPT(...) or REPLACE(...)
   */
-class ParserColumnsTransformers : public IParserBase
+class ParserColumnsTransformers : public IParserDialectBase
 {
 public:
     enum class ColumnTransformer : UInt8
@@ -86,8 +92,8 @@ public:
     using ColumnTransformers = MultiEnum<ColumnTransformer, UInt8>;
     static constexpr auto AllTransformers = ColumnTransformers{ColumnTransformer::APPLY, ColumnTransformer::EXCEPT, ColumnTransformer::REPLACE};
 
-    explicit ParserColumnsTransformers(ColumnTransformers allowed_transformers_ = AllTransformers, bool is_strict_ = false)
-        : allowed_transformers(allowed_transformers_)
+    explicit ParserColumnsTransformers(ParserSettingsImpl t, ColumnTransformers allowed_transformers_ = AllTransformers, bool is_strict_ = false)
+        : IParserDialectBase(t), allowed_transformers(allowed_transformers_)
         , is_strict(is_strict_)
     {}
 
@@ -100,12 +106,12 @@ protected:
 
 
 /// Just *
-class ParserAsterisk : public IParserBase
+class ParserAsterisk : public IParserDialectBase
 {
 public:
     using ColumnTransformers = ParserColumnsTransformers::ColumnTransformers;
-    explicit ParserAsterisk(ColumnTransformers allowed_transformers_ = ParserColumnsTransformers::AllTransformers)
-        : allowed_transformers(allowed_transformers_)
+    explicit ParserAsterisk(ParserSettingsImpl t, ColumnTransformers allowed_transformers_ = ParserColumnsTransformers::AllTransformers)
+        : IParserDialectBase(t), allowed_transformers(allowed_transformers_)
     {}
 
 protected:
@@ -117,21 +123,23 @@ protected:
 
 /** Something like t.* or db.table.*
   */
-class ParserQualifiedAsterisk : public IParserBase
+class ParserQualifiedAsterisk : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "qualified asterisk"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 /** COLUMNS('<regular expression>')
   */
-class ParserColumnsMatcher : public IParserBase
+class ParserColumnsMatcher : public IParserDialectBase
 {
 public:
     using ColumnTransformers = ParserColumnsTransformers::ColumnTransformers;
-    explicit ParserColumnsMatcher(ColumnTransformers allowed_transformers_ = ParserColumnsTransformers::AllTransformers)
-        : allowed_transformers(allowed_transformers_)
+    explicit ParserColumnsMatcher(ParserSettingsImpl t, ColumnTransformers allowed_transformers_ = ParserColumnsTransformers::AllTransformers)
+        : IParserDialectBase(t), allowed_transformers(allowed_transformers_)
     {}
 
 protected:
@@ -147,11 +155,11 @@ protected:
   *  Syntax - two pairs of parentheses instead of one. The first is for parameters, the second for arguments.
   * For functions, the DISTINCT modifier can be specified, for example, count(DISTINCT x, y).
   */
-class ParserFunction : public IParserBase
+class ParserFunction : public IParserDialectBase
 {
 public:
-    explicit ParserFunction(bool allow_function_parameters_ = true, bool is_table_function_ = false)
-        : allow_function_parameters(allow_function_parameters_), is_table_function(is_table_function_)
+    explicit ParserFunction(ParserSettingsImpl t, bool allow_function_parameters_ = true, bool is_table_function_ = false)
+        : IParserDialectBase(t), allow_function_parameters(allow_function_parameters_), is_table_function(is_table_function_)
     {
     }
 
@@ -164,33 +172,41 @@ protected:
 
 // A special function parser for view table function.
 // It parses an SELECT query as its argument and doesn't support getColumnName().
-class ParserTableFunctionView : public IParserBase
+class ParserTableFunctionView : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "function"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 // Window reference (the thing that goes after OVER) for window function.
 // Can be either window name or window definition.
-class ParserWindowReference : public IParserBase
+class ParserWindowReference : public IParserDialectBase
 {
     const char * getName() const override { return "window reference"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
-class ParserWindowDefinition : public IParserBase
+class ParserWindowDefinition : public IParserDialectBase
 {
     const char * getName() const override { return "window definition"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 // The WINDOW clause of a SELECT query that defines a list of named windows.
 // Returns an ASTExpressionList of ASTWindowListElement's.
-class ParserWindowList : public IParserBase
+class ParserWindowList : public IParserDialectBase
 {
     const char * getName() const override { return "WINDOW clause"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 class ParserCodecDeclarationList : public IParserBase
@@ -214,68 +230,86 @@ protected:
 /// It tries to read literal as text.
 /// If it fails, later operator will be transformed to function CAST.
 /// Examples: "0.1::Decimal(38, 38)", "[1, 2]::Array(UInt8)"
-class ParserCastOperator : public IParserBase
+class ParserCastOperator : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "CAST operator"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 ASTPtr createFunctionCast(const ASTPtr & expr_ast, const ASTPtr & type_ast);
-class ParserCastAsExpression : public IParserBase
+class ParserCastAsExpression : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "CAST AS expression"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
-class ParserSubstringExpression : public IParserBase
+class ParserSubstringExpression : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "SUBSTRING expression"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
-class ParserTrimExpression : public IParserBase
+class ParserTrimExpression : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "TRIM expression"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
-class ParserLeftExpression : public IParserBase
+class ParserLeftExpression : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "LEFT expression"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
-class ParserRightExpression : public IParserBase
+class ParserRightExpression : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "RIGHT expression"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
-class ParserExtractExpression : public IParserBase
+class ParserExtractExpression : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "EXTRACT expression"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
-class ParserDateAddExpression : public IParserBase
+class ParserDateAddExpression : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "DATE_ADD expression"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
-class ParserDateDiffExpression : public IParserBase
+class ParserDateDiffExpression : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "DATE_DIFF expression"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 /** NULL literal.
@@ -290,11 +324,13 @@ protected:
 
 /** Numeric literal.
   */
-class ParserNumber : public IParserBase
+class ParserNumber : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "number"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 /** Unsigned integer, used in right hand side of tuple access operator (x.1).
@@ -325,11 +361,11 @@ protected:
   *  parse as an application of [] operator or 'tuple' function (slow path).
   */
 template <typename Collection>
-class ParserCollectionOfLiterals : public IParserBase
+class ParserCollectionOfLiterals : public IParserDialectBase
 {
 public:
-    ParserCollectionOfLiterals(TokenType opening_bracket_, TokenType closing_bracket_)
-        : opening_bracket(opening_bracket_), closing_bracket(closing_bracket_) {}
+    ParserCollectionOfLiterals(TokenType opening_bracket_, TokenType closing_bracket_, ParserSettingsImpl t)
+        : IParserDialectBase(t), opening_bracket(opening_bracket_), closing_bracket(closing_bracket_) {}
 protected:
     const char * getName() const override { return "collection of literals"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
@@ -339,10 +375,11 @@ private:
 };
 
 /// A tuple of literals with same type.
-class ParserTupleOfLiterals : public IParserBase
+class ParserTupleOfLiterals : public IParserDialectBase
 {
 public:
-    ParserCollectionOfLiterals<Tuple> tuple_parser{TokenType::OpeningRoundBracket, TokenType::ClosingRoundBracket};
+    using IParserDialectBase::IParserDialectBase;
+    ParserCollectionOfLiterals<Tuple> tuple_parser{TokenType::OpeningRoundBracket, TokenType::ClosingRoundBracket, dt};
 protected:
     const char * getName() const override { return "tuple"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override
@@ -351,10 +388,11 @@ protected:
     }
 };
 
-class ParserArrayOfLiterals : public IParserBase
+class ParserArrayOfLiterals : public IParserDialectBase
 {
 public:
-    ParserCollectionOfLiterals<Array> array_parser{TokenType::OpeningSquareBracket, TokenType::ClosingSquareBracket};
+    using IParserDialectBase::IParserDialectBase;
+    ParserCollectionOfLiterals<Array> array_parser{TokenType::OpeningSquareBracket, TokenType::ClosingSquareBracket, dt};
 protected:
     const char * getName() const override { return "array"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override
@@ -363,14 +401,27 @@ protected:
     }
 };
 
+/**
+  * Parse query with EXISTS expression.
+  */
+class ParserExistsExpression : public IParserDialectBase
+{
+protected:
+    const char * getName() const override { return "exists expression"; }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
+};
 
 /** The literal is one of: NULL, UInt64, Int64, Float64, String.
   */
-class ParserLiteral : public IParserBase
+class ParserLiteral : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "literal"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 
@@ -405,11 +456,13 @@ protected:
 /** Prepared statements.
   * Parse query with parameter expression {name:type}.
   */
-class ParserSubstitution : public IParserBase
+class ParserSubstitution : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "substitution"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 
@@ -425,26 +478,38 @@ protected:
 
 /** The expression element is one of: an expression in parentheses, an array, a literal, a function, an identifier, an asterisk.
   */
-class ParserExpressionElement : public IParserBase
+class ParserExpressionElement : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "element of expression"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 
 /** An expression element, possibly with an alias, if appropriate.
   */
-class ParserWithOptionalAlias : public IParserBase
+class ParserWithOptionalAlias : public IParserDialectBase
 {
 public:
-    ParserWithOptionalAlias(ParserPtr && elem_parser_, bool allow_alias_without_as_keyword_)
-    : elem_parser(std::move(elem_parser_)), allow_alias_without_as_keyword(allow_alias_without_as_keyword_) {}
+    ParserWithOptionalAlias(ParserPtr && elem_parser_, bool allow_alias_without_as_keyword_, ParserSettingsImpl t)
+    : IParserDialectBase(t),elem_parser(std::move(elem_parser_)), allow_alias_without_as_keyword(allow_alias_without_as_keyword_) {}
 protected:
     ParserPtr elem_parser;
     bool allow_alias_without_as_keyword;
 
     const char * getName() const override { return "element of expression with optional alias"; }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+};
+
+/** Element of CLUSTER BY expression - same as expression element, but in addition, INTO <TOTAL_BUCKET_NUMBER> BUCKETS 
+  * must be specified.
+  */
+class ParserClusterByElement : public IParserBase
+{
+protected:
+    const char * getName() const override { return "element of CLUSTER BY expression"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 };
 
@@ -454,20 +519,22 @@ protected:
   *  and optionally, COLLATE 'locale'.
   *  and optionally, WITH FILL [FROM x] [TO y] [STEP z]
   */
-class ParserOrderByElement : public IParserBase
+class ParserOrderByElement : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "element of ORDER BY expression"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 /** Parser for function with arguments like KEY VALUE (space separated)
   * no commas allowed, just space-separated pairs.
   */
-class ParserFunctionWithKeyValueArguments : public IParserBase
+class ParserFunctionWithKeyValueArguments : public IParserDialectBase
 {
 public:
-    explicit ParserFunctionWithKeyValueArguments(bool brackets_can_be_omitted_ = false) : brackets_can_be_omitted(brackets_can_be_omitted_)
+    explicit ParserFunctionWithKeyValueArguments(ParserSettingsImpl t, bool brackets_can_be_omitted_ = false) : IParserDialectBase(t), brackets_can_be_omitted(brackets_can_be_omitted_)
     {
     }
 
@@ -483,29 +550,35 @@ protected:
 /** Table engine, possibly with parameters. See examples from ParserIdentifierWithParameters
   * Parse result is ASTFunction, with or without arguments.
   */
-class ParserIdentifierWithOptionalParameters : public IParserBase
+class ParserIdentifierWithOptionalParameters : public IParserDialectBase
 {
 protected:
     const char * getName() const  override{ return "identifier with optional parameters"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 /** Element of TTL expression - same as expression element, but in addition,
  *   TO DISK 'xxx' | TO VOLUME 'xxx' | DELETE could be specified
   */
-class ParserTTLElement : public IParserBase
+class ParserTTLElement : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "element of TTL expression"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 /// Part of the UPDATE command or TTL with GROUP BY of the form: col_name = expr
-class ParserAssignment : public IParserBase
+class ParserAssignment : public IParserDialectBase
 {
 protected:
     const char * getName() const  override{ return "column assignment"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 }

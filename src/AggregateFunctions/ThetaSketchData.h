@@ -4,12 +4,10 @@
 #    include <Common/config.h>
 #endif
 
-#if USE_DATASKETCHES
 
-#include <boost/noncopyable.hpp>
 #include <memory>
-#include <theta_sketch.hpp> // Y_IGNORE
-#include <theta_union.hpp> // Y_IGNORE
+#include <Statistics/DataSketchesHelper.h>
+#include <boost/noncopyable.hpp>
 
 
 namespace DB
@@ -37,6 +35,17 @@ private:
         return sk_union.get();
     }
 
+    datasketches::theta_union * regulateAsUnion()
+    {
+        auto u = getSkUnion();
+        if (sk_update)
+        {
+            u->update(*sk_update);
+            sk_update.reset(nullptr);
+        }
+        return u;
+    }
+
 public:
     using value_type = Key;
 
@@ -44,40 +53,29 @@ public:
     ~ThetaSketchData() = default;
 
     /// Insert original value without hash, as `datasketches::update_theta_sketch.update` will do the hash internal.
-    void insertOriginal(const StringRef & value)
-    {
-        getSkUpdate()->update(value.data, value.size);
-    }
+    void insertOriginal(const StringRef & value) { getSkUpdate()->update(value.data, value.size); }
 
     /// Note that `datasketches::update_theta_sketch.update` will do the hash again.
-    void insert(Key value)
-    {
-        getSkUpdate()->update(value);
-    }
+    void insert(Key value) { getSkUpdate()->update(value); }
 
+    // get final estimated ndv
     UInt64 size() const
     {
-        if (sk_union)
-            return static_cast<UInt64>(sk_union->get_result().get_estimate());
-        else if (sk_update)
-            return static_cast<UInt64>(sk_update->get_estimate());
-        else
-            return 0;
+        auto u = sk_union ? *sk_union : datasketches::theta_union::builder().build();
+        if (sk_update)
+        {
+            u.update(*sk_update);
+        }
+        return u.get_result().get_estimate();
     }
 
     void merge(const ThetaSketchData & rhs)
     {
-        datasketches::theta_union * u = getSkUnion();
-
-        if (sk_update)
-        {
-            u->update(*sk_update);
-            sk_update.reset(nullptr);
-        }
+        auto u = regulateAsUnion();
 
         if (rhs.sk_update)
             u->update(*rhs.sk_update);
-        else if (rhs.sk_union)
+        if (rhs.sk_union)
             u->update(rhs.sk_union->get_result());
     }
 
@@ -95,14 +93,19 @@ public:
 
     void write(DB::WriteBuffer & out) const
     {
-        if (sk_update)
+        if (sk_union)
         {
-            auto bytes = sk_update->compact().serialize();
+            auto u = *sk_union;
+            if (sk_update)
+            {
+                u.update(*sk_update);
+            }
+            auto bytes = u.get_result().serialize();
             writeVectorBinary(bytes, out);
         }
-        else if (sk_union)
+        else if (sk_update)
         {
-            auto bytes = sk_union->get_result().serialize();
+            auto bytes = sk_update->compact().serialize();
             writeVectorBinary(bytes, out);
         }
         else
@@ -115,5 +118,3 @@ public:
 
 
 }
-
-#endif

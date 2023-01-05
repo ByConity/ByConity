@@ -20,7 +20,8 @@ class Context;
 class IFunctionBase;
 using FunctionBasePtr = std::shared_ptr<IFunctionBase>;
 
-
+class Set;
+using SetPtr = std::shared_ptr<Set>;
 /** Data structure for implementation of IN expression.
   */
 class Set
@@ -70,11 +71,14 @@ public:
     bool areTypesEqual(size_t set_type_idx, const DataTypePtr & other_type) const;
     void checkTypesEqual(size_t set_type_idx, const DataTypePtr & other_type) const;
 
+    SetVariants data;
+    void serialize(WriteBuffer & buf) const;
+    void deserializeImpl(ReadBuffer & buf);
+    static SetPtr deserialize(ReadBuffer & buf);
+
 private:
     size_t keys_size = 0;
     Sizes key_sizes;
-
-    SetVariants data;
 
     /** How IN works with Nullable types.
       *
@@ -112,6 +116,9 @@ private:
 
     /// Check if set contains all the data.
     bool is_created = false;
+
+    /// local header for distributed stages.
+    Block local_header;
 
     /// If in the left part columns contains the same types as the elements of the set.
     void executeOrdinary(
@@ -164,9 +171,14 @@ private:
         bool negative,
         size_t rows,
         ConstNullMapPtr null_map) const;
+
+    template <typename Method>
+	void deserializeImplCase(
+		Method & method,
+		SetVariants & variants,
+		ReadBuffer & buf);
 };
 
-using SetPtr = std::shared_ptr<Set>;
 using ConstSetPtr = std::shared_ptr<const Set>;
 using Sets = std::vector<SetPtr>;
 
@@ -178,29 +190,19 @@ using FunctionPtr = std::shared_ptr<IFunction>;
   * Single field is stored in column for more optimal inplace comparisons with other regular columns.
   * Extracting fields from columns and further their comparison is suboptimal and requires extra copying.
   */
-class ValueWithInfinity
+struct FieldValue
 {
-public:
-    enum Type
-    {
-        MINUS_INFINITY = -1,
-        NORMAL = 0,
-        PLUS_INFINITY = 1
-    };
-
-    ValueWithInfinity(MutableColumnPtr && column_)
-        : column(std::move(column_)), type(NORMAL) {}
-
+    FieldValue(MutableColumnPtr && column_) : column(std::move(column_)) {}
     void update(const Field & x);
-    void update(Type type_) { type = type_; }
 
-    const IColumn & getColumnIfFinite() const;
+    bool isNormal() const { return !value.isPositiveInfinity() && !value.isNegativeInfinity(); }
+    bool isPositiveInfinity() const { return value.isPositiveInfinity(); }
+    bool isNegativeInfinity() const { return value.isNegativeInfinity(); }
 
-    Type getType() const { return type; }
+    Field value; // Null, -Inf, +Inf
 
-private:
+    // If value is Null, uses the actual value in column
     MutableColumnPtr column;
-    Type type;
 };
 
 
@@ -230,7 +232,7 @@ private:
     Columns ordered_set;
     std::vector<KeyTuplePositionMapping> indexes_mapping;
 
-    using ColumnsWithInfinity = std::vector<ValueWithInfinity>;
+    using FieldValues = std::vector<FieldValue>;
 };
 
 }

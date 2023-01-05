@@ -31,17 +31,18 @@ MergeTreeWhereOptimizer::MergeTreeWhereOptimizer(
     SelectQueryInfo & query_info,
     ContextPtr context,
     std::unordered_map<std::string, UInt64> column_sizes_,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageMetadataPtr & metadata_snapshot_,
     const Names & queried_columns_,
     Poco::Logger * log_)
     : table_columns{collections::map<std::unordered_set>(
-        metadata_snapshot->getColumns().getAllPhysical(), [](const NameAndTypePair & col) { return col.name; })}
+        metadata_snapshot_->getColumns().getAllPhysical(), [](const NameAndTypePair & col) { return col.name; })}
     , queried_columns{queried_columns_}
     , sorting_key_names{NameSet(
-          metadata_snapshot->getSortingKey().column_names.begin(), metadata_snapshot->getSortingKey().column_names.end())}
+          metadata_snapshot_->getSortingKey().column_names.begin(), metadata_snapshot_->getSortingKey().column_names.end())}
     , block_with_constants{KeyCondition::getBlockWithConstants(query_info.query->clone(), query_info.syntax_analyzer_result, context)}
     , log{log_}
     , column_sizes{std::move(column_sizes_)}
+    , metadata_snapshot{metadata_snapshot_}
 {
     const auto & primary_key = metadata_snapshot->getPrimaryKey();
     if (!primary_key.column_names.empty())
@@ -183,7 +184,6 @@ ASTPtr MergeTreeWhereOptimizer::reconstruct(const Conditions & conditions)
     return function;
 }
 
-
 void MergeTreeWhereOptimizer::optimize(ASTSelectQuery & select) const
 {
     if (!select.where() || select.prewhere())
@@ -239,7 +239,6 @@ void MergeTreeWhereOptimizer::optimize(ASTSelectQuery & select) const
 
         if (moved_enough)
             break;
-
         move_condition(it);
     }
 

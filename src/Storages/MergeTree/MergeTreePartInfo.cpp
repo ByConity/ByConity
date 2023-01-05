@@ -83,7 +83,8 @@ bool MergeTreePartInfo::tryParsePartName(const String & part_name, MergeTreePart
     Int64 min_block_num = 0;
     Int64 max_block_num = 0;
     UInt32 level = 0;
-    UInt32 mutation = 0;
+    UInt64 mutation = 0;
+    UInt64 hint_mutation = 0;
 
     if (!tryReadIntText(min_block_num, in)
         || !checkChar('_', in)
@@ -103,7 +104,16 @@ bool MergeTreePartInfo::tryParsePartName(const String & part_name, MergeTreePart
     if (!in.eof())
     {
         if (!checkChar('_', in)
-            || !tryReadIntText(mutation, in)
+            || !tryReadIntText(mutation, in))
+        {
+            return false;
+        }
+    }
+
+    if (!in.eof())
+    {
+        if (!checkChar('_', in)
+            || !tryReadIntText(hint_mutation, in)
             || !in.eof())
         {
             return false;
@@ -126,6 +136,7 @@ bool MergeTreePartInfo::tryParsePartName(const String & part_name, MergeTreePart
         }
         part_info->level = level;
         part_info->mutation = mutation;
+        part_info->hint_mutation = hint_mutation;
     }
 
     return true;
@@ -166,8 +177,19 @@ bool MergeTreePartInfo::contains(const String & outer_part_name, const String & 
     return outer.contains(inner);
 }
 
+String MergeTreePartInfo::getBlockName() const
+{
+    WriteBufferFromOwnString wb;
+    writeString(partition_id, wb);
+    writeChar('_', wb);
+    writeIntText(min_block, wb);
+    writeChar('_', wb);
+    writeIntText(max_block, wb);
+    return wb.str();
+}
 
-String MergeTreePartInfo::getPartName() const
+template <bool NameWithHintMutation>
+String MergeTreePartInfo::getPartNameImpl() const
 {
     WriteBufferFromOwnString wb;
 
@@ -191,11 +213,40 @@ String MergeTreePartInfo::getPartName() const
     {
         writeChar('_', wb);
         writeIntText(mutation, wb);
+        if constexpr (NameWithHintMutation)
+        {
+            writeChar('_', wb);
+            writeIntText(hint_mutation, wb);
+        }
     }
 
     return wb.str();
 }
 
+String MergeTreePartInfo::getPartName() const
+{
+    return getPartNameImpl<false>();
+}
+
+String MergeTreePartInfo::getPartNameWithHintMutation() const
+{
+    return getPartNameImpl<true>();
+}
+
+/// partititon_id + min_block + max_block
+String MergeTreePartInfo::getBasicPartName() const
+{
+    WriteBufferFromOwnString wb;
+
+    writeString(partition_id, wb);
+    writeChar('_', wb);
+    writeIntText(min_block, wb);
+    writeChar('_', wb);
+    writeIntText(max_block, wb);
+    writeChar('_', wb);
+
+    return wb.str();
+}
 
 String MergeTreePartInfo::getPartNameV0(DayNum left_date, DayNum right_date) const
 {
@@ -284,6 +335,57 @@ bool DetachedPartInfo::tryParseDetachedPartName(const String & dir_name, Detache
 
     part_info.prefix = dir_name.substr(0, first_separator);
     return part_info.valid_name = true;
+}
+
+String MergeTreePartInfo::getPartitionKeyInStringAt(const size_t index) const
+{
+    size_t pos = 0;
+    String key;
+    size_t idx = 0;
+    while (pos < partition_id.size())
+    {
+        size_t next_pos = partition_id.find('-', pos);
+        if (next_pos != std::string::npos)
+        {
+            if (idx == index)
+            {
+                key = partition_id.substr(pos, next_pos - pos);
+                break;
+            }
+            idx++;
+        }
+        else
+        {
+            if (idx == index)
+                key = partition_id.substr(pos);
+            break;
+        }
+
+        pos = next_pos + 1;
+    }
+    return key;
+}
+
+Names MergeTreePartInfo::splitPartitionKeys(const String & partition_id)
+{
+    Names partition_keys;
+    size_t pos = 0;
+    while (pos < partition_id.size())
+    {
+        size_t next_pos = partition_id.find('-', pos);
+        if (next_pos != std::string::npos)
+        {
+            partition_keys.push_back(partition_id.substr(pos, next_pos - pos));
+        }
+        else
+        {
+            partition_keys.push_back(partition_id.substr(pos));
+            break;
+        }
+
+        pos = next_pos + 1;
+    }
+    return partition_keys;
 }
 
 }

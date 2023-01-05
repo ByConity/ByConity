@@ -21,6 +21,10 @@ namespace DB
  *      REFRESH
  */
 
+
+
+/// JUST APPEND after the tail of enum Type, or
+/// the CI test 01604_explain_ast_of_nonselect_query may fail
 class ASTAlterCommand : public IAST
 {
 public:
@@ -39,6 +43,8 @@ public:
         RESET_SETTING,
         MODIFY_QUERY,
         REMOVE_TTL,
+        MODIFY_CLUSTER_BY,
+        DROP_CLUSTER,
 
         ADD_INDEX,
         DROP_INDEX,
@@ -54,20 +60,42 @@ public:
         DROP_PARTITION,
         DROP_DETACHED_PARTITION,
         ATTACH_PARTITION,
+        ATTACH_DETACHED_PARTITION,
         MOVE_PARTITION,
+        MOVE_PARTITION_FROM,
         REPLACE_PARTITION,
+        REPLACE_PARTITION_WHERE,
+        INGEST_PARTITION,
         FETCH_PARTITION,
         FREEZE_PARTITION,
         FREEZE_ALL,
         UNFREEZE_PARTITION,
         UNFREEZE_ALL,
 
+        DROP_PARTITION_WHERE,
+        FETCH_PARTITION_WHERE,
+
+        BUILD_BITMAP_OF_PARTITION_WHERE,
+        BUILD_BITMAP_OF_PARTITION,
+        DROP_BITMAP_OF_PARTITION_WHERE,
+        DROP_BITMAP_OF_PARTITION,
+        BUILD_MARK_BITMAP_OF_PARTITION_WHERE,
+        BUILD_MARK_BITMAP_OF_PARTITION,
+        DROP_MARK_BITMAP_OF_PARTITION_WHERE,
+        DROP_MARK_BITMAP_OF_PARTITION,
+        REPAIR_PARTITION,
+
         DELETE,
+        FAST_DELETE,
         UPDATE,
+
+        CLEAR_MAP_KEY,
 
         NO_TYPE,
 
         LIVE_VIEW_REFRESH,
+
+        SAMPLE_PARTITION_WHERE,
     };
 
     Type type = NO_TYPE;
@@ -87,6 +115,11 @@ public:
     /** For MODIFY ORDER BY
      */
     ASTPtr order_by;
+
+    /** For MODIFY CLUSTER BY
+     */
+    ASTPtr cluster_by;
+
 
     /** For MODIFY SAMPLE BY
      */
@@ -122,12 +155,12 @@ public:
      */
     ASTPtr projection;
 
-    /** Used in DROP PARTITION, ATTACH PARTITION FROM, UPDATE, DELETE queries.
+    /** Used in DROP PARTITION, ATTACH PARTITION FROM, UPDATE, DELETE, FASTDELETE queries.
      *  The value or ID of the partition is stored here.
      */
     ASTPtr partition;
 
-    /// For DELETE/UPDATE WHERE: the predicate that filters the rows to delete/update.
+    /// For DELETE/FASTDELETE/UPDATE WHERE: the predicate that filters the rows to delete/update.
     ASTPtr predicate;
 
     /// A list of expressions of the form `column = expr` for the UPDATE command.
@@ -152,9 +185,24 @@ public:
      */
     ASTPtr values;
 
+    /// For CLEAR MAP KEY map_column('map_key1', 'map_key2'...)
+    ASTPtr map_keys;
+
+    /// For FASTDELETE / INGESTION query, the optional list of columns to overwrite
+    ASTPtr columns;
+    /// For Ingestion columns
+    ASTPtr keys;
+
+    /// For sample / split / resharding expression
+    ASTPtr with_sharding_exp;
+
     bool detach = false;        /// true for DETACH PARTITION
 
-    bool part = false;          /// true for ATTACH PART, DROP DETACHED PART and MOVE
+    bool attach_from_detached = false;  /// true for ATTACHE DETACHED PARTITION.
+
+    bool part = false;          /// true for ATTACH PART, DROP DETACHED PART, REPAIR PART and MOVE
+
+    bool parts = false;         /// true for ATTACH PARTS from hdfs directory
 
     bool clear_column = false;  /// for CLEAR COLUMN (do not drop column from metadata)
 
@@ -167,6 +215,8 @@ public:
     bool if_exists = false;     /// option for DROP_COLUMN, MODIFY_COLUMN, COMMENT_COLUMN
 
     bool first = false;         /// option for ADD_COLUMN, MODIFY_COLUMN
+
+    bool cascading = false; /// true for DROP/DETACH PARTITION [WHERE]
 
     DataDestinationType move_destination_type; /// option for MOVE PART/PARTITION
 
@@ -201,6 +251,8 @@ public:
 
     ASTPtr clone() const override;
 
+    ASTType getType() const override { return ASTType::ASTAlterCommand; }
+
 protected:
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
 };
@@ -217,6 +269,8 @@ public:
     bool isFreezeAlter() const;
 
     String getID(char) const override;
+
+    ASTType getType() const override { return ASTType::ASTAlterQuery; }
 
     ASTPtr clone() const override;
 

@@ -60,6 +60,12 @@ Columns IMergeTreeDataPartWriter::releaseIndexColumns()
         std::make_move_iterator(index_columns.end()));
 }
 
-IMergeTreeDataPartWriter::~IMergeTreeDataPartWriter() = default;
+void IMergeTreeDataPartWriter::updateWriterStream(const NameAndTypePair &)
+{
+    throw Exception("Should implemented in it's sub-class", ErrorCodes::NOT_IMPLEMENTED);
+}
 
+
+
+IMergeTreeDataPartWriter::~IMergeTreeDataPartWriter() = default;
 }

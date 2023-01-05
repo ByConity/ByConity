@@ -66,6 +66,7 @@ public:
     void updateWeakHash32(WeakHash32 & hash) const override;
     void updateHashFast(SipHash & hash) const override;
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
+    void insertRangeSelective(const IColumn & src, const Selector & selector, size_t selector_start, size_t length) override;
     void insert(const Field & x) override;
     void insertFrom(const IColumn & src_, size_t n) override;
     void insertDefault() override;
@@ -92,6 +93,9 @@ public:
     ColumnPtr replicate(const Offsets & replicate_offsets) const override;
     ColumnPtr convertToFullColumnIfConst() const override;
     void getExtremes(Field & min, Field & max) const override;
+
+    /// Map support array key
+    bool canBeInsideNullable() const override { return true; }
 
     bool hasEqualOffsets(const ColumnArray & other) const;
 
@@ -142,13 +146,12 @@ public:
 
     bool isCollationSupported() const override { return getData().isCollationSupported(); }
 
-private:
-    WrappedPtr data;
-    WrappedPtr offsets;
-
     size_t ALWAYS_INLINE offsetAt(ssize_t i) const { return getOffsets()[i - 1]; }
     size_t ALWAYS_INLINE sizeAt(ssize_t i) const { return getOffsets()[i] - getOffsets()[i - 1]; }
 
+private:
+    WrappedPtr data;
+    WrappedPtr offsets;
 
     /// Multiply values if the nested column is ColumnVector<T>.
     template <typename T>

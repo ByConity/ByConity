@@ -16,6 +16,7 @@
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeMap.h>
+#include <DataTypes/DataTypeByteMap.h>
 
 
 namespace DB
@@ -273,6 +274,32 @@ namespace
                 tryToReplaceNullFieldsInComplexTypesWithDefaultValues(entry_value, value_type);
             }
         }
+        else if (type.isMap() && value.getType() == Field::Types::ByteMap)
+        {
+            const DataTypeByteMap & type_map = static_cast<const DataTypeByteMap &>(data_type);
+
+            const auto & key_type = *type_map.getKeyType();
+            const auto & value_type = *type_map.getValueType();
+
+            auto & map = value.get<ByteMap>();
+            size_t map_size = map.size();
+
+            for (size_t i = 0; i < map_size; ++i)
+            {
+                auto & entry_key = map[i].first;
+                auto & entry_value = map[i].second;
+
+                if (entry_key.isNull() && !key_type.isNullable())
+                    entry_key = key_type.getDefault();
+
+                tryToReplaceNullFieldsInComplexTypesWithDefaultValues(entry_key, key_type);
+
+                if (entry_value.isNull() && !value_type.isNullable())
+                    entry_value = value_type.getDefault();
+
+                tryToReplaceNullFieldsInComplexTypesWithDefaultValues(entry_value, value_type);
+            }
+        }
     }
 }
 
@@ -291,6 +318,7 @@ bool ValuesBlockInputFormat::parseExpression(IColumn & column, size_t column_idx
     Tokens tokens(buf.position(), buf.buffer().end());
     IParser::Pos token_iterator(tokens, settings.max_parser_depth);
     ASTPtr ast;
+    ParserExpression parser(ParserSettings::valueOf(settings.dialect_type));
 
     bool parsed = parser.parse(token_iterator, ast, expected);
 

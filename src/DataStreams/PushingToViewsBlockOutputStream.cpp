@@ -19,7 +19,6 @@
 #include <Storages/StorageMaterializedView.h>
 #include <common/logger_useful.h>
 
-
 namespace DB
 {
 
@@ -79,6 +78,7 @@ PushingToViewsBlockOutputStream::PushingToViewsBlockOutputStream(
 
         ASTPtr query;
         BlockOutputStreamPtr out;
+        String implicit_column;
 
         if (auto * materialized_view = dynamic_cast<StorageMaterializedView *>(dependent_table.get()))
         {
@@ -121,7 +121,7 @@ PushingToViewsBlockOutputStream::PushingToViewsBlockOutputStream(
             out = std::make_shared<PushingToViewsBlockOutputStream>(
                 dependent_table, dependent_metadata_snapshot, insert_context, ASTPtr());
 
-        views.emplace_back(ViewInfo{std::move(query), database_table, std::move(out), nullptr, 0 /* elapsed_ms */});
+        views.emplace_back(ViewInfo{std::move(query), database_table, std::move(out), nullptr, 0, implicit_column});
     }
 
     /// Do not push to destination table if the flag is set
@@ -332,6 +332,8 @@ void PushingToViewsBlockOutputStream::process(const Block & block, ViewInfo & vi
 
     try
     {
+        String implicit_column;
+        Block output_header = view.out->getHeader();
         BlockInputStreamPtr in;
 
         /// We need keep InterpreterSelectQuery, until the processing will be finished, since:

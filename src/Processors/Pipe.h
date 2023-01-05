@@ -1,8 +1,9 @@
 #pragma once
 
 #include <Processors/IProcessor.h>
-#include <Processors/QueryPlan/QueryIdHolder.h>
-#include <Processors/QueryPlan/QueryPlan.h>
+#include <Interpreters/RuntimeFilter/RuntimeFilterHolder.h>
+#include <QueryPlan/QueryIdHolder.h>
+#include <QueryPlan/QueryPlan.h>
 #include <Access/EnabledQuota.h>
 #include <DataStreams/SizeLimits.h>
 #include <Storages/TableLockHolder.h>
@@ -92,7 +93,7 @@ public:
     using Transformer = std::function<Processors(OutputPortRawPtrs ports)>;
 
     /// Transform Pipe in general way.
-    void transform(const Transformer & transformer);
+    void transform(const Transformer & transformer, size_t sink_num = 0);
 
     /// Unite several pipes together. They should have same header.
     static Pipe unitePipes(Pipes pipes);
@@ -113,6 +114,7 @@ public:
     void addInterpreterContext(std::shared_ptr<const Context> context) { holder.interpreter_context.emplace_back(std::move(context)); }
     void addStorageHolder(StoragePtr storage) { holder.storage_holders.emplace_back(std::move(storage)); }
     void addQueryIdHolder(std::shared_ptr<QueryIdHolder> query_id_holder) { holder.query_id_holder = std::move(query_id_holder); }
+    void addRuntimeFilterHolder(RuntimeFilterHolder rf_holder) { holder.runtime_filters.emplace_back(std::move(rf_holder)); }
     /// For queries with nested interpreters (i.e. StorageDistributed)
     void addQueryPlan(std::unique_ptr<QueryPlan> plan) { holder.query_plans.emplace_back(std::move(plan)); }
 
@@ -134,6 +136,7 @@ private:
         std::vector<TableLockHolder> table_locks;
         std::vector<std::unique_ptr<QueryPlan>> query_plans;
         std::shared_ptr<QueryIdHolder> query_id_holder;
+        std::vector<RuntimeFilterHolder> runtime_filters;
     };
 
     Holder holder;

@@ -9,7 +9,7 @@ namespace DB
 
 class DataTypeLowCardinality : public IDataType
 {
-private:
+protected:
     DataTypePtr dictionary_type;
 
 public:
@@ -23,6 +23,7 @@ public:
     }
     const char * getFamilyName() const override { return "LowCardinality"; }
     TypeIndex getTypeId() const override { return TypeIndex::LowCardinality; }
+    DataTypePtr getFullLowCardinalityTypePtr() const;
 
     MutableColumnPtr createColumn() const override;
 
@@ -55,7 +56,12 @@ public:
     static MutableColumnUniquePtr createColumnUnique(const IDataType & keys_type);
     static MutableColumnUniquePtr createColumnUnique(const IDataType & keys_type, MutableColumnPtr && keys);
 
-private:
+    /// Key can not be null because it's meaningless
+    bool canBeMapKeyType() const override { return dictionary_type->canBeMapKeyType(); }
+    /// Due to LowCardinality can not be inside nullable, so if dictionary_type is not nullable, ColumnByteMap can not insert Null field for missing key when handling each row. You can see more information in method ColumnByteMap::getValueColumnByKey.
+    bool canBeMapValueType() const override;
+
+protected:
     SerializationPtr doGetDefaultSerialization() const override;
 
     template <typename ... Params>
@@ -72,6 +78,23 @@ private:
 
     template <typename Creator>
     static MutableColumnUniquePtr createColumnUniqueImpl(const IDataType & keys_type, const Creator & creator);
+};
+
+/**
+ * For Low Cardinality column fall-back, this type only live in serialize process.
+ * Deserialize still use the parent type, and the dict version help to work properly.
+ */
+class DataTypeFullLowCardinality : public DataTypeLowCardinality
+{
+public:
+    DataTypeFullLowCardinality(DataTypePtr dictionary_type_);
+    String doGetName() const override
+    {
+        return "FullLowCardinality(" + dictionary_type->getName() + ")";
+    }
+
+protected:
+    SerializationPtr doGetDefaultSerialization() const override;
 };
 
 /// Returns dictionary type if type is DataTypeLowCardinality, type otherwise.

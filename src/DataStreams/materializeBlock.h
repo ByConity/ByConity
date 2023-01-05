@@ -10,5 +10,5 @@ namespace DB
   */
 Block materializeBlock(const Block & block);
 void materializeBlockInplace(Block & block);
-
+void substituteBlock(Block & block, const std::unordered_map<String, String> & name_substitution_info);
 }

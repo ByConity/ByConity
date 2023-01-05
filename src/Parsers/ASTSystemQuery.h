@@ -11,6 +11,24 @@
 namespace DB
 {
 
+enum class MetastoreOperation
+{
+    UNKNOWN,
+    START_AUTO_SYNC,
+    STOP_AUTO_SYNC,
+    SYNC,
+    DROP_ALL_KEY,
+    DROP_BY_KEY
+};
+
+const char * metaOptToString(MetastoreOperation opt);
+
+struct MetastoreOptions
+{
+    MetastoreOperation operation = MetastoreOperation::UNKNOWN;
+    String drop_key {};
+};
+
 class ASTSystemQuery : public IAST, public ASTQueryWithOnCluster
 {
 public:
@@ -25,6 +43,8 @@ public:
         DROP_MARK_CACHE,
         DROP_UNCOMPRESSED_CACHE,
         DROP_MMAP_CACHE,
+        DROP_CHECKSUMS_CACHE,
+        DROP_CNCH_PART_CACHE,
 #if USE_EMBEDDED_COMPILER
         DROP_COMPILED_EXPRESSION_CACHE,
 #endif
@@ -35,16 +55,23 @@ public:
         RESTORE_REPLICA,
         DROP_REPLICA,
         SYNC_REPLICA,
+        START_RESOURCE_GROUP,
+        STOP_RESOURCE_GROUP,
         RELOAD_DICTIONARY,
         RELOAD_DICTIONARIES,
         RELOAD_MODEL,
         RELOAD_MODELS,
         RELOAD_EMBEDDED_DICTIONARIES,
         RELOAD_CONFIG,
+        RELOAD_FORMAT_SCHEMA,
         RELOAD_SYMBOLS,
         RESTART_DISK,
         STOP_MERGES,
         START_MERGES,
+        REMOVE_MERGES,
+        STOP_GC,
+        START_GC,
+        FORCE_GC,
         STOP_TTL_MERGES,
         START_TTL_MERGES,
         STOP_FETCHES,
@@ -56,9 +83,23 @@ public:
         STOP_REPLICATION_QUEUES,
         START_REPLICATION_QUEUES,
         FLUSH_LOGS,
+        FLUSH_CNCH_LOG,
+        STOP_CNCH_LOG,
+        RESUME_CNCH_LOG,
         FLUSH_DISTRIBUTED,
         STOP_DISTRIBUTED_SENDS,
         START_DISTRIBUTED_SENDS,
+        START_CONSUME,
+        STOP_CONSUME,
+        RESTART_CONSUME,
+        FETCH_PARTS,
+        METASTORE,
+        CLEAR_BROKEN_TABLES,
+        DEDUP, // dedup db.table [partition partition_expr] for repair
+        SYNC_DEDUP_WORKER,
+        START_DEDUP_WORKER,
+        STOP_DEDUP_WORKER,
+        DUMP_SERVER_STATUS,
         END
     };
 
@@ -77,9 +118,24 @@ public:
     String disk;
     UInt64 seconds{};
 
+    // For execute/reload mutation
+    String mutation_id;
+
+    MetastoreOptions meta_ops;
+
+    ASTPtr predicate;
+    ASTPtr values_changes;
+
+    ASTPtr target_path;
+
+    // For DEDUP
+    ASTPtr partition; // The value or ID of the partition is stored here.
+
     String getID(char) const override { return "SYSTEM query"; }
 
-    ASTPtr clone() const override { return std::make_shared<ASTSystemQuery>(*this); }
+    ASTType getType() const override { return ASTType::ASTSystemQuery; }
+
+    ASTPtr clone() const override;
 
     ASTPtr getRewrittenASTWithoutOnCluster(const std::string & new_database) const override
     {

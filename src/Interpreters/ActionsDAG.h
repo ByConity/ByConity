@@ -27,6 +27,9 @@ using FunctionOverloadResolverPtr = std::shared_ptr<IFunctionOverloadResolver>;
 class IDataType;
 using DataTypePtr = std::shared_ptr<const IDataType>;
 
+class WriteBuffer;
+class ReadBuffer;
+
 namespace JSONBuilder
 {
     class JSONMap;
@@ -88,6 +91,17 @@ public:
         ColumnPtr column;
 
         void toTree(JSONBuilder::JSONMap & map) const;
+
+        /**
+         * only for serialize and deserialize when dispatch distributed query plan.
+         */
+        mutable size_t id;
+        std::vector<size_t> children_ids;
+        bool has_function_base;
+        bool has_function;
+
+        void serialize(WriteBuffer & buf) const;
+        static Node deserialize(ReadBuffer & buf, ContextPtr context);
     };
 
     /// NOTE: std::list is an implementation detail.
@@ -158,6 +172,7 @@ public:
     bool removeUnusedResult(const std::string & column_name);
 
     void projectInput(bool project = true) { project_input = project; }
+    void projectedOutput(bool projected_output_ ) { projected_output = projected_output_; }
     bool isInputProjected() const { return project_input; }
     bool isOutputProjected() const { return projected_output; }
 
@@ -183,7 +198,7 @@ public:
     ActionsDAGPtr clone() const;
 
     /// Execute actions for header. Input block must have empty columns.
-    /// Result should be equal to the execution of ExpressionActions build form this DAG.
+    /// Result should be equal to the execution of ExpressionActions built from this DAG.
     /// Actions are not changed, no expressions are compiled.
     ///
     /// In addition, check that result constants are constants according to DAG.
@@ -265,6 +280,9 @@ public:
         bool can_remove_filter,
         const Names & available_inputs,
         const ColumnsWithTypeAndName & all_inputs);
+
+    void serialize(WriteBuffer & buf) const;
+    static ActionsDAGPtr deserialize(ReadBuffer & buf, ContextPtr context);
 
 private:
     Node & addNode(Node node);

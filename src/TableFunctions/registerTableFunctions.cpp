@@ -43,6 +43,7 @@ void registerTableFunctions()
 #endif
 
     registerTableFunctionDictionary(factory);
+    registerTableFunctionCnch(factory);
 }
 
 }

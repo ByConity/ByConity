@@ -23,37 +23,50 @@
 #include <Parsers/ParserShowPrivilegesQuery.h>
 #include <Parsers/ParserExplainQuery.h>
 #include <Parsers/QueryWithOutputSettingsPushDownVisitor.h>
-
+#include <Parsers/ParserRefreshQuery.h>
+#include <Parsers/ParserStatsQuery.h>
+#include <Parsers/ParserDumpInfoQuery.h>
+#include <Parsers/ParserReproduceQuery.h>
+#include <Parsers/ParserUndropQuery.h>
 
 namespace DB
 {
 
 bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
-    ParserShowTablesQuery show_tables_p;
-    ParserSelectWithUnionQuery select_p;
+    ParserShowTablesQuery show_tables_p(dt);
+    ParserSelectWithUnionQuery select_p(dt);
     ParserTablePropertiesQuery table_p;
-    ParserDescribeTableQuery describe_table_p;
+    ParserDescribeTableQuery describe_table_p(dt);
     ParserShowProcesslistQuery show_processlist_p;
-    ParserCreateQuery create_p;
-    ParserAlterQuery alter_p;
+    ParserCreateQuery create_p(dt);
+    ParserAlterQuery alter_p(dt);
     ParserRenameQuery rename_p;
     ParserDropQuery drop_p;
-    ParserCheckQuery check_p;
-    ParserOptimizeQuery optimize_p;
-    ParserKillQueryQuery kill_query_p;
+    ParserUndropQuery undrop_p;
+    ParserCheckQuery check_p(dt);
+    ParserOptimizeQuery optimize_p(dt);
+    ParserKillQueryQuery kill_query_p(dt);
     ParserWatchQuery watch_p;
     ParserShowAccessQuery show_access_p;
     ParserShowAccessEntitiesQuery show_access_entities_p;
     ParserShowCreateAccessEntityQuery show_create_access_entity_p;
     ParserShowGrantsQuery show_grants_p;
     ParserShowPrivilegesQuery show_privileges_p;
-    ParserExplainQuery explain_p(end);
+    ParserExplainQuery explain_p(end, dt);
+    ParserDumpInfoQuery dump_info_p(end, dt);
+    ParserReproduceQuery reproduce_p(end);
+    ParserRefreshQuery refresh_p(dt);
+    ParserCreateStatsQuery create_stats_p;
+    ParserShowStatsQuery show_stats_p;
+    ParserDropStatsQuery drop_stats_p;
 
     ASTPtr query;
 
     bool parsed =
            explain_p.parse(pos, query, expected)
+        || reproduce_p.parse(pos, query, expected)
+        || dump_info_p.parse(pos, query, expected)
         || select_p.parse(pos, query, expected)
         || show_create_access_entity_p.parse(pos, query, expected) /// should be before `show_tables_p`
         || show_tables_p.parse(pos, query, expected)
@@ -64,6 +77,7 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
         || alter_p.parse(pos, query, expected)
         || rename_p.parse(pos, query, expected)
         || drop_p.parse(pos, query, expected)
+        || undrop_p.parse(pos, query, expected)
         || check_p.parse(pos, query, expected)
         || kill_query_p.parse(pos, query, expected)
         || optimize_p.parse(pos, query, expected)
@@ -71,7 +85,11 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
         || show_access_p.parse(pos, query, expected)
         || show_access_entities_p.parse(pos, query, expected)
         || show_grants_p.parse(pos, query, expected)
-        || show_privileges_p.parse(pos, query, expected);
+        || show_privileges_p.parse(pos, query, expected)
+        || refresh_p.parse(pos, query, expected)
+        || create_stats_p.parse(pos, query, expected)
+        || show_stats_p.parse(pos, query, expected)
+        || drop_stats_p.parse(pos, query, expected);
 
     if (!parsed)
         return false;

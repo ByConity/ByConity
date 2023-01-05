@@ -100,7 +100,7 @@ bool MergeTreePartsMover::selectPartsForMove(
         return false;
 
     std::unordered_map<DiskPtr, LargestPartsWithRequiredSize> need_to_move;
-    const auto policy = data->getStoragePolicy();
+    const auto policy = data->getStoragePolicy(IStorage::StorageLocation::MAIN);
     const auto & volumes = policy->getVolumes();
 
     if (!volumes.empty())
@@ -206,7 +206,7 @@ MergeTreeData::DataPartPtr MergeTreePartsMover::clonePart(const MergeTreeMoveEnt
         /// Try to fetch part from S3 without copy and fallback to default copy
         /// if it's not possible
         moving_part.part->assertOnDisk();
-        String path_to_clone = fs::path(data->getRelativeDataPath()) / directory_to_move / "";
+        String path_to_clone = fs::path(data->getRelativeDataPath(IStorage::StorageLocation::MAIN)) / directory_to_move / "";
         String relative_path = part->relative_path;
         if (disk->exists(path_to_clone + relative_path))
         {
@@ -216,7 +216,7 @@ MergeTreeData::DataPartPtr MergeTreePartsMover::clonePart(const MergeTreeMoveEnt
         disk->createDirectories(path_to_clone);
         bool is_fetched = data->tryToFetchIfShared(*part, disk, fs::path(path_to_clone) / part->name);
         if (!is_fetched)
-            part->volume->getDisk()->copy(fs::path(data->getRelativeDataPath()) / relative_path / "", disk, path_to_clone);
+            part->volume->getDisk()->copy(fs::path(data->getRelativeDataPath(IStorage::StorageLocation::MAIN)) / relative_path / "", disk, path_to_clone);
         part->volume->getDisk()->removeFileIfExists(fs::path(path_to_clone) / IMergeTreeDataPart::DELETE_ON_DESTROY_MARKER_FILE_NAME);
     }
     else

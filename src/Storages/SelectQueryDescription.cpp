@@ -6,6 +6,7 @@
 #include <Interpreters/AddDefaultDatabaseVisitor.h>
 #include <Interpreters/Context.h>
 
+
 namespace DB
 {
 
@@ -48,7 +49,7 @@ StorageID extractDependentTableFromSelectQuery(ASTSelectQuery & query, ContextPt
 {
     if (add_default_db)
     {
-        AddDefaultDatabaseVisitor visitor(context->getCurrentDatabase(), false, nullptr);
+        AddDefaultDatabaseVisitor visitor(context, context->getCurrentDatabase(), false, false, nullptr);
         visitor.visit(query);
     }
 
@@ -128,8 +129,8 @@ SelectQueryDescription SelectQueryDescription::getSelectQueryFromASTForMatView(c
     result.select_table_id = extractDependentTableFromSelectQuery(select_query, context);
     result.select_query = select->as<ASTSelectWithUnionQuery &>().clone();
     result.inner_query = new_inner_query->clone();
-
     return result;
 }
 
 }
+

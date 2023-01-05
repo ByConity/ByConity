@@ -19,6 +19,14 @@
 #include <filesystem>
 #include <Common/filesystemHelpers.h>
 
+#include <Transaction/ICnchTransaction.h>
+#include <Catalog/Catalog.h>
+#include <Catalog/CatalogFactory.h>
+#include <CloudServices/CnchWorkerResource.h>
+#include <Databases/DatabaseCnch.h>
+#include <Common/Status.h>
+#include <Protos/RPCHelpers.h>
+
 #if !defined(ARCADIA_BUILD)
 #    include "config_core.h"
 #endif
@@ -202,8 +210,20 @@ void DatabaseCatalog::shutdownImpl()
     view_dependencies.clear();
 }
 
-DatabaseAndTable DatabaseCatalog::tryGetByUUID(const UUID & uuid) const
+DatabaseAndTable DatabaseCatalog::tryGetByUUID(const UUID & uuid, const ContextPtr & local_context) const
 {
+    if (use_cnch_catalog && local_context->getCurrentTransaction())
+    {
+        StoragePtr storage = getContext()->getCnchCatalog()->tryGetTableByUUID(*local_context, UUIDHelpers::UUIDToString(uuid), local_context->getCurrentTransactionID().toUInt64(), false);
+        if (storage && !storage->is_dropped && !storage->is_detached)
+        {
+            DatabasePtr database_cnch = tryGetDatabaseCnch(storage->getDatabaseName(), local_context);
+            if (!database_cnch)
+                throw Exception("Database " + backQuoteIfNeed(storage->getDatabaseName()) + " is not exists as DatabaseCnch.", ErrorCodes::UNKNOWN_DATABASE);
+            return std::make_pair(std::move(database_cnch), std::move(storage));
+        }
+    }
+
     assert(uuid != UUIDHelpers::Nil && getFirstLevelIdx(uuid) < uuid_map.size());
     const UUIDToStorageMapPart & map_part = uuid_map[getFirstLevelIdx(uuid)];
     std::lock_guard lock{map_part.mutex};
@@ -226,15 +246,31 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
         return {};
     }
 
+    if (context_->getServerType() == ServerType::cnch_worker)
+    {
+        if (auto worker_resource = context_->tryGetCnchWorkerResource())
+        {
+            /// try get table from session resource
+            /// Note: the tables in cnch session doesn't belong to any DatabasePtr
+
+            // if (worker_resource->isCnchTableInWorker(table_id))
+            //     return getCnchTable()
+
+            if (auto table = worker_resource->getTable(table_id))
+                return {nullptr, table};
+        }
+    }
+
     if (table_id.hasUUID())
     {
         /// Shortcut for tables which have persistent UUID
-        auto db_and_table = tryGetByUUID(table_id.uuid);
+        auto db_and_table = tryGetByUUID(table_id.uuid, context_);
         if (!db_and_table.first || !db_and_table.second)
         {
             assert(!db_and_table.first && !db_and_table.second);
             if (exception)
-                exception->emplace(ErrorCodes::UNKNOWN_TABLE, "Table {} doesn't exist", table_id.getNameForLogs());
+                exception->emplace(ErrorCodes::UNKNOWN_TABLE, "Table {} with uuid: {} doesn't exist", table_id.getNameForLogs(),
+                    UUIDHelpers::UUIDToString(table_id.uuid));
             return {};
         }
 
@@ -267,7 +303,12 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
         return {};
     }
 
-    DatabasePtr database;
+    DatabasePtr database{};
+
+    if (preferCnchCatalog(context_))
+        database = tryGetDatabaseCnch(table_id.getDatabaseName(), context_);
+
+    if (!database)
     {
         std::lock_guard lock{databases_mutex};
         auto it = databases.find(table_id.getDatabaseName());
@@ -291,14 +332,32 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
 
 void DatabaseCatalog::assertDatabaseExists(const String & database_name) const
 {
-    std::lock_guard lock{databases_mutex};
-    assertDatabaseExistsUnlocked(database_name);
+    if (use_cnch_catalog)
+    {
+        DatabasePtr database_cnch = tryGetDatabaseCnch(database_name);
+        if (database_cnch)
+            return;
+    }
+
+    {
+        std::lock_guard lock{databases_mutex};
+        assertDatabaseExistsUnlocked(database_name);
+    }
 }
 
 void DatabaseCatalog::assertDatabaseDoesntExist(const String & database_name) const
 {
-    std::lock_guard lock{databases_mutex};
-    assertDatabaseDoesntExistUnlocked(database_name);
+    {
+        std::lock_guard lock{databases_mutex};
+        assertDatabaseDoesntExistUnlocked(database_name);
+    }
+
+    if (use_cnch_catalog)
+    {
+        DatabasePtr database_cnch = tryGetDatabaseCnch(database_name);
+        if (database_cnch)
+            throw Exception("Database " + backQuoteIfNeed(database_name) + " already exists as DatabaseCnch.", ErrorCodes::DATABASE_ALREADY_EXISTS);
+    }
 }
 
 void DatabaseCatalog::assertDatabaseExistsUnlocked(const String & database_name) const
@@ -318,6 +377,8 @@ void DatabaseCatalog::assertDatabaseDoesntExistUnlocked(const String & database_
 
 void DatabaseCatalog::attachDatabase(const String & database_name, const DatabasePtr & database)
 {
+    if (database->getEngineName() == "Cnch")
+        return;
     std::lock_guard lock{databases_mutex};
     assertDatabaseDoesntExistUnlocked(database_name);
     databases.emplace(database_name, database);
@@ -327,12 +388,17 @@ void DatabaseCatalog::attachDatabase(const String & database_name, const Databas
 }
 
 
-DatabasePtr DatabaseCatalog::detachDatabase(const String & database_name, bool drop, bool check_empty)
+DatabasePtr DatabaseCatalog::detachDatabase(ContextPtr local_context, const String & database_name, bool drop, bool check_empty)
 {
     if (database_name == TEMPORARY_DATABASE)
         throw Exception("Cannot detach database with temporary tables.", ErrorCodes::DATABASE_ACCESS_DENIED);
 
-    DatabasePtr db;
+    DatabasePtr db{};
+
+    if (preferCnchCatalog(local_context))
+        db = tryGetDatabaseCnch(database_name, local_context);
+
+    if (!db)
     {
         std::lock_guard lock{databases_mutex};
         assertDatabaseExistsUnlocked(database_name);
@@ -363,7 +429,7 @@ DatabasePtr DatabaseCatalog::detachDatabase(const String & database_name, bool d
     if (drop)
     {
         /// Delete the database.
-        db->drop(getContext());
+        db->drop(local_context);
 
         /// Old ClickHouse versions did not store database.sql files
         fs::path database_metadata_file = fs::path(getContext()->getPath()) / "metadata" / (escapeForFileName(database_name) + ".sql");
@@ -387,14 +453,47 @@ void DatabaseCatalog::updateDatabaseName(const String & old_name, const String &
 
 DatabasePtr DatabaseCatalog::getDatabase(const String & database_name) const
 {
+    if (use_cnch_catalog)
+    {
+        DatabasePtr database_cnch = tryGetDatabaseCnch(database_name);
+        if (database_cnch)
+            return database_cnch;
+    }
+
     std::lock_guard lock{databases_mutex};
     assertDatabaseExistsUnlocked(database_name);
     return databases.find(database_name)->second;
 }
 
+DatabasePtr DatabaseCatalog::tryGetDatabase(const String & database_name, ContextPtr local_context) const
+{
+    assert(!database_name.empty());
+
+    if (preferCnchCatalog(local_context))
+    {
+        DatabasePtr database_cnch = tryGetDatabaseCnch(database_name, local_context);
+        if (database_cnch)
+            return database_cnch;
+    }
+
+    std::lock_guard lock{databases_mutex};
+    auto it = databases.find(database_name);
+    if (it == databases.end())
+        return {};
+    return it->second;
+}
+
 DatabasePtr DatabaseCatalog::tryGetDatabase(const String & database_name) const
 {
     assert(!database_name.empty());
+
+    if (use_cnch_catalog)
+    {
+        DatabasePtr database_cnch = tryGetDatabaseCnch(database_name);
+        if (database_cnch)
+            return database_cnch;
+    }
+
     std::lock_guard lock{databases_mutex};
     auto it = databases.find(database_name);
     if (it == databases.end())
@@ -404,6 +503,13 @@ DatabasePtr DatabaseCatalog::tryGetDatabase(const String & database_name) const
 
 DatabasePtr DatabaseCatalog::getDatabase(const UUID & uuid) const
 {
+    if (use_cnch_catalog)
+    {
+        DatabasePtr database_cnch = tryGetDatabaseCnch(uuid);
+        if (database_cnch)
+            return database_cnch;
+    }
+
     std::lock_guard lock{databases_mutex};
     auto it = db_uuid_map.find(uuid);
     if (it == db_uuid_map.end())
@@ -413,6 +519,13 @@ DatabasePtr DatabaseCatalog::getDatabase(const UUID & uuid) const
 
 DatabasePtr DatabaseCatalog::tryGetDatabase(const UUID & uuid) const
 {
+    if (use_cnch_catalog)
+    {
+        DatabasePtr database_cnch = tryGetDatabaseCnch(uuid);
+        if (database_cnch)
+            return database_cnch;
+    }
+
     assert(uuid != UUIDHelpers::Nil);
     std::lock_guard lock{databases_mutex};
     auto it = db_uuid_map.find(uuid);
@@ -424,11 +537,35 @@ DatabasePtr DatabaseCatalog::tryGetDatabase(const UUID & uuid) const
 bool DatabaseCatalog::isDatabaseExist(const String & database_name) const
 {
     assert(!database_name.empty());
+
+    if (use_cnch_catalog)
+    {
+        DatabasePtr cnch_database = tryGetDatabaseCnch(database_name);
+        if (cnch_database)
+            return true;
+    }
+
     std::lock_guard lock{databases_mutex};
     return databases.end() != databases.find(database_name);
 }
 
 Databases DatabaseCatalog::getDatabases() const
+{
+    Databases res;
+    {
+        std::lock_guard lock{databases_mutex};
+        res = databases;
+    }
+
+    if (use_cnch_catalog)
+    {
+        Databases cnch_databases = getDatabaseCnchs();
+        std::move(cnch_databases.begin(), cnch_databases.end(), std::inserter(res, res.end()));
+    }
+    return res;
+}
+
+Databases DatabaseCatalog::getNonCnchDatabases() const
 {
     std::lock_guard lock{databases_mutex};
     return databases;
@@ -437,7 +574,7 @@ Databases DatabaseCatalog::getDatabases() const
 bool DatabaseCatalog::isTableExist(const DB::StorageID & table_id, ContextPtr context_) const
 {
     if (table_id.hasUUID())
-        return tryGetByUUID(table_id.uuid).second != nullptr;
+        return tryGetByUUID(table_id.uuid, context_).second != nullptr;
 
     DatabasePtr db;
     {
@@ -541,6 +678,7 @@ std::unique_ptr<DatabaseCatalog> DatabaseCatalog::database_catalog;
 
 DatabaseCatalog::DatabaseCatalog(ContextMutablePtr global_context_)
     : WithMutableContext(global_context_), log(&Poco::Logger::get("DatabaseCatalog"))
+    , use_cnch_catalog{global_context_->getServerType() == ServerType::cnch_server}
 {
     TemporaryLiveViewCleaner::init(global_context_);
 }
@@ -582,6 +720,23 @@ void DatabaseCatalog::shutdown()
 DatabasePtr DatabaseCatalog::getDatabase(const String & database_name, ContextPtr local_context) const
 {
     String resolved_database = local_context->resolveDatabase(database_name);
+
+    if (local_context->getServerType() == ServerType::cnch_worker)
+    {
+        if (auto worker_resource = local_context->tryGetCnchWorkerResource())
+        {
+            if (auto database = worker_resource->getDatabase(resolved_database))
+                return database;
+        }
+    }
+
+    if (preferCnchCatalog(local_context))
+    {
+        DatabasePtr res = tryGetDatabaseCnch(database_name, local_context);
+        if (res)
+            return res;
+    }
+
     return getDatabase(resolved_database);
 }
 
@@ -591,7 +746,6 @@ void DatabaseCatalog::addDependency(const StorageID & from, const StorageID & wh
     // FIXME when loading metadata storage may not know UUIDs of it's dependencies, because they are not loaded yet,
     // so UUID of `from` is not used here. (same for remove, get and update)
     view_dependencies[{from.getDatabaseName(), from.getTableName()}].insert(where);
-
 }
 
 void DatabaseCatalog::removeDependency(const StorageID & from, const StorageID & where)
@@ -609,8 +763,47 @@ Dependencies DatabaseCatalog::getDependencies(const StorageID & from) const
     return Dependencies(iter->second.begin(), iter->second.end());
 }
 
-void
-DatabaseCatalog::updateDependency(const StorageID & old_from, const StorageID & old_where, const StorageID & new_from,
+void DatabaseCatalog::addMemoryTableDependency(const StorageID & local_table_id, const StorageID & memory_table_id)
+{
+    std::lock_guard lock{databases_mutex};
+    memory_table_dependencies[{local_table_id.getDatabaseName(), local_table_id.getTableName()}].insert(memory_table_id);
+}
+
+void DatabaseCatalog::removeMemoryTableDependency(const StorageID & local_table_id)
+{
+    std::lock_guard lock{databases_mutex};
+    memory_table_dependencies.erase({local_table_id.getDatabaseName(), local_table_id.getTableName()});
+}
+
+std::optional<MemoryTableInfo> DatabaseCatalog::tryGetDependencyMemoryTable(const StorageID & local_table_id, ContextPtr local_context) const
+{
+    String source_db;
+    String source_table;
+    {
+        std::lock_guard lock{databases_mutex};
+        auto iter = memory_table_dependencies.find(local_table_id);
+        if (iter == memory_table_dependencies.end()) return {};
+        if (iter->second.size() != 1 || iter->second.empty()) return {};
+        source_db = iter->second.begin()->getDatabaseName();
+        source_table = iter->second.begin()->getTableName();
+    }
+    auto source_table_ptr = tryGetTable({source_db, source_table}, local_context);
+    if (source_table_ptr)
+    {
+#if USE_RDKAFKA
+        /// Do nothing for CnchKafka now
+#endif
+        {
+            return {};
+        }
+    }
+    else
+    {
+        return {};
+    }
+}
+
+void DatabaseCatalog::updateDependency(const StorageID & old_from, const StorageID & old_where, const StorageID & new_from,
                                   const StorageID & new_where)
 {
     std::lock_guard lock{databases_mutex};
@@ -936,6 +1129,64 @@ void DatabaseCatalog::waitTableFinallyDropped(const UUID & uuid)
     });
 }
 
+DatabasePtr DatabaseCatalog::tryGetDatabaseCnch(const String & database_name) const
+{
+    DatabasePtr cnch_database = getContext()->getCnchCatalog()->getDatabase(database_name, getContext(), TxnTimestamp::maxTS());
+    return cnch_database;
+}
+
+DatabasePtr DatabaseCatalog::tryGetDatabaseCnch(const String & database_name, ContextPtr local_context) const
+{
+    auto txn = local_context->getCurrentTransaction();
+    DatabasePtr res;
+    if (txn)
+        res = txn->tryGetDatabaseViaCache(database_name);
+    if (res)
+        return res;
+    auto catalog = getContext()->tryGetCnchCatalog();
+    if (catalog)
+        res = catalog->getDatabase(database_name, getContext(), txn ? txn->getStartTime() : TxnTimestamp::maxTS());
+    if (res && txn)
+        txn->addDatabaseIntoCache(res);
+    return res;
+}
+
+DatabasePtr DatabaseCatalog::tryGetDatabaseCnch(const UUID & uuid) const
+{
+    Catalog::Catalog::DataModelDBs all_db_models =
+        getContext()->getCnchCatalog()->getAllDataBases();
+    auto it = std::find_if(all_db_models.begin(), all_db_models.end(),
+        [uuid] (const Protos::DataModelDB & model)
+        {
+            return (uuid == RPCHelpers::createUUID(model.uuid()));
+        }
+    );
+
+    if ((it != all_db_models.end()) && !Status::isDeleted(it->status()))
+        return Catalog::CatalogFactory::getDatabaseByDataModel(*it, getContext());
+    else
+        return {};
+}
+
+Databases DatabaseCatalog::getDatabaseCnchs() const
+{
+    Databases res;
+    Catalog::Catalog::DataModelDBs all_db_models =
+        getContext()->getCnchCatalog()->getAllDataBases();
+    std::for_each(
+        all_db_models.begin(), all_db_models.end(),
+        [& res, this] (const Protos::DataModelDB & model)
+        {
+            if (!Status::isDeleted(model.status()))
+            {
+                DatabasePtr database_cnch = Catalog::CatalogFactory::getDatabaseByDataModel(model, getContext());
+                res.insert(std::make_pair(model.name(), std::move(database_cnch)));
+            }
+        }
+    );
+
+    return res;
+}
 
 DDLGuard::DDLGuard(Map & map_, std::shared_mutex & db_mutex_, std::unique_lock<std::mutex> guards_lock_, const String & elem, const String & database_name)
         : map(map_), db_mutex(db_mutex_), guards_lock(std::move(guards_lock_))
@@ -978,4 +1229,8 @@ DDLGuard::~DDLGuard()
     releaseTableLock();
 }
 
+inline bool DatabaseCatalog::preferCnchCatalog(const ContextPtr & local_context) const
+{
+    return use_cnch_catalog || local_context->getSettingsRef().prefer_cnch_catalog;
+}
 }

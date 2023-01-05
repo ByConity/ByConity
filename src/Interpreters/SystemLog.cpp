@@ -1,13 +1,20 @@
 #include <Interpreters/SystemLog.h>
 #include <Interpreters/QueryLog.h>
 #include <Interpreters/QueryThreadLog.h>
+#include <Interpreters/QueryExchangeLog.h>
 #include <Interpreters/PartLog.h>
+#include <Interpreters/PartMergeLog.h>
+#include <Interpreters/ServerPartLog.h>
 #include <Interpreters/TextLog.h>
 #include <Interpreters/TraceLog.h>
 #include <Interpreters/CrashLog.h>
 #include <Interpreters/MetricLog.h>
 #include <Interpreters/AsynchronousMetricLog.h>
 #include <Interpreters/OpenTelemetrySpanLog.h>
+#include <Interpreters/MutationLog.h>
+#include <Interpreters/KafkaLog.h>
+#include <Interpreters/ProcessorsProfileLog.h>
+#include <Interpreters/ZooKeeperLog.h>
 
 #include <Poco/Util/AbstractConfiguration.h>
 #include <common/logger_useful.h>
@@ -75,7 +82,7 @@ std::shared_ptr<TSystemLog> createSystemLog(
         engine += " ORDER BY (event_date, event_time)";
     }
     // Validate engine definition grammatically to prevent some configuration errors
-    ParserStorage storage_parser;
+    ParserStorage storage_parser(ParserSettings::valueOf(context->getSettingsRef().dialect_type));
     parseQuery(storage_parser, engine.data(), engine.data() + engine.size(),
             "Storage to create table for " + config_prefix, 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
 
@@ -92,7 +99,10 @@ SystemLogs::SystemLogs(ContextPtr global_context, const Poco::Util::AbstractConf
 {
     query_log = createSystemLog<QueryLog>(global_context, "system", "query_log", config, "query_log");
     query_thread_log = createSystemLog<QueryThreadLog>(global_context, "system", "query_thread_log", config, "query_thread_log");
+    query_exchange_log = createSystemLog<QueryExchangeLog>(global_context, "system", "query_exchange_log", config, "query_exchange_log");
     part_log = createSystemLog<PartLog>(global_context, "system", "part_log", config, "part_log");
+    part_merge_log = createSystemLog<PartMergeLog>(global_context, "system", "part_merge_log", config, "part_merge_log");
+    server_part_log = createSystemLog<ServerPartLog>(global_context, "system", "server_part_log", config, "server_part_log");
     trace_log = createSystemLog<TraceLog>(global_context, "system", "trace_log", config, "trace_log");
     crash_log = createSystemLog<CrashLog>(global_context, "system", "crash_log", config, "crash_log");
     text_log = createSystemLog<TextLog>(global_context, "system", "text_log", config, "text_log");
@@ -103,13 +113,24 @@ SystemLogs::SystemLogs(ContextPtr global_context, const Poco::Util::AbstractConf
     opentelemetry_span_log = createSystemLog<OpenTelemetrySpanLog>(
         global_context, "system", "opentelemetry_span_log", config,
         "opentelemetry_span_log");
+    mutation_log = createSystemLog<MutationLog>(global_context, "system", "mutation_log", config, "mutation_log");
+    kafka_log = createSystemLog<KafkaLog>(global_context, "system", "kafka_log", config, "kafka_log");
+    processors_profile_log = createSystemLog<ProcessorsProfileLog>(global_context, "system", "processors_profile_log", config, "processors_profile_log");
+    zookeeper_log = createSystemLog<ZooKeeperLog>(global_context, "system", "zookeeper_log", config, "zookeeper_log");
 
     if (query_log)
         logs.emplace_back(query_log.get());
     if (query_thread_log)
         logs.emplace_back(query_thread_log.get());
+    if (query_exchange_log)
+        logs.emplace_back(query_exchange_log.get());
+
     if (part_log)
         logs.emplace_back(part_log.get());
+    if (part_merge_log)
+        logs.emplace_back(part_merge_log.get());
+    if (server_part_log)
+        logs.emplace_back(server_part_log.get());
     if (trace_log)
         logs.emplace_back(trace_log.get());
     if (crash_log)
@@ -122,6 +143,14 @@ SystemLogs::SystemLogs(ContextPtr global_context, const Poco::Util::AbstractConf
         logs.emplace_back(asynchronous_metric_log.get());
     if (opentelemetry_span_log)
         logs.emplace_back(opentelemetry_span_log.get());
+    if (mutation_log)
+        logs.emplace_back(mutation_log.get());
+    if (kafka_log)
+        logs.emplace_back(kafka_log.get());
+    if (processors_profile_log)
+        logs.emplace_back(processors_profile_log.get());
+    if (zookeeper_log)
+        logs.emplace_back(zookeeper_log.get());
 
     try
     {

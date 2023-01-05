@@ -7,7 +7,9 @@
 #include <IO/ReadHelpers.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/WriteHelpers.h>
+#include <IO/Operators.h>
 #include <boost/algorithm/string/predicate.hpp>
+#include <regex>
 
 
 namespace DB
@@ -16,6 +18,7 @@ namespace ErrorCodes
 {
     extern const int SIZE_OF_FIXED_STRING_DOESNT_MATCH;
     extern const int CANNOT_PARSE_BOOL;
+    extern const int BAD_ARGUMENTS;
 }
 
 
@@ -324,6 +327,81 @@ void SettingFieldCustom::readBinary(ReadBuffer & in)
     String str;
     readStringBinary(str, in);
     parseFromString(str);
+}
+
+SettingFieldMultiRegexString & SettingFieldMultiRegexString::operator=(const Field & f)
+{
+    value = parseStringToRegexSet(f.safeGet<const String &>());
+    changed = true;
+    return *this;
+}
+
+String SettingFieldMultiRegexString::toString() const
+{
+    WriteBufferFromOwnString res;
+
+    bool is_first = true;
+    for (const String & column : value)
+    {
+        if (!is_first)
+            res << ", ";
+        is_first = false;
+        res << column;
+    }
+    return res.str();
+}
+
+void SettingFieldMultiRegexString::writeBinary(WriteBuffer & out) const
+{
+    writeVarUInt(value.size(), out);
+    for (String item: value)
+        writeStringBinary(item, out);
+}
+
+void SettingFieldMultiRegexString::readBinary(ReadBuffer & in)
+{
+    size_t cnt;
+    readVarUInt(cnt, in);
+    while(cnt-- > 0)
+    {
+        String item;
+        readStringBinary(item, in);
+        value.emplace(item);
+    }
+}
+
+/// Split string into strings by comma
+std::set<String> SettingFieldMultiRegexString::parseStringToRegexSet(String x)
+{
+    char comma = ',';
+    std::set<String> res;
+    x = x + comma;
+    size_t last_pos = 0, pos = x.find(comma);
+    while (pos != String::npos)
+    {
+        String item = x.substr(last_pos, pos - last_pos);
+        if (!item.empty())
+        {
+            /// trim string
+            item.erase(0, item.find_first_not_of("\r\t\n "));
+            item.erase(item.find_last_not_of("\r\t\n ") + 1);
+            if (!item.empty())
+            {
+                try
+                {
+                    std::regex regex(item);
+                }
+                catch(...)
+                {
+                    throw Exception(ErrorCodes::BAD_ARGUMENTS, "{} is not a valid regular expression.", item);
+                }
+                res.emplace(item);
+            }
+        }
+        last_pos = pos + 1;
+        pos = x.find(comma, last_pos);
+    }
+    return res;
 }
 
 }

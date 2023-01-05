@@ -16,6 +16,7 @@
 #include <Interpreters/ConvertStringsToEnumVisitor.h>
 #include <Interpreters/PredicateExpressionsOptimizer.h>
 #include <Interpreters/RewriteFunctionToSubcolumnVisitor.h>
+#include <Interpreters/RewriteFunctionToLiteralsVisitor.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExternalDictionariesLoader.h>
 
@@ -187,10 +188,22 @@ GroupByKeysInfo getGroupByKeysInfo(const ASTs & group_by_keys)
     /// filling set with short names of keys
     for (const auto & group_key : group_by_keys)
     {
-        if (group_key->as<ASTFunction>())
-            data.has_function = true;
+        /// for grouping sets case
+        if (group_key->as<ASTExpressionList>())
+        {
+            const auto express_list_ast = group_key->as<const ASTExpressionList &>();
+            for (const auto & group_elem : express_list_ast.children)
+            {
+                data.key_names.insert(group_elem->getColumnName());
+            }
+        }
+        else
+        {
+            if (group_key->as<ASTFunction>())
+                data.has_function = true;
 
-        data.key_names.insert(group_key->getColumnName());
+            data.key_names.insert(group_key->getColumnName());
+        }
     }
 
     return data;
@@ -593,8 +606,15 @@ void TreeOptimizer::optimizeIf(ASTPtr & query, Aliases & aliases, bool if_chain_
         OptimizeIfChainsVisitor().visit(query);
 }
 
+void optimizeRewriteFunctionsToLiterals(ASTPtr & query, ContextPtr context)
+{
+    RewriteFunctionToLiteralsVisitor::Data data(context);
+    RewriteFunctionToLiteralsVisitor(data).visit(query);
+}
+
 void TreeOptimizer::apply(ASTPtr & query, TreeRewriterResult & result,
-                          const std::vector<TableWithColumnNamesAndTypes> & tables_with_columns, ContextPtr context)
+                          const std::vector<TableWithColumnNamesAndTypes> & tables_with_columns, ContextPtr context,
+                          bool push_predicate_to_subquery)
 {
     const auto & settings = context->getSettingsRef();
 
@@ -613,7 +633,9 @@ void TreeOptimizer::apply(ASTPtr & query, TreeRewriterResult & result,
         optimizeAggregationFunctions(query);
 
     /// Push the predicate expression down to the subqueries.
-    result.rewrite_subqueries = PredicateExpressionsOptimizer(context, tables_with_columns, settings).optimize(*select_query);
+    /// (optimizer has its own predicate pushdown implementation, so turn this off)
+    if (push_predicate_to_subquery)
+        result.rewrite_subqueries = PredicateExpressionsOptimizer(context, tables_with_columns, settings).optimize(*select_query);
 
     /// GROUP BY injective function elimination.
     optimizeGroupBy(select_query, result.source_columns_set, context);
@@ -679,6 +701,9 @@ void TreeOptimizer::apply(ASTPtr & query, TreeRewriterResult & result,
 
     /// Remove duplicated columns from USING(...).
     optimizeUsing(select_query);
+
+    /// Rewrite simple functions to literal
+    optimizeRewriteFunctionsToLiterals(query, context);
 }
 
 }

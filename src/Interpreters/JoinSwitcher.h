@@ -19,6 +19,8 @@ class JoinSwitcher : public IJoin
 public:
     JoinSwitcher(std::shared_ptr<TableJoin> table_join_, const Block & right_sample_block_);
 
+    JoinType getType() const override { return JoinType::Switcher; }
+
     const TableJoin & getTableJoin() const override { return *table_join; }
 
     /// Add block of data from right hand of JOIN into current join object.
@@ -60,6 +62,9 @@ public:
     {
         return join->createStreamWithNonJoinedRows(block, max_block_size);
     }
+
+    void serialize(WriteBuffer & buf) const override;
+    static JoinPtr deserialize(ReadBuffer & buf, ContextPtr context);
 
 private:
     JoinPtr join;

@@ -2,6 +2,7 @@
 
 #include <Interpreters/IInterpreter.h>
 #include <Parsers/IAST_fwd.h>
+#include <Parsers/ASTSystemQuery.h>
 #include <Storages/IStorage_fwd.h>
 #include <Interpreters/StorageID.h>
 #include <Common/ActionLock.h>
@@ -15,7 +16,6 @@ namespace DB
 
 class Context;
 class AccessRightsElements;
-class ASTSystemQuery;
 
 
 /** Implement various SYSTEM queries.
@@ -59,8 +59,34 @@ private:
 
     AccessRightsElements getRequiredAccessForDDLOnCluster() const;
     void startStopAction(StorageActionBlockType action_type, bool start);
+    void startOrStopConsume(ASTSystemQuery::Type type);
+
+    void executeMetastoreCmd(ASTSystemQuery & query) const;
+
+    void executeDedup(const ASTSystemQuery & query);
+
+    void dumpCnchServerManagerStatus();
+
+    void dropCnchPartCache(ASTSystemQuery & query);
+
+    void dropChecksumsCache(const StorageID & table_id) const;
+
+    BlockIO executeCnchCommand(ASTSystemQuery & query, ContextMutablePtr & system_context);
+    BlockIO executeLocalCommand(ASTSystemQuery & query, ContextMutablePtr & system_context);
+
+    void executeBGTaskInCnchServer(ContextMutablePtr & system_context, ASTSystemQuery::Type type) const;
+
+    void executeSyncDedupWorker(ContextMutablePtr & system_context) const;
+
+    // clear Broken Table infos
+    void clearBrokenTables(ContextMutablePtr & system_context) const;
 
     void extendQueryLogElemImpl(QueryLogElement &, const ASTPtr &, ContextPtr) const override;
+
+    /// fetch part from remote storage and attach to target table.
+    void fetchParts(const ASTSystemQuery & query, const StorageID & table_id, ContextPtr local_context);
+
+    void executeActionOnCNCHLog(const String & table, ASTSystemQuery::Type type);
 };
 
 

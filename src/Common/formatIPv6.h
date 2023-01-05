@@ -16,6 +16,11 @@ constexpr size_t IPV6_MAX_TEXT_LENGTH = 39;
 namespace DB
 {
 
+namespace ErrorCodes
+{
+    extern const int BAD_ARGUMENTS;
+}
+
 
 /** Rewritten inet_ntop6 from http://svn.apache.org/repos/asf/apr/apr/trunk/network_io/unix/inet_pton.c
   *  performs significantly faster than the reference implementation due to the absence of sprintf calls,
@@ -224,4 +229,9 @@ inline void formatIPv4(const unsigned char * src, char *& dst, uint8_t mask_tail
     dst[-1] = '\0';
 }
 
+/**
+ *  normalize ipv6 and ipv4 address
+ */
+std::string normalizeHost(const std::string & host);
+std::tuple<std::string, bool> safeNormalizeHost(const std::string &host);
 }

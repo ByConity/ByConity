@@ -79,7 +79,7 @@ ColumnsDescription getStructureOfRemoteTableInShard(
 
     const DataTypeFactory & data_type_factory = DataTypeFactory::instance();
 
-    ParserExpression expr_parser;
+    ParserExpression expr_parser(ParserSettings::valueOf(context->getSettingsRef().dialect_type));
 
     while (Block current = input->read())
     {

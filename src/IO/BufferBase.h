@@ -48,6 +48,11 @@ public:
             std::swap(end_pos, other.end_pos);
         }
 
+        inline void reset(){
+            begin_pos = nullptr;
+            end_pos = nullptr;
+        }
+
     private:
         Position begin_pos;
         Position end_pos;        /// 1 byte after the end of the buffer
@@ -65,6 +70,15 @@ public:
         working_buffer = Buffer(ptr, ptr + size);
         pos = ptr + offset;
     }
+
+    void reset()
+    {
+        internal_buffer.reset();
+        working_buffer.reset();
+        pos = nullptr;
+    }
+
+    virtual void freeResource() { reset(); } 
 
     /// get buffer
     inline Buffer & internalBuffer() { return internal_buffer; }
@@ -94,9 +108,33 @@ public:
     /** Check that there is more bytes in buffer after cursor. */
     bool ALWAYS_INLINE hasPendingData() const { return available() > 0; }
 
+    //@Map
+    virtual void deepCopyTo(BufferBase& target) const
+    {
+        std::memcpy(target.working_buffer.begin(), working_buffer.begin(), offset());
+        // relocate the pos in target buffer
+        target.position() = target.working_buffer.begin() + offset();
+
+        target.bytes = bytes;
+    }
+
+    virtual ~BufferBase()
+    {
+        // dummy function
+    }
+
     bool isPadded() const { return padded; }
 
 protected:
+    void resetWorkingBuffer()
+    {
+        /// Move position to the end of buffer to trigger call of 'next' on next reading.
+        /// Discard all data in current working buffer to prevent wrong assumptions on content
+        /// of buffer, e.g. for optimizations of seeks in seekable buffers.
+        working_buffer.resize(0);
+        pos = working_buffer.end();
+    }
+
     /// Read/write position.
     Position pos;
 

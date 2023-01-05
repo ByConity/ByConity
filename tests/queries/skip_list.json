@@ -102,6 +102,64 @@
         "01755_client_highlight_multi_line_comment_regression"
     ],
     "release-build": [
+       "01801_s3_cluster",
+        "01269_toStartOfSecond",
+        "01103_check_cpu_instructions_at_startup",
+        "01086_odbc_roundtrip",
+        "00515_enhanced_time_zones",
+        "00142_parse_timestamp_as_datetime",
+        "01193_metadata_loading",
+        "02021_test_perfect_shard",
+        "02021_test_perfect_shard_in",
+        "02032_function_version_compare",
+        "00743_aggregation_finder_funnel_group",
+
+        /// Memory
+        "00634_performance_introspection_and_logging",
+        "01598_memory_limit_zeros",
+        "01548_parallel_parsing_max_memory",
+
+        /// Map
+        "00900_orc_arrow_parquet_maps",
+        "00900_long_parquet_load",
+        "01318_map_add_map_subtract_on_map_type",
+        "01323_add_scalars_in_time",
+        "01455_opentelemetry_distributed",
+        "01475_read_subcolumns",
+        "01475_read_subcolumns_storages",
+        "01475_read_subcolumns_3",
+        "01550_create_map_type",
+        "01550_type_map_formats",
+        "01592_length_map",
+        "01651_map_functions",
+        "01715_tuple_insert_null_as_default",
+        "01720_type_map_and_casts",
+        "01744_tuple_cast_to_map_bugfix",
+        "01803_const_nullable_map",
+        "01939_type_map_json",
+        "02029_aggregate_function_session_split",
+
+        /// Bitmap
+        "01829_test_aggregation_bitmapMaxLevel",
+        "01829_test_aggregation_bitmapExpressionComputation_two_shards",
+        "01829_test_aggregation_bitmapExpressionComputation",
+        "01829_test_aggregation_bitmapColumnDiff",
+        "00829_bitmap64_function",
+
+        //StressTest skiplist
+        "08000_scalar_query_distributed_stages",
+        "10060_zookeeper_test_uniquekey_unique_merge",
+        "10061_zookeeper_test_uniquekey_alter_engine_table_level",
+        "10065_zookeeper_test_uniquekey_vertical_merge",
+        "10044_zookeeper_test_uniquekey_unique_merge_tree_optimize",
+        "10062_any_left_noteq_nestloop_join",
+        "10062_any_left_nestloop_join",
+        "00145_aggregate_functions_statistics",
+        "01594_too_low_memory_limits",
+        "10033_zookeeper_test_uniquekey_partition_level_unique",
+        "08000_test_multi_join_distributed_stages",
+        "08000_test_in_distributed_stages",
+        "08000_test_join_distributed_stages"
     ],
     "database-ordinary": [
         "00604_show_create_database",
@@ -134,6 +192,7 @@
         "01532_execute_merges_on_single_replica",
         "00652_replicated_mutations_default_database_zookeeper",
         "00620_optimize_on_nonleader_replica_zookeeper",
+        "01158_zookeeper_log",
         /// grep -c
         "01018_ddl_dictionaries_bad_queries",
         "00908_bloom_filter_index",
@@ -182,7 +241,8 @@
     ],
     "polymorphic-parts": [
         "01508_partition_pruning_long", /// bug, shoud be fixed
-        "01482_move_to_prewhere_and_cast" /// bug, shoud be fixed
+        "01482_move_to_prewhere_and_cast", /// bug, shoud be fixed
+        "01158_zookeeper_log"
     ],
     "parallel":
     [

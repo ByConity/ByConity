@@ -248,12 +248,18 @@ public:
         return *processor;
     }
 
+    size_t getRows() const { return rows; }
+    size_t getBytes() const { return bytes; }
+
 protected:
     void inline ALWAYS_INLINE updateVersion()
     {
         if (likely(update_info))
             update_info->update();
     }
+
+    size_t rows = 0;
+    size_t bytes = 0;
 };
 
 /// Invariants:
@@ -285,7 +291,7 @@ public:
 
         is_finished = flags & State::IS_FINISHED;
 
-        if (unlikely(!data->exception && data->chunk.getNumColumns() != header.columns()))
+        if (unlikely(!data->exception && header && data->chunk.getNumColumns() != header.columns()))
         {
             auto & chunk = data->chunk;
 
@@ -297,6 +303,9 @@ public:
 
             throw Exception(msg, ErrorCodes::LOGICAL_ERROR);
         }
+
+        rows += data->chunk.getNumRows();
+        bytes += data->chunk.bytes();
 
         return std::move(*data);
     }
@@ -401,7 +410,10 @@ public:
 
     void ALWAYS_INLINE pushData(Data data_)
     {
-        if (unlikely(!data_.exception && data_.chunk.getNumColumns() != header.columns()))
+        rows += data_.chunk.getNumRows();
+        bytes += data_.chunk.bytes();
+
+        if (unlikely(!data_.exception && header.columns() && data_.chunk.getNumColumns() != header.columns()))
         {
             String msg = "Invalid number of columns in chunk pushed to OutputPort. Expected "
                          + std::to_string(header.columns())

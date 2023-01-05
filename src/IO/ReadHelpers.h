@@ -38,7 +38,8 @@
 
 /// 1 GiB
 #define DEFAULT_MAX_STRING_SIZE (1ULL << 30)
-
+// SQL standard for Timezone offset is of the format [+/-]hh:mm
+#define TIME_ZONE_STRING_INPUT_SIZE 6
 
 namespace DB
 {
@@ -98,6 +99,10 @@ inline void readChar(char & x, ReadBuffer & buf)
         throwReadAfterEOF();
 }
 
+inline bool isQuoted(char x)
+{
+    return x == '\'' || x == '\"';
+}
 
 /// Read POD-type in native format
 template <typename T>
@@ -130,7 +135,6 @@ inline void readStringBinary(std::string & s, ReadBuffer & buf, size_t MAX_STRIN
     buf.readStrict(s.data(), size);
 }
 
-
 inline StringRef readStringBinaryInto(Arena & arena, ReadBuffer & buf)
 {
     size_t size = 0;
@@ -141,6 +145,13 @@ inline StringRef readStringBinaryInto(Arena & arena, ReadBuffer & buf)
 
     return StringRef(data, size);
 }
+
+inline void readStringRefBinary(StringRef & s, ReadBuffer & buf, Arena & arena)
+{
+    s = readStringBinaryInto(arena, buf);
+}
+
+void readStringRefsBinary(StringRefs & v, ReadBuffer & buf, Arena& arena, size_t MAX_VECTOR_SIZE = DEFAULT_MAX_STRING_SIZE);
 
 
 template <typename T>
@@ -454,10 +465,12 @@ void readIntTextUnsafe(T & x, ReadBuffer & buf)
         ///  if (c < 10)
         /// for unknown reason on Xeon E5645.
 
-        if ((*buf.position() & 0xF0) == 0x30) /// It makes sense to have this condition inside loop.
+        // Note: the following logic is not correct while handle character between 0x3A - 0x3F
+        auto c = *buf.position();
+        if ((c & 0xF0) == 0x30 && c < 0x3A) /// It makes sense to have this condition inside loop.
         {
             res *= 10;
-            res += *buf.position() & 0x0F;
+            res += c & 0x0F;
             ++buf.position();
         }
         else
@@ -482,6 +495,8 @@ template <typename T> bool tryReadFloatText(T & x, ReadBuffer & in);
 
 /// simple: all until '\n' or '\t'
 void readString(String & s, ReadBuffer & buf);
+
+void readWord(String & s, ReadBuffer & buf);
 
 void readEscapedString(String & s, ReadBuffer & buf);
 
@@ -590,35 +605,29 @@ inline ReturnType readDateTextImpl(LocalDate & date, ReadBuffer & buf)
         /// YYYY-MM-D
         /// YYYY-M-DD
         /// YYYY-M-D
+        /// YYYYMMDD
 
         /// The delimiters can be arbitrary characters, like YYYY/MM!DD, but obviously not digits.
 
         UInt16 year = (pos[0] - '0') * 1000 + (pos[1] - '0') * 100 + (pos[2] - '0') * 10 + (pos[3] - '0');
-        pos += 5;
+        pos += 4;
 
-        if (isNumericASCII(pos[-1]))
-            return ReturnType(false);
-
-        UInt8 month = pos[0] - '0';
-        if (isNumericASCII(pos[1]))
+        auto next = [&]()
         {
-            month = month * 10 + pos[1] - '0';
-            pos += 3;
-        }
-        else
-            pos += 2;
+            /// skip separator if necessary
+            if (!isNumericASCII(*pos))
+                ++pos;
 
-        if (isNumericASCII(pos[-1]))
-            return ReturnType(false);
+            UInt8 res = *(pos++) - '0';
 
-        UInt8 day = pos[0] - '0';
-        if (isNumericASCII(pos[1]))
-        {
-            day = day * 10 + pos[1] - '0';
-            pos += 2;
-        }
-        else
-            pos += 1;
+            if (isNumericASCII(*pos))
+                res = res * 10 + (*(pos++) - '0');
+
+            return res;
+        };
+
+        UInt8 month = next();
+        UInt8 day = next();
 
         buf.position() = pos;
         date = LocalDate(year, month, day);
@@ -626,6 +635,16 @@ inline ReturnType readDateTextImpl(LocalDate & date, ReadBuffer & buf)
     }
     else
         return readDateTextFallback<ReturnType>(date, buf);
+}
+
+inline void convertToDayNum(DayNum & date, ExtendedDayNum & from)
+{
+    if (unlikely(from < 0))
+        date = 0;
+    else if (unlikely(from > 0xFFFF))
+        date = 0xFFFF;
+    else
+        date = from;
 }
 
 template <typename ReturnType = void>
@@ -640,7 +659,24 @@ inline ReturnType readDateTextImpl(DayNum & date, ReadBuffer & buf)
     else if (!readDateTextImpl<ReturnType>(local_date, buf))
         return false;
 
-    date = DateLUT::instance().makeDayNum(local_date.year(), local_date.month(), local_date.day());
+    ExtendedDayNum ret = DateLUT::instance().makeDayNum(local_date.year(), local_date.month(), local_date.day());
+    convertToDayNum(date,ret);
+    return ReturnType(true);
+}
+
+template <typename ReturnType = void>
+inline ReturnType readDateTextImpl(ExtendedDayNum & date, ReadBuffer & buf)
+{
+    static constexpr bool throw_exception = std::is_same_v<ReturnType, void>;
+
+    LocalDate local_date;
+
+    if constexpr (throw_exception)
+        readDateTextImpl<ReturnType>(local_date, buf);
+    else if (!readDateTextImpl<ReturnType>(local_date, buf))
+        return false;
+    /// When the parameter is out of rule or out of range, Date32 uses 1925-01-01 as the default value (-DateLUT::instance().getDayNumOffsetEpoch(), -16436) and Date uses 1970-01-01.
+    date = DateLUT::instance().makeDayNum(local_date.year(), local_date.month(), local_date.day(), -static_cast<Int32>(DateLUT::instance().getDayNumOffsetEpoch()));
     return ReturnType(true);
 }
 
@@ -655,12 +691,22 @@ inline void readDateText(DayNum & date, ReadBuffer & buf)
     readDateTextImpl<void>(date, buf);
 }
 
+inline void readDateText(ExtendedDayNum & date, ReadBuffer & buf)
+{
+    readDateTextImpl<void>(date, buf);
+}
+
 inline bool tryReadDateText(LocalDate & date, ReadBuffer & buf)
 {
     return readDateTextImpl<bool>(date, buf);
 }
 
 inline bool tryReadDateText(DayNum & date, ReadBuffer & buf)
+{
+    return readDateTextImpl<bool>(date, buf);
+}
+
+inline bool tryReadDateText(ExtendedDayNum & date, ReadBuffer & buf)
 {
     return readDateTextImpl<bool>(date, buf);
 }
@@ -735,6 +781,73 @@ inline T parseFromString(const std::string_view & str)
     return parse<T>(str.data(), str.size());
 }
 
+UInt128 stringToUUID(const String & str);
+
+static inline bool hasTzSign(const char *c)
+{
+    return *c == '+' || *c  == '-';
+}
+
+inline bool parseFractionalSeconds(Int64 &fraction, UInt32 scale, ReadBuffer & buf)
+{
+    if (buf.eof() || *buf.position() != '.') {
+        return false;
+    }
+    ++buf.position();
+
+    /// Read digits, up to 'scale' positions.
+    for (size_t i = 0; i < scale; ++i)
+    {
+        if (!buf.eof() && isNumericASCII(*buf.position()))
+        {
+            fraction *= 10;
+            fraction += *buf.position() - '0';
+            ++buf.position();
+        }
+        else
+        {
+            /// Adjust to scale.
+            fraction *= 10;
+        }
+    }
+
+    /// Ignore digits that are out of precision.
+    while (!buf.eof() && isNumericASCII(*buf.position()))
+        ++buf.position();
+    return true;
+}
+
+inline bool parseTimezoneOffset(Int32 &t, ReadBuffer & buf, UInt8 i = 0) {
+    const char * s = buf.position() + i;
+    if (buf.buffer().end() < s + TIME_ZONE_STRING_INPUT_SIZE) {
+        return false;
+    }
+    if (!hasTzSign(s) || s[3] != ':') {
+        return false;
+    }
+
+    bool is_negative = s[0] == '+';
+
+    UInt8 hour = (s[1] - '0') * 10 + (s[2] - '0');
+    UInt8 minute = (s[4] - '0') * 10 + (s[5] - '0');
+    if (unlikely(hour < 0 || hour > 14 || minute < 0 || minute > 60)) {
+        return false;
+    }
+    t = hour * 3600 + minute * 60;
+    if (is_negative) t= -t;
+    return true;
+}
+
+inline bool ignoreTimezoneOffset(ReadBuffer & buf) {
+    if (!buf.eof() && hasTzSign(buf.position())) {
+        Int32 t;
+        if (!parseTimezoneOffset(t, buf)) {
+            return false;
+        }
+        buf.position() += TIME_ZONE_STRING_INPUT_SIZE;
+    }
+    return true;
+}
 
 template <typename ReturnType = void>
 ReturnType readDateTimeTextFallback(time_t & datetime, ReadBuffer & buf, const DateLUTImpl & date_lut);
@@ -743,7 +856,7 @@ ReturnType readDateTimeTextFallback(time_t & datetime, ReadBuffer & buf, const D
   * As an exception, also supported parsing of unix timestamp in form of decimal number.
   */
 template <typename ReturnType = void>
-inline ReturnType readDateTimeTextImpl(time_t & datetime, ReadBuffer & buf, const DateLUTImpl & date_lut)
+inline ReturnType readDateTimeTzTextImpl(time_t & datetime, ReadBuffer & buf, const DateLUTImpl & date_lut)
 {
     /// Optimistic path, when whole value is in buffer.
     const char * s = buf.position();
@@ -751,6 +864,7 @@ inline ReturnType readDateTimeTextImpl(time_t & datetime, ReadBuffer & buf, cons
     /// YYYY-MM-DD hh:mm:ss
     static constexpr auto DateTimeStringInputSize = 19;
     bool optimistic_path_for_date_time_input = s + DateTimeStringInputSize <= buf.buffer().end();
+    static constexpr bool throw_exception = std::is_same_v<ReturnType, void>;
 
     if (optimistic_path_for_date_time_input)
     {
@@ -763,13 +877,29 @@ inline ReturnType readDateTimeTextImpl(time_t & datetime, ReadBuffer & buf, cons
             UInt8 hour = (s[11] - '0') * 10 + (s[12] - '0');
             UInt8 minute = (s[14] - '0') * 10 + (s[15] - '0');
             UInt8 second = (s[17] - '0') * 10 + (s[18] - '0');
-
-            if (unlikely(year == 0))
-                datetime = 0;
-            else
-                datetime = date_lut.makeDateTime(year, month, day, hour, minute, second);
-
             buf.position() += DateTimeStringInputSize;
+            if (unlikely(year == 0)) {
+                datetime = 0;
+                return ReturnType(true);
+            }
+            s = buf.position();
+            if (s < buf.buffer().end() && *s == '.') {
+                while(++s < buf.buffer().end() && isNumericASCII(*s));
+            }
+            if (s < buf.buffer().end() && hasTzSign(s)) {
+                Int32 timezone_offset;
+                if (!parseTimezoneOffset(timezone_offset, buf, s - buf.position())) {
+                    if constexpr (throw_exception) {
+                        throw Exception("Cannot parse datetime: timezone offset value",
+                            ErrorCodes::CANNOT_PARSE_DATETIME);
+                    }
+                    return ReturnType(false);
+                }
+                const DateLUTImpl & utc_lut = DateLUT::instance("UTC");
+                datetime = utc_lut.makeDateTime(year, month, day, hour, minute, second) + timezone_offset;
+            } else {
+                datetime = date_lut.makeDateTime(year, month, day, hour, minute, second);
+            }
             return ReturnType(true);
         }
         else
@@ -780,57 +910,123 @@ inline ReturnType readDateTimeTextImpl(time_t & datetime, ReadBuffer & buf, cons
         return readDateTimeTextFallback<ReturnType>(datetime, buf, date_lut);
 }
 
+/** In YYYY-MM-DD hh:mm:ss or YYYY-MM-DD format, according to specified time zone.
+  * As an exception, also supported parsing of unix timestamp in form of decimal number.
+  * For row level timezone, we only support YYYY-MM-DD hh:mm:ss(+/-)hh:mm format
+  * if it has been parsed by path other than the above format and has timezone offset (+/-)hh:mm,
+  * it may have incorect result.
+  */
+
+template <typename ReturnType = void>
+inline ReturnType readDateTimeTextImpl(time_t & datetime, ReadBuffer & buf, const DateLUTImpl & date_lut)
+{
+    if constexpr (std::is_same_v<ReturnType, void>)
+        readDateTimeTzTextImpl<void>(datetime, buf, date_lut);
+    else if (!readDateTimeTzTextImpl<bool>(datetime, buf, date_lut))
+        return false;
+
+    if (!ignoreTimezoneOffset(buf)) {
+        return ReturnType(false);
+    }
+
+    return ReturnType(true);
+}
+
+/** For row level timezone, we only support YYYY-MM-DD hh:mm:ss[.mmmmmmmm](+/-)hh:mm format
+  * if it has been parsed by path other than the above format and has timezone offset (+/-)hh:mm,
+  * it may have incorect result.
+  */
 template <typename ReturnType>
 inline ReturnType readDateTimeTextImpl(DateTime64 & datetime64, UInt32 scale, ReadBuffer & buf, const DateLUTImpl & date_lut)
 {
     time_t whole;
-    if (!readDateTimeTextImpl<bool>(whole, buf, date_lut))
+    if (!readDateTimeTzTextImpl<bool>(whole, buf, date_lut))
     {
         return ReturnType(false);
     }
 
+    int negative_multiplier = 1;
+
     DB::DecimalUtils::DecimalComponents<DateTime64> components{static_cast<DateTime64::NativeType>(whole), 0};
 
-    if (!buf.eof() && *buf.position() == '.')
+    if (parseFractionalSeconds(components.fractional, scale, buf))
     {
-        ++buf.position();
-
-        /// Read digits, up to 'scale' positions.
-        for (size_t i = 0; i < scale; ++i)
+        /// Fractional part (subseconds) is treated as positive by users
+        /// (as DateTime64 itself is a positive, although underlying decimal is negative)
+        /// setting fractional part to be negative when whole is 0 results in wrong value,
+        /// so we multiply result by -1.
+        if (components.whole < 0 && components.fractional != 0)
         {
-            if (!buf.eof() && isNumericASCII(*buf.position()))
+            const auto scale_multiplier = DecimalUtils::scaleMultiplier<DateTime64::NativeType>(scale);
+            ++components.whole;
+            components.fractional = scale_multiplier - components.fractional;
+            if (!components.whole)
             {
-                components.fractional *= 10;
-                components.fractional += *buf.position() - '0';
-                ++buf.position();
-            }
-            else
-            {
-                /// Adjust to scale.
-                components.fractional *= 10;
+                negative_multiplier = -1;
             }
         }
-
-        /// Ignore digits that are out of precision.
-        while (!buf.eof() && isNumericASCII(*buf.position()))
-            ++buf.position();
     }
     /// 9908870400 is time_t value for 2184-01-01 UTC (a bit over the last year supported by DateTime64)
     else if (whole >= 9908870400LL)
     {
         /// Unix timestamp with subsecond precision, already scaled to integer.
         /// For disambiguation we support only time since 2001-09-09 01:46:40 UTC and less than 30 000 years in future.
-
-        for (size_t i = 0; i < scale; ++i)
-        {
-            components.fractional *= 10;
-            components.fractional += components.whole % 10;
-            components.whole /= 10;
-        }
+        components.fractional =  components.whole % common::exp10_i32(scale);
+        components.whole = components.whole / common::exp10_i32(scale);
     }
 
-    datetime64 = DecimalUtils::decimalFromComponents<DateTime64>(components, scale);
+    // If it has NOT been parsed by any other path, it will have incorrect result.
+    if (!ignoreTimezoneOffset(buf)) {
+        return ReturnType(false);
+    }
 
+    if constexpr (std::is_same_v<ReturnType, void>)
+        datetime64 = DecimalUtils::decimalFromComponents<DateTime64>(components, scale);
+    else
+        DecimalUtils::tryGetDecimalFromComponents<DateTime64>(components, scale, datetime64);
+
+    datetime64 *= negative_multiplier;
+
+    return ReturnType(true);
+}
+
+// Parse format HH:MM:SS.NNNNNNNNN (SQL Standard)
+inline bool readTimeTextImpl(time_t & t, ReadBuffer & buf)
+{
+    static constexpr auto TimeStringInputSize = 8;
+    const char * s = buf.position();
+    if (buf.buffer().end() < s + TimeStringInputSize) {
+        return false;
+    }
+    if (s[2] != ':' && s[5] != ':') {
+        return false;
+    }
+
+    UInt8 hour = (s[0] - '0') * 10 + (s[1] - '0');
+    UInt8 minute = (s[3] - '0') * 10 + (s[4] - '0');
+    UInt8 sec = (s[6] - '0') * 10 + (s[7] - '0');
+
+    if (unlikely(hour >= 24 || minute > 60 || sec > 60)) {
+        return false;
+    }
+
+    t = (hour * 3600 + minute * 60 + sec);
+    buf.position() += TimeStringInputSize;
+    return true;
+}
+
+template <typename ReturnType>
+inline ReturnType readTimeTextImpl(Decimal64 & time, UInt32 scale, ReadBuffer & buf)
+{
+    time_t whole;
+
+    if (!readTimeTextImpl(whole, buf)) {
+        return ReturnType(false);
+    }
+
+    DB::DecimalUtils::DecimalComponents<Decimal64> components{static_cast<Decimal64::NativeType>(whole), 0};
+    parseFractionalSeconds(components.fractional, scale, buf);
+    time = DecimalUtils::decimalFromComponents<Decimal64>(components, scale);
     return ReturnType(true);
 }
 
@@ -842,6 +1038,16 @@ inline void readDateTimeText(time_t & datetime, ReadBuffer & buf, const DateLUTI
 inline void readDateTime64Text(DateTime64 & datetime64, UInt32 scale, ReadBuffer & buf, const DateLUTImpl & date_lut = DateLUT::instance())
 {
     readDateTimeTextImpl<void>(datetime64, scale, buf, date_lut);
+}
+
+inline void readTimeText(Decimal64 & time, UInt32 scale, ReadBuffer & buf)
+{
+    readTimeTextImpl<void>(time, scale, buf);
+}
+
+inline bool tryReadTimeText(Decimal64 & time, UInt32 scale, ReadBuffer & buf)
+{
+    return readTimeTextImpl<bool>(time, scale, buf);
 }
 
 inline bool tryReadDateTimeText(time_t & datetime, ReadBuffer & buf, const DateLUTImpl & time_zone = DateLUT::instance())
@@ -889,6 +1095,17 @@ inline void readBinary(Decimal64 & x, ReadBuffer & buf) { readPODBinary(x, buf);
 inline void readBinary(Decimal128 & x, ReadBuffer & buf) { readPODBinary(x, buf); }
 inline void readBinary(Decimal256 & x, ReadBuffer & buf) { readPODBinary(x.value, buf); }
 inline void readBinary(LocalDate & x, ReadBuffer & buf) { readPODBinary(x, buf); }
+inline void readBinary(StringRef & x, ReadBuffer & buf, Arena & arena) { readStringRefBinary(x, buf, arena); }
+inline void readBinary(PairInt64 & x, ReadBuffer & buf)
+{
+    readBinary(x.low, buf);
+    readBinary(x.high, buf);
+}
+inline void readBinary(std::pair<String, String> & x, ReadBuffer & buf)
+{
+    readBinary(x.first, buf);
+    readBinary(x.second, buf);
+}
 
 
 template <typename T>
@@ -1090,6 +1307,13 @@ inline void skipWhitespaceIfAny(ReadBuffer & buf, bool one_line = false)
     else
         while (!buf.eof() && isWhitespaceASCIIOneLine(*buf.position()))
             ++buf.position();
+}
+
+/// Skip non-numeric characters.
+inline void skipNonNumericIfAny(ReadBuffer & buf)
+{
+    while (!buf.eof() &&  ! (isNumericASCII(*buf.position())))
+        ++buf.position();
 }
 
 /// Skips json value.

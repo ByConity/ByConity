@@ -98,6 +98,7 @@ public:
     NamesAndTypesList getAll() const; /// ordinary + materialized + aliases
     NamesAndTypesList getAllWithSubcolumns() const;
     NamesAndTypesList getAllPhysicalWithSubcolumns() const;
+    NamesAndTypesList getSubcolumnsOfAllPhysical() const;
 
     using ColumnTTLs = std::unordered_map<String, ASTPtr>;
     ColumnTTLs getColumnTTLs() const;
@@ -135,6 +136,7 @@ public:
 
     std::optional<NameAndTypePair> tryGetPhysical(const String & column_name) const;
     std::optional<NameAndTypePair> tryGetColumnOrSubcolumn(GetFlags flags, const String & column_name) const;
+    std::optional<NameAndTypePair> tryGetMapImplicitColumn(const String & column_name) const;
 
     ColumnDefaults getDefaults() const; /// TODO: remove
     bool hasDefault(const String & column_name) const;

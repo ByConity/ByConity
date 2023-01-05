@@ -47,7 +47,7 @@ ASTPtr ASTDeclarePartitionOptions::clone() const
 static inline bool parsePartitionExpression(IParser::Pos & pos, std::string & type, ASTPtr & node, Expected & expected, bool subpartition = false)
 {
     ASTPtr expression;
-    ParserExpression p_expression;
+    ParserExpression p_expression(ParserSettings::CLICKHOUSE);
     if (!subpartition && ParserKeyword("LIST").ignore(pos, expected))
     {
         type = "list";
@@ -77,7 +77,7 @@ static inline bool parsePartitionExpression(IParser::Pos & pos, std::string & ty
                     return false;
 
                 ASTPtr algorithm;
-                ParserLiteral p_literal;
+                ParserLiteral p_literal(ParserSettings::CLICKHOUSE);
                 if (!p_literal.parse(pos, algorithm, expected) || !algorithm->as<ASTLiteral>())
                     return false;
 
@@ -124,7 +124,7 @@ bool ParserDeclarePartitionOptions::parseImpl(Pos & pos, ASTPtr & node, Expected
 
     if (ParserKeyword("PARTITIONS").ignore(pos, expected))
     {
-        ParserLiteral p_literal;
+        ParserLiteral p_literal(ParserSettings::CLICKHOUSE);
         if (!p_literal.parse(pos, partition_numbers, expected))
             return false;
     }
@@ -136,7 +136,7 @@ bool ParserDeclarePartitionOptions::parseImpl(Pos & pos, ASTPtr & node, Expected
 
         if (ParserKeyword("SUBPARTITIONS").ignore(pos, expected))
         {
-            ParserLiteral p_literal;
+            ParserLiteral p_literal(ParserSettings::CLICKHOUSE);
             if (!p_literal.parse(pos, subpartition_numbers, expected))
                 return false;
         }

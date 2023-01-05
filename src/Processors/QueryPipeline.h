@@ -30,6 +30,8 @@ struct ExpressionActionsSettings;
 class IJoin;
 using JoinPtr = std::shared_ptr<IJoin>;
 
+using RuntimeFilterId = UInt64;
+
 class QueryPipeline
 {
 public:
@@ -59,7 +61,7 @@ public:
 
     using Transformer = std::function<Processors(OutputPortRawPtrs ports)>;
     /// Transform pipeline in general way.
-    void transform(const Transformer & transformer);
+    void transform(const Transformer & transforme, size_t sink_num = 0);
 
     /// Add TotalsHavingTransform. Resize pipeline to single input. Adds totals port.
     void addTotalsHavingTransform(ProcessorPtr transform);
@@ -121,6 +123,7 @@ public:
     void addTableLock(TableLockHolder lock) { pipe.addTableLock(std::move(lock)); }
     void addInterpreterContext(std::shared_ptr<const Context> context) { pipe.addInterpreterContext(std::move(context)); }
     void addStorageHolder(StoragePtr storage) { pipe.addStorageHolder(std::move(storage)); }
+    void addRuntimeFilterHolder(RuntimeFilterHolder rf_holder) { pipe.addRuntimeFilterHolder(std::move(rf_holder)); }
     void addQueryPlan(std::unique_ptr<QueryPlan> plan) { pipe.addQueryPlan(std::move(plan)); }
     void setLimits(const StreamLocalLimits & limits) { pipe.setLimits(limits); }
     void setLeafLimits(const SizeLimits & limits) { pipe.setLeafLimits(limits); }
@@ -138,11 +141,14 @@ public:
         if (max_threads) //-V1051
             num_threads = std::min(num_threads, max_threads);
 
-        return std::max<size_t>(1, num_threads);
+        return std::max<size_t>(min_threads + 1, num_threads);
     }
 
     /// Set upper limit for the recommend number of threads
     void setMaxThreads(size_t max_threads_) { max_threads = max_threads_; }
+
+    /// Set lower limit for the number of threads
+    void setMinThreads(size_t min_threads_) { min_threads = min_threads_; }
 
     /// Update upper limit for the recommend number of threads
     void limitMaxThreads(size_t max_threads_)
@@ -150,6 +156,8 @@ public:
         if (max_threads == 0 || max_threads_ < max_threads)
             max_threads = max_threads_;
     }
+
+    const Processors & getProcessors() const { return pipe.getProcessors(); }
 
     /// Convert query pipeline to pipe.
     static Pipe getPipe(QueryPipeline pipeline) { return std::move(pipeline.pipe); }
@@ -162,6 +170,9 @@ private:
     /// Limit on the number of threads. Zero means no limit.
     /// Sometimes, more streams are created then the number of threads for more optimal execution.
     size_t max_threads = 0;
+
+    /// Limit on the minimum number of threads.
+    size_t min_threads = 0;
 
     QueryStatus * process_list_element = nullptr;
 

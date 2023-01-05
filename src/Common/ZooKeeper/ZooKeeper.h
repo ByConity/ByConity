@@ -12,6 +12,7 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/ZooKeeper/IKeeper.h>
 #include <Common/ZooKeeper/ZooKeeperConstants.h>
+#include <ServiceDiscovery/IServiceDiscovery.h>
 #include <unistd.h>
 
 
@@ -25,6 +26,10 @@ namespace CurrentMetrics
     extern const Metric EphemeralNode;
 }
 
+namespace DB
+{
+    class ZooKeeperLog;
+}
 
 namespace zkutil
 {
@@ -82,17 +87,19 @@ public:
             <identity>user:password</identity>
         </zookeeper>
     */
-    ZooKeeper(const Poco::Util::AbstractConfiguration & config, const std::string & config_name);
+    ZooKeeper(const Poco::Util::AbstractConfiguration & config, const std::string & config_name, std::shared_ptr<DB::ZooKeeperLog> zk_log_, const DB::ServiceEndpoints & endpoints);
 
     /// Creates a new session with the same parameters. This method can be used for reconnecting
     /// after the session has expired.
     /// This object remains unchanged, and the new session is returned.
     Ptr startNewSession() const;
 
-    bool configChanged(const Poco::Util::AbstractConfiguration & config, const std::string & config_name) const;
+    bool configChanged(const Poco::Util::AbstractConfiguration & config, const std::string & config_name, const DB::ServiceEndpoints & endpoints) const;
 
     /// Returns true, if the session has expired.
     bool expired();
+
+    DB::KeeperApiVersion getApiVersion();
 
     /// Create a znode.
     /// Throw an exception if something went wrong.
@@ -151,21 +158,25 @@ public:
 
     Strings getChildren(const std::string & path,
                         Coordination::Stat * stat = nullptr,
-                        const EventPtr & watch = nullptr);
+                        const EventPtr & watch = nullptr,
+                        Coordination::ListRequestType list_request_type = Coordination::ListRequestType::ALL);
 
     Strings getChildrenWatch(const std::string & path,
                              Coordination::Stat * stat,
-                             Coordination::WatchCallback watch_callback);
+                             Coordination::WatchCallback watch_callback,
+                             Coordination::ListRequestType list_request_type = Coordination::ListRequestType::ALL);
 
     /// Doesn't not throw in the following cases:
     /// * The node doesn't exist.
     Coordination::Error tryGetChildren(const std::string & path, Strings & res,
                            Coordination::Stat * stat = nullptr,
-                           const EventPtr & watch = nullptr);
+                           const EventPtr & watch = nullptr,
+                           Coordination::ListRequestType list_request_type = Coordination::ListRequestType::ALL);
 
     Coordination::Error tryGetChildrenWatch(const std::string & path, Strings & res,
                                 Coordination::Stat * stat,
-                                Coordination::WatchCallback watch_callback);
+                                Coordination::WatchCallback watch_callback,
+                                Coordination::ListRequestType list_request_type = Coordination::ListRequestType::ALL);
 
     /// Performs several operations in a transaction.
     /// Throws on every error.
@@ -177,6 +188,9 @@ public:
     Coordination::Error tryMultiNoThrow(const Coordination::Requests & requests, Coordination::Responses & responses);
 
     Int64 getClientID();
+
+    /// Get hosts of zookeeper
+    Strings getHosts() { return hosts; }
 
     /// Remove the node with the subtree. If someone concurrently adds or removes a node
     /// in the subtree, the result is undefined.
@@ -235,9 +249,15 @@ public:
     FutureExists asyncTryExistsNoThrow(const std::string & path, Coordination::WatchCallback watch_callback = {});
 
     using FutureGetChildren = std::future<Coordination::ListResponse>;
-    FutureGetChildren asyncGetChildren(const std::string & path, Coordination::WatchCallback watch_callback = {});
+    FutureGetChildren asyncGetChildren(
+        const std::string & path,
+        Coordination::WatchCallback watch_callback = {},
+        Coordination::ListRequestType list_request_type = Coordination::ListRequestType::ALL);
     /// Like the previous one but don't throw any exceptions on future.get()
-    FutureGetChildren asyncTryGetChildrenNoThrow(const std::string & path, Coordination::WatchCallback watch_callback = {});
+    FutureGetChildren asyncTryGetChildrenNoThrow(
+        const std::string & path,
+        Coordination::WatchCallback watch_callback = {},
+        Coordination::ListRequestType list_request_type = Coordination::ListRequestType::ALL);
 
     using FutureSet = std::future<Coordination::SetResponse>;
     FutureSet asyncSet(const std::string & path, const std::string & data, int32_t version = -1);
@@ -282,7 +302,11 @@ private:
         const std::string & path, std::string & res, Coordination::Stat * stat, Coordination::WatchCallback watch_callback);
     Coordination::Error setImpl(const std::string & path, const std::string & data, int32_t version, Coordination::Stat * stat);
     Coordination::Error getChildrenImpl(
-        const std::string & path, Strings & res, Coordination::Stat * stat, Coordination::WatchCallback watch_callback);
+        const std::string & path,
+        Strings & res,
+        Coordination::Stat * stat,
+        Coordination::WatchCallback watch_callback,
+        Coordination::ListRequestType list_request_type);
     Coordination::Error multiImpl(const Coordination::Requests & requests, Coordination::Responses & responses);
     Coordination::Error existsImpl(const std::string & path, Coordination::Stat * stat_, Coordination::WatchCallback watch_callback);
 
@@ -298,6 +322,7 @@ private:
     std::mutex mutex;
 
     Poco::Logger * log = nullptr;
+    std::shared_ptr<DB::ZooKeeperLog> zk_log;
 };
 
 

@@ -70,6 +70,14 @@ public:
         m_day   = values.day_of_month;
     }
 
+    explicit LocalDate(ExtendedDayNum day_num)
+    {
+        const auto & values = DateLUT::instance().getValues(day_num);
+        m_year  = values.year;
+        m_month = values.month;
+        m_day   = values.day_of_month;
+    }
+
     LocalDate(unsigned short year_, unsigned char month_, unsigned char day_)
         : m_year(year_), m_month(month_), m_day(day_)
     {
@@ -98,9 +106,20 @@ public:
         return DayNum(lut.makeDayNum(m_year, m_month, m_day).toUnderType());
     }
 
+    ExtendedDayNum getExtendedDayNum() const
+    {
+        const auto & lut = DateLUT::instance();
+        return ExtendedDayNum (lut.makeDayNum(m_year, m_month, m_day).toUnderType());
+    }
+
     operator DayNum() const
     {
         return getDayNum();
+    }
+
+    operator time_t() const
+    {
+        return DateLUT::instance().makeDate(m_year, m_month, m_day);
     }
 
     unsigned short year() const { return m_year; }

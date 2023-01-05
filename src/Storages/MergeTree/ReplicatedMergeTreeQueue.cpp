@@ -1792,11 +1792,13 @@ std::vector<MergeTreeMutationStatus> ReplicatedMergeTreeQueue::getMutationsStatu
             result.push_back(MergeTreeMutationStatus
             {
                 entry.znode_name,
+                {}, /// query_id
                 buf.str(),
                 entry.create_time,
                 entry.block_numbers,
                 parts_to_mutate,
                 status.is_done,
+                {}, // finish_time
                 status.latest_failed_part,
                 status.latest_fail_time,
                 status.latest_fail_reason,

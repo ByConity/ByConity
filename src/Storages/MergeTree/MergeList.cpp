@@ -8,7 +8,7 @@
 namespace DB
 {
 
-MergeListElement::MergeListElement(const StorageID & table_id_, const FutureMergedMutatedPart & future_part)
+MergeListElement::MergeListElement(const StorageID & table_id_, const FutureMergedMutatedPart & future_part, const Settings & settings)
     : table_id{table_id_}
     , partition_id{future_part.part_info.partition_id}
     , result_part_name{future_part.name}
@@ -35,22 +35,36 @@ MergeListElement::MergeListElement(const StorageID & table_id_, const FutureMerg
         is_mutation = (result_part_info.getDataVersion() != source_data_version);
     }
 
+    memory_tracker.setDescription("Mutate/Merge");
+    /// MemoryTracker settings should be set here, because
+    /// later (see MemoryTrackerThreadSwitcher)
+    /// parent memory tracker will be changed, and if merge executed from the
+    /// query (OPTIMIZE TABLE), all settings will be lost (since
+    /// current_thread::memory_tracker will have Thread level MemoryTracker,
+    /// which does not have any settings itself, it relies on the settings of the
+    /// thread_group::memory_tracker, but MemoryTrackerThreadSwitcher will reset parent).
+    memory_tracker.setProfilerStep(settings.memory_profiler_step);
+    memory_tracker.setSampleProbability(settings.memory_profiler_sample_probability);
+    if (settings.memory_tracker_fault_probability)
+        memory_tracker.setFaultProbability(settings.memory_tracker_fault_probability);
+
+    /// Let's try to copy memory related settings from the query,
+    /// since settings that we have here is not from query, but global, from the table.
+    ///
+    /// NOTE: Remember, that Thread level MemoryTracker does not have any settings,
+    /// so it's parent is required.
+    MemoryTracker * query_memory_tracker = CurrentThread::getMemoryTracker();
+    MemoryTracker * parent_query_memory_tracker;
+    if (query_memory_tracker->level == VariableContext::Thread && (parent_query_memory_tracker = query_memory_tracker->getParent())
+        && parent_query_memory_tracker != &total_memory_tracker)
+    {
+        memory_tracker.setOrRaiseHardLimit(parent_query_memory_tracker->getHardLimit());
+    }
+
     /// Each merge is executed into separate background processing pool thread
     background_thread_memory_tracker = CurrentThread::getMemoryTracker();
     if (background_thread_memory_tracker)
     {
-        /// From the query context it will be ("for thread") memory tracker with VariableContext::Thread level,
-        /// which does not have any limits and sampling settings configured.
-        /// And parent for this memory tracker should be ("(for query)") with VariableContext::Process level,
-        /// that has limits and sampling configured.
-        MemoryTracker * parent;
-        if (background_thread_memory_tracker->level == VariableContext::Thread &&
-            (parent = background_thread_memory_tracker->getParent()) &&
-            parent != &total_memory_tracker)
-        {
-            background_thread_memory_tracker = parent;
-        }
-
         background_thread_memory_tracker_prev_parent = background_thread_memory_tracker->getParent();
         background_thread_memory_tracker->setParent(&memory_tracker);
     }

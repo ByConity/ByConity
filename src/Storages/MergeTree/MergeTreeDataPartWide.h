@@ -16,19 +16,21 @@ class MergeTreeDataPartWide : public IMergeTreeDataPart
 {
 public:
     MergeTreeDataPartWide(
-        const MergeTreeData & storage_,
+        const MergeTreeMetaBase & storage_,
         const String & name_,
         const MergeTreePartInfo & info_,
         const VolumePtr & volume,
         const std::optional<String> & relative_path_ = {},
-        const IMergeTreeDataPart * parent_part_ = nullptr);
+        const IMergeTreeDataPart * parent_part_ = nullptr,
+        IStorage::StorageLocation location_ = IStorage::StorageLocation::MAIN);
 
     MergeTreeDataPartWide(
-        MergeTreeData & storage_,
+        MergeTreeMetaBase & storage_,
         const String & name_,
         const VolumePtr & volume,
         const std::optional<String> & relative_path_ = {},
-        const IMergeTreeDataPart * parent_part_ = nullptr);
+        const IMergeTreeDataPart * parent_part_ = nullptr,
+        IStorage::StorageLocation location_ = IStorage::StorageLocation::MAIN);
 
     MergeTreeReaderPtr getReader(
         const NamesAndTypesList & columns,
@@ -57,6 +59,8 @@ public:
     ~MergeTreeDataPartWide() override;
 
     bool hasColumnFiles(const NameAndTypePair & column) const override;
+
+    void loadIndexGranularity(size_t marks_count, const std::vector<size_t> & index_granularities) override;
 
 private:
     void checkConsistency(bool require_part_metadata) const override;

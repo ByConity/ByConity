@@ -266,11 +266,27 @@ void ColumnFixedString::insertRangeFrom(const IColumn & src, size_t start, size_
     memcpy(chars.data() + old_size, &src_concrete.chars[start * n], length * n);
 }
 
+void ColumnFixedString::insertRangeSelective(const IColumn & src, const IColumn::Selector & selector, size_t selector_start, size_t length) 
+{
+    const ColumnFixedString & src_concrete = static_cast<const ColumnFixedString &>(src);
+
+    size_t old_size = chars.size();
+    chars.resize(old_size + length * n); 
+    auto * cur_data_end = chars.data() + old_size;
+    auto * src_data_start = src_concrete.chars.data();
+
+    for (size_t i = 0; i < length; ++i)
+    {
+        size_t src_pos = selector[selector_start + i];
+        memcpySmallAllowReadWriteOverflow15(cur_data_end + i * n, src_data_start+ n * src_pos, n);
+    }
+}
+
 ColumnPtr ColumnFixedString::filter(const IColumn::Filter & filt, ssize_t result_size_hint) const
 {
     size_t col_size = size();
     if (col_size != filt.size())
-        throw Exception("Size of filter doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+        throw Exception(ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH, "Size of filter ({}) doesn't match size of column ({})", filt.size(), col_size);
 
     auto res = ColumnFixedString::create(n);
 
@@ -281,51 +297,42 @@ ColumnPtr ColumnFixedString::filter(const IColumn::Filter & filt, ssize_t result
     const UInt8 * filt_end = filt_pos + col_size;
     const UInt8 * data_pos = chars.data();
 
-#ifdef __SSE2__
     /** A slightly more optimized version.
         * Based on the assumption that often pieces of consecutive values
         *  completely pass or do not pass the filter.
         * Therefore, we will optimistically check the parts of `SIMD_BYTES` values.
         */
-
-    static constexpr size_t SIMD_BYTES = 16;
-    const __m128i zero16 = _mm_setzero_si128();
-    const UInt8 * filt_end_sse = filt_pos + col_size / SIMD_BYTES * SIMD_BYTES;
+    static constexpr size_t SIMD_BYTES = 64;
+    const UInt8 * filt_end_aligned = filt_pos + col_size / SIMD_BYTES * SIMD_BYTES;
     const size_t chars_per_simd_elements = SIMD_BYTES * n;
 
-    while (filt_pos < filt_end_sse)
+    while (filt_pos < filt_end_aligned)
     {
-        UInt16 mask = _mm_movemask_epi8(_mm_cmpeq_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i *>(filt_pos)), zero16));
-        mask = ~mask;
+        uint64_t mask = bytes64MaskToBits64Mask(filt_pos);
 
-        if (0 == mask)
-        {
-            /// Nothing is inserted.
-            data_pos += chars_per_simd_elements;
-        }
-        else if (0xFFFF == mask)
+        if (0xffffffffffffffff == mask)
         {
             res->chars.insert(data_pos, data_pos + chars_per_simd_elements);
-            data_pos += chars_per_simd_elements;
         }
         else
         {
             size_t res_chars_size = res->chars.size();
-            for (size_t i = 0; i < SIMD_BYTES; ++i)
+            while (mask)
             {
-                if (filt_pos[i])
-                {
-                    res->chars.resize(res_chars_size + n);
-                    memcpySmallAllowReadWriteOverflow15(&res->chars[res_chars_size], data_pos, n);
-                    res_chars_size += n;
-                }
-                data_pos += n;
+                size_t index = __builtin_ctzll(mask);
+                res->chars.resize(res_chars_size + n);
+                memcpySmallAllowReadWriteOverflow15(&res->chars[res_chars_size], data_pos + index * n, n);
+                res_chars_size += n;
+            #ifdef __BMI__
+                mask = _blsr_u64(mask);
+            #else
+                mask = mask & (mask-1);
+            #endif
             }
         }
-
+        data_pos += chars_per_simd_elements;
         filt_pos += SIMD_BYTES;
     }
-#endif
 
     size_t res_chars_size = res->chars.size();
     while (filt_pos < filt_end)

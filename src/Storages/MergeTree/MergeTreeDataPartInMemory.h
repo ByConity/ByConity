@@ -11,19 +11,21 @@ class MergeTreeDataPartInMemory : public IMergeTreeDataPart
 {
 public:
     MergeTreeDataPartInMemory(
-        const MergeTreeData & storage_,
+        const MergeTreeMetaBase & storage_,
         const String & name_,
         const MergeTreePartInfo & info_,
         const VolumePtr & volume_,
         const std::optional<String> & relative_path_ = {},
-        const IMergeTreeDataPart * parent_part_ = nullptr);
+        const IMergeTreeDataPart * parent_part_ = nullptr,
+        IStorage::StorageLocation location_ = IStorage::StorageLocation::MAIN);
 
     MergeTreeDataPartInMemory(
-        MergeTreeData & storage_,
+        MergeTreeMetaBase & storage_,
         const String & name_,
         const VolumePtr & volume_,
         const std::optional<String> & relative_path_ = {},
-        const IMergeTreeDataPart * parent_part_ = nullptr);
+        const IMergeTreeDataPart * parent_part_ = nullptr,
+        IStorage::StorageLocation location_ = IStorage::StorageLocation::MAIN);
 
     MergeTreeReaderPtr getReader(
         const NamesAndTypesList & columns,

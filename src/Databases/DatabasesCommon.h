@@ -15,6 +15,8 @@ namespace DB
 
 class Context;
 
+String getTableDefinitionFromCreateQuery(const ASTPtr & query, bool attach);
+
 /// A base class for databases that manage their own list of tables.
 class DatabaseWithOwnTablesBase : public IDatabase, protected WithContext
 {
@@ -33,11 +35,18 @@ public:
 
     void shutdown() override;
 
+    void clearBrokenTables() override;
+
+    std::map<String, String> getBrokenTables() override;
+
     ~DatabaseWithOwnTablesBase() override;
 
 protected:
     Tables tables;
     Poco::Logger * log;
+
+    /// Information to log broken parts which fails to be loaded
+    std::map<String, String> brokenTables;
 
     DatabaseWithOwnTablesBase(const String & name_, const String & logger, ContextPtr context);
 
@@ -45,5 +54,7 @@ protected:
     StoragePtr detachTableUnlocked(const String & table_name, std::unique_lock<std::mutex> & lock);
     StoragePtr getTableUnlocked(const String & table_name, std::unique_lock<std::mutex> & lock) const;
 };
+
+std::vector<StoragePtr> getViews(const StorageID & storage_id, const ContextPtr & context);
 
 }

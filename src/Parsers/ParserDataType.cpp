@@ -27,10 +27,10 @@ private:
     {
         ParserNestedTable nested_parser;
         ParserDataType data_type_parser;
-        ParserLiteral literal_parser;
+        ParserLiteral literal_parser(ParserSettings::CLICKHOUSE);
 
         const char * operators[] = {"=", "equals", nullptr};
-        ParserLeftAssociativeBinaryOperatorList enum_parser(operators, std::make_unique<ParserLiteral>());
+        ParserLeftAssociativeBinaryOperatorList enum_parser(operators, std::make_unique<ParserLiteral>(ParserSettings::CLICKHOUSE));
 
         if (pos->type == TokenType::BareWord && std::string_view(pos->begin, pos->size()) == "Nested")
             return nested_parser.parse(pos, node, expected);

@@ -18,6 +18,7 @@ public:
     ASTPtr select;
     ASTPtr watch;
     ASTPtr table_function;
+    ASTPtr in_file;
     ASTPtr settings_ast;
 
     /// Data to insert
@@ -33,6 +34,8 @@ public:
     /** Get the text that identifies this element. */
     String getID(char delim) const override { return "InsertQuery" + (delim + table_id.database_name) + delim + table_id.table_name; }
 
+    ASTType getType() const override { return ASTType::ASTInsertQuery; }
+
     ASTPtr clone() const override
     {
         auto res = std::make_shared<ASTInsertQuery>(*this);
@@ -44,6 +47,11 @@ public:
         if (table_function) { res->table_function = table_function->clone(); res->children.push_back(res->table_function); }
         if (settings_ast) { res->settings_ast = settings_ast->clone(); res->children.push_back(res->settings_ast); }
 
+        if (in_file)
+        {
+            res->in_file = in_file->clone(); res->children.push_back(res->in_file);
+        }
+        
         return res;
     }
 

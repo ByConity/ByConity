@@ -4,13 +4,17 @@
 #include <Common/quoteString.h>
 #include <IO/Operators.h>
 #include <IO/WriteBufferFromString.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/InterpreterSelectQuery.h>
+#include <Interpreters/getHeaderForProcessingStage.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTSetQuery.h>
 #include <Processors/Pipe.h>
-#include <Processors/QueryPlan/ReadFromPreparedSource.h>
+#include <QueryPlan/PlanSegmentSourceStep.h>
+#include <QueryPlan/ReadFromPreparedSource.h>
 #include <Storages/AlterCommands.h>
 
 
@@ -21,6 +25,7 @@ namespace ErrorCodes
     extern const int TABLE_IS_DROPPED;
     extern const int NOT_IMPLEMENTED;
     extern const int DEADLOCK_AVOIDED;
+    extern const int PART_COLUMNS_NOT_FOUND_IN_TABLE_VERSIONS;
 }
 
 bool IStorage::isVirtualColumn(const String & column_name, const StorageMetadataPtr & metadata_snapshot) const
@@ -119,6 +124,36 @@ void IStorage::read(
     }
 }
 
+void IStorage::read(
+    QueryPlan & query_plan,
+    const Names & column_names,
+    const StorageMetadataPtr & metadata_snapshot,
+    SelectQueryInfo & query_info,
+    ContextPtr context,
+    QueryProcessingStage::Enum processed_stage,
+    size_t max_block_size,
+    unsigned num_streams,
+    bool distributed_stages)
+{
+    if (distributed_stages)
+    {
+        //IStorage::read(query_plan, column_names, metadata_snapshot, query_info, context, processed_stage, max_block_size, num_streams);
+        auto header = getHeaderForProcessingStage(*this, column_names, metadata_snapshot, query_info, context, processed_stage);
+        auto read_step = std::make_unique<PlanSegmentSourceStep>(header,
+                                                              getStorageID(), 
+                                                              query_info,
+                                                              column_names,
+                                                              processed_stage,
+                                                              max_block_size,
+                                                              num_streams,
+                                                              context);
+        read_step->setStepDescription(getStorageID().getNameForLogs());
+        query_plan.addStep(std::move(read_step));
+    }
+    else
+        throw Exception("Shouldn't call this read function if it is not a distributed stage query", ErrorCodes::LOGICAL_ERROR);
+}
+
 Pipe IStorage::alterPartition(
     const StorageMetadataPtr & /* metadata_snapshot */, const PartitionCommands & /* commands */, ContextPtr /* context */)
 {
@@ -199,6 +234,43 @@ NameDependencies IStorage::getDependentViewsByColumn(ContextPtr context) const
         }
     }
     return name_deps;
+}
+
+void IStorage::serialize(WriteBuffer & buf) const
+{
+    writeBinary(storage_id.database_name, buf);
+    writeBinary(storage_id.table_name, buf);
+}
+
+StoragePtr IStorage::deserialize(ReadBuffer & buf, const ContextPtr & context)
+{
+    String database_name;
+    String table_name;
+    readBinary(database_name, buf);
+    readBinary(table_name, buf);
+    return DatabaseCatalog::instance().getTable({database_name, table_name}, context);
+}
+
+NamesAndTypesListPtr IStorage::getPartColumns(const UInt64 &columns_commit_time) const
+{
+    if (columns_commit_time == commit_time.toUInt64())
+        return part_columns;
+    auto it = previous_versions_part_columns.find(columns_commit_time);
+    if (it == previous_versions_part_columns.end())
+        throw Exception("Part's columns_commit_time " + toString(columns_commit_time) + " not found in table versions", ErrorCodes::PART_COLUMNS_NOT_FOUND_IN_TABLE_VERSIONS);
+    return it->second;
+}
+
+UInt64 IStorage::getPartColumnsCommitTime(const NamesAndTypesList &search_part_columns) const
+{
+    if (search_part_columns == *part_columns)
+        return commit_time.toUInt64();
+    for (const auto & version : previous_versions_part_columns)
+    {
+        if (search_part_columns == *version.second)
+            return version.first;
+    }
+    return 0;
 }
 
 std::string PrewhereInfo::dump() const

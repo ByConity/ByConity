@@ -49,7 +49,7 @@ bool allArgumentsAreConstants(const ColumnsWithTypeAndName & args)
 }
 
 ColumnPtr replaceLowCardinalityColumnsByNestedAndGetDictionaryIndexes(
-    ColumnsWithTypeAndName & args, bool can_be_executed_on_default_arguments, size_t input_rows_count)
+    ColumnsWithTypeAndName & args, bool can_be_executed_on_default_arguments, size_t input_rows_count, bool & is_full_stat)
 {
     size_t num_rows = input_rows_count;
     ColumnPtr indexes;
@@ -64,11 +64,19 @@ ColumnPtr replaceLowCardinalityColumnsByNestedAndGetDictionaryIndexes(
                 throw Exception(ErrorCodes::LOGICAL_ERROR, "Expected single dictionary argument for function.");
 
             const auto * low_cardinality_type = checkAndGetDataType<DataTypeLowCardinality>(column.type.get());
+            const auto * low_cardinality_full_type = checkAndGetDataType<DataTypeFullLowCardinality>(column.type.get());
 
-            if (!low_cardinality_type)
+            if (!low_cardinality_type && !low_cardinality_full_type)
                 throw Exception(ErrorCodes::LOGICAL_ERROR,
                     "Incompatible type for low cardinality column: {}",
                     column.type->getName());
+
+            if (low_cardinality_column->isFullState())
+            {
+                column.column = low_cardinality_column->getNestedColumnPtr();
+                is_full_stat = true;
+                return nullptr;
+            }
 
             if (can_be_executed_on_default_arguments)
             {
@@ -212,7 +220,24 @@ ColumnPtr IExecutableFunction::executeWithoutLowCardinalityColumns(
 
     ColumnPtr res;
     if (dry_run)
-        res = executeDryRunImpl(args, result_type, input_rows_count);
+    {
+        // if dry_run is true, we only need to clone an empty args
+        if (args.size() > 0 && args[0].column->size() > 0 && input_rows_count == 0)
+        {
+            ColumnsWithTypeAndName empty_args(args.size());
+            for (size_t i  = 0; i < args.size(); i++)
+            {
+                ColumnWithTypeAndName temp_arg;
+                temp_arg.column = args[i].column->cloneEmpty();
+                temp_arg.type = args[i].type;
+                temp_arg.name = args[i].name;
+                empty_args[i] = temp_arg;
+            }
+            res = executeDryRunImpl(empty_args, result_type, input_rows_count);
+        }
+        else
+            res = executeDryRunImpl(args, result_type, input_rows_count);
+    }
     else
         res = executeImpl(args, result_type, input_rows_count);
 
@@ -235,8 +260,15 @@ ColumnPtr IExecutableFunction::execute(const ColumnsWithTypeAndName & arguments,
             bool can_be_executed_on_default_arguments = canBeExecutedOnDefaultArguments();
 
             const auto & dictionary_type = res_low_cardinality_type->getDictionaryType();
+            bool is_full_stat = false;
             ColumnPtr indexes = replaceLowCardinalityColumnsByNestedAndGetDictionaryIndexes(
-                    columns_without_low_cardinality, can_be_executed_on_default_arguments, input_rows_count);
+                    columns_without_low_cardinality, can_be_executed_on_default_arguments, input_rows_count, is_full_stat);
+
+            if (is_full_stat) // for full state lc column
+            {
+                convertLowCardinalityColumnsToFull(columns_without_low_cardinality);
+                return executeWithoutLowCardinalityColumns(columns_without_low_cardinality, dictionary_type, input_rows_count, dry_run);
+            }
 
             size_t new_input_rows_count = columns_without_low_cardinality.empty()
                                         ? input_rows_count

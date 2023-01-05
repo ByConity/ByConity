@@ -9,6 +9,7 @@
 #include <Columns/ColumnTuple.h>
 #include <Columns/ColumnLowCardinality.h>
 #include <Columns/ColumnMap.h>
+#include <Columns/ColumnByteMap.h>
 #include <Core/callOnTypeIndex.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -17,6 +18,7 @@
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeMap.h>
+#include <DataTypes/DataTypeByteMap.h>
 #include <Processors/Formats/IOutputFormat.h>
 #include <arrow/api.h>
 #include <arrow/builder.h>
@@ -354,6 +356,28 @@ namespace DB
         }
     }
 
+    static void fillArrowArrayWithDate32ColumnData(
+        ColumnPtr write_column,
+        const PaddedPODArray<UInt8> * null_bytemap,
+        const String & format_name,
+        arrow::ArrayBuilder* array_builder,
+        size_t start,
+        size_t end)
+    {
+        const PaddedPODArray<Int32> & internal_data = assert_cast<const ColumnVector<Int32> &>(*write_column).getData();
+        arrow::Date32Builder & builder = assert_cast<arrow::Date32Builder &>(*array_builder);
+        arrow::Status status;
+
+        for (size_t value_i = start; value_i < end; ++value_i)
+        {
+            if (null_bytemap && (*null_bytemap)[value_i])
+                status = builder.AppendNull();
+            else
+                status = builder.Append(internal_data[value_i]);
+            checkStatus(status, write_column->getName(), format_name);
+        }
+    }
+
     static void fillArrowArray(
         const String & column_name,
         ColumnPtr & column,
@@ -392,6 +416,10 @@ namespace DB
         {
             fillArrowArrayWithDateTimeColumnData(column, null_bytemap, format_name, array_builder, start, end);
         }
+        else if ("Date32" == column_type_name)
+        {
+            fillArrowArrayWithDate32ColumnData(column, null_bytemap, format_name, array_builder, start, end);
+        }
         else if ("Array" == column_type_name)
         {
             fillArrowArrayWithArrayColumnData<arrow::ListBuilder>(column_name, column, column_type, null_bytemap, array_builder, format_name, start, end, dictionary_values);
@@ -406,9 +434,17 @@ namespace DB
         }
         else if ("Map" == column_type_name)
         {
+#ifdef USE_COMMUNITY_MAP
             ColumnPtr column_array = assert_cast<const ColumnMap *>(column.get())->getNestedColumnPtr();
             DataTypePtr array_type = assert_cast<const DataTypeMap *>(column_type.get())->getNestedType();
             fillArrowArrayWithArrayColumnData<arrow::MapBuilder>(column_name, column_array, array_type, null_bytemap, array_builder, format_name, start, end, dictionary_values);
+#else
+            const ColumnByteMap * map_column = assert_cast<const ColumnByteMap *>(column.get());
+            const DataTypeByteMap * map_type = assert_cast<const DataTypeByteMap *>(column_type.get());
+            ColumnPtr column_array = ColumnArray::create(ColumnTuple::create(Columns{map_column->getKeyPtr(), map_column->getValuePtr()}), map_column->getOffsetsPtr());
+            DataTypePtr array_type = std::make_shared<DataTypeArray>(std::make_shared<DataTypeTuple>(DataTypes{map_type->getKeyType(), map_type->getValueType()}, Names{"keys", "values"}));
+            fillArrowArrayWithArrayColumnData<arrow::MapBuilder>(column_name, column_array, array_type, null_bytemap, array_builder, format_name, start, end, dictionary_values);
+#endif
         }
         else if (isDecimal(column_type))
         {
@@ -581,6 +617,19 @@ namespace DB
             return arrow::map(
                 getArrowType(key_type, columns[0], column_name, format_name, is_column_nullable),
                 getArrowType(val_type, columns[1], column_name, format_name, is_column_nullable)
+            );
+        }
+
+        if (isByteMap(column_type))
+        {
+            const auto * byte_map_type = assert_cast<const DataTypeByteMap *>(column_type.get());
+            const auto & key_type = byte_map_type->getKeyType();
+            const auto & val_type = byte_map_type->getValueType();
+
+            const ColumnByteMap * column_byte_map =  assert_cast<const ColumnByteMap *>(column.get());
+            return arrow::map(
+                getArrowType(key_type, column_byte_map->getKeyPtr(), column_name, format_name, is_column_nullable),
+                getArrowType(val_type, column_byte_map->getValuePtr(), column_name, format_name, is_column_nullable)
             );
         }
 

@@ -7,15 +7,18 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTOrderByElement.h>
+#include <Parsers/ASTSampleRatio.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/ExpressionListParsers.h>
 #include <Parsers/parseQuery.h>
+#include <Parsers/queryToString.h>
 
 #include <Access/AccessFlags.h>
 #include <Access/ContextAccess.h>
 
 #include <AggregateFunctions/AggregateFunctionCount.h>
+#include <AggregateFunctions/AggregateFunctionFactory.h>
 
 #include <Interpreters/ApplyWithAliasVisitor.h>
 #include <Interpreters/ApplyWithSubqueryVisitor.h>
@@ -34,34 +37,38 @@
 #include <Interpreters/OpenTelemetrySpanLog.h>
 #include <Interpreters/QueryAliasesVisitor.h>
 #include <Interpreters/replaceAliasColumnsInQuery.h>
+#include <Interpreters/InterpreterPerfectShard.h>
+#include <Interpreters/ProcessList.h>
 
 #include <Processors/Pipe.h>
-#include <Processors/QueryPlan/AggregatingStep.h>
-#include <Processors/QueryPlan/ArrayJoinStep.h>
-#include <Processors/QueryPlan/CreatingSetsStep.h>
-#include <Processors/QueryPlan/CubeStep.h>
-#include <Processors/QueryPlan/DistinctStep.h>
-#include <Processors/QueryPlan/ExpressionStep.h>
-#include <Processors/QueryPlan/ExtremesStep.h>
-#include <Processors/QueryPlan/FillingStep.h>
-#include <Processors/QueryPlan/FilterStep.h>
-#include <Processors/QueryPlan/FinishSortingStep.h>
-#include <Processors/QueryPlan/JoinStep.h>
-#include <Processors/QueryPlan/LimitByStep.h>
-#include <Processors/QueryPlan/LimitStep.h>
-#include <Processors/QueryPlan/MergeSortingStep.h>
-#include <Processors/QueryPlan/MergingAggregatedStep.h>
-#include <Processors/QueryPlan/MergingSortedStep.h>
-#include <Processors/QueryPlan/OffsetStep.h>
-#include <Processors/QueryPlan/PartialSortingStep.h>
-#include <Processors/QueryPlan/QueryPlan.h>
-#include <Processors/QueryPlan/ReadFromPreparedSource.h>
-#include <Processors/QueryPlan/ReadNothingStep.h>
-#include <Processors/QueryPlan/RollupStep.h>
-#include <Processors/QueryPlan/SettingQuotaAndLimitsStep.h>
-#include <Processors/QueryPlan/TotalsHavingStep.h>
-#include <Processors/QueryPlan/WindowStep.h>
-#include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
+#include <QueryPlan/AggregatingStep.h>
+#include <QueryPlan/ArrayJoinStep.h>
+#include <QueryPlan/CreatingSetsStep.h>
+#include <QueryPlan/CubeStep.h>
+#include <QueryPlan/DistinctStep.h>
+#include <QueryPlan/ExpressionStep.h>
+#include <QueryPlan/ExtremesStep.h>
+#include <QueryPlan/FillingStep.h>
+#include <QueryPlan/FilterStep.h>
+#include <QueryPlan/FinalSampleStep.h>
+#include <QueryPlan/FinishSortingStep.h>
+#include <QueryPlan/JoinStep.h>
+#include <QueryPlan/LimitByStep.h>
+#include <QueryPlan/LimitStep.h>
+#include <QueryPlan/MergeSortingStep.h>
+#include <QueryPlan/MergingAggregatedStep.h>
+#include <QueryPlan/MergingSortedStep.h>
+#include <QueryPlan/OffsetStep.h>
+#include <QueryPlan/PartialSortingStep.h>
+#include <QueryPlan/QueryPlan.h>
+#include <QueryPlan/ReadFromPreparedSource.h>
+#include <QueryPlan/ReadNothingStep.h>
+#include <QueryPlan/RollupStep.h>
+#include <QueryPlan/SettingQuotaAndLimitsStep.h>
+#include <QueryPlan/SubstitutionStep.h>
+#include <QueryPlan/TotalsHavingStep.h>
+#include <QueryPlan/WindowStep.h>
+#include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Processors/Sources/NullSource.h>
 #include <Processors/Sources/SourceFromInputStream.h>
 #include <Processors/Transforms/AggregatingTransform.h>
@@ -122,7 +129,7 @@ String InterpreterSelectQuery::generateFilterActions(ActionsDAGPtr & actions, co
     /// Keep columns that are required after the filter actions.
     for (const auto & column_str : prerequisite_columns)
     {
-        ParserExpression expr_parser;
+        ParserExpression expr_parser(ParserSettings::valueOf(context->getSettingsRef().dialect_type));
         expr_list->children.push_back(parseQuery(expr_parser, column_str, 0, context->getSettingsRef().max_parser_depth));
     }
 
@@ -199,6 +206,8 @@ static ContextPtr getSubqueryContext(ContextPtr context)
     subquery_settings.max_result_bytes = 0;
     /// The calculation of extremes does not make sense and is not necessary (if you do it, then the extremes of the subquery can be taken for whole query).
     subquery_settings.extremes = false;
+    /// subquery should not be executed in perfect-shard mode.
+    subquery_settings.distributed_perfect_shard = 0;
     subquery_context->setSettings(subquery_settings);
     return subquery_context;
 }
@@ -216,7 +225,7 @@ static void rewriteMultipleJoins(ASTPtr & query, const TablesWithColumns & table
     cross_to_inner.cross_to_inner_join_rewrite = settings.cross_to_inner_join_rewrite;
     CrossToInnerJoinVisitor(cross_to_inner).visit(query);
 
-    JoinToSubqueryTransformVisitor::Data join_to_subs_data{tables, aliases};
+    JoinToSubqueryTransformVisitor::Data join_to_subs_data{tables, settings.dialect_type, aliases};
     JoinToSubqueryTransformVisitor(join_to_subs_data).visit(query);
 }
 
@@ -447,7 +456,8 @@ InterpreterSelectQuery::InterpreterSelectQuery(
 
         if (!options.only_analyze)
         {
-            if (query.sampleSize() && (input || input_pipe || !storage || !storage->supportsSampling()))
+            auto range_sampling = context->getSettingsRef().enable_deterministic_sample_by_range || context->getSettingsRef().enable_sample_by_range;
+            if (query.sampleSize() && (input || input_pipe || !storage || (!range_sampling && !storage->supportsSampling())))
                 throw Exception("Illegal SAMPLE: table doesn't support sampling", ErrorCodes::SAMPLING_NOT_SUPPORTED);
 
             if (query.final() && (input || input_pipe || !storage || !storage->supportsFinal()))
@@ -509,6 +519,9 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     };
 
     analyze(shouldMoveToPrewhere());
+    rewriteQueryBaseOnView();
+    if (mv_optimizer_result->rewrite_by_view)
+        analyze(shouldMoveToPrewhere());
 
     bool need_analyze_again = false;
     if (analysis_result.prewhere_constant_filter_description.always_false || analysis_result.prewhere_constant_filter_description.always_true)
@@ -567,15 +580,52 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         analysis_result.required_columns = required_columns;
     }
 
+    LOG_TRACE(log, "query: " + queryToString(query));
+    // std::ostringstream ostr;
+    // for (auto & c : required_columns)
+    //     ostr << c << ", ";
+    // LOG_TRACE(log, "required_columns: " + ostr.str());
+    // LOG_TRACE(log, "result_header: " + result_header.dumpStructure());
     /// Blocks used in expression analysis contains size 1 const columns for constant folding and
     ///  null non-const columns to avoid useless memory allocations. However, a valid block sample
     ///  requires all columns to be of size 0, thus we need to sanitize the block here.
     sanitizeBlock(result_header, true);
 }
 
+/// Rewrite query based on view substitution
+void InterpreterSelectQuery::rewriteQueryBaseOnView()
+{
+    SelectQueryInfo current_info;
+    current_info.query = query_ptr;
+    current_info.sets = query_analyzer->getPreparedSets();
+    current_info.syntax_analyzer_result = query_info.syntax_analyzer_result;
+    mv_optimizer_result = MaterializedViewSubstitutionOptimizer(context, options).optimize(current_info);
+    if (mv_optimizer_result->rewrite_by_view)
+    {
+        QueryStatus * process_list_elem = context->getProcessListElement();
+        if (process_list_elem)
+            process_list_elem->setQueryRewriteByView(queryToString(query_ptr));
+        if (storage)
+        {
+            storage = mv_optimizer_result->storage;
+            table_lock = storage->lockForShare(context->getInitialQueryId(), context->getSettingsRef().lock_acquire_timeout);
+            table_id = storage->getStorageID();
+            metadata_snapshot = storage->getInMemoryMetadataPtr();
+        }
+    }
+}
+
 void InterpreterSelectQuery::buildQueryPlan(QueryPlan & query_plan)
 {
-    executeImpl(query_plan, input, std::move(input_pipe));
+    std::shared_ptr<InterpreterPerfectShard> interpreter_perfect_shard = 
+        context->getSettingsRef().distributed_perfect_shard ? std::make_shared<InterpreterPerfectShard>(*this) : nullptr;
+
+    if (interpreter_perfect_shard && interpreter_perfect_shard->checkPerfectShardable())
+    {
+        interpreter_perfect_shard->buildQueryPlan(query_plan);
+    }
+    else
+        executeImpl(query_plan, input, std::move(input_pipe));
 
     /// We must guarantee that result structure is the same as in getSampleBlock()
     ///
@@ -591,6 +641,23 @@ void InterpreterSelectQuery::buildQueryPlan(QueryPlan & query_plan)
 
         auto converting = std::make_unique<ExpressionStep>(query_plan.getCurrentDataStream(), convert_actions_dag);
         query_plan.addStep(std::move(converting));
+    }
+
+    if (context->getSettingsRef().enable_final_sample)
+    {
+        auto & query = getSelectQuery();
+        if (query.sampleSize())
+        {
+            ASTSampleRatio * sample = query.sampleSize()->as<ASTSampleRatio>();
+            ASTSampleRatio::BigNum numerator = sample->ratio.numerator;
+            ASTSampleRatio::BigNum denominator = sample->ratio.denominator;
+            if (numerator <= 1 || denominator > 1)
+                return;
+
+            auto sampling
+                = std::make_unique<FinalSampleStep>(query_plan.getCurrentDataStream(), numerator, context->getSettingsRef().max_block_size);
+            query_plan.addStep(std::move(sampling));
+        }
     }
 }
 
@@ -689,6 +756,9 @@ Block InterpreterSelectQuery::getSampleBlockImpl()
 
         Block res;
 
+        if (analysis_result.use_grouping_set_key)
+            res.insert({ nullptr, std::make_shared<DataTypeUInt64>(), "__grouping_set" });
+
         for (const auto & key : query_analyzer->aggregationKeys())
             res.insert({nullptr, header.getByName(key.name).type, key.name});
 
@@ -703,6 +773,10 @@ Block InterpreterSelectQuery::getSampleBlockImpl()
 
             res.insert({nullptr, type, aggregate.column_name});
         }
+
+        /// Achieve consistency with result header and pipe header when column substitution happen
+        if (mv_optimizer_result && mv_optimizer_result->rewrite_by_view)
+            substituteBlock(res, mv_optimizer_result->name_substitution_info);
 
         return res;
     }
@@ -935,6 +1009,11 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, const BlockInpu
         options.to_stage > QueryProcessingStage::WithMergeableState &&
         !query.group_by_with_totals && !query.group_by_with_rollup && !query.group_by_with_cube;
 
+    bool use_grouping_set_key = expressions.use_grouping_set_key;
+
+    if (query.group_by_with_grouping_sets && query.group_by_with_totals)
+       throw Exception("WITH TOTALS and GROUPING SETS are not supported together", ErrorCodes::NOT_IMPLEMENTED);
+
     if (query_info.projection && query_info.projection->desc->type == ProjectionDescription::Type::Aggregate)
     {
         query_info.projection->aggregate_overflow_row = aggregate_overflow_row;
@@ -1055,7 +1134,7 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, const BlockInpu
 
             preliminary_sort();
             if (expressions.need_aggregate)
-                executeMergeAggregated(query_plan, aggregate_overflow_row, aggregate_final);
+                executeMergeAggregated(query_plan, aggregate_overflow_row, aggregate_final, use_grouping_set_key);
         }
         if (from_aggregation_stage)
         {
@@ -1158,8 +1237,11 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, const BlockInpu
 
             if (expressions.need_aggregate)
             {
+                /// if options.distributed_stages is true, we need to build distributed plan segment so that we should always generate
+                /// Aggregating with partial state.
+                bool aggregate_stage = options.distributed_stages ? false : aggregate_final;
                 executeAggregation(
-                    query_plan, expressions.before_aggregation, aggregate_overflow_row, aggregate_final, query_info.input_order_info);
+                    query_plan, expressions.before_aggregation, aggregate_overflow_row, aggregate_stage, query_info.input_order_info);
                 /// We need to reset input order info, so that executeOrder can't use  it
                 query_info.input_order_info.reset();
             }
@@ -1205,6 +1287,18 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, const BlockInpu
             // If there is no global subqueries, we can run subqueries only when receive them on server.
             if (!query_analyzer->hasGlobalSubqueries() && !subqueries_for_sets.empty())
                 executeSubqueriesInSetsAndJoins(query_plan, subqueries_for_sets);
+
+            /**
+             * For distributed query processing,
+             * if the query that sends to remote servers have been rewrite by materialized views,
+             * then the streams return from remote servers might have different headers, we must handle this.
+            */
+            if (!expressions.second_stage && mv_optimizer_result && mv_optimizer_result->rewrite_by_view)
+            {
+                auto substitution_step
+                    = std::make_unique<SubstitutionStep>(query_plan.getCurrentDataStream(), mv_optimizer_result->name_substitution_info);
+                query_plan.addStep(std::move(substitution_step));
+            }
         }
 
         if (expressions.second_stage || from_aggregation_stage)
@@ -1217,7 +1311,13 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, const BlockInpu
             {
                 /// If you need to combine aggregated results from multiple servers
                 if (!expressions.first_stage)
-                    executeMergeAggregated(query_plan, aggregate_overflow_row, aggregate_final);
+                    executeMergeAggregated(query_plan, aggregate_overflow_row, aggregate_final, use_grouping_set_key);
+                else
+                {
+                    /// if we have first_stage and distributed_stage, it means we need build distributed plan segments
+                    if (options.distributed_stages)
+                        executeMergeAggregated(query_plan, aggregate_overflow_row, aggregate_final);
+                }
 
                 if (!aggregate_final)
                 {
@@ -1233,11 +1333,11 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, const BlockInpu
                     else if (query.group_by_with_cube)
                         executeRollupOrCube(query_plan, Modificator::CUBE);
 
-                    if ((query.group_by_with_rollup || query.group_by_with_cube) && expressions.hasHaving())
+                    if ((query.group_by_with_rollup || query.group_by_with_cube || query.group_by_with_grouping_sets) && expressions.hasHaving())
                     {
                         if (query.group_by_with_totals)
                             throw Exception(
-                                "WITH TOTALS and WITH ROLLUP or CUBE are not supported together in presence of HAVING",
+                                "WITH TOTALS and WITH ROLLUP or CUBE or GROUPING SETS are not supported together in presence of HAVING",
                                 ErrorCodes::NOT_IMPLEMENTED);
                         executeHaving(query_plan, expressions.before_having);
                     }
@@ -1245,8 +1345,8 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, const BlockInpu
                 else if (expressions.hasHaving())
                     executeHaving(query_plan, expressions.before_having);
             }
-            else if (query.group_by_with_totals || query.group_by_with_rollup || query.group_by_with_cube)
-                throw Exception("WITH TOTALS, ROLLUP or CUBE are not supported without aggregation", ErrorCodes::NOT_IMPLEMENTED);
+            else if (query.group_by_with_totals || query.group_by_with_rollup || query.group_by_with_cube || query.group_by_with_grouping_sets)
+                throw Exception("WITH TOTALS, ROLLUP, CUBE or GROUPING SETS are not supported without aggregation", ErrorCodes::NOT_IMPLEMENTED);
 
             // Now we must execute:
             // 1) expressions before window functions,
@@ -1393,7 +1493,7 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, const BlockInpu
         executeSubqueriesInSetsAndJoins(query_plan, subqueries_for_sets);
 }
 
-static StreamLocalLimits getLimitsForStorage(const Settings & settings, const SelectQueryOptions & options)
+StreamLocalLimits getLimitsForStorage(const Settings & settings, const SelectQueryOptions & options)
 {
     StreamLocalLimits limits;
     limits.mode = LimitsMode::LIMITS_TOTAL;
@@ -1428,6 +1528,7 @@ static void executeMergeAggregatedImpl(
     bool overflow_row,
     bool final,
     bool is_remote_storage,
+    bool has_grouping_sets,
     const Settings & settings,
     const NamesAndTypesList & aggregation_keys,
     const AggregateDescriptions & aggregates)
@@ -1435,6 +1536,8 @@ static void executeMergeAggregatedImpl(
     const auto & header_before_merge = query_plan.getCurrentDataStream().header;
 
     ColumnNumbers keys;
+    if (has_grouping_sets)
+        keys.push_back(header_before_merge.getPositionByName("__grouping_set"));
     for (const auto & key : aggregation_keys)
         keys.push_back(header_before_merge.getPositionByName(key.name));
 
@@ -1467,8 +1570,9 @@ static void executeMergeAggregatedImpl(
     query_plan.addStep(std::move(merging_aggregated));
 }
 
-void InterpreterSelectQuery::addEmptySourceToQueryPlan(
-    QueryPlan & query_plan, const Block & source_header, const SelectQueryInfo & query_info, ContextPtr context_)
+Pipe InterpreterSelectQuery::generateNullSourcePipe(
+    const Block & source_header, const SelectQueryInfo & query_info
+)
 {
     Pipe pipe(std::make_shared<NullSource>(source_header));
 
@@ -1504,6 +1608,14 @@ void InterpreterSelectQuery::addEmptySourceToQueryPlan(
         });
     }
 
+    return pipe;
+}
+
+void InterpreterSelectQuery::addEmptySourceToQueryPlan(
+    QueryPlan & query_plan, const Block & source_header, const SelectQueryInfo & query_info, ContextPtr context_)
+{
+    Pipe pipe = generateNullSourcePipe(source_header, query_info);
+
     auto read_from_pipe = std::make_unique<ReadFromPreparedSource>(std::move(pipe));
     read_from_pipe->setStepDescription("Read from NullSource");
     query_plan.addStep(std::move(read_from_pipe));
@@ -1536,6 +1648,7 @@ void InterpreterSelectQuery::addEmptySourceToQueryPlan(
                 query_plan,
                 query_info.projection->aggregate_overflow_row,
                 query_info.projection->aggregate_final,
+                false,
                 false,
                 context_->getSettingsRef(),
                 query_info.projection->aggregation_keys,
@@ -1747,7 +1860,11 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
         && processing_stage == QueryProcessingStage::FetchColumns
         && query_analyzer->hasAggregation()
         && (query_analyzer->aggregates().size() == 1)
-        && typeid_cast<const AggregateFunctionCount *>(query_analyzer->aggregates()[0].function.get());
+        && typeid_cast<const AggregateFunctionCount *>(query_analyzer->aggregates()[0].function.get())
+        /*
+        ** disable optimize_trival_count since distributed_stages mode cannot read data from local.
+        */
+        && !options.distributed_stages;
 
     if (optimize_trivial_count)
     {
@@ -1939,11 +2056,17 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
                 }
             }
 
-            if (query_info.projection)
-                query_info.projection->input_order_info
-                    = query_info.projection->order_optimizer->getInputOrder(query_info.projection->desc->metadata, context);
-            else
-                query_info.input_order_info = query_info.order_optimizer->getInputOrder(metadata_snapshot, context);
+            /**
+             * For distributed stages mode, local information about sorting is useless since we need gather data from remote nodes.
+             */
+            if (!options.distributed_stages)
+            {
+                if (query_info.projection)
+                    query_info.projection->input_order_info
+                        = query_info.projection->order_optimizer->getInputOrder(query_info.projection->desc->metadata, context);
+                else
+                    query_info.input_order_info = query_info.order_optimizer->getInputOrder(metadata_snapshot, context);
+            }
         }
 
         StreamLocalLimits limits;
@@ -1960,7 +2083,14 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
         if (!options.ignore_quota && (options.to_stage == QueryProcessingStage::Complete))
             quota = context->getQuota();
 
-        storage->read(query_plan, required_columns, metadata_snapshot, query_info, context, processing_stage, max_block_size, max_streams);
+        /**
+         * If it is distributed stages, we call read function to create ReadFromStorageStep so that it only contains infomation
+         * can be serialized / deserialized between workers.
+         */
+        if (options.distributed_stages)
+            storage->read(query_plan, required_columns, metadata_snapshot, query_info, context, processing_stage, max_block_size, max_streams, true);
+        else
+            storage->read(query_plan, required_columns, metadata_snapshot, query_info, context, processing_stage, max_block_size, max_streams);
 
         if (context->hasQueryContext() && !options.is_internal)
         {
@@ -2010,14 +2140,85 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
     }
 }
 
-
 void InterpreterSelectQuery::executeWhere(QueryPlan & query_plan, const ActionsDAGPtr & expression, bool remove_filter)
 {
     auto where_step = std::make_unique<FilterStep>(
         query_plan.getCurrentDataStream(), expression, getSelectQuery().where()->getColumnName(), remove_filter);
 
-    where_step->setStepDescription("WHERE");
+    String filter_description;
+    if (options.distributed_stages)
+        filter_description = ": " + getSelectQuery().where()->getColumnName();
+    
+    where_step->setStepDescription("WHERE" + filter_description);
     query_plan.addStep(std::move(where_step));
+}
+
+
+static Aggregator::Params getAggregatorParams(
+    const Block & src_header_,
+    const SelectQueryExpressionAnalyzer & query_analyzer,
+    const Context & context,
+    const ColumnNumbers & keys,
+    const AggregateDescriptions & aggregates,
+    bool overflow_row,
+    const Settings & settings,
+    size_t group_by_two_level_threshold,
+    size_t group_by_two_level_threshold_bytes)
+{
+    return Aggregator::Params
+    {
+        src_header_,
+        keys,
+        aggregates,
+        overflow_row,
+        settings.max_rows_to_group_by,
+        settings.group_by_overflow_mode,
+        group_by_two_level_threshold,
+        group_by_two_level_threshold_bytes,
+        settings.max_bytes_before_external_group_by,
+        settings.empty_result_for_aggregation_by_empty_set || (keys.empty() && query_analyzer.hasConstAggregationKeys()),
+        context.getTemporaryVolume(),
+        settings.max_threads,
+        settings.min_free_disk_space_for_temporary_data,
+        settings.compile_aggregate_expressions,
+        settings.min_count_to_compile_aggregate_expression
+    };
+}
+
+static GroupingSetsParamsList getAggregatorGroupingSetsParams(
+    const SelectQueryExpressionAnalyzer & query_analyzer,
+    const Block & header_before_aggregation,
+    const ColumnNumbers & all_keys
+)
+{
+    GroupingSetsParamsList result;
+    if (query_analyzer.useGroupingSetKey())
+    {
+        auto const & aggregation_keys_list = query_analyzer.aggregationKeysList();
+
+        ColumnNumbersList grouping_sets_with_keys;
+        ColumnNumbersList missing_columns_per_set;
+
+        for (const auto & aggregation_keys : aggregation_keys_list)
+        {
+            ColumnNumbers keys;
+            std::unordered_set<size_t> keys_set;
+            for (const auto & key : aggregation_keys)
+            {
+                keys.push_back(header_before_aggregation.getPositionByName(key.name));
+                keys_set.insert(keys.back());
+            }
+
+            ColumnNumbers missing_indexes;
+            for (size_t i = 0; i < all_keys.size(); ++i)
+            {
+                if (!keys_set.count(all_keys[i]))
+                    missing_indexes.push_back(i);
+            }
+            result.emplace_back(std::move(keys), std::move(missing_indexes));
+        }
+    }
+    return result;
 }
 
 
@@ -2043,22 +2244,18 @@ void InterpreterSelectQuery::executeAggregation(QueryPlan & query_plan, const Ac
 
     const Settings & settings = context->getSettingsRef();
 
-    Aggregator::Params params(
+    auto aggregator_params = getAggregatorParams(
         header_before_aggregation,
+        *query_analyzer,
+        *context,
         keys,
         aggregates,
         overflow_row,
-        settings.max_rows_to_group_by,
-        settings.group_by_overflow_mode,
+        settings,
         settings.group_by_two_level_threshold,
-        settings.group_by_two_level_threshold_bytes,
-        settings.max_bytes_before_external_group_by,
-        settings.empty_result_for_aggregation_by_empty_set || (keys.empty() && query_analyzer->hasConstAggregationKeys()),
-        context->getTemporaryVolume(),
-        settings.max_threads,
-        settings.min_free_disk_space_for_temporary_data,
-        settings.compile_aggregate_expressions,
-        settings.min_count_to_compile_aggregate_expression);
+        settings.group_by_two_level_threshold_bytes);
+
+    auto grouping_sets_params = getAggregatorGroupingSetsParams(*query_analyzer, header_before_aggregation, keys);
 
     SortDescription group_by_sort_description;
 
@@ -2076,7 +2273,8 @@ void InterpreterSelectQuery::executeAggregation(QueryPlan & query_plan, const Ac
 
     auto aggregating_step = std::make_unique<AggregatingStep>(
         query_plan.getCurrentDataStream(),
-        params,
+        std::move(aggregator_params),
+        std::move(grouping_sets_params),
         final,
         settings.max_block_size,
         merge_threads,
@@ -2084,11 +2282,10 @@ void InterpreterSelectQuery::executeAggregation(QueryPlan & query_plan, const Ac
         storage_has_evenly_distributed_read,
         std::move(group_by_info),
         std::move(group_by_sort_description));
-
     query_plan.addStep(std::move(aggregating_step));
 }
 
-void InterpreterSelectQuery::executeMergeAggregated(QueryPlan & query_plan, bool overflow_row, bool final)
+void InterpreterSelectQuery::executeMergeAggregated(QueryPlan & query_plan, bool overflow_row, bool final, bool has_grouping_sets)
 {
     /// If aggregate projection was chosen for table, avoid adding MergeAggregated.
     /// It is already added by storage (because of performance issues).
@@ -2102,6 +2299,7 @@ void InterpreterSelectQuery::executeMergeAggregated(QueryPlan & query_plan, bool
         overflow_row,
         final,
         storage && storage->isRemote(),
+        has_grouping_sets,
         context->getSettingsRef(),
         query_analyzer->aggregationKeys(),
         query_analyzer->aggregates());
@@ -2135,46 +2333,27 @@ void InterpreterSelectQuery::executeTotalsAndHaving(
     query_plan.addStep(std::move(totals_having_step));
 }
 
-
 void InterpreterSelectQuery::executeRollupOrCube(QueryPlan & query_plan, Modificator modificator)
 {
     const auto & header_before_transform = query_plan.getCurrentDataStream().header;
 
-    ColumnNumbers keys;
+    const Settings & settings = context->getSettingsRef();
 
+    ColumnNumbers keys;
     for (const auto & key : query_analyzer->aggregationKeys())
         keys.push_back(header_before_transform.getPositionByName(key.name));
 
-    const Settings & settings = context->getSettingsRef();
-
-    Aggregator::Params params(
-        header_before_transform,
-        keys,
-        query_analyzer->aggregates(),
-        false,
-        settings.max_rows_to_group_by,
-        settings.group_by_overflow_mode,
-        0,
-        0,
-        settings.max_bytes_before_external_group_by,
-        settings.empty_result_for_aggregation_by_empty_set,
-        context->getTemporaryVolume(),
-        settings.max_threads,
-        settings.min_free_disk_space_for_temporary_data,
-        settings.compile_aggregate_expressions,
-        settings.min_count_to_compile_aggregate_expression);
-
-    auto transform_params = std::make_shared<AggregatingTransformParams>(params, true);
+    auto params = getAggregatorParams(header_before_transform, *query_analyzer, *context, keys, query_analyzer->aggregates(), false, settings, 0, 0);
+    auto transform_params = std::make_shared<AggregatingTransformParams>(std::move(params), true);
 
     QueryPlanStepPtr step;
     if (modificator == Modificator::ROLLUP)
         step = std::make_unique<RollupStep>(query_plan.getCurrentDataStream(), std::move(transform_params));
-    else
+    else if (modificator == Modificator::CUBE)
         step = std::make_unique<CubeStep>(query_plan.getCurrentDataStream(), std::move(transform_params));
 
     query_plan.addStep(std::move(step));
 }
-
 
 void InterpreterSelectQuery::executeExpression(QueryPlan & query_plan, const ActionsDAGPtr & expression, const std::string & description)
 {
@@ -2289,7 +2468,7 @@ void InterpreterSelectQuery::executeWindow(QueryPlan & query_plan)
             query_plan.addStep(std::move(merging_sorted));
         }
 
-        auto window_step = std::make_unique<WindowStep>(query_plan.getCurrentDataStream(), w, w.window_functions);
+        auto window_step = std::make_unique<WindowStep>(query_plan.getCurrentDataStream(), w, w.window_functions, false);
         window_step->setStepDescription("Window step for window '" + w.window_name + "'");
 
         query_plan.addStep(std::move(window_step));

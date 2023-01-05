@@ -40,11 +40,14 @@ void MergeTreeDataPartTTLInfos::update(const MergeTreeDataPartTTLInfos & other_i
 }
 
 
-void MergeTreeDataPartTTLInfos::read(ReadBuffer & in)
+void MergeTreeDataPartTTLInfos::read(ReadBuffer & in, bool old_meta_format)
 {
     String json_str;
     readString(json_str, in);
-    assertEOF(in);
+    if (old_meta_format)
+        assertChar('\n', in);
+    else
+        assertEOF(in);
 
     JSON json(json_str);
     if (json.has("columns"))

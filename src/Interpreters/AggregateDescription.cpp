@@ -1,8 +1,11 @@
 #include <Interpreters/AggregateDescription.h>
 #include <Common/FieldVisitorToString.h>
-#include <IO/Operators.h>
-
 #include <Common/JSONBuilder.h>
+#include <IO/Operators.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
+#include <DataTypes/DataTypeHelper.h>
+#include <AggregateFunctions/AggregateFunctionFactory.h>
 
 
 namespace DB
@@ -146,6 +149,44 @@ void AggregateDescription::explain(JSONBuilder::JSONMap & map) const
 
         map.add("Argument Positions", std::move(args_pos_array));
     }
+}
+
+void AggregateDescription::serialize(WriteBuffer & buf) const
+{
+    writeBinary(function->getName(), buf);
+    writeBinary(function->getArgumentTypes().size(), buf);
+    for (const auto & type : function->getArgumentTypes())
+    {
+        serializeDataType(type, buf);
+    }
+
+    writeBinary(parameters, buf);
+    writeBinary(arguments, buf);
+    writeBinary(argument_names, buf);
+    writeBinary(column_name, buf);
+    writeBinary(mask_column, buf);
+}
+
+void AggregateDescription::deserialize(ReadBuffer & buf)
+{
+    String func_name;
+    readBinary(func_name, buf);
+    DataTypes data_types;
+    size_t type_size;
+    readBinary(type_size, buf);
+    data_types.resize(type_size);
+
+    for (size_t i = 0; i < type_size; ++i)
+        data_types[i] = deserializeDataType(buf);
+
+    readBinary(parameters, buf);
+    readBinary(arguments, buf);
+    readBinary(argument_names, buf);
+    readBinary(column_name, buf);
+    readBinary(mask_column, buf);
+
+    AggregateFunctionProperties properties;
+    function = AggregateFunctionFactory::instance().get(func_name, data_types, parameters, properties);
 }
 
 }

@@ -10,6 +10,7 @@ namespace DB
 void registerFunctionsBitmap(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionBitmapBuild>();
+    factory.registerFunction<FunctionArrayToBitmap>();
     factory.registerFunction<FunctionBitmapToArray>();
     factory.registerFunction<FunctionBitmapSubsetInRange>();
     factory.registerFunction<FunctionBitmapSubsetLimit>();
@@ -31,5 +32,7 @@ void registerFunctionsBitmap(FunctionFactory & factory)
     factory.registerFunction<FunctionBitmapHasAll>();
     factory.registerFunction<FunctionBitmapHasAny>();
     factory.registerFunction<FunctionBitmapContains>();
+
+    factory.registerFunction<FunctionEmptyBitmap>();
 }
 }

@@ -8,6 +8,11 @@ DiskDecorator::DiskDecorator(const DiskPtr & delegate_) : delegate(delegate_)
 {
 }
 
+UInt64 DiskDecorator::getID() const
+{
+    return delegate->getID();
+}
+
 const String & DiskDecorator::getName() const
 {
     return delegate->getName();
@@ -115,15 +120,15 @@ void DiskDecorator::listFiles(const String & path, std::vector<String> & file_na
 
 std::unique_ptr<ReadBufferFromFileBase>
 DiskDecorator::readFile(
-    const String & path, size_t buf_size, size_t estimated_size, size_t aio_threshold, size_t mmap_threshold, MMappedFileCache * mmap_cache) const
+    const String & path, const ReadSettings& settings) const
 {
-    return delegate->readFile(path, buf_size, estimated_size, aio_threshold, mmap_threshold, mmap_cache);
+    return delegate->readFile(path, settings);
 }
 
 std::unique_ptr<WriteBufferFromFileBase>
-DiskDecorator::writeFile(const String & path, size_t buf_size, WriteMode mode)
+DiskDecorator::writeFile(const String & path, const WriteSettings& settings)
 {
-    return delegate->writeFile(path, buf_size, mode);
+    return delegate->writeFile(path, settings);
 }
 
 void DiskDecorator::removeFile(const String & path)

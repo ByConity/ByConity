@@ -386,7 +386,8 @@ std::pair<const char *, bool> splitMultipartQuery(
     const std::string & queries,
     std::vector<std::string> & queries_list,
     size_t max_query_size,
-    size_t max_parser_depth)
+    size_t max_parser_depth,
+    ParserSettingsImpl dialect_type)
 {
     ASTPtr ast;
 
@@ -394,7 +395,7 @@ std::pair<const char *, bool> splitMultipartQuery(
     const char * pos = begin; /// parser moves pos from begin to the end of current query
     const char * end = begin + queries.size();
 
-    ParserQuery parser(end);
+    ParserQuery parser(end, dialect_type);
 
     queries_list.clear();
 

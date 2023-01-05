@@ -6,6 +6,13 @@
 namespace DB
 {
 
+namespace ErrorCodes
+{
+    extern const int LOGICAL_ERROR;
+}
+
+const char null_array[NULL_ARRAY_SZ] __attribute__ ((aligned (64))) = {0};
+
 template <typename IteratorSrc, typename IteratorDst>
 void formatHex(IteratorSrc src, IteratorDst dst, const size_t num_bytes)
 {

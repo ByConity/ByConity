@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Core/SettingsEnums.h>
+
 #include <Interpreters/Context_fwd.h>
 
 #include <cstddef>
@@ -24,6 +26,8 @@ struct ExpressionActionsSettings
     size_t max_temporary_non_const_columns = 0;
 
     CompileExpressions compile_expressions = CompileExpressions::no;
+
+    enum DialectType dialect_type = DialectType::CLICKHOUSE;
 
     static ExpressionActionsSettings fromSettings(const Settings & from, CompileExpressions compile_expressions = CompileExpressions::no);
     static ExpressionActionsSettings fromContext(ContextPtr from, CompileExpressions compile_expressions = CompileExpressions::no);

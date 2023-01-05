@@ -10,12 +10,14 @@ namespace DB
   * Example:
   *     EXTERNAL DDL FROM MySQL(clickhouse_db, mysql_db) DROP TABLE mysql_db.name;
   */
-class ParserExternalDDLQuery : public IParserBase
+class ParserExternalDDLQuery : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "EXTERNAL DDL query"; }
 
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 }

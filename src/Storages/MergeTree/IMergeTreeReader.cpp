@@ -1,10 +1,14 @@
 #include <DataTypes/NestedUtils.h>
 #include <DataTypes/DataTypeArray.h>
+#include <DataTypes/MapHelpers.h>
+#include "common/logger_useful.h"
 #include <Common/escapeForFileName.h>
 #include <Compression/CachedCompressedReadBuffer.h>
 #include <Columns/ColumnArray.h>
+#include <Columns/ColumnByteMap.h>
 #include <Interpreters/inplaceBlockConversions.h>
 #include <Storages/MergeTree/IMergeTreeReader.h>
+#include <Storages/MergeTree/MergeTreeSuffix.h>
 #include <Common/typeid_cast.h>
 
 
@@ -81,13 +85,13 @@ static bool arrayHasNoElementsRead(const IColumn & column)
     return last_offset != 0;
 }
 
-void IMergeTreeReader::fillMissingColumns(Columns & res_columns, bool & should_evaluate_missing_defaults, size_t num_rows)
+void IMergeTreeReader::fillMissingColumns(Columns & res_columns, bool & should_evaluate_missing_defaults, size_t num_rows, bool check_column_size)
 {
     try
     {
         size_t num_columns = columns.size();
 
-        if (res_columns.size() != num_columns)
+        if (check_column_size && res_columns.size() != num_columns)
             throw Exception("invalid number of columns passed to MergeTreeReader::fillMissingColumns. "
                             "Expected " + toString(num_columns) + ", "
                             "got " + toString(res_columns.size()), ErrorCodes::LOGICAL_ERROR);
@@ -243,13 +247,13 @@ NameAndTypePair IMergeTreeReader::getColumnFromPart(const NameAndTypePair & requ
     return {String(it->first), type};
 }
 
-void IMergeTreeReader::performRequiredConversions(Columns & res_columns)
+void IMergeTreeReader::performRequiredConversions(Columns & res_columns, bool check_column_size)
 {
     try
     {
         size_t num_columns = columns.size();
 
-        if (res_columns.size() != num_columns)
+        if (check_column_size && res_columns.size() != num_columns)
         {
             throw Exception(
                 "Invalid number of columns passed to MergeTreeReader::performRequiredConversions. "
@@ -311,6 +315,156 @@ void IMergeTreeReader::checkNumberOfColumns(size_t num_columns_to_read) const
         throw Exception("invalid number of columns passed to MergeTreeReader::readRows. "
                         "Expected " + toString(columns.size()) + ", "
                         "got " + toString(num_columns_to_read), ErrorCodes::LOGICAL_ERROR);
+}
+
+void IMergeTreeReader::addByteMapStreams(const NameAndTypePair & name_and_type, const String & col_name,
+	const ReadBufferFromFileBase::ProfileCallback & profile_callback, clockid_t clock_type)
+{
+    ISerialization::StreamCallback callback = [&](const ISerialization::SubstreamPath & substream_path) {
+        String implicit_stream_name = ISerialization::getFileNameForStream(name_and_type, substream_path);
+
+        if (streams.count(implicit_stream_name))
+            return;
+
+        String col_stream_name = implicit_stream_name;
+        if (data_part->versions->enable_compact_map_data)
+            col_stream_name = ISerialization::getFileNameForStream(col_name, substream_path);
+
+        bool data_file_exists = data_part->getChecksums()->files.count(implicit_stream_name + DATA_FILE_EXTENSION);
+
+        /** If data file is missing then we will not try to open it.
+          * It is necessary since it allows to add new column to structure of the table without creating new files for old parts.
+          */
+        if (!data_file_exists)
+            return;
+
+        streams.emplace(
+            implicit_stream_name,
+            std::make_unique<MergeTreeReaderStream>(
+                data_part->volume->getDisk(),
+                data_part->getFullRelativePath() + col_stream_name,
+                implicit_stream_name,
+                DATA_FILE_EXTENSION,
+                data_part->getMarksCount(),
+                all_mark_ranges,
+                settings,
+                mark_cache,
+                uncompressed_cache,
+                &data_part->index_granularity_info,
+                profile_callback,
+                clock_type,
+                data_part->getFileOffsetOrZero(implicit_stream_name + DATA_FILE_EXTENSION),
+                data_part->getFileSizeOrZero(implicit_stream_name + DATA_FILE_EXTENSION),
+                data_part->getFileOffsetOrZero(data_part->index_granularity_info.getMarksFilePath(implicit_stream_name)),
+                data_part->getFileSizeOrZero(data_part->index_granularity_info.getMarksFilePath(implicit_stream_name))));
+    };
+
+    auto serialization = data_part->getSerializationForColumn(name_and_type);
+    serialization->enumerateStreams(callback);
+    serializations.emplace(name_and_type.name, std::move(serialization));
+
+}
+
+void IMergeTreeReader::readMapDataNotKV(
+    const NameAndTypePair & name_and_type, ColumnPtr & column,
+    size_t from_mark, bool continue_reading, size_t max_rows_to_read,
+    std::unordered_map<String, ISerialization::SubstreamsCache> & caches,
+    std::unordered_map<String, size_t> & res_col_to_idx, Columns & res_columns)
+{
+    size_t column_size_before_reading = column->size();
+    const auto & [name, type] = name_and_type;
+
+    // collect all the substreams based on map column's name and its keys substream.
+    // and somehow construct runtime two implicit columns(key&value) representation.
+    auto keys_iter = map_column_keys.equal_range(name);
+    const DataTypeByteMap & type_map = typeid_cast<const DataTypeByteMap &>(*type);
+    DataTypePtr impl_value_type = type_map.getValueTypeForImplicitColumn();
+
+    std::map<String, std::pair<size_t, const IColumn *>> impl_key_values;
+    std::list<ColumnPtr> impl_key_col_holder;
+    String impl_key_name;
+    for (auto kit = keys_iter.first; kit != keys_iter.second; ++kit)
+    {
+        impl_key_name = getImplicitColNameForMapKey(name, kit->second);
+        NameAndTypePair implicit_key_name_and_type{impl_key_name, impl_value_type};
+        auto cache = caches[implicit_key_name_and_type.getNameInStorage()];
+
+        // If MAP implicit column and MAP column co-exist in columns, implicit column should
+        // only read only once.
+
+        if (dup_implicit_keys.count(impl_key_name) != 0)
+        {
+            auto idx = res_col_to_idx[impl_key_name];
+            impl_key_values[kit->second] = std::pair<size_t, const IColumn *>(column_size_before_reading, res_columns[idx].get());
+            continue;
+        }
+
+
+        impl_key_col_holder.push_back(impl_value_type->createColumn());
+        auto & implValueColumn = impl_key_col_holder.back();
+        readData(implicit_key_name_and_type, implValueColumn, from_mark, continue_reading, max_rows_to_read, cache);
+        impl_key_values[kit->second] = {0, &(*implValueColumn)};
+    }
+
+    // after reading all implicit values columns based files(built by keys), it's time to
+    // construct runtime ColumnMap(key_column, value_column).
+    dynamic_cast<ColumnByteMap *>(const_cast<IColumn *>(column.get()))->fillByExpandedColumns(type_map, impl_key_values);
+}
+
+void IMergeTreeReader::readData(
+    const NameAndTypePair & name_and_type, ColumnPtr & column,
+    size_t from_mark, bool continue_reading, size_t max_rows_to_read,
+    ISerialization::SubstreamsCache & cache)
+{
+    auto get_stream_getter = [&](bool stream_for_prefix) -> ISerialization::InputStreamGetter
+    {
+        return [&, stream_for_prefix](const ISerialization::SubstreamPath & substream_path) -> ReadBuffer * //-V1047
+        {
+            /// If substream have already been read.
+            if (cache.count(ISerialization::getSubcolumnNameForStream(substream_path)))
+                return nullptr;
+
+            String stream_name = ISerialization::getFileNameForStream(name_and_type, substream_path);
+            
+            auto it = streams.find(stream_name);
+            if (it == streams.end())
+                return nullptr;
+
+            IMergeTreeReaderStream & stream = *it->second;
+
+            if (stream_for_prefix)
+            {
+                stream.seekToStart();
+                continue_reading = false;
+            }
+            else if (!continue_reading)
+            {
+                stream.seekToMark(from_mark);
+            }
+
+            return stream.data_buffer;
+        };
+    };
+
+    double & avg_value_size_hint = avg_value_size_hints[name_and_type.name];
+    ISerialization::DeserializeBinaryBulkSettings deserialize_settings;
+    deserialize_settings.avg_value_size_hint = avg_value_size_hint;
+
+    const auto & name = name_and_type.name;
+    auto serialization = serializations[name];
+    
+    if (!deserialize_binary_bulk_state_map.contains(name))
+    {
+        deserialize_settings.getter = get_stream_getter(true);
+        serialization->deserializeBinaryBulkStatePrefix(deserialize_settings, deserialize_binary_bulk_state_map[name]);
+    }
+
+    deserialize_settings.getter = get_stream_getter(false);
+    deserialize_settings.continuous_reading = continue_reading;
+    auto & deserialize_state = deserialize_binary_bulk_state_map[name];
+
+    serialization->deserializeBinaryBulkWithMultipleStreams(column, max_rows_to_read, deserialize_settings, deserialize_state, &cache);
+    IDataType::updateAvgValueSizeHint(*column, avg_value_size_hint);
 }
 
 }

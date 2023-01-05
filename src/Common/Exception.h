@@ -3,6 +3,7 @@
 #include <cerrno>
 #include <vector>
 #include <memory>
+#include <mutex>
 
 #include <Poco/Version.h>
 #include <Poco/Exception.h>
@@ -11,15 +12,13 @@
 
 #include <fmt/format.h>
 
-#if !defined(NDEBUG) || defined(ADDRESS_SANITIZER) || defined(THREAD_SANITIZER) || defined(MEMORY_SANITIZER) || defined(UNDEFINED_BEHAVIOR_SANITIZER)
-#define ABORT_ON_LOGICAL_ERROR
-#endif
-
 namespace Poco { class Logger; }
 
 
 namespace DB
 {
+
+void abortOnFailedAssertion(const String & description);
 
 class Exception : public Poco::Exception
 {
@@ -51,6 +50,7 @@ public:
     const char * name() const throw() override { return "DB::Exception"; }
     const char * what() const throw() override { return message().data(); }
 
+    std::string displayText() const override;
     /// Add something to the existing message.
     template <typename ...Args>
     void addMessage(const std::string& format, Args&&... args)
@@ -155,6 +155,8 @@ using Exceptions = std::vector<std::exception_ptr>;
 void tryLogCurrentException(const char * log_name, const std::string & start_of_message = "");
 void tryLogCurrentException(Poco::Logger * logger, const std::string & start_of_message = "");
 
+void tryLogDebugCurrentException(const char * log_name, const std::string & start_of_message = "");
+void tryLogDebugCurrentException(Poco::Logger * logger, const std::string & start_of_message = "");
 
 /** Prints current exception in canonical format.
   * with_stacktrace - prints stack trace for DB::Exception.
@@ -168,6 +170,8 @@ std::string getCurrentExceptionMessage(bool with_stacktrace, bool check_embedded
 /// Returns error code from ErrorCodes
 int getCurrentExceptionCode();
 
+std::unique_ptr<Exception> getSerializableException();
+Exception toException(const std::string & s, const std::string & additional_message = "");
 
 /// An execution status of any piece of code, contains return code and optional error
 struct ExecutionStatus
@@ -216,5 +220,17 @@ std::enable_if_t<std::is_pointer_v<T>, T> exception_cast(std::exception_ptr e)
         return nullptr;
     }
 }
+
+/// Allows to save first catched exception in jobs and postpone its rethrow.
+class ExceptionHandler
+{
+public:
+    void setException(std::exception_ptr && exception);
+    void throwIfException();
+
+private:
+    std::exception_ptr first_exception;
+    std::mutex mutex;
+};
 
 }

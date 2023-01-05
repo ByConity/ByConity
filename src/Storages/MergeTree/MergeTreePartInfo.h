@@ -5,7 +5,9 @@
 #include <vector>
 #include <common/types.h>
 #include <common/DayNum.h>
+#include <Core/Names.h>
 #include <Storages/MergeTree/MergeTreeDataFormatVersion.h>
+#include <Storages/IStorage.h>
 
 
 namespace DB
@@ -20,19 +22,31 @@ struct MergeTreePartInfo
     Int64 max_block = 0;
     UInt32 level = 0;
     Int64 mutation = 0;   /// If the part has been mutated or contains mutated parts, is equal to mutation version number.
+    Int64 hint_mutation = 0; /// Trace about previous version part.
+
+    StorageType storage_type = StorageType::Local;
 
     bool use_leagcy_max_level = false;  /// For compatibility. TODO remove it
 
     MergeTreePartInfo() = default;
 
-    MergeTreePartInfo(String partition_id_, Int64 min_block_, Int64 max_block_, UInt32 level_)
-        : partition_id(std::move(partition_id_)), min_block(min_block_), max_block(max_block_), level(level_)
+    // MergeTreePartInfo(String partition_id_, Int64 min_block_, Int64 max_block_, UInt32 level_)
+    //     : partition_id(std::move(partition_id_)), min_block(min_block_), max_block(max_block_), level(level_)
+    // {
+    // }
+
+    // MergeTreePartInfo(String partition_id_, Int64 min_block_, Int64 max_block_, UInt32 level_, Int64 mutation_)
+    //     : partition_id(std::move(partition_id_)), min_block(min_block_), max_block(max_block_), level(level_), mutation(mutation_)
+    // {}
+
+    MergeTreePartInfo(String partition_id_, Int64 min_block_, Int64 max_block_, UInt32 level_, UInt64 mutation_ = 0, UInt64 hint_mutation_ = 0, StorageType storage_type_ = StorageType::Local)
+        : partition_id(std::move(partition_id_)), min_block(min_block_), max_block(max_block_), level(level_), mutation(mutation_), hint_mutation(hint_mutation_), storage_type(storage_type_)
     {
     }
 
-    MergeTreePartInfo(String partition_id_, Int64 min_block_, Int64 max_block_, UInt32 level_, Int64 mutation_)
-        : partition_id(std::move(partition_id_)), min_block(min_block_), max_block(max_block_), level(level_), mutation(mutation_)
+    MergeTreePartInfo newDropVersion(UInt64 txn_id, StorageType storage_type_ = StorageType::Local) const
     {
+        return {partition_id, min_block, max_block, level + 1, txn_id, /*hint_mutation*/ 0, storage_type_};
     }
 
     bool operator<(const MergeTreePartInfo & rhs) const
@@ -65,6 +79,14 @@ struct MergeTreePartInfo
             && mutation >= rhs.mutation;
     }
 
+    bool containsExactly(const MergeTreePartInfo & rhs) const
+    {
+        return partition_id == rhs.partition_id
+            && min_block == rhs.min_block
+            && max_block == rhs.max_block
+            && (level > rhs.level || mutation > rhs.mutation);
+    }
+
     /// Return part mutation version, if part wasn't mutated return zero
     Int64 getMutationVersion() const
     {
@@ -86,7 +108,14 @@ struct MergeTreePartInfo
         return level == MergeTreePartInfo::MAX_LEVEL || level == another_max_level;
     }
 
+    /// Block name : PartitionID_MinBlock_MaxBlock
+    /// All MVCC parts of the same block shared a block name
+    String getBlockName() const;
+
     String getPartName() const;
+    String getPartNameWithHintMutation() const;
+
+    String getBasicPartName() const;
     String getPartNameV0(DayNum left_date, DayNum right_date) const;
     UInt64 getBlocksCount() const
     {
@@ -104,10 +133,19 @@ struct MergeTreePartInfo
 
     static bool contains(const String & outer_part_name, const String & inner_part_name, MergeTreeDataFormatVersion format_version);
 
+    String getPartitionKeyInStringAt(size_t index) const;
+
+    static Names splitPartitionKeys(const String & partition_id);
+
     static constexpr UInt32 MAX_LEVEL = 999999999;
     static constexpr UInt32 MAX_BLOCK_NUMBER = 999999999;
+    static constexpr UInt32 MAX_MUTATION = 999999999;
 
     static constexpr UInt32 LEGACY_MAX_LEVEL = std::numeric_limits<decltype(level)>::max();
+
+private:
+    template<bool NameWithHintMutation>
+    String getPartNameImpl() const;
 };
 
 /// Information about detached part, which includes its prefix in

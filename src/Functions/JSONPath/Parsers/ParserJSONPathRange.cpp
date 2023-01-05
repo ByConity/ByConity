@@ -32,7 +32,7 @@ bool ParserJSONPathRange::parseImpl(Pos & pos, ASTPtr & node, Expected & expecte
     auto range = std::make_shared<ASTJSONPathRange>();
     node = range;
 
-    ParserNumber number_p;
+    ParserNumber number_p(ParserSettings::CLICKHOUSE);
     ASTPtr number_ptr;
     while (pos->type != TokenType::ClosingSquareBracket)
     {

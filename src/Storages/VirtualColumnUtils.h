@@ -46,6 +46,10 @@ auto extractSingleValueFromBlock(const Block & block, const String & name)
     return res;
 }
 
+/// Utility method for cascading drop/detach partition
+void cascadingDrop(const StorageID & table_id, const ASTPtr & partition_or_predicate,
+                   bool drop_where, bool detach, bool cascading, ContextPtr context);
+
 }
 
 }

@@ -71,7 +71,7 @@ DataTypePtr FunctionHasColumnInTable::getReturnTypeImpl(const ColumnsWithTypeAnd
     {
         const ColumnWithTypeAndName & argument = arguments[i];
 
-        if (!checkColumnConst<ColumnString>(argument.column.get()))
+        if (argument.column && !checkColumnConst<ColumnString>(argument.column.get()))
         {
             throw Exception(arg_pos_description[i] + " argument for function " + getName() + " must be const String.",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);

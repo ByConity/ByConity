@@ -16,6 +16,9 @@ struct SettingChange
 
     friend bool operator ==(const SettingChange & lhs, const SettingChange & rhs) { return (lhs.name == rhs.name) && (lhs.value == rhs.value); }
     friend bool operator !=(const SettingChange & lhs, const SettingChange & rhs) { return !(lhs == rhs); }
+
+    void serialize(WriteBuffer & buf) const;
+    void deserialize(ReadBuffer & buf);
 };
 
 
@@ -27,6 +30,9 @@ public:
     bool tryGet(const std::string_view & name, Field & out_value) const;
     const Field * tryGet(const std::string_view & name) const;
     Field * tryGet(const std::string_view & name);
+
+    void serialize(WriteBuffer & buf) const;
+    void deserialize(ReadBuffer & buf);
 };
 
 }

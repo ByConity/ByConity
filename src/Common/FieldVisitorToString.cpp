@@ -53,6 +53,8 @@ static String formatFloat(const Float64 x)
 
 
 String FieldVisitorToString::operator() (const Null &) const { return "NULL"; }
+String FieldVisitorToString::operator() (const NegativeInfinity &) const { return "-Inf"; }
+String FieldVisitorToString::operator() (const PositiveInfinity &) const { return "+Inf"; }
 String FieldVisitorToString::operator() (const UInt64 & x) const { return formatQuoted(x); }
 String FieldVisitorToString::operator() (const Int64 & x) const { return formatQuoted(x); }
 String FieldVisitorToString::operator() (const Float64 & x) const { return formatFloat(x); }
@@ -126,5 +128,29 @@ String FieldVisitorToString::operator() (const Map & x) const
     return wb.str();
 }
 
+String FieldVisitorToString::operator() (const ByteMap & x) const
+{
+    WriteBufferFromOwnString wb;
+
+    wb << '{';
+    for (auto it = x.begin(); it != x.end(); ++it)
+    {
+        if (it != x.begin())
+            wb << ", ";
+        wb << applyVisitor(*this, it->first);
+        wb << ":";
+        wb << applyVisitor(*this, it->second);
+    }
+    wb << '}';
+
+    return wb.str();
 }
 
+String FieldVisitorToString::operator() (const BitMap64 & x) const
+{
+    WriteBufferFromOwnString wb;
+    wb << "BitMap64_" << x.toString();
+    return wb.str();
+}
+
+}

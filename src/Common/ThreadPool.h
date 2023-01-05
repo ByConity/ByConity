@@ -1,5 +1,6 @@
 #pragma once
 
+#include <unistd.h>
 #include <cstdint>
 #include <thread>
 #include <mutex>
@@ -8,10 +9,15 @@
 #include <queue>
 #include <list>
 #include <optional>
+#include <sstream>
 
 #include <Poco/Event.h>
 #include <Common/ThreadStatus.h>
 #include <common/scope_guard.h>
+#include <Common/SystemUtils.h>
+#include <Common/CGroup/CpuSet.h>
+#include <Common/CGroup/CpuController.h>
+
 
 /** Very simple thread pool similar to boost::threadpool.
   * Advantages:
@@ -30,13 +36,13 @@ public:
     using Job = std::function<void()>;
 
     /// Maximum number of threads is based on the number of physical cores.
-    ThreadPoolImpl();
+    ThreadPoolImpl(DB::CpuSetPtr cpu_set_ = nullptr);
 
     /// Size is constant. Up to num_threads are created on demand and then run until shutdown.
-    explicit ThreadPoolImpl(size_t max_threads_);
+    explicit ThreadPoolImpl(size_t max_threads_, DB::CpuSetPtr cpu_set_ = nullptr);
 
     /// queue_size - maximum number of running plus scheduled jobs. It can be greater than max_threads. Zero means unlimited.
-    ThreadPoolImpl(size_t max_threads_, size_t max_free_threads_, size_t queue_size_, bool shutdown_on_exception_ = true);
+    ThreadPoolImpl(size_t max_threads_, size_t max_free_threads_, size_t queue_size_, bool shutdown_on_exception_ = true, DB::CpuSetPtr cpu_set_ = nullptr, DB::CpuControllerPtr cpu_ = nullptr);
 
     /// Add new job. Locks until number of scheduled jobs is less than maximum or exception in one of threads was thrown.
     /// If any thread was throw an exception, first exception will be rethrown from this method,
@@ -75,6 +81,7 @@ public:
     void setMaxFreeThreads(size_t value);
     void setQueueSize(size_t value);
     size_t getMaxThreads() const;
+    size_t getMaxQueueSize() const;
 
 private:
     mutable std::mutex mutex;
@@ -106,6 +113,8 @@ private:
     std::priority_queue<JobWithPriority> jobs;
     std::list<Thread> threads;
     std::exception_ptr first_exception;
+    DB::CpuSetPtr cpu_set;
+    DB::CpuControllerPtr cpu;
 
 
     template <typename ReturnType>
@@ -160,14 +169,22 @@ public:
 
     template <typename Function, typename... Args>
     explicit ThreadFromGlobalPool(Function && func, Args &&... args)
-        : state(std::make_shared<Poco::Event>())
+        : state(std::make_shared<Poco::Event>()),
+        tid(std::make_shared<size_t>(0)),
+        cv(std::make_shared<std::condition_variable>()),
+        mutex()
     {
         /// NOTE: If this will throw an exception, the destructor won't be called.
-        GlobalThreadPool::instance().scheduleOrThrow([
+        getThreadPool().scheduleOrThrow([
+            tid = tid,
+            cv = cv,
             state = state,
             func = std::forward<Function>(func),
             args = std::make_tuple(std::forward<Args>(args)...)]() mutable /// mutable is needed to destroy capture
         {
+            *tid = DB::SystemUtils::gettid();
+            cv->notify_all();
+
             auto event = std::move(state);
             SCOPE_EXIT(event->set());
 
@@ -193,6 +210,8 @@ public:
         if (joinable())
             abort();
         state = std::move(rhs.state);
+        tid = std::move(rhs.tid);
+        cv = std::move(rhs.cv);
         return *this;
     }
 
@@ -223,11 +242,36 @@ public:
         return state != nullptr;
     }
 
+    size_t gettid()
+    {
+        std::unique_lock<std::mutex> lock(mutex);
+        cv->wait(lock, [tid=tid]{return *tid != 0;});
+        return *tid;
+    }
+
+    FreeThreadPool & getThreadPool();
+
 private:
     /// The state used in this object and inside the thread job.
     std::shared_ptr<Poco::Event> state;
+    std::shared_ptr<size_t> tid;
+    std::shared_ptr<std::condition_variable> cv;
+    std::mutex mutex;
 };
 
+inline std::function<void()> createExceptionHandledJob(std::function<void()> job, DB::ExceptionHandler & handler)
+{
+    return [job{std::move(job)}, &handler]() {
+        try
+        {
+            job();
+        }
+        catch (...)
+        {
+            handler.setException(std::current_exception());
+        }
+    };
+}
 
 /// Recommended thread pool for the case when multiple thread pools are created and destroyed.
 using ThreadPool = ThreadPoolImpl<ThreadFromGlobalPool>;

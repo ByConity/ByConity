@@ -25,7 +25,6 @@ class IConnectionPool : private boost::noncopyable
 public:
     using Entry = PoolBase<Connection>::Entry;
 
-public:
     virtual ~IConnectionPool() = default;
 
     /// Selects the connection to work.
@@ -59,8 +58,11 @@ public:
             const String & client_name_,
             Protocol::Compression compression_,
             Protocol::Secure secure_,
-            Int64 priority_ = 1)
-       : Base(max_connections_,
+            Int64 priority_ = 1,
+            UInt16 exchange_port_ = 0,
+            UInt16 exchange_status_port_ = 0,
+            UInt16 rpc_port_ = 0)
+        : Base(max_connections_,
         &Poco::Logger::get("ConnectionPool (" + host_ + ":" + toString(port_) + ")")),
         host(host_),
         port(port_),
@@ -72,7 +74,10 @@ public:
         client_name(client_name_),
         compression(compression_),
         secure(secure_),
-        priority(priority_)
+        priority(priority_),
+        exchange_port(exchange_port_),
+        exchange_status_port(exchange_status_port_),
+        rpc_port(rpc_port_)
     {
     }
 
@@ -114,7 +119,9 @@ protected:
             host, port,
             default_database, user, password,
             cluster, cluster_secret,
-            client_name, compression, secure);
+            client_name, compression, secure,
+            Poco::Timespan(DBMS_DEFAULT_SYNC_REQUEST_TIMEOUT_SEC, 0),
+            exchange_port, exchange_status_port, rpc_port);
     }
 
 private:
@@ -132,7 +139,9 @@ private:
     Protocol::Compression compression; /// Whether to compress data when interacting with the server.
     Protocol::Secure secure;           /// Whether to encrypt data when interacting with the server.
     Int64 priority;                    /// priority from <remote_servers>
-
+    UInt16 exchange_port;
+    UInt16 exchange_status_port;
+    UInt16 rpc_port;
 };
 
 }

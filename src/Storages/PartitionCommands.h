@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Core/Field.h>
+#include <Core/Names.h>
 #include <common/types.h>
 #include <Parsers/IAST.h>
 #include <Storages/IStorage_fwd.h>
@@ -23,15 +24,23 @@ struct PartitionCommand
         UNKNOWN,
 
         ATTACH_PARTITION,
+        ATTACH_DETACHED_PARTITION,
         MOVE_PARTITION,
+        MOVE_PARTITION_FROM,
         DROP_PARTITION,
         DROP_DETACHED_PARTITION,
+        DROP_PARTITION_WHERE,
         FETCH_PARTITION,
+        FETCH_PARTITION_WHERE,
+        REPAIR_PARTITION,
         FREEZE_ALL_PARTITIONS,
         FREEZE_PARTITION,
         UNFREEZE_ALL_PARTITIONS,
         UNFREEZE_PARTITION,
         REPLACE_PARTITION,
+        REPLACE_PARTITION_WHERE,
+        INGEST_PARTITION,
+        SAMPLE_PARTITION_WHERE,
     };
 
     Type type = UNKNOWN;
@@ -41,8 +50,16 @@ struct PartitionCommand
     /// true for DETACH PARTITION.
     bool detach = false;
 
+    bool attach_from_detached = false;
+
     /// true for ATTACH PART and DROP DETACHED PART (and false for PARTITION)
     bool part = false;
+
+    /// true for ATTACH PARTS from hdfs directory
+    bool parts = false;
+
+    /// true for DROP/DETACH PARTITION [WHERE]
+    bool cascading = false;
 
     /// For ATTACH PARTITION partition FROM db.table
     String from_database;
@@ -58,6 +75,13 @@ struct PartitionCommand
 
     /// For FREEZE PARTITION and UNFREEZE
     String with_name;
+
+    /// columns for INGEST PARTITION
+    Names column_names;
+    Names key_names;
+
+    /// expression for sample / split / resharding
+    ASTPtr sharding_exp;
 
     enum MoveDestinationType
     {
@@ -77,6 +101,8 @@ struct PartitionCommand
     /// different flags)
     std::string typeToString() const;
 };
+
+bool partitionCommandHasWhere(const PartitionCommand & command);
 
 using PartitionCommands = std::vector<PartitionCommand>;
 

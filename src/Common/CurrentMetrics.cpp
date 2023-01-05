@@ -5,17 +5,28 @@
 #define APPLY_FOR_METRICS(M) \
     M(Query, "Number of executing queries") \
     M(Merge, "Number of executing background merges") \
+    M(Manipulation, "Number of execting manipulation tasks") \
     M(PartMutation, "Number of mutations (ALTER DELETE/UPDATE)") \
     M(ReplicatedFetch, "Number of data parts being fetched from replica") \
     M(ReplicatedSend, "Number of data parts being sent to replicas") \
     M(ReplicatedChecks, "Number of data parts checking for consistency") \
     M(BackgroundPoolTask, "Number of active tasks in BackgroundProcessingPool (merges, mutations, or replication queue bookkeeping)") \
+    M(UniqueTableBackgroundPoolTask, "Number of active tasks in BackgroundJobExecutor. This pool is used for doing merge task for unique table") \
     M(BackgroundFetchesPoolTask, "Number of active tasks in BackgroundFetchesPool") \
     M(BackgroundMovePoolTask, "Number of active tasks in BackgroundProcessingPool for moves") \
     M(BackgroundSchedulePoolTask, "Number of active tasks in BackgroundSchedulePool. This pool is used for periodic ReplicatedMergeTree tasks, like cleaning old data parts, altering data parts, replica re-initialization, etc.") \
     M(BackgroundBufferFlushSchedulePoolTask, "Number of active tasks in BackgroundBufferFlushSchedulePool. This pool is used for periodic Buffer flushes") \
     M(BackgroundDistributedSchedulePoolTask, "Number of active tasks in BackgroundDistributedSchedulePool. This pool is used for distributed sends that is done in background.") \
     M(BackgroundMessageBrokerSchedulePoolTask, "Number of active tasks in BackgroundProcessingPool for message streaming") \
+    M(BackgroundConsumeSchedulePoolTask, "Number of active tasks in BackgroundSchedulePool. This pool is used for periodic ReplicatedMergeTree tasks, like cleaning old data parts, altering data parts, replica re-initialization, etc.") \
+    M(BackgroundRestartSchedulePoolTask, "Number of active tasks in BackgroundSchedulePool. This pool is used for periodic ReplicatedMergeTree tasks, like cleaning old data parts, altering data parts, replica re-initialization, etc.") \
+    M(BackgroundHaLogSchedulePoolTask, "Number of active tasks in BackgroundSchedulePool. This pool is used for periodic ReplicatedMergeTree tasks, like cleaning old data parts, altering data parts, replica re-initialization, etc.") \
+    M(BackgroundMutationSchedulePoolTask, "Number of active tasks in BackgroundSchedulePool. This pool is used for periodic ReplicatedMergeTree tasks, like cleaning old data parts, altering data parts, replica re-initialization, etc.") \
+    M(BackgroundLocalSchedulePoolTask, "Number of active tasks in BackgroundSchedulePool. This pool is used for periodic ReplicatedMergeTree tasks, like cleaning old data parts, altering data parts, replica re-initialization, etc.") \
+    M(BackgroundMergeSelectSchedulePoolTask, "Number of active tasks in BackgroundSchedulePool. This pool is used for periodic ReplicatedMergeTree tasks, like cleaning old data parts, altering data parts, replica re-initialization, etc.") \
+    M(BackgroundUniqueTableSchedulePoolTask, "Number of active tasks in BackgroundSchedulePool. This pool is used for periodic ReplicatedMergeTree tasks, like cleaning old data parts, altering data parts, replica re-initialization, etc.") \
+    M(BackgroundMemoryTableSchedulePoolTask, "Number of active tasks in BackgroundSchedulePool. This pool is used for memory table threads, etc.") \
+    M(BackgroundCNCHTopologySchedulePoolTask, "Number of active tasks in BackgroundSchedulePool. This pool is used for topology related background threads.") \
     M(CacheDictionaryUpdateQueueBatches, "Number of 'batches' (a set of keys) in update queue in CacheDictionaries.") \
     M(CacheDictionaryUpdateQueueKeys, "Exact number of keys in update queue in CacheDictionaries.") \
     M(DiskSpaceReservedForMerge, "Disk space reserved for currently running background merges. It is slightly more than the total size of currently merging parts.") \
@@ -35,8 +46,11 @@
     M(SendScalars, "Number of connections that are sending data for scalars to remote servers.") \
     M(SendExternalTables, "Number of connections that are sending data for external tables to remote servers. External tables are used to implement GLOBAL IN and GLOBAL JOIN operators with distributed subqueries.") \
     M(QueryThread, "Number of query processing threads") \
+    M(LeaderReplica, "Number of Replicated tables that are leaders. Leader replica is responsible for assigning merges, cleaning old blocks for deduplications and a few more bookkeeping tasks. There may be no more than one leader across all replicas at one moment of time. If there is no leader it will be elected soon or it indicate an issue.") \
     M(ReadonlyReplica, "Number of Replicated tables that are currently in readonly state due to re-initialization after ZooKeeper session loss or due to startup without ZooKeeper configured.") \
     M(MemoryTracking, "Total amount of memory (bytes) allocated by the server.") \
+    M(MemoryTrackingForMerges, "Total amount of memory (bytes) allocated for background merges. Included in MemoryTrackingInBackgroundProcessingPool. Note that this value may include a drift when the memory was allocated in a context of background processing pool and freed in other context or vice-versa. This happens naturally due to caches for tables indexes and doesn't indicate memory leaks.") \
+    M(MemoryTrackingForConsuming, "Total amount of memory (bytes) used by consumer tasks") \
     M(EphemeralNode, "Number of ephemeral nodes hold in ZooKeeper.") \
     M(ZooKeeperSession, "Number of sessions (connections) to ZooKeeper. Should be no more than one, because using more than one connection to ZooKeeper may lead to bugs due to lack of linearizability (stale reads) that ZooKeeper consistency model allows.") \
     M(ZooKeeperWatch, "Number of watches (event subscriptions) in ZooKeeper.") \
@@ -69,8 +83,22 @@
     M(PartsWide, "Wide parts.") \
     M(PartsCompact, "Compact parts.") \
     M(PartsInMemory, "In-memory parts.") \
+    M(PartsCNCH, "CNCH parts.") \
     M(MMappedFiles, "Total number of mmapped files.") \
-    M(MMappedFileBytes, "Sum size of mmapped file regions.") \
+    M(MMappedFileBytes, "Sum size of mmapped file regions.")     \
+    M(MemoryTrackingForExchange, "Total amount of memory (bytes) allocated for complex query exchange") \
+    \
+    M(StorageMemoryRows, "Memory table input rows") \
+    M(StorageMemoryBytes, "Memory table input bytes") \
+    \
+    M(CnchSDRequestsUpstream, "Number of Service Discovery requests to upstream") \
+    \
+    M(CnchTxnActiveTransactions, "Number of active transactions") \
+    M(CnchTxnTransactionRecords, "Number of transaction records") \
+    \
+    M(DiskCacheEvictQueueLength, "Length of disk cache evict queue") \
+    M(DiskCacheRoughSingleStatsBucketSize, "Diskcache single statistics bucket size") \
+
 
 namespace CurrentMetrics
 {

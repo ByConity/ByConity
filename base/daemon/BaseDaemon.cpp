@@ -63,6 +63,11 @@
 #   include <Common/config_version.h>
 #endif
 
+#include <Common/config.h>
+#if USE_BREAKPAD
+#    include "client/linux/handler/exception_handler.h"
+#endif
+
 #if defined(OS_DARWIN)
 #   pragma GCC diagnostic ignored "-Wunused-macros"
 #   define _XOPEN_SOURCE 700  // ucontext is not available without _XOPEN_SOURCE
@@ -73,6 +78,33 @@ namespace fs = std::filesystem;
 
 DB::PipeFDs signal_pipe;
 
+#if USE_BREAKPAD
+static bool use_minidump = true;
+static std::shared_ptr<google_breakpad::MinidumpDescriptor> descriptor;
+static std::shared_ptr<google_breakpad::ExceptionHandler> eh;
+
+
+static bool dumpCallbackInfo(const google_breakpad::MinidumpDescriptor & descriptor, void *, bool succeeded)
+{
+    LOG_INFO(&Poco::Logger::get("Minidump"), "SCM {}, Signal dump path: {}", VERSION_SCM, descriptor.path());
+    return succeeded;
+}
+
+static bool dumpCallbackError(const google_breakpad::MinidumpDescriptor & descriptor, void *, bool succeeded)
+{
+    LOG_ERROR(&Poco::Logger::get("Minidump"), "SCM {}, core dump path: {}", VERSION_SCM, descriptor.path());
+    return succeeded;
+}
+
+static std::string getMinidumpPath(const std::string & log_path)
+{
+    auto path = Poco::Path(log_path).makeParent();
+    if (path.toString().empty())
+        return "/tmp";
+    return path.toString();
+}
+#endif
+
 
 /** Reset signal handler to the default and send signal to itself.
   * It's called from user signal handler to write core dump.
@@ -80,6 +112,11 @@ DB::PipeFDs signal_pipe;
 static void call_default_signal_handler(int sig)
 {
     signal(sig, SIG_DFL);
+#if USE_BREAKPAD
+    if (use_minidump)
+        eh = std::shared_ptr<google_breakpad::ExceptionHandler>(
+            new google_breakpad::ExceptionHandler(*descriptor, nullptr, dumpCallbackError, nullptr, true, -1));
+#endif
     raise(sig);
 }
 
@@ -113,6 +150,11 @@ static void writeSignalIDtoSignalPipe(int sig)
 static void closeLogsSignalHandler(int sig, siginfo_t *, void *)
 {
     DENY_ALLOCATIONS_IN_SCOPE;
+    writeSignalIDtoSignalPipe(sig);
+}
+
+static void minidumpSignalHandler(int sig, siginfo_t *, void *)
+{
     writeSignalIDtoSignalPipe(sig);
 }
 
@@ -212,6 +254,17 @@ public:
                 BaseDaemon::instance().closeLogs(BaseDaemon::instance().logger());
                 LOG_INFO(log, "Opened new log file after received signal.");
             }
+            else if (sig == SIGUSR2)
+            {
+                LOG_DEBUG(log, "Received signal to minidump");
+#if USE_BREAKPAD
+                if (use_minidump)
+                {
+                    google_breakpad::ExceptionHandler s_eh(*descriptor, NULL, dumpCallbackInfo, NULL, true, -1);
+                    s_eh.WriteMinidump();
+                }
+#endif
+            }
             else if (sig == Signals::StdTerminate)
             {
                 UInt32 thread_num;
@@ -222,9 +275,7 @@ public:
 
                 onTerminate(message, thread_num);
             }
-            else if (sig == SIGINT ||
-                sig == SIGQUIT ||
-                sig == SIGTERM)
+            else if (sig == SIGINT || sig == SIGQUIT || sig == SIGTERM)
             {
                 daemon.handleSignal(sig);
             }
@@ -261,8 +312,15 @@ private:
 
     void onTerminate(const std::string & message, UInt32 thread_num) const
     {
-        LOG_FATAL(log, "(version {}{}, {}) (from thread {}) {}",
-            VERSION_STRING, VERSION_OFFICIAL, daemon.build_id_info, thread_num, message);
+        LOG_FATAL(
+            log,
+            "(version {}{} scm {}, {}) (from thread {}) {}",
+            VERSION_STRING,
+            VERSION_OFFICIAL,
+            VERSION_SCM,
+            daemon.build_id_info,
+            thread_num,
+            message);
     }
 
     void onFault(
@@ -288,15 +346,30 @@ private:
 
         if (query_id.empty())
         {
-            LOG_FATAL(log, "(version {}{}, {}) (from thread {}) (no query) Received signal {} ({})",
-                VERSION_STRING, VERSION_OFFICIAL, daemon.build_id_info,
-                thread_num, strsignal(sig), sig);
+            LOG_FATAL(
+                log,
+                "(version {}{} scm{}, {}) (from thread {}) (no query) Received signal {} ({})",
+                VERSION_STRING,
+                VERSION_OFFICIAL,
+                VERSION_SCM,
+                daemon.build_id_info,
+                thread_num,
+                strsignal(sig),
+                sig);
         }
         else
         {
-            LOG_FATAL(log, "(version {}{}, {}) (from thread {}) (query_id: {}) Received signal {} ({})",
-                VERSION_STRING, VERSION_OFFICIAL, daemon.build_id_info,
-                thread_num, query_id, strsignal(sig), sig);
+            LOG_FATAL(
+                log,
+                "(version {}{} scm {}, {}) (from thread {}) (query_id: {}) Received signal {} ({})",
+                VERSION_STRING,
+                VERSION_OFFICIAL,
+                VERSION_SCM,
+                daemon.build_id_info,
+                thread_num,
+                query_id,
+                strsignal(sig),
+                sig);
         }
 
         String error_message;
@@ -330,8 +403,11 @@ private:
         String calculated_binary_hash = getHashOfLoadedBinaryHex();
         if (daemon.stored_binary_hash.empty())
         {
-            LOG_FATAL(log, "Calculated checksum of the binary: {}."
-                " There is no information about the reference checksum.", calculated_binary_hash);
+            LOG_FATAL(
+                log,
+                "Calculated checksum of the binary: {}."
+                " There is no information about the reference checksum.",
+                calculated_binary_hash);
         }
         else if (calculated_binary_hash == daemon.stored_binary_hash)
         {
@@ -339,15 +415,18 @@ private:
         }
         else
         {
-            LOG_FATAL(log, "Calculated checksum of the ClickHouse binary ({0}) does not correspond"
+            LOG_FATAL(
+                log,
+                "Calculated checksum of the ClickHouse binary ({0}) does not correspond"
                 " to the reference checksum stored in the binary ({1})."
                 " It may indicate one of the following:"
                 " - the file was changed just after startup;"
                 " - the file is damaged on disk due to faulty hardware;"
                 " - the loaded executable is damaged in memory due to faulty hardware;"
                 " - the file was intentionally modified;"
-                " - logical error in code."
-                , calculated_binary_hash, daemon.stored_binary_hash);
+                " - logical error in code.",
+                calculated_binary_hash,
+                daemon.stored_binary_hash);
         }
 #endif
 
@@ -587,7 +666,15 @@ void debugIncreaseOOMScore() {}
 
 void BaseDaemon::initialize(Application & self)
 {
-    closeFDs();
+    /// BaseDaemon will close inheritable file descriptors from parent processe to avoid 
+    /// security vulnerability issue and file resource resuse issue like tcp port resuse.
+    /// But closing inheritable fds here may be too late, since global variables initialized 
+    /// before main entry may open some fds already, which leading to implicit problems such as 
+    /// closing fd witch already closed by BaseDaemon before.
+    /// For example, Brpc will create Bvars as global variable and will open some file under /proc 
+    /// before closeFDs called.
+    /// For our sitiuation, just ingoring inheritable fds is ok.
+    // closeFDs();
 
     ServerApplication::initialize(self);
 
@@ -686,6 +773,12 @@ void BaseDaemon::initialize(Application & self)
             && chdir("/tmp") != 0)
             throw Poco::Exception("Cannot change directory to /tmp");
     }
+
+#if USE_BREAKPAD
+    use_minidump = config().getBool("use_minidump", true);
+    if (use_minidump)
+        descriptor = std::make_shared<google_breakpad::MinidumpDescriptor>(getMinidumpPath(config().getString("logger.log", "")));
+#endif
 
     /// sensitive data masking rules are not used here
     buildLoggers(config(), logger(), self.commandName());
@@ -796,6 +889,7 @@ void BaseDaemon::initializeTerminationAndSignalProcessing()
     addSignalHandler({SIGABRT, SIGSEGV, SIGILL, SIGBUS, SIGSYS, SIGFPE, SIGPIPE, SIGTSTP, SIGTRAP}, signalHandler, &handled_signals);
     addSignalHandler({SIGHUP, SIGUSR1}, closeLogsSignalHandler, &handled_signals);
     addSignalHandler({SIGINT, SIGQUIT, SIGTERM}, terminateRequestedSignalHandler, &handled_signals);
+    addSignalHandler({SIGUSR2}, minidumpSignalHandler, &handled_signals);
 
 #if defined(SANITIZER)
     __sanitizer_set_death_callback(sanitizerDeathCallback);
@@ -831,10 +925,9 @@ void BaseDaemon::initializeTerminationAndSignalProcessing()
 
 void BaseDaemon::logRevision() const
 {
-    Poco::Logger::root().information("Starting " + std::string{VERSION_FULL}
-        + " with revision " + std::to_string(ClickHouseRevision::getVersionRevision())
-        + ", " + build_id_info
-        + ", PID " + std::to_string(getpid()));
+    Poco::Logger::root().information(
+        "Starting " + std::string { VERSION_FULL } + " scm " + std::string{VERSION_SCM} + " with revision "
+        + std::to_string(ClickHouseRevision::getVersionRevision()) + ", " + build_id_info + ", PID " + std::to_string(getpid()));
 }
 
 void BaseDaemon::defineOptions(Poco::Util::OptionSet & new_options)

@@ -12,6 +12,7 @@
 #include <Processors/Pipe.h>
 #include <IO/Operators.h>
 #include <Dictionaries/getDictionaryConfigurationFromAST.h>
+#include <Catalog/Catalog.h>
 
 
 namespace DB
@@ -122,7 +123,8 @@ StorageDictionary::StorageDictionary(
 StorageDictionary::StorageDictionary(
     const StorageID & table_id,
     LoadablesConfigurationPtr dictionary_configuration,
-    ContextPtr context_)
+    ContextPtr context_,
+    bool is_cnch_dictionary)
     : StorageDictionary(
         table_id,
         table_id.getFullNameNotQuoted(),
@@ -133,7 +135,8 @@ StorageDictionary::StorageDictionary(
     configuration = dictionary_configuration;
 
     auto repository = std::make_unique<ExternalLoaderDictionaryStorageConfigRepository>(*this);
-    remove_repository_callback = context_->getExternalDictionariesLoader().addConfigRepository(std::move(repository));
+    if (!is_cnch_dictionary)
+        remove_repository_callback = context_->getExternalDictionariesLoader().addConfigRepository(std::move(repository));
 }
 
 StorageDictionary::~StorageDictionary()
@@ -238,6 +241,17 @@ void StorageDictionary::renameInMemory(const StorageID & new_table_id)
     }
 }
 
+namespace
+{
+bool isCnchDictionary(ContextPtr local_context, const String & database_name)
+{
+    if (local_context->getServerType() != ServerType::cnch_server)
+        return false;
+    return local_context->getCnchCatalog()->isDatabaseExists(
+        database_name, local_context->getCurrentCnchStartTime());
+}
+}
+
 void registerStorageDictionary(StorageFactory & factory)
 {
     factory.registerStorage("Dictionary", [](const StorageFactory::Arguments & args)
@@ -258,7 +272,8 @@ void registerStorageDictionary(StorageFactory & factory)
 
             /// Create dictionary storage that owns underlying dictionary
             auto abstract_dictionary_configuration = getDictionaryConfigurationFromAST(args.query, local_context, dictionary_id.database_name);
-            auto result_storage = StorageDictionary::create(dictionary_id, abstract_dictionary_configuration, local_context);
+            bool is_cnch_dictionary = isCnchDictionary(local_context, dictionary_id.database_name);
+            auto result_storage = StorageDictionary::create(dictionary_id, abstract_dictionary_configuration, local_context, is_cnch_dictionary);
 
             bool lazy_load = local_context->getConfigRef().getBool("dictionaries_lazy_load", true);
             if (!args.attach && !lazy_load)

@@ -141,7 +141,7 @@ if __name__ == "__main__":
     parser.add_argument("--server-log-folder", default='/var/log/clickhouse-server')
     parser.add_argument("--output-folder")
     parser.add_argument("--global-time-limit", type=int, default=3600)
-    parser.add_argument("--num-parallel", type=int, default=cpu_count())
+    parser.add_argument("--num-parallel", type=int, default=max(cpu_count()//2, 1))
     parser.add_argument('--hung-check', action='store_true', default=False)
     # make sense only for hung check
     parser.add_argument('--drop-databases', action='store_true', default=False)

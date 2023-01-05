@@ -37,6 +37,7 @@ bool pathStartsWith(const String & path, const String & prefix_path);
 
 bool symlinkStartsWith(const String & path, const String & prefix_path);
 
+String joinPaths(const std::vector<String>& components, bool add_post_slash = false);
 }
 
 namespace FS

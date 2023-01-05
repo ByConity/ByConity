@@ -28,6 +28,8 @@ class ColumnLowCardinality final : public COWHelper<IColumn, ColumnLowCardinalit
     friend class COWHelper<IColumn, ColumnLowCardinality>;
 
     ColumnLowCardinality(MutableColumnPtr && column_unique, MutableColumnPtr && indexes, bool is_shared = false);
+    ColumnLowCardinality(MutableColumnPtr && column_unique, MutableColumnPtr && indexes, MutableColumnPtr && nest_column); // for full state
+
     ColumnLowCardinality(const ColumnLowCardinality & other) = default;
 
 public:
@@ -45,39 +47,135 @@ public:
         return Base::create(std::move(column_unique), std::move(indexes), is_shared);
     }
 
+    static Ptr create(const ColumnPtr & column_unique_, const ColumnPtr & indexes_, const ColumnPtr & nest_column_)
+    {
+        return ColumnLowCardinality::create(column_unique_->assumeMutable(), indexes_->assumeMutable(), nest_column_->assumeMutable());
+    }
+
+    static MutablePtr create(MutableColumnPtr && column_unique, MutableColumnPtr && indexes, MutableColumnPtr && nest_column_)
+    {
+        return Base::create(std::move(column_unique), std::move(indexes), std::move(nest_column_));
+    }
+
     std::string getName() const override { return "ColumnLowCardinality"; }
     const char * getFamilyName() const override { return "ColumnLowCardinality"; }
     TypeIndex getDataType() const override { return TypeIndex::LowCardinality; }
 
-    ColumnPtr convertToFullColumn() const { return getDictionary().getNestedColumn()->index(getIndexes(), 0); }
+    ColumnPtr convertToFullColumn() const;
     ColumnPtr convertToFullColumnIfLowCardinality() const override { return convertToFullColumn(); }
 
     MutableColumnPtr cloneResized(size_t size) const override;
-    size_t size() const override { return getIndexes().size(); }
-
-    Field operator[](size_t n) const override { return getDictionary()[getIndexes().getUInt(n)]; }
-    void get(size_t n, Field & res) const override { getDictionary().get(getIndexes().getUInt(n), res); }
-
-    StringRef getDataAt(size_t n) const override { return getDictionary().getDataAt(getIndexes().getUInt(n)); }
-    StringRef getDataAtWithTerminatingZero(size_t n) const override
+    size_t size() const override
     {
-        return getDictionary().getDataAtWithTerminatingZero(getIndexes().getUInt(n));
+        if (full_state)
+            return getNestedColumn().size();
+        else
+            return getIndexes().size();
     }
 
-    UInt64 get64(size_t n) const override { return getDictionary().get64(getIndexes().getUInt(n)); }
-    UInt64 getUInt(size_t n) const override { return getDictionary().getUInt(getIndexes().getUInt(n)); }
-    Int64 getInt(size_t n) const override { return getDictionary().getInt(getIndexes().getUInt(n)); }
-    Float64 getFloat64(size_t n) const override { return getDictionary().getInt(getIndexes().getFloat64(n)); }
-    Float32 getFloat32(size_t n) const override { return getDictionary().getInt(getIndexes().getFloat32(n)); }
-    bool getBool(size_t n) const override { return getDictionary().getInt(getIndexes().getBool(n)); }
-    bool isNullAt(size_t n) const override { return getDictionary().isNullAt(getIndexes().getUInt(n)); }
+    Field operator[](size_t n) const override
+    {
+        if (full_state)
+            return getNestedColumn()[n];
+        else
+            return getDictionary()[getIndexes().getUInt(n)];
+    }
+
+    void get(size_t n, Field & res) const override
+    {
+        if (full_state)
+            getNestedColumn().get(n, res);
+        else
+            getDictionary().get(getIndexes().getUInt(n), res);
+    }
+
+    StringRef getDataAt(size_t n) const override
+    {
+        if (full_state)
+            return getNestedColumn().getDataAt(n);
+        else
+            return getDictionary().getDataAt(getIndexes().getUInt(n));
+    }
+
+    StringRef getDataAtWithTerminatingZero(size_t n) const override
+    {
+        if (full_state)
+            return getNestedColumn().getDataAtWithTerminatingZero(n);
+        else
+            return getDictionary().getDataAtWithTerminatingZero(getIndexes().getUInt(n));
+    }
+
+    UInt64 get64(size_t n) const override
+    {
+        if (full_state)
+            return getNestedColumn().get64(n);
+        else
+            return getDictionary().get64(getIndexes().getUInt(n));
+    }
+    UInt64 getUInt(size_t n) const override
+    {
+        if (full_state)
+            return getNestedColumn().getUInt(n);
+        else
+            return getDictionary().getUInt(getIndexes().getUInt(n));
+    }
+    Int64 getInt(size_t n) const override
+    {
+        if (full_state)
+            return getNestedColumn().getInt(n);
+        else
+            return getDictionary().getInt(getIndexes().getUInt(n));
+    }
+    bool isNullAt(size_t n) const override
+    {
+        if (full_state)
+            return getNestedColumn().isNullAt(n);
+        else
+            return getDictionary().isNullAt(getIndexes().getUInt(n));
+    }
+
+    Float64 getFloat64(size_t n) const override
+    {
+        if (full_state)
+            return getNestedColumn().getFloat64(n);
+        else
+            return getDictionary().getInt(getIndexes().getFloat64(n));
+    }
+
+    Float32 getFloat32(size_t n) const override
+    {
+        if (full_state)
+            return  getNestedColumn().getFloat32(n);
+        else
+            return getDictionary().getInt(getIndexes().getFloat32(n));
+    }
+
+    bool getBool(size_t n) const override
+    {
+        if (full_state)
+            return getNestedColumn().getBool(n);
+        else
+            return getDictionary().getInt(getIndexes().getBool(n));
+    }
+
     ColumnPtr cut(size_t start, size_t length) const override
     {
-        return ColumnLowCardinality::create(dictionary.getColumnUniquePtr(), getIndexes().cut(start, length));
+        if (full_state)
+        {
+            return ColumnLowCardinality::create(dictionary.getColumnUniquePtr()->cloneEmpty(),
+                                                getIndexes().cloneEmpty(), getNestedColumn().cut(start, length));
+        }
+        else
+            return ColumnLowCardinality::create(dictionary.getColumnUniquePtr(), getIndexes().cut(start, length));
     }
 
     void insert(const Field & x) override;
     void insertDefault() override;
+
+    void mergeGatherColumn(const IColumn &src, std::unordered_map<UInt64, UInt64> &reverseIndex);
+    void loadDictionaryFrom(const IColumn & src);
+    void insertIndexFrom(const IColumn & src, size_t n);
+    void insertIndexRangeFrom(const IColumn & src, size_t start, size_t length);
 
     void insertFrom(const IColumn & src, size_t n) override;
     void insertFromFullColumn(const IColumn & src, size_t n);
@@ -85,6 +183,7 @@ public:
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
     void insertRangeFromFullColumn(const IColumn & src, size_t start, size_t length);
     void insertRangeFromDictionaryEncodedColumn(const IColumn & keys, const IColumn & positions);
+    void insertRangeSelective(const IColumn & src, const IColumn::Selector & selector, size_t selector_start, size_t length) override;
 
     void insertData(const char * pos, size_t length) override;
 
@@ -98,7 +197,10 @@ public:
 
     void updateHashWithValue(size_t n, SipHash & hash) const override
     {
-        return getDictionary().updateHashWithValue(getIndexes().getUInt(n), hash);
+        if (full_state)
+            return getNestedColumn().updateHashWithValue(n, hash);
+        else
+            return getDictionary().updateHashWithValue(getIndexes().getUInt(n), hash);
     }
 
     void updateWeakHash32(WeakHash32 & hash) const override;
@@ -107,17 +209,29 @@ public:
 
     ColumnPtr filter(const Filter & filt, ssize_t result_size_hint) const override
     {
-        return ColumnLowCardinality::create(dictionary.getColumnUniquePtr(), getIndexes().filter(filt, result_size_hint));
+        if (full_state)
+            return ColumnLowCardinality::create(dictionary.getColumnUniquePtr()->cloneEmpty(),
+                                                 getIndexes().cloneEmpty(), getNestedColumn().filter(filt, result_size_hint));
+        else
+            return ColumnLowCardinality::create(dictionary.getColumnUniquePtr(), getIndexes().filter(filt, result_size_hint));
     }
 
     ColumnPtr permute(const Permutation & perm, size_t limit) const override
     {
-        return ColumnLowCardinality::create(dictionary.getColumnUniquePtr(), getIndexes().permute(perm, limit));
+        if (full_state)
+            return ColumnLowCardinality::create(dictionary.getColumnUniquePtr()->cloneEmpty(),
+                                                getIndexes().cloneEmpty(), getNestedColumn().permute(perm, limit));
+        else
+            return ColumnLowCardinality::create(dictionary.getColumnUniquePtr(), getIndexes().permute(perm, limit));
     }
 
     ColumnPtr index(const IColumn & indexes_, size_t limit) const override
     {
-        return ColumnLowCardinality::create(dictionary.getColumnUniquePtr(), getIndexes().index(indexes_, limit));
+        if (full_state)
+            return ColumnLowCardinality::create(dictionary.getColumnUniquePtr()->cloneEmpty(),
+                                                getIndexes().cloneEmpty(), getNestedColumn().index(indexes_, limit));
+        else
+            return ColumnLowCardinality::create(dictionary.getColumnUniquePtr(), getIndexes().index(indexes_, limit));
     }
 
     int compareAt(size_t n, size_t m, const IColumn & rhs, int nan_direction_hint) const override;
@@ -140,7 +254,11 @@ public:
 
     ColumnPtr replicate(const Offsets & offsets) const override
     {
-        return ColumnLowCardinality::create(dictionary.getColumnUniquePtr(), getIndexes().replicate(offsets));
+        if (full_state)
+            return ColumnLowCardinality::create(dictionary.getColumnUniquePtr()->cloneEmpty(),
+                                                getIndexes().cloneEmpty(), getNestedColumn().replicate(offsets));
+        else
+            return ColumnLowCardinality::create(dictionary.getColumnUniquePtr(), getIndexes().replicate(offsets));
     }
 
     std::vector<MutableColumnPtr> scatter(ColumnIndex num_columns, const Selector & selector) const override;
@@ -149,17 +267,39 @@ public:
 
     void getExtremes(Field & min, Field & max) const override
     {
-        return dictionary.getColumnUnique().getNestedColumn()->index(getIndexes(), 0)->getExtremes(min, max); /// TODO: optimize
+        if (full_state)
+            return getNestedColumn().getExtremes(min, max);
+        else
+            return dictionary.getColumnUnique().getNestedColumn()->index(getIndexes(), 0)->getExtremes(min, max); /// TODO: optimize
     }
 
-    void reserve(size_t n) override { idx.reserve(n); }
+    void reserve(size_t n) override { if (full_state) getNestedColumn().reserve(n); else idx.reserve(n); }
 
-    size_t byteSize() const override { return idx.getPositions()->byteSize() + getDictionary().byteSize(); }
     size_t byteSizeAt(size_t n) const override { return getDictionary().byteSizeAt(getIndexes().getUInt(n)); }
-    size_t allocatedBytes() const override { return idx.getPositions()->allocatedBytes() + getDictionary().allocatedBytes(); }
+    size_t byteSize() const override
+    {
+        if (full_state)
+            return getNestedColumn().byteSize();
+        else
+            return idx.getPositions()->byteSize() + getDictionary().byteSize();
+    }
+
+    size_t allocatedBytes() const override
+    {
+        if (full_state)
+            return getNestedColumn().allocatedBytes();
+        else
+            return idx.getPositions()->allocatedBytes() + getDictionary().allocatedBytes();
+    }
 
     void forEachSubcolumn(ColumnCallback callback) override
     {
+        if (full_state)
+        {
+            callback(nested_column);
+            return;
+        }
+
         callback(idx.getPositionsPtr());
 
         /// Column doesn't own dictionary if it's shared.
@@ -169,15 +309,26 @@ public:
 
     bool structureEquals(const IColumn & rhs) const override
     {
+        if (full_state)
+        {
+            return getNestedColumn().structureEquals(rhs);
+        }
+
         if (auto rhs_low_cardinality = typeid_cast<const ColumnLowCardinality *>(&rhs))
             return idx.getPositions()->structureEquals(*rhs_low_cardinality->idx.getPositions())
                 && dictionary.getColumnUnique().structureEquals(rhs_low_cardinality->dictionary.getColumnUnique());
         return false;
     }
 
-    bool valuesHaveFixedSize() const override { return getDictionary().valuesHaveFixedSize(); }
-    bool isFixedAndContiguous() const override { return false; }
-    size_t sizeOfValueIfFixed() const override { return getDictionary().sizeOfValueIfFixed(); }
+    bool valuesHaveFixedSize() const override
+    {
+        if (full_state)
+            return getNestedColumn().valuesHaveFixedSize();
+        else
+            return getDictionary().valuesHaveFixedSize();
+    }
+    bool isFixedAndContiguous() const override { if (full_state) return getNestedColumn().isFixedAndContiguous(); else return false; }
+    size_t sizeOfValueIfFixed() const override { if (full_state) return getNestedColumn().sizeOfValueIfFixed(); else return getDictionary().sizeOfValueIfFixed(); }
     bool isNumeric() const override { return getDictionary().isNumeric(); }
     bool lowCardinality() const override { return true; }
     bool isCollationSupported() const override { return getDictionary().getNestedColumn()->isCollationSupported(); }
@@ -189,6 +340,7 @@ public:
     bool nestedIsNullable() const { return isColumnNullable(*dictionary.getColumnUnique().getNestedColumn()); }
     void nestedToNullable() { dictionary.getColumnUnique().nestedToNullable(); }
     void nestedRemoveNullable() { dictionary.getColumnUnique().nestedRemoveNullable(); }
+    bool isNullable() const override { if (full_state) return getNestedColumn().isNullable(); else return isColumnNullable(*dictionary.getColumnUniquePtr()); }
 
     const IColumnUnique & getDictionary() const { return dictionary.getColumnUnique(); }
     IColumnUnique & getDictionary() { return dictionary.getColumnUnique(); }
@@ -234,8 +386,38 @@ public:
     DictionaryEncodedColumn getMinimalDictionaryEncodedColumn(UInt64 offset, UInt64 limit) const;
 
     ColumnPtr countKeys() const;
-
     bool containsNull() const;
+    void transformIndex(std::unordered_map<UInt64, UInt64>& trans, size_t max_size);
+
+    bool isFullState() const { return full_state; }
+    void setFullState(bool fullState) { full_state = fullState; }
+    IColumn & getNestedColumn() { return *nested_column; }
+    const IColumn & getNestedColumn() const { return *nested_column; }
+
+    const ColumnPtr & getNestedColumnPtr() const { return nested_column; }
+    ColumnPtr & getNestedColumnPtr() { return nested_column; }
+
+    void switchToFull()
+    {
+        if (full_state)
+            throw Exception("Unexpected switch to full.", ErrorCodes::LOGICAL_ERROR);
+
+        nested_column = getDictionary().getNestedColumn()->index(getIndexes(), 0);
+        idx = Index();
+        dictionary = Dictionary(dictionary.getColumnUnique().cloneEmpty(), false);
+        full_state = true;
+    }
+
+    void switchToFullWithDict(const ColumnPtr & dict)
+    {
+        if (full_state)
+            throw Exception("Unexpected switch to full.", ErrorCodes::LOGICAL_ERROR);
+
+        nested_column = dict->index(getIndexes(), 0);
+        idx = Index();
+        dictionary = Dictionary(dictionary.getColumnUnique().cloneEmpty(), false);
+        full_state = true;
+    }
 
     class Index
     {
@@ -265,11 +447,10 @@ public:
         void attachPositions(ColumnPtr positions_);
 
         void countKeys(ColumnUInt64::Container & counts) const;
-
         bool containsDefault() const;
 
         void updateWeakHash(WeakHash32 & hash, WeakHash32 & dict_hash) const;
-
+        void transformIndex(std::unordered_map<UInt64, UInt64>& trans, size_t max_size);
     private:
         WrappedPtr positions;
         size_t size_of_type = 0;
@@ -319,6 +500,8 @@ private:
 
     Dictionary dictionary;
     Index idx;
+    WrappedPtr nested_column;
+    bool full_state = false;
 
     void compactInplace();
     void compactIfSharedDictionary();

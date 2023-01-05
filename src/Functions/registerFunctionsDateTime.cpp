@@ -40,6 +40,7 @@ void registerFunctionToRelativeSecondNum(FunctionFactory &);
 void registerFunctionToTime(FunctionFactory &);
 void registerFunctionNow(FunctionFactory &);
 void registerFunctionNow64(FunctionFactory &);
+void registerFunctionCurrentTime(FunctionFactory &);
 void registerFunctionToday(FunctionFactory &);
 void registerFunctionYesterday(FunctionFactory &);
 void registerFunctionTimeSlot(FunctionFactory &);
@@ -71,6 +72,9 @@ void registerFunctionFromModifiedJulianDay(FunctionFactory &);
 void registerFunctionDateTrunc(FunctionFactory &);
 
 void registerFunctiontimezoneOffset(FunctionFactory &);
+void registerFunctionNextDay(FunctionFactory &);
+void registerFunctionLastDay(FunctionFactory &);
+void registerFunctionDateFormat(FunctionFactory & factory);
 
 void registerFunctionsDateTime(FunctionFactory & factory)
 {
@@ -111,6 +115,7 @@ void registerFunctionsDateTime(FunctionFactory & factory)
     registerFunctionToTime(factory);
     registerFunctionNow(factory);
     registerFunctionNow64(factory);
+    registerFunctionCurrentTime(factory);
     registerFunctionToday(factory);
     registerFunctionYesterday(factory);
     registerFunctionTimeSlot(factory);
@@ -141,6 +146,9 @@ void registerFunctionsDateTime(FunctionFactory & factory)
     registerFunctionFromModifiedJulianDay(factory);
     registerFunctionDateTrunc(factory);
     registerFunctiontimezoneOffset(factory);
+    registerFunctionNextDay(factory);
+    registerFunctionLastDay(factory);
+    registerFunctionDateFormat(factory);
 }
 
 }

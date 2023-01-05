@@ -1,5 +1,6 @@
 # docker build -t yandex/clickhouse-stateless-test .
-FROM yandex/clickhouse-test-base
+ARG TAG=stable
+FROM bytehouse/clickhouse-test-base:${TAG}
 
 ARG odbc_driver_url="https://github.com/ClickHouse/clickhouse-odbc/releases/download/v1.1.4.20200302/clickhouse-odbc-1.1.4-Linux.tar.gz"
 
@@ -48,6 +49,11 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 ENV NUM_TRIES=1
 ENV MAX_RUN_TIME=0
 
+# unset http proxy env
+ENV http_proxy=
+ENV https_proxy=
+ENV no_proxy=
+
 COPY run.sh /
 COPY process_functional_tests_result.py /
-CMD ["/bin/bash", "/run.sh"]
+# CMD ["/bin/bash", "/run.sh"]

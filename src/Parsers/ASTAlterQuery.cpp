@@ -32,6 +32,11 @@ ASTPtr ASTAlterCommand::clone() const
         res->order_by = order_by->clone();
         res->children.push_back(res->order_by);
     }
+    if (cluster_by)
+    {
+        res->cluster_by = cluster_by->clone();
+        res->children.push_back(res->cluster_by);
+    }
     if (partition)
     {
         res->partition = partition->clone();
@@ -67,6 +72,11 @@ ASTPtr ASTAlterCommand::clone() const
         res->rename_to = rename_to->clone();
         res->children.push_back(res->rename_to);
     }
+    if (columns)
+    {
+        res->columns = columns->clone();
+        res->children.push_back(res->columns);
+    }
 
     return res;
 }
@@ -91,13 +101,17 @@ void ASTAlterCommand::formatImpl(
     }
     else if (type == ASTAlterCommand::DROP_COLUMN)
     {
-        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str
-                      << (clear_column ? "CLEAR " : "DROP ") << "COLUMN " << (if_exists ? "IF EXISTS " : "") << (settings.hilite ? hilite_none : "");
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << (clear_column ? "CLEAR " : "DROP ") << "COLUMN "
+                      << (if_exists ? "IF EXISTS " : "") << (settings.hilite ? hilite_none : "");
         column->formatImpl(settings, state, frame);
-        if (partition)
+        if (partition || predicate)
         {
-            settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << " IN PARTITION " << (settings.hilite ? hilite_none : "");
-            partition->formatImpl(settings, state, frame);
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str
+                        << (predicate ? " IN PARTITION WHERE " : " IN PARTITION ") << (settings.hilite ? hilite_none : "");
+            if (partition)
+                partition->formatImpl(settings, state, frame);
+            else if (predicate)
+                predicate->formatImpl(settings, state, frame);
         }
     }
     else if (type == ASTAlterCommand::MODIFY_COLUMN)
@@ -131,6 +145,15 @@ void ASTAlterCommand::formatImpl(
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "MODIFY ORDER BY " << (settings.hilite ? hilite_none : "");
         order_by->formatImpl(settings, state, frame);
+    }
+    else if (type == ASTAlterCommand::MODIFY_CLUSTER_BY)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "MODIFY CLUSTER BY " << (settings.hilite ? hilite_none : "");
+        cluster_by->formatImpl(settings, state, frame);
+    }
+    else if (type == ASTAlterCommand::DROP_CLUSTER)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "DROP CLUSTER";
     }
     else if (type == ASTAlterCommand::MODIFY_SAMPLE_BY)
     {
@@ -220,10 +243,17 @@ void ASTAlterCommand::formatImpl(
     }
     else if (type == ASTAlterCommand::DROP_PARTITION)
     {
-        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << (cascading ? "CASCADING " : "")
                       << (detach ? "DETACH" : "DROP") << (part ? " PART " : " PARTITION ")
                       << (settings.hilite ? hilite_none : "");
         partition->formatImpl(settings, state, frame);
+    }
+    else if (type == ASTAlterCommand::DROP_PARTITION_WHERE)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << (cascading ? "CASCADING " : "")
+                      << (detach ? "DETACH" : "DROP") << " PARTITION WHERE "
+                      << (settings.hilite ? hilite_none : "");
+        predicate->formatImpl(settings, state, frame);
     }
     else if (type == ASTAlterCommand::DROP_DETACHED_PARTITION)
     {
@@ -234,8 +264,22 @@ void ASTAlterCommand::formatImpl(
     else if (type == ASTAlterCommand::ATTACH_PARTITION)
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "ATTACH "
-                      << (part ? "PART " : "PARTITION ") << (settings.hilite ? hilite_none : "");
+                      << (parts ? "PARTS" : part ? "PART " : "PARTITION ") << (settings.hilite ? hilite_none : "");
+        if (!parts)
+            partition->formatImpl(settings, state, frame);
+    }
+    else if (type == ASTAlterCommand::ATTACH_DETACHED_PARTITION)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "ATTACH DETACHED PARTITION "
+                      << (settings.hilite ? hilite_none : "");
         partition->formatImpl(settings, state, frame);
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << " FROM " << (settings.hilite ? hilite_none : "");
+        if (!from_database.empty())
+        {
+            settings.ostr << (settings.hilite ? hilite_identifier : "") << backQuoteIfNeed(from_database)
+                          << (settings.hilite ? hilite_none : "") << ".";
+        }
+        settings.ostr << (settings.hilite ? hilite_identifier : "") << backQuoteIfNeed(from_table) << (settings.hilite ? hilite_none : "");
     }
     else if (type == ASTAlterCommand::MOVE_PARTITION)
     {
@@ -270,6 +314,18 @@ void ASTAlterCommand::formatImpl(
             settings.ostr << quoteString(move_destination_name);
         }
     }
+    else if (type == ASTAlterCommand::MOVE_PARTITION_FROM)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "MOVE PARTITION " << (settings.hilite ? hilite_none : "");
+        partition->formatImpl(settings, state, frame);
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << " FROM " << (settings.hilite ? hilite_none : "") ;
+        if (!from_database.empty())
+        {
+            settings.ostr << (settings.hilite ? hilite_identifier : "") << backQuoteIfNeed(from_database)
+                          << (settings.hilite ? hilite_none : "") << ".";
+        }
+        settings.ostr << (settings.hilite ? hilite_identifier : "") << backQuoteIfNeed(from_table) << (settings.hilite ? hilite_none : "");
+    }
     else if (type == ASTAlterCommand::REPLACE_PARTITION)
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << (replace ? "REPLACE" : "ATTACH") << " PARTITION "
@@ -283,10 +339,58 @@ void ASTAlterCommand::formatImpl(
         }
         settings.ostr << (settings.hilite ? hilite_identifier : "") << backQuoteIfNeed(from_table) << (settings.hilite ? hilite_none : "");
     }
+    else if (type == ASTAlterCommand::REPLACE_PARTITION_WHERE)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << (replace ? "REPLACE" : "ATTACH") << " PARTITION WHERE "
+                      << (settings.hilite ? hilite_none : "");
+        predicate->formatImpl(settings, state, frame);
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << " FROM " << (settings.hilite ? hilite_none : "");
+        if (!from_database.empty())
+        {
+            settings.ostr << (settings.hilite ? hilite_identifier : "") << backQuoteIfNeed(from_database)
+                          << (settings.hilite ? hilite_none : "") << ".";
+        }
+        settings.ostr << (settings.hilite ? hilite_identifier : "") << backQuoteIfNeed(from_table) << (settings.hilite ? hilite_none : "");
+    }
+    else if (type == ASTAlterCommand::INGEST_PARTITION)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "INGEST PARTITION " << (settings.hilite ? hilite_none : "");
+        partition->formatImpl(settings, state, frame);
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << " COLUMNS " << (settings.hilite ? hilite_none : "");
+        columns->formatImpl(settings, state, frame);
+        if (keys)
+        {
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << " KEY " << (settings.hilite ? hilite_none : "");
+            keys->formatImpl(settings, state, frame);
+        }
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << " FROM " << (settings.hilite ? hilite_none : "") ;
+        if (!from_database.empty())
+        {
+            settings.ostr << (settings.hilite ? hilite_identifier : "") << backQuoteIfNeed(from_database)
+                          << (settings.hilite ? hilite_none : "") << ".";
+        }
+        settings.ostr << (settings.hilite ? hilite_identifier : "") << backQuoteIfNeed(from_table) << (settings.hilite ? hilite_none : "");
+    }
     else if (type == ASTAlterCommand::FETCH_PARTITION)
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "FETCH "
                       << (part ? "PART " : "PARTITION ") << (settings.hilite ? hilite_none : "");
+        partition->formatImpl(settings, state, frame);
+        settings.ostr << (settings.hilite ? hilite_keyword : "")
+                      << " FROM " << (settings.hilite ? hilite_none : "") << DB::quote << from;
+    }
+    else if (type == ASTAlterCommand::FETCH_PARTITION_WHERE)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "FETCH "
+                      << "PARTITION WHERE " << (settings.hilite ? hilite_none : "");
+        predicate->formatImpl(settings, state, frame);
+        settings.ostr << (settings.hilite ? hilite_keyword : "")
+                      << " FROM " << (settings.hilite ? hilite_none : "") << DB::quote << from;
+    }
+    else if (type == ASTAlterCommand::REPAIR_PARTITION)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "REPAIR "
+                      << "PARTITION " << (settings.hilite ? hilite_none : "");
         partition->formatImpl(settings, state, frame);
         settings.ostr << (settings.hilite ? hilite_keyword : "")
                       << " FROM " << (settings.hilite ? hilite_none : "") << DB::quote << from;
@@ -344,6 +448,22 @@ void ASTAlterCommand::formatImpl(
         }
 
         settings.ostr << (settings.hilite ? hilite_keyword : "") << " WHERE " << (settings.hilite ? hilite_none : "");
+        predicate->formatImpl(settings, state, frame);
+    }
+    else if (type == ASTAlterCommand::FAST_DELETE)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "FASTDELETE " << (settings.hilite ? hilite_none : "");
+        if (columns)
+        {
+            columns->formatImpl(settings, state, frame);
+            settings.ostr << settings.nl_or_ws;
+        }
+        if (partition)
+        {
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << " IN PARTITION " << (settings.hilite ? hilite_none : "");
+            partition->formatImpl(settings, state, frame);
+        }
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "WHERE " << (settings.hilite ? hilite_none : "");
         predicate->formatImpl(settings, state, frame);
     }
     else if (type == ASTAlterCommand::UPDATE)
@@ -406,6 +526,28 @@ void ASTAlterCommand::formatImpl(
 
         settings.ostr << (settings.hilite ? hilite_keyword : "") << " TO ";
         rename_to->formatImpl(settings, state, frame);
+    }
+    else if (type == ASTAlterCommand::CLEAR_MAP_KEY)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "CLEAR MAP KEY " << (settings.hilite ? hilite_none : "");
+        column->formatImpl(settings, state, frame);
+        settings.ostr << "(";
+        map_keys->formatImpl(settings, state, frame);
+        settings.ostr << ")";
+    }
+    else if (type == ASTAlterCommand::SAMPLE_PARTITION_WHERE)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "SAMPLE PARTITION WITH " << (settings.hilite ? hilite_none : "");
+        with_sharding_exp->formatImpl(settings, state, frame);
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << " WHERE " << (settings.hilite ? hilite_none : "");
+        predicate->formatImpl(settings, state, frame);
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << " TO " << (settings.hilite ? hilite_none : "");
+        if (!from_database.empty())
+        {
+            settings.ostr << (settings.hilite ? hilite_identifier : "") << backQuoteIfNeed(from_database)
+                          << (settings.hilite ? hilite_none : "") << ".";
+        }
+        settings.ostr << (settings.hilite ? hilite_identifier : "") << backQuoteIfNeed(from_table) << (settings.hilite ? hilite_none : "");
     }
     else
         throw Exception("Unexpected type of ALTER", ErrorCodes::UNEXPECTED_AST_STRUCTURE);

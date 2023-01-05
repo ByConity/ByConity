@@ -75,6 +75,16 @@ void ASTColumnDeclaration::formatImpl(const FormatSettings & settings, FormatSta
         default_expression->formatImpl(settings, state, frame);
     }
 
+    if (flags & TYPE_COMPRESSION_FLAG)
+    {
+        settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "") << "COMPRESSION"  << (settings.hilite ? hilite_none : "");
+    }
+
+    if (flags & TYPE_MAP_KV_STORE_FLAG)
+    {
+        settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "") << "KV"  << (settings.hilite ? hilite_none : "");
+    }
+
     if (comment)
     {
         settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "") << "COMMENT" << (settings.hilite ? hilite_none : "") << ' ';

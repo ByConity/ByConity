@@ -1,3 +1,5 @@
+#include <Common/config.h>
+
 #include <Storages/Kafka/StorageKafka.h>
 #include <Storages/Kafka/parseSyslogLevel.h>
 
@@ -174,21 +176,21 @@ StorageKafka::StorageKafka(
     : IStorage(table_id_)
     , WithContext(context_->getGlobalContext())
     , kafka_settings(std::move(kafka_settings_))
-    , topics(parseTopics(getContext()->getMacros()->expand(kafka_settings->kafka_topic_list.value)))
-    , brokers(getContext()->getMacros()->expand(kafka_settings->kafka_broker_list.value))
-    , group(getContext()->getMacros()->expand(kafka_settings->kafka_group_name.value))
+    , topics(parseTopics(getContext()->getMacros()->expand(kafka_settings->topic_list.value)))
+    , brokers(getContext()->getMacros()->expand(kafka_settings->broker_list.value))
+    , group(getContext()->getMacros()->expand(kafka_settings->group_name.value))
     , client_id(
-          kafka_settings->kafka_client_id.value.empty() ? getDefaultClientId(table_id_)
-                                                        : getContext()->getMacros()->expand(kafka_settings->kafka_client_id.value))
-    , format_name(getContext()->getMacros()->expand(kafka_settings->kafka_format.value))
-    , row_delimiter(kafka_settings->kafka_row_delimiter.value)
-    , schema_name(getContext()->getMacros()->expand(kafka_settings->kafka_schema.value))
-    , num_consumers(kafka_settings->kafka_num_consumers.value)
+          kafka_settings->client_id.value.empty() ? getDefaultClientId(table_id_)
+                                                        : getContext()->getMacros()->expand(kafka_settings->client_id.value))
+    , format_name(getContext()->getMacros()->expand(kafka_settings->format.value))
+    , row_delimiter(kafka_settings->row_delimiter.value)
+    , schema_name(getContext()->getMacros()->expand(kafka_settings->schema.value))
+    , num_consumers(kafka_settings->num_consumers.value)
     , log(&Poco::Logger::get("StorageKafka (" + table_id_.table_name + ")"))
     , semaphore(0, num_consumers)
-    , intermediate_commit(kafka_settings->kafka_commit_every_batch.value)
+    , intermediate_commit(kafka_settings->commit_every_batch.value)
     , settings_adjustments(createSettingsAdjustments())
-    , thread_per_consumer(kafka_settings->kafka_thread_per_consumer.value)
+    , thread_per_consumer(kafka_settings->thread_per_consumer.value)
 {
     if (kafka_settings->kafka_handle_error_mode == HandleKafkaErrorMode::STREAM)
     {
@@ -224,7 +226,7 @@ SettingsChanges StorageKafka::createSettingsAdjustments()
 
     if (!kafka_settings->input_format_allow_errors_num.changed)
     {
-        kafka_settings->input_format_allow_errors_num = kafka_settings->kafka_skip_broken_messages.value;
+        kafka_settings->input_format_allow_errors_num = kafka_settings->skip_broken_messages.value;
     }
 
     if (!schema_name.empty())
@@ -441,15 +443,15 @@ ConsumerBufferPtr StorageKafka::createReadBuffer(const size_t consumer_number)
 
 size_t StorageKafka::getMaxBlockSize() const
 {
-    return kafka_settings->kafka_max_block_size.changed
-        ? kafka_settings->kafka_max_block_size.value
+    return kafka_settings->max_block_size.changed
+        ? kafka_settings->max_block_size.value
         : (getContext()->getSettingsRef().max_insert_block_size.value / num_consumers);
 }
 
 size_t StorageKafka::getPollMaxBatchSize() const
 {
-    size_t batch_size = kafka_settings->kafka_poll_max_batch_size.changed
-                        ? kafka_settings->kafka_poll_max_batch_size.value
+    size_t batch_size = kafka_settings->poll_max_batch_size.changed
+                        ? kafka_settings->poll_max_batch_size.value
                         : getContext()->getSettingsRef().max_block_size.value;
 
     return std::min(batch_size,getMaxBlockSize());
@@ -457,8 +459,8 @@ size_t StorageKafka::getPollMaxBatchSize() const
 
 size_t StorageKafka::getPollTimeoutMillisecond() const
 {
-    return kafka_settings->kafka_poll_timeout_ms.changed
-        ? kafka_settings->kafka_poll_timeout_ms.totalMilliseconds()
+    return kafka_settings->poll_timeout_ms.changed
+        ? kafka_settings->poll_timeout_ms.totalMilliseconds()
         : getContext()->getSettingsRef().stream_poll_timeout_ms.totalMilliseconds();
 }
 
@@ -622,8 +624,8 @@ bool StorageKafka::streamToViews()
         // Limit read batch to maximum block size to allow DDL
         StreamLocalLimits limits;
 
-        limits.speed_limits.max_execution_time = kafka_settings->kafka_flush_interval_ms.changed
-                                                 ? kafka_settings->kafka_flush_interval_ms
+        limits.speed_limits.max_execution_time = kafka_settings->max_poll_interval_ms.changed
+                                                 ? kafka_settings->max_poll_interval_ms
                                                  : getContext()->getSettingsRef().stream_flush_interval_ms;
 
         limits.timeout_overflow_mode = OverflowMode::BREAK;
@@ -733,20 +735,20 @@ void registerStorageKafka(StorageFactory & factory)
           */
 
         /* 0 = raw, 1 = evaluateConstantExpressionAsLiteral, 2=evaluateConstantExpressionOrIdentifierAsLiteral */
-        CHECK_KAFKA_STORAGE_ARGUMENT(1, kafka_broker_list, 0)
-        CHECK_KAFKA_STORAGE_ARGUMENT(2, kafka_topic_list, 1)
-        CHECK_KAFKA_STORAGE_ARGUMENT(3, kafka_group_name, 2)
-        CHECK_KAFKA_STORAGE_ARGUMENT(4, kafka_format, 2)
-        CHECK_KAFKA_STORAGE_ARGUMENT(5, kafka_row_delimiter, 2)
-        CHECK_KAFKA_STORAGE_ARGUMENT(6, kafka_schema, 2)
-        CHECK_KAFKA_STORAGE_ARGUMENT(7, kafka_num_consumers, 0)
-        CHECK_KAFKA_STORAGE_ARGUMENT(8, kafka_max_block_size, 0)
-        CHECK_KAFKA_STORAGE_ARGUMENT(9, kafka_skip_broken_messages, 0)
-        CHECK_KAFKA_STORAGE_ARGUMENT(10, kafka_commit_every_batch, 0)
+        CHECK_KAFKA_STORAGE_ARGUMENT(1, broker_list, 0)
+        CHECK_KAFKA_STORAGE_ARGUMENT(2, topic_list, 1)
+        CHECK_KAFKA_STORAGE_ARGUMENT(3, group_name, 2)
+        CHECK_KAFKA_STORAGE_ARGUMENT(4, format, 2)
+        CHECK_KAFKA_STORAGE_ARGUMENT(5, row_delimiter, 2)
+        CHECK_KAFKA_STORAGE_ARGUMENT(6, schema, 2)
+        CHECK_KAFKA_STORAGE_ARGUMENT(7, num_consumers, 0)
+        CHECK_KAFKA_STORAGE_ARGUMENT(8, max_block_size, 0)
+        CHECK_KAFKA_STORAGE_ARGUMENT(9, skip_broken_messages, 0)
+        CHECK_KAFKA_STORAGE_ARGUMENT(10, commit_every_batch, 0)
 
         #undef CHECK_KAFKA_STORAGE_ARGUMENT
 
-        auto num_consumers = kafka_settings->kafka_num_consumers.value;
+        auto num_consumers = kafka_settings->num_consumers.value;
 
         if (num_consumers > 16)
         {
@@ -757,12 +759,12 @@ void registerStorageKafka(StorageFactory & factory)
             throw Exception("Number of consumers can not be lower than 1", ErrorCodes::BAD_ARGUMENTS);
         }
 
-        if (kafka_settings->kafka_max_block_size.changed && kafka_settings->kafka_max_block_size.value < 1)
+        if (kafka_settings->max_block_size.changed && kafka_settings->max_block_size.value < 1)
         {
             throw Exception("kafka_max_block_size can not be lower than 1", ErrorCodes::BAD_ARGUMENTS);
         }
 
-        if (kafka_settings->kafka_poll_max_batch_size.changed && kafka_settings->kafka_poll_max_batch_size.value < 1)
+        if (kafka_settings->poll_max_batch_size.changed && kafka_settings->poll_max_batch_size.value < 1)
         {
             throw Exception("kafka_poll_max_batch_size can not be lower than 1", ErrorCodes::BAD_ARGUMENTS);
         }
@@ -814,3 +816,4 @@ Names StorageKafka::getVirtualColumnNames() const
 }
 
 }
+

@@ -1,4 +1,5 @@
 #include <Parsers/ASTQualifiedAsterisk.h>
+#include <Parsers/ASTSerDerHelper.h>
 #include <IO/WriteHelpers.h>
 #include <IO/Operators.h>
 
@@ -22,6 +23,23 @@ void ASTQualifiedAsterisk::formatImpl(const FormatSettings & settings, FormatSta
         settings.ostr << ' ';
         (*it)->formatImpl(settings, state, frame);
     }
+}
+
+void ASTQualifiedAsterisk::serialize(WriteBuffer & buf) const
+{
+    serializeASTs(children, buf);
+}
+
+void ASTQualifiedAsterisk::deserializeImpl(ReadBuffer & buf)
+{
+    children = deserializeASTs(buf);
+}
+
+ASTPtr ASTQualifiedAsterisk::deserialize(ReadBuffer & buf)
+{
+    auto asterisk = std::make_shared<ASTQualifiedAsterisk>();
+    asterisk->deserializeImpl(buf);
+    return asterisk;
 }
 
 }

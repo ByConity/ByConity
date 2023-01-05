@@ -36,6 +36,14 @@ Block::Block(const ColumnsWithTypeAndName & data_) : data{data_}
     initializeIndexByName();
 }
 
+Block::Block(const NamesAndTypes & data_)
+{
+    for (const auto & item : data_)
+    {
+        data.emplace_back(item.type, item.name);
+    }
+    initializeIndexByName();
+}
 
 void Block::initializeIndexByName()
 {
@@ -282,7 +290,6 @@ std::string Block::dumpNames() const
     return out.str();
 }
 
-
 std::string Block::dumpStructure() const
 {
     WriteBufferFromOwnString out;
@@ -471,6 +478,26 @@ NamesAndTypesList Block::getNamesAndTypesList() const
 }
 
 
+NamesAndTypes Block::getNamesAndTypes() const
+{
+    NamesAndTypes res;
+
+    for (const auto & elem : data)
+        res.emplace_back(elem.name, elem.type);
+
+    return res;
+}
+
+NameToType Block::getNamesToTypes() const
+{
+    NameToType res;
+
+    for (const auto & elem : data)
+        res.emplace(elem.name, elem.type);
+
+    return res;
+}
+
 Names Block::getNames() const
 {
     Names res;
@@ -478,6 +505,17 @@ Names Block::getNames() const
 
     for (const auto & elem : data)
         res.push_back(elem.name);
+
+    return res;
+}
+
+NameSet Block::getNameSet() const
+{
+    NameSet res;
+    res.reserve(columns());
+
+    for (const auto & elem : data)
+        res.insert(elem.name);
 
     return res;
 }

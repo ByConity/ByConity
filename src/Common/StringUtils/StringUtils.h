@@ -11,6 +11,7 @@ namespace detail
 {
     bool startsWith(const std::string & s, const char * prefix, size_t prefix_size);
     bool endsWith(const std::string & s, const char * suffix, size_t suffix_size);
+    void parseSlowQuery(const std::string& query, size_t & pos);
 }
 
 
@@ -22,6 +23,11 @@ inline bool startsWith(const std::string & s, const std::string & prefix)
 inline bool endsWith(const std::string & s, const std::string & suffix)
 {
     return detail::endsWith(s, suffix.data(), suffix.size());
+}
+
+inline void parseSlowQuery(const std::string& query, size_t & pos)
+{
+    detail::parseSlowQuery(query, pos);
 }
 
 

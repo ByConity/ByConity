@@ -20,6 +20,7 @@ using FunctionReplaceRegexpAll = FunctionStringReplace<ReplaceRegexpImpl<false>,
 void registerFunctionReplaceRegexpAll(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionReplaceRegexpAll>();
+    factory.registerAlias("regexp_replace", NameReplaceRegexpAll::name, FunctionFactory::CaseInsensitive);
 }
 
 }

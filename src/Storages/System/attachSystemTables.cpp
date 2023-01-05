@@ -7,6 +7,7 @@
 #include <Storages/System/StorageSystemBuildOptions.h>
 #include <Storages/System/StorageSystemCollations.h>
 #include <Storages/System/StorageSystemClusters.h>
+#include <Storages/System/StorageSystemCnchStagedParts.h>
 #include <Storages/System/StorageSystemColumns.h>
 #include <Storages/System/StorageSystemDatabases.h>
 #include <Storages/System/StorageSystemDataSkippingIndices.h>
@@ -42,8 +43,10 @@
 #include <Storages/System/StorageSystemTables.h>
 #include <Storages/System/StorageSystemZooKeeper.h>
 #include <Storages/System/StorageSystemContributors.h>
+#include <Storages/System/StorageSystemResourceGroups.h>
 #include <Storages/System/StorageSystemErrors.h>
 #include <Storages/System/StorageSystemDDLWorkerQueue.h>
+#include <Storages/System/StorageSystemKafkaTables.h>
 
 #if !defined(ARCADIA_BUILD)
     #include <Storages/System/StorageSystemLicenses.h>
@@ -68,11 +71,39 @@
 #include <Storages/System/StorageSystemQuotasUsage.h>
 #include <Storages/System/StorageSystemUserDirectories.h>
 #include <Storages/System/StorageSystemPrivileges.h>
+#include <Storages/System/StorageSystemMetastore.h>
+#include <Storages/System/StorageSystemBrokenTables.h>
+#include <Storages/System/StorageSystemVirtualWarehouses.h>
+#include <Storages/System/StorageSystemWorkerGroups.h>
+#include <Storages/System/StorageSystemWorkers.h>
+#include <Storages/System/StorageSystemManipulations.h>
 
 #ifdef OS_LINUX
 #include <Storages/System/StorageSystemStackTrace.h>
 #endif
 
+#include <Storages/System/StorageSystemBGThreads.h>
+#include <Storages/System/StorageSystemCnchParts.h>
+#include <Storages/System/StorageSystemCnchPartsInfoLocal.h>
+#include <Storages/System/StorageSystemCnchPartsInfo.h>
+#include <Storages/System/StorageSystemCnchTableInfo.h>
+#include <Storages/System/StorageSystemCnchTablesHistory.h>
+#include <Storages/System/StorageSystemCnchDatabases.h>
+#include <Storages/System/StorageSystemCnchColumns.h>
+#include <Storages/System/StorageSystemCnchDictionaries.h>
+#include <Storages/System/StorageSystemCnchTables.h>
+#include <Storages/System/StorageSystemCnchDatabasesHistory.h>
+#include <Storages/System/StorageSystemCnchDedupWorkers.h>
+#include <Storages/System/StorageSystemCnchManipulations.h>
+#include <Storages/System/StorageSystemGlobalGCManager.h>
+#include <Storages/System/StorageSystemDMBGJobs.h>
+#include <Storages/System/StorageSystemPersistentBGJobStatus.h>
+#include <Storages/System/StorageSystemLockMap.h>
+
+#include <Storages/System/StorageSystemWorkers.h>
+#include <Storages/System/StorageSystemWorkerGroups.h>
+#include <Storages/System/StorageSystemVirtualWarehouses.h>
+#include <Storages/System/StorageSystemCnchTableHost.h>
 
 namespace DB
 {
@@ -117,6 +148,7 @@ void attachSystemTablesLocal(IDatabase & system_database)
     attach<StorageSystemPrivileges>(system_database, "privileges");
     attach<StorageSystemErrors>(system_database, "errors");
     attach<StorageSystemDataSkippingIndices>(system_database, "data_skipping_indices");
+    attach<StorageSystemManipulations>(system_database, "manipulations");
 #if !defined(ARCADIA_BUILD)
     attach<StorageSystemLicenses>(system_database, "licenses");
     attach<StorageSystemTimeZones>(system_database, "time_zones");
@@ -152,14 +184,45 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
     attach<StorageSystemMacros>(system_database, "macros");
     attach<StorageSystemReplicatedFetches>(system_database, "replicated_fetches");
     attach<StorageSystemPartMovesBetweenShards>(system_database, "part_moves_between_shards");
+#if USE_RDKAFKA
+    attach<StorageSystemKafkaTables>(system_database, "kafka_tables");
+#endif
+    attach<StorageSystemResourceGroups>(system_database, "resource_groups");
 
     if (has_zookeeper)
         attach<StorageSystemZooKeeper>(system_database, "zookeeper");
+
+    attach<StorageSystemMetastore>(system_database, "metastore");
+    attach<StorageSystemBrokenTables>(system_database, "broken_tables");
+    attach<StorageSystemBGThreads>(system_database, "bg_threads");
+    attach<StorageSystemCnchParts>(system_database, "cnch_parts");
+    attach<StorageSystemCnchPartsInfoLocal>(system_database, "cnch_parts_info_local");
+    attach<StorageSystemCnchPartsInfo>(system_database, "cnch_parts_info");
+    attach<StorageSystemCnchTableInfo>(system_database, "cnch_table_info");
+    attach<StorageSystemCnchTablesHistory>(system_database, "cnch_tables_history");
+    attach<StorageSystemCnchDatabases>(system_database, "cnch_databases");
+    attach<StorageSystemCnchColumns>(system_database, "cnch_columns");
+    attach<StorageSystemCnchDictionaries>(system_database, "cnch_dictionaries");
+    attach<StorageSystemCnchDatabasesHistory>(system_database, "cnch_databases_history");
+    attach<StorageSystemCnchTables>(system_database, "cnch_tables");
+    attach<StorageSystemCnchManipulations>(system_database, "cnch_manipulations");
+    attach<StorageSystemDMBGJobs>(system_database, "dm_bg_jobs");
+    attach<StorageSystemPersistentBGJobStatus>(system_database, "persistent_bg_job_status");
+    attach<StorageSystemGlobalGCManager>(system_database, "global_gc_manager");
+    attach<StorageSystemLockMap>(system_database, "lock_map");
+
+    attach<StorageSystemWorkers>(system_database, "workers");
+    attach<StorageSystemWorkerGroups>(system_database, "worker_groups");
+    attach<StorageSystemVirtualWarehouses>(system_database, "virtual_warehouses");
+    attach<StorageSystemCnchStagedParts>(system_database, "cnch_staged_parts");
+    attach<StorageSystemCnchTableHost>(system_database, "cnch_table_host");
+    attach<StorageSystemCnchDedupWorkers>(system_database, "cnch_dedup_workers");
 }
 
 void attachSystemTablesAsync(IDatabase & system_database, AsynchronousMetrics & async_metrics)
 {
     attach<StorageSystemAsynchronousMetrics>(system_database, "asynchronous_metrics", async_metrics);
 }
+
 
 }

@@ -1,6 +1,7 @@
 #include <Storages/MergeTree/MergeTreeIndexGranularityInfo.h>
-#include <Storages/MergeTree/MergeTreeData.h>
-
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
+#include "Storages/MergeTree/MergeTreeDataPartType.h"
+#include <Storages/MergeTree/MergeTreeDataPartChecksum.h>
 
 namespace fs = std::filesystem;
 
@@ -29,7 +30,21 @@ std::optional<std::string> MergeTreeIndexGranularityInfo::getMarksExtensionFromF
     return {};
 }
 
-MergeTreeIndexGranularityInfo::MergeTreeIndexGranularityInfo(const MergeTreeData & storage, MergeTreeDataPartType type_)
+std::optional<std::string> MergeTreeIndexGranularityInfo::getMarksExtensionFromChecksums(const MergeTreeDataPartChecksums & checksums)
+{
+    for (const auto & checksum : checksums.files)
+    {
+        const auto & ext = fs::path(checksum.first).extension();
+        if (ext == getNonAdaptiveMrkExtension()
+            || ext == getAdaptiveMrkExtension(MergeTreeDataPartType::WIDE)
+            || ext == getAdaptiveMrkExtension(MergeTreeDataPartType::COMPACT)
+            || ext == getAdaptiveMrkExtension(MergeTreeDataPartType::CNCH)) // duplicate
+            return ext;
+    }
+    return {};
+}
+
+MergeTreeIndexGranularityInfo::MergeTreeIndexGranularityInfo(const MergeTreeMetaBase & storage, MergeTreeDataPartType type_)
     : type(type_)
 {
     const auto storage_settings = storage.getSettings();
@@ -38,17 +53,26 @@ MergeTreeIndexGranularityInfo::MergeTreeIndexGranularityInfo(const MergeTreeData
     /// Granularity is fixed
     if (!storage.canUseAdaptiveGranularity())
     {
-        if (type != MergeTreeDataPartType::WIDE)
-            throw Exception("Only Wide parts can be used with non-adaptive granularity.", ErrorCodes::NOT_IMPLEMENTED);
+        if (type != MergeTreeDataPartType::WIDE && type != MergeTreeDataPartType::CNCH)
+            throw Exception("Only WIDE or CNCH parts can be used with non-adaptive granularity, current type: " + type.toString(), ErrorCodes::NOT_IMPLEMENTED);
         setNonAdaptive();
     }
     else
         setAdaptive(storage_settings->index_granularity_bytes);
+
+    has_disk_cache = (type == MergeTreeDataPartType::CNCH) && storage_settings->enable_local_disk_cache;
 }
 
 void MergeTreeIndexGranularityInfo::changeGranularityIfRequired(const DiskPtr & disk, const String & path_to_part)
 {
     auto mrk_ext = getMarksExtensionFromFilesystem(disk, path_to_part);
+    if (mrk_ext && *mrk_ext == getNonAdaptiveMrkExtension())
+        setNonAdaptive();
+}
+
+void MergeTreeIndexGranularityInfo::changeGranularityIfRequired(const MergeTreeDataPartChecksums & checksums)
+{
+    auto mrk_ext = getMarksExtensionFromChecksums(checksums);
     if (mrk_ext && *mrk_ext == getNonAdaptiveMrkExtension())
         setNonAdaptive();
 }
@@ -69,7 +93,7 @@ void MergeTreeIndexGranularityInfo::setNonAdaptive()
 
 size_t MergeTreeIndexGranularityInfo::getMarkSizeInBytes(size_t columns_num) const
 {
-    if (type == MergeTreeDataPartType::WIDE)
+    if (type == MergeTreeDataPartType::WIDE || type == MergeTreeDataPartType::CNCH)
         return is_adaptive ? getAdaptiveMrkSizeWide() : getNonAdaptiveMrkSizeWide();
     else if (type == MergeTreeDataPartType::COMPACT)
         return getAdaptiveMrkSizeCompact(columns_num);
@@ -87,7 +111,7 @@ size_t getAdaptiveMrkSizeCompact(size_t columns_num)
 
 std::string getAdaptiveMrkExtension(MergeTreeDataPartType part_type)
 {
-    if (part_type == MergeTreeDataPartType::WIDE)
+    if (part_type == MergeTreeDataPartType::WIDE || part_type == MergeTreeDataPartType::CNCH)
         return ".mrk2";
     else if (part_type == MergeTreeDataPartType::COMPACT)
         return ".mrk3";

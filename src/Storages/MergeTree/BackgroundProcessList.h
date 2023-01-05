@@ -41,6 +41,9 @@ public:
 
     ListElement * operator->() { return &*it; }
     const ListElement * operator->() const { return &*it; }
+
+    ListElement * get() { return &*it; }
+    const ListElement * get() const { return &*it; }
 };
 
 
@@ -83,9 +86,22 @@ public:
         return res;
     }
 
+    size_t size() const
+    {
+        std::lock_guard lock(mutex);
+        return entries.size();
+    }
+
+    template <class F>
+    void apply(F && f)
+    {
+        std::lock_guard lock(mutex);
+        f(entries);
+    }
+
     virtual void onEntryCreate(const Entry & /* entry */) {}
     virtual void onEntryDestroy(const Entry & /* entry */) {}
-    virtual inline ~BackgroundProcessList() {}
+    virtual inline ~BackgroundProcessList() = default;
 };
 
 }

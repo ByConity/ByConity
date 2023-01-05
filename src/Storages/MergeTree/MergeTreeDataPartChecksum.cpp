@@ -1,6 +1,7 @@
 #include "MergeTreeDataPartChecksum.h"
 #include <Common/SipHash.h>
 #include <Common/hex.h>
+#include <DataTypes/MapHelpers.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <IO/ReadBufferFromString.h>
@@ -79,11 +80,21 @@ void MergeTreeDataPartChecksums::checkEqual(const MergeTreeDataPartChecksums & r
     }
 }
 
+bool MergeTreeDataPartChecksums::isEqual(const MergeTreeDataPartChecksums & rhs, const String & col_name) const
+{
+    auto it = files.find(col_name);
+    auto jt = rhs.files.find(col_name);
+    return it != files.end() && jt != rhs.files.end() && it->second.file_size == jt->second.file_size
+        && it->second.file_hash == jt->second.file_hash;
+}
+
 void MergeTreeDataPartChecksums::checkSizes(const DiskPtr & disk, const String & path) const
 {
     for (const auto & it : files)
     {
         const String & name = it.first;
+        if (versions->enable_compact_map_data && isMapImplicitKeyNotKV(name))
+            continue;
         it.second.checkSize(disk, path + name);
     }
 }
@@ -93,6 +104,38 @@ UInt64 MergeTreeDataPartChecksums::getTotalSizeOnDisk() const
     UInt64 res = 0;
     for (const auto & it : files)
         res += it.second.file_size;
+    return res;
+}
+
+/// Returns names of all the files for the given map column.
+/// For compact map, both checksum's filename and disk's filename are returned in order for
+/// MergeTreeDataMergerMutator to remove related files from disk and checksums when the column is dropped.
+Strings MergeTreeDataPartChecksums::collectFilesForMapColumnNotKV(const String & map_column) const
+{
+    auto map_key_prefix = genMapKeyFilePrefix(map_column);
+    auto map_base_prefix = genMapBaseFilePrefix(map_column);
+
+    Strings res;
+    /// Collect all compact file names from the implicit key name from checksums
+    NameSet compact_file_set;
+    for (const auto & [file, _] : files)
+    {
+        if (startsWith(file, map_key_prefix))
+        {
+            if (versions->enable_compact_map_data)
+            {
+                String file_name = getMapFileNameFromImplicitFileName(file);
+                compact_file_set.insert(file_name);
+            }
+            res.emplace_back(file);
+        }
+        else if (startsWith(file, map_base_prefix))
+            res.emplace_back(file);
+    }
+
+    for (auto & file : compact_file_set)
+        res.emplace_back(file);
+
     return res;
 }
 
@@ -108,6 +151,12 @@ bool MergeTreeDataPartChecksums::read(ReadBuffer & in, size_t format_version)
             return readV3(in);
         case 4:
             return readV4(in);
+        case 5:
+            return readV5(in);
+        case 6:
+            return readV6(in);
+        case 7:
+            return readV7(in);
         default:
             throw Exception("Bad checksums format version: " + DB::toString(format_version), ErrorCodes::UNKNOWN_FORMAT);
     }
@@ -176,6 +225,8 @@ bool MergeTreeDataPartChecksums::readV3(ReadBuffer & in)
         Checksum sum;
 
         readBinary(name, in);
+        if (versions->enable_compact_map_data)
+            readVarUInt(sum.file_offset, in);
         readVarUInt(sum.file_size, in);
         readPODBinary(sum.file_hash, in);
         readBinary(sum.is_compressed, in);
@@ -198,9 +249,133 @@ bool MergeTreeDataPartChecksums::readV4(ReadBuffer & from)
     return readV3(in);
 }
 
+bool MergeTreeDataPartChecksums::readV5(ReadBuffer & from)
+{
+    /// v4
+    CompressedReadBuffer in{from};
+
+    /// v3
+    size_t count;
+
+    readVarUInt(count, in);
+
+    for (size_t i = 0; i < count; ++i)
+    {
+        String name;
+        Checksum sum;
+
+        readBinary(name, in);
+        if (storage_type == StorageType::ByteHDFS)
+            readVarUInt(sum.file_offset, in);
+        readVarUInt(sum.file_size, in);
+        readPODBinary(sum.file_hash, in);
+        readBinary(sum.is_compressed, in);
+
+        if (sum.is_compressed)
+        {
+            readVarUInt(sum.uncompressed_size, in);
+            readPODBinary(sum.uncompressed_hash, in);
+        }
+
+        /// v5
+        readBinary(sum.is_deleted, in);
+
+        files.emplace(std::move(name), sum);
+    }
+
+    return true;
+}
+
+bool MergeTreeDataPartChecksums::readV6(ReadBuffer & from)
+{
+    /// v4
+    CompressedReadBuffer in{from};
+
+    /// v3
+    size_t count;
+
+    readVarUInt(count, in);
+
+    for (size_t i = 0; i < count; ++i)
+    {
+        String name;
+        Checksum sum;
+
+        readBinary(name, in);
+        if (storage_type == StorageType::ByteHDFS)
+        {
+            readVarUInt(sum.file_offset, in);
+            /// v6 for checksums preloading.
+            readVarUInt(sum.mutation, in);
+        }
+        readVarUInt(sum.file_size, in);
+        readPODBinary(sum.file_hash, in);
+        readBinary(sum.is_compressed, in);
+
+        if (sum.is_compressed)
+        {
+            readVarUInt(sum.uncompressed_size, in);
+            readPODBinary(sum.uncompressed_hash, in);
+        }
+
+        /// v5
+        readBinary(sum.is_deleted, in);
+
+        files.emplace(std::move(name), sum);
+    }
+
+    return true;
+}
+
+/// To be compatible with feature of encryption in the dev branch
+bool MergeTreeDataPartChecksums::readV7(ReadBuffer & from)
+{
+    /// v4
+    CompressedReadBuffer in{from};
+
+    /// v3
+    size_t count;
+
+    readVarUInt(count, in);
+
+    for (size_t i = 0; i < count; ++i)
+    {
+        String name;
+        Checksum sum;
+
+        readBinary(name, in);
+        if (storage_type == StorageType::ByteHDFS)
+        {
+            readVarUInt(sum.file_offset, in);
+            /// v6 for checksums preloading.
+            readVarUInt(sum.mutation, in);
+        }
+        readVarUInt(sum.file_size, in);
+        readPODBinary(sum.file_hash, in);
+        readBinary(sum.is_compressed, in);
+
+        if (sum.is_compressed)
+        {
+            readVarUInt(sum.uncompressed_size, in);
+            readPODBinary(sum.uncompressed_hash, in);
+        }
+
+        /// v7 for encryption
+        bool is_encrypted = false;
+        readBinary(is_encrypted, in);
+
+        /// v5
+        readBinary(sum.is_deleted, in);
+
+        files.emplace(std::move(name), sum);
+    }
+
+    return true;
+}
+
 void MergeTreeDataPartChecksums::write(WriteBuffer & to) const
 {
-    writeString("checksums format version: 4\n", to);
+    writeString("checksums format version: 6\n", to);
 
     CompressedWriteBuffer out{to, CompressionCodecFactory::instance().getDefaultCodec(), 1 << 16};
 
@@ -212,6 +387,10 @@ void MergeTreeDataPartChecksums::write(WriteBuffer & to) const
         const Checksum & sum = it.second;
 
         writeBinary(name, out);
+        if (storage_type == StorageType::ByteHDFS || versions->enable_compact_map_data)
+            writeVarUInt(sum.file_offset, out);
+        if (storage_type == StorageType::ByteHDFS)
+            writeVarUInt(sum.mutation, out);
         writeVarUInt(sum.file_size, out);
         writePODBinary(sum.file_hash, out);
         writeBinary(sum.is_compressed, out);
@@ -221,6 +400,9 @@ void MergeTreeDataPartChecksums::write(WriteBuffer & to) const
             writeVarUInt(sum.uncompressed_size, out);
             writePODBinary(sum.uncompressed_hash, out);
         }
+
+        // writeBinary(sum.is_encrypted, out);
+        writeBinary(sum.is_deleted, out);
     }
 }
 

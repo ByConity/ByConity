@@ -34,6 +34,19 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
     extern const int CANNOT_ALLOCATE_MEMORY;
     extern const int CANNOT_MREMAP;
+    const char * getSqlState(int error_code);
+}
+
+void abortOnFailedAssertion(const String & description)
+{
+    LOG_FATAL(&Poco::Logger::root(), "Logical error: '{}'.", description);
+
+    /// This is to suppress -Wmissing-noreturn
+    volatile bool always_false = false;
+    if (always_false)
+        return;
+
+    abort();
 }
 
 /// - Aborts the process if error code is LOGICAL_ERROR.
@@ -45,8 +58,7 @@ void handle_error_code([[maybe_unused]] const std::string & msg, int code, bool 
 #ifdef ABORT_ON_LOGICAL_ERROR
     if (code == ErrorCodes::LOGICAL_ERROR)
     {
-        LOG_FATAL(&Poco::Logger::root(), "Logical error: '{}'.", msg);
-        abort();
+        abortOnFailedAssertion(msg);
     }
 #endif
 
@@ -129,6 +141,18 @@ Exception::FramePointers Exception::getStackFramePointers() const
     return frame_pointers;
 }
 
+std::string Exception::displayText() const
+{
+    std::string txt = name();
+    if (!message().empty())
+    {
+        txt.append(": ");
+        txt.append(message());
+        txt.append(" SQLSTATE: ");
+        txt.append(ErrorCodes::getSqlState(code()));
+    }
+    return txt;
+}
 
 void throwFromErrno(const std::string & s, int code, int the_errno)
 {
@@ -177,6 +201,46 @@ void tryLogCurrentException(Poco::Logger * logger, const std::string & start_of_
     MemoryTracker::LockExceptionInThread lock_memory_tracker(VariableContext::Global);
 
     tryLogCurrentExceptionImpl(logger, start_of_message);
+}
+
+void tryLogDebugCurrentException(const char * log_name, const std::string & start_of_message)
+{
+    tryLogDebugCurrentException(&Poco::Logger::get(log_name), start_of_message);
+}
+
+void tryLogDebugCurrentException(Poco::Logger * logger, const std::string & start_of_message)
+{
+    try
+    {
+        LOG_DEBUG(logger, start_of_message + (start_of_message.empty() ? "" : ": ") + getCurrentExceptionMessage(true));
+    }
+    catch (...)
+    {
+    }
+}
+
+std::unique_ptr<Exception> getSerializableException()
+{
+    try
+    {
+        throw;
+    }
+    catch (const Exception & e)
+    {
+        return std::unique_ptr<Exception>(e.clone());
+    }
+    catch (const Poco::Exception & e)
+    {
+        return std::make_unique<Exception>(e.displayText(), ErrorCodes::POCO_EXCEPTION);
+    }
+    catch (const std::exception & e)
+    {
+        return std::make_unique<Exception>(e.what(), ErrorCodes::STD_EXCEPTION);
+    }
+    catch (...)
+    {
+        return std::make_unique<Exception>("Unknown exception", ErrorCodes::UNKNOWN_EXCEPTION);
+    }
 }
 
 static void getNoSpaceLeftInfoMessage(std::filesystem::path path, String & msg)
@@ -525,5 +589,18 @@ std::string ParsingException::displayText() const
     }
 }
 
+void ExceptionHandler::setException(std::exception_ptr && exception)
+{
+    std::unique_lock lock(mutex);
+    if (!first_exception)
+        first_exception = std::move(exception);
+}
+
+void ExceptionHandler::throwIfException()
+{
+    std::unique_lock lock(mutex);
+    if (first_exception)
+        std::rethrow_exception(first_exception);
+}
 
 }

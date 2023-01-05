@@ -59,6 +59,49 @@ void ASTSettingsProfileElement::formatImpl(const FormatSettings & settings, Form
     }
 }
 
+void ASTSettingsProfileElement::serialize(WriteBuffer & buf) const
+{
+    writeBinary(parent_profile, buf);
+    writeBinary(setting_name, buf);
+    writeFieldBinary(value, buf);
+    writeFieldBinary(min_value, buf);
+    writeFieldBinary(max_value, buf);
+    if (readonly)
+    {
+        writeBinary(true, buf);
+        writeBinary(readonly.value(), buf);
+    }
+    else
+        writeBinary(false, buf);
+    writeBinary(id_mode, buf);
+    writeBinary(use_inherit_keyword, buf);
+}
+
+void ASTSettingsProfileElement::deserializeImpl(ReadBuffer & buf)
+{
+    readBinary(parent_profile, buf);
+    readBinary(setting_name, buf);
+    readFieldBinary(value, buf);
+    readFieldBinary(min_value, buf);
+    readFieldBinary(max_value, buf);
+    bool has_readonly;
+    readBinary(has_readonly, buf);
+    if (has_readonly)
+    {
+        bool read_tmp;
+        readBinary(read_tmp, buf);
+        readonly = read_tmp;
+    }
+    readBinary(id_mode, buf);
+    readBinary(use_inherit_keyword, buf);
+}
+
+ASTPtr ASTSettingsProfileElement::deserialize(ReadBuffer & buf)
+{
+    auto element = std::make_shared<ASTSettingsProfileElement>();
+    element->deserializeImpl(buf);
+    return element;
+}
 
 bool ASTSettingsProfileElements::empty() const
 {
@@ -93,6 +136,29 @@ void ASTSettingsProfileElements::setUseInheritKeyword(bool use_inherit_keyword_)
 {
     for (auto & element : elements)
         element->use_inherit_keyword = use_inherit_keyword_;
+}
+
+void ASTSettingsProfileElements::serialize(WriteBuffer & buf) const
+{
+    writeBinary(elements.size(), buf);
+    for (auto & element : elements)
+        element->serialize(buf);
+}
+
+void ASTSettingsProfileElements::deserializeImpl(ReadBuffer & buf)
+{
+    size_t size;
+    readBinary(size, buf);
+    elements.resize(size);
+    for (size_t i = 0; i < size; ++i)
+        elements[i]->deserializeImpl(buf);
+}
+
+ASTPtr ASTSettingsProfileElements::deserialize(ReadBuffer & buf)
+{
+    auto element = std::make_shared<ASTSettingsProfileElements>();
+    element->deserializeImpl(buf);
+    return element;
 }
 
 }

@@ -1,4 +1,5 @@
 #include <Common/ThreadPool.h>
+#include <Common/config.h>
 
 #include <Poco/DirectoryIterator.h>
 
@@ -20,6 +21,13 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <filesystem>
 
+#if USE_HDFS
+#include <hdfs/hdfs.h>
+#include <IO/copyData.h>
+#include <Storages/HDFS/ReadBufferFromByteHDFS.h>
+#include <IO/WriteBufferFromFile.h>
+#include <Storages/HDFS/HDFSCommon.h>
+#endif
 namespace fs = std::filesystem;
 
 namespace DB
@@ -32,7 +40,7 @@ static void executeCreateQuery(
     const String & file_name,
     bool has_force_restore_data_flag)
 {
-    ParserCreateQuery parser;
+    ParserCreateQuery parser(ParserSettings::valueOf(context->getSettingsRef().dialect_type));
     ASTPtr ast = parseQuery(
         parser, query.data(), query.data() + query.size(), "in file " + file_name, 0, context->getSettingsRef().max_parser_depth);
 
@@ -71,7 +79,7 @@ static void loadDatabase(
     {
         /// It's first server run and we need create default and system databases.
         /// .sql file with database engine will be written for CREATE query.
-        database_attach_query = "CREATE DATABASE " + backQuoteIfNeed(database);
+        database_attach_query = "CREATE DATABASE " + backQuoteIfNeed(database) + " ENGINE = Atomic";
     }
 
     try
@@ -189,6 +197,65 @@ void loadMetadataSystem(ContextMutablePtr context)
         executeCreateQuery(database_create_query, context, DatabaseCatalog::SYSTEM_DATABASE, "<no file>", true);
     }
 
+}
+
+/* Load schema files from hdfs*/
+void reloadFormatSchema(String remote_format_schema_path, String format_schema_path, Poco::Logger * log)
+{
+#if USE_HDFS
+    if (!remote_format_schema_path.empty())
+    {
+        remote_format_schema_path += "/"; // add it by default
+        // try download files from remote_format_schema_path to format_schema_path
+        Poco::URI remote_uri(remote_format_schema_path);
+        if (remote_uri.getScheme() == "hdfs")
+        {
+            HDFSBuilderPtr builder = createHDFSBuilder(remote_uri);
+            HDFSFSPtr fs = createHDFSFS(builder.get());
+            int num = 0;
+            hdfsFileInfo* files = hdfsListDirectory(fs.get(), remote_uri.getPath().c_str(), &num);
+            for (int i = 0; i < num; i++)
+            {
+                String fileName(files[i].mName);
+                    Poco::Path path(fileName);
+                String shortFileName = path.getFileName();
+                String suffix = path.getExtension();
+                if (files[i].mKind == kObjectKindDirectory || (suffix != "proto" && suffix != "capnp")) continue; // skip directory
+                Poco::File target_file(format_schema_path+ "/" + shortFileName);
+                // avoid download same file multiple times, checking size for now, it is not solid but should work online
+                if (target_file.exists() && (target_file.getSize() == UInt64(files[i].mSize)))
+                {
+                    if(log)
+                    {
+
+                        LOG_TRACE(log, "skip get same size remote_format_schema " + shortFileName);
+                    }
+                    continue;
+                }
+
+                Poco::File file(format_schema_path+"/chtmp_" + shortFileName);
+                if (file.exists()) file.remove(); // remove last residual file
+
+                ReadBufferFromByteHDFS reader(fileName);
+                WriteBufferFromFile writer(file.path());
+                copyData(reader, writer, nullptr);
+                if (target_file.exists()) target_file.remove();
+
+                file.renameTo(format_schema_path+ "/" + shortFileName);
+                if(log)
+                {
+                    LOG_INFO(log, "get remote_format_schema " + shortFileName);
+                }
+            }
+            hdfsFreeFileInfo(files, num);
+        }
+        else
+        {
+            if(log) {LOG_ERROR(log, "remote_format_schema_path only support hdfs");}
+        }
+    }
+#endif
+    return;
 }
 
 }

@@ -22,6 +22,8 @@ public:
     explicit MergeTreeIndexGranularity(const std::vector<size_t> & marks_rows_partial_sums_);
     MergeTreeIndexGranularity(size_t marks_count, size_t fixed_granularity);
 
+    /// Return the index granulirities from `marks_rows_partial_sums`, could be usede when serializing the part.
+    std::vector<size_t> getIndexGranularities() const;
 
     /// Return count of rows between marks
     size_t getRowsCountInRange(const MarkRange & range) const;

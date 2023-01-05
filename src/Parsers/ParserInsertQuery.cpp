@@ -34,11 +34,12 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserKeyword s_select("SELECT");
     ParserKeyword s_watch("WATCH");
     ParserKeyword s_with("WITH");
+    ParserKeyword s_infile("INFILE");
     ParserToken s_lparen(TokenType::OpeningRoundBracket);
     ParserToken s_rparen(TokenType::ClosingRoundBracket);
     ParserIdentifier name_p;
-    ParserList columns_p(std::make_unique<ParserInsertElement>(), std::make_unique<ParserToken>(TokenType::Comma), false);
-    ParserFunction table_function_p{false};
+    ParserList columns_p(std::make_unique<ParserInsertElement>(dt), std::make_unique<ParserToken>(TokenType::Comma), false);
+    ParserFunction table_function_p{dt, false};
 
     ASTPtr database;
     ASTPtr table;
@@ -47,6 +48,7 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ASTPtr select;
     ASTPtr watch;
     ASTPtr table_function;
+    ASTPtr in_file;
     ASTPtr settings_ast;
     /// Insertion data
     const char * data = nullptr;
@@ -95,15 +97,26 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     {
         if (!name_p.parse(pos, format, expected))
             return false;
+
+        if (s_infile.ignore(pos, expected))
+        {
+            if (!ParserStringLiteral().parse(pos, in_file, expected))
+                return false;
+        }
     }
     else if (s_select.ignore(pos, expected) || s_with.ignore(pos,expected))
     {
         pos = before_values;
-        ParserSelectWithUnionQuery select_p;
+        ParserSelectWithUnionQuery select_p(dt);
         select_p.parse(pos, select, expected);
 
         /// FORMAT section is expected if we have input() in SELECT part
         if (s_format.ignore(pos, expected) && !name_p.parse(pos, format, expected))
+            return false;
+    }
+    else if (s_infile.ignore(pos, expected))
+    {
+        if (!ParserStringLiteral().parse(pos, in_file, expected))
             return false;
     }
     else if (s_watch.ignore(pos, expected))
@@ -136,7 +149,7 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     }
 
 
-    if (format)
+    if (!in_file && format)
     {
         Pos last_token = pos;
         --last_token;
@@ -185,6 +198,10 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     query->settings_ast = settings_ast;
     query->data = data != end ? data : nullptr;
     query->end = end;
+    query->in_file = in_file;
+
+    if (in_file)
+        query->data = nullptr;
 
     if (columns)
         query->children.push_back(columns);
@@ -200,9 +217,9 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
 bool ParserInsertElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
-    return ParserColumnsMatcher().parse(pos, node, expected)
-        || ParserQualifiedAsterisk().parse(pos, node, expected)
-        || ParserAsterisk().parse(pos, node, expected)
+    return ParserColumnsMatcher(dt).parse(pos, node, expected)
+        || ParserQualifiedAsterisk(dt).parse(pos, node, expected)
+        || ParserAsterisk(dt).parse(pos, node, expected)
         || ParserCompoundIdentifier().parse(pos, node, expected);
 }
 

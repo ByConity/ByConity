@@ -19,8 +19,8 @@
 #include <Storages/MergeTree/EphemeralLockInZooKeeper.h>
 #include <Storages/MergeTree/DataPartsExchange.h>
 #include <Storages/MergeTree/ReplicatedMergeTreeAddress.h>
-#include <Storages/MergeTree/LeaderElection.h>
 #include <Storages/MergeTree/PartMovesBetweenShardsOrchestrator.h>
+#include <Coordination/LeaderElection.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Cluster.h>
 #include <Interpreters/PartLog.h>
@@ -260,6 +260,8 @@ public:
 
     bool createEmptyPartInsteadOfLost(zkutil::ZooKeeperPtr zookeeper, const String & lost_part_name);
 
+    void attachPartsInDirectory(const PartNamesWithDisks & parts_with_disk, const String & relative_path, ContextPtr query_context) override;
+
 private:
     std::atomic_bool are_restoring_replica {false};
 
@@ -388,8 +390,8 @@ private:
 
     /// Throttlers used in DataPartsExchange to lower maximum fetch/sends
     /// speed.
-    ThrottlerPtr replicated_fetches_throttler;
-    ThrottlerPtr replicated_sends_throttler;
+    // ThrottlerPtr replicated_fetches_throttler;
+    // ThrottlerPtr replicated_sends_throttler;
 
     template <class Func>
     void foreachCommittedParts(Func && func, bool select_sequential_consistency) const;

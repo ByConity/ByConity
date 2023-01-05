@@ -64,13 +64,13 @@ public:
             bool randomize_, size_t max_iterations_, double max_time_,
             const String & json_path_, size_t confidence_,
             const String & query_id_, const String & query_to_execute_, bool continue_on_errors_,
-            bool reconnect_, bool print_stacktrace_, const Settings & settings_)
+            bool reconnect_, bool print_stacktrace_, bool print_detail_, const Settings & settings_)
         :
         concurrency(concurrency_), delay(delay_), queue(concurrency), randomize(randomize_),
         cumulative(cumulative_), max_iterations(max_iterations_), max_time(max_time_),
         json_path(json_path_), confidence(confidence_), query_id(query_id_),
         query_to_execute(query_to_execute_), continue_on_errors(continue_on_errors_), reconnect(reconnect_),
-        print_stacktrace(print_stacktrace_), settings(settings_),
+        print_stacktrace(print_stacktrace_), print_detail(print_detail_), settings(settings_),
         shared_context(Context::createShared()), global_context(Context::createGlobal(shared_context.get())),
         pool(concurrency)
     {
@@ -159,6 +159,7 @@ private:
     bool continue_on_errors;
     bool reconnect;
     bool print_stacktrace;
+    bool print_detail;
     const Settings & settings;
     SharedContextHolder shared_context;
     ContextMutablePtr global_context;
@@ -191,6 +192,41 @@ private:
             result_rows += result_rows_inc;
             result_bytes += result_bytes_inc;
             sampler.insert(seconds);
+        }
+
+        void add(const Stats & rhs)
+        {
+            queries += rhs.queries;
+            errors += rhs.errors;
+            read_rows += rhs.read_rows;
+            read_bytes += rhs.read_bytes;
+            result_rows += rhs.result_rows;
+            result_bytes += rhs.result_bytes;
+            work_time += rhs.work_time;
+            sampler.merge(rhs.sampler);
+        }
+
+        void print(const String & description, size_t concurrent) const
+        {
+            double seconds = work_time / concurrent;
+
+            if (!description.empty())
+                std::cerr << description << ", ";
+
+            std::cerr
+                    << "queries " << queries << ", "
+                    << "seconds " << seconds << ", ";
+
+            if (errors)
+                std::cerr << "errors " << errors << ", ";
+
+            std::cerr
+                    << "QPS: " << (queries / seconds) << ", "
+                    << "RPS: " << (read_rows / seconds) << ", "
+                    << "MiB/s: " << (read_bytes / seconds / 1048576) << ", "
+                    << "result RPS: " << (result_rows / seconds) << ", "
+                    << "result MiB/s: " << (result_bytes / seconds / 1048576) << "."
+                    << "\n";
         }
 
         void clear()
@@ -434,12 +470,17 @@ private:
 
         comparison_info_per_interval[connection_index]->add(seconds, progress.read_rows, progress.read_bytes, info.rows, info.bytes);
         comparison_info_total[connection_index]->add(seconds, progress.read_rows, progress.read_bytes, info.rows, info.bytes);
-        t_test.add(connection_index, seconds);
+
+        /// only compare the first two nodes
+        if (connection_index < 2)
+            t_test.add(connection_index, seconds);
     }
 
     void report(MultiStats & infos)
     {
         std::lock_guard lock(mutex);
+
+        Stats total_stats{};
 
         std::cerr << "\n";
         for (size_t i = 0; i < infos.size(); ++i)
@@ -450,31 +491,30 @@ private:
             if (0 == info->queries)
                 return;
 
-            double seconds = info->work_time / concurrency;
-
-            std::cerr
-                    << connections[i]->getDescription() << ", "
-                    << "queries " << info->queries << ", ";
-            if (info->errors)
-            {
-                std::cerr << "errors " << info->errors << ", ";
-            }
-            std::cerr
-                    << "QPS: " << (info->queries / seconds) << ", "
-                    << "RPS: " << (info->read_rows / seconds) << ", "
-                    << "MiB/s: " << (info->read_bytes / seconds / 1048576) << ", "
-                    << "result RPS: " << (info->result_rows / seconds) << ", "
-                    << "result MiB/s: " << (info->result_bytes / seconds / 1048576) << "."
-                    << "\n";
+            if (print_detail)
+                info->print(connections[i]->getDescription(), concurrency);
+            else
+                total_stats.add(*info);
         }
+
+        if (!print_detail)
+            total_stats.print("", concurrency);
+
         std::cerr << "\n";
 
         auto print_percentile = [&](double percent)
         {
             std::cerr << percent << "%\t\t";
-            for (const auto & info : infos)
+            if (print_detail)
             {
-                std::cerr << info->sampler.quantileNearest(percent / 100.0) << " sec.\t";
+                for (const auto & info : infos)
+                {
+                    std::cerr << info->sampler.quantileNearest(percent / 100.0) << " sec.\t";
+                }
+            }
+            else
+            {
+                std::cerr << total_stats.sampler.quantileNearest(percent / 100.0) << " sec.\t";
             }
             std::cerr << "\n";
         };
@@ -594,8 +634,9 @@ int mainEntryClickHouseBenchmark(int argc, char ** argv)
             ("password",      value<std::string>()->default_value(""),          "")
             ("database",      value<std::string>()->default_value("default"),   "")
             ("stacktrace",                                                      "print stack traces of exceptions")
-            ("confidence",    value<size_t>()->default_value(5), "set the level of confidence for T-test [0=80%, 1=90%, 2=95%, 3=98%, 4=99%, 5=99.5%(default)")
-            ("query_id",      value<std::string>()->default_value(""),         "")
+            ("confidence",    value<size_t>()->default_value(5),                "set the level of confidence for T-test [0=80%, 1=90%, 2=95%, 3=98%, 4=99%, 5=99.5%(default)")
+            ("query_id",      value<std::string>()->default_value(""),          "")
+            ("detail",                                                          "output detail info for all hosts")
             ("continue_on_errors", "continue testing even if a query fails")
             ("reconnect", "establish new connection for every query")
         ;
@@ -629,6 +670,8 @@ int mainEntryClickHouseBenchmark(int argc, char ** argv)
 
         Strings hosts = options.count("host") ? options["host"].as<Strings>() : Strings({"localhost"});
 
+        bool print_detail = options.count("detail");
+
         Benchmark benchmark(
             options["concurrency"].as<unsigned>(),
             options["delay"].as<double>(),
@@ -650,6 +693,7 @@ int mainEntryClickHouseBenchmark(int argc, char ** argv)
             options.count("continue_on_errors"),
             options.count("reconnect"),
             print_stacktrace,
+            print_detail,
             settings);
         return benchmark.run();
     }

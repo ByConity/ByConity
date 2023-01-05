@@ -34,6 +34,16 @@ struct Granule
     bool is_complete;
 };
 
+struct StreamNameAndMark
+{
+    String stream_name;
+    MarkInCompressedFile mark;
+};
+
+using StreamsWithMarks = std::vector<StreamNameAndMark>;
+using ColumnNameToMark = std::unordered_map<String, StreamsWithMarks>;
+using MapColumnsKeys = std::map<String, std::set<String> >;
+
 /// Multiple granules to write for concrete block.
 using Granules = std::vector<Granule>;
 
@@ -56,7 +66,8 @@ public:
             const std::string & marks_path_,
             const std::string & marks_file_extension_,
             const CompressionCodecPtr & compression_codec_,
-            size_t max_compress_block_size_);
+            size_t max_compress_block_size_,
+            bool is_compact_map = false);
 
         String escaped_column_name;
         std::string data_file_extension;
@@ -72,11 +83,18 @@ public:
         std::unique_ptr<WriteBufferFromFileBase> marks_file;
         HashingWriteBuffer marks;
 
+        /// file offset, it's used to distinguish different implicit columns because all implicit column data store in the same file.
+        off_t data_file_offset;
+        off_t marks_file_offset;
+
         void finalize();
 
         void sync() const;
 
         void addToChecksums(IMergeTreeDataPart::Checksums & checksums);
+        
+        void deepCopyTo(Stream& target);
+        [[noreturn]] void freeResource();
     };
 
     using StreamPtr = std::unique_ptr<Stream>;
@@ -94,6 +112,11 @@ public:
     void setWrittenOffsetColumns(WrittenOffsetColumns * written_offset_columns_)
     {
         written_offset_columns = written_offset_columns_;
+    }
+
+    void setMergeStatus(bool is_merge_)
+    {
+        is_merge = is_merge_;
     }
 
 protected:
@@ -119,6 +142,93 @@ protected:
 
     /// Get unique non ordered skip indices column.
     Names getSkipIndicesColumns() const;
+
+    void addStreams(
+        const NameAndTypePair & column,
+        const ASTPtr & effective_codec_desc);
+    
+    /// construct an implicit stream for map column (not kv)
+    void addByteMapStreams(
+         const NameAndTypePair & column, // implicit_name
+         const String & col_name,
+         const ASTPtr & effective_codec_desc);
+    
+    ISerialization::StreamCallback finalizeStreams(const String & name);
+
+    /// Write data of one column.
+    /// Return how many marks were written and
+    /// how many rows were written for last mark
+    void writeColumn(
+        const NameAndTypePair & name_and_type,
+        const IColumn & column,
+        WrittenOffsetColumns & offset_columns,
+        const Granules & granules,
+        bool need_finalize = false);
+
+    virtual bool canGranuleNotComplete() { return false; }
+
+    virtual size_t getRowsWrittenInLastMark() { return 0; }
+
+    /// Write data of one bytemap column.
+    /// Return how many marks were written and
+    /// how many rows were written for last mark
+    void writeCompactedByteMapColumn(
+        const NameAndTypePair & name_and_type,
+        const IColumn & column,
+        WrittenOffsetColumns & offset_columns,
+        const Granules & granules);
+
+    void writeUncompactedByteMapColumn(
+        const NameAndTypePair & name_and_type,
+        const IColumn & column,
+        WrittenOffsetColumns & offset_columns,
+        const Granules & granules);
+
+    void deepCopyAndAdd(const String & source_stream_name, const String & target_stream_name, const IDataType & type);
+
+    ISerialization::OutputStreamGetter createStreamGetter(const NameAndTypePair & column, WrittenOffsetColumns & offset_columns) const;
+
+    /// Write single granule of one column.
+    void writeSingleGranule(
+        const NameAndTypePair & name_and_type,
+        const IColumn & column,
+        WrittenOffsetColumns & offset_columns,
+        ISerialization::SerializeBinaryBulkStatePtr & serialization_state,
+        ISerialization::SerializeBinaryBulkSettings & serialize_settings,
+        const Granule & granule);
+
+    /// Take offsets from column and return as MarkInCompressed file with stream name
+    StreamsWithMarks getCurrentMarksForColumn(
+        const NameAndTypePair & column,
+        WrittenOffsetColumns & offset_columns,
+        ISerialization::SubstreamPath & path);
+
+    /// When writing uncompact map data and handling new key case, except for copy stream, it's necessary to copy last_non_written mark info, just replace the stream name.
+    StreamsWithMarks copyLastNonWrittenMarks(
+        const NameAndTypePair & source_column,
+        const StreamsWithMarks & source_marks,
+        const NameAndTypePair & target_column,
+        WrittenOffsetColumns & offset_columns,
+        ISerialization::SubstreamPath & path);
+
+    /// Write mark to disk using stream and rows count
+    void flushMarkToFile(
+        const StreamNameAndMark & stream_with_mark,
+        size_t rows_in_mark);
+
+    /// Write mark for column taking offsets from column stream
+    void writeSingleMark(
+        const NameAndTypePair & column,
+        WrittenOffsetColumns & offset_columns,
+        size_t number_of_rows,
+        ISerialization::SubstreamPath & path);
+
+    void writeFinalMark(
+        const NameAndTypePair & column,
+        WrittenOffsetColumns & offset_columns,
+        ISerialization::SubstreamPath & path);
+
+    virtual Poco::Logger * getLogger() = 0; 
 
     const MergeTreeIndices skip_indices;
 
@@ -149,6 +259,30 @@ protected:
 
     /// Data is already written up to this mark.
     size_t current_mark = 0;
+
+    using ColumnStreams = std::map<String, StreamPtr>;
+    ColumnStreams column_streams;
+
+    using SerializationState = ISerialization::SerializeBinaryBulkStatePtr;
+    using SerializationStates = std::unordered_map<String, SerializationState>;
+
+    SerializationStates serialization_states;
+
+    /// Non written marks to disk (for each column). Waiting until all rows for
+    /// this marks will be written to disk.
+    using MarksForColumns = std::unordered_map<String, StreamsWithMarks>;
+    MarksForColumns last_non_written_marks;
+
+    MapColumnsKeys exist_keys_names;
+	NamesAndTypesList implicit_columns_list;
+
+    bool optimize_map_column_serialization = false;
+
+    /// This parameter is used in following cases:
+    /// 1. write compact map
+    /// 2. write row store for unique table
+    /// In other cases, this parameter can not reflect the correct merge status.
+    bool is_merge = false;
 
 private:
     void initSkipIndices();

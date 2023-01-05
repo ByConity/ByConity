@@ -22,6 +22,7 @@ public:
         SELECT,
         TABLES,
         PREWHERE,
+        IMPLICITWHERE,  /// only used in CnchHive
         WHERE,
         GROUP_BY,
         HAVING,
@@ -38,25 +39,33 @@ public:
     /** Get the text that identifies this element. */
     String getID(char) const override { return "SelectQuery"; }
 
+    ASTType getType() const override { return ASTType::ASTSelectQuery; }
+
     ASTPtr clone() const override;
+
+    void collectAllTables(std::vector<ASTPtr> &, bool &) const;
 
     bool distinct = false;
     bool group_by_with_totals = false;
     bool group_by_with_rollup = false;
     bool group_by_with_cube = false;
     bool group_by_with_constant_keys = false;
+    bool group_by_with_grouping_sets = false;
     bool limit_with_ties = false;
 
     ASTPtr & refSelect()    { return getExpression(Expression::SELECT); }
     ASTPtr & refTables()    { return getExpression(Expression::TABLES); }
     ASTPtr & refPrewhere()  { return getExpression(Expression::PREWHERE); }
+    ASTPtr & refImplicitWhere() { return getExpression(Expression::IMPLICITWHERE); }
     ASTPtr & refWhere()     { return getExpression(Expression::WHERE); }
     ASTPtr & refHaving()    { return getExpression(Expression::HAVING); }
+    ASTPtr & refLimitLength()   { return getExpression(Expression::LIMIT_LENGTH); }
 
     const ASTPtr with()           const { return getExpression(Expression::WITH); }
     const ASTPtr select()         const { return getExpression(Expression::SELECT); }
     const ASTPtr tables()         const { return getExpression(Expression::TABLES); }
     const ASTPtr prewhere()       const { return getExpression(Expression::PREWHERE); }
+    const ASTPtr implicitWhere()  const { return getExpression(Expression::IMPLICITWHERE); }
     const ASTPtr where()          const { return getExpression(Expression::WHERE); }
     const ASTPtr groupBy()        const { return getExpression(Expression::GROUP_BY); }
     const ASTPtr having()         const { return getExpression(Expression::HAVING); }
@@ -68,6 +77,22 @@ public:
     const ASTPtr limitOffset()    const { return getExpression(Expression::LIMIT_OFFSET); }
     const ASTPtr limitLength()    const { return getExpression(Expression::LIMIT_LENGTH); }
     const ASTPtr settings()       const { return getExpression(Expression::SETTINGS); }
+
+    ASTPtr getWith()            { return getExpression(Expression::WITH, true); }
+    ASTPtr getSelect()          { return getExpression(Expression::SELECT, true); }
+    ASTPtr getTables()          { return getExpression(Expression::TABLES, true); }
+    ASTPtr getPrewhere()        { return getExpression(Expression::PREWHERE, true); }
+    ASTPtr getWhere()           { return getExpression(Expression::WHERE, true); }
+    ASTPtr getGroupBy()         { return getExpression(Expression::GROUP_BY, true); }
+    ASTPtr getHaving()          { return getExpression(Expression::HAVING, true); }
+    ASTPtr getWindow()          { return getExpression(Expression::WINDOW, true); }
+    ASTPtr getOrderBy()         { return getExpression(Expression::ORDER_BY, true); }
+    ASTPtr getLimitByOffset()   { return getExpression(Expression::LIMIT_BY_OFFSET, true); }
+    ASTPtr getLimitByLength()   { return getExpression(Expression::LIMIT_BY_LENGTH, true); }
+    ASTPtr getLimitBy()         { return getExpression(Expression::LIMIT_BY, true); }
+    ASTPtr getLimitOffset()     { return getExpression(Expression::LIMIT_OFFSET, true); }
+    ASTPtr getLimitLength()     { return getExpression(Expression::LIMIT_LENGTH, true); }
+    ASTPtr getSettings()        { return getExpression(Expression::SETTINGS, true); }
 
     /// Set/Reset/Remove expression.
     void setExpression(Expression expr, ASTPtr && ast);
@@ -95,6 +120,11 @@ public:
 
     void setFinal();
 
+    void serialize(WriteBuffer & buf) const override;
+    void deserializeImpl(ReadBuffer & buf) override;
+    static ASTPtr deserialize(ReadBuffer & buf);
+
+    std::vector<Expression> getExpressionTypes() const;
 protected:
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
 

@@ -8,6 +8,7 @@
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/IInterpreterUnionOrSelectQuery.h>
 #include <Interpreters/StorageID.h>
+#include <Interpreters/MaterializedViewSubstitutionOptimizer.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Storages/ReadInOrderOptimizer.h>
 #include <Storages/SelectQueryInfo.h>
@@ -27,9 +28,13 @@ class InterpreterSelectWithUnionQuery;
 class Context;
 class QueryPlan;
 
+struct GroupingSetsParams;
+using GroupingSetsParamsList = std::vector<GroupingSetsParams>;
+
 struct TreeRewriterResult;
 using TreeRewriterResultPtr = std::shared_ptr<const TreeRewriterResult>;
 
+StreamLocalLimits getLimitsForStorage(const Settings & settings, const SelectQueryOptions & options);
 
 /** Interprets the SELECT query. Returns the stream of blocks with the results of the query before `to_stage` stage.
   */
@@ -91,6 +96,8 @@ public:
 
     const SelectQueryInfo & getQueryInfo() const { return query_info; }
 
+    SelectQueryInfo getQueryInfo() { return query_info; }
+
     const SelectQueryExpressionAnalyzer * getQueryAnalyzer() const { return query_analyzer.get(); }
 
     const ExpressionAnalysisResult & getAnalysisResult() const { return analysis_result; }
@@ -99,12 +106,19 @@ public:
 
     bool hasAggregation() const { return query_analyzer->hasAggregation(); }
 
+    static Pipe generateNullSourcePipe(
+        const Block & source_header, const SelectQueryInfo & query_info);
+
     static void addEmptySourceToQueryPlan(
         QueryPlan & query_plan, const Block & source_header, const SelectQueryInfo & query_info, ContextPtr context_);
 
     Names getRequiredColumns() { return required_columns; }
 
+    MaterializedViewOptimizerResultPtr getMaterializeViewMatchResult() { return mv_optimizer_result; }
+
 private:
+    friend class InterpreterPerfectShard;
+
     InterpreterSelectQuery(
         const ASTPtr & query_ptr_,
         ContextPtr context_,
@@ -130,7 +144,7 @@ private:
     void executeWhere(QueryPlan & query_plan, const ActionsDAGPtr & expression, bool remove_filter);
     void executeAggregation(
         QueryPlan & query_plan, const ActionsDAGPtr & expression, bool overflow_row, bool final, InputOrderInfoPtr group_by_info);
-    void executeMergeAggregated(QueryPlan & query_plan, bool overflow_row, bool final);
+    void executeMergeAggregated(QueryPlan & query_plan, bool overflow_row, bool final, bool has_grouping_sets = false);
     void executeTotalsAndHaving(QueryPlan & query_plan, bool has_having, const ActionsDAGPtr & expression, bool overflow_row, bool final);
     void executeHaving(QueryPlan & query_plan, const ActionsDAGPtr & expression);
     static void executeExpression(QueryPlan & query_plan, const ActionsDAGPtr & expression, const std::string & description);
@@ -169,6 +183,8 @@ private:
       */
     void initSettings();
 
+    void rewriteQueryBaseOnView();
+
     TreeRewriterResultPtr syntax_analyzer_result;
     std::unique_ptr<SelectQueryExpressionAnalyzer> query_analyzer;
     SelectQueryInfo query_info;
@@ -203,6 +219,8 @@ private:
 
     Poco::Logger * log;
     StorageMetadataPtr metadata_snapshot;
+
+    MaterializedViewOptimizerResultPtr mv_optimizer_result;
 };
 
 }

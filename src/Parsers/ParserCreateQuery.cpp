@@ -62,7 +62,7 @@ bool ParserNestedTable::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
 bool ParserIdentifierWithParameters::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
-    return ParserFunction().parse(pos, node, expected);
+    return ParserFunction(dt).parse(pos, node, expected);
 }
 
 bool ParserNameTypePairList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
@@ -73,7 +73,7 @@ bool ParserNameTypePairList::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
 
 bool ParserColumnDeclarationList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
-    return ParserList(std::make_unique<ParserColumnDeclaration>(), std::make_unique<ParserToken>(TokenType::Comma), false)
+    return ParserList(std::make_unique<ParserColumnDeclaration>(dt), std::make_unique<ParserToken>(TokenType::Comma), false)
         .parse(pos, node, expected);
 }
 
@@ -90,7 +90,7 @@ bool ParserIndexDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
 
     ParserIdentifier name_p;
     ParserDataType data_type_p;
-    ParserExpression expression_p;
+    ParserExpression expression_p(dt);
     ParserUnsignedInteger granularity_p;
 
     ASTPtr name;
@@ -131,7 +131,7 @@ bool ParserConstraintDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected &
     ParserKeyword s_check("CHECK");
 
     ParserIdentifier name_p;
-    ParserLogicalOrExpression expression_p;
+    ParserLogicalOrExpression expression_p(dt);
 
     ASTPtr name;
     ASTPtr expr;
@@ -157,7 +157,7 @@ bool ParserConstraintDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected &
 bool ParserProjectionDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserIdentifier name_p;
-    ParserProjectionSelectQuery query_p;
+    ParserProjectionSelectQuery query_p(dt);
     ParserToken s_lparen(TokenType::OpeningRoundBracket);
     ParserToken s_rparen(TokenType::ClosingRoundBracket);
     ASTPtr name;
@@ -191,11 +191,11 @@ bool ParserTablePropertyDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expecte
     ParserKeyword s_projection("PROJECTION");
     ParserKeyword s_primary_key("PRIMARY KEY");
 
-    ParserIndexDeclaration index_p;
-    ParserConstraintDeclaration constraint_p;
-    ParserProjectionDeclaration projection_p;
-    ParserColumnDeclaration column_p{true, true};
-    ParserExpression primary_key_p;
+    ParserIndexDeclaration index_p(dt);
+    ParserConstraintDeclaration constraint_p(dt);
+    ParserProjectionDeclaration projection_p(dt);
+    ParserColumnDeclaration column_p{dt, true, true};
+    ParserExpression primary_key_p(dt);
 
     ASTPtr new_node = nullptr;
 
@@ -231,19 +231,19 @@ bool ParserTablePropertyDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expecte
 
 bool ParserIndexDeclarationList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
-    return ParserList(std::make_unique<ParserIndexDeclaration>(), std::make_unique<ParserToken>(TokenType::Comma), false)
+    return ParserList(std::make_unique<ParserIndexDeclaration>(dt), std::make_unique<ParserToken>(TokenType::Comma), false)
             .parse(pos, node, expected);
 }
 
 bool ParserConstraintDeclarationList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
-    return ParserList(std::make_unique<ParserConstraintDeclaration>(), std::make_unique<ParserToken>(TokenType::Comma), false)
+    return ParserList(std::make_unique<ParserConstraintDeclaration>(dt), std::make_unique<ParserToken>(TokenType::Comma), false)
             .parse(pos, node, expected);
 }
 
 bool ParserProjectionDeclarationList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
-    return ParserList(std::make_unique<ParserProjectionDeclaration>(), std::make_unique<ParserToken>(TokenType::Comma), false)
+    return ParserList(std::make_unique<ParserProjectionDeclaration>(dt), std::make_unique<ParserToken>(TokenType::Comma), false)
             .parse(pos, node, expected);
 }
 
@@ -251,7 +251,7 @@ bool ParserTablePropertiesDeclarationList::parseImpl(Pos & pos, ASTPtr & node, E
 {
     ASTPtr list;
     if (!ParserList(
-            std::make_unique<ParserTablePropertyDeclaration>(),
+            std::make_unique<ParserTablePropertyDeclaration>(dt),
                     std::make_unique<ParserToken>(TokenType::Comma), false)
             .parse(pos, list, expected))
         return false;
@@ -309,23 +309,28 @@ bool ParserStorage::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserKeyword s_engine("ENGINE");
     ParserToken s_eq(TokenType::Equals);
     ParserKeyword s_partition_by("PARTITION BY");
+    ParserKeyword s_cluster_by("CLUSTER BY");
     ParserKeyword s_primary_key("PRIMARY KEY");
     ParserKeyword s_order_by("ORDER BY");
+    ParserKeyword s_unique_key("UNIQUE KEY");
     ParserKeyword s_sample_by("SAMPLE BY");
     ParserKeyword s_ttl("TTL");
     ParserKeyword s_settings("SETTINGS");
     ParserKeyword s_comment("COMMENT");
 
-    ParserIdentifierWithOptionalParameters ident_with_optional_params_p;
-    ParserExpression expression_p;
+    ParserIdentifierWithOptionalParameters ident_with_optional_params_p(dt);
+    ParserExpression expression_p(dt);
+    ParserClusterByElement cluster_p;
     ParserSetQuery settings_p(/* parse_only_internals_ = */ true);
-    ParserTTLExpressionList parser_ttl_list;
+    ParserTTLExpressionList parser_ttl_list(dt);
     ParserStringLiteral string_literal_parser;
 
     ASTPtr engine;
     ASTPtr partition_by;
+    ASTPtr cluster_by;
     ASTPtr primary_key;
     ASTPtr order_by;
+    ASTPtr unique_key;
     ASTPtr sample_by;
     ASTPtr ttl_table;
     ASTPtr settings;
@@ -349,6 +354,14 @@ bool ParserStorage::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
                 return false;
         }
 
+        if (!cluster_by && s_cluster_by.ignore(pos, expected))
+        {
+            if (cluster_p.parse(pos, cluster_by, expected))
+                continue;
+            else
+                return false;
+        }
+
         if (!primary_key && s_primary_key.ignore(pos, expected))
         {
             if (expression_p.parse(pos, primary_key, expected))
@@ -360,6 +373,15 @@ bool ParserStorage::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         if (!order_by && s_order_by.ignore(pos, expected))
         {
             if (expression_p.parse(pos, order_by, expected))
+                continue;
+            else
+                return false;
+        }
+
+
+        if (!unique_key && s_unique_key.ignore(pos, expected))
+        {
+            if (expression_p.parse(pos, unique_key, expected))
                 continue;
             else
                 return false;
@@ -400,8 +422,10 @@ bool ParserStorage::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     auto storage = std::make_shared<ASTStorage>();
     storage->set(storage->engine, engine);
     storage->set(storage->partition_by, partition_by);
+    storage->set(storage->cluster_by, cluster_by);
     storage->set(storage->primary_key, primary_key);
     storage->set(storage->order_by, order_by);
+    storage->set(storage->unique_key, unique_key);
     storage->set(storage->sample_by, sample_by);
     storage->set(storage->ttl_table, ttl_table);
 
@@ -427,15 +451,19 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     ParserKeyword s_from("FROM");
     ParserKeyword s_on("ON");
     ParserKeyword s_as("AS");
+    ParserKeyword s_ignore("IGNORE");
+    ParserKeyword s_replicated("REPLICATED");
+    ParserKeyword s_async("ASYNC");
+    ParserKeyword s_ttl("TTL");
     ParserToken s_dot(TokenType::Dot);
     ParserToken s_lparen(TokenType::OpeningRoundBracket);
     ParserToken s_rparen(TokenType::ClosingRoundBracket);
-    ParserStorage storage_p;
+    ParserStorage storage_p(dt);
     ParserIdentifier name_p;
-    ParserTablePropertiesDeclarationList table_properties_p;
-    ParserSelectWithUnionQuery select_p;
-    ParserFunction table_function_p;
-    ParserNameList names_p;
+    ParserTablePropertiesDeclarationList table_properties_p(dt);
+    ParserSelectWithUnionQuery select_p(dt);
+    ParserFunction table_function_p(dt);
+    ParserNameList names_p(dt);
 
     ASTPtr table;
     ASTPtr columns_list;
@@ -452,6 +480,9 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     bool or_replace = false;
     bool if_not_exists = false;
     bool is_temporary = false;
+    bool ignore_replicated = false;
+    bool ignore_async = false;
+    bool ignore_ttl = false;
 
     if (s_create.ignore(pos, expected))
     {
@@ -481,7 +512,7 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
 
     if (attach && s_from.ignore(pos, expected))
     {
-        ParserLiteral from_path_p;
+        ParserLiteral from_path_p(dt);
         if (!from_path_p.parse(pos, from_path, expected))
             return false;
     }
@@ -562,6 +593,26 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
                         return false;
                 }
 
+                /// Optional - IGNORE REPLCIATE can be specified
+                if (s_ignore.ignore(pos, expected))
+                {
+                    bool option = false;
+                    do
+                    {
+                        option = false;
+                        bool temp = s_replicated.ignore(pos, expected);
+                        if (temp) option = ignore_replicated = true;
+                        temp = s_async.ignore(pos, expected);
+                        if (temp) option = ignore_async = true;
+                        temp = s_ttl.ignore(pos, expected);
+                        if (temp) option = ignore_ttl = true;
+
+                    } while (option);
+                    
+                    if (!ignore_replicated && !ignore_async && !ignore_ttl)
+                        return false;
+                }
+
                 /// Optional - ENGINE can be specified.
                 if (!storage)
                     storage_p.parse(pos, storage, expected);
@@ -581,6 +632,9 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     query->create_or_replace = or_replace;
     query->if_not_exists = if_not_exists;
     query->temporary = is_temporary;
+    query->ignore_replicated = ignore_replicated;
+    query->ignore_async = ignore_async;
+    query->ignore_ttl = ignore_ttl;
 
     query->database = table_id.database_name;
     query->table = table_id.table_name;
@@ -621,8 +675,8 @@ bool ParserCreateLiveViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & e
     ParserToken s_dot(TokenType::Dot);
     ParserToken s_lparen(TokenType::OpeningRoundBracket);
     ParserToken s_rparen(TokenType::ClosingRoundBracket);
-    ParserTablePropertiesDeclarationList table_properties_p;
-    ParserSelectWithUnionQuery select_p;
+    ParserTablePropertiesDeclarationList table_properties_p(dt);
+    ParserSelectWithUnionQuery select_p(dt);
 
     ASTPtr table;
     ASTPtr to_table;
@@ -664,7 +718,7 @@ bool ParserCreateLiveViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & e
     {
         if (ParserKeyword{"TIMEOUT"}.ignore(pos, expected))
         {
-            if (!ParserNumber{}.parse(pos, live_view_timeout, expected))
+            if (!ParserNumber{dt}.parse(pos, live_view_timeout, expected))
             {
                 live_view_timeout = std::make_shared<ASTLiteral>(static_cast<UInt64>(DEFAULT_TEMPORARY_LIVE_VIEW_TIMEOUT_SEC));
             }
@@ -678,7 +732,7 @@ bool ParserCreateLiveViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & e
 
         if (ParserKeyword{"REFRESH"}.ignore(pos, expected) || ParserKeyword{"PERIODIC REFRESH"}.ignore(pos, expected))
         {
-            if (!ParserNumber{}.parse(pos, live_view_periodic_refresh, expected))
+            if (!ParserNumber{dt}.parse(pos, live_view_periodic_refresh, expected))
                 live_view_periodic_refresh = std::make_shared<ASTLiteral>(static_cast<UInt64>(DEFAULT_PERIODIC_LIVE_VIEW_REFRESH_SEC));
 
             with_periodic_refresh = true;
@@ -759,7 +813,7 @@ bool ParserCreateDatabaseQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & e
     ParserKeyword s_attach("ATTACH");
     ParserKeyword s_database("DATABASE");
     ParserKeyword s_if_not_exists("IF NOT EXISTS");
-    ParserStorage storage_p;
+    ParserStorage storage_p(dt);
     ParserIdentifier name_p;
 
     ASTPtr database;
@@ -834,11 +888,11 @@ bool ParserCreateViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     ParserToken s_dot(TokenType::Dot);
     ParserToken s_lparen(TokenType::OpeningRoundBracket);
     ParserToken s_rparen(TokenType::ClosingRoundBracket);
-    ParserStorage storage_p;
+    ParserStorage storage_p(dt);
     ParserIdentifier name_p;
-    ParserTablePropertiesDeclarationList table_properties_p;
-    ParserSelectWithUnionQuery select_p;
-    ParserNameList names_p;
+    ParserTablePropertiesDeclarationList table_properties_p(dt);
+    ParserSelectWithUnionQuery select_p(dt);
+    ParserNameList names_p(dt);
 
     ASTPtr table;
     ASTPtr to_table;
@@ -896,7 +950,7 @@ bool ParserCreateViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
 
     if (ParserKeyword{"TO INNER UUID"}.ignore(pos, expected))
     {
-        ParserLiteral literal_p;
+        ParserLiteral literal_p(dt);
         if (!literal_p.parse(pos, to_inner_uuid, expected))
             return false;
     }
@@ -980,8 +1034,8 @@ bool ParserCreateDictionaryQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, E
     ParserToken s_left_paren(TokenType::OpeningRoundBracket);
     ParserToken s_right_paren(TokenType::ClosingRoundBracket);
     ParserToken s_dot(TokenType::Dot);
-    ParserDictionaryAttributeDeclarationList attributes_p;
-    ParserDictionary dictionary_p;
+    ParserDictionaryAttributeDeclarationList attributes_p(dt);
+    ParserDictionary dictionary_p(dt);
 
     bool if_not_exists = false;
     bool replace = false;
@@ -1062,11 +1116,11 @@ bool ParserCreateDictionaryQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, E
 
 bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
-    ParserCreateTableQuery table_p;
-    ParserCreateDatabaseQuery database_p;
-    ParserCreateViewQuery view_p;
-    ParserCreateDictionaryQuery dictionary_p;
-    ParserCreateLiveViewQuery live_view_p;
+    ParserCreateTableQuery table_p(dt);
+    ParserCreateDatabaseQuery database_p(dt);
+    ParserCreateViewQuery view_p(dt);
+    ParserCreateDictionaryQuery dictionary_p(dt);
+    ParserCreateLiveViewQuery live_view_p(dt);
 
     return table_p.parse(pos, node, expected)
         || database_p.parse(pos, node, expected)

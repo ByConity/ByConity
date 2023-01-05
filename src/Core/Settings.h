@@ -3,6 +3,7 @@
 #include <Core/BaseSettings.h>
 #include <Core/SettingsEnums.h>
 #include <Core/Defines.h>
+#include <Poco/JSON/Object.h>
 
 
 namespace Poco::Util
@@ -20,10 +21,9 @@ namespace DB
 {
 class IColumn;
 
-
 /** List of settings: type, name, default value, description, flags
   *
-  * This looks rather unconvenient. It is done that way to avoid repeating settings in different places.
+  * This looks rather inconvenient. It is done that way to avoid repeating settings in different places.
   * Note: as an alternative, we could implement settings to be completely dynamic in form of map: String -> Field,
   *  but we are not going to do it, because settings is used everywhere as static struct fields.
   *
@@ -32,10 +32,12 @@ class IColumn;
   */
 
 #define COMMON_SETTINGS(M) \
+    M(UInt64, TEST_KNOB, 0, "A placeholder for experiment features. Each bit represents a feature, the feature is enabled if the bit is 1", 0) \
     M(UInt64, min_compress_block_size, 65536, "The actual size of the block to compress, if the uncompressed data less than max_compress_block_size is no less than this value and no less than the volume of data for one mark.", 0) \
     M(UInt64, max_compress_block_size, 1048576, "The maximum size of blocks of uncompressed data before compressing for writing to a table.", 0) \
     M(UInt64, max_block_size, DEFAULT_BLOCK_SIZE, "Maximum block size for reading", 0) \
     M(UInt64, max_insert_block_size, DEFAULT_INSERT_BLOCK_SIZE, "The maximum block size for insertion, if we control the creation of blocks for insertion.", 0) \
+    M(UInt64, max_insert_block_size_bytes, DEFAULT_BLOCK_SIZE_BYTES, "The maximum block bytes for insertion, if we control the creation of blocks for insertion.", 0) \
     M(UInt64, min_insert_block_size_rows, DEFAULT_INSERT_BLOCK_SIZE, "Squash blocks passed to INSERT query to specified size in rows, if blocks are not big enough.", 0) \
     M(UInt64, min_insert_block_size_bytes, (DEFAULT_INSERT_BLOCK_SIZE * 256), "Squash blocks passed to INSERT query to specified size in bytes, if blocks are not big enough.", 0) \
     M(UInt64, min_insert_block_size_rows_for_materialized_views, 0, "Like min_insert_block_size_rows, but applied only during pushing to MATERIALIZED VIEW (default: min_insert_block_size_rows)", 0) \
@@ -63,6 +65,10 @@ class IColumn;
     M(Milliseconds, connection_pool_max_wait_ms, 0, "The wait time when the connection pool is full.", 0) \
     M(Milliseconds, replace_running_query_max_wait_ms, 5000, "The wait time for running query with the same query_id to finish when setting 'replace_running_query' is active.", 0) \
     M(Milliseconds, kafka_max_wait_ms, 5000, "The wait time for reading from Kafka before retry.", 0) \
+    M(Milliseconds, kafka_session_timeout_ms, 180000, "Kafka client session.timeout.ms", 0) \
+    M(UInt64, kafka_refresh_consul_time, 60 * 60, "Time to refresh consul", 0) \
+    M(Bool, enable_debug_select_from_kafka_table, 0, "Enable read from StorageHaKafka for debug", 0) \
+    M(Bool, constraint_skip_violate, 0, "Whether to skip constraint violated rows.", 0)  \
     M(Milliseconds, rabbitmq_max_wait_ms, 5000, "The wait time for reading from RabbitMQ before retry.", 0) \
     M(UInt64, poll_interval, DBMS_DEFAULT_POLL_INTERVAL, "Block at the query wait loop on the server for the specified number of seconds.", 0) \
     M(UInt64, idle_connection_timeout, 3600, "Close idle TCP connections after specified number of seconds.", 0) \
@@ -78,11 +84,20 @@ class IColumn;
     M(Bool, replace_running_query, false, "Whether the running request should be canceled with the same id as the new one.", 0) \
     M(UInt64, background_buffer_flush_schedule_pool_size, 16, "Number of threads performing background flush for tables with Buffer engine. Only has meaning at server startup.", 0) \
     M(UInt64, background_pool_size, 16, "Number of threads performing background work for tables (for example, merging in merge tree). Only has meaning at server startup.", 0) \
+    M(UInt64, unique_table_background_pool_size, 16, "Number of threads performing background work for tables (for example, merging in merge tree). Only has meaning at server startup.", 0) \
     M(UInt64, background_move_pool_size, 8, "Number of threads performing background moves for tables. Only has meaning at server startup.", 0) \
     M(UInt64, background_fetches_pool_size, 8, "Number of threads performing background fetches for replicated tables. Only has meaning at server startup.", 0) \
     M(UInt64, background_schedule_pool_size, 128, "Number of threads performing background tasks for replicated tables, dns cache updates. Only has meaning at server startup.", 0) \
     M(UInt64, background_message_broker_schedule_pool_size, 16, "Number of threads performing background tasks for message streaming. Only has meaning at server startup.", 0) \
     M(UInt64, background_distributed_schedule_pool_size, 16, "Number of threads performing background tasks for distributed sends. Only has meaning at server startup.", 0) \
+    M(UInt64, background_local_schedule_pool_size, 16, "Number of threads performing background no-network operation tasks for replicated tables. Only has meaning at server startup.", 0) \
+    M(UInt64, background_consume_schedule_pool_size, 16, "Number of threads performing background tasks for kafka tables. Only has meaning at server startup.", 0) \
+    M(UInt64, background_unique_table_schedule_pool_size, 16, "Number of threads performing background tasks for unique tables. Only has meaning at server startup.", 0) \
+    M(UInt64, background_memory_table_schedule_pool_size, 24, "Number of threads performing background tasks for memory table. Only has meaning at server startup.", 0) \
+    M(UInt64, background_topology_thread_pool_size, 4, "Number of threads performing topology related background tasks.", 0) \
+    M(UInt64, local_disk_cache_thread_pool_size, 16, "Number of threads perforrming background tasks from cache segments from cloud storage to local disk. Only has meaning at server startup.", 0) \
+    M(UInt64, local_disk_cache_evict_thread_pool_size, 16, "Number of threads perforrming asynchronous remove disk cache file.", 0) \
+    M(UInt64, max_bandwidth_for_disk_cache, 0, "The maximum speed for loading from disk cache. Zero means unlimited. Only has meaning at server startup.", 0) \
     M(UInt64, max_replicated_fetches_network_bandwidth_for_server, 0, "The maximum speed of data exchange over the network in bytes per second for replicated fetches. Zero means unlimited. Only has meaning at server startup.", 0) \
     M(UInt64, max_replicated_sends_network_bandwidth_for_server, 0, "The maximum speed of data exchange over the network in bytes per second for replicated sends. Zero means unlimited. Only has meaning at server startup.", 0) \
     \
@@ -104,7 +119,7 @@ class IColumn;
     M(TotalsMode, totals_mode, TotalsMode::AFTER_HAVING_EXCLUSIVE, "How to calculate TOTALS when HAVING is present, as well as when max_rows_to_group_by and group_by_overflow_mode = ‘any’ are present.", IMPORTANT) \
     M(Float, totals_auto_threshold, 0.5, "The threshold for totals_mode = 'auto'.", 0) \
     \
-    M(Bool, allow_suspicious_low_cardinality_types, false, "In CREATE TABLE statement allows specifying LowCardinality modifier for types of small fixed size (8 or less). Enabling this may increase merge times and memory consumption.", 0) \
+    M(Bool, allow_suspicious_low_cardinality_types, true, "In CREATE TABLE statement allows specifying LowCardinality modifier for types of small fixed size (8 or less). Enabling this may increase merge times and memory consumption.", 0) \
     M(Bool, compile_expressions, true, "Compile some scalar functions and operators to native code.", 0) \
     M(UInt64, min_count_to_compile_expression, 3, "The number of identical expressions before they are JIT-compiled", 0) \
     M(Bool, compile_aggregate_expressions, true, "Compile aggregate functions to native code.", 0) \
@@ -113,6 +128,8 @@ class IColumn;
     M(UInt64, group_by_two_level_threshold_bytes, 50000000, "From what size of the aggregation state in bytes, a two-level aggregation begins to be used. 0 - the threshold is not set. Two-level aggregation is used when at least one of the thresholds is triggered.", 0) \
     M(Bool, distributed_aggregation_memory_efficient, true, "Is the memory-saving mode of distributed aggregation enabled.", 0) \
     M(UInt64, aggregation_memory_efficient_merge_threads, 0, "Number of threads to use for merge intermediate aggregation results in memory efficient mode. When bigger, then more memory is consumed. 0 means - same as 'max_threads'.", 0) \
+    \
+    M(Bool, enable_extended_results_for_datetime_functions, false, "Enable date functions like toLastDayOfMonth return Date32 results (instead of Date results) for Date32/DateTime64 arguments.", 0) \
     \
     M(UInt64, max_parallel_replicas, 1, "The maximum number of replicas of each shard used when the query is executed. For consistency (to get different parts of the same partition), this option only works for the specified sampling key. The lag of the replicas is not controlled.", 0) \
     M(UInt64, parallel_replicas_count, 0, "", 0) \
@@ -125,6 +142,7 @@ class IColumn;
     M(UInt64, distributed_push_down_limit, 0, "If 1, LIMIT will be applied on each shard separatelly. Usually you don't need to use it, since this will be done automatically if it is possible, i.e. for simple query SELECT FROM LIMIT.", 0) \
     M(Bool, optimize_distributed_group_by_sharding_key, false, "Optimize GROUP BY sharding_key queries (by avoiding costly aggregation on the initiator server).", 0) \
     M(UInt64, optimize_skip_unused_shards_limit, 1000, "Limit for number of sharding key values, turns off optimize_skip_unused_shards if the limit is reached", 0) \
+    M(Bool, distributed_perfect_shard, false, "Whether to enalbe aggregation finished in worker side, to avoid merge aggregation states in coordinator", 0) \
     M(Bool, optimize_skip_unused_shards, false, "Assumes that data is distributed by sharding_key. Optimization to skip unused shards if SELECT query filters by sharding_key.", 0) \
     M(Bool, optimize_skip_unused_shards_rewrite_in, true, "Rewrite IN in query for remote shards to exclude values that does not belong to the shard (requires optimize_skip_unused_shards)", 0) \
     M(Bool, allow_nondeterministic_optimize_skip_unused_shards, false, "Allow non-deterministic functions (includes dictGet) in sharding_key for optimize_skip_unused_shards", 0) \
@@ -132,7 +150,7 @@ class IColumn;
     M(UInt64, optimize_skip_unused_shards_nesting, 0, "Same as optimize_skip_unused_shards, but accept nesting level until which it will work.", 0) \
     M(UInt64, force_optimize_skip_unused_shards_nesting, 0, "Same as force_optimize_skip_unused_shards, but accept nesting level until which it will work.", 0) \
     \
-    M(Bool, input_format_parallel_parsing, true, "Enable parallel parsing for some data formats.", 0) \
+    M(Bool, input_format_parallel_parsing, false, "Enable parallel parsing for some data formats.", 0) \
     M(UInt64, min_chunk_bytes_for_parallel_parsing, (10 * 1024 * 1024), "The minimum chunk size in bytes, which each thread will parse in parallel.", 0) \
     M(Bool, output_format_parallel_formatting, true, "Enable parallel formatting for some data formats.", 0) \
     \
@@ -172,6 +190,7 @@ class IColumn;
     M(Milliseconds, log_queries_min_query_duration_ms, 0, "Minimal time for the query to run, to get to the query_log/query_thread_log.", 0) \
     M(UInt64, log_queries_cut_to_length, 100000, "If query length is greater than specified threshold (in bytes), then cut query when writing to query log. Also limit length of printed query in ordinary text log.", 0) \
     \
+    M(Bool, log_processors_profiles, false, "Log Processors profile events.", 0) \
     M(DistributedProductMode, distributed_product_mode, DistributedProductMode::DENY, "How are distributed subqueries performed inside IN or JOIN sections?", IMPORTANT) \
     \
     M(UInt64, max_concurrent_queries_for_all_users, 0, "The maximum number of concurrent requests for all users.", 0) \
@@ -182,6 +201,7 @@ class IColumn;
     M(UInt64, insert_quorum, 0, "For INSERT queries in the replicated table, wait writing for the specified number of replicas and linearize the addition of the data. 0 - disabled.", 0) \
     M(Milliseconds, insert_quorum_timeout, 600000, "", 0) \
     M(Bool, insert_quorum_parallel, true, "For quorum INSERT queries - enable to make parallel inserts without linearizability", 0) \
+    M(Bool, optimize_map_column_serialization, false, "Construct map value columns in advance during serialization", 0) \
     M(UInt64, select_sequential_consistency, 0, "For SELECT queries from the replicated table, throw an exception if the replica does not have a chunk written with the quorum; do not read the parts that have not yet been written with the quorum.", 0) \
     M(UInt64, table_function_remote_max_addresses, 1000, "The maximum number of different shards and the maximum number of replicas of one shard in the `remote` function.", 0) \
     M(Milliseconds, read_backoff_min_latency_ms, 1000, "Setting to reduce the number of threads in case of slow reads. Pay attention only to reads that took at least that much time.", 0) \
@@ -212,7 +232,7 @@ class IColumn;
     \
     M(Bool, fsync_metadata, 1, "Do fsync after changing metadata for tables and databases (.sql files). Could be disabled in case of poor latency on server with high load of DDL queries and high load of disk subsystem.", 0) \
     \
-    M(Bool, join_use_nulls, 0, "Use NULLs for non-joined rows of outer JOINs for types that can be inside Nullable. If false, use default value of corresponding columns data type.", IMPORTANT) \
+    M(Bool, join_use_nulls, 1, "Use NULLs for non-joined rows of outer JOINs for types that can be inside Nullable. If false, use default value of corresponding columns data type.", IMPORTANT) \
     \
     M(JoinStrictness, join_default_strictness, JoinStrictness::ALL, "Set default strictness in JOIN query. Possible values: empty string, 'ANY', 'ALL'. If empty, query without strictness will throw exception.", 0) \
     M(Bool, any_join_distinct_right_table_keys, false, "Enable old ANY JOIN logic with many-to-one left-to-right table keys mapping for all ANY JOINs. It leads to confusing not equal results for 't1 ANY LEFT JOIN t2' and 't2 ANY RIGHT JOIN t1'. ANY RIGHT JOIN needs one-to-many keys mapping to be consistent with LEFT one.", IMPORTANT) \
@@ -244,7 +264,7 @@ class IColumn;
     M(UInt64, http_max_field_value_size, 1048576, "Maximum length of field value in HTTP header", 0) \
     M(Bool, optimize_throw_if_noop, false, "If setting is enabled and OPTIMIZE query didn't actually assign a merge then an explanatory exception is thrown", 0) \
     M(Bool, use_index_for_in_with_subqueries, true, "Try using an index if there is a subquery or a table expression on the right side of the IN operator.", 0) \
-    M(Bool, joined_subquery_requires_alias, true, "Force joined subqueries and table functions to have aliases for correct name qualification.", 0) \
+    M(Bool, joined_subquery_requires_alias, false, "Force joined subqueries and table functions to have aliases for correct name qualification.", 0) \
     M(Bool, empty_result_for_aggregation_by_empty_set, false, "Return empty result when aggregating without keys on empty set.", 0) \
     M(Bool, allow_distributed_ddl, true, "If it is set to true, then a user is allowed to executed distributed DDL queries.", 0) \
     M(Bool, allow_suspicious_codecs, false, "If it is set to true, allow to specify meaningless compression codecs.", 0) \
@@ -257,7 +277,11 @@ class IColumn;
     M(Float, opentelemetry_start_trace_probability, 0., "Probability to start an OpenTelemetry trace for an incoming query.", 0) \
     M(Bool, prefer_column_name_to_alias, false, "Prefer using column names instead of aliases if possible.", 0) \
     M(Bool, prefer_global_in_and_join, false, "If enabled, all IN/JOIN operators will be rewritten as GLOBAL IN/JOIN. It's useful when the to-be-joined tables are only available on the initiator and we need to always scatter their data on-the-fly during distributed processing with the GLOBAL keyword. It's also useful to reduce the need to access the external sources joining external tables.", 0) \
-    \
+    M(Bool, enable_query_cache, false, "Whether to enable query cache", 0) \
+    M(UInt64, connection_check_pool_size, 16, "Number of thread for connection check", 0) \
+    M(Bool, query_worker_fault_tolerance, false, "Whether to retry when worker failures are detected when allocating metadata during query execution.", 0) \
+    M(Bool, enable_partition_prune, true, "prune partition based on where expression analysis.", 0) \
+    M(Bool, restore_table_expression_in_distributed, 1, "restore table expressions in distributed query to pass current database to remote query.", 0) \
     \
     /** Limits during query execution are part of the settings. \
       * Used to provide a more safe execution of queries from the user interface. \
@@ -273,6 +297,8 @@ class IColumn;
     M(UInt64, max_rows_to_read_leaf, 0, "Limit on read rows on the leaf nodes for distributed queries. Limit is applied for local reads only excluding the final merge stage on the root node.", 0) \
     M(UInt64, max_bytes_to_read_leaf, 0, "Limit on read bytes (after decompression) on the leaf nodes for distributed queries. Limit is applied for local reads only excluding the final merge stage on the root node.", 0) \
     M(OverflowMode, read_overflow_mode_leaf, OverflowMode::THROW, "What to do when the leaf limit is exceeded.", 0) \
+    \
+    M(UInt64, max_query_cpu_second, 0, "Limit the maximum amount of CPU resources such a query segment can consume.", 0) \
     \
     M(UInt64, max_rows_to_group_by, 0, "", 0) \
     M(OverflowModeGroupBy, group_by_overflow_mode, OverflowMode::THROW, "What to do when the limit is exceeded.", 0) \
@@ -338,7 +364,7 @@ class IColumn;
     M(UInt64, max_memory_usage, 0, "Maximum memory usage for processing of single query. Zero means unlimited.", 0) \
     M(UInt64, max_memory_usage_for_user, 0, "Maximum memory usage for processing all concurrently running queries for the user. Zero means unlimited.", 0) \
     M(UInt64, max_untracked_memory, (4 * 1024 * 1024), "Small allocations and deallocations are grouped in thread local variable and tracked or profiled only when amount (in absolute value) becomes larger than specified value. If the value is higher than 'memory_profiler_step' it will be effectively lowered to 'memory_profiler_step'.", 0) \
-    M(UInt64, memory_profiler_step, 0, "Whenever query memory usage becomes larger than every next step in number of bytes the memory profiler will collect the allocating stack trace. Zero means disabled memory profiler. Values lower than a few megabytes will slow down query processing.", 0) \
+    M(UInt64, memory_profiler_step, (4 * 1024 * 1024), "Whenever query memory usage becomes larger than every next step in number of bytes the memory profiler will collect the allocating stack trace. Zero means disabled memory profiler. Values lower than a few megabytes will slow down query processing.", 0) \
     M(Float, memory_profiler_sample_probability, 0., "Collect random allocations and deallocations and write them into system.trace_log with 'MemorySample' trace_type. The probability is for every alloc/free regardless to the size of the allocation. Note that sampling happens only when the amount of untracked memory exceeds 'max_untracked_memory'. You may want to set 'max_untracked_memory' to 0 for extra fine grained sampling.", 0) \
     \
     M(UInt64, max_network_bandwidth, 0, "The maximum speed of data exchange over the network in bytes per second for a query. Zero means unlimited.", 0) \
@@ -349,6 +375,7 @@ class IColumn;
     M(Bool, log_profile_events, true, "Log query performance statistics into the query_log and query_thread_log.", 0) \
     M(Bool, log_query_settings, true, "Log query settings into the query_log.", 0) \
     M(Bool, log_query_threads, true, "Log query threads into system.query_thread_log table. This setting have effect only when 'log_queries' is true.", 0) \
+    M(Bool, log_query_exchange, true, "Log query exchange metric.", 0) \
     M(String, log_comment, "", "Log comment into system.query_log table and server log. It can be set to arbitrary string no longer than max_query_size.", 0) \
     M(LogsLevel, send_logs_level, LogsLevel::fatal, "Send server text logs with specified minimum level to client. Valid values: 'trace', 'debug', 'information', 'warning', 'error', 'fatal', 'none'", 0) \
     M(Bool, enable_optimize_predicate_expression, 1, "If it is set to true, optimize predicates to subqueries.", 0) \
@@ -396,13 +423,17 @@ class IColumn;
     M(UInt64, max_live_view_insert_blocks_before_refresh, 64, "Limit maximum number of inserted blocks after which mergeable blocks are dropped and query is re-executed.", 0) \
     M(UInt64, min_free_disk_space_for_temporary_data, 0, "The minimum disk space to keep while writing temporary data used in external sorting and aggregation.", 0) \
     \
-    M(DefaultDatabaseEngine, default_database_engine, DefaultDatabaseEngine::Atomic, "Default database engine.", 0) \
+    M(DefaultDatabaseEngine, default_database_engine, DefaultDatabaseEngine::Cnch, "Default database engine.", 0) \
+    M(Bool, debug_cnch_remain_temp_part, false, "Debug mode: remain temp (inserted, merged, altered) part", 0) \
+    M(Bool, debug_cnch_force_commit_parts_rpc, false, "Debug mode: force to commit parts by RPC", 0) \
     M(Bool, show_table_uuid_in_table_create_query_if_not_nil, false, "For tables in databases with Engine=Atomic show UUID of the table in its CREATE query.", 0) \
     M(Bool, database_atomic_wait_for_drop_and_detach_synchronously, false, "When executing DROP or DETACH TABLE in Atomic database, wait for table data to be finally dropped or detached.", 0) \
     M(Bool, enable_scalar_subquery_optimization, true, "If it is set to true, prevent scalar subqueries from (de)serializing large scalar values and possibly avoid running the same subquery more than once.", 0) \
     M(Bool, optimize_trivial_count_query, true, "Process trivial 'SELECT count() FROM table' query from metadata.", 0) \
     M(Bool, optimize_respect_aliases, true, "If it is set to true, it will respect aliases in WHERE/GROUP BY/ORDER BY, that will help with partition pruning/secondary indexes/optimize_aggregation_in_order/optimize_read_in_order/optimize_trivial_count", 0) \
     M(UInt64, mutations_sync, 0, "Wait for synchronous execution of ALTER TABLE UPDATE/DELETE queries (mutations). 0 - execute asynchronously. 1 - wait current server. 2 - wait all replicas if they exist.", 0) \
+    M(UInt64, mutations_wait_timeout, 0, "Maximum seconds to wait for synchronous mutations. 0 - wait unlimited time", 0) \
+    M(String, mutation_query_id, "", "Used to overwrite mutation's query id in tests", 0) \
     M(Bool, optimize_move_functions_out_of_any, false, "Move functions out of aggregate functions 'any', 'anyLast'.", 0) \
     M(Bool, optimize_normalize_count_variants, true, "Rewrite aggregate functions that semantically equals to count() as count().", 0) \
     M(Bool, optimize_injective_functions_inside_uniq, true, "Delete injective functions of one argument inside uniq*() functions.", 0) \
@@ -446,7 +477,7 @@ class IColumn;
     M(Bool, optimize_skip_merged_partitions, false, "Skip partitions with one part with level > 0 in optimize final", 0) \
     M(Bool, optimize_on_insert, true, "Do the same transformation for inserted block of data as if merge was done on this block.", 0) \
     M(Bool, allow_experimental_map_type, true, "Obsolete setting, does nothing.", 0) \
-    M(Bool, allow_experimental_window_functions, false, "Allow experimental window functions", 0) \
+    M(Bool, allow_experimental_window_functions, true, "Allow experimental window functions", 0) \
     M(Bool, allow_experimental_projection_optimization, false, "Enable projection optimization when processing SELECT queries", 0) \
     M(Bool, force_optimize_projection, false, "If projection optimization is enabled, SELECT queries need to use projection", 0) \
     M(Bool, async_socket_for_remote, true, "Asynchronously read from socket executing remote query", 0) \
@@ -467,10 +498,12 @@ class IColumn;
     M(UInt64, max_distributed_depth, 5, "Maximum distributed query depth", 0) \
     M(Bool, database_replicated_always_detach_permanently, false, "Execute DETACH TABLE as DETACH TABLE PERMANENTLY if database engine is Replicated", 0) \
     M(DistributedDDLOutputMode, distributed_ddl_output_mode, DistributedDDLOutputMode::THROW, "Format of distributed DDL query result", 0) \
-    M(UInt64, distributed_ddl_entry_format_version, 1, "Version of DDL entry to write into ZooKeeper", 0) \
+    M(UInt64, distributed_ddl_entry_format_version, 2, "Version of DDL entry to write into ZooKeeper", 0) \
     M(UInt64, external_storage_max_read_rows, 0, "Limit maximum number of rows when table with external engine should flush history data. Now supported only for MySQL table engine, database engine, dictionary and MaterializeMySQL. If equal to 0, this setting is disabled", 0) \
     M(UInt64, external_storage_max_read_bytes, 0, "Limit maximum number of bytes when table with external engine should flush history data. Now supported only for MySQL table engine, database engine, dictionary and MaterializeMySQL. If equal to 0, this setting is disabled", 0)  \
     M(UnionMode, union_default_mode, UnionMode::Unspecified, "Set default Union Mode in SelectWithUnion query. Possible values: empty string, 'ALL', 'DISTINCT'. If empty, query without Union Mode will throw exception.", 0) \
+    M(UnionMode, intersect_default_mode, UnionMode::ALL, "Set default Intersect Mode in intersect query. Possible values: empty string, 'ALL', 'DISTINCT'. If empty, query without Intersect Mode will throw exception.", 0) \
+    M(UnionMode, except_default_mode, UnionMode::ALL, "Set default Except Mode in except query. Possible values: empty string, 'ALL', 'DISTINCT'. If empty, query without Except Mode will throw exception.", 0) \
     M(Bool, optimize_aggregators_of_group_by_keys, true, "Eliminates min/max/any/anyLast aggregators of GROUP BY keys in SELECT section", 0) \
     M(Bool, optimize_group_by_function_keys, true, "Eliminates functions of other keys in GROUP BY section", 0) \
     M(Bool, legacy_column_name_of_tuple_literal, false, "List all names of element of large tuple literals in their column names instead of hash. This settings exists only for compatibility reasons. It makes sense to set to 'true', while doing rolling update of cluster from version lower than 21.7 to higher.", 0) \
@@ -482,9 +515,81 @@ class IColumn;
     M(UInt64, limit, 0, "Limit on read rows from the most 'end' result for select query, default 0 means no limit length", 0) \
     M(UInt64, offset, 0, "Offset on read rows from the most 'end' result for select query", 0) \
     \
+    /** Bytedance */ \
+    M(UInt64, alter_skip_check, 0, "Skip check while alter table. 1 for skipping columns and metadate strings check; 2 for skipping metadata_version check", 0) \
+    M(UInt64, ha_alter_metadata_sync, 1, "Wait for actions to alter metadata. 0 - do not wait, 1 - wait for execution only of itself, 2 - wait for everyone.", 0) \
+    M(UInt64, ha_alter_data_sync, 0, "Wait for actions to alter data. 0 - do not wait, 1 - wait for execution only of itself, 2 - wait for everyone.", 0) \
+    M(String, blacklist_for_merge_task_regex, "CHTMP$", "A blacklist for merge task, to prevent the generation of MergeTasks for some tables.", 0) \
+    M(Bool, ignore_leader_check, 0, "Ignore leader check while executing some ALTER queries", 0) \
+    M(Bool, enable_view_based_query_rewrite, false, "Whether to enable view-based query rewriting.", 0) \
+    M(Bool, enable_mv_estimate_read_cost, false, "Enable materialized view estimate with read cost", 0) \
+    M(Bool, cascading_refresh_materialized_view, true, "Whether cascading refresh the materialized view", 0) \
+    M(UInt64, max_rows_to_refresh_by_partition, 100000000, "The maximum rows to refresh a materialized view by partition. If exceed, we'll refresh the materialized view part by part.", 0) \
+    M(UInt64, slow_query_ms, 0, "Slow query criterial in ms. 0 means all related function will not be executed", 0)\
+    M(UInt64, max_rows_to_schedule_merge, 500000000, "Max rows of merged part for merge scheduler", 0)\
+    M(UInt64, total_rows_to_schedule_merge, 0, "Max total rows of merged parts for merge scheduler, 0 means unlimit", 0)\
+    M(UInt64, expired_start_hour_to_merge, 12, "The hour of UTC time, if current time is greater than it, merge scheduler can lower the merge frequency", 0)\
+    M(UInt64, expired_end_hour_to_merge, 12, "The hour of UTC time, if current time is smaller than it, merge scheduler can lower the merge frequency", 0)\
+    M(UInt64, strict_rows_to_schedule_merge, 50000000, "Max rows of merged part for merge scheduler when the current time is expired according to expired_hour_to_merge", 0)\
+    M(UInt64, max_parts_to_optimize, 1000, "Max number of parts to optimize", 0)\
+    M(Bool, enable_merge_scheduler, false, "Whether to enable MergeScheduler to excute merge", 0)\
+    M(Bool, conservative_merge_predicate, true, "Judge merge tree parts whether can be merged conservatively", 0)\
+    M(Bool, snappy_format_blocked, false, "Using blocked decompress flow for Snappy input", 0)\
+    M(String, virtual_warehouse, "", "The vw name set by user on which the query run", 0) \
+    M(String, virtual_warehouse_write, "", "The write vw name set by user on which the query run", 0) \
+    M(String, vw_schedule_algo, "Unknown", "algorithm for picking a worker group from vw. {Random(1),LocalRoundRobin(2),LocalLowCpu(3),LocalLowMem(4),LocalLowDisk(5),GlobalRoundRobin(102),GlobalLowCpu(103),GlobalLowMem(104),GlobalLowDisk(105)}", 0) \
+    M(DialectType, dialect_type, DialectType::CLICKHOUSE, "Dialect type, e.g. CLICKHOUSE, ANSI", 0) \
+    M(Bool, adaptive_type_cast, false, "Performs type cast operations adaptively, according to the value", 0) \
+    M(Bool, tealimit_order_keep, false, "Whether tealimit output keep order by clause", 0)\
+    M(UInt64, early_limit_for_map_virtual_columns, 0, "Enable early limit while quering _map_column_keys column", 0)\
+    M(Bool, skip_nullinput_notnull_col, false, "Skip null value in JSON for not null column", 0)\
+    M(Milliseconds, meta_sync_task_interval_ms, 1*60*60*1000, "Interval of background schedule task for metasore synchronization", 0)\
+    M(Bool, enable_fetch_part_incrementally, true, "Whether to enable fetching part incrementally", 0) \
+    M(String, blocklist_for_merge_thread_regex, "", "A blacklist for merge thread, to prevent the generation of MergeTasks for some tables.", 0) \
+    M(Bool, decimal_division_use_extended_scale, false, "If enabled, the result scale of decimal division is determined by: max(6, S1)", 0) \
+    M(Bool, decimal_arithmetic_promote_storage, false, "Promote storage for some cases of decimal arithmetic operation(e.g. Decimal32 * Decimal32 -> Decimal64)", 0) \
+    M(Bool, allow_extended_type_conversion, false, "When enabled, implicit type conversion is allowed for more input types(e.g. UInt64 & Ints, Decimal & Float, Float & Int64)", 0) \
+    \
+    /** settings in cnch **/ \
+    M(UInt64, cnch_data_retention_time_in_sec, 3*24*60*60, "Waiting time when dropped table or database is actually removed.", 0) \
+    M(Milliseconds, topology_lease_renew_interval_ms, 1000, "Interval of background task to renew topology lease.", 0) \
+    M(Milliseconds, topology_refresh_interval_ms, 500, "Interval of background task to sync topology from consul.", 0) \
+    M(Milliseconds, topology_lease_life_ms, 12000, "Expiration time of topology lease.", 0) \
+    M(Milliseconds, topology_session_restart_check_ms, 120, "Check and try to restart leader election for server master", 0) \
+    M(UInt64, catalog_max_commit_size, 2000, "Max record number to be committed in one batch.", 0) \
+    M(Bool, server_write_ha, true, "Whether to enable write on non-host server if host server is not available. Directly commit from non-host server.", 0) \
+    M(Bool, enable_write_non_host_server, true, "Whether to eable write on non-host server. Will root write request to host server.", 0) \
+    M(UInt64, cnch_clear_parts_timeout, 10, "Wait for actions to clear the parts in workers within the specified number of seconds. 0 - wait unlimited time.", 0) \
+    M(Seconds, cnch_fetch_parts_timeout, 60, "The timeout for gettting parts from metastore. 0 - wait unlimited time.", 0) \
+    M(UInt64, cnch_sync_parts_timeout, 10, "Wait for actions to sync the parts in workers within the specified number of seconds. 0 - wait unlimited time.", 0) \
+    M(UInt64, part_cache_manager_thread_pool_size, 16, "Number of thread performing background parts info collection in PartCacheManager.", 0) \
+    M(String, username_for_internal_communication, "server", "Username to be used by server for authentication on worker side.", 0) \
+    M(UInt64, cnch_part_allocation_algorithm, 2, "Part allocation algorithm, 0: jump consistent hashing, 1: bounded hash ring consistent hashing, 2: strict ring consistent hashing.", 0) \
+    M(UInt64, cnch_max_cached_storage, 0, "Cnch storage cache size.", 0) \
+    M(Bool, enable_multiple_tables_for_cnch_parts, 0, "Allow to query multiple tables for system.cnch_parts", 0) \
+    M(Bool, enable_query_level_profiling, false, "Enable profiling at query and operator level", 0) \
+    M(Bool, enable_kafka_log_profiling, false, "Enable query profiling for cnch_kafka_log table", 0) \
+    M(Bool, enable_query_metrics_tables_profiling, false, "Enable query profiling for query_metrics and query worker_metrics tables", 0) \
+    M(UInt64, cloud_task_auto_stop_timeout, 60, "We will remove this task when heartbeat can't find this task more than retries_count times.", 0)\
+    /** Settings for Unique Table */ \
+    M(Bool, enable_unique_partial_update, true, "Whether to use partial column update for INSERT", 0) \
+    M(Milliseconds, dedup_worker_heartbeat_ms, 3000, "Dedup worker heartbeat interval time", 0) \
+    M(Bool, enable_staging_area_for_write, false, "Whether INSERTs on unique tables should commit to the staging area or not.", 0) \
+    M(UInt64, max_string_size_for_unique_key, 1048576, "Max string size limit for unique key.", 0) \
+    M(UInt64, unique_key_attach_partition_timeout, 3600, "Default timeout (seconds) for attaching partiton for unique key", 0) \
+    \
+    M(UInt64, resource_group_unmatched_behavior, 0, "The behavior when there is no resource group matched: 0 for let go, 1 for exception, 2 for the first root group.", 0) \
     /** Experimental functions */ \
     M(Bool, allow_experimental_funnel_functions, false, "Enable experimental functions for funnel analysis.", 0) \
     \
+    /** Complex query settings **/\
+    M(Bool, enable_distributed_stages, false, "Enable complex query mode to split plan to distributed stages", 0)\
+    M(Bool, fallback_to_simple_query, false, "Enable fallback if there is any syntax error", 0)\
+    M(Bool, debug_plan_generation, false, "Enable complex query mode to split plan to distributed stages", 0)\
+    M(Bool, send_plan_segment_by_brpc, true, "Whether to send plan segment by BRPC", 0)\
+    \
+    /** Brpc config **/\
+    M(Bool, enable_brpc_builtin_services, true, "Whether to enable brpc builtin services", 0)\
     \
     /** Obsolete settings that do nothing but left for compatibility reasons. Remove each one after half a year of obsolescence. */ \
     M(UInt64, max_memory_usage_for_all_queries, 0, "Obsolete setting, does nothing.", 0) \
@@ -494,8 +599,140 @@ class IColumn;
     M(Bool, allow_experimental_bigint_types, true, "Obsolete setting, does nothing.", 0) \
     M(HandleKafkaErrorMode, handle_kafka_error_mode, HandleKafkaErrorMode::DEFAULT, "Obsolete setting, does nothing.", 0) \
     M(Bool, database_replicated_ddl_output, true, "Obsolete setting, does nothing.", 0) \
-    /** The section above is for obsolete settings. Do not add anything there. */
-
+    /** Ingestion */ \
+    M(UInt64, max_ingest_columns_size, 10, "The maximum number of columns that can be ingested.", 0) \
+    M(UInt64, ingest_partition_timeout, 3600, "The ingestion timeout in seconds.", 0) \
+    M(UInt64, max_ingest_rows_size, 50000000, "The maximum rows for ingestion.", 0) \
+    M(UInt64, parallel_ingest_threads, 8, "The maximum threads for ingestion.", 0) \
+    M(Bool, enable_replicas_create_ingest_node_in_zk, 0, "Whether to enable replicas to create ingest node in zk", 0) \
+    M(Bool, allow_ingest_empty_partition, false, "Allow empty partition replace target table", 0) \
+    M(Bool, enable_async_ingest, false, "Allow ingest in aync mode", 0) \
+    \
+    /** Optimizer relative settings */ \
+    M(Bool, enable_optimizer, false, "Whether enable query optimizer", 0) \
+    M(Bool, enable_optimizer_fallback, true, "Whether enable query optimizer fallback to clickhouse origin when failed", 0) \
+    M(Bool, enable_memory_catalog, false, "Enable memory catalog for unittest", 0) \
+    M(UInt64, memory_catalog_worker_size, 8, "Memory catalog work size for unittest", 0) \
+    M(Bool, enable_optimizer_explain, false, "Enable query return explain for unittest", 0) \
+    M(UInt64, statistics_collect_debug_level, 0, "Debug level for statistics collector", 0) \
+    M(Bool, create_stats_time_output, true, "Enable time output in create stats, should be disabled at regression test", 0) \
+    M(Bool, statistics_collect_histogram, true, "Enable histogram collection", 0) \
+    M(Bool, statistics_collect_floating_histogram, true, "Collect histogram for float/double/Decimal columns", 0) \
+    M(Bool, statistics_collect_floating_histogram_ndv, true, "Collect histogram ndv for float/double/Decimal columns", 0) \
+    M(UInt64, statistics_collect_string_size_limit_for_histogram, 64, "Collect string histogram only for avg_size <= string_size_limit, since it's unnecessary to collect stats for text", 0) \
+    M(Bool, statistics_enable_sample, false, "Use sampling for statistics", 0) \
+    M(UInt64, statistics_sample_row_count, 40'000'000, "Minimal row count for sampling", 0) \
+    M(Float, statistics_sample_ratio, 0.1, "Ratio for sampling", 0) \
+    M(StatisticsAccurateSampleNdvMode, statistics_accurate_sample_ndv, StatisticsAccurateSampleNdvMode::AUTO, "Mode of accurate sample ndv to estimate full ndv", 0) \
+    M(UInt64, statistics_batch_max_columns, 30, "Max column size in a batch when collecting stats", 0) \
+    M(Float, cost_calculator_table_scan_weight, 1, "Table scan cost weight for cost calculator", 0) \
+    M(Float, cost_calculator_aggregating_weight, 7, "Aggregate output weight for cost calculator", 0) \
+    M(Float, cost_calculator_join_probe_weight, 0.5, "Join probe side weight for cost calculator", 0) \
+    M(Float, cost_calculator_join_build_weight, 2, "Join build side weight for cost calculator", 0) \
+    M(Float, cost_calculator_join_output_weight, 0.5, "Join output weight for cost calculator", 0) \
+    M(Float, cost_calculator_cte_weight, 1, "CTE output weight for cost calculator", 0) \
+    M(Float, cost_calculator_projection_weight, 0.1, "CTE output weight for cost calculator", 0) \
+    M(Bool, print_graphviz, false, "Whether print graphviz", 0) \
+    M(String, graphviz_path, "/tmp/plan/", "The path of graphviz plan", 0) \
+    M(Bool, eliminate_cross_joins, true, "Whether eliminate cross joins", 0) \
+    M(Bool, enable_rewrite_alias_in_select, true, "Whether rewrite alias in select", 0) \
+    M(UInt64, iterative_optimizer_timeout, 10000, "Max running time of a single iterative optimizer in ms", 0) \
+    M(UInt64, cascades_optimizer_timeout, 10000, "Max running time of a single cascades optimizer in ms", 0) \
+    M(UInt64, plan_optimizer_timeout, 600000, "Max running time of a plan rewriter optimizer in ms", 0) \
+    M(Bool, enable_nested_loop_join, true, "Whether enable nest loop join for outer join with filter", 0)\
+    M(Bool, enable_cbo, true, "Whether enable CBO", 0) \
+    M(Bool, enum_replicate, true, "Enum replicate join", 0) \
+    M(Bool, enum_repartition, true, "Enum repartition join", 0) \
+    M(UInt64, max_replicate_build_size, 200000, "Max join build size, when enum replicate", 0) \
+    M(UInt64, max_replicate_shuffle_size, 50000000, "Max join build size, when enum replicate", 0) \
+    M(Bool, add_parallel_before_agg, false, "Add parallel before agg", 0) \
+    M(Bool, add_parallel_after_join, false, "Add parallel after join", 0) \
+    M(Bool, enforce_round_robin, false, "Whether add round robin exchange node", 0) \
+    M(Bool, enable_pk_fk, true, "Whether enable PK-FK join estimation", 0) \
+    M(Bool, enable_left_join_to_right_join, true, "Whether enable convert left join to right join", 0) \
+    M(Bool, enable_shuffle_with_order, false, "Whether enable keep data order when shuffle", 0) \
+    M(Bool, enable_distinct_to_aggregate, true, "Whether enable convert distinct to group by", 0) \
+    M(Bool, enable_magic_set, true, "Whether enable magic set rewriting for join aggregation", 0) \
+    M(Bool, enable_dynamic_filter, true, "Whether enable dynamic filter for join", 0) \
+    M(UInt64, dynamic_filter_min_filter_rows, 10000, "Set minimum row to enable dynamic filter", 0) \
+    M(Float, dynamic_filter_max_filter_factor, 0.7, "Set maximal filter factor to enable dynamic filter", 0) \
+    M(Bool, enable_dynamic_filter_for_bloom_filter, true, "Whether enable dynamic filter for bloom filter", 0) \
+    M(Bool, enable_dynamic_filter_for_join, true, "Whether enable dynamic filter for join", 0) \
+    M(UInt64, dynamic_filter_default_bytes, 1024 * 256, "Whether enable dynamic filter for join", 0) \
+    M(UInt64, dynamic_filter_default_hashes, 4, "Whether enable dynamic filter for join", 0) \
+    M(CTEMode, cte_mode, CTEMode::INLINED, "CTE mode: SHARED|INLINED|AUTO", 0) \
+    M(Bool, enable_cte_property_enum, false, "Whether enumerate all possible properties for cte", 0) \
+    M(Bool, enable_cte_common_property, true, "Whether search common property for cte", 0) \
+    M(UInt64 , max_graph_reorder_size, 10, "Max tables join order enum on graph", 0) \
+    M(Float, enable_partial_aggregate_ratio , 0.9, "Enable partial aggregate ratio : group by keys ndv / total row count", 0) \
+    M(Bool, enable_simplify_expression, true, "Whether enable simplify predicates", 0) \
+    M(Bool, enable_unwarp_cast_in, true, "Whether enable unwrap cast function", 0) \
+    M(Bool, enable_common_predicate_rewrite, true, "Whether enable common predicate rewrite", 0) \
+    M(Bool, enable_windows_reorder, true, "Reorder adjacent windows to decrease exchange", 0) \
+    M(Bool, enable_swap_predicate_rewrite, true, "Whether enable swap predicate rewrite", 0) \
+    M(Bool, enable_equivalences, true, "Whether enable using equivalences when property match", 0) \
+    M(Bool, enable_replace_group_by_literal_to_symbol, false, "Replace group by literal to symbol", 0) \
+    M(Bool, enable_replace_order_by_literal_to_symbol, false, "Replace order by literal to symbol", 0) \
+    M(Bool, enable_push_partial_agg, true, "Whether enable push partial agg", 0) \
+    M(Bool, enforce_all_join_to_any_join, false, "Whether enforce all join to any join", 0) \
+    M(Bool, enable_implicit_type_conversion, true, "Whether enable implicit type conversion for JOIN, Set operation, IN subquery", 0) \
+    M(Bool, enable_redundant_sort_removal, true, "Whether enable ignore redundant sort in subquery", 0) \
+    M(Bool, enable_materialized_view_rewrite, false, "Whether enable materialized view based rewriter for query", 0) \
+    M(Bool, enable_materialized_view_ast_rewrite, false, "Whether enable materialized view based rewriter for query", 0) \
+    M(Bool, enable_materialized_view_rewrite_verbose_log, false, "Whether enable materialized view based rewriter for query", 0) \
+    M(Bool, enable_materialized_view_join_rewriting, false, "Whether enable materialized view based rewriter for query using join materialized views", 0) \
+    M(Bool, enable_sharding_optimize, false, "Whether enable sharding optimization, eg. local join", 0) \
+    M(Bool, enable_filter_window_to_partition_topn, true, "Filter window to partition topn", 0) \
+    /** Exchange setttings */ \
+    M(UInt64, exchange_parallel_size, 1, "Exchange parallel size", 0) \
+    M(UInt64, exchange_source_pipeline_threads, 16, "Recommend number of threads for pipeline which reading data from exchange, ingoned if exchange need keep data order", 0) \
+    M(UInt64, exchange_timeout_ms, 100000, "Exchange request timeout ms",0) \
+    M(UInt64, exchange_local_receiver_queue_size, 50, "Queue size for local exchange receiver",0) \
+    M(UInt64, exchange_remote_receiver_queue_size, 100, "Queue size for remote exchange receiver",0) \
+    M(Bool, exchange_enable_block_compress, false, "Whether enable exchange block compress ", 0) \
+    M(UInt64, exchange_stream_max_buf_size, 209715200, "Default 200M, -1 means no limit", 0) \
+    M(UInt64, exchange_buffer_send_threshold_in_bytes, 1000000, "The minimum bytes when exchange will flush send buffer ", 0) \
+    M(UInt64, exchange_buffer_send_threshold_in_row, 65505, "The minimum row num when exchange will flush send buffer", 0) \
+    M(UInt64, exchange_unordered_output_parallel_size, 8, "The num of exchange sink for unorder exchange, ingoned if exchange need keep data order ", 0) \
+    M(Bool, exchange_enable_keep_order_parallel_shuffle, false, "Whether enable parallel shuffle when exchange need keep order", 0) \
+    M(Bool, exchange_enable_force_remote_mode, false, "Force exchange data transfer through network", 0) \
+    M(Bool, exchange_enable_force_keep_order, false, "Force exchange keep data order", 0) \
+    M(Bool, exchange_force_use_buffer, false, "Force exchange use buffer as possible", 0) \
+    M(UInt64, distributed_max_parallel_size, false, "Max distributed execution parallel size", 0) \
+    \
+    /** Dynamic Filter settings */ \
+    M(UInt64, wait_runtime_filter_timeout, 1000, "Execute filter wait for runtime filter timeout ms", 0) \
+    M(UInt64, wait_runtime_filter_timeout_for_filter, 0, "Execute filter wait for runtime filter timeout ms", 0) \
+    M(Bool, runtime_filter_dynamic_mode, false, "Whether enable bloom runtime filter", 0) \
+    \
+    /** ip2geo settings */ \
+    M(String, ip2geo_local_path, "/data01/clickhouse/data/geo_db/", "Local path for IP Database files", 0)\
+    M(String, ip2geo_local_path_oversea, "/data01/clickhouse/data/geo_db/oversea/", "Local path for IP Database files for oversea", 0)\
+    M(Bool, ip2geo_update_from_hdfs, 0, "Whether to update db file from hdfs", 0)\
+    M(String, ipv4_file, "ipv4_pro", "IPDB file for ipv4", 0)\
+    M(String, ipv6_file, "ipv6_pro", "IPDB file for ipv6", 0)\
+    M(String, geoip_city_file, "GeoIP2-City", "GeoIP DB file for city", 0)\
+    M(String, geoip_isp_file, "GeoIP2-ISP", "GeoIP DB file for ISP", 0)\
+    M(String, geoip_asn_file, "GeoLite2-ASN", "GeoIP DB file for ASN", 0)\
+    \
+    /** Sample setttings */ \
+    M(Bool, enable_sample_by_range, false, "Sample by range if it is true", 0) \
+    M(Bool, enable_deterministic_sample_by_range, false, "Deterministic sample by range if it is true", 0) \
+    M(Bool, enable_final_sample, false, "Sample from result rows if it is true", 0) \
+    \
+    /** clone strategy **/ \
+    M(Bool, stop_clone_in_utc_time, false, "Enable stop executing clone log in utc time", 0) \
+    M(UInt64, utc_time_to_stop_clone, 2, "The hour of UTC time, if current time is greater than it, clone is stopepd", 0) \
+    M(UInt64, utc_time_to_start_clone, 12, "The hour of UTC time, if current time is greater than it, clone is started", 0) \
+    M(String, utc_time_interval_allow_clone, "", "A list of UTC time, every two elements consist an interval which can execute clone", 0) \
+    M(String, utc_time_interval_stop_clone, "", "A list of UTC time, every two elements consist an interval which stop clone", 0) \
+    M(Bool, remote_query_memory_table, false, "Query remote memory table", 0) \
+    \
+    /* Transaction and catalog */ \
+    M(Bool, ignore_duplicate_insertion_label, true, "Throw an exception if false", 0) \
+    M(Bool, bypass_ddl_db_lock, false, "Bypass locking database while creating tables", 0) \
+    M(Bool, prefer_cnch_catalog, false, "Force using cnch catalog to get table first when resolving database and table", 0) \
+    /** The section above is for obsolete settings. Do not add anything there. */\
 
 // End of COMMON_SETTINGS
 // Please add settings related to formats into the FORMAT_FACTORY_SETTINGS below.
@@ -519,13 +756,15 @@ class IColumn;
     M(DateTimeInputFormat, date_time_input_format, FormatSettings::DateTimeInputFormat::Basic, "Method to read DateTime from text input formats. Possible values: 'basic' and 'best_effort'.", 0) \
     M(DateTimeOutputFormat, date_time_output_format, FormatSettings::DateTimeOutputFormat::Simple, "Method to write DateTime to text output. Possible values: 'simple', 'iso', 'unix_timestamp'.", 0) \
     \
+    M(UInt64, max_hdfs_write_buffer_size, DBMS_DEFAULT_BUFFER_SIZE, "The maximum size of the buffer to write data to hdfs.",0) \
+    \
     M(Bool, input_format_values_interpret_expressions, true, "For Values format: if the field could not be parsed by streaming parser, run SQL parser and try to interpret it as SQL expression.", 0) \
     M(Bool, input_format_values_deduce_templates_of_expressions, true, "For Values format: if the field could not be parsed by streaming parser, run SQL parser, deduce template of the SQL expression, try to parse all rows using template and then interpret expression for all rows.", 0) \
     M(Bool, input_format_values_accurate_types_of_literals, true, "For Values format: when parsing and interpreting expressions using template, check actual type of literal to avoid possible overflow and precision issues.", 0) \
     M(Bool, input_format_avro_allow_missing_fields, false, "For Avro/AvroConfluent format: when field is not found in schema use default value instead of error", 0) \
     M(URI, format_avro_schema_registry_url, "", "For AvroConfluent format: Confluent Schema Registry URL.", 0) \
     \
-    M(Bool, output_format_json_quote_64bit_integers, true, "Controls quoting of 64-bit integers in JSON output format.", 0) \
+    M(Bool, output_format_json_quote_64bit_integers, false, "Controls quoting of 64-bit integers in JSON output format.", 0) \
     \
     M(Bool, output_format_json_quote_denormals, false, "Enables '+nan', '-nan', '+inf', '-inf' outputs in JSON output format.", 0) \
     \
@@ -571,6 +810,16 @@ class IColumn;
     M(Bool, cross_to_inner_join_rewrite, true, "Use inner join instead of comma/cross join if possible", 0) \
     \
     M(Bool, output_format_arrow_low_cardinality_as_dictionary, false, "Enable output LowCardinality type as Dictionary Arrow type", 0) \
+    M(Bool, enable_low_cardinality_merge_new_algo, true, "Whether use the new merge algorithm during part merge for low cardinality column", 0) \
+    M(UInt64, low_cardinality_distinct_threshold, 100000, "Threshold for fallback to native column from low cardinality column, 0 disable", 0) \
+    \
+    M(UInt64, cnch_part_attach_limit, 3000, "Maximum number of part for ATTACH PARTITION/PARTS command", 0)\
+    M(UInt64, cnch_part_attach_drill_down, 1, "Maximum levels of path to find cnch data parts, 0 means no drill down", 0) \
+    M(UInt64, cnch_part_attach_assert_parts_count, 0, "Assert total number of parts to attach.", 0) \
+    M(UInt64, cnch_part_attach_assert_rows_count, 0, "Assert totol number of part rows to attach.", 0) \
+    M(UInt64, cnch_part_attach_max_source_discover_level, 1, "Maximum levels of drill down to lookup for different sources", 0) \
+    M(Bool, skip_table_definition_hash_check, false, "Whether skip table definition hash check when attach data parts.", 0)  \
+
 
 // End of FORMAT_FACTORY_SETTINGS
 // Please add settings non-related to formats into the COMMON_SETTINGS above.
@@ -609,6 +858,11 @@ struct Settings : public BaseSettings<SettingsTraits>
     /// Check that there is no user-level settings at the top level in config.
     /// This is a common source of mistake (user don't know where to write user-level setting).
     static void checkNoSettingNamesAtTopLevel(const Poco::Util::AbstractConfiguration & config, const String & config_path);
+
+    /// Get all changed settings
+    SettingsChanges getChangedSettings() const;
+    /// save settings changed to json
+    void dumpToJSON(Poco::JSON::Object & dumpJson)const;
 };
 
 /*

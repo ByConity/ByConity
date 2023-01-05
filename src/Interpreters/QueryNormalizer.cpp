@@ -2,14 +2,19 @@
 #include <Core/Names.h>
 #include <Interpreters/QueryNormalizer.h>
 #include <Interpreters/IdentifierSemantic.h>
+#include <Interpreters/evaluateConstantExpression.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTLiteral.h>
+#include <Parsers/ASTPartition.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTQueryParameter.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <DataTypes/MapHelpers.h> // for getImplicitFileNameForMapKey
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/quoteString.h>
+#include <Common/FieldVisitorToString.h>
 #include <IO/WriteHelpers.h>
 
 namespace DB
@@ -21,6 +26,7 @@ namespace ErrorCodes
     extern const int CYCLIC_ALIASES;
     extern const int UNKNOWN_QUERY_PARAMETER;
     extern const int BAD_ARGUMENTS;
+	extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 }
 
 
@@ -63,6 +69,232 @@ private:
     const String copy;
 };
 
+String QueryNormalizer::getMapKeyName(ASTFunction & node, Data & data)
+{
+    ASTLiteral * key_lit = node.arguments->children[1]->as<ASTLiteral>(); // Constant Literal
+    ASTFunction * key_func = node.arguments->children[1]->as<ASTFunction>(); // for constant foldable functions' case
+
+    String key_name;
+    if (key_lit) // key is literal
+    {
+        key_name = key_lit->getColumnName();
+    }
+    else if (key_func)
+    {
+        // check whether key_func's inputs are all constant literal, if yes, invoke constant folding logic.
+        // This handling is specially added for Date key which is toDate('YYYY-MM_DD') in SQL
+        bool all_input_const = true;
+        for (auto & c : key_func->arguments->children)
+        {
+            if (!c->as<ASTLiteral>())
+            {
+                all_input_const = false;
+                break;
+            }
+        }
+
+        if (all_input_const)
+        {
+            std::pair<Field, DataTypePtr> value_raw = evaluateConstantExpression(node.arguments->children[1], data.context);
+            key_name = applyVisitor(DB::FieldVisitorToString(), value_raw.first);
+        }
+    }
+
+    return key_name;
+}
+
+void QueryNormalizer::rewriteMapElement(ASTPtr & ast, const String & map_name, const String & key_name)
+{
+    String my_alias = ast->tryGetAlias();
+    if (!key_name.empty())
+    {
+        // create identifier
+        String implicit_name = getImplicitColNameForMapKey(map_name, key_name);
+        ast = std::make_shared<ASTIdentifier>(implicit_name);
+        ast->as<ASTIdentifier>()->is_implicit_map_key = true;
+        //set alias back
+        ast->setAlias(my_alias);
+    }
+}
+
+void QueryNormalizer::visit(ASTFunction & node, ASTPtr & ast, Data & data)
+{
+    String & func_name = node.name;
+
+    /// Special cases for count function.
+    String func_name_lowercase = Poco::toLower(func_name);
+    if (endsWith(func_name_lowercase, "vcfunnelopt"))
+    {
+		// TODO
+        // /// reuse funnel_old_rule setting for skipping repeat event in Finder case
+        // if (data.settings.funnel_old_rule)
+        // {
+        //     func_name = func_name + "Skip";
+        // }
+    }
+#if 0 //TODO
+    else if (func_name_lowercase == "sumdistinct")
+    {
+        /// replace sumDistinc with internal implementation uniqSum;
+        func_name = "uniqSum";
+    }
+    else if (func_name_lowercase == "partitionstatus")
+    {
+        String old_col_name_or_alias = node.getAliasOrColumnName();
+
+        ASTs & args = node.arguments->children;
+        if (args.size() != 3)
+            throw Exception("Function partitionStatus only accept three arguments.", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+        size_t arg_num = 0;
+        args[arg_num] = evaluateConstantExpressionOrIdentifierAsLiteral(args[arg_num], data.context);
+        String database_name = args[arg_num]->as<ASTLiteral &>().value.safeGet<String>();
+
+        ++arg_num;
+        args[arg_num] = evaluateConstantExpressionOrIdentifierAsLiteral(args[arg_num], data.context);
+        String table_name = args[arg_num]->as<ASTLiteral &>().value.safeGet<String>();
+
+        ++arg_num;
+
+        auto partition = std::make_shared<ASTPartition>();
+        size_t fields_count;
+        String fields_str;
+
+        String partition_name = args[arg_num]->getColumnName();
+
+        const auto * tuple_ast = args[arg_num]->as<ASTFunction>();
+        if (tuple_ast && tuple_ast->name == "tuple")
+        {
+            const auto * arguments_ast = tuple_ast->arguments->as<ASTExpressionList>();
+            if (arguments_ast)
+                fields_count = arguments_ast->children.size();
+            else
+                fields_count = 0;
+
+            auto left_paren = partition_name.data();
+            auto right_paren = partition_name.data() + partition_name.size();
+
+            while (left_paren != right_paren && *left_paren != '(')
+                ++left_paren;
+            if (*left_paren != '(')
+                throw Exception("Provided partition in wrong format.", ErrorCodes::LOGICAL_ERROR);
+
+            while (right_paren != left_paren && *right_paren != ')')
+                --right_paren;
+            if (*right_paren != ')')
+                throw Exception("Provided partition in wrong format.", ErrorCodes::LOGICAL_ERROR);
+
+            fields_str = String(left_paren + 1, right_paren - left_paren - 1);
+        }
+        else
+        {
+            fields_count = 1;
+            fields_str = String(partition_name.data(), partition_name.size());
+        }
+
+        partition->value = args[arg_num];
+        partition->children.push_back(args[arg_num]);
+        partition->fields_str = std::move(fields_str);
+        partition->fields_count = fields_count;
+
+        String partition_id;
+        auto table = DatabaseCatalog::instance().getTable(database_name, table_name);
+        if (auto * materialized_view = dynamic_cast<StorageMaterializedView *>(table.get()))
+            partition_id = materialized_view->getTargetTable()->getPartitionIDFromQuery(partition, data.context);
+        else
+            partition_id = table->getPartitionIDFromQuery(partition, data.context);
+
+        /// rewrtie the partitionStatus function
+        auto new_arguments = std::make_shared<ASTExpressionList>();
+        new_arguments->children.push_back(std::make_shared<ASTLiteral>(database_name));
+        new_arguments->children.push_back(std::make_shared<ASTLiteral>(table_name));
+        new_arguments->children.push_back(std::make_shared<ASTLiteral>(partition_id));
+
+        node.children.clear();
+        node.arguments = new_arguments;
+        node.children.push_back(new_arguments);
+        // set the alias to the old column name or alias of this function, then the required result header will keep consistent after rewriting.
+        node.setAlias(old_col_name_or_alias);
+    }
+#endif
+    // Rewrite mapElement(c, 'k') to implicit column __c__'k'
+    else if (
+        data.rewrite_map_col && startsWith(func_name_lowercase, "mapelement") && node.arguments->children.size() == 2 && data.storage
+        && data.storage->supportsMapImplicitColumn())
+    {
+        ASTIdentifier * map_col = node.arguments->children[0]->as<ASTIdentifier>();
+
+        if (map_col && !IdentifierSemantic::isSpecial(*map_col))
+        {
+            String key_name = getMapKeyName(node, data);
+            String map_name = map_col->name();
+            if (data.storage && data.metadata_snapshot->columns.hasPhysical(map_name))
+            {
+                auto map_type = data.metadata_snapshot->columns.getPhysical(map_name).type;
+                if (map_type->isMap() && !map_type->isMapKVStore())
+                    rewriteMapElement(ast, map_name, key_name);
+            }
+        }
+    }
+    // Support square bracket for map element. Just convert it into mapElement function.
+    // Rewrite arrayElement(c, 'k') to implicit column __c__'k'
+    else if (
+        data.rewrite_map_col && startsWith(func_name_lowercase, "arrayelement") && node.arguments->children.size() == 2 && data.storage
+        && data.storage->supportsMapImplicitColumn())
+    {
+        ASTIdentifier * map_col = node.arguments->children[0]->as<ASTIdentifier>();
+
+        if (map_col && !IdentifierSemantic::isSpecial(*map_col))
+        {
+            String key_name = getMapKeyName(node, data);
+            String map_name = map_col->name();
+            if (data.storage && data.metadata_snapshot->columns.hasPhysical(map_name))
+            {
+                auto map_type = data.metadata_snapshot->columns.getPhysical(map_name).type;
+                if (map_type->isMap())
+                {
+                    node.name = "mapElement"; /// convert array element to mapelement for map type
+                    if (!map_type->isMapKVStore())
+                        rewriteMapElement(ast, map_name, key_name);
+                }
+            }
+        }
+    }
+    // Rewrite mapKeys(c) to implicite column c.key for KV store map
+    else if (
+        data.rewrite_map_col && startsWith(func_name_lowercase, "mapkeys") && node.arguments->children.size() == 1 && data.storage
+        && data.storage->supportsMapImplicitColumn())
+    {
+        ASTIdentifier * map_col = node.arguments->children[0]->as<ASTIdentifier>();
+        if (map_col)
+        {
+            DataTypePtr type = data.metadata_snapshot->columns.getPhysical(map_col->name()).type;
+            if (type->isMap() && type->isMapKVStore())
+            {
+                String origin_alias = ast->getAliasOrColumnName();
+                ast = std::make_shared<ASTIdentifier>(map_col->name() + ".key");
+                ast->setAlias(origin_alias);
+            }
+        }
+    }
+    // Rewrite mapValues(c) to implicite column c.value for KV store map
+    else if (
+        data.rewrite_map_col && startsWith(func_name_lowercase, "mapvalues") && node.arguments->children.size() == 1 && data.storage
+        && data.storage->supportsMapImplicitColumn())
+    {
+        ASTIdentifier * map_col = node.arguments->children[0]->as<ASTIdentifier>();
+        if (map_col)
+        {
+            DataTypePtr type = data.metadata_snapshot->columns.getPhysical(map_col->name()).type;
+            if (type->isMap() && type->isMapKVStore())
+            {
+                String origin_alias = ast->getAliasOrColumnName();
+                ast = std::make_shared<ASTIdentifier>(map_col->name() + ".value");
+                ast->setAlias(origin_alias);
+            }
+        }
+    }
+}
 
 void QueryNormalizer::visit(ASTIdentifier & node, ASTPtr & ast, Data & data)
 {
@@ -116,7 +348,18 @@ void QueryNormalizer::visit(ASTIdentifier & node, ASTPtr & ast, Data & data)
             }
         }
         else
-            ast = alias_node;
+        {
+            if (data.context->getSettingsRef().enable_optimizer)
+            {
+                ast = alias_node->clone(); // For ExprAnalyzer, an aliased expression may have different analyze result with
+                                           // the origin expression, thus we clone the expression so that both analyze results
+                                           // can reside in the Analysis object. see also 00057_join_aliases.sql
+            }
+            else
+            {
+                ast = alias_node;
+            }
+        }
     }
 }
 
@@ -223,8 +466,9 @@ void QueryNormalizer::visit(ASTPtr & ast, Data & data)
         if (!my_alias.empty())
             data.current_alias = my_alias;
     }
-
-    if (auto * node_id = ast->as<ASTIdentifier>())
+    if (auto * node = ast->as<ASTFunction>())
+        visit(*node, ast, data);
+    else if (auto * node_id = ast->as<ASTIdentifier>())
         visit(*node_id, ast, data);
     else if (auto * node_tables = ast->as<ASTTablesInSelectQueryElement>())
         visit(*node_tables, ast, data);

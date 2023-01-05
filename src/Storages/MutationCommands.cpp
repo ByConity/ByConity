@@ -38,6 +38,16 @@ std::optional<MutationCommand> MutationCommand::parse(ASTAlterCommand * command,
         res.partition = command->partition;
         return res;
     }
+    else if (command->type == ASTAlterCommand::FAST_DELETE)
+    {
+        MutationCommand res;
+        res.ast = command->ptr();
+        res.type = FAST_DELETE;
+        res.predicate = command->predicate;
+        res.partition = command->partition;
+        res.columns = command->columns;
+        return res;
+    }
     else if (command->type == ASTAlterCommand::UPDATE)
     {
         MutationCommand res;
@@ -73,6 +83,16 @@ std::optional<MutationCommand> MutationCommand::parse(ASTAlterCommand * command,
         res.partition = command->partition;
         res.predicate = nullptr;
         res.projection_name = command->projection->as<ASTIdentifier &>().name();
+        return res;
+    }
+    else if (parse_alter_commands && command->type == ASTAlterCommand::ADD_COLUMN)
+    {
+        MutationCommand res;
+        res.ast = command->ptr();
+        res.type = MutationCommand::Type::ADD_COLUMN;
+        const auto & ast_col_decl = command->col_decl->as<ASTColumnDeclaration &>();
+        res.column_name = ast_col_decl.name;
+        res.data_type = DataTypeFactory::instance().get(ast_col_decl.type);
         return res;
     }
     else if (parse_alter_commands && command->type == ASTAlterCommand::MODIFY_COLUMN)
@@ -139,6 +159,23 @@ std::optional<MutationCommand> MutationCommand::parse(ASTAlterCommand * command,
         res.partition = command->partition;
         return res;
     }
+    else if (parse_alter_commands && command->type == ASTAlterCommand::CLEAR_MAP_KEY)
+    {
+        MutationCommand res;
+        res.ast = command->ptr();
+        res.type = MutationCommand::Type::CLEAR_MAP_KEY;
+        res.column_name = getIdentifierName(command->column);
+        res.map_keys = command->map_keys;
+        return res;
+    }
+    else if (parse_alter_commands && command->type == ASTAlterCommand::MODIFY_CLUSTER_BY)
+    {
+        MutationCommand res;
+        res.ast = command->ptr();
+        res.type = MutationCommand::Type::RECLUSTER;
+        return res;
+    }
+
     return {};
 }
 
@@ -151,6 +188,29 @@ std::shared_ptr<ASTExpressionList> MutationCommands::ast() const
     return res;
 }
 
+bool MutationCommands::willMutateData() const
+{
+    for (auto & c : *this)
+        if (c.type != MutationCommand::Type::ADD_COLUMN)
+            return true;
+    return false;
+}
+
+bool MutationCommands::requireIndependentExecution() const
+{
+    /// 'fastdelete' and 'modify column' reads part using an empty delete bitmap,
+    /// so they can't be executed together with commands like update or delete
+    /// which uses part's delete bitmap
+    return std::any_of(begin(), end(), [](const MutationCommand & c)
+    {
+        return c.type == MutationCommand::FAST_DELETE || c.type == MutationCommand::READ_COLUMN;
+    });
+}
+
+bool MutationCommands::allOf(MutationCommand::Type type) const
+{
+    return !empty() && std::all_of(begin(), end(), [type](const MutationCommand & c) { return c.type == type; });
+}
 
 void MutationCommands::writeText(WriteBuffer & out) const
 {
@@ -164,7 +224,7 @@ void MutationCommands::readText(ReadBuffer & in)
     String commands_str;
     readEscapedString(commands_str, in);
 
-    ParserAlterCommandList p_alter_commands;
+    ParserAlterCommandList p_alter_commands(ParserSettings::CLICKHOUSE);
     auto commands_ast = parseQuery(
         p_alter_commands, commands_str.data(), commands_str.data() + commands_str.length(), "mutation commands list", 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
     for (const auto & child : commands_ast->children)

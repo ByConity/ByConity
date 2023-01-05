@@ -83,6 +83,8 @@ When doing SELECT we read from all data parts. INSERTed data parts comes with un
 namespace DB
 {
 
+class MergeScheduler;
+
 class SimpleMergeSelector final : public IMergeSelector
 {
 public:
@@ -90,6 +92,12 @@ public:
     {
         /// Zero means unlimited. Can be overridden by the same merge tree setting.
         size_t max_parts_to_merge_at_once = 100;
+
+        /** Zero means unlimited.
+         *  Unique table will set it to a value < 2^32 in order to prevent rowid(UInt32) overflow
+         *  Too large part has no advantage since we cannot utilize parallelism. We set max_total_rows_to_merge as 2147483647.
+         */
+        size_t max_total_rows_to_merge = 0xFFFFFFFF;
 
         /** Minimum ratio of size of one part to all parts in set of parts to merge (for usual cases).
           * For example, if all parts have equal size, it means, that at least 'base' number of parts should be merged.
@@ -152,7 +160,8 @@ public:
 
     PartsRange select(
         const PartsRanges & parts_ranges,
-        const size_t max_total_size_to_merge) override;
+        const size_t max_total_size_to_merge,
+        MergeScheduler * merge_scheduler = nullptr) override;
 
 private:
     const Settings settings;

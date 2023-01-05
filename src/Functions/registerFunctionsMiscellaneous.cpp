@@ -10,6 +10,7 @@ class FunctionFactory;
 void registerFunctionCurrentDatabase(FunctionFactory &);
 void registerFunctionCurrentUser(FunctionFactory &);
 void registerFunctionHostName(FunctionFactory &);
+void registerFunctionHost(FunctionFactory &);
 void registerFunctionFQDN(FunctionFactory &);
 void registerFunctionVisibleWidth(FunctionFactory &);
 void registerFunctionToTypeName(FunctionFactory &);
@@ -26,6 +27,7 @@ void registerFunctionRowNumberInAllBlocks(FunctionFactory &);
 void registerFunctionNeighbor(FunctionFactory &);
 void registerFunctionSleep(FunctionFactory &);
 void registerFunctionSleepEachRow(FunctionFactory &);
+void registerFunctionInvalidateStatsCache(FunctionFactory &);
 void registerFunctionMaterialize(FunctionFactory &);
 void registerFunctionIgnore(FunctionFactory &);
 void registerFunctionIndexHint(FunctionFactory &);
@@ -52,6 +54,7 @@ void registerFunctionFinalizeAggregation(FunctionFactory &);
 void registerFunctionToLowCardinality(FunctionFactory &);
 void registerFunctionLowCardinalityIndices(FunctionFactory &);
 void registerFunctionLowCardinalityKeys(FunctionFactory &);
+void registerFunctionLowCardinalityIsNoneEncoded(FunctionFactory &);
 void registerFunctionsIn(FunctionFactory &);
 void registerFunctionJoinGet(FunctionFactory &);
 void registerFunctionFilesystem(FunctionFactory &);
@@ -73,6 +76,7 @@ void registerFunctionByteSize(FunctionFactory &);
 void registerFunctionFile(FunctionFactory & factory);
 void registerFunctionConnectionId(FunctionFactory & factory);
 void registerFunctionPartitionId(FunctionFactory & factory);
+void registerFunctionPartitionStatus(FunctionFactory & factory);
 void registerFunctionIsIPAddressContainedIn(FunctionFactory &);
 
 #if USE_ICU
@@ -84,6 +88,7 @@ void registerFunctionsMiscellaneous(FunctionFactory & factory)
     registerFunctionCurrentDatabase(factory);
     registerFunctionCurrentUser(factory);
     registerFunctionHostName(factory);
+    registerFunctionHost(factory);
     registerFunctionFQDN(factory);
     registerFunctionVisibleWidth(factory);
     registerFunctionToTypeName(factory);
@@ -100,6 +105,7 @@ void registerFunctionsMiscellaneous(FunctionFactory & factory)
     registerFunctionNeighbor(factory);
     registerFunctionSleep(factory);
     registerFunctionSleepEachRow(factory);
+    registerFunctionInvalidateStatsCache(factory);
     registerFunctionMaterialize(factory);
     registerFunctionIgnore(factory);
     registerFunctionIndexHint(factory);
@@ -126,6 +132,7 @@ void registerFunctionsMiscellaneous(FunctionFactory & factory)
     registerFunctionToLowCardinality(factory);
     registerFunctionLowCardinalityIndices(factory);
     registerFunctionLowCardinalityKeys(factory);
+    registerFunctionLowCardinalityIsNoneEncoded(factory);
     registerFunctionsIn(factory);
     registerFunctionJoinGet(factory);
     registerFunctionFilesystem(factory);
@@ -147,6 +154,7 @@ void registerFunctionsMiscellaneous(FunctionFactory & factory)
     registerFunctionFile(factory);
     registerFunctionConnectionId(factory);
     registerFunctionPartitionId(factory);
+    registerFunctionPartitionStatus(factory);
     registerFunctionIsIPAddressContainedIn(factory);
 
 #if USE_ICU

@@ -13,15 +13,34 @@ class AggregatedArenasChunkInfo : public ChunkInfo
 public:
     Arenas arenas;
     AggregatedArenasChunkInfo(Arenas arenas_)
-        : arenas(std::move(arenas_))
-    {}
+        : arenas(std::move(arenas_)) { }
 };
 
 class AggregatedChunkInfo : public ChunkInfo
 {
 public:
-    bool is_overflows = false;
-    Int32 bucket_num = -1;
+    mutable bool is_overflows = false;
+    mutable Int32 bucket_num = -1;
+
+    void write(WriteBuffer & out) const override
+    {
+        writeVarUInt(is_overflows, out);
+        writeVarUInt(bucket_num, out);
+    }
+
+    void read(ReadBuffer & in) const override
+    {
+        readVarUInt(is_overflows, in);
+        readVarUInt(bucket_num, in);
+    }
+
+    Type getType() const override { return Type::AggregatedChunkInfo; }
+
+    virtual bool isEqual(const ChunkInfo & rhs) const override
+    {
+        const auto & other = static_cast<const AggregatedChunkInfo &>(rhs);
+        return is_overflows == other.is_overflows && bucket_num == other.bucket_num;
+    }
 };
 
 class IBlockInputStream;

@@ -247,6 +247,19 @@ bool ColumnAggregateFunction::structureEquals(const IColumn & to) const
     return typeid(func_this) == typeid(func_to);
 }
 
+static void pushBackAndCreateState(ColumnAggregateFunction::Container & data, Arena & arena, const IAggregateFunction * func)
+{
+    data.push_back(arena.alignedAlloc(func->sizeOfData(), func->alignOfData()));
+    try
+    {
+        func->create(data.back());
+    }
+    catch (...)
+    {
+        data.pop_back();
+        throw;
+    }
+}
 
 void ColumnAggregateFunction::insertRangeFrom(const IColumn & from, size_t start, size_t length)
 {
@@ -281,6 +294,35 @@ void ColumnAggregateFunction::insertRangeFrom(const IColumn & from, size_t start
     }
 }
 
+
+void ColumnAggregateFunction::insertRangeSelective(
+    const IColumn & from, const IColumn::Selector & selector, size_t selector_start, size_t length)
+{
+    const ColumnAggregateFunction & from_concrete = static_cast<const ColumnAggregateFunction &>(from);
+    const auto & from_data = from_concrete.data;
+    if (!empty() && src.get() != &from_concrete)
+    {
+        ensureOwnership();
+        Arena & arena = createOrGetArena();
+        Arena * arena_ptr = &arena;
+        data.reserve(size() + length);
+        for (size_t i = 0; i < length; ++i)
+        {
+            pushBackAndCreateState(data, arena, func.get());
+            func->merge(data.back(), from_data[selector[selector_start + i]], arena_ptr);
+        }
+        return;
+    }
+    /// Keep shared ownership of aggregation states.
+    src = from_concrete.getPtr();
+
+    size_t old_size = data.size();
+    data.resize(old_size + length);
+    auto * data_start = data.data();
+    size_t element_size = sizeof(data[0]);
+    for (size_t i = 0; i < length; ++i)
+        memcpy(data_start + old_size + i, &from_concrete.data[selector[selector_start + i]], element_size);
+}
 
 ColumnPtr ColumnAggregateFunction::filter(const Filter & filter, ssize_t result_size_hint) const
 {
@@ -481,21 +523,6 @@ Arena & ColumnAggregateFunction::createOrGetArena()
         my_arena = std::make_shared<Arena>();
 
     return *my_arena.get();
-}
-
-
-static void pushBackAndCreateState(ColumnAggregateFunction::Container & data, Arena & arena, const IAggregateFunction * func)
-{
-    data.push_back(arena.alignedAlloc(func->sizeOfData(), func->alignOfData()));
-    try
-    {
-        func->create(data.back());
-    }
-    catch (...)
-    {
-        data.pop_back();
-        throw;
-    }
 }
 
 void ColumnAggregateFunction::insert(const Field & x)

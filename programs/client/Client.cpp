@@ -1,5 +1,6 @@
 #include "ConnectionParameters.h"
 #include "QueryFuzzer.h"
+#include "Storages/HDFS/HDFSCommon.h"
 #include "Suggest.h"
 #include "TestHint.h"
 
@@ -26,6 +27,10 @@
 #include <boost/algorithm/string/replace.hpp>
 #include <Poco/String.h>
 #include <Poco/Util/Application.h>
+#include <Processors/Formats/IInputFormat.h>
+#include <Processors/Executors/PullingAsyncPipelineExecutor.h>
+#include <Processors/QueryPipeline.h>
+#include <Columns/ColumnString.h>
 #include <common/find_symbols.h>
 #include <common/LineReader.h>
 #include <Common/ClickHouseRevision.h>
@@ -47,15 +52,16 @@
 #include <IO/ReadBufferFromFileDescriptor.h>
 #include <IO/WriteBufferFromFileDescriptor.h>
 #include <IO/WriteBufferFromFile.h>
+#include <Storages/HDFS/WriteBufferFromHDFS.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/ReadBufferFromString.h>
+#include <IO/ZlibDeflatingWriteBuffer.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <IO/Operators.h>
 #include <IO/UseSSL.h>
 #include <IO/WriteBufferFromOStream.h>
-#include <DataStreams/AsynchronousBlockInputStream.h>
-#include <DataStreams/AddingDefaultsBlockInputStream.h>
+#include <Processors/Transforms/AddingDefaultsTransform.h>
 #include <DataStreams/InternalTextLogsRowOutputStream.h>
 #include <DataStreams/NullBlockOutputStream.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -79,6 +85,7 @@
 #include <Functions/registerFunctions.h>
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Formats/registerFormats.h>
+#include <Formats/FormatFactory.h>
 #include <Common/Config/configReadClient.h>
 #include <Storages/ColumnsDescription.h>
 #include <common/argsToConfig.h>
@@ -113,6 +120,7 @@ namespace ErrorCodes
     extern const int UNRECOGNIZED_ARGUMENTS;
     extern const int SYNTAX_ERROR;
     extern const int TOO_DEEP_RECURSION;
+    extern const int ILLEGAL_OUTPUT_PATH;
 }
 
 
@@ -192,9 +200,15 @@ private:
     WriteBufferFromFileDescriptor std_out{STDOUT_FILENO};
     std::unique_ptr<ShellCommand> pager_cmd;
 
+    std::optional<String> out_path;
     /// The user can specify to redirect query output to a file.
     std::optional<WriteBufferFromFile> out_file_buf;
     BlockOutputStreamPtr block_out_stream;
+#if USE_HDFS
+    /// The user can specify to redirect query output to local file.
+    std::unique_ptr<WriteBufferFromHDFS> out_hdfs_raw;
+    std::optional<ZlibDeflatingWriteBuffer> out_hdfs_buf;
+#endif
 
     /// The user could specify special file for server logs (stderr by default)
     std::unique_ptr<WriteBuffer> out_logs_buf;
@@ -269,12 +283,14 @@ private:
         context->setQueryParameters(query_parameters);
 
         /// settings and limits could be specified in config file, but passed settings has higher priority
+        SettingsChanges config_settings;
         for (const auto & setting : context->getSettingsRef().allUnchanged())
         {
             const auto & name = setting.getName();
             if (config().has(name))
-                context->setSetting(name, config().getString(name));
+                config_settings.emplace_back(name, Settings::stringToValueUtil(name, config().getString(name)));
         }
+        context->applySettingsChanges(config_settings);
 
         /// Set path for format schema files
         if (config().has("format_schema_path"))
@@ -290,6 +306,17 @@ private:
         }
         if (query_id_formats.empty())
             query_id_formats.emplace_back("Query id:", " {query_id}\n");
+#if USE_HDFS
+        /// Init HDFS3 client config path
+        std::string hdfs_config = config().getString("hdfs3_config", "");
+        if (!hdfs_config.empty())
+        {
+            setenv("LIBHDFS3_CONF", hdfs_config.c_str(), 1);
+        }
+
+        HDFSConnectionParams hdfs_params = HDFSConnectionParams::parseHdfsFromConfig(config());
+        context->setHdfsConnectionParams(hdfs_params);
+#endif
     }
 
 
@@ -1632,7 +1659,7 @@ private:
                 insert->tryFindInputFunction(input_function);
 
             /// INSERT query for which data transfer is needed (not an INSERT SELECT or input()) is processed separately.
-            if (insert && (!insert->select || input_function) && !insert->watch)
+            if (insert && (!insert->select || input_function) && !insert->watch && !insert->in_file)
             {
                 if (input_function && insert->format.empty())
                     throw Exception("FORMAT must be specified for function input()", ErrorCodes::INVALID_USAGE_OF_INPUT);
@@ -1647,14 +1674,16 @@ private:
         {
             if (const auto * set_query = parsed_query->as<ASTSetQuery>())
             {
+                SettingsChanges changes;
                 /// Save all changes in settings to avoid losing them if the connection is lost.
                 for (const auto & change : set_query->changes)
                 {
                     if (change.name == "profile")
                         current_profile = change.value.safeGet<String>();
                     else
-                        context->applySettingChange(change);
+                        changes.emplace_back(change);
                 }
+                context->applySettingsChanges(changes);
             }
 
             if (const auto * use_query = parsed_query->as<ASTUseQuery>())
@@ -1756,7 +1785,7 @@ private:
     void processInsertQuery()
     {
         const auto parsed_insert_query = parsed_query->as<ASTInsertQuery &>();
-        if (!parsed_insert_query.data && (is_interactive || (!stdin_is_a_tty && std_in.eof())))
+        if (!parsed_insert_query.data && !parsed_insert_query.in_file && (is_interactive || (!stdin_is_a_tty && std_in.eof())))
             throw Exception("No data to insert", ErrorCodes::NO_DATA_TO_INSERT);
 
         connection->sendQuery(
@@ -1785,10 +1814,10 @@ private:
 
     ASTPtr parseQuery(const char *& pos, const char * end, bool allow_multi_statements)
     {
-        ParserQuery parser(end);
+        const auto & settings = context->getSettingsRef();
+        ParserQuery parser(end, ParserSettings::valueOf(settings.dialect_type));
         ASTPtr res;
 
-        const auto & settings = context->getSettingsRef();
         size_t max_length = 0;
         if (!allow_multi_statements)
             max_length = settings.max_query_size;
@@ -1889,19 +1918,24 @@ private:
                 current_format = insert->format;
         }
 
-        BlockInputStreamPtr block_input = context->getInputFormat(current_format, buf, sample, insert_format_max_block_size);
+        auto source = FormatFactory::instance().getInput(current_format, buf, sample, context, insert_format_max_block_size);
+        Pipe pipe(source);
 
         if (columns_description.hasDefaults())
-            block_input = std::make_shared<AddingDefaultsBlockInputStream>(block_input, columns_description, context);
-
-        BlockInputStreamPtr async_block_input = std::make_shared<AsynchronousBlockInputStream>(block_input);
-
-        async_block_input->readPrefix();
-
-        while (true)
         {
-            Block block = async_block_input->read();
+            pipe.addSimpleTransform([&](const Block & header)
+            {
+                return std::make_shared<AddingDefaultsTransform>(header, columns_description, *source, context);
+            });
+        }
 
+        QueryPipeline pipeline;
+        pipeline.init(std::move(pipe));
+        PullingAsyncPipelineExecutor executor(pipeline);
+
+        Block block;
+        while (executor.pull(block))
+        {
             /// Check if server send Log packet
             receiveLogs();
 
@@ -1913,18 +1947,18 @@ private:
                  * We're exiting with error, so it makes sense to kill the
                  * input stream without waiting for it to complete.
                  */
-                async_block_input->cancel(true);
+                executor.cancel();
                 return;
             }
 
-            connection->sendData(block);
-            processed_rows += block.rows();
-
-            if (!block)
-                break;
+            if (block)
+            {
+                connection->sendData(block);
+                processed_rows += block.rows();
+            }
         }
 
-        async_block_input->readSuffix();
+        connection->sendData({});
     }
 
 
@@ -1946,13 +1980,20 @@ private:
             out_file_buf->next();
             out_file_buf.reset();
         }
-
+#if USE_HDFS
+        if (out_hdfs_buf)
+        {
+            out_hdfs_buf->finalize();
+            out_hdfs_buf.reset();
+        }
+#endif
         if (out_logs_buf)
         {
             out_logs_buf->next();
             out_logs_buf.reset();
         }
 
+        out_path.reset();
         std_out.next();
     }
 
@@ -2075,6 +2116,9 @@ private:
                 onEndOfStream();
                 return false;
 
+            case Protocol::Server::QueryMetrics:
+                return true;
+
             default:
                 throw Exception(
                     ErrorCodes::UNKNOWN_PACKET_FROM_SERVER, "Unknown packet {} from server {}", packet.type, connection->getDescription());
@@ -2191,12 +2235,33 @@ private:
             {
                 if (query_with_output->out_file)
                 {
-                    const auto & out_file_node = query_with_output->out_file->as<ASTLiteral &>();
-                    const auto & out_file = out_file_node.value.safeGet<std::string>();
+                    // const auto & out_file_node = query_with_output->out_file->as<ASTLiteral &>();
+                    // const auto & out_file = out_file_node.value.safeGet<std::string>();
 
-                    out_file_buf.emplace(out_file, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_EXCL | O_CREAT);
-                    out_buf = &*out_file_buf;
+                    out_path.emplace(typeid_cast<const ASTLiteral &>(*query_with_output->out_file).value.safeGet<std::string>());
+                    const Poco::URI out_uri(*out_path);
+                    const String & scheme = out_uri.getScheme();
 
+                    if(scheme.empty())
+                    {
+                        out_file_buf.emplace(*out_path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_EXCL | O_CREAT);
+                        out_buf = &*out_file_buf;
+                    }
+#if USE_HDFS
+                    else if(isHdfsOrCfsScheme(scheme))
+                    {
+                        out_hdfs_raw = std::make_unique<WriteBufferFromHDFS>(*out_path,
+                            context->getHdfsConnectionParams(),
+                            context->getSettingsRef().max_hdfs_write_buffer_size);
+                        int compression_level = Z_DEFAULT_COMPRESSION;
+                        out_hdfs_buf.emplace(std::move(out_hdfs_raw), DB::CompressionMethod::Gzip, compression_level);
+                        out_buf = &*out_hdfs_buf;
+                    }
+#endif
+                    else
+                    {
+                        throw Exception("Path: " + *out_path + " is illegal, only support write query result to local file or tos", ErrorCodes::ILLEGAL_OUTPUT_PATH);
+                    }
                     // We are writing to file, so default format is the same as in non-interactive mode.
                     if (is_interactive && is_default_format)
                         current_format = "TabSeparated";
@@ -2279,8 +2344,9 @@ private:
         block_out_stream->write(block);
         written_first_block = true;
 
-        /// Received data block is immediately displayed to the user.
-        block_out_stream->flush();
+        /// If does not upload result to local file/hdfs, then received data block is immediately displayed to the user.
+        if(!out_path)
+            block_out_stream->flush();
 
         /// Restore progress bar after data block.
         if (need_render_progress)
@@ -2607,7 +2673,7 @@ public:
         }
 
         context->makeGlobalContext();
-        context->setSettings(cmd_settings);
+        context->applySettingsChanges(cmd_settings.changes());
 
         /// Copy settings-related program options to config.
         /// TODO: Is this code necessary?

@@ -5,6 +5,7 @@
 #include <Parsers/IAST_fwd.h>
 #include <Core/QualifiedTableName.h>
 #include <Common/Exception.h>
+#include <Interpreters/Context_fwd.h>
 
 namespace Poco
 {
@@ -27,6 +28,8 @@ static constexpr char const * TABLE_WITH_UUID_NAME_PLACEHOLDER = "_";
 class ASTQueryWithTableAndOutput;
 class ASTTableIdentifier;
 class Context;
+class WriteBuffer;
+class ReadBuffer;
 
 // TODO(ilezhankin): refactor and merge |ASTTableIdentifier|
 struct StorageID
@@ -86,12 +89,15 @@ struct StorageID
 
     QualifiedTableName getQualifiedName() const { return {database_name, getTableName()}; }
 
-    static StorageID fromDictionaryConfig(const Poco::Util::AbstractConfiguration & config,
-                                          const String & config_prefix);
+    static StorageID fromDictionaryConfig(const Poco::Util::AbstractConfiguration & config, const String & config_prefix);
 
     /// If dictionary has UUID, then use it as dictionary name in ExternalLoader to allow dictionary renaming.
     /// ExternalDictnariesLoader::resolveDictionaryName(...) should be used to access such dictionaries by name.
     String getInternalDictionaryName() const;
+
+    void serialize(WriteBuffer & buffer) const;
+
+    static StorageID deserialize(ReadBuffer & buffer, ContextPtr context);
 
 private:
     StorageID() = default;

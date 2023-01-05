@@ -6,6 +6,8 @@
                      <default_database>shard_0</default_database>
                      <host>localhost</host>
                      <port>9000</port>
+                     <exchange_port>9300</exchange_port>
+                     <exchange_status_port>9400</exchange_status_port>
                  </replica>
              </shard>
              <shard>
@@ -13,6 +15,8 @@
                      <default_database>shard_1</default_database>
                      <host>localhost</host>
                      <port>9000</port>
+                     <exchange_port>9300</exchange_port>
+                     <exchange_status_port>9400</exchange_status_port>
                  </replica>
              </shard>
         </test_cluster_two_shards_different_databases>
@@ -21,10 +25,14 @@
                  <replica>
                      <host>127.0.0.1</host>
                      <port>9000</port>
+                     <exchange_port>9300</exchange_port>
+                     <exchange_status_port>9400</exchange_status_port>
                  </replica>
                  <replica>
                      <host>127.0.0.2</host>
                      <port>9000</port>
+                     <exchange_port>9300</exchange_port>
+                     <exchange_status_port>9400</exchange_status_port>
                  </replica>
              </shard>
         </test_cluster_one_shard_two_replicas>
@@ -34,11 +42,15 @@
                      <default_database>shard_0</default_database>
                      <host>localhost</host>
                      <port>9000</port>
+                     <exchange_port>9300</exchange_port>
+                     <exchange_status_port>9400</exchange_status_port>
                  </replica>
                  <replica>
                      <default_database>shard_1</default_database>
                      <host>localhost</host>
                      <port>9000</port>
+                     <exchange_port>9300</exchange_port>
+                     <exchange_status_port>9400</exchange_status_port>
                  </replica>
              </shard>
         </test_cluster_two_replicas_different_databases>

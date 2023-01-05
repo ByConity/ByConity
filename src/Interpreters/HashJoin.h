@@ -134,6 +134,8 @@ class HashJoin : public IJoin
 public:
     HashJoin(std::shared_ptr<TableJoin> table_join_, const Block & right_sample_block, bool any_take_last_row_ = false);
 
+    JoinType getType() const override { return JoinType::Hash; }
+
     const TableJoin & getTableJoin() const override { return *table_join; }
 
     /** Add block of data from right hand of JOIN to the map.
@@ -335,6 +337,9 @@ public:
     }
 
     bool isUsed(size_t off) const { return used_flags.getUsedSafe(off); }
+
+    void serialize(WriteBuffer & buf) const override;
+    static JoinPtr deserialize(ReadBuffer & buf, ContextPtr context);
 
 private:
     friend class NonJoinedBlockInputStream;

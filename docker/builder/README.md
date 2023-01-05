@@ -1,4 +1,4 @@
-Allows to build ClickHouse in Docker.
+Allows to build ByConity in Docker.
 This is useful if you have an old OS distribution and you don't want to build fresh gcc or clang from sources.
 
 Usage:
@@ -20,14 +20,3 @@ If not, you must add this user to `docker` group: `sudo usermod -aG docker $USER
 
 Build results are available in `build_docker` directory at top level of your working copy.
 It builds only binaries, not packages.
-
-For example, run server:
-```
-cd $(git rev-parse --show-toplevel)/src/Server
-$(git rev-parse --show-toplevel)/docker/builder/programs/clickhouse server --config-file $(git rev-parse --show-toplevel)/programs/server/config.xml
-```
-
-Run client:
-```
-$(git rev-parse --show-toplevel)/docker/builder/programs/clickhouse client
-```

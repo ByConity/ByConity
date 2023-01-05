@@ -81,6 +81,8 @@ public:
         UInt16 port;
         String user;
         String password;
+        UInt16 exchange_port;
+        UInt16 exchange_status_port;
 
         /// For inter-server authorization
         String cluster;
@@ -118,7 +120,9 @@ public:
             bool secure_ = false,
             Int64 priority_ = 1,
             UInt32 shard_index_ = 0,
-            UInt32 replica_index_ = 0);
+            UInt32 replica_index_ = 0,
+            UInt16 exchange_port_ = 0,
+            UInt16 exchange_status_port_ = 0);
 
         /// Returns 'escaped_host_name:port'
         String toString() const;
@@ -151,6 +155,9 @@ public:
     using Addresses = std::vector<Address>;
     using AddressesWithFailover = std::vector<Addresses>;
 
+    /// Construct a cluster by Addresses
+    Cluster(const Settings & settings, const std::vector<Addresses> & shards, bool treat_local_as_remote);
+
     /// Name of directory for asynchronous write to StorageDistributed if has_internal_replication
     ///
     /// Contains different path for permutations of:
@@ -172,7 +179,6 @@ public:
 
     struct ShardInfo
     {
-    public:
         bool isLocal() const { return !local_addresses.empty(); }
         bool hasRemoteConnections() const { return local_addresses.size() != per_replica_pools.size(); }
         size_t getLocalNodeCount() const { return local_addresses.size(); }
@@ -180,7 +186,6 @@ public:
         /// Name of directory for asynchronous write to StorageDistributed if has_internal_replication
         const std::string & insertPathForInternalReplication(bool prefer_localhost_replica, bool use_compact_format) const;
 
-    public:
         ShardInfoInsertPathForInternalReplication insert_path_for_internal_replication;
         /// Number of the shard, the indexation begins with 1
         UInt32 shard_num = 0;
@@ -191,6 +196,7 @@ public:
         /// Connection pool for each replica, contains nullptr for local replicas
         ConnectionPoolPtrs per_replica_pools;
         bool has_internal_replication = false;
+        std::string worker_id;
     };
 
     using ShardsInfo = std::vector<ShardInfo>;

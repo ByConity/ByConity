@@ -1,5 +1,9 @@
 #include <Core/NamesAndTypes.h>
+#include <DataTypes/DataTypeByteMap.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeHelper.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <DataTypes/MapHelpers.h>
 #include <IO/ReadBuffer.h>
 #include <IO/WriteBuffer.h>
 #include <IO/ReadHelpers.h>
@@ -43,6 +47,36 @@ String NameAndTypePair::getSubcolumnName() const
     return name.substr(*subcolumn_delimiter_position + 1, name.size() - *subcolumn_delimiter_position);
 }
 
+void NameAndTypePair::serialize(WriteBuffer & buf) const
+{
+    writeBinary(name, buf);
+    serializeDataType(type, buf);
+    serializeDataType(type_in_storage, buf);
+    if (subcolumn_delimiter_position)
+    {
+        writeBinary(true, buf);
+        writeBinary(subcolumn_delimiter_position.value(), buf);
+    }
+    else
+        writeBinary(false, buf);
+}
+
+void NameAndTypePair::deserialize(ReadBuffer & buf)
+{
+    readBinary(name, buf);
+    type = deserializeDataType(buf);
+    type_in_storage = deserializeDataType(buf);
+
+    bool has_size;
+    readBinary(has_size, buf);
+    if (has_size)
+    {
+        size_t subcolumn_tmp;
+        readBinary(subcolumn_tmp, buf);
+        subcolumn_delimiter_position = subcolumn_tmp;
+    }
+}
+
 void NamesAndTypesList::readText(ReadBuffer & buf)
 {
     const DataTypeFactory & data_type_factory = DataTypeFactory::instance();
@@ -51,20 +85,51 @@ void NamesAndTypesList::readText(ReadBuffer & buf)
     size_t count;
     DB::readText(count, buf);
     assertString(" columns:\n", buf);
+    resize(count);
 
-    String column_name;
-    String type_name;
-    for (size_t i = 0; i < count; ++i)
+    for (NameAndTypePair & it : *this)
     {
-        readBackQuotedStringWithSQLStyle(column_name, buf);
+        readBackQuotedStringWithSQLStyle(it.name, buf);
         assertChar(' ', buf);
+        String type_name;
         readString(type_name, buf);
+        it.type = data_type_factory.get(type_name);
+
+        if (*buf.position() == '\n')
+        {
+            assertChar('\n', buf);
+            continue;
+        }
+
+        assertChar('\t', buf);
+        // optional settings
+        String options;
+        readString(options, buf);
+
+        while (!options.empty())
+        {
+            if (options == "KV")
+            {
+                it.type->setFlags(TYPE_MAP_KV_STORE_FLAG);
+            }
+            else if(options == "COMPRESSION")
+            {
+                it.type->setFlags(TYPE_COMPRESSION_FLAG);
+            }
+            else
+            {
+                // TBD: ignore for now, or throw exception
+            }
+
+            if (*buf.position() == '\n')
+                break;
+
+            assertChar('\t', buf);
+            readString(options, buf);
+        }
+
         assertChar('\n', buf);
-
-        emplace_back(column_name, data_type_factory.get(type_name));
     }
-
-    assertEOF(buf);
 }
 
 void NamesAndTypesList::writeText(WriteBuffer & buf) const
@@ -77,6 +142,27 @@ void NamesAndTypesList::writeText(WriteBuffer & buf) const
         writeBackQuotedString(it.name, buf);
         writeChar(' ', buf);
         writeString(it.type->getName(), buf);
+
+        UInt8 flag = it.type->getFlags();
+
+        while (flag)
+        {
+            if (flag & TYPE_COMPRESSION_FLAG)
+            {
+                writeChar('\t', buf);
+                writeString("COMPRESSION", buf);
+                flag ^= TYPE_COMPRESSION_FLAG;
+            }
+            else if (flag & TYPE_MAP_KV_STORE_FLAG)
+            {
+                writeChar('\t', buf);
+                writeString("KV", buf);
+                flag ^= TYPE_MAP_KV_STORE_FLAG;
+            }
+            else
+                break;
+        }
+
         writeChar('\n', buf);
     }
 }
@@ -111,6 +197,30 @@ size_t NamesAndTypesList::sizeOfDifference(const NamesAndTypesList & rhs) const
     vector.insert(vector.end(), begin(), end());
     std::sort(vector.begin(), vector.end());
     return (std::unique(vector.begin(), vector.end()) - vector.begin()) * 2 - size() - rhs.size();
+}
+
+bool NamesAndTypesList::isCompatableWithKeyColumns(const NamesAndTypesList & rhs, const Names & keys_columns)
+{
+    if (keys_columns.size() > 1)
+    {
+        NameSet keys(keys_columns.begin(), keys_columns.end());
+        NamesAndTypes k1, k2;
+        for (const NameAndTypePair & column : *this)
+        {
+            if (keys.count(column.name))
+                k1.push_back(column);
+        }
+        for (const NameAndTypePair & column : rhs)
+        {
+            if (keys.count(column.name))
+                k2.push_back(column);
+        }
+
+        if (k1 != k2)
+            return false;
+    }
+
+    return isSubsetOf(rhs) || rhs.isSubsetOf(*this);
 }
 
 void NamesAndTypesList::getDifference(const NamesAndTypesList & rhs, NamesAndTypesList & deleted, NamesAndTypesList & added) const
@@ -176,10 +286,49 @@ NamesAndTypesList NamesAndTypesList::addTypes(const Names & names) const
     NamesAndTypesList res;
     for (const String & name : names)
     {
-        auto it = types.find(name);
-        if (it == types.end())
-            throw Exception("No column " + name, ErrorCodes::THERE_IS_NO_COLUMN);
-        res.emplace_back(name, *it->second);
+        if (isMapImplicitKeyNotKV(name))
+        {
+            String map_name = parseMapNameFromImplicitColName(name);
+            auto it = types.find(map_name);
+            if (it == types.end())
+                throw Exception(ErrorCodes::THERE_IS_NO_COLUMN, "No column {} when handing implicit column {}", map_name, name);
+            if (!(*it->second)->isMap() || (*it->second)->isMapKVStore())
+                throw Exception(
+                    ErrorCodes::BAD_ARGUMENTS,
+                    "Data type {} of column {} is not MapNotKV as expected when handling implicit column {}.",
+                    (*it->second)->getName(),
+                    map_name,
+                    name);
+            res.emplace_back(name, typeid_cast<const DataTypeByteMap &>(*(*it->second)).getValueTypeForImplicitColumn());
+        }
+        else if (isMapKV(name))
+        {
+            String map_name = parseMapNameFromImplicitKVName(name);
+            auto it = types.find(map_name);
+            if (it == types.end())
+                throw Exception(ErrorCodes::THERE_IS_NO_COLUMN, "No column {} when handling implicit kv column {}", map_name, name);
+            if (!(*it->second)->isMap() || !(*it->second)->isMapKVStore())
+                throw Exception(
+                    ErrorCodes::BAD_ARGUMENTS,
+                    "Data type {} of column {} is not MapKV as expected when handing implicit kv column {}.",
+                    (*it->second)->getName(),
+                    map_name,
+                    name);
+            res.emplace_back(name, typeid_cast<const DataTypeByteMap &>(*(*it->second)).getMapStoreType(name));
+        }
+        else
+        {
+            auto it = types.find(name);
+            if (it == types.end())
+            {
+                // if (endsWith(name, COMPRESSION_COLUMN_EXTENSION))
+                //     res.emplace_back(name, std::make_shared<DataTypeUInt16>());
+                // else
+                throw Exception("No column " + name, ErrorCodes::THERE_IS_NO_COLUMN);
+            }
+
+            res.emplace_back(name, *it->second);
+        }
     }
 
     return res;
@@ -204,4 +353,36 @@ std::optional<NameAndTypePair> NamesAndTypesList::tryGetByName(const std::string
     }
     return {};
 }
+
+size_t NamesAndTypesList::getPosByName(const std::string &name) const noexcept
+{
+    size_t pos = 0;
+    for (const NameAndTypePair & column : *this)
+    {
+        if (column.name == name)
+            break;
+        ++pos;
+    }
+    return pos;
+}
+
+void NamesAndTypesList::serialize(WriteBuffer & buf) const
+{
+    writeBinary(size(), buf);
+    for (auto & elem : *this)
+        elem.serialize(buf);
+}
+
+void NamesAndTypesList::deserialize(ReadBuffer & buf)
+{
+    size_t size;
+    readBinary(size, buf);
+    for (size_t i = 0; i < size; ++i)
+    {
+        NameAndTypePair pair;
+        pair.deserialize(buf);
+        this->push_back(pair);
+    }
+}
+
 }

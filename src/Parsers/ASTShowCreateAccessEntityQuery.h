@@ -38,6 +38,9 @@ public:
     std::optional<std::pair<String, String>> database_and_table_name;
 
     String getID(char) const override;
+
+    ASTType getType() const override { return ASTType::ASTShowCreateAccessEntityQuery; }
+
     ASTPtr clone() const override;
 
     void replaceEmptyDatabase(const String & current_database);

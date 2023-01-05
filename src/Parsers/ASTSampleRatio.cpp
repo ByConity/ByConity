@@ -40,4 +40,20 @@ void ASTSampleRatio::formatImpl(const IAST::FormatSettings & settings, IAST::For
     settings.ostr << toString(ratio);
 }
 
+void ASTSampleRatio::serialize(WriteBuffer & buf) const
+{
+    writeBinary(ratio.numerator, buf);
+    writeBinary(ratio.denominator, buf);
+}
+
+ASTPtr ASTSampleRatio::deserialize(ReadBuffer & buf)
+{
+    ASTSampleRatio::Rational ratio;
+    readBinary(ratio.numerator, buf);
+    readBinary(ratio.denominator, buf);
+
+    auto sample = std::make_shared<ASTSampleRatio>(ratio);
+    return sample;
+}
+
 }

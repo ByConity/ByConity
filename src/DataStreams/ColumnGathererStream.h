@@ -3,6 +3,8 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <IO/ReadBuffer.h>
 #include <Common/PODArray.h>
+#include <Storages/MergeTree/MergeTreeSuffix.h>
+#include <Columns/ColumnLowCardinality.h>
 
 
 namespace Poco { class Logger; }
@@ -58,7 +60,7 @@ class ColumnGathererStream : public IBlockInputStream
 public:
     ColumnGathererStream(
         const String & column_name_, const BlockInputStreams & source_streams, ReadBuffer & row_sources_buf_,
-        size_t block_preferred_size_ = DEFAULT_BLOCK_SIZE);
+        bool enable_low_cardinality_merge_new_algo_ = true, size_t fallback_threshold = 0, size_t block_preferred_size_ = DEFAULT_BLOCK_SIZE);
 
     String getName() const override { return "ColumnGatherer"; }
 
@@ -72,6 +74,21 @@ public:
     template <typename Column>
     void gather(Column & column_res);
 
+    void gatherLowCardinality(ColumnLowCardinality &column_res);
+    void gatherLowCardinalityInFullState(ColumnLowCardinality &column_res);
+    void prepareSwitchFullLowCardinality(ColumnLowCardinality &column_res);
+    bool preCheckFullLowCardinalitySources();
+    bool isNeedSwitchFullLowCardinality(ColumnLowCardinality &column_res)
+    {
+        return is_first_merge && low_cardinality_fallback_threshold > 0
+                && column_res.getDictionary().size() >= low_cardinality_fallback_threshold;
+    }
+
+    bool isSwitchedToFullLowCardinality() {
+        return is_switch_low_cardinality;
+    }
+
+
 private:
     /// Cache required fields
     struct Source
@@ -80,6 +97,10 @@ private:
         size_t pos = 0;
         size_t size = 0;
         Block block;
+        // used for low cardinality column
+        using ReverseIndex = std::unordered_map<UInt64, UInt64>;
+        ReverseIndex index_map;
+
 
         void update(const String & name)
         {
@@ -96,11 +117,15 @@ private:
 
     std::vector<Source> sources;
     ReadBuffer & row_sources_buf;
-
+    bool enable_low_cardinality_merge_new_algo;
+    size_t low_cardinality_fallback_threshold;
     size_t block_preferred_size;
+    bool is_switch_low_cardinality = false;
+    bool is_first_merge = true;
 
     Source * source_to_fully_copy = nullptr;
     Block output_block;
+    MutableColumnPtr cardinalityDict = nullptr;
 
     Poco::Logger * log;
 };

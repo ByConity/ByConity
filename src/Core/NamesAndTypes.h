@@ -10,6 +10,7 @@
 #include <DataTypes/IDataType.h>
 #include <Core/Names.h>
 
+#include <Storages/MergeTree/MergeTreeSuffix.h>
 
 namespace DB
 {
@@ -42,6 +43,9 @@ public:
 
     String name;
     DataTypePtr type;
+
+    void serialize(WriteBuffer & buf) const;
+    void deserialize(ReadBuffer & buf);
 
 private:
     DataTypePtr type_in_storage;
@@ -85,6 +89,11 @@ public:
     ///  (in other words, the added and deleted columns are counted once, the columns that changed the type - twice).
     size_t sizeOfDifference(const NamesAndTypesList & rhs) const;
 
+    /// Check if columns are compatable. If return true, the data with such columns counld be shared. Eg: table with
+    /// current columns can attach parts with columns 'rhs', and vice versas.  if there are more than one keys_columns, 
+    /// they should appear with the same order in this two column lists.
+    bool isCompatableWithKeyColumns(const NamesAndTypesList & rhs, const Names & keys_columns);
+
     /// If an element changes type, it is present both in deleted (with the old type) and in added (with the new type).
     void getDifference(const NamesAndTypesList & rhs, NamesAndTypesList & deleted, NamesAndTypesList & added) const;
 
@@ -105,8 +114,16 @@ public:
 
     /// Try to get column by name, return empty optional if column not found
     std::optional<NameAndTypePair> tryGetByName(const std::string & name) const;
+
+    /// Try to get column position by name, returns number of columns if column isn't found
+    size_t getPosByName(const std::string & name) const noexcept;
+
+    void serialize(WriteBuffer & buf) const;
+    void deserialize(ReadBuffer & buf);
 };
 
+using NamesAndTypesListPtr = std::shared_ptr<NamesAndTypesList>;
+using NamesAndTypesLists = std::vector<NamesAndTypesList>;
 }
 
 namespace std

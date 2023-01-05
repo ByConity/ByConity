@@ -3,6 +3,8 @@
 #include <Storages/MergeTree/MergeTreeIndices.h>
 #include <Storages/StorageFactory.h>
 #include <Storages/StorageMergeTree.h>
+#include <Storages/StorageCloudMergeTree.h>
+#include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 
 #include <Common/Macros.h>
@@ -244,6 +246,7 @@ CREATE TABLE [IF NOT EXISTS] [db.]table_name [ON CLUSTER cluster]
 ) ENGINE = MergeTree()
 ORDER BY expr
 [PARTITION BY expr]
+[CLUSTER BY expr INTO <TOTAL_BUCKET_NUMBER> BUCKETS [SPLIT_NUMBER <SPLIT_NUMBER_VALUE>] [WITH_RANGE] ]
 [PRIMARY KEY expr]
 [SAMPLE BY expr]
 [TTL expr [DELETE|TO DISK 'xxx'|TO VOLUME 'xxx'], ...]
@@ -290,10 +293,9 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         *  - Sampling expression in the SAMPLE BY clause;
         *  - Additional MergeTreeSettings in the SETTINGS clause;
         */
-
     bool is_extended_storage_def = args.storage_def->partition_by || args.storage_def->primary_key || args.storage_def->order_by
-        || args.storage_def->sample_by || (args.query.columns_list->indices && !args.query.columns_list->indices->children.empty())
-        || (args.query.columns_list->projections && !args.query.columns_list->projections->children.empty()) || args.storage_def->settings;
+        || args.storage_def->unique_key || args.storage_def->sample_by || (args.query.columns_list->indices && !args.query.columns_list->indices->children.empty())
+        || (args.query.columns_list->projections && !args.query.columns_list->projections->children.empty()) || args.storage_def->settings || args.storage_def->cluster_by;
 
     String name_part = args.engine_name.substr(0, args.engine_name.size() - strlen("MergeTree"));
 
@@ -301,21 +303,33 @@ static StoragePtr create(const StorageFactory::Arguments & args)
     if (replicated)
         name_part = name_part.substr(strlen("Replicated"));
 
-    MergeTreeData::MergingParams merging_params;
-    merging_params.mode = MergeTreeData::MergingParams::Ordinary;
+    bool is_ha = startsWith(name_part, "Ha");
+    if (is_ha)
+        name_part = name_part.substr(strlen("Ha"));
+
+    bool is_cloud = startsWith(name_part, "Cloud");
+    if (is_cloud)
+        name_part = name_part.substr(strlen("Cloud"));
+
+    bool is_cnch = startsWith(name_part, "Cnch");
+    if (is_cnch)
+        name_part = name_part.substr(strlen("Cnch"));
+
+    MergeTreeMetaBase::MergingParams merging_params;
+    merging_params.mode = MergeTreeMetaBase::MergingParams::Ordinary;
 
     if (name_part == "Collapsing")
-        merging_params.mode = MergeTreeData::MergingParams::Collapsing;
+        merging_params.mode = MergeTreeMetaBase::MergingParams::Collapsing;
     else if (name_part == "Summing")
-        merging_params.mode = MergeTreeData::MergingParams::Summing;
+        merging_params.mode = MergeTreeMetaBase::MergingParams::Summing;
     else if (name_part == "Aggregating")
-        merging_params.mode = MergeTreeData::MergingParams::Aggregating;
+        merging_params.mode = MergeTreeMetaBase::MergingParams::Aggregating;
     else if (name_part == "Replacing")
-        merging_params.mode = MergeTreeData::MergingParams::Replacing;
+        merging_params.mode = MergeTreeMetaBase::MergingParams::Replacing;
     else if (name_part == "Graphite")
-        merging_params.mode = MergeTreeData::MergingParams::Graphite;
+        merging_params.mode = MergeTreeMetaBase::MergingParams::Graphite;
     else if (name_part == "VersionedCollapsing")
-        merging_params.mode = MergeTreeData::MergingParams::VersionedCollapsing;
+        merging_params.mode = MergeTreeMetaBase::MergingParams::VersionedCollapsing;
     else if (!name_part.empty())
         throw Exception(
             "Unknown storage " + args.engine_name + getMergeTreeVerboseHelp(is_extended_storage_def), ErrorCodes::UNKNOWN_STORAGE);
@@ -341,7 +355,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         needed_params += "]";
     };
 
-    if (replicated)
+    if (replicated || is_ha)
     {
         if (is_extended_storage_def)
         {
@@ -353,6 +367,17 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             add_mandatory_param("path in ZooKeeper");
             add_mandatory_param("replica name");
         }
+    }
+
+    if (is_cloud)
+    {
+        add_mandatory_param("database name of Cnch");
+        add_mandatory_param("table name of Cnch");
+    }
+
+    if (is_cnch || is_cloud)
+    {
+        add_optional_param("version column for unique key");
     }
 
     if (!is_extended_storage_def)
@@ -367,19 +392,19 @@ static StoragePtr create(const StorageFactory::Arguments & args)
     {
         default:
             break;
-        case MergeTreeData::MergingParams::Summing:
+        case MergeTreeMetaBase::MergingParams::Summing:
             add_optional_param("list of columns to sum");
             break;
-        case MergeTreeData::MergingParams::Replacing:
+        case MergeTreeMetaBase::MergingParams::Replacing:
             add_optional_param("version");
             break;
-        case MergeTreeData::MergingParams::Collapsing:
+        case MergeTreeMetaBase::MergingParams::Collapsing:
             add_mandatory_param("sign column");
             break;
-        case MergeTreeData::MergingParams::Graphite:
+        case MergeTreeMetaBase::MergingParams::Graphite:
             add_mandatory_param("'config_element_for_graphite_schema'");
             break;
-        case MergeTreeData::MergingParams::VersionedCollapsing: {
+        case MergeTreeMetaBase::MergingParams::VersionedCollapsing: {
             add_mandatory_param("sign column");
             add_mandatory_param("version");
             break;
@@ -414,7 +439,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         throw Exception(msg, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
     }
 
-    if (is_extended_storage_def)
+    if (is_extended_storage_def && !args.storage_def->unique_key)
     {
         /// Allow expressions in engine arguments.
         /// In new syntax argument can be literal or identifier or array/tuple of identifiers.
@@ -448,7 +473,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
     String replica_name;
     bool allow_renaming = true;
 
-    if (replicated)
+    if (replicated || is_ha)
     {
         bool has_arguments = arg_num + 2 <= arg_cnt;
         bool has_valid_arguments = has_arguments && engine_args[arg_num]->as<ASTLiteral>() && engine_args[arg_num + 1]->as<ASTLiteral>();
@@ -480,7 +505,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
                     "No replica name in config" + getMergeTreeVerboseHelp(is_extended_storage_def), ErrorCodes::NO_REPLICA_NAME_GIVEN);
             ++arg_num;
         }
-        else if (is_extended_storage_def && (arg_cnt == 0 || !engine_args[arg_num]->as<ASTLiteral>() || (arg_cnt == 1 && merging_params.mode == MergeTreeData::MergingParams::Graphite)))
+        else if (is_extended_storage_def && (arg_cnt == 0 || !engine_args[arg_num]->as<ASTLiteral>() || (arg_cnt == 1 && merging_params.mode == MergeTreeMetaBase::MergingParams::Graphite)))
         {
             /// Try use default values if arguments are not specified.
             /// Note: {uuid} macro works for ON CLUSTER queries when database engine is Atomic.
@@ -553,10 +578,27 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             allow_renaming = false;
     }
 
+    String cnch_database_name;
+    String cnch_table_name;
+
+    if (is_cloud)
+    {
+        if (arg_num + 2 > arg_cnt || !engine_args[arg_num]->as<ASTIdentifier>() || !engine_args[arg_num + 1]->as<ASTIdentifier>())
+            throw Exception(
+                ErrorCodes::BAD_ARGUMENTS,
+                "Expected two string literal arguments for CloudMergeTree: cnch_database_name and cnch_table_name");
+
+        cnch_database_name = engine_args[arg_num]->as<ASTIdentifier &>().name();
+        cnch_table_name = engine_args[arg_num + 1]->as<ASTIdentifier &>().name();
+
+        arg_num += 2;
+        engine_args.erase(engine_args.begin(), engine_args.begin() + 2);
+    }
+
     /// This merging param maybe used as part of sorting key
     std::optional<String> merging_param_key_arg;
 
-    if (merging_params.mode == MergeTreeData::MergingParams::Collapsing)
+    if (merging_params.mode == MergeTreeMetaBase::MergingParams::Collapsing)
     {
         if (!tryGetIdentifierNameInto(engine_args[arg_cnt - 1], merging_params.sign_column))
             throw Exception(
@@ -564,7 +606,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
                 ErrorCodes::BAD_ARGUMENTS);
         --arg_cnt;
     }
-    else if (merging_params.mode == MergeTreeData::MergingParams::Replacing)
+    else if (merging_params.mode == MergeTreeMetaBase::MergingParams::Replacing)
     {
         /// If the last element is not index_granularity or replica_name (a literal), then this is the name of the version column.
         if (arg_cnt && !engine_args[arg_cnt - 1]->as<ASTLiteral>())
@@ -576,7 +618,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             --arg_cnt;
         }
     }
-    else if (merging_params.mode == MergeTreeData::MergingParams::Summing)
+    else if (merging_params.mode == MergeTreeMetaBase::MergingParams::Summing)
     {
         /// If the last element is not index_granularity or replica_name (a literal), then this is a list of summable columns.
         if (arg_cnt && !engine_args[arg_cnt - 1]->as<ASTLiteral>())
@@ -585,7 +627,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             --arg_cnt;
         }
     }
-    else if (merging_params.mode == MergeTreeData::MergingParams::Graphite)
+    else if (merging_params.mode == MergeTreeMetaBase::MergingParams::Graphite)
     {
         String graphite_config_name;
         String error_msg
@@ -605,7 +647,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         --arg_cnt;
         setGraphitePatternsFromConfig(args.getContext(), graphite_config_name, merging_params.graphite_params);
     }
-    else if (merging_params.mode == MergeTreeData::MergingParams::VersionedCollapsing)
+    else if (merging_params.mode == MergeTreeMetaBase::MergingParams::VersionedCollapsing)
     {
         if (!tryGetIdentifierNameInto(engine_args[arg_cnt - 1], merging_params.version_column))
             throw Exception(
@@ -632,7 +674,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
     metadata.setComment(args.comment);
 
     std::unique_ptr<MergeTreeSettings> storage_settings;
-    if (replicated)
+    if (replicated || is_ha) /// TODO: fix me
         storage_settings = std::make_unique<MergeTreeSettings>(args.getContext()->getReplicatedMergeTreeSettings());
     else
         storage_settings = std::make_unique<MergeTreeSettings>(args.getContext()->getMergeTreeSettings());
@@ -648,6 +690,9 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         /// single default partition with name "all".
         metadata.partition_key = KeyDescription::getKeyFromAST(partition_by_key, metadata.columns, args.getContext());
 
+        if (args.storage_def->cluster_by)
+            metadata.cluster_by_key = KeyDescription::getClusterByKeyFromAST(args.storage_def->cluster_by->ptr(), metadata.columns, args.getContext());
+
         /// PRIMARY KEY without ORDER BY is allowed and considered as ORDER BY.
         if (!args.storage_def->order_by && args.storage_def->primary_key)
             args.storage_def->set(args.storage_def->order_by, args.storage_def->primary_key->clone());
@@ -657,6 +702,12 @@ static StoragePtr create(const StorageFactory::Arguments & args)
                 "You must provide an ORDER BY or PRIMARY KEY expression in the table definition. "
                 "If you don't want this table to be sorted, use ORDER BY/PRIMARY KEY tuple()",
                 ErrorCodes::BAD_ARGUMENTS);
+
+        if (args.storage_def->unique_key)
+        {
+            metadata.unique_key = KeyDescription::getKeyFromAST(
+                args.storage_def->unique_key->ptr(), metadata.columns, args.getContext());
+        }
 
         /// Get sorting key from engine arguments.
         ///
@@ -710,6 +761,23 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             metadata.column_ttls_by_name[name] = new_ttl_entry;
         }
 
+        // For cnch, if storage_policy is not specified, modify it to cnch's default
+        if (is_cnch || is_cloud)
+        {
+            if (!args.storage_def->settings)
+            {
+                auto settings_ast = std::make_shared<ASTSetQuery>();
+                settings_ast->is_standalone = false;
+                args.storage_def->set(args.storage_def->settings, settings_ast);
+            }
+
+            if (!args.storage_def->settings->changes.tryGet("storage_policy"))
+            {
+                args.storage_def->settings->changes.push_back(
+                    SettingChange("storage_policy", args.getContext()->getDefaultCnchPolicyName()));
+            }
+        }
+
         storage_settings->loadFromQuery(*args.storage_def);
 
         // updates the default storage_settings with settings specified via SETTINGS arg in a query
@@ -718,6 +786,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
     }
     else
     {
+
         /// Syntax: *MergeTree(..., date, [sample_key], primary_key, index_granularity, ...)
         /// Get date:
         if (!tryGetIdentifierNameInto(engine_args[arg_num], date_column_name))
@@ -768,6 +837,30 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             throw Exception("Table TTL is not allowed for MergeTree in old syntax", ErrorCodes::BAD_ARGUMENTS);
     }
 
+    if (args.storage_def->unique_key)
+    {
+        if (merging_params.mode != MergeTreeMetaBase::MergingParams::Ordinary || (!is_cnch && !is_cloud))
+            throw Exception("Only CnchMergeTree and CloudMergeTree support UNIQUE KEY", ErrorCodes::BAD_ARGUMENTS);
+
+        if (engine_args.size() > 0)
+        {
+            if (!engine_args.back()->as<ASTIdentifier>() && !engine_args.back()->as<ASTFunction>())
+                throw Exception("Version column must be identifier or function expression", ErrorCodes::BAD_ARGUMENTS);
+
+            if (args.storage_def->partition_by && args.storage_def->partition_by->getColumnName() == engine_args.back()->getColumnName())
+            {
+                merging_params.partition_value_as_version = true;
+            }
+            else if (!tryGetIdentifierNameInto(engine_args.back(), merging_params.version_column))
+            {
+                throw Exception(
+                    "Version column name must be an unquoted string" + getMergeTreeVerboseHelp(is_extended_storage_def),
+                    ErrorCodes::BAD_ARGUMENTS);
+            }
+            ++arg_num;
+        }
+    }
+
     DataTypes data_types = metadata.partition_key.data_types;
     if (!args.attach && !storage_settings->allow_floating_point_partition_key)
     {
@@ -780,7 +873,18 @@ static StoragePtr create(const StorageFactory::Arguments & args)
     if (arg_num != arg_cnt)
         throw Exception("Wrong number of engine arguments.", ErrorCodes::BAD_ARGUMENTS);
 
+    /// In ANSI mode, allow_nullable_key must be true
+    if (args.getLocalContext()->getSettingsRef().dialect_type == DialectType::ANSI)
+    {
+        // If user sets allow_nullable_key=0.
+        if (storage_settings->allow_nullable_key.changed && !storage_settings->allow_nullable_key.value)
+            throw Exception("In ANSI mode, allow_nullable_key must be true.", ErrorCodes::BAD_ARGUMENTS);
+        
+        storage_settings->allow_nullable_key.value = true;
+    }
+    
     if (replicated)
+    {
         return StorageReplicatedMergeTree::create(
             zookeeper_path,
             replica_name,
@@ -794,7 +898,34 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             std::move(storage_settings),
             args.has_force_restore_data_flag,
             allow_renaming);
+    }
+    else if (is_cloud)
+    {
+        return StorageCloudMergeTree::create(
+            args.table_id,
+            cnch_database_name,
+            cnch_table_name,
+            "", /// Do NOT set relative path for CloudMergeTree args.relative_data_path,
+            metadata,
+            args.getContext(),
+            date_column_name,
+            merging_params,
+            std::move(storage_settings));
+    }
+    else if (is_cnch)
+    {
+        return StorageCnchMergeTree::create(
+            args.table_id,
+            args.relative_data_path,
+            metadata,
+            args.attach,
+            args.getContext(),
+            date_column_name,
+            merging_params,
+            std::move(storage_settings));
+    }
     else
+    {
         return StorageMergeTree::create(
             args.table_id,
             args.relative_data_path,
@@ -805,6 +936,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             merging_params,
             std::move(storage_settings),
             args.has_force_restore_data_flag);
+    }
 }
 
 
@@ -837,6 +969,30 @@ void registerStorageMergeTree(StorageFactory & factory)
     factory.registerStorage("ReplicatedSummingMergeTree", create, features);
     factory.registerStorage("ReplicatedGraphiteMergeTree", create, features);
     factory.registerStorage("ReplicatedVersionedCollapsingMergeTree", create, features);
+
+    factory.registerStorage("HaMergeTree", create, features);
+    factory.registerStorage("HaCollapsingMergeTree", create, features);
+    factory.registerStorage("HaReplacingMergeTree", create, features);
+    factory.registerStorage("HaAggregatingMergeTree", create, features);
+    factory.registerStorage("HaSummingMergeTree", create, features);
+    factory.registerStorage("HaGraphiteMergeTree", create, features);
+    factory.registerStorage("HaVersionedCollapsingMergeTree", create, features);
+
+    factory.registerStorage("CloudMergeTree", create, features);
+    factory.registerStorage("CloudCollapsingMergeTree", create, features);
+    factory.registerStorage("CloudReplacingMergeTree", create, features);
+    factory.registerStorage("CloudAggregatingMergeTree", create, features);
+    factory.registerStorage("CloudSummingMergeTree", create, features);
+    factory.registerStorage("CloudGraphiteMergeTree", create, features);
+    factory.registerStorage("CloudVersionedCollapsingMergeTree", create, features);
+
+    factory.registerStorage("CnchMergeTree", create, features);
+    factory.registerStorage("CnchCollapsingMergeTree", create, features);
+    factory.registerStorage("CnchReplacingMergeTree", create, features);
+    factory.registerStorage("CnchAggregatingMergeTree", create, features);
+    factory.registerStorage("CnchSummingMergeTree", create, features);
+    factory.registerStorage("CnchGraphiteMergeTree", create, features);
+    factory.registerStorage("CnchVersionedCollapsingMergeTree", create, features);
 }
 
 }

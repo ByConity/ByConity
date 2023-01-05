@@ -21,6 +21,7 @@ bool ParserShowTablesQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     ParserKeyword s_temporary("TEMPORARY");
     ParserKeyword s_tables("TABLES");
     ParserKeyword s_databases("DATABASES");
+    ParserKeyword s_history("HISTORY");
     ParserKeyword s_clusters("CLUSTERS");
     ParserKeyword s_cluster("CLUSTER");
     ParserKeyword s_dictionaries("DICTIONARIES");
@@ -35,7 +36,7 @@ bool ParserShowTablesQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     ParserKeyword s_limit("LIMIT");
     ParserStringLiteral like_p;
     ParserIdentifier name_p;
-    ParserExpressionWithOptionalAlias exp_elem(false);
+    ParserExpressionWithOptionalAlias exp_elem(false, dt);
 
     ASTPtr like;
     ASTPtr database;
@@ -48,6 +49,9 @@ bool ParserShowTablesQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     if (s_databases.ignore(pos, expected))
     {
         query->databases = true;
+
+        if (s_history.ignore(pos, expected))
+            query->history = true;
 
         if (s_not.ignore(pos, expected))
             query->not_like = true;
@@ -136,6 +140,9 @@ bool ParserShowTablesQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
             else
                 return false;
         }
+
+        if (s_history.ignore(pos, expected))
+            query->history = true;
 
         if (s_from.ignore(pos, expected) || s_in.ignore(pos, expected))
         {

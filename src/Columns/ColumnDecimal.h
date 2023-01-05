@@ -109,6 +109,7 @@ public:
     }
     void insert(const Field & x) override { data.push_back(DB::get<T>(x)); }
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
+    void insertRangeSelective(const IColumn & src, const IColumn::Selector & selector, size_t selector_start, size_t length) override;
 
     void popBack(size_t n) override
     {

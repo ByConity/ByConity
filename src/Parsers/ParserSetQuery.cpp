@@ -17,7 +17,7 @@ namespace DB
 bool ParserSetQuery::parseNameValuePair(SettingChange & change, IParser::Pos & pos, Expected & expected)
 {
     ParserCompoundIdentifier name_p;
-    ParserLiteral value_p;
+    ParserLiteral value_p(ParserSettings::CLICKHOUSE);
     ParserToken s_eq(TokenType::Equals);
 
     ASTPtr name;

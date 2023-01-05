@@ -20,6 +20,10 @@
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeNested.h>
+#include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <DataTypes/MapHelpers.h>
 #include <Common/Exception.h>
 #include <Interpreters/Context.h>
 #include <Storages/IStorage.h>
@@ -76,6 +80,24 @@ void ColumnDescription::writeText(WriteBuffer & buf) const
         writeEscapedString(queryToString(default_desc.expression), buf);
     }
 
+    UInt8 flag = type->getFlags();
+
+    while (flag)
+    {
+        if (flag & TYPE_COMPRESSION_FLAG)
+        {
+            writeChar('\t', buf);
+            DB::writeText("COMPRESSION", buf);
+            flag ^= TYPE_COMPRESSION_FLAG;
+        }
+        else if (flag & TYPE_MAP_KV_STORE_FLAG)
+        {
+            writeChar('\t', buf);
+            DB::writeText("KV", buf);
+            flag ^= TYPE_MAP_KV_STORE_FLAG;
+        }
+    }
+
     if (!comment.empty())
     {
         writeChar('\t', buf);
@@ -113,7 +135,7 @@ void ColumnDescription::readText(ReadBuffer & buf)
         String modifiers;
         readEscapedStringUntilEOL(modifiers, buf);
 
-        ParserColumnDeclaration column_parser(/* require type */ true);
+        ParserColumnDeclaration column_parser(ParserSettings::CLICKHOUSE, /* require type */ true);
         ASTPtr ast = parseQuery(column_parser, "x T " + modifiers, "column parser", 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
 
         if (const auto * col_ast = ast->as<ASTColumnDeclaration>())
@@ -132,6 +154,9 @@ void ColumnDescription::readText(ReadBuffer & buf)
 
             if (col_ast->ttl)
                 ttl = col_ast->ttl;
+
+            if (col_ast->flags)
+                type->setFlags(col_ast->flags);
         }
         else
             throw Exception("Cannot parse column description", ErrorCodes::CANNOT_PARSE_TEXT);
@@ -157,7 +182,7 @@ ColumnsDescription::ColumnsDescription(NamesAndTypesList ordinary, NamesAndAlias
 
         const char * alias_expression_pos = alias.expression.data();
         const char * alias_expression_end = alias_expression_pos + alias.expression.size();
-        ParserExpression expression_parser;
+        ParserExpression expression_parser(ParserSettings::CLICKHOUSE); /* can interchange decimal and float in default value */
         description.default_desc.expression = parseQuery(expression_parser, alias_expression_pos, alias_expression_end, "expression", 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
 
         add(std::move(description));
@@ -413,6 +438,17 @@ NamesAndTypesList ColumnsDescription::getByNames(GetFlags flags, const Names & n
                 continue;
             }
         }
+        //@ByteMap
+        else if (auto impl = tryGetMapImplicitColumn(name))
+        {
+            res.push_back(*impl);
+            continue;
+        }
+        else if (name == "_part_row_number")
+        {
+            res.emplace_back("_part_row_number", std::make_shared<DataTypeUInt64>());
+            continue;
+        }
         else if (with_subcolumns)
         {
             auto jt = subcolumns.get<0>().find(name);
@@ -448,6 +484,22 @@ Names ColumnsDescription::getNamesOfPhysical() const
     return ret;
 }
 
+std::optional<NameAndTypePair> ColumnsDescription::tryGetMapImplicitColumn(const String & column_name) const
+{
+    if (isMapImplicitKey(column_name))
+    {
+        auto ordinary_columns = getOrdinary();
+        for (auto & nt : ordinary_columns)
+        {
+            if (nt.type->isMap() && !nt.type->isMapKVStore() && isMapImplicitKeyOfSpecialMapName(column_name, nt.name))
+                return NameAndTypePair(column_name, typeid_cast<const DataTypeByteMap &>(*nt.type).getValueTypeForImplicitColumn());
+            else if (nt.type->isMap() && nt.type->isMapKVStore() && isMapKVOfSpecialMapName(column_name, nt.name))
+                return NameAndTypePair(column_name, typeid_cast<const DataTypeByteMap &>(*nt.type).getMapStoreType(column_name));
+        }
+    }
+    return {};
+}
+
 std::optional<NameAndTypePair> ColumnsDescription::tryGetColumnOrSubcolumn(GetFlags flags, const String & column_name) const
 {
     auto it = columns.get<1>().find(column_name);
@@ -457,6 +509,8 @@ std::optional<NameAndTypePair> ColumnsDescription::tryGetColumnOrSubcolumn(GetFl
     auto jt = subcolumns.get<0>().find(column_name);
     if (jt != subcolumns.get<0>().end())
         return *jt;
+    if (auto res = tryGetMapImplicitColumn(column_name))
+        return res;
 
     return {};
 }
@@ -499,6 +553,9 @@ bool ColumnsDescription::hasPhysical(const String & column_name) const
 bool ColumnsDescription::hasColumnOrSubcolumn(GetFlags flags, const String & column_name) const
 {
     auto it = columns.get<1>().find(column_name);
+    // @ByteMap
+    if (tryGetMapImplicitColumn(column_name)) return true;
+
     return (it != columns.get<1>().end()
         && (defaultKindToGetFlag(it->default_desc.kind) & flags))
             || hasSubcolumn(column_name);
@@ -526,6 +583,18 @@ NamesAndTypesList ColumnsDescription::getAllPhysicalWithSubcolumns() const
     auto columns_list = getAllPhysical();
     addSubcolumnsToList(columns_list);
     return columns_list;
+}
+
+NamesAndTypesList ColumnsDescription::getSubcolumnsOfAllPhysical() const
+{
+    NamesAndTypesList result;
+    auto columns_list = getAllPhysical();
+    auto size = columns_list.size();
+    addSubcolumnsToList(columns_list);
+    auto start_it = columns_list.begin();
+    std::advance(start_it, size);
+    result.splice(result.end(), columns_list, start_it, columns_list.end());
+    return result;
 }
 
 bool ColumnsDescription::hasDefaults() const

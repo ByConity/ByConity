@@ -13,4 +13,8 @@ void loadMetadataSystem(ContextMutablePtr context);
 /// Load tables from databases and add them to context. Database 'system' is ignored. Use separate function to load system tables.
 void loadMetadata(ContextMutablePtr context, const String & default_database_name = {});
 
+void reloadFormatSchema(String remote_format_schema_path,
+                        String format_schema_path,
+                        Poco::Logger * log = nullptr);
+
 }

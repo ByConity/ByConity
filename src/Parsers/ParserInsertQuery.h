@@ -22,7 +22,7 @@ namespace DB
   * INSERT INTO [db.]table (c1, c2, c3) SELECT | WATCH  ...
   * INSERT INTO [db.]table SELECT | WATCH ...
   */
-class ParserInsertQuery : public IParserBase
+class ParserInsertQuery : public IParserDialectBase
 {
 private:
     const char * end;
@@ -30,16 +30,18 @@ private:
     const char * getName() const override { return "INSERT query"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 public:
-    explicit ParserInsertQuery(const char * end_) : end(end_) {}
+    explicit ParserInsertQuery(const char * end_, ParserSettingsImpl t) : IParserDialectBase(t), end(end_) {}
 };
 
 /** Insert accepts an identifier and an asterisk with variants.
   */
-class ParserInsertElement : public IParserBase
+class ParserInsertElement : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "insert element"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 }

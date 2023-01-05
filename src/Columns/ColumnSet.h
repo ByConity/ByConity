@@ -8,6 +8,7 @@ namespace DB
 {
 
 class Set;
+using SetPtr = std::shared_ptr<Set>;
 using ConstSetPtr = std::shared_ptr<const Set>;
 
 
@@ -29,6 +30,11 @@ public:
     MutableColumnPtr cloneDummy(size_t s_) const override { return ColumnSet::create(s_, data); }
 
     ConstSetPtr getData() const { return data; }
+
+    void setData(SetPtr set) {
+        data = std::move(set); 
+        s = 1;
+    }
 
     // Used only for debugging, making it DUMPABLE
     Field operator[](size_t) const override { return {}; }

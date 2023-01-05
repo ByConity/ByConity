@@ -3,10 +3,8 @@
 #include <Storages/MergeTree/MergeTreeThreadSelectBlockInputProcessor.h>
 #include <Interpreters/Context.h>
 
-
 namespace DB
 {
-
 
 MergeTreeThreadSelectBlockInputProcessor::MergeTreeThreadSelectBlockInputProcessor(
     const size_t thread_,
@@ -15,7 +13,7 @@ MergeTreeThreadSelectBlockInputProcessor::MergeTreeThreadSelectBlockInputProcess
     const UInt64 max_block_size_rows_,
     size_t preferred_block_size_bytes_,
     size_t preferred_max_column_in_block_size_bytes_,
-    const MergeTreeData & storage_,
+    const MergeTreeMetaBase & storage_,
     const StorageMetadataPtr & metadata_snapshot_,
     const bool use_uncompressed_cache_,
     const PrewhereInfoPtr & prewhere_info_,
@@ -66,6 +64,13 @@ bool MergeTreeThreadSelectBlockInputProcessor::getNewTask()
     /// Allows pool to reduce number of threads in case of too slow reads.
     auto profile_callback = [this](ReadBufferFromFileBase::ProfileInfo info_) { pool->profileFeedback(info_); };
 
+    if (metadata_snapshot->hasUniqueKey())
+    {
+        task->delete_bitmap = task->data_part->getDeleteBitmap();
+        if (!task->delete_bitmap)
+            throw Exception("Expected delete bitmap exists for a unique table part: " + task->data_part->name, ErrorCodes::LOGICAL_ERROR);
+    }
+
     if (!reader)
     {
         auto rest_mark_ranges = pool->getRestMarks(*task->data_part, task->mark_ranges[0]);
@@ -76,12 +81,20 @@ bool MergeTreeThreadSelectBlockInputProcessor::getNewTask()
 
         reader = task->data_part->getReader(task->columns, metadata_snapshot, rest_mark_ranges,
             owned_uncompressed_cache.get(), owned_mark_cache.get(), reader_settings,
-            IMergeTreeReader::ValueSizeMap{}, profile_callback);
+            IMergeTreeReader::ValueSizeMap{},  profile_callback);
 
         if (prewhere_info)
-            pre_reader = task->data_part->getReader(task->pre_columns, metadata_snapshot, rest_mark_ranges,
-                owned_uncompressed_cache.get(), owned_mark_cache.get(), reader_settings,
-                IMergeTreeReader::ValueSizeMap{}, profile_callback);
+        {
+            pre_reader = task->data_part->getReader(
+                task->pre_columns,
+                metadata_snapshot,
+                rest_mark_ranges,
+                owned_uncompressed_cache.get(),
+                owned_mark_cache.get(),
+                reader_settings,
+                IMergeTreeReader::ValueSizeMap{},
+                profile_callback);
+        }
     }
     else
     {
@@ -90,14 +103,28 @@ bool MergeTreeThreadSelectBlockInputProcessor::getNewTask()
         {
             auto rest_mark_ranges = pool->getRestMarks(*task->data_part, task->mark_ranges[0]);
             /// retain avg_value_size_hints
-            reader = task->data_part->getReader(task->columns, metadata_snapshot, rest_mark_ranges,
-                owned_uncompressed_cache.get(), owned_mark_cache.get(), reader_settings,
-                reader->getAvgValueSizeHints(), profile_callback);
+            reader = task->data_part->getReader(
+                task->columns,
+                metadata_snapshot,
+                rest_mark_ranges,
+                owned_uncompressed_cache.get(),
+                owned_mark_cache.get(),
+                reader_settings,
+                reader->getAvgValueSizeHints(),
+                profile_callback);
 
             if (prewhere_info)
-                pre_reader = task->data_part->getReader(task->pre_columns, metadata_snapshot, rest_mark_ranges,
-                owned_uncompressed_cache.get(), owned_mark_cache.get(), reader_settings,
-                reader->getAvgValueSizeHints(), profile_callback);
+            {
+                pre_reader = task->data_part->getReader(
+                    task->pre_columns,
+                    metadata_snapshot,
+                    rest_mark_ranges,
+                    owned_uncompressed_cache.get(),
+                    owned_mark_cache.get(),
+                    reader_settings,
+                    reader->getAvgValueSizeHints(),
+                    profile_callback);
+            }
         }
     }
 

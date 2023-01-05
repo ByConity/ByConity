@@ -65,6 +65,16 @@ add_subdirectory (Formats)
 add_subdirectory (Compression)
 add_subdirectory (Server)
 add_subdirectory (Coordination)
+add_subdirectory (Protos)
+add_subdirectory (FormaterTool)
+add_subdirectory (ServiceDiscovery)
+add_subdirectory (ResourceManagement)
+add_subdirectory (Transaction)
+add_subdirectory (MergeTreeCommon)
+add_subdirectory (Catalog)
+add_subdirectory (TSO)
+add_subdirectory (DaemonManager)
+add_subdirectory (Optimizer)
 
 
 set(dbms_headers)
@@ -72,9 +82,24 @@ set(dbms_sources)
 
 add_headers_and_sources(clickhouse_common_io Common)
 add_headers_and_sources(clickhouse_common_io Common/HashTable)
+add_headers_and_sources(clickhouse_common_io Common/CGroup)
+add_headers_and_sources(clickhouse_common_io Common/Brpc)
 add_headers_and_sources(clickhouse_common_io IO)
 add_headers_and_sources(clickhouse_common_io IO/S3)
+add_headers_and_sources(clickhouse_common_io ServiceDiscovery)
 list (REMOVE_ITEM clickhouse_common_io_sources Common/malloc.cpp Common/new_delete.cpp)
+add_headers_and_sources(dbms Storages/IndexFile)
+add_headers_and_sources(dbms Storages/IngestColumnCnch)
+add_headers_and_sources(dbms FormaterTool)
+add_headers_and_sources(dbms Transaction)
+add_headers_and_sources(dbms Transaction/Actions)
+add_headers_and_sources(dbms MergeTreeCommon)
+add_headers_and_sources(dbms Catalog)
+add_headers_and_sources(dbms CloudServices)
+add_headers_and_sources(dbms WorkerTasks)
+add_headers_and_sources(dbms ResourceGroup)
+add_headers_and_sources(dbms ResourceManagement)
+add_headers_and_sources(dbms TSO)
 
 if(USE_RDKAFKA)
     add_headers_and_sources(dbms Storages/Kafka)
@@ -103,6 +128,8 @@ if (USE_HDFS)
     add_headers_and_sources(dbms Storages/HDFS)
     add_headers_and_sources(dbms Disks/HDFS)
 endif()
+
+add_headers_and_sources(dbms Protos)
 
 list (APPEND clickhouse_common_io_sources ${CONFIG_BUILD})
 list (APPEND clickhouse_common_io_headers ${CONFIG_VERSION} ${CONFIG_COMMON})
@@ -187,8 +214,13 @@ add_object_library(clickhouse_interpreters Interpreters)
 add_object_library(clickhouse_interpreters_mysql Interpreters/MySQL)
 add_object_library(clickhouse_interpreters_clusterproxy Interpreters/ClusterProxy)
 add_object_library(clickhouse_interpreters_jit Interpreters/JIT)
+add_object_library(clickhouse_interpreters_distributedstages Interpreters/DistributedStages)
+add_object_library(clickhouse_interpreters_runtimefilters Interpreters/RuntimeFilter)
+add_object_library(clickhouse_interpreters_cnch_query_metrics Interpreters/CnchQueryMetrics)
 add_object_library(clickhouse_columns Columns)
 add_object_library(clickhouse_storages Storages)
+add_object_library(clickhouse_disk_cache Storages/DiskCache)
+add_object_library(clickhouse_storages_hive Storages/Hive)
 add_object_library(clickhouse_storages_mysql Storages/MySQL)
 add_object_library(clickhouse_storages_distributed Storages/Distributed)
 add_object_library(clickhouse_storages_mergetree Storages/MergeTree)
@@ -206,8 +238,28 @@ add_object_library(clickhouse_processors_transforms Processors/Transforms)
 add_object_library(clickhouse_processors_sources Processors/Sources)
 add_object_library(clickhouse_processors_merges Processors/Merges)
 add_object_library(clickhouse_processors_merges_algorithms Processors/Merges/Algorithms)
-add_object_library(clickhouse_processors_queryplan Processors/QueryPlan)
-add_object_library(clickhouse_processors_queryplan_optimizations Processors/QueryPlan/Optimizations)
+add_object_library(clickhouse_processors_exchange Processors/Exchange)
+add_object_library(clickhouse_processors_exchange_datatrans Processors/Exchange/DataTrans)
+add_object_library(clickhouse_processors_exchange_datatrans_brpc Processors/Exchange/DataTrans/Brpc)
+add_object_library(clickhouse_processors_exchange_datatrans_local Processors/Exchange/DataTrans/Local)
+add_object_library(clickhouse_analyzers Analyzers)
+add_object_library(clickhouse_queryplan QueryPlan)
+add_object_library(clickhouse_queryplan_optimizations QueryPlan/Optimizations)
+add_object_library(clickhouse_optimizer Optimizer)
+add_object_library(clickhouse_optimizer_iterative Optimizer/Iterative)
+add_object_library(clickhouse_optimizer_costmodel Optimizer/CostModel)
+add_object_library(clickhouse_optimizer_cardinality Optimizer/CardinalityEstimate)
+add_object_library(clickhouse_optimizer_cascades Optimizer/Cascades)
+add_object_library(clickhouse_optimizer_materialized_view Optimizer/MaterializedView)
+add_object_library(clickhouse_optimizer_rule Optimizer/Rule)
+add_object_library(clickhouse_optimizer_rule_transformation Optimizer/Rule/Transformation)
+add_object_library(clickhouse_optimizer_rule_implementation Optimizer/Rule/Implementation)
+add_object_library(clickhouse_optimizer_rewrite Optimizer/Rule/Rewrite)
+add_object_library(clickhouse_optimizer_property Optimizer/Property)
+add_object_library(clickhouse_optimizer_rewriter Optimizer/Rewriter)
+add_object_library(clickhouse_optimizer_dump Optimizer/Dump)
+add_object_library(clickhouse_statistics Statistics)
+
 
 if (USE_NURAFT)
     add_object_library(clickhouse_coordination Coordination)
@@ -219,6 +271,20 @@ set (DBMS_COMMON_LIBRARIES)
 if ((NOT USE_LIBCXX) AND COMPILER_CLANG AND OS_LINUX)
     list (APPEND DBMS_COMMON_LIBRARIES atomic)
 endif()
+
+
+# hash functions
+option(ENABLE_MULTITARGET_CODE "Enable platform-dependent code" ON)
+
+if (ENABLE_MULTITARGET_CODE)
+    add_definitions(-DENABLE_MULTITARGET_CODE=1)
+else()
+    add_definitions(-DENABLE_MULTITARGET_CODE=0)
+endif()
+list (APPEND DBMS_COMMON_LIBRARIES ${CITYHASH_LIBRARIES})
+list (APPEND DBMS_COMMON_LIBRARIES ${FARMHASH_LIBRARIES})
+list (APPEND DBMS_COMMON_LIBRARIES metrohash)
+list (APPEND DBMS_COMMON_LIBRARIES murmurhash)
 
 if (MAKE_STATIC_LIBRARIES OR NOT SPLIT_SHARED_LIBRARIES)
     add_library (dbms STATIC ${dbms_headers} ${dbms_sources})
@@ -252,6 +318,11 @@ endmacro ()
 dbms_target_include_directories (PUBLIC "${ClickHouse_SOURCE_DIR}/src" "${ClickHouse_BINARY_DIR}/src")
 target_include_directories (clickhouse_common_io PUBLIC "${ClickHouse_SOURCE_DIR}/src" "${ClickHouse_BINARY_DIR}/src")
 
+# FIXME (UNIQUE KEY): Find a better place to locate this
+target_include_directories(clickhouse_common_io PUBLIC "${SNAPPY_INCLUDE_DIR}") # uses some includes from core
+
+target_include_directories(clickhouse_common_io PUBLIC "${LIBNUMA_INCLUDE_DIR}") # libnuma
+
 if (USE_EMBEDDED_COMPILER)
     dbms_target_link_libraries (PRIVATE ${REQUIRED_LLVM_LIBRARIES})
     dbms_target_include_directories (SYSTEM BEFORE PUBLIC ${LLVM_INCLUDE_DIRS})
@@ -271,9 +342,19 @@ target_link_libraries (clickhouse_common_io
             ${LINK_LIBRARIES_ONLY_ON_X86_64}
         PUBLIC
             common
+            dbms
             ${DOUBLE_CONVERSION_LIBRARIES}
             dragonbox_to_chars
 )
+
+# Use X86 AVX2/AVX512 instructions to accelerate filter operations
+set_source_files_properties(
+        Columns/ColumnFixedString.cpp
+        Columns/ColumnsCommon.cpp
+        Columns/ColumnVector.cpp
+        Columns/ColumnDecimal.cpp
+        Columns/ColumnString.cpp
+        PROPERTIES COMPILE_FLAGS "${X86_INTRINSICS_FLAGS}")
 
 if(RE2_LIBRARY)
     target_link_libraries(clickhouse_common_io PUBLIC ${RE2_LIBRARY})
@@ -293,13 +374,23 @@ target_link_libraries(clickhouse_common_io
             ${ZLIB_LIBRARIES}
             pcg_random
             Poco::Foundation
+            Poco::ZIP
             roaring
+            ${LIBNUMA_LIBRARY}
+            ipdb
+            maxminddb
+        PRIVATE
+            ${UDNS_LIBRARIES}
+
 )
 
+target_include_directories(clickhouse_common_io SYSTEM PUBLIC ${UDNS_INCLUDE_DIR})
 
+# dbms_target_link_libraries(PUBLIC ch_contrib::abseil_swiss_tables)
 
 if (USE_RDKAFKA)
-    dbms_target_link_libraries(PRIVATE ${CPPKAFKA_LIBRARY} ${RDKAFKA_LIBRARY})
+    dbms_target_link_libraries(PRIVATE ${CPPKAFKA_LIBRARY} ${RDKAFKA_LIBRARY} )
+    dbms_target_include_directories(SYSTEM BEFORE PRIVATE  ${RAPIDJSON_INCLUDE_DIR})
     if(NOT USE_INTERNAL_RDKAFKA_LIBRARY)
         dbms_target_include_directories(SYSTEM BEFORE PRIVATE ${RDKAFKA_INCLUDE_DIR})
     endif()
@@ -333,11 +424,17 @@ dbms_target_link_libraries (
         lz4
         Poco::JSON
         Poco::MongoDB
+        Poco::ZIP
         string_utils
     PUBLIC
         ${MYSQLXX_LIBRARY}
         boost::system
         clickhouse_common_io
+        clickhouse_protos_lib
+        catalog_lib
+        resource_manager_lib
+        tso_lib
+        daemon_manager_lib
 )
 
 target_include_directories(clickhouse_common_io PUBLIC "${CMAKE_CURRENT_BINARY_DIR}/Core/include") # uses some includes from core
@@ -398,7 +495,15 @@ dbms_target_include_directories (SYSTEM BEFORE PRIVATE ${SPARSEHASH_INCLUDE_DIR}
 if (USE_PROTOBUF)
     dbms_target_link_libraries (PRIVATE ${Protobuf_LIBRARY})
     dbms_target_include_directories (SYSTEM BEFORE PRIVATE ${Protobuf_INCLUDE_DIR})
+    target_link_libraries(clickhouse_common_io PUBLIC brpc-static ${DYNAMIC_LIB})
+    target_link_libraries(clickhouse_common_io PUBLIC clickhouse_protos_lib)
+    target_link_libraries(clickhouse_common_io PUBLIC ${Protobuf_LIBRARY})
+    target_include_directories (clickhouse_common_io SYSTEM BEFORE PUBLIC ${Protobuf_INCLUDE_DIR})
 endif ()
+
+if (USE_BYTEKV)
+    dbms_target_include_directories (SYSTEM BEFORE PUBLIC ${BYTEKV_INCLUDE_DIR})
+endif()
 
 if (USE_GRPC)
     dbms_target_link_libraries (PUBLIC clickhouse_grpc_protos)
@@ -449,14 +554,18 @@ if (USE_ROCKSDB)
     dbms_target_include_directories(SYSTEM BEFORE PUBLIC ${ROCKSDB_INCLUDE_DIR})
 endif()
 
+if (USE_HIVE)
+    dbms_target_link_libraries(PRIVATE ${HIVE_METASTORE_LIBRARY})
+    dbms_target_include_directories (SYSTEM BEFORE PUBLIC ${HIVE_METASTORE_INCLUDE_DIR})
+endif()
+
 if (USE_LIBPQXX)
     dbms_target_link_libraries(PUBLIC ${LIBPQXX_LIBRARY})
     dbms_target_include_directories(SYSTEM BEFORE PUBLIC ${LIBPQXX_INCLUDE_DIR})
 endif()
 
-if (USE_DATASKETCHES)
-    target_include_directories (clickhouse_aggregate_functions SYSTEM BEFORE PRIVATE ${DATASKETCHES_INCLUDE_DIR})
-endif ()
+target_link_libraries(clickhouse_aggregate_functions PRIVATE datasketches_lib)
+dbms_target_link_libraries(PUBLIC datasketches_lib)
 
 dbms_target_link_libraries(PRIVATE _boost_context)
 
@@ -468,9 +577,17 @@ if (ENABLE_TESTS AND USE_GTEST)
         file(GLOB_RECURSE "${DST_VAR}" RELATIVE "${BASE_DIR}" "gtest*.cpp")
     endmacro()
 
+    macro (grep_gtest_headers BASE_DIR DST_VAR)
+    # Cold match files that are not in tests/ directories
+    file(GLOB_RECURSE "${DST_VAR}" RELATIVE "${BASE_DIR}" "gtest*.h")
+    endmacro()
+
     # attach all dbms gtest sources
     grep_gtest_sources("${ClickHouse_SOURCE_DIR}/src" dbms_gtest_sources)
+    grep_gtest_headers("${ClickHouse_SOURCE_DIR}/src" dbms_gtest_headers)
     add_executable(unit_tests_dbms ${dbms_gtest_sources})
+
+    target_include_directories(unit_tests_dbms PRIVATE ${dbms_gtest_headers})
 
     # gtest framework has substandard code
     target_compile_options(unit_tests_dbms PRIVATE
@@ -480,7 +597,11 @@ if (ENABLE_TESTS AND USE_GTEST)
         -Wno-sign-compare
         -Wno-used-but-marked-unused
         -Wno-missing-noreturn
+        -Wno-old-style-cast
+        -Wno-suggest-override
+        -Wno-suggest-destructor-override
         -Wno-gnu-zero-variadic-macro-arguments
+        -Wno-unreachable-code
     )
 
     target_link_libraries(unit_tests_dbms PRIVATE
@@ -491,7 +612,9 @@ if (ENABLE_TESTS AND USE_GTEST)
         clickhouse_storages_system
         dbms
         clickhouse_common_zookeeper
-        string_utils)
+        string_utils
+        brpc-static
+        )
 
     # For __udivmodti4 referenced in Core/tests/gtest_DecimalFunctions.cpp
     if (OS_DARWIN AND COMPILER_GCC)

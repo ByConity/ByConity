@@ -9,6 +9,8 @@ class Block;
 class Chunk;
 class LazyOutputFormat;
 struct BlockStreamProfileInfo;
+class PipelineExecutor;
+using PipelineExecutorPtr = std::shared_ptr<PipelineExecutor>;
 
 /// Asynchronous pulling executor for QueryPipeline.
 /// Always creates extra thread. If query is executed in single thread, use PullingPipelineExecutor.
@@ -45,6 +47,12 @@ public:
 
     /// Get query profile info.
     BlockStreamProfileInfo & getProfileInfo();
+
+    /// Get PipelineExecutor.
+    PipelineExecutorPtr getPipelineExecutor();
+
+    /// Check exception, if has, rethrow it
+    void rethrowExceptionIfHas();
 
     /// Internal executor data.
     struct Data;

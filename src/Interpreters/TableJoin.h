@@ -53,6 +53,7 @@ private:
       */
 
     friend class TreeRewriter;
+    friend class JoinStep;
 
     const SizeLimits size_limits;
     const size_t default_max_bytes = 0;
@@ -64,6 +65,7 @@ private:
     const size_t partial_merge_join_left_table_buffer_bytes = 0;
     const size_t max_files_to_merge = 0;
     const String temporary_files_codec = "LZ4";
+    const bool allow_extended_conversion = false;
 
     Names key_names_left;
     Names key_names_right; /// Duplicating names are qualified.
@@ -94,6 +96,9 @@ private:
 
     VolumePtr tmp_volume;
 
+    // Used to generate TableJoin during serialization
+    ASTPtr select_query;
+
     Names requiredJoinedNames() const;
 
     /// Create converting actions and change key column names if required
@@ -122,13 +127,20 @@ public:
 
     ASTTableJoin::Kind kind() const { return table_join.kind; }
     ASTTableJoin::Strictness strictness() const { return table_join.strictness; }
+    ASTTableJoin::Locality locality() const { return table_join.locality; }
+
+    void setSelectQuery(const ASTPtr & select_query_) { select_query = select_query_; }
+    ASTPtr getSelectQuery() const { return select_query; }
+
     bool sameStrictnessAndKind(ASTTableJoin::Strictness, ASTTableJoin::Kind) const;
     const SizeLimits & sizeLimits() const { return size_limits; }
     VolumePtr getTemporaryVolume() { return tmp_volume; }
     bool allowMergeJoin() const;
     bool allowDictJoin(const String & dict_key, const Block & sample_block, Names &, NamesAndTypesList &) const;
+    void setJoinAlgorithm(JoinAlgorithm join_algorithm_) { join_algorithm = join_algorithm_; }
     bool preferMergeJoin() const { return join_algorithm == JoinAlgorithm::PREFER_PARTIAL_MERGE; }
     bool forceMergeJoin() const { return join_algorithm == JoinAlgorithm::PARTIAL_MERGE; }
+    bool forceNestedLoopJoin() const { return join_algorithm == JoinAlgorithm::NESTED_LOOP_JOIN; }
     bool forceHashJoin() const
     {
         /// HashJoin always used for DictJoin
@@ -152,6 +164,7 @@ public:
 
     bool hasUsing() const { return table_join.using_expression_list != nullptr; }
     bool hasOn() const { return table_join.on_expression != nullptr; }
+    ASTPtr getOnExpression(){ return table_join.on_expression != nullptr ? table_join.on_expression : table_join.on_expression; }
 
     NamesWithAliases getNamesWithAliases(const NameSet & required_columns) const;
     NamesWithAliases getRequiredColumns(const Block & sample, const Names & action_required_columns) const;
@@ -190,6 +203,7 @@ public:
     const Names & keyNamesLeft() const { return key_names_left; }
     const Names & keyNamesRight() const { return key_names_right; }
     const NamesAndTypesList & columnsFromJoinedTable() const { return columns_from_joined_table; }
+    void setColumnsFromJoinedTable(const NamesAndTypesList & columns) { columns_from_joined_table = columns; }
     Names columnsAddedByJoin() const
     {
         Names res;
@@ -206,6 +220,10 @@ public:
     Block getRequiredRightKeys(const Block & right_table_keys, std::vector<String> & keys_sources) const;
 
     String renamedRightColumnName(const String & name) const;
+
+    void serialize(WriteBuffer & buf) const;
+    void deserializeImpl(ReadBuffer & buf, ContextPtr context);
+    static std::shared_ptr<TableJoin> deserialize(ReadBuffer & buf, ContextPtr context);
 };
 
 }

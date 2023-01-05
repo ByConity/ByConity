@@ -30,8 +30,8 @@ bool ParserDeclareSubPartition::parseImpl(Pos & pos, ASTPtr & node, Expected & e
             OptionDescribe("COMMENT", "comment", std::make_shared<ParserStringLiteral>()),
             OptionDescribe("DATA DIRECTORY", "data_directory", std::make_shared<ParserStringLiteral>()),
             OptionDescribe("INDEX DIRECTORY", "index_directory", std::make_shared<ParserStringLiteral>()),
-            OptionDescribe("MAX_ROWS", "max_rows", std::make_shared<ParserLiteral>()),
-            OptionDescribe("MIN_ROWS", "min_rows", std::make_shared<ParserLiteral>()),
+            OptionDescribe("MAX_ROWS", "max_rows", std::make_shared<ParserLiteral>(ParserSettings::CLICKHOUSE)),
+            OptionDescribe("MIN_ROWS", "min_rows", std::make_shared<ParserLiteral>(ParserSettings::CLICKHOUSE)),
             OptionDescribe("TABLESPACE", "tablespace", std::make_shared<ParserIdentifier>()),
         }
     };

@@ -5,6 +5,7 @@
 #include <Interpreters/MutationsInterpreter.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Storages/MergeTree/MergeTreeData.h>
+#include <Storages/MergeTree/MergeTreeFillDeleteWithDefaultValueSource.h>
 #include <Storages/MergeTree/StorageFromMergeTreeDataPart.h>
 #include <Processors/Transforms/FilterTransform.h>
 #include <Processors/Transforms/ExpressionTransform.h>
@@ -12,10 +13,10 @@
 #include <Processors/Transforms/MaterializingTransform.h>
 #include <Processors/Sources/NullSource.h>
 #include <Processors/QueryPipeline.h>
-#include <Processors/QueryPlan/QueryPlan.h>
-#include <Processors/QueryPlan/ExpressionStep.h>
-#include <Processors/QueryPlan/FilterStep.h>
-#include <Processors/QueryPlan/ReadFromPreparedSource.h>
+#include <QueryPlan/QueryPlan.h>
+#include <QueryPlan/ExpressionStep.h>
+#include <QueryPlan/FilterStep.h>
+#include <QueryPlan/ReadFromPreparedSource.h>
 #include <Processors/Executors/PipelineExecutingBlockInputStream.h>
 #include <DataStreams/CheckSortedBlockInputStream.h>
 #include <Parsers/ASTIdentifier.h>
@@ -25,7 +26,7 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/formatAST.h>
 #include <IO/WriteHelpers.h>
-#include <Processors/QueryPlan/CreatingSetsStep.h>
+#include <QueryPlan/CreatingSetsStep.h>
 #include <DataTypes/NestedUtils.h>
 
 
@@ -172,6 +173,28 @@ ColumnDependencies getAllColumnDependencies(const StorageMetadataPtr & metadata_
     return dependencies;
 }
 
+MergeTreeDataPartPtr tryGetPartFromStorage(const StoragePtr & storage)
+{
+    auto storage_from_part = std::dynamic_pointer_cast<StorageFromMergeTreeDataPart>(storage);
+    if (!storage_from_part)
+        return nullptr;
+    if (auto num_parts = storage_from_part->getParts().size(); num_parts != 1)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Mutation should be applied to one part at a time, found {}", num_parts);
+    return storage_from_part->getParts().front();
+}
+
+BlockInputStreamPtr createStreamFromSource(SourcePtr source)
+{
+    Pipes pipes;
+    pipes.emplace_back(Pipe(std::move(source)));
+
+    QueryPipeline pipeline;
+    pipeline.init(Pipe::unitePipes(std::move(pipes)));
+    pipeline.setMaxThreads(1);
+
+    return std::make_shared<PipelineExecutingBlockInputStream>(std::move(pipeline));
+}
+
 }
 
 
@@ -276,6 +299,7 @@ MutationsInterpreter::MutationsInterpreter(
     , can_execute(can_execute_)
     , select_limits(SelectQueryOptions().analyze(!can_execute).ignoreLimits())
 {
+    storage->checkMutationIsPossible(commands, context->getSettingsRef());
     mutation_ast = prepare(!can_execute);
 }
 
@@ -291,6 +315,9 @@ static NameSet getKeyColumns(const StoragePtr & storage, const StorageMetadataPt
         key_columns.insert(col);
 
     for (const String & col : metadata_snapshot->getColumnsRequiredForSortingKey())
+        key_columns.insert(col);
+
+    for (const String & col : metadata_snapshot->getColumnsRequiredForUniqueKey())
         key_columns.insert(col);
     /// We don't process sample_by_ast separately because it must be among the primary key columns.
 
@@ -437,6 +464,32 @@ ASTPtr MutationsInterpreter::prepare(bool dry_run)
 
             auto negated_predicate = makeASTFunction("isZeroOrNull", getPartitionAndPredicateExpressionForMutationCommand(command));
             stages.back().filters.push_back(negated_predicate);
+        }
+        else if (command.type == MutationCommand::FAST_DELETE)
+        {
+            is_fast_delete = true;
+            mutation_kind.set(MutationKind::MUTATE_OTHER);
+            if (!stages.empty())
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Stage is not empty");
+            stages.emplace_back(context);
+
+            if (command.columns)
+            {
+                for (const auto & column : command.columns->children)
+                {
+                    const auto * identifier = column->as<ASTIdentifier>();
+                    if (!identifier)
+                        throw Exception(ErrorCodes::BAD_ARGUMENTS, "fastdelete columns should be identifiers");
+                    if (!all_columns.contains(identifier->name()))
+                        throw Exception(ErrorCodes::NO_SUCH_COLUMN_IN_TABLE, "Table doesn't contain physical column {}", identifier->name());
+                    /// TODO: still got some issues on map column, disable temporarily
+                    if (auto col = all_columns.tryGetByName(identifier->name()); col.has_value() && col->type->isMap())
+                        throw Exception(ErrorCodes::BAD_ARGUMENTS, "fastdelete a map column '{}' is not supported", identifier->name());
+                    /// TODO: check column is not security / encrypt / low cardinality / map kv (maybe ok for security/encrypt/lowcard ?)
+                    stages.back().fast_delete_columns.insert(identifier->name());
+                }
+            }
+            stages.back().fast_delete_filter = getPartitionAndPredicateExpressionForMutationCommand(command);
         }
         else if (command.type == MutationCommand::UPDATE)
         {
@@ -628,6 +681,9 @@ ASTPtr MutationsInterpreter::prepare(bool dry_run)
     /// The same about columns, that are needed for calculation of TTL expressions.
     if (!dependencies.empty())
     {
+        if (is_fast_delete)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "fastdelete mutation should have 0 dependency to update, but found {}", dependencies.size());
+
         NameSet changed_columns;
         NameSet unchanged_columns;
         for (const auto & dependency : dependencies)
@@ -686,8 +742,28 @@ ASTPtr MutationsInterpreter::prepare(bool dry_run)
     }
 
     is_prepared = true;
+    if (is_fast_delete)
+        return prepareInterpreterSelectQueryForFastDelete(stages.front(), dry_run);
+    else
+        return prepareInterpreterSelectQuery(stages, dry_run);
+}
 
-    return prepareInterpreterSelectQuery(stages, dry_run);
+ASTPtr MutationsInterpreter::prepareInterpreterSelectQueryForFastDelete(Stage & prepared_stage, bool /*dry_run*/)
+{
+    /// we construct a "SELECT _part_row_number WHERE fast_delete_condition" query
+    /// to get row numbers of all the affected rows
+    auto select = std::make_shared<ASTSelectQuery>();
+
+    select->setExpression(ASTSelectQuery::Expression::SELECT, std::make_shared<ASTExpressionList>());
+    select->select()->children.push_back(std::make_shared<ASTIdentifier>("_part_row_number"));
+
+    if (prepared_stage.fast_delete_filter)
+    {
+        ASTPtr where_expression = prepared_stage.fast_delete_filter;
+        select->setExpression(ASTSelectQuery::Expression::WHERE, std::move(where_expression));
+    }
+
+    return select;
 }
 
 ASTPtr MutationsInterpreter::prepareInterpreterSelectQuery(std::vector<Stage> & prepared_stages, bool dry_run)
@@ -862,6 +938,25 @@ QueryPipelinePtr MutationsInterpreter::addStreamsForLaterStages(const std::vecto
     return pipeline;
 }
 
+ImmutableDeleteBitmapPtr MutationsInterpreter::prepareNewDeleteBitmap(IBlockInputStream & in, const ImmutableDeleteBitmapPtr & current_bitmap)
+{
+    DeleteBitmapPtr new_deletes(new Roaring);
+    in.readPrefix();
+    while (Block block = in.read())
+    {
+        auto & column_and_type = block.getByName("_part_row_number");
+        const auto & row_numbers = assert_cast<const ColumnUInt64 &>(*column_and_type.column).getData();
+        for (size_t i = 0; i < row_numbers.size(); ++i)
+            new_deletes->add(static_cast<uint32_t>(row_numbers[i]));
+    }
+    in.readSuffix();
+
+    /// new bitmap := current bitmap + new deletes
+    if (current_bitmap)
+        *new_deletes |= *current_bitmap;
+    return new_deletes;
+}
+
 void MutationsInterpreter::validate()
 {
     if (!select_interpreter)
@@ -903,9 +998,31 @@ BlockInputStreamPtr MutationsInterpreter::execute()
     auto pipeline = addStreamsForLaterStages(stages, plan);
     BlockInputStreamPtr result_stream = std::make_shared<PipelineExecutingBlockInputStream>(std::move(*pipeline));
 
+    if (is_fast_delete)
+    {
+        auto part = tryGetPartFromStorage(storage);
+        if (!part)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot get the part to mutate");
+        updated_delete_bitmap = prepareNewDeleteBitmap(*result_stream, part->getDeleteBitmap());
+
+        auto & fast_delete_columns = stages.front().fast_delete_columns;
+        if (fast_delete_columns.empty())
+        {
+            updated_header = std::make_unique<Block>();
+            return nullptr;
+        }
+
+        /// construct a new stream to update fast delete columns (set deleted rows to default values)
+        Names columns_to_rewrite {fast_delete_columns.begin(), fast_delete_columns.end()};
+        auto source = std::make_unique<MergeTreeFillDeleteWithDefaultValueSource>(
+            part->storage, metadata_snapshot, part, updated_delete_bitmap, columns_to_rewrite);
+        result_stream = createStreamFromSource(std::move(source));
+    }
+
     /// Sometimes we update just part of columns (for example UPDATE mutation)
     /// in this case we don't read sorting key, so just we don't check anything.
-    if (auto sort_desc = getStorageSortDescriptionIfPossible(result_stream->getHeader()))
+    /// Also skip order checking for FAST_DELETE because the mutated key column may not be sorted.
+    if (auto sort_desc = getStorageSortDescriptionIfPossible(result_stream->getHeader()); sort_desc && !is_fast_delete)
         result_stream = std::make_shared<CheckSortedBlockInputStream>(result_stream, *sort_desc);
 
     if (!updated_header)

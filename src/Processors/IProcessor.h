@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <Processors/Port.h>
+#include <Common/Stopwatch.h>
 
 
 class EventCounter;
@@ -299,13 +300,56 @@ public:
     IQueryPlanStep * getQueryPlanStep() const { return query_plan_step; }
     size_t getQueryPlanStepGroup() const { return query_plan_step_group; }
 
+    uint64_t getElapsedUs() const { return elapsed_us; }
+    uint64_t getInputWaitElapsedUs() const { return input_wait_elapsed_us; }
+    uint64_t getOutputWaitElapsedUs() const { return output_wait_elapsed_us; }
+
+    struct ProcessorDataStats
+    {
+        size_t input_rows = 0;
+        size_t input_bytes = 0;
+        size_t output_rows = 0;
+        size_t output_bytes = 0;
+    };
+
+    ProcessorDataStats getProcessorDataStats() const
+    {
+        ProcessorDataStats stats;
+
+        for (const auto & input : inputs)
+        {
+            stats.input_rows += input.rows;
+            stats.input_bytes += input.bytes;
+        }
+
+        for (const auto & output : outputs)
+        {
+            stats.output_rows += output.rows;
+            stats.output_bytes += output.bytes;
+        }
+
+        return stats;
+    }
+    
 protected:
     virtual void onCancel() {}
 
 private:
+    /// For:
+    /// - elapsed_us
+    /// - input_wait_elapsed_us
+    /// - output_wait_elapsed_us
+    friend class PipelineExecutor;
     std::atomic<bool> is_cancelled{false};
 
     std::string processor_description;
+
+    /// For processors_profile_log
+    uint64_t elapsed_us = 0;
+    Stopwatch input_wait_watch;
+    uint64_t input_wait_elapsed_us = 0;
+    Stopwatch output_wait_watch;
+    uint64_t output_wait_elapsed_us = 0;
 
     size_t stream_number = NO_STREAM;
 
