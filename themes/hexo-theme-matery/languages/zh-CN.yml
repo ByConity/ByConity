@@ -84,7 +84,8 @@ theme:
     features:
       archimg:
         url: https://juejin.cn
-        title: Hello image 中文
+        src: "#"
+        title: Hello
       feature:
         - 
           title: 高性能低成本

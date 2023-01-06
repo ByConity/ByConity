@@ -84,6 +84,7 @@ theme:
     features:
       archimg:
         url: https://juejin.cn
+        src: "#"
         title: Hello image
       feature:
         - 

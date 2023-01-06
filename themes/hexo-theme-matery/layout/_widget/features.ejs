@@ -11,8 +11,8 @@
                 </div>
                 <% } %>
             <% } %>
-            <% if (card.img) { %>
-            <img class="col l12 m12 s12" src="<%= __(card.img.url) %>" alt="<%= __(card.img.title) %>" lazy="true" />
+            <% if (card.img && card.img.src && __(card.img.src).length > 5) { %>
+            <img class="col l12 m12 s12" src="<%= __(card.img.src) %>" alt="<%= __(card.img.title) %>" lazy="true" />
             <% } %>
         <% } %>
     </div>

@@ -653,6 +653,7 @@ features:
   -
     img:
       url: theme.home.features.archimg.url
+      src: theme.home.features.archimg.src
       title: theme.home.features.archimg.title
   -
     cards:
