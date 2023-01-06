@@ -3,7 +3,8 @@ var featureimg = url_for('/medias/bg.jpg');
 if (page.img) {
     featureimg = url_for(page.img);
 } else {
-    var hashCode = function (str) {
+    featureimg = url_for('/medias/banner/0.jpg');
+    /* var hashCode = function (str) {
         if (!str && str.length === 0) {
             return 0;
         }
@@ -21,7 +22,7 @@ if (page.img) {
 
     featureimg = theme.jsDelivr.url
             ? theme.jsDelivr.url + url_for(theme.featureImages[num])
-            : url_for(theme.featureImages[num]);
+            : url_for(theme.featureImages[num]); */
 }
 %>
 
