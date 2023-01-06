@@ -17,9 +17,9 @@ timezone: 'Asia/Shanghai'
 ## Set your site url here. For example, if you use GitHub Page, set url as 'https://username.github.io/project'
 # custom it
 url: https://byconity.github.io
-permalink: :lang/:year:month/:title/
+permalink: :title/
 permalink_defaults:
-  lang: en
+  lang: zh-cn
 pretty_urls:
   trailing_index: true # Set to false to remove trailing 'index.html' from permalinks
   trailing_html: true # Set to false to remove trailing '.html' from permalinks
@@ -44,7 +44,7 @@ external_link:
   exclude: ''
 filename_case: 0
 render_drafts: false
-post_asset_folder: false
+post_asset_folder: true
 relative_link: false
 future: true
 highlight:
@@ -59,6 +59,10 @@ prismjs:
   preprocess: true
   line_number: true
   tab_replace: ''
+marked:
+  prependRoot: true
+  postAsset: true
+
 
 # Home page setting
 # path: Root path for your blogs index page. (default = '')
@@ -66,8 +70,11 @@ prismjs:
 # order_by: Posts order. (Order by date descending by default)
 index_generator:
   path: ''
-  per_page: 10
+  per_page: 12
   order_by: -date
+  # https://github.com/xcatliu/hexo-generator-index-i18n
+  # single_language_index: Show only default language posts at home page. By default is false. This means that home page can contain posts written on any language.
+  single_language_index: true
 
 # Category & Tag
 # custom

@@ -10,17 +10,18 @@ menu:
   # Categories:
   #   url: /categories
   #   icon: fas fa-bookmark
-  Projects:
-    url: /projects
-    icon: fas fa-tags
+  # Projects:
+  #   url: /projects
+  #   icon: fas fa-tags
   Docs:
-    url: /docs
+    # TODO - refector by i18n auto detect
+    url: /zh-cn/docs
     icon: fas fa-archive
-  Blog:
-    url: /blog
-    icon: fas fa-bookmark
+  # Blog:
+  #   url: /blog
+  #   icon: fas fa-bookmark
   Community:
-    url: /blog
+    url: https://github.com/byconity
     icon: fas fa-user-circle
   # Archives:
   #   url: /archives
