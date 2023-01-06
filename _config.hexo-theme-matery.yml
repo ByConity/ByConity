@@ -1,9 +1,9 @@
 # main menu navigation url and icon
 # 配置菜单导航的名称、路径和图标icon.
 menu:
-  Home:
-    url: /
-    icon: fas fa-home
+  # Home:
+  #   url: /
+  #   icon: fas fa-home
   # Tags:
   #   url: /tags
   #   icon: fas fa-tags
