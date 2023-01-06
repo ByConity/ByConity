@@ -91,7 +91,7 @@ private:
         MergeTreeMarksLoader marks_loader;
     };
     using CompactDataReaderPtr = std::unique_ptr<CompactDataReader>;
-    
+
     /// In compact part, all columns except for ByteMap columns will write into one file. These column will use this data reader.
     /// Each implicit column of ByteMap columns will use separate reader stream.
     CompactDataReaderPtr data_reader;

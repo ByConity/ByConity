@@ -36,7 +36,7 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
-VWResourceGroup::VWResourceGroup(ContextPtr context_) 
+VWResourceGroup::VWResourceGroup(ContextPtr context_)
     : WithContext(context_)
     , log(&Poco::Logger::get("VWResourceGroup")) {};
 

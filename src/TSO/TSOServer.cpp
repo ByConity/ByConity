@@ -527,7 +527,7 @@ int TSOServer::main(const std::vector<std::string> &)
 
         if (restart_task)
             restart_task->deactivate();
-        
+
         global_context->shutdown();
 
         LOG_DEBUG(log, "Waiting for current connections to Keeper to finish.");

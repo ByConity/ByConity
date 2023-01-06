@@ -47,9 +47,9 @@ BlockIO executePlanSegmentTree(PlanSegmentTreePtr & plan_segment_tree, ContextMu
     auto * log = &Poco::Logger::get("executePlanSegmentTree");
 
     LOG_DEBUG(log, "Generate QueryPipeline from PlanSegment");
-    
+
     PlanSegmentsStatusPtr scheduler_status;
-    
+
     if (plan_segment_tree->getNodes().size() > 1)
     {
         RuntimeFilterManager::getInstance().registerQuery(context->getCurrentQueryId(), *plan_segment_tree);
@@ -80,7 +80,7 @@ BlockIO executePlanSegmentTree(PlanSegmentTreePtr & plan_segment_tree, ContextMu
             LOG_TRACE(log, "EXECUTE\n" + final_segment->toString());
 
             if (context->getSettingsRef().debug_plan_generation)
-                break;            
+                break;
             res = DB::lazyExecutePlanSegmentLocally(std::make_unique<PlanSegment>(std::move(*final_segment)), context);
             break;
         }

@@ -60,6 +60,6 @@ private:
     static void visit(ASTQualifiedAsterisk & query, ASTPtr & node, Data & data);
 };
 
-using RewriteDistributedQueryVisitor = InDepthNodeVisitor<RewriteDistributedQueryMatcher, true>; 
+using RewriteDistributedQueryVisitor = InDepthNodeVisitor<RewriteDistributedQueryMatcher, true>;
 
 }

@@ -67,7 +67,7 @@ private:
     BoundedDataQueue<Chunk> queue;
     String data_key;
     brpc::StreamId stream_id{brpc::INVALID_STREAM_ID};
-    
+
     bool keep_order;
 };
 

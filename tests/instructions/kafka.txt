@@ -39,7 +39,7 @@ Login inside Kafka container and stream some data:
     docker exec -it <kafka_container_id> bash --login
     vi data.csv
     cat data.csv | /opt/kafka/bin/kafka-console-producer.sh --topic topic --broker-list localhost:9092
-    
+
 Read data in clickhouse:
 
     SELECT * FROM kafka;

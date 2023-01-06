@@ -73,7 +73,7 @@ public:
         {
             res->in_file = in_file->clone(); res->children.push_back(res->in_file);
         }
-        
+
         return res;
     }
 

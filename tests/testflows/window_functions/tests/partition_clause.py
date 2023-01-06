@@ -10,9 +10,9 @@ def single_expr(self):
     expected = convert_output("""
       x | s | sum
     ----+---+------
-      1 | a |  2 
-      1 | b |  2 
-      2 | b |  2 
+      1 | a |  2
+      1 | b |  2
+      2 | b |  2
     """)
 
     execute_query(

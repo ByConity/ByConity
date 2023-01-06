@@ -177,7 +177,7 @@ void MetastoreRocksDBImpl::assert_db_open()
     if (db_closed)
         throw Exception("MetaStore is not initialized or has been closed.", ErrorCodes::METASTORE_OPERATION_ERROR);
 }
-   
+
 
 void MetastoreRocksDBImpl::init()
 {

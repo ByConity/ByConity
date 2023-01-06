@@ -81,8 +81,8 @@ BroadcastStatus LocalBroadcastChannel::send(Chunk chunk)
     auto bytes = chunk.allocatedBytes();
     send_metric.send_uncompressed_bytes += bytes;
     if (receive_queue.tryEmplace(options.max_timeout_ms / 2, std::move(chunk)))
-    {       
-        ExchangeUtils::transferThreadMemoryToGlobal(bytes);     
+    {
+        ExchangeUtils::transferThreadMemoryToGlobal(bytes);
         return *broadcast_status.load(std::memory_order_acquire);
     }
 

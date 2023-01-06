@@ -54,7 +54,7 @@ using TableJoinPtr = std::shared_ptr<TableJoin>;
         ITEM = TYPE(tmp); \
     }
 
-template<typename Type> 
+template<typename Type>
 void serializeEnum(const Type & item, WriteBuffer & buf)
 {
     writeBinary(UInt8(item), buf);

@@ -100,7 +100,7 @@ public:
         pos = nullptr;
     }
 
-    virtual void freeResource() { reset(); } 
+    virtual void freeResource() { reset(); }
 
     /// get buffer
     inline Buffer & internalBuffer() { return internal_buffer; }

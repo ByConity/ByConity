@@ -164,7 +164,7 @@ public:
         const String& config_prefix = "");
 
     static HDFSConnectionParams parseFromMisusedNNProxyStr(String hdfs_nnproxy, String hdfs_user="clickhouse");
-    
+
     static const HDFSConnectionParams & defaultNNProxy()
     {
         static HDFSConnectionParams params(CONN_NNPROXY, "clickhouse", "nnproxy");

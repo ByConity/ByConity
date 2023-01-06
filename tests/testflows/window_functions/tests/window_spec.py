@@ -7,7 +7,7 @@ def partition_clause(self):
     """Check window specification that only contains partition clause.
     """
     expected = convert_output("""
-     sum 
+     sum
     -------
     25100
     25100
@@ -31,7 +31,7 @@ def orderby_clause(self):
     """Check window specification that only contains order by clause.
     """
     expected = convert_output("""
-     sum 
+     sum
     -------
     25100
     25100
@@ -55,7 +55,7 @@ def frame_clause(self):
     """Check window specification that only contains frame clause.
     """
     expected = convert_output("""
-     sum 
+     sum
     -------
     5000
     3900
@@ -79,7 +79,7 @@ def partition_with_order_by(self):
     """Check window specification that contains partition and order by clauses.
     """
     expected = convert_output("""
-     sum 
+     sum
     -------
      4200
      8700
@@ -103,7 +103,7 @@ def partition_with_frame(self):
     """Check window specification that contains partition and frame clauses.
     """
     expected = convert_output("""
-     sum 
+     sum
     -------
     4200
     6000
@@ -127,7 +127,7 @@ def order_by_with_frame(self):
     """Check window specification that contains order by and frame clauses.
     """
     expected = convert_output("""
-     sum 
+     sum
     -------
     4200
     10200
@@ -151,7 +151,7 @@ def partition_with_order_by_and_frame(self):
     """Check window specification that contains all clauses.
     """
     expected = convert_output("""
-     sum 
+     sum
     -------
     4200
     8700
@@ -175,7 +175,7 @@ def empty(self):
     """Check defining an empty window specification.
     """
     expected = convert_output("""
-     sum 
+     sum
     -------
      47100
      47100

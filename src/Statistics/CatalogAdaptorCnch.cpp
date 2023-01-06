@@ -129,7 +129,7 @@ void CatalogAdaptorCnch::writeStatsData(const StatsTableIdentifier & table, cons
     }
 }
 
-void CatalogAdaptorCnch::dropStatsColumnData(const StatsTableIdentifier & table, const ColumnDescVector & cols_desc) 
+void CatalogAdaptorCnch::dropStatsColumnData(const StatsTableIdentifier & table, const ColumnDescVector & cols_desc)
 {
     auto uuid_str = UUIDHelpers::UUIDToString(table.getUUID());
     for (auto & desc : cols_desc)

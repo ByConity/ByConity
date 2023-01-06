@@ -59,8 +59,8 @@ private:
     /// Write block of rows into .bin file and marks in .mrk files, primary index in .idx file
     /// and skip indices in their corresponding files.
     void writeDataBlockPrimaryIndexAndSkipIndices(const Block & block, const Granules & granules);
-    
-    Poco::Logger * getLogger() override { return log; } 
+
+    Poco::Logger * getLogger() override { return log; }
 
     Block header;
 
@@ -91,7 +91,7 @@ private:
             , hashing_buf(compressed_buf) {}
     };
     using CompressedStreamPtr = std::shared_ptr<CompressedStream>;
-    
+
     struct CompactDataWriter
     {
         CompactDataWriter(

@@ -162,7 +162,7 @@ void IStorage::read(
         //IStorage::read(query_plan, column_names, metadata_snapshot, query_info, context, processed_stage, max_block_size, num_streams);
         auto header = getHeaderForProcessingStage(*this, column_names, metadata_snapshot, query_info, context, processed_stage);
         auto read_step = std::make_unique<PlanSegmentSourceStep>(header,
-                                                              getStorageID(), 
+                                                              getStorageID(),
                                                               query_info,
                                                               column_names,
                                                               processed_stage,

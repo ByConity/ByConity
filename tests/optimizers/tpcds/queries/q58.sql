@@ -7,11 +7,11 @@
  where (ss_item_sk = i_item_sk)
    and (d_date in (
      select d_date
-     from 
+     from
       date_dim
       where (d_week_seq = (
         select d_week_seq
-        from 
+        from
           date_dim
         where (d_date ='2000-01-03')
         ))
@@ -20,17 +20,17 @@
  group by i_item_id
  )
  ,cs_items as(
-   select 
+   select
     i_item_id item_id
     ,sum(cs_ext_sales_price) cs_item_rev
-  from 
+  from
       catalog_sales
       ,item
       ,date_dim
  where (cs_item_sk = i_item_sk)
   and  (d_date in (
       select d_date
-      from 
+      from
         date_dim
        where (d_week_seq = (select d_week_seq
                                       from date_dim
@@ -40,7 +40,7 @@
   and  cs_sold_date_sk = d_date_sk
  group by i_item_id),
  ws_items as(
-   select 
+   select
         i_item_id item_id
         ,sum(ws_ext_sales_price) ws_item_rev
   from web_sales
@@ -49,11 +49,11 @@
  where (ws_item_sk = i_item_sk)
   and  (d_date in (
     select d_date
-    from 
+    from
       date_dim
     where (d_week_seq =(
           select d_week_seq
-          from 
+          from
             date_dim
           where (d_date = '2000-01-03')
         ))
@@ -69,7 +69,7 @@
        ,ws_item_rev
        ,ws_item_rev/((ss_item_rev+cs_item_rev+ws_item_rev)/3) * 100 ws_dev
        ,(ss_item_rev+cs_item_rev+ws_item_rev)/3 average
- from 
+ from
  ss_items
  ,cs_items
  ,ws_items

@@ -49,7 +49,7 @@ struct ProcessorProfileLogElement
     size_t input_bytes{};
     size_t output_rows{};
     size_t output_bytes{};
-    
+
     static std::string name() { return "ProcessorsProfileLog"; }
     static NamesAndTypesList getNamesAndTypes();
     static NamesAndAliases getNamesAndAliases() { return {}; }

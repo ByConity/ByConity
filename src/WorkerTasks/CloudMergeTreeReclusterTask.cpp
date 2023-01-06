@@ -56,7 +56,7 @@ void CloudMergeTreeReclusterTask::executeImpl()
         part->info.partition_id, part->info.min_block, part->info.max_block, part->info.level + 1, part->info.mutation, 0);
         reservations.emplace_back(storage.reserveSpace(0));
         auto single_disk_volume = std::make_shared<SingleDiskVolume>("volume_" + part->name, reservations.back()->getDisk(), 0);
-        
+
         auto drop_part = std::make_shared<MergeTreeDataPartCNCH>(
             storage, drop_part_info.getPartName(), drop_part_info, single_disk_volume, std::nullopt);
         drop_part->partition.assign(part->partition);

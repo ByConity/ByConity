@@ -16,7 +16,7 @@ where ss_item_sk = i_item_sk and
           i_class in ('computers','stereo','football')
          )
       or (i_category in ('Men','Jewelry','Women') and
-          i_class in ('shirts','birdal','dresses') 
+          i_class in ('shirts','birdal','dresses')
         ))
 group by i_category, i_class, i_brand,
          s_store_name, s_company_name, d_moy) tmp1

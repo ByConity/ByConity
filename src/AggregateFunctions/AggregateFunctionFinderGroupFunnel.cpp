@@ -96,7 +96,7 @@ namespace
         // Limitation right now, we only support up to 64 events.
         if (num_virts > NUMBER_STEPS)
             throw Exception("Too many events checked in " + name, ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        
+
         if (user_pro_idx > num_virts || user_pro_idx < 1)
             throw Exception("Wrong input for user property index, 1-based.",ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 

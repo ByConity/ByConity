@@ -295,7 +295,7 @@ class Cluster(object):
 
         self.docker_compose += f" --ansi never --project-directory \"{docker_compose_project_dir}\" --file \"{docker_compose_file_path}\""
         self.lock = threading.Lock()
-    
+
     @property
     def control_shell(self, timeout=300):
         """Must be called with self.lock.acquired.
@@ -339,7 +339,7 @@ class Cluster(object):
         if node is not None:
             with self.lock:
                 container_id = self.node_container_id(node=node, timeout=timeout)
-        
+
         time_start = time.time()
         while True:
             try:

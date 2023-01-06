@@ -83,7 +83,7 @@ struct CatalogConfig
 
     StoreType type = StoreType::UNINIT;
     FDBConf fdb_conf;
-    ByteKVConf bytekv_conf; 
+    ByteKVConf bytekv_conf;
 };
 
 }

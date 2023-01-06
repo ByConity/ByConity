@@ -94,7 +94,7 @@ void FieldVisitorWriteBinary::operator() (const ByteMap & x, WriteBuffer & buf) 
 {
     UInt8 ktype = Field::Types::Null;
     UInt8 vtype = Field::Types::Null;
- 
+
     const size_t size = x.size();
     if (size)
     {

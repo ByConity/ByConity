@@ -72,7 +72,7 @@ private:
 
     MergeTreeData::DataPart::Checksums sendPartFromDisk(
         const MergeTreeData::DataPartPtr & part,
-        ReadBuffer & body, 
+        ReadBuffer & body,
         WriteBuffer & out,
         int client_protocol_version,
         bool incrementally,

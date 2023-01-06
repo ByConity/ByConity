@@ -56,7 +56,7 @@ PartMerger::PartMerger(const ASTPtr & query_ptr_, ContextMutablePtr context_)
 
     if (!endsWith(source_path, "/"))
         source_path.append("/");
-    
+
     if (!endsWith(target_path, "/"))
         target_path.append("/");
 
@@ -204,11 +204,11 @@ std::vector<MergeEntryPtr> PartMerger::selectPartsToMerge(const MergeTreeData & 
     for (const MergeTreeData::DataPartPtr & part : data_parts)
     {
         const String & partition_id = part->info.partition_id;
-        
+
         if (prev_partition_id.empty())
             prev_partition_id = partition_id;
-        
-        if (prev_partition_id != partition_id || 
+
+        if (prev_partition_id != partition_id ||
             total_merge_size + part->getBytesOnDisk() > max_total_size_to_merge ||
             total_merge_rows + part->rows_count > max_total_rows_to_merge)
         {

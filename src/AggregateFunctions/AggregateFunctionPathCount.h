@@ -391,7 +391,7 @@ public:
             Data::NodeSet topk_set;
             for (auto & node_count : steps[i].node_counts)
             {
-                if (node_count.getKey() == Data::LOSS_NODE) 
+                if (node_count.getKey() == Data::LOSS_NODE)
                     continue;
 
                 topk_set.insert(node_count.getKey(), node_count.getMapped().high); // TODO check count

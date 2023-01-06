@@ -39,7 +39,7 @@ AggregateFunctionPtr createAggregateFunctionBitMapJoinAndCard(const std::string 
     {
         union_num = static_cast<Int32>(parameters[0].safeGet<UInt64>());
         thread_num = parameters[1].safeGet<UInt64>();
-        
+
         if (parameters.size() == 3)
             limit_bitmap_number = parameters[2].safeGet<UInt64>();
     }
@@ -90,7 +90,7 @@ AggregateFunctionPtr createAggregateFunctionBitMapJoinAndCard2(const std::string
     {
         union_num = static_cast<Int32>(parameters[0].safeGet<UInt64>());
         thread_num = parameters[1].safeGet<UInt64>();
-        
+
         if (parameters.size() == 3)
             limit_bitmap_number = parameters[2].safeGet<UInt64>();
     }

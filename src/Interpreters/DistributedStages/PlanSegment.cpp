@@ -290,9 +290,9 @@ void PlanSegment::deserialize(ReadBuffer & buf)
 }
 
 /**
- * update plansegemnt if 
- * 1. a segment is deserialized 
- * 2. before final segment executed on coordinator 
+ * update plansegemnt if
+ * 1. a segment is deserialized
+ * 2. before final segment executed on coordinator
  */
 void PlanSegment::update()
 {
@@ -328,7 +328,7 @@ String PlanSegment::toString() const
     ostr << "coordinator_address: " << coordinator_address.toString() << "\n";
     ostr << "current_address: " << current_address.toString() << "\n";
     ostr << "cluster_name: " << cluster_name << "\n";
-    ostr << "parallel: " << parallel << ", exchange_parallel_size: " << exchange_parallel_size; 
+    ostr << "parallel: " << parallel << ", exchange_parallel_size: " << exchange_parallel_size;
 
     return ostr.str();
 }

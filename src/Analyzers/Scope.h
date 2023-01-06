@@ -148,12 +148,12 @@ private:
     bool query_boundary;
     FieldDescriptions field_descriptions;
 public:
-    ScopeType getType() const 
+    ScopeType getType() const
     {
         return type;
     }
 
-    const FieldDescriptions& getFields() const 
+    const FieldDescriptions& getFields() const
     {
         return field_descriptions;
     }

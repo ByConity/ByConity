@@ -24,7 +24,7 @@ namespace DB
 class DeserializeBufTransform : public ISimpleTransform
 {
 public:
-    
+
     struct IOBufChunkInfo : public ChunkInfo
     {
         butil::IOBuf io_buf;

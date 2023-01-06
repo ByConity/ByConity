@@ -82,7 +82,7 @@ DiskSelector::DiskSelector(const Poco::Util::AbstractConfiguration & config, con
         {
             /// check uniqueness of disk id.
             if (found->second.first != DiskType::toString(disk_ptr->getType()) || found->second.second != disk_ptr->getPath())
-                throw Exception(ErrorCodes::DISK_ID_NOT_UNIQUE, "Disk '{}' has conflict id({}) with another disk which has path : {}", 
+                throw Exception(ErrorCodes::DISK_ID_NOT_UNIQUE, "Disk '{}' has conflict id({}) with another disk which has path : {}",
                             disk_ptr->getName(), found->first, found->second.second);
         }
 
@@ -213,7 +213,7 @@ void DiskSelector::flushDiskInfo() const
     auto disk_info_path = disks_path / ALL_DISK_INFO_FILE;
     if (fs::exists(disk_info_path))
         fs::remove(disk_info_path);
-    
+
     fs::rename(tmp_path, disk_info_path);
 }
 

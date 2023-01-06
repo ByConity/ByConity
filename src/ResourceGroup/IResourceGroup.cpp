@@ -51,10 +51,10 @@ void IResourceGroup::setParent(IResourceGroup * parent_)
 }
 
 IResourceGroup::QueryEntity::QueryEntity(
-    IResourceGroup * group_, 
+    IResourceGroup * group_,
     const String & query_,
-    const Context & query_context_, 
-    QueryStatusType status_type_) 
+    const Context & query_context_,
+    QueryStatusType status_type_)
     : group(group_)
     , query(query_)
     , query_context(&query_context_)

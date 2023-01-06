@@ -69,7 +69,7 @@ void WorkerNode::reserveResourceQuotas(const ResourceRequirement & requirement, 
 {
     if (requirement.task_cold_startup_sec <= 0)
         return;
-    
+
     auto mem = requirement.request_mem_bytes * n;
     auto cpu = requirement.request_cpu_cores * n;
 
@@ -142,7 +142,7 @@ void WorkerNode::update(const WorkerNodeResourceData & data, const size_t regist
     }
 
     /// Change all Registering workers to Running state every $register_granularity seconds.
-    if (state.load(std::memory_order_relaxed) == WorkerState::Registering 
+    if (state.load(std::memory_order_relaxed) == WorkerState::Registering
         && last_update_time / register_granularity > register_time / register_granularity)
     {
         state.store(WorkerState::Running, std::memory_order_relaxed);

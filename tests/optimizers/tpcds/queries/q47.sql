@@ -1,9 +1,9 @@
 with v1 as(
- select i_category, 
+ select i_category,
         i_brand,
-        s_store_name, 
+        s_store_name,
         s_company_name,
-        d_year, 
+        d_year,
         d_moy,
         sum(ss_sales_price) sum_sales,
         avg(sum(ss_sales_price)) over
@@ -27,15 +27,15 @@ with v1 as(
           s_store_name, s_company_name,
           d_year, d_moy),
  v2 as(
- select v1.i_category, 
-        v1.i_brand, 
-        v1.s_store_name, 
+ select v1.i_category,
+        v1.i_brand,
+        v1.s_store_name,
         v1.s_company_name,
-        v1.d_year, 
+        v1.d_year,
         v1.d_moy,
         v1.avg_monthly_sales,
-        v1.sum_sales, 
-        v1_lag.sum_sales psum, 
+        v1.sum_sales,
+        v1_lag.sum_sales psum,
         v1_lead.sum_sales nsum
  from v1, v1 v1_lag, v1 v1_lead
  where v1.i_category = v1_lag.i_category and

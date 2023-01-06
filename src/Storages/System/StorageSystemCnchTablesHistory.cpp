@@ -184,7 +184,7 @@ Pipe StorageSystemCnchTablesHistory::read(
 
     auto tables = cnch_catalog->getTablesByID(requested_table_id);
 
-    BlockInputStreamPtr input = std::make_shared<CnchTablesHistoryInputStream>(std::move(columns_mask), 
+    BlockInputStreamPtr input = std::make_shared<CnchTablesHistoryInputStream>(std::move(columns_mask),
         std::move(res_block), max_block_size, tables);
     ProcessorPtr source = std::make_shared<SourceFromInputStream>(input);
     pipe.addSource(source);

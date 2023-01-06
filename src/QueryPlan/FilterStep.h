@@ -32,7 +32,7 @@ public:
         ActionsDAGPtr actions_dag_,
         String filter_column_name_,
         bool remove_filter_column_);
-    
+
     FilterStep(const DataStream & input_stream_, const ConstASTPtr & filter_, bool remove_filter_column_ = true);
 
     String getName() const override { return "Filter"; }
@@ -50,7 +50,7 @@ public:
     const ConstASTPtr & getFilter() const { return filter; }
     const String & getFilterColumnName() const { return filter_column_name; }
     bool removesFilterColumn() const { return remove_filter_column; }
-    
+
     ActionsDAGPtr createActions(ContextPtr context, const ASTPtr & rewrite_filter) const;
 
     void serialize(WriteBuffer & buf) const override;

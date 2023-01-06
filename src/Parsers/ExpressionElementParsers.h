@@ -525,7 +525,7 @@ protected:
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 };
 
-/** Element of CLUSTER BY expression - same as expression element, but in addition, INTO <TOTAL_BUCKET_NUMBER> BUCKETS 
+/** Element of CLUSTER BY expression - same as expression element, but in addition, INTO <TOTAL_BUCKET_NUMBER> BUCKETS
   * must be specified.
   */
 class ParserClusterByElement : public IParserBase

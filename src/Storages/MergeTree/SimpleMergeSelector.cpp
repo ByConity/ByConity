@@ -215,7 +215,7 @@ void selectWithinPartition(
 
             if (settings.max_total_rows_to_merge && sum_rows > settings.max_total_rows_to_merge)
                 break;
-            
+
             size_t estimated_size_to_merge = max_total_size_to_merge;
             if (merge_scheduler)
                 merge_scheduler->getEstimatedBytes(estimated_size_to_merge);

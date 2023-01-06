@@ -914,11 +914,11 @@ RQ_SRS_014_LDAP_RoleMapping_Configuration_UserDirectory_RoleMapping_Prefix_WithS
     num='4.8.8.5')
 
 SRS_014_ClickHouse_LDAP_Role_Mapping = Specification(
-    name='SRS-014 ClickHouse LDAP Role Mapping', 
+    name='SRS-014 ClickHouse LDAP Role Mapping',
     description=None,
     author=None,
-    date=None, 
-    status=None, 
+    date=None,
+    status=None,
     approved_by=None,
     approved_date=None,
     approved_version=None,
@@ -1148,9 +1148,9 @@ All the updates are tracked using the [Revision History].
 
 The [SRS-007 ClickHouse Authentication of Users via LDAP] added support for authenticating
 users using an [LDAP] server and the [SRS-009 ClickHouse LDAP External User Directory] added
-support for authenticating users using an [LDAP] external user directory. 
+support for authenticating users using an [LDAP] external user directory.
 
-This requirements specification adds additional functionality for mapping [LDAP] groups to 
+This requirements specification adds additional functionality for mapping [LDAP] groups to
 the corresponding [ClickHouse] [RBAC] roles when [LDAP] external user directory is configured.
 This functionality will enable easier access management for [LDAP] authenticated users
 as the privileges granted by the roles can be granted or revoked by granting or revoking
@@ -1185,7 +1185,7 @@ one or more roles are specified in the `<roles>` section.
 #### RQ.SRS-014.LDAP.RoleMapping.Search
 version: 1.0
 
-[ClickHouse] SHALL perform search on the [LDAP] server and map the results to [RBAC] role names 
+[ClickHouse] SHALL perform search on the [LDAP] server and map the results to [RBAC] role names
 when authenticating users using the [LDAP] external user directory if the `<role_mapping>` section is configured
 as part of the [LDAP] external user directory. The matched roles SHALL be assigned to the user.
 
@@ -1220,7 +1220,7 @@ to an [RBAC] role that has a name that contains special characters that need to 
 #### RQ.SRS-014.LDAP.RoleMapping.Map.MultipleRoles
 version: 1.0
 
-[ClickHouse] SHALL support mapping one or more [LDAP] search results for users authenticated using 
+[ClickHouse] SHALL support mapping one or more [LDAP] search results for users authenticated using
 [LDAP] external user directory to one or more [RBAC] role.
 
 ### LDAP Groups
@@ -1235,15 +1235,15 @@ have privileges provided by the role(s) until the next time they are authenticat
 #### RQ.SRS-014.LDAP.RoleMapping.LDAP.Group.RemovedAndAdded.Parallel
 version: 1.0
 
-[ClickHouse] SHALL support authenticating users using [LDAP] external user directory 
-when [LDAP] groups are removed and added 
+[ClickHouse] SHALL support authenticating users using [LDAP] external user directory
+when [LDAP] groups are removed and added
 at the same time as [LDAP] user authentications are performed in parallel.
 
 #### RQ.SRS-014.LDAP.RoleMapping.LDAP.Group.UserRemoved
 version: 1.0
 
 [ClickHouse] SHALL not assign [RBAC] role(s) for the user authenticated using [LDAP] external user directory
-if the user has been removed from the corresponding [LDAP] group(s) that map those role(s). 
+if the user has been removed from the corresponding [LDAP] group(s) that map those role(s).
 Any active user sessions SHALL have privileges provided by the role(s) until the next time the user is authenticated.
 
 #### RQ.SRS-014.LDAP.RoleMapping.LDAP.Group.UserRemovedAndAdded.Parallel
@@ -1258,7 +1258,7 @@ at the same time as [LDAP] user authentications are performed in parallel.
 #### RQ.SRS-014.LDAP.RoleMapping.RBAC.Role.NotPresent
 version: 1.0
 
-[ClickHouse] SHALL not reject authentication attempt using [LDAP] external user directory if any of the roles that are 
+[ClickHouse] SHALL not reject authentication attempt using [LDAP] external user directory if any of the roles that are
 are mapped from [LDAP] but are not present locally.
 
 #### RQ.SRS-014.LDAP.RoleMapping.RBAC.Role.Added
@@ -1306,7 +1306,7 @@ when new privilege is added to one of the roles that were mapped as a result of 
 version: 1.0
 
 [ClickHouse] SHALL remove privilege from all the users authenticated using [LDAP] external user directory
-when the privilege that was provided by the mapped role is removed from all the roles 
+when the privilege that was provided by the mapped role is removed from all the roles
 that were mapped as a result of [LDAP] search.
 
 ### Authentication
@@ -1360,10 +1360,10 @@ version: 1.0
 
 [ClickHouse] SHALL support the `<bind_dn>` parameter in the `<ldap_servers><server_name>` section
 of the `config.xml` that SHALL be used to construct the `DN` to bind to.
-The resulting `DN` SHALL be constructed by replacing all `{user_name}` substrings of the template 
+The resulting `DN` SHALL be constructed by replacing all `{user_name}` substrings of the template
 with the actual user name during each authentication attempt.
 
-For example, 
+For example,
 
 ```xml
 <yandex>
@@ -1389,13 +1389,13 @@ are specified as part of [LDAP] server description in the `<ldap_servers>` secti
 version: 1.0
 
 [ClickHouse] SHALL support the `user_dn_detection` sub-section in the `<ldap_servers><server_name>` section
-of the `config.xml` that SHALL be used to enable detecting the actual user DN of the bound user. 
+of the `config.xml` that SHALL be used to enable detecting the actual user DN of the bound user.
 
 ##### RQ.SRS-014.LDAP.RoleMapping.Configuration.Server.UserDNDetection.BaseDN
 version: 1.0
 
-[ClickHouse] SHALL support `base_dn` parameter in the `user_dn_detection` sub-section in the 
-`<ldap_servers><server_name>` section of the `config.xml` that SHALL specify how 
+[ClickHouse] SHALL support `base_dn` parameter in the `user_dn_detection` sub-section in the
+`<ldap_servers><server_name>` section of the `config.xml` that SHALL specify how
 to construct the base DN for the LDAP search to detect the actual user DN.
 
 For example,
@@ -1410,8 +1410,8 @@ For example,
 ##### RQ.SRS-014.LDAP.RoleMapping.Configuration.Server.UserDNDetection.Scope
 version: 1.0
 
-[ClickHouse] SHALL support `scope` parameter in the `user_dn_detection` sub-section in the 
-`<ldap_servers><server_name>` section of the `config.xml` that SHALL the scope of the 
+[ClickHouse] SHALL support `scope` parameter in the `user_dn_detection` sub-section in the
+`<ldap_servers><server_name>` section of the `config.xml` that SHALL the scope of the
 LDAP search to detect the actual user DN. The `scope` parameter SHALL support the following values
 
 * `base`
@@ -1431,7 +1431,7 @@ For example,
 ##### RQ.SRS-014.LDAP.RoleMapping.Configuration.Server.UserDNDetection.SearchFilter
 version: 1.0
 
-[ClickHouse] SHALL support `search_filter` parameter in the `user_dn_detection` sub-section in the 
+[ClickHouse] SHALL support `search_filter` parameter in the `user_dn_detection` sub-section in the
 `<ldap_servers><server_name>` section of the `config.xml` that SHALL specify the LDAP search
 filter used to detect the actual user DN.
 
@@ -1490,14 +1490,14 @@ as part of the values for different configuration parameters inside the
 ##### RQ.SRS-014.LDAP.RoleMapping.Configuration.UserDirectory.RoleMapping.MultipleSections
 version: 1.0
 
-[ClickHouse] SHALL support multiple `<role_mapping>` sections defined inside the same `<user_directories><ldap>` section 
+[ClickHouse] SHALL support multiple `<role_mapping>` sections defined inside the same `<user_directories><ldap>` section
 of the `config.xml` and all of the `<role_mapping>` sections SHALL be applied.
 
 ##### RQ.SRS-014.LDAP.RoleMapping.Configuration.UserDirectory.RoleMapping.MultipleSections.IdenticalParameters
 version: 1.0
 
-[ClickHouse] SHALL not duplicate mapped roles when multiple `<role_mapping>` sections 
-with identical parameters are defined inside the `<user_directories><ldap>` section 
+[ClickHouse] SHALL not duplicate mapped roles when multiple `<role_mapping>` sections
+with identical parameters are defined inside the `<user_directories><ldap>` section
 of the `config.xml`.
 
 #### BaseDN Parameter
@@ -1505,10 +1505,10 @@ of the `config.xml`.
 ##### RQ.SRS-014.LDAP.RoleMapping.Configuration.UserDirectory.RoleMapping.BaseDN
 version: 1.0
 
-[ClickHouse] SHALL support the `<base_dn>` parameter in the `<user_directories><ldap><role_mapping>` section 
+[ClickHouse] SHALL support the `<base_dn>` parameter in the `<user_directories><ldap><role_mapping>` section
 of the `config.xml` that SHALL specify the template to be used to construct the base `DN` for the [LDAP] search.
 
-The resulting `DN` SHALL be constructed by replacing all the `{user_name}`, `{bind_dn}`, and `user_dn` substrings of 
+The resulting `DN` SHALL be constructed by replacing all the `{user_name}`, `{bind_dn}`, and `user_dn` substrings of
 the template with the actual user name and bind `DN` during each [LDAP] search.
 
 #### Attribute Parameter
@@ -1516,7 +1516,7 @@ the template with the actual user name and bind `DN` during each [LDAP] search.
 ##### RQ.SRS-014.LDAP.RoleMapping.Configuration.UserDirectory.RoleMapping.Attribute
 version: 1.0
 
-[ClickHouse] SHALL support the `<attribute>` parameter in the `<user_directories><ldap><role_mapping>` section of 
+[ClickHouse] SHALL support the `<attribute>` parameter in the `<user_directories><ldap><role_mapping>` section of
 the `config.xml` that SHALL specify the name of the attribute whose values SHALL be returned by the [LDAP] search.
 
 #### Scope Parameter
@@ -1524,42 +1524,42 @@ the `config.xml` that SHALL specify the name of the attribute whose values SHALL
 ##### RQ.SRS-014.LDAP.RoleMapping.Configuration.UserDirectory.RoleMapping.Scope
 version: 1.0
 
-[ClickHouse] SHALL support the `<scope>` parameter in the `<user_directories><ldap><role_mapping>` section of 
-the `config.xml` that SHALL define the scope of the LDAP search as defined 
+[ClickHouse] SHALL support the `<scope>` parameter in the `<user_directories><ldap><role_mapping>` section of
+the `config.xml` that SHALL define the scope of the LDAP search as defined
 by the https://ldapwiki.com/wiki/LDAP%20Search%20Scopes.
 
 ##### RQ.SRS-014.LDAP.RoleMapping.Configuration.UserDirectory.RoleMapping.Scope.Value.Base
 version: 1.0
 
-[ClickHouse] SHALL support the `base` value for the the `<scope>` parameter in the 
+[ClickHouse] SHALL support the `base` value for the the `<scope>` parameter in the
 `<user_directories><ldap><role_mapping>` section of the `config.xml` that SHALL
 limit the scope as specified by the https://ldapwiki.com/wiki/BaseObject.
 
 ##### RQ.SRS-014.LDAP.RoleMapping.Configuration.UserDirectory.RoleMapping.Scope.Value.OneLevel
 version: 1.0
 
-[ClickHouse] SHALL support the `one_level` value for the the `<scope>` parameter in the 
+[ClickHouse] SHALL support the `one_level` value for the the `<scope>` parameter in the
 `<user_directories><ldap><role_mapping>` section of the `config.xml` that SHALL
 limit the scope as specified by the https://ldapwiki.com/wiki/SingleLevel.
 
 ##### RQ.SRS-014.LDAP.RoleMapping.Configuration.UserDirectory.RoleMapping.Scope.Value.Children
 version: 1.0
 
-[ClickHouse] SHALL support the `children` value for the the `<scope>` parameter in the 
+[ClickHouse] SHALL support the `children` value for the the `<scope>` parameter in the
 `<user_directories><ldap><role_mapping>` section of the `config.xml` that SHALL
 limit the scope as specified by the https://ldapwiki.com/wiki/SubordinateSubtree.
 
 ##### RQ.SRS-014.LDAP.RoleMapping.Configuration.UserDirectory.RoleMapping.Scope.Value.Subtree
 version: 1.0
 
-[ClickHouse] SHALL support the `children` value for the the `<scope>` parameter in the 
+[ClickHouse] SHALL support the `children` value for the the `<scope>` parameter in the
 `<user_directories><ldap><role_mapping>` section of the `config.xml` that SHALL
 limit the scope as specified by the https://ldapwiki.com/wiki/WholeSubtree.
 
 ##### RQ.SRS-014.LDAP.RoleMapping.Configuration.UserDirectory.RoleMapping.Scope.Value.Default
 version: 1.0
 
-[ClickHouse] SHALL support the `subtree` as the default value for the the `<scope>` parameter in the 
+[ClickHouse] SHALL support the `subtree` as the default value for the the `<scope>` parameter in the
 `<user_directories><ldap><role_mapping>` section of the `config.xml` when the `<scope>` parameter is not specified.
 
 #### Search Filter Parameter
@@ -1568,26 +1568,26 @@ version: 1.0
 version: 1.0
 
 [ClickHouse] SHALL support the `<search_filter>` parameter in the `<user_directories><ldap><role_mapping>`
-section of the `config.xml` that SHALL specify the template used to construct 
+section of the `config.xml` that SHALL specify the template used to construct
 the [LDAP filter](https://ldap.com/ldap-filters/) for the search.
 
-The resulting filter SHALL be constructed by replacing all `{user_name}`, `{bind_dn}`, `{base_dn}`, and `{user_dn}` substrings 
+The resulting filter SHALL be constructed by replacing all `{user_name}`, `{bind_dn}`, `{base_dn}`, and `{user_dn}` substrings
 of the template with the actual user name, bind `DN`, and base `DN` during each the [LDAP] search.
- 
+
 #### Prefix Parameter
 
 ##### RQ.SRS-014.LDAP.RoleMapping.Configuration.UserDirectory.RoleMapping.Prefix
 version: 1.0
 
 [ClickHouse] SHALL support the `<prefix>` parameter in the `<user directories><ldap><role_mapping>`
-section of the `config.xml` that SHALL be expected to be in front of each string in 
-the original list of strings returned by the [LDAP] search. 
-Prefix SHALL be removed from the original strings and resulting strings SHALL be treated as [RBAC] role names. 
+section of the `config.xml` that SHALL be expected to be in front of each string in
+the original list of strings returned by the [LDAP] search.
+Prefix SHALL be removed from the original strings and resulting strings SHALL be treated as [RBAC] role names.
 
 ##### RQ.SRS-014.LDAP.RoleMapping.Configuration.UserDirectory.RoleMapping.Prefix.Default
 version: 1.0
 
-[ClickHouse] SHALL support empty string as the default value of the `<prefix>` parameter in 
+[ClickHouse] SHALL support empty string as the default value of the `<prefix>` parameter in
 the `<user directories><ldap><role_mapping>` section of the `config.xml`.
 
 ##### RQ.SRS-014.LDAP.RoleMapping.Configuration.UserDirectory.RoleMapping.Prefix.WithUTF8Characters
@@ -1614,7 +1614,7 @@ the `<user directories><ldap><role_mapping>` section of the `config.xml`.
 * **LDAP**: https://en.wikipedia.org/wiki/Lightweight_Directory_Access_Protocol
 * **ClickHouse:** https://clickhouse.tech
 * **GitHub Repository**: https://github.com/ClickHouse/ClickHouse/blob/master/tests/testflows/ldap/role_mapping/requirements/requirements.md
-* **Revision History**: https://github.com/ClickHouse/ClickHouse/commits/master/tests/testflows/ldap/role_mapping/requirements/requirements.md 
+* **Revision History**: https://github.com/ClickHouse/ClickHouse/commits/master/tests/testflows/ldap/role_mapping/requirements/requirements.md
 * **Git:** https://git-scm.com/
 
 [RBAC]: https://clickhouse.tech/docs/en/operations/access-rights/

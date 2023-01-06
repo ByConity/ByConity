@@ -25,7 +25,7 @@
 
 namespace DB
 {
-/// Send data to single partititon. Usually used with RepartitionTransform and BufferedCopyTransform: 
+/// Send data to single partititon. Usually used with RepartitionTransform and BufferedCopyTransform:
 ///                                                 ||-> SinglePartitionExchangeSink[partition 0]
 /// RepartitionTransform--> BufferedCopyTransform-->||-> SinglePartitionExchangeSink[partition 1]
 ///                                                 ||-> SinglePartitionExchangeSink[partition 2]
@@ -33,8 +33,8 @@ namespace DB
 class SinglePartitionExchangeSink : public IExchangeSink
 {
 public:
-    explicit SinglePartitionExchangeSink(Block header_, 
-    BroadcastSenderPtr sender_, 
+    explicit SinglePartitionExchangeSink(Block header_,
+    BroadcastSenderPtr sender_,
     size_t partition_id_,
     ExchangeOptions options_);
     String getName() const override { return "SinglePartitionExchangeSink"; }

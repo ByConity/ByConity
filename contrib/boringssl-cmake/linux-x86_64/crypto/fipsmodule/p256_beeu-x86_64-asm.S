@@ -11,7 +11,7 @@
 #if defined(BORINGSSL_PREFIX)
 #include <boringssl_prefix_symbols_asm.h>
 #endif
-.text	
+.text
 
 .type	beeu_mod_inverse_vartime,@function
 .hidden	beeu_mod_inverse_vartime
@@ -19,7 +19,7 @@
 .hidden beeu_mod_inverse_vartime
 .align	32
 beeu_mod_inverse_vartime:
-.cfi_startproc	
+.cfi_startproc
 	pushq	%rbp
 .cfi_adjust_cfa_offset	8
 .cfi_offset	rbp,-16
@@ -336,7 +336,7 @@ beeu_mod_inverse_vartime:
 .cfi_adjust_cfa_offset	-8
 .cfi_restore	rbp
 	.byte	0xf3,0xc3
-.cfi_endproc	
+.cfi_endproc
 
 .size	beeu_mod_inverse_vartime, .-beeu_mod_inverse_vartime
 #endif

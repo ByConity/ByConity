@@ -198,7 +198,7 @@ namespace
              *    b. if version of visible row is 5, need to keep visible row.
              *    Thus need to return invisible row2 with delete info.
              * In the above two cases, both need to return row info with delete info.
-             * 
+             *
              * TODO: handle the above two cases in same block in writing process
              ************************************************************************************************************************/
                 size_t insert_pos = rows_with_key.size(), delete_pos = rows_with_key.size();

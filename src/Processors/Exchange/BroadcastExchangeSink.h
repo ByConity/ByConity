@@ -34,7 +34,7 @@ public:
     BroadcastExchangeSink(Block header_, BroadcastSenderPtrs senders_, ExchangeOptions options_);
     virtual ~BroadcastExchangeSink() override;
     String getName() const override { return "BroadcastExchangeSink"; }
-    
+
 protected:
     virtual void consume(Chunk) override;
     virtual void onFinish() override;

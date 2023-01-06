@@ -567,7 +567,7 @@ void ColumnArray::insertRangeSelective(const IColumn & src, const Selector & sel
     cur_data.reserve(cur_size);
     cur_offsets.resize(cur_size);
 
-    for (size_t i = 0; i < length; ++i) 
+    for (size_t i = 0; i < length; ++i)
     {
         size_t src_pos = selector[selector_start + i];
         size_t offset = src_offsets[src_pos - 1];

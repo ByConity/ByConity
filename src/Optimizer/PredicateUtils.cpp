@@ -390,7 +390,7 @@ bool PredicateUtils::isInliningCandidate(ConstASTPtr & predicate, ProjectionNode
         UInt64 count = dependency.second;
 
         bool symbol_reference_or_literal = false;
-        
+
 
         auto & expr = assignments.at(symbol);
         if (expr->as<const ASTLiteral>() || expr->as<const ASTIdentifier>())

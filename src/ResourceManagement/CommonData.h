@@ -200,7 +200,7 @@ struct WorkerNodeResourceData
 
     UInt32 register_time;
     UInt32 last_update_time;
-    
+
     UInt64 reserved_memory_bytes;
     UInt32 reserved_cpu_cores;
     WorkerState state;
@@ -220,7 +220,7 @@ struct WorkerNodeResourceData
     inline String toDebugString() const
     {
         std::stringstream ss;
-        ss << "{ vw:" << vw_name 
+        ss << "{ vw:" << vw_name
         << ", worker_group:" << worker_group_id
         << ", id:" << id
         << ", cpu_usage:" << cpu_usage
@@ -338,7 +338,7 @@ struct WorkerGroupMetrics
     inline String toDebugString() const
     {
         std::stringstream ss;
-        ss << id << ":" 
+        ss << id << ":"
             << max_cpu_usage << "|" << min_cpu_usage << "|" << avg_cpu_usage << "|"
             << max_mem_usage << "|" << min_mem_usage << "|" << avg_mem_usage << "|" << min_mem_available
             << "|" << total_queries;

@@ -129,7 +129,7 @@ Pipe StorageSystemCnchTableInfo::read(
     Catalog::CatalogPtr cnch_catalog = context->getCnchCatalog();
     if (context->getServerType() != ServerType::cnch_server || !cnch_catalog)
         throw Exception("Table system.cnch_table_info only support cnch_server", ErrorCodes::LOGICAL_ERROR);
-    
+
     NameSet names_set(column_names.begin(), column_names.end());
     Block sample_block = metadata_snapshot->getSampleBlock();
     Block res_block;

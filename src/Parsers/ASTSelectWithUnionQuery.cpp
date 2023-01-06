@@ -159,7 +159,7 @@ void ASTSelectWithUnionQuery::serialize(WriteBuffer & buf) const
         serializeEnum(mode, buf);
 
     writeBinary(is_normalized, buf);
-    
+
     serializeAST(list_of_selects, buf);
 
     writeBinary(set_of_modes.size(), buf);

@@ -127,7 +127,7 @@ public:
         return plan_node;
     }
 
-protected:    
+protected:
     PlanNodeId id;
     PlanNodes children;
     PlanNodeStatisticsEstimate statistics;

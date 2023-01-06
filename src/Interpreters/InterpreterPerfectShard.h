@@ -42,7 +42,7 @@ using DataTypePtr = std::shared_ptr<const IDataType>;
  *        for example, select a, count() from test_table group by a
  *        server will get two columns (a, count()), we will add a new aggregation-step sum(count()) to merge aggregation with the same key.
  * 2. do the final projection, limits, and order by if possible.
- */ 
+ */
 class InterpreterPerfectShard
 {
 public:

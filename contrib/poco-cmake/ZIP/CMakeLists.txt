@@ -1,6 +1,6 @@
 
 if (USE_INTERNAL_POCO_LIBRARY)
-    # Poco::ZIP 
+    # Poco::ZIP
     file(GLOB SRCS "${LIBRARY_DIR}/Zip/src/*.cpp")
 
     add_library (_poco_zip ${SRCS})

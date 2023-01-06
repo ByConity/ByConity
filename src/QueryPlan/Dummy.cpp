@@ -18,7 +18,7 @@
 #include <QueryPlan/Dummy.h>
 #include <Core/NamesAndTypes.h>
 
-namespace DB 
+namespace DB
 {
 
 std::pair<String, PlanNodePtr> createDummyPlanNode(ContextMutablePtr context)

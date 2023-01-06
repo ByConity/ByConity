@@ -83,12 +83,12 @@ public:
         step->setStepDescription(step_description);
         return std::move(step);
     }
-    
+
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr) const override
     {
         return std::make_shared<FinalSampleStep>(input_streams[0], sample_size, max_chunk_size);
     }
-    
+
 
     static ITransformingStep::Traits getTraits()
     {

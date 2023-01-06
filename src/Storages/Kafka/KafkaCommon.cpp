@@ -163,7 +163,7 @@ String toString(const cppkafka::TopicPartitionList & tpl)
     {
         if (iter != tpl.begin())
             oss << ", ";
-        
+
         oss << iter->get_topic() << "["
             << iter->get_partition() << ":"
             << (iter->get_offset() == RD_KAFKA_OFFSET_INVALID ? "#" : std::to_string(iter->get_offset()))

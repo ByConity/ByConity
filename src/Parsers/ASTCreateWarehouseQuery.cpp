@@ -44,10 +44,10 @@ void ASTCreateWarehouseQuery::formatImpl(const FormatSettings &s, FormatState &s
 
     if (settings)
     {
-        s.ostr << (s.hilite ? hilite_keyword : "") 
-        << s.nl_or_ws << "SETTINGS " 
+        s.ostr << (s.hilite ? hilite_keyword : "")
+        << s.nl_or_ws << "SETTINGS "
         << (s.hilite ? hilite_none : "");
-        
+
         settings->formatImpl(s, state, frame);
     }
 }

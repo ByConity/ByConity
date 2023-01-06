@@ -34,7 +34,7 @@ SELECT * FROM test_ingest_partition_target ORDER BY id1 ASC, id2 ASC;
 DROP TABLE IF EXISTS test_ingest_partition_target;
 DROP TABLE IF EXISTS test_ingest_partition_source;
 
--- Test the case when target table has no part 
+-- Test the case when target table has no part
 CREATE TABLE test_ingest_partition_target (p_date Date, id1 Int32, id2 Int32, c1 String, c2 String) ENGINE = CnchMergeTree PARTITION BY p_date ORDER BY (id1, id2) SETTINGS index_granularity = 8192;
 CREATE TABLE test_ingest_partition_source (p_date Date, id1 Int32, id2 Int32, c1 String, c2 String) ENGINE = CnchMergeTree PARTITION BY p_date ORDER BY (id1, id2) SETTINGS index_granularity = 8192;
 
@@ -50,8 +50,8 @@ SELECT '---';
 DROP TABLE IF EXISTS test_ingest_partition_target;
 DROP TABLE IF EXISTS test_ingest_partition_source;
 
-CREATE TABLE test_ingest_partition_target (`date` Date, `id` Int32, `name` Map(String, String)) ENGINE = CnchMergeTree PARTITION BY date ORDER BY id; 
-CREATE TABLE test_ingest_partition_source (`date` Date, `id` Int32, `name` Map(String, String)) ENGINE = CnchMergeTree PARTITION BY date ORDER BY id; 
+CREATE TABLE test_ingest_partition_target (`date` Date, `id` Int32, `name` Map(String, String)) ENGINE = CnchMergeTree PARTITION BY date ORDER BY id;
+CREATE TABLE test_ingest_partition_source (`date` Date, `id` Int32, `name` Map(String, String)) ENGINE = CnchMergeTree PARTITION BY date ORDER BY id;
 
 SYSTEM STOP MERGES test_ingest_partition_target;
 

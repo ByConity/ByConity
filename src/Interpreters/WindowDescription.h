@@ -132,7 +132,7 @@ struct WindowFrame
         assert(false);
         return "<unknown frame boundary>";
     }
-    
+
     void serialize(WriteBuffer & buffer) const;
     void deserialize(ReadBuffer & buffer);
 };

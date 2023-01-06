@@ -395,7 +395,7 @@ QueryQueueInfo VirtualWarehouse::getAggQueueInfo()
         //Remove outdated entries
         if (it->second.last_sync < timeout_threshold)
         {
-            LOG_DEBUG(&Poco::Logger::get("VirtualWarehouse"), 
+            LOG_DEBUG(&Poco::Logger::get("VirtualWarehouse"),
                         "Removing outdated server sync from {}, last synced {}",
                         it->first, std::to_string(it->second.last_sync));
             it = server_query_queue_map.erase(it);

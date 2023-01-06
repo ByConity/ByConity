@@ -37,7 +37,7 @@ namespace ErrorCodes
     extern const int RESOURCE_MANAGER_WRONG_VW_SCHEDULE_ALGO;
 }
 
-InterpreterCreateWarehouseQuery::InterpreterCreateWarehouseQuery(const ASTPtr & query_ptr_, ContextPtr context_) 
+InterpreterCreateWarehouseQuery::InterpreterCreateWarehouseQuery(const ASTPtr & query_ptr_, ContextPtr context_)
     : WithContext(context_), query_ptr(query_ptr_) {}
 
 

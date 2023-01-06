@@ -90,9 +90,9 @@ void PartLinker::execute()
 
         String destination = new_part_path;
         String file_name = it->name();
-        auto rename_it = std::find_if(files_to_rename.begin(), files_to_rename.end(), 
+        auto rename_it = std::find_if(files_to_rename.begin(), files_to_rename.end(),
                         [&file_name](const auto & rename_pair) { return rename_pair.first == file_name; });
-        
+
         if (rename_it != files_to_rename.end())
         {
             if (rename_it->second.empty())

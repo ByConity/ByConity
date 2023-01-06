@@ -407,7 +407,7 @@ version: 1.0
 that SHALL define a period of time, in seconds, after a successful bind attempt, during which a user SHALL be assumed
 to be successfully authenticated for all consecutive requests without contacting the [LDAP] server.
 After period of time since the last successful attempt expires then on the authentication attempt
-SHALL result in contacting the [LDAP] server to verify the username and password. 
+SHALL result in contacting the [LDAP] server to verify the username and password.
 
 #### RQ.SRS-007.LDAP.Configuration.Server.VerificationCooldown.Default
 version: 1.0

@@ -43,7 +43,7 @@ void StorageSystemBrokenTables::fillData(MutableColumns & res_columns, ContextPt
     {
         if (check_access_for_databases && !access->isGranted(AccessType::SHOW_DATABASES, database_name))
             continue;
-        
+
         auto tables = database->getBrokenTables();
         for (const auto & [broken_table, error_msg] : tables)
         {

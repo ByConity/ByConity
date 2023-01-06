@@ -1162,7 +1162,7 @@ protected:
 
         if (query_prewhere_expr)
             generated_query->setExpression(ASTSelectQuery::Expression::PREWHERE, std::move(query_prewhere_expr));
-            
+
         UInt64 max_block_size = context->getSettingsRef().max_block_size;
         if (!max_block_size)
             throw Exception("Setting 'max_block_size' cannot be zero", ErrorCodes::PARAMETER_OUT_OF_BOUND);

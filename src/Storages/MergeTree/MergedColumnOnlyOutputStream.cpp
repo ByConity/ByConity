@@ -83,7 +83,7 @@ MergedColumnOnlyOutputStream::MergedColumnOnlyOutputStream(
     , header(header_)
 {
     NamesAndTypesList columns_list;
-    
+
     columns_list = header.getNamesAndTypesList();
 
     writer = data_part->getWriter(

@@ -18,7 +18,7 @@
 
 namespace DB::FDB
 {
-    
+
 enum FDBError
 {
 #define CREATE_ENUM(name, number) \

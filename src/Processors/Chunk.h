@@ -56,7 +56,7 @@ public:
 
     /// used for indicating
     virtual Type getType() const { return Type::Any; }
-    
+
     virtual bool isEqual(const ChunkInfo & rhs) const { return this == &rhs; }
 
 protected:

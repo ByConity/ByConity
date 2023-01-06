@@ -35,8 +35,8 @@ ASTPtr ASTAlterWarehouseQuery::clone() const
 void ASTAlterWarehouseQuery::formatImpl(const FormatSettings &s, FormatState &state, FormatStateStacked frame) const
 {
 
-    s.ostr << (s.hilite ? hilite_keyword : "") 
-           << "ALTER WAREHOUSE " 
+    s.ostr << (s.hilite ? hilite_keyword : "")
+           << "ALTER WAREHOUSE "
            << (s.hilite ? hilite_none : "");
 
     s.ostr << (s.hilite ? hilite_identifier : "") << name << (s.hilite ? hilite_none : "");

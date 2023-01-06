@@ -60,7 +60,7 @@ public:
     virtual void createDirectories(const String & path) override;
 
     virtual void clearDirectory(const String & path) override;
-    
+
     virtual void moveDirectory(const String& from_path, const String& to_path) override;
 
     virtual DiskDirectoryIteratorPtr iterateDirectory(const String& path) override;
@@ -106,7 +106,7 @@ private:
 
     const String disk_name;
     const String disk_path;
-    
+
     HDFSConnectionParams hdfs_params;
 
     HDFSFileSystem hdfs_fs;

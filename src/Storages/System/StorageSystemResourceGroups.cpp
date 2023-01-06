@@ -89,7 +89,7 @@ void StorageSystemResourceGroups::fillData(MutableColumns & res_columns, Context
         res_columns[i++]->insert(info.max_queued_waiting_ms);
 
         res_columns[i++]->insert(info.cpu_shares);
-        
+
         if (info.last_used > 0)
             res_columns[i++]->insert(info.last_used / 1000);
         else

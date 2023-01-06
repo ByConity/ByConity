@@ -22,7 +22,7 @@
 #include <Columns/ColumnVector.h>
 #include <Columns/ColumnArray.h>
 
-namespace DB 
+namespace DB
 {
 
     using StateType = UInt8;
@@ -97,7 +97,7 @@ namespace DB
             data_to.insert(user_distribution, user_distribution + m_num_slots);
         }
 
-        void create(const AggregateDataPtr place) const override 
+        void create(const AggregateDataPtr place) const override
         {
             auto* d =  new (place) AggregateFunctionUserDistributionData;
             std::fill(d->user_distribution, d->user_distribution + m_num_slots, 0);

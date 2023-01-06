@@ -43,7 +43,7 @@ public:
         const DataStream & right_stream_,
         JoinPtr join_,
         size_t max_block_size_);
-    
+
     JoinStep(
         DataStreams input_streams_,
         DataStream output_stream_,
@@ -57,7 +57,7 @@ public:
         ASOF::Inequality asof_inequality_ = ASOF::Inequality::GreaterOrEquals,
         DistributionType distribution_type_ = DistributionType::UNKNOWN,
         bool magic_set_ = false);
-    
+
 
     String getName() const override { return "Join"; }
 
@@ -129,7 +129,7 @@ private:
 
     ASTTableJoin::Kind kind;
     ASTTableJoin::Strictness strictness;
-    
+
     Names left_keys;
     Names right_keys;
 

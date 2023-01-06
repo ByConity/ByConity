@@ -104,7 +104,7 @@ public:
                 {
                     UInt8 hit = data1[j];
                     UInt8 level = data2[j];
-                    if (hit) 
+                    if (hit)
                     {
                         hit_level = level;
                         // take j

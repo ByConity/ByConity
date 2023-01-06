@@ -112,7 +112,7 @@ public:
     size_t sizeOfDifference(const NamesAndTypesList & rhs) const;
 
     /// Check if columns are compatable. If return true, the data with such columns counld be shared. Eg: table with
-    /// current columns can attach parts with columns 'rhs', and vice versas.  if there are more than one keys_columns, 
+    /// current columns can attach parts with columns 'rhs', and vice versas.  if there are more than one keys_columns,
     /// they should appear with the same order in this two column lists.
     bool isCompatableWithKeyColumns(const NamesAndTypesList & rhs, const Names & keys_columns);
 

@@ -38,13 +38,13 @@ void evaluateWhereCondition(const ASTPtr & ast, std::map<String,String> & condit
 {
     if (!ast)
         return;
-    
+
     if (ASTFunction * func = ast->as<ASTFunction>())
     {
         if (func->name == "and" || func->name == "or")
         {
             for (auto & arg : func->arguments->children)
-                evaluateWhereCondition(arg, conditions); 
+                evaluateWhereCondition(arg, conditions);
         }
         else if (func->name == "equals")
         {
@@ -91,7 +91,7 @@ void StorageSystemMetastore::fillData(MutableColumns & res_columns, ContextPtr c
 
 
     StoragePtr storage = DatabaseCatalog::instance().getTable(StorageID{database, table}, context);
-    
+
     if (auto metastore = dynamic_cast<MergeTreeData *>(storage.get())->getMetastore())
     {
         auto it = metastore->getMetaInfo();

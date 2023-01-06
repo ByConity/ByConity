@@ -271,7 +271,7 @@ void Aggregator::Params::serialize(WriteBuffer & buf) const
 
 Aggregator::Params Aggregator::Params::deserialize(ReadBuffer & buf, const ContextPtr & context)
 {
-    
+
     auto src_header = deserializeBlock(buf);
     auto intermediate_header = deserializeBlock(buf);
 

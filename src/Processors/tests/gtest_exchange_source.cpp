@@ -62,7 +62,7 @@ TEST(ExchangeSource, LocalNormalTest)
     ASSERT_TRUE(status.code == BroadcastStatusCode::RUNNING);
 
     Block header = {ColumnWithTypeAndName(ColumnUInt8::create(), std::make_shared<DataTypeUInt8>(), "local_exchange_test")};
-    
+
     auto exchange_source = std::make_shared<ExchangeSource>(std::move(header), local_receiver, exchange_options);
     QueryPipeline pipeline;
 
@@ -87,7 +87,7 @@ TEST(ExchangeSource, LocalNormalTest)
     }
 
     executor.cancel();
-    
+
 }
 
 TEST(ExchangeSource, LocalLimitTest)

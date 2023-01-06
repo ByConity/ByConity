@@ -22,7 +22,7 @@
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsuggest-destructor-override"
-#include <Protos/data_part.pb.h>       
+#include <Protos/data_part.pb.h>
 #pragma GCC diagnostic pop
 
 namespace DB

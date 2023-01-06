@@ -1111,7 +1111,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                                     processor_elem.input_bytes = stats.input_bytes;
                                     processor_elem.output_rows = stats.output_rows;
                                     processor_elem.output_bytes = stats.output_bytes;
-                                    
+
                                     processors_profile_log->add(processor_elem);
                                 }
                             }

@@ -47,7 +47,7 @@ public:
 
     bool needKeepOrder() const { return keep_order; }
     const std::unordered_map<String, std::vector<String>> & getOutToInputs() const { return output_to_inputs; }
-    
+
     Block getHeader() const { return getOutputStream().header; }
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
     void setInputStreams(const DataStreams & input_streams_) override;

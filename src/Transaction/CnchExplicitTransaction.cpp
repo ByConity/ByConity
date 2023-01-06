@@ -154,10 +154,10 @@ TxnTimestamp CnchExplicitTransaction::rollback()
     LOG_DEBUG(log, "Explicit transaction {} failed, start rollback\n", txn_record.txnID().toUInt64());
     /// First, abort all secondary transaction
     /// TODO: exception handling
-    std::for_each(secondary_txns.begin(), secondary_txns.end(), [this](auto & txn) 
+    std::for_each(secondary_txns.begin(), secondary_txns.end(), [this](auto & txn)
     {
         LOG_TRACE(log, "Aborting secondary transaction {}\n", txn->getTransactionID().toUInt64());
-        txn->abort(); 
+        txn->abort();
     });
     auto lock = getLock();
 
@@ -185,9 +185,9 @@ TxnTimestamp CnchExplicitTransaction::abort()
     LOG_DEBUG(log, "Abort explicit transaction {}\n", txn_record.txnID().toUInt64());
     auto lock = getLock();
     /// First, abort all secondary transaction
-    std::for_each(secondary_txns.begin(), secondary_txns.end(), [this](auto & txn) 
+    std::for_each(secondary_txns.begin(), secondary_txns.end(), [this](auto & txn)
     {
-        try 
+        try
         {
             LOG_TRACE(log, "Aborting secondary transaction {}\n", txn->getTransactionID().toUInt64());
             txn->abort();

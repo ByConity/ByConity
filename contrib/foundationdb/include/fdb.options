@@ -19,7 +19,7 @@ For example, "TLS_key_bytes" may be translated to:
  - TLS_KEY_BYTE
  - TLSKeyBytes
 
-If paramType is not present, the option takes no parameter. Otherwise it must be "String", 
+If paramType is not present, the option takes no parameter. Otherwise it must be "String",
  "Int" or "Bytes". These will be parsed according to the C API spec.
 
 If paramType is set, paramDescription must be present and describe the parameter.
@@ -30,8 +30,8 @@ description is not currently required but encouraged.
 
 <Options>
   <Scope name="NetworkOption">
-    <Option name="local_address"  code="10" 
-            paramType="String" paramDescription="IP:PORT" 
+    <Option name="local_address"  code="10"
+            paramType="String" paramDescription="IP:PORT"
             description="Deprecated"/>
     <Option name="cluster_file" code="20"
             paramType="String" paramDescription="path to cluster file"
@@ -122,7 +122,7 @@ description is not currently required but encouraged.
             description="This option is set automatically to communicate the list of supported clients to the active client."
             hidden="true" />
     <Option name="external_client" code="1001"
-            description="This option is set automatically on all clients loaded externally using the multi-version API." 
+            description="This option is set automatically on all clients loaded externally using the multi-version API."
             hidden="true" />
     <Option name="external_client_transport_id" code="1002"
             description="This option tells a child on a multiversion client what transport ID to use."
@@ -150,15 +150,15 @@ description is not currently required but encouraged.
     <Option name="snapshot_ryw_disable" code="27"
             description="Snapshot read operations will not see the results of writes done in the same transaction. This was the default behavior prior to API version 300." />
     <Option name="transaction_logging_max_field_length" code="405" paramType="Int" paramDescription="Maximum length of escaped key and value fields."
-            description="Sets the maximum escaped length of key and value fields to be logged to the trace file via the LOG_TRANSACTION option. This sets the ``transaction_logging_max_field_length`` option of each transaction created by this database. See the transaction option description for more information." 
+            description="Sets the maximum escaped length of key and value fields to be logged to the trace file via the LOG_TRANSACTION option. This sets the ``transaction_logging_max_field_length`` option of each transaction created by this database. See the transaction option description for more information."
             defaultFor="405"/>
     <Option name="transaction_timeout" code="500"
             paramType="Int" paramDescription="value in milliseconds of timeout"
-            description="Set a timeout in milliseconds which, when elapsed, will cause each transaction automatically to be cancelled. This sets the ``timeout`` option of each transaction created by this database. See the transaction option description for more information. Using this option requires that the API version is 610 or higher." 
+            description="Set a timeout in milliseconds which, when elapsed, will cause each transaction automatically to be cancelled. This sets the ``timeout`` option of each transaction created by this database. See the transaction option description for more information. Using this option requires that the API version is 610 or higher."
             defaultFor="500"/>
     <Option name="transaction_retry_limit" code="501"
             paramType="Int" paramDescription="number of times to retry"
-            description="Set a maximum number of retries after which additional calls to ``onError`` will throw the most recently seen error code. This sets the ``retry_limit`` option of each transaction created by this database. See the transaction option description for more information." 
+            description="Set a maximum number of retries after which additional calls to ``onError`` will throw the most recently seen error code. This sets the ``retry_limit`` option of each transaction created by this database. See the transaction option description for more information."
             defaultFor="501"/>
     <Option name="transaction_max_retry_delay" code="502"
             paramType="Int" paramDescription="value in milliseconds of maximum delay"
@@ -166,7 +166,7 @@ description is not currently required but encouraged.
             defaultFor="502"/>
     <Option name="transaction_size_limit" code="503"
             paramType="Int" paramDescription="value in bytes"
-            description="Set the maximum transaction size in bytes. This sets the ``size_limit`` option on each transaction created by this database. See the transaction option description for more information." 
+            description="Set the maximum transaction size in bytes. This sets the ``size_limit`` option on each transaction created by this database. See the transaction option description for more information."
             defaultFor="503"/>
     <Option name="transaction_causal_read_risky" code="504"
             description="The read version will be committed, and usually will be the latest committed, but might not be the latest committed in the event of a simultaneous fault and misbehaving clock."
@@ -175,7 +175,7 @@ description is not currently required but encouraged.
             description="Addresses returned by get_addresses_for_key include the port when enabled. This will be enabled by default in api version 630, and this option will be deprecated."
             defaultFor="23"/>
   </Scope>
-  
+
   <Scope name="TransactionOption">
     <Option name="causal_write_risky" code="10"
             description="The transaction, if not self-conflicting, may be committed a second time after commit succeeds, in the event of a fault"/>
@@ -209,7 +209,7 @@ description is not currently required but encouraged.
             description="Allows this transaction to read and modify system keys (those that start with the byte 0xFF)"/>
     <Option name="read_system_keys" code="302"
             description="Allows this transaction to read system keys (those that start with the byte 0xFF)"/>
-    <Option name="debug_dump" code="400" 
+    <Option name="debug_dump" code="400"
             hidden="true" />
     <Option name="debug_retry_logging" code="401" paramType="String" paramDescription="Optional transaction name" />
     <Option name="transaction_logging_enable" code="402" paramType="String" paramDescription="String identifier to be used in the logs when tracing this transaction. The identifier must not exceed 100 characters."
@@ -226,7 +226,7 @@ description is not currently required but encouraged.
             persistent="true" />
     <Option name="retry_limit" code="501"
             paramType="Int" paramDescription="number of times to retry"
-            description="Set a maximum number of retries after which additional calls to ``onError`` will throw the most recently seen error code. Valid parameter values are ``[-1, INT_MAX]``. If set to -1, will disable the retry limit. Prior to API version 610, like all other transaction options, the retry limit must be reset after a call to ``onError``. If the API version is 610 or greater, the retry limit is not reset after an ``onError`` call. Note that at all API versions, it is safe and legal to set the retry limit each time the transaction begins, so most code written assuming the older behavior can be upgraded to the newer behavior without requiring any modification, and the caller is not required to implement special logic in retry loops to only conditionally set this option." 
+            description="Set a maximum number of retries after which additional calls to ``onError`` will throw the most recently seen error code. Valid parameter values are ``[-1, INT_MAX]``. If set to -1, will disable the retry limit. Prior to API version 610, like all other transaction options, the retry limit must be reset after a call to ``onError``. If the API version is 610 or greater, the retry limit is not reset after an ``onError`` call. Note that at all API versions, it is safe and legal to set the retry limit each time the transaction begins, so most code written assuming the older behavior can be upgraded to the newer behavior without requiring any modification, and the caller is not required to implement special logic in retry loops to only conditionally set this option."
             persistent="true"/>
     <Option name="max_retry_delay" code="502"
             paramType="Int" paramDescription="value in milliseconds of maximum delay"
@@ -272,7 +272,7 @@ description is not currently required but encouraged.
   </Scope>
 
   <Scope name="MutationType">
-    <Option name="add" code="2" 
+    <Option name="add" code="2"
             paramType="Bytes" paramDescription="addend"
             description="Performs an addition of little-endian integers. If the existing value in the database is not present or shorter than ``param``, it is first extended to the length of ``param`` with zero bytes.  If ``param`` is shorter than the existing value in the database, the existing value is truncated to match the length of ``param``. The integers to be added must be stored in a little-endian representation.  They can be signed in two's complement representation or unsigned. You can add to an integer at a known offset in the value by prepending the appropriate number of zero bytes to ``param`` and padding with zero bytes to match the length of the value. However, this offset technique requires that you know the addition will not cause the integer field within the value to overflow."/>
     <Option name="and" code="6"

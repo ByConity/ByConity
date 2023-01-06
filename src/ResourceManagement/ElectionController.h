@@ -57,7 +57,7 @@ private:
     ResourceManagerController & rm_controller;
     bool enable_leader_election{false};
     std::atomic_bool is_leader{false};
-    
+
 };
 
 using ElectionControllerPtr = std::shared_ptr<ElectionController>;

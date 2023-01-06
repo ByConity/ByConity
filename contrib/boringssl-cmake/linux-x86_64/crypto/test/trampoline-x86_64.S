@@ -11,7 +11,7 @@
 #if defined(BORINGSSL_PREFIX)
 #include <boringssl_prefix_symbols_asm.h>
 #endif
-.text	
+.text
 
 
 
@@ -26,7 +26,7 @@
 .align	16
 abi_test_trampoline:
 .Labi_test_trampoline_seh_begin:
-.cfi_startproc	
+.cfi_startproc
 
 
 
@@ -181,7 +181,7 @@ abi_test_unwind_stop:
 
 
 	.byte	0xf3,0xc3
-.cfi_endproc	
+.cfi_endproc
 .Labi_test_trampoline_seh_end:
 .size	abi_test_trampoline,.-abi_test_trampoline
 .type	abi_test_clobber_rax, @function
@@ -440,7 +440,7 @@ abi_test_clobber_xmm15:
 .hidden abi_test_bad_unwind_wrong_register
 .align	16
 abi_test_bad_unwind_wrong_register:
-.cfi_startproc	
+.cfi_startproc
 .Labi_test_bad_unwind_wrong_register_seh_begin:
 	pushq	%r12
 .cfi_adjust_cfa_offset	8
@@ -455,7 +455,7 @@ abi_test_bad_unwind_wrong_register:
 .cfi_restore	%r12
 	.byte	0xf3,0xc3
 .Labi_test_bad_unwind_wrong_register_seh_end:
-.cfi_endproc	
+.cfi_endproc
 .size	abi_test_bad_unwind_wrong_register,.-abi_test_bad_unwind_wrong_register
 
 
@@ -466,7 +466,7 @@ abi_test_bad_unwind_wrong_register:
 .hidden abi_test_bad_unwind_temporary
 .align	16
 abi_test_bad_unwind_temporary:
-.cfi_startproc	
+.cfi_startproc
 .Labi_test_bad_unwind_temporary_seh_begin:
 	pushq	%r12
 .cfi_adjust_cfa_offset	8
@@ -487,7 +487,7 @@ abi_test_bad_unwind_temporary:
 .cfi_restore	%r12
 	.byte	0xf3,0xc3
 .Labi_test_bad_unwind_temporary_seh_end:
-.cfi_endproc	
+.cfi_endproc
 .size	abi_test_bad_unwind_temporary,.-abi_test_bad_unwind_temporary
 
 

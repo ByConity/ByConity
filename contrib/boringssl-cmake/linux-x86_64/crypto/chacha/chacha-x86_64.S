@@ -11,7 +11,7 @@
 #if defined(BORINGSSL_PREFIX)
 #include <boringssl_prefix_symbols_asm.h>
 #endif
-.text	
+.text
 
 .extern	OPENSSL_ia32cap_P
 .hidden OPENSSL_ia32cap_P
@@ -50,7 +50,7 @@
 .type	ChaCha20_ctr32,@function
 .align	64
 ChaCha20_ctr32:
-.cfi_startproc	
+.cfi_startproc
 	cmpq	$0,%rdx
 	je	.Lno_data
 	movq	OPENSSL_ia32cap_P+4(%rip),%r10
@@ -332,13 +332,13 @@ ChaCha20_ctr32:
 .cfi_adjust_cfa_offset	-136
 .Lno_data:
 	.byte	0xf3,0xc3
-.cfi_endproc	
+.cfi_endproc
 .size	ChaCha20_ctr32,.-ChaCha20_ctr32
 .type	ChaCha20_ssse3,@function
 .align	32
 ChaCha20_ssse3:
 .LChaCha20_ssse3:
-.cfi_startproc	
+.cfi_startproc
 	movq	%rsp,%r9
 .cfi_def_cfa_register	r9
 	cmpq	$128,%rdx
@@ -469,13 +469,13 @@ ChaCha20_ssse3:
 .cfi_def_cfa_register	rsp
 .Lssse3_epilogue:
 	.byte	0xf3,0xc3
-.cfi_endproc	
+.cfi_endproc
 .size	ChaCha20_ssse3,.-ChaCha20_ssse3
 .type	ChaCha20_4x,@function
 .align	32
 ChaCha20_4x:
 .LChaCha20_4x:
-.cfi_startproc	
+.cfi_startproc
 	movq	%rsp,%r9
 .cfi_def_cfa_register	r9
 	movq	%r10,%r11
@@ -1021,13 +1021,13 @@ ChaCha20_4x:
 .cfi_def_cfa_register	rsp
 .L4x_epilogue:
 	.byte	0xf3,0xc3
-.cfi_endproc	
+.cfi_endproc
 .size	ChaCha20_4x,.-ChaCha20_4x
 .type	ChaCha20_8x,@function
 .align	32
 ChaCha20_8x:
 .LChaCha20_8x:
-.cfi_startproc	
+.cfi_startproc
 	movq	%rsp,%r9
 .cfi_def_cfa_register	r9
 	subq	$0x280+8,%rsp
@@ -1627,7 +1627,7 @@ ChaCha20_8x:
 .cfi_def_cfa_register	rsp
 .L8x_epilogue:
 	.byte	0xf3,0xc3
-.cfi_endproc	
+.cfi_endproc
 .size	ChaCha20_8x,.-ChaCha20_8x
 #endif
 .section	.note.GNU-stack,"",@progbits

@@ -221,7 +221,7 @@ void ReadBufferFromByteHDFS::tryConnect()
         int retry = 0 ;
         Poco::URI uri(uriPrefix);
         do{
-            // add retry on failure. 
+            // add retry on failure.
             fs = createHDFSFS(builder.get());
             if (fs == nullptr)
             {

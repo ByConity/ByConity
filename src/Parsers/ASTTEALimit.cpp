@@ -25,7 +25,7 @@ namespace DB
     ASTPtr ASTTEALimit::clone() const
     {
         auto res = std::make_shared<ASTTEALimit>(*this);
-        res->children.clear(); 
+        res->children.clear();
         CLONE(limit_value)
         CLONE(limit_offset)
         CLONE(group_expr_list)
@@ -39,8 +39,8 @@ namespace DB
         return "TEALIMIT";
     }
 
-    void ASTTEALimit::formatImpl(const FormatSettings & s, 
-                                 FormatState & state, 
+    void ASTTEALimit::formatImpl(const FormatSettings & s,
+                                 FormatState & state,
                                  FormatStateStacked frame) const
     {
         s.ostr << (s.hilite ? hilite_keyword : "") << "TEALIMIT ";

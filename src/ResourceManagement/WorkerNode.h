@@ -52,7 +52,7 @@ struct DeductionEntry
     UInt64 value;
     time_t delete_time;
 
-    DeductionEntry(DeductionType type_, UInt64 value_, time_t delete_time_) 
+    DeductionEntry(DeductionType type_, UInt64 value_, time_t delete_time_)
     : type(type_), value(value_), delete_time(delete_time_) {}
 };
 

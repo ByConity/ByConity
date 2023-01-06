@@ -119,8 +119,8 @@ void ConsistentHashRing::eraseImpl(const String & node, bool keep_physical)
 ConsistentHashRing::RingConstIterator ConsistentHashRing::findImpl(const String & key) const
 {
     /// Multi-probe hasing assign a key to its closest lower-bound node on the ring.
-    /// The key is assign num_probes times with a set of hash functions and the last assignment 
-    /// is returned. Yes, it's sound moron @@, but it works and backed by theory, pls read the 
+    /// The key is assign num_probes times with a set of hash functions and the last assignment
+    /// is returned. Yes, it's sound moron @@, but it works and backed by theory, pls read the
     /// paper for the formal proof.
     UInt64 min_distance = std::numeric_limits<UInt64>::max();
     auto ret = ring.begin();

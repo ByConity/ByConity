@@ -36,17 +36,17 @@ ASTPtr ASTShowWarehousesQuery::clone() const
 }
 void ASTShowWarehousesQuery::formatImpl(const FormatSettings & s, FormatState &/*state*/, FormatStateStacked /*frame*/) const
 {
-    s.ostr << (s.hilite ? hilite_keyword : "") 
-           << "SHOW WAREHOUSES " 
+    s.ostr << (s.hilite ? hilite_keyword : "")
+           << "SHOW WAREHOUSES "
            << (s.hilite ? hilite_none : "");
 
     if (!like.empty())
     {
         std::stringstream ss;
         ss << std::quoted(like, '\'');
-        s.ostr << (s.hilite ? hilite_keyword : "") 
-               << "LIKE " 
-               << (s.hilite ? hilite_none : "") 
+        s.ostr << (s.hilite ? hilite_keyword : "")
+               << "LIKE "
+               << (s.hilite ? hilite_none : "")
                << ss.str();
     }
 

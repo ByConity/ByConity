@@ -81,7 +81,7 @@ public:
 private:
     Processors & processors;
     std::mutex processors_mutex;
-    
+
     bool need_processors_profiles;
 
     ExecutingGraphPtr graph;

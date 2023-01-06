@@ -17,7 +17,7 @@ insert into table test_sample values ('2019-01-01', 10);
 set enable_final_sample = 1;
 
 select count() from test_sample sample 10;
-select count() from test_sample sample 10; 
+select count() from test_sample sample 10;
 select count() from test_sample sample 10;
 select count() from test_sample sample 10;
 select count() from test_sample sample 5;

@@ -27,7 +27,7 @@
 
 /***
  *  C++ client for fdb
- */ 
+ */
 
 namespace DB
 {

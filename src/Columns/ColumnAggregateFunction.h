@@ -194,7 +194,7 @@ public:
     void protect() override;
 
     void insertRangeFrom(const IColumn & from, size_t start, size_t length) override;
-    
+
     void insertRangeSelective(const IColumn & from, const IColumn::Selector & selector, size_t selector_start, size_t length) override;
 
     void popBack(size_t n) override;

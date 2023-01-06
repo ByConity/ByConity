@@ -64,7 +64,7 @@ public:
     /// save information of current disks into file.
     void flushDiskInfo() const;
 
-    /// load disk info from file. help to check uniqueness of disk id 
+    /// load disk info from file. help to check uniqueness of disk id
     DisksInfo loadDiskInfo() const;
 
 

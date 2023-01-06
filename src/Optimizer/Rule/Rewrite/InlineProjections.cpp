@@ -216,8 +216,8 @@ std::set<String> InlineProjections::extractInliningTargets(ProjectionNode * pare
             continue;
         }
 
-        auto& expr = child_step.getAssignments().at(symbol); 
-        
+        auto& expr = child_step.getAssignments().at(symbol);
+
         if(!ExpressionDeterminism::isDeterministic(expr, context)) {
             continue;
         }

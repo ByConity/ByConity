@@ -95,7 +95,7 @@ private:
     static void check_fdb_op(const fdb_error_t & error_t);
     /// convert metastore specific error code to Clickhouse error code for processing convenience in upper layer.
     static int toCommonErrorCode(const fdb_error_t & error_t);
-    
+
     FDB::FDBClientPtr fdb_client;
 };
 

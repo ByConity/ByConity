@@ -45,7 +45,7 @@ protected:
 	BigUnsignedInABase(int, Index c) : NumberlikeArray<Digit>(nullptr, c) {}
 
 	// Decreases len to eliminate any leading zero digits.
-	void zapLeadingZeros() { 
+	void zapLeadingZeros() {
 		while (len > 0 && blk[len - 1] == 0)
 			len--;
 	}
@@ -112,7 +112,7 @@ public:
 	bool isZero() const { return NumberlikeArray<Digit>::isEmpty(); }
 
 	/* Equality test.  For the purposes of this test, two BigUnsignedInABase
-	 * values must have the same base to be equal. */ 
+	 * values must have the same base to be equal. */
 	bool operator ==(const BigUnsignedInABase &x) const {
 		return base == x.base && NumberlikeArray<Digit>::operator ==(x);
 	}

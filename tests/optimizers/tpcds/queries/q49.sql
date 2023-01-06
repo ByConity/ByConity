@@ -110,7 +110,7 @@ select  channel, item, return_ratio, return_rank, currency_rank from
  			and sts.ss_net_profit > 1
                          and sts.ss_net_paid > 0
                          and sts.ss_quantity > 0
-                         and ss_sold_date_sk = d_date_sk 
+                         and ss_sold_date_sk = d_date_sk
                          and d_year = 2001
                          and d_moy = 12
  		group by sts.ss_item_sk

@@ -37,7 +37,7 @@ namespace ErrorCodes
 
 MergeTreeReaderStream::MergeTreeReaderStream(
         DiskPtr disk_,
-        const String & path_prefix_, const String & stream_name_, const String & data_file_extension_, 
+        const String & path_prefix_, const String & stream_name_, const String & data_file_extension_,
         size_t marks_count_,
         const MarkRanges & all_mark_ranges,
         const MergeTreeReaderSettings & settings,

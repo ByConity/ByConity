@@ -470,7 +470,7 @@ private:
                     }
                     case Container::UpdateResult::UPDATED: {
                         updated_elements.emplace_back(key, result.previous_value.value);
-                        
+
                         [[fallthrough]];
                     }
                     case Container::UpdateResult::UNTOUCHED: {

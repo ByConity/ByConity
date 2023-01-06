@@ -268,7 +268,7 @@ def parallel_login(self, server=None, user_count=10, timeout=300):
                                     for users in user_groups.values():
                                         for check in checks:
                                             tasks.append(pool.apply_async(check, (users, 0, 25, True)))
-    
+
                                     tasks.append(pool.apply_async(restart))
                             finally:
                                 with Then("logins during restart should work"):

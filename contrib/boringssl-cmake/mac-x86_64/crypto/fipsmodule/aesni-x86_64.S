@@ -11,7 +11,7 @@
 #if defined(BORINGSSL_PREFIX)
 #include <boringssl_prefix_symbols_asm.h>
 #endif
-.text	
+.text
 
 .globl	_aes_hw_encrypt
 .private_extern _aes_hw_encrypt

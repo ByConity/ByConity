@@ -101,7 +101,7 @@ public:
            return visitor.visit##TYPE(node, context); \
        }
        APPLY_AST_TYPES(VISITOR_DEF)
-#undef VISITOR_DEF 
+#undef VISITOR_DEF
         return visitor.visitNode(node, context);
     }
 

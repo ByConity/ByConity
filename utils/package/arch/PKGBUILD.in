@@ -30,4 +30,4 @@ package() {
         compiler=""
     fi
     cp $SRC/debian/clickhouse-server.service $pkgdir/usr/lib/systemd/system
-} 
+}

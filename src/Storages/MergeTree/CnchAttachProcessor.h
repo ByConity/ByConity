@@ -121,7 +121,7 @@ private:
     const Context& query_ctx;
     const int expand_thread_pool_threshold;
     const int max_worker_threads;
-    
+
     TransactionCnchPtr new_txn;
 
     std::unique_ptr<ThreadPool> worker_pool;

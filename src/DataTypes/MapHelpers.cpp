@@ -244,7 +244,7 @@ bool isMapImplicitKey(const String & map_col)
 
 bool isMapImplicitKeyOfSpecialMapName(const String & implicit_col, const String & map_col)
 {
-    return startsWith(implicit_col, getMapKeyPrefix(map_col)); 
+    return startsWith(implicit_col, getMapKeyPrefix(map_col));
 }
 
 bool isMapImplicitKeyNotKV(const String & map_col)

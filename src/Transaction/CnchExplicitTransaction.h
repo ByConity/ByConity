@@ -32,7 +32,7 @@ namespace DB
         Poco::Logger * log {&Poco::Logger::get("CnchExplicitTransaction")};
         std::vector<TransactionCnchPtr> secondary_txns;
         std::vector<String> statements;
-        static constexpr int MAX_RETRY = 3; 
+        static constexpr int MAX_RETRY = 3;
     public:
         CnchExplicitTransaction(const ContextPtr & context, TransactionRecord record);
         ~CnchExplicitTransaction() override = default;

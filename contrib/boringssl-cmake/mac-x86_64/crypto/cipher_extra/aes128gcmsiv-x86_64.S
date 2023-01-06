@@ -11,7 +11,7 @@
 #if defined(BORINGSSL_PREFIX)
 #include <boringssl_prefix_symbols_asm.h>
 #endif
-.data	
+.data
 
 .p2align	4
 one:
@@ -45,7 +45,7 @@ con3:
 .byte	-1,-1,-1,-1,-1,-1,-1,-1,4,5,6,7,4,5,6,7
 and_mask:
 .long	0,0xffffffff, 0xffffffff, 0xffffffff
-.text	
+.text
 
 .p2align	4
 GFMUL:

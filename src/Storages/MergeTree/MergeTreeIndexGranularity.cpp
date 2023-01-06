@@ -56,7 +56,7 @@ std::vector<size_t> MergeTreeIndexGranularity::getIndexGranularities() const
     {
         index_granularities.push_back(marks_rows_partial_sums[i]-marks_rows_partial_sums[i-1]);
     }
-    
+
     return index_granularities;
 }
 

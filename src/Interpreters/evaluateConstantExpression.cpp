@@ -308,7 +308,7 @@ namespace
                     return;
                 }
             };
-            
+
             populate_result(right);
             return result;
         }

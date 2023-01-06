@@ -94,7 +94,7 @@ public:
 
     void enable();
     void disable();
-    bool isInUse() const 
+    bool isInUse() const
     {
         return !disabled.load(std::memory_order_relaxed) && started.load(std::memory_order_relaxed);
     }

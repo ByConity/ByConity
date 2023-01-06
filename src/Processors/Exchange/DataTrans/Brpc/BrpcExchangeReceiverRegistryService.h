@@ -34,7 +34,7 @@ public:
         const ::DB::Protos::RegistryRequest * request,
         ::DB::Protos::RegistryResponse * response,
         ::google::protobuf::Closure * done) override;
-    
+
 
 private:
     int max_buf_size;

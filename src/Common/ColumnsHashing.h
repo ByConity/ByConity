@@ -129,12 +129,12 @@ struct HashMethodString
     }
 
     template <typename Data>
-    static void read(Data & data, ReadBuffer & buf, Arena & arena) 
-    { 
+    static void read(Data & data, ReadBuffer & buf, Arena & arena)
+    {
         if constexpr (place_string_to_arena)
             data.read(buf, arena);
         else
-            data.read(buf); 
+            data.read(buf);
     }
 
 protected:
@@ -177,12 +177,12 @@ struct HashMethodFixedString
     }
 
     template <typename Data>
-    static void read(Data & data, ReadBuffer & buf, Arena & arena) 
-    { 
+    static void read(Data & data, ReadBuffer & buf, Arena & arena)
+    {
         if constexpr (place_string_to_arena)
             data.read(buf, arena);
         else
-            data.read(buf); 
+            data.read(buf);
     }
 
 protected:
@@ -542,9 +542,9 @@ struct HashMethodKeysFixed
     }
 
     template <typename Data>
-    static void read(Data & data, ReadBuffer & buf, Arena &) 
-    { 
-        data.read(buf); 
+    static void read(Data & data, ReadBuffer & buf, Arena &)
+    {
+        data.read(buf);
     }
 
     HashMethodKeysFixed(const ColumnRawPtrs & key_columns, const Sizes & key_sizes_, const HashMethodContextPtr &)
@@ -734,9 +734,9 @@ struct HashMethodHashed
     }
 
     template <typename Data>
-    static void read(Data & data, ReadBuffer & buf, Arena &) 
-    { 
-        data.read(buf); 
+    static void read(Data & data, ReadBuffer & buf, Arena &)
+    {
+        data.read(buf);
     }
 };
 

@@ -33,7 +33,7 @@ AggregateFunctionPtr createAggregateFunctionBitmapColumnDiff(const std::string &
     String diff_direction_str{"forward"};
     if (!parameters.empty() && parameters.size() != 3)
         throw Exception("AggregateFunction " + name + " need three parameters", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-    
+
     if (!parameters.empty())
     {
         parameters[0].tryGet<UInt64>(return_type_);

@@ -639,7 +639,7 @@ void InterpreterSelectQuery::rewriteQueryBaseOnView()
 
 void InterpreterSelectQuery::buildQueryPlan(QueryPlan & query_plan)
 {
-    std::shared_ptr<InterpreterPerfectShard> interpreter_perfect_shard = 
+    std::shared_ptr<InterpreterPerfectShard> interpreter_perfect_shard =
         context->getSettingsRef().distributed_perfect_shard ? std::make_shared<InterpreterPerfectShard>(*this) : nullptr;
 
     if (interpreter_perfect_shard && interpreter_perfect_shard->checkPerfectShardable())
@@ -2170,7 +2170,7 @@ void InterpreterSelectQuery::executeWhere(QueryPlan & query_plan, const ActionsD
     String filter_description;
     if (options.distributed_stages)
         filter_description = ": " + getSelectQuery().where()->getColumnName();
-    
+
     where_step->setStepDescription("WHERE" + filter_description);
     query_plan.addStep(std::move(where_step));
 }

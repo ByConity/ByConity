@@ -58,7 +58,7 @@ static std::shared_ptr<DB::Catalog::IMetaStore> metastore_ptr = nullptr;
         metastore_ptr->put(common_key_prefix + std::to_string(index), common_value_prefix + "_" + std::to_string(index));
         index++;
     }
-    
+
     metastore_ptr->clean(common_key_prefix);
 };
 
@@ -96,7 +96,7 @@ static std::shared_ptr<DB::Catalog::IMetaStore> metastore_ptr = nullptr;
         keys.emplace_back(common_key_prefix + std::to_string(i));
         put_request.AddPut(DB::Catalog::SinglePutRequest(keys.back(), common_value_prefix + "_" + std::to_string(i)));
     }
-    
+
     // test loop
     for (auto _ : state)
     {
@@ -199,7 +199,7 @@ static std::shared_ptr<DB::Catalog::IMetaStore> metastore_ptr = nullptr;
 }
 
 
-int main(int argc, char** argv) { 
+int main(int argc, char** argv) {
     boost::program_options::options_description desc("Options");
     desc.add_options()
         ("help,h", "help list")
@@ -231,11 +231,11 @@ int main(int argc, char** argv) {
     }
 
     BENCHMARK(BM_metastore_put)->Unit(benchmark::kMicrosecond);
-    BENCHMARK(BM_metastore_get)->Unit(benchmark::kMicrosecond);  
+    BENCHMARK(BM_metastore_get)->Unit(benchmark::kMicrosecond);
     BENCHMARK(BM_metastore_multiput)->Unit(benchmark::kMicrosecond)->Arg(100)->Arg(1000);
     BENCHMARK(BM_metastore_multiget)->Unit(benchmark::kMicrosecond)->Arg(100)->Arg(1000);
     BENCHMARK(BM_metastore_scan)->Unit(benchmark::kMicrosecond)->Arg(10000)->Arg(100000)->Setup(ScanSetup)->Teardown(ScanTearDown);
-    ::benchmark::Initialize(&(argc), argv);              
+    ::benchmark::Initialize(&(argc), argv);
     // if (::benchmark::ReportUnrecognizedArguments(argc, argv))
     //     return 1;
     ::benchmark::RunSpecifiedBenchmarks();

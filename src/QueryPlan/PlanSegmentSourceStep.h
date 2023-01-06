@@ -29,7 +29,7 @@ class PlanSegmentSourceStep : public ISourceStep
 {
 public:
     explicit PlanSegmentSourceStep(Block header_,
-                                StorageID storage_id_, 
+                                StorageID storage_id_,
                                 const SelectQueryInfo & query_info_,
                                 const Names & column_names_,
                                 QueryProcessingStage::Enum processed_stage_,

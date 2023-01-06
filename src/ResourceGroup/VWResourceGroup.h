@@ -31,7 +31,7 @@ using CnchTopologyMasterPtr = std::shared_ptr<CnchTopologyMaster>;
 /** Resource group which has root groups for each Virtual Warehouse
   * Child classes (further filters) are currently not yet supported
   */
-class VWResourceGroup : public IResourceGroup, protected WithContext 
+class VWResourceGroup : public IResourceGroup, protected WithContext
 {
 public:
     VWResourceGroup(ContextPtr context_);

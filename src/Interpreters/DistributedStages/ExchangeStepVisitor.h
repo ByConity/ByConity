@@ -49,7 +49,7 @@ public:
     ExchangeStepResult visitLimitNode(QueryPlan::Node * node, ExchangeStepContext & exchange_context) override;
 
     ExchangeStepResult visitMergingSortedNode(QueryPlan::Node * node, ExchangeStepContext & exchange_context) override;
-    
+
     void addGather(QueryPlan & query_plan, ExchangeStepContext & exchange_context);
 
 private:

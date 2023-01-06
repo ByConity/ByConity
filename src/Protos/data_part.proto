@@ -11,7 +11,7 @@ message DataPartModel
     required uint64 last_modify_time = 6;
     optional string uuid = 7;           /// optional uuid for parts; set only if assign_part_uuids is configured in storage.
     optional string columns = 8;
-    optional uint64 meta_version = 9;   /// used for replaceing columns in later optimization. 
+    optional uint64 meta_version = 9;   /// used for replaceing columns in later optimization.
     optional string ttl_infos = 10;
     optional uint64 marks_count = 11;    /// save marks_count for non-adaptive parts;
     repeated uint64 index_granularities = 12;  /// defails of adaptive index granularity

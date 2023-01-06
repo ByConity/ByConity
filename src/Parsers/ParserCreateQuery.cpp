@@ -630,7 +630,7 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
                         if (temp) option = ignore_ttl = true;
 
                     } while (option);
-                    
+
                     if (!ignore_replicated && !ignore_async && !ignore_ttl)
                         return false;
                 }

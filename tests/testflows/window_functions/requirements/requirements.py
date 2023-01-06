@@ -3332,11 +3332,11 @@ RQ_SRS_019_ClickHouse_WindowFunctions_AggregateFunctions_Parametric = Requiremen
     num='3.8.2.3.1')
 
 SRS019_ClickHouse_Window_Functions = Specification(
-    name='SRS019 ClickHouse Window Functions', 
+    name='SRS019 ClickHouse Window Functions',
     description=None,
     author=None,
-    date=None, 
-    status=None, 
+    date=None,
+    status=None,
     approved_by=None,
     approved_date=None,
     approved_version=None,
@@ -3908,7 +3908,7 @@ version: 1.0
 #### RQ.SRS-019.ClickHouse.WindowFunctions.NonDistributedTables
 version: 1.0
 
-[ClickHouse] SHALL support correct operation of [window functions] on non-distributed 
+[ClickHouse] SHALL support correct operation of [window functions] on non-distributed
 table engines such as `MergeTree`.
 
 
@@ -4000,7 +4000,7 @@ version: 1.0
 
 [ClickHouse] SHALL return support using more than one `expr` in the [order_clause] definition.
 
-For example, 
+For example,
 
 ```sql
 SELECT x,s, sum(x) OVER (ORDER BY x DESC, s DESC) FROM values('x Int8, s String', (1,'a'),(1,'b'),(2,'b'))
@@ -4041,10 +4041,10 @@ frame_clause:
 #### RQ.SRS-019.ClickHouse.WindowFunctions.FrameClause.DefaultFrame
 version: 1.0
 
-[ClickHouse] SHALL support the default `frame_clause` to be `RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`. 
+[ClickHouse] SHALL support the default `frame_clause` to be `RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`.
 
-If the `ORDER BY` clause is specified then this SHALL set the frame to be all rows from 
-the partition start up to and including current row and its peers. 
+If the `ORDER BY` clause is specified then this SHALL set the frame to be all rows from
+the partition start up to and including current row and its peers.
 
 If the `ORDER BY` clause is not specified then this SHALL set the frame to include all rows
 in the partition because all the rows are considered to be the peers of the current row.
@@ -4133,7 +4133,7 @@ SELECT number,sum(number) OVER (ROWS UNBOUNDED PRECEDING) FROM numbers(1,3)
 ###### RQ.SRS-019.ClickHouse.WindowFunctions.RowsFrame.Start.ExprPreceding
 version: 1.0
 
-[ClickHouse] SHALL include `expr` rows before and including the current row in the window partition 
+[ClickHouse] SHALL include `expr` rows before and including the current row in the window partition
 when `ROWS expr PRECEDING` frame is specified.
 
 For example,
@@ -4303,7 +4303,7 @@ SELECT number,sum(number) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
 ###### RQ.SRS-019.ClickHouse.WindowFunctions.RowsFrame.Between.UnboundedPreceding.UnboundedFollowing
 version: 1.0
 
-[ClickHouse] SHALL include all rows in the window partition 
+[ClickHouse] SHALL include all rows in the window partition
 when `ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING` frame is specified.
 
 For example,
@@ -4382,7 +4382,7 @@ SELECT number,sum(number) OVER (ROWS BETWEEN 1 FOLLOWING AND CURRENT ROW) FROM n
 version: 1.0
 
 [ClickHouse] SHALL return an error when `ROWS BETWEEN expr FOLLOWING AND expr FOLLOWING`
-is specified and the end of the frame specified by the `expr FOLLOWING` is a row that is before the row 
+is specified and the end of the frame specified by the `expr FOLLOWING` is a row that is before the row
 specified by the frame start.
 
 ```sql
@@ -4392,7 +4392,7 @@ SELECT number,sum(number) OVER (ROWS BETWEEN 1 FOLLOWING AND 0 FOLLOWING) FROM n
 ###### RQ.SRS-019.ClickHouse.WindowFunctions.RowsFrame.Between.ExprFollowing.UnboundedFollowing
 version: 1.0
 
-[ClickHouse] SHALL include all the rows from and including current row plus `expr` rows following it 
+[ClickHouse] SHALL include all the rows from and including current row plus `expr` rows following it
 until and including the last row in the window partition
 when `ROWS BETWEEN expr FOLLOWING AND UNBOUNDED FOLLOWING` frame is specified.
 
@@ -4413,8 +4413,8 @@ SELECT number,sum(number) OVER (ROWS BETWEEN 1 FOLLOWING AND UNBOUNDED FOLLOWING
 ###### RQ.SRS-019.ClickHouse.WindowFunctions.RowsFrame.Between.ExprFollowing.ExprFollowing
 version: 1.0
 
-[ClickHouse] SHALL include the rows from and including current row plus `expr` following it 
-until and including the row specified by the frame end when the frame end 
+[ClickHouse] SHALL include the rows from and including current row plus `expr` following it
+until and including the row specified by the frame end when the frame end
 is the current row plus `expr` following it is right at or after the start of the frame
 when `ROWS BETWEEN expr FOLLOWING AND expr FOLLOWING` frame is specified.
 
@@ -4506,7 +4506,7 @@ version: 1.0
 
 [ClickHouse] SHALL include the rows from and including current row minus `expr` rows preceding it
 until and including the current row minus `expr` rows preceding it if the end
-of the frame is after the frame start in the window partition 
+of the frame is after the frame start in the window partition
 when `ROWS BETWEEN expr PRECEDING AND expr PRECEDING` frame is specified.
 
 For example,
@@ -4676,7 +4676,7 @@ SELECT number,sum(number) OVER (RANGE UNBOUNDED PRECEDING) FROM numbers(1,3)
 ###### RQ.SRS-019.ClickHouse.WindowFunctions.RangeFrame.Start.UnboundedPreceding.WithOrderBy
 version: 1.0
 
-[ClickHouse] SHALL include rows with values from and including the first row 
+[ClickHouse] SHALL include rows with values from and including the first row
 until and including all [current row peers] in the window partition
 when `RANGE UNBOUNDED PRECEDING` frame is specified with the `ORDER BY` clause.
 
@@ -4717,7 +4717,7 @@ over a non-numerical column.
 version: 1.0
 
 [ClickHouse] SHALL include rows with values from and including current row value minus `expr`
-until and including the value for the current row 
+until and including the value for the current row
 when `RANGE expr PRECEDING` frame is specified with the `ORDER BY` clause.
 
 For example,
@@ -4750,7 +4750,7 @@ SELECT number,sum(number) OVER (RANGE 1 FOLLOWING) FROM numbers(1,3)
 ###### RQ.SRS-019.ClickHouse.WindowFunctions.RangeFrame.Start.ExprFollowing.WithOrderBy.Error
 version: 1.0
 
-[ClickHouse] SHALL return an error when `RANGE expr FOLLOWING` frame is specified wit the `ORDER BY` clause 
+[ClickHouse] SHALL return an error when `RANGE expr FOLLOWING` frame is specified wit the `ORDER BY` clause
 as the value for the frame start cannot be larger than the value for the frame end.
 
 For example,
@@ -4764,12 +4764,12 @@ SELECT number,sum(number) OVER (ORDER BY number RANGE 1 FOLLOWING) FROM numbers(
 ###### RQ.SRS-019.ClickHouse.WindowFunctions.RangeFrame.Between.CurrentRow.CurrentRow
 version: 1.0
 
-[ClickHouse] SHALL include all [current row peers] in the window partition 
+[ClickHouse] SHALL include all [current row peers] in the window partition
 when `RANGE BETWEEN CURRENT ROW AND CURRENT ROW` frame is specified with or without the `ORDER BY` clause.
 
 For example,
 
-**Without `ORDER BY`**  
+**Without `ORDER BY`**
 
 ```sql
 SELECT number,sum(number) OVER (RANGE BETWEEN CURRENT ROW AND CURRENT ROW) FROM numbers(1,3)
@@ -4783,7 +4783,7 @@ SELECT number,sum(number) OVER (RANGE BETWEEN CURRENT ROW AND CURRENT ROW) FROM 
 └────────┴──────────────────────────────────────────────────────────────┘
 ```
 
-**With `ORDER BY`**  
+**With `ORDER BY`**
 
 ```sql
 SELECT number,sum(number) OVER (ORDER BY number RANGE BETWEEN CURRENT ROW AND CURRENT ROW) FROM numbers(1,3)
@@ -5080,31 +5080,31 @@ SELECT number,sum(number) OVER (ORDER BY number RANGE BETWEEN UNBOUNDED PRECEDIN
 ###### RQ.SRS-019.ClickHouse.WindowFunctions.RangeFrame.Between.UnboundedFollowing.CurrentRow.Error
 version: 1.0
 
-[ClickHouse] SHALL return an error when `RANGE BETWEEN UNBOUNDED FOLLOWING AND CURRENT ROW` frame is specified 
+[ClickHouse] SHALL return an error when `RANGE BETWEEN UNBOUNDED FOLLOWING AND CURRENT ROW` frame is specified
 with or without the `ORDER BY` clause.
 
 ###### RQ.SRS-019.ClickHouse.WindowFunctions.RangeFrame.Between.UnboundedFollowing.UnboundedFollowing.Error
 version: 1.0
 
-[ClickHouse] SHALL return an error when `RANGE BETWEEN UNBOUNDED FOLLOWING AND UNBOUNDED FOLLOWING` frame is specified 
+[ClickHouse] SHALL return an error when `RANGE BETWEEN UNBOUNDED FOLLOWING AND UNBOUNDED FOLLOWING` frame is specified
 with or without the `ORDER BY` clause.
 
 ###### RQ.SRS-019.ClickHouse.WindowFunctions.RangeFrame.Between.UnboundedFollowing.UnboundedPreceding.Error
 version: 1.0
 
-[ClickHouse] SHALL return an error when `RANGE BETWEEN UNBOUNDED FOLLOWING AND UNBOUNDED PRECEDING` frame is specified 
+[ClickHouse] SHALL return an error when `RANGE BETWEEN UNBOUNDED FOLLOWING AND UNBOUNDED PRECEDING` frame is specified
 with or without the `ORDER BY` clause.
 
 ###### RQ.SRS-019.ClickHouse.WindowFunctions.RangeFrame.Between.UnboundedFollowing.ExprPreceding.Error
 version: 1.0
 
-[ClickHouse] SHALL return an error when `RANGE BETWEEN UNBOUNDED FOLLOWING AND expr PRECEDING` frame is specified 
+[ClickHouse] SHALL return an error when `RANGE BETWEEN UNBOUNDED FOLLOWING AND expr PRECEDING` frame is specified
 with or without the `ORDER BY` clause.
 
 ###### RQ.SRS-019.ClickHouse.WindowFunctions.RangeFrame.Between.UnboundedFollowing.ExprFollowing.Error
 version: 1.0
 
-[ClickHouse] SHALL return an error when `RANGE BETWEEN UNBOUNDED FOLLOWING AND expr FOLLOWING` frame is specified 
+[ClickHouse] SHALL return an error when `RANGE BETWEEN UNBOUNDED FOLLOWING AND expr FOLLOWING` frame is specified
 with or without the `ORDER BY` clause.
 
 ##### RANGE BETWEEN expr PRECEDING
@@ -5112,7 +5112,7 @@ with or without the `ORDER BY` clause.
 ###### RQ.SRS-019.ClickHouse.WindowFunctions.RangeFrame.Between.ExprPreceding.CurrentRow.WithOrderBy
 version: 1.0
 
-[ClickHouse] SHALL include all rows with values from and including current row minus `expr` 
+[ClickHouse] SHALL include all rows with values from and including current row minus `expr`
 until and including [current row peers] in the window partition
 when `RANGE BETWEEN expr PRECEDING AND CURRENT ROW` frame is specified with the `ORDER BY` clause.
 
@@ -5146,7 +5146,7 @@ SELECT number,sum(number) OVER (RANGE BETWEEN 1 PRECEDING AND CURRENT ROW) FROM 
 ###### RQ.SRS-019.ClickHouse.WindowFunctions.RangeFrame.Between.ExprPreceding.UnboundedPreceding.Error
 version: 1.0
 
-[ClickHouse] SHALL return an error when `RANGE BETWEEN expr PRECEDING AND UNBOUNDED PRECEDING` frame is specified 
+[ClickHouse] SHALL return an error when `RANGE BETWEEN expr PRECEDING AND UNBOUNDED PRECEDING` frame is specified
 with or without the `ORDER BY` clause.
 
 For example,
@@ -5166,7 +5166,7 @@ SELECT number,sum(number) OVER (ORDER BY number RANGE BETWEEN 1 PRECEDING AND UN
 ###### RQ.SRS-019.ClickHouse.WindowFunctions.RangeFrame.Between.ExprPreceding.UnboundedFollowing.WithoutOrderBy.Error
 version: 1.0
 
-[ClickHouse] SHALL return an error when `RANGE BETWEEN expr PRECEDING AND UNBOUNDED FOLLOWING` frame is specified 
+[ClickHouse] SHALL return an error when `RANGE BETWEEN expr PRECEDING AND UNBOUNDED FOLLOWING` frame is specified
 without the `ORDER BY` clause.
 
 For example,
@@ -5178,7 +5178,7 @@ SELECT number,sum(number) OVER (RANGE BETWEEN 1 PRECEDING AND UNBOUNDED FOLLOWIN
 ###### RQ.SRS-019.ClickHouse.WindowFunctions.RangeFrame.Between.ExprPreceding.UnboundedFollowing.WithOrderBy
 version: 1.0
 
-[ClickHouse] SHALL include all rows with values from and including current row minus `expr` 
+[ClickHouse] SHALL include all rows with values from and including current row minus `expr`
 until and including the last row in the window partition when `RANGE BETWEEN expr PRECEDING AND UNBOUNDED FOLLOWING` frame
 is specified with the `ORDER BY` clause.
 
@@ -5200,7 +5200,7 @@ SELECT number,sum(number) OVER (ORDER BY number RANGE BETWEEN 1 PRECEDING AND UN
 ###### RQ.SRS-019.ClickHouse.WindowFunctions.RangeFrame.Between.ExprPreceding.ExprFollowing.WithoutOrderBy.Error
 version: 1.0
 
-[ClickHouse] SHALL return an error when `RANGE BETWEEN expr PRECEDING AND expr FOLLOWING` frame is specified 
+[ClickHouse] SHALL return an error when `RANGE BETWEEN expr PRECEDING AND expr FOLLOWING` frame is specified
 without the `ORDER BY` clause.
 
 For example,
@@ -5212,8 +5212,8 @@ SELECT number,sum(number) OVER (RANGE BETWEEN 1 PRECEDING AND 1 FOLLOWING) FROM 
 ###### RQ.SRS-019.ClickHouse.WindowFunctions.RangeFrame.Between.ExprPreceding.ExprFollowing.WithOrderBy
 version: 1.0
 
-[ClickHouse] SHALL include all rows with values from and including current row minus preceding `expr` 
-until and including current row plus following `expr` in the window partition 
+[ClickHouse] SHALL include all rows with values from and including current row minus preceding `expr`
+until and including current row plus following `expr` in the window partition
 when `RANGE BETWEEN expr PRECEDING AND expr FOLLOWING` frame is specified with the `ORDER BY` clause.
 
 For example,
@@ -5234,7 +5234,7 @@ SELECT number,sum(number) OVER (ORDER BY number RANGE BETWEEN 1 PRECEDING AND 1 
 ###### RQ.SRS-019.ClickHouse.WindowFunctions.RangeFrame.Between.ExprPreceding.ExprPreceding.WithoutOrderBy.Error
 version: 1.0
 
-[ClickHouse] SHALL return an error when `RANGE BETWEEN expr PRECEDING AND expr PRECEDING` frame is specified 
+[ClickHouse] SHALL return an error when `RANGE BETWEEN expr PRECEDING AND expr PRECEDING` frame is specified
 without the `ORDER BY` clause.
 
 For example,
@@ -5246,7 +5246,7 @@ SELECT number,sum(number) OVER (RANGE BETWEEN 1 PRECEDING AND 0 PRECEDING) FROM 
 ###### RQ.SRS-019.ClickHouse.WindowFunctions.RangeFrame.Between.ExprPreceding.ExprPreceding.WithOrderBy.Error
 version: 1.0
 
-[ClickHouse] SHALL return an error when the value of the [frame_end] specified by the 
+[ClickHouse] SHALL return an error when the value of the [frame_end] specified by the
 current row minus preceding `expr` is greater than the value of the [frame_start] in the window partition
 when `RANGE BETWEEN expr PRECEDING AND expr PRECEDING` frame is specified with the `ORDER BY` clause.
 
@@ -5260,7 +5260,7 @@ SELECT number,sum(number) OVER (RANGE BETWEEN 1 PRECEDING AND 2 PRECEDING) FROM 
 version: 1.0
 
 [ClickHouse] SHALL include all rows with values from and including current row minus preceding `expr` for the [frame_start]
-until and including current row minus following `expr` for the [frame_end] in the window partition 
+until and including current row minus following `expr` for the [frame_end] in the window partition
 when `RANGE BETWEEN expr PRECEDING AND expr PRECEDING` frame is specified with the `ORDER BY` clause
 if an only if the [frame_end] value is equal or greater than [frame_start] value.
 
@@ -5301,7 +5301,7 @@ or **Equal**
 ###### RQ.SRS-019.ClickHouse.WindowFunctions.RangeFrame.Between.ExprFollowing.CurrentRow.WithoutOrderBy.Error
 version: 1.0
 
-[ClickHouse] SHALL return an error when `RANGE BETWEEN expr FOLLOWING AND CURRENT ROW` frame is specified 
+[ClickHouse] SHALL return an error when `RANGE BETWEEN expr FOLLOWING AND CURRENT ROW` frame is specified
 without the `ORDER BY` clause.
 
 For example,
@@ -5313,7 +5313,7 @@ SELECT number,sum(number) OVER (RANGE BETWEEN 0 FOLLOWING AND CURRENT ROW) FROM 
 ###### RQ.SRS-019.ClickHouse.WindowFunctions.RangeFrame.Between.ExprFollowing.CurrentRow.WithOrderBy.Error
 version: 1.0
 
-[ClickHouse] SHALL return an error when `RANGE BETWEEN expr FOLLOWING AND CURRENT ROW` frame is specified 
+[ClickHouse] SHALL return an error when `RANGE BETWEEN expr FOLLOWING AND CURRENT ROW` frame is specified
 with the `ORDER BY` clause and `expr` is greater than `0`.
 
 For example,
@@ -5326,7 +5326,7 @@ SELECT number,sum(number) OVER (RANGE BETWEEN 1 FOLLOWING AND CURRENT ROW) FROM 
 version: 1.0
 
 [ClickHouse] SHALL include all [current row peers] in the window partition
-when `RANGE BETWEEN expr FOLLOWING AND CURRENT ROW` frame is specified 
+when `RANGE BETWEEN expr FOLLOWING AND CURRENT ROW` frame is specified
 with the `ORDER BY` clause if and only if the `expr` equals to `0`.
 
 For example,
@@ -5364,7 +5364,7 @@ SELECT number,sum(number) OVER (RANGE BETWEEN 0 FOLLOWING AND CURRENT ROW) FROM 
 ###### RQ.SRS-019.ClickHouse.WindowFunctions.RangeFrame.Between.ExprFollowing.UnboundedFollowing.WithoutOrderBy.Error
 version: 1.0
 
-[ClickHouse] SHALL return an error when `RANGE BETWEEN expr FOLLOWING AND UNBOUNDED FOLLOWING` frame is specified 
+[ClickHouse] SHALL return an error when `RANGE BETWEEN expr FOLLOWING AND UNBOUNDED FOLLOWING` frame is specified
 without the `ORDER BY` clause.
 
 For example,
@@ -5377,7 +5377,7 @@ SELECT number,sum(number) OVER (RANGE BETWEEN 1 FOLLOWING AND UNBOUNDED FOLLOWIN
 version: 1.0
 
 [ClickHouse] SHALL include all rows with values from and including current row plus `expr`
-until and including the last row in the window partition 
+until and including the last row in the window partition
 when `RANGE BETWEEN expr FOLLOWING AND UNBOUNDED FOLLOWING` frame is specified with the `ORDER BY` clause.
 
 For example,
@@ -5398,7 +5398,7 @@ SELECT number,sum(number) OVER (ORDER BY number RANGE BETWEEN 1 FOLLOWING AND UN
 ###### RQ.SRS-019.ClickHouse.WindowFunctions.RangeFrame.Between.ExprFollowing.UnboundedPreceding.Error
 version: 1.0
 
-[ClickHouse] SHALL return an error when `RANGE BETWEEN expr FOLLOWING AND UNBOUNDED PRECEDING` frame is specified 
+[ClickHouse] SHALL return an error when `RANGE BETWEEN expr FOLLOWING AND UNBOUNDED PRECEDING` frame is specified
 with or without the `ORDER BY` clause.
 
 For example,
@@ -5418,20 +5418,20 @@ SELECT number,sum(number) OVER (ORDER BY number RANGE BETWEEN 1 FOLLOWING AND UN
 ###### RQ.SRS-019.ClickHouse.WindowFunctions.RangeFrame.Between.ExprFollowing.ExprPreceding.WithoutOrderBy.Error
 version: 1.0
 
-[ClickHouse] SHALL return an error when `RANGE BETWEEN expr FOLLOWING AND expr PRECEDING` frame is specified 
+[ClickHouse] SHALL return an error when `RANGE BETWEEN expr FOLLOWING AND expr PRECEDING` frame is specified
 without the `ORDER BY`.
 
 ###### RQ.SRS-019.ClickHouse.WindowFunctions.RangeFrame.Between.ExprFollowing.ExprPreceding.Error
 version: 1.0
 
-[ClickHouse] SHALL return an error when `RANGE BETWEEN expr FOLLOWING AND expr PRECEDING` frame is specified 
+[ClickHouse] SHALL return an error when `RANGE BETWEEN expr FOLLOWING AND expr PRECEDING` frame is specified
 with the `ORDER BY` clause if the value of both `expr` is not `0`.
 
 ###### RQ.SRS-019.ClickHouse.WindowFunctions.RangeFrame.Between.ExprFollowing.ExprPreceding.WithOrderBy.ZeroSpecialCase
 version: 1.0
 
 [ClickHouse] SHALL include all rows with value equal to [current row peers] in the window partition
-when `RANGE BETWEEN expr FOLLOWING AND expr PRECEDING` frame is specified 
+when `RANGE BETWEEN expr FOLLOWING AND expr PRECEDING` frame is specified
 with the `ORDER BY` clause if and only if both `expr`'s are `0`.
 
 For example,
@@ -5452,13 +5452,13 @@ SELECT number,sum(number) OVER (ORDER BY number RANGE BETWEEN 0 FOLLOWING AND 0 
 ###### RQ.SRS-019.ClickHouse.WindowFunctions.RangeFrame.Between.ExprFollowing.ExprFollowing.WithoutOrderBy.Error
 version: 1.0
 
-[ClickHouse] SHALL return an error when `RANGE BETWEEN expr FOLLOWING AND expr FOLLOWING` frame is specified 
+[ClickHouse] SHALL return an error when `RANGE BETWEEN expr FOLLOWING AND expr FOLLOWING` frame is specified
 without the `ORDER BY` clause.
 
 ###### RQ.SRS-019.ClickHouse.WindowFunctions.RangeFrame.Between.ExprFollowing.ExprFollowing.WithOrderBy.Error
 version: 1.0
 
-[ClickHouse] SHALL return an error when `RANGE BETWEEN expr FOLLOWING AND expr FOLLOWING` frame is specified 
+[ClickHouse] SHALL return an error when `RANGE BETWEEN expr FOLLOWING AND expr FOLLOWING` frame is specified
 with the `ORDER BY` clause but the `expr` for the [frame_end] is less than the `expr` for the [frame_start].
 
 For example,
@@ -5472,8 +5472,8 @@ version: 1.0
 
 [ClickHouse] SHALL include all rows with value from and including current row plus `expr` for the [frame_start]
 until and including current row plus `expr` for the [frame_end] in the window partition
-when `RANGE BETWEEN expr FOLLOWING AND expr FOLLOWING` frame is specified 
-with the `ORDER BY` clause if and only if the `expr` for the [frame_end] is greater than or equal than the 
+when `RANGE BETWEEN expr FOLLOWING AND expr FOLLOWING` frame is specified
+with the `ORDER BY` clause if and only if the `expr` for the [frame_end] is greater than or equal than the
 `expr` for the [frame_start].
 
 For example,
@@ -5665,7 +5665,7 @@ or adhoc window defined inplace.
 
 
 ```
-OVER ()|(window_spec)|named_window 
+OVER ()|(window_spec)|named_window
 ```
 
 #### Empty Clause
@@ -5821,7 +5821,7 @@ leadInFrame(column) OVER (...)
 
 The function SHALL return the value from the row that leads (follows) the current row
 by the `offset` rows within the current frame. If there is no such row,
-the return value SHALL be the `default` value. If the `default` value is not specified 
+the return value SHALL be the `default` value. If the `default` value is not specified
 then the default value for the corresponding column data type SHALL be returned.
 
 The `offset` SHALL be a literal non-negative integer. If the `offset` is set to `0`, then
@@ -5842,7 +5842,7 @@ lagInFrame(column) OVER (...)
 
 The function SHALL return the value from the row that lags (preceds) the current row
 by the `offset` rows within the current frame. If there is no such row,
-the return value SHALL be the `default` value. If the `default` value is not specified 
+the return value SHALL be the `default` value. If the `default` value is not specified
 then the default value for the corresponding column data type SHALL be returned.
 
 The `offset` SHALL be a literal non-negative integer. If the `offset` is set to `0`, then

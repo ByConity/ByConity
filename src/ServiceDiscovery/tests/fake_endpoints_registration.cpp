@@ -76,13 +76,13 @@ void fakedEndpointRegister(std::string vw_name_template, int num_total, int num_
     int vw_id = 1;
     // A & PTR records
     {
-        std::string vw_name = findAndReplaceAll(vw_name_template, "{}", to_string(vw_id)); 
+        std::string vw_name = findAndReplaceAll(vw_name_template, "{}", to_string(vw_id));
         zone_info_stream << vw_name << HEADLESS_TAIL;
         int cur = 0;
         for (int i = 1; i <= num_total; i++) {
             if (i > num_expected){
                 if (cur % ENDPOINTS_THRESHOLD_FOR_ONE_SERVICE == 0){ // beginning of a new service registration;
-                    vw_id++; 
+                    vw_id++;
                     vw_name = findAndReplaceAll(vw_name_template, "{}", to_string(vw_id));
                     zone_info_stream << vw_name << HEADLESS_TAIL;
                 }

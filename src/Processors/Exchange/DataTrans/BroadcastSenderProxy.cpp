@@ -105,7 +105,7 @@ void BroadcastSenderProxy::merge(IBroadcastSender && sender)
 
         real_sender->merge(std::move(*other->real_sender));
         other->has_real_sender.store(false, std::memory_order_release);
-        
+
         std::unique_lock lock(other->mutex);
         other->context = ContextPtr();
         other->header = Block();

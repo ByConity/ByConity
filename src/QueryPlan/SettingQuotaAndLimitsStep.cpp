@@ -135,7 +135,7 @@ QueryPlanStepPtr SettingQuotaAndLimitsStep::deserialize(ReadBuffer & buf, Contex
     TableLockHolder table_lock;
     if (has_table_lock)
         table_lock = storage->lockForShare(context->getInitialQueryId(), context->getSettingsRef().lock_acquire_timeout);
-    
+
     StreamLocalLimits limits;
     SizeLimits leaf_limits;
     std::shared_ptr<const EnabledQuota> quota;

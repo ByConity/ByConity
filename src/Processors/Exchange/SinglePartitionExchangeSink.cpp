@@ -34,7 +34,7 @@
 
 namespace DB
 {
-    
+
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
@@ -64,7 +64,7 @@ void SinglePartitionExchangeSink::consume(Chunk chunk)
 
     if (!buffered_sender.compareBufferChunkInfo(repartition_info->origin_chunk_info))
         buffered_sender.updateBufferChunkInfo(std::move(repartition_info->origin_chunk_info));
-    
+
     const IColumn::Selector & partition_selector = repartition_info->selector;
 
     size_t from = repartition_info->start_points[partition_id];

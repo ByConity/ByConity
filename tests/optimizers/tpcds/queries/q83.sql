@@ -1,4 +1,4 @@
- 
+
  with sr_items as
  (select i_item_id item_id,
         sum(sr_return_quantity) sr_item_qty
@@ -6,10 +6,10 @@
       item,
       date_dim
  where sr_item_sk = i_item_sk
- and   d_date    in 
+ and   d_date    in
 	(select d_date
 	from date_dim
-	where d_week_seq in 
+	where d_week_seq in
 		(select d_week_seq
 		from date_dim
 	  where d_date in ('2000-11-17','2000-09-27','2000-06-30')))
@@ -22,10 +22,10 @@
       item,
       date_dim
  where cr_item_sk = i_item_sk
- and   d_date    in 
+ and   d_date    in
 	(select d_date
 	from date_dim
-	where d_week_seq in 
+	where d_week_seq in
 		(select d_week_seq
 		from date_dim
 	  where d_date in ('2000-11-17','2000-09-27','2000-06-30')))
@@ -38,10 +38,10 @@
       item,
       date_dim
  where wr_item_sk = i_item_sk
- and   d_date    in 
+ and   d_date    in
 	(select d_date
 	from date_dim
-	where d_week_seq in 
+	where d_week_seq in
 		(select d_week_seq
 		from date_dim
 		where d_date in ('2000-11-17','2000-09-27','2000-06-30')))
@@ -59,7 +59,7 @@
      ,cr_items
      ,wr_items
  where sr_items.item_id=cr_items.item_id
-   and sr_items.item_id=wr_items.item_id 
+   and sr_items.item_id=wr_items.item_id
  order by sr_items.item_id
          ,sr_item_qty
  limit 100;

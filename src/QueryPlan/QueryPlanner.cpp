@@ -1195,7 +1195,7 @@ void QueryPlannerVisitor::planAggregate(PlanBuilder & builder, ASTSelectQuery & 
             auto end = keys_for_all_group.begin();
             std::advance(end, set_size);
             Names keys_for_this_group{keys_for_all_group.begin(), end};
-            grouping_sets_params.emplace_back(std::move(keys_for_this_group));        
+            grouping_sets_params.emplace_back(std::move(keys_for_this_group));
         }
     }
 
@@ -1204,9 +1204,9 @@ void QueryPlannerVisitor::planAggregate(PlanBuilder & builder, ASTSelectQuery & 
         grouping_sets_params.clear();
         for (auto keys_for_this_group : Utils::powerSet(keys_for_all_group))
         {
-            grouping_sets_params.emplace_back(std::move(keys_for_this_group));        
+            grouping_sets_params.emplace_back(std::move(keys_for_this_group));
         }
-        grouping_sets_params.emplace_back(GroupingSetsParams{});        
+        grouping_sets_params.emplace_back(GroupingSetsParams{});
     }
 
     auto agg_step = std::make_shared<AggregatingStep>(

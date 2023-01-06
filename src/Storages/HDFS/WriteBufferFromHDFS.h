@@ -45,7 +45,7 @@ public:
         const Poco::Util::AbstractConfiguration & config_,
         size_t buf_size_ = DBMS_DEFAULT_BUFFER_SIZE,
         int flags = O_WRONLY);
-        
+
 
     WriteBufferFromHDFS(
         const std::string & hdfs_name_,

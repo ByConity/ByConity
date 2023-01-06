@@ -23,7 +23,7 @@
 namespace DB
 {
 
-InterpreterShowWarehousesQuery::InterpreterShowWarehousesQuery(const ASTPtr & query_ptr_, ContextMutablePtr context_) 
+InterpreterShowWarehousesQuery::InterpreterShowWarehousesQuery(const ASTPtr & query_ptr_, ContextMutablePtr context_)
     : WithMutableContext(context_), query_ptr(query_ptr_) {}
 
 String InterpreterShowWarehousesQuery::getRewrittenQuery()

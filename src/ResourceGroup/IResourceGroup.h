@@ -117,7 +117,7 @@ public:
         }
     };
     using Handle = std::shared_ptr<QueryEntityHandler>;
-    
+
     virtual ResourceGroupType getType() const = 0;
     virtual bool canRunMore() const = 0;
     virtual bool canQueueMore() const = 0;

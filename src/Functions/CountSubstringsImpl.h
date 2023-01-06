@@ -67,7 +67,7 @@ struct CountSubstringsImpl
         // When needle is empty, Return the result directly. Otherwise SELECT countSubstringsCaseInsensitive(toString(number), '') from numbers(1); will be in an endless loop.
         if (needle.size() == 0)
             return;
-            
+
         /// Current index in the array of strings.
         size_t i = 0;
 

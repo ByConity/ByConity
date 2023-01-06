@@ -27,7 +27,7 @@ AggregateFunctionPtr createAggregateFunctionBitMapMaxLevel(const std::string & n
 {
     if (parameters.size() > 2)
         throw Exception("AggregateFunction " + name + " needs 0 or 1 parameters", ErrorCodes::NOT_IMPLEMENTED);
-    
+
     UInt64 return_tpye{0}; /// 0: only summary; 1: only detail; 2: summay + detail
     if (parameters.size() == 1)
         return_tpye = safeGet<UInt64>(parameters[0]);

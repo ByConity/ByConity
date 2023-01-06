@@ -54,7 +54,7 @@ namespace UnitTest
 TEST(ExchangeSink, BroadcastExchangeSinkTest)
 {
     auto context = getContext().context;
-    Block header = {ColumnWithTypeAndName(ColumnUInt8::create(), std::make_shared<DataTypeUInt8>(), "local_exchange_test")};   
+    Block header = {ColumnWithTypeAndName(ColumnUInt8::create(), std::make_shared<DataTypeUInt8>(), "local_exchange_test")};
     ExchangeOptions exchange_options {.exhcange_timeout_ms= 1000};
     LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
     auto source_key = std::make_shared<ExchangeDataKey>("", 1, 1, 1, "");
@@ -102,7 +102,7 @@ TEST(ExchangeSink, BroadcastExchangeSinkTest)
 TEST(ExchangeSink, BroadcastExchangeSinkBufferTest)
 {
     auto context = getContext().context;
-    Block header = {ColumnWithTypeAndName(ColumnUInt8::create(), std::make_shared<DataTypeUInt8>(), "local_exchange_test")};   
+    Block header = {ColumnWithTypeAndName(ColumnUInt8::create(), std::make_shared<DataTypeUInt8>(), "local_exchange_test")};
     ExchangeOptions exchange_options {.exhcange_timeout_ms= 1000, .force_use_buffer = true};
     LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
     auto source_key = std::make_shared<ExchangeDataKey>("", 1, 1, 1, "");

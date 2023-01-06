@@ -3,9 +3,9 @@ select * from
 sum(ss_sales_price) sum_sales,
 avg(sum(ss_sales_price)) over (partition by i_manufact_id) avg_quarterly_sales
 from item, store_sales, date_dim, store
-where ss_item_sk = i_item_sk 
+where ss_item_sk = i_item_sk
 and ss_sold_date_sk = d_date_sk
-and ss_store_sk = s_store_sk 
+and ss_store_sk = s_store_sk
 and d_month_seq in (1200,1200+1,1200+2,1200+3,1200+4,1200+5,1200+6,1200+7,1200+8,1200+9,1200+10,1200+11) and
 ((i_category in ('Books','Children','Electronics') and
 i_class in ('personal','portable','reference','self-help') and

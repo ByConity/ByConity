@@ -100,7 +100,7 @@ std::optional<Chunk> ExchangeSource::tryGenerate()
             throw Exception(
                 getName() + " fail to receive data: " + status.message + " code: " + std::to_string(status.code),
                 ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION);
-        
+
         if (fetch_exception_from_scheduler)
         {
             auto context = CurrentThread::get().getQueryContext();

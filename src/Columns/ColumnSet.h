@@ -54,7 +54,7 @@ public:
     ConstSetPtr getData() const { return data; }
 
     void setData(SetPtr set) {
-        data = std::move(set); 
+        data = std::move(set);
         s = 1;
     }
 

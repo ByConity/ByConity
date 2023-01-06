@@ -94,7 +94,7 @@ public:
         [[maybe_unused]] MergeScheduler * merge_scheduler = nullptr) = 0;
 
     virtual PartsRanges selectMulti(
-        const PartsRanges & partitions, 
+        const PartsRanges & partitions,
         const size_t max_total_size_to_merge,
         [[maybe_unused]] MergeScheduler * merge_scheduler = nullptr)
     {

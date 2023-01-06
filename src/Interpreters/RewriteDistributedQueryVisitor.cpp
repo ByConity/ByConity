@@ -74,7 +74,7 @@ RewriteDistributedQueryMatcher::Data RewriteDistributedQueryMatcher::collectTabl
         auto storage = tryGetTable(table, context);
         auto distributed_table = dynamic_cast<StorageDistributed *>(storage.get());
         if (distributed_table)
-        {   
+        {
             result_data.table_rewrite_info[table.get()] = {distributed_table->getRemoteDatabaseName(), distributed_table->getRemoteTableName()};
 
             auto * identifier = table->as<ASTTableIdentifier>();

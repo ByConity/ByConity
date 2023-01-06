@@ -203,7 +203,7 @@ abi_test_trampoline:
 .Largs_done:
 	li	2, 0
 	mtctr	12
-	bctrl	
+	bctrl
 	ld	2, 24(1)
 
 	ld	4, 32(1)
@@ -334,7 +334,7 @@ abi_test_trampoline:
 	addi	1, 1, 528
 	ld	0, 16(1)
 	mtlr	0
-	blr	
+	blr
 .size	abi_test_trampoline,.-abi_test_trampoline
 .globl	abi_test_clobber_r0
 .type	abi_test_clobber_r0,@function
@@ -343,7 +343,7 @@ abi_test_clobber_r0:
 .localentry	abi_test_clobber_r0,0
 
 	li	0, 0
-	blr	
+	blr
 .size	abi_test_clobber_r0,.-abi_test_clobber_r0
 .globl	abi_test_clobber_r2
 .type	abi_test_clobber_r2,@function
@@ -352,7 +352,7 @@ abi_test_clobber_r2:
 .localentry	abi_test_clobber_r2,0
 
 	li	2, 0
-	blr	
+	blr
 .size	abi_test_clobber_r2,.-abi_test_clobber_r2
 .globl	abi_test_clobber_r3
 .type	abi_test_clobber_r3,@function
@@ -361,7 +361,7 @@ abi_test_clobber_r3:
 .localentry	abi_test_clobber_r3,0
 
 	li	3, 0
-	blr	
+	blr
 .size	abi_test_clobber_r3,.-abi_test_clobber_r3
 .globl	abi_test_clobber_r4
 .type	abi_test_clobber_r4,@function
@@ -370,7 +370,7 @@ abi_test_clobber_r4:
 .localentry	abi_test_clobber_r4,0
 
 	li	4, 0
-	blr	
+	blr
 .size	abi_test_clobber_r4,.-abi_test_clobber_r4
 .globl	abi_test_clobber_r5
 .type	abi_test_clobber_r5,@function
@@ -379,7 +379,7 @@ abi_test_clobber_r5:
 .localentry	abi_test_clobber_r5,0
 
 	li	5, 0
-	blr	
+	blr
 .size	abi_test_clobber_r5,.-abi_test_clobber_r5
 .globl	abi_test_clobber_r6
 .type	abi_test_clobber_r6,@function
@@ -388,7 +388,7 @@ abi_test_clobber_r6:
 .localentry	abi_test_clobber_r6,0
 
 	li	6, 0
-	blr	
+	blr
 .size	abi_test_clobber_r6,.-abi_test_clobber_r6
 .globl	abi_test_clobber_r7
 .type	abi_test_clobber_r7,@function
@@ -397,7 +397,7 @@ abi_test_clobber_r7:
 .localentry	abi_test_clobber_r7,0
 
 	li	7, 0
-	blr	
+	blr
 .size	abi_test_clobber_r7,.-abi_test_clobber_r7
 .globl	abi_test_clobber_r8
 .type	abi_test_clobber_r8,@function
@@ -406,7 +406,7 @@ abi_test_clobber_r8:
 .localentry	abi_test_clobber_r8,0
 
 	li	8, 0
-	blr	
+	blr
 .size	abi_test_clobber_r8,.-abi_test_clobber_r8
 .globl	abi_test_clobber_r9
 .type	abi_test_clobber_r9,@function
@@ -415,7 +415,7 @@ abi_test_clobber_r9:
 .localentry	abi_test_clobber_r9,0
 
 	li	9, 0
-	blr	
+	blr
 .size	abi_test_clobber_r9,.-abi_test_clobber_r9
 .globl	abi_test_clobber_r10
 .type	abi_test_clobber_r10,@function
@@ -424,7 +424,7 @@ abi_test_clobber_r10:
 .localentry	abi_test_clobber_r10,0
 
 	li	10, 0
-	blr	
+	blr
 .size	abi_test_clobber_r10,.-abi_test_clobber_r10
 .globl	abi_test_clobber_r11
 .type	abi_test_clobber_r11,@function
@@ -433,7 +433,7 @@ abi_test_clobber_r11:
 .localentry	abi_test_clobber_r11,0
 
 	li	11, 0
-	blr	
+	blr
 .size	abi_test_clobber_r11,.-abi_test_clobber_r11
 .globl	abi_test_clobber_r12
 .type	abi_test_clobber_r12,@function
@@ -442,7 +442,7 @@ abi_test_clobber_r12:
 .localentry	abi_test_clobber_r12,0
 
 	li	12, 0
-	blr	
+	blr
 .size	abi_test_clobber_r12,.-abi_test_clobber_r12
 .globl	abi_test_clobber_r14
 .type	abi_test_clobber_r14,@function
@@ -451,7 +451,7 @@ abi_test_clobber_r14:
 .localentry	abi_test_clobber_r14,0
 
 	li	14, 0
-	blr	
+	blr
 .size	abi_test_clobber_r14,.-abi_test_clobber_r14
 .globl	abi_test_clobber_r15
 .type	abi_test_clobber_r15,@function
@@ -460,7 +460,7 @@ abi_test_clobber_r15:
 .localentry	abi_test_clobber_r15,0
 
 	li	15, 0
-	blr	
+	blr
 .size	abi_test_clobber_r15,.-abi_test_clobber_r15
 .globl	abi_test_clobber_r16
 .type	abi_test_clobber_r16,@function
@@ -469,7 +469,7 @@ abi_test_clobber_r16:
 .localentry	abi_test_clobber_r16,0
 
 	li	16, 0
-	blr	
+	blr
 .size	abi_test_clobber_r16,.-abi_test_clobber_r16
 .globl	abi_test_clobber_r17
 .type	abi_test_clobber_r17,@function
@@ -478,7 +478,7 @@ abi_test_clobber_r17:
 .localentry	abi_test_clobber_r17,0
 
 	li	17, 0
-	blr	
+	blr
 .size	abi_test_clobber_r17,.-abi_test_clobber_r17
 .globl	abi_test_clobber_r18
 .type	abi_test_clobber_r18,@function
@@ -487,7 +487,7 @@ abi_test_clobber_r18:
 .localentry	abi_test_clobber_r18,0
 
 	li	18, 0
-	blr	
+	blr
 .size	abi_test_clobber_r18,.-abi_test_clobber_r18
 .globl	abi_test_clobber_r19
 .type	abi_test_clobber_r19,@function
@@ -496,7 +496,7 @@ abi_test_clobber_r19:
 .localentry	abi_test_clobber_r19,0
 
 	li	19, 0
-	blr	
+	blr
 .size	abi_test_clobber_r19,.-abi_test_clobber_r19
 .globl	abi_test_clobber_r20
 .type	abi_test_clobber_r20,@function
@@ -505,7 +505,7 @@ abi_test_clobber_r20:
 .localentry	abi_test_clobber_r20,0
 
 	li	20, 0
-	blr	
+	blr
 .size	abi_test_clobber_r20,.-abi_test_clobber_r20
 .globl	abi_test_clobber_r21
 .type	abi_test_clobber_r21,@function
@@ -514,7 +514,7 @@ abi_test_clobber_r21:
 .localentry	abi_test_clobber_r21,0
 
 	li	21, 0
-	blr	
+	blr
 .size	abi_test_clobber_r21,.-abi_test_clobber_r21
 .globl	abi_test_clobber_r22
 .type	abi_test_clobber_r22,@function
@@ -523,7 +523,7 @@ abi_test_clobber_r22:
 .localentry	abi_test_clobber_r22,0
 
 	li	22, 0
-	blr	
+	blr
 .size	abi_test_clobber_r22,.-abi_test_clobber_r22
 .globl	abi_test_clobber_r23
 .type	abi_test_clobber_r23,@function
@@ -532,7 +532,7 @@ abi_test_clobber_r23:
 .localentry	abi_test_clobber_r23,0
 
 	li	23, 0
-	blr	
+	blr
 .size	abi_test_clobber_r23,.-abi_test_clobber_r23
 .globl	abi_test_clobber_r24
 .type	abi_test_clobber_r24,@function
@@ -541,7 +541,7 @@ abi_test_clobber_r24:
 .localentry	abi_test_clobber_r24,0
 
 	li	24, 0
-	blr	
+	blr
 .size	abi_test_clobber_r24,.-abi_test_clobber_r24
 .globl	abi_test_clobber_r25
 .type	abi_test_clobber_r25,@function
@@ -550,7 +550,7 @@ abi_test_clobber_r25:
 .localentry	abi_test_clobber_r25,0
 
 	li	25, 0
-	blr	
+	blr
 .size	abi_test_clobber_r25,.-abi_test_clobber_r25
 .globl	abi_test_clobber_r26
 .type	abi_test_clobber_r26,@function
@@ -559,7 +559,7 @@ abi_test_clobber_r26:
 .localentry	abi_test_clobber_r26,0
 
 	li	26, 0
-	blr	
+	blr
 .size	abi_test_clobber_r26,.-abi_test_clobber_r26
 .globl	abi_test_clobber_r27
 .type	abi_test_clobber_r27,@function
@@ -568,7 +568,7 @@ abi_test_clobber_r27:
 .localentry	abi_test_clobber_r27,0
 
 	li	27, 0
-	blr	
+	blr
 .size	abi_test_clobber_r27,.-abi_test_clobber_r27
 .globl	abi_test_clobber_r28
 .type	abi_test_clobber_r28,@function
@@ -577,7 +577,7 @@ abi_test_clobber_r28:
 .localentry	abi_test_clobber_r28,0
 
 	li	28, 0
-	blr	
+	blr
 .size	abi_test_clobber_r28,.-abi_test_clobber_r28
 .globl	abi_test_clobber_r29
 .type	abi_test_clobber_r29,@function
@@ -586,7 +586,7 @@ abi_test_clobber_r29:
 .localentry	abi_test_clobber_r29,0
 
 	li	29, 0
-	blr	
+	blr
 .size	abi_test_clobber_r29,.-abi_test_clobber_r29
 .globl	abi_test_clobber_r30
 .type	abi_test_clobber_r30,@function
@@ -595,7 +595,7 @@ abi_test_clobber_r30:
 .localentry	abi_test_clobber_r30,0
 
 	li	30, 0
-	blr	
+	blr
 .size	abi_test_clobber_r30,.-abi_test_clobber_r30
 .globl	abi_test_clobber_r31
 .type	abi_test_clobber_r31,@function
@@ -604,7 +604,7 @@ abi_test_clobber_r31:
 .localentry	abi_test_clobber_r31,0
 
 	li	31, 0
-	blr	
+	blr
 .size	abi_test_clobber_r31,.-abi_test_clobber_r31
 .globl	abi_test_clobber_f0
 .type	abi_test_clobber_f0,@function
@@ -616,7 +616,7 @@ abi_test_clobber_f0:
 
 	std	0, -8(1)
 	lfd	0, -8(1)
-	blr	
+	blr
 .size	abi_test_clobber_f0,.-abi_test_clobber_f0
 .globl	abi_test_clobber_f1
 .type	abi_test_clobber_f1,@function
@@ -628,7 +628,7 @@ abi_test_clobber_f1:
 
 	std	0, -8(1)
 	lfd	1, -8(1)
-	blr	
+	blr
 .size	abi_test_clobber_f1,.-abi_test_clobber_f1
 .globl	abi_test_clobber_f2
 .type	abi_test_clobber_f2,@function
@@ -640,7 +640,7 @@ abi_test_clobber_f2:
 
 	std	0, -8(1)
 	lfd	2, -8(1)
-	blr	
+	blr
 .size	abi_test_clobber_f2,.-abi_test_clobber_f2
 .globl	abi_test_clobber_f3
 .type	abi_test_clobber_f3,@function
@@ -652,7 +652,7 @@ abi_test_clobber_f3:
 
 	std	0, -8(1)
 	lfd	3, -8(1)
-	blr	
+	blr
 .size	abi_test_clobber_f3,.-abi_test_clobber_f3
 .globl	abi_test_clobber_f4
 .type	abi_test_clobber_f4,@function
@@ -664,7 +664,7 @@ abi_test_clobber_f4:
 
 	std	0, -8(1)
 	lfd	4, -8(1)
-	blr	
+	blr
 .size	abi_test_clobber_f4,.-abi_test_clobber_f4
 .globl	abi_test_clobber_f5
 .type	abi_test_clobber_f5,@function
@@ -676,7 +676,7 @@ abi_test_clobber_f5:
 
 	std	0, -8(1)
 	lfd	5, -8(1)
-	blr	
+	blr
 .size	abi_test_clobber_f5,.-abi_test_clobber_f5
 .globl	abi_test_clobber_f6
 .type	abi_test_clobber_f6,@function
@@ -688,7 +688,7 @@ abi_test_clobber_f6:
 
 	std	0, -8(1)
 	lfd	6, -8(1)
-	blr	
+	blr
 .size	abi_test_clobber_f6,.-abi_test_clobber_f6
 .globl	abi_test_clobber_f7
 .type	abi_test_clobber_f7,@function
@@ -700,7 +700,7 @@ abi_test_clobber_f7:
 
 	std	0, -8(1)
 	lfd	7, -8(1)
-	blr	
+	blr
 .size	abi_test_clobber_f7,.-abi_test_clobber_f7
 .globl	abi_test_clobber_f8
 .type	abi_test_clobber_f8,@function
@@ -712,7 +712,7 @@ abi_test_clobber_f8:
 
 	std	0, -8(1)
 	lfd	8, -8(1)
-	blr	
+	blr
 .size	abi_test_clobber_f8,.-abi_test_clobber_f8
 .globl	abi_test_clobber_f9
 .type	abi_test_clobber_f9,@function
@@ -724,7 +724,7 @@ abi_test_clobber_f9:
 
 	std	0, -8(1)
 	lfd	9, -8(1)
-	blr	
+	blr
 .size	abi_test_clobber_f9,.-abi_test_clobber_f9
 .globl	abi_test_clobber_f10
 .type	abi_test_clobber_f10,@function
@@ -736,7 +736,7 @@ abi_test_clobber_f10:
 
 	std	0, -8(1)
 	lfd	10, -8(1)
-	blr	
+	blr
 .size	abi_test_clobber_f10,.-abi_test_clobber_f10
 .globl	abi_test_clobber_f11
 .type	abi_test_clobber_f11,@function
@@ -748,7 +748,7 @@ abi_test_clobber_f11:
 
 	std	0, -8(1)
 	lfd	11, -8(1)
-	blr	
+	blr
 .size	abi_test_clobber_f11,.-abi_test_clobber_f11
 .globl	abi_test_clobber_f12
 .type	abi_test_clobber_f12,@function
@@ -760,7 +760,7 @@ abi_test_clobber_f12:
 
 	std	0, -8(1)
 	lfd	12, -8(1)
-	blr	
+	blr
 .size	abi_test_clobber_f12,.-abi_test_clobber_f12
 .globl	abi_test_clobber_f13
 .type	abi_test_clobber_f13,@function
@@ -772,7 +772,7 @@ abi_test_clobber_f13:
 
 	std	0, -8(1)
 	lfd	13, -8(1)
-	blr	
+	blr
 .size	abi_test_clobber_f13,.-abi_test_clobber_f13
 .globl	abi_test_clobber_f14
 .type	abi_test_clobber_f14,@function
@@ -784,7 +784,7 @@ abi_test_clobber_f14:
 
 	std	0, -8(1)
 	lfd	14, -8(1)
-	blr	
+	blr
 .size	abi_test_clobber_f14,.-abi_test_clobber_f14
 .globl	abi_test_clobber_f15
 .type	abi_test_clobber_f15,@function
@@ -796,7 +796,7 @@ abi_test_clobber_f15:
 
 	std	0, -8(1)
 	lfd	15, -8(1)
-	blr	
+	blr
 .size	abi_test_clobber_f15,.-abi_test_clobber_f15
 .globl	abi_test_clobber_f16
 .type	abi_test_clobber_f16,@function
@@ -808,7 +808,7 @@ abi_test_clobber_f16:
 
 	std	0, -8(1)
 	lfd	16, -8(1)
-	blr	
+	blr
 .size	abi_test_clobber_f16,.-abi_test_clobber_f16
 .globl	abi_test_clobber_f17
 .type	abi_test_clobber_f17,@function
@@ -820,7 +820,7 @@ abi_test_clobber_f17:
 
 	std	0, -8(1)
 	lfd	17, -8(1)
-	blr	
+	blr
 .size	abi_test_clobber_f17,.-abi_test_clobber_f17
 .globl	abi_test_clobber_f18
 .type	abi_test_clobber_f18,@function
@@ -832,7 +832,7 @@ abi_test_clobber_f18:
 
 	std	0, -8(1)
 	lfd	18, -8(1)
-	blr	
+	blr
 .size	abi_test_clobber_f18,.-abi_test_clobber_f18
 .globl	abi_test_clobber_f19
 .type	abi_test_clobber_f19,@function
@@ -844,7 +844,7 @@ abi_test_clobber_f19:
 
 	std	0, -8(1)
 	lfd	19, -8(1)
-	blr	
+	blr
 .size	abi_test_clobber_f19,.-abi_test_clobber_f19
 .globl	abi_test_clobber_f20
 .type	abi_test_clobber_f20,@function
@@ -856,7 +856,7 @@ abi_test_clobber_f20:
 
 	std	0, -8(1)
 	lfd	20, -8(1)
-	blr	
+	blr
 .size	abi_test_clobber_f20,.-abi_test_clobber_f20
 .globl	abi_test_clobber_f21
 .type	abi_test_clobber_f21,@function
@@ -868,7 +868,7 @@ abi_test_clobber_f21:
 
 	std	0, -8(1)
 	lfd	21, -8(1)
-	blr	
+	blr
 .size	abi_test_clobber_f21,.-abi_test_clobber_f21
 .globl	abi_test_clobber_f22
 .type	abi_test_clobber_f22,@function
@@ -880,7 +880,7 @@ abi_test_clobber_f22:
 
 	std	0, -8(1)
 	lfd	22, -8(1)
-	blr	
+	blr
 .size	abi_test_clobber_f22,.-abi_test_clobber_f22
 .globl	abi_test_clobber_f23
 .type	abi_test_clobber_f23,@function
@@ -892,7 +892,7 @@ abi_test_clobber_f23:
 
 	std	0, -8(1)
 	lfd	23, -8(1)
-	blr	
+	blr
 .size	abi_test_clobber_f23,.-abi_test_clobber_f23
 .globl	abi_test_clobber_f24
 .type	abi_test_clobber_f24,@function
@@ -904,7 +904,7 @@ abi_test_clobber_f24:
 
 	std	0, -8(1)
 	lfd	24, -8(1)
-	blr	
+	blr
 .size	abi_test_clobber_f24,.-abi_test_clobber_f24
 .globl	abi_test_clobber_f25
 .type	abi_test_clobber_f25,@function
@@ -916,7 +916,7 @@ abi_test_clobber_f25:
 
 	std	0, -8(1)
 	lfd	25, -8(1)
-	blr	
+	blr
 .size	abi_test_clobber_f25,.-abi_test_clobber_f25
 .globl	abi_test_clobber_f26
 .type	abi_test_clobber_f26,@function
@@ -928,7 +928,7 @@ abi_test_clobber_f26:
 
 	std	0, -8(1)
 	lfd	26, -8(1)
-	blr	
+	blr
 .size	abi_test_clobber_f26,.-abi_test_clobber_f26
 .globl	abi_test_clobber_f27
 .type	abi_test_clobber_f27,@function
@@ -940,7 +940,7 @@ abi_test_clobber_f27:
 
 	std	0, -8(1)
 	lfd	27, -8(1)
-	blr	
+	blr
 .size	abi_test_clobber_f27,.-abi_test_clobber_f27
 .globl	abi_test_clobber_f28
 .type	abi_test_clobber_f28,@function
@@ -952,7 +952,7 @@ abi_test_clobber_f28:
 
 	std	0, -8(1)
 	lfd	28, -8(1)
-	blr	
+	blr
 .size	abi_test_clobber_f28,.-abi_test_clobber_f28
 .globl	abi_test_clobber_f29
 .type	abi_test_clobber_f29,@function
@@ -964,7 +964,7 @@ abi_test_clobber_f29:
 
 	std	0, -8(1)
 	lfd	29, -8(1)
-	blr	
+	blr
 .size	abi_test_clobber_f29,.-abi_test_clobber_f29
 .globl	abi_test_clobber_f30
 .type	abi_test_clobber_f30,@function
@@ -976,7 +976,7 @@ abi_test_clobber_f30:
 
 	std	0, -8(1)
 	lfd	30, -8(1)
-	blr	
+	blr
 .size	abi_test_clobber_f30,.-abi_test_clobber_f30
 .globl	abi_test_clobber_f31
 .type	abi_test_clobber_f31,@function
@@ -988,7 +988,7 @@ abi_test_clobber_f31:
 
 	std	0, -8(1)
 	lfd	31, -8(1)
-	blr	
+	blr
 .size	abi_test_clobber_f31,.-abi_test_clobber_f31
 .globl	abi_test_clobber_v0
 .type	abi_test_clobber_v0,@function
@@ -997,7 +997,7 @@ abi_test_clobber_v0:
 .localentry	abi_test_clobber_v0,0
 
 	vxor	0, 0, 0
-	blr	
+	blr
 .size	abi_test_clobber_v0,.-abi_test_clobber_v0
 .globl	abi_test_clobber_v1
 .type	abi_test_clobber_v1,@function
@@ -1006,7 +1006,7 @@ abi_test_clobber_v1:
 .localentry	abi_test_clobber_v1,0
 
 	vxor	1, 1, 1
-	blr	
+	blr
 .size	abi_test_clobber_v1,.-abi_test_clobber_v1
 .globl	abi_test_clobber_v2
 .type	abi_test_clobber_v2,@function
@@ -1015,7 +1015,7 @@ abi_test_clobber_v2:
 .localentry	abi_test_clobber_v2,0
 
 	vxor	2, 2, 2
-	blr	
+	blr
 .size	abi_test_clobber_v2,.-abi_test_clobber_v2
 .globl	abi_test_clobber_v3
 .type	abi_test_clobber_v3,@function
@@ -1024,7 +1024,7 @@ abi_test_clobber_v3:
 .localentry	abi_test_clobber_v3,0
 
 	vxor	3, 3, 3
-	blr	
+	blr
 .size	abi_test_clobber_v3,.-abi_test_clobber_v3
 .globl	abi_test_clobber_v4
 .type	abi_test_clobber_v4,@function
@@ -1033,7 +1033,7 @@ abi_test_clobber_v4:
 .localentry	abi_test_clobber_v4,0
 
 	vxor	4, 4, 4
-	blr	
+	blr
 .size	abi_test_clobber_v4,.-abi_test_clobber_v4
 .globl	abi_test_clobber_v5
 .type	abi_test_clobber_v5,@function
@@ -1042,7 +1042,7 @@ abi_test_clobber_v5:
 .localentry	abi_test_clobber_v5,0
 
 	vxor	5, 5, 5
-	blr	
+	blr
 .size	abi_test_clobber_v5,.-abi_test_clobber_v5
 .globl	abi_test_clobber_v6
 .type	abi_test_clobber_v6,@function
@@ -1051,7 +1051,7 @@ abi_test_clobber_v6:
 .localentry	abi_test_clobber_v6,0
 
 	vxor	6, 6, 6
-	blr	
+	blr
 .size	abi_test_clobber_v6,.-abi_test_clobber_v6
 .globl	abi_test_clobber_v7
 .type	abi_test_clobber_v7,@function
@@ -1060,7 +1060,7 @@ abi_test_clobber_v7:
 .localentry	abi_test_clobber_v7,0
 
 	vxor	7, 7, 7
-	blr	
+	blr
 .size	abi_test_clobber_v7,.-abi_test_clobber_v7
 .globl	abi_test_clobber_v8
 .type	abi_test_clobber_v8,@function
@@ -1069,7 +1069,7 @@ abi_test_clobber_v8:
 .localentry	abi_test_clobber_v8,0
 
 	vxor	8, 8, 8
-	blr	
+	blr
 .size	abi_test_clobber_v8,.-abi_test_clobber_v8
 .globl	abi_test_clobber_v9
 .type	abi_test_clobber_v9,@function
@@ -1078,7 +1078,7 @@ abi_test_clobber_v9:
 .localentry	abi_test_clobber_v9,0
 
 	vxor	9, 9, 9
-	blr	
+	blr
 .size	abi_test_clobber_v9,.-abi_test_clobber_v9
 .globl	abi_test_clobber_v10
 .type	abi_test_clobber_v10,@function
@@ -1087,7 +1087,7 @@ abi_test_clobber_v10:
 .localentry	abi_test_clobber_v10,0
 
 	vxor	10, 10, 10
-	blr	
+	blr
 .size	abi_test_clobber_v10,.-abi_test_clobber_v10
 .globl	abi_test_clobber_v11
 .type	abi_test_clobber_v11,@function
@@ -1096,7 +1096,7 @@ abi_test_clobber_v11:
 .localentry	abi_test_clobber_v11,0
 
 	vxor	11, 11, 11
-	blr	
+	blr
 .size	abi_test_clobber_v11,.-abi_test_clobber_v11
 .globl	abi_test_clobber_v12
 .type	abi_test_clobber_v12,@function
@@ -1105,7 +1105,7 @@ abi_test_clobber_v12:
 .localentry	abi_test_clobber_v12,0
 
 	vxor	12, 12, 12
-	blr	
+	blr
 .size	abi_test_clobber_v12,.-abi_test_clobber_v12
 .globl	abi_test_clobber_v13
 .type	abi_test_clobber_v13,@function
@@ -1114,7 +1114,7 @@ abi_test_clobber_v13:
 .localentry	abi_test_clobber_v13,0
 
 	vxor	13, 13, 13
-	blr	
+	blr
 .size	abi_test_clobber_v13,.-abi_test_clobber_v13
 .globl	abi_test_clobber_v14
 .type	abi_test_clobber_v14,@function
@@ -1123,7 +1123,7 @@ abi_test_clobber_v14:
 .localentry	abi_test_clobber_v14,0
 
 	vxor	14, 14, 14
-	blr	
+	blr
 .size	abi_test_clobber_v14,.-abi_test_clobber_v14
 .globl	abi_test_clobber_v15
 .type	abi_test_clobber_v15,@function
@@ -1132,7 +1132,7 @@ abi_test_clobber_v15:
 .localentry	abi_test_clobber_v15,0
 
 	vxor	15, 15, 15
-	blr	
+	blr
 .size	abi_test_clobber_v15,.-abi_test_clobber_v15
 .globl	abi_test_clobber_v16
 .type	abi_test_clobber_v16,@function
@@ -1141,7 +1141,7 @@ abi_test_clobber_v16:
 .localentry	abi_test_clobber_v16,0
 
 	vxor	16, 16, 16
-	blr	
+	blr
 .size	abi_test_clobber_v16,.-abi_test_clobber_v16
 .globl	abi_test_clobber_v17
 .type	abi_test_clobber_v17,@function
@@ -1150,7 +1150,7 @@ abi_test_clobber_v17:
 .localentry	abi_test_clobber_v17,0
 
 	vxor	17, 17, 17
-	blr	
+	blr
 .size	abi_test_clobber_v17,.-abi_test_clobber_v17
 .globl	abi_test_clobber_v18
 .type	abi_test_clobber_v18,@function
@@ -1159,7 +1159,7 @@ abi_test_clobber_v18:
 .localentry	abi_test_clobber_v18,0
 
 	vxor	18, 18, 18
-	blr	
+	blr
 .size	abi_test_clobber_v18,.-abi_test_clobber_v18
 .globl	abi_test_clobber_v19
 .type	abi_test_clobber_v19,@function
@@ -1168,7 +1168,7 @@ abi_test_clobber_v19:
 .localentry	abi_test_clobber_v19,0
 
 	vxor	19, 19, 19
-	blr	
+	blr
 .size	abi_test_clobber_v19,.-abi_test_clobber_v19
 .globl	abi_test_clobber_v20
 .type	abi_test_clobber_v20,@function
@@ -1177,7 +1177,7 @@ abi_test_clobber_v20:
 .localentry	abi_test_clobber_v20,0
 
 	vxor	20, 20, 20
-	blr	
+	blr
 .size	abi_test_clobber_v20,.-abi_test_clobber_v20
 .globl	abi_test_clobber_v21
 .type	abi_test_clobber_v21,@function
@@ -1186,7 +1186,7 @@ abi_test_clobber_v21:
 .localentry	abi_test_clobber_v21,0
 
 	vxor	21, 21, 21
-	blr	
+	blr
 .size	abi_test_clobber_v21,.-abi_test_clobber_v21
 .globl	abi_test_clobber_v22
 .type	abi_test_clobber_v22,@function
@@ -1195,7 +1195,7 @@ abi_test_clobber_v22:
 .localentry	abi_test_clobber_v22,0
 
 	vxor	22, 22, 22
-	blr	
+	blr
 .size	abi_test_clobber_v22,.-abi_test_clobber_v22
 .globl	abi_test_clobber_v23
 .type	abi_test_clobber_v23,@function
@@ -1204,7 +1204,7 @@ abi_test_clobber_v23:
 .localentry	abi_test_clobber_v23,0
 
 	vxor	23, 23, 23
-	blr	
+	blr
 .size	abi_test_clobber_v23,.-abi_test_clobber_v23
 .globl	abi_test_clobber_v24
 .type	abi_test_clobber_v24,@function
@@ -1213,7 +1213,7 @@ abi_test_clobber_v24:
 .localentry	abi_test_clobber_v24,0
 
 	vxor	24, 24, 24
-	blr	
+	blr
 .size	abi_test_clobber_v24,.-abi_test_clobber_v24
 .globl	abi_test_clobber_v25
 .type	abi_test_clobber_v25,@function
@@ -1222,7 +1222,7 @@ abi_test_clobber_v25:
 .localentry	abi_test_clobber_v25,0
 
 	vxor	25, 25, 25
-	blr	
+	blr
 .size	abi_test_clobber_v25,.-abi_test_clobber_v25
 .globl	abi_test_clobber_v26
 .type	abi_test_clobber_v26,@function
@@ -1231,7 +1231,7 @@ abi_test_clobber_v26:
 .localentry	abi_test_clobber_v26,0
 
 	vxor	26, 26, 26
-	blr	
+	blr
 .size	abi_test_clobber_v26,.-abi_test_clobber_v26
 .globl	abi_test_clobber_v27
 .type	abi_test_clobber_v27,@function
@@ -1240,7 +1240,7 @@ abi_test_clobber_v27:
 .localentry	abi_test_clobber_v27,0
 
 	vxor	27, 27, 27
-	blr	
+	blr
 .size	abi_test_clobber_v27,.-abi_test_clobber_v27
 .globl	abi_test_clobber_v28
 .type	abi_test_clobber_v28,@function
@@ -1249,7 +1249,7 @@ abi_test_clobber_v28:
 .localentry	abi_test_clobber_v28,0
 
 	vxor	28, 28, 28
-	blr	
+	blr
 .size	abi_test_clobber_v28,.-abi_test_clobber_v28
 .globl	abi_test_clobber_v29
 .type	abi_test_clobber_v29,@function
@@ -1258,7 +1258,7 @@ abi_test_clobber_v29:
 .localentry	abi_test_clobber_v29,0
 
 	vxor	29, 29, 29
-	blr	
+	blr
 .size	abi_test_clobber_v29,.-abi_test_clobber_v29
 .globl	abi_test_clobber_v30
 .type	abi_test_clobber_v30,@function
@@ -1267,7 +1267,7 @@ abi_test_clobber_v30:
 .localentry	abi_test_clobber_v30,0
 
 	vxor	30, 30, 30
-	blr	
+	blr
 .size	abi_test_clobber_v30,.-abi_test_clobber_v30
 .globl	abi_test_clobber_v31
 .type	abi_test_clobber_v31,@function
@@ -1276,7 +1276,7 @@ abi_test_clobber_v31:
 .localentry	abi_test_clobber_v31,0
 
 	vxor	31, 31, 31
-	blr	
+	blr
 .size	abi_test_clobber_v31,.-abi_test_clobber_v31
 .globl	abi_test_clobber_cr0
 .type	abi_test_clobber_cr0,@function
@@ -1289,7 +1289,7 @@ abi_test_clobber_cr0:
 	mfcr	0
 	not	0, 0
 	mtcrf	128, 0
-	blr	
+	blr
 .size	abi_test_clobber_cr0,.-abi_test_clobber_cr0
 .globl	abi_test_clobber_cr1
 .type	abi_test_clobber_cr1,@function
@@ -1302,7 +1302,7 @@ abi_test_clobber_cr1:
 	mfcr	0
 	not	0, 0
 	mtcrf	64, 0
-	blr	
+	blr
 .size	abi_test_clobber_cr1,.-abi_test_clobber_cr1
 .globl	abi_test_clobber_cr2
 .type	abi_test_clobber_cr2,@function
@@ -1315,7 +1315,7 @@ abi_test_clobber_cr2:
 	mfcr	0
 	not	0, 0
 	mtcrf	32, 0
-	blr	
+	blr
 .size	abi_test_clobber_cr2,.-abi_test_clobber_cr2
 .globl	abi_test_clobber_cr3
 .type	abi_test_clobber_cr3,@function
@@ -1328,7 +1328,7 @@ abi_test_clobber_cr3:
 	mfcr	0
 	not	0, 0
 	mtcrf	16, 0
-	blr	
+	blr
 .size	abi_test_clobber_cr3,.-abi_test_clobber_cr3
 .globl	abi_test_clobber_cr4
 .type	abi_test_clobber_cr4,@function
@@ -1341,7 +1341,7 @@ abi_test_clobber_cr4:
 	mfcr	0
 	not	0, 0
 	mtcrf	8, 0
-	blr	
+	blr
 .size	abi_test_clobber_cr4,.-abi_test_clobber_cr4
 .globl	abi_test_clobber_cr5
 .type	abi_test_clobber_cr5,@function
@@ -1354,7 +1354,7 @@ abi_test_clobber_cr5:
 	mfcr	0
 	not	0, 0
 	mtcrf	4, 0
-	blr	
+	blr
 .size	abi_test_clobber_cr5,.-abi_test_clobber_cr5
 .globl	abi_test_clobber_cr6
 .type	abi_test_clobber_cr6,@function
@@ -1367,7 +1367,7 @@ abi_test_clobber_cr6:
 	mfcr	0
 	not	0, 0
 	mtcrf	2, 0
-	blr	
+	blr
 .size	abi_test_clobber_cr6,.-abi_test_clobber_cr6
 .globl	abi_test_clobber_cr7
 .type	abi_test_clobber_cr7,@function
@@ -1380,7 +1380,7 @@ abi_test_clobber_cr7:
 	mfcr	0
 	not	0, 0
 	mtcrf	1, 0
-	blr	
+	blr
 .size	abi_test_clobber_cr7,.-abi_test_clobber_cr7
 .globl	abi_test_clobber_ctr
 .type	abi_test_clobber_ctr,@function
@@ -1390,7 +1390,7 @@ abi_test_clobber_ctr:
 
 	li	0, 0
 	mtctr	0
-	blr	
+	blr
 .size	abi_test_clobber_ctr,.-abi_test_clobber_ctr
 
 .globl	abi_test_clobber_lr
@@ -1403,7 +1403,7 @@ abi_test_clobber_lr:
 	mtctr	0
 	li	0, 0
 	mtlr	0
-	bctr	
+	bctr
 .size	abi_test_clobber_lr,.-abi_test_clobber_lr
 
 #endif  // !OPENSSL_NO_ASM && __powerpc64__

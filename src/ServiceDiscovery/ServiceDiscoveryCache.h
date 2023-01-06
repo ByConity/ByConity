@@ -70,7 +70,7 @@ public:
     }
 private:
     using Map = std::unordered_map<SDCacheKey, SDCacheValue<Tendpoint>, hash_fn>;
-    Map cache;  
-    std::shared_mutex mutex;    
+    Map cache;
+    std::shared_mutex mutex;
 };
 }

@@ -84,7 +84,7 @@ public:
      * Scan all records from the specific key. If the key is empty, will go over all records in current DB.
      */
     virtual IteratorPtr scan(const String &) = 0;
-     
+
     /***
      * Clear all metainfo in the metastore;
      */

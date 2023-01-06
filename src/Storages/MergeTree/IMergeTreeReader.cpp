@@ -447,7 +447,7 @@ void IMergeTreeReader::readData(
                 return nullptr;
 
             String stream_name = ISerialization::getFileNameForStream(name_and_type, substream_path);
-            
+
             auto it = streams.find(stream_name);
             if (it == streams.end())
                 return nullptr;
@@ -474,7 +474,7 @@ void IMergeTreeReader::readData(
 
     const auto & name = name_and_type.name;
     auto serialization = serializations[name];
-    
+
     if (!deserialize_binary_bulk_state_map.contains(name))
     {
         deserialize_settings.getter = get_stream_getter(true);

@@ -23,9 +23,9 @@ namespace DB
 
 class CheckAliasVisitor
 {
-public:        
+public:
     ASTs stack;
-    
+
     void visit(ASTPtr & ast);
     bool isSelectItem();
     bool isTableExpressionElement();

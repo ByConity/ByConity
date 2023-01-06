@@ -46,7 +46,7 @@ function wait_vm_for_start()
         if [ $? -eq 0 ]; then
             started=1
             break
-        fi 
+        fi
         sleep 1s
     done
 

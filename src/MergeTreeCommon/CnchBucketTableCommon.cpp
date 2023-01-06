@@ -232,11 +232,11 @@ void RewriteInQueryMatcher::visit(ASTPtr & node, Data & data)
 {
     if (!node)
         return;
-    
+
     const auto * fn = node->as<ASTFunction>();
     if (!fn || fn->name != "in")
         return;
-    
+
     data.replaceExpressionListChildren(fn);
 }
 

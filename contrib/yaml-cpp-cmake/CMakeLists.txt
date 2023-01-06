@@ -9,7 +9,7 @@ set (SRCS
 	${LIBRARY_DIR}/src/exceptions.cpp
 	${LIBRARY_DIR}/src/ostream_wrapper.cpp
 	${LIBRARY_DIR}/src/simplekey.cpp
-	${LIBRARY_DIR}/src/depthguard.cpp 
+	${LIBRARY_DIR}/src/depthguard.cpp
 	${LIBRARY_DIR}/src/exp.cpp
 	${LIBRARY_DIR}/src/parse.cpp
 	${LIBRARY_DIR}/src/singledocparser.cpp

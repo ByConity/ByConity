@@ -66,7 +66,7 @@ public:
     using PoolOptionsMap = std::unordered_map<std::string, BrpcChannelPoolOptions::PoolOptions>;
 
 private:
-    
+
     PoolOptionsMap options_map;
 
 public:

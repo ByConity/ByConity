@@ -208,7 +208,7 @@ void QueryPlan::freshPlan()
 }
 
 /**
- * Be careful, after we create a sub_plan, some nodes in the original plan have been deleted and deconstructed. 
+ * Be careful, after we create a sub_plan, some nodes in the original plan have been deleted and deconstructed.
  * More precisely， nodes that moved to sub_plan are deleted.
  */
 QueryPlan QueryPlan::getSubPlan(QueryPlan::Node * node_)

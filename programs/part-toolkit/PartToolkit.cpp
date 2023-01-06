@@ -66,7 +66,7 @@ void run(const std::string & query, Poco::Logger * log)
     mutable_context_ptr->makeGlobalContext();
     mutable_context_ptr->setConfig(configuration);
     mutable_context_ptr->setMarkCache(1000000);
-    
+
     const char * begin = query.data();
     const char * end =  query.data() + query.size();
 

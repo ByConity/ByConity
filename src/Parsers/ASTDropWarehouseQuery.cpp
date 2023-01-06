@@ -32,8 +32,8 @@ ASTPtr ASTDropWarehouseQuery::clone() const
 
 void ASTDropWarehouseQuery::formatImpl(const FormatSettings &s, FormatState &/*state*/, FormatStateStacked /*frame*/) const
 {
-    s.ostr << (s.hilite ? hilite_keyword : "") 
-           << "DROP WAREHOUSE " 
+    s.ostr << (s.hilite ? hilite_keyword : "")
+           << "DROP WAREHOUSE "
            << (if_exists ? "IF EXISTS " : "")
            << (s.hilite ? hilite_none : "");
 

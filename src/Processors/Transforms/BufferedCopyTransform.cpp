@@ -111,7 +111,7 @@ IProcessor::Status BufferedCopyTransform::prepareGenerate()
 {
     if(pushed)
         return Status::PortFull;
-        
+
     pushed = true;
     bool all_outputs_processed = true;
 
@@ -166,7 +166,7 @@ void BufferedCopyTransform::tryFlush(const PortNumbers & updated_output_ports)
 {
     if(pushed)
         return;
-    
+
     for (UInt64 output_id : updated_output_ports)
     {
         OutputPort * output_ptr = output_vec[output_id];

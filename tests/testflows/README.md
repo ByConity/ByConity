@@ -1,6 +1,6 @@
 ## ClickHouse Tests in [TestFlows]
 
-This directory contains integration tests written using [TestFlows] 
+This directory contains integration tests written using [TestFlows]
 that involves several ClickHouse instances, custom configs, ZooKeeper, etc.
 
 ## Supported environment
@@ -12,7 +12,7 @@ that involves several ClickHouse instances, custom configs, ZooKeeper, etc.
 
 * [Docker] [install](https://docs.docker.com/compose/install/)
 * [Docker Compose] [install](https://docs.docker.com/engine/install/)
-* [TestFlows] [install](https://testflows.com/handbook/#Installation) 
+* [TestFlows] [install](https://testflows.com/handbook/#Installation)
 
 ## Running tests locally
 
@@ -27,16 +27,16 @@ You can run tests locally by passing `--local` and `--clickhouse-binary-path` to
 > python3 regression.py -h
 > ```
 
-> Note: make sure that the ClickHouse binary has correct permissions. 
-> If you are using `/usr/bin/clickhouse` its owner and group is set to `root:root` by default 
-> and it needs to be changed to `clickhouse:clickhouse`. You can change the owner and the group 
+> Note: make sure that the ClickHouse binary has correct permissions.
+> If you are using `/usr/bin/clickhouse` its owner and group is set to `root:root` by default
+> and it needs to be changed to `clickhouse:clickhouse`. You can change the owner and the group
 > using the following command.
-> 
+>
 > ```bash
 > sudo chown clickhouse:clickhouse /usr/bin/clickhouse
 > ```
 
-Using the default ClickHouse installation and its server binary at `/usr/bin/clickhouse`, you can run 
+Using the default ClickHouse installation and its server binary at `/usr/bin/clickhouse`, you can run
 regressions locally using the following command.
 
 ```bash
@@ -120,9 +120,9 @@ You need to download the `test.log` that contains all raw messages.
 ### Step 3: get messages for the failing test
 
 Once you know the name of the failing test and you have the `test.log` that contains all the raw messages
-for all the tests, you can use `tfs show test messages` command. 
+for all the tests, you can use `tfs show test messages` command.
 
-> You get the `tfs` command by installing [TestFlows]. 
+> You get the `tfs` command by installing [TestFlows].
 
 For example,
 
@@ -135,10 +135,10 @@ cat test.log | tfs show test messages "/clickhouse/rbac/syntax/grant privilege/g
 
 ### Step 4: working with the `test.log`
 
-You can use the `test.log` with many of the commands provided by the 
-`tfs` utility. 
+You can use the `test.log` with many of the commands provided by the
+`tfs` utility.
 
-> See `tfs --help` for more information. 
+> See `tfs --help` for more information.
 
 For example, you can get a list of failing tests from the `test.log` using the
 `tfs show fails` command as follows
@@ -161,7 +161,7 @@ $ cat test.log | tfs transform fails --new
 ```
 
 [Python 3]: https://www.python.org/
-[Ubuntu]: https://ubuntu.com/ 
+[Ubuntu]: https://ubuntu.com/
 [TestFlows]: https://testflows.com
 [TestFlows Handbook]: https://testflows.com/handbook/
 [Docker]: https://www.docker.com/

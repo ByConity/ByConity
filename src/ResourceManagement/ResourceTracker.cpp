@@ -70,9 +70,9 @@ void ResourceTracker::clearLostWorkers()
     {
         if (it->second->last_update_time < timeout_threshold)
         {
-            LOG_DEBUG(log, "Removing worker {}: {}, last updated about {} seconds ago.", 
-                            it->second->worker_group_id, 
-                            it->second->getID(), 
+            LOG_DEBUG(log, "Removing worker {}: {}, last updated about {} seconds ago.",
+                            it->second->worker_group_id,
+                            it->second->getID(),
                             time_now - it->second->last_update_time);
             try
             {
@@ -126,14 +126,14 @@ std::pair<bool, WorkerNodePtr> ResourceTracker::registerNodeImpl(const WorkerNod
 
         if (it->second->worker_group_id != data.worker_group_id)
         {
-            LOG_WARNING(log, "The work_group_id {} of Node {} is different from the previous {}", 
+            LOG_WARNING(log, "The work_group_id {} of Node {} is different from the previous {}",
                             data.worker_group_id, data.id, it->second->worker_group_id);
             return {true, it->second};
         }
 
         if (it->second->vw_name != data.vw_name)
         {
-            LOG_WARNING(log, "The vw_name {} of Node {} is different from the previous {}", 
+            LOG_WARNING(log, "The vw_name {} of Node {} is different from the previous {}",
                             data.vw_name, data.id, it->second->vw_name);
             return {true, it->second};
         }

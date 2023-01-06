@@ -62,7 +62,7 @@ std::pair<MergeTreeMeta::MutableDataPartsVector, PartNamesWithDisks> MergeTreeMe
             DiskPtr disk_ptr = storage.getStoragePolicy(IStorage::StorageLocation::MAIN)->getDiskByID(part_data.disk_id());
             if (disk_ptr)
                 unloaded_parts.emplace_back(part_name, disk_ptr);
-            
+
             metastore->drop(iterPtr->key());
         }
         iterPtr->next();
@@ -164,7 +164,7 @@ void MergeTreeMeta::loadProjections(const MergeTreeMetaBase & storage)
         }
 
         String projection_name = iterPtr->key().substr(projection_prefix.size() + parent_name.size() + 1); ///seed getProjectionKey() for more details.
-        
+
         try
         {
             MutableDataPartPtr part = buildProjectionFromMeta(storage, projection_name, part_data, parent_part.get());

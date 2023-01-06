@@ -4,7 +4,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . $CURDIR/../shell_config.sh
 
 user=readonly
-# Support IPv6 host, the first case is ipv6 the second is not 
+# Support IPv6 host, the first case is ipv6 the second is not
 if [[ ${CLICKHOUSE_HOST} =~ .*:.* ]]; then
     address=[${CLICKHOUSE_HOST}]
 else

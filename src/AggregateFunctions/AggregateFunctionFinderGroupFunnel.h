@@ -382,7 +382,7 @@ void calculateFunnel(std::function<UInt32(UInt32)> && getGroup, EventLists<Param
                             reuse_funnel_index.push_back(funnel_index[ii]);
 
                         reuse_funnel_index.push_back(i);
-                        if (last_start != -1 && next_start == -1) 
+                        if (last_start != -1 && next_start == -1)
                             next_start = last_start;
 
                         last_start = i + 1;

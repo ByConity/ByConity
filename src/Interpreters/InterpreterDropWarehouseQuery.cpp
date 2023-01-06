@@ -29,7 +29,7 @@ namespace ErrorCodes
 {
     extern const int RESOURCE_MANAGER_ERROR;
 }
-InterpreterDropWarehouseQuery::InterpreterDropWarehouseQuery(const ASTPtr & query_ptr_, ContextPtr context_) 
+InterpreterDropWarehouseQuery::InterpreterDropWarehouseQuery(const ASTPtr & query_ptr_, ContextPtr context_)
     : WithContext(context_), query_ptr(query_ptr_) {}
 
 

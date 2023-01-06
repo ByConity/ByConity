@@ -54,7 +54,7 @@ void SerializationBitMap64::deserializeBinary(Field & field, ReadBuffer & istr) 
     readVarUInt(size, istr);
     PODArray<char> buffer(size);
     istr.readStrict(buffer.data(), size);
-    
+
     field = Field(BitMap64::readSafe(buffer.data(), size));
 }
 
@@ -300,7 +300,7 @@ void SerializationBitMap64::deserializeWholeText(IColumn & column, ReadBuffer & 
         skipWhitespaceIfAny(istr);
 
         char * next_pos = find_first_symbols<' ', ',', ']'>(istr.position(), istr.buffer().end());
-	
+
         if (next_pos > istr.position())
         {
             uint64_t temp = bitshift(istr.position(), next_pos);

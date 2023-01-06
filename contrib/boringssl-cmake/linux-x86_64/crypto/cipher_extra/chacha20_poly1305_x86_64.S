@@ -11,7 +11,7 @@
 #if defined(BORINGSSL_PREFIX)
 #include <boringssl_prefix_symbols_asm.h>
 #endif
-.text	
+.text
 .extern	OPENSSL_ia32cap_P
 .hidden OPENSSL_ia32cap_P
 
@@ -58,7 +58,7 @@ chacha20_poly1305_constants:
 .type	poly_hash_ad_internal,@function
 .align	64
 poly_hash_ad_internal:
-.cfi_startproc	
+.cfi_startproc
 	xorq	%r10,%r10
 	xorq	%r11,%r11
 	xorq	%r12,%r12
@@ -221,7 +221,7 @@ hash_ad_tail_loop:
 
 1:
 	.byte	0xf3,0xc3
-.cfi_endproc	
+.cfi_endproc
 .size	poly_hash_ad_internal, .-poly_hash_ad_internal
 
 .globl	chacha20_poly1305_open
@@ -229,7 +229,7 @@ hash_ad_tail_loop:
 .type	chacha20_poly1305_open,@function
 .align	64
 chacha20_poly1305_open:
-.cfi_startproc	
+.cfi_startproc
 	pushq	%rbp
 .cfi_adjust_cfa_offset	8
 	pushq	%rbx
@@ -2100,7 +2100,7 @@ open_sse_128:
 	jmp	1b
 	jmp	open_sse_tail_16
 .size	chacha20_poly1305_open, .-chacha20_poly1305_open
-.cfi_endproc	
+.cfi_endproc
 
 
 
@@ -2110,7 +2110,7 @@ open_sse_128:
 .type	chacha20_poly1305_seal,@function
 .align	64
 chacha20_poly1305_seal:
-.cfi_startproc	
+.cfi_startproc
 	pushq	%rbp
 .cfi_adjust_cfa_offset	8
 	pushq	%rbx
@@ -8982,6 +8982,6 @@ seal_avx2_short_tail:
 1:
 	vzeroupper
 	jmp	seal_sse_tail_16
-.cfi_endproc	
+.cfi_endproc
 #endif
 .section	.note.GNU-stack,"",@progbits

@@ -88,7 +88,7 @@ void MergeSortingStep::transformPipeline(QueryPipeline & pipeline, const BuildQu
     max_bytes_before_external_sort = settings.context->getSettingsRef().max_bytes_before_external_sort;
     tmp_volume = settings.context->getTemporaryVolume();
     min_free_disk_space = settings.context->getSettingsRef().min_free_disk_space_for_temporary_data;
-    
+
     pipeline.addSimpleTransform([&](const Block & header, QueryPipeline::StreamType stream_type) -> ProcessorPtr
     {
         if (stream_type == QueryPipeline::StreamType::Totals)

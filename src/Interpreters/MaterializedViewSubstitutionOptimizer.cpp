@@ -937,7 +937,7 @@ namespace DB
                 auto sorting_key_names = view_target_table->getInMemoryMetadataPtr()->getSortingKeyColumns();
                 for (auto & key_name : sorting_key_names)
                     sorting_columns.emplace(key_name);
-                    
+
                 for (auto & child : view_query.select()->children)
                 {
                     /// Every column which is not under aggregate function should appear in sorting columns.
@@ -1001,7 +1001,7 @@ namespace DB
                 result.view_match_info = "Match failed target table-" + result.view_target_table->getStorageID().getFullTableName() + " not support sample";
 
             auto * view_query = materialized_view->normalizeInnerQuery()->as<ASTSelectQuery>();
-            
+
             if (!view_query)
                 continue;
 

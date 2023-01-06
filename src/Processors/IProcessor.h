@@ -352,7 +352,7 @@ public:
 
         return stats;
     }
-    
+
 protected:
     virtual void onCancel() {}
 

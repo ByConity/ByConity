@@ -125,7 +125,7 @@ public:
                     estimated_ndv_upper_bound));
 
             bool use_accurate = false;
-            switch (handler_context.settings.accurate_sample_ndv) 
+            switch (handler_context.settings.accurate_sample_ndv)
             {
                 case StatisticsAccurateSampleNdvMode::AUTO:
                     // when error of estimated ndv more than 30% due to HyperLogLog,

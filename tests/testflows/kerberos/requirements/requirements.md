@@ -44,7 +44,7 @@
 ## Revision History
 
 This document is stored in an electronic form using [Git] source control management software
-hosted in a [GitHub Repository].  
+hosted in a [GitHub Repository].
 All the updates are tracked using the [Git]'s [Revision History].
 
 ## Introduction

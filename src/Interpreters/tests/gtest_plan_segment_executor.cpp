@@ -126,14 +126,14 @@ TEST(PlanSegmentExecutor, ExecuteTest)
         if (thread.joinable())
             thread.join();
     });
-    
+
     QueryPlan query_plan;
     QueryPlan::Node remote_node{.step = std::move(exchange_source_step), .children = {}};
     query_plan.addRoot(std::move(remote_node));
     plan_segment.setQueryPlan(std::move(query_plan));
     PlanSegmentExecutor executor(std::make_unique<PlanSegment>(std::move(plan_segment)), context, exchange_options);
     executor.execute();
-    
+
 
     for (int i = 0; i < 5; i++)
     {
@@ -348,9 +348,9 @@ TEST(PlanSegmentExecutor, ExecuteCancelTest)
         if(max_time < 0)
             break;
     }
-        
+
     ASSERT_TRUE(code == CancellationCode::CancelSent);
-    
+
     RecvDataPacket recv_res = sink_receiver->recv(5000);
     ASSERT_TRUE(std::holds_alternative<BroadcastStatus>(recv_res));
     ASSERT_TRUE(std::get<BroadcastStatus>(recv_res).code == BroadcastStatusCode::SEND_CANCELLED);

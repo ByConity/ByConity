@@ -95,7 +95,7 @@ String fetchRMAddressFromKeeper(ContextPtr context)
     String current_leader = current_zookeeper->get(current_leader_node);
     if (current_leader.empty())
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Can't get current RM leader, leader_node `{}` in keeper is empty.", current_leader_node);
-    
+
     return current_leader;
 }
 

@@ -36,7 +36,7 @@ struct ContextHolder
     {
         context->makeGlobalContext();
         context->setPath("./");
-        
+
         DB::DatabasePtr database = std::make_shared<DB::DatabaseMemory>("test_database", context);
         DB::DatabaseCatalog::instance().attachDatabase("test_database", database);
     }

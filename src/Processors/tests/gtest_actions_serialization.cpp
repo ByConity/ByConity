@@ -138,9 +138,9 @@ TEST(TestActions, TestActionsSerialization)
 
     auto function_actions_dag = createActionsFunction();
     auto new_function_actions_dag = serializeActions(function_actions_dag);
-    checkResult(function_actions_dag, new_function_actions_dag); 
+    checkResult(function_actions_dag, new_function_actions_dag);
 
     auto more_function_actions_dag = createActionsMoreFunction();
     auto new_more_function_actions_dag = serializeActions(more_function_actions_dag);
-    checkResult(more_function_actions_dag, new_more_function_actions_dag); 
+    checkResult(more_function_actions_dag, new_more_function_actions_dag);
 }

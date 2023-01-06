@@ -66,7 +66,7 @@ void MetroHash128::Update(const uint8_t * const buffer, const uint64_t length)
         memcpy(input.b + (bytes % 32), ptr, static_cast<size_t>(fill));
         ptr   += fill;
         bytes += fill;
-        
+
         // input buffer is still partially filled
         if ((bytes % 32) != 0) return;
 
@@ -76,7 +76,7 @@ void MetroHash128::Update(const uint8_t * const buffer, const uint64_t length)
         state.v[2] += read_u64(&input.b[16]) * k2; state.v[2] = rotate_right(state.v[2],29) + state.v[0];
         state.v[3] += read_u64(&input.b[24]) * k3; state.v[3] = rotate_right(state.v[3],29) + state.v[1];
     }
-    
+
     // bulk update
     bytes += (end - ptr);
     while (ptr <= (end - 32))
@@ -87,7 +87,7 @@ void MetroHash128::Update(const uint8_t * const buffer, const uint64_t length)
         state.v[2] += read_u64(ptr) * k2; ptr += 8; state.v[2] = rotate_right(state.v[2],29) + state.v[0];
         state.v[3] += read_u64(ptr) * k3; ptr += 8; state.v[3] = rotate_right(state.v[3],29) + state.v[1];
     }
-    
+
     // store remaining bytes in input buffer
     if (ptr < end)
         memcpy(input.b, ptr, end - ptr);
@@ -104,11 +104,11 @@ void MetroHash128::Finalize(uint8_t * const hash)
         state.v[0] ^= rotate_right(((state.v[0] + state.v[2]) * k0) + state.v[3], 21) * k1;
         state.v[1] ^= rotate_right(((state.v[1] + state.v[3]) * k1) + state.v[2], 21) * k0;
     }
-    
+
     // process any bytes remaining in the input buffer
     const uint8_t * ptr = reinterpret_cast<const uint8_t*>(input.b);
     const uint8_t * const end = ptr + (bytes % 32);
-    
+
     if ((end - ptr) >= 16)
     {
         state.v[0] += read_u64(ptr) * k2; ptr += 8; state.v[0] = rotate_right(state.v[0],33) * k3;
@@ -140,7 +140,7 @@ void MetroHash128::Finalize(uint8_t * const hash)
         state.v[1] += read_u8 (ptr) * k2; state.v[1] = rotate_right(state.v[1],33) * k3;
         state.v[1] ^= rotate_right((state.v[1] * k3) + state.v[0], 58) * k0;
     }
-    
+
     state.v[0] += rotate_right((state.v[0] * k0) + state.v[1], 13);
     state.v[1] += rotate_right((state.v[1] * k1) + state.v[0], 37);
     state.v[0] += rotate_right((state.v[0] * k2) + state.v[1], 13);
@@ -241,7 +241,7 @@ bool MetroHash128::ImplementationVerified()
 
     // verify incremental implementation
     MetroHash128 metro;
-    
+
     metro.Initialize(0);
     metro.Update(reinterpret_cast<const uint8_t *>(MetroHash128::test_string), strlen(MetroHash128::test_string));
     metro.Finalize(hash);
@@ -265,14 +265,14 @@ void metrohash128_1(const uint8_t * key, uint64_t len, uint32_t seed, uint8_t * 
 
     const uint8_t * ptr = reinterpret_cast<const uint8_t*>(key);
     const uint8_t * const end = ptr + len;
-    
+
     uint64_t v[4];
-    
+
     v[0] = ((static_cast<uint64_t>(seed) - k0) * k3) + len;
     v[1] = ((static_cast<uint64_t>(seed) + k1) * k2) + len;
-    
+
     if (len >= 32)
-    {        
+    {
         v[2] = ((static_cast<uint64_t>(seed) + k0) * k2) + len;
         v[3] = ((static_cast<uint64_t>(seed) - k1) * k3) + len;
 
@@ -290,7 +290,7 @@ void metrohash128_1(const uint8_t * key, uint64_t len, uint32_t seed, uint8_t * 
         v[0] ^= rotate_right(((v[0] + v[2]) * k0) + v[3], 26) * k1;
         v[1] ^= rotate_right(((v[1] + v[3]) * k1) + v[2], 30) * k0;
     }
-    
+
     if ((end - ptr) >= 16)
     {
         v[0] += read_u64(ptr) * k2; ptr += 8; v[0] = rotate_right(v[0],33) * k3;
@@ -298,31 +298,31 @@ void metrohash128_1(const uint8_t * key, uint64_t len, uint32_t seed, uint8_t * 
         v[0] ^= rotate_right((v[0] * k2) + v[1], 17) * k1;
         v[1] ^= rotate_right((v[1] * k3) + v[0], 17) * k0;
     }
-    
+
     if ((end - ptr) >= 8)
     {
         v[0] += read_u64(ptr) * k2; ptr += 8; v[0] = rotate_right(v[0],33) * k3;
         v[0] ^= rotate_right((v[0] * k2) + v[1], 20) * k1;
     }
-    
+
     if ((end - ptr) >= 4)
     {
         v[1] += read_u32(ptr) * k2; ptr += 4; v[1] = rotate_right(v[1],33) * k3;
         v[1] ^= rotate_right((v[1] * k3) + v[0], 18) * k0;
     }
-    
+
     if ((end - ptr) >= 2)
     {
         v[0] += read_u16(ptr) * k2; ptr += 2; v[0] = rotate_right(v[0],33) * k3;
         v[0] ^= rotate_right((v[0] * k2) + v[1], 24) * k1;
     }
-    
+
     if ((end - ptr) >= 1)
     {
         v[1] += read_u8 (ptr) * k2; v[1] = rotate_right(v[1],33) * k3;
         v[1] ^= rotate_right((v[1] * k3) + v[0], 24) * k0;
     }
-    
+
     v[0] += rotate_right((v[0] * k0) + v[1], 13);
     v[1] += rotate_right((v[1] * k1) + v[0], 37);
     v[0] += rotate_right((v[0] * k2) + v[1], 13);
@@ -339,18 +339,18 @@ void metrohash128_2(const uint8_t * key, uint64_t len, uint32_t seed, uint8_t * 
     static const uint64_t k0 = 0xD6D018F5;
     static const uint64_t k1 = 0xA2AA033B;
     static const uint64_t k2 = 0x62992FC1;
-    static const uint64_t k3 = 0x30BC5B29; 
+    static const uint64_t k3 = 0x30BC5B29;
 
     const uint8_t * ptr = reinterpret_cast<const uint8_t*>(key);
     const uint8_t * const end = ptr + len;
-    
+
     uint64_t v[4];
-    
+
     v[0] = ((static_cast<uint64_t>(seed) - k0) * k3) + len;
     v[1] = ((static_cast<uint64_t>(seed) + k1) * k2) + len;
-    
+
     if (len >= 32)
-    {        
+    {
         v[2] = ((static_cast<uint64_t>(seed) + k0) * k2) + len;
         v[3] = ((static_cast<uint64_t>(seed) - k1) * k3) + len;
 
@@ -368,7 +368,7 @@ void metrohash128_2(const uint8_t * key, uint64_t len, uint32_t seed, uint8_t * 
         v[0] ^= rotate_right(((v[0] + v[2]) * k0) + v[3], 33) * k1;
         v[1] ^= rotate_right(((v[1] + v[3]) * k1) + v[2], 33) * k0;
     }
-    
+
     if ((end - ptr) >= 16)
     {
         v[0] += read_u64(ptr) * k2; ptr += 8; v[0] = rotate_right(v[0],29) * k3;
@@ -376,31 +376,31 @@ void metrohash128_2(const uint8_t * key, uint64_t len, uint32_t seed, uint8_t * 
         v[0] ^= rotate_right((v[0] * k2) + v[1], 29) * k1;
         v[1] ^= rotate_right((v[1] * k3) + v[0], 29) * k0;
     }
-    
+
     if ((end - ptr) >= 8)
     {
         v[0] += read_u64(ptr) * k2; ptr += 8; v[0] = rotate_right(v[0],29) * k3;
         v[0] ^= rotate_right((v[0] * k2) + v[1], 29) * k1;
     }
-    
+
     if ((end - ptr) >= 4)
     {
         v[1] += read_u32(ptr) * k2; ptr += 4; v[1] = rotate_right(v[1],29) * k3;
         v[1] ^= rotate_right((v[1] * k3) + v[0], 25) * k0;
     }
-    
+
     if ((end - ptr) >= 2)
     {
         v[0] += read_u16(ptr) * k2; ptr += 2; v[0] = rotate_right(v[0],29) * k3;
         v[0] ^= rotate_right((v[0] * k2) + v[1], 30) * k1;
     }
-    
+
     if ((end - ptr) >= 1)
     {
           v[1] += read_u8 (ptr) * k2; v[1] = rotate_right(v[1],29) * k3;
           v[1] ^= rotate_right((v[1] * k3) + v[0], 18) * k0;
     }
-    
+
     v[0] += rotate_right((v[0] * k0) + v[1], 33);
     v[1] += rotate_right((v[1] * k1) + v[0], 33);
     v[0] += rotate_right((v[0] * k2) + v[1], 33);

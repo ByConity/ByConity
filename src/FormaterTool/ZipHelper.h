@@ -29,7 +29,7 @@ namespace DB
 using DelegatePair = std::pair<const Poco::Zip::ZipLocalFileHeader, const std::string>;
 
 /***
- * Helper class for compressing/uncompression part files when interact with HDFS. Please note that 
+ * Helper class for compressing/uncompression part files when interact with HDFS. Please note that
  * we choose a algorithm with low compress rate to speed up processing. Do not realy on this for data compression.
  */
 
@@ -43,8 +43,8 @@ public:
 
 private:
     void setSource(const std::string & source);
-    
-    [[noreturn]]		
+
+    [[noreturn]]
     void onDecompressError(const void* , DelegatePair & info);
 
     std::string source_file;

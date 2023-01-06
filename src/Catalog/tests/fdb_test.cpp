@@ -173,7 +173,7 @@ bool testBatchWriteWithConflict(DB::Catalog::MetastoreFDBImpl & metastore)
 
     std::atomic_bool test_success = true;
     std::vector<String> keys, keys1, keys2, expected_values;
-    
+
     for (int i=1; i<=7; i++)
         keys1.emplace_back(base_key_prefix + std::to_string(i));
 

@@ -149,7 +149,7 @@ private:
 		/// Already has database.
         if (identifier.compound())
             return;
-        
+
 		/// There is temporary table with such name, should not be rewritten.
         if (external_tables.count(identifier.shortName()))
 			return;

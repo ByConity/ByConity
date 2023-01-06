@@ -74,11 +74,11 @@ RQ_SRS_001_Example_Select_1 = Requirement(
     num='4.3')
 
 SRS_001_ClickHouse_Software_Requirements_Specification_Template = Specification(
-    name='SRS-001 ClickHouse Software Requirements Specification Template', 
+    name='SRS-001 ClickHouse Software Requirements Specification Template',
     description=None,
     author='[name of the author]',
-    date='[date]', 
-    status=None, 
+    date='[date]',
+    status=None,
     approved_by=None,
     approved_date=None,
     approved_version=None,
@@ -152,7 +152,7 @@ All the requirements must be specified in the [Requirements](#requirements) sect
 
 ### Table of Contents
 
-Note that currently the table of contents is generated manually using 
+Note that currently the table of contents is generated manually using
 
 ```bash
 cat CH_SRS001_ClickHouse.md | tfs document toc
@@ -192,25 +192,25 @@ Some description of the term that you would like to use.
 
 ## Requirements
 
-This section includes all the requirements. This section can be structured in any way one sees fit. 
+This section includes all the requirements. This section can be structured in any way one sees fit.
 
 Each requirement is defined by the section that starts with
 the following prefix:
 
     RQ.[document id].[requirement name]
 
-then immediately followed by a one-line block that contains the 
+then immediately followed by a one-line block that contains the
 the `version` of the requirement.
 
 ### RQ.SRS-001.Example
 version: 1.0
 
 This is a long description of the requirement that can include any
-relevant information. 
+relevant information.
 
-The one-line block that follows the requirement defines the `version` 
+The one-line block that follows the requirement defines the `version`
 of the requirement. The version is controlled manually and is used
-to indicate material changes to the requirement that would 
+to indicate material changes to the requirement that would
 require tests that cover this requirement to be updated.
 
 It is a good practice to use requirement names that are broken

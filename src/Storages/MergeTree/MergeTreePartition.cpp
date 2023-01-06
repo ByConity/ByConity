@@ -366,7 +366,7 @@ void MergeTreePartition::store(const MergeTreeMetaBase & storage, WriteBuffer & 
 
     if (!partition_key_sample)
         return;
-    
+
     for (size_t i = 0; i < value.size(); ++i)
         partition_key_sample.getByPosition(i).type->getDefaultSerialization()->serializeBinary(value[i], buf);
 }

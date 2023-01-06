@@ -130,7 +130,7 @@ def process_result(result_path):
         state = "test failed"
         if test_results is []:
             test_results.append(("Asan filed", "FAIL", "0"))
-    
+
     if server_health_check:
         description += "Server does not respond to health check, Please check the log"
         state = "test failed"

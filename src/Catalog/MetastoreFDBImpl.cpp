@@ -66,7 +66,7 @@ std::pair<bool, String> MetastoreFDBImpl::putCAS(const String & key, const Strin
         String old_value;
         if (with_old_value)
             get(key, old_value);
-        
+
         return std::make_pair(false, std::move(old_value));
     }
     else
@@ -175,7 +175,7 @@ int MetastoreFDBImpl::toCommonErrorCode(const fdb_error_t & error_code)
     {
     case FDB::FDBError::FDB_not_committed:
         return DB::ErrorCodes::METASTORE_COMMIT_CAS_FAILURE;
-    
+
     default:
         return error_code;
     }

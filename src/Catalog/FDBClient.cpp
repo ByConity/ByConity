@@ -32,7 +32,7 @@ namespace FDB
 
 #define RETURN_ON_ERROR(code) \
     if (code) \
-        return code 
+        return code
 
 #define THROW_ON_ERROR(code) \
     if (code) \

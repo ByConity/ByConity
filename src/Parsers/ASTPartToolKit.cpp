@@ -31,7 +31,7 @@ ASTPtr ASTPartToolKit::clone() const
 
     if (data_format)
         res->data_format = data_format->clone();
-    
+
     if (create_query)
         res->create_query = create_query->clone();
 

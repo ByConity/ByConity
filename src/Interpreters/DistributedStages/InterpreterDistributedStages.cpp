@@ -209,7 +209,7 @@ void MockTestQuery(PlanSegmentTree * plan_segment_tree, ContextMutablePtr contex
     std::vector<PlanSegment *> old_plans;
     for (auto & node : plan_segment_tree->getNodes())
         old_plans.push_back(node.plan_segment.get());
-    
+
     for (size_t i = 0; i < plan_size; ++i)
     {
         auto lhs = old_plans[i];

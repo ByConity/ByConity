@@ -421,7 +421,7 @@ CancellationCode QueryStatus::cancelQuery(bool kill)
             return CancellationCode::CancelSent;
         }
     }
-    
+
     /// Streams are destroyed, and ProcessListElement will be deleted from ProcessList soon. We need wait a little bit
     if (streamsAreReleased())
         return CancellationCode::CancelSent;

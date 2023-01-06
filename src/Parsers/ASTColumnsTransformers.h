@@ -113,7 +113,7 @@ public:
     String getID(char) const override { return "ColumnsReplaceTransformer"; }
 
     ASTType getType() const override { return ASTType::ASTColumnsReplaceTransformer; }
-    
+
     ASTPtr clone() const override
     {
         auto clone = std::make_shared<ASTColumnsReplaceTransformer>(*this);

@@ -36,9 +36,9 @@ public:
     DedupWorkerManager(ContextPtr context, const StorageID & storage_id);
 
     ~DedupWorkerManager() override;
-    
+
     void runImpl() override;
-    
+
     void stop() override;
 
     /**
@@ -49,9 +49,9 @@ public:
     DedupWorkerStatus getDedupWorkerStatus();
 
 private:
-    
+
     void iterate(StoragePtr & istorage);
-    
+
     void assignDeduperToWorker(StoragePtr & cnch_table);
 
     /// caller must hold lock of worker_client_mutex.

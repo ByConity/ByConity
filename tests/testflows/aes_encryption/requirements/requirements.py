@@ -1697,11 +1697,11 @@ RQ_SRS008_AES_MySQL_Decrypt_Function_Mode_KeyAndInitializationVector_Length = Re
     num='4.12.18')
 
 SRS_008_ClickHouse_AES_Encryption_Functions = Specification(
-    name='SRS-008 ClickHouse AES Encryption Functions', 
+    name='SRS-008 ClickHouse AES Encryption Functions',
     description=None,
     author=None,
-    date=None, 
-    status=None, 
+    date=None,
+    status=None,
     approved_by=None,
     approved_date=None,
     approved_version=None,
@@ -2597,7 +2597,7 @@ of the `aes_encrypt_mysql` function:
 #### RQ.SRS008.AES.MySQL.Encrypt.Function.Parameters.Mode.Values.GCM.Error
 version: 1.0
 
-[ClickHouse] SHALL return an error if any of the following [GCM] modes are specified as the value 
+[ClickHouse] SHALL return an error if any of the following [GCM] modes are specified as the value
 for the `mode` parameter of the `aes_encrypt_mysql` function
 
 * `aes-128-gcm`
@@ -2607,7 +2607,7 @@ for the `mode` parameter of the `aes_encrypt_mysql` function
 #### RQ.SRS008.AES.MySQL.Encrypt.Function.Parameters.Mode.Values.CTR.Error
 version: 1.0
 
-[ClickHouse] SHALL return an error if any of the following [CTR] modes are specified as the value 
+[ClickHouse] SHALL return an error if any of the following [CTR] modes are specified as the value
 for the `mode` parameter of the `aes_encrypt_mysql` function
 
 * `aes-128-ctr`
@@ -2763,7 +2763,7 @@ of the `aes_decrypt_mysql` function:
 #### RQ.SRS008.AES.MySQL.Decrypt.Function.Parameters.Mode.Values.GCM.Error
 version: 1.0
 
-[ClickHouse] SHALL return an error if any of the following [GCM] modes are specified as the value 
+[ClickHouse] SHALL return an error if any of the following [GCM] modes are specified as the value
 for the `mode` parameter of the `aes_decrypt_mysql` function
 
 * `aes-128-gcm`
@@ -2773,7 +2773,7 @@ for the `mode` parameter of the `aes_decrypt_mysql` function
 #### RQ.SRS008.AES.MySQL.Decrypt.Function.Parameters.Mode.Values.CTR.Error
 version: 1.0
 
-[ClickHouse] SHALL return an error if any of the following [CTR] modes are specified as the value 
+[ClickHouse] SHALL return an error if any of the following [CTR] modes are specified as the value
 for the `mode` parameter of the `aes_decrypt_mysql` function
 
 * `aes-128-ctr`

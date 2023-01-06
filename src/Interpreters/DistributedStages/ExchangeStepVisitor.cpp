@@ -103,7 +103,7 @@ ExchangeStepResult ExchangeStepVisitor::visitJoinNode(QueryPlan::Node * node, Ex
         throw Exception("Join must have two children", ErrorCodes::LOGICAL_ERROR);
 
     /**
-     * Left join is always index 0 when query plan is generated 
+     * Left join is always index 0 when query plan is generated
      */
     auto left_stream = step->getInputStreams()[0];
     auto right_stream = step->getInputStreams()[1];
@@ -183,7 +183,7 @@ void AddExchangeRewriter::rewrite(QueryPlan & query_plan, ExchangeStepContext & 
     ExchangeStepResult result_node = VisitorUtil::accept(query_plan.getRoot(), visitor, exchange_context);
     if (result_node)
         query_plan.setRoot(result_node);
-    
+
     visitor.addGather(query_plan, exchange_context);
 }
 

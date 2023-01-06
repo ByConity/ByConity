@@ -684,7 +684,7 @@ void PipelineExecutor::executeStepImpl(size_t thread_num, size_t num_threads, st
 #else
                 if (need_processors_profiles)
                     execution_time_watch.emplace();
-#endif  
+#endif
                 node->job();
 
                 if (need_processors_profiles)
@@ -699,7 +699,7 @@ void PipelineExecutor::executeStepImpl(size_t thread_num, size_t num_threads, st
 
             if (finished)
                 break;
-            
+
             if (!checkTimeLimitSoft())
                 break;
 

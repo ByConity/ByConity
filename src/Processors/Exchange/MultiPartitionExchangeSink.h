@@ -26,7 +26,7 @@
 
 namespace DB
 {
-/// Send data to all partititons. Usually used with ResizeProcessor 
+/// Send data to all partititons. Usually used with ResizeProcessor
 ///                   ||-> MultiPartitionExchangeSink
 /// ResizeProcessor-->||-> MultiPartitionExchangeSink
 ///                   ||-> MultiPartitionExchangeSink

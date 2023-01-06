@@ -234,14 +234,14 @@ void ColumnByteMap::insertRangeFrom(const IColumn & src, size_t start, size_t le
 void ColumnByteMap::insertRangeSelective(const IColumn & src, const IColumn::Selector & selector, size_t selector_start, size_t length)
 {
     if (length == 0) return;
-    
+
     const ColumnByteMap & src_concrete = static_cast<const ColumnByteMap &>(src);
     const IColumn & src_key_col = src_concrete.getKey();
     const IColumn & src_value_col = src_concrete.getValue();
     IColumn & cur_key_col = getKey();
     IColumn & cur_value_col = getValue();
     Offsets & cur_offsets = getOffsets();
-    
+
     size_t old_size = cur_offsets.size();
     cur_offsets.resize(old_size + length);
 
@@ -1296,7 +1296,7 @@ void ColumnByteMap::removeKeys(const NameSet & keys)
     ColumnPtr key_res = key_column->cloneEmpty();
     ColumnPtr value_res = value_column->cloneEmpty();
     ColumnPtr offset_res = offsets->cloneEmpty();
-    
+
     const Offsets & offsets_ = getOffsets();
 
     auto & key_res_col = key_res->assumeMutableRef();
@@ -1333,14 +1333,14 @@ void ColumnByteMap::removeKeys(const NameSet & keys)
 /**
  * Insert implicit map column from outside, only when the current ColumnByteMap has the same size with implicit columns.
  * Currently, this method works for ingestion column feature.
- * 
+ *
  * @param implicit_columns it should has the same type with return value of ColumnByteMap::getValueColumnByKey. Otherwise, throw exception.
  */
 void ColumnByteMap::insertImplicitMapColumns(const std::unordered_map<String, ColumnPtr> & implicit_columns)
 {
     if (implicit_columns.empty())
         return;
-    
+
     size_t origin_size = size();
     ColumnPtr key_res = key_column->cloneEmpty();
     ColumnPtr value_res = value_column->cloneEmpty();

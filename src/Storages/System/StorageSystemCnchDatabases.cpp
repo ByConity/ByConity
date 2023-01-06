@@ -59,7 +59,7 @@ void StorageSystemCnchDatabases::fillData(MutableColumns & res_columns, ContextP
                     res_columns[col_num++]->insertDefault();
                 res_columns[col_num++]->insert(res[i].txnid());
                 res_columns[col_num++]->insert(res[i].previous_version());
-                auto commit_time = (res[i].commit_time() >> 18) ; // first 48 bits represent times 
+                auto commit_time = (res[i].commit_time() >> 18) ; // first 48 bits represent times
                 res_columns[col_num++]->insert(commit_time/1000) ;// convert to seconds
             }
         }

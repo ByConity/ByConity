@@ -901,10 +901,10 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         // If user sets allow_nullable_key=0.
         if (storage_settings->allow_nullable_key.changed && !storage_settings->allow_nullable_key.value)
             throw Exception("In ANSI mode, allow_nullable_key must be true.", ErrorCodes::BAD_ARGUMENTS);
-        
+
         storage_settings->allow_nullable_key.value = true;
     }
-    
+
     if (replicated)
     {
         return StorageReplicatedMergeTree::create(

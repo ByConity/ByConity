@@ -288,12 +288,12 @@ void ColumnFixedString::insertRangeFrom(const IColumn & src, size_t start, size_
     memcpy(chars.data() + old_size, &src_concrete.chars[start * n], length * n);
 }
 
-void ColumnFixedString::insertRangeSelective(const IColumn & src, const IColumn::Selector & selector, size_t selector_start, size_t length) 
+void ColumnFixedString::insertRangeSelective(const IColumn & src, const IColumn::Selector & selector, size_t selector_start, size_t length)
 {
     const ColumnFixedString & src_concrete = static_cast<const ColumnFixedString &>(src);
 
     size_t old_size = chars.size();
-    chars.resize(old_size + length * n); 
+    chars.resize(old_size + length * n);
     auto * cur_data_end = chars.data() + old_size;
     auto * src_data_start = src_concrete.chars.data();
 

@@ -1,4 +1,4 @@
-select  
+select
    count(distinct cs_order_number) as "order count"
   ,sum(cs_ext_ship_cost) as "total shipping cost"
   ,sum(cs_net_profit) as "total net profit"
@@ -8,7 +8,7 @@ from
   ,customer_address
   ,call_center
 where
-    d_date between '2002-2-01' and 
+    d_date between '2002-2-01' and
            (cast('2002-2-01' as date) + INTERVAL '60' DAY)
 and cs1.cs_ship_date_sk = d_date_sk
 and cs1.cs_ship_addr_sk = ca_address_sk

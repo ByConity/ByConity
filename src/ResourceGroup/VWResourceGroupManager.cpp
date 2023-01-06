@@ -58,7 +58,7 @@ IResourceGroup* VWResourceGroupManager::selectGroup(const Context & query_contex
 {
     auto lock = getReadLock();
     const ClientInfo & client_info = query_context.getClientInfo();
-    
+
     if (auto vw = query_context.tryGetCurrentVW(); vw)
     {
         const String & vw_name = vw->getName();
@@ -77,7 +77,7 @@ IResourceGroup* VWResourceGroupManager::selectGroup(const Context & query_contex
                 parent = parent->getParent();
             }
 
-            if (parent_resource_group == vw_name 
+            if (parent_resource_group == vw_name
                 && (select_case.user == nullptr || std::regex_match(client_info.initial_user, *(select_case.user)))
                 && (select_case.query_id == nullptr || std::regex_match(client_info.initial_query_id, *(select_case.query_id)))
                 && (select_case.query_type == nullptr || *select_case.query_type == ResourceSelectCase::getQueryType(ast)))
@@ -145,7 +145,7 @@ bool VWResourceGroupManager::deleteGroup(const String & virtual_warehouse) const
         LOG_DEBUG(&Poco::Logger::get("VWResourceGroupManager"), "Skipping deletion of read/write/task/default VWs.");
         return false;
     }
-    
+
     auto root_group = root_groups.find(virtual_warehouse);
     if (root_group == root_groups.end())
     {

@@ -34,7 +34,7 @@ struct TransactionRecordLite
     CnchTransactionStatus status;
     TransactionRecordLite() = default;
     TransactionRecordLite(UInt64 commit_ts_, CnchTransactionStatus status_) : commit_ts(commit_ts_), status(status_) {}
-}; 
+};
 
 template <typename T, typename Operation>
 bool isCommitted(const T & element, std::unordered_map<UInt64, TransactionRecordLite> & transactions)

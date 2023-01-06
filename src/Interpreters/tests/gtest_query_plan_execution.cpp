@@ -115,7 +115,7 @@ void executeTestQuery(const ASTPtr & query)
     std::vector<PlanSegment *> old_plans;
     for (auto & node : plan_segment_tree->getNodes())
         old_plans.push_back(node.plan_segment.get());
-    
+
     for (size_t i = 0; i < plan_size; ++i)
     {
         auto lhs = old_plans[i];

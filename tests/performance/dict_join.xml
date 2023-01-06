@@ -6,7 +6,7 @@
 
     <create_query>
         CREATE DICTIONARY join_hashed_dictionary (key UInt64, value String)
-        PRIMARY KEY key 
+        PRIMARY KEY key
         SOURCE(CLICKHOUSE(DB 'default' TABLE 'join_dictionary_source_table'))
         LIFETIME(MIN 0 MAX 1000)
         LAYOUT(HASHED());
@@ -17,16 +17,16 @@
         SELECT number, toString(number)
         FROM numbers(1000000);
     </fill_query>
-    
+
     <query>
-        SELECT COUNT() 
+        SELECT COUNT()
         FROM join_dictionary_source_table
         JOIN join_hashed_dictionary
         ON join_dictionary_source_table.key = join_hashed_dictionary.key;
     </query>
 
     <query>
-        SELECT COUNT() 
+        SELECT COUNT()
         FROM join_dictionary_source_table
         JOIN join_hashed_dictionary
         ON join_dictionary_source_table.key = toUInt64(join_hashed_dictionary.key);

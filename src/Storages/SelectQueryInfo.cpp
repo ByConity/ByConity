@@ -69,7 +69,7 @@ PrewhereInfoPtr PrewhereInfo::deserialize(ReadBuffer & buf, ContextPtr context)
     readBinary(has_row_level_filter, buf);
     if (has_row_level_filter)
         row_level_filter = ActionsDAG::deserialize(buf, context);
-    
+
     bool has_prewhere_actions;
     readBinary(has_prewhere_actions, buf);
     if (has_prewhere_actions)

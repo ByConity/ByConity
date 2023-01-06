@@ -118,7 +118,7 @@ static void OnSendRuntimeFilterCallback(Protos::TransferRuntimeFilterResponse * 
 {
     std::unique_ptr<Protos::TransferRuntimeFilterResponse> response_guard(response);
     std::unique_ptr<brpc::Controller> cntl_guard(cntl);
-        
+
     rpc_channel->checkAliveWithController(*cntl);
     if (cntl->Failed())
         LOG_DEBUG(&Poco::Logger::get("RuntimeFilterBuild"), "Send to coordinator failed, message: " + cntl->ErrorText());

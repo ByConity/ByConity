@@ -416,8 +416,8 @@ FreeThreadPool & ThreadFromGlobalPool::getThreadPool()
         return GlobalThreadPool::instance();
 
     if (auto * resource_group = query_context->tryGetResourceGroup();
-        resource_group == nullptr 
-        || resource_group->getType() != DB::ResourceGroupType::Internal 
+        resource_group == nullptr
+        || resource_group->getType() != DB::ResourceGroupType::Internal
         || resource_group->getThreadPool() == nullptr)
         return GlobalThreadPool::instance();
     else

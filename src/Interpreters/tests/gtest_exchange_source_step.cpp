@@ -117,7 +117,7 @@ TEST(ExchangeSourceStep, InitializePipelineTest)
     ASSERT_TRUE(executor.pull(pull_chunk));
     ASSERT_TRUE(pull_chunk.getNumRows() == 10);
     ASSERT_TRUE(pull_chunk.bytes() == total_bytes);
-    
+
     executor.cancel();
 }
 
