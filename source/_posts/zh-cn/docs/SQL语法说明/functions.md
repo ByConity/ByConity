@@ -10,6 +10,8 @@ updatedAt: "2022-02-28T02:39:28.268Z"
 categories:
 - Docs
 - SQL_Syntax
+tags:
+- Docs
 ---
 ByteHouse provides two SQL dialects, (1) **ClickHouse** and (2) **ANSI**. 
 

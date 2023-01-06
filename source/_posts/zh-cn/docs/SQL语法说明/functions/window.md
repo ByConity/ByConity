@@ -7,6 +7,8 @@ updatedAt: "2021-08-01T07:52:51.347Z"
 categories:
 - Docs
 - SQL_Syntax
+tags:
+- Docs
 ---
 ByteHouse supports the standard syntax of window functions. A list of window related features are explained below.
 

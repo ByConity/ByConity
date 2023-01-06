@@ -7,6 +7,8 @@ updatedAt: "2021-09-23T06:38:57.511Z"
 categories:
 - Docs
 - SQL_Syntax
+tags:
+- Docs
 ---
 
 # string

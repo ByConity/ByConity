@@ -7,6 +7,8 @@ updatedAt: "2021-09-23T04:06:29.273Z"
 categories:
 - Docs
 - SQL_Syntax
+tags:
+- Docs
 ---
 > Notice:
 Some of the examples below are referenced from [ClickHouse Documentation](https://clickhouse.com/docs/en/sql-reference/functions/) but have been adapted and modified to work in ByteHouse.

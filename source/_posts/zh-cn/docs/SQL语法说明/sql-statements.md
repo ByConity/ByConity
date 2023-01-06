@@ -10,6 +10,8 @@ updatedAt: "2022-02-28T02:27:53.768Z"
 categories:
 - Docs
 - SQL_Syntax
+tags:
+- Docs
 ---
 
 The supported statements in ByteHouse are similar to ClickHouse, but it is still recommended to follow the ByteHouse manual to ensure proper use. Some of the examples below are referenced from [ClickHouse Documentation](https://clickhouse.tech/docs/en/sql-reference/statements/) but have been adapted and modified to work in ByteHouse.

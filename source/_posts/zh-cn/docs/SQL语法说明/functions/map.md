@@ -7,6 +7,8 @@ updatedAt: "2021-07-29T12:29:27.367Z"
 categories:
 - Docs
 - SQL_Syntax
+tags:
+- Docs
 ---
 ## map
 

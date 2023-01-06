@@ -10,6 +10,8 @@ updatedAt: "2022-02-28T02:26:27.494Z"
 categories:
 - Docs
 - SQL_Syntax
+tags:
+- Docs
 ---
 The data types provided in ByteHouse are adapted from ClickHouse. Visit this [page](https://clickhouse.tech/docs/en/sql-reference/data-types/) for more information on ClickHouse data types.
 

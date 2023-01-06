@@ -7,6 +7,8 @@ updatedAt: "2021-09-23T04:02:59.496Z"
 categories:
 - Docs
 - SQL_Syntax
+tags:
+- Docs
 ---
 
 # hash

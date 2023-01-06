@@ -7,6 +7,8 @@ updatedAt: "2021-07-29T12:25:27.577Z"
 categories:
 - Docs
 - SQL_Syntax
+tags:
+- Docs
 ---
 ## MACNumToString
 

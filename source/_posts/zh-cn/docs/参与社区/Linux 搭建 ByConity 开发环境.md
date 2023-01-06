@@ -3,6 +3,8 @@ title: Linux 搭建 ByConity 开发环境
 categories:
 - Docs
 - Community
+tags:
+- Docs
 ---
 
 # Linux 搭建 ByConity 开发环境

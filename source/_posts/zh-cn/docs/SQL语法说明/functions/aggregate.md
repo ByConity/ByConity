@@ -10,6 +10,8 @@ updatedAt: "2021-09-23T03:25:11.849Z"
 categories:
 - Docs
 - SQL_Syntax
+tags:
+- Docs
 ---
 
 > Notice:
