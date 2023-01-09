@@ -19,7 +19,7 @@
     "hexo-generator-index": "^3.0.0",
     "hexo-generator-index-i18n": "^0.2.1",
     "hexo-generator-search": "^2.4.3",
-    "hexo-generator-tag": "^1.0.0",
+    "hexo-generator-tag": "^2.0.0",
     "hexo-renderer-ejs": "^2.0.0",
     "hexo-renderer-marked": "^6.0.0",
     "hexo-renderer-stylus": "^2.1.0",
