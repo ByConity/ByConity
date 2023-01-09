@@ -62,6 +62,8 @@ prismjs:
 marked:
   prependRoot: true
   postAsset: true
+# post bottom prev and next post display or hidden
+post_bottom_prev_next: false
 
 
 # Home page setting

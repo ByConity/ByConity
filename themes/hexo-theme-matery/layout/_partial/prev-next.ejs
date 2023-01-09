@@ -16,6 +16,7 @@ var featureimg = '/medias/featureimages/0.jpg';
 var featureImages = theme.featureImages;
 %>
 
+<% if (config.post_bottom_prev_next) { %>
 <article id="prenext-posts" class="prev-next articles">
     <div class="row article-row">
         <% if (page.prev) { %>
@@ -265,3 +266,4 @@ var featureImages = theme.featureImages;
         <% } %>
     </div>
 </article>
+<% } %>
