@@ -585,6 +585,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->makeGlobalContext();
     global_context->setApplicationType(Context::ApplicationType::SERVER);
 
+    global_context->initCnchConfig(config());
     global_context->initRootConfig(config());
     const auto & root_config = global_context->getRootConfig();
 
@@ -603,7 +604,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->setComplexQueryActive(true);
     }
 
-    Catalog::CatalogConfig catalog_conf(config());
+    Catalog::CatalogConfig catalog_conf(global_context->getCnchConfigRef());
 
     std::string current_raw_sd_config;
     if (config().has("service_discovery")) // only important for local mode (for observing if the sd section is changed)
@@ -616,7 +617,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         global_context->initVirtualWarehousePool();
         global_context->initServiceDiscoveryClient();
-        global_context->initCatalog(catalog_conf, config().getString("catalog.name_space", "default"));
+        global_context->initCatalog(catalog_conf,
+            global_context->getCnchConfigRef().getString("catalog.name_space", "default"));
         global_context->initTSOClientPool(root_config.service_discovery.tso_psm);
         global_context->initDaemonManagerClientPool(root_config.service_discovery.daemon_manager_psm);
         global_context->initCnchServerClientPool(root_config.service_discovery.server_psm);
@@ -1094,9 +1096,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
 #if USE_HDFS
     /// Init hdfs user
-    std::string hdfs_user = config().getString("hdfs_user", "clickhouse");
+    std::string hdfs_user = global_context->getCnchConfigRef().getString("hdfs_user", "clickhouse");
     global_context->setHdfsUser(hdfs_user);
-    std::string hdfs_nnproxy = config().getString("hdfs_nnproxy", "nnproxy");
+    std::string hdfs_nnproxy = global_context->getCnchConfigRef().getString("hdfs_nnproxy", "nnproxy");
     global_context->setHdfsNNProxy(hdfs_nnproxy);
 
     /// Init HDFS3 client config path
@@ -1106,7 +1108,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         setenv("LIBHDFS3_CONF", hdfs_config.c_str(), 1);
     }
 
-    HDFSConnectionParams hdfs_params = HDFSConnectionParams::parseHdfsFromConfig(config());
+    HDFSConnectionParams hdfs_params = HDFSConnectionParams::parseHdfsFromConfig(global_context->getCnchConfigRef());
     global_context->setHdfsConnectionParams(hdfs_params);
 #endif
 

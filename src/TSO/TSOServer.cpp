@@ -391,6 +391,7 @@ int TSOServer::main(const std::vector<std::string> &)
     global_context = Context::createGlobal(shared_context.get());
 
     global_context->makeGlobalContext();
+    global_context->initCnchConfig(config());
     global_context->initServiceDiscoveryClient();
     global_context->setApplicationType(Context::ApplicationType::TSO);
 

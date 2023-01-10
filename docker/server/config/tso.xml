@@ -1,0 +1,22 @@
+<?xml version="1.0" ?>
+<yandex>
+    <logger>
+        <level>trace</level>
+        <log>/root/app/logs/tso/tso.log</log>
+        <errorlog>/root/app/logs/tso/tso.err.log</errorlog>
+        <size>1000M</size>
+        <count>10</count>
+    </logger>
+    <tso_service>
+        <type>fdb</type>
+        <port>18689</port>
+        <fdb>
+            <cluster_file>/root/app/config/fdb.cluster</cluster_file>
+        </fdb>
+        <tso_window_ms>3000</tso_window_ms>
+        <tso_get_leader_info_interval_ms>0</tso_get_leader_info_interval_ms>
+        <tso_max_retry_count>3</tso_max_retry_count>
+    </tso_service>
+    <cnch_config>/root/app/config/cnch_config.xml</cnch_config>
+</yandex>
+
