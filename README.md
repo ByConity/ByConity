@@ -60,7 +60,7 @@ git clone --recursive https://github.com/ByConity/ByConity.git byconity
 ### 3. Build
 
 ```
-cd byconity
+cd ByConity
 mkdir build && cd build
 export CC=clang-12
 export CXX=clang++-12
