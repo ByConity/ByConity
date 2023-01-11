@@ -54,7 +54,7 @@ sudo ./llvm.sh 12
 ### 2. Checkout Source Code
 
 ```
-git clone --recursive https://github.com/ByConity/ByConity.git byconity
+git clone --recursive https://github.com/ByConity/ByConity.git
 ```
 
 ### 3. Build
