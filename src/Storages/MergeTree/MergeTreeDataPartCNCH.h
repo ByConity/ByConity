@@ -87,6 +87,8 @@ public:
     /// But when the part has delete_flag info, delete_bitmap represent the delete_flag info which leads to that new part has delete_bitmap.
     const ImmutableDeleteBitmapPtr & getDeleteBitmap(bool is_unique_new_part = false) const override;
 
+    virtual void projectionRemove(const String & parent_to, bool keep_shared_data) const override;
+
 private:
 
     bool isDeleted() const;
@@ -111,6 +113,8 @@ private:
     void loadMetaInfoFromBuffer(ReadBuffer & buffer, bool load_hint_mutation);
 
     void calculateEachColumnSizes(ColumnSizeByName & each_columns_size, ColumnSize & total_size) const override;
+
+    void removeImpl(bool keep_shared_data) const override;
 };
 
 }
