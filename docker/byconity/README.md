@@ -27,7 +27,11 @@ Run:
 docker-compose up -d
 ```
 
-This will create a local cluster with byconity components, hdfs, and foundationdb.
+This will create a local cluster with basic byconity components, hdfs, and foundationdb. If you want to run byconity with resource-manager and multiple read workers, use:
+
+```
+docker-compose -f docker-compose.yml.multiworkers up -d
+```
 
 ### Connect to the cluster
 
