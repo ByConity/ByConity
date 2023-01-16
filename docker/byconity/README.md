@@ -33,6 +33,13 @@ This will create a local cluster with basic byconity components, hdfs, and found
 docker-compose -f docker-compose.yml.multiworkers up -d
 ```
 
+### Create hdfs users
+Internally, byconity read/write to hdfs with username `clickhouse` (and data is stored in `/user/clickhouse/`), which is not created by default when starting hadoop cluster. We can use following commands to create the user `clickhouse` on hdfs.
+
+```
+./hdfs/create_users.sh
+```
+
 ### Connect to the cluster
 
 You can either use your local build `clickhouse` binary or use official `clickhouse` client to connect to byconity. To install offical `clickhouse-client`, run:
