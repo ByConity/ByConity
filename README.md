@@ -121,3 +121,8 @@ The config templates can be found in deploy/template. You should replace the fol
    1. `cd ByConity/deploy`
    2. `python3.9 deploy.py --template_paths template/byconity-server.xml template/byconity-worker.xml --program_dir /home/ByConity/build/programs`
    3. There are other arguments for the script. For example, you can run 2 servers with argument `-s 2`
+
+
+## Deploy ByConity to physical machines
+There are some way to deploy ByConity to physical machines:
+- Deploy via docker [wrapper](https://github.com/ByConity/ByConity/tree/add_run_docker_file/docker/server/)

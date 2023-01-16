@@ -111,13 +111,14 @@ int ResourceManager::main(const std::vector<std::string> &)
     global_context->makeGlobalContext();
     global_context->setServerType(config().getString("cnch_type", "resource_manager"));
     global_context->setApplicationType(Context::ApplicationType::SERVER);
+    global_context->initCnchConfig(config());
     global_context->initRootConfig(config());
 
     global_context->initServiceDiscoveryClient();
 
     /// Initialize catalog
-    Catalog::CatalogConfig catalog_conf(config());
-    auto name_space = config().getString("catalog.name_space", "default");
+    Catalog::CatalogConfig catalog_conf(global_context->getCnchConfigRef());
+    auto name_space = global_context->getCnchConfigRef().getString("catalog.name_space", "default");
     global_context->initCatalog(catalog_conf, name_space);
 
     auto rm_controller = std::make_shared<RM::ResourceManagerController>(global_context);
