@@ -10,4 +10,6 @@ The current way to deploy ByConity to physical servers is deployed via a docker 
 - Execute `./run.sh read_worker` on 1 machine to run read worker. You can have many workers by repeated this command on different machines. And add the workers info in `service_discovery` tags in `config/cnch_config.xml` so that server can know them.
 - Execute `./run.sh write_worker` on 1 machine to run write worker
 - Execute `./run.sh dm` on 1 machine to run daemon manager. TSO and DM are light weight services and can be run in the same machine with server or worker for resource efficient.
+- Execute `./run.sh cli` on the machine that run server to connect to server using clickhouse-cli interface.
+- To stop any component execute `./run.sh stop {component_name}` where `component_name` can be `tso`, `server`, ...
 
