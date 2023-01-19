@@ -28,11 +28,11 @@ function run_read_worker() {
     --mount type=bind,source="$(pwd)"/config,target=/root/app/config \
     --mount type=bind,source="$(pwd)"/logs,target=/root/app/logs \
     --mount type=bind,source="$(pwd)"/data,target=/root/app/data \
-    --expose 18696 \
-    --expose 18697 \
-    --expose 18698 \
-    --expose 18699 \
-    --expose 18700 \
+    --expose 18690 \
+    --expose 18691 \
+    --expose 18692 \
+    --expose 18693 \
+    --expose 18694 \
     --network host \
     --name byconity-read-worker minhthucdao1/byconity-server:v0.1 server -C --config-file /root/app/config/worker.xml 
 }
@@ -42,11 +42,11 @@ function run_write_worker() {
     --mount type=bind,source="$(pwd)"/config,target=/root/app/config \
     --mount type=bind,source="$(pwd)"/logs,target=/root/app/logs \
     --mount type=bind,source="$(pwd)"/data,target=/root/app/data \
-    --expose 18690 \
-    --expose 18691 \
-    --expose 18692 \
-    --expose 18693 \
-    --expose 18694 \
+    --expose 18696 \
+    --expose 18697 \
+    --expose 18698 \
+    --expose 18699 \
+    --expose 18700 \
     --network host \
     --name byconity-write-worker minhthucdao1/byconity-server:v0.1 server -C --config-file /root/app/config/worker-write.xml 
 }
