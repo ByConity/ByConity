@@ -24,7 +24,10 @@ A minimal ByConity cluster include:
 
 
 ## Build ByConity
-The easiest way to build ByConity is built in [docker](https://github.com/ByConity/ByConity/tree/master/docker/builder)
+The easiest way to build ByConity is built in [docker](https://github.com/ByConity/ByConity/tree/master/docker/builder). Please note that if you build ByConity via docker, whenever you run you need to export the `LD_LIBRARY_PATH` so that the executable can find Foundation DB library `libfdb_c.so`.
+```
+export LD_LIBRARY_PATH="{ByConity_source_path}/contrib/foundationdb/lib/"
+```
 
 It can also be built the following operating systems:
 

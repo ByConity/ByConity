@@ -11,5 +11,5 @@ The current way to deploy ByConity to physical servers is deployed via a docker 
 - Execute `./run.sh write_worker` on 1 machine to run write worker
 - Execute `./run.sh dm` on 1 machine to run daemon manager. TSO and DM are light weight services and can be run in the same machine with server or worker for resource efficient.
 - Execute `./run.sh cli` on the machine that run server to connect to server using clickhouse-cli interface.
-- To stop any component execute `./run.sh stop {component_name}` where `component_name` can be `tso`, `server`, ...
+- To stop any component execute `./run.sh stop {component_name}` where `component_name` can be `tso`, `server`, .... After you stop if you want to run again then use `./run.sh start {component_name}` otherwise you have got an error about container already in use from `docker`.
 
