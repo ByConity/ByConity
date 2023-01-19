@@ -67,6 +67,12 @@ function run_cli() {
     --name byconity-cli minhthucdao1/byconity-server:v0.1 client --host 127.0.0.1 --port 18684
 }
 
+function run_cli2() {
+    docker run -it\
+    --network host \
+    --rm minhthucdao1/byconity-server:v0.1 client --host $1 --port 18684
+}
+
 function stop_byconity() {
     if [ "$1" = "tso" ]; then
         docker stop -t 30 byconity-tso
@@ -107,6 +113,11 @@ if [ ! -f "config/fdb.cluster" ]; then
     exit 0
 fi
 
+if grep -q example.host.com "config/fdb.cluster"; then
+    echo "file config/fdb.cluster haven't been configured properly."
+    exit 0
+fi
+
 mkdir -p data/byconity_server/server_local_disk/data/0/
 mkdir -p logs/
 
@@ -122,10 +133,12 @@ elif [ "$1" = "dm" ]; then
     run_dm
 elif [ "$1" = "cli" ]; then
     run_cli
+elif [ "$1" = "cli2" ]; then
+    run_cli2 $2
 elif [ "$1" = "stop" ]; then
     stop_byconity $2
 elif [ "$1" = "start" ]; then
     start_byconity $2
 else
-    echo "valid argument are tso, server, read_worker, write_worker, dm, cli, stop tso, stop server, stop read_worker, stop write_worker, stop dm, start tso, start server, start read_worker ..."
+    echo "valid argument are tso, server, read_worker, write_worker, dm, cli, cli2, stop tso, stop server, stop read_worker, stop write_worker, stop dm, start tso, start server, start read_worker ..."
 fi
