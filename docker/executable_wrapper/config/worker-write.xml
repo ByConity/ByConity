@@ -384,7 +384,7 @@
     -->
     <dictionaries_config>*_dictionary.xml</dictionaries_config>
 
-    <format_schema_path>/data01/minh.dao/CHwp/CHdata/byconity/var/lib/worker-write/format_schemas/</format_schema_path>
+    <format_schema_path>/root/app/data/byconity_server/var/lib/worker-write/format_schemas/</format_schema_path>
 
     <storage_configuration>
         <disks>
