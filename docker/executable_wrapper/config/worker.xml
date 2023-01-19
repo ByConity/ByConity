@@ -14,12 +14,12 @@
         <count>10</count>
     </logger>
 
-    <http_port>18697</http_port>
-    <rpc_port>18698</rpc_port>
-    <tcp_port>18696</tcp_port>
+    <http_port>18691</http_port>
+    <rpc_port>18692</rpc_port>
+    <tcp_port>18690</tcp_port>
 
-    <exchange_port>18699</exchange_port>
-    <exchange_status_port>18700</exchange_status_port>
+    <exchange_port>18693</exchange_port>
+    <exchange_status_port>18694</exchange_status_port>
     <interserver_http_port>18701</interserver_http_port>
 
     <max_connections>4096</max_connections>
@@ -384,7 +384,7 @@
     -->
     <dictionaries_config>*_dictionary.xml</dictionaries_config>
 
-    <format_schema_path>/data01/minh.dao/CHwp/CHdata/byconity/var/lib/worker/format_schemas/</format_schema_path>
+    <format_schema_path>/root/app/data/byconity_server/var/lib/worker/format_schemas/</format_schema_path>
 
     <storage_configuration>
         <disks>
