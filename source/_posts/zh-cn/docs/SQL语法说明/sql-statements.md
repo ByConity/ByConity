@@ -42,10 +42,10 @@ ALTER TABLE [tableIdentifier] ADD COLUMN [IF NOT EXISTS] [tableColumnDfnt] [AFTE
 # Step 1: create a table 
 CREATE TABLE db_name.table_name
 (
-    `order_by_column ` String
+    `order_by_column` String
 )
 ENGINE = `CnchMergeTree`
-ORDER BY (`order_by_column `)
+ORDER BY (`order_by_column`)
 
 # Step 2: add column
 ALTER TABLE db_name.table_name ADD COLUMN IF NOT EXISTS column_name String COMMENT 'column comment here' AFTER order_by_column
@@ -71,11 +71,11 @@ If the modify column is:
 # Step 1: create a table 
 CREATE TABLE db_name.table_name
 (
-    `order_by_column ` String,
+    `order_by_column` String,
     `normal_column` Int64 DEFAULT 0
 )
 ENGINE = `CnchMergeTree`
-ORDER BY (`order_by_column `)
+ORDER BY (`order_by_column`)
 
 # Step 2: modify column normal_column_name & update its data type, comment and default value
 ALTER TABLE db_name.table_name MODIFY COLUMN IF EXISTS normal_column String DEFAULT 'new_default_value' COMMENT 'new comment' 
