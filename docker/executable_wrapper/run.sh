@@ -64,7 +64,7 @@ function run_dm() {
 function run_cli() {
     docker run -it\
     --network host \
-    minhthucdao1/byconity-server:v0.1 client --host 127.0.0.1 --port 18684
+    --name byconity-cli minhthucdao1/byconity-server:v0.1 client --host 127.0.0.1 --port 18684
 }
 
 function stop_byconity() {
@@ -80,6 +80,24 @@ function stop_byconity() {
         docker stop -t 30 byconity-dm
     else
         echo "valid argument stop tso, stop server, stop read_worker, stop write_worker, stop dm"
+    fi
+}
+
+function start_byconity() {
+    if [ "$1" = "tso" ]; then
+        docker start byconity-tso
+    elif [ "$1" = "server" ]; then
+        docker start byconity-server
+    elif [ "$1" = "read_worker" ]; then
+        docker start byconity-read-worker
+    elif [ "$1" = "write_worker" ]; then
+        docker start byconity-write-worker
+    elif [ "$1" = "dm" ]; then
+        docker start byconity-dm
+    elif [ "$1" = "cli" ]; then
+        docker start -i byconity-cli
+    else
+        echo "valid argument start tso, start server, start read_worker, start write_worker, start dm, start cli"
     fi
 }
 
@@ -106,6 +124,8 @@ elif [ "$1" = "cli" ]; then
     run_cli
 elif [ "$1" = "stop" ]; then
     stop_byconity $2
+elif [ "$1" = "start" ]; then
+    start_byconity $2
 else
-    echo "valid argument are tso, server, read_worker, write_worker, dm, cli, stop tso, stop server, stop read_worker, stop write_worker, stop dm"
+    echo "valid argument are tso, server, read_worker, write_worker, dm, cli, stop tso, stop server, stop read_worker, stop write_worker, stop dm, start tso, start server, start read_worker ..."
 fi
