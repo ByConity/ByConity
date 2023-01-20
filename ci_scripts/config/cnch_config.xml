@@ -17,7 +17,7 @@
                     <port>
                         <!--HTTP-->
                         <name>PORT2</name>
-                        <va</value>
+                        <value>8123</value>
                     </port>
                     <port>
                         <!--RPC-->
