@@ -10,8 +10,6 @@ jobs:
   scm_build:
     name: Build binary and run stateless tests
     container: vivekscl/test:latest
-    env:
-      PATH: "$PATH:/opt/tiger/foundationdb/bin"
     runs-on: self-hosted
     steps:
       - name: Check out repository code
@@ -26,6 +24,7 @@ jobs:
       - name: start fdb
         run: |
           echo $(pwd)
+          export PATH=$PATH:/opt/tiger/foundationdb/bin
           bash $GITHUB_WORKSPACE/docker/test/foundationdb/start_fdb.sh
       - name: start hdfs
         run: |
