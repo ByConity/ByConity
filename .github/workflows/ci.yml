@@ -28,6 +28,8 @@ jobs:
           bash $GITHUB_WORKSPACE/docker/test/foundationdb/start_fdb.sh
       - name: start hdfs
         run: |
+          export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
+          export HADOOP_HOME=/hadoop
           $HADOOP_HOME/bin/hdfs namenode -format
           $HADOOP_HOME/bin/hdfs --daemon start namenode
           $HADOOP_HOME/bin/hdfs --daemon start datanode
