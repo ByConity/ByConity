@@ -30,6 +30,8 @@ done
 
 # disable  CLICKHOUSE WATCHDOG
 CLICKHOUSE_WATCHDOG_ENABLE=0
+$BIN_PATH/clickhouse install
+cp $BIN_PATH/clickhouse-test /usr/bin/clickhouse-test
 
 # start services
 ASAN_OPTIONS=halt_on_error=false,log_path=/test_output/tso0/asan.tso0.log nohup ${BIN_PATH}/tso-server --config-file ${APP_ROOT}/ci_scripts/config/tso.xml >/dev/null 2>&1 &
