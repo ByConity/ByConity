@@ -11,11 +11,11 @@ jobs:
     name: Build binary and run stateless tests
     container: vivekscl/test:latest
     env:
-      PATH: "$PATH:/opt/tiger/yarn_deploy/hadoop/bin:/opt/tiger/consul_deploy/bin/go:/clickhouse/bin:/clickhouse/usr/breakpad/bin:/opt/tiger/bvc/bin:/opt/tiger/foundationdb/bin"
+      PATH: "$PATH:/opt/tiger/foundationdb/bin"
     runs-on: self-hosted
     steps:
       - name: Check out repository code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Build binary with build_bin.sh
         env:
           CUSTOM_CMAKE_BUILD_TYPE: "Release"
