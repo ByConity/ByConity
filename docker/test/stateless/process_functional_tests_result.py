@@ -79,6 +79,8 @@ def process_result(result_path):
     state = "success"
     description = ""
     files = os.listdir(result_path)
+    asan_fail = False
+    server_health_check = False
     if files:
         logging.info("Find files in result folder %s", ','.join(files))
         result_path = os.path.join(result_path, 'test_result.txt')

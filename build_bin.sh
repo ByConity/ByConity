@@ -7,7 +7,7 @@ PROJECT="$( cd "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P  )"
 export PATH=`echo $PATH | sed -e 's/:\/opt\/tiger\/typhoon-blade//'`
 
 rm -rf output/
-mkdir -p output
+mkdir -p output/bin
 
 export CMAKE_BUILD_TYPE=${CUSTOM_CMAKE_BUILD_TYPE:-RelWithDebInfo}
 export CMAKE_FLAGS="-DCMAKE_INSTALL_PREFIX=../output -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DUSE_BYTEDANCE_RDKAFKA=${CUSTOM_USE_BYTEDANCE_RDKAFKA:-1} ${CMAKE_FLAGS}"
@@ -18,7 +18,6 @@ CMAKE_FLAGS="-DENABLE_BREAKPAD=ON $CMAKE_FLAGS" # enable minidump
 [[ -n "$CUSTOM_MAX_LINKING_JOBS" ]] && CMAKE_FLAGS="-DPARALLEL_LINK_JOBS=${CUSTOM_MAX_LINKING_JOBS} ${CMAKE_FLAGS}"
 [[ -n "$CUSTOM_MAX_COMPILE_JOBS" ]] && CMAKE_FLAGS="-DPARALLEL_COMPILE_JOBS=${CUSTOM_MAX_COMPILE_JOBS} ${CMAKE_FLAGS}"
 export CMAKE_FLAGS
-
 
 rm -rf build && mkdir build && cd build
 
