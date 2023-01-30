@@ -16,7 +16,7 @@ depends:
 
 maintainer: "A ByConity member <minh.dao@bytedance.com>"
 description: |
-  ByConity Server
+  ByConity Worker
     ByConity is a column-oriented database management system
     that allows generating analytical data reports in real time.
     This package provides server side symbolic link and common configuration files
@@ -30,7 +30,7 @@ overrides:
     - byconity-common-static = ${BYCONITY_VERSION_STRING}
 
 contents:
-- src: root/etc/byconity-server/byconity-server.xml
+- src: root/etc/byconity-server/byconity-worker.xml
   dst: /etc/byconity-server/byconity-server.xml
   type: config|noreplace
 - src: root/etc/byconity-server/cnch_config.xml
@@ -39,8 +39,6 @@ contents:
 - src: root/etc/byconity-server/users.xml
   dst: /etc/byconity-server/users.xml
   type: config|noreplace
-- src: byconity-server.service
-  dst: /lib/systemd/system/byconity-server.service
 # docs
 - src: ../AUTHORS
   dst: /usr/share/doc/byconity-server/AUTHORS
@@ -52,4 +50,3 @@ contents:
   dst: /usr/share/doc/byconity-server/README.md
 scripts:
   preinstall: ./byconity.preinstall
-  postinstall: ./byconity-server.postinstall

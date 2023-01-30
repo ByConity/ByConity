@@ -17,27 +17,27 @@
                     <port>
                         <!--HTTP-->
                         <name>PORT2</name>
-                        <value>18685</value>
+                        <value>8123</value>
                     </port>
                     <port>
                         <!--RPC-->
                         <name>PORT1</name>
-                        <value>18686</value>
+                        <value>8124</value>
                     </port>
                     <port>
                         <!--TCP/Primary-->
                         <name>PORT0</name>
-                        <value>18684</value>
+                        <value>9010</value>
                     </port>
                     <port>
                         <!--Exchange Stream Port-->
                         <name>PORT5</name>
-                        <value>18687</value>
+                        <value>9300</value>
                     </port>
                     <port>
                         <!--Exchange Status Port-->
                         <name>PORT6</name>
-                        <value>18688</value>
+                        <value>9400</value>
                     </port>
                 </ports>
             </node>
@@ -52,27 +52,27 @@
                     <port>
                         <!--HTTP-->
                         <name>PORT2</name>
-                        <value>18697</value>
+                        <value>8123</value>
                     </port>
                     <port>
                         <!--RPC-->
                         <name>PORT1</name>
-                        <value>18698</value>
+                        <value>8124</value>
                     </port>
                     <port>
                         <!--TCP/Primary-->
                         <name>PORT0</name>
-                        <value>18696</value>
+                        <value>9010</value>
                     </port>
                     <port>
                         <!--Exchange Stream Port-->
                         <name>PORT5</name>
-                        <value>18699</value>
+                        <value>9300</value>
                     </port>
                     <port>
                         <!--Exchange Status Port-->
                         <name>PORT6</name>
-                        <value>18700</value>
+                        <value>9400</value>
                     </port>
                 </ports>
                 <vw_name>vw_write</vw_name>
@@ -84,27 +84,27 @@
                     <port>
                         <!--HTTP-->
                         <name>PORT2</name>
-                        <value>18691</value>
+                        <value>8123</value>
                     </port>
                     <port>
                         <!--RPC-->
                         <name>PORT1</name>
-                        <value>18692</value>
+                        <value>8124</value>
                     </port>
                     <port>
                         <!--TCP/Primary-->
                         <name>PORT0</name>
-                        <value>18690</value>
+                        <value>9010</value>
                     </port>
                     <port>
                         <!--Exchange Stream Port-->
                         <name>PORT5</name>
-                        <value>18693</value>
+                        <value>9300</value>
                     </port>
                     <port>
                         <!--Exchange Status Port-->
                         <name>PORT6</name>
-                        <value>18694</value>
+                        <value>9400</value>
                     </port>
                 </ports>
                 <vw_name>vw_default</vw_name>
@@ -122,7 +122,7 @@
                 <ports>
                     <port>
                         <name>PORT0</name>
-                        <value>18689</value>
+                        <value>9910</value>
                     </port>
                 </ports>
             </node>
@@ -140,7 +140,7 @@
                     <port>
                         <!--RPC-->
                         <name>PORT0</name>
-                        <value>18695</value>
+                        <value>9920</value>
                     </port>
                 </ports>
             </node>
@@ -154,7 +154,7 @@
     <catalog_service>
         <type>fdb</type>
         <fdb>
-            <cluster_file>/root/app/config/fdb.cluster</cluster_file>
+            <cluster_file>/etc/byconity-server/fdb.cluster</cluster_file>
         </fdb>
     </catalog_service>
 

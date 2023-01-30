@@ -26,12 +26,17 @@ description: |
     that allows generating analytical data reports in real time.
     This package provides common files for both byconity server and client
 
+overrides:
+  deb:
+    depends:
+    - foundationdb-clients
+  rpm:
+    depends:
+    - foundationdb-clients
+
 contents:
 - src: root/usr/bin/clickhouse
   dst: /usr/bin/clickhouse
-# depend on fdb shared library for now, remove later
-- src: root/usr/lib/libfdb_c.so
-  dst: /usr/lib/libfdb_c.so
 # docs
 - src: ../AUTHORS
   dst: /usr/share/doc/byconity-common-static/AUTHORS
