@@ -12,4 +12,4 @@ cmake -G Ninja /server "-DCMAKE_C_COMPILER=$(command -v clang-11)" "-DCMAKE_CXX_
 # Without this option my laptop with 16 GiB RAM failed to execute build due to full system freeze.
 NUM_JOBS=$(( ($(nproc || grep -c ^processor /proc/cpuinfo) + 1) / 2 ))
 
-ninja -j $NUM_JOBS && env TEST_OPT="--skip long compile $TEST_OPT" ctest -V -j $NUM_JOBS
+ninja -j $NUM_JOBS

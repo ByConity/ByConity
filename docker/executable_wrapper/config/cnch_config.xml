@@ -11,7 +11,7 @@
             <headless_service>cnch-server-headless</headless_service>
 
             <node>
-                <host>fdbd:dc03:3:131::166</host>
+                <host>{your_server_address}</host>
                 <hostname>Server-6</hostname>
                 <ports>
                     <port>
@@ -46,7 +46,7 @@
         <vw>
             <psm>data.cnch.vw_default</psm>
             <node>
-                <host>fdbd:dc03:3:131::166</host>
+                <host>{your_write_worker_address}</host>
                 <hostname>WriteWorker-3</hostname>
                 <ports>
                     <port>
@@ -78,7 +78,7 @@
                 <vw_name>vw_write</vw_name>
             </node>
             <node>
-                <host>fdbd:dc03:3:131::166</host>
+                <host>{your_read_worker_address}</host>
                 <hostname>DefaultWorker-5</hostname>
                 <ports>
                     <port>
@@ -117,7 +117,7 @@
             <headless_service>cnch-tso-headless</headless_service>
 
             <node>
-                <host>fdbd:dc03:3:131::166</host>
+                <host>{your_tso_address}</host>
                 <hostname>TSO-0</hostname>
                 <ports>
                     <port>
@@ -134,7 +134,7 @@
             <headless_service>cnch-daemonmanager-headless</headless_service>
 
             <node>
-                <host>fdbd:dc03:3:131::166</host>
+                <host>{your_daemonmanager_address}</host>
                 <hostname>Daemon-1</hostname>
                 <ports>
                     <port>

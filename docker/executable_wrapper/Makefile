@@ -3,9 +3,10 @@ image:
 	cp ./app/run.sh ../../build/programs/
 	docker build --network=host -t minhthucdao1/byconity-server ../../build/programs -f Dockerfile
 image_pull:
-	docker pull minhthucdao1/byconity-server
+	docker pull minhthucdao1/byconity-server:v0.1
 image_push:
-	docker push minhthucdao1/byconity-server
+	docker tag minhthucdao1/byconity-server:latest minhthucdao1/byconity-server:v0.1
+	docker push minhthucdao1/byconity-server:v0.1
 run:
 	docker run -it --network host --name dao_tso minhthucdao1/byconity-server 
 debug_image:
