@@ -417,11 +417,11 @@ RQ_SRS_016_Kerberos_Parallel_Deletion = Requirement(
     num='4.8.6')
 
 QA_SRS016_ClickHouse_Kerberos_Authentication = Specification(
-    name='QA-SRS016 ClickHouse Kerberos Authentication', 
+    name='QA-SRS016 ClickHouse Kerberos Authentication',
     description=None,
     author='Andrey Zvonov',
-    date='December 14, 2020', 
-    status='-', 
+    date='December 14, 2020',
+    status='-',
     approved_by='-',
     approved_date='-',
     approved_version='-',
@@ -563,7 +563,7 @@ QA_SRS016_ClickHouse_Kerberos_Authentication = Specification(
 ## Revision History
 
 This document is stored in an electronic form using [Git] source control management software
-hosted in a [GitLab Repository].  
+hosted in a [GitLab Repository].
 All the updates are tracked using the [Git]'s [Revision History].
 
 ## Introduction

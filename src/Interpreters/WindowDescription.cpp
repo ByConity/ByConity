@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2016-2023 ClickHouse, Inc.
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,8 +15,8 @@
 
 
 /*
- * This file may have been modified by ByteDance Ltd. (“ Bytedance's Modifications”).
- * All Bytedance's Modifications are Copyright (2023) ByteDance Ltd..
+ * This file may have been modified by Bytedance Ltd. and/or its affiliates (“ Bytedance's Modifications”).
+ * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
 #include <Interpreters/WindowDescription.h>
@@ -240,7 +239,7 @@ void WindowFrame::serialize(WriteBuffer & buffer) const
     serializeEnum(begin_type, buffer);
     writeFieldBinary(begin_offset, buffer);
     writeBinary(begin_preceding, buffer);
-    
+
     serializeEnum(end_type, buffer);
     writeFieldBinary(end_offset, buffer);
     writeBinary(end_preceding, buffer);
@@ -263,7 +262,7 @@ void WindowFrame::deserialize(ReadBuffer & buffer)
 void WindowFunctionDescription::serialize(WriteBuffer & buffer) const
 {
     writeBinary(column_name, buffer);
-    
+
     writeBinary(aggregate_function->getName(), buffer);
     writeBinary(function_parameters, buffer);
     serializeDataTypes(argument_types, buffer);
@@ -273,7 +272,7 @@ void WindowFunctionDescription::serialize(WriteBuffer & buffer) const
 void WindowFunctionDescription::deserialize(ReadBuffer & buffer)
 {
     readBinary(column_name, buffer);
-    
+
     String func_name;
     readBinary(func_name, buffer);
     readBinary(function_parameters, buffer);

@@ -33,7 +33,7 @@ with year_total as (
         ,c_last_name
         ,d_year
         )
-        select 
+        select
         t_s_secyear.customer_id, t_s_secyear.customer_first_name, t_s_secyear.customer_last_name
         from year_total t_s_firstyear
         ,year_total t_s_secyear

@@ -1,0 +1,38 @@
+
+logger:
+  level: trace
+  log: /var/byconity/out.log
+  errorlog: /var/byconity/err.log
+  testlog: /var/byconity/test.log
+  size: 1000M
+  count: 10
+listen_host: "0.0.0.0"
+path: /var/byconity/
+timezone: Asia/Shanghai
+catalog:
+  name_space: default
+perQuery: 1
+catalog_service:
+  type: fdb
+  fdb:
+    cluster_file: /etc/byconity/fdb/fdb.cluster
+resource_manager:
+  port: 28989
+  vws:
+    vw:
+    -
+      name: vw_default
+      type: default
+      num_workers: 0
+      worker_groups:
+        worker_group:
+          name: wg_default
+          type: Physical
+    -
+      name: vw_write
+      type: write
+      num_workers: 0
+      worker_groups:
+        worker_group:
+          name: wg_write
+          type: Physical

@@ -791,11 +791,11 @@ RQ_SRS_018_ClickHouse_Map_DataType_Functions_MapValues = Requirement(
     num='3.13.8.1')
 
 SRS018_ClickHouse_Map_Data_Type = Specification(
-    name='SRS018 ClickHouse Map Data Type', 
+    name='SRS018 ClickHouse Map Data Type',
     description=None,
     author=None,
-    date=None, 
-    status=None, 
+    date=None,
+    status=None,
     approved_by=None,
     approved_date=None,
     approved_version=None,
@@ -1082,7 +1082,7 @@ version: 1.0
 version: 1.0
 
 [ClickHouse] SHALL support getting the value from a `Map(key, value)` data type using `map[key]` syntax.
-If `key` has duplicates then the first `key:value` pair MAY be returned. 
+If `key` has duplicates then the first `key:value` pair MAY be returned.
 
 For example,
 
@@ -1104,14 +1104,14 @@ SELECT map(1,2) AS m, m[1024]
 Exceptions:
 
 * when key is `NULL` the return value MAY be `NULL`
-* when key value is not valid for the key type, for example it is out of range for [Integer] type, 
+* when key value is not valid for the key type, for example it is out of range for [Integer] type,
   when reading from a table column it MAY return the default value for key data type
 
 #### RQ.SRS-018.ClickHouse.Map.DataType.Value.Retrieval.KeyNotFound
 version: 1.0
 
 [ClickHouse] SHALL return default value for the data type of the value
-when there's no corresponding `key` defined in the `Map(key, value)` data type. 
+when there's no corresponding `key` defined in the `Map(key, value)` data type.
 
 
 ### Converting Tuple(Array, Array) to Map
@@ -1179,7 +1179,7 @@ version: 1.0
 #### RQ.SRS-018.ClickHouse.Map.DataType.SubColumns.Keys
 version: 1.0
 
-[ClickHouse] SHALL support `keys` subcolumn in the `Map(key, value)` type that can be used 
+[ClickHouse] SHALL support `keys` subcolumn in the `Map(key, value)` type that can be used
 to retrieve an [Array] of map keys.
 
 ```sql
@@ -1211,7 +1211,7 @@ SELECT map( 'aa', 4, '44' , 5) as c, c.keys
 #### RQ.SRS-018.ClickHouse.Map.DataType.SubColumns.Values
 version: 1.0
 
-[ClickHouse] SHALL support `values` subcolumn in the `Map(key, value)` type that can be used 
+[ClickHouse] SHALL support `values` subcolumn in the `Map(key, value)` type that can be used
 to retrieve an [Array] of map values.
 
 ```sql
@@ -1275,7 +1275,7 @@ SELECT length(map())
 version: 1.0
 
 [ClickHouse] SHALL support `Map(key, value)` data type as an argument to the [empty] function
-that SHALL return 1 if number of keys in the map is 0 otherwise if the number of keys is 
+that SHALL return 1 if number of keys in the map is 0 otherwise if the number of keys is
 greater or equal to 1 it SHALL return 0.
 
 For example,
@@ -1309,7 +1309,7 @@ version: 1.0
 [ClickHouse] SHALL support arranging `key, value` pairs into `Map(key, value)` data type
 using `map` function.
 
-**Syntax** 
+**Syntax**
 
 ``` sql
 map(key1, value1[, key2, value2, ...])
@@ -1416,11 +1416,11 @@ SELECT mapValues(a) from table_map;
 [CAST]: https://clickhouse.tech/docs/en/sql-reference/functions/type-conversion-functions/#type_conversion_function-cast
 [Tuple]: https://clickhouse.tech/docs/en/sql-reference/data-types/tuple/
 [Tuple(Array,Array)]: https://clickhouse.tech/docs/en/sql-reference/data-types/tuple/
-[Array]: https://clickhouse.tech/docs/en/sql-reference/data-types/array/ 
+[Array]: https://clickhouse.tech/docs/en/sql-reference/data-types/array/
 [String]: https://clickhouse.tech/docs/en/sql-reference/data-types/string/
 [Integer]: https://clickhouse.tech/docs/en/sql-reference/data-types/int-uint/
 [ClickHouse]: https://clickhouse.tech
-[GitHub Repository]: https://github.com/ClickHouse/ClickHouse/blob/master/tests/testflows/map_type/requirements/requirements.md 
+[GitHub Repository]: https://github.com/ClickHouse/ClickHouse/blob/master/tests/testflows/map_type/requirements/requirements.md
 [Revision History]: https://github.com/ClickHouse/ClickHouse/commits/master/tests/testflows/map_type/requirements/requirements.md
 [Git]: https://git-scm.com/
 [GitHub]: https://github.com

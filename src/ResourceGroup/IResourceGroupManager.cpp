@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -64,12 +63,12 @@ ResourceSelectCase::QueryType ResourceSelectCase::getQueryType(const DB::IAST *a
     else if (ast->as<ASTSelectQuery>() || ast->as<ASTSelectWithUnionQuery>())
         return ResourceSelectCase::QueryType::SELECT;
 
-    else if (ast->as<ASTInsertQuery>() 
+    else if (ast->as<ASTInsertQuery>()
         // || ast->as<ASTDeleteQuery>()
     )
         return ResourceSelectCase::QueryType::DATA;
 
-    else if (const auto * ast_system = ast->as<ASTSystemQuery>(); ast_system 
+    else if (const auto * ast_system = ast->as<ASTSystemQuery>(); ast_system
         && ast_system->type == ASTSystemQuery::Type::DEDUP
     )
         return ResourceSelectCase::QueryType::DATA;
@@ -81,7 +80,7 @@ ResourceSelectCase::QueryType ResourceSelectCase::getQueryType(const DB::IAST *a
             for (auto child : alter_selects->command_list->children)
             {
                 auto * command_ast = child->as<ASTAlterCommand>();
-                
+
                 if (auto command = AlterCommand::parse(command_ast); command)
                 {
                     if (command->type == AlterCommand::Type::ADD_COLUMN

@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2016-2023 ClickHouse, Inc.
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,8 +15,8 @@
 
 
 /*
- * This file may have been modified by ByteDance Ltd. (“ Bytedance's Modifications”).
- * All Bytedance's Modifications are Copyright (2023) ByteDance Ltd..
+ * This file may have been modified by Bytedance Ltd. and/or its affiliates (“ Bytedance's Modifications”).
+ * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
 #include <Storages/MergeTree/DataPartsExchange.h>
@@ -376,7 +375,7 @@ void Service::sendPartFromMemory(
 
 MergeTreeData::DataPart::Checksums Service::sendPartFromDisk(
     const MergeTreeData::DataPartPtr & part,
-    ReadBuffer & body, 
+    ReadBuffer & body,
     WriteBuffer & out,
     int client_protocol_version,
     bool incrementally,
@@ -464,7 +463,7 @@ MergeTreeData::DataPart::Checksums Service::sendPartFromDisk(
 
     writeBinary(checksums.files.size(), out);
     writeBoolText(enable_compact_map_data, out);
-    
+
     using pair = std::pair<String, MergeTreeDataPartChecksum>;
     std::vector<pair> checksumsVector;
 
@@ -704,7 +703,7 @@ MergeTreeData::MutableDataPartPtr Fetcher::fetchPart(
     };
 
     int server_protocol_version = parse<int>(in.getResponseCookie("server_protocol_version", "0"));
-    
+
     auto fetch_part_incrementally = in.getResponseCookie("fetch_part_incrementally", "false");
     if (old_version_part && fetch_part_incrementally == "false")
         old_version_part = nullptr;

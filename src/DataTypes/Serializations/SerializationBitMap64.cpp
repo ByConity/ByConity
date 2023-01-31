@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -54,7 +53,7 @@ void SerializationBitMap64::deserializeBinary(Field & field, ReadBuffer & istr) 
     readVarUInt(size, istr);
     PODArray<char> buffer(size);
     istr.readStrict(buffer.data(), size);
-    
+
     field = Field(BitMap64::readSafe(buffer.data(), size));
 }
 
@@ -300,7 +299,7 @@ void SerializationBitMap64::deserializeWholeText(IColumn & column, ReadBuffer & 
         skipWhitespaceIfAny(istr);
 
         char * next_pos = find_first_symbols<' ', ',', ']'>(istr.position(), istr.buffer().end());
-	
+
         if (next_pos > istr.position())
         {
             uint64_t temp = bitshift(istr.position(), next_pos);

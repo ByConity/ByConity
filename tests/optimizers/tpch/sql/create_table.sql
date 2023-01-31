@@ -21,7 +21,7 @@ create table part (
     p_container  Nullable(String),
     p_retailprice  Nullable(Float64),
     p_comment  Nullable(String)
-) ENGINE = CnchMergeTree() 
+) ENGINE = CnchMergeTree()
 ORDER BY p_partkey;
 create table supplier (
     s_suppkey  Int32,
@@ -31,7 +31,7 @@ create table supplier (
     s_phone  Nullable(String),
     s_acctbal  Nullable(Float64),
     s_comment  Nullable(String)
-) ENGINE = CnchMergeTree() 
+) ENGINE = CnchMergeTree()
 ORDER BY s_suppkey;
 create table partsupp (
     ps_partkey  Int32,
@@ -50,7 +50,7 @@ create table customer (
     c_acctbal  Nullable(Float64),
     c_mktsegment  Nullable(String),
     c_comment  Nullable(String)
-) ENGINE = CnchMergeTree() 
+) ENGINE = CnchMergeTree()
 ORDER BY c_custkey;
 create table orders (
     o_orderkey  Int32,
@@ -62,7 +62,7 @@ create table orders (
     o_clerk  Nullable(String),
     o_shippriority  Nullable(Int32),
     o_comment  Nullable(String)
-) ENGINE = CnchMergeTree() 
+) ENGINE = CnchMergeTree()
 ORDER BY o_orderkey;
 create table lineitem (
     l_orderkey  Int32,
@@ -81,5 +81,5 @@ create table lineitem (
     l_shipinstruct  Nullable(String),
     l_shipmode  Nullable(String),
     l_comment  Nullable(String)
-) ENGINE = CnchMergeTree() 
+) ENGINE = CnchMergeTree()
 ORDER BY l_orderkey;

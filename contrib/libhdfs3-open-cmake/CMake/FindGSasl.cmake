@@ -19,7 +19,7 @@ FIND_LIBRARY(GSASL_LIBRARIES gsasl)
 
 INCLUDE(FindPackageHandleStandardArgs)
 
-# handle the QUIETLY and REQUIRED arguments and set GSASL_FOUND to TRUE if 
+# handle the QUIETLY and REQUIRED arguments and set GSASL_FOUND to TRUE if
 # all listed variables are TRUE
 FIND_PACKAGE_HANDLE_STANDARD_ARGS(GSASL DEFAULT_MSG GSASL_LIBRARIES GSASL_INCLUDE_DIR)
 

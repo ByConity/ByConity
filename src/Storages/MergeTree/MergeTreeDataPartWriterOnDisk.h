@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2016-2023 ClickHouse, Inc.
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,8 +15,8 @@
 
 
 /*
- * This file may have been modified by ByteDance Ltd. (“ Bytedance's Modifications”).
- * All Bytedance's Modifications are Copyright (2023) ByteDance Ltd..
+ * This file may have been modified by Bytedance Ltd. and/or its affiliates (“ Bytedance's Modifications”).
+ * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
 #pragma once
@@ -114,7 +113,7 @@ public:
         void sync() const;
 
         void addToChecksums(IMergeTreeDataPart::Checksums & checksums);
-        
+
         void deepCopyTo(Stream& target);
         [[noreturn]] void freeResource();
     };
@@ -168,13 +167,13 @@ protected:
     void addStreams(
         const NameAndTypePair & column,
         const ASTPtr & effective_codec_desc);
-    
+
     /// construct an implicit stream for map column (not kv)
     void addByteMapStreams(
          const NameAndTypePair & column, // implicit_name
          const String & col_name,
          const ASTPtr & effective_codec_desc);
-    
+
     ISerialization::StreamCallback finalizeStreams(const String & name);
 
     /// Write data of one column.
@@ -250,7 +249,7 @@ protected:
         WrittenOffsetColumns & offset_columns,
         ISerialization::SubstreamPath & path);
 
-    virtual Poco::Logger * getLogger() = 0; 
+    virtual Poco::Logger * getLogger() = 0;
 
     const MergeTreeIndices skip_indices;
 

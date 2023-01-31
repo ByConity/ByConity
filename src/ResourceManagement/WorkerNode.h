@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -52,7 +51,7 @@ struct DeductionEntry
     UInt64 value;
     time_t delete_time;
 
-    DeductionEntry(DeductionType type_, UInt64 value_, time_t delete_time_) 
+    DeductionEntry(DeductionType type_, UInt64 value_, time_t delete_time_)
     : type(type_), value(value_), delete_time(delete_time_) {}
 };
 

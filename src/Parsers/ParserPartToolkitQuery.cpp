@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -85,7 +84,7 @@ bool ParserPWStorage::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     storage->set(storage->order_by, order_by);
     storage->set(storage->unique_key, unique_key);
 
-    /// Mock a CloudMergeTree engine 
+    /// Mock a CloudMergeTree engine
     std::shared_ptr<ASTFunction> engine = std::make_shared<ASTFunction>();
     engine->name = "CloudMergeTree";
     engine->arguments = std::make_shared<ASTExpressionList>();
@@ -132,10 +131,10 @@ bool ParserPartToolkitQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
         /// parse input format
         if (!name_p.parse(pos, data_format, expected))
             return false;
-        
+
         if (!s_file.ignore(pos, expected))
             return false;
-        
+
         type = PartToolType::WRITER;
     }
     else if (s_merge.ignore(pos, expected))
@@ -154,7 +153,7 @@ bool ParserPartToolkitQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
         /// parse output format
         if (!name_p.parse(pos, data_format, expected))
             return false;
-        
+
         type = PartToolType::CONVERTER;
     }
     else
@@ -172,7 +171,7 @@ bool ParserPartToolkitQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
 
     if (!s_lparen.ignore(pos, expected))
         return false;
-    
+
     if (!table_properties_p.parse(pos, columns_list, expected))
         return false;
 

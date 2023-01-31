@@ -52,19 +52,19 @@ xfails = {
      [(Fail, issue_18250)],
     "compatibility/mysql/:engine/encrypt/mysql_datatype='VARCHAR(100)'/:":
      [(Fail, issue_18250)],
-    # reinterpretAsFixedString for UUID stopped working 
+    # reinterpretAsFixedString for UUID stopped working
     "decrypt/decryption/mode=:datatype=UUID:":
-     [(Fail, issue_24029)], 
+     [(Fail, issue_24029)],
     "encrypt/:/mode=:datatype=UUID:":
-     [(Fail, issue_24029)], 
-    "decrypt/invalid ciphertext/mode=:/invalid ciphertext=reinterpretAsFixedString(toUUID:": 
-     [(Fail, issue_24029)], 
+     [(Fail, issue_24029)],
+    "decrypt/invalid ciphertext/mode=:/invalid ciphertext=reinterpretAsFixedString(toUUID:":
+     [(Fail, issue_24029)],
     "encrypt_mysql/encryption/mode=:datatype=UUID:":
-     [(Fail, issue_24029)], 
+     [(Fail, issue_24029)],
     "decrypt_mysql/decryption/mode=:datatype=UUID:":
-     [(Fail, issue_24029)], 
+     [(Fail, issue_24029)],
     "decrypt_mysql/invalid ciphertext/mode=:/invalid ciphertext=reinterpretAsFixedString(toUUID:":
-     [(Fail, issue_24029)], 
+     [(Fail, issue_24029)],
 }
 
 @TestFeature

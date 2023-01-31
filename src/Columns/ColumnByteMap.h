@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -27,7 +26,7 @@ namespace DB
 {
 
 /**
- * Column, runtime ColumnByteMap is implicited stored as two implicit columns(key, value) and one offset column to count # k-v pair per row. 
+ * Column, runtime ColumnByteMap is implicited stored as two implicit columns(key, value) and one offset column to count # k-v pair per row.
  */
 class ColumnByteMap final : public COWHelper<IColumn, ColumnByteMap>
 {
@@ -129,7 +128,7 @@ public:
     void fillByExpandedColumns(const DataTypeByteMap &, const std::map<String, std::pair<size_t, const IColumn *>> &);
 
     /**
-     * Remove data of map keys from the column. 
+     * Remove data of map keys from the column.
      * Note: currently, this mothod is only used in the case that handling command of "clear map key" and the type of part is in-memory. In other on-disk part type(compact and wide), it can directly handle the files.
      */
     void removeKeys(const NameSet & keys);

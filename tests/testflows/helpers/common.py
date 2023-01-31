@@ -9,7 +9,7 @@ from multiprocessing import TimeoutError as PoolTaskTimeoutError
 def instrument_clickhouse_server_log(self, node=None, test=None,
         clickhouse_server_log="/var/log/clickhouse-server/clickhouse-server.log"):
     """Instrument clickhouse-server.log for the current test (default)
-    by adding start and end messages that include test name to log 
+    by adding start and end messages that include test name to log
     of the specified node. If we are in the debug mode and the test
     fails then dump the messages from the log for this test.
     """

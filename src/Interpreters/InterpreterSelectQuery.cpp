@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2016-2023 ClickHouse, Inc.
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,8 +15,8 @@
 
 
 /*
- * This file may have been modified by ByteDance Ltd. (“ Bytedance's Modifications”).
- * All Bytedance's Modifications are Copyright (2023) ByteDance Ltd..
+ * This file may have been modified by Bytedance Ltd. and/or its affiliates (“ Bytedance's Modifications”).
+ * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
 #include <DataStreams/OneBlockInputStream.h>
@@ -639,7 +638,7 @@ void InterpreterSelectQuery::rewriteQueryBaseOnView()
 
 void InterpreterSelectQuery::buildQueryPlan(QueryPlan & query_plan)
 {
-    std::shared_ptr<InterpreterPerfectShard> interpreter_perfect_shard = 
+    std::shared_ptr<InterpreterPerfectShard> interpreter_perfect_shard =
         context->getSettingsRef().distributed_perfect_shard ? std::make_shared<InterpreterPerfectShard>(*this) : nullptr;
 
     if (interpreter_perfect_shard && interpreter_perfect_shard->checkPerfectShardable())
@@ -2170,7 +2169,7 @@ void InterpreterSelectQuery::executeWhere(QueryPlan & query_plan, const ActionsD
     String filter_description;
     if (options.distributed_stages)
         filter_description = ": " + getSelectQuery().where()->getColumnName();
-    
+
     where_step->setStepDescription("WHERE" + filter_description);
     query_plan.addStep(std::move(where_step));
 }

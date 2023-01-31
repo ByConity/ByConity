@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2016-2023 ClickHouse, Inc.
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,8 +15,8 @@
 
 
 /*
- * This file may have been modified by ByteDance Ltd. (“ Bytedance's Modifications”).
- * All Bytedance's Modifications are Copyright (2023) ByteDance Ltd..
+ * This file may have been modified by Bytedance Ltd. and/or its affiliates (“ Bytedance's Modifications”).
+ * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
 #pragma once
@@ -194,7 +193,7 @@ public:
     void protect() override;
 
     void insertRangeFrom(const IColumn & from, size_t start, size_t length) override;
-    
+
     void insertRangeSelective(const IColumn & from, const IColumn::Selector & selector, size_t selector_start, size_t length) override;
 
     void popBack(size_t n) override;

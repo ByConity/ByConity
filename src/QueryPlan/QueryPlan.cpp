@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -208,7 +207,7 @@ void QueryPlan::freshPlan()
 }
 
 /**
- * Be careful, after we create a sub_plan, some nodes in the original plan have been deleted and deconstructed. 
+ * Be careful, after we create a sub_plan, some nodes in the original plan have been deleted and deconstructed.
  * More precisely， nodes that moved to sub_plan are deleted.
  */
 QueryPlan QueryPlan::getSubPlan(QueryPlan::Node * node_)

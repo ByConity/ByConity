@@ -51,7 +51,7 @@ INSERT INTO bucket3 VALUES ('jack', 15);
 SELECT * FROM bucket3 ORDER BY name FORMAT CSV;
 SELECT bucket_number FROM system.cnch_parts where database = currentDatabase() and table = 'bucket3' FORMAT CSV;
 
--- Ensure bucket number is assigned to a part in bucket table with shard ratio 
+-- Ensure bucket number is assigned to a part in bucket table with shard ratio
 INSERT INTO bucket_with_split_number VALUES ('vivek', 10);
 SELECT * FROM bucket_with_split_number ORDER BY name FORMAT CSV;
 SELECT bucket_number FROM system.cnch_parts where database = currentDatabase() and table = 'bucket_with_split_number' FORMAT CSV;
@@ -69,7 +69,7 @@ SELECT * FROM dts_bucket_with_split_number_n_range ORDER BY name FORMAT CSV;
 SELECT bucket_number FROM system.cnch_parts where database = currentDatabase() and table = 'dts_bucket_with_split_number_n_range' FORMAT CSV;
 SELECT split_number, with_range FROM system.cnch_tables where database = currentDatabase() and name = 'dts_bucket_with_split_number_n_range' FORMAT CSV;
 
--- Ensure optimize_skip_unused_workers 
+-- Ensure optimize_skip_unused_workers
 INSERT INTO TABLE test_optimize select toUInt32(number/10), toUInt32(number/10), concat('record', toString(number)) from system.numbers limit 30;
 SELECT * FROM  test_optimize where code = 2 ORDER BY record LIMIT 3 FORMAT CSV;
 -- Apply optimization, note here will only check correctness. Integeration test framework should evaluate optimization in future.

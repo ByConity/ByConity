@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -25,7 +24,7 @@
 
 namespace DB
 {
-/// Send data to single partititon. Usually used with RepartitionTransform and BufferedCopyTransform: 
+/// Send data to single partititon. Usually used with RepartitionTransform and BufferedCopyTransform:
 ///                                                 ||-> SinglePartitionExchangeSink[partition 0]
 /// RepartitionTransform--> BufferedCopyTransform-->||-> SinglePartitionExchangeSink[partition 1]
 ///                                                 ||-> SinglePartitionExchangeSink[partition 2]
@@ -33,8 +32,8 @@ namespace DB
 class SinglePartitionExchangeSink : public IExchangeSink
 {
 public:
-    explicit SinglePartitionExchangeSink(Block header_, 
-    BroadcastSenderPtr sender_, 
+    explicit SinglePartitionExchangeSink(Block header_,
+    BroadcastSenderPtr sender_,
     size_t partition_id_,
     ExchangeOptions options_);
     String getName() const override { return "SinglePartitionExchangeSink"; }

@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -36,7 +35,7 @@ extern const int RESOURCE_MANAGER_INIT_ERROR;
 namespace DB::ResourceManagement
 {
 
-ElectionController::ElectionController(ResourceManagerController & rm_controller_) 
+ElectionController::ElectionController(ResourceManagerController & rm_controller_)
     : WithContext(rm_controller_.getContext())
     , LeaderElectionBase(getContext()->getRootConfig().resource_manager.check_leader_info_interval_ms)
     , rm_controller(rm_controller_)
@@ -52,7 +51,7 @@ ElectionController::ElectionController(ResourceManagerController & rm_controller
     startLeaderElection(getContext()->getSchedulePool());
 }
 
-ElectionController::~ElectionController() 
+ElectionController::~ElectionController()
 {
     shutDown();
 }
@@ -153,7 +152,7 @@ void ElectionController::exitLeaderElection()
 void ElectionController::shutDown()
 {
     is_leader = false;
-    rm_controller.getWorkerGroupResourceCoordinator().stop(); 
+    rm_controller.getWorkerGroupResourceCoordinator().stop();
 
     leader_election.reset();
     current_zookeeper.reset();

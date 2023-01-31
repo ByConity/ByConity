@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -34,7 +33,7 @@
 
 namespace DB
 {
-    
+
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
@@ -64,7 +63,7 @@ void SinglePartitionExchangeSink::consume(Chunk chunk)
 
     if (!buffered_sender.compareBufferChunkInfo(repartition_info->origin_chunk_info))
         buffered_sender.updateBufferChunkInfo(std::move(repartition_info->origin_chunk_info));
-    
+
     const IColumn::Selector & partition_selector = repartition_info->selector;
 
     size_t from = repartition_info->start_points[partition_id];

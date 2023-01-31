@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -69,11 +68,11 @@ struct AggregateFunctionPathSplitData
         sorted = true;
     }
 
-    void add(EventIndex index, Time time, StringRef param, Arena * arena) 
+    void add(EventIndex index, Time time, StringRef param, Arena * arena)
     {
         events.push_back(Event(index, time, param), arena);
     }
-    
+
     void merge(const AggregateFunctionPathSplitData & other, Arena * arena)
     {
         sorted = false;
@@ -86,7 +85,7 @@ struct AggregateFunctionPathSplitData
             events[i].param = StringRef(arena->insert(t_param.data, t_param.size), t_param.size);
         }
     }
-    
+
     void serialize(WriteBuffer & buf) const
     {
         writeBinary(sorted, buf);
@@ -99,7 +98,7 @@ struct AggregateFunctionPathSplitData
             writeBinary(events[i].param, buf);
         }
     }
-    
+
     void deserialize(ReadBuffer & buf, Arena * arena)
     {
         readBinary(sorted, buf);

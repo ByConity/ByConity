@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -71,7 +70,7 @@ PartConverter::PartConverter(const ASTPtr & query_ptr_, ContextMutablePtr contex
 
     if (!endsWith(source_path, "/"))
         source_path.append("/");
-    
+
     if (!endsWith(target_path, "/"))
         target_path.append("/");
 
@@ -82,10 +81,10 @@ PartConverter::PartConverter(const ASTPtr & query_ptr_, ContextMutablePtr contex
     source_path = uri.getPath();
     if (!endsWith(source_path, "/"))
         source_path.append("/");
-    
+
     if (fs::exists(target_path))
         throw Exception("Target location already exists. Please use a non-exists directory instead.", ErrorCodes::DIRECTORY_ALREADY_EXISTS);
-    
+
     // create target directory to get generated files.
     fs::create_directories(target_path);
 
@@ -180,7 +179,7 @@ void PartConverter::execute()
     {
         if (fs::exists(outfile))
             throw Exception("File {} already exists.", ErrorCodes::LOGICAL_ERROR);
-        
+
         LOG_DEBUG(log, "Dump blocks to new file {}", outfile);
         auto file_buffer = std::make_unique<WriteBufferFromFile>(outfile);
         auto zip_buffer = std::make_unique<ZlibDeflatingWriteBuffer>(std::move(file_buffer), DB::CompressionMethod::Gzip, 3);

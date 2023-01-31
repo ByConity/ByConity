@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -111,7 +110,7 @@ struct AggregateFunctionBitMapColumnDiffData
                 readVarUInt(key_data, buf);
                 key = static_cast<T>(key_data);
             }
-            
+
             size_t bytes_size;
             readVarUInt(bytes_size, buf);
             PODArray<char> buffer(bytes_size);
@@ -173,7 +172,7 @@ public:
             types.emplace_back(std::make_shared<DataTypeString>());
         else
             types.emplace_back(std::make_shared<DataTypeNumber<T>>());
-        
+
         /// When input type is Data, the template T is set to UInt16 (for column of Date),
         /// so we have to distinguish this in runtime
         if (is_date)
@@ -182,7 +181,7 @@ public:
             types.emplace_back(std::make_shared<DataTypeDate>());
         }
 
-        if (result_type == 0ull) // sum count 
+        if (result_type == 0ull) // sum count
             types.emplace_back(std::make_shared<DataTypeArray>(std::make_shared<DataTypeUInt64>()));
         else if (result_type == 1ull) // detail in bitmap
             types.emplace_back(std::make_shared<DataTypeArray>(std::make_shared<DataTypeBitMap64>()));
@@ -226,17 +225,17 @@ public:
         auto & input_data = const_cast<typename AggregateFunctionBitMapColumnDiffData<T>::data_type &>(this->data(place).data);
         if (input_data.empty())
             return;
-        
+
         if (diff_step >= input_data.size())
             throw Exception(getName() + ": the step " + std::to_string(diff_step) + " is larger than data size", ErrorCodes::LOGICAL_ERROR);
-        
+
         std::vector<DiffPair> all_data;
         std::unordered_map<T, std::vector<BitMapPtr>> intermediate_res;
-        
+
         /// prepare data
         for (auto it = input_data.begin(); it != input_data.end(); ++it)
             all_data.emplace_back(std::move(it->first), std::move(it->second));
-        
+
         if (diff_direction.diff_direc == DiffDirection::BACKWARD)
             std::sort(all_data.begin(), all_data.end(), std::greater<DiffPair>());
         else
@@ -296,7 +295,7 @@ public:
             {
                 for (const auto & ptr : it->second)
                     column_in_tuple.insertValue(ptr->cardinality());
-                
+
                 prev_offset += it->second.size();
                 offsets.push_back(prev_offset);
             }
@@ -333,7 +332,7 @@ private:
     * **/
     DiffDirectionOp diff_direction;
     /***
-     * the step to decide the next key of operator Andnot. 
+     * the step to decide the next key of operator Andnot.
      * eg. step = 2 means 2021-07-01 - 2021-07-03 for day '2021-07-01'
      * the value by user is an absolute UInt64 number
      ***/

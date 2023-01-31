@@ -436,7 +436,7 @@ else ()
         add_custom_target (clickhouse-worker ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-worker DEPENDS clickhouse)
         install (FILES "${CMAKE_CURRENT_BINARY_DIR}/clickhouse-worker" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
         list(APPEND CLICKHOUSE_BUNDLE clickhouse-worker)
-    endif () 
+    endif ()
 
     if (ENABLE_CLICKHOUSE_CLIENT)
         add_custom_target (clickhouse-client ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-client DEPENDS clickhouse)

@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -41,14 +40,14 @@ static inline bool cmp_group_mem(const WorkerGroupAndMetrics & a, const WorkerGr
 
 static inline bool cmp_worker_cpu(const WorkerNodePtr & a, const WorkerNodePtr & b)
 {
-    return a->convertCoresToPercents() + a->cpu_usage.load(std::memory_order_relaxed) 
+    return a->convertCoresToPercents() + a->cpu_usage.load(std::memory_order_relaxed)
         < b->convertCoresToPercents() + b->cpu_usage.load(std::memory_order_relaxed);
 }
 
 static inline bool cmp_worker_mem(const WorkerNodePtr & a, const WorkerNodePtr & b)
 {
     /// Use add but not sub to avoid uint overflow.
-    return a->memory_available.load(std::memory_order_relaxed) + b->reserved_memory_bytes.load(std::memory_order_relaxed) 
+    return a->memory_available.load(std::memory_order_relaxed) + b->reserved_memory_bytes.load(std::memory_order_relaxed)
         < b->memory_available.load(std::memory_order_relaxed) + a->reserved_memory_bytes.load(std::memory_order_relaxed);
 }
 
@@ -223,7 +222,7 @@ std::vector<HostWithPorts> QueryScheduler::pickWorkers(const VWScheduleAlgo & al
     std::vector<WorkerNodePtr> available_workers;
     filterWorker(requirement, available_workers);
 
-    /// If there is no worker meets the requirement, 
+    /// If there is no worker meets the requirement,
     /// - If random result is allowed, then do a sampling among all workers.
     /// - If random result is not allowed, then just return an empty result set.
     if (available_workers.empty())

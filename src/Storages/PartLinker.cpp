@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -90,9 +89,9 @@ void PartLinker::execute()
 
         String destination = new_part_path;
         String file_name = it->name();
-        auto rename_it = std::find_if(files_to_rename.begin(), files_to_rename.end(), 
+        auto rename_it = std::find_if(files_to_rename.begin(), files_to_rename.end(),
                         [&file_name](const auto & rename_pair) { return rename_pair.first == file_name; });
-        
+
         if (rename_it != files_to_rename.end())
         {
             if (rename_it->second.empty())

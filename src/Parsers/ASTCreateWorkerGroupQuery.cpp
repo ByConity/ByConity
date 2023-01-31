@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -33,20 +32,20 @@ ASTPtr ASTCreateWorkerGroupQuery::clone() const
 
 void ASTCreateWorkerGroupQuery::formatImpl(const FormatSettings & s, FormatState & state, FormatStateStacked frame) const
 {
-    s.ostr << (s.hilite ? hilite_keyword : "") 
-           << "CREATE WORKER GROUP " 
+    s.ostr << (s.hilite ? hilite_keyword : "")
+           << "CREATE WORKER GROUP "
            << (if_not_exists ? "IF NOT EXISTS " : "")
            << (s.hilite ? hilite_none : "");
 
-    s.ostr << (s.hilite ? hilite_identifier : "") 
-           << worker_group_id 
+    s.ostr << (s.hilite ? hilite_identifier : "")
+           << worker_group_id
            << (s.hilite ? hilite_none : "");
 
     if (!vw_name.empty())
     {
-        s.ostr << (s.hilite ? hilite_keyword : "") 
-               << " IN " 
-               << (s.hilite ? hilite_identifier : "") 
+        s.ostr << (s.hilite ? hilite_keyword : "")
+               << " IN "
+               << (s.hilite ? hilite_identifier : "")
                << (s.hilite ? hilite_none : "");
 
         s.ostr << (s.hilite ? hilite_identifier : "") << vw_name << (s.hilite ? hilite_none : "");
@@ -54,9 +53,9 @@ void ASTCreateWorkerGroupQuery::formatImpl(const FormatSettings & s, FormatState
 
     if (settings)
     {
-        s.ostr << (s.hilite ? hilite_keyword : "") 
-               << s.nl_or_ws 
-               << "SETTINGS " 
+        s.ostr << (s.hilite ? hilite_keyword : "")
+               << s.nl_or_ws
+               << "SETTINGS "
                << (s.hilite ? hilite_none : "");
 
         settings->formatImpl(s, state, frame);

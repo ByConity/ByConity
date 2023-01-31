@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -232,11 +231,11 @@ void RewriteInQueryMatcher::visit(ASTPtr & node, Data & data)
 {
     if (!node)
         return;
-    
+
     const auto * fn = node->as<ASTFunction>();
     if (!fn || fn->name != "in")
         return;
-    
+
     data.replaceExpressionListChildren(fn);
 }
 

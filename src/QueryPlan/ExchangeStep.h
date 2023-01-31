@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -47,7 +46,7 @@ public:
 
     bool needKeepOrder() const { return keep_order; }
     const std::unordered_map<String, std::vector<String>> & getOutToInputs() const { return output_to_inputs; }
-    
+
     Block getHeader() const { return getOutputStream().header; }
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
     void setInputStreams(const DataStreams & input_streams_) override;

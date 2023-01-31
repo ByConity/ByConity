@@ -83,12 +83,12 @@ uint32_t MurmurHash2 ( const void * key, size_t len, uint32_t seed )
   h ^= h >> 15;
 
   return h;
-} 
+}
 
 //-----------------------------------------------------------------------------
 // MurmurHash2, 64-bit versions, by Austin Appleby
 
-// The same caveats as 32-bit MurmurHash2 apply here - beware of alignment 
+// The same caveats as 32-bit MurmurHash2 apply here - beware of alignment
 // and endian-ness issues if used across multiple platforms.
 
 // 64-bit hash for 64-bit platforms
@@ -107,12 +107,12 @@ uint64_t MurmurHash64A ( const void * key, size_t len, uint64_t seed )
   {
     uint64_t k = *data++;
 
-    k *= m; 
-    k ^= k >> r; 
-    k *= m; 
-    
+    k *= m;
+    k ^= k >> r;
+    k *= m;
+
     h ^= k;
-    h *= m; 
+    h *= m;
   }
 
   const unsigned char * data2 = (const unsigned char*)data;
@@ -128,13 +128,13 @@ uint64_t MurmurHash64A ( const void * key, size_t len, uint64_t seed )
   case 1: h ^= uint64_t(data2[0]);
           h *= m;
   };
- 
+
   h ^= h >> r;
   h *= m;
   h ^= h >> r;
 
   return h;
-} 
+}
 
 
 // 64-bit hash for 32-bit platforms
@@ -188,13 +188,13 @@ uint64_t MurmurHash64B ( const void * key, size_t len, uint64_t seed )
   h = (h << 32) | h2;
 
   return h;
-} 
+}
 
 //-----------------------------------------------------------------------------
 // MurmurHash2A, by Austin Appleby
 
-// This is a variant of MurmurHash2 modified to use the Merkle-Damgard 
-// construction. Bulk speed should be identical to Murmur2, small-key speed 
+// This is a variant of MurmurHash2 modified to use the Merkle-Damgard
+// construction. Bulk speed should be identical to Murmur2, small-key speed
 // will be 10%-20% slower due to the added overhead at the end of the hash.
 
 // This variant fixes a minor issue where null keys were more likely to
@@ -245,10 +245,10 @@ uint32_t MurmurHash2A ( const void * key, size_t len, uint32_t seed )
 //-----------------------------------------------------------------------------
 // CMurmurHash2A, by Austin Appleby
 
-// This is a sample implementation of MurmurHash2A designed to work 
+// This is a sample implementation of MurmurHash2A designed to work
 // incrementally.
 
-// Usage - 
+// Usage -
 
 // CMurmurHash2A hasher
 // hasher.Begin(seed);
@@ -354,8 +354,8 @@ uint32_t MurmurHashNeutral2 ( const void * key, size_t len, uint32_t seed )
     k |= data[2] << 16;
     k |= data[3] << 24;
 
-    k *= m; 
-    k ^= k >> r; 
+    k *= m;
+    k ^= k >> r;
     k *= m;
 
     h *= m;
@@ -364,7 +364,7 @@ uint32_t MurmurHashNeutral2 ( const void * key, size_t len, uint32_t seed )
     data += 4;
     len -= 4;
   }
-  
+
   switch(len)
   {
   case 3: h ^= data[2] << 16;
@@ -378,13 +378,13 @@ uint32_t MurmurHashNeutral2 ( const void * key, size_t len, uint32_t seed )
   h ^= h >> 15;
 
   return h;
-} 
+}
 
 //-----------------------------------------------------------------------------
 // MurmurHashAligned2, by Austin Appleby
 
 // Same algorithm as MurmurHash2, but only does aligned reads - should be safer
-// on certain platforms. 
+// on certain platforms.
 
 // Performance will be lower than MurmurHash2
 

@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2016-2023 ClickHouse, Inc.
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,8 +15,8 @@
 
 
 /*
- * This file may have been modified by ByteDance Ltd. (“ Bytedance's Modifications”).
- * All Bytedance's Modifications are Copyright (2023) ByteDance Ltd..
+ * This file may have been modified by Bytedance Ltd. and/or its affiliates (“ Bytedance's Modifications”).
+ * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
 #pragma once
@@ -64,7 +63,7 @@ public:
     void checkAlterIsPossible(const AlterCommands & commands, ContextPtr context) const override;
 
     bool supportsMapImplicitColumn() const override { return true;  }
-    
+
     /// you need to add and remove columns in the sub-tables manually
     /// the structure of sub-tables is not checked
     void alter(const AlterCommands & params, ContextPtr context, TableLockHolder & table_lock_holder) override;

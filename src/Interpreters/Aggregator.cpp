@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2016-2023 ClickHouse, Inc.
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,8 +15,8 @@
 
 
 /*
- * This file may have been modified by ByteDance Ltd. (“ Bytedance's Modifications”).
- * All Bytedance's Modifications are Copyright (2023) ByteDance Ltd..
+ * This file may have been modified by Bytedance Ltd. and/or its affiliates (“ Bytedance's Modifications”).
+ * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
 #include <future>
@@ -271,7 +270,7 @@ void Aggregator::Params::serialize(WriteBuffer & buf) const
 
 Aggregator::Params Aggregator::Params::deserialize(ReadBuffer & buf, const ContextPtr & context)
 {
-    
+
     auto src_header = deserializeBlock(buf);
     auto intermediate_header = deserializeBlock(buf);
 

@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -80,10 +79,10 @@ private:
     String generateFilterString();
     String generateRemoteQuery(const String & source_database, const String & source_table, const String & partition_id, const Strings & column_lists);
     IngestParts generateIngestParts(MergeTreeData & data, const MergeTreeData::DataPartsVector & parts);
-    IngestSources generateSourceBlocks(MergeTreeData & source_data, 
-                                                    const MergeTreeData::DataPartsVector & parts_to_read, 
-                                                    const Names & all_columns_with_partition_key);    
-    
+    IngestSources generateSourceBlocks(MergeTreeData & source_data,
+                                                    const MergeTreeData::DataPartsVector & parts_to_read,
+                                                    const Names & all_columns_with_partition_key);
+
     // ------ Utilities for Ingest partition -------
     std::optional<NameAndTypePair> tryGetMapColumn(const StorageInMemoryMetadata & data, const String & col_name);
     void writeNewPart(const StorageInMemoryMetadata & data, const IngestPartition::IngestSources & src_blocks, BlockOutputStreamPtr & output, Names & column_names);
@@ -99,9 +98,9 @@ private:
      * @param ordered_key_names The join keys
      */
     Block blockJoinBlocks(MergeTreeData & data,
-                    Block & target_block, 
-                    const IngestPartition::IngestSources & src_blocks, 
-                    const Names & column_names, 
+                    Block & target_block,
+                    const IngestPartition::IngestSources & src_blocks,
+                    const Names & column_names,
                     const Names & ordered_key_names,
                     bool compact);
 
@@ -112,20 +111,20 @@ private:
     void ingestion(MergeTreeData & data, const IngestParts & parts_to_ingest, const IngestPartition::IngestSources & src_blocks,
                    const Names & ingest_column_names, const Names & ordered_key_names, const Names & all_columns, const Settings & settings);
 
-    void ingestWidePart(MergeTreeData & data, 
+    void ingestWidePart(MergeTreeData & data,
                 const Block & header,
-                MergeTreeData::MutableDataPartPtr & new_data_part, 
-                const MergeTreeData::DataPartPtr & target_part, 
+                MergeTreeData::MutableDataPartPtr & new_data_part,
+                const MergeTreeData::DataPartPtr & target_part,
                 const IngestPartition::IngestSources & src_blocks,
                 const Names & ingest_column_names, const Names & ordered_key_names, const Names & all_columns,
                 const Settings & settings,
                 std::function<bool()> check_cached_cancel);
 
     void ingestCompactPart(
-                MergeTreeData & data, 
+                MergeTreeData & data,
                 const NamesAndTypesList & part_columns,
-                MergeTreeData::MutableDataPartPtr & new_data_part, 
-                const MergeTreeData::DataPartPtr & target_part, 
+                MergeTreeData::MutableDataPartPtr & new_data_part,
+                const MergeTreeData::DataPartPtr & target_part,
                 const IngestPartition::IngestSources & src_blocks,
                 const Names & ingest_column_names, const Names & ordered_key_names,
                 const Settings & settings,

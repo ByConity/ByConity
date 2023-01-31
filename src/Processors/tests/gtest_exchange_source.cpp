@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -62,7 +61,7 @@ TEST(ExchangeSource, LocalNormalTest)
     ASSERT_TRUE(status.code == BroadcastStatusCode::RUNNING);
 
     Block header = {ColumnWithTypeAndName(ColumnUInt8::create(), std::make_shared<DataTypeUInt8>(), "local_exchange_test")};
-    
+
     auto exchange_source = std::make_shared<ExchangeSource>(std::move(header), local_receiver, exchange_options);
     QueryPipeline pipeline;
 
@@ -87,7 +86,7 @@ TEST(ExchangeSource, LocalNormalTest)
     }
 
     executor.cancel();
-    
+
 }
 
 TEST(ExchangeSource, LocalLimitTest)

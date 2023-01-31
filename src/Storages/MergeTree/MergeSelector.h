@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2016-2023 ClickHouse, Inc.
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,8 +15,8 @@
 
 
 /*
- * This file may have been modified by ByteDance Ltd. (“ Bytedance's Modifications”).
- * All Bytedance's Modifications are Copyright (2023) ByteDance Ltd..
+ * This file may have been modified by Bytedance Ltd. and/or its affiliates (“ Bytedance's Modifications”).
+ * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
 #pragma once
@@ -94,7 +93,7 @@ public:
         [[maybe_unused]] MergeScheduler * merge_scheduler = nullptr) = 0;
 
     virtual PartsRanges selectMulti(
-        const PartsRanges & partitions, 
+        const PartsRanges & partitions,
         const size_t max_total_size_to_merge,
         [[maybe_unused]] MergeScheduler * merge_scheduler = nullptr)
     {

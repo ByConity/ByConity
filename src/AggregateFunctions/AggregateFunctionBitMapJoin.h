@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -140,7 +139,7 @@ void readStrings(Strings & data, ReadBuffer & buf)
 {
     size_t size = 0;
     readVarUInt(size, buf);
-    
+
     for (size_t i = 0; i < size; ++i)
     {
         String key;
@@ -356,11 +355,11 @@ struct PositionTuples
         writeVarUInt(position, buf);
         size_t map_size = tuples.size();
         writeVarUInt(map_size, buf);
-        
+
         for (auto it = tuples.begin(); it != tuples.end(); ++it)
         {
             writeStrings(it->first.keys, buf);
-            
+
             size_t tuples_num = it->second.size();
             writeVarUInt(tuples_num, buf);
             for (auto jt = it->second.begin(); jt != it->second.end(); ++jt)
@@ -416,8 +415,8 @@ struct PositionTuples
                 buf.readStrict(buffer.data(), bytes_size);
                 BitMap64 bitmap = BitMap64::readSafe(buffer.data(), bytes_size);
 
-                tmp_tuple = std::make_tuple(std::move(join_key), 
-                                                      std::move(group_by), 
+                tmp_tuple = std::make_tuple(std::move(join_key),
+                                                      std::move(group_by),
                                                       std::make_shared<BitMap64>(bitmap));
 
                 tuples_ptrs.emplace_back(std::make_shared<JoinTuple>(tmp_tuple));
@@ -442,7 +441,7 @@ struct AggregateFunctionBitMapJoinData
 
         StringsMapKey key(std::move(join_keys));
         JoinTuplePtr tuple_ptr{std::make_shared<JoinTuple>(std::make_tuple(std::move(join_keys), std::move(group_bys), std::move(bitmap_ptr)))};
-        
+
         for (auto & pos_tuples : join_tuples_by_position) // Position value is in a small range, just compare one by one
         {
             if (pos-1 == pos_tuples.position)  // position starts from 0, but pos from user starts from 1
@@ -459,7 +458,7 @@ struct AggregateFunctionBitMapJoinData
     {
         auto & lhs_tuples_by_position = this->join_tuples_by_position;
         auto & rhs_tuples_by_position = const_cast<std::vector<PositionTuples> &>(rhs.join_tuples_by_position);
-        
+
         if (rhs_tuples_by_position.empty())
             return;
         else if (lhs_tuples_by_position.empty())
@@ -491,7 +490,7 @@ struct AggregateFunctionBitMapJoinData
     {
         size_t position_num = join_tuples_by_position.size();
         writeVarUInt(position_num, buf);
-        for (auto it = join_tuples_by_position.begin(); 
+        for (auto it = join_tuples_by_position.begin();
             it != join_tuples_by_position.end(); ++it)
         {
             it->serialize(buf);
@@ -558,14 +557,14 @@ public:
         for (auto pi : join_keys_idx)
         {
             // join key starts from 3 in user's input, and it appears in each position
-            join_keys.emplace_back(columns_str.at(pi.second - 3)); 
+            join_keys.emplace_back(columns_str.at(pi.second - 3));
         }
 
         for (auto pi : group_by_keys_idx)
         {
             if (pi.first == static_cast<UInt64>(pos) && columns_str.at(pi.second - 3) == "#-1#")
                 throw Exception("The column you identified for group by is invalid, where data is '#-1#'", ErrorCodes::LOGICAL_ERROR);
-            
+
             group_by_keys.emplace_back(columns_str.at(pi.second - 3));
         }
 
@@ -594,7 +593,7 @@ public:
             return;
             // throw Exception("AggregateFunction " + getName() + ": at least one position has no data actually", ErrorCodes::LOGICAL_ERROR);
 
-        sort(this_join_tuples.begin(), this_join_tuples.end(), 
+        sort(this_join_tuples.begin(), this_join_tuples.end(),
             [](const PositionTuples & left, const PositionTuples & right) -> bool {
                 return left.position < right.position;
             });
@@ -608,14 +607,14 @@ public:
 
         // insert result to res_column
         result_group_by_tuples.writeResultOfKeyAndValue(tuple_in_array, result_type);
-        
+
         column_offsets.getData().push_back(column_res.getData().size());
     }
 
 private:
-    void joinMultiThreads(KVSharded & result, 
+    void joinMultiThreads(KVSharded & result,
                           std::vector<Pairs> & split_lhs_data,
-                          HashedStringsKeyTuples & rhs_data, 
+                          HashedStringsKeyTuples & rhs_data,
                           size_t thread_num_) const
     {
         ThreadGroupStatusPtr thread_group = CurrentThread::getGroup();
@@ -624,14 +623,14 @@ private:
         {
             setThreadName("bitmapJoin");
             CurrentThread::attachToIfDetached(thread_group);
-            
+
             JoinTuplePtrs tuples_tmp;
             Pairs & group = split_lhs_data.at(index);
             for (auto gt = group.begin(); gt != group.end(); ++gt)
             {
                 auto & key = gt->first;
                 auto & left = gt->second; // left JoinTuplePtrs
-                
+
                 auto rjt = rhs_data.find(key);
                 if (rjt == rhs_data.end()) // key is not matched
                 {
@@ -652,7 +651,7 @@ private:
                             break;
                     }
                 }
-                
+
                 auto & right = rjt->second;  // right JoinTuplePtrs
                 for (auto lt = left.begin(); lt != left.end(); ++lt)
                 {
@@ -683,7 +682,7 @@ private:
                                     group_bys.emplace_back(std::move(rt_group_bys.at(i)));
                             }
                         }
-                        
+
                         BitMap64 bitmap(*lt_bitmap_ptr);
 
                         switch (logic_operation.logicOp)
@@ -716,7 +715,7 @@ private:
                         JoinTuple  tmp_tuple{std::make_tuple(join_keys, group_bys,
                                                               std::make_shared<BitMap64>(std::move(bitmap)))};
 
-                        result.put(std::move(StringsMapKey(std::move(group_bys))), 
+                        result.put(std::move(StringsMapKey(std::move(group_bys))),
                                    std::move(JoinTuplePtrs{std::make_shared<JoinTuple>(tmp_tuple)}));
                    }
                 }

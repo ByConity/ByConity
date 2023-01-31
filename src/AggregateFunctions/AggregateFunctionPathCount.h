@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -391,7 +390,7 @@ public:
             Data::NodeSet topk_set;
             for (auto & node_count : steps[i].node_counts)
             {
-                if (node_count.getKey() == Data::LOSS_NODE) 
+                if (node_count.getKey() == Data::LOSS_NODE)
                     continue;
 
                 topk_set.insert(node_count.getKey(), node_count.getMapped().high); // TODO check count

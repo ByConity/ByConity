@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -172,8 +171,8 @@ PlanSegmentResult PlanSegmentVisitor::visitCTERefNode(QueryPlan::Node * node, Pl
 
 PlanSegment * PlanSegmentVisitor::createPlanSegment(QueryPlan::Node * node, size_t segment_id, PlanSegmentVisitorContext & split_context)
 {
-    /**   
-     * Be careful, after we create a sub_plan, some nodes in the original plan have been deleted and deconstructed. 
+    /**
+     * Be careful, after we create a sub_plan, some nodes in the original plan have been deleted and deconstructed.
      * More precisely, nodes that moved to sub_plan are deleted.
      */
     QueryPlan sub_plan = plan_segment_context.query_plan.getSubPlan(node);

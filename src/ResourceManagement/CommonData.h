@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -200,7 +199,7 @@ struct WorkerNodeResourceData
 
     UInt32 register_time;
     UInt32 last_update_time;
-    
+
     UInt64 reserved_memory_bytes;
     UInt32 reserved_cpu_cores;
     WorkerState state;
@@ -220,7 +219,7 @@ struct WorkerNodeResourceData
     inline String toDebugString() const
     {
         std::stringstream ss;
-        ss << "{ vw:" << vw_name 
+        ss << "{ vw:" << vw_name
         << ", worker_group:" << worker_group_id
         << ", id:" << id
         << ", cpu_usage:" << cpu_usage
@@ -338,7 +337,7 @@ struct WorkerGroupMetrics
     inline String toDebugString() const
     {
         std::stringstream ss;
-        ss << id << ":" 
+        ss << id << ":"
             << max_cpu_usage << "|" << min_cpu_usage << "|" << avg_cpu_usage << "|"
             << max_mem_usage << "|" << min_mem_usage << "|" << avg_mem_usage << "|" << min_mem_available
             << "|" << total_queries;

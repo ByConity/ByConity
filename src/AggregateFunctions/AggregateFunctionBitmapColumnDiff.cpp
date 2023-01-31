@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -33,7 +32,7 @@ AggregateFunctionPtr createAggregateFunctionBitmapColumnDiff(const std::string &
     String diff_direction_str{"forward"};
     if (!parameters.empty() && parameters.size() != 3)
         throw Exception("AggregateFunction " + name + " need three parameters", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-    
+
     if (!parameters.empty())
     {
         parameters[0].tryGet<UInt64>(return_type_);

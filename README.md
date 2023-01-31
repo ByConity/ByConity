@@ -4,14 +4,14 @@
     <img src="ByConity-architecture.png" alt="ByConity-architecture" width="800"/>
 </p>
 
-ByConity is a data warehouse designed for changes in modern cloud architecture. It adopts a cloud-native architecture design to meet the requirements of data warehouse users for flexible scaling, separation of reads and writes, resource isolation, and strong data consistency. At the same time, it provides excellent query and write performance. 
+ByConity is a data warehouse designed for changes in modern cloud architecture. It adopts a cloud-native architecture design to meet the requirements of data warehouse users for flexible scaling, separation of reads and writes, resource isolation, and strong data consistency. At the same time, it provides excellent query and write performance.
 
 ByConity is using a large number of mature OLAP technologies, such as column storage engine, MPP execution, intelligent query optimization, vectorized execution, Codegen, indexing, and data compression; it also makes special technological innovations for the cloud scenarios and storage-computing separation architecture.
 
 ByConity is built on top of [ClickHouse](https://github.com/ClickHouse/ClickHouse). We appreciate the excellent work of the ClickHouse team.
 
 ## Try ByConity
-You can quickly bring up a ByConity playground by following this simple [guide](https://github.com/ByConity/byconity-docker). 
+You can quickly bring up a ByConity playground by following this simple [guide](https://github.com/ByConity/byconity-docker).
 
 A minimal ByConity cluster include:
 - A [FoundationDB](https://www.foundationdb.org/) database cluster to store meta data.
@@ -24,7 +24,10 @@ A minimal ByConity cluster include:
 
 
 ## Build ByConity
-The easiest way to build ByConity is built in [docker](https://github.com/ByConity/ByConity/tree/master/docker/builder)
+The easiest way to build ByConity is built in [docker](https://github.com/ByConity/ByConity/tree/master/docker/builder). Please note that if you build ByConity via docker, whenever you run you need to export the `LD_LIBRARY_PATH` so that the executable can find Foundation DB library `libfdb_c.so`.
+```
+export LD_LIBRARY_PATH="{ByConity_source_path}/contrib/foundationdb/lib/"
+```
 
 It can also be built the following operating systems:
 
@@ -54,13 +57,13 @@ sudo ./llvm.sh 12
 ### 2. Checkout Source Code
 
 ```
-git clone --recursive https://github.com/ByConity/ByConity.git byconity
+git clone --recursive https://github.com/ByConity/ByConity.git
 ```
 
 ### 3. Build
 
 ```
-cd byconity
+cd ByConity
 mkdir build && cd build
 export CC=clang-12
 export CXX=clang++-12
@@ -80,7 +83,9 @@ resource_manager     # byconity resource manager
 ```
 
 ## Run ByConity Locally
-Assuming you have [FoundationDB](https://apple.github.io/foundationdb/local-dev.html) and [HDFS](https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-common/ClusterSetup.html) set up and running locally:
+The most convinience way for local development is to use `docker-compose`. You can use `docker-compose` to quickly create a [byconity cluster](/docker/byconity/README.md) from your local build binary. By using this approach, you do not need to worry about the setup of ByConity dependencies (FoundationDB and HDFS), it automatically launches them all. It is recommended to use this approach for ByConity development.
+
+Alternatively, if you don't want to use docker, please follow the belowing guide to run ByConity in non-containerized environments.  It assumes you have [FoundationDB](https://apple.github.io/foundationdb/local-dev.html) and [HDFS](https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-common/ClusterSetup.html) set up and running locally:
 1. Modify the template config
 2. Run the local deployment script to run all the components
 
@@ -119,3 +124,8 @@ The config templates can be found in deploy/template. You should replace the fol
    1. `cd ByConity/deploy`
    2. `python3.9 deploy.py --template_paths template/byconity-server.xml template/byconity-worker.xml --program_dir /home/ByConity/build/programs`
    3. There are other arguments for the script. For example, you can run 2 servers with argument `-s 2`
+
+
+## Deploy ByConity to physical machines
+There are some way to deploy ByConity to physical machines:
+- Deploy via docker [wrapper](https://github.com/ByConity/ByConity/tree/master/docker/executable_wrapper)

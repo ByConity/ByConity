@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2016-2023 ClickHouse, Inc.
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,8 +15,8 @@
 
 
 /*
- * This file may have been modified by ByteDance Ltd. (“ Bytedance's Modifications”).
- * All Bytedance's Modifications are Copyright (2023) ByteDance Ltd..
+ * This file may have been modified by Bytedance Ltd. and/or its affiliates (“ Bytedance's Modifications”).
+ * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
 #pragma once
@@ -113,7 +112,7 @@ public:
     String getID(char) const override { return "ColumnsReplaceTransformer"; }
 
     ASTType getType() const override { return ASTType::ASTColumnsReplaceTransformer; }
-    
+
     ASTPtr clone() const override
     {
         auto clone = std::make_shared<ASTColumnsReplaceTransformer>(*this);

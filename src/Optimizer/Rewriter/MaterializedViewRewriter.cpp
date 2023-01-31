@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -1162,7 +1161,7 @@ protected:
 
         if (query_prewhere_expr)
             generated_query->setExpression(ASTSelectQuery::Expression::PREWHERE, std::move(query_prewhere_expr));
-            
+
         UInt64 max_block_size = context->getSettingsRef().max_block_size;
         if (!max_block_size)
             throw Exception("Setting 'max_block_size' cannot be zero", ErrorCodes::PARAMETER_OUT_OF_BOUND);

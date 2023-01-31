@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -244,7 +243,7 @@ bool isMapImplicitKey(const String & map_col)
 
 bool isMapImplicitKeyOfSpecialMapName(const String & implicit_col, const String & map_col)
 {
-    return startsWith(implicit_col, getMapKeyPrefix(map_col)); 
+    return startsWith(implicit_col, getMapKeyPrefix(map_col));
 }
 
 bool isMapImplicitKeyNotKV(const String & map_col)

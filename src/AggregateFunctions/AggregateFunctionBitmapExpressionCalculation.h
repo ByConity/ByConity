@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -122,7 +121,7 @@ template<typename T, typename = std::enable_if_t< std::is_integral_v<T> > >
  struct AggregateFunctionBitMapExtractData
  {
      AggregateFunctionBitMapData<T> bitmap_data;
- 
+
      void merge(AggregateFunctionBitMapExtractData<T> & rhs)
      {
          if (bitmap_data.empty())
@@ -181,8 +180,8 @@ public:
         T key = column_key.getElement(row_num);
 
         // use's key in this range may get the intermediate cached results
-        if (key >= final_key && key < 0) 
-            throw Exception("The tag (or bitmap key): " + std::to_string(key) + " affects the computation, " + 
+        if (key >= final_key && key < 0)
+            throw Exception("The tag (or bitmap key): " + std::to_string(key) + " affects the computation, " +
                 "please change another number, maybe positive number is better", ErrorCodes::LOGICAL_ERROR);
 
         const auto & column_bitmap = static_cast<const ColumnBitMap64 &>(*columns[1]);
@@ -337,9 +336,9 @@ public:
         T key = column_key.getElement(row_num);
 
         // use's key in this range may get the intermediate cached results
-        if (std::any_of(final_keys.begin(), final_keys.end(), [&](T final_key) { 
+        if (std::any_of(final_keys.begin(), final_keys.end(), [&](T final_key) {
                 return key >= final_key && key < 0; }))
-            throw Exception("The tag (or bitmap key): " + std::to_string(key) + " affects the computation, " + 
+            throw Exception("The tag (or bitmap key): " + std::to_string(key) + " affects the computation, " +
                 "please change another number, maybe positive number is better", ErrorCodes::LOGICAL_ERROR);
 
         const auto & column_bitmap = static_cast<const ColumnBitMap64 &>(*columns[1]);
@@ -1025,7 +1024,7 @@ public:
 
         // use's key in this range may get the intermediate cached results
         if (key >= final_key && key < 0)
-            throw Exception("The tag (or bitmap key): " + std::to_string(key) + " affects the computation, " + 
+            throw Exception("The tag (or bitmap key): " + std::to_string(key) + " affects the computation, " +
                 "please change another number, maybe positive number is better", ErrorCodes::LOGICAL_ERROR);
 
         const auto & column_bitmap = static_cast<const ColumnBitMap64 &>(*columns[1]);

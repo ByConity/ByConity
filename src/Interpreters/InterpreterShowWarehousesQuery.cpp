@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -23,7 +22,7 @@
 namespace DB
 {
 
-InterpreterShowWarehousesQuery::InterpreterShowWarehousesQuery(const ASTPtr & query_ptr_, ContextMutablePtr context_) 
+InterpreterShowWarehousesQuery::InterpreterShowWarehousesQuery(const ASTPtr & query_ptr_, ContextMutablePtr context_)
     : WithMutableContext(context_), query_ptr(query_ptr_) {}
 
 String InterpreterShowWarehousesQuery::getRewrittenQuery()

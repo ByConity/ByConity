@@ -1,9 +1,9 @@
-select case when (select count(*) 
-                  from store_sales 
+select case when (select count(*)
+                  from store_sales
                   where ss_quantity between 1 and 20) > 74129
-            then (select avg(ss_ext_discount_amt) 
-                  from store_sales 
-                  where ss_quantity between 1 and 20) 
+            then (select avg(ss_ext_discount_amt)
+                  from store_sales
+                  where ss_quantity between 1 and 20)
             else (select avg(ss_net_paid)
                   from store_sales
                   where ss_quantity between 1 and 20) end bucket1 ,
@@ -12,7 +12,7 @@ select case when (select count(*)
                   where ss_quantity between 21 and 40) > 122840
             then (select avg(ss_ext_discount_amt)
                   from store_sales
-                  where ss_quantity between 21 and 40) 
+                  where ss_quantity between 21 and 40)
             else (select avg(ss_net_paid)
                   from store_sales
                   where ss_quantity between 21 and 40) end bucket2,

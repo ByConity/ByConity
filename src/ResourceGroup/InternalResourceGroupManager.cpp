@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -63,8 +62,8 @@ void InternalResourceGroupManager::initialize(const Poco::Util::AbstractConfigur
             if (groups.find(name) != groups.end())
                 throw Exception("Resource group name duplicated: " + name, ErrorCodes::RESOURCE_GROUP_ILLEGAL_CONFIG);
 
-            auto pr = groups.emplace(std::piecewise_construct, 
-                                     std::forward_as_tuple(name), 
+            auto pr = groups.emplace(std::piecewise_construct,
+                                     std::forward_as_tuple(name),
                                      std::forward_as_tuple(std::make_shared<InternalResourceGroup>()));
             auto group = pr.first->second;
             group->setName(name);
@@ -136,7 +135,7 @@ void InternalResourceGroupManager::initialize(const Poco::Util::AbstractConfigur
               groups.size(), select_cases.size());
 
     bool old_val = false;
-    if (!root_groups.empty() 
+    if (!root_groups.empty()
         && started.compare_exchange_strong(old_val, true, std::memory_order_seq_cst, std::memory_order_relaxed))
     {
         resource_task = std::make_unique<ResourceTask>(this);

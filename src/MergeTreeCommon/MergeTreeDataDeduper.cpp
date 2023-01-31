@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -198,7 +197,7 @@ namespace
              *    b. if version of visible row is 5, need to keep visible row.
              *    Thus need to return invisible row2 with delete info.
              * In the above two cases, both need to return row info with delete info.
-             * 
+             *
              * TODO: handle the above two cases in same block in writing process
              ************************************************************************************************************************/
                 size_t insert_pos = rows_with_key.size(), delete_pos = rows_with_key.size();

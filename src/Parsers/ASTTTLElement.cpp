@@ -1,4 +1,3 @@
-
 #include <Columns/Collator.h>
 #include <Common/quoteString.h>
 #include <Parsers/ASTTTLElement.h>

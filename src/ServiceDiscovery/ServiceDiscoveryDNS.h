@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -28,9 +27,9 @@
 namespace DB
 {
 
-/// DNS service discovery completely dependents on K8s Service. 
+/// DNS service discovery completely dependents on K8s Service.
 /// We use K8s Headless Service name as the dns query.
-/// IP list is retrieved by DNS A4 record (from K8s headless Service). 
+/// IP list is retrieved by DNS A4 record (from K8s headless Service).
 /// Ports are retrieved by DNS Srv record (from K8s non-headless Service).
 /// Cluster name is included in K8s Headless Service name.
 
@@ -101,11 +100,11 @@ private:
     String resolveHostnameFromUpstream(const DNSClientPtr & client, const String & ptr_query) const;
 
     ServicePair makeWorkerServicePair(const String & vw_name) const;
-    
+
     static String makeSrvQuery(const String & service_name, const String & port_name);
     static String makeString(const String & host, const String & port);
 
-    std::mutex mutexHost;  
+    std::mutex mutexHost;
     std::mutex mutexPort;
     std::mutex mutexHostname;
 
@@ -132,7 +131,7 @@ private:
     std::unordered_map<String, cacheValueHost> cacheHost;
     std::unordered_map<String, cacheValuePort> cachePort;
     std::unordered_map<String, cacheValueHostname> cacheHostname;
-public: 
+public:
     // for TEST ONLY;
     void clearCache(){ cacheHost.clear(); cachePort.clear(); cacheHostname.clear();}
 };

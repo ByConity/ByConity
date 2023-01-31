@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -76,7 +75,7 @@ bool InterpreterPerfectShard::checkPerfectShardable()
     auto * select = query->as<ASTSelectQuery>();
     if (!select || !perfect_shardable)
         return false;
-    
+
     if (checkIfSelectListExistConstant(select->select()))
         return false;
 
@@ -183,7 +182,7 @@ QueryProcessingStage::Enum InterpreterPerfectShard::determineProcessingStage()
     ASTSelectQuery * select = query->as<ASTSelectQuery>();
     if (select->orderBy())
         return QueryProcessingStage::WithMergeableStateAfterAggregation;
-    
+
     if (select->limitBy() || select->limitLength() || select->limitOffset())
         return QueryProcessingStage::WithMergeableStateAfterAggregation;
 
@@ -314,7 +313,7 @@ void InterpreterPerfectShard::addAggregation(QueryPlan & query_plan)
     bool overflow_row = false;
 
     Aggregator::Params params(header_before_aggregation, keys, aggregates,
-                              overflow_row, 
+                              overflow_row,
                               settings.max_threads);
 
     auto merge_threads = interpreter.getMaxStreams();
@@ -344,7 +343,7 @@ void InterpreterPerfectShard::getOriginalProject()
     {
         if (original_project.count(it->second->getColumnName()))
         {
-            LOG_DEBUG(log, "Found duplicated alias " + it->second->getColumnName() + 
+            LOG_DEBUG(log, "Found duplicated alias " + it->second->getColumnName() +
                 " : " + it->first + " when apply Perfect-shard", ErrorCodes::LOGICAL_ERROR);
             perfect_shardable = false;
             return;
@@ -375,12 +374,12 @@ bool InterpreterPerfectShard::checkAggregationReturnType() const
                 if (it != original_project.end())
                     argument_column_name = it->second;
             }
-        
+
             DataTypePtr type = result_header.getByName(argument_column_name).type;
 
             if (getAggregationName(descr.function->getName(), type).empty())
                 return false;
-            
+
             return true;
         };
 

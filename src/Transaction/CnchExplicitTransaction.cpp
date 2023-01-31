@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -154,10 +153,10 @@ TxnTimestamp CnchExplicitTransaction::rollback()
     LOG_DEBUG(log, "Explicit transaction {} failed, start rollback\n", txn_record.txnID().toUInt64());
     /// First, abort all secondary transaction
     /// TODO: exception handling
-    std::for_each(secondary_txns.begin(), secondary_txns.end(), [this](auto & txn) 
+    std::for_each(secondary_txns.begin(), secondary_txns.end(), [this](auto & txn)
     {
         LOG_TRACE(log, "Aborting secondary transaction {}\n", txn->getTransactionID().toUInt64());
-        txn->abort(); 
+        txn->abort();
     });
     auto lock = getLock();
 
@@ -185,9 +184,9 @@ TxnTimestamp CnchExplicitTransaction::abort()
     LOG_DEBUG(log, "Abort explicit transaction {}\n", txn_record.txnID().toUInt64());
     auto lock = getLock();
     /// First, abort all secondary transaction
-    std::for_each(secondary_txns.begin(), secondary_txns.end(), [this](auto & txn) 
+    std::for_each(secondary_txns.begin(), secondary_txns.end(), [this](auto & txn)
     {
-        try 
+        try
         {
             LOG_TRACE(log, "Aborting secondary transaction {}\n", txn->getTransactionID().toUInt64());
             txn->abort();

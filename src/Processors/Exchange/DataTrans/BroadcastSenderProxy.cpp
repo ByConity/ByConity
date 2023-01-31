@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -105,7 +104,7 @@ void BroadcastSenderProxy::merge(IBroadcastSender && sender)
 
         real_sender->merge(std::move(*other->real_sender));
         other->has_real_sender.store(false, std::memory_order_release);
-        
+
         std::unique_lock lock(other->mutex);
         other->context = ContextPtr();
         other->header = Block();

@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -184,7 +183,7 @@ Pipe StorageSystemCnchTablesHistory::read(
 
     auto tables = cnch_catalog->getTablesByID(requested_table_id);
 
-    BlockInputStreamPtr input = std::make_shared<CnchTablesHistoryInputStream>(std::move(columns_mask), 
+    BlockInputStreamPtr input = std::make_shared<CnchTablesHistoryInputStream>(std::move(columns_mask),
         std::move(res_block), max_block_size, tables);
     ProcessorPtr source = std::make_shared<SourceFromInputStream>(input);
     pipe.addSource(source);

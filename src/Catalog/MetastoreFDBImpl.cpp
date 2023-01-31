@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -66,7 +65,7 @@ std::pair<bool, String> MetastoreFDBImpl::putCAS(const String & key, const Strin
         String old_value;
         if (with_old_value)
             get(key, old_value);
-        
+
         return std::make_pair(false, std::move(old_value));
     }
     else
@@ -175,7 +174,7 @@ int MetastoreFDBImpl::toCommonErrorCode(const fdb_error_t & error_code)
     {
     case FDB::FDBError::FDB_not_committed:
         return DB::ErrorCodes::METASTORE_COMMIT_CAS_FAILURE;
-    
+
     default:
         return error_code;
     }

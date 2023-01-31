@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -103,7 +102,7 @@ ExchangeStepResult ExchangeStepVisitor::visitJoinNode(QueryPlan::Node * node, Ex
         throw Exception("Join must have two children", ErrorCodes::LOGICAL_ERROR);
 
     /**
-     * Left join is always index 0 when query plan is generated 
+     * Left join is always index 0 when query plan is generated
      */
     auto left_stream = step->getInputStreams()[0];
     auto right_stream = step->getInputStreams()[1];
@@ -183,7 +182,7 @@ void AddExchangeRewriter::rewrite(QueryPlan & query_plan, ExchangeStepContext & 
     ExchangeStepResult result_node = VisitorUtil::accept(query_plan.getRoot(), visitor, exchange_context);
     if (result_node)
         query_plan.setRoot(result_node);
-    
+
     visitor.addGather(query_plan, exchange_context);
 }
 

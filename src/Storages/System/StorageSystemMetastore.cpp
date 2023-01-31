@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -38,13 +37,13 @@ void evaluateWhereCondition(const ASTPtr & ast, std::map<String,String> & condit
 {
     if (!ast)
         return;
-    
+
     if (ASTFunction * func = ast->as<ASTFunction>())
     {
         if (func->name == "and" || func->name == "or")
         {
             for (auto & arg : func->arguments->children)
-                evaluateWhereCondition(arg, conditions); 
+                evaluateWhereCondition(arg, conditions);
         }
         else if (func->name == "equals")
         {
@@ -91,7 +90,7 @@ void StorageSystemMetastore::fillData(MutableColumns & res_columns, ContextPtr c
 
 
     StoragePtr storage = DatabaseCatalog::instance().getTable(StorageID{database, table}, context);
-    
+
     if (auto metastore = dynamic_cast<MergeTreeData *>(storage.get())->getMetastore())
     {
         auto it = metastore->getMetaInfo();

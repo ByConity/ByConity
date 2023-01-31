@@ -6,7 +6,7 @@ Thank you.
 
 ## Legal Info
 
-In order for us to accept patches and other contributions from you, you may adopt our License Agreement 
+In order for us to accept patches and other contributions from you, you may adopt our License Agreement
 By adopting the CLA, you state the following:
 
 * You obviously wish and are willingly licensing your contributions to us for our open source projects under the terms of the CLA,

@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -96,7 +95,7 @@ namespace
         // Limitation right now, we only support up to 64 events.
         if (num_virts > NUMBER_STEPS)
             throw Exception("Too many events checked in " + name, ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        
+
         if (user_pro_idx > num_virts || user_pro_idx < 1)
             throw Exception("Wrong input for user property index, 1-based.",ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 

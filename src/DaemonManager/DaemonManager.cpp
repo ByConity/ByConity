@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -216,7 +215,6 @@ int DaemonManager::main(const std::vector<std::string> &)
     Logger * log = &logger();
     LOG_INFO(log, "Daemon Manager start up...");
 
-    Catalog::CatalogConfig catalog_conf(config());
 
     /** Context contains all that query execution is dependent:
       *  settings, available functions, data types, aggregate functions, databases, ...
@@ -229,10 +227,15 @@ int DaemonManager::main(const std::vector<std::string> &)
     global_context->setSetting("background_schedule_pool_size", config().getUInt64("background_schedule_pool_size", 12));
     GlobalThreadPool::initialize(config().getUInt("max_thread_pool_size", 100));
 
-    global_context->initCatalog(catalog_conf, config().getString("catalog.name_space", "default"));
+    global_context->initCnchConfig(config());
+
+    const Poco::Util::AbstractConfiguration & cnch_config = global_context->getCnchConfigRef();
+    Catalog::CatalogConfig catalog_conf(cnch_config);
+    global_context->initCatalog(catalog_conf,
+        cnch_config.getString("catalog.name_space", "default"));
     global_context->initServiceDiscoveryClient();
-    global_context->initCnchServerClientPool(config().getString("service_discovery.server.psm", "data.cnch.server"));
-    global_context->initTSOClientPool(config().getString("service_discovery.tso.psm", "data.cnch.tso"));
+    global_context->initCnchServerClientPool(cnch_config.getString("service_discovery.server.psm", "data.cnch.server"));
+    global_context->initTSOClientPool(cnch_config.getString("service_discovery.tso.psm", "data.cnch.tso"));
 
     global_context->setCnchTopologyMaster();
     global_context->setSetting("cnch_data_retention_time_in_sec", config().getUInt64("cnch_data_retention_time_in_sec", 3*24*60*60));
@@ -240,7 +243,7 @@ int DaemonManager::main(const std::vector<std::string> &)
     std::string path = getCanonicalPath(config().getString("path", DBMS_DEFAULT_PATH));
     global_context->setPath(path);
 
-    HDFSConnectionParams hdfs_params = HDFSConnectionParams::parseHdfsFromConfig(config());
+    HDFSConnectionParams hdfs_params = HDFSConnectionParams::parseHdfsFromConfig(global_context->getCnchConfigRef());
     global_context->setHdfsConnectionParams(hdfs_params);
 
     /// Temporary solution to solve the problem with Disk initialization

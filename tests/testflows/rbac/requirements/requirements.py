@@ -8854,11 +8854,11 @@ RQ_SRS_006_RBAC_Privileges_AdminOption = Requirement(
     num='5.40')
 
 SRS_006_ClickHouse_Role_Based_Access_Control = Specification(
-    name='SRS-006 ClickHouse Role Based Access Control', 
+    name='SRS-006 ClickHouse Role Based Access Control',
     description=None,
     author=None,
-    date=None, 
-    status=None, 
+    date=None,
+    status=None,
     approved_by=None,
     approved_date=None,
     approved_version=None,

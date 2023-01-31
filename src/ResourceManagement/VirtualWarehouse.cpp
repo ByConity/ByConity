@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -395,7 +394,7 @@ QueryQueueInfo VirtualWarehouse::getAggQueueInfo()
         //Remove outdated entries
         if (it->second.last_sync < timeout_threshold)
         {
-            LOG_DEBUG(&Poco::Logger::get("VirtualWarehouse"), 
+            LOG_DEBUG(&Poco::Logger::get("VirtualWarehouse"),
                         "Removing outdated server sync from {}, last synced {}",
                         it->first, std::to_string(it->second.last_sync));
             it = server_query_queue_map.erase(it);

@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -61,8 +60,8 @@ public:
     ColumnPtr executeImplDryRun(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t ) const override
     {
         if (arguments.size() != 3)
-            throw Exception("Function " + getName() + " need three arguments", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH); 
-        
+            throw Exception("Function " + getName() + " need three arguments", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
         const auto & num_column = arguments[0];
         return num_column.type->createColumn();
     }
@@ -71,7 +70,7 @@ public:
     {
         if (arguments.size() != 3)
             throw Exception("Function " + getName() + " need three arguments", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-        
+
         const auto & num_column = arguments[0];
         const auto & prefix_column = arguments[1];
         const auto & length_column = arguments[2];
@@ -105,7 +104,7 @@ private:
         const ColumnVector<T> * num_const = checkAndGetColumnConstData<ColumnVector<T>>(column);
         if (num_const)
             num_column = num_const;
-        
+
         const ColumnVector<K> * prefix_column = checkAndGetColumnConstData<ColumnVector<K>>(prefix);
         const ColumnVector<UInt8> * length_column = checkAndGetColumnConstData<ColumnVector<UInt8>>(length);
         if (!prefix_column || !length_column)
@@ -150,7 +149,7 @@ private:
                         vec_res[i] = vec_res[i] / factor_number * factor_number;
                 }
             }
-            
+
             if (num_const)
                 return ColumnConst::create(std::move(clone_column), rows_size);
             else
@@ -158,7 +157,7 @@ private:
         }
         else
             throw Exception("Function " + getName() + " can only handle positive number", ErrorCodes::LOGICAL_ERROR);
-    } 
+    }
 
 
     template <typename T>
@@ -174,7 +173,7 @@ private:
         else if (data_type.isUInt64())
             return executeIntImpl<T, UInt64>(partition.column.get(), prefix.column.get(), length.column.get());
         else
-            throw Exception("Function " + getName() + " need Unsigned number for second argument", ErrorCodes::LOGICAL_ERROR);  
+            throw Exception("Function " + getName() + " need Unsigned number for second argument", ErrorCodes::LOGICAL_ERROR);
     }
 };
 

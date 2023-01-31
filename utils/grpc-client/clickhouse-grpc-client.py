@@ -52,7 +52,7 @@ def error_print(*args, **kwargs):
 class ClickHouseGRPCClient(cmd.Cmd):
     prompt="grpc :) "
 
-    def __init__(self, host=default_host, port=default_port, user_name=default_user_name, password='', 
+    def __init__(self, host=default_host, port=default_port, user_name=default_user_name, password='',
                  database='', output_format='', settings='', verbatim=False, show_debug_info=False):
         super(ClickHouseGRPCClient, self).__init__(completekey=None)
         self.host = host
@@ -129,7 +129,7 @@ class ClickHouseGRPCClient(cmd.Cmd):
                         cancel_event.wait()
                         if cancel_tries > 0:
                             yield clickhouse_grpc_pb2.QueryInfo(cancel=True)
-            
+
                 for result in self.stub.ExecuteQueryWithStreamIO(send_query_info()):
                     if self.show_debug_info:
                         print('\nresult={}'.format(result))
@@ -282,7 +282,7 @@ def main(args):
     output_format = args.output_format
     if not output_format and interactive_mode:
         output_format = default_output_format_for_interactive_mode
-   
+
     try:
         with ClickHouseGRPCClient(host=args.host, port=args.port, user_name=args.user_name, password=args.password,
                                   database=args.database, output_format=output_format, verbatim=verbatim,

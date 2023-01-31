@@ -1572,11 +1572,11 @@ RQ_SRS_009_LDAP_ExternalUserDirectory_Authentication_VerificationCooldown_Reset_
     num='4.2.4.9')
 
 SRS_009_ClickHouse_LDAP_External_User_Directory = Specification(
-    name='SRS-009 ClickHouse LDAP External User Directory', 
+    name='SRS-009 ClickHouse LDAP External User Directory',
     description=None,
     author=None,
-    date=None, 
-    status=None, 
+    date=None,
+    status=None,
     approved_by=None,
     approved_date=None,
     approved_version=None,
@@ -2178,7 +2178,7 @@ in the configuration of the external user directory.
 version: 1.0
 
 [ClickHouse] SHALL add a role to the users authenticated using LDAP external user directory
-that did not exist during the time of authentication but are defined in the 
+that did not exist during the time of authentication but are defined in the
 configuration file as soon as the role with that name becomes
 available.
 
@@ -2503,7 +2503,7 @@ if more than one `roles` parameter is defined in the configuration.
 version: 2.0
 
 [ClickHouse] SHALL not return an error if the role specified in the `<roles>`
-parameter does not exist locally. 
+parameter does not exist locally.
 
 ##### RQ.SRS-009.LDAP.ExternalUserDirectory.Configuration.Users.Parameters.Roles.Empty
 version: 1.0

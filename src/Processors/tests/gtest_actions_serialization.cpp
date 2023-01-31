@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -138,9 +137,9 @@ TEST(TestActions, TestActionsSerialization)
 
     auto function_actions_dag = createActionsFunction();
     auto new_function_actions_dag = serializeActions(function_actions_dag);
-    checkResult(function_actions_dag, new_function_actions_dag); 
+    checkResult(function_actions_dag, new_function_actions_dag);
 
     auto more_function_actions_dag = createActionsMoreFunction();
     auto new_more_function_actions_dag = serializeActions(more_function_actions_dag);
-    checkResult(more_function_actions_dag, new_more_function_actions_dag); 
+    checkResult(more_function_actions_dag, new_more_function_actions_dag);
 }

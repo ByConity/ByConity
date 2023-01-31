@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -118,7 +117,7 @@ static void OnSendRuntimeFilterCallback(Protos::TransferRuntimeFilterResponse * 
 {
     std::unique_ptr<Protos::TransferRuntimeFilterResponse> response_guard(response);
     std::unique_ptr<brpc::Controller> cntl_guard(cntl);
-        
+
     rpc_channel->checkAliveWithController(*cntl);
     if (cntl->Failed())
         LOG_DEBUG(&Poco::Logger::get("RuntimeFilterBuild"), "Send to coordinator failed, message: " + cntl->ErrorText());

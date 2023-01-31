@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -100,7 +99,7 @@ std::optional<Chunk> ExchangeSource::tryGenerate()
             throw Exception(
                 getName() + " fail to receive data: " + status.message + " code: " + std::to_string(status.code),
                 ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION);
-        
+
         if (fetch_exception_from_scheduler)
         {
             auto context = CurrentThread::get().getQueryContext();

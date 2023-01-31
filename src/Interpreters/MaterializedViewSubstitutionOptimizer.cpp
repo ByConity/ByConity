@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -937,7 +936,7 @@ namespace DB
                 auto sorting_key_names = view_target_table->getInMemoryMetadataPtr()->getSortingKeyColumns();
                 for (auto & key_name : sorting_key_names)
                     sorting_columns.emplace(key_name);
-                    
+
                 for (auto & child : view_query.select()->children)
                 {
                     /// Every column which is not under aggregate function should appear in sorting columns.
@@ -1001,7 +1000,7 @@ namespace DB
                 result.view_match_info = "Match failed target table-" + result.view_target_table->getStorageID().getFullTableName() + " not support sample";
 
             auto * view_query = materialized_view->normalizeInnerQuery()->as<ASTSelectQuery>();
-            
+
             if (!view_query)
                 continue;
 

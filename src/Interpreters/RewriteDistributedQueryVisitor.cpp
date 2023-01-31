@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -74,7 +73,7 @@ RewriteDistributedQueryMatcher::Data RewriteDistributedQueryMatcher::collectTabl
         auto storage = tryGetTable(table, context);
         auto distributed_table = dynamic_cast<StorageDistributed *>(storage.get());
         if (distributed_table)
-        {   
+        {
             result_data.table_rewrite_info[table.get()] = {distributed_table->getRemoteDatabaseName(), distributed_table->getRemoteTableName()};
 
             auto * identifier = table->as<ASTTableIdentifier>();

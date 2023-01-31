@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -59,7 +58,7 @@ void StorageSystemCnchDatabases::fillData(MutableColumns & res_columns, ContextP
                     res_columns[col_num++]->insertDefault();
                 res_columns[col_num++]->insert(res[i].txnid());
                 res_columns[col_num++]->insert(res[i].previous_version());
-                auto commit_time = (res[i].commit_time() >> 18) ; // first 48 bits represent times 
+                auto commit_time = (res[i].commit_time() >> 18) ; // first 48 bits represent times
                 res_columns[col_num++]->insert(commit_time/1000) ;// convert to seconds
             }
         }

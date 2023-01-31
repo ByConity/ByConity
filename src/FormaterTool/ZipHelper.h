@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -29,7 +28,7 @@ namespace DB
 using DelegatePair = std::pair<const Poco::Zip::ZipLocalFileHeader, const std::string>;
 
 /***
- * Helper class for compressing/uncompression part files when interact with HDFS. Please note that 
+ * Helper class for compressing/uncompression part files when interact with HDFS. Please note that
  * we choose a algorithm with low compress rate to speed up processing. Do not realy on this for data compression.
  */
 
@@ -43,8 +42,8 @@ public:
 
 private:
     void setSource(const std::string & source);
-    
-    [[noreturn]]		
+
+    [[noreturn]]
     void onDecompressError(const void* , DelegatePair & info);
 
     std::string source_file;

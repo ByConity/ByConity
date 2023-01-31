@@ -105,11 +105,11 @@ def parallel_login(self, server, user_count=10, timeout=300):
                         tasks.append(pool.apply_async(login_with_valid_username_and_password, (users, i, 50,)))
                         tasks.append(pool.apply_async(login_with_valid_username_and_invalid_password, (users, i, 50,)))
                         tasks.append(pool.apply_async(login_with_invalid_username_and_valid_password, (users, i, 50,)))
-    
+
             finally:
                 with Then("it should work"):
                     join(tasks, timeout)
-    
+
 @TestScenario
 @Requirements(
     RQ_SRS_009_LDAP_ExternalUserDirectory_Authentication_Parallel_SameUser("1.0"),
@@ -184,7 +184,7 @@ def parallel_login_with_the_same_user_multiple_servers(self, server, timeout=300
         with ldap_users(*users, node=self.context.cluster.node("openldap1")):
             with ldap_users(*users, node=self.context.cluster.node("openldap2")):
                 tasks = []
-                with Pool(4) as pool:                
+                with Pool(4) as pool:
                     try:
                         with When("the same user tries to login in parallel", description="""
                             * with valid username and password

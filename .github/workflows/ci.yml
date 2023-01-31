@@ -8,12 +8,12 @@ on:
 
 jobs:
   scm_build:
-    name: Build binary
+    name: Build binary and run stateless tests
     container: vivekscl/test:latest
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Check out repository code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Build binary with build_bin.sh
         env:
           CUSTOM_CMAKE_BUILD_TYPE: "Release"
@@ -21,3 +21,42 @@ jobs:
           git -C "$GITHUB_WORKSPACE" submodule sync
           git -C "$GITHUB_WORKSPACE" submodule update --init --recursive
           ./build_bin.sh
+      - name: start fdb
+        run: |
+          echo $(pwd)
+          export PATH=$PATH:/opt/tiger/foundationdb/bin
+          bash $GITHUB_WORKSPACE/docker/test/foundationdb/start_fdb.sh
+      - name: start hdfs
+        run: |
+          export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
+          export HADOOP_HOME=/hadoop
+          $HADOOP_HOME/bin/hdfs namenode -format
+          $HADOOP_HOME/bin/hdfs --daemon start namenode
+          $HADOOP_HOME/bin/hdfs --daemon start datanode
+      - name: Run CNCH FuntionalStateless
+        continue-on-error: true
+        run: |
+          bash ${GITHUB_WORKSPACE}/ci_scripts/cluster_up.sh
+          echo $PATH
+          ls /usr/bin
+          bash ${GITHUB_WORKSPACE}/docker/test/foundationdb/show_fdb.sh
+          export ADDITIONAL_OPTIONS='--jobs 4 --run cnch_stateless'
+          export MAX_RUN_TIME=9000
+          cp -r $GITHUB_WORKSPACE/docker/test/stateless/* .
+          /bin/bash run_cnch.sh
+      - name: After test
+        continue-on-error: true
+        run: |
+          mkdir /test_output/foundationdb && cp /opt/tiger/foundationdb/logs/* /test_output/foundationdb/. || true
+          bash $GITHUB_WORKSPACE/.codebase/ci_scripts/common_component/copy_core_to_shared.sh || true # copy core to artifact folder
+          bash $GITHUB_WORKSPACE/.codebase/ci_scripts/common_component/copy_case_stdout_to_shared.sh || true # copy stdout to artifact folder
+          mv /test_output /Artifacts  && tar --warning=no-file-changed -zcf  /Artifacts.tar.gz /Artifacts/*  || true
+          bash .codebase/ci_scripts/common_component/block_ci.sh || true # check block_ci_flag
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: Artifacts
+          path: /Artifacts.tar.gz
+      - name: Analyse Result
+        run:
+          /bin/bash $GITHUB_WORKSPACE/docker/test/result.sh

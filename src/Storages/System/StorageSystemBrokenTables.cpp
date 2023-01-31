@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -43,7 +42,7 @@ void StorageSystemBrokenTables::fillData(MutableColumns & res_columns, ContextPt
     {
         if (check_access_for_databases && !access->isGranted(AccessType::SHOW_DATABASES, database_name))
             continue;
-        
+
         auto tables = database->getBrokenTables();
         for (const auto & [broken_table, error_msg] : tables)
         {

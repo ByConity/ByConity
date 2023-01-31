@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -52,7 +51,7 @@ public:
         return std::make_shared<DataTypeArray>(std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>()));
     }
 
-    String getStringAttr(const IColumn ** columns, size_t row_num) const 
+    String getStringAttr(const IColumn ** columns, size_t row_num) const
     {
         if constexpr (std::is_same<AttrType, String>::value)
             return (dynamic_cast<const ColumnString *>(columns[1]))->getDataAt(row_num).toString();
@@ -66,7 +65,7 @@ public:
 
         String attr = getStringAttr(columns, row_num);
 
-        if (c_time < m_start_time) 
+        if (c_time < m_start_time)
             return;
 
         size_t ind = lut.toRelativeMonthNum(c_time) - start_month;
@@ -106,11 +105,11 @@ public:
         attrs.clear();
         attrs.resize(size);
 
-        for(size_t i = 0; i < size; ++i) 
+        for(size_t i = 0; i < size; ++i)
         {
             size_t size_i = 0;
             readVarUInt(size_i, buf);
-            for (size_t j = 0; j < size_i; ++j) 
+            for (size_t j = 0; j < size_i; ++j)
             {
                 String s;
                 readBinary(s, buf);

@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -135,7 +134,7 @@ QueryPlanStepPtr SettingQuotaAndLimitsStep::deserialize(ReadBuffer & buf, Contex
     TableLockHolder table_lock;
     if (has_table_lock)
         table_lock = storage->lockForShare(context->getInitialQueryId(), context->getSettingsRef().lock_acquire_timeout);
-    
+
     StreamLocalLimits limits;
     SizeLimits leaf_limits;
     std::shared_ptr<const EnabledQuota> quota;

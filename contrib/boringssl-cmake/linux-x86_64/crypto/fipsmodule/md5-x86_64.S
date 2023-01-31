@@ -11,14 +11,14 @@
 #if defined(BORINGSSL_PREFIX)
 #include <boringssl_prefix_symbols_asm.h>
 #endif
-.text	
+.text
 .align	16
 
 .globl	md5_block_asm_data_order
 .hidden md5_block_asm_data_order
 .type	md5_block_asm_data_order,@function
 md5_block_asm_data_order:
-.cfi_startproc	
+.cfi_startproc
 	pushq	%rbp
 .cfi_adjust_cfa_offset	8
 .cfi_offset	rbp,-16
@@ -696,7 +696,7 @@ md5_block_asm_data_order:
 .cfi_adjust_cfa_offset	-40
 .Lepilogue:
 	.byte	0xf3,0xc3
-.cfi_endproc	
+.cfi_endproc
 .size	md5_block_asm_data_order,.-md5_block_asm_data_order
 #endif
 .section	.note.GNU-stack,"",@progbits

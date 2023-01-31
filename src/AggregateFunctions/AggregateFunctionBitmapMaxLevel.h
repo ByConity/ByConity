@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -74,7 +73,7 @@ public:
             types.emplace_back(std::make_shared<DataTypeInt64>()); // level
             types.emplace_back(std::make_shared<DataTypeArray>(std::make_shared<DataTypeUInt64>()));  // uid array
         }
-        
+
         return std::make_shared<DataTypeArray>(std::make_shared<DataTypeTuple>(types));
     }
 
@@ -114,7 +113,7 @@ public:
         {
             keys.emplace_back(it->first);
         }
-        
+
         if (keys.size() > 1)
         {
             std::sort(keys.begin(), keys.end(), std::greater<Int64>());
@@ -176,7 +175,7 @@ public:
             }
             prev_res_offset += keys.size();
         }
-        
+
         /// return type = 1, detail logic
         for (auto it = keys.rbegin(); it != keys.rend(); ++it)
         {

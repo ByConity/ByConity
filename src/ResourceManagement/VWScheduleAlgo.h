@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -65,7 +64,7 @@ constexpr auto toString(VWScheduleAlgo algo)
             return "GlobalLowMem";
         case VWScheduleAlgo::GlobalLowDisk:
             return "GlobalLowDisk";
-            
+
         default:
             return "Unknown";
     }
@@ -89,7 +88,7 @@ constexpr auto toVWScheduleAlgo(char * algo_str)
         return VWScheduleAlgo::LocalLowMem;
     else if (strcmp(algo_str,  "locallowdisk") == 0)
         return VWScheduleAlgo::LocalLowDisk;
-    
+
     else if (strcmp(algo_str,  "globalroundrobin") == 0)
         return VWScheduleAlgo::GlobalRoundRobin;
     else if (strcmp(algo_str,  "globallowcpu") == 0)

@@ -44,7 +44,7 @@ from
                               -- for each virtual run, randomly reorder measurements
                               order by virtual_run, rand()
                            ) virtual_runs
-                     ) relabeled 
+                     ) relabeled
                   group by virtual_run, random_label
                ) virtual_medians
             group by virtual_run -- aggregate by random_label

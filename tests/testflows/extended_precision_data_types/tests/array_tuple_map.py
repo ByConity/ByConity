@@ -357,7 +357,7 @@ def map_func(self, data_type, node=None):
             exitcode, message = 0, None
 
             if data_type.startswith("Decimal"):
-                exitcode, message = 43, "Exception:"        
+                exitcode, message = 43, "Exception:"
             node.query(sql, exitcode=exitcode, message=message)
 
         execute_query(f"""SELECT * FROM {table_name} ORDER BY a ASC""")

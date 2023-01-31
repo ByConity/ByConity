@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -111,7 +110,7 @@ IProcessor::Status BufferedCopyTransform::prepareGenerate()
 {
     if(pushed)
         return Status::PortFull;
-        
+
     pushed = true;
     bool all_outputs_processed = true;
 
@@ -166,7 +165,7 @@ void BufferedCopyTransform::tryFlush(const PortNumbers & updated_output_ports)
 {
     if(pushed)
         return;
-    
+
     for (UInt64 output_id : updated_output_ports)
     {
         OutputPort * output_ptr = output_vec[output_id];

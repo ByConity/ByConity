@@ -1,7 +1,7 @@
 
- select count(*) 
+ select count(*)
 from store_sales
-    ,household_demographics 
+    ,household_demographics
     ,time_dim, store
 where ss_sold_time_sk = time_dim.t_time_sk
     and ss_hdemo_sk = household_demographics.hd_demo_sk

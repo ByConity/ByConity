@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -51,10 +50,10 @@ void IResourceGroup::setParent(IResourceGroup * parent_)
 }
 
 IResourceGroup::QueryEntity::QueryEntity(
-    IResourceGroup * group_, 
+    IResourceGroup * group_,
     const String & query_,
-    const Context & query_context_, 
-    QueryStatusType status_type_) 
+    const Context & query_context_,
+    QueryStatusType status_type_)
     : group(group_)
     , query(query_)
     , query_context(&query_context_)

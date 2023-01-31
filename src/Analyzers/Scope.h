@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -148,12 +147,12 @@ private:
     bool query_boundary;
     FieldDescriptions field_descriptions;
 public:
-    ScopeType getType() const 
+    ScopeType getType() const
     {
         return type;
     }
 
-    const FieldDescriptions& getFields() const 
+    const FieldDescriptions& getFields() const
     {
         return field_descriptions;
     }

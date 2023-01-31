@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -69,7 +68,7 @@ PrewhereInfoPtr PrewhereInfo::deserialize(ReadBuffer & buf, ContextPtr context)
     readBinary(has_row_level_filter, buf);
     if (has_row_level_filter)
         row_level_filter = ActionsDAG::deserialize(buf, context);
-    
+
     bool has_prewhere_actions;
     readBinary(has_prewhere_actions, buf);
     if (has_prewhere_actions)

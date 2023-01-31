@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2016-2023 ClickHouse, Inc.
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,8 +15,8 @@
 
 
 /*
- * This file may have been modified by ByteDance Ltd. (“ Bytedance's Modifications”).
- * All Bytedance's Modifications are Copyright (2023) ByteDance Ltd..
+ * This file may have been modified by Bytedance Ltd. and/or its affiliates (“ Bytedance's Modifications”).
+ * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
 #pragma once
@@ -91,7 +90,7 @@ private:
         MergeTreeMarksLoader marks_loader;
     };
     using CompactDataReaderPtr = std::unique_ptr<CompactDataReader>;
-    
+
     /// In compact part, all columns except for ByteMap columns will write into one file. These column will use this data reader.
     /// Each implicit column of ByteMap columns will use separate reader stream.
     CompactDataReaderPtr data_reader;

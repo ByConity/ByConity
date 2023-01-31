@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -89,7 +88,7 @@ void StorageSystemResourceGroups::fillData(MutableColumns & res_columns, Context
         res_columns[i++]->insert(info.max_queued_waiting_ms);
 
         res_columns[i++]->insert(info.cpu_shares);
-        
+
         if (info.last_used > 0)
             res_columns[i++]->insert(info.last_used / 1000);
         else

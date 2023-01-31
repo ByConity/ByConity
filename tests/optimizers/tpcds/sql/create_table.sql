@@ -26,7 +26,7 @@ create table catalog_returns (
   cr_reversed_charge Nullable(Float64),
   cr_store_credit Nullable(Float64),
   cr_net_loss Nullable(Float64)
-) ENGINE = CnchMergeTree() 
+) ENGINE = CnchMergeTree()
 order by cr_item_sk;
 create table catalog_sales (
   cs_sold_date_sk Nullable(Int64),
@@ -63,14 +63,14 @@ create table catalog_sales (
   cs_net_paid_inc_ship Nullable(Float64),
   cs_net_paid_inc_ship_tax Nullable(Float64),
   cs_net_profit Nullable(Float64)
-) ENGINE = CnchMergeTree() 
+) ENGINE = CnchMergeTree()
 order by cs_item_sk;
 create table inventory (
   inv_date_sk Nullable(Int64),
   inv_item_sk Nullable(Int64),
   inv_warehouse_sk Nullable(Int64),
   inv_quantity_on_hand Nullable(Int64)
-) ENGINE = CnchMergeTree() 
+) ENGINE = CnchMergeTree()
 order by inv_item_sk;
 create table store_returns (
   sr_returned_date_sk Nullable(Int64),
@@ -93,7 +93,7 @@ create table store_returns (
   sr_reversed_charge Nullable(Float64),
   sr_store_credit Nullable(Float64),
   sr_net_loss Nullable(Float64)
-) ENGINE = CnchMergeTree() 
+) ENGINE = CnchMergeTree()
 order by sr_item_sk;
 create table store_sales (
   ss_sold_date_sk Nullable(Int64),
@@ -119,7 +119,7 @@ create table store_sales (
   ss_net_paid Nullable(Float64),
   ss_net_paid_inc_tax Nullable(Float64),
   ss_net_profit Nullable(Float64)
-) ENGINE = CnchMergeTree() 
+) ENGINE = CnchMergeTree()
 order by ss_item_sk;
 create table web_returns (
   wr_returned_date_sk Nullable(Int64),
@@ -146,7 +146,7 @@ create table web_returns (
   wr_reversed_charge Nullable(Float64),
   wr_account_credit Nullable(Float64),
   wr_net_loss Nullable(Float64)
-) ENGINE = CnchMergeTree() 
+) ENGINE = CnchMergeTree()
 order by wr_item_sk;
 create table web_sales (
   ws_sold_date_sk Nullable(Int64),
@@ -183,7 +183,7 @@ create table web_sales (
   ws_net_paid_inc_ship Nullable(Float64),
   ws_net_paid_inc_ship_tax Nullable(Float64),
   ws_net_profit Nullable(Float64)
-) ENGINE = CnchMergeTree() 
+) ENGINE = CnchMergeTree()
 order by ws_item_sk;
 create table call_center (
   cc_call_center_sk Nullable(Int64),
@@ -217,7 +217,7 @@ create table call_center (
   cc_country Nullable(String),
   cc_gmt_offset Nullable(Float64),
   cc_tax_percentage Nullable(Float64)
-) ENGINE = CnchMergeTree() 
+) ENGINE = CnchMergeTree()
 ORDER BY cc_call_center_sk;
 create table catalog_page (
   cp_catalog_page_sk Nullable(Int64),
@@ -229,7 +229,7 @@ create table catalog_page (
   cp_catalog_page_number Nullable(Int64),
   cp_description Nullable(String),
   cp_type Nullable(String)
-) ENGINE = CnchMergeTree() 
+) ENGINE = CnchMergeTree()
 ORDER BY cp_catalog_page_sk;
 CREATE TABLE customer (
   c_customer_sk Nullable(Int64),
@@ -250,7 +250,7 @@ CREATE TABLE customer (
   c_login Nullable(String),
   c_email_address Nullable(String),
   c_last_review_date_sk Nullable(Int64)
-) ENGINE = CnchMergeTree() 
+) ENGINE = CnchMergeTree()
 ORDER BY c_customer_sk;
 CREATE TABLE customer_address (
   ca_address_sk Nullable(Int64),
@@ -266,7 +266,7 @@ CREATE TABLE customer_address (
   ca_country Nullable(String),
   ca_gmt_offset Nullable(Float64),
   ca_location_type Nullable(String)
-) ENGINE = CnchMergeTree() 
+) ENGINE = CnchMergeTree()
 ORDER BY ca_address_sk;
 create table customer_demographics (
   cd_demo_sk Nullable(Int64),
@@ -278,7 +278,7 @@ create table customer_demographics (
   cd_dep_count Nullable(Int64),
   cd_dep_employed_count Nullable(Int64),
   cd_dep_college_count Nullable(Int64)
-) ENGINE = CnchMergeTree() 
+) ENGINE = CnchMergeTree()
 ORDER BY cd_demo_sk;
 create table date_dim (
   d_date_sk Nullable(Int64),
@@ -309,7 +309,7 @@ create table date_dim (
   d_current_month Nullable(String),
   d_current_quarter Nullable(String),
   d_current_year Nullable(String)
-) ENGINE = CnchMergeTree() 
+) ENGINE = CnchMergeTree()
 ORDER BY d_date_sk;
 create table household_demographics (
   hd_demo_sk Nullable(Int64),
@@ -317,13 +317,13 @@ create table household_demographics (
   hd_buy_potential Nullable(String),
   hd_dep_count Nullable(Int64),
   hd_vehicle_count Nullable(Int64)
-) ENGINE = CnchMergeTree() 
+) ENGINE = CnchMergeTree()
 ORDER BY hd_demo_sk;
 create table income_band (
   ib_income_band_sk Nullable(Int64),
   ib_lower_bound Nullable(Int64),
   ib_upper_bound Nullable(Int64)
-) ENGINE = CnchMergeTree() 
+) ENGINE = CnchMergeTree()
 ORDER BY ib_income_band_sk;
 create table item (
   i_item_sk Nullable(Int64),
@@ -348,7 +348,7 @@ create table item (
   i_container Nullable(String),
   i_manager_id Nullable(Int64),
   i_product_name Nullable(String)
-) ENGINE = CnchMergeTree() 
+) ENGINE = CnchMergeTree()
 ORDER BY i_item_sk;
 create table promotion (
   p_promo_sk Nullable(Int64),
@@ -370,13 +370,13 @@ create table promotion (
   p_channel_details Nullable(String),
   p_purpose Nullable(String),
   p_discount_active Nullable(String)
-) ENGINE = CnchMergeTree() 
+) ENGINE = CnchMergeTree()
 ORDER BY p_promo_sk;
 create table reason (
   r_reason_sk Nullable(Int64),
   r_reason_id Nullable(String),
   r_reason_desc Nullable(String)
-) ENGINE = CnchMergeTree() 
+) ENGINE = CnchMergeTree()
 ORDER BY r_reason_sk;
 create table ship_mode (
   sm_ship_mode_sk Nullable(Int64),
@@ -385,7 +385,7 @@ create table ship_mode (
   sm_code Nullable(String),
   sm_carrier Nullable(String),
   sm_contract Nullable(String)
-) ENGINE = CnchMergeTree() 
+) ENGINE = CnchMergeTree()
 ORDER BY sm_ship_mode_sk;
 create table store (
   s_store_sk Nullable(Int64),
@@ -417,7 +417,7 @@ create table store (
   s_country Nullable(String),
   s_gmt_offset Nullable(Float64),
   s_tax_percentage Nullable(Float64)
-) ENGINE = CnchMergeTree() 
+) ENGINE = CnchMergeTree()
 ORDER BY s_store_sk;
 create table time_dim (
   t_time_sk Nullable(Int64),
@@ -430,7 +430,7 @@ create table time_dim (
   t_shift Nullable(String),
   t_sub_shift Nullable(String),
   t_meal_time Nullable(String)
-) ENGINE = CnchMergeTree() 
+) ENGINE = CnchMergeTree()
 ORDER BY t_time_sk;
 create table warehouse (
   w_warehouse_sk Nullable(Int64),
@@ -447,7 +447,7 @@ create table warehouse (
   w_zip Nullable(String),
   w_country Nullable(String),
   w_gmt_offset Nullable(Float64)
-) ENGINE = CnchMergeTree() 
+) ENGINE = CnchMergeTree()
 ORDER BY w_warehouse_sk;
 create table web_page (
   wp_web_page_sk Nullable(Int64),
@@ -464,7 +464,7 @@ create table web_page (
   wp_link_count Nullable(Int64),
   wp_image_count Nullable(Int64),
   wp_max_ad_count Nullable(Int64)
-) ENGINE = CnchMergeTree() 
+) ENGINE = CnchMergeTree()
 ORDER BY wp_web_page_sk;
 create table web_site (
   web_site_sk Nullable(Int64),
@@ -493,5 +493,5 @@ create table web_site (
   web_country Nullable(String),
   web_gmt_offset Nullable(Float64),
   web_tax_percentage Nullable(Float64)
-) ENGINE = CnchMergeTree() 
+) ENGINE = CnchMergeTree()
 ORDER BY web_site_sk;

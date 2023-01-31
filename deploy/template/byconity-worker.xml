@@ -302,7 +302,7 @@
     <enable_metastore_mock>0</enable_metastore_mock>
 
     <perQuery>0</perQuery>
-    
+
     <storage_configuration>
         <disks>
             <default></default>

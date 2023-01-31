@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -54,7 +53,7 @@ void PartToolkitBase::applySettings()
     mergetree_settings.set("enable_local_disk_cache",0);
     settings.set("input_format_skip_unknown_fields", true);
     settings.set("skip_nullinput_notnull_col", true);
-    
+
 
     /// apply user defined settings.
     const ASTPartToolKit & pw_query = query_ptr->as<ASTPartToolKit &>();
@@ -100,7 +99,7 @@ StoragePtr PartToolkitBase::getTable()
             columns,
             constraints,
             false);
-        
+
         storage = res;
         return res;
     }
@@ -148,7 +147,7 @@ PartNamesWithDisks PartToolkitBase::collectPartsFromSource(const String & source
                 fs::rename(dir + file_name, dest_dir + file_name);
                 ziphelper.unzipFile(dest_dir + file_name, dest_dir + part_name);
                 res.emplace_back(part_name, disk_ptr);
-            }   
+            }
         }
     }
 

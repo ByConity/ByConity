@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -81,8 +80,8 @@ BroadcastStatus LocalBroadcastChannel::send(Chunk chunk)
     auto bytes = chunk.allocatedBytes();
     send_metric.send_uncompressed_bytes += bytes;
     if (receive_queue.tryEmplace(options.max_timeout_ms / 2, std::move(chunk)))
-    {       
-        ExchangeUtils::transferThreadMemoryToGlobal(bytes);     
+    {
+        ExchangeUtils::transferThreadMemoryToGlobal(bytes);
         return *broadcast_status.load(std::memory_order_acquire);
     }
 

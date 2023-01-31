@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -31,7 +30,7 @@ namespace DB
  * - flatten mode: map is flatten as implicit key columns, __map__key
  * - compacted mode: map is flatten as implicit key columns and all key columns files
  *   are compacted in one file to avoid too many small files in the system
- * - KV mode: map is implemented as two array of keys and values, but it is slightly 
+ * - KV mode: map is implemented as two array of keys and values, but it is slightly
  *   different from community format, i.e. it is Tuple(offset, key, value)
  * */
 class DataTypeByteMap final : public IDataType

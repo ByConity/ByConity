@@ -1,4 +1,3 @@
-
 #include <Common/CurrentMetrics.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>

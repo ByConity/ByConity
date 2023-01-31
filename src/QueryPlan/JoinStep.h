@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -43,7 +42,7 @@ public:
         const DataStream & right_stream_,
         JoinPtr join_,
         size_t max_block_size_);
-    
+
     JoinStep(
         DataStreams input_streams_,
         DataStream output_stream_,
@@ -57,7 +56,7 @@ public:
         ASOF::Inequality asof_inequality_ = ASOF::Inequality::GreaterOrEquals,
         DistributionType distribution_type_ = DistributionType::UNKNOWN,
         bool magic_set_ = false);
-    
+
 
     String getName() const override { return "Join"; }
 
@@ -129,7 +128,7 @@ private:
 
     ASTTableJoin::Kind kind;
     ASTTableJoin::Strictness strictness;
-    
+
     Names left_keys;
     Names right_keys;
 

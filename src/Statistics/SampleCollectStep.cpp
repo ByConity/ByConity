@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -125,7 +124,7 @@ public:
                     estimated_ndv_upper_bound));
 
             bool use_accurate = false;
-            switch (handler_context.settings.accurate_sample_ndv) 
+            switch (handler_context.settings.accurate_sample_ndv)
             {
                 case StatisticsAccurateSampleNdvMode::AUTO:
                     // when error of estimated ndv more than 30% due to HyperLogLog,

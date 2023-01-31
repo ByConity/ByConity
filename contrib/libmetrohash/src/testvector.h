@@ -22,7 +22,7 @@
 
 typedef void (*HashFunction) (const uint8_t * key, uint64_t len, uint32_t seed, uint8_t * hash);
 
-struct TestVectorData 
+struct TestVectorData
 {
 	HashFunction function;
 	uint32_t bits;
@@ -39,7 +39,7 @@ static const char * test_key_63 = "012345678901234567890123456789012345678901234
 
 // The hash assumes a little-endian architecture. Treating the hash results
 // as an array of uint64_t should enable conversion for big-endian implementations.
-const TestVectorData TestVector [] = 
+const TestVectorData TestVector [] =
 {
 	// seed = 0
 	{ metrohash64_1,      64, test_key_63, 0, "658F044F5C730E40" },

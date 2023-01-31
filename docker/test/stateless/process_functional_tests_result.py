@@ -79,6 +79,8 @@ def process_result(result_path):
     state = "success"
     description = ""
     files = os.listdir(result_path)
+    asan_fail = False
+    server_health_check = False
     if files:
         logging.info("Find files in result folder %s", ','.join(files))
         result_path = os.path.join(result_path, 'test_result.txt')
@@ -130,7 +132,7 @@ def process_result(result_path):
         state = "test failed"
         if test_results is []:
             test_results.append(("Asan filed", "FAIL", "0"))
-    
+
     if server_health_check:
         description += "Server does not respond to health check, Please check the log"
         state = "test failed"

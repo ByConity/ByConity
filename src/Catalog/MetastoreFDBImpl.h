@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -95,7 +94,7 @@ private:
     static void check_fdb_op(const fdb_error_t & error_t);
     /// convert metastore specific error code to Clickhouse error code for processing convenience in upper layer.
     static int toCommonErrorCode(const fdb_error_t & error_t);
-    
+
     FDB::FDBClientPtr fdb_client;
 };
 

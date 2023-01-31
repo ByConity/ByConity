@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -203,7 +202,7 @@ BroadcastStatus BrpcRemoteBroadcastSender::sendIOBuffer(const butil::IOBuf & io_
                 LOG_INFO(log, "Stream-{} with key {} is closed", stream_id, data_key);
                 return BroadcastStatus(BroadcastStatusCode::RECV_UNKNOWN_ERROR, false, "Stream is closed by peer");
             }
-                
+
             LOG_TRACE(
                 log,
                 "Stream write buffer full wait for {} ms,  retry count-{}, stream_id-{} ,with data_key-{} wait res code:{} size:{} ",

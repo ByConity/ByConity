@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -27,7 +26,7 @@ AggregateFunctionPtr createAggregateFunctionBitMapMaxLevel(const std::string & n
 {
     if (parameters.size() > 2)
         throw Exception("AggregateFunction " + name + " needs 0 or 1 parameters", ErrorCodes::NOT_IMPLEMENTED);
-    
+
     UInt64 return_tpye{0}; /// 0: only summary; 1: only detail; 2: summay + detail
     if (parameters.size() == 1)
         return_tpye = safeGet<UInt64>(parameters[0]);

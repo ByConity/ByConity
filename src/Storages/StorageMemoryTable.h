@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -86,7 +85,7 @@ public:
         QueryProcessingStage::Enum processed_stage,
         size_t max_block_size,
         unsigned num_streams) override;
-    
+
     BlockOutputStreamPtr write(const ASTPtr & query, const StorageMetadataPtr & /*metadata_snapshot*/, ContextPtr context) override;
 
     void startup() override;
@@ -151,7 +150,7 @@ private:
         }
     };
 
-    
+
     ReadMemoryTableMode read_memory_mode;
 
     struct WriteBlockRequest
@@ -190,16 +189,16 @@ public:
     /** num_shards - the level of internal parallelism (the number of independent buffers)
       * The buffer is flushed if all minimum thresholds or at least one of the maximum thresholds are exceeded.
       */
-    StorageMemoryTable(const StorageID & table_id_, 
+    StorageMemoryTable(const StorageID & table_id_,
             const ColumnsDescription & columns_,
             const ConstraintsDescription & constraints_,
             const String & comment,
             ContextPtr context_,
              size_t num_shards_,
-            const Thresholds & min_thresholds_, 
+            const Thresholds & min_thresholds_,
             const Thresholds & max_thresholds_,
             const StorageID & destination_id_,
-            bool allow_materialized_, 
+            bool allow_materialized_,
             size_t write_block_queue_size);
 
     ~StorageMemoryTable() override;

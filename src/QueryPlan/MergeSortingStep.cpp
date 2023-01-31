@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -88,7 +87,7 @@ void MergeSortingStep::transformPipeline(QueryPipeline & pipeline, const BuildQu
     max_bytes_before_external_sort = settings.context->getSettingsRef().max_bytes_before_external_sort;
     tmp_volume = settings.context->getTemporaryVolume();
     min_free_disk_space = settings.context->getSettingsRef().min_free_disk_space_for_temporary_data;
-    
+
     pipeline.addSimpleTransform([&](const Block & header, QueryPipeline::StreamType stream_type) -> ProcessorPtr
     {
         if (stream_type == QueryPipeline::StreamType::Totals)

@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -95,7 +94,7 @@ String fetchRMAddressFromKeeper(ContextPtr context)
     String current_leader = current_zookeeper->get(current_leader_node);
     if (current_leader.empty())
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Can't get current RM leader, leader_node `{}` in keeper is empty.", current_leader_node);
-    
+
     return current_leader;
 }
 

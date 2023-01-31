@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -382,7 +381,7 @@ void calculateFunnel(std::function<UInt32(UInt32)> && getGroup, EventLists<Param
                             reuse_funnel_index.push_back(funnel_index[ii]);
 
                         reuse_funnel_index.push_back(i);
-                        if (last_start != -1 && next_start == -1) 
+                        if (last_start != -1 && next_start == -1)
                             next_start = last_start;
 
                         last_start = i + 1;

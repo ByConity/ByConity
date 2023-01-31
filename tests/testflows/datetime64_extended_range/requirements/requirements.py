@@ -1629,11 +1629,11 @@ RQ_SRS_010_DateTime64_ExtendedRange_TypeConversionFunctions_fromUnixTimestamp64N
     num='4.2.1.4.16')
 
 SRS_010_ClickHouse_DateTime64_Extended_Range = Specification(
-    name='SRS-010 ClickHouse DateTime64 Extended Range', 
+    name='SRS-010 ClickHouse DateTime64 Extended Range',
     description=None,
     author=None,
-    date=None, 
-    status=None, 
+    date=None,
+    status=None,
     approved_by=None,
     approved_date=None,
     approved_version=None,

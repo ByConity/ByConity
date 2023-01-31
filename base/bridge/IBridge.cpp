@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2016-2023 ClickHouse, Inc.
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,8 +15,8 @@
 
 
 /*
- * This file may have been modified by ByteDance Ltd. (“ Bytedance's Modifications”).
- * All Bytedance's Modifications are Copyright (2023) ByteDance Ltd..
+ * This file may have been modified by Bytedance Ltd. and/or its affiliates (“ Bytedance's Modifications”).
+ * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
 #include "IBridge.h"
@@ -150,12 +149,12 @@ void IBridge::defineOptions(Poco::Util::OptionSet & options)
 
 void IBridge::initialize(Application & self)
 {
-    /// BaseDaemon will close inheritable file descriptors from parent processe to avoid 
+    /// BaseDaemon will close inheritable file descriptors from parent processe to avoid
     /// security vulnerability issue and file resource resuse issue like tcp port resuse.
-    /// But closing inheritable fds here may be too late, since global variables initialized 
-    /// before main entry may open some fds already, which leading to implicit problems such as 
+    /// But closing inheritable fds here may be too late, since global variables initialized
+    /// before main entry may open some fds already, which leading to implicit problems such as
     /// closing fd witch already closed by BaseDaemon before.
-    /// For example, Brpc will create Bvars as global variable and will open some file under /proc 
+    /// For example, Brpc will create Bvars as global variable and will open some file under /proc
     /// before closeFDs called.
     /// For our sitiuation, just ingoring inheritable fds is ok.
     // BaseDaemon::closeFDs();

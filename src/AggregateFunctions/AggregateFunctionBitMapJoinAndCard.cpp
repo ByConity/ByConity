@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -39,7 +38,7 @@ AggregateFunctionPtr createAggregateFunctionBitMapJoinAndCard(const std::string 
     {
         union_num = static_cast<Int32>(parameters[0].safeGet<UInt64>());
         thread_num = parameters[1].safeGet<UInt64>();
-        
+
         if (parameters.size() == 3)
             limit_bitmap_number = parameters[2].safeGet<UInt64>();
     }
@@ -90,7 +89,7 @@ AggregateFunctionPtr createAggregateFunctionBitMapJoinAndCard2(const std::string
     {
         union_num = static_cast<Int32>(parameters[0].safeGet<UInt64>());
         thread_num = parameters[1].safeGet<UInt64>();
-        
+
         if (parameters.size() == 3)
             limit_bitmap_number = parameters[2].safeGet<UInt64>();
     }

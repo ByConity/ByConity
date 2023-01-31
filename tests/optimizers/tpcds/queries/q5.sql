@@ -24,7 +24,7 @@ with ssr as
      date_dim,
      store
  where date_sk = d_date_sk
-       and d_date between cast('2000-08-23' as date) 
+       and d_date between cast('2000-08-23' as date)
                   and (cast('2000-08-23' as date) + INTERVAL '14' DAY)
        and store_sk = s_store_sk
  group by s_store_id)
@@ -97,7 +97,7 @@ with ssr as
         , sum(sales) as sales
         , sum(returns) as returns
         , sum(profit) as profit
- from 
+ from
  (select 'store channel' as channel
         , 'store' || s_store_id as id
         , sales

@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -283,7 +282,7 @@ void PlanSegmentExecutor::registerAllExchangeReceivers(const QueryPipeline & pip
                 async_results.emplace_back(brpc_receiver->registerToSendersAsync(register_timeout_ms));
             }
         }
-        
+
         for (auto * local_receiver : local_receivers)
             local_receiver->registerToSenders(register_timeout_ms);
     }

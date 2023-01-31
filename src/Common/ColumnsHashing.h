@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2016-2023 ClickHouse, Inc.
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,8 +15,8 @@
 
 
 /*
- * This file may have been modified by ByteDance Ltd. (“ Bytedance's Modifications”).
- * All Bytedance's Modifications are Copyright (2023) ByteDance Ltd..
+ * This file may have been modified by Bytedance Ltd. and/or its affiliates (“ Bytedance's Modifications”).
+ * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
 #pragma once
@@ -129,12 +128,12 @@ struct HashMethodString
     }
 
     template <typename Data>
-    static void read(Data & data, ReadBuffer & buf, Arena & arena) 
-    { 
+    static void read(Data & data, ReadBuffer & buf, Arena & arena)
+    {
         if constexpr (place_string_to_arena)
             data.read(buf, arena);
         else
-            data.read(buf); 
+            data.read(buf);
     }
 
 protected:
@@ -177,12 +176,12 @@ struct HashMethodFixedString
     }
 
     template <typename Data>
-    static void read(Data & data, ReadBuffer & buf, Arena & arena) 
-    { 
+    static void read(Data & data, ReadBuffer & buf, Arena & arena)
+    {
         if constexpr (place_string_to_arena)
             data.read(buf, arena);
         else
-            data.read(buf); 
+            data.read(buf);
     }
 
 protected:
@@ -542,9 +541,9 @@ struct HashMethodKeysFixed
     }
 
     template <typename Data>
-    static void read(Data & data, ReadBuffer & buf, Arena &) 
-    { 
-        data.read(buf); 
+    static void read(Data & data, ReadBuffer & buf, Arena &)
+    {
+        data.read(buf);
     }
 
     HashMethodKeysFixed(const ColumnRawPtrs & key_columns, const Sizes & key_sizes_, const HashMethodContextPtr &)
@@ -734,9 +733,9 @@ struct HashMethodHashed
     }
 
     template <typename Data>
-    static void read(Data & data, ReadBuffer & buf, Arena &) 
-    { 
-        data.read(buf); 
+    static void read(Data & data, ReadBuffer & buf, Arena &)
+    {
+        data.read(buf);
     }
 };
 

@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2016-2023 ClickHouse, Inc.
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,8 +15,8 @@
 
 
 /*
- * This file may have been modified by ByteDance Ltd. (“ Bytedance's Modifications”).
- * All Bytedance's Modifications are Copyright (2023) ByteDance Ltd..
+ * This file may have been modified by Bytedance Ltd. and/or its affiliates (“ Bytedance's Modifications”).
+ * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
 #include <string.h> // memcpy
@@ -567,7 +566,7 @@ void ColumnArray::insertRangeSelective(const IColumn & src, const Selector & sel
     cur_data.reserve(cur_size);
     cur_offsets.resize(cur_size);
 
-    for (size_t i = 0; i < length; ++i) 
+    for (size_t i = 0; i < length; ++i)
     {
         size_t src_pos = selector[selector_start + i];
         size_t offset = src_offsets[src_pos - 1];

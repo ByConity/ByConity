@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -29,7 +28,7 @@ namespace ErrorCodes
 {
     extern const int RESOURCE_MANAGER_ERROR;
 }
-InterpreterDropWarehouseQuery::InterpreterDropWarehouseQuery(const ASTPtr & query_ptr_, ContextPtr context_) 
+InterpreterDropWarehouseQuery::InterpreterDropWarehouseQuery(const ASTPtr & query_ptr_, ContextPtr context_)
     : WithContext(context_), query_ptr(query_ptr_) {}
 
 

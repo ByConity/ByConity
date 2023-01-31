@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -104,7 +103,7 @@ public:
                 {
                     UInt8 hit = data1[j];
                     UInt8 level = data2[j];
-                    if (hit) 
+                    if (hit)
                     {
                         hit_level = level;
                         // take j

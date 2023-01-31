@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -66,7 +65,7 @@ public:
         auto & arr = this->data(place).value;
         auto & map = this->data(place).bitmap;
         arr.push_back(columns[0]->getUInt(row_num), arena);
-        
+
         if (arr.size() == 4097)
         {
             map.addMany(4097, arr.data());
@@ -102,7 +101,7 @@ public:
         const auto & bitmap = this->data(place).bitmap;
         size_t bytes = bitmap.getSizeInBytes();
         writeVarUInt(bytes, buf);
-        
+
         if (bytes != 0)
         {
             std::vector<char> bitmap_chars;
@@ -123,7 +122,7 @@ public:
 
         size_t bytes = 0;
         readVarUInt(bytes, buf);
-        
+
         if (bytes != 0)
         {
             std::vector<char> bitmap_chars;
@@ -141,7 +140,7 @@ public:
         auto & arr = this->data(place).value;
         if (!arr.empty())
             bitmap.addMany(arr.size(), arr.data());
-        
+
         dynamic_cast<ColumnBitMap64 &>(to).insert(bitmap);
     }
 

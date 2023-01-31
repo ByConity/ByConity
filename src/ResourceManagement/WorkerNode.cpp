@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -69,7 +68,7 @@ void WorkerNode::reserveResourceQuotas(const ResourceRequirement & requirement, 
 {
     if (requirement.task_cold_startup_sec <= 0)
         return;
-    
+
     auto mem = requirement.request_mem_bytes * n;
     auto cpu = requirement.request_cpu_cores * n;
 
@@ -142,7 +141,7 @@ void WorkerNode::update(const WorkerNodeResourceData & data, const size_t regist
     }
 
     /// Change all Registering workers to Running state every $register_granularity seconds.
-    if (state.load(std::memory_order_relaxed) == WorkerState::Registering 
+    if (state.load(std::memory_order_relaxed) == WorkerState::Registering
         && last_update_time / register_granularity > register_time / register_granularity)
     {
         state.store(WorkerState::Running, std::memory_order_relaxed);

@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -53,7 +52,7 @@ public:
             ASSERT_EQ(*cache.get(std::to_string(i)), std::to_string(i));
         }
     }
-    
+
     template<typename Key, typename Value, typename HashFunction>
     static void verifyRangeNotExist(BucketLRUCache<Key, Value, HashFunction>& cache,
             int begin, int end) {
@@ -218,7 +217,7 @@ TEST_F(BucketLRUCacheTest, SetInsert) {
 TEST_F(BucketLRUCacheTest, SetUpdate) {
     int cache_size = 3;
     BucketLRUCache<String, String> cache(cache_size, 1, 2);
-    
+
     insertToCache(cache, 0, cache_size);
     VERIFY_CACHE_COUNT(cache, cache_size);
     VERIFY_CACHE_WEIGHT(cache, cache_size);
@@ -264,7 +263,7 @@ TEST_F(BucketLRUCacheTest, Remove) {
     VERIFY_CACHE_RANGE_EXIST(cache, 3, 4);
     VERIFY_CACHE_RANGE_EXIST(cache, 5, 6);
     VERIFY_CACHE_LRU_ORDER(cache, std::vector<String>({"1", "3", "5"}));
-    
+
     insertToCache(cache, 4, 5);
     VERIFY_CACHE_COUNT(cache, 4);
     VERIFY_CACHE_WEIGHT(cache, 4);

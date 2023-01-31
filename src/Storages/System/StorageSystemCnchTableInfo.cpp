@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -129,7 +128,7 @@ Pipe StorageSystemCnchTableInfo::read(
     Catalog::CatalogPtr cnch_catalog = context->getCnchCatalog();
     if (context->getServerType() != ServerType::cnch_server || !cnch_catalog)
         throw Exception("Table system.cnch_table_info only support cnch_server", ErrorCodes::LOGICAL_ERROR);
-    
+
     NameSet names_set(column_names.begin(), column_names.end());
     Block sample_block = metadata_snapshot->getSampleBlock();
     Block res_block;

@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -139,7 +138,7 @@ IMergeSelector::PartsRanges DanceMergeSelector::selectMulti(const PartsRanges & 
 
 /**
  * @brief scan range [i, j] of score_table and select at most n ranges ordered by score.
- * 
+ *
  * @param parts source data parts.
  * @param score_table the score table.
  * @param i begin position (inclusive)
@@ -149,10 +148,10 @@ IMergeSelector::PartsRanges DanceMergeSelector::selectMulti(const PartsRanges & 
  * @param out output collector.
  */
 void DanceMergeSelector::selectRangesFromScoreTable(
-    const PartsRange & parts, 
-    const std::vector<std::vector<double>> & score_table, 
-    size_t i, 
-    size_t j, 
+    const PartsRange & parts,
+    const std::vector<std::vector<double>> & score_table,
+    size_t i,
+    size_t j,
     size_t num_max_out,
     size_t max_width,
     std::vector<BestRangeWithScore> & out)
@@ -161,7 +160,7 @@ void DanceMergeSelector::selectRangesFromScoreTable(
         return;
     double min_score = std::numeric_limits<double>::max();
     size_t min_i = 0, min_j = 0;
-    
+
     for (auto m = i; m <= j; m++)
     {
         if (m >= score_table.size())
@@ -317,7 +316,7 @@ void DanceMergeSelector::selectWithinPartition(const PartsRange & parts, const s
     {
         if (is_small_partition(partition_id))
             best_ranges["all"].front().update(range.min_score, range.best_begin, range.best_end);
-        else 
+        else
             best_ranges[partition_id].emplace_back(range);
     }
 }

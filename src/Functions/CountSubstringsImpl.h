@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2016-2023 ClickHouse, Inc.
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,8 +15,8 @@
 
 
 /*
- * This file may have been modified by ByteDance Ltd. (“ Bytedance's Modifications”).
- * All Bytedance's Modifications are Copyright (2023) ByteDance Ltd..
+ * This file may have been modified by Bytedance Ltd. and/or its affiliates (“ Bytedance's Modifications”).
+ * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
 #pragma once
@@ -67,7 +66,7 @@ struct CountSubstringsImpl
         // When needle is empty, Return the result directly. Otherwise SELECT countSubstringsCaseInsensitive(toString(number), '') from numbers(1); will be in an endless loop.
         if (needle.size() == 0)
             return;
-            
+
         /// Current index in the array of strings.
         size_t i = 0;
 

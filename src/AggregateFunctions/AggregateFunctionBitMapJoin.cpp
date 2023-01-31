@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -59,7 +58,7 @@ namespace DB
                 if (pos == 0 || ((pos^0xFF) && pos > union_num+1))
                 {
                     throw Exception("AggregateFunction " + name + ": wrong value of keys postion identifier, which starts from 1", ErrorCodes::LOGICAL_ERROR);
-                } 
+                }
                 if (idx < 3 || idx > argument_num)
                     throw Exception("AggregateFunction " + name + ": wrong value of key index, which starts from 3", ErrorCodes::LOGICAL_ERROR);
                 to.emplace_back(pos, idx);
@@ -114,7 +113,7 @@ namespace
             throw Exception("AggregateFunction " + name + ": duplicated join key index, only one is ok", ErrorCodes::LOGICAL_ERROR);
 
         getParameterOfPositionAndIndex(group_by_arr, name, union_num, argument_types.size(), group_by_keys_idx);
-        
+
         // judge duplicated group by keys
         for (size_t i = 0; i < group_by_keys_idx.size() - 1; ++i)
         {
@@ -123,8 +122,8 @@ namespace
                 // Two case:
                 // 1. equal pair, like ['1.3', '1.3']
                 // 2. same idx, but one of the postion is not specified(0xFF), like ['3', '1.3']
-                if (group_by_keys_idx[i] == group_by_keys_idx[j] || 
-                    (group_by_keys_idx[i].second == group_by_keys_idx[j].second  
+                if (group_by_keys_idx[i] == group_by_keys_idx[j] ||
+                    (group_by_keys_idx[i].second == group_by_keys_idx[j].second
                         && (group_by_keys_idx[i].first == 0xFF || group_by_keys_idx[j].first == 0xFF)))
                     throw Exception("AggregateFunction " + name + ": duplicated group by index", ErrorCodes::LOGICAL_ERROR);
             }
@@ -142,13 +141,13 @@ namespace
             throw Exception(
                 "AggregateFunction " + name + " only support logic operation: AND, OR, XOR, besides empty string is also ok",
                 DB::ErrorCodes::LOGICAL_ERROR);
-        
+
         JoinOperation join_op(join_str);
         if (!join_op.isValid())
             throw Exception(
                 "AggregateFunction " + name + " only support join type: INNER, LEFT. And empty string means INNER JOIN",
                 DB::ErrorCodes::LOGICAL_ERROR);
-        
+
         UInt64 thread_num = 32;
         if (parameters.size() == 6)
         {
@@ -162,7 +161,7 @@ namespace
         }
         if (result_type != 0 && result_type != 1)
             throw Exception("AggregateFunction " + name + " only support result_type: 0, 1", ErrorCodes::LOGICAL_ERROR);
-        
+
         if (!WhichDataType(argument_types[0]).isUInt8())
             throw Exception("AggregateFunction " + name + " needs Int type for its first argument", ErrorCodes::NOT_IMPLEMENTED);
 

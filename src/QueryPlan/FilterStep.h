@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -32,7 +31,7 @@ public:
         ActionsDAGPtr actions_dag_,
         String filter_column_name_,
         bool remove_filter_column_);
-    
+
     FilterStep(const DataStream & input_stream_, const ConstASTPtr & filter_, bool remove_filter_column_ = true);
 
     String getName() const override { return "Filter"; }
@@ -50,7 +49,7 @@ public:
     const ConstASTPtr & getFilter() const { return filter; }
     const String & getFilterColumnName() const { return filter_column_name; }
     bool removesFilterColumn() const { return remove_filter_column; }
-    
+
     ActionsDAGPtr createActions(ContextPtr context, const ASTPtr & rewrite_filter) const;
 
     void serialize(WriteBuffer & buf) const override;

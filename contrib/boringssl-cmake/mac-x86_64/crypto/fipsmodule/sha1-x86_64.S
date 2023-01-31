@@ -11,7 +11,7 @@
 #if defined(BORINGSSL_PREFIX)
 #include <boringssl_prefix_symbols_asm.h>
 #endif
-.text	
+.text
 
 
 .globl	_sha1_block_data_order

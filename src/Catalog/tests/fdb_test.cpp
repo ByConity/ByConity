@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -173,7 +172,7 @@ bool testBatchWriteWithConflict(DB::Catalog::MetastoreFDBImpl & metastore)
 
     std::atomic_bool test_success = true;
     std::vector<String> keys, keys1, keys2, expected_values;
-    
+
     for (int i=1; i<=7; i++)
         keys1.emplace_back(base_key_prefix + std::to_string(i));
 

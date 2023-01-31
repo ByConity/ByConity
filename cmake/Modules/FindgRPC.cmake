@@ -287,7 +287,7 @@ endif()
 # Get full path to plugin.
 find_program(gRPC_CPP_PLUGIN
              NAMES grpc_cpp_plugin
-             DOC "The plugin for generating gRPC client and server C++ stubs from `.proto` files") 
+             DOC "The plugin for generating gRPC client and server C++ stubs from `.proto` files")
 
 find_program(gRPC_PYTHON_PLUGIN
              NAMES grpc_python_plugin

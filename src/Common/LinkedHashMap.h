@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -33,13 +32,13 @@ namespace ErrorCodes
 // this append only
 template<typename Key, typename Value>
 class LinkedHashMap {
-public:    
+public:
     LinkedHashMap() = default;
     template<typename KeyArg, typename ValueArg>
-    void emplace_back(KeyArg&& key_arg, ValueArg&& value_args) 
+    void emplace_back(KeyArg&& key_arg, ValueArg&& value_args)
     {
         auto index = ordered_storage.size();
-        if (mapping.count(key_arg)) 
+        if (mapping.count(key_arg))
         {
             throw Exception("duplicated key is not allowed", ErrorCodes::LOGICAL_ERROR);
         }
@@ -52,33 +51,33 @@ public:
         for(auto& [k, v]: ordered_storage)
         {
             (void)v;
-            mapping[k] = index++;     
+            mapping[k] = index++;
         }
-    } 
+    }
 
     template<typename Iter>
-    LinkedHashMap(Iter beg, Iter end) 
+    LinkedHashMap(Iter beg, Iter end)
     {
         insert_back(beg, end);
-    } 
+    }
 
     void emplace_back(const std::pair<Key, Value> & assignment)
     {
-        emplace_back(assignment.first, assignment.second); 
+        emplace_back(assignment.first, assignment.second);
     }
 
-    void emplace_back(std::pair<Key, Value> && assignment) 
+    void emplace_back(std::pair<Key, Value> && assignment)
     {
         emplace_back(std::move(assignment.first), std::move(assignment.second));
     }
 
     template<typename Iter>
-    void insert_back(Iter beg, Iter end) 
+    void insert_back(Iter beg, Iter end)
     {
-        for(auto iter = beg; iter != end; ++iter) 
+        for(auto iter = beg; iter != end; ++iter)
         {
             this->emplace_back(iter->first, iter->second);
-        }   
+        }
     }
 
     // TODO: use user-defined key to avoid it
@@ -114,7 +113,7 @@ public:
 
     Value& at(const Key& key) {
         auto iter = mapping.find(key);
-        if(iter == mapping.end()) 
+        if(iter == mapping.end())
         {
             throw Exception("out of bounds", ErrorCodes::LOGICAL_ERROR);
         }
@@ -131,14 +130,14 @@ public:
         return ordered_storage.front();
     }
 
-    const auto& back() const 
+    const auto& back() const
     {
         return ordered_storage.back();
     }
 
     LinkedHashMap(const LinkedHashMap &) = default;
     LinkedHashMap(LinkedHashMap &&) = default;
-    
+
     LinkedHashMap& operator=(const LinkedHashMap &) = default;
     LinkedHashMap& operator=(LinkedHashMap &&) = default;
 private:

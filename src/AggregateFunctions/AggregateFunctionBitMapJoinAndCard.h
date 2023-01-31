@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -446,13 +445,13 @@ private:
         for (auto it = position_tuples.cbegin(); it != position_tuples.cend(); ++it)
         {
             if (it->tuples.size() > limit_bitmap_number)
-                throw Exception("AggregateFunction " + getName() + 
+                throw Exception("AggregateFunction " + getName() +
                     ": receives too many bitmaps in the " + std::to_string(it->position) + "-th subquery", ErrorCodes::TOO_MANY_ROWS);
 
             total_rows *= it->tuples.size();
 
             if (it != position_tuples.end()-1 && total_rows > limit_bitmap_number)
-                throw Exception("AggregateFunction " + getName() + ": The memory is out of limit to contain any bitmap after several JOINs," + 
+                throw Exception("AggregateFunction " + getName() + ": The memory is out of limit to contain any bitmap after several JOINs," +
                     " and the remaining JOINs can't go on", ErrorCodes::TOO_MANY_ROWS);
 
             if (it->tuples.size() > max_size)

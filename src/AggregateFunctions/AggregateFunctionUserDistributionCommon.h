@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -22,7 +21,7 @@
 #include <Columns/ColumnVector.h>
 #include <Columns/ColumnArray.h>
 
-namespace DB 
+namespace DB
 {
 
     using StateType = UInt8;
@@ -97,7 +96,7 @@ namespace DB
             data_to.insert(user_distribution, user_distribution + m_num_slots);
         }
 
-        void create(const AggregateDataPtr place) const override 
+        void create(const AggregateDataPtr place) const override
         {
             auto* d =  new (place) AggregateFunctionUserDistributionData;
             std::fill(d->user_distribution, d->user_distribution + m_num_slots, 0);

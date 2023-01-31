@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -163,7 +162,7 @@ String toString(const cppkafka::TopicPartitionList & tpl)
     {
         if (iter != tpl.begin())
             oss << ", ";
-        
+
         oss << iter->get_topic() << "["
             << iter->get_partition() << ":"
             << (iter->get_offset() == RD_KAFKA_OFFSET_INVALID ? "#" : std::to_string(iter->get_offset()))

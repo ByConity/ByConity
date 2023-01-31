@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -60,7 +59,7 @@ public:
     virtual void createDirectories(const String & path) override;
 
     virtual void clearDirectory(const String & path) override;
-    
+
     virtual void moveDirectory(const String& from_path, const String& to_path) override;
 
     virtual DiskDirectoryIteratorPtr iterateDirectory(const String& path) override;
@@ -106,7 +105,7 @@ private:
 
     const String disk_name;
     const String disk_path;
-    
+
     HDFSConnectionParams hdfs_params;
 
     HDFSFileSystem hdfs_fs;

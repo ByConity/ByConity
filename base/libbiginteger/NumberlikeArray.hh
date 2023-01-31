@@ -34,7 +34,7 @@ public:
 	Blk *blk;
 
 	// Constructs a ``zero'' NumberlikeArray with the given capacity.
-	NumberlikeArray(Index c) : cap(c), len(0) { 
+	NumberlikeArray(Index c) : cap(c), len(0) {
 		blk = (cap > 0) ? (new Blk[cap]) : nullptr;
 	}
 

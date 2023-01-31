@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -32,8 +31,8 @@ ASTPtr ASTDropWarehouseQuery::clone() const
 
 void ASTDropWarehouseQuery::formatImpl(const FormatSettings &s, FormatState &/*state*/, FormatStateStacked /*frame*/) const
 {
-    s.ostr << (s.hilite ? hilite_keyword : "") 
-           << "DROP WAREHOUSE " 
+    s.ostr << (s.hilite ? hilite_keyword : "")
+           << "DROP WAREHOUSE "
            << (if_exists ? "IF EXISTS " : "")
            << (s.hilite ? hilite_none : "");
 

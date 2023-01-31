@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -49,7 +48,7 @@ public:
     ExchangeStepResult visitLimitNode(QueryPlan::Node * node, ExchangeStepContext & exchange_context) override;
 
     ExchangeStepResult visitMergingSortedNode(QueryPlan::Node * node, ExchangeStepContext & exchange_context) override;
-    
+
     void addGather(QueryPlan & query_plan, ExchangeStepContext & exchange_context);
 
 private:

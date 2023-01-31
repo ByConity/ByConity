@@ -11,5 +11,5 @@ cd ..
 
 for i in $(jq --raw-output '.[] | .file' build/compile_commands.json | grep -v -F 'contrib'); do
     echo "$i";
-    clang-tidy "$i" -p build -header-filter='dbms|libs' -checks='boost-*,bugprone-*,clang-analyzer-*,performance-*'; 
+    clang-tidy "$i" -p build -header-filter='dbms|libs' -checks='boost-*,bugprone-*,clang-analyzer-*,performance-*';
 done

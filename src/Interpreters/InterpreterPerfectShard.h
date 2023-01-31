@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -42,7 +41,7 @@ using DataTypePtr = std::shared_ptr<const IDataType>;
  *        for example, select a, count() from test_table group by a
  *        server will get two columns (a, count()), we will add a new aggregation-step sum(count()) to merge aggregation with the same key.
  * 2. do the final projection, limits, and order by if possible.
- */ 
+ */
 class InterpreterPerfectShard
 {
 public:

@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2016-2023 ClickHouse, Inc.
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,8 +15,8 @@
 
 
 /*
- * This file may have been modified by ByteDance Ltd. (“ Bytedance's Modifications”).
- * All Bytedance's Modifications are Copyright (2023) ByteDance Ltd..
+ * This file may have been modified by Bytedance Ltd. and/or its affiliates (“ Bytedance's Modifications”).
+ * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
 #include <Storages/MergeTree/MergeTreeIndexMinMax.h>
@@ -901,10 +900,10 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         // If user sets allow_nullable_key=0.
         if (storage_settings->allow_nullable_key.changed && !storage_settings->allow_nullable_key.value)
             throw Exception("In ANSI mode, allow_nullable_key must be true.", ErrorCodes::BAD_ARGUMENTS);
-        
+
         storage_settings->allow_nullable_key.value = true;
     }
-    
+
     if (replicated)
     {
         return StorageReplicatedMergeTree::create(

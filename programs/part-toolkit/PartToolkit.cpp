@@ -1,6 +1,5 @@
-
 /*
- * Copyright (2022) ByteDance Ltd.
+ * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -66,7 +65,7 @@ void run(const std::string & query, Poco::Logger * log)
     mutable_context_ptr->makeGlobalContext();
     mutable_context_ptr->setConfig(configuration);
     mutable_context_ptr->setMarkCache(1000000);
-    
+
     const char * begin = query.data();
     const char * end =  query.data() + query.size();
 

@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2016-2023 ClickHouse, Inc.
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,8 +15,8 @@
 
 
 /*
- * This file may have been modified by ByteDance Ltd. (“ Bytedance's Modifications”).
- * All Bytedance's Modifications are Copyright (2023) ByteDance Ltd..
+ * This file may have been modified by Bytedance Ltd. and/or its affiliates (“ Bytedance's Modifications”).
+ * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
 #pragma once
@@ -326,7 +325,7 @@ private:
         {
             tmp_array.clear();
             BitMap64 bitmap;
-            
+
             for (; pos < offsets[i]; ++pos)
             {
                 tmp_array.emplace_back(static_cast<UInt64>(input_data[pos]));
@@ -390,7 +389,7 @@ public:
         // DataTypeBitMap64
         const auto * bitmap64_type = typeid_cast<const DataTypeBitMap64 *>(from_type);
         const DataTypeAggregateFunction * aggr_type = typeid_cast<const DataTypeAggregateFunction *>(from_type);
-        
+
         if (bitmap64_type)
             executeBitMap64Type(arguments, input_rows_count, res_data, res_offsets);
         else
@@ -415,7 +414,7 @@ public:
             else
                 throw Exception(
                     "Unexpected type " + from_type->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        }        
+        }
 
         return res_ptr;
     }
@@ -449,7 +448,7 @@ private:
     {
         const auto * column = typeid_cast<const ColumnBitMap64 *>(arguments[0].column.get());
 
-        ColumnVector<UInt64>::Container & res_container = typeid_cast<ColumnVector<UInt64> &>(res_data_col).getData();    
+        ColumnVector<UInt64>::Container & res_container = typeid_cast<ColumnVector<UInt64> &>(res_data_col).getData();
         ColumnArray::Offset res_offset = 0;
 
         for (size_t i = 0; i < input_rows_count; ++i)
@@ -532,7 +531,7 @@ public:
             else
                 throw Exception(
                     "Unexpected type " + from_type->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        } 
+        }
     }
 
 private:
@@ -777,7 +776,7 @@ public:
 
 private:
     using ToType = UInt64;
-    
+
     ColumnPtr executeBitMap64Type(const ColumnsWithTypeAndName & arguments, size_t input_rows_count) const
     {
         const IColumn * column_ptrs[3];
@@ -838,7 +837,7 @@ private:
 
             if (from_end - from_start != to_end - to_start)
                 throw Exception("From array size and to array size mismatch", ErrorCodes::LOGICAL_ERROR);
-            
+
             auto & bitmap = column_bitmap->getBitMapAt( is_column_const[0] ? 0ULL : i );
 
             for (size_t j = from_start; j < from_end; ++j)
@@ -1285,9 +1284,9 @@ private:
         auto uint64_column = castColumn(arguments[1], std::make_shared<DataTypeUInt64>());
         column_ptrs[1] = uint64_column.get();
         is_column_const[1] = isColumnConst(*column_ptrs[1]);
-        const PaddedPODArray<UInt64> & container1 = 
+        const PaddedPODArray<UInt64> & container1 =
             checkAndGetColumnEvenIfConst<ColumnUInt64>(column_ptrs[1])->getData();
-        
+
         for (size_t i = 0; i < input_rows_count; ++i)
         {
             auto & bitmap = column_bitmap->getBitMapAt( is_column_const[0] ? 0ULL : i );
@@ -1362,7 +1361,7 @@ public:
             throw Exception(
                 "Second argument for function " + getName() + " must be a bitmap but it has type " + arguments[1]->getName(),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        
+
         if (bitmap64_type0 && bitmap64_type1)
             return std::make_shared<DataTypeNumber<ToType>>();
 
@@ -1553,7 +1552,7 @@ public:
             throw Exception(
                 "Second argument for function " + getName() + " must be a bitmap but it has type " + arguments[1]->getName(),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        
+
         if (bitmap64_type0 && bitmap64_type1)
             return arguments[0];
 
