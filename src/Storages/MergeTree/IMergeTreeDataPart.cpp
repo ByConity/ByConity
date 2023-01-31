@@ -1377,6 +1377,11 @@ void IMergeTreeDataPart::remove() const
         return;
     }
 
+    removeImpl(*keep_shared_data);
+}
+
+void IMergeTreeDataPart::removeImpl(bool keep_shared_data) const
+{
     /// load checksums before move any part files
     auto checksums = getChecksums();
 
@@ -1406,7 +1411,7 @@ void IMergeTreeDataPart::remove() const
         LOG_WARNING(storage.log, "Directory {} (to which part must be renamed before removing) already exists. Most likely this is due to unclean restart. Removing it.", fullPath(disk, to));
         try
         {
-            disk->removeSharedRecursive(fs::path(to) / "", *keep_shared_data);
+            disk->removeSharedRecursive(fs::path(to) / "", keep_shared_data);
         }
         catch (...)
         {
@@ -1433,14 +1438,14 @@ void IMergeTreeDataPart::remove() const
     std::unordered_set<String> projection_directories;
     for (const auto & [p_name, projection_part] : projection_parts)
     {
-        projection_part->projectionRemove(to, *keep_shared_data);
+        projection_part->projectionRemove(to, keep_shared_data);
         projection_directories.emplace(p_name + ".proj");
     }
 
     if (checksums->empty())
     {
         /// If the part is not completely written, we cannot use fast path by listing files.
-        disk->removeSharedRecursive(fs::path(to) / "", *keep_shared_data);
+        disk->removeSharedRecursive(fs::path(to) / "", keep_shared_data);
     }
     else
     {
@@ -1467,12 +1472,12 @@ void IMergeTreeDataPart::remove() const
                     }
                     file_set.insert(file_name);
                     if (projection_directories.find(file_name) == projection_directories.end())
-                        disk->removeSharedFile(fs::path(to) / file_name, *keep_shared_data);
+                        disk->removeSharedFile(fs::path(to) / file_name, keep_shared_data);
                 }
 				else
 				{
 					if (projection_directories.find(file) == projection_directories.end())
-						disk->removeSharedFile(fs::path(to) / file, *keep_shared_data);
+						disk->removeSharedFile(fs::path(to) / file, keep_shared_data);
 				}
             }
     #if !defined(__clang__)
@@ -1480,10 +1485,10 @@ void IMergeTreeDataPart::remove() const
     #endif
 
             for (const auto & file : {"checksums.txt", "columns.txt"})
-                disk->removeSharedFile(fs::path(to) / file, *keep_shared_data);
+                disk->removeSharedFile(fs::path(to) / file, keep_shared_data);
 
-            disk->removeSharedFileIfExists(fs::path(to) / DEFAULT_COMPRESSION_CODEC_FILE_NAME, *keep_shared_data);
-            disk->removeSharedFileIfExists(fs::path(to) / DELETE_ON_DESTROY_MARKER_FILE_NAME, *keep_shared_data);
+            disk->removeSharedFileIfExists(fs::path(to) / DEFAULT_COMPRESSION_CODEC_FILE_NAME, keep_shared_data);
+            disk->removeSharedFileIfExists(fs::path(to) / DELETE_ON_DESTROY_MARKER_FILE_NAME, keep_shared_data);
 
             disk->removeDirectory(to);
         }
@@ -1493,7 +1498,7 @@ void IMergeTreeDataPart::remove() const
 
             LOG_ERROR(storage.log, "Cannot quickly remove directory {} by removing files; fallback to recursive removal. Reason: {}", fullPath(disk, to), getCurrentExceptionMessage(false));
 
-            disk->removeSharedRecursive(fs::path(to) / "", *keep_shared_data);
+            disk->removeSharedRecursive(fs::path(to) / "", keep_shared_data);
         }
     }
 }

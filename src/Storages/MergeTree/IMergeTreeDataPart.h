@@ -173,7 +173,8 @@ public:
 
     void remove() const;
 
-    void projectionRemove(const String & parent_to, bool keep_shared_data = false) const;
+    virtual void projectionRemove(const String & parent_to, bool keep_shared_data) const;
+
 
     /// Initialize columns (from columns.txt if exists, or create from column files if not).
     /// Load checksums from checksums.txt if exists. Load index if required.
@@ -594,6 +595,8 @@ protected:
     /// Loads unique key index if the part has unique key.
     /// Data parts supporting unique key should override this method.
     virtual UniqueKeyIndexPtr loadUniqueKeyIndex();
+
+    virtual void removeImpl(bool keep_shared_data) const;
 
 private:
     /// In compact parts order of columns is necessary

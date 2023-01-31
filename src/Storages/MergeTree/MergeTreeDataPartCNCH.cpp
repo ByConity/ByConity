@@ -695,4 +695,39 @@ void MergeTreeDataPartCNCH::calculateEachColumnSizes(
 {
 }
 
+void MergeTreeDataPartCNCH::removeImpl(bool keep_shared_data) const
+{
+    for (const auto & [_, projection_part] : projection_parts)
+        projection_part->projectionRemove(relative_path, keep_shared_data);
+
+    auto disk = volume->getDisk();
+    try
+    {
+        disk->removeFile(fs::path(relative_path) / "data");
+        disk->removeDirectory(relative_path);
+    }
+    catch(...)
+    {
+        /// Recursive directory removal does many excessive "stat" syscalls under the hood.
+        LOG_ERROR(storage.log, "Cannot quickly remove directory {} by removing files; fallback to recursive removal. Reason: {}", fullPath(disk, relative_path), getCurrentExceptionMessage(false));
+        disk->removeRecursive(fs::path(relative_path) / "");
+    }
+}
+
+void MergeTreeDataPartCNCH::projectionRemove(const String & parent_to, bool) const
+{
+    String to = parent_to + "/" + relative_path;
+    auto disk = volume->getDisk();
+    try
+    {
+        disk->removeFile(fs::path(relative_path) / "data");
+        disk->removeDirectory(relative_path);
+    }
+    catch(...)
+    {
+        /// Recursive directory removal does many excessive "stat" syscalls under the hood.
+        LOG_ERROR(storage.log, "Cannot quickly remove directory {} by removing files; fallback to recursive removal. Reason: {}", fullPath(disk, relative_path), getCurrentExceptionMessage(false));
+        disk->removeRecursive(fs::path(relative_path) / "");
+    }
+}
 }
