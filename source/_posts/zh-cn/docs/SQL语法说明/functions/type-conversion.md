@@ -349,8 +349,8 @@ toDecimal64OrZero( expr, S)
 
 **Returned value**
 A value in the `Nullable(Decimal(P,S))` data type. The value contains:
-- Number with `S` decimal places, if ClickHouse interprets the input string as a number. 
-- 0 with `S` decimal places, if ClickHouse can’t interpret the input string as a number or if the input number contains more than `S` decimal places. 
+- Number with `S` decimal places, if ByConity interprets the input string as a number. 
+- 0 with `S` decimal places, if ByConity can’t interpret the input string as a number or if the input number contains more than `S` decimal places. 
 
 **Example**
 
