@@ -131,7 +131,7 @@ CREATE TABLE db_name.table_name
     `old_column_name` Int64
 )
 ENGINE = `CnchMergeTree`
-ORDER BY (`old_column_name`)
+ORDER BY (`order_by_column`)
 
 # Step 2: rename column
 ALTER TABLE db_name.table_name RENAME COLUMN old_column_name TO new_column_name
