@@ -358,5 +358,4 @@ if (ENABLE_BENCHMARK)
 endif()
 
 add_subdirectory(numactl-cmake)
-add_subdirectory(foundationdb)
 add_subdirectory(hivemetastore-cmake)

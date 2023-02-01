@@ -9,7 +9,7 @@ on:
 jobs:
   scm_build:
     name: Build binary and run stateless tests
-    container: vivekscl/test:latest
+    container: minhthucdao1/byconity-builder:latest
     runs-on: self-hosted
     steps:
       - name: Check out repository code
