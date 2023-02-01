@@ -3,8 +3,8 @@ title: "Aggregation"
 slug: "aggregate"
 hidden: false
 metadata: 
-  title: "Aggregation Functions in ByteHouse"
-  description: "Find out various aggregation functions supported in ByteHouse such as anyHeavy, anyLast, argMax, argMin, avg, corr, covarPop, covarSamp, groupBitAnd, etc."
+  title: "Aggregation Functions in ByConity"
+  description: "Find out various aggregation functions supported in ByConity such as anyHeavy, anyLast, argMax, argMin, avg, corr, covarPop, covarSamp, groupBitAnd, etc."
 createdAt: "2021-07-29T11:49:53.230Z"
 updatedAt: "2021-09-23T03:25:11.849Z"
 categories:
@@ -15,7 +15,7 @@ tags:
 ---
 
 > Notice:
-Some of the examples below are referenced from [ClickHouse Documentation](https://clickhouse.com/docs/en/sql-reference/functions/) but have been adapted and modified to work in ByteHouse.
+Some of the examples below are referenced from [ClickHouse Documentation](https://clickhouse.com/docs/en/sql-reference/functions/) but have been adapted and modified to work in ByConity.
 
 ## any
 Selects the first encountered value.
@@ -24,7 +24,7 @@ To get a determinate result, you can use the ‘min’ or ‘max’ function ins
 
 In some cases, you can rely on the order of execution. This applies to cases when SELECT comes from a subquery that uses ORDER BY.
 
-When a `SELECT` query has the `GROUP BY` clause or at least one aggregate function, ByteHouse (in contrast to MySQL) requires that all expressions in the `SELECT` , `HAVING` , and `ORDER BY` clauses be calculated from keys or from aggregate functions. In other words, each column selected from the table must be used either in keys or inside aggregate functions. To get behavior like in MySQL, you can put the other columns in the `any` aggregate function.
+When a `SELECT` query has the `GROUP BY` clause or at least one aggregate function, ByConity (in contrast to MySQL) requires that all expressions in the `SELECT` , `HAVING` , and `ORDER BY` clauses be calculated from keys or from aggregate functions. In other words, each column selected from the table must be used either in keys or inside aggregate functions. To get behavior like in MySQL, you can put the other columns in the `any` aggregate function.
 
 **Syntax**
 ```sql
