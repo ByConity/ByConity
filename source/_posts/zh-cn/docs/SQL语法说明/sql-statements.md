@@ -469,7 +469,7 @@ INSERT INTO example_table VALUES (1, 'a', '2021-07-27'), (2, 'b', '2021-07-27')
 ```
 ### INSERT FORMAT
 
-Data can be passed to the INSERT in aformatsupported by ByteHouse.
+Data can be passed to the INSERT in a format supported by ByteHouse.
 ** Syntax**
 
 ```sql
@@ -489,7 +489,9 @@ ENGINE = `CnchMergeTree`
 ORDER BY (`a`) 
 
 # step 2: insert 2 rows in value format into the table
-INSERT INTO example_table FORMAT VALUES (1, 'a', '2021-07-27'), (2, 'b', '2021-07-27');
+INSERT INTO example_table FORMAT TabSeparated
+1 a 2021-07-27
+2 b 2021-07-27
 ```
 ### INSERT SELECT
 
