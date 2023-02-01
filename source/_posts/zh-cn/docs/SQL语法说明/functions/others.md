@@ -223,7 +223,7 @@ blockSize()
 
 ```
 
-In ClickHouse, queries are always run on blocks (sets of column parts). This function allows getting the size of the block that you called it for.
+In ByConity, queries are always run on blocks (sets of column parts). This function allows getting the size of the block that you called it for.
 
 ## currentDatabase
 
@@ -794,7 +794,7 @@ Result:
 ## if
 
 
-Controls conditional branching. Unlike most systems, ClickHouse always evaluate both expressions `then` and `else` .
+Controls conditional branching. Unlike most systems, ByConity always evaluate both expressions `then` and `else` .
 
 **Syntax**
 
@@ -950,7 +950,7 @@ However, the argument is still evaluated. This can be used for benchmarks.
 
 The function is intended for debugging and introspection purposes. The function ignores it's argument and always returns 1. Arguments are not even evaluated.
 
-But for the purpose of index analysis, the argument of this function is analyzed as if it was present directly without being wrapped inside `indexHint` function. This allows to select data in index ranges by the corresponding condition but without further filtering by this condition. The index in ClickHouse is sparse and using `indexHint` will yield more data than specifying the same condition directly.
+But for the purpose of index analysis, the argument of this function is analyzed as if it was present directly without being wrapped inside `indexHint` function. This allows to select data in index ranges by the corresponding condition but without further filtering by this condition. The index in ByConity is sparse and using `indexHint` will yield more data than specifying the same condition directly.
 
 **Syntax**
 
@@ -1000,7 +1000,7 @@ SELECT FlightDate AS k, count() FROM ontime GROUP BY k ORDER BY k
 
 ```
 
-ClickHouse processed the entire table ( `Processed 4.28 million rows` ).
+ByConity processed the entire table ( `Processed 4.28 million rows` ).
 
 Result:
 
@@ -1034,7 +1034,7 @@ SELECT FlightDate AS k, count() FROM ontime WHERE k = '2017-09-15' GROUP BY k OR
 
 ```
 
-By using the index, ClickHouse processed a significantly smaller number of rows ( `Processed 32.74 thousand rows` ).
+By using the index, ByConity processed a significantly smaller number of rows ( `Processed 32.74 thousand rows` ).
 
 Result:
 
@@ -1070,7 +1070,7 @@ ORDER BY k ASC
 
 ```
 
-ClickHouse used the index in the same way as the previous time ( `Processed 32.74 thousand rows` ).
+ByConity used the index in the same way as the previous time ( `Processed 32.74 thousand rows` ).
 
 The expression `k = '2017-09-15'` was not used when generating the result.
 
@@ -1253,7 +1253,7 @@ materialize(x)
 
 Turns a constant into a full column containing just one value.
 
-In ClickHouse, full columns and constants are represented differently in memory. Functions work differently for constant arguments and normal arguments (different code is executed), although the result is almost always the same. This function is for debugging this behavior.
+In ByConity, full columns and constants are represented differently in memory. Functions work differently for constant arguments and normal arguments (different code is executed), although the result is almost always the same. This function is for debugging this behavior.
 
 ## modelEvaluate
 
@@ -1497,7 +1497,7 @@ SELECT replicate(x, arr);
 
 **Arguments:**
 
-- `arr` — Original array. ClickHouse creates a new array of the same length as the original and fills it with the value `x` . 
+- `arr` — Original array. ByConity creates a new array of the same length as the original and fills it with the value `x` . 
 
 
 
@@ -1973,7 +1973,7 @@ toTypeName(x)
 
 Returns a string containing the type name of the passed argument.
 
-If `NULL` is passed to the function as input, then it returns the `Nullable(Nothing)` type, which corresponds to an internal `NULL` representation in ClickHouse.
+If `NULL` is passed to the function as input, then it returns the `Nullable(Nothing)` type, which corresponds to an internal `NULL` representation in ByConity.
 
 ## transform
 
