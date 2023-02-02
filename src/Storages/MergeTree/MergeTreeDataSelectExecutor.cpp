@@ -1519,7 +1519,7 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
         return may_true;
     };
 
-    if (!key_condition.matchesExactContinuousRange())
+    if (!key_condition.matchesExactContinuousRange(primary_key.data_types))
     {
         // Do exclusion search, where we drop ranges that do not match
 
