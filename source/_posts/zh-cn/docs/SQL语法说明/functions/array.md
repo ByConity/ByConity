@@ -11,7 +11,7 @@ tags:
 - Docs
 ---
 > Notice:
-Some of the examples below are referenced from [ClickHouse Documentation](https://clickhouse.com/docs/en/sql-reference/functions/) but have been adapted and modified to work in ByteHouse.
+Some of the examples below are referenced from [ClickHouse Documentation](https://clickhouse.com/docs/en/sql-reference/functions/) but have been adapted and modified to work in ByConity.
 
 ## array 
 
@@ -797,7 +797,7 @@ arrayPushBack(array, single_value)
 **Arguments**
 
 - `array` – Array. 
-- `single_value` – A single value. Only numbers can be added to an array with numbers, and only strings can be added to an array of strings. When adding numbers, ByteHouse automatically sets the `single_value` type for the data type of the array. Can be `NULL` . The function adds a `NULL` element to an array, and the type of array elements converts to `Nullable` . 
+- `single_value` – A single value. Only numbers can be added to an array with numbers, and only strings can be added to an array of strings. When adding numbers, ByConity automatically sets the `single_value` type for the data type of the array. Can be `NULL` . The function adds a `NULL` element to an array, and the type of array elements converts to `Nullable` . 
 
 **Returned values**
 
@@ -834,7 +834,7 @@ arrayPushFront(array, single_value)
 **Arguments**
 
 - `array` – Array. 
-- `single_value` – A single value. Only numbers can be added to an array with numbers, and only strings can be added to an array of strings. When adding numbers, ByteHouse automatically sets the `single_value` type for the data type of the array. Can be `NULL` . The function adds a `NULL` element to an array, and the type of array elements converts to `Nullable` . 
+- `single_value` – A single value. Only numbers can be added to an array with numbers, and only strings can be added to an array of strings. When adding numbers, ByConity automatically sets the `single_value` type for the data type of the array. Can be `NULL` . The function adds a `NULL` element to an array, and the type of array elements converts to `Nullable` . 
 
 **Returned values**
 
