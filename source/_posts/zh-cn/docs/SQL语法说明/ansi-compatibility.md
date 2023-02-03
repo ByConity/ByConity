@@ -10,4 +10,4 @@ categories:
 tags:
 - Docs
 ---
-ByteHouse provides a rich set of SQL syntax through ANSI SQL dialect. When using this dialect, SQL statements will be parsed and validated by Apache Calcite and then sent to servers for execution. Apache Calcite supports standard ANSI SQL, please refer to the BNF-grammar here for more details: https://calcite.apache.org/docs/reference.html.
+ByConity provides a rich set of SQL syntax through ANSI SQL dialect. When using this dialect, SQL statements will be parsed and validated by Apache Calcite and then sent to servers for execution. Apache Calcite supports standard ANSI SQL, please refer to the BNF-grammar here for more details: https://calcite.apache.org/docs/reference.html.
