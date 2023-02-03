@@ -11,7 +11,7 @@ tags:
 - Docs
 ---
 > Notice:
-Some of the examples below are referenced from [ClickHouse Documentation](https://clickhouse.com/docs/en/sql-reference/functions/) but have been adapted and modified to work in ByteHouse.
+Some of the examples below are referenced from [ClickHouse Documentation](https://clickhouse.com/docs/en/sql-reference/functions/) but have been adapted and modified to work in ByConity.
 
 ## addDays
 Function adds a Date/DateTime interval to a Date/DateTime and then return the Date/DateTime. 
@@ -856,7 +856,7 @@ SELECT timeSlots(toDateTime('2012-01-01 12:20:00'), toUInt32(600))
 ```
 
 
-<!-- TODO:Sensitive Function of Bytehouse -->
+<!-- TODO:Sensitive Function of ByConity -->
 <!-- ## timezone
 Returns the timezone of the server.
 
