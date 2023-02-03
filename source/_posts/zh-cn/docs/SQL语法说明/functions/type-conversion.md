@@ -11,7 +11,7 @@ tags:
 - Docs
 ---
 > Notice:
-Some of the examples below are referenced from [ClickHouse Documentation](https://clickhouse.com/docs/en/sql-reference/functions/) but have been adapted and modified to work in ByteHouse.
+Some of the examples below are referenced from [ClickHouse Documentation](https://clickhouse.com/docs/en/sql-reference/functions/) but have been adapted and modified to work in ByConity.
 
 ## CAST
 Converts an input value to the specified data type. Unlike the reinterpret function, `CAST` tries to present the same value using the new data type. If the conversion can not be done then an exception is raised.
@@ -299,13 +299,13 @@ toDecimal64OrNull(expr, S)
 <!-- TODO: Gateway client does not support toDecimal128OrNull(expr, S) -->
 
 **Arguments**
-- `expr` — Expression, returns a value in the String data type. ByteHouse expects the textual representation of the decimal number. For example, `'1.111'` . 
+- `expr` — Expression, returns a value in the String data type. ByConity expects the textual representation of the decimal number. For example, `'1.111'` . 
 - `S` — Scale, the number of decimal places in the resulting value. 
 
 **Returned value**
 A value in the `Nullable(Decimal(P,S))` data type. The value contains:
-- Number with `S` decimal places, if ByteHouse interprets the input string as a number. 
-- `NULL` , if ByteHouse can’t interpret the input string as a number or if the input number contains more than `S` decimal places. 
+- Number with `S` decimal places, if ByConity interprets the input string as a number. 
+- `NULL` , if ByConity can’t interpret the input string as a number or if the input number contains more than `S` decimal places. 
 
 **Examples**
 
@@ -344,7 +344,7 @@ toDecimal64OrZero( expr, S)
 <!-- TODO: Gateway client does not support toDecimal128OrZero( expr, S) -->
 
 **Arguments**
-- `expr` — Expression data type. ByteHouse expects the textual representation of the decimal number. For example, `'1.111'` . 
+- `expr` — Expression data type. ByConity expects the textual representation of the decimal number. For example, `'1.111'` . 
 - `S` — Scale, the number of decimal places in the resulting value. 
 
 **Returned value**
@@ -428,7 +428,7 @@ The behavior of functions for the NaN and Inf arguments is undefined.
 
 When you convert a value from one to another data type, you should remember that in common case, it is an unsafe operation that can lead to a data loss. A data loss can occur if you try to fit value from a larger data type to a smaller data type, or if you convert values between different data types.
 
-ByteHouse has the [same behavior as C++ programs](https://en.cppreference.com/w/cpp/language/implicit_conversion).
+ByConity has the [same behavior as C++ programs](https://en.cppreference.com/w/cpp/language/implicit_conversion).
 
 **Example**
 
@@ -466,7 +466,7 @@ The behavior of functions for the NaN and Inf arguments is undefined.
 
 When you convert a value from one to another data type, you should remember that in common case, it is an unsafe operation that can lead to a data loss. A data loss can occur if you try to fit value from a larger data type to a smaller data type, or if you convert values between different data types.
 
-ByteHouse has the [same behavior as C++ programs](https://en.cppreference.com/w/cpp/language/implicit_conversion).
+ByConity has the [same behavior as C++ programs](https://en.cppreference.com/w/cpp/language/implicit_conversion).
 
 **Example**
 
@@ -504,7 +504,7 @@ The behavior of functions for the NaN and Inf arguments is undefined.
 
 When you convert a value from one to another data type, you should remember that in common case, it is an unsafe operation that can lead to a data loss. A data loss can occur if you try to fit value from a larger data type to a smaller data type, or if you convert values between different data types.
 
-ByteHouse has the [same behavior as C++ programs](https://en.cppreference.com/w/cpp/language/implicit_conversion).
+ByConity has the [same behavior as C++ programs](https://en.cppreference.com/w/cpp/language/implicit_conversion).
 
 **Example**
 
@@ -700,11 +700,11 @@ toUInt64(expr)
 
 Functions use [rounding towards zero](https://en.wikipedia.org/wiki/Rounding#Rounding_towards_zero) , meaning they truncate fractional digits of numbers.
 
-The behavior of functions for negative agruments and for the NaN and Inf arguments is undefined. If you pass a string with a negative number, for example `'-32'` , ByteHouse raises an exception.
+The behavior of functions for negative agruments and for the NaN and Inf arguments is undefined. If you pass a string with a negative number, for example `'-32'` , ByConity raises an exception.
 
 When you convert a value from one to another data type, you should remember that in common case, it is an unsafe operation that can lead to a data loss. A data loss can occur if you try to fit value from a larger data type to a smaller data type, or if you convert values between different data types.
 
-ByteHouse has the [same behavior as C++ programs](https://en.cppreference.com/w/cpp/language/implicit_conversion).
+ByConity has the [same behavior as C++ programs](https://en.cppreference.com/w/cpp/language/implicit_conversion).
 
 **Example**
 
