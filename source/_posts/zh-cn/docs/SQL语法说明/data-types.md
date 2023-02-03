@@ -3,8 +3,8 @@ title: "Data Types"
 slug: "data-types"
 hidden: false
 metadata: 
-  title: "Supported Data Types in ByteHouse"
-  description: "ByteHouse can support various data types, such as Numeric Data Types, String & Binary Data Types, Date & Time Data Types, Semi-structured Data Types, etc."
+  title: "Supported Data Types in ByConity"
+  description: "ByConity can support various data types, such as Numeric Data Types, String & Binary Data Types, Date & Time Data Types, Semi-structured Data Types, etc."
 createdAt: "2021-06-17T15:27:33.972Z"
 updatedAt: "2022-02-28T02:26:27.494Z"
 categories:
@@ -13,7 +13,7 @@ categories:
 tags:
 - Docs
 ---
-The data types provided in ByteHouse are adapted from ClickHouse. Visit this [page](https://clickhouse.tech/docs/en/sql-reference/data-types/) for more information on ClickHouse data types.
+The data types provided in ByConity are adapted from ClickHouse. Visit this [page](https://clickhouse.tech/docs/en/sql-reference/data-types/) for more information on ClickHouse data types.
 
 ## Summary of Data Types
 * Numeric Data Types
@@ -43,7 +43,7 @@ The data types provided in ByteHouse are adapted from ClickHouse. Visit this [pa
 
 Fixed-length integers, with or without a sign.
 
-When creating tables, numeric parameters for integer numbers can be set (e.g. `TINYINT(8)`, `SMALLINT(16)`, `INT(32)`, `BIGINT(64)`), but ByteHouse ignores them.
+When creating tables, numeric parameters for integer numbers can be set (e.g. `TINYINT(8)`, `SMALLINT(16)`, `INT(32)`, `BIGINT(64)`), but ByConity ignores them.
 
 **Aliases**
 
@@ -85,7 +85,7 @@ When creating tables, numeric parameters for integer numbers can be set (e.g. `T
 
 - `Float64` — `DOUBLE`.
 
-When creating tables, numeric parameters for floating point numbers can be set (e.g. `FLOAT(12)`, `FLOAT(15, 22)`, `DOUBLE(12)`, `DOUBLE(4, 18)`), but ByteHouse ignores them.
+When creating tables, numeric parameters for floating point numbers can be set (e.g. `FLOAT(12)`, `FLOAT(15, 22)`, `DOUBLE(12)`, `DOUBLE(4, 18)`), but ByConity ignores them.
 
 ### Decimal(P, S), Decimal32(S), Decimal64(S), Decimal128(S)
 
@@ -125,11 +125,11 @@ Strings of an arbitrary length. The length is not limited. The value can contain
 
 The String type replaces the types VARCHAR, BLOB, CLOB, and others from other DBMSs.
 
-When creating tables, numeric parameters for string fields can be set (e.g. `VARCHAR(255)`), but ByteHouse ignores them.
+When creating tables, numeric parameters for string fields can be set (e.g. `VARCHAR(255)`), but ByConity ignores them.
 
 **Encodings**
 
-ByteHouse doesn’t have the concept of encodings. Strings can contain an arbitrary set of bytes, which are stored and output as-is.
+ByConity doesn’t have the concept of encodings. Strings can contain an arbitrary set of bytes, which are stored and output as-is.
 
 If you need to store texts, we recommend using UTF-8 encoding. At the very least, if your terminal uses UTF-8 (as recommended), you can read and write your values without making conversions.
 
@@ -163,13 +163,13 @@ Examples of the values that can be efficiently stored in `FixedString`-typed col
 
 To store UUID values, use the UUID data type.
 
-When inserting the data, ByteHouse:
+When inserting the data, ByConity:
 
 - Complements a string with null bytes if the string contains fewer than `N` bytes.
 
 - Throws the `Too large value for FixedString(N)` exception if the string contains more than `N` bytes.
 
-When selecting the data, ByteHouse does not remove the null bytes at the end of the string. If you use the `WHERE` clause, you should add null bytes manually to match the `FixedString` value. The following example illustrates how to use the `WHERE` clause with `FixedString`.
+When selecting the data, ByConity does not remove the null bytes at the end of the string. If you use the `WHERE` clause, you should add null bytes manually to match the `FixedString` value. The following example illustrates how to use the `WHERE` clause with `FixedString`.
 
 This behaviour differs from MySQL for the `CHAR` type (where strings are padded with spaces, and the spaces are removed for output).
 
@@ -286,9 +286,9 @@ SELECT tuple(1,'a') AS x, toTypeName(x)
 
 Enumerated type consisting of named values.
 
-Named values must be declared as `'string' = integer` pairs. ByteHouse stores only numbers, but supports operations with the values through their names.
+Named values must be declared as `'string' = integer` pairs. ByConity stores only numbers, but supports operations with the values through their names.
 
-ByteHouse supports:
+ByConity supports:
 
 - `Enum8`: 8-bit Enum. It can contain up to 256 values enumerated in the `[-128, 127]` range.
 
@@ -302,9 +302,9 @@ CREATE TABLE t_enum(x Enum8('hello' = 1, 'world' = 2)) ENGINE = Memory;
 INSERT INTO t_enum VALUES ('hello'), ('world'), ('hello');
 ```
 
-Column `x` can only store values that are listed in the type definition: `'hello'` or `'world'`. If you try to save any other value, ByteHouse will raise an exception. 
+Column `x` can only store values that are listed in the type definition: `'hello'` or `'world'`. If you try to save any other value, ByConity will raise an exception. 
 
-When you query data from the table, ByteHouse outputs the string values from `Enum`.
+When you query data from the table, ByConity outputs the string values from `Enum`.
 
 ```
 SELECT * FROM t_enum
@@ -411,7 +411,7 @@ For a `TypeName`, you can’t use composite data types [Array](https://clickhous
 
 A `Nullable` type field can’t be included in table indexes.
 
-`NULL` is the default value for any `Nullable` type, unless specified otherwise in the ByteHouse server configuration.
+`NULL` is the default value for any `Nullable` type, unless specified otherwise in the ByConity server configuration.
 
 **Example**
 
