@@ -11,11 +11,11 @@ tags:
 - Docs
 ---
 > Notice:
-Some of the examples below are referenced from [ClickHouse Documentation](https://clickhouse.com/docs/en/sql-reference/functions/) but have been adapted and modified to work in ByteHouse.
+Some of the examples below are referenced from [ClickHouse Documentation](https://clickhouse.com/docs/en/sql-reference/functions/) but have been adapted and modified to work in ByConity.
 
 
 ## JSONExtract
-Parses a JSON and extract a value of the given ByteHouse data type.
+Parses a JSON and extract a value of the given ByConity data type.
 This is a generalization of the previous `JSONExtract<type>` functions.
 This means
 `JSONExtract(..., 'String')` returns exactly the same as `JSONExtractString()` ,
@@ -35,10 +35,10 @@ JSONExtract(json[, indices_or_keys…], Return_type)
     - Negative integer = access the n-th member/key from the end. 
     - Minimum index of the element is 1. Thus the element 0 does not exist.
     - You may use integers to access both JSON arrays and JSON objects.
-- `Return_type` – ByteHouse data type. 
+- `Return_type` – ByConity data type. 
 
 **Returned value**
-- Extracted value of the given ByteHouse data type.
+- Extracted value of the given ByConity data type.
 
 **Example**
 
@@ -223,7 +223,7 @@ SELECT JSONExtractInt('{"a": "hello", "b": [-100, 200.0, 300]}', 'b', 1)
 ```
 
 ## JSONExtractKeysAndValues
-Parses key-value pairs from a JSON where the values are of the given ByteHouse data type.
+Parses key-value pairs from a JSON where the values are of the given ByConity data type.
 
 **Syntax**
 
@@ -496,7 +496,7 @@ JSONType(json\[, indices_or_keys\]…)
     - You may use integers to access both JSON arrays and JSON objects.
 
 **Returned value**
-- ByteHouse data type.
+- ByConity data type.
 
 **Example**
 
