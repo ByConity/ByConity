@@ -11,7 +11,7 @@ tags:
 - Docs
 ---
 > Notice:
-Some of the examples below are referenced from [ClickHouse Documentation](https://clickhouse.com/docs/en/sql-reference/functions/) but have been adapted and modified to work in ByteHouse.
+Some of the examples below are referenced from [ClickHouse Documentation](https://clickhouse.com/docs/en/sql-reference/functions/) but have been adapted and modified to work in ByConity.
 
 <!-- TODO: no encrypt functions but we have decrypt functions. syntax unsure -->
 <!-- ## decrypt
