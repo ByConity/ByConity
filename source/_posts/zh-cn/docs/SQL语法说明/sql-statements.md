@@ -3,8 +3,8 @@ title: "SQL Statements"
 slug: "sql-statements"
 hidden: false
 metadata: 
-  title: "Supported SQL Statements in ByteHouse"
-  description: "The supported statements in ByteHouse are similar to ClickHouse, but it's still recommended to follow the manual to ensure proper use. See some examples."
+  title: "Supported SQL Statements in ByConity"
+  description: "The supported statements in ByConity are similar to ClickHouse, but it's still recommended to follow the manual to ensure proper use. See some examples."
 createdAt: "2021-06-17T15:31:57.358Z"
 updatedAt: "2022-02-28T02:27:53.768Z"
 categories:
@@ -14,7 +14,7 @@ tags:
 - Docs
 ---
 
-The supported statements in ByteHouse are similar to ClickHouse, but it is still recommended to follow the ByteHouse manual to ensure proper use. Some of the examples below are referenced from [ClickHouse Documentation](https://clickhouse.tech/docs/en/sql-reference/statements/) but have been adapted and modified to work in ByteHouse.
+The supported statements in ByConity are similar to ClickHouse, but it is still recommended to follow the ByConity manual to ensure proper use. Some of the examples below are referenced from [ClickHouse Documentation](https://clickhouse.tech/docs/en/sql-reference/statements/) but have been adapted and modified to work in ByConity.
 [block:callout]
 {
   "type": "info",
@@ -338,7 +338,7 @@ Normal views don’t store any data. They just perform a read from another table
 ```sql
 CREATE [OR REPLACE] VIEW [IF NOT EXISTS] [tableIdentifier] [UUID uuid] AS [selectUnionStmt]
 ```
-- `OR REPLACE` is included, ByteHouse will create a new view and replace the old view with the same name. 
+- `OR REPLACE` is included, ByConity will create a new view and replace the old view with the same name. 
 
 - `IF NOT EXISTS` clause is included, the query won’t return an error if the table already exists. 
 
@@ -469,7 +469,7 @@ INSERT INTO example_table VALUES (1, 'a', '2021-07-27'), (2, 'b', '2021-07-27')
 ```
 ### INSERT FORMAT
 
-Data can be passed to the INSERT in a format supported by ByteHouse.
+Data can be passed to the INSERT in a format supported by ByConity.
 ** Syntax**
 
 ```sql
@@ -1072,7 +1072,7 @@ Used by insertStmt to represent a list of columns.
 ```
 ## withClause
 
-Bytehouse supports Common Table Expressions( [CTE](https://en.wikipedia.org/wiki/Hierarchical_and_recursive_queries_in_SQL) ). The results of WITH clause can be used in the remaining `SELECT` query. There are certain limitations to the support, including
+ByConity supports Common Table Expressions( [CTE](https://en.wikipedia.org/wiki/Hierarchical_and_recursive_queries_in_SQL) ). The results of WITH clause can be used in the remaining `SELECT` query. There are certain limitations to the support, including
 - Recursions are not allowed in CTE 
 
 - Subqueries are not allowed in CTE 
@@ -1246,7 +1246,7 @@ Read data from table function:
 ```sql
 FROM tableFunctionExpr [FINAL] [sampleClause]
 ```
-- `FINAL` : When `FINAL` is specified, ByteHouse fully merges the data before returning the result and thus performs all data transformations that happen during merges. 
+- `FINAL` : When `FINAL` is specified, ByConity fully merges the data before returning the result and thus performs all data transformations that happen during merges. 
 
 **Example**
 
@@ -1277,7 +1277,7 @@ We use table function numbers here to generate a table with 10 rows.
 ```sql
 GROUP BY [(][columnExprList][)] [WITH ROLLUP|WITH CUBE] [WITH TOTALS]
 ```
-- `NULL processing` : ByteHouse interprets NULL as a value. If group by keys contains NULL value, it will appear in the result. 
+- `NULL processing` : ByConity interprets NULL as a value. If group by keys contains NULL value, it will appear in the result. 
 
 - `[WITH ROLLUP]` :  calculate subtotals for the key expressions, based on their order in the `GROUP BY` list. 
 
@@ -1431,7 +1431,7 @@ Join produces a new table by combining columns from one or multiple tables by us
 
    - `ANY` ,  If the right table has several matching rows, only the first one found is joined. If the right table has only one matching row, the results of ANY and ALL are the same. 
 
-   - `ALL` , If the right table has several matching rows, ByteHouse creates a Cartesian product from matching rows. This is the normal JOIN behaviour from standard SQL. 
+   - `ALL` , If the right table has several matching rows, ByConity creates a Cartesian product from matching rows. This is the normal JOIN behaviour from standard SQL. 
 
    - `ASOF` ,  For joining sequences with an uncertain match. 
 
