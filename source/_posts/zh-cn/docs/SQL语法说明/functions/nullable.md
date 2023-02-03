@@ -11,7 +11,7 @@ tags:
 - Docs
 ---
 > Notice:
-Some of the examples below are referenced from [ClickHouse Documentation](https://clickhouse.com/docs/en/sql-reference/functions/) but have been adapted and modified to work in ByteHouse.
+Some of the examples below are referenced from [ClickHouse Documentation](https://clickhouse.com/docs/en/sql-reference/functions/) but have been adapted and modified to work in ByConity.
 
 ## assumeNotNull
 Results in an equivalent non- `Nullable` value for a Nullable type. In case the original value is `NULL` the result is undetermined. See also `ifNull` and `coalesce` functions.
@@ -237,7 +237,7 @@ nullIf(x, y)
 ```
 
 **Arguments**
-- `x` , `y` — Values for comparison. They must be compatible types, or Bytehouse will generate an exception.
+- `x` , `y` — Values for comparison. They must be compatible types, or ByConity will generate an exception.
 
 **Returned values**
 - `NULL` , if the arguments are equal. 
