@@ -12,7 +12,7 @@ tags:
 ---
 
 > Notice:
-Some of the examples below are referenced from [ClickHouse Documentation](https://clickhouse.com/docs/en/sql-reference/functions/) but have been adapted and modified to work in ByteHouse.
+Some of the examples below are referenced from [ClickHouse Documentation](https://clickhouse.com/docs/en/sql-reference/functions/) but have been adapted and modified to work in ByConity.
 
 ## URLHierarchy
 Returns an array containing the URL, truncated at the end by the symbols /,? in the path and query-string. Consecutive separator characters are counted as one. The cut is made in the position after all the consecutive separator characters.
@@ -299,8 +299,8 @@ yandex.com
 ```
 
 **Returned values**
-- Host name. If ByteHouse can parse the input string as a URL. 
-- Empty string. If ByteHouse can’t parse the input string as a URL. 
+- Host name. If ByConity can parse the input string as a URL. 
+- Empty string. If ByConity can’t parse the input string as a URL. 
 Type: `String` .
 
 **Example**
@@ -328,8 +328,8 @@ domainWithoutWWW(url)
 - `url` — URL. Type: String. 
 
 **Returned values**
-- Host name. If ByteHouse can parse the input string as a URL. 
-- Empty string. If ByteHouse can’t parse the input string as a URL. 
+- Host name. If ByConity can parse the input string as a URL. 
+- Empty string. If ByConity can’t parse the input string as a URL. 
 Type: `String` .
 
 **Example**
@@ -619,8 +619,8 @@ https://yandex.com/time/
 ```
 
 **Returned values**
-- Domain name. If ByteHouse can parse the input string as a URL. 
-- Empty string. If ByteHouse cannot parse the input string as a URL. 
+- Domain name. If ByConity can parse the input string as a URL. 
+- Empty string. If ByConity cannot parse the input string as a URL. 
 Type: `String` .
 
 **Example**
