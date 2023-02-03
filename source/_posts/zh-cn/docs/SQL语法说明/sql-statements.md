@@ -638,10 +638,10 @@ SHOW DATABASES
 ```sql
 SHOW DATABASES
 ```
-|**Name**|**CreatedAt**|**CreatedBy**|**UpdatedAt**|**UpdatedBy**|**LastQueriedAt**|**LastQueriedBy**|**Comments**|**Engine**|
-|--|--|--|--|--|--|--|--|--|
-|db_name1|1627366525|123456|1627366525|123456|1627366525|123456|comment here||
-|db_name2|1627366525|123456|1627366525|123456|1627366525|123456|comment here||
+|**Name**|
+|--|
+|db_name1|
+|db_name2|
 
 ### SHOW TABLES
 
@@ -657,10 +657,10 @@ If the `FROM` clause is not specified, the query returns the list of tables from
 ```sql
 SHOW TABLES FROM my_db LIKE '%table'
 ```
-|**Name**|**CreatedAt**|**CreatedBy**|**UpdatedAt**|**UpdatedBy**|**LastQueriedAt**|**LastQueriedBy**|**Type**|**HasUniqueKey**|
-|--|--|--|--|--|--|--|--|--|
-|sells_table|1627366525|123456|1627366525|123456|1627366525|123456|TABLE|0|
-|view_table|1627366525|123456|1627366525|123456|1627366525|123456|VIEW|0|
+|**Name**|
+|--|
+|sells_table|
+|view_table|
 
 ### SHOW CREATE TABLE
 
