@@ -10,7 +10,7 @@ categories:
 tags:
 - Docs
 ---
-ByteHouse supports the standard syntax of window functions. A list of window related features are explained below.
+ByConity supports the standard syntax of window functions. A list of window related features are explained below.
 
 |Feature|Status|
 |--|--|
