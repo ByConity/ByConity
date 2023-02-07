@@ -302,12 +302,10 @@ bool MergedReadBufferWithSegmentCache::seekToMarkInSegmentCache(size_t segment_i
         size_t segment_start_compressed_offset =
             marks_loader.getMark(segment_idx * cache_segment_size).offset_in_compressed_file;
 
-        LOG_TRACE(logger, fmt::format("Seek to diskcache {}, segment {}, offset {}:{}",
-            cache_path, segment_idx, mark_pos.offset_in_compressed_file, mark_pos.offset_in_decompressed_block));
-
+        LOG_TRACE(logger, fmt::format("Seek to diskcache {} (current buffer at {}), segment {}, offset {}:{}", cache_path, cache_buffer.initialized() ? cache_buffer.path() : "Uninitialized", segment_idx, mark_pos.offset_in_compressed_file, mark_pos.offset_in_decompressed_block));
         // There isn't any segment reading right now, or it's not the segment we
         // are looking for, initialize one
-        if (!cache_buffer.initialized() || cache_buffer.path() != cache_path)
+        if (!cache_buffer.initialized() || cache_buffer.path() != fullPath(cache_disk, cache_path))
         {
             cache_buffer.reset();
 
