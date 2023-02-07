@@ -701,33 +701,35 @@ void MergeTreeDataPartCNCH::removeImpl(bool keep_shared_data) const
         projection_part->projectionRemove(relative_path, keep_shared_data);
 
     auto disk = volume->getDisk();
+    auto path_on_disk = fs::path(storage.getRelativeDataPath(location)) / relative_path;
     try
     {
-        disk->removeFile(fs::path(relative_path) / "data");
-        disk->removeDirectory(relative_path);
+        disk->removeFile(path_on_disk / "data");
+        disk->removeDirectory(path_on_disk);
     }
     catch(...)
     {
         /// Recursive directory removal does many excessive "stat" syscalls under the hood.
-        LOG_ERROR(storage.log, "Cannot quickly remove directory {} by removing files; fallback to recursive removal. Reason: {}", fullPath(disk, relative_path), getCurrentExceptionMessage(false));
-        disk->removeRecursive(fs::path(relative_path) / "");
+        LOG_ERROR(storage.log, "Cannot quickly remove directory {} by removing files; fallback to recursive removal. Reason: {}", fullPath(disk, path_on_disk), getCurrentExceptionMessage(false));
+        disk->removeRecursive(path_on_disk);
     }
 }
 
 void MergeTreeDataPartCNCH::projectionRemove(const String & parent_to, bool) const
 {
-    String to = parent_to + "/" + relative_path;
+    auto projection_path_on_disk = fs::path(storage.getRelativeDataPath(location)) / relative_path / parent_to;
     auto disk = volume->getDisk();
     try
     {
-        disk->removeFile(fs::path(relative_path) / "data");
-        disk->removeDirectory(relative_path);
+        disk->removeFile(projection_path_on_disk / "data");
+        disk->removeDirectory(projection_path_on_disk);
     }
     catch(...)
     {
         /// Recursive directory removal does many excessive "stat" syscalls under the hood.
-        LOG_ERROR(storage.log, "Cannot quickly remove directory {} by removing files; fallback to recursive removal. Reason: {}", fullPath(disk, relative_path), getCurrentExceptionMessage(false));
-        disk->removeRecursive(fs::path(relative_path) / "");
+        LOG_ERROR(storage.log, "Cannot quickly remove directory {} by removing files; fallback to recursive removal. Reason: {}", fullPath(disk, projection_path_on_disk), getCurrentExceptionMessage(false));
+        disk->removeRecursive(projection_path_on_disk);
+
     }
 }
 }
