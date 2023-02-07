@@ -203,8 +203,6 @@ public:
         return 2;
     }
 
-    bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return false; }
-
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {0}; }
 
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
@@ -241,10 +239,10 @@ public:
             const auto * type_tuple = typeid_cast<const DataTypeTuple *>(arguments[0].type.get());
             for (size_t i = 0; i < tuple_size; i++)
             {
-                if (!WhichDataType(type_tuple->getElement(i)).isNativeUInt())
+                if (!WhichDataType(type_tuple->getElements()[i]).isNativeUInt())
                     throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
                                     "Illegal type {} of argument in tuple for function {}, should be a native UInt",
-                                    type_tuple->getElement(i)->getName(), getName());
+                                    type_tuple->getElements()[i]->getName(), getName());
                 auto ratio = mask->getColumn(i).getUInt(0);
                 if (ratio > 8 || ratio < 1)
                     throw Exception(ErrorCodes::ARGUMENT_OUT_OF_BOUND,
@@ -380,54 +378,7 @@ private:
 
 REGISTER_FUNCTION(MortonDecode)
 {
-    factory.registerFunction<FunctionMortonDecode>({
-        R"(
-Decodes a Morton encoding (ZCurve) into the corresponding unsigned integer tuple
-
-The function has two modes of operation:
-- Simple
-- Expanded
-
-Simple: accepts a resulting tuple size as a first argument and the code as a second argument.
-[example:simple]
-Will decode into: `(1,2,3,4)`
-The resulting tuple size cannot be more than 8
-
-Expanded: accepts a range mask (tuple) as a first argument and the code as a second argument.
-Each number in mask configures the amount of range shrink
-1 - no shrink
-2 - 2x shrink
-3 - 3x shrink
-....
-Up to 8x shrink.
-[example:range_shrank]
-Note: see mortonEncode() docs on why range change might be beneficial.
-Still limited to 8 numbers at most.
-
-Morton code for one argument is always the argument itself (as a tuple).
-[example:identity]
-Produces: `(1)`
-
-You can shrink one argument too:
-[example:identity_shrank]
-Produces: `(128)`
-
-The function accepts a column of codes as a second argument:
-[example:from_table]
-
-The range tuple must be a constant:
-[example:from_table_range]
-)",
-        Documentation::Examples{
-            {"simple", "SELECT mortonDecode(4, 2149)"},
-            {"range_shrank", "SELECT mortonDecode((1,2), 1572864)"},
-            {"identity", "SELECT mortonDecode(1, 1)"},
-            {"identity_shrank", "SELECT mortonDecode(tuple(2), 32768)"},
-            {"from_table", "SELECT mortonDecode(2, code) FROM table"},
-            {"from_table_range", "SELECT mortonDecode((1,2), code) FROM table"},
-            },
-        Documentation::Categories {"ZCurve", "Morton coding"}
-    });
+    factory.registerFunction<FunctionMortonDecode>();
 }
 
 }

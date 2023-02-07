@@ -168,8 +168,6 @@ public:
         return 0;
     }
 
-    bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return false; }
-
     bool useDefaultImplementationForConstants() const override { return true; }
 
     DataTypePtr getReturnTypeImpl(const DB::DataTypes & arguments) const override
@@ -190,10 +188,10 @@ public:
                                 arguments[0]->getName(), getName());
             for (size_t i = 0; i < tuple_size; i++)
             {
-                if (!WhichDataType(type_tuple->getElement(i)).isNativeUInt())
+                if (!WhichDataType(type_tuple->getElements()[i]).isNativeUInt())
                     throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
                                     "Illegal type {} of argument in tuple for function {}, should be a native UInt",
-                                    type_tuple->getElement(i)->getName(), getName());
+                                    type_tuple->getElements()[i]->getName(), getName());
             }
         }
 
@@ -335,59 +333,7 @@ private:
 
 REGISTER_FUNCTION(MortonEncode)
 {
-    factory.registerFunction<FunctionMortonEncode>({
-    R"(
-Calculates Morton encoding (ZCurve) for a list of unsigned integers
-
-The function has two modes of operation:
-- Simple
-- Expanded
-
-Simple: accepts up to 8 unsigned integers as arguments and produces a UInt64 code.
-[example:simple]
-
-Expanded: accepts a range mask (tuple) as a first argument and up to 8 unsigned integers as other arguments.
-Each number in mask configures the amount of range expansion
-1 - no expansion
-2 - 2x expansion
-3 - 3x expansion
-....
-Up to 8x expansion.
-[example:range_expanded]
-Note: tuple size must be equal to the number of the other arguments
-
-Range expansion can be beneficial when you need a similar distribution for arguments with wildly different ranges (or cardinality)
-For example: 'IP Address' (0...FFFFFFFF) and 'Country code' (0...FF)
-
-Morton encoding for one argument is always the argument itself.
-[example:identity]
-Produces: `1`
-
-You can expand one argument too:
-[example:identity_expanded]
-Produces: `32768`
-
-The function also accepts columns as arguments:
-[example:from_table]
-
-But the range tuple must still be a constant:
-[example:from_table_range]
-
-Please note that you can fit only so much bits of information into Morton code as UInt64 has.
-Two arguments will have a range of maximum 2^32 (64/2) each
-Three arguments: range of max 2^21 (64/3) each
-And so on, all overflow will be clamped to zero
-)",
-        Documentation::Examples{
-            {"simple", "SELECT mortonEncode(1, 2, 3)"},
-            {"range_expanded", "SELECT mortonEncode((1,2), 1024, 16)"},
-            {"identity", "SELECT mortonEncode(1)"},
-            {"identity_expanded", "SELECT mortonEncode(tuple(2), 128)"},
-            {"from_table", "SELECT mortonEncode(n1, n2) FROM table"},
-            {"from_table_range", "SELECT mortonEncode((1,2), n1, n2) FROM table"},
-            },
-        Documentation::Categories {"ZCurve", "Morton coding"}
-    });
+    factory.registerFunction<FunctionMortonEncode>();
 }
 
 }
