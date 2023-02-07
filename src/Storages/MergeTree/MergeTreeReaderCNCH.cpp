@@ -418,7 +418,7 @@ void MergeTreeReaderCNCH::addStreamsIfNoBurden(
                 mark_path, mark_file_offset, mark_file_size,
                 all_mark_ranges, settings, mark_cache, uncompressed_cache,
                 segment_cache.get(),
-                segment_cache_strategy->getSegmentSize(),
+                segment_cache_strategy == nullptr ? 1 : segment_cache_strategy->getSegmentSize(),
                 &(source_data_part->index_granularity_info),
                 profile_callback, clock_type
             );
