@@ -1515,7 +1515,7 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
         }
         bool may_true = key_condition.mayBeTrueInRange(
             used_key_size, index_left.data(), index_right.data(), primary_key.data_types);
-        LOG_DEBUG(log, "Key condition {} is {} in [ ({}) - ({}) )", key_condition.toString(), may_true, fmt::join(index_left, " "), fmt::join(index_right, " "));
+        LOG_TRACE(log, "Key condition {} is {} in [ ({}) - ({}) )", key_condition.toString(), may_true, fmt::join(index_left, " "), fmt::join(index_right, " "));
         return may_true;
     };
 
