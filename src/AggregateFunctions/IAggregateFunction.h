@@ -21,7 +21,6 @@
 
 #pragma once
 
-#include <Columns/ColumnTuple.h>
 #include <Columns/ColumnsNumber.h>
 #include <Core/Block.h>
 #include <Core/ColumnNumbers.h>
@@ -29,6 +28,8 @@
 #include <Interpreters/Context_fwd.h>
 #include <Common/Exception.h>
 #include <common/types.h>
+#include <Common/Exception.h>
+#include <Common/ThreadPool.h>
 
 #if !defined(ARCADIA_BUILD)
 #    include "config_core.h"
@@ -140,6 +141,16 @@ public:
     /// Merges state (on which place points to) with other state of current aggregation function.
     virtual void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const = 0;
 
+    /// Tells if merge() with thread pool parameter could be used.
+    virtual bool isAbleToParallelizeMerge() const { return false; }
+
+    /// Should be used only if isAbleToParallelizeMerge() returned true.
+    virtual void
+    merge(AggregateDataPtr __restrict /*place*/, ConstAggregateDataPtr /*rhs*/, ThreadPool & /*thread_pool*/, Arena * /*arena*/) const
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "merge() with thread pool parameter isn't implemented for {} ", getName());
+    }
+
     /// Serializes state (to transmit it over the network, for example).
     virtual void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf) const = 0;
 
@@ -222,6 +233,7 @@ public:
         const UInt8 * null_map,
         Arena * arena,
         ssize_t if_argument_pos = -1) const = 0;
+
 
     virtual void addBatchSinglePlaceFromInterval(
         size_t batch_begin, size_t batch_end, AggregateDataPtr place, const IColumn ** columns, Arena * arena, ssize_t if_argument_pos = -1)

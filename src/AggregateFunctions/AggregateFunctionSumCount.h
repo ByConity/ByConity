@@ -3,6 +3,7 @@
 #include <type_traits>
 #include <DataTypes/DataTypeTuple.h>
 #include <AggregateFunctions/AggregateFunctionAvg.h>
+#include <Columns/ColumnTuple.h>
 
 
 namespace DB
