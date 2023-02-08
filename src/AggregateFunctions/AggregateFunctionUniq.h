@@ -377,28 +377,18 @@ public:
     }
 
     void ALWAYS_INLINE addBatchSinglePlace(
-        size_t row_begin, size_t row_end, AggregateDataPtr __restrict place, const IColumn ** columns, Arena *, ssize_t if_argument_pos)
+        size_t batch_size, AggregateDataPtr __restrict place, const IColumn ** columns, Arena *, ssize_t if_argument_pos)
         const override
     {
         const char8_t * flags = nullptr;
         if (if_argument_pos >= 0)
             flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData().data();
 
-        detail::Adder<T, Data>::add(this->data(place), columns, num_args, row_begin, row_end, flags, nullptr /* null_map */);
-    }
-
-    void addManyDefaults(
-        AggregateDataPtr __restrict place,
-        const IColumn ** columns,
-        size_t /*length*/,
-        Arena * /*arena*/) const override
-    {
-        detail::Adder<T, Data>::add(this->data(place), columns, num_args, 0);
+        detail::Adder<T, Data>::add(this->data(place), columns, num_args, 0, batch_size, flags, nullptr /* null_map */);
     }
 
     void addBatchSinglePlaceNotNull(
-        size_t row_begin,
-        size_t row_end,
+        size_t batch_size,
         AggregateDataPtr __restrict place,
         const IColumn ** columns,
         const UInt8 * null_map,
@@ -409,7 +399,7 @@ public:
         if (if_argument_pos >= 0)
             flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData().data();
 
-        detail::Adder<T, Data>::add(this->data(place), columns, num_args, row_begin, row_end, flags, null_map);
+        detail::Adder<T, Data>::add(this->data(place), columns, num_args, 0, batch_size, flags, null_map);
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
@@ -484,19 +474,18 @@ public:
     }
 
     void addBatchSinglePlace(
-        size_t row_begin, size_t row_end, AggregateDataPtr __restrict place, const IColumn ** columns, Arena *, ssize_t if_argument_pos)
+        size_t batch_size, AggregateDataPtr __restrict place, const IColumn ** columns, Arena *, ssize_t if_argument_pos)
         const override
     {
         const char8_t * flags = nullptr;
         if (if_argument_pos >= 0)
             flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData().data();
 
-        detail::Adder<T, Data>::add(this->data(place), columns, num_args, row_begin, row_end, flags, nullptr /* null_map */);
+        detail::Adder<T, Data>::add(this->data(place), columns, num_args, 0, batch_size, flags, nullptr /* null_map */);
     }
 
     void addBatchSinglePlaceNotNull(
-        size_t row_begin,
-        size_t row_end,
+        size_t batch_size,
         AggregateDataPtr __restrict place,
         const IColumn ** columns,
         const UInt8 * null_map,
@@ -507,7 +496,7 @@ public:
         if (if_argument_pos >= 0)
             flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData().data();
 
-        detail::Adder<T, Data>::add(this->data(place), columns, num_args, row_begin, row_end, flags, null_map);
+        detail::Adder<T, Data>::add(this->data(place), columns, num_args, 0, batch_size, flags, null_map);
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override

@@ -21,8 +21,6 @@
 
 #pragma once
 
-#include <Columns/ColumnSparse.h>
-#include <Columns/ColumnTuple.h>
 #include <Columns/ColumnsNumber.h>
 #include <Core/Block.h>
 #include <Core/ColumnNumbers.h>
@@ -30,7 +28,6 @@
 #include <Interpreters/Context_fwd.h>
 #include <Common/Exception.h>
 #include <common/types.h>
-#include <base/types.h>
 #include <Common/Exception.h>
 #include <Common/ThreadPool.h>
 
@@ -236,6 +233,7 @@ public:
         const UInt8 * null_map,
         Arena * arena,
         ssize_t if_argument_pos = -1) const = 0;
+
 
     virtual void addBatchSinglePlaceFromInterval(
         size_t batch_begin, size_t batch_end, AggregateDataPtr place, const IColumn ** columns, Arena * arena, ssize_t if_argument_pos = -1)
