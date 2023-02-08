@@ -52,9 +52,9 @@ bool isReadOnlyTransaction(const DB::IAST * ast);
 class ICnchTransaction : public TypePromotion<ICnchTransaction>, public WithContext
 {
 public:
-    explicit ICnchTransaction(const ContextPtr & context_) : WithContext(context_), global_context(*context_->getGlobalContext()) { }
+    explicit ICnchTransaction(const ContextPtr & context_) : WithContext(context_), global_context(context_->getGlobalContext()) { }
     explicit ICnchTransaction(const ContextPtr & context_, TransactionRecord record)
-        : WithContext(context_), global_context(*context_->getGlobalContext()), txn_record(std::move(record))
+        : WithContext(context_), global_context(context_->getGlobalContext()), txn_record(std::move(record))
     {
     }
 
@@ -94,7 +94,7 @@ public:
     template <typename TAction, typename... Args>
     ActionPtr createAction(Args &&... args) const
     {
-        return std::make_shared<TAction>(global_context.shared_from_this(), txn_record.txnID(), std::forward<Args>(args)...);
+        return std::make_shared<TAction>(global_context, txn_record.txnID(), std::forward<Args>(args)...);
     }
     template <typename... Args>
     IntentLockPtr createIntentLock(const String & lock_prefix, Args &&... args) const
@@ -193,7 +193,7 @@ protected:
 protected:
     /// Transaction still needs global context because the query context will expired after query is finished, but
     /// the transaction still running even query is finished.
-    const Context & global_context;
+    ContextPtr global_context;
     TransactionRecord txn_record;
     UUID main_table_uuid{UUIDHelpers::Nil};
 

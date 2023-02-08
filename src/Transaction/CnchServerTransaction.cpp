@@ -65,7 +65,7 @@ CnchServerTransaction::CnchServerTransaction(const ContextPtr & context_, Transa
 {
     if (!isReadOnly())
     {
-        global_context.getCnchCatalog()->createTransactionRecord(getTransactionRecord());
+        global_context->getCnchCatalog()->createTransactionRecord(getTransactionRecord());
         CurrentMetrics::add(CurrentMetrics::CnchTxnTransactionRecords);
     }
 }
@@ -95,7 +95,7 @@ TxnTimestamp CnchServerTransaction::commitV1()
         ProfileEvents::increment(ProfileEvents::CnchTxnCommitV1ElapsedMilliseconds, watch.elapsedMilliseconds());
     });
 
-    auto commit_ts = global_context.getTimestamp();
+    auto commit_ts = global_context->getTimestamp();
 
     try
     {
@@ -176,7 +176,7 @@ TxnTimestamp CnchServerTransaction::commit()
     if (isReadOnly() || !txn_record.isPrepared())
         throw Exception("Invalid commit operation", ErrorCodes::LOGICAL_ERROR);
 
-    TxnTimestamp commit_ts = global_context.getTimestamp();
+    TxnTimestamp commit_ts = global_context->getTimestamp();
     int retry = MAX_RETRY;
     do
     {
@@ -193,7 +193,7 @@ TxnTimestamp CnchServerTransaction::commit()
                              .setCommitTs(commit_ts)
                              .setMainTableUUID(getMainTableUUID());
                 Stopwatch stop_watch;
-                auto success = global_context.getCnchCatalog()->setTransactionRecordStatusWithOffsets(txn_record, target_record, consumer_group, tpl);
+                auto success = global_context->getCnchCatalog()->setTransactionRecordStatusWithOffsets(txn_record, target_record, consumer_group, tpl);
 
                 txn_record = std::move(target_record);
                 if (success)
@@ -226,7 +226,7 @@ TxnTimestamp CnchServerTransaction::commit()
                 {
                     /// Pack the operation creating a new label into CAS operations
                     insertion_label->commit();
-                    label_key = global_context.getCnchCatalog()->getInsertionLabelKey(insertion_label);
+                    label_key = global_context->getCnchCatalog()->getInsertionLabelKey(insertion_label);
                     label_value = insertion_label->serializeValue();
                     Catalog::SinglePutRequest put_req(label_key, label_value, true);
                     put_req.callback = [label = insertion_label](int code, const std::string & msg) {
@@ -246,7 +246,7 @@ TxnTimestamp CnchServerTransaction::commit()
                              .setCommitTs(commit_ts)
                              .setMainTableUUID(getMainTableUUID());
 
-                bool success = global_context.getCnchCatalog()->setTransactionRecordWithRequests(txn_record, target_record, requests, response);
+                bool success = global_context->getCnchCatalog()->setTransactionRecordWithRequests(txn_record, target_record, requests, response);
 
                 txn_record = std::move(target_record);
 
@@ -305,9 +305,9 @@ TxnTimestamp CnchServerTransaction::rollback()
     TxnTimestamp ts;
     try
     {
-        ts = global_context.getTimestamp();
+        ts = global_context->getTimestamp();
         setCommitTime(ts);
-        global_context.getCnchCatalog()->rollbackTransaction(txn_record);
+        global_context->getCnchCatalog()->rollbackTransaction(txn_record);
         LOG_DEBUG(log, "Successfully rollback transaction: {}\n", txn_record.txnID().toUInt64());
     }
     catch (...)
@@ -328,10 +328,10 @@ TxnTimestamp CnchServerTransaction::abort()
 
     TransactionRecord target_record = getTransactionRecord();
     target_record.setStatus(CnchTransactionStatus::Aborted)
-                 .setCommitTs(global_context.getTimestamp())
+                 .setCommitTs(global_context->getTimestamp())
                  .setMainTableUUID(getMainTableUUID());
 
-    bool success = global_context.getCnchCatalog()->setTransactionRecord(txn_record, target_record);
+    bool success = global_context->getCnchCatalog()->setTransactionRecord(txn_record, target_record);
     txn_record = std::move(target_record);
 
     if (success)
@@ -375,7 +375,7 @@ void CnchServerTransaction::clean(TxnCleanTask & task)
     {
         // operations are done in sequence, if any operation failed, the remaining will not continue. The background scan thread will finish the remaining job.
         auto lock = getLock();
-        auto catalog = global_context.getCnchCatalog();
+        auto catalog = global_context->getCnchCatalog();
         auto txn_id = getTransactionID();
         // releaseIntentLocks();
 
@@ -399,8 +399,8 @@ void CnchServerTransaction::clean(TxnCleanTask & task)
 
             catalog->clearUndoBuffer(txn_id);
             /// set clean time in kv, txn_record will be remove by daemon manager
-            UInt64 ttl = global_context.getConfigRef().getUInt64("cnch_txn_safe_remove_seconds", 5 * 60);
-            catalog->setTransactionRecordCleanTime(txn_record, global_context.getTimestamp(), ttl);
+            UInt64 ttl = global_context->getConfigRef().getUInt64("cnch_txn_safe_remove_seconds", 5 * 60);
+            catalog->setTransactionRecordCleanTime(txn_record, global_context->getTimestamp(), ttl);
             // TODO: move to dm when metrics ready
             CurrentMetrics::sub(CurrentMetrics::CnchTxnTransactionRecords);
             LOG_DEBUG(log, "Successfully clean a finished transaction: {}\n", txn_record.txnID().toUInt64());
