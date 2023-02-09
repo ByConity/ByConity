@@ -171,12 +171,7 @@ QueryProcessingStage::Enum StorageCnchMergeTree::getQueryProcessingStage(
     ContextPtr local_context, QueryProcessingStage::Enum, const StorageMetadataPtr &, SelectQueryInfo &) const
 {
     const auto & settings = local_context->getSettingsRef();
-
-    if (settings.distributed_perfect_shard || settings.distributed_group_by_no_merge)
-    {
-        return QueryProcessingStage::Complete;
-    }
-    else if (auto worker_group = local_context->tryGetCurrentWorkerGroup())
+    if (auto worker_group = local_context->tryGetCurrentWorkerGroup())
     {
         size_t num_workers = worker_group->getShardsInfo().size();
         size_t result_size = (num_workers * settings.max_parallel_replicas);
@@ -2254,6 +2249,26 @@ String StorageCnchMergeTree::genCreateTableQueryForWorker(const String & suffix)
     }
 
     return getCreateQueryForCloudTable(getCreateTableSql(), worker_table_name);
+}
+
+std::optional<UInt64> StorageCnchMergeTree::totalRows(const Settings &) const
+{
+    auto parts = getAllParts();
+    size_t rows = 0;
+    for (const auto & part : parts)
+        if (!part->isPartial())
+            rows += part->rows_count;
+    return rows;
+}
+
+std::optional<UInt64> StorageCnchMergeTree::totalRowsByPartitionPredicate(const SelectQueryInfo & query_info, ContextPtr local_context) const
+{
+    auto parts = selectPartsToRead(query_info.syntax_analyzer_result->requiredSourceColumns(), local_context, query_info)
+    size_t rows = 0;
+    for (const auto & part : parts)
+        if (!part->isPartial())
+            rows += part->rows_count;
+    return rows;
 }
 
 } // end namespace DB

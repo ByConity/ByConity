@@ -40,6 +40,10 @@ public:
     bool supportsPrewhere() const override { return true; }
     bool supportsIndexForIn() const override { return true; }
     bool supportsMapImplicitColumn() const override { return true; }
+    bool supportsTrivialCount() const override { return true; }
+
+    std::optional<UInt64> totalRows(const Settings &) const override;
+    std::optional<UInt64> totalRowsByPartitionPredicate(const SelectQueryInfo &, ContextPtr) const override;
 
     StoragePolicyPtr getStoragePolicy(StorageLocation location) const override;
     const String& getRelativeDataPath(StorageLocation location) const override;

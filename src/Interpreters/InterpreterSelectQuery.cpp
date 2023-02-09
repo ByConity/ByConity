@@ -1878,7 +1878,12 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
         && storage
         && storage->getName() != "MaterializeMySQL"
         && !row_policy_filter
-        && processing_stage == QueryProcessingStage::FetchColumns
+        /*
+        ** Trivial count optimization for StorageCnchMergeTree. In original Clickhouse implementation,
+        ** high-level storage cannot support trival count, but StorageCnchMergeTree is special because it
+        ** HAS own metadata.
+        */
+        && (processing_stage == QueryProcessingStage::FetchColumns || storage->supportsTrivialCount())
         && query_analyzer->hasAggregation()
         && (query_analyzer->aggregates().size() == 1)
         && typeid_cast<const AggregateFunctionCount *>(query_analyzer->aggregates()[0].function.get())
