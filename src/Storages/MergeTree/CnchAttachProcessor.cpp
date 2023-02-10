@@ -15,6 +15,8 @@
 
 #include <Storages/MergeTree/CnchAttachProcessor.h>
 #include <memory>
+#include <numeric>
+#include <filesystem>
 #include <set>
 #include <utility>
 #include <Databases/DatabasesCommon.h>
@@ -23,9 +25,16 @@
 #include <Interpreters/trySetVirtualWarehouse.h>
 #include <Parsers/ASTLiteral.h>
 #include <Storages/StorageMaterializedView.h>
+#include <Storages/PartitionCommands.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include <Storages/MergeTree/MergeTreeCNCHDataDumper.h>
-#include "Storages/PartitionCommands.h"
+
+
+namespace ProfileEvents
+{
+    extern const Event PartsToAttach;
+    extern const Event NumOfRowsToAttach;
+}
 
 namespace DB
 {
@@ -34,11 +43,13 @@ namespace ErrorCodes
 {
     extern const int BUCKET_TABLE_ENGINE_MISMATCH;
     extern const int NOT_IMPLEMENTED;
+    extern const int LOGICAL_ERROR;
+    extern const int NETWORK_ERROR;
 }
 
-MergeTreeDataPartsVector fromCNCHPartsVec(const MutableMergeTreeDataPartsCNCHVector & parts)
+IMergeTreeDataPartsVector fromCNCHPartsVec(const MutableMergeTreeDataPartsCNCHVector& parts)
 {
-    MergeTreeDataPartsVector converted_parts;
+    IMergeTreeDataPartsVector converted_parts;
     for (const MutableMergeTreeDataPartCNCHPtr& part : parts)
     {
         converted_parts.push_back(part);
@@ -46,14 +57,20 @@ MergeTreeDataPartsVector fromCNCHPartsVec(const MutableMergeTreeDataPartsCNCHVec
     return converted_parts;
 }
 
-MutableMergeTreeDataPartsCNCHVector toCNCHPartsVec(const MergeTreeDataPartsVector& parts)
+MutableMergeTreeDataPartsCNCHVector toCNCHPartsVec(const IMergeTreeDataPartsVector& parts)
 {
     MutableMergeTreeDataPartsCNCHVector converted_parts;
-    for (const MergeTreeDataPartPtr& part : parts)
+    for (const IMergeTreeDataPartPtr& part : parts)
     {
-        converted_parts.push_back(std::dynamic_pointer_cast<MergeTreeDataPartCNCH>(
-            std::const_pointer_cast<IMergeTreeDataPart>(part)
-        ));
+        if (auto cnch_part = std::dynamic_pointer_cast<MergeTreeDataPartCNCH>(
+            std::const_pointer_cast<IMergeTreeDataPart>(part)); cnch_part != nullptr)
+        {
+            converted_parts.push_back(cnch_part);
+        }
+        else
+        {
+            throw Exception("Failed to convert parts back to cnch parts", ErrorCodes::LOGICAL_ERROR);
+        }
     }
     return converted_parts;
 }
@@ -86,7 +103,8 @@ bool AttachFilter::filter(const MergeTreePartInfo& part_info) const
     {
         case PART:
         {
-            return part_name_info.containsExactly(part_info);
+            // Filter out all part with same block info, i.e. all base and delta part
+            return part_name_info.sameBlocks(part_info);
         }
         case PARTITION:
         {
@@ -100,46 +118,54 @@ bool AttachFilter::filter(const MergeTreePartInfo& part_info) const
     __builtin_unreachable();
 }
 
-void AttachFilter::checkFilterResult(const std::multiset<String>& visible_part_names,
-    const Context& query_ctx) const
+void AttachFilter::checkFilterResult(const std::vector<MutableMergeTreeDataPartsCNCHVector>& parts_from_sources,
+    UInt64 attach_limit) const
 {
-    switch (mode)
+    if (mode == PART)
     {
-        case PART:
+        // NOTE(wsy) We don't support attach from middle of part chain by now
+        size_t total_matched_parts = 0;
+        MutableMergeTreeDataPartCNCHPtr founded_part = nullptr;
+        for (const auto& parts_from_source : parts_from_sources)
         {
-            if (visible_part_names.empty())
+            total_matched_parts += parts_from_source.size();
+            if (!parts_from_source.empty())
             {
-                throw Exception(fmt::format("Part {} not found", object_id),
-                    ErrorCodes::BAD_ARGUMENTS);
+                founded_part = parts_from_source[0];
             }
-            else if (visible_part_names.size() > 1)
-            {
-                throw Exception(fmt::format("Expect only one visible part, got {}",
-                    visible_part_names.size()), ErrorCodes::BAD_ARGUMENTS);
-            }
-            else
-            {
-                if (String visible_part = *visible_part_names.begin(); visible_part != object_id)
-                {
-                    throw Exception(fmt::format("Can't attach part {}, maybe you want to attach {}",
-                        object_id, visible_part), ErrorCodes::BAD_ARGUMENTS);
-                }
-            }
-            return;
         }
-        case PARTITION:
-        case PARTS:
+        
+        if (total_matched_parts != 1)
         {
-            if (UInt64 part_limit = query_ctx.getSettingsRef().cnch_part_attach_limit;
-                visible_part_names.size() > part_limit)
-            {
-                throw Exception(fmt::format("Parts number {} exceed {}", visible_part_names.size(),
-                    part_limit), ErrorCodes::BAD_ARGUMENTS);
-            }
-            return;
+            throw Exception(fmt::format("Expect only one visible part, got {}",
+                total_matched_parts), ErrorCodes::BAD_ARGUMENTS);
+        }
+
+        String founded_part_name = founded_part->info.getPartName();
+        if (founded_part_name != object_id)
+        {
+            throw Exception(fmt::format("Can't attach part {}, maybe you want to attach {}",
+                object_id, founded_part_name), ErrorCodes::BAD_ARGUMENTS);
         }
     }
-    __builtin_unreachable();
+
+    size_t founded_parts = 0;
+    for (const auto& parts_from_source : parts_from_sources)
+    {
+        for (const auto& part : parts_from_source)
+        {
+            for (IMergeTreeDataPartPtr current = part; current != nullptr;
+                current = current->tryGetPreviousPart())
+            {
+                ++founded_parts;
+            }
+        }
+    }
+    if (founded_parts > attach_limit)
+    {
+        throw Exception(fmt::format("Parts number {} exceed {}", founded_parts,
+            attach_limit), ErrorCodes::BAD_ARGUMENTS);
+    }
 }
 
 String AttachFilter::toString() const
@@ -183,7 +209,9 @@ void AttachContext::writeRenameMapToKV(Catalog::Catalog& catalog, const String& 
     {
         for (const auto & [from, to] : resource.rename_map)
         {
-            undo_buffers.emplace_back(txn_id, UndoResourceType::FileSystem, from, to, disk_name);
+            undo_buffers.emplace_back(txn_id, UndoResourceType::FileSystem,
+                from, to);
+            undo_buffers.back().setDiskName(disk_name);
         }
     }
     catalog.writeUndoBuffer(uuid, txn_id, undo_buffers);
@@ -216,7 +244,10 @@ void AttachContext::rollback()
         for (const auto& entry : resource.rename_map)
         {
             pool.scheduleOrThrowOnError([&disk = resource.disk, from=entry.first, to=entry.second]() {
-                disk->moveDirectory(to, from);
+                if (disk->exists(to))
+                {
+                    disk->moveDirectory(to, from);
+                }
             });
         }
     }
@@ -225,7 +256,7 @@ void AttachContext::rollback()
 
 ThreadPool& AttachContext::getWorkerPool(int job_nums)
 {
-    bool need_create_thread_pool = worker_pool == nullptr;
+    bool need_create_thread_pool = worker_pool == nullptr || worker_pool->finished();
     if (!need_create_thread_pool)
     {
         // Already have a thread pool
@@ -263,13 +294,17 @@ void CnchAttachProcessor::exec()
         }
     }
 
-    AttachContext attach_ctx(*query_ctx, 8, 16, logger);
+    AttachContext attach_ctx(*query_ctx, 8,
+        query_ctx->getSettingsRef().cnch_part_attach_max_threads, logger);
 
+    NameSet staged_parts_name;
+    AttachFilter filter;
     try
     {
         // Find all parts which matchs filter, these parts will retain it's origin
         // position, then calculate parts chain and return all visible parts
         std::pair<AttachFilter, PartsFromSources> collect_res = collectParts(attach_ctx);
+        filter = collect_res.first;
         PartsFromSources& parts_from_sources = collect_res.second;
 
         // Assign new part name and rename it to target location
@@ -284,8 +319,9 @@ void CnchAttachProcessor::exec()
         if (!parts_to_commit.empty())
         {
             // Commit transaction
-            NameSet staged_parts_name;
             {
+                injectFailure(AttachFailurePoint::BEFORE_COMMIT_FAIL);
+
                 CnchDataWriter cnch_writer(target_tbl, query_ctx, ManipulationType::Insert);
                 if (is_unique_tbl)
                 {
@@ -304,18 +340,16 @@ void CnchAttachProcessor::exec()
                     });
                 }
 
-                auto& txn_coordinator = query_ctx->getCnchTransactionCoordinator();
-                TransactionCnchPtr txn = query_ctx->getCurrentTransaction();
-                txn->setMainTableUUID(target_tbl.getStorageUUID());
-                txn_coordinator.commitV2(txn);
+                injectFailure(AttachFailurePoint::MID_COMMIT_FAIL);
             }
 
             if (is_unique_tbl)
             {
-                waitingForDedup(collect_res.first.object_id, staged_parts_name);
+                for (const auto & part : parts_to_commit)
+                {
+                    staged_parts_name.insert(part->info.getPartName());
+                }
             }
-
-            refreshView();
         }
     }
     catch(...)
@@ -327,53 +361,72 @@ void CnchAttachProcessor::exec()
         throw;
     }
 
+    try
+    {
+        // If anything went wrong after this point, we don't know for sure if we
+        // should move parts back to source table, since UndoResource is recorded,
+        // we let transaction handle rollback
+        auto& txn_coordinator = query_ctx->getCnchTransactionCoordinator();
+        TransactionCnchPtr txn = query_ctx->getCurrentTransaction();
+        txn->setMainTableUUID(target_tbl.getStorageUUID());
+        txn_coordinator.commitV2(txn);
+
+        injectFailure(AttachFailurePoint::AFTER_COMMIT_FAIL);
+
+        if (is_unique_tbl)
+        {
+            waitingForDedup(filter.object_id, staged_parts_name);
+        }
+
+        refreshView();
+    }
+    catch(...)
+    {
+        tryLogCurrentException(logger);
+
+        attach_ctx.commit();
+
+        throw;
+    }
+
     attach_ctx.commit();
 }
 
-String CnchAttachProcessor::trimPathPostSlash(const String& path)
+// Return relative path from 'from' to 'to'
+String CnchAttachProcessor::relativePathTo(const String& from, const String& to)
 {
-    String path_copy = path;
-    if (!path_copy.empty() && path_copy.back() == '/')
-    {
-        path_copy.pop_back();
-    }
-    return path_copy;
-}
+    Poco::Path from_path = Poco::Path::forDirectory(from);
+    Poco::Path to_path = Poco::Path::forDirectory(to);
 
-String CnchAttachProcessor::relativePathTo(const String& source, const String& target)
-{
-    std::filesystem::path source_path(trimPathPostSlash(source));
-    std::filesystem::path target_path(trimPathPostSlash(target));
-
-    if (source_path.is_absolute() ^ target_path.is_absolute())
+    if (from_path.isAbsolute() ^ to_path.isAbsolute())
     {
-        throw Exception(fmt::format("Source {} and target {} have only one absolute path",
-            source, target), ErrorCodes::BAD_ARGUMENTS);
+        throw Exception(fmt::format("From {} and to {} have only one absolute path",
+            from, to), ErrorCodes::BAD_ARGUMENTS);
     }
-    auto source_iter = source_path.begin();
-    auto target_iter = target_path.begin();
-    for (auto source_end = source_path.end(), target_end = target_path.end();
-        source_iter != source_end && target_iter != target_end; ++source_iter, ++target_iter)
+
+    int idx = 0;
+    for (int limit = std::min(from_path.depth(), to_path.depth());
+        idx < limit; ++idx)
     {
-        if (*source_iter != *target_iter)
+        if (from_path[idx] != to_path[idx])
         {
             break;
         }
     }
 
-    LOG_INFO(&Poco::Logger::get("Source"), "Path " + String(source_path));
+    Poco::Path relative_path;
+    for (int i = idx; i < from_path.depth(); ++i)
+    {
+        relative_path.pushDirectory("..");
+    }
+    for (int i = idx; i < to_path.depth(); ++i)
+    {
+        relative_path.pushDirectory(to_path[i]);
+    }
 
-    std::filesystem::path relative_path;
-    for (auto source_end = source_path.end(); source_iter != source_end; ++source_iter)
-    {
-        LOG_INFO(&Poco::Logger::get("Source"), fmt::format("Rel '{}'", String(*source_iter)));
-        relative_path /= "..";
-    }
-    for (auto target_end = target_path.end(); target_iter != target_end; ++target_iter)
-    {
-        relative_path /= *target_iter;
-    }
-    return relative_path;
+    LOG_TRACE(&Poco::Logger::get("RelativePath"), fmt::format("From {}, to {}, rel {}", from, to, relative_path.toString()));
+
+    return relative_path.toString();
 }
 
 std::pair<AttachFilter, CnchAttachProcessor::PartsFromSources> CnchAttachProcessor::collectParts(
@@ -381,6 +434,8 @@ std::pair<AttachFilter, CnchAttachProcessor::PartsFromSources> CnchAttachProcess
 {
     AttachFilter filter;
     PartsFromSources chained_parts_from_sources;
+
+    injectFailure(AttachFailurePoint::BEFORE_COLLECT_PARTS);
 
     if (!command.from_table.empty())
     {
@@ -402,26 +457,24 @@ std::pair<AttachFilter, CnchAttachProcessor::PartsFromSources> CnchAttachProcess
                    ErrorCodes::NOT_IMPLEMENTED);
             }
             filter = AttachFilter::createPartitionFilter(partition_id);
-            chained_parts_from_sources = collectPartsFromTableDetached(*from_cnch_table,
-                filter, attach_ctx);
+            chained_parts_from_sources = collectPartsFromTableDetached(*from_cnch_table, filter, attach_ctx);
         }
         else
         {
             if (is_unique_tbl)
             {
-                throw Exception("Doest not supported for unique table",
-                    ErrorCodes::NOT_IMPLEMENTED);
+                throw Exception("Attach parts from other table's active partition is not "
+                    "supported for unique table", ErrorCodes::NOT_IMPLEMENTED);
             }
 
-            chained_parts_from_sources = collectPartsFromActivePartition(*from_cnch_table,
-                attach_ctx);
+            chained_parts_from_sources = collectPartsFromActivePartition(*from_cnch_table, attach_ctx);
         }
     }
     else
     {
         if (is_unique_tbl)
         {
-            throw Exception("Doest not supported for unique table",
+            throw Exception("Attach parts from path is not supported for unique table",
                 ErrorCodes::NOT_IMPLEMENTED);
         }
 
@@ -452,16 +505,9 @@ std::pair<AttachFilter, CnchAttachProcessor::PartsFromSources> CnchAttachProcess
         }
     }
 
-    // Check filter result
-    std::multiset<String> visible_part_names;
-    for (const MutableMergeTreeDataPartsCNCHVector& parts : chained_parts_from_sources)
-    {
-        for (const MutableMergeTreeDataPartCNCHPtr& part : parts)
-        {
-            visible_part_names.insert(part->name);
-        }
-    }
-    filter.checkFilterResult(visible_part_names, *query_ctx);
+    injectFailure(AttachFailurePoint::CHECK_FILTER_RESULT);
+
+    filter.checkFilterResult(chained_parts_from_sources, query_ctx->getSettingsRef().cnch_part_attach_limit);
 
     // Check part's hash def against table's
     if (target_tbl.isBucketTable() && !query_ctx->getSettingsRef().skip_table_definition_hash_check)
@@ -493,8 +539,7 @@ std::pair<AttachFilter, CnchAttachProcessor::PartsFromSources> CnchAttachProcess
         }
     }
 
-    return std::make_pair<AttachFilter, PartsFromSources>(std::move(filter),
-        std::move(chained_parts_from_sources));
+    return {std::move(filter), std::move(chained_parts_from_sources)};
 }
 
 CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromTableDetached(
@@ -516,7 +561,8 @@ CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromTable
         source.units.emplace_back(disk, src_rel_path);
     }
 
-    return collectPartsFromSources(tbl, sources, filter, attach_ctx);
+    return collectPartsFromSources(tbl, sources, filter,
+        query_ctx->getSettingsRef().cnch_part_attach_drill_down, attach_ctx);
 }
 
 CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromPath(
@@ -527,15 +573,17 @@ CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromPath(
 
     auto [src_path, disk] = findBestDiskForHDFSPath(path);
 
+    int drill_down_level = query_ctx->getSettingsRef().cnch_part_attach_drill_down;
     std::vector<CollectSource> sources = discoverCollectSources(target_tbl, disk,
-        src_path, query_ctx->getSettingsRef().cnch_part_attach_max_source_discover_level);
+        src_path, drill_down_level);
 
-    return collectPartsFromSources(target_tbl, sources, filter, attach_ctx);
+    return collectPartsFromSources(target_tbl, sources, filter, drill_down_level,
+        attach_ctx);
 }
 
 std::vector<CollectSource> CnchAttachProcessor::discoverCollectSources(
     const StorageCnchMergeTree& tbl, const DiskPtr& disk, const String& root_path,
-    int max_discover_depth)
+    int& drill_down_level)
 {
     std::vector<String> current_level_path{root_path};
     std::vector<String> next_level_path;
@@ -570,7 +618,8 @@ std::vector<CollectSource> CnchAttachProcessor::discoverCollectSources(
         return next_level;
     };
 
-    for (int i = 0; i < max_discover_depth; ++i)
+    int drilled = 0;
+    for (; drilled <= drill_down_level; ++drilled)
     {
         next_level_path = walkthrough(current_level_path);
         if (next_level_path.empty())
@@ -581,8 +630,13 @@ std::vector<CollectSource> CnchAttachProcessor::discoverCollectSources(
         current_level_path.swap(next_level_path);
     }
 
+    injectFailure(AttachFailurePoint::DISCOVER_PATH);
+
+    // Return remained drill down level
+    drill_down_level -= drilled;
+
     // Construct sources from current level's path
-    std::vector<CollectSource> sources(current_level_path.size());
+    std::vector<CollectSource> sources;
     for (size_t i = 0; i < current_level_path.size(); ++i)
     {
         LOG_TRACE(logger, fmt::format("Construct new source from {}",
@@ -596,64 +650,71 @@ std::vector<CollectSource> CnchAttachProcessor::discoverCollectSources(
 
 CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromSources(
     const StorageCnchMergeTree& tbl, const std::vector<CollectSource>& sources,
-    const AttachFilter& filter, AttachContext& attach_ctx)
+    const AttachFilter& filter, int max_drill_down_level, AttachContext& attach_ctx)
 {
-    // TODO(wsy) Parallel this
-    size_t total_parts_num = 0;
-    PartsFromSources parts_from_sources;
-    for (const CollectSource& source : sources)
+    if (max_drill_down_level < 0)
     {
-        parts_from_sources.emplace_back();
-        MutableMergeTreeDataPartsCNCHVector& founded_parts = parts_from_sources.back();
+        LOG_INFO(logger, "Skip parts collection since it already encounter drill down level limit, maybe try increase cnch_part_attach_drill_down");
+        return {};
+    }
 
-        for (const CollectSource::Unit& unit : source.units)
-        {
-            LOG_DEBUG(logger, fmt::format("Collect parts from disk {}, path {}",
-                unit.disk->getName(),
-                std::string(std::filesystem::path(unit.disk->getPath()) / unit.rel_path)));
+    std::atomic<size_t> total_parts_num = 0;
+    // Founded parts from different sources, each source will calculate visibility
+    // independently
+    PartsFromSources parts_from_sources(sources.size());
 
-            if (!unit.disk->exists(unit.rel_path))
+    auto& worker_pool = attach_ctx.getWorkerPool(sources.size());
+    for (size_t i = 0; i < sources.size(); ++i)
+    {
+        worker_pool.scheduleOrThrowOnError([this, &tbl, &source = sources[i], &founded_parts = parts_from_sources[i], &total_parts_num, &filter, max_drill_down_level]() {
+            for (const CollectSource::Unit& unit : source.units)
             {
-                LOG_DEBUG(logger, fmt::format("Path {} doesn't exist, skip",
+                LOG_DEBUG(logger, fmt::format("Collect parts from disk {}, path {}",
+                    unit.disk->getName(),
                     std::string(std::filesystem::path(unit.disk->getPath()) / unit.rel_path)));
-            }
-            else
-            {
-                String unit_rel_path = std::filesystem::path(unit.rel_path) / "";
-                collectPartsFromUnit(tbl, unit.disk, unit_rel_path,
-                    query_ctx->getSettingsRef().cnch_part_attach_drill_down,
-                    filter, founded_parts);
-            }
-        }
 
-        total_parts_num += founded_parts.size();
-    }
+                injectFailure(AttachFailurePoint::COLLECT_PARTS_FROM_UNIT);
 
-    if (size_t expected_parts = query_ctx->getSettingsRef().cnch_part_attach_assert_parts_count;
-        expected_parts != 0 && total_parts_num != expected_parts)
-    {
-        throw Exception(fmt::format("Expected parts count {} but got {}", expected_parts,
-            total_parts_num), ErrorCodes::BAD_ARGUMENTS);
+                if (!unit.disk->exists(unit.rel_path))
+                {
+                    LOG_DEBUG(logger, fmt::format("Path {} doesn't exist, skip",
+                        std::string(std::filesystem::path(unit.disk->getPath()) / unit.rel_path)));
+                }
+                else
+                {
+                    String unit_rel_path = std::filesystem::path(unit.rel_path) / "";
+                    collectPartsFromUnit(tbl, unit.disk, unit_rel_path,
+                        max_drill_down_level, filter, founded_parts);
+                }
+            }
+
+            total_parts_num.fetch_add(founded_parts.size());
+        });
     }
+    worker_pool.wait();
+
+    verifyPartsNum(total_parts_num);
 
     // Parallel load parts
-    auto& worker_pool = attach_ctx.getWorkerPool(total_parts_num);
+    auto& load_pool = attach_ctx.getWorkerPool(total_parts_num);
     for (MutableMergeTreeDataPartsCNCHVector& parts : parts_from_sources)
     {
         for (const MutableMergeTreeDataPartCNCHPtr& part : parts)
         {
-            worker_pool.scheduleOrThrowOnError([part]() {
-                part->loadFromFileSystem(false);
+            load_pool.scheduleOrThrowOnError([this, part]() {
+                injectFailure(AttachFailurePoint::LOAD_PART);
+
+                part->loadFromFileSystem(true);
             });
         }
     }
-    worker_pool.wait();
+    load_pool.wait();
 
     // Calculate visible parts
     for (MutableMergeTreeDataPartsCNCHVector& parts : parts_from_sources)
     {
-        MergeTreeDataPartsVector converted_parts = fromCNCHPartsVec(parts);
-        parts = toCNCHPartsVec(CnchPartsHelper::calcVisibleParts(converted_parts, false));
+        auto const_parts = fromCNCHPartsVec(parts);
+        parts = toCNCHPartsVec(CnchPartsHelper::calcVisibleParts(const_parts, false));
     }
 
     return parts_from_sources;
@@ -665,19 +726,17 @@ void CnchAttachProcessor::collectPartsFromUnit(const StorageCnchMergeTree& tbl,
 {
     if (max_drill_down_level < 0)
     {
-        LOG_INFO(logger, fmt::format("Terminate collect since reach max drill down level at {}",
-            path));
+        LOG_INFO(logger, fmt::format("Terminate collect since reach max drill down level at {}", path));
         return;
     }
 
+    MergeTreePartInfo part_info;
     auto volume = std::make_shared<SingleDiskVolume>("single_disk_vol", disk);
-    for (auto iter = disk->iterateDirectory(path);
-        iter->isValid(); iter->next())
+    for (auto iter = disk->iterateDirectory(path); iter->isValid(); iter->next())
     {
         String current_entry_path = std::filesystem::path(path) / iter->name();
         if (disk->isDirectory(current_entry_path))
         {
-            MergeTreePartInfo part_info;
             if (MergeTreePartInfo::tryParsePartName(iter->name(), &part_info,
                 tbl.format_version))
             {
@@ -705,75 +764,86 @@ void CnchAttachProcessor::collectPartsFromUnit(const StorageCnchMergeTree& tbl,
         }
         else
         {
-            LOG_DEBUG(logger, fmt::format("When collect parts from disk {}, path {} "
+            LOG_TRACE(logger, fmt::format("When collect parts from disk {}, path {} "
                 "is a file, skip", disk->getName(), std::string(std::filesystem::path(disk->getPath()) / iter->path())));
         }
     }
 }
 
-CnchAttachProcessor::PartsFromSources
-CnchAttachProcessor::collectPartsFromActivePartition(StorageCnchMergeTree & tbl, [[maybe_unused]] AttachContext & attach_ctx)
+CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromActivePartition(
+    StorageCnchMergeTree& tbl, AttachContext& attach_ctx)
 {
-    LOG_DEBUG(logger, fmt::format("Collect parts from table {} active parts", tbl.getLogName()));
+    LOG_DEBUG(logger, fmt::format("Collect parts from table {} active parts",
+        tbl.getLogName()));
 
     IMergeTreeDataPartsVector parts;
     PartitionCommand drop_command;
+    // Detach this partition
+    drop_command.detach = true;
     drop_command.type
         = partitionCommandHasWhere(command) ? PartitionCommand::Type::DROP_PARTITION_WHERE : PartitionCommand::Type::DROP_PARTITION;
     drop_command.partition = command.partition->clone();
     tbl.dropPartitionOrPart(drop_command, query_ctx, &parts);
 
+    injectFailure(AttachFailurePoint::DETACH_PARTITION_FAIL);
+
+    size_t total_parts_num = 0;
+    for (const auto& part : parts)
+    {
+        for (auto curr_part = part; curr_part != nullptr; curr_part = curr_part->tryGetPreviousPart())
+        {
+            ++total_parts_num;
+        }
+    }
+
+    verifyPartsNum(total_parts_num);
+
     // dropPartition will commit old transaction, we need to create a
     // new transaction here
     if (query_ctx->getCurrentTransaction()->getStatus() == CnchTransactionStatus::Finished)
     {
-        TransactionCnchPtr txn = query_ctx->getCnchTransactionCoordinator().createTransaction();
+        TransactionCnchPtr txn = query_ctx->getCnchTransactionCoordinator()
+            .createTransaction(CreateTransactionOption().setAsyncPostCommit(query_ctx->getSettingsRef().async_post_commit));
         attach_ctx.setAdditionalTxn(txn);
         query_ctx->setCurrentTransaction(txn, false);
     }
 
     // Convert part
-    return {toCNCHPartsVec(parts)};
+    return PartsFromSources{toCNCHPartsVec(parts)};
 }
 
 std::pair<String, DiskPtr> CnchAttachProcessor::findBestDiskForHDFSPath(
     const String& from_path)
 {
-    auto prefix_match = [](const String& disk, const String& target) {
-        std::filesystem::path disk_path(trimPathPostSlash(disk));
-        std::filesystem::path target_path(trimPathPostSlash(target));
+    // If target is a subdirectory of root, return longest common depth
+    auto prefix_match = [](const String& root, const String& target) {
+        Poco::Path root_path = Poco::Path::forDirectory(root);
+        Poco::Path target_path = Poco::Path::forDirectory(target);
 
-        if (!disk_path.is_absolute() || !target_path.is_absolute())
+        if (!root_path.isAbsolute() || !target_path.isAbsolute())
         {
-            throw Exception("Expect only absolute path", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(fmt::format("Expect only absolute path, but got root {}, target {}",
+                root, target), ErrorCodes::BAD_ARGUMENTS);
         }
 
-        auto disk_iter = disk_path.begin();
-        auto target_iter = target_path.begin();
-        size_t matching_prefix = 0;
-        for (auto disk_end = disk_path.end(), target_end = target_path.end();
-            disk_iter != disk_end && target_iter != target_end; ++disk_iter, ++target_iter)
-        {
-            if (*disk_iter != *target_iter)
-            {
-                break;
-            }
-            ++matching_prefix;
-        }
-
-        if (disk_iter != disk_path.end())
+        if (root_path.depth() > target_path.depth())
         {
             return std::make_pair<UInt32, String>(0, "");
         }
-        else
+        for (int i = 0, limit = root_path.depth(); i < limit; ++i)
         {
-            std::filesystem::path relative_path_to_disk;
-            for (auto target_end = target_path.end(); target_iter != target_end; ++target_iter)
+            if (root_path[i] != target_path[i])
             {
-                relative_path_to_disk /= *target_iter;
+                return std::make_pair<UInt32, String>(0, "");
             }
-            return std::make_pair<UInt32, String>(matching_prefix, relative_path_to_disk / "");
         }
+        std::filesystem::path rel_path;
+        for (int i = root_path.depth(), limit = target_path.depth(); i < limit; ++i)
+        {
+            rel_path /= target_path[i];
+        }
+        return std::make_pair<UInt32, String>(target_path.depth() - root_path.depth(),
+            String(rel_path));
     };
 
     DiskPtr best_disk = nullptr;
@@ -807,7 +877,7 @@ std::pair<String, DiskPtr> CnchAttachProcessor::findBestDiskForHDFSPath(
     return std::pair<String, DiskPtr>(rel_path_on_disk, best_disk);
 }
 
-// Return flattern data parts
+// Return flatten data parts
 MutableMergeTreeDataPartsCNCHVector CnchAttachProcessor::prepareParts(
     const PartsFromSources& parts_from_sources, AttachContext& attach_ctx)
 {
@@ -820,13 +890,13 @@ MutableMergeTreeDataPartsCNCHVector CnchAttachProcessor::prepareParts(
     size_t total_rows_count = 0;
 
     UInt64 current_tx_id = query_ctx->getCurrentTransactionID().toUInt64();
-    for (const MutableMergeTreeDataPartsCNCHVector& visible_parts : parts_from_sources)
+    for (const MutableMergeTreeDataPartsCNCHVector & visible_parts : parts_from_sources)
     {
         parts_and_infos_from_sources.emplace_back();
-        std::vector<std::pair<IMergeTreeDataPartPtr, MergeTreePartInfo>>& parts_and_infos =
+        std::vector<std::pair<IMergeTreeDataPartPtr, MergeTreePartInfo>> & parts_and_infos =
             parts_and_infos_from_sources.back();
 
-        for (const MutableMergeTreeDataPartCNCHPtr& part : visible_parts)
+        for (const MutableMergeTreeDataPartCNCHPtr & part : visible_parts)
         {
             UInt64 new_block_id = query_ctx->getTimestamp();
             UInt64 new_mutation = current_tx_id;
@@ -840,12 +910,11 @@ MutableMergeTreeDataPartsCNCHVector CnchAttachProcessor::prepareParts(
                 if (current_part->isPartial() &&
                     (prev_part == nullptr || current_part->info.hint_mutation != prev_part->info.mutation))
                 {
-                    throw Exception("Previous part of partital part is absent",
-                        ErrorCodes::LOGICAL_ERROR);
+                    throw Exception("Previous part of partial part is absent", ErrorCodes::LOGICAL_ERROR);
                 }
 
-                auto new_part_info = MergeTreePartInfo::fromPartName(current_part->info.getPartNameWithHintMutation(),
-                    target_tbl.format_version);
+                auto new_part_info = MergeTreePartInfo::fromPartName(
+                    current_part->info.getPartNameWithHintMutation(), target_tbl.format_version);
                 new_part_info.min_block = new_block_id;
                 new_part_info.max_block = new_block_id;
                 new_part_info.mutation = new_mutation--;
@@ -867,6 +936,10 @@ MutableMergeTreeDataPartsCNCHVector CnchAttachProcessor::prepareParts(
         total_parts_count += parts_and_infos.size();
     }
 
+    ProfileEvents::increment(ProfileEvents::NumOfRowsToAttach, total_rows_count);
+
+    injectFailure(AttachFailurePoint::ROWS_ASSERT_FAIL);
+
     if (size_t expected_rows = query_ctx->getSettingsRef().cnch_part_attach_assert_rows_count;
         expected_rows != 0 && expected_rows != total_rows_count)
     {
@@ -885,18 +958,19 @@ MutableMergeTreeDataPartsCNCHVector CnchAttachProcessor::prepareParts(
         disk->createDirectories(target_tbl.getRelativeDataPath(IStorage::StorageLocation::MAIN));
     }
 
+    injectFailure(AttachFailurePoint::PREPARE_WRITE_UNDO_FAIL);
+
     // Write rename record to kv first
-    for (auto& parts_and_infos : parts_and_infos_from_sources)
+    for (auto & parts_and_infos : parts_and_infos_from_sources)
     {
-        for (std::pair<IMergeTreeDataPartPtr, MergeTreePartInfo>& part_and_info : parts_and_infos)
+        for (auto & part_and_info : parts_and_infos)
         {
             IMergeTreeDataPartPtr part = part_and_info.first;
             MergeTreePartInfo part_info = part_and_info.second;
             String part_name = part_info.getPartNameWithHintMutation();
             String target_path = std::filesystem::path(target_tbl.getRelativeDataPath(IStorage::StorageLocation::MAIN))
                 / part_name / "";
-            attach_ctx.writeRenameRecord(part->volume->getDefaultDisk(), part->getFullRelativePath(),
-                target_path);
+            attach_ctx.writeRenameRecord(part->volume->getDefaultDisk(), part->getFullRelativePath(), target_path);
         }
     }
     attach_ctx.writeRenameMapToKV(*(query_ctx->getCnchCatalog()),
@@ -905,21 +979,33 @@ MutableMergeTreeDataPartsCNCHVector CnchAttachProcessor::prepareParts(
 
     UInt64 table_def_hash = target_tbl.getTableHashForClusterBy();
     size_t offset = 0;
-    auto& worker_pool = attach_ctx.getWorkerPool(total_parts_count);
-    for (auto& parts_and_infos : parts_and_infos_from_sources)
+    auto & worker_pool = attach_ctx.getWorkerPool(total_parts_count);
+    for (auto & parts_and_infos : parts_and_infos_from_sources)
     {
-        for (std::pair<IMergeTreeDataPartPtr, MergeTreePartInfo>& part_and_info : parts_and_infos)
+        for (auto & part_and_info : parts_and_infos)
         {
             worker_pool.scheduleOrThrowOnError([&prepared_parts, table_def_hash, offset, part = part_and_info.first, part_info = part_and_info.second, this]() {
                 String part_name = part_info.getPartNameWithHintMutation();
-                String target_path = std::filesystem::path(target_tbl.getRelativeDataPath(IStorage::StorageLocation::MAIN))
-                    / part_name / "";
+                String target_path = std::filesystem::path(target_tbl.getRelativeDataPath(IStorage::StorageLocation::MAIN)) / part_name / "";
                 part->volume->getDisk()->moveDirectory(part->getFullRelativePath(), target_path);
 
-                prepared_parts[offset] = std::make_shared<MergeTreeDataPartCNCH>(
-                    target_tbl, part_name, part->volume, part_name);
-                prepared_parts[offset]->loadFromFileSystem(false);
+                Protos::DataModelPart part_model;
+                fillPartModel(target_tbl, *part, part_model, true);
+                // Assign new part info
+                auto part_info_model = part_model.mutable_part_info();
+                part_info_model->set_partition_id(part_info.partition_id);
+                part_info_model->set_min_block(part_info.min_block);
+                part_info_model->set_max_block(part_info.max_block);
+                part_info_model->set_level(part_info.level);
+                part_info_model->set_mutation(part_info.mutation);
+                part_info_model->set_hint_mutation(part_info.hint_mutation);
+
+                // Discard part's commit time
+                part_model.set_commit_time(IMergeTreeDataPart::NOT_INITIALIZED_COMMIT_TIME);
+                prepared_parts[offset] = createPartFromModel(target_tbl, part_model, part_name);
                 prepared_parts[offset]->table_definition_hash = table_def_hash;
+
+                injectFailure(AttachFailurePoint::MOVE_PART_FAIL);
             });
             ++offset;
         }
@@ -931,9 +1017,17 @@ MutableMergeTreeDataPartsCNCHVector CnchAttachProcessor::prepareParts(
 
 void CnchAttachProcessor::genPartsDeleteMark(MutableMergeTreeDataPartsCNCHVector& parts_to_write)
 {
+    injectFailure(AttachFailurePoint::GEN_DELETE_MARK_FAIL);
+
     auto parts_to_drop = target_tbl.selectPartsByPartitionCommand(query_ctx, command);
     if (!parts_to_drop.empty())
     {
+        if (command.part)
+        {
+            throw Exception(fmt::format("Trying to attach part, but {} already exists",
+                parts_to_drop.front()->name()), ErrorCodes::BAD_ARGUMENTS);
+        }
+
         if (target_tbl.isBucketTable() && !query_ctx->getSettingsRef().skip_table_definition_hash_check)
         {
             auto table_def_hash = target_tbl.getTableHashForClusterBy();
@@ -941,7 +1035,7 @@ void CnchAttachProcessor::genPartsDeleteMark(MutableMergeTreeDataPartsCNCHVector
             {
                 if (part->part_model().bucket_number() < 0 || table_def_hash != part->part_model().table_definition_hash())
                 {
-                    LOG_DEBUG(logger, fmt::format("Part's table_definition_hash [{}] is "
+                    LOG_ERROR(logger, fmt::format("Part's table_definition_hash [{}] is "
                         "different from target's table_definition_hash [{}]",
                         part->part_model().table_definition_hash(), table_def_hash));
                     throw Exception("Source parts are not bucket parts or have different CLUSTER BY definition from the target table. ",
@@ -1010,6 +1104,28 @@ void CnchAttachProcessor::refreshView()
     catch(...)
     {
         tryLogCurrentException(logger);
+    }
+}
+
+void CnchAttachProcessor::verifyPartsNum(size_t parts_num) const
+{
+    ProfileEvents::increment(ProfileEvents::PartsToAttach, parts_num);
+
+    injectFailure(AttachFailurePoint::PARTS_ASSERT_FAIL);
+
+    if (size_t expected_parts = query_ctx->getSettingsRef().cnch_part_attach_assert_parts_count;
+        expected_parts != 0 && parts_num != expected_parts)
+    {
+        throw Exception(fmt::format("Expected parts count {} but got {}", expected_parts,
+            parts_num), ErrorCodes::BAD_ARGUMENTS);
+    }
+}
+
+void CnchAttachProcessor::injectFailure(AttachFailurePoint point) const
+{
+    if (unlikely(failure_injection_knob & static_cast<int>(point)))
+    {
+        throw Exception("Injected exception", ErrorCodes::NETWORK_ERROR);
     }
 }
 

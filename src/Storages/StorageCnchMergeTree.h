@@ -149,7 +149,7 @@ public:
 
     ServerDataPartsVector selectPartsByPartitionCommand(ContextPtr local_context, const PartitionCommand & command);
     void dropPartitionOrPart(const PartitionCommand & command, ContextPtr local_context,
-        IMergeTreeDataPartsVector* dropped_parts = nullptr);
+        IMergeTreeDataPartsVector* dropped_parts = nullptr, size_t max_threads = 16);
     Block getBlockWithVirtualPartitionColumns(const std::vector<std::shared_ptr<MergeTreePartition>> & partition_list) const;
 
     struct PartitionDropInfo
@@ -199,7 +199,7 @@ private:
         const Names & column_names_to_return) const;
 
     void dropPartsImpl(ServerDataPartsVector& svr_parts_to_drop,
-        IMergeTreeDataPartsVector& parts_to_drop, bool detach, ContextPtr local_context);
+        IMergeTreeDataPartsVector& parts_to_drop, bool detach, ContextPtr local_context, size_t max_threads);
 
     void collectResource(ContextPtr local_context, ServerDataPartsVector & parts, const String & local_table_name, const std::set<Int64> & required_bucket_numbers = {});
 
