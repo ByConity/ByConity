@@ -1914,28 +1914,41 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
 
         if (num_rows)
         {
-            const AggregateFunctionCount & agg_count = static_cast<const AggregateFunctionCount &>(*func);
+            Block block_with_count;
+            if (from_stage == QueryProcessingStage::FetchColumns)
+            {
+                /// We will process it up to "WithMergeableState".
+                const AggregateFunctionCount & agg_count = static_cast<const AggregateFunctionCount &>(*func);
 
-            /// We will process it up to "WithMergeableState".
-            std::vector<char> state(agg_count.sizeOfData());
-            AggregateDataPtr place = state.data();
+                std::vector<char> state(agg_count.sizeOfData());
+                AggregateDataPtr place = state.data();
 
-            agg_count.create(place);
-            SCOPE_EXIT_MEMORY_SAFE(agg_count.destroy(place));
+                agg_count.create(place);
+                SCOPE_EXIT_MEMORY_SAFE(agg_count.destroy(place));
 
-            agg_count.set(place, *num_rows);
+                agg_count.set(place, *num_rows);
 
-            auto column = ColumnAggregateFunction::create(func);
-            column->insertFrom(place);
+                auto column = ColumnAggregateFunction::create(func);
+                column->insertFrom(place);
 
-            Block header = analysis_result.before_aggregation->getResultColumns();
-            size_t arguments_size = desc.argument_names.size();
-            DataTypes argument_types(arguments_size);
-            for (size_t j = 0; j < arguments_size; ++j)
-                argument_types[j] = header.getByName(desc.argument_names[j]).type;
+                Block header = analysis_result.before_aggregation->getResultColumns();
+                size_t arguments_size = desc.argument_names.size();
+                DataTypes argument_types(arguments_size);
+                for (size_t j = 0; j < arguments_size; ++j)
+                    argument_types[j] = header.getByName(desc.argument_names[j]).type;
 
-            Block block_with_count{
-                {std::move(column), std::make_shared<DataTypeAggregateFunction>(func, argument_types, desc.parameters), desc.column_name}};
+                block_with_count = Block{
+                    ColumnWithTypeAndName(std::move(column), std::make_shared<DataTypeAggregateFunction>(func, argument_types, desc.parameters), desc.column_name)};
+                from_stage = QueryProcessingStage::WithMergeableState;
+            }
+            else
+            {
+                /// We will process it up to "Complete".
+                auto column = ColumnUInt64::create();
+                column->insertValue(*num_rows);
+                block_with_count = Block{ColumnWithTypeAndName(std::move(column), std::make_shared<DataTypeUInt64>(), desc.column_name)};
+                from_stage = QueryProcessingStage::Complete;
+            }
 
             auto istream = std::make_shared<OneBlockInputStream>(block_with_count);
             auto prepared_count = std::make_unique<ReadFromPreparedSource>(Pipe(std::make_shared<SourceFromInputStream>(istream)), context);
