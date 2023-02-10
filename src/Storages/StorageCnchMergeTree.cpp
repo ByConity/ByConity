@@ -299,7 +299,7 @@ Strings StorageCnchMergeTree::selectPartitionsByPredicate(
     const SelectQueryInfo & query_info,
     std::vector<std::shared_ptr<MergeTreePartition>> & partition_list,
     const Names & column_names_to_return,
-    ContextPtr local_context)
+    ContextPtr local_context) const
 {
     /// Coarse grained partition prunner: filter out the partition which will definately not sastify the query predicate. The benefit
     /// is 2-folded: (1) we can prune data parts and (2) we can reduce numbers of calls to catalog to get parts 's metadata.
@@ -853,7 +853,7 @@ bool StorageCnchMergeTree::optimize(const ASTPtr & query, const StorageMetadataP
     return true;
 }
 
-CheckResults StorageCnchMergeTree::checkDataCommon(const ASTPtr & query, ContextPtr local_context, ServerDataPartsVector & parts)
+CheckResults StorageCnchMergeTree::checkDataCommon(const ASTPtr & query, ContextPtr local_context, ServerDataPartsVector & parts) const
 {
     String local_table_name = getCloudTableName(local_context);
 
@@ -915,7 +915,7 @@ CheckResults StorageCnchMergeTree::checkData(const ASTPtr & query, ContextPtr lo
     return checkDataCommon(query, local_context, parts);
 }
 
-ServerDataPartsVector StorageCnchMergeTree::getAllParts(ContextPtr local_context)
+ServerDataPartsVector StorageCnchMergeTree::getAllParts(ContextPtr local_context) const
 {
     // TEST_START(testlog);
 
@@ -933,7 +933,7 @@ ServerDataPartsVector StorageCnchMergeTree::getAllParts(ContextPtr local_context
 }
 
 ServerDataPartsVector
-StorageCnchMergeTree::selectPartsToRead(const Names & column_names_to_return, ContextPtr local_context, const SelectQueryInfo & query_info)
+StorageCnchMergeTree::selectPartsToRead(const Names & column_names_to_return, ContextPtr local_context, const SelectQueryInfo & query_info) const
 {
     ServerDataPartsVector data_parts;
 
@@ -1250,7 +1250,7 @@ void StorageCnchMergeTree::removeCheckpoint(const Protos::Checkpoint & checkpoin
     // getContext()->getCnchCatalog()->markCheckpoint(shared_from_this(), new_checkpoint);
 }
 
-void StorageCnchMergeTree::filterPartsInExplicitTransaction(ServerDataPartsVector & data_parts, ContextPtr local_context)
+void StorageCnchMergeTree::filterPartsInExplicitTransaction(ServerDataPartsVector & data_parts, ContextPtr local_context) const
 {
     Int64 primary_txn_id = local_context->getCurrentTransaction()->getPrimaryTransactionID().toUInt64();
     TxnTimestamp start_time = local_context->getCurrentTransaction()->getStartTime();
@@ -2251,23 +2251,23 @@ String StorageCnchMergeTree::genCreateTableQueryForWorker(const String & suffix)
     return getCreateQueryForCloudTable(getCreateTableSql(), worker_table_name);
 }
 
-std::optional<UInt64> StorageCnchMergeTree::totalRows(const Settings &) const
+std::optional<UInt64> StorageCnchMergeTree::totalRows(const ContextPtr & query_context) const
 {
-    auto parts = getAllParts();
+    auto parts = getAllParts(query_context);
     size_t rows = 0;
     for (const auto & part : parts)
         if (!part->isPartial())
-            rows += part->rows_count;
+            rows += part->rowsCount();
     return rows;
 }
 
 std::optional<UInt64> StorageCnchMergeTree::totalRowsByPartitionPredicate(const SelectQueryInfo & query_info, ContextPtr local_context) const
 {
-    auto parts = selectPartsToRead(query_info.syntax_analyzer_result->requiredSourceColumns(), local_context, query_info)
+    auto parts = selectPartsToRead(query_info.syntax_analyzer_result->requiredSourceColumns(), local_context, query_info);
     size_t rows = 0;
     for (const auto & part : parts)
         if (!part->isPartial())
-            rows += part->rows_count;
+            rows += part->rowsCount();
     return rows;
 }
 

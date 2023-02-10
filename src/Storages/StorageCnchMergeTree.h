@@ -42,7 +42,7 @@ public:
     bool supportsMapImplicitColumn() const override { return true; }
     bool supportsTrivialCount() const override { return true; }
 
-    std::optional<UInt64> totalRows(const Settings &) const override;
+    std::optional<UInt64> totalRows(const ContextPtr &) const override;
     std::optional<UInt64> totalRowsByPartitionPredicate(const SelectQueryInfo &, ContextPtr) const override;
 
     StoragePolicyPtr getStoragePolicy(StorageLocation location) const override;
@@ -98,7 +98,7 @@ public:
     ServerDataPartsVector selectPartsToRead(
         const Names & column_names_to_return,
         ContextPtr local_context,
-        const SelectQueryInfo & query_info);
+        const SelectQueryInfo & query_info) const;
 
     /// Return all base parts and delete bitmap metas in the given partitions.
     /// If `partitions` is empty, return meta for all partitions.
@@ -189,12 +189,12 @@ private:
     // Relative path to auxility storage disk root
     String relative_auxility_storage_path;
 
-    CheckResults checkDataCommon(const ASTPtr & query, ContextPtr local_context, ServerDataPartsVector & parts);
+    CheckResults checkDataCommon(const ASTPtr & query, ContextPtr local_context, ServerDataPartsVector & parts) const;
 
-    ServerDataPartsVector getAllParts(ContextPtr local_context);
+    ServerDataPartsVector getAllParts(ContextPtr local_context) const;
 
     Strings selectPartitionsByPredicate(
-        const SelectQueryInfo & query_info, std::vector<std::shared_ptr<MergeTreePartition>> & partition_list, const Names & column_names_to_return, ContextPtr local_context);
+        const SelectQueryInfo & query_info, std::vector<std::shared_ptr<MergeTreePartition>> & partition_list, const Names & column_names_to_return, ContextPtr local_context) const;
 
     void filterPartsByPartition(
         ServerDataPartsVector & parts,
@@ -210,7 +210,7 @@ private:
     MutationCommands getFirstAlterMutationCommandsForPart(const DataPartPtr &) const override { return {}; }
 
     /// For select in interactive transaction session
-    void filterPartsInExplicitTransaction(ServerDataPartsVector & data_parts, ContextPtr local_context);
+    void filterPartsInExplicitTransaction(ServerDataPartsVector & data_parts, ContextPtr local_context) const;
 
     /// Generate view dependency create queries for materialized view writing
     Names genViewDependencyCreateQueries(const StorageID & storage_id, ContextPtr local_context, const String & table_suffix);

@@ -45,7 +45,7 @@ public:
 
     void alter(const AlterCommands & params, ContextPtr context, TableLockHolder & table_lock_holder) override;
 
-    std::optional<UInt64> totalRows(const Settings &) const override
+    std::optional<UInt64> totalRows(const ContextPtr &) const override
     {
         return {0};
     }

@@ -1900,7 +1900,7 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
 
         if (!query.prewhere() && !query.where())
         {
-            num_rows = storage->totalRows(settings);
+            num_rows = storage->totalRows(context);
         }
         else // It's possible to optimize count() given only partition predicates
         {

@@ -463,7 +463,7 @@ protected:
                 settings.select_sequential_consistency = 0;
                 if (columns_mask[src_index++])
                 {
-                    auto total_rows = table ? table->totalRows(settings) : std::nullopt;
+                    auto total_rows = table ? table->totalRows(context) : std::nullopt;
                     if (total_rows)
                         res_columns[res_index++]->insert(*total_rows);
                     else

@@ -1212,7 +1212,7 @@ namespace Catalog
     }
 
     DB::ServerDataPartsVector Catalog::getServerDataPartsInPartitions(
-        const StoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, const Context * session_context)
+        const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, const Context * session_context)
     {
         ServerDataPartsVector outRes;
         runWithMetricSupport(
@@ -1220,7 +1220,7 @@ namespace Catalog
                 Stopwatch watch;
                 auto fall_back = [&]() {
                     ServerDataPartsVector res;
-                    auto & merge_tree_storage = dynamic_cast<MergeTreeMetaBase &>(*storage);
+                    auto & merge_tree_storage = dynamic_cast<const MergeTreeMetaBase &>(*storage);
                     Strings all_partitions = getPartitionIDsFromMetastore(storage);
                     auto parts_model = getDataPartsMetaFromMetastore(storage, partitions, all_partitions, ts);
                     for (auto & part_model_ptr : parts_model)
@@ -1232,7 +1232,7 @@ namespace Catalog
                 };
 
                 ServerDataPartsVector res;
-                if (!dynamic_cast<MergeTreeMetaBase *>(storage.get()))
+                if (!dynamic_cast<const MergeTreeMetaBase *>(storage.get()))
                 {
                     outRes = res;
                     return;
@@ -1327,12 +1327,12 @@ namespace Catalog
         return outRes;
     }
 
-    ServerDataPartsVector Catalog::getAllServerDataParts(const StoragePtr & table, const TxnTimestamp & ts, const Context * session_context)
+    ServerDataPartsVector Catalog::getAllServerDataParts(const ConstStoragePtr & table, const TxnTimestamp & ts, const Context * session_context)
     {
         ServerDataPartsVector outRes;
         runWithMetricSupport(
             [&] {
-                if (!dynamic_cast<MergeTreeMetaBase *>(table.get()))
+                if (!dynamic_cast<const MergeTreeMetaBase *>(table.get()))
                 {
                     outRes = {};
                     return;
@@ -1669,7 +1669,7 @@ namespace Catalog
             meta_proxy->setNonHostUpdateTimeStamp(name_space, UUIDHelpers::UUIDToString(storage->getStorageID().uuid), current_pts);
     }
 
-    bool Catalog::canUseCache(const StoragePtr & storage, const Context * session_context)
+    bool Catalog::canUseCache(const ConstStoragePtr & storage, const Context * session_context)
     {
         UInt64 latest_nhut;
         if (!context.getPartCacheManager())
@@ -1775,13 +1775,13 @@ namespace Catalog
             ProfileEvents::DropAllPartFailed);
     }
 
-    std::vector<std::shared_ptr<MergeTreePartition>> Catalog::getPartitionList(const StoragePtr & table, const Context * session_context)
+    std::vector<std::shared_ptr<MergeTreePartition>> Catalog::getPartitionList(const ConstStoragePtr & table, const Context * session_context)
     {
         std::vector<std::shared_ptr<MergeTreePartition>> partition_list;
         runWithMetricSupport(
             [&] {
                 PartitionMap partitions;
-                if (auto * cnch_table = dynamic_cast<MergeTreeMetaBase *>(table.get()))
+                if (auto * cnch_table = dynamic_cast<const MergeTreeMetaBase *>(table.get()))
                 {
                     bool can_use_cache = true;
                     if (context.getSettingsRef().server_write_ha)
@@ -1801,7 +1801,7 @@ namespace Catalog
         return partition_list;
     }
 
-    Strings Catalog::getPartitionIDs(const StoragePtr & storage, const Context * session_context)
+    Strings Catalog::getPartitionIDs(const ConstStoragePtr & storage, const Context * session_context)
     {
         Strings partition_ids;
         runWithMetricSupport(
@@ -1845,7 +1845,7 @@ namespace Catalog
             ProfileEvents::GetPartitionsFromMetastoreFailed);
     }
 
-    Strings Catalog::getPartitionIDsFromMetastore(const StoragePtr & storage)
+    Strings Catalog::getPartitionIDsFromMetastore(const ConstStoragePtr & storage)
     {
         Strings partitions_id;
         IMetaStore::IteratorPtr it = meta_proxy->getPartitionList(name_space, UUIDHelpers::UUIDToString(storage->getStorageID().uuid));
@@ -4247,7 +4247,7 @@ namespace Catalog
     }
 
     DataModelPartPtrVector Catalog::getDataPartsMetaFromMetastore(
-        const StoragePtr & storage, const Strings & required_partitions, const Strings & full_partitions, const TxnTimestamp & ts)
+        const ConstStoragePtr & storage, const Strings & required_partitions, const Strings & full_partitions, const TxnTimestamp & ts)
     {
         auto createDataModelPartPtr = [&](const String & meta) {
             Protos::DataModelPart part_model;
