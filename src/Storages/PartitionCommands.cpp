@@ -92,6 +92,7 @@ std::optional<PartitionCommand> PartitionCommand::parse(const ASTAlterCommand * 
         res.attach_from_detached = command_ast->attach_from_detached;
         res.from_database = command_ast->from_database;
         res.from_table = command_ast->from_table;
+        res.detach = command_ast->detach;
         return res;
     }
     else if (command_ast->type == ASTAlterCommand::MOVE_PARTITION)
@@ -142,6 +143,7 @@ std::optional<PartitionCommand> PartitionCommand::parse(const ASTAlterCommand * 
         res.from_database = command_ast->from_database;
         res.from_table = command_ast->from_table;
         res.from_zookeeper_path = command_ast->from;
+        res.detach = command_ast->detach;
         return res;
     }
     else if (command_ast->type == ASTAlterCommand::REPLACE_PARTITION_WHERE)

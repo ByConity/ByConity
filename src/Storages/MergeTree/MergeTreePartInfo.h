@@ -108,6 +108,11 @@ struct MergeTreePartInfo
             && (level > rhs.level || mutation > rhs.mutation);
     }
 
+    bool sameBlocks(const MergeTreePartInfo & rhs) const
+    {
+        return partition_id == rhs.partition_id && min_block == rhs.min_block && max_block == rhs.max_block;
+    }
+
     /// Return part mutation version, if part wasn't mutated return zero
     Int64 getMutationVersion() const
     {

@@ -200,7 +200,7 @@ UInt32 getNameNodeIdForDisk(const StoragePolicyPtr &, const DiskPtr &)
     return 0;
 }
 
-void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Protos::DataModelPart & part_model)
+void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Protos::DataModelPart & part_model, bool ignore_column_commit_time)
 {
     /// fill part info
     Protos::DataModelPartInfo * model_info = part_model.mutable_part_info();
@@ -229,7 +229,7 @@ void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Pr
     if (part.mutation_commit_time)
         part_model.set_mutation_commit_time(part.mutation_commit_time);
 
-    if (part.columns_commit_time)
+    if (!ignore_column_commit_time && part.columns_commit_time)
     {
         part_model.set_columns_commit_time(part.columns_commit_time);
     }

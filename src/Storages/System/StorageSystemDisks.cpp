@@ -38,7 +38,7 @@ StorageSystemDisks::StorageSystemDisks(const StorageID & table_id_)
     storage_metadata.setColumns(ColumnsDescription(
     {
         {"name", std::make_shared<DataTypeString>()},
-        {"id", std::make_shared<DataTypeString>()},
+        {"id", std::make_shared<DataTypeUInt64>()},
         {"path", std::make_shared<DataTypeString>()},
         {"free_space", std::make_shared<DataTypeUInt64>()},
         {"total_space", std::make_shared<DataTypeUInt64>()},
@@ -60,7 +60,7 @@ Pipe StorageSystemDisks::read(
     metadata_snapshot->check(column_names, getVirtuals(), getStorageID());
 
     MutableColumnPtr col_name = ColumnString::create();
-    MutableColumnPtr col_id = ColumnString::create();
+    MutableColumnPtr col_id = ColumnUInt64::create();
     MutableColumnPtr col_path = ColumnString::create();
     MutableColumnPtr col_free = ColumnUInt64::create();
     MutableColumnPtr col_total = ColumnUInt64::create();

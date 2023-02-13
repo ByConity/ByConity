@@ -28,6 +28,26 @@
 namespace DB
 {
 
+// Define exception point, will throw exception if exception knob is set to certain value.
+// For test only
+enum class AttachFailurePoint
+{
+    BEFORE_COLLECT_PARTS = 1 << 0,
+    COLLECT_PARTS_FROM_UNIT = 1 << 1,
+    PARTS_ASSERT_FAIL = 1 << 2,
+    LOAD_PART = 1 << 3,
+    DISCOVER_PATH = 1 << 4,
+    CHECK_FILTER_RESULT = 1 << 5, // Same as check bucket property failed
+    ROWS_ASSERT_FAIL = 1 << 6,
+    DETACH_PARTITION_FAIL = 1 << 7,
+    PREPARE_WRITE_UNDO_FAIL = 1 << 8,
+    MOVE_PART_FAIL = 1 << 9,
+    GEN_DELETE_MARK_FAIL = 1 << 10,
+    BEFORE_COMMIT_FAIL = 1 << 11,
+    MID_COMMIT_FAIL = 1 << 12,
+    AFTER_COMMIT_FAIL = 1 << 13
+};
+
 // Filter for attach operation, has 3 modes
 // 1. filter out single part
 // 2. filter out parts within some partition
@@ -52,8 +72,8 @@ public:
     // Filter out if this part should attach
     bool filter(const MergeTreePartInfo& part_info) const;
 
-    void checkFilterResult(const std::multiset<String>& visible_part_names,
-        const Context& query_ctx) const;
+    void checkFilterResult(const std::vector<MutableMergeTreeDataPartsCNCHVector>& parts_from_sources,
+        UInt64 attach_limit) const;
 
     String toString() const;
 
@@ -64,9 +84,10 @@ private:
     MergeTreePartInfo part_name_info;
 };
 
-// Single source of parts collection, will calcVisibleParts for every source.
-// One source may contains comes from multiple disks, for example table with
-// multinamenode
+// Single source of parts collection, will calcVisibleParts for each source.
+// For example, a table's detached directory is a single source. For attach
+// from path, if it may contains multiple subdirectory, each subdirectory have 
+// it's own parts, then each subdirectory will consider as a single source
 class CollectSource
 {
 public:
@@ -78,9 +99,9 @@ public:
         String rel_path;
     };
 
-    // A source may have single or multiple collect unit
-    // For collect parts from table, it will contains multiple unit,
-    // one for each disk's detached directory
+    // A source may have multiple collect unit, for example, a table with multinamenode
+    // enabled, it may have multiple detached path, one for each namenode, then each
+    // detached path is consider as a collect unit
     std::vector<Unit> units;
 };
 
@@ -126,27 +147,28 @@ private:
     std::unique_ptr<ThreadPool> worker_pool;
 
     std::mutex mu;
+    /// Temporary resource created during ATTACH, including temp dictionary, file movement records... 
     std::map<String, TempResource> resources;
 
     Poco::Logger* logger;
 };
 
 // Attach will follow such process
-// 1. Find detached parts which match filter from source(path/table etc)
-// 2. Move detached parts to temporary directory under target table's detached dir
-// 3. Load these detached parts
-// 4. Calculate visible parts
-// 5. Generate new block id and mutation id for visible parts
-// 6. Rename parts to final directory
-// 7. Load visible parts(Maybe we can elimate this by use loaded parts?)
-// 8. Commit transaction
+// 1. Find all candidate parts which match filter from source(path/table etc)
+// 2. Load these parts and calculate visibility
+// 3. Generate new block id and mutation id for visible parts
+// 4. Move these parts to final position
+// 5. Commit transaction
 class CnchAttachProcessor
 {
 public:
     CnchAttachProcessor(StorageCnchMergeTree& tbl, const PartitionCommand& cmd,
         const ContextMutablePtr& ctx):
-            target_tbl(tbl), is_unique_tbl(tbl.getInMemoryMetadataPtr()->hasUniqueKey()),
-            command(cmd), query_ctx(ctx), logger(&Poco::Logger::get("CnchAttachProcessor")) {}
+            failure_injection_knob(ctx->getSettingsRef().attach_failure_injection_knob),
+            target_tbl(tbl), from_storage(nullptr),
+            is_unique_tbl(tbl.getInMemoryMetadataPtr()->hasUniqueKey()),
+            command(cmd), query_ctx(ctx),
+            logger(&Poco::Logger::get("CnchAttachProcessor")) {}
 
     void exec();
 
@@ -169,10 +191,10 @@ private:
     PartsFromSources collectPartsFromPath(const String& path, const AttachFilter& filter,
         AttachContext& attach_ctx);
     std::vector<CollectSource> discoverCollectSources(const StorageCnchMergeTree& tbl,
-        const DiskPtr& disk, const String& rel_path, int max_source_discover_depth);
+        const DiskPtr& disk, const String& rel_path, int& drill_down_level);
     PartsFromSources collectPartsFromSources(const StorageCnchMergeTree& tbl,
         const std::vector<CollectSource>& sources, const AttachFilter& filter,
-        AttachContext& attach_ctx);
+        int max_drill_down_level, AttachContext& attach_ctx);
     void collectPartsFromUnit(const StorageCnchMergeTree& tbl,
         const DiskPtr& disk, String& path, int max_drill_down_level,
         const AttachFilter& filter, MutableMergeTreeDataPartsCNCHVector& founded_parts);
@@ -187,6 +209,11 @@ private:
     void genPartsDeleteMark(MutableMergeTreeDataPartsCNCHVector& parts_to_write);
     void waitingForDedup(const String& partition_id, const NameSet& staged_parts_name);
     void refreshView();
+
+    void verifyPartsNum(size_t total_parts_num) const;
+    inline void injectFailure(AttachFailurePoint point) const;
+
+    UInt64 failure_injection_knob;
 
     StorageCnchMergeTree& target_tbl;
     StoragePtr from_storage; /// If attach.from_table is not empty

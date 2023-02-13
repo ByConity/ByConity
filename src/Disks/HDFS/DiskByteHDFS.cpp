@@ -177,7 +177,7 @@ void DiskByteHDFS::listFiles(const String & path, std::vector<String> & file_nam
 
 std::unique_ptr<ReadBufferFromFileBase> DiskByteHDFS::readFile(const String & path, const ReadSettings & settings) const
 {
-    return std::make_unique<ReadBufferFromByteHDFS>(absolutePath(path), true, hdfs_params, settings.buffer_size);
+    return std::make_unique<ReadBufferFromByteHDFS>(absolutePath(path), settings.byte_hdfs_pread, hdfs_params, settings.buffer_size);
 }
 
 std::unique_ptr<WriteBufferFromFileBase> DiskByteHDFS::writeFile(const String & path, const WriteSettings & settings)
