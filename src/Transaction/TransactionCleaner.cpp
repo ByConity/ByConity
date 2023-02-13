@@ -53,6 +53,13 @@ void TransactionCleaner::cleanTransaction(const TransactionCnchPtr & txn)
     if (!txn_record.ended())
         txn->abort();
 
+    if (!txn->async_post_commit)
+    {
+        TxnCleanTask task(txn->getTransactionID(), CleanTaskPriority::HIGH, txn_record.status());
+        txn->clean(task);
+        return;
+    }
+
     scheduleTask(
         [this, txn] {
             TxnCleanTask & task = getCleanTask(txn->getTransactionID());

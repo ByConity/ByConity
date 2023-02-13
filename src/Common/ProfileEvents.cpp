@@ -699,6 +699,9 @@
     M(GetBGJobStatusesFailed, "") \
     M(DropBGJobStatusSuccess, "") \
     M(DropBGJobStatusFailed, "") \
+    \
+    M(PartsToAttach, "") \
+    M(NumOfRowsToAttach, "") \
 
 namespace ProfileEvents
 {

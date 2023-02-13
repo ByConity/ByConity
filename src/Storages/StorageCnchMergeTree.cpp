@@ -1664,7 +1664,7 @@ void StorageCnchMergeTree::checkAlterPartitionIsPossible(
                 /// We are able to parse it
                 MergeTreePartInfo::fromPartName(part_name, format_version);
             }
-            else
+            else if (!command.parts)
             {
                 /// We are able to parse it
                 getPartitionIDFromQuery(command.partition, getContext());
@@ -1847,7 +1847,7 @@ void StorageCnchMergeTree::truncate(
 }
 
 void StorageCnchMergeTree::dropPartitionOrPart(const PartitionCommand & command,
-    ContextPtr local_context, IMergeTreeDataPartsVector* dropped_parts)
+    ContextPtr local_context, IMergeTreeDataPartsVector* dropped_parts, size_t max_threads)
 {
     auto svr_parts = selectPartsByPartitionCommand(local_context, command);
     if (svr_parts.empty())
@@ -1859,7 +1859,7 @@ void StorageCnchMergeTree::dropPartitionOrPart(const PartitionCommand & command,
     }
 
     auto parts = createPartVectorFromServerParts(*this, svr_parts);
-    dropPartsImpl(svr_parts, parts, command.detach, local_context);
+    dropPartsImpl(svr_parts, parts, command.detach, local_context, max_threads);
 
     if (dropped_parts != nullptr)
     {
@@ -1868,7 +1868,8 @@ void StorageCnchMergeTree::dropPartitionOrPart(const PartitionCommand & command,
 }
 
 void StorageCnchMergeTree::dropPartsImpl(ServerDataPartsVector& svr_parts_to_drop,
-    IMergeTreeDataPartsVector& parts_to_drop, bool detach, ContextPtr local_context)
+    IMergeTreeDataPartsVector& parts_to_drop, bool detach, ContextPtr local_context,
+    size_t max_threads)
 {
     auto txn = local_context->getCurrentTransaction();
 
@@ -1888,19 +1889,29 @@ void StorageCnchMergeTree::dropPartsImpl(ServerDataPartsVector& svr_parts_to_dro
             disk->createDirectories(getRelativeDataPath(IStorage::StorageLocation::MAIN) + "/detached");
         }
 
-        ThreadPool pool(std::min(parts_to_drop.size(), 16UL));
-        auto callback = [&] (const DataPartPtr & part)
+        UndoResources undo_resources;
+        auto write_undo_callback = [&](const DataPartPtr& part) {
+            UndoResource ub(txn->getTransactionID(), UndoResourceType::FileSystem, part->getFullRelativePath(),
+                part->getRelativePathForDetachedPart(""));
+            ub.setDiskName(part->volume->getDisk()->getName());
+            undo_resources.push_back(ub);
+        };
+        for (const auto& data_part : parts_to_drop)
         {
-            pool.scheduleOrThrowOnError([part, &txn, &local_context, this] {
-                UndoResource ub(txn->getTransactionID(), UndoResourceType::FileSystem, part->getFullRelativePath(), part->getRelativePathForDetachedPart(""));
-                ub.setDiskName(part->volume->getDisk()->getName());
-                local_context->getCnchCatalog()->writeUndoBuffer(UUIDHelpers::UUIDToString(getStorageUUID()), txn->getTransactionID(), {ub});
+            data_part->enumeratePreviousParts(write_undo_callback);
+        }
+        local_context->getCnchCatalog()->writeUndoBuffer(UUIDHelpers::UUIDToString(getStorageUUID()),
+            txn->getTransactionID(), undo_resources);
+
+        ThreadPool pool(std::min(parts_to_drop.size(), max_threads));
+        auto callback = [&pool] (const DataPartPtr& part) {
+            pool.scheduleOrThrowOnError([part]() {
                 part->renameToDetached("");
             });
         };
-        for (const auto & data_part : parts_to_drop)
+        for (const auto& part : parts_to_drop)
         {
-            data_part->enumeratePreviousParts(callback);
+            part->enumeratePreviousParts(callback);
         }
         pool.wait();
         /// NOTE: we still need create DROP_RANGE part for detached parts,
@@ -1914,6 +1925,7 @@ void StorageCnchMergeTree::dropPartsImpl(ServerDataPartsVector& svr_parts_to_dro
         auto drop_part_info = part->info();
         drop_part_info.level += 1;
         drop_part_info.mutation = txn->getPrimaryTransactionID().toUInt64();
+        drop_part_info.hint_mutation = 0;
         auto disk = getStoragePolicy(IStorage::StorageLocation::AUXILITY)->getAnyDisk();
         auto single_disk_volume = std::make_shared<SingleDiskVolume>("volume_" + drop_part_info.getPartName(), disk);
         String drop_part_name = drop_part_info.getPartName();

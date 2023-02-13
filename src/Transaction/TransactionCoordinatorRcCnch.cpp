@@ -98,6 +98,7 @@ TransactionCnchPtr TransactionCoordinatorRcCnch::createTransaction(const CreateT
     }
 
     txn->force_clean_by_dm = opt.force_clean_by_dm;
+    txn->async_post_commit = opt.async_post_commit;
 
     ProfileEvents::increment((opt.read_only ? ProfileEvents::CnchTxnReadTxnCreated : ProfileEvents::CnchTxnWriteTxnCreated));
     LOG_DEBUG(log, "Created txn {}\n", txn->getTransactionRecord().toString());
