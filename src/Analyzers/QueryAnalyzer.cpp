@@ -1512,9 +1512,14 @@ namespace
             verifyNoReferenceToNonGroupingKeyInSubquery(node);
         }
 
-        void visitInSubquery(ASTPtr &node, ASTFunction &, const Void &) override
+        void visitInSubquery(ASTPtr &, ASTFunction & function, const Void &) override
         {
-            verifyNoReferenceToNonGroupingKeyInSubquery(node);
+            verifyNoReferenceToNonGroupingKeyInSubquery(function.arguments->children[1]);
+        }
+
+        void visitQuantifiedComparisonSubquery(ASTPtr &, ASTQuantifiedComparison & ast, const Void &) override
+        {
+            verifyNoReferenceToNonGroupingKeyInSubquery(ast.children[1]);
         }
 
         void visitExistsSubquery(ASTPtr &node, ASTFunction &, const Void &) override
