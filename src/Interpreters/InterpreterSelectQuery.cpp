@@ -110,6 +110,7 @@
 #include <Common/checkStackSize.h>
 #include <common/map.h>
 #include <common/scope_guard_safe.h>
+#include "Parsers/ASTSelectQuery.h"
 #include <memory>
 
 
@@ -1950,9 +1951,69 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
             else
             {
                 /// We execute query till "Complete"
+                auto & expressions = analysis_result;
                 executeMergeAggregatedImpl(query_plan, false, /*final=*/true, false, false, context->getSettingsRef(), query_analyzer->aggregationKeys(), query_analyzer->aggregates());
-                executeExpression(query_plan, analysis_result.before_order_by, "Before ORDER BY");
-                executeProjection(query_plan, analysis_result.final_projection);
+                executeExpression(query_plan, expressions.before_order_by, "Before ORDER BY");
+                /** Optimization - if there are several sources and there is LIMIT, then first apply the preliminary LIMIT,
+                 * limiting the number of rows in each up to `offset + limit`.
+                 */
+                bool has_withfill = false;
+                if (query.orderBy())
+                {
+                    SortDescription order_descr = getSortDescription(query, context);
+                    for (auto & descr : order_descr)
+                        if (descr.with_fill)
+                        {
+                            has_withfill = true;
+                            break;
+                        }
+                }
+                bool apply_prelimit = query.limitLength() && !query.limit_with_ties &&
+                                    !hasWithTotalsInAnySubqueryInFromClause(query) &&
+                                    !query.arrayJoinExpressionList() &&
+                                    !query.distinct &&
+                                    !expressions.hasLimitBy() &&
+                                    !settings.extremes &&
+                                    !has_withfill;
+                bool limit_applied = false;
+                if (apply_prelimit)
+                {
+                    executePreLimit(query_plan, /* do_not_skip_offset= */ false);
+                    limit_applied = true;
+                }
+                /** If there was more than one stream,
+                * then DISTINCT needs to be performed once again after merging all streams.
+                */
+                if (query.distinct)
+                    executeDistinct(query_plan, false, expressions.selected_columns, false);
+
+                if (expressions.hasLimitBy())
+                {
+                    executeExpression(query_plan, expressions.before_limit_by, "Before LIMIT BY");
+                    executeLimitBy(query_plan);
+                }
+                executeWithFill(query_plan);
+                /// If we have 'WITH TIES', we need execute limit before projection,
+                /// because in that case columns from 'ORDER BY' are used.
+                if (query.limit_with_ties)
+                {
+                    executeLimit(query_plan);
+                    limit_applied = true;
+                }
+                /// We must do projection after DISTINCT because projection may remove some columns.
+                executeProjection(query_plan, expressions.final_projection);
+                /// Extremes are calculated before LIMIT, but after LIMIT BY. This is Ok.
+                executeExtremes(query_plan);
+                /// Limit is no longer needed if there is prelimit.
+                ///
+                /// NOTE: that LIMIT cannot be applied of OFFSET should not be applied,
+                /// since LIMIT will apply OFFSET too.
+                /// This is the case for various optimizations for distributed queries,
+                /// and when LIMIT cannot be applied it will be applied on the initiator anyway.
+                if (!limit_applied)
+                    executeLimit(query_plan);
+                executeOffset(query_plan);
+
                 from_stage = QueryProcessingStage::Complete;
                 analysis_result.first_stage = false;
                 analysis_result.second_stage = false;
