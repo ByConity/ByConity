@@ -129,11 +129,20 @@ MarkCache::MappedPtr MergeTreeMarksLoader::loadMarksImpl()
             return buf;
         }();
 
-        if (buffer->eof() || buffer->buffer().size() != mark_file_size)
-            throw Exception("Cannot read all marks from file " + mrk_path + ", eof: " + std::to_string(buffer->eof())
-            + ", buffer size: " + std::to_string(buffer->buffer().size()) + ", file size: " + std::to_string(mark_file_size), ErrorCodes::CANNOT_READ_ALL_DATA);
+        try
+        {
+            buffer->readStrict(reinterpret_cast<char *>(res->data()), mark_file_size);
+        }
+        catch (DB::Exception & e)
+        {
+            e.addMessage(
+                "while loading marks from file: {}, file size: {}, remote file offset: {}",
+                buffer->getFileName(),
+                mark_file_size,
+                mark_file_offset);
 
-        buffer->readStrict(reinterpret_cast<char *>(res->data()), mark_file_size);
+            throw;
+        }
     }
     else
     {
