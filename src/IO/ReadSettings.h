@@ -32,6 +32,7 @@ struct ReadSettings
     size_t mmap_threshold = 0;
 
     MMappedFileCache* mmap_cache = nullptr;
+    bool byte_hdfs_pread = true;
 };
 
 }

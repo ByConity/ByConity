@@ -145,7 +145,7 @@ MergeTreeReaderStream::MergeTreeReaderStream(
                     .estimated_size = sum_mark_range_bytes,
                     .aio_threshold = settings.min_bytes_to_use_direct_io,
                     .mmap_threshold = settings.min_bytes_to_use_mmap_io,
-                    settings.mmap_cache.get()
+                    .mmap_cache = settings.mmap_cache.get()
                 }
             ),
             /* allow_different_codecs = */false,

@@ -601,14 +601,31 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
 
             if (s_from.ignore(pos))
             {
-                if (!parseDatabaseAndTableName(pos, expected, command->from_database, command->from_table))
+                ASTPtr ast_from;
+                if (parseDatabaseAndTableName(pos, expected, command->from_database, command->from_table))
+                {
+                    /// for command 'alter table table_1 attach partition from table_2'
+                    /// we should detach the partition in table_2, then rename parts.
+                    /// so we must set 'command.detach = true' to avoid delete part in table_2.
+                    /// attach_partition_where and replace_partition is the same logic.
+                    command->replace = false;
+                    command->detach = true;
+                    command->type = ASTAlterCommand::REPLACE_PARTITION;
+                }
+                else if (parser_string_literal.parse(pos, ast_from, expected))
+                {
+                    command->replace = false;
+                    command->from = ast_from->as<ASTLiteral &>().value.get<const String &>();
+                    command->type = ASTAlterCommand::ATTACH_PARTITION;
+                }
+                else
+                {
                     return false;
-
-                command->replace = false;
-                command->type = ASTAlterCommand::REPLACE_PARTITION;
+                }
             }
             else
             {
+                command->replace = false;
                 command->type = ASTAlterCommand::ATTACH_PARTITION;
             }
         }

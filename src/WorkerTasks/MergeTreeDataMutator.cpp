@@ -352,6 +352,12 @@ IMutableMergeTreeDataPartPtr MergeTreeDataMutator::mutatePartToTemporaryPart(
             return new_data_part; /// empty partial part
         }
 
+        String part_dir = new_data_part->getFullRelativePath();
+        if (!disk->exists(part_dir))
+        {
+            disk->createDirectories(part_dir);
+        }
+
         manipulation_entry->columns_written = storage_columns.size() - updated_header.columns();
 
         auto old_checksums = source_part->getChecksums();
@@ -390,7 +396,10 @@ IMutableMergeTreeDataPartPtr MergeTreeDataMutator::mutatePartToTemporaryPart(
             }
             else if (old_checksums->files.count(rename_from))
             {
-                new_data_part->checksums_ptr->files[rename_to] = old_checksums->files[rename_from];
+                if (!rename_to.empty())
+                {
+                    new_data_part->checksums_ptr->files[rename_to] = old_checksums->files[rename_from];
+                }
                 new_data_part->checksums_ptr->files.erase(rename_from);
             }
         }

@@ -94,7 +94,7 @@ public:
     template <typename TAction, typename... Args>
     ActionPtr createAction(Args &&... args) const
     {
-        return std::make_shared<TAction>(getContext(), txn_record.txnID(), std::forward<Args>(args)...);
+        return std::make_shared<TAction>(global_context.shared_from_this(), txn_record.txnID(), std::forward<Args>(args)...);
     }
     template <typename... Args>
     IntentLockPtr createIntentLock(const String & lock_prefix, Args &&... args) const
@@ -184,6 +184,8 @@ public:
 
     DatabasePtr tryGetDatabaseViaCache(const String & database_name);
     void addDatabaseIntoCache(DatabasePtr db);
+
+    bool async_post_commit = false;
 protected:
     void setStatus(CnchTransactionStatus status);
     void setTransactionRecord(TransactionRecord record);

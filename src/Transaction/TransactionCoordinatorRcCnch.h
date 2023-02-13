@@ -43,6 +43,7 @@ struct CreateTransactionOption
         CnchTransactionPriority priority = CnchTransactionPriority::high;       // priority when cleaning
         TxnTimestamp txn_hint = {0};                                            // hint
         bool force_clean_by_dm = false;                                         // force clean by dm
+        bool async_post_commit = true;                                          // do post commit asynchronously
 
         CreateTransactionOption() = default;
         ~CreateTransactionOption() = default;
@@ -54,6 +55,7 @@ struct CreateTransactionOption
         CreateTransactionOption & setPriority(CnchTransactionPriority priority_) { this->priority = priority_; return *this; }
         CreateTransactionOption & setTxnHint(TxnTimestamp txn_hint_) { this->txn_hint = txn_hint_; return *this; }
         CreateTransactionOption & setForceCleanByDM(bool force_clean_by_dm_) { this->force_clean_by_dm = force_clean_by_dm_; return *this; }
+        CreateTransactionOption & setAsyncPostCommit(bool async) { this->async_post_commit = async; return *this; }
 
         void validate() const { } // TODO: throw on invalid options
 };
