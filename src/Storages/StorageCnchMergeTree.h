@@ -16,12 +16,12 @@
 #pragma once
 
 #include <optional>
-#include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <MergeTreeCommon/CnchStorageCommon.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
+#include <Storages/MergeTree/MergeTreeDataPartType.h>
+#include <Storages/MergeTree/PartitionPruner.h>
 #include <common/shared_ptr_helper.h>
 #include "Catalog/DataModelPartWrapper_fwd.h"
-#include <Storages/MergeTree/PartitionPruner.h>
-#include <Storages/MergeTree/MergeTreeDataPartType.h>
 
 namespace DB
 {
@@ -30,10 +30,11 @@ struct PrepareContextResult;
 class StorageCnchMergeTree final : public shared_ptr_helper<StorageCnchMergeTree>, public MergeTreeMetaBase, public CnchStorageCommonHelper
 {
     friend struct shared_ptr_helper<StorageCnchMergeTree>;
+
 public:
     ~StorageCnchMergeTree() override;
 
-    std::string getName() const override { return "Cnch" + merging_params.getModeName() + "MergeTree";}
+    std::string getName() const override { return "Cnch" + merging_params.getModeName() + "MergeTree"; }
 
     bool supportsSampling() const override { return true; }
     bool supportsFinal() const override { return true; }
@@ -46,7 +47,7 @@ public:
     std::optional<UInt64> totalRowsByPartitionPredicate(const SelectQueryInfo &, ContextPtr) const override;
 
     StoragePolicyPtr getStoragePolicy(StorageLocation location) const override;
-    const String& getRelativeDataPath(StorageLocation location) const override;
+    const String & getRelativeDataPath(StorageLocation location) const override;
 
     bool isRemote() const override { return true; }
 
@@ -95,10 +96,8 @@ public:
 
     time_t getTTLForPartition(const MergeTreePartition & partition) const;
 
-    ServerDataPartsVector selectPartsToRead(
-        const Names & column_names_to_return,
-        ContextPtr local_context,
-        const SelectQueryInfo & query_info) const;
+    ServerDataPartsVector
+    selectPartsToRead(const Names & column_names_to_return, ContextPtr local_context, const SelectQueryInfo & query_info) const;
 
     /// Return all base parts and delete bitmap metas in the given partitions.
     /// If `partitions` is empty, return meta for all partitions.
@@ -106,7 +105,8 @@ public:
 
     /// return table's committed staged parts (excluding deleted ones).
     /// if partitions != null, ignore staged parts not belong to `partitions`.
-    MergeTreeDataPartsCNCHVector getStagedParts(const TxnTimestamp & ts, const NameSet * partitions = nullptr, bool skip_delete_bitmap = false);
+    MergeTreeDataPartsCNCHVector
+    getStagedParts(const TxnTimestamp & ts, const NameSet * partitions = nullptr, bool skip_delete_bitmap = false);
 
     /// Pre-condition: "parts" should have been sorted in part info order
     void getDeleteBitmapMetaForParts(const MergeTreeDataPartsCNCHVector & parts, ContextPtr context, TxnTimestamp start_time);
@@ -128,10 +128,7 @@ public:
     void addCheckpoint(const Protos::Checkpoint & checkpoint);
     void removeCheckpoint(const Protos::Checkpoint & checkpoint);
 
-    ColumnSizeByName getColumnSizes() const override
-    {
-        return {};
-    }
+    ColumnSizeByName getColumnSizes() const override { return {}; }
 
 
     void checkAlterIsPossible(const AlterCommands & commands, ContextPtr local_context) const override;
@@ -140,10 +137,8 @@ public:
 
     void checkAlterPartitionIsPossible(
         const PartitionCommands & commands, const StorageMetadataPtr & metadata_snapshot, const Settings & settings) const override;
-    Pipe alterPartition(
-        const StorageMetadataPtr & metadata_snapshot,
-        const PartitionCommands & commands,
-        ContextPtr query_context) override;
+    Pipe
+    alterPartition(const StorageMetadataPtr & metadata_snapshot, const PartitionCommands & commands, ContextPtr query_context) override;
 
     void truncate(
         const ASTPtr & /*query*/,
@@ -152,8 +147,8 @@ public:
         TableExclusiveLockHolder &) override;
 
     ServerDataPartsVector selectPartsByPartitionCommand(ContextPtr local_context, const PartitionCommand & command);
-    void dropPartitionOrPart(const PartitionCommand & command, ContextPtr local_context,
-        IMergeTreeDataPartsVector* dropped_parts = nullptr);
+    void
+    dropPartitionOrPart(const PartitionCommand & command, ContextPtr local_context, IMergeTreeDataPartsVector * dropped_parts = nullptr);
     Block getBlockWithVirtualPartitionColumns(const std::vector<std::shared_ptr<MergeTreePartition>> & partition_list) const;
 
     struct PartitionDropInfo
@@ -193,8 +188,14 @@ private:
 
     ServerDataPartsVector getAllParts(ContextPtr local_context) const;
 
+    ServerDataPartsVector
+    getAllPartsInPartitions(const Names & column_names_to_return, ContextPtr local_context, const SelectQueryInfo & query_info) const;
+
     Strings selectPartitionsByPredicate(
-        const SelectQueryInfo & query_info, std::vector<std::shared_ptr<MergeTreePartition>> & partition_list, const Names & column_names_to_return, ContextPtr local_context) const;
+        const SelectQueryInfo & query_info,
+        std::vector<std::shared_ptr<MergeTreePartition>> & partition_list,
+        const Names & column_names_to_return,
+        ContextPtr local_context) const;
 
     void filterPartsByPartition(
         ServerDataPartsVector & parts,
@@ -202,10 +203,14 @@ private:
         const SelectQueryInfo & query_info,
         const Names & column_names_to_return) const;
 
-    void dropPartsImpl(ServerDataPartsVector& svr_parts_to_drop,
-        IMergeTreeDataPartsVector& parts_to_drop, bool detach, ContextPtr local_context);
+    void dropPartsImpl(
+        ServerDataPartsVector & svr_parts_to_drop, IMergeTreeDataPartsVector & parts_to_drop, bool detach, ContextPtr local_context);
 
-    void collectResource(ContextPtr local_context, ServerDataPartsVector & parts, const String & local_table_name, const std::set<Int64> & required_bucket_numbers = {});
+    void collectResource(
+        ContextPtr local_context,
+        ServerDataPartsVector & parts,
+        const String & local_table_name,
+        const std::set<Int64> & required_bucket_numbers = {});
 
     MutationCommands getFirstAlterMutationCommandsForPart(const DataPartPtr &) const override { return {}; }
 
