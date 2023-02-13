@@ -577,26 +577,11 @@ MergeTreeRangeReader::MergeTreeRangeReader(
             sample_block.erase(prewhere_info->row_level_column_name);
         }
 
-        size_t rows = sample_block.rows();
         if (prewhere_info->prewhere_actions)
-            prewhere_info->prewhere_actions->execute(sample_block, rows, true);
-        if (!sample_block)
-            sample_block.insert({DataTypeUInt8().createColumnConst(rows, 0), std::make_shared<DataTypeUInt8>(), "_dummy"});
+            prewhere_info->prewhere_actions->execute(sample_block, true);
 
         if (prewhere_info->remove_prewhere_column)
-        {
-            if (sample_block.has(prewhere_info->prewhere_column_name))
-                sample_block.erase(prewhere_info->prewhere_column_name);
-        }
-        else
-        {
-            if (!sample_block.has(prewhere_info->prewhere_column_name))
-            {
-                const auto & prewhere_actions = prewhere_info->prewhere_actions->getActions();
-                const auto * last_action_node = prewhere_actions[prewhere_actions.size()-1].node;
-                sample_block.insert({last_action_node->result_type->createColumn(),last_action_node->result_type, prewhere_info->prewhere_column_name});
-            }
-        }
+            sample_block.erase(prewhere_info->prewhere_column_name);
     }
 }
 
