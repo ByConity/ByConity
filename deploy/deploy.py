@@ -196,7 +196,7 @@ class Server(Entity):
     SD = ROOT / "service_discovery/server"
 
     TEMPLATE_HDFS_CONFIG = 'hdfs3.xml'
-    TEMPLATE_USER_CONFIG = 'cnch-users.xml'
+    TEMPLATE_USER_CONFIG = 'byconity-users.xml'
 
     def __init__(self, name, template_path, cluster_dir, hdfs_prefix, catalog_type):
         # the order must be the same as that in the service_discovery section
