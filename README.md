@@ -24,7 +24,7 @@ A minimal ByConity cluster include:
 
 
 ## Build ByConity
-The easiest way to build ByConity is built in [docker](https://github.com/ByConity/ByConity/tree/master/docker/builder). ByConity executable file depend on Foundation DB library `libfdb_c.so`. So in order to run it, we need to install the FoundationDB client package. This [links](https://apple.github.io/foundationdb/getting-started-linux.html) tell how to install. We can download client package from FoundationDB GitHub release pages, for example [here](https://github.com/apple/foundationdb/releases/tag/7.1.0). Another way to export the `LD_LIBRARY_PATH` so that the executable can find Foundation DB library `libfdb_c.so`. But this way is not recommended.
+The easiest way to build ByConity is built in [docker](https://github.com/ByConity/ByConity/tree/master/docker/builder). ByConity executable file depend on Foundation DB library `libfdb_c.so`. So in order to run it, we need to install the FoundationDB client package. This [link](https://apple.github.io/foundationdb/getting-started-linux.html) tells how to install. We can download client package from FoundationDB GitHub release pages, for example [here](https://github.com/apple/foundationdb/releases/tag/7.1.0). Another way to export the `LD_LIBRARY_PATH` so that the executable can find Foundation DB library `libfdb_c.so`. But this way is not recommended.
 ```
 export LD_LIBRARY_PATH="{ByConity_source_path}/contrib/foundationdb/lib/"
 ```
