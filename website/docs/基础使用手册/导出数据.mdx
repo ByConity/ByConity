@@ -1,0 +1,84 @@
+---
+title: 导出数据
+tags:
+  - Docs
+---
+
+# 导出数据
+
+文档类型：教程型
+
+文档格式：教程目的，前置准备，分步骤讲解原理 & 示例，相关文档推荐；
+
+内容提要：
+
+1. 支持将表的数据导出到哪些文件系统或者数据库，如何导出
+2. 是否支持导出查询结果，如何导出
+
+ByConity 支持将查询结果重定向到客户 SELECT 端的文件，这里的文件可以是本地文件，也可以是 HDFS 上的文件。例如：
+
+```
+SELECT <expr_list> INTO OUTFILE file_name FORMAT format_name
+
+```
+
+其中，file_name、format_name 均为字符串类型。
+
+## 导出到本地
+
+例如，考虑该表：
+
+```
+CREATE TABLE test.select_outfile_testtable
+(
+    `a` Int8,
+    `b` String,
+    `c` Int8,
+    `date` Date
+)
+ENGINE = CnchMergeTree()
+PARTITION by toYYYYMM(date)
+ORDER BY tuple()
+
+```
+
+insert 部分数据：
+
+```
+ INSERT INTO test.select_outfile_testtable VALUES (1, 'a', 1,'2022-11-10'), (2, 'b', 2,'2022-11-11'), (3, 'c', 3,'2022-11-12'), (4, 'd', 4,'2022-11-13');
+
+```
+
+将 SELECT 结果导出到本地文件（以 CSV 为例）：
+
+```
+SELECT * FROM test.select_outfile_testtable INTO OUTFILE 'select.csv' FORMAT CSV
+
+```
+
+结果：
+
+```
+➜  ~ cat select.csv
+1,"a",1,"2022-11-10"
+2,"b",2,"2022-11-11"
+3,"c",3,"2022-11-12"
+4,"d",4,"2022-11-13"
+
+```
+
+## 导出到 HDFS
+
+使用 INTO OUTFILE 子句，示例
+
+```
+SELECT <expr_list> INTO OUTFILE 'hdfs://ip:port/user/tiger/test/test.gz ' FORMAT format_name
+
+```
+
+其中 hdfs://ip:port/user/tiger/test/test.gz 为上传的 HDFS 地址，格式为：
+
+1. hdfs://为固定前缀，表明是上传到 HDFS；ip 是 hdfs namenode 服务地址。
+2. /user/tiger/test/test.gz 即为输出文件的路径，需要注意的是 hdfs 目录路径必须是可用的。
+
+同时，支持常见格式导出到 HDFS，比如 CSV、Parquet、JSON 等，为减少网络传输量，默认开启 gzip 压缩。
