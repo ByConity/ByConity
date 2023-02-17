@@ -20,3 +20,4 @@ tso_service:
     send_timeout: 1800
   tso_window_ms: 3000
   tso_get_leader_info_interval_ms: 0
+cnch_config: /config/cnch-config.yml
