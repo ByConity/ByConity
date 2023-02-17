@@ -184,7 +184,7 @@ TxnTimestamp CnchWorkerTransaction::commitV2()
         if (e.code() == ErrorCodes::BRPC_TIMEOUT)
         {
             // TODO: check in catalog
-            TxnTimestamp commit_ts = global_context.getTimestamp();
+            TxnTimestamp commit_ts = global_context->getTimestamp();
             TransactionRecord prev_record;
             bool success = false;
             try
@@ -192,7 +192,7 @@ TxnTimestamp CnchWorkerTransaction::commitV2()
                 TransactionRecord target_record = getTransactionRecord();
                 target_record.setStatus(CnchTransactionStatus::Aborted).setCommitTs(commit_ts).setMainTableUUID(getMainTableUUID());
 
-                success = global_context.getCnchCatalog()->setTransactionRecord(txn_record, target_record);
+                success = global_context->getCnchCatalog()->setTransactionRecord(txn_record, target_record);
                 txn_record = std::move(target_record);
             }
             catch (...)

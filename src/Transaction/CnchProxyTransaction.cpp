@@ -40,7 +40,7 @@ CnchProxyTransaction::CnchProxyTransaction(const ContextPtr & context_, CnchServ
     const auto & [txn_id, start_time] = remote_client->createTransaction(primary_txn_id);
     /// Load the transction record from byte kv, if creating transaction
     /// success, should be available at this time
-    auto record = global_context.getCnchCatalog()->tryGetTransactionRecord(txn_id);
+    auto record = global_context->getCnchCatalog()->tryGetTransactionRecord(txn_id);
     if (!record || record->status() != CnchTransactionStatus::Running || record->primaryTxnID() != primary_txn_id)
     {
         throw Exception("CnchProxyTransaction: create transaction on remote server failed", ErrorCodes::LOGICAL_ERROR);

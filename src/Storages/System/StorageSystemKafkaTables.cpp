@@ -19,8 +19,6 @@
 #include <Catalog/Catalog.h>
 #include <CloudServices/CnchBGThreadsMap.h>
 #include <Columns/ColumnString.h>
-#include <Columns/ColumnsNumber.h>
-#include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeArray.h>
