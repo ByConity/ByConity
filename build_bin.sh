@@ -33,9 +33,6 @@ else
     cmake ../ ${CMAKE_FLAGS} && ninja
 fi
 
-# copy shared libaries
-cp ${PROJECT}/contrib/foundationdb/lib/libfdb_c.so ../output/lib
-
 # create the `usr/bin` directory to keep it same with old version
 mkdir -p ../output/usr
 mv ../output/bin ../output/usr/
