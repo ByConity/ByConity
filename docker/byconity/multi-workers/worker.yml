@@ -34,49 +34,7 @@ max_session_timeout: 3600
 default_session_timeout: 60
 dictionaries_config: "*_dictionary.xml"
 format_schema_path: /var/byconity/format_schemas/
-service_discovery:
-  mode: local
-  cluster: default
-  disable_cache: false
-  cache_timeout: 5
-  resource_manager:
-    psm: data.cnch.resource_manager
-    node:
-      host: resource-manager-0
-      hostname: resource-manager-0
-      ports:
-        port:
-          name: PORT0
-          value: 28989
-  daemon_manager:
-    psm: data.cnch.daemon_manager
-    node:
-      host: daemon-manager-0
-      hostname: daemon-manager-0
-      ports:
-        port:
-          name: PORT0
-          value: 17553
-  tso:
-    psm: data.cnch.tso
-    node:
-      host: tso-0
-      hostname: tso-0
-      ports:
-        port:
-        -
-          name: PORT0
-          value: 18845
-        -
-          name: PORT2
-          value: 9181
-catalog:
-  name_space: default
 perQuery: 1
-catalog_service:
-  type: fdb
-  fdb:
-    cluster_file: /etc/byconity/fdb/fdb.cluster
 storage_configuration:
   disks:
     hdfs_disk:
@@ -94,7 +52,6 @@ storage_configuration:
         local:
           default: local_disk
           disk: local_disk
-hdfs_addr: "hdfs://hdfs-namenode:9000"
 cnch_kafka_log:
   database: cnch_system
   table: cnch_kafka_log
@@ -110,3 +67,4 @@ consistent_hash_ring:
   num_replicas: 16
   num_probes: 21
   load_factor: 1.3
+cnch_config: /config/cnch-config.yml

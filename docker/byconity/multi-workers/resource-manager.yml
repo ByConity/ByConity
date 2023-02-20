@@ -36,3 +36,4 @@ resource_manager:
         worker_group:
           name: wg_write
           type: Physical
+cnch_config: /config/cnch-config.yml
