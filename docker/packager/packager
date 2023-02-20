@@ -215,7 +215,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    image_name = f"minhthucdao1/{IMAGE_TYPE}-builder"
+    image_name = f"byconity/{IMAGE_TYPE}-builder"
 
     ch_root = args.clickhouse_repo_path
 
