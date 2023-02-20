@@ -18,6 +18,7 @@ jobs:
         env:
           CUSTOM_CMAKE_BUILD_TYPE: "Release"
         run: |
+          git config --global --add safe.directory /__w/ByConity/ByConity
           git -C "$GITHUB_WORKSPACE" submodule sync
           git -C "$GITHUB_WORKSPACE" submodule update --init --recursive
           ./build_bin.sh
