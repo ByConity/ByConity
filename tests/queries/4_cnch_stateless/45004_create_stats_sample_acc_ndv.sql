@@ -1,9 +1,9 @@
 set create_stats_time_output=0;
 set statistics_enable_sample=1;
-set statistics_accurate_sample_ndv='NEVER';
-drop database if exists test_stats_45004_sample;
-create database test_stats_45004_sample;
-use test_stats_45004_sample;
+set statistics_accurate_sample_ndv='ALWAYS';
+drop database if exists test_stats_45004_sample_acc;
+create database test_stats_45004_sample_acc;
+use test_stats_45004_sample_acc;
 create table tb (
    `id` UInt64,
    `i8` Int8,
@@ -30,28 +30,28 @@ create table tb (
 ) ENGINE = CnchMergeTree PARTITION BY id ORDER BY id;
 
 create table tbnull (
-   `id` UInt64,
-   `i8null` Nullable(Int8),
-   `i16null` Nullable(Int16),
-   `i32null` Nullable(Int32),
-   `i64null` Nullable(Int64),
-   `u8null`  Nullable(UInt8),
-   `u16null` Nullable(UInt16),
-   `u32null` Nullable(UInt32),
-   `u64null` Nullable(UInt64),
-   `f32null` Nullable(Float32),
-   `f64null` Nullable(Float64),
-   `datenull` Nullable(Date),
-   `date32null` Nullable(Date32),
-   `datetimenulll` Nullable(DateTime),
-   `datetime64nulll` Nullable(DateTime64(3)),
-   `strnull` Nullable(String),
-   `fxstrnull` Nullable(FixedString(20)),
-   `strlowcardnull` LowCardinality(Nullable(String)),
-   `fxstrlowcardnull` LowCardinality(Nullable(FixedString(20))),
-   `decimal32null` Nullable(Decimal32(5)),
-   `decimal64null` Nullable(Decimal64(10)),
-   `decimal128null` Nullable(Decimal128(20))
+    `id` UInt64,
+    `i8null` Nullable(Int8),
+    `i16null` Nullable(Int16),
+    `i32null` Nullable(Int32),
+    `i64null` Nullable(Int64),
+    `u8null`  Nullable(UInt8),
+    `u16null` Nullable(UInt16),
+    `u32null` Nullable(UInt32),
+    `u64null` Nullable(UInt64),
+    `f32null` Nullable(Float32),
+    `f64null` Nullable(Float64),
+    `datenull` Nullable(Date),
+    `date32null` Nullable(Date32),
+    `datetimenulll` Nullable(DateTime),
+    `datetime64nulll` Nullable(DateTime64(3)),
+    `strnull` Nullable(String),
+    `fxstrnull` Nullable(FixedString(20)),
+    `strlowcardnull` LowCardinality(Nullable(String)),
+    `fxstrlowcardnull` LowCardinality(Nullable(FixedString(20))),
+    `decimal32null` Nullable(Decimal32(5)),
+    `decimal64null` Nullable(Decimal64(10)),
+    `decimal128null` Nullable(Decimal128(20))
 ) ENGINE = CnchMergeTree PARTITION BY id ORDER BY id;
 select '---------create empty stats';
 create stats all;
@@ -81,4 +81,4 @@ select '---------show empty stats';
 show stats all;
 drop table tb;
 drop table tbnull;
-drop database test_stats_45004_sample;
+drop database test_stats_45004_sample_acc;

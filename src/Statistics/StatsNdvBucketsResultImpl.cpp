@@ -195,7 +195,7 @@ void StatsNdvBucketsResultImpl<T>::writeSymbolStatistics(SymbolStatistics & symb
 
         if (count > 0)
         {
-            symbol.emplaceBackBucket(std::make_shared<Bucket>(lb, ub, int_ndv, count, lb_inc, ub_inc));
+            symbol.emplaceBackBucket(Bucket(lb, ub, int_ndv, count, lb_inc, ub_inc));
         }
     }
 }

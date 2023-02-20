@@ -233,14 +233,13 @@ static std::vector<StatsTableIdentifier> getTables(ContextPtr context, const AST
 {
     std::vector<StatsTableIdentifier> tables;
     auto catalog = createCatalogAdaptor(context);
+    auto db = context->resolveDatabase(query->database);
     if (query->target_all)
     {
-        auto db = context->getCurrentDatabase();
         tables = catalog->getAllTablesID(db);
     }
     else
     {
-        auto db = query->database.empty() ? context->getCurrentDatabase() : query->database;
         auto table_info_opt = catalog->getTableIdByName(db, query->table);
         if (!table_info_opt)
         {
@@ -289,7 +288,7 @@ std::vector<FormattedOutputData> getColumnFormattedOutput(const String & full_co
     auto & histogram = symbol_stats.getHistogram();
     for (auto & bucket : histogram.getBuckets())
     {
-        auto count = bucket->getCount();
+        auto count = bucket.getCount();
         if (count == 0)
         {
             continue;
@@ -297,11 +296,11 @@ std::vector<FormattedOutputData> getColumnFormattedOutput(const String & full_co
         FormattedOutputData fod;
         fod.append("identifier", full_column_name);
         fod.append("bucket_id", bucket_id);
-        auto low_inc = bucket->isLowerClosed();
-        auto high_inc = bucket->isUpperClosed();
-        auto low = bucket->getLowerBound();
-        auto high = bucket->getUpperBound();
-        auto ndv = bucket->getNumDistinct();
+        auto low_inc = bucket.isLowerClosed();
+        auto high_inc = bucket.isUpperClosed();
+        auto low = bucket.getLowerBound();
+        auto high = bucket.getUpperBound();
+        auto ndv = bucket.getNumDistinct();
         String range
             = (low_inc ? "[" : "(") + boost::lexical_cast<String>(low) + ", " + boost::lexical_cast<String>(high) + (high_inc ? "]" : ")");
         fod.append("range", range);
