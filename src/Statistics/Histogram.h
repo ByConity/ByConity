@@ -36,17 +36,17 @@ class Histogram
 public:
     Histogram(Buckets buckets = {});
 
-    void emplaceBackBucket(BucketPtr ptr) { buckets.emplace_back(std::move(ptr)); }
+    void emplaceBackBucket(Bucket ptr) { buckets.emplace_back(std::move(ptr)); }
 
     const Buckets & getBuckets() const { return buckets; }
 
-    BucketPtr getBucket(size_t index) const
+    BucketOpt getBucket(size_t index) const
     {
         if (index < buckets.size())
         {
             return buckets[index];
         }
-        return nullptr;
+        return std::nullopt;
     }
 
     size_t getBucketSize() const { return buckets.size(); }
@@ -77,11 +77,11 @@ public:
 
 private:
     Buckets buckets;
-    void cleanupResidualBucket(BucketPtr & bucket, bool bucket_is_residual) const;
-    BucketPtr getNextBucket(BucketPtr & new_bucket, bool & result_bucket_is_residual, size_t & current_bucket_index) const;
-    size_t addResidualUnionAllBucket(Buckets & histogram_buckets, BucketPtr & bucket, bool bucket_is_residual, size_t index) const;
+    void cleanupResidualBucket(BucketOpt & bucket, bool bucket_is_residual) const;
+    BucketOpt getNextBucket(const BucketOpt & new_bucket, bool & result_bucket_is_residual, size_t & current_bucket_index) const;
+    size_t addResidualUnionAllBucket(Buckets & histogram_buckets, const BucketOpt & bucket, bool bucket_is_residual, size_t index) const;
     static void addBuckets(const Buckets & src_buckets, Buckets & dest_buckets, size_t begin, size_t end);
-    bool subsumes(const BucketPtr & bucket) const;
+    bool subsumes(const Bucket & bucket) const;
 };
 
 }

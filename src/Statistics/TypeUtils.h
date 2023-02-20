@@ -14,7 +14,6 @@
  */
 
 #pragma once
-#include <Core/NameToType.h>
 #include <Core/NamesAndTypes.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -97,7 +96,7 @@ inline bool isCollectableType(const DataTypePtr & raw_type)
 inline ColumnDescVector filterCollectableColumns(
     const ColumnDescVector & collectable, const std::vector<String> & target_columns, bool exception_on_unsupported = false)
 {
-    NameToType name_to_type;
+    std::unordered_map<String, DataTypePtr> name_to_type;
     ColumnDescVector result;
     std::vector<String> unsupported_columns;
 

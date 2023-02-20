@@ -14,6 +14,7 @@
  */
 
 #pragma once
+#include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTVisitor.h>
 #include <QueryPlan/PlanVisitor.h>
 
@@ -27,11 +28,20 @@ public:
     static std::set<std::string> extract(std::vector<ConstASTPtr> & nodes);
 };
 
-class SymbolVisitor : public ConstASTVisitor<Void, std::set<std::string>>
+
+struct SymbolVisitorContext
+{
+    std::set<std::string> result;
+    // count of forbidden list
+    std::unordered_map<std::string, UInt64> exclude_symbols;
+};
+
+class SymbolVisitor : public ConstASTVisitor<Void, SymbolVisitorContext>
 {
 public:
-    Void visitNode(const ConstASTPtr &, std::set<std::string> & context) override;
-    Void visitASTIdentifier(const ConstASTPtr &, std::set<std::string> & context) override;
+    Void visitNode(const ConstASTPtr &, SymbolVisitorContext & context) override;
+    Void visitASTIdentifier(const ConstASTPtr &, SymbolVisitorContext & context) override;
+    Void visitASTFunction(const ConstASTPtr & node, SymbolVisitorContext & context) override;
 };
 
 }

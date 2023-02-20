@@ -28,12 +28,14 @@ static ContextMutablePtr createQueryContext(ContextPtr context)
     query_context->makeQueryContext();
     query_context->setCurrentQueryId(""); // generate random query_id
     query_context->getClientInfo().query_kind = ClientInfo::QueryKind::SECONDARY_QUERY;
-    auto settings = context->getSettings();
-    settings.enable_optimizer = false;
-    settings.dialect_type = DialectType::CLICKHOUSE;
-    settings.database_atomic_wait_for_drop_and_detach_synchronously = true;
-    settings.enable_deterministic_sample_by_range = true;
-    query_context->setSettings(settings);
+
+    SettingsChanges changes;
+    changes.emplace_back("enable_optimizer", false);
+    changes.emplace_back("dialect_type", "CLICKHOUSE");
+    changes.emplace_back("database_atomic_wait_for_drop_and_detach_synchronously", true);
+    changes.emplace_back("enable_deterministic_sample_by_range", true);
+    query_context->applySettingsChanges(changes);
+
     return query_context;
 }
 

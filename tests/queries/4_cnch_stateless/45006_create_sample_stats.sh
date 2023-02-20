@@ -38,8 +38,9 @@ echo "BAD NDV ${DATA[4]} for id"
 fi
 
 echo "create stats2"
-${CLICKHOUSE_CLIENT} --query="create stats test_stats with sample 0.0000001 ratio 1000000 rows settings create_stats_time_output=0"
+${CLICKHOUSE_CLIENT} --query="create stats test_stats with sample 0.0000001 ratio 100000 rows settings create_stats_time_output=0"
 INPUT=`${CLICKHOUSE_CLIENT} --query="show stats test_stats"`
+
 
 # echo identifier, <NOTHING>, full_count
 echo "$INPUT" | grep "test_stats\.\*"
