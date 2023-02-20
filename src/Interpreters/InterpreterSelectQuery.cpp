@@ -1959,9 +1959,45 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
             else
             {
                 /// We execute query till "Complete"
-                executeMergeAggregatedImpl(query_plan, false, /*final=*/true, false, false, context->getSettingsRef(), query_analyzer->aggregationKeys(), query_analyzer->aggregates());
-                finalizeAfterAggregation(query_plan, false, false, false);
+                auto & expressions = analysis_result;
+                bool aggregate_final =
+                    expressions.need_aggregate &&
+                    options.to_stage > QueryProcessingStage::WithMergeableState &&
+                    !query.group_by_with_totals && !query.group_by_with_rollup && !query.group_by_with_cube;
+                bool aggregate_overflow_row =
+                    expressions.need_aggregate &&
+                    query.group_by_with_totals &&
+                    settings.max_rows_to_group_by &&
+                    settings.group_by_overflow_mode == OverflowMode::ANY &&
+                    settings.totals_mode != TotalsMode::AFTER_HAVING_EXCLUSIVE;
+                executeMergeAggregated(query_plan, aggregate_overflow_row, aggregate_final, query.group_by_with_grouping_sets);
+                if (!aggregate_final)
+                {
+                    if (query.group_by_with_totals)
+                    {
+                        bool final = !query.group_by_with_rollup && !query.group_by_with_cube;
+                        executeTotalsAndHaving(
+                            query_plan, expressions.hasHaving(), expressions.before_having, aggregate_overflow_row, final);
+                    }
 
+                    if (query.group_by_with_rollup)
+                        executeRollupOrCube(query_plan, Modificator::ROLLUP);
+                    else if (query.group_by_with_cube)
+                        executeRollupOrCube(query_plan, Modificator::CUBE);
+
+                    if ((query.group_by_with_rollup || query.group_by_with_cube || query.group_by_with_grouping_sets) && expressions.hasHaving())
+                    {
+                        if (query.group_by_with_totals)
+                            throw Exception(
+                                "WITH TOTALS and WITH ROLLUP or CUBE or GROUPING SETS are not supported together in presence of HAVING",
+                                ErrorCodes::NOT_IMPLEMENTED);
+                        executeHaving(query_plan, expressions.before_having);
+                    }
+                }
+                else if (expressions.hasHaving())
+                    executeHaving(query_plan, expressions.before_having);
+
+                finalizeAfterAggregation(query_plan, false, false, aggregate_final);
                 from_stage = QueryProcessingStage::Complete;
                 analysis_result.first_stage = false;
                 analysis_result.second_stage = false;
