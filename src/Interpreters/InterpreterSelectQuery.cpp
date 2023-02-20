@@ -110,7 +110,8 @@
 #include <Common/checkStackSize.h>
 #include <common/map.h>
 #include <common/scope_guard_safe.h>
-#include "Parsers/ASTSelectQuery.h"
+#include <Core/QueryProcessingStage.h>
+#include <Parsers/ASTSelectQuery.h>
 #include <memory>
 
 
@@ -1370,157 +1371,149 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, const BlockInpu
             else if (query.group_by_with_totals || query.group_by_with_rollup || query.group_by_with_cube || query.group_by_with_grouping_sets)
                 throw Exception("WITH TOTALS, ROLLUP, CUBE or GROUPING SETS are not supported without aggregation", ErrorCodes::NOT_IMPLEMENTED);
 
-            finalizeAfterAggregation(query_plan, from_aggregation_stage, to_aggregation_stage, aggregate_final);
+            // Now we must execute:
+            // 1) expressions before window functions,
+            // 2) window functions,
+            // 3) expressions after window functions,
+            // 4) preliminary distinct.
+            // Some of these were already executed at the shards (first_stage),
+            // see the counterpart code and comments there.
+            if (from_aggregation_stage)
+            {
+                if (query_analyzer->hasWindow())
+                    throw Exception(
+                        "Window functions does not support processing from WithMergeableStateAfterAggregation",
+                        ErrorCodes::NOT_IMPLEMENTED);
+            }
+            else if (expressions.need_aggregate)
+            {
+                executeExpression(query_plan, expressions.before_window,
+                    "Before window functions");
+                executeWindow(query_plan);
+                executeExpression(query_plan, expressions.before_order_by, "Before ORDER BY");
+                executeDistinct(query_plan, true, expressions.selected_columns, true);
+            }
+            else
+            {
+                if (query_analyzer->hasWindow())
+                {
+                    executeWindow(query_plan);
+                    executeExpression(query_plan, expressions.before_order_by, "Before ORDER BY");
+                    executeDistinct(query_plan, true, expressions.selected_columns, true);
+                }
+                else
+                {
+                    // Neither aggregation nor windows, all expressions before
+                    // ORDER BY executed on shards.
+                }
+            }
+
+            if (expressions.has_order_by)
+            {
+                /** If there is an ORDER BY for distributed query processing,
+                    *  but there is no aggregation, then on the remote servers ORDER BY was made
+                    *  - therefore, we merge the sorted streams from remote servers.
+                    *
+                    * Also in case of remote servers was process the query up to WithMergeableStateAfterAggregationAndLimit
+                    * (distributed_group_by_no_merge=2 or optimize_distributed_group_by_sharding_key=1 takes place),
+                    * then merge the sorted streams is enough, since remote servers already did full ORDER BY.
+                    */
+
+                if (from_aggregation_stage)
+                    executeMergeSorted(query_plan, "after aggregation stage for ORDER BY");
+                else if (!expressions.first_stage
+                    && !expressions.need_aggregate
+                    && !expressions.has_window
+                    && !(query.group_by_with_totals && !aggregate_final))
+                    executeMergeSorted(query_plan, "for ORDER BY, without aggregation");
+                else    /// Otherwise, just sort.
+                    executeOrder(
+                        query_plan,
+                        query_info.input_order_info ? query_info.input_order_info
+                                                    : (query_info.projection ? query_info.projection->input_order_info : nullptr));
+            }
+
+            /** Optimization - if there are several sources and there is LIMIT, then first apply the preliminary LIMIT,
+                * limiting the number of rows in each up to `offset + limit`.
+                */
+            bool has_withfill = false;
+            if (query.orderBy())
+            {
+                SortDescription order_descr = getSortDescription(query, context);
+                for (auto & desc : order_descr)
+                    if (desc.with_fill)
+                    {
+                        has_withfill = true;
+                        break;
+                    }
+            }
+
+            bool apply_limit = options.to_stage != QueryProcessingStage::WithMergeableStateAfterAggregation;
+            bool apply_prelimit = apply_limit &&
+                                    query.limitLength() && !query.limit_with_ties &&
+                                    !hasWithTotalsInAnySubqueryInFromClause(query) &&
+                                    !query.arrayJoinExpressionList() &&
+                                    !query.distinct &&
+                                    !expressions.hasLimitBy() &&
+                                    !settings.extremes &&
+                                    !has_withfill;
+            bool apply_offset = options.to_stage != QueryProcessingStage::WithMergeableStateAfterAggregationAndLimit;
+            bool limit_applied = false;
+            if (apply_prelimit)
+            {
+                executePreLimit(query_plan, /* do_not_skip_offset= */!apply_offset);
+                limit_applied = true;
+            }
+
+            /** If there was more than one stream,
+                * then DISTINCT needs to be performed once again after merging all streams.
+                */
+            if (query.distinct)
+                executeDistinct(query_plan, false, expressions.selected_columns, false);
+
+            if (expressions.hasLimitBy())
+            {
+                executeExpression(query_plan, expressions.before_limit_by, "Before LIMIT BY");
+                executeLimitBy(query_plan);
+            }
+
+            executeWithFill(query_plan);
+
+            /// If we have 'WITH TIES', we need execute limit before projection,
+            /// because in that case columns from 'ORDER BY' are used.
+            if (query.limit_with_ties && apply_offset)
+            {
+                executeLimit(query_plan);
+                limit_applied = true;
+            }
+
+            /// Projection not be done on the shards, since then initiator will not find column in blocks.
+            /// (significant only for WithMergeableStateAfterAggregation/WithMergeableStateAfterAggregationAndLimit).
+            if (!to_aggregation_stage)
+            {
+                /// We must do projection after DISTINCT because projection may remove some columns.
+                executeProjection(query_plan, expressions.final_projection);
+            }
+
+            /// Extremes are calculated before LIMIT, but after LIMIT BY. This is Ok.
+            executeExtremes(query_plan);
+
+            /// Limit is no longer needed if there is prelimit.
+            ///
+            /// NOTE: that LIMIT cannot be applied of OFFSET should not be applied,
+            /// since LIMIT will apply OFFSET too.
+            /// This is the case for various optimizations for distributed queries,
+            /// and when LIMIT cannot be applied it will be applied on the initiator anyway.
+            if (apply_limit && !limit_applied && apply_offset)
+                executeLimit(query_plan);
+
+            if (apply_offset)
+                executeOffset(query_plan);
         }
     }
 
     if (!subqueries_for_sets.empty() && (expressions.hasHaving() || query_analyzer->hasGlobalSubqueries()))
         executeSubqueriesInSetsAndJoins(query_plan, subqueries_for_sets);
-}
-
-void InterpreterSelectQuery::finalizeAfterAggregation(QueryPlan & query_plan, bool from_aggregation_stage, bool to_aggregation_stage, bool aggregate_final)
-{
-    // Now we must execute:
-    // 1) expressions before window functions,
-    // 2) window functions,
-    // 3) expressions after window functions,
-    // 4) preliminary distinct.
-    // Some of these were already executed at the shards (first_stage),
-    // see the counterpart code and comments there.
-    auto & query = getSelectQuery();
-    auto & expressions = analysis_result;
-    const auto & settings = context->getSettingsRef();
-    if (from_aggregation_stage)
-    {
-        if (query_analyzer->hasWindow())
-            throw Exception(
-                "Window functions does not support processing from WithMergeableStateAfterAggregation",
-                ErrorCodes::NOT_IMPLEMENTED);
-    }
-    else if (expressions.need_aggregate)
-    {
-        executeExpression(query_plan, expressions.before_window,
-            "Before window functions");
-        executeWindow(query_plan);
-        executeExpression(query_plan, expressions.before_order_by, "Before ORDER BY");
-        executeDistinct(query_plan, true, expressions.selected_columns, true);
-    }
-    else
-    {
-        if (query_analyzer->hasWindow())
-        {
-            executeWindow(query_plan);
-            executeExpression(query_plan, expressions.before_order_by, "Before ORDER BY");
-            executeDistinct(query_plan, true, expressions.selected_columns, true);
-        }
-        else
-        {
-            // Neither aggregation nor windows, all expressions before
-            // ORDER BY executed on shards.
-        }
-    }
-
-    if (expressions.has_order_by)
-    {
-        /** If there is an ORDER BY for distributed query processing,
-            *  but there is no aggregation, then on the remote servers ORDER BY was made
-            *  - therefore, we merge the sorted streams from remote servers.
-            *
-            * Also in case of remote servers was process the query up to WithMergeableStateAfterAggregationAndLimit
-            * (distributed_group_by_no_merge=2 or optimize_distributed_group_by_sharding_key=1 takes place),
-            * then merge the sorted streams is enough, since remote servers already did full ORDER BY.
-            */
-
-        if (from_aggregation_stage)
-            executeMergeSorted(query_plan, "after aggregation stage for ORDER BY");
-        else if (!expressions.first_stage
-            && !expressions.need_aggregate
-            && !expressions.has_window
-            && !(query.group_by_with_totals && !aggregate_final))
-            executeMergeSorted(query_plan, "for ORDER BY, without aggregation");
-        else    /// Otherwise, just sort.
-            executeOrder(
-                query_plan,
-                query_info.input_order_info ? query_info.input_order_info
-                                            : (query_info.projection ? query_info.projection->input_order_info : nullptr));
-    }
-
-    /** Optimization - if there are several sources and there is LIMIT, then first apply the preliminary LIMIT,
-        * limiting the number of rows in each up to `offset + limit`.
-        */
-    bool has_withfill = false;
-    if (query.orderBy())
-    {
-        SortDescription order_descr = getSortDescription(query, context);
-        for (auto & desc : order_descr)
-            if (desc.with_fill)
-            {
-                has_withfill = true;
-                break;
-            }
-    }
-
-    bool apply_limit = options.to_stage != QueryProcessingStage::WithMergeableStateAfterAggregation;
-    bool apply_prelimit = apply_limit &&
-                            query.limitLength() && !query.limit_with_ties &&
-                            !hasWithTotalsInAnySubqueryInFromClause(query) &&
-                            !query.arrayJoinExpressionList() &&
-                            !query.distinct &&
-                            !expressions.hasLimitBy() &&
-                            !settings.extremes &&
-                            !has_withfill;
-    bool apply_offset = options.to_stage != QueryProcessingStage::WithMergeableStateAfterAggregationAndLimit;
-    bool limit_applied = false;
-    if (apply_prelimit)
-    {
-        executePreLimit(query_plan, /* do_not_skip_offset= */!apply_offset);
-        limit_applied = true;
-    }
-
-    /** If there was more than one stream,
-        * then DISTINCT needs to be performed once again after merging all streams.
-        */
-    if (query.distinct)
-        executeDistinct(query_plan, false, expressions.selected_columns, false);
-
-    if (expressions.hasLimitBy())
-    {
-        executeExpression(query_plan, expressions.before_limit_by, "Before LIMIT BY");
-        executeLimitBy(query_plan);
-    }
-
-    executeWithFill(query_plan);
-
-    /// If we have 'WITH TIES', we need execute limit before projection,
-    /// because in that case columns from 'ORDER BY' are used.
-    if (query.limit_with_ties && apply_offset)
-    {
-        executeLimit(query_plan);
-        limit_applied = true;
-    }
-
-    /// Projection not be done on the shards, since then initiator will not find column in blocks.
-    /// (significant only for WithMergeableStateAfterAggregation/WithMergeableStateAfterAggregationAndLimit).
-    if (!to_aggregation_stage)
-    {
-        /// We must do projection after DISTINCT because projection may remove some columns.
-        executeProjection(query_plan, expressions.final_projection);
-    }
-
-    /// Extremes are calculated before LIMIT, but after LIMIT BY. This is Ok.
-    executeExtremes(query_plan);
-
-    /// Limit is no longer needed if there is prelimit.
-    ///
-    /// NOTE: that LIMIT cannot be applied of OFFSET should not be applied,
-    /// since LIMIT will apply OFFSET too.
-    /// This is the case for various optimizations for distributed queries,
-    /// and when LIMIT cannot be applied it will be applied on the initiator anyway.
-    if (apply_limit && !limit_applied && apply_offset)
-        executeLimit(query_plan);
-
-    if (apply_offset)
-        executeOffset(query_plan);
 }
 
 StreamLocalLimits getLimitsForStorage(const Settings & settings, const SelectQueryOptions & options)
@@ -1951,57 +1944,12 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
             auto prepared_count = std::make_unique<ReadFromPreparedSource>(Pipe(std::make_shared<SourceFromInputStream>(istream)), context);
             prepared_count->setStepDescription("Optimized trivial count");
             query_plan.addStep(std::move(prepared_count));
-            if (from_stage == QueryProcessingStage::FetchColumns)
-            {
-                from_stage = QueryProcessingStage::WithMergeableState;
-                analysis_result.first_stage = false;
-            }
-            else
-            {
-                /// We execute query till "Complete"
-                auto & expressions = analysis_result;
-                bool aggregate_final =
-                    expressions.need_aggregate &&
-                    options.to_stage > QueryProcessingStage::WithMergeableState &&
-                    !query.group_by_with_totals && !query.group_by_with_rollup && !query.group_by_with_cube;
-                bool aggregate_overflow_row =
-                    expressions.need_aggregate &&
-                    query.group_by_with_totals &&
-                    settings.max_rows_to_group_by &&
-                    settings.group_by_overflow_mode == OverflowMode::ANY &&
-                    settings.totals_mode != TotalsMode::AFTER_HAVING_EXCLUSIVE;
-                executeMergeAggregated(query_plan, aggregate_overflow_row, aggregate_final, query.group_by_with_grouping_sets);
-                if (!aggregate_final)
-                {
-                    if (query.group_by_with_totals)
-                    {
-                        bool final = !query.group_by_with_rollup && !query.group_by_with_cube;
-                        executeTotalsAndHaving(
-                            query_plan, expressions.hasHaving(), expressions.before_having, aggregate_overflow_row, final);
-                    }
-
-                    if (query.group_by_with_rollup)
-                        executeRollupOrCube(query_plan, Modificator::ROLLUP);
-                    else if (query.group_by_with_cube)
-                        executeRollupOrCube(query_plan, Modificator::CUBE);
-
-                    if ((query.group_by_with_rollup || query.group_by_with_cube || query.group_by_with_grouping_sets) && expressions.hasHaving())
-                    {
-                        if (query.group_by_with_totals)
-                            throw Exception(
-                                "WITH TOTALS and WITH ROLLUP or CUBE or GROUPING SETS are not supported together in presence of HAVING",
-                                ErrorCodes::NOT_IMPLEMENTED);
-                        executeHaving(query_plan, expressions.before_having);
-                    }
-                }
-                else if (expressions.hasHaving())
-                    executeHaving(query_plan, expressions.before_having);
-
-                finalizeAfterAggregation(query_plan, false, false, aggregate_final);
-                from_stage = QueryProcessingStage::Complete;
-                analysis_result.first_stage = false;
-                analysis_result.second_stage = false;
-            }
+            from_stage = QueryProcessingStage::WithMergeableState;
+            analysis_result.first_stage = false;
+            /// For StorageCnchMergeTree, analysis_result.second_stage sometimes can be false, for example if we have
+            /// 1 server and 1 worker, server will expect everything run on worker and only read final result from remote
+            if (options.to_stage >= QueryProcessingStage::WithMergeableState && !analysis_result.second_stage)
+                analysis_result.second_stage = true;
             return;
         }
     }
