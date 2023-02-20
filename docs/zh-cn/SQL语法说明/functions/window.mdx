@@ -1,0 +1,21 @@
+---
+title: "Window"
+slug: "window"
+hidden: false
+createdAt: "2021-08-01T07:50:23.044Z"
+updatedAt: "2021-08-01T07:52:51.347Z"
+tags:
+  - Docs
+---
+
+ByConity supports the standard syntax of window functions. A list of window related features are explained below.
+
+| Feature                                     | Status                                                                                                                                                    |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ROWS mode                                   | Supported. Please specify ROWs mode explicitly since RANGE mode is the default mode, so please always specify `ROWS` keyword in the window specification. |
+| RANGE mode                                  | not supported                                                                                                                                             |
+| GROUPS mode                                 | not supported                                                                                                                                             |
+| Expressions involving window function like: | supported                                                                                                                                                 |
+| Use of aggregate functions in window        | supported                                                                                                                                                 |
+| Navigations functions:                      | supported                                                                                                                                                 |
+| Window alias like:                          | supported                                                                                                                                                 |

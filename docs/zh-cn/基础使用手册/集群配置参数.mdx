@@ -1,0 +1,685 @@
+---
+title: 集群配置参数
+tags:
+  - Docs
+---
+
+# 集群配置参数
+
+文档类型：说明型
+
+内容提要：
+
+1. 在安装部署的过程中，需要理解哪些基础参数
+2. 各组件分别有哪些高级参数，作用是什么
+
+## Server 配置参数
+
+ByConity(曾用内部代号 CNCH) Server 端的配置保存在 cnch-server.xml 中，进程启动时通过 `--config-file` 指定， server 会自动从 cnch-server.xml 中加载配置。
+
+### cnch_type
+
+配置 ByConity 进程类型，可配置为 server 或者 worker。其中 server 主要负责接收查询请求并负责将查询调度到 worker；worker 节点主要负责执行来自 server 的查询任务。举例如下：
+
+Example:
+
+```
+<cnch_type>server</cnch_type>
+
+```
+
+### tcp_port
+
+server 和客户端进行连接的 TCP 端口
+
+Example：
+
+```
+<tcp_port>9000</tcp_port>
+
+```
+
+### http_port
+
+server 与客户端进行连接的 HTTP 端口
+
+Example:
+
+```
+<https_port>9999</https_port>
+
+```
+
+### rpc_port
+
+server 与其他组件进行交互的 RPC 端口
+
+Example:
+
+```
+<rpc_port>8124</rpc_port>
+
+```
+
+### exchange_port
+
+复杂查询的数据传输端口 （将来考虑与 rpc_port 合并）
+
+### exchange_status_port
+
+复杂查询的控制指令端口 （将来考虑与 rpc_port 合并）
+
+### path
+
+本地数据路径目录
+
+Example:
+
+```
+<path>/var/lib/clickhouse/</path>
+
+```
+
+### tmp_path
+
+本地临时目录路径,用来存放查询过程中的临时数据
+
+Example：
+
+```
+<tmp_path>/var/lib/clickhouse/tmp/</tmp_path>
+
+```
+
+### users_config
+
+用户相关配置文件的路径。
+
+Example:
+
+```
+<users_config>/path/to/userconf/users.xml</users_config>
+
+```
+
+### Service discovery
+
+配置与 server 进程通信的其他组件(包括其他 server)。与 server 交互的其他组件有 server, tso, daemon manager, virtual warehouse 以及 resource manager
+
+keys**:**
+
+- **mode** : 服务发现模式, 可选择的配置参数为 local , dns, consul
+- **cluster**: 集群名称
+- **disable_cache**：如果配置为 false, 将启用缓存以减少调用服务发现的次数
+- **cache_timeout** : 缓存过期时间
+
+Example
+
+```
+<service_discovery>
+    <mode>dns</mode>
+    <cluster>default</cluster>
+        <disable_cache>false</disable_cache>
+        <cache_timeout>5</cache_timeout>
+    <server>
+        <psm>data.cnch.server</psm>
+        <service>cnch-server-pp</service>
+        <headless_service>cnch-server-pp-headless</headless_service>
+    </server>
+    <tso>
+        <psm>data.cnch.tso</psm>
+        <service>cnch-tso</service>
+        <headless_service>cnch-tso-headless</headless_service>
+    </tso>
+    <vw>
+        <psm>data.cnch.vw</psm>
+    </vw>
+    <daemon_manager>
+        <psm>data.cnch.daemon_manager</psm>
+        <service>cnch-daemon-manager</service>
+        <headless_service>cnch-daemon-manager-headless</headless_service>
+    </daemon_manager>
+    <resource_manager>
+        <psm>data.cnch.resource_manager</psm>
+        <service>cnch-resource-manager</service>
+        <headless_service>cnch-resource-manager-headless</headless_service>
+    </resource_manager>
+</service_discovery>
+
+```
+
+### Catalog service
+
+集群元数据相关配置
+
+Keys:
+
+- **type** : 元数据存储引擎类型，支持 bytekv, fdb
+
+Example:
+
+```
+<!-- For foundationDB metastore-->
+<catalog_service>
+    <!--TODO: move name_space into catalog_service tag -->
+    <!--Metastore storage type, support `bytekv` and `fdb`-->
+    <type>fdb</type>
+    <fdb>
+        <cluster_file>/path/to/fdb/cluster_config</cluster_file>
+    </fdb>
+</catalog_service>
+
+```
+
+###
+
+## HDFS   配置参数
+
+启动服务时，会按照 cfs_addr>hdfs_addr>hdfs_ha_nameservice>hdfs_nnproxy 的顺序来检测配置项，一但命中某个配置项配置则使用对应的配置项来访问 HDFS
+
+### hdfs_user
+
+访问 HDFS 时默认使用的用户的名称，默认 clickhouse
+
+Example:
+
+```
+<hdfs_user>clickhouse</hdfs_user>
+
+```
+
+### cfs_addr
+
+cfs 服务的地址，格式为 cfs://service_url
+
+Example:
+
+```
+<cfs_addr>cfs://service_url</cfs_addr>
+
+```
+
+### hdfs_addr
+
+hdfs 服务的地址，格式为 hdfs://nnip:nnport/path
+
+Example:
+
+```
+<hdfs_addr>hdfs://nnip:nnport/path</hdfs_addr>
+
+```
+
+### hdfs_ha_nameservice
+
+hdfs 服务的名称，需要在 libhdfs3 的配置文件中提前配置好
+
+Example:
+
+```
+<hdfs_ha_nameservice>hdfs_service</hdfs_ha_nameservice>
+
+```
+
+### ~~hdfs_nnproxy~~
+
+~~访问~~~~HDFS~~~~时默认使用的 nnproxy 名称，默认 nnproxy~~
+
+~~Example:~~
+
+```
+~~<hdfs_nnproxy>nnproxy</hdfs_nnproxy>~~
+
+```
+
+### storage_configuration
+
+1. 接下来的配置层级与配置文件中 storage_configuration 配置层级一一对应
+
+- storage_configuration
+- cnch_default_policy，指定 CNCH 存储实际数据所使用的 StoragePolicy，可选配置项，默认是 cnch_default_hdfs，这个 StoragePolicy 中应当仅包含 HDFSDisk
+- 当建表的时候，对于 CNCH 表，如果没有指定 storage_policy 这个 MergeTreeSettings，则会被默认修改为 ${cnch_default_policy}
+- cnch_auxility_policy，指定 CNCH 在本地磁盘上存储临时数据所使用的 StoragePolicy，可选配置项，默认是 default
+- disks
+- ${DISK_NAME}
+- type，这个磁盘的类型，可选配置项，默认是 local
+- CNCH 支持选用 hdfs/bytehdfs 这两种磁盘作为远端存储，目前该 StoragePolicy 中仅支持单个 Disk
+- 为了与内部的配置兼容，hdfs/bytehdfs 均解析为内部的 bytehdfs 这种 Disk，社区版本的 HDFSDisk 的 type 被重命名为 communityhdfs
+- CNCH 所使用的 StoragePolicy 所指定的 HDFSDisk，其配置项在所有的 Server/Worker 的配置文件中都应当相同
+- path
+- 数据将被存储在这个 Disk 的哪个路径中，必需的配置项
+- hdfs_params
+- 针对 bytehdfs 类型的磁盘所新增的可选配置项，包含如下参数
+- hdfs_user，连接 hdfs 所使用的 user，可选配置项，默认是 clickhouse
+- cfs_addr，cfs 的地址，可选配置项，仅在使用 cfs 时需要配置此配置项
+- hdfs_addr，hdfs 的 namenode 的地址，可选配置项，如 hdfs://nnip:nnport/path
+- hdfs_ha_nameservice，可选配置项，如果需要使用 hdfs 的 HA，可以使用该配置项指定对应的 service，对应的 hdfs 配置需要通过 hdfs3_config 配置文件来配置
+- hdfs_nnproxy，hdfs 的 nnproxy 的地址，可选配置项，默认是 nnproxy
+- 如果 DiskByteHDFS 没有配置 hdfs_params 配置项，则会去配置文件中找到全局的配置项，例如配置文件中 hdfs_user 这个配置项的值
+- policies
+- ${STORAGE_POLICY_NAME}
+- volumes
+- ${VOLUME_NAME}
+- default，这个 Volume 中的默认磁盘，必需的配置项，默认的磁盘会被用来存放部分不支持多盘存储的数据，例如 metastore 等
+- disk，这个 Volume 所包含的所有磁盘名称，必需的配置项，对应 Disk 需要在 storage_configuration.disks 中配置好
+
+1. 配置示例
+
+```
+<storage_configuration>
+    <disks>
+        <default></default>
+        <server_local_disk1>
+            <path>/home/ch_test_service/service_test_env/server_data1/</path>
+        </server_local_disk1>
+        <server_local_disk2>
+            <path>/home/ch_test_service/service_test_env/server_data2/</path>
+        </server_local_disk2>
+        <server_hdfs_disk0>
+            <path>/user/cnch/</path>
+            <type>bytehdfs</type>
+        </server_hdfs_disk0>
+    </disks>
+    <policies>
+        <default>
+            <volumes>
+                <local>
+                    <default>default</default>
+                    <disk>default</disk>
+                    <disk>server_local_disk1</disk>
+                    <disk>server_local_disk2</disk>
+                </local>
+            </volumes>
+        </default>
+        <cnch_default_hdfs>
+            <volumes>
+                <hdfs>
+                    <default>server_hdfs_disk0</default>
+                    <disk>server_hdfs_disk0</disk>
+                </hdfs>
+            </volumes>
+        </cnch_default_hdfs>
+    </policies>
+</storage_configuration>
+
+```
+
+1. 为了兼容内部旧版本的配置项，如果用户仅指定了 default 这一个 StoragePolicy，同时包含 hdfs 和 local 这两个 volume，那么这个配置项会被解析成两个 StoragePolicy，一个是 default，但是仅包含 local 这个 volume，另一个是 ${cnch_default_policy}，仅包含 hdfs 这个 volume
+
+### hdfs3_config
+
+libhdfs3 配置文件路径
+
+Example:
+
+```
+<hdfs3_config>/path/to/conf/hdfs3.xml</hdfs3_config>
+
+```
+
+### disk_cache_strategies
+
+配置 disk cache 策略，包括策略 simple 和 lru 两种不同策略：
+
+- **lru**，LRUCache 淘汰策略相关配置
+- lru_max_size，DiskCache 最大的大小，默认 2T
+- random_drop_threshold，Cache 队列有长度限制，当队列长度到达一定比例后会按一定几率开始丢弃 Cache 请求来避免大表 Scan 导致 Cache 队列被占满，默认 50%
+- **simple**，Cache 策略相关配置
+- segment_size，DiskCache 的粒度，默认 8192，即将一个 ColumnStream 的最多 8192 个 GranuleCache 组成一个 DiskCacheSegment
+- hits_to_cache，数据开始 Cache 的阈值，默认为 2
+
+Example:
+
+```
+<disk_cache_strategies>
+    <simple>
+        <lru_max_size>1099511627776</lru_max_size>
+    </simple>
+</disk_cache_strategies>
+
+```
+
+### cnch_kafka_log
+
+配置后，CNCH 将开启 kafka_log, 可通过系统表查看消费日志
+
+Example:
+
+```
+<cnch_kafka_log>
+    <database>cnch_system</database>
+    <table>cnch_kafka_log</table>
+    <flush_max_row_count>10000</flush_max_row_count>
+    <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+</cnch_kafka_log>
+
+```
+
+### brpc
+
+### cnch_transaction_cleaner_max_threads
+
+CNCH 后台清理 transaction record 的线程池大小，默认 128
+
+Example:
+
+```
+<cnch_transaction_cleaner_max_threads>128</cnch_transaction_cleaner_max_threads>
+
+```
+
+### cnch_transaction_cleaner_queue_size
+
+CNCH 后台清理 transaction record 的线程池队列大小，默认 10000
+
+Example:
+
+```
+<cnch_transaction_cleaner_queue_size>10000</cnch_transaction_cleaner_queue_size>
+
+```
+
+### dance_merge_selector
+
+配置自研 merge 选择策略参数
+
+Example:
+
+```
+<dance_merge_selector>
+    <max_total_rows_to_merge>10000000</max_total_rows_to_merge>
+</dance_merge_selector>
+
+```
+
+### exchange_timeout_ms
+
+复杂查询数据传输 rpc 超时，默认 100000
+
+Example:
+
+```
+<exchange_timeout_ms>100000</exchange_timeout_ms>
+
+```
+
+### zookeeper
+
+配置 zookeeper （可选）， 当使用 clickhouse keeper 时需要配置为空
+
+Example:
+
+```
+<zookeeper></zookeeper>
+
+```
+
+## TSO 配置参数
+
+### tso_service
+
+配置 tso 服务，包括服务端口，元数据存储，keeper 等
+
+Keys:
+
+- **port**: TSO 服务 TCP 端口
+- **keeper**: tso，server_master 等组件 leader 选举服务
+- **type**: TSO 元数据存储引擎
+
+Example:
+
+```
+<tso_service>
+    <port>8080</port>
+    <keeper>
+        <port>2181</port>
+    </keeper>
+    <!-- Support for CNCH-CE Merge. Metastore store type, support `bytekv` and `fdb` -->
+    <type>fdb</type>
+    <fdb>
+        <cluster_file>/path/to/fdb/conf/fdb.cluster</cluster_file>>
+    </fdb>
+ </tso_service>
+
+```
+
+### keeper_server
+
+- path: keeper 数据存储路径
+
+```
+<path>/var/lib/tso_server/keeper/</path>
+
+```
+
+- keeper_server
+- tcp_port：keeper 服务的 tcp 端口
+- server_id：keeper 内部 leader 选举的 id，需要是 int 类型
+- log_storage_path：keeper log 存储路径
+- snapshot_storage_path：keeper snapshot 存储路径
+- coordination_settings：支持定制化 keeper settings
+- raft_configuration：可选，支持从配置文件读取 keeper 节点。如使用服务发现读取 keeper 节点，则不能配置该配置项
+- id: 同上 server_id
+- hostname: ip 地址
+- port: keeper 内部通信 port，与 tcp_port 不同
+
+```
+<keeper_server>
+    <tcp_port>9181</tcp_port>
+    <server_id>1</server_id>
+    <log_storage_path>/var/lib/tso_server/keeper/log</log_storage_path>
+    <snapshot_storage_path>/var/lib/tso_server/keeper1/snapshots</snapshot_storage_path>
+
+    <coordination_settings>
+        <operation_timeout_ms>10000</operation_timeout_ms>
+        <session_timeout_ms>30000</session_timeout_ms>
+        <raft_logs_level>warning</raft_logs_level>
+        <compress_logs>0</compress_logs>
+    </coordination_settings>
+<!--
+    <raft_configuration>
+        <server>
+            <id>1</id>
+            <hostname>host0</hostname>
+            <port>9445</port>
+        </server>
+        <server>
+            <id>2</id>
+            <hostname>host1</hostname>
+            <port>9445</port>
+        </server>
+        <server>
+            <id>3</id>
+            <hostname>host2</hostname>
+            <port>9445</port>
+        </server>
+    </raft_configuration>
+-->
+</keeper_server>
+
+```
+
+- zookeeper
+
+配置 zookeeper 以启用 leader election，也可通过服务发现来获取 zookeeper 的节点信息，在这种情况下，需要配置一个空的 zookeeper 标签
+
+```
+<zookeeper>
+    <!--
+    <node index="1">
+        <host>host0</host>
+        <port>9181</port>
+    </node>
+    -->
+</zookeeper>
+
+```
+
+### service_discovery
+
+服务发现相关配置，高可用 TSO 进程通过服务发现获取其他 TSO server 地址及端口进行通信
+
+Keys:
+
+- **mode** : 与其他模块 service discovery 一样，支持 dns, consul, local 等模式
+
+Example:
+
+```
+<service_discovery>
+    <mode>dns</mode>
+    <tso>
+        <psm>data.cnch.tso</psm>
+        <service>cnch-tso</service>
+        <headless_service>cnch-tso-headless</headless_service>
+    </tso>
+</service_discovery>
+
+```
+
+## Daemon Manager 配置参数
+
+### daemon_manager
+
+配置 daemon manager 进程端口以及调度后台任务的信息
+
+Keys:
+
+- port: DM 进程 TCP 端口
+- http: DM 进程 http 端口等配置
+- workload_thread_interval_ms: 后台任务调度的时间间隔
+- daemon_jobs: DM 负责调度的后台任务类型及配置。可调度的任务类型包括：PART_GC, PART_MERGE, CONSUMER, GLOBAL_GC, TXN_GC 等
+
+Example:
+
+```
+<daemon_manager>
+    <port>8090</port>
+    <http>
+        <port>8091</port>
+        <receive_timeout>1800</receive_timeout>
+        <send_timeout>1800</send_timeout>
+    </http>
+    <workload_thread_interval_ms>1000</workload_thread_interval_ms>
+    <daemon_jobs>
+        <job>
+            <name>PART_GC</name>
+            <!-- Interval in millisecond -->
+            <interval>10000</interval>
+        </job>
+        <job>
+            <name>PART_MERGE</name>
+            <!-- Interval in millisecond -->
+            <interval>10000</interval>
+        </job>
+        <job>
+            <name>CONSUMER</name>
+            <!-- Interval in millisecond -->
+            <interval>10000</interval>
+        </job>
+        <job>
+            <name>GLOBAL_GC</name>
+            <!-- Interval in millisecond -->
+            <interval>50000</interval>
+        </job>
+        <job>
+            <name>TXN_GC</name>
+            <!-- Interval in millisecond -->
+            <interval>600000</interval>
+        </job>
+        <job>
+            <name>DEDUP_WORKER</name>
+            <!-- Interval in millisecond -->
+            <interval>10000</interval>
+        </job>
+        <job>
+            <name>PART_CLUSTERING</name>
+            <!-- Interval in millisecond -->
+            <interval>10000</interval>
+        </job>
+    </daemon_jobs>
+</daemon_manager>
+
+```
+
+### cnch_data_retention_time_in_sec
+
+被删除的表及数据库在被彻底清理之前的保留时间，默认 3 天。期间内，用户可以恢复已经删除的数据。
+
+Example:
+
+```
+<cnch_data_retention_time_in_sec>86400</cnch_data_retention_time_in_sec>
+
+```
+
+## Resource Manager 配置参数
+
+### resource_manager
+
+配置 resource manager 进程端口、初始 VW 配置等信息。
+
+Keys：
+
+- **port: **服务启动的端口号
+- **vws: **初始配置的 VW 相关信息
+
+Example：
+
+```
+<resource_manager>
+    <port>18989</port>
+    <vws>
+        <vw>
+            <name>vw_default</name>
+            <type>Default</type>
+            <num_workers>1</num_workers>
+            <worker_groups>
+                <worker_group>
+                    <name>wg_default</name>
+                    <type>Physical</type>
+                </worker_group>
+            </worker_groups>
+        </vw>
+    </vws>
+</resource_manager>
+
+```
+
+### catalog
+
+Catalog 相关配置。
+
+Keys:
+
+- name_space
+
+Example:
+
+```
+<name_space>default</name_space>
+
+```
+
+### catalog_service
+
+catalog_service 相关配置。
+
+Keys:
+
+- **type** - catalog 服务的类型
+
+Example:
+
+```
+<!-- For foundationDB metastore-->
+<catalog_service>
+    <!--TODO: move name_space into catalog_service tag -->
+    <!--Metastore storage type, support `bytekv` and `fdb`-->
+    <type>fdb</type>
+    <fdb>
+        <cluster_file>/path/to/fdb/cluster_config</cluster_file>
+    </fdb>
+</catalog_service>
+
+```
