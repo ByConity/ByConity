@@ -4312,12 +4312,12 @@ namespace Catalog
     }
 
     DeleteBitmapMetaPtrVector
-    Catalog::getDeleteBitmapsInPartitions(const StoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts)
+    Catalog::getDeleteBitmapsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts)
     {
         DeleteBitmapMetaPtrVector outRes;
         runWithMetricSupport(
             [&] {
-                auto & merge_tree_storage = dynamic_cast<MergeTreeMetaBase &>(*storage);
+                const auto & merge_tree_storage = dynamic_cast<const MergeTreeMetaBase &>(*storage);
 
                 auto createDeleteBitmapMetaPtr = [&](const String & meta) {
                     DataModelDeleteBitmapPtr model_ptr = std::make_shared<Protos::DataModelDeleteBitmap>();

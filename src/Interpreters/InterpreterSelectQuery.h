@@ -158,6 +158,7 @@ private:
     Block getSampleBlockImpl();
 
     void executeImpl(QueryPlan & query_plan, const BlockInputStreamPtr & prepared_input, std::optional<Pipe> prepared_pipe);
+    void finalizeAfterAggregation(QueryPlan & query_plan, bool from_aggregation_stage, bool to_aggregation_stage, bool aggregate_final);
 
     /// Different stages of query execution.
 

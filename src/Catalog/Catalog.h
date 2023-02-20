@@ -169,7 +169,7 @@ public:
 
     /// (UNIQUE KEY) fetch all delete bitmaps <= ts in the given partitions
     DeleteBitmapMetaPtrVector
-    getDeleteBitmapsInPartitions(const StoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts = 0);
+    getDeleteBitmapsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts = 0);
     /// (UNIQUE KEY) get bitmaps by keys
     DeleteBitmapMetaPtrVector getDeleteBitmapByKeys(const StoragePtr & storage, const NameSet & keys);
     /// (UNIQUE KEY) remove bitmaps meta from KV, used by GC

@@ -1127,7 +1127,7 @@ void StorageCnchMergeTree::getDeleteBitmapMetaForStagedParts(
 }
 
 void StorageCnchMergeTree::getDeleteBitmapMetaForParts(
-    const ServerDataPartsVector & parts, ContextPtr local_context, TxnTimestamp start_time)
+    const ServerDataPartsVector & parts, ContextPtr local_context, TxnTimestamp start_time) const
 {
     auto catalog = local_context->getCnchCatalog();
     if (!catalog)
@@ -2324,10 +2324,22 @@ String StorageCnchMergeTree::genCreateTableQueryForWorker(const String & suffix)
 std::optional<UInt64> StorageCnchMergeTree::totalRows(const ContextPtr & query_context) const
 {
     auto parts = getAllParts(query_context);
+    if (parts.empty())
+        return 0;
+    const auto & metadata_snapshot = getInMemoryMetadataPtr();
+    if (metadata_snapshot->hasUniqueKey())
+        getDeleteBitmapMetaForParts(parts, query_context, query_context->getCurrentTransactionID());
     size_t rows = 0;
     for (const auto & part : parts)
+    {
         if (!part->isPartial())
-            rows += part->rowsCount();
+        {
+            if (const auto & delete_bitmap = part->getDeleteBitmap(*this, false))
+                rows += part->rowsCount() - delete_bitmap->cardinality();
+            else
+                rows += part->rowsCount();
+        }
+    }
     return rows;
 }
 
@@ -2337,7 +2349,11 @@ StorageCnchMergeTree::totalRowsByPartitionPredicate(const SelectQueryInfo & quer
     /// Similar to selectPartsToRead, but will return {} if the predicate is not a partition predicate or _part
     auto column_names_to_return = query_info.syntax_analyzer_result->requiredSourceColumns();
     auto parts = getAllPartsInPartitions(column_names_to_return, local_context, query_info);
-    if (parts.empty()) return 0;
+    if (parts.empty())
+        return 0;
+    const auto & metadata_snapshot = getInMemoryMetadataPtr();
+    if (metadata_snapshot->hasUniqueKey())
+        getDeleteBitmapMetaForParts(parts, local_context, local_context->getCurrentTransactionID());
 
     bool partition_column_valid = std::any_of(column_names_to_return.begin(), column_names_to_return.end(), [](const auto & name) {
         return name == "_partition_id" || name == "_partition_value";
@@ -2350,11 +2366,11 @@ StorageCnchMergeTree::totalRowsByPartitionPredicate(const SelectQueryInfo & quer
         ASTPtr expression_ast;
 
         /// Generate valid expressions for filtering
-        partition_column_valid
-            = partition_column_valid && VirtualColumnUtils::prepareFilterBlockWithQuery(query_info.query, local_context, partition_block, expression_ast);
+        partition_column_valid = partition_column_valid
+            && VirtualColumnUtils::prepareFilterBlockWithQuery(query_info.query, local_context, partition_block, expression_ast);
     }
 
-    PartitionPruner partition_pruner(getInMemoryMetadataPtr(), query_info, local_context, true /* strict */);
+    PartitionPruner partition_pruner(metadata_snapshot, query_info, local_context, true /* strict */);
 
     if (!partition_column_valid && partition_pruner.isUseless())
         return {};
@@ -2372,7 +2388,12 @@ StorageCnchMergeTree::totalRowsByPartitionPredicate(const SelectQueryInfo & quer
     for (const auto & part : parts)
         if (!part->isPartial() && (part_values.empty() || part_values.find(part->name()) != part_values.end())
             && !partition_pruner.canBePruned(*part))
-            rows += part->rowsCount();
+        {
+            if (const auto & delete_bitmap = part->getDeleteBitmap(*this, false))
+                rows += part->rowsCount() - delete_bitmap->cardinality();
+            else
+                rows += part->rowsCount();
+        }
     return rows;
 }
 
