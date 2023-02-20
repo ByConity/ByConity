@@ -91,19 +91,18 @@ void ServerPartLogElement::appendToBlock(MutableColumns & columns) const
     columns[i++]->insert(exception);
 }
 
-/*
-bool ServerPartLog::addNewParts(ContextPtr context, ServerPartLogElement::Type type, const MutableMergeTreeDataPartsCNCHVector & parts, UInt64 txn_id, UInt8 error)
+bool ServerPartLog::addNewParts(const ContextPtr & local_context, ServerPartLogElement::Type type, const MutableMergeTreeDataPartsCNCHVector & parts, UInt64 txn_id, UInt8 error)
 {
     std::shared_ptr<ServerPartLog> server_part_log;
     try
     {
-        server_part_log = context->getServerPartLog();
+        server_part_log = local_context->getServerPartLog();
         if (!server_part_log)
             return false;
 
         auto event_time = time(nullptr);
 
-        for (auto & part : parts)
+        for (const auto & part : parts)
         {
             ServerPartLogElement elem;
 
@@ -129,10 +128,9 @@ bool ServerPartLog::addNewParts(ContextPtr context, ServerPartLogElement::Type t
     }
     catch (...)
     {
-        tryLogCurrentException(server_part_log ? server_part_log->log : &Logger::get("ServerPartLog"), __PRETTY_FUNCTION__);
+        tryLogCurrentException(server_part_log ? server_part_log->log : &Poco::Logger::get("ServerPartLog"), __PRETTY_FUNCTION__);
         return false;
     }
 }
-*/
 
 }

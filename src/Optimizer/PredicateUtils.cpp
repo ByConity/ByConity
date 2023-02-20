@@ -25,6 +25,8 @@
 #include <QueryPlan/JoinStep.h>
 #include <QueryPlan/ProjectionStep.h>
 
+#include <common/arithmeticOverflow.h>
+
 namespace DB
 {
 
@@ -196,24 +198,22 @@ ConstASTPtr PredicateUtils::distributePredicate(ConstASTPtr or_predicate, Contex
         }
         sub_predicates_to_set.emplace_back(sets);
     }
-    int original_base_expressions = 0;
+    Int64 original_base_expressions = 0;
     for (auto & set : sub_predicates_to_set)
     {
         original_base_expressions += set.size();
     }
 
-    int new_base_expressions;
-    try
+    Int64 new_base_expressions = 1;
+    bool overflow = false;
+
+    for (auto & set : sub_predicates_to_set)
     {
-        int multiply_exact = 1;
-        for (auto & set : sub_predicates_to_set)
-        {
-            int size = set.size();
-            multiply_exact = multiply_exact * size;
-        }
-        new_base_expressions = multiply_exact * sub_predicates_to_set.size();
+        Int64 size = set.size();
+        overflow |= common::mulOverflow(new_base_expressions, size, new_base_expressions);
     }
-    catch (...)
+    overflow |= common::mulOverflow(new_base_expressions, Int64(sub_predicates_to_set.size()), new_base_expressions);
+    if (overflow)
     {
         // Integer overflow from multiplication means there are too many expressions
         return or_predicate;

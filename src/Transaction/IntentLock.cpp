@@ -88,7 +88,7 @@ void IntentLock::writeIntents()
         throw Exception("IntentLock is already locked", ErrorCodes::LOGICAL_ERROR);
 
     Stopwatch watch;
-    auto catalog = context.getCnchCatalog();
+    auto catalog = getContext()->getCnchCatalog();
     auto intents = createWriteIntents();
     std::map<std::pair<TxnTimestamp, String>, std::vector<String>> conflict_parts;
     bool lock_success = catalog->writeIntents(lock_prefix, intents, conflict_parts);
@@ -136,7 +136,7 @@ void IntentLock::writeIntents()
                 if (location == txn_record.location())
                 {
                     // get transaction status from local server
-                    auto & coordinator = context.getCnchTransactionCoordinator();
+                    auto & coordinator = getContext()->getCnchTransactionCoordinator();
                     txn_status = coordinator.getTransactionStatus(txn_id);
                 }
                 else
@@ -144,8 +144,8 @@ void IntentLock::writeIntents()
                     // get transaction status from remote server
                     try
                     {
-                        // auto server_client = context.getCnchServerClientPool().get(location);
-                        // txn_status = server_client->getTransactionStatus(txn_id);
+                        auto server_client = getContext()->getCnchServerClientPool().get(location);
+                        txn_status = server_client->getTransactionStatus(txn_id);
                     }
                     catch (...)
                     {
@@ -161,7 +161,7 @@ void IntentLock::writeIntents()
                     {
                         TransactionRecord target_record;
                         target_record.setStatus(CnchTransactionStatus::Aborted);
-                        target_record.setCommitTs(context.getTimestamp());
+                        target_record.setCommitTs(getContext()->getTimestamp());
 
                         bool success = catalog->setTransactionRecord(*record, target_record);
                         if (success)
@@ -184,7 +184,7 @@ void IntentLock::writeIntents()
                 {
                     try
                     {
-                        record->setCommitTs(context.getTimestamp());
+                        record->setCommitTs(getContext()->getTimestamp());
                         catalog->rollbackTransaction(*record);
                     }
                     catch (...)
@@ -217,7 +217,7 @@ void IntentLock::removeIntents()
 {
     if (locked && valid)
     {
-        auto catalog = context.getCnchCatalog();
+        auto catalog = getContext()->getCnchCatalog();
         auto intents = createWriteIntents();
         catalog->clearIntents(lock_prefix, intents);
         locked = false;

@@ -1,0 +1,109 @@
+---
+title: "Random"
+slug: "random"
+hidden: false
+createdAt: "2021-07-29T12:26:05.181Z"
+updatedAt: "2021-09-23T06:37:41.756Z"
+tags:
+  - Docs
+---
+
+> Notice:
+> Some of the examples below are referenced from [ClickHouse Documentation](https://clickhouse.com/docs/en/sql-reference/functions/) but have been adapted and modified to work in ByConity.
+
+## rand
+
+Returns a pseudo-random UInt32 number, evenly distributed among all UInt32-type numbers.
+Uses a linear congruential generator.
+
+**Syntax**
+
+```sql
+rand([x])
+```
+
+**Arguments**
+
+- `x` — Expression resulting in any of the supported data types. The resulting value is discarded, but the expression itself if used for bypassing common subexpression elimination if the function is called multiple times in one query. Optional parameter.
+
+**Returned values**
+
+- a pseudo-random UInt32 number. Type: UInt32
+
+**Example**
+
+```sql
+SELECT rand(), rand(number) FROM numbers(2);
+```
+
+```plain%20text
+┌─rand()─────┬─rand(number)─┐
+│ 3882830473 │ 2236253349   │
+│ 4122795699 │ 3720179576   │
+└────────────┴──────────────┘
+```
+
+## rand64
+
+Returns a pseudo-random UInt64 number, evenly distributed among all UInt64-type numbers.
+Uses a linear congruential generator.
+
+**Syntax**
+
+```sql
+rand64([x])
+```
+
+**Arguments**
+
+- `x` — Expression resulting in any of the supported data types. The resulting value is discarded, but the expression itself if used for bypassing common subexpression elimination if the function is called multiple times in one query. Optional parameter.
+
+**Returned values**
+
+- a pseudo-random UInt64 number. Type: UInt64
+
+**Example**
+
+```sql
+SELECT rand64(), rand64(number) FROM numbers(2);
+```
+
+```plain%20text
+┌─rand64()────────────┬─rand64(number)───────┐
+│ 4216084906413806748 │ 17404981640646529534 │
+│ 874879808660605772  │ 941470430861381566   │
+└─────────────────────┴──────────────────────┘
+```
+
+## randConstant
+
+Produces a constant column with a random value.
+
+**Syntax**
+
+```sql
+randConstant([x])
+```
+
+**Arguments**
+
+- `x` — Expression resulting in any of the supported data types. The resulting value is discarded, but the expression itself if used for bypassing common subexpression elimination if the function is called multiple times in one query. Optional parameter.
+
+**Returned value**
+
+- Pseudo-random number. Type: UInt32.
+
+**Example**
+
+```sql
+SELECT rand(), rand(1), rand(number), randConstant(), randConstant(1), randConstant(number)
+FROM numbers(3)
+```
+
+```plain%20text
+┌─rand()─────┬─rand(1)────┬─rand(number)─┬─randConstant()─┬─randConstant(1)─┬─randConstant(number)─┐
+│ 1617218167 │ 3030783952 │ 3660442590   │ 3335999329     │ 1508515848      │ 1880875990           │
+│ 432450540  │ 2987789840 │ 653572307    │ 3335999329     │ 1508515848      │ 1880875990           │
+│ 3698169875 │ 79826010   │ 458167070    │ 3335999329     │ 1508515848      │ 1880875990           │
+└────────────┴────────────┴──────────────┴────────────────┴─────────────────┴──────────────────────┘
+```
