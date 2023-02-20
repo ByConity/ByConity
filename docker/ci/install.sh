@@ -1,29 +1,7 @@
 #!/usr/bin/env bash
-bvc_version=1.0.0.94
-tiger_root=/opt/tiger
-bvc_path=$tiger_root/bvc
-export PATH="${PATH}:/${bvc_path}/bin:${tiger_root}/typhoon-blade:${tiger_root}/dev_toolkit"
-
-if ! type '$bvc' > /dev/null; then
-    echo "========== install bvc ============"
-    mkdir -p $bvc_path && cd $bvc_path
-    wget -O bvc.tar.gz http://d.scm.byted.org/api/download/ceph:tao.modules.bvc_$bvc_version.tar.gz
-    tar -xvzf bvc.tar.gz -C $bvc_path
-    echo "========== finish install bvc ============"
-fi
-
-if ! type '$blade' > /dev/null; then
-    set +x
-    echo "========== install blade ============"
-    cd $tiger_root
-    bvc clone inf/blade/blade_build -f typhoon-blade
-    bvc clone dev_toolkit
-    echo "========== finish install blade ============"
-fi
 
 # Donwload HDFS
 cd /
-wget https://downloads.apache.org/hadoop/common/hadoop-3.3.4/hadoop-3.3.4.tar.gz
 tar -xvzf hadoop-3.3.4.tar.gz
 mv hadoop-3.3.4 hadoop
 
@@ -48,8 +26,5 @@ mkdir -p /hadoop/hadoopdata/hdfs/namenode
 mkdir -p /hadoop/hadoopdata/hdfs/datanode
 
 # Download FDB binaries
-mkdir -p /opt/tiger/foundationdb/bin
-wget https://github.com/apple/foundationdb/releases/download/7.1.0/fdbmonitor.x86_64 -q -O /opt/tiger/foundationdb/bin/fdbmonitor
-wget https://github.com/apple/foundationdb/releases/download/7.1.0/fdbcli.x86_64 -q -O /opt/tiger/foundationdb/bin/fdbcli
-wget https://github.com/apple/foundationdb/releases/download/7.1.0/fdbserver.x86_64 -q -O /opt/tiger/foundationdb/bin/fdbserver
+# mkdir -p /opt/tiger/foundationdb/bin
 
