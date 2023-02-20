@@ -1,13 +1,13 @@
 build: image
 	mkdir -p $(HOME)/.ccache
-	docker run --network=host --rm --workdir /server --volume $(realpath ../..):/server --cap-add=SYS_PTRACE --mount=type=bind,source=$(HOME)/.ccache,destination=/ccache -e CCACHE_DIR=/ccache -it minhthucdao1/byconity-builder
+	docker run --network=host --rm --workdir /server --volume $(realpath ../..):/server --cap-add=SYS_PTRACE --mount=type=bind,source=$(HOME)/.ccache,destination=/ccache -e CCACHE_DIR=/ccache -it byconity/byconity-builder
 
 pull:
-	docker pull minhthucdao1/byconity-builder
+	docker pull byconity/byconity-builder
 
 image:
 	curl -L -o foundationdb-clients_7.1.27-1_amd64.deb https://github.com/apple/foundationdb/releases/download/7.1.27/foundationdb-clients_7.1.27-1_amd64.deb
-	docker build --network=host -t minhthucdao1/byconity-builder .
+	docker build --network=host -t byconity/byconity-builder .
 
 image_push:
-	docker push minhthucdao1/byconity-builder
+	docker push byconity/byconity-builder
