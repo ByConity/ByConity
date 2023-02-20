@@ -1,6 +1,6 @@
 # rebuild in #33610
 # docker build -t byconity/binary-builder .
-FROM minhthucdao1/byconity-builder
+FROM byconity/byconity-builder
 RUN apt-get install -y curl moreutils
 ENV CC=clang-11
 ENV CXX=clang++-11
