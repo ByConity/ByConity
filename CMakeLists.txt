@@ -46,6 +46,8 @@ include (cmake/target.cmake)
 include (cmake/tools.cmake)
 include (cmake/analysis.cmake)
 
+include (cmake/CompileFoundationDB.cmake)
+
 # Ignore export() since we don't use it,
 # but it gets broken with a global targets via link_libraries()
 macro (export)
