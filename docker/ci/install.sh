@@ -25,6 +25,8 @@ sed '$ i\\t<property><name>dfs.replication</name><value>1</value></property>\n\t
 mkdir -p /hadoop/hadoopdata/hdfs/namenode
 mkdir -p /hadoop/hadoopdata/hdfs/datanode
 
+git config --global --add safe.directory /__w/ByConity/ByConity
+
 # Download FDB binaries
 # mkdir -p /opt/tiger/foundationdb/bin
 
