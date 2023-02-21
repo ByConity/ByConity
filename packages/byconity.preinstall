@@ -1,0 +1,4 @@
+#!/bin/sh
+set -e
+
+mkdir -p /etc/byconity-server
