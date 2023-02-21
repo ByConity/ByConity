@@ -71,17 +71,9 @@ namespace ErrorCodes
 
 }
 
-/// ANSI escape sequence for intense color in terminal.
-#define HILITE "\033[1m"
-#define END_HILITE "\033[0m"
-
-static constexpr auto CLICKHOUSE_BRIDGE_USER = "clickhouse-bridge";
-static constexpr auto CLICKHOUSE_BRIDGE_GROUP = "clickhouse-bridge";
-
 using namespace DB;
 namespace po = boost::program_options;
 namespace fs = std::filesystem;
-
 
 static auto executeScript(const std::string & command, bool throw_on_error = false)
 {
@@ -98,23 +90,6 @@ static auto executeScript(const std::string & command, bool throw_on_error = fal
     }
     else
         return sh->tryWait();
-}
-
-static bool ask(std::string question)
-{
-    while (true)
-    {
-        std::string answer;
-        std::cout << question;
-        std::getline(std::cin, answer);
-        if (!std::cin.good())
-            return false;
-
-        if (answer.empty() || answer == "n" || answer == "N")
-            return false;
-        if (answer == "y" || answer == "Y")
-            return true;
-    }
 }
 
 static bool filesEqual(std::string path1, std::string path2)
@@ -135,10 +110,11 @@ int mainEntryClickHouseInstall(int argc, char ** argv)
         ("help,h", "produce help message")
         ("prefix", po::value<std::string>()->default_value(""), "prefix for all paths")
         ("binary-path", po::value<std::string>()->default_value("/usr/bin"), "where to install binaries")
-        ("config-path", po::value<std::string>()->default_value("/etc/clickhouse-server"), "where to install configs")
-        ("log-path", po::value<std::string>()->default_value("/var/log/clickhouse-server"), "where to create log directory")
-        ("data-path", po::value<std::string>()->default_value("/var/lib/clickhouse"), "directory for data")
-        ("pid-path", po::value<std::string>()->default_value("/var/run/clickhouse-server"), "directory for pid file")
+        ("config-path", po::value<std::string>()->default_value("/etc/byconity-server"), "where to install configs")
+        ("log-path", po::value<std::string>()->default_value("/var/log/byconity-server"), "where to create log directory")
+        ("data-path", po::value<std::string>()->default_value("/var/lib/byconity-server"), "directory for data")
+        ("disk-path", po::value<std::string>()->default_value("/var/lib/byconity-server/server_local_disk/data/0/"), "directory for local data parts")
+        ("pid-path", po::value<std::string>()->default_value("/var/run/byconity-server"), "directory for pid file")
         ("user", po::value<std::string>()->default_value("clickhouse"), "clickhouse user to create")
         ("group", po::value<std::string>()->default_value("clickhouse"), "clickhouse group to create")
     ;
@@ -270,14 +246,7 @@ int mainEntryClickHouseInstall(int argc, char ** argv)
         {
             "clickhouse-server",
             "clickhouse-client",
-            "clickhouse-local",
-            "clickhouse-benchmark",
-            "clickhouse-copier",
-            "clickhouse-obfuscator",
-            "clickhouse-git-import",
-            "clickhouse-compressor",
-            "clickhouse-format",
-            "clickhouse-extract-from-config"
+            "clickhouse-local"
         };
 
         for (const auto & tool : tools)
@@ -395,95 +364,11 @@ int mainEntryClickHouseInstall(int argc, char ** argv)
             fs::create_directories(config_dir);
         }
 
-        fs::path main_config_file = config_dir / "config.xml";
-        fs::path users_config_file = config_dir / "users.xml";
-        fs::path config_d = config_dir / "config.d";
-        fs::path users_d = config_dir / "users.d";
-
         std::string log_path = prefix / options["log-path"].as<std::string>();
         std::string data_path = prefix / options["data-path"].as<std::string>();
+        std::string disk_path = prefix / options["disk-path"].as<std::string>();
         std::string pid_path = prefix / options["pid-path"].as<std::string>();
 
-        bool has_password_for_default_user = false;
-
-        if (!fs::exists(config_d))
-        {
-            fmt::print("Creating config directory {} that is used for tweaks of main server configuration.\n", config_d.string());
-            fs::create_directory(config_d);
-        }
-
-        if (!fs::exists(users_d))
-        {
-            fmt::print("Creating config directory {} that is used for tweaks of users configuration.\n", users_d.string());
-            fs::create_directory(users_d);
-        }
-
-        if (!fs::exists(main_config_file))
-        {
-            std::string_view main_config_content = getResource("config.xml");
-            if (main_config_content.empty())
-            {
-                fmt::print("There is no default config.xml, you have to download it and place to {}.\n", main_config_file.string());
-            }
-            else
-            {
-                WriteBufferFromFile out(main_config_file.string());
-                out.write(main_config_content.data(), main_config_content.size());
-                out.sync();
-                out.finalize();
-            }
-        }
-        else
-        {
-            fmt::print("Config file {} already exists, will keep it and extract path info from it.\n", main_config_file.string());
-
-            ConfigProcessor processor(main_config_file.string(), /* throw_on_bad_incl = */ false, /* log_to_console = */ false);
-            ConfigurationPtr configuration(new Poco::Util::XMLConfiguration(processor.processConfig()));
-
-            if (configuration->has("path"))
-            {
-                data_path = configuration->getString("path");
-                fmt::print("{} has {} as data path.\n", main_config_file.string(), data_path);
-            }
-
-            if (configuration->has("logger.log"))
-            {
-                log_path = fs::path(configuration->getString("logger.log")).remove_filename();
-                fmt::print("{} has {} as log path.\n", main_config_file.string(), log_path);
-            }
-        }
-
-
-        if (!fs::exists(users_config_file))
-        {
-            std::string_view users_config_content = getResource("users.xml");
-            if (users_config_content.empty())
-            {
-                fmt::print("There is no default users.xml, you have to download it and place to {}.\n", users_config_file.string());
-            }
-            else
-            {
-                WriteBufferFromFile out(users_config_file.string());
-                out.write(users_config_content.data(), users_config_content.size());
-                out.sync();
-                out.finalize();
-            }
-        }
-        else
-        {
-            fmt::print("Users config file {} already exists, will keep it and extract users info from it.\n", users_config_file.string());
-
-            /// Check if password for default user already specified.
-            ConfigProcessor processor(users_config_file.string(), /* throw_on_bad_incl = */ false, /* log_to_console = */ false);
-            ConfigurationPtr configuration(new Poco::Util::XMLConfiguration(processor.processConfig()));
-
-            if (!configuration->getString("users.default.password", "").empty()
-                || !configuration->getString("users.default.password_sha256_hex", "").empty()
-                || !configuration->getString("users.default.password_double_sha1_hex", "").empty())
-            {
-                has_password_for_default_user = true;
-            }
-        }
 
         auto change_ownership = [](const String & file_name, const String & user_name, const String & group_name)
         {
@@ -494,21 +379,6 @@ int mainEntryClickHouseInstall(int argc, char ** argv)
 
         /// Chmod and chown configs
         change_ownership(config_dir.string(), user, group);
-
-        /// Symlink "preprocessed_configs" is created by the server, so "write" is needed.
-        fs::permissions(config_dir, fs::perms::owner_all, fs::perm_options::replace);
-
-        /// Subdirectories, so "execute" is needed.
-        if (fs::exists(config_d))
-            fs::permissions(config_d, fs::perms::owner_read | fs::perms::owner_exec, fs::perm_options::replace);
-        if (fs::exists(users_d))
-            fs::permissions(users_d, fs::perms::owner_read | fs::perms::owner_exec, fs::perm_options::replace);
-
-        /// Readonly.
-        if (fs::exists(main_config_file))
-            fs::permissions(main_config_file, fs::perms::owner_read, fs::perm_options::replace);
-        if (fs::exists(users_config_file))
-            fs::permissions(users_config_file, fs::perms::owner_read, fs::perm_options::replace);
 
         /// Create directories for data and log.
 
@@ -530,6 +400,16 @@ int mainEntryClickHouseInstall(int argc, char ** argv)
         {
             fmt::print("Creating data directory {}.\n", data_path);
             fs::create_directories(data_path);
+        }
+
+        if (fs::exists(disk_path))
+        {
+            fmt::print("Data directory {} already exists.\n", disk_path);
+        }
+        else
+        {
+            fmt::print("Creating data directory {}.\n", disk_path);
+            fs::create_directories(disk_path);
         }
 
         if (fs::exists(pid_path))
@@ -562,6 +442,13 @@ int mainEntryClickHouseInstall(int argc, char ** argv)
             executeScript(command);
         }
 
+        {
+            /// Not recursive, because there can be a huge number of files and it will be slow.
+            std::string command = fmt::format("chown {}:{} '{}'", user, group, disk_path);
+            fmt::print(" {}\n", command);
+            executeScript(command);
+        }
+
         /// All users are allowed to read pid file (for clickhouse status command).
         fs::permissions(pid_path, fs::perms::owner_all | fs::perms::group_read | fs::perms::others_read, fs::perm_options::replace);
 
@@ -571,95 +458,8 @@ int mainEntryClickHouseInstall(int argc, char ** argv)
         /// Data directory is not accessible to anyone except clickhouse.
         fs::permissions(data_path, fs::perms::owner_all, fs::perm_options::replace);
 
-        fs::path odbc_bridge_path = bin_dir / "clickhouse-odbc-bridge";
-        fs::path library_bridge_path = bin_dir / "clickhouse-library-bridge";
-
-        if (fs::exists(odbc_bridge_path) || fs::exists(library_bridge_path))
-        {
-            create_group(CLICKHOUSE_BRIDGE_GROUP);
-            create_user(CLICKHOUSE_BRIDGE_USER, CLICKHOUSE_BRIDGE_GROUP);
-
-            if (fs::exists(odbc_bridge_path))
-                change_ownership(odbc_bridge_path, CLICKHOUSE_BRIDGE_USER, CLICKHOUSE_BRIDGE_GROUP);
-            if (fs::exists(library_bridge_path))
-                change_ownership(library_bridge_path, CLICKHOUSE_BRIDGE_USER, CLICKHOUSE_BRIDGE_GROUP);
-        }
-
-        bool stdin_is_a_tty = isatty(STDIN_FILENO);
-        bool stdout_is_a_tty = isatty(STDOUT_FILENO);
-
-        /// dpkg or apt installers can ask for non-interactive work explicitly.
-
-        const char * debian_frontend_var = getenv("DEBIAN_FRONTEND");
-        bool noninteractive = debian_frontend_var && debian_frontend_var == std::string_view("noninteractive");
-
-        bool is_interactive = !noninteractive && stdin_is_a_tty && stdout_is_a_tty;
-
-        /// We can ask password even if stdin is closed/redirected but /dev/tty is available.
-        bool can_ask_password = !noninteractive && stdout_is_a_tty;
-
-        /// Set up password for default user.
-        if (has_password_for_default_user)
-        {
-            fmt::print(HILITE "Password for default user is already specified. To remind or reset, see {} and {}." END_HILITE "\n",
-                       users_config_file.string(), users_d.string());
-        }
-        else if (!can_ask_password)
-        {
-            fmt::print(HILITE "Password for default user is empty string. See {} and {} to change it." END_HILITE "\n",
-                       users_config_file.string(), users_d.string());
-        }
-        else
-        {
-            /// NOTE: When installing debian package with dpkg -i, stdin is not a terminal but we are still being able to enter password.
-            /// More sophisticated method with /dev/tty is used inside the `readpassphrase` function.
-
-            char buf[1000] = {};
-            std::string password;
-            if (auto * result = readpassphrase("Enter password for default user: ", buf, sizeof(buf), 0))
-                password = result;
-
-            if (!password.empty())
-            {
-                std::string password_file = users_d / "default-password.xml";
-                WriteBufferFromFile out(password_file);
-#if USE_SSL
-                std::vector<uint8_t> hash;
-                hash.resize(32);
-                encodeSHA256(password, hash.data());
-                std::string hash_hex;
-                hash_hex.resize(64);
-                for (size_t i = 0; i < 32; ++i)
-                    writeHexByteLowercase(hash[i], &hash_hex[2 * i]);
-                out << "<yandex>\n"
-                    "    <users>\n"
-                    "        <default>\n"
-                    "            <password remove='1' />\n"
-                    "            <password_sha256_hex>" << hash_hex << "</password_sha256_hex>\n"
-                    "        </default>\n"
-                    "    </users>\n"
-                    "</yandex>\n";
-                out.sync();
-                out.finalize();
-                fmt::print(HILITE "Password for default user is saved in file {}." END_HILITE "\n", password_file);
-#else
-                out << "<yandex>\n"
-                    "    <users>\n"
-                    "        <default>\n"
-                    "            <password><![CDATA[" << password << "]]></password>\n"
-                    "        </default>\n"
-                    "    </users>\n"
-                    "</yandex>\n";
-                out.sync();
-                out.finalize();
-                fmt::print(HILITE "Password for default user is saved in plaintext in file {}." END_HILITE "\n", password_file);
-#endif
-                has_password_for_default_user = true;
-            }
-            else
-                fmt::print(HILITE "Password for default user is empty string. See {} and {} to change it." END_HILITE "\n",
-                           users_config_file.string(), users_d.string());
-        }
+        /// Disk directory is not accessible to anyone except clickhouse.
+        fs::permissions(disk_path, fs::perms::owner_all, fs::perm_options::replace);
 
         /** Set capabilities for the binary.
           *
@@ -684,34 +484,6 @@ int mainEntryClickHouseInstall(int argc, char ** argv)
             "/tmp/test_setcap.sh", fs::canonical(main_bin_path).string());
         executeScript(command);
 #endif
-
-        /// If password was set, ask for open for connections.
-        if (is_interactive && has_password_for_default_user)
-        {
-            if (ask("Allow server to accept connections from the network (default is localhost only), [y/N]: "))
-            {
-                std::string listen_file = config_d / "listen.xml";
-                WriteBufferFromFile out(listen_file);
-                out << "<yandex>\n"
-                    "    <listen_host>::</listen_host>\n"
-                    "</yandex>\n";
-                out.sync();
-                out.finalize();
-                fmt::print("The choice is saved in file {}.\n", listen_file);
-            }
-        }
-
-        std::string maybe_password;
-        if (has_password_for_default_user)
-            maybe_password = " --password";
-
-        fmt::print(
-            "\nClickHouse has been successfully installed.\n"
-            "\nStart clickhouse-server with:\n"
-            " sudo clickhouse start\n"
-            "\nStart clickhouse-client with:\n"
-            " clickhouse-client{}\n\n",
-            maybe_password);
     }
     catch (const fs::filesystem_error &)
     {
@@ -978,8 +750,8 @@ int mainEntryClickHouseStart(int argc, char ** argv)
     desc.add_options()
         ("help,h", "produce help message")
         ("binary-path", po::value<std::string>()->default_value("/usr/bin"), "directory with binary")
-        ("config-path", po::value<std::string>()->default_value("/etc/clickhouse-server"), "directory with configs")
-        ("pid-path", po::value<std::string>()->default_value("/var/run/clickhouse-server"), "directory for pid file")
+        ("config-path", po::value<std::string>()->default_value("/etc/byconity-server"), "directory with configs")
+        ("pid-path", po::value<std::string>()->default_value("/var/run/byconity-server"), "directory for pid file")
         ("user", po::value<std::string>()->default_value("clickhouse"), "clickhouse user")
     ;
 
