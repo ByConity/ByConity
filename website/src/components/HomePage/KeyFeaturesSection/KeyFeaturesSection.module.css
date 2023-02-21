@@ -1,0 +1,22 @@
+.container {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.card {
+  flex: 1;
+  background-color: white;
+  padding: 24px;
+  border-radius: 8px;
+}
+
+.cardHeader {
+  font-size: 1.25rem;
+  border-left: 0.25rem solid var(--ifm-color-primary);
+  padding: 8px;
+}
+
+.cardBody {
+  font-size: 1.15rem;
+}

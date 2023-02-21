@@ -1,0 +1,8 @@
+.card {
+  text-align: center;
+  background-color: var(--ifm-color-primary-light);
+  color: var(--ifm-color-white);
+  padding: 32px;
+  border-radius: 8px;
+  margin-bottom: 32px;
+}

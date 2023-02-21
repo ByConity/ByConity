@@ -1,7 +1,8 @@
 import React from "react";
 import clsx from "clsx";
 import Translate from "@docusaurus/Translate";
-import styles from "./styles.module.css";
+import styles from "./KeyFeaturesSection.module.css";
+import Section from "@site/src/components/Section";
 
 type FeatureItem = {
   title: JSX.Element;
@@ -45,25 +46,25 @@ const FeatureList: FeatureItem[] = [
 
 function Feature({ title, description }: FeatureItem) {
   return (
-    <div className={clsx("col col--4")}>
-      <div className="text--center padding-horiz--md">
-        <h3>{title}</h3>
-        <p>{description}</p>
+    <div className={styles.card}>
+      <div>
+        <h3 className={styles.cardHeader}>{title}</h3>
       </div>
+      <div className={styles.cardBody}>{description}</div>
     </div>
   );
 }
 
-export default function HomepageFeatures(): JSX.Element {
+function KeyFeaturesSection() {
   return (
-    <section className={styles.features}>
-      <div className="container">
-        <div className="row">
-          {FeatureList.map((props, idx) => (
-            <Feature key={idx} {...props} />
-          ))}
-        </div>
+    <Section title="Key Features">
+      <div className={clsx("container", styles.container)}>
+        {FeatureList.map((props, idx) => (
+          <Feature key={idx} {...props} />
+        ))}
       </div>
-    </section>
+    </Section>
   );
 }
+
+export default KeyFeaturesSection;
