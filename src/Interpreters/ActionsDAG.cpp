@@ -1490,7 +1490,6 @@ ActionsDAG::SplitResult ActionsDAG::split(std::unordered_set<const Node *> split
             if (cur.next_child_to_visit == cur.node->children.size())
             {
                 cur_data.visited = true;
-                stack.pop();
 
                 if (!cur_data.needed_by_split_node)
                 {
@@ -1558,6 +1557,8 @@ ActionsDAG::SplitResult ActionsDAG::split(std::unordered_set<const Node *> split
                         new_inputs.push_back(cur.node);
                     }
                 }
+                
+                stack.pop();
             }
         }
     }

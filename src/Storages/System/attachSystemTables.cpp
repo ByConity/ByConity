@@ -68,6 +68,7 @@
 #include <Storages/System/StorageSystemErrors.h>
 #include <Storages/System/StorageSystemDDLWorkerQueue.h>
 #include <Storages/System/StorageSystemKafkaTables.h>
+#include <Storages/System/StorageSystemCnchKafkaTables.h>
 
 #if !defined(ARCADIA_BUILD)
     #include <Storages/System/StorageSystemLicenses.h>
@@ -207,6 +208,7 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
     attach<StorageSystemPartMovesBetweenShards>(system_database, "part_moves_between_shards");
 #if USE_RDKAFKA
     attach<StorageSystemKafkaTables>(system_database, "kafka_tables");
+    attach<StorageSystemCnchKafkaTables>(system_database, "cnch_kafka_tables");
 #endif
     attach<StorageSystemResourceGroups>(system_database, "resource_groups");
 

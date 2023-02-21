@@ -18,10 +18,7 @@
 #include <Catalog/Catalog.h>
 #include <Interpreters/ServerPartLog.h>
 #include <Storages/StorageCnchMergeTree.h>
-// #include <MergeTreeCommon/CnchWorkerClientPools.h>
-// #include <MergeTreeCommon/commitCnchParts.h>
-// #include <Storages/StorageCnchMergeTree.h>
-// #include <Interpreters/ServerPartLog.h>
+
 
 namespace DB
 {
@@ -65,7 +62,7 @@ void InsertAction::executeV1(TxnTimestamp commit_time)
 
     auto catalog = global_context.getCnchCatalog();
     catalog->finishCommit(table, txn_id, commit_time, {parts.begin(), parts.end()}, delete_bitmaps, false, /*preallocate_mode=*/ false);
-    // ServerPartLog::addNewParts(getContext(),ServerPartLogElement::INSERT_PART, parts, txn_id, false);
+    ServerPartLog::addNewParts(getContext(), ServerPartLogElement::INSERT_PART, parts, txn_id, false);
 }
 
 void InsertAction::executeV2()
@@ -92,7 +89,7 @@ void InsertAction::postCommit(TxnTimestamp commit_time)
     for (auto & part : parts)
         part->commit_time = commit_time;
 
-    // ServerPartLog::addNewParts(getContext(), ServerPartLogElement::INSERT_PART, parts, txn_id, false);
+    ServerPartLog::addNewParts(getContext(), ServerPartLogElement::INSERT_PART, parts, txn_id, false);
 }
 
 void InsertAction::abort()
@@ -101,7 +98,7 @@ void InsertAction::abort()
     // skip part cache to avoid blocking by write lock of part cache for long time
     global_context.getCnchCatalog()->clearParts(table, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, {staged_parts.begin(), staged_parts.end()}}, true);
 
-    // ServerPartLog::addNewParts(getContext(), ServerPartLogElement::INSERT_PART, parts, txn_id, true);
+    ServerPartLog::addNewParts(getContext(), ServerPartLogElement::INSERT_PART, parts, txn_id, true);
 }
 
 UInt32 InsertAction::collectNewParts() const
