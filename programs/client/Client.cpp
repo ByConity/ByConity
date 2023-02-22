@@ -124,10 +124,6 @@
 #pragma GCC optimize("-fno-var-tracking-assignments")
 #endif
 
-#ifndef VERSION_MAJOR
-#define VERSION_MAJOR 0
-#endif
-
 namespace fs = std::filesystem;
 
 namespace DB
