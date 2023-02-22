@@ -1225,7 +1225,7 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
 
                     calculateMax(max_part_count_for_partition, table_merge_tree->getMaxPartsCountForPartition());
                     total_number_of_bytes += table_merge_tree->totalBytes(settings).value();
-                    total_number_of_rows += table_merge_tree->totalRows(settings).value();
+                    total_number_of_rows += table_merge_tree->totalRows(getContext()).value();
                     total_number_of_parts += table_merge_tree->getPartsCount();
                 }
 

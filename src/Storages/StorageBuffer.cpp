@@ -1060,13 +1060,13 @@ void StorageBuffer::checkAlterIsPossible(const AlterCommands & commands, Context
     }
 }
 
-std::optional<UInt64> StorageBuffer::totalRows(const Settings & settings) const
+std::optional<UInt64> StorageBuffer::totalRows(const ContextPtr & query_context) const
 {
     std::optional<UInt64> underlying_rows;
     auto underlying = DatabaseCatalog::instance().tryGetTable(destination_id, getContext());
 
     if (underlying)
-        underlying_rows = underlying->totalRows(settings);
+        underlying_rows = underlying->totalRows(query_context);
     if (!underlying_rows)
         return underlying_rows;
 

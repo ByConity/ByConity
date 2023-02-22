@@ -22,6 +22,7 @@
 #include <Core/Types.h>
 #include <Catalog/DataModelPartWrapper_fwd.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
+#include "Storages/MergeTree/IMergeTreeDataPart_fwd.h"
 #include <vector>
 #include <forward_list>
 
@@ -70,6 +71,8 @@ public:
 
     mutable std::forward_list<DataModelDeleteBitmapPtr> delete_bitmap_metas;
 
+    const ImmutableDeleteBitmapPtr & getDeleteBitmap(const MergeTreeMetaBase & storage, bool is_unique_new_part) const;
+
     UInt64 getCommitTime() const;
     void setCommitTime(const UInt64 & new_commit_time) const;
     UInt64 getColumnsCommitTime() const;
@@ -114,8 +117,8 @@ public:
 private:
     mutable std::optional<UInt64> commit_time;
     mutable ServerDataPartPtr prev_part;
-
     mutable UInt64 virtual_part_size = 0;
+    mutable ImmutableDeleteBitmapPtr delete_bitmap;
 
 };
 
