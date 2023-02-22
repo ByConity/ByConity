@@ -230,7 +230,7 @@ Pipe StorageMergeTree::read(
         BuildQueryPipelineSettings::fromContext(local_context));
 }
 
-std::optional<UInt64> StorageMergeTree::totalRows(const Settings &) const
+std::optional<UInt64> StorageMergeTree::totalRows(const ContextPtr &) const
 {
     // not using total_active_size_rows because it doesn't consider delete bitmap
     // return getTotalActiveSizeInRows();

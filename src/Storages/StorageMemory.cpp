@@ -332,7 +332,7 @@ void StorageMemory::truncate(
     total_size_rows.store(0, std::memory_order_relaxed);
 }
 
-std::optional<UInt64> StorageMemory::totalRows(const Settings &) const
+std::optional<UInt64> StorageMemory::totalRows(const ContextPtr &) const
 {
     /// All modifications of these counters are done under mutex which automatically guarantees synchronization/consistency
     /// When run concurrently we are fine with any value: "before" or "after"

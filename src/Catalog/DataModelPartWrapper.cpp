@@ -15,6 +15,7 @@
 
 #include <Catalog/DataModelPartWrapper.h>
 #include <Protos/DataModelHelpers.h>
+#include "Storages/MergeTree/DeleteBitmapCache.h"
 
 namespace DB
 {
@@ -154,4 +155,96 @@ void ServerDataPart::setVirtualPartSize(const UInt64 & vp_size) const { virtual_
 
 UInt64 ServerDataPart::getVirtualPartSize() const { return virtual_part_size; }
 
+const ImmutableDeleteBitmapPtr & ServerDataPart::getDeleteBitmap(const MergeTreeMetaBase & storage, bool is_unique_new_part) const
+{
+    if (!storage.getInMemoryMetadataPtr()->hasUniqueKey() || deleted())
+    {
+        if (delete_bitmap != nullptr)
+            throw Exception("Delete bitmap for part " + name() + " is not null", ErrorCodes::LOGICAL_ERROR);
+        return delete_bitmap;
+    }
+
+    if (!delete_bitmap)
+    {
+        /// bitmap hasn't been set, load it from cache and metas
+        if (delete_bitmap_metas.empty())
+        {
+            /// for new part of unique table, it's valid if its delete_bitmap_metas is empty
+            if (is_unique_new_part)
+                return delete_bitmap;
+            throw Exception("No metadata for delete bitmap of part " + name(), ErrorCodes::LOGICAL_ERROR);
+        }
+        Stopwatch watch;
+        auto cache = storage.getContext()->getDeleteBitmapCache();
+        String cache_key = DeleteBitmapCache::buildKey(storage.getStorageUUID(), info().partition_id, info().min_block, info().max_block);
+        ImmutableDeleteBitmapPtr cached_bitmap;
+        UInt64 cached_version = 0; /// 0 is an invalid value and acts as a sentinel
+        bool hit_cache = cache->lookup(cache_key, cached_version, cached_bitmap);
+
+        UInt64 target_version = delete_bitmap_metas.front()->commit_time();
+        UInt64 txn_id = delete_bitmap_metas.front()->txn_id();
+        if (hit_cache && cached_version == target_version)
+        {
+            /// common case: got the exact version of bitmap from cache
+            this->delete_bitmap = std::move(cached_bitmap);
+        }
+        else
+        {
+            DeleteBitmapPtr bitmap = std::make_shared<Roaring>();
+            std::forward_list<DataModelDeleteBitmapPtr> to_reads; /// store meta in ascending order of commit time
+
+            if (cached_version > target_version)
+            {
+                /// case: querying an older version than the cached version
+                /// then cached bitmap can't be used and we need to build the bitmap from all metas
+                to_reads = delete_bitmap_metas;
+                to_reads.reverse();
+            }
+            else
+            {
+                /// case: querying a newer version than the cached version
+                /// if all metas > cached version, build the bitmap from all metas.
+                /// otherwise build the bitmap from the cached bitmap and newer metas (whose version > cached version)
+                for (auto & meta : delete_bitmap_metas)
+                {
+                    if (meta->commit_time() > cached_version)
+                    {
+                        to_reads.insert_after(to_reads.before_begin(), meta);
+                    }
+                    else if (meta->commit_time() == cached_version)
+                    {
+                        *bitmap = *cached_bitmap; /// copy the cached bitmap as the base
+                        break;
+                    }
+                    else
+                    {
+                        throw Exception(
+                            "Part " + name() + " doesn't contain delete bitmap meta at " + toString(cached_version),
+                            ErrorCodes::LOGICAL_ERROR);
+                    }
+                }
+            }
+
+            /// union to_reads into bitmap
+            for (auto & meta : to_reads)
+                deserializeDeleteBitmapInfo(storage, meta, bitmap);
+
+            this->delete_bitmap = std::move(bitmap);
+            if (target_version > cached_version)
+            {
+                cache->insert(cache_key, target_version, delete_bitmap);
+            }
+            LOG_DEBUG(
+                storage.getLogger(),
+                "Loaded delete bitmap at commit_time {} of {} in {} ms, bitmap cardinality: {}, it was generated in txn_id: {}",
+                target_version,
+                name(),
+                watch.elapsedMilliseconds(),
+                delete_bitmap->cardinality(),
+                txn_id);
+        }
+    }
+    assert(delete_bitmap != nullptr);
+    return delete_bitmap;
+}
 }

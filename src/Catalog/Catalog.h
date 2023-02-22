@@ -157,9 +157,9 @@ public:
     bool getTableActiveness(const StoragePtr & storage, const TxnTimestamp & ts);
 
     ///data parts related interface
-    ServerDataPartsVector getServerDataPartsInPartitions(const StoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, const Context * session_context);
+    ServerDataPartsVector getServerDataPartsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, const Context * session_context);
 
-    ServerDataPartsVector getAllServerDataParts(const StoragePtr & storage, const TxnTimestamp & ts, const Context * session_context);
+    ServerDataPartsVector getAllServerDataParts(const ConstStoragePtr & storage, const TxnTimestamp & ts, const Context * session_context);
     DataPartsVector getDataPartsByNames(const NameSet & names, const StoragePtr & table, const TxnTimestamp & ts);
     DataPartsVector getStagedDataPartsByNames(const NameSet & names, const StoragePtr & table, const TxnTimestamp & ts);
     DeleteBitmapMetaPtrVector getAllDeleteBitmaps(const StoragePtr & table, const TxnTimestamp & ts);
@@ -169,7 +169,7 @@ public:
 
     /// (UNIQUE KEY) fetch all delete bitmaps <= ts in the given partitions
     DeleteBitmapMetaPtrVector
-    getDeleteBitmapsInPartitions(const StoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts = 0);
+    getDeleteBitmapsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts = 0);
     /// (UNIQUE KEY) get bitmaps by keys
     DeleteBitmapMetaPtrVector getDeleteBitmapByKeys(const StoragePtr & storage, const NameSet & keys);
     /// (UNIQUE KEY) remove bitmaps meta from KV, used by GC
@@ -191,11 +191,11 @@ public:
 
     void dropAllPart(const StoragePtr & storage, const TxnTimestamp & txnID, const TxnTimestamp & ts);
 
-    std::vector<std::shared_ptr<MergeTreePartition>> getPartitionList(const StoragePtr & table, const Context * session_context);
+    std::vector<std::shared_ptr<MergeTreePartition>> getPartitionList(const ConstStoragePtr & table, const Context * session_context);
 
     void getPartitionsFromMetastore(const MergeTreeMetaBase & table, PartitionMap & partition_list);
 
-    Strings getPartitionIDs(const StoragePtr & storage, const Context * session_context);
+    Strings getPartitionIDs(const ConstStoragePtr & storage, const Context * session_context);
 
     /// dictionary related APIs
 
@@ -520,7 +520,7 @@ private:
     StoragePtr createTableFromDataModel(const Context & session_context, const Protos::DataModelTable & data_model);
     void detachOrAttachTable(const String & db, const String & name, const TxnTimestamp & ts, bool is_detach);
     DataModelPartPtrVector getDataPartsMetaFromMetastore(
-        const StoragePtr & storage, const Strings & required_partitions, const Strings & full_partitions, const TxnTimestamp & ts);
+        const ConstStoragePtr & storage, const Strings & required_partitions, const Strings & full_partitions, const TxnTimestamp & ts);
     void detachOrAttachDictionary(const String & db, const String & name, bool is_detach);
     void moveTableIntoTrash(
         Protos::DataModelTable & table,
@@ -534,11 +534,11 @@ private:
     void clearDataPartsMetaInternal(
         const StoragePtr & table, const DataPartsVector & parts, const DeleteBitmapMetaPtrVector & delete_bitmaps = {});
 
-    Strings getPartitionIDsFromMetastore(const StoragePtr & storage);
+    Strings getPartitionIDsFromMetastore(const ConstStoragePtr & storage);
 
     void mayUpdateUHUT(const StoragePtr & storage);
 
-    bool canUseCache(const StoragePtr & storage, const Context * session_context);
+    bool canUseCache(const ConstStoragePtr & storage, const Context * session_context);
 
     void finishCommitInBatch(
         const StoragePtr & storage,
@@ -572,7 +572,7 @@ private:
     /// currently used by data parts and delete bitmaps
     template <typename T>
     std::vector<T> getDataModelsByPartitions(
-        const StoragePtr & storage,
+        const ConstStoragePtr & storage,
         const String & meta_prefix,
         const Strings & partitions,
         const Strings & full_partitions,

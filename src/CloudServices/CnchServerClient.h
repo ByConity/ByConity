@@ -58,7 +58,7 @@ public:
 
     void removeIntermediateData(const TxnTimestamp & txn_id);
 
-    ServerDataPartsVector fetchDataParts(const String & remote_host, const StoragePtr & table, const Strings & partition_list, const TxnTimestamp & ts);
+    ServerDataPartsVector fetchDataParts(const String & remote_host, const ConstStoragePtr & table, const Strings & partition_list, const TxnTimestamp & ts);
 
     void redirectCommitParts(
         const StoragePtr & table,
