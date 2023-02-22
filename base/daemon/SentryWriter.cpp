@@ -24,10 +24,6 @@
 #    include <stdio.h>
 #    include <filesystem>
 
-#ifndef VERSION_MAJOR
-#define VERSION_MAJOR 0
-#endif
-
 namespace fs = std::filesystem;
 
 namespace
