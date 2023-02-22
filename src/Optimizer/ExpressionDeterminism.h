@@ -25,23 +25,35 @@ namespace DB
 class ExpressionDeterminism
 {
 public:
-    static std::set<String> getDeterministicSymbols(Assignments & assignments, ContextMutablePtr & context);
-    static ConstASTPtr filterDeterministicConjuncts(ConstASTPtr predicate, ContextMutablePtr & context);
-    static ConstASTPtr filterNonDeterministicConjuncts(ConstASTPtr predicate, ContextMutablePtr & context);
-    static std::set<ConstASTPtr> filterDeterministicPredicates(std::vector<ConstASTPtr> & predicates, ContextMutablePtr & context);
-    static bool isDeterministic(ConstASTPtr expression, ContextMutablePtr & context);
+    static std::set<String> getDeterministicSymbols(Assignments & assignments, ContextPtr context);
+    static ConstASTPtr filterDeterministicConjuncts(ConstASTPtr predicate, ContextPtr context);
+    static ConstASTPtr filterNonDeterministicConjuncts(ConstASTPtr predicate, ContextPtr context);
+    static std::set<ConstASTPtr> filterDeterministicPredicates(std::vector<ConstASTPtr> & predicates, ContextPtr context);
+    static bool isDeterministic(ConstASTPtr expression, ContextPtr context);
+    static bool canChangeOutputRows(ConstASTPtr expression, ContextPtr context);
+
+    struct ExpressionProperty
+    {
+        bool is_deterministic;
+        bool can_change_output_rows;
+    };
+
+private:
+    static ExpressionProperty getExpressionProperty(ConstASTPtr expression, ContextPtr context);
 };
 
-class DeterminismVisitor : public ConstASTVisitor<Void, ContextMutablePtr>
+class DeterminismVisitor : public ConstASTVisitor<Void, ContextPtr>
 {
 public:
     explicit DeterminismVisitor(bool isDeterministic);
-    Void visitNode(const ConstASTPtr & node, ContextMutablePtr & context) override;
-    Void visitASTFunction(const ConstASTPtr & node, ContextMutablePtr & context) override;
+    Void visitNode(const ConstASTPtr & node, ContextPtr & context) override;
+    Void visitASTFunction(const ConstASTPtr & node, ContextPtr & context) override;
     bool isDeterministic() const { return is_deterministic; }
+    bool canChangeOutputRows() const { return can_change_output_rows; }
 
 private:
     bool is_deterministic;
+    bool can_change_output_rows = false;
 };
 
 }
