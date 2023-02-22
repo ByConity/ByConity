@@ -110,8 +110,6 @@
 #include <Common/checkStackSize.h>
 #include <common/map.h>
 #include <common/scope_guard_safe.h>
-#include <Core/QueryProcessingStage.h>
-#include <Parsers/ASTSelectQuery.h>
 #include <memory>
 
 
@@ -1411,13 +1409,13 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, const BlockInpu
             if (expressions.has_order_by)
             {
                 /** If there is an ORDER BY for distributed query processing,
-                    *  but there is no aggregation, then on the remote servers ORDER BY was made
-                    *  - therefore, we merge the sorted streams from remote servers.
-                    *
-                    * Also in case of remote servers was process the query up to WithMergeableStateAfterAggregationAndLimit
-                    * (distributed_group_by_no_merge=2 or optimize_distributed_group_by_sharding_key=1 takes place),
-                    * then merge the sorted streams is enough, since remote servers already did full ORDER BY.
-                    */
+                  *  but there is no aggregation, then on the remote servers ORDER BY was made
+                  *  - therefore, we merge the sorted streams from remote servers.
+                  *
+                  * Also in case of remote servers was process the query up to WithMergeableStateAfterAggregationAndLimit
+                  * (distributed_group_by_no_merge=2 or optimize_distributed_group_by_sharding_key=1 takes place),
+                  * then merge the sorted streams is enough, since remote servers already did full ORDER BY.
+                  */
 
                 if (from_aggregation_stage)
                     executeMergeSorted(query_plan, "after aggregation stage for ORDER BY");
@@ -1434,8 +1432,8 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, const BlockInpu
             }
 
             /** Optimization - if there are several sources and there is LIMIT, then first apply the preliminary LIMIT,
-                * limiting the number of rows in each up to `offset + limit`.
-                */
+              * limiting the number of rows in each up to `offset + limit`.
+              */
             bool has_withfill = false;
             if (query.orderBy())
             {
@@ -1450,13 +1448,13 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, const BlockInpu
 
             bool apply_limit = options.to_stage != QueryProcessingStage::WithMergeableStateAfterAggregation;
             bool apply_prelimit = apply_limit &&
-                                    query.limitLength() && !query.limit_with_ties &&
-                                    !hasWithTotalsInAnySubqueryInFromClause(query) &&
-                                    !query.arrayJoinExpressionList() &&
-                                    !query.distinct &&
-                                    !expressions.hasLimitBy() &&
-                                    !settings.extremes &&
-                                    !has_withfill;
+                                  query.limitLength() && !query.limit_with_ties &&
+                                  !hasWithTotalsInAnySubqueryInFromClause(query) &&
+                                  !query.arrayJoinExpressionList() &&
+                                  !query.distinct &&
+                                  !expressions.hasLimitBy() &&
+                                  !settings.extremes &&
+                                  !has_withfill;
             bool apply_offset = options.to_stage != QueryProcessingStage::WithMergeableStateAfterAggregationAndLimit;
             bool limit_applied = false;
             if (apply_prelimit)
@@ -1466,8 +1464,8 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, const BlockInpu
             }
 
             /** If there was more than one stream,
-                * then DISTINCT needs to be performed once again after merging all streams.
-                */
+              * then DISTINCT needs to be performed once again after merging all streams.
+              */
             if (query.distinct)
                 executeDistinct(query_plan, false, expressions.selected_columns, false);
 
@@ -1916,10 +1914,9 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
 
         if (num_rows)
         {
-            Block block_with_count;
-            /// We will process it up to "WithMergeableState".
             const AggregateFunctionCount & agg_count = static_cast<const AggregateFunctionCount &>(*func);
 
+            /// We will process it up to "WithMergeableState".
             std::vector<char> state(agg_count.sizeOfData());
             AggregateDataPtr place = state.data();
 
@@ -1937,8 +1934,8 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
             for (size_t j = 0; j < arguments_size; ++j)
                 argument_types[j] = header.getByName(desc.argument_names[j]).type;
 
-            block_with_count = Block{
-                ColumnWithTypeAndName(std::move(column), std::make_shared<DataTypeAggregateFunction>(func, argument_types, desc.parameters), desc.column_name)};
+            Block block_with_count{
+                {std::move(column), std::make_shared<DataTypeAggregateFunction>(func, argument_types, desc.parameters), desc.column_name}};
 
             auto istream = std::make_shared<OneBlockInputStream>(block_with_count);
             auto prepared_count = std::make_unique<ReadFromPreparedSource>(Pipe(std::make_shared<SourceFromInputStream>(istream)), context);
