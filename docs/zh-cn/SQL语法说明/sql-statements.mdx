@@ -1,0 +1,1480 @@
+---
+title: "SQL Statements"
+slug: "sql-statements"
+hidden: false
+metadata: 
+  title: "Supported SQL Statements in ByConity"
+  description: "The supported statements in ByConity are similar to ClickHouse, but it's still recommended to follow the manual to ensure proper use. See some examples."
+createdAt: "2021-06-17T15:31:57.358Z"
+updatedAt: "2022-02-28T02:27:53.768Z"
+tags:
+- Docs
+---
+
+The supported statements in ByConity are similar to ClickHouse, but it is still recommended to follow the ByConity manual to ensure proper use. Some of the examples below are referenced from [ClickHouse Documentation](https://clickhouse.tech/docs/en/sql-reference/statements/) but have been adapted and modified to work in ByConity.
+[block:callout]
+{
+  "type": "info",
+  "body": "Symbols between token [] are optional. For example [IF NOT EXISTS]\nToken | means or\nToken ... means can repeat more times",
+  "title": "Note"
+}
+[/block]
+## Alter Statement
+
+### ADD COLUMN
+
+Adds a new column to the table.
+** Syntax**
+
+```sql
+ALTER TABLE [tableIdentifier] ADD COLUMN [IF NOT EXISTS] [tableColumnDfnt] [AFTER name_after]
+```
+- `IF NOT EXISTS` clause is included, the query won’t return an error if the column already exists. 
+
+- `AFTER name_after` (the name of another column), the column is added after the specified one in the list of table columns. 
+
+**Example**
+
+```sql
+# Step 1: create a table 
+CREATE TABLE db_name.table_name
+(
+    `order_by_column` String
+)
+ENGINE = `CnchMergeTree`
+ORDER BY (`order_by_column`)
+
+# Step 2: add column
+ALTER TABLE db_name.table_name ADD COLUMN IF NOT EXISTS column_name String COMMENT 'column comment here' AFTER order_by_column
+```
+### MODIFY COLUMN
+
+** Syntax**
+
+Modify Column
+```sql
+ALTER TABLE [tableIdentifier] MODIFY COLUMN [IF EXISTS] [tableColumnDfnt] 
+```
+If the modify column is:
+- Order by column: can modify its default_expr, comment, codec. 
+
+- Partition by column: can modify its comment. 
+
+- Normal column: can modify itstype, default_expr, comment, codec. 
+
+**Example**
+
+```sql
+# Step 1: create a table 
+CREATE TABLE db_name.table_name
+(
+    `order_by_column` String,
+    `normal_column` Int64 DEFAULT 0
+)
+ENGINE = `CnchMergeTree`
+ORDER BY (`order_by_column`)
+
+# Step 2: modify column normal_column_name & update its data type, comment and default value
+ALTER TABLE db_name.table_name MODIFY COLUMN IF EXISTS normal_column String DEFAULT 'new_default_value' COMMENT 'new comment' 
+```
+### DROP COLUMN
+
+Deletes a column in the table. Partition by columns and order by columns are not allowed to drop.
+** Syntax**
+
+```sql
+ALTER TABLE [tableIdentifier] DROP COLUMN [IF EXISTS] column_name;
+```
+- `IF EXISTS` clause is specified, the query won’t return an error if the column does not exist. 
+
+**Example**
+
+```sql
+# Step 1: create a table 
+CREATE TABLE db_name.table_name
+(
+    `order_by_column` String,
+    `normal_column` Int64
+)
+ENGINE = `CnchMergeTree`
+ORDER BY (`order_by_column`)
+
+# Step 2: drop the normal column
+ALTER TABLE db_name.table_name DROP COLUMN IF EXISTS normal_column
+```
+### RENAME COLUMN
+
+Rename a column in the table. There are some usage notes:
+- Cannot rename column to an existing column. 
+
+- Cannot rename column to itself. 
+
+- Rename from column must exists. 
+
+** Syntax**
+
+```sql
+ALTER TABLE [tableIdentifier] RENAME COLUMN [IF EXISTS] column_name_from TO column_name_to;
+```
+- `IF EXISTS` clause is specified, the query won’t return an error if the column does not exist. 
+
+**Example**
+
+```sql
+# Step 1: create a table 
+CREATE TABLE db_name.table_name
+(
+    `order_by_column` String,
+    `old_column_name` Int64
+)
+ENGINE = `CnchMergeTree`
+ORDER BY (`order_by_column`)
+
+# Step 2: rename column
+ALTER TABLE db_name.table_name RENAME COLUMN old_column_name TO new_column_name
+```
+### ADD CONSTRAINT
+
+Adds a constraint to the table.
+** Syntax**
+
+```sql
+ALTER TABLE [tableIdentifier] ADD CONSTRAINT [IF NOT EXISTS] constraint_name CHECK columnExpr;
+```
+- `IF NOT EXISTS` clause is included, the query won’t return an error if the constraint already exists. 
+
+**Example**
+
+```sql
+# Step 1: create a table
+CREATE TABLE `example_table`
+(
+    `order_by_column` String
+)
+ENGINE = `CnchMergeTree`
+ORDER BY (`order_by_column`)
+
+# Step 2: add constraint check_str
+ALTER TABLE example_table ADD CONSTRAINT IF NOT EXISTS check_str CHECK order_by_column != 'forbidden_string'
+```
+### DROP CONSTRAINT
+
+Deletes a constraint to the table.
+** Syntax**
+
+```sql
+ALTER TABLE [tableIdentifier] DROP CONSTRAINT [IF EXISTS] constraint_name;
+```
+- `IF EXISTS` clause is specified, the query won’t return an error if the constraint does not exist. 
+
+**Example**
+
+```sql
+# Step 1: create a table with the constraint check_str
+CREATE TABLE `example_table`
+(
+    `order_by_column` String,
+    CONSTRAINT check_str CHECK order_by_column != 'forbidden_string'
+)
+ENGINE = `CnchMergeTree`
+ORDER BY (`order_by_column`)
+
+# Step 2: drop constraint check_str
+ALTER TABLE example_table DROP CONSTRAINT IF EXISTS check_str
+```
+### MODIFYTTL
+
+Change table TTL. Columns used in ttl Clause must be in partition by columns.
+** Syntax**
+
+```sql
+ALTER TABLE [tableIdentifier] MODIFY [ttlClause];
+```
+**Example**
+
+```sql
+# Step 1: create a table with table TTL to be 1 day
+CREATE TABLE `example_table`
+(
+    `d` DateTime
+)
+ENGINE = `CnchMergeTree`
+PARTITION BY d
+ORDER BY `d`
+TTL d + INTERVAL 1 DAY
+
+# Step 2: modify table ttl & change the TTL to 2 month
+ALTER TABLE example_table
+    MODIFY TTL d + INTERVAL 2 MONTH
+```
+### REMOVETTL
+
+Remove table TTL.
+** Syntax**
+
+```sql
+ALTER TABLE [tableIdentifier] REMOVE TTL;
+```
+**Example**
+
+```sql
+# Step 1: create a table with table TTL to be 1 day
+CREATE TABLE `example_table`
+(
+    `d` DateTime
+)
+ENGINE = `CnchMergeTree`
+PARTITION BY d
+ORDER BY d
+TTL d + INTERVAL 1 DAY
+
+# Step 2: remove table ttl
+ALTER TABLE example_table
+    REMOVE TTL
+```
+### 
+
+## AST Statement
+
+Shows the execution plan of a statement. Dumps the query AST.
+** Syntax**
+
+```sql
+AST query
+```
+**Output**
+
+|**Column**|**Description**|
+|--|--|
+|explain|The parsedASTof the statement|
+
+**Example**
+
+```sql
+AST SELECT 1;
+```
+```plain%20text
+Explain ParsedAST (children 1)
+ SelectWithUnionQuery (children 1)
+ ExpressionList (children 1)
+  SelectQuery (children 1)
+  ExpressionList (children 1)
+   Literal UInt64_1
+```
+## Create Statement
+
+### CREATE DATABASE
+
+Creates a new database
+** Syntax**
+
+```sql
+CREATE DATABASE [IF NOT EXISTS] [databaseIdentifier] [ENGINE=Cnch]
+```
+- `IF NOT EXISTS` : query won’t return an error if the database already exists. 
+
+**Example**
+
+1. Create database with default database engine. 
+
+```sql
+CREATE DATABASE IF NOT EXISTS test;
+```
+2. Create database with optional engine clause. Currently only Cnch engine is allowed. 
+
+```sql
+CREATE DATABASE IF NOT EXISTS test ENGINE=Cnch;
+```
+### CREATE TABLE
+
+Creates a new table.
+#### Create Table With Explicit Schema
+
+** Syntax**
+
+```sql
+CREATE TABLE [IF NOT EXISTS] [tableIdentifier] [UUID uuid]
+(
+    [tableColumnDfnt],
+    [CONSTRAINT constraint_name CHECK columnExpr,]
+    ...
+) [engineClause]
+```
+- `IF NOT EXISTS` : query won’t return an error if the table already exists. 
+
+- `UUID` : table will have an uuid provided by user. Otherwise, a generated uuid will be used. 
+
+- `[CONSTRAINT constraint_name CHECK columnExpr]` : add a constraint to table. 
+
+   - columnExpr after `CHECK` should be a boolean expression. 
+
+   - If constraints are checked for every row in `INSERT` query. Exception will be raised if any constraint is not satisfied. 
+
+   - Adding large amount of constraints can negatively affect performance of big `INSERT` queries. 
+
+**Example**
+
+1. Create Table 
+
+```sql
+CREATE TABLE IF NOT EXISTS test.createTable(
+    id UInt32,
+    name String DEFAULT '',
+    CONSTRAINT constraint1 CHECK id > 10
+) 
+ENGINE=CnchMergeTree
+ORDER BY id
+```
+### CREATE VIEW
+
+#### CREATE NORMAL VIEW
+
+Normal views don’t store any data. They just perform a read from another table on each access. In other words, a normal view is nothing more than a saved query. When reading from a view, this saved query is used as a subquery in the FROM clause.
+** Syntax**
+
+```sql
+CREATE [OR REPLACE] VIEW [IF NOT EXISTS] [tableIdentifier] [UUID uuid] AS [selectUnionStmt]
+```
+- `OR REPLACE` is included, ByConity will create a new view and replace the old view with the same name. 
+
+- `IF NOT EXISTS` clause is included, the query won’t return an error if the table already exists. 
+
+- `UUID` is specified, table will have an uuid provided by user. Otherwise, a generated uuid will be used. 
+
+**Example**
+
+```sql
+# Step 1: create a table
+CREATE TABLE `example_table`
+(
+    `order_by_column` String
+)
+ENGINE = `CnchMergeTree`
+ORDER BY (`order_by_column`)
+
+# step 2: create a view based on the created table
+CREATE VIEW example_view AS SELECT * FROM example_table
+```
+## Describe Statement
+
+Returns the columns definition of a table
+** Syntax**
+
+```sql
+DESC|DESCRIBE [TABLE] [tableIdentifier]
+```
+**Example**
+
+```sql
+DESCRIBE example_view
+```
+
+|**N** **ame**|**Type**|**DefaultType**|**DefaultExpression**|**Comment**|**CodecExpression**|**TTLExpression**|**LastQueriedAt**|**LastQueriedBy**|
+|--|--|--|--|--|--|--|--|--|
+|order_by_column|String||||||||
+
+## Explain Statement
+
+### EXPLAIN SYNTAX
+
+checks the syntax validity.
+** Syntax**
+
+```sql
+EXPLAIN SYNTAX query
+```
+**Example**
+
+```sql
+EXPLAIN SYNTAX SELECT 1
+```
+|**syntax_correct**|**syntax_message**|**has_join**|**has_asterisk**|
+|--|--|--|--|
+|1||0|0|
+
+
+
+## Drop Statement
+
+### DROP DATABASE
+
+Deletes the Database.
+** Syntax**
+
+```sql
+DROP DATABASE [IF EXISTS] [databaseIdentifier]
+```
+**Example**
+
+```sql
+# create a database
+CREATE DATABASE example_db
+
+# drop a database
+DROP DATABASE example_db
+```
+### DROP TABLE
+
+Deletes the table.
+** Syntax**
+
+```sql
+DROP TABLE [IF EXISTS] [tableIdentifier]
+```
+**Example**
+
+```sql
+# step 1: create a table
+CREATE TABLE `example_table`
+(
+    `order_by_column` String
+)
+ENGINE = `CnchMergeTree`
+ORDER BY (`order_by_column`)
+
+# step 2: drop a table
+DROP TABLE example_table
+```
+
+
+## Insert Statement
+
+Adds data into a table.
+### INSERT VALUES
+
+Data can be inserted with this basic query format.
+** Syntax**
+
+```sql
+INSERT INTO [TABLE] [tableIdentifier] [columnsClause] VALUES
+```
+**Example**
+
+```sql
+# step 1: create a table
+CREATE TABLE `example_table`
+(
+    `a` Int8,
+    `b` String,
+    `c` Date
+)
+ENGINE = `CnchMergeTree`
+ORDER BY (`a`)
+
+# step 2: insert 2 rows into the table
+INSERT INTO example_table VALUES (1, 'a', '2021-07-27'), (2, 'b', '2021-07-27')
+```
+### INSERT FORMAT
+
+Data can be passed to the INSERT in a format supported by ByConity.
+** Syntax**
+
+```sql
+INSERT INTO [TABLE] [tableIdentifier] [columnsClause] FORMAT format_name
+```
+**Example**
+
+```sql
+# step 1: create a table
+CREATE TABLE `example_table`
+(
+    `a` Int8,
+    `b` String,
+    `c` Date
+)
+ENGINE = `CnchMergeTree`
+ORDER BY (`a`) 
+
+# step 2: insert 2 rows in value format into the table
+INSERT INTO example_table FORMAT TabSeparated
+1 a 2021-07-27
+2 b 2021-07-27
+```
+### INSERT SELECT
+
+Inserts the results of a SELECT query.  Columns are mapped according to their position in the SELECT clause. However, their names in the SELECT expression and the table for INSERT may differ. If necessary, typecasting is performed.
+** Syntax**
+
+```sql
+INSERT INTO [TABLE] [tableIdentifier] [columnsClause] [selectUnionStmt]
+```
+**Example**
+
+```sql
+INSERT INTO example_table SELECT * FROM example_table
+```
+### INSERT INFILE
+
+Insert data to a table from a file.  gateway-client only
+Supported file format:
+- .csv 
+
+- .json 
+
+- .avro 
+
+- .parquet 
+
+** Syntax**
+
+```sql
+INSERT INTO [TABLE] [tableIdentifier] [columnsClause] [FORMAT format_name] INFILE filepath
+```
+**Example**
+
+```sql
+INSERT INTO my_table FORMAT csvwithnames INFILE '/Users/my_name/Downloads/ETH-USD.csv'
+```
+## Rename Statement
+
+### RENAME TABLE
+
+Renames one or more tables.
+** Syntax**
+
+```sql
+RENAME TABLE [tableIdentifier] TO [tableIdentifier], [tableIdentifier] TO [tableIdentifier]
+```
+**Example**
+
+```sql
+# step 1: create a table
+CREATE TABLE `example_table`
+(
+    `a` Int8,
+    `b` String,
+    `c` Date
+)
+ENGINE = `CnchMergeTree`
+ORDER BY (`a`)
+
+# step 2: rename the new created table
+RENAME TABLE example_table to new_table_name
+```
+## Select Union Statement
+
+SELECT query,  possibly with UNION ALL.
+** Syntax**
+
+```sql
+[selectStmt] [UNION ALL [selectStmt]...
+```
+**Example**
+
+```sql
+CREATE TABLE IF NOT EXISTS test.example_table1 (column1 Date, column2 UInt32) ENGINE=CnchMergeTree ORDER BY column1;
+CREATE TABLE IF NOT EXISTS test.example_table2 (column1 Date, column2 UInt32) ENGINE=CnchMergeTree ORDER BY column1;
+INSERT INTO test.example_table1 VALUES ('2015-08-07',1);
+INSERT INTO test.example_table2 VALUES ('2015-08-08',2);
+SELECT * FROM test.example_table1 UNION ALL SELECT * FROM test.example_table2;
+```
+|**column1**|**column2**|
+|--|--|
+|2015-08-07|1|
+
+|**column1**|**column2**|
+|--|--|
+|2015-08-08|2|
+
+## Select Statement
+
+`SELECT` queries perform data retrieval from tables.
+** Syntax**
+
+```sql
+[withClause]
+SELECT [DISTINCT][columnExprList])
+[fromClause]
+[arrayJoinClause]
+[joinClause]
+[prewhereClause]
+[whereClause]
+[groupByClause]
+[havingClause]
+[orderByClause]
+[limitByClause]
+[limitClause]
+[settingsClause]
+```
+- `DISTINCT` , only unique rows will remain in a query result. It works with NULL as if `NULL` were a specific value, and `NULL==NULL` . 
+
+- `Asterisk symbol (*)` , An asterisk can be put in any part of a query instead of an expression. When the query is analyzed, the asterisk is expanded to a list of all table columns (excluding the `MATERIALIZED` and `ALIAS` columns). 
+
+## Set Statement
+
+Set a list of settings for the current session.
+** Syntax**
+
+```sql
+SET [settingExprList]
+```
+**Example**
+
+```sql
+# set virtual warehouse
+SET WAREHOUSE your_warehouse_name
+
+# set role
+SET ROLE AccountAdmin
+
+# set if to choose ansi mode or not
+SET ansi_sql = 1
+```
+## Show Statement
+
+### SHOW DATABASES
+
+Prints a list of all databases. The command does not require a running warehouse to execute.
+** Syntax**
+
+```sql
+SHOW DATABASES
+```
+**Example**s
+
+```sql
+SHOW DATABASES
+```
+|**Name**|
+|--|
+|db_name1|
+|db_name2|
+
+### SHOW TABLES
+
+Displays a list of tables. The command does not require a running warehouse to execute.
+** Syntax**
+
+```sql
+SHOW TABLES [FROM [databaseIdentifier] [LIKE STRING_LITERAL]
+```
+If the `FROM` clause is not specified, the query returns the list of tables from the current database.
+**Example**
+
+```sql
+SHOW TABLES FROM my_db LIKE '%table'
+```
+|**Name**|
+|--|
+|sells_table|
+|view_table|
+
+### SHOW CREATE TABLE
+
+Display table create sql
+** Syntax**
+
+```sql
+SHOW CREATE [TABLE] [tableIdentifier]
+```
+**Example**
+
+```sql
+# step 1: create a table
+CREATE TABLE `example_table`
+(
+    `order_by_column` String
+)
+ENGINE = `CnchMergeTree`
+ORDER BY (`order_by_column`)
+
+# step 2: show create table
+SHOW CREATE TABLE example_table
+```
+|Query|
+|--|
+|`CREATE TABLE `example_db`.`example_table` COMMENT '',(,    `order_by_column` String,),ENGINE=`CnchMergeTree`,PRIMARY KEY `order_by_column`,ORDER BY `order_by_column`;`|
+
+## Truncate Statement
+
+Removes all data from a table.
+** Syntax**
+
+```sql
+TRUNCATE TABLE [IF EXISTS] [tableIdentifier]
+```
+**Example**
+
+```sql
+TRUNCATE TABLE IF EXISTS example_table
+```
+## Use Statement
+
+Sets the current database for the session. The current database is used for searching for tables if the database is not explicitly defined in the query with a dot before the table name.
+Note: This query can’t be made when using the HTTP protocol, since there is no concept of a session.
+
+**Syntax**
+
+```sql
+USE [databaseIdentifier];
+```
+**Example**
+
+```sql
+USE example_db
+```
+## Database Identifier
+
+**Syntax**
+
+```sql
+database_name
+```
+- database_name: String. Name of the database. 
+
+## Table Identifier
+
+**Syntax**
+
+```sql
+[database_name.]table_name
+```
+- database_name: String. Name of the database. 
+
+- table_name: String. Name of the table. 
+
+- If database_name is not provided, current database will be used. 
+
+## Table Column Definition
+
+Column definition
+
+**Syntax**
+
+```sql
+column_name column_type [tableColumnPropertyExpr] [COMMENT comment] [codecExpr]
+column_name [column_type] [tableColumnPropertyExpr] [COMMENT comment] [codecExpr]
+```
+- If column_type is not explicit declared, [tableColumnPropertyExpr] must be provided for column type inference. 
+
+**Example**
+
+1. Column with explicit type 
+
+```sql
+id UInt32
+```
+2. Column with inexplicit type but type can be inferred from [tableColumnPropertyExpr] . 
+
+```sql
+id DEFAULT 1
+```
+3. Column with comment 
+
+```sql
+id UInt32 COMMENT 'id'
+```
+4. Column with codec 
+
+```sql
+id UInt32 CODEC(LZ4)
+```
+## Table Column Property Expression
+
+Column properties.
+
+**Syntax**
+
+```sql
+DEFAULT [columnExpr]
+```
+- `DEFAULT columnExpr` : Normal default value. If the INSERT query doesn’t specify the corresponding column, it will be filled in by computing the corresponding expression. 
+
+**Example**
+
+1. Column with default expression 
+
+```sql
+id UInt32 DEFAULT 1
+```
+## Setting Expression List
+
+**Syntax**
+
+settingExprList
+```sql
+settingExpr [,settingExpr]...
+```
+settingExpr
+```sql
+setting_name=setting_val
+```
+- setting_name: String. Name of the setting. 
+
+- setting_val: number or string. Value of the setting. 
+
+## EngineClause
+
+**Syntax**
+
+```sql
+ENGINE=engine_name
+-- below are optinal field for table engine only
+[orderByClause]
+[partitionByClause]
+[primaryKeyClause]
+[uniqueKeyClause]
+[sampleByClause]
+[ttlClause]
+[settingsClause]
+```
+- For database engine, engine_name can only be Cnch. 
+
+- For table engine, engine_name can only be CnchMergeTree. 
+
+## orderByClause
+
+**Syntax**
+
+orderByClause
+```sql
+ORDER BY orderExpr [,orderExpr]...
+```
+orderExpr
+```sql
+[columnExpr] [ASCENDING|ASC|DESCENDING|DESC] [NULLS [FIRST|LAST] [COLLATE STRING_LITERAL]
+```
+- `[ASCENDING|ASC|DESCENDING|DESC]` : determines the sorting direction. If the direction is not specified, `ASC` is assumed. 
+
+- `[NULLS [FIRST|LAST]` : determines `NaN` and `NULL` sorting order. 
+
+   - By default or with the `NULLS LAST` modifier: first the values, then `NaN` , then `NULL` . 
+
+   - With the `NULLS FIRST` modifier: first `NULL` , then `NaN` , then other values. 
+
+- `[COLLATE STRING_LITERAL]` : For sorting by String values, you can specify collation. 
+
+   - Collate is supported in LowCardinality, Nullable, Array and Tuple 
+
+   - When using `COLLATE` , sorting is always case-insensitive. 
+
+   - only recommend using `COLLATE` for final sorting of a small number of rows, since sorting with `COLLATE` is less efficient than normal sorting by bytes. 
+
+**Example**
+
+1. Order by multiple orderExpr 
+
+```sql
+CREATE TABLE IF NOT EXISTS test.orderByClause (id UInt32, val UInt32) ENGINE=CnchMergeTree() ORDER BY id;
+INSERT INTO TABLE test.orderByClause VALUES (1,5),(1,15),(2,5),(2,15);
+SELECT * FROM test.orderByClause ORDER BY id ASC, val DESC;
+```
+
+2. Order by NULLS FIRST 
+
+```sql
+CREATE TABLE IF NOT EXISTS test.orderByClause (id UInt32, val Nullable(UInt32)) ENGINE=CnchMergeTree() ORDER BY id;
+INSERT INTO test.orderByClause VALUES (1,2),(2,NULL),(3,2),(3,3),(3,NULL);
+SELECT * FROM test.orderByClause ORDER BY val DESC NULLS FIRST;
+```
+
+3. Order by with COLLATE 
+
+```sql
+CREATE TABLE IF NOT EXISTS test.orderByClause (x UInt32, s Nullable(String)) ENGINE=CnchMergeTree ORDER BY x;
+INSERT INTO test.orderByClause VALUES (1,'bca'),(2,NULL),(3,'ABC'),(4,'123a'),(5,'abc'),(6,NULL),(7,'BCA');
+SELECT * FROM test.orderByClause ORDER BY s ASC COLLATE 'ru';
+```
+## partitionByClause
+
+Used by engineClause to define the partition key. Partition key can be any expression from the table columns.
+** Syntax**
+
+```sql
+PARTITION BY [columnExpr]
+```
+**Example**
+
+1. Partition key defined by a columnExpr 
+
+```sql
+CREATE TABLE test.partitionByClause
+(
+    VisitDate Date,
+    Hour UInt8,
+    ClientID UUID
+)
+ENGINE = CnchMergeTree
+PARTITION BY VisitDate
+ORDER BY Hour;
+```
+In this example, records will be partitioned by the VisitDate.
+2. Partition key defined in a tuple of columnExpr 
+
+```sql
+CREATE TABLE test.partitionByClause
+(
+    VisitDate Date,
+    Hour UInt8,
+    ClientID UUID
+)
+ENGINE = CnchMergeTree
+PARTITION BY (VisitDate,Hour)
+ORDER BY Hour;
+```
+In this example, records will be partitioned by the hour of the visitDate.
+## primaryKeyClause
+
+Used by engineClause to define the primary key if it differs from order by key.
+By default the primary key is the same as the order by key. Thus in most cases it is unnecessary to specify a separate primaryKeyClause.
+** Syntax**
+
+```sql
+PRIMARY KEY [columnExpr]
+```
+**Example**
+
+```sql
+CREATE TABLE test.primaryKeyClause
+(
+    VisitDate Date,
+    Hour UInt8,
+    ClientID UUID
+)
+ENGINE = CnchMergeTree
+ORDER BY (VisitDate,Hour)
+PRIMARY KEY VisitDate;
+```
+## uniqueKeyClause
+
+Used by engineClause to define the unique key. If specified, the table creates a partition-level constraint that all unique key values in the same partition must be distinct. If you try to insert a row with a unique key that matches an existing row, it will first delete the old row and then insert the new row.
+** Syntax**
+
+```sql
+UNIQUE KEY [columnExpr]
+```
+Note that only expressions with the following data types can be used in UNIQUE KEY
+- Primary data type: `[U]Int8/16/32/64, Boolean, Date, DateTime, String` 
+
+- Composite date type: `Tuple` composed of elements in supported primary data types 
+
+**Example**
+
+1. Unique key defined by a single column 
+
+```sql
+CREATE TABLE test.uniqueKeyClause
+(
+  `event_date` Date,
+  `order_id` UInt64,
+  `state` UInt32,
+  `amount` UInt64
+)
+ENGINE = CnchMergeTree
+PARTITION BY event_date
+ORDER BY state
+UNIQUE KEY order_id;
+
+-- rows with the same key will replace previous rows
+INSERT INTO test.uniqueKeyClause VALUES
+('2021-03-01', 1001, 1, 100),
+('2021-03-01', 1002, 1, 200),
+('2021-03-01', 1001, 2, 100),
+('2021-03-02', 1001, 1, 400);
+
+SELECT * FROM test.uniqueKeyClause ORDER BY event_date, order_id;
+┌─event_date─┬─order_id─┬─state─┬─amount─┐
+│ 2021-03-01 │     1001 │     2 │    100 │
+│ 2021-03-01 │     1002 │     1 │    200 │
+│ 2021-03-02 │     1001 │     1 │    400 │
+└────────────┴──────────┴───────┴────────┘
+
+INSERT INTO test.uniqueKeyClause VALUES
+('2021-03-01', 1002, 2, 200),
+('2021-03-02', 1001, 2, 400),
+('2021-03-02', 1002, 1, 300);
+
+SELECT * FROM test.uniqueKeyClause ORDER BY event_date, order_id;
+┌─event_date─┬─order_id─┬─state─┬─amount─┐
+│ 2021-03-01 │     1001 │     2 │    100 │
+│ 2021-03-01 │     1002 │     2 │    200 │
+│ 2021-03-02 │     1001 │     2 │    400 │
+│ 2021-03-02 │     1002 │     1 │    300 │
+└────────────┴──────────┴───────┴────────┘
+```
+2. Composite unique key 
+
+```sql
+CREATE TABLE test.uniqueKeyClause
+(
+  `event_date` Date,
+  `region` UInt64,
+  `state` String,
+  `amount` UInt64
+)
+ENGINE = CnchMergeTree
+PARTITION BY event_date
+ORDER BY state
+UNIQUE KEY (region, state);
+```
+## sampleByClause
+
+Used by engineClause to define the sample key. The sampling expression must contain primary key and result of sampling expression must be unsigned integer.
+** Syntax**
+
+```sql
+SAMPLE BY [columnExpr]
+```
+**Example**
+
+```sql
+CREATE TABLE IF NOT EXISTS test.sampleByClause 
+(
+    id UInt32
+) 
+ENGINE=CnchMergeTree 
+ORDER BY id 
+SAMPLE BY id;
+```
+## ttlClause
+
+Expression to specify storage duration of rows.
+- columnExpr return results must have one `Date` or `DateTime` column. 
+
+- Columns used in ttlClause must be in partition by columns. 
+
+** Syntax**
+
+```sql
+TTL [columnExpr]
+```
+**Example**
+
+```sql
+CREATE TABLE test.ttlClause
+(
+    VisitDate Date,
+    Hour UInt8,
+    ClientID UUID
+)
+ENGINE = CnchMergeTree
+ORDER BY Hour
+PARTITION BY VisitDate
+TTL VisitDate + INTERVAL 1 DAY；
+```
+## settingsClause
+
+**Syntax**
+
+```sql
+SETTINGS [settingExprList]
+```
+## columnsClause
+
+Used by insertStmt to represent a list of columns.
+**Syntax**
+
+```sql
+(column_name[,column_name]...)
+```
+## withClause
+
+ByConity supports Common Table Expressions( [CTE](https://en.wikipedia.org/wiki/Hierarchical_and_recursive_queries_in_SQL) ). The results of WITH clause can be used in the remaining `SELECT` query. There are certain limitations to the support, including
+- Recursions are not allowed in CTE 
+
+- Subqueries are not allowed in CTE 
+
+We only support below syntax.
+
+** Syntax**
+
+```sql
+WITH [columnExpr] AS identifier
+```
+**Example**
+
+1. Using constant expression as “variable” 
+
+```sql
+WITH '2019-08-01 15:23:00' as ts SELECT ts
+```
+3. Using results of a scalar subquery (1 row) 
+
+```sql
+/* this example would return TOP 10 of most huge tables */
+WITH
+(
+    SELECT 1
+) AS number
+SELECT number;
+```
+## limitClause
+
+** Syntax**
+
+select the first `m` rows from the result.
+```sql
+LIMIT m
+```
+select the `m` rows from the result after skipping the first `n` rows.
+```sql
+LIMIT n, m
+LIMIT m OFFSET n
+```
+- `n` and `m` must be non-negative integers. 
+
+- If there is no orderByClause that explicitly sorts results, the choice of rows for the result may be arbitrary and non-deterministic. 
+
+**Example**
+
+1. Example of Limit m. 
+
+```sql
+CREATE TABLE IF NOT EXISTS test.limitClause (id UInt32) engine=CnchMergeTree() order by id;
+INSERT INTO test.limitClause VALUES (1),(2),(3),(4),(5);
+SELECT * FROM test.limitClause LIMIT 2; -- first 2 values will be return
+```
+2. Example of Limit n,m 
+
+```sql
+CREATE TABLE IF NOT EXISTS test.limitClause (id UInt32) engine=CnchMergeTree() order by id;
+INSERT INTO test.limitClause VALUES (1),(2),(3),(4),(5);
+SELECT * FROM test.limitClause LIMIT 1,2; -- skip first value，next 2 values will be return
+SELECT * FROM test.limitClause LIMIT 2 OFFSET 1; -- skip first value，next 2 values will be return
+```
+## limitByClause
+
+select the `m` rows for each distinct value of `expressions`
+** Syntax**
+
+select the first `m` rows from the result for each distinct value of columnExpr.
+```sql
+LIMIT m BY [columnExprList]
+```
+**Example**
+
+1. Example of Limit m by columnExpr 
+
+```sql
+CREATE TABLE test.limitByClause(id UInt32, val UInt32) ENGINE = CnchMergeTree() order by id;
+INSERT INTO test.limitByClause VALUES (1, 10), (1, 11), (1, 12), (2, 20), (2, 21);
+SELECT * FROM test.limitByClause ORDER BY id, val LIMIT 2 BY id; -- expect 4 rows. (1, 10), (1, 11), (2, 20), (2, 21) 
+```
+In this example, for each id (include value 1 and 2), we need to return 2 rows.
+## havingClause
+
+Filtering the aggregation results produced by groupByClause. It is similar to the whereClause, but the difference is that `WHERE` is performed before aggregation, while `HAVING` is performed after it.
+** Syntax**
+
+```sql
+HAVING [columnExpr](http://columnexpr/)
+```
+**Example**
+
+```sql
+CREATE TABLE test.havingClause(id UInt32, val UInt32) ENGINE = CnchMergeTree() ORDER BY id;
+INSERT INTO test.havingClause VALUES (1, 10), (1, 11), (1, 12), (2, 20), (2, 21);
+SELECT id FROM test.havingClause GROUP BY id HAVING count(id)>2; -- only 1 is expected. 
+```
+## arrayJoinClause
+
+For table contains array column, array join can produce a new table that has a column with each individual array element of that initial column, while values of other columns are duplicated
+** Syntax**
+
+```sql
+[LEFT] ARRAY JOIN [columnExprList]
+```
+- You can specify only one arrayJoinClause in a `SELECT` query. 
+
+- `[LEFT] ARRAY JOIN` : types of ARRAY JOIN 
+
+   - `ARRAY JOIN` - In base case, empty arrays are not included in the result of `JOIN` . 
+
+   - `LEFT ARRAY JOIN` - The result of `JOIN` contains rows with empty arrays. The value for an empty array is set to the default value for the array element type (usually 0, empty string or NULL). 
+
+**Example**
+
+```sql
+CREATE TABLE test.arrayJoinClause(s String, arr Array(UInt8)) ENGINE = CnchMergeTree ORDER BY s;
+INSERT INTO test.arrayJoinClause VALUES ('Hello', [1,2]), ('World', [3,4,5]), ('Goodbye', []);
+SELECT s, arr FROM test.arrayJoinClause ARRAY JOIN arr;
+```
+## prewhereClause
+
+Prewhere is an optimization to apply filtering more efficiently. It is enabled by default even if `PREWHERE` clause is not specified explicitly. It works by automatically moving part of WHERE condition to prewhere stage. The role of `PREWHERE` clause is only to control this optimization if you think that you know how to do it better than it happens by default.
+With prewhere optimization, at first only the columns necessary for executing prewhere expression are read. Then the other columns are read that are needed for running the rest of the query, but only those blocks where the prewhere expression is “true” at least for some rows. If there are a lot of blocks where prewhere expression is “false” for all rows and prewhere needs less columns than other parts of query, this often allows to read a lot less data from disk for query execution.
+** Syntax**
+
+```sql
+PREWHERE [columnExpr](http://columnexpr/)
+```
+**Example**
+
+```sql
+CREATE TABLE test.prewhereClause(id UInt32, val UInt32) ENGINE = CnchMergeTree() ORDER BY id;
+INSERT INTO test.prewhereClause VALUES (1, 10), (1, 11), (1, 12), (2, 20), (2, 21);
+SELECT * FROM test.prewhereClause PREWHERE id=1 WHERE val>10; -- (1, 11), (1, 12) expected
+```
+## whereClause
+
+whereClause allows to filter the data that is coming from fromClause of `SELECT` . It must contain an expression with the `UInt8` type. This is usually an expression with comparison and logical operators.
+** Syntax**
+
+```sql
+WHERE [columnExpr]
+```
+**Example**
+
+```sql
+CREATE TABLE test.whereClause(id UInt32, val UInt32) ENGINE = CnchMergeTree() ORDER BY id;
+INSERT INTO test.whereClause VALUES (1, 10), (1, 11), (1, 12), (2, 20), (2, 21);
+SELECT * FROM test.whereClause WHERE val>10; -- (1, 11), (1, 12), (2, 20), (2, 21) expected
+```
+## fromClause
+
+The fromClause specifies the source to read data from:
+- Table 
+
+- Subquery 
+
+- Table Function 
+
+** Syntax**
+
+Read data from table:
+```sql
+FROM [tableIdentifier] [FINAL] [sampleClause] 
+```
+Read data from subquery:
+```sql
+FROM ([selectUnionStmt]) [FINAL] [sampleClause]
+```
+Read data from table function:
+```sql
+FROM tableFunctionExpr [FINAL] [sampleClause]
+```
+- `FINAL` : When `FINAL` is specified, ByConity fully merges the data before returning the result and thus performs all data transformations that happen during merges. 
+
+**Example**
+
+1. Select from table 
+
+```sql
+CREATE TABLE test.fromClause (id UInt32, val UInt32) ENGINE=CnchMergeTree() ORDER BY id;
+INSERT INTO test.fromClause VALUES (1, 10), (1, 11), (1, 12), (2, 20), (2, 21);
+SELECT * FROM test.fromClause; -- expect 5 rows 
+```
+2. Select from subquery 
+
+```sql
+CREATE TABLE test.fromClause (id UInt32, val UInt32) ENGINE=CnchMergeTree() ORDER BY id;
+INSERT INTO test.fromClause VALUES (1, 10), (1, 11), (1, 12), (2, 20), (2, 21);
+SELECT * FROM (SELECT * FROM test.fromClause LIMIT 3); -- expect 3 rows 
+```
+3. Select from tableFunctionExpr 
+
+```sql
+SELECT * FROM numbers(10); -- expect 10 rows 
+```
+We use table function numbers here to generate a table with 10 rows.
+## groupByClause
+`groupByClause` switches the `SELECT` query into an aggregation mode. [columnExprList] under `groupByClause` acts as grouping key and result of aggregating `SELECT` query will contain as many rows as there were unique values of grouping key in source table.
+** Syntax**
+
+```sql
+GROUP BY [(][columnExprList][)] [WITH ROLLUP|WITH CUBE] [WITH TOTALS]
+```
+- `NULL processing` : ByConity interprets NULL as a value. If group by keys contains NULL value, it will appear in the result. 
+
+- `[WITH ROLLUP]` :  calculate subtotals for the key expressions, based on their order in the `GROUP BY` list. 
+
+   - The subtotals rows are added after the result table. 
+
+   - In the subtotals rows the values of already "grouped" key expressions are set to `0` or empty line. 
+
+- `[WITH CUBE]` : calculate subtotals for every combination of the key expressions in the `GROUP BY` list. 
+
+- `[WITH TOTALS]` : calculate subtotals for a combination of all key expressions in the `GROUP BY` list. 
+
+**Example**
+
+1. Group by key contains NULL value. 
+
+```sql
+CREATE TABLE IF NOT EXISTS test.groupByClause (x UInt32, y Nullable(UInt32)) ENGINE=CnchMergeTree ORDER BY x;
+INSERT INTO test.groupByClause VALUES (1,2),(2,NULL),(3,2),(3,3),(3,NULL);
+SELECT sum(x), y FROM test.groupByClause GROUP BY y; 
+```
+|**sum(x)**|**y**|
+|--|--|
+|4|2|
+|3|3|
+|5|NULL|
+
+2. Group by WITH ROLLUP modifier 
+
+```sql
+CREATE TABLE IF NOT EXISTS test.groupByClause (year UInt32, month UInt32, day UInt32) ENGINE=CnchMergeTree ORDER BY year;
+INSERT INTO test.groupByClause VALUES (2019,1,5),(2019,1,15),(2020,1,5),(2020,1,15),(2021,1,5),(2021,1,15);
+SELECT year, month, day, count() FROM test.groupByClause GROUP BY year, month, day WITH ROLLUP;
+```
+As `GROUP BY` section has three key expressions, the result contains four tables with subtotals "rolled up" from right to left:
+- `GROUP BY year, month, day` ; 
+
+- `GROUP BY year, month` (and `day` column is filled with zeros); 
+
+- `GROUP BY year` (now `month, day` columns are both filled with zeros); 
+
+- and totals (and all three key expression columns are zeros). 
+
+3. Group by WITH CUBE modifier 
+
+```sql
+CREATE TABLE IF NOT EXISTS test.groupByClause (year UInt32, month UInt32, day UInt32) ENGINE=CnchMergeTree ORDER BY year;
+INSERT INTO test.groupByClause VALUES (2019,1,5),(2019,1,15),(2020,1,5),(2020,1,15),(2021,1,5),(2021,1,15);
+SELECT year, month, day, count() FROM test.groupByClause GROUP BY year, month, day WITH CUBE;
+```
+As `GROUP BY` section has three key expressions, the result contains eight tables with subtotals for all key expression combinations:
+- `GROUP BY year, month, day` 
+
+- `GROUP BY year, month` 
+
+- `GROUP BY year, day` 
+
+- `GROUP BY year` 
+
+- `GROUP BY month, day` 
+
+- `GROUP BY month` 
+
+- `GROUP BY day` 
+
+- and totals. (and all three key expression columns are zeros). 
+
+4. Group by WITH TOTAL modifier 
+
+```sql
+CREATE TABLE IF NOT EXISTS test.groupByClause (year UInt32, month UInt32, day UInt32) ENGINE=CnchMergeTree ORDER BY year;
+INSERT INTO test.groupByClause VALUES (2019,1,5),(2019,1,15),(2020,1,5),(2020,1,15),(2021,1,5),(2021,1,15);
+SELECT year, month, day, count() FROM test.groupByClause GROUP BY year, month, day WITH TOTALS;
+```
+If the `WITH TOTALS` modifier is specified, another row will be calculated.
+- `GROUP BY year, month, day` 
+
+- and totals. (and all three key expression columns are zeros). 
+
+## subqueryClause
+
+**Syntax**
+
+```sql
+AS [selectUnionStmt]
+```
+## sampleClause
+
+The sampleClause allows for approximated `SELECT` query processing. With sampleClause enabled, query is not performed on all the data, but only on a certain fraction of data. This is useful when:
+- Have strict timing requirements (like \<100ms) but you can’t justify the cost of additional hardware resources to meet them. 
+
+- Raw data is not accurate, so approximation does not noticeably degrade the quality. 
+
+- Business requirements target approximate results (for cost-effectiveness, or to market exact results to premium users). 
+
+Note: To use sampling, you must declare sampling expression was specified during CnchMergeTree table creation, see [sampleByClause].
+**Syntax**
+
+Sample K. K is the number from 0 to 1.
+```sql
+SAMPLE K
+```
+Sample N. N is integer larger than 1.
+```sql
+SAMPLE N
+```
+SAMPLE K OFFSET M. K and M are numbers from 0 to 1.
+```sql
+SAMPLE K OFFSET M
+```
+**Example**
+
+1. Sample K 
+
+```sql
+CREATE TABLE IF NOT EXISTS test.sampleClause (id UInt32) ENGINE=CnchMergeTree ORDER BY id SAMPLE BY id;
+INSERT INTO test.sampleClause SELECT * FROM numbers(1000);
+SELECT COUNT() FROM test.sampleClause SAMPLE 0.1; -- 1000 is expected
+```
+In this example, 10% of data will be used for approximation.
+2. Sample N 
+
+```sql
+CREATE TABLE IF NOT EXISTS test.sampleClause (id UInt32) ENGINE=CnchMergeTree ORDER BY id SAMPLE BY id;
+INSERT INTO test.sampleClause SELECT * FROM numbers(1000);
+SELECT COUNT() FROM test.sampleClause SAMPLE 2; -- 1000 is expected
+```
+In this example 2 rows of data will be used for approximation.
+3. SAMPLE K OFFSET M 
+
+```sql
+CREATE TABLE IF NOT EXISTS test.sampleClause (id UInt32) ENGINE=CnchMergeTree ORDER BY id SAMPLE BY id;
+INSERT INTO test.sampleClause SELECT * FROM numbers(1000);
+SELECT COUNT() FROM test.sampleClause SAMPLE 0.1 OFFSET 0.2;
+```
+In this example, 10% of data will be used for approximation after skipping 20% of data.
+## joinClause
+
+Join produces a new table by combining columns from one or multiple tables by using values common to each.
+** Syntax**
+
+```sql
+[GLOBAL|LOCAL] [ANY|ALL|ASOF] [INNER|LEFT|RIGHT|FULL|CROSS] [OUTER] JOIN [tableIdentifier] ON|USING [columnExprList]
+```
+- `[GLOBAL|LOCAL]` : 
+
+      - `GLOBAL` , broadcast Join. Broadcast joins cannot be used when joining two large DataFrames. 
+        
+      - `LOCAL` , local join. Using distribution keys on the join columns can use local join. 
+
+- `[ANY|ALL|ASOF]` : 
+
+   - `ANY` ,  If the right table has several matching rows, only the first one found is joined. If the right table has only one matching row, the results of ANY and ALL are the same. 
+
+   - `ALL` , If the right table has several matching rows, ByConity creates a Cartesian product from matching rows. This is the normal JOIN behaviour from standard SQL. 
+
+   - `ASOF` ,  For joining sequences with an uncertain match. 
+
+- `[INNER|LEFT|RIGHT|FULL|CROSS]` : All standard [SQL JOIN](https://en.wikipedia.org/wiki/Join_(SQL)) types 
+
+   - `INNER JOIN` , only matching rows are returned. 
+
+   - `LEFT OUTER JOIN` , non-matching rows from left table are returned in addition to matching rows. 
+
+   - `RIGHT OUTER JOIN` , non-matching rows from right table are returned in addition to matching rows. 
+
+   - `FULL OUTER JOIN` , non-matching rows from both tables are returned in addition to matching rows. 
+
+   - `CROSS JOIN` , produces cartesian product of whole tables, “join keys” are not specified. 
+
+- `ON|USING` : Expressions from `ON` clause and columns from `USING` clause are called “join keys”. 
+
+**Example**
+
+```sql
+CREATE TABLE IF NOT EXISTS test.joinClause (number UInt64) ENGINE=CnchMergeTree ORDER BY number;
+INSERT INTO test.joinClause SELECT * FROM numbers(10);
+
+SELECT number, joined FROM test.joinClause ANY LEFT JOIN (SELECT number * 2 AS number, number * 10 + 1 AS joined FROM test.joinClause LIMIT 10) js2 USING number LIMIT 10
+```
+|**number**|**joined**|
+|--|--|
+|0|1|
+|1|NULL|
+|2|21|
+|3|NULL|
+|4|41|
+|5|NULL|
+|6|61|
+|7|NULL|
+|8|81|
+|9|NULL|
+
+## columnExprList
+
+A list of columnExpr seperate by Comma.
+** Syntax**
+
+```prolog
+[columnExpr] [columnExpr]...
+```
+## columnExpr
+
+A columnExpr is a function, identifier, literal, application of an operator, expression in brackets, subquery, or asterisk. It can also contain an alias.
