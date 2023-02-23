@@ -1,5 +1,6 @@
 import React from "react";
 import Link from "@docusaurus/Link";
+import Translate from "@docusaurus/Translate";
 import { FaGithub } from "react-icons/fa";
 import useDocusaurusContext from "@docusaurus/useDocusaurusContext";
 import clsx from "clsx";
@@ -14,13 +15,15 @@ function HeroBannerSection() {
     <header className={clsx("hero hero--primary", styles.hero)}>
       <div className={clsx("container", styles.container)}>
         <h1 className="hero__title">{title}</h1>
+
         <p className="hero__subtitle">{tagline}</p>
+
         <div className={styles.buttons}>
           <Link
             className="button button--success button--lg"
             to="/docs/ByConity简介/主要原理概念"
           >
-            Get Started
+            <Translate id="getStarted" />
           </Link>
           <Link
             className={clsx(

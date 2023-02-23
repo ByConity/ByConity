@@ -16,38 +16,24 @@ type FeatureItem = {
 
 const FeatureList: FeatureItem[] = [
   {
-    title: <Translate>High Performance, Low Cost</Translate>,
+    title: <Translate id="homePage.keyFeaturesSection.feature1.title" />,
     icon: <BsSpeedometer2 style={{ color: "var(--ifm-color-danger)" }} />,
     description: (
-      <Translate>
-        Support sub-second query response capability under massive data scale
-        through vectorized execution engine, columnar storage and CBO+RBO
-        optimizer. At the same time, the ultra-high compression ratio helps
-        users save a lot of storage space and reduce disk costs.
-      </Translate>
+      <Translate id="homePage.keyFeaturesSection.feature1.description" />
     ),
   },
   {
-    title: <Translate>Unified Support for Multiple Scenarios</Translate>,
+    title: <Translate id="homePage.keyFeaturesSection.feature2.title" />,
     icon: <MdQueryStats style={{ color: "var(--ifm-color-warning)" }} />,
     description: (
-      <Translate>
-        Supports real-time data streaming and offline batch data writing with
-        interactive things capability and multi-table associative query
-        capability, which can meet the interactive query needs of online systems
-        as well as backend real-time monitoring, report big screen, etc.
-      </Translate>
+      <Translate id="homePage.keyFeaturesSection.feature2.description" />
     ),
   },
   {
-    title: <Translate>Eco-friendly</Translate>,
+    title: <Translate id="homePage.keyFeaturesSection.feature3.title" />,
     icon: <BiNetworkChart style={{ color: "var(--ifm-color-success)" }} />,
     description: (
-      <Translate>
-        Compatible with most ClickHouse interfaces and tools, supports Kafka,
-        Spark, Flink and many other data imports, also supports Superset,
-        Tableau and other data visualization tools.
-      </Translate>
+      <Translate id="homePage.keyFeaturesSection.feature3.description" />
     ),
   },
 ];
@@ -68,7 +54,7 @@ function Feature({ className, title, description, icon }: FeatureItem) {
 
 function KeyFeaturesSection() {
   return (
-    <Section title="Key Features">
+    <Section title={<Translate id="homePage.keyFeaturesSection.title" />}>
       <div className={clsx("container", styles.container)}>
         {FeatureList.map((props, idx) => (
           <Feature key={idx} {...props} />

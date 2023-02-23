@@ -1,4 +1,5 @@
 import React from "react";
+import Translate from "@docusaurus/Translate";
 import Section from "@site/src/components/Section";
 import { RxOpenInNewWindow } from "react-icons/rx";
 
@@ -41,7 +42,7 @@ function LogoDisplay(props: LogoDisplayProps) {
 
 function CommunitySection() {
   return (
-    <Section title="Join the Community">
+    <Section title={<Translate id="homePage.communitySection.title" />}>
       <div className={styles.logoGrid}>
         <LogoDisplay
           imageSrc={githubLogoPath}

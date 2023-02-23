@@ -1,5 +1,6 @@
 import clsx from "clsx";
 import React from "react";
+import Translate from "@docusaurus/Translate";
 import Link from "@docusaurus/Link";
 import { FaGithub } from "react-icons/fa";
 import styles from "./GetStartedSection.module.css";
@@ -24,23 +25,23 @@ function Card(props) {
 
 function GetStartedSection() {
   return (
-    <Section title="Let's Get Started">
+    <Section title={<Translate id="homePage.getStartedSection.title" />}>
       <div className={clsx("container", styles.container)}>
         <Card
-          title="Read the documentation"
+          title={<Translate id="homePage.getStartedSection.readDocs.title" />}
           icon={<BsBook />}
           description={
             <Link
               className="button button--success button--lg margin-right--sm"
               to="/docs/ByConity简介/主要原理概念"
             >
-              Get Started
+              <Translate id="getStarted" />
             </Link>
           }
         />
 
         <Card
-          title="Start contributing"
+          title={<Translate id="homePage.getStartedSection.contribute.title" />}
           icon={<BsCodeSlash />}
           description={
             <Link
