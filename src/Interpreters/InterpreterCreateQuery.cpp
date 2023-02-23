@@ -61,6 +61,7 @@
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/InterpreterInsertQuery.h>
 #include <Interpreters/AddDefaultDatabaseVisitor.h>
+#include <Interpreters/ZOrderDDLRewriter.h>
 #include <Interpreters/join_common.h>
 
 #include <Access/AccessRightsElement.h>
@@ -1418,6 +1419,8 @@ void InterpreterCreateQuery::prepareOnClusterQuery(ASTCreateQuery & create, Cont
 BlockIO InterpreterCreateQuery::execute()
 {
     FunctionNameNormalizer().visit(query_ptr.get());
+    ZOrderDDLRewriter().apply(query_ptr.get());
+    LOG_DEBUG(&Poco::Logger::get("InterpreterCreateQuery"), "CREATE query after rewrite: {}", query_ptr->formatForErrorMessage());
     auto & create = query_ptr->as<ASTCreateQuery &>();
     if (!create.cluster.empty())
     {
