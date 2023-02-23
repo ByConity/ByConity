@@ -376,7 +376,7 @@ private:
     ImplementationSelector<IFunction> selector;
 };
 
-REGISTER_FUNCTION(MortonDecode)
+void registerFunctionMortonDecode(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionMortonDecode>();
 }

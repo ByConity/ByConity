@@ -331,7 +331,7 @@ private:
     ImplementationSelector<IFunction> selector;
 };
 
-REGISTER_FUNCTION(MortonEncode)
+void registerFunctionMortonEncode(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionMortonEncode>();
 }

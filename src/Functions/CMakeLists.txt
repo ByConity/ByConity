@@ -25,8 +25,6 @@ target_link_libraries(clickhouse_functions
         murmurhash
         biginteger
         morton_nd
-)
-
     PRIVATE
         ${ZLIB_LIBRARIES}
         boost::filesystem
