@@ -4,7 +4,7 @@
 }
 
 .section:nth-child(odd) {
-  background-color: #40e4ff22;
+  background-color: var(--ifm-color-gray-100);
 }
 
 .title {

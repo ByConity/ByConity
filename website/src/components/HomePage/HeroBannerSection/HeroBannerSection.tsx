@@ -11,7 +11,7 @@ function HeroBannerSection() {
   const { title, tagline } = siteConfig;
 
   return (
-    <header className="hero hero--primary">
+    <header className={clsx("hero hero--primary", styles.hero)}>
       <div className={clsx("container", styles.container)}>
         <h1 className="hero__title">{title}</h1>
         <p className="hero__subtitle">{tagline}</p>

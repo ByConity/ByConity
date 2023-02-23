@@ -1,17 +1,23 @@
 import React from "react";
 import clsx from "clsx";
 import Translate from "@docusaurus/Translate";
-import styles from "./KeyFeaturesSection.module.css";
 import Section from "@site/src/components/Section";
+import { BsSpeedometer2 } from "react-icons/bs";
+import { BiNetworkChart } from "react-icons/bi";
+import { MdQueryStats } from "react-icons/md";
+import styles from "./KeyFeaturesSection.module.css";
 
 type FeatureItem = {
+  className?: string;
   title: JSX.Element;
+  icon: React.ReactNode;
   description: JSX.Element;
 };
 
 const FeatureList: FeatureItem[] = [
   {
     title: <Translate>High Performance, Low Cost</Translate>,
+    icon: <BsSpeedometer2 style={{ color: "var(--ifm-color-danger)" }} />,
     description: (
       <Translate>
         Support sub-second query response capability under massive data scale
@@ -23,6 +29,7 @@ const FeatureList: FeatureItem[] = [
   },
   {
     title: <Translate>Unified Support for Multiple Scenarios</Translate>,
+    icon: <MdQueryStats style={{ color: "var(--ifm-color-warning)" }} />,
     description: (
       <Translate>
         Supports real-time data streaming and offline batch data writing with
@@ -34,6 +41,7 @@ const FeatureList: FeatureItem[] = [
   },
   {
     title: <Translate>Eco-friendly</Translate>,
+    icon: <BiNetworkChart style={{ color: "var(--ifm-color-success)" }} />,
     description: (
       <Translate>
         Compatible with most ClickHouse interfaces and tools, supports Kafka,
@@ -44,12 +52,15 @@ const FeatureList: FeatureItem[] = [
   },
 ];
 
-function Feature({ title, description }: FeatureItem) {
+function Feature({ className, title, description, icon }: FeatureItem) {
   return (
-    <div className={styles.card}>
+    <div className={clsx(styles.card, className)}>
+      <div className={styles.cardImage}>{icon}</div>
+
       <div>
         <h3 className={styles.cardHeader}>{title}</h3>
       </div>
+
       <div className={styles.cardBody}>{description}</div>
     </div>
   );
