@@ -149,7 +149,8 @@ QueryPlanStepPtr createAggregatingStep()
         10,
         true,
         nullptr,
-        std::move(group_by_sort_description)
+        std::move(group_by_sort_description),
+        true
     );
 }
 

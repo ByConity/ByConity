@@ -241,8 +241,7 @@ PlanNodePtr CorrelatedScalarSubqueryVisitor::visitApplyNode(ApplyNode & node, Vo
         desc_with_mask.arguments = desc.arguments;
         descs_with_mask.emplace_back(desc_with_mask);
     }
-
-    auto group_agg_step = std::make_shared<AggregatingStep>(join_node->getStep()->getOutputStream(), keys, descs_with_mask, GroupingSetsParamsList{} , true);
+    auto group_agg_step = std::make_shared<AggregatingStep>(join_node->getStep()->getOutputStream(), keys, descs_with_mask, GroupingSetsParamsList{} , true, GroupingDescriptions{}, false, false);
     auto group_agg_node = std::make_shared<AggregatingNode>(context->nextNodeId(), std::move(group_agg_step), PlanNodes{join_node});
 
     // step 6 : project used columns
@@ -536,7 +535,7 @@ PlanNodePtr CorrelatedInSubqueryVisitor::visitApplyNode(ApplyNode & node, Void &
     aggregate_desc_2.argument_names = Names{null_match_condition_symbol};
 
     AggregateDescriptions aggregate_descs{aggregate_desc_1, aggregate_desc_2};
-    auto count_step = std::make_shared<AggregatingStep>(pre_expression_node->getStep()->getOutputStream(), keys, aggregate_descs, GroupingSetsParamsList{}, true);
+    auto count_step = std::make_shared<AggregatingStep>(pre_expression_node->getStep()->getOutputStream(), keys, aggregate_descs, GroupingSetsParamsList{}, true, GroupingDescriptions{}, false, false);
     auto count_node = std::make_shared<AggregatingNode>(context->nextNodeId(), std::move(count_step), PlanNodes{pre_expression_node});
 
     // step 8 project match values
@@ -1041,7 +1040,7 @@ PlanNodePtr CorrelatedExistsSubqueryVisitor::visitApplyNode(ApplyNode & node, Vo
     AggregateDescriptions aggregate_descs{aggregate_desc};
 
     auto count_non_null_step
-        = std::make_shared<AggregatingStep>(remove_null_node->getStep()->getOutputStream(), keys, aggregate_descs, GroupingSetsParamsList{}, true);
+        = std::make_shared<AggregatingStep>(remove_null_node->getStep()->getOutputStream(), keys, aggregate_descs, GroupingSetsParamsList{}, true, GroupingDescriptions{}, false, false);
     auto count_non_null_node
         = std::make_shared<AggregatingNode>(context->nextNodeId(), std::move(count_non_null_step), PlanNodes{remove_null_node});
 
@@ -1112,7 +1111,7 @@ PlanNodePtr UnCorrelatedExistsSubqueryVisitor::visitApplyNode(ApplyNode & node, 
     aggregate_desc.parameters = parameters;
     aggregate_desc.function = agg_fun;
     AggregateDescriptions aggregate_descs{aggregate_desc};
-    auto count_subquery_step = std::make_shared<AggregatingStep>(subquery_ptr->getStep()->getOutputStream(), keys, aggregate_descs, GroupingSetsParamsList{}, true);
+    auto count_subquery_step = std::make_shared<AggregatingStep>(subquery_ptr->getStep()->getOutputStream(), keys, aggregate_descs, GroupingSetsParamsList{}, true, GroupingDescriptions{}, false, false);
     auto count_subquery_node
         = std::make_shared<AggregatingNode>(context->nextNodeId(), std::move(count_subquery_step), PlanNodes{subquery_ptr});
 
@@ -1213,7 +1212,7 @@ PlanNodePtr UnCorrelatedQuantifiedComparisonSubqueryVisitor::visitApplyNode(Appl
     makeAggDescriptionsMinMaxCountCount2(aggregate_descriptions, context, min_value, max_value, count_all_value, count_non_null_value, subquery_ptr, qc_right);
 
     Names keys;
-    auto agg_step = std::make_shared<AggregatingStep>(right_data_stream, keys, aggregate_descriptions, GroupingSetsParamsList{}, true);
+    auto agg_step = std::make_shared<AggregatingStep>(right_data_stream, keys, aggregate_descriptions, GroupingSetsParamsList{}, true, GroupingDescriptions{}, false, false);
     auto agg_node
         = std::make_shared<AggregatingNode>(context->nextNodeId(), std::move(agg_step), PlanNodes{subquery_ptr});
 
@@ -1433,7 +1432,7 @@ PlanNodePtr CorrelatedQuantifiedComparisonSubqueryVisitor::visitApplyNode(ApplyN
         keys.emplace_back(item.name);
     }
 
-    auto count_step = std::make_shared<AggregatingStep>(join_node->getStep()->getOutputStream(), keys, aggregate_descriptions, GroupingSetsParamsList{}, true);
+    auto count_step = std::make_shared<AggregatingStep>(join_node->getStep()->getOutputStream(), keys, aggregate_descriptions, GroupingSetsParamsList{}, true, GroupingDescriptions{}, false, false);
     auto count_node = std::make_shared<AggregatingNode>(context->nextNodeId(), std::move(count_step), PlanNodes{join_node});
 
     // step5 : project match values;

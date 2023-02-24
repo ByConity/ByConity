@@ -2301,6 +2301,9 @@ void InterpreterSelectQuery::executeAggregation(QueryPlan & query_plan, const Ac
 
     bool storage_has_evenly_distributed_read = storage && storage->hasEvenlyDistributedRead();
 
+    const bool should_produce_results_in_order_of_bucket_number
+        = !final && settings.distributed_aggregation_memory_efficient;
+
     auto aggregating_step = std::make_unique<AggregatingStep>(
         query_plan.getCurrentDataStream(),
         std::move(aggregator_params),
@@ -2311,7 +2314,9 @@ void InterpreterSelectQuery::executeAggregation(QueryPlan & query_plan, const Ac
         temporary_data_merge_threads,
         storage_has_evenly_distributed_read,
         std::move(group_by_info),
-        std::move(group_by_sort_description));
+        std::move(group_by_sort_description),
+        should_produce_results_in_order_of_bucket_number);
+
     query_plan.addStep(std::move(aggregating_step));
 }
 
