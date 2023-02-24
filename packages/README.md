@@ -2,7 +2,7 @@ One way to deploy ByConity to physical machines is to its packages using the pac
 
 ByConity using FoundationDB as meta store. So ByConity packages depends on the FoundationDB client package. Hence, before deploying ByConity packages on any machine, we need to deploy FoundationDB client package first. The Foundation client package are tight coupled to version of FoundationDB server. So we need to choose the client package with version that match the version of FoundationDB server
 
-To deploy FoundationDB client package, we go to the release [page](https://github.com/apple/foundationdb/releases), find the right package to your OS and download it. For example, here i download version `7.1.27` for Debian OS, `amd64` machine.
+To deploy FoundationDB client package, we go to the release [page](https://github.com/apple/foundationdb/releases), find the right package to your OS and download it. Or you can build the package by yourself, in that case follow this [guide](https://github.com/ByConity/ByConity/tree/master/docker/packager) . For example, here i download version `7.1.27` for Debian OS, `amd64` machine.
 ```
 curl -L -o foundationdb-clients_7.1.27-1_amd64.deb https://github.com/apple/foundationdb/releases/download/7.1.27/foundationdb-clients_7.1.27-1_amd64.deb
 ```
@@ -16,7 +16,7 @@ The next step is to install the common package `byconity-common-static`, this is
 ```
 sudo dpkg -i byconity-common-static_0.1.1.1_amd64.deb
 ```
-After that edit configuration files `/etc/byconity-server/cnch_config.xml` and `/etc/byconity-server/fdb.config`.  The `cnch_config.xml` file contains service_discovery config, hdfs config, foundationdb cluster config path. The `fdb.config` is the cluster config file of FoundationDB cluster. Config it using the guide in [here](https://github.com/ByConity/ByConity/packages/config_service_discovery.md)
+After that edit configuration files `/etc/byconity-server/cnch_config.xml` and `/etc/byconity-server/fdb.config`.  The `cnch_config.xml` file contains service_discovery config, hdfs config, foundationdb cluster config path. The `fdb.config` is the cluster config file of FoundationDB cluster. Config it using the guide in [here](https://github.com/ByConity/ByConity/tree/master/packages/config_service_discovery.md)
 
 After that on the machine you want to install TSO service. Download the `byconity-tso` package and install.
 ```
