@@ -109,6 +109,8 @@ Rename a column in the table. There are some usage notes:
 
 - Cannot rename column to itself. 
 
+- Cannot rename column when it is used for table index(i.e. partition key, primary key, order_by key)
+
 - Rename from column must exists. 
 
 ** Syntax**
