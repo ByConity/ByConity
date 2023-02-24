@@ -1,6 +1,12 @@
 One way to deploy ByConity to physical machines is to its packages using the package manager. For example, install Debian package for Debian OS and rpm packages for Centos OS
 
-ByConity using FoundationDB as meta store. So ByConity packages depends on the FoundationDB client package. Hence, before deploying ByConity packages on any machine, we need to deploy FoundationDB client package first. The Foundation client package are tight coupled to version of FoundationDB server. So we need to choose the client package with version that match the version of FoundationDB server
+ByConity using FoundationDB as meta store, and HDFS as datastore. So before starting to deploy ByConity, we need to deploy FoundationDB and HDFS first.
+
+For deploying [Foundation](https://apple.github.io/foundationdb/) database, you can refer to the installation guide [here](https://github.com/ByConity/ByConity/tree/master/docker/executable_wrapper/FDB_installation.md)
+
+After that we need to deploy an HDFS cluster consist of name node and data node, and create the directory `/user/clickhouse` in HDFS for store data. You can refer to the installation guide [here](https://github.com/ByConity/ByConity/tree/master/docker/executable_wrapper/HDFS_installation.md). After this step, you got the name node url which ussually the value of `fs.defaultFS` that you can find in the `core-site.xml` config. 
+
+Now we will start deploying Byconity. ByConity packages depends on the FoundationDB client package. Hence, before deploying ByConity packages on any machine, we need to deploy FoundationDB client package first. The Foundation client package are tight coupled to version of FoundationDB server. So we need to choose the client package with version that match the version of FoundationDB server
 
 To deploy FoundationDB client package, we go to the release [page](https://github.com/apple/foundationdb/releases), find the right package to your OS and download it. Or you can build the package by yourself, in that case follow this [guide](https://github.com/ByConity/ByConity/tree/master/docker/packager) . For example, here i download version `7.1.27` for Debian OS, `amd64` machine.
 ```
