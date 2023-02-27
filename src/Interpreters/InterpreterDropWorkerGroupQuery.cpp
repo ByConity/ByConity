@@ -21,6 +21,12 @@
 
 namespace DB
 {
+
+namespace ErrorCodes
+{
+    extern const int RESOURCE_MANAGER_ILLEGAL_CONFIG;
+}
+
 InterpreterDropWorkerGroupQuery::InterpreterDropWorkerGroupQuery(const ASTPtr & query_ptr_, ContextPtr context_)
     : WithContext(context_), query_ptr(query_ptr_) {}
 
@@ -28,8 +34,10 @@ BlockIO InterpreterDropWorkerGroupQuery::execute()
 {
     auto & drop_query = query_ptr->as<ASTDropWorkerGroupQuery &>();
 
-    auto rm_client = getContext()->getResourceManagerClient();
-    rm_client->dropWorkerGroup(drop_query.worker_group_id, drop_query.if_exists);
+    if (auto rm_client = getContext()->getResourceManagerClient())
+        rm_client->dropWorkerGroup(drop_query.worker_group_id, drop_query.if_exists);
+    else
+        throw Exception("Can't apply DDL of worker group as RM is not enabled.", ErrorCodes::RESOURCE_MANAGER_ILLEGAL_CONFIG);
 
     return {};
 }
