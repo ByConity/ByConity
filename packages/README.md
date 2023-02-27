@@ -8,7 +8,7 @@ After that we need to deploy an HDFS cluster consist of name node and data node,
 
 Now we will start deploying Byconity. ByConity packages depends on the FoundationDB client package. Hence, before deploying ByConity packages on any machine, we need to deploy FoundationDB client package first. The Foundation client package are tight coupled to version of FoundationDB server. So we need to choose the client package with version that match the version of FoundationDB server
 
-To deploy FoundationDB client package, we go to the release [page](https://github.com/apple/foundationdb/releases), find the right package to your OS and download it. Or you can build the package by yourself, in that case follow this [guide](https://github.com/ByConity/ByConity/tree/master/docker/packager) . For example, here i download version `7.1.27` for Debian OS, `amd64` machine.
+To deploy FoundationDB client package, we go to the release [page](https://github.com/apple/foundationdb/releases), find the right package to your OS and download it. For example, here i download version `7.1.27` for Debian OS, `amd64` machine.
 ```
 curl -L -o foundationdb-clients_7.1.27-1_amd64.deb https://github.com/apple/foundationdb/releases/download/7.1.27/foundationdb-clients_7.1.27-1_amd64.deb
 ```
@@ -18,7 +18,8 @@ Then install with this command
 sudo dpkg -i foundationdb-clients_7.1.27-1_amd64.deb
 ```
 
-The next step is to install the common package `byconity-common-static`, this is the package that all other packages depend on, go the the ByConity release [page](https://github.com/ByConity/ByConity/releases)
+Next we will deploy ByConity packages, you can find it in release [page](https://github.com/ByConity/ByConity/releases). Or you can build the package by yourself, in that case follow this [guide](https://github.com/ByConity/ByConity/tree/master/docker/packager) 
+The first package that need to install is the common package `byconity-common-static`, this is the package that all other packages depend on, go the the ByConity 
 ```
 sudo dpkg -i byconity-common-static_0.1.1.1_amd64.deb
 ```
