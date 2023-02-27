@@ -96,7 +96,7 @@
     </openSSL>
 
     <!-- Maximum number of concurrent queries. -->
-    <max_concurrent_queries>100</max_concurrent_queries>
+    <max_concurrent_queries>150</max_concurrent_queries>
 
     <max_server_memory_usage>0</max_server_memory_usage>
 
