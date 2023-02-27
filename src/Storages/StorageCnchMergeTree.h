@@ -140,6 +140,10 @@ public:
     Pipe
     alterPartition(const StorageMetadataPtr & metadata_snapshot, const PartitionCommands & commands, ContextPtr query_context) override;
 
+    void checkMutationIsPossible(const MutationCommands & commands, const Settings & settings) const override;
+
+    void mutate(const MutationCommands & commands, ContextPtr query_context) override;
+
     void truncate(
         const ASTPtr & /*query*/,
         const StorageMetadataPtr & /* metadata_snapshot */,

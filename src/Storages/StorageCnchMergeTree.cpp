@@ -2397,4 +2397,29 @@ StorageCnchMergeTree::totalRowsByPartitionPredicate(const SelectQueryInfo & quer
     return rows;
 }
 
+void StorageCnchMergeTree::checkMutationIsPossible(const MutationCommands & commands, const Settings & /*settings*/) const
+{
+    for (const auto & command : commands)
+    {
+        if (command.type != MutationCommand::MATERIALIZE_INDEX)
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED , "StorageCnchMergeTree doesn't support mutation of type {}\n", command.type);
+    }
+}
+
+void StorageCnchMergeTree::mutate(const MutationCommands & commands, ContextPtr query_context)
+{
+    if (commands.empty())
+        return;
+
+    auto txn = query_context->getCurrentTransaction();
+    auto catalog = query_context->getCnchCatalog();
+
+    CnchMergeTreeMutationEntry mutation_entry;
+    mutation_entry.txn_id = txn->getTransactionID();
+    mutation_entry.commit_time = commit_time;
+    mutation_entry.commands = commands;
+    mutation_entry.columns_commit_time = commit_time;
+    catalog->createMutation(getStorageID(), mutation_entry.txn_id.toString(), mutation_entry.toString());
+}
+
 } // end namespace DB

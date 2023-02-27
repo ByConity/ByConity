@@ -144,8 +144,6 @@ BlockIO InterpreterAlterQuery::execute()
 
     if (!mutation_commands.empty())
     {
-        if (cnch_table_lock)
-            throw Exception("Mutation is not supported in Cnch now.", ErrorCodes::NOT_IMPLEMENTED);
         table->checkMutationIsPossible(mutation_commands, getContext()->getSettingsRef());
         MutationsInterpreter(table, metadata_snapshot, mutation_commands, getContext(), false).validate();
         table->mutate(mutation_commands, getContext());
