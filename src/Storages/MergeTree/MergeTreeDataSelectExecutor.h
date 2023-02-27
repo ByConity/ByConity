@@ -119,7 +119,7 @@ private:
         MergeTreeIndexConditionPtr condition,
         MergeTreeMetaBase::DataPartPtr part,
         const MarkRanges & ranges,
-        const Settings & settings,
+        ContextPtr context,
         const MergeTreeReaderSettings & reader_settings,
         size_t & total_granules,
         size_t & granules_dropped,

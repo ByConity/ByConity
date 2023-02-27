@@ -1,4 +1,3 @@
-
 DROP TABLE IF EXISTS indexed_table;
 CREATE TABLE indexed_table
 (    `tm` DateTime,
