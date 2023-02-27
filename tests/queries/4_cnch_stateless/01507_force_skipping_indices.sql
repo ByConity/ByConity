@@ -7,7 +7,7 @@ CREATE TABLE data_01507
     INDEX d1_idx d1 TYPE minmax GRANULARITY 1,
     INDEX d1_null_idx assumeNotNull(d1_null) TYPE minmax GRANULARITY 1
 )
-Engine=MergeTree()
+Engine=CnchMergeTree()
 ORDER BY key;
 
 INSERT INTO data_01507 VALUES (1, 2, 3);
