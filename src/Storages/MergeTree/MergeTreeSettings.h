@@ -46,7 +46,6 @@ struct Settings;
     M(UInt64, min_compress_block_size, 0, "When granule is written, compress the data in buffer if the size of pending uncompressed data is larger or equal than the specified threshold. If this setting is not set, the corresponding global setting is used.", 0) \
     M(UInt64, max_compress_block_size, 0, "Compress the pending uncompressed data in buffer if its size is larger or equal than the specified threshold. Block of data will be compressed even if the current granule is not finished. If this setting is not set, the corresponding global setting is used.", 0) \
     M(UInt64, index_granularity, 8192, "How many rows correspond to one primary key value.", 0) \
-    M(UInt64, z_index_granularity, 1, "For sorting by space-filling curve, this is the GRANULARITY of the minmax index created on each key column", 0) \
     \
     /** Data storing format settings. */ \
     /* For backward compatibility, do not use compact part */ \
@@ -242,10 +241,13 @@ struct Settings;
     /** uuid of CnchMergeTree, as we won't use uuid in CloudMergeTree */ \
     M(String, cnch_table_uuid, "", "Used for CloudMergeTree to get uuid of Cnch Table for ingestion task, like Kafka", 0) \
     \
+    /* z-ordering settings */ \
+    M(Bool, enable_index_by_space_filling_curve, true, "Enable index by space filling curve like z-order, hibert curve", 0) \
+    M(UInt64, z_index_granularity, 2, "For sorting by space-filling curve, this is the GRANULARITY of the minmax index created on each key column", 0) \
+
     /// Settings that should not change after the creation of a table.
 #define APPLY_FOR_IMMUTABLE_MERGE_TREE_SETTINGS(M) \
     M(index_granularity) \
-    M(z_index_granularity)
 
 DECLARE_SETTINGS_TRAITS(MergeTreeSettingsTraits, LIST_OF_MERGE_TREE_SETTINGS)
 

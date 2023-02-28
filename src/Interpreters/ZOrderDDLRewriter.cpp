@@ -14,6 +14,7 @@
  */
 
 #include <Interpreters/ZOrderDDLRewriter.h>
+#include <Storages/MergeTree/MergeTreeSettings.h>
 
 namespace DB
 {
@@ -25,14 +26,22 @@ void ZOrderDDLRewriter::apply(IAST * ast)
         auto columns = getColumnsInOrderByWithSpaceFillingCurves(create);
         if (columns.size() <= 1)
             return;
-        size_t z_index_granularity = 1;
+        MergeTreeSettings default_settings;
+        size_t z_index_granularity = default_settings.z_index_granularity.value;
+        bool allow_rewrite = default_settings.enable_index_by_space_filling_curve;
         auto * settings = create->storage->settings;
         if (settings)
         {
-            auto * change = settings->changes.tryGet("z_index_granularity");
-            if (change)
-                z_index_granularity = change->safeGet<UInt64>();
+            auto * allow_rewrite_change = settings->changes.tryGet("enable_index_by_space_filling_curve");
+            if (allow_rewrite_change)
+                allow_rewrite = allow_rewrite_change->safeGet<UInt64>();
+            if (!allow_rewrite)
+                return;
+            auto * z_index_granularity_change = settings->changes.tryGet("z_index_granularity");
+            if (z_index_granularity_change)
+                z_index_granularity = z_index_granularity_change->safeGet<UInt64>();
         }
+
         /// Create minmax index for all columns
         if (!create->columns_list->indices)
         {
