@@ -2412,14 +2412,20 @@ void StorageCnchMergeTree::mutate(const MutationCommands & commands, ContextPtr 
         return;
 
     auto txn = query_context->getCurrentTransaction();
-    auto catalog = query_context->getCnchCatalog();
+    auto action = txn->createAction<DDLAlterAction>(shared_from_this());
+    auto & alter_act = action->as<DDLAlterAction &>();
+    alter_act.setMutationCommands(commands);
+    txn->appendAction(std::move(action));
+    txn->commitV1();
 
-    CnchMergeTreeMutationEntry mutation_entry;
-    mutation_entry.txn_id = txn->getTransactionID();
-    mutation_entry.commit_time = commit_time;
-    mutation_entry.commands = commands;
-    mutation_entry.columns_commit_time = commit_time;
-    catalog->createMutation(getStorageID(), mutation_entry.txn_id.toString(), mutation_entry.toString());
+    /// TODO: trigger sync mutation if mutation_sync = 1, this is only an ugly (mainly for CI test)
+    auto bg_thread = query_context->tryGetCnchBGThread(CnchBGThreadType::MergeMutate, getStorageID());
+    if (bg_thread)
+    {
+        auto merge_mutate_thread = typeid_cast<CnchMergeMutateThread *>(bg_thread.get());
+        auto istorage = shared_from_this();
+        merge_mutate_thread->triggerPartMutate(shared_from_this());
+    }
 }
 
 } // end namespace DB

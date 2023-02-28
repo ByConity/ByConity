@@ -204,7 +204,7 @@ TRAP(wcsnrtombs)
 TRAP(wcsrtombs)
 TRAP(wctomb)
 TRAP(wordexp)
-TRAP(basename)
+//TRAP(basename) // Used by FoundationDB
 TRAP(catgets)
 TRAP(dbm_clearerr)
 TRAP(dbm_close)

@@ -10,6 +10,7 @@ namespace DB
 
 class MergeTreeIndexReader
 {
+static constexpr char const * INDEX_FILE_EXTENSION = ".idx";
 public:
     MergeTreeIndexReader(
         MergeTreeIndexPtr index_,

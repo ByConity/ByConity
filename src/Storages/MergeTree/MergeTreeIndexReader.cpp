@@ -51,7 +51,7 @@ MergeTreeIndexReader::MergeTreeIndexReader(
                 part_->volume->getDisk(),
                 part_->getFullRelativePath() + index->getFileName(),
                 index->getFileName(),
-                ".idx",
+                INDEX_FILE_EXTENSION,
                 marks_count_,
                 all_mark_ranges_,
                 std::move(settings),
@@ -60,8 +60,8 @@ MergeTreeIndexReader::MergeTreeIndexReader(
                 &part_->index_granularity_info,
                 ReadBufferFromFileBase::ProfileCallback{},
                 CLOCK_MONOTONIC_COARSE,
-                part_->getFileOffsetOrZero(index->getFileName() + ".idx"),
-                part_->getFileSizeOrZero(index->getFileName() + ".idx"),
+                part_->getFileOffsetOrZero(index->getFileName() + INDEX_FILE_EXTENSION),
+                part_->getFileSizeOrZero(index->getFileName() + INDEX_FILE_EXTENSION),
                 part_->getFileOffsetOrZero(index->getFileName() + part_->getMarksFileExtension()),
                 part_->getFileSizeOrZero(index->getFileName() + part_->getMarksFileExtension())
             );
@@ -74,44 +74,45 @@ MergeTreeIndexReader::MergeTreeIndexReader(
             const auto & index_name = index->getFileName();
             IDiskCachePtr segment_cache;
             IDiskCacheStrategyPtr segment_cache_strategy;
-            if (part_->storage.getSettings()->enable_local_disk_cache)
+            MergeTreeDataPartPtr source_data_part = part_->getMvccDataPart(index_name + INDEX_FILE_EXTENSION);
+            if (source_data_part->storage.getSettings()->enable_local_disk_cache)
             {
                 auto [cache, cache_strategy] = DiskCacheFactory::instance().getDefault();
 
                 segment_cache_strategy = std::move(cache_strategy);
                 segment_cache = std::move(cache);
             }
-            String mark_file_name = part_->index_granularity_info.getMarksFilePath(index_name);
+            String mark_file_name = source_data_part->index_granularity_info.getMarksFilePath(index_name);
 
             /// data file
-            String data_path = std::filesystem::path(part_->getFullRelativePath()) / "data";
-            off_t data_file_offset = part_->getFileOffsetOrZero(index_name + ".idx");
-            size_t data_file_size = part_->getFileSizeOrZero(index_name + ".idx");
+            String data_path = std::filesystem::path(source_data_part->getFullRelativePath()) / "data";
+            off_t data_file_offset = source_data_part->getFileOffsetOrZero(index_name + INDEX_FILE_EXTENSION);
+            size_t data_file_size = source_data_part->getFileSizeOrZero(index_name + INDEX_FILE_EXTENSION);
 
             /// mark file
             const String & mark_path = data_path;
-            off_t mark_file_offset = part_->getFileOffsetOrZero(mark_file_name);
-            size_t mark_file_size = part_->getFileSizeOrZero(mark_file_name);
+            off_t mark_file_offset = source_data_part->getFileOffsetOrZero(mark_file_name);
+            size_t mark_file_size = source_data_part->getFileSizeOrZero(mark_file_name);
             if (segment_cache_strategy)
             {
                 // Cache segment if necessary
                 IDiskCacheSegmentsVector segments
                     = segment_cache_strategy->getCacheSegments(segment_cache_strategy->transferRangesToSegments<DiskCacheSegment>(
                         all_mark_ranges_,
-                        part_,
+                        source_data_part,
                         DiskCacheSegment::FileOffsetAndSize{mark_file_offset, mark_file_size},
-                        part_->getMarksCount(),
+                        source_data_part->getMarksCount(),
                         index_name,
-                        DATA_FILE_EXTENSION,
+                        INDEX_FILE_EXTENSION,
                         DiskCacheSegment::FileOffsetAndSize{data_file_offset, data_file_size}));
                 segment_cache->cacheSegmentsToLocalDisk(segments);
             }
             stream = std::make_unique<MergeTreeReaderStreamWithSegmentCache>(
-                part_->storage.getStorageID(),
-                part_->name,
+                source_data_part->storage.getStorageID(),
+                source_data_part->name,
                 index_name,
-                part_->volume->getDisk(),
-                part_->getMarksCount(),
+                source_data_part->volume->getDisk(),
+                source_data_part->getMarksCount(),
                 data_path, data_file_offset, data_file_size,
                 mark_path, mark_file_offset, mark_file_size,
                 all_mark_ranges_,
@@ -120,7 +121,7 @@ MergeTreeIndexReader::MergeTreeIndexReader(
                 nullptr, /*uncompressed_cache*/
                 segment_cache.get(),
                 segment_cache_strategy ? segment_cache_strategy->getSegmentSize() : 1,
-                &(part_->index_granularity_info),
+                &(source_data_part->index_granularity_info),
                 ReadBufferFromFileBase::ProfileCallback{},
                 CLOCK_MONOTONIC_COARSE
             );
