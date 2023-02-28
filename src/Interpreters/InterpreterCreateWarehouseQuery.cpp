@@ -32,6 +32,7 @@ namespace ErrorCodes
     extern const int SYNTAX_ERROR;
     extern const int RESOURCE_MANAGER_ERROR;
     extern const int RESOURCE_MANAGER_INCOMPATIBLE_SETTINGS;
+    extern const int RESOURCE_MANAGER_ILLEGAL_CONFIG;
     extern const int RESOURCE_MANAGER_UNKNOWN_SETTING;
     extern const int RESOURCE_MANAGER_WRONG_VW_SCHEDULE_ALGO;
 }
@@ -158,8 +159,10 @@ BlockIO InterpreterCreateWarehouseQuery::execute()
     if (vw_settings.min_worker_groups > vw_settings.max_worker_groups)
         throw Exception("min_worker_groups should be less than or equal to max_worker_groups", ErrorCodes::RESOURCE_MANAGER_INCOMPATIBLE_SETTINGS);
 
-    auto client = getContext()->getResourceManagerClient();
-    client->createVirtualWarehouse(vw_name, vw_settings, create.if_not_exists);
+    if (auto client = getContext()->getResourceManagerClient())
+        client->createVirtualWarehouse(vw_name, vw_settings, create.if_not_exists);
+    else
+        throw Exception("Can't apply DDL of warehouse as RM is not enabled.", ErrorCodes::RESOURCE_MANAGER_ILLEGAL_CONFIG);
 
     return {};
 }

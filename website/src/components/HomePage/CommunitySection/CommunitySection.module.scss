@@ -1,0 +1,42 @@
+.logoGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  justify-items: center;
+  align-items: center;
+  gap: 32px;
+}
+
+.logoDisplayLink {
+  display: block;
+  width: 100%;
+}
+
+.logoDisplay {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+  padding: 48px;
+
+  .imageContainer {
+    height: 96px;
+    width: 96px;
+  }
+
+  .hoverImageContainer {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: absolute;
+    top: 100%;
+    height: 192px;
+    width: 192px;
+    background-color: #ffffffdd;
+    transition: all 0.3s ease-in-out;
+  }
+
+  &:hover .hoverImageContainer {
+    top: 0;
+  }
+}
