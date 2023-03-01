@@ -381,11 +381,11 @@ def run_single_test(args, ext, server_logs_level, client_options, case_file, std
     if need_drop_database:
         with open(stderr_file, 'a') as stderr:
             clickhouse_proc_create = Popen(shlex.split(client), stdin=PIPE, stdout=PIPE, stderr=stderr, universal_newlines=True)
-        seconds_left = max(args.timeout - (datetime.now() - start_time).total_seconds(), 20)
+        seconds_left = min(args.timeout - (datetime.now() - start_time).total_seconds(), 20)
         try:
-            drop_database_query = "SELECT 1" # check if this is an issue with test client not being able to send query or server side issue
-#             if args.replicated_database:
-#                 drop_database_query += " ON CLUSTER test_cluster_database_replicated"
+            drop_database_query = "DROP DATABASE " + database
+            if args.replicated_database:
+                drop_database_query += " ON CLUSTER test_cluster_database_replicated"
             clickhouse_proc_create.communicate((drop_database_query), timeout=seconds_left)
         except TimeoutExpired:
             # kill test process because it can also hung
