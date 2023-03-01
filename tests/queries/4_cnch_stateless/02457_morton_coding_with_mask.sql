@@ -102,7 +102,7 @@ drop table if exists morton_numbers_mask_02457;
 create table morton_numbers_mask_02457(
     n1 UInt16,
     n2 UInt16,
-    n3 UInt8,
+    n3 UInt8
 )
     Engine=MergeTree()
     ORDER BY n1;
