@@ -142,9 +142,9 @@ WorkerGroupHandleImpl::WorkerGroupHandleImpl(const WorkerGroupHandleImpl & from,
 
 CnchWorkerClientPtr WorkerGroupHandleImpl::getWorkerClientByHash(const String & key) const
 {
-    UInt64 index = std::hash<String>{}(key);
-    if (worker_clients.empty() || index >= worker_clients.size())
+    if (worker_clients.empty())
         throw Exception("No available worker for " + id, ErrorCodes::RESOURCE_MANAGER_NO_AVAILABLE_WORKER);
+    UInt64 index = std::hash<String>{}(key) % worker_clients.size();
     return worker_clients[index];
 }
 

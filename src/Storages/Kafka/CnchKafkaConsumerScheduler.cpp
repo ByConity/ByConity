@@ -20,6 +20,11 @@
 
 namespace DB
 {
+    namespace ErrorCodes
+    {
+        extern const int RESOURCE_MANAGER_NO_AVAILABLE_WORKER;
+    }
+
     IKafkaConsumerScheduler::IKafkaConsumerScheduler(const String &vw_name_, const KafkaConsumerScheduleMode schedule_mode_, ContextPtr context_)
         : vw_name(std::move(vw_name_)), schedule_mode(schedule_mode_), global_context(context_->getGlobalContext()),
         log(&Poco::Logger::get("KafkaConsumer" + String(getScheduleModeName()) + "Scheduler"))
@@ -126,7 +131,7 @@ namespace DB
 
             clients_status_map.erase(node.client_ptr);
         }
-        throw Exception("No available workers for scheduling Kafka consumer, vw: " + vw_name, ErrorCodes::LOGICAL_ERROR);
+        throw Exception("No available workers for scheduling Kafka consumer, vw: " + vw_name, ErrorCodes::RESOURCE_MANAGER_NO_AVAILABLE_WORKER);
     }
 
     bool KafkaConsumerSchedulerLeastConsumers::shouldReschedule(const CnchWorkerClientPtr current_worker, const String & /* key */, const size_t index)

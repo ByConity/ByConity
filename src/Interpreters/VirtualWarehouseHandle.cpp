@@ -360,9 +360,9 @@ std::vector<CnchWorkerClientPtr> VirtualWarehouseHandleImpl::getAllWorkers()
 {
     std::vector<CnchWorkerClientPtr> res;
     std::lock_guard lock(state_mutex);
-    for (auto const & [_, wg_handle] : worker_groups)
+    for (const auto & [_, wg_handle] : worker_groups)
     {
-        auto & workers = wg_handle->getWorkerClients();
+        const auto & workers = wg_handle->getWorkerClients();
         res.insert(res.end(), workers.begin(), workers.end());
     }
     return res;
