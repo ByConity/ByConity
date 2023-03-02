@@ -18,6 +18,8 @@
 #include <CloudServices/ICnchBGThread.h>
 #include <CloudServices/CnchWorkerClientPools.h>
 #include <CloudServices/DedupWorkerStatus.h>
+#include <Interpreters/VirtualWarehouseHandle.h>
+#include <Interpreters/VirtualWarehousePool.h>
 #include <Storages/IStorage_fwd.h>
 
 namespace DB
@@ -63,7 +65,6 @@ private:
     String getDedupWorkerDebugInfo();
 
     mutable std::mutex worker_client_mutex;
-    CnchWorkerClientPoolPtr worker_pool;
     CnchWorkerClientPtr worker_client;
     StorageID worker_storage_id;
 

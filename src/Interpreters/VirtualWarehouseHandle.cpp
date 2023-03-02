@@ -339,6 +339,35 @@ WorkerGroupHandle VirtualWarehouseHandleImpl::pickLocally(const VWScheduleAlgo &
     return selectGroup(algo, available_groups);
 }
 
+CnchWorkerClientPtr VirtualWarehouseHandleImpl::getWorkerByHash(const String & key)
+{
+    /// TODO: Should we expand the worker list first?
+    UInt64 val = std::hash<String>{}(key);
+    std::lock_guard lock(state_mutex);
+    auto wg_index = val % worker_groups.size();
+    auto & group = std::next(worker_groups.begin(), wg_index)->second;
+    return group->getWorkerClientByHash(key);
+}
+
+/// Get a worker from the VW using a random strategy.
+CnchWorkerClientPtr VirtualWarehouseHandleImpl::getWorker()
+{
+    auto wg_handle = randomWorkerGroup();
+    return wg_handle->getWorkerClient();
+}
+
+std::vector<CnchWorkerClientPtr> VirtualWarehouseHandleImpl::getAllWorkers()
+{
+    std::vector<CnchWorkerClientPtr> res;
+    std::lock_guard lock(state_mutex);
+    for (auto const & [_, wg_handle] : worker_groups)
+    {
+        auto & workers = wg_handle->getWorkerClients();
+        res.insert(res.end(), workers.begin(), workers.end());
+    }
+    return res;
+}
+
 WorkerGroupHandle VirtualWarehouseHandleImpl::randomWorkerGroup() const
 {
     std::uniform_int_distribution dist;

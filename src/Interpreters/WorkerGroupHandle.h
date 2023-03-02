@@ -104,6 +104,8 @@ public:
     const auto & getWorkerClients() const { return worker_clients; }
     const ShardsInfo & getShardsInfo() const { return shards_info; }
 
+    CnchWorkerClientPtr getWorkerClient() const;
+    CnchWorkerClientPtr getWorkerClientByHash(const String & key) const;
     CnchWorkerClientPtr getWorkerClient(const HostWithPorts & host_ports) const;
 
     std::optional<size_t> indexOf(const HostWithPorts & host_ports) const
@@ -124,7 +126,6 @@ public:
     Strings getWorkerTCPAddresses(const Settings & settings) const;
     Strings getWorkerIDVec() const;
     std::vector<std::pair<String, UInt16>> getReadWorkers() const;
-    HostWithPorts randomWorker() const;
 
     bool hasRing() const { return ring != nullptr; }
     const DB::ConsistentHashRing & getRing() const { return *ring; }

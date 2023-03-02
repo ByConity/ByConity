@@ -19,6 +19,7 @@
 
 #include <CloudServices/CnchWorkerClientPools.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/VirtualWarehousePool.h>
 
 namespace DB
 {
@@ -72,8 +73,8 @@ protected:
 
     virtual void initOrUpdateWorkerPool();
 
-    CnchWorkerClientPoolPtr worker_pool;
     String vw_name;
+    VirtualWarehouseHandle vw_handle;
     KafkaConsumerScheduleMode schedule_mode;
     ContextPtr global_context;
     Poco::Logger * log;

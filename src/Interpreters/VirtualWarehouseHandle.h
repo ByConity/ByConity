@@ -16,6 +16,7 @@
 #pragma once
 
 #include <Common/Exception.h>
+#include <CloudServices/CnchWorkerClient.h>
 #include <Interpreters/Context_fwd.h>
 #include <ResourceManagement/CommonData.h>
 #include <ResourceManagement/VWScheduleAlgo.h>
@@ -82,6 +83,7 @@ private:
 public:
     using Container = std::unordered_map<String, WorkerGroupHandle>;
     using VirtualWarehouseHandle = std::shared_ptr<VirtualWarehouseHandleImpl>;
+    using CnchWorkerClientPtr = std::shared_ptr<CnchWorkerClient>;
     using VWScheduleAlgo = ResourceManagement::VWScheduleAlgo;
     using Requirement = ResourceManagement::ResourceRequirement;
     using WorkerGroupMetrics = ResourceManagement::WorkerGroupMetrics;
@@ -108,6 +110,10 @@ public:
     std::optional<HostWithPorts> tryPickWorkerFromRM(VWScheduleAlgo algo, const Requirement & requirement = {});
 
     bool addWorkerGroup(const WorkerGroupHandle & worker_group);
+
+    CnchWorkerClientPtr getWorker();
+    CnchWorkerClientPtr getWorkerByHash(const String & key);
+    std::vector<CnchWorkerClientPtr> getAllWorkers();
 
 private:
     bool addWorkerGroupImpl(const WorkerGroupHandle & worker_group, const std::lock_guard<std::mutex> & lock);

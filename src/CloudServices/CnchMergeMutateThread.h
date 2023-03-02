@@ -17,6 +17,8 @@
 #include <CloudServices/ICnchBGThread.h>
 
 #include <Catalog/DataModelPartWrapper_fwd.h>
+#include <Interpreters/VirtualWarehouseHandle.h>
+#include <Interpreters/VirtualWarehousePool.h>
 #include <Storages/MergeTree/CnchMergeTreeMutationEntry.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Transaction/ICnchTransaction.h>
@@ -29,8 +31,6 @@ namespace DB
 
 class CnchWorkerClient;
 using CnchWorkerClientPtr = std::shared_ptr<CnchWorkerClient>;
-using CnchWorkerClientPool = RpcClientPool<CnchWorkerClient>;
-using CnchWorkerClientPoolPtr = std::shared_ptr<CnchWorkerClientPool>;
 
 class CnchMergeMutateThread;
 struct PartMergeLogElement;
@@ -193,7 +193,7 @@ private:
     std::mutex worker_pool_mutex;
     String vw_name;
     String pick_worker_algo;
-    CnchWorkerClientPoolPtr worker_pool;
+    VirtualWarehouseHandle vw_handle;
 
     std::atomic_bool shutdown_called{false};
 
