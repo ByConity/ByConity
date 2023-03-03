@@ -41,12 +41,12 @@ std::shared_ptr<Cluster> mockVWCluster(const Context & context, const String & v
     auto value = context.getSettingsRef().vw_schedule_algo.value;
     auto algo = ResourceManagement::toVWScheduleAlgo(&value[0]);
     auto wg_handle = vw_handle->pickWorkerGroup(algo);
-    auto & worker_clients = wg_handle->getWorkerClients();
+    const auto & worker_clients = wg_handle->getWorkerClients();
 
     auto user_password = context.getCnchInterserverCredentials();
 
     std::vector<Cluster::Addresses> addresses;
-    for (auto & client : worker_clients)
+    for (const auto & client : worker_clients)
     {
         if (client)
         {

@@ -235,7 +235,7 @@ bool VirtualWarehouseHandleImpl::updateWorkerGroupsFromPSM()
                 worker_groups.try_emplace(
                     group_id, std::make_shared<WorkerGroupHandleImpl>(group_id, WorkerGroupHandleSource::PSM, name, hosts, getContext()));
             else if (!HostWithPorts::isExactlySameVec(
-                         it->second->getHostWithPortsVec(), hosts)) /// replace with the new one bacause of diff
+                         it->second->getHostWithPortsVec(), hosts)) /// replace with the new one because of diff
                 worker_groups.try_emplace(
                     group_id, std::make_shared<WorkerGroupHandleImpl>(group_id, WorkerGroupHandleSource::PSM, name, hosts, getContext()));
             else /// reuse the old one
