@@ -25,7 +25,7 @@ jobs:
       - name: Set Timezone to Europe/Moscow
         uses: zcong1993/setup-timezone@master
         with:
-          timezoneLinux: Europe/Moscow
+          timezone: Europe/Moscow
       - name: start fdb
         run: |
           echo $(pwd)
