@@ -23,9 +23,9 @@ jobs:
           git -C "$GITHUB_WORKSPACE" submodule update --init --recursive
           ./build_bin.sh
       - name: Set Timezone to Europe/Moscow
-        uses: szenius/set-timezone@v1.0
+        uses: zcong1993/setup-timezone@master
         with:
-          timezoneLinux: "Europe/Moscow"
+          timezoneLinux: Europe/Moscow
       - name: start fdb
         run: |
           echo $(pwd)
