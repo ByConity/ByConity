@@ -91,8 +91,9 @@ void StorageSystemMetastore::fillData(MutableColumns & res_columns, ContextPtr c
 
     StoragePtr storage = DatabaseCatalog::instance().getTable(StorageID{database, table}, context);
 
-    if (auto metastore = dynamic_cast<MergeTreeData *>(storage.get())->getMetastore())
+    if (auto * data = dynamic_cast<MergeTreeData *>(storage.get()))
     {
+        auto metastore = data->getMetastore();
         auto it = metastore->getMetaInfo();
         auto uuid_prefix_len = toString(storage->getStorageID().uuid).length() + 1; /// length of 'uuid_'
         while(it->hasNext())
