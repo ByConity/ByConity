@@ -364,12 +364,12 @@ def run_single_test(args, ext, server_logs_level, client_options, case_file, std
         pattern = '{test} > {stdout} 2> {stderr}'
 
     if ext == '.sql':
-        pattern = "{client} --send_logs_level={logs_level} {options} --testmode --multiquery < " + pattern
+        pattern = "{client} --send_logs_level={logs_level} {options} --testmode --multiquery"
 
     command = pattern.format(**params)
 
-    with open(stdout_file, 'a') as out, open(stderr_file, 'a') as err:
-        proc = Popen(shlex.split(command), stdout=out, stderr=err, env=os.environ, universal_newlines=True)
+    with open(stdout_file, 'a') as out, open(stderr_file, 'a') as err, open(case_file, 'a') as test_case:
+        proc = Popen(shlex.split(command), stdin=test_case, stdout=out, stderr=err, env=os.environ, universal_newlines=True)
         try:
             proc.communicate(timeout=args.timeout)
         except TimeoutExpired:
