@@ -282,6 +282,38 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
         }
     }
 
+    if (table_id.hasUUID() && table_id.database_name == TEMPORARY_DATABASE)
+    {
+        /// Shortcut for tables which have persistent UUID
+        auto db_and_table = tryGetByUUID(table_id.uuid, context_);
+        if (!db_and_table.first || !db_and_table.second)
+        {
+            assert(!db_and_table.first && !db_and_table.second);
+            if (exception)
+                exception->emplace(ErrorCodes::UNKNOWN_TABLE, "Table {} with uuid: {} doesn't exist", table_id.getNameForLogs(),
+                    UUIDHelpers::UUIDToString(table_id.uuid));
+            return {};
+        }
+
+#if USE_LIBPQXX
+        if (!context_->isInternalQuery() && (db_and_table.first->getEngineName() == "MaterializedPostgreSQL"))
+        {
+            db_and_table.second = std::make_shared<StorageMaterializedPostgreSQL>(std::move(db_and_table.second), getContext());
+        }
+#endif
+
+#if USE_MYSQL
+        /// It's definitely not the best place for this logic, but behaviour must be consistent with DatabaseMaterializeMySQL::tryGetTable(...)
+        if (db_and_table.first->getEngineName() == "MaterializeMySQL")
+        {
+            if (!MaterializeMySQLSyncThread::isMySQLSyncThread())
+                db_and_table.second = std::make_shared<StorageMaterializeMySQL>(std::move(db_and_table.second), db_and_table.first.get());
+        }
+#endif
+        return db_and_table;
+    }
+
+
     if (table_id.database_name == TEMPORARY_DATABASE)
     {
         /// For temporary tables UUIDs are set in Context::resolveStorageID(...).
