@@ -368,38 +368,38 @@ def run_single_test(args, ext, server_logs_level, client_options, case_file, std
 
     command = pattern.format(**params)
 
-    proc = Popen(command, shell=True, env=os.environ)
+    proc = Popen(command, shell=False, env=os.environ)
 
     while (datetime.now() - start_time).total_seconds() < args.timeout and proc.poll() is None:
         sleep(0.01)
 
-    need_drop_database = not args.database
-    if need_drop_database and args.no_drop_if_fail:
-        maybe_passed = (proc.returncode == 0) and (proc.stderr is None) and (proc.stdout is None or 'Exception' not in proc.stdout)
-        need_drop_database = not maybe_passed
+#     need_drop_database = not args.database
+#     if need_drop_database and args.no_drop_if_fail:
+#         maybe_passed = (proc.returncode == 0) and (proc.stderr is None) and (proc.stdout is None or 'Exception' not in proc.stdout)
+#         need_drop_database = not maybe_passed
 
-    if need_drop_database:
-        with open(stderr_file, 'a') as stderr:
-            clickhouse_proc_create = Popen(shlex.split(client), stdin=PIPE, stdout=PIPE, stderr=stderr, universal_newlines=True)
-        seconds_left = min(args.timeout - (datetime.now() - start_time).total_seconds(), 20)
-        try:
-            drop_database_query = "DROP DATABASE " + database
-            if args.replicated_database:
-                drop_database_query += " ON CLUSTER test_cluster_database_replicated"
-            clickhouse_proc_create.communicate((drop_database_query), timeout=seconds_left)
-        except TimeoutExpired:
-            # kill test process because it can also hung
-            if proc.returncode is None:
-                try:
-                    proc.kill()
-                except OSError as e:
-                    if e.errno != ESRCH:
-                        raise
+#     if need_drop_database:
+#         with open(stderr_file, 'a') as stderr:
+#             clickhouse_proc_create = Popen(shlex.split(client), stdin=PIPE, stdout=PIPE, stderr=stderr, universal_newlines=True)
+#         seconds_left = max(args.timeout - (datetime.now() - start_time).total_seconds(), 20)
+#         try:
+#             drop_database_query = "DROP DATABASE " + database
+#             if args.replicated_database:
+#                 drop_database_query += " ON CLUSTER test_cluster_database_replicated"
+#             clickhouse_proc_create.communicate((drop_database_query), timeout=seconds_left)
+#         except TimeoutExpired:
+#             # kill test process because it can also hung
+#             if proc.returncode is None:
+#                 try:
+#                     proc.kill()
+#                 except OSError as e:
+#                     if e.errno != ESRCH:
+#                         raise
 
-            total_time = (datetime.now() - start_time).total_seconds()
-            return clickhouse_proc_create, "", "Timeout dropping database {} after test".format(database), total_time
+#             total_time = (datetime.now() - start_time).total_seconds()
+#             return clickhouse_proc_create, "", "Timeout dropping database {} after test".format(database), total_time
 
-        shutil.rmtree(args.test_tmp_dir)
+#         shutil.rmtree(args.test_tmp_dir)
 
     total_time = (datetime.now() - start_time).total_seconds()
 
