@@ -368,7 +368,7 @@ def run_single_test(args, ext, server_logs_level, client_options, case_file, std
 
     command = pattern.format(**params)
 
-    with open(stdout_file, 'a') as out, open(stderr_file, 'a') as err, open(case_file, 'a') as test_case:
+    with open(stdout_file, 'a') as out, open(stderr_file, 'a') as err, open(case_file, 'r') as test_case:
         proc = Popen(shlex.split(command), stdin=test_case, stdout=out, stderr=err, env=os.environ, universal_newlines=True)
         try:
             proc.communicate(timeout=args.timeout)
