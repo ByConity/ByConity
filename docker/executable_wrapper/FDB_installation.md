@@ -103,8 +103,9 @@ Reload the service files to include the new service
 systemctl daemon-reload
 ```
 
-Start the service
+Enable and start the service
 ```
+systemctl enable fdb.service
 systemctl start fdb.service
 ```
 

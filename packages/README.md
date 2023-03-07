@@ -1,4 +1,4 @@
-One way to deploy ByConity to physical machines is to its packages using the package manager. For example, install Debian package for Debian OS and rpm packages for Centos OS
+One way to deploy ByConity to physical machines is using package manager. For example, install Debian package for Debian OS and rpm packages for Centos OS
 
 ByConity using FoundationDB as meta store, and HDFS as datastore. So before starting to deploy ByConity, we need to deploy FoundationDB and HDFS first.
 
@@ -18,8 +18,8 @@ Then install with this command
 sudo dpkg -i foundationdb-clients_7.1.27-1_amd64.deb
 ```
 
-Next we will deploy ByConity packages, you can find it in release [page](https://github.com/ByConity/ByConity/releases). Or you can build the package by yourself, in that case follow this [guide](https://github.com/ByConity/ByConity/tree/master/docker/packager) 
-The first package that need to install is the common package `byconity-common-static`, this is the package that all other packages depend on, go the the ByConity 
+Next we will deploy ByConity packages, you can find them in release [page](https://github.com/ByConity/ByConity/releases). Or you can build the package by yourself, in that case follow this [guide](https://github.com/ByConity/ByConity/tree/master/docker/packager).
+The first package that need to install is the common package `byconity-common-static`, this is the package that all other packages depend on.
 ```
 sudo dpkg -i byconity-common-static_0.1.1.1_amd64.deb
 ```
