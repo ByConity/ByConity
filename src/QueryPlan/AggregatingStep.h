@@ -71,7 +71,8 @@ public:
         size_t temporary_data_merge_threads_,
         bool storage_has_evenly_distributed_read_,
         InputOrderInfoPtr group_by_info_,
-        SortDescription group_by_sort_description_)
+        SortDescription group_by_sort_description_,
+        bool should_produce_results_in_order_of_bucket_number_)
         : AggregatingStep(
             input_stream_,
             Names(),
@@ -83,7 +84,10 @@ public:
             temporary_data_merge_threads_,
             storage_has_evenly_distributed_read_,
             std::move(group_by_info_),
-            std::move(group_by_sort_description_))
+            std::move(group_by_sort_description_),
+            {},
+            false,
+            should_produce_results_in_order_of_bucket_number_)
     {
     }
 
@@ -93,7 +97,8 @@ public:
         AggregateDescriptions aggregates_,
         GroupingSetsParamsList grouping_sets_params_,
         bool final_,
-        GroupingDescriptions groupings_ = {}, bool /*totals_*/ = false)
+        GroupingDescriptions groupings_ = {}, bool /*totals_*/ = false,
+        bool should_produce_results_in_order_of_bucket_number_ = true)
         : AggregatingStep(
             input_stream_,
             keys_,
@@ -106,7 +111,9 @@ public:
             false,
             nullptr,
             SortDescription(),
-            groupings_)
+            groupings_,
+            false,
+            should_produce_results_in_order_of_bucket_number_)
     {
     }
 
@@ -124,8 +131,8 @@ public:
         InputOrderInfoPtr group_by_info_,
         SortDescription group_by_sort_description_,
         GroupingDescriptions groupings_ = {},
-        bool totals_ = false);
-
+        bool totals_ = false,
+        bool should_produce_results_in_order_of_bucket_number = true);
 
     String getName() const override { return "Aggregating"; }
 
@@ -145,6 +152,7 @@ public:
     bool isFinal() const { return final; }
     bool isGroupingSet() const { return !grouping_sets_params.empty(); }
     const GroupingDescriptions & getGroupings() const { return groupings; }
+    bool shouldProduceResultsInOrderOfBucketNumber() const { return should_produce_results_in_order_of_bucket_number; }
 
     bool isNormal() const { return final && !isGroupingSet() /*&& !totals && !having*/ && groupings.empty(); }
 
@@ -172,6 +180,19 @@ private:
     SortDescription group_by_sort_description;
 
     GroupingDescriptions groupings;
+    /// It determines if we should resize pipeline to 1 at the end.
+    /// Needed in case of distributed memory efficient aggregation over distributed table.
+    /// Specifically, if there is a further MergingAggregatedStep and
+    /// distributed_aggregation_memory_efficient=true
+    /// then the pipeline should not be resized to > 1; otherwise,
+    /// the data passed to GroupingAggregatedTransform are not in bucket order -> error.
+    /// Set as to_stage==WithMergeableState && distributed_aggregation_memory_efficient
+    /// which is equivalent to !final_ && && distributed_aggregation_memory_efficient
+    /// distributed_aggregation_memory_efficient is not available inside this class,
+    /// therefore, this variable is passed to the constructor.
+    /// if the condition is unkown, the safe options is to set it to true to avoid errors
+    /// therefore the default value is true in the constructor
+    const bool should_produce_results_in_order_of_bucket_number;
 
     Processors aggregating_in_order;
     Processors aggregating_sorted;

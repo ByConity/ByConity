@@ -28,7 +28,7 @@ Next edit the file `etc/hadoop/core-site.xml` with content like this. Note that 
 <configuration>
         <property>
                 <name>fs.defaultFS</name>
-                <value>hdfs://10.149.57.203:12000</value>
+                <value>hdfs://10.119.57.203:12000</value>
         </property>
 </configuration>
 ```
@@ -38,8 +38,8 @@ In the node that we want to install namenode, we create a file contain list of d
 
 ```
 $ cat /root/user_xyz/hdfs/datanodes_list.txt
-10.21.170.163
-10.21.154.30
+10.11.170.163
+10.11.154.30
 ```
 
 Then create a directory for storing namenode runtime data

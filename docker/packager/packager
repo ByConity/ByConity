@@ -1,0 +1,256 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+import subprocess
+import os
+import argparse
+import logging
+import sys
+from typing import List
+
+SCRIPT_PATH = os.path.realpath(__file__)
+IMAGE_TYPE = "binary"
+
+def check_image_exists_locally(image_name):
+    try:
+        output = subprocess.check_output(
+            f"docker images -q {image_name} 2> /dev/null", shell=True
+        )
+        return output != ""
+    except subprocess.CalledProcessError:
+        return False
+
+
+def pull_image(image_name):
+    try:
+        subprocess.check_call(f"docker pull {image_name}", shell=True)
+        return True
+    except subprocess.CalledProcessError:
+        logging.info(f"Cannot pull image {image_name}".format())
+        return False
+
+
+def build_image(image_name, filepath):
+    context = os.path.dirname(filepath)
+    build_cmd = f"docker build --network=host -t {image_name} -f {filepath} {context}"
+    logging.info("Will build image with cmd: '%s'", build_cmd)
+    subprocess.check_call(
+        build_cmd,
+        shell=True,
+    )
+
+
+def pre_build(repo_path: str, env_variables: List[str]):
+    if "WITH_PERFORMANCE=1" in env_variables:
+        current_branch = subprocess.check_output(
+            "git branch --show-current", shell=True, encoding="utf-8"
+        ).strip()
+        is_shallow = (
+            subprocess.check_output(
+                "git rev-parse --is-shallow-repository", shell=True, encoding="utf-8"
+            )
+            == "true\n"
+        )
+        if is_shallow:
+            # I've spent quite some time on looking around the problem, and my
+            # conclusion is: in the current state the easiest way to go is to force
+            # unshallow repository for performance artifacts.
+            # To change it we need to rework our performance tests docker image
+            raise Exception("shallow repository is not suitable for performance builds")
+        if current_branch != "master":
+            cmd = (
+                f"git -C {repo_path} fetch --no-recurse-submodules "
+                "--no-tags origin master:master"
+            )
+            logging.info("Getting master branch for performance artifact: '%s'", cmd)
+            subprocess.check_call(cmd, shell=True)
+
+
+def run_docker_image_with_env(
+    image_name,
+    as_root,
+    output,
+    env_variables,
+    ch_root,
+    ccache_dir,
+    docker_image_version,
+):
+    env_part = " -e ".join(env_variables)
+    if env_part:
+        env_part = " -e " + env_part
+
+    if sys.stdout.isatty():
+        interactive = "-it"
+    else:
+        interactive = ""
+
+    if as_root:
+        user = "0:0"
+    else:
+        user = f"{os.geteuid()}:{os.getegid()}"
+
+    cmd = (
+        f"docker run --network=host --user={user} --rm --volume={output}:/output "
+        f"--volume={ch_root}:/build --volume={ccache_dir}:/ccache {env_part} "
+        f"{interactive} {image_name}:{docker_image_version}"
+    )
+
+    logging.info("Will build ClickHouse pkg with cmd: '%s'", cmd)
+
+    subprocess.check_call(cmd, shell=True)
+
+
+def is_release_build(build_type, package_type, sanitizer):
+    return (
+        build_type == ""
+        and package_type == "deb"
+        and sanitizer == ""
+    )
+
+
+def parse_env_variables(
+    build_type,
+    package_type,
+    version,
+    author,
+    official,
+    additional_pkgs,
+    with_binaries,
+):
+    result = []
+    result.append("OUTPUT_DIR=/output")
+    cmake_flags = ["$CMAKE_FLAGS"]
+    build_target = "clickhouse-bundle"
+
+    cc = "clang-11"
+    result.append("DEB_ARCH=amd64")
+
+    cxx = cc.replace("gcc", "g++").replace("clang", "clang++")
+
+    if package_type == "deb":
+        # NOTE: This are the env for packages/build script
+        result.append("MAKE_DEB=true")
+        cmake_flags.append("-DCMAKE_INSTALL_PREFIX=/usr")
+        cmake_flags.append("-DCMAKE_INSTALL_SYSCONFDIR=/etc")
+        cmake_flags.append("-DCMAKE_INSTALL_LOCALSTATEDIR=/var")
+
+    result.append(f"CC={cc}")
+    result.append(f"CXX={cxx}")
+    cmake_flags.append(f"-DCMAKE_C_COMPILER={cc}")
+    cmake_flags.append(f"-DCMAKE_CXX_COMPILER={cxx}")
+
+    if build_type:
+        result.append(f"BUILD_TYPE={build_type.capitalize()}")
+    else:
+        result.append("BUILD_TYPE=None")
+
+    if additional_pkgs:
+        # NOTE: This are the env for packages/build script
+        result.append("MAKE_APK=true")
+        result.append("MAKE_RPM=true")
+        result.append("MAKE_TGZ=true")
+
+    if with_binaries == "programs":
+        result.append("BINARY_OUTPUT=programs")
+
+    if version:
+        result.append(f"VERSION_STRING='{version}'")
+
+    if author:
+        result.append(f"AUTHOR='{author}'")
+
+    if official:
+        cmake_flags.append("-DCLICKHOUSE_OFFICIAL_BUILD=1")
+
+    result.append('CMAKE_FLAGS="' + " ".join(cmake_flags) + '"')
+    result.append(f"BUILD_TARGET={build_target}")
+
+    return result
+
+
+def dir_name(name: str) -> str:
+    if not os.path.isabs(name):
+        name = os.path.abspath(os.path.join(os.getcwd(), name))
+    return name
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        description="ClickHouse building script using prebuilt Docker image",
+    )
+    parser.add_argument(
+        "--package-type",
+        choices=["deb", "binary", "coverity"],
+        required=True,
+    )
+    parser.add_argument(
+        "--clickhouse-repo-path",
+        default=os.path.join(os.path.dirname(SCRIPT_PATH), os.pardir, os.pardir),
+        type=dir_name,
+        help="ClickHouse git repository",
+    )
+    parser.add_argument("--output-dir", type=dir_name, required=True)
+    parser.add_argument("--build-type", choices=("debug", ""), default="")
+    parser.add_argument(
+        "--ccache_dir",
+        default=os.getenv("HOME", "") + "/.ccache",
+        type=dir_name,
+        help="a directory with ccache",
+    )
+    parser.add_argument("--force-build-image", action="store_true")
+    parser.add_argument("--version")
+    parser.add_argument("--author", default="byconity", help="a package author")
+    parser.add_argument("--official", action="store_true")
+    parser.add_argument("--additional-pkgs", action="store_true")
+    parser.add_argument(
+        "--with-binaries", choices=("programs", "tests", ""), default=""
+    )
+    parser.add_argument(
+        "--docker-image-version", default="latest", help="docker image tag to use"
+    )
+    parser.add_argument(
+        "--as-root", action="store_true", help="if the container should run as root"
+    )
+
+    args = parser.parse_args()
+
+    image_name = f"byconity/{IMAGE_TYPE}-builder"
+
+    ch_root = args.clickhouse_repo_path
+
+    if args.additional_pkgs and args.package_type != "deb":
+        raise Exception("Can build additional packages only in deb build")
+
+    if args.with_binaries != "" and args.package_type != "deb":
+        raise Exception("Can add additional binaries only in deb build")
+
+    if args.with_binaries != "" and args.package_type == "deb":
+        logging.info("Should place %s to output", args.with_binaries)
+
+    dockerfile = os.path.join(ch_root, "docker/packager", IMAGE_TYPE, "Dockerfile")
+    image_with_version = image_name + ":" + args.docker_image_version
+    if not check_image_exists_locally(image_name) or args.force_build_image:
+        if not pull_image(image_with_version) or args.force_build_image:
+            build_image(image_with_version, dockerfile)
+    env_prepared = parse_env_variables(
+        args.build_type,
+        args.package_type,
+        args.version,
+        args.author,
+        args.official,
+        args.additional_pkgs,
+        args.with_binaries,
+    )
+
+    pre_build(args.clickhouse_repo_path, env_prepared)
+    run_docker_image_with_env(
+        image_name,
+        args.as_root,
+        args.output_dir,
+        env_prepared,
+        ch_root,
+        args.ccache_dir,
+        args.docker_image_version,
+    )
+    logging.info("Output placed into %s", args.output_dir)

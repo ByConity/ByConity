@@ -1,4 +1,5 @@
 function(compile_fdb)
+  cmake_minimum_required(VERSION 3.25)
   set(options)
   set(oneValueArgs TARGET)
   set(multiValueArgs)

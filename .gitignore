@@ -152,6 +152,10 @@ package-lock.json
 /src/Protos/*.pb.h
 docker/server/config/tso.xml
 
+# Misc
+.DS_Store
+byted.yaml
+
 ###################
 ##### Website #####
 
@@ -166,7 +170,6 @@ docker/server/config/tso.xml
 /website/.cache-loader
 
 # Misc
-/website/.DS_Store
 /website/.env.local
 /website/.env.development.local
 /website/.env.test.local

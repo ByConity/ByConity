@@ -27,7 +27,9 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int RESOURCE_MANAGER_ERROR;
+    extern const int RESOURCE_MANAGER_ILLEGAL_CONFIG;
 }
+
 InterpreterDropWarehouseQuery::InterpreterDropWarehouseQuery(const ASTPtr & query_ptr_, ContextPtr context_)
     : WithContext(context_), query_ptr(query_ptr_) {}
 
@@ -37,8 +39,10 @@ BlockIO InterpreterDropWarehouseQuery::execute()
     auto & drop = query_ptr->as<ASTDropWarehouseQuery &>();
     auto & vw_name = drop.name;
 
-    auto client = getContext()->getResourceManagerClient();
-    client->dropVirtualWarehouse(vw_name, drop.if_exists);
+    if (auto client = getContext()->getResourceManagerClient())
+        client->dropVirtualWarehouse(vw_name, drop.if_exists);
+    else
+        throw Exception("Can't apply DDL of warehouse as RM is not enabled.", ErrorCodes::RESOURCE_MANAGER_ILLEGAL_CONFIG);
 
     return {};
 }

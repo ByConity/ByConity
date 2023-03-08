@@ -52,7 +52,7 @@ CnchMergeTree 表是最常用的表引擎，核心思想和 LSM-Tree 类似，�
 
 - 数据颗粒（Granule）
 
-每个数据片段被逻辑的分割成颗粒（granule ），默认的 Granule 为 8192 行（由表的 index_granularity 配置决定）。颗粒是 ByConity 中进行数据查询时的最小不可分割数据集。每个颗粒的第一行通过该行的主键值进行标记， ByConity 会为每个数据片段创建一个索引文件来存储这些标记。对于每列，无论它是否包含在主键当中，ByConity 都会存储类似标记。这些标记让您可以在列文件中直接找到数据。Granule 作为 ByConity 稀疏索引的索引目标，也是在内存中进行数据扫描的单位。
+每个数据片段被逻辑的分割成颗粒（Granule ），默认的 Granule 为 8192 行（由表的 index_granularity 配置决定）。颗粒是 ByConity 中进行数据查询时的最小不可分割数据集。每个颗粒的第一行通过该行的主键值进行标记， ByConity 会为每个数据片段创建一个索引文件来存储这些标记。对于每列，无论它是否包含在主键当中，ByConity 都会存储类似标记。这些标记让您可以在列文件中直接找到数据。Granule 作为 ByConity 稀疏索引的索引目标，也是在内存中进行数据扫描的单位。
 
 - 后台 Merge
 
@@ -92,7 +92,7 @@ ORDER BY expr
 
 可以是一组列的元组或任意的表达式。 例如: `ORDER BY (OrderID, Date)` 。
 
-如果不需要排序，可以使用 `ORDER BY tuple()`。DataPart 里的数据将按照排序键进行排序。
+如果不需要排序，可以使用 `ORDER BY tuple()`。DataPart 里的数据将按照排序键进行排序。请注意，order by 使用的字段在建表后，无法被修改。
 
 ### 设计主键(PRIMARY KEY)
 
@@ -133,13 +133,20 @@ INDEX index_name expr TYPE type(...) GRANULARITY granularity_value
 
 #### 可用的索引类型
 
-- `minmax` 存储指定表达式的极值（如果表达式是 `tuple` ，则存储 `tuple` 中每个元素的极值），这些信息用于跳过数据块，类似主键。
-
-跳数索引功能正在测试中，等完成后补充支持的跳数索引类型。
+- `minmax` 存储指定表达式的极值（如果表达式是 `tuple` ，则存储 `tuple` 中每个元素的极值），这些信息用于跳过数据块，类似主键。跳数索引功能正在测试中，等完成后补充支持的跳数索引类型。
 
 ### 设计 Bucket
+Bucket 表是一个可选的表级设置，如果设置合适的Bucket, 系统会根据用户提交的 Cluster Key(即建表语句中提供的一个或者多个列、表达式）去整理表数据，将相同值的数据聚簇在同一个 bucket number 下。
 
-CNCH Bucket table 最佳实践手册
+使用 Cluster Key 聚簇数据在大表上可以获得以下几项收益：
+1. 针对 cluster key 的点查可以过滤掉大部分数据，降低IO量获得更短的执行时间和更高的并发QPS;
+2. 针对 cluster key 的聚合计算，可以有更少的内存占用和更短的执行时间，配合 distributed_perfect_shard 优化可以获得进一步的提高;
+3. 两张或者多张表针对 cluster key 的 join 可以获得 co-located join 的优化，极大的降低 shuffle 数据量并得到更短的执行时间;
+
+由于Bucket表的设置比较复杂，请参考后文中 Bucket 表最佳实践的细则来设置。一般情况下，两种场景适合设置：
+1. 表足够大，意味着在一个分区下的parts数量至少需要显著多于 worker 数量；
+2. 查询语句可以从上述收益点中获益；
+
 
 ### 采样
 
@@ -148,6 +155,7 @@ CNCH Bucket table 最佳实践手册
 如果要用抽样表达式，主键中必须包含这个表达式。例如： `SAMPLE BY intHash32(UserID) ORDER BY (CounterID, EventDate, intHash32(UserID))` 。
 
 细节参考采样功能（需要独立一篇采样功能）
+
 
 ### 列和表的 TTL
 
@@ -158,6 +166,7 @@ CNCH Bucket table 最佳实践手册
 `TTL date + INTERVAl 1 DAY`
 
 更多细节，请查看 [表和列的 TTL](https://clickhouse.com/docs/zh/engines/table-engines/mergetree-family/mergetree#table_engine-mergetree-ttl)（太多了，可能要独立一篇 TTL 的）
+
 
 ### 高级配置
 
@@ -173,7 +182,7 @@ CNCH Bucket table 最佳实践手册
 
 #### 计算组配置
 
-参考 【教程型】配置计算组
+参考配置计算组
 
 #### merge 相关配置
 
@@ -200,11 +209,11 @@ CNCH Bucket table 最佳实践手册
 
 [https://clickhouse.com/docs/zh/guides/improving-query-performance/skipping-indexes](https://clickhouse.com/docs/zh/guides/improving-query-performance/skipping-indexes)
 
-###
+
 
 ### 列类型考虑
 
-### 避免一味使用 String 类型
+#### 避免一味使用 String 类型
 
 如果可能的情况下使用 Int(8|16|32|64|128|256) / Date / Date32 / DateTime / DateTime64 / Float / Decimal 代替 String
 
@@ -214,7 +223,7 @@ CNCH Bucket table 最佳实践手册
 
 String 最小最大长度差距不超过 8 的情况下使用 FixedString，因为 String 相比 FixedString 在内存中要多储存 8 字节的 offset `SELECT min(length(col)), max(length(col)) FROM table`
 
-### Nullable 选择
+#### Nullable 选择
 
 如果确定列中不包含 Null，不要使用 Nullable 类型，会对性能有负面影响
 

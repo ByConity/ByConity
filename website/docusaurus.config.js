@@ -32,12 +32,15 @@ const config = {
     locales: ["en", "zh-cn"],
   },
 
+  plugins: ["docusaurus-plugin-sass"],
+
   presets: [
     [
       "classic",
       /** @type {import('@docusaurus/preset-classic').Options} */
       ({
         docs: {
+          path: "../docs/en",
           sidebarPath: require.resolve("./sidebars.js"),
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
@@ -137,6 +140,9 @@ const config = {
       prism: {
         theme: lightCodeTheme,
         darkTheme: darkCodeTheme,
+      },
+      colorMode: {
+        disableSwitch: true,
       },
     }),
 };

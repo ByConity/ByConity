@@ -270,22 +270,55 @@
     "message": "标签",
     "description": "The title of the tag list page"
   },
-  "High Performance, Low Cost": {
+  "underConstruction.text": {
+    "message": "此页面正在开发中"
+  },
+  "communityPage.title": {
+    "message": "社区"
+  },
+  "usersPage.title": {
+    "message": "用户"
+  },
+  "homePage.communitySection.title": {
+    "message": "加入社区"
+  },
+  "homePage.getStartedSection.title": {
+    "message": "开始使用ByConity"
+  },
+  "homePage.getStartedSection.readDocs.title": {
+    "message": "文档中心"
+  },
+  "getStarted": {
+    "message": "快速开始"
+  },
+  "homePage.getStartedSection.contribute.title": {
+    "message": "开源代码"
+  },
+  "homePage.introductionSection.title": {
+    "message": "ByConity是什么？"
+  },
+  "homePage.introductionSection.description": {
+    "message": "ByConity 是分布式的云原生SQL数仓引擎，擅长交互式查询和即席查询，具有支持多表关联复杂查询、集群扩容无感、离线批数据和实时数据流统一汇总等特点。"
+  },
+  "homePage.keyFeaturesSection.feature1.title": {
     "message": "高性能低成本"
   },
-  "Unified Support for Multiple Scenarios": {
-    "message": "多种场景统一支持"
-  },
-  "Eco-friendly": {
-    "message": "生态友好"
-  },
-  "Support sub-second query response capability under massive data scale through vectorized execution engine, columnar storage and CBO+RBO optimizer. At the same time, the ultra-high compression ratio helps users save a lot of storage space and reduce disk costs.": {
+  "homePage.keyFeaturesSection.feature1.description": {
     "message": "支持在海量数据规模下，通过向量化执行引擎、列式存储和CBO+RBO优化器达成亚秒级查询响应能力。同时超高压缩比率帮助用户节省大量存储空间，降低磁盘成本。"
   },
-  "Supports real-time data streaming and offline batch data writing with interactive things capability and multi-table associative query capability, which can meet the interactive query needs of online systems as well as backend real-time monitoring, report big screen, etc.": {
+  "homePage.keyFeaturesSection.feature2.title": {
+    "message": "多种场景统一支持"
+  },
+  "homePage.keyFeaturesSection.feature2.description": {
     "message": "支持实时数据流和离线批数据写入，具有交互式事物能力和多表关联查询能力，既可以满足线上系统的交互式查询需求，也可以满足后台实时监控、报表大屏等。"
   },
-  "Compatible with most ClickHouse interfaces and tools, supports Kafka, Spark, Flink and many other data imports, also supports Superset, Tableau and other data visualization tools.": {
-    "message": "兼容ClickHouse 大多数接口和工具，支持Kafka、Spark、Flink等多种数据导入，也支持Superset，Tableau等数据可视化工具。"
+  "homePage.keyFeaturesSection.feature3.title": {
+    "message": "生态友好"
+  },
+  "homePage.keyFeaturesSection.feature3.description": {
+    "message": "兼容ClickHouse大多数接口和工具，支持Kafka、Spark、Flink等多种数据导入，也支持Superset，Tableau等数据可视化工具。"
+  },
+  "homePage.keyFeaturesSection.title": {
+    "message": "核心优势"
   }
 }

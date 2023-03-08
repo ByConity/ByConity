@@ -28,6 +28,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
+    extern const int RESOURCE_MANAGER_ILLEGAL_CONFIG;
 }
 
 InterpreterCreateWorkerGroupQuery::InterpreterCreateWorkerGroupQuery(const ASTPtr & query_ptr_, ContextPtr context_)
@@ -74,8 +75,10 @@ BlockIO InterpreterCreateWorkerGroupQuery::execute()
         }
     }
 
-    auto rm_client = getContext()->getResourceManagerClient();
-    rm_client->createWorkerGroup(create_query.worker_group_id, create_query.if_not_exists, create_query.vw_name, worker_group_data);
+    if (auto rm_client = getContext()->getResourceManagerClient())
+        rm_client->createWorkerGroup(create_query.worker_group_id, create_query.if_not_exists, create_query.vw_name, worker_group_data);
+    else
+        throw Exception("Can't apply DDL of worker group as RM is not enabled.", ErrorCodes::RESOURCE_MANAGER_ILLEGAL_CONFIG);
 
     return {};
 }
