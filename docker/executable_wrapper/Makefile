@@ -1,15 +1,16 @@
+tag?=v0.2.1
 image:
-	cp ./../../contrib/foundationdb/lib/libfdb_c.so ../../build/programs/
+	test -f ../../build/programs/foundationdb-clients_7.1.27-1_amd64.deb || curl -L -o ../../build/programs/foundationdb-clients_7.1.27-1_amd64.deb https://github.com/apple/foundationdb/releases/download/7.1.27/foundationdb-clients_7.1.27-1_amd64.deb
 	cp ./app/run.sh ../../build/programs/
 	docker build --network=host -t byconity/byconity-server ../../build/programs -f Dockerfile
 image_pull:
-	docker pull byconity/byconity-server:v0.2
+	docker pull byconity/byconity-server:stable
 image_push:
-	docker tag byconity/byconity-server:latest byconity/byconity-server:v0.2
-	docker push byconity/byconity-server:v0.2
-run:
-	docker run -it --network host --name dao_tso byconity/byconity-server 
+	docker tag byconity/byconity-server:latest byconity/byconity-server:$(tag)
+	docker tag byconity/byconity-server:latest byconity/byconity-server:stable
+	docker push byconity/byconity-server:$(tag)
+	docker push byconity/byconity-server:stable
+run_test:
+	docker run --rm byconity/byconity-server:$(tag) client --help
 debug_image:
 	docker exec -it byconity-tso /bin/bash
-prepare_config:
-	./config/prepare_config.py
