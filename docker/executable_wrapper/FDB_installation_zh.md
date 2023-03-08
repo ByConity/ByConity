@@ -1,7 +1,7 @@
 # Foundation DB 安装指南
 在本指南中，我将在3台使用Debian OS的物理机上设置一个FoundationDB集群。 可以参考[Getting Started on Linux](https://apple.github.io/foundationdb/getting-started-linux.html) and [Building a Cluster](https://apple.github.io/foundationdb/building-cluster.html)两个官方指南。
 
-首先，我们需要在[此处](https://github.com/apple/foundationdb/releases/)下载并安装的二进制文件。 我们需要下载**服务器**，**监视器**和**CLI**二进制文件，以及那些coressponding **sha256**校验和文件，本指南选择撰写时的最新版本**7.1.25**版。 接着创建一个文件夹并使用以下命令下载：
+首先，我们需要在[此处](https://github.com/apple/foundationdb/releases/)下载并安装的二进制文件。 我们需要下载 **server**, **monitor**，和**cli** binary，以及那些coressponding **sha256**校验和文件，本指南选择撰写时的最新版本**7.1.25**版。 接着创建一个文件夹并使用以下命令下载：
 
 ```Plaintext
 curl -L -o fdbserver.x86_64 https://github.com/apple/foundationdb/releases/download/7.1.25/fdbserver.x86_64
@@ -24,7 +24,7 @@ $ cat fdbserver.x86_64.sha256
 73b70a75464e64fd0a01a7536e110e31c3e6ce793d425aecfc40f0be9f0652b7  fdbserver.x86_64
 ```
 
-假设您下载它们并存储在目录/`/root/user_xyz/foundationdb/bin`中。 接下来删除那些sha256 checksum文件，因为我们不再需要它们。我们将重命名可执行文件（executation file）以删除Tailting`x86_64` 并授予它们可执行的许可（executable permission）。
+假设它们被存储在目录/`/root/user_xyz/foundationdb/bin`中。 接下来删除那些sha256 checksum文件，因为这些文件将不再被使用。我们可以重命名可执行文件并授予它们可执行的权限。
 
 ```Plaintext
 rm *.sha256
@@ -42,7 +42,7 @@ mkdir -p /root/user_xyz/fdb_runtime/data
 mkdir -p /root/user_xyz/fdb_runtime/logs
 ```
 
-在 `/root/user_xyz/fdb_runtime/config/` 中创建 `foundationdb.conf` 配置文件，内容如下
+在 `/root/user_xyz/fdb_runtime/config/` 中创建 `foundationdb.conf` 配置文件，内容如下：
 
 ```Plaintext
 $ cat /root/user_xyz/fdb_runtime/config/foundationdb.conf
@@ -72,14 +72,14 @@ class=storage
 class=stateless
 ```
 
-在同一目录下创建 `fdb.cluster` 文件，内容如下，修改ip为你机器的ip
+在同一目录下创建 `fdb.cluster` 文件，内容如下，修改ip为你机器的ip。
 
 ```Plaintext
 $ cat /root/user_xyz/fdb_runtime/config/fdb.cluster
 clusterdsc:test@10.25.160.40:4500
 ```
 
-我们将把 FDB 安装为 `systemd` 服务，因此在同一个文件夹中我们将创建`fdb.service`文件，其内容如下
+我们将把 FDB 安装为 `systemd` 服务，因此在同一个文件夹中我们将创建`fdb.service`文件，其内容如下。
 
 ```Plaintext
 $ cat /root/user_xyz/fdb_runtime/config/fdb.service
@@ -96,28 +96,28 @@ ExecStart=/root/user_xyz/foundationdb/bin/fdbmonitor --conffile /root/user_xyz/f
 WantedBy=multi-user.target
 ```
 
-这样我们就完成了配置文件的准备。 现在让我们将 fdb 安装到 `systemd` 中
+这样我们就完成了配置文件的准备。 现在让我们将 fdb 安装到 `systemd` 中。
 
-将服务文件复制到 `/etc/systemd/system/`
+将服务文件复制到 `/etc/systemd/system/`。
 
 ```Plaintext
 cp fdb.service /etc/systemd/system/
 ```
 
-重新加载服务文件以包含新服务
+重新加载服务文件以包含新服务。
 
 ```Plaintext
 systemctl daemon-reload
 ```
 
-Enable并启动服务
+Enable并启动服务。
 
 ```Plaintext
 systemctl enable fdb.service
 systemctl start fdb.service
 ```
 
-检查服务并查看它是否处于活动状态
+检查服务并查看它是否处于活动状态。
 
 ```Plaintext
 $ systemctl status fdb.service
@@ -126,9 +126,9 @@ $ systemctl status fdb.service
    Active: active (running) since Tue 2023-01-17 18:35:42 CST; 20s ago
 ```
 
-现在我们已经在 1 台机器上安装了 fdb 服务，下面将在其他 2 台机器上重复同样的操作
+现在我们已经在 1 台机器上安装了 fdb 服务，下面将在其他 2 台机器上重复同样的操作。
 
-安装3台机器后，我们需要将它们连接起来形成一个集群。 现在回到第一个节点，使用 fdbcli 连接到 FDB
+安装3台机器后，我们需要将它们连接起来形成一个集群。 现在回到第一个节点，使用 fdbcli 连接到 FDB。
 
 ```Plaintext
 $ ./foundationdb/bin/fdbcli -C fdb_runtime/config/fdb.cluster
@@ -140,19 +140,19 @@ Welcome to the fdbcli. For help, type `help'.
 fdb>
 ```
 
-执行此以初始化数据库
+执行此以初始化数据库。
 
 ```Plaintext
 configure new single ssd
 ```
 
-接下来，执行此从其他 2 个节点到一个集群，将地址替换为您的机器地址
+接下来，执行此从其他 2 个节点到一个集群，将地址替换为您的机器地址。
 
 ```Plaintext
 coordinators 10.149.54.214:4500 10.21.154.30:4500 10.21.170.163:4500
 ```
 
-然后退出cli，你会发现`fdb.cluster` 现在有了新的内容
+然后退出cli，你会发现`fdb.cluster` 现在有了新的内容。
 
 ```Plaintext
 $ cat fdb_runtime/config/fdb.cluster
@@ -161,13 +161,13 @@ $ cat fdb_runtime/config/fdb.cluster
 clusterdsc:wwxVEcyLvSiO3BGKxjIw7Sg5d1UTX5ad@10.21.154.30:4500,10.21.170.163:4500,10.149.54.214:4500
 ```
 
-将此文件复制到其他2台机器并替换旧文件然后重新启动fdb服务
+将此文件复制到其他2台机器并替换旧文件然后重新启动fdb服务。
 
 ```Plaintext
 systemctl restart fdb.service
 ```
 
-然后回到第一台机器，执行这条命令，将冗余模式改为 `triple`
+然后回到第一台机器，执行这条命令。
 
 ```Plaintext
 configure triple
