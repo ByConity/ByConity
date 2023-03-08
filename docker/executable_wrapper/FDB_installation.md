@@ -72,7 +72,7 @@ class=stateless
 Then in the same directory create file `fdb.cluster` with content like this, change the ip to the ip of your machine
 ```
 $ cat /root/user_xyz/fdb_runtime/config/fdb.cluster
-clusterdsc:test@10.25.160.40:4500
+clusterdsc:test@example1.host.com:4500
 ```
 We will install FDB as a `systemd` service so in the same folder we will create file `fdb.service` with content like this
 
@@ -137,7 +137,7 @@ configure new single ssd
 ```
 Next, execute this to from 2 other nodes to a cluster, replace the address with your machine address 
 ```
-coordinators 10.149.54.214:4500 10.21.154.30:4500 10.21.170.163:4500
+coordinators example1.host.com:4500 example2.host.com:4500 example3.host.com:4500
 ```
 
 Then exit the cli, you will found that the `fdb.cluster` now have a new content
@@ -146,7 +146,7 @@ Then exit the cli, you will found that the `fdb.cluster` now have a new content
 $ cat fdb_runtime/config/fdb.cluster
 # DO NOT EDIT!
 # This file is auto-generated, it is not to be edited by hand
-clusterdsc:wwxVEcyLvSiO3BGKxjIw7Sg5d1UTX5ad@10.21.154.30:4500,10.21.170.163:4500,10.149.54.214:4500
+clusterdsc:wwxVEcyLvSiO3BGKxjIw7Sg5d1UTX5ad@example1.host.com:4500,example2.host.com:4500,example3.host.com:4500
 ```
 
 Copy this file to other 2 machines and replace the old file then restart fdb service
