@@ -1,8 +1,5 @@
 set enable_optimizer = 1;
 
-create database if not exists test;
-use test;
-
 drop table if exists t;
 create table t(a Int32, b Int32, c Int32) engine = CnchMergeTree() order by a;
 
