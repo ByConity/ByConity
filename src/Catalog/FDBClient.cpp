@@ -13,6 +13,9 @@
  * limitations under the License.
  */
 
+#include <cstdint>
+#include <string>
+#include <string.h>
 #include <Catalog/FDBClient.h>
 #include <Catalog/FDBError.h>
 #include <Common/Exception.h>
@@ -139,6 +142,9 @@ std::shared_ptr<Iterator> FDBClient::Scan(FDBTransactionPtr tr, const ScanReques
     return std::make_shared<Iterator>(tr, scan_req);
 }
 
+/*
+values: <string, UInt64> pair, the string is the value string and UInt64 is the length of the value string.
+*/
 fdb_error_t FDBClient::MultiGet(FDBTransactionPtr tr, const std::vector<std::string> & keys, std::vector<std::pair<std::string, UInt64>> & values)
 {
     AssertTrsansactionStatus(tr);
@@ -159,7 +165,7 @@ fdb_error_t FDBClient::MultiGet(FDBTransactionPtr tr, const std::vector<std::str
         RETURN_ON_ERROR(fdb_future_block_until_ready(f_read->future));
         RETURN_ON_ERROR(fdb_future_get_value(f_read->future, &present, &outValue, &outValueLength));
         if (present)
-            values.emplace_back(std::make_pair(std::string(outValue, outValue+outValueLength), 1));
+            values.emplace_back(std::make_pair(std::string(outValue, outValue+outValueLength), outValueLength));
         else
             values.emplace_back(std::make_pair("", 0));
     }
@@ -172,7 +178,8 @@ fdb_error_t FDBClient::MultiWrite(FDBTransactionPtr tr, const Catalog::BatchComm
     AssertTrsansactionStatus(tr);
     std::vector<int> index_of_cas_req;
     std::vector<FDBFuturePtr> future_list;
-    for (size_t i=0; i<req.puts.size(); i++)
+
+    for (size_t i = 0; i < req.puts.size(); ++i)
     {
         const Catalog::SinglePutRequest & single_put_req = req.puts[i];
         if (single_put_req.if_not_exists || single_put_req.expected_value)
@@ -183,12 +190,27 @@ fdb_error_t FDBClient::MultiWrite(FDBTransactionPtr tr, const Catalog::BatchComm
             index_of_cas_req.emplace_back(i);
         }
     }
+    size_t puts_cas_size = index_of_cas_req.size();
+
+    for (size_t i = 0; i < req.deletes.size(); ++i)
+    {
+        const Catalog::SingleDeleteRequest & single_del_req = req.deletes[i];
+        if (single_del_req.expected_value)
+        {
+            const uint8_t* p_key = reinterpret_cast<const uint8_t*>(single_del_req.key.data());
+            FDBFuturePtr f_read = std::make_shared<FDBFutureRAII>(fdb_transaction_get(tr->transaction, p_key, single_del_req.key.size(), 0));
+            future_list.emplace_back(f_read);
+            index_of_cas_req.emplace_back(i);
+        }
+    }
+    size_t deletes_cas_size = index_of_cas_req.size() - puts_cas_size;
 
     fdb_bool_t present;
     uint8_t const *outValue;
     int outValueLength;
 
-    for (size_t i=0; i<future_list.size(); i++)
+    // check for puts
+    for (size_t i = 0; i < puts_cas_size; ++i)
     {
         RETURN_ON_ERROR(fdb_future_block_until_ready(future_list[i]->future));
         RETURN_ON_ERROR(fdb_future_get_error(future_list[i]->future));
@@ -205,8 +227,8 @@ fdb_error_t FDBClient::MultiWrite(FDBTransactionPtr tr, const Catalog::BatchComm
         {
             if (present)
             {
-                if (put_req.expected_value->size()!=static_cast<size_t>(outValueLength) || memcmp(put_req.expected_value->data(), outValue, outValueLength))
-                    resp.puts.emplace(index_of_cas_req[i], std::string(outValue, outValue+outValueLength));
+                if (put_req.expected_value->size() != static_cast<size_t>(outValueLength) || memcmp(put_req.expected_value->data(), outValue, outValueLength))
+                    resp.puts.emplace(index_of_cas_req[i], std::string(outValue, outValue + outValueLength));
             }
             else
             {
@@ -215,11 +237,34 @@ fdb_error_t FDBClient::MultiWrite(FDBTransactionPtr tr, const Catalog::BatchComm
         }
     }
 
+    // check for deletes
+    for (size_t i = puts_cas_size; i < puts_cas_size + deletes_cas_size; ++i)
+    {
+        RETURN_ON_ERROR(fdb_future_block_until_ready(future_list[i]->future));
+        RETURN_ON_ERROR(fdb_future_get_error(future_list[i]->future));
+        RETURN_ON_ERROR(fdb_future_get_value(future_list[i]->future, &present, &outValue, &outValueLength));
+
+        const Catalog::SingleDeleteRequest & del_req = req.deletes[index_of_cas_req[i]];
+
+        if (del_req.expected_value)
+        {
+            if (present)
+            {
+                if (del_req.expected_value->size() != static_cast<size_t>(outValueLength) || memcmp(del_req.expected_value->data(), outValue, outValueLength))
+                    resp.deletes.emplace(index_of_cas_req[i], std::string(outValue, outValue + outValueLength));
+            }
+            else
+            {
+                resp.deletes.emplace(index_of_cas_req[i], "");
+            }
+        }
+    }
+
     /// return immediately if find any conflict in current commit;
-    if (resp.puts.size())
+    if (!resp.puts.empty() || !resp.deletes.empty())
         return FDBError::FDB_not_committed;
 
-    for (size_t i=0; i<req.puts.size(); i++)
+    for (size_t i = 0; i < req.puts.size(); ++i)
     {
          fdb_transaction_set(tr->transaction,
             reinterpret_cast<const uint8_t*>(req.puts[i].key.data()),
@@ -229,24 +274,91 @@ fdb_error_t FDBClient::MultiWrite(FDBTransactionPtr tr, const Catalog::BatchComm
         );
     }
 
-    for (size_t i=0; i<req.deletes.size(); i++)
-        fdb_transaction_clear(tr->transaction, reinterpret_cast<const uint8_t*>(req.deletes[i].c_str()), req.deletes[i].size());
+    for (size_t i = 0; i < req.deletes.size(); ++i)
+        fdb_transaction_clear(tr->transaction, reinterpret_cast<const uint8_t*>(req.deletes[i].key.c_str()), req.deletes[i].key.size());
 
     FDBFuturePtr f = std::make_shared<FDBFutureRAII>(fdb_transaction_commit(tr->transaction));
     RETURN_ON_ERROR(fdb_future_block_until_ready(f->future));
     fdb_error_t error_code = fdb_future_get_error(f->future);
 
+    /// The commit would still fail due to conflict (CAS), so we need to read for the conflicted value again.
+    /// Note, the values conflict here may not be the same as the values in the conflict commit because FDB doesn't support CAS operations.
+    /// So from the caller side, cannot have the above assumption, only can guarantee they are latest value for read this time, 
+    /// should perform further operations in CAS way.
+    if (error_code)
+    {
+        std::vector<std::string> req_keys;
+        std::vector<std::string> req_values;
+        for (size_t i = 0; i < req.puts.size(); ++i)
+        {
+            const Catalog::SinglePutRequest & single_put_req = req.puts[i];
+            if (single_put_req.if_not_exists || single_put_req.expected_value)
+            {
+                req_keys.push_back(single_put_req.key);
+                req_values.push_back(single_put_req.expected_value.value_or(""));
+            }
+        }
+
+        for (size_t i = 0; i < req.deletes.size(); ++i)
+        {
+            const Catalog::SingleDeleteRequest & single_del_req = req.deletes[i];
+            if (single_del_req.expected_value)
+            {
+                req_keys.push_back(single_del_req.key);
+                req_values.push_back(single_del_req.expected_value.value_or(""));
+            }
+        }
+
+        // snapshot multi get, res: <value, length> pair
+        // after txn conflict, the values may vary, the following logic for the values gain here should also use CAS operation.
+        std::vector<std::pair<String, UInt64>> res;
+        fdb_error_t multi_get_code = MultiGet(tr, req_keys, res);
+
+        if (multi_get_code)
+            return multi_get_code;  
+
+        for (size_t i = 0; i < puts_cas_size; ++i)
+        {
+            if ((req_values[i].size() != res[i].second) || memcmp(req_values[i].data(), res[i].first.data(), res[i].second))
+            {
+                resp.puts.emplace(index_of_cas_req[i], res[i].first);
+            }
+        }
+
+        for (size_t i = puts_cas_size; i < puts_cas_size + deletes_cas_size; ++i)
+        {
+            if ((req_values[i].size() != res[i].second) || memcmp(req_values[i].data(), res[i].first.data(), res[i].second))
+            {
+                resp.deletes.emplace(index_of_cas_req[i], res[i].first);
+            }
+        }
+    }
+
     return error_code;
 }
 
-fdb_error_t FDBClient::Delete(FDBTransactionPtr tr, const std::string & key)
+fdb_error_t FDBClient::Delete(FDBTransactionPtr tr, const std::string & key, const std::string & expected)
 {
     AssertTrsansactionStatus(tr);
+    if (!expected.empty())
+    {
+        FDBFuturePtr f_read = std::make_shared<FDBFutureRAII>(fdb_transaction_get(tr->transaction, reinterpret_cast<const uint8_t*>(key.c_str()), key.size(), 0));
+        RETURN_ON_ERROR(fdb_future_block_until_ready(f_read->future));
+        RETURN_ON_ERROR(fdb_future_get_error(f_read->future));
+        fdb_bool_t present;
+        uint8_t const *outValue;
+        int outValueLength;
+        RETURN_ON_ERROR(fdb_future_get_value(f_read->future, &present, &outValue, &outValueLength));
+
+        if (!present || (expected.size() != static_cast<size_t>(outValueLength) || memcmp(expected.data(), outValue, outValueLength)))
+            return FDBError::FDB_not_committed;
+    }
+    
     fdb_transaction_clear(tr->transaction, reinterpret_cast<const uint8_t*>(key.c_str()), key.size());
     FDBFuturePtr f = std::make_shared<FDBFutureRAII>(fdb_transaction_commit(tr->transaction));
     RETURN_ON_ERROR(fdb_future_block_until_ready(f->future));
-    RETURN_ON_ERROR(fdb_future_get_error(f->future));
-    return 0;
+    fdb_error_t error_code = fdb_future_get_error(f->future);
+    return error_code;
 }
 
 fdb_error_t FDBClient::Clear(FDBTransactionPtr tr, const std::string & start_key, const std::string & end_key)
