@@ -235,7 +235,7 @@ bool VirtualWarehouseHandleImpl::updateWorkerGroupsFromPSM()
                 worker_groups.try_emplace(
                     group_id, std::make_shared<WorkerGroupHandleImpl>(group_id, WorkerGroupHandleSource::PSM, name, hosts, getContext()));
             else if (!HostWithPorts::isExactlySameVec(
-                         it->second->getHostWithPortsVec(), hosts)) /// replace with the new one bacause of diff
+                         it->second->getHostWithPortsVec(), hosts)) /// replace with the new one because of diff
                 worker_groups.try_emplace(
                     group_id, std::make_shared<WorkerGroupHandleImpl>(group_id, WorkerGroupHandleSource::PSM, name, hosts, getContext()));
             else /// reuse the old one
@@ -337,6 +337,35 @@ WorkerGroupHandle VirtualWarehouseHandleImpl::pickLocally(const VWScheduleAlgo &
         return randomWorkerGroup();
     }
     return selectGroup(algo, available_groups);
+}
+
+CnchWorkerClientPtr VirtualWarehouseHandleImpl::getWorkerByHash(const String & key)
+{
+    /// TODO: Should we expand the worker list first?
+    UInt64 val = std::hash<String>{}(key);
+    std::lock_guard lock(state_mutex);
+    auto wg_index = val % worker_groups.size();
+    auto & group = std::next(worker_groups.begin(), wg_index)->second;
+    return group->getWorkerClientByHash(key);
+}
+
+/// Get a worker from the VW using a random strategy.
+CnchWorkerClientPtr VirtualWarehouseHandleImpl::getWorker()
+{
+    auto wg_handle = randomWorkerGroup();
+    return wg_handle->getWorkerClient();
+}
+
+std::vector<CnchWorkerClientPtr> VirtualWarehouseHandleImpl::getAllWorkers()
+{
+    std::vector<CnchWorkerClientPtr> res;
+    std::lock_guard lock(state_mutex);
+    for (const auto & [_, wg_handle] : worker_groups)
+    {
+        const auto & workers = wg_handle->getWorkerClients();
+        res.insert(res.end(), workers.begin(), workers.end());
+    }
+    return res;
 }
 
 WorkerGroupHandle VirtualWarehouseHandleImpl::randomWorkerGroup() const

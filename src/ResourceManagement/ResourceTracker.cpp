@@ -35,6 +35,7 @@ ResourceTracker::ResourceTracker(ResourceManagerController & rm_controller_)
     : rm_controller(rm_controller_)
     , log(&Poco::Logger::get("ResourceTracker"))
     , background_task(getContext()->getSchedulePool().createTask("ResourceTrackerTask", [&](){ clearLostWorkers(); }))
+    , register_granularity_sec(getContext()->getRootConfig().resource_manager.worker_register_visible_granularity_sec.value)
 {
     background_task->activateAndSchedule();
 }
