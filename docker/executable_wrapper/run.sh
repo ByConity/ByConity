@@ -6,7 +6,7 @@ function run_tso() {
     --mount type=bind,source="$(pwd)"/logs,target=/root/app/logs \
     --expose 18689 \
     --network host \
-    --name byconity-tso byconity/byconity-server:v0.2 tso-server --config-file /root/app/config/tso.xml
+    --name byconity-tso byconity/byconity-server:stable tso-server --config-file /root/app/config/tso.xml
 }
 
 function run_server() {
@@ -20,7 +20,7 @@ function run_server() {
     --expose 18687 \
     --expose 18688 \
     --network host \
-    --name byconity-server byconity/byconity-server:v0.2 server -C --config-file /root/app/config/server.xml 
+    --name byconity-server byconity/byconity-server:stable server -C --config-file /root/app/config/server.xml 
 }
 
 function run_read_worker() {
@@ -34,7 +34,7 @@ function run_read_worker() {
     --expose 18693 \
     --expose 18694 \
     --network host \
-    --name byconity-read-worker byconity/byconity-server:v0.2 server -C --config-file /root/app/config/worker.xml 
+    --name byconity-read-worker byconity/byconity-server:stable server -C --config-file /root/app/config/worker.xml 
 }
 
 function run_write_worker() {
@@ -48,7 +48,7 @@ function run_write_worker() {
     --expose 18699 \
     --expose 18700 \
     --network host \
-    --name byconity-write-worker byconity/byconity-server:v0.2 server -C --config-file /root/app/config/worker-write.xml 
+    --name byconity-write-worker byconity/byconity-server:stable server -C --config-file /root/app/config/worker-write.xml 
 }
 
 function run_dm() {
@@ -58,19 +58,19 @@ function run_dm() {
     --mount type=bind,source="$(pwd)"/data,target=/root/app/data \
     --expose 18965 \
     --network host \
-    --name byconity-dm byconity/byconity-server:v0.2 daemon-manager --config-file /root/app/config/dm.xml 
+    --name byconity-dm byconity/byconity-server:stable daemon-manager --config-file /root/app/config/dm.xml 
 }
 
 function run_cli() {
     docker run -it\
     --network host \
-    --name byconity-cli byconity/byconity-server:v0.2 client --host 127.0.0.1 --port 18684
+    --name byconity-cli byconity/byconity-server:stable client --host 127.0.0.1 --port 18684
 }
 
 function run_cli2() {
     docker run -it\
     --network host \
-    --rm byconity/byconity-server:v0.2 client --host $1 --port 18684
+    --rm byconity/byconity-server:stable client --host $1 --port 18684
 }
 
 function stop_byconity() {
