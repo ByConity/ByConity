@@ -38,10 +38,7 @@ namespace ErrorCodes
 std::shared_ptr<Cluster> mockVWCluster(const Context & context, const String & vw_name)
 {
     auto vw_handle = context.getVirtualWarehousePool().get(vw_name);
-    auto value = context.getSettingsRef().vw_schedule_algo.value;
-    auto algo = ResourceManagement::toVWScheduleAlgo(&value[0]);
-    auto wg_handle = vw_handle->pickWorkerGroup(algo);
-    const auto & worker_clients = wg_handle->getWorkerClients();
+    const auto worker_clients = vw_handle->getAllWorkers();
 
     auto user_password = context.getCnchInterserverCredentials();
 
