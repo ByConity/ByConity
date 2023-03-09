@@ -51,7 +51,9 @@ jobs:
         run: pnpm install
 
       - name: Test build website
-        run: bash ./build.sh
+        run:
+          - bash ./create-links.sh
+          - pnpm run build
 
   deploy:
     if: github.event_name != 'pull_request'
@@ -98,4 +100,5 @@ jobs:
           git config --global user.email "parksoon_my@hotmail.com"
           git config --global user.name "pswai"
           pnpm install
-          pnpm run deploy
+          bash ./create-links.sh
+          USE_SSH=true pnpm run deploy
