@@ -2,12 +2,12 @@ name: Deploy website to GitHub Pages
 
 on:
   pull_request:
-    branches: [main]
+    branches: [master]
     paths:
       - "docs/**"
       - "website/**"
   push:
-    branches: [main]
+    branches: [master]
     paths:
       - "docs/**"
       - "website/**"

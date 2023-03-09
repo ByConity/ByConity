@@ -2,9 +2,15 @@ name: CI
 on:
   # Triggers the workflow on push or pull request events but only for the "main" branch
   push:
-    branches: [ "master" ]
+    branches: ["master"]
+    paths-ignore:
+      - "docs/**"
+      - "website/**"
   pull_request:
-    branches: [ "master" ]
+    branches: ["master"]
+    paths-ignore:
+      - "docs/**"
+      - "website/**"
 
 jobs:
   scm_build:
@@ -59,5 +65,4 @@ jobs:
           name: Artifacts
           path: /Artifacts.tar.gz
       - name: Analyse Result
-        run:
-          /bin/bash $GITHUB_WORKSPACE/docker/test/result.sh
+        run: /bin/bash $GITHUB_WORKSPACE/docker/test/result.sh
