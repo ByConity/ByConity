@@ -169,6 +169,9 @@ byted.yaml
 /website/.docusaurus
 /website/.cache-loader
 
+# Soft links during build
+/website/i18n/zh-cn/docusaurus-plugin-content-blog/current
+
 # Misc
 /website/.env.local
 /website/.env.development.local
