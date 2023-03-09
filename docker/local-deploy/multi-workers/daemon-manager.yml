@@ -1,0 +1,40 @@
+logger:
+  level: trace
+  log: /var/byconity/out.log
+  errorlog: /var/byconity/err.log
+  testlog: /var/byconity/test.log
+  size: 1000M
+  count: 10
+path: /var/byconity/
+timezone: Asia/Shanghai
+daemon_manager:
+  port: 17553
+  daemon_jobs:
+    job:
+    -
+      name: PART_GC
+      interval: 10000
+      disable: 0
+    -
+      name: PART_MERGE
+      interval: 10000
+      disable: 0
+    -
+      name: CONSUMER
+      interval: 10000
+      disable: 0
+    -
+      name: GLOBAL_GC
+      interval: 5000
+      disable: 0
+    -
+      name: PART_CLUSTERING
+      interval: 30000
+      disable: 0
+    -
+      name: DEDUP_WORKER
+      interval: 3000
+      disable: 0
+
+hdfs_addr: "hdfs://hdfs-namenode:9000"
+cnch_config: /config/cnch-config.yml
