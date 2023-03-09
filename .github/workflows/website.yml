@@ -51,9 +51,9 @@ jobs:
         run: pnpm install
 
       - name: Test build website
-        run:
-          - bash ./create-links.sh
-          - pnpm run build
+        run: |
+          bash ./create-links.sh
+          pnpm run build
 
   deploy:
     if: github.event_name != 'pull_request'
