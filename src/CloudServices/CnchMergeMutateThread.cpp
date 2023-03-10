@@ -1203,14 +1203,16 @@ void CnchMergeMutateThread::triggerPartMutate(StoragePtr storage)
     auto * cnch = typeid_cast<StorageCnchMergeTree *>(storage.get());
     if (!cnch)
         return;
+
     {
         std::lock_guard pool_lock(worker_pool_mutex);
         vw_name = cnch->getSettings()->cnch_vw_write;
         /// pick_worker_algo = storage_settings->cnch_merge_pick_worker_algo;
-        worker_pool = getContext()->getCnchWorkerClientPools().getPool(vw_name);
-        if (!worker_pool)
+        vw_handle = getContext()->getVirtualWarehousePool().get(vw_name);
+        if (!vw_handle)
             return;
     }
+
     tryMutateParts(storage, *cnch);
 }
 
