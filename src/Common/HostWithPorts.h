@@ -19,21 +19,119 @@
 #include <ostream>
 #include <string>
 #include <vector>
+#include <fmt/core.h>
+#include <common/getFQDNOrHostName.h>
 
 namespace DB
 {
 class HostWithPorts;
 using HostWithPortsVec = std::vector<HostWithPorts>;
 
-std::string addBracketsIfIpv6(const std::string & host);
-std::string createHostPortString(const std::string & host, uint16_t port);
-std::string createHostPortString(const std::string & host, const std::string & port);
-bool isSameHost(const std::string & lhs_host, const std::string & rhs_host);
-std::string_view removeBracketsIfIpv6(const std::string & host_name);
+inline const std::string & getHostIPFromEnv()
+{
+    const auto get_host_ip_lambda = [] () -> std::string
+    {
+        {
+            const char * byted_ipv6 = getenv("BYTED_HOST_IPV6");
+            if (byted_ipv6 && byted_ipv6[0])
+                return byted_ipv6;
+        }
 
-const std::string & getHostIPFromEnv();
+        {
+            const char * my_ipv6 = getenv("MY_HOST_IPV6");
+            if (my_ipv6 && my_ipv6[0])
+                return my_ipv6;
+        }
 
-const char * getLoopbackIPFromEnv();
+        {
+            const char * byted_ipv4 = getenv("BYTED_HOST_IP");
+            if (byted_ipv4 && byted_ipv4[0])
+                return byted_ipv4;
+        }
+
+        {
+            const char * my_ipv4 = getenv("MY_HOST_IP");
+            if (my_ipv4 && my_ipv4[0])
+                return my_ipv4;
+        }
+
+        return getIPOrFQDNOrHostName();
+    };
+
+    static std::string host_ip = get_host_ip_lambda();
+    return host_ip;
+}
+
+inline const char * getLoopbackIPFromEnv()
+{
+    const auto get_loopback_ip_lambda = [] () -> const char *
+    {
+        {
+            const char * byted_ipv6 = getenv("BYTED_HOST_IPV6");
+            if (byted_ipv6 && byted_ipv6[0])
+                return "::1";
+        }
+
+        {
+            const char * my_ipv6 = getenv("MY_HOST_IPV6");
+            if (my_ipv6 && my_ipv6[0])
+                return "::1";
+        }
+
+        {
+            const char * byted_ipv4 = getenv("BYTED_HOST_IP");
+            if (byted_ipv4 && byted_ipv4[0])
+                return "127.0.0.1";
+        }
+
+        {
+            const char * my_ipv4 = getenv("MY_HOST_IP");
+            if (my_ipv4 && my_ipv4[0])
+                return "127.0.0.1";
+        }
+
+        return "127.0.0.1";
+    };
+
+    static const char * loopback_ip = get_loopback_ip_lambda();
+    return loopback_ip;
+}
+
+inline std::string addBracketsIfIpv6(const std::string & host_name)
+{
+    if (host_name.find_first_of(':') != std::string::npos && !host_name.empty() && host_name.back() != ']')
+        return fmt::format("[{}]", host_name);
+    else
+        return host_name;
+}
+
+inline std::string createHostPortString(const std::string & host, uint16_t port)
+{
+    return fmt::format("{}:{}", addBracketsIfIpv6(host), port);
+}
+
+inline std::string createHostPortString(const std::string & host, const std::string & port)
+{
+    return fmt::format("{}:{}", addBracketsIfIpv6(host), port);
+}
+
+inline std::string_view removeBracketsIfIpv6(const std::string & host_name)
+{
+    if (host_name.find_first_of(':') != std::string::npos &&
+        !host_name.empty() &&
+        host_name.back() == ']' &&
+        host_name.front() == '['
+    )
+        return std::string_view(host_name.data() + 1, host_name.size() - 2);
+    return std::string_view(host_name.c_str());
+}
+
+inline bool isSameHost(const std::string & lhs, const std::string & rhs)
+{
+    if (lhs == rhs)
+        return true;
+    return removeBracketsIfIpv6(lhs) == removeBracketsIfIpv6(rhs);
+}
 
 class HostWithPorts
 {
@@ -61,11 +159,11 @@ public:
 
     bool empty() const { return host.empty() || (rpc_port == 0 && tcp_port == 0); }
 
-    std::string getRPCAddress() const { return addBracketsIfIpv6(host) + ':' + std::to_string(rpc_port); }
-    std::string getTCPAddress() const { return addBracketsIfIpv6(host) + ':' + std::to_string(tcp_port); }
-    std::string getHTTPAddress() const { return addBracketsIfIpv6(host) + ':' + std::to_string(http_port); }
-    std::string getExchangeAddress() const { return addBracketsIfIpv6(host) + ':' + std::to_string(exchange_port); }
-    std::string getExchangeStatusAddress() const { return addBracketsIfIpv6(host) + ':' + std::to_string(exchange_status_port); }
+    std::string getRPCAddress() const { return fmt::format("{}:{}", addBracketsIfIpv6(host), std::to_string(rpc_port)); }
+    std::string getTCPAddress() const { return fmt::format("{}:{}", addBracketsIfIpv6(host), std::to_string(tcp_port)); }
+    std::string getHTTPAddress() const { return fmt::format("{}:{}", addBracketsIfIpv6(host), std::to_string(http_port)); }
+    std::string getExchangeAddress() const { return fmt::format("{}:{}", addBracketsIfIpv6(host), std::to_string(exchange_port)); }
+    std::string getExchangeStatusAddress() const { return fmt::format("{}:{}", addBracketsIfIpv6(host), std::to_string(exchange_status_port)); }
 
     const std::string & getHost() const { return host; }
     uint16_t getTCPPort() const { return tcp_port; }
