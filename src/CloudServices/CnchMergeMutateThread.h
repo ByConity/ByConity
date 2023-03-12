@@ -124,6 +124,7 @@ public:
     bool removeTasksOnPartition(const String & partition_id);
 
     String triggerPartMerge(StoragePtr & istorage, const String & partition_id, bool aggressive, bool try_select, bool try_execute);
+    void triggerPartMutate(StoragePtr storage);
 
     void waitTasksFinish(const std::vector<String> & task_ids, UInt64 timeout_ms);
 

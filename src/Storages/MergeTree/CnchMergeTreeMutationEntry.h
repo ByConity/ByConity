@@ -37,7 +37,7 @@ struct CnchMergeTreeMutationEntry
     static CnchMergeTreeMutationEntry parse(const String & str);
     bool isReclusterMutation() const;
 
-    TxnTimestamp txn_id; // mock
+    TxnTimestamp txn_id;
     TxnTimestamp commit_time;
 
     /*
