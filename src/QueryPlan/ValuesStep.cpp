@@ -22,7 +22,7 @@
 
 namespace DB
 {
-ValuesStep::ValuesStep(Block header, Fields fields_, size_t rows_) : ISourceStep(DataStream{.header = header}), fields(fields_), rows(rows_)
+ValuesStep::ValuesStep(Block header, Fields fields_, size_t rows_) : ISourceStep(DataStream{.header = std::move(header)}), fields(std::move(fields_)), rows(rows_)
 {
 }
 

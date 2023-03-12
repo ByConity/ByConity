@@ -102,9 +102,9 @@ private:
             new_name_to_type[markers[i]] = std::make_shared<DataTypeUInt8>();
         }
 
-        auto expression_step = std::make_shared<ProjectionStep>(output_stream, assignments, new_name_to_type);
+        auto expression_step = std::make_shared<ProjectionStep>(output_stream, std::move(assignments), std::move(new_name_to_type));
         PlanNodes children{source};
-        PlanNodePtr expr_node = std::make_shared<ProjectionNode>(context.nextNodeId(), std::move(expression_step), children);
+        PlanNodePtr expr_node = std::make_shared<ProjectionNode>(context.nextNodeId(), std::move(expression_step), std::move(children));
         return expr_node;
     }
 

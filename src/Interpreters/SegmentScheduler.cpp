@@ -318,7 +318,7 @@ void SegmentScheduler::buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::s
             graph_ptr->sources.emplace_back(plan_segment_ptr->getPlanSegmentId());
         }
         // source
-        if (plan_segment_ptr->getPlanSegmentInputs().size() >= 1)
+        if (!plan_segment_ptr->getPlanSegmentInputs().empty())
         {
             bool all_tables = true;
             for (const auto & input : plan_segment_ptr->getPlanSegmentInputs())
@@ -373,7 +373,7 @@ void SegmentScheduler::buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::s
     {
         if (!it->second->getPlanSegmentInputs().empty())
         {
-            for (auto plan_segment_input_ptr : it->second->getPlanSegmentInputs())
+            for (const auto & plan_segment_input_ptr : it->second->getPlanSegmentInputs())
             {
                 // only check when input is from an another exchange
                 if (plan_segment_input_ptr->getPlanSegmentType() != PlanSegmentType::EXCHANGE)

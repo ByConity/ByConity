@@ -76,7 +76,7 @@ PlanNodePtr SetOperationMerge::merge()
     }
 
     DataStreams input_stream;
-
+    input_stream.reserve(new_sources.size());
     for (const auto & item : new_sources)
         input_stream.emplace_back(item->getStep()->getOutputStream());
 
@@ -88,14 +88,16 @@ PlanNodePtr SetOperationMerge::merge()
 
     if (node->getStep()->getType() == IQueryPlanStep::Type::Union)
     {
-        auto union_step = std::make_unique<UnionStep>(input_stream, output, output_to_inputs);
+        auto union_step = std::make_unique<UnionStep>(std::move(input_stream), std::move(output), std::move(output_to_inputs));
         PlanNodePtr union_node = std::make_shared<UnionNode>(context.nextNodeId(), std::move(union_step), new_sources);
         return union_node;
     }
-
-    auto intersect_step = std::make_unique<IntersectStep>(input_stream, output, output_to_inputs, result_is_distinct);
-    PlanNodePtr intersect_node = std::make_shared<IntersectNode>(context.nextNodeId(), std::move(intersect_step), new_sources);
-    return intersect_node;
+    else
+    {
+        auto intersect_step = std::make_unique<IntersectStep>(std::move(input_stream), output, output_to_inputs, result_is_distinct);
+        PlanNodePtr intersect_node = std::make_shared<IntersectNode>(context.nextNodeId(), std::move(intersect_step), new_sources);
+        return intersect_node;
+    }
 }
 
 PlanNodePtr SetOperationMerge::mergeFirstSource()
@@ -124,7 +126,7 @@ PlanNodePtr SetOperationMerge::mergeFirstSource()
     }
 
     DataStreams input_stream;
-
+    input_stream.reserve(new_sources.size());
     for (const auto & item : new_sources)
         input_stream.emplace_back(item->getStep()->getOutputStream());
 
@@ -136,7 +138,7 @@ PlanNodePtr SetOperationMerge::mergeFirstSource()
 
     if (node->getStep()->getType() == IQueryPlanStep::Type::Union)
     {
-        auto union_step = std::make_unique<UnionStep>(input_stream, output, false);
+        auto union_step = std::make_unique<UnionStep>(std::move(input_stream), std::move(output), false);
         PlanNodePtr union_node = std::make_shared<UnionNode>(context.nextNodeId(), std::move(union_step), new_sources);
         return union_node;
     }

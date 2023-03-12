@@ -43,7 +43,7 @@ bool isLocalServer(const std::string & target, const std::string & port)
 
         const std::string target_ip = DB::DNSResolver::instance().resolveHost(target_host).toString();
 
-        if ((target_ip == "127.0.0.1") || (target_ip == "::1") || (target_ip == getIPOrFQDNOrHostName()) || (target_ip == DB::getHostIPFromEnv()))
+        if ((target_ip == "127.0.0.1") || (target_ip == "::1") || (target_ip == DB::getHostIPFromEnv()) || (target_ip == getIPOrFQDNOrHostName()))
         {
             return true;
         }

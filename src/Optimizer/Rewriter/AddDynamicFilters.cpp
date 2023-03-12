@@ -457,7 +457,7 @@ PlanNodePtr AddDynamicFilters::RemoveUnusedDynamicFilterRewriter::visitProjectio
         project_step->getAssignments(),
         project_step->getNameToType(),
         project_step->isFinalProject(),
-        dynamic_filters);
+        std::move(dynamic_filters));
 
     return PlanNodeBase::createPlanNode(node.getId(), new_project_step, PlanNodes{result}, node.getStatistics());
 }

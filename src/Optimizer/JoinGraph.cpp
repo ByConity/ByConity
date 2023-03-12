@@ -52,6 +52,7 @@ JoinGraph JoinGraph::withJoinGraph(
             throw Exception("Node appeared in two JoinGraphs, id : " + std::to_string(node->getId()), ErrorCodes::LOGICAL_ERROR);
 
     std::vector<PlanNodePtr> nodes_merged;
+    nodes_merged.reserve(nodes.size() + other.nodes.size());
     nodes_merged.insert(nodes_merged.end(), nodes.begin(), nodes.end());
     nodes_merged.insert(nodes_merged.end(), other.nodes.begin(), other.nodes.end());
 
@@ -60,6 +61,7 @@ JoinGraph JoinGraph::withJoinGraph(
     edges_merged.insert(other.edges.begin(), other.edges.end());
 
     std::vector<ConstASTPtr> filters_merged;
+    filters_merged.reserve(filters_merged.size() + other.filter.size());
     filters_merged.insert(filters_merged.end(), filter.begin(), filter.end());
     filters_merged.insert(filters_merged.end(), other.filter.begin(), other.filter.end());
 
@@ -193,9 +195,9 @@ JoinGraph JoinGraphVisitor::visitProjectionNode(ProjectionNode & node, NameSet &
 {
     if (ignore_columns_not_join_condition)
     {
-        auto step = dynamic_cast<const ProjectionStep *>(node.getStep().get());
+        const auto * step = dynamic_cast<const ProjectionStep *>(node.getStep().get());
         bool contains_required_columns = false;
-        for (auto & assigment : step->getAssignments())
+        for (const auto & assigment : step->getAssignments())
         {
             if (Utils::isIdentity(assigment))
                 continue;

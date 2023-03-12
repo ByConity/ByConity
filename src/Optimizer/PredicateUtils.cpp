@@ -151,6 +151,7 @@ ConstASTPtr PredicateUtils::extractCommonPredicates(ConstASTPtr predicate, Conte
         std::vector<std::pair<ConstASTPtr, String>> uncorrelated_map = removeAll(pairs, common_predicates);
 
         std::vector<ConstASTPtr> uncorrelate_predicates;
+        uncorrelate_predicates.reserve(uncorrelated_map.size());
         for (auto & uncorrelated : uncorrelated_map)
         {
             uncorrelate_predicates.emplace_back(uncorrelated.first);
@@ -301,7 +302,7 @@ ASTPtr PredicateUtils::combineDisjunctsWithDefault(const std::vector<ConstASTPtr
         return predicates[0]->clone();
 
     ASTs args;
-    for (auto & arg : predicates)
+    for (const auto & arg : predicates)
     {
         if (isTruePredicate(arg))
             return PredicateConst::TRUE_VALUE;
@@ -611,11 +612,11 @@ PredicateUtils::extractEqualPredicates(const std::vector<ConstASTPtr> & predicat
     std::vector<std::pair<ConstASTPtr, ConstASTPtr>> equal_predicates;
     std::vector<ConstASTPtr> other_predicates;
 
-    for (auto & predicate : predicates)
+    for (const auto & predicate : predicates)
     {
         for (auto & filter : PredicateUtils::extractConjuncts(predicate))
         {
-            auto function = filter->as<ASTFunction>();
+            const auto * function = filter->as<ASTFunction>();
             if (function && function->name == "equals")
             {
                 if (function->children.size() == 2 && function->children[0]->getType() == ASTType::ASTIdentifier

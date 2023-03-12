@@ -234,7 +234,7 @@ void OptimizeInput::execute()
 
         if (group_expr->getStep()->getType() == IQueryPlanStep::Type::CTERef)
         {
-            const auto cte_step = dynamic_cast<const CTERefStep *>(group_expr->getStep().get());
+            const auto * const cte_step = dynamic_cast<const CTERefStep *>(group_expr->getStep().get());
             CTEId cte_id = cte_step->getId();
             auto cte_def_group = context->getMemo().getCTEDefGroupByCTEId(cte_id);
 
@@ -293,6 +293,7 @@ void OptimizeInput::execute()
             // 1. Collect stats needed and cache them in the group
             // 2. Calculate cost based on children's stats
             std::vector<PlanNodeStatisticsPtr> children_stats;
+            children_stats.reserve(group_expr->getChildrenGroups().size());
             for (const auto & child : group_expr->getChildrenGroups())
                 children_stats.emplace_back(context->getMemo().getGroupById(child)->getStatistics().value_or(nullptr));
 
@@ -361,16 +362,16 @@ void OptimizeInput::execute()
                     auto left_equivalences = context->getMemo().getGroupById(group_expr->getChildrenGroups()[0])->getEquivalences();
                     auto right_equivalences = context->getMemo().getGroupById(group_expr->getChildrenGroups()[1])->getEquivalences();
                     NameToNameSetMap right_join_key_to_left;
-                    if (auto join_step = dynamic_cast<const JoinStep *>(group_expr->getStep().get()))
+                    if (const auto * join_step = dynamic_cast<const JoinStep *>(group_expr->getStep().get()))
                     {
-                        auto left_rep_map = left_equivalences->representMap();
-                        auto right_rep_map = right_equivalences->representMap();
+                        const auto & left_rep_map = left_equivalences->representMap();
+                        const auto & right_rep_map = right_equivalences->representMap();
                         for (size_t join_key_index = 0; join_key_index < join_step->getLeftKeys().size(); ++join_key_index)
                         {
                             auto left_key = join_step->getLeftKeys()[join_key_index];
                             auto right_key = join_step->getRightKeys()[join_key_index];
-                            left_key = left_rep_map.count(left_key) ? left_rep_map.at(left_key) : left_key;
-                            right_key = right_rep_map.count(right_key) ? right_rep_map.at(right_key) : right_key;
+                            left_key = left_rep_map.contains(left_key) ? left_rep_map.at(left_key) : left_key;
+                            right_key = right_rep_map.contains(right_key) ? right_rep_map.at(right_key) : right_key;
                             right_join_key_to_left[right_key].insert(left_key);
                         }
                     }
@@ -426,7 +427,7 @@ void OptimizeInput::execute()
             Property output_prop;
             if (group_expr->getStep()->getType() == IQueryPlanStep::Type::CTERef)
             {
-                const auto cte_step = dynamic_cast<const CTERefStep *>(group_expr->getStep().get());
+                const auto * const cte_step = dynamic_cast<const CTERefStep *>(group_expr->getStep().get());
                 CTEId cte_id = cte_step->getId();
                 auto cte_def_group = context->getOptimizerContext().getMemo().getCTEDefGroupByCTEId(cte_id);
                 auto cte_global_property = CTEDescription::createCTEDefGlobalProperty(context->getRequiredProp(), cte_id);

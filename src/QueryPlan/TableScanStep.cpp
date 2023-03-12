@@ -117,7 +117,7 @@ TableScanStep::TableScanStep(
     , max_block_size(max_block_size_)
 {
     log = &Poco::Logger::get("TableScanStep");
-
+    column_names.reserve(column_alias.size());
     for (auto & item : column_alias)
     {
         column_names.emplace_back(item.first);

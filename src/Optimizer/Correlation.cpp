@@ -214,7 +214,7 @@ std::optional<DecorrelationResult> DecorrelationVisitor::visitFilterNode(FilterN
         }
     }
 
-    DecorrelationResult & child_result_value = child_result.value();
+    DecorrelationResult child_result_value = std::move(child_result.value());
 
     std::set<String> correlate_predicate_symbols = SymbolsExtractor::extract(correlation_predicates);
     std::set<String> set_correlation;
@@ -242,19 +242,19 @@ std::optional<DecorrelationResult> DecorrelationVisitor::visitFilterNode(FilterN
         auto filter_step = std::make_shared<FilterStep>(input, un_correlation_predicate);
         auto filter_node = std::make_shared<FilterNode>(context.nextNodeId(), std::move(filter_step), children);
         DecorrelationResult filter_result{
-            .node = filter_node,
-            .symbols_to_propagate = symbols_to_propagate,
-            .correlation_predicates = correlation_predicates,
-            .at_most_single_row = child_result_value.at_most_single_row};
-        return std::make_optional(filter_result);
+            .node = std::move(filter_node),
+            .symbols_to_propagate = std::move(symbols_to_propagate),
+            .correlation_predicates = std::move(correlation_predicates),
+            .at_most_single_row = std::move(child_result_value.at_most_single_row)};
+        return std::make_optional(std::move(filter_result));
     }
 
     DecorrelationResult filter_result{
-        .node = child_result_value.node,
-        .symbols_to_propagate = symbols_to_propagate,
-        .correlation_predicates = correlation_predicates,
-        .at_most_single_row = child_result_value.at_most_single_row};
-    return std::make_optional(filter_result);
+        .node = std::move(child_result_value.node),
+        .symbols_to_propagate = std::move(symbols_to_propagate),
+        .correlation_predicates = std::move(correlation_predicates),
+        .at_most_single_row = std::move(child_result_value.at_most_single_row)};
+    return std::make_optional(std::move(filter_result));
 }
 
 std::optional<DecorrelationResult> DecorrelationVisitor::visitProjectionNode(ProjectionNode & node, Context & context)
@@ -266,7 +266,7 @@ std::optional<DecorrelationResult> DecorrelationVisitor::visitProjectionNode(Pro
         return std::nullopt;
     }
 
-    DecorrelationResult & child_result_value = child_result.value();
+    DecorrelationResult child_result_value = std::move(child_result.value());
     std::set<String> output_symbols;
     const auto & name_and_types = node.getStep()->getOutputStream().header;
     for (const auto & column : name_and_types)
@@ -274,7 +274,7 @@ std::optional<DecorrelationResult> DecorrelationVisitor::visitProjectionNode(Pro
         output_symbols.emplace(column.name);
     }
     std::vector<String> symbols_to_add;
-    std::set<String> symbols_to_propagate = child_result_value.symbols_to_propagate;
+    const std::set<String> & symbols_to_propagate = child_result_value.symbols_to_propagate;
     // if output symbols don't have symbols_to_propagate, project it.
     for (const auto & symbol : symbols_to_propagate)
     {
@@ -310,25 +310,25 @@ std::optional<DecorrelationResult> DecorrelationVisitor::visitProjectionNode(Pro
         }
 
         DataStream input{.header = input_stream_columns};
-        auto expression_step = std::make_shared<ProjectionStep>(input, add_assignments, name_to_type);
+        auto expression_step = std::make_shared<ProjectionStep>(input, std::move(add_assignments), std::move(name_to_type));
         PlanNodes children{child_result_value.node};
-        auto expression_node = std::make_shared<ProjectionNode>(context.nextNodeId(), std::move(expression_step), children);
+        auto expression_node = std::make_shared<ProjectionNode>(context.nextNodeId(), std::move(expression_step), std::move(children));
 
         DecorrelationResult result{
             .node = expression_node,
-            .symbols_to_propagate = child_result_value.symbols_to_propagate,
-            .correlation_predicates = child_result_value.correlation_predicates,
-            .at_most_single_row = child_result_value.at_most_single_row};
-        return std::make_optional(result);
+            .symbols_to_propagate = std::move(child_result_value.symbols_to_propagate),
+            .correlation_predicates = std::move(child_result_value.correlation_predicates),
+            .at_most_single_row = std::move(child_result_value.at_most_single_row)};
+        return std::make_optional(std::move(result));
     }
     else
     {
         DecorrelationResult result{
-            .node = child_result_value.node,
-            .symbols_to_propagate = child_result_value.symbols_to_propagate,
-            .correlation_predicates = child_result_value.correlation_predicates,
-            .at_most_single_row = child_result_value.at_most_single_row};
-        return std::make_optional(result);
+            .node = std::move(child_result_value.node),
+            .symbols_to_propagate = std::move(child_result_value.symbols_to_propagate),
+            .correlation_predicates = std::move(child_result_value.correlation_predicates),
+            .at_most_single_row = std::move(child_result_value.at_most_single_row)};
+        return std::make_optional(std::move(result));
     }
 }
 

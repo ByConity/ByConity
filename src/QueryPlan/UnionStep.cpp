@@ -49,7 +49,7 @@ UnionStep::UnionStep(
     std::unordered_map<String, std::vector<String>> output_to_inputs_,
     size_t max_threads_,
     bool local_)
-    : SetOperationStep(input_streams_, output_stream_, output_to_inputs_), max_threads(max_threads_), local(local_)
+    : SetOperationStep(std::move(input_streams_), std::move(output_stream_), std::move(output_to_inputs_)), max_threads(max_threads_), local(local_)
 {
     header = Block();
     for (auto & item : output_stream->header)

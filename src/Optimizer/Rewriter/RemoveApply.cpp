@@ -96,7 +96,7 @@ PlanNodePtr CorrelatedScalarSubqueryVisitor::visitApplyNode(ApplyNode & node, Vo
     if (subquery_step_ptr->getType() == IQueryPlanStep::Type::Aggregating)
     {
         const auto & step = dynamic_cast<const AggregatingStep &>(*subquery_step_ptr);
-        auto & keys = step.getKeys();
+        const auto & keys = step.getKeys();
         if (keys.empty())
         {
             match = true;
@@ -117,7 +117,7 @@ PlanNodePtr CorrelatedScalarSubqueryVisitor::visitApplyNode(ApplyNode & node, Vo
         if (child_step_ptr->getType() == IQueryPlanStep::Type::Aggregating)
         {
             const auto & step = dynamic_cast<const AggregatingStep &>(*child_step_ptr);
-            auto & keys = step.getKeys();
+            const auto & keys = step.getKeys();
             if (keys.empty())
             {
                 match = true;
@@ -171,9 +171,10 @@ PlanNodePtr CorrelatedScalarSubqueryVisitor::visitApplyNode(ApplyNode & node, Vo
     const DataStream & right_data_stream = non_null_node->getStep()->getOutputStream();
     DataStreams streams = {left_data_stream, right_data_stream};
 
-    auto left_header = left_data_stream.header;
-    auto right_header = right_data_stream.header;
+    const auto & left_header = left_data_stream.header;
+    const auto & right_header = right_data_stream.header;
     NamesAndTypes output;
+    output.reserve(left_header.columns() + right_header.columns());
     for (const auto & item : left_header)
     {
         output.emplace_back(NameAndTypePair{item.name, item.type});
@@ -184,8 +185,8 @@ PlanNodePtr CorrelatedScalarSubqueryVisitor::visitApplyNode(ApplyNode & node, Vo
     }
     std::pair<Names, Names> key_pairs = result_value.extractJoinClause(correlation);
     auto join_step = std::make_shared<JoinStep>(
-        streams,
-        DataStream{.header = output},
+        std::move(streams),
+        DataStream{.header = std::move(output)},
         ASTTableJoin::Kind::Left,
         ASTTableJoin::Strictness::All,
         key_pairs.first,
@@ -208,6 +209,7 @@ PlanNodePtr CorrelatedScalarSubqueryVisitor::visitApplyNode(ApplyNode & node, Vo
 
     const AggregateDescriptions & descs = scalar_agg_step.getAggregates();
     AggregateDescriptions descs_with_mask;
+    descs_with_mask.reserve(descs.size());
     for (const auto & desc : descs)
     {
         AggregateDescription desc_with_mask;
@@ -239,9 +241,9 @@ PlanNodePtr CorrelatedScalarSubqueryVisitor::visitApplyNode(ApplyNode & node, Vo
         desc_with_mask.argument_names = argument_names;
         desc_with_mask.parameters = desc.parameters;
         desc_with_mask.arguments = desc.arguments;
-        descs_with_mask.emplace_back(desc_with_mask);
+        descs_with_mask.emplace_back(std::move(desc_with_mask));
     }
-    auto group_agg_step = std::make_shared<AggregatingStep>(join_node->getStep()->getOutputStream(), keys, descs_with_mask, GroupingSetsParamsList{} , true, GroupingDescriptions{}, false, false);
+    auto group_agg_step = std::make_shared<AggregatingStep>(join_node->getStep()->getOutputStream(), std::move(keys), std::move(descs_with_mask), GroupingSetsParamsList{} , true, GroupingDescriptions{}, false, false);
     auto group_agg_node = std::make_shared<AggregatingNode>(context->nextNodeId(), std::move(group_agg_step), PlanNodes{join_node});
 
     // step 6 : project used columns
@@ -268,7 +270,7 @@ PlanNodePtr CorrelatedScalarSubqueryVisitor::visitApplyNode(ApplyNode & node, Vo
         }
     }
 
-    auto expression_step = std::make_shared<ProjectionStep>(group_agg_node->getStep()->getOutputStream(), assignments, name_to_type);
+    auto expression_step = std::make_shared<ProjectionStep>(group_agg_node->getStep()->getOutputStream(), std::move(assignments), std::move(name_to_type));
     auto expression_node = std::make_shared<ProjectionNode>(context->nextNodeId(), std::move(expression_step), PlanNodes{group_agg_node});
     return expression_node;
 }
@@ -317,9 +319,10 @@ PlanNodePtr UnCorrelatedScalarSubqueryVisitor::visitApplyNode(ApplyNode & node, 
     const DataStream & right_data_stream = subquery_ptr->getStep()->getOutputStream();
     DataStreams streams = {left_data_stream, right_data_stream};
 
-    auto left_header = left_data_stream.header;
-    auto right_header = right_data_stream.header;
+    const auto & left_header = left_data_stream.header;
+    const auto & right_header = right_data_stream.header;
     NamesAndTypes output;
+    output.reserve(left_header.columns() + right_header.columns());
     for (const auto & item : left_header)
     {
         output.emplace_back(NameAndTypePair{item.name, item.type});
@@ -330,8 +333,8 @@ PlanNodePtr UnCorrelatedScalarSubqueryVisitor::visitApplyNode(ApplyNode & node, 
     }
 
     auto join_step = std::make_shared<JoinStep>(
-        streams,
-        DataStream{.header = output},
+        std::move(streams),
+        DataStream{.header = std::move(output)},
         ASTTableJoin::Kind::Cross,
         ASTTableJoin::Strictness::All,
         Names{},

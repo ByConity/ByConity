@@ -153,7 +153,7 @@ PlanNodePtr ColumnPruningVisitor::visitProjectionNode(ProjectionNode & node, Nam
         return child;
 
     auto expr_step = std::make_shared<ProjectionStep>(
-        child->getStep()->getOutputStream(), assignments, name_to_type, step->isFinalProject(), step->getDynamicFilters());
+        child->getStep()->getOutputStream(), std::move(assignments), std::move(name_to_type), step->isFinalProject(), step->getDynamicFilters());
     PlanNodes children{child};
     auto expr_node = ProjectionNode::createPlanNode(context->nextNodeId(), std::move(expr_step), children, node.getStatistics());
     return expr_node;

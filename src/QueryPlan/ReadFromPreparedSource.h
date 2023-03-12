@@ -50,7 +50,7 @@ public:
     ReadFromStorageStep(Pipe pipe_, String storage_name)
         : ReadFromPreparedSource(std::move(pipe_))
     {
-        setStepDescription(storage_name);
+        setStepDescription(std::move(storage_name));
     }
 
     String getName() const override { return "ReadFromStorage"; }

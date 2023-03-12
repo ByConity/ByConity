@@ -52,6 +52,7 @@ TranslationResult SetOperationNodeTranslator::makeSetContainmentPlanForDistinct(
         group_by_keys.emplace_back(item.name);
 
     AggregateDescriptions aggregates;
+    aggregates.reserve(markers.size());
     for (size_t i = 0; i < markers.size(); i++)
     {
         AggregateDescription aggregate_desc;
@@ -62,7 +63,7 @@ TranslationResult SetOperationNodeTranslator::makeSetContainmentPlanForDistinct(
         AggregateFunctionProperties properties;
         aggregate_desc.function = AggregateFunctionFactory::instance().get("sum", types, params, properties);
 
-        aggregates.push_back(aggregate_desc);
+        aggregates.emplace_back(aggregate_desc);
     }
 
     auto agg_step = std::make_shared<AggregatingStep>(union_node->getStep()->getOutputStream(), group_by_keys, aggregates, GroupingSetsParamsList{}, true, GroupingDescriptions{}, false, false);
@@ -75,6 +76,7 @@ TranslationResult SetOperationNodeTranslator::makeSetContainmentPlanForDistinct(
 PlanNodePtr SetOperationNodeTranslator::unionNodes(const PlanNodes & children, const NamesAndTypes cols)
 {
     DataStreams input_stream;
+    input_stream.reserve(children.size());
     for (const auto & item : children)
         input_stream.emplace_back(item->getStep()->getOutputStream());
     DataStream output;

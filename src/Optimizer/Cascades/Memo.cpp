@@ -44,11 +44,9 @@ GroupExprPtr Memo::insertGroupExpr(GroupExprPtr group_expr, CascadesContext & co
     auto it = group_expressions.find(group_expr);
     // duplicate group expression
     if (it != group_expressions.end())
-    {
         return *it;
-    }
-
-    group_expressions.insert(group_expr);
+    else
+        group_expressions.insert(it, group_expr);
 
     // New expression, so try to insert into an existing group or
     // create a new group if none specified

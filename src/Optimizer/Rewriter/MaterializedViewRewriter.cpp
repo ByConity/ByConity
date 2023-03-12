@@ -1138,7 +1138,7 @@ protected:
         // output projection
         plan = PlanNodeBase::createPlanNode(
             context->nextNodeId(),
-            std::make_shared<ProjectionStep>(plan->getCurrentDataStream(), rewrite_assignments, candidate.name_to_type),
+            std::make_shared<ProjectionStep>(plan->getCurrentDataStream(), std::move(rewrite_assignments), candidate.name_to_type),
             {plan});
         return plan;
     }
@@ -1224,15 +1224,15 @@ protected:
             if (!Utils::isIdentity(arguments))
                 plan = PlanNodeBase::createPlanNode(
                     context->nextNodeId(),
-                    std::make_shared<ProjectionStep>(plan->getCurrentDataStream(), arguments, arguments_types),
+                    std::make_shared<ProjectionStep>(plan->getCurrentDataStream(), std::move(arguments), std::move(arguments_types)),
                     {plan});
 
             plan = PlanNodeBase::createPlanNode(
                 context->nextNodeId(),
-                std::make_shared<AggregatingStep>(plan->getCurrentDataStream(), keys, agg_rewriter.aggregates, GroupingSetsParamsList{}, true, GroupingDescriptions{}, false, false),
+                std::make_shared<AggregatingStep>(plan->getCurrentDataStream(), std::move(keys), agg_rewriter.aggregates, GroupingSetsParamsList{}, true, GroupingDescriptions{}, false, false),
                 {plan});
         }
-        return std::make_pair(plan, rewrite_arguments);
+        return std::make_pair(std::move(plan), std::move(rewrite_arguments));
     }
 
 private:

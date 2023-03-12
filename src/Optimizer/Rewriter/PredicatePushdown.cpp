@@ -474,12 +474,12 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
     }
 
     auto left_source_expression_step
-        = std::make_shared<ProjectionStep>(left_source->getStep()->getOutputStream(), left_assignments, left_types);
+        = std::make_shared<ProjectionStep>(left_source->getStep()->getOutputStream(), std::move(left_assignments), std::move(left_types));
     auto left_source_expression_node
         = std::make_shared<ProjectionNode>(context->nextNodeId(), std::move(left_source_expression_step), PlanNodes{left_source});
 
     auto right_source_expression_step = std::make_shared<ProjectionStep>(
-        right_source->getStep()->getOutputStream(), right_assignments, right_types, false, dynamic_filters_results.dynamic_filters);
+        right_source->getStep()->getOutputStream(), std::move(right_assignments), std::move(right_types), false, dynamic_filters_results.dynamic_filters);
     auto right_source_expression_node
         = std::make_shared<ProjectionNode>(context->nextNodeId(), std::move(right_source_expression_step), PlanNodes{right_source});
 
@@ -493,6 +493,7 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
     auto left_header = left_data_stream.header;
     auto right_header = right_data_stream.header;
     NamesAndTypes output;
+    output.reserve(left_header.columns() + right_header.columns());
     for (const auto & item : left_header)
     {
         output.emplace_back(NameAndTypePair{item.name, item.type});
@@ -558,7 +559,7 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
         if (need_project_left)
         {
             auto left_project_step
-                = std::make_shared<ProjectionStep>(left_source_expression_node->getStep()->getOutputStream(), left_project_assignments, left_project_types);
+                = std::make_shared<ProjectionStep>(left_source_expression_node->getStep()->getOutputStream(), std::move(left_project_assignments), std::move(left_project_types));
             left_source_expression_node
                 = std::make_shared<ProjectionNode>(context->nextNodeId(), std::move(left_project_step), PlanNodes{left_source_expression_node});
         }
@@ -566,7 +567,7 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
         if (need_project_right)
         {
             auto right_project_step
-                = std::make_shared<ProjectionStep>(right_source_expression_node->getStep()->getOutputStream(), right_project_assignments, right_project_types);
+                = std::make_shared<ProjectionStep>(right_source_expression_node->getStep()->getOutputStream(), std::move(right_project_assignments), std::move(right_project_types));
             right_source_expression_node
                 = std::make_shared<ProjectionNode>(context->nextNodeId(), std::move(right_project_step), PlanNodes{right_source_expression_node});
         }
