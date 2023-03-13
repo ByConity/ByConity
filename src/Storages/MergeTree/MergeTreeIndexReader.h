@@ -8,7 +8,19 @@
 namespace DB
 {
 
-class MergeTreeIndexReader
+/// Abstract class for MergeTree index readers
+class IMergeTreeIndexReader
+{
+public:
+    virtual ~IMergeTreeIndexReader() = default;
+
+    virtual void seek(size_t mark) = 0;
+
+    virtual MergeTreeIndexGranulePtr read() = 0;
+};
+
+/// Reader for (real) index with physical file `index_name.idx`
+class MergeTreeIndexReader : public IMergeTreeIndexReader
 {
 static constexpr char const * INDEX_FILE_EXTENSION = ".idx";
 public:
@@ -20,13 +32,21 @@ public:
         MergeTreeReaderSettings settings,
         MarkCache * mark_cache);
 
-    void seek(size_t mark);
+    void seek(size_t mark) override;
 
-    MergeTreeIndexGranulePtr read();
+    MergeTreeIndexGranulePtr read() override;
 
 private:
     MergeTreeIndexPtr index;
     std::unique_ptr<IMergeTreeReaderStream> stream;
 };
 
-}
+/// Reader for virtual index. Virtual index has no physical file
+/// We will materialize the index on the fly in `read` method:
+/// (1) Read source column of the index --> output some required source columns to calculate the index expression
+/// (2) Calculate the index expression --> ouput a column
+/// (3) Build the index granule w.r.t. the index type
+class MergeTreeVirtualIndexReader : public IMergeTreeIndexReader
+{
+
+};

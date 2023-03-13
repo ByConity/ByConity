@@ -58,6 +58,8 @@ struct IndexDescription
     /// Recalculate index with new columns because index expression may change
     /// if something change in columns.
     void recalculateWithNewColumns(const ColumnsDescription & new_columns, ContextPtr context);
+    /// If this index is hypothetical
+    bool isHypothetical() const { return type.starts_with("hypothetical"); }
 };
 
 /// All secondary indices in storage
