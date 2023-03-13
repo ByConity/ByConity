@@ -405,7 +405,7 @@ void CnchMergeMutateThread::runImpl()
             std::lock_guard lock(worker_pool_mutex);
             vw_name = storage.getSettings()->cnch_vw_write;
             /// TODO: pick_worker_algo = storage.getSettings()->cnch_merge_pick_worker_algo;
-            worker_pool = getContext()->getCnchWorkerClientPools().getPool(vw_name);
+            vw_handle = getContext()->getVirtualWarehousePool().get(vw_name);
         }
 
         bool merge_success = false;
@@ -832,7 +832,7 @@ String CnchMergeMutateThread::triggerPartMerge(
             std::lock_guard pool_lock(worker_pool_mutex);
             vw_name = storage_settings->cnch_vw_write;
             /// pick_worker_algo = storage_settings->cnch_merge_pick_worker_algo;
-            worker_pool = local_context->getCnchWorkerClientPools().getPool(vw_name);
+            vw_handle = getContext()->getVirtualWarehousePool().get(vw_name);
         }
 
         return submitFutureManipulationTask(
@@ -974,32 +974,10 @@ void CnchMergeMutateThread::finishTask(const String & task_id, const MergeTreeDa
     updatePartCache(curr_task->parts.front()->info().partition_id, curr_task->parts.size());
 }
 
-CnchWorkerClientPtr CnchMergeMutateThread::getWorker(ManipulationType type, [[maybe_unused]] const ServerDataPartsVector & all_parts)
+CnchWorkerClientPtr CnchMergeMutateThread::getWorker([[maybe_unused]] ManipulationType type, [[maybe_unused]] const ServerDataPartsVector & all_parts)
 {
     std::lock_guard lock(worker_pool_mutex);
-
-    /// FIXME: (zuochuang.zema) refactor this feature later.
-    // if (pick_worker_algo == "RoundRobin")
-    // {
-    if (ManipulationType::Merge == type)
-        return worker_pool->get();
-    return worker_pool->get();
-    // }
-
-    // ResourceRequirement requirement{};
-    // UInt64 part_bytes = 0;
-    // for (auto & part : all_parts)
-    //     part_bytes += part->part_model().size();
-    // requirement.request_disk_bytes = part_bytes;
-
-    /// Try to pick worker from RM (use vw handle).
-    // auto vw = getContext()->getVirtualWarehousePool().get(vw_name);
-    // auto host_ports = vw->tryPickWorkerFromRM(VWScheduleAlgo::GlobalLowCpu, requirement);
-    // if (host_ports)
-    //     return worker_pool->get(host_ports.value());
-
-    // LOG_TRACE(log, "Resource Manager result is invalid, pick one locally.");
-    // return worker_pool->get();
+    return vw_handle->getWorker();
 }
 
 bool CnchMergeMutateThread::needCollectExtendedMergeMetrics()
@@ -1218,6 +1196,24 @@ void CnchMergeMutateThread::removeMutationEntry(const TxnTimestamp & commit_ts, 
     LOG_DEBUG(log, "Mutation {}(command: {}) has been done, will remove it from catalog.",  it->first,  buf.str());
     getContext()->getCnchCatalog()->removeMutation(storage_id, entry.txn_id.toString());
     it = current_mutations_by_version.erase(it);
+}
+
+void CnchMergeMutateThread::triggerPartMutate(StoragePtr storage)
+{
+    auto * cnch = typeid_cast<StorageCnchMergeTree *>(storage.get());
+    if (!cnch)
+        return;
+
+    {
+        std::lock_guard pool_lock(worker_pool_mutex);
+        vw_name = cnch->getSettings()->cnch_vw_write;
+        /// pick_worker_algo = storage_settings->cnch_merge_pick_worker_algo;
+        vw_handle = getContext()->getVirtualWarehousePool().get(vw_name);
+        if (!vw_handle)
+            return;
+    }
+
+    tryMutateParts(storage, *cnch);
 }
 
 }

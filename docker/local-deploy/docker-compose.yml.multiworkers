@@ -1,0 +1,143 @@
+version: "3"
+services:
+# hdfs / remote fs
+  hdfs:
+    image: gchq/hdfs:3.3
+    command: namenode
+    container_name: hdfs-namenode
+    environment:
+      - HADOOP_CONF_DIR=${HADOOP_CONF_DIR}
+    ports:
+      - 9871:9870
+    volumes:
+      - ./hdfs:${HADOOP_CONF_DIR}:ro
+      - /var/log/hadoop
+      - /data1
+      - /data2
+
+  hdfs-datanode:
+    depends_on:
+      - hdfs
+    image: gchq/hdfs:3.3
+    command: datanode
+    container_name: hdfs-datanode
+    environment:
+      - HADOOP_CONF_DIR=${HADOOP_CONF_DIR}
+    volumes:
+      - ./hdfs:${HADOOP_CONF_DIR}:ro
+      - /var/log/hadoop
+      - /data1
+      - /data2
+
+# foundation db / catalog
+  fdb:
+    image: foundationdb/foundationdb:7.1.24
+    environment:
+      FDB_NETWORKING_MODE: container
+      FDB_COORDINATOR_PORT: 4550
+      FDB_PORT: 4550
+    container_name: fdb-0
+
+# byconity:
+  tso:
+    image: byconity/debian:buster-runit-fdb7.1.27
+    command: bash -c "fdbcli -C /config/fdb.cluster --exec \"configure new single ssd\"; export PATH=$PATH:/opt/byconity/bin/ && tso-server --config-file /config/tso.yml"
+    depends_on:
+      - fdb
+      - hdfs
+    volumes:
+      - ${BYCONITY_BINARY_PATH}/:/opt/byconity/bin/:ro
+      - ./multi-workers/:/config/:ro
+    # evironment:
+    container_name: tso-0
+    cap_add:
+      - SYS_PTRACE
+
+  resource-manager:
+    image: byconity/debian:buster-runit-fdb7.1.27
+    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 tso-0:18845 && resource-manager --config-file /config/resource-manager.yml"
+    depends_on:
+      - tso
+    volumes:
+      - ${BYCONITY_BINARY_PATH}/:/opt/byconity/bin/:ro
+      - ./multi-workers/:/config/:ro
+    container_name: resource-manager-0
+    cap_add:
+      - SYS_PTRACE
+
+  server:
+    image: byconity/debian:buster-runit-fdb7.1.27
+    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 tso-0:18845 && clickhouse-server --config-file /config/server.yml"
+    depends_on:
+      - tso
+      - hdfs
+    ports:
+      - "9000:52145"
+      - "8124:21557"
+    container_name: server-0
+    volumes:
+      - ${BYCONITY_BINARY_PATH}/:/opt/byconity/bin/:ro
+      - ./multi-workers/:/config/:ro
+    cap_add:
+      - SYS_PTRACE
+
+  worker-write:
+    image: byconity/debian:buster-runit-fdb7.1.27
+    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 server:21557 && VIRTUAL_WAREHOUSE_ID=vw_write WORKER_GROUP_ID=wg_write WORKER_ID=w0 clickhouse-server --config-file /config/worker.yml"
+    depends_on:
+      - server
+    container_name: worker-write-0
+    volumes:
+      - ${BYCONITY_BINARY_PATH}/:/opt/byconity/bin/:ro
+      - ./multi-workers/:/config/:ro
+    cap_add:
+      - SYS_PTRACE
+
+  worker-default-0:
+    image: byconity/debian:buster-runit-fdb7.1.27
+    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 server:21557  && VIRTUAL_WAREHOUSE_ID=vw_default WORKER_GROUP_ID=wg_default WORKER_ID=r0 clickhouse-server --config-file /config/worker.yml"
+    depends_on:
+      - server
+    container_name: worker-default-0
+    volumes:
+      - ${BYCONITY_BINARY_PATH}/:/opt/byconity/bin/:ro
+      - ./multi-workers/:/config/:ro
+    cap_add:
+      - SYS_PTRACE
+
+  worker-default-1:
+    image: byconity/debian:buster-runit-fdb7.1.27
+    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 server:21557  && VIRTUAL_WAREHOUSE_ID=vw_default WORKER_GROUP_ID=wg_default WORKER_ID=r1 clickhouse-server --config-file /config/worker.yml"
+    depends_on:
+      - server
+    container_name: worker-default-1
+    volumes:
+      - ${BYCONITY_BINARY_PATH}/:/opt/byconity/bin/:ro
+      - ./multi-workers/:/config/:ro
+    cap_add:
+      - SYS_PTRACE
+
+  worker-default-2:
+    image: byconity/debian:buster-runit-fdb7.1.27
+    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 server:21557  && VIRTUAL_WAREHOUSE_ID=vw_default WORKER_GROUP_ID=wg_default WORKER_ID=r2 clickhouse-server --config-file /config/worker.yml"
+    depends_on:
+      - server
+    container_name: worker-default-2
+    volumes:
+      - ${BYCONITY_BINARY_PATH}/:/opt/byconity/bin/:ro
+      - ./multi-workers/:/config/:ro
+    cap_add:
+      - SYS_PTRACE
+
+
+  daemon-manager:
+    image: byconity/debian:buster-runit-fdb7.1.27
+    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 server:21557  && daemon-manager --config-file ./config/daemon-manager.yml"
+    depends_on:
+      - server
+    container_name: daemon-manager-0
+    volumes:
+      - ${BYCONITY_BINARY_PATH}/:/opt/byconity/bin/:ro
+      - ./multi-workers/:/config/:ro
+    cap_add:
+      - SYS_PTRACE

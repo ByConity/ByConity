@@ -958,7 +958,7 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
                     index_and_condition.condition,
                     part,
                     ranges.ranges,
-                    settings,
+                    context,
                     reader_settings,
                     total_granules,
                     granules_dropped,
@@ -1628,13 +1628,14 @@ MarkRanges MergeTreeDataSelectExecutor::filterMarksUsingIndex(
     MergeTreeIndexConditionPtr condition,
     MergeTreeMetaBase::DataPartPtr part,
     const MarkRanges & ranges,
-    const Settings & settings,
+    ContextPtr context,
     const MergeTreeReaderSettings & reader_settings,
     size_t & total_granules,
     size_t & granules_dropped,
     Poco::Logger * log)
 {
-    if (!part->volume->getDisk()->exists(part->getFullRelativePath() + index_helper->getFileName() + ".idx"))
+    const auto & settings = context->getSettingsRef();
+    if (!part->getChecksums()->files.contains(index_helper->getFileName() + ".idx"))
     {
         LOG_DEBUG(log, "File for index {} does not exist. Skipping it.", backQuote(index_helper->index.name));
         return ranges;
@@ -1656,7 +1657,8 @@ MarkRanges MergeTreeDataSelectExecutor::filterMarksUsingIndex(
         index_helper, part,
         index_marks_count,
         ranges,
-        reader_settings);
+        reader_settings,
+        context->getMarkCache().get());
 
     MarkRanges res;
 
