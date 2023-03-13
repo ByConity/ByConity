@@ -2397,4 +2397,35 @@ StorageCnchMergeTree::totalRowsByPartitionPredicate(const SelectQueryInfo & quer
     return rows;
 }
 
+void StorageCnchMergeTree::checkMutationIsPossible(const MutationCommands & commands, const Settings & /*settings*/) const
+{
+    for (const auto & command : commands)
+    {
+        if (command.type != MutationCommand::MATERIALIZE_INDEX)
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED , "StorageCnchMergeTree doesn't support mutation of type {}\n", command.type);
+    }
+}
+
+void StorageCnchMergeTree::mutate(const MutationCommands & commands, ContextPtr query_context)
+{
+    if (commands.empty())
+        return;
+
+    auto txn = query_context->getCurrentTransaction();
+    auto action = txn->createAction<DDLAlterAction>(shared_from_this());
+    auto & alter_act = action->as<DDLAlterAction &>();
+    alter_act.setMutationCommands(commands);
+    txn->appendAction(std::move(action));
+    txn->commitV1();
+
+    /// TODO: trigger sync mutation if mutation_sync = 1, this is only an ugly (mainly for CI test)
+    auto bg_thread = query_context->tryGetCnchBGThread(CnchBGThreadType::MergeMutate, getStorageID());
+    if (bg_thread)
+    {
+        auto merge_mutate_thread = typeid_cast<CnchMergeMutateThread *>(bg_thread.get());
+        auto istorage = shared_from_this();
+        merge_mutate_thread->triggerPartMutate(shared_from_this());
+    }
+}
+
 } // end namespace DB
