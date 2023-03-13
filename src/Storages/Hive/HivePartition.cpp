@@ -23,7 +23,7 @@ HivePartition::HivePartition(const String & partition_id_, HivePartitionInfo & i
 
 HivePartition::~HivePartition() = default;
 
-const String & HivePartition::getID()
+const String & HivePartition::getID() const
 {
     return partition_id;
 }
@@ -78,5 +78,9 @@ const std::vector<String> & HivePartition::getPartsName() const
     return info.parts_name;
 }
 
+const String & HivePartition::getHDFSUri() const
+{
+    return info.hdfs_uri;
+}
 
 }

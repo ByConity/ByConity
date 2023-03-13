@@ -171,6 +171,20 @@ Strings HiveMetastoreClient::getPartitionIDsFromMetastore(
     return res;
 }
 
+static Strings getPartsNameInPartition(const DiskPtr & disk, const String & location)
+{
+    Strings part_names;
+    for (auto it = disk->iterateDirectory(location); it->isValid(); it->next())
+    {
+        if (startsWith(it->name(), "_") || startsWith(it->name(), "."))
+            continue;
+
+        part_names.push_back(it->name());
+    }
+
+    return part_names;
+}
+
 HivePartitionVector HiveMetastoreClient::getPartitionsFromMetastore(
     [[maybe_unused]] const StoragePtr & storage,
     const String & db_name,
@@ -196,6 +210,7 @@ HivePartitionVector HiveMetastoreClient::getPartitionsFromMetastore(
     // ExceptionHandler exception_handler;
 
     // LOG_TRACE(log, "thread pool size: " << pool_size << " num_per_thread: " << num_per_thread << " remain: " << remain);
+    auto disk = storage->getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
 
     for (size_t cnt = 0, start = 0; cnt < pool_size; ++cnt)
     {
@@ -206,6 +221,7 @@ HivePartitionVector HiveMetastoreClient::getPartitionsFromMetastore(
             {
                 auto info = std::make_shared<HivePartitionInfo>();
                 info->partition_path = normalizeHdfsSchema(partitions[i].sd.location);
+                info->hdfs_uri = disk->getName();
                 info->table_path = table_path;
                 info->db_name = partitions[i].dbName;
                 info->table_name = partitions[i].tableName;
@@ -213,7 +229,7 @@ HivePartitionVector HiveMetastoreClient::getPartitionsFromMetastore(
                 info->last_access_time = partitions[i].lastAccessTime;
                 info->values = partitions[i].values;
                 info->cols = partitions[i].sd.cols;
-                std::vector<String> parts_name = getPartsNameInPartition(storage, info->partition_path);
+                std::vector<String> parts_name = getPartsNameInPartition(disk, info->partition_path);
                 String partition_id = escapeHiveTablePrefix(table_path, info->partition_path);
                 info->parts_name = std::move(parts_name);
 
@@ -257,6 +273,7 @@ HivePartitionVector HiveMetastoreClient::getPartitionsByFilter(
     // ExceptionHandler exception_handler;
 
     // LOG_TRACE(log, "thread pool size: " << pool_size << " num_per_thread: " << num_per_thread << " remain: " << remain);
+    auto disk = storage->getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
 
     for (size_t cnt = 0, start = 0; cnt < pool_size; ++cnt)
     {
@@ -270,11 +287,12 @@ HivePartitionVector HiveMetastoreClient::getPartitionsByFilter(
                 info->table_path = table_path;
                 info->db_name = partitions[i].dbName;
                 info->table_name = partitions[i].tableName;
+                info->hdfs_uri = disk->getName();
                 info->create_time = partitions[i].createTime;
                 info->last_access_time = partitions[i].lastAccessTime;
                 info->values = partitions[i].values;
                 info->cols = partitions[i].sd.cols;
-                std::vector<String> parts_name = getPartsNameInPartition(storage, info->partition_path);
+                std::vector<String> parts_name = getPartsNameInPartition(disk, info->partition_path);
                 String partition_id = escapeHiveTablePrefix(table_path, info->partition_path);
                 info->parts_name = std::move(parts_name);
 
@@ -324,7 +342,7 @@ bool HiveMetastoreClient::getDataPartIndex(const String & part_name, Int64 & ind
 HiveDataPartsCNCHVector HiveMetastoreClient::getDataPartsInPartition(
     const StoragePtr & /*storage*/,
     HivePartitionPtr & partition,
-    const HDFSConnectionParams & hdfs_paras,
+    const HDFSConnectionParams &,
     const std::set<Int64> & required_bucket_numbers)
 {
     //if no cache
@@ -339,14 +357,14 @@ HiveDataPartsCNCHVector HiveMetastoreClient::getDataPartsInPartition(
         Int64 index = 0;
         if (!required_bucket_numbers.empty() && getDataPartIndex(part_name, index))
         {
-            if (std::find(required_bucket_numbers.begin(), required_bucket_numbers.end(), index) == required_bucket_numbers.end())
+            if (required_bucket_numbers.find(index) == required_bucket_numbers.end())
                 continue;
         }
 
         part_name = partition_id + '/' + part_name;
         auto info = std::make_shared<HivePartInfo>(part_name, partition_id);
 
-        res.push_back(std::make_shared<HiveDataPart>(part_name, table_path, nullptr, *info, hdfs_paras, skip_list));
+        res.push_back(std::make_shared<HiveDataPart>(part_name, partition->getHDFSUri(), table_path, nullptr, *info, skip_list));
     }
 
     return res;
@@ -410,20 +428,6 @@ void HiveMetastoreClient::getColumns(std::vector<FieldSchema> & result, const St
 {
     auto client_call = [&](ThriftHiveMetastoreClientPool::Entry & client) { client->get_schema(result, db_name, table_name); };
     tryCallHiveClient(client_call);
-}
-
-Strings HiveMetastoreClient::getPartsNameInPartition(const StoragePtr & /*storage*/, const String & location)
-{
-    Strings part_names;
-    for (HDFSCommon::DirectoryIterator it = HDFSCommon::DirectoryIterator(location); it != HDFSCommon::DirectoryIterator(); ++it)
-    {
-        if (startsWith(it.name(), "_") || startsWith(it.name(), "."))
-            continue;
-
-        part_names.push_back(it.name());
-    }
-
-    return part_names;
 }
 
 String HiveMetastoreClient::convertArrayTypeToCnch(const String & hive_type)
@@ -720,7 +724,7 @@ HiveMetastoreClientFactory::createThriftHiveMetastoreClient(const String & name,
     auto port = hms_url.getPort();
 
     if (host.empty() || port == 0)
-        throw Exception("host empty or port is 0 ", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "host empty or port is 0. host {}, port {}", host, port);
 
     LOG_TRACE(&Poco::Logger::get("HiveMetastoreClientFactory"), "CnchHive connect HiveMetastore host: {} {}", host, port);
     std::shared_ptr<TSocket> socket = std::make_shared<TSocket>(host, port);

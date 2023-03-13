@@ -309,5 +309,12 @@ static TTLBrokenNameNodes brokenNNs; // NameNode blacklist
 HDFSBuilderWrapper createHDFSBuilder(const String & uri_str, const Poco::Util::AbstractConfiguration &);
 HDFSFSPtr createHDFSFS(hdfsBuilder * builder);
 
+String getNameNodeUrl(const String & hdfs_url);
+String getNameNodeCluster(const String & hdfs_url);
+
+/// use default params or build from url
+/// build params from custom url
+HDFSConnectionParams hdfsParamsFromUrl(const Poco::URI & uri);
+
 }
 // #endif
