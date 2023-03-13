@@ -1,6 +1,6 @@
 
 # HDFS 安装指南
-在本指南中，我将在 3 台机器上设置 HDFS，其中 1 台机器用于 namenode，另外 2 台机器用于datanode。这里参考了官方文档 [SingleCluster](https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-common/SingleCluster.html) 和 [ClusterSetup](https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-common/ClusterSetup.html)。 这里将安装 HDFS 版本 3.3.4，因此需要 java-8，因为这是 Hadoop 推荐的 Java 版本。
+在本指南中，我们将在 3 台机器上设置 HDFS，其中 1 台机器用于 namenode，另外 2 台机器用于datanode。这里参考了官方文档 [SingleCluster](https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-common/SingleCluster.html) 和 [ClusterSetup](https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-common/ClusterSetup.html)。 这里将安装 HDFS 版本 3.3.4，因此需要 java-8，因为这是 Hadoop 推荐的 Java 版本。
 
 首先我们在 3 台机器上安装 Java。 有很多方法可以安装 Java，这里使用这两个命令安装：
 
