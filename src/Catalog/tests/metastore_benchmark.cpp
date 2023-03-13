@@ -139,7 +139,7 @@ static std::shared_ptr<DB::Catalog::IMetaStore> metastore_ptr = nullptr;
     // test loop
     for (auto _ : state)
     {
-        auto res = metastore_ptr->multiGet(keys);
+        auto res = metastore_ptr->multiGet(keys, 1);
         if (res.size() != batch_size)
         {
             std::string msg = "Fail to get all data! Expect " + std::to_string(batch_size) + ", but get " + std::to_string(res.size());

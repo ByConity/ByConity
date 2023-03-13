@@ -63,7 +63,7 @@ public:
     /***
      * Get a set of records by their names from metastore;
      */
-    virtual std::vector<std::pair<String, UInt64>> multiGet(const std::vector<String> & keys) = 0;
+    virtual std::vector<std::pair<String, UInt64>> multiGet(const std::vector<String> & keys, uint8_t snapshot) = 0;
 
     /***
      * Commit record in batch. For both write and delete.

@@ -139,7 +139,7 @@ std::shared_ptr<Iterator> FDBClient::Scan(FDBTransactionPtr tr, const ScanReques
     return std::make_shared<Iterator>(tr, scan_req);
 }
 
-fdb_error_t FDBClient::MultiGet(FDBTransactionPtr tr, const std::vector<std::string> & keys, std::vector<std::pair<std::string, UInt64>> & values)
+fdb_error_t FDBClient::MultiGet(FDBTransactionPtr tr, const std::vector<std::string> & keys, std::vector<std::pair<std::string, UInt64>> & values, uint8_t snapshot)
 {
     AssertTrsansactionStatus(tr);
     RETURN_ON_ERROR(fdb_database_create_transaction(fdb, &(tr->transaction)));
@@ -147,7 +147,7 @@ fdb_error_t FDBClient::MultiGet(FDBTransactionPtr tr, const std::vector<std::str
     for (auto & key : keys)
     {
         const uint8_t* p_key = reinterpret_cast<const uint8_t*>(key.c_str());
-        FDBFuturePtr f_read = std::make_shared<FDBFutureRAII>(fdb_transaction_get(tr->transaction, p_key, key.size(), 1));
+        FDBFuturePtr f_read = std::make_shared<FDBFutureRAII>(fdb_transaction_get(tr->transaction, p_key, key.size(), snapshot));
         future_list.emplace_back(f_read);
     }
 

@@ -74,7 +74,7 @@ public:
 
     uint64_t get(const String & key, String & value) override;
 
-    std::vector<std::pair<String, UInt64>> multiGet(const std::vector<String> & keys) override;
+    std::vector<std::pair<String, UInt64>> multiGet(const std::vector<String> & keys, uint8_t snapshot) override;
 
     bool batchWrite(const BatchCommitRequest & req, BatchCommitResponse response) override;
 

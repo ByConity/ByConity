@@ -651,7 +651,7 @@ public:
         for (const T item: items)
             keys.emplace_back(generateKey(item));
 
-        return metastore_ptr->multiGet(keys);
+        return metastore_ptr->multiGet(keys, 1);
     }
 
     void createRootPath(const String & root_path);
