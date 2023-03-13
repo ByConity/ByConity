@@ -1,0 +1,272 @@
+---
+title: 连接客户端
+tags:
+  - Docs
+---
+
+# 连接客户端
+
+文档类型：教程型
+
+文档结构：教程目的，前置准备，分步骤讲解原理 & 示例，相关文档推荐；
+
+内容提要：
+
+1. ByConity 提供哪些客户端或者驱动方式进行与其他系统的交互
+2. 如何在部署好集群后，下载、启动这些客户端
+
+## 命令行客户端（CLI）
+
+### [Docker Client](https://hub.docker.com/r/yandex/clickhouse-server/)
+
+如果你已经安装了 Docker，那么只需下面命令就可以直接建立 Byconity 连接：
+
+```
+docker run -it yandex/clickhouse-client --host 127.0.0.1 --port 9000 --user default --password xxxx
+
+```
+
+下面各项均为**可选项**，视情况而定：
+
+- `--host xxx` 主机 IP 或域名
+- `--port 9000` tcp 端口，默认为 9000
+- `--user default` 用户名
+- `--password xxxx` 密码
+
+### Clickhouse Client
+
+Byconity 兼容 ClickHouse 开源社区所提供的客户端。
+
+- [各操作系统安装 ClickhouseClient 参考](https://clickhouse.com/docs/en/integrations/sql-clients/clickhouse-client-local)，下面是以 MacOS x86_64 为例的安装命令：
+
+```
+curl -O 'https://builds.clickhouse.com/master/macos/clickhouse' \
+&& chmod a+x ./clickhouse
+
+sudo mv ./clickhouse /usr/local/bin/
+
+```
+
+- 建立连接：
+
+```
+clickhouse client --host 127.0.0.1 --password xxxx
+
+```
+
+- `clickhouse client --help` 可以查看可选参数，这里的参数和上面
+
+`docker run -it yandex/clickhouse-client ...` 后面的参数名是一致的
+
+## 各语言驱动器（Driver）
+
+Clickhouse 官方提供的各种语言的开源 Driver 可直接用于 Byconity 连接。
+
+### Python
+
+#### [clickhouse-connect](https://github.com/ClickHouse/clickhouse-connect)
+
+- clickhouse-connect 只支持 python3
+- 安装：`pip3 install clickhouse-connect`
+- 示例代码：
+
+```
+import clickhouse_connect
+
+# connect
+client = clickhouse_connect.get_client(host='localhost', username='default', password='xxxx')
+
+# query
+query_result = client.query('SHOW DATABASES;')
+print (query_result.result_set)
+
+```
+
+#### [clickhouse-driver](https://pypi.org/project/clickhouse-driver/)
+
+- Python3 安装：`pip3 install clickhouse-driver`
+- Python2 安装：`pip install clickhouse-driver`
+- 示例代码：
+
+```
+from clickhouse_driver import Client
+from clickhouse_driver import connect
+
+# connect
+client = Client(host='localhost',port =9000, user='default', password='xxxx')
+
+# query
+query_result = client.execute('SHOW DATABASES;')
+print (query_result)
+
+```
+
+### Go
+
+#### 使用 [clickhouse-go](https://github.com/ClickHouse/clickhouse-go) 连接
+
+- clickhouse-go 相比后面的 ch-go 对 Go 的类型支持更友好，底层由 ch-go 实现，推荐使用。
+- 在项目中执行 ` go get ``github.com/ClickHouse/clickhouse-go/v2 ` 安装
+- 示例代码：
+
+```
+package main
+
+import (
+        "context"
+        "log"
+        "net"
+        "time"
+
+        "github.com/ClickHouse/clickhouse-go/v2"
+)
+
+func main() {
+        ctx := context.Background()
+
+        // 配置连接参数
+        conn, err := clickhouse.Open(&clickhouse.Options{
+                Addr: string[]{"127.0.0.1"},
+                Auth: clickhouse.Auth{
+                        Database: "my_db",
+                        Username: "default",
+                        Password: "xxxx",
+                },
+                DialContext: func(ctx context.Context, addr string) (net.Conn, error) {
+                        var d net.Dialer
+                        return d.DialContext(ctx, "tcp", addr)
+                },
+                Settings: clickhouse.Settings{
+                        "max_execution_time": 60,
+                },
+                DialTimeout:      time.Duration(10) * time.Second,
+                MaxOpenConns:     5,
+                MaxIdleConns:     5,
+                ConnMaxLifetime:  time.Duration(10) * time.Minute,
+                ConnOpenStrategy: clickhouse.ConnOpenInOrder,
+        })
+        if err != nil {
+                log.Panic(err)
+        }
+
+        if err := conn.Ping(ctx); err != nil {
+                log.Panic(err)
+        }
+
+        // 执行 SQL
+        if err := conn.Exec(ctx, "SHOW DATABASES;"); err != nil {
+                log.Panic(err)
+        }
+}
+
+```
+
+#### 使用 [ch-go](https://github.com/ClickHouse/ch-go) 连接
+
+- ch-go 对 Clickhouse 数据类型支持更好，性能稍高于 clickhouse-go。
+- 安装：` go get ``github.com/ClickHouse/ch-go `
+- 示例代码：
+
+```
+package main
+
+import (
+  "context"
+  "fmt"
+
+  "github.com/ClickHouse/ch-go"
+  "github.com/ClickHouse/ch-go/proto"
+)
+
+func main() {
+  ctx := context.Background()
+  c, err := ch.Dial(ctx, ch.Options{Address: "localhost:9000"})
+  if err != nil {
+    panic(err)
+  }
+  var (
+    numbers int
+    data    proto.ColUInt64
+  )
+  if err := c.Do(ctx, ch.Query{
+    Body: "SELECT number FROM system.numbers LIMIT 500000000",
+    Result: proto.Results{
+      {Name: "number", Data: &data},
+    },
+    // OnResult will be called on next received data block.
+    OnResult: func(ctx context.Context, b proto.Block) error {
+      numbers += len(data)
+      return nil
+    },
+  }); err != nil {
+    panic(err)
+  }
+  fmt.Println("numbers:", numbers)
+}
+
+```
+
+### Java
+
+用 [clickhouse-jdbc](https://github.com/ClickHouse/clickhouse-jdbc/tree/master/clickhouse-jdbc) 连接
+
+- 通过 maven 配置安装：
+
+```
+<dependency>
+    <!-- please stop using ru.yandex.clickhouse as it's been deprecated -->
+    <groupId>com.clickhouse</groupId>
+    <artifactId>clickhouse-jdbc</artifactId>
+    <version>0.3.2-patch11</version>
+    <!-- use uber jar with all dependencies included, change classifier to http for smaller jar -->
+    <classifier>all</classifier>
+    <exclusions>
+        <exclusion>
+            <groupId>*</groupId>
+            <artifactId>*</artifactId>
+        </exclusion>
+    </exclusions>
+</dependency>
+
+```
+
+- 示例代码：
+
+```
+String url = "jdbc:ch://localhost:8123";
+Properties properties = new Properties();
+properties.setProperty("max_execution_time", "120");
+ClickHouseDataSource dataSource = new ClickHouseDataSource(url, properties);
+try (Connection conn = dataSource.getConnection("default", "password");
+    Statement stmt = conn.createStatement()) {
+    ResultSet rs = stmt.executeQuery("SHOW DATABASES;");
+    while(rs.next()) {
+        // ...
+    }
+}
+
+```
+
+## HTTP
+
+ByConity 也提供 HTTP 连接方式，可以用 curl 或 postman 方式执行 SQL。curl 示例：
+
+```
+curl --location --request POST '127.0.0.1:8123/?max_execution_time=60&default_format=Native' \
+--header 'Authorization: Basic xxx' \
+--header 'Content-Type: text/plain' \
+--data-raw 'SHOW DATABASES;'
+
+```
+
+- 以 `Basic Auth`(用户名 + 密码)方式进行加密，加密结果为上面的 `--header 'Authorization: Basic xxx'`
+- 在 Body 中直接填写要执行的 SQL，对应上面的 `--data-raw 'SHOW DATABASES;'`
+- HTTP 接口默认端口号为 `8123`
+- 示例参数：
+- `max_execution_time=60` 指定查询最大等待时间(秒)
+- 默认情况下，返回的数据是 `TabSeparated` 格式的，`default_format` 可以指定 `TabSeparated` 之外的默认格式
+
+## 参考文档
+
+- [Clickhouse Http 参考](https://clickhouse.com/docs/zh/interfaces/http)
+- [Clickhouse 各语言 Driver 参考](https://clickhouse.com/docs/en/integrations/language-clients)

@@ -1,0 +1,1800 @@
+---
+title: "Aggregation"
+slug: "aggregate"
+hidden: false
+metadata: 
+  title: "Aggregation Functions in ByConity"
+  description: "Find out various aggregation functions supported in ByConity such as anyHeavy, anyLast, argMax, argMin, avg, corr, covarPop, covarSamp, groupBitAnd, etc."
+createdAt: "2021-07-29T11:49:53.230Z"
+updatedAt: "2021-09-23T03:25:11.849Z"
+tags:
+- Docs
+---
+
+> Notice:
+Some of the examples below are referenced from [ClickHouse Documentation](https://clickhouse.com/docs/en/sql-reference/functions/) but have been adapted and modified to work in ByConity.
+
+## any
+Selects the first encountered value.
+The query can be executed in any order and even in a different order each time, so the result of this function is indeterminate.
+To get a determinate result, you can use the ‘min’ or ‘max’ function instead of ‘any’.
+
+In some cases, you can rely on the order of execution. This applies to cases when SELECT comes from a subquery that uses ORDER BY.
+
+When a `SELECT` query has the `GROUP BY` clause or at least one aggregate function, ByConity (in contrast to MySQL) requires that all expressions in the `SELECT` , `HAVING` , and `ORDER BY` clauses be calculated from keys or from aggregate functions. In other words, each column selected from the table must be used either in keys or inside aggregate functions. To get behavior like in MySQL, you can put the other columns in the `any` aggregate function.
+
+**Syntax**
+```sql
+any(column)
+```
+
+**Arguments**
+- `column` – The column name. 
+
+**Returned value**
+- first value encontered. Type is same as input column.
+
+**Example**
+```sql
+SELECT any(number) FROM numbers(10);
+```
+
+
+```plain%20text
+┌─any(number)─┐
+│ 0           │
+└─────────────┘
+```
+
+## anyHeavy
+Selects a frequently occurring value using the [heavy hitters](http://www.cs.umd.edu/~samir/498/karp.pdf) algorithm. If there is a value that occurs more than in half the cases in each of the query’s execution threads, this value is returned. Normally, the result is nondeterministic.
+
+**Syntax**
+
+```sql
+anyHeavy(column)
+```
+
+**Arguments**
+- `column` – The column name. 
+
+**Returned value**
+- most frequent value. Type is same as input column.
+
+**Example**
+```sql
+CREATE TABLE IF NOT EXISTS test.functionAnyHeavy(id Int) ENGINE=CnchMergeTree() ORDER BY id;
+INSERT INTO test.functionAnyHeavy values (1),(1),(1),(2),(3);
+SELECT anyHeavy(id) FROM test.functionAnyHeavy;
+```
+
+
+```plain%20text
+┌─anyHeavy(id)─┐
+│ 1            │
+└──────────────┘
+```
+
+## anyLast
+Selects the last value encountered.
+The result is just as indeterminate.
+
+**Syntax**
+```sql
+anyLast(column)
+```
+
+**Arguments**
+- `column` – The column name. 
+
+**Returned value**
+- last value encountered. Type is same as input column.
+
+**Example**
+```sql
+SELECT anyLast(number) FROM numbers(10);
+```
+
+
+```plain%20text
+┌─anyLast(number)─┐
+│ 9               │
+└─────────────────┘
+```
+
+
+## argMax
+Calculates the `arg` value for a maximum `val` value. If there are several different values of `arg` for maximum values of `val` , returns the first of these values encountered.
+
+**Syntax**
+```sql
+argMax(arg, val)
+```
+
+**Arguments**
+- `arg` — Argument. 
+- `val` — Value. 
+
+**Returned value**
+- arg value that corresponds to maximum val value. Type is same as arg type.
+
+**Example**
+```sql
+CREATE TABLE IF NOT EXISTS test.functionArgMax (user String, salary Int) Engine=CnchMergeTree() ORDER BY user;
+INSERT INTO test.functionArgMax VALUES ('director',5000),('manager',3000),('worker',1000);
+SELECT argMax(user, salary) FROM test.functionArgMax;
+```
+
+
+```plain%20text
+┌─argMax(user, salary)─┐
+│ director             │
+└──────────────────────┘
+```
+
+## argMin
+Calculates the `arg` value for a minimum `val` value. If there are several different values of `arg` for minimum values of `val` , returns the first of these values encountered.
+
+**Syntax**
+```sql
+argMin(arg, val)
+```
+
+**Arguments**
+- `arg` — Argument. 
+- `val` — Value. 
+
+**Returned value**
+- arg value that corresponds to minimum val value. Type is same as arg type.
+
+**Example**
+```sql
+CREATE TABLE IF NOT EXISTS test.functionArgMin (user String, salary Int) Engine=CnchMergeTree() ORDER BY user;
+INSERT INTO test.functionArgMin VALUES ('director',5000),('manager',3000),('worker',1000);
+SELECT argMin(user, salary) FROM test.functionArgMin;
+```
+
+```plain%20text
+┌─argMin(user, salary)─┐
+│ worker               │
+└──────────────────────┘
+```
+
+## avg
+Calculates the arithmetic mean.
+
+**Syntax**
+```sql
+avg(x)
+```
+
+**Arguments**
+- `x` — input values, must be Integer, Float or Decimal. 
+
+**Returned value**
+- The arithmetic mean, always as Float64. 
+- `NaN` if the input parameter `x` is empty. 
+
+**Example**
+```sql
+CREATE TABLE IF NOT EXISTS test.functionAvg (x Int8) ENGINE=CnchMergeTree() ORDER BY x;
+INSERT INTO test.functionAvg SELECT * FROM numbers(6);
+SELECT avg(x) FROM test.functionAvg;
+```
+
+```plain%20text
+┌─avg(x)──┐
+│ 2.5e+00 │
+└─────────┘
+```
+
+```sql
+CREATE TABLE IF NOT EXISTS test.functionAvg (x Int8) ENGINE=CnchMergeTree() ORDER BY x;
+SELECT avg(x) FROM test.functionAvg;
+```
+
+```plain%20text
+┌─avg(x)─┐
+│ NaN    │
+└────────┘
+```
+
+## corr
+Calculates the Pearson correlation coefficient: `Σ((x - x̅)(y - y̅)) / sqrt(Σ((x - x̅)^2) * Σ((y - y̅)^2))`.
+This function uses a numerically unstable algorithm. If you need [numerical stability](https://en.wikipedia.org/wiki/Numerical_stability) in calculations, use the `corrStable` function. It works slower but provides a lower computational error.
+
+**Syntax**
+```sql
+corr(x, y)
+```
+
+**Arguments**
+- `x` — input values, must be Integer, Float. 
+- `y` — input values, must be Integer, Float.
+
+**Returned value**
+- Pearson correlation coefficient, always as Float64. 
+
+**Example**
+```sql
+CREATE TABLE IF NOT EXISTS test.functionCorr (x Int8, y Int8) ENGINE=CnchMergeTree() ORDER BY x;
+INSERT INTO test.functionCorr VALUES (1,5),(2,4),(3,3),(4,2),(5,1);
+SELECT corr(x,y) FROM test.functionCorr;
+```
+
+```plain%20text
+┌─corr(x, y)─┐
+│ -1e+00     │
+└────────────┘
+```
+
+## covarPop
+Calculates the value of `Σ((x - x̅)(y - y̅)) / n`.
+This function uses a numerically unstable algorithm. If you need [numerical stability](https://en.wikipedia.org/wiki/Numerical_stability) in calculations, use the `covarPopStable` function. It works slower but provides a lower computational error.
+
+**Syntax**
+```sql
+covarPop(x, y)
+```
+
+**Arguments**
+- `x` — input values, must be Integer, Float. 
+- `y` — input values, must be Integer, Float.
+
+**Returned value**
+- `Σ((x - x̅)(y - y̅)) / n`, always as Float64.
+
+**Example**
+```sql
+CREATE TABLE IF NOT EXISTS test.functionCovarPop (x Int8, y Int8) ENGINE=CnchMergeTree() ORDER BY x;
+INSERT INTO test.functionCovarPop VALUES (1,5),(2,4),(3,3),(4,2),(5,1);
+SELECT covarPop(x,y) FROM test.functionCovarPop;
+```
+
+```plain%20text
+┌─covarPop(x, y)─┐
+│ -2e+00         │
+└────────────────┘
+```
+
+## covarSamp
+Calculates the value of `Σ((x - x̅)(y - y̅)) / (n - 1)`.
+This function uses a numerically unstable algorithm. If you need [numerical stability](https://en.wikipedia.org/wiki/Numerical_stability) in calculations, use the `covarSampStable` function. It works slower but provides a lower computational error.
+
+**Syntax**
+```sql
+covarSamp(x, y)
+```
+
+**Arguments**
+- `x` — input values, must be Integer, Float. 
+- `y` — input values, must be Integer, Float.
+
+**Returned value**
+- `Σ((x - x̅)(y - y̅)) / (n - 1)`, always as Float64.
+- When n <= 1, returns NaN.
+
+**Example**
+```sql
+CREATE TABLE IF NOT EXISTS test.functionCovarSamp (x Int8, y Int8) ENGINE=CnchMergeTree() ORDER BY x;
+INSERT INTO test.functionCovarSamp VALUES (1,5),(2,4),(3,3),(4,2),(5,1);
+SELECT covarSamp(x,y) FROM test.functionCovarSamp;
+```
+
+```plain%20text
+┌─covarSamp(x, y)─┐
+│ -2.5e+00        │
+└─────────────────┘
+```
+
+```sql
+CREATE TABLE IF NOT EXISTS test.functionCovarSamp (x Int8, y Int8) ENGINE=CnchMergeTree() ORDER BY x;
+INSERT INTO test.functionCovarSamp VALUES (1,5);
+SELECT covarSamp(x,y) FROM test.functionCovarSamp;
+```
+
+```plain%20text
+┌─covarSamp(x, y)─┐
+│ NaN             │
+└─────────────────┘
+```
+
+## groupArray
+Creates an array of argument values.
+Values can be added to the array in any (indeterminate) order.
+
+The second version (with the `max_size` parameter) limits the size of the resulting array to `max_size` elements. For example, `groupArray(1)(x)` is equivalent to `[any (x)]` .
+
+In some cases, you can still rely on the order of execution. This applies to cases when `SELECT` comes from a subquery that uses `ORDER BY` .
+
+**Syntax**
+```sql
+groupArray(x)
+groupArray(max_size)(x)
+```
+
+**Arguments**
+- `x` — input values.
+
+**Returned value**
+- array of values. Type is Array.
+
+**Example**
+```sql
+select groupArray(number) from numbers(10);
+```
+
+```plain%20text
+┌─groupArray(number)─────────────┐
+│ [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] │
+└────────────────────────────────┘
+```
+
+```sql
+select groupArray(5)(number) from numbers(10);
+```
+
+```plain%20text
+┌─groupArray(5)(number)─┐
+│ [0, 1, 2, 3, 4]       │
+└───────────────────────┘
+```
+
+
+
+## groupBitAnd
+Applies bitwise `AND` for series of numbers.
+
+**Syntax**
+```sql
+groupBitAnd(expr)
+```
+
+**Arguments**
+- `expr` – An expression that results in `UInt*` type.
+
+**Return value**
+- Value of the `UInt*` type.
+
+**Example**
+```sql
+CREATE TABLE IF NOT EXISTS test.groupBitAnd (num UInt8) ENGINE=CnchMergeTree() ORDER BY num;
+INSERT INTO test.groupBitAnd VALUES (44),(28),(13),(85);
+SELECT groupBitAnd(num) FROM test.groupBitAnd;
+```
+
+
+```plain%20text
+┌─groupBitAnd(num)─┐
+│ 4                │
+└──────────────────┘
+```
+Bit representation of 44,28,13 and 85 are 00101100,00011100,00001101 and 01010101. The bit and of the four numbers is 00000100 which is equal to 4.
+
+
+## groupBitOr
+Applies bitwise `OR` for series of numbers.
+
+**Syntax**
+```sql
+groupBitOr(expr)
+```
+
+**Arguments**
+- `expr` – An expression that results in `UInt*` type.
+
+**Returned value**
+- Value of the `UInt*` type.
+
+**Example**
+```sql
+CREATE TABLE IF NOT EXISTS test.functionGroupBitOr (num UInt8) ENGINE=CnchMergeTree ORDER BY num;
+INSERT INTO test.functionGroupBitOr VALUES (44),(28),(13),(85);
+SELECT groupBitOr(num) FROM test.functionGroupBitOr;
+```
+
+
+```plain%20text
+┌─groupBitOr(num)─┐
+│ 125             │
+└─────────────────┘
+```
+Bit representation of 44,28,13 and 85 are 00101100,00011100,00001101 and 01010101. The bit or of the four numbers is 01111101 which is equal to 125.
+## groupBitXor
+Applies bitwise `XOR` for series of numbers.
+
+**Syntax**
+```sql
+groupBitXor(expr)
+```
+
+**Arguments**
+- `expr` – An expression that results in `UInt*` type.
+
+**Return value**
+- Value of the `UInt*` type.
+
+**Example**
+```sql
+CREATE TABLE IF NOT EXISTS test.functionGroupBitXor (num UInt8) ENGINE=CnchMergeTree ORDER BY num;
+INSERT INTO test.functionGroupBitXor VALUES (44),(28),(13),(85);
+SELECT groupBitXor(num) FROM test.functionGroupBitXor;
+
+```
+
+```plain%20text
+┌─groupBitXor(num)─┐
+│ 104              │
+└──────────────────┘
+```
+Bit representation of 44,28,13 and 85 are 00101100,00011100,00001101 and 01010101. The bit xor of the four numbers is 01101000 which is equal to 104.
+## groupBitmap
+Bitmap or Aggregate calculations from a unsigned integer column, return cardinality of type UInt64, if add suffix -State, then return bitmap object.
+
+**Syntax**
+```sql
+groupBitmap(expr)
+```
+
+**Arguments**
+- `expr` – An expression that results in `UInt*` type.
+
+**Return value**
+- Value of the `UInt64` type.
+
+**Example**
+```sql
+SELECT groupBitmapState(number) FROM numbers(4);
+```
+
+
+```plain%20text
+┌─groupBitmap(number)─┐
+│ 4                   │
+└─────────────────────┘
+```
+
+## groupBitmapAnd
+Calculations the AND of a bitmap column, return cardinality of type UInt64, if add suffix -State, then return bitmap object.
+
+**Syntax**
+```sql
+groupBitmapAnd(expr)
+```
+
+**Arguments**
+- `expr` – An expression that results in `AggregateFunction(groupBitmap, UInt*)` type.
+
+**Return value**
+- Value of the `UInt64` type.
+
+**Example**
+```sql
+DROP TABLE IF EXISTS bitmap_column_expr_test2;
+
+CREATE TABLE bitmap_column_expr_test2(tag_id String,z AggregateFunction(groupBitmap, UInt32)) ENGINE = CnchMergeTree ORDER BY tag_id;
+
+INSERT INTO bitmap_column_expr_test2 VALUES ('tag1', bitmapBuild(cast([1,2,3,4,5,6,7,8,9,10] as Array(UInt32))));
+INSERT INTO bitmap_column_expr_test2 VALUES ('tag2', bitmapBuild(cast([6,7,8,9,10,11,12,13,14,15] as Array(UInt32))));
+INSERT INTO bitmap_column_expr_test2 VALUES ('tag3', bitmapBuild(cast([2,4,6,8,10,12] as Array(UInt32))));
+
+SELECT groupBitmapAnd(z) FROM bitmap_column_expr_test2 WHERE like(tag_id, 'tag%');
+┌─groupBitmapAnd(z)─┐
+│               3   │
+└───────────────────┘
+
+SELECT arraySort(bitmapToArray(groupBitmapAndState(z))) FROM bitmap_column_expr_test2 WHERE like(tag_id, 'tag%');
+┌─arraySort(bitmapToArray(groupBitmapAndState(z)))─┐
+│ [6,8,10]                                         │
+└──────────────────────────────────────────────────┘
+
+```
+
+## groupBitmapOr
+Calculations the OR of a bitmap column, return cardinality of type UInt64, if add suffix -State, then return bitmap object. This is equivalent to `groupBitmapMerge` .
+
+**Syntax**
+```sql
+groupBitmapOr(expr)
+```
+
+**Arguments**
+- `expr` – An expression that results in `AggregateFunction(groupBitmap, UInt*)` type.
+
+**Returned value**
+- Value of the `UInt64` type.
+
+**Example**
+```sql
+
+DROP TABLE IF EXISTS bitmap_column_expr_test2;
+CREATE TABLE bitmap_column_expr_test2(tag_id String,z AggregateFunction(groupBitmap, UInt32)) ENGINE = CnchMergeTree ORDER BY tag_id;
+
+INSERT INTO bitmap_column_expr_test2 VALUES ('tag1', bitmapBuild(cast([1,2,3,4,5,6,7,8,9,10] as Array(UInt32))));
+INSERT INTO bitmap_column_expr_test2 VALUES ('tag2', bitmapBuild(cast([6,7,8,9,10,11,12,13,14,15] as Array(UInt32))));
+INSERT INTO bitmap_column_expr_test2 VALUES ('tag3', bitmapBuild(cast([2,4,6,8,10,12] as Array(UInt32))));
+
+SELECT groupBitmapOr(z) FROM bitmap_column_expr_test2 WHERE like(tag_id, 'tag%');
+
+┌─groupBitmapOr(z)─┐
+│             15   │
+└──────────────────┘
+
+SELECT arraySort(bitmapToArray(groupBitmapOrState(z))) FROM bitmap_column_expr_test2 WHERE like(tag_id, 'tag%');
+┌─arraySort(bitmapToArray(groupBitmapOrState(z)))─┐
+│ [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]           │
+└─────────────────────────────────────────────────┘
+```
+
+## groupBitmapXor
+Calculations the XOR of a bitmap column, return cardinality of type UInt64, if add suffix -State, then return bitmap object.
+
+**Syntax**
+```sql
+groupBitmapOr(expr)
+```
+
+**Arguments**
+- `expr` – An expression that results in `AggregateFunction(groupBitmap, UInt*)` type.
+
+**Returned value**
+- Value of the `UInt64` type.
+
+**Example**
+
+```sql
+
+DROP TABLE IF EXISTS bitmap_column_expr_test2;
+CREATE TABLE bitmap_column_expr_test2(tag_id String, z AggregateFunction(groupBitmap, UInt32)) ENGINE = CnchMergeTree ORDER BY tag_id;
+
+
+INSERT INTO bitmap_column_expr_test2 VALUES ('tag1', bitmapBuild(cast([1,2,3,4,5,6,7,8,9,10] as Array(UInt32))));
+INSERT INTO bitmap_column_expr_test2 VALUES ('tag2', bitmapBuild(cast([6,7,8,9,10,11,12,13,14,15] as Array(UInt32))));
+INSERT INTO bitmap_column_expr_test2 VALUES ('tag3', bitmapBuild(cast([2,4,6,8,10,12] as Array(UInt32))));
+
+SELECT groupBitmapXor(z) FROM bitmap_column_expr_test2 WHERE like(tag_id, 'tag%');
+┌─groupBitmapXor(z)─┐
+│              10   │
+└───────────────────┘
+
+SELECT arraySort(bitmapToArray(groupBitmapXorState(z))) FROM bitmap_column_expr_test2 WHERE like(tag_id, 'tag%');
+
+┌─arraySort(bitmapToArray(groupBitmapXorState(z)))─┐
+│ [1,3,5,6,8,10,11,13,14,15]                       │
+└──────────────────────────────────────────────────┘
+
+```
+
+## groupUniqArray
+Creates an array from different argument values. Memory consumption is the same as for the uniqExact function.
+
+The second version (with the `max_size` parameter) limits the size of the resulting array to `max_size` elements.
+
+**Syntax**
+
+```sql
+groupUniqArray(x)
+groupUniqArray(max_size)(x)
+```
+
+**Arguments**
+- `x` — input values.
+
+**Returned value**
+- array of values. Type is Array.
+
+**Example**
+```sql
+select groupUniqArray(number) from numbers(10);
+```
+
+```plain%20text
+┌─groupUniqArray(number)─────────┐
+│ [0, 8, 3, 9, 7, 2, 1, 6, 4, 5] │
+└────────────────────────────────┘
+```
+<!-- TODO: Below Function Does Not Work In CNCH, Check with ChenXing -->
+```sql
+select groupUniqArray(5)(number) from numbers(10); 
+```
+
+```plain%20text
+┌─groupArray(5)(number)─┐
+│ [0, 1, 2, 3, 4]       │
+└───────────────────────┘
+```
+
+## histogram
+Calculates an adaptive histogram. It does not guarantee precise results.
+
+The functions uses [A Streaming Parallel Decision Tree Algorithm](http://jmlr.org/papers/volume11/ben-haim10a/ben-haim10a.pdf) . The borders of histogram bins are adjusted as new data enters a function. In common case, the widths of bins are not equal.
+
+
+**Syntax**
+```sql
+histogram(number_of_bins)(values)
+```
+
+**Arguments**
+- `number_of_bins` — Upper limit for the number of bins in the histogram. The function automatically calculates the number of bins. It tries to reach the specified number of bins, but if it fails, it uses fewer bins.
+- `values` — Expression resulting in input values.
+
+**Returned values**
+- Array of Tuples of the following format:
+
+```
+[(lower_1, upper_1, height_1), ... (lower_N, upper_N, height_N)]
+
+- `lower` — Lower bound of the bin.
+- `upper` — Upper bound of the bin.
+- `height` — Calculated height of the bin.
+```
+
+**Example**
+
+```sql
+SELECT histogram(5)(number + 1) FROM numbers(20);
+```
+
+
+```plain%20text
+┌─histogram(5)(plus(number, 1))───────────────────────────────────────────┐
+│ [(1,4.5,4),(4.5,8.5,4),(8.5,12.75,4.125),(12.75,17,4.625),(17,20,3.25)] │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+You can visualize a histogram with the bar function, for example:
+
+```sql
+
+WITH histogram(5)(rand() % 100) AS hist
+SELECT
+    arrayJoin(hist).3 AS height,
+    bar(height, 0, 6, 5) AS bar
+FROM numbers(20);
+
+```
+
+
+```plain%20text
+
+┌─height─┬─bar───┐
+
+│  2.125 │ █▋    │
+
+│   3.25 │ ██▌   │
+
+│  5.625 │ ████▏ │
+
+│  5.625 │ ████▏ │
+
+│  3.375 │ ██▌   │
+
+└────────┴───────┘
+
+```
+
+In this case, you should remember that you do not know the histogram bin borders.
+
+## max
+Aggregate function that calculates the maximum across a group of values.
+
+**Syntax**
+```sql
+max(values)
+```
+
+**Arguments**
+- `values` — input values.
+
+**Returned values**
+- maximum value. Type is same as values
+
+**Example**
+```sql
+SELECT max(number) FROM numbers(20);
+```
+
+```plain%20text
+┌─max(number)─┐
+│ 19          │
+└─────────────┘
+```
+
+If you need non-aggregate function to choose a maximum of two values, see `greatest` :
+```sql
+SELECT greatest(a, b) FROM table;
+```
+
+## median
+The `median*` functions are the aliases for the corresponding `quantile*` functions. They calculate median of a numeric data sample.
+
+Functions:
+- `median` — Alias for quantile. 
+- `medianDeterministic` — Alias for quantileDeterministic. 
+- `medianExact` — Alias for quantileExact. 
+- `medianExactWeighted` — Alias for quantileExactWeighted. 
+- `medianTiming` — Alias for quantileTiming.
+- `medianTimingWeighted` — Alias for quantileTimingWeighted. 
+- `medianTDigest` — Alias for quantileTDigest. 
+- `medianTDigestWeighted` — Alias for quantileTDigestWeighted. 
+- `medianBFloat16` — Alias for quantileBFloat16.
+##  medianDeterministic 
+Alias for quantileDeterministic.
+
+##  medianExact
+Alias for quantileExact.
+
+## medianExactWeighted
+Alias for quantileExactWeighted.
+
+## medianTDigest
+Alias for quantileTDigest.
+
+## medianTDigestWeighted
+Alias for quantileTDigestWeighted.
+
+## medianTiming
+Alias for quantileTiming.
+
+## medianTimingWeighted
+Alias for quantileTimingWeighted.
+
+## quantile
+Computes an approximate [quantile](https://en.wikipedia.org/wiki/Quantile) of a numeric data sequence.
+
+This function applies [reservoir sampling](https://en.wikipedia.org/wiki/Reservoir_sampling) with a reservoir size up to 8192 and a random number generator for sampling. The result is non-deterministic. To get an exact quantile, use the quantileExact function.
+
+When using multiple `quantile*` functions with different levels in a query, the internal states are not combined (that is, the query works less efficiently than it could). In this case, use the quantiles function.
+
+**Syntax**
+```sql
+quantile(level)(expr)
+```
+Alias: `median` .
+
+**Arguments**
+- `level` — Level of quantile. Optional parameter. Constant floating-point number from 0 to 1. We recommend using a `level` value in the range of `[0.01, 0.99]` . Default value: 0.5. At `level=0.5` the function calculates [median](https://en.wikipedia.org/wiki/Median) . 
+- `expr` — Expression over the column values resulting in numeric, Date, or DateTime.
+
+
+**Returned value**
+- Approximate quantile of the specified level. 
+Type:
+- Float64 for numeric data type input. 
+- Date if input values have the `Date` type.
+- DateTime if input values have the `DateTime` type. 
+
+**Example**
+```sql
+SELECT quantile(number) FROM numbers(10);
+```
+
+
+```plain%20text
+┌─quantile(number)─┐
+│ 4.5e+00          │
+└──────────────────┘
+```
+
+
+## quantileDeterministic
+Computes an approximate [quantile](https://en.wikipedia.org/wiki/Quantile) of a numeric data sequence.
+
+This function applies [reservoir sampling](https://en.wikipedia.org/wiki/Reservoir_sampling) with a reservoir size up to 8192 and deterministic algorithm of sampling. The result is deterministic. To get an exact quantile, use the quantileExact function.
+
+When using multiple `quantile*` functions with different levels in a query, the internal states are not combined (that is, the query works less efficiently than it could). In this case, use the quantiles function.
+
+**Syntax**
+```sql
+quantileDeterministic(level)(expr, determinator)
+```
+Alias: `medianDeterministic` .
+
+**Arguments**
+- `level` — Level of quantile. Optional parameter. Constant floating-point number from 0 to 1. We recommend using a `level` value in the range of `[0.01, 0.99]` . Default value: 0.5. At `level=0.5` the function calculates [median](https://en.wikipedia.org/wiki/Median) . 
+- `expr` — Expression over the column values resulting in numeric data types, Date or DateTime. 
+- `determinator` — Number whose hash is used instead of a random number generator in the reservoir sampling algorithm to make the result of sampling deterministic. As a determinator you can use any deterministic positive number, for example, a user id or an event id. If the same determinator value occures too often, the function works incorrectly. 
+
+**Returned value**
+- Approximate quantile of the specified level. 
+Type:
+- Float64 for numeric data type input. 
+- Date if input values have the `Date` type.
+- DateTime if input values have the `DateTime` type. 
+
+**Example**
+```sql
+SELECT quantileDeterministic(number, 1) FROM numbers(10);
+```
+
+
+```plain%20text
+┌─quantileDeterministic(number, 1)─┐
+│ 4.5e+00                          │
+└──────────────────────────────────┘
+```
+
+
+## quantileExact
+Exactly computes the [quantile](https://en.wikipedia.org/wiki/Quantile) of a numeric data sequence.
+
+To get exact value, all the passed values are combined into an array, which is then partially sorted. Therefore, the function consumes `O(n)` memory, where `n` is a number of values that were passed. However, for a small number of values, the function is very effective.
+
+When using multiple `quantile*` functions with different levels in a query, the internal states are not combined (that is, the query works less efficiently than it could). In this case, use the quantiles function.
+
+**Syntax**
+```sql
+quantileExact(level)(expr)
+```
+Alias: `medianExact` .
+
+**Arguments**
+- `level` — Level of quantile. Optional parameter. Constant floating-point number from 0 to 1. We recommend using a `level` value in the range of `[0.01, 0.99]` . Default value: 0.5. At `level=0.5` the function calculates [median](https://en.wikipedia.org/wiki/Median) . 
+- `expr` — Expression over the column values resulting in numeric data types, Date or DateTime. 
+
+**Returned value**
+- Quantile of the specified level.
+Type:
+- Float64 for numeric data type input. 
+- Date if input values have the `Date` type. 
+- DateTime if input values have the `DateTime` type. 
+
+**Example**
+```sql
+SELECT quantileExact(number) FROM numbers(10);
+```
+
+
+```plain%20text
+┌─quantileExact(number)─┐
+│                     5 │
+└───────────────────────┘
+```
+
+## quantileExactWeighted
+Exactly computes the [quantile](https://en.wikipedia.org/wiki/Quantile) of a numeric data sequence, taking into account the weight of each element.
+
+To get exact value, all the passed values are combined into an array, which is then partially sorted. Each value is counted with its weight, as if it is present `weight` times. A hash table is used in the algorithm. Because of this, if the passed values are frequently repeated, the function consumes less RAM than quantileExact. You can use this function instead of `quantileExact` and specify the weight 1.
+
+When using multiple `quantile*` functions with different levels in a query, the internal states are not combined (that is, the query works less efficiently than it could). In this case, use the quantiles function.
+
+**Syntax**
+```sql
+quantileExactWeighted(level)(expr, weight)
+```
+Alias: `medianExactWeighted` .
+
+**Arguments**
+- `level` — Level of quantile. Optional parameter. Constant floating-point number from 0 to 1. We recommend using a `level` value in the range of `[0.01, 0.99]` . Default value: 0.5. At `level=0.5` the function calculates [median](https://en.wikipedia.org/wiki/Median) . 
+- `expr` — Expression over the column values resulting in numeric, Date or DateTime. 
+- `weight` — Column with weights of sequence members. Weight is a number of value occurrences. 
+
+**Returned value**
+- Quantile of the specified level. 
+Type:
+- Float64 for numeric data type input. 
+- Date if input values have the `Date` type. 
+- DateTime if input values have the `DateTime` type. 
+
+**Example**
+```sql
+CREATE TABLE IF NOT EXISTS test.functionQuantileExactWeighted (n UInt8, val UInt8) ENGINE=CnchMergeTree ORDER BY n;
+INSERT INTO test.functionQuantileExactWeighted VALUES (0,3),(1,2),(2,1),(5,4);
+SELECT quantileExactWeighted(n, val) FROM test.functionQuantileExactWeighted;
+```
+
+
+```plain%20text
+┌─quantileExactWeighted(n, val)─┐
+│                             1 │
+└───────────────────────────────┘
+```
+
+
+
+## quantileTDigest
+Computes an approximate [quantile](https://en.wikipedia.org/wiki/Quantile) of a numeric data sequence using the [t-digest](https://github.com/tdunning/t-digest/blob/master/docs/t-digest-paper/histo.pdf) algorithm.
+
+Memory consumption is `log(n)` , where `n` is a number of values. The result depends on the order of running the query, and is nondeterministic.
+
+The performance of the function is lower than performance of quantile or quantileTiming. In terms of the ratio of State size to precision, this function is much better than `quantile` .
+
+When using multiple `quantile*` functions with different levels in a query, the internal states are not combined (that is, the query works less efficiently than it could). In this case, use the quantiles function.
+
+**Syntax**
+```sql
+quantileTDigest(level)(expr)
+```
+Alias: `medianTDigest` .
+
+**Arguments**
+- `level` — Level of quantile. Optional parameter. Constant floating-point number from 0 to 1. We recommend using a `level` value in the range of `[0.01, 0.99]` . Default value: 0.5. At `level=0.5` the function calculates [median](https://en.wikipedia.org/wiki/Median) . 
+- `expr` — Expression over the column values resulting in numeric data types, Date or DateTime. 
+
+
+**Returned value**
+- Approximate quantile of the specified level. 
+Type:
+- Float64 for numeric data type input. 
+- Date if input values have the `Date` type. 
+- DateTime if input values have the `DateTime` type. 
+
+**Example**
+```sql
+SELECT quantileTDigest(number) FROM numbers(10)
+```
+
+```plain%20text
+┌─quantileTDigest(number)─┐
+│ 4.5e+00                 │
+└─────────────────────────┘
+```
+
+
+## quantileTDigestWeighted
+Computes an approximate [quantile](https://en.wikipedia.org/wiki/Quantile) of a numeric data sequence using the [t-digest](https://github.com/tdunning/t-digest/blob/master/docs/t-digest-paper/histo.pdf) algorithm. The function takes into account the weight of each sequence member. The maximum error is 1%. Memory consumption is `log(n)` , where `n` is a number of values.
+
+The performance of the function is lower than the performance of quantile or quantileTiming. In terms of the ratio of State size to precision, this function is much better than `quantile`.
+
+The result depends on the order of running the query and is nondeterministic.
+
+When using multiple `quantile*` functions with different levels in a query, the internal states are not combined (that is, the query works less efficiently than it could). In this case, use the quantiles function.
+
+[block:callout]
+{
+  "type": "info",
+  "title": "Note",
+  "body": "Using `quantileTDigestWeighted` [is not recommended for tiny data sets](https://github.com/tdunning/t-digest/issues/167#issuecomment-828650275) and can lead to significat error. In this case, consider possibility of using `quantileTDigest` instead."
+}
+[/block]
+**Syntax**
+```sql
+quantileTDigestWeighted(level)(expr, weight)
+```
+Alias: `medianTDigestWeighted` .
+
+**Arguments**
+- `level` — Level of quantile. Optional parameter. Constant floating-point number from 0 to 1. We recommend using a `level` value in the range of `[0.01, 0.99]` . Default value: 0.5. At `level=0.5` the function calculates [median](https://en.wikipedia.org/wiki/Median) . 
+- `expr` — Expression over the column values resulting in numeric data types, Date or DateTime. 
+- `weight` — Column with weights of sequence elements. Weight is a number of value occurrences. 
+
+**Returned value**
+- Approximate quantile of the specified level. 
+Type:
+- Float64 for numeric data type input. 
+- Date if input values have the `Date` type. 
+- DateTime if input values have the `DateTime` type. 
+
+**Example**
+```sql
+SELECT quantileTDigestWeighted(number, 1) FROM numbers(10)
+```
+
+
+```plain%20text
+┌─quantileTDigestWeighted(number, 1)─┐
+│ 4.5e+00                            │
+└────────────────────────────────────┘
+```
+
+## quantileTiming
+With the determined precision computes the [quantile](https://en.wikipedia.org/wiki/Quantile) of a numeric data sequence.
+
+The result is deterministic (it does not depend on the query processing order). The function is optimized for working with sequences which describe distributions like loading web pages times or backend response times.
+
+When using multiple `quantile*` functions with different levels in a query, the internal states are not combined (that is, the query works less efficiently than it could). In this case, use the quantiles function.
+
+**Syntax**
+```sql
+quantileTiming(level)(expr)
+```
+Alias: `medianTiming` .
+
+**Arguments**
+- `level` — Level of quantile. Optional parameter. Constant floating-point number from 0 to 1. We recommend using a `level` value in the range of `[0.01, 0.99]` . Default value: 0.5. At `level=0.5` the function calculates [median](https://en.wikipedia.org/wiki/Median) . 
+- `expr` — Expression over a column values returning a Float* -type number. 
+   - If negative values are passed to the function, the behavior is undefined. 
+   - If the value is greater than 30,000 (a page loading time of more than 30 seconds), it is assumed to be 30,000. 
+
+**Accuracy**
+The calculation is accurate if:
+- Total number of values does not exceed 5670. 
+- Total number of values exceeds 5670, but the page loading time is less than 1024ms. 
+
+Otherwise, the result of the calculation is rounded to the nearest multiple of 16 ms.
+
+!!! note "Note"
+For calculating page loading time quantiles, this function is more effective and accurate than quantile.
+
+**Returned value**
+- Quantile of the specified level. 
+Type: `Float32` .
+
+!!! note "Note"
+If no values are passed to the function (when using `quantileTimingIf` ), NaN is returned. The purpose of this is to differentiate these cases from cases that result in zero. See ORDER BY clause for notes on sorting `NaN` values.
+
+**Example**
+```sql
+CREATE TABLE IF NOT EXISTS test.functionQuantileTiming (response_time UInt32) ENGINE=CnchMergeTree ORDER BY response_time;
+INSERT INTO test.functionQuantileTiming VALUES (72),(112),(126),(145),(104),(242),(313),(168),(108);
+SELECT quantileTiming(response_time) FROM test.functionQuantileTiming;
+```
+
+
+```plain%20text
+┌─quantileTiming(response_time)─┐
+│ 1.26e+02                      │
+└───────────────────────────────┘
+```
+
+## quantileTimingWeighted
+With the determined precision computes the [quantile](https://en.wikipedia.org/wiki/Quantile) of a numeric data sequence according to the weight of each sequence member.
+
+The result is deterministic (it does not depend on the query processing order). The function is optimized for working with sequences which describe distributions like loading web pages times or backend response times.
+
+When using multiple `quantile*` functions with different levels in a query, the internal states are not combined (that is, the query works less efficiently than it could). In this case, use the quantiles function.
+
+**Syntax**
+```sql
+quantileTimingWeighted(level)(expr, weight)
+```
+Alias: `medianTimingWeighted` .
+
+**Arguments**
+- `level` — Level of quantile. Optional parameter. Constant floating-point number from 0 to 1. We recommend using a `level` value in the range of `[0.01, 0.99]` . Default value: 0.5. At `level=0.5` the function calculates [median](https://en.wikipedia.org/wiki/Median) . 
+- `expr` — Expression over a column values returning a Float* -type number. 
+- If negative values are passed to the function, the behavior is undefined.
+- If the value is greater than 30,000 (a page loading time of more than 30 seconds), it is assumed to be 30,000.
+- `weight` — Column with weights of sequence elements. Weight is a number of value occurrences. 
+
+**Accuracy**
+The calculation is accurate if:
+- Total number of values does not exceed 5670. 
+- Total number of values exceeds 5670, but the page loading time is less than 1024ms. 
+
+Otherwise, the result of the calculation is rounded to the nearest multiple of 16 ms.
+
+!!! note "Note"
+For calculating page loading time quantiles, this function is more effective and accurate than quantile.
+
+**Returned value**
+- Quantile of the specified level. 
+Type: `Float32` .
+
+!!! note "Note"
+If no values are passed to the function (when using `quantileTimingIf` ), NaN is returned. The purpose of this is to differentiate these cases from cases that result in zero. See ORDER BY clause for notes on sorting `NaN` values.
+
+**Example**
+```sql
+CREATE TABLE IF NOT EXISTS test.functionQuantileTimingWeighted (response_time UInt32, weight UInt32) ENGINE=CnchMergeTree ORDER BY response_time;
+INSERT INTO test.functionQuantileTimingWeighted VALUES (68,1),(104,2),(112,3),(126,2),(138,1),(162,1);
+SELECT quantileTimingWeighted(response_time, weight) FROM test.functionQuantileTimingWeighted;
+```
+
+
+```plain%20text
+┌─quantileTimingWeighted(response_time, weight)─┐
+│ 1.12e+02                                      │
+└───────────────────────────────────────────────┘
+```
+
+## quantiles
+All the quantile functions also have corresponding quantiles functions: `quantiles` , `quantilesDeterministic` , `quantilesTiming` , `quantilesTimingWeighted` , `quantilesExact` , `quantilesExactWeighted` , `quantilesTDigest` , `quantilesBFloat16` . These functions calculate all the quantiles of the listed levels in one pass, and return an array of the resulting values.
+
+**Syntax**
+```sql
+quantiles(level1, level2, …)(x)
+```
+
+**Arguments**
+- `level1,level2...` — Levels of quantiles. Each level is a constant floating-point number from 0 to 1. We recommend using a `level` value in the range of `[0.01, 0.99]`. 
+
+**Returned value**
+- A list of quantiles. 
+
+**Example**
+```sql
+SELECT quantiles(0.5,0.4)(number) FROM numbers(10);
+```
+
+
+```plain%20text
+┌─quantiles(0.5, 0.4)(number)─┐
+│ [4.5e+00, 3.6e+00]          │
+└─────────────────────────────┘
+```
+quantiles(0.5,0.4)(number) equivalent to quantile(0.5)(number) and quantile(0.4)(number).
+## quantilesTimingWeighted
+Same as `quantileTimingWeighted` , but accept multiple parameters with quantile levels and return an Array filled with many values of that quantiles.
+
+**Syntax**
+```sql
+quantileTimingWeighted(level1, level2, …)(x)
+```
+
+**Arguments**
+- `level1,level2...` — Levels of quantiles. Each level is a constant floating-point number from 0 to 1. We recommend using a `level` value in the range of `[0.01, 0.99]`. 
+
+**Returned value**
+- A list of quantiles. 
+
+**Example**
+```sql
+CREATE TABLE IF NOT EXISTS test.functionQuantilesTimingWeighted (response_time UInt32, weight UInt32) ENGINE=CnchMergeTree ORDER BY response_time;
+INSERT INTO test.functionQuantilesTimingWeighted VALUES (68,1),(104,2),(112,3),(126,2),(138,1),(162,1);
+SELECT quantilesTimingWeighted(0.5, 0.99)(response_time, weight) FROM test.functionQuantilesTimingWeighted;
+```
+
+
+```plain%20text
+┌─quantilesTimingWeighted(0.5, 0.99)(response_time, weight)─┐
+│ [1.12e+02, 1.62e+02]                                      │
+└───────────────────────────────────────────────────────────┘
+```
+
+
+
+## sequenceCount
+sequenceCount(pattern)(time, cond1, cond2, …)
+
+Counts the number of event chains that matched the pattern. The function searches event chains that do not overlap. It starts to search for the next chain after the current chain is matched.
+
+!!! warning "Warning"
+Events that occur at the same second may lay in the sequence in an undefined order affecting the result.
+
+**Syntax**
+```sql
+sequenceCount(pattern)(timestamp, cond1, cond2, ...)
+```
+
+**Arguments**
+- `pattern` — Pattern string. See Pattern syntax. 
+- `timestamp` — Column considered to contain time data. Typical data types are `Date` and `DateTime` . You can also use any of the supported UInt data types. 
+- `cond1` , `cond2` — Conditions that describe the chain of events. Data type: `UInt8` . You can pass up to 32 condition arguments. The function takes only the events described in these conditions into account. If the sequence contains data that isn’t described in a condition, the function skips them. 
+
+**Returned values**
+- Number of non-overlapping event chains that are matched. 
+Type: `UInt64` .
+
+
+**Example**
+Count how many times the number 2 occurs after the number 1 with any amount of other numbers between them:
+```sql
+CREATE TABLE test.functionSequenceCount (time DateTime, number UInt8) ENGINE=CnchMergeTree ORDER BY time;
+INSERT INTO test.functionSequenceCount VALUES (1,1),(2,3),(3,2),(4,1),(5,3),(6,2);
+SELECT sequenceCount('(?1).*(?2)')(time, number = 1, number = 2) FROM test.functionSequenceCount;
+```
+
+```plain%20text
+┌─sequenceCount('(?1).*(?2)')(time, equals(number, 1), equals(number, 2))─┐
+│                                                                       2 │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+
+
+## sequenceMatch
+sequenceMatch(pattern)(timestamp, cond1, cond2, …)
+
+Checks whether the sequence contains an event chain that matches the pattern.
+
+!!! warning "Warning"
+Events that occur at the same second may lay in the sequence in an undefined order affecting the result.
+
+**Syntax**
+```sql
+sequenceMatch(pattern)(timestamp, cond1, cond2, ...)
+```
+
+**Arguments**
+- `pattern` — Pattern string. See Pattern syntax. 
+- `timestamp` — Column considered to contain time data. Typical data types are `Date` and `DateTime` . You can also use any of the supported UInt data types. 
+- `cond1` , `cond2` — Conditions that describe the chain of events. Data type: `UInt8` . You can pass up to 32 condition arguments. The function takes only the events described in these conditions into account. If the sequence contains data that isn’t described in a condition, the function skips them. 
+
+**Returned values**
+- 1, if the pattern is matched. 
+- 0, if the pattern isn’t matched. 
+Type: `UInt8` .
+
+**Pattern syntax**
+- `(?N)` — Matches the condition argument at position `N` . Conditions are numbered in the `[1, 32]` range. For example, `(?1)` matches the argument passed to the `cond1` parameter. 
+- `.*` — Matches any number of events. You do not need conditional arguments to match this element of the pattern. 
+- `(?t operator value)` — Sets the time in seconds that should separate two events. For example, pattern `(?1)(?t>1800)(?2)` matches events that occur more than 1800 seconds from each other. An arbitrary number of any events can lay between these events. You can use the `>=` , `>` , `<` , `<=` , `==` operators. 
+
+
+**Examples**
+Consider data in the `t` table:
+
+
+```plain%20text
+
+┌─time─┬─number─┐
+
+│    1 │      1 │
+
+│    2 │      3 │
+
+│    3 │      2 │
+
+└──────┴────────┘
+
+```
+
+Perform the query:
+
+```sql
+CREATE TABLE IF NOT EXISTS test.functionSequenceMatch (time DateTime, number UInt8) ENGINE=CnchMergeTree ORDER BY time;
+INSERT INTO test.functionSequenceMatch VALUES (1,1),(2,3),(3,2);
+SELECT sequenceMatch('(?1)(?2)')(time, number = 1, number = 2) FROM test.functionSequenceMatch;
+```
+
+
+```plain%20text
+┌─sequenceMatch('(?1)(?2)')(time, equals(number, 1), equals(number, 2))─┐
+│                                                                     1 │
+└───────────────────────────────────────────────────────────────────────┘
+```
+The function found the event chain where number 2 follows number 1. It skipped number 3 between them, because the number is not described as an event. If we want to take this number into account when searching for the event chain given in the example, we should make a condition for it.
+
+```sql
+SELECT sequenceMatch('(?1)(?2)')(time, number = 1, number = 2, number = 3) FROM test.functionSequenceMatch;
+```
+
+
+```plain%20text
+┌─sequenceMatch('(?1)(?2)')(time, equals(number, 1), equals(number, 2), equals(number, 3))─┐
+│                                                                                        0 │
+└──────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+In this case, the function couldn’t find the event chain matching the pattern, because the event for number 3 occured between 1 and 2. If in the same case we checked the condition for number 4, the sequence would match the pattern.
+
+```sql
+SELECT sequenceMatch('(?1)(?2)')(time, number = 1, number = 2, number = 4) FROM test.functionSequenceMatch;
+```
+
+
+```plain%20text
+┌─sequenceMatch('(?1)(?2)')(time, equals(number, 1), equals(number, 2), equals(number, 4))─┐
+│                                                                                        1 │
+└──────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+
+
+## stddevPop
+The result is equal to the square root of varPop.
+
+This function uses a numerically unstable algorithm. If you need [numerical stability](https://en.wikipedia.org/wiki/Numerical_stability) in calculations, use the `stddevPopStable` function. It works slower but provides a lower computational error.
+
+**Syntax**
+```sql
+stddevPop(values)
+```
+
+**Arguments**
+- `values` — input values.
+
+**Returned values**
+- stddevPop of values. Returns Float64.
+
+**Example**
+```sql
+SELECT stddevPop(number) FROM numbers(10);
+```
+
+```plain%20text
+┌─stddevPop(number)──────┐
+│ 2.8722813232690143e+00 │
+└────────────────────────┘
+```
+
+## stddevSamp
+The result is equal to the square root of varSamp.
+
+This function uses a numerically unstable algorithm. If you need [numerical stability](https://en.wikipedia.org/wiki/Numerical_stability) in calculations, use the `stddevSampStable` function. It works slower but provides a lower computational error.
+
+**Syntax**
+```sql
+stddevSamp(values)
+```
+
+**Arguments**
+- `values` — input values.
+
+**Returned values**
+- stddevSamp of values. Returns Float64.
+
+**Example**
+```sql
+SELECT stddevSamp(number) FROM numbers(10);
+```
+
+```plain%20text
+┌─stddevSamp(number)─────┐
+│ 3.0276503540974917e+00 │
+└────────────────────────┘
+```
+
+## STDDEV_POP
+Alias to stddevPop.
+
+## STDDEV_SAMP
+Alias to stddevSamp.
+
+
+## sum
+Calculates the sum. Only works for numbers.
+
+**Syntax**
+```sql
+sum(values)
+```
+
+**Arguments**
+- `values` — input values.
+
+**Returned values**
+- sum of values. Type is same as values
+
+**Example**
+```sql
+SELECT sum(number) FROM numbers(10);
+```
+
+```plain%20text
+┌─sum(number)─┐
+│ 45          │
+└─────────────┘
+```
+sum from 0 to 9.
+
+## sumKahan
+Calculates the sum of the numbers with [Kahan compensated summation algorithm](https://en.wikipedia.org/wiki/Kahan_summation_algorithm)
+Slower than sum function.
+
+The compensation works only for Float types.
+
+**Syntax**
+```sql
+sumKahan(x)
+```
+
+**Arguments** 
+- `x` — Input value, must be Integer, Float, or Decimal.
+
+**Returned value**
+- the sum of numbers, with type Integer, Float, or Decimal depends on type of input arguments
+
+**Example**
+```sql
+SELECT sum(0.1), sumKahan(0.1) FROM numbers(10);
+```
+
+```plain%20text
+┌─sum(0.1)──────────────┬─sumKahan(0.1)─┐
+│ 9.999999999999999e-01 │ 1e+00         │
+└───────────────────────┴───────────────┘
+```
+
+## sumMap
+Totals the `value` array according to the keys specified in the `key` array.
+The number of elements in `key` and `value` must be the same for each row that is totaled.
+
+**Syntax**
+```sql
+sumMap(key, value)
+```
+**Arguments** 
+- `key` — Input keys. Type Array
+- `value` — Input values. Type Array
+
+**Returned value**
+- Returns a tuple of two arrays: keys in sorted order, and values summed for the corresponding keys.
+
+**Example**
+```sql
+CREATE TABLE test.functionSumMap(
+    date Date,
+    timeslot DateTime,
+    status UInt16,
+    requests UInt64
+) ENGINE = CnchMergeTree ORDER BY date;
+
+INSERT INTO test.functionSumMap VALUES
+    ('2000-01-01', '2000-01-01 00:00:00', 1,2),
+    ('2000-01-01', '2000-01-01 00:00:00', 1,5),
+    ('2000-01-01', '2000-01-01 00:00:00', 3,4),
+    ('2000-01-01', '2000-01-01 00:01:00', 5,6),
+    ('2000-01-01', '2000-01-01 00:01:00', 7,8);
+
+SELECT timeslot, sumMap([status], [requests]) FROM test.functionSumMap GROUP BY timeslot;
+```
+
+
+```plain%20text
+┌─timeslot────────────┬─sumMap(array(status), array(requests))─┐
+│ 2000-01-01 00:00:00 │ ([1, 3], [7, 4])                       │
+│ 2000-01-01 00:01:00 │ ([5, 7], [6, 8])                       │
+└─────────────────────┴────────────────────────────────────────┘
+```
+
+## sumMapFiltered
+Same behavior as sumMap except that an array of keys is passed as a parameter. This can be especially useful when working with a high cardinality of keys.
+
+**Syntax**
+```sql
+sumMapFiltered(keys_to_keep)(keys, values)
+```
+**Arguments** 
+- `keys_to_keep` - Input keys_to_keep. Type Array
+- `key` — Input keys. Type Array
+- `value` — Input values. Type Array
+
+**Returned value**
+- Returns a tuple of two arrays: keys in sorted order, and values summed for the corresponding keys.
+
+**Example**
+```sql
+CREATE TABLE test.functionSumMapFiltered(
+    date Date,
+    timeslot DateTime,
+    status UInt16,
+    requests UInt64
+) ENGINE = CnchMergeTree ORDER BY date;
+
+INSERT INTO test.functionSumMapFiltered VALUES
+    ('2000-01-01', '2000-01-01 00:00:00', 1,2),
+    ('2000-01-01', '2000-01-01 00:00:00', 1,5),
+    ('2000-01-01', '2000-01-01 00:00:00', 3,4),
+    ('2000-01-01', '2000-01-01 00:01:00', 5,6),
+    ('2000-01-01', '2000-01-01 00:01:00', 7,8);
+
+SELECT timeslot, sumMapFiltered([1])([status], [requests]) FROM test.functionSumMapFiltered GROUP BY timeslot;
+```
+
+
+```plain%20text
+┌─timeslot────────────┬─sumMapFiltered([1])(array(status), array(requests))─┐
+│ 2000-01-01 00:00:00 │ ([1], [7])                                          │
+│ 2000-01-01 00:01:00 │ ([], [])                                            │
+└─────────────────────┴─────────────────────────────────────────────────────┘
+```
+
+## sumWithOverflow
+Computes the sum of the numbers, using the same data type for the result as for the input parameters. If the sum exceeds the maximum value for this data type, it is calculated with overflow.
+
+Only works for numbers.
+
+**Syntax**
+```sql
+sumWithOverflow(values)
+```
+**Arguments** 
+- `values` - Input Values.
+
+**Returned value**
+- Sum of the numbers.
+
+**Example**
+```sql
+CREATE TABLE IF NOT EXISTS test.functionSumWithOverflow (x UInt8) ENGINE=CnchMergeTree ORDER BY x;
+INSERT INTO test.functionSumWithOverflow values (254),(254);
+SELECT sum(x), sumWithOverflow(x) FROM test.functionSumWithOverflow;
+```
+
+
+```plain%20text
+┌─sum(x)─┬─sumWithOverflow(x)─┐
+│ 508    │ 252                │
+└────────┴────────────────────┘
+```
+
+## topK
+Returns an array of the approximately most frequent values in the specified column. The resulting array is sorted in descending order of approximate frequency of values (not by the values themselves).
+
+Implements the [Filtered Space-Saving](http://www.l2f.inesc-id.pt/~fmmb/wiki/uploads/Work/misnis.ref0a.pdf) algorithm for analyzing TopK, based on the reduce-and-combine algorithm from [Parallel Space Saving](https://arxiv.org/pdf/1401.0702.pdf) .
+
+This function does not provide a guaranteed result. In certain situations, errors might occur and it might return frequent values that aren’t the most frequent values.
+
+We recommend using the `N < 10` value; performance is reduced with large `N` values. Maximum value of `N = 65536` .
+
+**Syntax**
+```sql
+topK(N)(x)
+```
+
+**Arguments**
+- `N` – The number of elements to return. If the parameter is omitted, default value 10 is used.
+- `x` – The values to calculate frequency. 
+
+**Example**
+```sql
+SELECT topK(3)(number) FROM numbers(10);
+```
+
+
+```plain%20text
+┌─topK(3)(number)─┐
+│ [0, 1, 2]       │
+└─────────────────┘
+```
+
+## topKWeighted
+Returns an array of the approximately most frequent values in the specified column. The resulting array is sorted in descending order of approximate frequency of values (not by the values themselves). Additionally, the weight of the value is taken into account.
+
+**Syntax**
+```sql
+topKWeighted(N)(x, weight)
+```
+
+**Arguments**
+- `N` — The number of elements to return. 
+- `x` — The value. 
+- `weight` — The weight. Every value is accounted `weight` times for frequency calculation. UInt64. 
+
+**Returned value**
+Returns an array of the values with maximum approximate sum of weights.
+
+**Example**
+```sql
+SELECT topKWeighted(10)(number, number) FROM numbers(1000)
+```
+
+<!-- TODO: Verified WITH CNCH. Result Incorrect. -->
+
+```plain%20text
+┌─topKWeighted(10)(number, number)──────────┐
+│ [999,998,997,996,995,994,993,992,991,990] │
+└───────────────────────────────────────────┘
+```
+
+
+
+## uniq
+Calculates the approximate number of different values of the argument.
+
+**Syntax**
+```sql
+uniq(x[, ...])
+```
+
+**Arguments**
+- The function takes a variable number of parameters. Parameters can be `Tuple` , `Array` , `Date` , `DateTime` , `String` , or numeric types.
+
+**Returned value**
+- A UInt64 -type number. 
+
+**Implementation details**
+Function:
+- Calculates a hash for all parameters in the aggregate, then uses it in calculations. 
+- Uses an adaptive sampling algorithm. For the calculation state, the function uses a sample of element hash values up to 65536. 
+
+This algorithm is very accurate and very efficient on the CPU. When the query contains several of these functions, using `uniq` is almost as fast as using other aggregate functions.This algorithm is very accurate and very efficient on the CPU. When the query contains several of these functions, using `uniq` is almost as fast as using other aggregate functions.
+- Provides the result deterministically (it does not depend on the query processing order). 
+
+We recommend using this function in almost all scenarios.
+
+**Example**
+```sql
+SELECT uniq(number) FROM numbers(1000);
+```
+
+
+
+## uniqCombined
+Calculates the approximate number of different argument values.
+The `uniqCombined` function is a good choice for calculating the number of different values.
+
+**Syntax**
+```sql
+uniqCombined(HLL_precision)(x[, ...])
+```
+
+**Arguments**
+- The function takes a variable number of parameters. Parameters can be `Tuple` , `Array` , `Date` , `DateTime` , `String` , or numeric types.
+- `HLL_precision` is the base-2 logarithm of the number of cells in [HyperLogLog](https://en.wikipedia.org/wiki/HyperLogLog) . Optional, you can use the function as `uniqCombined(x[, ...])` . The default value for `HLL_precision` is 17, which is effectively 96 KiB of space (2^17 cells, 6 bits each).
+
+**Returned value**
+- A number UInt64 -type number. 
+
+**Implementation details**
+Function:
+- Calculates a hash (64-bit hash for `String` and 32-bit otherwise) for all parameters in the aggregate, then uses it in calculations. 
+- Uses a combination of three algorithms: array, hash table, and HyperLogLog with an error correction table. 
+
+For a small number of distinct elements, an array is used. When the set size is larger, a hash table is used. For a larger number of elements, HyperLogLog is used, which will occupy a fixed amount of memory.For a small number of distinct elements, an array is used. When the set size is larger, a hash table is used. For a larger number of elements, HyperLogLog is used, which will occupy a fixed amount of memory.
+- Provides the result deterministically (it does not depend on the query processing order). 
+
+Note
+
+Since it uses 32-bit hash for non- `String` type, the result will have very high error for cardinalities significantly larger than `UINT_MAX` (error will raise quickly after a few tens of billions of distinct values), hence in this case you should use uniqCombined64
+
+Compared to the uniq function, the `uniqCombined` :
+
+- Consumes several times less memory. 
+- Calculates with several times higher accuracy. 
+- Usually has slightly lower performance. In some scenarios, `uniqCombined` can perform better than `uniq` , for example, with distributed queries that transmit a large number of aggregation states over the network. 
+
+**Example**
+```sql
+SELECT uniqCombined(number) FROM numbers(1000);
+```
+
+## uniqExact
+Calculates the exact number of different argument values.
+
+Use the `uniqExact` function if you absolutely need an exact result. Otherwise use the uniq function.
+
+The `uniqExact` function uses more memory than `uniq` , because the size of the state has unbounded growth as the number of different values increases.
+
+**Syntax**
+```sql
+uniqExact(x[, ...])
+```
+
+**Arguments**
+The function takes a variable number of parameters. Parameters can be `Tuple` , `Array` , `Date` , `DateTime` , `String` , or numeric types.
+
+**Returned value**
+- A number UInt64 -type number. 
+
+**Example**
+```sql
+SELECT uniqExact(number) FROM numbers(1000);
+```
+
+
+```plain%20text
+┌─uniqExact(number)─┐
+│ 1000              │
+└───────────────────┘
+```
+## uniqHLL12
+Calculates the approximate number of different argument values, using the [HyperLogLog](https://en.wikipedia.org/wiki/HyperLogLog) algorithm.
+
+**Syntax**
+```sql
+uniqHLL12(x[, ...])
+```
+
+**Arguments**
+The function takes a variable number of parameters. Parameters can be `Tuple` , `Array` , `Date` , `DateTime` , `String` , or numeric types.
+
+**Returned value**
+- A UInt64 -type number. 
+
+**Implementation details**
+Function:
+- Calculates a hash for all parameters in the aggregate, then uses it in calculations. 
+- Uses the HyperLogLog algorithm to approximate the number of different argument values. 
+2^12 5-bit cells are used. The size of the state is slightly more than 2.5 KB. The result is not very accurate (up to ~10% error) for small data sets (<10K elements). However, the result is fairly accurate for high-cardinality data sets (10K-100M), with a maximum error of ~1.6%. Starting from 100M, the estimation error increases, and the function will return very inaccurate results for data sets with extremely high cardinality (1B+ elements).
+- Provides the determinate result (it does not depend on the query processing order). 
+
+We do not recommend using this function. In most cases, use the uniq or uniqCombined function.
+
+**Example**
+```sql
+SELECT uniqHLL12(number) FROM numbers(1000);
+```
+## uniqUpTo
+Calculates the number of different argument values if it is less than or equal to N. If the number of different argument values is greater than N, it returns N + 1.
+
+Recommended for use with small Ns, up to 10. The maximum value of N is 100.
+
+For the state of an aggregate function, it uses the amount of memory equal to 1 + N * the size of one value of bytes.
+
+For strings, it stores a non-cryptographic hash of 8 bytes. That is, the calculation is approximated for strings.
+
+The function also works for several arguments.
+
+It works as fast as possible, except for cases when a large N value is used and the number of unique values is slightly less than N.
+
+
+**Syntax**
+```sql
+uniqUpTo(N)(x)
+```
+
+**Arguments**
+- `N` The function takes a variable number of parameters. Parameters can be `Tuple` , `Array` , `Date` , `DateTime` , `String` , or numeric types.
+
+**Returned value**
+- A UInt64 -type number. 
+
+**Example**
+```sql
+SELECT uniqUpTo(5)(number) FROM numbers(10);
+```
+
+
+```plain%20text
+┌─uniqUpTo(5)(number)─┐
+│ 6                   │
+└─────────────────────┘
+```
+
+```sql
+SELECT uniqUpTo(5)(number) FROM numbers(4);
+```
+
+
+```plain%20text
+┌─uniqUpTo(5)(number)─┐
+│ 4                   │
+└─────────────────────┘
+```
+
+## varPop
+Calculates the amount `Σ((x - x̅)^2) / n` , where `n` is the sample size and `x̅` is the average value of `x` .
+
+This function uses a numerically unstable algorithm. If you need [numerical stability](https://en.wikipedia.org/wiki/Numerical_stability) in calculations, use the `varPopStable` function. It works slower but provides a lower computational error.
+
+**Syntax**
+```sql
+varPop(values)
+```
+
+**Arguments**
+- `values` — input values.
+
+**Returned values**
+- varPop of values. Returns Float64.
+
+**Example**
+```sql
+SELECT varPop(number) FROM numbers(10);
+```
+
+```plain%20text
+┌─varPop(number)─┐
+│ 8.25e+00       │
+└────────────────┘
+```
+
+## varSamp
+Calculates the amount `Σ((x - x̅)^2) / (n - 1)` , where `n` is the sample size and `x̅` is the average value of `x` .
+
+It represents an unbiased estimate of the variance of a random variable if passed values form its sample.
+
+This function uses a numerically unstable algorithm. If you need [numerical stability](https://en.wikipedia.org/wiki/Numerical_stability) in calculations, use the `varSampStable` function. It works slower but provides a lower computational error.
+
+**Syntax**
+```sql
+varSamp(values)
+```
+
+**Arguments**
+- `values` — input values.
+
+**Returned values**
+- varSamp of values. Returns Float64.
+- When `n <= 1` , returns `NaN` .
+
+**Example**
+```sql
+SELECT varSamp(number) FROM numbers(10);
+```
+
+
+```plain%20text
+┌─varSamp(number)───────┐
+│ 9.166666666666666e+00 │
+└───────────────────────┘
+```
+
+```sql
+SELECT varSamp(number) FROM numbers(1);
+```
+
+```plain%20text
+┌─varSamp(number)─┐
+│ NaN             │
+└─────────────────┘
+```
+## VAR_POP
+Alias to varPop.
+
+## VAR_SAMP
+Alias to varSamp.

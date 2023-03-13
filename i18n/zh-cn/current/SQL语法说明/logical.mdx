@@ -1,0 +1,150 @@
+---
+title: "Logical"
+slug: "logical"
+hidden: false
+createdAt: "2021-07-29T12:13:37.269Z"
+updatedAt: "2021-09-23T06:31:50.019Z"
+tags:
+  - Docs
+---
+
+# logical
+
+> Notice:
+> Some of the examples below are referenced from [ClickHouse Documentation](https://clickhouse.com/docs/en/sql-reference/functions/) but have been adapted and modified to work in ByConity.
+
+## and
+
+Calculates the result of the logical conjunction between two or more values. Corresponds to Logical AND Operator.
+
+**Syntax**
+
+```
+and(val1, val2...)
+
+```
+
+**Arguments**
+
+- `val1, val2, ...` — List of at least two values. Int, UInt, Float or Nullable.
+
+**Returned value**
+
+- `0` , if there is at least one zero value argument.
+- `NULL` , if there are no zero values arguments and there is at least one `NULL` argument.
+- `1` , otherwise.
+  Type: UInt8 or Nullable(UInt8).
+
+**Example**
+
+```
+SELECT and(0, 1, -2);
+
+```
+
+```
+┌─and(0, 1, -2)─┐
+│ 0             │
+└───────────────┘
+
+```
+
+With `NULL`:
+
+```
+SELECT and(NULL, 1, 10, -2);
+
+```
+
+```
+┌─and(NULL, 1, 10, -2)─┐
+│ ᴺᵁᴸᴸ                 │
+└──────────────────────┘
+
+```
+
+## or
+
+Calculates the result of the logical disjunction between two or more values. Corresponds to Logical OR Operator.
+
+**Syntax**
+
+```
+or(val1, val2...)
+
+```
+
+**Arguments**
+
+- `val1, val2, ...` — List of at least two values. Int, UInt, Float or Nullable.
+
+**Returned value**
+
+- `1` , if there is at least one non-zero value.
+- `0` , if there are only zero values.
+- `NULL` , if there are only zero values and `NULL` .
+  Type: UInt8 or Nullable(UInt8).
+
+**Example**
+
+```
+SELECT or(1, 0, 0, 2, NULL);
+
+```
+
+```
+┌─or(1, 0, 0, 2, NULL)─┐
+│ 1                    │
+└──────────────────────┘
+
+```
+
+## xor
+
+Calculates the result of the logical exclusive disjunction between two or more values. For more than two values the function works as if it calculates `XOR` of the first two values and then uses the result with the next value to calculate `XOR` and so on.
+
+**Syntax**
+
+```
+xor(val1, val2...)
+
+```
+
+**Arguments**
+
+- `val1, val2, ...` — List of at least two values. Int, UInt, Float or Nullable.
+
+**Returned value**
+
+- `1` , for two values: if one of the values is zero and other is not.
+- `0` , for two values: if both values are zero or non-zero at the same time.
+- `NULL` , if there is at least one `NULL` value.
+  Type: UInt8 or Nullable(UInt8).
+
+**Example**
+
+```
+SELECT xor(0, 1, 1);
+
+```
+
+```
+┌─xor(0, 1, 1)─┐
+│ 0            │
+└──────────────┘
+
+```
+
+With `NULL`:
+
+```
+SELECT xor(NULL, 0);
+
+```
+
+```
+┌─xor(NULL, 0)─┐
+│ ᴺᵁᴸᴸ         │
+└──────────────┘
+
+```

@@ -1,0 +1,2217 @@
+---
+title: "Others"
+slug: "others"
+hidden: true
+createdAt: "2021-07-29T12:25:27.577Z"
+updatedAt: "2021-07-29T12:25:27.577Z"
+tags:
+- Docs
+---
+## MACNumToString
+
+
+**Syntax**
+
+```sql
+
+MACNumToString(num)
+
+```
+
+Accepts a UInt64 number. Interprets it as a MAC address in big endian. Returns a string containing the corresponding MAC address in the format AA:BB:CC:DD:EE:FF (colon-separated numbers in hexadecimal form).
+
+## MACStringToNum
+
+
+**Syntax**
+
+```sql
+
+MACNumToString(num)
+
+```
+
+The inverse function of MACNumToString. If the MAC address has an invalid format, it returns 0.
+
+## MACStringToOUI
+
+
+**Syntax**
+
+```sql
+
+MACStringToOUI(s)
+
+```
+
+Accepts a MAC address in the format AA:BB:CC:DD:EE:FF (colon-separated numbers in hexadecimal form). Returns the first three octets as a UInt64 number. If the MAC address has an invalid format, it returns 0.
+
+## auc
+
+
+Calculate AUC (Area Under the Curve, which is a concept in machine learning, see more details: [https://en.wikipedia.org/wiki/Receiver_operating_characteristic#Area_under_the_curve](https://en.wikipedia.org/wiki/Receiver_operating_characteristic#Area_under_the_curve) ).
+
+**Syntax**
+
+```sql
+
+arrayAUC(arr_scores, arr_labels)
+
+```
+
+**Arguments**
+
+- `arr_scores` — scores prediction model gives. 
+
+
+
+- `arr_labels` — labels of samples, usually 1 for positive sample and 0 for negtive sample. 
+
+
+
+**Returned value**
+
+Returns AUC value with type Float64.
+
+**Example**
+
+Query:
+
+```sql
+
+select arrayAUC([0.1, 0.4, 0.35, 0.8], [0, 0, 1, 1]);
+
+```
+
+Result:
+
+```plain%20text
+
+┌─arrayAUC([0.1, 0.4, 0.35, 0.8], [0, 0, 1, 1])─┐
+
+│                                          0.75 │
+
+└───────────────────────────────────────────────┘
+
+```
+
+## bar
+
+
+**Syntax**
+
+```sql
+
+bar(x, min, max, width)
+
+```
+
+Allows building a unicode-art diagram.
+
+`bar(x, min, max, width)` draws a band with a width proportional to `(x - min)` and equal to `width` characters when `x = max` .
+
+**Arguments**
+
+- `x` — Size to display. 
+
+
+
+- `min, max` — Integer constants. The value must fit in `Int64` . 
+
+
+
+- `width` — Constant, positive integer, can be fractional. 
+
+
+
+The band is drawn with accuracy to one eighth of a symbol.
+
+Example:
+
+```sql
+
+SELECT
+
+    toHour(EventTime) AS h,
+
+    count() AS c,
+
+    bar(c, 0, 600000, 20) AS bar
+
+FROM test.hits
+
+GROUP BY h
+
+ORDER BY h ASC
+
+```
+
+```plain%20text
+
+┌──h─┬──────c─┬─bar────────────────┐
+
+│  0 │ 292907 │ █████████▋         │
+
+│  1 │ 180563 │ ██████             │
+
+│  2 │ 114861 │ ███▋               │
+
+│  3 │  85069 │ ██▋                │
+
+│  4 │  68543 │ ██▎                │
+
+│  5 │  78116 │ ██▌                │
+
+│  6 │ 113474 │ ███▋               │
+
+│  7 │ 170678 │ █████▋             │
+
+│  8 │ 278380 │ █████████▎         │
+
+│  9 │ 391053 │ █████████████      │
+
+│ 10 │ 457681 │ ███████████████▎   │
+
+│ 11 │ 493667 │ ████████████████▍  │
+
+│ 12 │ 509641 │ ████████████████▊  │
+
+│ 13 │ 522947 │ █████████████████▍ │
+
+│ 14 │ 539954 │ █████████████████▊ │
+
+│ 15 │ 528460 │ █████████████████▌ │
+
+│ 16 │ 539201 │ █████████████████▊ │
+
+│ 17 │ 523539 │ █████████████████▍ │
+
+│ 18 │ 506467 │ ████████████████▊  │
+
+│ 19 │ 520915 │ █████████████████▎ │
+
+│ 20 │ 521665 │ █████████████████▍ │
+
+│ 21 │ 542078 │ ██████████████████ │
+
+│ 22 │ 493642 │ ████████████████▍  │
+
+│ 23 │ 400397 │ █████████████▎     │
+
+└────┴────────┴────────────────────┘
+
+```
+
+## blockNumber
+
+
+Returns the sequence number of the data block where the row is located.
+
+## blockSize
+
+
+Gets the size of the block.
+
+**Syntax**
+
+```sql
+
+blockSize()
+
+```
+
+In ByConity, queries are always run on blocks (sets of column parts). This function allows getting the size of the block that you called it for.
+
+## currentDatabase
+
+
+**Syntax**
+
+```sql
+
+currentDatabase()
+
+```
+
+Returns the name of the current database.
+
+You can use this function in table engine parameters in a CREATE TABLE query where you need to specify the database.
+
+## defaultValueOfArgumentType
+
+
+Outputs the default value for the data type. Does not include default values for custom columns set by the user.
+
+**Syntax**
+
+```sql
+
+defaultValueOfArgumentType(expression)
+
+```
+
+**Arguments:**
+
+- `expression` — Arbitrary type of value or an expression that results in a value of an arbitrary type. 
+
+
+
+**Returned values**
+
+- `0` for numbers. 
+
+
+
+- Empty string for strings. 
+
+
+
+- `ᴺᵁᴸᴸ` for [Nullable](https://bytedance.feishu.cn/sql-reference/data-types/nullable.md) . 
+
+
+
+**Example**
+
+```sql
+
+SELECT defaultValueOfArgumentType( CAST(1 AS Int8) )
+
+```
+
+```plain%20text
+
+┌─defaultValueOfArgumentType(CAST(1, 'Int8'))─┐
+
+│                                           0 │
+
+└─────────────────────────────────────────────┘
+
+```
+
+```sql
+
+SELECT defaultValueOfArgumentType( CAST(1 AS Nullable(Int8) ) )
+
+```
+
+```plain%20text
+
+┌─defaultValueOfArgumentType(CAST(1, 'Nullable(Int8)'))─┐
+
+│                                                  ᴺᵁᴸᴸ │
+
+└───────────────────────────────────────────────────────┘
+
+```
+
+## dumpColumnStructure
+
+
+Outputs a detailed description of data structures in RAM
+
+**Syntax**
+
+```sql
+
+dumpColumnStructure(value)
+
+```
+
+**Arguments:**
+
+- `value` — Any type of value. 
+
+
+
+**Returned values**
+
+- A string describing the structure that is used for representing the `value` data type in RAM. 
+
+
+
+**Example**
+
+```sql
+
+SELECT dumpColumnStructure(CAST('2018-01-01 01:02:03', 'DateTime'))
+
+```
+
+```plain%20text
+
+┌─dumpColumnStructure(CAST('2018-01-01 01:02:03', 'DateTime'))─┐
+
+│ DateTime, Const(size = 1, UInt32(size = 1))                  │
+
+└──────────────────────────────────────────────────────────────┘
+
+```
+
+## filesystemAvailable
+
+
+Returns amount of remaining space on the filesystem where the files of the databases located. It is always smaller than total free space ( [filesystemFree](https://bytedance.feishu.cn/docs/doccnFkHpok0xssNrwscSUDfwNG#filesystemfree) ) because some space is reserved for OS.
+
+**Syntax**
+
+```sql
+
+filesystemAvailable()
+
+```
+
+**Returned value**
+
+- The amount of remaining space available in bytes. 
+
+
+
+Type: [UInt64](https://bytedance.feishu.cn/sql-reference/data-types/int-uint.md) .
+
+**Example**
+
+Query:
+
+```sql
+
+SELECT formatReadableSize(filesystemAvailable()) AS "Available space", toTypeName(filesystemAvailable()) AS "Type";
+
+```
+
+Result:
+
+```plain%20text
+
+┌─Available space─┬─Type───┐
+
+│ 30.75 GiB       │ UInt64 │
+
+└─────────────────┴────────┘
+
+```
+
+## filesystemCapacity
+
+
+Returns the capacity of the filesystem in bytes. For evaluation, the [path](https://bytedance.feishu.cn/operations/server-configuration-parameters/settings.md#server_configuration_parameters-path) to the data directory must be configured.
+
+**Syntax**
+
+```sql
+
+filesystemCapacity()
+
+```
+
+**Returned value**
+
+- Capacity information of the filesystem in bytes. 
+
+
+
+Type: [UInt64](https://bytedance.feishu.cn/sql-reference/data-types/int-uint.md) .
+
+**Example**
+
+Query:
+
+```sql
+
+SELECT formatReadableSize(filesystemCapacity()) AS "Capacity", toTypeName(filesystemCapacity()) AS "Type"
+
+```
+
+Result:
+
+```plain%20text
+
+┌─Capacity──┬─Type───┐
+
+│ 39.32 GiB │ UInt64 │
+
+└───────────┴────────┘
+
+```
+
+## filesystemFree
+
+
+Returns total amount of the free space on the filesystem where the files of the databases located. See also `filesystemAvailable`
+
+**Syntax**
+
+```sql
+
+filesystemFree()
+
+```
+
+**Returned value**
+
+- Amount of free space in bytes. 
+
+
+
+Type: [UInt64](https://bytedance.feishu.cn/sql-reference/data-types/int-uint.md) .
+
+**Example**
+
+Query:
+
+```sql
+
+SELECT formatReadableSize(filesystemFree()) AS "Free space", toTypeName(filesystemFree()) AS "Type";
+
+```
+
+Result:
+
+```plain%20text
+
+┌─Free space─┬─Type───┐
+
+│ 32.39 GiB  │ UInt64 │
+
+└────────────┴────────┘
+
+```
+
+## finalizeAggregation
+
+
+Takes state of aggregate function. Returns result of aggregation (or finalized state when using [-State](https://bytedance.feishu.cn/sql-reference/aggregate-functions/combinators.md#agg-functions-combinator-state) combinator).
+
+**Syntax**
+
+```sql
+
+finalizeAggregation(state)
+
+```
+
+**Arguments**
+
+- `state` — State of aggregation. [AggregateFunction](https://bytedance.feishu.cn/sql-reference/data-types/aggregatefunction.md#data-type-aggregatefunction) . 
+
+
+
+**Returned value(s)**
+
+- Value/values that was aggregated. 
+
+
+
+Type: Value of any types that was aggregated.
+
+**Examples**
+
+Query:
+
+```sql
+
+SELECT finalizeAggregation(( SELECT countState(number) FROM numbers(10)));
+
+```
+
+Result:
+
+```plain%20text
+
+┌─finalizeAggregation(_subquery16)─┐
+
+│                               10 │
+
+└──────────────────────────────────┘
+
+```
+
+Query:
+
+```sql
+
+SELECT finalizeAggregation(( SELECT sumState(number) FROM numbers(10)));
+
+```
+
+Result:
+
+```plain%20text
+
+┌─finalizeAggregation(_subquery20)─┐
+
+│                               45 │
+
+└──────────────────────────────────┘
+
+```
+
+Note that `NULL` values are ignored.
+
+Query:
+
+```sql
+
+SELECT finalizeAggregation(arrayReduce('anyState', [NULL, 2, 3]));
+
+```
+
+Result:
+
+```plain%20text
+
+┌─finalizeAggregation(arrayReduce('anyState', [NULL, 2, 3]))─┐
+
+│                                                          2 │
+
+└────────────────────────────────────────────────────────────┘
+
+```
+
+Combined example:
+
+Query:
+
+```sql
+
+WITH initializeAggregation('sumState', number) AS one_row_sum_state
+
+SELECT
+
+    number,
+
+    finalizeAggregation(one_row_sum_state) AS one_row_sum,
+
+    runningAccumulate(one_row_sum_state) AS cumulative_sum
+
+FROM numbers(10);
+
+```
+
+Result:
+
+```plain%20text
+
+┌─number─┬─one_row_sum─┬─cumulative_sum─┐
+
+│      0 │           0 │              0 │
+
+│      1 │           1 │              1 │
+
+│      2 │           2 │              3 │
+
+│      3 │           3 │              6 │
+
+│      4 │           4 │             10 │
+
+│      5 │           5 │             15 │
+
+│      6 │           6 │             21 │
+
+│      7 │           7 │             28 │
+
+│      8 │           8 │             36 │
+
+│      9 │           9 │             45 │
+
+└────────┴─────────────┴────────────────┘
+
+```
+
+**See Also**
+
+- [arrayReduce](https://bytedance.feishu.cn/sql-reference/functions/array-functions.md#arrayreduce) 
+
+
+
+- [initializeAggregation](https://bytedance.feishu.cn/docs/doccnFkHpok0xssNrwscSUDfwNG#initializeaggregation) 
+
+
+
+## formatReadableSize(x)
+
+formatReadableSize(x)
+Accepts the size (number of bytes). Returns a rounded size with a suffix (KiB, MiB, etc.) as a string.
+
+Example:
+
+``` sql
+SELECT
+    arrayJoin([1, 1024, 1024*1024, 192851925]) AS filesize_bytes,
+    formatReadableSize(filesize_bytes) AS filesize
+```
+
+``` text
+┌─filesize_bytes─┬─filesize───┐
+│              1 │ 1.00 B     │
+│           1024 │ 1.00 KiB   │
+│        1048576 │ 1.00 MiB   │
+│      192851925 │ 183.92 MiB │
+└────────────────┴────────────┘
+​```## getSizeOfEnumType
+
+
+Returns the number of fields in [Enum](https://bytedance.feishu.cn/sql-reference/data-types/enum.md) .
+
+**Syntax**
+
+​```sql
+
+getSizeOfEnumType(value)
+
+```
+
+**Arguments:**
+
+- `value` — Value of type `Enum` . 
+
+
+
+**Returned values**
+
+- The number of fields with `Enum` input values. 
+
+
+
+- An exception is thrown if the type is not `Enum` . 
+
+
+
+**Example**
+
+```sql
+
+SELECT getSizeOfEnumType( CAST('a' AS Enum8('a' = 1, 'b' = 2) ) ) AS x
+
+```
+
+```plain%20text
+
+┌─x─┐
+
+│ 2 │
+
+└───┘
+
+```
+
+## globalIn
+
+
+in, notIn, globalIn, globalNotIn {#in-functions}
+
+See the section [IN operators](https://bytedance.feishu.cn/sql-reference/operators/in.md#select-in-operators) .
+
+## globalNotIn
+
+
+in, notIn, globalIn, globalNotIn {#in-functions}
+
+See the section [IN operators](https://bytedance.feishu.cn/sql-reference/operators/in.md#select-in-operators) .
+
+## has
+
+
+has(arr, elem)
+
+Checks whether the ‘arr’ array has the ‘elem’ element.
+
+Returns 0 if the element is not in the array, or 1 if it is.
+
+`NULL` is processed as a value.
+
+```sql
+
+SELECT has([1, 2, NULL], NULL)
+
+```
+
+```plain%20text
+
+┌─has([1, 2, NULL], NULL)─┐
+
+│                       1 │
+
+└─────────────────────────┘
+
+```
+
+## hasColumnInTable
+
+
+hasColumnInTable([‘hostname’[, ‘username’[, ‘password’]],] ‘database’, ‘table’, ‘column’) {#hascolumnintablehostname-username-password-database-table-column}
+
+Accepts constant strings: database name, table name, and column name. Returns a UInt8 constant expression equal to 1 if there is a column, otherwise 0. If the hostname parameter is set, the test will run on a remote server.
+
+The function throws an exception if the table does not exist.
+
+For elements in a nested data structure, the function checks for the existence of a column. For the nested data structure itself, the function returns 0.
+
+## hostName
+
+
+hostName()
+
+Returns a string with the name of the host that this function was performed on. For distributed processing, this is the name of the remote server host, if the function is performed on a remote server.
+
+## identity
+
+
+Returns the same value that was used as its argument. Used for debugging and testing, allows to cancel using index, and get the query performance of a full scan. When query is analyzed for possible use of index, the analyzer does not look inside `identity` functions. Also constant folding is not applied too.
+
+**Syntax**
+
+```sql
+
+identity(x)
+
+```
+
+**Example**
+
+Query:
+
+```sql
+
+SELECT identity(42)
+
+```
+
+Result:
+
+```plain%20text
+
+┌─identity(42)─┐
+
+│           42 │
+
+└──────────────┘
+
+```
+
+## if
+
+
+Controls conditional branching. Unlike most systems, ByConity always evaluate both expressions `then` and `else` .
+
+**Syntax**
+
+```sql
+
+SELECT if(cond, then, else)
+
+```
+
+If the condition `cond` evaluates to a non-zero value, returns the result of the expression `then` , and the result of the expression `else` , if present, is skipped. If the `cond` is zero or `NULL` , then the result of the `then` expression is skipped and the result of the `else` expression, if present, is returned.
+
+**Arguments**
+
+- `cond` – The condition for evaluation that can be zero or not. The type is UInt8, Nullable(UInt8) or NULL. 
+
+
+
+- `then` – The expression to return if condition is met. 
+
+
+
+- `else` – The expression to return if condition is not met. 
+
+
+
+**Returned values**
+
+The function executes `then` and `else` expressions and returns its result, depending on whether the condition `cond` ended up being zero or not.
+
+**Example**
+
+Query:
+
+```sql
+
+SELECT if(1, plus(2, 2), plus(2, 6));
+
+```
+
+Result:
+
+```plain%20text
+
+┌─plus(2, 2)─┐
+
+│          4 │
+
+└────────────┘
+
+```
+
+Query:
+
+```sql
+
+SELECT if(0, plus(2, 2), plus(2, 6));
+
+```
+
+Result:
+
+```plain%20text
+
+┌─plus(2, 6)─┐
+
+│          8 │
+
+└────────────┘
+
+```
+
+- `then` and `else` must have the lowest common type. 
+
+
+
+**Example:**
+
+Take this `LEFT_RIGHT` table:
+
+```sql
+
+SELECT *
+
+FROM LEFT_RIGHT
+
+
+
+┌─left─┬─right─┐
+
+│ ᴺᵁᴸᴸ │     4 │
+
+│    1 │     3 │
+
+│    2 │     2 │
+
+│    3 │     1 │
+
+│    4 │  ᴺᵁᴸᴸ │
+
+└──────┴───────┘
+
+```
+
+The following query compares `left` and `right` values:
+
+```sql
+
+SELECT
+
+    left,
+
+    right,
+
+    if(left < right, 'left is smaller than right', 'right is greater or equal than left') AS is_smaller
+
+FROM LEFT_RIGHT
+
+WHERE isNotNull(left) AND isNotNull(right)
+
+
+
+┌─left─┬─right─┬─is_smaller──────────────────────────┐
+
+│    1 │     3 │ left is smaller than right          │
+
+│    2 │     2 │ right is greater or equal than left │
+
+│    3 │     1 │ right is greater or equal than left │
+
+└──────┴───────┴─────────────────────────────────────┘
+
+```
+
+Note: `NULL` values are not used in this example, check [NULL values in conditionals](https://bytedance.feishu.cn/docs/doccnZ2mgKjAAc5rAc62DusGjq1#null-values-in-conditionals) section.
+
+## ignore
+
+
+**Syntax**
+
+```sql
+
+ignore(…) 
+
+```
+
+Accepts any arguments, including `NULL` . Always returns 0.
+
+However, the argument is still evaluated. This can be used for benchmarks.
+
+## indexHint
+
+
+The function is intended for debugging and introspection purposes. The function ignores it's argument and always returns 1. Arguments are not even evaluated.
+
+But for the purpose of index analysis, the argument of this function is analyzed as if it was present directly without being wrapped inside `indexHint` function. This allows to select data in index ranges by the corresponding condition but without further filtering by this condition. The index in ByConity is sparse and using `indexHint` will yield more data than specifying the same condition directly.
+
+**Syntax**
+
+```sql
+
+SELECT * FROM table WHERE indexHint(<expression>)
+
+```
+
+**Returned value**
+
+5. Type: [Uint8](https://clickhouse.yandex/docs/en/data_types/int_uint/#diapazony-uint) . 
+
+
+
+**Example**
+
+Here is the example of test data from the table [ontime](https://bytedance.feishu.cn/getting-started/example-datasets/ontime.md) .
+
+Input table:
+
+```sql
+
+SELECT count() FROM ontime
+
+```
+
+```plain%20text
+
+┌─count()─┐
+
+│ 4276457 │
+
+└─────────┘
+
+```
+
+The table has indexes on the fields `(FlightDate, (Year, FlightDate))` .
+
+Create a query, where the index is not used.
+
+Query:
+
+```sql
+
+SELECT FlightDate AS k, count() FROM ontime GROUP BY k ORDER BY k
+
+```
+
+ByConity processed the entire table ( `Processed 4.28 million rows` ).
+
+Result:
+
+```plain%20text
+
+┌──────────k─┬─count()─┐
+
+│ 2017-01-01 │   13970 │
+
+│ 2017-01-02 │   15882 │
+
+........................
+
+│ 2017-09-28 │   16411 │
+
+│ 2017-09-29 │   16384 │
+
+│ 2017-09-30 │   12520 │
+
+└────────────┴─────────┘
+
+```
+
+To apply the index, select a specific date.
+
+Query:
+
+```sql
+
+SELECT FlightDate AS k, count() FROM ontime WHERE k = '2017-09-15' GROUP BY k ORDER BY k
+
+```
+
+By using the index, ByConity processed a significantly smaller number of rows ( `Processed 32.74 thousand rows` ).
+
+Result:
+
+```plain%20text
+
+┌──────────k─┬─count()─┐
+
+│ 2017-09-15 │   16428 │
+
+└────────────┴─────────┘
+
+```
+
+Now wrap the expression `k = '2017-09-15'` into `indexHint` function.
+
+Query:
+
+```sql
+
+SELECT
+
+    FlightDate AS k,
+
+    count()
+
+FROM ontime
+
+WHERE indexHint(k = '2017-09-15')
+
+GROUP BY k
+
+ORDER BY k ASC
+
+```
+
+ByConity used the index in the same way as the previous time ( `Processed 32.74 thousand rows` ).
+
+The expression `k = '2017-09-15'` was not used when generating the result.
+
+In examle the `indexHint` function allows to see adjacent dates.
+
+Result:
+
+```plain%20text
+
+┌──────────k─┬─count()─┐
+
+│ 2017-09-14 │    7071 │
+
+│ 2017-09-15 │   16428 │
+
+│ 2017-09-16 │    1077 │
+
+│ 2017-09-30 │    8167 │
+
+└────────────┴─────────┘
+
+```
+
+## isFinite
+
+
+isFinite(x)
+
+**Syntax**
+
+```sql
+
+isFinite(x)
+
+```
+
+Accepts Float32 and Float64 and returns UInt8 equal to 1 if the argument is not infinite and not a NaN, otherwise 0.
+
+## isInfinite
+
+
+isInfinite(x)
+
+**Syntax**
+
+```sql
+
+isInfinite(x)
+
+```
+
+Accepts Float32 and Float64 and returns UInt8 equal to 1 if the argument is infinite, otherwise 0. Note that 0 is returned for a NaN.
+
+## isNaN
+
+
+isNaN(x)
+
+**Syntax**
+
+```sql
+
+isNaN(x)
+
+```
+
+Accepts Float32 and Float64 and returns UInt8 equal to 1 if the argument is a NaN, otherwise 0.
+
+## joinGet
+
+
+The function lets you extract data from the table the same way as from a [dictionary](https://bytedance.feishu.cn/sql-reference/dictionaries/index.md) .
+
+Gets data from [Join](https://bytedance.feishu.cn/engines/table-engines/special/join.md#creating-a-table) tables using the specified join key.
+
+Only supports tables created with the `ENGINE = Join(ANY, LEFT, <join_keys>)` statement.
+
+**Syntax**
+
+```sql
+
+joinGet(join_storage_table_name, `value_column`, join_keys)
+
+```
+
+**Arguments**
+
+- `join_storage_table_name` — an [identifier](https://bytedance.feishu.cn/sql-reference/syntax.md#syntax-identifiers) indicates where search is performed. The identifier is searched in the default database (see parameter `default_database` in the config file). To override the default database, use the `USE db_name` or specify the database and the table through the separator `db_name.db_table` , see the example. 
+
+
+
+- `value_column` — name of the column of the table that contains required data. 
+
+
+
+- `join_keys` — list of keys. 
+
+
+
+**Returned value**
+
+Returns list of values corresponded to list of keys.
+
+If certain does not exist in source table then `0` or `null` will be returned based on [join_use_nulls](https://bytedance.feishu.cn/operations/settings/settings.md#join_use_nulls) setting.
+
+More info about `join_use_nulls` in [Join operation](https://bytedance.feishu.cn/engines/table-engines/special/join.md) .
+
+**Example**
+
+Input table:
+
+```sql
+
+CREATE DATABASE db_test
+
+CREATE TABLE db_test.id_val(`id` UInt32, `val` UInt32) ENGINE = Join(ANY, LEFT, id) SETTINGS join_use_nulls = 1
+
+INSERT INTO db_test.id_val VALUES (1,11)(2,12)(4,13)
+
+```
+
+```plain%20text
+
+┌─id─┬─val─┐
+
+│  4 │  13 │
+
+│  2 │  12 │
+
+│  1 │  11 │
+
+└────┴─────┘
+
+```
+
+Query:
+
+```sql
+
+SELECT joinGet(db_test.id_val,'val',toUInt32(number)) from numbers(4) SETTINGS join_use_nulls = 1
+
+```
+
+Result:
+
+```plain%20text
+
+┌─joinGet(db_test.id_val, 'val', toUInt32(number))─┐
+
+│                                                0 │
+
+│                                               11 │
+
+│                                               12 │
+
+│                                                0 │
+
+└──────────────────────────────────────────────────┘
+
+```
+
+## least
+
+
+least(a, b)
+
+Returns the smallest value from a and b.
+
+## log
+
+
+log(x)
+
+Accepts a numeric argument and returns a Float64 number close to the natural logarithm of the argument.
+
+## materialize
+
+
+materialize(x)
+
+Turns a constant into a full column containing just one value.
+
+In ByConity, full columns and constants are represented differently in memory. Functions work differently for constant arguments and normal arguments (different code is executed), although the result is almost always the same. This function is for debugging this behavior.
+
+## modelEvaluate
+
+
+Evaluate external model.
+
+**Syntax**
+
+```sql
+
+modelEvaluate(model_name, …) 
+
+```
+
+Accepts a model name and model arguments. Returns Float64.
+
+## regionHierarchy
+
+
+regionHierarchy(id[, geobase]) {#regionhierarchyid-geobase}
+
+Accepts a UInt32 number – the region ID from the Yandex geobase. Returns an array of region IDs consisting of the passed region and all parents along the chain.
+
+Example: `regionHierarchy(toUInt32(213)) = [213,1,3,225,10001,10000]` .
+
+## regionIn
+
+
+regionIn(lhs, rhs[, geobase]) {#regioninlhs-rhs-geobase}
+
+Checks whether a ‘lhs’ region belongs to a ‘rhs’ region. Returns a UInt8 number equal to 1 if it belongs, or 0 if it does not belong.
+
+The relationship is reflexive – any region also belongs to itself.
+
+## regionToArea
+
+
+regionToArea(id[, geobase])
+
+Converts a region to an area (type 5 in the geobase). In every other way, this function is the same as ‘regionToCity’.
+
+```sql
+
+SELECT DISTINCT regionToName(regionToArea(toUInt32(number), 'ua'))
+
+FROM system.numbers
+
+LIMIT 15
+
+```
+
+```plain%20text
+
+┌─regionToName(regionToArea(toUInt32(number), \'ua\'))─┐
+
+│                                                      │
+
+│ Moscow and Moscow region                             │
+
+│ St. Petersburg and Leningrad region                  │
+
+│ Belgorod region                                      │
+
+│ Ivanovsk region                                      │
+
+│ Kaluga region                                        │
+
+│ Kostroma region                                      │
+
+│ Kursk region                                         │
+
+│ Lipetsk region                                       │
+
+│ Orlov region                                         │
+
+│ Ryazan region                                        │
+
+│ Smolensk region                                      │
+
+│ Tambov region                                        │
+
+│ Tver region                                          │
+
+│ Tula region                                          │
+
+└──────────────────────────────────────────────────────┘
+
+```
+
+## regionToCity
+
+
+regionToCity(id[, geobase])
+
+Accepts a UInt32 number – the region ID from the Yandex geobase. If this region is a city or part of a city, it returns the region ID for the appropriate city. Otherwise, returns 0.
+
+## regionToContinent
+
+
+regionToContinent(id[, geobase])
+
+Converts a region to a continent. In every other way, this function is the same as ‘regionToCity’.
+
+Example: `regionToContinent(toUInt32(213)) = 10001` converts Moscow (213) to Eurasia (10001).
+
+## regionToCountry
+
+
+regionToCountry(id[, geobase])
+
+Converts a region to a country. In every other way, this function is the same as ‘regionToCity’.
+
+Example: `regionToCountry(toUInt32(213)) = 225` converts Moscow (213) to Russia (225).
+
+## regionToDistrict
+
+
+regionToDistrict(id[, geobase])
+
+Converts a region to a federal district (type 4 in the geobase). In every other way, this function is the same as ‘regionToCity’.
+
+```sql
+
+SELECT DISTINCT regionToName(regionToDistrict(toUInt32(number), 'ua'))
+
+FROM system.numbers
+
+LIMIT 15
+
+```
+
+```plain%20text
+
+┌─regionToName(regionToDistrict(toUInt32(number), \'ua\'))─┐
+
+│                                                          │
+
+│ Central federal district                                 │
+
+│ Northwest federal district                               │
+
+│ South federal district                                   │
+
+│ North Caucases federal district                          │
+
+│ Privolga federal district                                │
+
+│ Ural federal district                                    │
+
+│ Siberian federal district                                │
+
+│ Far East federal district                                │
+
+│ Scotland                                                 │
+
+│ Faroe Islands                                            │
+
+│ Flemish region                                           │
+
+│ Brussels capital region                                  │
+
+│ Wallonia                                                 │
+
+│ Federation of Bosnia and Herzegovina                     │
+
+└──────────────────────────────────────────────────────────┘
+
+```
+
+## regionToName
+
+
+regionToName(id[, lang])
+
+Accepts a UInt32 number – the region ID from the Yandex geobase. A string with the name of the language can be passed as a second argument. Supported languages are: ru, en, ua, uk, by, kz, tr. If the second argument is omitted, the language ‘ru’ is used. If the language is not supported, an exception is thrown. Returns a string – the name of the region in the corresponding language. If the region with the specified ID does not exist, an empty string is returned.
+
+`ua` and `uk` both mean Ukrainian.
+
+## regionToPopulation
+
+
+regionToPopulation(id[, geobase])
+
+Gets the population for a region.
+
+The population can be recorded in files with the geobase. See the section “External dictionaries”.
+
+If the population is not recorded for the region, it returns 0.
+
+In the Yandex geobase, the population might be recorded for child regions, but not for parent regions.
+
+## regionToTopContinent
+
+
+`regionToTopContinent(id[, geobase])`
+
+Finds the highest continent in the hierarchy for the region.
+
+**Syntax**
+
+```sql
+
+regionToTopContinent(id[, geobase])
+
+```
+
+**Arguments**
+
+- `id` — Region ID from the Yandex geobase. [UInt32](https://bytedance.feishu.cn/sql-reference/data-types/int-uint.md) . 
+
+
+
+- `geobase` — Dictionary key. See [Multiple Geobases](https://bytedance.feishu.cn/docs/doccnFkHpok0xssNrwscSUDfwNG#multiple-geobases) . [String](https://bytedance.feishu.cn/sql-reference/data-types/string.md) . Optional. 
+
+
+
+**Returned value**
+
+- Identifier of the top level continent (the latter when you climb the hierarchy of regions). 
+
+
+
+- 0, if there is none. 
+
+
+
+Type: `UInt32` .
+
+## replicate
+
+
+Creates an array with a single value.
+
+Used for internal implementation of [arrayJoin](https://bytedance.feishu.cn/sql-reference/functions/array-join.md#functions_arrayjoin) .
+
+```sql
+
+SELECT replicate(x, arr);
+
+```
+
+**Arguments:**
+
+- `arr` — Original array. ByConity creates a new array of the same length as the original and fills it with the value `x` . 
+
+
+
+- `x` — The value that the resulting array will be filled with. 
+
+
+
+**Returned value**
+
+An array filled with the value `x` .
+
+Type: `Array` .
+
+**Example**
+
+Query:
+
+```sql
+
+SELECT replicate(1, ['a', 'b', 'c'])
+
+```
+
+Result:
+
+```plain%20text
+
+┌─replicate(1, ['a', 'b', 'c'])─┐
+
+│ [1,1,1]                       │
+
+└───────────────────────────────┘
+
+```
+
+## rowNumberInAllBlocks
+
+
+rowNumberInAllBlocks()
+
+Returns the ordinal number of the row in the data block. This function only considers the affected data blocks.
+
+## rowNumberInBlock
+
+
+Returns the ordinal number of the row in the data block. Different data blocks are always recalculated.
+
+## runningAccumulate
+
+
+Accumulates states of an aggregate function for each row of a data block.
+
+**Warning**
+
+The state is reset for each new data block.
+
+**Syntax**
+
+```sql
+
+runningAccumulate(agg_state[, grouping]);
+
+```
+
+**Arguments**
+
+- `agg_state` — State of the aggregate function. [AggregateFunction](https://bytedance.feishu.cn/sql-reference/data-types/aggregatefunction.md#data-type-aggregatefunction) . 
+
+
+
+- `grouping` — Grouping key. Optional. The state of the function is reset if the `grouping` value is changed. It can be any of the [supported data types](https://bytedance.feishu.cn/sql-reference/data-types/index.md) for which the equality operator is defined. 
+
+
+
+**Returned value**
+
+- Each resulting row contains a result of the aggregate function, accumulated for all the input rows from 0 to the current position. `runningAccumulate` resets states for each new data block or when the `grouping` value changes. 
+
+
+
+Type depends on the aggregate function used.
+
+**Examples**
+
+Consider how you can use `runningAccumulate` to find the cumulative sum of numbers without and with grouping.
+
+Query:
+
+```sql
+
+SELECT k, runningAccumulate(sum_k) AS res FROM (SELECT number as k, sumState(k) AS sum_k FROM numbers(10) GROUP BY k ORDER BY k);
+
+```
+
+Result:
+
+```plain%20text
+
+┌─k─┬─res─┐
+
+│ 0 │   0 │
+
+│ 1 │   1 │
+
+│ 2 │   3 │
+
+│ 3 │   6 │
+
+│ 4 │  10 │
+
+│ 5 │  15 │
+
+│ 6 │  21 │
+
+│ 7 │  28 │
+
+│ 8 │  36 │
+
+│ 9 │  45 │
+
+└───┴─────┘
+
+```
+
+The subquery generates `sumState` for every number from `0` to `9` . `sumState` returns the state of the [sum](https://bytedance.feishu.cn/sql-reference/aggregate-functions/reference/sum.md) function that contains the sum of a single number.
+
+The whole query does the following:
+
+6. For the first row, `runningAccumulate` takes `sumState(0)` and returns `0` . 
+
+
+
+7. For the second row, the function merges `sumState(0)` and `sumState(1)` resulting in `sumState(0 + 1)` , and returns `1` as a result. 
+
+
+
+8. For the third row, the function merges `sumState(0 + 1)` and `sumState(2)` resulting in `sumState(0 + 1 + 2)` , and returns `3` as a result. 
+
+
+
+9. The actions are repeated until the block ends. 
+
+
+
+The following example shows the `groupping` parameter usage:
+
+Query:
+
+```sql
+
+SELECT
+
+    grouping,
+
+    item,
+
+    runningAccumulate(state, grouping) AS res
+
+FROM
+
+(
+
+    SELECT
+
+        toInt8(number / 4) AS grouping,
+
+        number AS item,
+
+        sumState(number) AS state
+
+    FROM numbers(15)
+
+    GROUP BY item
+
+    ORDER BY item ASC
+
+);
+
+```
+
+Result:
+
+```plain%20text
+
+┌─grouping─┬─item─┬─res─┐
+
+│        0 │    0 │   0 │
+
+│        0 │    1 │   1 │
+
+│        0 │    2 │   3 │
+
+│        0 │    3 │   6 │
+
+│        1 │    4 │   4 │
+
+│        1 │    5 │   9 │
+
+│        1 │    6 │  15 │
+
+│        1 │    7 │  22 │
+
+│        2 │    8 │   8 │
+
+│        2 │    9 │  17 │
+
+│        2 │   10 │  27 │
+
+│        2 │   11 │  38 │
+
+│        3 │   12 │  12 │
+
+│        3 │   13 │  25 │
+
+│        3 │   14 │  39 │
+
+└──────────┴──────┴─────┘
+
+```
+
+As you can see, `runningAccumulate` merges states for each group of rows separately.
+
+## runningDifference
+
+
+**Syntax**
+
+```sql
+
+runningDifference(x) 
+
+```
+
+Calculates the difference between successive row values in the data block.
+
+Returns 0 for the first row and the difference from the previous row for each subsequent row.
+
+Warning:
+
+It can reach the previous row only inside the currently processed data block.
+
+The result of the function depends on the affected data blocks and the order of data in the block.
+
+The rows order used during the calculation of `runningDifference` can differ from the order of rows returned to the user.
+
+To prevent that you can make a subquery with [ORDER BY](https://bytedance.feishu.cn/sql-reference/statements/select/order-by.md) and call the function from outside the subquery.
+
+Example:
+
+```sql
+
+SELECT
+
+    EventID,
+
+    EventTime,
+
+    runningDifference(EventTime) AS delta
+
+FROM
+
+(
+
+    SELECT
+
+        EventID,
+
+        EventTime
+
+    FROM events
+
+    WHERE EventDate = '2016-11-24'
+
+    ORDER BY EventTime ASC
+
+    LIMIT 5
+
+)
+
+```
+
+```plain%20text
+
+┌─EventID─┬───────────EventTime─┬─delta─┐
+
+│    1106 │ 2016-11-24 00:00:04 │     0 │
+
+│    1107 │ 2016-11-24 00:00:05 │     1 │
+
+│    1108 │ 2016-11-24 00:00:05 │     0 │
+
+│    1109 │ 2016-11-24 00:00:09 │     4 │
+
+│    1110 │ 2016-11-24 00:00:10 │     1 │
+
+└─────────┴─────────────────────┴───────┘
+
+```
+
+Please note - block size affects the result. With each new block, the `runningDifference` state is reset.
+
+```sql
+
+SELECT
+
+    number,
+
+    runningDifference(number + 1) AS diff
+
+FROM numbers(100000)
+
+WHERE diff != 1
+
+```
+
+```plain%20text
+
+┌─number─┬─diff─┐
+
+│      0 │    0 │
+
+└────────┴──────┘
+
+┌─number─┬─diff─┐
+
+│  65536 │    0 │
+
+└────────┴──────┘
+
+```
+
+```sql
+
+set max_block_size=100000 -- default value is 65536!
+
+
+
+SELECT
+
+    number,
+
+    runningDifference(number + 1) AS diff
+
+FROM numbers(100000)
+
+WHERE diff != 1
+
+```
+
+```plain%20text
+
+┌─number─┬─diff─┐
+
+│      0 │    0 │
+
+└────────┴──────┘
+
+```
+
+## runningDifferenceStartingWithFirstValue
+
+
+Same as for [runningDifference](https://bytedance.feishu.cn/docs/other-functions.md#other_functions-runningdifference) , the difference is the value of the first row, returned the value of the first row, and each subsequent row returns the difference from the previous row.
+
+## sleep
+
+
+**Syntax**
+
+```sql
+
+sleep(seconds)
+
+```
+
+Sleeps ‘seconds’ seconds on each data block. You can specify an integer or a floating-point number.
+
+
+
+## sleepEachRow
+
+
+sleepEachRow(seconds)
+
+Sleeps ‘seconds’ seconds on each row. You can specify an integer or a floating-point number.
+
+## throwIf
+
+
+throwIf(x[, custom_message])
+
+Throw an exception if the argument is non zero.
+
+custom_message - is an optional parameter: a constant string, provides an error message
+
+```sql
+
+SELECT throwIf(number = 3, 'Too many') FROM numbers(10);
+
+```
+
+```plain%20text
+
+↙ Progress: 0.00 rows, 0.00 B (0.00 rows/s., 0.00 B/s.) Received exception from server (version 19.14.1):
+
+Code: 395. DB::Exception: Received from [localhost:9000](http://localhost:9000/). DB::Exception: Too many.
+
+```
+
+## toColumnTypeName
+
+
+Returns the name of the class that represents the data type of the column in RAM.
+
+```sql
+
+toColumnTypeName(value)
+
+```
+
+**Arguments:**
+
+- `value` — Any type of value. 
+
+
+
+**Returned values**
+
+- A string with the name of the class that is used for representing the `value` data type in RAM. 
+
+
+
+**Example of the difference between** `**toTypeName ' and ' toColumnTypeName**`
+
+```sql
+
+SELECT toTypeName(CAST('2018-01-01 01:02:03' AS DateTime))
+
+```
+
+```plain%20text
+
+┌─toTypeName(CAST('2018-01-01 01:02:03', 'DateTime'))─┐
+
+│ DateTime                                            │
+
+└─────────────────────────────────────────────────────┘
+
+```
+
+```sql
+
+SELECT toColumnTypeName(CAST('2018-01-01 01:02:03' AS DateTime))
+
+```
+
+```plain%20text
+
+┌─toColumnTypeName(CAST('2018-01-01 01:02:03', 'DateTime'))─┐
+
+│ Const(UInt32)                                             │
+
+└───────────────────────────────────────────────────────────┘
+
+```
+
+The example shows that the `DateTime` data type is stored in memory as `Const(UInt32)` .
+
+## toTypeName
+
+
+toTypeName(x)
+
+Returns a string containing the type name of the passed argument.
+
+If `NULL` is passed to the function as input, then it returns the `Nullable(Nothing)` type, which corresponds to an internal `NULL` representation in ByConity.
+
+## transform
+
+
+**Syntax**
+
+```sql
+
+transform(x, array_from, array_to) 
+
+```
+
+Differs from the first variation in that the ‘default’ argument is omitted.
+
+If the ‘x’ value is equal to one of the elements in the ‘array_from’ array, it returns the matching element (that is numbered the same) from the ‘array_to’ array. Otherwise, it returns ‘x’.
+
+Types:
+
+`transform(T, Array(T), Array(T)) -> T`
+
+Example:
+
+```sql
+
+SELECT
+
+    transform(domain(Referer), ['[yandex.ru](http://yandex.ru/)', '[google.ru](http://google.ru/)', '[vk.com](http://vk.com/)'], ['www.yandex', '[example.com](http://example.com/)']) AS s,
+
+    count() AS c
+
+FROM test.hits
+
+GROUP BY domain(Referer)
+
+ORDER BY count() DESC
+
+LIMIT 10
+
+```
+
+```plain%20text
+
+┌─s──────────────┬───────c─┐
+
+│                │ 2906259 │
+
+│ www.yandex     │  867767 │
+
+│ ███████.ru     │  313599 │
+
+│ [mail.yandex.ru](http://mail.yandex.ru/) │  107147 │
+
+│ ██████.ru      │  100355 │
+
+│ █████████.ru   │   65040 │
+
+│ [news.yandex.ru](http://news.yandex.ru/) │   64515 │
+
+│ ██████.net     │   59141 │
+
+│ [example.com](http://example.com/)    │   57316 │
+
+└────────────────┴─────────┘
+
+```
+
+transformx-array-from-array-to-default
+
+**Syntax**
+
+```sql
+
+transform(x, array_from, array_to, default)
+
+```
+
+**Argument**
+
+`x` – What to transform.
+
+`array_from` – Constant array of values for converting.
+
+`array_to` – Constant array of values to convert the values in ‘from’ to.
+
+`default` – Which value to use if ‘x’ is not equal to any of the values in ‘from’.
+
+`array_from` and `array_to` – Arrays of the same size.
+
+Types:
+
+`transform(T, Array(T), Array(U), U) -> U`
+
+`T` and `U` can be numeric, string, or Date or DateTime types.
+
+Where the same letter is indicated (T or U), for numeric types these might not be matching types, but types that have a common type.
+
+For example, the first argument can have the Int64 type, while the second has the Array(UInt16) type.
+
+If the ‘x’ value is equal to one of the elements in the ‘array_from’ array, it returns the existing element (that is numbered the same) from the ‘array_to’ array. Otherwise, it returns ‘default’. If there are multiple matching elements in ‘array_from’, it returns one of the matches.
+
+**Example** :
+
+```sql
+
+SELECT
+
+    transform(SearchEngineID, [2, 3], ['Yandex', 'Google'], 'Other') AS title,
+
+    count() AS c
+
+FROM test.hits
+
+WHERE SearchEngineID != 0
+
+GROUP BY title
+
+ORDER BY c DESC
+
+```
+
+```plain%20text
+
+┌─title─────┬──────c─┐
+
+│ Yandex    │ 498635 │
+
+│ Google    │ 229872 │
+
+│ Other     │ 104472 │
+
+└───────────┴────────┘
+
+```
+
+transformx-array-from-array-to
+
+**Syntax**
+
+```sql
+
+transform(x, array_from, array_to)
+
+```
+
+Differs from the first variation in that the ‘default’ argument is omitted.
+
+If the ‘x’ value is equal to one of the elements in the ‘array_from’ array, it returns the matching element (that is numbered the same) from the ‘array_to’ array. Otherwise, it returns ‘x’.
+
+**Types** :
+
+`transform(T, Array(T), Array(T)) -> T`
+
+**Example** :
+
+```sql
+
+SELECT
+
+    transform(domain(Referer), ['[yandex.ru](http://yandex.ru/)', '[google.ru](http://google.ru/)', '[vk.com](http://vk.com/)'], ['www.yandex', '[example.com](http://example.com/)']) AS s,
+
+    count() AS c
+
+FROM test.hits
+
+GROUP BY domain(Referer)
+
+ORDER BY count() DESC
+
+LIMIT 10
+
+```
+
+```plain%20text
+
+┌─s──────────────┬───────c─┐
+
+│                │ 2906259 │
+
+│ www.yandex     │  867767 │
+
+│ ███████.ru     │  313599 │
+
+│ [mail.yandex.ru](http://mail.yandex.ru/) │  107147 │
+
+│ ██████.ru      │  100355 │
+
+│ █████████.ru   │   65040 │
+
+│ [news.yandex.ru](http://news.yandex.ru/) │   64515 │
+
+│ ██████.net     │   59141 │
+
+│ [example.com](http://example.com/)    │   57316 │
+
+└────────────────┴─────────┘
+
+```
+
+## uptime
+
+
+uptime()
+
+Returns the server’s uptime in seconds.
+
+## version
+
+
+**Syntax**
+
+```sql
+
+version()
+
+```
+
+Returns the version of the server as a string.
+
+## visibleWidth
+
+
+visibleWidth(x)
+
+Calculates the approximate width when outputting values to the console in text format (tab-separated).
+
+This function is used by the system for implementing Pretty formats.
+
+`NULL` is represented as a string corresponding to `NULL` in `Pretty` formats.
+
+```sql
+
+SELECT visibleWidth(NULL)
+
+```
+
+```plain%20text
+
+┌─visibleWidth(NULL)─┐
+
+│                  4 │
+
+└────────────────────┘
+
+```

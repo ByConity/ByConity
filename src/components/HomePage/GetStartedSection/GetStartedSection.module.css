@@ -1,0 +1,41 @@
+.container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.buttons {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.githubButton > * {
+  vertical-align: middle;
+}
+
+.card {
+  flex: 1;
+  background-color: white;
+  padding: 24px;
+  border-radius: 8px;
+  border: 1px solid var(--ifm-color-primary-lightest);
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: center;
+  min-height: 4rem;
+  font-size: 1.5rem;
+  text-align: center;
+}
+
+.cardImage {
+  font-size: 5rem;
+  text-align: center;
+}
+
+.cardBody {
+  font-size: 1.15rem;
+  text-align: center;
+}

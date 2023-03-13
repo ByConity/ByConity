@@ -1,0 +1,59 @@
+---
+title: 复杂查询模型和执行调优
+tags:
+  - Docs
+---
+
+# 复杂查询模型和执行调优
+
+## 复杂查询执行模型
+
+![](./assets/复杂查询模型和执行调优/boxcnUIHT3GY66QcCm0sXdVUrxc.png)
+
+** 复杂查询执行模型图**
+
+分析型查询可以分为简单查询和复杂查询，简单查询通常是单表检索聚合、大表与小表 Join 查询，查询响应快；复杂查询指的是有大表、多表关联和复杂的逻辑处理，通常查询响应慢消耗资源多。ByConity 在复杂查询上进行了优化设计。
+
+简单的查询可以采用两阶段执行模型，计算节点上面执行的 partial 阶段，服务节点上面执行的 final 阶段，一旦我们需要执行一个复杂的多个聚合或者 join 的查询，两阶段的执行模型灵活性非常低，也让查询的优化变得棘手。为了更好的支持分布式查询，方便执行优化器产生的执行计划，我们引入了支持多轮分布式执行模式的复杂查询。
+
+复杂查询的执行流程如下：
+
+- Query SQL String 通过 parser 解析为 AST
+- 对 AST 做改写和优化，产生执行计划
+- 启用优化器的时候，通过优化器产生执行计划。
+- 将执行计划切分为多个 PlanSegment
+- PlanSegment 即分布式执行过程中的一个执行片段，它包含
+- 执行需要的 AST 片段，或者一个由 PlanNode 构成的逻辑执行计划片段
+- PlanSegment 执行的节点信息
+- PlanSegment 的上下游信息，这些信息包括上游的输入流，下游需要的输入流
+- 引擎的调度器会将这些 PlanSegment 构成一个 DAG，然后按拓扑排序下发给集群中的所有节点
+- 每个节点收到 PlanSegment 之后，开始驱动 PlanSegment 执行
+- 包含数据源的 PlanSegment 开始读取数据，将数据按照一定的 shuffle 规则分发到下游的各个节点上
+- 包含 exchange 输入的 PlanSegment 等待上游的数据，如果需要继续做 shuffle 则会继续将数据下发给各个节点
+- 多轮 stage 完成之后，结果会返回到服务端
+
+## 如何开启
+
+开启优化器会自动走复杂查询执行模型。通过配置 enable_optimizer=1，或者 dialect_type='ANSI' 可以开启。
+
+- 确定统计信息存在
+
+没有统计信息，生成的查询计划不是最优。`show stats [<db_name>.]<table_name>`
+
+- 分析计划每一个 Step 的耗时
+
+通过 `explain analyze sql` 可以显示每一个 Step 的耗时
+
+- Exchange 参数调优
+
+Exchange 算子负责 PlanSegment 之间的数据传输。
+
+`exchange_source_pipeline_threads` 影响 pipeline 执行的总线程数目，尤其是非 source 的 pipeline(指直接从存储读取数据的 pipeline)，目前默认设置为 CPU 核数，目前并没有一个理想推荐值，可以考虑/2 或者\*2 观察结果。如果查询内存占用较大，可以调小。
+
+`exchange_timeout_ms` Exhange 超时时间（ms)，默认为 100s，如果出现 Exchange 相关超时报错可以适当调大
+
+`exchange_unordered_output_parallel_size` 影响 exchange 输出数据的并发能力，默认为 8，一般不需要调整。如果 exchange_source_pipeline_threads 调整比较大，可以适当调大 exchange_unordered_output_parallel_size，增加上游输出能力。
+
+`exchange_enable_block_compress` 是否开启 exchange 压缩，默认开启，如果 CPU 瓶颈比网络明显，可以尝试关闭
+
+## 参考文档

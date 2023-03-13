@@ -1,0 +1,250 @@
+---
+title: 设计库表
+tags:
+  - Docs
+---
+
+# 设计库表
+
+文档类型：教程型
+
+文档格式：教程目的，前置准备，分步骤讲解原理 & 示例，相关文档推荐；
+
+内容提要：
+
+1. ByConity 是如何组织数据库和数据表的
+2. 数据库表的规格，比如单数据库支持放多少数据表，单表支持多少列
+3. 设计数据表时，应该理解哪些配置（primary key 等）
+4. 典型场景下，设计数据表的最佳实践是什么
+
+## 组织库表
+
+### 数据库
+
+ByConity 的数据库是一组相关联的表或者视图的组合，方便用户管理这组 schema 的生命周期以及权限控制。ByConity 对数据库的数目上限没有硬性限制。
+
+### 数据表
+
+从逻辑上看，数据表是一组拥有相同行数的数据列的集合，并从属某个数据库。ByConity 对一个数据库的表数目也没有限制（最好不超过百万）。一个表拥有的数据列数目不超过 10 万。
+
+#### 表引擎
+
+表引擎即表的类型，决定了：
+
+- 数据的组织和存储方式
+- 索引的方式以及索引类型
+- 支持哪些查询以及如何支持
+- 一些其他特定的功能和配置
+
+ByConity 最常用的表引擎是 CnchMergeTree。其他特殊类型的表引擎包括 Hive 外表、Kafka 表等 。下面重点讲下 MergeTree 表引擎的原理。
+
+#### CnchMergeTree 表原理
+
+CnchMergeTree 表是最常用的表引擎，核心思想和 LSM-Tree 类似，数据按分区键(partition by)进行分区，然后排序键(order by)进行有序存储。主要特点：
+
+- 如果指定了分区键的话，数据会按分区键划分成了不同的逻辑数据集（逻辑分区，Partition)
+
+每一个逻辑分区可以存在零到多个数据片段（DataPart）。如果查询条件可以裁剪分区，通常可以加速查询。如果没有指定分区键，全部数据都在一个逻辑分区里。
+
+- 数据片段
+
+数据片段里的数据按排序键排序。每个数据片段还会存在一个 min/max 索引，来加速分区选择。
+
+- 数据颗粒（Granule）
+
+每个数据片段被逻辑的分割成颗粒（granule ），默认的 Granule 为 8192 行（由表的 index_granularity 配置决定）。颗粒是 ByConity 中进行数据查询时的最小不可分割数据集。每个颗粒的第一行通过该行的主键值进行标记， ByConity 会为每个数据片段创建一个索引文件来存储这些标记。对于每列，无论它是否包含在主键当中，ByConity 都会存储类似标记。这些标记让您可以在列文件中直接找到数据。Granule 作为 ByConity 稀疏索引的索引目标，也是在内存中进行数据扫描的单位。
+
+- 后台 Merge
+
+后台任务会定时对同一个分区的 DataPart 进行合并，并保持按排序键有序。后台的合并减少了 Part 的数目，以便更高效存储，并提升了查询性能。
+
+## CnchMergeTree 建表语句和相关配置
+
+```
+CREATE TABLE [IF NOT EXISTS] [db.]table_name
+(
+    name1 [type1] [NULL|NOT NULL] [DEFAULT|ALIAS expr1] [compression_codec] [TTL expr1],
+    name2 [type2] [NULL|NOT NULL] [DEFAULT|ALIAS expr2] [compression_codec] [TTL expr2],
+    ...
+    INDEX index_name1 expr1 TYPE type1(...) GRANULARITY value1,
+    INDEX index_name2 expr2 TYPE type2(...) GRANULARITY value2，
+) ENGINE = CnchMergeTree()
+ORDER BY expr
+[PARTITION BY expr]
+[CLUSTER BY (column, expression, ...) INTO value1 BUCKETS SPLIT_NUMBER value2 WITH_RANGE]
+[PRIMARY KEY expr]
+[UNIQUE KEY expr]
+[SAMPLE BY expr]
+[TTL expr]
+[SETTINGS name=value, ...]
+
+```
+
+### 设计分区键（PARTITION BY)
+
+分区键定义分区，分区是在一个表中通过指定的规则划分而成的逻辑数据集。可以按任意标准进行分区，如按日期。为了减少需要操作的数据，每个分区都是分开存储的。查询时，ByConity 尽量使用这些分区的最小子集。建表时候通过 `PARTITION BY expr` 子句指定。分区键可以是表中列的任意表达式。例如，指定按月分区，表达式为 `toYYYYMM(date)`；或者按表达元组，如 `(toMonday(date), EventType)` 等。
+
+需要注意，表中分区表达式计算出的取值范围不能太大（推荐不超过一万），太多分区会占用比较大的内存以及带来比较多的 IO 和计算开销。
+
+合理的设计分区键可以极大减少查询时需要扫描的数据量，一般考虑将查询中最常用的条件同时取值范围不超过一万的列设计为分区键（如日期等）。
+
+### 设计排序键（ORDER BY）
+
+可以是一组列的元组或任意的表达式。 例如: `ORDER BY (OrderID, Date)` 。
+
+如果不需要排序，可以使用 `ORDER BY tuple()`。DataPart 里的数据将按照排序键进行排序。
+
+### 设计主键(PRIMARY KEY)
+
+默认情况不需要显式指定，ByConity 将使用排序键作为主键。当有特殊场景主键和排序键不一致时，主键必须为排序键的最左前缀。如排序键为(OrderID, Date)，主键必须为 OrderID，不能为 Date。在一些特殊的表引擎，如 CnchAggregatingMergeTree、CnchSumMergeTree 中，主键会与排序键不同。
+
+ByConity 会在主键上建立以 Granule 为单位的稀疏索引，（与之对比，所谓稠密索引则是每一行都会建立索引信息）。
+
+如果查询条件能匹配主键索引的最左前缀，通过主键索引可以快速过滤出可能需要读取的数据颗粒，相比扫描整个 DataPart，通常要高效很多。
+
+另外需要注意，PRIMARY KEY 不能保证唯一性，所以可以插入主键重复的数据行。
+
+分区（PARTITION BY）和主键(PRIMARY KEY)是两种不同的加速数据查询的方式，定义的时候应当尽量错开使用不同的列来定义两者，来覆盖更多的查询场景。例如 order by 的第一个列一定不要重复放到 partition by 里。下面是如何选择主键的一些考虑：
+
+- 是否是查询条件里常用的列
+- 不是非分区键的第一个列
+- 这个列的选择性，例如性别、是/否这种可选值太少的列不建议放入主键中
+- 假如现在的主键是（a，b)，如果在大多数情况下给定（a，b）对应的数据范围很大（包含多个 Granule），可以考虑把一个新的查询常用列附加到主键中，这样可以过滤更多的数据。
+- 过长的主键会对插入性能和内存消耗有负面影响，但对查询性能没有影响。
+
+### 唯一键索引(UNIQUE KEY)
+
+主键（PRIMARY KEY）不能保证去重，如果有唯一键去重的需求，需要在建表时设置唯一键索引。设置唯一键之后，ByConity 提供 upsert 更新写语义，可以根据唯一键高效更新数据行。查询自动返回每个唯一键的最新值。
+
+唯一键可以是一组列的元组或任意的表达式，如 `UNIQUE KEY (product_id, sipHash64(city))`。
+
+唯一建索引可以通过配置 `partition_level_unique_keys` 控制是分区级别唯一还是全表唯一，目前推荐实践为：分区唯一索引，单分区数据量不超过千万级别**。**若为全表唯一，则全表数据量建议不超过千万级别。
+
+通过唯一键查询时会用上唯一键索引过滤数据加速查询，所以通常主键可以设置和唯一键不一样列，覆盖更多的查询条件。不过如果要使用部分列更新功能的话，是需要唯一键为排序键的最左前缀。
+
+### 跳数索引（Index）
+
+建表时可以这样定义跳数索引
+
+```
+INDEX index_name expr TYPE type(...) GRANULARITY granularity_value
+
+```
+
+#### 可用的索引类型
+
+- `minmax` 存储指定表达式的极值（如果表达式是 `tuple` ，则存储 `tuple` 中每个元素的极值），这些信息用于跳过数据块，类似主键。
+
+跳数索引功能正在测试中，等完成后补充支持的跳数索引类型。
+
+### 设计 Bucket
+
+CNCH Bucket table 最佳实践手册
+
+### 采样
+
+用于抽样的表达式，可选项。
+
+如果要用抽样表达式，主键中必须包含这个表达式。例如： `SAMPLE BY intHash32(UserID) ORDER BY (CounterID, EventDate, intHash32(UserID))` 。
+
+细节参考采样功能（需要独立一篇采样功能）
+
+### 列和表的 TTL
+
+指定行存储的持续时间并定义数据片段在硬盘和卷上的移动逻辑的规则列表，可选项。
+
+表达式中必须存在至少一个 `Date` 或 `DateTime` 类型的列，比如：
+
+`TTL date + INTERVAl 1 DAY`
+
+更多细节，请查看 [表和列的 TTL](https://clickhouse.com/docs/zh/engines/table-engines/mergetree-family/mergetree#table_engine-mergetree-ttl)（太多了，可能要独立一篇 TTL 的）
+
+### 高级配置
+
+#### Granule 配置
+
+- `index_granularity` — 索引粒度。索引中相邻的『标记』间的数据行数（对应 Granule 大小）。默认值 8192 。
+
+后面三个配置待测试，RD 未验证功能。
+
+- `index_granularity_bytes` — 索引粒度，以字节为单位，默认值: 10Mb。如果想要仅按数据行数限制索引粒度, 请设置为 0(不建议)。
+- `min_index_granularity_bytes` - 允许的最小数据粒度，默认值：1024b。该选项用于防止误操作，添加了一个非常低索引粒度的表。
+- `enable_mixed_granularity_parts` — 是否启用通过 `index_granularity_bytes` 控制索引粒度的大小。在老版本只有 `index_granularity` 配置能够用于限制索引粒度的大小。当从具有很大的行（几十上百兆字节）的表中查询数据时候，`index_granularity_bytes` 配置能够提升 ByConity 的性能。如果您的表里有很大的行，可以开启这项配置来提升 `SELECT` 查询的性能。
+
+#### 计算组配置
+
+参考 【教程型】配置计算组
+
+#### merge 相关配置
+
+参考后台任务章节
+
+#### 存储相关配置
+
+参考存储相关章节
+
+#### 唯一索引相关配置
+
+- `partition_level_unique_keys` - 唯一索引是否是分区唯一，默认值：`true`；如果为 `false`，代表唯一索引是全表级别；
+- `cloud_enable_staging_area` - 是否开启异步写入模式，默认值：`false`。
+
+#### 其他配置
+
+## 最佳实践
+
+### 主键索引的最佳实践
+
+[https://clickhouse.com/docs/zh/guides/improving-query-performance/sparse-primary-indexes/](https://clickhouse.com/docs/zh/guides/improving-query-performance/sparse-primary-indexes/)
+
+### 二级索引最佳实践
+
+[https://clickhouse.com/docs/zh/guides/improving-query-performance/skipping-indexes](https://clickhouse.com/docs/zh/guides/improving-query-performance/skipping-indexes)
+
+###
+
+### 列类型考虑
+
+### 避免一味使用 String 类型
+
+如果可能的情况下使用 Int(8|16|32|64|128|256) / Date / Date32 / DateTime / DateTime64 / Float / Decimal 代替 String
+
+最简单的判断方法就是看是否可以转换到目标类型比如 `SELECT countIf(toUInt8OrNull(col) IS NULL) FROM table`, `SELECT countIf(toDateOrNull(col) IS NULL) FROM table`
+
+对内容相对固定的 String Column, 可以考虑使用 Enum 代替，比如省份名称. Enum 后期可以通过 `ALTER TABLE` 添加新值
+
+String 最小最大长度差距不超过 8 的情况下使用 FixedString，因为 String 相比 FixedString 在内存中要多储存 8 字节的 offset `SELECT min(length(col)), max(length(col)) FROM table`
+
+### Nullable 选择
+
+如果确定列中不包含 Null，不要使用 Nullable 类型，会对性能有负面影响
+
+### LowCardinality
+
+如果某个列的基数较低，例如一个 DataPart 内只有不超过 10000 个不相等的值，可以考虑用 LowCardinality 类型。LowCardinality 类型会对原始列进行字典编码。对很多应用来说，处理字典编码的数据可以显著的增加查询速度，并且降低存储空间，提升 IO 效率。
+
+### 列 Codec 选择
+
+通用编码 lz4 / lz4hc / zstd / deflate_qpl
+
+[https://clickhouse.com/docs/en/sql-reference/statements/create/table/#general-purpose-codecs](https://clickhouse.com/docs/en/sql-reference/statements/create/table/#general-purpose-codecs)
+
+通常来说 lz4 编码快但压缩率没有 zstd 高, 在支持 Intel IAA 的平台上可以考虑使用 qpl
+
+特殊编码可以和上面的通用编码一起使用: Delta / DoubleDelta / Gorilla / FPC / T64
+
+[https://clickhouse.com/docs/en/sql-reference/statements/create/table/#specialized-codecs](https://clickhouse.com/docs/en/sql-reference/statements/create/table/#specialized-codecs)
+
+一般来说时序可以用 doubledelta, 随时序变化的值可以用 gorilla, FPC 在 64bit 浮点数上效果比较好. T64 是寻找 64 个值的共同高位进行裁剪，只记录变化的部分
+
+下面是一些最佳实践
+
+- DateTime 类型: 未排序，建议用 Delta+LZ4
+- DateTime 类型：排序，建议用 LZ4
+- Date 类型：未排序，建议用 ZSTD
+- Date 类型：排序（例：PK），建议用 LZ4
+
+### 参考文档
+
+[https://clickhouse.com/docs/zh/engines/table-engines/mergetree-family/mergetree#tiao-shu-suo-yin-fen-duan-hui-zong-suo-yin-shi-yan-xing-de](https://clickhouse.com/docs/zh/engines/table-engines/mergetree-family/mergetree#tiao-shu-suo-yin-fen-duan-hui-zong-suo-yin-shi-yan-xing-de)
+
+[https://clickhouse.com/docs/en/sql-reference/statements/create/table/#column-compression-codecs](https://clickhouse.com/docs/en/sql-reference/statements/create/table/#column-compression-codecs)
