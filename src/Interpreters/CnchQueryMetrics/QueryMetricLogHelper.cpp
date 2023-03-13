@@ -338,7 +338,7 @@ void insertCnchQueryMetric(
     {
         String initial_query_id = context->getClientInfo().initial_query_id;
         String current_query_id = context->getCurrentQueryId();
-        String worker_id = getWorkerGroupID(context);
+        String worker_id = getWorkerID(context);
         time_t event_time = current_time;
         UInt32 latency = (info) ? info->elapsed_seconds * 1000 : 0;
         UInt32 selected_parts = (info && info->profile_counters) ? ((*info->profile_counters)[ProfileEvents::SelectedParts]).load() : 0;

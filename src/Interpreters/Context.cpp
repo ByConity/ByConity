@@ -2559,7 +2559,7 @@ HostWithPorts Context::getHostWithPorts() const
     auto get_host_with_port = [this] ()
     {
         String host = getHostIPFromEnv();
-        String id = getWorkerId(shared_from_this());
+        String id = getWorkerID(shared_from_this());
         if (id.empty())
             id = host;
 

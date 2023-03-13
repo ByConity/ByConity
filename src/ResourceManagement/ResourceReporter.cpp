@@ -91,7 +91,7 @@ bool ResourceReporterTask::sendHeartbeat()
 
     LOG_TRACE(log, "Send heartbeat to RM: {} self: {}", resource_manager->leader_host_port, data.host_ports.toDebugString());
     ContextPtr context = getContext();
-    data.id = getWorkerId(context);
+    data.id = getWorkerID(context);
     data.vw_name = getVirtualWareHouseID(context);
     data.worker_group_id = getWorkerGroupID(context);
     return resource_manager->reportResourceUsage(data);
@@ -105,7 +105,7 @@ void ResourceReporterTask::sendRegister()
     LOG_TRACE(log, "Register Node in RM: {} self: {}", resource_manager->leader_host_port, data.host_ports.toDebugString());
 
     ContextPtr context = getContext();
-    data.id = getWorkerId(context);
+    data.id = getWorkerID(context);
     data.vw_name = getVirtualWareHouseID(context);
     data.worker_group_id = getWorkerGroupID(context);
     resource_manager->registerWorker(data);
@@ -117,7 +117,7 @@ void ResourceReporterTask::sendRemove()
     try
     {
         ContextPtr context = getContext();
-        resource_manager->removeWorker(getWorkerId(context), getVirtualWareHouseID(context), getWorkerGroupID(context));
+        resource_manager->removeWorker(getWorkerID(context), getVirtualWareHouseID(context), getWorkerGroupID(context));
     }
     catch (...)
     {

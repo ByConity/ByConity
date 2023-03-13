@@ -192,7 +192,7 @@ std::string getFromEnvOrConfig(ContextPtr context, const std::string & name)
 }
 } /// end namespace
 
-std::string getWorkerId(ContextPtr context)
+std::string getWorkerID(ContextPtr context)
 {
     static std::string worker_id = getFromEnvOrConfig(context, "WORKER_ID");
     return worker_id;
