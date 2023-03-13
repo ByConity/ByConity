@@ -19,6 +19,7 @@
 #include <ostream>
 #include <string>
 #include <vector>
+#include <Interpreters/Context_fwd.h>
 
 namespace DB
 {
@@ -30,6 +31,9 @@ std::string createHostPortString(const std::string & host, uint16_t port);
 std::string createHostPortString(const std::string & host, const std::string & port);
 bool isSameHost(const std::string & lhs_host, const std::string & rhs_host);
 std::string_view removeBracketsIfIpv6(const std::string & host_name);
+std::string getWorkerId(ContextPtr context);
+std::string getWorkerGroupID(ContextPtr context);
+std::string getVirtualWareHouseID(ContextPtr context);
 
 const std::string & getHostIPFromEnv();
 

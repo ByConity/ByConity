@@ -191,6 +191,7 @@
 #include <Transaction/CnchServerTransaction.h>
 #include <Transaction/CnchWorkerTransaction.h>
 #include <Statistics/StatisticsMemoryStore.h>
+#include <Common/HostWithPorts.h>
 
 namespace fs = std::filesystem;
 
@@ -2555,20 +2556,26 @@ const RemoteHostFilter & Context::getRemoteHostFilter() const
 
 HostWithPorts Context::getHostWithPorts() const
 {
-    auto * id_cstr = std::getenv("WORKER_ID");
-    const auto & ip_cstr = getHostIPFromEnv();
-    String id = (nullptr == id_cstr) ? DNSResolver::instance().getHostName() : String(id_cstr);
-    String host = (ip_cstr.empty()) ? DNSResolver::instance().getHostName() : String(ip_cstr);
+    auto get_host_with_port = [this] ()
+    {
+        String host = getHostIPFromEnv();
+        String id = getWorkerId(shared_from_this());
+        if (id.empty())
+            id = host;
 
-    return HostWithPorts{
-        std::move(host),
-        getRPCPort(),
-        getTCPPort(),
-        getHTTPPort(),
-        getExchangePort(),
-        getExchangeStatusPort(),
-        std::move(id)
+        return HostWithPorts {
+            std::move(host),
+            getRPCPort(),
+            getTCPPort(),
+            getHTTPPort(),
+            getExchangePort(),
+            getExchangeStatusPort(),
+            std::move(id)
+        };
     };
+
+    static HostWithPorts cache = get_host_with_port();
+    return cache;
 }
 
 UInt16 Context::getTCPPort() const

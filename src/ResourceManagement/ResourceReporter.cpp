@@ -18,6 +18,7 @@
 #include <Interpreters/Context.h>
 #include <ResourceManagement/CommonData.h>
 #include <ResourceManagement/ResourceManagerClient.h>
+#include <Common/HostWithPorts.h>
 
 
 
@@ -89,9 +90,10 @@ bool ResourceReporterTask::sendHeartbeat()
     auto data = resource_monitor->createResourceData();
 
     LOG_TRACE(log, "Send heartbeat to RM: {} self: {}", resource_manager->leader_host_port, data.host_ports.toDebugString());
-    data.id = getenv("WORKER_ID");
-    data.vw_name = getenv("VIRTUAL_WAREHOUSE_ID");
-    data.worker_group_id = getenv("WORKER_GROUP_ID");
+    ContextPtr context = getContext();
+    data.id = getWorkerId(context);
+    data.vw_name = getVirtualWareHouseID(context);
+    data.worker_group_id = getWorkerGroupID(context);
     return resource_manager->reportResourceUsage(data);
 }
 
@@ -101,9 +103,11 @@ void ResourceReporterTask::sendRegister()
     auto data = resource_monitor->createResourceData(true);
 
     LOG_TRACE(log, "Register Node in RM: {} self: {}", resource_manager->leader_host_port, data.host_ports.toDebugString());
-    data.id = getenv("WORKER_ID");
-    data.vw_name = getenv("VIRTUAL_WAREHOUSE_ID");
-    data.worker_group_id = getenv("WORKER_GROUP_ID");
+
+    ContextPtr context = getContext();
+    data.id = getWorkerId(context);
+    data.vw_name = getVirtualWareHouseID(context);
+    data.worker_group_id = getWorkerGroupID(context);
     resource_manager->registerWorker(data);
 }
 
@@ -112,7 +116,8 @@ void ResourceReporterTask::sendRemove()
     auto resource_manager = getContext()->getResourceManagerClient();
     try
     {
-        resource_manager->removeWorker(getenv("WORKER_ID"), getenv("VIRTUAL_WAREHOUSE_ID"), getenv("WORKER_GROUP_ID"));
+        ContextPtr context = getContext();
+        resource_manager->removeWorker(getWorkerId(context), getVirtualWareHouseID(context), getWorkerGroupID(context));
     }
     catch (...)
     {
