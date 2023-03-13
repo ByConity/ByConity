@@ -1,0 +1,23 @@
+logger:
+  level: trace
+  log: /var/log/byconity/tso.log
+  errorlog: /var/log/byconity/tso.err.log
+  testlog: /var/log/byconity/tso.test.log
+  size: 1000M
+  count: 10
+  console: true
+listen_host: "0.0.0.0"
+path: /var/byconity/tso
+tmp_path: /var/byconity/tmp
+tso_service:
+  type: fdb
+  fdb:
+    cluster_file: /config/fdb.cluster
+  port: 18845
+  http:
+    port: 9181
+    receive_timeout: 1800
+    send_timeout: 1800
+  tso_window_ms: 3000
+  tso_get_leader_info_interval_ms: 0
+cnch_config: /config/cnch-config.yml

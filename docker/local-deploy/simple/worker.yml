@@ -1,0 +1,62 @@
+logger:
+  level: trace
+  log: /var/byconity/out.log
+  errorlog: /var/byconity/err.log
+  testlog: /var/byconity/test.log
+  size: 1000M
+  count: 10
+http_port: 21557
+rpc_port: 30605
+tcp_port: 52145
+ha_tcp_port: 26247
+exchange_port: 47447
+exchange_status_port: 60611
+interserver_http_port: 30491
+listen_host: "0.0.0.0"
+cnch_type: worker
+vw_name: vw_default
+max_connections: 4096
+keep_alive_timeout: 3
+max_concurrent_queries: 100
+uncompressed_cache_size: 8589934592
+mark_cache_size: 5368709120
+path: /var/byconity/
+tmp_path: /var/byconity/tmp_data/
+users_config: /config/users.yml
+default_profile: default
+default_database: default
+timezone: Asia/Shanghai
+mlock_executable: false
+macros:
+  "-incl": macros
+  "-optional": true
+builtin_dictionaries_reload_interval: 3600
+max_session_timeout: 3600
+default_session_timeout: 60
+dictionaries_config: "*_dictionary.xml"
+format_schema_path: /var/byconity/format_schemas/
+perQuery: 1
+storage_configuration:
+  disks:
+    hdfs_disk:
+      path: /user/clickhouse/
+      type: bytehdfs
+    local_disk:
+      path: /var/byconity/data/
+      type: local
+  policies:
+    default:
+      volumes:
+        hdfs:
+          default: hdfs_disk
+          disk: hdfs_disk
+        local:
+          default: local_disk
+          disk: local_disk
+hdfs_addr: "hdfs://hdfs-namenode:9000"
+query_log:
+  database: system
+  table: query_log
+  flush_interval_milliseconds: 15000
+  partition_by: event_date
+cnch_config: /config/cnch-config.yml

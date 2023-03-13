@@ -140,6 +140,26 @@ WorkerGroupHandleImpl::WorkerGroupHandleImpl(const WorkerGroupHandleImpl & from,
     }
 }
 
+CnchWorkerClientPtr WorkerGroupHandleImpl::getWorkerClientByHash(const String & key) const
+{
+    if (worker_clients.empty())
+        throw Exception("No available worker for " + id, ErrorCodes::RESOURCE_MANAGER_NO_AVAILABLE_WORKER);
+    UInt64 index = std::hash<String>{}(key) % worker_clients.size();
+    return worker_clients[index];
+}
+
+CnchWorkerClientPtr WorkerGroupHandleImpl::getWorkerClient() const
+{
+    if (worker_clients.empty())
+        throw Exception("No available worker for " + id, ErrorCodes::RESOURCE_MANAGER_NO_AVAILABLE_WORKER);
+    if (worker_clients.size() == 1)
+        return worker_clients[0];
+
+    std::uniform_int_distribution dist;
+    auto index = dist(thread_local_rng) % worker_clients.size();
+    return worker_clients[index];
+}
+
 CnchWorkerClientPtr WorkerGroupHandleImpl::getWorkerClient(const HostWithPorts & host_ports) const
 {
     if (auto index = indexOf(host_ports))
@@ -207,18 +227,6 @@ std::vector<std::pair<String, UInt16>> WorkerGroupHandleImpl::getReadWorkers() c
         res.emplace_back(conn->getHost(), conn->getPort());
     }
     return res;
-}
-
-HostWithPorts WorkerGroupHandleImpl::randomWorker() const
-{
-    if (hosts.empty())
-        throw Exception("No available worker for " + id, ErrorCodes::RESOURCE_MANAGER_NO_AVAILABLE_WORKER);
-    if (hosts.size() == 1)
-        return hosts[0];
-
-    std::uniform_int_distribution dist;
-    auto index = dist(thread_local_rng) % hosts.size();
-    return hosts[index];
 }
 
 }
