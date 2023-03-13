@@ -1,4 +1,6 @@
 SET mutations_sync = 1;
+
+USE test;
 DROP TABLE IF EXISTS test_optimize;
 CREATE TABLE test_optimize(x Int32, y String) Engine = CnchMergeTree ORDER BY x;
 
