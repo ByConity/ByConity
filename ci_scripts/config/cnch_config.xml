@@ -1,6 +1,5 @@
 <?xml version="1.0"?>
 <yandex>
-    <timezone>Europe/Moscow</timezone>
     <service_discovery>
         <mode>local</mode>
         <cluster>default</cluster>
