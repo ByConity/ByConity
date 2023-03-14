@@ -931,7 +931,7 @@ RelationPlan QueryPlannerVisitor::planReadFromStorage(const IAST & table_ast, Sc
 
     auto table_step = std::make_shared<TableScanStep>(
         context,
-        storage->getStorageID(),
+        storage,
         columns_with_aliases,
         query_info,
         QueryProcessingStage::Enum::FetchColumns,
