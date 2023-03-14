@@ -65,6 +65,11 @@ CnchBGThreadPtr CnchBGThreadsMap::createThread(const StorageID & storage_id)
     {
         return std::make_shared<DedupWorkerManager>(getContext(), storage_id);
     }
+    else if (type == CnchBGThreadType::Clustering)
+    {
+        /// TODO support Reclustering ManagerThread
+        //return std::make_shared<ReclusteringManagerThread>(global_context, storage_id);
+    }
     else
     {
         throw Exception(String("Not supported background thread ") + toString(type), ErrorCodes::NOT_IMPLEMENTED);
