@@ -312,7 +312,7 @@ Strings MetastoreProxy::getUDFsMetaByName(const String & name_space, const std::
         keys.push_back(udfStoreKey(name_space, function_name));
 
     Strings udf_info;
-    auto values = metastore_ptr->multiGet(keys);
+    auto values = metastore_ptr->multiGet(keys, 1);
     for (const auto & ele : values)
         udf_info.emplace_back(std::move(ele.first));
     return udf_info;
@@ -528,7 +528,7 @@ Strings MetastoreProxy::getMaskingPolicies(const String & name_space, const Stri
         keys.push_back(maskingPolicyKey(name_space, name));
 
     Strings res;
-    auto values = metastore_ptr->multiGet(keys);
+    auto values = metastore_ptr->multiGet(keys, 1);
     for (auto & ele : values)
         res.push_back(std::move(ele.first));
 
@@ -620,7 +620,7 @@ Strings MetastoreProxy::getPartsByName(const String & name_space, const String &
         keys.push_back(dataPartKey(name_space, uuid, part_name));
 
     Strings parts_meta;
-    auto values = metastore_ptr->multiGet(keys);
+    auto values = metastore_ptr->multiGet(keys, 1);
     for (auto & ele : values)
         parts_meta.emplace_back(std::move(ele.first));
     return parts_meta;
@@ -864,7 +864,7 @@ std::vector<std::pair<String, UInt64>> MetastoreProxy::getTransactionRecords(con
     for (const auto & txn_id : txn_ids)
         txn_keys.push_back(transactionRecordKey(name_space, txn_id.toUInt64()));
 
-    return metastore_ptr->multiGet(txn_keys);
+    return metastore_ptr->multiGet(txn_keys, 0);
 }
 
 IMetaStore::IteratorPtr MetastoreProxy::getAllTransactionRecord(const String & name_space, const size_t & max_result_number)
@@ -994,7 +994,7 @@ void MetastoreProxy::clearIntents(const String & name_space, const String & inte
     for (const auto & intent : intents)
         intent_names.emplace_back(writeIntentKey(name_space, intent_prefix, intent.intent()));
 
-    auto snapshot = metastore_ptr->multiGet(intent_names);
+    auto snapshot = metastore_ptr->multiGet(intent_names, 1);
 
     Poco::Logger * log = &Poco::Logger::get(__func__);
     std::vector<size_t> matched_intent_index;
@@ -1184,7 +1184,7 @@ std::vector<String> MetastoreProxy::multiDropAndCheck(const Strings & keys)
     multiDrop(keys);
     /// check if all keys have been deleted, return drop failed keys if any;
     std::vector<String> keys_drop_failed{};
-    auto values = metastore_ptr->multiGet(keys);
+    auto values = metastore_ptr->multiGet(keys, 1);
     for (auto & pair : values)
     {
         if (!pair.first.empty())
@@ -1266,7 +1266,7 @@ void MetastoreProxy::getKafkaTpl(const String & name_space, const String & consu
         keys.emplace_back(std::move(key));
     }
 
-    auto values = metastore_ptr->multiGet(keys);
+    auto values = metastore_ptr->multiGet(keys, 1);
     if (tpl.size() != values.size())
         throw Exception("Got wrong size of offsets while getting tpl", ErrorCodes::LOGICAL_ERROR);
 
@@ -1456,7 +1456,7 @@ void MetastoreProxy::prepareAddDeleteBitmaps(const String & name_space, const St
 Strings MetastoreProxy::getDeleteBitmapByKeys(const Strings & keys)
 {
     Strings parts_meta;
-    auto values = metastore_ptr->multiGet(keys);
+    auto values = metastore_ptr->multiGet(keys, 1);
     for (auto & ele : values)
         parts_meta.emplace_back(std::move(ele.first));
     return parts_meta;
@@ -1551,7 +1551,7 @@ MetastoreProxy::getTableStatistics(const String & name_space, const String & uui
     {
         keys.push_back(tableStatisticKey(name_space, uuid, tag));
     }
-    auto values = metastore_ptr->multiGet(keys);
+    auto values = metastore_ptr->multiGet(keys, 1);
     std::unordered_map<StatisticsTag, StatisticsBasePtr> res;
     for (const auto & value : values)
     {
@@ -1622,7 +1622,7 @@ std::unordered_map<StatisticsTag, StatisticsBasePtr> MetastoreProxy::getColumnSt
     {
         keys.push_back(columnStatisticKey(name_space, uuid, column, tag));
     }
-    auto values = metastore_ptr->multiGet(keys);
+    auto values = metastore_ptr->multiGet(keys, 1);
     std::unordered_map<StatisticsTag, StatisticsBasePtr> res;
     for (const auto & value : values)
     {

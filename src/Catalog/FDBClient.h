@@ -111,7 +111,7 @@ public:
     fdb_error_t Get(FDBTransactionPtr tr, const std::string & key, GetResponse & res);
     fdb_error_t Put(FDBTransactionPtr tr, const PutRequest & put);
     std::shared_ptr<Iterator> Scan(FDBTransactionPtr tr, const ScanRequest & scan_req);
-    fdb_error_t MultiGet(FDBTransactionPtr tr, const std::vector<std::string> & keys, std::vector<std::pair<std::string, UInt64>> & values);
+    fdb_error_t MultiGet(FDBTransactionPtr tr, const std::vector<std::string> & keys, std::vector<std::pair<std::string, UInt64>> & values, uint8_t snapshot);
     fdb_error_t MultiWrite(FDBTransactionPtr tr, const Catalog::BatchCommitRequest & req, Catalog::BatchCommitResponse & resp);
     fdb_error_t Delete(FDBTransactionPtr tr, const std::string & key);
     fdb_error_t Clear(FDBTransactionPtr tr, const std::string & start_key, const std::string & end_key);
