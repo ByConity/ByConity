@@ -31,7 +31,7 @@ double Histogram::getTotalNdv() const
     double count = 0;
     for (const auto & bucket : buckets)
     {
-        count += bucket->getNumDistinct();
+        count += bucket.getNumDistinct();
     }
     return count;
 }
@@ -41,7 +41,7 @@ double Histogram::getTotalCount() const
     double count = 0;
     for (const auto & bucket : buckets)
     {
-        count += bucket->getCount();
+        count += bucket.getCount();
     }
     return count;
 }
@@ -52,12 +52,12 @@ double Histogram::getMin() const
     {
         return 0;
     }
-    double min = buckets[0]->getLowerBound();
+    double min = buckets[0].getLowerBound();
     for (size_t i = 1; i < buckets.size(); i++)
     {
-        if (min > buckets[i]->getLowerBound())
+        if (min > buckets[i].getLowerBound())
         {
-            min = buckets[i]->getLowerBound();
+            min = buckets[i].getLowerBound();
         }
     }
     return min;
@@ -69,12 +69,12 @@ double Histogram::getMax() const
     {
         return 0;
     }
-    double max = buckets[0]->getUpperBound();
+    double max = buckets[0].getUpperBound();
     for (size_t i = 1; i < buckets.size(); i++)
     {
-        if (max < buckets[i]->getUpperBound())
+        if (max < buckets[i].getUpperBound())
         {
-            max = buckets[i]->getUpperBound();
+            max = buckets[i].getUpperBound();
         }
     }
     return max;
@@ -87,9 +87,9 @@ double Histogram::estimateEqual(double value) const
 
     for (const auto & bucket : buckets)
     {
-        if (bucket->contains(value) && bucket->getNumDistinct() > 0)
+        if (bucket.contains(value) && bucket.getNumDistinct() > 0)
         {
-            return ((1.0 / bucket->getNumDistinct()) * bucket->getCount()) / getTotalCount();
+            return ((1.0 / bucket.getNumDistinct()) * bucket.getCount()) / getTotalCount();
         }
     }
     return 0.0;
@@ -103,20 +103,20 @@ double Histogram::estimateLessThanOrLessThanEqualFilter(double value, bool equal
     for (const auto & bucket : buckets)
     {
         // ----- point ----- lower_bound -----
-        if (bucket->isBefore(value))
+        if (bucket.isBefore(value))
         {
             break;
         }
         // ----- upper_bound ----- point -----
-        else if (bucket->isAfter(value) || (equal && bucket->isUpperClosed() && bucket->getUpperBound() == value))
+        else if (bucket.isAfter(value) || (equal && bucket.isUpperClosed() && bucket.getUpperBound() == value))
         {
-            hit_count += bucket->getCount();
+            hit_count += bucket.getCount();
         }
         else
         {
             // ----- lower_bound ----- point ----- upper_bound  ----
-            double overlap = bucket->getOverlapPercentage(value);
-            hit_count += overlap * bucket->getCount();
+            double overlap = bucket.getOverlapPercentage(value);
+            hit_count += overlap * bucket.getCount();
         }
     }
     return static_cast<double>(hit_count) / getTotalCount();
@@ -128,20 +128,20 @@ double Histogram::estimateGreaterThanOrGreaterThanEqualFilter(double value, bool
     for (const auto & bucket : buckets)
     {
         // ----- point ----- lower_bound -----
-        if (bucket->isBefore(value) || (equal && bucket->isLowerClosed() && bucket->getLowerBound() == value))
+        if (bucket.isBefore(value) || (equal && bucket.isLowerClosed() && bucket.getLowerBound() == value))
         {
-            hit_count += bucket->getCount();
+            hit_count += bucket.getCount();
         }
         // ----- upper_bound ----- point -----
-        else if (bucket->isAfter(value))
+        else if (bucket.isAfter(value))
         {
             continue;
         }
         else
         {
             // ----- lower_bound ----- point ----- upper_bound  ----
-            double overlap = 1.0 - bucket->getOverlapPercentage(value);
-            hit_count += bucket->getCount() * overlap;
+            double overlap = 1.0 - bucket.getOverlapPercentage(value);
+            hit_count += bucket.getCount() * overlap;
         }
     }
     return static_cast<double>(hit_count) / getTotalCount();
@@ -150,18 +150,18 @@ double Histogram::estimateGreaterThanOrGreaterThanEqualFilter(double value, bool
 Buckets Histogram::estimateJoin(const Histogram & right_histogram, double lower_bound, double upper_bound) const
 {
     // Only bins whose range intersect [lower_bound, upper_bound] have join possibility.
-    std::vector<BucketPtr> left_buckets;
+    std::vector<Bucket> left_buckets;
     for (const auto & bucket : this->getBuckets())
     {
-        if (bucket->getLowerBound() <= upper_bound && bucket->getUpperBound() >= lower_bound)
+        if (bucket.getLowerBound() <= upper_bound && bucket.getUpperBound() >= lower_bound)
         {
             left_buckets.emplace_back(bucket);
         }
     }
-    std::vector<BucketPtr> right_buckets;
+    std::vector<Bucket> right_buckets;
     for (const auto & bucket : right_histogram.getBuckets())
     {
-        if (bucket->getLowerBound() <= upper_bound && bucket->getUpperBound() >= lower_bound)
+        if (bucket.getLowerBound() <= upper_bound && bucket.getUpperBound() >= lower_bound)
         {
             right_buckets.emplace_back(bucket);
         }
@@ -173,10 +173,10 @@ Buckets Histogram::estimateJoin(const Histogram & right_histogram, double lower_
     while (left_index < left_buckets.size() && right_index < right_buckets.size())
     {
         auto & left_bucket = left_buckets[left_index];
-        BucketPtr left = left_bucket->trim(lower_bound, upper_bound);
+        Bucket left = left_bucket.trim(lower_bound, upper_bound);
 
         auto & right_bucket = right_buckets[right_index];
-        BucketPtr right = right_bucket->trim(lower_bound, upper_bound);
+        Bucket right = right_bucket.trim(lower_bound, upper_bound);
 
         // Only collect overlapped ranges.
         bool intersects = Bucket::intersects(left, right);
@@ -214,7 +214,7 @@ Buckets Histogram::estimateJoin(const Histogram & right_histogram, double lower_
             continue;
         }
 
-        OverlappedRange overlap = left->makeBucketIntersect(right);
+        OverlappedRange overlap = left.makeBucketIntersect(right);
         overlaps.emplace_back(overlap);
     }
 
@@ -227,7 +227,7 @@ Buckets Histogram::estimateJoin(const Histogram & right_histogram, double lower_
 
         if (range_ndv > 0)
         {
-            auto bucket = std::make_shared<Bucket>(range.lower_bound, range.upper_bound, range_ndv, range_count / range_ndv, true, true);
+            auto bucket = Bucket(range.lower_bound, range.upper_bound, range_ndv, range_count / range_ndv, true, true);
             join_buckets.emplace_back(bucket);
         }
     }
@@ -240,15 +240,15 @@ Histogram Histogram::createEqualFilter(double value) const
     Buckets new_buckets;
     for (const auto & bucket : buckets)
     {
-        if (bucket->contains(value))
+        if (bucket.contains(value))
         {
-            if (bucket->isSingleton())
+            if (bucket.isSingleton())
             {
                 new_buckets.emplace_back(bucket);
             }
             else
             {
-                BucketPtr new_bucket = bucket->makeBucketSingleton(value);
+                Bucket new_bucket = bucket.makeBucketSingleton(value);
                 new_buckets.emplace_back(new_bucket);
             }
         }
@@ -258,22 +258,26 @@ Histogram Histogram::createEqualFilter(double value) const
 
 Histogram Histogram::createNotEqualFilter(double value) const
 {
-    std::vector<BucketPtr> new_buckets;
+    std::vector<Bucket> new_buckets;
     for (const auto & bucket : buckets)
     {
-        if (bucket->contains(value))
+        if (bucket.contains(value))
         {
             // bucket is singleton, and contains, pass
-            if (bucket->isSingleton())
+            if (bucket.isSingleton())
             {
                 continue;
             }
             else
             {
-                BucketPtr new_bucket_1 = bucket->makeBucketScaleUpper(value, false);
-                new_buckets.emplace_back(new_bucket_1);
-                BucketPtr new_bucket_2 = bucket->makeBucketScaleLower(value, false);
-                new_buckets.emplace_back(new_bucket_2);
+                if (auto new_bucket_1 = bucket.makeBucketScaleUpper(value, false))
+                {
+                    new_buckets.emplace_back(std::move(new_bucket_1.value()));
+                }
+                if (auto new_bucket_2 = bucket.makeBucketScaleLower(value, false))
+                {
+                    new_buckets.emplace_back(std::move(new_bucket_2.value()));
+                }
             }
         }
         else
@@ -286,26 +290,26 @@ Histogram Histogram::createNotEqualFilter(double value) const
 
 Histogram Histogram::createLessThanOrLessThanEqualFilter(double value, bool equal) const
 {
-    std::vector<BucketPtr> new_buckets;
+    std::vector<Bucket> new_buckets;
     for (const auto & bucket : buckets)
     {
         // ----- point ----- lower_bound -----
-        if (bucket->isBefore(value))
+        if (bucket.isBefore(value))
         {
             break;
         }
         // ----- upper_bound ----- point -----
-        else if (bucket->isAfter(value) || (equal && bucket->isUpperClosed() && bucket->getUpperBound() == value))
+        else if (bucket.isAfter(value) || (equal && bucket.isUpperClosed() && bucket.getUpperBound() == value))
         {
             new_buckets.emplace_back(bucket);
         }
         else
         {
             // ----- lower_bound ----- point ----- upper_bound  ----
-            BucketPtr new_bucket = bucket->makeBucketScaleUpper(value, equal);
+            BucketOpt new_bucket = bucket.makeBucketScaleUpper(value, equal);
             if (new_bucket)
             {
-                new_buckets.emplace_back(new_bucket);
+                new_buckets.emplace_back(std::move(new_bucket.value()));
             }
         }
     }
@@ -314,24 +318,26 @@ Histogram Histogram::createLessThanOrLessThanEqualFilter(double value, bool equa
 
 Histogram Histogram::createGreaterThanOrGreaterThanEqualFilter(double value, bool equal) const
 {
-    std::vector<BucketPtr> new_buckets;
+    std::vector<Bucket> new_buckets;
     for (const auto & bucket : buckets)
     {
         // ----- point ----- lower_bound -----
-        if (bucket->isBefore(value) || (equal && bucket->isLowerClosed() && bucket->getLowerBound() == value))
+        if (bucket.isBefore(value) || (equal && bucket.isLowerClosed() && bucket.getLowerBound() == value))
         {
             new_buckets.emplace_back(bucket);
         }
         // ----- upper_bound ----- point -----
-        else if (bucket->isAfter(value))
+        else if (bucket.isAfter(value))
         {
             continue;
         }
         else
         {
             // ----- lower_bound ----- point ----- upper_bound  ----
-            BucketPtr new_buckte = bucket->makeBucketScaleLower(value, equal);
-            new_buckets.emplace_back(new_buckte);
+            if (auto new_bucket = bucket.makeBucketScaleLower(value, equal))
+            {
+                new_buckets.emplace_back(std::move(new_bucket.value()));
+            }
         }
     }
     return Histogram{new_buckets};
@@ -344,15 +350,15 @@ Histogram Histogram::createInFilter(std::set<double> & values) const
     {
         for (const auto & bucket : buckets)
         {
-            if (bucket->contains(value))
+            if (bucket.contains(value))
             {
-                if (bucket->isSingleton())
+                if (bucket.isSingleton())
                 {
                     new_buckets.emplace_back(bucket);
                 }
                 else
                 {
-                    BucketPtr new_bucket = bucket->makeBucketSingleton(value);
+                    Bucket new_bucket = bucket.makeBucketSingleton(value);
                     new_buckets.emplace_back(new_bucket);
                 }
             }
@@ -368,19 +374,23 @@ Histogram Histogram::createNotInFilter(std::set<double> & values) const
     {
         for (const auto & bucket : buckets)
         {
-            if (bucket->contains(value))
+            if (bucket.contains(value))
             {
                 // bucket is singleton, and contains, pass
-                if (bucket->isSingleton())
+                if (bucket.isSingleton())
                 {
                     continue;
                 }
                 else
                 {
-                    BucketPtr new_bucket_1 = bucket->makeBucketScaleUpper(value, false);
-                    new_buckets.emplace_back(new_bucket_1);
-                    BucketPtr new_bucket_2 = bucket->makeBucketScaleLower(value, false);
-                    new_buckets.emplace_back(new_bucket_2);
+                    if (auto new_bucket_1 = bucket.makeBucketScaleUpper(value, false))
+                    {
+                        new_buckets.emplace_back(std::move(new_bucket_1.value()));
+                    }
+                    if (auto new_bucket_2 = bucket.makeBucketScaleLower(value, false))
+                    {
+                        new_buckets.emplace_back(std::move(new_bucket_2.value()));
+                    }
                 }
             }
             else
@@ -409,29 +419,29 @@ Histogram Histogram::createUnion(const Histogram & other) const
         return Histogram{};
     }
 
-    const BucketPtr & bucket1_first = this->getBucket(idx1);
-    const BucketPtr & bucket2_first = other.getBucket(idx2);
+    auto bucket1_first = this->getBucket(idx1);
+    auto bucket2_first = other.getBucket(idx2);
 
-    BucketPtr bucket1 = bucket1_first;
-    BucketPtr bucket2 = bucket2_first;
+    BucketOpt bucket1 = std::move(bucket1_first);
+    BucketOpt bucket2 = std::move(bucket2_first);
 
     // flags to determine if the buckets where residue of the bucket-merge operation
     bool bucket1_is_residual = false;
     bool bucket2_is_residual = false;
 
-    while (bucket1 != nullptr && bucket2 != nullptr)
+    while (bucket1 && bucket2)
     {
-        if (Bucket::isBefore(bucket1, bucket2))
+        if (Bucket::isBefore(bucket1.value(), bucket2.value()))
         {
-            new_buckets.emplace_back(bucket1);
+            new_buckets.emplace_back(bucket1.value());
             cleanupResidualBucket(bucket1, bucket1_is_residual);
             idx1++;
             bucket1 = this->getBucket(idx1);
             bucket1_is_residual = false;
         }
-        else if (Bucket::isBefore(bucket2, bucket1))
+        else if (Bucket::isBefore(bucket2.value(), bucket1.value()))
         {
-            new_buckets.emplace_back(bucket2);
+            new_buckets.emplace_back(bucket2.value());
             cleanupResidualBucket(bucket2, bucket2_is_residual);
             idx2++;
             bucket2 = other.getBucket(idx2);
@@ -439,13 +449,11 @@ Histogram Histogram::createUnion(const Histogram & other) const
         }
         else
         {
-            Utils::checkState(Bucket::intersects(bucket1, bucket2));
-            BucketPtr bucket1_new = nullptr;
-            BucketPtr bucket2_new = nullptr;
-            BucketPtr merge_bucket = bucket1->makeBucketMerged(bucket2, bucket1_new, bucket2_new);
+            Utils::checkState(Bucket::intersects(bucket1.value(), bucket2.value()));
+            auto [merge_bucket, bucket1_new, bucket2_new] = bucket1.value().makeBucketMerged(bucket2.value());
             new_buckets.emplace_back(merge_bucket);
 
-            Utils::checkState(nullptr == bucket1_new || nullptr == bucket2_new);
+            Utils::checkState(!bucket1_new || !bucket2_new);
 
             cleanupResidualBucket(bucket1, bucket1_is_residual);
             cleanupResidualBucket(bucket2, bucket2_is_residual);
@@ -458,8 +466,8 @@ Histogram Histogram::createUnion(const Histogram & other) const
     size_t buckets1 = getBucketSize();
     size_t buckets2 = other.getBucketSize();
 
-    Utils::assertIff(nullptr == bucket1, idx1 == buckets1);
-    Utils::assertIff(nullptr == bucket2, idx2 == buckets2);
+    Utils::assertIff(!bucket1, idx1 == buckets1);
+    Utils::assertIff(!bucket2, idx2 == buckets2);
 
     idx1 = addResidualUnionAllBucket(new_buckets, bucket1, bucket1_is_residual, idx1);
     idx2 = addResidualUnionAllBucket(new_buckets, bucket2, bucket2_is_residual, idx2);
@@ -489,19 +497,18 @@ Histogram Histogram::createNot(const Histogram & origin) const
 }
 
 // cleanup residual buckets
-void Histogram::cleanupResidualBucket(BucketPtr & bucket, bool bucket_is_residual) const
+void Histogram::cleanupResidualBucket(BucketOpt & bucket, bool bucket_is_residual) const
 {
-    if (nullptr != bucket && bucket_is_residual)
+    if (bucket && bucket_is_residual)
     {
-        bucket = nullptr;
+        bucket = {};
     }
 }
 
 // get the next bucket for union / union all
-BucketPtr Histogram::getNextBucket(BucketPtr & new_bucket, bool & result_bucket_is_residual, size_t & current_bucket_index) const
-
+BucketOpt Histogram::getNextBucket(const BucketOpt & new_bucket, bool & result_bucket_is_residual, size_t & current_bucket_index) const
 {
-    if (nullptr != new_bucket)
+    if (new_bucket)
     {
         result_bucket_is_residual = true;
         return new_bucket;
@@ -514,11 +521,13 @@ BucketPtr Histogram::getNextBucket(BucketPtr & new_bucket, bool & result_bucket_
 }
 
 // add residual bucket in the union all operation to the array of buckets in the histogram
-size_t Histogram::addResidualUnionAllBucket(Buckets & histogram_buckets, BucketPtr & bucket, bool bucket_is_residual, size_t index) const
+size_t
+Histogram::addResidualUnionAllBucket(Buckets & histogram_buckets, const BucketOpt & bucket, bool bucket_is_residual, size_t index) const
 {
     if (bucket_is_residual)
     {
-        histogram_buckets.emplace_back(bucket);
+        Utils::checkState(bucket.has_value());
+        histogram_buckets.emplace_back(bucket.value());
         return index + 1;
     }
 
@@ -533,7 +542,7 @@ void Histogram::addBuckets(const Buckets & src_buckets, Buckets & dest_buckets, 
 
     for (size_t ul = begin; ul < end; ul++)
     {
-        BucketPtr bucket = src_buckets[ul];
+        Bucket bucket = src_buckets[ul];
         dest_buckets.emplace_back(bucket);
     }
 }
@@ -543,10 +552,7 @@ Histogram Histogram::applySelectivity(double rowcount_selectivity, double ndv_se
     Buckets new_buckets;
     for (const auto & bucket : buckets)
     {
-        if (bucket)
-        {
-            new_buckets.emplace_back(bucket->applySelectivity(rowcount_selectivity, ndv_selectivity));
-        }
+        new_buckets.emplace_back(bucket.applySelectivity(rowcount_selectivity, ndv_selectivity));
     }
     return Histogram{new_buckets};
 }
@@ -561,7 +567,7 @@ Histogram Histogram::copy() const
     return Histogram{new_buckets};
 }
 
-bool Histogram::subsumes(const BucketPtr & origin_bucket) const
+bool Histogram::subsumes(const Bucket & origin_bucket) const
 {
     for (auto & bucket : buckets)
     {

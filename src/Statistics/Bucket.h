@@ -24,8 +24,10 @@ namespace DB::Statistics
 struct OverlappedRange;
 
 class Bucket;
-using BucketPtr = std::shared_ptr<Bucket>;
-using Buckets = std::vector<BucketPtr>;
+// using Bucket = std::shared_ptr<Bucket>;
+// using BucketOpt = NullableSharedPtr<Bucket>;
+using BucketOpt = std::optional<Bucket>;
+using Buckets = std::vector<Bucket>;
 struct OverlappedRange;
 using OverlappedRanges = std::vector<OverlappedRange>;
 
@@ -74,11 +76,6 @@ private:
     // is upper bound closed (does bucket includes boundary value)
     bool upper_bound_inclusive;
 
-    // private copy constructor
-    Bucket(const Bucket &);
-
-    // private assignment operator
-    Bucket & operator=(const Bucket &);
 
 public:
     Bucket(double lower_bound, double upper_bound, double ndv, double count, bool lower_bound_inclusive, bool upper_bound_inclusive);
@@ -145,31 +142,31 @@ public:
     // is upper bound closed (does bucket includes boundary value)
     bool isUpperClosed() const { return upper_bound_inclusive; }
 
-    BucketPtr trim(double lower_bound_, double upper_bound_);
+    Bucket trim(double lower_bound_, double upper_bound_);
 
     // does bucket's range intersect another's
-    static bool intersects(const BucketPtr & bucket1, const BucketPtr & bucket2);
+    static bool intersects(const Bucket & bucket1, const Bucket & bucket2);
 
     // does bucket's range subsume another's
-    static bool subsumes(const BucketPtr & bucket1, const BucketPtr & bucket2);
+    static bool subsumes(const Bucket & bucket1, const Bucket & bucket2);
 
     // does bucket occur before another
-    static bool isBefore(const BucketPtr & bucket1, const BucketPtr & bucket2);
+    static bool isBefore(const Bucket & bucket1, const Bucket & bucket2);
 
     // does bucket occur after another
-    static bool isAfter(const BucketPtr & bucket1, const BucketPtr & bucket2);
+    static bool isAfter(const Bucket & bucket1, const Bucket & bucket2);
 
     // construct new bucket with lower bound greater than given point
-    BucketPtr makeBucketGreaterThan(double point) const;
+    BucketOpt makeBucketGreaterThan(double point) const;
 
     // scale down version of bucket adjusting upper boundary
-    BucketPtr makeBucketScaleUpper(double upper_bound, bool include_upper) const;
+    BucketOpt makeBucketScaleUpper(double upper_bound, bool include_upper) const;
 
     // scale down version of bucket adjusting lower boundary
-    BucketPtr makeBucketScaleLower(double point_lower_new, bool include_lower) const;
+    BucketOpt makeBucketScaleLower(double point_lower_new, bool include_lower) const;
 
     // extract singleton bucket at given point
-    BucketPtr makeBucketSingleton(double point_singleton) const;
+    Bucket makeBucketSingleton(double point_singleton) const;
 
     //		Create a new bucket by intersecting with another
     //		and return the percentage of each of the buckets that intersect.
@@ -228,10 +225,10 @@ public:
     //		Note that there are no equi-join results outside of these squares that
     //		overlay the diagonal.
     //------------------------------------------------------------------------
-    OverlappedRange makeBucketIntersect(BucketPtr & bucket) const;
+    OverlappedRange makeBucketIntersect(const Bucket & bucket) const;
 
     // return copy of bucket
-    BucketPtr makeBucketCopy();
+    Bucket makeBucketCopy() const;
 
     //		Merges with another bucket. Returns merged bucket that should be part
     //		of the output. It also returns what is leftover from the merge.
@@ -241,19 +238,18 @@ public:
     //		merge of [1,1) and [1,1) produces [1,1), NULL, NULL
     //
     //---------------------------------------------------------------------------
-    BucketPtr makeBucketMerged(
-        BucketPtr & bucket_other, BucketPtr & result_bucket1_new, BucketPtr & result_bucket2_new, bool is_union_all = true) const;
+    std::tuple<Bucket, BucketOpt, BucketOpt> makeBucketMerged(const Bucket & bucket_other, bool is_union_all = true) const;
 
     // compare lower bucket boundaries
-    static int compareLowerBounds(const BucketPtr & bucket1, const BucketPtr & bucket2);
+    static int compareLowerBounds(const Bucket & bucket1, const Bucket & bucket2);
 
     // compare upper bucket boundaries
-    static int compareUpperBounds(const BucketPtr & bucket1, const BucketPtr & bucket2);
+    static int compareUpperBounds(const Bucket & bucket1, const Bucket & bucket2);
 
     // compare lower bound of first bucket to upper bound of second bucket
-    static int compareLowerBoundToUpperBound(const BucketPtr & bucket1, const BucketPtr & bucket2);
+    static int compareLowerBoundToUpperBound(const Bucket & bucket1, const Bucket & bucket2);
 
-    BucketPtr applySelectivity(double rowcount_selectivity, double ndv_selectivity);
+    Bucket applySelectivity(double rowcount_selectivity, double ndv_selectivity) const;
 };
 
 }

@@ -9,7 +9,7 @@ create table memory_test (
                              `i16` Int16,
                              `i32` Int32
 ) ENGINE = CnchMergeTree PARTITION BY id ORDER BY id;
-create table cnch_test (
+create table catalog_test (
                            `i64` Int64,
                            `u8` UInt8,
                            `u16` UInt16,
@@ -17,7 +17,7 @@ create table cnch_test (
 ) ENGINE = CnchMergeTree PARTITION BY u8 ORDER BY u8;
 
 insert into memory_test values (1, -1, -10, -100)(2, -2, -20, -200);
-insert into cnch_test values (-1000, 1, 10, 100)( 2, 20, 200, 2000);
+insert into catalog_test values (-1000, 1, 10, 100)( 2, 20, 200, 2000);
 
 set enable_memory_catalog=1;
 select '---------create memory stats';
@@ -27,9 +27,9 @@ show stats all;
 
 
 set enable_memory_catalog=0;
-select '---------create cnch stats';
-create stats cnch_test;
-select '---------show cnch stats';
+select '---------create catalog stats';
+create stats catalog_test;
+select '---------show catalog stats';
 show stats all;
 
 
@@ -42,14 +42,14 @@ select '---------show memory stats';
 show stats all;
 
 set enable_memory_catalog=0;
-select '---------show cnch stats';
+select '---------show catalog stats';
 show stats all;
-select '---------drop cnch stats';
+select '---------drop catalog stats';
 drop stats all;
-select '---------show cnch stats';
+select '---------show catalog stats';
 show stats all;
 
 drop table memory_test;
-drop table cnch_test;
+drop table catalog_test;
 drop database test_stats_45005_memory;
 
