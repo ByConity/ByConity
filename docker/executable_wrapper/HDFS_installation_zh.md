@@ -73,7 +73,9 @@ mkdir -p /root/user_xyz/hdfs/root_data_path_for_namenode
 </configuration>
 ```
 
-这就是 namenode 的配置。 现在对于你需要部署 datanode 的那两个节点，创建一个目录来存储 datanode 运行时数据
+这就是 namenode 的配置。 
+
+现在对于你需要部署 datanode 的那两个节点，创建一个目录来存储 datanode 运行时数据
 
 ```
 mkdir -p /root/user_xyz/hdfs/root_data_path_for_datanode
