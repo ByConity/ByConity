@@ -52,6 +52,11 @@ public:
 
     String getFullTablePath();
 
+    using HiveTablePtr = std::shared_ptr<Apache::Hadoop::Hive::Table>;
+    HiveTablePtr getHiveTable() const;
+
+    StoragePolicyPtr getStoragePolicy(StorageLocation) const override;
+
     Pipe read(
         const Names & /*column_names*/,
         const StorageMetadataPtr & /*metadata_snapshot*/,
@@ -152,8 +157,11 @@ private:
     // ContextMutablePtr global_context;
     Poco::Logger * log;
 
-    std::shared_ptr<Table> table = nullptr;
-    mutable std::mutex mutex;
+    mutable HiveTablePtr hive_table = nullptr;
+    mutable std::once_flag init_table;
+
+    mutable StoragePolicyPtr storage_policy;
+    mutable std::once_flag init_disk;
 
 public:
     const CnchHiveSettings settings;

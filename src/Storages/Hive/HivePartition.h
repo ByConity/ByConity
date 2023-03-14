@@ -26,6 +26,7 @@ struct HivePartitionInfo
 {
     String db_name;
     String table_name;
+    String hdfs_uri;
     String partition_path;
     String table_path;
     int32_t create_time;
@@ -35,33 +36,6 @@ struct HivePartitionInfo
     String output_format;
     std::vector<FieldSchema> cols;
     std::vector<String> parts_name;
-
-    HivePartitionInfo(
-        const String & dbName_,
-        const String & tableName_,
-        const String & partition_path_,
-        const String & table_path_,
-        int32_t & createTime_,
-        int32_t & lastAccessTime_,
-        std::vector<String> & values_,
-        const String & inputFormat_,
-        const String & outputFormat_,
-        std::vector<FieldSchema> & cols_,
-        std::vector<String> & parts_name_)
-        : db_name(dbName_)
-        , table_name(tableName_)
-        , partition_path(partition_path_)
-        , table_path(table_path_)
-        , create_time(createTime_)
-        , last_access_time(lastAccessTime_)
-        , values(values_)
-        , input_format(inputFormat_)
-        , output_format(outputFormat_)
-        , cols(cols_)
-        , parts_name(parts_name_)
-    {
-    }
-    HivePartitionInfo() = default;
 
     const std::vector<String> & getPartsName() const { return parts_name; }
     const String & getLocation() const { return partition_path; }
@@ -73,7 +47,7 @@ public:
     HivePartition(const String & partition_id, HivePartitionInfo & info_);
     ~HivePartition();
 
-    const String & getID();
+    const String & getID() const;
     const String & getTablePath() const;
     const String & getPartitionPath();
     const String & getTableName() const;
@@ -84,7 +58,7 @@ public:
     const String & getInputFormat() const;
     const String & getOutputFromat() const;
     const std::vector<String> & getPartsName() const;
-
+    const String & getHDFSUri() const;
 
 private:
     String partition_id;

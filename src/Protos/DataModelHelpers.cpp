@@ -30,6 +30,8 @@
 #include <Transaction/TxnTimestamp.h>
 #include <Common/Exception.h>
 #include <common/JSON.h>
+#include <Disks/HDFS/DiskByteHDFS.h>
+#include <Storages/HDFS/HDFSCommon.h>
 
 namespace DB
 {
@@ -412,6 +414,7 @@ void fillCnchHivePartsModel(const HiveDataPartsCNCHVector & parts, pb::RepeatedP
         *info.mutable_partition_id() = part->info.partition_id;
         *part_model.mutable_relative_path() = part->relative_path;
         part_model.set_skip_lists(size);
+        part_model.set_hdfs_uri(part->getHDFSUri());
 
         for (auto & skip_num : skip_list)
             *part_model.mutable_skip_numbers()->Add() = skip_num;
@@ -424,6 +427,9 @@ createCnchHiveDataParts(const ContextPtr & context, const pb::RepeatedPtrField<P
     HiveDataPartsCNCHVector res;
     res.reserve(parts_model.size());
 
+    /// share the disk configuration
+    DiskPtr disk;
+
     for (const auto & part : parts_model)
     {
         const auto & part_name = part.part_info().name();
@@ -433,12 +439,23 @@ createCnchHiveDataParts(const ContextPtr & context, const pb::RepeatedPtrField<P
         for (const auto & skip_number : part.skip_numbers())
             required_skip_lists.insert(skip_number);
 
+        if (!disk)
+        {
+            HDFSConnectionParams params = context->getHdfsConnectionParams();
+            if (part.has_hdfs_uri())
+            {
+                Poco::URI uri(part.hdfs_uri());
+                params = hdfsParamsFromUrl(uri);
+            }
+            disk = std::make_shared<DiskByteHDFS>(part.hdfs_uri(), "", params);
+        }
+
         res.emplace_back(std::make_shared<const HiveDataPart>(
             part_name,
             part.relative_path(),
-            nullptr,
+            part.has_hdfs_uri() ? part.hdfs_uri() : context->getHdfsNNProxy(),
+            disk,
             HivePartInfo(part_name, partition_id),
-            context->getHdfsConnectionParams(),
             required_skip_lists));
     }
     return res;
