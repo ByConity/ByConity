@@ -20,6 +20,9 @@
 #include <IO/WriteBufferFromString.h>
 #include <IO/Operators.h>
 #include <Common/Exception.h>
+#include <Interpreters/Context.h>
+#include <common/getFQDNOrHostName.h>
+#include <Interpreters/Context.h>
 
 namespace DB
 {
@@ -67,6 +70,36 @@ std::ostream & operator<<(std::ostream & os, const HostWithPorts & host_ports)
 {
     os << host_ports.toDebugString();
     return os;
+}
+
+namespace
+{
+std::string getFromEnvOrConfig(ContextPtr context, const std::string & name)
+{
+    char * ret = std::getenv(name.c_str());
+    if (ret)
+        return ret;
+
+    return context->getConfigRef().getString(name, "");
+}
+} /// end namespace
+
+std::string getWorkerID(ContextPtr context)
+{
+    static std::string worker_id = getFromEnvOrConfig(context, "WORKER_ID");
+    return worker_id;
+}
+
+std::string getWorkerGroupID(ContextPtr context)
+{
+    static std::string worker_group_id = getFromEnvOrConfig(context, "WORKER_GROUP_ID");
+    return worker_group_id;
+}
+
+std::string getVirtualWareHouseID(ContextPtr context)
+{
+    static std::string virtual_warehouse_id = getFromEnvOrConfig(context, "VIRTUAL_WAREHOUSE_ID");
+    return virtual_warehouse_id;
 }
 
 }

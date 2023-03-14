@@ -21,6 +21,7 @@
 #include <vector>
 #include <fmt/core.h>
 #include <common/getFQDNOrHostName.h>
+#include <Interpreters/Context_fwd.h>
 
 namespace DB
 {
@@ -114,6 +115,10 @@ inline std::string createHostPortString(const std::string & host, const std::str
 {
     return fmt::format("{}:{}", addBracketsIfIpv6(host), port);
 }
+
+std::string getWorkerID(ContextPtr context);
+std::string getWorkerGroupID(ContextPtr context);
+std::string getVirtualWareHouseID(ContextPtr context);
 
 inline std::string_view removeBracketsIfIpv6(const std::string & host_name)
 {
