@@ -18,6 +18,8 @@
 #include <cstddef>
 #include <random>
 #include <sstream>
+#include <vector>
+#include <string.h>
 #include <DaemonManager/BGJobStatusInCatalog.h>
 #include <IO/ReadHelpers.h>
 
@@ -950,7 +952,7 @@ bool MetastoreProxy::writeIntent(const String & name_space, const String & inten
     {
         if (e.code() == ErrorCodes::METASTORE_COMMIT_CAS_FAILURE)
         {
-            for (auto & [index, new_value] : resp.puts)
+            for (auto & [index, new_value]: resp.puts)
             {
                 std::cout << "cas failed key: " << new_value << std::endl;
                 cas_failed_list.push_back(new_value);
@@ -1015,7 +1017,7 @@ void MetastoreProxy::clearIntents(const String & name_space, const String & inte
     /// then remove intents from metastore.
     BatchCommitRequest batch_write;
 
-    /// TODO: do we need CAS delete?
+    /// CAS delete is needed becuase the intent could be overwrite by other transactions
     for (auto idx : matched_intent_index)
         batch_write.AddDelete(intent_names[idx]);
 

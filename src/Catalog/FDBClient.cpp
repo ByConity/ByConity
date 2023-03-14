@@ -139,6 +139,9 @@ std::shared_ptr<Iterator> FDBClient::Scan(FDBTransactionPtr tr, const ScanReques
     return std::make_shared<Iterator>(tr, scan_req);
 }
 
+/*
+values: <string, UInt64> pair, the string is the value string and UInt64 is the length of the value string.
+*/
 fdb_error_t FDBClient::MultiGet(FDBTransactionPtr tr, const std::vector<std::string> & keys, std::vector<std::pair<std::string, UInt64>> & values)
 {
     AssertTrsansactionStatus(tr);
@@ -159,7 +162,7 @@ fdb_error_t FDBClient::MultiGet(FDBTransactionPtr tr, const std::vector<std::str
         RETURN_ON_ERROR(fdb_future_block_until_ready(f_read->future));
         RETURN_ON_ERROR(fdb_future_get_value(f_read->future, &present, &outValue, &outValueLength));
         if (present)
-            values.emplace_back(std::make_pair(std::string(outValue, outValue+outValueLength), 1));
+            values.emplace_back(std::make_pair(std::string(outValue, outValue+outValueLength), outValueLength));
         else
             values.emplace_back(std::make_pair("", 0));
     }
@@ -235,6 +238,40 @@ fdb_error_t FDBClient::MultiWrite(FDBTransactionPtr tr, const Catalog::BatchComm
     FDBFuturePtr f = std::make_shared<FDBFutureRAII>(fdb_transaction_commit(tr->transaction));
     RETURN_ON_ERROR(fdb_future_block_until_ready(f->future));
     fdb_error_t error_code = fdb_future_get_error(f->future);
+
+    /// The commit would still fail due to conflict (CAS), so we need to read for the conflicted value again.
+    /// Note, the values conflict here may not be the same as the values in the conflict commit because FDB doesn't support CAS operations.
+    /// So from the caller side, cannot have the above assumption, only can guarantee they are latest value for read this time, 
+    /// should perform further operations in CAS way.
+    if (error_code)
+    {
+        std::vector<std::string> req_keys;
+        // <index, value> pair
+        std::vector<std::pair<int, std::string>> req_values;
+        for (size_t i = 0; i < req.puts.size(); ++i)
+        {
+            const Catalog::SinglePutRequest & single_put_req = req.puts[i];
+            if (single_put_req.if_not_exists || single_put_req.expected_value)
+            {
+                req_keys.push_back(single_put_req.key);
+                req_values.emplace_back(i, single_put_req.expected_value.value_or(""));
+            }
+        }
+
+        // <value, length> pair
+        std::vector<std::pair<String, UInt64>> res;
+        fdb_error_t multi_get_code = MultiGet(tr, req_keys, res);
+        if (multi_get_code)
+            return multi_get_code;
+
+        for (size_t i = 0; i < req_keys.size(); ++i)
+        {
+            if ((req_values[i].second.size() != res[i].second) || memcmp(req_values[i].second.data(), res[i].first.data(), res[i].second))
+            {
+                resp.puts.emplace(req_values[i].first, res[i].first);
+            }
+        }   
+    }
 
     return error_code;
 }

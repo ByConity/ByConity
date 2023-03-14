@@ -2171,6 +2171,7 @@ namespace Catalog
                     res = true;
                     return;
                 }
+                
                 if (txn_data.empty())
                 {
                     LOG_DEBUG(log, "UpdateTransactionRecord fails. Expected record {} not exist.", expected_record.toString());
