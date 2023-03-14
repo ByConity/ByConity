@@ -17,8 +17,10 @@
 
 #include <Functions/FunctionFactory.h>
 #include <Interpreters/AggregateDescription.h>
+#include <Interpreters/Context.h>
 #include <Optimizer/ExpressionExtractor.h>
 #include <Optimizer/SymbolsExtractor.h>
+#include <Optimizer/ExpressionDeterminism.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 
@@ -186,6 +188,20 @@ String flipOperator(const String & name)
         return "lessOrEquals";
 
     throw Exception("Unsupported comparison", DB::ErrorCodes::LOGICAL_ERROR);
+}
+
+bool canChangeOutputRows(const Assignments & assignments, ContextPtr context)
+{
+    for (const auto & assignment: assignments)
+        if (ExpressionDeterminism::canChangeOutputRows(assignment.second, context))
+            return true;
+
+    return false;
+}
+
+bool canChangeOutputRows(const ProjectionStep & project, ContextPtr context)
+{
+    return canChangeOutputRows(project.getAssignments(), context);
 }
 
 }
