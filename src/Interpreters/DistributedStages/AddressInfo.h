@@ -17,6 +17,7 @@
 
 #include <Core/Types.h>
 #include <IO/WriteHelpers.h>
+#include <Common/HostWithPorts.h>
 
 
 namespace DB
@@ -77,15 +78,15 @@ namespace DB
 
     using AddressInfos = std::vector<AddressInfo>;
 
-    inline String extractHostPort(const AddressInfo & address) { return address.getHostName() + ":" + toString(address.getPort()); }
+    inline String extractHostPort(const AddressInfo & address) { return createHostPortString(address.getHostName(), toString(address.getPort())); }
 
     std::vector<String> extractHostPorts(const AddressInfos & addresses);
 
-    inline String extractExchangeHostPort(const AddressInfo & address) {return address.getHostName() + ":" + toString(address.getExchangePort());}
+    inline String extractExchangeHostPort(const AddressInfo & address) {return createHostPortString(address.getHostName(), toString(address.getExchangePort())); }
 
     std::vector<String> extractExchangeHostPorts(const AddressInfos & addresses);
 
-    inline String extractExchangeStatusHostPort(const AddressInfo & address) {return address.getHostName() + ":" + toString(address.getExchangeStatusPort());}
+    inline String extractExchangeStatusHostPort(const AddressInfo & address) {return createHostPortString(address.getHostName(), toString(address.getExchangeStatusPort())); }
 
     std::vector<String> extractExchangeStatusHostPorts(const AddressInfos & addresses);
 

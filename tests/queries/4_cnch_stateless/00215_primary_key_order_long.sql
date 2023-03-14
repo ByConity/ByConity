@@ -1,4 +1,3 @@
-USE test;
 DROP TABLE IF EXISTS primary_key;
 CREATE TABLE primary_key (d Date DEFAULT today(), x Int8)
 ENGINE = CnchMergeTree PARTITION BY d ORDER BY -x;

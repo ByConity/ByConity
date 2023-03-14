@@ -22,6 +22,7 @@
 #include <Parsers/ExpressionListParsers.h>
 #include <Parsers/IParserBase.h>
 #include <Parsers/parseDatabaseAndTableName.h>
+#include "parseDatabaseAndTableName.h"
 
 namespace DB
 {
@@ -74,12 +75,23 @@ protected:
 
         if (!query->target_all)
         {
-            if (!parseDatabaseAndTableName(pos, expected, query->database, query->table))
+            bool any_database = false;
+            bool any_table = false;
+
+            if (!parseDatabaseAndTableNameOrAsterisks(pos, expected, query->database, any_database, query->table, any_table))
+                return false;
+            
+            // collect on any database is not implemented
+            if (any_database)
                 return false;
 
-            // parse columns
-            if (open.ignore(pos, expected))
+            if (any_table)
             {
+                query->target_all = true;
+            }
+            else if (open.ignore(pos, expected))
+            {
+                // parse columns when given table
                 auto parse_id = [&query, &pos, &expected] {
                     ASTPtr identifier;
                     if (!ParserIdentifier(true).parse(pos, identifier, expected))

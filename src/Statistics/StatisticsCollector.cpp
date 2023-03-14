@@ -138,7 +138,7 @@ std::optional<PlanNodeStatisticsPtr> StatisticsCollector::toPlanNodeStatistics()
             }
             else if (construct_single_bucket_histogram)
             {
-                auto bucket = std::make_shared<Bucket>(symbol->min, symbol->max, symbol->ndv, nonnull_count, true, true);
+                auto bucket = Bucket(symbol->min, symbol->max, symbol->ndv, nonnull_count, true, true);
                 symbol->histogram.emplaceBackBucket(std::move(bucket));
             }
             result->updateSymbolStatistics(col, symbol);

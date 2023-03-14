@@ -49,7 +49,7 @@ namespace ErrorCodes
 
 AddressInfo getLocalAddress(ContextPtr & query_context)
 {
-    const auto & host = getIPOrFQDNOrHostName();
+    const auto & host = getHostIPFromEnv();
     auto port = query_context->getTCPPort();
     const ClientInfo & info = query_context->getClientInfo();
     return AddressInfo(
@@ -116,7 +116,7 @@ SegmentScheduler::insertPlanSegments(const String & query_id, PlanSegmentTree * 
 CancellationCode
 SegmentScheduler::cancelPlanSegmentsFromCoordinator(const String query_id, const String & exception, ContextPtr query_context)
 {
-    const String & coordinator_host = getIPOrFQDNOrHostName();
+    const String & coordinator_host = getHostIPFromEnv();
     return cancelPlanSegments(query_id, exception, coordinator_host, query_context);
 }
 
@@ -161,7 +161,7 @@ CancellationCode SegmentScheduler::cancelPlanSegments(
 
 void SegmentScheduler::cancelWorkerPlanSegments(const String & query_id, const DAGGraphPtr dag_ptr, ContextPtr query_context)
 {
-    String coordinator_addr = getIPOrFQDNOrHostName() + ":" + std::to_string(query_context->getExchangeStatusPort());
+    String coordinator_addr = query_context->getHostWithPorts().getExchangeAddress();
     //TODO: cancel worker in parallel
     for (const auto & addr : dag_ptr->plan_send_addresses)
     {

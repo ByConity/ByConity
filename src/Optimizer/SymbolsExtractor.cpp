@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <Interpreters/RequiredSourceColumnsVisitor.h>
 #include <Optimizer/ExpressionExtractor.h>
 #include <Optimizer/SymbolsExtractor.h>
 #include <Parsers/ASTIdentifier.h>
@@ -22,9 +23,14 @@ namespace DB
 std::set<std::string> SymbolsExtractor::extract(ConstASTPtr node)
 {
     static SymbolVisitor visitor;
-    std::set<std::string> context;
+    SymbolVisitorContext context;
     ASTVisitorUtil::accept(node, visitor, context);
-    return context;
+    if (context.exclude_symbols.size() != 0)
+    {
+        throw Exception("exclude_symbols should be null", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    return std::move(context.result);
 }
 
 std::set<std::string> SymbolsExtractor::extract(PlanNodePtr & node)
@@ -40,15 +46,15 @@ std::set<std::string> SymbolsExtractor::extract(PlanNodePtr & node)
 std::set<std::string> SymbolsExtractor::extract(std::vector<ConstASTPtr> & nodes)
 {
     static SymbolVisitor visitor;
-    std::set<std::string> context;
+    SymbolVisitorContext context;
     for (auto & node : nodes)
     {
         ASTVisitorUtil::accept(node, visitor, context);
     }
-    return context;
+    return std::move(context.result);
 }
 
-Void SymbolVisitor::visitNode(const ConstASTPtr & node, std::set<std::string> & context)
+Void SymbolVisitor::visitNode(const ConstASTPtr & node, SymbolVisitorContext & context)
 {
     for (ConstASTPtr child : node->children)
     {
@@ -57,11 +63,44 @@ Void SymbolVisitor::visitNode(const ConstASTPtr & node, std::set<std::string> & 
     return Void{};
 }
 
-Void SymbolVisitor::visitASTIdentifier(const ConstASTPtr & node, std::set<std::string> & context)
+Void SymbolVisitor::visitASTIdentifier(const ConstASTPtr & node, SymbolVisitorContext & context)
 {
     auto & identifier = node->as<ASTIdentifier &>();
-    context.emplace(identifier.name());
+    if (!context.exclude_symbols.count(identifier.name()))
+    {
+        context.result.insert(identifier.name());
+    }
     return Void{};
+}
+
+Void SymbolVisitor::visitASTFunction(const ConstASTPtr & node, SymbolVisitorContext & context)
+{
+    auto & ast_func = node->as<const ASTFunction &>();
+    if (ast_func.name == "lambda")
+    {
+        auto exclude_symbols = RequiredSourceColumnsMatcher::extractNamesFromLambda(ast_func);
+        for (auto & es : exclude_symbols)
+        {
+            ++context.exclude_symbols[es];
+        }
+
+        visitNode(ast_func.arguments->children[1], context);
+
+        for (auto & es : exclude_symbols)
+        {
+            auto reduced_value = --context.exclude_symbols[es];
+            if (reduced_value == 0)
+            {
+                context.exclude_symbols.erase(es);
+            }
+        }
+
+        return Void{};
+    }
+    else
+    {
+        return visitNode(node, context);
+    }
 }
 
 }

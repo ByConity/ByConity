@@ -27,11 +27,20 @@ class TableScanStep : public ISourceStep
 public:
     TableScanStep(
         ContextPtr context,
+        StoragePtr storage_,
+        const NamesWithAliases & column_alias_,
+        const SelectQueryInfo & query_info_,
+        QueryProcessingStage::Enum processing_stage_,
+        size_t max_block_size_);
+
+    TableScanStep(
+        ContextPtr context,
         StorageID storage_id_,
         const NamesWithAliases & column_alias_,
         const SelectQueryInfo & query_info_,
         QueryProcessingStage::Enum processing_stage_,
         size_t max_block_size_);
+
 
     TableScanStep(
         DataStream output,

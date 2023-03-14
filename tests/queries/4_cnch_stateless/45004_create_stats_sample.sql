@@ -1,7 +1,9 @@
 set create_stats_time_output=0;
-drop database if exists test_stats_45005_full;
-create database test_stats_45005_full;
-use test_stats_45005_full;
+set statistics_enable_sample=1;
+set statistics_accurate_sample_ndv='NEVER';
+drop database if exists test_stats_45004_sample;
+create database test_stats_45004_sample;
+use test_stats_45004_sample;
 create table tb (
    `id` UInt64,
    `i8` Int8,
@@ -15,6 +17,7 @@ create table tb (
    `f32` Float32,
    `f64` Float64,
    `date` Date,
+   `date32` Date32,
    `datetime` DateTime,
    `datetime64` DateTime64(3),
    `str` String,
@@ -39,6 +42,7 @@ create table tbnull (
    `f32null` Nullable(Float32),
    `f64null` Nullable(Float64),
    `datenull` Nullable(Date),
+   `date32null` Nullable(Date32),
    `datetimenulll` Nullable(DateTime),
    `datetime64nulll` Nullable(DateTime64(3)),
    `strnull` Nullable(String),
@@ -54,9 +58,9 @@ create stats all;
 select '---------show empty stats';
 show stats all;
 show column_stats all;
-insert into tb values (1, -1, -10, -100, -1000, 1, 10, 100, 1000, 0.1, 0.01, '2022-01-01', '2022-01-01 00:00:01', '2022-01-01 00:00:01.11', 'str1', 'str1', 'str1', 'str1', 0.1, 0.01, 0.001)(2, -2, -20, -200, -2000, 2, 20, 200, 2000, 0.2, 0.02, '2022-02-02', '2022-02-02 00:00:02', '2022-02-02 00:00:02.22', 'str2', 'str2', 'str2', 'str2', 0.2, 0.02, 0.002);
+insert into tb values (1, -1, -10, -100, -1000, 1, 10, 100, 1000, 0.1, 0.01, '2022-01-01', '2022-01-01', '2022-01-01 00:00:01', '2022-01-01 00:00:01.11', 'str1', 'str1', 'str1', 'str1', 0.1, 0.01, 0.001)(2, -2, -20, -200, -2000, 2, 20, 200, 2000, 0.2, 0.02, '2022-02-02', '2022-02-02','2022-02-02 00:00:02', '2022-02-02 00:00:02.22', 'str2', 'str2', 'str2', 'str2', 0.2, 0.02, 0.002);
 
-insert into tbnull values (1, -1, -10, -100, -1000, 1, 10, 100, 1000, 0.1, 0.01, '2022-01-01', '2022-01-01 00:00:01', '2022-01-01 00:00:01.11', 'str1', 'str1', 'str1', 'str1', 0.1, 0.01, 0.001)(2, -2, -20, -200, -2000, 2, 20, 200, 2000, 0.2, 0.02, '2022-02-02', '2022-02-02 00:00:02', '2022-02-02 00:00:02.22', 'str2', 'str2', 'str2', 'str2', 0.2, 0.02, 0.002)(3, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+insert into tbnull values (1, -1, -10, -100, -1000, 1, 10, 100, 1000, 0.1, 0.01, '2022-01-01', '2022-01-01','2022-01-01 00:00:01', '2022-01-01 00:00:01.11', 'str1', 'str1', 'str1', 'str1', 0.1, 0.01, 0.001)(2, -2, -20, -200, -2000, 2, 20, 200, 2000, 0.2, 0.02, '2022-02-02', '2022-02-02','2022-02-02 00:00:02', '2022-02-02 00:00:02.22', 'str2', 'str2', 'str2', 'str2', 0.2, 0.02, 0.002)(3, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 select '---------drop single stats';
 drop stats tb;
 select '---------show remaining stats';
@@ -77,4 +81,4 @@ select '---------show empty stats';
 show stats all;
 drop table tb;
 drop table tbnull;
-drop database test_stats_45005_full;
+drop database test_stats_45004_sample;

@@ -51,24 +51,24 @@ void AddressInfo::deserialize(ReadBuffer &buf)
 std::vector<String> extractHostPorts(const AddressInfos &addresses)
 {
     std::vector<String> ret;
-    for (const auto &address : addresses)
-        ret.emplace_back(address.getHostName() + ":" + toString(address.getPort()));
+    for (const auto & address : addresses)
+        ret.emplace_back(createHostPortString(address.getHostName(), toString(address.getPort())));
     return ret;
 }
 
 std::vector<String> extractExchangeHostPorts(const AddressInfos & addresses)
 {
     std::vector<String> ret;
-    for (const auto &address : addresses)
-        ret.emplace_back(address.getHostName() + ":" + toString(address.getExchangePort()));
+    for (const auto & address : addresses)
+        ret.emplace_back(createHostPortString(address.getHostName(), toString(address.getExchangePort())));
     return ret;
 }
 
 std::vector<String> extractExchangeStatusHostPorts(const AddressInfos & addresses)
 {
     std::vector<String> ret;
-    for (const auto &address : addresses)
-        ret.emplace_back(address.getHostName() + ":" + toString(address.getExchangeStatusPort()));
+    for (const auto & address : addresses)
+        ret.emplace_back(createHostPortString(address.getHostName(), toString(address.getExchangeStatusPort())));
     return ret;
 }
 

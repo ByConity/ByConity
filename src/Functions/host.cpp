@@ -16,6 +16,7 @@
 #include <Functions/IFunction.h>
 #include <Functions/FunctionFactory.h>
 #include <DataTypes/DataTypeString.h>
+#include <Common/HostWithPorts.h>
 #include <common/getFQDNOrHostName.h>
 #include <Core/Field.h>
 
@@ -60,7 +61,7 @@ public:
       */
     ColumnPtr executeImpl(const ColumnsWithTypeAndName &, const DataTypePtr & result_type, size_t input_rows_count) const override
     {
-        return result_type->createColumnConst(input_rows_count, getIPOrFQDNOrHostName())->convertToFullColumnIfConst();
+        return result_type->createColumnConst(input_rows_count, getHostIPFromEnv())->convertToFullColumnIfConst();
     }
 };
 

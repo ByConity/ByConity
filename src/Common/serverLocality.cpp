@@ -16,6 +16,7 @@
 #include <Common/serverLocality.h>
 #include <Common/isLocalAddress.h>
 #include <Common/DNSResolver.h>
+#include <Common/HostWithPorts.h>
 #include <common/getFQDNOrHostName.h>
 #include <common/logger_useful.h>
 
@@ -42,7 +43,7 @@ bool isLocalServer(const std::string & target, const std::string & port)
 
         const std::string target_ip = DB::DNSResolver::instance().resolveHost(target_host).toString();
 
-        if ((target_ip == "127.0.0.1") || (target_ip == "::1") || (target_ip == getIPOrFQDNOrHostName()))
+        if ((target_ip == "127.0.0.1") || (target_ip == "::1") || (target_ip == getIPOrFQDNOrHostName()) || (target_ip == DB::getHostIPFromEnv()))
         {
             return true;
         }

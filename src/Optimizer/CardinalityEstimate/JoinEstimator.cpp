@@ -13,8 +13,8 @@
  * limitations under the License.
  */
 
-#include <Optimizer/CardinalityEstimate/JoinEstimator.h>
 #include <Core/Types.h>
+#include <Optimizer/CardinalityEstimate/JoinEstimator.h>
 
 namespace DB
 {
@@ -397,7 +397,7 @@ UInt64 JoinEstimator::computeCardinalityByHistogram(
     double join_card = 1;
     for (auto & bucket : join_buckets)
     {
-        join_card += bucket->getCount();
+        join_card += bucket.getCount();
     }
 
     double adjust_left_rowcount = join_card / left_stats.getRowCount();

@@ -15,10 +15,10 @@
 
 #include <Optimizer/CardinalityEstimate/ProjectionEstimator.h>
 
-#include <Common/FieldVisitors.h>
-#include <Common/FieldVisitorConvertToNumber.h>
 #include <Optimizer/SymbolsExtractor.h>
 #include <Parsers/ASTVisitor.h>
+#include <Common/FieldVisitorConvertToNumber.h>
+#include <Common/FieldVisitors.h>
 
 namespace DB
 {
@@ -36,7 +36,8 @@ PlanNodeStatisticsPtr ProjectionEstimator::estimate(PlanNodeStatisticsPtr & chil
     std::unordered_map<String, SymbolStatisticsPtr> calculated_symbol_statistics;
     for (auto & assignment : step.getAssignments())
     {
-        auto result = ScalarStatsCalculator::estimate(assignment.second, name_to_type.at(assignment.first), project_stats->getRowCount(), symbol_statistics);
+        auto result = ScalarStatsCalculator::estimate(
+            assignment.second, name_to_type.at(assignment.first), project_stats->getRowCount(), symbol_statistics);
         if (result && !result->isUnknown())
         {
             calculated_symbol_statistics[assignment.first] = result;
@@ -50,8 +51,8 @@ PlanNodeStatisticsPtr ProjectionEstimator::estimate(PlanNodeStatisticsPtr & chil
     return std::make_shared<PlanNodeStatistics>(project_stats->getRowCount(), calculated_symbol_statistics);
 }
 
-SymbolStatisticsPtr
-ScalarStatsCalculator::estimate(ConstASTPtr expression, const DataTypePtr & type_, UInt64 total_rows_, std::unordered_map<String, SymbolStatisticsPtr> symbolStatistics)
+SymbolStatisticsPtr ScalarStatsCalculator::estimate(
+    ConstASTPtr expression, const DataTypePtr & type_, UInt64 total_rows_, std::unordered_map<String, SymbolStatisticsPtr> symbolStatistics)
 {
     ScalarStatsCalculator calculator{type_, total_rows_};
     return ASTVisitorUtil::accept(expression, calculator, symbolStatistics);
@@ -62,13 +63,15 @@ SymbolStatisticsPtr ScalarStatsCalculator::visitNode(const ConstASTPtr &, std::u
     return SymbolStatistics::UNKNOWN;
 }
 
-SymbolStatisticsPtr ScalarStatsCalculator::visitASTIdentifier(const ConstASTPtr & node, std::unordered_map<String, SymbolStatisticsPtr> & context)
+SymbolStatisticsPtr
+ScalarStatsCalculator::visitASTIdentifier(const ConstASTPtr & node, std::unordered_map<String, SymbolStatisticsPtr> & context)
 {
     auto & identifier = node->as<ASTIdentifier &>();
     return context[identifier.name()];
 }
 
-SymbolStatisticsPtr ScalarStatsCalculator::visitASTFunction(const ConstASTPtr & node, std::unordered_map<String, SymbolStatisticsPtr> & context)
+SymbolStatisticsPtr
+ScalarStatsCalculator::visitASTFunction(const ConstASTPtr & node, std::unordered_map<String, SymbolStatisticsPtr> & context)
 {
     // TODO literal interpreter
     auto symbols = SymbolsExtractor::extract(node);
@@ -103,15 +106,7 @@ ScalarStatsCalculator::visitASTLiteral(const ConstASTPtr & node, std::unordered_
     {
         double value = applyVisitor(FieldVisitorConvertToNumber<Float64>(), literal->value);
         return std::make_shared<SymbolStatistics>(
-            1,
-            value,
-            value,
-            0,
-            8,
-            Histogram{Buckets{std::make_shared<Bucket>(value, value, 1, total_rows, true, true)}},
-            type,
-            "unknown",
-            false);
+            1, value, value, 0, 8, Histogram{Buckets{Bucket(value, value, 1, total_rows, true, true)}}, type, "unknown", false);
     }
 
     if (tmp_type->getTypeId() == TypeIndex::String || type->getTypeId() == TypeIndex::FixedString)
@@ -119,15 +114,7 @@ ScalarStatsCalculator::visitASTLiteral(const ConstASTPtr & node, std::unordered_
         String str = literal->value.safeGet<String>();
         double value = CityHash_v1_0_2::CityHash64(str.data(), str.size());
         return std::make_shared<SymbolStatistics>(
-            1,
-            value,
-            value,
-            0,
-            8,
-            Histogram{Buckets{std::make_shared<Bucket>(value, value, 1, total_rows, true, true)}},
-            type,
-            "unknown",
-            false);
+            1, value, value, 0, 8, Histogram{Buckets{Bucket(value, value, 1, total_rows, true, true)}}, type, "unknown", false);
     }
     return visitNode(node, context);
 }

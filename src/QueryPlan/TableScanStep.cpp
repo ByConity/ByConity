@@ -43,6 +43,7 @@
 #include <Storages/StorageDistributed.h>
 #include <Storages/VirtualColumnUtils.h>
 #include <Common/FieldVisitorToString.h>
+#include "Interpreters/DatabaseCatalog.h"
 
 
 namespace DB
@@ -101,14 +102,15 @@ void TableScanStep::makeSetsForIndex(const ASTPtr & node, ContextPtr context, Pr
 }
 
 TableScanStep::TableScanStep(
-    ContextPtr context,
-    StorageID storage_id_,
+    ContextPtr  /*context*/,
+    StoragePtr storage_,
     const NamesWithAliases & column_alias_,
     const SelectQueryInfo & query_info_,
     QueryProcessingStage::Enum processing_stage_,
     size_t max_block_size_)
     : ISourceStep(DataStream{})
-    , storage_id(storage_id_)
+    , storage(storage_)
+    , storage_id(storage->getStorageID())
     , column_alias(column_alias_)
     , query_info(query_info_)
     , processing_stage(processing_stage_)
@@ -124,8 +126,6 @@ TableScanStep::TableScanStep(
     // order sensitive
     Names require_column_list = column_names;
     NameSet require_columns{column_names.begin(), column_names.end()};
-
-    storage = DatabaseCatalog::instance().getTable(storage_id, context);
 
     //    QueryPlan tmp_query_plan;
     //    storage->read(tmp_query_plan, require_column_list, storage->getInMemoryMetadataPtr(), query_info, context, processing_stage, max_block_size, max_streams, true);
@@ -167,6 +167,14 @@ TableScanStep::TableScanStep(
     }
 }
 
+TableScanStep::TableScanStep(
+    ContextPtr  context,
+    StorageID storage_id_,
+    const NamesWithAliases & column_alias_,
+    const SelectQueryInfo & query_info_,
+    QueryProcessingStage::Enum processing_stage_,
+    size_t max_block_size_)
+    : TableScanStep(context, DatabaseCatalog::instance().getTable(storage_id_, context), column_alias_, query_info_, processing_stage_, max_block_size_) { }
 
 void TableScanStep::optimizeWhereIntoPrewhre(ContextPtr context)
 {

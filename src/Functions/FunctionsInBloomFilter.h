@@ -64,14 +64,38 @@ public:
         String rf_key = arguments[0].column->size() == 0 ? "" : arguments[0].column->getDataAt(0).toString();
         String column_key = arguments[1].column->size() == 0 ? "" : arguments[1].column->getDataAt(0).toString();
 
-        /// When dynamic mode is enabled each time execute this function should get runtime filter otherwise get runtime filter only once
-        if ((!context->getSettingsRef().runtime_filter_dynamic_mode && !runtime_filter)
-            || context->getSettingsRef().runtime_filter_dynamic_mode)
+        RuntimeFilterPtr runtime_filter;
+        if (context->getSettingsRef().runtime_filter_dynamic_mode)
         {
+            /// dynamic mode is enabled
+            /// get runtime_filter each time from manager
+            /// since runtime_filter is local variable, thus lock-free
             runtime_filter = RuntimeFilterManager::getInstance().getRuntimeFilter(rf_key, 0);
             if (runtime_filter)
                 LOG_DEBUG(log, "Runtime filter with key " + rf_key + " success");
         }
+        else
+        {
+            /// dynamic mode is disabled
+            /// get runtime_filter only once, if successful
+            /// runtime_filter_cache has to be protected by lock
+            /// and ensure getRuntimeFilter(...) is called successfully only once
+            std::unique_lock lck(mu);
+            if (!runtime_filter_cache)
+            {
+                runtime_filter_cache = RuntimeFilterManager::getInstance().getRuntimeFilter(rf_key, 0);
+                runtime_filter = runtime_filter_cache;
+                lck.unlock();
+
+                if (runtime_filter)
+                    LOG_DEBUG(log, "Runtime filter with key " + rf_key + " success");
+            }
+            else
+            {
+                runtime_filter = runtime_filter_cache;
+            }
+        }
+
 
         if (!runtime_filter)
         {
@@ -109,7 +133,8 @@ public:
 
 private:
     ContextPtr context;
-    mutable RuntimeFilterPtr runtime_filter;
+    mutable RuntimeFilterPtr runtime_filter_cache;
+    mutable std::mutex mu;
     Poco::Logger * log;
 };
 }

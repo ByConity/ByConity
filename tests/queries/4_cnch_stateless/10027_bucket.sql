@@ -1,5 +1,4 @@
 SET enable_multiple_tables_for_cnch_parts = 1;
-use test;
 DROP TABLE IF EXISTS bucket;
 DROP TABLE IF EXISTS bucket2;
 DROP TABLE IF EXISTS bucket3;

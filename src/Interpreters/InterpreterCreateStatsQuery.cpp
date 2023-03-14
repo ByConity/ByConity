@@ -44,9 +44,9 @@ static auto getTableIdentifier(ContextPtr context, const QueryType * query)
 {
     std::vector<StatsTableIdentifier> tables;
     auto catalog = createCatalogAdaptor(context);
+    auto db = context->resolveDatabase(query->database);
     if (query->target_all)
     {
-        auto db = context->getCurrentDatabase();
         tables = catalog->getAllTablesID(db);
         if (tables.empty())
         {
@@ -56,7 +56,6 @@ static auto getTableIdentifier(ContextPtr context, const QueryType * query)
     }
     else
     {
-        auto db = context->resolveDatabase(query->database);
         auto table_info_opt = catalog->getTableIdByName(db, query->table);
         if (!table_info_opt)
         {

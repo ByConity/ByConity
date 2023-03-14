@@ -104,15 +104,15 @@ SetOperationStep::SetOperationStep(
     for (const auto & value : output_to_inputs_)
     {
         Utils::checkArgument(
-            value.second.size() == input_streams_.size(), "Every source needs to map its symbols to an output operation symbol");
+            value.second.size() == input_streams.size(), "Every source needs to map its symbols to an output operation symbol");
     }
 
     // Make sure each source positionally corresponds to their Symbol values in the Multimap
-    for (size_t i = 0; i < input_streams_.size(); i++)
+    for (size_t i = 0; i < input_streams.size(); i++)
     {
         for (auto value : output_to_inputs_)
         {
-            const Names & input_symbols = input_streams_[i].header.getNames();
+            const Names & input_symbols = input_streams[i].header.getNames();
             String symbol = value.second[i];
             Utils::checkArgument(
                 std::find(input_symbols.begin(), input_symbols.end(), symbol) != input_symbols.end(),

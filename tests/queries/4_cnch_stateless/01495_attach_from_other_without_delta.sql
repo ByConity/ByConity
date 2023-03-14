@@ -1,5 +1,3 @@
-use test;
-
 -- Test attach from other table's active partition
 select 'ATTACH FROM OTHER TABLE ACTIVE PARTITION WITHOUT DELTA';
 drop table if exists afo_src_active_no_delta;

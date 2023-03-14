@@ -26,7 +26,7 @@ namespace DB
 {
 size_t PartialRuntimeFilter::merge(RuntimeFilterPtr runtime_filter_, const String & address)
 {
-    std::lock_guard<std::mutex> guard(mutex);
+    std::lock_guard guard(mutex);
     if (runtime_filter_)
     {
         if (!runtime_filter)
