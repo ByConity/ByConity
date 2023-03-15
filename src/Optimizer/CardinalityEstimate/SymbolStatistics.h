@@ -32,7 +32,6 @@ using Statistics::OverlappedRange;
 using Statistics::OverlappedRanges;
 using Statistics::Bucket;
 using Statistics::Buckets;
-using Statistics::BucketPtr;
 using Statistics::Histogram;
 
 namespace Statistics
@@ -142,7 +141,7 @@ public:
     SymbolStatisticsPtr applySelectivity(double selectivity);
     SymbolStatisticsPtr applySelectivity(double rowcount_selectivity, double ndv_selectivity);
 
-    void emplaceBackBucket(BucketPtr bucket) { histogram.emplaceBackBucket(std::move(bucket)); }
+    void emplaceBackBucket(Bucket bucket) { histogram.emplaceBackBucket(std::move(bucket)); }
 
     Poco::JSON::Object::Ptr toJson() const;
 

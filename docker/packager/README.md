@@ -2,17 +2,19 @@ Allow to build ByConity in Docker for different platforms with different
 compilers and build settings. Correctly configured Docker daemon is single dependency.
 
 Usage:
+First step, at the root directory of the source code, rm folder `build_docker` if it exist
+
 For example to build a deb package:
 ```
 $ mkdir deb/test_output/
-$ ./packager --output-dir deb/test_output/ --package-type deb --docker-image-version 0.1 --ccache_dir=/data01/minh.dao/.ccache_for_docker
+$ ./packager --output-dir deb/test_output/ --package-type deb --docker-image-version 0.1 --ccache_dir=/data01/minh.dao/.ccache_for_docker --version 0.1.1.1
 $ ls -l deb/test_output/
 ```
 
 Build both Debian package and RPM package
 ```
 $ mkdir deb/test_output/
-$ ./packager --output-dir deb/test_output/ --package-type deb --docker-image-version 0.1 --ccache_dir=/your/cache/path/.ccache_for_docker --additional-pkgs
+$ ./packager --output-dir deb/test_output/ --package-type deb --docker-image-version 0.1 --ccache_dir=/your/cache/path/.ccache_for_docker --additional-pkgs --version 0.1.1.1
 $ ls -l deb/test_output/
 Feb 24 09:37:11 -rw-r--r-- 1 1002 1002       7171 Feb 24 09:33 byconity-client-0.1.1.1-amd64.tgz
 Feb 24 09:37:11 -rw-r--r-- 1 1002 1002       9038 Feb 24 09:33 byconity-client-0.1.1.1.x86_64.rpm
