@@ -2,7 +2,7 @@ In order to update to update docker image for executable wrapper
 Execute wrapper docker image is a wrapper of executable binary for ByConity.
 
 Step 1: build executable binary for ByConity
-- From root folder of git repo, rm 
+- From root folder of git repo, rm folder `build_docker` if it exists
 - cd to `docker/builder`
 - Build binary with `make build' 
 
