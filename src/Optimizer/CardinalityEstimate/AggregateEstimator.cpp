@@ -72,13 +72,12 @@ PlanNodeStatisticsPtr AggregateEstimator::estimate(PlanNodeStatisticsPtr & child
         name_to_type[item.name] = item.type;
     }
     const AggregateDescriptions & agg_descs = step.getAggregates();
-    for (auto & agg_desc : agg_descs)
+    for (const auto & agg_desc : agg_descs)
     {
-        symbol_statistics[agg_desc.column_name]
-            = AggregateEstimator::estimateAggFun(agg_desc.function, row_count, name_to_type[agg_desc.column_name]);
+        symbol_statistics.insert_or_assign(agg_desc.column_name, AggregateEstimator::estimateAggFun(agg_desc.function, row_count, name_to_type[agg_desc.column_name]));
     }
 
-    return std::make_shared<PlanNodeStatistics>(row_count, symbol_statistics);
+    return std::make_shared<PlanNodeStatistics>(row_count, std::move(symbol_statistics));
 }
 
 PlanNodeStatisticsPtr AggregateEstimator::estimate(PlanNodeStatisticsPtr & child_stats, const MergingAggregatedStep & step)
@@ -100,11 +99,10 @@ PlanNodeStatisticsPtr AggregateEstimator::estimate(PlanNodeStatisticsPtr & child
     }
     for (const auto & agg_desc : agg_descs)
     {
-        symbol_statistics[agg_desc.column_name]
-            = AggregateEstimator::estimateAggFun(agg_desc.function, row_count, name_to_type[agg_desc.column_name]);
+        symbol_statistics.insert_or_assign(agg_desc.column_name, AggregateEstimator::estimateAggFun(agg_desc.function, row_count, name_to_type[agg_desc.column_name]));
     }
 
-    return std::make_shared<PlanNodeStatistics>(row_count, symbol_statistics);
+    return std::make_shared<PlanNodeStatistics>(row_count, std::move(symbol_statistics));
 }
 
 PlanNodeStatisticsPtr AggregateEstimator::estimate(PlanNodeStatisticsPtr & child_stats, const DistinctStep & step)
@@ -125,7 +123,7 @@ PlanNodeStatisticsPtr AggregateEstimator::estimate(PlanNodeStatisticsPtr & child
         row_count = std::min(row_count, double(limit));
     }
 
-    return std::make_shared<PlanNodeStatistics>(row_count, symbol_statistics);
+    return std::make_shared<PlanNodeStatistics>(row_count, std::move(symbol_statistics));
 }
 
 SymbolStatisticsPtr AggregateEstimator::estimateAggFun(AggregateFunctionPtr fun, UInt64 row_count, DataTypePtr data_type)

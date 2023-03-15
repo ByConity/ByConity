@@ -30,11 +30,11 @@ PlanNodeStatisticsPtr AssignUniqueIdEstimator::estimate(PlanNodeStatisticsPtr & 
     std::unordered_map<String, SymbolStatisticsPtr> symbol_statistics;
     for (auto & stats : child_stats->getSymbolStatistics())
     {
-        symbol_statistics[stats.first] = stats.second->copy();
+        symbol_statistics.insert_or_assign(stats.first, stats.second->copy());
     }
-    symbol_statistics[unique_symbol] = unique_stats;
+    symbol_statistics.insert_or_assign(unique_symbol, unique_stats);
 
-    auto stats = std::make_shared<PlanNodeStatistics>(child_stats->getRowCount(), symbol_statistics);
+    auto stats = std::make_shared<PlanNodeStatistics>(child_stats->getRowCount(), std::move(symbol_statistics));
     return stats;
 }
 

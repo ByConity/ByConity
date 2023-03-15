@@ -267,9 +267,9 @@ PlanNodeStatisticsPtr CardinalityVisitor::visitCTERefStep(const CTERefStep & ste
 
     auto & stats = result.value();
     std::unordered_map<String, SymbolStatisticsPtr> calculated_symbol_statistics;
-    for (auto & item : step.getOutputColumns())
-        calculated_symbol_statistics[item.first] = stats->getSymbolStatistics(item.second);
-    return std::make_shared<PlanNodeStatistics>(stats->getRowCount(), calculated_symbol_statistics);
+    for (const auto & item : step.getOutputColumns())
+        calculated_symbol_statistics.insert_or_assign(item.first, stats->getSymbolStatistics(item.second));
+    return std::make_shared<PlanNodeStatistics>(stats->getRowCount(), std::move(calculated_symbol_statistics));
 }
 
 PlanNodeStatisticsPtr CardinalityVisitor::visitEnforceSingleRowStep(const EnforceSingleRowStep & step, CardinalityContext & context)

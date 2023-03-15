@@ -41,23 +41,21 @@ public:
         std::unordered_map<String, SymbolStatisticsPtr> copy_symbol_statistics;
         for (const auto & item : symbol_statistics)
         {
-            copy_symbol_statistics[item.first] = item.second->copy();
+            copy_symbol_statistics.insert_or_assign(item.first, item.second->copy());
         }
-        return std::make_shared<PlanNodeStatistics>(row_count, symbol_statistics);
+        return std::make_shared<PlanNodeStatistics>(row_count, std::move(copy_symbol_statistics));
     }
 
     PlanNodeStatistics & operator+=(const PlanNodeStatistics & other)
     {
         row_count += other.row_count;
 
-        for (auto & symbols_stats : symbol_statistics)
+        for (auto & it : symbol_statistics)
         {
-            for (auto & other_symbols_stats : other.symbol_statistics)
+            auto jt =  other.symbol_statistics.find(it.first);
+            if (jt != other.symbol_statistics.end())
             {
-                if (symbols_stats.first == other_symbols_stats.first)
-                {
-                    *symbols_stats.second + *other_symbols_stats.second;
-                }
+                *it.second + *jt->second;
             }
         }
         return *this;

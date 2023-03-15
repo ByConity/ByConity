@@ -303,7 +303,7 @@ UInt64 JoinEstimator::computeCardinalityByFKPK(
 
         for (auto & item : fk_stats.getSymbolStatistics())
         {
-            join_output_statistics[item.first] = item.second->copy();
+            join_output_statistics.insert_or_assign(item.first, item.second->copy());
         }
 
         // PK side partial match, adjust statistics;

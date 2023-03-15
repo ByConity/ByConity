@@ -26,9 +26,9 @@ PlanNodeStatistics::PlanNodeStatistics(UInt64 row_count_, std::unordered_map<Str
 
 SymbolStatisticsPtr PlanNodeStatistics::getSymbolStatistics(const String & symbol)
 {
-    if (symbol_statistics.contains(symbol))
+    if (auto it = symbol_statistics.find(symbol); it != symbol_statistics.end())
     {
-        return symbol_statistics[symbol];
+        return it->second;
     }
     return SymbolStatistics::UNKNOWN;
 }
@@ -36,7 +36,7 @@ SymbolStatisticsPtr PlanNodeStatistics::getSymbolStatistics(const String & symbo
 UInt64 PlanNodeStatistics::getOutputSizeInBytes() const
 {
     size_t row_size = 0;
-    for (auto & symbols : symbol_statistics)
+    for (const auto & symbols : symbol_statistics)
     {
         if (!symbols.second->isUnknown())
         {
@@ -52,7 +52,7 @@ String PlanNodeStatistics::toString() const
     details << "RowCount: " << row_count << "\\n";
     details << "DataSize: " << std::to_string(getOutputSizeInBytes()) << "\\n";
     details << "Symbol\\n";
-    for (auto & symbol : symbol_statistics)
+    for (const auto & symbol : symbol_statistics)
     {
         details << symbol.first << ": " << symbol.second->getNdv() << ", " << symbol.second->getMin() << ", " << symbol.second->getMax()
                 << ", hist:" << symbol.second->getHistogram().getBuckets().size() << "\\n";
@@ -66,7 +66,7 @@ Poco::JSON::Object::Ptr PlanNodeStatistics::toJson() const
     json->set("rowCont", row_count);
 
     Poco::JSON::Array symbol_statistics_json_array;
-    for (auto & item : symbol_statistics)
+    for (const auto & item : symbol_statistics)
     {
         Poco::JSON::Object::Ptr symbol_statistics_json = new Poco::JSON::Object;
         symbol_statistics_json->set("symbol", item.first);

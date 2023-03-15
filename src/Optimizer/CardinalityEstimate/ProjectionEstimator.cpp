@@ -32,23 +32,23 @@ PlanNodeStatisticsPtr ProjectionEstimator::estimate(PlanNodeStatisticsPtr & chil
     PlanNodeStatisticsPtr project_stats = child_stats->copy();
     const auto & name_to_type = step.getNameToType();
 
-    std::unordered_map<String, SymbolStatisticsPtr> & symbol_statistics = project_stats->getSymbolStatistics();
+    auto & symbol_statistics = project_stats->getSymbolStatistics();
     std::unordered_map<String, SymbolStatisticsPtr> calculated_symbol_statistics;
-    for (auto & assignment : step.getAssignments())
+    for (const auto & assignment : step.getAssignments())
     {
         auto result = ScalarStatsCalculator::estimate(
             assignment.second, name_to_type.at(assignment.first), project_stats->getRowCount(), symbol_statistics);
         if (result && !result->isUnknown())
         {
-            calculated_symbol_statistics[assignment.first] = result;
             if (result->getType() && result->getType()->getName() != step.getNameToType().at(assignment.first)->getName())
             {
-                calculated_symbol_statistics[assignment.first]->getHistogram().clear();
+                result->getHistogram().clear();
             }
+            calculated_symbol_statistics.insert_or_assign(assignment.first, result);
         }
     }
 
-    return std::make_shared<PlanNodeStatistics>(project_stats->getRowCount(), calculated_symbol_statistics);
+    return std::make_shared<PlanNodeStatistics>(project_stats->getRowCount(), std::move(calculated_symbol_statistics));
 }
 
 SymbolStatisticsPtr ScalarStatsCalculator::estimate(
@@ -66,7 +66,7 @@ SymbolStatisticsPtr ScalarStatsCalculator::visitNode(const ConstASTPtr &, std::u
 SymbolStatisticsPtr
 ScalarStatsCalculator::visitASTIdentifier(const ConstASTPtr & node, std::unordered_map<String, SymbolStatisticsPtr> & context)
 {
-    auto & identifier = node->as<ASTIdentifier &>();
+    const auto & identifier = node->as<ASTIdentifier &>();
     return context[identifier.name()];
 }
 
@@ -79,9 +79,9 @@ ScalarStatsCalculator::visitASTFunction(const ConstASTPtr & node, std::unordered
     auto result = SymbolStatistics::UNKNOWN;
     for (const auto & symbol : symbols)
     {
-        if (context.contains(symbol))
+        if (auto it = context.find(symbol); it != context.end())
         {
-            auto child = context.at(symbol);
+            const auto & child = it->second;
             if (child->getNdv() > result->getNdv())
             {
                 result = child->copy();
@@ -96,7 +96,7 @@ ScalarStatsCalculator::visitASTFunction(const ConstASTPtr & node, std::unordered
 SymbolStatisticsPtr
 ScalarStatsCalculator::visitASTLiteral(const ConstASTPtr & node, std::unordered_map<String, SymbolStatisticsPtr> & context)
 {
-    auto literal = dynamic_cast<const ASTLiteral *>(node.get());
+    const auto * literal = dynamic_cast<const ASTLiteral *>(node.get());
     if (literal->value.isNull())
         return std::make_shared<SymbolStatistics>(1, 0, 0, 1);
     DataTypePtr tmp_type = type;

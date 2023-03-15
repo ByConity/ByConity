@@ -36,28 +36,31 @@ PlanNodeStatisticsPtr TableScanEstimator::estimate(ContextMutablePtr context, co
         return nullptr;
     }
     auto plan_node_stats = std::move(plan_node_stats_opt.value());
+    auto & stats = plan_node_stats->getSymbolStatistics();
 
     NameToNameMap alias_to_column;
     for (const auto & item : step.getColumnAlias())
     {
-        alias_to_column[item.second] = item.first;
+        alias_to_column.insert_or_assign(item.second, item.first);
     }
 
     for (const auto & col : step.getOutputStream().header)
     {
-        String column = col.name;
-        if (alias_to_column.contains(col.name) && col.name != alias_to_column[col.name]
-            && plan_node_stats->getSymbolStatistics().contains(alias_to_column[col.name]))
+        const auto & alias = col.name;
+        if (auto it = alias_to_column.find(alias); it != alias_to_column.end() && it->second != alias)
         {
-            // rename
-            plan_node_stats->getSymbolStatistics()[col.name] = plan_node_stats->getSymbolStatistics()[alias_to_column[col.name]];
-            plan_node_stats->getSymbolStatistics().erase(alias_to_column[col.name]);
+            /// Only keep original column name in statistics
+            const auto & name = it->second;
+            if (auto jt = stats.find(alias); jt != stats.end()) {
+                stats.insert_or_assign(name, jt->second);
+                stats.erase(jt);
+
+            }
         }
-        if (plan_node_stats->getSymbolStatistics().contains(col.name))
+        if (auto jt = stats.find(alias); jt != stats.end())
         {
-            plan_node_stats->getSymbolStatistics()[col.name]->setType(col.type);
-            plan_node_stats->getSymbolStatistics()[col.name]->setDbTableColumn(
-                step.getDatabase() + "-" + step.getTable() + "-" + alias_to_column[col.name]);
+            jt->second->setType(col.type);
+            jt->second->setDbTableColumn(step.getDatabase() + "-" + step.getTable() + "-" + alias);
         }
     }
 
