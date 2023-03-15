@@ -42,74 +42,6 @@
                 </ports>
             </node>
         </server>
-        <vw_psm>data.cnch.vw_default</vw_psm>
-        <vw>
-            <psm>data.cnch.vw_default</psm>
-            <node>
-                <host>{your_write_worker_address}</host>
-                <hostname>WriteWorker-3</hostname>
-                <ports>
-                    <port>
-                        <!--HTTP-->
-                        <name>PORT2</name>
-                        <value>8123</value>
-                    </port>
-                    <port>
-                        <!--RPC-->
-                        <name>PORT1</name>
-                        <value>8124</value>
-                    </port>
-                    <port>
-                        <!--TCP/Primary-->
-                        <name>PORT0</name>
-                        <value>9010</value>
-                    </port>
-                    <port>
-                        <!--Exchange Stream Port-->
-                        <name>PORT5</name>
-                        <value>9300</value>
-                    </port>
-                    <port>
-                        <!--Exchange Status Port-->
-                        <name>PORT6</name>
-                        <value>9400</value>
-                    </port>
-                </ports>
-                <vw_name>vw_write</vw_name>
-            </node>
-            <node>
-                <host>{your_read_worker_address}</host>
-                <hostname>DefaultWorker-5</hostname>
-                <ports>
-                    <port>
-                        <!--HTTP-->
-                        <name>PORT2</name>
-                        <value>8123</value>
-                    </port>
-                    <port>
-                        <!--RPC-->
-                        <name>PORT1</name>
-                        <value>8124</value>
-                    </port>
-                    <port>
-                        <!--TCP/Primary-->
-                        <name>PORT0</name>
-                        <value>9010</value>
-                    </port>
-                    <port>
-                        <!--Exchange Stream Port-->
-                        <name>PORT5</name>
-                        <value>9300</value>
-                    </port>
-                    <port>
-                        <!--Exchange Status Port-->
-                        <name>PORT6</name>
-                        <value>9400</value>
-                    </port>
-                </ports>
-                <vw_name>vw_default</vw_name>
-            </node>
-        </vw>
         <tso>
             <psm>data.cnch.tso</psm>
 
@@ -145,6 +77,20 @@
                 </ports>
             </node>
         </daemon_manager>
+        <resource_manager>
+            <psm>data.cnch.resource_manager</psm>
+            <service>cnch-resourcemanager</service>
+            <headless_service>cnch-resourcemanager-headless</headless_service>
+            <!-- For local test -->
+            <node>
+                <host>{your_resource_manager_address}</host>
+                <hostname>rm0</hostname>
+                <ports>
+                    <!-- RPC/Primary -->
+                    <port><name>PORT0</name><value>9925</value></port>
+                </ports>
+            </node>
+        </resource_manager>
     </service_discovery>
 
     <catalog>

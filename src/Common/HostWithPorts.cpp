@@ -86,7 +86,14 @@ std::string getFromEnvOrConfig(ContextPtr context, const std::string & name)
 
 std::string getWorkerID(ContextPtr context)
 {
-    static std::string worker_id = getFromEnvOrConfig(context, "WORKER_ID");
+    auto get_worker_id_lambda = [] (ContextPtr c) {
+        std::string worker_id = getFromEnvOrConfig(c, "WORKER_ID");
+        if (worker_id.empty())
+            worker_id = getHostIPFromEnv();
+        return worker_id;
+    };
+
+    static std::string worker_id = get_worker_id_lambda(context);
     return worker_id;
 }
 
