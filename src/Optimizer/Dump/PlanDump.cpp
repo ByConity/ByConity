@@ -95,19 +95,15 @@ Void NodeDumper::visitTableScanNode(TableScanNode & node, Void & void_context)
 {
     //    Poco::JSON::Object Storage_DDL;
     auto & step_ptr = node.getStep();
-    auto & step = dynamic_cast<const TableScanStep &>(*step_ptr);
+    const auto & step = dynamic_cast<const TableScanStep &>(*step_ptr);
     String database = step.getDatabase();
     String table = step.getTable();
     String database_table = database + "." + table;
     if (!visited_tables.count(database_table))
     {
         visited_tables.insert(database_table);
-        ASTPtr create_query = DatabaseCatalog::instance().getDatabase(database)->getCreateTableQuery(table, context);
-        WriteBufferFromOwnString buf;
-        formatAST(*create_query, buf, false, false);
-        String res = buf.str();
-
-        query_ddl.set(database_table, res);
+        auto create_query = DatabaseCatalog::instance().getTable(StorageID(database, table),context)->getCreateTableSql();
+        query_ddl.set(database_table, create_query);
         query_stats.set(database_table, tableJson(context, database, table));
     }
     StoragePtr storage = step.getStorage();
@@ -133,7 +129,7 @@ Void NodeDumper::visitTableScanNode(TableScanNode & node, Void & void_context)
 }
 Void NodeDumper::visitCTERefNode(CTERefNode & node, Void & void_context)
 {
-    auto & step = dynamic_cast<const CTERefStep &>(*node.getStep().get());
+    const auto & step = dynamic_cast<const CTERefStep &>(*node.getStep().get());
     if (cte_helper)
     {
         cte_helper->accept(step.getId(), *this, void_context);
