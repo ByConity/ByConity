@@ -134,7 +134,7 @@ public:
     const std::vector<size_t> & getExecuteSegmentIds() const { return execute_segment_ids; }
 
 private:
-    std::mutex mutex;
+    bthread::Mutex mutex;
     RuntimeFilterPtr runtime_filter;
     std::unordered_set<String> merged_address_set;
 
@@ -149,7 +149,7 @@ public:
 
     RuntimeFilterPtr get(size_t timeout_ms)
     {
-        std::unique_lock<std::mutex> lock(mutex);
+        std::unique_lock lock(mutex);
         if (timeout_ms != 0)
             cv.wait_for(lock, std::chrono::milliseconds(timeout_ms), [&]() { return runtime_filter.get(); });
         return runtime_filter;
@@ -157,14 +157,14 @@ public:
 
     void set(RuntimeFilterPtr runtime_filter_)
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard lock(mutex);
         runtime_filter = std::move(runtime_filter_);
         cv.notify_all();
     }
 
 private:
-    std::mutex mutex;
-    std::condition_variable cv;
+    bthread::Mutex mutex;
+    bthread::ConditionVariable cv;
     RuntimeFilterPtr runtime_filter;
 };
 
