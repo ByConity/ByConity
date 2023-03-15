@@ -230,6 +230,7 @@ PlanWithScanRows AddDynamicFilters::DynamicFilterPredicatesRewriter::visitPlanNo
     PlanNodes children;
     size_t total_rows = 0;
     DataStreams inputs;
+    inputs.reserve(plan.getChildren().size());
     for (auto & child : plan.getChildren())
     {
         auto result = VisitorUtil::accept(*child, *this, context);
@@ -241,7 +242,7 @@ PlanWithScanRows AddDynamicFilters::DynamicFilterPredicatesRewriter::visitPlanNo
     new_step->setInputStreams(inputs);
     plan.setStep(new_step);
 
-    plan.replaceChildren(children);
+    plan.replaceChildren(std::move(children));
     return PlanWithScanRows{plan.shared_from_this(), total_rows};
 }
 

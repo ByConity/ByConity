@@ -66,7 +66,7 @@ bool GroupBindingIterator::hasNext()
         // Keep checking item iterators until we find a match
         while (current_item_index < num_group_items)
         {
-            auto group_expr = target_group->getLogicalExpressions()[current_item_index];
+            const auto & group_expr = target_group->getLogicalExpressions()[current_item_index];
             current_iterator = std::make_unique<GroupExprBindingIterator>(memo, group_expr, pattern, context);
 
             if (current_iterator->hasNext())
@@ -86,12 +86,11 @@ PlanNodePtr GroupBindingIterator::next()
     if (pattern->getTargetType() == IQueryPlanStep::Type::Any || pattern->getTargetType() == IQueryPlanStep::Type::Tree)
     {
         current_item_index = num_group_items;
-        PlanNodes children;
         const auto & statistics = memo.getGroupById(group_id)->getStatistics();
         return PlanNodeBase::createPlanNode(
             context->nextNodeId(),
             std::make_shared<AnyStep>(context->getMemo().getGroupById(group_id)->getStep()->getOutputStream(), group_id),
-            children,
+            {},
             statistics);
     }
 
@@ -200,6 +199,7 @@ bool GroupExprBindingIterator::hasNext()
         else
         {
             PlanNodes children;
+            children.reserve(children_bindings.size());
             for (size_t idx = 0; idx < children_bindings_pos.size(); ++idx)
             {
                 PlanNodes & child_binding = children_bindings[idx];
@@ -208,7 +208,7 @@ bool GroupExprBindingIterator::hasNext()
             }
 
             const auto & statistics = memo.getGroupById(group_expr->getGroupId())->getStatistics();
-            current_binding = PlanNodeBase::createPlanNode(context->nextNodeId(), group_expr->getStep(), children, statistics);
+            current_binding = PlanNodeBase::createPlanNode(context->nextNodeId(), group_expr->getStep(), std::move(children), statistics);
         }
     }
 
@@ -218,7 +218,7 @@ bool GroupExprBindingIterator::hasNext()
 
 PlanNodePtr Winner::buildPlanNode(CascadesContext & context, PlanNodes & children)
 {
-    auto stats = context.getMemo().getGroupById(group_expr->getGroupId())->getStatistics();
+    const auto & stats = context.getMemo().getGroupById(group_expr->getGroupId())->getStatistics();
     auto plan_node = PlanNodeBase::createPlanNode(context.getContext()->nextNodeId(), group_expr->getStep(), children);
     plan_node->setStatistics(stats);
     if (remote_exchange)

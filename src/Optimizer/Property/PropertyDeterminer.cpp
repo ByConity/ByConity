@@ -75,23 +75,17 @@ PropertySets DeterminerVisitor::visitJoinStep(const JoinStep & step, DeterminerC
     Names left_keys = step.getLeftKeys();
     Names right_keys = step.getRightKeys();
 
-    // process ASOF join, it is different with normal join.
+    // process ASOF join, it is different with normal join as the last keys is inequality
     if (step.getStrictness() == ASTTableJoin::Strictness::Asof)
     {
-        Names left_keys_asof;
-        Names right_keys_asof;
-        for (size_t i = 0; i < left_keys.size() - 1; ++i)
-        {
-            left_keys_asof.emplace_back(left_keys[i]);
-            right_keys_asof.emplace_back(right_keys[i]);
-        }
-
-        Property left{Partitioning{Partitioning::Handle::FIXED_HASH, left_keys_asof, false, 0, nullptr, true}};
-        Property right{Partitioning{Partitioning::Handle::FIXED_HASH, right_keys_asof, false, 0, nullptr, false}};
-        PropertySet set;
-        set.emplace_back(left);
-        set.emplace_back(right);
-        return {set};
+        if (!left_keys.empty()) left_keys.pop_back();
+        if (!right_keys.empty()) right_keys.pop_back();
+        Property left{Partitioning{Partitioning::Handle::FIXED_HASH, std::move(left_keys), false, 0, nullptr, true}};
+        Property right{Partitioning{Partitioning::Handle::FIXED_HASH, std::move(right_keys), false, 0, nullptr, false}};
+        PropertySets sets(1);
+        sets[0].emplace_back(std::move(left));
+        sets[0].emplace_back(std::move(right));
+        return sets;
     }
 
     if (step.getDistributionType() == DistributionType::BROADCAST)
@@ -104,18 +98,18 @@ PropertySets DeterminerVisitor::visitJoinStep(const JoinStep & step, DeterminerC
     {
         Property left{Partitioning{Partitioning::Handle::SINGLE}};
         Property right{Partitioning{Partitioning::Handle::SINGLE}};
-        PropertySet set;
-        set.emplace_back(left);
-        set.emplace_back(right);
-        return {set};
+        PropertySets sets(1);
+        sets[0].emplace_back(std::move(left));
+        sets[0].emplace_back(std::move(right));
+        return sets;
     }
 
-    Property left{Partitioning{Partitioning::Handle::FIXED_HASH, left_keys, false, 0, nullptr, true}};
-    Property right{Partitioning{Partitioning::Handle::FIXED_HASH, right_keys, false, 0, nullptr, false}};
-    PropertySet set;
-    set.emplace_back(left);
-    set.emplace_back(right);
-    return {set};
+    Property left{Partitioning{Partitioning::Handle::FIXED_HASH, std::move(left_keys), false, 0, nullptr, true}};
+    Property right{Partitioning{Partitioning::Handle::FIXED_HASH, std::move(right_keys), false, 0, nullptr, false}};
+    PropertySets sets(1);
+    sets[0].emplace_back(std::move(left));
+    sets[0].emplace_back(std::move(right));
+    return sets;
 }
 
 PropertySets DeterminerVisitor::visitAggregatingStep(const AggregatingStep & step, DeterminerContext &)
@@ -126,27 +120,27 @@ PropertySets DeterminerVisitor::visitAggregatingStep(const AggregatingStep & ste
 //    }
 
     auto keys = step.getKeys();
+    PropertySets sets;
     if (keys.empty())
     {
-        PropertySet set;
-        set.emplace_back(Property{Partitioning{Partitioning::Handle::SINGLE}});
-        return {set};
+        sets.resize(1);
+        sets[0].emplace_back(Property{Partitioning{Partitioning::Handle::SINGLE}});
     }
-
-    PropertySets sets;
-
-    sets.emplace_back(PropertySet{Property{Partitioning{
-        Partitioning::Handle::FIXED_HASH,
-        keys,
-    }}});
-
-    if (step.isGroupingSet())
+    else
     {
-        keys.emplace_back("__grouping_set");
         sets.emplace_back(PropertySet{Property{Partitioning{
             Partitioning::Handle::FIXED_HASH,
-            keys,
+            std::move(keys),
         }}});
+
+        if (step.isGroupingSet())
+        {
+            keys.emplace_back("__grouping_set");
+            sets.emplace_back(PropertySet{Property{Partitioning{
+                Partitioning::Handle::FIXED_HASH,
+                std::move(keys),
+            }}});
+        }
     }
 
     return sets;
@@ -161,22 +155,17 @@ PropertySets DeterminerVisitor::visitMergingAggregatedStep(const MergingAggregat
         set.emplace_back(Property{Partitioning{Partitioning::Handle::SINGLE}});
         return {set};
     }
-    std::vector<String> group_bys;
-    for (const auto & key : keys)
-    {
-        group_bys.emplace_back(key);
-    }
-    PropertySet set;
-    set.emplace_back(Property{Partitioning{
+    PropertySets sets;
+    sets[0].emplace_back(Property{Partitioning{
         Partitioning::Handle::FIXED_HASH,
-        group_bys,
+        std::move(keys),
     }});
-    return {set};
+    return sets;
 }
 
 PropertySets DeterminerVisitor::visitUnionStep(const UnionStep & step, DeterminerContext & context)
 {
-    PropertySet set;
+    PropertySets sets(1);
     for (size_t i = 0; i < step.getInputStreams().size(); ++i)
     {
         std::unordered_map<String, String> mapping;
@@ -186,9 +175,9 @@ PropertySets DeterminerVisitor::visitUnionStep(const UnionStep & step, Determine
         }
         Property translated = context.getRequired().translate(mapping);
         translated.setPreferred(true);
-        set.emplace_back(translated);
+        sets[0].emplace_back(std::move(translated));
     }
-    return {set};
+    return sets;
 }
 
 PropertySets DeterminerVisitor::visitIntersectStep(const IntersectStep & node, DeterminerContext & context)
@@ -278,21 +267,23 @@ PropertySets DeterminerVisitor::visitExtremesStep(const ExtremesStep &, Determin
 
 PropertySets DeterminerVisitor::visitWindowStep(const WindowStep & step, DeterminerContext &)
 {
-    auto keys = step.getWindow().partition_by;
+    const auto & keys = step.getWindow().partition_by;
+    PropertySets sets(1);
     if (keys.empty())
     {
-        PropertySet set;
-        set.emplace_back(Property{Partitioning{Partitioning::Handle::SINGLE}});
-        return {set};
+        sets[0].emplace_back(Property{Partitioning{Partitioning::Handle::SINGLE}});
     }
-    std::vector<String> group_bys;
-    for (const auto & key : keys)
+    else
     {
-        group_bys.emplace_back(key.column_name);
+        Strings window_keys;
+        window_keys.reserve(keys.size());
+        for (const auto & key : keys)
+        {
+            window_keys.emplace_back(key.column_name);
+        }
+        sets[0].emplace_back(Property{Partitioning{Partitioning::Handle::FIXED_HASH, std::move(window_keys), false}});
     }
-    PropertySet set;
-    set.emplace_back(Property{Partitioning{Partitioning::Handle::FIXED_HASH, group_bys, false}});
-    return {set};
+    return sets;
 }
 
 PropertySets DeterminerVisitor::visitApplyStep(const ApplyStep &, DeterminerContext &)

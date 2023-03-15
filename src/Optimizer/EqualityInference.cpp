@@ -30,7 +30,7 @@ EqualityInference EqualityInference::newInstance(const std::vector<ConstASTPtr> 
 {
     DisjointSet equalities;
     std::unordered_set<ConstASTPtr, ASTEquality::ASTHash, ASTEquality::ASTEquals> candidates;
-    for (auto & predicate : predicates)
+    for (const auto & predicate : predicates)
     {
         auto conjuncts = PredicateUtils::extractConjuncts(predicate);
         for (auto & conjunct : conjuncts)
@@ -41,9 +41,9 @@ EqualityInference EqualityInference::newInstance(const std::vector<ConstASTPtr> 
             }
         }
     }
-    for (auto & candidate : candidates)
+    for (const auto & candidate : candidates)
     {
-        auto & fun = candidate->as<ASTFunction &>();
+        const auto & fun = candidate->as<ASTFunction &>();
         ASTPtr left = fun.arguments->getChildren()[0];
         ASTPtr right = fun.arguments->getChildren()[1];
         equalities.findAndUnion(left, right);
@@ -55,9 +55,9 @@ EqualityInference EqualityInference::newInstance(const std::vector<ConstASTPtr> 
     std::unordered_map<ConstASTPtr, ConstASTSet, ASTEquality::ASTHash, ASTEquality::ASTEquals> by_expressions;
     for (auto & equivalence : equivalent_classes)
     {
-        for (auto & expr : equivalence)
+        for (const auto & expr : equivalence)
         {
-            by_expressions[expr] = equivalence;
+            by_expressions.insert_or_assign(expr, equivalence);
         }
     }
 
@@ -74,7 +74,7 @@ EqualityInference EqualityInference::newInstance(const std::vector<ConstASTPtr> 
 
         auto sub_expressions = SubExpressionExtractor::extract(expr);
         ConstASTSet sub_expressions_remove_itself;
-        for (auto & sub_expression : sub_expressions)
+        for (const auto & sub_expression : sub_expressions)
         {
             if (sub_expression != expr)
             {
@@ -82,7 +82,7 @@ EqualityInference EqualityInference::newInstance(const std::vector<ConstASTPtr> 
             }
         }
         sub_expressions = sub_expressions_remove_itself;
-        for (auto & sub_expression : sub_expressions)
+        for (const auto & sub_expression : sub_expressions)
         {
             if (by_expressions.contains(sub_expression))
             {
@@ -92,25 +92,25 @@ EqualityInference EqualityInference::newInstance(const std::vector<ConstASTPtr> 
         }
     }
 
-    std::unordered_map<ConstASTPtr, ConstASTSet, ASTEquality::ASTHash, ASTEquality::ASTEquals> equality_sets = makeEqualitySets(equalities);
+    std::unordered_map<ConstASTPtr, ConstASTSet, ASTEquality::ASTHash, ASTEquality::ASTEquals> equality_sets = makeEqualitySets(std::move(equalities));
     ConstASTMap canonical_mappings;
 
     for (auto & equality_set : equality_sets)
     {
-        for (auto & value : equality_set.second)
+        for (const auto & value : equality_set.second)
         {
-            canonical_mappings[value] = equality_set.first;
+            canonical_mappings.insert_or_assign(value, equality_set.first);
         }
     }
 
-    return EqualityInference{equality_sets, canonical_mappings, derived_expressions};
+    return EqualityInference{std::move(equality_sets), std::move(canonical_mappings), std::move(derived_expressions)};
 }
 
 bool EqualityInference::isInferenceCandidate(const ConstASTPtr & predicate, ContextMutablePtr & context)
 {
     if (predicate->as<ASTFunction>())
     {
-        auto & fun = predicate->as<ASTFunction &>();
+        const auto & fun = predicate->as<ASTFunction &>();
         if (fun.name == "equals" && !mayReturnNullOnNonNullInput(fun) && ExpressionDeterminism::isDeterministic(predicate, context))
         {
             // We should only consider equalities that have distinct left and right components
@@ -417,22 +417,23 @@ std::vector<ConstASTSet> DisjointSet::getEquivalentClasses()
     {
         const ConstASTPtr & node = entry.first;
         auto root = findInternal(node);
-        if (root_to_tree_elements.contains(root))
+        auto it = root_to_tree_elements.find(root);
+        if (it != root_to_tree_elements.end())
         {
-            ConstASTSet & value = root_to_tree_elements[root];
-            value.emplace(node);
+            it->second.emplace(node);
         }
         else
         {
             ConstASTSet value;
             value.emplace(node);
-            root_to_tree_elements[root] = value;
+            root_to_tree_elements.insert(it, {root, std::move(value)});
         }
     }
     std::vector<ConstASTSet> result;
+    result.reserve(root_to_tree_elements.size());
     for (auto & element : root_to_tree_elements)
     {
-        result.emplace_back(element.second);
+        result.emplace_back(std::move(element.second));
     }
     return result;
 }

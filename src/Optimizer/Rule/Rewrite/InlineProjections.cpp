@@ -179,7 +179,7 @@ std::set<String> InlineProjections::extractInliningTargets(ProjectionNode * pare
     const auto & child_step = *child->getStep();
 
     std::unordered_map<String, UInt32> dependencies;
-    for (auto & assignment : parent_step.getAssignments())
+    for (const auto & assignment : parent_step.getAssignments())
     {
         auto expr = assignment.second;
         std::set<std::string> symbols = SymbolsExtractor::extract(expr);
@@ -204,7 +204,7 @@ std::set<String> InlineProjections::extractInliningTargets(ProjectionNode * pare
         }
     }
 
-    std::set<String> singletons;
+    std::set<String> & singletons = constants;
     for (auto & dependency : dependencies)
     {
         const auto & symbol = dependency.first;
@@ -215,7 +215,7 @@ std::set<String> InlineProjections::extractInliningTargets(ProjectionNode * pare
             continue;
         }
 
-        auto& expr = child_step.getAssignments().at(symbol);
+        const auto & expr = child_step.getAssignments().at(symbol);
 
         if(!ExpressionDeterminism::isDeterministic(expr, context)) {
             continue;
@@ -237,7 +237,6 @@ std::set<String> InlineProjections::extractInliningTargets(ProjectionNode * pare
             singletons.emplace(symbol);
         }
     }
-    singletons.insert(constants.begin(), constants.end());
 
     // inline all if remaining are not used or identity.
     std::set<String> identities_or_not_used;
@@ -279,7 +278,7 @@ PatternPtr InlineProjectionIntoJoin::getPattern() const
 
 TransformResult InlineProjectionIntoJoin::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
 {
-    auto old_join_node = dynamic_cast<JoinNode *>(node.get());
+    auto * old_join_node = dynamic_cast<JoinNode *>(node.get());
     if (!old_join_node)
         return {};
 

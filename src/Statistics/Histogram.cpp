@@ -419,11 +419,8 @@ Histogram Histogram::createUnion(const Histogram & other) const
         return Histogram{};
     }
 
-    auto bucket1_first = this->getBucket(idx1);
-    auto bucket2_first = other.getBucket(idx2);
-
-    BucketOpt bucket1 = std::move(bucket1_first);
-    BucketOpt bucket2 = std::move(bucket2_first);
+    auto bucket1 = this->getBucket(idx1);
+    auto bucket2 = other.getBucket(idx2);
 
     // flags to determine if the buckets where residue of the bucket-merge operation
     bool bucket1_is_residual = false;
@@ -480,20 +477,20 @@ Histogram Histogram::createUnion(const Histogram & other) const
 
     // add any leftover buckets from other histogram
     addBuckets(other.getBuckets(), new_buckets, idx2, buckets2);
-    return Histogram{new_buckets};
+    return Histogram(std::move(new_buckets));
 }
 
 Histogram Histogram::createNot(const Histogram & origin) const
 {
     Buckets not_buckets;
-    for (auto & origin_bucket : origin.buckets)
+    for (const auto & origin_bucket : origin.buckets)
     {
         if (!subsumes(origin_bucket))
         {
             not_buckets.emplace_back(origin_bucket);
         }
     }
-    return Histogram{not_buckets};
+    return Histogram(std::move(not_buckets));
 }
 
 // cleanup residual buckets
@@ -539,10 +536,10 @@ void Histogram::addBuckets(const Buckets & src_buckets, Buckets & dest_buckets, 
 {
     Utils::checkState(begin <= end);
     Utils::checkState(end <= src_buckets.size());
-
+    dest_buckets.reserve(end - begin);
     for (size_t ul = begin; ul < end; ul++)
     {
-        Bucket bucket = src_buckets[ul];
+        const Bucket & bucket = src_buckets[ul];
         dest_buckets.emplace_back(bucket);
     }
 }
@@ -550,26 +547,28 @@ void Histogram::addBuckets(const Buckets & src_buckets, Buckets & dest_buckets, 
 Histogram Histogram::applySelectivity(double rowcount_selectivity, double ndv_selectivity) const
 {
     Buckets new_buckets;
+    new_buckets.reserve(buckets.size());
     for (const auto & bucket : buckets)
     {
         new_buckets.emplace_back(bucket.applySelectivity(rowcount_selectivity, ndv_selectivity));
     }
-    return Histogram{new_buckets};
+    return Histogram(std::move(new_buckets));
 }
 
 Histogram Histogram::copy() const
 {
     Buckets new_buckets;
+    new_buckets.reserve(buckets.size());
     for (const auto & bucket : buckets)
     {
         new_buckets.emplace_back(bucket);
     }
-    return Histogram{new_buckets};
+    return Histogram(std::move(new_buckets));
 }
 
 bool Histogram::subsumes(const Bucket & origin_bucket) const
 {
-    for (auto & bucket : buckets)
+    for (const auto & bucket : buckets)
     {
         if (Bucket::subsumes(bucket, origin_bucket))
         {

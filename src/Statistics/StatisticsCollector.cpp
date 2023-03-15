@@ -93,7 +93,7 @@ void StatisticsCollector::readFromCatalogImpl(const ColumnDescVector & cols_desc
     }
 
     table_stats.readFromCollection(data.table_stats);
-    for (auto & [name, type] : cols_desc)
+    for (const auto & [name, type] : cols_desc)
     {
         if (!data.column_stats.count(name))
         {
@@ -118,7 +118,7 @@ std::optional<PlanNodeStatisticsPtr> StatisticsCollector::toPlanNodeStatistics()
     auto table_row_count = table_stats.basic->getRowCount();
     result->updateRowCount(table_row_count);
     // whether to construct single bucket histogram from min/max if there is no histogram
-    for (auto & [col, stats] : columns_stats)
+    for (const auto & [col, stats] : columns_stats)
     {
         auto symbol = std::make_shared<SymbolStatistics>();
 

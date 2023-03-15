@@ -25,7 +25,7 @@ ExchangeStep::ExchangeStep(DataStreams input_streams_, const ExchangeMode & mode
     , schema(std::move(schema_))
     , keep_order(keep_order_)
 {
-    setInputStreams(input_streams_);
+    setInputStreams(std::move(input_streams_));
 }
 
 void ExchangeStep::setInputStreams(const DataStreams & input_streams_)
@@ -34,14 +34,32 @@ void ExchangeStep::setInputStreams(const DataStreams & input_streams_)
     output_stream = DataStream{.header = input_streams[0].header};
     for (size_t i = 0; i < output_stream->header.columns(); ++i)
     {
-        String output_symbol = output_stream->header.getByPosition(i).name;
+        const String & output_symbol = output_stream->header.getByPosition(i).name;
         std::vector<String> inputs;
+        inputs.reserve(input_streams.size());
         for (auto & input_stream : input_streams)
         {
-            String input_symbol = input_stream.header.getByPosition(i).name;
-            inputs.emplace_back(input_symbol);
+            inputs.emplace_back(input_stream.header.getByPosition(i).name);
         }
-        output_to_inputs[output_symbol] = inputs;
+        output_to_inputs.insert_or_assign(output_symbol, std::move(inputs));
+    }
+}
+
+void ExchangeStep::setInputStreams(DataStreams && input_streams_)
+{
+    input_streams = std::move(input_streams_);
+    output_stream = DataStream{.header = input_streams[0].header};
+    for (size_t i = 0; i < output_stream->header.columns(); ++i)
+    {
+        const String & output_symbol = output_stream->header.getByPosition(i).name;
+        std::vector<String> inputs;
+        inputs.reserve(input_streams.size());
+        for (auto & input_stream : input_streams)
+        {
+            inputs.emplace_back(input_stream.header.getByPosition(i).name);
+        }
+        output_to_inputs.insert_or_assign(output_symbol, std::move(inputs));
+
     }
 }
 

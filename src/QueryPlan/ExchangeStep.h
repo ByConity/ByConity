@@ -50,6 +50,7 @@ public:
     Block getHeader() const { return getOutputStream().header; }
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
     void setInputStreams(const DataStreams & input_streams_) override;
+    void setInputStreams(DataStreams && input_streams_);
 
 private:
     ExchangeMode exchange_type = ExchangeMode::UNKNOWN;

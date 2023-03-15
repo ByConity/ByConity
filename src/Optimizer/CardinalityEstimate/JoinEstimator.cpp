@@ -58,29 +58,30 @@ PlanNodeStatisticsPtr JoinEstimator::computeCardinality(
     // init join card, and output column statistics.
     UInt64 join_card = left_rows * right_rows;
     std::unordered_map<String, SymbolStatisticsPtr> join_output_statistics;
-    for (auto & item : left_stats.getSymbolStatistics())
-    {
-        join_output_statistics[item.first] = item.second->copy();
-    }
-    for (auto & item : right_stats.getSymbolStatistics())
-    {
-        join_output_statistics[item.first] = item.second->copy();
-    }
 
     // cross join
     if (kind == ASTTableJoin::Kind::Cross)
     {
         for (auto & item : left_stats.getSymbolStatistics())
         {
-            join_output_statistics[item.first] = item.second->applySelectivity(right_rows, 1);
+            join_output_statistics.insert_or_assign(item.first, item.second->applySelectivity(right_rows, 1));
         }
 
         for (auto & item : right_stats.getSymbolStatistics())
         {
-            join_output_statistics[item.first] = item.second->applySelectivity(left_rows, 1);
+            join_output_statistics.insert_or_assign(item.first, item.second->applySelectivity(left_rows, 1));
         }
 
-        return std::make_shared<PlanNodeStatistics>(join_card, join_output_statistics);
+        return std::make_shared<PlanNodeStatistics>(join_card, std::move(join_output_statistics));
+    }
+
+    for (auto & item : left_stats.getSymbolStatistics())
+    {
+        join_output_statistics.insert_or_assign(item.first, item.second->copy());
+    }
+    for (auto & item : right_stats.getSymbolStatistics())
+    {
+        join_output_statistics.insert_or_assign(item.first, item.second->copy());
     }
 
     // inner/left/right/full join
@@ -169,7 +170,7 @@ PlanNodeStatisticsPtr JoinEstimator::computeCardinality(
         if (pre_key_join_card <= join_card)
         {
             join_card = pre_key_join_card;
-            join_output_statistics = pre_key_join_output_statistics;
+            join_output_statistics.swap(pre_key_join_output_statistics);
         }
     }
 
@@ -205,7 +206,7 @@ PlanNodeStatisticsPtr JoinEstimator::computeCardinality(
 
     // TODO@lichengxian update statistics for join filters.
 
-    return std::make_shared<PlanNodeStatistics>(join_card, join_output_statistics);
+    return std::make_shared<PlanNodeStatistics>(join_card, std::move(join_output_statistics));
 }
 
 bool JoinEstimator::matchPKFK(UInt64 left_rows, UInt64 right_rows, UInt64 left_ndv, UInt64 right_ndv)
@@ -315,17 +316,17 @@ UInt64 JoinEstimator::computeCardinalityByFKPK(
                 auto new_pk_key_stats = pk_key_stats.copy();
                 new_pk_key_stats = new_pk_key_stats->applySelectivity(adjust_rowcount, adjust_ndv);
                 new_pk_key_stats->setNdv(fk_ndv);
-                join_output_statistics[item.first] = new_pk_key_stats;
+                join_output_statistics.insert_or_assign(item.first, new_pk_key_stats);
             }
             else
             {
                 if (double(item.second->getNdv()) / pk_stats.getRowCount() > 0.8)
                 {
-                    join_output_statistics[item.first] = item.second->applySelectivity(adjust_rowcount, adjust_ndv);
+                    join_output_statistics.insert_or_assign(item.first, item.second->applySelectivity(adjust_rowcount, adjust_ndv));
                 }
                 else
                 {
-                    join_output_statistics[item.first] = item.second->applySelectivity(adjust_rowcount, 1);
+                    join_output_statistics.insert_or_assign(item.first, item.second->applySelectivity(adjust_rowcount, 1));
                 }
             }
         }
@@ -346,17 +347,17 @@ UInt64 JoinEstimator::computeCardinalityByFKPK(
                 auto new_fk_key_stats = fk_key_stats.copy();
                 new_fk_key_stats = new_fk_key_stats->applySelectivity(adjust_fk_rowcount, adjust_fk_ndv);
                 new_fk_key_stats->setNdv(pk_ndv);
-                join_output_statistics[item.first] = new_fk_key_stats;
+                join_output_statistics.insert_or_assign(item.first, new_fk_key_stats);
             }
             else
             {
                 if (double(item.second->getNdv()) / fk_stats.getRowCount() > 0.8)
                 {
-                    join_output_statistics[item.first] = item.second->applySelectivity(adjust_fk_rowcount, adjust_fk_ndv);
+                    join_output_statistics.insert_or_assign(item.first, item.second->applySelectivity(adjust_fk_rowcount, adjust_fk_ndv));
                 }
                 else
                 {
-                    join_output_statistics[item.first] = item.second->applySelectivity(adjust_fk_rowcount, 1);
+                    join_output_statistics.insert_or_assign(item.first, item.second->applySelectivity(adjust_fk_rowcount, 1));
                 }
             }
         }
@@ -364,7 +365,7 @@ UInt64 JoinEstimator::computeCardinalityByFKPK(
         double adjust_pk_rowcount = join_card / pk_stats.getRowCount();
         for (auto & item : pk_stats.getSymbolStatistics())
         {
-            join_output_statistics[item.first] = item.second->applySelectivity(adjust_pk_rowcount, 1.0);
+            join_output_statistics.insert_or_assign(item.first, item.second->applySelectivity(adjust_pk_rowcount, 1.0));
         }
     }
 
@@ -410,11 +411,11 @@ UInt64 JoinEstimator::computeCardinalityByHistogram(
             {
                 new_left_key_stats->setNdv(min_ndv);
             }
-            join_output_statistics[left_key] = new_left_key_stats;
+            join_output_statistics.insert_or_assign(left_key, new_left_key_stats);
         }
         else
         {
-            join_output_statistics[item.first] = item.second->applySelectivity(adjust_left_rowcount, 1);
+            join_output_statistics.insert_or_assign(item.first, item.second->applySelectivity(adjust_left_rowcount, 1));
         }
     }
 
@@ -428,11 +429,11 @@ UInt64 JoinEstimator::computeCardinalityByHistogram(
             {
                 new_right_key_stats->setNdv(min_ndv);
             }
-            join_output_statistics[right_key] = new_right_key_stats;
+            join_output_statistics.insert_or_assign(right_key, new_right_key_stats);
         }
         else
         {
-            join_output_statistics[item.first] = item.second->applySelectivity(adjust_right_rowcount, 1);
+            join_output_statistics.insert_or_assign(item.first, item.second->applySelectivity(adjust_right_rowcount, 1));
         }
     }
 
@@ -458,20 +459,22 @@ UInt64 JoinEstimator::computeCardinalityByNDV(
     double adjust_left_rowcount = join_card / left_stats.getRowCount();
     for (auto & item : left_stats.getSymbolStatistics())
     {
-        join_output_statistics[item.first] = item.second->applySelectivity(adjust_left_rowcount, 1.0);
+        auto value = item.second->applySelectivity(adjust_left_rowcount, 1.0);
         if (item.first == left_key && kind == ASTTableJoin::Kind::Inner)
         {
-            join_output_statistics[item.first]->setNdv(min_ndv);
+            value->setNdv(min_ndv);
         }
+        join_output_statistics.insert_or_assign(item.first, std::move(value));
     }
     double adjust_right_rowcount = join_card / right_stats.getRowCount();
     for (auto & item : right_stats.getSymbolStatistics())
     {
-        join_output_statistics[item.first] = item.second->applySelectivity(adjust_right_rowcount, 1.0);
+        auto value = item.second->applySelectivity(adjust_right_rowcount, 1.0);
         if (item.first == right_key && kind == ASTTableJoin::Kind::Inner)
         {
-            join_output_statistics[item.first]->setNdv(min_ndv);
+            value->setNdv(min_ndv);
         }
+        join_output_statistics.insert_or_assign(item.first, item.second->applySelectivity(adjust_right_rowcount, 1.0));
     }
     return join_card;
 }

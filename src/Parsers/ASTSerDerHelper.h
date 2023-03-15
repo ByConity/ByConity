@@ -25,7 +25,7 @@ namespace DB
 
 ASTPtr createByASTType(ASTType type, ReadBuffer & buf);
 
-void serializeAST(const ASTPtr & ast, WriteBuffer & buf);
+void serializeAST(const ConstASTPtr & ast, WriteBuffer & buf);
 
 void serializeAST(const IAST & ast, WriteBuffer & buf);
 

@@ -117,7 +117,7 @@ void serializeAST(const IAST & ast, WriteBuffer & buf)
     ast.serialize(buf);
 }
 
-void serializeAST(const ASTPtr & ast, WriteBuffer & buf)
+void serializeAST(const ConstASTPtr & ast, WriteBuffer & buf)
 {
     if (ast)
     {

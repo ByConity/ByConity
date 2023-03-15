@@ -62,11 +62,11 @@ String StatsNdvBucketsResultImpl<T>::serialize() const
     Protos::StatsNdvBucketsResult pb;
     pb.set_bounds_blob(bounds_.serialize());
 
-    for (auto & count : counts_)
+    for (const auto & count : counts_)
     {
         pb.add_counts(count);
     }
-    for (auto & ndv : ndvs_)
+    for (const auto & ndv : ndvs_)
     {
         pb.add_ndvs(ndv);
     }
@@ -81,14 +81,14 @@ String StatsNdvBucketsResultImpl<T>::serializeToJson() const
     Poco::JSON::Parser parser;
     ptr_json->set("bounds_blob", parser.parse(bounds_.serializeToJson()));
     Poco::JSON::Array array_counts;
-    for (auto & count : counts_)
+    for (const auto & count : counts_)
     {
         array_counts.add(int64_t(count));
     }
     ptr_json->set("counts", Poco::Dynamic::Var(array_counts));
 
     Poco::JSON::Array array_ndvs;
-    for (auto & ndv : ndvs_)
+    for (const auto & ndv : ndvs_)
     {
         array_ndvs.add(double(ndv));
     }
@@ -181,7 +181,6 @@ template <typename T>
 void StatsNdvBucketsResultImpl<T>::writeSymbolStatistics(SymbolStatistics & symbol)
 {
     checkValid();
-    Buckets buckets;
     for (size_t i = 0; i < numBuckets(); ++i)
     {
         auto lb = static_cast<double>(bounds_[i]);

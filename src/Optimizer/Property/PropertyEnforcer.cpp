@@ -73,31 +73,26 @@ QueryPlanStepPtr PropertyEnforcer::enforceNodePartitioning(
 {
     const auto & output_stream = step->getOutputStream();
     DataStreams streams{output_stream};
-    Partitioning partitioning = required.getNodePartitioning();
+    const Partitioning & partitioning = required.getNodePartitioning();
 
     // if the stream is ordered, we need keep order when exchange data.
     bool keep_order = context.getSettingsRef().enable_shuffle_with_order;
 
     if (partitioning.getPartitioningHandle() == Partitioning::Handle::SINGLE)
     {
-        QueryPlanStepPtr step_ptr = std::make_unique<ExchangeStep>(streams, ExchangeMode::GATHER, partitioning, keep_order);
-        return step_ptr;
+        return std::make_unique<ExchangeStep>(std::move(streams), ExchangeMode::GATHER, partitioning, keep_order);
     }
     if (partitioning.getPartitioningHandle() == Partitioning::Handle::FIXED_HASH)
     {
-        QueryPlanStepPtr step_ptr = std::make_unique<ExchangeStep>(streams, ExchangeMode::REPARTITION, partitioning, keep_order);
-        return step_ptr;
+        return std::make_unique<ExchangeStep>(std::move(streams), ExchangeMode::REPARTITION, partitioning, keep_order);
     }
     if (partitioning.getPartitioningHandle() == Partitioning::Handle::FIXED_BROADCAST)
     {
-        QueryPlanStepPtr step_ptr = std::make_unique<ExchangeStep>(streams, ExchangeMode::BROADCAST, partitioning, keep_order);
-        return step_ptr;
+        return std::make_unique<ExchangeStep>(std::move(streams), ExchangeMode::BROADCAST, partitioning, keep_order);
     }
     if (partitioning.getPartitioningHandle() == Partitioning::Handle::FIXED_ARBITRARY)
     {
-        QueryPlanStepPtr step_ptr
-            = std::make_unique<ExchangeStep>(streams, ExchangeMode::LOCAL_NO_NEED_REPARTITION, partitioning, keep_order);
-        return step_ptr;
+        return std::make_unique<ExchangeStep>(std::move(streams), ExchangeMode::LOCAL_NO_NEED_REPARTITION, partitioning, keep_order);
     }
     if (partitioning.getPartitioningHandle() == Partitioning::Handle::ARBITRARY)
     {
@@ -115,8 +110,7 @@ PropertyEnforcer::enforceStreamPartitioning(ConstQueryPlanStepPtr step, const Pr
 
     if (required.getStreamPartitioning().getPartitioningHandle() == Partitioning::Handle::SINGLE)
     {
-        QueryPlanStepPtr step_ptr = std::make_unique<UnionStep>(streams, 0, true);
-        return step_ptr;
+        return std::make_unique<UnionStep>(std::move(streams), 0, true);
     }
     throw Exception("Property Enforce error", ErrorCodes::ILLEGAL_ENFORCE);
 }

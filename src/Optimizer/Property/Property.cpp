@@ -79,26 +79,18 @@ bool Partitioning::isPartitionOn(const Partitioning & requirement) const
 
 Partitioning Partitioning::normalize(const SymbolEquivalences & symbol_equivalences) const
 {
-    auto mapping = symbol_equivalences.representMap();
-    for (const auto & item : columns)
-    {
-        if (!mapping.contains(item))
-        {
-            mapping[item] = item;
-        }
-    }
-    return translate(mapping);
+    return translate(symbol_equivalences.representMap());
 }
 
 Partitioning Partitioning::translate(const std::unordered_map<String, String> & identities) const
 {
     Names translate_columns;
     for (const auto & column : columns)
-        if (identities.contains(column))
-            translate_columns.emplace_back(identities.at(column));
+        if (auto it = identities.find(column); it != identities.end())
+            translate_columns.emplace_back(it->second);
         else // note: don't discard column
             translate_columns.emplace_back(column);
-    return Partitioning{handle, translate_columns, require_handle, buckets, sharding_expr, enforce_round_robin};
+    return Partitioning{handle, std::move(translate_columns), require_handle, buckets, sharding_expr, enforce_round_robin};
 }
 
 String Partitioning::toString() const
