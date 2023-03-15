@@ -2,6 +2,8 @@ Allow to build ByConity in Docker for different platforms with different
 compilers and build settings. Correctly configured Docker daemon is single dependency.
 
 Usage:
+First step, at the root directory of the source code, rm folder `build_docker` if it exist
+
 For example to build a deb package:
 ```
 $ mkdir deb/test_output/
