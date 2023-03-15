@@ -1,4 +1,4 @@
-tag?=v0.2.1
+tag?=v0.2.2
 image:
 	test -f ../../build/programs/foundationdb-clients_7.1.27-1_amd64.deb || curl -L -o ../../build/programs/foundationdb-clients_7.1.27-1_amd64.deb https://github.com/apple/foundationdb/releases/download/7.1.27/foundationdb-clients_7.1.27-1_amd64.deb
 	cp ./app/run.sh ../../build/programs/
