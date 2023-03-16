@@ -20,7 +20,7 @@ Projection est. ? rows
                            ├─ Repartition Exchange est. ? rows
                            │  │     Partition by: {c_custkey}
                            │  └─ Inner Join est. ? rows
-                           │     │     Condition:
+                           │     │     Condition: 
                            │     │     Filter: c_acctbal > `expr#avg(c_acctbal)`
                            │     ├─ Filter est. 150000 rows
                            │     │  │     Condition: substring(c_phone, 1, 2) IN ('13', '31', '23', '29', '30', '18', '17')

@@ -14,7 +14,7 @@ Projection est. 100 rows
                   ├─ Projection est. ? rows
                   │  │     Expressions: [expr#count(), expr#sum(multiply(ss_quantity, ss_list_price)), i_brand_id, i_category_id, i_class_id], expr#'store':='store'
                   │  └─ Inner Join est. ? rows
-                  │     │     Condition:
+                  │     │     Condition: 
                   │     │     Filter: `expr#sum(multiply(ss_quantity, ss_list_price))` > `expr#avg(multiply(quantity, list_price))`
                   │     ├─ MergingAggregated est. 152480 rows
                   │     │  └─ Repartition Exchange est. 152480 rows
@@ -208,7 +208,7 @@ Projection est. 100 rows
                   ├─ Projection est. ? rows
                   │  │     Expressions: [expr#count()_1, expr#sum(multiply(cs_quantity, cs_list_price)), i_brand_id_7, i_category_id_7, i_class_id_7], expr#'catalog':='catalog'
                   │  └─ Inner Join est. ? rows
-                  │     │     Condition:
+                  │     │     Condition: 
                   │     │     Filter: `expr#sum(multiply(cs_quantity, cs_list_price))` > `expr#avg(multiply(quantity, list_price))_1`
                   │     ├─ MergingAggregated est. 152480 rows
                   │     │  └─ Repartition Exchange est. 152480 rows
@@ -402,7 +402,7 @@ Projection est. 100 rows
                   └─ Projection est. ? rows
                      │     Expressions: [expr#count()_2, expr#sum(multiply(ws_quantity, ws_list_price)), i_brand_id_14, i_category_id_14, i_class_id_14], expr#'web':='web'
                      └─ Inner Join est. ? rows
-                        │     Condition:
+                        │     Condition: 
                         │     Filter: `expr#sum(multiply(ws_quantity, ws_list_price))` > `expr#avg(multiply(quantity, list_price))_2`
                         ├─ MergingAggregated est. 152480 rows
                         │  └─ Repartition Exchange est. 152480 rows
@@ -604,10 +604,10 @@ Projection est. 100 rows
          └─ Sorting est. ? rows
             │     Order by: {expr#'store'_2 asc, i_brand_id_22 asc, i_class_id_22 asc, i_category_id_22 asc}
             └─ Inner Join est. ? rows
-               │     Condition:
+               │     Condition: 
                │     Filter: `expr#sum(multiply(ss_quantity, ss_list_price))_3` > `expr#avg(multiply(quantity, list_price))_4`
                ├─ Inner Join est. ? rows
-               │  │     Condition:
+               │  │     Condition: 
                │  │     Filter: `expr#sum(multiply(ss_quantity, ss_list_price))_2` > `expr#avg(multiply(quantity, list_price))_3`
                │  ├─ Inner Join est. 24396800 rows
                │  │  │     Condition: i_brand_id_22 == i_brand_id_29, i_category_id_22 == i_category_id_29, i_class_id_22 == i_class_id_29

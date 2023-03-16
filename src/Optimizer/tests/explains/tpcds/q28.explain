@@ -3,15 +3,15 @@ Projection est. 100 rows
 └─ Limit est. 100 rows
    │     Limit: 100
    └─ Inner Join est. ? rows
-      │     Condition:
+      │     Condition: 
       ├─ Inner Join est. ? rows
-      │  │     Condition:
+      │  │     Condition: 
       │  ├─ Inner Join est. ? rows
-      │  │  │     Condition:
+      │  │  │     Condition: 
       │  │  ├─ Inner Join est. ? rows
-      │  │  │  │     Condition:
+      │  │  │  │     Condition: 
       │  │  │  ├─ Inner Join est. ? rows
-      │  │  │  │  │     Condition:
+      │  │  │  │  │     Condition: 
       │  │  │  │  ├─ MergingAggregated est. 1 rows
       │  │  │  │  │  └─ Gather Exchange est. 1 rows
       │  │  │  │  │     └─ Aggregating est. 1 rows
