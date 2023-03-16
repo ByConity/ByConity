@@ -842,7 +842,7 @@ class IColumn;
     M(Bool, skip_table_definition_hash_check, false, "Whether skip table definition hash check when attach data parts.", 0)  \
     M(UInt64, cnch_part_attach_max_threads, 16, "Max threads to use when attach parts", 0) \
     M(UInt64, attach_failure_injection_knob, 0, "Attach failure injection knob, for test only", 0) \
-    M(Bool, async_post_commit, true, "Txn post commit asynchronously", 0) \
+    M(Bool, async_post_commit, false, "Txn post commit asynchronously", 0) \
 
 
 // End of FORMAT_FACTORY_SETTINGS
