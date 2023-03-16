@@ -2,35 +2,35 @@ Gather Exchange est. ? rows
 └─ Projection est. ? rows
    │     Expressions: bucket1:=multiIf(`expr#count()` > 74129, `expr#avg(ss_ext_discount_amt)`, `expr#avg(ss_net_paid)`), bucket2:=multiIf(`expr#count()_1` > 122840, `expr#avg(ss_ext_discount_amt)_1`, `expr#avg(ss_net_paid)_1`), bucket3:=multiIf(`expr#count()_2` > 56580, `expr#avg(ss_ext_discount_amt)_2`, `expr#avg(ss_net_paid)_2`), bucket4:=multiIf(`expr#count()_3` > 10097, `expr#avg(ss_ext_discount_amt)_3`, `expr#avg(ss_net_paid)_3`), bucket5:=multiIf(`expr#count()_4` > 165306, `expr#avg(ss_ext_discount_amt)_4`, `expr#avg(ss_net_paid)_4`)
    └─ Inner Join est. ? rows
-      │     Condition:
+      │     Condition: 
       ├─ Inner Join est. ? rows
-      │  │     Condition:
+      │  │     Condition: 
       │  ├─ Inner Join est. ? rows
-      │  │  │     Condition:
+      │  │  │     Condition: 
       │  │  ├─ Inner Join est. ? rows
-      │  │  │  │     Condition:
+      │  │  │  │     Condition: 
       │  │  │  ├─ Inner Join est. ? rows
-      │  │  │  │  │     Condition:
+      │  │  │  │  │     Condition: 
       │  │  │  │  ├─ Inner Join est. ? rows
-      │  │  │  │  │  │     Condition:
+      │  │  │  │  │  │     Condition: 
       │  │  │  │  │  ├─ Inner Join est. ? rows
-      │  │  │  │  │  │  │     Condition:
+      │  │  │  │  │  │  │     Condition: 
       │  │  │  │  │  │  ├─ Inner Join est. ? rows
-      │  │  │  │  │  │  │  │     Condition:
+      │  │  │  │  │  │  │  │     Condition: 
       │  │  │  │  │  │  │  ├─ Inner Join est. ? rows
-      │  │  │  │  │  │  │  │  │     Condition:
+      │  │  │  │  │  │  │  │  │     Condition: 
       │  │  │  │  │  │  │  │  ├─ Inner Join est. ? rows
-      │  │  │  │  │  │  │  │  │  │     Condition:
+      │  │  │  │  │  │  │  │  │  │     Condition: 
       │  │  │  │  │  │  │  │  │  ├─ Inner Join est. ? rows
-      │  │  │  │  │  │  │  │  │  │  │     Condition:
+      │  │  │  │  │  │  │  │  │  │  │     Condition: 
       │  │  │  │  │  │  │  │  │  │  ├─ Inner Join est. ? rows
-      │  │  │  │  │  │  │  │  │  │  │  │     Condition:
+      │  │  │  │  │  │  │  │  │  │  │  │     Condition: 
       │  │  │  │  │  │  │  │  │  │  │  ├─ Inner Join est. ? rows
-      │  │  │  │  │  │  │  │  │  │  │  │  │     Condition:
+      │  │  │  │  │  │  │  │  │  │  │  │  │     Condition: 
       │  │  │  │  │  │  │  │  │  │  │  │  ├─ Inner Join est. ? rows
-      │  │  │  │  │  │  │  │  │  │  │  │  │  │     Condition:
+      │  │  │  │  │  │  │  │  │  │  │  │  │  │     Condition: 
       │  │  │  │  │  │  │  │  │  │  │  │  │  ├─ Inner Join est. ? rows
-      │  │  │  │  │  │  │  │  │  │  │  │  │  │  │     Condition:
+      │  │  │  │  │  │  │  │  │  │  │  │  │  │  │     Condition: 
       │  │  │  │  │  │  │  │  │  │  │  │  │  │  ├─ Filter est. 1 rows
       │  │  │  │  │  │  │  │  │  │  │  │  │  │  │  │     Condition: r_reason_sk = 1
       │  │  │  │  │  │  │  │  │  │  │  │  │  │  │  └─ TableScan tpcds.reason est. 65 rows
