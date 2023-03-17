@@ -67,7 +67,7 @@ CnchBGThreadPtr CnchBGThreadsMap::createThread(const StorageID & storage_id)
     }
     else if (type == CnchBGThreadType::Clustering)
     {
-        return std::make_shared<ReclusteringManagerThread>(global_context, storage_id);
+        return std::make_shared<ReclusteringManagerThread>(getContext(), storage_id);
     }
     else
     {

@@ -11,7 +11,7 @@ class StorageCnchMergeTree;
 /**
  * Manage recluster task for a table
  */
-class ReclusteringManagerThread: public ICnchBackgroundThread
+class ReclusteringManagerThread : public ICnchBGThread
 {
 public:
 
