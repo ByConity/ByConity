@@ -1,7 +1,7 @@
 # Foundation DB 安装指南
-在本指南中，我将在3台使用Debian OS的物理机上设置一个FoundationDB集群。 可以参考[Getting Started on Linux](https://apple.github.io/foundationdb/getting-started-linux.html) and [Building a Cluster](https://apple.github.io/foundationdb/building-cluster.html)两个官方指南。
+在本指南中，我将在3台使用Debian OS的物理机上设置一个FoundationDB集群。 可以参考[Getting Started on Linux](https://apple.github.io/foundationdb/getting-started-linux.html) 和 [Building a Cluster](https://apple.github.io/foundationdb/building-cluster.html)两个官方指南。
 
-首先，我们需要在[此处](https://github.com/apple/foundationdb/releases/)下载并安装的二进制文件。 我们需要下载 **server**, **monitor**，和**cli** binary，以及那些coressponding **sha256**校验和文件，本指南选择撰写时的最新版本**7.1.25**版。 接着创建一个文件夹并使用以下命令下载：
+首先，我们需要在[此处](https://github.com/apple/foundationdb/releases/)下载并安装的二进制文件。 我们需要下载 **server**, **monitor**，和**cli** 安装包，以及 **sha256**校验和文件，请保证安装包的版本都是匹配的。 接着创建一个文件夹并使用以下命令下载：
 
 ```Plaintext
 curl -L -o fdbserver.x86_64 https://github.com/apple/foundationdb/releases/download/7.1.25/fdbserver.x86_64
@@ -79,7 +79,7 @@ $ cat /root/user_xyz/fdb_runtime/config/fdb.cluster
 clusterdsc:test@10.25.160.40:4500
 ```
 
-我们将把 FDB 安装为 `systemd` 服务，因此在同一个文件夹中我们将创建`fdb.service`文件，其内容如下。
+我们将把 FDB 安装为 `systemd` 服务，因此在同一个文件夹中我们将创建`fdb.service`文件，其内容如下：
 
 ```Plaintext
 $ cat /root/user_xyz/fdb_runtime/config/fdb.service
@@ -110,7 +110,7 @@ cp fdb.service /etc/systemd/system/
 systemctl daemon-reload
 ```
 
-Enable并启动服务。
+启动服务。
 
 ```Plaintext
 systemctl enable fdb.service
