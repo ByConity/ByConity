@@ -34,20 +34,19 @@ You can check it status by
 ```
 systemctl status byconity-tso`
 ```
-The config for tso service is located in `/etc/byconity-server/byconity-tso.xml`, you can config as you like but the default are good enough , to start it immediately execute
+The config for tso service is located in `/etc/byconity-server/byconity-tso.xml`, you can config as you like but the default are good enough, to start it immediately execute
 ```
 systemctl start byconity-tso
 ```
 The next time you install this package again (for example, you want to upgrade), then you don't need to execute `start` command.
 
-With the same manner, in the machine you want to install ByConity server. Download the `byconity-server` package and install.
+In the same way, install ByConity resource manager, ByConity server, ByConity worker, ByConity worker write and ByConity daemon manager. The `byconity-resource-manager`, `byconity-daemon-manger` and `byconity-tso` are light weight service so it could be install in shared machine with other package. But for `byconity-server`, `byconity-worker`, `byconity-worker-write` we should install them in separate machines.
+
 ```
+sudo dpkg -i byconity-resource-manager_0.1.1.1_amd64.deb 
 sudo dpkg -i byconity-server_0.1.1.1_amd64.deb 
-```
-Next is install ByConity worker, Byconity worker write and Byconity daemon manager, download the corresponding packages and install.
-```
 sudo dpkg -i byconity-worker_0.1.1.1_amd64.deb 
 sudo dpkg -i byconity-worker-write_0.1.1.1_amd64.deb 
 sudo dpkg -i byconity-daemon-manager_0.1.1.1_amd64.deb 
 ```
-The byconity-daemon-manger and byconity-tso are light weight service so it could be install in shared machine with other package. But for `byconity-server`, `byconity-worker`, `byconity-worker-write` we should install them in separate machines.
+You can install more workers in the same way. Each worker has a settings call `WORKER_ID` in the config file `/etc/byconity-server/(byconity-worker|byconity-worker-write).xml` to config `worker id` for worker, `worker id` have to be unique between workers, the default value of `WORKER_ID` in config file is empty. In that case the `worker_id` is automatically assigned to be the IP address of the host machine.

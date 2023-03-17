@@ -26,7 +26,7 @@ if [ "$1" = configure ] || [ -n "$not_deb_os" ]; then
     if [ -x "/bin/systemctl" ] && [ -f /lib/systemd/system/byconity-daemon-manager.service ] && [ -d /run/systemd/system ]; then
         /bin/systemctl daemon-reload
         /bin/systemctl enable byconity-daemon-manager
-        echo "Edit ${CLICKHOUSE_CONFDIR}/byconity-daemon-manager.xml and ${CLICKHOUSE_CONFDIR}/cnch_config.xml as guideline in https://github.com/ByConity/ByConity/packages/ then the byconity daemon-manager service will be ready soon, check readiness with 'systemctl status byconity-daemon-manager'"
+        echo "If this is the first time you deploy resource manager, edit ${CLICKHOUSE_CONFDIR}/byconity-daemon-manager.xml as guideline in https://github.com/ByConity/ByConity/packages/ then execute `systemctl start byconity-daemon-manager`, check readiness with 'systemctl status byconity-daemon-manager'"
 
     fi
 fi

@@ -27,6 +27,8 @@ using CnchWorkerClientPoolPtr = std::shared_ptr<CnchWorkerClientPool>;
 using ResourceManagement::VirtualWarehouseType;
 using ResourceManagement::VirtualWarehouseTypes;
 
+/// The cache for worker clients.
+/// To get a specific VW (or workers of the VW), please use VirtualWarehousePool and VirtualWarehouseHandle.
 class CnchWorkerClientPools
 {
 public:
@@ -37,10 +39,6 @@ public:
 
     void addVirtualWarehouse(const String & name, const String & psm, VirtualWarehouseTypes vw_types);
     void removeVirtualWarehouse(const String & name);
-
-    CnchWorkerClientPoolPtr getPool(VirtualWarehouseType vw_type);
-    CnchWorkerClientPoolPtr getPool(const Strings & names, VirtualWarehouseTypes vw_types);
-    CnchWorkerClientPoolPtr getPool(const String & name);
 
     CnchWorkerClientPtr getWorker(const HostWithPorts & host_ports);
 

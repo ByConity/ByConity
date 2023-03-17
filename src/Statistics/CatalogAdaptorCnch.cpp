@@ -191,9 +191,7 @@ std::vector<StatsTableIdentifier> CatalogAdaptorCnch::getAllTablesID(const Strin
 
 std::optional<StatsTableIdentifier> CatalogAdaptorCnch::getTableIdByName(const String & database_name, const String & table_name) const
 {
-    auto & ins = DatabaseCatalog::instance();
-    auto db_storage = ins.getDatabase(database_name);
-    auto table = db_storage->tryGetTable(table_name, context);
+    auto table = DatabaseCatalog::instance().getDatabaseAndTable(StorageID(database_name, table_name), context).second;
     if (!table)
     {
         return std::nullopt;

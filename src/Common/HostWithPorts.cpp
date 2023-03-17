@@ -20,122 +20,15 @@
 #include <IO/WriteBufferFromString.h>
 #include <IO/Operators.h>
 #include <Common/Exception.h>
+#include <Interpreters/Context.h>
 #include <common/getFQDNOrHostName.h>
+#include <Interpreters/Context.h>
 
 namespace DB
 {
 namespace ErrorCodes
 {
     extern const int BAD_ARGUMENTS;
-}
-
-const std::string & getHostIPFromEnv()
-{
-    const auto get_host_ip_lambda = [] () -> std::string
-    {
-        {
-            const char * byted_ipv6 = getenv("BYTED_HOST_IPV6");
-            if (byted_ipv6 && byted_ipv6[0])
-                return byted_ipv6;
-        }
-
-        {
-            const char * my_ipv6 = getenv("MY_HOST_IPV6");
-            if (my_ipv6 && my_ipv6[0])
-                return my_ipv6;
-        }
-
-        {
-            const char * byted_ipv4 = getenv("BYTED_HOST_IP");
-            if (byted_ipv4 && byted_ipv4[0])
-                return byted_ipv4;
-        }
-
-        {
-            const char * my_ipv4 = getenv("MY_HOST_IP");
-            if (my_ipv4 && my_ipv4[0])
-                return my_ipv4;
-        }
-
-        return getIPOrFQDNOrHostName();
-    };
-
-    static std::string host_ip = get_host_ip_lambda();
-    return host_ip;
-}
-
-const char * getLoopbackIPFromEnv()
-{
-    const auto get_loopback_ip_lambda = [] () -> const char *
-    {
-        {
-            const char * byted_ipv6 = getenv("BYTED_HOST_IPV6");
-            if (byted_ipv6 && byted_ipv6[0])
-                return "::1";
-        }
-
-        {
-            const char * my_ipv6 = getenv("MY_HOST_IPV6");
-            if (my_ipv6 && my_ipv6[0])
-                return "::1";
-        }
-
-        {
-            const char * byted_ipv4 = getenv("BYTED_HOST_IP");
-            if (byted_ipv4 && byted_ipv4[0])
-                return "127.0.0.1";
-        }
-
-        {
-            const char * my_ipv4 = getenv("MY_HOST_IP");
-            if (my_ipv4 && my_ipv4[0])
-                return "127.0.0.1";
-        }
-
-        return "127.0.0.1";
-    };
-
-    static const char * loopback_ip = get_loopback_ip_lambda();
-    return loopback_ip;
-}
-
-std::string addBracketsIfIpv6(const std::string & host_name)
-{
-    std::string res;
-
-    if (host_name.find_first_of(':') != std::string::npos && !host_name.empty() && host_name.back() != ']')
-        res += '[' + host_name + ']';
-    else
-        res = host_name;
-    return res;
-}
-
-std::string createHostPortString(const std::string & host, uint16_t port)
-{
-    return createHostPortString(host, toString(port));
-}
-
-std::string createHostPortString(const std::string & host, const std::string & port)
-{
-    return addBracketsIfIpv6(host) + ':' + port;
-}
-
-std::string_view removeBracketsIfIpv6(const std::string & host_name)
-{
-    if (host_name.find_first_of(':') != std::string::npos &&
-        !host_name.empty() &&
-        host_name.back() == ']' &&
-        host_name.front() == '['
-    )
-        return std::string_view(host_name.data() + 1, host_name.size() - 2);
-    return std::string_view(host_name.c_str());
-}
-
-bool isSameHost(const std::string & lhs, const std::string & rhs)
-{
-    if (lhs == rhs)
-        return true;
-    return removeBracketsIfIpv6(lhs) == removeBracketsIfIpv6(rhs);
 }
 
 std::string HostWithPorts::toDebugString() const
@@ -177,6 +70,43 @@ std::ostream & operator<<(std::ostream & os, const HostWithPorts & host_ports)
 {
     os << host_ports.toDebugString();
     return os;
+}
+
+namespace
+{
+std::string getFromEnvOrConfig(ContextPtr context, const std::string & name)
+{
+    char * ret = std::getenv(name.c_str());
+    if (ret)
+        return ret;
+
+    return context->getConfigRef().getString(name, "");
+}
+} /// end namespace
+
+std::string getWorkerID(ContextPtr context)
+{
+    auto get_worker_id_lambda = [] (ContextPtr c) {
+        std::string worker_id = getFromEnvOrConfig(c, "WORKER_ID");
+        if (worker_id.empty())
+            worker_id = getHostIPFromEnv();
+        return worker_id;
+    };
+
+    static std::string worker_id = get_worker_id_lambda(context);
+    return worker_id;
+}
+
+std::string getWorkerGroupID(ContextPtr context)
+{
+    static std::string worker_group_id = getFromEnvOrConfig(context, "WORKER_GROUP_ID");
+    return worker_group_id;
+}
+
+std::string getVirtualWareHouseID(ContextPtr context)
+{
+    static std::string virtual_warehouse_id = getFromEnvOrConfig(context, "VIRTUAL_WAREHOUSE_ID");
+    return virtual_warehouse_id;
 }
 
 }

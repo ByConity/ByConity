@@ -74,7 +74,7 @@ Projection est. 100 rows
                   ├─ Projection est. ? rows
                   │  │     Expressions: [cs_call_center_sk, expr#sum(cr_return_amount), expr#sum(cs_ext_sales_price)], expr#'catalog channel':='catalog channel', expr#minus(profit, profit_loss):=`expr#sum(cs_net_profit)` - `expr#sum(cr_net_loss)`
                   │  └─ Inner Join est. ? rows
-                  │     │     Condition:
+                  │     │     Condition: 
                   │     ├─ MergingAggregated est. 42 rows
                   │     │  └─ Repartition Exchange est. 42 rows
                   │     │     │     Partition by: {cs_call_center_sk}

@@ -20,6 +20,7 @@
 #include <Storages/getStructureOfRemoteTable.h>
 #include <Storages/StorageDistributed.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/VirtualWarehousePool.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTIdentifier.h>
 #include <TableFunctions/TableFunctionFactory.h>
@@ -36,27 +37,13 @@ namespace ErrorCodes
 
 std::shared_ptr<Cluster> mockVWCluster(const Context & context, const String & vw_name)
 {
-    auto & worker_pools = context.getCnchWorkerClientPools();
-
-    CnchWorkerClientPoolPtr vw_client_pool = worker_pools.getPool(vw_name);
-    if (!vw_client_pool)
-        throw Exception("vw doesn't exist, vw name:" + vw_name, ErrorCodes::BAD_ARGUMENTS);
-
-    std::vector<std::shared_ptr<CnchWorkerClient>> worker_clients;
-    try
-    {
-        worker_clients = vw_client_pool->getAll();
-    }
-    catch(const Exception & e)
-    {
-        throw Exception("Get worker clients for vw " + vw_name + " failed. Got exception "
-             + e.displayText(), e.code());
-    }
+    auto vw_handle = context.getVirtualWarehousePool().get(vw_name);
+    const auto worker_clients = vw_handle->getAllWorkers();
 
     auto user_password = context.getCnchInterserverCredentials();
 
     std::vector<Cluster::Addresses> addresses;
-    for (auto & client : worker_clients)
+    for (const auto & client : worker_clients)
     {
         if (client)
         {

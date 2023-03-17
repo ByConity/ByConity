@@ -7,7 +7,7 @@ Projection est. 100 rows
       └─ Projection est. ? rows
          │     Expressions: [expr#sum(ss_ext_sales_price), expr#sum(ss_ext_sales_price)_1], expr#multiply(divide(CAST(promotions, 'decimal(15, 4)'), CAST(total, 'decimal(15, 4)')), 100):=(CAST(`expr#sum(ss_ext_sales_price)`, 'decimal(15, 4)') / CAST(`expr#sum(ss_ext_sales_price)_1`, 'decimal(15, 4)')) * 100
          └─ Inner Join est. ? rows
-            │     Condition:
+            │     Condition: 
             ├─ MergingAggregated est. ? rows
             │  └─ Gather Exchange est. ? rows
             │     └─ Aggregating est. ? rows
