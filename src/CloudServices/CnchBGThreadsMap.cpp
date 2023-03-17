@@ -67,8 +67,7 @@ CnchBGThreadPtr CnchBGThreadsMap::createThread(const StorageID & storage_id)
     }
     else if (type == CnchBGThreadType::Clustering)
     {
-        /// TODO support Reclustering ManagerThread
-        //return std::make_shared<ReclusteringManagerThread>(global_context, storage_id);
+        return std::make_shared<ReclusteringManagerThread>(global_context, storage_id);
     }
     else
     {
