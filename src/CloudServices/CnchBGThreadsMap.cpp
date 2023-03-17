@@ -22,6 +22,7 @@
 #include <Storages/Kafka/CnchKafkaConsumeManager.h>
 #include <CloudServices/CnchPartGCThread.h>
 #include <CloudServices/DedupWorkerManager.h>
+#include <CloudServices/ReclusteringManagerThread.h>
 
 #include <regex>
 
