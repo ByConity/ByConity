@@ -37,26 +37,26 @@ chmod ug+x fdbcli fdbmonitor fdbserver
 
 Next we will create some folder to store the config, data and log:
 ```
-mkdir -p /<your_root>/fdb_runtime/config
-mkdir -p /<your_root>/fdb_runtime/data
-mkdir -p /<your_root>/fdb_runtime/logs
+mkdir -p /<your_directory>/fdb_runtime/config
+mkdir -p /<your_directory>/fdb_runtime/data
+mkdir -p /<your_directory>/fdb_runtime/logs
 ```
-Then we create the `foundationdb.conf` config file in `/<your_root>/fdb_runtime/config/` with content like this
+Then we create the `foundationdb.conf` config file in `/<your_directory>/fdb_runtime/config/` with content like this
 
 ```
-$ cat /<your_root>/fdb_runtime/config/foundationdb.conf
+$ cat /<your_directory>/fdb_runtime/config/foundationdb.conf
 [fdbmonitor]
 user = root
 
 [general]
-cluster-file = /<your_root>/fdb_runtime/config/fdb.cluster
+cluster-file = /<your_directory>/fdb_runtime/config/fdb.cluster
 restart-delay = 60
 
 [fdbserver]
 
-command = /<your_root>/foundationdb/bin/fdbserver
-datadir = /<your_root>/fdb_runtime/data/$ID
-logdir = /<your_root>/fdb_runtime/logs/
+command = /<your_directory>/foundationdb/bin/fdbserver
+datadir = /<your_directory>/fdb_runtime/data/$ID
+logdir = /<your_directory>/fdb_runtime/logs/
 public-address = auto:$ID
 listen-address = public
 
@@ -73,13 +73,13 @@ class=stateless
 
 Then in the same directory create file `fdb.cluster` with content like this, change the ip to the ip of your machine
 ```
-$ cat /<your_root>/fdb_runtime/config/fdb.cluster
+$ cat /<your_directory>/fdb_runtime/config/fdb.cluster
 clusterdsc:test@<your_ip_address>:4500
 ```
 We will install FDB as a `systemd` service. So, in the same folder we will create file `fdb.service` with content like this
 
 ```
-$ cat /<your_root>/fdb_runtime/config/fdb.service
+$ cat /<your_directory>/fdb_runtime/config/fdb.service
 [Unit]
 Description=FoundationDB (KV storage for cnch metastore)
 
@@ -87,7 +87,7 @@ Description=FoundationDB (KV storage for cnch metastore)
 Restart=always
 RestartSec=30
 TimeoutStopSec=600
-ExecStart=/<your_root>/foundationdb/bin/fdbmonitor --conffile /<your_root>/fdb_runtime/config/foundationdb.conf --lockfile /<your_root>/fdb_runtime/fdbmonitor.pid
+ExecStart=/<your_directory>/foundationdb/bin/fdbmonitor --conffile /<your_directory>/fdb_runtime/config/foundationdb.conf --lockfile /<your_directory>/fdb_runtime/fdbmonitor.pid
 
 [Install]
 WantedBy=multi-user.target
