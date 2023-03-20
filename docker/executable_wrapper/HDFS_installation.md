@@ -18,8 +18,8 @@ $ cd hadoop-3.3.4
 Then, inside the directory, we edit file `etc/hadoop/hadoop-env.sh` to set a suitable env for it . I need to go uncomment and modify the below lines to set some variable. 
 ```
 export JAVA_HOME=/usr/lib/jvm/java-8-byteopenjdk-amd64
-export HADOOP_HOME=/<your_root>/hdfs/hadoop-3.3.4
-export HADOOP_LOG_DIR=/<your_root>/hdfs/logs
+export HADOOP_HOME=/<your_directory>/hdfs/hadoop-3.3.4
+export HADOOP_LOG_DIR=/<your_directory>/hdfs/logs
 ```
 
 Next edit the file `etc/hadoop/core-site.xml` with content like this. Note that the `value` tag will be the value of your name node address
@@ -44,7 +44,7 @@ $ cat /root/user_xyz/hdfs/datanodes_list.txt
 
 Then create a directory for storing namenode runtime data
 ```
-mkdir -p /<your_root>/hdfs/root_data_path_for_namenode
+mkdir -p /<your_directory>/hdfs/root_data_path_for_namenode
 ```
 
 Next edit file `etc/hadoop/hdfs-site.xml` with content like this
@@ -56,11 +56,11 @@ Next edit file `etc/hadoop/hdfs-site.xml` with content like this
         </property>
         <property>
                 <name>dfs.namenode.name.dir</name>
-                <value>file:///<your_root>/hdfs/root_data_path_for_namenode</value>
+                <value>file:///<your_directory>/hdfs/root_data_path_for_namenode</value>
         </property>
         <property>
                 <name>dfs.hosts</name>
-                <value>/<your_root>/hdfs/datanodes_list.txt</value>
+                <value>/<your_directory>/hdfs/datanodes_list.txt</value>
         </property>
 
 </configuration>
@@ -78,7 +78,7 @@ Next edit file `etc/hadoop/hdfs-site.xml` with content like this
 <configuration>
         <property>
                 <name>dfs.data.dir</name>
-                <value>file:///<your_root>/hdfs/root_data_path_for_datanode</value>
+                <value>file:///<your_directory>/hdfs/root_data_path_for_datanode</value>
         </property>
 </configuration>
 ```
