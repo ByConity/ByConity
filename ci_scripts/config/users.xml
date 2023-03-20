@@ -99,6 +99,14 @@
             <!-- User can create other users and grant rights to them. -->
             <!-- <access_management>1</access_management> -->
         </default>
+        <readonly>
+            <networks>
+                <ip>::/0</ip>
+            </networks>
+            <password></password>
+            <profile>readonly</profile>
+            <quota>default</quota>
+        </readonly>
         <server>
             <!-- Password could be specified in plaintext or in SHA256 (in hex format).
 
