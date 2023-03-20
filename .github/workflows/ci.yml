@@ -22,6 +22,9 @@ jobs:
           git -C "$GITHUB_WORKSPACE" submodule sync
           git -C "$GITHUB_WORKSPACE" submodule update --init --recursive
           ./build_bin.sh
+      - name: run unit tests
+        run: |
+          bash $GITHUB_WORKSPACE/unittest.sh
       - name: start fdb
         run: |
           echo $(pwd)
