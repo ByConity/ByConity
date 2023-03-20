@@ -8,9 +8,6 @@ build
 .docusaurus
 .cache-loader
 
-# Soft links during build
-i18n/zh-cn/docusaurus-plugin-content-blog/current
-
 # Misc
 .env.local
 .env.development.local
