@@ -1,7 +1,7 @@
 In this guideline, I will set up a Foundation DB cluster on 3 physical machines. They are all using debian OS. I refer to two official guidelines here [Getting Started on Linux](https://apple.github.io/foundationdb/getting-started-linux.html) and [Building a Cluster](https://apple.github.io/foundationdb/building-cluster.html). 
 
 Firstly, we need to download the binary for the installation in [here](https://github.com/apple/foundationdb/releases/). We need to download the __server__, __monitor__ and __cli__ binaries, and those corresponding __sha256__ checksum files. I will choose version __7.1.25__ as it is the latest at the time.\
-In your root directory, let's create a folder `foundationdb`.\
+In your directory, let's create a folder `foundationdb`.\
 Then, create a subfolder `bin` inside `foundationdb`. \
 In this `foundationdb/bin` folder, download with the following command: 
 
