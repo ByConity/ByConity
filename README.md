@@ -1,41 +1,20 @@
-# Website
+# byconity.github.io
 
-This website is built using [Docusaurus 2](https://docusaurus.io/), a modern static website generator.
+## Content Folders
 
-### Installation
+| Type | Language |                                                    Path                                                    |
+| :--: | :------: | :--------------------------------------------------------------------------------------------------------: |
+| Docs |    en    |                                              [docs/](./docs/)                                              |
+| Docs |  zh-cn   | [i18n/zh-cn/docusaurus-plugin-content-docs/current/](./i18n/zh-cn/docusaurus-plugin-content-docs/current/) |
+| Blog |    en    |                                              [blog/](./blog/)                                              |
+| Blog |  zh-cn   | [i18n/zh-cn/docusaurus-plugin-content-blog/current/](./i18n/zh-cn/docusaurus-plugin-content-blog/current/) |
 
-```
-$ yarn
-```
+## Editing Docs
 
-### Local Development
+- Learn the basics at https://docusaurus.io/docs/create-doc.
+- Docs front matters at https://docusaurus.io/docs/api/plugins/@docusaurus/plugin-content-docs#markdown-front-matter.
 
-```
-$ yarn start
-```
+## Editing Blog Posts
 
-This command starts a local development server and opens up a browser window. Most changes are reflected live without having to restart the server.
-
-### Build
-
-```
-$ yarn build
-```
-
-This command generates static content into the `build` directory and can be served using any static contents hosting service.
-
-### Deployment
-
-Using SSH:
-
-```
-$ USE_SSH=true yarn deploy
-```
-
-Not using SSH:
-
-```
-$ GIT_USER=<Your GitHub username> yarn deploy
-```
-
-If you are using GitHub pages for hosting, this command is a convenient way to build the website and push to the `gh-pages` branch.
+- Learn the basics at https://docusaurus.io/docs/blog.
+- Blog front matters at https://docusaurus.io/docs/api/plugins/@docusaurus/plugin-content-blog#markdown-front-matter
