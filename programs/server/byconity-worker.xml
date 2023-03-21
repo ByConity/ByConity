@@ -9,6 +9,9 @@
         <size>1000M</size>
         <count>10</count>
     </logger>
+    <WORKER_ID></WORKER_ID>
+    <WORKER_GROUP_ID>vw_default_A</WORKER_GROUP_ID>
+    <VIRTUAL_WAREHOUSE_ID>vw_default</VIRTUAL_WAREHOUSE_ID>
     <http_port>8123</http_port>
     <rpc_port>8124</rpc_port>
     <tcp_port>9010</tcp_port>

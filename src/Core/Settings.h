@@ -586,7 +586,7 @@ class IColumn;
     M(UInt64, part_cache_manager_thread_pool_size, 16, "Number of thread performing background parts info collection in PartCacheManager.", 0) \
     M(String, username_for_internal_communication, "server", "Username to be used by server for authentication on worker side.", 0) \
     M(UInt64, cnch_part_allocation_algorithm, 2, "Part allocation algorithm, 0: jump consistent hashing, 1: bounded hash ring consistent hashing, 2: strict ring consistent hashing.", 0) \
-    M(UInt64, cnch_max_cached_storage, 0, "Cnch storage cache size.", 0) \
+    M(UInt64, cnch_max_cached_storage, 2048, "Cnch storage cache size.", 0) \
     M(Bool, enable_multiple_tables_for_cnch_parts, 0, "Allow to query multiple tables for system.cnch_parts", 0) \
     M(Bool, enable_query_level_profiling, false, "Enable profiling at query and operator level", 0) \
     M(Bool, enable_kafka_log_profiling, false, "Enable query profiling for cnch_kafka_log table", 0) \
@@ -842,7 +842,7 @@ class IColumn;
     M(Bool, skip_table_definition_hash_check, false, "Whether skip table definition hash check when attach data parts.", 0)  \
     M(UInt64, cnch_part_attach_max_threads, 16, "Max threads to use when attach parts", 0) \
     M(UInt64, attach_failure_injection_knob, 0, "Attach failure injection knob, for test only", 0) \
-    M(Bool, async_post_commit, true, "Txn post commit asynchronously", 0) \
+    M(Bool, async_post_commit, false, "Txn post commit asynchronously", 0) \
 
 
 // End of FORMAT_FACTORY_SETTINGS

@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <mutex>
 #include <Databases/DatabaseCnch.h>
 
 #include <Catalog/Catalog.h>
@@ -121,6 +122,10 @@ void DatabaseCnch::dropTable(ContextPtr local_context, const String & table_name
     txn->commitV1();
     if (is_dictionary)
         local_context->getExternalDictionariesLoader().reloadConfig("CnchCatalogRepository");
+
+    std::lock_guard wr{cache_mutex};
+    if (cache.contains(table_name))
+        cache.erase(table_name);
 }
 
 void DatabaseCnch::drop(ContextPtr local_context)
@@ -181,6 +186,10 @@ void DatabaseCnch::detachTablePermanently(ContextPtr local_context, const String
 
     if (is_dictionary)
         local_context->getExternalDictionariesLoader().reloadConfig("CnchCatalogRepository");
+
+    std::lock_guard wr{cache_mutex};
+    if (cache.contains(table_name))
+        cache.erase(table_name);
 }
 
 ASTPtr DatabaseCnch::getCreateDatabaseQuery() const
@@ -202,9 +211,19 @@ StoragePtr DatabaseCnch::tryGetTable(const String & name, ContextPtr local_conte
 {
     try
     {
+        {
+            std::shared_lock rd{cache_mutex};
+            auto it = cache.find(name);
+            if (it != cache.end())
+                return it->second;
+        }
         auto res = tryGetTableImpl(name, local_context);
         if (res && !res->is_detached && !res->is_dropped)
+        {
+            std::lock_guard wr{cache_mutex};
+            cache.emplace(name, res);
             return res;
+        }
     }
     catch (Exception & e)
     {
@@ -351,7 +370,7 @@ void DatabaseCnch::renameTable(
     auto txn = local_context->getCurrentTransaction();
     if (to_database.isTableExist(to_table_name, local_context))
         throw Exception("Table " + to_database.getDatabaseName() + "." + to_table_name + " already exists.", ErrorCodes::TABLE_ALREADY_EXISTS);
-    StoragePtr from_table = tryGetTable(table_name, local_context);
+    StoragePtr from_table = tryGetTableImpl(table_name, local_context);
     if (!from_table)
         throw Exception("Table " + database_name + "." + table_name + " doesn't exist.", ErrorCodes::UNKNOWN_TABLE);
     std::vector<IntentLockPtr> locks;
@@ -375,6 +394,9 @@ void DatabaseCnch::renameTable(
     auto rename_table = txn->createAction<DDLRenameAction>(std::move(params));
     txn->appendAction(std::move(rename_table));
     /// Commit in InterpreterRenameQuery because we can rename multiple tables in a same transaction
+    std::lock_guard wr{cache_mutex};
+    if (cache.contains(table_name))
+        cache.erase(table_name);
 }
 
 }

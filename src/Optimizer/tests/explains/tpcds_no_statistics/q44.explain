@@ -24,7 +24,7 @@ Projection est. 100 rows
                │     │     │     └─ Window est. ? rows
                │     │     │        └─ Gather Exchange est. ? rows
                │     │     │           └─ Inner Join est. ? rows
-               │     │     │              │     Condition:
+               │     │     │              │     Condition: 
                │     │     │              │     Filter: `expr#avg(ss_net_profit)` > ('0.9' * `expr#avg(ss_net_profit)_1`)
                │     │     │              ├─ MergingAggregated est. ? rows
                │     │     │              │  └─ Repartition Exchange est. ? rows
@@ -59,7 +59,7 @@ Projection est. 100 rows
                │     │           └─ Window est. ? rows
                │     │              └─ Gather Exchange est. ? rows
                │     │                 └─ Inner Join est. ? rows
-               │     │                    │     Condition:
+               │     │                    │     Condition: 
                │     │                    │     Filter: `expr#avg(ss_net_profit)_2` > ('0.9' * `expr#avg(ss_net_profit)_3`)
                │     │                    ├─ MergingAggregated est. ? rows
                │     │                    │  └─ Repartition Exchange est. ? rows

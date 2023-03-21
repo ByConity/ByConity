@@ -103,11 +103,8 @@ void DedupWorkerManager::assignDeduperToWorker(StoragePtr & storage)
 
 void DedupWorkerManager::selectDedupWorker(StorageCnchMergeTree & cnch_table)
 {
-    if (!worker_pool)
-        worker_pool = getContext()->getCnchWorkerClientPools().getPool(
-            {cnch_table.getSettings()->cnch_vw_task, cnch_table.getSettings()->cnch_vw_write, cnch_table.getSettings()->cnch_vw_default},
-            {VirtualWarehouseType::Task, VirtualWarehouseType::Write, VirtualWarehouseType::Default});
-    worker_client = worker_pool->get();
+    auto vw_handle = getContext()->getVirtualWarehousePool().get(cnch_table.getSettings()->cnch_vw_write);
+    worker_client = vw_handle->getWorker();
 }
 
 void DedupWorkerManager::stopDeduperWorker()

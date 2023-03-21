@@ -286,7 +286,28 @@ HDFSBuilderPtr createHDFSBuilder(const Poco::URI & uri, const std::string hdfs_u
     return builder;
 }
 
-
+String getNameNodeUrl(const String & hdfs_url)
+{
+    const size_t pos = hdfs_url.find('/', hdfs_url.find("//") + 2);
+    String namenode_url = hdfs_url.substr(0, pos) + "/";
+    return namenode_url;
+}
+String getNameNodeCluster(const String & hdfs_url)
+{
+    auto pos1 = hdfs_url.find("//") + 2;
+    auto pos2 = hdfs_url.find('/', pos1);
+    return hdfs_url.substr(pos1, pos2 - pos1);
+}
+HDFSConnectionParams hdfsParamsFromUrl(const Poco::URI & uri)
+{
+    /// ignore password
+    String user_info = uri.getUserInfo();
+    user_info = user_info.substr(0, user_info.find(':'));
+    /// default user clickhouse
+    if (user_info.empty())
+        user_info = "clickhouse";
+    return HDFSConnectionParams(HDFSConnectionParams::HDFSConnectionType::CONN_HDFS, user_info, {{uri.getHost(), uri.getPort()}});
+}
 }
 
 #endif

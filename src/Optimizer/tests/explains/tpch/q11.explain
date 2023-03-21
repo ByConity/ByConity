@@ -6,7 +6,7 @@ Projection est. ? rows
       └─ Sorting est. ? rows
          │     Order by: {expr#sum(multiply(ps_supplycost, ps_availqty)) desc nulls_last}
          └─ Inner Join est. ? rows
-            │     Condition:
+            │     Condition: 
             │     Filter: `expr#sum(multiply(ps_supplycost, ps_availqty))` > `expr#multiply(sum(multiply(ps_supplycost, ps_availqty)), CAST('0.0001', 'Decimal(18, 4)'))`
             ├─ MergingAggregated est. 32000 rows
             │  └─ Repartition Exchange est. 32000 rows

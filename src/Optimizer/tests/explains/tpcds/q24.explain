@@ -6,7 +6,7 @@ Projection est. ? rows
       └─ Sorting est. ? rows
          │     Order by: {c_last_name asc, c_first_name asc, s_store_name asc}
          └─ Inner Join est. ? rows
-            │     Condition:
+            │     Condition: 
             │     Filter: `expr#sum(netpaid)` > `expr#multiply(CAST('0.05', 'Decimal(18, 2)'), avg(netpaid))`
             ├─ MergingAggregated est. 12730549 rows
             │  └─ Repartition Exchange est. 12730549 rows
@@ -147,7 +147,7 @@ Projection est. ? rows
       └─ Sorting est. ? rows
          │     Order by: {c_last_name_2 asc, c_first_name_2 asc, s_store_name_2 asc}
          └─ Inner Join est. ? rows
-            │     Condition:
+            │     Condition: 
             │     Filter: `expr#sum(netpaid)_1` > `expr#multiply(CAST('0.05', 'Decimal(18, 2)'), avg(netpaid))_1`
             ├─ MergingAggregated est. 12778683 rows
             │  └─ Repartition Exchange est. 12778683 rows

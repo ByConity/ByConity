@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <mutex>
 #include <Common/Exception.h>
 #include <Common/escapeForFileName.h>
 #include <Common/quoteString.h>
@@ -23,6 +24,7 @@
 #include <Storages/IStorage.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Common/ErrorCodes.h>
+#include "Storages/IStorage_fwd.h"
 #include <Interpreters/Context_fwd.h>
 
 namespace DB
@@ -84,6 +86,10 @@ protected:
 
 private:
     const UUID db_uuid;
+    /// local storage cache, mapping from name->storage, mainly for select query
+    /// Work under an assumptions that database was re-created for each query
+    mutable std::unordered_map<String, StoragePtr> cache;
+    mutable std::shared_mutex cache_mutex;
     Poco::Logger * log;
 };
 
