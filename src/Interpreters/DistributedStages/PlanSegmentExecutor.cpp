@@ -599,6 +599,9 @@ Processors PlanSegmentExecutor::buildRepartitionExchangeSink(
 
 Processors PlanSegmentExecutor::buildBroadcastExchangeSink(BroadcastSenderPtrs & senders, size_t output_index, const Block &header, OutputPortRawPtrs &ports)
 {
+    /// For broadcast exchange, we all 1:1 remote sender to one 1:N remote sender and can avoid duplicated serialization
+    ExchangeUtils::mergeSenders(senders);
+    LOG_DEBUG(logger, "After merge, broadcast sink size {}", senders.size());
     Processors new_processors;
 
     for (auto &port : ports)
