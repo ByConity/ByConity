@@ -113,7 +113,7 @@ static std::shared_ptr<DB::Catalog::IMetaStore> metastore_ptr = nullptr;
     DB::Catalog::BatchCommitResponse delete_response;
     for (auto & delete_key : keys)
     {
-        delete_request.AddDelete(delete_key);
+        delete_request.AddDelete(DB::Catalog::SingleDeleteRequest(delete_key));
     }
     metastore_ptr->batchWrite(delete_request, delete_response);
 }

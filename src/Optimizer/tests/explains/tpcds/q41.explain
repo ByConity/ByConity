@@ -13,7 +13,7 @@ Projection est. 100 rows
                   └─ Aggregating est. ? rows
                      │     Group by: {i_product_name}
                      └─ Inner Join est. ? rows
-                        │     Condition:
+                        │     Condition: 
                         │     Filter: coalesce(`expr#count()`, countIf) > 0
                         ├─ Left Join est. 3636 rows
                         │  │     Condition: i_manufact == i_manufact_1

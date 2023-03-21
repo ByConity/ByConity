@@ -106,8 +106,6 @@ public:
         const HDFSConnectionParams & hdfs_paras,
         const std::set<Int64> & required_bucket_numbers = {});
 
-    Strings getPartsNameInPartition(const StoragePtr & storage, const String & location);
-
     //schema check
     void check(const ColumnsDescription & columns, const String & db_name, const String & table_name);
 

@@ -76,7 +76,7 @@ Projection est. 100 rows
                │     └─ Aggregating est. ? rows
                │        │     Group by: {c_customer_sk}
                │        └─ Inner Join est. ? rows
-               │           │     Condition:
+               │           │     Condition: 
                │           │     Filter: `expr#sum(multiply(ss_quantity, ss_sales_price))` > ('0.500000' * `expr#max(csales)`)
                │           ├─ MergingAggregated est. ? rows
                │           │  └─ Repartition Exchange est. ? rows
@@ -204,7 +204,7 @@ Projection est. 100 rows
                      └─ Aggregating est. ? rows
                         │     Group by: {c_customer_sk_2}
                         └─ Inner Join est. ? rows
-                           │     Condition:
+                           │     Condition: 
                            │     Filter: `expr#sum(multiply(ss_quantity, ss_sales_price))_2` > ('0.500000' * `expr#max(csales)_1`)
                            ├─ MergingAggregated est. ? rows
                            │  └─ Repartition Exchange est. ? rows
@@ -358,7 +358,7 @@ Projection est. 100 rows
                │              └─ Aggregating est. ? rows
                │                 │     Group by: {c_customer_sk_5}
                │                 └─ Inner Join est. ? rows
-               │                    │     Condition:
+               │                    │     Condition: 
                │                    │     Filter: `expr#sum(multiply(ss_quantity, ss_sales_price))_4` > ('0.500000' * `expr#max(csales)_2`)
                │                    ├─ MergingAggregated est. ? rows
                │                    │  └─ Repartition Exchange est. ? rows
@@ -502,7 +502,7 @@ Projection est. 100 rows
                               └─ Aggregating est. ? rows
                                  │     Group by: {c_customer_sk_8}
                                  └─ Inner Join est. ? rows
-                                    │     Condition:
+                                    │     Condition: 
                                     │     Filter: `expr#sum(multiply(ss_quantity, ss_sales_price))_6` > ('0.500000' * `expr#max(csales)_3`)
                                     ├─ MergingAggregated est. ? rows
                                     │  └─ Repartition Exchange est. ? rows
