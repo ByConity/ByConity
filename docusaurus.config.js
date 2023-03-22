@@ -69,6 +69,7 @@ const config = {
       image: "img/docusaurus-social-card.jpg",
       navbar: {
         title: "ByConity",
+        hideOnScroll: true,
         logo: {
           alt: "ByConity Logo",
           src: "img/logo.png",
@@ -96,6 +97,10 @@ const config = {
       },
       footer: {
         style: "dark",
+        logo: {
+          alt: "ByConity",
+          src: "img/footer-logo.svg",
+        },
         links: [
           {
             title: "Docs",
@@ -110,17 +115,29 @@ const config = {
             title: "Community",
             items: [
               {
-                label: "Stack Overflow",
-                href: "https://stackoverflow.com/questions/tagged/docusaurus",
+                label: "Community",
+                href: "/community",
               },
               {
-                label: "Discord",
-                href: "https://discordapp.com/invite/docusaurus",
+                label: "Users",
+                href: "/users",
               },
               {
-                label: "Twitter",
-                href: "https://twitter.com/docusaurus",
+                label: "Bilibili",
+                href: "https://space.bilibili.com/2065226922?spm_id_from=333.1007.0.0",
               },
+              // {
+              //   label: "Twitter",
+              //   href: "",
+              // },
+              // {
+              //   label: "Slack",
+              //   href: "",
+              // },
+              // {
+              //   label: "Meetup",
+              //   href: "",
+              // },
             ],
           },
           {

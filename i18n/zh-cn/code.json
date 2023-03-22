@@ -323,5 +323,23 @@
   },
   "tagline": {
     "message": "云原生大数据分析引擎"
+  },
+  "homePage.communitySection.github.title": {
+    "message": "Github"
+  },
+  "homePage.communitySection.wechat.title": {
+    "message": "Wechat"
+  },
+  "homePage.communitySection.bilibili.title": {
+    "message": "Bilibili"
+  },
+  "homePage.communitySection.twitter.title": {
+    "message": "Twitter"
+  },
+  "homePage.communitySection.slack.title": {
+    "message": "Slack"
+  },
+  "homePage.communitySection.meetup.title": {
+    "message": "Meetup"
   }
 }

@@ -1,0 +1,44 @@
+.container {
+  padding: 80px;
+}
+
+.content {
+  max-width: 1144px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: center;
+  gap: 80px;
+}
+
+.descriptionColumn {
+  flex: 1;
+}
+
+.imageColumn {
+  flex: 1;
+}
+
+.header {
+  font-size: 62px;
+  font-weight: normal;
+  margin-bottom: 48px;
+}
+
+.introductionText {
+  font-size: 32px;
+  line-height: 56px;
+}
+
+@media (max-width: 1280px) {
+  .content {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 425px) {
+  .container {
+    padding: 80px 20px;
+    text-align: center;
+    min-height: 600px;
+  }
+}

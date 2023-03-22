@@ -286,13 +286,13 @@
     "message": "Let's Get Started!"
   },
   "homePage.getStartedSection.readDocs.title": {
-    "message": "Read the Documentations!"
+    "message": "Read the Documentations"
   },
   "getStarted": {
     "message": "Get Started"
   },
   "homePage.getStartedSection.contribute.title": {
-    "message": "Start Contributing!"
+    "message": "Start Contributing"
   },
   "homePage.introductionSection.title": {
     "message": "What is ByConity?"
@@ -322,6 +322,24 @@
     "message": "Key Features"
   },
   "tagline": {
-    "message": "Distributed Cloud-native SQL Data Warehouse Engine"
+    "message": "Cloud native big data analysis engine"
+  },
+  "homePage.communitySection.github.title": {
+    "message": "Github"
+  },
+  "homePage.communitySection.wechat.title": {
+    "message": "Wechat"
+  },
+  "homePage.communitySection.bilibili.title": {
+    "message": "Bilibili"
+  },
+  "homePage.communitySection.twitter.title": {
+    "message": "Twitter"
+  },
+  "homePage.communitySection.slack.title": {
+    "message": "Slack"
+  },
+  "homePage.communitySection.meetup.title": {
+    "message": "Meetup"
   }
 }

@@ -1,68 +1,95 @@
 import React from "react";
 import Translate from "@docusaurus/Translate";
-import Section from "@site/src/components/Section";
-import { RxOpenInNewWindow } from "react-icons/rx";
 
-import bilibiliLogoPath from "./bilibili-logo.png";
-import githubLogoPath from "./github-logo.png";
-import meetupLogoPath from "./meetup-logo.png";
-import slackLogoPath from "./slack-logo.png";
-import twitterLogoPath from "./twitter-logo.png";
-import wechatLogoPath from "./wechat-logo.png";
+import BilibiliLogo from "./bilibili-logo.svg";
+import GithubLogo from "./github-logo.svg";
+import MeetupLogo from "./meetup-logo.svg";
+import SlackLogo from "./slack-logo.svg";
+import TwitterLogo from "./twitter-logo.svg";
+import WechatLogo from "./wechat-logo.svg";
 import wechatQrPath from "./wechat-qr.jpeg";
 
 import styles from "./CommunitySection.module.scss";
+import clsx from "clsx";
 
 type LogoDisplayProps = {
-  imageSrc: string;
+  image: React.ReactNode;
+  title: React.ReactNode;
   externalLink?: string;
   hoverImageSrc?: string;
 };
 
 function LogoDisplay(props: LogoDisplayProps) {
-  const { imageSrc, externalLink, hoverImageSrc } = props;
+  const { image, externalLink, title, hoverImageSrc } = props;
 
   return (
-    <a href={externalLink} target="_blank" className={styles.logoDisplayLink}>
+    <a
+      href={externalLink}
+      target="_blank"
+      className={clsx(styles.logoDisplayLink, {
+        [styles.disabled]: !externalLink && !hoverImageSrc,
+      })}
+    >
       <div className={styles.logoDisplay}>
-        <div className={styles.imageContainer}>
-          <img src={imageSrc} />
-        </div>
-        <div className={styles.hoverImageContainer}>
-          {hoverImageSrc ? (
+        <div className={styles.imageContainer}>{image}</div>
+
+        {hoverImageSrc && (
+          <div className={styles.hoverImageContainer}>
             <img src={hoverImageSrc} />
-          ) : (
-            <RxOpenInNewWindow size="30%" />
-          )}
-        </div>
+          </div>
+        )}
       </div>
+
+      <div className={styles.logoTitle}>{title}</div>
     </a>
   );
 }
 
 function CommunitySection() {
   return (
-    <Section title={<Translate id="homePage.communitySection.title" />}>
-      <div className={styles.logoGrid}>
-        <LogoDisplay
-          imageSrc={githubLogoPath}
-          externalLink="https://github.com/byconity"
-        />
+    <div className={styles.container}>
+      <div className={styles.content}>
+        <h2 className={styles.header}>
+          <Translate id="homePage.communitySection.title" />
+        </h2>
 
-        <LogoDisplay imageSrc={wechatLogoPath} hoverImageSrc={wechatQrPath} />
+        <div className={styles.logoGrid}>
+          <LogoDisplay
+            image={<GithubLogo />}
+            externalLink="https://github.com/byconity"
+            title={<Translate id="homePage.communitySection.github.title" />}
+          />
 
-        <LogoDisplay
-          imageSrc={bilibiliLogoPath}
-          externalLink="https://space.bilibili.com/2065226922?spm_id_from=333.1007.0.0"
-        />
+          <LogoDisplay
+            image={<WechatLogo />}
+            externalLink="https://weixin.qq.com/r/FxP-51HEvQzCrRWE90YF"
+            hoverImageSrc={wechatQrPath}
+            title={<Translate id="homePage.communitySection.wechat.title" />}
+          />
 
-        <LogoDisplay imageSrc={twitterLogoPath} />
+          <LogoDisplay
+            image={<BilibiliLogo />}
+            externalLink="https://space.bilibili.com/2065226922?spm_id_from=333.1007.0.0"
+            title={<Translate id="homePage.communitySection.bilibili.title" />}
+          />
 
-        <LogoDisplay imageSrc={slackLogoPath} />
+          <LogoDisplay
+            image={<TwitterLogo />}
+            title={<Translate id="homePage.communitySection.twitter.title" />}
+          />
 
-        <LogoDisplay imageSrc={meetupLogoPath} />
+          <LogoDisplay
+            image={<SlackLogo />}
+            title={<Translate id="homePage.communitySection.slack.title" />}
+          />
+
+          <LogoDisplay
+            image={<MeetupLogo />}
+            title={<Translate id="homePage.communitySection.meetup.title" />}
+          />
+        </div>
       </div>
-    </Section>
+    </div>
   );
 }
 

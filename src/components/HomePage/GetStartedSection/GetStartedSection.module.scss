@@ -1,0 +1,47 @@
+.container {
+  background-color: #232f47;
+  color: #fff;
+  padding-top: 80px;
+  padding-bottom: 80px;
+}
+
+.content {
+  max-width: 1144px;
+  margin: 0 auto;
+}
+
+.header {
+  font-size: 52px;
+  margin-bottom: 80px;
+  text-align: center;
+}
+
+.buttons {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 34px;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+  border: 2px solid #9ea9bf;
+  color: #fff;
+  font-size: 24px;
+  padding: 32px;
+  border-radius: 8px;
+  min-width: 400px;
+
+  &:hover {
+    color: var(--ifm-font-color-base);
+    text-decoration: none;
+    background-color: #f6f9fb;
+  }
+
+  &:active {
+    color: var(--ifm-font-color-base);
+    background-color: #fff;
+  }
+}

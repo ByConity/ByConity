@@ -1,41 +1,29 @@
 import React from "react";
 import Link from "@docusaurus/Link";
 import Translate from "@docusaurus/Translate";
-import { FaGithub } from "react-icons/fa";
 import useDocusaurusContext from "@docusaurus/useDocusaurusContext";
-import clsx from "clsx";
 
-import styles from "./HeroBannerSection.module.css";
+import styles from "./HeroBannerSection.module.scss";
 
 function HeroBannerSection() {
   const { siteConfig } = useDocusaurusContext();
   const { title, tagline } = siteConfig;
 
   return (
-    <header className={clsx("hero hero--primary", styles.hero)}>
-      <div className={clsx("container", styles.container)}>
-        <h1 className="hero__title">{title}</h1>
+    <header className={styles.container}>
+      <div className={styles.content}>
+        <h1 className={styles.title}>{title}</h1>
 
-        <p className="hero__subtitle">
+        <div className={styles.tagLine}>
           <Translate id="tagline" />
-        </p>
+        </div>
 
-        <div className={styles.buttons}>
+        <div>
           <Link
-            className="button button--success button--lg"
+            className={styles.getStartedButton}
             to="/docs/ByConity简介/主要原理概念"
           >
             <Translate id="getStarted" />
-          </Link>
-          <Link
-            className={clsx(
-              "button button--secondary button--lg",
-              styles.githubButton
-            )}
-            href="https://github.com/ByConity/ByConity"
-          >
-            <FaGithub />
-            <span> Github</span>
           </Link>
         </div>
       </div>

@@ -13,15 +13,77 @@
   --ifm-color-primary-light: #0f4eff;
   --ifm-color-primary-lighter: #1b57ff;
   --ifm-color-primary-lightest: #4072ff;
+
+  --ifm-color-content: #232f47;
 }
 
-/* For readability concerns, you should choose a lighter palette in dark mode. */
-[data-theme="dark"] {
-  --ifm-color-primary: #40e4ff;
-  --ifm-color-primary-dark: #20dfff;
-  --ifm-color-primary-darker: #10ddff;
-  --ifm-color-primary-darkest: #00c0df;
-  --ifm-color-primary-light: #60e9ff;
-  --ifm-color-primary-lighter: #70ebff;
-  --ifm-color-primary-lightest: #a0f2ff;
+/* Overriding the defaults */
+.navbar {
+  height: 80px;
+}
+
+.navbar__inner {
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+.navbar__item {
+  font-size: 20px;
+  padding-left: 22px;
+  padding-right: 22px;
+}
+
+.navbar__brand {
+  font-size: 24px;
+}
+
+.navbar__brand + .navbar__item {
+  margin-left: auto;
+}
+
+.navbar .dropdown__link {
+  font-size: 20px;
+}
+
+.footer--dark {
+  --ifm-footer-background-color: #000;
+  --ifm-footer-link-color: #adb0b7;
+  padding-top: 80px;
+}
+
+.footer__logo {
+  margin-top: unset;
+}
+
+.footer__title {
+  font-size: 24px;
+}
+
+.footer__item {
+  font-size: 20px;
+}
+
+.footer__copyright {
+  font-size: 18px;
+  margin-top: 40px;
+}
+
+@media (min-width: 997px) {
+  .navbar__items.navbar__items--right::before {
+    content: "";
+    border-right: 1px solid #d9d9d9;
+    height: 12px;
+    margin-left: 10px;
+    margin-right: 10px;
+  }
+}
+
+@media (max-width: 996px) {
+  .footer {
+    text-align: center;
+  }
+
+  .footer__logo {
+    margin-bottom: 32px;
+  }
 }

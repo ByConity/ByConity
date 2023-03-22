@@ -1,6 +1,21 @@
+.container {
+  padding: 80px;
+}
+
+.content {
+  max-width: 1144px;
+  margin: 0 auto;
+}
+
+.header {
+  font-size: 52px;
+  margin-bottom: 80px;
+  text-align: center;
+}
+
 .logoGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
   justify-items: center;
   align-items: center;
   gap: 32px;
@@ -9,6 +24,33 @@
 .logoDisplayLink {
   display: block;
   width: 100%;
+  color: inherit;
+
+  &.disabled,
+  &.disabled:hover {
+    color: inherit;
+    text-decoration: none;
+    opacity: 0.5;
+  }
+
+  &:not(.disabled):hover {
+    color: inherit;
+    text-decoration: none;
+    font-weight: bold;
+  }
+
+  &:not(.disabled):hover .imageContainer {
+    transform: scale(1.2);
+  }
+
+  &:not(.disabled):hover .hoverImageContainer {
+    top: 0;
+  }
+
+  .logoTitle {
+    text-align: center;
+    font-size: 20px;
+  }
 }
 
 .logoDisplay {
@@ -17,26 +59,28 @@
   align-items: center;
   position: relative;
   overflow: hidden;
-  padding: 48px;
+  padding-top: 10px;
+  padding-bottom: 10px;
 
   .imageContainer {
-    height: 96px;
-    width: 96px;
+    transition: transform 0.25s ease-in-out;
   }
-
   .hoverImageContainer {
     display: flex;
     justify-content: center;
     align-items: center;
     position: absolute;
     top: 100%;
-    height: 192px;
-    width: 192px;
+    height: 100px;
+    width: 100px;
     background-color: #ffffffdd;
     transition: all 0.3s ease-in-out;
   }
+}
 
-  &:hover .hoverImageContainer {
-    top: 0;
+@media (max-width: 425px) {
+  .container {
+    padding: 80px 20px;
+    text-align: center;
   }
 }
