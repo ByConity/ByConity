@@ -35,18 +35,31 @@ enum CatalogCode : int
     CAS_FAILED = -10003,
 };
 
-struct SinglePutRequest
+enum RequestType : int
 {
-    SinglePutRequest(const std::string & key_, const std::string & value_, bool if_not_exists_ = false)
+    PUT = 0,
+    DELETE = 1,
+};
+
+template <RequestType T>
+struct SingleRequest
+{
+    explicit SingleRequest(const std::string & key_)
+        : key(key_)
+    {
+    }
+
+    explicit SingleRequest(const std::string & key_, const std::string & value_, bool if_not_exists_ = false)
         : key(key_), value(value_), if_not_exists(if_not_exists_)
     {
     }
-    SinglePutRequest(const std::string & key_, const std::string & value_, const std::string & expected_)
+    explicit SingleRequest(const std::string & key_, const std::string & value_, const std::string & expected_)
         : key(key_), value(value_)
     {
         if (!expected_.empty())
             expected_value = expected_;
     }
+    RequestType type;
     std::string key;
     std::string value;
     bool if_not_exists = false;
@@ -55,20 +68,24 @@ struct SinglePutRequest
     std::function<void(int, const std::string &)> callback;
 };
 
+using SinglePutRequest = SingleRequest<RequestType::PUT> ;
+using SingleDeleteRequest = SingleRequest<RequestType::DELETE>;
+
 
 struct BatchCommitRequest
 {
-    BatchCommitRequest(const bool with_cas_ = true, const bool allow_cas_fail_ = false)
+    explicit BatchCommitRequest(const bool with_cas_ = true, const bool allow_cas_fail_ = false)
         : with_cas(with_cas_), allow_cas_fail(allow_cas_fail_)
     {
     }
+    
     void AddPut(const SinglePutRequest & put) { puts.emplace_back(put); }
-    void AddDelete(const std::string & del) { deletes.emplace_back(del); }
+    void AddDelete(const SingleDeleteRequest & del) { deletes.emplace_back(del); }
     void SetTimeout(uint32_t time_out) { commit_timeout_ms = time_out; }
     bool isEmpty() { return puts.empty() && deletes.empty(); }
 
     std::vector<SinglePutRequest> puts;
-    std::vector<std::string> deletes;
+    std::vector<SingleDeleteRequest> deletes;
     bool with_cas = true;
     bool allow_cas_fail = true;
     uint32_t commit_timeout_ms = 0;

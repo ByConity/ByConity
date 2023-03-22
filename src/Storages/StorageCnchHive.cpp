@@ -39,11 +39,15 @@
 #include <QueryPlan/BuildQueryPipelineSettings.h>
 #include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <QueryPlan/ReadFromPreparedSource.h>
+#include <Storages/HDFS/HDFSCommon.h>
 #include <Storages/Hive/HiveBucketFilter.h>
 #include <Storages/Hive/HiveWhereOptimizer.h>
 #include <Storages/IStorage.h>
 #include <Storages/StorageCnchHive.h>
 #include <Storages/StorageInMemoryMetadata.h>
+#include <Disks/HDFS/DiskByteHDFS.h>
+#include <Disks/SingleDiskVolume.h>
+
 namespace DB
 {
 namespace ErrorCodes
@@ -223,14 +227,8 @@ void StorageCnchHive::setProperties()
 
 void StorageCnchHive::checkStorageFormat()
 {
-    if (table == nullptr)
-    {
-        auto hms_client = HiveMetastoreClientFactory::instance().getOrCreate(remote_psm, settings);
-        table = std::make_shared<Apache::Hadoop::Hive::Table>();
-        hms_client->getTable(*table, remote_database, remote_table);
-    }
-
-    const String format = (*table).sd.outputFormat;
+    auto table = getHiveTable();
+    const String format = table->sd.outputFormat;
     if (format.find("parquet") == String::npos)
         throw Exception("CnchHive only support parquet format. Current format is " + format + " .", ErrorCodes::BAD_ARGUMENTS);
 }
@@ -242,14 +240,9 @@ bool StorageCnchHive::isBucketTable() const
 
 void StorageCnchHive::checkSortByKey()
 {
-    if (table == nullptr)
-    {
-        auto hms_client = HiveMetastoreClientFactory::instance().getOrCreate(remote_psm, settings);
-        table = std::make_shared<Apache::Hadoop::Hive::Table>();
-        hms_client->getTable(*table, remote_database, remote_table);
-    }
+    auto table = getHiveTable();
 
-    auto sortcols = (*table).sd.sortCols;
+    auto sortcols = table->sd.sortCols;
     auto sorting_key_expr_list_local = extractKeyExpressionList(order_by_ast);
     if (sorting_key_expr_list_local->children.size() != sortcols.size())
         throw Exception("CnchHive sort cols doesn't match .", ErrorCodes::BAD_ARGUMENTS);
@@ -282,14 +275,9 @@ void StorageCnchHive::checkSortByKey()
 
 void StorageCnchHive::checkPartitionByKey()
 {
-    if (table == nullptr)
-    {
-        auto hms_client = HiveMetastoreClientFactory::instance().getOrCreate(remote_psm, settings);
-        table = std::make_shared<Apache::Hadoop::Hive::Table>();
-        hms_client->getTable(*table, remote_database, remote_table);
-    }
+    auto table = getHiveTable();
 
-    std::vector<FieldSchema> partitionkeys = (*table).partitionKeys;
+    std::vector<FieldSchema> partitionkeys = table->partitionKeys;
     auto partition_key_expr_list_local = extractKeyExpressionList(partition_by_ast);
     if (partition_key_expr_list_local->children.size() != partitionkeys.size())
         throw Exception("CnchHive partition Key doesn't match .", ErrorCodes::BAD_ARGUMENTS);
@@ -319,14 +307,8 @@ void StorageCnchHive::checkPartitionByKey()
 
 void StorageCnchHive::checkClusterByKey()
 {
-    if (table == nullptr)
-    {
-        auto hms_client = HiveMetastoreClientFactory::instance().getOrCreate(remote_psm, settings);
-        table = std::make_shared<Apache::Hadoop::Hive::Table>();
-        hms_client->getTable(*table, remote_database, remote_table);
-    }
-
-    const auto & hivebucket_cols = (*table).sd.bucketCols;
+    auto table = getHiveTable();
+    const auto & hivebucket_cols = table->sd.bucketCols;
     LOG_TRACE(log, " hivebucket_cols size = {}", hivebucket_cols.size());
 
     for (const auto & col : hivebucket_cols)
@@ -565,36 +547,44 @@ std::set<Int64> StorageCnchHive::getSelectedBucketNumbers(const SelectQueryInfo 
 
 String StorageCnchHive::getFullTablePath()
 {
-    std::shared_ptr<Apache::Hadoop::Hive::Table> temp_table = nullptr;
-    {
-        std::lock_guard lock(mutex);
-        temp_table = table;
-    }
+    auto table = getHiveTable();
+    return Poco::URI(table->sd.location).getPath();
+}
 
-    if (temp_table == nullptr)
-    {
-        LOG_TRACE(log, " get table path, remote_psm: {}", remote_psm);
+StorageCnchHive::HiveTablePtr StorageCnchHive::getHiveTable() const
+{
+    std::call_once(init_table, [this] {
         auto hms_client = HiveMetastoreClientFactory::instance().getOrCreate(remote_psm, settings);
-        auto local_temp_table = std::make_shared<Apache::Hadoop::Hive::Table>();
-        hms_client->getTable(*local_temp_table, remote_database, remote_table);
+        auto temp = std::make_shared<Apache::Hadoop::Hive::Table>();
+        hms_client->getTable(*temp, remote_database, remote_table);
 
-        std::lock_guard lock(mutex);
-        if (table == nullptr)
-            table = local_temp_table;
-    }
+        Poco::URI uri(temp->sd.location);
+        LOG_TRACE(log, "table location: {}", temp->sd.location);
 
-    Poco::URI uri((*table).sd.location);
-    LOG_TRACE(log, "table location: {}", (*table).sd.location);
+        if (uri.getScheme() != "hdfs")
+        {
+            throw Exception("remote hive location path only support hdfs now,  Currently hdfs schema is " + uri.getScheme(), ErrorCodes::NOT_IMPLEMENTED);
+        }
 
-    if (uri.getScheme() == "hdfs")
-    {
-        return uri.getPath();
-    }
-    else
-    {
-        LOG_ERROR(log, "remote hive location path only support hdfs. Currently hdfs schema is :{}", uri.getScheme());
-        throw Exception("remote hive location path only support hdfs now", ErrorCodes::LOGICAL_ERROR);
-    }
+        hive_table = std::move(temp);
+    });
+
+    return hive_table;
+}
+
+StoragePolicyPtr StorageCnchHive::getStoragePolicy(StorageLocation) const
+{
+    auto table = getHiveTable();
+    std::call_once(init_disk, [this, &table] {
+        String cluster = getNameNodeCluster(table->sd.location);
+        Poco::URI uri(table->sd.location);
+        HDFSConnectionParams params = hdfsParamsFromUrl(uri);
+        auto disk = std::make_shared<DiskByteHDFS>(table->sd.location, "", params);
+        VolumePtr volume = std::make_shared<SingleDiskVolume>(remote_psm, disk);
+        storage_policy = std::make_shared<StoragePolicy>(remote_psm, Volumes{volume}, 0);
+    });
+
+    return storage_policy;
 }
 
 HiveDataPartsCNCHVector StorageCnchHive::getDataPartsInPartitions(
