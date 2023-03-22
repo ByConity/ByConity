@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import useDocusaurusContext from "@docusaurus/useDocusaurusContext";
 import Layout from "@theme/Layout";
 import KeyFeaturesSection from "@site/src/components/HomePage/KeyFeaturesSection";
@@ -10,6 +10,11 @@ import GetStartedSection from "./GetStartedSection";
 function HomePage() {
   const { siteConfig } = useDocusaurusContext();
   const { title } = siteConfig;
+
+  useEffect(() => {
+    const nav = document.querySelector(".navbar");
+    nav.classList.add("navbar--no-border");
+  }, []);
 
   return (
     <Layout title={title}>

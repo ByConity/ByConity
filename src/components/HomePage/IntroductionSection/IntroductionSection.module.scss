@@ -16,6 +16,7 @@
 
 .imageColumn {
   flex: 1;
+  text-align: center;
 }
 
 .header {
@@ -29,6 +30,10 @@
   line-height: 56px;
 }
 
+.image {
+  max-width: 100%;
+}
+
 @media (max-width: 1280px) {
   .content {
     flex-direction: column;
@@ -40,5 +45,9 @@
     padding: 80px 20px;
     text-align: center;
     min-height: 600px;
+  }
+
+  .content {
+    gap: 40px;
   }
 }

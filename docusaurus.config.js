@@ -90,8 +90,11 @@ const config = {
           },
           {
             href: "https://github.com/ByConity/ByConity",
-            label: "GitHub",
             position: "right",
+
+            // These allows adding Github icon using custom styles
+            html: "<span>GitHub</span>",
+            className: "header-github-link",
           },
         ],
       },

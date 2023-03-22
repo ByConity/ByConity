@@ -1,5 +1,7 @@
 .container {
   background-color: #f5f9fb;
+  margin-left: 80px;
+  margin-right: 80px;
 }
 
 .content {
@@ -43,14 +45,26 @@
   }
 }
 
-@media (max-width: 1280px) {
+@media (max-width: 1440px) {
   .content {
     // Following original design ratio
     background-size: 91.4%;
   }
 }
 
+@media (max-width: 1280px) {
+  .container {
+    margin-left: 40px;
+    margin-right: 40px;
+  }
+}
+
 @media (max-width: 425px) {
+  .container {
+    margin-left: 0;
+    margin-right: 0;
+  }
+
   .content {
     padding: 80px 20px;
     text-align: center;

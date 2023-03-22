@@ -1,6 +1,5 @@
 import React from "react";
 import Translate from "@docusaurus/Translate";
-import architectureImagePath from "./architecture.png";
 import ArchitectureImage from "./architecture.svg";
 import styles from "./IntroductionSection.module.scss";
 
@@ -18,7 +17,7 @@ function IntroductionSection() {
         </div>
 
         <div className={styles.imageColumn}>
-          <ArchitectureImage />
+          <ArchitectureImage className={styles.image} />
         </div>
       </div>
     </div>
