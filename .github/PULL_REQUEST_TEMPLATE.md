@@ -1,6 +1,6 @@
-I hereby agree to the terms of the CLA available at: [placeholder]
+I hereby agree to the terms of the CLA available at: https://cla-assistant.io/ByConity/ByConity  
 
-Changelog category (leave one):
+Changelog category (please edit the below items and leave one that you choose):
 - New Feature
 - Bug Fix
 - Improvement
