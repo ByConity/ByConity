@@ -945,6 +945,7 @@ def main(args):
     global exit_code
     global server_logs_level
 
+
     def is_data_present():
         clickhouse_proc = Popen(shlex.split(args.client), stdin=PIPE, stdout=PIPE, stderr=PIPE)
         (stdout, stderr) = clickhouse_proc.communicate(b"EXISTS TABLE test.hits")
@@ -1242,6 +1243,11 @@ if __name__ == '__main__':
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGHUP, signal_handler)
+
+    try:
+        multiprocessing.set_start_method("spawn")
+    except RuntimeError:
+        pass
 
     parser=ArgumentParser(description='ClickHouse functional tests')
     parser.add_argument('-q', '--queries', help='Path to queries dir')
