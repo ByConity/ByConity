@@ -9,7 +9,7 @@ sudo apt-get update
 sudo apt-get install openjdk-8-jdk
 ```
 
-接下来我们需要下载一个hadoop 文件夹，解压并进入
+接下来我们需要下载一个hadoop 的压缩包，解压并进入
 
 ```
 $ curl -L -o hadoop-3.3.4.tar.gz https://dlcdn.apache.org/hadoop/common/stable/hadoop-3.3.4.tar.gz
@@ -27,24 +27,24 @@ export HADOOP_HOME=/root/user_xyz/hdfs/hadoop-3.3.4
 export HADOOP_LOG_DIR=/root/user_xyz/hdfs/logs
 ```
 
-接下来用这样的内容编辑文件` etc/hadoop/core-site.xml`。 请注意， `value` tag 将是你的 namenode 地址的值
+接下来编辑文件` etc/hadoop/core-site.xml`。 请注意， `value` tag 将是你的 namenode 地址的值
 
 ```
 <configuration>
         <property>
                 <name>fs.defaultFS</name>
-                <value>hdfs://10.119.57.203:12000</value>
+                <value>hdfs://10.0.0.1:12000</value>
         </property>
 </configuration>
 ```
 
-我们已经完成了所有机器的通用设置，从现在开始，namenode 和 datanode 的设置是不同的。 在我们要安装 namenode 的节点中，我们创建一个包含 datanode 列表的文件。 例如，在我的例子中，我创建了 
+我们已经完成了通用设置，接着做namenode 和 datanode 的特殊设置。 在我们要安装 namenode 的节点中，我们创建一个包含 datanode 列表的文件。 例如，在我的例子中，我创建了 
 `datanodes_list.txt`，内容如下
 
 ```
 $ cat /root/user_xyz/hdfs/datanodes_list.txt
-10.11.170.163
-10.11.154.30
+10.0.0.1
+10.0.0.2
 ```
 
 然后创建存放 namenode 运行时数据的目录
@@ -73,9 +73,9 @@ mkdir -p /root/user_xyz/hdfs/root_data_path_for_namenode
 </configuration>
 ```
 
-这就是 namenode 的配置。 
+以上是 namenode 的配置。 
 
-现在对于你需要部署 datanode 的那两个节点，创建一个目录来存储 datanode 运行时数据
+现在对于你需要部署 datanode 的节点，创建一个目录来存储 datanode 运行时数据
 
 ```
 mkdir -p /root/user_xyz/hdfs/root_data_path_for_datanode
@@ -92,20 +92,20 @@ mkdir -p /root/user_xyz/hdfs/root_data_path_for_datanode
 </configuration>
 ```
 
-我们已经完成配置，现在转到 namenode 机器，转到hadoop分布格式化文件系统并用这个命令启动 namenode
+然后转到 namenode 机器，格式化hadoop分布式文件系统并启动 namenode
 
 ```
 bin/hdfs namenode -format
 bin/hdfs  --daemon start namenode
 ```
 
-然后到另外两台datanode机器，到 hadoop 文件夹，用下面这个命令启动 data node
+然后到所有datanode机器，在 hadoop 文件夹，用以下命令启动 datanode
 
 ```
 bin/hdfs  --daemon start datanode
 ```
 
-我们已经完成了 HDFS 的设置。 现在我们必须创建一个目录来存储数据。 所以转到 namenode 机器，从 hadoop 文件夹，执行以下命令
+以上我们已经完成了 HDFS 的设置。 现在我们必须为byconity创建用户和数据目录。 转到 namenode 机器，从 hadoop 文件夹，执行以下命令
 
 ```
 bin/hdfs dfs -mkdir -p /user/clickhouse/

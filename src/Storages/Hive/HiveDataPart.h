@@ -86,15 +86,16 @@ public:
 public:
     HiveDataPart(
         const String & name_,
+        const String & hdfs_uri_,
         const String & relative_path_,
         const DiskPtr & disk_,
         const HivePartInfo & info_,
-        HDFSConnectionParams hdfs_params_ = HDFSConnectionParams(),
         std::unordered_set<Int64> skip_splits_ = {},
         NamesAndTypesList index_names_and_types_ = {});
 
     String getFullDataPartPath() const;
     String getFullTablePath() const;
+    String getHDFSUri() const;
 
     const std::unordered_set<Int64> & getSkipSplits() const { return skip_splits; }
     void setSkipSplits(const std::unordered_set<Int64> & skip_splits_) { skip_splits = skip_splits_; }
@@ -111,10 +112,10 @@ public:
 public:
 
     String name;
+    String hdfs_uri;
     String relative_path;
     DiskPtr disk;
     HivePartInfo info;
-    const HDFSConnectionParams hdfs_params;
 
     std::unordered_set<Int64> skip_splits = {};
     NamesAndTypesList index_names_and_types = {};
@@ -126,7 +127,7 @@ public:
 
     mutable std::mutex mutex;
 
-    mutable std::unique_ptr<ReadBufferFromByteHDFS> in;
+    mutable std::unique_ptr<ReadBuffer> in;
     mutable std::unique_ptr<parquet::arrow::FileReader> reader;
     mutable std::map<String, size_t> parquet_column_positions;
 };

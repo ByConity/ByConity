@@ -24,6 +24,7 @@
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <WorkerTasks/ManipulationType.h>
+#include <Poco/Exception.h>
 
 namespace DB
 {
@@ -386,7 +387,7 @@ void CnchPartGCThread::collectStaleBitmaps(
 {
     do
     {
-        auto & prev_bitmap = parent_bitmap->tryGetPrevious();
+        const auto & prev_bitmap = parent_bitmap->tryGetPrevious();
         if (!prev_bitmap || prev_bitmap->getCommitTime() <= begin.toUInt64())
             break;
 
@@ -450,6 +451,13 @@ void CnchPartGCThread::pushToRemovingQueue(
                     auto cnch_part = (*it)->toCNCHDataPart(storage);
                     if (!is_staged_part)
                         cnch_part->remove();
+                    remove_parts.emplace_back(cnch_part);
+                }
+                catch (Poco::FileNotFoundException & e)
+                {
+                    /// If the file already has been deleted, we can delete it directly from catalog.
+                    LOG_ERROR(log, "Error occurs when remove part: " + name + " msg: " + e.displayText());
+                    auto cnch_part = (*it)->toCNCHDataPart(storage);
                     remove_parts.emplace_back(cnch_part);
                 }
                 catch (...)
