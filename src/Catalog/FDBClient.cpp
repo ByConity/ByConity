@@ -342,16 +342,12 @@ fdb_error_t FDBClient::Delete(FDBTransactionPtr tr, const std::string & key, con
     AssertTrsansactionStatus(tr);
     if (!expected.empty())
     {
-        FDBFuturePtr f_read = std::make_shared<FDBFutureRAII>(fdb_transaction_get(tr->transaction, reinterpret_cast<const uint8_t*>(key.c_str()), key.size(), 0));
-        RETURN_ON_ERROR(fdb_future_block_until_ready(f_read->future));
-        RETURN_ON_ERROR(fdb_future_get_error(f_read->future));
-        fdb_bool_t present;
-        uint8_t const *outValue;
-        int outValueLength;
-        RETURN_ON_ERROR(fdb_future_get_value(f_read->future, &present, &outValue, &outValueLength));
-
-        if (!present || (expected.size() != static_cast<size_t>(outValueLength) || memcmp(expected.data(), outValue, outValueLength)))
-            return FDBError::FDB_not_committed;
+        fdb_transaction_atomic_op(tr->transaction, reinterpret_cast<const uint8_t*>(key.c_str()), key.size(), 
+            reinterpret_cast<const uint8_t*>(expected.c_str()), expected.size(), FDB_MUTATION_TYPE_COMPARE_AND_CLEAR);
+        FDBFuturePtr f = std::make_shared<FDBFutureRAII>(fdb_transaction_commit(tr->transaction));
+        RETURN_ON_ERROR(fdb_future_block_until_ready(f->future));
+        fdb_error_t error_code = fdb_future_get_error(f->future);
+        return error_code;
     }
     
     fdb_transaction_clear(tr->transaction, reinterpret_cast<const uint8_t*>(key.c_str()), key.size());
