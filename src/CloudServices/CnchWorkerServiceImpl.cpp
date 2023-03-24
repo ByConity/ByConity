@@ -418,6 +418,41 @@ void CnchWorkerServiceImpl::checkDataParts(
     }
 }
 
+void CnchWorkerServiceImpl::preloadDataParts(
+    [[maybe_unused]] google::protobuf::RpcController * cntl,
+    const Protos::PreloadDataPartsReq * request,
+    Protos::PreloadDataPartsResp * response,
+    google::protobuf::Closure * done)
+{
+    brpc::ClosureGuard done_guard(done);
+    try
+    {
+        auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
+        StoragePtr storage = createStorageFromQuery(request->create_table_query(), rpc_context);
+        auto & cloud_merge_tree = dynamic_cast<StorageCloudMergeTree &>(*storage);
+        auto data_parts = createPartVectorFromModelsForSend<MutableMergeTreeDataPartCNCHPtr>(cloud_merge_tree, request->parts());
+
+        std::unique_ptr<ThreadPool> pool;
+        if (request->sync())
+        {
+            pool = std::make_unique<ThreadPool>(std::min(data_parts.size(), 16UL));
+        }
+
+        for (const auto & part : data_parts)
+        {
+            part->preload(pool.get());
+        }
+
+        if (pool)
+            pool->wait();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        RPCHelpers::handleException(response->mutable_exception());  
+    }
+}
+
 void CnchWorkerServiceImpl::sendOffloading(
     google::protobuf::RpcController *,
     const Protos::SendOffloadingReq *,

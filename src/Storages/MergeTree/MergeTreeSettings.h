@@ -222,6 +222,7 @@ struct Settings;
     M(Bool, enable_persistent_checksum, false, "Persist checksums of part in memory. If set to false, checksums will be managed by a global cache to save memory.", 0) \
     \
     M(Bool, enable_local_disk_cache, true, "Enable local disk cache", 0) \
+    M(Bool, enable_preload_parts, false, "Enable preload parts", 0) \
     \
     /* Renamed settings - cannot be ignored */\
     M(Bool, enable_nullable_sorting_key, false, "Alias of `allow_nullable_key`", 0) \

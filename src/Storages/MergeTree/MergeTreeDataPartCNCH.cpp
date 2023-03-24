@@ -26,6 +26,8 @@
 #include <Storages/UUIDAndPartName.h>
 #include <Storages/UniqueKeyIndexCache.h>
 #include <Common/Exception.h>
+#include "DataTypes/DataTypeByteMap.h"
+#include "Storages/DiskCache/DiskCacheSegment.h"
 
 namespace ProfileEvents
 {
@@ -730,6 +732,82 @@ void MergeTreeDataPartCNCH::projectionRemove(const String & parent_to, bool) con
         LOG_ERROR(storage.log, "Cannot quickly remove directory {} by removing files; fallback to recursive removal. Reason: {}", fullPath(disk, projection_path_on_disk), getCurrentExceptionMessage(false));
         disk->removeRecursive(projection_path_on_disk);
 
+    }
+}
+
+void MergeTreeDataPartCNCH::preload(ThreadPool * pool) const
+{
+    if (isPartial())
+        throw Exception("Preload partial parts in invalid", ErrorCodes::LOGICAL_ERROR);
+
+    Stopwatch watch;
+    auto [cache, cache_strategy] = DiskCacheFactory::instance().getDefault();
+    MarkRanges all_mark_ranges{MarkRange(0, getMarksCount())};
+    IDiskCacheSegmentsVector segments;
+
+    auto addSegments = [&, this, strategy = cache_strategy](const NameAndTypePair & col) {
+        ISerialization::StreamCallback callback = [&](const ISerialization::SubstreamPath & substream_path) {
+            String stream_name = ISerialization::getFileNameForStream(col.name, substream_path);
+            ChecksumsPtr checksums = getChecksums();
+            if (!checksums->files.count(stream_name + DATA_FILE_EXTENSION))
+                return;
+
+            String mark_file_name = index_granularity_info.getMarksFilePath(stream_name);
+            String data_file_name = stream_name + DATA_FILE_EXTENSION;
+
+            auto seg = strategy->transferRangesToSegments<DiskCacheSegment>(
+                all_mark_ranges,
+                shared_from_this(),
+                DiskCacheSegment::FileOffsetAndSize{getFileOffsetOrZero(mark_file_name), getFileSizeOrZero(mark_file_name)},
+                getMarksCount(),
+                stream_name,
+                DATA_FILE_EXTENSION,
+                DiskCacheSegment::FileOffsetAndSize{getFileOffsetOrZero(data_file_name), getFileSizeOrZero(data_file_name)});
+            segments.insert(segments.end(), std::make_move_iterator(seg.begin()), std::make_move_iterator(seg.end()));
+        };
+        ISerialization::SubstreamPath substream_path;
+        auto serialization = getSerializationForColumn(col);
+        serialization->enumerateStreams(callback, substream_path);
+    };
+
+    for (const NameAndTypePair & column : *columns_ptr)
+    {
+        if (column.type->isMap() && !column.type->isMapKVStore())
+        {
+            /// TODO: map
+        }
+        else
+        {
+            addSegments(column);
+        }
+    }
+
+    /// cache checksums & pk
+    /// ChecksumsCache and PrimaryIndexCache will be set during caching to disk
+    segments.emplace_back(std::make_shared<ChecksumsDiskCacheSegment>(shared_from_this()));
+    segments.emplace_back(std::make_shared<PrimaryIndexDiskCacheSegment>(shared_from_this()));
+
+    if (!pool)
+    {
+        pool = &(storage.getContext()->getLocalDiskCacheThreadPool());
+    }
+
+    if (pool)
+    {
+        pool->scheduleOrThrow([segments = std::move(segments), cache=cache] {
+            for (const auto & segment : segments)
+            {
+                try
+                {
+                    if (cache->get(segment->getSegmentName()).second.empty())
+                        segment->cacheToDisk(*cache);
+                }
+                catch (...)
+                {
+                    /// no exception thrown
+                }
+            }
+        });
     }
 }
 }

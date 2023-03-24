@@ -237,7 +237,7 @@ void CloudMergeTreeBlockOutputStream::writeSuffixImpl()
     {
         /// auto testlog = std::make_shared<TestLog>(const_cast<Context &>(context));
         /// TEST_START(testlog);
-        /// tryPreloadChecksumsAndPrimaryIndex(storage, std::move(preload_parts), ManipulationType::Insert, context);
+        tryPreload(context, storage, preload_parts);
         /// TEST_END(testlog, "Finish tryPreloadChecksumsAndPrimaryIndex in batch mode");
     }
 }

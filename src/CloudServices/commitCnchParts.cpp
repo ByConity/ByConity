@@ -17,6 +17,7 @@
 
 #include <CloudServices/CnchMergeMutateThread.h>
 #include <CloudServices/CnchServerClient.h>
+#include <CloudServices/CnchServerClientPool.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/PartLog.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
@@ -481,6 +482,39 @@ void CnchDataWriter::publishStagedParts(
     items.bitmaps = dumpDeleteBitmaps(storage, bitmaps_to_dump);
 
     commitDumpedParts(items);
+}
+
+void tryPreload(
+    const ContextPtr local_context,
+    const MergeTreeMetaBase & storage,
+    const MutableMergeTreeDataPartsCNCHVector & dumped_parts)
+{
+    auto settings = storage.getSettings();
+    if (settings->enable_preload_parts && settings->enable_local_disk_cache)
+    {
+        try
+        {
+            Stopwatch timer;
+            auto server_client = local_context->getCnchServerClientPool().get();
+            MutableMergeTreeDataPartsCNCHVector preload_parts;
+            std::copy_if(dumped_parts.begin(), dumped_parts.end(), std::back_inserter(preload_parts), [](const auto & part) {
+                return !part->deleted && !part->isPartial();
+            });
+
+            if (!preload_parts.empty())
+            {
+                server_client->submitPreloadTask(storage, preload_parts);
+                LOG_DEBUG(
+                    storage.getLogger(),
+                    "Finish submit preload task for {} parts to server {}, elapsed {} ms", preload_parts.size(), server_client->getRPCAddress(), timer.elapsedMilliseconds());
+            }
+            // TODO: invalidate deleted part's disk cache
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__, "Fail to preload");
+        }
+    }
 }
 
 }

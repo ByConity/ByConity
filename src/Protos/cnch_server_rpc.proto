@@ -136,6 +136,17 @@ message CommitPartsResp
   optional uint64 commit_timestamp = 2;
 }
 
+message SubmitPreloadTaskReq {
+  optional string database = 1;
+  optional string table = 2;
+  optional UUID uuid = 3;
+  repeated DataModelPart parts = 4;
+}
+
+message SubmitPreloadTaskResp {
+  optional string exception = 1;
+}
+
 message GetMinActiveTimestampReq
 {
   required StorageID storage_id = 1;
@@ -483,4 +494,6 @@ service CnchServerService
   rpc submitQueryWorkerMetrics(SubmitQueryWorkerMetricsReq) returns (SubmitQueryWorkerMetricsResp);
 
   rpc executeOptimize(ExecuteOptimizeQueryReq) returns (ExecuteOptimizeQueryResp);
+
+  rpc submitPreloadTask(SubmitPreloadTaskReq) returns (SubmitPreloadTaskResp);
 };

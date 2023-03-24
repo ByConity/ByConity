@@ -171,6 +171,19 @@ message SetQueryIntentResp
   required uint32 status = 3;
 }
 
+message PreloadDataPartsReq
+{
+  optional uint64 txn_id = 1;
+  optional string create_table_query = 2;
+  repeated DataModelPart parts = 3;
+  optional bool sync = 4;
+}
+
+message PreloadDataPartsResp
+{
+  optional string exception = 1;
+}
+
 message SubmitSyncTaskReq
 {
   required UUID storage_id = 1;
@@ -415,4 +428,5 @@ service CnchWorkerService
   rpc checkDataParts(CheckDataPartsReq) returns (CheckDataPartsResp);
   rpc sendOffloading(SendOffloadingReq) returns (SendOffloadingResp);
   rpc removeWorkerResource(RemoveWorkerResourceReq) returns (RemoveWorkerResourceResp);
+  rpc preloadDataParts(PreloadDataPartsReq) returns (PreloadDataPartsResp);
 }

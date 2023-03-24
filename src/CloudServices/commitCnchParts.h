@@ -81,4 +81,8 @@ private:
     cppkafka::TopicPartitionList tpl;
 };
 
+void tryPreload(
+    const ContextPtr context,
+    const MergeTreeMetaBase & storage,
+    const MutableMergeTreeDataPartsCNCHVector & dumped_parts);
 }

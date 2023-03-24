@@ -196,6 +196,32 @@ brpc::CallId CnchWorkerClient::sendCnchHiveDataParts(
     return call_id;
 }
 
+void CnchWorkerClient::preloadDataParts(
+    const ContextPtr & context,
+    const TxnTimestamp & txn_id,
+    const IStorage & storage,
+    const String & create_local_table_query,
+    const ServerDataPartsVector & parts,
+    bool sync)
+{
+    brpc::Controller cntl;
+    Protos::PreloadDataPartsReq request;
+    Protos::PreloadDataPartsResp response;
+
+    const auto & settings = context->getSettingsRef();
+    auto send_timeout = std::max(settings.max_execution_time.value.totalMilliseconds() >> 1, 30 * 1000L);
+    cntl.set_timeout_ms(send_timeout);
+
+    request.set_txn_id(txn_id);
+    request.set_create_table_query(create_local_table_query);
+    request.set_sync(sync);
+    fillPartsModelForSend(storage, parts, *request.mutable_parts());
+    stub->preloadDataParts(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+}
+
 brpc::CallId CnchWorkerClient::sendQueryDataParts(
     const ContextPtr & context,
     const StoragePtr & storage,

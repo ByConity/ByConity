@@ -61,7 +61,7 @@ void AssignedResource::addDataParts(const HiveDataPartsCNCHVector & parts)
 
 CnchServerResource::~CnchServerResource()
 {
-    if (!worker_group)
+    if (!worker_group || skip_clean_worker)
         return;
 
     auto worker_clients = worker_group->getWorkerClients();
@@ -214,6 +214,24 @@ void CnchServerResource::sendResource(const ContextPtr & context)
         brpc::Join(call_id);
 
     handler.throwIfException();
+}
+
+void CnchServerResource::sendResource(const ContextPtr & context, WorkerAction act)
+{
+    Stopwatch watch;
+    {
+        auto lock = getLock();
+        allocateResource(context, lock);
+
+        for (auto & [host_ports, resource] : assigned_worker_resource)
+        {
+            auto worker_client = worker_group->getWorkerClient(host_ports);
+            act(worker_client, resource);
+        }
+        assigned_worker_resource.clear();
+    }
+
+    /// ProfileEvents::increment(ProfileEvents::CnchPartsAllocationMilliseconds, watch.elapsedMilliseconds());
 }
 
 void CnchServerResource::allocateResource(const ContextPtr & context, std::lock_guard<std::mutex> &)

@@ -116,6 +116,8 @@ public:
             worker_group = std::move(worker_group_);
     }
 
+    void skipCleanWorker() { skip_clean_worker = true; }
+
     template <typename T>
     void addDataParts(const UUID & storage_id, const std::vector<T> & data_parts, const std::set<Int64> & required_bucket_numbers = {})
     {
@@ -133,6 +135,9 @@ public:
     void sendResource(const ContextPtr & context, const HostWithPorts & worker);
     /// allocate and send resource to worker_group
     void sendResource(const ContextPtr & context);
+
+    using WorkerAction = std::function<void(CnchWorkerClientPtr, std::vector<AssignedResource> &)>;
+    void sendResource(const ContextPtr & context, WorkerAction act);
 
     /// remove all resource in server
     void removeAll();
@@ -159,6 +164,7 @@ private:
     std::unordered_map<UUID, AssignedResource> assigned_table_resource;
     std::unordered_map<HostWithPorts, std::vector<AssignedResource>> assigned_worker_resource;
 
+    bool skip_clean_worker{false};
     Poco::Logger * log;
     mutable ServerResourceLockManager lock_manager;
 };
