@@ -7,7 +7,15 @@ if (NOT USE_INTERNAL_PROTOBUF_LIBRARY)
     endif ()
 endif()
 
-SET(WITH_KERBEROS false)
+if (${USE_KRB5})
+    SET(WITH_KERBEROS 1)
+else ()
+    SET(WITH_KERBEROS 0)
+endif()
+
+message(STATUS "Using hdfs3 whith KRB5 ${WITH_KERBEROS}")
+
+
 SET(WITH_CURL false)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_POCO_LOGGER")
 
@@ -25,10 +33,6 @@ include(Platform)
 include(Options)
 
 # prefer shared libraries
-if (WITH_KERBEROS)
-    find_package(KERBEROS REQUIRED)
-endif()
-
 if (WITH_CURL)
     find_package(CURL REQUIRED)
 endif()
@@ -75,7 +79,7 @@ target_include_directories(hdfs3 PRIVATE ${HDFS3_ROOT_DIR}/contrib)
 
 target_include_directories(hdfs3 PRIVATE ${LIBGSASL_INCLUDE_DIR})
 if (WITH_KERBEROS)
-    target_include_directories(hdfs3 PRIVATE ${KERBEROS_INCLUDE_DIRS})
+    target_include_directories(hdfs3 PRIVATE ${KRB5_INCLUDE_DIR})
 endif()
 
 if (WITH_CURL)
@@ -87,7 +91,7 @@ target_include_directories(hdfs3 PRIVATE ${LIBXML2_INCLUDE_DIR})
 
 target_link_libraries(hdfs3 ${LIBGSASL_LIBRARY})
 if (WITH_KERBEROS)
-    target_link_libraries(hdfs3 ${KERBEROS_LIBRARIES})
+    target_link_libraries(hdfs3 ${KRB5_LIBRARY})
 endif()
 
 if (WITH_CURL)
