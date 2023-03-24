@@ -76,6 +76,9 @@ struct IMergeTreeIndex
     /// gets filename without extension
     String getFileName() const { return INDEX_FILE_PREFIX + index.name; }
 
+    /// is this index hypothetical
+    bool isHypothetical() const { return index.is_hypothetical; }
+
     /// Checks whether the column is in data skipping index.
     virtual bool mayBenefitFromIndexForIn(const ASTPtr & node) const = 0;
 

@@ -28,6 +28,7 @@
 #include <Storages/MarkCache.h>
 #include <Storages/MergeTree/MergeTreeReaderStream.h>
 #include <Storages/MergeTree/MergeTreeReaderStreamWithSegmentCache.h>
+#include "Storages/MergeTree/IMergeTreeReader.h"
 
 
 namespace DB
@@ -40,7 +41,7 @@ MergeTreeIndexReader::MergeTreeIndexReader(
     const MarkRanges & all_mark_ranges_,
     MergeTreeReaderSettings settings,
     MarkCache * mark_cache)
-    : index(index_)
+    : IMergeTreeIndexReader(index_)
 {
     switch(part_->info.storage_type)
     {

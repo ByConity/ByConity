@@ -37,6 +37,7 @@ public:
     IAST * expr;
     ASTFunction * type;
     UInt64 granularity;
+    bool is_hypothetical = false;
 
     /** Get the text that identifies this element. */
     String getID(char) const override { return "Index"; }

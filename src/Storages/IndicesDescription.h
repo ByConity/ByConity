@@ -45,6 +45,9 @@ struct IndexDescription
     /// Index granularity, make sense for skip indices
     size_t granularity;
 
+    /// Is index virtual
+    bool is_hypothetical = false;
+
     /// Parse index from definition AST
     static IndexDescription getIndexFromAST(const ASTPtr & definition_ast, const ColumnsDescription & columns, ContextPtr context);
 

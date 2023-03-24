@@ -142,6 +142,7 @@ bool ParserIndexDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     index->granularity = granularity->as<ASTLiteral &>().value.safeGet<UInt64>();
     index->set(index->expr, expr);
     index->set(index->type, type);
+    index->is_hypothetical = is_hypothetical_index;
     node = index;
 
     return true;
@@ -208,6 +209,7 @@ bool ParserProjectionDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected &
 bool ParserTablePropertyDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserKeyword s_index("INDEX");
+    ParserKeyword s_hypothetical_index("HYPOTHETICAL INDEX");
     ParserKeyword s_constraint("CONSTRAINT");
     ParserKeyword s_projection("PROJECTION");
     ParserKeyword s_primary_key("PRIMARY KEY");
@@ -222,6 +224,12 @@ bool ParserTablePropertyDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expecte
 
     if (s_index.ignore(pos, expected))
     {
+        if (!index_p.parse(pos, new_node, expected))
+            return false;
+    }
+    if (s_hypothetical_index.ignore(pos, expected))
+    {
+        index_p.makeHypothetical();
         if (!index_p.parse(pos, new_node, expected))
             return false;
     }

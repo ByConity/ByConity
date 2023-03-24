@@ -322,7 +322,9 @@ class ParserIndexDeclaration : public IParserDialectBase
 protected:
     const char * getName() const override { return "index declaration"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+    bool is_hypothetical_index = false;
 public:
+    ParserIndexDeclaration & makeHypothetical() { is_hypothetical_index = true; return *this; }
     using IParserDialectBase::IParserDialectBase;
 };
 
