@@ -21,7 +21,7 @@
 
 namespace DB
 {
-std::set<String> ExpressionDeterminism::getDeterministicSymbols(Assignments & assignments, ContextPtr & context)
+std::set<String> ExpressionDeterminism::getDeterministicSymbols(Assignments & assignments, ContextPtr context)
 {
     std::set<String> deterministic_symbols;
     for (auto & assignment : assignments)
@@ -34,7 +34,7 @@ std::set<String> ExpressionDeterminism::getDeterministicSymbols(Assignments & as
     return deterministic_symbols;
 }
 
-ConstASTPtr ExpressionDeterminism::filterDeterministicConjuncts(ConstASTPtr predicate, ContextPtr & context)
+ConstASTPtr ExpressionDeterminism::filterDeterministicConjuncts(ConstASTPtr predicate, ContextPtr context)
 {
     if (predicate == PredicateConst::TRUE_VALUE || predicate == PredicateConst::FALSE_VALUE)
     {
@@ -52,7 +52,7 @@ ConstASTPtr ExpressionDeterminism::filterDeterministicConjuncts(ConstASTPtr pred
     return PredicateUtils::combineConjuncts(deterministic);
 }
 
-ConstASTPtr ExpressionDeterminism::filterNonDeterministicConjuncts(ConstASTPtr predicate, ContextPtr & context)
+ConstASTPtr ExpressionDeterminism::filterNonDeterministicConjuncts(ConstASTPtr predicate, ContextPtr context)
 {
     std::vector<ConstASTPtr> predicates = PredicateUtils::extractConjuncts(predicate);
     std::vector<ConstASTPtr> non_deterministic;
@@ -66,7 +66,7 @@ ConstASTPtr ExpressionDeterminism::filterNonDeterministicConjuncts(ConstASTPtr p
     return PredicateUtils::combineConjuncts(non_deterministic);
 }
 
-std::set<ConstASTPtr> ExpressionDeterminism::filterDeterministicPredicates(std::vector<ConstASTPtr> & predicates, ContextPtr & context)
+std::set<ConstASTPtr> ExpressionDeterminism::filterDeterministicPredicates(std::vector<ConstASTPtr> & predicates, ContextPtr context)
 {
     std::set<ConstASTPtr> deterministic;
     for (auto & predicate : predicates)
@@ -79,7 +79,7 @@ std::set<ConstASTPtr> ExpressionDeterminism::filterDeterministicPredicates(std::
     return deterministic;
 }
 
-bool ExpressionDeterminism::isDeterministic(ConstASTPtr expression, ContextPtr & context)
+bool ExpressionDeterminism::isDeterministic(ConstASTPtr expression, ContextPtr context)
 {
     return getExpressionProperty(std::move(expression), std::move(context)).is_deterministic;
 }
@@ -114,7 +114,7 @@ Void DeterminismVisitor::visitNode(const ConstASTPtr & node, ContextPtr & contex
 Void DeterminismVisitor::visitASTFunction(const ConstASTPtr & node, ContextPtr & context)
 {
     visitNode(node, context);
-    auto & fun = node->as<const ASTFunction &>();
+    const auto & fun = node->as<const ASTFunction &>();
     if (!context->isFunctionDeterministic(fun.name))
     {
         is_deterministic = false;
