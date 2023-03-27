@@ -115,6 +115,8 @@ private:
         Poco::Logger * log);
 
     static MarkRanges filterMarksUsingIndex(
+        const MergeTreeMetaBase & data,
+        StorageMetadataPtr metadata_snapshot,
         MergeTreeIndexPtr index_helper,
         MergeTreeIndexConditionPtr condition,
         MergeTreeMetaBase::DataPartPtr part,
@@ -213,8 +215,9 @@ public:
     /// Filter parts using primary key and secondary indexes.
     /// For every part, select mark ranges to read.
     static RangesInDataParts filterPartsByPrimaryKeyAndSkipIndexes(
-        MergeTreeMetaBase::DataPartsVector && parts,
+        const MergeTreeMetaBase & data_,
         StorageMetadataPtr metadata_snapshot,
+        MergeTreeMetaBase::DataPartsVector && parts,
         const SelectQueryInfo & query_info,
         const ContextPtr & context,
         const KeyCondition & key_condition,
@@ -223,7 +226,6 @@ public:
         size_t num_streams,
         ReadFromMergeTree::IndexStats & index_stats,
         bool use_skip_indexes,
-        const MergeTreeMetaBase & data_,
         bool use_sampling,
         RelativeSize relative_sample_size);
 

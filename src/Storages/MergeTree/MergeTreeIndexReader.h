@@ -1,9 +1,13 @@
 #pragma once
-
+#include <Storages/MergeTree/MergeTreeSequentialSource.h>
 #include <Storages/MergeTree/MergeTreeReaderStream.h>
 #include <Storages/MergeTree/MergeTreeIndices.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/IMergeTreeReaderStream.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
+#include <Processors/IProcessor.h>
+#include <Storages/MergeTree/IMergeTreeReader.h>
+#include "Storages/ProjectionsDescription.h"
 
 namespace DB
 {
@@ -27,10 +31,10 @@ public:
     virtual MergeTreeIndexGranulePtr read() = 0;
 
     template<typename ...Args>
-    static MergeTreeIndexReadePtr create(MergeTreeIndexPtr index, Args &&... args)
+    static MergeTreeIndexReadePtr create(const MergeTreeMetaBase & data, StorageMetadataPtr metadata, MergeTreeIndexPtr index, Args &&... args)
     {
         if (index->isHypothetical())
-            return std::make_unique<MergeTreeHypoIndexReader>(index, std::forward<Args>(args)...);
+            return std::make_unique<MergeTreeHypoIndexReader>(data, metadata, index, std::forward<Args>(args)...);
         else
             return std::make_unique<MergeTreeIndexReader>(index, std::forward<Args>(args)...);
     }
@@ -66,6 +70,8 @@ class MergeTreeHypoIndexReader : public IMergeTreeIndexReader
 {
 public:
     MergeTreeHypoIndexReader(
+        const MergeTreeMetaBase & storage_,
+        StorageMetadataPtr metadata_,
         MergeTreeIndexPtr index_,
         MergeTreeData::DataPartPtr part_,
         size_t marks_count_,
@@ -73,11 +79,14 @@ public:
         MergeTreeReaderSettings settings,
         MarkCache * mark_cache);
 
-    void seek(size_t mark) override;
+    void seek(size_t mark) override { source.seek(mark);}
 
     MergeTreeIndexGranulePtr read() override;
-private:
 
+private:
+    using MergeTreeReaderPtr = std::unique_ptr<IMergeTreeReader>;
+    MergeTreeSequentialSource source;
+    MergeTreeIndexAggregatorPtr aggregator;
 };
 
 }

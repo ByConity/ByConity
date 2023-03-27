@@ -28,7 +28,8 @@
 #include <Storages/MarkCache.h>
 #include <Storages/MergeTree/MergeTreeReaderStream.h>
 #include <Storages/MergeTree/MergeTreeReaderStreamWithSegmentCache.h>
-#include "Storages/MergeTree/IMergeTreeReader.h"
+#include <Storages/MergeTree/MergeTreeSequentialSource.h>
+#include "Storages/ProjectionsDescription.h"
 
 
 namespace DB
@@ -147,4 +148,44 @@ MergeTreeIndexGranulePtr MergeTreeIndexReader::read()
     return granule;
 }
 
+MergeTreeHypoIndexReader::MergeTreeHypoIndexReader(
+    const MergeTreeMetaBase & storage,
+    StorageMetadataPtr metadata_,
+    MergeTreeIndexPtr index_,
+    MergeTreeData::DataPartPtr part_,
+    size_t,
+    const MarkRanges &,
+    MergeTreeReaderSettings,
+    MarkCache *)
+    : IMergeTreeIndexReader(index_)
+    , source(
+          storage,
+          metadata_,
+          part_,
+          index->getColumnsRequiredForIndexCalc(),
+          /*read_with_direct_io*/ true,
+          /*take_column_types_from_storage*/ false,
+          /*quiet*/ true),
+      aggregator(index->createIndexAggregator()) { }
+
+MergeTreeIndexGranulePtr MergeTreeHypoIndexReader::read()
+{
+    size_t granularity = index->index.granularity;
+    const auto & expression = index->index.expression;
+    size_t pos;
+    for (size_t i = 0; i < granularity; ++i)
+    {
+        Chunk chunk = source.generate();
+        Block block = source.getOutputs().front().getHeader();
+        block.setColumns(chunk.detachColumns());
+        expression->execute(block);
+        Block output;
+        auto output_positions = expression->getResultPositions();
+        for (const auto & p : output_positions) {
+            output.insert(block.getByPosition(p));
+        }
+        aggregator->update(output, &pos, output.rows());
+    }
+    return aggregator->getGranuleAndReset();
+}
 }

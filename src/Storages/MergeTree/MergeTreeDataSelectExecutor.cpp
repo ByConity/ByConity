@@ -21,6 +21,8 @@
 
 #include <boost/rational.hpp>   /// For calculations related to sampling coefficients.
 #include <common/scope_guard_safe.h>
+#include "MergeTreeCommon/MergeTreeMetaBase.h"
+#include "Storages/ProjectionsDescription.h"
 #include <optional>
 #include <unordered_set>
 
@@ -827,8 +829,9 @@ DataTypes MergeTreeDataSelectExecutor::get_set_element_types(const NamesAndTypes
 }
 
 RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipIndexes(
-    MergeTreeMetaBase::DataPartsVector && parts,
+    const MergeTreeMetaBase & data_,
     StorageMetadataPtr metadata_snapshot,
+    MergeTreeMetaBase::DataPartsVector && parts,
     const SelectQueryInfo & query_info,
     const ContextPtr & context,
     const KeyCondition & key_condition,
@@ -837,7 +840,6 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
     size_t num_streams,
     ReadFromMergeTree::IndexStats & index_stats,
     bool use_skip_indexes,
-    const MergeTreeMetaBase & /*data_*/,
     bool use_sampling,
     RelativeSize relative_sample_size)
 {
@@ -848,6 +850,8 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
 
     struct DataSkippingIndexAndCondition
     {
+        const MergeTreeMetaBase & data;
+        StorageMetadataPtr metadata_snapshot;
         MergeTreeIndexPtr index;
         MergeTreeIndexConditionPtr condition;
         std::atomic<size_t> total_granules{0};
@@ -855,8 +859,8 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
         std::atomic<size_t> total_parts{0};
         std::atomic<size_t> parts_dropped{0};
 
-        DataSkippingIndexAndCondition(MergeTreeIndexPtr index_, MergeTreeIndexConditionPtr condition_)
-            : index(index_), condition(condition_)
+        DataSkippingIndexAndCondition(const MergeTreeMetaBase & data_, StorageMetadataPtr metadata_snapshot_, MergeTreeIndexPtr index_, MergeTreeIndexConditionPtr condition_)
+            : data(data_), metadata_snapshot(metadata_snapshot_), index(index_), condition(condition_)
         {
         }
     };
@@ -871,7 +875,7 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
                 auto index_helper = MergeTreeIndexFactory::instance().get(index);
                 auto condition = index_helper->createIndexCondition(query_info, context);
                 if (!condition->alwaysUnknownOrTrue())
-                    useful_indices.emplace_back(index_helper, condition);
+                    useful_indices.emplace_back(data_, metadata_snapshot, index_helper, condition);
             }
         }
     }
@@ -957,6 +961,8 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
                 size_t total_granules = 0;
                 size_t granules_dropped = 0;
                 ranges.ranges = filterMarksUsingIndex(
+                    index_and_condition.data,
+                    index_and_condition.metadata_snapshot,
                     index_and_condition.index,
                     index_and_condition.condition,
                     part,
@@ -1319,8 +1325,9 @@ size_t MergeTreeDataSelectExecutor::estimateNumMarksToRead(
     MergeTreeReaderSettings reader_settings;
 
     auto parts_with_ranges = filterPartsByPrimaryKeyAndSkipIndexes(
-        std::move(parts),
+        data,
         metadata_snapshot,
+        std::move(parts),
         query_info,
         context,
         key_condition,
@@ -1329,7 +1336,6 @@ size_t MergeTreeDataSelectExecutor::estimateNumMarksToRead(
         num_streams,
         index_stats,
         false,
-        data,
         sampling.use_sampling,
         sampling.relative_sample_size);
 
@@ -1627,6 +1633,8 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
 
 
 MarkRanges MergeTreeDataSelectExecutor::filterMarksUsingIndex(
+    const MergeTreeMetaBase & data,
+    StorageMetadataPtr metadata_snapshot,
     MergeTreeIndexPtr index_helper,
     MergeTreeIndexConditionPtr condition,
     MergeTreeMetaBase::DataPartPtr part,
@@ -1657,7 +1665,7 @@ MarkRanges MergeTreeDataSelectExecutor::filterMarksUsingIndex(
     size_t index_marks_count = (marks_count - final_mark + index_granularity - 1) / index_granularity;
 
     auto reader
-        = IMergeTreeIndexReader::create(index_helper, part, index_marks_count, ranges, reader_settings, context->getMarkCache().get());
+        = IMergeTreeIndexReader::create(data, metadata_snapshot, index_helper, part, index_marks_count, ranges, reader_settings, context->getMarkCache().get());
 
     MarkRanges res;
 

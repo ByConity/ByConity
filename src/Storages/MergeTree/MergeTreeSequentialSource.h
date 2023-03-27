@@ -32,6 +32,7 @@ namespace DB
 /// Lightweight (in terms of logic) stream for reading single part from MergeTree
 class MergeTreeSequentialSource : public SourceWithProgress
 {
+friend class MergeTreeHypoIndexReader;
 public:
     /// NOTE: in case you want to read part with row id included, please add extra `_part_row_number` to
     /// the columns you want to read.
@@ -61,6 +62,8 @@ public:
     size_t getCurrentMark() const { return current_mark; }
 
     size_t getCurrentRow() const { return current_row; }
+
+    void seek(size_t mark, size_t row = 0) { current_mark = mark; current_row = row; continue_reading = false; }
 
 protected:
     Chunk generate() override;

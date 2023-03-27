@@ -903,8 +903,9 @@ ReadFromMergeTree::AnalysisResult ReadFromMergeTree::selectRangesToRead(MergeTre
     size_t parts_before_pk = parts.size();
 
     result.parts_with_ranges = MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipIndexes(
-        std::move(parts),
+        data,
         metadata_snapshot,
+        std::move(parts),
         query_info,
         context,
         key_condition,
@@ -913,7 +914,6 @@ ReadFromMergeTree::AnalysisResult ReadFromMergeTree::selectRangesToRead(MergeTre
         requested_num_streams,
         result.index_stats,
         true,
-        data,
         result.sampling.use_sampling,
         result.sampling.relative_sample_size);
 
