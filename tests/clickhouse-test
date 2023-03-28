@@ -1386,7 +1386,8 @@ if __name__ == '__main__':
         else:
             args.extract_from_config = args.binary + ' extract-from-config'
 
-    args.jobs = multiprocessing.cpu_count()
+    if args.jobs is None:
+        args.jobs = multiprocessing.cpu_count()
 
     if "ASAN_OPTIONS" in os.environ:
         ASAN_OPTIONS = os.environ['ASAN_OPTIONS'].split(',')

@@ -11,6 +11,7 @@ jobs:
     name: Build binary and run stateless tests
     container: 
       image: byconity/byconity-ci:latest
+      options: --cpus 2
     runs-on: self-hosted
     steps:
       - name: Check out repository code
@@ -45,7 +46,7 @@ jobs:
           echo $PATH
           ls /usr/bin
           bash ${GITHUB_WORKSPACE}/docker/test/foundationdb/show_fdb.sh
-          export ADDITIONAL_OPTIONS=' --run cnch_stateless'
+          export ADDITIONAL_OPTIONS='--jobs 2 --run cnch_stateless'
           export MAX_RUN_TIME=9000
           cp -r $GITHUB_WORKSPACE/docker/test/stateless/* .
           /bin/bash run_cnch.sh
