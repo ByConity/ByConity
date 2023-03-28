@@ -21,7 +21,7 @@ function HeroBannerSection() {
         <div>
           <Link
             className={styles.getStartedButton}
-            to="/docs/ByConity简介/主要原理概念"
+            to="/docs/introduction/main-principle-concepts"
           >
             <Translate id="getStarted" />
           </Link>

@@ -3,28 +3,28 @@
     "message": "Next",
     "description": "The label for version current"
   },
-  "sidebar.tutorialSidebar.category.ByConity简介": {
-    "message": "ByConity简介",
-    "description": "The label for category ByConity简介 in sidebar tutorialSidebar"
-  },
-  "sidebar.tutorialSidebar.category.SQL语法说明": {
-    "message": "SQL语法说明",
-    "description": "The label for category SQL语法说明 in sidebar tutorialSidebar"
-  },
   "sidebar.tutorialSidebar.category.Functions": {
     "message": "Functions",
     "description": "The label for category Functions in sidebar tutorialSidebar"
   },
-  "sidebar.tutorialSidebar.category.参与社区": {
-    "message": "参与社区",
-    "description": "The label for category 参与社区 in sidebar tutorialSidebar"
+  "sidebar.tutorialSidebar.category.Introduction": {
+    "message": "Introduction",
+    "description": "The label for category Introduction in sidebar tutorialSidebar"
   },
-  "sidebar.tutorialSidebar.category.基础使用手册": {
-    "message": "基础使用手册",
-    "description": "The label for category 基础使用手册 in sidebar tutorialSidebar"
+  "sidebar.tutorialSidebar.category.SQL Syntax": {
+    "message": "SQL Syntax",
+    "description": "The label for category SQL Syntax in sidebar tutorialSidebar"
   },
-  "sidebar.tutorialSidebar.category.高级用户手册": {
-    "message": "高级用户手册",
-    "description": "The label for category 高级用户手册 in sidebar tutorialSidebar"
+  "sidebar.tutorialSidebar.category.Basic Guides": {
+    "message": "Basic Guides",
+    "description": "The label for category Basic Guides in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Advanced Guides": {
+    "message": "Advanced Guides",
+    "description": "The label for category Advanced Guides in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Community": {
+    "message": "Community",
+    "description": "The label for category Community in sidebar tutorialSidebar"
   }
 }

@@ -13,19 +13,7 @@
   },
   "link.item.label.Docs": {
     "message": "Docs",
-    "description": "The label of footer link with label=Docs linking to /docs/ByConity简介/主要原理概念"
-  },
-  "link.item.label.Stack Overflow": {
-    "message": "Stack Overflow",
-    "description": "The label of footer link with label=Stack Overflow linking to https://stackoverflow.com/questions/tagged/docusaurus"
-  },
-  "link.item.label.Discord": {
-    "message": "Discord",
-    "description": "The label of footer link with label=Discord linking to https://discordapp.com/invite/docusaurus"
-  },
-  "link.item.label.Twitter": {
-    "message": "Twitter",
-    "description": "The label of footer link with label=Twitter linking to https://twitter.com/docusaurus"
+    "description": "The label of footer link with label=Docs linking to /docs/introduction/main-principle-concepts"
   },
   "link.item.label.Blog": {
     "message": "Blog",
@@ -38,5 +26,17 @@
   "copyright": {
     "message": "Copyright © 2023 ByteDance.",
     "description": "The footer copyright"
+  },
+  "link.item.label.Community": {
+    "message": "Community",
+    "description": "The label of footer link with label=Community linking to /community"
+  },
+  "link.item.label.Users": {
+    "message": "Users",
+    "description": "The label of footer link with label=Users linking to /users"
+  },
+  "link.item.label.Bilibili": {
+    "message": "Bilibili",
+    "description": "The label of footer link with label=Bilibili linking to https://space.bilibili.com/2065226922?spm_id_from=333.1007.0.0"
   }
 }

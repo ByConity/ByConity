@@ -16,7 +16,10 @@ function GetStartedSection() {
         </div>
 
         <div className={styles.buttons}>
-          <Link className={styles.button} to="/docs/ByConity简介/主要原理概念">
+          <Link
+            className={styles.button}
+            to="/docs/introduction/main-principle-concepts"
+          >
             <FileIcon />
             <Translate id="homePage.getStartedSection.readDocs.title" />
           </Link>
