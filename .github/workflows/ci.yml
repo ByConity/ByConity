@@ -9,7 +9,9 @@ on:
 jobs:
   scm_build:
     name: Build binary and run stateless tests
-    container: byconity/byconity-ci:latest
+    container: 
+      image: byconity/byconity-ci:latest
+      options: --cpus 2
     runs-on: self-hosted
     steps:
       - name: Check out repository code
