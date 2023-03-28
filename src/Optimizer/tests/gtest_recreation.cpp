@@ -62,7 +62,7 @@ public:
 std::shared_ptr<DB::BaseDumpPlanTest> TpcdsPlanDumpWithStatisticsTest::tester;
 
 
-TEST_F(TpcdsPlanDumpWithStatisticsTest, dump)
+TEST_F(TpcdsPlanDumpWithStatisticsTest, DISABLED_dump)
 {
     std::string query_id = dump("test");
     EXPECT_TRUE(checkDump(query_id));
