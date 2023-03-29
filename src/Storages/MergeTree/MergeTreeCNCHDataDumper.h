@@ -75,6 +75,7 @@ public:
       * primary_index
       * checksums
       * metainfo
+	  * unique_key_index
       * -----------data footer----------
       * primary_index offset(8 bytes)
       * primary_index size(8 bytes)
