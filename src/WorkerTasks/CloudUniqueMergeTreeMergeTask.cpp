@@ -244,7 +244,10 @@ void CloudUniqueMergeTreeMergeTask::executeImpl()
     }
     auto ctx = getContext();
     CnchLockHolder cnch_lock(*ctx, {std::move(partition_lock)});
-    cnch_lock.lock();
+
+    /// TODO: better msg
+    if (!cnch_lock.tryLock())
+        throw Exception("Failed to acquire lock for merge task " + params.task_id, ErrorCodes::ABORTED);
 
     lock_watch.restart();
 
