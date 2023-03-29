@@ -55,7 +55,7 @@ public:
     CnchLock(const CnchLock &) = delete;
     CnchLock & operator=(const CnchLock &) = delete;
 
-    void lock()
+    bool tryLock()
     {
         auto server = context.getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(lock_info->table_uuid), false);
         lock_info->lock_id = context.getTimestamp();
@@ -77,6 +77,7 @@ public:
         }
 
         locked = (lock_info->status == LockStatus::LOCK_OK);
+        return locked;
     }
 
     void unlock()
@@ -118,14 +119,15 @@ CnchLockHolder::~CnchLockHolder()
     unlock();
 }
 
-void CnchLockHolder::lock()
+bool CnchLockHolder::tryLock()
 {
     Stopwatch watch;
     SCOPE_EXIT({ LOG_DEBUG(&Poco::Logger::get("CnchLock"), "acquire {} locks in {} ms", cnch_locks.size(), watch.elapsedMilliseconds()); });
 
     for (const auto & lock : cnch_locks)
     {
-        lock->lock();
+        if (!lock->tryLock())
+            return false;
     }
 
     /// init heartbeat task if needed
@@ -135,6 +137,7 @@ void CnchLockHolder::lock()
             = global_context.getSchedulePool().createTask("reportLockHeartBeat", [this]() { reportLockHeartBeatTask(); });
         report_lock_heartbeat_task->activateAndSchedule();
     }
+    return true;
 }
 
 void CnchLockHolder::unlock()
