@@ -4,6 +4,7 @@
 
 #include "IO/ReadBuffer.h"
 #include "IO/WriteBuffer.h"
+#include "Storages/Hive/HiveDataPart_fwd.h"
 
 namespace DB
 {
@@ -32,7 +33,9 @@ struct IParallelReadSplits : public std::deque<IParallelReadSplit>
 
 struct HiveParallelReadSplit : public IParallelReadSplit
 {
-    String hive_file_path;
+    HiveParallelReadSplit(HiveDataPartCNCHPtr part, size_t start, size_t end);
+
+    HiveDataPartCNCHPtr part;
     size_t start;
     size_t end;
 

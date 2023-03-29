@@ -101,6 +101,7 @@ namespace Protocol
                                       /// This is such an inverted logic, where server sends requests
                                       /// And client returns back response
             QueryMetrics = 14,        /// Query metrics in cnch worker side
+            DistributedReadTaskRequest = 15,
             MAX = QueryMetrics,
 
         };
@@ -165,7 +166,7 @@ namespace Protocol
             ReadTaskResponse = 9,     /// TODO:
             PlanSegment = 10,
             CnchQuery = 11,
-
+            DistributedReadTaskResponse = 12,
             MAX = CnchQuery,
         };
 

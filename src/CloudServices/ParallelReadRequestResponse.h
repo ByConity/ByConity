@@ -7,16 +7,10 @@
 namespace DB
 {
 
-enum class CoordinationMode
-{
-    Default
-};
-
 struct ParallelReadRequest
 {
-    CoordinationMode mode;
     size_t replica_num;
-    size_t min_number_of_slice;
+    // size_t min_weight;
 
     void serialize(WriteBuffer & out) const;
     String describe() const;

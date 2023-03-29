@@ -60,6 +60,7 @@
 #include <Processors/Executors/PullingAsyncPipelineExecutor.h>
 #include <QueryPlan/GraphvizPrinter.h>
 
+#include "CloudServices/ParallelReadRequestResponse.h"
 #include "Core/Protocol.h"
 #include "TCPHandler.h"
 
@@ -331,6 +332,22 @@ void TCPHandler::runImpl()
                 std::lock_guard lock(task_callback_mutex);
                 sendReadTaskRequestAssumeLocked();
                 return receiveReadTaskResponseAssumeLocked();
+            });
+
+            query_context->setDistributedReadTaskCallback([this](ParallelReadRequest request) -> std::optional<ParallelReadResponse>
+            {
+                // Stopwatch watch;
+                // CurrentMetrics::Increment callback_metric_increment(CurrentMetrics::MergeTreeReadTaskRequestsSent);
+                std::lock_guard lock(task_callback_mutex);
+
+                if (state.is_cancelled)
+                    return std::nullopt;
+
+                sendDistributedReadTaskRequestAssumeLocked(std::move(request));
+                // ProfileEvents::increment(ProfileEvents::MergeTreeReadTaskRequestsSent);
+                auto res = receiveDistributedReadTaskResponseAssumeLocked();
+                // ProfileEvents::increment(ProfileEvents::MergeTreeReadTaskRequestsSentElapsedMicroseconds, watch.elapsedMicroseconds());
+                return res;
             });
 
             bool may_have_embedded_data = client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_CLIENT_SUPPORT_EMBEDDED_DATA;
@@ -830,6 +847,13 @@ void TCPHandler::sendReadTaskRequestAssumeLocked()
     out->next();
 }
 
+void sendDistributedReadTaskRequestAssumeLocked(ParallelReadRequest request)
+{
+    writeVarUInt(Protocol::Server::, *out);
+    request.serialize(*out);
+    out->next();
+}
+
 void TCPHandler::sendProfileInfo(const BlockStreamProfileInfo & info)
 {
     writeVarUInt(Protocol::Server::ProfileInfo, *out);
@@ -1144,6 +1168,27 @@ String TCPHandler::receiveReadTaskResponseAssumeLocked()
     return response;
 }
 
+std::optional<ParallelReadResponse> TCPHandler::receiveDistributedReadTaskResponseAssumeLocked()
+{
+    UInt64 packet_type = 0;
+    readVarUInt(packet_type, *in);
+    if (packet_type != Protocol::Client::ReadTaskResponse)
+    {
+        if (packet_type == Protocol::Client::Cancel)
+        {
+            state.is_cancelled = true;
+            return {};
+        }
+        else
+        {
+            throw Exception(fmt::format("Received {} packet after requesting read task",
+                    Protocol::Client::toString(packet_type)), ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
+        }
+    }
+    ParallelReadResponse response;
+    response.deserialize(*in);
+    return response;
+}
 
 void TCPHandler::receiveClusterNameAndSalt()
 {

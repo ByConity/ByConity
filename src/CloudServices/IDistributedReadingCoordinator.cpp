@@ -44,6 +44,16 @@ public:
 
         return response;
     }
+
+    void finish()
+    {
+
+    }
+
+    void addSplit()
+    {
+        
+    }
 };
 
 ParallelReadResponse ParallelReplicasReadingCoordinator::handleRequest(ParallelReadRequest request)
@@ -52,6 +62,22 @@ ParallelReadResponse ParallelReplicasReadingCoordinator::handleRequest(ParallelR
         initialize();
 
     return pimpl->handleRequest(std::move(request));
+}
+
+void ParallelReplicasReadingCoordinator::addSplit()
+{
+    if (!pimpl)
+        initialize();
+
+    /// return pimpl->addSplit(std::move());
+}
+
+void ParallelReplicasReadingCoordinator::finish()
+{
+    if (!pimpl)
+        initialize();
+
+    return pimpl->finish();
 }
 
 }

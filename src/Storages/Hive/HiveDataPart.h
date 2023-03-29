@@ -37,6 +37,7 @@ struct HivePartInfo
 {
     String name;
     String partition_id;
+    size_t file_size;
 
     HivePartInfo(const String & name_, const String & partition_id_)
         : name(name_)

@@ -20,6 +20,7 @@
 #include <Storages/Hive/HiveDataPart.h>
 #include <Storages/MergeTree/RowGroupsInDataPart.h>
 #include <Storages/StorageCloudHive.h>
+#include "Storages/Hive/HiveDataSelectExecutor.h"
 
 namespace DB
 {
@@ -93,6 +94,34 @@ private:
     mutable std::mutex mutex;
 
     // Poco::Logger * log = Poco::Logger::get("CnchHiveReadPool");
+};
+
+class HiveDistributedReadPool : private boost::noncopyable
+{
+public:
+    HiveDistributedReadPool(
+        const StorageMetadataPtr & metadata_snapshot_,
+        const StorageCloudHive & data_,
+        const size_t & threads_,
+        DistributedReadingExtension extension_,
+        Names column_names_)
+        : metadata_snapshot(metadata_snapshot_)
+        , data(data_)
+        , threads(threads_)
+        , extension(extension_)
+        , column_names(column_names_)
+    {
+    }
+
+    CnchHiveReadTaskPtr getTask(const size_t & thread);
+private:
+    StorageMetadataPtr metadata_snapshot;
+    const StorageCloudHive & data;
+    size_t threads;
+    DistributedReadingExtension extension;
+    Names column_names;
+    bool no_more_tasks_available{false};
+
 };
 
 }

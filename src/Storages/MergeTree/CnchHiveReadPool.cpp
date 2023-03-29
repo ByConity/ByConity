@@ -36,7 +36,6 @@ CnchHiveReadPool::CnchHiveReadPool(
     const StorageMetadataPtr & metadata_snapshot_,
     Names column_names_)
     : backoff_state{threads_}, parts{std::move(parts_)}, data{data_}, metadata_snapshot(metadata_snapshot_), column_names{column_names_}
-
 {
     fillPerThreadInfo(threads_, sum_row_groups_, parts);
 }
