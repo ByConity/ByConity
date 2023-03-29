@@ -1,5 +1,6 @@
 ---
-Title: Background and Technical Architecture
+title: Background and Technical Architecture
+sidebar_position: 4
 tags:
   - Docs
 ---
@@ -20,7 +21,7 @@ ByConity can be roughly divided into 3 layers: Service Access Layer, Computing L
 
 ## Service Access Layer
 
-ByConity 's service access layer accepts the user's query, first parses the query, and combines the catalog  api to obtain Metadata information to generate an efficient execution plan, then obtains available computing resources through the Resource Manager, and finally schedules the query plan to a suitable (e.g., with cache) computing node for execution. The service access layer consists of one or more servers and supports horizontal expansion, serving as a response to user services and coordinating scheduling. In addition to user jobs, there are background tasks in ByConity, such as compaction/ gc , etc. These background tasks are managed by the Daemon manager and dispatched to the corresponding server for execution.
+ByConity 's service access layer accepts the user's query, first parses the query, and combines the catalog api to obtain Metadata information to generate an efficient execution plan, then obtains available computing resources through the Resource Manager, and finally schedules the query plan to a suitable (e.g., with cache) computing node for execution. The service access layer consists of one or more servers and supports horizontal expansion, serving as a response to user services and coordinating scheduling. In addition to user jobs, there are background tasks in ByConity, such as compaction/ gc , etc. These background tasks are managed by the Daemon manager and dispatched to the corresponding server for execution.
 
 The query optimizer is one of the cores of the ByConity system. An excellent optimizer can greatly improve query performance. Especially in complex query scenarios, the optimizer can improve performance by several to hundreds of times. ByConity's self-developed optimizer provides extreme optimization capabilities based on four major optimization directions (rule-based, cost-based, data-dependence-based, and histroy-based).
 
@@ -36,7 +37,7 @@ ByConity 's metadata and data are stored separately. Metadata is stored in a dis
 
 ### Metadata Storage
 
-ByConity 's Metadata storage implements a common catalog  api based on a high-performance distributed key-value store (FoundationDB), making the backend pluggable and easy to expand and adapt to other key-value stores. ByConity also implements complete transaction semantics ( ACID ) support on the upper layer of the catalog api, providing efficient and reliable Metadata services and ensuring high data quality.
+ByConity 's Metadata storage implements a common catalog api based on a high-performance distributed key-value store (FoundationDB), making the backend pluggable and easy to expand and adapt to other key-value stores. ByConity also implements complete transaction semantics ( ACID ) support on the upper layer of the catalog api, providing efficient and reliable Metadata services and ensuring high data quality.
 
 ### Data storage
 

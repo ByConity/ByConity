@@ -77,7 +77,7 @@ const config = {
         items: [
           {
             type: "doc",
-            docId: "ByConity简介/主要原理概念",
+            docId: "introduction/main-principle-concepts",
             position: "left",
             label: "Docs",
           },
@@ -110,7 +110,7 @@ const config = {
             items: [
               {
                 label: "Docs",
-                to: "/docs/ByConity简介/主要原理概念",
+                to: "/docs/introduction/main-principle-concepts",
               },
             ],
           },
