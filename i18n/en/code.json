@@ -1,9 +1,9 @@
 {
   "underConstruction.text": {
-    "message": "underConstruction.text"
+    "message": "This page is under construction. Stay tuned!"
   },
   "usersPage.title": {
-    "message": "usersPage.title"
+    "message": "Users"
   },
   "theme.ErrorPageContent.title": {
     "message": "This page crashed.",
@@ -277,69 +277,69 @@
     "description": "The title of the tag list page"
   },
   "communityPage.title": {
-    "message": "communityPage.title"
+    "message": "Community"
   },
   "homePage.communitySection.title": {
-    "message": "homePage.communitySection.title"
+    "message": "Join the Community"
   },
   "homePage.getStartedSection.title": {
-    "message": "homePage.getStartedSection.title"
+    "message": "Let's Get Started!"
   },
   "homePage.getStartedSection.readDocs.title": {
-    "message": "homePage.getStartedSection.readDocs.title"
+    "message": "Read the Documentations"
   },
   "getStarted": {
-    "message": "getStarted"
+    "message": "Get Started"
   },
   "homePage.getStartedSection.contribute.title": {
-    "message": "homePage.getStartedSection.contribute.title"
+    "message": "Start Contributing"
   },
   "homePage.introductionSection.title": {
-    "message": "homePage.introductionSection.title"
+    "message": "What is ByConity?"
   },
   "homePage.introductionSection.description": {
-    "message": "homePage.introductionSection.description"
+    "message": "ByConity is a distributed cloud-native SQL data warehouse engine, that excels in interactive queries and Ad-Hoc queries, featuring support for querying multiple tables, cluster expansion without sensation, and unified aggregation of offline batch data and real-time data streams."
   },
   "homePage.keyFeaturesSection.feature1.title": {
-    "message": "homePage.keyFeaturesSection.feature1.title"
+    "message": "High Performance, Low Cost"
   },
   "homePage.keyFeaturesSection.feature1.description": {
-    "message": "homePage.keyFeaturesSection.feature1.description"
+    "message": "Support sub-second query response capability under massive data scale through vectorized execution engine, columnar storage and CBO+RBO optimizer. At the same time, the ultra-high compression ratio helps users save a lot of storage space and reduce disk costs."
   },
   "homePage.keyFeaturesSection.feature2.title": {
-    "message": "homePage.keyFeaturesSection.feature2.title"
+    "message": "Unified Support for Multiple Scenarios"
   },
   "homePage.keyFeaturesSection.feature2.description": {
-    "message": "homePage.keyFeaturesSection.feature2.description"
+    "message": "Supports real-time data streaming and offline batch data writing with interactive things capability and multi-table associative query capability, which can meet the interactive query needs of online systems as well as backend real-time monitoring, report big screen, etc."
   },
   "homePage.keyFeaturesSection.feature3.title": {
-    "message": "homePage.keyFeaturesSection.feature3.title"
+    "message": "Eco-friendly"
   },
   "homePage.keyFeaturesSection.feature3.description": {
-    "message": "homePage.keyFeaturesSection.feature3.description"
+    "message": "Compatible with most ClickHouse interfaces and tools, supports Kafka, Spark, Flink and many other data imports, also supports Superset, Tableau and other data visualization tools."
   },
   "homePage.keyFeaturesSection.title": {
-    "message": "homePage.keyFeaturesSection.title"
+    "message": "Key Features"
   },
   "tagline": {
-    "message": "tagline"
+    "message": "Cloud native big data analysis engine"
   },
   "homePage.communitySection.github.title": {
-    "message": "homePage.communitySection.github.title"
+    "message": "Github"
   },
   "homePage.communitySection.wechat.title": {
-    "message": "homePage.communitySection.wechat.title"
+    "message": "Wechat"
   },
   "homePage.communitySection.bilibili.title": {
-    "message": "homePage.communitySection.bilibili.title"
+    "message": "Bilibili"
   },
   "homePage.communitySection.twitter.title": {
-    "message": "homePage.communitySection.twitter.title"
+    "message": "Twitter"
   },
   "homePage.communitySection.slack.title": {
-    "message": "homePage.communitySection.slack.title"
+    "message": "Slack"
   },
   "homePage.communitySection.meetup.title": {
-    "message": "homePage.communitySection.meetup.title"
+    "message": "Meetup"
   }
 }
