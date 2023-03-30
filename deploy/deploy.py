@@ -12,6 +12,7 @@ import os
 import sys
 import shutil
 import time
+import getpass
 
 SCRIPT_DIR = Path(os.path.realpath(__file__)).parent
 logging.basicConfig(level=logging.INFO,
@@ -168,7 +169,8 @@ class Entity:
         self.conf.update(ROOT / 'path', self.workspace / "data")
         self.conf.update(ROOT / 'tmp_path', self.workspace / "tmp_data")
         self.conf.update(ROOT / 'user_files_path', self.workspace / "user_files")
-        self.conf.update(ROOT / 'users_config', self.workspace / "cnch-users.xml")
+        self.conf.update(ROOT / 'users_config', self.workspace / "byconity-users.xml")
+        self.conf.update(ROOT / 'cnch_config', self.workspace / "cnch_config.xml")
 
         self.conf.update(ROOT / 'format_schema_path',
                          self.workspace / "format_schemas")
@@ -181,7 +183,7 @@ class Entity:
         '''kill the process of this entity and the tmux window'''
         for proc in psutil.process_iter():
             p = psutil.Process(proc.pid)
-            if p.username() == os.getlogin():
+            if p.username() == getpass.getuser():
                 cmd = ' '.join(x for x in proc.cmdline())
                 kill = False
                 if self.BIN in cmd:
@@ -197,6 +199,8 @@ class Server(Entity):
 
     TEMPLATE_HDFS_CONFIG = 'hdfs3.xml'
     TEMPLATE_USER_CONFIG = 'byconity-users.xml'
+    TEMPLATE_CNCH_CONFIG = 'cnch_config.xml'
+    TEMPLATE_FDB_CLUSTER_CONFIG = 'fdb.cluster'
 
     def __init__(self, name, template_path, cluster_dir, hdfs_prefix, catalog_type):
         # the order must be the same as that in the service_discovery section
@@ -229,10 +233,10 @@ class Server(Entity):
         self.conf.update(DM.SERVICE, dm)
         self.conf.update(ROOT / "service_discovery", sd)
 
-        for port in self.port_list:
-            self.conf.update(ROOT / port, self.port_gen.get(port))
+        # for port in self.port_list:
+        #     self.conf.update(ROOT / port, self.port_gen.get(port))
 
-        hdfs_path = Path(self.hdfs_prefix) / os.getlogin()
+        hdfs_path = Path(self.hdfs_prefix) / getpass.getuser()
 
         self.conf.clear(ROOT / 'storage_configuration/disks')
         # If path does not exist, mkdir for it
@@ -251,24 +255,28 @@ class Server(Entity):
                          self.workspace / "logs_bytejournal")
 
         self.conf.update(ROOT / "tso_service/bytejournal/election_point_key",
-                         "tso_election_point_" + os.getlogin())
+                         "tso_election_point_" + getpass.getuser())
         self.conf.update(ROOT / "bytejournal/cnch_prefix",
-                         "cnch_prefix_" + os.getlogin())
+                         "cnch_prefix_" + getpass.getuser())
 
         self.conf.update(ROOT / "server_leader_election/namespace",
-                         "server_namespace_" + os.getlogin())
+                         "server_namespace_" + getpass.getuser())
         self.conf.update(ROOT / "server_leader_election/point",
-                         "server_point_" + os.getlogin())
+                         "server_point_" + getpass.getuser())
         if self.catalog_type == 'fdb':
-            fdb_path = f'{self.workspace}/fdb/cluster_config/'
+            fdb_path = f'{self.workspace}/fdb.cluster'
             self.conf.update(ROOT / "catalog_service/fdb/cluster_file", fdb_path)
             self.conf.update(ROOT / "tso_service/fdb/cluster_file", fdb_path)
-            Path(fdb_path).resolve().mkdir(parents=True, exist_ok=True)
+            # Path(fdb_path).resolve().mkdir(parents=True, exist_ok=True)
 
         self.conf.save()
         shutil.copy(self.template_dir / self.TEMPLATE_USER_CONFIG,
                     self.workspace)
         shutil.copy(self.template_dir / self.TEMPLATE_HDFS_CONFIG,
+                    self.workspace)
+        shutil.copy(self.template_dir / self.TEMPLATE_CNCH_CONFIG,
+                    self.workspace)
+        shutil.copy(self.template_dir / self.TEMPLATE_FDB_CLUSTER_CONFIG,
                     self.workspace)
 
 
@@ -400,16 +408,16 @@ class CNCHCluster(Cluster):
             return
 
         # combine the sd section of all entities to get the complete sd section
-        self.conf.remove(Server.SD / 'node')
-        for server in self.servers:
-            self.conf.add(Server.SD, server.gen_sd_config())
-        self.conf.remove(Worker.SD / 'node')
-        for worker in self.workers:
-            self.conf.add(Worker.SD, worker.gen_sd_config())
-        self.conf.update(ROOT / "service_discovery" / 'tso-server',
-                         self.tso.gen_sd_config())
-        self.conf.update(ROOT / "service_discovery" / 'daemon-manager',
-                         self.dm.gen_sd_config())
+        # self.conf.remove(Server.SD / 'node')
+        # for server in self.servers:
+        #     self.conf.add(Server.SD, server.gen_sd_config())
+        # self.conf.remove(Worker.SD / 'node')
+        # for worker in self.workers:
+        #     self.conf.add(Worker.SD, worker.gen_sd_config())
+        # self.conf.update(ROOT / "service_discovery" / 'tso-server',
+        #                  self.tso.gen_sd_config())
+        # self.conf.update(ROOT / "service_discovery" / 'daemon-manager',
+        #                  self.dm.gen_sd_config())
         csd = self.conf.get_node(ROOT / "service_discovery")
 
         # get xml nodes of other entities
@@ -440,7 +448,7 @@ if __name__ == '__main__':
 
     parser.add_argument('-c',
                         '--catalog_type',
-                        default='bytekv',
+                        default='fdb',
                         choices=['bytekv', 'fdb'],
                         help="Type of catalog to use")
 
