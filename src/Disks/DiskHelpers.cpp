@@ -45,7 +45,6 @@ DiskPtr getDiskForPathId(const StoragePolicyPtr& storage_policy, UInt32 path_id)
     VolumePtr remote_volume = storage_policy->getVolume(0);
     String disk_name = getDiskNameForPathId(remote_volume, path_id);
     DiskPtr disk = storage_policy->getDiskByName(disk_name);
-    fmt::print(stderr, "Getting disk {}:{} from volumn {} with storage policy {}\n", disk_name, disk->getPath(), remote_volume->getName(), storage_policy->getName());
     if (disk == nullptr)
         throw Exception("Disk " + disk_name + " not found in " + storage_policy->getName(),
             ErrorCodes::INVALID_CONFIG_PARAMETER);
