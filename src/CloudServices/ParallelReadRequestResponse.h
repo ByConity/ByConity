@@ -9,22 +9,19 @@ namespace DB
 
 struct ParallelReadRequest
 {
-    size_t replica_num;
-    // size_t min_weight;
+    String worker_id;
+    size_t min_weight {0};
 
     void serialize(WriteBuffer & out) const;
-    String describe() const;
     void deserialize(ReadBuffer & in);
-    void merge(ParallelReadRequest & other);
 };
 
 struct ParallelReadResponse
 {
     bool finish{false};
-    IParallelReadSplits split;
+    ParallelReadSplits split;
 
     void serialize(WriteBuffer & out) const;
-    String describe() const;
     void deserialize(ReadBuffer & in);
 };
 

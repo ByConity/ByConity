@@ -127,7 +127,8 @@ namespace Protocol
                 "TableColumns",
                 "PartUUIDs",
                 "ReadTaskRequest",
-                "QueryMetrics"
+                "QueryMetrics",
+                "DistributedReadTaskRequest"
             };
             return packet <= MAX
                 ? data[packet]

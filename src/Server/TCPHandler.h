@@ -200,7 +200,7 @@ private:
     void receivePlanSegment();
     void receiveIgnoredPartUUIDs();
     String receiveReadTaskResponseAssumeLocked();
-    std::optional<ParallelReadResponse> receiveDistributedReadTaskResponseAssumeLocked()
+    std::optional<ParallelReadResponse> receiveDistributedReadTaskResponseAssumeLocked();
     bool receiveData(bool scalar);
     bool readDataNext(size_t poll_interval, time_t receive_timeout);
     void readData(const Settings & connection_settings);

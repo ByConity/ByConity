@@ -26,7 +26,7 @@ class ParquetBlockInputFormat;
 
 CnchHiveThreadSelectBlockInputProcessor::CnchHiveThreadSelectBlockInputProcessor(
     const size_t & thread_,
-    const std::shared_ptr<CnchHiveReadPool> & pool_,
+    const HiveReadPoolPtr & pool_,
     const StorageCloudHive & /*storage_*/,
     const StorageMetadataPtr & metadata_snapshot_,
     ContextPtr & context_,
@@ -44,7 +44,6 @@ Block CnchHiveThreadSelectBlockInputProcessor::getHeader() const
 
 Chunk CnchHiveThreadSelectBlockInputProcessor::generate()
 {
-    LOG_TRACE(&Poco::Logger::get("CnchHiveThreadSelectBlockInputProcessor"), " generate ");
     Block res;
 
     while (!res && !isCancelled())

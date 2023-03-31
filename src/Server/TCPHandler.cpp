@@ -847,9 +847,9 @@ void TCPHandler::sendReadTaskRequestAssumeLocked()
     out->next();
 }
 
-void sendDistributedReadTaskRequestAssumeLocked(ParallelReadRequest request)
+void TCPHandler::sendDistributedReadTaskRequestAssumeLocked(ParallelReadRequest request)
 {
-    writeVarUInt(Protocol::Server::, *out);
+    writeVarUInt(Protocol::Server::DistributedReadTaskRequest, *out);
     request.serialize(*out);
     out->next();
 }

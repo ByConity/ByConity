@@ -47,6 +47,9 @@
 #include <Storages/StorageInMemoryMetadata.h>
 #include <Disks/HDFS/DiskByteHDFS.h>
 #include <Disks/SingleDiskVolume.h>
+#include "CloudServices/HiveDistributedReadingCoordinator.h"
+#include "DataStreams/RemoteQueryExecutor.h"
+#include "Processors/Sources/RemoteSource.h"
 
 namespace DB
 {
@@ -563,7 +566,7 @@ StorageCnchHive::HiveTablePtr StorageCnchHive::getHiveTable() const
 
         if (uri.getScheme() != "hdfs")
         {
-            throw Exception("remote hive location path only support hdfs now,  Currently hdfs schema is " + uri.getScheme(), ErrorCodes::NOT_IMPLEMENTED);
+            throw Exception("remote hive location path only support hdfs now,  Currently hdfs uri is " + temp->sd.location, ErrorCodes::NOT_IMPLEMENTED);
         }
 
         hive_table = std::move(temp);
@@ -650,7 +653,9 @@ void StorageCnchHive::collectResource(ContextPtr local_context, const HiveDataPa
 
     cnch_resource->setWorkerGroup(local_context->getCurrentWorkerGroup());
     cnch_resource->addCreateQuery(local_context, shared_from_this(), create_table_query, local_table_name);
-    cnch_resource->addDataParts(getStorageUUID(), parts);
+
+    if (!local_context->getSettingsRef().enable_hive_distributed_reading)
+        cnch_resource->addDataParts(getStorageUUID(), parts);
 }
 
 Pipe StorageCnchHive::read(
@@ -662,6 +667,46 @@ Pipe StorageCnchHive::read(
     size_t max_block_size,
     unsigned num_streams)
 {
+    if (local_context->getSettingsRef().enable_hive_distributed_reading)
+    {
+        auto data_parts = prepareReadContext(column_names, metadata_snapshot, query_info, local_context, num_streams);
+        Block header = InterpreterSelectQuery(query_info.query, local_context, SelectQueryOptions(processed_stage)).getSampleBlock();
+        const Scalars & scalars = local_context->hasQueryContext() ? local_context->getQueryContext()->getScalars() : Scalars{};
+
+        LOG_TRACE(log, "Original query before rewrite: {}", queryToString(query_info.query));
+        auto modified_query_ast = rewriteSelectQuery(query_info.query, getDatabaseName(), getCloudTableName(local_context));
+        auto worker_group = local_context->getCurrentWorkerGroup();
+
+        auto coordinator = std::make_shared<HiveDistributedReadingCoordinator>(worker_group);
+        coordinator->addParts(std::move(data_parts));
+        coordinator->finish();
+
+        RemoteQueryExecutor::Extension extension
+        {
+            .coordinator = coordinator
+        };
+
+        Pipes pipes;
+
+        for (const auto & shard_info : worker_group->getShardsInfo())
+        {
+            auto remote_query_executor = std::make_shared<RemoteQueryExecutor>(
+                shard_info.pool,
+                queryToString(modified_query_ast),
+                header,
+                local_context,
+                /*throttler=*/nullptr,
+                scalars,
+                Tables(),
+                processed_stage,
+                extension);
+            pipes.emplace_back(
+                std::make_shared<RemoteSource>(remote_query_executor, processed_stage == QueryProcessingStage::WithMergeableState, false));
+        }
+
+        return Pipe::unitePipes(std::move(pipes));
+    }
+
     QueryPlan plan;
     read(plan, column_names, metadata_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
     return plan.convertToPipe(
@@ -675,9 +720,17 @@ void StorageCnchHive::read(
     SelectQueryInfo & query_info,
     ContextPtr local_context,
     QueryProcessingStage::Enum processed_stage,
-    const size_t /*max_block_size*/,
+    const size_t max_block_size,
     unsigned num_streams)
 {
+    if (local_context->getSettingsRef().enable_hive_distributed_reading)
+    {
+        auto pipe = read(column_names, metadata_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
+        auto read_step = std::make_unique<ReadFromStorageStep>(std::move(pipe), getName());
+        query_plan.addStep(std::move(read_step));
+        return;
+    }
+
     LOG_TRACE(log, " read  num_streams = {}", num_streams);
 
     auto data_parts = prepareReadContext(column_names, metadata_snapshot, query_info, local_context, num_streams);

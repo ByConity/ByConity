@@ -26,7 +26,7 @@ namespace DB
 struct DistributedReadingExtension
 {
     DistributedReadTaskCallback callback;
-    size_t number_of_current_replica;
+    String worker_id;
 };
 
 /** Executes SELECT queries on data from the hive.

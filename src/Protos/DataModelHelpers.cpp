@@ -450,7 +450,7 @@ createCnchHiveDataParts(const ContextPtr & context, const pb::RepeatedPtrField<P
             disk = std::make_shared<DiskByteHDFS>(part.hdfs_uri(), "", params);
         }
 
-        res.emplace_back(std::make_shared<const HiveDataPart>(
+        res.emplace_back(std::make_shared<HiveDataPart>(
             part_name,
             part.relative_path(),
             part.has_hdfs_uri() ? part.hdfs_uri() : context->getHdfsNNProxy(),

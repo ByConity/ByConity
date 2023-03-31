@@ -148,7 +148,7 @@ Pipe StorageS3Cluster::read(
             /// So, task_identifier is passed as constructor argument. It is more obvious.
             auto remote_query_executor = std::make_shared<RemoteQueryExecutor>(
                     *connections.back(), queryToString(query_info.query), header, context,
-                    /*throttler=*/nullptr, scalars, Tables(), processed_stage, callback);
+                    /*throttler=*/nullptr, scalars, Tables(), processed_stage, RemoteQueryExecutor::Extension{ .task_iterator = std::move(callback) });
 
             pipes.emplace_back(std::make_shared<RemoteSource>(remote_query_executor, add_agg_info, false));
         }

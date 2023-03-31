@@ -35,6 +35,7 @@
 #include <Interpreters/CnchQueryMetrics/QueryWorkerMetricLog.h>
 #include <IO/ConnectionTimeoutsContext.h>
 #include <Common/FiberStack.h>
+#include "Core/Protocol.h"
 #include <Client/MultiplexedConnections.h>
 #include <Client/HedgedConnections.h>
 #include <CloudServices/CnchServerResource.h>
@@ -54,11 +55,13 @@ RemoteQueryExecutor::RemoteQueryExecutor(
     Connection & connection,
     const String & query_, const Block & header_, ContextPtr context_,
     ThrottlerPtr throttler, const Scalars & scalars_, const Tables & external_tables_,
-    QueryProcessingStage::Enum stage_, std::shared_ptr<TaskIterator> task_iterator_)
+    QueryProcessingStage::Enum stage_, std::optional<Extension> extension_)
     : header(header_), query(query_), context(context_)
-    , scalars(scalars_), external_tables(external_tables_), stage(stage_), task_iterator(task_iterator_)
+    , scalars(scalars_), external_tables(external_tables_), stage(stage_)
+    , task_iterator(extension_ ? extension_->task_iterator : nullptr)
+    , coordinator(extension_ ? extension_->coordinator : nullptr)
 {
-    create_connections = [this, &connection, throttler]()
+    create_connections = [this, &connection, throttler, extension_]()
     {
         return std::make_unique<MultiplexedConnections>(connection, context, context->getSettingsRef(), throttler);
     };
@@ -68,9 +71,11 @@ RemoteQueryExecutor::RemoteQueryExecutor(
     std::vector<IConnectionPool::Entry> && connections_,
     const String & query_, const Block & header_, ContextPtr context_,
     const ThrottlerPtr & throttler, const Scalars & scalars_, const Tables & external_tables_,
-    QueryProcessingStage::Enum stage_, std::shared_ptr<TaskIterator> task_iterator_)
+    QueryProcessingStage::Enum stage_, std::optional<Extension> extension_)
     : header(header_), query(query_), context(context_)
-    , scalars(scalars_), external_tables(external_tables_), stage(stage_), task_iterator(task_iterator_)
+    , scalars(scalars_), external_tables(external_tables_), stage(stage_)
+    , task_iterator(extension_ ? extension_->task_iterator : nullptr)
+    , coordinator(extension_ ? extension_->coordinator : nullptr)
 {
     create_connections = [this, connections_, throttler]() mutable {
         return std::make_unique<MultiplexedConnections>(std::move(connections_), context, context->getSettingsRef(), throttler);
@@ -81,9 +86,11 @@ RemoteQueryExecutor::RemoteQueryExecutor(
     const ConnectionPoolWithFailoverPtr & pool,
     const String & query_, const Block & header_, ContextPtr context_,
     const ThrottlerPtr & throttler, const Scalars & scalars_, const Tables & external_tables_,
-    QueryProcessingStage::Enum stage_, std::shared_ptr<TaskIterator> task_iterator_)
+    QueryProcessingStage::Enum stage_, std::optional<Extension> extension_)
     : header(header_), query(query_), context(context_)
-    , scalars(scalars_), external_tables(external_tables_), stage(stage_), task_iterator(task_iterator_)
+    , scalars(scalars_), external_tables(external_tables_), stage(stage_)
+    , task_iterator(extension_ ? extension_->task_iterator : nullptr)
+    , coordinator(extension_ ? extension_->coordinator : nullptr)
 {
     create_connections = [this, pool, throttler]()->std::unique_ptr<IConnections>
     {
@@ -326,6 +333,9 @@ std::optional<Block> RemoteQueryExecutor::processPacket(Packet packet)
         case Protocol::Server::ReadTaskRequest:
             processReadTaskRequest();
             break;
+        case Protocol::Server::DistributedReadTaskRequest:
+            processDistributedReadTaskRequest(packet.request);
+            break;
         case Protocol::Server::PartUUIDs:
             if (!setPartUUIDs(packet.part_uuids))
                 got_duplicated_part_uuids = true;
@@ -414,6 +424,15 @@ void RemoteQueryExecutor::processReadTaskRequest()
         throw Exception("Distributed task iterator is not initialized", ErrorCodes::LOGICAL_ERROR);
     auto response = (*task_iterator)();
     connections->sendReadTaskResponse(response);
+}
+
+void RemoteQueryExecutor::processDistributedReadTaskRequest(ParallelReadRequest request)
+{
+    if (!coordinator)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Coordinator for distributed processing is not initialized");
+
+    auto response = coordinator->handleRequest(std::move(request));
+    connections->sendDistributedReadTaskResponse(response);
 }
 
 void RemoteQueryExecutor::finish(std::unique_ptr<ReadContext> * read_context)

@@ -29,6 +29,8 @@
 #include <Interpreters/StorageID.h>
 #include <Common/FiberStack.h>
 #include <Common/TimerDescriptor.h>
+#include "CloudServices/IDistributedReadingCoordinator.h"
+#include <optional>
 #include <variant>
 
 namespace DB
@@ -56,26 +58,33 @@ class RemoteQueryExecutor
 public:
     using ReadContext = RemoteQueryExecutorReadContext;
 
+    struct Extension
+    {
+        std::shared_ptr<TaskIterator> task_iterator;
+        std::shared_ptr<IDistributedReadingCoordinator> coordinator;
+        /// std::optional<IConnections::ReplicaInfo> replica_info;
+    };
+
     /// Takes already set connection.
     RemoteQueryExecutor(
         Connection & connection,
         const String & query_, const Block & header_, ContextPtr context_,
         ThrottlerPtr throttler_ = nullptr, const Scalars & scalars_ = Scalars(), const Tables & external_tables_ = Tables(),
-        QueryProcessingStage::Enum stage_ = QueryProcessingStage::Complete, std::shared_ptr<TaskIterator> task_iterator_ = {});
+        QueryProcessingStage::Enum stage_ = QueryProcessingStage::Complete, std::optional<Extension> extension_ = {});
 
     /// Accepts several connections already taken from pool.
     RemoteQueryExecutor(
         std::vector<IConnectionPool::Entry> && connections_,
         const String & query_, const Block & header_, ContextPtr context_,
         const ThrottlerPtr & throttler = nullptr, const Scalars & scalars_ = Scalars(), const Tables & external_tables_ = Tables(),
-        QueryProcessingStage::Enum stage_ = QueryProcessingStage::Complete, std::shared_ptr<TaskIterator> task_iterator_ = {});
+        QueryProcessingStage::Enum stage_ = QueryProcessingStage::Complete, std::optional<Extension> extension_ = {});
 
     /// Takes a pool and gets one or several connections from it.
     RemoteQueryExecutor(
         const ConnectionPoolWithFailoverPtr & pool,
         const String & query_, const Block & header_, ContextPtr context_,
         const ThrottlerPtr & throttler = nullptr, const Scalars & scalars_ = Scalars(), const Tables & external_tables_ = Tables(),
-        QueryProcessingStage::Enum stage_ = QueryProcessingStage::Complete, std::shared_ptr<TaskIterator> task_iterator_ = {});
+        QueryProcessingStage::Enum stage_ = QueryProcessingStage::Complete, std::optional<Extension> extension_ = {});
 
     ~RemoteQueryExecutor();
 
@@ -151,6 +160,9 @@ private:
     /// Initiator identifier for distributed task processing
     std::shared_ptr<TaskIterator> task_iterator;
 
+    /// 
+    std::shared_ptr<IDistributedReadingCoordinator> coordinator;
+
     /// Streams for reading from temporary tables and following sending of data
     /// to remote servers for GLOBAL-subqueries
     std::vector<ExternalTablesData> external_tables_data;
@@ -214,6 +226,8 @@ private:
     bool setPartUUIDs(const std::vector<UUID> & uuids);
 
     void processReadTaskRequest();
+
+    void processDistributedReadTaskRequest(ParallelReadRequest request);
 
     /// Cancell query and restart it with info about duplicated UUIDs
     /// only for `allow_experimental_query_deduplication`.

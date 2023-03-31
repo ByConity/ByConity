@@ -220,7 +220,7 @@ using InputBlocksReader = std::function<Block(ContextPtr)>;
 /// Used in distributed task processing
 using ReadTaskCallback = std::function<String()>;
 
-using DistributedReadTaskCallback = std::function<std::optional<ParallelReadResponse>(ParallelReadRequest)>
+using DistributedReadTaskCallback = std::function<std::optional<ParallelReadResponse>(ParallelReadRequest)>;
 
 class UniqueKeyIndexCache;
 using UniqueKeyIndexCachePtr = std::shared_ptr<UniqueKeyIndexCache>;
