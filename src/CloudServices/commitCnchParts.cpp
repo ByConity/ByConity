@@ -484,18 +484,15 @@ void CnchDataWriter::publishStagedParts(
     commitDumpedParts(items);
 }
 
-void tryPreload(
-    const ContextPtr local_context,
-    const MergeTreeMetaBase & storage,
-    const MutableMergeTreeDataPartsCNCHVector & dumped_parts)
+void CnchDataWriter::tryPreload(const MutableMergeTreeDataPartsCNCHVector & dumped_parts)
 {
-    auto settings = storage.getSettings();
-    if (settings->enable_preload_parts && settings->enable_local_disk_cache)
+    auto storage_settings = storage.getSettings();
+    if (storage_settings->enable_preload_parts && (storage_settings->enable_local_disk_cache || context->getSettingsRef().enable_preload_parts))
     {
         try
         {
             Stopwatch timer;
-            auto server_client = local_context->getCnchServerClientPool().get();
+            auto server_client = context->getCnchServerClientPool().get();
             MutableMergeTreeDataPartsCNCHVector preload_parts;
             std::copy_if(dumped_parts.begin(), dumped_parts.end(), std::back_inserter(preload_parts), [](const auto & part) {
                 return !part->deleted && !part->isPartial();

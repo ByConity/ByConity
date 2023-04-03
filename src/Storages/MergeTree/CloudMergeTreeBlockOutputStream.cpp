@@ -233,11 +233,11 @@ void CloudMergeTreeBlockOutputStream::writeSuffixImpl()
         writeSuffixForUpsert();
     }
 
-    if (!preload_parts.empty())
+    if (!preload_parts.empty() && storage.getSettings()->enable_preload_parts)
     {
         /// auto testlog = std::make_shared<TestLog>(const_cast<Context &>(context));
         /// TEST_START(testlog);
-        tryPreload(context, storage, preload_parts);
+        cnch_writer.tryPreload(preload_parts);
         /// TEST_END(testlog, "Finish tryPreloadChecksumsAndPrimaryIndex in batch mode");
     }
 }

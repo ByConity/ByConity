@@ -96,7 +96,8 @@ void CloudMergeTreeMergeTask::executeImpl()
         throw Exception("Merge task " + params.task_id + " is cancelled", ErrorCodes::ABORTED);
 
     CnchDataWriter cnch_writer(storage, getContext(), ManipulationType::Merge, params.task_id);
-    cnch_writer.dumpAndCommitCnchParts(temp_parts);
+    DumpedData data = cnch_writer.dumpAndCommitCnchParts(temp_parts);
+    cnch_writer.tryPreload(data.parts);
 }
 
 }

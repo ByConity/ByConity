@@ -70,6 +70,8 @@ public:
 
     void commitDumpedParts(const DumpedData & dumped_data);
 
+    void tryPreload(const MutableMergeTreeDataPartsCNCHVector & dumped_parts);
+
 private:
 
     MergeTreeMetaBase & storage;
@@ -81,8 +83,4 @@ private:
     cppkafka::TopicPartitionList tpl;
 };
 
-void tryPreload(
-    const ContextPtr context,
-    const MergeTreeMetaBase & storage,
-    const MutableMergeTreeDataPartsCNCHVector & dumped_parts);
 }
