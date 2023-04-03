@@ -660,6 +660,7 @@ def run_tests_array(all_tests_with_params):
                         if stderr:
                             status += stderr
                         status += 'Database: ' + testcase_args.testcase_database
+                        print(status)
                     else:
                         counter = 1
                         while need_retry(stderr):
