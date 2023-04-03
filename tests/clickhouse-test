@@ -642,7 +642,8 @@ def run_tests_array(all_tests_with_params):
 
                     testcase_args = configure_testcase_args(args, case_file, suite_tmp_dir, stderr_file)
                     proc, stdout, stderr, total_time = run_single_test(testcase_args, ext, server_logs_level, client_options, case_file, stdout_file, stderr_file)
-
+                    print("returncode: ")
+                    print(proc.returncode)
                     if proc.returncode is None:
                         try:
                             proc.kill()
@@ -660,7 +661,7 @@ def run_tests_array(all_tests_with_params):
                         if stderr:
                             status += stderr
                         status += 'Database: ' + testcase_args.testcase_database
-                        print(status)
+                        print(Output!!!)
                     else:
                         counter = 1
                         while need_retry(stderr):
