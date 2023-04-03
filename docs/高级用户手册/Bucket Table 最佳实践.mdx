@@ -1,0 +1,63 @@
+---
+title: Bucket table 最佳实践手册
+tags:
+  - Docs
+---
+
+# Bucket table 说明
+
+在 ByConity 中使用 Bucket table 时，系统会依据用户建表语句中提供的一个或者多个列、表达式整理表数据，将相同值的数据聚簇在同一个 bucket number 下。
+
+# 使用 Bucket table 的收益
+
+使用 cluster key 聚蔟数据在大表上可以获得以下几项收益：
+1. 针对 cluster key 的点查可以过滤掉大部分数据，降低IO量获得更短的执行时间和更高的并发QPS
+2. 针对 cluster key 的聚合计算，可以有更少的内存占用和更短的执行时间，配合 distributed_perfect_shard 优化可以获得进一步的提高
+3. 两张或者多张表针对 cluster key 的 join 可以获得 co-located join 的优化，极大的降低 shuffle 数据量并得到更短的执行时间
+
+# 什么时候考虑使用 Bucket table
+
+1. 表足够大，意味着在一个分区下的parts数量至少需要显著多于 worker 数量
+2. 查询语句可以从上述收益点中获益
+
+# 如何选择 cluster key
+
+Cluster key 可以是一个或者多个列、表达式，建议最多使用3个字段，更多的字段通常会引入过高的写入代价且获益语句范围更小。
+
+选择正确的 cluster key 对于性能的影响非常显著，因此需要慎重选择。通常可以按照如下原则：
+1. 经常用于相等、IN 过滤的列
+2. 常用的聚合列
+3. 多表的 join key
+
+上述场景如果常用的情况是两列组合，比如 a = 1 and b = 2，那么 cluster key 选择两列可以获得更好的效果。
+
+另一个需要考虑的维度是列的 distinct 值数量：
+1. distinct 值需要至少超过 worker 数量
+2. 如果 distinct 值数量较小，最好能保持 worker 数量的倍数，以实现查询时数据分布的更均衡
+
+# 如何选择 bucket number
+
+在一个分区内
+1. 数据会依据 cluster key 的值分配到相应 bucket number 的 parts 中
+2. 同一个 bucket number 的 parts 在查询时会发送到同一个 worker 节点上计算
+
+因此选择一个合适的 bucket number 对于存储和查询都有重大的影响，一般有如下原则：
+1. 确保 bucket number 为 worker 数量的倍数，这是为了保证查询时分配的均衡，一般建议设置为1倍或者2倍（预留扩充worker节点余度）worker节点数量即可
+2. 确保一个分区下一个 bucket number 中有足够多的数据，不要生成太小的 parts，因此建议如果表比较小，至少确保一个分区的一个 bucket number parts 大小超过 1GB。不要设置过高的 bucket nubmer，可以出现小于 worker 数量的 bucket number
+
+# 如何决定是否要修改 cluster by 定义
+
+在运行过程中因为数据变化、查询模式变化、worker节点数量变化，用户可能会想要重新设置 cluster key 和 bucket number。
+
+这里需要考虑实施修改的代价，权衡是否需要修改已经何时修改：
+1. 修改 cluster by 定义需要对现存已有数据做 recluster，需要评估现存数据量估算 recluster 执行时间
+2. recluster 期间现存数据的查询会回退为一张普通表，所有 bucket table 的收益暂时都失去
+3. Recluster 会占用 write worker 的资源，需要评估当前cnch集群是否有独立的 write worker 以及当前负担，评估对现有查询、merge等任务的影响
+
+这里有两种情况：
+1. 修改 cluster key：
+  1. 此时意味着当前的数据已经无法获得 bucket table 收益，因此无需考虑 recluster 期间失去的收益
+  2. 需要评估 recluster 任务对于现有任务的影响判断是否可以执行
+2. 修改 bucket number
+  1. 当前 bucket table 的收益仍在，因此需要和业务方确认可以接受的性能回退的时间，进一步根据 recluster 时间判断是否可以执行，以及确定开始执行时间
+  2. 也需要评估 recluster 任务对于现有任务的影响判断是否可以执行
