@@ -1,14 +1,13 @@
 ---
-title: Linux 搭建 ByConity 开发环境
+title: Setup ByConity Developement Environment 
 tags:
   - Docs
 ---
 
-# Linux 搭建 ByConity 开发环境
+# Setup ByConity Developement Environment
 
-# 环境依赖
-
-从源码编译 ByConity 需要安装以下组件
+## Environment Dependencies
+The following components are required to compile ByConity from source code:
 
 ```
 Git
@@ -20,11 +19,10 @@ Third-Party Library: openssl
 
 ```
 
-# Linux 开发环境
+## Linux Development Environment
+### Installing dependencies
 
-## 安装依赖
-
-Debian 11 (Bullseye) 示例
+Example for Debian 11 (Bullseye)
 
 ```
 sudo apt-get update
@@ -38,7 +36,7 @@ sudo ./llvm.sh 12
 
 ```
 
-## 编译 ByConity
+### Compiling ByConity
 
 ```
 git clone --recursive <ByConity Repository URL> byconity
@@ -52,7 +50,7 @@ ninja
 
 ```
 
-可执行文件在 programs 目录下
+The executable files are located in the programs directory:
 
 ```
 clickhouse-client    # byconity client
