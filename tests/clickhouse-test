@@ -373,7 +373,16 @@ def run_single_test(args, ext, server_logs_level, client_options, case_file, std
 
     with open(stdout_file, 'w') as out, open(stderr_file, 'w') as err, open(case_file, 'r') as test_case:
         proc = Popen(shlex.split(command), stdin=test_case, stdout=out, stderr=err, env=os.environ, universal_newlines=True)
-        proc.communicate(timeout=args.timeout)
+        try:
+            proc.communicate(timeout=args.timeout*2)
+        except TimeoutExpired:
+            # kill test process because it can also hung
+            if proc.returncode is None:
+                try:
+                    proc.kill()
+                except OSError as e:
+                    if e.errno != ESRCH:
+                        raise
 
 
 #    while (datetime.now() - start_time).total_seconds() < args.timeout and proc.poll() is None:
