@@ -324,7 +324,14 @@ def configure_testcase_args(args, case_file, suite_tmp_dir, stderr_file):
             try:
                 clickhouse_proc_create.communicate(("CREATE DATABASE " + database + get_db_engine(testcase_args, database)), timeout=testcase_args.timeout)
             except TimeoutExpired:
-                database = 'test'
+                # kill test process because it can also hung
+                # continue using database as it was most likely created
+                if clickhouse_proc_create.returncode is None:
+                    try:
+                        clickhouse_proc_create.kill()
+                    except OSError as e:
+                        if e.errno != ESRCH:
+                            raise
 
         os.environ["CLICKHOUSE_DATABASE"] = database
         # Set temporary directory to match the randomly generated database,
@@ -641,10 +648,6 @@ def run_tests_array(all_tests_with_params):
 
                     testcase_args = configure_testcase_args(args, case_file, suite_tmp_dir, stderr_file)
                     proc, stdout, stderr, total_time = run_single_test(testcase_args, ext, server_logs_level, client_options, case_file, stdout_file, stderr_file)
-                    print("returncode: ")
-                    print(proc.returncode)
-                    print("reference file: "  + str(reference_file))
-                    print("total_time: "  + str(total_time))
                     if proc.returncode is None:
                         try:
                             proc.kill()
@@ -657,12 +660,11 @@ def run_tests_array(all_tests_with_params):
                         status += print_test_time(total_time)
                         status += " - Timeout!\n"
                         if stdout:
-                            status += "Output!!!: "
+                            status += "Output: \n"
                             status += stdout + "\n"
                         if stderr:
                             status += stderr
                         status += 'Database: ' + testcase_args.testcase_database
-                        print("Output!!!")
                     else:
                         counter = 1
                         while need_retry(stderr):
@@ -1266,7 +1268,7 @@ if __name__ == '__main__':
     parser.add_argument('--configclient', help='Client config (if you use not default ports)')
     parser.add_argument('--configserver', default= '/etc/clickhouse-server/config.xml', help='Preprocessed server config')
     parser.add_argument('-o', '--output', help='Output xUnit compliant test report directory')
-    parser.add_argument('-t', '--timeout', type=int, default=1200, help='Timeout for each test case in seconds')
+    parser.add_argument('-t', '--timeout', type=int, default=300, help='Timeout for each test case in seconds')
     parser.add_argument('--global_time_limit', type=int, help='Stop if executing more than specified time (after current test finished)')
     parser.add_argument('test', nargs='*', help='Optional test case name regex')
     parser.add_argument('-d', '--disabled', action='store_true', default=False, help='Also run disabled tests')
