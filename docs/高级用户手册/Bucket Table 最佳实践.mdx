@@ -12,7 +12,7 @@ tags:
 
 使用 cluster key 聚蔟数据在大表上可以获得以下几项收益：
 1. 针对 cluster key 的点查可以过滤掉大部分数据，降低IO量获得更短的执行时间和更高的并发QPS
-2. 针对 cluster key 的聚合计算，可以有更少的内存占用和更短的执行时间，配合 distributed_perfect_shard 优化可以获得进一步的提高
+2. 针对 cluster key 的聚合计算，计算节点可以在数据子集进行预先计算，实现更小的内存占用和更短的执行时间
 3. 两张或者多张表针对 cluster key 的 join 可以获得 co-located join 的优化，极大的降低 shuffle 数据量并得到更短的执行时间
 
 # 什么时候考虑使用 Bucket table
@@ -31,14 +31,27 @@ Cluster key 可以是一个或者多个列、表达式，建议最多使用3个�
 
 上述场景如果常用的情况是两列组合，比如 a = 1 and b = 2，那么 cluster key 选择两列可以获得更好的效果。
 
-另一个需要考虑的维度是列的 distinct 值数量：
-1. distinct 值需要至少超过 worker 数量
-2. 如果 distinct 值数量较小，最好能保持 worker 数量的倍数，以实现查询时数据分布的更均衡
+另一个需要考虑的维度是列的 distinct 值数量，鉴于
+1. 相同 cluster key 的数据会归属于同一个 bucket number
+2. 一个 bucket number 下的所有 parts 会发送到同一个 worker 中进行计算
+
+我们可以得出结论
+1. 为了能利用所有 worker 节点进行计算，distinct 值需要至少超过 worker 数量
+2. 如果 distinct 值数量较小，偏向于选择最大的 distinct 值，最好为 worker 数量的倍数，以实现查询时数据分布的更均衡
+
+例如：
+1. 表 test，用户常用的过滤列是 c1, c2, c3，列相互独立
+2. worker 数量为 30
+3. distinct c1 为 6
+4. distinct c2 为 8
+5. distinct c3 为 5
+
+可以看出 3 列单独的 distinct 都小于 worker 数量。disticnt c1, c2 为 48 虽然大于 worker 数量，但是不是 worker 数量的倍数，因此也不是合适的 cluster key。distinct c1, c3 为 30 正好为 worker 数量的 1 倍，但考虑数据分布的均衡性，选择更大的 distinct c1, c2, c3 为 8倍 worker 数量更为合适
 
 # 如何选择 bucket number
 
-在一个分区内
-1. 数据会依据 cluster key 的值分配到相应 bucket number 的 parts 中
+鉴于在一个分区内
+1. 每行数据会依据 cluster key 的值按 `% BUCKETS` 计算得到相应 bucket number
 2. 同一个 bucket number 的 parts 在查询时会发送到同一个 worker 节点上计算
 
 因此选择一个合适的 bucket number 对于存储和查询都有重大的影响，一般有如下原则：
@@ -54,8 +67,8 @@ Cluster key 可以是一个或者多个列、表达式，建议最多使用3个�
 2. recluster 期间现存数据的查询会回退为一张普通表，所有 bucket table 的收益暂时都失去
 3. Recluster 会占用 write worker 的资源，需要评估当前cnch集群是否有独立的 write worker 以及当前负担，评估对现有查询、merge等任务的影响
 
-这里有两种情况：
-1. 修改 cluster key：
+有两种修改 cluster by 定义的情况：
+1. 修改 cluster key
   1. 此时意味着当前的数据已经无法获得 bucket table 收益，因此无需考虑 recluster 期间失去的收益
   2. 需要评估 recluster 任务对于现有任务的影响判断是否可以执行
 2. 修改 bucket number
