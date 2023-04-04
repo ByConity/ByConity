@@ -31,7 +31,7 @@ public:
     explicit CnchLockHolder(const Context & global_context_, std::vector<LockInfoPtr> && elems);
     ~CnchLockHolder();
 
-    void lock();
+    [[nodiscard]] bool tryLock();
     void unlock();
     void setLockExpireDuration(std::chrono::milliseconds expire_duration) { lock_expire_duration = expire_duration; }
 

@@ -179,7 +179,8 @@ void CloudMergeTreeDedupWorker::iterate()
         *context,
         CnchDedupHelper::getLocksToAcquire(
             scope, txn->getTransactionID(), storage, storage.getSettings()->dedup_acquire_lock_timeout.value.totalMilliseconds()));
-    cnch_lock.lock();
+    if (!cnch_lock.tryLock())
+        return;
 
     /// get staged parts again after acquired the locks
     ts = context->getTimestamp(); /// must get a new ts after locks are acquired
