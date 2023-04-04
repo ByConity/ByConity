@@ -1212,7 +1212,8 @@ void StorageCnchMergeTree::executeDedupForRepair(const ASTPtr & partition, Conte
         *getContext(),
         CnchDedupHelper::getLocksToAcquire(
             scope, txn->getTransactionID(), *this, getSettings()->dedup_acquire_lock_timeout.value.totalMilliseconds()));
-    cnch_lock.lock();
+    if (!cnch_lock.tryLock())
+        throw Exception("Failed to acquire lock for txn " + txn->getTransactionID().toString(), ErrorCodes::CNCH_LOCK_ACQUIRE_FAILED);
 
     TxnTimestamp ts = getContext()->getTimestamp();
     MergeTreeDataPartsCNCHVector visible_parts = CnchDedupHelper::getVisiblePartsToDedup(scope, *this, ts);
