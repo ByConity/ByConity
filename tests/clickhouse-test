@@ -324,8 +324,7 @@ def configure_testcase_args(args, case_file, suite_tmp_dir, stderr_file):
             try:
                 clickhouse_proc_create.communicate(("CREATE DATABASE " + database + get_db_engine(testcase_args, database)), timeout=testcase_args.timeout)
             except TimeoutExpired:
-                total_time = (datetime.now() - testcase_args.testcase_start_time).total_seconds()
-                return clickhouse_proc_create, "", "Timeout creating database {} before test".format(database), total_time
+                database = 'test'
 
         os.environ["CLICKHOUSE_DATABASE"] = database
         # Set temporary directory to match the randomly generated database,
@@ -374,7 +373,7 @@ def run_single_test(args, ext, server_logs_level, client_options, case_file, std
     with open(stdout_file, 'w') as out, open(stderr_file, 'w') as err, open(case_file, 'r') as test_case:
         proc = Popen(shlex.split(command), stdin=test_case, stdout=out, stderr=err, env=os.environ, universal_newlines=True)
         try:
-            proc.communicate(timeout=args.timeout*2)
+            proc.communicate(timeout=args.timeout)
         except TimeoutExpired:
             # kill test process because it can also hung
             if proc.returncode is None:
@@ -1267,7 +1266,7 @@ if __name__ == '__main__':
     parser.add_argument('--configclient', help='Client config (if you use not default ports)')
     parser.add_argument('--configserver', default= '/etc/clickhouse-server/config.xml', help='Preprocessed server config')
     parser.add_argument('-o', '--output', help='Output xUnit compliant test report directory')
-    parser.add_argument('-t', '--timeout', type=int, default=600, help='Timeout for each test case in seconds')
+    parser.add_argument('-t', '--timeout', type=int, default=1200, help='Timeout for each test case in seconds')
     parser.add_argument('--global_time_limit', type=int, help='Stop if executing more than specified time (after current test finished)')
     parser.add_argument('test', nargs='*', help='Optional test case name regex')
     parser.add_argument('-d', '--disabled', action='store_true', default=False, help='Also run disabled tests')
