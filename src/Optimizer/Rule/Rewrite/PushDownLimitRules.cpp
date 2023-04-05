@@ -17,6 +17,7 @@
 
 #include <Optimizer/PlanNodeCardinality.h>
 #include <Optimizer/Rule/Patterns.h>
+#include <Optimizer/Utils.h>
 #include <QueryPlan/JoinStep.h>
 #include <QueryPlan/LimitStep.h>
 
@@ -66,9 +67,13 @@ PatternPtr PushLimitThroughProjection::getPattern() const
     return Patterns::limit()->withSingle(Patterns::project());
 }
 
-TransformResult PushLimitThroughProjection::transformImpl(PlanNodePtr node, const Captures &, RuleContext &)
+TransformResult PushLimitThroughProjection::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_ctx)
 {
     auto projection = node->getChildren()[0];
+    const auto * projection_step = dynamic_cast<const ProjectionStep *>(projection->getStep().get());
+    if (!projection_step || Utils::canChangeOutputRows(*projection_step, rule_ctx.context))
+        return {};
+
     auto source = projection->getChildren()[0];
 
     const auto * limit_step = dynamic_cast<const LimitStep *>(node->getStep().get());
