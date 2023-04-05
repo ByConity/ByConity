@@ -40,6 +40,7 @@ namespace ErrorCodes
     extern const int NO_FILE_IN_DATA_PART;
     extern const int LOGICAL_ERROR;
     extern const int NOT_IMPLEMENTED;
+    extern const int DISK_CACHE_NOT_USED;
 }
 
 static constexpr auto DATA_FILE = "data";
@@ -434,24 +435,28 @@ void MergeTreeDataPartCNCH::loadIndex()
     if (!key_size)
         return;
 
-    const bool enable_disk_cache = storage.getSettings()->enable_local_disk_cache;
-    if (enable_disk_cache)
+    if (enableDiskCache())
     {
-        try
+        auto disk_cache = DiskCacheFactory::instance().getDefault().first;
+        PrimaryIndexDiskCacheSegment segment(shared_from_this());
+        auto [cache_disk, segment_path] = disk_cache->get(segment.getSegmentName());
+        if (cache_disk && cache_disk->exists(segment_path))
         {
-            auto disk_cache = DiskCacheFactory::instance().getDefault().first;
-            PrimaryIndexDiskCacheSegment segment(shared_from_this());
-            auto [cache_disk, segment_path] = disk_cache->get(segment.getSegmentName());
-            if (cache_disk && cache_disk->exists(segment_path))
+            try
             {
+                LOG_DEBUG(storage.log, "has index disk cache {}", segment_path);
                 auto cache_buf = openForReading(cache_disk, segment_path, cache_disk->getFileSize(segment_path));
                 index = loadIndexFromBuffer(*cache_buf, primary_key);
                 return;
             }
+            catch (...)
+            {
+                tryLogCurrentException("Could not load index from disk cache");
+            }
         }
-        catch (...)
+        else if (disk_cache_mode == DiskCacheMode::FORCE_CHECKSUMS_DISK_CACHE)
         {
-            tryLogCurrentException("Could not load index from disk cache");
+            throw Exception(ErrorCodes::DISK_CACHE_NOT_USED, "Index {} of part has no disk cache {} and 'FORCE_DISK_CACHE' is set", name, segment_path);
         }
     }
 
@@ -462,7 +467,7 @@ void MergeTreeDataPartCNCH::loadIndex()
     LimitReadBuffer buf = readPartFile(*data_file, file_offset, file_size);
     index = loadIndexFromBuffer(buf, primary_key);
 
-    if (enable_disk_cache)
+    if (enableDiskCache())
     {
         auto index_seg = std::make_shared<PrimaryIndexDiskCacheSegment>(shared_from_this());
         auto disk_cache = DiskCacheFactory::instance().getDefault().first;
@@ -477,25 +482,28 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_un
     if (deleted)
         return checksums;
 
-    const bool enable_disk_cache = storage.getSettings()->enable_local_disk_cache;
-    if (enable_disk_cache)
+    if (enableDiskCache())
     {
-        try
+        ChecksumsDiskCacheSegment checksums_segment(shared_from_this());
+        auto disk_cache = DiskCacheFactory::instance().getDefault().first;
+        auto [cache_disk, segment_path] = disk_cache->get(checksums_segment.getSegmentName());
+        if (cache_disk && cache_disk->exists(segment_path))
         {
-            ChecksumsDiskCacheSegment checksums_segment(shared_from_this());
-            auto disk_cache = DiskCacheFactory::instance().getDefault().first;
-            auto [cache_disk, segment_path] = disk_cache->get(checksums_segment.getSegmentName());
-            if (cache_disk && cache_disk->exists(segment_path))
+            try
             {
                 auto cache_buf = openForReading(cache_disk, segment_path, cache_disk->getFileSize(segment_path));
                 if (checksums->read(*cache_buf))
                     assertEOF(*cache_buf);
                 return checksums;
             }
+            catch (...)
+            {
+                tryLogCurrentException("Could not load checksums from disk");
+            }
         }
-        catch (...)
+        else if (disk_cache_mode == DiskCacheMode::FORCE_CHECKSUMS_DISK_CACHE)
         {
-            tryLogCurrentException("Could not load checksums from disk");
+            throw Exception(ErrorCodes::DISK_CACHE_NOT_USED, "Checksums {} of part has no disk cache {} and 'FORCE_DISK_CACHE' is set", name, segment_path);
         }
     }
 
@@ -561,7 +569,7 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_un
     }
 
     /// store in disk cache
-    if (enable_disk_cache)
+    if (enableDiskCache())
     {
         auto segment = std::make_shared<ChecksumsDiskCacheSegment>(shared_from_this());
         auto disk_cache = DiskCacheFactory::instance().getDefault().first;
@@ -735,7 +743,7 @@ void MergeTreeDataPartCNCH::projectionRemove(const String & parent_to, bool) con
     }
 }
 
-void MergeTreeDataPartCNCH::preload(ThreadPool * pool) const
+void MergeTreeDataPartCNCH::preload(ThreadPool & pool) const
 {
     if (isPartial())
         throw Exception("Preload partial parts in invalid", ErrorCodes::LOGICAL_ERROR);
@@ -787,27 +795,19 @@ void MergeTreeDataPartCNCH::preload(ThreadPool * pool) const
     segments.emplace_back(std::make_shared<ChecksumsDiskCacheSegment>(shared_from_this()));
     segments.emplace_back(std::make_shared<PrimaryIndexDiskCacheSegment>(shared_from_this()));
 
-    if (!pool)
-    {
-        pool = &(storage.getContext()->getLocalDiskCacheThreadPool());
-    }
-
-    if (pool)
-    {
-        pool->scheduleOrThrow([segments = std::move(segments), cache=cache] {
-            for (const auto & segment : segments)
+    pool.scheduleOrThrow([segments = std::move(segments), cache=cache] {
+        for (const auto & segment : segments)
+        {
+            try
             {
-                try
-                {
-                    if (cache->get(segment->getSegmentName()).second.empty())
-                        segment->cacheToDisk(*cache);
-                }
-                catch (...)
-                {
-                    /// no exception thrown
-                }
+                if (cache->get(segment->getSegmentName()).second.empty())
+                    segment->cacheToDisk(*cache);
             }
-        });
-    }
+            catch (...)
+            {
+                /// no exception thrown
+            }
+        }
+    });
 }
 }

@@ -70,7 +70,7 @@ public:
 
     void commitDumpedParts(const DumpedData & dumped_data);
 
-    void tryPreload(const MutableMergeTreeDataPartsCNCHVector & dumped_parts);
+    void preload(const MutableMergeTreeDataPartsCNCHVector & dumped_parts);
 
 private:
 

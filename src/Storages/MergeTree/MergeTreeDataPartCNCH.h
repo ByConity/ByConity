@@ -88,7 +88,7 @@ public:
 
     virtual void projectionRemove(const String & parent_to, bool keep_shared_data) const override;
 
-    void preload(ThreadPool * pool = nullptr) const;
+    void preload(ThreadPool & pool) const;
 
 private:
 

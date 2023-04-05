@@ -234,6 +234,7 @@ brpc::CallId CnchWorkerClient::sendQueryDataParts(
     request.set_txn_id(context->getCurrentTransactionID());
     request.set_database_name(storage->getDatabaseName());
     request.set_table_name(local_table_name);
+    request.set_disk_cache_mode(context->getSettingsRef().disk_cache_mode.toString());
 
     fillBasePartAndDeleteBitmapModels(*storage, data_parts, *request.mutable_parts(), *request.mutable_bitmaps());
     for (const auto & bucket_num : required_bucket_numbers)

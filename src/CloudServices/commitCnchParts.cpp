@@ -484,11 +484,13 @@ void CnchDataWriter::publishStagedParts(
     commitDumpedParts(items);
 }
 
-void CnchDataWriter::tryPreload(const MutableMergeTreeDataPartsCNCHVector & dumped_parts)
+void CnchDataWriter::preload(const MutableMergeTreeDataPartsCNCHVector & dumped_parts)
 {
-    auto storage_settings = storage.getSettings();
-    if (storage_settings->enable_preload_parts && (storage_settings->enable_local_disk_cache || context->getSettingsRef().enable_preload_parts))
+    auto & settings = context->getSettingsRef();
+    if (settings.enable_preload_parts || storage.getSettings()->enable_preload_parts)
     {
+        bool sync_preload = !settings.enable_async_preload_parts;
+
         try
         {
             Stopwatch timer;
@@ -500,7 +502,7 @@ void CnchDataWriter::tryPreload(const MutableMergeTreeDataPartsCNCHVector & dump
 
             if (!preload_parts.empty())
             {
-                server_client->submitPreloadTask(storage, preload_parts);
+                server_client->submitPreloadTask(storage, preload_parts, sync_preload);
                 LOG_DEBUG(
                     storage.getLogger(),
                     "Finish submit preload task for {} parts to server {}, elapsed {} ms", preload_parts.size(), server_client->getRPCAddress(), timer.elapsedMilliseconds());
@@ -510,6 +512,8 @@ void CnchDataWriter::tryPreload(const MutableMergeTreeDataPartsCNCHVector & dump
         catch (...)
         {
             tryLogCurrentException(__PRETTY_FUNCTION__, "Fail to preload");
+            if (sync_preload)
+                throw;
         }
     }
 }

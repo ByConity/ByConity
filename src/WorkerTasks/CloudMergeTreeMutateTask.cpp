@@ -49,7 +49,7 @@ void CloudMergeTreeMutateTask::executeImpl()
 
     CnchDataWriter cnch_writer(storage, getContext(), ManipulationType::Mutate, params.task_id);
     auto res = cnch_writer.dumpAndCommitCnchParts(data_parts);
-    cnch_writer.tryPreload(res.parts);
+    cnch_writer.preload(res.parts);
 }
 
 }

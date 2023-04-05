@@ -70,7 +70,7 @@ void CloudMergeTreeReclusterTask::executeImpl()
 
     CnchDataWriter cnch_writer(storage, getContext(), ManipulationType::Clustering, params.task_id);
     auto res = cnch_writer.dumpAndCommitCnchParts(parts_to_commit);
-    cnch_writer.tryPreload(res.parts);
+    cnch_writer.preload(res.parts);
 }
 
 }

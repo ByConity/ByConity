@@ -632,7 +632,7 @@ void CnchServerClient::submitQueryWorkerMetrics(const QueryWorkerMetricElementPt
     RPCHelpers::checkResponse(response);
 }
 
-void CnchServerClient::submitPreloadTask(const MergeTreeMetaBase & storage, const MutableMergeTreeDataPartsCNCHVector & parts)
+void CnchServerClient::submitPreloadTask(const MergeTreeMetaBase & storage, const MutableMergeTreeDataPartsCNCHVector & parts, bool sync, size_t max_timeout)
 {
     if (parts.empty())
         return;
@@ -640,8 +640,10 @@ void CnchServerClient::submitPreloadTask(const MergeTreeMetaBase & storage, cons
     brpc::Controller cntl;
     Protos::SubmitPreloadTaskReq request;
     Protos::SubmitPreloadTaskResp response;
+    cntl.set_timeout_ms(-1);
 
     RPCHelpers::fillUUID(storage.getStorageUUID(), *request.mutable_uuid());
+    request.set_sync(sync);
     for (const auto & part : parts)
     {
         auto new_part = request.add_parts();

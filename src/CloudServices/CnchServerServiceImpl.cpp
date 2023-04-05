@@ -938,7 +938,7 @@ void CnchServerServiceImpl::submitPreloadTask(
             if (parts.empty())
                 return;
 
-            cnch->sendPreloadTasks(rpc_context, std::move(parts));
+            cnch->sendPreloadTasks(rpc_context, std::move(parts), request->sync());
         }
         catch (...)
         {

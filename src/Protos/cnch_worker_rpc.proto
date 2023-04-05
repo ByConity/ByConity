@@ -327,6 +327,7 @@ message SendDataPartsReq
   repeated DataModelDeleteBitmap bitmaps = 5;
   repeated int64 bucket_numbers = 6;
   repeated UDFInfo udf_infos = 7;
+  optional string disk_cache_mode = 8;
 }
 
 message SendDataPartsResp

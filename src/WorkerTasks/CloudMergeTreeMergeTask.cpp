@@ -97,7 +97,7 @@ void CloudMergeTreeMergeTask::executeImpl()
 
     CnchDataWriter cnch_writer(storage, getContext(), ManipulationType::Merge, params.task_id);
     DumpedData data = cnch_writer.dumpAndCommitCnchParts(temp_parts);
-    cnch_writer.tryPreload(data.parts);
+    cnch_writer.preload(data.parts);
 }
 
 }

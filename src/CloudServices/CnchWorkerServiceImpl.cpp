@@ -307,6 +307,17 @@ void CnchWorkerServiceImpl::sendQueryDataParts(
             data_parts = createBasePartAndDeleteBitmapFromModelsForSend<IMergeTreeMutableDataPartPtr>(cloud_merge_tree, request->parts(), request->bitmaps());
         else
             data_parts = createPartVectorFromModelsForSend<IMergeTreeMutableDataPartPtr>(cloud_merge_tree, request->parts());
+
+        if (request->has_disk_cache_mode())
+        {
+            SettingFieldDiskCacheMode disk_cache_mode;
+            disk_cache_mode.parseFromString(request->disk_cache_mode());
+            if (disk_cache_mode.value != DiskCacheMode::AUTO)
+            {
+                for (auto & part : data_parts)
+                    part->disk_cache_mode = disk_cache_mode;
+            }
+        }
         cloud_merge_tree.loadDataParts(data_parts);
 
         LOG_DEBUG(log, "Received and loaded {} server parts.", data_parts.size());
@@ -427,24 +438,31 @@ void CnchWorkerServiceImpl::preloadDataParts(
     brpc::ClosureGuard done_guard(done);
     try
     {
+        Stopwatch watch;
         auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
         StoragePtr storage = createStorageFromQuery(request->create_table_query(), rpc_context);
         auto & cloud_merge_tree = dynamic_cast<StorageCloudMergeTree &>(*storage);
         auto data_parts = createPartVectorFromModelsForSend<MutableMergeTreeDataPartCNCHPtr>(cloud_merge_tree, request->parts());
 
         std::unique_ptr<ThreadPool> pool;
+        ThreadPool *pool_ptr;
         if (request->sync())
         {
             pool = std::make_unique<ThreadPool>(std::min(data_parts.size(), 16UL));
+            pool_ptr = pool.get();
         }
+        else
+            pool_ptr = &(rpc_context->getLocalDiskCacheThreadPool());
 
         for (const auto & part : data_parts)
         {
-            part->preload(pool.get());
+            part->preload(*pool_ptr);
         }
 
-        if (pool)
+        if (request->sync())
             pool->wait();
+
+        LOG_DEBUG(storage->getLogger(), "Finish preload tasks in {} ms, sync {}", watch.elapsedMilliseconds(), request->sync());
     }
     catch (...)
     {

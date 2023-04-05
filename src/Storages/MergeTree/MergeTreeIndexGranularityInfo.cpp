@@ -80,8 +80,6 @@ MergeTreeIndexGranularityInfo::MergeTreeIndexGranularityInfo(const MergeTreeMeta
     }
     else
         setAdaptive(storage_settings->index_granularity_bytes);
-
-    has_disk_cache = (type == MergeTreeDataPartType::CNCH) && storage_settings->enable_local_disk_cache;
 }
 
 void MergeTreeIndexGranularityInfo::changeGranularityIfRequired(const DiskPtr & disk, const String & path_to_part)

@@ -97,7 +97,7 @@ MarkCache::MappedPtr MergeTreeMarksLoader::loadMarksImpl()
     if (!index_granularity_info.is_adaptive)
     {
         auto buffer = [&, this]() -> std::unique_ptr<ReadBufferFromFileBase> {
-            if (index_granularity_info.has_disk_cache && disk_cache)
+            if (disk_cache)
             {
                 try
                 {

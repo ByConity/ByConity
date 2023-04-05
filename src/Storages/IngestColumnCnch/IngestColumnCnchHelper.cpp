@@ -548,7 +548,7 @@ void ingestionCnch(
 
     CnchDataWriter cnch_writer(data, context, ManipulationType::Insert, context->getCurrentQueryId());
     auto res = cnch_writer.dumpAndCommitCnchParts(new_partial_parts);
-    cnch_writer.tryPreload(res.parts);
+    cnch_writer.preload(res.parts);
 }
 
 MemoryInefficientIngest::MemoryInefficientIngest(
