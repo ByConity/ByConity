@@ -65,6 +65,8 @@
     M(TableFunctionExecute, "") \
     M(MarkCacheHits, "") \
     M(MarkCacheMisses, "") \
+    M(PrimaryIndexCacheHits, "") \
+    M(PrimaryIndexCacheMisses, "") \
     M(QueryCacheHits, "") \
     M(QueryCacheMisses, "") \
     M(ChecksumsCacheHits, "") \

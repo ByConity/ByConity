@@ -620,8 +620,11 @@ private:
     /// Loads marks index granularity into memory
     virtual void loadIndexGranularity();
 
+    /// Loads index from cache
+    void loadIndexFromCache();
+
     /// Loads index file.
-    virtual void loadIndex();
+    virtual IndexPtr loadIndex();
 
     /// Load rows count for this part from disk (for the newer storage format version).
     /// For the older format version calculates rows count from the size of a column with a fixed size.

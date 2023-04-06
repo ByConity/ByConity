@@ -606,6 +606,9 @@ IMergeTreeDataPart::IndexPtr IMergeTreeDataPart::getIndex() const
     std::lock_guard<std::mutex> lock(index_mutex);
 
     if (index->empty())
+        const_cast<IMergeTreeDataPart *>(this)->loadIndexFromCache();
+
+    if (index->empty())
         const_cast<IMergeTreeDataPart *>(this)->loadIndex();
 
     return index;
@@ -878,7 +881,18 @@ IMergeTreeDataPart::IndexPtr IMergeTreeDataPart::loadIndexFromBuffer(ReadBuffer 
     return {};
 }
 
-void IMergeTreeDataPart::loadIndex()
+void IMergeTreeDataPart::loadIndexFromCache()
+{
+    auto cache = storage.primary_index_cache;
+    if (cache && !is_temp && !isProjectionPart())
+    {
+        auto load_func = [this] { return const_cast<IMergeTreeDataPart *>(this)->loadIndex(); };
+        index = cache->getOrSet(UUIDAndPartName(storage.getStorageUUID(), name), std::move(load_func)).first;
+    }
+
+}
+
+IMergeTreeDataPart::IndexPtr IMergeTreeDataPart::loadIndex()
 {
     /// It can be empty in case of mutations
     if (!index_granularity.isInitialized())
@@ -900,6 +914,8 @@ void IMergeTreeDataPart::loadIndex()
             index = loadIndexFromBuffer(*index_file, primary_key);
         }
     }
+
+    return index;
 }
 
 NameSet IMergeTreeDataPart::getFileNamesWithoutChecksums() const

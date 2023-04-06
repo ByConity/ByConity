@@ -21,11 +21,11 @@
 #include <Storages/extractKeyExpressionList.h>
 #include <Storages/MergeTree/PinnedPartUUIDs.h>
 #include <Storages/MergeTree/MergeTreeMeta.h>
+#include <Storages/PrimaryIndexCache.h>
 #include <MergeTreeCommon/IMergeTreePartMeta.h>
 #include <Processors/Merges/Algorithms/Graphite.h>
 #include <Common/SimpleIncrement.h>
 #include <Disks/StoragePolicy.h>
-
 
 namespace DB
 {
@@ -489,8 +489,7 @@ protected:
             throw Exception("Can't modify " + (*it)->getNameWithState(), ErrorCodes::LOGICAL_ERROR);
     }
 
-    /// FIXME: add after supporting primary index cache
-    // PrimaryIndexCachePtr primary_index_cache;
+    PrimaryIndexCachePtr primary_index_cache;
 
     void checkProperties(const StorageInMemoryMetadata & new_metadata, const StorageInMemoryMetadata & old_metadata, bool attach = false) const;
 
