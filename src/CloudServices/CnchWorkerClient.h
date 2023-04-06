@@ -83,13 +83,14 @@ public:
         const HiveDataPartsCNCHVector & parts,
         ExceptionHandler & handler);
 
-    void preloadDataParts(
+    brpc::CallId preloadDataParts(
         const ContextPtr & context,
         const TxnTimestamp & txn_id,
         const IStorage & storage,
         const String & create_local_table_query,
         const ServerDataPartsVector & parts,
-        bool sync);
+        bool sync,
+        ExceptionHandler & handler);
 
     brpc::CallId sendOffloadingInfo(
         const ContextPtr & context,

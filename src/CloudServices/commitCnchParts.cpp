@@ -502,7 +502,8 @@ void CnchDataWriter::preload(const MutableMergeTreeDataPartsCNCHVector & dumped_
 
             if (!preload_parts.empty())
             {
-                server_client->submitPreloadTask(storage, preload_parts, sync_preload);
+                auto max_timeout = std::max(30 * 1000L, settings.max_execution_time.totalMilliseconds());
+                server_client->submitPreloadTask(storage, preload_parts, sync_preload, max_timeout);
                 LOG_DEBUG(
                     storage.getLogger(),
                     "Finish submit preload task for {} parts to server {}, elapsed {} ms", preload_parts.size(), server_client->getRPCAddress(), timer.elapsedMilliseconds());

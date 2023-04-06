@@ -17,7 +17,6 @@
 
 #include <Catalog/DataModelPartWrapper.h>
 #include <CloudServices/CnchPartsHelper.h>
-#include <CloudServices/CnchWorkerClient.h>
 #include <CloudServices/CnchWorkerResource.h>
 #include <Interpreters/Context.h>
 #include <MergeTreeCommon/assignCnchParts.h>
@@ -218,7 +217,8 @@ void CnchServerResource::sendResource(const ContextPtr & context)
 
 void CnchServerResource::sendResource(const ContextPtr & context, WorkerAction act)
 {
-    Stopwatch watch;
+    ExceptionHandler handler;
+    std::vector<brpc::CallId> call_ids;
     {
         auto lock = getLock();
         allocateResource(context, lock);
@@ -226,12 +226,16 @@ void CnchServerResource::sendResource(const ContextPtr & context, WorkerAction a
         for (auto & [host_ports, resource] : assigned_worker_resource)
         {
             auto worker_client = worker_group->getWorkerClient(host_ports);
-            act(worker_client, resource);
+            auto ids = act(worker_client, resource, handler);
+            call_ids.insert(call_ids.end(), ids.begin(), ids.end());
         }
         assigned_worker_resource.clear();
     }
 
-    /// ProfileEvents::increment(ProfileEvents::CnchPartsAllocationMilliseconds, watch.elapsedMilliseconds());
+    for (auto & call_id : call_ids)
+        brpc::Join(call_id);
+
+    handler.throwIfException();
 }
 
 void CnchServerResource::allocateResource(const ContextPtr & context, std::lock_guard<std::mutex> &)

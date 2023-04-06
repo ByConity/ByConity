@@ -15,6 +15,7 @@
 
 #pragma once
 #include <Catalog/DataModelPartWrapper_fwd.h>
+#include <CloudServices/CnchWorkerClient.h>
 #include <Common/HostWithPorts.h>
 #include <Core/Types.h>
 #include <Interpreters/StorageID.h>
@@ -136,7 +137,8 @@ public:
     /// allocate and send resource to worker_group
     void sendResource(const ContextPtr & context);
 
-    using WorkerAction = std::function<void(CnchWorkerClientPtr, std::vector<AssignedResource> &)>;
+    /// WorkerAction should not throw
+    using WorkerAction = std::function<std::vector<brpc::CallId>(CnchWorkerClientPtr, std::vector<AssignedResource> &, ExceptionHandler &)>;
     void sendResource(const ContextPtr & context, WorkerAction act);
 
     /// remove all resource in server

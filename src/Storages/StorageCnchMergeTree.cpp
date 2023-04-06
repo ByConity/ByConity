@@ -1305,13 +1305,16 @@ void StorageCnchMergeTree::sendPreloadTasks(ContextPtr local_context, ServerData
     server_resource->addCreateQuery(local_context, shared_from_this(), create_table_query, "");
     server_resource->addDataParts(getStorageUUID(), parts, bucket_numbers);
     /// TODO: async rpc?
-    server_resource->sendResource(local_context, [&](CnchWorkerClientPtr client, auto & resources) {
+    server_resource->sendResource(local_context, [&](CnchWorkerClientPtr client, auto & resources, ExceptionHandler &handler) {
+        std::vector<brpc::CallId> ids;
         for (const auto & resource : resources)
         {
             auto data_parts = std::move(resource.server_parts);
             CnchPartsHelper::flattenPartsVector(data_parts);
-            client->preloadDataParts(local_context, txn_id, *this, create_table_query, data_parts, sync);
+            brpc::CallId id = client->preloadDataParts(local_context, txn_id, *this, create_table_query, data_parts, sync, handler);
+            ids.emplace_back(id);
         }
+        return ids;
     });
 }
 

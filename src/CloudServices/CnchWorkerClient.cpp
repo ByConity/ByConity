@@ -196,30 +196,31 @@ brpc::CallId CnchWorkerClient::sendCnchHiveDataParts(
     return call_id;
 }
 
-void CnchWorkerClient::preloadDataParts(
+brpc::CallId CnchWorkerClient::preloadDataParts(
     const ContextPtr & context,
     const TxnTimestamp & txn_id,
     const IStorage & storage,
     const String & create_local_table_query,
     const ServerDataPartsVector & parts,
-    bool sync)
+    bool sync,
+    ExceptionHandler & handler)
 {
-    brpc::Controller cntl;
     Protos::PreloadDataPartsReq request;
-    Protos::PreloadDataPartsResp response;
-
-    const auto & settings = context->getSettingsRef();
-    auto send_timeout = std::max(settings.max_execution_time.value.totalMilliseconds() >> 1, 30 * 1000L);
-    cntl.set_timeout_ms(send_timeout);
-
     request.set_txn_id(txn_id);
     request.set_create_table_query(create_local_table_query);
     request.set_sync(sync);
     fillPartsModelForSend(storage, parts, *request.mutable_parts());
-    stub->preloadDataParts(&cntl, &request, &response, nullptr);
 
-    assertController(cntl);
-    RPCHelpers::checkResponse(response);
+    auto * cntl = new brpc::Controller();
+    auto * response = new Protos::PreloadDataPartsResp();
+    /// adjust the timeout to prevent timeout if there are too many parts to send,
+    const auto & settings = context->getSettingsRef();
+    auto send_timeout = std::max(settings.max_execution_time.value.totalMilliseconds() >> 1, 30 * 1000L);
+    cntl->set_timeout_ms(send_timeout);
+
+    auto call_id = cntl->call_id();
+    stub->preloadDataParts(cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDone, response, cntl, &handler));
+    return call_id;
 }
 
 brpc::CallId CnchWorkerClient::sendQueryDataParts(

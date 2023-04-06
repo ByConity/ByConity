@@ -118,7 +118,7 @@ public:
     getBackGroundStatus(const CnchBGThreadType & type);
 
     void submitQueryWorkerMetrics(const QueryWorkerMetricElementPtr & query_worker_metric_element);
-    void submitPreloadTask(const MergeTreeMetaBase & storage, const MutableMergeTreeDataPartsCNCHVector & parts, bool sync);
+    void submitPreloadTask(const MergeTreeMetaBase & storage, const MutableMergeTreeDataPartsCNCHVector & parts, bool sync, UInt64 timeout_ms);
 
     UInt32 reportDeduperHeartbeat(const StorageID & cnch_storage_id, const String & worker_table_name);
 
