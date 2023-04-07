@@ -36,7 +36,7 @@ ByConity 复用了[社区 ClickHouse MergeTree](https://clickhouse.com/docs/en/e
 - 避免大量零碎的元数据和存储访问操作。Merge 完成时立即删除旧 Part 意味着大量零碎的 IO 操作，使得操作变得低效，也容易影响其他流程的正常执行。
 - 更简单的实现。无需过多考虑 Merge 任务状态和 Part 状态间的一致性。
 
-![](./assets/管理后台任务/boxcnyNZuYWKFyUqFHQ8wAYsIOy.png)
+![](./assets/background-task-management/boxcnyNZuYWKFyUqFHQ8wAYsIOy.png)
 
 图 X-1
 
@@ -59,7 +59,7 @@ ByConity 从设计之初就要求能用一套系统同时处理不同场景和�
 - 对选出的每个分区，扫描其所有 Part，按照 Part 的行数、大小、写入时间等信息，计算相互合并的收益大小，并最终按收益顺序选出多组 Part。
 - 最后，对于每个被选择的分区，如果最后没有从该分区选出收益高的 Merge 任务，则在后续一段时间内将不再选择该分区，以实现自适应的调整。
 
-![](./assets/管理后台任务/boxcnnvwD2ZKklNKkrVatqtnjUb.png)
+![](./assets/background-task-management/boxcnnvwD2ZKklNKkrVatqtnjUb.png)
 
 图 X-2
 
@@ -87,11 +87,11 @@ Merge 任务执行完成后，Worker 向 Server 返回成功执行的标志。�
 
 首先简单介绍写 part 的命名结构，part 命名如下图：
 
-![](./assets/管理后台任务/boxcn35mmn27RkI7PnEdYgJML3g.png)
+![](./assets/background-task-management/boxcn35mmn27RkI7PnEdYgJML3g.png)
 
 1. 社区版本 Part 可见性判断，以 Merge 任务为例
 
-![](./assets/管理后台任务/boxcn9MQ9pAUXo2fFk9xURxVGrh.png)
+![](./assets/background-task-management/boxcn9MQ9pAUXo2fFk9xURxVGrh.png)
 
 1. ByConityPart 可见性判断 (TODO)
 
@@ -105,7 +105,7 @@ Server 对一个被淘汰的 Part 进行标记时，并不改变该 Part 的任�
 
 基于图 X-2，在 Merge 完成将变成如下图 X-3 的状态：
 
-![](./assets/管理后台任务/boxcnuwPQMcD1U9cypYG0DdP1th.png)
+![](./assets/background-task-management/boxcnuwPQMcD1U9cypYG0DdP1th.png)
 
 GC 后台任务运行时，和 Merge 后台任务类似，
 
@@ -123,7 +123,7 @@ ByConity 继承了社区 Kafka 消费的基本设计，并基于云原生新架�
 
 基本数据通路如下：
 
-![](./assets/管理后台任务/boxcnzUYNuizBq5CUpsp0ZZAzoz.png)
+![](./assets/background-task-management/boxcnzUYNuizBq5CUpsp0ZZAzoz.png)
 
 图中各组件是 ByConity 涉及 CnchKafka 的组件，具体组件说明请参考架构文档。
 
@@ -150,7 +150,7 @@ KafkaConsumeManager 主要实现和功能包括：
 
 单次消费执行流程可参考下图：
 
-![](./assets/管理后台任务/boxcnSgFjCeQGVkbtqB3b1013gf.png)
+![](./assets/background-task-management/boxcnSgFjCeQGVkbtqB3b1013gf.png)
 
 ### Exactly-Once
 

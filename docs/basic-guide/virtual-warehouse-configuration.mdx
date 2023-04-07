@@ -12,7 +12,7 @@ tags:
 
 # 计算组、Worker 和 Server 的关系
 
-在[资源管理器](../高级用户手册/资源管理器) 章节我们介绍了**计算组**（Virtual Warehouse, 简称 VW）、**计算组副本**（Worker Group, 简称 WG）和计算节点等概念。一个 ByConity 集群中，计算资源被划分为多个计算组，每个计算组包含多个配置相同的计算组副本，每个计算组副本则包含多个计算节点。可以在不同级别对资源进行自由的扩缩容，实现弹性计算。以扩容为例，我们可以有不同的扩容方式：
+在[资源管理器](../advanced-guide/resource-manager) 章节我们介绍了**计算组**（Virtual Warehouse, 简称 VW）、**计算组副本**（Worker Group, 简称 WG）和计算节点等概念。一个 ByConity 集群中，计算资源被划分为多个计算组，每个计算组包含多个配置相同的计算组副本，每个计算组副本则包含多个计算节点。可以在不同级别对资源进行自由的扩缩容，实现弹性计算。以扩容为例，我们可以有不同的扩容方式：
 
 - 对 Worker 的 CPU、MEM 资源进行纵向扩容，以提升单节点的处理性能。
 - 增加一个计算组副本内 Worker 的数量，以提升计算组副本处理查询时的性能。
@@ -86,7 +86,7 @@ tags:
 
 ## 本地模式
 
-在启动 resource manager 组件时，我们可以在配置文件（参考[集群配置参数](./集群配置参数) Resource Manager 部分）中填写计算组相关信息。Resource Manager 会直接根据这些信息创建对应的计算组（以及计算组副本）。示例：
+在启动 resource manager 组件时，我们可以在配置文件（参考[集群配置参数](./cluster-configuration) （todo: link）resource manager 部分）中填写计算组相关信息。resource manager 会直接根据这些信息创建对应的计算组（以及计算组副本）。示例：
 
 ```
 <vws>
@@ -105,9 +105,9 @@ tags:
 
 ```
 
-我们配置了一个名为 vw_default 的计算组，类型为 Default，并且预期该 vw 中有 1 个 worker（num_workers 仅作为创建 vw 的一个指示信息，运行时实际 worker 数量可以<u>查询相关系统表</u><u>（[查看计算组信息]</u><u>）</u>获得）。同时，我们为该计算组配置了 1 个副本，名为 wg_default。
+我们配置了一个名为 vw_default 的计算组，类型为 Default，并且预期该 vw 中有 1 个 worker（num_workers 仅作为创建 vw 的一个指示信息，运行时实际 worker 数量可以<u>查询相关系统表</u><u>（todo: link [查看计算组信息]</u><u>）</u>获得）。同时，我们为该计算组配置了 1 个副本，名为 wg_default。
 
-在启动 server 组件时，我们可以在配置文件中（参考[集群配置参数](./集群配置参数) Server 部分）服务发现部分直接配置每个 VW 对应的 Worker 信息。
+在启动 server 组件时，我们可以在配置文件中（参考[集群配置参数](./cluster-configuration) （todo: link） server 部分）服务发现部分直接配置每个 vw 对应的 worker 信息。
 
 ```
 <service_discovery>
@@ -170,7 +170,9 @@ SETTINGS type = 'Physical';
 
 ByConity 创建计算组和计算组副本的元信息后，则可以创建对应的 K8s Worker 资源，为 worker 配置对应的环境变量 VIRTUAL_WAREHOUSE_ID=$VW_NAME, WORKER_GROUP_ID=$WG_NAME。
 
-Worker 启动后即可自动注册到对应的 virtual warehouse 和 worker group 中。具体操作见：[https://github.com/ByConity/byconity-deploy](https://github.com/ByConity/byconity-deploy)
+Worker 启动后即可自动注册到对应的 virtual warehouse 和 worker group 中。
+
+具体操作见：[https://github.com/ByConity/byconity-deploy](https://github.com/ByConity/byconity-deploy)
 
 # 修改计算组
 

@@ -66,7 +66,7 @@ Default 和 Write VW 的区分，使得 ByConity 可以轻松实现读写分离�
 
 当 Server 发现 Query 是一个 SELECT Query 时，需要从表的 Default VW 中挑选一个 WG 来处理查询。
 
-![](./assets/资源管理器/boxcnbZbcFxobIoWtbHHOFEBuAd.png)
+![](./assets/resource-manager/boxcnbZbcFxobIoWtbHHOFEBuAd.png)
 
 如图所示，假设表的 Default VW 中有 2 个 Physical WG，以及 1 个 Shared WG（指向另一个 VW 中的 Physical WG）。因为是一个 SELECT 查询，所以我们需要选择 1 个 WG 来处理查询。Physical WG 1 是当前负载最低的 WG，被选中处理该查询。
 
@@ -74,7 +74,7 @@ Default 和 Write VW 的区分，使得 ByConity 可以轻松实现读写分离�
 
 当 Server 发现 Query 是一个 INSERT Query 时，需要从表的 Write VW 中挑选一个 Worker 来处理查询。
 
-![](./assets/资源管理器/boxcn1vUjQxIvpWIT2zplXffgyg.png)
+![](./assets/resource-manager/boxcn1vUjQxIvpWIT2zplXffgyg.png)
 
 如图所示，假设表的 Write VW 中有 2 个 Physical WG，每个 WG 包含 3 个 Worker。因为是一个 INSERT 查询，所以我们需要选择一个 Worker 来处理查询。Worker 3 当前负载最低，被选中处理该查询。
 
@@ -82,7 +82,7 @@ Default 和 Write VW 的区分，使得 ByConity 可以轻松实现读写分离�
 
 Server 除了处理用户查询，还需要为表调度后台任务，比如在后台不断地对表数据执行 Merge 以提升查询性能。
 
-![](./assets/资源管理器/boxcnHyC6wY1ypvpTr7TkWHtLng.png)
+![](./assets/resource-manager/boxcnHyC6wY1ypvpTr7TkWHtLng.png)
 
 如图所示，Server 生成一个 Merge 任务，需要从 Write VW 中选择一个 Worker 来处理。Worker 3 当前负载最低，被选中来执行 Merge 任务。
 
@@ -99,10 +99,10 @@ Server 除了处理用户查询，还需要为表调度后台任务，比如在�
 
 当一个 Physical WG 整体资源利用率较低时，可以在其他需要更多计算资源的 VW 内创建一个 Shared WG，并指向该 Physical WG。这样，这个 Physical WG 就可以被其他 VW 的查询或任务所使用。
 
-![](./assets/资源管理器/boxcnwYSsOLigmR3d9nblBrpLFg.png)
+![](./assets/resource-manager/boxcnwYSsOLigmR3d9nblBrpLFg.png)
 
 如图所示，在 Default VW 1 中，我们创建了一个共享计算组 Shared WG 3，它不拥有任何实际的物理计算资源，而是指向另一个 Default VW 3 中的物理计算组 Physical WG 6。Shared WG 3 拥有和 Physical WG 6 完全相同的负载信息，在 Default VW 1 进行调度决策时，可以选择 Shared WG 3（或其中的 Worker）来处理 SELECT 查询（或 INSERT 查询、后台任务）。最终，查询或后台任务实际是路由到 Physical WG 6 进行处理。
 
 ## 参考文档
 
-[云原生数据仓库 ByteHouse 技术白皮书 V1.0](./assets/资源管理器/云原生数据仓库ByteHouse技术白皮书V1.0.pdf)
+[云原生数据仓库 ByteHouse 技术白皮书 V1.0](./assets/resource-manager/云原生数据仓库ByteHouse技术白皮书V1.0.pdf)

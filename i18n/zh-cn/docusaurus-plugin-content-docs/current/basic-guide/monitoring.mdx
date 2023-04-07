@@ -22,7 +22,7 @@ kubectl port-forward -n cnch cnch-default-server-0 8123:8123
 
 之后可以用浏览器打开 localhost:8123/metrics ，可查看到如下图所示的指标显示。每一行对应一个具体指标项，符合 Prometheus 约定的指标格式。
 
-![](./assets/监控集群/boxcnMqU9e8xvq46v7IH9ORtLCf.png)
+![](./assets/monitoring/boxcnMqU9e8xvq46v7IH9ORtLCf.png)
 
 ## VictoriaMetric 指标聚合：
 
@@ -560,7 +560,7 @@ kubctl apply -f cnch-metrics.yaml # 配置对应rule
 
 看板的内容看截图
 
-![](./assets/监控集群/boxcnvwueXWFISCRgsRJ66J2vKb.jpeg)
+![](./assets/monitoring/boxcnvwueXWFISCRgsRJ66J2vKb.jpeg)
 
 摘录其中比较重要的看板进行说明：
 
@@ -571,7 +571,7 @@ kubctl apply -f cnch-metrics.yaml # 配置对应rule
 | Queries Per Second | `sum(cnch:profile_events:labelled_query_vw:total_rate5m{namespace="$namespace", cluster="$cluster", workload=~"$workload"})`                                                                                                                                                                                | 所有 VW 的总 QPS。                                       |
 | VW Queries Success | `1 - (sum by (pod) (cnch:profile_events:labelled_query_vw:error_rate5m{cluster="$cluster", namespace="$namespace", workload=~"$workload", pod=~"$pod"}) sum by (pod) (cnch:profile_events:labelled_query_vw:total_rate5m{cluster="$cluster", namespace="$namespace", workload=~"$workload", pod=~"$pod"}))` | 使用 error_rate5m 和 total_rate5m 相减和除后，得到成功率 |
 
-Server 的完整 Grafana 配置文件如下，可在 Grafana 的 UI 导入：[cnch-server.json](./assets/监控集群/cnch-server.json)
+Server 的完整 Grafana 配置文件如下，可在 Grafana 的 UI 导入：[cnch-server.json](./assets/monitoring/cnch-server.json)
 
 ## 监控 TSO
 
@@ -588,7 +588,7 @@ Server 的完整 Grafana 配置文件如下，可在 Grafana 的 UI 导入：[cn
 
 看板截图如下：
 
-![](./assets/监控集群/boxcn3CLoRUlpCEDJnEy8f6dxPe.jpeg)
+![](./assets/monitoring/boxcn3CLoRUlpCEDJnEy8f6dxPe.jpeg)
 
 其中重要的指标说明：
 
@@ -598,14 +598,14 @@ Server 的完整 Grafana 配置文件如下，可在 Grafana 的 UI 导入：[cn
 | TSO Worker Requests Per Sec      | `cnch:tso:requests:total_rate5m{namespace="$namespace", cluster="$cluster", workload!~".*(server\|**kafka**).*"}`                                                                                       | 去除 server 和 kafka，只看各 worker 对 TSO 的请求 QPS     |
 | TSO Servers Requests Server Rate | `cnch:tso:requests:error_rate5m{namespace="$namespace", cluster="$cluster", workload=~".*server.*"} cnch:tso:requests:total_rate5m{namespace="$namespace", cluster="$cluster", workload=~".*server.*"}` | 用 error_rate 和 total_rate 相除，过滤出 TSO 查询的失败率 |
 
-TSO 完整的配置文件如下：[cnch-tso.json](./assets/监控集群/cnch-tso.json)
+TSO 完整的配置文件如下：[cnch-tso.json](./assets/monitoring/cnch-tso.json)
 
 ## 其他可以监控的信息
 
 其他常用的监控看板配置此处列出，不再一一截图
 
-Cluster Overview: 整个集群概览 [cnch-cluster.json](./assets/监控集群/cnch-cluster.json)
+Cluster Overview: 整个集群概览 [cnch-cluster.json](./assets/monitoring/cnch-cluster.json)
 
-VW: 各计算组 Virtual Warehouse 的详情 [cnch-vw.json](./assets/监控集群/cnch-vw.json)
+VW: 各计算组 Virtual Warehouse 的详情 [cnch-vw.json](./assets/monitoring/cnch-vw.json)
 
-DaemonManager: 管理 Merge 等后台任务的组件 [cnch-daemonmanager.json](./assets/监控集群/cnch-daemonmanager.json)
+DaemonManager: 管理 Merge 等后台任务的组件 [cnch-daemonmanager.json](./assets/monitoring/cnch-daemonmanager.json)

@@ -29,7 +29,7 @@ ByConity 的事务处理主要是对用户数据的元数据进行管理，元�
 
 TSO 使用混合逻辑时钟，时钟由物理部分和逻辑部分组成，64 位表示一个时间。为了避免 TSO 宕机导致的时间戳丢失，需要对时间戳持久化。但是如果每次授时都持久化将会降低性能，所以 TSO 会预申请一个可分配的时间窗口（例如 3s）申请成功之后，TSO 可以在内存中直接分配 3 秒窗口之内的所有时间戳。客户端请求时间戳，逻辑时钟部分随着请求递增。如果出现逻辑部分溢出情况，会睡眠 50ms 等待物理时钟被推进。TSO 会每 50ms 检查时钟，如果当前 TSO 的物理时钟已经落后于当前时间，需要更新 TSO 的物理时钟部分为当前物理时间。如果逻辑时钟部分过半，也会增加 TSO 的物理时钟，一旦物理时钟增长，逻辑时钟清零。如果当前时间窗口已经用完，需要申请下一个时间窗口。同时更新持久化的窗口上界。
 
-![](./assets/事物和并发控制/boxcnIQ0kKkzfdE6l3QnZZ31iGb.png)
+![](./assets/managing-concurrency/boxcnIQ0kKkzfdE6l3QnZZ31iGb.png)
 
 ### 事务处理
 
@@ -47,7 +47,7 @@ ByConity 单个事务在元数据管理上有高吞吐读写的需求，由于�
 - 提交事务，并更新事务记录的提交时间；
 - 异步更新 part 数据的提交时间为事务的提交时间（part 未更新提交时间之前，需要反查事务记录的提交时间）；
 
-![](./assets/事物和并发控制/boxcnSsWWnS2sH5qiwBsILZyaNg.png)
+![](./assets/managing-concurrency/boxcnSsWWnS2sH5qiwBsILZyaNg.png)
 
 ```
                                                        事务提交详细流程图
@@ -73,7 +73,7 @@ ByConity 利用多版本和锁来保证并发读写场景下数据的正确性�
 
 每个 part 的元数据除去其原有基本信息之外，都有一个对应的版本（version），每次对已有数据进行变更，都会产生一个新的版本，而不是直接在原有数据上进行更新。对于 RC 隔离级别，已经开始的读事务，仍然继续读取旧的版本，新版本对其不可见，这样读和写互相不影响，最大化读写性能。
 
-![](./assets/事物和并发控制/boxcnJmeAgBLo86uZBHIHKbdRhc.png)
+![](./assets/managing-concurrency/boxcnJmeAgBLo86uZBHIHKbdRhc.png)
 
 #### 锁
 

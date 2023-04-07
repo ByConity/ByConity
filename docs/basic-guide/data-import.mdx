@@ -202,7 +202,7 @@ CnchKafka 继承了社区的基本设计，即通过一个 <CnchKafka 消费表�
 
 基本数据通路如下：
 
-![](./assets/导入数据/boxcnbeMipMsWmYggoqbR4DT88c.png)
+![](./assets/data-import/boxcnbeMipMsWmYggoqbR4DT88c.png)
 
 图中各组件是 ByConity 云原生架构部分涉及 CnchKafka 的组件，为避免读者不了解，此处对各组件做简单说明；但限于篇幅和重点，更详细的架构设计细节请参考架构文档。
 
@@ -246,7 +246,7 @@ KafkaConsumeManager 主要实现和功能包括：
 
 单次消费执行流程可参考下图：
 
-![](./assets/导入数据/boxcnlEuwS4ogryA87WHPdDK1Md.png)
+![](./assets/data-import/boxcnlEuwS4ogryA87WHPdDK1Md.png)
 
 #### Exactly-Once
 
@@ -869,7 +869,7 @@ alter table test attach parts from '/hdfs/path/to/dumped/dir'
 
 实际应用场景下，需要往 ByConity 集群导入大量数据，可以考虑使用 spark。首先从外部将数据读入 spark dataset；然后根据 sharding key 对 dataset 进行 repartition，保证将要发送到不同 ByConity 节点到数据落在不同的 partition 上（可能需要根据实际情况，调整 spark.sql.shuffle.partitions 参数使 partition 不小于 ByConity 主节点数）；对于每个 partition， 首先通过调用 part writer 生成 part 文件，并指定 part 文件上传到 hdfs，然后通过向对应 ByConity 节点发送 http 请求，通知 ByConity 加载 part 文件。数据流图如下：
 
-![](./assets/导入数据/boxcnlSkMX0zkWno7WT7250zU1f.png)
+![](./assets/data-import/boxcnlSkMX0zkWno7WT7250zU1f.png)
 
 ## 通过 ByConity 访问外部数据源
 
@@ -981,7 +981,7 @@ select * from mysql_table1;
 
 ```
 
-![](./assets/导入数据/boxcnJv89B9UChc3nI0EPHoba6c.png)
+![](./assets/data-import/boxcnJv89B9UChc3nI0EPHoba6c.png)
 
 - 测试 INSERT 查询
 
@@ -1000,7 +1000,7 @@ mysql> select id, column1 from db1.table1;
 
 ```
 
-![](./assets/导入数据/boxcnQdV8Jpg8jcqEKwAOjONxkh.png)
+![](./assets/data-import/boxcnQdV8Jpg8jcqEKwAOjONxkh.png)
 
 ### Hive
 
