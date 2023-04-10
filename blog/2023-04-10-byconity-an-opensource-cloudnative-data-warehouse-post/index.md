@@ -21,14 +21,9 @@ The background of ByConity can be traced back to 2018 when ByteDance began to us
 
 The ByConity team hopes to give the project back to the community and improve it through the power of open source. In January 2023, ByConity was officially open-sourced, and the beta version was released.
 
-<!-- ![Figure 1 ByteDance ClickHouse usage](./f1-byte-clickhouse-usage.png) -->
-
-<p align="center">
-  <img src="./f1-byte-clickhouse-usage.png" alt="Figure 1 ByteDance ClickHouse usage" width="500" height="300">
-</p>
+![Figure 1 ByteDance ClickHouse usage](./f1-byte-clickhouse-usage.png)
 
 Figure 1: ByteDance ClickHouse Usage
-
 
 
 # Features of ByConity
