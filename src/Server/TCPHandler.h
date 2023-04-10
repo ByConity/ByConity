@@ -35,6 +35,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 
+#include "CloudServices/ParallelReadRequestResponse.h"
 #include "IServer.h"
 
 
@@ -199,6 +200,7 @@ private:
     void receivePlanSegment();
     void receiveIgnoredPartUUIDs();
     String receiveReadTaskResponseAssumeLocked();
+    std::optional<ParallelReadResponse> receiveDistributedReadTaskResponseAssumeLocked();
     bool receiveData(bool scalar);
     bool readDataNext(size_t poll_interval, time_t receive_timeout);
     void readData(const Settings & connection_settings);
@@ -230,6 +232,7 @@ private:
     void sendEndOfStream();
     void sendPartUUIDs();
     void sendReadTaskRequestAssumeLocked();
+    void sendDistributedReadTaskRequestAssumeLocked(ParallelReadRequest request);
     void sendProfileInfo(const BlockStreamProfileInfo & info);
     void sendQueryWorkerMetrics();
     void sendTotals(const Block & totals);

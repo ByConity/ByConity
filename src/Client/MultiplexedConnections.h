@@ -63,6 +63,7 @@ public:
     void sendResource() override;
 
     void sendReadTaskResponse(const String &) override;
+    void sendDistributedReadTaskResponse(const ParallelReadResponse & response) override;
 
     Packet receivePacket() override;
 

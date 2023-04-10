@@ -22,6 +22,7 @@
 #pragma once
 
 #include <Client/Connection.h>
+#include "CloudServices/ParallelReadRequestResponse.h"
 
 namespace DB
 {
@@ -49,6 +50,10 @@ public:
         bool with_pending_data) = 0;
 
     virtual void sendReadTaskResponse(const String &) = 0;
+    virtual void sendDistributedReadTaskResponse(const ParallelReadResponse &)
+    {
+      throw Exception(ErrorCodes::NOT_IMPLEMENTED, "sendDistributedReadTaskResponse in not implemented");
+    }
 
     /// Get packet from any replica.
     virtual Packet receivePacket() = 0;

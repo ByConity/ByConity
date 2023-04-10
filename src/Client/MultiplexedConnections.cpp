@@ -23,6 +23,7 @@
 #include <IO/ConnectionTimeouts.h>
 #include <IO/Operators.h>
 #include <Common/thread_local_rng.h>
+#include "Core/Protocol.h"
 #include <Interpreters/Context.h>
 #include <CloudServices/CnchServerResource.h>
 
@@ -226,6 +227,14 @@ void MultiplexedConnections::sendReadTaskResponse(const String & response)
     current_connection->sendReadTaskResponse(response);
 }
 
+void MultiplexedConnections::sendDistributedReadTaskResponse(const ParallelReadResponse & response)
+{
+    std::lock_guard lock(cancel_mutex);
+    if (cancelled)
+        return;
+    current_connection->sendDistributedReadTaskResponse(response);
+}
+
 Packet MultiplexedConnections::receivePacket()
 {
     std::lock_guard lock(cancel_mutex);
@@ -280,6 +289,7 @@ Packet MultiplexedConnections::drain()
     switch (packet.type)
     {
         case Protocol::Server::ReadTaskRequest:
+        case Protocol::Server::DistributedReadTaskRequest:
         case Protocol::Server::PartUUIDs:
         case Protocol::Server::Data:
         case Protocol::Server::Progress:
@@ -359,6 +369,7 @@ Packet MultiplexedConnections::receivePacketUnlocked(AsyncCallback async_callbac
     switch (packet.type)
     {
         case Protocol::Server::ReadTaskRequest:
+        case Protocol::Server::DistributedReadTaskRequest:
         case Protocol::Server::PartUUIDs:
         case Protocol::Server::Data:
         case Protocol::Server::Progress:

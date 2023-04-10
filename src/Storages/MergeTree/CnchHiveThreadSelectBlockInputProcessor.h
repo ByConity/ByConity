@@ -30,7 +30,7 @@ class CnchHiveThreadSelectBlockInputProcessor : public SourceWithProgress
 public:
     CnchHiveThreadSelectBlockInputProcessor(
         const size_t & thread,
-        const std::shared_ptr<CnchHiveReadPool> & pool,
+        const HiveReadPoolPtr & pool,
         const StorageCloudHive & storage,
         const StorageMetadataPtr & metadata_snapshot_,
         ContextPtr & context,
@@ -49,7 +49,7 @@ private:
 
     size_t thread;
 
-    std::shared_ptr<CnchHiveReadPool> pool;
+    HiveReadPoolPtr pool;
 
     // const StorageCloudHive & storage;
     StorageMetadataPtr metadata_snapshot;

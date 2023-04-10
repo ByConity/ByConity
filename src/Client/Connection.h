@@ -27,6 +27,7 @@
 
 #include <Common/HostWithPorts.h>
 #include <Common/Throttler.h>
+#include "CloudServices/ParallelReadRequestResponse.h"
 #if !defined(ARCADIA_BUILD)
 #   include <Common/config.h>
 #endif
@@ -96,6 +97,9 @@ struct Packet
     BlockStreamProfileInfo profile_info;
     std::vector<UUID> part_uuids;
     QueryWorkerMetricElements query_worker_metric_elements;
+
+    ParallelReadRequest request;
+    ParallelReadResponse response;
 
     Packet() : type(Protocol::Server::Hello) {}
 };
@@ -231,6 +235,7 @@ public:
     void sendIgnoredPartUUIDs(const std::vector<UUID> & uuids);
 
     void sendReadTaskResponse(const String &);
+    void sendDistributedReadTaskResponse(const ParallelReadResponse & response);
 
     /// Send prepared block of data (serialized and, if need, compressed), that will be read from 'input'.
     /// You could pass size of serialized/compressed block.
@@ -388,6 +393,7 @@ private:
     std::vector<String> receiveMultistringMessage(UInt64 msg_type) const;
     std::unique_ptr<Exception> receiveException() const;
     Progress receiveProgress() const;
+    ParallelReadRequest receiveParallelReadRequest() const;
     BlockStreamProfileInfo receiveProfileInfo() const;
     QueryWorkerMetricElements receiveQueryWorkerMetrics();
 

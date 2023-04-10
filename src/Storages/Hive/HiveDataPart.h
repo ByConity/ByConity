@@ -37,6 +37,9 @@ struct HivePartInfo
 {
     String name;
     String partition_id;
+    size_t file_size;
+
+    HivePartInfo() = default;
 
     HivePartInfo(const String & name_, const String & partition_id_)
         : name(name_)
@@ -108,6 +111,10 @@ public:
     size_t getTotalRowGroups() const;
 
     ~HiveDataPart();
+    HiveDataPart();
+
+    void serialize(WriteBuffer &) const;
+    void deserialize(ReadBuffer &);
 
 public:
 

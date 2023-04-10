@@ -23,6 +23,9 @@
 #include <parquet/arrow/reader.h>
 #include <parquet/file_reader.h>
 #include <parquet/statistics.h>
+#include "Disks/HDFS/DiskByteHDFS.h"
+#include "IO/WriteHelpers.h"
+#include "Storages/HDFS/HDFSCommon.h"
 
 
 namespace DB
@@ -86,6 +89,7 @@ String HiveDataPart::getHDFSUri() const
     return hdfs_uri;
 }
 
+HiveDataPart::HiveDataPart() = default;
 HiveDataPart::~HiveDataPart() = default;
 
 void HiveDataPart::loadSplitMinMaxIndexes()
@@ -218,5 +222,28 @@ void HiveDataPart::loadSplitMinMaxIndexesImpl()
 //         strs.push_back(name_type.name + ":" + name_type.type->getName() + idx->parallelogram[i++].toString());
 //     return boost::algorithm::join(strs, "|");
 // }
+
+void HiveDataPart::serialize(WriteBuffer & buf) const
+{
+    writeStringBinary(name, buf);
+    writeStringBinary(relative_path, buf);
+    writeStringBinary(hdfs_uri, buf);
+    writeStringBinary(info.partition_id, buf);
+    /// skip list
+}
+
+void HiveDataPart::deserialize(ReadBuffer & buf)
+{
+    readStringBinary(name, buf);
+    readStringBinary(relative_path, buf);
+    readStringBinary(hdfs_uri, buf);
+    readStringBinary(info.partition_id, buf);
+    if (!disk)
+    {
+        Poco::URI uri(hdfs_uri);
+        HDFSConnectionParams params = hdfsParamsFromUrl(uri);
+        disk = std::make_shared<DiskByteHDFS>(hdfs_uri, "", params);
+    }
+}
 
 }

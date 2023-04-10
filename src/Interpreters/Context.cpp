@@ -3597,6 +3597,19 @@ void Context::setReadTaskCallback(ReadTaskCallback && callback)
     next_task_callback = callback;
 }
 
+DistributedReadTaskCallback Context::getDistributedReadTaskCallback() const
+{
+    if (!distributed_read_task_callback.has_value())
+        throw Exception(fmt::format("Distributed task callback is not set for query {}", getInitialQueryId()), ErrorCodes::LOGICAL_ERROR);
+
+    return distributed_read_task_callback.value();
+}
+
+void Context::setDistributedReadTaskCallback(DistributedReadTaskCallback && callback)
+{
+    distributed_read_task_callback = callback;
+}
+
 PartUUIDsPtr Context::getIgnoredPartUUIDs() const
 {
     auto lock = getLock();

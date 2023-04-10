@@ -64,7 +64,7 @@ QueryPlanPtr HiveDataSelectExecutor::read(
 
     LOG_DEBUG(log, "CloudHive Loaded  {} parts ", data_parts.size());
 
-    if (data_parts.empty())
+    if (data_parts.empty() && !context->getSettingsRef().enable_hive_distributed_reading)
         return {};
 
     Names real_column_names = column_names_to_return;

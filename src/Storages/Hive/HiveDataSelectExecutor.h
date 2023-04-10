@@ -19,9 +19,16 @@
 #include <Storages/MergeTree/RowGroupsInDataPart.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/StorageCloudHive.h>
+#include "Interpreters/Context.h"
 
 namespace DB
 {
+struct DistributedReadingExtension
+{
+    DistributedReadTaskCallback callback;
+    String worker_id;
+};
+
 /** Executes SELECT queries on data from the hive.
   */
 class HiveDataSelectExecutor

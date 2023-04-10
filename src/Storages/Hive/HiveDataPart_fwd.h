@@ -23,7 +23,7 @@ namespace DB
 {
 class HiveDataPart;
 
-using HiveDataPartCNCHPtr = std::shared_ptr<const HiveDataPart>;
+using HiveDataPartCNCHPtr = std::shared_ptr<HiveDataPart>;
 using HiveDataPartsCNCHVector = std::vector<HiveDataPartCNCHPtr>;
 using MutableHiveDataPartCNCHPtr = std::shared_ptr<HiveDataPart>;
 using MutableHiveDataPartsCNCHVector = std::vector<MutableHiveDataPartCNCHPtr>;

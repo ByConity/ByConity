@@ -42,6 +42,7 @@
 #include <Common/ThreadPool.h>
 #include <Common/isLocalAddress.h>
 #include <common/types.h>
+#include "CloudServices/ParallelReadRequestResponse.h"
 #include <Transaction/TxnTimestamp.h>
 #include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
 // #include <Storages/HDFS/HDFSCommon.h>
@@ -136,6 +137,8 @@ using QueryWorkerMetricElements = std::vector<QueryWorkerMetricElementPtr>;
 struct MergeTreeSettings;
 class StorageS3Settings;
 struct CnchHiveSettings;
+struct ParallelReadRequest;
+struct ParallelReadResponse;
 class IDatabase;
 class DDLWorker;
 class ITableFunction;
@@ -216,6 +219,8 @@ using InputBlocksReader = std::function<Block(ContextPtr)>;
 
 /// Used in distributed task processing
 using ReadTaskCallback = std::function<String()>;
+
+using DistributedReadTaskCallback = std::function<std::optional<ParallelReadResponse>(ParallelReadRequest)>;
 
 class UniqueKeyIndexCache;
 using UniqueKeyIndexCachePtr = std::shared_ptr<UniqueKeyIndexCache>;
@@ -372,6 +377,8 @@ private:
 
     /// Fields for distributed s3 function
     std::optional<ReadTaskCallback> next_task_callback;
+
+    std::optional<DistributedReadTaskCallback> distributed_read_task_callback;
 
     /// Record entities accessed by current query, and store this information in system.query_log.
     struct QueryAccessInfo
@@ -1123,6 +1130,9 @@ public:
 
     ReadTaskCallback getReadTaskCallback() const;
     void setReadTaskCallback(ReadTaskCallback && callback);
+
+    DistributedReadTaskCallback getDistributedReadTaskCallback() const;
+    void setDistributedReadTaskCallback(DistributedReadTaskCallback && callback);
 
     void setPipelineLogPath(const String & path) { pipeline_log_path = path; }
     String getPipelineLogpath() const { return pipeline_log_path; }

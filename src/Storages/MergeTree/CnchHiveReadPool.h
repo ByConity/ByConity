@@ -20,6 +20,8 @@
 #include <Storages/Hive/HiveDataPart.h>
 #include <Storages/MergeTree/RowGroupsInDataPart.h>
 #include <Storages/StorageCloudHive.h>
+#include <Poco/Logger.h>
+#include "Storages/Hive/HiveDataSelectExecutor.h"
 
 namespace DB
 {
@@ -46,7 +48,17 @@ struct CnchHiveReadTask
     bool isFinished() const { return sum_row_group_in_parts == 0; }
 };
 
-class CnchHiveReadPool : private boost::noncopyable
+class ICnchHiveReadPool : private boost::noncopyable
+{
+public:
+    virtual ~ICnchHiveReadPool() = default;
+    virtual Block getHeader() const = 0;
+    virtual CnchHiveReadTaskPtr getTask(const size_t & thread) = 0;
+};
+
+using HiveReadPoolPtr = std::shared_ptr<ICnchHiveReadPool>;
+
+class CnchHiveReadPool : public ICnchHiveReadPool
 {
 public:
     CnchHiveReadPool(
@@ -57,8 +69,8 @@ public:
         const StorageMetadataPtr & metadata_snapshot_,
         Names column_names);
 
-    Block getHeader() const;
-    CnchHiveReadTaskPtr getTask(const size_t & thread);
+    Block getHeader() const override;
+    CnchHiveReadTaskPtr getTask(const size_t & thread) override;
 
 private:
     struct BackoffState
@@ -93,6 +105,39 @@ private:
     mutable std::mutex mutex;
 
     // Poco::Logger * log = Poco::Logger::get("CnchHiveReadPool");
+};
+
+class HiveDistributedReadPool : public ICnchHiveReadPool
+{
+public:
+    HiveDistributedReadPool(
+        const StorageMetadataPtr & metadata_snapshot_,
+        const StorageCloudHive & data_,
+        const size_t & num_threads_,
+        DistributedReadingExtension extension_,
+        Names column_names_)
+        : metadata_snapshot(metadata_snapshot_)
+        , data(data_)
+        , num_threads(num_threads_)
+        , extension(extension_)
+        , column_names(column_names_)
+    {
+    }
+
+    Block getHeader() const override;
+    CnchHiveReadTaskPtr getTask(const size_t & thread) override;
+
+private:
+    StorageMetadataPtr metadata_snapshot;
+    const StorageCloudHive & data;
+    size_t num_threads;
+    DistributedReadingExtension extension;
+    Names column_names;
+
+    std::mutex mutex;
+    Poco::Logger * log {&Poco::Logger::get("HiveDistributedReadPool")};
+    bool no_more_tasks_available{false};
+    std::deque<RowGroupsInDataPart> buffered_ranges;
 };
 
 }

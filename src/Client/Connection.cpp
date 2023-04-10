@@ -41,6 +41,8 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/OpenSSLHelpers.h>
 #include <Common/randomSeed.h>
+#include "Core/Protocol.h"
+#include "IO/VarInt.h"
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/CnchQueryMetrics/QueryWorkerMetricLog.h>
@@ -775,6 +777,15 @@ void Connection::sendReadTaskResponse(const String & response)
     out->next();
 }
 
+void Connection::sendDistributedReadTaskResponse(const ParallelReadResponse & response)
+{
+    if (!connected)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Connection is not established");
+    writeVarUInt(Protocol::Client::ReadTaskResponse, *out);
+    response.serialize(*out);
+    out->next();
+}
+
 void Connection::sendPreparedData(ReadBuffer & input, size_t size, const String & name)
 {
     /// NOTE 'Throttler' is not used in this method (could use, but it's not important right now).
@@ -1042,6 +1053,10 @@ Packet Connection::receivePacket()
             case Protocol::Server::ReadTaskRequest:
                 return res;
 
+            case Protocol::Server::DistributedReadTaskRequest:
+                res.request = receiveParallelReadRequest();
+                return res;
+
             default:
                 /// In unknown state, disconnect - to not leave unsynchronised connection.
                 disconnect();
@@ -1165,6 +1180,12 @@ Progress Connection::receiveProgress() const
     return progress;
 }
 
+ParallelReadRequest Connection::receiveParallelReadRequest() const
+{
+    ParallelReadRequest request;
+    request.deserialize(*in);
+    return request;
+}
 
 BlockStreamProfileInfo Connection::receiveProfileInfo() const
 {

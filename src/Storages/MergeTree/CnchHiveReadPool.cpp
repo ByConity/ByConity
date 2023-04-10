@@ -36,7 +36,6 @@ CnchHiveReadPool::CnchHiveReadPool(
     const StorageMetadataPtr & metadata_snapshot_,
     Names column_names_)
     : backoff_state{threads_}, parts{std::move(parts_)}, data{data_}, metadata_snapshot(metadata_snapshot_), column_names{column_names_}
-
 {
     fillPerThreadInfo(threads_, sum_row_groups_, parts);
 }
@@ -189,6 +188,49 @@ CnchHiveReadTaskPtr CnchHiveReadPool::getTask(const size_t & thread)
         current_row_group);
 
     return std::make_unique<CnchHiveReadTask>(part, current_row_group, sum_row_group_in_part, part_idx);
+}
+
+CnchHiveReadTaskPtr HiveDistributedReadPool::getTask(const size_t &  /*thread*/)
+{
+    std::lock_guard lock(mutex);
+
+    if (no_more_tasks_available)
+        return nullptr;
+
+    if (buffered_ranges.empty() && !no_more_tasks_available)
+    {
+        auto response = extension.callback(ParallelReadRequest{
+            .worker_id = extension.worker_id,
+            .min_weight = num_threads
+        });
+
+        if (!response || response->finish)
+        {
+            no_more_tasks_available = true;
+        }
+
+        LOG_TRACE(log, "fetch read tasks from coordinator {}", response->split.describe());
+
+        auto hive_splits = response->split.converTo<HiveParallelReadSplit>();
+        for (const auto & hive_split : hive_splits)
+        {
+            LOG_TRACE(log, "received hive split {}", hive_split.describe());
+            const auto hive_part = hive_split.part;
+            buffered_ranges.push_back({hive_part, hive_part->getTotalRowGroups()});
+        }
+    }
+
+    if (buffered_ranges.empty())
+        return nullptr;
+
+    auto current = buffered_ranges.front();
+    buffered_ranges.pop_front();
+    return std::make_unique<CnchHiveReadTask>(current.data_part, 0, current.data_part->getTotalRowGroups(), 0);
+}
+
+Block HiveDistributedReadPool::getHeader() const
+{
+    return metadata_snapshot->getSampleBlockForColumns(column_names, data.getVirtuals(), data.getStorageID());
 }
 
 }

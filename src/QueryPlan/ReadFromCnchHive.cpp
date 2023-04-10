@@ -54,6 +54,32 @@ ReadFromCnchHive::ReadFromCnchHive(
 
 void ReadFromCnchHive::initializePipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &)
 {
+    if (context->getSettingsRef().enable_hive_distributed_reading)
+    {
+        auto extension = DistributedReadingExtension{
+            .callback = context->getDistributedReadTaskCallback(),
+            .worker_id = context->getHostWithPorts().getTCPAddress(),
+        };
+
+        auto pool = std::make_shared<HiveDistributedReadPool>(metadata_snapshot, data, num_streams, extension, real_column_names);
+
+        Pipe pipe;
+        for (size_t i = 0; i < num_streams; ++i)
+        {
+            Pipes res;
+            res.emplace_back(
+                std::make_shared<CnchHiveThreadSelectBlockInputProcessor>(i, pool, data, metadata_snapshot, context, max_block_size));
+
+            pipe = Pipe::unitePipes(std::move(res));
+        }
+
+        for (const auto & processor : pipe.getProcessors())
+            processors.emplace_back(processor);
+
+        pipeline.init(std::move(pipe));
+        return;
+    }
+
     if (data_parts.empty())
     {
         pipeline.init(Pipe(std::make_shared<NullSource>(getOutputStream().header)));
