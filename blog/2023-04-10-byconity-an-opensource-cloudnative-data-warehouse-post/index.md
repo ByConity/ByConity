@@ -1,11 +1,7 @@
 ---
 slug: byconity-an-opensource-cloudnative-data-warehouse-post
 title: ByConity -- An Open source Cloud-native Data Warehouse
-authors:
-  name: Tiger Wang
-  title: ByConity Opensource Evangelist
-  url: https://github.com/tigerwangyb
-  image_url: https://github.com/will-update-later.png
+authors: [hustnn, tigerwangyb]
 tags: [video introduction, docusaurus]
 ---
 
