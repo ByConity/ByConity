@@ -24,6 +24,7 @@ The ByConity team hopes to give the project back to the community and improve it
 <!-- ![Figure 1: ByteDance ClickHouse Usage](./f1-byte-clickhouse-usage.png)  -->
 
 <div align="center"> <img src="./f1-byte-clickhouse-usage.png" alt="Figure 1: ByteDance ClickHouse Usage" width="400" height="245"></div>
+<div align="center"><em style="font-style:italic;">Figure 1: ByteDance ClickHouse Usage</em></div>
 
 # Features of ByConity
 
@@ -36,6 +37,7 @@ One of the critical advantages of ByConity is its storage-computing separation a
 <!-- ![Figure 2: ByConity storage-computing separation to achieve multi-tenant isolation](./f2-storage-computing-separation.png) -->
 
 <div align="center"> <img src="./f2-storage-computing-separation.png" alt="Figure 2: ByConity storage-computing separation to achieve multi-tenant isolation" width="500" height="300"></div>
+<div align="center"><em style="font-style:italic;">Figure 2: ByConity storage-computing separation to achieve multi-tenant isolation</em></div>
 
 ## Elastic Scaling
 
@@ -62,6 +64,7 @@ ByConity's architecture is divided into three layers:
 3. Data storage: Distributed file system, such as HDFS, S3, etc. 
 
 <div align="center"> <img src="./f3-three-layer-architecture.png" alt="Figure 3: ByConity's architecture" width="500" height="300"></div>
+<div align="center"><em style="font-style:italic;">Figure 3: ByConity's architecture</em></div>
 
 # Working Principle of ByConity
 
@@ -154,4 +157,6 @@ Scan the QR code to reply [name + QR code] Join the ByConity communication group
 
 
 <div align="center"> <img src="./f5-byconity-community-qrcode.png" alt="ByConity Community QR Code" width="300" height="300"></div>
+<div align="center"><em style="font-style:italic;">ByConity Community QR Code</em></div>
+
 
