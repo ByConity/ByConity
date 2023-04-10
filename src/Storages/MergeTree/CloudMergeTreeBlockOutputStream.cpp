@@ -218,6 +218,8 @@ void CloudMergeTreeBlockOutputStream::writeSuffix()
 
 void CloudMergeTreeBlockOutputStream::writeSuffixImpl()
 {
+    cnch_writer.preload(preload_parts);
+
     if (!metadata_snapshot->hasUniqueKey() || to_staging_area)
     {
         /// case1(normal table): commit all the temp parts as visible parts
@@ -232,8 +234,6 @@ void CloudMergeTreeBlockOutputStream::writeSuffixImpl()
         /// and then remove duplicate keys between visible parts and temp parts.
         writeSuffixForUpsert();
     }
-
-    cnch_writer.preload(preload_parts);
 }
 
 void CloudMergeTreeBlockOutputStream::writeSuffixForInsert()
