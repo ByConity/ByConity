@@ -49,7 +49,7 @@ jobs:
           export MAX_RUN_TIME=9000
           cp -r $GITHUB_WORKSPACE/docker/test/stateless/* .
           apt-get install strace -y 
-          strace -c /bin/bash run_cnch.sh
+          strace -fc -Tttv -s 200 /bin/bash run_cnch.sh
       - name: After test
         continue-on-error: true
         run: |
