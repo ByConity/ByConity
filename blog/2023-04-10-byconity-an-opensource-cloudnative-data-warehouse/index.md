@@ -71,6 +71,7 @@ ByConity's architecture is divided into three layers:
 ByConity is a powerful open-source cloud-native data warehouse that adopts a storage-computing separation architecture. In this section, we will examine the working principle of ByConity and the interaction process of each component of ByConity through the complete life cycle of a SQL.
 
 <div align="center"> <img src="./f4-internal-component-interaction.png" alt="Figure 4: ByConity internal component interaction diagram" width="500" height="600"></div>
+<div align="center"><em style="font-style:italic;">Figure 4: ByConity internal component interaction diagram</em></div>
 
 Figure 4 above is the interaction diagram of ByConity components. The dotted line in the figure indicates the inflow of a SQL, the two-way arrow in the solid line indicates the interaction within the component, and the one-way arrow indicates the data processing and output to the client.
 
