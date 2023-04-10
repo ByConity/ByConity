@@ -21,6 +21,8 @@ The background of ByConity can be traced back to 2018 when ByteDance began to us
 
 The ByConity team hopes to give the project back to the community and improve it through the power of open source. In January 2023, ByConity was officially open-sourced, and the beta version was released.
 
+![Figure 1: ByteDance ClickHouse Usage](./f1-byte-clickhouse-usage.png)
+
 # Features of ByConity
 
 ByConity has several key features that make it a powerful open-source cloud-native data warehouse.
@@ -29,7 +31,7 @@ ByConity has several key features that make it a powerful open-source cloud-nati
 
 One of the critical advantages of ByConity is its storage-computing separation architecture, which enables read-write separation and elastic scaling. This architecture ensures that read and write operations do not affect each other, and computing resources and storage resources can be independently expanded and contracted on demand, ensuring efficient resource utilization. ByConity also supports multi-tenant resource isolation, making it suitable for multi-tenant environments.
 
-![Figure 2: ByConity storage-computing separation to achieve multi-tenant isolation](https://i.imgur.com/7oI8GpR.png)
+![Figure 2: ByConity storage-computing separation to achieve multi-tenant isolation](./f2-storage-computing-separation.png)
 
 ## Elastic Scaling
 
@@ -55,13 +57,13 @@ ByConity's architecture is divided into three layers:
 2. Computing group: ByConity's computing resource layer, where each Virtual Warehouse is a computing group
 3. Data storage: Distributed file system, such as HDFS, S3, etc. 
 
-![Figure 3: ByConity's architecture](https://i.imgur.com/3mHlOan.png)
+![Figure 3: ByConity's architecture](./f3-three-layer-architecture.png)
 
 # Working Principle of ByConity
 
 ByConity is a powerful open-source cloud-native data warehouse that adopts a storage-computing separation architecture. In this section, we will examine the working principle of ByConity and the interaction process of each component of ByConity through the complete life cycle of a SQL.
 
-![Figure 4: ByConity internal component interaction diagram](https://i.imgur.com/xntNzjJ.png)
+![Figure 4: ByConity internal component interaction diagram](./f4-internal-component-interaction.png)
 
 Figure 4 above is the interaction diagram of ByConity components. The dotted line in the figure indicates the inflow of a SQL, the two-way arrow in the solid line indicates the interaction within the component, and the one-way arrow indicates the data processing and output to the client.
 
@@ -146,4 +148,4 @@ We have a video that introduces ByConity in detail, including a demo of ByConity
 
 Scan the QR code to reply [name + QR code] Join the ByConity communication group to get more project dynamics and activity information.
 
-![QR Code](https://i.imgur.com/1cJ9XaZ.png)
+![QR Code](./f5-byconity-community-qrcode.png)
