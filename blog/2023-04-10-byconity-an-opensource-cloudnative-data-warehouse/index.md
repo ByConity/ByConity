@@ -5,7 +5,7 @@ authors:
   name: Tiger Wang
   title: ByConity Opensource Evangelist
   url: https://github.com/tigerwangyb
-  image_url: https://github.com/tiger.png
+  image_url: https://github.com/will-update-later.png
 tags: [video introduction, docusaurus]
 ---
 
