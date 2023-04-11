@@ -520,11 +520,12 @@ def colored(text, args, color=None, on_color=None, attrs=None):
 
 
 stop_time = None
-exit_code = multiprocessing.Value("i", 0)
-server_died = multiprocessing.Event()
-stop_tests_triggered_lock = multiprocessing.Lock()
-stop_tests_triggered = multiprocessing.Event()
-queue = multiprocessing.Queue(maxsize=1)
+ctx = multiprocessing.get_context("spawn")
+exit_code = ctx.Value("i", 0)
+server_died = ctx.Event()
+stop_tests_triggered_lock = ctx.Lock()
+stop_tests_triggered = ctx.Event()
+queue = ctx.Queue(maxsize=1)
 restarted_tests = []  # (test, stderr)
 
 # def run_tests_array(all_tests, suite, suite_dir, suite_tmp_dir, run_total):
@@ -549,7 +550,8 @@ def run_tests_array(all_tests_with_params):
     failures_chain = 0
     start_time = datetime.now()
 
-    is_concurrent = multiprocessing.current_process().name != "MainProcess"
+    ctx = multiprocessing.get_context("spawn")
+    is_concurrent = ctx.current_process().name != "MainProcess"
 
     client_options = get_additional_client_options(args)
 
@@ -561,7 +563,7 @@ def run_tests_array(all_tests_with_params):
 
     if num_tests > 0:
         about = 'about ' if is_concurrent else ''
-        print(f"\nRunning {about}{num_tests} {suite} tests ({multiprocessing.current_process().name}).\n")
+        print(f"\nRunning {about}{num_tests} {suite} tests ({ctx.current_process().name}).\n")
 
     while True:
         if is_concurrent:
@@ -783,13 +785,13 @@ def run_tests_array(all_tests_with_params):
     if failures_total > 0:
         print(colored(f"\nHaving {failures_total} errors! {passed_total} tests passed."
             f" {skipped_total} tests skipped. {(datetime.now() - start_time).total_seconds():.2f} s elapsed"
-            f' ({multiprocessing.current_process().name}).',
+            f' ({ctx.current_process().name}).',
             args, "red", attrs=["bold"]))
         exit_code.value = 1
     else:
         print(colored(f"\n{passed_total} tests passed. {skipped_total} tests skipped."
             f" {(datetime.now() - start_time).total_seconds():.2f} s elapsed"
-            f' ({multiprocessing.current_process().name}).',
+            f' ({ctx.current_process().name}).',
             args, "green", attrs=["bold"]))
 
     sys.stdout.flush()
