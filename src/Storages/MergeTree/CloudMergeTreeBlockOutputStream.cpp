@@ -218,6 +218,8 @@ void CloudMergeTreeBlockOutputStream::writeSuffix()
 
 void CloudMergeTreeBlockOutputStream::writeSuffixImpl()
 {
+    cnch_writer.preload(preload_parts);
+
     if (!metadata_snapshot->hasUniqueKey() || to_staging_area)
     {
         /// case1(normal table): commit all the temp parts as visible parts
@@ -231,14 +233,6 @@ void CloudMergeTreeBlockOutputStream::writeSuffixImpl()
         /// case(unique table with sync insert): acquire the necessary locks to avoid write-write conflicts
         /// and then remove duplicate keys between visible parts and temp parts.
         writeSuffixForUpsert();
-    }
-
-    if (!preload_parts.empty())
-    {
-        /// auto testlog = std::make_shared<TestLog>(const_cast<Context &>(context));
-        /// TEST_START(testlog);
-        /// tryPreloadChecksumsAndPrimaryIndex(storage, std::move(preload_parts), ManipulationType::Insert, context);
-        /// TEST_END(testlog, "Finish tryPreloadChecksumsAndPrimaryIndex in batch mode");
     }
 }
 

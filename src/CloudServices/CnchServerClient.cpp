@@ -632,6 +632,30 @@ void CnchServerClient::submitQueryWorkerMetrics(const QueryWorkerMetricElementPt
     RPCHelpers::checkResponse(response);
 }
 
+void CnchServerClient::submitPreloadTask(const MergeTreeMetaBase & storage, const MutableMergeTreeDataPartsCNCHVector & parts, bool sync, UInt64 timeout_ms)
+{
+    if (parts.empty())
+        return;
+
+    brpc::Controller cntl;
+    Protos::SubmitPreloadTaskReq request;
+    Protos::SubmitPreloadTaskResp response;
+    if (timeout_ms)
+        cntl.set_timeout_ms(timeout_ms);
+
+    RPCHelpers::fillUUID(storage.getStorageUUID(), *request.mutable_uuid());
+    request.set_sync(sync);
+    for (const auto & part : parts)
+    {
+        auto new_part = request.add_parts();
+        fillPartModel(storage, *part, *new_part);
+    }
+
+    stub->submitPreloadTask(&cntl, &request, &response, nullptr);
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+}
+
 UInt32 CnchServerClient::reportDeduperHeartbeat(const StorageID & cnch_storage_id, const String & worker_table_name)
 {
     brpc::Controller cntl;

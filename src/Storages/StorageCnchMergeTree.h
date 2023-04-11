@@ -175,6 +175,8 @@ public:
 
     String genCreateTableQueryForWorker(const String & suffix);
 
+    void sendPreloadTasks(ContextPtr local_context, ServerDataPartsVector parts, bool sync = true);
+
 protected:
     StorageCnchMergeTree(
         const StorageID & table_id_,

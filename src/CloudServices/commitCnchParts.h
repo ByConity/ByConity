@@ -70,6 +70,8 @@ public:
 
     void commitDumpedParts(const DumpedData & dumped_data);
 
+    void preload(const MutableMergeTreeDataPartsCNCHVector & dumped_parts);
+
 private:
 
     MergeTreeMetaBase & storage;

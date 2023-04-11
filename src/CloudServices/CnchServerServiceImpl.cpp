@@ -910,6 +910,44 @@ void CnchServerServiceImpl::submitQueryWorkerMetrics(
     );
 }
 
+void CnchServerServiceImpl::submitPreloadTask(
+    google::protobuf::RpcController * cntl,
+    const Protos::SubmitPreloadTaskReq * request,
+    Protos::SubmitPreloadTaskResp * response,
+    google::protobuf::Closure * done)
+{
+    RPCHelpers::serviceHandler(done, response, [c = cntl, request, response, done, gc = getContext(), log = log] {
+        brpc::ClosureGuard done_guard(done);
+
+        try
+        {
+            auto rpc_context = RPCHelpers::createSessionContextForRPC(gc, *c);
+            const TxnTimestamp txn_id = rpc_context->getTimestamp();
+            rpc_context->setTemporaryTransaction(txn_id, {}, /*check catalog*/ false);
+
+            String table_uuid = UUIDHelpers::UUIDToString(RPCHelpers::createUUID(request->uuid()));
+            auto storage = rpc_context->getCnchCatalog()->tryGetTableByUUID(*rpc_context, table_uuid, TxnTimestamp::maxTS());
+            if (!storage)
+                throw Exception(ErrorCodes::UNKNOWN_TABLE, "Table with uuid {} not found.", table_uuid);
+
+            auto * cnch = dynamic_cast<StorageCnchMergeTree *>(storage.get());
+            if (!cnch)
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Table is not of MergeTree class");
+
+            ServerDataPartsVector parts = createServerPartsFromModels(*cnch, request->parts());
+            if (parts.empty())
+                return;
+
+            cnch->sendPreloadTasks(rpc_context, std::move(parts), request->sync());
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log);
+            RPCHelpers::handleException(response->mutable_exception());
+        }
+    });
+}
+
 void CnchServerServiceImpl::executeOptimize(
     google::protobuf::RpcController *,
     const Protos::ExecuteOptimizeQueryReq * request,

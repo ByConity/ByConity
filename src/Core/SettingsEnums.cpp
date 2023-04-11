@@ -148,4 +148,10 @@ IMPLEMENT_SETTING_ENUM(StatisticsAccurateSampleNdvMode, ErrorCodes::BAD_ARGUMENT
     {{"NEVER", StatisticsAccurateSampleNdvMode::NEVER},
      {"AUTO", StatisticsAccurateSampleNdvMode::AUTO},
      {"ALWAYS", StatisticsAccurateSampleNdvMode::ALWAYS}})
+
+IMPLEMENT_SETTING_ENUM(DiskCacheMode, ErrorCodes::BAD_ARGUMENTS,
+    {{"AUTO", DiskCacheMode::AUTO},
+     {"USE_DISK_CACHE", DiskCacheMode::USE_DISK_CACHE},
+     {"SKIP_DISK_CACHE", DiskCacheMode::SKIP_DISK_CACHE},
+     {"FORCE_CHECKSUMS_DISK_CACHE", DiskCacheMode::FORCE_CHECKSUMS_DISK_CACHE}})
 }

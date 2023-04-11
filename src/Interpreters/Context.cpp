@@ -4172,7 +4172,7 @@ StoragePtr Context::tryGetCnchTable(const String & , const String & ) const
     throw Exception("Not implemented yet. ", ErrorCodes::NOT_IMPLEMENTED);
 }
 
-void Context::setCurrentWorkerGroup(WorkerGroupHandle worker_group)
+void Context::setCurrentWorkerGroup(WorkerGroupHandle worker_group) const
 {
     current_worker_group = std::move(worker_group);
 }
@@ -4292,13 +4292,14 @@ void Context::setCurrentTransaction(TransactionCnchPtr txn, bool finish_txn)
     current_cnch_txn = std::move(txn);
 }
 
-TransactionCnchPtr Context::setTemporaryTransaction(const TxnTimestamp & txn_id, const TxnTimestamp & primary_txn_id)
+TransactionCnchPtr Context::setTemporaryTransaction(const TxnTimestamp & txn_id, const TxnTimestamp & primary_txn_id, bool with_check)
 {
     auto lock = getLock();
 
     if (shared->server_type == ServerType::cnch_server)
     {
-        auto txn_record = getCnchCatalog()->tryGetTransactionRecord((txn_id));
+        std::optional<TransactionRecord> txn_record = with_check ? getCnchCatalog()->tryGetTransactionRecord((txn_id)) : std::nullopt;
+
         if (!txn_record)
         {
             txn_record = std::make_optional<TransactionRecord>();

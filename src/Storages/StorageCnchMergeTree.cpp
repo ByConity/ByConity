@@ -1282,6 +1282,42 @@ void StorageCnchMergeTree::removeCheckpoint(const Protos::Checkpoint & checkpoin
     // getContext()->getCnchCatalog()->markCheckpoint(shared_from_this(), new_checkpoint);
 }
 
+void StorageCnchMergeTree::sendPreloadTasks(ContextPtr local_context, ServerDataPartsVector parts, bool sync)
+{
+    auto worker_group = getWorkerGroupForTable(*this, local_context);
+    local_context->setCurrentWorkerGroup(worker_group);
+
+    TxnTimestamp txn_id = local_context->getCurrentTransactionID();
+    String create_table_query = genCreateTableQueryForWorker(txn_id.toString());
+
+    /// reuse server resource for part allocation
+    /// no worker session context is created
+    auto server_resource = std::make_shared<CnchServerResource>(txn_id);
+    server_resource->skipCleanWorker();
+    /// all bucket numbers are required
+    std::set<Int64> bucket_numbers;
+    if (isBucketTable())
+    {
+        std::transform(parts.begin(), parts.end(), std::inserter(bucket_numbers, bucket_numbers.end()), [](const auto & part) {
+            return part->part_model().bucket_number();
+        });
+    }
+    server_resource->addCreateQuery(local_context, shared_from_this(), create_table_query, "");
+    server_resource->addDataParts(getStorageUUID(), parts, bucket_numbers);
+    /// TODO: async rpc?
+    server_resource->sendResource(local_context, [&](CnchWorkerClientPtr client, auto & resources, ExceptionHandler &handler) {
+        std::vector<brpc::CallId> ids;
+        for (const auto & resource : resources)
+        {
+            auto data_parts = std::move(resource.server_parts);
+            CnchPartsHelper::flattenPartsVector(data_parts);
+            brpc::CallId id = client->preloadDataParts(local_context, txn_id, *this, create_table_query, data_parts, sync, handler);
+            ids.emplace_back(id);
+        }
+        return ids;
+    });
+}
+
 void StorageCnchMergeTree::filterPartsInExplicitTransaction(ServerDataPartsVector & data_parts, ContextPtr local_context) const
 {
     Int64 primary_txn_id = local_context->getCurrentTransaction()->getPrimaryTransactionID().toUInt64();

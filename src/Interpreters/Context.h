@@ -1221,7 +1221,7 @@ public:
 
     StoragePtr tryGetCnchTable(const String & database_name, const String & table_name) const;
 
-    void setCurrentWorkerGroup(WorkerGroupHandle group);
+    void setCurrentWorkerGroup(WorkerGroupHandle group) const;
     WorkerGroupHandle getCurrentWorkerGroup() const;
     WorkerGroupHandle tryGetCurrentWorkerGroup() const;
 
@@ -1252,7 +1252,7 @@ public:
     void initCnchTransactionCoordinator();
     TransactionCoordinatorRcCnch & getCnchTransactionCoordinator() const;
     void setCurrentTransaction(TransactionCnchPtr txn, bool finish_txn = true);
-    TransactionCnchPtr setTemporaryTransaction(const TxnTimestamp & txn_id, const TxnTimestamp & primary_txn_id = 0);
+    TransactionCnchPtr setTemporaryTransaction(const TxnTimestamp & txn_id, const TxnTimestamp & primary_txn_id = 0, bool with_check = true);
     TransactionCnchPtr getCurrentTransaction() const;
     TxnTimestamp getCurrentTransactionID() const;
     TxnTimestamp getCurrentCnchStartTime() const;

@@ -83,6 +83,15 @@ public:
         const HiveDataPartsCNCHVector & parts,
         ExceptionHandler & handler);
 
+    brpc::CallId preloadDataParts(
+        const ContextPtr & context,
+        const TxnTimestamp & txn_id,
+        const IStorage & storage,
+        const String & create_local_table_query,
+        const ServerDataPartsVector & parts,
+        bool sync,
+        ExceptionHandler & handler);
+
     brpc::CallId sendOffloadingInfo(
         const ContextPtr & context,
         const HostWithPortsVec & read_workers,

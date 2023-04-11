@@ -251,4 +251,15 @@ enum class StatisticsAccurateSampleNdvMode
 };
 
 DECLARE_SETTING_ENUM(StatisticsAccurateSampleNdvMode)
+
+/// The setting for controlling usage of local disk cache
+enum class DiskCacheMode
+{
+    AUTO = 0,          /// depends on storage settings
+    USE_DISK_CACHE,    /// use disk cache if cache is available
+    SKIP_DISK_CACHE,   /// use no disk cache
+    FORCE_CHECKSUMS_DISK_CACHE,  /// if disk cache is not hit, throw an exception
+};
+
+DECLARE_SETTING_ENUM(DiskCacheMode);
 }

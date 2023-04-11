@@ -269,7 +269,7 @@ void CloudUniqueMergeTreeMergeTask::executeImpl()
         watch.elapsedMilliseconds(),
         lock_watch.elapsedMilliseconds());
     /// preload can be done outside the lock
-    // tryPreload(context, storage, dumped_data.parts, ManipulationType::Merge);
+    // preload(context, storage, dumped_data.parts, ManipulationType::Merge);
 }
 
 } // namespace DB
