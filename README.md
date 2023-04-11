@@ -11,11 +11,13 @@ npm install # Install NPM dependencies
 npm start # Start local server, OR
 
 npm start -l zh-cn # Start the zh-cn server
+
+npm run build # Build the Website
 ```
 
 ## General Folder Structure
 
-```
+```txt
 byconity.github.io/
 ├── docs/ # English docs, use kebab-case
 │   ├── category-1
