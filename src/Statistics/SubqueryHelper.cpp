@@ -86,16 +86,10 @@ Block SubqueryHelper::getNextBlock()
     }
 
     Block block;
-    auto ok = impl->executor->pull(block);
-    impl->executor->rethrowExceptionIfHas();
-    if (!ok)
+    while (!block && impl->executor->pull(block))
     {
-        return {};
     }
-    else
-    {
-        return block;
-    }
+    return block;
 }
 
 void executeSubQuery(ContextPtr old_context, const String & sql)
