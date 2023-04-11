@@ -929,7 +929,7 @@ def do_run_tests(jobs, suite, suite_dir, suite_tmp_dir, all_tests, parallel_test
         for _ in range(jobs):
             parallel_tests_array.append((None, batch_size, suite, suite_dir, suite_tmp_dir))
 
-        with closing(multiprocessing.Pool(processes=jobs)) as pool:
+        with closing(multiprocessing.get_context("spawn").Pool(processes=jobs)) as pool:
             pool.map_async(run_tests_array, parallel_tests_array)
 
             for suit in parallel_tests:
