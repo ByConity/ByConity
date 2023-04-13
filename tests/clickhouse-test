@@ -520,7 +520,7 @@ def colored(text, args, color=None, on_color=None, attrs=None):
 
 
 stop_time = None
-ctx = multiprocessing.get_context("spawn")
+ctx = multiprocessing.get_context("forkserver")
 exit_code = ctx.Value("i", 0)
 server_died = ctx.Event()
 stop_tests_triggered_lock = ctx.Lock()
@@ -550,7 +550,7 @@ def run_tests_array(all_tests_with_params):
     failures_chain = 0
     start_time = datetime.now()
 
-    ctx = multiprocessing.get_context("spawn")
+    ctx = multiprocessing.get_context("forkserver")
     is_concurrent = ctx.current_process().name != "MainProcess"
 
     client_options = get_additional_client_options(args)
@@ -931,7 +931,7 @@ def do_run_tests(jobs, suite, suite_dir, suite_tmp_dir, all_tests, parallel_test
         for _ in range(jobs):
             parallel_tests_array.append((None, batch_size, suite, suite_dir, suite_tmp_dir))
 
-        with closing(multiprocessing.get_context("spawn").Pool(processes=jobs)) as pool:
+        with closing(multiprocessing.get_context("forkserver").Pool(processes=jobs)) as pool:
             pool.map_async(run_tests_array, parallel_tests_array)
 
             for suit in parallel_tests:
