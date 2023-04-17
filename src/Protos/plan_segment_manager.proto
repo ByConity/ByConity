@@ -64,16 +64,11 @@ message ExecutePlanSegmentRequest {
 
   // Default database.
   optional string database = 23;
-<<<<<<< HEAD
 
   // Cnch Transaction ID
   required uint64 txn_id = 24;
-=======
-  optional string cluster = 24;
-  optional string salt = 25;
 
-  optional uint32 brpc_protocol_major_revision = 26;
->>>>>>> eaf774c32ce... add brpc major version
+  optional uint32 brpc_protocol_major_revision = 25;
 }
 
 message ExecutePlanSegmentResponse {
