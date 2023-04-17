@@ -23,13 +23,10 @@
 #include <Optimizer/PlanOptimizer.h>
 #include <QueryPlan/GraphvizPrinter.h>
 #include <QueryPlan/QueryPlanner.h>
-<<<<<<< HEAD
 #include <Storages/StorageCnchMergeTree.h>
-=======
 #include <Storages/StorageCnchHive.h>
 #include <Storages/StorageDistributed.h>
 #include "QueryPlan/QueryPlan.h"
->>>>>>> 3cd36486bda... suport shared cte
 
 namespace DB
 {
@@ -74,20 +71,16 @@ BlockIO InterpreterSelectQueryUseOptimizer::execute()
     total_watch.start();
     QueryPlanPtr query_plan = buildQueryPlan();
 
-<<<<<<< HEAD
     stage_watch.start();
     QueryPlan plan = PlanNodeToNodeVisitor::convert(*query_plan);
 
     LOG_DEBUG(log, "optimizer stage run time: plan normalize, {} ms", stage_watch.elapsedMillisecondsAsDouble());
  
     stage_watch.restart();
-=======
->>>>>>> 3cd36486bda... suport shared cte
+
     PlanSegmentTreePtr plan_segment_tree = std::make_unique<PlanSegmentTree>();
     ClusterInfoContext cluster_info_context{.query_plan = *query_plan, .context = context, .plan_segment_tree = plan_segment_tree};
     PlanSegmentContext plan_segment_context = ClusterInfoFinder::find(*query_plan, cluster_info_context);
-
-    QueryPlan plan = PlanNodeToNodeVisitor::convert(*query_plan);
 
     plan.allocateLocalTable(context);
     PlanSegmentSplitter::split(plan, plan_segment_context);

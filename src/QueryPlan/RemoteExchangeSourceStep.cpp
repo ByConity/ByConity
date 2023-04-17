@@ -171,16 +171,11 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
                     }
                     else
                     {
-<<<<<<< HEAD
                         String localhost_address = context->getHostWithPorts().getExchangeAddress();
-                        LOG_DEBUG(logger, "Force local exchange use remote source : {}@{}", data_key->dump(), localhost_address);
-=======
-                        String localhost_address = context->getLocalHost() + ":" + std::to_string(context->getExchangePort());
                         LOG_DEBUG(logger, "Force local exchange use remote source : {}@{} for plansegment {}->{}",
                                   data_key->dump(), localhost_address, write_plan_segment_id, plan_segment_id);
                         String name = BrpcRemoteBroadcastReceiver::generateName(
                             query_id, exchange_id, write_plan_segment_id, plan_segment_id, partition_id);
->>>>>>> 3cd36486bda... suport shared cte
                         auto brpc_receiver = std::make_shared<BrpcRemoteBroadcastReceiver>(
                             std::move(data_key), localhost_address, context, exchange_header, keep_order, name);
                         receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(brpc_receiver);
