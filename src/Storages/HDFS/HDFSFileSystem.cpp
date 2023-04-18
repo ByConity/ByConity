@@ -24,6 +24,7 @@
 #include <ServiceDiscovery/ServiceDiscoveryFactory.h>
 #include <ServiceDiscovery/ServiceDiscoveryConsul.h>
 #include <Storages/HDFS/HDFSFileSystem.h>
+#include <Storages/HDFS/HDFSAuth.h>
 #include <hdfs/hdfs.h>
 #include <common/logger_useful.h>
 #include <common/scope_guard.h>
@@ -198,8 +199,6 @@ HDFSBuilderPtr createHDFSBuilder(const Poco::URI & uri, const String & hdfs_user
             service_name = uri.getHost();
         }
     }
-
-
 
     hdfsBuilderSetUserName(builder.get(), hdfs_user.c_str());
 
@@ -817,24 +816,26 @@ HDFSConnectionParams HDFSConnectionParams::parseHdfsFromConfig(
 
     String hdfs_user = config.getString(hdfs_user_key, "clickhouse");
 
+    HDFSConnectionParams connect_params;
+
     if (config.has(cfs_addr_key))
     {
         // for ip:port, poco cannot parse it correctly. the ip will be parsed as scheme.
         Poco::URI cfs_uri(addSchemeOnNeed(cfs_addr_key, "cfs://"));
         String host = cfs_uri.getHost();
         int port = cfs_uri.getPort() == 0 ? 65212 : cfs_uri.getPort();
-        return HDFSConnectionParams(CONN_CFS, hdfs_user, {{host, port}});
+        connect_params = HDFSConnectionParams(CONN_CFS, hdfs_user, {{host, port}});
     }
     else if (config.has(hdfs_addr_key))
     {
         Poco::URI hdfs_uri(addSchemeOnNeed(config.getString(hdfs_addr_key), "hdfs://"));
         String host = hdfs_uri.getHost();
         int port = hdfs_uri.getPort() == 0 ? 65212 : hdfs_uri.getPort();
-        return HDFSConnectionParams(CONN_HDFS, hdfs_user, {{host, port}});
+        connect_params = HDFSConnectionParams(CONN_HDFS, hdfs_user, {{host, port}});
     }
     else if (config.has(hdfs_ha_key))
     {
-        return HDFSConnectionParams(CONN_HA, hdfs_user, config.getString(hdfs_ha_key));
+        connect_params = HDFSConnectionParams(CONN_HA, hdfs_user, config.getString(hdfs_ha_key));
     }
     else if (config.has(hdfs_nnproxy_key))
     {
@@ -847,15 +848,22 @@ HDFSConnectionParams HDFSConnectionParams::parseHdfsFromConfig(
             HDFSConnectionType conn_type = isCfsScheme(proxy_uri.getScheme()) ? CONN_CFS : CONN_HDFS;
             String host = proxy_uri.getHost();
             int port = proxy_uri.getPort() == 0 ? 65212 : proxy_uri.getPort();
-            return HDFSConnectionParams(conn_type, hdfs_user, {{host, port}});
+            connect_params = HDFSConnectionParams(conn_type, hdfs_user, {{host, port}});
         }
         else
         {
             // this is a nnproxy.
-            return HDFSConnectionParams(CONN_NNPROXY, hdfs_user, hdfs_nnproxy);
+            connect_params = HDFSConnectionParams(CONN_NNPROXY, hdfs_user, hdfs_nnproxy);
         }
     }
-    return HDFSConnectionParams();
+    else
+    {
+        connect_params = HDFSConnectionParams();
+    }
+
+    connect_params.krb5_params = HDFSKrb5Params::parseKrb5FromConfig(config, config_prefix);
+
+    return connect_params;
 }
 
 HDFSConnectionParams HDFSConnectionParams::parseFromMisusedNNProxyStr(String hdfs_nnproxy,String hdfs_user)
@@ -957,6 +965,14 @@ HDFSBuilderPtr HDFSConnectionParams::createBuilder(const Poco::URI & uri) const
     // set read/connect timeout, default value in libhdfs3 is about 1 hour, and too large
 
     HDFSBuilderPtr builder(raw_builder);
+
+    //set krb5 auth and init
+    if(krb5_params.need_kinit)
+    {
+        krb5_params.setHDFSKrb5Config(builder.get());
+        krb5_params.runKinit();
+    }
+
     if (!uri.getHost().empty())
     {
         auto normalizedHost =  std::get<0>(safeNormalizeHost(uri.getHost()));
