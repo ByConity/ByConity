@@ -415,14 +415,15 @@ void MergeTreeDataPartCNCH::checkConsistency([[maybe_unused]] bool require_part_
 {
 }
 
-void MergeTreeDataPartCNCH::loadIndex()
+MergeTreeDataPartCNCH::IndexPtr MergeTreeDataPartCNCH::loadIndex()
 {
+    /// load index from base part if it's a partial part
     if (isPartial())
     {
         /// Partial parts may not have index; primary columns never get altered, so getting index from base parts
         auto base_part = getBasePart();
         index = base_part->getIndex();
-        return;
+        return index;
     }
 
     /// It can be empty in case of mutations
@@ -434,7 +435,7 @@ void MergeTreeDataPartCNCH::loadIndex()
     size_t key_size = primary_key.column_names.size();
 
     if (!key_size)
-        return;
+        return index;
 
     if (enableDiskCache())
     {
@@ -448,7 +449,7 @@ void MergeTreeDataPartCNCH::loadIndex()
                 LOG_DEBUG(storage.log, "has index disk cache {}", segment_path);
                 auto cache_buf = openForReading(cache_disk, segment_path, cache_disk->getFileSize(segment_path));
                 index = loadIndexFromBuffer(*cache_buf, primary_key);
-                return;
+                return index;
             }
             catch (...)
             {
@@ -474,6 +475,8 @@ void MergeTreeDataPartCNCH::loadIndex()
         auto disk_cache = DiskCacheFactory::instance().getDefault().first;
         disk_cache->cacheSegmentsToLocalDisk({std::move(index_seg)});
     }
+
+    return index;
 }
 
 IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_unused]] bool require)

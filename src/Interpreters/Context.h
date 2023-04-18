@@ -103,6 +103,7 @@ class Compiler;
 class MarkCache;
 class MMappedFileCache;
 class UncompressedCache;
+class PrimaryIndexCache;
 class ProcessList;
 class ProcessListEntry;
 class PlanSegment;
@@ -937,6 +938,10 @@ public:
     void setMarkCache(size_t cache_size_in_bytes);
     std::shared_ptr<MarkCache> getMarkCache() const;
     void dropMarkCache() const;
+
+    void setPrimaryIndexCache(size_t cache_size_in_bytes);
+    std::shared_ptr<PrimaryIndexCache> getPrimaryIndexCache() const;
+    void dropPrimaryIndexCache() const;
 
     /// Create a cache of queries of specified size. This can be done only once.
     void setQueryCache(size_t cache_size_in_bytes);
