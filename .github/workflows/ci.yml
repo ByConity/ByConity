@@ -41,12 +41,15 @@ jobs:
         continue-on-error: true
         run: |
           bash ${GITHUB_WORKSPACE}/ci_scripts/cluster_up.sh
-          echo $PATH
-          ls /usr/bin
           bash ${GITHUB_WORKSPACE}/docker/test/foundationdb/show_fdb.sh
           export ADDITIONAL_OPTIONS=' --run cnch_stateless'
           export MAX_RUN_TIME=9000
           cp -r $GITHUB_WORKSPACE/docker/test/stateless/* .
+          /bin/bash run_cnch.sh
+      - name: Run CNCH FuntionalStateless with optimizer
+        continue-on-error: true
+        run: |
+          export ADDITIONAL_OPTIONS=' --run cnch_stateless --client-option 'enable_optimizer=1' '
           /bin/bash run_cnch.sh
       - name: After test
         continue-on-error: true
