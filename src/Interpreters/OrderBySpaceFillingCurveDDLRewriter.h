@@ -52,17 +52,17 @@ class IAST;
  * 6. Inject the index DDL and `PRIMARY KEY tuple()` clause into the AST
  */
 
-class ZOrderDDLRewriter
+class OrderBySpaceFillingCurveDDLRewriter
 {
 
-static inline const NameSet space_filling_curves = {"mortonencode"};
+static inline const NameSet space_filling_curves = {"mortonencode, zorder"};
 static constexpr char const * magic_index_prefix = "autoZcreate";
 
 public:
     static void apply(IAST * ast);
 
 private:
-    static Names getColumnsInOrderByWithSpaceFillingCurves(const ASTCreateQuery * create);
+    static Names getColumnsInOrderByWithSpaceFillingCurve(const ASTCreateQuery * create);
 };
 
 }

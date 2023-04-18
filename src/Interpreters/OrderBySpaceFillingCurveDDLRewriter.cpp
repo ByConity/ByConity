@@ -13,17 +13,17 @@
  * limitations under the License.
  */
 
-#include <Interpreters/ZOrderDDLRewriter.h>
+#include <Interpreters/OrderBySpaceFillingCurveDDLRewriter.h>
 #include <Storages/MergeTree/MergeTreeSettings.h>
 
 namespace DB
 {
 
-void ZOrderDDLRewriter::apply(IAST * ast)
+void OrderBySpaceFillingCurveDDLRewriter::apply(IAST * ast)
 {
     if (auto * create = ast->as<ASTCreateQuery>())
     {
-        auto columns = getColumnsInOrderByWithSpaceFillingCurves(create);
+        auto columns = getColumnsInOrderByWithSpaceFillingCurve(create);
         if (columns.size() <= 1)
             return;
         MergeTreeSettings default_settings;
@@ -78,7 +78,7 @@ void ZOrderDDLRewriter::apply(IAST * ast)
     }
 }
 
-Names ZOrderDDLRewriter::getColumnsInOrderByWithSpaceFillingCurves(const ASTCreateQuery * create)
+Names OrderBySpaceFillingCurveDDLRewriter::getColumnsInOrderByWithSpaceFillingCurve(const ASTCreateQuery * create)
 {
     Names columns;
     const auto * storage = create->storage;

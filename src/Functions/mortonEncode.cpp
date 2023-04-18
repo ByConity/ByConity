@@ -334,6 +334,7 @@ private:
 void registerFunctionMortonEncode(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionMortonEncode>();
+    factory.registerFunction<FunctionMortonEncode>("ZORDER");
 }
 
 }
