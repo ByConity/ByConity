@@ -451,6 +451,41 @@ void runMissingAndRemoveDuplicateJob(
         });
 }
 
+std::vector<BGJobInfoFromServer> findZombieJobsInServer(
+    const std::set<UUID> & new_bg_jobs_uuids,
+    BackgroundJobs & managed_job_exclude_new_job,
+    const std::unordered_multimap<UUID, BGJobInfoFromServer> & jobs_from_server)
+{
+    std::vector<BGJobInfoFromServer> zombie_jobs;
+
+    std::for_each(jobs_from_server.begin(), jobs_from_server.end(),
+        [&] (const std::pair<UUID, BGJobInfoFromServer> & job_from_server)
+        {
+            UUID job_from_server_uuid = job_from_server.first;
+            if ((new_bg_jobs_uuids.contains(job_from_server_uuid)) ||
+                (managed_job_exclude_new_job.contains(job_from_server_uuid)))
+                return;
+            zombie_jobs.push_back(job_from_server.second);
+        });
+
+    return zombie_jobs;
+}
+
+void removeZombieJobsInServer(
+    const Context & context,
+    DaemonJobServerBGThread & daemon_job,
+    const std::vector<BGJobInfoFromServer> & zombie_jobs
+)
+{
+    Poco::Logger * log = daemon_job.getLog();
+    std::for_each(zombie_jobs.begin(), zombie_jobs.end(), [&] (const BGJobInfoFromServer & j)
+        {
+            LOG_INFO(log, "Will drop zombie thread for job type {}, table {} on host {}", toString(daemon_job.getType()), j.storage_id.getNameForLogs(), j.host_port);
+            context.getCnchServerClientPool().get(j.host_port)->controlCnchBGThread(j.storage_id, daemon_job.getType(), CnchBGThreadAction::Drop);
+            LOG_INFO(log, "Droped zombie thread for job type {}, table {} on host {}", toString(daemon_job.getType()), j.storage_id.getNameForLogs(), j.host_port);
+        });
+}
+
 std::optional<std::unordered_multimap<UUID, BGJobInfoFromServer>> fetchBGThreadFromServer(
     Context & context,
     CnchBGThreadType type,
@@ -492,6 +527,7 @@ size_t checkLivenessIfNeed(
     Context & context,
     DaemonJobServerBGThread & daemon_job,
     BackgroundJobs & check_bg_jobs,
+    const std::set<UUID> & new_bg_jobs_uuids,
     const std::vector<String> & servers,
     BGJobsFromServersFetcher fetch_bg_jobs_from_server /*fetchBGThreadFromServer*/
 )
@@ -512,6 +548,10 @@ size_t checkLivenessIfNeed(
     if (!bg_jobs_from_server)
         return counter;
     runMissingAndRemoveDuplicateJob(daemon_job, check_bg_jobs, bg_jobs_from_server.value());
+    removeZombieJobsInServer(
+        context,
+        daemon_job,
+        findZombieJobsInServer(new_bg_jobs_uuids, check_bg_jobs, bg_jobs_from_server.value()));
     return counter + 1;
 }
 
@@ -646,12 +686,20 @@ bool DaemonJobServerBGThread::executeImpl()
         LOG_DEBUG(log, "sync bg jobs took {} ms.", milliseconds);
 
     watch.restart();
+    std::set<UUID> new_bg_job_uuids;
+    std::transform(new_bg_jobs.begin(), new_bg_jobs.end(),
+        std::inserter(new_bg_job_uuids, new_bg_job_uuids.end()),
+        [] (const BackgroundJobPtr & j)
+        {
+            return j->getUUID();
+        });
     counter_for_liveness_check = checkLivenessIfNeed(
         counter_for_liveness_check,
         liveness_check_interval,
         context,
         *this,
         background_jobs_clone,
+        new_bg_job_uuids,
         server_info.alive_servers,
         fetchBGThreadFromServer
     );
