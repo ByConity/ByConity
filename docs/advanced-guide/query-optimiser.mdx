@@ -1,19 +1,19 @@
 ---
-title: 查询优化器
+title: Query Optimizer
 tags:
   - Docs
 ---
 
-# 查询优化器
+# Query Optimizer
 
-优化器是数据库系统的核心，优秀的优化器能极大提高查询性能，特别是在复杂查询场景下优化器能带来数倍至数百倍的性能提升。
+The optimizer is the core of the database system. An excellent optimizer can greatly improve query performance, especially in complex query scenarios. The optimizer can bring performance improvements of several to hundreds of times.
 
-ByConity 自研优化器基于四个大的优化方向提供极致优化能力：
+ByConity's optimizer provides extreme optimization capabilities based on four major optimization directions:
 
-- RBO：基于规则的优化能力。支持：列裁剪、分区裁剪、表达式简化、子查询解关联、谓词下推、冗余算子消除、Outer-JOIN 转 INNER-JOIN、算子下推存储、分布式算子拆分等常见的启发式优化能力。
-- CBO：基于代价的优化能力。支持：Join Reorder、Outer-Join Reorder、Join/Agg Reorder、CTE、物化视图、Dynamic Filter 下推、Magic Set 等基于代价的优化能力。并且面向分布式计划融合了 Property Enforcement。
-- DBO：基于数据依赖的优化能力。支持：唯一键、functional dependency、Order dependency、Inclusion dependency 等基于数据依赖关系的优化能力。
-- HBO：基于查询反馈的优化能力。支持：基数估计动态调整、并行度动态调整、执行计划动态调整等基于历史执行反馈的优化能力。
+- RBO: rule-based optimization capability. Support column pruning, partition pruning, expression simplification, subquery disassociation, predicate pushdown, redundant operator elimination, Outer-JOIN to INNER-JOIN, operator pushdown storage, distributed operator splitting, etc. Heuristic optimization capability.
+- CBO: Cost-based optimization capability. Support Join Reorder, Outer-Join Reorder, Join/Agg Reorder, CTE, materialized view, Dynamic Filter pushdown, Magic Set and other cost-based optimization capabilities. And it integrates Property Enforcement for distributed planning.
+- DBO: optimization capability based on data dependencies. Support unique key, functional dependency, Order dependency, Inclusion dependency and other optimization capabilities based on data dependencies.
+- HBO: Optimization capability based on query feedback. Support dynamic adjustment of cardinality estimation, dynamic adjustment of parallelism, dynamic adjustment of execution plan and other optimization capabilities based on historical execution feedback.
 
 # Turn on Query Optimizer
 
