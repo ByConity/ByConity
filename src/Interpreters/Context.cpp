@@ -917,7 +917,7 @@ void Context::initCnchConfig(const Poco::Util::AbstractConfiguration & config)
 
 const Poco::Util::AbstractConfiguration & Context::getCnchConfigRef() const
 {
-    return *shared->cnch_config;
+    return shared->cnch_config ? *shared->cnch_config : getConfigRef();
 }
 
 const RootConfiguration & Context::getRootConfig() const
