@@ -1,41 +1,41 @@
 ---
-title: 配置后台任务
+title: Background Tasks Configuration 
 tags:
   - Docs
 ---
 
-# 配置后台任务
+# Background Tasks Configuration 
 
-# 常用命令
+# Common commands
 
-### 启动/停止表的 Merge
+### Start/Stop Merge of tables
 
 ```
--- 启动 merge
+-- Start merge
 system start merges xxx.yyy;
 
--- 停止 merge
+-- Stop merge
 system stop merges xxx.yyy;
 
 ```
 
-### 手动触发 merge
+### Manually trigger merge
 
 ```
--- 触发一次merge 调度（和上面自动流程相同）
+-- Trigger a merge schedule (same as the automatic process above)
 optimize table xxx.yyy;
 
--- 触发一次指定partition下的merge调度
+-- Trigger a merge schedule under the specified partition
 optimize table xxx.yyy partition 'zzz';
 
 ```
 
-此外，还可以有 dry run 模式，方便查看接下来 merge 能选出哪些 part（或者排查为什么选不出 part）
+In addition, there can also be a dry run mode, which is convenient for checking which parts can be selected in the next merge (or why the part cannot be selected)
 
 ```
--- 打开tracelog，执行try optimize的时候
--- 会打印整个merge select过程的相关日志，
--- 比如选了哪些partition，哪些part，merge任务发给了哪个worker等。
+-- Open tracelog, when executing try optimize
+-- will print the relevant logs of the entire merge select process,
+-- For example, which partitions are selected, which parts, which worker the merge task is sent to, etc.
 set send_logs_level = 'trace';
 
 try optimize table xxx.yyy;
@@ -43,42 +43,42 @@ try optimize table xxx.yyy partition 'zzz';
 
 ```
 
-### 修改 merge 参数
+### Modify the merge parameters
 
 ```
 alter table xxx.yyy modify setting cnch_merge_zzz = www;
 
 ```
 
-### 观测
+### Observation
 
-注意选择表的 host server。
+Note the host server of the selection table.
 
-system.bg_threads 可以查看表的 Merge/GC 后台线程运行状态。
+system.bg_threads can view the running status of the Merge/GC background thread of the table.
 
-system.manipulations 可以查看当前正在运行的 Merge 任务。
+system.manipulations can view the currently running Merge tasks.
 
-system.server_part_log 可以查看历史 Merge 任务的信息。（新 insert 的 part 也可以看这个表）。
+system.server_part_log can view the information of historical Merge tasks. (You can also see this table for the part of the new insert).
 
 # Settings
 
-| 配置项                                  | 默认值, 含义                                                         | 备注                                                                                                                                                                                 |
-| :-------------------------------------- | :------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-|                                         | _////// 多 partition //////_                                         | _最早每次只选一个 partition，并发不够。改多 partition 期望提高并发。_                                                                                                                |
-| enable_addition_bg_task                 | false, 允许更多的 merge 任务同时运行                                 | 配合 max_addition_bg_task_num 一起使用。                                                                                                                                             |
-| max_addition_bg_task_num                | 200, 限制最大的并发任务数量                                          |                                                                                                                                                                                      |
-| max_partition_for_multi_select          | 3, 选多少个 partitions 来 merge                                      | merge 会先选 partitions，再从 partitions 中选 range。如果是多 partition key（比如 appid, date）通常需要将这个值调大，因为 partition 很多。                                           |
-|                                         | _////// 提高每次选 range 的速度 //////_                              | _数据量大的时候，每次 select 都非常耗时，期望通过**batch**加速。_                                                                                                                    |
-| cnch_merge_enable_batch_select          | false, 是否开启 batch_select                                         | batch_select 会每 round 选一大批 ranges，之后的 round 会直接 submit 这些 range，能让 merge 的触发周期缩短，从而让总任务量真正达到并发上限。                                          |
-| cnch_merge_max_total_rows_to_merge      | 15000000, 单个 merged part 的最大行数                                | 当业务很清楚 level0 part 行数以及期望控制 merge 后的整体数量（影响查询时间）时，比较管用。                                                                                           |
-|                                         | _////// 实时数据优化 //////_                                         | _实时场景_                                                                                                                                                                           |
-| cnch_merge_only_realtime_partition      | false, 是否只选 realtime partition                                   | 每 round 选 partitions 时，会选 N 个 count 多的 partition，N 个 realtime partition。如果 enable 这个 setting，则只会按 realtime 程度（min_block）选 partition。 实时表场景会很有用。 |
-| max_bytes_to_merge_at_max_space_in_pool | 150 _ 1024 _ 1024 \* 1024， 即 150GB。单 merge 任务最大 bytes 限制。 | 参数名看起来不够直观，遗留代码问题... cnch 里面这个参数被用在了设置 merge selector 的 max size 上。功能类似 cnch_merge_max_total_rows_to_merge，一个限制行数，一个限制 bytes 数。    |
-| cnch_vw_write                           | vw_default, 执行 merge 用的 vw                                       | 咨询 sre 可以知道自己业务应该使用哪个 vw 作为 write vw                                                                                                                               |
-| cnch_merge_pick_worker_algo             | 'RM', 选 worker 时的算法，默认从 RM 挑选。                           | 并发量大时需要设置为'**RoundRobin**'                                                                                                                                                 |
+| Configuration Items | Default Value, Meaning | Remarks |
+| :----------------------------------------- | :-------- -------------------------------------------------- --------- | :--------------------------------------- -------------------------------------------------- -------------------------------------------------- ------------------------------------------- |
+| | _////// Multiple partitions //////_ | _Only select one partition each time at the earliest, and the concurrency is not enough. Changing multiple partitions is expected to improve concurrency. _ |
+| enable_addition_bg_task | false, allow more merge tasks to run at the same time | used together with max_addition_bg_task_num. |
+| max_addition_bg_task_num | 200, limit the maximum number of concurrent tasks | |
+| max_partition_for_multi_select | 3, how many partitions to select for merge | merge will select partitions first, and then select range from partitions. If there are multiple partition keys (such as appid, date), this value usually needs to be increased because there are many partitions. |
+| | _////// Increase the speed of each range selection //////_ | _ When the amount of data is large, each selection is very time-consuming, and it is expected to be accelerated by **batch**. _ |
+| cnch_merge_enable_batch_select | false, whether to enable batch_select | batch_select will select a large number of ranges every round, and then submit these ranges directly in subsequent rounds, which can shorten the trigger cycle of merge, so that the total number of tasks can truly reach the upper limit of concurrency. |
+| cnch_merge_max_total_rows_to_merge | 15000000, the maximum number of rows for a single merged part | It is more useful when the business is very clear about the number of level0 part rows and expects to control the overall number after merge (affecting query time). |
+| | _////// Real-time data optimization //////_ | _Real-time scenario_ |
+| cnch_merge_only_realtime_partition | false, whether to select only realtime partition | When selecting partitions for each round, N partitions with more than count and N realtime partitions will be selected. If this setting is enabled, partitions will only be selected according to the realtime level (min_block). A live table scenario would be useful. |
+| max_bytes_to_merge_at_max_space_in_pool | 150 _ 1024 _ 1024 \* 1024, which is 150GB. The maximum bytes limit of a single merge task. | The parameter name does not seem intuitive enough, the legacy code problem... This parameter in cnch is used to set the max size of the merge selector. The function is similar to cnch_merge_max_total_rows_to_merge, one limits the number of rows, and the other limits the number of bytes. |
+| cnch_vw_write | vw_default, vw for executing merge | Consult sre to know which vw should be used as write vw for your business |
+| cnch_merge_pick_worker_algo | 'RM', the algorithm when selecting workers, pick from RM by default. | In a high concurrency usage, it needs to be set to '**RoundRobin**' |
 
-# 使用说明
+# Instructions for use
 
-- 如果表规模不大（百万量级），但是当前 parts 比较多，想加快 merge 频率，通常 enable_addition_bg_task = 1 max_partition_for_multi_select 会有效果。这时候对应的 max_addition_bg_task_num 是 merge 并发量的上限。
-- 如果表规模很大了（千万, 上亿），（每次从 catalog 获取 parts 耗时就会很长），这时候可能不仅要 enable_addition_bg_task， 还需要使用 cnch_merge_enable_batch_select = 1 来增加每次 merge select 的结果。
-- 关于 cnch_merge_only_realtime_partition 和 max_partition_for_multi_select。 通常 kafka 实时表会使用 cnch_merge_only_realtime_partition，它表示每次选 partition 的时候只选 min_block 最新的，partition 数量由 max_partition_for_multi_select 控制。注意：如果是一个离线表且每天产生大量的新 partition，此时打开 cnch_merge_only_realtime_partition 并且 max_partition_for_multi_select 设置得很小的话，那会出现当天有 partition 无法参与 merge 的情况。
+- If the size of the table is not large (on the order of millions), but there are many parts currently, and you want to speed up the merge frequency, usually enable_addition_bg_task = 1 max_partition_for_multi_select will have an effect. At this time, the corresponding max_addition_bg_task_num is the upper limit of merge concurrency.
+- If the table size is very large (tens of millions, hundreds of millions), (it will take a long time to get parts from the catalog each time), at this time you may not only need to enable_addition_bg_task, but also need to use cnch_merge_enable_batch_select = 1 to increase the number of each merge select result.
+- About cnch_merge_only_realtime_partition and max_partition_for_multi_select. Usually kafka real-time tables use cnch_merge_only_realtime_partition, which means that only the latest min_block is selected each time a partition is selected, and the number of partitions is controlled by max_partition_for_multi_select. Note: If it is an offline table and a large number of new partitions are generated every day, if cnch_merge_only_realtime_partition is turned on at this time and max_partition_for_multi_select is set very small, there will be a situation where some partitions cannot participate in the merge on the same day.
