@@ -255,6 +255,9 @@
 [submodule "contrib/hivemetastore"]
 	path = contrib/hivemetastore
 	url = https://github.com/ClickHouse/hive-metastore.git
+[submodule "contrib/udns"]
+	path = contrib/udns
+	url = https://github.com/ortclib/udns.git
 [submodule "contrib/morton-nd"]
 	path = contrib/morton-nd
 	url = https://github.com/morton-nd/morton-nd
