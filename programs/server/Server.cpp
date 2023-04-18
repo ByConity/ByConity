@@ -1102,7 +1102,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setHdfsNNProxy(hdfs_nnproxy);
 
     /// Init HDFS3 client config path
-    std::string hdfs_config = config().getString("hdfs3_config", "");
+    std::string hdfs_config = global_context->getCnchConfigRef().getString("hdfs3_config", "");
     if (!hdfs_config.empty())
     {
         setenv("LIBHDFS3_CONF", hdfs_config.c_str(), 1);
@@ -1168,9 +1168,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     if( has_hdfs_disk )
     {
-        const int hdfs_max_fd_num = config().getInt("hdfs_max_fd_num", 100000);
-        const int hdfs_skip_fd_num = config().getInt("hdfs_skip_fd_num", 100);
-        const int hdfs_io_error_num_to_reconnect = config().getInt("hdfs_io_error_num_to_reconnect", 10);
+        const int hdfs_max_fd_num = global_context->getCnchConfigRef().getInt("hdfs_max_fd_num", 100000);
+        const int hdfs_skip_fd_num = global_context->getCnchConfigRef().getInt("hdfs_skip_fd_num", 100);
+        const int hdfs_io_error_num_to_reconnect = global_context->getCnchConfigRef().getInt("hdfs_io_error_num_to_reconnect", 10);
         registerDefaultHdfsFileSystem(hdfs_params, hdfs_max_fd_num, hdfs_skip_fd_num, hdfs_io_error_num_to_reconnect);
     }
 
