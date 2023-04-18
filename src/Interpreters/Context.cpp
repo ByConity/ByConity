@@ -909,12 +909,12 @@ void Context::initCnchConfig(const Poco::Util::AbstractConfiguration & config)
         shared->cnch_config = loaded_config.configuration;
     }
     else
-        shared->cnch_config = Poco::Util::Application::instance().config();
+        throw Exception("cnch_config not found", ErrorCodes::NO_ELEMENTS_IN_CONFIG);
 }
 
 const Poco::Util::AbstractConfiguration & Context::getCnchConfigRef() const
 {
-    return *shared->cnch_config;
+    return shared->cnch_config ? *shared->cnch_config : getConfigRef();
 }
 
 const RootConfiguration & Context::getRootConfig() const

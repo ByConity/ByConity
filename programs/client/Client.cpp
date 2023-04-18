@@ -333,7 +333,6 @@ private:
             query_id_formats.emplace_back("Query id:", " {query_id}\n");
 #if USE_HDFS
         /// Init HDFS3 client config path
-        context->initCnchConfig(config());
         std::string hdfs_config = context->getCnchConfigRef().getString("hdfs3_config", "");
         if (!hdfs_config.empty())
         {
