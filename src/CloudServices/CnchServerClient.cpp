@@ -152,7 +152,7 @@ std::pair<TxnTimestamp, TxnTimestamp> CnchServerClient::createTransactionForKafk
     return {response.txn_id(), response.start_time()};
 }
 
-ServerDataPartsVector CnchServerClient::fetchDataParts(const String & remote_host, const StoragePtr & table, const Strings & partition_list, const TxnTimestamp & ts)
+ServerDataPartsVector CnchServerClient::fetchDataParts(const String & remote_host, const ConstStoragePtr & table, const Strings & partition_list, const TxnTimestamp & ts)
 {
     brpc::Controller cntl;
     Protos::FetchDataPartsReq request;
@@ -164,7 +164,7 @@ ServerDataPartsVector CnchServerClient::fetchDataParts(const String & remote_hos
     request.set_table_commit_time(table->commit_time);
     request.set_timestamp(ts.toUInt64());
 
-    for (auto & partition_id : partition_list)
+    for (const auto & partition_id : partition_list)
         request.add_partitions(partition_id);
 
     stub->fetchDataParts(&cntl, &request, &response, nullptr);
@@ -172,7 +172,7 @@ ServerDataPartsVector CnchServerClient::fetchDataParts(const String & remote_hos
     assertController(cntl);
     RPCHelpers::checkResponse(response);
 
-    auto & storage = dynamic_cast<MergeTreeMetaBase &>(*table);
+    const auto & storage = dynamic_cast<const MergeTreeMetaBase &>(*table);
     return createServerPartsFromModels(storage, response.parts());
 }
 
@@ -628,6 +628,30 @@ void CnchServerClient::submitQueryWorkerMetrics(const QueryWorkerMetricElementPt
     fillQueryWorkerMetricElement(query_worker_metric_element, *request.mutable_element());
 
     stub->submitQueryWorkerMetrics(&cntl, &request, &response, nullptr);
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+}
+
+void CnchServerClient::submitPreloadTask(const MergeTreeMetaBase & storage, const MutableMergeTreeDataPartsCNCHVector & parts, bool sync, UInt64 timeout_ms)
+{
+    if (parts.empty())
+        return;
+
+    brpc::Controller cntl;
+    Protos::SubmitPreloadTaskReq request;
+    Protos::SubmitPreloadTaskResp response;
+    if (timeout_ms)
+        cntl.set_timeout_ms(timeout_ms);
+
+    RPCHelpers::fillUUID(storage.getStorageUUID(), *request.mutable_uuid());
+    request.set_sync(sync);
+    for (const auto & part : parts)
+    {
+        auto new_part = request.add_parts();
+        fillPartModel(storage, *part, *new_part);
+    }
+
+    stub->submitPreloadTask(&cntl, &request, &response, nullptr);
     assertController(cntl);
     RPCHelpers::checkResponse(response);
 }

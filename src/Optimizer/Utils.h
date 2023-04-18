@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Interpreters/Context_fwd.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
@@ -96,6 +97,8 @@ namespace Utils
         return power_set;
     }
 
+    bool canChangeOutputRows(const Assignments & assignments, ContextPtr context);
+    bool canChangeOutputRows(const ProjectionStep & project, ContextPtr context);
 }
 
 }

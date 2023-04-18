@@ -128,7 +128,7 @@ static MappedAggregationInfo createAggregationOverNull(const AggregatingStep * r
 
     // create an aggregation node whose source is the null row.
     auto aggregation_over_null_row_step
-        = std::make_shared<AggregatingStep>(null_row->getStep()->getOutputStream(), Names{}, aggregations_over_null, GroupingSetsParamsList{}, true);
+        = std::make_shared<AggregatingStep>(null_row->getStep()->getOutputStream(), Names{}, aggregations_over_null, GroupingSetsParamsList{}, true, GroupingDescriptions{}, false, false);
     auto aggregation_over_null_row = PlanNodeBase::createPlanNode(context.nextNodeId(), std::move(aggregation_over_null_row_step), {null_row});
 
     return MappedAggregationInfo{aggregation_over_null_row, aggregations_symbol_mapping};
@@ -270,7 +270,9 @@ TransformResult PushAggThroughOuterJoin::transformImpl(PlanNodePtr aggregation, 
     auto grouping_keys = join_step->getKind() == ASTTableJoin::Kind::Right ? join_step->getLeftKeys() : join_step->getRightKeys();
 
     auto rewritten_aggregation = std::make_shared<AggregatingStep>(
-        inner_table->getStep()->getOutputStream(), grouping_keys, agg_step->getAggregates(), agg_step->getGroupingSetsParams(), agg_step->isFinal());
+        inner_table->getStep()->getOutputStream(), grouping_keys, agg_step->getAggregates(), agg_step->getGroupingSetsParams(), agg_step->isFinal(),
+        GroupingDescriptions{}, false,  !(agg_step->isFinal()) && context.context->getSettingsRef().distributed_aggregation_memory_efficient
+        );
     auto rewritten_agg_node = PlanNodeBase::createPlanNode(context.context->nextNodeId(), std::move(rewritten_aggregation), {inner_table});
 
     PlanNodePtr rewritten_join;

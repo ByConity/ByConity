@@ -771,7 +771,10 @@ Result DaemonJobServerBGThread::executeJobAction(const StorageID & storage_id, C
                 if (res.second)
                     bg_ptr = res.first->second;
                 else
-                    return {"Failed to insert this uuid to background_jobs, the jobs probably has been started recently", false};
+                {
+                    LOG_INFO(log, "Failed to insert this uuid to background_jobs, the jobs probably has been started recently");
+                    bg_ptr = res.first->second;
+                }
             }
 
             if (bg_ptr)

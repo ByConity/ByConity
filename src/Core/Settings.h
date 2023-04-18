@@ -171,7 +171,7 @@ class IColumn;
     M(UInt64, optimize_skip_unused_shards_nesting, 0, "Same as optimize_skip_unused_shards, but accept nesting level until which it will work.", 0) \
     M(UInt64, force_optimize_skip_unused_shards_nesting, 0, "Same as force_optimize_skip_unused_shards, but accept nesting level until which it will work.", 0) \
     \
-    M(Bool, input_format_parallel_parsing, false, "Enable parallel parsing for some data formats.", 0) \
+    M(Bool, input_format_parallel_parsing, true, "Enable parallel parsing for some data formats.", 0) \
     M(UInt64, min_chunk_bytes_for_parallel_parsing, (10 * 1024 * 1024), "The minimum chunk size in bytes, which each thread will parse in parallel.", 0) \
     M(Bool, output_format_parallel_formatting, true, "Enable parallel formatting for some data formats.", 0) \
     \
@@ -586,12 +586,15 @@ class IColumn;
     M(UInt64, part_cache_manager_thread_pool_size, 16, "Number of thread performing background parts info collection in PartCacheManager.", 0) \
     M(String, username_for_internal_communication, "server", "Username to be used by server for authentication on worker side.", 0) \
     M(UInt64, cnch_part_allocation_algorithm, 2, "Part allocation algorithm, 0: jump consistent hashing, 1: bounded hash ring consistent hashing, 2: strict ring consistent hashing.", 0) \
-    M(UInt64, cnch_max_cached_storage, 0, "Cnch storage cache size.", 0) \
+    M(UInt64, cnch_max_cached_storage, 2048, "Cnch storage cache size.", 0) \
     M(Bool, enable_multiple_tables_for_cnch_parts, 0, "Allow to query multiple tables for system.cnch_parts", 0) \
     M(Bool, enable_query_level_profiling, false, "Enable profiling at query and operator level", 0) \
     M(Bool, enable_kafka_log_profiling, false, "Enable query profiling for cnch_kafka_log table", 0) \
     M(Bool, enable_query_metrics_tables_profiling, false, "Enable query profiling for query_metrics and query worker_metrics tables", 0) \
     M(UInt64, cloud_task_auto_stop_timeout, 60, "We will remove this task when heartbeat can't find this task more than retries_count times.", 0)\
+    M(Bool, enable_preload_parts, false, "Enable preload parts", 0) \
+    M(Bool, enable_async_preload_parts, true, "Allow to preload data parts asynchronously", 0) \
+    M(DiskCacheMode, disk_cache_mode, DiskCacheMode::AUTO, "Whether to use local disk cache", 0) \
     /** Settings for Unique Table */ \
     M(Bool, enable_unique_partial_update, true, "Whether to use partial column update for INSERT", 0) \
     M(Milliseconds, dedup_worker_heartbeat_ms, 3000, "Dedup worker heartbeat interval time", 0) \
@@ -842,7 +845,7 @@ class IColumn;
     M(Bool, skip_table_definition_hash_check, false, "Whether skip table definition hash check when attach data parts.", 0)  \
     M(UInt64, cnch_part_attach_max_threads, 16, "Max threads to use when attach parts", 0) \
     M(UInt64, attach_failure_injection_knob, 0, "Attach failure injection knob, for test only", 0) \
-    M(Bool, async_post_commit, true, "Txn post commit asynchronously", 0) \
+    M(Bool, async_post_commit, false, "Txn post commit asynchronously", 0) \
 
 
 // End of FORMAT_FACTORY_SETTINGS

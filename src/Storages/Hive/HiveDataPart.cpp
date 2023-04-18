@@ -55,17 +55,17 @@ Range createRangeFromParquetStatistics(std::shared_ptr<parquet::ByteArrayStatist
 
 HiveDataPart::HiveDataPart(
     const String & name_,
+    const String & hdfs_uri_,
     const String & relative_path_,
     const DiskPtr & disk_,
     const HivePartInfo & info_,
-    HDFSConnectionParams hdfs_params_,
     std::unordered_set<Int64> skip_splits_,
     NamesAndTypesList index_names_and_types_)
     : name(name_)
+    , hdfs_uri(hdfs_uri_)
     , relative_path(relative_path_)
     , disk(disk_)
     , info(info_)
-    , hdfs_params(hdfs_params_)
     , skip_splits(skip_splits_)
     , index_names_and_types(index_names_and_types_)
 {
@@ -79,6 +79,11 @@ String HiveDataPart::getFullDataPartPath() const
 String HiveDataPart::getFullTablePath() const
 {
     return relative_path;
+}
+
+String HiveDataPart::getHDFSUri() const
+{
+    return hdfs_uri;
 }
 
 HiveDataPart::~HiveDataPart() = default;
@@ -110,7 +115,10 @@ size_t HiveDataPart::getTotalRowGroups() const
 
 void HiveDataPart::prepareReader() const
 {
-    in = std::make_unique<ReadBufferFromByteHDFS>(getFullDataPartPath(), true, hdfs_params);
+    if (!disk)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Hive disk is not set");
+
+    in = disk->readFile(getFullDataPartPath());
     THROW_ARROW_NOT_OK(parquet::arrow::OpenFile(asArrowFile(*in), arrow::default_memory_pool(), &reader));
 }
 

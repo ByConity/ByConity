@@ -103,7 +103,6 @@ private:
     std::vector<ConsumerInfo> consumer_infos;
     KafkaConsumerSchedulerPtr consumer_scheduler;
 
-    CnchWorkerClientPoolPtr worker_pool;
     std::atomic<bool> cloud_table_has_unique_key{false};
 
     UInt64 exception_occur_times{0};

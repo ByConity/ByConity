@@ -16,12 +16,12 @@
 #pragma once
 
 #include <optional>
-#include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <MergeTreeCommon/CnchStorageCommon.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
+#include <Storages/MergeTree/MergeTreeDataPartType.h>
+#include <Storages/MergeTree/PartitionPruner.h>
 #include <common/shared_ptr_helper.h>
 #include "Catalog/DataModelPartWrapper_fwd.h"
-#include <Storages/MergeTree/PartitionPruner.h>
-#include <Storages/MergeTree/MergeTreeDataPartType.h>
 
 namespace DB
 {
@@ -30,19 +30,24 @@ struct PrepareContextResult;
 class StorageCnchMergeTree final : public shared_ptr_helper<StorageCnchMergeTree>, public MergeTreeMetaBase, public CnchStorageCommonHelper
 {
     friend struct shared_ptr_helper<StorageCnchMergeTree>;
+
 public:
     ~StorageCnchMergeTree() override;
 
-    std::string getName() const override { return "Cnch" + merging_params.getModeName() + "MergeTree";}
+    std::string getName() const override { return "Cnch" + merging_params.getModeName() + "MergeTree"; }
 
     bool supportsSampling() const override { return true; }
     bool supportsFinal() const override { return true; }
     bool supportsPrewhere() const override { return true; }
     bool supportsIndexForIn() const override { return true; }
     bool supportsMapImplicitColumn() const override { return true; }
+    bool supportsTrivialCount() const override { return true; }
+
+    std::optional<UInt64> totalRows(const ContextPtr &) const override;
+    std::optional<UInt64> totalRowsByPartitionPredicate(const SelectQueryInfo &, ContextPtr) const override;
 
     StoragePolicyPtr getStoragePolicy(StorageLocation location) const override;
-    const String& getRelativeDataPath(StorageLocation location) const override;
+    const String & getRelativeDataPath(StorageLocation location) const override;
 
     bool isRemote() const override { return true; }
 
@@ -91,10 +96,8 @@ public:
 
     time_t getTTLForPartition(const MergeTreePartition & partition) const;
 
-    ServerDataPartsVector selectPartsToRead(
-        const Names & column_names_to_return,
-        ContextPtr local_context,
-        const SelectQueryInfo & query_info);
+    ServerDataPartsVector
+    selectPartsToRead(const Names & column_names_to_return, ContextPtr local_context, const SelectQueryInfo & query_info) const;
 
     /// Return all base parts and delete bitmap metas in the given partitions.
     /// If `partitions` is empty, return meta for all partitions.
@@ -102,13 +105,14 @@ public:
 
     /// return table's committed staged parts (excluding deleted ones).
     /// if partitions != null, ignore staged parts not belong to `partitions`.
-    MergeTreeDataPartsCNCHVector getStagedParts(const TxnTimestamp & ts, const NameSet * partitions = nullptr, bool skip_delete_bitmap = false);
+    MergeTreeDataPartsCNCHVector
+    getStagedParts(const TxnTimestamp & ts, const NameSet * partitions = nullptr, bool skip_delete_bitmap = false);
 
     /// Pre-condition: "parts" should have been sorted in part info order
     void getDeleteBitmapMetaForParts(const MergeTreeDataPartsCNCHVector & parts, ContextPtr context, TxnTimestamp start_time);
     /// For staged parts, delete bitmap represents delete_flag info which is optional, it's valid if it doesn't have delete_bitmap metadata.
     void getDeleteBitmapMetaForStagedParts(const MergeTreeDataPartsCNCHVector & parts, ContextPtr context, TxnTimestamp start_time);
-    void getDeleteBitmapMetaForParts(const ServerDataPartsVector & parts, ContextPtr context, TxnTimestamp start_time);
+    void getDeleteBitmapMetaForParts(const ServerDataPartsVector & parts, ContextPtr context, TxnTimestamp start_time) const;
 
     /// Used by the "SYSTEM DEDUP" command to repair unique table by removing duplicate keys in visible parts.
     void executeDedupForRepair(const ASTPtr & partition, ContextPtr context);
@@ -124,10 +128,7 @@ public:
     void addCheckpoint(const Protos::Checkpoint & checkpoint);
     void removeCheckpoint(const Protos::Checkpoint & checkpoint);
 
-    ColumnSizeByName getColumnSizes() const override
-    {
-        return {};
-    }
+    ColumnSizeByName getColumnSizes() const override { return {}; }
 
 
     void checkAlterIsPossible(const AlterCommands & commands, ContextPtr local_context) const override;
@@ -136,10 +137,12 @@ public:
 
     void checkAlterPartitionIsPossible(
         const PartitionCommands & commands, const StorageMetadataPtr & metadata_snapshot, const Settings & settings) const override;
-    Pipe alterPartition(
-        const StorageMetadataPtr & metadata_snapshot,
-        const PartitionCommands & commands,
-        ContextPtr query_context) override;
+    Pipe
+    alterPartition(const StorageMetadataPtr & metadata_snapshot, const PartitionCommands & commands, ContextPtr query_context) override;
+
+    void checkMutationIsPossible(const MutationCommands & commands, const Settings & settings) const override;
+
+    void mutate(const MutationCommands & commands, ContextPtr query_context) override;
 
     void truncate(
         const ASTPtr & /*query*/,
@@ -148,8 +151,10 @@ public:
         TableExclusiveLockHolder &) override;
 
     ServerDataPartsVector selectPartsByPartitionCommand(ContextPtr local_context, const PartitionCommand & command);
+
     void dropPartitionOrPart(const PartitionCommand & command, ContextPtr local_context,
         IMergeTreeDataPartsVector* dropped_parts = nullptr, size_t max_threads = 16);
+
     Block getBlockWithVirtualPartitionColumns(const std::vector<std::shared_ptr<MergeTreePartition>> & partition_list) const;
 
     struct PartitionDropInfo
@@ -170,6 +175,8 @@ public:
 
     String genCreateTableQueryForWorker(const String & suffix);
 
+    void sendPreloadTasks(ContextPtr local_context, ServerDataPartsVector parts, bool sync = true);
+
 protected:
     StorageCnchMergeTree(
         const StorageID & table_id_,
@@ -185,12 +192,18 @@ private:
     // Relative path to auxility storage disk root
     String relative_auxility_storage_path;
 
-    CheckResults checkDataCommon(const ASTPtr & query, ContextPtr local_context, ServerDataPartsVector & parts);
+    CheckResults checkDataCommon(const ASTPtr & query, ContextPtr local_context, ServerDataPartsVector & parts) const;
 
-    ServerDataPartsVector getAllParts(ContextPtr local_context);
+    ServerDataPartsVector getAllParts(ContextPtr local_context) const;
+
+    ServerDataPartsVector
+    getAllPartsInPartitions(const Names & column_names_to_return, ContextPtr local_context, const SelectQueryInfo & query_info) const;
 
     Strings selectPartitionsByPredicate(
-        const SelectQueryInfo & query_info, std::vector<std::shared_ptr<MergeTreePartition>> & partition_list, const Names & column_names_to_return, ContextPtr local_context);
+        const SelectQueryInfo & query_info,
+        std::vector<std::shared_ptr<MergeTreePartition>> & partition_list,
+        const Names & column_names_to_return,
+        ContextPtr local_context) const;
 
     void filterPartsByPartition(
         ServerDataPartsVector & parts,
@@ -201,12 +214,16 @@ private:
     void dropPartsImpl(ServerDataPartsVector& svr_parts_to_drop,
         IMergeTreeDataPartsVector& parts_to_drop, bool detach, ContextPtr local_context, size_t max_threads);
 
-    void collectResource(ContextPtr local_context, ServerDataPartsVector & parts, const String & local_table_name, const std::set<Int64> & required_bucket_numbers = {});
+    void collectResource(
+        ContextPtr local_context,
+        ServerDataPartsVector & parts,
+        const String & local_table_name,
+        const std::set<Int64> & required_bucket_numbers = {});
 
     MutationCommands getFirstAlterMutationCommandsForPart(const DataPartPtr &) const override { return {}; }
 
     /// For select in interactive transaction session
-    void filterPartsInExplicitTransaction(ServerDataPartsVector & data_parts, ContextPtr local_context);
+    void filterPartsInExplicitTransaction(ServerDataPartsVector & data_parts, ContextPtr local_context) const;
 
     /// Generate view dependency create queries for materialized view writing
     Names genViewDependencyCreateQueries(const StorageID & storage_id, ContextPtr local_context, const String & table_suffix);

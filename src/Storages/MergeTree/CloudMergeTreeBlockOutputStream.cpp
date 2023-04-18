@@ -218,6 +218,8 @@ void CloudMergeTreeBlockOutputStream::writeSuffix()
 
 void CloudMergeTreeBlockOutputStream::writeSuffixImpl()
 {
+    cnch_writer.preload(preload_parts);
+
     if (!metadata_snapshot->hasUniqueKey() || to_staging_area)
     {
         /// case1(normal table): commit all the temp parts as visible parts
@@ -231,14 +233,6 @@ void CloudMergeTreeBlockOutputStream::writeSuffixImpl()
         /// case(unique table with sync insert): acquire the necessary locks to avoid write-write conflicts
         /// and then remove duplicate keys between visible parts and temp parts.
         writeSuffixForUpsert();
-    }
-
-    if (!preload_parts.empty())
-    {
-        /// auto testlog = std::make_shared<TestLog>(const_cast<Context &>(context));
-        /// TEST_START(testlog);
-        /// tryPreloadChecksumsAndPrimaryIndex(storage, std::move(preload_parts), ManipulationType::Insert, context);
-        /// TEST_END(testlog, "Finish tryPreloadChecksumsAndPrimaryIndex in batch mode");
     }
 }
 
@@ -334,8 +328,10 @@ void CloudMergeTreeBlockOutputStream::writeSuffixForUpsert()
         scope, txn->getTransactionID(), storage, storage.getSettings()->dedup_acquire_lock_timeout.value.totalMilliseconds());
     Stopwatch lock_watch;
     CnchLockHolder cnch_lock(*context, std::move(locks_to_acquire));
-    cnch_lock.lock();
-
+    if (!cnch_lock.tryLock())
+    {
+        throw Exception("Failed to acquire lock for txn " + txn->getTransactionID().toString(), ErrorCodes::CNCH_LOCK_ACQUIRE_FAILED);
+    }
     ts = context->getTimestamp(); /// must get a new ts after locks are acquired
     MergeTreeDataPartsCNCHVector visible_parts = CnchDedupHelper::getVisiblePartsToDedup(scope, *cnch_table, ts);
     MergeTreeDataPartsCNCHVector staged_parts = CnchDedupHelper::getStagedPartsToDedup(scope, *cnch_table, ts);

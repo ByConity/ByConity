@@ -83,7 +83,7 @@ resource_manager     # byconity resource manager
 ```
 
 ## Run ByConity Locally
-The most convinience way for local development is to use `docker-compose`. You can use `docker-compose` to quickly create a [byconity cluster](/docker/byconity/README.md) from your local build binary. By using this approach, you do not need to worry about the setup of ByConity dependencies (FoundationDB and HDFS), it automatically launches them all. It is recommended to use this approach for ByConity development.
+The most convinience way for local development is to use `docker-compose`. You can use `docker-compose` to quickly create a [byconity cluster](/docker/local-deploy/README.md) from your local build binary. By using this approach, you do not need to worry about the setup of ByConity dependencies (FoundationDB and HDFS), it automatically launches them all. It is recommended to use this approach for ByConity development.
 
 Alternatively, if you don't want to use docker, please follow the belowing guide to run ByConity in non-containerized environments.  It assumes you have [FoundationDB](https://apple.github.io/foundationdb/local-dev.html) and [HDFS](https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-common/ClusterSetup.html) set up and running locally:
 1. Modify the template config
@@ -129,3 +129,8 @@ The config templates can be found in deploy/template. You should replace the fol
 ## Deploy ByConity to physical machines
 There are some way to deploy ByConity to physical machines:
 - Deploy via docker [wrapper](https://github.com/ByConity/ByConity/tree/master/docker/executable_wrapper)
+- Deploy using [package manager](https://github.com/ByConity/ByConity/tree/master/packages)
+
+### Test ByConity in development enviroment
+To test ByConity in development enviroment, follow this [guide](https://github.com/ByConity/ByConity/tree/master/Testing.md)
+

@@ -1,4 +1,3 @@
-USE test;
 DROP TABLE IF EXISTS dts_partition_test;
 CREATE TABLE dts_partition_test (n Int64, s String) Engine = CnchMergeTree ORDER BY (n);
 

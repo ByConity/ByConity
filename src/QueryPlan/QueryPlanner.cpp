@@ -931,7 +931,7 @@ RelationPlan QueryPlannerVisitor::planReadFromStorage(const IAST & table_ast, Sc
 
     auto table_step = std::make_shared<TableScanStep>(
         context,
-        storage->getStorageID(),
+        storage,
         columns_with_aliases,
         query_info,
         QueryProcessingStage::Enum::FetchColumns,
@@ -1215,7 +1215,9 @@ void QueryPlannerVisitor::planAggregate(PlanBuilder & builder, ASTSelectQuery & 
         select_query.group_by_with_grouping_sets || grouping_sets_params.size() > 1 ? std::move(grouping_sets_params) : GroupingSetsParamsList{},
         true,
         grouping_operations_descs,
-        select_query.group_by_with_totals);
+        select_query.group_by_with_totals,
+        context->getSettingsRef().distributed_aggregation_memory_efficient 
+        );
 
     builder.addStep(std::move(agg_step));
     builder.withAdditionalMappings(mappings_for_aggregate);

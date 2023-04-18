@@ -1258,6 +1258,8 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     }
     catch (...)
     {
+        finish_current_transaction(context);
+
         if (!internal)
         {
             if (query_for_logging.empty())

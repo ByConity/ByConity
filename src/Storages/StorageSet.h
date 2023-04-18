@@ -75,7 +75,7 @@ public:
 
     void truncate(const ASTPtr &, const StorageMetadataPtr & metadata_snapshot, ContextPtr, TableExclusiveLockHolder &) override;
 
-    std::optional<UInt64> totalRows(const Settings & settings) const override;
+    std::optional<UInt64> totalRows(const ContextPtr & query_context) const override;
     std::optional<UInt64> totalBytes(const Settings & settings) const override;
 
 private:

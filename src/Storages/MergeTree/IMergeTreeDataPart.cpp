@@ -1627,6 +1627,18 @@ UInt64 IMergeTreeDataPart::getVersionFromPartition() const
     return partition.value[0].safeGet<UInt64>();
 }
 
+bool IMergeTreeDataPart::enableDiskCache() const
+{
+    if (disk_cache_mode == DiskCacheMode::AUTO)
+        return storage.getSettings()->enable_local_disk_cache;
+    else if (disk_cache_mode == DiskCacheMode::SKIP_DISK_CACHE)
+        return false;
+    else if (disk_cache_mode == DiskCacheMode::USE_DISK_CACHE || disk_cache_mode == DiskCacheMode::FORCE_CHECKSUMS_DISK_CACHE)
+        return true;
+    else
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown disk cache mode");
+}
+
 String IMergeTreeDataPart::getRelativePathForDetachedPart(const String & prefix) const
 {
     /// Do not allow underscores in the prefix because they are used as separators.

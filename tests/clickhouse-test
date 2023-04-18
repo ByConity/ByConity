@@ -340,6 +340,9 @@ def configure_testcase_args(args, case_file, suite_tmp_dir, stderr_file):
     return testcase_args
 
 def run_single_test(args, ext, server_logs_level, client_options, case_file, stdout_file, stderr_file):
+    # To help debug CI failure due to AttributeError
+    if type(args) is tuple:
+        print(args)
     client = args.testcase_client
     start_time = args.testcase_start_time
     database = args.testcase_database
@@ -364,29 +367,14 @@ def run_single_test(args, ext, server_logs_level, client_options, case_file, std
         pattern = '{test} > {stdout} 2> {stderr}'
 
     if ext == '.sql':
-        pattern = "{client} --send_logs_level={logs_level} --testmode --multiquery {options} < " + pattern
+        pattern = "{client} --send_logs_level={logs_level} {options} --testmode --multiquery"
 
     command = pattern.format(**params)
 
-    proc = Popen(command, shell=True, env=os.environ)
-
-    while (datetime.now() - start_time).total_seconds() < args.timeout and proc.poll() is None:
-        sleep(0.01)
-
-    need_drop_database = not args.database
-    if need_drop_database and args.no_drop_if_fail:
-        maybe_passed = (proc.returncode == 0) and (proc.stderr is None) and (proc.stdout is None or 'Exception' not in proc.stdout)
-        need_drop_database = not maybe_passed
-
-    if need_drop_database:
-        with open(stderr_file, 'a') as stderr:
-            clickhouse_proc_create = Popen(shlex.split(client), stdin=PIPE, stdout=PIPE, stderr=stderr, universal_newlines=True)
-        seconds_left = max(args.timeout - (datetime.now() - start_time).total_seconds(), 20)
+    with open(stdout_file, 'w') as out, open(stderr_file, 'w') as err, open(case_file, 'r') as test_case:
+        proc = Popen(shlex.split(command), stdin=test_case, stdout=out, stderr=err, env=os.environ, universal_newlines=True)
         try:
-            drop_database_query = "DROP DATABASE " + database
-            if args.replicated_database:
-                drop_database_query += " ON CLUSTER test_cluster_database_replicated"
-            clickhouse_proc_create.communicate((drop_database_query), timeout=seconds_left)
+            proc.communicate(timeout=args.timeout)
         except TimeoutExpired:
             # kill test process because it can also hung
             if proc.returncode is None:
@@ -396,10 +384,37 @@ def run_single_test(args, ext, server_logs_level, client_options, case_file, std
                     if e.errno != ESRCH:
                         raise
 
-            total_time = (datetime.now() - start_time).total_seconds()
-            return clickhouse_proc_create, "", "Timeout dropping database {} after test".format(database), total_time
 
-        shutil.rmtree(args.test_tmp_dir)
+#    while (datetime.now() - start_time).total_seconds() < args.timeout and proc.poll() is None:
+#        sleep(0.01)
+
+#     need_drop_database = not args.database
+#     if need_drop_database and args.no_drop_if_fail:
+#         maybe_passed = (proc.returncode == 0) and (proc.stderr is None) and (proc.stdout is None or 'Exception' not in proc.stdout)
+#         need_drop_database = not maybe_passed
+
+#     if need_drop_database:
+#         with open(stderr_file, 'a') as stderr:
+#             clickhouse_proc_create = Popen(shlex.split(client), stdin=PIPE, stdout=PIPE, stderr=stderr, universal_newlines=True)
+#         seconds_left = max(args.timeout - (datetime.now() - start_time).total_seconds(), 20)
+#         try:
+#             drop_database_query = "DROP DATABASE " + database
+#             if args.replicated_database:
+#                 drop_database_query += " ON CLUSTER test_cluster_database_replicated"
+#             clickhouse_proc_create.communicate((drop_database_query), timeout=seconds_left)
+#         except TimeoutExpired:
+#             # kill test process because it can also hung
+#             if proc.returncode is None:
+#                 try:
+#                     proc.kill()
+#                 except OSError as e:
+#                     if e.errno != ESRCH:
+#                         raise
+
+#             total_time = (datetime.now() - start_time).total_seconds()
+#             return clickhouse_proc_create, "", "Timeout dropping database {} after test".format(database), total_time
+
+#         shutil.rmtree(args.test_tmp_dir)
 
     total_time = (datetime.now() - start_time).total_seconds()
 

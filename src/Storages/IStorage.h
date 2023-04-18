@@ -181,6 +181,9 @@ public:
     /// Returns true if the storage supports reading of subcolumns of complex types.
     virtual bool supportsSubcolumns() const { return false; }
 
+    /// Support trivial count optimization for high level storage, only TRUE for StorageCnchMergeTree
+    virtual bool supportsTrivialCount() const { return false; }
+
     /// Requires squashing small blocks to large for optimal storage.
     /// This is true for most storages that store data on disk.
     virtual bool prefersLargeBlocks() const { return true; }
@@ -623,7 +626,7 @@ public:
     /// - For total_rows column in system.tables
     ///
     /// Does takes underlying Storage (if any) into account.
-    virtual std::optional<UInt64> totalRows(const Settings &) const { return {}; }
+    virtual std::optional<UInt64> totalRows(const ContextPtr &) const { return {}; }
 
     /// Same as above but also take partition predicate into account.
     virtual std::optional<UInt64> totalRowsByPartitionPredicate(const SelectQueryInfo &, ContextPtr) const { return {}; }

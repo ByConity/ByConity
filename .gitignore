@@ -152,29 +152,6 @@ package-lock.json
 /src/Protos/*.pb.h
 docker/server/config/tso.xml
 
-###################
-##### Website #####
-
-# Dependencies
-/website/node_modules
-
-# Production
-/website/build
-
-# Generated files
-/website/.docusaurus
-/website/.cache-loader
-
 # Misc
-/website/.DS_Store
-/website/.env.local
-/website/.env.development.local
-/website/.env.test.local
-/website/.env.production.local
-
-/website/npm-debug.log*
-/website/yarn-debug.log*
-/website/yarn-error.log*
-
-##### Website #####
-###################
+.DS_Store
+byted.yaml

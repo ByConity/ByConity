@@ -244,7 +244,10 @@ void CloudUniqueMergeTreeMergeTask::executeImpl()
     }
     auto ctx = getContext();
     CnchLockHolder cnch_lock(*ctx, {std::move(partition_lock)});
-    cnch_lock.lock();
+
+    /// TODO: better msg
+    if (!cnch_lock.tryLock())
+        throw Exception("Failed to acquire lock for merge task " + params.task_id, ErrorCodes::ABORTED);
 
     lock_watch.restart();
 
@@ -266,7 +269,7 @@ void CloudUniqueMergeTreeMergeTask::executeImpl()
         watch.elapsedMilliseconds(),
         lock_watch.elapsedMilliseconds());
     /// preload can be done outside the lock
-    // tryPreload(context, storage, dumped_data.parts, ManipulationType::Merge);
+    // preload(context, storage, dumped_data.parts, ManipulationType::Merge);
 }
 
 } // namespace DB

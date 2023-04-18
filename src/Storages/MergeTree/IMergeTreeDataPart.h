@@ -548,6 +548,9 @@ public:
     /// Return version value from partition. Throws exception if the table didn't use partition as version
     UInt64 getVersionFromPartition() const;
 
+    DiskCacheMode disk_cache_mode {DiskCacheMode::AUTO};
+    bool enableDiskCache() const;
+
 protected:
     friend class MergeTreeMetaBase;
     friend class MergeTreeData;

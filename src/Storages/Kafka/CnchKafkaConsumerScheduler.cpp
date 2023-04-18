@@ -20,6 +20,11 @@
 
 namespace DB
 {
+    namespace ErrorCodes
+    {
+        extern const int RESOURCE_MANAGER_NO_AVAILABLE_WORKER;
+    }
+
     IKafkaConsumerScheduler::IKafkaConsumerScheduler(const String &vw_name_, const KafkaConsumerScheduleMode schedule_mode_, ContextPtr context_)
         : vw_name(std::move(vw_name_)), schedule_mode(schedule_mode_), global_context(context_->getGlobalContext()),
         log(&Poco::Logger::get("KafkaConsumer" + String(getScheduleModeName()) + "Scheduler"))
@@ -27,16 +32,11 @@ namespace DB
         initOrUpdateWorkerPool();
     }
 
+    /// TODO: (zuochuang.zema, renqiang) maybe it's unnecessary as vw_handle can get newest workers automatically.
     void IKafkaConsumerScheduler::initOrUpdateWorkerPool()
     {
-        /// Here updating for `worker_pool` will be triggered
-        if (worker_pool && !worker_pool->empty())
-            return;
-
-        worker_pool = global_context->getCnchWorkerClientPools().getPool({vw_name},
-                                                                 {VirtualWarehouseType::Write, VirtualWarehouseType::Default});
-        if (!worker_pool || worker_pool->empty())
-            throw Exception("Init worker pool #" + vw_name + " failed, pls check it", ErrorCodes::LOGICAL_ERROR);
+        /// May throw exception: VIRTUAL_WAREHOUSE_NOT_FOUND
+        vw_handle = global_context->getVirtualWarehousePool().get(vw_name);
     }
 
     /// Random mode:
@@ -49,7 +49,7 @@ namespace DB
     CnchWorkerClientPtr KafkaConsumerSchedulerRandom::selectWorkerNode(const String & /* key */, const size_t /* index */)
     {
         initOrUpdateWorkerPool();
-        return worker_pool->get();
+        return vw_handle->getWorker();
     }
 
     /// Hash mode:
@@ -62,7 +62,7 @@ namespace DB
     CnchWorkerClientPtr KafkaConsumerSchedulerHash::selectWorkerNode(const String &key, const size_t /* index */)
     {
         initOrUpdateWorkerPool();
-        return worker_pool->getByHashRing(key);
+        return vw_handle->getWorkerByHash(key);
     }
 
     bool KafkaConsumerSchedulerHash::shouldReschedule(const CnchWorkerClientPtr current_worker, const String & key, const size_t index)
@@ -92,7 +92,7 @@ namespace DB
     {
         IKafkaConsumerScheduler::initOrUpdateWorkerPool();
 
-        auto new_clients = worker_pool->getAll();
+        auto new_clients = vw_handle->getAllWorkers();
         std::unordered_map<CnchWorkerClientPtr, size_t> new_clients_map;
         std::priority_queue<client_status> new_clients_queue;
 
@@ -131,7 +131,7 @@ namespace DB
 
             clients_status_map.erase(node.client_ptr);
         }
-        throw Exception("No available service for " + worker_pool->getServiceName(), ErrorCodes::LOGICAL_ERROR);
+        throw Exception("No available workers for scheduling Kafka consumer, vw: " + vw_name, ErrorCodes::RESOURCE_MANAGER_NO_AVAILABLE_WORKER);
     }
 
     bool KafkaConsumerSchedulerLeastConsumers::shouldReschedule(const CnchWorkerClientPtr current_worker, const String & /* key */, const size_t index)

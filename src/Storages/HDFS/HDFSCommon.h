@@ -40,6 +40,7 @@
 #include <Poco/URI.h>
 #include <random>
 #include <Common/HostWithPorts.h>
+#include <Storages/HDFS/HDFSAuth.h>
 namespace DB
 {
 inline bool isHdfsScheme(const std::string & scheme)
@@ -120,7 +121,6 @@ struct HDFSFileInfo
 using HDFSBuilderPtr = std::unique_ptr<hdfsBuilder, detail::HDFSBuilderDeleter>;
 using HDFSFSPtr = std::shared_ptr<std::remove_pointer_t<hdfsFS>>;
 
-
 class HDFSConnectionParams
 {
 public:
@@ -142,6 +142,7 @@ public:
     String hdfs_user;
     String hdfs_service;
     std::vector<IpWithPort> addrs;
+    HDFSKrb5Params krb5_params;
 
     bool use_nnproxy_ha = false; // for whether to use ha config for nnproxies.
     bool inited = false;
@@ -308,6 +309,13 @@ static TTLBrokenNameNodes brokenNNs; // NameNode blacklist
 /// TODO Allow to tune from query Settings.
 HDFSBuilderWrapper createHDFSBuilder(const String & uri_str, const Poco::Util::AbstractConfiguration &);
 HDFSFSPtr createHDFSFS(hdfsBuilder * builder);
+
+String getNameNodeUrl(const String & hdfs_url);
+String getNameNodeCluster(const String & hdfs_url);
+
+/// use default params or build from url
+/// build params from custom url
+HDFSConnectionParams hdfsParamsFromUrl(const Poco::URI & uri);
 
 }
 // #endif

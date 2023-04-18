@@ -1054,7 +1054,7 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
         if (!database)
         {
             if (getContext()->getServerType() != ServerType::cnch_worker)
-                throw Exception("No database " + database_name + " found", ErrorCodes::LOGICAL_ERROR);
+                throw Exception("No database " + database_name + " found", ErrorCodes::UNKNOWN_DATABASE);
 
             ASTCreateQuery create_database;
             create_database.database = database_name;

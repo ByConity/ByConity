@@ -44,7 +44,6 @@ private:
 
 private:
     bool init_request = true;
-
     Poco::Logger * log;
     std::unique_ptr<ResourceMonitor> resource_monitor;
     BackgroundSchedulePool::TaskHolder background_task;

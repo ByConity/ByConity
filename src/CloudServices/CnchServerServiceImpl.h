@@ -240,6 +240,12 @@ public:
         Protos::SubmitQueryWorkerMetricsResp * response,
         google::protobuf::Closure * done) override;
 
+    void submitPreloadTask(
+        google::protobuf::RpcController * cntl,
+        const Protos::SubmitPreloadTaskReq * request,
+        Protos::SubmitPreloadTaskResp * response,
+        google::protobuf::Closure * done) override;
+
     void executeOptimize(
         google::protobuf::RpcController * cntl,
         const Protos::ExecuteOptimizeQueryReq * request,

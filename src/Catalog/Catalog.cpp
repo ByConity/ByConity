@@ -575,7 +575,7 @@ namespace Catalog
                     {
                         batch_writes.AddPut(
                             SinglePutRequest(MetastoreProxy::dictionaryTrashKey(name_space, trashBD_name, dic_ptr->name()), dic_ptr->SerializeAsString()));
-                        batch_writes.AddDelete(MetastoreProxy::dictionaryStoreKey(name_space, database, dic_ptr->name()));
+                        batch_writes.AddDelete(SingleDeleteRequest(MetastoreProxy::dictionaryStoreKey(name_space, database, dic_ptr->name())));
                     }
 
                     BatchCommitResponse resp;
@@ -623,7 +623,7 @@ namespace Catalog
                     }
 
                     /// remove old database record;
-                    batch_writes.AddDelete(MetastoreProxy::dbKey(name_space, from_database, database->commit_time()));
+                    batch_writes.AddDelete(SingleDeleteRequest(MetastoreProxy::dbKey(name_space, from_database, database->commit_time())));
                     /// create new database record;
                     database->set_name(to_database);
                     database->set_previous_version(0);
@@ -1212,7 +1212,7 @@ namespace Catalog
     }
 
     DB::ServerDataPartsVector Catalog::getServerDataPartsInPartitions(
-        const StoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, const Context * session_context)
+        const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, const Context * session_context)
     {
         ServerDataPartsVector outRes;
         runWithMetricSupport(
@@ -1220,7 +1220,7 @@ namespace Catalog
                 Stopwatch watch;
                 auto fall_back = [&]() {
                     ServerDataPartsVector res;
-                    auto & merge_tree_storage = dynamic_cast<MergeTreeMetaBase &>(*storage);
+                    auto & merge_tree_storage = dynamic_cast<const MergeTreeMetaBase &>(*storage);
                     Strings all_partitions = getPartitionIDsFromMetastore(storage);
                     auto parts_model = getDataPartsMetaFromMetastore(storage, partitions, all_partitions, ts);
                     for (auto & part_model_ptr : parts_model)
@@ -1232,7 +1232,7 @@ namespace Catalog
                 };
 
                 ServerDataPartsVector res;
-                if (!dynamic_cast<MergeTreeMetaBase *>(storage.get()))
+                if (!dynamic_cast<const MergeTreeMetaBase *>(storage.get()))
                 {
                     outRes = res;
                     return;
@@ -1327,12 +1327,12 @@ namespace Catalog
         return outRes;
     }
 
-    ServerDataPartsVector Catalog::getAllServerDataParts(const StoragePtr & table, const TxnTimestamp & ts, const Context * session_context)
+    ServerDataPartsVector Catalog::getAllServerDataParts(const ConstStoragePtr & table, const TxnTimestamp & ts, const Context * session_context)
     {
         ServerDataPartsVector outRes;
         runWithMetricSupport(
             [&] {
-                if (!dynamic_cast<MergeTreeMetaBase *>(table.get()))
+                if (!dynamic_cast<const MergeTreeMetaBase *>(table.get()))
                 {
                     outRes = {};
                     return;
@@ -1669,7 +1669,7 @@ namespace Catalog
             meta_proxy->setNonHostUpdateTimeStamp(name_space, UUIDHelpers::UUIDToString(storage->getStorageID().uuid), current_pts);
     }
 
-    bool Catalog::canUseCache(const StoragePtr & storage, const Context * session_context)
+    bool Catalog::canUseCache(const ConstStoragePtr & storage, const Context * session_context)
     {
         UInt64 latest_nhut;
         if (!context.getPartCacheManager())
@@ -1775,13 +1775,13 @@ namespace Catalog
             ProfileEvents::DropAllPartFailed);
     }
 
-    std::vector<std::shared_ptr<MergeTreePartition>> Catalog::getPartitionList(const StoragePtr & table, const Context * session_context)
+    std::vector<std::shared_ptr<MergeTreePartition>> Catalog::getPartitionList(const ConstStoragePtr & table, const Context * session_context)
     {
         std::vector<std::shared_ptr<MergeTreePartition>> partition_list;
         runWithMetricSupport(
             [&] {
                 PartitionMap partitions;
-                if (auto * cnch_table = dynamic_cast<MergeTreeMetaBase *>(table.get()))
+                if (auto * cnch_table = dynamic_cast<const MergeTreeMetaBase *>(table.get()))
                 {
                     bool can_use_cache = true;
                     if (context.getSettingsRef().server_write_ha)
@@ -1801,7 +1801,7 @@ namespace Catalog
         return partition_list;
     }
 
-    Strings Catalog::getPartitionIDs(const StoragePtr & storage, const Context * session_context)
+    Strings Catalog::getPartitionIDs(const ConstStoragePtr & storage, const Context * session_context)
     {
         Strings partition_ids;
         runWithMetricSupport(
@@ -1845,7 +1845,7 @@ namespace Catalog
             ProfileEvents::GetPartitionsFromMetastoreFailed);
     }
 
-    Strings Catalog::getPartitionIDsFromMetastore(const StoragePtr & storage)
+    Strings Catalog::getPartitionIDsFromMetastore(const ConstStoragePtr & storage)
     {
         Strings partitions_id;
         IMetaStore::IteratorPtr it = meta_proxy->getPartitionList(name_space, UUIDHelpers::UUIDToString(storage->getStorageID().uuid));
@@ -2171,6 +2171,7 @@ namespace Catalog
                     res = true;
                     return;
                 }
+                
                 if (txn_data.empty())
                 {
                     LOG_DEBUG(log, "UpdateTransactionRecord fails. Expected record {} not exist.", expected_record.toString());
@@ -3843,8 +3844,8 @@ namespace Catalog
 
                 // delete the record from db trash as well as the corresponding version of db meta.
                 BatchCommitRequest batch_writes;
-                batch_writes.AddDelete(MetastoreProxy::dbTrashKey(name_space, database, ts));
-                batch_writes.AddDelete(MetastoreProxy::dbKey(name_space, database, ts));
+                batch_writes.AddDelete(SingleDeleteRequest(MetastoreProxy::dbTrashKey(name_space, database, ts)));
+                batch_writes.AddDelete(SingleDeleteRequest(MetastoreProxy::dbKey(name_space, database, ts)));
 
                 // restore table and dictionary
                 String trashDBName = database + "_" + toString(ts);
@@ -3854,13 +3855,13 @@ namespace Catalog
                 for (auto & table_id_ptr : table_id_ptrs)
                 {
                     table_id_ptr->set_database(database);
-                    batch_writes.AddDelete(MetastoreProxy::tableTrashKey(name_space, trashDBName, table_id_ptr->name(), ts));
+                    batch_writes.AddDelete(SingleDeleteRequest(MetastoreProxy::tableTrashKey(name_space, trashDBName, table_id_ptr->name(), ts)));
                     restoreTableFromTrash(table_id_ptr, ts, batch_writes);
                 }
 
                 for (auto & dic_ptr : dic_ptrs)
                 {
-                    batch_writes.AddDelete(MetastoreProxy::dictionaryTrashKey(name_space, trashDBName, dic_ptr->name()));
+                    batch_writes.AddDelete(SingleDeleteRequest(MetastoreProxy::dictionaryTrashKey(name_space, trashDBName, dic_ptr->name())));
                     batch_writes.AddPut(SinglePutRequest(
                         MetastoreProxy::dictionaryStoreKey(name_space, database, dic_ptr->name()), dic_ptr->SerializeAsString()));
                 }
@@ -4247,7 +4248,7 @@ namespace Catalog
     }
 
     DataModelPartPtrVector Catalog::getDataPartsMetaFromMetastore(
-        const StoragePtr & storage, const Strings & required_partitions, const Strings & full_partitions, const TxnTimestamp & ts)
+        const ConstStoragePtr & storage, const Strings & required_partitions, const Strings & full_partitions, const TxnTimestamp & ts)
     {
         auto createDataModelPartPtr = [&](const String & meta) {
             Protos::DataModelPart part_model;
@@ -4312,12 +4313,12 @@ namespace Catalog
     }
 
     DeleteBitmapMetaPtrVector
-    Catalog::getDeleteBitmapsInPartitions(const StoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts)
+    Catalog::getDeleteBitmapsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts)
     {
         DeleteBitmapMetaPtrVector outRes;
         runWithMetricSupport(
             [&] {
-                auto & merge_tree_storage = dynamic_cast<MergeTreeMetaBase &>(*storage);
+                const auto & merge_tree_storage = dynamic_cast<const MergeTreeMetaBase &>(*storage);
 
                 auto createDeleteBitmapMetaPtr = [&](const String & meta) {
                     DataModelDeleteBitmapPtr model_ptr = std::make_shared<Protos::DataModelDeleteBitmap>();
@@ -4460,13 +4461,13 @@ namespace Catalog
 
         /// remove dependency
         for (const String & dependency : dependencies)
-            batch_write.AddDelete(MetastoreProxy::viewDependencyKey(name_space, dependency, table_id.uuid()));
+            batch_write.AddDelete(SingleDeleteRequest(MetastoreProxy::viewDependencyKey(name_space, dependency, table_id.uuid())));
 
         batch_write.AddPut(SinglePutRequest(MetastoreProxy::tableStoreKey(name_space, table_id.uuid(), ts.toUInt64()), table.SerializeAsString()));
         // use database name and table name in table_id is required because it may different with that in table data model.
         batch_write.AddPut(SinglePutRequest(
             MetastoreProxy::tableTrashKey(name_space, table_id.database(), table_id.name(), ts.toUInt64()), table_id.SerializeAsString()));
-        batch_write.AddDelete(MetastoreProxy::tableUUIDMappingKey(name_space, table.database(), table.name()));
+        batch_write.AddDelete(SingleDeleteRequest(MetastoreProxy::tableUUIDMappingKey(name_space, table.database(), table.name())));
     }
 
     void Catalog::restoreTableFromTrash(
@@ -4481,8 +4482,8 @@ namespace Catalog
         /// 2.add table->uuid mapping;
         /// 3. remove last version of table meta(which is marked as delete);
         /// 4. try rebuild dependencies if any
-        batch_write.AddDelete(MetastoreProxy::tableTrashKey(name_space, table_id->database(), table_id->name(), ts));
-        batch_write.AddDelete(MetastoreProxy::tableStoreKey(name_space, table_id->uuid(), table_model->commit_time()));
+        batch_write.AddDelete(SingleDeleteRequest(MetastoreProxy::tableTrashKey(name_space, table_id->database(), table_id->name(), ts)));
+        batch_write.AddDelete(SingleDeleteRequest(MetastoreProxy::tableStoreKey(name_space, table_id->uuid(), table_model->commit_time())));
         batch_write.AddPut(SinglePutRequest(
             MetastoreProxy::tableUUIDMappingKey(name_space, table_id->database(), table_id->name()),
             table_id->SerializeAsString(), true));

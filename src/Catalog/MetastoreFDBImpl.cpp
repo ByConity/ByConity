@@ -98,11 +98,11 @@ std::vector<std::pair<String, UInt64>> MetastoreFDBImpl::multiGet(const std::vec
     return res;
 }
 
-void MetastoreFDBImpl::drop(const String & key, const UInt64 &)
+void MetastoreFDBImpl::drop(const String & key, const String & expected)
 {
     FDB::FDBTransactionPtr tr = std::make_shared<FDB::FDBTransactionRAII>();
     check_fdb_op(fdb_client->CreateTransaction(tr));
-    check_fdb_op(fdb_client->Clear(tr, key, getNextKey(key)));
+    check_fdb_op(fdb_client->Delete(tr, key, expected));
 }
 
 MetastoreFDBImpl::IteratorPtr MetastoreFDBImpl::getAll()
@@ -141,7 +141,7 @@ MetastoreFDBImpl::IteratorPtr MetastoreFDBImpl::getByRange(const String & range_
     return std::make_shared<FDBIterator>(fdb_iter);
 }
 
-bool MetastoreFDBImpl::batchWrite(const BatchCommitRequest & req, BatchCommitResponse response)
+bool MetastoreFDBImpl::batchWrite(const BatchCommitRequest & req, BatchCommitResponse & response)
 {
     FDB::FDBTransactionPtr tr = std::make_shared<FDB::FDBTransactionRAII>();
     check_fdb_op(fdb_client->CreateTransaction(tr));

@@ -57,10 +57,6 @@ void DDLAlterAction::executeV1(TxnTimestamp commit_time)
     {
         if (!mutation_commands.empty())
         {
-            /// TODO: write undo buffer before rename
-            // updatePartData(part, commit_time);
-            // part->renameTo(part->info.getPartName(true));
-
             CnchMergeTreeMutationEntry mutation_entry;
             mutation_entry.txn_id = txn_id;
             mutation_entry.commit_time = commit_time;
@@ -77,8 +73,11 @@ void DDLAlterAction::executeV1(TxnTimestamp commit_time)
         // table->checkMaskingPolicy(*cache);
 
         updateTsCache(table->getStorageUUID(), commit_time);
-        catalog->alterTable(table, new_schema, static_cast<StorageCnchMergeTree &>(*table).commit_time, txn_id, commit_time);
-        LOG_DEBUG(log, "Successfully change schema in Catalog.");
+        if (!new_schema.empty())
+        {
+            catalog->alterTable(table, new_schema, static_cast<StorageCnchMergeTree &>(*table).commit_time, txn_id, commit_time);
+            LOG_DEBUG(log, "Successfully change schema in catalog.");
+        }
     }
     catch (...)
     {

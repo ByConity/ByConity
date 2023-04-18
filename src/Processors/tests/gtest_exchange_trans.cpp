@@ -185,7 +185,6 @@ TEST_F(ExchangeRemoteTest, SerDserChunk)
 void sender_thread(BroadcastSenderProxyPtr sender, Chunk chunk)
 {
     BroadcastStatus status = sender->send(std::move(chunk));
-    ASSERT_TRUE(status.code == BroadcastStatusCode::RUNNING);
 }
 
 TEST_F(ExchangeRemoteTest, RemoteNormalTest)

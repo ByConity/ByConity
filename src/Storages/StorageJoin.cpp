@@ -191,7 +191,7 @@ size_t StorageJoin::getSize() const
     return join->getTotalRowCount();
 }
 
-std::optional<UInt64> StorageJoin::totalRows(const Settings &) const
+std::optional<UInt64> StorageJoin::totalRows(const ContextPtr &) const
 {
     std::shared_lock<std::shared_mutex> lock(rwlock);
     return join->getTotalRowCount();

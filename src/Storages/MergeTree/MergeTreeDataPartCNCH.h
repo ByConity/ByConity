@@ -88,6 +88,8 @@ public:
 
     virtual void projectionRemove(const String & parent_to, bool keep_shared_data) const override;
 
+    void preload(ThreadPool & pool) const;
+
 private:
 
     bool isDeleted() const;
@@ -112,6 +114,7 @@ private:
     void loadMetaInfoFromBuffer(ReadBuffer & buffer, bool load_hint_mutation);
 
     void calculateEachColumnSizes(ColumnSizeByName & each_columns_size, ColumnSize & total_size) const override;
+    ColumnSize getColumnSizeImpl(const NameAndTypePair & column, std::unordered_set<String> * processed_substreams) const;
 
     void removeImpl(bool keep_shared_data) const override;
 };

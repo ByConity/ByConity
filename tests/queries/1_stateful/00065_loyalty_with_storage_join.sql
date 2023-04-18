@@ -1,5 +1,3 @@
-USE test;
-
 DROP TABLE IF EXISTS join;
 CREATE TABLE join (UserID UInt64, loyalty Int8) ENGINE = Join(SEMI, LEFT, UserID);
 

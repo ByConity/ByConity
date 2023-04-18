@@ -1,6 +1,6 @@
 ---------create empty stats
-tb	21	0
-tbnull	21	0
+tb	22	0
+tbnull	22	0
 ---------show empty stats
 tb.*		0					
 tb.id	UInt64	0	0	0	nan	nan	0
@@ -15,6 +15,7 @@ tb.u64	UInt64	0	0	0	nan	nan	0
 tb.f32	Float32	0	0	0	nan	nan	0
 tb.f64	Float64	0	0	0	nan	nan	0
 tb.date	Date	0	0	0	nan	nan	0
+tb.date32	Date32	0	0	0	nan	nan	0
 tb.datetime	DateTime	0	0	0	nan	nan	0
 tb.datetime64	DateTime64(3)	0	0	0	nan	nan	0
 tb.str	String	0	0	0	nan	nan	0
@@ -37,6 +38,7 @@ tbnull.u64null	Nullable(UInt64)	0	0	0	nan	nan	0
 tbnull.f32null	Nullable(Float32)	0	0	0	nan	nan	0
 tbnull.f64null	Nullable(Float64)	0	0	0	nan	nan	0
 tbnull.datenull	Nullable(Date)	0	0	0	nan	nan	0
+tbnull.date32null	Nullable(Date32)	0	0	0	nan	nan	0
 tbnull.datetimenulll	Nullable(DateTime)	0	0	0	nan	nan	0
 tbnull.datetime64nulll	Nullable(DateTime64(3))	0	0	0	nan	nan	0
 tbnull.strnull	Nullable(String)	0	0	0	nan	nan	0
@@ -61,6 +63,7 @@ tbnull.u64null	Nullable(UInt64)	0	0	0	nan	nan	0
 tbnull.f32null	Nullable(Float32)	0	0	0	nan	nan	0
 tbnull.f64null	Nullable(Float64)	0	0	0	nan	nan	0
 tbnull.datenull	Nullable(Date)	0	0	0	nan	nan	0
+tbnull.date32null	Nullable(Date32)	0	0	0	nan	nan	0
 tbnull.datetimenulll	Nullable(DateTime)	0	0	0	nan	nan	0
 tbnull.datetime64nulll	Nullable(DateTime64(3))	0	0	0	nan	nan	0
 tbnull.strnull	Nullable(String)	0	0	0	nan	nan	0
@@ -71,7 +74,7 @@ tbnull.decimal32null	Nullable(Decimal(9, 5))	0	0	0	nan	nan	0
 tbnull.decimal64null	Nullable(Decimal(18, 10))	0	0	0	nan	nan	0
 tbnull.decimal128null	Nullable(Decimal(38, 20))	0	0	0	nan	nan	0
 ---------create partial stats
-tb	21	2
+tb	22	2
 ---------show partial stats
 tb.*		2					
 tb.id	UInt64	2	0	2	1	2	1
@@ -86,6 +89,7 @@ tb.u64	UInt64	2	0	2	1000	2000	1
 tb.f32	Float32	2	0	2	0.10000000149011612	0.20000000298023224	1
 tb.f64	Float64	2	0	2	0.01	0.02	1
 tb.date	Date	2	0	2	18993	19025	1
+tb.date32	Date32	2	0	2	18993	19025	1
 tb.datetime	DateTime	2	0	2	1640984401	1643749202	1
 tb.datetime64	DateTime64(3)	2	0	2	1640984401.1099999	1643749202.22	1
 tb.str	String	2	0	2	1.1096017674383174e+19	1.6207752184614115e+19	1
@@ -108,6 +112,7 @@ tbnull.u64null	Nullable(UInt64)	0	0	0	nan	nan	0
 tbnull.f32null	Nullable(Float32)	0	0	0	nan	nan	0
 tbnull.f64null	Nullable(Float64)	0	0	0	nan	nan	0
 tbnull.datenull	Nullable(Date)	0	0	0	nan	nan	0
+tbnull.date32null	Nullable(Date32)	0	0	0	nan	nan	0
 tbnull.datetimenulll	Nullable(DateTime)	0	0	0	nan	nan	0
 tbnull.datetime64nulll	Nullable(DateTime64(3))	0	0	0	nan	nan	0
 tbnull.strnull	Nullable(String)	0	0	0	nan	nan	0
@@ -141,6 +146,8 @@ tb.f64	0	[0.01, 0.01]	1	1	1	1
 tb.f64	1	[0.02, 0.02]	1	1	2	2
 tb.date	0	[18993, 18993]	1	1	1	1
 tb.date	1	[19025, 19025]	1	1	2	2
+tb.date32	0	[18993, 18993]	1	1	1	1
+tb.date32	1	[19025, 19025]	1	1	2	2
 tb.datetime	0	[1640984401, 1640984401]	1	1	1	1
 tb.datetime	1	[1643749202, 1643749202]	1	1	2	2
 tb.datetime64	0	[1640984401.1099999, 1640984401.1099999]	1	1	1	1
@@ -160,8 +167,8 @@ tb.decimal64	1	[0.02, 0.02]	1	1	2	2
 tb.decimal128	0	[0.001, 0.001]	1	1	1	1
 tb.decimal128	1	[0.002, 0.002]	1	1	2	2
 ---------create stats override
-tb	21	2
-tbnull	21	3
+tb	22	2
+tbnull	22	3
 ---------show stats override
 tb.*		2					
 tb.id	UInt64	2	0	2	1	2	1
@@ -176,6 +183,7 @@ tb.u64	UInt64	2	0	2	1000	2000	1
 tb.f32	Float32	2	0	2	0.10000000149011612	0.20000000298023224	1
 tb.f64	Float64	2	0	2	0.01	0.02	1
 tb.date	Date	2	0	2	18993	19025	1
+tb.date32	Date32	2	0	2	18993	19025	1
 tb.datetime	DateTime	2	0	2	1640984401	1643749202	1
 tb.datetime64	DateTime64(3)	2	0	2	1640984401.1099999	1643749202.22	1
 tb.str	String	2	0	2	1.1096017674383174e+19	1.6207752184614115e+19	1
@@ -198,6 +206,7 @@ tbnull.u64null	Nullable(UInt64)	2	1	2	1000	2000	1
 tbnull.f32null	Nullable(Float32)	2	1	2	0.10000000149011612	0.20000000298023224	1
 tbnull.f64null	Nullable(Float64)	2	1	2	0.01	0.02	1
 tbnull.datenull	Nullable(Date)	2	1	2	18993	19025	1
+tbnull.date32null	Nullable(Date32)	2	1	2	18993	19025	1
 tbnull.datetimenulll	Nullable(DateTime)	2	1	2	1640984401	1643749202	1
 tbnull.datetime64nulll	Nullable(DateTime64(3))	2	1	2	1640984401.1099999	1643749202.22	1
 tbnull.strnull	Nullable(String)	2	1	2	1.1096017674383174e+19	1.6207752184614115e+19	1
@@ -231,6 +240,8 @@ tb.f64	0	[0.01, 0.01]	1	1	1	1
 tb.f64	1	[0.02, 0.02]	1	1	2	2
 tb.date	0	[18993, 18993]	1	1	1	1
 tb.date	1	[19025, 19025]	1	1	2	2
+tb.date32	0	[18993, 18993]	1	1	1	1
+tb.date32	1	[19025, 19025]	1	1	2	2
 tb.datetime	0	[1640984401, 1640984401]	1	1	1	1
 tb.datetime	1	[1643749202, 1643749202]	1	1	2	2
 tb.datetime64	0	[1640984401.1099999, 1640984401.1099999]	1	1	1	1
@@ -274,6 +285,8 @@ tbnull.f64null	0	[0.01, 0.01]	1	1	1	1
 tbnull.f64null	1	[0.02, 0.02]	1	1	2	2
 tbnull.datenull	0	[18993, 18993]	1	1	1	1
 tbnull.datenull	1	[19025, 19025]	1	1	2	2
+tbnull.date32null	0	[18993, 18993]	1	1	1	1
+tbnull.date32null	1	[19025, 19025]	1	1	2	2
 tbnull.datetimenulll	0	[1640984401, 1640984401]	1	1	1	1
 tbnull.datetimenulll	1	[1643749202, 1643749202]	1	1	2	2
 tbnull.datetime64nulll	0	[1640984401.1099999, 1640984401.1099999]	1	1	1	1

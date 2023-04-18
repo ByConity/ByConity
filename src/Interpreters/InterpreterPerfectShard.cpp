@@ -182,7 +182,6 @@ QueryProcessingStage::Enum InterpreterPerfectShard::determineProcessingStage()
     ASTSelectQuery * select = query->as<ASTSelectQuery>();
     if (select->orderBy())
         return QueryProcessingStage::WithMergeableStateAfterAggregation;
-
     if (select->limitBy() || select->limitLength() || select->limitOffset())
         return QueryProcessingStage::WithMergeableStateAfterAggregation;
 
@@ -331,7 +330,10 @@ void InterpreterPerfectShard::addAggregation(QueryPlan & query_plan)
             temporary_data_merge_threads,
             storage_has_evenly_distributed_read,
             std::move(group_by_info),
-            std::move(group_by_sort_description));
+            std::move(group_by_sort_description),
+            // because final_=true => no further merging/aggregating step =>
+            // should_produce_results_in_order_of_bucket_number_ = false
+            false);
 
     query_plan.addStep(std::move(aggregating_step));
 }
@@ -374,13 +376,8 @@ bool InterpreterPerfectShard::checkAggregationReturnType() const
                 if (it != original_project.end())
                     argument_column_name = it->second;
             }
-
             DataTypePtr type = result_header.getByName(argument_column_name).type;
-
-            if (getAggregationName(descr.function->getName(), type).empty())
-                return false;
-
-            return true;
+            return !getAggregationName(descr.function->getName(), type).empty();
         };
 
         for (auto & descr : pre_aggregates)

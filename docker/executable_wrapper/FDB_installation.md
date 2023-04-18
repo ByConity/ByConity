@@ -1,6 +1,9 @@
-In this guideline I will set up a Foundation DB cluster on 3 physical machines. They are all using debian OS. I refer to two official guideline here [Getting Started on Linux](https://apple.github.io/foundationdb/getting-started-linux.html) and [Building a Cluster](https://apple.github.io/foundationdb/building-cluster.html). 
+In this guideline, I will set up a Foundation DB cluster on 3 physical machines. They are all using debian OS. I refer to two official guidelines here [Getting Started on Linux](https://apple.github.io/foundationdb/getting-started-linux.html) and [Building a Cluster](https://apple.github.io/foundationdb/building-cluster.html). 
 
-Firstly we need to download the binary for the installation in [here](https://github.com/apple/foundationdb/releases/). We need to download the __server__, __monitor__ and __cli__ binary, and those coressponding __sha256__ checksum file . I will chose version __7.1.25__ which is the latest at the time. So let create a folder and download with the following command: 
+Firstly, we need to download the binary for the installation in [here](https://github.com/apple/foundationdb/releases/). We need to download the __server__, __monitor__ and __cli__ binaries, and those corresponding __sha256__ checksum files. I will choose version __7.1.25__ as it is the latest at the time.\
+In your directory, let's create a folder `foundationdb`.\
+Then, create a subfolder `bin` inside `foundationdb`. \
+In this `foundationdb/bin` folder, download with the following command: 
 
 ```
 curl -L -o fdbserver.x86_64 https://github.com/apple/foundationdb/releases/download/7.1.25/fdbserver.x86_64
@@ -13,7 +16,7 @@ curl -L -o fdbcli.x86_64 https://github.com/apple/foundationdb/releases/download
 curl -L -o fdbcli.x86_64.sha256 https://github.com/apple/foundationdb/releases/download/7.1.25/fdbcli.x86_64.sha256
 ```
 
-After download them let do the checksum check on executable files to see if the download are good. For example
+After the download is completed, let's do the checksum check on the executable files to see if the downloads are good. The two checksums should be equal. For example:
 
 ```
 $ sha256sum --binary fdbserver.x86_64
@@ -22,8 +25,7 @@ $ sha256sum --binary fdbserver.x86_64
 $ cat fdbserver.x86_64.sha256
 73b70a75464e64fd0a01a7536e110e31c3e6ce793d425aecfc40f0be9f0652b7  fdbserver.x86_64
 ```
-Assume you download them and store in directory `/root/user_xyz/foundationdb/bin`. 
-Next we will delete those sha256 checksum file because we don't need them anymore, we also rename the executation file to remove the trailing `x86_64` and give them executable permission.
+Next we will delete those sha256 checksum file because we don't need them anymore, we'll also rename the executable file to remove the trailing `x86_64` and give them executable permission.
 
 ```
 rm *.sha256
@@ -35,26 +37,26 @@ chmod ug+x fdbcli fdbmonitor fdbserver
 
 Next we will create some folder to store the config, data and log:
 ```
-mkdir -p /root/user_xyz/fdb_runtime/config
-mkdir -p /root/user_xyz/fdb_runtime/data
-mkdir -p /root/user_xyz/fdb_runtime/logs
+mkdir -p /<your_directory>/fdb_runtime/config
+mkdir -p /<your_directory>/fdb_runtime/data
+mkdir -p /<your_directory>/fdb_runtime/logs
 ```
-Then we create the `foundationdb.conf` config file in `/root/user_xyz/fdb_runtime/config/` with content like this
+Then we create the `foundationdb.conf` config file in `/<your_directory>/fdb_runtime/config/` with content like this
 
 ```
-$ cat /root/user_xyz/fdb_runtime/config/foundationdb.conf
+$ cat /<your_directory>/fdb_runtime/config/foundationdb.conf
 [fdbmonitor]
 user = root
 
 [general]
-cluster-file = /root/user_xyz/fdb_runtime/config/fdb.cluster
+cluster-file = /<your_directory>/fdb_runtime/config/fdb.cluster
 restart-delay = 60
 
 [fdbserver]
 
-command = /root/user_xyz/foundationdb/bin/fdbserver
-datadir = /root/user_xyz/fdb_runtime/data/$ID
-logdir = /root/user_xyz/fdb_runtime/logs/
+command = /<your_directory>/foundationdb/bin/fdbserver
+datadir = /<your_directory>/fdb_runtime/data/$ID
+logdir = /<your_directory>/fdb_runtime/logs/
 public-address = auto:$ID
 listen-address = public
 
@@ -71,13 +73,13 @@ class=stateless
 
 Then in the same directory create file `fdb.cluster` with content like this, change the ip to the ip of your machine
 ```
-$ cat /root/user_xyz/fdb_runtime/config/fdb.cluster
-clusterdsc:test@10.25.160.40:4500
+$ cat /<your_directory>/fdb_runtime/config/fdb.cluster
+clusterdsc:test@<your_ip_address>:4500
 ```
-We will install FDB as a `systemd` service so in the same folder we will create file `fdb.service` with content like this
+We will install FDB as a `systemd` service. So, in the same folder we will create file `fdb.service` with content like this
 
 ```
-$ cat /root/user_xyz/fdb_runtime/config/fdb.service
+$ cat /<your_directory>/fdb_runtime/config/fdb.service
 [Unit]
 Description=FoundationDB (KV storage for cnch metastore)
 
@@ -85,13 +87,13 @@ Description=FoundationDB (KV storage for cnch metastore)
 Restart=always
 RestartSec=30
 TimeoutStopSec=600
-ExecStart=/root/user_xyz/foundationdb/bin/fdbmonitor --conffile /root/user_xyz/fdb_runtime/config/foundationdb.conf --lockfile /root/user_xyz/fdb_runtime/fdbmonitor.pid
+ExecStart=/<your_directory>/foundationdb/bin/fdbmonitor --conffile /<your_directory>/fdb_runtime/config/foundationdb.conf --lockfile /<your_directory>/fdb_runtime/fdbmonitor.pid
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-So we have finish prepare the config file. Now let install fdb into `systemd`
+We have finished preparing the config file. Now let's install fdb into `systemd`
 
 Copy the service file into `/etc/systemd/system/`
 ```
@@ -103,8 +105,9 @@ Reload the service files to include the new service
 systemctl daemon-reload
 ```
 
-Start the service
+Enable and start the service
 ```
+systemctl enable fdb.service
 systemctl start fdb.service
 ```
 
@@ -117,9 +120,9 @@ $ systemctl status fdb.service
 
 ```
 
-Now I have install fdb service in 1 machine, I will repeate the same for other 2 machine
+Now I have install fdb service in 1 machine, I will repeat the same for the other 2 machines
 
-After install 3 machine, we need to connect them to form a cluster. Now go back to the first node, connect to FDB uusing fdbcli 
+After it's installed on all 3 machines, we need to connect them to form a cluster. Now go back to the first node, connect to FDB using fdbcli 
 
 ```
 $ ./foundationdb/bin/fdbcli -C fdb_runtime/config/fdb.cluster
@@ -136,7 +139,7 @@ configure new single ssd
 ```
 Next, execute this to from 2 other nodes to a cluster, replace the address with your machine address 
 ```
-coordinators 10.149.54.214:4500 10.21.154.30:4500 10.21.170.163:4500
+coordinators <node_1_ip_address>:4500 <node_2_ip_address>:4500 <node_3_ip_address>:4500
 ```
 
 Then exit the cli, you will found that the `fdb.cluster` now have a new content
@@ -145,7 +148,7 @@ Then exit the cli, you will found that the `fdb.cluster` now have a new content
 $ cat fdb_runtime/config/fdb.cluster
 # DO NOT EDIT!
 # This file is auto-generated, it is not to be edited by hand
-clusterdsc:wwxVEcyLvSiO3BGKxjIw7Sg5d1UTX5ad@10.21.154.30:4500,10.21.170.163:4500,10.149.54.214:4500
+clusterdsc:wwxVEcyLvSiO3BGKxjIw7Sg5d1UTX5ad@example1.host.com:4500,example2.host.com:4500,example3.host.com:4500
 ```
 
 Copy this file to other 2 machines and replace the old file then restart fdb service
@@ -154,7 +157,7 @@ Copy this file to other 2 machines and replace the old file then restart fdb ser
 systemctl restart fdb.service
 ```
 
-Then come back to the first machine and execute this command to change redundant mode to `triple`
+Then come back to the first machine, connect to FDB using fdbcli again and execute this command to change redundant mode to `triple`
 
 ```
 configure triple
@@ -174,4 +177,4 @@ Configuration:
   Usable Regions         - 1
 ```
 
-That's it. You've finished installing Foundationdb server, now you have the `fdb.cluster` file. We will use it in config Byconity.
+That's it. You've finished installing Foundationdb server. Now you have the `fdb.cluster` file. We will use it in Byconity's configuration.

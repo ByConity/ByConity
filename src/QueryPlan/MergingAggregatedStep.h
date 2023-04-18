@@ -74,6 +74,17 @@ private:
     bool memory_efficient_aggregation;
     size_t max_threads;
     size_t memory_efficient_merge_threads;
+
+    /// It determines if we should resize pipeline to 1 at the end.
+    /// Needed in case of distributed memory efficient aggregation over distributed table.
+    /// Specifically, if there is a further MergingAggregatedStep and 
+    /// distributed_aggregation_memory_efficient=true
+    /// then the pipeline should not be resized to > 1; otherwise, 
+    /// the data passed to GroupingAggregatedTransform are not in bucket order -> error.
+    /// Set as to_stage==WithMergeableState && distributed_aggregation_memory_efficient
+    /// which is equivalent to !final_ && && distributed_aggregation_memory_efficient
+    /// Initialized in the constructor according the formula above
+    const bool should_produce_results_in_order_of_bucket_number;
 };
 
 }

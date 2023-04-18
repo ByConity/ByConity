@@ -109,7 +109,7 @@ PlanNodePtr MagicSetRule::buildMagicSetAsFilterJoin(
         filter_node = PlanNodeBase::createPlanNode(
             context->nextNodeId(),
             std::make_shared<AggregatingStep>(
-                filter_node->getStep()->getOutputStream(), reallocated_filter_names, AggregateDescriptions{}, GroupingSetsParamsList{}, true),
+                filter_node->getStep()->getOutputStream(), reallocated_filter_names, AggregateDescriptions{}, GroupingSetsParamsList{}, true, GroupingDescriptions{}, false, false),
             PlanNodes{filter_node});
     }
 

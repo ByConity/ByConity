@@ -50,6 +50,7 @@ void ChecksumsDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache)
     if (auto read_buffer = write_buffer.tryGetReadBuffer())
     {
         disk_cache.set(getSegmentName(), *read_buffer, file_size);
+        LOG_DEBUG(disk_cache.getLogger(), "cache checksums file: {}", getSegmentName());
     }
 }
 
@@ -94,6 +95,7 @@ void PrimaryIndexDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache)
     if (auto read_buffer = write_buffer.tryGetReadBuffer())
     {
         disk_cache.set(getSegmentName(), *read_buffer, file_size);
+        LOG_DEBUG(disk_cache.getLogger(), "cache primary index file: {}", getSegmentName());
     }
 }
 

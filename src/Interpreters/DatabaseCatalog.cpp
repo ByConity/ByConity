@@ -282,7 +282,7 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
         }
     }
 
-    if (table_id.hasUUID())
+    if (table_id.hasUUID() && table_id.database_name == TEMPORARY_DATABASE)
     {
         /// Shortcut for tables which have persistent UUID
         auto db_and_table = tryGetByUUID(table_id.uuid, context_);

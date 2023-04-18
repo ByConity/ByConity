@@ -75,7 +75,7 @@ TransformResult DistinctToAggregate::transformImpl(PlanNodePtr node, const Captu
             aggregate_desc.function = AggregateFunctionFactory::instance().get("any", {name_and_type.type}, parameters, properties);
             descriptions.emplace_back(aggregate_desc);
         }
-        auto group_agg_step = std::make_shared<AggregatingStep>(node->getStep()->getOutputStream(), step.getColumns(), descriptions, GroupingSetsParamsList{}, true);
+        auto group_agg_step = std::make_shared<AggregatingStep>(node->getStep()->getOutputStream(), step.getColumns(), descriptions, GroupingSetsParamsList{}, true, GroupingDescriptions{}, false, false);
         auto group_agg_node = PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(group_agg_step), node->getChildren());
         return group_agg_node;
     }

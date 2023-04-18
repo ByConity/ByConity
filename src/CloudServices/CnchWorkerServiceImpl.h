@@ -179,6 +179,12 @@ public:
         Protos::CheckDataPartsResp * response,
         google::protobuf::Closure * done) override;
 
+    void preloadDataParts(
+        google::protobuf::RpcController * cntl,
+        const Protos::PreloadDataPartsReq * request,
+        Protos::PreloadDataPartsResp * response,
+        google::protobuf::Closure * done) override;
+
     void sendOffloading(
         google::protobuf::RpcController * cntl,
         const Protos::SendOffloadingReq * request,

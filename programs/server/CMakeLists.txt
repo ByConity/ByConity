@@ -29,10 +29,10 @@ set (CLICKHOUSE_SERVER_LINK
 
 clickhouse_program_add(server)
 
-install(FILES config.xml users.xml DESTINATION "${CLICKHOUSE_ETC_DIR}/clickhouse-server" COMPONENT clickhouse)
+install(FILES byconity-server.xml byconity-worker.xml byconity-worker-write.xml cnch_config.xml byconity-daemon-manager.xml byconity-tso.xml users.xml byconity-resource-manager.xml DESTINATION "${CLICKHOUSE_ETC_DIR}/byconity-server" COMPONENT clickhouse)
 
 clickhouse_embed_binaries(
     TARGET clickhouse_server_configs
-    RESOURCES config.xml users.xml embedded.xml play.html
+    RESOURCES byconity-server.xml byconity-worker.xml byconity-worker-write.xml cnch_config.xml byconity-daemon-manager.xml byconity-tso.xml users.xml embedded.xml play.html
 )
 add_dependencies(clickhouse-server-lib clickhouse_server_configs)

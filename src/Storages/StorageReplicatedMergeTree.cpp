@@ -4550,10 +4550,10 @@ void StorageReplicatedMergeTree::foreachCommittedParts(Func && func, bool select
     }
 }
 
-std::optional<UInt64> StorageReplicatedMergeTree::totalRows(const Settings & settings) const
+std::optional<UInt64> StorageReplicatedMergeTree::totalRows(const ContextPtr & query_context) const
 {
     UInt64 res = 0;
-    foreachCommittedParts([&res](auto & part) { res += part->rows_count; }, settings.select_sequential_consistency);
+    foreachCommittedParts([&res](auto & part) { res += part->rows_count; }, query_context->getSettingsRef().select_sequential_consistency);
     return res;
 }
 
