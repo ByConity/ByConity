@@ -184,7 +184,7 @@ public:
         TableHandler table_handler(table_info);
         table_handler.registerHandler(std::make_unique<RowCountHandler>(handler_context));
 
-        for (auto & col_desc : cols_desc)
+        for (const auto & col_desc : cols_desc)
         {
             table_handler.registerHandler(std::make_unique<FirstFullColumnHandler>(handler_context, col_desc));
         }
@@ -202,7 +202,7 @@ public:
         TableHandler table_handler(table_info);
         table_handler.registerHandler(std::make_unique<RowCountHandler>(handler_context));
         bool to_collect = false;
-        for (auto & col_desc : cols_desc)
+        for (const auto & col_desc : cols_desc)
         {
             auto & col_info = handler_context.columns_data.at(col_desc.name);
             if (std::llround(col_info.ndv_value_opt.value()) >= 2)

@@ -34,7 +34,7 @@ PlanNodeStatisticsPtr AssignUniqueIdEstimator::estimate(PlanNodeStatisticsPtr & 
     }
     symbol_statistics[unique_symbol] = unique_stats;
 
-    auto stats = std::make_shared<PlanNodeStatistics>(child_stats->getRowCount(), symbol_statistics);
+    auto stats = std::make_shared<PlanNodeStatistics>(child_stats->getRowCount(), std::move(symbol_statistics));
     return stats;
 }
 

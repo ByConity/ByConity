@@ -131,7 +131,7 @@ static MappedAggregationInfo createAggregationOverNull(const AggregatingStep * r
         = std::make_shared<AggregatingStep>(null_row->getStep()->getOutputStream(), Names{}, aggregations_over_null, GroupingSetsParamsList{}, true, GroupingDescriptions{}, false, false);
     auto aggregation_over_null_row = PlanNodeBase::createPlanNode(context.nextNodeId(), std::move(aggregation_over_null_row_step), {null_row});
 
-    return MappedAggregationInfo{aggregation_over_null_row, aggregations_symbol_mapping};
+    return MappedAggregationInfo{.aggregation_node = std::move(aggregation_over_null_row), .symbol_mapping = std::move(aggregations_symbol_mapping)};
 }
 
 // When the aggregation is done after the join, there will be a null value that gets aggregated over
@@ -197,7 +197,7 @@ static PlanNodePtr coalesceWithNullAggregation(const AggregatingStep * aggregati
         name_to_type[symbol.name] = symbol.type;
     }
 
-    auto projection_step = std::make_shared<ProjectionStep>(cross_join->getStep()->getOutputStream(), assignments_builder, name_to_type);
+    auto projection_step = std::make_shared<ProjectionStep>(cross_join->getStep()->getOutputStream(), std::move(assignments_builder), std::move(name_to_type));
     return PlanNodeBase::createPlanNode(context.nextNodeId(), std::move(projection_step), {cross_join});
 }
 

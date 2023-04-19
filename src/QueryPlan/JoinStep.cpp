@@ -265,7 +265,7 @@ void JoinStep::serialize(WriteBuffer & buf, bool with_output) const
         writeVectorBinary(left_keys, buf);
         writeVectorBinary(right_keys, buf);
 
-        serializeAST(filter->clone(), buf);
+        serializeAST(filter, buf);
         writeBinary(has_using, buf);
 
         writeBinary(require_right_keys.has_value(), buf);

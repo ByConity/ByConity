@@ -42,7 +42,7 @@ ConstASTPtr CommonPredicatesRewriter::visitNode(const ConstASTPtr & node, NodeCo
 
 ConstASTPtr CommonPredicatesRewriter::visitASTFunction(const ConstASTPtr & node, NodeContext & node_context)
 {
-    auto & fun = node->as<ASTFunction &>();
+    const auto & fun = node->as<ASTFunction &>();
     if (fun.name == PredicateConst::AND || fun.name == PredicateConst::OR)
     {
         std::vector<ConstASTPtr> extracted_predicates = PredicateUtils::extractPredicate(node);
@@ -50,18 +50,17 @@ ConstASTPtr CommonPredicatesRewriter::visitASTFunction(const ConstASTPtr & node,
         for (auto & predicate : extracted_predicates)
         {
             NodeContext child_context{.root = NodeContext::Root::NOT_ROOT_NODE, .context = node_context.context};
-            auto rewritten = process(predicate, child_context);
-            result.emplace_back(rewritten);
+            result.emplace_back(process(predicate, child_context));
         }
         ASTPtr combined_predicate = PredicateUtils::combinePredicates(fun.name, result);
-        auto combined_fun = combined_predicate->as<ASTFunction>();
+        const auto & combined_fun = combined_predicate->as<ASTFunction>();
         if (combined_fun == nullptr || (combined_fun->name != PredicateConst::AND && combined_fun->name != PredicateConst::OR))
         {
             return combined_predicate;
         }
         auto simplified = PredicateUtils::extractCommonPredicates(combined_predicate, node_context.context);
         // Prefer AND at the root if possible
-        auto simplified_fun = simplified->as<ASTFunction>();
+        const auto & simplified_fun = simplified->as<ASTFunction>();
         if (node_context.root == NodeContext::Root::ROOT_NODE && simplified_fun && simplified_fun->name == PredicateConst::OR)
         {
             return PredicateUtils::distributePredicate(simplified, node_context.context);
@@ -98,7 +97,7 @@ ConstASTPtr SwapPredicateRewriter::visitNode(const ConstASTPtr & node, Void & co
 
 ConstASTPtr SwapPredicateRewriter::visitASTFunction(const ConstASTPtr & predicate, Void & context)
 {
-    auto & function = predicate->as<ASTFunction &>();
+    const auto & function = predicate->as<ASTFunction &>();
     if (function.name == "and")
     {
         std::vector<ConstASTPtr> conjuncts = PredicateUtils::extractConjuncts(predicate);

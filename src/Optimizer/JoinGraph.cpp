@@ -85,7 +85,7 @@ JoinGraph JoinGraph::withJoinGraph(
     }
 
     bool is_contains_cross_join = contains_cross_join || contains_cross_join_;
-    return JoinGraph{nodes_merged, edges_merged, filters_merged, new_root, is_contains_cross_join, new_original_node};
+    return JoinGraph{std::move(nodes_merged), std::move(edges_merged), std::move(filters_merged), new_root, is_contains_cross_join, std::move(new_original_node)};
 }
 
 String JoinGraph::toString() // NOLINT
