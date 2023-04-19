@@ -9,7 +9,7 @@ tags:
 ByConity is leverage the Github doing the developement. Each contributor and maintainer in ByConity must follow this workflow:
 
 * Work on forked repositories.
-* Create branches on the fork and avoid working directly on the `master` branch.
+* Create branches on the fork repo and avoid working directly on the `main` branch.
 
 ## Prepare the fork
 
@@ -27,40 +27,48 @@ In the terminal, navigate to the location of your fork and perform the following
 
 1.  Run the `git remote -v` command to list the current configured remote repository for your fork.
 The result is as follows:
-    ```
+
+```txt
     origin  https://github.com/{your-username}/{your-fork}.git (fetch)
     origin  https://github.com/{your-username}/{your-fork}.git (push)
-    ```
-    See the example:
-    ```
+```
+
+See the example:
+
+```txt
     origin	https://github.com/YourName/ByConity.git (fetch)
     origin	https://github.com/YourName/ByConity.git (push)
-    ```
+```
 
 2. Specify a new remote upstream repository to synchronize with the fork:
-    ```
+
+```bash
     git remote add upstream https://github.com/{original-owner}/{original-repository}.git
-    ```
-    See the example:
-    ```
-    git remote add upstream https://github.com/ByConity/ByConity.git
-    ```
-3. Run the `git fetch upstream master` command to fetch all branches.
-4. Set up the local `master` branch to track the remote `master` branch from the upstream repository:
-    ```
-    git branch -u upstream/master master
-    ```
-
-Now, each time you rebase or check out the `master` branch, you refer to the `master` branch of the upstream repository. In other words, when you create a branch from local up-to-date `master` means creating a branch from latest upstream `master`.
-
-To verify that your local `master` branch points to the `upstream/master`, run the `git branch -vv` command. The result is similar to the following:
 ```
-* master           c2226e0 [upstream/master] Update the README.md document
+
+See the example:
+
+```bash
+    git remote add upstream https://github.com/ByConity/ByConity.git
+```
+3. Run the `git fetch upstream main` command to fetch all branches.
+4. Set up the local `main` branch to track the remote `main` branch from the upstream repository:
+
+```bash
+    git branch -u upstream/main main
+```
+
+Now, each time you rebase or check out the `main` branch, you refer to the `main` branch of the upstream repository. In other words, when you create a branch from local up-to-date `main` means creating a branch from latest upstream `main`.
+
+To verify that your local `main` branch points to the `upstream/main`, run the `git branch -vv` command. The result is similar to the following:
+
+```txt
+* main         6a43546 [upstream/main] Translate Background Tasks Configuration in English 
 ```
 
 5. Commit changes. Always provide [clear commit messages](https://cbea.ms/git-commit/#imperative) to track commit changes easier.
 
-6. Create a pull request from the branch of your forked repository to the `master` branch of the upstream repository and wait for the maintainers' review.
+6. Create a pull request from the branch of your forked repository to the `main` branch of the upstream repository and wait for the maintainers' review.
 
 Pull requests should have a title that follows [the specification](https://www.conventionalcommits.org/en/v1.0.0/#summary), otherwise, merging is blocked. 
 If you are not familiar with the specification simply ask maintainers to modify. You can also use this cheatsheet if you want:
