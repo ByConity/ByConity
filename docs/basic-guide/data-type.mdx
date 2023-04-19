@@ -1,31 +1,31 @@
 ---
-title: 数据类型
+title: Data Type
 tags:
   - Docs
 ---
 
-# 数据类型
+# Data Type
 
-文档类型：说明型
+Document Type: Descriptive
 
-内容提要：
+Summary:
 
-1. byconity 支持哪些数据类型
-2. 对比 clickhouse 缺少哪些数据类型
+1. What data types does ByConity support?
+2. Compared with ClickHouse, which data types are lacking in 
 
-# 差异概要
+# Difference Summary
 
-byconity 缺少 Date32 类型，Boolean 类型，Geo 类型（需要 allow_experimental_geo_types =1 才能使用）
+ByConity lacks Date32 type, Boolean type, Geo type (requires allow_experimental_geo_types =1 to use)
 
-byconity 的 Map 有 KV/Byte/CompactByte 三种模式，其中 KV 模式和开源 ClickHouse 兼容
+ByConity's Map has three modes of KV/Byte/CompactByte, among which the KV mode is compatible with the open source ClickHouse.
 
-# 整数类型
+# Integer Types
 
-固定长度的整型，包括有符号整型或无符号整型。
+Fixed-length integers, including signed or unsigned integers.
 
-创建表时，可以为整数设置类型参数 (例如. **TINYINT(8)**, **SMALLINT(16)**, **INT(32)**, **BIGINT(64)**), 但 byconity 会忽略它们.
+When creating a table, you can set type parameters for integers (eg. **TINYINT(8)**, **SMALLINT(16)**, **INT(32)**, **BIGINT(64)**), But ByConity ignores them.
 
-## 整型范围
+## Integer Range
 
 - **Int8** — [-128 : 127]
 - **Int16** — [-32768 : 32767]
@@ -34,14 +34,14 @@ byconity 的 Map 有 KV/Byte/CompactByte 三种模式，其中 KV 模式和开�
 - **Int128** — [-170141183460469231731687303715884105728 : 170141183460469231731687303715884105727]
 - **Int256** — [-57896044618658097711785492504343953926634992332820282019728792003956564819968 : 57896044618658097711785492504343953926634992332820282019728792003956564819967]
 
-别名：
+Alias:
 
 - **Int8** — **TINYINT**, **BOOL**, **BOOLEAN**, **INT1**.
 - **Int16** — **SMALLINT**, **INT2**.
 - **Int32** — **INT**, **INT4**, **INTEGER**.
 - **Int64** — **BIGINT**.
 
-## 无符号整型范围
+## Unsigned Integer Range
 
 - **UInt8** — [0 : 255]
 - **UInt16** — [0 : 65535]
@@ -52,31 +52,31 @@ byconity 的 Map 有 KV/Byte/CompactByte 三种模式，其中 KV 模式和开�
 
 # UUID
 
-通用唯一标识符(UUID)是一个 16 字节的数字，用于标识记录。有关 UUID 的详细信息, 参见[维基百科](https://en.wikipedia.org/wiki/Universally_unique_identifier)。
+A Universally Unique Identifier (UUID) is a 16-byte number that identifies a record. See [Wikipedia](https://en.wikipedia.org/wiki/Universally_unique_identifier).
 
-UUID 类型值的示例如下:
+Examples of UUID type values are as follows:
 
 ```
 ec282515-a492-46d8-808c-8f3bd899b1b1
 
 ```
 
-如果在插入新记录时未指定 UUID 列的值，则 UUID 值将用零填充:
+If no value is specified for the UUID column when inserting a new record, the UUID value will be filled with zeros:
 
 ```
 00000000-0000-0000-0000-000000000000
 
 ```
 
-## 如何生成
+## How to generate
 
-要生成 UUID 值，byconity 提供了 [generateuidv4](https://clickhouse.com/docs/zh/sql-reference/functions/uuid-functions) 函数。
+To generate UUID values, ByConity provides the [generateuidv4](https://clickhouse.com/docs/en/sql-reference/functions/uuid-functions) function.
 
-## 用法示例
+## Usage Example 
 
-**示例 1**
+**Example 1**
 
-这个例子演示了创建一个具有 UUID 类型列的表，并在表中插入一个值。
+This example demonstrates creating a table with a column of type UUID and inserting a value into the table.
 
 ```
 CREATE TABLE t_uuid (x UUID, y String) ENGINE=Memory
@@ -100,9 +100,9 @@ SELECT * FROM t_uuid
 
 ```
 
-**示例 2**
+**Example 2**
 
-在这个示例中，插入新记录时未指定 UUID 列的值。
+In this example, no value for the UUID column is specified when inserting a new record.
 
 ```
 INSERT INTO t_uuid (y) VALUES ('Example 2')
@@ -122,26 +122,27 @@ SELECT * FROM t_uuid
 
 ```
 
-## 限制
+## Limits
 
-UUID 数据类型只支持 [字符串](https://clickhouse.com/docs/zh/sql-reference/data-types/string) 数据类型也支持的函数(比如, [min](https://clickhouse.com/docs/zh/sql-reference/aggregate-functions/reference/min#agg_function-min), [max](https://clickhouse.com/docs/zh/sql-reference/aggregate-functions/reference/max#agg_function-max), 和 [count](https://clickhouse.com/docs/zh/sql-reference/aggregate-functions/reference/count#agg_function-count))。
 
-算术运算不支持 UUID 数据类型（例如, [abs](https://clickhouse.com/docs/zh/sql-reference/functions/arithmetic-functions#arithm_func-abs)）或聚合函数，例如 [sum](https://clickhouse.com/docs/zh/sql-reference/aggregate-functions/reference/sum#agg_function-sum) 和 [avg](https://clickhouse.com/docs/zh/sql-reference/aggregate-functions/reference/avg#agg_function-avg).
+UUID data type only supports [string](https://clickhouse.com/docs/en/sql-reference/data-types/string) data type also supports functions(for example, [min](https://clickhouse.com/docs/en/sql-reference/aggregate-functions/reference/min#agg_function-min), [max](https://clickhouse.com/docs/en/sql-reference/aggregate-functions/reference/max#agg_function-max), and [count](https://clickhouse.com/docs/en/sql-reference/aggregate-functions/reference/count#agg_function-count)).
 
-# 浮点类型
+Arithmetic operations do not support UUID data types（for example, [abs](https://clickhouse.com/docs/en/sql-reference/functions/arithmetic-functions#arithm_func-abs)）or aggregate functions such as [sum](https://clickhouse.com/docs/en/sql-reference/aggregate-functions/reference/sum#agg_function-sum) and [avg](https://clickhouse.com/docs/en/sql-reference/aggregate-functions/reference/avg#agg_function-avg).
 
-[浮点数](https://en.wikipedia.org/wiki/IEEE_754)。
+# floating point type
 
-类型与以下 C 语言中类型是相同的：
+[Floating point numbers](https://en.wikipedia.org/wiki/IEEE_754)。
+
+The type is the same as the following C type：
 
 - **Float32** - **float**
 - **Float64** - **double**
 
-我们建议您尽可能以整数形式存储数据。例如，将固定精度的数字转换为整数值，例如货币数量或页面加载时间用毫秒为单位表示
+We recommend that you store data as integers whenever possible. For example, converting a fixed-precision number to an integer value, such as a currency amount or page load time expressed in milliseconds
 
-## 使用浮点数
+## Use floating point numbers
 
-- 对浮点数进行计算可能引起四舍五入的误差。
+- Calculations with floating point numbers may cause rounding errors.
 
 ```
 SELECT 1 - 0.9
@@ -155,15 +156,15 @@ SELECT 1 - 0.9
 
 ```
 
-- 计算的结果取决于计算方法（计算机系统的处理器类型和体系结构）
-- 浮点计算结果可能是诸如无穷大（**INF**）和«非数字»（**NaN**）。对浮点数计算的时候应该考虑到这点。
-- 当一行行阅读浮点数的时候，浮点数的结果可能不是机器最近显示的数值。
+- The result of the calculation depends on the calculation method (processor type and architecture of the computer system)
+- Results of floating point calculations may be values such as infinity (**INF**) and «Not a Number» (**NaN**). This should be taken into account when calculating with floating point numbers.
+- When reading floating-point numbers line by line, the floating-point result may not be the most recent value displayed by the machine.
 
-## NaN 和 Inf
+## NaN and Inf
 
-与标准 SQL 相比，byconity 支持以下类别的浮点数：
+Compared to standard SQL, ByConity supports the following classes of floating point numbers:
 
-- **Inf** – 正无穷
+- **Inf** – positive infinity
 
 ```
 SELECT 0.5 / 0
@@ -177,7 +178,7 @@ SELECT 0.5 / 0
 
 ```
 
-- **-Inf** – 负无穷
+- **-Inf** – negative infinity
 
 ```
 SELECT -0.5 / 0
@@ -191,7 +192,7 @@ SELECT -0.5 / 0
 
 ```
 
-- **NaN** – 非数字
+- **NaN** – not a number
 
 ```
 SELECT 0 / 0
@@ -202,58 +203,61 @@ SELECT 0 / 0
 
 ```
 
-可以在 [ORDER BY 子句](https://clickhouse.com/docs/zh/sql-reference/data-types/float) 查看更多关于 **NaN** 排序的规则。
+
+You can see more rules about **NaN** sorting in [ORDER BY clause](https://clickhouse.com/docs/en/sql-reference/data-types/float) 
+
 
 # Decimal
 
-包括 Decimal(P,S),Decimal32(S),Decimal64(S),Decimal128(S)等类型
+Including Decimal(P,S),Decimal32(S),Decimal64(S),Decimal128(S)and other types
 
-有符号的定点数，可在加、减和乘法运算过程中保持精度。对于除法，最低有效数字会被丢弃（不舍入）。
+Signed fixed-point numbers that maintain precision during addition, subtraction, and multiplication operations. For division, the least significant digit is discarded (no rounding).
 
-## 参数
+## parameters
 
-- P - 精度。有效范围：[1:38]，决定可以有多少个十进制数字（包括分数）。
-- S - 规模。有效范围：[0：P]，决定数字的小数部分中包含的小数位数。
+- P - Precision. Valid range: [1:38], determines how many decimal digits (including fractions) can be.
+- S - Scale. Valid range: [0:P], determines the number of decimal places included in the fractional part of the number.
 
-对于不同的 P 参数值 Decimal 表示，以下例子都是同义的： -P 从[1:9]-对于 Decimal32(S) -P 从[10:18]-对于 Decimal64(小号) -P 从[19:38]-对于 Decimal128（S)
+The following examples are synonymous for different Decimal representations of P parameter values: -P from [1:9] - for Decimal32(S) -P from [10:18] - for Decimal64(S) -P from [ 19:38] - for Decimal128(S)
 
-## 十进制值范围
+
+## range of decimal values
 
 - Decimal32(S) - ( -1 * 10^(9 - S),1*10^(9-S) )
 - Decimal64(S) - ( -1 * 10^(18 - S),1*10^(18-S) )
 - Decimal128(S) - ( -1 * 10^(38 - S),1*10^(38-S) )
 
-例如，Decimal32(4) 可以表示 -99999.9999 至 99999.9999 的数值，步长为 0.0001。
+For example, Decimal32(4) can represent values from -99999.9999 to 99999.9999 in steps of 0.0001.
 
-## 内部表示方式
+## Internal representation
 
-数据采用与自身位宽相同的有符号整数存储。这个数在内存中实际范围会高于上述范围，从 String 转换到十进制数的时候会做对应的检查。
+The data is stored in a signed integer with the same bit width as itself. The actual range of this number in memory will be higher than the above range, and the corresponding check will be done when converting from String to decimal number.
 
-由于现代 CPU 不支持 128 位数字，因此 Decimal128 上的操作由软件模拟。所以 Decimal128 的运算速度明显慢于 Decimal32/Decimal64。
+Since modern CPUs don't support 128-bit numbers, operations on Decimal128 are emulated by software. So the operation speed of Decimal128 is significantly slower than Decimal32/Decimal64.
 
-## 运算和结果类型
+## Operation and result type
 
-对 Decimal 的二进制运算导致更宽的结果类型（无论参数的顺序如何）。
+Binary operations on Decimal result in a wider result type (regardless of the order of the arguments).
 
 - Decimal64(S1) &lt;op&gt; Decimal32(S2) -> Decimal64(S)
 - Decimal128(S1) &lt;op&gt; Decimal32(S2) -> Decimal128(S)
 - Decimal128(S1) &lt;op&gt; Decimal64(S2) -> Decimal128(S)
 
-精度变化的规则：
+Rules for precision changes:
 
-- 加法，减法：S = max(S1, S2)。
-- 乘法：S = S1 + S2。
-- 除法：S = S1。
+- Addition, subtraction: S = max(S1, S2).
+- Multiplication: S = S1 + S2.
+- Division: S = S1.
 
-对于 Decimal 和整数之间的类似操作，结果是与参数大小相同的十进制。
+For similar operations between Decimal and integers, the result is a decimal of the same size as the argument.
 
-未定义 Decimal 和 Float32/Float64 之间的函数。要执行此类操作，您可以使用：toDecimal32、toDecimal64、toDecimal128 或 toFloat32，toFloat64，需要显式地转换其中一个参数。注意，结果将失去精度，类型转换是昂贵的操作。
+Functions between Decimal and Float32/Float64 are undefined. To perform such operations you can use: toDecimal32, toDecimal64, toDecimal128 or toFloat32, toFloat64 requires explicit conversion of one of the arguments. Note that the result will lose precision and type conversions are expensive operations.
 
-Decimal 上的一些函数返回结果为 Float64（例如，var 或 stddev）。对于其中一些，中间计算发生在 Decimal 中。对于此类函数，尽管结果类型相同，但 Float64 和 Decimal 中相同数据的结果可能不同。
+Some functions on Decimal return results as Float64 (for example, var or stddev). For some of them, intermediate calculations happen in Decimal . For such functions, the results for the same data in Float64 and Decimal may differ, although the result types are the same.
 
-## 溢出检查
+## overflow check
 
-在对 Decimal 类型执行操作时，数值可能会发生溢出。分数中的过多数字被丢弃（不是舍入的）。整数中的过多数字将导致异常。
+Numerical overflow may occur when performing operations on Decimal types. Excess digits in fractions are discarded (not rounded). Too many digits in an integer will cause an exception.
 
 ```
 SELECT toDecimal32(2, 4) AS x, x / 3
@@ -272,7 +276,7 @@ DB::Exception: Decimal math overflow.
 
 ```
 
-检查溢出会导致计算变慢。如果已知溢出不可能，则可以通过设置 **decimal_check_overflow** 来禁用溢出检查，在这种情况下，溢出将导致结果不正确：
+Checking for overflow can result in slower calculations. Overflow checking can be disabled by setting **decimal_check_overflow** if overflow is known to be impossible, in which case overflow will lead to incorrect results:
 
 ```
 SET decimal_check_overflow = 0;
@@ -284,7 +288,7 @@ SELECT toDecimal32(4.2, 8) AS x, 6 * x
 
 ```
 
-溢出检查不仅发生在算术运算上，还发生在比较运算上：
+Overflow checking happens not only on arithmetic operations, but also on comparison operations:
 
 ```
 SELECT toDecimal32(1, 8) < 100
@@ -293,17 +297,17 @@ DB::Exception: Can't compare.
 
 ```
 
-# 日期时间相关类型
+# Date time related types
 
 ## Date
 
-用两个字节存储，表示从 1970-01-01 (无符号) 到当前的日期值。允许存储从 Unix 纪元开始到编译阶段定义的上限阈值常量（目前上限是 2106 年，但最终完全支持的年份为 2105）。最小值输出为 1970-01-01。
+Stored in two bytes, representing date values from 1970-01-01 (unsigned) to the present. Allows storage of upper threshold constants defined from the Unix epoch up to the compile phase (currently the upper limit is 2106, but 2105 will eventually be fully supported). The minimum output is 1970-01-01.
 
-值的范围: [1970-01-01, 2149-06-06]。
+Range of values:[1970-01-01, 2149-06-06].
 
-日期中没有存储时区信息。
+There is no time zone information stored in the date.
 
-### **示例**
+### **Example**
 
 ```
 CREATE TABLE date_test
@@ -330,38 +334,38 @@ SELECT * FROM date_test;
 
 ## DateTime
 
-时间戳类型。用四个字节（无符号的）存储 Unix 时间戳）。允许存储与日期类型相同的范围内的值。最小值为 1970-01-01 00:00:00。时间戳类型值精确到秒（没有闰秒）。
+Timestamp type. Store Unix timestamps in four bytes (unsigned). Allows storing values in the same range as the date type. The minimum value is 1970-01-01 00:00:00. Timestamp type values are accurate to the second (no leap seconds).
 
-值的范围: [1970-01-01 00:00:00, 2106-02-07 06:28:15]。
+Range of values: [1970-01-01 00:00:00, 2106-02-07 06:28:15].
 
-### 时区
+### Time zone
 
-使用启动客户端或服务器时的系统时区，时间戳是从文本（分解为组件）转换为二进制并返回。在文本格式中，有关夏令时的信息会丢失。
+Timestamps are converted from text (broken into components) to binary and back, using the system timezone when the client or server was started. In text format, information about daylight saving time is lost.
 
-默认情况下，客户端连接到服务的时候会使用服务端时区。您可以通过启用客户端命令行选项 **--use_client_time_zone** 来设置使用客户端时间。
+By default, clients use the server's time zone when connecting to the service. You can set to use client time by enabling the client command line option **--use_client_time_zone**.
 
-因此，在处理文本日期时（例如，在保存文本转储时），请记住在夏令时更改期间可能存在歧义，如果时区发生更改，则可能存在匹配数据的问题。
+So when dealing with textual dates (e.g. when saving text dumps), keep in mind that there may be ambiguity during daylight savings changes, and there may be problems matching data if timezones change.
 
 ## DateTime64
 
-此类型允许以日期（date）加时间（time）的形式来存储一个时刻的时间值，具有定义的亚秒精度
+This type allows storing a time value at an instant in the form of a date plus a time, with defined sub-second precision
 
-时间刻度大小（精度）：10(-精度) 秒
+Timescale size (precision): 10(-precision) seconds
 
-语法:
+Grammar:
 
 ```
 DateTime64(precision, [timezone])
 
 ```
 
-在内部，此类型以 Int64 类型将数据存储为自 Linux 纪元开始(1970-01-01 00:00:00UTC)的时间刻度数（ticks）。时间刻度的分辨率由 precision 参数确定。此外，**DateTime64** 类型可以像存储其他数据列一样存储时区信息，时区会影响 **DateTime64** 类型的值如何以文本格式显示，以及如何解析以字符串形式指定的时间数据 (‘2020-01-01 05:00:01.000’)。时区不存储在表的行中（也不在 resultset 中），而是存储在列的元数据中。详细信息请参考 [DateTime](https://clickhouse.com/docs/zh/sql-reference/data-types/datetime) 数据类型.
+Internally, this type stores data as ticks since the Linux epoch (1970-01-01 00:00:00UTC) as an Int64 type. The resolution of the timescale is determined by the precision parameter. In addition, the **DateTime64** type can store time zone information like any other data column, and the time zone affects how values of the **DateTime64** type are displayed in text format, and how time data specified as a string ('2020 -01-01 05:00:01.000'). The time zone is not stored in the rows of the table (nor in the resultset), but in the metadata of the columns. For details, please refer to [DateTime](https://clickhouse.com/docs/en/sql-reference/data-types/datetime) data type.
 
-值的范围: [1900-01-01 00:00:00, 2299-12-31 23:59:59.99999999] (注意: 最大值的精度是 8)。
+Range of values: [1900-01-01 00:00:00, 2299-12-31 23:59:59.99999999] (Note: the maximum value is 8).
 
-### 示例
+### Example
 
-**1.** 创建一个具有 **DateTime64** 类型列的表，并向其中插入数据:
+**1.** Create a table with a **DateTime64** type column and insert data into it:
 
 ```
 CREATE TABLE dt
@@ -391,10 +395,10 @@ SELECT * FROM dt
 
 ```
 
-- 将日期时间作为 integer 类型插入时，它会被视为适当缩放的 Unix 时间戳(UTC)。**1546300800000** （精度为 3）表示 **'2019-01-01 00:00:00'** UTC. 不过，因为 **timestamp** 列指定了 **Asia/Istanbul** （UTC+3）的时区，当作为字符串输出时，它将显示为 **'2019-01-01 03:00:00'**
-- 当把字符串作为日期时间插入时，它会被赋予时区信息。 **'2019-01-01 00:00:00'** 将被认为处于 **Asia/Istanbul** 时区并被存储为 **1546290000000**.
+- When inserting a datetime as an integer, it is treated as an appropriately scaled Unix timestamp (UTC). **1546300800000** (with a precision of 3) means **'2019-01-01 00:00:00'** UTC. However, because the **timestamp** column specifies **Asia/Istanbul** (UTC+ 3) the time zone, when output as a string, it will appear as **'2019-01-01 03:00:00'**
+- When inserting a string as a datetime, it will be given time zone information. **'2019-01-01 00:00:00'** will be considered to be in **Asia/Istanbul** timezone and stored as **1546290000000**.
 
-**2.** 过滤 **DateTime64** 类型的值
+**2.** Filter the value of **DateTime64** type
 
 ```
 SELECT * FROM dt WHERE timestamp = toDateTime64('2019-01-01 00:00:00', 3, 'Asia/Istanbul')
@@ -408,9 +412,9 @@ SELECT * FROM dt WHERE timestamp = toDateTime64('2019-01-01 00:00:00', 3, 'Asia/
 
 ```
 
-与 **DateTime** 不同, **DateTime64** 类型的值不会自动从 **String** 类型的值转换过来
+Unlike **DateTime**, values of type **DateTime64** are not automatically converted from values of type **String**
 
-**3.** 获取 **DateTime64** 类型值的时区信息:
+**3.** Get the time zone information of **DateTime64** type value:
 
 ```
 SELECT toDateTime64(now(), 3, 'Asia/Istanbul') AS column, toTypeName(column) AS x
@@ -424,7 +428,7 @@ SELECT toDateTime64(now(), 3, 'Asia/Istanbul') AS column, toTypeName(column) AS 
 
 ```
 
-**4.** 时区转换
+**4.** Time zone conversion
 
 ```
 SELECT
@@ -442,16 +446,16 @@ FROM dt
 
 ```
 
-# 枚举类型（Enum8,Enum16）
+# Enumeration type（Enum8,Enum16）
 
-包括 **Enum8** 和 **Enum16** 类型。**Enum** 保存 **'string'= integer** 的对应关系。在 byconity 中，尽管用户使用的是字符串常量，但所有含有 **Enum** 数据类型的操作都是按照包含整数的值来执行。这在性能方面比使用 **String** 数据类型更有效。
+Includes **Enum8** and **Enum16** types. **Enum** holds the correspondence of **'string'= integer**. In ByConity, all operations with **Enum** data types are performed on values containing integers, even though the user is using string constants. This is more efficient in terms of performance than using the **String** data type.
 
-- **Enum8** 用 **'String'= Int8** 对描述。
-- **Enum16** 用 **'String'= Int16** 对描述。
+- **Enum8** is described with **'String'= Int8** pairs.
+- **Enum16** is described with **'String'= Int16** pairs.
 
-## 用法示例
+## Example usage
 
-创建一个带有一个枚举 **Enum8('hello' = 1, 'world' = 2)** 类型的列：
+Create a column with an enum **Enum8('hello' = 1, 'world' = 2)** type:
 
 ```
 CREATE TABLE t_enum
@@ -462,7 +466,7 @@ ENGINE = Memory
 
 ```
 
-这个 **x** 列只能存储类型定义中列出的值：**'hello'**或**'world'**。如果您尝试保存任何其他值，byconity 抛出异常。
+This **x** column can only store the values listed in the type definition: **'hello'** or **'world'**. If you try to save any other value, ByConity throws an exception.
 
 ```
 :) INSERT INTO t_enum VALUES ('hello'), ('world'), ('hello')
@@ -483,7 +487,7 @@ Code: 49. DB::Exception: Unknown element 'a' for type Enum8('hello' = 1, 'world'
 
 ```
 
-当您从表中查询数据时，byconity 从 **Enum** 中输出字符串值。
+ByConity outputs string values from **Enum** when you query data from the table.
 
 ```
 SELECT * FROM t_enum
@@ -496,7 +500,7 @@ SELECT * FROM t_enum
 
 ```
 
-如果需要看到对应行的数值，则必须将 **Enum** 值转换为整数类型。
+If you need to see the value of the corresponding row, you must convert the **Enum** value to an integer type.
 
 ```
 SELECT CAST(x, 'Int8') FROM t_enum
@@ -509,7 +513,7 @@ SELECT CAST(x, 'Int8') FROM t_enum
 
 ```
 
-在查询中创建枚举值，您还需要使用 **CAST**。
+To create enum values in queries, you also need to use **CAST**.
 
 ```
 SELECT toTypeName(CAST('a', 'Enum8(\'a\' = 1, \'b\' = 2)'))
@@ -520,13 +524,13 @@ SELECT toTypeName(CAST('a', 'Enum8(\'a\' = 1, \'b\' = 2)'))
 
 ```
 
-## 规则及用法
+## Rules and Usage
 
-**Enum8** 类型的每个值范围是 **-128 ... 127**，**Enum16** 类型的每个值范围是 **-32768 ... 32767**。所有的字符串或者数字都必须是不一样的。允许存在空字符串。如果某个 Enum 类型被指定了（在表定义的时候），数字可以是任意顺序。然而，顺序并不重要。
+Each value ranges from **-128 ... 127** for **Enum8** types and **-32768 ... 32767** for **Enum16** types. All strings or numbers must be distinct. Empty strings are allowed. If an Enum type is specified (during table definition), the numbers can be in any order. However, the order is not important.
 
-**Enum** 中的字符串和数值都不能是 [NULL](https://clickhouse.com/docs/zh/sql-reference/data-types/enum)。
+Neither strings nor numbers in **Enum** can be [NULL](https://clickhouse.com/docs/en/sql-reference/data-types/enum).
 
-**Enum** 包含在 [可为空](https://clickhouse.com/docs/zh/sql-reference/data-types/nullable) 类型中。因此，如果您使用此查询创建一个表
+**Enum** is included in the [nullable](https://clickhouse.com/docs/en/sql-reference/data-types/nullable) type. So if you create a table with this query
 
 ```
 CREATE TABLE t_enum_nullable
@@ -537,75 +541,75 @@ ENGINE = TinyLog
 
 ```
 
-不仅可以存储 **'hello'** 和 **'world'** ，还可以存储 **NULL**。
+Not only **'hello'** and **'world'** can be stored, but **NULL** can also be stored.
 
 ```
 INSERT INTO t_enum_nullable Values('hello'),('world'),(NULL)
 
 ```
 
-在内存中，**Enum** 列的存储方式与相应数值的 **Int8** 或 **Int16** 相同。
+In memory, **Enum** columns are stored in the same way as **Int8** or **Int16** for the corresponding numeric value.
 
-当以文本方式读取的时候，byconity 将值解析成字符串然后去枚举值的集合中搜索对应字符串。如果没有找到，会抛出异常。当读取文本格式的时候，会根据读取到的字符串去找对应的数值。如果没有找到，会抛出异常。
+When reading as text, ByConity parses the value into a string and then searches for the corresponding string in the set of enumeration values. If not found, an exception is thrown. When reading the text format, it will find the corresponding value according to the read string. If not found, an exception is thrown.
 
-当以文本形式写入时，byconity 将值解析成字符串写入。如果列数据包含垃圾数据（不是来自有效集合的数字），则抛出异常。Enum 类型以二进制读取和写入的方式与 **Int8** 和 **Int16** 类型一样的。
+When written as text, ByConity parses the value into a string and writes it. An exception is thrown if the column data contains garbage data (not numbers from a valid collection). Enum types are read and written in binary in the same way as **Int8** and **Int16** types.
 
-隐式默认值是数值最小的值。
+The implicit default is the numerically smallest value.
 
-在 **ORDER BY**，**GROUP BY**，**IN**，**DISTINCT** 等等中，Enum 的行为与相应的数字相同。例如，按数字排序。对于等式运算符和比较运算符，Enum 的工作机制与它们在底层数值上的工作机制相同。
+In **ORDER BY**, **GROUP BY**, **IN**, **DISTINCT**, etc., Enum behaves the same as the corresponding number. For example, sort numerically. Enums work the same way for equality and comparison operators as they do for underlying numeric values.
 
-枚举值不能与数字进行比较。枚举可以与常量字符串进行比较。如果与之比较的字符串不是有效 Enum 值，则将引发异常。可以使用 IN 运算符来判断一个 Enum 是否存在于某个 Enum 集合中，其中集合中的 Enum 需要用字符串表示。
+Enum values cannot be compared to numbers. Enums can be compared to constant strings. An exception will be thrown if the string being compared to is not a valid Enum value. You can use the IN operator to determine whether an Enum exists in an Enum collection, where the Enum in the collection needs to be represented by a string.
 
-大多数具有数字和字符串的运算并不适用于 Enums；例如，Enum 类型不能和一个数值相加。但是，Enum 有一个原生的 **toString** 函数，它返回它的字符串值。
+Most operations with numbers and strings do not work with Enums; for example, Enum types cannot be added to a number. However, Enum has a native **toString** function which returns its string value.
 
-Enum 值使用 **toT** 函数可以转换成数值类型，其中 T 是一个数值类型。若 **T** 恰好对应 Enum 的底层数值类型，这个转换是零消耗的。
+Enum values can be converted to numeric types using the **toT** function, where T is a numeric type. If **T** happens to correspond to the underlying numeric type of Enum, this conversion is zero-cost.
 
-Enum 类型可以被 **ALTER** 无成本地修改对应集合的值。可以通过 **ALTER** 操作来增加或删除 Enum 的成员（只要表没有用到该值，删除都是安全的）。作为安全保障，改变之前使用过的 Enum 成员将抛出异常。
+The Enum type can be ALTERed without cost to modify the value of the corresponding collection. Members of Enum can be added or deleted by **ALTER** operation (deletion is safe as long as the value is not used in the table). As a safety precaution, changing a previously used Enum member will throw an exception.
 
-通过 **ALTER** 操作，可以将 **Enum8** 转成 **Enum16**，反之亦然，就像 **Int8** 转 **Int16** 一样。
+Through the **ALTER** operation, you can convert **Enum8** to **Enum16**, and vice versa, just like **Int8** to **Int16**.
 
-# 字符串类型
+# String type
 
 ## String
 
-字符串可以任意长度的。它可以包含任意的字节集，包含空字节。因此，字符串类型可以代替其他 DBMSs 中的 VARCHAR、BLOB、CLOB 等类型。
+Strings can be of any length. It can contain an arbitrary set of bytes, including null bytes. Therefore, the String type can replace VARCHAR, BLOB, CLOB, etc. types in other DBMSs.
 
-### 编码
+### Encoding
 
-byconity 没有编码的概念。字符串可以是任意的字节集，按它们原本的方式进行存储和输出。 若需存储文本，我们建议使用 UTF-8 编码。至少，如果你的终端使用 UTF-8（推荐），这样读写就不需要进行任何的转换了。 同样，对不同的编码文本 byconity 会有不同处理字符串的函数。 比如，**length** 函数可以计算字符串包含的字节数组的长度，然而 **lengthUTF8** 函数是假设字符串以 UTF-8 编码，计算的是字符串包含的 Unicode 字符的长度。
+ByConity has no concept of encoding. Strings can be arbitrary sets of bytes, stored and output as they are. For storing text, we recommend using UTF-8 encoding. At least, if your terminal uses UTF-8 (recommended), then reading and writing doesn't require any conversion. Similarly, for different encoding text ByConity will have different functions for processing strings. For example, the **length** function can calculate the length of the byte array contained in the string, but the **lengthUTF8** function assumes that the string is encoded in UTF-8, and calculates the length of the Unicode characters contained in the string.
 
 ## FixString
 
-固定长度 N 的字符串（N 必须是严格的正自然数）。
+A string of fixed length N (N must be a strictly positive natural number).
 
-您可以使用下面的语法对列声明为 **FixedString** 类型：
+You can declare a column to be of type **FixedString** using the following syntax:
 
 ```
 <column_name> FixedString(N)
 
 ```
 
-其中 **N** 表示自然数。
+where **N** represents a natural number.
 
-当数据的长度恰好为 N 个字节时，**FixedString** 类型是高效的。 在其他情况下，这可能会降低效率。
+The **FixedString** type is efficient when the length of the data is exactly N bytes. In other cases, this may reduce efficiency.
 
-可以有效存储在 **FixedString** 类型的列中的值的示例：
+Examples of values that can be efficiently stored in columns of type **FixedString**:
 
-- 二进制表示的 IP 地址（IPv6 使用 **FixedString(16)**）
-- 语言代码（ru_RU, en_US … ）
-- 货币代码（USD, RUB … ）
-- 二进制表示的哈希值（MD5 使用 **FixedString(16)**，SHA256 使用 **FixedString(32)**）
+- IP address in binary representation (IPv6 uses **FixedString(16)**)
+- language code (ru_RU, en_US … )
+- currency code (USD, RUB … )
+- hash value in binary representation (MD5 uses **FixedString(16)**, SHA256 uses **FixedString(32)**)
 
-请使用 [UUID](https://clickhouse.com/docs/zh/sql-reference/data-types/uuid) 数据类型来存储 UUID 值，。
+Please use the [UUID](https://clickhouse.com/docs/en/sql-reference/data-types/uuid) data type to store UUID values.
 
-当向 byconity 中插入数据时,
+When inserting data into ByConity,
 
-- 如果字符串包含的字节数少于 `N’,将对字符串末尾进行空字节填充。
-- 如果字符串包含的字节数大于 **N**,将抛出**Too large value for FixedString(N)**异常。
+- If the string contains less than `N' bytes, the end of the string will be padded with null bytes.
+- If the string contains more bytes than **N**, a **Too large value for FixedString(N)** exception will be thrown.
 
-当做数据查询时，byconity 不会删除字符串末尾的空字节。 如果使用 **WHERE** 子句，则须要手动添加空字节以匹配 **FixedString** 的值。 以下示例阐明了如何将 **WHERE** 子句与 **FixedString** 一起使用。
+Byconity does not remove null bytes at the end of strings when doing data lookups. If you use a **WHERE** clause, you will need to manually add null bytes to match the value of **FixedString**. The following example illustrates how to use the **WHERE** clause with **FixedString**.
 
-考虑带有**FixedString（2)**列的表：
+Consider a table with a **FixedString(2)** column:
 
 ```
 ┌─name──┐
@@ -614,7 +618,7 @@ byconity 没有编码的概念。字符串可以是任意的字节集，按它�
 
 ```
 
-查询语句 **SELECT \* FROM FixedStringTable WHERE a = 'b'** 不会返回任何结果。请使用空字节来填充筛选条件。
+The query statement **SELECT \* FROM FixedStringTable WHERE a = 'b'** returns no results. Please use null bytes to fill the filter.
 
 ```
 SELECT * FROM FixedStringTable
@@ -629,17 +633,18 @@ WHERE a = 'b\0'
 
 ```
 
-这种方式与 MySQL 的 **CHAR** 类型的方式不同（MySQL 中使用空格填充字符串，并在输出时删除空格）。
+This method is different from MySQL's **CHAR** type (in MySQL, strings are padded with spaces and spaces are removed on output).
 
-请注意，**FixedString(N)**的长度是个常量。仅由空字符组成的字符串，函数 [length](https://clickhouse.com/docs/zh/sql-reference/functions/array-functions#array_functions-length) 返回值为** N**,而函数 [empty](https://clickhouse.com/docs/zh/sql-reference/functions/string-functions#empty) 的返回值为 **1**。
+Note that the length of **FixedString(N)** is a constant. A string consisting only of null characters, the return value of the function [length](https://clickhouse.com/docs/en/sql-reference/functions/array-functions#array_functions-length) is **N**, and The return value of the function [empty](https://clickhouse.com/docs/en/sql-reference/functions/string-functions#empty) is **1**.
 
-# 嵌套数据结构
+
+# Nested data structures
 
 ## Nested(Name1 Type1, Name2 Type2, …)
 
-嵌套数据结构类似于嵌套表。嵌套数据结构的参数（列名和类型）与 CREATE 查询类似。每个表可以包含任意多行嵌套数据结构。
+Nested data structures are similar to nested tables. Parameters (column names and types) for nested data structures are similar to CREATE queries. Each table can contain any number of rows of nested data structures.
 
-示例:
+Example:
 
 ```
 CREATE TABLE nested_test (s String, nest Nested(x UInt8, y UInt32)) ENGINE = Memory;
@@ -662,9 +667,9 @@ SELECT * FROM nested_test;
 
 ```
 
-所以可以简单地把嵌套数据结构当做是所有列都是相同长度的多列数组。
+So you can simply think of nested data structures as multi-column arrays where all columns are the same length.
 
-SELECT 查询只有在使用 ARRAY JOIN 的时候才可以指定整个嵌套数据结构的名称。更多信息，参考 «ARRAY JOIN 子句»。示例：
+SELECT queries can only specify the name of an entire nested data structure when using ARRAY JOIN. For more information, refer to «ARRAY JOIN clause». Example:
 
 ```
 SELECT s, nest.x, nest.y FROM nested_test ARRAY JOIN nest;
@@ -682,32 +687,32 @@ SELECT s, nest.x, nest.y FROM nested_test ARRAY JOIN nest;
 
 ```
 
-不能对整个嵌套数据结构执行 SELECT。只能明确列出属于它一部分列。
+A SELECT cannot be performed on an entire nested data structure. Only the columns that are part of it can be explicitly listed.
 
-对于 INSERT 查询，可以单独地传入所有嵌套数据结构中的列数组（假如它们是单独的列数组）。在插入过程中，系统会检查它们是否有相同的长度。
+For INSERT queries, the column arrays in all nested data structures can be passed in individually (provided they are separate column arrays). During insertion, the system checks that they have the same length.
 
-对于 DESCRIBE 查询，嵌套数据结构中的列会以相同的方式分别列出来。
+For DESCRIBE queries, columns in nested data structures are listed separately in the same way.
 
-ALTER 查询对嵌套数据结构的操作非常有限。
+ALTER queries have very limited operations on nested data structures.
 
-# 元组类型（Tuple）
+# Tuple
 
-元组，其中每个元素都有单独的 [类型](https://clickhouse.com/docs/zh/sql-reference/data-types/#data_types)。
+A tuple, where each element has a separate [type](https://clickhouse.com/docs/en/sql-reference/data-types/#data_types).
 
-不能在表中存储元组（除了内存表）。它们可以用于临时列分组。在查询中，IN 表达式和带特定参数的 lambda 函数可以来对临时列进行分组。更多信息，请参阅 [IN 操作符](https://clickhouse.com/docs/zh/sql-reference/data-types/tuple) 和 [高阶函数](https://clickhouse.com/docs/zh/sql-reference/data-types/tuple)。
+Tuples cannot be stored in tables (except memtables). They can be used for temporary column grouping. In queries, IN expressions and lambda functions with specific parameters can be used to group temporary columns. For more information, see [IN operator](https://clickhouse.com/docs/en/sql-reference/data-types/tuple) and [Higher-order functions](https://clickhouse.com/docs/en/sql-reference/data-types/tuple).
 
-元组可以是查询的结果。在这种情况下，对于 JSON 以外的文本格式，括号中的值是逗号分隔的。在 JSON 格式中，元组作为数组输出（在方括号中）。
+A tuple can be the result of a query. In this case, values in parentheses are comma-separated for text formats other than JSON. In JSON format, tuples are output as arrays (in square brackets).
 
-## 创建元组
+## Create tuple
 
-可以使用函数来创建元组：
+Functions can be used to create tuples:
 
 ```
 tuple(T1, T2, ...)
 
 ```
 
-创建元组的示例：
+Example of creating a tuple:
 
 ```
 :) SELECT tuple(1,'a') AS x, toTypeName(x)
@@ -724,11 +729,11 @@ SELECT
 
 ```
 
-## 元组中的数据类型
+## Data types in tuples
 
-在动态创建元组时，byconity 会自动为元组的每一个参数赋予最小可表达的类型。如果参数为 [NULL](https://clickhouse.com/docs/zh/sql-reference/data-types/tuple#null-literal)，那这个元组对应元素是 [可为空](https://clickhouse.com/docs/zh/sql-reference/data-types/nullable)。
+When dynamically creating tuples, ByConity will automatically assign the smallest expressible type to each parameter of the tuple. If the parameter is [NULL](https://clickhouse.com/docs/en/sql-reference/data-types/tuple#null-literal), then the corresponding element of this tuple is [nullable](https://clickhouse.com/docs/en/sql-reference/data-types/nullable).
 
-自动数据类型检测示例：
+Example of automatic data type detection:
 
 ```
 SELECT tuple(1, NULL) AS x, toTypeName(x)
@@ -745,32 +750,32 @@ SELECT
 
 ```
 
-# 低基数类型
+# Low cardinality type
 
-把其它数据类型转变为字典编码类型。
+Convert other data types to dictionary-encoded types.
 
-## 语法
+## Grammar
 
 ```
 LowCardinality(data_type)
 
 ```
 
-**参数**
+**Parameter**
 
-- **data_type** — String, FixedString, Date, DateTime，包括数字类型，但是 Decimal 除外。对一些数据类型来说，**LowCardinality** 并不高效，详查 [allow_suspicious_low_cardinality_types](https://clickhouse.com/docs/zh/operations/settings/settings#allow_suspicious_low_cardinality_types) 设置描述。
+- **data_type** — String, FixedString, Date, DateTime, including numeric types, but excluding Decimal. For some data types, **LowCardinality** is not efficient, please refer to [allow_suspicious_low_cardinality_types](https://clickhouse.com/docs/en/operations/settings/settings#allow_suspicious_low_cardinality_types) setting description.
 
-## 描述
+## describe
 
-**LowCardinality** 是一种改变数据存储和数据处理方法的概念。 byconity 会把 **LowCardinality** 所在的列进行 [dictionary coding](https://en.wikipedia.org/wiki/Dictionary_coder)。对很多应用来说，处理字典编码的数据可以显著的增加 [SELECT](https://clickhouse.com/docs/zh/sql-reference/statements/select/) 查询速度。
+**LowCardinality** is a concept that changes the way data is stored and processed. ByConity will perform [dictionary coding](https://en.wikipedia.org/wiki/Dictionary_coder) on the column where **LowCardinality** is located. For many applications, processing dictionary-encoded data can significantly increase [SELECT](https://clickhouse.com/docs/en/sql-reference/statements/select/) query speed.
 
-使用 **LowCarditality** 数据类型的效率依赖于数据的多样性。如果一个字典包含少于 10000 个不同的值，那么 byconity 可以进行更高效的数据存储和处理。反之如果字典多于 10000，效率会表现的更差。
+The efficiency of using the **LowCarditality** data type depends on the diversity of the data. If a dictionary contains less than 10000 distinct values, then ByConity allows for more efficient data storage and processing. On the contrary, if the dictionary is more than 10000, the efficiency will be worse.
 
-当使用字符类型的时候，可以考虑使用 **LowCardinality** 代替 Enum。 **LowCardinality** 通常更加灵活和高效。
+When using character types, consider using **LowCardinality** instead of Enum. **LowCardinality** is generally more flexible and efficient.
 
-## 例子
+## Example
 
-创建一个 **LowCardinality** 类型的列：
+Create a column of type **LowCardinality**:
 
 ```
 CREATE TABLE lc_t
@@ -783,38 +788,38 @@ ORDER BY id
 
 ```
 
-# 域
+# area
 
-## 定义
+## define
 
-Domain 类型是特定实现的类型，它总是与某个现存的基础类型保持二进制兼容的同时添加一些额外的特性，以能够在维持磁盘数据不变的情况下使用这些额外的特性。目前 byconity 暂不支持自定义 domain 类型。
+A Domain type is an implementation-specific type that is always binary compatible with an existing base type while adding some extra features that can be used while maintaining the disk data unchanged. Currently ByConity does not support custom domain types.
 
-如果你可以在一个地方使用与 Domain 类型二进制兼容的基础类型，那么在相同的地方您也可以使用 Domain 类型，例如：
+If you can use an underlying type that is binary-compatible with a Domain type in one place, then you can also use a Domain type in the same place, for example:
 
-- 使用 Domain 类型作为表中列的类型
-- 对 Domain 类型的列进行读/写数据
-- 如果与 Domain 二进制兼容的基础类型可以作为索引，那么 Domain 类型也可以作为索引
-- 将 Domain 类型作为参数传递给函数使用
-- 其他
+- use the Domain type as the type of the column in the table
+- Read/write data to columns of Domain type
+- If an underlying type that is binary-compatible with the Domain can be indexed, then the Domain type can also be indexed
+- Pass the Domain type as a parameter to the function to use
+- other
 
-### Domains 的额外特性
+### Additional Features for Domains
 
-- 在执行 SHOW CREATE TABLE 或 DESCRIBE TABLE 时，其对应的列总是展示为 Domain 类型的名称
-- 在 INSERT INTO domain_table(domain_column) VALUES(…)中输入数据总是以更人性化的格式进行输入
-- 在 SELECT domain_column FROM domain_table 中数据总是以更人性化的格式输出
-- 在 INSERT INTO domain_table FORMAT CSV …中，实现外部源数据以更人性化的格式载入
+- When executing SHOW CREATE TABLE or DESCRIBE TABLE, the corresponding columns are always displayed as Domain type names
+- Input data in INSERT INTO domain_table(domain_column) VALUES(…) is always entered in a more human-friendly format
+- In SELECT domain_column FROM domain_table data is always output in a more human-friendly format
+- In INSERT INTO domain_table FORMAT CSV ..., load external source data in a more user-friendly format
 
-### Domains 类型的限制
+### Domains Type Restrictions
 
-- 无法通过 **ALTER TABLE** 将基础类型的索引转换为 Domain 类型的索引。
-- 当从其他列或表插入数据时，无法将 string 类型的值隐式地转换为 Domain 类型的值。
-- 无法对存储为 Domain 类型的值添加约束。
+- Cannot convert an index of underlying type to an index of Domain type via **ALTER TABLE**.
+- A value of type string cannot be implicitly converted to a value of type Domain when inserting data from another column or table.
+- Cannot add constraints on values stored as Domain type.
 
 ## ipv4
 
-**IPv4** 是与 **UInt32** 类型保持二进制兼容的 Domain 类型，其用于存储 IPv4 地址的值。它提供了更为紧凑的二进制存储的同时支持识别可读性更加友好的输入输出格式。
+**IPv4** is a Domain type that is binary compatible with the **UInt32** type and is used to store the value of an IPv4 address. It provides more compact binary storage while supporting a more readable input and output format.
 
-### 基本使用
+### Basic usage
 
 ```
 CREATE TABLE hits (url String, from IPv4) ENGINE = Memory
@@ -831,14 +836,14 @@ DESCRIBE TABLE hits;
 
 ```
 
-同时您也可以使用 **IPv4** 类型的列作为主键：
+Also you can use **IPv4** type column as primary key:
 
 ```
 CREATE TABLE hits (url String, from IPv4) ENGINE = Memory;
 
 ```
 
-在写入与查询时，**IPv4** 类型能够识别可读性更加友好的输入输出格式：
+When writing and querying, the **IPv4** type can recognize a more readable input and output format:
 
 ```
 INSERT INTO hits (url, from) VALUES ('https://wikipedia.org', '116.253.40.133')('https://byconity.com', '183.247.232.58')('https://byconity.com/docs/en/', '116.106.34.242');
@@ -856,7 +861,7 @@ SELECT * FROM hits;
 
 ```
 
-同时它提供更为紧凑的二进制存储格式：
+At the same time it provides a more compact binary storage format:
 
 ```
 SELECT toTypeName(from), hex(from) FROM hits LIMIT 1;
@@ -870,7 +875,7 @@ SELECT toTypeName(from), hex(from) FROM hits LIMIT 1;
 
 ```
 
-不可隐式转换为除 **UInt32** 以外的其他类型类型。如果要将 **IPv4** 类型的值转换成字符串，你可以使用**IPv4NumToString()**显示的进行转换：
+Not implicitly convertible to types other than **UInt32**. If you want to convert a value of type **IPv4** to a string, you can use **IPv4NumToString()** to do the conversion as shown:
 
 ```
 SELECT toTypeName(s), IPv4NumToString(from) as s FROM hits LIMIT 1;
@@ -884,7 +889,7 @@ SELECT toTypeName(s), IPv4NumToString(from) as s FROM hits LIMIT 1;
 
 ```
 
-或可以使用 **CAST** 将它转换为 **UInt32** 类型:
+Or you can use **CAST** to convert it to **UInt32** type:
 
 ```
 SELECT toTypeName(i), CAST(from as UInt32) as i FROM hits LIMIT 1;
@@ -900,9 +905,9 @@ SELECT toTypeName(i), CAST(from as UInt32) as i FROM hits LIMIT 1;
 
 ## ipv6
 
-**IPv6** 是与**FixedString(16)**类型保持二进制兼容的 Domain 类型，其用于存储 IPv6 地址的值。它提供了更为紧凑的二进制存储的同时支持识别可读性更加友好的输入输出格式。
+**IPv6** is a Domain type that maintains binary compatibility with the **FixedString(16)** type, which is used to store the value of an IPv6 address. It provides more compact binary storage while supporting a more readable input and output format.
 
-### 基本用法
+### Basic Use
 
 ```
 CREATE TABLE hits (url String, from IPv6) ENGINE = Memory;
@@ -919,14 +924,14 @@ DESCRIBE TABLE hits;
 
 ```
 
-同时您也可以使用 **IPv6** 类型的列作为主键：
+Also you can use **IPv6** type column as primary key:
 
 ```
 CREATE TABLE hits (url String, from IPv6) ENGINE = Memory;
 
 ```
 
-在写入与查询时，**IPv6** 类型能够识别可读性更加友好的输入输出格式：
+When writing and querying, the **IPv6** type can recognize a more readable input and output format:
 
 ```
 INSERT INTO hits (url, from) VALUES ('https://wikipedia.org', '2a02:aa08:e000:3100::2')('https://byconity.com', '2001:44c8:129:2632:33:0:252:2')('https://byconity.com/docs/en/', '2a02:e980:1e::1');
@@ -944,7 +949,7 @@ SELECT * FROM hits;
 
 ```
 
-同时它提供更为紧凑的二进制存储格式：
+At the same time it provides a more compact binary storage format:
 
 ```
 SELECT toTypeName(from), hex(from) FROM hits LIMIT 1;
@@ -958,7 +963,7 @@ SELECT toTypeName(from), hex(from) FROM hits LIMIT 1;
 
 ```
 
-不可隐式转换为除 **FixedString(16)**以外的其他类型类型。如果要将** IPv6**类型的值转换成字符串，你可以使用**IPv6NumToString()**显示的进行转换：
+Not implicitly convertible to types other than **FixedString(16)**. If you want to convert a value of type **IPv6** to a string, you can use **IPv6NumToString()** to do the conversion as shown:
 
 ```
 SELECT toTypeName(s), IPv6NumToString(from) as s FROM hits LIMIT 1;
@@ -972,7 +977,7 @@ SELECT toTypeName(s), IPv6NumToString(from) as s FROM hits LIMIT 1;
 
 ```
 
-或使用 **CAST** 将其转换为 **FixedString(16)**：
+Or use **CAST** to convert it to **FixedString(16)**:
 
 ```
 SELECT toTypeName(i), CAST(from as FixedString(16)) as i FROM hits LIMIT 1;
@@ -990,36 +995,36 @@ SELECT toTypeName(i), CAST(from as FixedString(16)) as i FROM hits LIMIT 1;
 
 **Map(key, value)** 可以存储 **key:value** 键值对类型的数据。
 
-**参数**
+**parameter**
 
-- **key** — 键值对的 key，类型可以是：[String](https://clickhouse.com/docs/zh/sql-reference/data-types/string), [Integer](https://clickhouse.com/docs/zh/sql-reference/data-types/int-uint), [LowCardinality](https://clickhouse.com/docs/zh/sql-reference/data-types/lowcardinality), 或者 [FixedString](https://clickhouse.com/docs/zh/sql-reference/data-types/fixedstring).
-- **value** — 键值对的 value，类型可以是：[String](https://clickhouse.com/docs/zh/sql-reference/data-types/string), [Integer](https://clickhouse.com/docs/zh/sql-reference/data-types/int-uint), [Array](https://clickhouse.com/docs/zh/sql-reference/data-types/array), [LowCardinality](https://clickhouse.com/docs/zh/sql-reference/data-types/lowcardinality), 或者 [FixedString](https://clickhouse.com/docs/zh/sql-reference/data-types/fixedstring).
+- **key** — the key of the key-value pair, the type can be: [String](https://clickhouse.com/docs/en/sql-reference/data-types/string), [Integer](https://clickhouse.com/docs/en/sql-reference/data-types/int-uint), [LowCardinality](https://clickhouse.com/docs/en/sql-reference/data-types/lowcardinality), Or [FixedString](https://clickhouse.com/docs/en/sql-reference/data-types/fixedstring).
+- **value** — the value of the key-value pair, the type can be: [String](https://clickhouse.com/docs/en/sql-reference/data-types/string), [Integer](https://clickhouse.com/docs/en/sql-reference/data-types/int-uint), [Array](https://clickhouse.com/docs/en/sql-reference/data-types/array), [LowCardinality](https://clickhouse.com/docs/en/sql-reference/data-types/lowcardinality), or [FixedString](https://clickhouse.com/docs/en/sql-reference/data- types/fixedstring).
 
-内容比较多，参考 [Map 功能梳理（WIP）](https://bytedance.feishu.cn/wiki/wikcnc08bHgaa8IuPODIOqeBQqc) CE 版本部分。
+There is a lot of content, please refer to [Map function combing (WIP)](https://bytedance.feishu.cn/wiki/wikcnc08bHgaa8IuPODIOqeBQqc) CE version part.
 
 # Array(T)
 
-由 **T** 类型元素组成的数组。
+An array of elements of type **T**.
 
-**T** 可以是任意类型，包含数组类型。 但不推荐使用多维数组，byconity 对多维数组的支持有限。例如，不能存储在 **MergeTree** 表中存储多维数组。
+**T** can be any type, including array types. However, multidimensional arrays are not recommended, and byconity has limited support for multidimensional arrays. For example, you cannot store multidimensional arrays in a **MergeTree** table.
 
-## 创建数组
+## create array
 
-您可以使用 array 函数来创建数组：
+You can use the array function to create arrays:
 
 ```
 array(T)
 
 ```
 
-您也可以使用方括号：
+You can also use square brackets:
 
 ```
 []
 
 ```
 
-创建数组示例：
+Example of creating an array:
 
 ```
 SELECT array(1, 2) AS x, toTypeName(x)
@@ -1042,13 +1047,13 @@ SELECT [1, 2] AS x, toTypeName(x)
 
 ```
 
-## 使用数据类型
+## Use data types
 
-byconity 会自动检测数组元素,并根据元素计算出存储这些元素最小的数据类型。如果在元素中存在 [NULL](https://clickhouse.com/docs/zh/sql-reference/data-types/array#null-literal) 或存在 [可为空](https://clickhouse.com/docs/zh/sql-reference/data-types/nullable#data_type-nullable) 类型元素，那么数组的元素类型将会变成 [可为空](https://clickhouse.com/docs/zh/sql-reference/data-types/nullable)。
+ByConity will automatically detect the array elements, and calculate the smallest data type to store these elements according to the elements. If there is a [NULL](https://clickhouse.com/docs/en/sql-reference/data-types/array#null-literal) or a [null-literal](https://clickhouse.com/docs/en/sql-reference/data-types/nullable#data_type-nullable) type element, then the element type of the array will become [nullable](https://clickhouse.com/docs/en/sql -reference/data-types/nullable).
 
-如果 byconity 无法确定数据类型，它将产生异常。当尝试同时创建一个包含字符串和数字的数组时会发生这种情况 (**SELECT array(1, 'a')**)。
+If ByConity cannot determine the data type, it will raise an exception. This happens when trying to create an array containing both strings and numbers (**SELECT array(1, 'a')**).
 
-自动数据类型检测示例：
+Example of automatic data type detection:
 
 ```
 SELECT array(1, 2, NULL) AS x, toTypeName(x)
@@ -1059,7 +1064,7 @@ SELECT array(1, 2, NULL) AS x, toTypeName(x)
 
 ```
 
-如果您尝试创建不兼容的数据类型数组，byconity 将引发异常：
+ByConity will throw an exception if you try to create an array of incompatible data types:
 
 ```
 SELECT array(1, 'a');
@@ -1076,42 +1081,42 @@ Code: 386. DB::Exception: Received from 0.0.0.0:30000. DB::Exception: There is n
 
 ```
 
-# Nullable（typename)
+# Nullable(typename)
 
-允许用特殊标记 ([NULL](https://clickhouse.com/docs/zh/sql-reference/data-types/nullable)) 表示«缺失值»，可以与 **TypeName** 的正常值存放一起。例如，**Nullable(Int8)** 类型的列可以存储 **Int8** 类型值，而没有值的行将存储 **NULL**。
+Allow special markup ([NULL](https://clickhouse.com/docs/en/sql-reference/data-types/nullable)) to indicate «missing value», which can be stored together with the normal value of **TypeName** . For example, a column of type **Nullable(Int8)** can store a value of type **Int8**, while a row with no value will store **NULL**.
 
-对于 **TypeName**，不能使用复合数据类型数组和元组。复合数据类型可以包含 **Nullable** 类型值，例如 **Array(Nullable(Int8))**。
+For **TypeName**, composite data type arrays and tuples cannot be used. Compound data types can contain **Nullable** type values, for example **Array(Nullable(Int8))**.
 
-**Nullable** 类型字段不能包含在表索引中。
+Fields of type **Nullable** cannot be included in table indexes.
 
-除非在 byconity 服务器配置中另有说明，否则 **NULL** 是任何 **Nullable** 类型的默认值。
+**NULL** is the default value for any **Nullable** type unless specified otherwise in the ByConity server configuration.
 
-## 存储特性
+## Storage Features
 
-要在表的列中存储 **Nullable** 类型值，byconity 除了使用带有值的普通文件外，还使用带有 **NULL** 掩码的单独文件。 掩码文件中的条目允许 byconity 区分每个表行的 **NULL** 和相应数据类型的默认值。 由于附加了新文件，**Nullable** 列与类似的普通文件相比消耗额外的存储空间。
+To store **Nullable** type values in table columns, ByConity uses separate files with **NULL** masks in addition to normal files with values. Entries in the mask file allow ByConity to distinguish between **NULL** for each table row and the default value for the corresponding data type. A **Nullable** column consumes additional storage compared to a similar normal file due to the new file being appended.
 
-!!! 注意点 "注意点" 使用 **Nullable** 几乎总是对性能产生负面影响，在设计数据库时请记住这一点
+!!! Points to Note "Points to Note" Using **Nullable** almost always has a negative impact on performance, keep this in mind when designing your database
 
-掩码文件中的条目允许 byconity 区分每个表行的对应数据类型的«NULL»和默认值由于有额外的文件，«Nullable»列比普通列消耗更多的存储空间
+Entries in the mask file allow ByConity to distinguish between «NULL» and default values for the corresponding data types of each table row. Due to the extra file, «Nullable» columns consume more storage space than normal columns
 
 # AggregateFunction(name, types_of_arguments…)
 
-聚合函数的中间状态，可以通过聚合函数名称加**-State **后缀的形式得到它。与此同时，当您需要访问该类型的最终状态数据时，您需要以相同的聚合函数名加**-Merge**后缀的形式来得到最终状态数据。
+The intermediate state of the aggregation function can be obtained by adding the **-State** suffix to the name of the aggregation function. At the same time, when you need to access the final state data of this type, you need to use the same aggregation function name plus **-Merge** suffix to get the final state data.
 
-**AggregateFunction** — 参数化的数据类型。
+**AggregateFunction** — parameterized data type.
 
-**参数**
+**parameter**
 
-- 聚合函数名
-
-```
-如果函数具备多个参数列表，请在此处指定其他参数列表中的值。
+- aggregate function name
 
 ```
+If the function has multiple parameter lists, specify values from the other parameter lists here.
 
-- 聚合函数参数的类型
+```
 
-**示例**
+- Types of aggregate function arguments
+
+**Example**
 
 ```
 CREATE TABLE t
@@ -1123,15 +1128,15 @@ CREATE TABLE t
 
 ```
 
-上述中的 [uniq](https://clickhouse.com/docs/zh/sql-reference/data-types/aggregatefunction#agg_function-uniq)， anyIf ([任何](https://clickhouse.com/docs/zh/sql-reference/data-types/aggregatefunction#agg_function-any) + [如果](https://clickhouse.com/docs/zh/sql-reference/data-types/aggregatefunction#agg-functions-combinator-if)) 以及 [分位数](https://clickhouse.com/docs/zh/sql-reference/data-types/aggregatefunction) 都为 byconity 中支持的聚合函数。
+[uniq](https://clickhouse.com/docs/en/sql-reference/data-types/aggregatefunction#agg_function-uniq) in the above, anyIf ([any](https://clickhouse.com/docs/en/sql-reference/data-types/aggregatefunction#agg_function-any) + [if](https://clickhouse.com/docs/en/sql-reference/data-types/aggregatefunction#agg-functions-combinator-if)) and [quantile](https://clickhouse.com/docs/en/sql-reference/data-types/aggregatefunction) are aggregate functions supported in ByConity.
 
-## 使用指南
+## user's guidance
 
-### 数据写入
+### Data writing
 
-当需要写入数据时，您需要将数据包含在 **INSERT SELECT** 语句中，同时对于 **AggregateFunction** 类型的数据，您需要使用对应的以**-State**为后缀的函数进行处理。
+When you need to write data, you need to include the data in the **INSERT SELECT** statement, and for **AggregateFunction** type data, you need to use the corresponding function with **-State** as the suffix deal with.
 
-**函数使用示例**
+**Function Usage Example**
 
 ```
 uniqState(UserID)
@@ -1139,17 +1144,17 @@ quantilesState(0.5, 0.9)(SendTiming)
 
 ```
 
-不同于 **uniq** 和 **quantiles** 函数返回聚合结果的最终值，以**-State **后缀的函数总是返回** AggregateFunction**类型的数据的中间状态。
+Unlike the **uniq** and **quantiles** functions that return the final value of the aggregated result, the functions suffixed with **-State** always return the intermediate state of the data of type **AggregateFunction**.
 
-对于 **SELECT** 而言，**AggregateFunction** 类型总是以特定的二进制形式展现在所有的输出格式中。例如，您可以使用 **SELECT** 语句将函数的状态数据转储为 **TabSeparated** 格式的同时使用 **INSERT** 语句将数据转储回去。
+For **SELECT**, the **AggregateFunction** type is always present in a specific binary form in all output formats. For example, you can use a **SELECT** statement to dump a function's state data into **TabSeparated** format while using an **INSERT** statement to dump the data back.
 
-### 数据查询
+### data query
 
-当从 **AggregatingMergeTree** 表中查询数据时，对于 **AggregateFunction** 类型的字段，您需要使用以**-Merge **为后缀的相同聚合函数来聚合数据。对于非** AggregateFunction **类型的字段，请将它们包含在** GROUP BY**子句中。
+When querying data from **AggregatingMergeTree** tables, for fields of type **AggregateFunction**, you need to use the same aggregation function suffixed with **-Merge** to aggregate the data. For fields that are not of type **AggregateFunction**, include them in the **GROUP BY** clause.
 
-以**-Merge **为后缀的聚合函数，可以将多个** AggregateFunction**类型的中间状态组合计算为最终的聚合结果。
+Aggregation functions suffixed with **-Merge** can combine multiple intermediate states of **AggregateFunction** type into the final aggregation result.
 
-例如，如下的两个查询返回的结果总是一致：
+For example, the following two queries always return the same result:
 
 ```
 SELECT uniq(UserID) FROM table
@@ -1158,15 +1163,15 @@ SELECT uniqMerge(state) FROM (SELECT uniqState(UserID) AS state FROM table GROUP
 
 ```
 
-## 使用示例
+## Example of use
 
-请参阅 CnchAggregatingMergeTree 的说明
+See the description of CnchAggregatingMergeTree
 
 # SimpleAggregateFunction
 
-**SimpleAggregateFunction(name, types_of_arguments…)** 数据类型存储聚合函数的当前值, 并不像 **AggregateFunction** 那样存储其全部状态。这种优化可以应用于具有以下属性函数: 将函数 **f** 应用于行集合 **S1 UNION ALL S2** 的结果，可以通过将 **f** 分别应用于行集合的部分, 然后再将 **f** 应用于结果来获得: **f(S1 UNION ALL S2) = f(f(S1) UNION ALL f(S2))**。 这个属性保证了部分聚合结果足以计算出合并的结果，所以我们不必存储和处理任何额外的数据。
+The **SimpleAggregateFunction(name, types_of_arguments…)** data type stores the current value of the aggregate function, and does not store its full state like **AggregateFunction**. This optimization can be applied to functions with the following properties: The result of applying the function **f** to the row set **S1 UNION ALL S2** can be obtained by applying **f** to parts of the row set separately, and then Then apply **f** to the result to get: **f(S1 UNION ALL S2) = f(f(S1) UNION ALL f(S2))**. This property guarantees that the partial aggregation result is sufficient to compute the merged result, so we don't have to store and process any additional data.
 
-支持以下聚合函数:
+The following aggregate functions are supported:
 
 - **any**
 - **anyLast**
@@ -1185,19 +1190,19 @@ SELECT uniqMerge(state) FROM (SELECT uniqState(UserID) AS state FROM table GROUP
 - **argMin**
 - **argMax**
 
-!!! note "注" **SimpleAggregateFunction(func, Type)** 的值外观和存储方式于 **Type** 相同, 所以你不需要应用带有 **-Merge**/**-State** 后缀的函数。
+!!! note "Note" **SimpleAggregateFunction(func, Type)** has the same value appearance and storage method as **Type**, so you don't need to apply with **-Merge**/**-State* * suffix function.
 
 ```
-`SimpleAggregateFunction` 的性能优于具有相同聚合函数的 `AggregateFunction` 。
+`SimpleAggregateFunction` outperforms `AggregateFunction` with the same aggregate function.
 
 ```
 
-**参数**
+**parameter**
 
-- 聚合函数的名称。
-- 聚合函数参数的类型。
+- The name of the aggregate function.
+- The type of the aggregate function parameter.
 
-**示例**
+**example**
 
 ```
 CREATE TABLE simple (id UInt64, val SimpleAggregateFunction(sum, Double)) ENGINE=CnchAggregatingMergeTree ORDER BY id;
@@ -1205,22 +1210,22 @@ CREATE TABLE simple (id UInt64, val SimpleAggregateFunction(sum, Double)) ENGINE
 
 ```
 
-# 特殊数据类型
+# Special data types
 
-特殊数据类型的值既不能存在表中也不能在结果中输出，但可用于查询的中间结果。
+Values of special data types can neither be stored in tables nor output in results, but can be used in intermediate results of queries.
 
-## Interval 类型
+## Interval type
 
-表示时间和日期间隔的数据类型家族。 [INTERVAL](https://clickhouse.com/docs/zh/sql-reference/operators/#operator-interval) 运算的结果类型。
+A family of data types representing time and date intervals. [INTERVAL](https://clickhouse.com/docs/en/sql-reference/operators/#operator-interval) The result type of the operation.
 
-!!! warning "警告" **Interval** 数据类型值不能存储在表中。
+!!! warning "Warning" **Interval** data type values cannot be stored in the table.
 
-结构:
+structure:
 
-- 时间间隔作为无符号整数值。
-- 时间间隔的类型。
+- The time interval as an unsigned integer value.
+- The type of time interval.
 
-支持的时间间隔类型:
+Supported interval types:
 
 - **SECOND**
 - **MINUTE**
@@ -1231,7 +1236,7 @@ CREATE TABLE simple (id UInt64, val SimpleAggregateFunction(sum, Double)) ENGINE
 - **QUARTER**
 - **YEAR**
 
-对于每个时间间隔类型，都有一个单独的数据类型。 例如， **DAY** 间隔对应于 **IntervalDay** 数据类型:
+For each interval type, there is a separate data type. For example, the **DAY** interval corresponds to the **IntervalDay** data type:
 
 ```
 SELECT toTypeName(INTERVAL 4 DAY)
@@ -1245,9 +1250,9 @@ SELECT toTypeName(INTERVAL 4 DAY)
 
 ```
 
-### 使用说明
+### Instructions for use
 
-您可以在与 [日期](https://clickhouse.com/docs/zh/sql-reference/data-types/date) 和 [日期时间](https://clickhouse.com/docs/zh/sql-reference/data-types/datetime) 类型值的算术运算中使用 **Interval** 类型值。 例如，您可以将 4 天添加到当前时间:
+You can use [date](https://clickhouse.com/docs/en/sql-reference/data-types/date) and [datetime](https://clickhouse.com/docs/en/sql-reference/data-types/datetime) values of type **Interval** are used in arithmetic operations on values of type **Interval**. For example, you can add 4 days to the current time:
 
 ```
 SELECT now() as current_date_time, current_date_time + INTERVAL 4 DAY
@@ -1261,9 +1266,9 @@ SELECT now() as current_date_time, current_date_time + INTERVAL 4 DAY
 
 ```
 
-不同类型的间隔不能合并。 你不能使用诸如 **4 DAY 1 HOUR** 的时间间隔. 以小于或等于时间间隔最小单位的单位来指定间隔，例如，时间间隔 **1 day and an hour** 可以表示为 **25 HOUR** 或 **90000 SECOND**.
+Intervals of different types cannot be combined. You cannot use a time interval such as **4 DAY 1 HOUR**. Specify the interval in units less than or equal to the smallest unit of the time interval, for example, the time interval **1 day and an hour** can be expressed as **25 HOUR ** or **90000 SECOND**.
 
-你不能对 **Interval** 类型的值执行算术运算，但你可以向 **Date** 或 **DateTime** 数据类型的值添加不同类型的时间间隔，例如:
+You cannot perform arithmetic operations on values of type **Interval**, but you can add different types of time intervals to values of **Date** or **DateTime** data types, for example:
 
 ```
 SELECT now() AS current_date_time, current_date_time + INTERVAL 4 DAY + INTERVAL 3 HOUR
@@ -1277,7 +1282,7 @@ SELECT now() AS current_date_time, current_date_time + INTERVAL 4 DAY + INTERVAL
 
 ```
 
-以下查询将导致异常:
+The following query will result in an exception:
 
 ```
 select now() AS current_date_time, current_date_time + (INTERVAL 4 DAY + INTERVAL 3 HOUR)
@@ -1290,21 +1295,21 @@ Code: 43. DB::Exception: Received from localhost:9000. DB::Exception: Wrong argu
 
 ```
 
-## 表达式
+## expression
 
-用于表示高阶函数中的 lambdas 表达式。
+Used to represent lambdas in higher-order functions.
 
-## 集合
+## gather
 
-可以用在 IN 表达式的右半部分。
+Can be used in the right half of an IN expression.
 
 ## Nothing
 
-此数据类型的唯一目的是表示不是期望值的情况。 所以不能创建一个 **Nothing** 类型的值。
+The sole purpose of this data type is to represent situations where a value is not expected. So you cannot create a value of type **Nothing**.
 
-例如，字面量 [NULL](https://clickhouse.com/docs/zh/sql-reference/syntax#null-literal) 的类型为 **Nullable(Nothing)**。详情请见 Nullable。
+For example, the literal [NULL](https://clickhouse.com/docs/en/sql-reference/syntax#null-literal) has type **Nullable(Nothing)**. See Nullable for details.
 
-**Nothing** 类型也可以用来表示空数组：
+The **Nothing** type can also be used to represent empty arrays:
 
 ```
 :) SELECT toTypeName(array())

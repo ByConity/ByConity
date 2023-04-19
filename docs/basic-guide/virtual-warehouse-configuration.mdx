@@ -1,92 +1,92 @@
 ---
-title: 配置计算组
+title: Virtual Warehouse Configuration
 tags:
   - Docs
 ---
 
-# 配置计算组
+# Virtual Warehouse Configuration
 
-文档类型：教程型
+Document Type: Tutorial
 
-文档格式：教程目的，前置准备，分步骤讲解原理 & 示例，相关文档推荐；
+Document format: tutorial purpose, pre-preparation, step-by-step explanation of principles & examples, and related document recommendations;
 
-# 计算组、Worker 和 Server 的关系
+# Calculate the relationship between groups, Workers and Servers
 
-在[资源管理器](../advanced-guide/resource-manager) 章节我们介绍了**计算组**（Virtual Warehouse, 简称 VW）、**计算组副本**（Worker Group, 简称 WG）和计算节点等概念。一个 ByConity 集群中，计算资源被划分为多个计算组，每个计算组包含多个配置相同的计算组副本，每个计算组副本则包含多个计算节点。可以在不同级别对资源进行自由的扩缩容，实现弹性计算。以扩容为例，我们可以有不同的扩容方式：
+In the [Resource Manager](../Advanced User Manual/Resource Manager) chapter, we introduced **Virtual Warehouse** (referred to as VW), **Worker Group** (referred to as WG) and Worker. In a ByConity cluster, computing resources are divided into multiple Virtual Warehouse, each Virtual Warehouse contains multiple Worker Groups with the same configuration, and each Worker Group contains multiple workers. Resources can be freely expanded and contracted at different levels to achieve elastic computing. Taking expansion as an example, we can have different expansion methods:
 
-- 对 Worker 的 CPU、MEM 资源进行纵向扩容，以提升单节点的处理性能。
-- 增加一个计算组副本内 Worker 的数量，以提升计算组副本处理查询时的性能。
-- 增加计算组内计算组副本的数量，以提升计算组处理查询的并发能力。
-- 为新的业务或租户增加新的计算组资源，实现租户间资源隔离。
+- Vertically expand the CPU and MEM resources of the Worker to improve the processing performance of a single node.
+- Increase the number of workers in a Worker Group to improve the performance of the Worker Group when processing queries.
+- Increase the number of Worker Group in the Virtual Warehouse to improve the concurrency capability of the Virtual Warehouse to process queries.
+- Add new Virtual Warehouse resources for new businesses or tenants to achieve resource isolation between tenants.
 
-服务节点，我们也称为 server，主要承担 sql 接收，调度，和结果回传的作用。计算节点，我们也称为 worker，主要承担的是计算任务，这些任务可以是数据写入、用户查询，也可以是一些后台任务。用户查询和后台任务，可以共享相同的计算节点以提高利用率，也可以使用独立的计算节点以保证严格的资源隔离。用户可以根据计算任务的特性、优先级和业务类别不同，构建多个计算组，并设置不同的资源弹性策略，提高计算效率降低成本。
+The service node, which we also call server, mainly undertakes the functions of sql receiving, scheduling, and result return. Computing nodes, also called workers, are mainly responsible for computing tasks, which can be data writing, user query, or some background tasks. User queries and background tasks can share the same worker to improve utilization, or use independent workers to ensure strict resource isolation. Users can build multiple virtual_warehouses according to the characteristics, priorities, and business categories of computing tasks, and set different resource elasticity policies to improve computing efficiency and reduce costs.
 
-# 查看计算组信息
+# View Virtual Warehouse information
 
-我们提供一组系统表可以查询计算组相关元信息，这些系统表只提供可观测的能力，不能通过修改表内容来更改计算组信息。如需修改计算组配置，请参考[修改计算组配置]（todo:link）。
+We provide a set of system tables to query the metadata related to the Virtual Warehouse. These system tables only provide observable capabilities, and the Virtual Warehouse information cannot be changed by modifying the table content. If you need to modify the configuration of the Virtual Warehouse, please refer to [Modify the configuration of the Virtual Warehouse] (todo: link).
 
 ## system.virtual_warehouses
 
-该系统表展示所有计算组（VW）的元信息，主要字段及说明：
+The system table shows the meta information, main fields and descriptions of all virtual warehouse (VW):
 
-| 字段名                 | 含义                                                            |
+| Field name                 | Descriptions                                                           |
 | :--------------------- | :-------------------------------------------------------------- |
-| name                   | 该 virtual warehouse 的名称，唯一标识。                         |
-| **type**               | 该 virtual warehouse 的类型，Default/Write。                    |
-| **num_workers**        | 该 virtual warehouse 为每个 worker group 配置的 worker 数量     |
-| active_worker_groups   | 该 virtual warehouse 中正在运行的计算组副本（worker group）数量 |
-| active_workers         | 该 virtual warehouse 中正在健康运行的 worker 数量               |
-| min_worker_groups      | 该 virtual warehouse 允许运行的最小计算组数量                   |
-| max_worker_groups      | 该 virtual warehouse 允许运行的最大计算组数量                   |
-| max_concurrent_queries | 该 virtual warehouse 允许的最大查询并发数量                     |
-| max_queued_queries     | 该 virtual warehouse 允许的最大排队查询数量                     |
-| max_queued_waiting_ms  | 该 virtual warehouse 允许的排队查询最大等待时长（毫秒）         |
+| name                   | The name of the virtual warehouse, unique identification.                       |
+| **type**               | The type of the virtual warehouse, Default/Write.                    |
+| **num_workers**        | The number of workers configured for each worker group by this virtual warehouse     |
+| active_worker_groups   | The number of running worker groups in this virtual warehouse |
+| active_workers         | The number of healthy workers in this virtual warehouse               |
+| min_worker_groups      | The minimum number of worker groups this virtual warehouse is allowed to run                   |
+| max_worker_groups      | The maximum number of worker groups that this virtual warehouse is allowed to run                   |
+| max_concurrent_queries | The maximum number of concurrent queries allowed by the virtual warehouse                    |
+| max_queued_queries     | The maximum number of queued queries allowed by this virtual warehouse                     |
+| max_queued_waiting_ms  | The maximum waiting time for queued queries allowed by this virtual warehouse (milliseconds)        |
 
 ## system.worker_groups
 
-该系统表展示所有计算组副本（WG）的元信息，主要字段及说明：
+This system table displays the meta information, main fields and descriptions of all worker groups (WG):：
 
-| 字段名         | 右对齐                                                                                  |
+| Field name      | Descriptions                                                                               |
 | :------------- | :-------------------------------------------------------------------------------------- |
-| vw_name        | 该 worker group 所属的 virtual warehouse 的名称                                         |
-| id             | 该 worker group 的 id，唯一标识                                                         |
-| num_workers    | 该 virtual warehouse 为每个 worker group 配置的 worker 数量                             |
-| linked_id      | 如果该 worker group 是一个 Shared 类型，则 linked_id 指向其引用的 Physical worker group |
-| active_workers | 该 worker group 中正在健康运行的 worker 数量                                            |
-| min_cpu_usage  | 该 worker group 中最小的 worker 的 cpu_usage                                            |
-| max_cpu_usage  | 该 worker group 中最大的 worker 的 cpu_usage                                            |
-| avg_cpu_usage  | 该 worker group 所有 worker 的 cpu_usage 均值                                           |
-| min_mem_usage  | 该 worker group 中最小的 worker 的 memory_usage                                         |
-| max_mem_usage  | 该 worker group 中最大的 worker 的 memory_usage                                         |
-| avg_mem_usage  | 该 worker group 所有 worker 的 memory_usage 均值                                        |
+| vw_name        | The name of the virtual warehouse to which this worker group belongs                                         |
+| id             | The id of the worker group, unique identification                                                         |
+| num_workers    | The number of workers configured for each worker group by this virtual warehouse                             |
+| linked_id      | If the worker group is a Shared type, linked_id points to the Physical worker group it refers to |
+| active_workers | The number of active workers in this worker group                                            |
+| min_cpu_usage  | The smallest worker cpu_usage in the worker group                                            |
+| max_cpu_usage  | The maximum worker cpu_usage in the worker group                                           |
+| avg_cpu_usage  | The average cpu_usage of all workers in this worker group                                           |
+| min_mem_usage  | The smallest worker memory_usage in the worker group                                         |
+| max_mem_usage  | The largest worker memory_usage in the worker group                                         |
+| avg_mem_usage  | The average memory_usage of all workers in the worker group                                        |
 
 ## system.workers
 
-该系统表记录所有运行中的 worker 信息，主要字段及说明：
+The system table records all running worker information, main fields and descriptions:
 
-| 字段名           | 含义                            |
+| Field name           | Descriptions                            |
 | :--------------- | :------------------------------ |
-| worker_id        | worker 的 id，唯一标识          |
-| vw_name          | worker 所属的 virtual warehouse |
-| worker_group_id  | worker 所属的 worker group      |
-| host             | worker 的 host (ip)             |
-| tcp_port         | worker 的 tcp_port              |
-| cpu_usage        | 当前的 cpu_usage                |
-| memory_usage     | 当前的 memory_usage             |
-| memory_available | 当前可用的 memory 量（字节）    |
-| last_update_time | 最近的心跳更新时间              |
+| worker_id        | The id of the worker, unique identification          |
+| vw_name          | The virtual warehouse the worker belongs to|
+| worker_group_id  | The worker group the worker belongs to  |
+| host             | The host (ip)  of the worker        |
+| tcp_port         | The tcp_port of the worker            |
+| cpu_usage        | Current cpu_usage                |
+| memory_usage     | Current memory_usage             |
+| memory_available | Current memory amount（byte） available   |
+| last_update_time | The latest heartbeat update time            |
 
-# 创建及使用计算组
+Create and use Virtual Warehouse
 
-我们提供本地模式和集群模式两种不同的配置方式来创建计算组。
+We provide two different configuration methods, local mode and cluster mode, to create Virtual Warehouse.
 
-本地模式可以直接在配置文件中填写计算组和计算组副本相关信息，便于调试或 demo 运行。
+In local mode, you can directly fill in the Virtual Warehouse and worker group related information in the configuration file, which is convenient for debugging or demo operation.
 
-集群模式则是生产环境下推荐的使用方式，此时我们需要通过特定的 SQL 来创建计算组，并通过对应的 K8s 操作创建实际的计算组资源。
+Cluster mode is the recommended way to use it in a production environment. At this time, we need to create a Virtual Warehouse through specific SQL, and create actual Virtual Warehouse resources through corresponding K8s operations.
 
-## 本地模式
+## local mode
 
-在启动 resource manager 组件时，我们可以在配置文件（参考[集群配置参数](./cluster-configuration) （todo: link）resource manager 部分）中填写计算组相关信息。resource manager 会直接根据这些信息创建对应的计算组（以及计算组副本）。示例：
+When starting the resource manager component, we can fill in the Virtual Warehouse related information in the configuration file (refer to [cluster-configuration](./cluster-configuration) resource manager section). The resource manager will directly create corresponding  Virtual Warehouse (and worker group) based on these information. Example:
 
 ```
 <vws>
@@ -105,9 +105,9 @@ tags:
 
 ```
 
-我们配置了一个名为 vw_default 的计算组，类型为 Default，并且预期该 vw 中有 1 个 worker（num_workers 仅作为创建 vw 的一个指示信息，运行时实际 worker 数量可以<u>查询相关系统表</u><u>（todo: link [查看计算组信息]</u><u>）</u>获得）。同时，我们为该计算组配置了 1 个副本，名为 wg_default。
+We have configured a Virtual Warehouse named vw_default, the type is Default, and it is expected that there will be 1 worker in this vw (num_workers is only used as an instruction to create a vw, the actual number of workers can be <u>query related system tables</u><u>(todo: link [view Virtual Warehouse information]</u><u>)</u> get). At the same time, we configured 1 replica for this Virtual Warehouse, named wg_default.
 
-在启动 server 组件时，我们可以在配置文件中（参考[集群配置参数](./cluster-configuration) （todo: link） server 部分）服务发现部分直接配置每个 vw 对应的 worker 信息。
+When starting the server component, we can directly configure the worker information corresponding to each vw in the service discovery part of the configuration file (refer to [cluster configuration](./cluster-configuration) server part).
 
 ```
 <service_discovery>
@@ -136,13 +136,13 @@ tags:
 
 ```
 
-在该示例中，server 做服务发现时，会找到计算组 vw_default 有一个 ip 为 10.1.2.3 的 worker。
+In this example, when the server does service discovery, it will find a worker whose ip is 10.1.2.3 in the virtual warehouse vw_default.
 
-## 集群模式
+## cluster mode
 
-我们可以在 ByConity 集群运行时，创建新的计算组。
+We can create new Virtual Warehouse while the ByConity cluster is running.
 
-### 创建计算组
+### Create Virtual Warehouse
 
 ```
 CREATE WAREHOUSE
@@ -153,9 +153,9 @@ SETTINGS num_workers = 1, type = 'Default',
 
 ```
 
-`CREATE WAREHOUSE IF NOT EXISTS `$VW_NAME` SETTINGS ...` 这个SQL用于创建计算组。$VW_NAME 为该计算组的唯一标识。创建计算组时，settings 中 num_workers 和 type 为必填项，其他配置可参考[查看计算组信息]小节。
+`CREATE WAREHOUSE IF NOT EXISTS `$VW_NAME` SETTINGS ...` This SQL is used to create computed groups. $VW_NAME is the unique identifier of the computing group. When creating a computing group, num_workers and type in the settings are required. For other configurations, please refer to the [View Virtual Warehouse Information] section.
 
-### 创建计算组副本
+### Creat Worker Group
 
 ```
 CREATE WORKER GROUP
@@ -164,19 +164,19 @@ SETTINGS type = 'Physical';
 
 ```
 
-`CREATE WORKER GROUP IF NOT EXISTS `$WG_NAME` SETTINGS ... `这个SQL用于创建计算组副本。$WG_NAME 为该计算组副本的唯一标识。
+`CREATE WORKER GROUP IF NOT EXISTS `$WG_NAME` SETTINGS ... `This SQL is used to create a worker group. $WG_NAME is the unique identifier of the worker group.
 
-### 创建 K8s Worker Pods
+### Creat K8s Worker Pods
 
-ByConity 创建计算组和计算组副本的元信息后，则可以创建对应的 K8s Worker 资源，为 worker 配置对应的环境变量 VIRTUAL_WAREHOUSE_ID=$VW_NAME, WORKER_GROUP_ID=$WG_NAME。
+After ByConity creates the meta information of the virtual warehouses and worker group, you can create the corresponding K8s Worker resource, and configure the corresponding environment variables VIRTUAL_WAREHOUSE_ID=$VW_NAME, WORKER_GROUP_ID=$WG_NAME for the worker.
 
-Worker 启动后即可自动注册到对应的 virtual warehouse 和 worker group 中。
+After the Worker is started, it can be automatically registered in the corresponding virtual warehouse and worker group.
 
-具体操作见：[https://github.com/ByConity/byconity-deploy](https://github.com/ByConity/byconity-deploy)
+For specific operations, please check：[https://github.com/ByConity/byconity-deploy](https://github.com/ByConity/byconity-deploy)
 
-# 修改计算组
+# Modify Virtual Warehouses
 
-除了计算组信息的查看和创建，我们还可以在运行时修改计算组相关的元信息。
+In addition to viewing and creating virtual warehouses information, we can also modify virtual warehouses related meta information at runtime.
 
 ```
 DROP WAREHOUSE IF EXISTS `vw_default`;
@@ -184,17 +184,17 @@ DROP WORKER GROUP IF EXISTS `wg_default`;
 
 ```
 
-上述 DROP 语句将删除指定的计算组和计算组副本。
+The above DROP statement will delete the specified virtual warehouses and worker group.
 
-注意：当 ByConity 元信息中找不到 worker pod 指定的 virtual warehouse 时，resource manager 将拒绝该 worker 的注册，因此该 worker 也无法被用于处理查询。
+Note: When the virtual warehouse specified by the worker pod cannot be found in the ByConity meta information, the resource manager will reject the registration of the worker, so the worker cannot be used to process queries.
 
 ```
 ALTER WAREHOUSE `vw_default`
 SETTINGS auto_suspend = 3600, auto_resume = 0,
-         min_worker_groups = 0, max_worker_groups = 0, max_concurrent_queries=50;
+          min_worker_groups = 0, max_worker_groups = 0, max_concurrent_queries=50;
 
 ```
 
-上述 ALTER 语句可以修改计算组的配置，修改后，计算组内所有的计算组副本都将使用新的配置。
+The above ALTER statement can modify the configuration of the virtual warehouses. After modification, all worker groups in the virtual warehouses will use the new configuration.
 
-注意：我们无法通过 `ALTER WORKER GROUP ...` 来修改计算组副本的配置。计算组副本的所有配置都继承自所属计算组的配置，因此不存在这样的语法。
+Note: We cannot modify the configuration of the worker group through `ALTER WORKER GROUP ...`. All configurations of a worker group are inherited from the configuration of the owning virtual warehouses, so no such syntax exists.

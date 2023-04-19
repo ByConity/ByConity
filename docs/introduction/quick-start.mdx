@@ -1,24 +1,24 @@
 ---
-title: 快速上手
+title: Quick Start
 sidebar_position: 2
 tags:
   - Docs
 ---
 
-# 快速上手
+# Quick Start
 
-集群搭建和启动之后，让我们快速的试用一下：）
+Now that the cluster is up and running, let's give it a quick spin :)
 
-# 入门教程
+# Getting Started Tutorial
 
-## 连接数据库
+## Connect to the database
 
 ```
 ./clickhouse-client -m -h HOST --port PORT
 
 ```
 
-## 创建库表
+## Create database and table
 
 ```
 CREATE DATABASE IF NOT EXISTS helloworld;
@@ -35,7 +35,7 @@ ORDER BY (user_id, timestamp);
 
 ```
 
-## 写入和查询
+## Insert and query
 
 ```
 INSERT INTO helloworld.my_first_table (user_id, message, timestamp) VALUES
@@ -54,9 +54,9 @@ exit;
 
 ```
 
-## 写入文件
+## Insert file
 
-假设我们有一个数据文件 data.csv
+Suppose we have a file data.csv
 
 ```
 102,This is data in a file,2022-02-22 10:43:28
@@ -72,7 +72,7 @@ exit;
 
 ```
 
-# 查看计算组状态
+# view VW status
 
 ```
 SELECT * FROM system.worker_groups
@@ -124,7 +124,7 @@ state:                 1
 
 ```
 
-# 查看历史查询
+# view history query
 
 [https://clickhouse.com/docs/en/operations/system-tables/query_log/](https://clickhouse.com/docs/en/operations/system-tables/query_log/)
 

@@ -1,38 +1,40 @@
 ---
-title: 推荐场景案例
+title: Recommended Use Cases
 sidebar_position: 3
 tags:
   - Docs
 ---
 
-# 推荐场景案例
+# Recommended Use Cases
 
-# 通用场景
+# General Scenario
 
-ByConity 使用大量成熟 OLAP 技术，例如列存引擎，MPP 执行，智能查询优化，向量化执行，Codegen, indexing，数据压缩，主要用于 OLAP 查询和计算场景。在实时数据接入、大宽表聚合查询、海量数据下复杂分析计算、多表关联查询场景下有非常好的性能。
+ByConity uses a large number of mature OLAP technologies, such as column storage engine, MPP execution, intelligent query optimization, vectorized execution, Codegen, indexing, data compression, mainly used in OLAP query and computing scenarios. It has very good performance in real-time data access, aggregation query of large and wide tables, complex analysis and calculation under massive data, and multi-table associated query scenarios.
 
-| 场景分类     | 场景             | 描述                       | 特点                       |
+| Scenario Category     | Scenario            | Description                       | Features                    |
 | :----------- | :--------------- | :------------------------- | :------------------------- |
-| 交互式查询   | 用户自定义查询   | 支持多维查询分析的数据应用 | 自由维度、多表关联、响应快 |
-|              | 自助式报表       | 支持 Tableau 等 BI 工具    | 自由维度、多表关联、响应快 |
-|              | 用户画像分析     | 支持 DMP 等圈人画像平台    | 自由维度、多表关联、响应快 |
-|              | 营销效果分析     | 支持流量效果漏斗分析       | 多表关联、实时             |
-|              | 行为日志分析     | 支持日志探索分析           | 日志检索、数据量大         |
-| 实时数据看板 | 实时业务监控大屏 | 支持 DataV 等可视化大屏    | 实时                       |
-|              | 直播数据统计看板 | 支持实时报表               | 实时                       |
-|              | 业务仪表盘       | 支持报表工具               | 统计、响应快               |
-|              | 系统链路监控     | 支持实时监控应用           | 实时                       |
-| 实时数据仓库 | 实时数据接入     | 支持实时数据写入、更新     | 实时数据写入，立即可见     |
-|              | 准实时 ETL 计算  | 支持复杂计算，数据清洗     | 混合负载                   |
+| Interactive query   | User-defined query | Data application that supports multi-dimensional query analysis | Free dimension, multi-table association, fast response | 
+|              | Self-service reports | Support BI tools such as Tableau | Free dimension, multi-table association, fast response|
+|              | User portrait analysis | Support DMP and other circle person portrait platforms | Free dimension, multi-table association, fast response |
+|              | Marketing effect analysis | Support traffic effect funnel analysis | Multi-table association, real-time |
+|              | Behavior log analysis | Support log exploration and analysis | Log retrieval, large amount of data      |
+| Real-time data Kanban | Real-time business monitoring large screen | Support DataV and other visual large screens | Real-time |
+|              | Live data statistics dashboard | Support real-time reports | Real-time    |
+|              | Business Dashboard | Support Report Tool | Statistics, Fast Response  |
+|              | System link monitoring | Support real-time monitoring applications | Real-time   |
+| Real-time data warehouse | Real-time data access | Support real-time data writing and updating | Real-time data writing, immediately visible |
+|              | Quasi-real-time ETL calculation | Support complex calculation, data cleaning | Mixed load   |
 
-# 多租户隔离和资源共享
 
-在 ByConity 里，用户可以为查询 SQL 指定计算组，实现物理资源隔离，避免不同租户之间查询互相干扰。当然，为了提高资源利用率，ByConity 也支持计算组之间的资源租借，实现资源共享。
 
-# 读写计算分离
+# Multi-tenant isolation and resource sharing
 
-ByConity 存储计算分离的架构，使其原生支持存储计算分离，insert 使用专门用于写入的计算组，select 使用专门用于读取的计算组，读写作业之间不会相互影响。
+In ByConity, users can specify a computing group for querying SQL to achieve physical resource isolation and avoid query interference between different tenants. Of course, in order to improve resource utilization, ByConity also supports resource leasing between computing groups to achieve resource sharing.
 
-# 实时扩缩容
+# Separation of reading and writing calculations
 
-ByConity 存储计算分离架构设计使其完美契合有动态扩缩容需求的场景，根据实际资源需求最大化资源利用率，降低成本。ByConity 的元数据和数据存储在远端，计算节点的无状态化使扩缩容变得十分轻量，只需等计算实例启动完成，即可立即服务，无需额外的数据迁移开销，实现实时扩缩容。
+ByConity's storage-computing separation architecture makes it natively support storage-computing separation. insert uses a computing group dedicated to writing, and select uses a computing group dedicated to reading. The read and write jobs will not affect each other.
+
+# Real-time scaling
+
+ByConity's storage and computing separation architecture design makes it perfectly suitable for scenarios with dynamic expansion and contraction requirements, maximizing resource utilization and reducing costs according to actual resource requirements. ByConity's metadata and data are stored at the remote end. The stateless computing nodes make expansion and contraction very lightweight. You only need to wait for the computing instance to start up, and the service can be served immediately without additional data migration overhead, realizing real-time expansion. Shrinkage.

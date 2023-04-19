@@ -1,65 +1,65 @@
 ---
-title: 导入数据
+title: Import Data
 tags:
   - Docs
 ---
 
-# 导入数据
+# Import Data
 
-文档类型：教程型
+Document Type: Tutorial
 
-文档结构：教程目的，前置准备，分步骤讲解原理 & 示例，相关文档推荐；
+Document structure: tutorial purpose, pre-preparation, step-by-step explanation of principles & examples, and related document recommendations;
 
-内容提要：
+Summary:
 
-1. 支持哪些方式导入数据，导入方式上是否有建议（比如直接写入和合并 part 文件后 attach）
-2. 如何连接上游支持的数据源
-3. 如何查看数据导入情况
-4. 常见的导入报错该做什么
+1. Which methods are supported to import data, and are there any suggestions on the import method (such as directly writing and merging part files after attaching)
+2. How to connect to upstream supported data sources
+3. How to check the data import status
+4. What to do for common import errors
 
-# 支持的数据源
+# Supported data sources
 
-提供多种数据导入方案，可以针对不同的数据源进行选择不同的数据导入方式。
+Various data import schemes are provided, and different data import methods can be selected for different data sources.
 
-## 按场景划分
+## Divide by scene
 
-数据源
+Data source
 
-导入方式
+Import method
 
-本地文件
+local files
 
-流式导入数据(本地文件及内存数据)
+Streaming import data (local files and memory data)
 
 HDFS
 
-通过外部存储数据导入
+Import from external strorage data
 
 Kafka
 
-通过 Kafka 导入数据
+Import data from Kafka
 
-通过 spark 导入
+Import from spark
 
-通过 Spark 导入外部数据
+Import external data from Spark
 
 Mysql、Hive
 
-通过 ByConity 访问外部数据源
+Access to external data sources via ByConity
 
-## 支持的数据格式
+## Supported data formats
 
-导入方式
+Import method
 
-支持的数据格式
+Supported Data Formats
 
 HDFS
 
 Parquet，ORC，csv，gzip
 
-本地文件以及内存数据
+Local files and memory data
 
-snappy 压缩格式
+snappy compression format
 
 json, csv, TSKV，Parquet，ORC
 
@@ -67,22 +67,22 @@ Kafka
 
 csv, gzip,json
 
-# 导入方式
+# Import Method
 
-## 流式导入数据(本地文件及内存数据)
+## Streaming import data (local files and memory data)
 
-### 方式一：
+### Method 1:
 
-方式一使用 VALUES 格式的常规语法，适合临时插入少量的数据用来测试：
+Method 1 uses the regular syntax of the VALUES format, which is suitable for temporarily inserting a small amount of data for testing:
 
 ```
 INSERT INTO [db.]table [(c1, c2, c3...)] VALUES (v11, v12, v13), (v21, v22, v23), ...
 
 ```
 
-其中，c1、c2、c3 是列字段声明，可忽略。VALUES 后紧跟的是由元组组成的代写入的数据，通过下标位与列字段声明一一对应。数据支持批量声明写入，多行数据之间使用逗号分隔。
+Among them, c1, c2, c3 are column field declarations, which can be ignored. Immediately after VALUES is the written data composed of tuples, which corresponds to the column field declaration through subscript bits. The data supports batch statement writing, and multiple lines of data are separated by commas.
 
-例如，考虑该表：
+For example, consider this table:
 
 ```
 CREATE TABLE test.insert_select_testtable
@@ -103,23 +103,23 @@ INSERT INTO insert_select_testtable VALUES (1, 'a', 1,'2022-11-10');
 
 ```
 
-在使用 VALUES 格式的语法写入数据时，支持加入表达式或者函数，例如：
+When writing data using the syntax of the VALUES format, expressions or functions are supported, for example:
 
 ```
 INSERT INTO insert_select_testtable VALUES (1, 'a', 1, now());
 
 ```
 
-### 方式二：
+### Method 2:
 
-方式二是使用指定格式的语法：
+The second way is to use the syntax of the specified format:
 
 ```
 INSERT INTO [db.]table [(c1, c2, c3...)] FORMAT format_name data_set
 
 ```
 
-ByConity 支持多种数据格式，以常用的 CSV 格式写入为例：
+ByConity supports multiple data formats, taking the commonly used CSV format as an example:
 
 ```
 INSERT INTO insert_select_testtable FORMAT CSV \
@@ -128,18 +128,19 @@ INSERT INTO insert_select_testtable FORMAT CSV \
 
 ```
 
-同时，还支持从文件向表中插入数据。例如：
+At the same time, it also supports inserting data into tables from files. For example:
 
 ```
 INSERT INTO [db.]table [(c1, c2, c3)] FORMAT format_name INFILE file_name
 
 ```
 
-使用上面的语句可以从客户端的文件上读取数据并插入表中，file_name 和 type 都是 String 类型，输入文件的格式一定要在 FORMAT 语句中设置。
+Use the above statement to read data from the client’s file and insert it into the table. file_name and type are both String types, and the format of the input file must be set in the FORMAT statement.
 
-### 方式三：
+### Method 3:
 
-方式三是使用 SELECT 子句的形式，适合需要保存某张表结果并供后续查询的情况：
+The third way is to use the form of the SELECT clause, which is suitable for the situation where the results of a certain table need to be saved and used for subsequent queries:
+
 
 ```
 INSERT INTO [db.]table [(c1, c2, c3...)] SELECT ...
@@ -147,127 +148,127 @@ INSERT INTO [db.]table [(c1, c2, c3...)] SELECT ...
 ```
 
 ```
-写入时与SELECT的列的对应关系是使用位置来进行对应的，尽管在SELECT表达式与INSERT中的名称是不同的。如果需要，会进行对应的类型转换。
+The corresponding relationship with the SELECT column when writing is to use the position to correspond, although the names in the SELECT expression and INSERT are different. If necessary, the corresponding type conversion will be performed.
 ```
 
-通过 SELECT 子句可将查询结果写入数据表，假设需要将 insert_select_testtable_1 的数据写入 insert_select_testtable，则可以使用下面的语句：
+The query result can be written into the data table through the SELECT clause. Assuming that the data of insert_select_testtable_1 needs to be written into insert_select_testtable, the following statement can be used:
 
 ```
 INSERT INTO insert_select_testtable SELECT * from insert_select_testtable_1
 
 ```
 
-在通过 SELECT 子句写入数据的时候，同样也支持加入表达式或者函数，例如：
+When writing data through the SELECT clause, it also supports adding expressions or functions, for example:
 
 ```
 INSERT INTO insert_select_testtable SELECT 1, 'a', 1, now();
 
 ```
 
-虽然 VALUES 和 SELECT 子句的形式都支持声明表达式或函数，但是表达式和函数会带来额外的性能开销，从而导致写入性能下降。所以如果追求极致的写入性能。所以如果追求极致的写入性能，就应该避免使用它们。
+Although both the forms of VALUES and SELECT clauses support declaring expressions or functions, expressions and functions will bring additional performance overhead, resulting in degraded write performance. So if you pursue the ultimate write performance. So if you pursue the ultimate write performance, you should avoid using them.
 
-## 通过外部存储数据导入
+## Import data from external storage
 
-ByConity 同样支持从本地或者 HDFS 上导入数据，例如：
+ByConity also supports importing data from local or HDFS, for example:
 
 ```
 INSERT INTO [db.]table [(c1, c2, c3)] FORMAT format_name INFILE 'hdfs://ip:port/file_name'
 
 ```
 
-## 使用 kakfa 导入数据
+## Import data using kakfa
 
-### 功能定义
+### Function definition
 
-CnchKafka 是 ByConity 基于社区 ClickHouse Kafka 表引擎自研实现的适配云原生架构的表引擎，用于高效快速地将用户数据从 Apache Kafka 实时导入 ByConity；其设计与实现既适配了云原生新架构，同时在社区实现基础上增强了部分功能。
+CnchKafka is a table engine adapted to the cloud-native architecture implemented by ByConity based on the self-developed community ClickHouse Kafka table engine. It is used to efficiently and quickly import user data from Apache Kafka into ByConity in real time; At the same time, some functions have been enhanced based on the community implementation.
 
-CnchKafka 主要功能特点包括：
+The main features of CnchKafka include:
 
-- 提供基于云原生架构优势的自动容错能力，降低运维成本；
-- 可扩展的消费能力：支持通过 SYSTEM 命令调节消费者数目，最高适配 topic 对应的 partition 数；
-- 增强消费语义：依赖 Transaction 保证，通过引擎管理 offset 实现 Exactly-Once 消费语义；
-- 消费性能：很大程度依赖用户表的 schema 复杂度，通常经验值 2k-2M 条/秒，吞吐 15MiB/s 左右；
-- 支持多种数据类型，包括但不限于 Json、ProtoBuf、CSV 等；
-- 支持记录消费日志，既方便排查问题，也提供了数据审计的能力。
+- Provide automatic fault tolerance based on the advantages of cloud-native architecture to reduce operation and maintenance costs;
+- Scalable consumption capability: support to adjust the number of consumers through the SYSTEM command, and the maximum number of partitions corresponding to the topic can be adapted;
+- Enhanced consumption semantics: Rely on Transaction guarantee, implement Exactly-Once consumption semantics through engine management offset;
+- Consumption performance: largely depends on the schema complexity of the user table, usually the experience value is 2k-2M entries/second, and the throughput is about 15MiB/s;
+- Support multiple data types, including but not limited to Json, ProtoBuf, CSV, etc.;
+- Supports recording consumption logs, which not only facilitates troubleshooting, but also provides the ability to audit data.
 
-### 实现原理
+### Implementation principle
 
-#### 概述
+#### Overview
 
-CnchKafka 继承了社区的基本设计，即通过一个 <CnchKafka 消费表、Materialized View 物化视图表、存储表 > 三元组实现整个消费链路，其中：
+CnchKafka inherits the basic design of the community, that is, realizes the entire consumption link through a <CnchKafka consumption table, Materialized View materialized view table, storage table> triplet, in which:
 
-- CnchKafka 消费表：负责订阅 Kafka topic 并消费消息；将得到的消息解析后写为 Block；
-- Materialized View 物化视图表：构建从消费表到存储表的数据通路，将 CnchKafka 消费的 Block 写入存储表，并提供简单的过滤功能；
-- 存储表：支持 Cnch 多种 MergeTree 存储表。
+- CnchKafka consumption table: responsible for subscribing to Kafka topics and consuming messages; parsing the obtained messages and writing them as Blocks;
+- Materialized View materialized view table: build a data path from the consumption table to the storage table, write the block consumed by CnchKafka into the storage table, and provide a simple filtering function;
+- Storage table: Support various MergeTree storage tables of Cnch.
 
-基本数据通路如下：
+The basic data path is as follows:
 
 ![](./assets/data-import/boxcnbeMipMsWmYggoqbR4DT88c.png)
 
-图中各组件是 ByConity 云原生架构部分涉及 CnchKafka 的组件，为避免读者不了解，此处对各组件做简单说明；但限于篇幅和重点，更详细的架构设计细节请参考架构文档。
+The components in the figure are the components of the ByConity cloud-native architecture that involve CnchKafka. In order to avoid readers' ignorance, here is a brief description of each component; but due to space limitations and key points, please refer to the architecture document for more detailed architecture design details.
 
 - **Server**
-- 应用接入层，所有查询和导入任务的入口；
-- 轻量级设计，本身不做具体查询和导入，主要负责任务调度转发和元数据访问，包括：
-- 预处理查询请求，从 Catalog 读取元数据，将原数据和查询 sql 下发查询节点，将查询结果返回上层（调用接口或用户等）；
-- 管理导入任务：选择导入节点执行导入任务；
-- 和 Catalog 交互，查询或更新元数据；
-- 和 Resource Manager 交互，选择任务执行节点保证负载均衡；
-- **Virtual WareHouse**
-- 计算层，所有查询和导入任务的执行节点，无状态服务；
-- 支持租户独享，实现资源和数据隔离；
-- 支持读写分离，查询和导入可创建和指定不同 Virtual WareHouse；
+- Application access layer, the entrance of all query and import tasks;
+- Lightweight design, no specific query and import itself, mainly responsible for task scheduling forwarding and metadata access, including:
+- Preprocess the query request, read the metadata from the Catalog, send the original data and query sql to the query node, and return the query result to the upper layer (call interface or user, etc.);
+- Manage import tasks: select the import node to execute the import task;
+- Interact with Catalog to query or update metadata;
+- Interact with Resource Manager to select task execution nodes to ensure load balancing;
+- **Virtual Ware House**
+- Computing layer, the execution node of all query and import tasks, stateless service;
+- Support exclusive use by tenants to achieve resource and data isolation;
+- Support read-write separation, query and import can create and specify different Virtual WareHouse;
 - **Catalog**
-- KV 数据库，用于元数据管理，包括数据库表元信息、part 元信息等；
-- CnchKafka 消费 offset 也存储在 catalog；
+- KV database, used for metadata management, including database table meta information, part meta information, etc.;
+- CnchKafka consumption offset is also stored in the catalog;
 - **VFS**
-- 底层存储，支持多种存储系统，包括 HDFS、S3 等。
+- Underlying storage, supporting multiple storage systems, including HDFS, S3, etc.
 
 #### KafkaConsumeManager
 
-每张 CnchKafka 消费表会在 Server 层启动一个 Manager 负责调度和管理所有的消费者任务。Manager 本身是 Server 端的一个常驻线程，通过 Server 的高可用和 DaemonManager 保证其服务稳定。
+Each CnchKafka consumption table will start a Manager at the server layer to be responsible for scheduling and managing all consumer tasks. The Manager itself is a resident thread on the server side, and its service is guaranteed to be stable through the high availability of the server and DaemonManager.
 
-KafkaConsumeManager 主要实现和功能包括：
+The main implementation and functions of KafkaConsumeManager include:
 
-- 根据配置的 consumer 数目将 topic partition 均匀分发到每个 consumer；
-- 与 Catalog 交互，获取 partition 消费的 offset；
-- 调度 consumer 到配置的 Virtual Warehouse 节点执行：
-- 节点选择支持多种策略配置，保证负载均衡；
-- 定期探活每个 consumer 任务，保证任务执行的稳定性。
+- Distribute the topic partition evenly to each consumer according to the configured number of consumers;
+- Interact with the Catalog to obtain the offset consumed by the partition;
+- Schedule the consumer to the configured Virtual Warehouse node for execution:
+- Node selection supports multiple policy configurations to ensure load balancing;
+- Regularly detect each consumer task to ensure the stability of task execution.
 
 #### KafkaConsumer
 
-每个 KafkaConsumer 实现为一个常驻线程在 Virtual Warehouse 节点执行，负责从指定的 topic partition 消费数据，转换为 part 写入 VFS，并将元信息提交回 Server 端写入 Catalog。主要特点：
+Each KafkaConsumer is implemented as a resident thread and executed on the Virtual Warehouse node. It is responsible for consuming data from the specified topic partition, converting it into parts and writing it to VFS, and submitting meta information back to the server side for writing to the Catalog. main feature:
 
-- 继承社区的攒批写入模式（每次消费周期默认 8 秒）；
-- 每次消费过程通过 Transaction 保证原子性：
-- 通过与 Server RPC 交互创建事务；
-- 事务提交会同时提交写入的 part 元信息以及最新消费的 offset。
+- Inherit the batch writing mode of the community (each consumption cycle defaults to 8 seconds);
+- Each consumption process guarantees atomicity through Transaction:
+- Create transactions by interacting with Server RPC;
+- The transaction commit will submit the written part meta-information and the latest consumed offset at the same time.
 
-单次消费执行流程可参考下图：
+Refer to the figure below for the execution process of a single consumption:
 
 ![](./assets/data-import/boxcnlEuwS4ogryA87WHPdDK1Md.png)
 
 #### Exactly-Once
 
-与社区实现相比，CnchKafka 实现增强了消费语义，即从社区的 At-Least-Once 语义，升级为 Exactly-Once 语义。这主要得益于新架构 Transaction 事务的保证。
+Compared with the community implementation, the CnchKafka implementation has enhanced consumption semantics, that is, from the community's At-Least-Once semantics to Exactly-Once semantics. This is mainly due to the guarantee of the new architecture Transaction.
 
-由于每轮消费都会通过事务管理，且每次提交数据元信息的同时提交对应的 offset。由于事务保证了提交的原子性，那么数据元信息和 offset 要么同时提交成功，要么都提交失败。
+Since each round of consumption will go through transaction management, and the corresponding offset will be submitted at the same time as the data metadata information is submitted each time. Since the transaction guarantees the atomicity of the commit, the data metadata and offset are either submitted successfully at the same time, or both fail to be submitted.
 
-这样就保证了数据和 offset 始终一致，每次消费重启都从上次提交的 offset 位置继续消费，从而实现了 Exactly-Once。
+This ensures that the data and offset are always consistent, and each restart of consumption will continue to consume from the last submitted offset position, thus realizing Exactly-Once.
 
-#### 自动容错实现
+#### Automatic fault tolerance implementation
 
-CnchKafka 整体容错策略采取**快速失败**方式，即：
+CnchKafka's overall fault-tolerant strategy adopts **fast failure** approach, namely:
 
-- KafkaConsumeManager 定期探活 consumer 任务，探活失败，立即拉起一个新的 consumer；
-- KafkaConsumer 每次执行中，与 Server RPC 的两次交互（创建事务和提交事务）都会向 Manager 校验自身的有效性，如果校验失败（比如 Manager 已经拉起了一个新的 consumer 等），会主动 kill 自己。
+- KafkaConsumeManager regularly detects consumer tasks, if the detection fails, a new consumer is immediately pulled;
+- In each execution of KafkaConsumer, the two interactions with Server RPC (creating transaction and submitting transaction) will verify the validity of itself to the Manager. If the verification fails (for example, the Manager has pulled a new consumer, etc.), it will Take the initiative to kill yourself.
 
-### 使用指南
+### user's guidance
 
-#### 建表
+#### Create table
 
-创建 CnchKafka 消费表和社区原生建 Kafka 表类似，需要通过 Setting 参数配置 Kafka 数据源及消费参数。示例如下：
+Creating a CnchKafka consumption table is similar to creating a Kafka table natively in the community. You need to configure the Kafka data source and consumption parameters through the Setting parameter. Examples are as follows:
 
 ```
 CREATE TABLE kafka_test.cnch_kafka_consume
@@ -286,11 +287,11 @@ kafka_num_consumers = 1
 
 ```
 
-（Setting 参数说明及其他更多参数支持请参考下方说明）
+(For setting parameter description and other more parameter support, please refer to the description below)
 
-由于 Kafka 消费设计需要三张表，所以还需要同步创建另外两张表。
+Since the Kafka consumption design requires three tables, two other tables need to be created synchronously.
 
-首先创建存储表（以 CnchMergeTree 为例）：
+First create a storage table (take CnchMergeTree as an example):
 
 ```
 CREATE TABLE kafka_test.cnch_store_kafka
@@ -304,7 +305,7 @@ ORDER BY ts
 
 ```
 
-最后创建物化视图表（必须 Kafka 表和存储表创建成功后才能创建）：
+Finally, create the materialized view table (it must be created after the Kafka table and storage table are successfully created):
 
 ```
 CREATE MATERIALIZED VIEW kafka_test.cnch_kafka_view
@@ -319,11 +320,11 @@ FROM kafka_test.cnch_kafka_consume
 
 ```
 
-如果你有对应 topic 的消费权限，那么三张表创建好以后，消费就会自动开始执行。
+If you have the consumption permission corresponding to the topic, after the three tables are created, the consumption will start automatically.
 
-#### 虚拟列支持
+#### Virtual column support
 
-有时候业务需要获取 Kafka 消息的元数据（e.g. 消息的 partition, offset 等）。此时可以使用 virtual columns 功能来满足这个需求。virtual columns 不需要在建表的时候指定，是表引擎本身的属性。可以放到 VIEW 表的 SELECT 语句中存储到底表中（当底表添加了对应列）：
+Sometimes the business needs to obtain the metadata of Kafka messages (e.g. message partition, offset, etc.). At this time, you can use the virtual columns function to meet this requirement. Virtual columns do not need to be specified when creating a table, they are attributes of the table engine itself. It can be placed in the SELECT statement of the VIEW table and stored in the bottom table (when the corresponding column is added to the bottom table):
 
 ```
 SELECT
@@ -331,55 +332,55 @@ SELECT
     _partition,    -- UInt64
     _key,    -- String
     _offset,    -- UInt64
-    _content,  -- String: 完整的消息内容
-    *    -- 正常列可以通过*展开，虚拟列则不能
+    _content,  -- String: complete message content
+    *    -- Normal columns can be expanded by *, virtual columns cannot
 FROM kafka_test.cnch_kafka_consume
 
 ```
 
-#### Setting 参数说明
+#### Setting Parameter Description
 
-**参数名**
+**Parameter Name**
 
-**类型**
+**type**
 
-**必填/默认值**
+**required/default**
 
-**说明**
+**Description**
 
 kafka_cluster / kafka_broker_list
 
 String
 
-必填
+required
 
-公司内部 Kafka 集群；
+Kafka cluster within the company
 
-社区版本 Kafka 请使用 `kafka_broker_list` 参数
+Community version Kafka please use `kafka_broker_list` parameter
 
 kafka_topic_list
 
 String
 
-必填
+required
 
-可以多个，逗号分隔
+Can be multiple, separated by commas
 
 kafka_group_name
 
 String
 
-必填
+required
 
-consumer group name，消费组
+consumer group name, consumer group
 
 kafka_format
 
 String
 
-必填
+required
 
-消息格式；目前最常用 JSONEachRow
+Message format; currently most commonly used JSONEachRow
 
 kafka_row_delimiter
 
@@ -387,7 +388,7 @@ String
 
 '\0'
 
-一般使用 '\n'
+common use '\n'
 
 kafka_num_consumers
 
@@ -395,7 +396,7 @@ UInt64
 
 1
 
-消费者个数，建议不超过 topic 中最大 partition 数目
+The number of consumers, it is recommended not to exceed the maximum number of partitions in the topic
 
 kafka_max_block_size
 
@@ -403,7 +404,7 @@ UInt64
 
 65536
 
-写入 block_size，上限 1M
+write block_size，the upper limit is 1M
 
 kafka_max_poll_interval_ms
 
@@ -419,9 +420,9 @@ String
 
 ""
 
-schema 文件设置参数，以文件名 + 冒号 + 消息名格式设置
+Schema file setting parameters, set in the format of file name + colon + message name
 
-如： `schema.proto:MyMessage`
+Such as: `schema.proto:MyMessage`
 
 kafka_format_schema_path
 
@@ -429,9 +430,9 @@ String
 
 ""
 
-远端 schema 文件路径(不含文件名)设置参数，目前只支持 hdfs.
+Remote schema file path (without file name) setting parameter, currently only supports hdfs.
 
-（如果没有设置这个参数，将从配置文件设置的默认路径读取）
+(If this parameter is not set, it will be read from the default path set in the configuration file)
 
 kafka_protobuf_enable_multiple_message
 
@@ -439,7 +440,7 @@ bool
 
 true
 
-设置为 true，表示可以从一条 kafka 消息中读取多个 protobuf 的 message，彼此以各自长度为间隔
+If set to true, it means that multiple protobuf messages can be read from one kafka message, separated by their respective lengths
 
 kafka_protobuf_default_length_parser
 
@@ -447,7 +448,7 @@ bool
 
 false
 
-仅在 `kafka_protobuf_enable_multiple_message` 为 true 生效：true 表示消息头部有变量记录长度；false 表示用一个固定的 8 字节作为头部记录长度。
+It only takes effect when `kafka_protobuf_enable_multiple_message` is true: true means that the message header has a variable record length; false means use a fixed 8 bytes as the header record length.
 
 kafka_extra_librdkafka_config
 
@@ -457,7 +458,7 @@ Json format string
 
 (More params refer to [here](https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md#:~:text=see%20dedicated%20API-,ssl.ca.location,-*))
 
-其他 rdkafka 支持的参数，通常用于鉴权
+Other parameters supported by rdkafka, usually used for authentication
 
 - **SCRAM**: "{"sasl.mechanisms":"SCRAM-SHA-512","sasl.password":"**\*","sasl.username":"bytehouse-dev","security.protocol":"sasl_ssl","ssl.ca.location":"**"}"
 - **PLAIN**: "{"sasl.mechanisms":"PLAIN","sasl.password":"admin","sasl.username":"admin","security.protocol":"sasl_plaintext"}"
@@ -468,7 +469,7 @@ String
 
 "vw_write"
 
-配置消费使用 Virtual WareHouse，consumer 任务将被调度到配置的 Virtual Warehouse 节点执行
+Configure consumption to use Virtual Warehouse, and the consumer task will be scheduled to the configured Virtual Warehouse node for execution
 
 kafka_cnch_schedule_mode
 
@@ -476,46 +477,46 @@ String
 
 "random"
 
-ConsumeManager 调度 consumer 任务时候采取的调度策略，目前支持：random, hash, and **least_consumers；**如果是独立 vw 或消费者数目大于 10，推荐使用** least_consumers**
+The scheduling strategy used by ConsumeManager when scheduling consumer tasks currently supports: random, hash, and **least_consumers; **If it is an independent vw or the number of consumers is greater than 10, it is recommended to use **least_consumers**
 
-#### 修改消费参数
+#### Modify consumption parameters
 
-支持通过 ALTER 命令快速修改 Setting 参数，主要用于调整消费者数目等提升消费能力。
+Supports quick modification of Setting parameters through the ALTER command, which is mainly used to adjust the number of consumers and improve consumption capabilities.
 
-命令：
+command:
 
 ```
 ALTER TABLE <cnch_kafka_name> MODIFY SETTING <name1> = <value1>, <name2> = <value2>
 
 ```
 
-该命令执行会自动重启消费任务。
+Execution of this command will automatically restart the consumption task.
 
-#### 手动启停消费
+#### Manually start and stop consumption
 
-在一些场景中用户可能需要手动停止消费，随后手动恢复；我们提供了对应的 SYSTEM 命令实现：
+In some scenarios, users may need to manually stop consumption, and then manually resume; we provide the corresponding SYSTEM command implementation:
 
 ```
 SYSTEM START/STOP/RESTART CONSUME <cnch_kafka_name>
 
 ```
 
-注意：START/STOP 命令会将对应状态持久化到 Catalog，因此在执行 STOP 命令后，如果不执行 START，即使服务重启，消费任务也不会恢复。
+Note: The START/STOP command will persist the corresponding state to the Catalog, so after executing the STOP command, if you do not execute START, even if the service restarts, the consumption task will not resume.
 
-#### 重置 offset
+#### reset offset
 
-由于 CnchKafka 的 offset 由引擎自身管理和保存，当用户需要重启 offset 时，我们同样实现了 SYSTEM 命令操作。具体支持以下三种方式：
+Since CnchKafka's offset is managed and saved by the engine itself, when the user needs to restart the offset, we also implement the SYSTEM command operation. Specifically, the following three methods are supported:
 
-##### A 重置到特殊位置：最新位置/起始位置
+##### A is reset to a special position: latest position/start position
 
-命令：
+command:
 
 ```
 SYSTEM RESET CONSUME OFFSET '{"database_name":"XXX", "table_name": "XXX", "offset_value":-1}'
 
 ```
 
-可能的特殊位置的 value 值：
+Possible position-specific value values:
 
 ```
     enum Offset {
@@ -527,255 +528,255 @@ SYSTEM RESET CONSUME OFFSET '{"database_name":"XXX", "table_name": "XXX", "offse
 
 ```
 
-##### B 按时间戳重置
+##### B reset by timestamp
 
-（版本要求 >= cnch-1.4）命令：
+Version requirements >= cnch-1.4) command:
 
 ```
 SYSTEM RESET CONSUME OFFSET '{"database_name":"XXX", "table_name": "XXX", "timestamp":1646125258000}'
 
 ```
 
-其中 timestamp 的值应该为 Kafka 侧数据有效期内的某个时间的时间戳，且为毫秒级。
+The value of timestamp should be the timestamp of a certain time within the validity period of the data on the Kafka side, and it is in milliseconds.
 
-##### C 指定 offset 具体 value
+##### C specifies the offset specific value
 
 ```
 system reset consume offset '{"database_name":"XXX", "table_name": "XXX", "topic_name": "XXX", "offset_values":[{"partition":0, "offset":100}, {"partition":10, "offset":101}]}'
 
 ```
 
-指定特定 topic partition 到特定 offset value，比较少见。
+It is relatively rare to assign a specific topic partition to a specific offset value.
 
-### 运维手册
+### Operation Manual
 
-#### 常见消费性能调优
+#### Common consumer performance tuning
 
-当消费持续出现 lag，通常为消费能力不足。CnchKafka 建表默认 1 个消费，单次消费写入最大 block size 为 65536. 当消费能力不足时，优先调整消费者和 block-size 参数。调整方式参考上文**修改消费参数**
+When consumption continues to lag, it is usually insufficient consumption capacity. CnchKafka creates a table with one consumer by default, and the maximum block size for a single consumption write is 65536. When the consumption capacity is insufficient, the consumer and block-size parameters should be adjusted first. For the adjustment method, refer to the above **Modify Consumption Parameters**
 
-##### 调整 max-block-size
+##### Adjust max-block-size
 
-- 该参数直接影响消费内存使用，值越大所需内存越大。对于一些单条数据较大的消费表，谨慎调整该参数，避免爆内存。（上限为 1M）
-- 当用户对数据延时要求不高，且数据量大 内存充足时，可同步调整此参数以及“kafka_max_poll_interval_ms”参数，让每一轮消费时间增加，每次写入的 part 变大，降低 MERGE 压力，提升查询性能。
+- This parameter directly affects the consumption memory usage, the larger the value is, the more memory is required. For some consumption tables with large single data, carefully adjust this parameter to avoid memory explosion. (up to 1M)
+- When the user does not have high requirements for data delay and the amount of data is large and the memory is sufficient, this parameter and the "kafka_max_poll_interval_ms" parameter can be adjusted synchronously to increase the consumption time of each round, increase the part written each time, and reduce the pressure of MERGE , to improve query performance.
 
-##### 调整 num_consumers
+##### Adjust num_consumers
 
-- 该参数上限为消费 topic 对应的 partition 数目。
-- 在消费无 lag 情况下，尽可能减少此参数（即避免无意义增大此参数），减少资源使用，同时避免消费产生过多碎 part，增大 MERGE 压力，且不利于查询。
+- The upper limit of this parameter is the number of partitions corresponding to the consumption topic.
+- In the case of no lag in consumption, reduce this parameter as much as possible (that is, avoid meaninglessly increasing this parameter), reduce resource usage, and avoid excessive consumption of fragmented parts, which increases MERGE pressure and is not conducive to queries.
 
-#### 用于辅助排查的系统表
+#### System table for auxiliary troubleshooting
 
-##### 消费事件：cnch_system.cnch_kafka_log
+##### Consumption event: cnch_system.cnch_kafka_log
 
-kakfa_log 表记录了一些消费的基本事件，开启需要在 config.xml 中配置 kafka_log 项（server&worker 均需配置），重启之后生效。
+The kakfa_log table records some basic consumption events. To enable it, you need to configure the kafka_log item in config.xml (both server and worker need to be configured), and it will take effect after restarting.
 
-kafka_log 在 Virtual Warehouse 由 consumer 任务写入，实时汇聚到全局的 cnch_system.cnch_kafka_log 表中，实现从 Server 段查看所有消费表的消费记录。
+The kafka_log is written by the consumer task in the Virtual Warehouse, and is aggregated into the global cnch_system.cnch_kafka_log table in real time, so that the consumption records of all consumption tables can be viewed from the server segment.
 
-**字段说明**
+**Field Description**
 
-**列名**
+**column name**
 
-**类型**
+**type**
 
-**说明**
+**illustrate**
 
 event_type
 
 Enum8
 
-见下表
+see table below
 
 event_date
 
-Date
+date
 
-时间发生日期。分区字段，建议每次查询都带上。
+Date of occurrence of time. Partition field, it is recommended to bring it in every query.
 
 event_time
 
 DateTime
 
-时间发生时间，单位秒
+The time of occurrence of the time, in seconds
 
 duration_ms
 
 UInt64
 
-事件持续时间，单位秒
+Event duration, in seconds
 
 cnch_database
 
 String
 
-CnchKafka 库名
+CnchKafka library name
 
 cnch_table
 
 String
 
-CnchKafka 表名
+CnchKafka table name
 
 database
 
 String
 
-consumer 任务库名（目前同 cnch_database）
+consumer task library name (currently the same as cnch_database)
 
 table
 
 String
 
-consumer 任务表名（通常为 cnch_table 加时间戳及消费者编号后缀）
+consumer task table name (usually cnch_table plus timestamp and consumer number suffix)
 
 consumer
 
 String
 
-消费者编号
+consumer number
 
 metric
 
 UInt64
 
-消费行数
+consumption line
 
 has_error
 
 UInt8
 
-1 代表有异常；0 代表无异常。
+1 means abnormal; 0 means no abnormal.
 
 exception
 
 String
 
-异常说明，
+exception description,
 
-**事件说明**
+**Event Description**
 
-**UInt8 值**
+**UInt8 value**
 
-**String 值**
+**String value**
 
-**说明**
+**illustrate**
 
 1
 
 POLL
 
-metric 表示消费了多少条数据，duration_ms 覆盖了一次完整的消费流程，包含 WRITE 的时间。
+Metric indicates how many pieces of data are consumed, and duration_ms covers a complete consumption process, including the time of WRITE.
 
 2
 
 PARSE_ERROR
 
-metric 表示解析出错的消费条数，如果有多条解析出错，仅挑选一条打印出来。
+The metric indicates the number of consumption items with parsing errors. If there are multiple parsing errors, only one will be selected and printed out.
 
 3
 
 WRITE
 
-metric 表示写入数据的行数，duration_ms 基本上等同于数据持久化的时间
+Metric indicates the number of rows written to the data, and duration_ms is basically equivalent to the data persistence time
 
 4
 
 EXCEPTION
 
-消费过程的异常。常见的有：鉴权异常，数据持久化失败，VIEW SELECT 执行失败。
+Abnormal consumption process. The common ones are: authentication exception, data persistence failure, and VIEW SELECT execution failure.
 
 5
 
 EMPTY_MESSAGE
 
-空消息条数。
+The number of empty messages.
 
 6
 
 FILTER
 
-写入阶段被过滤的数据。
+The data to be filtered during the write phase.
 
 7
 
 COMMIT
 
-最后事务提交记录，只有该条记录才表示数据写入成功，可作为数据审计标准
+The last transaction submission record, only this record indicates that the data was written successfully, which can be used as a data audit standard
 
-##### 消费状态：system.cnch_kafka_tables
+##### Consumption status: system.cnch_kafka_tables
 
-kafka_tables 记录了 CnchKafka 表的实时状态，默认开始，为内存表；
+kafka_tables records the real-time status of the CnchKafka table, which starts by default and is a memory table;
 
-**字段说明**
+**Field Description**
 
-**字段名**
+**field name**
 
-**数据类型**
+**type of data**
 
-**说明**
+**illustrate**
 
 database
 
 String
 
-数据库名
+Database name
 
 name
 
 String
 
-Kafka 表名
+Kafka table name
 
 uuid
 
 String
 
-kafka 表唯一标识 UUID
+Kafka table unique identifier UUID
 
 kafka_cluster
 
 String
 
-kafka 集群
+kafka cluster
 
 topics
 
 Array(String)
 
-消费 topic 列表
+Consume topic list
 
 consumer_group
 
 String
 
-所属消费组
+Belonging to the consumer group
 
 num_consumers
 
 UInt32
 
-当前实际正在执行的消费者数目
+The number of consumers currently actually executing
 
 consumer_tables
 
 Array(String)
 
-各个消费者对应的数据表名
+The data table name corresponding to each consumer
 
 consumer_hosts
 
 Array(String)
 
-各个消费者分发到的执行节点
+Execution nodes to which each consumer is distributed
 
-consuemr_partitions
+consumemr_partitions
 
 Array(String)
 
-各个消费者分配到的需要消费的 partition
+The partitions that each consumer is assigned to consume
 
-#### 常见排查消费异常记录
+#### Common troubleshooting consumption exception records
 
-##### 查看 CnchKafka 消费表实时状态
+##### View the real-time status of CnchKafka consumption table
 
 ```
 SELECT * FROM system.cnch_kafka_tables
@@ -783,7 +784,7 @@ WHERE database = <database_name> AND name = <cnch_kafka_table>
 
 ```
 
-##### 查看最近消费记录
+##### View recent consumption records
 
 ```
 SELECT * FROM cnch_system.cnch_kafka_log
@@ -795,7 +796,7 @@ ORDER BY event_time
 
 ```
 
-##### 按小时统计当天消费记录
+##### Statistics of consumption records of the day by hour
 
 ```
 SELECT
@@ -812,81 +813,81 @@ ORDER BY hour
 
 ```
 
-## 通过 Spark 导入外部数据
+## Import external data through Spark
 
 ```
-  使用part writer工具导入ByConity，part writer工具可以不经过ByConity引擎，直接将数据文件转化为part文件。使用part writer可以实现ByConity查询与构建分离，一定程度缓解数据导入和查询的资源竞争，提高查询性能。目前，part writer及ByConity对应的加载part文件功能的开发基本完成，下面介绍如何使用part writer将数据导入到ByConity。
+   Use the part writer tool to import ByConity, and the part writer tool can directly convert data files into part files without going through the ByConity engine. Using the part writer can realize the separation of ByConity query and construction, alleviate the resource competition of data import and query to a certain extent, and improve query performance. At present, the development of the part writer and ByConity's corresponding function of loading part files is basically completed. The following describes how to use the part writer to import data into ByConity.
 
-   （1）使用part writer生成part文件
+    (1) Use part writer to generate part file
 ```
 
-part writer 接收一个 sql 语句作为参数，用户通过 sql 语句指定源数据文件、数据文件格式、数据 schema、part 文件保存路径等详细信息，使用方式如下：
+The part writer receives a sql statement as a parameter, and the user specifies the source data file, data file format, data schema, part file storage path and other detailed information through the sql statement. The usage is as follows:
 
 ```
-./part_writer "load CSV file '/path/to/data/test.csv' as table db.tablename(col1 UInt64, col2 String, col3 Nullable(String)) partition by col1 order by (col2, col3) location '/path/to/dest/'"
+./part_writer "load CSV file '/path/to/data/test.csv' as table db.tablename(col1 UInt64, col2 String, col3 Nullable(String)) partition by col1 order by (col2, col3) location '/ path/to/dest/'"
 
 ```
 
-示例 SQL 中，
+In the example SQL,
 
-1. ‘CSV’指定源数据文件格式；此外，part writer 还可使用 CSVWithNames， JSONEachRow 等多种 clickhouse 原生支持的数据文件格式。
-2. '/path/to/data/test.csv' 指定了源数据文件；支持从本地和 hdfs 读取源数据。如使用 hdfs 数据文件，指定路径为：‘hdfs://host:port/path/to/data/file’;
-3. '/path/to/dest/'指定 part 文件写入的目标文件夹；支持将 part 文件直接写到 hdfs 上，ByConity 可以从 hdfs 上拉取并加载 part 文件。
-4. as table 指定了插入数据的 schema 信息
-5. partition by 和 order by 分别指定了数据表的分区键和排序键，多个键之间使用逗号进行分割并且需要用圆括号包裹， 如: partition by (name, id)。
-6. ByConity 特殊选项，settings cnch=1，用于将生成的 part 直接 dump 成 ByConity 的 part 格式并写入 location 选项指定的 hdfs 路径。
+1. 'CSV' specifies the source data file format; in addition, the part writer can also use CSVWithNames, JSONEachRow and other data file formats natively supported by clickhouse.
+2. '/path/to/data/test.csv' specifies the source data file; it supports reading source data from local and hdfs. If using hdfs data files, specify the path as: 'hdfs://host:port/path/to/data/file';
+3. '/path/to/dest/' specifies the destination folder where part files are written; it supports writing part files directly to hdfs, and ByConity can pull and load part files from hdfs.
+4. as table specifies the schema information of the inserted data
+5. partition by and order by specify the partition key and sort key of the data table respectively. Multiple keys are separated by commas and need to be wrapped in parentheses, such as: partition by (name, id).
+6. The ByConity special option, settings cnch=1, is used to directly dump the generated part into the ByConity part format and write it into the hdfs path specified by the location option.
 
-（2）part 文件导入 ByConity
+(2) Import part files into ByConity
 
-生成好的 part 文件可以直接 copy 到 ByConity 表对应的数据文件路径下，然后通过重启 ByConity server 加载；
+The generated part file can be directly copied to the data file path corresponding to the ByConity table, and then loaded by restarting the ByConity server;
 
-也可以将 part 文件目录 copy 到表的 detached 目录下，通过 attach 命令加载 part 文件, 如
+You can also copy the part file directory to the detached directory of the table, and load the part file through the attach command, such as
 
 ```
 alter table test attach part 'partfile'
 
 ```
 
-如果使用 part writer 生成 part 文件时指定了直接上传到 hdfs，可以执行如下命令：
+If you specify to upload directly to hdfs when using part writer to generate part files, you can execute the following command:
 
 ```
 system fetch parts into db.table 'hdfs://host:port/path/to/part/'
 
 ```
 
-ByConity 将自动从 hdfs 路径下拉取 part 文件并进行加载。
+ByConity will automatically pull the part file from the hdfs path and load it.
 
-ByConity attach 语法：
+ByConity attach syntax:
 
-用于将 dump 到 hdfs 的 parts 导入到目标表：
+Used to import the parts dumped to hdfs into the target table:
 
 ```
 alter table test attach parts from '/hdfs/path/to/dumped/dir'
 
 ```
 
-同时，形式四还支持 spark 导入：
+At the same time, the fourth form also supports spark import:
 
-实际应用场景下，需要往 ByConity 集群导入大量数据，可以考虑使用 spark。首先从外部将数据读入 spark dataset；然后根据 sharding key 对 dataset 进行 repartition，保证将要发送到不同 ByConity 节点到数据落在不同的 partition 上（可能需要根据实际情况，调整 spark.sql.shuffle.partitions 参数使 partition 不小于 ByConity 主节点数）；对于每个 partition， 首先通过调用 part writer 生成 part 文件，并指定 part 文件上传到 hdfs，然后通过向对应 ByConity 节点发送 http 请求，通知 ByConity 加载 part 文件。数据流图如下：
+In the actual application scenario, it is necessary to import a large amount of data into the ByConity cluster, you can consider using spark. First read the data into the spark dataset from the outside; then repartition the dataset according to the sharding key to ensure that the data to be sent to different ByConity nodes falls on different partitions (it may be necessary to adjust the parameters of spark.sql.shuffle.partitions according to the actual situation Make the partition not less than the number of ByConity master nodes); for each partition, first generate a part file by calling the part writer, and specify the part file to upload to hdfs, and then notify ByConity to load the part file by sending an http request to the corresponding ByConity node. The data flow diagram is as follows:
 
-![](./assets/data-import/boxcnlSkMX0zkWno7WT7250zU1f.png)
+![](./assets/import data/boxcnlSkMX0zkWno7WT7250zU1f.png)
 
-## 通过 ByConity 访问外部数据源
+## Access external data sources through ByConity
 
-### MySQL
+###MySQL
 
-`MySQL` 引擎允许用户通过 ByConity 访问 MySQL 表，并可以进行 SELECT 和 INSERT 查询。
+The `MySQL` engine allows users to access MySQL tables through ByConity, and can make SELECT and INSERT queries.
 
-#### 在 MySQL 中创建表
+#### Create Tables in MySQL
 
-- 创建 database
+- create database
 
 ```
 CREATE DATABASE db1;
 
 ```
 
-- 在 mysql 中创建表
+- Create tables in mysql
 
 ```
 CREATE TABLE db1.table1(
@@ -896,7 +897,7 @@ CREATE TABLE db1.table1(
 
 ```
 
-- 插入一些数据
+- insert some date
 
 ```
 INSERT INTO db1.table1
@@ -907,83 +908,83 @@ values
 
 ```
 
-- 在 mysql 中创建 user 以在 ByConity 中连接 mysql
+- Create a user in mysql to connect to mysql in ByConity
 
 ```
 CREATE USER 'mysql_byconity'@'%' IDENTIFIED BY 'Password123!';
 
 ```
 
-- 授予权限。(这里为了展示，授予了 `mysql_byconity` 用户 admin 权限)
+- Granted permission. (Here, for demonstration purposes, the `mysql_byconity` user has been granted admin privileges)
 
 ```
 GRANT ALL PRIVILEGES ON *.* TO 'mysql_byconity'@'%';
 
 ```
 
-#### 在 ByConity 中创建 MySQL 表
+#### Create MySQL table in ByConity
 
 Now let's create a ByConity table that uses the **MySQL** table engine:
 
 ```
 CREATE TABLE mysql_table1 (
-  id UInt64,
-  column1 String
+   idUInt64,
+   column1 String
 )
 ENGINE = MySQL('mysql-host.domain.com','db1','table1','mysql_byconity','Password123!');
 
 ```
 
-`MySQL` 引擎的参数如下表：
+The parameters of the `MySQL` engine are as follows:
 
-参数
+parameter
 
-描述
+describe
 
-例子
+example
 
 host
 
-域名或 IP:Port
+Domain name or IP:Port
 
 mysql-host.domain.com
 
 database
 
-mysql 数据库名
+mysql database name
 
 db1
 
 tabele
 
-mysql 表名
+mysql table name
 
 table1
 
 user
 
-连接 mysql 的用户
+user to connect to mysql
 
 mysql_byconity
 
 password
 
-连接 mysql 的密码
+Password to connect to mysql
 
 Password123!
 
-#### 在 ByConity 中测试连接 mysql 表
+#### Test connection mysql table in ByConity
 
-- 测试 SELECT 查询
+- Test SELECT query
 
 ```
 select * from mysql_table1;
 
 ```
 
-![](./assets/data-import/boxcnJv89B9UChc3nI0EPHoba6c.png)
+![](./assets/import data/boxcnJv89B9UChc3nI0EPHoba6c.png)
 
-- 测试 INSERT 查询
+- Test INSERT query
 
 ```
 INSERT INTO mysql_table1
@@ -993,49 +994,49 @@ VALUES
 
 ```
 
-- 在 MySQL 中验证从 ByConity 中插入的数据
+- Validate data inserted from ByConity in MySQL
 
 ```
 mysql> select id, column1 from db1.table1;
 
 ```
 
-![](./assets/data-import/boxcnQdV8Jpg8jcqEKwAOjONxkh.png)
+![](./assets/import data/boxcnQdV8Jpg8jcqEKwAOjONxkh.png)
 
 ### Hive
 
 ```
-CnchHive为ByConity提供的一种表引擎，支持使用外表的方式进行联邦查询，用户无需通过数据导入，可以直接进行数据查询加速。
+CnchHive is a table engine provided by ByConity, which supports federated query in the form of external tables, and users can directly accelerate data query without importing data.
 ```
 
-### 使用：
+### use:
 
-#### 实例 1：构建 hive 表的全集
+#### Example 1: Build a complete set of hive tables
 
 ```
---创建hive外表
+--Create hive table
 CREATE TABLE t
 (
-  client_ip   String,
-  request     String,
-  status_code INT,
-  object_size INT,
-  date String
+   client_ip String,
+   request String,
+   status_code INT,
+   object_size INT,
+   date String
 )
 ENGINE = CnchHive('psm', 'hive_database_name', 'hive_table_name')
 PARTITION BY date;
 
---参数说明：
---psm：hivemetastore psm
---hive_database_name：hive表database name
---hive_table_name：hive表table name
+--Parameter Description:
+--psm:hivemetastore-psm
+--hive_database_name: hive database name
+--hive_table_name: hive table name
 
---查询hive外表
+--Query hive external table
 select * from  t where xxx;
 
 ```
 
-#### 实例 2：构建 hive 表的子集
+#### Example 2: Building a subset of hive tables
 
 ```
 CREATE TABLE t
@@ -1047,17 +1048,17 @@ CREATE TABLE t
 ENGINE = CnchHive('psm', 'hive_database_name', 'hive_table_name')
 PARTITION BY date
 
---参数说明：
+--Parameter Description:
 --psm：hivemetastore psm
---hive_database_name：hive表database name
---hive_table_name：hive表table name
+--hive_database_name：hive database name
+--hive_table_name：hive table name
 
---查询hive外表
+--Query hive external table
 select * from  t where xxx;
 
 ```
 
-#### 实例 3：hive bucket 表构建
+#### Example 3: hive bucket table construction
 
 ```
 CREATE TABLE t
@@ -1074,37 +1075,37 @@ CLUSTER BY device_id INTO 65536 BUCKETS
 ORDER BY server_time
 SETTINGS cnch_vw_default ='vw_default'
 
---参数说明：
+--Parameter Description：
 --psm：hivemetastore psm
---hive_database_name：hive表database name
---hive_table_name：hive表table name
+--hive_database_name：hive database name
+--hive_table_name：hive table name
 
---查询hive外表
+--Query hive external table
 select * from  t where xxx;
 
 ```
 
-说明：
+illustrate:
 
-- 外表列
-- 列名需要与 hive 表一一对应
-- 列的顺序不需要与 hive 一一对应
-- 可以只选择 hive 表中的部分列，但分区列必须要全部包含。
-- 外表列的分区需要通过 partition by 语句指定，同时需要与普通列一样定义到描述列表中。
-- 当 Hive 表为 bucket 表时，建 CnchHive 引擎时需指定分桶列以及分桶数量。（CLUSTER BY xxx INTO xxx BUCKETS ）
-- 当 Hive 表中有 ORDER BY 字段，建 CnchHive 引擎时需指定 ORDER BY 字段。
-- ENGINE 指定为 CnchHive
-- 引擎参数
-- psm：hivemetastore psm
-- hive_database_name：指定 hive 中的数据库
-- hive_table_name：指定 hive 中的表，不支持 view。
-- 支持的列类型对应关系如下表：
+- External column
+- The column names need to correspond one-to-one with the hive table
+- The order of the columns does not need to correspond one-to-one with hive
+- You can select only some of the columns in the hive table, but the partition columns must include all of them.
+- The partition of the external column needs to be specified through the partition by statement, and it needs to be defined in the description list like ordinary columns.
+- When the Hive table is a bucket table, you need to specify the bucket column and the number of buckets when building the CnchHive engine. (CLUSTER BY xxx INTO xxx BUCKETS )
+- When there is an ORDER BY field in the Hive table, the ORDER BY field needs to be specified when building the CnchHive engine.
+- ENGINE specified as CnchHive
+- engine parameters
+- psm:hivemetastore-psm
+- hive_database_name: specifies the database in hive
+- hive_table_name: specifies the table in hive, does not support view.
+- The supported column types correspond to the following table:
 
-hive 列类型
+hive column type
 
-CnchHive 列类型
+CnchHive column type
 
-描述
+describe
 
 INT/INTERGER
 
@@ -1132,7 +1133,7 @@ CHAR
 
 FixedString
 
-内部转换为 FixedString
+Internally converted to FixedString
 
 DOUBLE
 
@@ -1154,152 +1155,152 @@ ARRAY
 
 Array
 
-说明：
+Description:
 
-- hive 表 schema 变更不会自动同步，需要在 Clickhouse 中重建 hive 外表
-- 当前 hive 存储格式仅支持 Parquet
-- 当前 CnchHive 不支持 insert、alter 操作
+- The hive table schema change will not be automatically synchronized, and the hive table needs to be rebuilt in Clickhouse
+- The current hive storage format only supports Parquet
+- Currently CnchHive does not support insert and alter operations
 
 #### SETTINGS
 
-cnch_vw_default：用于指定 vw。
+cnch_vw_default：to specify vw
 
-max_read_row_group_threads：用于指定并发读取 Parquet row group 的并发数量。
+max_read_row_group_threads: Used to specify the number of concurrent reads of Parquet row groups.
 
-#### 运维手册
+#### Operation Manual
 
-关键字
+keywords
 
-解决办法
+Solution
 
 DB::Exception: Can not insert NULL data into non-nullable column "name"
 
-列字段添加 Nullable 属性。
+Add Nullable attribute to column field.
 
 DB::Exception: The hive type is not match in cnch.
 
-CnchHive schema type 与 Hive schema 不匹配。
+CnchHive schema type does not match Hive schema.
 
 DB::Exception: column name xxx doesn't match.
 
-CnchHive schema name 与 Hive schema 不匹配。
+CnchHive schema name does not match Hive schema.
 
 DB::Exception: CnchHive only support parquet format. Current format is org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat.
 
-CnchHive 目前仅支持存储格式为 Parquet。
+CnchHive currently only supports Parquet as the storage format.
 
 DB::Exception: No available nnproxy xxx.
 
-HiveMetastore 的 psm 有问题，需 check HiveMetastore psm 是否可访问。
+There is a problem with the psm of HiveMetastore, you need to check whether the psm of HiveMetastore is accessible.
 
-# 常见报错及处理
+# Common errors and handling
 
-关键字
+keywords
 
-原因
+reason
 
-解决办法
+Solution
 
 Too many map keys in table
 
 (more than 10000)
 
-Map 列中 key 种类超 10000
+The number of key types in the Map column exceeds 10,000
 
-超 10000 则无法导入，请导入数据减少 map key 数量
+If it exceeds 10000, it cannot be imported, please import data to reduce the number of map keys
 
 Memory limit (total)
 
-导入过程中内存超限制
+Memory limit exceeded during import
 
 Cannot parse JSON
 
-json 中数据类型与 clickhouse 的不符
+The data type in json does not match that of clickhouse
 
-请用户检查上游生成数据类型是否匹配；
+Ask the user to check whether the upstream generated data type matches;
 
 Duplicate field found while parsing JSONEachRow format: hour
 
-json 数据有字段重复，这里的重复字段是 hour，即"format:"后的就是重复字段
+The json data has repeated fields, and the repeated field here is hour, that is, the repeated field after "format:"
 
-检查上游数据是否正确，配置是否正确
+Check whether the upstream data is correct and the configuration is correct
 
 HDFS json size xxx > 1099511627776
 
-导入数据太大(1T)，禁止导入
+Import data is too large (1T), import is prohibited
 
-减少导入数据量
+Reduce the amount of imported data
 
 Unable to parse hdfs json file
 
-hdfs 中数据格式错误
+Data format error in hdfs
 
-请用户检查 hdfs 中文件是否为合法的 json
+Ask the user to check whether the file in hdfs is legal json
 
 DB::Exception: Error while reading parquet data: IOError: definition level exceeds maximum. Stack trace
 
-hdsf 文件错误读取错误，多数为丢块等造成。
+hdsf file error reading error, most of which are caused by missing blocks.
 
-需要重新生产 HDFS 文件
+HDFS files need to be regenerated
 
-DB::Exception: Cannot parse string 'time="2021-11-12' as Date: syntax error at position 10 (parsed just 'time="2021'). Note: there are toDateOrZero and toDateOrNull functions, which returns zero/NULL instead of throwing exception.: while pushing to view
+DB::Exception: Cannot parse string 'time="2021-11-12' as Date: syntax error at position 10 (parsed just 'time="2021'). Note: there are toDateOrZero and toDateOrNull functions, which returns zero/ NULL instead of throwing exception.: while pushing to view
 
-这种情况是用户 topic 中有脏数据；Kafka 表消费的时候按 string 正常解析；但是写入底表通过 toDate 等函数转换发现不合法，导致写入失败阻塞消费
+In this case, there is dirty data in the user topic; when the Kafka table is consumed, it is parsed normally according to the string; but the writing to the bottom table is found to be illegal through the conversion of functions such as toDate, resulting in writing failure and blocking consumption
 
-1.临时可修改 VIEW 表，过滤脏数据；
+1. Temporarily modify the VIEW table to filter dirty data;
 
-2.用户上游添加数据清洗和保护机制
+2. User upstream to add data cleaning and protection mechanism
 
-3.Kafka 表解析与底表保持一致，不建议在写入阶段再转换，Kafka 解析失败可以丢弃脏数据，不阻塞整个消费
+3. The Kafka table analysis is consistent with the bottom table. It is not recommended to convert it during the writing phase. If Kafka analysis fails, dirty data can be discarded without blocking the entire consumption
 
 Code: 1001, type: cppkafka::Exception, e.what() = Failed to create consumer handle: consumer regist error, please check output!
 
-打开 trace 日志，查看 Kafka 侧具体报错信息
+Open the trace log to view the specific error information on the Kafka side
 
-根据报错信息处理
+Handle according to the error message
 
 Code: 49, e.displayText() = DB::Exception: Check dependencies failed for
 
-VIEW 表找不到
+VIEW table not found
 
-重建 VIEW 表
+Rebuild the VIEW table
 
 Code: 6001. DB::Exception: DB::Exception: Cannot get metadata of table XXX by UUID : XXX.
 
-执行 ALTER TABLE 命令时报错，cnch 表是和 server 绑定，这个是由于没在表对应 server 执行导致
+An error is reported when executing the ALTER TABLE command. The cnch table is bound to the server. This is because the table is not executed on the corresponding server.
 
-先查询 system.cnch_table_host 获得该表对应的 server，然后在对应 server 执行
+First query system.cnch_table_host to obtain the server corresponding to the table, and then execute on the corresponding server
 
 No space left on device: while pushing to view
 
-磁盘用满
+disk full
 
-清理磁盘
+clean disk
 
-# 导入参数调优
+# Import parameter tuning
 
-## 直接写入方式调优
+## Direct write mode tuning
 
-在使用 INSERT VALUES, INSERT INFILE 或者 PartWriter 工具写入时，最后生成的 Part 数量会影响写入 HDFS 的次数进而影响写入整体的耗时，因此应当尽量减少 Part 的数量。直接写入的流程如下：
+When using INSERT VALUES, INSERT INFILE or PartWriter tools to write, the number of Parts generated at the end will affect the number of times written to HDFS and affect the overall writing time, so the number of Parts should be reduced as much as possible. The direct writing process is as follows:
 
-- 读取部分文件数据
-- 将这部分数据按照 PartitionBy 进行切分
-- 将这部分数据按照 ClusterBy 进行切分
-- 将切分完的数据写成新的 Part 并写入 HDFS
+- read part of file data
+- Split this part of data according to PartitionBy
+- Split this part of data according to ClusterBy
+- Write the split data into a new Part and write it to HDFS
 
-调优手段：
+Tuning means:
 
-1. 为了减少 Part 的数量，我们可以将文件中具有相同的分区和 Bucket 的数据排列在一起，这样每次读取一些新的数据后，生成的 Part 数量会尽可能少。可以将数据按照分区相同，分区内 Bucket 相同的要求进行排序，Bucket 的计算规则是：
+1. In order to reduce the number of Parts, we can arrange the data with the same partition and Bucket in the file together, so that after reading some new data each time, the number of Parts generated will be as small as possible. The data can be sorted according to the requirement that the partitions are the same and the buckets in the partitions are the same. The calculation rules of the buckets are:
 
-- 如果没有指定 SPLIT_NUMBER，会将 ClusterByKey 所使用的列计算 SipHash 后对 BucketNumber 取模得到 BucketNumber
-- 如果指定了 SPLIT_NUMBER
-- 计算 SplitValue
-- 如果 ClusterBy 某一列，利用 dtspartition 函数计算出对应的 SplitValue
-- 如果 ClusterBy 多列，则将这些列利用 SipHash 计算出对应的 SplitValue
-- 计算 BucketNumber
-- 如果是 WithRange，则用 SplitValue \* BucketCount / SplitNumber 计算对应 BucketNumber
-- 如果不是 WithRange，则用 SplitValue % BucketCount 计算对应 BucketNumber
+- If SPLIT_NUMBER is not specified, SipHash will be calculated for the column used by ClusterByKey and then the BucketNumber will be moduloed to get BucketNumber
+- if SPLIT_NUMBER is specified
+- Calculate SplitValue
+- If a column is ClusterBy, use the dtspartition function to calculate the corresponding SplitValue
+- If ClusterBy has multiple columns, use SipHash to calculate the corresponding SplitValue of these columns
+- Calculate BucketNumber
+- If it is WithRange, use SplitValue \* BucketCount / SplitNumber to calculate the corresponding BucketNumber
+- If not WithRange, use SplitValue % BucketCount to calculate the corresponding BucketNumber
 
-1. 读取文件时
-2. 如果每行数据大小并不大，可以通过调大 max_insert_block_size 来一次读取更大的 Block，从而生成更大的 Part
-3. 如果读取的文件不是 HDFS/CFS 的，同时使用通配符匹配了多个文件，也可以同时调大 min_insert_block_size_rows 和 min_insert_block_size_bytes
+1. When reading a file
+2. If the data size of each row is not large, you can read a larger block at a time by increasing max_insert_block_size, thereby generating a larger Part
+3. If the file to be read is not HDFS/CFS and multiple files are matched using wildcards, you can also increase min_insert_block_size_rows and min_insert_block_size_bytes at the same time

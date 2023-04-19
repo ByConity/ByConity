@@ -1,25 +1,25 @@
 ---
-title: 集群配置参数
+title: Cluster Configuration
 tags:
   - Docs
 ---
 
-# 集群配置参数
+# Cluster Configuration
 
-文档类型：说明型
+Document Type: Descriptive
 
-内容提要：
+Summary:
 
-1. 在安装部署的过程中，需要理解哪些基础参数
-2. 各组件分别有哪些高级参数，作用是什么
+1. In the process of installation and deployment, what basic parameters need to be understood
+2. What are the advanced parameters of each component and what are their functions?
 
-## Server 配置参数
+## Server Configuration Parameters
 
-ByConity(曾用内部代号 CNCH) Server 端的配置保存在 cnch-server.xml 中，进程启动时通过 `--config-file` 指定， server 会自动从 cnch-server.xml 中加载配置。
+ByConity (formerly codenamed CNCH) server-side configuration is stored in cnch-server.xml, specified by `--config-file` when the process starts, and the server will automatically load the configuration from cnch-server.xml.
 
 ### cnch_type
 
-配置 ByConity 进程类型，可配置为 server 或者 worker。其中 server 主要负责接收查询请求并负责将查询调度到 worker；worker 节点主要负责执行来自 server 的查询任务。举例如下：
+Configure the ByConity process type, which can be configured as server or worker. Among them, the server is mainly responsible for receiving query requests and dispatching queries to workers; the worker nodes are mainly responsible for executing query tasks from the server. Examples are as follows:
 
 Example:
 
@@ -30,7 +30,7 @@ Example:
 
 ### tcp_port
 
-server 和客户端进行连接的 TCP 端口
+The TCP port used by server and client to connect
 
 Example：
 
@@ -41,7 +41,7 @@ Example：
 
 ### http_port
 
-server 与客户端进行连接的 HTTP 端口
+The HTTP port used by server and client to connect
 
 Example:
 
@@ -52,7 +52,7 @@ Example:
 
 ### rpc_port
 
-server 与其他组件进行交互的 RPC 端口
+The RPC port for server to interact with other components
 
 Example:
 
@@ -63,15 +63,15 @@ Example:
 
 ### exchange_port
 
-复杂查询的数据传输端口 （将来考虑与 rpc_port 合并）
+Data transfer port for complex queries (to be considered for merging with rpc_port in the future)
 
 ### exchange_status_port
 
-复杂查询的控制指令端口 （将来考虑与 rpc_port 合并）
+Control command port for complex queries (to be considered for merging with rpc_port in the future)
 
 ### path
 
-本地数据路径目录
+Local data path directory
 
 Example:
 
@@ -82,7 +82,7 @@ Example:
 
 ### tmp_path
 
-本地临时目录路径,用来存放查询过程中的临时数据
+Local temporary directory path, used to store temporary data during the query process
 
 Example：
 
@@ -93,7 +93,7 @@ Example：
 
 ### users_config
 
-用户相关配置文件的路径。
+The path to the user-related configuration file.
 
 Example:
 
@@ -104,14 +104,14 @@ Example:
 
 ### Service discovery
 
-配置与 server 进程通信的其他组件(包括其他 server)。与 server 交互的其他组件有 server, tso, daemon manager, virtual warehouse 以及 resource manager
+Configure other components (including other servers) that communicate with the server process. Other components that interact with the server are server, tso, daemon manager, virtual warehouse and resource manager
 
 keys**:**
 
-- **mode** : 服务发现模式, 可选择的配置参数为 local , dns, consul
-- **cluster**: 集群名称
-- **disable_cache**：如果配置为 false, 将启用缓存以减少调用服务发现的次数
-- **cache_timeout** : 缓存过期时间
+- **mode** : service discovery mode, optional configuration parameters are local , dns, consul
+- **cluster** : cluster name
+- **disable_cache** : If configured as false, caching will be enabled to reduce the number of calls to service discovery
+- **cache_timeout** : cache expiration time
 
 Example
 
@@ -150,11 +150,11 @@ Example
 
 ### Catalog service
 
-集群元数据相关配置
+Catalog service related configuration
 
 Keys:
 
-- **type** : 元数据存储引擎类型，支持 bytekv, fdb
+- **type** : Metadata storage engine type, support bytekv, fdb
 
 Example:
 
@@ -173,13 +173,13 @@ Example:
 
 ###
 
-## HDFS   配置参数
+## HDFS configuration parameters
 
-启动服务时，会按照 cfs_addr>hdfs_addr>hdfs_ha_nameservice>hdfs_nnproxy 的顺序来检测配置项，一但命中某个配置项配置则使用对应的配置项来访问 HDFS
+When starting the service, the configuration items will be detected in the order of cfs_addr>hdfs_addr>hdfs_ha_nameservice>hdfs_nnproxy. Once a configuration item configuration is hit, the corresponding configuration item will be used to access HDFS
 
 ### hdfs_user
 
-访问 HDFS 时默认使用的用户的名称，默认 clickhouse
+The name of the user used by default when accessing HDFS, the default is clickhouse
 
 Example:
 
@@ -190,7 +190,7 @@ Example:
 
 ### cfs_addr
 
-cfs 服务的地址，格式为 cfs://service_url
+The address of the cfs service, the format is cfs://service_url
 
 Example:
 
@@ -201,7 +201,7 @@ Example:
 
 ### hdfs_addr
 
-hdfs 服务的地址，格式为 hdfs://nnip:nnport/path
+The address of hdfs service, the format is hdfs://nnip:nnport/path
 
 Example:
 
@@ -212,7 +212,7 @@ Example:
 
 ### hdfs_ha_nameservice
 
-hdfs 服务的名称，需要在 libhdfs3 的配置文件中提前配置好
+The name of the hdfs service needs to be configured in advance in the configuration file of libhdfs3
 
 Example:
 
@@ -223,7 +223,7 @@ Example:
 
 ### ~~hdfs_nnproxy~~
 
-~~访问~~~~HDFS~~~~时默认使用的 nnproxy 名称，默认 nnproxy~~
+~~The name of nnproxy used by default when accessing ~~~~HDFS~~~~, default nnproxy~~
 
 ~~Example:~~
 
@@ -234,36 +234,36 @@ Example:
 
 ### storage_configuration
 
-1. 接下来的配置层级与配置文件中 storage_configuration 配置层级一一对应
+1. The next configuration level corresponds to the storage_configuration configuration level in the configuration file
 
 - storage_configuration
-- cnch_default_policy，指定 CNCH 存储实际数据所使用的 StoragePolicy，可选配置项，默认是 cnch_default_hdfs，这个 StoragePolicy 中应当仅包含 HDFSDisk
-- 当建表的时候，对于 CNCH 表，如果没有指定 storage_policy 这个 MergeTreeSettings，则会被默认修改为 ${cnch_default_policy}
-- cnch_auxility_policy，指定 CNCH 在本地磁盘上存储临时数据所使用的 StoragePolicy，可选配置项，默认是 default
+- cnch_default_policy, specifies the StoragePolicy used by ByConity to store actual data, an optional configuration item, the default is cnch_default_hdfs, and this StoragePolicy should only include HDFSDisk
+- When creating a table, for a ByConity table, if the storage_policy MergeTreeSettings is not specified, it will be changed to ${cnch_default_policy} by default
+- cnch_auxility_policy, specifies the StoragePolicy used by ByConity to store temporary data on the local disk, optional configuration item, the default is default
 - disks
 - ${DISK_NAME}
-- type，这个磁盘的类型，可选配置项，默认是 local
-- CNCH 支持选用 hdfs/bytehdfs 这两种磁盘作为远端存储，目前该 StoragePolicy 中仅支持单个 Disk
-- 为了与内部的配置兼容，hdfs/bytehdfs 均解析为内部的 bytehdfs 这种 Disk，社区版本的 HDFSDisk 的 type 被重命名为 communityhdfs
-- CNCH 所使用的 StoragePolicy 所指定的 HDFSDisk，其配置项在所有的 Server/Worker 的配置文件中都应当相同
+- type, the type of this disk, optional configuration item, the default is local
+- ByConity supports the selection of two disks, hdfs/bytehdfs, as remote storage. Currently, only a single Disk is supported in the StoragePolicy
+- In order to be compatible with the internal configuration, hdfs/bytehdfs are resolved to the internal bytehdfs Disk, and the type of the community version HDFSDisk is renamed to communityhdfs
+- The configuration items of HDFSDisk specified by the StoragePolicy used by ByConity should be the same in all Server/Worker configuration files
 - path
-- 数据将被存储在这个 Disk 的哪个路径中，必需的配置项
+- Which path of this Disk will the data be stored in, required configuration items
 - hdfs_params
-- 针对 bytehdfs 类型的磁盘所新增的可选配置项，包含如下参数
-- hdfs_user，连接 hdfs 所使用的 user，可选配置项，默认是 clickhouse
-- cfs_addr，cfs 的地址，可选配置项，仅在使用 cfs 时需要配置此配置项
-- hdfs_addr，hdfs 的 namenode 的地址，可选配置项，如 hdfs://nnip:nnport/path
-- hdfs_ha_nameservice，可选配置项，如果需要使用 hdfs 的 HA，可以使用该配置项指定对应的 service，对应的 hdfs 配置需要通过 hdfs3_config 配置文件来配置
-- hdfs_nnproxy，hdfs 的 nnproxy 的地址，可选配置项，默认是 nnproxy
-- 如果 DiskByteHDFS 没有配置 hdfs_params 配置项，则会去配置文件中找到全局的配置项，例如配置文件中 hdfs_user 这个配置项的值
+- A new optional configuration item for disks of type bytehdfs, including the following parameters
+- hdfs_user, the user used to connect to hdfs, an optional configuration item, the default is clickhouse
+- cfs_addr, the address of cfs, an optional configuration item, this configuration item needs to be configured only when using cfs
+- hdfs_addr, the namenode address of hdfs, optional configuration items, such as hdfs://nnip:nnport/path
+- hdfs_ha_nameservice, an optional configuration item. If you need to use hdfs HA, you can use this configuration item to specify the corresponding service. The corresponding hdfs configuration needs to be configured through the hdfs3_config configuration file
+- hdfs_nnproxy, nnproxy address of hdfs, optional configuration item, default is nnproxy
+- If DiskByteHDFS does not configure the hdfs_params configuration item, it will find the global configuration item in the configuration file, such as the value of the hdfs_user configuration item in the configuration file
 - policies
 - ${STORAGE_POLICY_NAME}
 - volumes
 - ${VOLUME_NAME}
-- default，这个 Volume 中的默认磁盘，必需的配置项，默认的磁盘会被用来存放部分不支持多盘存储的数据，例如 metastore 等
-- disk，这个 Volume 所包含的所有磁盘名称，必需的配置项，对应 Disk 需要在 storage_configuration.disks 中配置好
+- default, the default disk in this Volume, a required configuration item, the default disk will be used to store some data that does not support multi-disk storage, such as metastore, etc.
+- disk, the name of all the disks contained in this Volume, the required configuration items, the corresponding Disk needs to be configured in storage_configuration.disks
 
-1. 配置示例
+1. configuration demo
 
 ```
 <storage_configuration>
@@ -304,11 +304,11 @@ Example:
 
 ```
 
-1. 为了兼容内部旧版本的配置项，如果用户仅指定了 default 这一个 StoragePolicy，同时包含 hdfs 和 local 这两个 volume，那么这个配置项会被解析成两个 StoragePolicy，一个是 default，但是仅包含 local 这个 volume，另一个是 ${cnch_default_policy}，仅包含 hdfs 这个 volume
+1. In order to be compatible with the internal configuration items of the old version, if the user only specifies a StoragePolicy of default, which also includes two volumes of hdfs and local, then this configuration item will be parsed into two StoragePolicy, one is default, but only contains The local volume, the other is ${cnch_default_policy}, which only includes the hdfs volume
 
 ### hdfs3_config
 
-libhdfs3 配置文件路径
+libhdfs3 configuration doc path
 
 Example:
 
@@ -319,14 +319,14 @@ Example:
 
 ### disk_cache_strategies
 
-配置 disk cache 策略，包括策略 simple 和 lru 两种不同策略：
+Configure the disk cache strategy, including two different strategies: simple and lru:
 
-- **lru**，LRUCache 淘汰策略相关配置
-- lru_max_size，DiskCache 最大的大小，默认 2T
-- random_drop_threshold，Cache 队列有长度限制，当队列长度到达一定比例后会按一定几率开始丢弃 Cache 请求来避免大表 Scan 导致 Cache 队列被占满，默认 50%
-- **simple**，Cache 策略相关配置
-- segment_size，DiskCache 的粒度，默认 8192，即将一个 ColumnStream 的最多 8192 个 GranuleCache 组成一个 DiskCacheSegment
-- hits_to_cache，数据开始 Cache 的阈值，默认为 2
+- **lru**, LRUCache elimination policy related configuration
+- lru_max_size, the maximum size of DiskCache, the default is 2T
+- random_drop_threshold, the cache queue has a length limit. When the queue length reaches a certain percentage, cache requests will be discarded with a certain probability to avoid large table scans causing the cache queue to be full. The default is 50%
+- **simple**, Cache policy related configuration
+- segment_size, the granularity of DiskCache, the default is 8192, that is, up to 8192 GranuleCaches of a ColumnStream form a DiskCacheSegment
+- hits_to_cache, the threshold of data start Cache, the default is 2
 
 Example:
 
@@ -341,7 +341,7 @@ Example:
 
 ### cnch_kafka_log
 
-配置后，CNCH 将开启 kafka_log, 可通过系统表查看消费日志
+After configuration, ByConity will open kafka_log, and the consumption log can be viewed through the system table
 
 Example:
 
@@ -359,7 +359,7 @@ Example:
 
 ### cnch_transaction_cleaner_max_threads
 
-CNCH 后台清理 transaction record 的线程池大小，默认 128
+The thread pool size of ByConity background cleaning transaction record, the default is 128
 
 Example:
 
@@ -370,7 +370,7 @@ Example:
 
 ### cnch_transaction_cleaner_queue_size
 
-CNCH 后台清理 transaction record 的线程池队列大小，默认 10000
+The thread pool queue size of ByConity background cleaning transaction record, the default is 10000
 
 Example:
 
@@ -381,7 +381,7 @@ Example:
 
 ### dance_merge_selector
 
-配置自研 merge 选择策略参数
+Configure self-developed merge selection strategy parameters
 
 Example:
 
@@ -394,7 +394,7 @@ Example:
 
 ### exchange_timeout_ms
 
-复杂查询数据传输 rpc 超时，默认 100000
+Complex query data transfer rpc timeout, default 100000
 
 Example:
 
@@ -405,7 +405,7 @@ Example:
 
 ### zookeeper
 
-配置 zookeeper （可选）， 当使用 clickhouse keeper 时需要配置为空
+Configure zookeeper (optional), when using clickhouse keeper, it needs to be empty
 
 Example:
 
@@ -414,17 +414,17 @@ Example:
 
 ```
 
-## TSO 配置参数
+## TSO configuration parameters
 
 ### tso_service
 
-配置 tso 服务，包括服务端口，元数据存储，keeper 等
+Configure tso service, including service port, metadata storage, keeper, etc.
 
 Keys:
 
-- **port**: TSO 服务 TCP 端口
-- **keeper**: tso，server_master 等组件 leader 选举服务
-- **type**: TSO 元数据存储引擎
+- **port**: TSO service TCP port
+- **keeper**: tso, server_master and other components leader election service
+- **type**: TSO metadata storage engine
 
 Example:
 
@@ -445,7 +445,7 @@ Example:
 
 ### keeper_server
 
-- path: keeper 数据存储路径
+- path: keeper data storage path
 
 ```
 <path>/var/lib/tso_server/keeper/</path>
@@ -453,15 +453,15 @@ Example:
 ```
 
 - keeper_server
-- tcp_port：keeper 服务的 tcp 端口
-- server_id：keeper 内部 leader 选举的 id，需要是 int 类型
-- log_storage_path：keeper log 存储路径
-- snapshot_storage_path：keeper snapshot 存储路径
-- coordination_settings：支持定制化 keeper settings
-- raft_configuration：可选，支持从配置文件读取 keeper 节点。如使用服务发现读取 keeper 节点，则不能配置该配置项
-- id: 同上 server_id
-- hostname: ip 地址
-- port: keeper 内部通信 port，与 tcp_port 不同
+- tcp_port: tcp port of the keeper service
+- server_id: the id of the leader election inside the keeper, which needs to be of type int
+- log_storage_path: keeper log storage path
+- snapshot_storage_path: keeper snapshot storage path
+- coordination_settings: support customized keeper settings
+- raft_configuration: optional, supports reading keeper nodes from configuration files. If you use service discovery to read the keeper node, you cannot configure this configuration item
+- id: Same as above server_id
+- hostname: ip address
+- port: keeper internal communication port, different from tcp_port
 
 ```
 <keeper_server>
@@ -501,7 +501,7 @@ Example:
 
 - zookeeper
 
-配置 zookeeper 以启用 leader election，也可通过服务发现来获取 zookeeper 的节点信息，在这种情况下，需要配置一个空的 zookeeper 标签
+Configure zookeeper to enable leader election, or obtain zookeeper node information through service discovery. In this case, you need to configure an empty zookeeper label
 
 ```
 <zookeeper>
@@ -517,11 +517,11 @@ Example:
 
 ### service_discovery
 
-服务发现相关配置，高可用 TSO 进程通过服务发现获取其他 TSO server 地址及端口进行通信
+Service discovery related configuration, the highly available TSO process obtains other TSO server addresses and ports for communication through service discovery
 
 Keys:
 
-- **mode** : 与其他模块 service discovery 一样，支持 dns, consul, local 等模式
+- **mode** : Like other modules service discovery, it supports dns, consul, local and other modes
 
 Example:
 
@@ -537,18 +537,18 @@ Example:
 
 ```
 
-## Daemon Manager 配置参数
+## Daemon Manager configuration parameters
 
 ### daemon_manager
 
-配置 daemon manager 进程端口以及调度后台任务的信息
+Configure daemon manager process ports and information about scheduling background tasks
 
 Keys:
 
-- port: DM 进程 TCP 端口
-- http: DM 进程 http 端口等配置
-- workload_thread_interval_ms: 后台任务调度的时间间隔
-- daemon_jobs: DM 负责调度的后台任务类型及配置。可调度的任务类型包括：PART_GC, PART_MERGE, CONSUMER, GLOBAL_GC, TXN_GC 等
+- pport: DM process TCP port
+- http: DM process http port and other configurations
+- workload_thread_interval_ms: The time interval for background task scheduling
+- daemon_jobs: The type and configuration of background tasks that DM is responsible for scheduling. Schedulable task types include: PART_GC, PART_MERGE, CONSUMER, GLOBAL_GC, TXN_GC, etc.
 
 Example:
 
@@ -604,7 +604,7 @@ Example:
 
 ### cnch_data_retention_time_in_sec
 
-被删除的表及数据库在被彻底清理之前的保留时间，默认 3 天。期间内，用户可以恢复已经删除的数据。
+The retention time of deleted tables and databases before being completely cleaned up, defaults to 3 days. During this period, users can recover deleted data.
 
 Example:
 
@@ -613,16 +613,16 @@ Example:
 
 ```
 
-## Resource Manager 配置参数
+## Resource Manager configuration parameters
 
 ### resource_manager
 
-配置 resource manager 进程端口、初始 VW 配置等信息。
+Configure resource manager process port, initial VW configuration and other information.
 
 Keys：
 
-- **port: **服务启动的端口号
-- **vws: **初始配置的 VW 相关信息
+- **port: **The port number where the service starts
+- **vws: ** Initially configured VW related information
 
 Example：
 
@@ -648,7 +648,7 @@ Example：
 
 ### catalog
 
-Catalog 相关配置。
+Catalog related configuration.
 
 Keys:
 
@@ -663,11 +663,11 @@ Example:
 
 ### catalog_service
 
-catalog_service 相关配置。
+catalog_service related configuration.
 
 Keys:
 
-- **type** - catalog 服务的类型
+- **type** - catalog service type
 
 Example:
 

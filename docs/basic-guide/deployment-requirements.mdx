@@ -1,38 +1,38 @@
 ---
-title: 部署要求
+title: Deployment Requirements
 tags:
   - Docs
 ---
 
-# 部署要求
+# Deployment Requirements
 
-ByConity 能够运行在绝大多数主流的商用服务器上，我们建议 ByConity 的部署能够遵循以下需求：
+ByConity can run on most mainstream commercial servers. We recommend that the deployment of ByConity can comply with the following requirements:
 
-- Linux 操作系统版本需求：
-      - 内核版本在 4.14 及以上
-          - Ubuntu 16.04.5 LTS 及以上
-          - Centos 8 及以上
-- 软件需求：
-      - 依赖均包含在 lib 中，无需额外的软件依赖
-- 硬件规格
-      - 开发测试环境
+- Linux operating system version requirements:
+   - Kernel version 4.14 and above
+   - Ubuntu 16.04.5 LTS and above
+   - Centos 8 and above
+- Software Requirements:
+   - Dependencies are included in lib, no additional software dependencies are required
+- Hardware specifications
+   - Development and testing environment
 
-| 组件名称        | CPU | 内存 | 硬盘  | 网络     | 实例数 |
+| Component Name | CPU | Memory | Hard Disk | Network | Number of Instances |
 | :-------------- | :-- | :--- | :---- | :------- | :----- |
-| TSO             | 1   | 300M | 5G    | 千兆网卡 | 1      |
-| Server          | 8   | 32G  | 100G  | 千兆网卡 | 1      |
-| Worker          | 4   | 16G  | 100G+ | 千兆网卡 | 1      |
-| DaemonManager   | 1   | 500M | 5G    | 千兆网卡 | 1      |
-| ResourceManager | 1   | 2G   | 5G    | 千兆网卡 | 1      |
+| TSO | 1 | 300M | 5G | Gigabit LAN | 1 |
+| Server | 8 | 32G | 100G | Gigabit LAN | 1 |
+| Worker | 4 | 16G | 100G+ | Gigabit LAN | 1 |
+| DaemonManager | 1 | 500M | 5G | Gigabit LAN | 1 |
+| ResourceManager | 1 | 2G | 5G | Gigabit LAN | 1 |
 
-- 生产环境
+- Production Environment
 
-| 组件名称        | CPU | 内存 | 硬盘 | 网络     | 实例数 |
+| Component Name | CPU | Memory | Hard Disk | Network | Number of Instances |
 | :-------------- | :-- | :--- | :--- | :------- | :----- |
-| TSO             | 2   | 500M | 5G   | 万兆网卡 | 3      |
-| Server          | 14  | 60G  | 1T   | 万兆网卡 | >=1    |
-| Worker          | 30  | 240G | 2T+  | 万兆网卡 | >=1    |
-| DaemonManager   | 4   | 10G  | 10G  | 万兆网卡 | 1      |
-| ResourceManager | 8   | 16G  | 10G  | 万兆网卡 | 1      |
+| TSO | 2 | 500M | 5G | 10 Gigabit LAN | 3 |
+| Server | 14 | 60G | 1T | 10 Gigabit NIC | >=1 |
+| Worker | 30 | 240G | 2T+ | 10 Gigabit LAN | >=1 |
+| DaemonManager | 4 | 10G | 10G | 10 Gigabit NIC | 1 |
+| ResourceManager | 8 | 16G | 10G | 10 Gigabit NIC | 1 |
 
-- 硬件规格中，Worker 和 Server 的本地磁盘主要用于存储写入时的临时数据和日志文件，同时 Worker 的本地磁盘中还会存储数据的 Cache，因此磁盘的大小需要根据配置的 DiskCache 大小及写入的数据量来确定。
+- In the hardware specification, the local disks of Worker and Server are mainly used to store temporary data and log files when writing. At the same time, the local disk of Worker also stores data Cache, so the size of the disk needs to be based on the configured DiskCache size and write determined by the amount of data entered.

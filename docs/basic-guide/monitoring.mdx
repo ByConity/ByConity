@@ -1,34 +1,33 @@
 ---
-title: 监控集群
+title: Monitor Cluster
 tags:
   - Docs
 ---
 
-# 监控集群
+# Monitor Cluster
 
-# 常见的监控指标
+# Common Monitoring Indicators
 
-## Prometheus 监控指标：
+## Prometheus Monitoring Indicators：
 
-引擎在 HTTP 接口 `/metrics` 路径下吐出监控项，默认端口 8123，可以直接访问对应端口输出。
+The engine spits out monitoring items under the path of the HTTP interface `/metrics`, the default port is 8123, and you can directly access the output of the corresponding port.
 
-可通过 kubectl 查看对应的 metric 输出
+The corresponding metric output can be viewed through kubectl
 
 ```
 kubectl port-forward -n cnch cnch-default-server-0 8123:8123
-# 用port-forward功能代理端口
+# use port-forward function to proxy port
 
 ```
 
-之后可以用浏览器打开 localhost:8123/metrics ，可查看到如下图所示的指标显示。每一行对应一个具体指标项，符合 Prometheus 约定的指标格式。
-
+After that, you can open localhost:8123/metrics with a browser, and you can view the indicator display as shown in the figure below. Each line corresponds to a specific index item, which conforms to the index format agreed by Prometheus.
 ![](./assets/monitoring/boxcnMqU9e8xvq46v7IH9ORtLCf.png)
 
-## VictoriaMetric 指标聚合：
+## VictoriaMetric Metric Aggregation：
 
-对指标的存储选择 VictoriaMetric，方便进行存储的横向扩展和提供更丰富的功能。
+Choose VictoriaMetric for the storage of indicators, which is convenient for horizontal expansion of storage and provides richer functions.
 
-其中重要的功能是 VMRule，可对原始指标进行聚合。因各组件吐出的原始 Prometheus 指标其中一部分可以直接使用来构建监控告警，另一部分比较复杂，不容易直接构建监控看板和告警，所以通过 VWRule 进行聚合。以下为规则配置文件 cnch-metrics.yaml：
+An important feature among these is the VMRule, which aggregates raw metrics. Because some of the original Prometheus indicators spit out by each component can be directly used to build monitoring alarms, the other part is more complicated and it is not easy to directly build monitoring dashboards and alarms, so it is aggregated through VWRule. The following is the rule configuration file cnch-metrics.yaml:
 
 ```
 # Source: victoria-rules/templates/cnch-metrics.yaml
@@ -535,77 +534,77 @@ spec:
 
 ```
 
-可 kubectl 执行配置生效：
+Use kubectl to execute the configuration to take effect:
 
 ```
-kubctl apply -f cnch-metrics.yaml # 配置对应rule
+kubctl apply -f cnch-metrics.yaml # Configure the corresponding rule
 
 ```
 
-## 监控服务节点（Server）
+Monitoring service node (Server)
 
-### 重要指标
+### Important indicators
 
-下面摘录比较重要的指标，进行说明
+The more important indicators are excerpted below for explanation
 
-| 指标名（其中带双引号的是经过 VM 聚合的）                              | 说明                                                  |
+| Metric name (the ones in double quotes are VM-aggregated)）                              | Description                        |
 | --------------------------------------------------------------------- | ----------------------------------------------------- |
-| cnch:latency:queries_cluster:pct95 cnch:latency:queries_cluster:pct99 | 查询延迟 pct99 和 pct55                               |
-| cnch:latency:queries_cluster:slow_ratio                               | 大于 10s 的慢查询占比                                 |
-| cnch:profile_events:labelled_query_vw:total_rate5m                    | 所有 VW 的总 QPS。                                    |
-| cnch:profile_events:labelled_query_vw:error_rate5m                    | 所有 VW 失败的 QPS。                                  |
-| cnch_current_metrics_query                                            | 其中的 label 名 query_type 值为 insert 是写入的 query |
+| cnch:latency:queries_cluster:pct95 cnch:latency:queries_cluster:pct99 | Query latency pct99 and pct55                         |
+| cnch:latency:queries_cluster:slow_ratio                               | The proportion of slow queries longer than 10s        |
+| cnch:profile_events:labelled_query_vw:total_rate5m                    | Total QPS of all VW                                   |
+| cnch:profile_events:labelled_query_vw:error_rate5m                    | Failed QPS for all VWs                                |
+| cnch_current_metrics_query                                            | The value of the label name query_type is insert, which is the written query |
 
-### 给服务节点（Server） 配置 Grafana 看板
+### Configure Grafana Kanban for the service node (Server)
 
-看板的内容看截图
+Kanban content see screenshot
 
 ![](./assets/monitoring/boxcnvwueXWFISCRgsRJ66J2vKb.jpeg)
 
-摘录其中比较重要的看板进行说明：
+ Important indicators:
 
-| 看板名             | 表达式                                                                                                                                                                                                                                                                                                      | 说明                                                     |
+| Kanban Name        | Expression                                                                                                                                                                                                                                                                                                  | Description                                              |
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| Queries Ducations  | `cnch:latency:queries_cluster:pct95{namespace="$namespace", cluster="$cluster"}和cnch:latency:queries_cluster:pct99{namespace="$namespace", cluster="$cluster"}`                                                                                                                                            | 查询延迟的 P99 和 P95 值。                               |
-| Slow Queries > 10s | `cnch:latency:queries_cluster:slow_ratio{namespace="$namespace", cluster="$cluster"}`                                                                                                                                                                                                                       | 大于 10s 的慢查询占比                                    |
-| Queries Per Second | `sum(cnch:profile_events:labelled_query_vw:total_rate5m{namespace="$namespace", cluster="$cluster", workload=~"$workload"})`                                                                                                                                                                                | 所有 VW 的总 QPS。                                       |
-| VW Queries Success | `1 - (sum by (pod) (cnch:profile_events:labelled_query_vw:error_rate5m{cluster="$cluster", namespace="$namespace", workload=~"$workload", pod=~"$pod"}) sum by (pod) (cnch:profile_events:labelled_query_vw:total_rate5m{cluster="$cluster", namespace="$namespace", workload=~"$workload", pod=~"$pod"}))` | 使用 error_rate5m 和 total_rate5m 相减和除后，得到成功率 |
+| Queries Ducations  | `cnch:latency:queries_cluster:pct95{namespace="$namespace", cluster="$cluster"}和cnch:latency:queries_cluster:pct99{namespace="$namespace", cluster="$cluster"}`                                                                                                                                            | Query latency P99 和 P95                                                               |
+| Slow Queries > 10s | `cnch:latency:queries_cluster:slow_ratio{namespace="$namespace", cluster="$cluster"}`                                                                                                                                                                                                                       | The proportion of slow queries longer than 10s                                             |
+| Queries Per Second | `sum(cnch:profile_events:labelled_query_vw:total_rate5m{namespace="$namespace", cluster="$cluster", workload=~"$workload"})`                                                                                                                                                                                | Total QPS for all VWs                                                                    |
+| VW Queries Success | `1 - (sum by (pod) (cnch:profile_events:labelled_query_vw:error_rate5m{cluster="$cluster", namespace="$namespace", workload=~"$workload", pod=~"$pod"}) sum by (pod) (cnch:profile_events:labelled_query_vw:total_rate5m{cluster="$cluster", namespace="$namespace", workload=~"$workload", pod=~"$pod"}))` | After subtracting and dividing error_rate5m and total_rate5m, the success rate is obtained |
 
-Server 的完整 Grafana 配置文件如下，可在 Grafana 的 UI 导入：[cnch-server.json](./assets/monitoring/cnch-server.json)
+The complete Grafana configuration file of the Server is as follows, which can be imported in the Grafana UI：[cnch-server.json](./assets/monitoring/cnch-server.json)
 
-## 监控 TSO
+## Monitor TSO
 
-### 重要指标
+### important indicators
 
-下面摘录对 TSO 比较重要的指标，进行说明：
+The following excerpts are some important indicators for TSO to illustrate:
 
-| 指标名                         | 说明               |
+| Indicators                     | Description        |
 | ------------------------------ | ------------------ |
-| cnch:tso:requests:error_rate5m | TSO 组件的失败 QPS |
-| cnch:tso:requests:total_rate5m | TSO 组件的总 QPS   |
+| cnch:tso:requests:error_rate5m | Failed QPS for TSO components |
+| cnch:tso:requests:total_rate5m | Total QPS for TSO components  |
 
-### 给 TSO 配置 Grafana 看板
+### Configure Grafana Kanban for TSO
 
-看板截图如下：
+The screenshot of the board is as follows:
 
 ![](./assets/monitoring/boxcn3CLoRUlpCEDJnEy8f6dxPe.jpeg)
 
-其中重要的指标说明：
+Important indicators:
 
-| 看板名                           | 表达式                                                                                                                                                                                                  | 说明                                                      |
+| Kanban Name                      | Expression                                                                                                                                                                                              | Description                                               |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| TSO Server Requests Per Sec      | `cnch:tso:requests:total_rate5m{namespace="$namespace", cluster="$cluster", workload=~".*server.*"}`                                                                                                    | Server 组件对 TSO 查询的的 QPS                            |
-| TSO Worker Requests Per Sec      | `cnch:tso:requests:total_rate5m{namespace="$namespace", cluster="$cluster", workload!~".*(server\|**kafka**).*"}`                                                                                       | 去除 server 和 kafka，只看各 worker 对 TSO 的请求 QPS     |
-| TSO Servers Requests Server Rate | `cnch:tso:requests:error_rate5m{namespace="$namespace", cluster="$cluster", workload=~".*server.*"} cnch:tso:requests:total_rate5m{namespace="$namespace", cluster="$cluster", workload=~".*server.*"}` | 用 error_rate 和 total_rate 相除，过滤出 TSO 查询的失败率 |
+| TSO Server Requests Per Sec      | `cnch:tso:requests:total_rate5m{namespace="$namespace", cluster="$cluster", workload=~".*server.*"}`                                                                                                    | QPS of Server component for TSO query                                                 |
+| TSO Worker Requests Per Sec      | `cnch:tso:requests:total_rate5m{namespace="$namespace", cluster="$cluster", workload!~".*(server\|**kafka**).*"}`                                                                                       | Remove the server and kafka, and only look at the request QPS of each worker for TSO  |
+| TSO Servers Requests Server Rate | `cnch:tso:requests:error_rate5m{namespace="$namespace", cluster="$cluster", workload=~".*server.*"} cnch:tso:requests:total_rate5m{namespace="$namespace", cluster="$cluster", workload=~".*server.*"}` | Divide error_rate and total_rate to filter the failure rate of TSO query              |
 
-TSO 完整的配置文件如下：[cnch-tso.json](./assets/monitoring/cnch-tso.json)
+The complete configuration file of TSO is as follows:[cnch-tso.json](./assets/monitoring/cnch-cluster.json)
 
-## 其他可以监控的信息
+## Other information that can be monitored
 
-其他常用的监控看板配置此处列出，不再一一截图
+Other commonly used monitoring board configurations are listed here, no more screenshots
 
-Cluster Overview: 整个集群概览 [cnch-cluster.json](./assets/monitoring/cnch-cluster.json)
+Cluster Overview: Overview of the entire cluster [cnch-cluster.json](./assets/monitoring/cnch-cluster.json)
 
-VW: 各计算组 Virtual Warehouse 的详情 [cnch-vw.json](./assets/monitoring/cnch-vw.json)
+VW: detials of each Virtual Warehouse [cnch-vw.json](./assets/monitoring/cnch-vw.json)
 
-DaemonManager: 管理 Merge 等后台任务的组件 [cnch-daemonmanager.json](./assets/monitoring/cnch-daemonmanager.json)
+DaemonManager: Components that manages background tasks such as Merge [cnch-daemonmanager.json](./assets/monitoring/cnch-daemonmanager.json)

@@ -1,64 +1,64 @@
 ---
-title: 设计库表
+title: Database Table Design
 tags:
   - Docs
 ---
 
-# 设计库表
+# Database Table Design
 
-文档类型：教程型
+Document Type: Tutorial
 
-文档格式：教程目的，前置准备，分步骤讲解原理 & 示例，相关文档推荐；
+Document format: tutorial purpose, pre-preparation, step-by-step explanation of principles & examples, and related document recommendations;
 
-内容提要：
+Abstract
 
-1. ByConity 是如何组织数据库和数据表的
-2. 数据库表的规格，比如单数据库支持放多少数据表，单表支持多少列
-3. 设计数据表时，应该理解哪些配置（primary key 等）
-4. 典型场景下，设计数据表的最佳实践是什么
+1. How ByConity organizes databases and data tables
+2. The specifications of the database table, such as how many data tables are supported by a single database, and how many columns are supported by a single table
+3. When designing a data table, which configurations should be understood (primary key, etc.)
+4. In a typical scenario, what is the best practice for designing a data table
 
-## 组织库表
+## Organization Database Table
 
-### 数据库
+### database
 
-ByConity 的数据库是一组相关联的表或者视图的组合，方便用户管理这组 schema 的生命周期以及权限控制。ByConity 对数据库的数目上限没有硬性限制。
+ByConity's database is a combination of a set of associated tables or views, which is convenient for users to manage the life cycle and permission control of this set of schemas. ByConity has no hard limit on the maximum number of databases.
 
-### 数据表
+### data sheet
 
-从逻辑上看，数据表是一组拥有相同行数的数据列的集合，并从属某个数据库。ByConity 对一个数据库的表数目也没有限制（最好不超过百万）。一个表拥有的数据列数目不超过 10 万。
+Logically, a data table is a collection of data columns with the same number of rows and belongs to a certain database. ByConity also has no limit on the number of tables in a database (preferably no more than one million). A table has no more than 100,000 data columns.
 
-#### 表引擎
+#### Table Engine
 
-表引擎即表的类型，决定了：
+The table engine is the type of the table, which determines:
 
-- 数据的组织和存储方式
-- 索引的方式以及索引类型
-- 支持哪些查询以及如何支持
-- 一些其他特定的功能和配置
+- How data is organized and stored
+- How to index and the type of index
+- Which queries are supported and how
+- Some other specific features and configurations
 
-ByConity 最常用的表引擎是 CnchMergeTree。其他特殊类型的表引擎包括 Hive 外表、Kafka 表等 。下面重点讲下 MergeTree 表引擎的原理。
+The most common table engine used by ByConity is CnchMergeTree. Other special types of table engines include Hive tables, Kafka tables, etc. The following focuses on the principle of the MergeTree table engine.
 
-#### CnchMergeTree 表原理
+#### CnchMergeTree table principle
 
-CnchMergeTree 表是最常用的表引擎，核心思想和 LSM-Tree 类似，数据按分区键(partition by)进行分区，然后排序键(order by)进行有序存储。主要特点：
+The CnchMergeTree table is the most commonly used table engine. The core idea is similar to that of LSM-Tree. The data is partitioned according to the partition key (partition by), and then the sort key (order by) is stored in an orderly manner. main feature:
 
-- 如果指定了分区键的话，数据会按分区键划分成了不同的逻辑数据集（逻辑分区，Partition)
+- If a partition key is specified, the data will be divided into different logical data sets according to the partition key (logical partition, Partition)
 
-每一个逻辑分区可以存在零到多个数据片段（DataPart）。如果查询条件可以裁剪分区，通常可以加速查询。如果没有指定分区键，全部数据都在一个逻辑分区里。
+Each logical partition can have zero or more data fragments (DataPart). Queries can often be sped up if the query criteria can prune partitions. If no partition key is specified, all data is in one logical partition.
 
-- 数据片段
+- data fragment
 
-数据片段里的数据按排序键排序。每个数据片段还会存在一个 min/max 索引，来加速分区选择。
+The data in the data fragment is sorted by the sort key. There will also be a min/max index for each data segment to speed up partition selection.
 
-- 数据颗粒（Granule）
+- Data granules (Granule)
 
-每个数据片段被逻辑的分割成颗粒（granule ），默认的 Granule 为 8192 行（由表的 index_granularity 配置决定）。颗粒是 ByConity 中进行数据查询时的最小不可分割数据集。每个颗粒的第一行通过该行的主键值进行标记， ByConity 会为每个数据片段创建一个索引文件来存储这些标记。对于每列，无论它是否包含在主键当中，ByConity 都会存储类似标记。这些标记让您可以在列文件中直接找到数据。Granule 作为 ByConity 稀疏索引的索引目标，也是在内存中进行数据扫描的单位。
+Each data fragment is logically divided into granules, and the default granule is 8192 rows (determined by the index_granularity configuration of the table). A granule is the smallest indivisible dataset for data query in ByConity. The first row of each granule is marked by the primary key value of the row, and ByConity will create an index file for each data fragment to store these marks. For each column, whether it is included in the primary key or not, ByConity stores a similar flag. These tags allow you to find data directly in the column file. Granule is the index target of ByConity sparse index and also the unit of data scanning in memory.
 
-- 后台 Merge
+- Background Merge
 
-后台任务会定时对同一个分区的 DataPart 进行合并，并保持按排序键有序。后台的合并减少了 Part 的数目，以便更高效存储，并提升了查询性能。
+The background task will periodically merge the DataParts of the same partition and keep them in order according to the sort key. Background merging reduces the number of Parts for more efficient storage and improves query performance.
 
-## CnchMergeTree 建表语句和相关配置
+## CnchMergeTree table creation statement and related configuration
 
 ```
 CREATE TABLE [IF NOT EXISTS] [db.]table_name
@@ -80,171 +80,171 @@ ORDER BY expr
 
 ```
 
-### 设计分区键（PARTITION BY)
+### Design partition key (PARTITION BY)
 
-分区键定义分区，分区是在一个表中通过指定的规则划分而成的逻辑数据集。可以按任意标准进行分区，如按日期。为了减少需要操作的数据，每个分区都是分开存储的。查询时，ByConity 尽量使用这些分区的最小子集。建表时候通过 `PARTITION BY expr` 子句指定。分区键可以是表中列的任意表达式。例如，指定按月分区，表达式为 `toYYYYMM(date)`；或者按表达元组，如 `(toMonday(date), EventType)` 等。
+A partition key defines a partition, which is a logical data set in a table divided by specified rules. Partitioning can be done by arbitrary criteria, such as by date. To reduce the data that needs to be manipulated, each partition is stored separately. When querying, ByConity tries to use the smallest subset of these partitions. It is specified by the `PARTITION BY expr` clause when creating a table. The partition key can be any expression of the columns in the table. For example, to specify partition by month, the expression is `toYYYYMM(date)`; or by expression tuple, such as `(toMonday(date), EventType)`, etc.
 
-需要注意，表中分区表达式计算出的取值范围不能太大（推荐不超过一万），太多分区会占用比较大的内存以及带来比较多的 IO 和计算开销。
+It should be noted that the value range calculated by the partition expression in the table should not be too large (recommended not to exceed 10,000). Too many partitions will occupy relatively large memory and bring more IO and computing overhead.
 
-合理的设计分区键可以极大减少查询时需要扫描的数据量，一般考虑将查询中最常用的条件同时取值范围不超过一万的列设计为分区键（如日期等）。
+A reasonable design of the partition key can greatly reduce the amount of data that needs to be scanned during the query. Generally, it is considered to design the most commonly used conditions in the query and the column with a value range of no more than 10,000 as the partition key (such as date, etc.).
 
-### 设计排序键（ORDER BY）
+### Design sort key (ORDER BY)
 
-可以是一组列的元组或任意的表达式。 例如: `ORDER BY (OrderID, Date)` 。
+Can be a tuple of columns or an arbitrary expression. For example: `ORDER BY (OrderID, Date)`.
 
-如果不需要排序，可以使用 `ORDER BY tuple()`。DataPart 里的数据将按照排序键进行排序。
+If sorting is not required, `ORDER BY tuple()` can be used. The data in the DataPart will be sorted according to the sort key.
 
-### 设计主键(PRIMARY KEY)
+### Design primary key (PRIMARY KEY)
 
-默认情况不需要显式指定，ByConity 将使用排序键作为主键。当有特殊场景主键和排序键不一致时，主键必须为排序键的最左前缀。如排序键为(OrderID, Date)，主键必须为 OrderID，不能为 Date。在一些特殊的表引擎，如 CnchAggregatingMergeTree、CnchSumMergeTree 中，主键会与排序键不同。
+By default there is no need to specify explicitly, ByConity will use the sort key as the primary key. When there is a special scenario where the primary key is inconsistent with the sort key, the primary key must be the leftmost prefix of the sort key. If the sort key is (OrderID, Date), the primary key must be OrderID, not Date. In some special table engines, such as CnchAggregatingMergeTree, CnchSumMergeTree, the primary key will be different from the sort key.
 
-ByConity 会在主键上建立以 Granule 为单位的稀疏索引，（与之对比，所谓稠密索引则是每一行都会建立索引信息）。
+ByConity will create a sparse index with Granule as the unit on the primary key (in contrast, the so-called dense index means that each row will create index information).
 
-如果查询条件能匹配主键索引的最左前缀，通过主键索引可以快速过滤出可能需要读取的数据颗粒，相比扫描整个 DataPart，通常要高效很多。
+If the query condition can match the leftmost prefix of the primary key index, the data particles that may need to be read can be quickly filtered out through the primary key index, which is usually much more efficient than scanning the entire DataPart.
 
-另外需要注意，PRIMARY KEY 不能保证唯一性，所以可以插入主键重复的数据行。
+In addition, it should be noted that PRIMARY KEY cannot guarantee uniqueness, so data rows with duplicate primary keys can be inserted.
 
-分区（PARTITION BY）和主键(PRIMARY KEY)是两种不同的加速数据查询的方式，定义的时候应当尽量错开使用不同的列来定义两者，来覆盖更多的查询场景。例如 order by 的第一个列一定不要重复放到 partition by 里。下面是如何选择主键的一些考虑：
+Partition (PARTITION BY) and primary key (PRIMARY KEY) are two different ways to speed up data query. When defining, you should try to stagger and use different columns to define the two to cover more query scenarios. For example, the first column of order by must not be placed in partition by repeatedly. Here are some considerations for how to choose a primary key:
 
-- 是否是查询条件里常用的列
-- 不是非分区键的第一个列
-- 这个列的选择性，例如性别、是/否这种可选值太少的列不建议放入主键中
-- 假如现在的主键是（a，b)，如果在大多数情况下给定（a，b）对应的数据范围很大（包含多个 Granule），可以考虑把一个新的查询常用列附加到主键中，这样可以过滤更多的数据。
-- 过长的主键会对插入性能和内存消耗有负面影响，但对查询性能没有影响。
+- Whether it is a commonly used column in the query condition
+- is not the first column of a non-partition key
+- The selectivity of this column, such as gender, yes/no, and columns with too few optional values ​​are not recommended to be placed in the primary key
+- If the current primary key is (a, b), if in most cases (a, b) corresponds to a large range of data (including multiple Granules), you can consider attaching a new common query column to the primary key , which allows more data to be filtered.
+- Excessively long primary keys have a negative impact on insert performance and memory consumption, but have no impact on query performance.
 
-### 唯一键索引(UNIQUE KEY)
+### Unique key index (UNIQUE KEY)
 
-主键（PRIMARY KEY）不能保证去重，如果有唯一键去重的需求，需要在建表时设置唯一键索引。设置唯一键之后，ByConity 提供 upsert 更新写语义，可以根据唯一键高效更新数据行。查询自动返回每个唯一键的最新值。
+The primary key (PRIMARY KEY) cannot be guaranteed to be deduplicated. If there is a need to deduplicate the unique key, you need to set the unique key index when creating the table. After setting the unique key, ByConity provides upsert update write semantics, which can efficiently update data rows according to the unique key. Queries automatically return the latest value for each unique key.
 
-唯一键可以是一组列的元组或任意的表达式，如 `UNIQUE KEY (product_id, sipHash64(city))`。
+A unique key can be a tuple of columns or an arbitrary expression, such as `UNIQUE KEY (product_id, sipHash64(city))`.
 
-唯一建索引可以通过配置 `partition_level_unique_keys` 控制是分区级别唯一还是全表唯一，目前推荐实践为：分区唯一索引，单分区数据量不超过千万级别**。**若为全表唯一，则全表数据量建议不超过千万级别。
+The unique index can be built by configuring `partition_level_unique_keys` to control whether it is unique at the partition level or unique for the entire table. The current recommended practice is: unique index for partition, and the data volume of a single partition should not exceed tens of millions**. **If it is unique in the entire table, it is recommended that the data volume of the entire table should not exceed tens of millions.
 
-通过唯一键查询时会用上唯一键索引过滤数据加速查询，所以通常主键可以设置和唯一键不一样列，覆盖更多的查询条件。不过如果要使用部分列更新功能的话，是需要唯一键为排序键的最左前缀。
+When querying through the unique key, the unique key index will be used to filter data to speed up the query, so usually the primary key can be set to a different column from the unique key to cover more query conditions. However, if you want to use the partial column update function, you need the unique key to be the leftmost prefix of the sort key.
 
-### 跳数索引（Index）
+### Jump index (Index)
 
-建表时可以这样定义跳数索引
+When creating a table, you can define the jump index like this
 
 ```
 INDEX index_name expr TYPE type(...) GRANULARITY granularity_value
 
 ```
 
-#### 可用的索引类型
+#### Available index types
 
-- `minmax` 存储指定表达式的极值（如果表达式是 `tuple` ，则存储 `tuple` 中每个元素的极值），这些信息用于跳过数据块，类似主键。
+- `minmax` stores the extreme value of the specified expression (if the expression is `tuple`, stores the extreme value of each element in `tuple`), this information is used to skip data blocks, similar to the primary key.
 
-跳数索引功能正在测试中，等完成后补充支持的跳数索引类型。
+The hop index function is being tested, and the supported hop index types will be added after completion.
 
-### 设计 Bucket
+### Design Bucket
 
-CNCH Bucket table 最佳实践手册
+CNCH Bucket table best practice manual
 
-### 采样
+### Sampling
 
-用于抽样的表达式，可选项。
+The expression to use for sampling, optional.
 
-如果要用抽样表达式，主键中必须包含这个表达式。例如： `SAMPLE BY intHash32(UserID) ORDER BY (CounterID, EventDate, intHash32(UserID))` 。
+If a sampling expression is to be used, it must be included in the primary key. For example: `SAMPLE BY intHash32(UserID) ORDER BY (CounterID, EventDate, intHash32(UserID))`.
 
-细节参考采样功能（需要独立一篇采样功能）
+For details, refer to the sampling function (a separate sampling function is required)
 
-### 列和表的 TTL
+### TTL for columns and tables
 
-指定行存储的持续时间并定义数据片段在硬盘和卷上的移动逻辑的规则列表，可选项。
+A list of rules that specify the duration of the row store and define the logic for moving pieces of data across disks and volumes, optional.
 
-表达式中必须存在至少一个 `Date` 或 `DateTime` 类型的列，比如：
+There must be at least one `Date` or `DateTime` type column in the expression, for example:
 
 `TTL date + INTERVAl 1 DAY`
 
-更多细节，请查看 [表和列的 TTL](https://clickhouse.com/docs/zh/engines/table-engines/mergetree-family/mergetree#table_engine-mergetree-ttl)（太多了，可能要独立一篇 TTL 的）
+For more details, please check [TTL of tables and columns](https://clickhouse.com/docs/en/engines/table-engines/mergetree-family/mergetree#table_engine-mergetree-ttl) (too many, maybe To be an independent TTL)
 
-### 高级配置
+### Advanced configuration
 
-#### Granule 配置
+#### Granule configuration
 
-- `index_granularity` — 索引粒度。索引中相邻的『标记』间的数据行数（对应 Granule 大小）。默认值 8192 。
+- `index_granularity` — index granularity. The number of data rows between adjacent "tags" in the index (corresponding to the size of the granule). The default value is 8192 .
 
-后面三个配置待测试，RD 未验证功能。
+The latter three configurations are to be tested, and RD has not verified functionality.
 
-- `index_granularity_bytes` — 索引粒度，以字节为单位，默认值: 10Mb。如果想要仅按数据行数限制索引粒度, 请设置为 0(不建议)。
-- `min_index_granularity_bytes` - 允许的最小数据粒度，默认值：1024b。该选项用于防止误操作，添加了一个非常低索引粒度的表。
-- `enable_mixed_granularity_parts` — 是否启用通过 `index_granularity_bytes` 控制索引粒度的大小。在老版本只有 `index_granularity` 配置能够用于限制索引粒度的大小。当从具有很大的行（几十上百兆字节）的表中查询数据时候，`index_granularity_bytes` 配置能够提升 ByConity 的性能。如果您的表里有很大的行，可以开启这项配置来提升 `SELECT` 查询的性能。
+- `index_granularity_bytes` — index granularity in bytes, default: 10Mb. Set to 0 (not recommended) if you want to limit the index granularity by the number of data rows only.
+- `min_index_granularity_bytes` - Minimum data granularity allowed, default: 1024b. This option is used to prevent misuse, adding a table with a very low index granularity.
+- `enable_mixed_granularity_parts` — Whether to enable controlling the size of the index granularity via `index_granularity_bytes`. In older versions only the `index_granularity` configuration can be used to limit the size of the index granularity. The `index_granularity_bytes` configuration can improve ByConity's performance when querying data from tables with very large rows (tens to hundreds of megabytes). If your table has very large rows, you can enable this configuration to improve the performance of `SELECT` queries.
 
-#### 计算组配置
+#### Compute group configuration
 
-参考 【教程型】配置计算组
+Refer to [Tutorial] Configuring Computing Groups
 
-#### merge 相关配置
+#### merge related configuration
 
-参考后台任务章节
+Refer to background task chapter
 
-#### 存储相关配置
+#### Storage related configuration
 
-参考存储相关章节
+Reference storage related chapters
 
-#### 唯一索引相关配置
+#### Unique index related configuration
 
-- `partition_level_unique_keys` - 唯一索引是否是分区唯一，默认值：`true`；如果为 `false`，代表唯一索引是全表级别；
-- `cloud_enable_staging_area` - 是否开启异步写入模式，默认值：`false`。
+- `partition_level_unique_keys` - Whether the unique index is partition unique, default value: `true`; if it is `false`, it means that the unique index is at the whole table level;
+- `cloud_enable_staging_area` - Whether to enable asynchronous writing mode, default value: `false`.
 
-#### 其他配置
+#### Other configuration
 
-## 最佳实践
+## Best Practices
 
-### 主键索引的最佳实践
+### Best practices for primary key indexes
 
-[https://clickhouse.com/docs/zh/guides/improving-query-performance/sparse-primary-indexes/](https://clickhouse.com/docs/zh/guides/improving-query-performance/sparse-primary-indexes/)
+[https://clickhouse.com/docs/en/guides/improving-query-performance/sparse-primary-indexes/](https://clickhouse.com/docs/en/guides/improving-query-performance/sparse -primary-indexes/)
 
-### 二级索引最佳实践
+### Secondary Index Best Practices
 
-[https://clickhouse.com/docs/zh/guides/improving-query-performance/skipping-indexes](https://clickhouse.com/docs/zh/guides/improving-query-performance/skipping-indexes)
+[https://clickhouse.com/docs/en/guides/improving-query-performance/skipping-indexes](https://clickhouse.com/docs/en/guides/improving-query-performance/skipping-indexes)
 
 ###
 
-### 列类型考虑
+### Column type considerations
 
-### 避免一味使用 String 类型
+### Avoid blindly using the String type
 
-如果可能的情况下使用 Int(8|16|32|64|128|256) / Date / Date32 / DateTime / DateTime64 / Float / Decimal 代替 String
+Use Int(8|16|32|64|128|256) / Date / Date32 / DateTime / DateTime64 / Float / Decimal instead of String if possible
 
-最简单的判断方法就是看是否可以转换到目标类型比如 `SELECT countIf(toUInt8OrNull(col) IS NULL) FROM table`, `SELECT countIf(toDateOrNull(col) IS NULL) FROM table`
+The easiest way to judge is to see if it can be converted to the target type, such as `SELECT countIf(toUInt8OrNull(col) IS NULL) FROM table`, `SELECT countIf(toDateOrNull(col) IS NULL) FROM table`
 
-对内容相对固定的 String Column, 可以考虑使用 Enum 代替，比如省份名称. Enum 后期可以通过 `ALTER TABLE` 添加新值
+For String Column with relatively fixed content, you can consider using Enum instead, such as the name of a province. Enum can add new values ​​through `ALTER TABLE` later
 
-String 最小最大长度差距不超过 8 的情况下使用 FixedString，因为 String 相比 FixedString 在内存中要多储存 8 字节的 offset `SELECT min(length(col)), max(length(col)) FROM table`
+Use FixedString when the difference between the minimum and maximum length of String does not exceed 8, because String stores 8 bytes more offset in memory than FixedString `SELECT min(length(col)), max(length(col)) FROM table`
 
-### Nullable 选择
+### Nullable selection
 
-如果确定列中不包含 Null，不要使用 Nullable 类型，会对性能有负面影响
+If you are sure that the column does not contain Null, do not use Nullable type, it will have a negative impact on performance
 
-### LowCardinality
+### Low Cardinality
 
-如果某个列的基数较低，例如一个 DataPart 内只有不超过 10000 个不相等的值，可以考虑用 LowCardinality 类型。LowCardinality 类型会对原始列进行字典编码。对很多应用来说，处理字典编码的数据可以显著的增加查询速度，并且降低存储空间，提升 IO 效率。
+If the cardinality of a column is low, for example, there are no more than 10,000 unequal values in a DataPart, you can consider using the LowCardinality type. The LowCardinality type dictionary-encodes the original column. For many applications, processing dictionary-encoded data can significantly increase query speed, reduce storage space, and improve IO efficiency.
 
-### 列 Codec 选择
+### Column Codec Selection
 
-通用编码 lz4 / lz4hc / zstd / deflate_qpl
+Generic encoding lz4/lz4hc/zstd/deflate_qpl
 
 [https://clickhouse.com/docs/en/sql-reference/statements/create/table/#general-purpose-codecs](https://clickhouse.com/docs/en/sql-reference/statements/create/table/#general-purpose-codecs)
 
-通常来说 lz4 编码快但压缩率没有 zstd 高, 在支持 Intel IAA 的平台上可以考虑使用 qpl
+Generally speaking, lz4 encoding is fast but the compression rate is not as high as zstd. You can consider using qpl on platforms that support Intel IAA
 
-特殊编码可以和上面的通用编码一起使用: Delta / DoubleDelta / Gorilla / FPC / T64
+Special encodings can be used together with the general encodings above: Delta / DoubleDelta / Gorilla / FPC / T64
 
 [https://clickhouse.com/docs/en/sql-reference/statements/create/table/#specialized-codecs](https://clickhouse.com/docs/en/sql-reference/statements/create/table/#specialized-codecs)
 
-一般来说时序可以用 doubledelta, 随时序变化的值可以用 gorilla, FPC 在 64bit 浮点数上效果比较好. T64 是寻找 64 个值的共同高位进行裁剪，只记录变化的部分
+Generally speaking, doubledelta can be used for timing, and gorilla can be used for values that change with time sequence. FPC works better on 64bit floating point numbers. T64 is to find the common high bits of 64 values for clipping, and only record the changed part
 
-下面是一些最佳实践
+Here are some best practices
 
-- DateTime 类型: 未排序，建议用 Delta+LZ4
-- DateTime 类型：排序，建议用 LZ4
-- Date 类型：未排序，建议用 ZSTD
-- Date 类型：排序（例：PK），建议用 LZ4
+- DateTime type: unsorted, it is recommended to use Delta+LZ4
+- DateTime type: sorting, it is recommended to use LZ4
+- Date type: unsorted, ZSTD is recommended
+- Date type: sorting (eg: PK), it is recommended to use LZ4
 
-### 参考文档
+### Reference Documentation
 
-[https://clickhouse.com/docs/zh/engines/table-engines/mergetree-family/mergetree#tiao-shu-suo-yin-fen-duan-hui-zong-suo-yin-shi-yan-xing-de](https://clickhouse.com/docs/zh/engines/table-engines/mergetree-family/mergetree#tiao-shu-suo-yin-fen-duan-hui-zong-suo-yin-shi-yan-xing-de)
+[https://clickhouse.com/docs/en/engines/table-engines/mergetree-family/mergetree#table_engine-mergetree-data_skipping-indexes](https://clickhouse.com/docs/en/engines/table-engines/mergetree-family/mergetree#table_engine-mergetree-data_skipping-indexes)
 
 [https://clickhouse.com/docs/en/sql-reference/statements/create/table/#column-compression-codecs](https://clickhouse.com/docs/en/sql-reference/statements/create/table/#column-compression-codecs)
