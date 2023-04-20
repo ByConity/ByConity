@@ -656,7 +656,7 @@ void MergeTreeDataMerger::gatherColumns()
         Float64 column_weight = column_sizes->columnWeight(column_name);
         MergeStageProgress column_progress(progress_before, column_weight);
         LOG_TRACE(log, "Gather column {} weight {} in progress {}", column_name, column_weight, progress_before);
-            if (column_type->isMap() && !column_type->isMapKVStore())
+        if (column_type->isMap() && !column_type->isMapKVStore())
         {
             /// Gather implicit columns for flatten map
             std::unordered_set<String> implicit_names;
