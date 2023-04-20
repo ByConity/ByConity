@@ -101,7 +101,7 @@ MergeTreeIndexReader::MergeTreeIndexReader(
                         all_mark_ranges_,
                         source_data_part,
                         DiskCacheSegment::FileOffsetAndSize{mark_file_offset, mark_file_size},
-                        source_data_part->getMarksCount(),
+                        marks_count_,
                         index_name,
                         INDEX_FILE_EXTENSION,
                         DiskCacheSegment::FileOffsetAndSize{data_file_offset, data_file_size}));
@@ -112,7 +112,7 @@ MergeTreeIndexReader::MergeTreeIndexReader(
                 source_data_part->name,
                 index_name,
                 source_data_part->volume->getDisk(),
-                source_data_part->getMarksCount(),
+                marks_count_,
                 data_path, data_file_offset, data_file_size,
                 mark_path, mark_file_offset, mark_file_size,
                 all_mark_ranges_,
