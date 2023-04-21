@@ -606,12 +606,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     Catalog::CatalogConfig catalog_conf(global_context->getCnchConfigRef());
 
-    std::string current_raw_sd_config;
-    if (config().has("service_discovery")) // only important for local mode (for observing if the sd section is changed)
-    {
-        current_raw_sd_config = config().getRawString("service_discovery");
-    }
-
     /// Initialize components in server or worker.
     if (global_context->getServerType() == ServerType::cnch_server || global_context->getServerType() == ServerType::cnch_worker)
     {
