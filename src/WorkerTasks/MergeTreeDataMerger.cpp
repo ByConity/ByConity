@@ -17,9 +17,11 @@
 
 #include <Common/ProfileEvents.h>
 #include <Common/filesystemHelpers.h>
+#include <DataTypes/MapHelpers.h>
 #include <DataStreams/ColumnGathererStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/MaterializingBlockInputStream.h>
+#include <DataTypes/IDataType.h>
 #include <DataTypes/DataTypeByteMap.h>
 #include <Processors/Executors/PipelineExecutingBlockInputStream.h>
 #include <Processors/Merges/AggregatingSortedTransform.h>
@@ -272,7 +274,7 @@ void MergeTreeDataMerger::chooseMergeAlgorithm()
     merge_alg = (is_supported_storage && enough_total_rows && enough_ordinary_cols && no_parts_overflow) ? MergeAlgorithm::Vertical
                                                                                                          : MergeAlgorithm::Horizontal;
 
-    LOG_DEBUG(log, "Selected MergeAlgorithm: {}", toString(MergeAlgorithm::Vertical));
+    LOG_DEBUG(log, "Selected MergeAlgorithm: {}", toString(merge_alg));
 }
 
 void MergeTreeDataMerger::prepareForProgress()
@@ -295,24 +297,6 @@ void MergeTreeDataMerger::prepareVerticalMerge()
     rows_sources_file = createTemporaryFile(tmp_disk->getPath());
     rows_sources_uncompressed_write_buf = std::make_unique<WriteBufferFromFile>(rows_sources_file->path());
     rows_sources_write_buf = std::make_unique<CompressedWriteBuffer>(*rows_sources_uncompressed_write_buf);
-
-    /// Collect implicit columns of byte map
-    NamesAndTypesList old_gathering_columns;
-    std::swap(old_gathering_columns, gathering_columns);
-    for (auto & column : old_gathering_columns)
-    {
-        if (column.type->isMap() && !column.type->isMapKVStore())
-        {
-            auto [curr, end] = getMapColumnRangeFromOrderedFiles(column.name, merged_column_to_size);
-            for (; curr != end; ++curr)
-                gathering_columns.emplace_back(
-                    curr->first, dynamic_cast<const DataTypeByteMap *>(column.type.get())->getValueTypeForImplicitColumn());
-        }
-        else
-        {
-            gathering_columns.push_back(column);
-        }
-    }
     gathering_columns.sort(); /// It gains btter performance if gathering by sorted columns
 }
 
@@ -546,14 +530,8 @@ void MergeTreeDataMerger::copyMergedData()
             "Written " + toString(rows_written) + " rows, but output rowid is " + toString(output_rowid), ErrorCodes::LOGICAL_ERROR);
 }
 
-void MergeTreeDataMerger::gatherColumn(const String & column_name)
+void MergeTreeDataMerger::gatherColumn(const String & column_name, MergeStageProgress & column_progress)
 {
-    /// Prepare progress
-    Float64 progress_before = manipulation_entry->progress.load(std::memory_order_relaxed);
-    Float64 column_weight = column_sizes->columnWeight(column_name);
-    MergeStageProgress column_progress(progress_before, column_weight);
-    LOG_TRACE(log, "Gather column {} weight {} in progress {}", column_name, column_weight, progress_before);
-
     /// Prepare input streams
     const auto & parts = params.source_data_parts;
     BlockInputStreams column_part_streams(parts.size());
@@ -633,9 +611,7 @@ void MergeTreeDataMerger::gatherColumn(const String & column_name)
     additional_column_checksums.add(std::move(changed_checksums));
 
     /// Update profiles and progress
-    manipulation_entry->columns_written.fetch_add(1, std::memory_order_relaxed);
     manipulation_entry->bytes_written_uncompressed.fetch_add(column_gathered_stream.getProfileInfo().bytes, std::memory_order_relaxed);
-    manipulation_entry->progress.store(progress_before + column_weight, std::memory_order_relaxed);
 }
 
 void MergeTreeDataMerger::gatherColumns()
@@ -676,10 +652,41 @@ void MergeTreeDataMerger::gatherColumns()
 
     for (auto & [column_name, column_type] : gathering_columns)
     {
+        Float64 progress_before = manipulation_entry->progress.load(std::memory_order_relaxed);
+        Float64 column_weight = column_sizes->columnWeight(column_name);
+        MergeStageProgress column_progress(progress_before, column_weight);
+        LOG_TRACE(log, "Gather column {} weight {} in progress {}", column_name, column_weight, progress_before);
         if (column_type->isMap() && !column_type->isMapKVStore())
-            continue;
-        gatherColumn(column_name);
-        normal_columns_gathered += 1;
+        {
+            /// Gather implicit columns for flatten map
+            std::unordered_set<String> implicit_names;
+            for (const auto & part : parts)
+            {
+                const auto & checksums = part->getChecksums();
+                for (const auto & it : checksums->files)
+                {
+                    const auto & file_name = it.first;
+                    if (isMapImplicitDataFileNameNotBaseOfSpecialMapName(file_name, column_name))
+                    {
+                        String key_name = parseKeyNameFromImplicitFileName(file_name, column_name);
+                        String implicit_name = getImplicitColNameForMapKey(column_name, key_name);
+                        implicit_names.insert(implicit_name);
+                    }
+                }
+            }
+            for (const auto & name : implicit_names)
+            {
+                gatherColumn(name, column_progress);
+            }
+        }
+        else
+        {
+            gatherColumn(column_name, column_progress);
+            normal_columns_gathered += 1;
+        }
+        /// Update profiles and progress
+        manipulation_entry->columns_written.fetch_add(1, std::memory_order_relaxed);
+        manipulation_entry->progress.store(progress_before + column_weight, std::memory_order_relaxed);
     }
 }
 
