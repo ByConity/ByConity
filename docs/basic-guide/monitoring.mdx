@@ -547,12 +547,12 @@ Monitoring service node (Server)
 
 The more important indicators are excerpted below for explanation
 
-| Metric name (the ones in double quotes are VM-aggregated)）                              | Description                        |
-| --------------------------------------------------------------------- | ----------------------------------------------------- |
-| cnch:latency:queries_cluster:pct95 cnch:latency:queries_cluster:pct99 | Query latency pct99 and pct55                         |
-| cnch:latency:queries_cluster:slow_ratio                               | The proportion of slow queries longer than 10s        |
-| cnch:profile_events:labelled_query_vw:total_rate5m                    | Total QPS of all VW                                   |
-| cnch:profile_events:labelled_query_vw:error_rate5m                    | Failed QPS for all VWs                                |
+| Metric name (the ones in double quotes are VM-aggregated)）           | Description                                                                  |
+| --------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| cnch:latency:queries_cluster:pct95 cnch:latency:queries_cluster:pct99 | Query latency pct99 and pct55                                                |
+| cnch:latency:queries_cluster:slow_ratio                               | The proportion of slow queries longer than 10s                               |
+| cnch:profile_events:labelled_query_vw:total_rate5m                    | Total QPS of all VW                                                          |
+| cnch:profile_events:labelled_query_vw:error_rate5m                    | Failed QPS for all VWs                                                       |
 | cnch_current_metrics_query                                            | The value of the label name query_type is insert, which is the written query |
 
 ### Configure Grafana Kanban for the service node (Server)
@@ -561,13 +561,13 @@ Kanban content see screenshot
 
 ![](./assets/monitoring/boxcnvwueXWFISCRgsRJ66J2vKb.jpeg)
 
- Important indicators:
+Important indicators:
 
-| Kanban Name        | Expression                                                                                                                                                                                                                                                                                                  | Description                                              |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| Queries Ducations  | `cnch:latency:queries_cluster:pct95{namespace="$namespace", cluster="$cluster"}和cnch:latency:queries_cluster:pct99{namespace="$namespace", cluster="$cluster"}`                                                                                                                                            | Query latency P99 和 P95                                                               |
+| Kanban Name        | Expression                                                                                                                                                                                                                                                                                                  | Description                                                                                |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Queries Ducations  | `cnch:latency:queries_cluster:pct95{namespace="$namespace", cluster="$cluster"}和cnch:latency:queries_cluster:pct99{namespace="$namespace", cluster="$cluster"}`                                                                                                                                            | Query latency P99 和 P95                                                                   |
 | Slow Queries > 10s | `cnch:latency:queries_cluster:slow_ratio{namespace="$namespace", cluster="$cluster"}`                                                                                                                                                                                                                       | The proportion of slow queries longer than 10s                                             |
-| Queries Per Second | `sum(cnch:profile_events:labelled_query_vw:total_rate5m{namespace="$namespace", cluster="$cluster", workload=~"$workload"})`                                                                                                                                                                                | Total QPS for all VWs                                                                    |
+| Queries Per Second | `sum(cnch:profile_events:labelled_query_vw:total_rate5m{namespace="$namespace", cluster="$cluster", workload=~"$workload"})`                                                                                                                                                                                | Total QPS for all VWs                                                                      |
 | VW Queries Success | `1 - (sum by (pod) (cnch:profile_events:labelled_query_vw:error_rate5m{cluster="$cluster", namespace="$namespace", workload=~"$workload", pod=~"$pod"}) sum by (pod) (cnch:profile_events:labelled_query_vw:total_rate5m{cluster="$cluster", namespace="$namespace", workload=~"$workload", pod=~"$pod"}))` | After subtracting and dividing error_rate5m and total_rate5m, the success rate is obtained |
 
 The complete Grafana configuration file of the Server is as follows, which can be imported in the Grafana UI：[cnch-server.json](./assets/monitoring/cnch-server.json)
@@ -578,8 +578,8 @@ The complete Grafana configuration file of the Server is as follows, which can b
 
 The following excerpts are some important indicators for TSO to illustrate:
 
-| Indicators                     | Description        |
-| ------------------------------ | ------------------ |
+| Indicators                     | Description                   |
+| ------------------------------ | ----------------------------- |
 | cnch:tso:requests:error_rate5m | Failed QPS for TSO components |
 | cnch:tso:requests:total_rate5m | Total QPS for TSO components  |
 
@@ -591,11 +591,11 @@ The screenshot of the board is as follows:
 
 Important indicators:
 
-| Kanban Name                      | Expression                                                                                                                                                                                              | Description                                               |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| TSO Server Requests Per Sec      | `cnch:tso:requests:total_rate5m{namespace="$namespace", cluster="$cluster", workload=~".*server.*"}`                                                                                                    | QPS of Server component for TSO query                                                 |
-| TSO Worker Requests Per Sec      | `cnch:tso:requests:total_rate5m{namespace="$namespace", cluster="$cluster", workload!~".*(server\|**kafka**).*"}`                                                                                       | Remove the server and kafka, and only look at the request QPS of each worker for TSO  |
-| TSO Servers Requests Server Rate | `cnch:tso:requests:error_rate5m{namespace="$namespace", cluster="$cluster", workload=~".*server.*"} cnch:tso:requests:total_rate5m{namespace="$namespace", cluster="$cluster", workload=~".*server.*"}` | Divide error_rate and total_rate to filter the failure rate of TSO query              |
+| Kanban Name                      | Expression                                                                                                                                                                                              | Description                                                                          |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| TSO Server Requests Per Sec      | `cnch:tso:requests:total_rate5m{namespace="$namespace", cluster="$cluster", workload=~".*server.*"}`                                                                                                    | QPS of Server component for TSO query                                                |
+| TSO Worker Requests Per Sec      | `cnch:tso:requests:total_rate5m{namespace="$namespace", cluster="$cluster", workload!~".*(server\|**kafka**).*"}`                                                                                       | Remove the server and kafka, and only look at the request QPS of each worker for TSO |
+| TSO Servers Requests Server Rate | `cnch:tso:requests:error_rate5m{namespace="$namespace", cluster="$cluster", workload=~".*server.*"} cnch:tso:requests:total_rate5m{namespace="$namespace", cluster="$cluster", workload=~".*server.*"}` | Divide error_rate and total_rate to filter the failure rate of TSO query             |
 
 The complete configuration file of TSO is as follows:[cnch-tso.json](./assets/monitoring/cnch-cluster.json)
 

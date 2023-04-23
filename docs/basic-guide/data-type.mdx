@@ -11,7 +11,7 @@ Document Type: Descriptive
 Summary:
 
 1. What data types does ByConity support?
-2. Compared with ClickHouse, which data types are lacking in 
+2. Compared with ClickHouse, which data types are lacking in
 
 # Difference Summary
 
@@ -72,7 +72,7 @@ If no value is specified for the UUID column when inserting a new record, the UU
 
 To generate UUID values, ByConity provides the [generateuidv4](https://clickhouse.com/docs/en/sql-reference/functions/uuid-functions) function.
 
-## Usage Example 
+## Usage Example
 
 **Example 1**
 
@@ -123,7 +123,6 @@ SELECT * FROM t_uuid
 ```
 
 ## Limits
-
 
 UUID data type only supports [string](https://clickhouse.com/docs/en/sql-reference/data-types/string) data type also supports functions(for example, [min](https://clickhouse.com/docs/en/sql-reference/aggregate-functions/reference/min#agg_function-min), [max](https://clickhouse.com/docs/en/sql-reference/aggregate-functions/reference/max#agg_function-max), and [count](https://clickhouse.com/docs/en/sql-reference/aggregate-functions/reference/count#agg_function-count)).
 
@@ -203,9 +202,7 @@ SELECT 0 / 0
 
 ```
 
-
-You can see more rules about **NaN** sorting in [ORDER BY clause](https://clickhouse.com/docs/en/sql-reference/data-types/float) 
-
+You can see more rules about **NaN** sorting in [ORDER BY clause](https://clickhouse.com/docs/en/sql-reference/data-types/float)
 
 # Decimal
 
@@ -219,7 +216,6 @@ Signed fixed-point numbers that maintain precision during addition, subtraction,
 - S - Scale. Valid range: [0:P], determines the number of decimal places included in the fractional part of the number.
 
 The following examples are synonymous for different Decimal representations of P parameter values: -P from [1:9] - for Decimal32(S) -P from [10:18] - for Decimal64(S) -P from [ 19:38] - for Decimal128(S)
-
 
 ## range of decimal values
 
@@ -636,7 +632,6 @@ WHERE a = 'b\0'
 This method is different from MySQL's **CHAR** type (in MySQL, strings are padded with spaces and spaces are removed on output).
 
 Note that the length of **FixedString(N)** is a constant. A string consisting only of null characters, the return value of the function [length](https://clickhouse.com/docs/en/sql-reference/functions/array-functions#array_functions-length) is **N**, and The return value of the function [empty](https://clickhouse.com/docs/en/sql-reference/functions/string-functions#empty) is **1**.
-
 
 # Nested data structures
 
@@ -1190,7 +1185,7 @@ The following aggregate functions are supported:
 - **argMin**
 - **argMax**
 
-!!! note "Note" **SimpleAggregateFunction(func, Type)** has the same value appearance and storage method as **Type**, so you don't need to apply with **-Merge**/**-State* * suffix function.
+!!! note "Note" **SimpleAggregateFunction(func, Type)** has the same value appearance and storage method as **Type**, so you don't need to apply with **-Merge**/\*_-State_ \* suffix function.
 
 ```
 `SimpleAggregateFunction` outperforms `AggregateFunction` with the same aggregate function.

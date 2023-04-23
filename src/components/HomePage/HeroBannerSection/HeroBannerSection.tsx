@@ -1,9 +1,9 @@
-import React from "react";
-import Link from "@docusaurus/Link";
-import Translate from "@docusaurus/Translate";
-import useDocusaurusContext from "@docusaurus/useDocusaurusContext";
+import React from 'react';
+import Link from '@docusaurus/Link';
+import Translate from '@docusaurus/Translate';
+import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 
-import styles from "./HeroBannerSection.module.scss";
+import styles from './HeroBannerSection.module.scss';
 
 function HeroBannerSection() {
   const { siteConfig } = useDocusaurusContext();

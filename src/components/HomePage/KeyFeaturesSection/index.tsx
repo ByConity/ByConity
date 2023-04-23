@@ -1,1 +1,1 @@
-export { default } from "./KeyFeaturesSection";
+export { default } from './KeyFeaturesSection';

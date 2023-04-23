@@ -1,1 +1,1 @@
-export { default } from "./GetStartedSection";
+export { default } from './GetStartedSection';

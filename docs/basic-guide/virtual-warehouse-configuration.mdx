@@ -29,51 +29,51 @@ We provide a set of system tables to query the metadata related to the Virtual W
 
 The system table shows the meta information, main fields and descriptions of all virtual warehouse (VW):
 
-| Field name                 | Descriptions                                                           |
-| :--------------------- | :-------------------------------------------------------------- |
-| name                   | The name of the virtual warehouse, unique identification.                       |
-| **type**               | The type of the virtual warehouse, Default/Write.                    |
-| **num_workers**        | The number of workers configured for each worker group by this virtual warehouse     |
-| active_worker_groups   | The number of running worker groups in this virtual warehouse |
-| active_workers         | The number of healthy workers in this virtual warehouse               |
-| min_worker_groups      | The minimum number of worker groups this virtual warehouse is allowed to run                   |
-| max_worker_groups      | The maximum number of worker groups that this virtual warehouse is allowed to run                   |
+| Field name             | Descriptions                                                                                 |
+| :--------------------- | :------------------------------------------------------------------------------------------- |
+| name                   | The name of the virtual warehouse, unique identification.                                    |
+| **type**               | The type of the virtual warehouse, Default/Write.                                            |
+| **num_workers**        | The number of workers configured for each worker group by this virtual warehouse             |
+| active_worker_groups   | The number of running worker groups in this virtual warehouse                                |
+| active_workers         | The number of healthy workers in this virtual warehouse                                      |
+| min_worker_groups      | The minimum number of worker groups this virtual warehouse is allowed to run                 |
+| max_worker_groups      | The maximum number of worker groups that this virtual warehouse is allowed to run            |
 | max_concurrent_queries | The maximum number of concurrent queries allowed by the virtual warehouse                    |
-| max_queued_queries     | The maximum number of queued queries allowed by this virtual warehouse                     |
-| max_queued_waiting_ms  | The maximum waiting time for queued queries allowed by this virtual warehouse (milliseconds)        |
+| max_queued_queries     | The maximum number of queued queries allowed by this virtual warehouse                       |
+| max_queued_waiting_ms  | The maximum waiting time for queued queries allowed by this virtual warehouse (milliseconds) |
 
 ## system.worker_groups
 
 This system table displays the meta information, main fields and descriptions of all worker groups (WG):：
 
-| Field name      | Descriptions                                                                               |
-| :------------- | :-------------------------------------------------------------------------------------- |
-| vw_name        | The name of the virtual warehouse to which this worker group belongs                                         |
-| id             | The id of the worker group, unique identification                                                         |
-| num_workers    | The number of workers configured for each worker group by this virtual warehouse                             |
+| Field name     | Descriptions                                                                                     |
+| :------------- | :----------------------------------------------------------------------------------------------- |
+| vw_name        | The name of the virtual warehouse to which this worker group belongs                             |
+| id             | The id of the worker group, unique identification                                                |
+| num_workers    | The number of workers configured for each worker group by this virtual warehouse                 |
 | linked_id      | If the worker group is a Shared type, linked_id points to the Physical worker group it refers to |
-| active_workers | The number of active workers in this worker group                                            |
-| min_cpu_usage  | The smallest worker cpu_usage in the worker group                                            |
-| max_cpu_usage  | The maximum worker cpu_usage in the worker group                                           |
-| avg_cpu_usage  | The average cpu_usage of all workers in this worker group                                           |
-| min_mem_usage  | The smallest worker memory_usage in the worker group                                         |
-| max_mem_usage  | The largest worker memory_usage in the worker group                                         |
-| avg_mem_usage  | The average memory_usage of all workers in the worker group                                        |
+| active_workers | The number of active workers in this worker group                                                |
+| min_cpu_usage  | The smallest worker cpu_usage in the worker group                                                |
+| max_cpu_usage  | The maximum worker cpu_usage in the worker group                                                 |
+| avg_cpu_usage  | The average cpu_usage of all workers in this worker group                                        |
+| min_mem_usage  | The smallest worker memory_usage in the worker group                                             |
+| max_mem_usage  | The largest worker memory_usage in the worker group                                              |
+| avg_mem_usage  | The average memory_usage of all workers in the worker group                                      |
 
 ## system.workers
 
 The system table records all running worker information, main fields and descriptions:
 
-| Field name           | Descriptions                            |
-| :--------------- | :------------------------------ |
-| worker_id        | The id of the worker, unique identification          |
-| vw_name          | The virtual warehouse the worker belongs to|
-| worker_group_id  | The worker group the worker belongs to  |
-| host             | The host (ip)  of the worker        |
-| tcp_port         | The tcp_port of the worker            |
-| cpu_usage        | Current cpu_usage                |
-| memory_usage     | Current memory_usage             |
-| memory_available | Current memory amount（byte） available   |
+| Field name       | Descriptions                                |
+| :--------------- | :------------------------------------------ |
+| worker_id        | The id of the worker, unique identification |
+| vw_name          | The virtual warehouse the worker belongs to |
+| worker_group_id  | The worker group the worker belongs to      |
+| host             | The host (ip) of the worker                 |
+| tcp_port         | The tcp_port of the worker                  |
+| cpu_usage        | Current cpu_usage                           |
+| memory_usage     | Current memory_usage                        |
+| memory_available | Current memory amount（byte） available     |
 | last_update_time | The latest heartbeat update time            |
 
 Create and use Virtual Warehouse
@@ -86,7 +86,7 @@ Cluster mode is the recommended way to use it in a production environment. At th
 
 ## local mode
 
-When starting the resource manager component, we can fill in the Virtual Warehouse related information in the configuration file (refer to [cluster-configuration](./cluster-configuration) resource manager section). The resource manager will directly create corresponding  Virtual Warehouse (and worker group) based on these information. Example:
+When starting the resource manager component, we can fill in the Virtual Warehouse related information in the configuration file (refer to [cluster-configuration](./cluster-configuration) resource manager section). The resource manager will directly create corresponding Virtual Warehouse (and worker group) based on these information. Example:
 
 ```
 <vws>
@@ -164,7 +164,7 @@ SETTINGS type = 'Physical';
 
 ```
 
-`CREATE WORKER GROUP IF NOT EXISTS `$WG_NAME` SETTINGS ... `This SQL is used to create a worker group. $WG_NAME is the unique identifier of the worker group.
+`CREATE WORKER GROUP IF NOT EXISTS `$WG_NAME`SETTINGS ...`This SQL is used to create a worker group. $WG_NAME is the unique identifier of the worker group.
 
 ### Creat K8s Worker Pods
 

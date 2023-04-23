@@ -1,10 +1,10 @@
 ---
-title: Background Tasks Configuration 
+title: Background Tasks Configuration
 tags:
   - Docs
 ---
 
-# Background Tasks Configuration 
+# Background Tasks Configuration
 
 # Common commands
 
@@ -62,20 +62,20 @@ system.server_part_log can view the information of historical Merge tasks. (You 
 
 # Settings
 
-| Configuration Items | Default Value, Meaning | Remarks |
-| :----------------------------------------- | :-------- -------------------------------------------------- --------- | :--------------------------------------- -------------------------------------------------- -------------------------------------------------- ------------------------------------------- |
-| | _////// Multiple partitions //////_ | _Only select one partition each time at the earliest, and the concurrency is not enough. Changing multiple partitions is expected to improve concurrency. _ |
-| enable_addition_bg_task | false, allow more merge tasks to run at the same time | used together with max_addition_bg_task_num. |
-| max_addition_bg_task_num | 200, limit the maximum number of concurrent tasks | |
-| max_partition_for_multi_select | 3, how many partitions to select for merge | merge will select partitions first, and then select range from partitions. If there are multiple partition keys (such as appid, date), this value usually needs to be increased because there are many partitions. |
-| | _////// Increase the speed of each range selection //////_ | _ When the amount of data is large, each selection is very time-consuming, and it is expected to be accelerated by **batch**. _ |
-| cnch_merge_enable_batch_select | false, whether to enable batch_select | batch_select will select a large number of ranges every round, and then submit these ranges directly in subsequent rounds, which can shorten the trigger cycle of merge, so that the total number of tasks can truly reach the upper limit of concurrency. |
-| cnch_merge_max_total_rows_to_merge | 15000000, the maximum number of rows for a single merged part | It is more useful when the business is very clear about the number of level0 part rows and expects to control the overall number after merge (affecting query time). |
-| | _////// Real-time data optimization //////_ | _Real-time scenario_ |
-| cnch_merge_only_realtime_partition | false, whether to select only realtime partition | When selecting partitions for each round, N partitions with more than count and N realtime partitions will be selected. If this setting is enabled, partitions will only be selected according to the realtime level (min_block). A live table scenario would be useful. |
+| Configuration Items                     | Default Value, Meaning                                                                     | Remarks                                                                                                                                                                                                                                                                                         |
+| :-------------------------------------- | :----------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|                                         | _////// Multiple partitions //////_                                                        | _Only select one partition each time at the earliest, and the concurrency is not enough. Changing multiple partitions is expected to improve concurrency. _                                                                                                                                     |
+| enable_addition_bg_task                 | false, allow more merge tasks to run at the same time                                      | used together with max_addition_bg_task_num.                                                                                                                                                                                                                                                    |
+| max_addition_bg_task_num                | 200, limit the maximum number of concurrent tasks                                          |                                                                                                                                                                                                                                                                                                 |
+| max_partition_for_multi_select          | 3, how many partitions to select for merge                                                 | merge will select partitions first, and then select range from partitions. If there are multiple partition keys (such as appid, date), this value usually needs to be increased because there are many partitions.                                                                              |
+|                                         | _////// Increase the speed of each range selection //////_                                 | _ When the amount of data is large, each selection is very time-consuming, and it is expected to be accelerated by **batch**. _                                                                                                                                                                 |
+| cnch_merge_enable_batch_select          | false, whether to enable batch_select                                                      | batch_select will select a large number of ranges every round, and then submit these ranges directly in subsequent rounds, which can shorten the trigger cycle of merge, so that the total number of tasks can truly reach the upper limit of concurrency.                                      |
+| cnch_merge_max_total_rows_to_merge      | 15000000, the maximum number of rows for a single merged part                              | It is more useful when the business is very clear about the number of level0 part rows and expects to control the overall number after merge (affecting query time).                                                                                                                            |
+|                                         | _////// Real-time data optimization //////_                                                | _Real-time scenario_                                                                                                                                                                                                                                                                            |
+| cnch_merge_only_realtime_partition      | false, whether to select only realtime partition                                           | When selecting partitions for each round, N partitions with more than count and N realtime partitions will be selected. If this setting is enabled, partitions will only be selected according to the realtime level (min_block). A live table scenario would be useful.                        |
 | max_bytes_to_merge_at_max_space_in_pool | 150 _ 1024 _ 1024 \* 1024, which is 150GB. The maximum bytes limit of a single merge task. | The parameter name does not seem intuitive enough, the legacy code problem... This parameter in cnch is used to set the max size of the merge selector. The function is similar to cnch_merge_max_total_rows_to_merge, one limits the number of rows, and the other limits the number of bytes. |
-| cnch_vw_write | vw_default, vw for executing merge | Consult sre to know which vw should be used as write vw for your business |
-| cnch_merge_pick_worker_algo | 'RM', the algorithm when selecting workers, pick from RM by default. | In a high concurrency usage, it needs to be set to '**RoundRobin**' |
+| cnch_vw_write                           | vw_default, vw for executing merge                                                         | Consult sre to know which vw should be used as write vw for your business                                                                                                                                                                                                                       |
+| cnch_merge_pick_worker_algo             | 'RM', the algorithm when selecting workers, pick from RM by default.                       | In a high concurrency usage, it needs to be set to '**RoundRobin**'                                                                                                                                                                                                                             |
 
 # Instructions for use
 

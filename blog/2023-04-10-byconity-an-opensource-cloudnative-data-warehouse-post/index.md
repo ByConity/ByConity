@@ -13,14 +13,13 @@ ByConity is an open-source cloud-native data warehouse that adopts a storage-com
 
 ## ByConity's History
 
-The background of ByConity can be traced back to 2018 when ByteDance began to use ClickHouse internally. Due to the development of business, the scale of data has become larger and larger to serve a large number of users. However, because ClickHouse is a Shared-Nothing architecture, each node is independent and does not share storage resources, so computing resources and storage resources are tightly coupled. This leads to a higher cost of expansion and contraction, and involves data migration, which prevents real-time and on-demand expansion and contraction, resulting in a waste of resources. Furthermore, the tightly coupled architecture of ClickHouse will cause multi-tenants to interact with each other in the shared cluster. In addition, because reading and writing are completed on one node, reading and writing are affected. Finally, ClickHouse does not support performance in complex queries such as multi-table join. Based on these pain points, the ByConity project was launched in January 2020. 
+The background of ByConity can be traced back to 2018 when ByteDance began to use ClickHouse internally. Due to the development of business, the scale of data has become larger and larger to serve a large number of users. However, because ClickHouse is a Shared-Nothing architecture, each node is independent and does not share storage resources, so computing resources and storage resources are tightly coupled. This leads to a higher cost of expansion and contraction, and involves data migration, which prevents real-time and on-demand expansion and contraction, resulting in a waste of resources. Furthermore, the tightly coupled architecture of ClickHouse will cause multi-tenants to interact with each other in the shared cluster. In addition, because reading and writing are completed on one node, reading and writing are affected. Finally, ClickHouse does not support performance in complex queries such as multi-table join. Based on these pain points, the ByConity project was launched in January 2020.
 
 The ByConity team hopes to give the project back to the community and improve it through the power of open source. In January 2023, ByConity was officially open-sourced, and the beta version was released.
 
 ![Figure 1 ByteDance ClickHouse usage](./f1-byte-clickhouse-usage.png)
 
 Figure 1: ByteDance ClickHouse Usage
-
 
 # Features of ByConity
 
@@ -55,7 +54,7 @@ ByConity's architecture is divided into three layers:
 
 1. Service access layer: Responsible for client data and service access, i.e., ByConity Server
 2. Computing group: ByConity's computing resource layer, where each Virtual Warehouse is a computing group
-3. Data storage: Distributed file system, such as HDFS, S3, etc. 
+3. Data storage: Distributed file system, such as HDFS, S3, etc.
 
 ![Figure 3: ByConity's architecture](./f3-three-layer-architecture.png)
 Figure 3: ByConity's architecture
@@ -122,24 +121,26 @@ ByConity performs query acceleration through caching. Under the architecture of 
 ## How to Obtain and Deploy
 
 ByConity currently supports four acquisition and deployment modes. Community developers are welcome to use them and submit issues to us:
+
 - Stand-alone version
-   - Use docker compose to pull up Reference: https://github.com/ByConity/byconity-docker
+  - Use docker compose to pull up Reference: https://github.com/ByConity/byconity-docker
 - K8s cluster version mode
-   - Use K8s deployment reference: https://github.com/ByConity/byconity-deploy
+  - Use K8s deployment reference: https://github.com/ByConity/byconity-deploy
 - Physical machine deployment mode
-   - Deploy on a physical machine using the package manager: https://github.com/ByConity/ByConity/tree/master/packages
+  - Deploy on a physical machine using the package manager: https://github.com/ByConity/ByConity/tree/master/packages
 - Source code compilation method
-   - Reference: https://github.com/ByConity/ByConity#build-byconity
+  - Reference: https://github.com/ByConity/ByConity#build-byconity
 
 ## ByConity's Future Open-Source Plan
 
 ByConity includes several key milestones in its open-source community roadmap through 2023. These milestones are designed to enhance ByConity's functionality, performance, and ease of use. Among them, the development of new storage engines, support for more data types, and integration with other data management tools are some important areas of focus. We have listed the following directions, and we have created an issue on Github: https://github.com/ByConity/ByConity/issues/26, inviting community partners to join us to discuss co-construction:
+
 - In terms of performance improvement: ByConity hopes to continue to improve performance, and here are three technical directions. One is to use indexes for acceleration, which includes four aspects:
-   - Optimize the existing skip index;
-   - Explore the implementation of new index research, such as zorder-index and inverted index;
-   - ByConity builds and accelerates Hive table indexes
-   - Index recommendation and conversion, lowering the threshold for users to use
-   The second is the continuous optimization of the query optimizer; the third is that ByConity's cache mechanism is local, and each computing group can only access its own cache. In the future, it is hoped to implement a distributed cache mechanism to further improve the cache hit rate.
+  - Optimize the existing skip index;
+  - Explore the implementation of new index research, such as zorder-index and inverted index;
+  - ByConity builds and accelerates Hive table indexes
+  - Index recommendation and conversion, lowering the threshold for users to use
+    The second is the continuous optimization of the query optimizer; the third is that ByConity's cache mechanism is local, and each computing group can only access its own cache. In the future, it is hoped to implement a distributed cache mechanism to further improve the cache hit rate.
 - Stability improvement: There are two aspects here. One is to support resource isolation in more dimensions. Currently, it only supports resource isolation in the computing group dimension. In the next step, resource isolation will also be supported on the server side, providing better end-to-end Guaranteed multi-tenancy capability. The second direction is to enrich metrics and improve observability and problem diagnosis capabilities.
 - Enterprise-level feature enhancements: We hope to achieve more detailed permission control, including column-level permission control. The other is to improve the functions related to data security, such as data backup and recovery and data end-to-end encryption. Finally, we continue to explore the deep compression of data to save storage costs.
 - Ecological compatibility improvement: This direction is the most important point. ByConity plans to support more types of storage backends, such as AWS's S3, Volcano Engine's object storage, etc. In terms of improving ecological compatibility, it includes integration with some drivers and some open source software. At the same time, we also hope to support federated queries of data lakes, such as Hudi, Iceberg, etc.
@@ -150,8 +151,5 @@ We have a video that introduces ByConity in detail, including a demo of ByConity
 
 Scan the QR code to reply [name + QR code] Join the ByConity communication group to get more project dynamics and activity information.
 
-
 ![ByConity Community QR Code](./f5-byconity-community-qrcode.png)
 ByConity Community QR Code
-
-

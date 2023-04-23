@@ -1,17 +1,18 @@
 ---
-title: "JSON"
-slug: "json"
+title: 'JSON'
+slug: 'json'
 hidden: false
-createdAt: "2021-07-29T12:12:52.763Z"
-updatedAt: "2021-09-23T04:06:29.273Z"
+createdAt: '2021-07-29T12:12:52.763Z'
+updatedAt: '2021-09-23T04:06:29.273Z'
 tags:
-- Docs
+  - Docs
 ---
-> Notice:
-Some of the examples below are referenced from [ClickHouse Documentation](https://clickhouse.com/docs/en/sql-reference/functions/) but have been adapted and modified to work in ByConity.
 
+> Notice:
+> Some of the examples below are referenced from [ClickHouse Documentation](https://clickhouse.com/docs/en/sql-reference/functions/) but have been adapted and modified to work in ByConity.
 
 ## JSONExtract
+
 Parses a JSON and extract a value of the given ByConity data type.
 This is a generalization of the previous `JSONExtract<type>` functions.
 This means
@@ -25,16 +26,18 @@ JSONExtract(json[, indices_or_keys…], Return_type)
 ```
 
 **Arguments**
-- `json` – json string. 
+
+- `json` – json string.
 - `indices_or_keys` - is a list of zero or more arguments each of them can be either string or integer.
-    - String = access object member by key. 
-    - Positive integer = access the n-th member/key from the beginning. 
-    - Negative integer = access the n-th member/key from the end. 
-    - Minimum index of the element is 1. Thus the element 0 does not exist.
-    - You may use integers to access both JSON arrays and JSON objects.
-- `Return_type` – ByConity data type. 
+  - String = access object member by key.
+  - Positive integer = access the n-th member/key from the beginning.
+  - Negative integer = access the n-th member/key from the end.
+  - Minimum index of the element is 1. Thus the element 0 does not exist.
+  - You may use integers to access both JSON arrays and JSON objects.
+- `Return_type` – ByConity data type.
 
 **Returned value**
+
 - Extracted value of the given ByConity data type.
 
 **Example**
@@ -48,6 +51,7 @@ SELECT JSONExtract('{"a": "hello", "b": [-100, 200.0, 300]}', 'Tuple(String, Arr
 │ (hello, [-1e+02, 2e+02, 3e+02])                                                         │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
 ```
+
 <!-- TODO: Gateway client returns errors for this query
 
 ```sql
@@ -108,25 +112,28 @@ SELECT JSONExtract('{"day": 5}', 'day', 'Enum8(\'Sunday\' = 0, \'Monday\' = 1, \
 ```
 
 ## JSONExtractBool
+
 Parses a JSON and extract a value. These functions are similar to `visitParam` functions.
 If the value does not exist or has a wrong type, `0` will be returned.
 
 **Syntax**
 
 ```sql
-JSONExtractBool(json\[, indices_or_keys\]…) 
+JSONExtractBool(json\[, indices_or_keys\]…)
 ```
 
 **Arguments**
-- `json` – json string. 
+
+- `json` – json string.
 - `indices_or_keys` - is a list of zero or more arguments each of them can be either string or integer.
-    - String = access object member by key. 
-    - Positive integer = access the n-th member/key from the beginning. 
-    - Negative integer = access the n-th member/key from the end. 
-    - Minimum index of the element is 1. Thus the element 0 does not exist.
-    - You may use integers to access both JSON arrays and JSON objects.
+  - String = access object member by key.
+  - Positive integer = access the n-th member/key from the beginning.
+  - Negative integer = access the n-th member/key from the end.
+  - Minimum index of the element is 1. Thus the element 0 does not exist.
+  - You may use integers to access both JSON arrays and JSON objects.
 
 **Returned value**
+
 - UInt8.
 
 **Example**
@@ -152,25 +159,28 @@ SELECT JSONExtractBool('{"passed": false}','passed')
 ```
 
 ## JSONExtractFloat
+
 Parses a JSON and extract a value. These functions are similar to `visitParam` functions.
 If the value does not exist or has a wrong type, `0` will be returned.
 
 **Syntax**
 
 ```sql
-JSONExtractFloat(json\[, indices_or_keys\]…) 
+JSONExtractFloat(json\[, indices_or_keys\]…)
 ```
 
 **Arguments**
-- `json` – json string. 
+
+- `json` – json string.
 - `indices_or_keys` - is a list of zero or more arguments each of them can be either string or integer.
-    - String = access object member by key. 
-    - Positive integer = access the n-th member/key from the beginning. 
-    - Negative integer = access the n-th member/key from the end. 
-    - Minimum index of the element is 1. Thus the element 0 does not exist.
-    - You may use integers to access both JSON arrays and JSON objects.
+  - String = access object member by key.
+  - Positive integer = access the n-th member/key from the beginning.
+  - Negative integer = access the n-th member/key from the end.
+  - Minimum index of the element is 1. Thus the element 0 does not exist.
+  - You may use integers to access both JSON arrays and JSON objects.
 
 **Returned value**
+
 - Float64.
 
 **Example**
@@ -186,25 +196,28 @@ SELECT JSONExtractFloat('{"a": "hello", "b": [-100, 200.0, 300]}', 'b', 2)
 ```
 
 ## JSONExtractInt
+
 Parses a JSON and extract a value. These functions are similar to `visitParam` functions.
 If the value does not exist or has a wrong type, `0` will be returned.
 
 **Syntax**
 
 ```sql
-JSONExtractInt(json\[, indices_or_keys\]…) 
+JSONExtractInt(json\[, indices_or_keys\]…)
 ```
 
 **Arguments**
-- `json` – json string. 
+
+- `json` – json string.
 - `indices_or_keys` - is a list of zero or more arguments each of them can be either string or integer.
-    - String = access object member by key. 
-    - Positive integer = access the n-th member/key from the beginning. 
-    - Negative integer = access the n-th member/key from the end. 
-    - Minimum index of the element is 1. Thus the element 0 does not exist.
-    - You may use integers to access both JSON arrays and JSON objects.
+  - String = access object member by key.
+  - Positive integer = access the n-th member/key from the beginning.
+  - Negative integer = access the n-th member/key from the end.
+  - Minimum index of the element is 1. Thus the element 0 does not exist.
+  - You may use integers to access both JSON arrays and JSON objects.
 
 **Returned value**
+
 - Int64.
 
 **Example**
@@ -220,6 +233,7 @@ SELECT JSONExtractInt('{"a": "hello", "b": [-100, 200.0, 300]}', 'b', 1)
 ```
 
 ## JSONExtractKeysAndValues
+
 Parses key-value pairs from a JSON where the values are of the given ByConity data type.
 
 **Syntax**
@@ -229,16 +243,18 @@ JSONExtractKeysAndValues(json[, indices_or_keys…], Value_type)
 ```
 
 **Arguments**
-- `json` – json string. 
+
+- `json` – json string.
 - `indices_or_keys` - is a list of zero or more arguments each of them can be either string or integer.
-    - String = access object member by key. 
-    - Positive integer = access the n-th member/key from the beginning. 
-    - Negative integer = access the n-th member/key from the end. 
-    - Minimum index of the element is 1. Thus the element 0 does not exist.
-    - You may use integers to access both JSON arrays and JSON objects.
-- `Value_type` - json value data type 
+  - String = access object member by key.
+  - Positive integer = access the n-th member/key from the beginning.
+  - Negative integer = access the n-th member/key from the end.
+  - Minimum index of the element is 1. Thus the element 0 does not exist.
+  - You may use integers to access both JSON arrays and JSON objects.
+- `Value_type` - json value data type
 
 **Returned value**
+
 - key-value pairs
 
 **Example**
@@ -252,7 +268,9 @@ SELECT JSONExtractKeysAndValues('{"x": {"a": 5, "b": 7, "c": 11}}', 'x', 'Int8')
 │ [(a, 5), (b, 7), (c, 11)]                                                 │
 └───────────────────────────────────────────────────────────────────────────┘
 ```
+
 ## JSONExtractRaw
+
 Returns a part of JSON as unparsed string.
 If the part does not exist or has a wrong type, an empty string will be returned.
 
@@ -263,15 +281,17 @@ JSONExtractRaw(json\[, indices_or_keys\]…)
 ```
 
 **Arguments**
-- `json` – json string. 
+
+- `json` – json string.
 - `indices_or_keys` - is a list of zero or more arguments each of them can be either string or integer.
-    - String = access object member by key. 
-    - Positive integer = access the n-th member/key from the beginning. 
-    - Negative integer = access the n-th member/key from the end. 
-    - Minimum index of the element is 1. Thus the element 0 does not exist.
-    - You may use integers to access both JSON arrays and JSON objects.
+  - String = access object member by key.
+  - Positive integer = access the n-th member/key from the beginning.
+  - Negative integer = access the n-th member/key from the end.
+  - Minimum index of the element is 1. Thus the element 0 does not exist.
+  - You may use integers to access both JSON arrays and JSON objects.
 
 **Returned value**
+
 - String
 
 **Example**
@@ -287,6 +307,7 @@ SELECT JSONExtractRaw('{"a": "hello", "b": [-100, 200.0, 300]}', 'b');
 ```
 
 ## JSONExtractString
+
 Parse a JSON and extract a string. This function is similar to `visitParamExtractString` functions.
 If the value does not exist or has a wrong type, an empty string will be returned.
 The value is unescaped. If unescaping failed, it returns an empty string.
@@ -298,15 +319,17 @@ JSONExtractString(json\[, indices_or_keys\]…)
 ```
 
 **Arguments**
-- `json` – json string. 
+
+- `json` – json string.
 - `indices_or_keys` - is a list of zero or more arguments each of them can be either string or integer.
-    - String = access object member by key. 
-    - Positive integer = access the n-th member/key from the beginning. 
-    - Negative integer = access the n-th member/key from the end. 
-    - Minimum index of the element is 1. Thus the element 0 does not exist.
-    - You may use integers to access both JSON arrays and JSON objects.
+  - String = access object member by key.
+  - Positive integer = access the n-th member/key from the beginning.
+  - Negative integer = access the n-th member/key from the end.
+  - Minimum index of the element is 1. Thus the element 0 does not exist.
+  - You may use integers to access both JSON arrays and JSON objects.
 
 **Returned value**
+
 - String
 
 **Example**
@@ -352,25 +375,28 @@ SELECT JSONExtractString('{"abc":"hello}', 'abc')
 ```
 
 ## JSONExtractUInt
+
 Parses a JSON and extract a value. These functions are similar to `visitParam` functions.
 If the value does not exist or has a wrong type, `0` will be returned.
 
 **Syntax**
 
 ```sql
-JSONExtractUInt(json\[, indices_or_keys\]…) 
+JSONExtractUInt(json\[, indices_or_keys\]…)
 ```
 
 **Arguments**
-- `json` – json string. 
+
+- `json` – json string.
 - `indices_or_keys` - is a list of zero or more arguments each of them can be either string or integer.
-    - String = access object member by key. 
-    - Positive integer = access the n-th member/key from the beginning. 
-    - Negative integer = access the n-th member/key from the end. 
-    - Minimum index of the element is 1. Thus the element 0 does not exist.
-    - You may use integers to access both JSON arrays and JSON objects.
+  - String = access object member by key.
+  - Positive integer = access the n-th member/key from the beginning.
+  - Negative integer = access the n-th member/key from the end.
+  - Minimum index of the element is 1. Thus the element 0 does not exist.
+  - You may use integers to access both JSON arrays and JSON objects.
 
 **Returned value**
+
 - UInt64.
 
 **Example**
@@ -384,7 +410,9 @@ SELECT JSONExtractUInt('{"a": "hello", "b": [-100, 200.0, 300]}', 'b', -1)
 │ 300                                                                 │
 └─────────────────────────────────────────────────────────────────────┘
 ```
+
 ## JSONHas
+
 If the value exists in the JSON document, `1` will be returned.
 If the value does not exist, `0` will be returned.
 
@@ -395,15 +423,17 @@ JSONHas(json[, indices_or_keys]…)
 ```
 
 **Arguments**
-- `json` – json string. 
+
+- `json` – json string.
 - `indices_or_keys` - is a list of zero or more arguments each of them can be either string or integer.
-    - String = access object member by key. 
-    - Positive integer = access the n-th member/key from the beginning. 
-    - Negative integer = access the n-th member/key from the end. 
-    - Minimum index of the element is 1. Thus the element 0 does not exist.
-    - You may use integers to access both JSON arrays and JSON objects.
+  - String = access object member by key.
+  - Positive integer = access the n-th member/key from the beginning.
+  - Negative integer = access the n-th member/key from the end.
+  - Minimum index of the element is 1. Thus the element 0 does not exist.
+  - You may use integers to access both JSON arrays and JSON objects.
 
 **Returned value**
+
 - UInt8.
 
 **Example**
@@ -429,6 +459,7 @@ SELECT JSONHas('{"a": "hello", "b": [-100, 200.0, 300]}', 'b', 4)
 ```
 
 ## JSONLength
+
 Return the length of a JSON array or a JSON object.
 
 If the value does not exist or has a wrong type, `0` will be returned.
@@ -440,15 +471,17 @@ JSONLength(json\[, indices_or_keys\]…)
 ```
 
 **Arguments**
-- `json` – json string. 
+
+- `json` – json string.
 - `indices_or_keys` - is a list of zero or more arguments each of them can be either string or integer.
-    - String = access object member by key. 
-    - Positive integer = access the n-th member/key from the beginning. 
-    - Negative integer = access the n-th member/key from the end. 
-    - Minimum index of the element is 1. Thus the element 0 does not exist.
-    - You may use integers to access both JSON arrays and JSON objects.
+  - String = access object member by key.
+  - Positive integer = access the n-th member/key from the beginning.
+  - Negative integer = access the n-th member/key from the end.
+  - Minimum index of the element is 1. Thus the element 0 does not exist.
+  - You may use integers to access both JSON arrays and JSON objects.
 
 **Returned value**
+
 - UInt64.
 
 **Example**
@@ -474,6 +507,7 @@ SELECT JSONLength('{"a": "hello", "b": [-100, 200.0, 300]}')
 ```
 
 ## JSONType
+
 Return the type of a JSON value.
 
 If the value does not exist, `Null` will be returned.
@@ -483,16 +517,19 @@ If the value does not exist, `Null` will be returned.
 ```sql
 JSONType(json\[, indices_or_keys\]…)
 ```
+
 **Arguments**
-- `json` – json string. 
+
+- `json` – json string.
 - `indices_or_keys` - is a list of zero or more arguments each of them can be either string or integer.
-    - String = access object member by key. 
-    - Positive integer = access the n-th member/key from the beginning. 
-    - Negative integer = access the n-th member/key from the end. 
-    - Minimum index of the element is 1. Thus the element 0 does not exist.
-    - You may use integers to access both JSON arrays and JSON objects.
+  - String = access object member by key.
+  - Positive integer = access the n-th member/key from the beginning.
+  - Negative integer = access the n-th member/key from the end.
+  - Minimum index of the element is 1. Thus the element 0 does not exist.
+  - You may use integers to access both JSON arrays and JSON objects.
 
 **Returned value**
+
 - ByConity data type.
 
 **Example**
@@ -528,6 +565,7 @@ SELECT JSONType('{"a": "hello", "b": [-100, 200.0, 300]}', 'b')
 ```
 
 ## visitParamExtractBool
+
 Parses a true/false value. The result is UInt8.
 
 **Syntax**
@@ -537,10 +575,12 @@ visitParamExtractBool(params, name)
 ```
 
 **Arguments**
-- `params` – json string. 
+
+- `params` – json string.
 - `name` - json key
 
 **Returned value**
+
 - UInt8.
 
 **Example**
@@ -564,7 +604,9 @@ SELECT visitParamExtractBool('{"abc":false}', 'abc')
 │ 0                                             │
 └───────────────────────────────────────────────┘
 ```
+
 ## visitParamExtractFloat
+
 Parses a float value. The result is Float64.
 
 **Syntax**
@@ -574,10 +616,12 @@ visitParamExtractFloat(params, name)
 ```
 
 **Arguments**
-- `params` – json string. 
+
+- `params` – json string.
 - `name` - json key
 
 **Returned value**
+
 - UInt8.
 
 **Example**
@@ -593,6 +637,7 @@ SELECT visitParamExtractFloat('{"abc":123.0}', 'abc')
 ```
 
 ## visitParamExtractInt
+
 Parses a Int value. The result is Int64.
 
 **Syntax**
@@ -602,10 +647,12 @@ visitParamExtractInt(params, name)
 ```
 
 **Arguments**
-- `params` – json string. 
+
+- `params` – json string.
 - `name` - json key
 
 **Returned value**
+
 - Int64.
 
 **Example**
@@ -621,6 +668,7 @@ SELECT visitParamExtractInt('{"abc":123}', 'abc')
 ```
 
 ## visitParamExtractRaw
+
 Returns the value of a field, including separators.
 
 **Syntax**
@@ -630,10 +678,12 @@ visitParamExtractRaw(params, name)
 ```
 
 **Arguments**
-- `params` – json string. 
+
+- `params` – json string.
 - `name` - json key
 
 **Returned value**
+
 - String.
 
 **Example**
@@ -659,6 +709,7 @@ SELECT visitParamExtractRaw('{"abc":{"def":[1,2,3]}}', 'abc')
 ```
 
 ## visitParamExtractString
+
 Parses the string in double quotes. The value is unescaped. If unescaping failed, it returns an empty string.
 
 **Syntax**
@@ -668,13 +719,16 @@ visitParamExtractString(params, name)
 ```
 
 **Arguments**
-- `params` – json string. 
+
+- `params` – json string.
 - `name` - json key
 
 **Returned value**
+
 - String.
 
 **Example**
+
 <!-- TODO: Gateway Client formatting issue
 
 ```sql
@@ -722,6 +776,7 @@ There is currently no support for code points in the format `\uXXXX\uYYYY` that 
 The following functions are based on [simdjson](https://github.com/lemire/simdjson) designed for more complex JSON parsing requirements. The assumption 2 mentioned above still applies.
 
 ## visitParamExtractUInt
+
 Parses UInt64 from the value of the field named `name` . If this is a string field, it tries to parse a number from the beginning of the string. If the field does not exist, or it exists but does not contain a number, it returns 0.
 
 **Syntax**
@@ -731,10 +786,12 @@ visitParamExtractUInt(params, name)
 ```
 
 **Arguments**
-- `params` – json string. 
+
+- `params` – json string.
 - `name` - json key
 
 **Returned value**
+
 - UInt64.
 
 **Example**
@@ -748,7 +805,9 @@ SELECT visitParamExtractUInt('{"abc":2}', 'abc')
 │ 2                                         │
 └───────────────────────────────────────────┘
 ```
+
 ## visitParamHas
+
 Checks whether there is a field with the `name` name.
 
 **Syntax**
@@ -758,10 +817,12 @@ visitParamHas(params, name)
 ```
 
 **Arguments**
-- `params` – json string. 
+
+- `params` – json string.
 - `name` - json key
 
 **Returned value**
+
 - UInt8.
 
 **Example**
