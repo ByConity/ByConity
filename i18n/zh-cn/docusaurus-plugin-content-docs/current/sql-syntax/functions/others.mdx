@@ -1,14 +1,14 @@
 ---
-title: "Others"
-slug: "others"
+title: 'Others'
+slug: 'others'
 hidden: true
-createdAt: "2021-07-29T12:25:27.577Z"
-updatedAt: "2021-07-29T12:25:27.577Z"
+createdAt: '2021-07-29T12:25:27.577Z'
+updatedAt: '2021-07-29T12:25:27.577Z'
 tags:
-- Docs
+  - Docs
 ---
-## MACNumToString
 
+## MACNumToString
 
 **Syntax**
 
@@ -22,7 +22,6 @@ Accepts a UInt64 number. Interprets it as a MAC address in big endian. Returns a
 
 ## MACStringToNum
 
-
 **Syntax**
 
 ```sql
@@ -34,7 +33,6 @@ MACNumToString(num)
 The inverse function of MACNumToString. If the MAC address has an invalid format, it returns 0.
 
 ## MACStringToOUI
-
 
 **Syntax**
 
@@ -48,7 +46,6 @@ Accepts a MAC address in the format AA:BB:CC:DD:EE:FF (colon-separated numbers i
 
 ## auc
 
-
 Calculate AUC (Area Under the Curve, which is a concept in machine learning, see more details: [https://en.wikipedia.org/wiki/Receiver_operating_characteristic#Area_under_the_curve](https://en.wikipedia.org/wiki/Receiver_operating_characteristic#Area_under_the_curve) ).
 
 **Syntax**
@@ -61,13 +58,9 @@ arrayAUC(arr_scores, arr_labels)
 
 **Arguments**
 
-- `arr_scores` — scores prediction model gives. 
+- `arr_scores` — scores prediction model gives.
 
-
-
-- `arr_labels` — labels of samples, usually 1 for positive sample and 0 for negtive sample. 
-
-
+- `arr_labels` — labels of samples, usually 1 for positive sample and 0 for negtive sample.
 
 **Returned value**
 
@@ -97,7 +90,6 @@ Result:
 
 ## bar
 
-
 **Syntax**
 
 ```sql
@@ -112,17 +104,11 @@ Allows building a unicode-art diagram.
 
 **Arguments**
 
-- `x` — Size to display. 
+- `x` — Size to display.
 
+- `min, max` — Integer constants. The value must fit in `Int64` .
 
-
-- `min, max` — Integer constants. The value must fit in `Int64` . 
-
-
-
-- `width` — Constant, positive integer, can be fractional. 
-
-
+- `width` — Constant, positive integer, can be fractional.
 
 The band is drawn with accuracy to one eighth of a symbol.
 
@@ -204,11 +190,9 @@ ORDER BY h ASC
 
 ## blockNumber
 
-
 Returns the sequence number of the data block where the row is located.
 
 ## blockSize
-
 
 Gets the size of the block.
 
@@ -224,7 +208,6 @@ In ByConity, queries are always run on blocks (sets of column parts). This funct
 
 ## currentDatabase
 
-
 **Syntax**
 
 ```sql
@@ -239,7 +222,6 @@ You can use this function in table engine parameters in a CREATE TABLE query whe
 
 ## defaultValueOfArgumentType
 
-
 Outputs the default value for the data type. Does not include default values for custom columns set by the user.
 
 **Syntax**
@@ -252,23 +234,15 @@ defaultValueOfArgumentType(expression)
 
 **Arguments:**
 
-- `expression` — Arbitrary type of value or an expression that results in a value of an arbitrary type. 
-
-
+- `expression` — Arbitrary type of value or an expression that results in a value of an arbitrary type.
 
 **Returned values**
 
-- `0` for numbers. 
+- `0` for numbers.
 
+- Empty string for strings.
 
-
-- Empty string for strings. 
-
-
-
-- `ᴺᵁᴸᴸ` for [Nullable](https://bytedance.feishu.cn/sql-reference/data-types/nullable.md) . 
-
-
+- `ᴺᵁᴸᴸ` for [Nullable](https://bytedance.feishu.cn/sql-reference/data-types/nullable.md) .
 
 **Example**
 
@@ -306,7 +280,6 @@ SELECT defaultValueOfArgumentType( CAST(1 AS Nullable(Int8) ) )
 
 ## dumpColumnStructure
 
-
 Outputs a detailed description of data structures in RAM
 
 **Syntax**
@@ -319,15 +292,11 @@ dumpColumnStructure(value)
 
 **Arguments:**
 
-- `value` — Any type of value. 
-
-
+- `value` — Any type of value.
 
 **Returned values**
 
-- A string describing the structure that is used for representing the `value` data type in RAM. 
-
-
+- A string describing the structure that is used for representing the `value` data type in RAM.
 
 **Example**
 
@@ -349,7 +318,6 @@ SELECT dumpColumnStructure(CAST('2018-01-01 01:02:03', 'DateTime'))
 
 ## filesystemAvailable
 
-
 Returns amount of remaining space on the filesystem where the files of the databases located. It is always smaller than total free space ( [filesystemFree](https://bytedance.feishu.cn/docs/doccnFkHpok0xssNrwscSUDfwNG#filesystemfree) ) because some space is reserved for OS.
 
 **Syntax**
@@ -362,9 +330,7 @@ filesystemAvailable()
 
 **Returned value**
 
-- The amount of remaining space available in bytes. 
-
-
+- The amount of remaining space available in bytes.
 
 Type: [UInt64](https://bytedance.feishu.cn/sql-reference/data-types/int-uint.md) .
 
@@ -392,7 +358,6 @@ Result:
 
 ## filesystemCapacity
 
-
 Returns the capacity of the filesystem in bytes. For evaluation, the [path](https://bytedance.feishu.cn/operations/server-configuration-parameters/settings.md#server_configuration_parameters-path) to the data directory must be configured.
 
 **Syntax**
@@ -405,9 +370,7 @@ filesystemCapacity()
 
 **Returned value**
 
-- Capacity information of the filesystem in bytes. 
-
-
+- Capacity information of the filesystem in bytes.
 
 Type: [UInt64](https://bytedance.feishu.cn/sql-reference/data-types/int-uint.md) .
 
@@ -435,7 +398,6 @@ Result:
 
 ## filesystemFree
 
-
 Returns total amount of the free space on the filesystem where the files of the databases located. See also `filesystemAvailable`
 
 **Syntax**
@@ -448,9 +410,7 @@ filesystemFree()
 
 **Returned value**
 
-- Amount of free space in bytes. 
-
-
+- Amount of free space in bytes.
 
 Type: [UInt64](https://bytedance.feishu.cn/sql-reference/data-types/int-uint.md) .
 
@@ -478,7 +438,6 @@ Result:
 
 ## finalizeAggregation
 
-
 Takes state of aggregate function. Returns result of aggregation (or finalized state when using [-State](https://bytedance.feishu.cn/sql-reference/aggregate-functions/combinators.md#agg-functions-combinator-state) combinator).
 
 **Syntax**
@@ -491,15 +450,11 @@ finalizeAggregation(state)
 
 **Arguments**
 
-- `state` — State of aggregation. [AggregateFunction](https://bytedance.feishu.cn/sql-reference/data-types/aggregatefunction.md#data-type-aggregatefunction) . 
-
-
+- `state` — State of aggregation. [AggregateFunction](https://bytedance.feishu.cn/sql-reference/data-types/aggregatefunction.md#data-type-aggregatefunction) .
 
 **Returned value(s)**
 
-- Value/values that was aggregated. 
-
-
+- Value/values that was aggregated.
 
 Type: Value of any types that was aggregated.
 
@@ -619,13 +574,9 @@ Result:
 
 **See Also**
 
-- [arrayReduce](https://bytedance.feishu.cn/sql-reference/functions/array-functions.md#arrayreduce) 
+- [arrayReduce](https://bytedance.feishu.cn/sql-reference/functions/array-functions.md#arrayreduce)
 
-
-
-- [initializeAggregation](https://bytedance.feishu.cn/docs/doccnFkHpok0xssNrwscSUDfwNG#initializeaggregation) 
-
-
+- [initializeAggregation](https://bytedance.feishu.cn/docs/doccnFkHpok0xssNrwscSUDfwNG#initializeaggregation)
 
 ## formatReadableSize(x)
 
@@ -634,13 +585,13 @@ Accepts the size (number of bytes). Returns a rounded size with a suffix (KiB, M
 
 Example:
 
-``` sql
+```sql
 SELECT
     arrayJoin([1, 1024, 1024*1024, 192851925]) AS filesize_bytes,
     formatReadableSize(filesize_bytes) AS filesize
 ```
 
-``` text
+````text
 ┌─filesize_bytes─┬─filesize───┐
 │              1 │ 1.00 B     │
 │           1024 │ 1.00 KiB   │
@@ -658,23 +609,17 @@ Returns the number of fields in [Enum](https://bytedance.feishu.cn/sql-reference
 
 getSizeOfEnumType(value)
 
-```
+````
 
 **Arguments:**
 
-- `value` — Value of type `Enum` . 
-
-
+- `value` — Value of type `Enum` .
 
 **Returned values**
 
-- The number of fields with `Enum` input values. 
+- The number of fields with `Enum` input values.
 
-
-
-- An exception is thrown if the type is not `Enum` . 
-
-
+- An exception is thrown if the type is not `Enum` .
 
 **Example**
 
@@ -696,20 +641,17 @@ SELECT getSizeOfEnumType( CAST('a' AS Enum8('a' = 1, 'b' = 2) ) ) AS x
 
 ## globalIn
 
-
 in, notIn, globalIn, globalNotIn {#in-functions}
 
 See the section [IN operators](https://bytedance.feishu.cn/sql-reference/operators/in.md#select-in-operators) .
 
 ## globalNotIn
 
-
 in, notIn, globalIn, globalNotIn {#in-functions}
 
 See the section [IN operators](https://bytedance.feishu.cn/sql-reference/operators/in.md#select-in-operators) .
 
 ## has
-
 
 has(arr, elem)
 
@@ -737,7 +679,6 @@ SELECT has([1, 2, NULL], NULL)
 
 ## hasColumnInTable
 
-
 hasColumnInTable([‘hostname’[, ‘username’[, ‘password’]],] ‘database’, ‘table’, ‘column’) {#hascolumnintablehostname-username-password-database-table-column}
 
 Accepts constant strings: database name, table name, and column name. Returns a UInt8 constant expression equal to 1 if there is a column, otherwise 0. If the hostname parameter is set, the test will run on a remote server.
@@ -748,13 +689,11 @@ For elements in a nested data structure, the function checks for the existence o
 
 ## hostName
 
-
 hostName()
 
 Returns a string with the name of the host that this function was performed on. For distributed processing, this is the name of the remote server host, if the function is performed on a remote server.
 
 ## identity
-
 
 Returns the same value that was used as its argument. Used for debugging and testing, allows to cancel using index, and get the query performance of a full scan. When query is analyzed for possible use of index, the analyzer does not look inside `identity` functions. Also constant folding is not applied too.
 
@@ -790,7 +729,6 @@ Result:
 
 ## if
 
-
 Controls conditional branching. Unlike most systems, ByConity always evaluate both expressions `then` and `else` .
 
 **Syntax**
@@ -805,17 +743,11 @@ If the condition `cond` evaluates to a non-zero value, returns the result of the
 
 **Arguments**
 
-- `cond` – The condition for evaluation that can be zero or not. The type is UInt8, Nullable(UInt8) or NULL. 
+- `cond` – The condition for evaluation that can be zero or not. The type is UInt8, Nullable(UInt8) or NULL.
 
+- `then` – The expression to return if condition is met.
 
-
-- `then` – The expression to return if condition is met. 
-
-
-
-- `else` – The expression to return if condition is not met. 
-
-
+- `else` – The expression to return if condition is not met.
 
 **Returned values**
 
@@ -863,9 +795,7 @@ Result:
 
 ```
 
-- `then` and `else` must have the lowest common type. 
-
-
+- `then` and `else` must have the lowest common type.
 
 **Example:**
 
@@ -929,12 +859,11 @@ Note: `NULL` values are not used in this example, check [NULL values in conditio
 
 ## ignore
 
-
 **Syntax**
 
 ```sql
 
-ignore(…) 
+ignore(…)
 
 ```
 
@@ -943,7 +872,6 @@ Accepts any arguments, including `NULL` . Always returns 0.
 However, the argument is still evaluated. This can be used for benchmarks.
 
 ## indexHint
-
 
 The function is intended for debugging and introspection purposes. The function ignores it's argument and always returns 1. Arguments are not even evaluated.
 
@@ -959,9 +887,7 @@ SELECT * FROM table WHERE indexHint(<expression>)
 
 **Returned value**
 
-5. Type: [Uint8](https://clickhouse.yandex/docs/en/data_types/int_uint/#diapazony-uint) . 
-
-
+5. Type: [Uint8](https://clickhouse.yandex/docs/en/data_types/int_uint/#diapazony-uint) .
 
 **Example**
 
@@ -1093,7 +1019,6 @@ Result:
 
 ## isFinite
 
-
 isFinite(x)
 
 **Syntax**
@@ -1107,7 +1032,6 @@ isFinite(x)
 Accepts Float32 and Float64 and returns UInt8 equal to 1 if the argument is not infinite and not a NaN, otherwise 0.
 
 ## isInfinite
-
 
 isInfinite(x)
 
@@ -1123,7 +1047,6 @@ Accepts Float32 and Float64 and returns UInt8 equal to 1 if the argument is infi
 
 ## isNaN
 
-
 isNaN(x)
 
 **Syntax**
@@ -1137,7 +1060,6 @@ isNaN(x)
 Accepts Float32 and Float64 and returns UInt8 equal to 1 if the argument is a NaN, otherwise 0.
 
 ## joinGet
-
 
 The function lets you extract data from the table the same way as from a [dictionary](https://bytedance.feishu.cn/sql-reference/dictionaries/index.md) .
 
@@ -1155,17 +1077,11 @@ joinGet(join_storage_table_name, `value_column`, join_keys)
 
 **Arguments**
 
-- `join_storage_table_name` — an [identifier](https://bytedance.feishu.cn/sql-reference/syntax.md#syntax-identifiers) indicates where search is performed. The identifier is searched in the default database (see parameter `default_database` in the config file). To override the default database, use the `USE db_name` or specify the database and the table through the separator `db_name.db_table` , see the example. 
+- `join_storage_table_name` — an [identifier](https://bytedance.feishu.cn/sql-reference/syntax.md#syntax-identifiers) indicates where search is performed. The identifier is searched in the default database (see parameter `default_database` in the config file). To override the default database, use the `USE db_name` or specify the database and the table through the separator `db_name.db_table` , see the example.
 
+- `value_column` — name of the column of the table that contains required data.
 
-
-- `value_column` — name of the column of the table that contains required data. 
-
-
-
-- `join_keys` — list of keys. 
-
-
+- `join_keys` — list of keys.
 
 **Returned value**
 
@@ -1231,20 +1147,17 @@ Result:
 
 ## least
 
-
 least(a, b)
 
 Returns the smallest value from a and b.
 
 ## log
 
-
 log(x)
 
 Accepts a numeric argument and returns a Float64 number close to the natural logarithm of the argument.
 
 ## materialize
-
 
 materialize(x)
 
@@ -1254,21 +1167,19 @@ In ByConity, full columns and constants are represented differently in memory. F
 
 ## modelEvaluate
 
-
 Evaluate external model.
 
 **Syntax**
 
 ```sql
 
-modelEvaluate(model_name, …) 
+modelEvaluate(model_name, …)
 
 ```
 
 Accepts a model name and model arguments. Returns Float64.
 
 ## regionHierarchy
-
 
 regionHierarchy(id[, geobase]) {#regionhierarchyid-geobase}
 
@@ -1278,7 +1189,6 @@ Example: `regionHierarchy(toUInt32(213)) = [213,1,3,225,10001,10000]` .
 
 ## regionIn
 
-
 regionIn(lhs, rhs[, geobase]) {#regioninlhs-rhs-geobase}
 
 Checks whether a ‘lhs’ region belongs to a ‘rhs’ region. Returns a UInt8 number equal to 1 if it belongs, or 0 if it does not belong.
@@ -1286,7 +1196,6 @@ Checks whether a ‘lhs’ region belongs to a ‘rhs’ region. Returns a UInt8
 The relationship is reflexive – any region also belongs to itself.
 
 ## regionToArea
-
 
 regionToArea(id[, geobase])
 
@@ -1342,13 +1251,11 @@ LIMIT 15
 
 ## regionToCity
 
-
 regionToCity(id[, geobase])
 
 Accepts a UInt32 number – the region ID from the Yandex geobase. If this region is a city or part of a city, it returns the region ID for the appropriate city. Otherwise, returns 0.
 
 ## regionToContinent
-
 
 regionToContinent(id[, geobase])
 
@@ -1358,7 +1265,6 @@ Example: `regionToContinent(toUInt32(213)) = 10001` converts Moscow (213) to Eur
 
 ## regionToCountry
 
-
 regionToCountry(id[, geobase])
 
 Converts a region to a country. In every other way, this function is the same as ‘regionToCity’.
@@ -1366,7 +1272,6 @@ Converts a region to a country. In every other way, this function is the same as
 Example: `regionToCountry(toUInt32(213)) = 225` converts Moscow (213) to Russia (225).
 
 ## regionToDistrict
-
 
 regionToDistrict(id[, geobase])
 
@@ -1422,7 +1327,6 @@ LIMIT 15
 
 ## regionToName
 
-
 regionToName(id[, lang])
 
 Accepts a UInt32 number – the region ID from the Yandex geobase. A string with the name of the language can be passed as a second argument. Supported languages are: ru, en, ua, uk, by, kz, tr. If the second argument is omitted, the language ‘ru’ is used. If the language is not supported, an exception is thrown. Returns a string – the name of the region in the corresponding language. If the region with the specified ID does not exist, an empty string is returned.
@@ -1430,7 +1334,6 @@ Accepts a UInt32 number – the region ID from the Yandex geobase. A string with
 `ua` and `uk` both mean Ukrainian.
 
 ## regionToPopulation
-
 
 regionToPopulation(id[, geobase])
 
@@ -1443,7 +1346,6 @@ If the population is not recorded for the region, it returns 0.
 In the Yandex geobase, the population might be recorded for child regions, but not for parent regions.
 
 ## regionToTopContinent
-
 
 `regionToTopContinent(id[, geobase])`
 
@@ -1459,28 +1361,19 @@ regionToTopContinent(id[, geobase])
 
 **Arguments**
 
-- `id` — Region ID from the Yandex geobase. [UInt32](https://bytedance.feishu.cn/sql-reference/data-types/int-uint.md) . 
+- `id` — Region ID from the Yandex geobase. [UInt32](https://bytedance.feishu.cn/sql-reference/data-types/int-uint.md) .
 
-
-
-- `geobase` — Dictionary key. See [Multiple Geobases](https://bytedance.feishu.cn/docs/doccnFkHpok0xssNrwscSUDfwNG#multiple-geobases) . [String](https://bytedance.feishu.cn/sql-reference/data-types/string.md) . Optional. 
-
-
+- `geobase` — Dictionary key. See [Multiple Geobases](https://bytedance.feishu.cn/docs/doccnFkHpok0xssNrwscSUDfwNG#multiple-geobases) . [String](https://bytedance.feishu.cn/sql-reference/data-types/string.md) . Optional.
 
 **Returned value**
 
-- Identifier of the top level continent (the latter when you climb the hierarchy of regions). 
+- Identifier of the top level continent (the latter when you climb the hierarchy of regions).
 
-
-
-- 0, if there is none. 
-
-
+- 0, if there is none.
 
 Type: `UInt32` .
 
 ## replicate
-
 
 Creates an array with a single value.
 
@@ -1494,13 +1387,9 @@ SELECT replicate(x, arr);
 
 **Arguments:**
 
-- `arr` — Original array. ByConity creates a new array of the same length as the original and fills it with the value `x` . 
+- `arr` — Original array. ByConity creates a new array of the same length as the original and fills it with the value `x` .
 
-
-
-- `x` — The value that the resulting array will be filled with. 
-
-
+- `x` — The value that the resulting array will be filled with.
 
 **Returned value**
 
@@ -1532,18 +1421,15 @@ Result:
 
 ## rowNumberInAllBlocks
 
-
 rowNumberInAllBlocks()
 
 Returns the ordinal number of the row in the data block. This function only considers the affected data blocks.
 
 ## rowNumberInBlock
 
-
 Returns the ordinal number of the row in the data block. Different data blocks are always recalculated.
 
 ## runningAccumulate
-
 
 Accumulates states of an aggregate function for each row of a data block.
 
@@ -1561,19 +1447,13 @@ runningAccumulate(agg_state[, grouping]);
 
 **Arguments**
 
-- `agg_state` — State of the aggregate function. [AggregateFunction](https://bytedance.feishu.cn/sql-reference/data-types/aggregatefunction.md#data-type-aggregatefunction) . 
+- `agg_state` — State of the aggregate function. [AggregateFunction](https://bytedance.feishu.cn/sql-reference/data-types/aggregatefunction.md#data-type-aggregatefunction) .
 
-
-
-- `grouping` — Grouping key. Optional. The state of the function is reset if the `grouping` value is changed. It can be any of the [supported data types](https://bytedance.feishu.cn/sql-reference/data-types/index.md) for which the equality operator is defined. 
-
-
+- `grouping` — Grouping key. Optional. The state of the function is reset if the `grouping` value is changed. It can be any of the [supported data types](https://bytedance.feishu.cn/sql-reference/data-types/index.md) for which the equality operator is defined.
 
 **Returned value**
 
-- Each resulting row contains a result of the aggregate function, accumulated for all the input rows from 0 to the current position. `runningAccumulate` resets states for each new data block or when the `grouping` value changes. 
-
-
+- Each resulting row contains a result of the aggregate function, accumulated for all the input rows from 0 to the current position. `runningAccumulate` resets states for each new data block or when the `grouping` value changes.
 
 Type depends on the aggregate function used.
 
@@ -1623,21 +1503,13 @@ The subquery generates `sumState` for every number from `0` to `9` . `sumState` 
 
 The whole query does the following:
 
-6. For the first row, `runningAccumulate` takes `sumState(0)` and returns `0` . 
+6. For the first row, `runningAccumulate` takes `sumState(0)` and returns `0` .
 
+7. For the second row, the function merges `sumState(0)` and `sumState(1)` resulting in `sumState(0 + 1)` , and returns `1` as a result.
 
+8. For the third row, the function merges `sumState(0 + 1)` and `sumState(2)` resulting in `sumState(0 + 1 + 2)` , and returns `3` as a result.
 
-7. For the second row, the function merges `sumState(0)` and `sumState(1)` resulting in `sumState(0 + 1)` , and returns `1` as a result. 
-
-
-
-8. For the third row, the function merges `sumState(0 + 1)` and `sumState(2)` resulting in `sumState(0 + 1 + 2)` , and returns `3` as a result. 
-
-
-
-9. The actions are repeated until the block ends. 
-
-
+9. The actions are repeated until the block ends.
 
 The following example shows the `groupping` parameter usage:
 
@@ -1719,12 +1591,11 @@ As you can see, `runningAccumulate` merges states for each group of rows separat
 
 ## runningDifference
 
-
 **Syntax**
 
 ```sql
 
-runningDifference(x) 
+runningDifference(x)
 
 ```
 
@@ -1856,11 +1727,9 @@ WHERE diff != 1
 
 ## runningDifferenceStartingWithFirstValue
 
-
 Same as for [runningDifference](https://bytedance.feishu.cn/docs/other-functions.md#other_functions-runningdifference) , the difference is the value of the first row, returned the value of the first row, and each subsequent row returns the difference from the previous row.
 
 ## sleep
-
 
 **Syntax**
 
@@ -1872,17 +1741,13 @@ sleep(seconds)
 
 Sleeps ‘seconds’ seconds on each data block. You can specify an integer or a floating-point number.
 
-
-
 ## sleepEachRow
-
 
 sleepEachRow(seconds)
 
 Sleeps ‘seconds’ seconds on each row. You can specify an integer or a floating-point number.
 
 ## throwIf
-
 
 throwIf(x[, custom_message])
 
@@ -1906,7 +1771,6 @@ Code: 395. DB::Exception: Received from [localhost:9000](http://localhost:9000/)
 
 ## toColumnTypeName
 
-
 Returns the name of the class that represents the data type of the column in RAM.
 
 ```sql
@@ -1917,15 +1781,11 @@ toColumnTypeName(value)
 
 **Arguments:**
 
-- `value` — Any type of value. 
-
-
+- `value` — Any type of value.
 
 **Returned values**
 
-- A string with the name of the class that is used for representing the `value` data type in RAM. 
-
-
+- A string with the name of the class that is used for representing the `value` data type in RAM.
 
 **Example of the difference between** `**toTypeName ' and ' toColumnTypeName**`
 
@@ -1965,7 +1825,6 @@ The example shows that the `DateTime` data type is stored in memory as `Const(UI
 
 ## toTypeName
 
-
 toTypeName(x)
 
 Returns a string containing the type name of the passed argument.
@@ -1974,12 +1833,11 @@ If `NULL` is passed to the function as input, then it returns the `Nullable(Noth
 
 ## transform
 
-
 **Syntax**
 
 ```sql
 
-transform(x, array_from, array_to) 
+transform(x, array_from, array_to)
 
 ```
 
@@ -2171,13 +2029,11 @@ LIMIT 10
 
 ## uptime
 
-
 uptime()
 
 Returns the server’s uptime in seconds.
 
 ## version
-
 
 **Syntax**
 
@@ -2190,7 +2046,6 @@ version()
 Returns the version of the server as a string.
 
 ## visibleWidth
-
 
 visibleWidth(x)
 

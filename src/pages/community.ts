@@ -1,1 +1,1 @@
-export { default } from "@site/src/components/CommunityPage";
+export { default } from '@site/src/components/CommunityPage';

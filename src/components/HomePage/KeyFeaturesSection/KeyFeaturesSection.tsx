@@ -1,10 +1,10 @@
-import React from "react";
-import clsx from "clsx";
-import Translate from "@docusaurus/Translate";
-import EcoModeIcon from "./eco-mode.svg";
-import ExternalIcon from "./external.svg";
-import FaceIcon from "./face.svg";
-import styles from "./KeyFeaturesSection.module.scss";
+import React from 'react';
+import clsx from 'clsx';
+import Translate from '@docusaurus/Translate';
+import EcoModeIcon from './eco-mode.svg';
+import ExternalIcon from './external.svg';
+import FaceIcon from './face.svg';
+import styles from './KeyFeaturesSection.module.scss';
 
 type FeatureCardProps = {
   title: JSX.Element;

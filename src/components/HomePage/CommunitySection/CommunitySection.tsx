@@ -1,16 +1,16 @@
-import React from "react";
-import Translate from "@docusaurus/Translate";
+import React from 'react';
+import Translate from '@docusaurus/Translate';
 
-import BilibiliLogo from "./bilibili-logo.svg";
-import GithubLogo from "./github-logo.svg";
-import MeetupLogo from "./meetup-logo.svg";
-import SlackLogo from "./slack-logo.svg";
-import TwitterLogo from "./twitter-logo.svg";
-import WechatLogo from "./wechat-logo.svg";
-import wechatQrPath from "./wechat-qr.jpeg";
+import BilibiliLogo from './bilibili-logo.svg';
+import GithubLogo from './github-logo.svg';
+import MeetupLogo from './meetup-logo.svg';
+import SlackLogo from './slack-logo.svg';
+import TwitterLogo from './twitter-logo.svg';
+import WechatLogo from './wechat-logo.svg';
+import wechatQrPath from './wechat-qr.jpeg';
 
-import styles from "./CommunitySection.module.scss";
-import clsx from "clsx";
+import styles from './CommunitySection.module.scss';
+import clsx from 'clsx';
 
 type LogoDisplayProps = {
   image: React.ReactNode;

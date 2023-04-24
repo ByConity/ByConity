@@ -1,7 +1,7 @@
-import React from "react";
-import Translate from "@docusaurus/Translate";
-import ArchitectureImage from "./architecture.svg";
-import styles from "./IntroductionSection.module.scss";
+import React from 'react';
+import Translate from '@docusaurus/Translate';
+import ArchitectureImage from './architecture.svg';
+import styles from './IntroductionSection.module.scss';
 
 function IntroductionSection() {
   return (

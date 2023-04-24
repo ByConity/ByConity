@@ -1,9 +1,9 @@
-import React from "react";
-import Translate from "@docusaurus/Translate";
-import Link from "@docusaurus/Link";
-import styles from "./GetStartedSection.module.scss";
-import FileIcon from "./file.svg";
-import CodeIcon from "./command-line.svg";
+import React from 'react';
+import Translate from '@docusaurus/Translate';
+import Link from '@docusaurus/Link';
+import styles from './GetStartedSection.module.scss';
+import FileIcon from './file.svg';
+import CodeIcon from './command-line.svg';
 
 function GetStartedSection() {
   return (

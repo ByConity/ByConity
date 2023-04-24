@@ -8,8 +8,8 @@ tags:
 
 ByConity is leverage the Github doing the developement. Each contributor and maintainer in ByConity must follow this workflow:
 
-* Work on forked repositories.
-* Create branches on the fork repo and avoid working directly on the `main` branch.
+- Work on forked repositories.
+- Create branches on the fork repo and avoid working directly on the `main` branch.
 
 ## Prepare the fork
 
@@ -26,7 +26,7 @@ Configure a `remote` repository that points to the upstream repository. This all
 In the terminal, navigate to the location of your fork and perform the following steps:
 
 1.  Run the `git remote -v` command to list the current configured remote repository for your fork.
-The result is as follows:
+    The result is as follows:
 
 ```txt
     origin  https://github.com/{your-username}/{your-fork}.git (fetch)
@@ -51,6 +51,7 @@ See the example:
 ```bash
     git remote add upstream https://github.com/ByConity/ByConity.git
 ```
+
 3. Run the `git fetch upstream main` command to fetch all branches.
 4. Set up the local `main` branch to track the remote `main` branch from the upstream repository:
 
@@ -63,24 +64,24 @@ Now, each time you rebase or check out the `main` branch, you refer to the `main
 To verify that your local `main` branch points to the `upstream/main`, run the `git branch -vv` command. The result is similar to the following:
 
 ```txt
-* main         6a43546 [upstream/main] Translate Background Tasks Configuration in English 
+* main         6a43546 [upstream/main] Translate Background Tasks Configuration in English
 ```
 
 5. Commit changes. Always provide [clear commit messages](https://cbea.ms/git-commit/#imperative) to track commit changes easier.
 
 6. Create a pull request from the branch of your forked repository to the `main` branch of the upstream repository and wait for the maintainers' review.
 
-Pull requests should have a title that follows [the specification](https://www.conventionalcommits.org/en/v1.0.0/#summary), otherwise, merging is blocked. 
+Pull requests should have a title that follows [the specification](https://www.conventionalcommits.org/en/v1.0.0/#summary), otherwise, merging is blocked.
 If you are not familiar with the specification simply ask maintainers to modify. You can also use this cheatsheet if you want:
 
-* fix:  prefix in the title indicates that PR is a bug fix and PATCH release must be triggered.
-* feat:  prefix in the title indicates that PR is a feature and MINOR release must be triggered.
-* docs:  prefix in the title indicates that PR is only related to the documentation and there is no need to trigger release.
-* chore:  prefix in the title indicates that PR is only related to cleanup in the project and there is no need to trigger release.
-* test:  prefix in the title indicates that PR is only related to tests and there is no need to trigger release.
-* refactor:  prefix in the title indicates that PR is only related to refactoring and there is no need to trigger release.
+- fix: prefix in the title indicates that PR is a bug fix and PATCH release must be triggered.
+- feat: prefix in the title indicates that PR is a feature and MINOR release must be triggered.
+- docs: prefix in the title indicates that PR is only related to the documentation and there is no need to trigger release.
+- chore: prefix in the title indicates that PR is only related to cleanup in the project and there is no need to trigger release.
+- test: prefix in the title indicates that PR is only related to tests and there is no need to trigger release.
+- refactor: prefix in the title indicates that PR is only related to refactoring and there is no need to trigger release.
 
 # Reference
 
-* [Asyncapi Git WorkFlow](https://github.com/asyncapi/community/blob/master/git-workflow.md)
-* [GitHub github-flow](https://docs.github.com/en/get-started/quickstart/github-flow)
+- [Asyncapi Git WorkFlow](https://github.com/asyncapi/community/blob/master/git-workflow.md)
+- [GitHub github-flow](https://docs.github.com/en/get-started/quickstart/github-flow)

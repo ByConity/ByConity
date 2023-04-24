@@ -1,14 +1,14 @@
-declare module "*.png" {
+declare module '*.png' {
   const value: string;
   export = value;
 }
 
-declare module "*.jpeg" {
+declare module '*.jpeg' {
   const value: string;
   export = value;
 }
 
-declare module "*.scss" {
+declare module '*.scss' {
   const content: Record<string, string>;
   export default content;
 }

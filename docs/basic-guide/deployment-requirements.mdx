@@ -9,30 +9,30 @@ tags:
 ByConity can run on most mainstream commercial servers. We recommend that the deployment of ByConity can comply with the following requirements:
 
 - Linux operating system version requirements:
-   - Kernel version 4.14 and above
-   - Ubuntu 16.04.5 LTS and above
-   - Centos 8 and above
+  - Kernel version 4.14 and above
+  - Ubuntu 16.04.5 LTS and above
+  - Centos 8 and above
 - Software Requirements:
-   - Dependencies are included in lib, no additional software dependencies are required
+  - Dependencies are included in lib, no additional software dependencies are required
 - Hardware specifications
-   - Development and testing environment
+  - Development and testing environment
 
-| Component Name | CPU | Memory | Hard Disk | Network | Number of Instances |
-| :-------------- | :-- | :--- | :---- | :------- | :----- |
-| TSO | 1 | 300M | 5G | Gigabit LAN | 1 |
-| Server | 8 | 32G | 100G | Gigabit LAN | 1 |
-| Worker | 4 | 16G | 100G+ | Gigabit LAN | 1 |
-| DaemonManager | 1 | 500M | 5G | Gigabit LAN | 1 |
-| ResourceManager | 1 | 2G | 5G | Gigabit LAN | 1 |
+| Component Name  | CPU | Memory | Hard Disk | Network     | Number of Instances |
+| :-------------- | :-- | :----- | :-------- | :---------- | :------------------ |
+| TSO             | 1   | 300M   | 5G        | Gigabit LAN | 1                   |
+| Server          | 8   | 32G    | 100G      | Gigabit LAN | 1                   |
+| Worker          | 4   | 16G    | 100G+     | Gigabit LAN | 1                   |
+| DaemonManager   | 1   | 500M   | 5G        | Gigabit LAN | 1                   |
+| ResourceManager | 1   | 2G     | 5G        | Gigabit LAN | 1                   |
 
 - Production Environment
 
-| Component Name | CPU | Memory | Hard Disk | Network | Number of Instances |
-| :-------------- | :-- | :--- | :--- | :------- | :----- |
-| TSO | 2 | 500M | 5G | 10 Gigabit LAN | 3 |
-| Server | 14 | 60G | 1T | 10 Gigabit NIC | >=1 |
-| Worker | 30 | 240G | 2T+ | 10 Gigabit LAN | >=1 |
-| DaemonManager | 4 | 10G | 10G | 10 Gigabit NIC | 1 |
-| ResourceManager | 8 | 16G | 10G | 10 Gigabit NIC | 1 |
+| Component Name  | CPU | Memory | Hard Disk | Network        | Number of Instances |
+| :-------------- | :-- | :----- | :-------- | :------------- | :------------------ |
+| TSO             | 2   | 500M   | 5G        | 10 Gigabit LAN | 3                   |
+| Server          | 14  | 60G    | 1T        | 10 Gigabit NIC | >=1                 |
+| Worker          | 30  | 240G   | 2T+       | 10 Gigabit LAN | >=1                 |
+| DaemonManager   | 4   | 10G    | 10G       | 10 Gigabit NIC | 1                   |
+| ResourceManager | 8   | 16G    | 10G       | 10 Gigabit NIC | 1                   |
 
 - In the hardware specification, the local disks of Worker and Server are mainly used to store temporary data and log files when writing. At the same time, the local disk of Worker also stores data Cache, so the size of the disk needs to be based on the configured DiskCache size and write determined by the amount of data entered.
