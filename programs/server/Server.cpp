@@ -1695,6 +1695,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         if (global_context->getComplexQueryActive())
         {
+            global_context->setExchangePort(config().getInt("exchange_port"));
+            global_context->setExchangeStatusPort(config().getInt("exchange_status_port"));
+
+            Statistics::CacheManager::initialize(global_context);
+
             for (size_t i = 0; i < listen_hosts.size(); i++)
             {
                 auto& listen_host = listen_hosts[i];
