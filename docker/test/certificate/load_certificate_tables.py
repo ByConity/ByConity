@@ -47,7 +47,7 @@ def main(args):
             return_code = os.system(item)
             if return_code != 0:
                 print('Failed sql is:', item)
-                raise f"error !"
+                raise Exception("error !")
         print('Table:', table_name_db_name, 'created')
 
     # TODO: import in parallel
