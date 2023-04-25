@@ -1,0 +1,14 @@
+DROP DATABASE IF EXISTS test_partial;
+CREATE DATABASE test_partial;
+CREATE TABLE test_partial.cnch_partial_part(a String, b String) ENGINE = CnchMergeTree() ORDER BY a;
+INSERT INTO test_partial.cnch_partial_part values ('a', '1'), ('b', '2');
+SET cnch_part_allocation_algorithm = 3;
+SELECT a, b FROM test_partial.cnch_partial_part;
+ALTER TABLE test_partial.cnch_partial_part MODIFY COLUMN b UInt8;
+SYSTEM START MERGES test_partial.cnch_partial_part;
+SELECT sleep(3) FORMAT Null;
+OPTIMIZE TABLE test_partial.cnch_partial_part;
+SELECT sleep(3) FORMAT Null;
+SELECT a, b FROM test_partial.cnch_partial_part;
+DROP TABLE test_partial.cnch_partial_part;
+DROP DATABASE test_partial;
