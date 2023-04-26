@@ -46,6 +46,7 @@ jobs:
           export MAX_RUN_TIME=9000
           cp -r $GITHUB_WORKSPACE/docker/test/stateless/* .
           /bin/bash run_cnch.sh
+          sleep 2000
       - name: Run CertificateStateful
         continue-on-error: true
         run: |

@@ -24,6 +24,8 @@ done
 for ((i=0; i<10; i++))
 do
   mkdir -p /data/byconity_server/server_local_disk/data/$i
+  mkdir -p /data/byconity_server/worker1_local_disk/data/$i
+  mkdir -p /data/byconity_server/worker2_local_disk/data/$i
   mkdir -p /data/byconity_worker/data/$i
   mkdir -p /data/byconity_worker-write/data/$i
 done
