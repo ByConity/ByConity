@@ -20,6 +20,7 @@
  */
 
 #include "common/logger_useful.h"
+#include <Client/Connection.h>
 #include <Common/PODArray.h>
 #include <Common/ThreadProfileEvents.h>
 #include <Common/formatReadable.h>
@@ -36,6 +37,8 @@
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/CountingBlockOutputStream.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <DataStreams/RemoteBlockInputStream.h>
+#include <DataStreams/RemoteBlockOutputStream.h>
 #include <DataStreams/copyData.h>
 #include <Processors/Transforms/getSourceFromFromASTInsertQuery.h>
 
@@ -535,12 +538,27 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     };
     String query_database;
     String query_table;
+    BlockIO res;
+
     try
     {
         ParserQuery parser(end, ParserSettings::valueOf(settings.dialect_type));
 
         /// TODO: parser should fail early when max_query_size limit is reached.
         ast = parseQuery(parser, begin, end, "", max_query_size, settings.max_parser_depth);
+
+        if (context->getSettingsRef().enable_auto_query_forwarding)
+        {
+            auto host_ports = getTargetServer(context, ast);
+            if (!host_ports.empty() && !isLocalServer(host_ports.getRPCAddress(), std::to_string(context->getRPCPort())))
+            {
+                LOG_INFO(&Poco::Logger::get("executeQuery"), "Will reroute query " + queryToString(ast) + " to " + host_ports.getTCPAddress());
+                context->initializeExternalTablesIfSet();
+                executeQueryByProxy(context, host_ports, ast, res);
+                LOG_INFO(&Poco::Logger::get("executeQuery"), "Query execution on remote server done");
+                return std::make_tuple(ast, std::move(res));
+            }
+        }
 
         /// Interpret SETTINGS clauses as early as possible (before invoking the corresponding interpreter),
         /// to allow settings to take effect.
@@ -617,7 +635,6 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
     /// Copy query into string. It will be written to log and presented in processlist. If an INSERT query, string will not include data to insertion.
     String query(begin, query_end);
-    BlockIO res;
 
     String query_for_logging;
 
@@ -1503,6 +1520,117 @@ void executeQuery(
     }
 
     streams.onFinish();
+}
+
+HostWithPorts getTargetServer(ContextPtr context, ASTPtr &ast)
+{
+    /// Only get target server for main table
+    String database, table;
+    if (const auto *insert = ast->as<ASTInsertQuery>())
+    {
+        database = insert->table_id.getDatabaseName();
+        table = insert->table_id.getTableName();
+    }
+    else if (const auto *alter = ast->as<ASTAlterQuery>())
+    {
+        database = alter->database;
+        table = alter->table;
+    }
+    else if (const auto *drop = ast->as<ASTDropQuery>())
+    {
+        database = drop->database;
+        table = drop->table;
+    }
+    else if (const auto *select = ast->as<ASTSelectQuery>())
+    {
+        ASTs tables;
+        bool has_table_func = false;
+        select->collectAllTables(tables, has_table_func);
+        if (!has_table_func && !tables.empty())
+        {
+            // simplily use the first table if there are multiple tables used
+            DatabaseAndTableWithAlias db_and_table(tables[0]);
+            database = db_and_table.database;
+            table = db_and_table.table;
+        }
+        else
+            return {};
+    }
+    else
+    {
+        /// TODO: check ddl query
+        return {};
+    }
+
+    /// Todo: handle the default case
+    if (database.empty())
+    {
+         throw Exception("Database must be specified", ErrorCodes::LOGICAL_ERROR);
+    }
+    if (database == "system") return {};
+    auto table_id = context->getCnchCatalog()->getTableIDByName(database, table);
+    if (!table_id)
+    {
+        throw Exception("Table " + database + "." + table + " not found in catalog", ErrorCodes::UNKNOWN_TABLE);
+    }
+
+    auto topology_master = context->getCnchTopologyMaster();
+
+    return topology_master->getTargetServer(table_id->uuid(), context->getTimestamp(), false);
+}
+
+void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server, const ASTPtr & ast, BlockIO & res)
+{
+    /// Create a proxy transaction for insert/alter query
+    auto & coordinator = context->getCnchTransactionCoordinator();
+    auto primary_txn_id = context->getCurrentTransaction()->getTransactionID();
+    auto proxy_txn = coordinator.createProxyTransaction(server,primary_txn_id);
+    context->setCurrentTransaction(proxy_txn);
+    /// Anyway, on finish and exception, we need to finish the proxy transaction
+    res.finish_callback = [proxy_txn](IBlockInputStream * , IBlockOutputStream *, QueryPipeline *, UInt64)
+    {
+        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query success on remote server");
+        proxy_txn->setTransactionStatus(CnchTransactionStatus::Finished);
+    };
+    res.exception_callback = [proxy_txn](int)
+    {
+        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query failed on remote server");
+        proxy_txn->setTransactionStatus(CnchTransactionStatus::Aborted);
+    };
+    /// Create connection to host
+    const auto & query_client_info = context->getClientInfo();
+    auto settings = context->getSettingsRef();
+    res.remote_execution_conn = std::make_shared<Connection>(
+        server.getHost(), server.tcp_port, 
+        "", /*default_database_*/
+        query_client_info.current_user, query_client_info.current_password, 
+        "", /*cluster_*/
+        "", /*cluster_secret*/
+        "server", /*client_name_*/
+        Protocol::Compression::Enable,
+        Protocol::Secure::Disable);
+
+    String query = queryToString(ast);
+    auto insert_ast = ast->as<ASTInsertQuery>();
+    bool wait_insert_data = insert_ast && !insert_ast->select && !insert_ast->in_file;
+    auto timeouts = ConnectionTimeouts::getTCPTimeoutsWithFailover(settings).getSaturated(settings.max_execution_time);
+    if (wait_insert_data)
+    {
+        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Sending query as INSERT VALUES query");
+        res.out = std::make_shared<DB::RemoteBlockOutputStream>(*res.remote_execution_conn, timeouts, query, settings, query_client_info, context);
+    }
+    else
+    {
+        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Sending query as ordinary query");
+        auto remote_stream = std::make_shared<DB::RemoteBlockInputStream>(*res.remote_execution_conn, query, Block(), context);
+        remote_stream->setPoolMode(PoolMode::GET_ONE);
+        remote_stream->readPrefix();
+        while (Block block = remote_stream->read());
+        remote_stream->readSuffix();
+        /// Get the extended profile info which is mainly for INSERT SELECT/INFILE
+        context->setExtendedProfileInfo(remote_stream->getExtendedProfileInfo());
+        res.in = std::move(remote_stream);
+    }
 }
 
 }

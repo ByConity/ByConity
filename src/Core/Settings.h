@@ -850,6 +850,7 @@ class IColumn;
     M(UInt64, cnch_part_attach_max_threads, 16, "Max threads to use when attach parts", 0) \
     M(UInt64, attach_failure_injection_knob, 0, "Attach failure injection knob, for test only", 0) \
     M(Bool, async_post_commit, false, "Txn post commit asynchronously", 0) \
+    M(Bool, enable_auto_query_forwarding, false, "Auto forward query to target server when having multiple servers", 0) \
 
 
 // End of FORMAT_FACTORY_SETTINGS
