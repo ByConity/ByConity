@@ -131,7 +131,7 @@ static MappedAggregationInfo createAggregationOverNull(const AggregatingStep * r
         = std::make_shared<AggregatingStep>(null_row->getStep()->getOutputStream(), Names{}, aggregations_over_null, GroupingSetsParamsList{}, true, GroupingDescriptions{}, false, false);
     auto aggregation_over_null_row = PlanNodeBase::createPlanNode(context.nextNodeId(), std::move(aggregation_over_null_row_step), {null_row});
 
-    return MappedAggregationInfo{.aggregation_node = std::move(aggregation_over_null_row), .symbol_mapping = std::move(aggregations_symbol_mapping)};
+    return MappedAggregationInfo{.aggregation_node = std::move(aggregation_over_null_row), .symbolMapping = std::move(aggregations_symbol_mapping)};
 }
 
 // When the aggregation is done after the join, there will be a null value that gets aggregated over
