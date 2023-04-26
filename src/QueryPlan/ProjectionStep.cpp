@@ -109,7 +109,7 @@ void ProjectionStep::serialize(WriteBuffer & buf) const
     for (const auto & item : assignments)
     {
         writeStringBinary(item.first, buf);
-        serializeAST(item.second->clone(), buf);
+        serializeAST(item.second, buf);
     }
 
     writeVarUInt(name_to_type.size(), buf);

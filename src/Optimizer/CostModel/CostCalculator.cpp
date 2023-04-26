@@ -222,7 +222,7 @@ CostWithCTEReferenceCounts PlanCostVisitor::visitPlanNode(PlanNodeBase & node, P
                              .children_stats = children_stats, .worker_size = worker_size};
     cost += VisitorUtil::accept(node.getStep(), visitor, cost_context).getCost();
     plan_cost_map.emplace(node.getId(), cost);
-    return CostWithCTEReferenceCounts{cost, cte_reference_counts};
+    return CostWithCTEReferenceCounts{cost, std::move(cte_reference_counts)};
 }
 
 CostWithCTEReferenceCounts PlanCostVisitor::visitCTERefNode(CTERefNode & node, PlanCostMap & plan_cost_map)

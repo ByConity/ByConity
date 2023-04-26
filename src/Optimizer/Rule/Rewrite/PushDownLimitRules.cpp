@@ -37,9 +37,9 @@ PatternPtr PushLimitIntoDistinct::getPattern() const
 
 TransformResult PushLimitIntoDistinct::transformImpl(PlanNodePtr node, const Captures &, RuleContext &)
 {
-    auto limit_step = dynamic_cast<const LimitStep *>(node->getStep().get());
+    const auto * limit_step = dynamic_cast<const LimitStep *>(node->getStep().get());
     auto distinct = node->getChildren()[0];
-    auto distinct_step = dynamic_cast<const DistinctStep *>(distinct->getStep().get());
+    const auto * distinct_step = dynamic_cast<const DistinctStep *>(distinct->getStep().get());
 
     // when limit 0, we skip this rule since another rule will delete the whole node
     auto limit_value = limit_step->getLimit();

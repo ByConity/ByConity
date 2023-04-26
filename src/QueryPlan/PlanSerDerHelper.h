@@ -99,6 +99,7 @@ std::vector<T> deserializeItemVector(ReadBuffer & buf)
 }
 
 void serializeBlock(const Block & block, WriteBuffer & buf);
+void serializeBlockWithData(const Block & block, WriteBuffer & buf);
 Block deserializeBlock(ReadBuffer & buf);
 
 void serializeColumn(const ColumnPtr & column, const DataTypePtr & data_type, WriteBuffer & buf);

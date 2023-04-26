@@ -29,6 +29,8 @@ void serializeAST(const ASTPtr & ast, WriteBuffer & buf);
 
 void serializeAST(const IAST & ast, WriteBuffer & buf);
 
+void serializeAST(const ConstASTPtr & ast, WriteBuffer & buf);
+
 ASTPtr deserializeAST(ReadBuffer & buf);
 
 void serializeASTs(const ASTs & asts, WriteBuffer & buf);

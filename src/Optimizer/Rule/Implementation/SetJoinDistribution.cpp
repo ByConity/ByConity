@@ -49,7 +49,7 @@ static bool mustReplicate(const JoinStep & join_step)
 TransformResult SetJoinDistribution::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
 {
     PlanNodes result;
-    auto join_node = dynamic_cast<JoinNode *>(node.get());
+    auto * join_node = dynamic_cast<JoinNode *>(node.get());
     if (!join_node)
         return {};
 

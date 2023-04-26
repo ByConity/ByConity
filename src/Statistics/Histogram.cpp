@@ -253,7 +253,7 @@ Histogram Histogram::createEqualFilter(double value) const
             }
         }
     }
-    return Histogram{new_buckets};
+    return Histogram{std::move(new_buckets)};
 }
 
 Histogram Histogram::createNotEqualFilter(double value) const

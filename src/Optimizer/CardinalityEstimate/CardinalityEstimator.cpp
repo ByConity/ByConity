@@ -154,7 +154,6 @@ PlanNodeStatisticsPtr CardinalityVisitor::visitExceptStep(const ExceptStep &, Ca
 
 PlanNodeStatisticsPtr CardinalityVisitor::visitExchangeStep(const ExchangeStep & step, CardinalityContext & context)
 {
-    std::vector<PlanNodeStatisticsPtr> children_stats;
     PlanNodeStatisticsPtr stats = ExchangeEstimator::estimate(context.children_stats, step);
     return stats;
 }
@@ -267,9 +266,9 @@ PlanNodeStatisticsPtr CardinalityVisitor::visitCTERefStep(const CTERefStep & ste
 
     auto & stats = result.value();
     std::unordered_map<String, SymbolStatisticsPtr> calculated_symbol_statistics;
-    for (auto & item : step.getOutputColumns())
+    for (const auto & item : step.getOutputColumns())
         calculated_symbol_statistics[item.first] = stats->getSymbolStatistics(item.second);
-    return std::make_shared<PlanNodeStatistics>(stats->getRowCount(), calculated_symbol_statistics);
+    return std::make_shared<PlanNodeStatistics>(stats->getRowCount(), std::move(calculated_symbol_statistics));
 }
 
 PlanNodeStatisticsPtr CardinalityVisitor::visitEnforceSingleRowStep(const EnforceSingleRowStep & step, CardinalityContext & context)

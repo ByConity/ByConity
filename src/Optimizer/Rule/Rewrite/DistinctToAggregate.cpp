@@ -34,7 +34,7 @@ TransformResult DistinctToAggregate::transformImpl(PlanNodePtr node, const Captu
         return {};
     }
 
-    auto distinct_node = dynamic_cast<DistinctNode *>(node.get());
+    auto * distinct_node = dynamic_cast<DistinctNode *>(node.get());
     if (!distinct_node)
         return {};
 
