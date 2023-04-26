@@ -109,6 +109,37 @@
                 </ports>
                 <vw_name>vw_default</vw_name>
             </node>
+            <node>
+                <host>ip_address_replace_me</host>
+                <hostname>DefaultWorker-6</hostname>
+                <ports>
+                    <port>
+                        <!--HTTP-->
+                        <name>PORT2</name>
+                        <value>18704</value>
+                    </port>
+                    <port>
+                        <!--RPC-->
+                        <name>PORT1</name>
+                        <value>18705</value>
+                    </port>
+                    <port>
+                        <!--TCP/Primary-->
+                        <name>PORT0</name>
+                        <value>18706</value>
+                    </port>
+                    <port>
+                        <!--Exchange Stream Port-->
+                        <name>PORT5</name>
+                        <value>18707</value>
+                    </port>
+                    <port>
+                        <!--Exchange Status Port-->
+                        <name>PORT6</name>
+                        <value>18708</value>
+                    </port>
+                </ports>
+                <vw_name>vw_default</vw_name>
         </vw>
         <tso>
             <psm>data.cnch.tso</psm>

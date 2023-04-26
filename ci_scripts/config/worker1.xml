@@ -8,8 +8,8 @@
 <yandex>
     <logger>
         <level>trace</level>
-        <log>/test_output/byconity-worker/worker.log</log>
-        <errorlog>/test_output/byconity-worker/worker.log</errorlog>
+        <log>/test_output/byconity-worker/worker1.log</log>
+        <errorlog>/test_output/byconity-worker/worker1.log</errorlog>
         <size>1000M</size>
         <count>10</count>
     </logger>
@@ -162,10 +162,10 @@
     <compiled_expression_cache_size>134217728</compiled_expression_cache_size>
 
     <!-- Path to data directory, with trailing slash. -->
-    <path>/data/byconity_worker/worker/</path>
+    <path>/data/byconity_worker/worker1/</path>
 
     <!-- Path to temporary data for processing hard queries. -->
-    <tmp_path>/data/byconity_worker/worker/tmp/</tmp_path>
+    <tmp_path>/data/byconity_worker/worker1/tmp/</tmp_path>
     <users_config>root_path_replace_me/config/users.xml</users_config>
 
 
@@ -181,7 +181,7 @@
     <!-- <tmp_policy>tmp</tmp_policy> -->
 
     <!-- Directory with user provided files that are accessible by 'file' table function. -->
-    <user_files_path>/data/byconity_worker/user_files/</user_files_path>
+    <user_files_path>/data/byconity_worker1/user_files/</user_files_path>
 
     <!-- LDAP server definitions. -->
     <ldap_servers>
@@ -216,7 +216,7 @@
         </users_xml>
         <local_directory>
             <!-- Path to folder where users created by SQL commands are stored. -->
-            <path>/data/byconity_worker/access/</path>
+            <path>/data/byconity_worker1/access/</path>
         </local_directory>
 
         <!-- To add an LDAP server as a remote user directory of users that are not defined locally, define a single 'ldap' section
@@ -405,13 +405,13 @@
     -->
     <dictionaries_config>*_dictionary.xml</dictionaries_config>
 
-    <format_schema_path>/data/byconity_worker/format_schemas/</format_schema_path>
+    <format_schema_path>/data/byconity_worker1/format_schemas/</format_schema_path>
 
     <storage_configuration>
         <disks>
             <default/>
             <server_local_disk1>
-                <path>/data/byconity_server/server_local_disk/data/0/</path>
+                <path>/data/byconity_server/worker1_local_disk/data/0/</path>
             </server_local_disk1>
             <server_hdfs_disk0>
                 <path>/user/clickhouse/</path>
