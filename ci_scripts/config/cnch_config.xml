@@ -140,6 +140,7 @@
                     </port>
                 </ports>
                 <vw_name>vw_default</vw_name>
+            </node>
         </vw>
         <tso>
             <psm>data.cnch.tso</psm>
