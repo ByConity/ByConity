@@ -13,11 +13,11 @@ ByConity using FoundationDB as meta store, and HDFS as datastore. So before
 starting to deploy ByConity, we need to deploy FoundationDB and HDFS first.
 
 For deploying [Foundation](https://apple.github.io/foundationdb/) database, 
-you can refer to the installation guide [here](https://github.com/ByConity/ByConity/tree/master/docker/executable_wrapper/FDB_installation.md)
+you can refer to the installation guide [here](./foundationdb-installation)
 
 After that we need to deploy an HDFS cluster consist of name node and data node, 
 and create the directory `/user/clickhouse` in HDFS for store data. You can refer 
-to the installation guide [here](https://github.com/ByConity/ByConity/tree/master/docker/executable_wrapper/.md). 
+to the installation guide [here](./hdfs-installation). 
 After this step, you got the name node url which ussually the value of `fs.defaultFS` 
 that you can find in the `core-site.xml` config. 
 
@@ -71,7 +71,7 @@ For the `hdfs_nnproxy` tags contains the address of HDFS name node
 
 The `fdb.config` is the file for foundation db client to connect to FoundationDB server, 
 you will have it after you config FoundationDB server. 
-Read more in [here](https://github.com/ByConity/ByConity/tree/master/docker/executable_wrapper/FDB_installation.md)
+Read more in [here](./foundationdb-installation)
 
 
 After that on the machine you want to install TSO service. Download the `byconity-tso` package and install.

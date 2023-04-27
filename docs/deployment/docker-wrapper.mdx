@@ -14,8 +14,8 @@ Please follow the below steps:
 
 - Checkout the config files and shell file from the ByConity repo https://github.com/ByConity/ByConity/tree/master/docker/executable_wrapper. 
 
-- Deploy [Foundation](https://apple.github.io/foundationdb/) database. You can refer to the installation guide [here](https://github.com/ByConity/ByConity/tree/master/docker/executable_wrapper/FDB_installation.md). After this step you will have a **fdb cluster config** file default located in `/etc/foundationdb/fdb.cluster`. Copy this file to `./config/fdb.clsuter`
-- Deploy an HDFS cluster consist of name node and data node, and create the directory `/user/clickhouse` in HDFS for store data. You can refer to the installation guide [here](https://github.com/ByConity/ByConity/tree/master/docker/executable_wrapper/HDFS_installation.md). After this step, you got the name node url which ussually the value of `fs.defaultFS` that you can find in the `core-site.xml` config. 
+- Deploy [Foundation](https://apple.github.io/foundationdb/) database. You can refer to the installation guide [here](./foundationdb-installation). After this step you will have a **fdb cluster config** file default located in `/etc/foundationdb/fdb.cluster`. Copy this file to `./config/fdb.clsuter`
+- Deploy an HDFS cluster consist of name node and data node, and create the directory `/user/clickhouse` in HDFS for store data. You can refer to the installation guide [here](./hdfs-installation). After this step, you got the name node url which ussually the value of `fs.defaultFS` that you can find in the `core-site.xml` config. 
 
 - Update file `config/cnch_config.xml`: 
     - Update the value of `hdfs_nnproxy` tag to your hdfs namenode url. 
