@@ -701,7 +701,7 @@ class IColumn;
     M(Bool, enable_dynamic_filter_for_join, true, "Whether enable dynamic filter for join", 0) \
     M(UInt64, dynamic_filter_default_bytes, 1024 * 256, "Whether enable dynamic filter for join", 0) \
     M(UInt64, dynamic_filter_default_hashes, 4, "Whether enable dynamic filter for join", 0) \
-    M(CTEMode, cte_mode, CTEMode::AUTO, "CTE mode: SHARED|INLINED|AUTO", 0) \
+    M(CTEMode, cte_mode, CTEMode::INLINED, "CTE mode: SHARED|INLINED|AUTO", 0) \
     M(Bool, enable_cte_property_enum, false, "Whether enumerate all possible properties for cte", 0) \
     M(Bool, enable_cte_common_property, true, "Whether search common property for cte", 0) \
     M(UInt64 , max_graph_reorder_size, 10, "Max tables join order enum on graph", 0) \
