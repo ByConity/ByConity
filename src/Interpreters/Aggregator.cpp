@@ -182,6 +182,7 @@ public:
                         /// Table name in worker has name like t_441011350722576384 with last 18 characters
                         /// is transaction id. We need to remove it to get correct cache key.
                         tb_name = tb_name.substr(0, tb_name.size() - 18 - 1);
+                        tbl.resetTable(db_name, tb_name);
                     }
                 }
             }
