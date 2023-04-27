@@ -65,6 +65,7 @@ static std::pair<Names, Names> createJoinCondition(UnionFind<String> & union_fin
 
     // create join key using the common equivalent symbols, each equivalent set create one join criteria.
     std::vector<std::pair<String, String>> criteria;
+    criteria.reserve(intersect_set.size());
     for (const auto & set : intersect_set)
     {
         criteria.emplace_back(

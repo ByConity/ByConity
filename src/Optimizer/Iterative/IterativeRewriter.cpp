@@ -83,7 +83,7 @@ bool IterativeRewriter::exploreNode(PlanNodePtr & node, IterativeRewriterContext
         auto node_type = node->getStep()->getType();
         if (auto res = rules.find(node_type); res != rules.end())
         {
-            auto & rules_of_this_type = res->second;
+            const auto & rules_of_this_type = res->second;
             for (auto iter = rules_of_this_type.begin();
                  // we can break the loop if the sub-plan has been entirely removed or the node type has been changed
                  node && node->getStep()->getType() == node_type && iter != rules_of_this_type.end();

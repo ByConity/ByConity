@@ -74,7 +74,7 @@ EqualityInference EqualityInference::newInstance(const std::vector<ConstASTPtr> 
 
         auto sub_expressions = SubExpressionExtractor::extract(expr);
         ConstASTSet sub_expressions_remove_itself;
-        for (auto & sub_expression : sub_expressions)
+        for (const auto & sub_expression : sub_expressions)
         {
             if (sub_expression != expr)
             {
@@ -82,7 +82,7 @@ EqualityInference EqualityInference::newInstance(const std::vector<ConstASTPtr> 
             }
         }
         sub_expressions = sub_expressions_remove_itself;
-        for (auto & sub_expression : sub_expressions)
+        for (const auto & sub_expression : sub_expressions)
         {
             if (by_expressions.contains(sub_expression))
             {
@@ -92,18 +92,18 @@ EqualityInference EqualityInference::newInstance(const std::vector<ConstASTPtr> 
         }
     }
 
-    std::unordered_map<ConstASTPtr, ConstASTSet, ASTEquality::ASTHash, ASTEquality::ASTEquals> equality_sets = makeEqualitySets(equalities);
+    auto equality_sets = makeEqualitySets(equalities);
     ConstASTMap canonical_mappings;
 
     for (auto & equality_set : equality_sets)
     {
-        for (auto & value : equality_set.second)
+        for (const auto & value : equality_set.second)
         {
             canonical_mappings[value] = equality_set.first;
         }
     }
 
-    return EqualityInference{equality_sets, canonical_mappings, derived_expressions};
+    return EqualityInference(equality_sets, std::move(canonical_mappings), {});
 }
 
 bool EqualityInference::isInferenceCandidate(const ConstASTPtr & predicate, ContextMutablePtr & context)
@@ -390,7 +390,7 @@ EqualityPartition EqualityInference::partitionedBy(std::set<String> scope)
             }
         }
     }
-    return EqualityPartition{scope_equalities, scope_complement_equalities, scope_straddling_equalities};
+    return EqualityPartition(std::move(scope_equalities), std::move(scope_complement_equalities), std::move(scope_straddling_equalities));
 }
 
 bool DisjointSet::findAndUnion(const ConstASTPtr & element_1, const ConstASTPtr & element_2)

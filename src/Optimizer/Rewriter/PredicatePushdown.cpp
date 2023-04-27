@@ -185,8 +185,9 @@ PlanNodePtr PredicateVisitor::visitFilterNode(FilterNode & node, PredicateContex
 
 PlanNodePtr PredicateVisitor::visitAggregatingNode(AggregatingNode & node, PredicateContext & predicate_context)
 {
-    const auto & step = * node.getStep();
-    auto & keys = step.getKeys();
+
+    const auto & step = *node.getStep();
+    const auto & keys = step.getKeys();
 
     // TODO: in case of grouping sets, we should be able to push the filters over grouping keys below the aggregation
     // and also preserve the filter above the aggregation if it has an empty grouping set
@@ -214,7 +215,7 @@ PlanNodePtr PredicateVisitor::visitAggregatingNode(AggregatingNode & node, Predi
 
     // Sort non-equality predicates by those that can be pushed down and those that cannot
     std::set<String> grouping_keys;
-    for (auto & key : keys)
+    for (const auto & key : keys)
     {
         grouping_keys.emplace(key);
     }
@@ -357,8 +358,7 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
     const DataStream & left_output = left->getStep()->getOutputStream();
     for (const auto & column : left_output.header)
     {
-        Assignment left_assignment{column.name, std::make_shared<ASTIdentifier>(column.name)};
-        left_assignments.emplace_back(left_assignment);
+        left_assignments.emplace_back(column.name, std::make_shared<ASTIdentifier>(column.name));
         left_types[column.name] = column.type;
     }
 
@@ -367,8 +367,7 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
     const DataStream & right_output = right->getStep()->getOutputStream();
     for (const auto & column : right_output.header)
     {
-        Assignment right_assignment{column.name, std::make_shared<ASTIdentifier>(column.name)};
-        right_assignments.emplace_back(right_assignment);
+        right_assignments.emplace_back(column.name, std::make_shared<ASTIdentifier>(column.name));
         right_types[column.name] = column.type;
     }
 
@@ -474,12 +473,12 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
     }
 
     auto left_source_expression_step
-        = std::make_shared<ProjectionStep>(left_source->getStep()->getOutputStream(), left_assignments, left_types);
+        = std::make_shared<ProjectionStep>(left_source->getStep()->getOutputStream(), std::move(left_assignments), std::move(left_types));
     auto left_source_expression_node
         = std::make_shared<ProjectionNode>(context->nextNodeId(), std::move(left_source_expression_step), PlanNodes{left_source});
 
     auto right_source_expression_step = std::make_shared<ProjectionStep>(
-        right_source->getStep()->getOutputStream(), right_assignments, right_types, false, dynamic_filters_results.dynamic_filters);
+        right_source->getStep()->getOutputStream(), std::move(right_assignments), std::move(right_types), false, std::move(dynamic_filters_results.dynamic_filters));
     auto right_source_expression_node
         = std::make_shared<ProjectionNode>(context->nextNodeId(), std::move(right_source_expression_step), PlanNodes{right_source});
 
@@ -495,11 +494,11 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
     NamesAndTypes output;
     for (const auto & item : left_header)
     {
-        output.emplace_back(NameAndTypePair{item.name, item.type});
+        output.emplace_back(item.name, item.type);
     }
     for (const auto & item : right_header)
     {
-        output.emplace_back(NameAndTypePair{item.name, item.type});
+        output.emplace_back(item.name, item.type);
     }
 
     // cast extracted join keys to super type
@@ -582,8 +581,8 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
             DataStream{.header = output},
             ASTTableJoin::Kind::Inner,
             ASTTableJoin::Strictness::All,
-            left_keys,
-            right_keys,
+            std::move(left_keys),
+            std::move(right_keys),
             new_join_filter,
             step->isHasUsing(),
             step->getRequireRightKeys(),
@@ -598,8 +597,8 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
             DataStream{.header = output},
             kind,
             step->getStrictness(),
-            left_keys,
-            right_keys,
+            std::move(left_keys),
+            std::move(right_keys),
             new_join_filter,
             step->isHasUsing(),
             step->getRequireRightKeys(),
@@ -658,7 +657,7 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
             output_types[column.name] = column.type;
         }
         auto output_expression_step
-            = std::make_shared<ProjectionStep>(output_node->getStep()->getOutputStream(), output_assignments, output_types);
+            = std::make_shared<ProjectionStep>(output_node->getStep()->getOutputStream(), std::move(output_assignments), std::move(output_types));
         auto output_expression_node
             = std::make_shared<ProjectionNode>(context->nextNodeId(), std::move(output_expression_step), PlanNodes{output_node});
         output_node = output_expression_node;
@@ -1091,7 +1090,7 @@ OuterJoinResult PredicateVisitor::processOuterJoin(
         = EqualityInference::newInstance(std::vector<ConstASTPtr>{inherited_predicate, outer_predicate}, context);
 
     EqualityPartition equality_partition = inherited_inference.partitionedBy(outer_symbols);
-    auto & scope_equalities = equality_partition.getScopeEqualities();
+    const auto & scope_equalities = equality_partition.getScopeEqualities();
     auto outer_only_inherited_equalities = PredicateUtils::combineConjuncts(scope_equalities);
     EqualityInference potential_null_symbol_inference = EqualityInference::newInstance(
         std::vector<ConstASTPtr>{outer_only_inherited_equalities, outer_predicate, inner_predicate, join_predicate}, context);
@@ -1104,7 +1103,7 @@ OuterJoinResult PredicateVisitor::processOuterJoin(
 
     EqualityPartition potential_null_symbol_inference_without_inner_inferred_partition =
         potential_null_symbol_inference_without_inner_inferred.partitionedBy(inner_symbols);
-    for (auto & conjunct : potential_null_symbol_inference_without_inner_inferred_partition.getScopeEqualities())
+    for (const auto & conjunct : potential_null_symbol_inference_without_inner_inferred_partition.getScopeEqualities())
     {
         inner_pushdown_conjuncts.emplace_back(conjunct);
     }
@@ -1112,29 +1111,29 @@ OuterJoinResult PredicateVisitor::processOuterJoin(
     // TODO: we can further improve simplifying the equalities by considering other relationships from the outer side
     EqualityPartition join_equality_partition = EqualityInference::newInstance(join_predicate, context).partitionedBy(inner_symbols);
 
-    for (auto & conjunct : join_equality_partition.getScopeEqualities())
+    for (const auto & conjunct : join_equality_partition.getScopeEqualities())
     {
         inner_pushdown_conjuncts.emplace_back(conjunct);
     }
-    for (auto & conjunct : join_equality_partition.getScopeComplementEqualities())
+    for (const auto & conjunct : join_equality_partition.getScopeComplementEqualities())
     {
         join_conjuncts.emplace_back(conjunct);
     }
-    for (auto & conjunct : join_equality_partition.getScopeStraddlingEqualities())
+    for (const auto & conjunct : join_equality_partition.getScopeStraddlingEqualities())
     {
         join_conjuncts.emplace_back(conjunct);
     }
 
     // Add the equalities from the inferences back in
-    for (auto & conjunct : equality_partition.getScopeEqualities())
+    for (const auto & conjunct : equality_partition.getScopeEqualities())
     {
         outer_pushdown_conjuncts.emplace_back(conjunct);
     }
-    for (auto & conjunct : equality_partition.getScopeComplementEqualities())
+    for (const auto & conjunct : equality_partition.getScopeComplementEqualities())
     {
         post_join_conjuncts.emplace_back(conjunct);
     }
-    for (auto & conjunct : equality_partition.getScopeStraddlingEqualities())
+    for (const auto & conjunct : equality_partition.getScopeStraddlingEqualities())
     {
         post_join_conjuncts.emplace_back(conjunct);
     }

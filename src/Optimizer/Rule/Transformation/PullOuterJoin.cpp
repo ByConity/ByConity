@@ -63,7 +63,7 @@ static std::optional<PlanNodePtr> createNewJoin(
     Context & context,
     NamesAndTypes output_stream = {})
 {
-    auto & left_keys = inner_join->getLeftKeys();
+    const auto & left_keys = inner_join->getLeftKeys();
 
     NameSet first_output;
     for (const auto & item : first->getStep()->getOutputStream().header)
@@ -71,7 +71,7 @@ static std::optional<PlanNodePtr> createNewJoin(
         first_output.insert(item.name);
     }
 
-    for (auto & left_key : left_keys)
+    for (const auto & left_key : left_keys)
     {
         // C only join A
         if (!first_output.contains(left_key))
@@ -210,7 +210,7 @@ TransformResult PullLeftJoinProjectionThroughInnerJoin::transformImpl(PlanNodePt
         name_to_type[item.name] = item.type;
     }
 
-    auto new_project_step = std::make_shared<ProjectionStep>(result->getStep()->getOutputStream(), assignments, name_to_type);
+    auto new_project_step = std::make_shared<ProjectionStep>(result->getStep()->getOutputStream(), std::move(assignments), std::move(name_to_type));
 
     return PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(new_project_step), {result});
 }
@@ -266,7 +266,7 @@ TransformResult PullLeftJoinFilterThroughInnerJoin::transformImpl(PlanNodePtr no
             assignments.emplace_back(item.name, std::make_shared<ASTIdentifier>(item.name));
             name_to_type[item.name] = item.type;
         }
-        auto new_project_step = std::make_shared<ProjectionStep>(new_filter_node->getStep()->getOutputStream(), assignments, name_to_type);
+        auto new_project_step = std::make_shared<ProjectionStep>(new_filter_node->getStep()->getOutputStream(), std::move(assignments), std::move(name_to_type));
         return PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(new_project_step), {new_filter_node});
     }
     return new_filter_node;

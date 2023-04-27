@@ -169,7 +169,7 @@ std::optional<PlanNodePtr> PushProjectionThroughJoin::pushProjectionThroughJoin(
     else
     {
         auto left_expression_step
-            = std::make_shared<ProjectionStep>(join_left->getStep()->getOutputStream(), left_assignments, left_name_to_type);
+            = std::make_shared<ProjectionStep>(join_left->getStep()->getOutputStream(), std::move(left_assignments), std::move(left_name_to_type));
         PlanNodePtr left_expression_node
             = std::make_shared<ProjectionNode>(context->nextNodeId(), std::move(left_expression_step), PlanNodes{join_left});
         left_expression_step_inline = inlineProjections(left_expression_node, context);
@@ -184,7 +184,7 @@ std::optional<PlanNodePtr> PushProjectionThroughJoin::pushProjectionThroughJoin(
     else
     {
         auto right_expression_step
-            = std::make_shared<ProjectionStep>(join_right->getStep()->getOutputStream(), right_assignments, right_name_to_type);
+            = std::make_shared<ProjectionStep>(join_right->getStep()->getOutputStream(), std::move(right_assignments), std::move(right_name_to_type));
         PlanNodePtr right_expression_node
             = std::make_shared<ProjectionNode>(context->nextNodeId(), std::move(right_expression_step), PlanNodes{join_right});
         right_expression_step_inline = inlineProjections(right_expression_node, context);
@@ -251,11 +251,11 @@ std::set<String> PushProjectionThroughJoin::getJoinRequiredSymbols(JoinNode & no
 
     const auto & step = *node.getStep();
 
-    for (auto & key : step.getLeftKeys())
+    for (const auto & key : step.getLeftKeys())
     {
         join_symbols.emplace(key);
     }
-    for (auto & key : step.getRightKeys())
+    for (const auto & key : step.getRightKeys())
     {
         join_symbols.emplace(key);
     }

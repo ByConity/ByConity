@@ -153,7 +153,7 @@ PlanNodePtr ColumnPruningVisitor::visitProjectionNode(ProjectionNode & node, Nam
         return child;
 
     auto expr_step = std::make_shared<ProjectionStep>(
-        child->getStep()->getOutputStream(), assignments, name_to_type, step->isFinalProject(), step->getDynamicFilters());
+    child->getStep()->getOutputStream(), std::move(assignments), std::move(name_to_type), step->isFinalProject(), step->getDynamicFilters());
     PlanNodes children{child};
     auto expr_node = ProjectionNode::createPlanNode(context->nextNodeId(), std::move(expr_step), children, node.getStatistics());
     return expr_node;
@@ -188,7 +188,7 @@ PlanNodePtr ColumnPruningVisitor::visitApplyNode(ApplyNode & node, NameSet & req
     }
     else if(ast && ast->as<ASTQuantifiedComparison>())
     {
-        auto & qc = ast->as<ASTQuantifiedComparison &>();
+        const auto & qc = ast->as<ASTQuantifiedComparison &>();
         ASTIdentifier & qc_left = qc.children[0]->as<ASTIdentifier &>();
         left_require.insert(qc_left.name());
     }
@@ -288,7 +288,7 @@ PlanNodePtr ColumnPruningVisitor::visitTableScanNode(TableScanNode & node, NameS
             column_names.emplace_back(item);
 
     auto read_step = std::make_shared<TableScanStep>(
-        context, step->getStorageID(), column_names, step->getQueryInfo(), step->getProcessedStage(), step->getMaxBlockSize());
+        context, step->getStorageID(), std::move(column_names), step->getQueryInfo(), step->getProcessedStage(), step->getMaxBlockSize());
     auto read_node = PlanNodeBase::createPlanNode(context->nextNodeId(), std::move(read_step), {}, node.getStatistics());
     return read_node;
 }
@@ -315,14 +315,14 @@ PlanNodePtr ColumnPruningVisitor::visitAggregatingNode(AggregatingNode & node, N
     auto child = VisitorUtil::accept(node.getChildren()[0], *this, child_require);
     if (aggs.empty() && step->getKeys().empty())
     {
-        auto [symbol, node] = createDummyPlanNode(context);
+        auto [symbol, node_] = createDummyPlanNode(context);
         (void) symbol;
         // require_.insert(symbol);
-        return node;
+        return node_;
     }
 
     auto agg_step = std::make_shared<AggregatingStep>(
-        child->getStep()->getOutputStream(), step->getKeys(), aggs, step->getGroupingSetsParams(), step->isFinal(), step->getGroupings()
+        child->getStep()->getOutputStream(), step->getKeys(), std::move(aggs), step->getGroupingSetsParams(), step->isFinal(), step->getGroupings()
         , false, step->shouldProduceResultsInOrderOfBucketNumber()
         //        step->getHaving(),
         //        step->getInteresteventsInfoList()
@@ -529,7 +529,7 @@ PlanNodePtr ColumnPruningVisitor::visitUnionNode(UnionNode & node, NameSet & req
         children.emplace_back(new_child);
     }
 
-    auto union_step = std::make_shared<UnionStep>(children_streams, output_stream, output_to_inputs,  step->getMaxThreads(), step->isLocal());
+    auto union_step = std::make_shared<UnionStep>(std::move(children_streams), std::move(output_stream), std::move(output_to_inputs),  step->getMaxThreads(), step->isLocal());
     auto union_node = UnionNode::createPlanNode(context->nextNodeId(), std::move(union_step), children, node.getStatistics());
     return union_node;
 }
@@ -565,10 +565,11 @@ PlanNodePtr ColumnPruningVisitor::visitExceptNode(ExceptNode & node, NameSet &)
         children.emplace_back(new_child);
     }
 
-    auto except_step = std::make_shared<ExceptStep>(children_streams, output_stream, step->isDistinct());
+    auto except_step = std::make_shared<ExceptStep>(std::move(children_streams), std::move(output_stream), step->isDistinct());
     auto except_node = ExceptNode::createPlanNode(context->nextNodeId(), std::move(except_step), children, node.getStatistics());
     return except_node;
 }
+
 PlanNodePtr ColumnPruningVisitor::visitIntersectNode(IntersectNode & node, NameSet &)
 {
     const auto * step = node.getStep().get();
@@ -601,7 +602,7 @@ PlanNodePtr ColumnPruningVisitor::visitIntersectNode(IntersectNode & node, NameS
         children.emplace_back(new_child);
     }
 
-    auto intersect_step = std::make_shared<IntersectStep>(children_streams, output_stream, step->isDistinct());
+    auto intersect_step = std::make_shared<IntersectStep>(std::move(children_streams), std::move(output_stream), step->isDistinct());
     auto intersect_node = IntersectNode::createPlanNode(context->nextNodeId(), std::move(intersect_step), children, node.getStatistics());
     return intersect_node;
 }
@@ -635,7 +636,7 @@ PlanNodePtr ColumnPruningVisitor::visitExchangeNode(ExchangeNode & node, NameSet
         input_streams.emplace_back(child->getStep()->getOutputStream());
     }
 
-    auto exchange_step = std::make_shared<ExchangeStep>(input_streams, step->getExchangeMode(), step->getSchema(), step->needKeepOrder());
+    auto exchange_step = std::make_shared<ExchangeStep>(std::move(input_streams), step->getExchangeMode(), step->getSchema(), step->needKeepOrder());
     return ExchangeNode::createPlanNode(context->nextNodeId(), std::move(exchange_step), children, node.getStatistics());
 }
 
@@ -665,7 +666,7 @@ PlanNodePtr ColumnPruningVisitor::visitCTERefNode(CTERefNode & node, NameSet & r
             output_columns.emplace(item);
 
     auto exchange_step
-        = std::make_shared<CTERefStep>(DataStream{result_columns}, with_step->getId(), output_columns, with_step->getFilter());
+        = std::make_shared<CTERefStep>(DataStream{std::move(result_columns)}, with_step->getId(), std::move(output_columns), with_step->getFilter());
     return CTERefNode::createPlanNode(context->nextNodeId(), std::move(exchange_step), {}, node.getStatistics());
 }
 }

@@ -47,14 +47,14 @@ PlanNodeStatisticsPtr UnionEstimator::mapToOutput(
 {
     std::unordered_map<String, SymbolStatisticsPtr> output_symbol_statistics;
 
-    for (auto & symbol : out_to_input)
+    for (const auto & symbol : out_to_input)
     {
         String output_symbol = symbol.first;
-        auto & input_symbols = symbol.second;
+        const auto & input_symbols = symbol.second;
         output_symbol_statistics[output_symbol] = child_stats.getSymbolStatistics(input_symbols.at(index))->copy();
     }
 
-    return std::make_shared<PlanNodeStatistics>(child_stats.getRowCount(), output_symbol_statistics);
+    return std::make_shared<PlanNodeStatistics>(child_stats.getRowCount(), std::move(output_symbol_statistics));
 }
 
 }

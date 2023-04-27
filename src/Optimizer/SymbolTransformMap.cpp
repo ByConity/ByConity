@@ -64,7 +64,7 @@ public:
 
     Void visitTableScanNode(TableScanNode & node, Void &) override
     {
-        auto table_step = dynamic_cast<const TableScanStep *>(node.getStep().get());
+        const auto * table_step = dynamic_cast<const TableScanStep *>(node.getStep().get());
         for (const auto & item : table_step->getColumnAlias())
         {
             auto column_reference = std::make_shared<ASTTableColumnReference>(table_step->getStorage(), item.first);
@@ -107,7 +107,7 @@ public:
 
     ASTPtr visitASTIdentifier(ASTPtr & expr, Void & context) override
     {
-        auto & name = expr->as<ASTIdentifier &>().name();
+        const auto & name = expr->as<ASTIdentifier &>().name();
 
         if (expression_lineage.count(name))
             return expression_lineage.at(name)->clone();

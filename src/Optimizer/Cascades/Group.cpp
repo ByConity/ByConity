@@ -83,7 +83,7 @@ void Group::addExpression(const GroupExprPtr & expression, CascadesContext & con
             is_table_scans.emplace_back(context.getMemo().getGroupById(child)->isTableScan());
         }
         statistics = CardinalityEstimator::estimate(
-            expression->getStep(), context.getCTEInfo(), children_stats, context.getContext(), simple_children, is_table_scans);
+            expression->getStep(), context.getCTEInfo(), std::move(children_stats), context.getContext(), simple_children, is_table_scans);
 
         stats_derived = true;
     }
@@ -97,7 +97,7 @@ void Group::addExpression(const GroupExprPtr & expression, CascadesContext & con
             {
                 children.emplace_back(context.getMemo().getGroupById(child)->getEquivalences());
             }
-            equivalences = SymbolEquivalencesDeriver::deriveEquivalences(expression->getStep(), children);
+            equivalences = SymbolEquivalencesDeriver::deriveEquivalences(expression->getStep(), std::move(children));
         }
         else
         {

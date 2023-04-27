@@ -127,15 +127,15 @@ String StatsNdvBucketsExtendImpl<T>::serialize() const
     Protos::StatsNdvBucketsExtend pb;
     pb.set_bounds_blob(bounds_.serialize());
 
-    for (auto & count : counts_)
+    for (const auto & count : counts_)
     {
         pb.add_counts(count);
     }
-    for (auto & cpc : cpc_sketches_)
+    for (const auto & cpc : cpc_sketches_)
     {
         pb.add_cpc_sketch_blobs(cpc.serialize());
     }
-    for (auto & block_cpc : block_cpc_sketches_)
+    for (const auto & block_cpc : block_cpc_sketches_)
     {
         pb.add_block_cpc_sketch_blobs(block_cpc.serialize());
     }
