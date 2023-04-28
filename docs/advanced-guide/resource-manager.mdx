@@ -1,108 +1,108 @@
 ---
-title: 资源管理器
+title: resource manager
 tags:
   - Docs
 ---
 
-# 资源管理器
+# resource manager
 
-资源管理器（Resource Manager，简称 RM）组件用于对 ByConity 计算资源进行统一管理和调度，是实现资源弹性和提高资源利用率的核心组件。
+The Resource Manager (RM) component is used for unified management and scheduling of ByConity computing resources, and is the core component to achieve resource elasticity and improve resource utilization.
 
-## 目标
+## Target
 
-ByConity 资源管理器的核心设计目标如下：
+The core design goals of ByConity Explorer are as follows:
 
-1. 能够管理、调度计算资源，提升资源利用率。
-2. 能够收集计算组 VW 的监控数据，便于基于负载进行资源调度。
-3. 能够为查询、INSERT、各种后台任务提供调度功能。
-4. 能够协调不同 VW 并动态调配 VW 的资源。
-5. 实现资源池化，弹性扩缩功能。
+1. Able to manage and schedule computing resources to improve resource utilization.
+2. It can collect the monitoring data of computing group VW, which is convenient for resource scheduling based on load.
+3. It can provide scheduling functions for queries, INSERTs, and various background tasks.
+4. Able to coordinate different VWs and dynamically allocate VW resources.
+5. Realize resource pooling and elastic scaling functions.
 
-## 计算资源的层级
+## The hierarchy of computing resources
 
-为了实现上述目标，我们将计算资源进行层级化的划分和管理。
+In order to achieve the above goals, we divide and manage computing resources hierarchically.
 
-### 计算节点 Worker
+### Compute Node Worker
 
-在 [主要原理概念](../introduction/main-principle-concepts) 中我们知道 ByConity 计算资源中最小的计算单元是一个 Worker 节点，它对应一个 Kubenetes Pod。
+In [Main Principle Concepts](../introduction/main-principle-concepts), we know that the smallest computing unit in ByConity computing resources is a Worker node, which corresponds to a Kubenetes Pod.
 
-Worker 启动后，将定期向 RM 汇报心跳信息，包括：
+After Worker starts, it will periodically report heartbeat information to RM, including:
 
-- 身份标识信息，如 WORKER_ID, WORKER_GROUP_ID, VIRTUAL_WAREHOUSE_ID 等。
-- 节点物理负载信息，如 CPU 使用率、MEMORY 使用率等。
-- 查询负载信息，如正在运行的 query 数量，排队的 query 数量等。
+- Identification information, such as WORKER_ID, WORKER_GROUP_ID, VIRTUAL_WAREHOUSE_ID, etc.
+- Node physical load information, such as CPU usage, MEMORY usage, etc.
+- Query load information, such as the number of running queries, the number of queued queries, etc.
 
-RM 维护和及时更新每个 Worker 的状态，在处理 query 时，根据 Worker 的身份标识和负载信息进行 query 的路由和调度。
+RM maintains and updates the status of each Worker in time, and routes and schedules the query according to the identity and load information of the Worker when processing the query.
 
-### 计算组副本 Worker Group
+### Compute Group Replicas Worker Group
 
-计算组副本（Worker Group，简称 WG）是实际处理一个查询请求所使用的计算资源，它对应一个 Kubenetes StatefulSet。
+A Worker Group (WG for short) is a computing resource used to actually process a query request, and it corresponds to a Kubenetes StatefulSet.
 
-一个计算组副本由多个 Worker 组成，每个 Worker 身份标识中的 WORKER_GROUP_ID 即指明自己所属的 Worker Group。同时，我们通过汇总 Worker Group 内所有 Worker 的负载信息，可以得到该 Worker Group 的聚合负载信息，如平均 CPU 使用率、最大 CPU 使用率、平均 MEMORY 使用率、最大 MEMORY 使用率等。
+A computing group replica consists of multiple workers, and the WORKER_GROUP_ID in each worker's identity indicates the worker group to which it belongs. At the same time, by summarizing the load information of all Workers in the Worker Group, we can obtain the aggregated load information of the Worker Group, such as average CPU usage, maximum CPU usage, average MEMORY usage, maximum MEMORY usage, etc.
 
-计算组副本又分为 Physical 和 Shared 两种。
+There are two types of computing group replicas: Physical and Shared.
 
-- 物理计算组副本（Physical Worker Group）与一组实际的物理资源（Kubernetes StatefulSet）绑定。
-- 共享计算组副本（Shared Worker Group）则不和物理资源绑定，而是通过引用的方式指向另一个 Physical Worker Group。Shared Worker Group 拥有独立的标识信息即 WOKRER_GROUP_ID，负载信息则为对应的 Physical Worker Group 的负载信息。
+- The copy of the physical computing group (Physical Worker Group) is bound to a set of actual physical resources (Kubernetes StatefulSet).
+- The shared computing group copy (Shared Worker Group) is not bound to physical resources, but points to another Physical Worker Group by reference. Shared Worker Group has independent identification information, namely WOKRER_GROUP_ID, and the load information is the load information of the corresponding Physical Worker Group.
 
-当我们需要管理（创建、删除等）一个物理计算组副本时，除了在 ByConity 内部修改元信息，还需要执行对应的 K8s 操作。而管理一个共享计算组副本则只需要修改该计算组副本的元信息即可，因为共享计算组副本不拥有任何物理资源。
+When we need to manage (create, delete, etc.) a copy of a physical computing group, in addition to modifying the meta information inside ByConity, we also need to perform the corresponding K8s operations. To manage a shared computing group copy, you only need to modify the meta-information of the computing group copy, because the shared computing group copy does not own any physical resources.
 
 ### Virtual Warehouse
 
-计算组（Virtual Warehouse，简称 VW）由多个配置相同的计算组副本构成。Worker 身份标识中的 VIRTUAL_WAREHOUSE_ID 即标识自己所属的 VW。
+A computing group (Virtual Warehouse, referred to as VW) consists of multiple copies of computing groups with the same configuration. The VIRTUAL_WAREHOUSE_ID in the Worker ID identifies the VW to which it belongs.
 
-VW 分为两种类型：Default 和 Write。
+VW is divided into two types: Default and Write.
 
-- Default VW 负责处理用户的普通 SELECT 查询，Default VW 也称作 Read VW。
-- Write VW 负责处理用户的 INSERT 查询，以及运行 ByConity 的 Merge、Mutate 等后台任务（link 后台任务）。
+- The Default VW is responsible for processing the user's normal SELECT query, and the Default VW is also called the Read VW.
+- Write VW is responsible for processing users' INSERT queries, and running ByConity's background tasks such as Merge and Mutate (link background tasks).
 
-Default 和 Write VW 的区分，使得 ByConity 可以轻松实现读写分离，最大限度的保证查询性能。
+The distinction between Default and Write VW enables ByConity to easily separate reads and writes to maximize query performance.
 
-## 调度流程
+## Scheduling process
 
-每一张 ByConity 用户表都需要指定自己的 default VW 和 write VW。之后，RM 会承担这张表的所有调度工作：SELECT query、INSERT query、后台任务等。
+Each ByConity user table needs to specify its own default VW and write VW. After that, RM will undertake all the scheduling work of this table: SELECT query, INSERT query, background tasks, etc.
 
-### SELECT Query 的调度流程
+### SELECT Query scheduling process
 
-当 Server 发现 Query 是一个 SELECT Query 时，需要从表的 Default VW 中挑选一个 WG 来处理查询。
+When the server finds that the Query is a SELECT Query, it needs to select a WG from the Default VW of the table to process the query.
 
 ![](./assets/resource-manager/boxcnbZbcFxobIoWtbHHOFEBuAd.png)
 
-如图所示，假设表的 Default VW 中有 2 个 Physical WG，以及 1 个 Shared WG（指向另一个 VW 中的 Physical WG）。因为是一个 SELECT 查询，所以我们需要选择 1 个 WG 来处理查询。Physical WG 1 是当前负载最低的 WG，被选中处理该查询。
+As shown in the figure, suppose there are 2 Physical WGs in the Default VW of the table, and 1 Shared WG (pointing to the Physical WG in another VW). Since it is a SELECT query, we need to select 1 WG to process the query. Physical WG 1 is currently the least loaded WG and is selected to handle the query.
 
-### INSERT Query 的调度流程
+### INSERT Query scheduling process
 
-当 Server 发现 Query 是一个 INSERT Query 时，需要从表的 Write VW 中挑选一个 Worker 来处理查询。
+When the server finds that the Query is an INSERT Query, it needs to select a Worker from the table's Write VW to process the query.
 
 ![](./assets/resource-manager/boxcn1vUjQxIvpWIT2zplXffgyg.png)
 
-如图所示，假设表的 Write VW 中有 2 个 Physical WG，每个 WG 包含 3 个 Worker。因为是一个 INSERT 查询，所以我们需要选择一个 Worker 来处理查询。Worker 3 当前负载最低，被选中处理该查询。
+As shown in the figure, suppose there are 2 Physical WGs in the Write VW of the table, and each WG contains 3 Workers. Because it is an INSERT query, we need to choose a Worker to process the query. Worker 3 currently has the lowest load and is selected to process the query.
 
-### 后台任务的调度流程
+### Scheduling process of background tasks
 
-Server 除了处理用户查询，还需要为表调度后台任务，比如在后台不断地对表数据执行 Merge 以提升查询性能。
+In addition to processing user queries, the server also needs to schedule background tasks for the table, such as continuously performing Merge on the table data in the background to improve query performance.
 
 ![](./assets/resource-manager/boxcnHyC6wY1ypvpTr7TkWHtLng.png)
 
-如图所示，Server 生成一个 Merge 任务，需要从 Write VW 中选择一个 Worker 来处理。Worker 3 当前负载最低，被选中来执行 Merge 任务。
+As shown in the figure, the Server generates a Merge task and needs to select a Worker from the Write VW to process it. Worker 3 currently has the lowest load and is selected to execute the Merge task.
 
-## 高可用 & 兼容升级
+## High Availability & Compatible Upgrade
 
-1. 采用简单的多副本主从配置。
-2. Worker 的心跳只发送给主节点，Server 的请求也只由主节点处理。
-3. 当主节点宕机时，由备节点接替服务，并从 KV 数据库同步必要的元数据。
-4. 由于 Server 有 VW、WG 和 Worker 信息的缓存，即便 RM 短时间不可用，服务节点仍然能够使用缓存的数据继续工作。
+1. Adopt a simple multi-copy master-slave configuration.
+2. The worker's heartbeat is only sent to the master node, and the server's request is only processed by the master node.
+3. When the primary node goes down, the standby node takes over the service and synchronizes the necessary metadata from the KV database.
+4. Since the Server has a cache of VW, WG, and Worker information, even if the RM is unavailable for a short time, the service node can still use the cached data to continue working.
 
-## 计算资源弹性共享
+## Flexible sharing of computing resources
 
-基于 Worker 负载信息对查询和后台任务进行调度，使得一个 VW 内部的 WG、Worker 负载更加均衡。此外，我们可以通过创建合适的 Shared WG（共享计算组）来实现 VW 之间的资源弹性共享。
+Scheduling queries and background tasks based on Worker load information makes the WG and Worker loads in a VW more balanced. In addition, we can achieve elastic sharing of resources between VWs by creating a suitable Shared WG (Shared Computing Group).
 
-当一个 Physical WG 整体资源利用率较低时，可以在其他需要更多计算资源的 VW 内创建一个 Shared WG，并指向该 Physical WG。这样，这个 Physical WG 就可以被其他 VW 的查询或任务所使用。
+When the overall resource utilization of a Physical WG is low, a Shared WG can be created in other VWs that require more computing resources and point to the Physical WG. In this way, this Physical WG can be used by other VW's queries or tasks.
 
 ![](./assets/resource-manager/boxcnwYSsOLigmR3d9nblBrpLFg.png)
 
-如图所示，在 Default VW 1 中，我们创建了一个共享计算组 Shared WG 3，它不拥有任何实际的物理计算资源，而是指向另一个 Default VW 3 中的物理计算组 Physical WG 6。Shared WG 3 拥有和 Physical WG 6 完全相同的负载信息，在 Default VW 1 进行调度决策时，可以选择 Shared WG 3（或其中的 Worker）来处理 SELECT 查询（或 INSERT 查询、后台任务）。最终，查询或后台任务实际是路由到 Physical WG 6 进行处理。
+As shown in the figure, in Default VW 1, we created a shared computing group Shared WG 3, which does not own any actual physical computing resources, but points to another physical computing group Physical WG 6 in Default VW 3. Shared WG 3 has exactly the same load information as Physical WG 6. When Default VW 1 makes scheduling decisions, Shared WG 3 (or its Worker) can be selected to process SELECT queries (or INSERT queries, background tasks). Ultimately, queries or background tasks are actually routed to Physical WG 6 for processing.
 
-## 参考文档
+## Reference Documentation
 
-[云原生数据仓库 ByteHouse 技术白皮书 V1.0](./assets/resource-manager/云原生数据仓库ByteHouse技术白皮书V1.0.pdf)
+[Cloud Native Data Warehouse ByteHouse Technical White Paper V1.0 (Chinese)](./assets/resource-manager/云原生数据仓库ByteHouse技术白皮书V1.0.pdf)
