@@ -1,54 +1,54 @@
 ---
-title: 导入调优
+title: Import Optimisation
 tags:
   - Docs
 ---
 
-# 导入调优
+# import optimisation
 
-# 支持的导入方式
+# Supported import methods
 
-目前 CNCH 支持的导入方式有如下几种：
+Currently CNCH supports the following import methods:
 
 - INSERT INFILE
-- 适合已经生成好数据文件的情况，在数据量较少的情况可以直接读取远程/本地的数据文件导入 CNCH，数据量大的情况(超过数 GB)下建议走 PartWriter 和 Attach 的方式
+- It is suitable for the situation where the data file has been generated. In the case of a small amount of data, you can directly read the remote/local data file and import it into CNCH. In the case of a large amount of data (more than a few GB), it is recommended to use PartWriter and Attach.
 - INSERT VALUES
-- 适合临时插入少量的数据用来测试
-- INSERT SELECT
-- 适合需要保存某张表结果并供后续查询的情况
-- Dumper&Attach
-- 适合从本地版迁移到 CNCH 的情况，可以直接将整个集群的数据直接用 Dumper 写入 HDFS 中，再利用 Attach 将这些数据直接移动到 CNCH 中并进行查询
-- PartWriter&Attach
-- 对于数据量大且文件数量多的场景，可以利用 Spark 等任务用 PartWriter 将原始的文件生成新的 Part 文件，并写入 HDFS 中，随后可以利用 Attach 功能将数据移动到 CNCH 中并进行查询
+- Suitable for temporarily inserting a small amount of data for testing
+-INSERT SELECT
+- Suitable for situations where you need to save the results of a certain table for subsequent queries
+-Dumper&Attach
+- Suitable for migrating from the local version to CNCH, you can directly use Dumper to write the data of the entire cluster into HDFS, and then use Attach to move these data directly to CNCH and query them
+-PartWriter&Attach
+- For scenarios with a large amount of data and a large number of files, tasks such as Spark can be used to use PartWriter to generate new Part files from the original files and write them to HDFS, and then the Attach function can be used to move the data to CNCH for query
 
-# 调优手段
+# optimisation means
 
-## 直接写入方式调优
+## Direct write mode tuning
 
-在使用 INSERT VALUES, INSERT INFILE 或者 PartWriter 工具写入时，最后生成的 Part 数量会影响写入 HDFS 的次数进而影响写入整体的耗时，因此应当尽量减少 Part 的数量。直接写入的流程如下：
+When using INSERT VALUES, INSERT INFILE, or PartWriter tools to write data, the number of Parts generated at the end can affect the number of times data is written to HDFS, which in turn affects the overall writing time. Therefore, it is recommended to minimize the number of Parts generated. The direct writing process is as follows:
 
-- 读取部分文件数据
-- 将这部分数据按照 PartitionBy 进行切分
-- 将这部分数据按照 ClusterBy 进行切分
-- 将切分完的数据写成新的 Part 并写入 HDFS
+- read part of file data
+- Split this part of data according to PartitionBy
+- Split this part of data according to ClusterBy
+- Write the split data into a new Part and write it to HDFS
 
-调优手段：
+Optimisation means:
 
-1. 为了减少 Part 的数量，我们可以将文件中具有相同的分区和 Bucket 的数据排列在一起，这样每次读取一些新的数据后，生成的 Part 数量会尽可能少。可以将数据按照分区相同，分区内 Bucket 相同的要求进行排序，Bucket 的计算规则是：
+1. To reduce the number of Parts, data with the same partition and bucket should be arranged together in a file. This ensures that the number of Parts generated is as small as possible when reading new data. The data can be sorted based on the requirement that the partitions are the same and the buckets in the partitions are the same. The calculation rules for the buckets are as follows:
 
-- 如果没有指定 SPLIT_NUMBER，会将 ClusterByKey 所使用的列计算 SipHash 后对 BucketNumber 取模得到 BucketNumber
-- 如果指定了 SPLIT_NUMBER
-- 计算 SplitValue
-- 如果 ClusterBy 某一列，利用 dtspartition 函数计算出对应的 SplitValue
-- 如果 ClusterBy 多列，则将这些列利用 SipHash 计算出对应的 SplitValue
-- 计算 BucketNumber
-- 如果是 WithRange，则用 SplitValue \* BucketCount / SplitNumber 计算对应 BucketNumber
-- 如果不是 WithRange，则用 SplitValue % BucketCount 计算对应 BucketNumber
+- If SPLIT_NUMBER is not specified, SipHash will be calculated for the column used by ClusterByKey and then the BucketNumber will be moduloed to get BucketNumber
+- if SPLIT_NUMBER is specified
+- Calculate SplitValue
+- If a column is ClusterBy, use the dtspartition function to calculate the corresponding SplitValue
+- If ClusterBy has multiple columns, use SipHash to calculate the corresponding SplitValue of these columns
+- Calculate BucketNumber
+- If it is WithRange, use SplitValue \* BucketCount / SplitNumber to calculate the corresponding BucketNumber
+- If not WithRange, use SplitValue % BucketCount to calculate the corresponding BucketNumber
 
-1. 读取文件时
-2. 如果每行数据大小并不大，可以通过调大 max_insert_block_size 来一次读取更大的 Block，从而生成更大的 Part
-3. 如果读取的文件不是 HDFS/CFS 的，同时使用通配符匹配了多个文件，也可以同时调大 min_insert_block_size_rows 和 min_insert_block_size_bytes
+1. When reading a file
+2. If the data size of each row is not large, you can read a larger block at a time by increasing max_insert_block_size, thereby generating a larger Part
+3. If the file to be read is not HDFS/CFS and multiple files are matched using wildcards, you can also increase min_insert_block_size_rows and min_insert_block_size_bytes at the same time
 
-## Dumper 方式调优
+## Dumper mode optimisation
 
-Dumper 迁移的时候可以一次指定一张表及其中的部分分区，将其写到 HDFS 中，这部分耗时与表的数据大小以及 Part 数量有关，可以使用 parallel 参数调大上传 Part 的并发，同时也可以等待 Part 在本地先 Merge 的比较充分后再使用 Dumper 进行上传。
+During Dumper migration, you can specify a table and some of its partitions at a time and write them to HDFS. The amount of time required for this process depends on the data size of the table and the number of parts. To increase the concurrency of uploading parts, you can use the parallel parameter. It is also possible to wait for the parts to be merged locally before using Dumper to upload them.
