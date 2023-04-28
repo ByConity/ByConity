@@ -1,85 +1,86 @@
 ---
-title: Bucket table 最佳实践手册
+title: Bucket table best practice manual
 tags:
   - Docs
 ---
 
-# Bucket table 说明
+# Bucket table Description
 
-在 ByConity 中使用 Bucket table 时，系统会依据用户建表语句中提供的一个或者多个列、表达式整理表数据，将相同值的数据聚簇在同一个 bucket number 下。
+In ByConity, when using a Bucket table, the system organizes table data based on one or more columns and expressions specified by the user in the table creation statement. The data with the same value is clustered together and assigned to the same bucket number.
 
-# 使用 Bucket table 的收益
+# Benefits of using Bucket table
 
-使用 cluster key 聚蔟数据在大表上可以获得以下几项收益：
+The following benefits can be obtained on large tables by using cluster key to aggregate data:
 
-1. 针对 cluster key 的点查可以过滤掉大部分数据，降低 IO 量获得更短的执行时间和更高的并发 QPS
-2. 针对 cluster key 的聚合计算，计算节点可以在数据子集进行预先计算，实现更小的内存占用和更短的执行时间
-3. 两张或者多张表针对 cluster key 的 join 可以获得 co-located join 的优化，极大的降低 shuffle 数据量并得到更短的执行时间
+1. Cluster key point checks can filter out most of the data, reducing the amount of IO needed to obtain shorter execution time and higher concurrent QPS.
+2. For aggregation calculations of the cluster key, computing nodes can pre-calculate subsets of data to achieve smaller memory usage and shorter execution times.
+3. Joining two or more tables for the cluster key can be optimized through co-located joins, which greatly reduce the amount of shuffle data and result in shorter execution times.
 
-# 什么时候考虑使用 Bucket table
+# When to consider using Bucket table
 
-1. 表足够大，意味着在一个分区下的 parts 数量至少需要显著多于 worker 数量
-2. 查询语句可以从上述收益点中获益
+1. The table is sufficiently large, which means that the number of partitions under a partition needs to be significantly higher than the number of workers.
+2. Query statements can take advantage of these benefits.
 
-# 如何选择 cluster key
+# How to choose a cluster key
 
-Cluster key 可以是一个或者多个列、表达式，建议最多使用 3 个字段，更多的字段通常会引入过高的写入代价且获益语句范围更小。
+The cluster key can consist of one or more columns and expressions. It is recommended to use up to 3 fields. Using more fields typically results in higher write costs and provides smaller benefits to query statements.The Cluster key can be one or more columns and expressions. It is recommended to use up to 3 fields. More fields usually introduce high write costs and the scope of benefit statements is smaller.
 
-选择正确的 cluster key 对于性能的影响非常显著，因此需要慎重选择。通常可以按照如下原则：
+Choosing the correct cluster key is crucial for optimizing performance, so it should be selected carefully. Generally, the following principles can be followed:
 
-1. 经常用于相等、IN 过滤的列
-2. 常用的聚合列
-3. 多表的 join key
+1. Columns that are often used for equality and IN filtering
+2. Commonly used aggregation columns
+3. Multi-table join key
 
-上述场景如果常用的情况是两列组合，比如 a = 1 and b = 2，那么 cluster key 选择两列可以获得更好的效果。
+If the above scenario is commonly used in combination of two columns, such as a = 1 and b = 2, then cluster key can get better results by selecting two columns.
 
-另一个需要考虑的维度是列的 distinct 值数量，鉴于
+Another dimension to consider is the number of distinct values for a column, given that
 
-1. 相同 cluster key 的数据会归属于同一个 bucket number
-2. 一个 bucket number 下的所有 parts 会发送到同一个 worker 中进行计算
+1. The data of the same cluster key will belong to the same bucket number
+2. All parts under a bucket number will be sent to the same worker for calculation
 
-我们可以得出结论
+We can conclude that
 
-1. 为了能利用所有 worker 节点进行计算，distinct 值需要至少超过 worker 数量
-2. 如果 distinct 值数量较小，偏向于选择最大的 distinct 值，最好为 worker 数量的倍数，以实现查询时数据分布的更均衡
+1. To utilize all worker nodes for computation, the number of distinct values needs to exceed the number of workers.
+2. If the number of distinct values is small, it is preferable to select the largest distinct value, preferably a multiple of the number of workers, to achieve a more balanced data distribution during querying.
 
-例如：
+For example:
 
-1. 表 test，用户常用的过滤列是 c1, c2, c3，列相互独立
-2. worker 数量为 30
-3. distinct c1 为 6
-4. distinct c2 为 8
-5. distinct c3 为 5
+1. In the table test, the commonly used filter columns are c1, c2, c3, and the columns are independent of each other
+2. The number of workers is 30
+3. distinct c1 is 6
+4. distinct c2 is 8
+5. distinct c3 is 5
 
-可以看出 3 列单独的 distinct 都小于 worker 数量。disticnt c1, c2 为 48 虽然大于 worker 数量，但是不是 worker 数量的倍数，因此也不是合适的 cluster key。distinct c1, c3 为 30 正好为 worker 数量的 1 倍，但考虑数据分布的均衡性，选择更大的 distinct c1, c2, c3 为 8 倍 worker 数量更为合适
+It can be observed that the distinct values of each column are all smaller than the number of workers. The number of distinct values for c1 and c2 is 48, which is greater than the number of workers, but it is not a multiple of the number of workers, making it unsuitable for a cluster key. The number of distinct values for c1 and c3 is 30, which is exactly one times the number of workers; however, for a more balanced data distribution, it is better to choose a larger value of distinct c1, c2, and c3, such as 8 times the number of workers.
 
-# 如何选择 bucket number
+# How to choose bucket number
 
-鉴于在一个分区内
+Given that within a partition
 
-1. 每行数据会依据 cluster key 的值按 `% BUCKETS` 计算得到相应 bucket number
-2. 同一个 bucket number 的 parts 在查询时会发送到同一个 worker 节点上计算
+1. Each row of data will be calculated according to the value of the cluster key by `% BUCKETS` to get the corresponding bucket number
+2. Parts of the same bucket number will be sent to the same worker node for calculation during query
 
-因此选择一个合适的 bucket number 对于存储和查询都有重大的影响，一般有如下原则：
+Therefore, choosing an appropriate bucket number has a major impact on storage and query, and generally has the following principles:
 
-1. 确保 bucket number 为 worker 数量的倍数，这是为了保证查询时分配的均衡，一般建议设置为 1 倍或者 2 倍（预留扩充 worker 节点余度）worker 节点数量即可
-2. 确保一个分区下一个 bucket number 中有足够多的数据，不要生成太小的 parts，因此建议如果表比较小，至少确保一个分区的一个 bucket number parts 大小超过 1GB。不要设置过高的 bucket nubmer，可以出现小于 worker 数量的 bucket number
+1. Ensure that the bucket number is a multiple of the number of workers to achieve balanced allocation during querying. It is generally recommended to set it to 1 or 2 times the number of workers (with room for expanding worker node redundancy) if there are enough worker nodes.
+2. Ensure that there is enough data in a bucket number under a partition and avoid generating overly small parts. For a relatively small table, ensure that the size of a bucket number part in a partition exceeds 1GB. Do not set the bucket number too high, as a bucket number smaller than the number of workers may be generated.
 
-# 如何决定是否要修改 cluster by 定义
+# How to decide whether to modify the cluster by definition
 
-在运行过程中因为数据变化、查询模式变化、worker 节点数量变化，用户可能会想要重新设置 cluster key 和 bucket number。
+During operation, due to data changes, query mode changes, and changes in the number of worker nodes, users may want to reset the cluster key and bucket number.
 
-这里需要考虑实施修改的代价，权衡是否需要修改已经何时修改：
+Here you need to consider the cost of implementing the modification, and weigh whether you need to modify and when:
 
-1. 修改 cluster by 定义需要对现存已有数据做 recluster，需要评估现存数据量估算 recluster 执行时间
-2. recluster 期间现存数据的查询会回退为一张普通表，所有 bucket table 的收益暂时都失去
-3. Recluster 会占用 write worker 的资源，需要评估当前 cnch 集群是否有独立的 write worker 以及当前负担，评估对现有查询、merge 等任务的影响
+1. To modify the definition of cluster by, re-clustering on the existing data is required. It is necessary to assess the amount of existing data to estimate the execution time of the re-clustering process.
+2. During the re-clustering period, querying existing data will revert to a normal table, and all the benefits of the bucket table will be temporarily lost.
+3. Re-clustering will occupy the resources of the write worker. It is necessary to evaluate whether the current cnch cluster has an independent write worker, the current load, and the impact on existing tasks such as querying and merging.
 
-有两种修改 cluster by 定义的情况：
+There are two cases of modifying the cluster by definition:
 
-1. 修改 cluster key
-1. 此时意味着当前的数据已经无法获得 bucket table 收益，因此无需考虑 recluster 期间失去的收益
-1. 需要评估 recluster 任务对于现有任务的影响判断是否可以执行
-1. 修改 bucket number
-1. 当前 bucket table 的收益仍在，因此需要和业务方确认可以接受的性能回退的时间，进一步根据 recluster 时间判断是否可以执行，以及确定开始执行时间
-1. 也需要评估 recluster 任务对于现有任务的影响判断是否可以执行
+1. Modifying the cluster key:
+- At this point, the current data can no longer benefit from the bucket table, so the lost income during re-clustering need not be considered.
+- It is necessary to evaluate the impact of the re-clustering task on existing tasks to determine whether it can be executed.
+
+2. Modifying the bucket number:
+- The current bucket table still provides benefits, so it is necessary to confirm with the business side the acceptable performance rollback time, assess whether it can be executed based on the re-clustering time, and determine the start execution time.
+- It is also necessary to evaluate the impact of the re-clustering task on existing tasks to determine whether it can be executed.
