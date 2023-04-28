@@ -70,9 +70,9 @@ void turnOffOptimizer(ContextMutablePtr context, ASTPtr & node)
     changeDistributedStages(node);
 }
 
-bool QueryUseOptimizerChecker::check(ASTPtr & node, const ContextMutablePtr & context)
+bool QueryUseOptimizerChecker::check(ASTPtr & node, const ContextMutablePtr & context, bool use_distributed_stages)
 {
-    if (!node || !context->getSettingsRef().enable_optimizer)
+    if (!node || (!context->getSettingsRef().enable_optimizer && !use_distributed_stages))
     {
         turnOffOptimizer(context, node);
         return false;
@@ -164,7 +164,7 @@ checkDatabaseAndTable(const ASTTableExpression & table_expression, const Context
                 return false;
 
             if (database_name == "system")
-                return true;
+                return false;
 
             if (dynamic_cast<const StorageView *>(storage_table.get()))
             {
