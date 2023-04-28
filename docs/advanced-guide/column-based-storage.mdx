@@ -1,39 +1,39 @@
 ---
-title: 列存设计原理
+title: Column Storage Design Principles
 tags:
   - Docs
 ---
 
-# 列存设计原理
+# Column storage design principle
 
-通常事务型数据库采用行存便于支持事务和高并发读写，分析型数据库采用列存减少 IO 和便于压缩。ByConity 采用列存的方式，保证读写性能、支持事务一致性，又适用大规模的数据计算。
+Typically, transactional databases use row storage to support transactions and high concurrent reading and writing, while analytical databases use column storage to reduce IO and facilitate compression. ByConity, on the other hand, uses column storage to ensure read and write performance, support transaction consistency, and is well-suited for large-scale data calculations.
 
 ### Data Layout
 
-表数据物理上按 Partition Key 切分为多个 Parts 存储在统一的分布式文件系统和云存储的逻辑存储路径下，每个 Part 的大小有数据量和行数限制，计算组根据服务节点分配的策略（预先分配和实时分配）获得其对应的部分 parts。
+Table data is physically divided into multiple parts based on the partition key and stored in a unified distributed file system and cloud storage logical storage path. The size of each part is limited by the amount of data and the number of rows. The computing group is allocated parts based on the service node strategies (pre-allocation and real-time allocation) to obtain their corresponding parts.
 
 ### Part Delta
 
-Part 数据最初构建之后是一个行列混合存储的 Part 数据文件，随着 DML/数据字典/Bitmap index 等构建工作的进行 Part 存在增量数据，这部分数据可以有以下两种存储方式：
+After the initial construction of Part data, it is a Part data file with row and column mixed storage. With the construction of DML/data dictionary/Bitmap index, etc., Part has incremental data. This part of data can be stored in the following two ways:
 
-1. 每次构建都会 Rewrite Part 数据
-2. 生成增量数据，后台异步合并成一个大的 Part 文件
+1. Every build will Rewrite Part data
+2. Generate incremental data and asynchronously merge it into a large Part file in the background
 
-方案一对整个集群的可用性可能会有一定的影响：
+The solution may have a certain impact on the availability of the entire cluster:
 
-1. 每次 DML/数据字典等构建都可能涉及到整个表 Parts 的全量 IO 操作，这个代价比较大。
-2. 构建时间比较长 DML 等操作会比较长的时间才能做完，对用户不友好，我们采用方案二。
+1. Every construction of DML/data dictionary may involve a full amount of IO operations on the entire table Parts, which is relatively expensive.
+2. It takes a long time to build DML and other operations will take a long time to complete, which is not friendly to users. We adopt the second solution.
 
-### Part 文件内容
+### Part file content
 
-part 数据分为两个部分：
+The part data is divided into two parts:
 
-一是整个 Part 包括 rows/schema/column data 在数据文件中的 Offset 等元信息，这部分信息持久化存储并被计算节点缓存
+One is that the whole Part includes meta-information such as rows/schema/column data in the data file, such as Offset, which is stored persistently and cached by computing nodes
 
-二是实际的数据信息，这部分信息包含实际的 column bin 数据/column mrk 数据/Map key bin/Map key index/数据字典数据/bitmap index 数据等，数据按元信息中的 Offset 信息在 Part 的数据文件依次存储。
+The second is the actual data information, this part of the information includes the actual column bin data/column mrk data/Map key bin/Map key index/data dictionary data/bitmap index data, etc., the data is in the data of the Part according to the Offset information in the meta information Files are stored sequentially.
 
 ### Compaction
 
-ByConity 支持将一个 part 文件拆分为多个小文件，通过配置 Part 的最大 Size 和最大行数，Compact 之后的 Part 需要满足这个限制。
+ByConity supports splitting a Part file into multiple smaller files. The maximum size and maximum number of lines of a Part can be configured, and the resulting Parts after compaction must meet these limits.
 
-ByConity 中的 Compaction 是在全局做的，与前面提高的全局的 block ID 保持一致。
+The compaction in ByConity is done globally, which is consistent with the previously raised global block ID.
