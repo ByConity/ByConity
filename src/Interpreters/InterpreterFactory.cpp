@@ -189,6 +189,9 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     }
     else if (query->as<ASTInsertQuery>())
     {
+        /// currently, the optimizer hasn't support insert select, call the check to force close optimizer.
+        QueryUseOptimizerChecker::check(query, context);
+
         ProfileEvents::increment(ProfileEvents::InsertQuery);
         bool allow_materialized = static_cast<bool>(context->getSettingsRef().insert_allow_materialized_columns);
         return std::make_unique<InterpreterInsertQuery>(query, context, allow_materialized);
