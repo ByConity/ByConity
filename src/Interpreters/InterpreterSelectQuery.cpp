@@ -2185,6 +2185,7 @@ void InterpreterSelectQuery::executeWhere(QueryPlan & query_plan, const ActionsD
 
 
 static Aggregator::Params getAggregatorParams(
+    const ASTPtr & query_ptr,
     const Block & src_header_,
     const SelectQueryExpressionAnalyzer & query_analyzer,
     const Context & context,
@@ -2195,6 +2196,13 @@ static Aggregator::Params getAggregatorParams(
     size_t group_by_two_level_threshold,
     size_t group_by_two_level_threshold_bytes)
 {
+    const auto stats_collecting_params = Aggregator::Params::StatsCollectingParams(
+        query_ptr,
+        context.getServerType() == ServerType::cnch_worker,
+        settings.collect_hash_table_stats_during_aggregation,
+        settings.max_entries_for_hash_table_stats,
+        settings.max_size_to_preallocate_for_aggregation);
+
     return Aggregator::Params
     {
         src_header_,
@@ -2211,7 +2219,9 @@ static Aggregator::Params getAggregatorParams(
         settings.max_threads,
         settings.min_free_disk_space_for_temporary_data,
         settings.compile_aggregate_expressions,
-        settings.min_count_to_compile_aggregate_expression
+        settings.min_count_to_compile_aggregate_expression,
+        Block{},
+        stats_collecting_params
     };
 }
 
@@ -2274,7 +2284,9 @@ void InterpreterSelectQuery::executeAggregation(QueryPlan & query_plan, const Ac
 
     const Settings & settings = context->getSettingsRef();
 
+
     auto aggregator_params = getAggregatorParams(
+        query_ptr,
         header_before_aggregation,
         *query_analyzer,
         *context,
@@ -2378,7 +2390,7 @@ void InterpreterSelectQuery::executeRollupOrCube(QueryPlan & query_plan, Modific
     for (const auto & key : query_analyzer->aggregationKeys())
         keys.push_back(header_before_transform.getPositionByName(key.name));
 
-    auto params = getAggregatorParams(header_before_transform, *query_analyzer, *context, keys, query_analyzer->aggregates(), false, settings, 0, 0);
+    auto params = getAggregatorParams(query_ptr, header_before_transform, *query_analyzer, *context, keys, query_analyzer->aggregates(), false, settings, 0, 0);
     auto transform_params = std::make_shared<AggregatingTransformParams>(std::move(params), true);
 
     QueryPlanStepPtr step;
