@@ -43,8 +43,7 @@ bool extractIdentifiers(const ASTFunction & func, std::unordered_set<ASTPtr *> &
             // be inside `any`, but this check in GetAggregatesMatcher happens
             // later, so we have to explicitly skip these nested functions here.
             if (arg_func->is_window_function
-                || AggregateFunctionFactory::instance().isAggregateFunctionName(
-                    arg_func->name))
+                || AggregateUtils::isAggregateFunction(*arg_func))
             {
                 return false;
             }
@@ -65,7 +64,12 @@ bool extractIdentifiers(const ASTFunction & func, std::unordered_set<ASTPtr *> &
 void RewriteAnyFunctionMatcher::visit(ASTPtr & ast, Data & data)
 {
     if (auto * func = ast->as<ASTFunction>())
+    {
+        if (func->is_window_function)
+            return;
+
         visit(*func, ast, data);
+    }
 }
 
 void RewriteAnyFunctionMatcher::visit(const ASTFunction & func, ASTPtr & ast, Data & data)
