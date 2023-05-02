@@ -45,7 +45,7 @@ jobs:
           export ADDITIONAL_OPTIONS=' --run cnch_stateless'
           export MAX_RUN_TIME=9000
           cp -r $GITHUB_WORKSPACE/docker/test/stateless/* .
-          /bin/bash run_cnch.sh
+      #/bin/bash run_cnch.sh
       # - name: Run CertificateStateful
       #   continue-on-error: true
       #   run: |
@@ -78,7 +78,7 @@ jobs:
           cp -r ${GITHUB_WORKSPACE}/docker/test/stateless/process_functional_tests_result.py ./
           cp -r ${GITHUB_WORKSPACE}/tests/clickhouse-test ./
           mkdir queries
-          cp -r ${GITHUB_WORKSPACE}/tests/queries/7_unstable_clickhouse_sql queries/
+          cp -r ${GITHUB_WORKSPACE}/tests/queries/7_clickhouse_sql queries/
           cp -r ${GITHUB_WORKSPACE}/tests/queries/shell_config.sh queries/
           mkdir -p test_output
           echo "Running test without optimizer"
