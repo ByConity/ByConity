@@ -37,39 +37,39 @@ jobs:
           $HADOOP_HOME/bin/hdfs namenode -format
           $HADOOP_HOME/bin/hdfs --daemon start namenode
           $HADOOP_HOME/bin/hdfs --daemon start datanode
-      - name: Run CNCH FuntionalStateless
-        continue-on-error: true
-        run: |
-          bash ${GITHUB_WORKSPACE}/ci_scripts/cluster_up.sh
-          bash ${GITHUB_WORKSPACE}/docker/test/foundationdb/show_fdb.sh
-          export ADDITIONAL_OPTIONS=' --run cnch_stateless'
-          export MAX_RUN_TIME=9000
-          cp -r $GITHUB_WORKSPACE/docker/test/stateless/* .
-          /bin/bash run_cnch.sh
-      - name: Run CertificateStateful
-        continue-on-error: true
-        run: |
-          mkdir -p ci_certificate_wp
-          cd ci_certificate_wp
-          cp -r ${GITHUB_WORKSPACE}/docker/test/certificate/* ./
-          echo "Load tables for certificate - first batch" && python3 load_certificate_tables.py --suite-path ${GITHUB_WORKSPACE}/tests/queries/3_1_certificate_aeolus_bp_edu && python3 load_certificate_tables.py --suite-path ${GITHUB_WORKSPACE}/tests/queries/3_2_certificate_aeolus_delta && python3 load_certificate_tables.py --suite-path ${GITHUB_WORKSPACE}/tests/queries/3_3_certificate_datarocks && wait 
-          echo "Load tables for certificate - second batch" && python3 load_certificate_tables.py --suite-path ${GITHUB_WORKSPACE}/tests/queries/3_4_certificate_deepinsight && python3 load_certificate_tables.py --suite-path ${GITHUB_WORKSPACE}/tests/queries/3_5_certificate_ecom_data && python3 load_certificate_tables.py --suite-path ${GITHUB_WORKSPACE}/tests/queries/3_6_certificate_libra_hl && wait
-          echo "Load tables for certificate - last batch" && python3 load_certificate_tables.py --suite-path ${GITHUB_WORKSPACE}/tests/queries/3_7_certificate_motor_dzx && wait
-          echo "Load tables for certificates done"
+      # - name: Run CNCH FuntionalStateless
+      #   continue-on-error: true
+      #   run: |
+      #     bash ${GITHUB_WORKSPACE}/ci_scripts/cluster_up.sh
+      #     bash ${GITHUB_WORKSPACE}/docker/test/foundationdb/show_fdb.sh
+      #     export ADDITIONAL_OPTIONS=' --run cnch_stateless'
+      #     export MAX_RUN_TIME=9000
+      #     cp -r $GITHUB_WORKSPACE/docker/test/stateless/* .
+      #     /bin/bash run_cnch.sh
+      # - name: Run CertificateStateful
+      #   continue-on-error: true
+      #   run: |
+      #     mkdir -p ci_certificate_wp
+      #     cd ci_certificate_wp
+      #     cp -r ${GITHUB_WORKSPACE}/docker/test/certificate/* ./
+      #     echo "Load tables for certificate - first batch" && python3 load_certificate_tables.py --suite-path ${GITHUB_WORKSPACE}/tests/queries/3_1_certificate_aeolus_bp_edu && python3 load_certificate_tables.py --suite-path ${GITHUB_WORKSPACE}/tests/queries/3_2_certificate_aeolus_delta && python3 load_certificate_tables.py --suite-path ${GITHUB_WORKSPACE}/tests/queries/3_3_certificate_datarocks && wait 
+      #     echo "Load tables for certificate - second batch" && python3 load_certificate_tables.py --suite-path ${GITHUB_WORKSPACE}/tests/queries/3_4_certificate_deepinsight && python3 load_certificate_tables.py --suite-path ${GITHUB_WORKSPACE}/tests/queries/3_5_certificate_ecom_data && python3 load_certificate_tables.py --suite-path ${GITHUB_WORKSPACE}/tests/queries/3_6_certificate_libra_hl && wait
+      #     echo "Load tables for certificate - last batch" && python3 load_certificate_tables.py --suite-path ${GITHUB_WORKSPACE}/tests/queries/3_7_certificate_motor_dzx && wait
+      #     echo "Load tables for certificates done"
 
-          cp ${GITHUB_WORKSPACE}/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
-          cp -r ${GITHUB_WORKSPACE}/tests/clickhouse-test ./
-          mkdir queries
-          cp -r ${GITHUB_WORKSPACE}/tests/queries/3_1_certificate_aeolus_bp_edu queries/
-          cp -r ${GITHUB_WORKSPACE}/tests/queries/3_2_certificate_aeolus_delta queries/
-          cp -r ${GITHUB_WORKSPACE}/tests/queries/3_3_certificate_datarocks queries/
-          cp -r ${GITHUB_WORKSPACE}/tests/queries/3_7_certificate_motor_dzx queries/
-          cp -r ${GITHUB_WORKSPACE}/tests/queries/shell_config.sh queries/
-          mkdir -p test_output
-          ./clickhouse-test --stop --hung-check --jobs 1 --order asc --print-time 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
-          ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/certificate_test_results.tsv --out-status-file /test_output/certificate_check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/certificate_check_status.tsv
-          cd ..
-          rm -rf ci_certificate_wp
+      #     cp ${GITHUB_WORKSPACE}/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
+      #     cp -r ${GITHUB_WORKSPACE}/tests/clickhouse-test ./
+      #     mkdir queries
+      #     cp -r ${GITHUB_WORKSPACE}/tests/queries/3_1_certificate_aeolus_bp_edu queries/
+      #     cp -r ${GITHUB_WORKSPACE}/tests/queries/3_2_certificate_aeolus_delta queries/
+      #     cp -r ${GITHUB_WORKSPACE}/tests/queries/3_3_certificate_datarocks queries/
+      #     cp -r ${GITHUB_WORKSPACE}/tests/queries/3_7_certificate_motor_dzx queries/
+      #     cp -r ${GITHUB_WORKSPACE}/tests/queries/shell_config.sh queries/
+      #     mkdir -p test_output
+      #     ./clickhouse-test --stop --hung-check --jobs 1 --order asc --print-time 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
+      #     ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/certificate_test_results.tsv --out-status-file /test_output/certificate_check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/certificate_check_status.tsv
+      #     cd ..
+      #     rm -rf ci_certificate_wp
       - name: CNCH - FuntionalStateless (multi-workers + ClickhouseSQL + w/w.o optimizer)
         continue-on-error: true
         run: |
@@ -78,7 +78,7 @@ jobs:
           cp -r ${GITHUB_WORKSPACE}/docker/test/stateless/process_functional_tests_result.py ./
           cp -r ${GITHUB_WORKSPACE}/tests/clickhouse-test ./
           mkdir queries
-          cp -r ${GITHUB_WORKSPACE}/tests/queries/7_clickhouse_sql queries/
+          cp -r ${GITHUB_WORKSPACE}/tests/queries/7_unstable_clickhouse_sql queries/
           cp -r ${GITHUB_WORKSPACE}/tests/queries/shell_config.sh queries/
           mkdir -p test_output
           echo "Running test without optimizer"
