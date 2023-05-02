@@ -109,6 +109,70 @@
                 </ports>
                 <vw_name>vw_default</vw_name>
             </node>
+            <node>
+                <host>ip_address_replace_me</host>
+                <hostname>WriteWorker-4</hostname>
+                <ports>
+                    <port>
+                        <!--HTTP-->
+                        <name>PORT2</name>
+                        <value>18897</value>
+                    </port>
+                    <port>
+                        <!--RPC-->
+                        <name>PORT1</name>
+                        <value>18898</value>
+                    </port>
+                    <port>
+                        <!--TCP/Primary-->
+                        <name>PORT0</name>
+                        <value>18896</value>
+                    </port>
+                    <port>
+                        <!--Exchange Stream Port-->
+                        <name>PORT5</name>
+                        <value>18899</value>
+                    </port>
+                    <port>
+                        <!--Exchange Status Port-->
+                        <name>PORT6</name>
+                        <value>18800</value>
+                    </port>
+                </ports>
+                <vw_name>vw_write</vw_name>
+            </node>
+            <node>
+                <host>ip_address_replace_me</host>
+                <hostname>DefaultWorker-6</hostname>
+                <ports>
+                    <port>
+                        <!--HTTP-->
+                        <name>PORT2</name>
+                        <value>18791</value>
+                    </port>
+                    <port>
+                        <!--RPC-->
+                        <name>PORT1</name>
+                        <value>18792</value>
+                    </port>
+                    <port>
+                        <!--TCP/Primary-->
+                        <name>PORT0</name>
+                        <value>18790</value>
+                    </port>
+                    <port>
+                        <!--Exchange Stream Port-->
+                        <name>PORT5</name>
+                        <value>18793</value>
+                    </port>
+                    <port>
+                        <!--Exchange Status Port-->
+                        <name>PORT6</name>
+                        <value>18794</value>
+                    </port>
+                </ports>
+                <vw_name>vw_default</vw_name>
+            </node>
         </vw>
         <tso>
             <psm>data.cnch.tso</psm>
