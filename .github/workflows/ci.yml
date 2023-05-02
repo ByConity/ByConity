@@ -37,15 +37,15 @@ jobs:
           $HADOOP_HOME/bin/hdfs namenode -format
           $HADOOP_HOME/bin/hdfs --daemon start namenode
           $HADOOP_HOME/bin/hdfs --daemon start datanode
-      # - name: Run CNCH FuntionalStateless
-      #   continue-on-error: true
-      #   run: |
-      #     bash ${GITHUB_WORKSPACE}/ci_scripts/cluster_up.sh
-      #     bash ${GITHUB_WORKSPACE}/docker/test/foundationdb/show_fdb.sh
-      #     export ADDITIONAL_OPTIONS=' --run cnch_stateless'
-      #     export MAX_RUN_TIME=9000
-      #     cp -r $GITHUB_WORKSPACE/docker/test/stateless/* .
-      #     /bin/bash run_cnch.sh
+      - name: Run CNCH FuntionalStateless
+        continue-on-error: true
+        run: |
+          bash ${GITHUB_WORKSPACE}/ci_scripts/cluster_up.sh
+          bash ${GITHUB_WORKSPACE}/docker/test/foundationdb/show_fdb.sh
+          export ADDITIONAL_OPTIONS=' --run cnch_stateless'
+          export MAX_RUN_TIME=9000
+          cp -r $GITHUB_WORKSPACE/docker/test/stateless/* .
+          /bin/bash run_cnch.sh
       # - name: Run CertificateStateful
       #   continue-on-error: true
       #   run: |
