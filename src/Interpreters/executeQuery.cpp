@@ -84,6 +84,7 @@
 
 #include <Interpreters/NamedSession.h>
 #include <Common/SensitiveDataMasker.h>
+#include "Transaction/TxnTimestamp.h"
 #include <Interpreters/trySetVirtualWarehouse.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <Parsers/ASTSystemQuery.h>
@@ -94,6 +95,7 @@
 
 #include <Processors/Formats/IOutputFormat.h>
 #include <Processors/Sources/SinkToOutputStream.h>
+#include <Processors/Sources/SourceFromInputStream.h>
 
 #include <Processors/Transforms/LimitsCheckingTransform.h>
 #include <Processors/Transforms/MaterializingTransform.h>
@@ -550,12 +552,13 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         if (context->getSettingsRef().enable_auto_query_forwarding)
         {
             auto host_ports = getTargetServer(context, ast);
+            LOG_DEBUG(&Poco::Logger::get("executeQuery"), "target server is {} and local rpc port is {}", host_ports.getRPCAddress(), context->getRPCPort());
             if (!host_ports.empty() && !isLocalServer(host_ports.getRPCAddress(), std::to_string(context->getRPCPort())))
             {
-                LOG_INFO(&Poco::Logger::get("executeQuery"), "Will reroute query " + queryToString(ast) + " to " + host_ports.getTCPAddress());
+                LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Will reroute query " + queryToString(ast) + " to " + host_ports.getTCPAddress());
                 context->initializeExternalTablesIfSet();
                 executeQueryByProxy(context, host_ports, ast, res);
-                LOG_INFO(&Poco::Logger::get("executeQuery"), "Query execution on remote server done");
+                LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query execution on remote server done");
                 return std::make_tuple(ast, std::move(res));
             }
         }
@@ -1541,7 +1544,7 @@ HostWithPorts getTargetServer(ContextPtr context, ASTPtr &ast)
         database = drop->database;
         table = drop->table;
     }
-    else if (const auto *select = ast->as<ASTSelectQuery>())
+    else if (const auto *select = ast->as<ASTSelectWithUnionQuery>())
     {
         ASTs tables;
         bool has_table_func = false;
@@ -1550,6 +1553,7 @@ HostWithPorts getTargetServer(ContextPtr context, ASTPtr &ast)
         {
             // simplily use the first table if there are multiple tables used
             DatabaseAndTableWithAlias db_and_table(tables[0]);
+            LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Extract db and table {}.{} from the query.", db_and_table.database, db_and_table.table);
             database = db_and_table.database;
             table = db_and_table.table;
         }
@@ -1583,8 +1587,9 @@ void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server
 {
     /// Create a proxy transaction for insert/alter query
     auto & coordinator = context->getCnchTransactionCoordinator();
-    auto primary_txn_id = context->getCurrentTransaction()->getTransactionID();
-    auto proxy_txn = coordinator.createProxyTransaction(server,primary_txn_id);
+    // Todo: support explicit transaction, for implicit txn auto query forwarding, use max timestamp
+    // auto primary_txn_id = context.getSessionContext().getCurrentTransaction()->getTransactionID();
+    auto proxy_txn = coordinator.createProxyTransaction(server, TxnTimestamp::maxTS());
     context->setCurrentTransaction(proxy_txn);
     /// Anyway, on finish and exception, we need to finish the proxy transaction
     res.finish_callback = [proxy_txn](IBlockInputStream * , IBlockOutputStream *, QueryPipeline *, UInt64)
