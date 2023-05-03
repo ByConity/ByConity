@@ -19,8 +19,8 @@ A minimal ByConity cluster include:
 - A ByConity server to receive request from clients.
 - A ByConity read worker to carry execution of read requests forward from server.
 - A ByConity write worker to carry execution of write requests forward from server.
-- A ByConity TSO server to provide timestamp
-- A ByConity daemon manager to manage background jobs that run in server
+- A ByConity TSO server to provide timestamp.
+- A ByConity daemon manager to manage background jobs that run in server.
 
 
 ## Build ByConity
