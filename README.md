@@ -15,7 +15,7 @@ You can quickly bring up a ByConity playground by following this simple [guide](
 
 A minimal ByConity cluster include:
 - A [FoundationDB](https://www.foundationdb.org/) database cluster to store meta data.
-- A [HDFS](https://hadoop.apache.org/docs/r1.2.1/hdfs_design.html) cluster to store data.
+- An [HDFS](https://hadoop.apache.org/docs/r1.2.1/hdfs_design.html) cluster to store data.
 - A ByConity server to receive request from clients.
 - A ByConity read worker to carry execution of read requests forward from server.
 - A ByConity write worker to carry execution of write requests forward from server.
@@ -24,12 +24,12 @@ A minimal ByConity cluster include:
 
 
 ## Build ByConity
-The easiest way to build ByConity is built in [docker](https://github.com/ByConity/ByConity/tree/master/docker/builder). ByConity executable file depend on Foundation DB library `libfdb_c.so`. So in order to run it, we need to install the FoundationDB client package. This [link](https://apple.github.io/foundationdb/getting-started-linux.html) tells how to install. We can download client package from FoundationDB GitHub release pages, for example [here](https://github.com/apple/foundationdb/releases/tag/7.1.0). Another way to export the `LD_LIBRARY_PATH` so that the executable can find Foundation DB library `libfdb_c.so`. But this way is not recommended.
+The easiest way to build ByConity is built in [docker](https://github.com/ByConity/ByConity/tree/master/docker/builder). ByConity executable file depend on Foundation DB library `libfdb_c.so`. So in order to run it, we need to install the FoundationDB client package. This [link](https://apple.github.io/foundationdb/getting-started-linux.html) tells how to install. We can download client package from FoundationDB GitHub release pages, for example [here](https://github.com/apple/foundationdb/releases/tag/7.1.0). Another way is to export the `LD_LIBRARY_PATH` so that the executable can find Foundation DB library `libfdb_c.so`. But this way is not recommended.
 ```
 export LD_LIBRARY_PATH="{ByConity_source_path}/contrib/foundationdb/lib/"
 ```
 
-It can also be built the following operating systems:
+It can also be built through the following operating systems:
 
 - Linux
 
@@ -85,14 +85,14 @@ resource_manager     # byconity resource manager
 ## Run ByConity Locally
 The most convinience way for local development is to use `docker-compose`. You can use `docker-compose` to quickly create a [byconity cluster](/docker/local-deploy/README.md) from your local build binary. By using this approach, you do not need to worry about the setup of ByConity dependencies (FoundationDB and HDFS), it automatically launches them all. It is recommended to use this approach for ByConity development.
 
-Alternatively, if you don't want to use docker, please follow the belowing guide to run ByConity in non-containerized environments.  It assumes you have [FoundationDB](https://apple.github.io/foundationdb/local-dev.html) and [HDFS](https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-common/ClusterSetup.html) set up and running locally:
+Alternatively, if you don't want to use docker, please follow the instructions below to run ByConity in non-containerized environments.  It assumes you have [FoundationDB](https://apple.github.io/foundationdb/local-dev.html) and [HDFS](https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-common/ClusterSetup.html) set up and running locally:
 1. Modify the template config
 2. Run the local deployment script to run all the components
 
 ### Modify the template config
-The config templates can be found in deploy/template. You should replace the following in in `byconity-server.xml` and `byconity-worker.xml`:
+The config templates can be found in deploy/template. You should replace the following in `byconity-server.xml` and `byconity-worker.xml`:
 1. `Path_To_FDB` with path to your FoundationDB `fdb.cluster` file path
-2. `HOST:PORT` with the host and port of your name node in your HDFS cluster
+2. `HOST:PORT` with the host and port of name node in your HDFS cluster
 ```xml
     <catalog_service>
         <type>fdb</type>
@@ -117,9 +117,9 @@ The config templates can be found in deploy/template. You should replace the fol
 
 ### Run the local deployment script
 1. Make sure you have `python3.9` and `tmux` installed
-2. Install missing libraries if any. For example:
+2. Install missing libraries, if any. For example:
    1. `pip3.9 install psutils`
-3. Run tmux in another terminal
+3. Run `tmux` in another terminal
 4. Run the deploy script in a separate terminal. `template_paths` and `program_dir` args are compulsory
    1. `cd ByConity/deploy`
    2. `python3.9 deploy.py --template_paths template/byconity-server.xml template/byconity-worker.xml --program_dir /home/ByConity/build/programs`
@@ -127,10 +127,10 @@ The config templates can be found in deploy/template. You should replace the fol
 
 
 ## Deploy ByConity to physical machines
-There are some way to deploy ByConity to physical machines:
+There are ways to deploy ByConity to physical machines:
 - Deploy via docker [wrapper](https://github.com/ByConity/ByConity/tree/master/docker/executable_wrapper)
 - Deploy using [package manager](https://github.com/ByConity/ByConity/tree/master/packages)
 
 ### Test ByConity in development enviroment
-To test ByConity in development enviroment, follow this [guide](https://github.com/ByConity/ByConity/tree/master/Testing.md)
+To test ByConity in development enviroment, follow this [guide](https://github.com/ByConity/ByConity/tree/master/Testing.md).
 
