@@ -557,6 +557,14 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
 
     new_values["Uptime"] = getContext()->getUptimeSeconds();
 
+    if (const auto stats = getHashTablesCacheStatistics())
+    {
+        new_values["HashTableStatsCacheEntries"] = stats->entries;
+        new_values["HashTableStatsCacheHits"] = stats->hits;
+        new_values["HashTableStatsCacheMisses"] = stats->misses;
+    }
+
+
     /// Process process memory usage according to OS
 #if defined(OS_LINUX)
     {

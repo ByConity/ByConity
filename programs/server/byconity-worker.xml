@@ -51,7 +51,7 @@
 
     <interserver_http_port>30977</interserver_http_port>
 
-    <listen_host>0.0.0.0</listen_host>
+    <listen_host>::</listen_host>
 
     <listen_backlog>64</listen_backlog> -->
 

@@ -81,7 +81,6 @@ public:
     void deserializeImpl(ReadBuffer & buf) override;
     static ASTPtr deserialize(ReadBuffer & buf);
 
-protected:
     String full_name;
     std::vector<String> name_parts;
     std::shared_ptr<IdentifierSemanticImpl> semantic; /// pimpl
