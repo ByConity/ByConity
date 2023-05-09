@@ -50,10 +50,10 @@ sleep 2
 ASAN_OPTIONS=halt_on_error=false,log_path=/test_output/vw-write/asan.worker-write.log WORKER_ID='write-worker-0' WORKER_GROUP_ID='write' VIRTUAL_WAREHOUSE_ID='vw_write' nohup  ${BIN_PATH}/clickhouse-server --config-file   ${APP_ROOT}/ci_scripts/config/worker-write.xml >/dev/null 2>&1 &
 sleep 2
 
-ASAN_OPTIONS=halt_on_error=false,log_path=/test_output/vw-default/asan.worker-default1.log WORKER_ID='default-worker-1' WORKER_GROUP_ID='default' VIRTUAL_WAREHOUSE_ID='vw_default' nohup  ${BIN_PATH}/clickhouse-server --config-file   ${APP_ROOT}/ci_scripts/config/worker1.xml >/dev/null 2>&1 &
-sleep 2
-ASAN_OPTIONS=halt_on_error=false,log_path=/test_output/vw-write/asan.worker-write1.log WORKER_ID='write-worker-1' WORKER_GROUP_ID='write' VIRTUAL_WAREHOUSE_ID='vw_write' nohup  ${BIN_PATH}/clickhouse-server --config-file   ${APP_ROOT}/ci_scripts/config/worker-write1.xml >/dev/null 2>&1 &
-sleep 2
+# ASAN_OPTIONS=halt_on_error=false,log_path=/test_output/vw-default/asan.worker-default1.log WORKER_ID='default-worker-1' WORKER_GROUP_ID='default' VIRTUAL_WAREHOUSE_ID='vw_default' nohup  ${BIN_PATH}/clickhouse-server --config-file   ${APP_ROOT}/ci_scripts/config/worker1.xml >/dev/null 2>&1 &
+# sleep 2
+# ASAN_OPTIONS=halt_on_error=false,log_path=/test_output/vw-write/asan.worker-write1.log WORKER_ID='write-worker-1' WORKER_GROUP_ID='write' VIRTUAL_WAREHOUSE_ID='vw_write' nohup  ${BIN_PATH}/clickhouse-server --config-file   ${APP_ROOT}/ci_scripts/config/worker-write1.xml >/dev/null 2>&1 &
+# sleep 2
 
 ASAN_OPTIONS=halt_on_error=false,log_path=/test_output/daemon-manager/asan.daemon_manager.log nohup ${BIN_PATH}/daemon-manager  --config-file  ${APP_ROOT}/ci_scripts/config/dm.xml  >/dev/null 2>&1 &
 sleep 2
