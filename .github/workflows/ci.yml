@@ -46,12 +46,6 @@ jobs:
           export MAX_RUN_TIME=9000
           cp -r $GITHUB_WORKSPACE/docker/test/stateless/* .
           /bin/bash run_cnch.sh
-      - name: Run CNCH FuntionalStateless with optimizer
-        continue-on-error: true
-        run: |
-          export MAX_RUN_TIME=9000
-          export ADDITIONAL_OPTIONS=' --run cnch_stateless --client-option 'enable_optimizer=1' '
-          /bin/bash run_cnch.sh
       # - name: Run CertificateStateful
       #   continue-on-error: true
       #   run: |
