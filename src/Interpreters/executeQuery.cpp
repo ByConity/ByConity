@@ -1614,7 +1614,7 @@ void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server
     auto settings = context->getSettingsRef();
     res.remote_execution_conn = std::make_shared<Connection>(
         server.getHost(), server.tcp_port, 
-        "", /*default_database_*/
+        context->getCurrentDatabase(), /*default_database_*/
         query_client_info.current_user, query_client_info.current_password, 
         "", /*cluster_*/
         "", /*cluster_secret*/
