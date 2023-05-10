@@ -368,8 +368,8 @@ def run_single_test(args, ext, server_logs_level, client_options, case_file, std
     proc = Popen(command, shell=True, env=os.environ)
 
 
-   while (datetime.now() - start_time).total_seconds() < args.timeout and proc.poll() is None:
-       sleep(0.01)
+    while (datetime.now() - start_time).total_seconds() < args.timeout and proc.poll() is None:
+        sleep(0.01)
 
 #     need_drop_database = not args.database
 #     if need_drop_database and args.no_drop_if_fail:
