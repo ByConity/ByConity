@@ -349,6 +349,7 @@ void TCPHandler::runImpl()
 
             if (state.io.out)  /// `INSERT VALUES` in server side
             {
+                LOG_DEBUG(log, "++++Processed insert query."); 
                 state.need_receive_data_for_insert = true;
                 processInsertQuery(connection_settings);
             }
@@ -359,9 +360,15 @@ void TCPHandler::runImpl()
                 executor->execute(state.io.pipeline.getNumThreads());
             }
             else if (state.io.pipeline.initialized())  /// `SELECT` in both server and worker sides or `INSERT SELECT` in write worker
+            {
+                LOG_DEBUG(log, "++++Processed processOrdinaryQueryWithProcessors.");
                 processOrdinaryQueryWithProcessors();
+            }
             else if (state.io.in)  /// `INSERT INFILE` in worker side
+            {
+                LOG_DEBUG(log, "++++Processed processOrdinaryQuery.");
                 processOrdinaryQuery();
+            }
 
             state.io.onFinish();
 
@@ -591,6 +598,7 @@ void TCPHandler::processInsertQuery(const Settings & connection_settings)
         {
             if (!table_id.empty())
             {
+                LOG_DEBUG(log, "++++sendTableColumns.");
                 auto storage_ptr = DatabaseCatalog::instance().getTable(table_id, query_context);
                 sendTableColumns(storage_ptr->getInMemoryMetadataPtr()->getColumns());
             }
