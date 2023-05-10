@@ -27,7 +27,6 @@
 #include <Common/ProfileEvents.h>
 #include <Common/ThreadPool.h>
 #include <common/getFQDNOrHostName.h>
-#include "Transaction/TxnTimestamp.h"
 #include <Interpreters/Context.h>
 // #include <MergeTreeCommon/CnchWorkerClientPools.h>
 
@@ -120,12 +119,9 @@ ProxyTransactionPtr TransactionCoordinatorRcCnch::createProxyTransaction(
             if (!active_txn_list.emplace(txn_id, txn).second)
                 throw Exception("Transaction (txn_id: " + txn_id.toString() + ") has been created", ErrorCodes::LOGICAL_ERROR);
         }
-        /// add txn to its primary txn's secondary txn list, skip query forwarding case of implicit transaction
-        if (txn->getPrimaryTransactionID() != TxnTimestamp::maxTS())
-        {
-            auto *primary_txn = getTransaction(txn->getPrimaryTransactionID())->as<CnchExplicitTransaction>();
-            if (primary_txn) primary_txn->addSecondaryTransaction(txn);
-        }   
+        /// add txn to its primary txn's secondary txn list
+        auto *primary_txn = getTransaction(txn->getPrimaryTransactionID())->as<CnchExplicitTransaction>();
+        if (primary_txn) primary_txn->addSecondaryTransaction(txn);
         LOG_DEBUG(log, "Created proxy txn {}\n", txn->getTransactionRecord().toString());
         return txn;
     }
