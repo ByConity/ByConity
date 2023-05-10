@@ -1,0 +1,111 @@
+---
+title: 安装 HDFS
+tags:
+  - Docs
+---
+
+在本指南中，我将在3台机器上设置HDFS，其中1台机器用于namenode，其他2台机器用于datanode。我参考了以下官方文档[SingleCluster](https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-common/SingleCluster.html)和[ClusterSetup](https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-common/ClusterSetup.html)。我将安装HDFS版本3.3.4，因此我需要Java-8，因为这是推荐的Java版本。
+
+首先，在3台机器上安装Java。有很多安装Java的方法，但我将使用以下两个命令进行安装：
+```sh
+sudo apt-get update
+sudo apt-get install openjdk-8-jdk
+```
+
+接下来，我们需要下载一个Hadoop发行版，解压缩并进入该目录
+```sh
+$ curl -L -o hadoop-3.3.4.tar.gz https://dlcdn.apache.org/hadoop/common/stable/hadoop-3.3.4.tar.gz
+$ tar xvf hadoop-3.3.4.tar.gz
+$ ls
+hadoop-3.3.4  hadoop-3.3.4.tar.gz
+$ cd hadoop-3.3.4
+```
+
+然后，在该目录中，我们编辑文件`etc/hadoop/hadoop-env.sh`以设置适当的环境。我需要取消注释并修改下面的行以设置一些变量。
+```sh
+export JAVA_HOME=/usr/lib/jvm/java-8-byteopenjdk-amd64
+export HADOOP_HOME=/<your_directory>/hdfs/hadoop-3.3.4
+export HADOOP_LOG_DIR=/<your_directory>/hdfs/logs
+```
+
+接下来，使用以下内容编辑文件`etc/hadoop/core-site.xml`。请注意，“value”标签将是您的namenode地址的值
+```sh
+<configuration>
+        <property>
+                <name>fs.defaultFS</name>
+                <value>hdfs://<your_name_node_ip_address>:12000</value>
+        </property>
+</configuration>
+```
+
+现在我们已经完成了所有三台机器的通用设置。从现在开始，namenode和datanode的设置是不同的。
+在我们想要安装namenode的节点中，我们创建一个包含datanode列表的文件。例如，在我的情况下，我创建了`datanodes_list.txt`，其内容如下
+```sh
+$ cat /root/user_xyz/hdfs/datanodes_list.txt
+<datanode_1_address>
+<datanode_2_address>
+```
+
+然后创建一个目录以存储namenode运行时数据
+```sh
+mkdir -p /<your_directory>/hdfs/root_data_path_for_namenode
+```
+
+接下来，使用以下内容编辑文件`etc/hadoop/hdfs-site.xml`
+```xml
+<configuration>
+        <property>
+                <name>dfs.replication</name>
+                <value>1</value>
+        </property>
+        <property>
+                <name>dfs.namenode.name.dir</name>
+                <value>file:///<your_directory>/hdfs/root_data_path_for_namenode</value>
+        </property>
+        <property>
+                <name>dfs.hosts</name>
+                <value>/<your_directory>/hdfs/datanodes_list.txt</value>
+        </property>
+
+</configuration>
+```
+
+这就是关于namenode的全部内容。现在对于那两个需要部署数据节点的节点，创建一个目录来存储数据节点的运行时数据。
+
+```sh
+mkdir -p /root/user_xyz/hdfs/root_data_path_for_datanode
+```
+
+接下来编辑文件`etc/hadoop/hdfs-site.xml`，内容如下
+
+```xml
+<configuration>
+        <property>
+                <name>dfs.data.dir</name>
+                <value>file:///<your_directory>/hdfs/root_data_path_for_datanode</value>
+        </property>
+</configuration>
+```
+
+我们已经完成了配置，现在转到namenode机器，进入hadoop目录
+格式化文件系统并使用以下命令启动namenode
+
+```sh
+bin/hdfs namenode -format
+bin/hdfs --daemon start namenode
+```
+
+然后进入另外两个数据节点机器，进入hadoop目录并使用以下命令启动数据节点
+
+```sh
+bin/hdfs --daemon start datanode
+```
+
+我们已经完成了HDFS的设置。现在我们将必须创建一个目录来存储数据。
+因此，进入namenode机器，在hadoop目录中执行以下命令
+
+```sh
+bin/hdfs dfs -mkdir -p /user/clickhouse/
+bin/hdfs dfs -chown clickhouse /user/clickhouse
+bin/hdfs dfs -chmod -R 775 /user/clickhouse
+```

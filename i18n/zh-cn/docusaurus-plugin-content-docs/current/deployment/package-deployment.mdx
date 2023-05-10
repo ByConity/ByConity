@@ -1,0 +1,79 @@
+---
+title: 软件包部署
+tags:
+  - Docs
+---
+
+＃软件包部署
+将 ByConity 部署到物理机器的一种方法是使用软件包管理器。
+例如，为 Debian OS 安装 Debian 软件包，为 Centos OS 安装 rpm 软件包。
+
+## 安装 FoundationDB 和 HDFS
+ByConity 使用 FoundationDB 作为元存储，使用 HDFS 作为数据存储。因此，在开始部署 ByConity 之前，我们需要先部署 FoundationDB 和 HDFS。
+
+要部署 [Foundation](https://apple.github.io/foundationdb/) 数据库，可以参考[此处](./foundationdb-installation)的安装指南。
+
+之后，我们需要部署一个 HDFS 集群，其中包括名称节点和数据节点，并在 HDFS 中创建目录 `/user/clickhouse` 以存储数据。可以参考[此处](./hdfs-installation)的安装指南。完成此步骤后，您将得到名称节点 url，通常是 `core-site.xml` 配置中找到的 `fs.defaultFS` 的值。
+
+## 安装 FoundationDB 客户端
+现在我们将开始部署 Byconity。ByConity 软件包依赖于 FoundationDB 客户端软件包。因此，在将 ByConity 软件包部署到任何计算机之前，我们需要先部署 FoundationDB 客户端软件包。FoundationDB 客户端软件包与 FoundationDB 服务器版本紧密耦合。因此，我们需要选择与 FoundationDB 服务器版本匹配的客户端软件包。
+
+要部署 FoundationDB 客户端软件包，我们转到 [页面](https://github.com/apple/foundationdb/releases) 上，找到适合您的操作系统的正确软件包并下载它。例如，在此处我下载版本 `7.1.27` 用于 Debian OS，`amd64` 机器。
+
+```sh
+curl -L -o foundationdb-clients_7.1.27-1_amd64.deb https://github.com/apple/foundationdb/releases/download/7.1.27/foundationdb-clients_7.1.27-1_amd64.deb
+```
+
+然后使用此命令进行安装
+
+```sh
+sudo dpkg -i foundationdb-clients_7.1.27-1_amd64.deb
+```
+
+## 部署 ByConity 软件包
+接下来，我们将部署 ByConity 软件包，您可以在发布 [页面](https://github.com/ByConity/ByConity/releases) 中找到它们。或者，您可以自己构建软件包，在这种情况下，请按照此 [指南](https://github.com/ByConity/ByConity/tree/master/docker/packager)。
+
+### 安装 byconity-common-static
+需要安装的第一个软件包是常见软件包 `byconity-common-static`，这是所有其他软件包都依赖的软件包。
+
+```sh
+sudo dpkg -i byconity-common-static_0.1.1.1_amd64.deb
+```
+
+之后编辑配置文件 `/etc/byconity-server/cnch_config.xml` 和 `/etc/byconity-server/fdb.config`。 `cnch_config.xml` 文件包含 service_discovery 配置、hdfs 配置和 foundationdb 集群配置路径。 `fdb.config` 是 FoundationDB 集群的集群配置文件。
+
+### 配置 `cnch_config.xml`
+
+`cnch_config.xml` 文件包含两部分需要用户配置的内容，`service_discovery` 标签和 `hdfs_nnproxy` 标签。在 ByConity 中，组件之间有三种相互发现的方式。`mode` 标签用于指定方式，有三种模式：`local`、`dns` 和 `consul`。
+
+在 `local` 模式下，用户需要在此配置文件中指定所有组件的 IP 地址或主机名，通过替换占位符 `{your_xxx_address}`（例如 `{your_server_address}`），该占位符实际上是组件的 IP 地址，例如 `10.0.2.72`。
+
+对于 `hdfs_nnproxy` 标签，包含 HDFS 名称节点的地址。
+
+### 配置 `fdb.config`
+
+`fdb.config` 是 FoundationDB 客户端连接到 FoundationDB 服务器的文件，您将在配置 FoundationDB 服务器后拥有它。在[这里](./foundationdb-installation)阅读更多内容。
+
+之后在您想要安装 TSO 服务的机器上。下载 `byconity-tso` 包并安装。
+```sh
+sudo dpkg -i byconity-tso_0.1.1.1_amd64.deb
+```
+如果这是第一次在系统上安装该软件包，则不会立即启动，而是在下一次重启时启动。您可以通过以下命令检查其状态：
+```sh
+systemctl status byconity-tso
+```
+TSO 服务的配置位于 `/etc/byconity-server/byconity-tso.xml`，您可以按照自己的需求进行配置，但默认值已足够好用。若要立即启动该服务，请执行以下命令：
+```sh
+systemctl start byconity-tso
+```
+下次再次安装该软件包（例如，您想要升级），则无需执行 `start` 命令。
+
+以相同的方式，安装 ByConity 资源管理器、ByConity 服务器、ByConity 工作器、ByConity 工作器写入和 ByConity 守护程序管理器。 `byconity-resource-manager`、`byconity-daemon-manger` 和 `byconity-tso` 是轻量级服务，因此可以安装在共享机器上与其他软件包一起使用。但是，对于 `byconity-server`、`byconity-worker` 和 `byconity-worker-write`，我们应该将它们分别安装在不同的机器上。
+```sh
+sudo dpkg -i byconity-resource-manager_0.1.1.1_amd64.deb 
+sudo dpkg -i byconity-server_0.1.1.1_amd64.deb 
+sudo dpkg -i byconity-worker_0.1.1.1_amd64.deb 
+sudo dpkg -i byconity-worker-write_0.1.1.1_amd64.deb 
+sudo dpkg -i byconity-daemon-manager_0.1.1.1_amd64.deb 
+```
+您可以以同样的方式安装更多的工作节点。每个工作节点都有一个名为`WORKER_ID`的设置项，在配置文件`/etc/byconity-server/(byconity-worker|byconity-worker-write).xml`中配置工作节点的`worker id`，`worker id`在工作节点之间必须是唯一的，配置文件中`WORKER_ID`的默认值为空。在这种情况下，`worker_id`会自动分配为主机机器的IP地址。

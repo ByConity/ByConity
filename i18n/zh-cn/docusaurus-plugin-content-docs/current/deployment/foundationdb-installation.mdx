@@ -1,0 +1,198 @@
+---
+title: 安装 FoundationDB 
+tags:
+  - Docs
+---
+
+在本指南中，我将在 3 台物理机上设置 Foundation DB 集群。它们都使用 debian 操作系统。我参考了两个官方指南：[在 Linux 上入门](https://apple.github.io/foundationdb/getting-started-linux.html) 和 [构建一个集群](https://apple.github.io/foundationdb/building-cluster.html)。
+
+首先，我们需要在[这里](https://github.com/apple/foundationdb/releases/)下载二进制文件进行安装。我们需要下载 __server__，__monitor__ 和 __cli__ 二进制文件，以及对应的 __sha256__ 校验和文件。我会选择版本为 __7.1.25__，因为它是当时最新的版本。\
+在您的目录中，让我们创建一个名为 `foundationdb` 的文件夹。\
+然后，在 `foundationdb` 中创建一个名为 `bin` 的子文件夹。\
+在这个 `foundationdb/bin` 文件夹中，使用以下命令进行下载：
+
+```sh
+curl -L -o fdbserver.x86_64 https://github.com/apple/foundationdb/releases/download/7.1.25/fdbserver.x86_64
+curl -L -o fdbserver.x86_64.sha256 https://github.com/apple/foundationdb/releases/download/7.1.25/fdbserver.x86_64.sha256
+
+curl -L -o fdbmonitor.x86_64 https://github.com/apple/foundationdb/releases/download/7.1.25/fdbmonitor.x86_64
+curl -L -o fdbmonitor.x86_64.sha256 https://github.com/apple/foundationdb/releases/download/7.1.25/fdbmonitor.x86_64.sha256
+
+curl -L -o fdbcli.x86_64 https://github.com/apple/foundationdb/releases/download/7.1.25/fdbcli.x86_64
+curl -L -o fdbcli.x86_64.sha256 https://github.com/apple/foundationdb/releases/download/7.1.25/fdbcli.x86_64.sha256
+```
+
+下载完成后，让我们对可执行文件进行校验以查看下载是否成功。这两个校验和应该相等。例如：
+
+```sh
+$ sha256sum --binary fdbserver.x86_64
+73b70a75464e64fd0a01a7536e110e31c3e6ce793d425aecfc40f0be9f0652b7 *fdbserver.x86_64
+
+$ cat fdbserver.x86_64.sha256
+73b70a75464e64fd0a01a7536e110e31c3e6ce793d425aecfc40f0be9f0652b7  fdbserver.x86_64
+```
+
+接下来，我们将删除这些 sha256 校验和文件，因为我们不再需要它们，我们还将重命名可执行文件以删除结尾的 `x86_64` 并给它们可执行权限。
+
+```sh
+rm *.sha256
+mv fdbcli.x86_64 fdbcli
+mv fdbmonitor.x86_64 fdbmonitor
+mv fdbserver.x86_64 fdbserver
+chmod ug+x fdbcli fdbmonitor fdbserver
+``` 
+
+接下来我们将创建一些文件夹来存储配置、数据和日志：
+```sh
+mkdir -p /<your_directory>/fdb_runtime/config
+mkdir -p /<your_directory>/fdb_runtime/data
+mkdir -p /<your_directory>/fdb_runtime/logs
+```
+
+然后在`/<your_directory>/fdb_runtime/config/`文件夹下创建`foundationdb.conf`配置文件，内容如下：
+
+```sh
+$ cat /<your_directory>/fdb_runtime/config/foundationdb.conf
+[fdbmonitor]
+user = root
+
+[general]
+cluster-file = /<your_directory>/fdb_runtime/config/fdb.cluster
+restart-delay = 60
+
+[fdbserver]
+
+command = /<your_directory>/foundationdb/bin/fdbserver
+datadir = /<your_directory>/fdb_runtime/data/$ID
+logdir = /<your_directory>/fdb_runtime/logs/
+public-address = auto:$ID
+listen-address = public
+
+
+[fdbserver.4500]
+class=stateless
+[fdbserver.4501]
+class=transaction
+[fdbserver.4502]
+class=storage
+[fdbserver.4503]
+class=stateless
+```
+
+然后在相同的文件夹中创建一个名为`fdb.cluster`的文件，内容如下，将`<your_ip_address>`替换为你的机器IP地址：
+
+```sh
+$ cat /<your_directory>/fdb_runtime/config/fdb.cluster
+clusterdsc:test@<your_ip_address>:4500
+```
+
+我们将FDB安装为`systemd`服务。因此，在同一文件夹中，我们将创建名为`fdb.service`的文件，内容如下：
+
+```sh
+$ cat /<your_directory>/fdb_runtime/config/fdb.service
+[Unit]
+Description=FoundationDB (KV storage for cnch metastore)
+
+[Service]
+Restart=always
+RestartSec=30
+TimeoutStopSec=600
+ExecStart=/<your_directory>/foundationdb/bin/fdbmonitor --conffile /<your_directory>/fdb_runtime/config/foundationdb.conf --lockfile /<your_directory>/fdb_runtime/fdbmonitor.pid
+
+[Install]
+WantedBy=multi-user.target
+```
+
+我们已经完成了配置文件的准备工作。现在让我们将FDB安装到`systemd`中。
+
+将服务文件复制到`/etc/systemd/system/`目录下：
+
+```sh
+cp fdb.service /etc/systemd/system/
+```
+
+重新加载服务文件以包括新服务：
+
+```sh
+systemctl daemon-reload
+```
+
+启用并启动服务：
+
+```sh
+systemctl enable fdb.service
+systemctl start fdb.service
+```
+
+检查服务并查看它是否处于活动状态：
+
+```sh
+$ systemctl status fdb.service
+● fdb.service - FoundationDB (KV storage for cnch metastore)
+   Loaded: loaded (/etc/systemd/system/fdb.service; disabled; vendor preset: enabled)
+   Active: active (running) since Tue 2023-01-17 18:35:42 CST; 20s ago
+
+```
+
+现在我已经在一台机器上安装了FDB服务，我将重复相同的步骤在另外两台机器上安装。
+
+在所有三台机器上安装完成之后，我们需要连接它们以形成一个集群。现在回到第一台节点，使用fdbcli连接到FDB。
+
+```sh
+$ ./foundationdb/bin/fdbcli -C fdb_runtime/config/fdb.cluster
+Using cluster file `fdb_runtime/config/fdb.cluster'.
+
+The database is unavailable; type `status' for more information.
+
+Welcome to the fdbcli. For help, type `help'.
+fdb>
+```
+
+执行以下命令来初始化数据库：
+
+```sh
+configure new single ssd
+```
+
+接下来，从另外两个节点上执行以下命令来加入集群，并将地址替换为你的机器地址：
+
+```sh
+coordinators <node_1_ip_address>:4500 <node_2_ip_address>:4500 <node_3_ip_address>:4500
+```
+
+然后退出fdbcli，你会发现`fdb.cluster`文件现在有了新内容：
+
+```sh
+$ cat fdb_runtime/config/fdb.cluster
+# DO NOT EDIT!
+# This file is auto-generated, it is not to be edited by hand
+clusterdsc:wwxVEcyLvSiO3BGKxjIw7Sg5d1UTX5ad@example1.host.com:4500,example2.host.com:4500,example3.host.com:4500
+```
+
+将此文件复制到另外两台机器并替换旧文件，然后重新启动fdb服务：
+
+```sh
+systemctl restart fdb.service
+```
+
+然后返回第一台机器，再次使用fdbcli连接到FDB，并执行以下命令将冗余模式更改为`triple`：
+
+```sh
+configure triple
+```
+
+然后在fdbcli中执行`status`命令以查看结果，你应该看到类似以下的内容：
+
+```sh
+fdb> status
+
+Using cluster file `fdb_runtime/config/fdb.cluster'.
+
+Configuration:
+  Redundancy mode        - triple
+  Storage engine         - ssd-2
+  Coordinators           - 3
+  Usable Regions         - 1
+```
+
+这就完成了FoundationDB服务器的安装。现在你拥有了`fdb.cluster`文件。我们将在Byconity的配置中使用它。

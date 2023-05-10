@@ -1,0 +1,27 @@
+---
+title: 使用 docker wrapper 将 ByConity 部署到物理服务器
+tags:
+  - Docs
+---
+
+# 使用 docker wrapper 将 ByConity 部署到物理服务器
+
+当前将 ByConity 部署到物理服务器的方式是通过 docker wrapper 进行部署。您可以按照本[指南](https://github.com/ByConity/ByConity/tree/master/docker/executable_wrapper/Update_docker_image.md)从源代码构建 docker 包装器映像。
+
+请按照以下步骤操作：
+
+- 从 ByConity 仓库https://github.com/ByConity/ByConity/tree/master/docker/executable_wrapper 签出相关的配置文件和 shell 文件。
+- 部署 [Foundation](https://apple.github.io/foundationdb/) 数据库。您可以在此处参考[安装指南](./foundationdb-installation)。完成此步骤后，您将拥有一个**fdb 集群配置文件**，默认位于/etc/foundationdb/fdb.cluster. 将此文件复制到./config/fdb.clsuter
+- 部署一个由名称节点和数据节点组成的 HDFS 集群, 在 HDFS上创建 `/user/clickhouse` 来存储数据。您可以在[此处](./hdfs-installation)参考安装指南。完成此步骤后，您将获得名称节点 url，通常是 `fs.defaultFS`您可以在配置中找到的值 `core-site.xml` 。
+
+- 更新文件 `config/cnch_config.xml`: 
+    - 将`hdfs_nnproxy`标签的值更新为您的hdfs名称节点URL。
+    - 在`service_discovery`标签内部，将`host`标签更新为适当的地址，通常是您计划安装ByConity的计算机的IP地址。
+- 执行 `make image_pull` 命令将docker镜像拉到本地。
+- 对于您计划部署TSO的机器，请执行 `./run.sh tso` 命令来运行TSO。同样地，在计划运行其他组件的其他机器上执行以下命令以使其运行。
+- 在一台机器上执行 `./run.sh server` 命令以运行服务器。
+- 在一台机器上执行 `./run.sh read_worker` 命令以运行读取工作进程。您可以通过在不同的机器上重复此命令来创建多个工作进程，并将这些工作进程的信息添加到 `config/cnch_config.xml` 中的 `service_discovery` 标签中，以便服务器可以识别它们。
+- 在一台机器上执行 `./run.sh write_worker` 命令以运行写入工作进程。
+- 在一台机器上执行 `./run.sh dm` 命令以运行守护进程管理器（daemon manager）。TSO和DM是轻量级服务，可以在与服务器或工作进程相同的机器上运行，以实现资源的高效利用。
+- 在运行服务器的机器上执行 `./run.sh cli` 命令，或者从任何机器上执行 `./run.sh cli2 {server_address}` 命令以使用clickhouse-cli界面连接到服务器。
+- 要停止任何组件，请执行 `./run.sh stop {component_name}` 命令，其中 `component_name` 可以是 `tso`、`server` 等。停止后，如果您想要重新运行，请使用 `./run.sh start {component_name}` 命令，否则您将收到关于容器已在使用的错误信息。

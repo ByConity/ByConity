@@ -1,0 +1,194 @@
+---
+title: 在 Kubernetes 上部署 ByConity
+tags:
+  - Docs
+---
+
+# 在 Kubernetes 上部署 ByConity
+
+本文演示了如何在 Kubernetes 集群中部署 ByConity 集群。
+
+## 本地部署一个 demo
+
+### Prerequisites
+
+- 在本地环境中安装和设置 [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
+- 在本地环境中安装 [helm](https://helm.sh/)
+- 安装[kind](https://kind.sigs.k8s.io/)和[Docker](https://www.docker.com/)
+- 签出 conity-deploy 代码查看
+
+```bash
+git clone git@github.com:ByConity/byconity-deploy.git
+cd byconity-deploy
+```
+
+### 使用 Kind 配置本地 Kubernetes 集群
+
+> 警告：Kind 不是为生产用途而设计的。
+> macOS 用户请注意：您可能需要增加容器的[可用内存](https://docs.docker.com/desktop/get-started/#resources)（建议 6 GB）。
+
+这将创建一个 1-control-plane、3-worker 的 Kubernetes 集群。
+
+```bash
+kind create cluster --config examples/kind/kind-byconity.yaml
+```
+
+测试以确保本地 kind 集群已准备就绪： 
+
+```bash
+kubectl cluster-info
+```
+
+### 初始化 Byconity 演示集群
+
+```bash
+# Install with fdb CRD first
+helm upgrade --install --create-namespace --namespace byconity -f ./examples/kind/values-kind.yaml byconity ./chart/byconity --set fdb.enabled=false
+
+# Install with fdb cluster
+helm upgrade --install --create-namespace --namespace byconity -f ./examples/kind/values-kind.yaml byconity ./chart/byconity
+```
+
+等到所有 Pod 准备就绪。
+
+```bash
+kubectl -n byconity get po
+```
+
+让我们试试吧！
+
+```
+$ kubectl -n byconity exec -it sts/byconity-server -- bash
+root@byconity-server-0:/# clickhouse client
+
+172.16.1.1 :)
+```
+
+### 从 Kubernetes 集群中删除或停止 ByConity
+
+```bash
+helm uninstall --namespace byconity byconity
+```
+
+如果您想暂时停止它，请在您的机器上停止它
+
+```bash
+docker stop byconity-cluster-control-plane byconity-cluster-worker byconity-cluster-worker2 byconity-cluster-worker3
+```
+
+## 部署在您自建的 Kubernetes 中
+
+
+
+### 如何部署或购买 Kubernetes 集群？
+
+您可以在这里获取信息：[生产环境](https://kubernetes.io/docs/setup/production-environment/)
+
+### 先决条件
+
+- 在本地环境中安装和设置 [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/) 
+- 在本地环境中安装 [helm](https://helm.sh/) 
+
+### 准备您的存储
+
+为了获得最佳的 [TCO](https://en.wikipedia.org/wiki/Total_cost_of_ownership) 和性能，本地磁盘最好与 ByConity server 和 worker 一起使用。 
+
+> ByConity server 和 worker 的存储仅用于磁盘缓存，您可以随时删除它们。
+
+您可以使用 [OpenEBS local PV](https://openebs.io/docs/concepts/localpv) 等存储.
+
+### 准备你自己的 helm 值文件
+
+您可以从 ./chart/byconity/values.yaml 复制并修改一些字段，例如：
+
+- 存储类名
+- 时区
+- 服务器/工人的副本
+- hdfs存储请求
+
+### 初始化 Byconity 集群
+
+```bash
+# Install with fdb CRD first
+helm upgrade --install --create-namespace --namespace byconity -f ./your/custom/values.yaml byconity ./chart/byconity --set fdb.enabled=false
+
+# Install with fdb cluster
+helm upgrade --install --create-namespace --namespace byconity -f ./your/custom/values.yaml byconity ./chart/byconity
+```
+
+等到所有 Pod 准备就绪。
+
+```bash
+kubectl -n byconity get po
+```
+
+让我们试试吧！
+
+```
+$ kubectl -n byconity exec -it sts/byconity-server -- bash
+root@byconity-server-0:/# clickhouse client
+
+172.16.1.1 :)
+```
+
+## 测试
+
+### 运行一些 SQL 来测试
+
+```sql
+CREATE DATABASE IF NOT EXISTS test;
+USE test;
+DROP TABLE IF EXISTS test.lc;
+CREATE TABLE test.lc (b LowCardinality(String)) engine=CnchMergeTree ORDER BY b;
+INSERT INTO test.lc SELECT '0123456789' FROM numbers(100000000);
+SELECT count(), b FROM test.lc group by b;
+DROP TABLE IF EXISTS test.lc;
+DROP DATABASE test;
+```
+
+## 更新您的 Byconity 集群
+
+### 添加新的虚拟数据仓库 
+
+假设您要为您的用户添加 2 个虚拟数据仓库，5 个副本用于my-new-vw-default读取，2 个副本用于my-new-vw-write写入。
+
+修改你的 values.yaml
+
+
+```yaml
+byconity:
+  virtualWarehouses:
+    ...
+
+    - <<: *defaultWorker
+      name: my-new-vw-default
+      replicas: 5
+    - <<: *defaultWorker
+      name: my-new-vw-write
+      replicas: 2
+```
+
+使用新值应用 helm 版本
+
+```bash
+helm upgrade --install --create-namespace --namespace byconity -f ./your/custom/values.yaml byconity ./chart/byconity
+```
+运行`CREATE WAREHOUSE` 数据定义语言 在Byconity创建逻辑虚拟仓库
+
+```sql
+CREATE WAREHOUSE IF NOT EXISTS `my-new-vw-default` SETTINGS num_workers = 0, type = 'Read';
+CREATE WAREHOUSE IF NOT EXISTS `my-new-vw-write` SETTINGS num_workers = 0, type = 'Write';
+```
+
+完毕。现在让我们创建一个表并使用您的新虚拟数据仓库！
+
+```sql
+-- Create a table with SETTINGS cnch_vw_default = 'my-new-vw-default', cnch_vw_write = 'my-new-vw-write'
+CREATE DATABASE IF NOT EXISTS test;
+CREATE TABLE test.lc2 (b LowCardinality(String)) engine=CnchMergeTree
+ORDER BY b
+SETTINGS cnch_vw_default = 'my-new-vw-default', cnch_vw_write = 'my-new-vw-write';
+
+-- Check if the table has the new settings
+SHOW CREATE TABLE test.lc2;
+```

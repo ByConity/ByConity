@@ -23,6 +23,10 @@
     "message": "高级用户手册",
     "description": "The label for category Advanced Guides in sidebar tutorialSidebar"
   },
+  "sidebar.tutorialSidebar.category.Deployment": {
+    "message": "部署",
+    "description": "The label for category Deployment in sidebar tutorialSidebar"
+  },
   "sidebar.tutorialSidebar.category.Community": {
     "message": "参与社区",
     "description": "The label for category Community in sidebar tutorialSidebar"
