@@ -1309,6 +1309,7 @@ void TCPHandler::receiveQuery()
     /// NOTE: these settings are applied only for current connection (not for distributed tables' connections)
     const Settings & settings = query_context->getSettingsRef();
     state.timeout_setter = std::make_unique<TimeoutSetter>(socket(), settings.receive_timeout, settings.send_timeout);
+    LOG_DEBUG(log, "Received NORMAL query");
 }
 
 void TCPHandler::receiveCnchQuery()
@@ -1432,6 +1433,7 @@ void TCPHandler::receiveCnchQuery()
     /// NOTE: these settings are applied only for current connection (not for distributed tables' connections)
     const Settings & settings = query_context->getSettingsRef();
     state.timeout_setter = std::make_unique<TimeoutSetter>(socket(), settings.receive_timeout, settings.send_timeout);
+    LOG_DEBUG(log, "Received CNCH query");
 }
 
 void TCPHandler::receiveUnexpectedQuery()
