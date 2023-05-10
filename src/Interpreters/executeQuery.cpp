@@ -40,6 +40,7 @@
 #include <DataStreams/RemoteBlockInputStream.h>
 #include <DataStreams/RemoteBlockOutputStream.h>
 #include <DataStreams/copyData.h>
+#include <Processors/Sources/RemoteSource.h>
 #include <Processors/Transforms/getSourceFromFromASTInsertQuery.h>
 
 #include <Parsers/ASTAlterQuery.h>
@@ -66,6 +67,7 @@
 #include <Interpreters/ApplyWithGlobalVisitor.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterFactory.h>
+#include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/InterpreterSetQuery.h>
 #include <Interpreters/NormalizeSelectWithUnionQueryVisitor.h>
 #include <Interpreters/OpenTelemetrySpanLog.h>
@@ -84,7 +86,9 @@
 
 #include <Interpreters/NamedSession.h>
 #include <Common/SensitiveDataMasker.h>
-#include "Transaction/TxnTimestamp.h"
+#include <DataStreams/RemoteQueryExecutor.h>
+#include <Interpreters/InterpreterSelectWithUnionQuery.h>
+#include <Transaction/TxnTimestamp.h>
 #include <Interpreters/trySetVirtualWarehouse.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <Parsers/ASTSystemQuery.h>
@@ -99,6 +103,9 @@
 
 #include <Processors/Transforms/LimitsCheckingTransform.h>
 #include <Processors/Transforms/MaterializingTransform.h>
+
+#include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
+#include <QueryPlan/ReadFromPreparedSource.h>
 
 #include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
 
@@ -549,7 +556,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         /// TODO: parser should fail early when max_query_size limit is reached.
         ast = parseQuery(parser, begin, end, "", max_query_size, settings.max_parser_depth);
 
-        if (context->getSettingsRef().enable_auto_query_forwarding)
+        if (context->getServerType() == ServerType::cnch_server && context->getSettingsRef().enable_auto_query_forwarding)
         {
             auto host_ports = getTargetServer(context, ast);
             LOG_DEBUG(&Poco::Logger::get("executeQuery"), "target server is {} and local rpc port is {}", host_ports.getRPCAddress(), context->getRPCPort());
@@ -1529,21 +1536,25 @@ HostWithPorts getTargetServer(ContextPtr context, ASTPtr &ast)
 {
     /// Only get target server for main table
     String database, table;
+
+    /* Catalog already has the part forwarding logic when committing,
+    not neccesary to forward insert query here.
     if (const auto *insert = ast->as<ASTInsertQuery>())
     {
         database = insert->table_id.getDatabaseName();
         table = insert->table_id.getTableName();
-    }
-    else if (const auto *alter = ast->as<ASTAlterQuery>())
+    }*/
+    if (const auto *alter = ast->as<ASTAlterQuery>())
     {
         database = alter->database;
         table = alter->table;
     }
+    /* drop table can be executed in non-host server
     else if (const auto *drop = ast->as<ASTDropQuery>())
     {
         database = drop->database;
         table = drop->table;
-    }
+    }*/
     else if (const auto *select = ast->as<ASTSelectWithUnionQuery>())
     {
         ASTs tables;
@@ -1561,22 +1572,17 @@ HostWithPorts getTargetServer(ContextPtr context, ASTPtr &ast)
             return {};
     }
     else
-    {
-        /// TODO: check ddl query
         return {};
-    }
 
-    /// Todo: handle the default case
     if (database.empty())
-    {
-         throw Exception("Database must be specified", ErrorCodes::LOGICAL_ERROR);
-    }
-    if (database == "system") return {};
+         database = context->getCurrentDatabase();
+
+    if (database == "system") 
+        return {};
+
     auto table_id = context->getCnchCatalog()->getTableIDByName(database, table);
     if (!table_id)
-    {
         throw Exception("Table " + database + "." + table + " not found in catalog", ErrorCodes::UNKNOWN_TABLE);
-    }
 
     auto topology_master = context->getCnchTopologyMaster();
 
@@ -1585,22 +1591,23 @@ HostWithPorts getTargetServer(ContextPtr context, ASTPtr &ast)
 
 void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server, const ASTPtr & ast, BlockIO & res)
 {
-    /// Create a proxy transaction for insert/alter query
-    auto & coordinator = context->getCnchTransactionCoordinator();
-    // Todo: support explicit transaction, for implicit txn auto query forwarding, use max timestamp
+    /// Create a proxy transaction for insert/select/alter query
+    // Todo: support explicit transaction
+    // auto & coordinator = context->getCnchTransactionCoordinator();
     // auto primary_txn_id = context.getSessionContext().getCurrentTransaction()->getTransactionID();
-    auto proxy_txn = coordinator.createProxyTransaction(server, TxnTimestamp::maxTS());
-    context->setCurrentTransaction(proxy_txn);
+    // auto proxy_txn = coordinator.createProxyTransaction(server, primary_txn_id);
+    // context->setCurrentTransaction(proxy_txn);
+
     /// Anyway, on finish and exception, we need to finish the proxy transaction
-    res.finish_callback = [proxy_txn](IBlockInputStream * , IBlockOutputStream *, QueryPipeline *, UInt64)
+    res.finish_callback = [&](IBlockInputStream * , IBlockOutputStream *, QueryPipeline *, UInt64)
     {
         LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query success on remote server");
-        proxy_txn->setTransactionStatus(CnchTransactionStatus::Finished);
+        //proxy_txn->setTransactionStatus(CnchTransactionStatus::Finished);
     };
-    res.exception_callback = [proxy_txn](int)
+    res.exception_callback = [&](int)
     {
         LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query failed on remote server");
-        proxy_txn->setTransactionStatus(CnchTransactionStatus::Aborted);
+        //proxy_txn->setTransactionStatus(CnchTransactionStatus::Aborted);
     };
     /// Create connection to host
     const auto & query_client_info = context->getClientInfo();
@@ -1616,26 +1623,23 @@ void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server
         Protocol::Secure::Disable);
 
     String query = queryToString(ast);
-    auto insert_ast = ast->as<ASTInsertQuery>();
-    bool wait_insert_data = insert_ast && !insert_ast->select && !insert_ast->in_file;
-    auto timeouts = ConnectionTimeouts::getTCPTimeoutsWithFailover(settings).getSaturated(settings.max_execution_time);
-    if (wait_insert_data)
-    {
-        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Sending query as INSERT VALUES query");
-        res.out = std::make_shared<DB::RemoteBlockOutputStream>(*res.remote_execution_conn, timeouts, query, settings, query_client_info, context);
-    }
-    else
-    {
-        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Sending query as ordinary query");
-        auto remote_stream = std::make_shared<DB::RemoteBlockInputStream>(*res.remote_execution_conn, query, Block(), context);
-        remote_stream->setPoolMode(PoolMode::GET_ONE);
-        remote_stream->readPrefix();
-        while (Block block = remote_stream->read());
-        remote_stream->readSuffix();
-        /// Get the extended profile info which is mainly for INSERT SELECT/INFILE
-        context->setExtendedProfileInfo(remote_stream->getExtendedProfileInfo());
-        res.in = std::move(remote_stream);
-    }
+    LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Sending query as ordinary query");
+    Block header;
+    if (ast->as<ASTSelectWithUnionQuery>())
+        header = InterpreterSelectWithUnionQuery(ast, context, SelectQueryOptions(QueryProcessingStage::Complete)).getSampleBlock();
+    Pipes remote_pipes;
+    auto remote_query_executor = std::make_shared<RemoteQueryExecutor>(*res.remote_execution_conn, query, header, context);
+    remote_query_executor->setPoolMode(PoolMode::GET_ONE);
+    remote_pipes.emplace_back(createRemoteSourcePipe(remote_query_executor, true, false, false, true));
+    remote_pipes.back().addInterpreterContext(context);
+
+    auto plan = std::make_unique<QueryPlan>();
+    auto read_from_remote = std::make_unique<ReadFromPreparedSource>(Pipe::unitePipes(std::move(remote_pipes)));
+    read_from_remote->setStepDescription("Read from remote server");
+    plan->addStep(std::move(read_from_remote));
+    res.pipeline = std::move(*plan->buildQueryPipeline(
+        QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context)));
+    res.pipeline.addInterpreterContext(context);
 }
 
 }
