@@ -653,6 +653,7 @@ def run_tests_array(all_tests_with_params):
                             proc, stdout, stderr, total_time = run_single_test(testcase_args, ext, server_logs_level, client_options, case_file, stdout_file, stderr_file)
                             sleep(2**counter)
                             counter += 1
+                            print("RETRY {}".format(counter))
                             if MAX_RETRIES < counter:
                                 if args.replicated_database:
                                     if DISTRIBUTED_DDL_TIMEOUT_MSG in stderr:
