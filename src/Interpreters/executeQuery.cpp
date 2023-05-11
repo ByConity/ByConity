@@ -1537,24 +1537,11 @@ HostWithPorts getTargetServer(ContextPtr context, ASTPtr &ast)
     /// Only get target server for main table
     String database, table;
 
-    /* Catalog already has the part forwarding logic when committing,
-    not neccesary to forward insert query here.
-    if (const auto *insert = ast->as<ASTInsertQuery>())
-    {
-        database = insert->table_id.getDatabaseName();
-        table = insert->table_id.getTableName();
-    }*/
     if (const auto *alter = ast->as<ASTAlterQuery>())
     {
         database = alter->database;
         table = alter->table;
     }
-    /* drop table can be executed in non-host server
-    else if (const auto *drop = ast->as<ASTDropQuery>())
-    {
-        database = drop->database;
-        table = drop->table;
-    }*/
     else if (const auto *select = ast->as<ASTSelectWithUnionQuery>())
     {
         ASTs tables;
@@ -1591,24 +1578,16 @@ HostWithPorts getTargetServer(ContextPtr context, ASTPtr &ast)
 
 void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server, const ASTPtr & ast, BlockIO & res)
 {
-    /// Create a proxy transaction for insert/select/alter query
     // Todo: support explicit transaction
-    // auto & coordinator = context->getCnchTransactionCoordinator();
-    // auto primary_txn_id = context.getSessionContext().getCurrentTransaction()->getTransactionID();
-    // auto proxy_txn = coordinator.createProxyTransaction(server, primary_txn_id);
-    // context->setCurrentTransaction(proxy_txn);
-
-    /// Anyway, on finish and exception, we need to finish the proxy transaction
     res.finish_callback = [&](IBlockInputStream * , IBlockOutputStream *, QueryPipeline *, UInt64)
     {
         LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query success on remote server");
-        //proxy_txn->setTransactionStatus(CnchTransactionStatus::Finished);
     };
     res.exception_callback = [&](int)
     {
         LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query failed on remote server");
-        //proxy_txn->setTransactionStatus(CnchTransactionStatus::Aborted);
     };
+
     /// Create connection to host
     const auto & query_client_info = context->getClientInfo();
     auto settings = context->getSettingsRef();
