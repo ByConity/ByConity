@@ -582,7 +582,7 @@ class IColumn;
     M(Milliseconds, topology_lease_life_ms, 12000, "Expiration time of topology lease.", 0) \
     M(Milliseconds, topology_session_restart_check_ms, 120, "Check and try to restart leader election for server master", 0) \
     M(UInt64, catalog_max_commit_size, 2000, "Max record number to be committed in one batch.", 0) \
-    M(Bool, server_write_ha, true, "Whether to enable write on non-host server if host server is not available. Directly commit from non-host server.", 0) \
+    M(Bool, server_write_ha, false, "Whether to enable write on non-host server if host server is not available. Directly commit from non-host server.", 0) \
     M(Bool, enable_write_non_host_server, true, "Whether to eable write on non-host server. Will root write request to host server.", 0) \
     M(UInt64, cnch_clear_parts_timeout, 10, "Wait for actions to clear the parts in workers within the specified number of seconds. 0 - wait unlimited time.", 0) \
     M(Seconds, cnch_fetch_parts_timeout, 60, "The timeout for gettting parts from metastore. 0 - wait unlimited time.", 0) \
