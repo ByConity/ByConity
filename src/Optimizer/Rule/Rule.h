@@ -131,6 +131,7 @@ class TransformResult;
  * 1) what kind of plan node can be accepted by this rule(see `Rule::getPattern`);
  * 2) how to rewrite a plan node(see `Rule::apply`).
  */
+
 class Rule
 {
 public:
