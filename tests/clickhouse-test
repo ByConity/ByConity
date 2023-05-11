@@ -43,6 +43,7 @@ MESSAGES_TO_RETRY = [
     "DB::Exception: New table appeared in database being dropped or detached. Try again",
     "is already started to be removing by another replica right now",
     "DB::Exception: No more packets are available",
+    "No more packets are available",
     DISTRIBUTED_DDL_TIMEOUT_MSG # FIXME
 ]
 
