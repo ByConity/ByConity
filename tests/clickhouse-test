@@ -658,6 +658,9 @@ def run_tests_array(all_tests_with_params):
                         status += 'Database: ' + testcase_args.testcase_database
                     else:
                         counter = 1
+                        print("PRINTING OUT STDERR")
+                        print(stderr)
+                        print(need_retry(stderr))
                         while need_retry(stderr):
                             restarted_tests.append((case_file, stderr))
                             testcase_args = configure_testcase_args(args, case_file, suite_tmp_dir, stderr_file)
