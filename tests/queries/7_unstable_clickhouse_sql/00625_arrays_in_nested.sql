@@ -12,7 +12,7 @@ INSERT INTO nested VALUES (['GoodBye'], [['1', '2']], [['PU', 'US', 'OTHER']]);
 SELECT * FROM nested ORDER BY column.name;
 SYSTEM START MERGES test.nested;
 SELECT sleep(3) FORMAT Null;
-OPTIMIZE TABLE test.nested PARTITION tuple() FINAL;
+OPTIMIZE TABLE test.nested PARTITION tuple();
 SELECT sleep(3) FORMAT Null;
 SELECT sleep(3) FORMAT Null;
 SELECT * FROM nested ORDER BY column.name;
