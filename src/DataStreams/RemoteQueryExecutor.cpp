@@ -237,6 +237,7 @@ Block RemoteQueryExecutor::read()
 
     while (true)
     {
+        std::lock_guard lock(was_cancelled_mutex);
         if (was_cancelled)
             return Block();
 

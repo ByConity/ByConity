@@ -42,7 +42,7 @@ jobs:
         run: |
           bash ${GITHUB_WORKSPACE}/ci_scripts/cluster_up.sh
           bash ${GITHUB_WORKSPACE}/docker/test/foundationdb/show_fdb.sh
-          export ADDITIONAL_OPTIONS=' --run cnch_stateless'
+          export ADDITIONAL_OPTIONS='--jobs 4 --run cnch_stateless'
           export MAX_RUN_TIME=9000
           cp -r $GITHUB_WORKSPACE/docker/test/stateless/* .
           /bin/bash run_cnch.sh

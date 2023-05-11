@@ -10,7 +10,7 @@ function run_tests()
     # more idiologically correct.
     read -ra ADDITIONAL_OPTIONS <<< "${ADDITIONAL_OPTIONS:-}"
     ps -aux
-    clickhouse-test --print-time --use-skip-list --order asc --test-runs 1 -q "${GITHUB_WORKSPACE}/tests/queries" "${ADDITIONAL_OPTIONS[@]}" 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee /test_output/test_result.txt || true
+    clickhouse-test --print-time --use-skip-list --order asc --test-runs 1 -q "${GITHUB_WORKSPACE}/tests/queries" "${ADDITIONAL_OPTIONS[@]}" 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a /test_output/test_result.txt || true
 }
 
 if [ -n "$ENABLE_IPV6" ]; then

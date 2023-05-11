@@ -89,7 +89,13 @@ public:
     Impl impls[NUM_BUCKETS];
 
 
-    TwoLevelHashTable() {}
+    TwoLevelHashTable() = default;
+
+    explicit TwoLevelHashTable(size_t size_hint)
+    {
+        for (auto & impl : impls)
+            impl.reserve(size_hint / NUM_BUCKETS);
+    }
 
     /// Copy the data from another (normal) hash table. It should have the same hash function.
     template <typename Source>

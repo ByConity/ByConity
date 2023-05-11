@@ -42,6 +42,7 @@ MESSAGES_TO_RETRY = [
     "ConnectionPoolWithFailover: Connection failed at try",
     "DB::Exception: New table appeared in database being dropped or detached. Try again",
     "is already started to be removing by another replica right now",
+    "DB::Exception: No more packets are available",
     DISTRIBUTED_DDL_TIMEOUT_MSG # FIXME
 ]
 
@@ -305,6 +306,7 @@ def configure_testcase_args(args, case_file, suite_tmp_dir, stderr_file):
     testcase_args.testcase_start_time = datetime.now()
     testcase_basename = os.path.basename(case_file)
     testcase_args.testcase_client = f"{testcase_args.client} --log_comment='{testcase_basename}'"
+    testcase_args.testcase_basename = testcase_basename
 
     if testcase_args.database:
         database = testcase_args.database
@@ -345,7 +347,7 @@ def run_single_test(args, ext, server_logs_level, client_options, case_file, std
     database = args.testcase_database
 
     # This is for .sh tests
-    os.environ["CLICKHOUSE_LOG_COMMENT"] = case_file
+    os.environ["CLICKHOUSE_LOG_COMMENT"] = args.testcase_basename
 
     params = {
         'client': client + ' --database=' + database,
@@ -356,34 +358,19 @@ def run_single_test(args, ext, server_logs_level, client_options, case_file, std
         'stderr': stderr_file,
     }
 
-    # >> append to stderr (but not stdout since it is not used there),
-    # because there are also output of per test database creation
-    if not args.database:
-        pattern = '{test} > {stdout} 2>> {stderr}'
-    else:
-        pattern = '{test} > {stdout} 2> {stderr}'
+    pattern = "{test} > {stdout} 2> {stderr}"
+
 
     if ext == '.sql':
-        pattern = "{client} --send_logs_level={logs_level} {options} --testmode --multiquery"
+        pattern = "{client} --send_logs_level={logs_level} --testmode --multiquery {options} < " + pattern
 
     command = pattern.format(**params)
 
-    with open(stdout_file, 'w') as out, open(stderr_file, 'w') as err, open(case_file, 'r') as test_case:
-        proc = Popen(shlex.split(command), stdin=test_case, stdout=out, stderr=err, env=os.environ, universal_newlines=True)
-        try:
-            proc.communicate(timeout=args.timeout)
-        except TimeoutExpired:
-            # kill test process because it can also hung
-            if proc.returncode is None:
-                try:
-                    proc.kill()
-                except OSError as e:
-                    if e.errno != ESRCH:
-                        raise
+    proc = Popen(command, shell=True, env=os.environ)
 
 
-#    while (datetime.now() - start_time).total_seconds() < args.timeout and proc.poll() is None:
-#        sleep(0.01)
+    while (datetime.now() - start_time).total_seconds() < args.timeout and proc.poll() is None:
+        sleep(0.01)
 
 #     need_drop_database = not args.database
 #     if need_drop_database and args.no_drop_if_fail:
