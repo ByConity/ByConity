@@ -184,7 +184,7 @@ SELECT toUUID(0) AS x, toFloat32(1) AS y, ((x > y) ? x : y) AS z, toTypeName(x),
 SELECT toUUID(0) AS x, toFloat64(1) AS y, ((x > y) ? x : y) AS z, toTypeName(x), toTypeName(y), toTypeName(z); -- { serverError 48 }
 SELECT toUUID(0) AS x, toDate(1) AS y, ((x > y) ? x : y) AS z, toTypeName(x), toTypeName(y), toTypeName(z); -- { serverError 48 }
 SELECT toUUID(0) AS x, toDateTime(1, 'Europe/Moscow') AS y, ((x > y) ? x : y) AS z, toTypeName(x), toTypeName(y), toTypeName(z); -- { serverError 48 }
-SELECT toUUID(0) AS x, toUUID(1) AS y, ((x > y) ? x : y) AS z, toTypeName(x), toTypeName(y), toTypeName(z);
+SELECT toUUID(0) AS x, toUUID(1) AS y, ((x > y) ? x : y) AS z, toTypeName(x), toTypeName(y), toTypeName(z); -- { serverError 48 }
 SELECT toUUID(0) AS x, toDecimal32(1, 0) AS y, ((x = 0) ? x : y) AS z, toTypeName(x), toTypeName(y), toTypeName(z); -- { serverError 48 }
 SELECT toUUID(0) AS x, toDecimal64(1, 0) AS y, ((x = 0) ? x : y) AS z, toTypeName(x), toTypeName(y), toTypeName(z); -- { serverError 48 }
 SELECT toUUID(0) AS x, toDecimal128(1, 0) AS y, ((x = 0) ? x : y) AS z, toTypeName(x), toTypeName(y), toTypeName(z); -- { serverError 48 }
