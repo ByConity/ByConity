@@ -157,13 +157,8 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     bool use_distributed_stages = (distributed_stages_settings.enable_distributed_stages) && !options.is_internal;
     use_distributed_stages = use_distributed_stages && !context->getSettingsRef().enable_optimizer && PlanSegmentHelper::supportDistributedStages(query);
 
-    if (use_distributed_stages && QueryUseOptimizerChecker::check(query, context, true))
+    if (use_distributed_stages && context->getComplexQueryActive() && QueryUseOptimizerChecker::check(query, context, true))
     {
-        if (!context->getComplexQueryActive())
-            throw Exception("Server config missing exchange_status_port and exchange_port cannot execute query with enable_distributed_stages enabled",
-                            ErrorCodes::LOGICAL_ERROR);
-        LOG_DEBUG(&Poco::Logger::get("InterpreterFactory"), "try use optimzier for join.");
-
         if (query->as<ASTSelectQuery>() || query->as<ASTSelectWithUnionQuery>())
             return std::make_unique<InterpreterSelectQueryUseOptimizer>(query, context, options);
     }

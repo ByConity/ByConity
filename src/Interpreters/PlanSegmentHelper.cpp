@@ -14,11 +14,11 @@ bool PlanSegmentHelper::supportDistributedStages(const ASTPtr & node)
     {
         if (isConstantQuery(node))
             return false;
-            
+
         if (hasJoin(node))
             return true;
     }
-    
+
     return false;
 }
 
@@ -38,7 +38,7 @@ bool PlanSegmentHelper::hasJoin(const ASTPtr & node)
         }
     }
 
-    return false; 
+    return false;
 }
 
 bool PlanSegmentHelper::isConstantQuery(const ASTPtr & node)
@@ -52,7 +52,7 @@ bool PlanSegmentHelper::isConstantQuery(const ASTPtr & node)
         {
             if (table_expression->database_and_table_name)
                 return false;
-        }   
+        }
 
     }
 
