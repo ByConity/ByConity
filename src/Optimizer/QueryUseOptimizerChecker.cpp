@@ -120,10 +120,6 @@ bool QueryUseOptimizerChecker::check(ASTPtr & node, const ContextMutablePtr & co
             //            support = false;
         }
     }
-    else if (node->as<ASTInsertQuery>())
-    {
-        support = false;
-    }
 
     if (!support)
         turnOffOptimizer(context, node);
@@ -166,7 +162,7 @@ checkDatabaseAndTable(const ASTTableExpression & table_expression, const Context
                 return false;
 
             if (database_name == "system")
-                return true;
+                return false;
 
             if (dynamic_cast<const StorageView *>(storage_table.get()))
             {

@@ -27,7 +27,7 @@ class Context;
 class QueryUseOptimizerChecker
 {
 public:
-    static bool check(ASTPtr & node, const ContextMutablePtr & context, bool enable_system = true);
+    static bool check(ASTPtr & node, const ContextMutablePtr & context, bool use_distributed_stages = false);
 };
 
 struct QueryUseOptimizerContext
