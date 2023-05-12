@@ -20,6 +20,7 @@
  */
 
 #include "common/logger_useful.h"
+#include <Client/Connection.h>
 #include <Common/PODArray.h>
 #include <Common/ThreadProfileEvents.h>
 #include <Common/formatReadable.h>
@@ -36,7 +37,10 @@
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/CountingBlockOutputStream.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <DataStreams/RemoteBlockInputStream.h>
+#include <DataStreams/RemoteBlockOutputStream.h>
 #include <DataStreams/copyData.h>
+#include <Processors/Sources/RemoteSource.h>
 #include <Processors/Transforms/getSourceFromFromASTInsertQuery.h>
 
 #include <Parsers/ASTAlterQuery.h>
@@ -63,6 +67,7 @@
 #include <Interpreters/ApplyWithGlobalVisitor.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterFactory.h>
+#include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/InterpreterSetQuery.h>
 #include <Interpreters/NormalizeSelectWithUnionQueryVisitor.h>
 #include <Interpreters/OpenTelemetrySpanLog.h>
@@ -81,6 +86,9 @@
 
 #include <Interpreters/NamedSession.h>
 #include <Common/SensitiveDataMasker.h>
+#include <DataStreams/RemoteQueryExecutor.h>
+#include <Interpreters/InterpreterSelectWithUnionQuery.h>
+#include <Transaction/TxnTimestamp.h>
 #include <Interpreters/trySetVirtualWarehouse.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <Parsers/ASTSystemQuery.h>
@@ -91,9 +99,13 @@
 
 #include <Processors/Formats/IOutputFormat.h>
 #include <Processors/Sources/SinkToOutputStream.h>
+#include <Processors/Sources/SourceFromInputStream.h>
 
 #include <Processors/Transforms/LimitsCheckingTransform.h>
 #include <Processors/Transforms/MaterializingTransform.h>
+
+#include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
+#include <QueryPlan/ReadFromPreparedSource.h>
 
 #include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
 
@@ -535,12 +547,28 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     };
     String query_database;
     String query_table;
+    BlockIO res;
+
     try
     {
         ParserQuery parser(end, ParserSettings::valueOf(settings.dialect_type));
 
         /// TODO: parser should fail early when max_query_size limit is reached.
         ast = parseQuery(parser, begin, end, "", max_query_size, settings.max_parser_depth);
+
+        if (context->getServerType() == ServerType::cnch_server && context->getSettingsRef().enable_auto_query_forwarding)
+        {
+            auto host_ports = getTargetServer(context, ast);
+            LOG_DEBUG(&Poco::Logger::get("executeQuery"), "target server is {} and local rpc port is {}", host_ports.getRPCAddress(), context->getRPCPort());
+            if (!host_ports.empty() && !isLocalServer(host_ports.getRPCAddress(), std::to_string(context->getRPCPort())))
+            {
+                LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Will reroute query " + queryToString(ast) + " to " + host_ports.getTCPAddress());
+                context->initializeExternalTablesIfSet();
+                executeQueryByProxy(context, host_ports, ast, res);
+                LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query execution on remote server done");
+                return std::make_tuple(ast, std::move(res));
+            }
+        }
 
         /// Interpret SETTINGS clauses as early as possible (before invoking the corresponding interpreter),
         /// to allow settings to take effect.
@@ -617,7 +645,6 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
     /// Copy query into string. It will be written to log and presented in processlist. If an INSERT query, string will not include data to insertion.
     String query(begin, query_end);
-    BlockIO res;
 
     String query_for_logging;
 
@@ -1503,6 +1530,95 @@ void executeQuery(
     }
 
     streams.onFinish();
+}
+
+HostWithPorts getTargetServer(ContextPtr context, ASTPtr &ast)
+{
+    /// Only get target server for main table
+    String database, table;
+
+    if (const auto *alter = ast->as<ASTAlterQuery>())
+    {
+        database = alter->database;
+        table = alter->table;
+    }
+    else if (const auto *select = ast->as<ASTSelectWithUnionQuery>())
+    {
+        ASTs tables;
+        bool has_table_func = false;
+        select->collectAllTables(tables, has_table_func);
+        if (!has_table_func && !tables.empty())
+        {
+            // simplily use the first table if there are multiple tables used
+            DatabaseAndTableWithAlias db_and_table(tables[0]);
+            LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Extract db and table {}.{} from the query.", db_and_table.database, db_and_table.table);
+            database = db_and_table.database;
+            table = db_and_table.table;
+        }
+        else
+            return {};
+    }
+    else
+        return {};
+
+    if (database.empty())
+         database = context->getCurrentDatabase();
+
+    if (database == "system") 
+        return {};
+
+    auto table_id = context->getCnchCatalog()->getTableIDByName(database, table);
+    if (!table_id)
+        throw Exception("Table " + database + "." + table + " not found in catalog", ErrorCodes::UNKNOWN_TABLE);
+
+    auto topology_master = context->getCnchTopologyMaster();
+
+    return topology_master->getTargetServer(table_id->uuid(), context->getTimestamp(), false);
+}
+
+void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server, const ASTPtr & ast, BlockIO & res)
+{
+    // Todo: support explicit transaction
+    res.finish_callback = [&](IBlockInputStream * , IBlockOutputStream *, QueryPipeline *, UInt64)
+    {
+        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query success on remote server");
+    };
+    res.exception_callback = [&](int)
+    {
+        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query failed on remote server");
+    };
+
+    /// Create connection to host
+    const auto & query_client_info = context->getClientInfo();
+    auto settings = context->getSettingsRef();
+    res.remote_execution_conn = std::make_shared<Connection>(
+        server.getHost(), server.tcp_port, 
+        context->getCurrentDatabase(), /*default_database_*/
+        query_client_info.current_user, query_client_info.current_password, 
+        "", /*cluster_*/
+        "", /*cluster_secret*/
+        "server", /*client_name_*/
+        Protocol::Compression::Enable,
+        Protocol::Secure::Disable);
+
+    String query = queryToString(ast);
+    LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Sending query as ordinary query");
+    Block header;
+    if (ast->as<ASTSelectWithUnionQuery>())
+        header = InterpreterSelectWithUnionQuery(ast, context, SelectQueryOptions(QueryProcessingStage::Complete)).getSampleBlock();
+    Pipes remote_pipes;
+    auto remote_query_executor = std::make_shared<RemoteQueryExecutor>(*res.remote_execution_conn, query, header, context);
+    remote_query_executor->setPoolMode(PoolMode::GET_ONE);
+    remote_pipes.emplace_back(createRemoteSourcePipe(remote_query_executor, true, false, false, true));
+    remote_pipes.back().addInterpreterContext(context);
+
+    auto plan = std::make_unique<QueryPlan>();
+    auto read_from_remote = std::make_unique<ReadFromPreparedSource>(Pipe::unitePipes(std::move(remote_pipes)));
+    read_from_remote->setStepDescription("Read from remote server");
+    plan->addStep(std::move(read_from_remote));
+    res.pipeline = std::move(*plan->buildQueryPipeline(
+        QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context)));
+    res.pipeline.addInterpreterContext(context);
 }
 
 }
