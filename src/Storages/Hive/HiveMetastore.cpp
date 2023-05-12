@@ -28,6 +28,7 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Storages/HDFS/HDFSCommon.h>
 #include <Storages/Hive/HiveMetastore.h>
+#include <Storages/Hive/TSaslClientTransport.h>
 #include <Storages/StorageCnchHive.h>
 #include <boost/algorithm/string.hpp>
 #include <hivemetastore/hive_metastore_types.h>
@@ -44,6 +45,7 @@
 #include <Common/hex.h>
 #include <Common/typeid_cast.h>
 #include <common/logger_useful.h>
+#include <Access/KerberosInit.h>
 
 #include <iostream>
 
@@ -733,6 +735,14 @@ HiveMetastoreClientFactory::createThriftHiveMetastoreClient(const String & name,
     socket->setRecvTimeout(settings.hive_metastore_client_recv_timeout);
     socket->setSendTimeout(settings.hive_metastore_client_send_timeout);
     std::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
+
+    if (settings.hive_metastore_client_kerberos_auth)
+    {   
+        String hadoop_kerberos_principal = settings.hive_metastore_client_principal.toString() + "/"+ settings.hive_metastore_client_service_fqdn.toString();
+        kerberosInit(settings.hive_metastore_client_keytab_path,hadoop_kerberos_principal);
+        transport = TSaslClientTransport::wrapClientTransports(settings.hive_metastore_client_service_fqdn, settings.hive_metastore_client_principal, transport);
+    }
+
     std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
     std::shared_ptr<ThriftHiveMetastoreClient> client = std::make_shared<ThriftHiveMetastoreClient>(protocol);
 

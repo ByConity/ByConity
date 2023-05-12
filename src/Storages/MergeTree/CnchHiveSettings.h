@@ -52,7 +52,13 @@ struct Settings;
     M(Bool, use_simple_hash, true, "", 0) \
     /** parallel read parquet max threads **/ \
     M(UInt64, max_read_row_group_threads, 32, "", 0) \
-    M(Bool, cnch_temporary_table, 0, "", 0)
+    M(Bool, cnch_temporary_table, 0, "", 0) \
+    /** HMS kerberos settings **/ \
+    M(Bool, hive_metastore_client_kerberos_auth, 0, "Enable hms auth with Kerberos", 0) \
+    M(String, hive_metastore_client_service_fqdn, "", "The fqdn for auth server", 0) \
+    M(String, hive_metastore_client_keytab_path, "/etc/krb5.keytab", "The path of Kerberos keytab for hms auth", 0) \
+    M(String, hive_metastore_client_principal, "hive", "The Kerberos principal for hms auth", 0) \
+
 
 
 /// Settings that should not change after the creation of a table.
