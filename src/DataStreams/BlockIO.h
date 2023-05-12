@@ -21,10 +21,9 @@
 
 #pragma once
 
+#include <Client/Connection.h>
 #include <DataStreams/IBlockStream_fwd.h>
-
 #include <functional>
-
 #include <Processors/QueryPipeline.h>
 
 
@@ -61,6 +60,8 @@ struct BlockIO
     bool null_format = false;
 
     Stopwatch watch;
+
+    ConnectionPtr remote_execution_conn;
 
     /// Call these functions if you want to log the request.
     void onFinish()

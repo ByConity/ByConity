@@ -89,6 +89,8 @@ BlockIO & BlockIO::operator= (BlockIO && rhs)
 
     null_format             = std::move(rhs.null_format);
 
+    remote_execution_conn = std::move(rhs.remote_execution_conn);
+
     return *this;
 }
 
