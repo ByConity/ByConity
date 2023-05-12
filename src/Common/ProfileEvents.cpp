@@ -704,6 +704,18 @@
     \
     M(PartsToAttach, "") \
     M(NumOfRowsToAttach, "") \
+    \
+    M(WriteBufferFromS3WriteOp, "S3 write op count") \
+    M(WriteBufferFromS3WriteOpFailed, "s3 write op failed count") \
+    M(WriteBufferFromS3WriteOpMicro, "s3 write op time") \
+    M(WriteBufferFromS3WriteOpBytes, "s3 write op size") \
+    M(WriteBufferFromS3ControlOp, "s3 control op count") \
+    M(WriteBufferFromS3ControlOpFailed, "s3 control op failed count") \
+    M(WriteBufferFromS3ControlOpMicro, "s3 control op time") \
+    M(ReadBufferFromS3Read, "s3 read op count") \
+    M(ReadBufferFromS3ReadFailed, "s3 read failed count") \
+    M(ReadBufferFromS3ReadBytes, "s3 read op size") \
+    M(ReadBufferFromS3ReadMicro, "s3 read op time") \
 
 namespace ProfileEvents
 {

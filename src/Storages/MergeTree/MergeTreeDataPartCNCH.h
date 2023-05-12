@@ -32,14 +32,16 @@ public:
         const MergeTreePartInfo & info_,
         const VolumePtr & volume_,
         const std::optional<String> & relative_path_ = {},
-        const IMergeTreeDataPart * parent_part_ = nullptr);
+        const IMergeTreeDataPart * parent_part_ = nullptr,
+        const UUID& part_id = UUIDHelpers::Nil);
 
     MergeTreeDataPartCNCH(
         const MergeTreeMetaBase & storage_,
         const String & name_,
         const VolumePtr & volume_,
         const std::optional<String> & relative_path_ = {},
-        const IMergeTreeDataPart * parent_part_ = nullptr);
+        const IMergeTreeDataPart * parent_part_ = nullptr,
+        const UUID& part_id = UUIDHelpers::Nil);
 
     MergeTreeReaderPtr getReader(
         const NamesAndTypesList & columns_to_read,

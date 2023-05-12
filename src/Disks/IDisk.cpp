@@ -15,6 +15,8 @@ namespace ErrorCodes
     extern const int NOT_IMPLEMENTED;
 }
 
+std::atomic<UInt64> next_disk_id = 0;
+
 bool IDisk::isDirectoryEmpty(const String & path)
 {
     return !iterateDirectory(path)->isValid();

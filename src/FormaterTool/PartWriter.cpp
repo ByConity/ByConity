@@ -136,7 +136,9 @@ void PartWriter::execute()
     LOG_DEBUG(log, "Creating remote storage path {} for table.", dest_path + uuid);
     remote_disk->createDirectory(uuid);
 
-    MergeTreeCNCHDataDumper cnch_dumper(*storage);
+    S3ObjectMetadata::PartGeneratorID part_generator_id(S3ObjectMetadata::PartGeneratorID::DUMPER,
+        UUIDHelpers::UUIDToString(UUIDHelpers::generateV4()));
+    MergeTreeCNCHDataDumper cnch_dumper(*storage, part_generator_id);
     /// prepare outputstream
     BlockOutputStreamPtr out = table->write(query_ptr, metadata_snapshot, getContext());
     CloudMergeTreeBlockOutputStream * cloud_stream = static_cast<CloudMergeTreeBlockOutputStream *>(out.get());
@@ -153,7 +155,7 @@ void PartWriter::execute()
         LOG_DEBUG(log, "Dumping {} parts to remote storage.", parts.size());
         for (const auto & temp_part : parts)
         {
-            cnch_dumper.dumpTempPart(temp_part, params, false, remote_disk);
+            cnch_dumper.dumpTempPart(temp_part, false, remote_disk);
             LOG_DEBUG(log, "Dumped part {}", temp_part->name);
         }
     }

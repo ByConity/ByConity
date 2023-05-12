@@ -102,6 +102,7 @@ message DataModelPart
     optional uint64 covered_parts_size = 23;     /// record deleted part size. Used by deleted part as well as drop range.
     optional uint64 covered_parts_rows = 24;     /// record deleted rows. Used by deleted part as well as drop range.
     optional bytes data_footer = 25;
+    optional UUID part_id = 26; 
     repeated uint64 index_granularities = 30;
 };
 
@@ -244,6 +245,10 @@ enum UndoResourceType
     DeleteBitmap = 1;
     FileSystem = 2;
     StagedPart = 3;
+    S3AttachPart = 5;
+    S3DetachPart = 6;
+    S3AttachMeta = 7;
+    S3VolatilePart = 8;
 }
 
 message DataModelUndoBuffer

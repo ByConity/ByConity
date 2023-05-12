@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2023 ClickHouse, Inc.
+ * Copyright 2023 Bytedance Ltd. and/or its affiliates.
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -13,32 +13,30 @@
  * limitations under the License.
  */
 
-
-/*
- * This file may have been modified by Bytedance Ltd. and/or its affiliates (“ Bytedance's Modifications”).
- * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
- */
-
-#pragma once
-
-#include <Core/Types.h>
-
+#include <Disks/DiskType.h>
+#include <Common/Exception.h>
 
 namespace DB
 {
 
-namespace UUIDHelpers
+namespace ErrorCodes
 {
-    /// Generate random UUID.
-    UUID generateV4();
+    extern const int BAD_ARGUMENTS;
+}
 
-    String UUIDToString(const UUID & uuid);
-    UUID toUUID(const String & uuid_str);
+int DiskType::toInt(Type disk_type)
+{
+    return static_cast<int>(disk_type);
+}
 
-    // PairInt64 use UInt64 pair
-    PairInt64 UUIDToPairInt64(const UUID & uuid);
-
-    const UUID Nil{};
+DiskType::Type DiskType::toType(int disk_type_id)
+{   
+    if (disk_type_id > TYPE_NUM_IN_DISK_TYPE)
+    {
+        throw Exception("Unknown disk type id " + std::to_string(disk_type_id),
+            ErrorCodes::BAD_ARGUMENTS);
+    }
+    return static_cast<Type>(disk_type_id);
 }
 
 }
