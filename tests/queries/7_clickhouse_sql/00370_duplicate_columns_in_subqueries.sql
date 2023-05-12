@@ -9,4 +9,5 @@ select b, c from (select 1 as a, 1 as b, 1 as c, 1 as b, 1 as c) any left join (
 select a, b, c from (select 42 as a, 1 as b, 2 as c, 1 as b, 2 as c) any left join (select 42 as a, 3 as d) using a;
 select a, b, c from (select 42 as a, 1 as b, 2 as c, 1 as b, 2 as c) any left join (select 42 as a, 3 as d) using a order by d;
 
+SET any_join_distinct_right_table_keys = 1;
 SELECT k, a1, b1, a2, b2 FROM (SELECT 0 AS k, 'hello' AS a1, 'world' AS b1, a1) ANY FULL OUTER JOIN (SELECT 1 AS k, 'hello' AS a2, 'world' AS b2, a2) USING (k) ORDER BY k;
