@@ -16,7 +16,7 @@ size_t trySplitFilter(QueryPlan::Node * node, QueryPlan::Nodes & nodes)
     const auto & expr = filter_step->getExpression();
 
     /// Do not split if there are function like runningDifference.
-    if (expr->hasStatefulFunctions())
+    if (!expr || expr->hasStatefulFunctions())
         return 0;
 
     auto split = expr->splitActionsForFilter(filter_step->getFilterColumnName());
