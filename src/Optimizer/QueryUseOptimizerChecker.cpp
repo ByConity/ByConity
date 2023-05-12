@@ -162,7 +162,7 @@ checkDatabaseAndTable(const ASTTableExpression & table_expression, const Context
                 return false;
 
             if (database_name == "system")
-                return false;
+                return true;
 
             if (dynamic_cast<const StorageView *>(storage_table.get()))
             {
