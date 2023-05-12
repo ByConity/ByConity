@@ -98,16 +98,39 @@ createPartFromModelCommon(const MergeTreeMetaBase & storage, const Protos::DataM
 
     DiskPtr remote_disk = getDiskForPathId(storage.getStoragePolicy(IStorage::StorageLocation::MAIN), path_id);
     auto mock_volume = std::make_shared<SingleDiskVolume>("volume_mock", remote_disk, 0);
-    auto part = std::make_shared<MergeTreeDataPartCNCH>(
-        storage, part_name, *info, mock_volume, relative_path.value_or(info->getPartNameWithHintMutation()));
+    UUID part_id = UUIDHelpers::Nil;
+    switch(remote_disk->getType())
+    {
+        case DiskType::Type::ByteS3:
+        {
+            part_id = RPCHelpers::createUUID(part_model.part_id());
+            if (!relative_path.has_value())
+                relative_path = UUIDHelpers::UUIDToString(part_id);
+            break;
+        }
+        case DiskType::Type::ByteHDFS:
+        {
+            if (!relative_path.has_value())
+                relative_path = info->getPartNameWithHintMutation();
+            break;
+        }
+        default:
+            throw Exception(fmt::format("Unsupported disk type {} in createPartFromModelCommon",
+                DiskType::toString(remote_disk->getType())), ErrorCodes::LOGICAL_ERROR);
+    }
+    auto part = std::make_shared<MergeTreeDataPartCNCH>(storage, part_name, *info,
+        mock_volume, relative_path, nullptr, part_id);
 
     if (part_model.has_staging_txn_id())
     {
         part->staging_txn_id = part_model.staging_txn_id();
-        /// this part shares the same relative path with the corresponding staged part
-        MergeTreePartInfo staged_part_info = part->info;
-        staged_part_info.mutation = part->staging_txn_id;
-        part->relative_path = staged_part_info.getPartNameWithHintMutation();
+        if (remote_disk->getType() == DiskType::Type::ByteHDFS)
+        {
+            /// this part shares the same relative path with the corresponding staged part
+            MergeTreePartInfo staged_part_info = part->info;
+            staged_part_info.mutation = part->staging_txn_id;
+            part->relative_path = staged_part_info.getPartNameWithHintMutation();
+        }
     }
 
     part->bytes_on_disk = part_model.size();
@@ -196,12 +219,6 @@ MutableMergeTreeDataPartCNCHPtr createPartFromModel(
     return part;
 }
 
-/// MOCK get namenode_id
-UInt32 getNameNodeIdForDisk(const StoragePolicyPtr &, const DiskPtr &)
-{
-    return 0;
-}
-
 void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Protos::DataModelPart & part_model, bool ignore_column_commit_time)
 {
     /// fill part info
@@ -224,7 +241,8 @@ void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Pr
     part_model.set_bucket_number(part.bucket_number);
     part_model.set_table_definition_hash(part.table_definition_hash);
     part_model.set_commit_time(part.commit_time.toUInt64());
-    part_model.set_data_path_id(getNameNodeIdForDisk(part.storage.getStoragePolicy(IStorage::StorageLocation::MAIN), part.volume->getDisk()));
+    // TODO support multiple namenode , mock 0 now.
+    part_model.set_data_path_id(0); 
 
     if (part.deleted)
         part_model.set_deleted(part.deleted);
@@ -282,6 +300,8 @@ void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Pr
     {
         part_model.set_covered_parts_rows(part.covered_parts_rows);
     }
+    // For part in hdfs, it's id will be filled with 0
+    RPCHelpers::fillUUID(part.getUUID(), *(part_model.mutable_part_id()));
 }
 
 void fillPartInfoModel(const IMergeTreeDataPart & part, Protos::DataModelPartInfo & part_info_model)

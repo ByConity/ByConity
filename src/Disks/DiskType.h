@@ -28,13 +28,17 @@ namespace DB
 
 struct DiskType
 {
+    // When add new type in Type, Please Update.
+    static constexpr auto TYPE_NUM_IN_DISK_TYPE = 5;
+
     enum class Type
     {
-        Local,
-        RAM,
-        S3,
-        HDFS,
-        ByteHDFS
+        Local = 0,
+        RAM = 1,
+        S3 = 2,
+        HDFS = 3,
+        ByteHDFS = 4,
+        ByteS3 = 5
     };
     static String toString(Type disk_type)
     {
@@ -50,9 +54,17 @@ struct DiskType
                 return "hdfs";
             case Type::ByteHDFS:
                 return "bytehdfs";
+            case Type::ByteS3:
+                return "bytes3";
         }
         __builtin_unreachable();
     }
+    
+    static int toInt(Type disk_type);
+
+    static Type toType(int disk_type_id);
 };
 
 }
+
+

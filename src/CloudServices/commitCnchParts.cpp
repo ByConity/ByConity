@@ -30,6 +30,8 @@
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Transaction/CnchWorkerTransaction.h>
 #include <Transaction/TxnTimestamp.h>
+#include <common/strong_typedef.h>
+#include <Core/Types.h>
 #include "Disks/IDisk.h"
 
 namespace DB
@@ -133,11 +135,22 @@ DumpedData CnchDataWriter::dumpCnchParts(
     /// For the delete bitmap, it's always be dumped to the default disk
     std::vector<DiskPtr> part_disks;
     part_disks.reserve(temp_parts.size() + temp_staged_parts.size());
+
     for (auto & part : temp_parts)
     {
         String part_name = part->info.getPartNameWithHintMutation();
         auto disk = storage.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
-        undo_resources.emplace_back(txn_id, UndoResourceType::Part, part_name, part_name + '/');
+        
+        // Assign part id here, since we need to record it into undo buffer before dump part to filesystem
+        String relative_path = part_name;
+        if (disk->getType() == DiskType::Type::ByteS3)
+        {
+            UUID part_id = newPartID(part->info, txn_id.toUInt64());
+            part->uuid = part_id;
+            relative_path = UUIDHelpers::UUIDToString(part_id);
+        }
+
+        undo_resources.emplace_back(txn_id, UndoResourceType::Part, part_name, relative_path + '/');
         undo_resources.back().setDiskName(disk->getName());
         part_disks.emplace_back(std::move(disk));
     }
@@ -149,7 +162,17 @@ DumpedData CnchDataWriter::dumpCnchParts(
     {
         String part_name = staged_part->info.getPartNameWithHintMutation();
         auto disk = storage.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
-        undo_resources.emplace_back(txn_id, UndoResourceType::StagedPart, part_name, part_name + '/');
+
+        // Assign part id here, since we need to record it into undo buffer before dump part to filesystem
+        String relative_path = part_name;
+        if (disk->getType() == DiskType::Type::ByteS3)
+        {
+            UUID part_id = newPartID(staged_part->info, txn_id.toUInt64());
+            staged_part->uuid = part_id;
+            relative_path = UUIDHelpers::UUIDToString(part_id);
+        }
+
+        undo_resources.emplace_back(txn_id, UndoResourceType::StagedPart, part_name, relative_path + '/');
         undo_resources.back().setDiskName(disk->getName());
         part_disks.emplace_back(std::move(disk));
     }
@@ -167,7 +190,9 @@ DumpedData CnchDataWriter::dumpCnchParts(
 
     /// Parallel dumping to shared storage
     DumpedData result;
-    MergeTreeCNCHDataDumper dumper(storage);
+    S3ObjectMetadata::PartGeneratorID part_generator_id(S3ObjectMetadata::PartGeneratorID::TRANSACTION,
+        curr_txn->getTransactionID().toString());
+    MergeTreeCNCHDataDumper dumper(storage, part_generator_id);
 
     watch.restart();
     ThreadPool dump_pool(std::min(
@@ -178,7 +203,7 @@ DumpedData CnchDataWriter::dumpCnchParts(
     {
         dump_pool.scheduleOrThrowOnError([&, i]() {
             const auto & temp_part = temp_parts[i];
-            auto dumped_part = dumper.dumpTempPart(temp_part, context->getHdfsConnectionParams(), false, part_disks[i]);
+            auto dumped_part = dumper.dumpTempPart(temp_part, false, part_disks[i]);
             LOG_TRACE(storage.getLogger(), "Dumped part {}", temp_part->name);
             result.parts[i] = std::move(dumped_part);
         });
@@ -192,7 +217,7 @@ DumpedData CnchDataWriter::dumpCnchParts(
         dump_pool.scheduleOrThrowOnError([&, i]() {
             const auto & temp_staged_part = temp_staged_parts[i];
             auto staged_part
-                = dumper.dumpTempPart(temp_staged_part, context->getHdfsConnectionParams(), false, part_disks[i + temp_parts.size()]);
+                = dumper.dumpTempPart(temp_staged_part, false, part_disks[i + temp_parts.size()]);
             LOG_TRACE(storage.getLogger(), "Dumped staged part {}", temp_staged_part->name);
             result.staged_parts[i] = std::move(staged_part);
         });
@@ -517,6 +542,19 @@ void CnchDataWriter::preload(const MutableMergeTreeDataPartsCNCHVector & dumped_
                 throw;
         }
     }
+}
+
+UUID CnchDataWriter::newPartID(const MergeTreePartInfo& part_info, UInt64 txn_timestamp)
+{
+    UUID random_id = UUIDHelpers::generateV4();
+    PairInt64 random_id_pair = UUIDHelpers::UUIDToPairInt64(random_id);
+    UInt64& random_id_low = random_id_pair.low;
+    UInt64& random_id_high = random_id_pair.high;
+    boost::hash_combine(random_id_low, part_info.min_block);
+    boost::hash_combine(random_id_high, part_info.max_block);
+    boost::hash_combine(random_id_low, part_info.mutation);
+    boost::hash_combine(random_id_high, txn_timestamp);
+    return random_id;
 }
 
 }
