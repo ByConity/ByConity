@@ -33,6 +33,7 @@ namespace ErrorCodes
 CnchTopologyMaster::CnchTopologyMaster(ContextPtr context_)
     : WithContext(context_)
     , topology_fetcher(getContext()->getTopologySchedulePool().createTask("TopologyFetcher", [&]() { fetchTopologies(); }))
+    , settings{context_->getSettings()}
 {
     topology_fetcher->activateAndSchedule();
 }
@@ -67,7 +68,7 @@ void CnchTopologyMaster::fetchTopologies()
             if (getContext()->getServerType() == ServerType::cnch_server && !last_topology.empty())
             {
                 /// reset cache if the server fails to sync topology for a while, prevent from ABA problem
-                if (topologies.front().getExpiration() > last_topology.front().getExpiration() + 2 * getContext()->getSettings().topology_lease_life_ms.totalMilliseconds())
+                if (topologies.front().getExpiration() > last_topology.front().getExpiration() + 2 * settings.topology_lease_life_ms.totalMilliseconds())
                 {
                     LOG_WARNING(log, "Reset part and table cache because of topology change");
                     if (getContext()->getPartCacheManager())
@@ -97,7 +98,7 @@ void CnchTopologyMaster::fetchTopologies()
         tryLogCurrentException(log, __PRETTY_FUNCTION__);
     }
 
-    topology_fetcher->scheduleAfter(getContext()->getSettings().topology_refresh_interval_ms.totalMilliseconds());
+    topology_fetcher->scheduleAfter(settings.topology_refresh_interval_ms.totalMilliseconds());
 }
 
 std::list<CnchServerTopology> CnchTopologyMaster::getCurrentTopology()
@@ -122,7 +123,7 @@ HostWithPorts CnchTopologyMaster::getTargetServerImpl(
     };
 
     HostWithPorts target_server{};
-    UInt64 lease_life_time = getContext()->getSettings().topology_lease_life_ms.totalMilliseconds();
+    UInt64 lease_life_time = settings.topology_lease_life_ms.totalMilliseconds();
     bool tso_is_available = (current_ts != TxnTimestamp::fallbackTS());
     UInt64 commit_time_ms = current_ts >> 18;
 
