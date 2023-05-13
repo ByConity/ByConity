@@ -3,7 +3,7 @@
 set -e
 
 #TestSuite Result Analysis
-success_count=$(cut -f1 /Artifacts/check_status.tsv | awk '/success/{++count}')
+success_count=$(cut -f1 /Artifacts/check_status.tsv | awk '/success/{++count} END {print count}')
 if [[ success_count -eq 2 ]]
 then
     echo "::add-message level=info::all cases pass!"
