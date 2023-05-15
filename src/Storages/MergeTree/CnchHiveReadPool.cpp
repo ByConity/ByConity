@@ -175,11 +175,11 @@ CnchHiveReadTaskPtr CnchHiveReadPool::getTask(const size_t & thread)
     auto & thread_task = thread_tasks.parts_and_groups.back();
     size_t part_idx = thread_task.part_idx;
     size_t current_row_group = thread_task.need_read_row_group_index;
+
     auto part = parts[part_idx].data_part;
-    size_t sum_row_group_in_part = threads_row_groups_sum.back();
+    size_t sum_row_group_in_part = threads_row_groups_sum[thread];
 
     thread_tasks.parts_and_groups.pop_back();
-    threads_row_groups_sum.pop_back();
 
     LOG_TRACE(
         &Poco::Logger::get("CnchHiveReadPool"),

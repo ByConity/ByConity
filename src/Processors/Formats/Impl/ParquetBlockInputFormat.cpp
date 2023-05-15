@@ -54,11 +54,13 @@ namespace ErrorCodes
 ParquetBlockInputFormat::ParquetBlockInputFormat(
     ReadBuffer & in_,
     Block header_,
+    const FormatSettings & format_settings_,
     const std::map<String, String> & partition_kv_,
     const std::unordered_set<Int64> & skip_row_groups_,
     const size_t row_group_index_,
     bool read_one_group_)
     : IInputFormat(std::move(header_), in_)
+    , format_settings(format_settings_)
     , partition_kv{partition_kv_}
     , skip_row_groups{skip_row_groups_}
     , read_one_group(read_one_group_)
@@ -74,7 +76,6 @@ ParquetBlockInputFormat::ParquetBlockInputFormat(
 
 Chunk ParquetBlockInputFormat::generate()
 {
-    LOG_TRACE(&Poco::Logger::get("ParquetBlockInputFormat"), " ParquetBlockInputFormat gemerate ");
     Chunk res;
 
     if (!file_reader)
@@ -94,11 +95,8 @@ Chunk ParquetBlockInputFormat::generate()
 
     ++row_group_current;
 
-    LOG_TRACE(&Poco::Logger::get("ParquetBlockInputFormat"), "CnchHiveThreadSelectBlockInputProcessor row_group_current = {} row_group_total = {}",row_group_current, row_group_total);
-
     arrow_column_to_ch_column->arrowTableToCHChunk(res, table);
 
-    LOG_TRACE(&Poco::Logger::get("ParquetBlockInputFormat"), "CnchHiveThreadSelectBlockInputProcessor parquet format read size = {}", res.getNumRows());
     return res;
 }
 
@@ -143,7 +141,13 @@ void ParquetBlockInputFormat::prepareReader()
     std::shared_ptr<arrow::Schema> schema;
     THROW_ARROW_NOT_OK(file_reader->GetSchema(&schema));
 
-    arrow_column_to_ch_column = std::make_unique<ArrowColumnToCHColumn>(getPort().getHeader(), schema, "Parquet", partition_kv);
+    arrow_column_to_ch_column = std::make_unique<ArrowColumnToCHColumn>(
+        getPort().getHeader(),
+        schema,
+        "Parquet",
+        format_settings.parquet.allow_missing_columns,
+        format_settings.null_as_default,
+        partition_kv);
 
     int index = 0;
     for (int i = 0; i < schema->num_fields(); ++i)
@@ -173,6 +177,7 @@ void registerInputFormatProcessorParquet(FormatFactory &factory)
                 return std::make_shared<ParquetBlockInputFormat>(
                     buf,
                     sample,
+                    settings,
                     settings.parquet.partition_kv,
                     settings.parquet.skip_row_groups,
                     settings.parquet.current_row_group,
