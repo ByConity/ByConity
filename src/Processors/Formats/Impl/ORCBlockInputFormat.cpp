@@ -29,8 +29,10 @@ namespace ErrorCodes
 ORCBlockInputFormat::ORCBlockInputFormat(
     ReadBuffer & in_,
     Block header_,
+    const FormatSettings & format_settings_,
     const std::map<String, String> & partition_kv_)
     : IInputFormat(std::move(header_), in_)
+    , format_settings(format_settings_)
     , partition_kv{partition_kv_}
  {
  }
@@ -103,7 +105,13 @@ void ORCBlockInputFormat::prepareReader()
     std::shared_ptr<arrow::Schema> schema;
     THROW_ARROW_NOT_OK(file_reader->ReadSchema(&schema));
 
-    arrow_column_to_ch_column = std::make_unique<ArrowColumnToCHColumn>(getPort().getHeader(), schema, "ORC", partition_kv);
+    arrow_column_to_ch_column = std::make_unique<ArrowColumnToCHColumn>(
+        getPort().getHeader(),
+        schema,
+        "ORC",
+        format_settings.orc.allow_missing_columns,
+        format_settings.null_as_default,
+        partition_kv);
 
     /// In ReadStripe column indices should be started from 1,
     /// because 0 indicates to select all columns.
@@ -131,7 +139,7 @@ void registerInputFormatProcessorORC(FormatFactory &factory)
                 const RowInputFormatParams &,
                 const FormatSettings & settings)
             {
-                return std::make_shared<ORCBlockInputFormat>(buf, sample, settings.orc.partition_kv);
+                return std::make_shared<ORCBlockInputFormat>(buf, sample, settings, settings.orc.partition_kv);
             });
     factory.markFormatAsColumnOriented("ORC");
 }

@@ -561,11 +561,8 @@ void HiveMetastoreClient::checkStorageFormat(const String & db_name, const Strin
     tryCallHiveClient(client_call);
 
     String format = table.sd.outputFormat;
-
-    if (format.find("parquet") == String::npos)
-    {
-        throw Exception("CnchHive only support parquet format. Current format is " + format + " .", ErrorCodes::BAD_ARGUMENTS);
-    }
+    if ((format.find("Parquet") == String::npos) && (format.find("Orc") == String::npos))
+        throw Exception("CnchHive only support parquet/orc format. Current format is " + format + " .", ErrorCodes::BAD_ARGUMENTS);
 }
 
 //schema check

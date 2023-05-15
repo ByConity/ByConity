@@ -86,6 +86,7 @@ FormatSettings getFormatSettings(ContextPtr context, const Settings & settings)
     format_settings.json.named_tuples_as_objects = settings.output_format_json_named_tuples_as_objects;
     format_settings.json.quote_64bit_integers = settings.output_format_json_quote_64bit_integers;
     format_settings.json.quote_denormals = settings.output_format_json_quote_denormals;
+    format_settings.parquet.allow_missing_columns = settings.input_format_parquet_allow_missing_columns;
     format_settings.null_as_default = settings.input_format_null_as_default;
     format_settings.parquet.row_group_size = settings.output_format_parquet_row_group_size;
     format_settings.pretty.charset = settings.output_format_pretty_grid_charset.toString() == "ASCII" ? FormatSettings::Pretty::Charset::ASCII : FormatSettings::Pretty::Charset::UTF8;
@@ -114,6 +115,8 @@ FormatSettings getFormatSettings(ContextPtr context, const Settings & settings)
     format_settings.with_names_use_header = settings.input_format_with_names_use_header;
     format_settings.write_statistics = settings.output_format_write_statistics;
     format_settings.arrow.low_cardinality_as_dictionary = settings.output_format_arrow_low_cardinality_as_dictionary;
+    format_settings.arrow.allow_missing_columns = settings.input_format_arrow_allow_missing_columns;
+    format_settings.orc.allow_missing_columns = settings.input_format_orc_allow_missing_columns;
 
     /// Validate avro_schema_registry_url with RemoteHostFilter when non-empty and in Server context
     if (format_settings.schema.is_server)

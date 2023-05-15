@@ -155,7 +155,7 @@ namespace DB
         }
     }
 
-    static void fillColumnWithBooleanData(std::shared_ptr<arrow::ChunkedArray> & arrow_column, IColumn & internal_column)
+    static void fillColumnWithBooleanData(std::shared_ptr<arrow::ChunkedArray> & arrow_column, IColumn & internal_column, const bool replace_null_with_default = false)
     {
         auto & column_data = assert_cast<ColumnVector<UInt8> &>(internal_column).getData();
         column_data.reserve(arrow_column->length());
@@ -167,12 +167,17 @@ namespace DB
             std::shared_ptr<arrow::Buffer> buffer = chunk.data()->buffers[1];
 
             for (size_t bool_i = 0; bool_i != static_cast<size_t>(chunk.length()); ++bool_i)
-                column_data.emplace_back(chunk.Value(bool_i));
+            {
+                if (chunk.IsNull(bool_i) && replace_null_with_default)
+                    column_data.emplace_back(UInt8());
+                else
+                    column_data.emplace_back(chunk.Value(bool_i));
+            }
         }
     }
 
 /// Arrow stores Parquet::DATE in Int32, while ClickHouse stores Date in UInt16. Therefore, it should be checked before saving
-static void fillColumnWithDate32Data(std::shared_ptr<arrow::ChunkedArray> & arrow_column, IColumn & internal_column)
+static void fillColumnWithDate32Data(std::shared_ptr<arrow::ChunkedArray> & arrow_column, IColumn & internal_column, const bool replace_null_with_default = false)
 {
     PaddedPODArray<UInt16> & column_data = assert_cast<ColumnVector<UInt16> &>(internal_column).getData();
     column_data.reserve(arrow_column->length());
@@ -183,23 +188,29 @@ static void fillColumnWithDate32Data(std::shared_ptr<arrow::ChunkedArray> & arro
 
         for (size_t value_i = 0, length = static_cast<size_t>(chunk.length()); value_i < length; ++value_i)
         {
-            UInt32 days_num = static_cast<UInt32>(chunk.Value(value_i));
-            if (days_num > DATE_LUT_MAX_DAY_NUM)
+            if (chunk.IsNull(value_i) && replace_null_with_default)
             {
-                // TODO: will it rollback correctly?
-                throw Exception
-                    {
-                        fmt::format("Input value {} of a column \"{}\" is greater than max allowed Date value, which is {}", days_num, internal_column.getName(), DATE_LUT_MAX_DAY_NUM),
-                        ErrorCodes::VALUE_IS_OUT_OF_RANGE_OF_DATA_TYPE
-                    };
+                column_data.emplace_back(UInt16());
             }
-
-            column_data.emplace_back(days_num);
+            else
+            {
+                UInt32 days_num = static_cast<UInt32>(chunk.Value(value_i));
+                if (days_num > DATE_LUT_MAX_DAY_NUM)
+                {
+                    // TODO: will it rollback correctly?
+                    throw Exception
+                        {
+                            fmt::format("Input value {} of a column \"{}\" is greater than max allowed Date value, which is {}", days_num, internal_column.getName(), DATE_LUT_MAX_DAY_NUM),
+                            ErrorCodes::VALUE_IS_OUT_OF_RANGE_OF_DATA_TYPE
+                        };
+                }
+                column_data.emplace_back(days_num);
+            }
         }
     }
 }
 
-    static void fillDate32ColumnWithDate32Data(std::shared_ptr<arrow::ChunkedArray> & arrow_column, IColumn & internal_column)
+    static void fillDate32ColumnWithDate32Data(std::shared_ptr<arrow::ChunkedArray> & arrow_column, IColumn & internal_column, const bool replace_null_with_default = false)
     {
         PaddedPODArray<Int32> & column_data = assert_cast<ColumnVector<Int32> &>(internal_column).getData();
         column_data.reserve(arrow_column->length());
@@ -210,18 +221,24 @@ static void fillColumnWithDate32Data(std::shared_ptr<arrow::ChunkedArray> & arro
 
             for (size_t value_i = 0, length = static_cast<size_t>(chunk.length()); value_i < length; ++value_i)
             {
-                Int32 days_num = static_cast<Int32>(chunk.Value(value_i));
-                if (days_num > DATE_LUT_MAX_EXTEND_DAY_NUM)
+                if (chunk.IsNull(value_i) && replace_null_with_default)
                 {
-                    // TODO: will it rollback correctly?
-                    throw Exception
-                        {
-                            fmt::format("Input value {} of a column \"{}\" is greater than max allowed Date value, which is {}", days_num, internal_column.getName(), DATE_LUT_MAX_DAY_NUM),
-                            ErrorCodes::VALUE_IS_OUT_OF_RANGE_OF_DATA_TYPE
-                        };
+                    column_data.emplace_back(Int32());
                 }
-
-                column_data.emplace_back(days_num);
+                else
+                {
+                    Int32 days_num = static_cast<Int32>(chunk.Value(value_i));
+                    if (days_num > DATE_LUT_MAX_EXTEND_DAY_NUM)
+                    {
+                        // TODO: will it rollback correctly?
+                        throw Exception
+                            {
+                                fmt::format("Input value {} of a column \"{}\" is greater than max allowed Date value, which is {}", days_num, internal_column.getName(), DATE_LUT_MAX_DAY_NUM),
+                                ErrorCodes::VALUE_IS_OUT_OF_RANGE_OF_DATA_TYPE
+                            };
+                    }
+                    column_data.emplace_back(days_num);
+                }
             }
         }
     }
@@ -350,18 +367,19 @@ static void fillColumnWithDate32Data(std::shared_ptr<arrow::ChunkedArray> & arro
         const std::string & column_name,
         const std::string & format_name,
         bool is_nullable,
+        bool replace_null_with_default,
         std::unordered_map<String, ColumnPtr> dictionary_values)
     {
         if (internal_column.isNullable())
         {
             ColumnNullable & column_nullable = assert_cast<ColumnNullable &>(internal_column);
-            readColumnFromArrowColumn(arrow_column, column_nullable.getNestedColumn(), column_name, format_name, true, dictionary_values);
+            readColumnFromArrowColumn(arrow_column, column_nullable.getNestedColumn(), column_name, format_name, true, false, dictionary_values);
             fillByteMapFromArrowColumn(arrow_column, column_nullable.getNullMapColumn());
             return;
         }
 
         /// TODO: check if a column is const?
-        if (!is_nullable && arrow_column->null_count() && arrow_column->type()->id() != arrow::Type::LIST
+        if (!is_nullable && !replace_null_with_default && arrow_column->null_count() && arrow_column->type()->id() != arrow::Type::LIST
             && arrow_column->type()->id() != arrow::Type::MAP && arrow_column->type()->id() != arrow::Type::STRUCT)
         {
             throw Exception
@@ -420,7 +438,7 @@ static void fillColumnWithDate32Data(std::shared_ptr<arrow::ChunkedArray> & arro
                     ? assert_cast<ColumnMap &>(internal_column).getNestedColumn()
                     : assert_cast<ColumnArray &>(internal_column);
 
-                readColumnFromArrowColumn(arrow_nested_column, column_array.getData(), column_name, format_name, false, dictionary_values);
+                readColumnFromArrowColumn(arrow_nested_column, column_array.getData(), column_name, format_name, false, replace_null_with_default, dictionary_values);
                 fillOffsetsFromArrowListColumn(arrow_column, column_array.getOffsetsColumn());
 #else
                 ColumnPtr bytemap_nested = nullptr;
@@ -434,7 +452,7 @@ static void fillColumnWithDate32Data(std::shared_ptr<arrow::ChunkedArray> & arro
                     ? assert_cast<ColumnArray &>(*(bytemap_nested->assumeMutable()))
                     : assert_cast<ColumnArray &>(internal_column);
 
-                readColumnFromArrowColumn(arrow_nested_column, column_array.getData(), column_name, format_name, false, dictionary_values);
+                readColumnFromArrowColumn(arrow_nested_column, column_array.getData(), column_name, format_name, false, replace_null_with_default, dictionary_values);
                 fillOffsetsFromArrowListColumn(arrow_column, column_array.getOffsetsColumn());
 #endif
                 break;
@@ -454,7 +472,7 @@ static void fillColumnWithDate32Data(std::shared_ptr<arrow::ChunkedArray> & arro
                 for (int i = 0; i != fields_count; ++i)
                 {
                     auto nested_arrow_column = std::make_shared<arrow::ChunkedArray>(nested_arrow_columns[i]);
-                    readColumnFromArrowColumn(nested_arrow_column, column_tuple.getColumn(i), column_name, format_name, false, dictionary_values);
+                    readColumnFromArrowColumn(nested_arrow_column, column_tuple.getColumn(i), column_name, format_name, false, replace_null_with_default, dictionary_values);
                 }
                 break;
             }
@@ -476,7 +494,7 @@ static void fillColumnWithDate32Data(std::shared_ptr<arrow::ChunkedArray> & arro
                     auto dict_column = IColumn::mutate(column_lc.getDictionaryPtr());
                     auto * uniq_column = static_cast<IColumnUnique *>(dict_column.get());
                     auto values_column = uniq_column->getNestedColumn()->cloneEmpty();
-                    readColumnFromArrowColumn(arrow_dict_column, *values_column, column_name, format_name, false, dictionary_values);
+                    readColumnFromArrowColumn(arrow_dict_column, *values_column, column_name, format_name, false, replace_null_with_default, dictionary_values);
                     uniq_column->uniqueInsertRangeFrom(*values_column, 0, values_column->size());
                     dict_values = std::move(dict_column);
                 }
@@ -638,7 +656,14 @@ static void fillColumnWithDate32Data(std::shared_ptr<arrow::ChunkedArray> & arro
         const Block & header_,
         std::shared_ptr<arrow::Schema> schema_,
         const std::string & format_name_,
-        const std::map<String, String> & partition_kv_) : header(header_), format_name(format_name_), partition_kv(partition_kv_)
+        bool allow_missing_columns_,
+        bool null_as_default_,
+        const std::map<String, String> & partition_kv_)
+        : header(header_)
+        , format_name(format_name_)
+        , allow_missing_columns(allow_missing_columns_)
+        , null_as_default(null_as_default_)
+        , partition_kv(partition_kv_)
     {
         for (const auto & field : schema_->fields())
         {
@@ -704,14 +729,27 @@ static void fillColumnWithDate32Data(std::shared_ptr<arrow::ChunkedArray> & arro
                 {
                     column_name = escapeForFileName(column_name);
                     if (name_to_column_ptr.find(column_name) == name_to_column_ptr.end())
-                        continue;
+                    {
+                        if (!allow_missing_columns)
+                            throw Exception{ErrorCodes::THERE_IS_NO_COLUMN, "Column '{}' is not presented in input data.", header_column.name};
+                        else
+                        {
+                            ColumnWithTypeAndName column;
+                            column.name = header_column.name;
+                            column.type = header_column.type;
+                            column.column = header_column.column->cloneResized(num_rows);
+                            columns_list.push_back(std::move(column.column));
+
+                            continue;
+                        }
+                    }
                 }
             }
             std::shared_ptr<arrow::ChunkedArray> arrow_column = name_to_column_ptr[header_column.name];
 
             DataTypePtr & internal_type = name_to_internal_type[header_column.name];
             MutableColumnPtr read_column = internal_type->createColumn();
-            readColumnFromArrowColumn(arrow_column, *read_column, header_column.name, format_name, false, dictionary_values);
+            readColumnFromArrowColumn(arrow_column, *read_column, header_column.name, format_name, false, null_as_default, dictionary_values);
 
             ColumnWithTypeAndName column;
             column.name = header_column.name;
