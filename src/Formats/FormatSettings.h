@@ -127,6 +127,12 @@ struct FormatSettings
         bool read_one_group = false;
     } parquet;
 
+    struct Orc
+    {
+        std::map<String, String> partition_kv = {};
+        std::unordered_set<Int64> skip_stripes = {};
+    } orc;
+
     struct Pretty
     {
         UInt64 max_rows = 10000;

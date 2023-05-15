@@ -230,6 +230,7 @@ HivePartitionVector HiveMetastoreClient::getPartitionsFromMetastore(
                 info->create_time = partitions[i].createTime;
                 info->last_access_time = partitions[i].lastAccessTime;
                 info->values = partitions[i].values;
+                info->input_format = partitions[i].sd.inputFormat;
                 info->cols = partitions[i].sd.cols;
                 std::vector<String> parts_name = getPartsNameInPartition(disk, info->partition_path);
                 String partition_id = escapeHiveTablePrefix(table_path, info->partition_path);
@@ -293,6 +294,7 @@ HivePartitionVector HiveMetastoreClient::getPartitionsByFilter(
                 info->create_time = partitions[i].createTime;
                 info->last_access_time = partitions[i].lastAccessTime;
                 info->values = partitions[i].values;
+                info->input_format = partitions[i].sd.inputFormat;
                 info->cols = partitions[i].sd.cols;
                 std::vector<String> parts_name = getPartsNameInPartition(disk, info->partition_path);
                 String partition_id = escapeHiveTablePrefix(table_path, info->partition_path);
@@ -353,6 +355,7 @@ HiveDataPartsCNCHVector HiveMetastoreClient::getDataPartsInPartition(
     const String partition_id = partition->getID();
     const String table_path = partition->getTablePath();
     std::unordered_set<Int64> skip_list = {};
+    const String format_name = partition->getInputFormat();
 
     for (auto & part_name : parts_name)
     {
@@ -366,44 +369,16 @@ HiveDataPartsCNCHVector HiveMetastoreClient::getDataPartsInPartition(
         part_name = partition_id + '/' + part_name;
         auto info = std::make_shared<HivePartInfo>(part_name, partition_id);
 
-        res.push_back(std::make_shared<HiveDataPart>(part_name, partition->getHDFSUri(), table_path, nullptr, *info, skip_list));
+        LOG_TRACE(&Poco::Logger::get("HiveMetastoreClient"), " getDataPartsInPartition format_name = {}", format_name);
+
+        if (format_name.find("Orc") != String::npos)
+            res.push_back(std::make_shared<HiveORCFile>(part_name, partition->getHDFSUri(), table_path, format_name, nullptr, *info, skip_list));
+        else if (format_name.find("Parquet") != String::npos)
+            res.push_back(std::make_shared<HiveParquetFile>(part_name, partition->getHDFSUri(), table_path, format_name, nullptr, *info, skip_list));
     }
 
     return res;
 }
-
-/// TODO: optimizer this function,
-/// modify some HiveDataPart member variables to mutable
-// MutableHiveDataPartsCNCHVector HiveMetastoreClient::getDataPartsInPartition(
-//     const StoragePtr & /*storage*/,
-//     HivePartitionPtr & partition,
-//     const HDFSConnectionParams & hdfs_paras,
-//     const NamesAndTypesList & index_names_and_types,
-//     const std::set<Int64> & required_bucket_numbers)
-// {
-//     MutableHiveDataPartsCNCHVector res;
-//     std::vector<String> parts_name = partition->getPartsName();
-//     const String partition_id = partition->getID();
-//     const String table_path = partition->getTablePath();
-//     std::unordered_set<Int64> skip_list = {};
-
-//     for(auto & part_name : parts_name)
-//     {
-//         Int64 index = 0;
-//         if(!required_bucket_numbers.empty() && getDataPartIndex(part_name, index))
-//         {
-//             if(std::find(required_bucket_numbers.begin(), required_bucket_numbers.end(), index) == required_bucket_numbers.end())
-//                 continue;
-//         }
-
-//         part_name = partition_id + '/' + part_name;
-//         auto info = std::make_shared<HivePartInfo>(part_name, partition_id);
-
-//         res.push_back(std::make_shared<HiveDataPart>(part_name, table_path, nullptr, *info, hdfs_paras, skip_list, index_names_and_types));
-//     }
-
-//     return res;
-// }
 
 String HiveMetastoreClient::normalizeHdfsSchema(const String & path)
 {
@@ -737,7 +712,7 @@ HiveMetastoreClientFactory::createThriftHiveMetastoreClient(const String & name,
     std::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
 
     if (settings.hive_metastore_client_kerberos_auth)
-    {   
+    {
         String hadoop_kerberos_principal = settings.hive_metastore_client_principal.toString() + "/"+ settings.hive_metastore_client_service_fqdn.toString();
         kerberosInit(settings.hive_metastore_client_keytab_path,hadoop_kerberos_principal);
         transport = TSaslClientTransport::wrapClientTransports(settings.hive_metastore_client_service_fqdn, settings.hive_metastore_client_principal, transport);

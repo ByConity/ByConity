@@ -672,7 +672,6 @@ static void fillColumnWithDate32Data(std::shared_ptr<arrow::ChunkedArray> & arro
 
             String column_name = header_column.name;
             String nested_table_name = Nested::extractTableName(header_column.name);
-            LOG_TRACE(&Poco::Logger::get("ArrowColumnToCHColumn"), " ArrowColumnToCHColumn column_name = {}", column_name);
             if (name_to_column_ptr.find(header_column.name) == name_to_column_ptr.end())
             {
                 // // TODO: What if some columns were not presented? Insert NULLs? What if a column is not nullable?

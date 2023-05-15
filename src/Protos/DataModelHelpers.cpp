@@ -242,7 +242,7 @@ void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Pr
     part_model.set_table_definition_hash(part.table_definition_hash);
     part_model.set_commit_time(part.commit_time.toUInt64());
     // TODO support multiple namenode , mock 0 now.
-    part_model.set_data_path_id(0); 
+    part_model.set_data_path_id(0);
 
     if (part.deleted)
         part_model.set_deleted(part.deleted);
@@ -430,11 +430,12 @@ void fillCnchHivePartsModel(const HiveDataPartsCNCHVector & parts, pb::RepeatedP
         auto & info = *part_model.mutable_part_info();
         auto skip_list = part->getSkipSplits();
         auto size = skip_list.size();
-        *info.mutable_name() = part->info.name;
-        *info.mutable_partition_id() = part->info.partition_id;
-        *part_model.mutable_relative_path() = part->relative_path;
+        *info.mutable_name() = part->getInfo().name;
+        *info.mutable_partition_id() = part->getInfo().partition_id;
+        *part_model.mutable_relative_path() = part->getRelativePath();
         part_model.set_skip_lists(size);
         part_model.set_hdfs_uri(part->getHDFSUri());
+        *part_model.mutable_format_name() = part->getFormatName();
 
         for (auto & skip_num : skip_list)
             *part_model.mutable_skip_numbers()->Add() = skip_num;
@@ -454,6 +455,7 @@ createCnchHiveDataParts(const ContextPtr & context, const pb::RepeatedPtrField<P
     {
         const auto & part_name = part.part_info().name();
         const auto & partition_id = part.part_info().partition_id();
+        const auto & format_name = part.format_name();
 
         std::unordered_set<Int64> required_skip_lists;
         for (const auto & skip_number : part.skip_numbers())
@@ -470,14 +472,29 @@ createCnchHiveDataParts(const ContextPtr & context, const pb::RepeatedPtrField<P
             disk = std::make_shared<DiskByteHDFS>(part.hdfs_uri(), "", params);
         }
 
-        res.emplace_back(std::make_shared<const HiveDataPart>(
-            part_name,
-            part.relative_path(),
-            part.has_hdfs_uri() ? part.hdfs_uri() : context->getHdfsNNProxy(),
-            disk,
-            HivePartInfo(part_name, partition_id),
-            required_skip_lists));
+        LOG_TRACE(&Poco::Logger::get("createCnchHiveDataParts"), " createCnchHiveDataParts format_name = {}", format_name);
+
+
+        if (format_name.find("Orc") != String::npos)
+            res.emplace_back(std::make_shared<const HiveORCFile>(
+                part_name,
+                part.relative_path(),
+                part.has_hdfs_uri() ? part.hdfs_uri() : context->getHdfsNNProxy(),
+                format_name,
+                disk,
+                HivePartInfo(part_name, partition_id),
+                required_skip_lists));
+        else if (format_name.find("Parquet") != String::npos)
+            res.emplace_back(std::make_shared<const HiveParquetFile>(
+                part_name,
+                part.relative_path(),
+                part.has_hdfs_uri() ? part.hdfs_uri() : context->getHdfsNNProxy(),
+                format_name,
+                disk,
+                HivePartInfo(part_name, partition_id),
+                required_skip_lists));
     }
+
     return res;
 }
 

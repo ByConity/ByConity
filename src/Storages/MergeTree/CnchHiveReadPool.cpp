@@ -31,7 +31,7 @@ namespace DB
 CnchHiveReadPool::CnchHiveReadPool(
     const size_t & threads_,
     const size_t & sum_row_groups_,
-    RowGroupsInDataParts && parts_,
+    BlocksInDataParts && parts_,
     const StorageCloudHive & data_,
     const StorageMetadataPtr & metadata_snapshot_,
     Names column_names_)
@@ -42,7 +42,7 @@ CnchHiveReadPool::CnchHiveReadPool(
 }
 
 ///
-void CnchHiveReadPool::fillPerThreadInfo(const size_t & threads, const size_t & sum_row_groups, RowGroupsInDataParts data_parts)
+void CnchHiveReadPool::fillPerThreadInfo(const size_t & threads, const size_t & sum_row_groups, BlocksInDataParts data_parts)
 {
     threads_tasks.resize(threads);
     const size_t min_row_groups_per_thread = (sum_row_groups - 1) / threads + 1;
@@ -63,7 +63,7 @@ void CnchHiveReadPool::fillPerThreadInfo(const size_t & threads, const size_t & 
     {
         const auto part_idx = data_parts.size() - 1;
         const auto & part = data_parts.back().data_part;
-        size_t row_groups_in_part = part->getTotalRowGroups();
+        size_t row_groups_in_part = part->getTotalBlockNumber();
         std::string path = part->getFullDataPartPath();
 
         LOG_TRACE(
