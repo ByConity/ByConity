@@ -23,6 +23,8 @@
 #include <Catalog/Catalog.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/PartitionCommands.h>
+#include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
+#include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include <Transaction/TxnTimestamp.h>
 
 namespace DB
@@ -121,7 +123,7 @@ public:
         max_worker_threads(max_thds), new_txn(nullptr), logger(log) {}
 
     void writeRenameRecord(const DiskPtr& disk, const String& from, const String& to);
-    // Persist rename map to kv in form of undo-buffer
+    // Persist rename map and other temporary resource to kv in form of undo-buffer
     void writeRenameMapToKV(Catalog::Catalog & catalog, const String& uuid, const TxnTimestamp& txn_id);
 
     void commit();
@@ -174,6 +176,8 @@ public:
 
 private:
     using PartsFromSources = std::vector<MutableMergeTreeDataPartsCNCHVector>;
+    // Origin part and new parts
+    using PartsWithHistory = std::pair<IMergeTreeDataPartsVector, MutableMergeTreeDataPartsCNCHVector>;
 
     static String trimPathPostSlash(const String& path);
     static String relativePathTo(const String& source, const String& target);
@@ -195,6 +199,8 @@ private:
     PartsFromSources collectPartsFromSources(const StorageCnchMergeTree& tbl,
         const std::vector<CollectSource>& sources, const AttachFilter& filter,
         int max_drill_down_level, AttachContext& attach_ctx);
+    PartsFromSources collectPartsFromS3TaskMeta(StorageCnchMergeTree& tbl,
+        const String& task_id, const AttachFilter& filter, AttachContext& attach_ctx);
     void collectPartsFromUnit(const StorageCnchMergeTree& tbl,
         const DiskPtr& disk, String& path, int max_drill_down_level,
         const AttachFilter& filter, MutableMergeTreeDataPartsCNCHVector& founded_parts);
@@ -203,10 +209,11 @@ private:
     std::pair<String, DiskPtr> findBestDiskForHDFSPath(const String& from_path);
 
     // Rename parts to attach to destination with new part name
-    MutableMergeTreeDataPartsCNCHVector prepareParts(const PartsFromSources& parts_from_sources,
-        AttachContext& attach_ctx);
+    PartsWithHistory prepareParts(const PartsFromSources & parts_from_sources, AttachContext & attach_ctx);
+    void commitPartsFromHDFS(const PartsWithHistory & prepared_parts, NameSet & staged_parts_name);
+    void commitPartsFromOthers(const PartsWithHistory & prepared_parts);
+    void genPartsDeleteMark(PartsWithHistory & prepared_parts);
 
-    void genPartsDeleteMark(MutableMergeTreeDataPartsCNCHVector& parts_to_write);
     void waitingForDedup(const String& partition_id, const NameSet& staged_parts_name);
     void refreshView();
 
@@ -216,7 +223,8 @@ private:
     UInt64 failure_injection_knob;
 
     StorageCnchMergeTree& target_tbl;
-    StoragePtr from_storage; /// If attach.from_table is not empty
+    // If attach from self/other table, set to source storage
+    StoragePtr from_storage;
     const bool is_unique_tbl;
     const PartitionCommand& command;
     ContextMutablePtr query_ctx;

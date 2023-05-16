@@ -73,6 +73,7 @@
 #include <Storages/MergeTree/MergeTreePartition.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Transaction/Actions/DDLAlterAction.h>
+#include <Transaction/Actions/S3DetachMetaAction.h>
 #include <brpc/controller.h>
 #include <Common/Exception.h>
 #include <Common/parseAddress.h>
@@ -151,7 +152,7 @@ StorageCnchMergeTree::StorageCnchMergeTree(
     std::unique_ptr<MergeTreeSettings> settings_)
     : MergeTreeMetaBase(
         table_id_,
-        relative_data_path_.empty() ? UUIDHelpers::UUIDToString(table_id_.uuid) : relative_data_path_,
+        relative_data_path_,
         metadata_,
         context_,
         date_column_name_,
@@ -162,7 +163,15 @@ StorageCnchMergeTree::StorageCnchMergeTree(
         [](const String &) {})
     , CnchStorageCommonHelper(table_id_, getDatabaseName(), getTableName())
 {
-    relative_auxility_storage_path = fs::path("auxility_store") / UUIDHelpers::UUIDToString(table_id_.uuid) / "";
+    String relative_table_path = getStoragePolicy(IStorage::StorageLocation::MAIN)
+                                     ->getAnyDisk()
+                                     ->getTableRelativePathOnDisk(UUIDHelpers::UUIDToString(table_id_.uuid));
+
+    if (relative_data_path_.empty() || relative_table_path.empty())
+    {
+        MergeTreeMetaBase::setRelativeDataPath(IStorage::StorageLocation::MAIN, relative_table_path);
+    }
+    relative_auxility_storage_path = fs::path("auxility_store") / relative_table_path / "";
     format_version = MERGE_TREE_CHCH_DATA_STORAGTE_VERSION;
 }
 
@@ -1948,42 +1957,83 @@ void StorageCnchMergeTree::dropPartsImpl(ServerDataPartsVector& svr_parts_to_dro
         if (metadata_snapshot->hasUniqueKey())
             throw Exception("detach partition command is not supported on unique table", ErrorCodes::NOT_IMPLEMENTED);
 
-        /// XXX: Detach parts will break MVCC: queries and tasks which reference those parts will fail.
-        // VolumePtr hdfs_volume = getStoragePolicy(IStorage::StorageLocation::MAIN)->local_store_volume();
+        DiskType::Type remote_storage_type = getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk()->getType();
 
-        // Create detached directory first
-        Disks disks = getStoragePolicy(IStorage::StorageLocation::MAIN)->getDisks();
-        for (DiskPtr & disk : disks)
+        switch (remote_storage_type)
         {
-            disk->createDirectories(getRelativeDataPath(IStorage::StorageLocation::MAIN) + "/detached");
-        }
+            case DiskType::Type::ByteHDFS:
+            {
+                /// XXX: Detach parts will break MVCC: queries and tasks which reference those parts will fail.
+                // VolumePtr hdfs_volume = getStoragePolicy(IStorage::StorageLocation::MAIN)->local_store_volume();
 
-        UndoResources undo_resources;
-        auto write_undo_callback = [&](const DataPartPtr& part) {
-            UndoResource ub(txn->getTransactionID(), UndoResourceType::FileSystem, part->getFullRelativePath(),
-                part->getRelativePathForDetachedPart(""));
-            ub.setDiskName(part->volume->getDisk()->getName());
-            undo_resources.push_back(ub);
-        };
-        for (const auto& data_part : parts_to_drop)
-        {
-            data_part->enumeratePreviousParts(write_undo_callback);
-        }
-        local_context->getCnchCatalog()->writeUndoBuffer(UUIDHelpers::UUIDToString(getStorageUUID()),
-            txn->getTransactionID(), undo_resources);
+                // Create detached directory first
+                Disks disks = getStoragePolicy(IStorage::StorageLocation::MAIN)->getDisks();
+                for (DiskPtr & disk : disks)
+                {
+                    disk->createDirectories(getRelativeDataPath(IStorage::StorageLocation::MAIN) + "/detached");
+                }
 
-        ThreadPool pool(std::min(parts_to_drop.size(), max_threads));
-        auto callback = [&pool] (const DataPartPtr& part) {
-            pool.scheduleOrThrowOnError([part]() {
-                part->renameToDetached("");
-            });
-        };
-        for (const auto& part : parts_to_drop)
-        {
-            part->enumeratePreviousParts(callback);
+                UndoResources undo_resources;
+                auto write_undo_callback = [&](const DataPartPtr & part) {
+                    UndoResource ub(
+                        txn->getTransactionID(),
+                        UndoResourceType::FileSystem,
+                        part->getFullRelativePath(),
+                        part->getRelativePathForDetachedPart(""));
+                    ub.setDiskName(part->volume->getDisk()->getName());
+                    undo_resources.push_back(ub);
+                };
+                for (const auto & data_part : parts_to_drop)
+                {
+                    data_part->enumeratePreviousParts(write_undo_callback);
+                }
+                local_context->getCnchCatalog()->writeUndoBuffer(
+                    UUIDHelpers::UUIDToString(getStorageUUID()), txn->getTransactionID(), undo_resources);
+
+                ThreadPool pool(std::min(parts_to_drop.size(), max_threads));
+                auto callback
+                    = [&pool](const DataPartPtr & part) { pool.scheduleOrThrowOnError([part]() { part->renameToDetached(""); }); };
+                for (const auto & part : parts_to_drop)
+                {
+                    part->enumeratePreviousParts(callback);
+                }
+                pool.wait();
+                /// NOTE: we still need create DROP_RANGE part for detached parts,
+                break;
+            }
+            case DiskType::Type::ByteS3: 
+            {
+                MergeTreeDataPartsCNCHVector parts;
+                UndoResources resources;
+                for (const auto & part_to_drop : parts_to_drop)
+                {
+                    for (IMergeTreeDataPartPtr curr_part = part_to_drop; curr_part != nullptr; curr_part = curr_part->tryGetPreviousPart())
+                    {
+                        auto part = dynamic_pointer_cast<const MergeTreeDataPartCNCH>(curr_part);
+                        if (part == nullptr)
+                        {
+                            throw Exception("Unexpected part type when detach", ErrorCodes::LOGICAL_ERROR);
+                        }
+
+                        UndoResource ub(txn->getTransactionID(), UndoResourceType::S3DetachPart, part->info.getPartName());
+                        resources.push_back(ub);
+
+                        parts.push_back(part);
+                    }
+                }
+
+                // Write undo buffer first
+                local_context->getCnchCatalog()->writeUndoBuffer(
+                    UUIDHelpers::UUIDToString(getStorageUUID()), txn->getTransactionID(), resources);
+
+                auto action = txn->createAction<S3DetachMetaAction>(shared_from_this(), parts);
+                txn->appendAction(action);
+                break;
+            }
+            default:
+                throw Exception(fmt::format("Unknown storage type {} when detach",
+                    DiskType::toString(remote_storage_type)), ErrorCodes::LOGICAL_ERROR);
         }
-        pool.wait();
-        /// NOTE: we still need create DROP_RANGE part for detached parts,
     }
 
     MutableDataPartsVector drop_ranges;

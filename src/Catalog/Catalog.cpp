@@ -36,12 +36,14 @@
 // #include <Access/MaskingPolicyDataModel.h>
 // #include <Access/MaskingPolicyCommon.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
+#include <Storages/MergeTree/CnchAttachProcessor.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Transaction/getCommitted.h>
 #include <CloudServices/CnchServerClient.h>
 #include <CloudServices/CnchPartsHelper.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <Protos/RPCHelpers.h>
+#include <Protos/data_models.pb.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/PartCacheManager.h>
 #include <Storages/CnchStorageCache.h>
@@ -4811,6 +4813,186 @@ namespace Catalog
     UInt64 Catalog::getMergeMutateThreadStartTime(const StorageID & storage_id) const
     {
         return meta_proxy->getMergeMutateThreadStartTime(name_space, UUIDHelpers::UUIDToString(storage_id.uuid));
+    }
+
+    /// APIs for attach parts from s3
+    void Catalog::attachDetachedParts(const StoragePtr& from_tbl, const StoragePtr& to_tbl,
+        const std::vector<String>& detached_part_names, const IMergeTreeDataPartsVector& parts)
+    {
+        if (detached_part_names.size() != parts.size())
+        {
+            throw Exception(fmt::format("Detached part names {} and parts count {} mismatch",
+                detached_part_names.size(), parts.size()), ErrorCodes::LOGICAL_ERROR);
+        }
+        if (parts.empty())
+        {
+            return;
+        }
+
+        Protos::DataModelPartVector commit_parts;
+        fillPartsModel(*to_tbl, parts, *commit_parts.mutable_parts());
+
+        meta_proxy->attachDetachedParts(name_space,
+            UUIDHelpers::UUIDToString(from_tbl->getStorageUUID()),
+            UUIDHelpers::UUIDToString(to_tbl->getStorageUUID()), detached_part_names,
+            commit_parts, getPartitionIDs(to_tbl, nullptr), max_commit_size_one_batch,
+            max_drop_size_one_batch);
+
+        if (context.getPartCacheManager())
+            context.getPartCacheManager()->insertDataPartsIntoCache(*to_tbl,
+                commit_parts.parts(), false, true);
+    }
+
+    void Catalog::detachAttachedParts(const StoragePtr& from_tbl, const StoragePtr& to_tbl,
+        const IMergeTreeDataPartsVector& attached_parts, const IMergeTreeDataPartsVector& parts)
+    {
+        if (attached_parts.size() != parts.size())
+        {
+            throw Exception(fmt::format("Attached part's size {} and part size {} mismatch",
+                attached_parts.size(), parts.size()), ErrorCodes::LOGICAL_ERROR);
+        }
+        if (parts.empty())
+        {
+            return;
+        }
+
+        std::vector<std::optional<Protos::DataModelPart>> commit_parts;
+        commit_parts.reserve(parts.size());
+        for (const auto& part : parts)
+        {
+            if (part != nullptr)
+            {
+                commit_parts.emplace_back(Protos::DataModelPart());
+                fillPartModel(*to_tbl, *part, commit_parts.back().value());
+            }
+            else
+            {
+                commit_parts.emplace_back(std::nullopt);
+            }
+        }
+
+        std::vector<String> attached_part_names;
+        attached_part_names.reserve(attached_parts.size());
+        for (const auto& part : attached_parts)
+        {
+            attached_part_names.push_back(part->info.getPartName());
+        }
+
+        meta_proxy->detachAttachedParts(name_space,
+            UUIDHelpers::UUIDToString(from_tbl->getStorageUUID()),
+            UUIDHelpers::UUIDToString(to_tbl->getStorageUUID()), attached_part_names,
+            commit_parts, max_commit_size_one_batch, max_drop_size_one_batch);
+
+        if (context.getPartCacheManager())
+        {
+            if (std::shared_ptr<MergeTreeMetaBase> storage = std::dynamic_pointer_cast<MergeTreeMetaBase>(from_tbl);
+                storage != nullptr)
+            {
+                context.getPartCacheManager()->invalidPartCache(from_tbl->getStorageUUID(),
+                    attached_part_names, storage->format_version);
+            }
+            else
+            {
+                throw Exception("Expected MergeTreeMetaBase when detachAttachedParts",
+                    ErrorCodes::LOGICAL_ERROR);
+            }
+        }
+    }
+
+    void Catalog::attachDetachedPartsRaw(const StoragePtr& tbl, const std::vector<String>& part_names)
+    {
+        if (part_names.empty())
+        {
+            return;
+        }
+
+        std::vector<std::pair<String, UInt64>> attached_metas = meta_proxy->attachDetachedPartsRaw(
+            name_space, UUIDHelpers::UUIDToString(tbl->getStorageUUID()), part_names,
+            max_commit_size_one_batch, max_drop_size_one_batch);
+
+        Protos::DataModelPartVector attached_parts;
+        for (const auto& [meta, version] : attached_metas)
+        {
+            if (!meta.empty())
+            {
+                attached_parts.add_parts()->ParseFromString(meta);
+            }
+        }
+
+        if (context.getPartCacheManager())
+            context.getPartCacheManager()->insertDataPartsIntoCache(*tbl,
+                attached_parts.parts(), false, true);
+    }
+
+    void Catalog::detachAttachedPartsRaw(const StoragePtr& from_tbl, const String& to_uuid,
+        const std::vector<String>& attached_part_names, const std::vector<std::pair<String, String>>& detached_part_metas)
+    {
+        if (attached_part_names.empty() && detached_part_metas.empty())
+        {
+            return;
+        }
+
+        MergeTreeDataFormatVersion format_version;
+        if (std::shared_ptr<MergeTreeMetaBase> storage = std::dynamic_pointer_cast<MergeTreeMetaBase>(from_tbl);
+            storage != nullptr)
+        {
+            format_version = storage->format_version;
+        }
+        else
+        {
+            throw Exception("Expect MergeTreeMetaBase when detachAttachedPartsRaw",
+                ErrorCodes::LOGICAL_ERROR);
+        }
+
+        meta_proxy->detachAttachedPartsRaw(name_space, UUIDHelpers::UUIDToString(from_tbl->getStorageUUID()),
+            to_uuid, attached_part_names, detached_part_metas, max_commit_size_one_batch,
+            max_drop_size_one_batch);
+
+        if (context.getPartCacheManager())
+        {
+            context.getPartCacheManager()->invalidPartCache(from_tbl->getStorageUUID(),
+                attached_part_names, format_version);
+        }
+    }
+
+    ServerDataPartsVector Catalog::listDetachedParts(const MergeTreeMetaBase& storage,
+        const AttachFilter& filter)
+    {
+        IMetaStore::IteratorPtr iter = nullptr;
+        switch (filter.mode)
+        {
+            case AttachFilter::Mode::PARTS:
+            {
+                iter = meta_proxy->getDetachedPartsInRange(name_space,
+                    UUIDHelpers::UUIDToString(storage.getStorageID().uuid),
+                    "", "", true, true);
+                break;
+            }
+            case AttachFilter::Mode::PART:
+            {
+                iter = meta_proxy->getDetachedPartsInRange(name_space,
+                    UUIDHelpers::UUIDToString(storage.getStorageID().uuid),
+                    filter.object_id, filter.object_id, true, true);
+                break;
+            }
+            case AttachFilter::Mode::PARTITION:
+            {
+                iter = meta_proxy->getDetachedPartsInRange(name_space,
+                    UUIDHelpers::UUIDToString(storage.getStorageID().uuid),
+                    filter.object_id + "_", filter.object_id + "_", true, true);
+                break;
+            }
+        }
+
+        ServerDataPartsVector parts_vec;
+        while (iter->next())
+        {
+            Protos::DataModelPart part_model;
+            part_model.ParseFromString(iter->value());
+            parts_vec.push_back(std::make_shared<ServerDataPart>(
+                createPartWrapperFromModel(storage, part_model)));
+        }
+        return parts_vec;
     }
 
     void fillUUIDForDictionary(DB::Protos::DataModelDictionary & d)

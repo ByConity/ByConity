@@ -15,6 +15,7 @@
 
 #include <Storages/MergeTree/CnchAttachProcessor.h>
 #include <memory>
+#include <vector>
 #include <numeric>
 #include <filesystem>
 #include <set>
@@ -24,10 +25,17 @@
 #include <CloudServices/CnchPartsHelper.h>
 #include <Interpreters/trySetVirtualWarehouse.h>
 #include <Parsers/ASTLiteral.h>
+#include <Disks/DiskByteS3.h>
+#include <Disks/DiskType.h>
+#include <Interpreters/executeQuery.h>
 #include <Storages/StorageMaterializedView.h>
 #include <Storages/PartitionCommands.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include <Storages/MergeTree/MergeTreeCNCHDataDumper.h>
+#include <Storages/MergeTree/S3PartsAttachMeta.h>
+#include <Transaction/TransactionCommon.h>
+#include <Transaction/TxnTimestamp.h>
+#include <Transaction/Actions/S3AttachMetaFileAction.h>
 
 
 namespace ProfileEvents
@@ -45,6 +53,8 @@ namespace ErrorCodes
     extern const int NOT_IMPLEMENTED;
     extern const int LOGICAL_ERROR;
     extern const int NETWORK_ERROR;
+    extern const int BAD_ARGUMENTS;
+    extern const int DIRECTORY_ALREADY_EXISTS;
 }
 
 IMergeTreeDataPartsVector fromCNCHPartsVec(const MutableMergeTreeDataPartsCNCHVector& parts)
@@ -308,47 +318,23 @@ void CnchAttachProcessor::exec()
         PartsFromSources& parts_from_sources = collect_res.second;
 
         // Assign new part name and rename it to target location
-        MutableMergeTreeDataPartsCNCHVector parts_to_commit = prepareParts(
-            parts_from_sources, attach_ctx);
+        PartsWithHistory prepared_parts = prepareParts(parts_from_sources, attach_ctx);
 
         if (command.replace)
         {
-            genPartsDeleteMark(parts_to_commit);
+            genPartsDeleteMark(prepared_parts);
         }
 
-        if (!parts_to_commit.empty())
+        if (!prepared_parts.first.empty())
         {
-            // Commit transaction
+            DiskType::Type disk_type = target_tbl.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk()->getType();
+            if(disk_type ==  DiskType::Type::ByteHDFS)
             {
-                injectFailure(AttachFailurePoint::BEFORE_COMMIT_FAIL);
-
-                CnchDataWriter cnch_writer(target_tbl, query_ctx, ManipulationType::Insert);
-                if (is_unique_tbl)
-                {
-                    for (const auto& part : parts_to_commit)
-                    {
-                        staged_parts_name.insert(part->info.getPartName());
-                    }
-                    cnch_writer.commitPreparedCnchParts(DumpedData{
-                        .staged_parts = std::move(parts_to_commit),
-                    });
-                }
-                else
-                {
-                    cnch_writer.commitPreparedCnchParts(DumpedData{
-                        .parts = std::move(parts_to_commit),
-                    });
-                }
-
-                injectFailure(AttachFailurePoint::MID_COMMIT_FAIL);
+                commitPartsFromHDFS(prepared_parts, staged_parts_name);
             }
-
-            if (is_unique_tbl)
-            {
-                for (const auto & part : parts_to_commit)
-                {
-                    staged_parts_name.insert(part->info.getPartName());
-                }
+            else
+            {   
+                commitPartsFromOthers(prepared_parts);
             }
         }
     }
@@ -545,40 +531,73 @@ std::pair<AttachFilter, CnchAttachProcessor::PartsFromSources> CnchAttachProcess
 CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromTableDetached(
     const StorageCnchMergeTree& tbl, const AttachFilter& filter, AttachContext& attach_ctx)
 {
-    LOG_DEBUG(logger, fmt::format("Collect parts from table {} with filter {}",
-        tbl.getLogName(), filter.toString()));
+    LOG_DEBUG(logger, fmt::format("Collect parts from table {} with filter {}", tbl.getLogName(), filter.toString()));
 
-    std::vector<CollectSource> sources(1);
-    CollectSource& source = sources.back();
-
-    // Table's detached directory in every disk form a single source
-    // and should calculate visible parts together
-    Disks remote_disks = tbl.getStoragePolicy(IStorage::StorageLocation::MAIN)->getDisks();
-    for (const DiskPtr& disk : remote_disks)
+    DiskType::Type remote_disk_type = target_tbl.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk()->getType();
+    switch (remote_disk_type)
     {
-        String src_rel_path = std::filesystem::path(tbl.getRelativeDataPath(IStorage::StorageLocation::MAIN))
-            / "detached" / "";
-        source.units.emplace_back(disk, src_rel_path);
-    }
+        case DiskType::Type::ByteHDFS: 
+        {
+            std::vector<CollectSource> sources(1);
+            CollectSource & source = sources.back();
 
-    return collectPartsFromSources(tbl, sources, filter,
-        query_ctx->getSettingsRef().cnch_part_attach_drill_down, attach_ctx);
+            // Table's detached directory in every disk form a single source
+            // and should calculate visible parts together
+            Disks remote_disks = tbl.getStoragePolicy(IStorage::StorageLocation::MAIN)->getDisks();
+            for (const DiskPtr & disk : remote_disks)
+            {
+                String src_rel_path = std::filesystem::path(tbl.getRelativeDataPath(IStorage::StorageLocation::MAIN)) / "detached" / "";
+                source.units.emplace_back(disk, src_rel_path);
+            }
+
+            return collectPartsFromSources(tbl, sources, filter, query_ctx->getSettingsRef().cnch_part_attach_drill_down, attach_ctx);
+        }
+        case DiskType::Type::ByteS3: 
+        {
+            // Collect detached parts from catalog
+            auto catalog = query_ctx->getCnchCatalog();
+            ServerDataPartsVector parts = catalog->listDetachedParts(tbl, filter);
+
+            PartsFromSources parts_from_sources(1);
+            for (ServerDataPartPtr& part : parts)
+            {
+                parts_from_sources.back().push_back(part->toCNCHDataPart(tbl));
+            }
+            return parts_from_sources;
+        }
+        default:
+            throw Exception(
+                fmt::format("Unsupported remote volume type {} when attach", DiskType::toString(remote_disk_type)),
+                ErrorCodes::BAD_ARGUMENTS);
+    }
 }
 
-CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromPath(
-    const String& path, const AttachFilter& filter, AttachContext& attach_ctx)
+CnchAttachProcessor::PartsFromSources
+CnchAttachProcessor::collectPartsFromPath(const String & path, const AttachFilter & filter, AttachContext & attach_ctx)
 {
-    LOG_DEBUG(logger, fmt::format("Collect parts from path {} with filter {}",
-        path, filter.toString()));
+    LOG_DEBUG(logger, fmt::format("Collect parts from path {} with filter {}", path, filter.toString()));
 
-    auto [src_path, disk] = findBestDiskForHDFSPath(path);
+    DiskType::Type remote_disk_type = target_tbl.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk()->getType();
+    switch (remote_disk_type)
+    {
+        case DiskType::Type::ByteHDFS: 
+        {
+            auto [src_path, disk] = findBestDiskForHDFSPath(path);
 
-    int drill_down_level = query_ctx->getSettingsRef().cnch_part_attach_drill_down;
-    std::vector<CollectSource> sources = discoverCollectSources(target_tbl, disk,
-        src_path, drill_down_level);
+            int drill_down_level = query_ctx->getSettingsRef().cnch_part_attach_drill_down;
+            std::vector<CollectSource> sources = discoverCollectSources(target_tbl, disk, src_path, drill_down_level);
 
-    return collectPartsFromSources(target_tbl, sources, filter, drill_down_level,
-        attach_ctx);
+            return collectPartsFromSources(target_tbl, sources, filter, drill_down_level, attach_ctx);
+        }
+        case DiskType::Type::ByteS3: 
+        {
+            return collectPartsFromS3TaskMeta(target_tbl, path, filter, attach_ctx);
+        }
+        default:
+            throw Exception(
+                fmt::format("Unsupported remote volume type {} when attach", DiskType::toString(remote_disk_type)),
+                ErrorCodes::BAD_ARGUMENTS);
+    }
 }
 
 std::vector<CollectSource> CnchAttachProcessor::discoverCollectSources(
@@ -716,6 +735,70 @@ CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromSourc
         auto const_parts = fromCNCHPartsVec(parts);
         parts = toCNCHPartsVec(CnchPartsHelper::calcVisibleParts(const_parts, false));
     }
+
+    return parts_from_sources;
+}
+
+CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromS3TaskMeta(
+    StorageCnchMergeTree & tbl, const String & task_id, const AttachFilter & filter, AttachContext & attach_ctx)
+{
+    if (filter.mode != AttachFilter::PARTS)
+    {
+        throw Exception(fmt::format("Only attach from parts is supported when attach from a path"), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    VolumePtr volume = tbl.getStoragePolicy(IStorage::StorageLocation::MAIN)->getVolume(0);
+    DiskPtr disk = tbl.getStoragePolicy(IStorage::StorageLocation::MAIN)->getVolume(0)->getDefaultDisk();
+    std::shared_ptr<DiskByteS3> disk_s3 = std::dynamic_pointer_cast<DiskByteS3>(disk);
+    if (disk_s3 == nullptr)
+    {
+        throw Exception("Failed to cast storage's default disk to Bytes3 when attach", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    {
+        TransactionCnchPtr txn = query_ctx->getCurrentTransaction();
+        auto action = txn->createAction<S3AttachMetaFileAction>(disk_s3, task_id);
+        txn->appendAction(action);
+
+        UndoResource attaching_mark_res(txn->getTransactionID(), UndoResourceType::S3AttachMeta, task_id);
+        attaching_mark_res.setDiskName(disk_s3->getName());
+        query_ctx->getCnchCatalog()->writeUndoBuffer(
+            UUIDHelpers::UUIDToString(target_tbl.getStorageUUID()), txn->getTransactionID(), {attaching_mark_res});
+    }
+
+    S3PartsAttachMeta task_meta(disk_s3->getS3Client(), disk_s3->getS3Bucket(), disk_s3->getPath(), task_id);
+
+    S3PartsAttachMeta::Reader reader(task_meta, 16);
+
+    PartsFromSources parts_from_sources(1);
+    MergeTreePartInfo info;
+
+    MutableMergeTreeDataPartsCNCHVector & parts = parts_from_sources[0];
+    for (const auto & part_meta : reader.metas())
+    {
+        if (MergeTreePartInfo::tryParsePartName(part_meta.first, &info, tbl.format_version))
+        {
+            if (filter.filter(info))
+            {
+                parts.push_back(std::make_shared<MergeTreeDataPartCNCH>(
+                    tbl, part_meta.first, info, volume, part_meta.second, nullptr, UUIDHelpers::toUUID(part_meta.second)));
+            }
+        }
+        else
+        {
+            throw Exception("Can't parse part name: " + part_meta.first + " in task: " + task_id, ErrorCodes::BAD_ARGUMENTS);
+        }
+    }
+
+    auto & worker_pool = attach_ctx.getWorkerPool(parts.size());
+    for (const auto & part : parts)
+    {
+        worker_pool.scheduleOrThrowOnError([this, part]() {
+            injectFailure(AttachFailurePoint::LOAD_PART);
+            part->loadFromFileSystem(false);
+        });
+    }
+    worker_pool.wait();
 
     return parts_from_sources;
 }
@@ -878,7 +961,7 @@ std::pair<String, DiskPtr> CnchAttachProcessor::findBestDiskForHDFSPath(
 }
 
 // Return flatten data parts
-MutableMergeTreeDataPartsCNCHVector CnchAttachProcessor::prepareParts(
+CnchAttachProcessor::PartsWithHistory  CnchAttachProcessor::prepareParts(
     const PartsFromSources& parts_from_sources, AttachContext& attach_ctx)
 {
     // Old part and corresponding new part info
@@ -948,74 +1031,145 @@ MutableMergeTreeDataPartsCNCHVector CnchAttachProcessor::prepareParts(
     }
 
     // Parallel rename, move parts from source location to target location
-    MutableMergeTreeDataPartsCNCHVector prepared_parts;
-    prepared_parts.resize(total_parts_count);
+    PartsWithHistory parts_with_history;
+    parts_with_history.first.resize(total_parts_count);
+    parts_with_history.second.resize(total_parts_count);
 
-    // Create target directory first
-    Disks disks = target_tbl.getStoragePolicy(IStorage::StorageLocation::MAIN)->getDisks();
-    for (const DiskPtr& disk : disks)
+    DiskType::Type remote_disk_type = target_tbl.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk()->getType();
+
+    switch (remote_disk_type)
     {
-        disk->createDirectories(target_tbl.getRelativeDataPath(IStorage::StorageLocation::MAIN));
-    }
-
-    injectFailure(AttachFailurePoint::PREPARE_WRITE_UNDO_FAIL);
-
-    // Write rename record to kv first
-    for (auto & parts_and_infos : parts_and_infos_from_sources)
-    {
-        for (auto & part_and_info : parts_and_infos)
+        case DiskType::Type::ByteHDFS: 
         {
-            IMergeTreeDataPartPtr part = part_and_info.first;
-            MergeTreePartInfo part_info = part_and_info.second;
-            String part_name = part_info.getPartNameWithHintMutation();
-            String target_path = std::filesystem::path(target_tbl.getRelativeDataPath(IStorage::StorageLocation::MAIN))
-                / part_name / "";
-            attach_ctx.writeRenameRecord(part->volume->getDefaultDisk(), part->getFullRelativePath(), target_path);
-        }
-    }
-    attach_ctx.writeRenameMapToKV(*(query_ctx->getCnchCatalog()),
-        UUIDHelpers::UUIDToString(target_tbl.getStorageUUID()),
-        query_ctx->getCurrentTransaction()->getTransactionID());
+            // Create target directory first
+            Disks disks = target_tbl.getStoragePolicy(IStorage::StorageLocation::MAIN)->getDisks();
+            for (const DiskPtr & disk : disks)
+            {
+                disk->createDirectories(target_tbl.getRelativeDataPath(IStorage::StorageLocation::MAIN));
+            }
 
-    UInt64 table_def_hash = target_tbl.getTableHashForClusterBy();
-    size_t offset = 0;
-    auto & worker_pool = attach_ctx.getWorkerPool(total_parts_count);
-    for (auto & parts_and_infos : parts_and_infos_from_sources)
-    {
-        for (auto & part_and_info : parts_and_infos)
+            injectFailure(AttachFailurePoint::PREPARE_WRITE_UNDO_FAIL);
+
+            // Write rename record to kv first
+            for (auto & parts_and_infos : parts_and_infos_from_sources)
+            {
+                for (auto & part_and_info : parts_and_infos)
+                {
+                    IMergeTreeDataPartPtr part = part_and_info.first;
+                    MergeTreePartInfo part_info = part_and_info.second;
+                    String part_name = part_info.getPartNameWithHintMutation();
+                    String target_path
+                        = std::filesystem::path(target_tbl.getRelativeDataPath(IStorage::StorageLocation::MAIN)) / part_name / "";
+                    attach_ctx.writeRenameRecord(part->volume->getDefaultDisk(), part->getFullRelativePath(), target_path);
+                }
+            }
+            attach_ctx.writeRenameMapToKV(
+                *(query_ctx->getCnchCatalog()),
+                UUIDHelpers::UUIDToString(target_tbl.getStorageUUID()),
+                query_ctx->getCurrentTransaction()->getTransactionID());
+
+            UInt64 table_def_hash = target_tbl.getTableHashForClusterBy();
+            size_t offset = 0;
+            auto & worker_pool = attach_ctx.getWorkerPool(total_parts_count);
+            for (auto & parts_and_infos : parts_and_infos_from_sources)
+            {
+                for (auto & part_and_info : parts_and_infos)
+                {
+                    worker_pool.scheduleOrThrowOnError(
+                        [&parts_with_history, table_def_hash, offset, part = part_and_info.first, part_info = part_and_info.second, this]() {
+                            String part_name = part_info.getPartNameWithHintMutation();
+                            String target_path
+                                = std::filesystem::path(target_tbl.getRelativeDataPath(IStorage::StorageLocation::MAIN)) / part_name / "";
+                            part->volume->getDisk()->moveDirectory(part->getFullRelativePath(), target_path);
+
+                            Protos::DataModelPart part_model;
+                            fillPartModel(target_tbl, *part, part_model, true);
+                            // Assign new part info
+                            auto part_info_model = part_model.mutable_part_info();
+                            part_info_model->set_partition_id(part_info.partition_id);
+                            part_info_model->set_min_block(part_info.min_block);
+                            part_info_model->set_max_block(part_info.max_block);
+                            part_info_model->set_level(part_info.level);
+                            part_info_model->set_mutation(part_info.mutation);
+                            part_info_model->set_hint_mutation(part_info.hint_mutation);
+
+                            // Discard part's commit time
+                            part_model.set_commit_time(IMergeTreeDataPart::NOT_INITIALIZED_COMMIT_TIME);
+                            parts_with_history.first[offset] = part;
+                            parts_with_history.second[offset] = createPartFromModel(target_tbl, part_model, part_name);
+                            parts_with_history.second[offset]->table_definition_hash = table_def_hash;
+
+                            injectFailure(AttachFailurePoint::MOVE_PART_FAIL);
+                        });
+                    ++offset;
+                }
+            }
+            worker_pool.wait();
+            break;
+        }
+        case DiskType::Type::ByteS3: 
         {
-            worker_pool.scheduleOrThrowOnError([&prepared_parts, table_def_hash, offset, part = part_and_info.first, part_info = part_and_info.second, this]() {
-                String part_name = part_info.getPartNameWithHintMutation();
-                String target_path = std::filesystem::path(target_tbl.getRelativeDataPath(IStorage::StorageLocation::MAIN)) / part_name / "";
-                part->volume->getDisk()->moveDirectory(part->getFullRelativePath(), target_path);
+            UndoResources undo_resources;
+            TxnTimestamp txn_id = query_ctx->getCurrentTransaction()->getTransactionID();
 
-                Protos::DataModelPart part_model;
-                fillPartModel(target_tbl, *part, part_model, true);
-                // Assign new part info
-                auto part_info_model = part_model.mutable_part_info();
-                part_info_model->set_partition_id(part_info.partition_id);
-                part_info_model->set_min_block(part_info.min_block);
-                part_info_model->set_max_block(part_info.max_block);
-                part_info_model->set_level(part_info.level);
-                part_info_model->set_mutation(part_info.mutation);
-                part_info_model->set_hint_mutation(part_info.hint_mutation);
+            size_t offset = 0;
+            UInt64 table_def_hash = target_tbl.getTableHashForClusterBy();
+            String from_storage_uuid = from_storage == nullptr ? "" : UUIDHelpers::UUIDToString(from_storage->getStorageUUID());
+            for (auto& parts_and_infos : parts_and_infos_from_sources)
+            {
+                for (std::pair<IMergeTreeDataPartPtr, MergeTreePartInfo>& part_and_info : parts_and_infos)
+                {
+                    const IMergeTreeDataPartPtr& part = part_and_info.first;
+                    const MergeTreePartInfo& part_info = part_and_info.second;
+                    String part_name = part->info.getPartName();
 
-                // Discard part's commit time
-                part_model.set_commit_time(IMergeTreeDataPart::NOT_INITIALIZED_COMMIT_TIME);
-                prepared_parts[offset] = createPartFromModel(target_tbl, part_model, part_name);
-                prepared_parts[offset]->table_definition_hash = table_def_hash;
+                    if (!from_storage_uuid.empty())
+                    {
+                        // Write part's origin meta into undo buffer, so when we rollback
+                        // we can revert changes like part's column commit time
+                        Protos::DataModelPart origin_part_model;
+                        fillPartModel(*from_storage, *part, origin_part_model);
+                        undo_resources.emplace_back(txn_id, UndoResourceType::S3AttachPart,
+                            from_storage_uuid, part->info.getPartNameWithHintMutation(), part->info.getPartName(),
+                            origin_part_model.SerializeAsString(), part_info.getPartName());
+                    }
+                    else
+                    {
+                        undo_resources.emplace_back(txn_id, UndoResourceType::S3VolatilePart,
+                            part->info.getPartNameWithHintMutation());
+                    }
+                    Protos::DataModelPart part_model;
+                    fillPartModel(target_tbl, *part, part_model, true);
+                    // Assign new part info
+                    auto part_info_model = part_model.mutable_part_info();
+                    part_info_model->set_partition_id(part_info.partition_id);
+                    part_info_model->set_min_block(part_info.min_block);
+                    part_info_model->set_max_block(part_info.max_block);
+                    part_info_model->set_level(part_info.level);
+                    part_info_model->set_mutation(part_info.mutation);
+                    part_info_model->set_hint_mutation(part_info.hint_mutation);
 
-                injectFailure(AttachFailurePoint::MOVE_PART_FAIL);
-            });
-            ++offset;
+                    // Discard part's commit time
+                    part_model.set_commit_time(IMergeTreeDataPart::NOT_INITIALIZED_COMMIT_TIME);
+                    parts_with_history.first[offset] = part;
+                    parts_with_history.second[offset] = createPartFromModel(target_tbl, part_model, part_info.getPartNameWithHintMutation());
+                    parts_with_history.second[offset]->table_definition_hash = table_def_hash;
+                    ++offset;
+                }
+            }
+
+            query_ctx->getCnchCatalog()->writeUndoBuffer(UUIDHelpers::UUIDToString(target_tbl.getStorageUUID()),
+                txn_id, undo_resources);
+            break;
         }
+        default:
+            throw Exception(fmt::format("Unsupported remote volume type {} when attach",
+                DiskType::toString(remote_disk_type)), ErrorCodes::BAD_ARGUMENTS);
     }
-    worker_pool.wait();
-
-    return prepared_parts;
+    return parts_with_history;
 }
 
-void CnchAttachProcessor::genPartsDeleteMark(MutableMergeTreeDataPartsCNCHVector& parts_to_write)
+void CnchAttachProcessor::genPartsDeleteMark(PartsWithHistory & parts_to_write)
 {
     injectFailure(AttachFailurePoint::GEN_DELETE_MARK_FAIL);
 
@@ -1043,7 +1197,6 @@ void CnchAttachProcessor::genPartsDeleteMark(MutableMergeTreeDataPartsCNCHVector
                 }
             }
         }
-        // TODO patch attach here 
         S3ObjectMetadata::PartGeneratorID part_generator_id(S3ObjectMetadata::PartGeneratorID::TRANSACTION,
             query_ctx->getCurrentTransactionID().toString());
         MergeTreeCNCHDataDumper dumper(target_tbl, part_generator_id);
@@ -1051,7 +1204,8 @@ void CnchAttachProcessor::genPartsDeleteMark(MutableMergeTreeDataPartsCNCHVector
         {
             auto dumped_part = dumper.dumpTempPart(temp_part);
             dumped_part->is_temp = false;
-            parts_to_write.push_back(std::move(dumped_part));
+            parts_to_write.first.push_back(nullptr);
+            parts_to_write.second.push_back(std::move(dumped_part));
         }
     }
 }
@@ -1122,6 +1276,86 @@ void CnchAttachProcessor::verifyPartsNum(size_t parts_num) const
             parts_num), ErrorCodes::BAD_ARGUMENTS);
     }
 }
+
+void CnchAttachProcessor::commitPartsFromHDFS(const PartsWithHistory & prepared_parts, NameSet & staged_parts_name)
+{
+    // Commit transaction
+    {
+        injectFailure(AttachFailurePoint::BEFORE_COMMIT_FAIL);
+
+        CnchDataWriter cnch_writer(target_tbl, query_ctx, ManipulationType::Insert);
+        if (is_unique_tbl)
+        {
+            for (const auto & part : prepared_parts.second)
+            {
+                staged_parts_name.insert(part->info.getPartName());
+            }
+            cnch_writer.commitPreparedCnchParts(DumpedData{
+                .staged_parts = std::move(prepared_parts.second),
+            });
+        }
+        else
+        {
+            cnch_writer.commitPreparedCnchParts(DumpedData{
+                .parts = std::move(prepared_parts.second),
+            });
+        }
+
+        injectFailure(AttachFailurePoint::MID_COMMIT_FAIL);
+    }
+
+    if (is_unique_tbl)
+    {
+        for (const auto & part : prepared_parts.second)
+        {
+            staged_parts_name.insert(part->info.getPartName());
+        }
+    }
+}
+
+void CnchAttachProcessor::commitPartsFromOthers(const PartsWithHistory & prepared_parts)
+{
+    if (is_unique_tbl)
+    {
+        throw Exception("Only support attach parts for unique table in hdfs", ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    // Commit transaction
+    injectFailure(AttachFailurePoint::BEFORE_COMMIT_FAIL);
+
+    if (command.from_table.empty() && !command.from_zookeeper_path.empty())
+    {
+        CnchDataWriter cnch_writer(target_tbl, query_ctx, ManipulationType::Insert);
+        cnch_writer.commitPreparedCnchParts(
+            DumpedData{
+                .parts = std::move(prepared_parts.second),
+            });
+
+        injectFailure(AttachFailurePoint::MID_COMMIT_FAIL);
+        return;
+    }
+
+    CnchDataWriter cnch_writer(target_tbl, query_ctx, ManipulationType::Attach);
+    std::unique_ptr<S3AttachPartsInfo> s3_parts_info;
+
+    if (!command.from_table.empty())
+    {
+        s3_parts_info = std::make_unique<S3AttachPartsInfo>(from_storage, prepared_parts.first, prepared_parts.second);
+    }
+    else
+    {
+        s3_parts_info = std::make_unique<S3AttachPartsInfo>(target_tbl.shared_from_this(), prepared_parts.first, prepared_parts.second);
+    }
+
+    cnch_writer.commitPreparedCnchParts(
+        DumpedData{
+            .parts = std::move(prepared_parts.second),
+        },
+        s3_parts_info);
+
+    injectFailure(AttachFailurePoint::MID_COMMIT_FAIL);
+}
+
 
 void CnchAttachProcessor::injectFailure(AttachFailurePoint point) const
 {

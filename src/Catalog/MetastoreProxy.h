@@ -88,6 +88,7 @@ namespace DB::Catalog
 #define FILESYS_LOCK_PREFIX "FSLK_"
 #define UDF_STORE_PREFIX "UDF_"
 #define MERGEMUTATE_THREAD_START_TIME "MTST_"
+#define DETACHED_PART_PREFIX "DP_"
 
 class MetastoreProxy
 {
@@ -538,6 +539,17 @@ public:
         return escapeString(name_sapce) + '_' + MERGEMUTATE_THREAD_START_TIME + uuid;
     }
 
+    static String detachedPartPrefix(const String& name_space, const String& uuid)
+    {
+        return escapeString(name_space) + '_' + DETACHED_PART_PREFIX + uuid + '_';
+    }
+
+    static String detachedPartKey(const String& name_space, const String& uuid,
+        const String& part_name)
+    {
+        return escapeString(name_space) + '_' + DETACHED_PART_PREFIX + uuid + '_' + part_name;
+    }
+
     /// end of Metastore Proxy keying schema
 
     void createTransactionRecord(const String & name_space, const UInt64 & txn_id, const String & txn_data);
@@ -630,7 +642,7 @@ public:
 
     /// mvcc version drop part
     void dropDataPart(const String & name_space, const String & table_uuid, const String & part_name, const String & part_info);
-    Strings getPartsByName(const String & name_space, const String & uuid, RepeatedFields & parts_name);
+    Strings getPartsByName(const String & name_space, const String & uuid, const Strings & parts_name);
     IMetaStore::IteratorPtr getPartsInRange(const String & name_space, const String & uuid, const String & partition_id);
     IMetaStore::IteratorPtr getPartsInRange(const String & name_space, const String & table_uuid, const String & range_start, const String & range_end, bool include_start, bool include_end);
     void dropDataPart(const String & name_space, const String & uuid, const String & part_name);
@@ -754,6 +766,25 @@ public:
         const String & name_space, const String & uuid, const String & column, const std::unordered_set<StatisticsTag> & tags);
     void setMergeMutateThreadStartTime(const String & name_space, const String & uuid, const UInt64 & start_time);
     UInt64 getMergeMutateThreadStartTime(const String & name_space, const String & uuid);
+
+    void attachDetachedParts(const String& name_space, const String& from_uuid,
+        const String& to_uuid, const std::vector<String>& detached_part_names,
+        const Protos::DataModelPartVector& parts, const Strings& current_partitions,
+        size_t batch_write_size, size_t batch_delete_size);
+    void detachAttachedParts(const String& name_space, const String& from_uuid,
+        const String& to_uuid, const std::vector<String>& attached_part_names,
+        const std::vector<std::optional<Protos::DataModelPart>>& parts,
+        size_t batch_write_size, size_t batch_delete_size);
+    std::vector<std::pair<String, UInt64>> attachDetachedPartsRaw(const String& name_space,
+        const String& tbl_uuid, const std::vector<String>& part_names,
+        size_t batch_write_size, size_t batch_delete_size);
+    void detachAttachedPartsRaw(const String& name_space, const String& from_uuid,
+        const String& to_uuid, const std::vector<String>& attached_part_names,
+        const std::vector<std::pair<String, String>>& detached_part_metas,
+        size_t batch_write_size, size_t batch_delete_size);
+    IMetaStore::IteratorPtr getDetachedPartsInRange(const String& name_space,
+        const String& tbl_uuid, const String& range_start, const String& range_end,
+        bool include_start = true, bool include_end = false);
 
 private:
 

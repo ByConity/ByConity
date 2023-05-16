@@ -35,12 +35,18 @@
 #include <common/getFQDNOrHostName.h>
 #include <Transaction/TransactionCommon.h>
 #include <ResourceManagement/CommonData.h>
+#include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 // #include <Access/MaskingPolicyDataModel.h>
 
 namespace DB::ErrorCodes
 {
     extern const int TIMEOUT_EXCEEDED;
 } // namespace DB::ErrorCodes
+
+namespace DB
+{
+class AttachFilter;
+}
 
 namespace DB::Catalog
 {
@@ -500,6 +506,26 @@ public:
     void setMergeMutateThreadStartTime(const StorageID & storage_id, const UInt64 & startup_time) const;
 
     UInt64 getMergeMutateThreadStartTime(const StorageID & storage_id) const;
+
+    // Interfaces to support s3 storage
+    // Delete detached parts from 'from_tbl' with `detached_part_names`,
+    // if part name in `detached_part_names` is empty, skip this delete.
+    // Write to `to_tbl` attached parts with `parts`
+    void attachDetachedParts(const StoragePtr& from_tbl, const StoragePtr& to_tbl,
+        const std::vector<String>& detached_part_names, const IMergeTreeDataPartsVector& parts);
+    // Delete parts from `from_tbl` with `attached_parts`, write detached part meta
+    // to `to_tbl` with parts, if parts is nullptr, skip this write
+    void detachAttachedParts(const StoragePtr& from_tbl, const StoragePtr& to_tbl,
+        const IMergeTreeDataPartsVector& attached_parts, const IMergeTreeDataPartsVector& parts);
+    // Rename part's meta for `tbl`, from detached to active
+    void attachDetachedPartsRaw(const StoragePtr& tbl, const std::vector<String>& part_names);
+    // Rename part's meta from `from_tbl` with attached_part_names, and 
+    // write to `to_uuid`'s detached parts, first element of `detached_part_metas` is detached part name
+    // second element of `detached_part_metas` is detached part meta
+    void detachAttachedPartsRaw(const StoragePtr& from_tbl, const String& to_uuid,
+        const std::vector<String>& attached_part_names, const std::vector<std::pair<String, String>>& detached_part_metas);
+    ServerDataPartsVector listDetachedParts(const MergeTreeMetaBase& storage,
+        const AttachFilter& filter);
 
 private:
     Poco::Logger * log = &Poco::Logger::get("Catalog");

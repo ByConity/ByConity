@@ -15,9 +15,11 @@
 
 #pragma once
 
+#include <memory>
 #include <Storages/MergeTree/DeleteBitmapMeta.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Transaction/TxnTimestamp.h>
+#include <Transaction/Actions/S3AttachMetaAction.h>
 #include <WorkerTasks/ManipulationType.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 
@@ -56,7 +58,7 @@ public:
         const IMutableMergeTreeDataPartsVector & temp_staged_parts = {});
 
     // server side only
-    TxnTimestamp commitPreparedCnchParts(const DumpedData & data);
+    TxnTimestamp commitPreparedCnchParts(const DumpedData & data, const std::unique_ptr<S3AttachPartsInfo>& s3_parts_info = nullptr);
 
     /// Convert staged parts to visible parts along with the given delete bitmaps.
     void publishStagedParts(

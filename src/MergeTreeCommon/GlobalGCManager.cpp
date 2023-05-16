@@ -13,17 +13,27 @@
  * limitations under the License.
  */
 
+#include <memory>
 #include <MergeTreeCommon/GlobalGCManager.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
+#include <Storages/MergeTree/S3PartsAttachMeta.h>
+#include <Storages/MergeTree/CnchAttachProcessor.h>
 #include <Storages/Kafka/StorageCnchKafka.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Protos/RPCHelpers.h>
 #include <Common/Status.h>
 #include <Catalog/Catalog.h>
+#include <Catalog/DataModelPartWrapper_fwd.h>
 
 
 namespace DB
 {
+
+namespace ErrorCodes
+{
+    extern const int LOGICAL_ERROR;
+}   
+
 GlobalGCManager::GlobalGCManager(
     ContextMutablePtr global_context_,
     size_t default_max_threads,
@@ -83,6 +93,50 @@ size_t amountOfWorkCanReceive(size_t max_threads, size_t deleting_table_num)
 }
 
 namespace {
+    void cleanS3Disks(const StoragePtr & storage, const MergeTreeMetaBase & mergetree_meta, const Context & context, Poco::Logger * log)
+    {   
+        auto catalog = context.getCnchCatalog();
+        Strings partition_ids = catalog->getPartitionIDs(storage, &context);
+
+        ThreadPool clean_pool(context.getSettingsRef().s3_gc_inter_partition_parallelism);
+        for (const String & partition_id : partition_ids)
+        {
+            clean_pool.scheduleOrThrow([partition_id, &log, &catalog, &storage, &mergetree_meta, &context]() {
+                MultiDiskS3PartsLazyCleaner parts_cleaner(std::nullopt, context.getSettingsRef().s3_gc_intra_partition_parallelism);
+
+                LOG_INFO(log, fmt::format("Start GC partition {} for table {}", partition_id, storage->getStorageID().getNameForLogs()));
+
+                ServerDataPartsVector parts = catalog->getServerDataPartsInPartitions(storage, {partition_id}, {0}, &context);
+                for (auto & part : parts)
+                {
+                    auto cnch_part = part->toCNCHDataPart(mergetree_meta);
+
+                    auto disks = cnch_part->volume->getDisks();
+                    for (const auto & disk : disks)
+                    {
+                        parts_cleaner.push(disk, cnch_part->getFullRelativePath());
+                    }
+                }
+
+                parts = catalog->listDetachedParts(mergetree_meta, AttachFilter::createPartitionFilter(partition_id));
+                for (auto & part : parts)
+                {
+                    auto cnch_part = part->toCNCHDataPart(mergetree_meta);
+
+                    auto disks = cnch_part->volume->getDisks();
+                    for (const auto & disk : disks)
+                    {
+                        parts_cleaner.push(disk, cnch_part->getFullRelativePath());
+                    }
+                }
+
+                parts_cleaner.finalize();
+
+                LOG_INFO(log, fmt::format("Finish GC partition {} for table {}", partition_id, storage->getStorageID().getNameForLogs()));
+            });
+        }
+        clean_pool.wait();
+    }
 
 void cleanDisks(const Disks & disks, const String & relative_path, Poco::Logger * log)
 {
@@ -130,8 +184,7 @@ bool executeGlobalGC(const Protos::DataModelTable & table, const Context & conte
     try
     {
         auto catalog = context.getCnchCatalog();
-
-        /// delete data directory of the table from hdfs
+        
         auto storage = catalog->tryGetTableByUUID(context, UUIDHelpers::UUIDToString(storage_id.uuid), TxnTimestamp::maxTS(), true);
         if (!storage)
         {
@@ -144,10 +197,26 @@ bool executeGlobalGC(const Protos::DataModelTable & table, const Context & conte
         {
             LOG_DEBUG(log, "Remove data path for table {}", storage_id.getNameForLogs());
             StoragePolicyPtr remote_storage_policy = mergetree->getStoragePolicy(IStorage::StorageLocation::MAIN);
-            Disks remote_disks = remote_storage_policy->getDisks();
-            const String & relative_path = mergetree->getRelativeDataPath(IStorage::StorageLocation::MAIN);
-            cleanDisks(remote_disks, relative_path, log);
 
+            DiskType::Type remote_disk_type = remote_storage_policy->getAnyDisk()->getType();
+            switch (remote_disk_type) 
+            {   
+                /// delete data directory of the table from hdfs
+                case DiskType::Type::ByteHDFS: {
+                    Disks remote_disks = remote_storage_policy->getDisks();
+                    const String & relative_path = mergetree->getRelativeDataPath(IStorage::StorageLocation::MAIN);
+                    cleanDisks(remote_disks, relative_path, log);
+                    break;
+                }
+                case DiskType::Type::ByteS3: {
+                    cleanS3Disks(storage, *mergetree, context, log);
+                    break;
+                }
+                default:
+                    throw Exception(
+                        fmt::format("Unexpected disk type {} when global gc", DiskType::toString(remote_disk_type)),
+                        ErrorCodes::LOGICAL_ERROR);
+            }
             // StoragePolicyPtr local_storage_policy = mergetree->getLocalStoragePolicy();
             // Disks local_disks = local_storage_policy->getDisks();
             // //const String local_store_path = mergetree->getLocalStorePath();
