@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.17)
 
+
 foreach(policy
         CMP0023
         CMP0048 # CMake 3.0
