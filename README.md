@@ -85,6 +85,7 @@ resource_manager     # byconity resource manager
 
 The most convinience way for local development is to use `docker-compose`. You can use `docker-compose` to quickly create a [byconity cluster](/docker/local-deploy/README.md) from your local build binary. By using this approach, you do not need to worry about the setup of ByConity dependencies (FoundationDB and HDFS), it automatically launches them all. It is recommended to use this approach for ByConity development.
 
+
 ## Deploy ByConity in cluster
 
 There are ways to deploy ByConity to physical machines:
@@ -95,3 +96,7 @@ There are ways to deploy ByConity to physical machines:
 ## Test ByConity in development enviroment
 
 To test ByConity in development enviroment, follow this [guide](https://github.com/ByConity/ByConity/tree/master/Testing.md).
+
+## Community
+
+- Join our [Discord server](https://discord.gg/V4BvTWGEQJ)
