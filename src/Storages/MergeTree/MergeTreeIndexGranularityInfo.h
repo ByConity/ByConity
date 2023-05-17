@@ -66,8 +66,6 @@ public:
     void setAdaptive(size_t index_granularity_bytes_);
     void setNonAdaptive();
 
-    bool has_disk_cache = false;
-
 private:
     MergeTreeDataPartType type;
 };

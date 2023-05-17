@@ -17,7 +17,6 @@
 
 #include <Catalog/DataModelPartWrapper.h>
 #include <CloudServices/CnchPartsHelper.h>
-#include <CloudServices/CnchWorkerClient.h>
 #include <CloudServices/CnchWorkerResource.h>
 #include <Interpreters/Context.h>
 #include <MergeTreeCommon/assignCnchParts.h>
@@ -51,9 +50,9 @@ void AssignedResource::addDataParts(const HiveDataPartsCNCHVector & parts)
 {
     for (const auto & part : parts)
     {
-        if (!part_names.count(part->name))
+        if (!part_names.count(part->getName()))
         {
-            part_names.emplace(part->name);
+            part_names.emplace(part->getName());
             hive_parts.emplace_back(part);
         }
     }
@@ -61,7 +60,7 @@ void AssignedResource::addDataParts(const HiveDataPartsCNCHVector & parts)
 
 CnchServerResource::~CnchServerResource()
 {
-    if (!worker_group)
+    if (!worker_group || skip_clean_worker)
         return;
 
     auto worker_clients = worker_group->getWorkerClients();
@@ -206,6 +205,29 @@ void CnchServerResource::sendResource(const ContextPtr & context)
             auto worker_client = worker_group->getWorkerClient(host_ports);
             auto curr_ids = processSend(context, worker_client, resource, handler);
             call_ids.insert(call_ids.end(), curr_ids.begin(), curr_ids.end());
+        }
+        assigned_worker_resource.clear();
+    }
+
+    for (auto & call_id : call_ids)
+        brpc::Join(call_id);
+
+    handler.throwIfException();
+}
+
+void CnchServerResource::sendResource(const ContextPtr & context, WorkerAction act)
+{
+    ExceptionHandler handler;
+    std::vector<brpc::CallId> call_ids;
+    {
+        auto lock = getLock();
+        allocateResource(context, lock);
+
+        for (auto & [host_ports, resource] : assigned_worker_resource)
+        {
+            auto worker_client = worker_group->getWorkerClient(host_ports);
+            auto ids = act(worker_client, resource, handler);
+            call_ids.insert(call_ids.end(), ids.begin(), ids.end());
         }
         assigned_worker_resource.clear();
     }

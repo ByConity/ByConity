@@ -65,6 +65,8 @@
     M(TableFunctionExecute, "") \
     M(MarkCacheHits, "") \
     M(MarkCacheMisses, "") \
+    M(PrimaryIndexCacheHits, "") \
+    M(PrimaryIndexCacheMisses, "") \
     M(QueryCacheHits, "") \
     M(QueryCacheMisses, "") \
     M(ChecksumsCacheHits, "") \
@@ -282,6 +284,10 @@
     M(S3WriteRequestsErrors, "Number of non-throttling errors in POST, DELETE, PUT and PATCH requests to S3 storage.") \
     M(S3WriteRequestsThrottling, "Number of 429 and 503 errors in POST, DELETE, PUT and PATCH requests to S3 storage.") \
     M(S3WriteRequestsRedirects, "Number of redirects in POST, DELETE, PUT and PATCH requests to S3 storage.") \
+    \
+    M(AggregationPreallocatedElementsInHashTables, "How many elements were preallocated in hash tables for aggregation.") \
+    M(AggregationHashTablesInitializedAsTwoLevel, "How many hash tables were inited as two-level for aggregation.") \
+    \
     M(QueryMemoryLimitExceeded, "Number of times when memory limit exceeded for query.") \
     M(MarkBitmapIndexReadMicroseconds, "Total time spent in reading mark bitmap index.") \
     \
@@ -702,6 +708,18 @@
     \
     M(PartsToAttach, "") \
     M(NumOfRowsToAttach, "") \
+    \
+    M(WriteBufferFromS3WriteOp, "S3 write op count") \
+    M(WriteBufferFromS3WriteOpFailed, "s3 write op failed count") \
+    M(WriteBufferFromS3WriteOpMicro, "s3 write op time") \
+    M(WriteBufferFromS3WriteOpBytes, "s3 write op size") \
+    M(WriteBufferFromS3ControlOp, "s3 control op count") \
+    M(WriteBufferFromS3ControlOpFailed, "s3 control op failed count") \
+    M(WriteBufferFromS3ControlOpMicro, "s3 control op time") \
+    M(ReadBufferFromS3Read, "s3 read op count") \
+    M(ReadBufferFromS3ReadFailed, "s3 read failed count") \
+    M(ReadBufferFromS3ReadBytes, "s3 read op size") \
+    M(ReadBufferFromS3ReadMicro, "s3 read op time") \
 
 namespace ProfileEvents
 {

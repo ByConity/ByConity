@@ -207,8 +207,11 @@ DiskPtr StoragePolicy::getDiskByName(const String & disk_name) const
 {
     for (auto && volume : volumes)
         for (auto && disk : volume->getDisks())
+        {
+            LOG_DEBUG(&Poco::Logger::get("StoragePolicy::getDiskByName"), "Storage disk name: {} loaded", disk->getName());
             if (disk->getName() == disk_name)
                 return disk;
+        }
     return {};
 }
 

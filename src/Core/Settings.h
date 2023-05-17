@@ -171,7 +171,7 @@ class IColumn;
     M(UInt64, optimize_skip_unused_shards_nesting, 0, "Same as optimize_skip_unused_shards, but accept nesting level until which it will work.", 0) \
     M(UInt64, force_optimize_skip_unused_shards_nesting, 0, "Same as force_optimize_skip_unused_shards, but accept nesting level until which it will work.", 0) \
     \
-    M(Bool, input_format_parallel_parsing, false, "Enable parallel parsing for some data formats.", 0) \
+    M(Bool, input_format_parallel_parsing, true, "Enable parallel parsing for some data formats.", 0) \
     M(UInt64, min_chunk_bytes_for_parallel_parsing, (10 * 1024 * 1024), "The minimum chunk size in bytes, which each thread will parse in parallel.", 0) \
     M(Bool, output_format_parallel_formatting, true, "Enable parallel formatting for some data formats.", 0) \
     \
@@ -501,11 +501,15 @@ class IColumn;
     M(Bool, allow_experimental_window_functions, true, "Allow experimental window functions", 0) \
     M(Bool, allow_experimental_projection_optimization, false, "Enable projection optimization when processing SELECT queries", 0) \
     M(Bool, force_optimize_projection, false, "If projection optimization is enabled, SELECT queries need to use projection", 0) \
-    M(Bool, async_socket_for_remote, true, "Asynchronously read from socket executing remote query", 0) \
+    M(Bool, async_socket_for_remote, false, "Asynchronously read from socket executing remote query", 0) \
     M(Bool, insert_null_as_default, true, "Insert DEFAULT values instead of NULL in INSERT SELECT (UNION ALL)", 0) \
     \
     M(Bool, optimize_rewrite_sum_if_to_count_if, true, "Rewrite sumIf() and sum(if()) function countIf() function when logically equivalent", 0) \
     M(UInt64, insert_shard_id, 0, "If non zero, when insert into a distributed table, the data will be inserted into the shard `insert_shard_id` synchronously. Possible values range from 1 to `shards_number` of corresponding distributed table", 0) \
+    \
+    M(Bool, collect_hash_table_stats_during_aggregation, true, "Enable collecting hash table statistics to optimize memory allocation", 0) \
+    M(UInt64, max_entries_for_hash_table_stats, 10'000, "How many entries hash table statistics collected during aggregation is allowed to have", 0) \
+    M(UInt64, max_size_to_preallocate_for_aggregation, 10'000'000, "For how many elements it is allowed to preallocate space in all hash tables in total before aggregation", 0) \
     \
     /** Experimental feature for moving data between shards. */ \
     \
@@ -578,7 +582,7 @@ class IColumn;
     M(Milliseconds, topology_lease_life_ms, 12000, "Expiration time of topology lease.", 0) \
     M(Milliseconds, topology_session_restart_check_ms, 120, "Check and try to restart leader election for server master", 0) \
     M(UInt64, catalog_max_commit_size, 2000, "Max record number to be committed in one batch.", 0) \
-    M(Bool, server_write_ha, true, "Whether to enable write on non-host server if host server is not available. Directly commit from non-host server.", 0) \
+    M(Bool, server_write_ha, false, "Whether to enable write on non-host server if host server is not available. Directly commit from non-host server.", 0) \
     M(Bool, enable_write_non_host_server, true, "Whether to eable write on non-host server. Will root write request to host server.", 0) \
     M(UInt64, cnch_clear_parts_timeout, 10, "Wait for actions to clear the parts in workers within the specified number of seconds. 0 - wait unlimited time.", 0) \
     M(Seconds, cnch_fetch_parts_timeout, 60, "The timeout for gettting parts from metastore. 0 - wait unlimited time.", 0) \
@@ -592,6 +596,9 @@ class IColumn;
     M(Bool, enable_kafka_log_profiling, false, "Enable query profiling for cnch_kafka_log table", 0) \
     M(Bool, enable_query_metrics_tables_profiling, false, "Enable query profiling for query_metrics and query worker_metrics tables", 0) \
     M(UInt64, cloud_task_auto_stop_timeout, 60, "We will remove this task when heartbeat can't find this task more than retries_count times.", 0)\
+    M(Bool, enable_preload_parts, false, "Enable preload parts", 0) \
+    M(Bool, enable_async_preload_parts, true, "Allow to preload data parts asynchronously", 0) \
+    M(DiskCacheMode, disk_cache_mode, DiskCacheMode::AUTO, "Whether to use local disk cache", 0) \
     /** Settings for Unique Table */ \
     M(Bool, enable_unique_partial_update, true, "Whether to use partial column update for INSERT", 0) \
     M(Milliseconds, dedup_worker_heartbeat_ms, 3000, "Dedup worker heartbeat interval time", 0) \
@@ -604,7 +611,7 @@ class IColumn;
     M(Bool, allow_experimental_funnel_functions, false, "Enable experimental functions for funnel analysis.", 0) \
     \
     /** Complex query settings **/\
-    M(Bool, enable_distributed_stages, false, "Enable complex query mode to split plan to distributed stages", 0)\
+    M(Bool, enable_distributed_stages, true, "Enable complex query mode to split plan to distributed stages", 0)\
     M(Bool, fallback_to_simple_query, false, "Enable fallback if there is any syntax error", 0)\
     M(Bool, debug_plan_generation, false, "Enable complex query mode to split plan to distributed stages", 0)\
     M(Bool, send_plan_segment_by_brpc, true, "Whether to send plan segment by BRPC", 0)\
@@ -799,6 +806,9 @@ class IColumn;
     M(Bool, output_format_pretty_color, true, "Use ANSI escape sequences to paint colors in Pretty formats", 0) \
     M(String, output_format_pretty_grid_charset, "UTF-8", "Charset for printing grid borders. Available charsets: ASCII, UTF-8 (default one).", 0) \
     M(UInt64, output_format_parquet_row_group_size, 1000000, "Row group size in rows.", 0) \
+    M(Bool, input_format_orc_allow_missing_columns, false, "Allow missing columns while reading ORC input formats", 0) \
+    M(Bool, input_format_parquet_allow_missing_columns, false, "Allow missing columns while reading Parquet input formats", 0) \
+    M(Bool, input_format_arrow_allow_missing_columns, false, "Allow missing columns while reading Arrow input formats", 0) \
     M(String, output_format_avro_codec, "", "Compression codec used for output. Possible values: 'null', 'deflate', 'snappy'.", 0) \
     M(UInt64, output_format_avro_sync_interval, 16 * 1024, "Sync interval in bytes.", 0) \
     M(Bool, output_format_tsv_crlf_end_of_line, false, "If it is set true, end of line in TSV format will be \\r\\n instead of \\n.", 0) \
@@ -843,6 +853,7 @@ class IColumn;
     M(UInt64, cnch_part_attach_max_threads, 16, "Max threads to use when attach parts", 0) \
     M(UInt64, attach_failure_injection_knob, 0, "Attach failure injection knob, for test only", 0) \
     M(Bool, async_post_commit, false, "Txn post commit asynchronously", 0) \
+    M(Bool, enable_auto_query_forwarding, false, "Auto forward query to target server when having multiple servers", 0) \
 
 
 // End of FORMAT_FACTORY_SETTINGS

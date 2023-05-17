@@ -606,12 +606,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     Catalog::CatalogConfig catalog_conf(global_context->getCnchConfigRef());
 
-    std::string current_raw_sd_config;
-    if (config().has("service_discovery")) // only important for local mode (for observing if the sd section is changed)
-    {
-        current_raw_sd_config = config().getRawString("service_discovery");
-    }
-
     /// Initialize components in server or worker.
     if (global_context->getServerType() == ServerType::cnch_server || global_context->getServerType() == ServerType::cnch_worker)
     {
@@ -1067,6 +1061,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             formatReadableSizeWithBinarySuffix(mark_cache_size));
     }
     global_context->setMarkCache(mark_cache_size);
+    global_context->setPrimaryIndexCache(mark_cache_size);
     global_context->setChecksumsCache(config().getUInt64("checksum_cache_size", 10737418240)); // 10GB
 
     /// Size of cache for query. It is not necessary.
@@ -1102,7 +1097,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setHdfsNNProxy(hdfs_nnproxy);
 
     /// Init HDFS3 client config path
-    std::string hdfs_config = config().getString("hdfs3_config", "");
+    std::string hdfs_config = global_context->getCnchConfigRef().getString("hdfs3_config", "");
     if (!hdfs_config.empty())
     {
         setenv("LIBHDFS3_CONF", hdfs_config.c_str(), 1);
@@ -1168,9 +1163,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     if( has_hdfs_disk )
     {
-        const int hdfs_max_fd_num = config().getInt("hdfs_max_fd_num", 100000);
-        const int hdfs_skip_fd_num = config().getInt("hdfs_skip_fd_num", 100);
-        const int hdfs_io_error_num_to_reconnect = config().getInt("hdfs_io_error_num_to_reconnect", 10);
+        const int hdfs_max_fd_num = global_context->getCnchConfigRef().getInt("hdfs_max_fd_num", 100000);
+        const int hdfs_skip_fd_num = global_context->getCnchConfigRef().getInt("hdfs_skip_fd_num", 100);
+        const int hdfs_io_error_num_to_reconnect = global_context->getCnchConfigRef().getInt("hdfs_io_error_num_to_reconnect", 10);
         registerDefaultHdfsFileSystem(hdfs_params, hdfs_max_fd_num, hdfs_skip_fd_num, hdfs_io_error_num_to_reconnect);
     }
 
@@ -1698,43 +1693,59 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->setExchangeStatusPort(config().getInt("exchange_status_port"));
 
             Statistics::CacheManager::initialize(global_context);
-            /// Brpc data trans registry service
-            rpc_servers.emplace_back(std::make_unique<brpc::Server>());
-            rpc_servers.emplace_back(std::make_unique<brpc::Server>());
-            rpc_services.emplace_back(std::make_unique<BrpcExchangeReceiverRegistryService>(global_context->getSettingsRef().exchange_stream_max_buf_size));
-            rpc_services.emplace_back(std::make_unique<PlanSegmentManagerRpcService>(global_context));
-            rpc_services.emplace_back(std::make_unique<RuntimeFilterService>(global_context));
 
-            if (rpc_servers[0]->AddService(rpc_services[0].get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0) {
-                throw Exception("Fail to add BrpcExchangeReceiverRegistryService", ErrorCodes::LOGICAL_ERROR);
-            }
-            if (rpc_servers[1]->AddService(rpc_services[1].get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0) {
-                throw Exception("Fail to add PlanSegmentManagerRpcService", ErrorCodes::LOGICAL_ERROR);
-            }
-            // RuntimeFilterService reuse PlanSegmentManagerRpcService port
-            if (rpc_servers[1]->AddService(rpc_services[2].get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0) {
-                throw Exception("Fail to add RuntimeFilterService", ErrorCodes::LOGICAL_ERROR);
-            }
-            brpc::ServerOptions stream_options;
-            stream_options.idle_timeout_sec = -1;
-            stream_options.server_info_name = "stm";
-            stream_options.has_builtin_services = enable_brpc_builtin_services;
-            if (rpc_servers[0]->Start(global_context->getExchangePort(), &stream_options) != 0) {
-                throw Exception("Fail to start BrpcExchangeReceiverRegistryService", ErrorCodes::LOGICAL_ERROR) ;
-            }
+            for (size_t i = 0; i < listen_hosts.size(); i++)
+            {
+                auto& listen_host = listen_hosts[i];
+                /// Brpc data trans registry service
+                auto exchange_server = std::make_unique<brpc::Server>();
+                auto exchange_status_server = std::make_unique<brpc::Server>();
 
-            brpc::ServerOptions command_options;
-            command_options.idle_timeout_sec = -1;
-            command_options.server_info_name = "cmd";
-            command_options.has_builtin_services = enable_brpc_builtin_services;
-            if (rpc_servers[1]->Start(global_context->getExchangeStatusPort(), &command_options) != 0) {
-                throw Exception("Fail to start PlanSegmentManagerRpcService", ErrorCodes::LOGICAL_ERROR) ;
+                auto exchange_service = std::make_unique<BrpcExchangeReceiverRegistryService>(global_context->getSettingsRef().exchange_stream_max_buf_size);
+                auto plan_segment_service = std::make_unique<PlanSegmentManagerRpcService>(global_context);
+                auto runtime_filter_service = std::make_unique<RuntimeFilterService>(global_context);
+
+                if (exchange_server->AddService(exchange_service.get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0)
+                    throw Exception("Fail to add BrpcExchangeReceiverRegistryService", ErrorCodes::LOGICAL_ERROR);
+
+                if (exchange_status_server->AddService(plan_segment_service.get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0)
+                    throw Exception("Fail to add PlanSegmentManagerRpcService", ErrorCodes::LOGICAL_ERROR);
+
+                // RuntimeFilterService reuse PlanSegmentManagerRpcService port
+                if (exchange_status_server->AddService(runtime_filter_service.get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0)
+                    throw Exception("Fail to add RuntimeFilterService", ErrorCodes::LOGICAL_ERROR);
+
+                std::string host_exchange_port = createHostPortString(listen_host, global_context->getExchangePort());
+                brpc::ServerOptions stream_options;
+                stream_options.idle_timeout_sec = -1;
+                if (i > 0)
+                    stream_options.server_info_name = fmt::format("stm{}", i);
+                else
+                    stream_options.server_info_name = fmt::format("stm");
+                stream_options.has_builtin_services = enable_brpc_builtin_services;
+                if (exchange_server->Start(host_exchange_port.c_str(), &stream_options) != 0)
+                    throw Exception("Fail to start BrpcExchangeReceiverRegistryService", ErrorCodes::LOGICAL_ERROR) ;
+
+                std::string host_exchange_status_port = createHostPortString(listen_host, global_context->getExchangeStatusPort());
+                brpc::ServerOptions cmd_options;
+                if (i > 0)
+                    cmd_options.server_info_name = fmt::format("cmd{}", i);
+                else
+                    cmd_options.server_info_name = fmt::format("cmd");
+                cmd_options.has_builtin_services = enable_brpc_builtin_services;
+                if (exchange_status_server->Start(host_exchange_status_port.c_str(), &cmd_options) != 0)
+                    throw Exception("Fail to start PlanSegmentManagerRpcService", ErrorCodes::LOGICAL_ERROR) ;
+
+                rpc_servers.emplace_back(std::move(exchange_server));
+                rpc_servers.emplace_back(std::move(exchange_status_server));
+
+                rpc_services.emplace_back(std::move(exchange_service));
+                rpc_services.emplace_back(std::move(plan_segment_service));
+                rpc_services.emplace_back(std::move(runtime_filter_service));
+
+                LOG_INFO(log, "start BrpcExchangeReceiverRegistryService listening :: {}", host_exchange_port);
+                LOG_INFO(log, "start PlanSegmentManagerRpcService listening :: {}", host_exchange_status_port);
             }
-            LOG_INFO(log, "start BrpcExchangeReceiverRegistryService listening :: {}", global_context->getExchangePort());
-            LOG_INFO(log, "start PlanSegmentManagerRpcService listening :: {}", global_context->getExchangeStatusPort());
-
-        //     /// TODO status service
-
         }
 
         if (global_context->getServerType() == ServerType::cnch_server || global_context->getServerType() == ServerType::cnch_worker)

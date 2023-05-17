@@ -1043,8 +1043,10 @@ void CnchAttachProcessor::genPartsDeleteMark(MutableMergeTreeDataPartsCNCHVector
                 }
             }
         }
-
-        MergeTreeCNCHDataDumper dumper(target_tbl);
+        // TODO patch attach here 
+        S3ObjectMetadata::PartGeneratorID part_generator_id(S3ObjectMetadata::PartGeneratorID::TRANSACTION,
+            query_ctx->getCurrentTransactionID().toString());
+        MergeTreeCNCHDataDumper dumper(target_tbl, part_generator_id);
         for (auto && temp_part : target_tbl.createDropRangesFromParts(parts_to_drop, query_ctx->getCurrentTransaction()))
         {
             auto dumped_part = dumper.dumpTempPart(temp_part);

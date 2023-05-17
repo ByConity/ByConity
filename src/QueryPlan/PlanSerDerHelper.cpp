@@ -180,6 +180,13 @@ ColumnPtr deserializeColumn(ReadBuffer & buf)
 void serializeBlock(const Block & block, WriteBuffer & buf)
 {
     BlockOutputStreamPtr block_out
+        = std::make_shared<NativeBlockOutputStream>(buf, ClickHouseRevision::getVersionRevision(), block);
+    block_out->write(block);
+}
+
+void serializeBlockWithData(const Block & block, WriteBuffer & buf)
+{
+    BlockOutputStreamPtr block_out
         = std::make_shared<NativeBlockOutputStream>(buf, ClickHouseRevision::getVersionRevision(), block.cloneEmpty());
     block_out->write(block);
 }

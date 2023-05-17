@@ -375,10 +375,12 @@ IMergeTreeDataPart::IMergeTreeDataPart(
     const std::optional<String> & relative_path_,
     Type part_type_,
     const IMergeTreeDataPart * parent_part_,
-    IStorage::StorageLocation location_)
+    IStorage::StorageLocation location_,
+    const UUID& part_id_)
     : storage(storage_)
     , name(name_)
     , info(MergeTreePartInfo::fromPartName(name_, storage.format_version))
+    , uuid(part_id_)
     , volume(parent_part_ ? parent_part_->volume : volume_)
     , relative_path(relative_path_.value_or(name_))
     , index_granularity_info(storage_, part_type_)
@@ -401,10 +403,12 @@ IMergeTreeDataPart::IMergeTreeDataPart(
     const std::optional<String> & relative_path_,
     Type part_type_,
     const IMergeTreeDataPart * parent_part_,
-    IStorage::StorageLocation location_)
+    IStorage::StorageLocation location_,
+    const UUID& part_id_)
     : storage(storage_)
     , name(name_)
     , info(info_)
+    , uuid(part_id_)
     , volume(parent_part_ ? parent_part_->volume : volume_)
     , relative_path(relative_path_.value_or(name_))
     , index_granularity_info(storage_, part_type_)
@@ -604,6 +608,9 @@ IMergeTreeDataPart::IndexPtr IMergeTreeDataPart::getIndex() const
 {
     /// lock is required here to prevent from multi-thread problems when the part is shared between more than one task.
     std::lock_guard<std::mutex> lock(index_mutex);
+
+    if (index->empty())
+        const_cast<IMergeTreeDataPart *>(this)->loadIndexFromCache();
 
     if (index->empty())
         const_cast<IMergeTreeDataPart *>(this)->loadIndex();
@@ -878,7 +885,18 @@ IMergeTreeDataPart::IndexPtr IMergeTreeDataPart::loadIndexFromBuffer(ReadBuffer 
     return {};
 }
 
-void IMergeTreeDataPart::loadIndex()
+void IMergeTreeDataPart::loadIndexFromCache()
+{
+    auto cache = storage.primary_index_cache;
+    if (cache && !is_temp && !isProjectionPart())
+    {
+        auto load_func = [this] { return const_cast<IMergeTreeDataPart *>(this)->loadIndex(); };
+        index = cache->getOrSet(UUIDAndPartName(storage.getStorageUUID(), name), std::move(load_func)).first;
+    }
+
+}
+
+IMergeTreeDataPart::IndexPtr IMergeTreeDataPart::loadIndex()
 {
     /// It can be empty in case of mutations
     if (!index_granularity.isInitialized())
@@ -900,6 +918,8 @@ void IMergeTreeDataPart::loadIndex()
             index = loadIndexFromBuffer(*index_file, primary_key);
         }
     }
+
+    return index;
 }
 
 NameSet IMergeTreeDataPart::getFileNamesWithoutChecksums() const
@@ -1625,6 +1645,18 @@ UInt64 IMergeTreeDataPart::getVersionFromPartition() const
     if (!storage.merging_params.partition_value_as_version)
         throw Exception("getVersionFromPartition() is not supported for " + storage.getStorageID().getFullTableName(), ErrorCodes::LOGICAL_ERROR);
     return partition.value[0].safeGet<UInt64>();
+}
+
+bool IMergeTreeDataPart::enableDiskCache() const
+{
+    if (disk_cache_mode == DiskCacheMode::AUTO)
+        return storage.getSettings()->enable_local_disk_cache;
+    else if (disk_cache_mode == DiskCacheMode::SKIP_DISK_CACHE)
+        return false;
+    else if (disk_cache_mode == DiskCacheMode::USE_DISK_CACHE || disk_cache_mode == DiskCacheMode::FORCE_CHECKSUMS_DISK_CACHE)
+        return true;
+    else
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown disk cache mode");
 }
 
 String IMergeTreeDataPart::getRelativePathForDetachedPart(const String & prefix) const

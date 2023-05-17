@@ -87,7 +87,7 @@ private:
 
     void copyMergedData();
 
-    void gatherColumn(const String & column_name);
+    void gatherColumn(const String & column_name,  MergeStageProgress & column_progress);
     void gatherColumns();
 
     void finalizePart();

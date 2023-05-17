@@ -134,7 +134,7 @@ GroupExprPtr CascadesContext::initMemo(const PlanNodePtr & plan_node)
         {
             queue.push(child);
         }
-        if (auto read_step = dynamic_cast<const CTERefStep *>(node->getStep().get()))
+        if (const auto * read_step = dynamic_cast<const CTERefStep *>(node->getStep().get()))
         {
             if (!memo.containsCTEId(read_step->getId()))
             {

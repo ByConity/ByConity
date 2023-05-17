@@ -36,17 +36,17 @@ TransformResult PushFilterIntoTableScan::transformImpl(PlanNodePtr node, const C
 {
     auto table_scan = node->getChildren()[0];
 
-    auto filter_step = dynamic_cast<const FilterStep *>(node->getStep().get());
+    const auto * filter_step = dynamic_cast<const FilterStep *>(node->getStep().get());
     auto filter_conjuncts = PredicateUtils::extractConjuncts(filter_step->getFilter());
 
     auto pushdown_filters = extractPushDownFilter(filter_conjuncts, rule_context.context);
     if (!pushdown_filters.empty())
     {
         auto copy_table_step = table_scan->getStep()->copy(rule_context.context);
-        auto table_step = dynamic_cast<TableScanStep *>(copy_table_step.get());
+        auto * table_step = dynamic_cast<TableScanStep *>(copy_table_step.get());
 
         std::unordered_map<String, String> inv_alias;
-        for (auto & item : table_step->getColumnAlias())
+        for (const auto & item : table_step->getColumnAlias())
             inv_alias.emplace(item.second, item.first);
 
         auto mapper = SymbolMapper::symbolMapper(inv_alias);
@@ -106,7 +106,7 @@ std::vector<ConstASTPtr> PushFilterIntoTableScan::extractPushDownFilter(const st
 std::vector<ConstASTPtr> PushFilterIntoTableScan::removeStorageFilter(const std::vector<ConstASTPtr> & conjuncts)
 {
     std::vector<ConstASTPtr> remove_array_set_check;
-    for (auto & conjunct : conjuncts)
+    for (const auto & conjunct : conjuncts)
     {
         // Attention !!!
         // arraySetCheck must push into storage, it is not executable in engine.
@@ -132,12 +132,12 @@ PatternPtr PushLimitIntoTableScan::getPattern() const
 
 TransformResult PushLimitIntoTableScan::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
 {
-    auto limit_step = dynamic_cast<const LimitStep *>(node->getStep().get());
+    const auto * limit_step = dynamic_cast<const LimitStep *>(node->getStep().get());
     auto table_scan = node->getChildren()[0];
 
     auto copy_table_step = table_scan->getStep()->copy(rule_context.context);
 
-    auto table_step = dynamic_cast<TableScanStep *>(copy_table_step.get());
+    auto * table_step = dynamic_cast<TableScanStep *>(copy_table_step.get());
     bool applied = table_step->setLimit(limit_step->getLimit() + limit_step->getOffset(), rule_context.context);
     if (!applied)
         return {}; // repeat calls

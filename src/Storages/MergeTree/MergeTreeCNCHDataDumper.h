@@ -26,6 +26,7 @@
 #include <Storages/MergeTree/MergeTreeDataFormatVersion.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include <Storages/MergeTree/MergeTreeDataPartChecksum.h>
+#include <Storages/MergeTree/S3ObjectMetadata.h>
 #include <Common/config.h>
 // #include <Encryption/AesEncrypt.h>
 
@@ -42,6 +43,7 @@ public:
 
     explicit MergeTreeCNCHDataDumper(
         MergeTreeMetaBase & data_,
+        const S3ObjectMetadata::PartGeneratorID& generator_id_,
         const String & magic_code_ = "CNCH",
         const MergeTreeDataFormatVersion version_ = MERGE_TREE_CHCH_DATA_STORAGTE_VERSION);
 
@@ -75,6 +77,7 @@ public:
       * primary_index
       * checksums
       * metainfo
+	  * unique_key_index
       * -----------data footer----------
       * primary_index offset(8 bytes)
       * primary_index size(8 bytes)
@@ -91,9 +94,8 @@ public:
       * metainfo key (32 bytes)
       * --------------------------------
       */
-    MutableMergeTreeDataPartCNCHPtr dumpTempPart(const IMutableMergeTreeDataPartPtr& local_part,
-        const HDFSConnectionParams & hdfs_params = HDFSConnectionParams::emptyHost(),
-        bool is_temp_prefix = false, const DiskPtr & remote_disk = nullptr) const;
+    MutableMergeTreeDataPartCNCHPtr
+    dumpTempPart(const IMutableMergeTreeDataPartPtr & local_part, bool is_temp_prefix = false, const DiskPtr & remote_disk = nullptr) const;
 
 private:
     struct CNCHDataMeta
@@ -126,6 +128,7 @@ private:
     NamesAndTypesList getKeyColumns() const;
 
     MergeTreeMetaBase & data;
+    S3ObjectMetadata::PartGeneratorID generator_id;
     Poco::Logger * log;
     String magic_code{"CNCH"};
     MergeTreeDataFormatVersion version{MERGE_TREE_CHCH_DATA_STORAGTE_VERSION};

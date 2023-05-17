@@ -25,7 +25,7 @@ std::set<std::string> SymbolsExtractor::extract(ConstASTPtr node)
     static SymbolVisitor visitor;
     SymbolVisitorContext context;
     ASTVisitorUtil::accept(node, visitor, context);
-    if (context.exclude_symbols.size() != 0)
+    if (!context.exclude_symbols.empty())
     {
         throw Exception("exclude_symbols should be null", ErrorCodes::LOGICAL_ERROR);
     }
@@ -65,7 +65,7 @@ Void SymbolVisitor::visitNode(const ConstASTPtr & node, SymbolVisitorContext & c
 
 Void SymbolVisitor::visitASTIdentifier(const ConstASTPtr & node, SymbolVisitorContext & context)
 {
-    auto & identifier = node->as<ASTIdentifier &>();
+    const auto & identifier = node->as<ASTIdentifier &>();
     if (!context.exclude_symbols.count(identifier.name()))
     {
         context.result.insert(identifier.name());
@@ -75,7 +75,7 @@ Void SymbolVisitor::visitASTIdentifier(const ConstASTPtr & node, SymbolVisitorCo
 
 Void SymbolVisitor::visitASTFunction(const ConstASTPtr & node, SymbolVisitorContext & context)
 {
-    auto & ast_func = node->as<const ASTFunction &>();
+    const auto & ast_func = node->as<const ASTFunction &>();
     if (ast_func.name == "lambda")
     {
         auto exclude_symbols = RequiredSourceColumnsMatcher::extractNamesFromLambda(ast_func);

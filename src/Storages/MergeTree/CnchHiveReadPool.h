@@ -52,7 +52,7 @@ public:
     CnchHiveReadPool(
         const size_t & threads,
         const size_t & sum_row_groups,
-        RowGroupsInDataParts && parts_,
+        BlocksInDataParts && parts_,
         const StorageCloudHive & data,
         const StorageMetadataPtr & metadata_snapshot_,
         Names column_names);
@@ -72,7 +72,7 @@ private:
 
     BackoffState backoff_state;
 
-    void fillPerThreadInfo(const size_t & threads, const size_t & sum_row_groups, RowGroupsInDataParts data_parts);
+    void fillPerThreadInfo(const size_t & threads, const size_t & sum_row_groups, BlocksInDataParts data_parts);
 
     struct ThreadTask
     {
@@ -84,7 +84,7 @@ private:
         std::vector<PartIndexAndPath> parts_and_groups;
     };
 
-    RowGroupsInDataParts parts;
+    BlocksInDataParts parts;
     const StorageCloudHive & data;
     StorageMetadataPtr metadata_snapshot;
     Names column_names;

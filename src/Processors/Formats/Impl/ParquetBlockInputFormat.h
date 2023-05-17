@@ -25,6 +25,7 @@
 #if USE_PARQUET
 
 #include <Processors/Formats/IInputFormat.h>
+#include <Formats/FormatSettings.h>
 
 namespace parquet::arrow { class FileReader; }
 
@@ -41,6 +42,7 @@ public:
     ParquetBlockInputFormat(
         ReadBuffer & in_,
         Block header_,
+        const FormatSettings & format_settings_,
         const std::map<String, String> & partition_kv_ = {},
         const std::unordered_set<Int64> & skip_row_groups_ = {},
         const size_t row_group_index_ = 0,
@@ -57,6 +59,7 @@ private:
     void prepareReader();
 
 private:
+    const FormatSettings format_settings;
     std::unique_ptr<parquet::arrow::FileReader> file_reader;
     int row_group_total = 0;
     // indices of columns to read from Parquet file

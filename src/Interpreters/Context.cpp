@@ -55,6 +55,7 @@
 #include <Storages/CompressionCodecSelector.h>
 #include <Storages/StorageS3Settings.h>
 #include <Storages/MergeTree/ChecksumsCache.h>
+#include <Storages/PrimaryIndexCache.h>
 #include <Disks/DiskLocal.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Interpreters/ActionLocksManager.h>
@@ -373,6 +374,8 @@ struct ContextSharedPart
     mutable std::shared_ptr<const StoragePolicySelector> merge_tree_storage_policy_selector;
     /// global checksums cache;
     mutable ChecksumsCachePtr checksums_cache;
+    /// Cache of primary indexes.
+    mutable PrimaryIndexCachePtr primary_index_cache;
 
     mutable ServiceDiscoveryClientPtr sd;
     mutable PartCacheManagerPtr cache_manager;           /// Manage cache of parts for cnch tables.
@@ -914,7 +917,7 @@ void Context::initCnchConfig(const Poco::Util::AbstractConfiguration & config)
 
 const Poco::Util::AbstractConfiguration & Context::getCnchConfigRef() const
 {
-    return *shared->cnch_config;
+    return shared->cnch_config ? *shared->cnch_config : getConfigRef();
 }
 
 const RootConfiguration & Context::getRootConfig() const
@@ -1865,6 +1868,28 @@ void Context::dropMarkCache() const
     auto lock = getLock();
     if (shared->mark_cache)
         shared->mark_cache->reset();
+}
+
+void Context::setPrimaryIndexCache(size_t cache_size_in_bytes)
+{
+    auto lock = getLock();
+
+    if (shared->primary_index_cache)
+        throw Exception("Primary cache has been already created.", ErrorCodes::LOGICAL_ERROR);
+
+    shared->primary_index_cache = std::make_shared<PrimaryIndexCache>(cache_size_in_bytes);
+}
+
+std::shared_ptr<PrimaryIndexCache> Context::getPrimaryIndexCache() const
+{
+    auto lock = getLock();
+    return shared->primary_index_cache;
+}
+
+void Context::dropPrimaryIndexCache() const 
+{
+    if (shared->primary_index_cache)
+        shared->primary_index_cache->reset();
 }
 
 void Context::setQueryCache(size_t cache_size_in_bytes)
@@ -4172,7 +4197,7 @@ StoragePtr Context::tryGetCnchTable(const String & , const String & ) const
     throw Exception("Not implemented yet. ", ErrorCodes::NOT_IMPLEMENTED);
 }
 
-void Context::setCurrentWorkerGroup(WorkerGroupHandle worker_group)
+void Context::setCurrentWorkerGroup(WorkerGroupHandle worker_group) const
 {
     current_worker_group = std::move(worker_group);
 }
@@ -4292,13 +4317,14 @@ void Context::setCurrentTransaction(TransactionCnchPtr txn, bool finish_txn)
     current_cnch_txn = std::move(txn);
 }
 
-TransactionCnchPtr Context::setTemporaryTransaction(const TxnTimestamp & txn_id, const TxnTimestamp & primary_txn_id)
+TransactionCnchPtr Context::setTemporaryTransaction(const TxnTimestamp & txn_id, const TxnTimestamp & primary_txn_id, bool with_check)
 {
     auto lock = getLock();
 
     if (shared->server_type == ServerType::cnch_server)
     {
-        auto txn_record = getCnchCatalog()->tryGetTransactionRecord((txn_id));
+        std::optional<TransactionRecord> txn_record = with_check ? getCnchCatalog()->tryGetTransactionRecord((txn_id)) : std::nullopt;
+
         if (!txn_record)
         {
             txn_record = std::make_optional<TransactionRecord>();

@@ -208,7 +208,7 @@ bool GroupExprBindingIterator::hasNext()
             }
 
             const auto & statistics = memo.getGroupById(group_expr->getGroupId())->getStatistics();
-            current_binding = PlanNodeBase::createPlanNode(context->nextNodeId(), group_expr->getStep(), children, statistics);
+            current_binding = PlanNodeBase::createPlanNode(context->nextNodeId(), group_expr->getStep(), std::move(children), statistics);
         }
     }
 

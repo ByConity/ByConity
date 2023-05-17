@@ -145,7 +145,7 @@ def write_results(results_file, status_file, results, status):
     with open(results_file, 'w') as f:
         out = csv.writer(f, delimiter='\t')
         out.writerows(results)
-    with open(status_file, 'w') as f:
+    with open(status_file, 'a') as f:
         out = csv.writer(f, delimiter='\t',quoting=csv.QUOTE_NONE, escapechar=' ')
         out.writerow(status)
 

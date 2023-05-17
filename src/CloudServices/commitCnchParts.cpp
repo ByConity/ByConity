@@ -17,6 +17,7 @@
 
 #include <CloudServices/CnchMergeMutateThread.h>
 #include <CloudServices/CnchServerClient.h>
+#include <CloudServices/CnchServerClientPool.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/PartLog.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
@@ -29,6 +30,8 @@
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Transaction/CnchWorkerTransaction.h>
 #include <Transaction/TxnTimestamp.h>
+#include <common/strong_typedef.h>
+#include <Core/Types.h>
 #include "Disks/IDisk.h"
 
 namespace DB
@@ -132,11 +135,22 @@ DumpedData CnchDataWriter::dumpCnchParts(
     /// For the delete bitmap, it's always be dumped to the default disk
     std::vector<DiskPtr> part_disks;
     part_disks.reserve(temp_parts.size() + temp_staged_parts.size());
+
     for (auto & part : temp_parts)
     {
         String part_name = part->info.getPartNameWithHintMutation();
         auto disk = storage.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
-        undo_resources.emplace_back(txn_id, UndoResourceType::Part, part_name, part_name + '/');
+        
+        // Assign part id here, since we need to record it into undo buffer before dump part to filesystem
+        String relative_path = part_name;
+        if (disk->getType() == DiskType::Type::ByteS3)
+        {
+            UUID part_id = newPartID(part->info, txn_id.toUInt64());
+            part->uuid = part_id;
+            relative_path = UUIDHelpers::UUIDToString(part_id);
+        }
+
+        undo_resources.emplace_back(txn_id, UndoResourceType::Part, part_name, relative_path + '/');
         undo_resources.back().setDiskName(disk->getName());
         part_disks.emplace_back(std::move(disk));
     }
@@ -148,7 +162,17 @@ DumpedData CnchDataWriter::dumpCnchParts(
     {
         String part_name = staged_part->info.getPartNameWithHintMutation();
         auto disk = storage.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
-        undo_resources.emplace_back(txn_id, UndoResourceType::StagedPart, part_name, part_name + '/');
+
+        // Assign part id here, since we need to record it into undo buffer before dump part to filesystem
+        String relative_path = part_name;
+        if (disk->getType() == DiskType::Type::ByteS3)
+        {
+            UUID part_id = newPartID(staged_part->info, txn_id.toUInt64());
+            staged_part->uuid = part_id;
+            relative_path = UUIDHelpers::UUIDToString(part_id);
+        }
+
+        undo_resources.emplace_back(txn_id, UndoResourceType::StagedPart, part_name, relative_path + '/');
         undo_resources.back().setDiskName(disk->getName());
         part_disks.emplace_back(std::move(disk));
     }
@@ -166,7 +190,9 @@ DumpedData CnchDataWriter::dumpCnchParts(
 
     /// Parallel dumping to shared storage
     DumpedData result;
-    MergeTreeCNCHDataDumper dumper(storage);
+    S3ObjectMetadata::PartGeneratorID part_generator_id(S3ObjectMetadata::PartGeneratorID::TRANSACTION,
+        curr_txn->getTransactionID().toString());
+    MergeTreeCNCHDataDumper dumper(storage, part_generator_id);
 
     watch.restart();
     ThreadPool dump_pool(std::min(
@@ -177,7 +203,7 @@ DumpedData CnchDataWriter::dumpCnchParts(
     {
         dump_pool.scheduleOrThrowOnError([&, i]() {
             const auto & temp_part = temp_parts[i];
-            auto dumped_part = dumper.dumpTempPart(temp_part, context->getHdfsConnectionParams(), false, part_disks[i]);
+            auto dumped_part = dumper.dumpTempPart(temp_part, false, part_disks[i]);
             LOG_TRACE(storage.getLogger(), "Dumped part {}", temp_part->name);
             result.parts[i] = std::move(dumped_part);
         });
@@ -191,7 +217,7 @@ DumpedData CnchDataWriter::dumpCnchParts(
         dump_pool.scheduleOrThrowOnError([&, i]() {
             const auto & temp_staged_part = temp_staged_parts[i];
             auto staged_part
-                = dumper.dumpTempPart(temp_staged_part, context->getHdfsConnectionParams(), false, part_disks[i + temp_parts.size()]);
+                = dumper.dumpTempPart(temp_staged_part, false, part_disks[i + temp_parts.size()]);
             LOG_TRACE(storage.getLogger(), "Dumped staged part {}", temp_staged_part->name);
             result.staged_parts[i] = std::move(staged_part);
         });
@@ -481,6 +507,54 @@ void CnchDataWriter::publishStagedParts(
     items.bitmaps = dumpDeleteBitmaps(storage, bitmaps_to_dump);
 
     commitDumpedParts(items);
+}
+
+void CnchDataWriter::preload(const MutableMergeTreeDataPartsCNCHVector & dumped_parts)
+{
+    auto & settings = context->getSettingsRef();
+    if (settings.enable_preload_parts || storage.getSettings()->enable_preload_parts)
+    {
+        bool sync_preload = !settings.enable_async_preload_parts;
+
+        try
+        {
+            Stopwatch timer;
+            auto server_client = context->getCnchServerClientPool().get();
+            MutableMergeTreeDataPartsCNCHVector preload_parts;
+            std::copy_if(dumped_parts.begin(), dumped_parts.end(), std::back_inserter(preload_parts), [](const auto & part) {
+                return !part->deleted && !part->isPartial();
+            });
+
+            if (!preload_parts.empty())
+            {
+                auto max_timeout = std::max(30 * 1000L, settings.max_execution_time.totalMilliseconds());
+                server_client->submitPreloadTask(storage, preload_parts, sync_preload, max_timeout);
+                LOG_DEBUG(
+                    storage.getLogger(),
+                    "Finish submit preload task for {} parts to server {}, elapsed {} ms", preload_parts.size(), server_client->getRPCAddress(), timer.elapsedMilliseconds());
+            }
+            // TODO: invalidate deleted part's disk cache
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__, "Fail to preload");
+            if (sync_preload)
+                throw;
+        }
+    }
+}
+
+UUID CnchDataWriter::newPartID(const MergeTreePartInfo& part_info, UInt64 txn_timestamp)
+{
+    UUID random_id = UUIDHelpers::generateV4();
+    PairInt64 random_id_pair = UUIDHelpers::UUIDToPairInt64(random_id);
+    UInt64& random_id_low = random_id_pair.low;
+    UInt64& random_id_high = random_id_pair.high;
+    boost::hash_combine(random_id_low, part_info.min_block);
+    boost::hash_combine(random_id_high, part_info.max_block);
+    boost::hash_combine(random_id_low, part_info.mutation);
+    boost::hash_combine(random_id_high, txn_timestamp);
+    return random_id;
 }
 
 }

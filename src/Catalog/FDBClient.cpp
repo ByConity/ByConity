@@ -23,7 +23,7 @@
 namespace DB
 {
 
-
+constexpr int64_t default_transaction_timeout = 5000; ///5 seconds
 namespace ErrorCodes
 {
     extern const int METASTORE_EXCEPTION;
@@ -79,6 +79,7 @@ FDBClient::FDBClient(const std::string & cluster_file)
     THROW_ON_ERROR(fdb_setup_network());
     pthread_create(&fdb_netThread, nullptr, [](void* )->void * {THROW_ON_ERROR(fdb_run_network()); return nullptr;}, nullptr);
     THROW_ON_ERROR(fdb_create_database(cluster_file.c_str(), &fdb));
+    THROW_ON_ERROR(fdb_database_set_option(fdb, FDB_DB_OPTION_TRANSACTION_TIMEOUT, reinterpret_cast<const uint8_t*>(&default_transaction_timeout), sizeof(default_transaction_timeout)));
 }
 
 FDBClient::~FDBClient()
@@ -283,7 +284,7 @@ fdb_error_t FDBClient::MultiWrite(FDBTransactionPtr tr, const Catalog::BatchComm
 
     /// The commit would still fail due to conflict (CAS), so we need to read for the conflicted value again.
     /// Note, the values conflict here may not be the same as the values in the conflict commit because FDB doesn't support CAS operations.
-    /// So from the caller side, cannot have the above assumption, only can guarantee they are latest value for read this time, 
+    /// So from the caller side, cannot have the above assumption, only can guarantee they are latest value for read this time,
     /// should perform further operations in CAS way.
     if (error_code)
     {
@@ -315,7 +316,7 @@ fdb_error_t FDBClient::MultiWrite(FDBTransactionPtr tr, const Catalog::BatchComm
         fdb_error_t multi_get_code = MultiGet(tr, req_keys, res);
 
         if (multi_get_code)
-            return multi_get_code;  
+            return multi_get_code;
 
         for (size_t i = 0; i < puts_cas_size; ++i)
         {
@@ -353,7 +354,7 @@ fdb_error_t FDBClient::Delete(FDBTransactionPtr tr, const std::string & key, con
         if (!present || (expected.size() != static_cast<size_t>(outValueLength) || memcmp(expected.data(), outValue, outValueLength)))
             return FDBError::FDB_not_committed;
     }
-    
+
     fdb_transaction_clear(tr->transaction, reinterpret_cast<const uint8_t*>(key.c_str()), key.size());
     FDBFuturePtr f = std::make_shared<FDBFutureRAII>(fdb_transaction_commit(tr->transaction));
     RETURN_ON_ERROR(fdb_future_block_until_ready(f->future));

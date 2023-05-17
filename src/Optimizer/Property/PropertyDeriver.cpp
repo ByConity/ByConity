@@ -156,7 +156,7 @@ Property DeriverVisitor::visitFilterStep(const FilterStep &, DeriverContext & co
 Property DeriverVisitor::visitJoinStep(const JoinStep & step, DeriverContext & context)
 {
     std::unordered_map<String, String> identities;
-    for (auto & item : step.getOutputStream().header)
+    for (const auto & item : step.getOutputStream().header)
     {
         identities[item.name] = item.name;
     }

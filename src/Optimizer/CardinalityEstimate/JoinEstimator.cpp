@@ -80,7 +80,7 @@ PlanNodeStatisticsPtr JoinEstimator::computeCardinality(
             join_output_statistics[item.first] = item.second->applySelectivity(left_rows, 1);
         }
 
-        return std::make_shared<PlanNodeStatistics>(join_card, join_output_statistics);
+        return std::make_shared<PlanNodeStatistics>(join_card, std::move(join_output_statistics));
     }
 
     // inner/left/right/full join
@@ -169,7 +169,7 @@ PlanNodeStatisticsPtr JoinEstimator::computeCardinality(
         if (pre_key_join_card <= join_card)
         {
             join_card = pre_key_join_card;
-            join_output_statistics = pre_key_join_output_statistics;
+            join_output_statistics.swap(pre_key_join_output_statistics);
         }
     }
 

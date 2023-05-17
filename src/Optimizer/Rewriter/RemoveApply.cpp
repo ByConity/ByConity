@@ -96,7 +96,7 @@ PlanNodePtr CorrelatedScalarSubqueryVisitor::visitApplyNode(ApplyNode & node, Vo
     if (subquery_step_ptr->getType() == IQueryPlanStep::Type::Aggregating)
     {
         const auto & step = dynamic_cast<const AggregatingStep &>(*subquery_step_ptr);
-        auto & keys = step.getKeys();
+        const auto & keys = step.getKeys();
         if (keys.empty())
         {
             match = true;
@@ -117,7 +117,7 @@ PlanNodePtr CorrelatedScalarSubqueryVisitor::visitApplyNode(ApplyNode & node, Vo
         if (child_step_ptr->getType() == IQueryPlanStep::Type::Aggregating)
         {
             const auto & step = dynamic_cast<const AggregatingStep &>(*child_step_ptr);
-            auto & keys = step.getKeys();
+            const auto & keys = step.getKeys();
             if (keys.empty())
             {
                 match = true;
@@ -317,21 +317,19 @@ PlanNodePtr UnCorrelatedScalarSubqueryVisitor::visitApplyNode(ApplyNode & node, 
     const DataStream & right_data_stream = subquery_ptr->getStep()->getOutputStream();
     DataStreams streams = {left_data_stream, right_data_stream};
 
-    auto left_header = left_data_stream.header;
-    auto right_header = right_data_stream.header;
     NamesAndTypes output;
-    for (const auto & item : left_header)
+    for (const auto & item : left_data_stream.header)
     {
         output.emplace_back(NameAndTypePair{item.name, item.type});
     }
-    for (const auto & item : right_header)
+    for (const auto & item : right_data_stream.header)
     {
         output.emplace_back(NameAndTypePair{item.name, item.type});
     }
 
     auto join_step = std::make_shared<JoinStep>(
         streams,
-        DataStream{.header = output},
+        DataStream{.header = std::move(output)},
         ASTTableJoin::Kind::Cross,
         ASTTableJoin::Strictness::All,
         Names{},
@@ -1135,22 +1133,20 @@ PlanNodePtr UnCorrelatedExistsSubqueryVisitor::visitApplyNode(ApplyNode & node, 
 
     DataStreams streams = {left_data_stream, right_data_stream};
 
-    auto left_header = left_data_stream.header;
-    auto right_header = right_data_stream.header;
     NamesAndTypes output;
-    for (const auto & item : left_header)
+    for (const auto & item : left_data_stream.header)
     {
         output.emplace_back(NameAndTypePair{item.name, item.type});
     }
-    for (const auto & item : right_header)
+    for (const auto & item : right_data_stream.header)
     {
         output.emplace_back(NameAndTypePair{item.name, item.type});
     }
 
     // step 3 : cross join, join rights side is a scalar value. (true/false)
     auto join_step = std::make_shared<JoinStep>(
-        streams,
-        DataStream{.header = output},
+        std::move(streams),
+        DataStream{.header = std::move(output)},
         ASTTableJoin::Kind::Cross,
         ASTTableJoin::Strictness::All,
         Names{},

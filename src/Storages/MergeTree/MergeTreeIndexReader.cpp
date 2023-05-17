@@ -75,7 +75,7 @@ MergeTreeIndexReader::MergeTreeIndexReader(
             IDiskCachePtr segment_cache;
             IDiskCacheStrategyPtr segment_cache_strategy;
             MergeTreeDataPartPtr source_data_part = part_->getMvccDataPart(index_name + INDEX_FILE_EXTENSION);
-            if (source_data_part->storage.getSettings()->enable_local_disk_cache)
+            if (source_data_part->enableDiskCache())
             {
                 auto [cache, cache_strategy] = DiskCacheFactory::instance().getDefault();
 
@@ -101,7 +101,7 @@ MergeTreeIndexReader::MergeTreeIndexReader(
                         all_mark_ranges_,
                         source_data_part,
                         DiskCacheSegment::FileOffsetAndSize{mark_file_offset, mark_file_size},
-                        source_data_part->getMarksCount(),
+                        marks_count_,
                         index_name,
                         INDEX_FILE_EXTENSION,
                         DiskCacheSegment::FileOffsetAndSize{data_file_offset, data_file_size}));
@@ -112,7 +112,7 @@ MergeTreeIndexReader::MergeTreeIndexReader(
                 source_data_part->name,
                 index_name,
                 source_data_part->volume->getDisk(),
-                source_data_part->getMarksCount(),
+                marks_count_,
                 data_path, data_file_offset, data_file_size,
                 mark_path, mark_file_offset, mark_file_size,
                 all_mark_ranges_,

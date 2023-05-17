@@ -418,6 +418,14 @@ time_t StorageCnchMergeTree::getTTLForPartition(const MergeTreePartition & parti
 
     /// Construct a block consists of partition keys then compute ttl values according to this block
     const auto & partition_key_sample = metadata_snapshot->getPartitionKey().sample_block;
+    /// We can only compute ttl at this point if partition key expression includes all columns in TTL expression
+    const auto & required_columns = table_ttl.rows_ttl.expression->getRequiredColumns();
+    if (std::any_of(
+            required_columns.begin(),
+            required_columns.end(),
+            [&partition_key_sample](const auto & name) { return !partition_key_sample.has(name); }))
+        return 0;
+
     MutableColumns columns = partition_key_sample.cloneEmptyColumns();
     const auto & partition_key = partition.value;
     /// This can happen when ALTER query is implemented improperly; finish ALTER query should bypass this check.
@@ -441,6 +449,7 @@ time_t StorageCnchMergeTree::getTTLForPartition(const MergeTreePartition & parti
         nt_iter++;
         column_iter++;
     }
+
 
     table_ttl.rows_ttl.expression->execute(block);
 
@@ -1212,7 +1221,8 @@ void StorageCnchMergeTree::executeDedupForRepair(const ASTPtr & partition, Conte
         *getContext(),
         CnchDedupHelper::getLocksToAcquire(
             scope, txn->getTransactionID(), *this, getSettings()->dedup_acquire_lock_timeout.value.totalMilliseconds()));
-    cnch_lock.lock();
+    if (!cnch_lock.tryLock())
+        throw Exception("Failed to acquire lock for txn " + txn->getTransactionID().toString(), ErrorCodes::CNCH_LOCK_ACQUIRE_FAILED);
 
     TxnTimestamp ts = getContext()->getTimestamp();
     MergeTreeDataPartsCNCHVector visible_parts = CnchDedupHelper::getVisiblePartsToDedup(scope, *this, ts);
@@ -1279,6 +1289,42 @@ void StorageCnchMergeTree::removeCheckpoint(const Protos::Checkpoint & checkpoin
     new_checkpoint.set_status(Protos::Checkpoint::Removing);
     /// FIXME: add after it was supported
     // getContext()->getCnchCatalog()->markCheckpoint(shared_from_this(), new_checkpoint);
+}
+
+void StorageCnchMergeTree::sendPreloadTasks(ContextPtr local_context, ServerDataPartsVector parts, bool sync)
+{
+    auto worker_group = getWorkerGroupForTable(*this, local_context);
+    local_context->setCurrentWorkerGroup(worker_group);
+
+    TxnTimestamp txn_id = local_context->getCurrentTransactionID();
+    String create_table_query = genCreateTableQueryForWorker(txn_id.toString());
+
+    /// reuse server resource for part allocation
+    /// no worker session context is created
+    auto server_resource = std::make_shared<CnchServerResource>(txn_id);
+    server_resource->skipCleanWorker();
+    /// all bucket numbers are required
+    std::set<Int64> bucket_numbers;
+    if (isBucketTable())
+    {
+        std::transform(parts.begin(), parts.end(), std::inserter(bucket_numbers, bucket_numbers.end()), [](const auto & part) {
+            return part->part_model().bucket_number();
+        });
+    }
+    server_resource->addCreateQuery(local_context, shared_from_this(), create_table_query, "");
+    server_resource->addDataParts(getStorageUUID(), parts, bucket_numbers);
+    /// TODO: async rpc?
+    server_resource->sendResource(local_context, [&](CnchWorkerClientPtr client, auto & resources, ExceptionHandler &handler) {
+        std::vector<brpc::CallId> ids;
+        for (const auto & resource : resources)
+        {
+            auto data_parts = std::move(resource.server_parts);
+            CnchPartsHelper::flattenPartsVector(data_parts);
+            brpc::CallId id = client->preloadDataParts(local_context, txn_id, *this, create_table_query, data_parts, sync, handler);
+            ids.emplace_back(id);
+        }
+        return ids;
+    });
 }
 
 void StorageCnchMergeTree::filterPartsInExplicitTransaction(ServerDataPartsVector & data_parts, ContextPtr local_context) const

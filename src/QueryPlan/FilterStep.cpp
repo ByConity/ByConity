@@ -167,7 +167,7 @@ void FilterStep::serialize(WriteBuffer & buf) const
         writeBinary(false, buf);
         if (filter)
         {
-            serializeAST(filter->clone(), buf);
+            serializeAST(filter, buf);
         }
         else
         {

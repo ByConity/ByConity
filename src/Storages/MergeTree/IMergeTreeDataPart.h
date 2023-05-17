@@ -109,7 +109,8 @@ public:
         const std::optional<String> & relative_path,
         Type part_type_,
         const IMergeTreeDataPart * parent_part_,
-        IStorage::StorageLocation location_);
+        IStorage::StorageLocation location_,
+        const UUID& part_id_ = UUIDHelpers::Nil);
 
     IMergeTreeDataPart(
         const MergeTreeMetaBase & storage_,
@@ -118,7 +119,8 @@ public:
         const std::optional<String> & relative_path,
         Type part_type_,
         const IMergeTreeDataPart * parent_part_,
-        IStorage::StorageLocation location_);
+        IStorage::StorageLocation location_,
+        const UUID& part_id_ = UUIDHelpers::Nil);
 
     virtual MergeTreeReaderPtr getReader(
         const NamesAndTypesList & columns_,
@@ -548,6 +550,9 @@ public:
     /// Return version value from partition. Throws exception if the table didn't use partition as version
     UInt64 getVersionFromPartition() const;
 
+    DiskCacheMode disk_cache_mode {DiskCacheMode::AUTO};
+    bool enableDiskCache() const;
+
 protected:
     friend class MergeTreeMetaBase;
     friend class MergeTreeData;
@@ -617,8 +622,11 @@ private:
     /// Loads marks index granularity into memory
     virtual void loadIndexGranularity();
 
+    /// Loads index from cache
+    void loadIndexFromCache();
+
     /// Loads index file.
-    virtual void loadIndex();
+    virtual IndexPtr loadIndex();
 
     /// Load rows count for this part from disk (for the newer storage format version).
     /// For the older format version calculates rows count from the size of a column with a fixed size.

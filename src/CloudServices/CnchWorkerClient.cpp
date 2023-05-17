@@ -196,6 +196,33 @@ brpc::CallId CnchWorkerClient::sendCnchHiveDataParts(
     return call_id;
 }
 
+brpc::CallId CnchWorkerClient::preloadDataParts(
+    const ContextPtr & context,
+    const TxnTimestamp & txn_id,
+    const IStorage & storage,
+    const String & create_local_table_query,
+    const ServerDataPartsVector & parts,
+    bool sync,
+    ExceptionHandler & handler)
+{
+    Protos::PreloadDataPartsReq request;
+    request.set_txn_id(txn_id);
+    request.set_create_table_query(create_local_table_query);
+    request.set_sync(sync);
+    fillPartsModelForSend(storage, parts, *request.mutable_parts());
+
+    auto * cntl = new brpc::Controller();
+    auto * response = new Protos::PreloadDataPartsResp();
+    /// adjust the timeout to prevent timeout if there are too many parts to send,
+    const auto & settings = context->getSettingsRef();
+    auto send_timeout = std::max(settings.max_execution_time.value.totalMilliseconds() >> 1, 30 * 1000L);
+    cntl->set_timeout_ms(send_timeout);
+
+    auto call_id = cntl->call_id();
+    stub->preloadDataParts(cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDone, response, cntl, &handler));
+    return call_id;
+}
+
 brpc::CallId CnchWorkerClient::sendQueryDataParts(
     const ContextPtr & context,
     const StoragePtr & storage,
@@ -208,6 +235,7 @@ brpc::CallId CnchWorkerClient::sendQueryDataParts(
     request.set_txn_id(context->getCurrentTransactionID());
     request.set_database_name(storage->getDatabaseName());
     request.set_table_name(local_table_name);
+    request.set_disk_cache_mode(context->getSettingsRef().disk_cache_mode.toString());
 
     fillBasePartAndDeleteBitmapModels(*storage, data_parts, *request.mutable_parts(), *request.mutable_bitmaps());
     for (const auto & bucket_num : required_bucket_numbers)

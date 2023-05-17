@@ -103,6 +103,7 @@ class Compiler;
 class MarkCache;
 class MMappedFileCache;
 class UncompressedCache;
+class PrimaryIndexCache;
 class ProcessList;
 class ProcessListEntry;
 class PlanSegment;
@@ -938,6 +939,10 @@ public:
     std::shared_ptr<MarkCache> getMarkCache() const;
     void dropMarkCache() const;
 
+    void setPrimaryIndexCache(size_t cache_size_in_bytes);
+    std::shared_ptr<PrimaryIndexCache> getPrimaryIndexCache() const;
+    void dropPrimaryIndexCache() const;
+
     /// Create a cache of queries of specified size. This can be done only once.
     void setQueryCache(size_t cache_size_in_bytes);
     std::shared_ptr<QueryCache> getQueryCache() const;
@@ -1221,7 +1226,7 @@ public:
 
     StoragePtr tryGetCnchTable(const String & database_name, const String & table_name) const;
 
-    void setCurrentWorkerGroup(WorkerGroupHandle group);
+    void setCurrentWorkerGroup(WorkerGroupHandle group) const;
     WorkerGroupHandle getCurrentWorkerGroup() const;
     WorkerGroupHandle tryGetCurrentWorkerGroup() const;
 
@@ -1252,7 +1257,7 @@ public:
     void initCnchTransactionCoordinator();
     TransactionCoordinatorRcCnch & getCnchTransactionCoordinator() const;
     void setCurrentTransaction(TransactionCnchPtr txn, bool finish_txn = true);
-    TransactionCnchPtr setTemporaryTransaction(const TxnTimestamp & txn_id, const TxnTimestamp & primary_txn_id = 0);
+    TransactionCnchPtr setTemporaryTransaction(const TxnTimestamp & txn_id, const TxnTimestamp & primary_txn_id = 0, bool with_check = true);
     TransactionCnchPtr getCurrentTransaction() const;
     TxnTimestamp getCurrentTransactionID() const;
     TxnTimestamp getCurrentCnchStartTime() const;

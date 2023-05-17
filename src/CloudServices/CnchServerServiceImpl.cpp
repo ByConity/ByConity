@@ -15,6 +15,7 @@
 
 #include <CloudServices/CnchServerServiceImpl.h>
 
+#include <Catalog/Catalog.h>
 #include <Protos/RPCHelpers.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
@@ -860,12 +861,65 @@ void CnchServerServiceImpl::getDeletingTablesInGlobalGC(
         tryLogCurrentException(log, __PRETTY_FUNCTION__);
     }
 }
+
+void CnchServerServiceImpl::handleRedirectCommitRequest(
+    [[maybe_unused]] google::protobuf::RpcController* controller,
+    [[maybe_unused]] const Protos::RedirectCommitPartsReq * request,
+    [[maybe_unused]] Protos::RedirectCommitPartsResp * response,
+    [[maybe_unused]] google::protobuf::Closure * done,
+    bool final_commit)
+{
+    RPCHelpers::serviceHandler(done, response, [request = request, response = response, done = done, final_commit=final_commit, &global_context = *getContext(), log = log] {
+        brpc::ClosureGuard done_guard(done);
+        try
+        {
+            String table_uuid = UUIDHelpers::UUIDToString(RPCHelpers::createUUID(request->uuid()));
+            StoragePtr storage = global_context.getCnchCatalog()->tryGetTableByUUID(
+                global_context, table_uuid, TxnTimestamp::maxTS());
+
+            if (!storage)
+                throw Exception("Table with uuid " + table_uuid + " not found.", ErrorCodes::UNKNOWN_TABLE);
+
+            auto * cnch = dynamic_cast<MergeTreeMetaBase *>(storage.get());
+            if (!cnch)
+                throw Exception("Table is not of MergeTree class", ErrorCodes::BAD_ARGUMENTS);
+
+            auto parts = createPartVectorFromModels<MergeTreeDataPartCNCHPtr>(*cnch, request->parts(), nullptr);
+            auto staged_parts = createPartVectorFromModels<MergeTreeDataPartCNCHPtr>(*cnch, request->staged_parts(), nullptr);
+            DeleteBitmapMetaPtrVector delete_bitmaps;
+            delete_bitmaps.reserve(request->delete_bitmaps_size());
+            for (auto & bitmap_model : request->delete_bitmaps())
+                delete_bitmaps.emplace_back(createFromModel(*cnch, bitmap_model));
+
+
+            if (!final_commit)
+            {
+                TxnTimestamp txnID{request->txn_id()};
+                global_context.getCnchCatalog()->writeParts(storage, txnID,
+                    Catalog::CommitItems{parts, delete_bitmaps, staged_parts}, request->from_merge_task(), request->preallocate_mode());
+            }
+            else
+            {
+                TxnTimestamp commitTs {request->commit_ts()};
+                global_context.getCnchCatalog()->setCommitTime(storage, Catalog::CommitItems{parts, delete_bitmaps, staged_parts},
+                    commitTs, request->txn_id());
+            }
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            RPCHelpers::handleException(response->mutable_exception());
+        }
+    });
+}
+
 void CnchServerServiceImpl::redirectCommitParts(
     google::protobuf::RpcController * controller,
     const Protos::RedirectCommitPartsReq * request,
     Protos::RedirectCommitPartsResp * response,
     google::protobuf::Closure * done)
 {
+    handleRedirectCommitRequest(controller, request, response, done, false);
 }
 void CnchServerServiceImpl::redirectSetCommitTime(
     google::protobuf::RpcController * controller,
@@ -873,6 +927,7 @@ void CnchServerServiceImpl::redirectSetCommitTime(
     Protos::RedirectCommitPartsResp * response,
     google::protobuf::Closure * done)
 {
+    handleRedirectCommitRequest(controller, request, response, done, true);
 }
 void CnchServerServiceImpl::removeMergeMutateTasksOnPartition(
     google::protobuf::RpcController * cntl,
@@ -881,6 +936,7 @@ void CnchServerServiceImpl::removeMergeMutateTasksOnPartition(
     google::protobuf::Closure * done)
 {
 }
+
 void CnchServerServiceImpl::submitQueryWorkerMetrics(
     google::protobuf::RpcController * /*cntl*/,
     const Protos::SubmitQueryWorkerMetricsReq * request,
@@ -908,6 +964,44 @@ void CnchServerServiceImpl::submitQueryWorkerMetrics(
             }
         }
     );
+}
+
+void CnchServerServiceImpl::submitPreloadTask(
+    google::protobuf::RpcController * cntl,
+    const Protos::SubmitPreloadTaskReq * request,
+    Protos::SubmitPreloadTaskResp * response,
+    google::protobuf::Closure * done)
+{
+    RPCHelpers::serviceHandler(done, response, [c = cntl, request, response, done, gc = getContext(), log = log] {
+        brpc::ClosureGuard done_guard(done);
+
+        try
+        {
+            auto rpc_context = RPCHelpers::createSessionContextForRPC(gc, *c);
+            const TxnTimestamp txn_id = rpc_context->getTimestamp();
+            rpc_context->setTemporaryTransaction(txn_id, {}, /*check catalog*/ false);
+
+            String table_uuid = UUIDHelpers::UUIDToString(RPCHelpers::createUUID(request->uuid()));
+            auto storage = rpc_context->getCnchCatalog()->tryGetTableByUUID(*rpc_context, table_uuid, TxnTimestamp::maxTS());
+            if (!storage)
+                throw Exception(ErrorCodes::UNKNOWN_TABLE, "Table with uuid {} not found.", table_uuid);
+
+            auto * cnch = dynamic_cast<StorageCnchMergeTree *>(storage.get());
+            if (!cnch)
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Table is not of MergeTree class");
+
+            ServerDataPartsVector parts = createServerPartsFromModels(*cnch, request->parts());
+            if (parts.empty())
+                return;
+
+            cnch->sendPreloadTasks(rpc_context, std::move(parts), request->sync());
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log);
+            RPCHelpers::handleException(response->mutable_exception());
+        }
+    });
 }
 
 void CnchServerServiceImpl::executeOptimize(

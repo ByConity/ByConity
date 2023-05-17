@@ -21,7 +21,7 @@
 
 namespace DB
 {
-std::set<String> ExpressionDeterminism::getDeterministicSymbols(Assignments & assignments, ContextMutablePtr & context)
+std::set<String> ExpressionDeterminism::getDeterministicSymbols(Assignments & assignments, ContextPtr context)
 {
     std::set<String> deterministic_symbols;
     for (auto & assignment : assignments)
@@ -34,7 +34,7 @@ std::set<String> ExpressionDeterminism::getDeterministicSymbols(Assignments & as
     return deterministic_symbols;
 }
 
-ConstASTPtr ExpressionDeterminism::filterDeterministicConjuncts(ConstASTPtr predicate, ContextMutablePtr & context)
+ConstASTPtr ExpressionDeterminism::filterDeterministicConjuncts(ConstASTPtr predicate, ContextPtr context)
 {
     if (predicate == PredicateConst::TRUE_VALUE || predicate == PredicateConst::FALSE_VALUE)
     {
@@ -52,7 +52,7 @@ ConstASTPtr ExpressionDeterminism::filterDeterministicConjuncts(ConstASTPtr pred
     return PredicateUtils::combineConjuncts(deterministic);
 }
 
-ConstASTPtr ExpressionDeterminism::filterNonDeterministicConjuncts(ConstASTPtr predicate, ContextMutablePtr & context)
+ConstASTPtr ExpressionDeterminism::filterNonDeterministicConjuncts(ConstASTPtr predicate, ContextPtr context)
 {
     std::vector<ConstASTPtr> predicates = PredicateUtils::extractConjuncts(predicate);
     std::vector<ConstASTPtr> non_deterministic;
@@ -66,7 +66,7 @@ ConstASTPtr ExpressionDeterminism::filterNonDeterministicConjuncts(ConstASTPtr p
     return PredicateUtils::combineConjuncts(non_deterministic);
 }
 
-std::set<ConstASTPtr> ExpressionDeterminism::filterDeterministicPredicates(std::vector<ConstASTPtr> & predicates, ContextMutablePtr & context)
+std::set<ConstASTPtr> ExpressionDeterminism::filterDeterministicPredicates(std::vector<ConstASTPtr> & predicates, ContextPtr context)
 {
     std::set<ConstASTPtr> deterministic;
     for (auto & predicate : predicates)
@@ -79,19 +79,30 @@ std::set<ConstASTPtr> ExpressionDeterminism::filterDeterministicPredicates(std::
     return deterministic;
 }
 
-bool ExpressionDeterminism::isDeterministic(ConstASTPtr expression, ContextMutablePtr & context)
+bool ExpressionDeterminism::isDeterministic(ConstASTPtr expression, ContextPtr context)
+{
+    return getExpressionProperty(std::move(expression), std::move(context)).is_deterministic;
+}
+
+bool ExpressionDeterminism::canChangeOutputRows(ConstASTPtr expression, ContextPtr context)
+{
+    return getExpressionProperty(std::move(expression), std::move(context)).can_change_output_rows;
+}
+
+ExpressionDeterminism::ExpressionProperty ExpressionDeterminism::getExpressionProperty(ConstASTPtr expression, ContextPtr context)
 {
     bool is_deterministic = true;
     DeterminismVisitor visitor{is_deterministic};
     ASTVisitorUtil::accept(expression, visitor, context);
-    return visitor.isDeterministic();
+    return {.is_deterministic = visitor.isDeterministic(),
+            .can_change_output_rows = visitor.canChangeOutputRows()};
 }
 
 DeterminismVisitor::DeterminismVisitor(bool isDeterministic) : is_deterministic(isDeterministic)
 {
 }
 
-Void DeterminismVisitor::visitNode(const ConstASTPtr & node, ContextMutablePtr & context)
+Void DeterminismVisitor::visitNode(const ConstASTPtr & node, ContextPtr & context)
 {
     for (ConstASTPtr child : node->children)
     {
@@ -100,21 +111,17 @@ Void DeterminismVisitor::visitNode(const ConstASTPtr & node, ContextMutablePtr &
     return Void{};
 }
 
-Void DeterminismVisitor::visitASTFunction(const ConstASTPtr & node, ContextMutablePtr & context)
+Void DeterminismVisitor::visitASTFunction(const ConstASTPtr & node, ContextPtr & context)
 {
     visitNode(node, context);
-    auto & fun = node->as<const ASTFunction &>();
-    if (AggregateFunctionFactory::instance().isAggregateFunctionName(fun.name))
-    {
-        return Void{};
-    }
-//    if (NavigationFunctionFactory::instance().isNavigationFunctionName(fun.name))
-//    {
-//        return Void{};
-//    }
+    const auto & fun = node->as<const ASTFunction &>();
     if (!context->isFunctionDeterministic(fun.name))
     {
         is_deterministic = false;
+    }
+    if (fun.name == "arrayJoin")
+    {
+        can_change_output_rows = true;
     }
     return Void{};
 }

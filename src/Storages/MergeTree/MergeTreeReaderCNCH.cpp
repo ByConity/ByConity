@@ -83,7 +83,7 @@ MergeTreeReaderCNCH::MergeTreeReaderCNCH(
     , log(&Poco::Logger::get("MergeTreeReaderCNCH(" + data_part_->get_name() + ")"))
 
 {
-    if (data_part->storage.getSettings()->enable_local_disk_cache)
+    if (data_part->enableDiskCache())
     {
         auto [cache, cache_strategy] = DiskCacheFactory::instance().getDefault();
 

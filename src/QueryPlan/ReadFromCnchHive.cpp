@@ -64,11 +64,11 @@ void ReadFromCnchHive::initializePipeline(QueryPipeline & pipeline, const BuildQ
 
     Pipe pipe;
 
-    RowGroupsInDataParts parts_with_row_groups{data_parts.begin(), data_parts.end()};
+    BlocksInDataParts parts_with_row_groups{data_parts.begin(), data_parts.end()};
 
-    auto process = [&](RowGroupsInDataParts data_parts_with_row_groups, int part_index) {
+    auto process = [&](BlocksInDataParts data_parts_with_row_groups, int part_index) {
         const auto & part = data_parts[part_index];
-        data_parts_with_row_groups[part_index].total_row_groups = part->getTotalRowGroups();
+        data_parts_with_row_groups[part_index].total_blocks = part->getTotalBlockNumber();
     };
 
     size_t num_threads = std::min(size_t(num_streams), data_parts.size());
@@ -110,7 +110,7 @@ void ReadFromCnchHive::initializePipeline(QueryPipeline & pipeline, const BuildQ
 
 Pipe ReadFromCnchHive::spreadRowGroupsAmongStreams(
     ContextPtr & /*context*/,
-    RowGroupsInDataParts && parts,
+    BlocksInDataParts && parts,
     size_t /*num_streams*/,
     const Names & column_names,
     const UInt64 & /*max_block_size*/)
@@ -119,7 +119,7 @@ Pipe ReadFromCnchHive::spreadRowGroupsAmongStreams(
     std::vector<size_t> sum_row_groups_in_parts(parts.size());
     for (size_t i = 0; i < parts.size(); ++i)
     {
-        sum_row_groups_in_parts[i] = parts[i].data_part->getTotalRowGroups();
+        sum_row_groups_in_parts[i] = parts[i].data_part->getTotalBlockNumber();
         sum_row_groups += sum_row_groups_in_parts[i];
     }
 

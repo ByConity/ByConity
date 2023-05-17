@@ -68,7 +68,7 @@ Property PropertyMatcher::compatibleCommonRequiredProperty(const std::unordered_
     const auto & node_partition = res.getNodePartitioning();
     const auto handle = node_partition.getPartitioningHandle();
     std::unordered_set<String> columns_set;
-    for (auto & item : node_partition.getPartitioningColumns())
+    for (const auto & item : node_partition.getPartitioningColumns())
         columns_set.emplace(item);
 
     for (; it != required_properties.end(); ++it)
@@ -85,7 +85,7 @@ Property PropertyMatcher::compatibleCommonRequiredProperty(const std::unordered_
         if (partition_handle == Partitioning::Handle::FIXED_HASH)
         {
             std::unordered_set<String> intersection;
-            auto & partition_columns = it->getNodePartitioning().getPartitioningColumns();
+            const auto & partition_columns = it->getNodePartitioning().getPartitioningColumns();
             std::copy_if(
                 partition_columns.begin(),
                 partition_columns.end(),
@@ -100,9 +100,7 @@ Property PropertyMatcher::compatibleCommonRequiredProperty(const std::unordered_
     if (is_all_broadcast)
         return Property{Partitioning{Partitioning::Handle::FIXED_BROADCAST}};
 
-    Names partition_columns;
-    for (auto & item : columns_set)
-        partition_columns.emplace_back(item);
+    Names partition_columns{columns_set.begin(), columns_set.end()};
 
     // no need to consider require_handle / buckets / enforce_round_robin for required property
     return Property{Partitioning{handle, std::move(partition_columns)}};

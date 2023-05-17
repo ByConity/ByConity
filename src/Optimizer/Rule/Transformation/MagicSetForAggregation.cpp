@@ -92,7 +92,7 @@ PlanNodePtr MagicSetRule::buildMagicSetAsFilterJoin(
         }
         filter_node = PlanNodeBase::createPlanNode(
             context->nextNodeId(),
-            std::make_shared<ProjectionStep>(DataStream{.header = names_and_types}, assignments, name_to_type),
+            std::make_shared<ProjectionStep>(DataStream{.header = names_and_types}, std::move(assignments), std::move(name_to_type)),
             PlanNodes{filter_node});
     }
 

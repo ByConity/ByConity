@@ -3,6 +3,7 @@ add_subdirectory(System)
 
 if(ENABLE_EXAMPLES)
     add_subdirectory(examples)
+    add_subdirectory(HDFS/examples)
 endif()
 
 # tools for verifying hdfs.
