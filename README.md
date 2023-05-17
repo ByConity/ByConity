@@ -11,9 +11,11 @@ ByConity is using a large number of mature OLAP technologies, such as column sto
 ByConity is built on top of [ClickHouse](https://github.com/ClickHouse/ClickHouse). We appreciate the excellent work of the ClickHouse team.
 
 ## Try ByConity
+
 You can quickly bring up a ByConity playground by following this simple [guide](https://github.com/ByConity/byconity-docker).
 
 A minimal ByConity cluster include:
+
 - A [FoundationDB](https://www.foundationdb.org/) database cluster to store meta data.
 - An [HDFS](https://hadoop.apache.org/docs/r1.2.1/hdfs_design.html) cluster to store data.
 - A ByConity server to receive request from clients.
@@ -22,10 +24,11 @@ A minimal ByConity cluster include:
 - A ByConity TSO server to provide timestamp.
 - A ByConity daemon manager to manage background jobs that run in server.
 
-
 ## Build ByConity
+
 The easiest way to build ByConity is built in [docker](https://github.com/ByConity/ByConity/tree/master/docker/builder). ByConity executable file depend on Foundation DB library `libfdb_c.so`. So in order to run it, we need to install the FoundationDB client package. This [link](https://apple.github.io/foundationdb/getting-started-linux.html) tells how to install. We can download client package from FoundationDB GitHub release pages, for example [here](https://github.com/apple/foundationdb/releases/tag/7.1.0). Another way is to export the `LD_LIBRARY_PATH` so that the executable can find Foundation DB library `libfdb_c.so`. But this way is not recommended.
-```
+
+```sh
 export LD_LIBRARY_PATH="{ByConity_source_path}/contrib/foundationdb/lib/"
 ```
 
@@ -43,7 +46,7 @@ The following packages are required:
 - C++ compiler: clang-11 or clang-12
 - Linker: lld
 
-```
+```sh
 sudo apt-get update
 sudo apt-get install git cmake ccache python3 ninja-build libssl-dev libsnappy-dev apt-transport-https
 
@@ -56,13 +59,13 @@ sudo ./llvm.sh 12
 
 ### 2. Checkout Source Code
 
-```
+```sh
 git clone --recursive https://github.com/ByConity/ByConity.git
 ```
 
 ### 3. Build
 
-```
+```sh
 cd ByConity
 mkdir build && cd build
 export CC=clang-12
@@ -73,7 +76,7 @@ ninja
 
 Then you can find the binary in the programs folder
 
-```
+```sh
 clickhouse-client    # byconity client
 clickhouse-server    # byconity server
 clickhouse-worker    # byconity worker
@@ -83,16 +86,21 @@ resource_manager     # byconity resource manager
 ```
 
 ## Run ByConity Locally
+
 The most convinience way for local development is to use `docker-compose`. You can use `docker-compose` to quickly create a [byconity cluster](/docker/local-deploy/README.md) from your local build binary. By using this approach, you do not need to worry about the setup of ByConity dependencies (FoundationDB and HDFS), it automatically launches them all. It is recommended to use this approach for ByConity development.
 
 Alternatively, if you don't want to use docker, please follow the instructions below to run ByConity in non-containerized environments.  It assumes you have [FoundationDB](https://apple.github.io/foundationdb/local-dev.html) and [HDFS](https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-common/ClusterSetup.html) set up and running locally:
+
 1. Modify the template config
 2. Run the local deployment script to run all the components
 
 ### Modify the template config
+
 The config templates can be found in deploy/template. You should replace the following in `byconity-server.xml` and `byconity-worker.xml`:
+
 1. `Path_To_FDB` with path to your FoundationDB `fdb.cluster` file path
 2. `HOST:PORT` with the host and port of name node in your HDFS cluster
+
 ```xml
     <catalog_service>
         <type>fdb</type>
@@ -116,6 +124,7 @@ The config templates can be found in deploy/template. You should replace the fol
 ```
 
 ### Run the local deployment script
+
 1. Make sure you have `python3.9` and `tmux` installed
 2. Install missing libraries, if any. For example:
    1. `pip3.9 install psutils`
@@ -125,12 +134,13 @@ The config templates can be found in deploy/template. You should replace the fol
    2. `python3.9 deploy.py --template_paths template/byconity-server.xml template/byconity-worker.xml --program_dir /home/ByConity/build/programs`
    3. There are other arguments for the script. For example, you can run 2 servers with argument `-s 2`
 
-
 ## Deploy ByConity to physical machines
+
 There are ways to deploy ByConity to physical machines:
-- Deploy via docker [wrapper](https://github.com/ByConity/ByConity/tree/master/docker/executable_wrapper)
-- Deploy using [package manager](https://github.com/ByConity/ByConity/tree/master/packages)
+
+- Deploy via docker [wrapper](https://byconity.github.io/docs/deployment/docker-wrapper)
+- Deploy using [package manager](https://byconity.github.io/docs/deployment/package-deployment)
 
 ### Test ByConity in development enviroment
-To test ByConity in development enviroment, follow this [guide](https://github.com/ByConity/ByConity/tree/master/Testing.md).
 
+To test ByConity in development enviroment, follow this [guide](https://github.com/ByConity/ByConity/tree/master/Testing.md).
