@@ -78,6 +78,7 @@ namespace ErrorCodes
     extern const int CANNOT_SEEK_THROUGH_FILE;
     extern const int POSITION_OUT_OF_BOUND;
     extern const int ALL_CONNECTION_TRIES_FAILED;
+    extern const int UNKNOWN_FILE_SIZE;
 }
 
 
@@ -144,6 +145,7 @@ namespace ErrorCodes
                 return fuzzy_hdfs_uri;
             }
 
+            size_t getFileSize();
 
             int getFD() const
             {
