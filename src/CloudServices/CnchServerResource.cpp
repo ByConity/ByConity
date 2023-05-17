@@ -50,9 +50,9 @@ void AssignedResource::addDataParts(const HiveDataPartsCNCHVector & parts)
 {
     for (const auto & part : parts)
     {
-        if (!part_names.count(part->name))
+        if (!part_names.count(part->getName()))
         {
-            part_names.emplace(part->name);
+            part_names.emplace(part->getName());
             hive_parts.emplace_back(part);
         }
     }
