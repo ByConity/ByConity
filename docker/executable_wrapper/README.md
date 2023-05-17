@@ -4,7 +4,7 @@ This directory has the docker file, Makefile, shell file and configration files 
 
 ## deploy ByConity into physical serves with this docker wrapper
 
-If you want to deploy ByConity into physical serves with this docker wrapper, please check out the instructions from [here](https://byconity.github.io/docs/deployment/docker-wrapper).
+If you want to deploy ByConity into physical serves with this docker wrapper, you can leverage the run.sh file to start ByConity services with docker command. Please check out the instructions from [here](https://byconity.github.io/docs/deployment/docker-wrapper).
 
 ## How to build
 

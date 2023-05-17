@@ -138,8 +138,8 @@ The config templates can be found in deploy/template. You should replace the fol
 
 There are ways to deploy ByConity to physical machines:
 
-- Deploy via docker [wrapper](https://github.com/ByConity/ByConity/tree/master/docker/executable_wrapper)
-- Deploy using [package manager](https://github.com/ByConity/ByConity/tree/master/packages)
+- Deploy via docker [wrapper](https://byconity.github.io/docs/deployment/docker-wrapper)
+- Deploy using [package manager](https://byconity.github.io/docs/deployment/package-deployment)
 
 ### Test ByConity in development enviroment
 
