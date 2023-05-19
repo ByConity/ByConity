@@ -333,6 +333,9 @@
   "homePage.communitySection.bilibili.title": {
     "message": "Bilibili"
   },
+  "homePage.communitySection.discord.title": {
+    "message": "Discord"
+  },
   "homePage.communitySection.twitter.title": {
     "message": "Twitter"
   },

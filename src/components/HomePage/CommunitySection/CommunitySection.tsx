@@ -8,6 +8,7 @@ import SlackLogo from './slack-logo.svg';
 import TwitterLogo from './twitter-logo.svg';
 import WechatLogo from './wechat-logo.svg';
 import wechatQrPath from './wechat-qr.jpeg';
+import DiscordLogo from './discord-logo.svg';
 
 import styles from './CommunitySection.module.scss';
 import clsx from 'clsx';
@@ -71,6 +72,12 @@ function CommunitySection() {
             image={<BilibiliLogo />}
             externalLink="https://space.bilibili.com/2065226922?spm_id_from=333.1007.0.0"
             title={<Translate id="homePage.communitySection.bilibili.title" />}
+          />
+
+          <LogoDisplay
+            image={<DiscordLogo />}
+            externalLink="https://discord.gg/V4BvTWGEQJ"
+            title={<Translate id="homePage.communitySection.discord.title" />}
           />
 
           <LogoDisplay
