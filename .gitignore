@@ -152,6 +152,8 @@ package-lock.json
 /src/Protos/*.pb.h
 docker/server/config/tso.xml
 
+target/
+
 # Misc
 .DS_Store
 byted.yaml
