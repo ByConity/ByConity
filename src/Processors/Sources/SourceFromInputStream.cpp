@@ -116,11 +116,11 @@ void SourceFromInputStream::work()
 
     if (rows_before_limit)
     {
-        std::cout << "SourceFromInputStream::transform BEFORE rows_before_limit = " << rows_before_limit.get() << std::endl;
+        std::cout << "SourceFromInputStream::transform BEFORE rows_before_limit = " << rows_before_limit->get() << std::endl;
         const auto & info = stream->getProfileInfo();
         if (info.hasAppliedLimit())
             rows_before_limit->add(info.getRowsBeforeLimit());
-        std::cout << "SourceFromInputStream::transform AFTER rows_before_limit = " << rows_before_limit.get() << std::endl;
+        std::cout << "SourceFromInputStream::transform AFTER rows_before_limit = " << rows_before_limit->get() << std::endl;
     }
 
     stream->readSuffix();

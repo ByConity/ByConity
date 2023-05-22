@@ -84,9 +84,9 @@ std::optional<Chunk> RemoteSource::tryGenerate()
         {
             if (rows_before_limit && info.hasAppliedLimit())
             {
-                std::cout << "RemoteSource::tryGenerate BEFORE rows_before_limit = " << rows_before_limit.get() << std::endl;
+                std::cout << "RemoteSource::tryGenerate BEFORE rows_before_limit = " << rows_before_limit->get() << std::endl;
                 rows_before_limit->set(info.getRowsBeforeLimit());
-                std::cout << "RemoteSource::tryGenerate AFTER rows_before_limit = " << rows_before_limit.get() << std::endl;
+                std::cout << "RemoteSource::tryGenerate AFTER rows_before_limit = " << rows_before_limit->get() << std::endl;
             }
         });
 

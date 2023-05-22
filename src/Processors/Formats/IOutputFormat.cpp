@@ -97,7 +97,7 @@ void IOutputFormat::work()
     {
         if (rows_before_limit_counter && rows_before_limit_counter->hasAppliedLimit())
         {
-            std::cout << "IOutputFormat::work DONE rows_before_limit_counter = " << rows_before_limit_counter.get() << std::endl;
+            std::cout << "IOutputFormat::work DONE rows_before_limit_counter = " << rows_before_limit_counter->get() << std::endl;
             setRowsBeforeLimit(rows_before_limit_counter->get());
         }
 

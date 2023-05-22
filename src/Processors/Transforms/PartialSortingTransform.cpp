@@ -104,9 +104,9 @@ void PartialSortingTransform::transform(Chunk & chunk)
 
     if (read_rows)
     {
-        std::cout << "PartialSortingTransform::transform BEFORE read_rows = " << read_rows.get() << std::endl;
+        std::cout << "PartialSortingTransform::transform BEFORE read_rows = " << read_rows->get() << std::endl;
         read_rows->add(chunk.getNumRows());
-        std::cout << "PartialSortingTransform::transform AFTER read_rows = " << read_rows.get() << std::endl;
+        std::cout << "PartialSortingTransform::transform AFTER read_rows = " << read_rows->get() << std::endl;
     }
 
     auto block = getInputPort().getHeader().cloneWithColumns(chunk.detachColumns());
