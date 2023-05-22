@@ -1,0 +1,85 @@
+---
+title: Git 工作流
+tags:
+  - Docs
+---
+# 基本规则
+
+ByConity 利用 Github 进行开发。ByConity 的每个贡献者和维护者都必须遵循以下工作流程：
+
+- 在 fork 的仓库上进行工作。
+- 在 fork 的仓库上创建分支，避免直接在 `master` 分支上工作。
+
+## 准备 fork
+
+fork 是原始仓库的副本，您可以通过它向原始仓库提出拉取请求来提出更改建议。
+
+## 配置您的 fork
+
+该文档将原始仓库称为上游仓库，将 fork 的仓库称为源仓库。我们假设您已经 fork 了上游仓库并且已经使用 `git clone` 下载了它。
+
+## 在本地 fork 上进行工作
+
+配置一个 `remote` 仓库，指向上游仓库。这样您就可以将您在 fork 上所做的更改与原始仓库同步。
+
+在终端中，进入到您 fork 的位置，并执行以下步骤：
+
+1. 运行 `git remote -v` 命令，列出您的fork 当前配置的远程仓库。结果如下：
+
+```txt
+    origin  https://github.com/{your-username}/{your-fork}.git (fetch)
+    origin  https://github.com/{your-username}/{your-fork}.git (push)
+```
+
+例如：
+
+```txt
+    origin	https://github.com/YourName/ByConity.git (fetch)
+    origin	https://github.com/YourName/ByConity.git (push)
+```
+
+2. 指定一个新的上游仓库来与 fork 同步：
+
+```bash
+    git remote add upstream https://github.com/{original-owner}/{original-repository}.git
+```
+
+例如：
+
+```bash
+    git remote add upstream https://github.com/ByConity/ByConity.git
+```
+
+3. 运行 `git fetch upstream master` 命令来获取所有分支。
+4. 设置本地 `master` 分支来跟踪上游仓库的远程 `master` 分支：
+
+```bash
+    git branch -u upstream/master master
+```
+
+现在，每当您重新基于或者检出 `master` 分支时，都会引用上游仓库的 `master` 分支。换句话说，当您从本地最新的 `master` 创建一个分支时，就意味着您从最新的上游 `main` 创建了一个分支。
+
+为了验证您的本地 `master` 分支是否指向了 `upstream/master`，运行 `git branch -vv` 命令。结果类似于以下内容：
+
+```txt
+* master         6a43546 [upstream/master] Translate Background Tasks Configuration in English
+```
+
+5. 提交更改。始终提供[清晰的提交消息](https://cbea.ms/git-commit/#imperative)，以便更容易地跟踪提交更改。
+
+6. 从您 fork 的仓库分支创建一个拉取请求，将其合并到上游仓库的 `main` 分支，并等待维护者的审核。
+
+拉取请求应该有一个遵循[规范](https://www.conventionalcommits.org/en/v1.0.0/#summary)的标题，否则将阻止合并。如果您不熟悉规范，请向维护者提出修改请求。您也可以使用以下备忘单：
+
+- fix：标题中的前缀表示 PR 是修复错误的，必须触发 PATCH 发布。
+- feat：标题中的前缀表示 PR 是新功能，必须触发 MINOR 发布。
+- docs：标题中的前缀表示 PR 仅与文档相关，不需要触发发布。
+- perf：标题中的前缀表示 PR 仅与性能相关，不需要触发发布。 
+- chore：标题中的前缀表示 PR 仅与项目清理相关，不需要触发发布。
+- test：标题中的前缀表示 PR 仅与测试相关，不需要触发发布。
+- refactor：标题中的前缀表示 PR 仅与重构相关，不需要触发发布。
+
+# 参考资料
+
+- [Asyncapi Git WorkFlow](https://github.com/asyncapi/community/blob/master/git-workflow.md)
+- [GitHub github-flow](https://docs.github.com/en/get-started/quickstart/github-flow)
