@@ -1,6 +1,7 @@
 #include <Processors/Transforms/PartialSortingTransform.h>
 #include <Interpreters/sortBlock.h>
 #include <Common/PODArray.h>
+#include <iostream>
 
 namespace DB
 {
@@ -102,7 +103,11 @@ void PartialSortingTransform::transform(Chunk & chunk)
     }
 
     if (read_rows)
+    {
+        std::cout << "PartialSortingTransform::transform BEFORE read_rows = " << read_rows.get() << std::endl;
         read_rows->add(chunk.getNumRows());
+        std::cout << "PartialSortingTransform::transform AFTER read_rows = " << read_rows.get() << std::endl;
+    }
 
     auto block = getInputPort().getHeader().cloneWithColumns(chunk.detachColumns());
 

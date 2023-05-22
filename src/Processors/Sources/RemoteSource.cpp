@@ -26,6 +26,7 @@
 #include <DataTypes/DataTypeAggregateFunction.h>
 #include <QueryPlan/IQueryPlanStep.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
+#include <iostream>
 
 namespace DB
 {
@@ -82,7 +83,11 @@ std::optional<Chunk> RemoteSource::tryGenerate()
         query_executor->setProfileInfoCallback([this](const BlockStreamProfileInfo & info)
         {
             if (rows_before_limit && info.hasAppliedLimit())
+            {
+                std::cout << "RemoteSource::tryGenerate BEFORE rows_before_limit = " << rows_before_limit.get() << std::endl;
                 rows_before_limit->set(info.getRowsBeforeLimit());
+                std::cout << "RemoteSource::tryGenerate AFTER rows_before_limit = " << rows_before_limit.get() << std::endl;
+            }
         });
 
         query_executor->sendQuery();

@@ -22,7 +22,7 @@
 #include <Processors/Formats/IOutputFormat.h>
 #include <IO/WriteBuffer.h>
 #include <common/scope_guard.h>
-
+#include <iostream>
 
 namespace DB
 {
@@ -96,7 +96,10 @@ void IOutputFormat::work()
     if (finished && !finalized)
     {
         if (rows_before_limit_counter && rows_before_limit_counter->hasAppliedLimit())
+        {
+            std::cout << "IOutputFormat::work DONE rows_before_limit_counter = " << rows_before_limit_counter.get() << std::endl;
             setRowsBeforeLimit(rows_before_limit_counter->get());
+        }
 
         finalize();
         finalized = true;
