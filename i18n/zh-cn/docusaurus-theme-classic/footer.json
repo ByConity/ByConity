@@ -1,22 +1,22 @@
 {
   "link.title.Docs": {
-    "message": "Docs",
+    "message": "文档",
     "description": "The title of the footer links column with title=Docs in the footer"
   },
   "link.title.Community": {
-    "message": "Community",
+    "message": "社区",
     "description": "The title of the footer links column with title=Community in the footer"
   },
   "link.title.More": {
-    "message": "More",
+    "message": "更多",
     "description": "The title of the footer links column with title=More in the footer"
   },
   "link.item.label.Docs": {
-    "message": "Docs",
+    "message": "文档",
     "description": "The label of footer link with label=Docs linking to /docs/introduction/main-principle-concepts"
   },
   "link.item.label.Blog": {
-    "message": "Blog",
+    "message": "博客",
     "description": "The label of footer link with label=Blog linking to /blog"
   },
   "link.item.label.GitHub": {
@@ -32,11 +32,11 @@
     "description": "The label of footer link with label=Community linking to /community"
   },
   "link.item.label.Users": {
-    "message": "Users",
+    "message": "用户",
     "description": "The label of footer link with label=Users linking to /users"
   },
   "link.item.label.Bilibili": {
-    "message": "Bilibili",
+    "message": "B站",
     "description": "The label of footer link with label=Bilibili linking to https://space.bilibili.com/2065226922?spm_id_from=333.1007.0.0"
   }
 }
