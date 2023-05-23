@@ -6,6 +6,7 @@
 #include <cassert>
 #include <iostream>
 #include <system_error>
+#include <JNIArrowStream.h>
 
 namespace DB
 {
@@ -33,17 +34,31 @@ JNIArrowReader::JNIArrowReader(const std::string & full_classname, const std::st
 
 JNIArrowReader::~JNIArrowReader()
 {
-    schema.release(&schema);
+    // schema.release(&schema);
+    // stream.release(&stream);
 }
 
 void JNIArrowReader::initStream()
 {
     JNIEnv * env = JNIHelper::instance().getJNIEnv();
     env->CallObjectMethod(jni_obj, method_init_stream, reinterpret_cast<jlong>(&stream));
-
+    if (env->ExceptionCheck()) 
+    {
+        env->ExceptionDescribe();
+    }
     int errcode = stream.get_schema(&stream, &schema);
+
+    if (env->ExceptionCheck()) 
+    {
+        env->ExceptionDescribe();
+    }
+
+    assert(errcode == 0);
     if (errcode != 0)
+    {
         print_err(errcode, &stream);
+        abort();
+    }
 }
 
 bool JNIArrowReader::next(ArrowArray & chunk)

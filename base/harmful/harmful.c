@@ -227,7 +227,7 @@ TRAP(lgamma)
 TRAP(lgammaf)
 TRAP(lgammal)
 TRAP(nftw)
-TRAP(nl_langinfo)
+//TRAP(nl_langinfo) // JNI ?
 TRAP(putc_unlocked)
 //TRAP(rand)
 /** In  the current POSIX.1 specification (POSIX.1-2008), readdir() is not required to be thread-safe.  However, in modern

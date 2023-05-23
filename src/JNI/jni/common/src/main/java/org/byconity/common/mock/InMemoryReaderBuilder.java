@@ -1,5 +1,6 @@
 package org.byconity.common.mock;
 
+import com.google.protobuf.InvalidProtocolBufferException;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.util.AutoCloseables;
@@ -14,6 +15,7 @@ import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.Schema;
 import org.byconity.common.ArrowReaderBuilder;
+import org.byconity.proto.HudiMeta;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -21,6 +23,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 public class InMemoryReaderBuilder extends ArrowReaderBuilder {
 
@@ -28,10 +32,14 @@ public class InMemoryReaderBuilder extends ArrowReaderBuilder {
     private int num_batch;
     private int batch_size;
 
-    public static InMemoryReaderBuilder create(byte[] raw) {
+    public static InMemoryReaderBuilder create(byte[] raw) throws InvalidProtocolBufferException {
+        HudiMeta.Properties properties = HudiMeta.Properties.parseFrom(raw);
+        Map<String, String> params = properties.getPropertiesList().stream().collect(
+                Collectors.toMap(HudiMeta.Properties.KeyValue::getKey, HudiMeta.Properties.KeyValue::getValue));
+
+        int num_batch = Integer.parseInt(params.get("num_batch"));
+        int batch_size = Integer.parseInt(params.get("batch_size"));
         BufferAllocator allocator = new RootAllocator();
-        int num_batch = ByteBuffer.wrap(raw, 0, 4).getInt();
-        int batch_size = ByteBuffer.wrap(raw, 4, 4).getInt();
         return new InMemoryReaderBuilder(allocator, num_batch, batch_size);
     }
 

@@ -131,6 +131,10 @@ if (USE_HDFS)
     add_headers_and_sources(dbms Disks/HDFS)
 endif()
 
+if (USE_JAVA_EXTENSIONS)
+    add_headers_and_sources(dbms Storages/DataLakes)
+endif()
+
 add_headers_and_sources(dbms Protos)
 
 list (APPEND clickhouse_common_io_sources ${CONFIG_BUILD})

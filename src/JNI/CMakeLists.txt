@@ -18,7 +18,10 @@ add_custom_target(mvn_build
     COMMENT "Building with Maven"
 )
 
-add_dependencies(clickhouse_jni_lib mvn_build)
+install (FILES ${CMAKE_CURRENT_SOURCE_DIR}/jni/distribution/target/jni-extension_1.0-SNAPSHOT-jar-with-dependencies.jar
+        DESTINATION ${CMAKE_INSTALL_PREFIX}/jar)
+
+# add_dependencies(clickhouse_jni_lib mvn_build)
 
 # protos
 add_subdirectory(jni)

@@ -35,6 +35,10 @@ JNIByteCreatable::JNIByteCreatable(const std::string & full_classname, const std
 
     /// invoke factory method
     jni_obj = env->CallStaticObjectMethod(jni_cls, factory_method, jbyte_array);
+    if (env->ExceptionCheck())
+    {
+        env->ExceptionDescribe();
+    }
     env->DeleteLocalRef(jbyte_array);
 }
 

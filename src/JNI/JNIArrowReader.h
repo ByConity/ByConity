@@ -11,7 +11,7 @@ public:
     JNIArrowReader(const std::string &full_classname, const std::string & pb_message);
     ~JNIArrowReader() override;
 
-    const ArrowSchema & getSchema() { return schema; }
+    ArrowSchema & getSchema() { return schema; }
 
     void initStream();
     bool next(ArrowArray & chunk);

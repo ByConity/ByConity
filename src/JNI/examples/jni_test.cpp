@@ -5,21 +5,19 @@
 #include <JNIHelper.h>
 #include <JNIMetaClient.h>
 
-std::string makeProperties(const std::map<std::string, std::string> &params)
+void makeProperties(DB::Protos::Properties * prop, const std::map<std::string, std::string> &params)
 {
-    DB::Protos::HudiMetaClientParams proto_params;
-    auto * mutable_proto = proto_params.mutable_properties();
     for (const auto &kv : params)
     {
-        auto *proto_kv = mutable_proto->add_properties();
+        auto *proto_kv = prop->add_properties();
         proto_kv->set_key(kv.first);
         proto_kv->set_value(kv.second);
     }
-    return proto_params.SerializeAsString();
 }
 
 void runMetaClient()
 {
+    std::cout << "run meta client" << std::endl;
     JNIEnv * env = DB::JNIHelper::instance().getJNIEnv();
     assert(env != nullptr);
 
@@ -28,10 +26,11 @@ void runMetaClient()
         {"B", "b"}
     };
 
-    std::string pb_params = makeProperties(params);
+    DB::Protos::HudiMetaClientParams req;
+    makeProperties(req.mutable_properties(), params);
     
-    DB::JNIMetaClient client("org/byconity/common/mock/HelloHudiMetaClient", pb_params);
-    std::string table_raw = client.getTable("world");
+    DB::JNIMetaClient client("org/byconity/common/mock/HelloHudiMetaClient", req.SerializeAsString());
+    std::string table_raw = client.getTable();
 
     DB::Protos::HudiTable table;
     table.ParseFromString(table_raw);
@@ -46,22 +45,22 @@ void runMetaClient()
 
 void runArrowStream()
 {
+    std::cout << "run arrow stream" << std::endl;
     JNIEnv * env = DB::JNIHelper::instance().getJNIEnv();
     assert(env != nullptr);
 
-    int num_batch = 4;
-    int batch_size = 10;
-    char s[sizeof(num_batch) * 2];
-    memcpy(s, &num_batch, sizeof(int));
-    memcpy(s + sizeof(int), &batch_size, sizeof(int));
-    std::string params(s, sizeof s);
+    std::map<std::string, std::string> params;
+    params["num_batch"] = "4";
+    params["batch_size"] = "10";
+    DB::Protos::Properties req;
+    makeProperties(&req, params);
 
-    DB::JNIArrowReader reader("org/byconity/common/mock/InMemoryReaderBuilder", params);
+    DB::JNIArrowReader reader("org/byconity/common/mock/InMemoryReaderBuilder", req.SerializeAsString());
     reader.initStream();
-    const auto & schema = reader.getSchema();
+    auto schema = reader.getSchema();
     std::cout << schema.n_children << std::endl;
 
-    DB::ArrowArray chunk;
+    ArrowArray chunk;
     while (reader.next(chunk))
     {
         std::cout << chunk.length << " rows" << std::endl;
@@ -71,8 +70,13 @@ void runArrowStream()
 
 int main(int, char **)
 {
-    setenv("CLASSPATH", "/data01/cao.liu.l/ck/ByConity/src/JNI/jni/distribution/target/jni-extension_1.0-SNAPSHOT-jar-with-dependencies.jar", 1);
+    const char * env = getenv("CLASSPATH");
+    if (env == nullptr)
+    {
+        std::cerr << "CLASSPATH is not set. CLASSPATH should be set to the path of 'jni-extension_1.0-SNAPSHOT-jar-with-dependencies.jar'" << std::endl;
+        return 1;
+    }
 
     runMetaClient();
-    //runArrowStream();
+    runArrowStream();
 }

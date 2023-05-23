@@ -1,6 +1,8 @@
 package org.byconity.readers;
 
+import com.google.protobuf.InvalidProtocolBufferException;
 import org.apache.arrow.memory.BufferAllocator;
+import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.ipc.ArrowReader;
 import org.apache.arrow.vector.types.pojo.Schema;
 import org.apache.hadoop.conf.Configuration;
@@ -23,7 +25,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimeFileSplit;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.byconity.common.ArrowReaderBuilder;
 import org.byconity.hudi.HiveArrowUtils;
+import org.byconity.proto.HudiMeta;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -38,7 +42,7 @@ import java.util.stream.Collectors;
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.stream.Collectors.toList;
 
-public class HudiFileSliceArrowReaderBuilder {
+public class HudiFileSliceArrowReaderBuilder extends ArrowReaderBuilder {
 
     private static final Logger LOG = LogManager.getLogger(HudiFileSliceArrowReaderBuilder.class);
     private BufferAllocator allocator;
@@ -55,9 +59,16 @@ public class HudiFileSliceArrowReaderBuilder {
     private final String serde;
     private final String inputFormat;
 
-    private static String getOrThrow(Map<String, String> map, String key)
-    {
-        return Optional.ofNullable(map.get(key)).orElseThrow(() -> new NoSuchElementException(key + "not found"));
+    private static String getOrThrow(Map<String, String> map, String key) {
+        return Optional.ofNullable(map.get(key)).orElseThrow(() -> new NoSuchElementException(key + " not found"));
+    }
+
+    public static HudiFileSliceArrowReaderBuilder create(byte[] raw) throws InvalidProtocolBufferException {
+        BufferAllocator allocator = new RootAllocator();
+        HudiMeta.Properties properties = HudiMeta.Properties.parseFrom(raw);
+        Map<String, String> params = properties.getPropertiesList().stream().collect(
+                Collectors.toMap(HudiMeta.Properties.KeyValue::getKey, HudiMeta.Properties.KeyValue::getValue));
+        return new HudiFileSliceArrowReaderBuilder(allocator, params);
     }
 
     public HudiFileSliceArrowReaderBuilder(BufferAllocator allocator, Map<String, String> params) {
@@ -181,6 +192,7 @@ public class HudiFileSliceArrowReaderBuilder {
         return sb.toString();
     }
 
+    @Override
     public ArrowReader build() throws IOException {
         try
         {
@@ -200,5 +212,10 @@ public class HudiFileSliceArrowReaderBuilder {
             LOG.error("Failed to open the hudi MOR slice reader.", e);
             throw new IOException("Failed to open the hudi MOR slice reader.", e);
         }
+    }
+
+    @Override
+    public BufferAllocator getAllocator() {
+        return allocator;
     }
 }

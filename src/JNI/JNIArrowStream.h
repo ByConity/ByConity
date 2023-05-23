@@ -34,9 +34,6 @@
 #define ARROW_FLAG_NULLABLE 2
 #define ARROW_FLAG_MAP_KEYS_SORTED 4
 
-namespace DB
-{
-
 struct ArrowSchema {
   // Array type description
   const char* format;
@@ -110,7 +107,6 @@ struct ArrowArrayStream {
   // Opaque producer-specific data
   void* private_data;
 };
-}
 
 #endif  // ARROW_C_STREAM_INTERFACE
 #endif  // ARROW_FLAG_DICTIONARY_ORDERED

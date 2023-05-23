@@ -27,7 +27,7 @@ public class HelloHudiMetaClient implements MetaClient {
     }
 
     @Override
-    public byte[] getTable(String tableName) throws Exception {
+    public byte[] getTable() throws Exception {
         List<HudiMeta.Properties.KeyValue> allProperties = new ArrayList<>();
         properties.forEach((k, v) -> {
             allProperties.add(HudiMeta.Properties.KeyValue.newBuilder().setKey(k).setValue(v).build());
@@ -36,7 +36,7 @@ public class HelloHudiMetaClient implements MetaClient {
 
         HudiMeta.HudiTable table = HudiMeta.HudiTable.newBuilder()
                 .setHiveDbName("Hello")
-                .setHiveTableName(tableName)
+                .setHiveTableName("World")
                 .setProperties(propertyProto)
                 .build();
 
@@ -44,7 +44,12 @@ public class HelloHudiMetaClient implements MetaClient {
     }
 
     @Override
-    public byte[] getFilesInPartition(String table, String partitionKey) throws Exception {
+    public byte[] getPartitionPaths() throws Exception {
+        return new byte[0];
+    }
+
+    @Override
+    public byte[] getFilesInPartition(String partitionKey) throws Exception {
         return new byte[0];
     }
 }

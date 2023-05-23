@@ -113,7 +113,7 @@ JNIHelper & JNIHelper::instance()
         cached_env = getGlobalJNIEnv();
     }
 
-    // assert(cached_env != nullptr);
+    assert(cached_env != nullptr);
     static JNIHelper helper;
     return helper;
 }

@@ -3,6 +3,7 @@ package org.byconity.hudi;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.ipc.ArrowReader;
+import org.byconity.proto.HudiMeta;
 import org.byconity.readers.HudiFileSliceArrowReaderBuilder;
 import org.junit.jupiter.api.Test;
 
@@ -54,8 +55,17 @@ a       b       c       d       e
         return params;
     }
 
-    void runScanOnParams(Map<String, String> params) throws IOException {
-        HudiFileSliceArrowReaderBuilder builder = new HudiFileSliceArrowReaderBuilder(allocator, params);
+    byte[] serialize(Map<String, String> map) {
+        HudiMeta.Properties.Builder builder = HudiMeta.Properties.newBuilder();
+        map.forEach((k, v) -> {
+            HudiMeta.Properties.KeyValue kv = HudiMeta.Properties.KeyValue.newBuilder().setKey(k).setValue(v).build();
+            builder.addProperties(kv);
+        });
+        return builder.build().toByteArray();
+    }
+
+    void runScanOnParams(byte[] params) throws IOException {
+        HudiFileSliceArrowReaderBuilder builder = HudiFileSliceArrowReaderBuilder.create(params);
         System.out.println(builder.toString());
 
         ArrowReader stream = builder.build();
@@ -68,6 +78,6 @@ a       b       c       d       e
     @Test
     public void c1DoScanTestOnPrimitiveType() throws IOException {
         Map<String, String> params = createScanTestParams();
-        runScanOnParams(params);
+        runScanOnParams(serialize(params));
     }
 }

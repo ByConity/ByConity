@@ -7,7 +7,6 @@
 namespace DB
 {
 
-
 class JNIHelper final {
 public:
     static JNIHelper & instance();
