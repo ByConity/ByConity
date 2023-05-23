@@ -20,11 +20,15 @@
 #include "common/logger_useful.h"
 #include <Common/Exception.h>
 // #include <Transaction/CnchExplicitTransaction.h>
-#include "Disks/IDisk.h"
+#include <Disks/IDisk.h>
+#include <Disks/DiskByteS3.h>
 #include <MergeTreeCommon/CnchStorageCommon.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
+#include <Storages/MergeTree/S3ObjectMetadata.h>
+#include <Storages/MergeTree/S3PartsAttachMeta.h>
 #include <Interpreters/Context.h>
 #include <cppkafka/cppkafka.h>
+
 
 namespace DB
 {
@@ -134,8 +138,24 @@ void UndoResource::clean(Catalog::Catalog & , [[maybe_unused]]MergeTreeMetaBase 
         String rel_path = storage->getRelativeDataPath(IStorage::StorageLocation::MAIN) + resource_relative_path;
         if (disk->exists(rel_path))
         {
-            LOG_DEBUG(log, "Will remove undo path {}", disk->getPath() + rel_path);
-            disk->removeRecursive(rel_path);
+            if ((type() == UndoResourceType::Part || type() == UndoResourceType::StagedPart)
+                && disk->getType() == DiskType::Type::ByteS3)
+            {
+                if (auto s3_disk = std::dynamic_pointer_cast<DiskByteS3>(disk); s3_disk != nullptr)
+                {
+                    S3PartsLazyCleaner cleaner(s3_disk->getS3Util(), s3_disk->getPath(),
+                        S3ObjectMetadata::PartGeneratorID(S3ObjectMetadata::PartGeneratorID::TRANSACTION, std::to_string(txn_id)), 1);
+
+                    cleaner.push(resource_relative_path);
+
+                    cleaner.finalize();
+                }
+            }
+            else
+            {
+                LOG_DEBUG(log, "Will remove Disk {} undo path {}" , disk->getPath(), rel_path);
+                disk->removeRecursive(rel_path);
+            }
         }
     }
     else if (type() == UndoResourceType::FileSystem)
@@ -163,7 +183,7 @@ UndoResourceNames integrateResources(const UndoResources & resources)
     UndoResourceNames result;
     for (const auto & resource : resources)
     {
-        if (resource.type() == UndoResourceType::Part)
+        if (resource.type() == UndoResourceType::Part || resource.type() == UndoResourceType::S3VolatilePart)
         {
             result.parts.insert(resource.placeholders(0));
         }
@@ -186,6 +206,11 @@ UndoResourceNames integrateResources(const UndoResources & resources)
             {
                 result.parts.insert(part_name);
             }
+        }
+        else if (resource.type() == UndoResourceType::S3AttachPart
+            || resource.type() == UndoResourceType::S3DetachPart
+            || resource.type() == UndoResourceType::S3AttachMeta)
+        {
         }
         else
             throw Exception("Unknown undo resource type " + toString(static_cast<int>(resource.type())), ErrorCodes::LOGICAL_ERROR);
