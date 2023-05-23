@@ -117,13 +117,16 @@
 #include <Interpreters/InterpreterCreateStatsQuery.h>
 #include <Interpreters/InterpreterDropStatsQuery.h>
 #include <Interpreters/InterpreterShowStatsQuery.h>
+#include <Interpreters/PlanSegmentHelper.h>
 
 #include <Parsers/ASTSystemQuery.h>
 
 #include <Databases/MySQL/MaterializeMySQLSyncThread.h>
 #include <Parsers/ASTExternalDDLQuery.h>
+#include "common/logger_useful.h"
 #include <Common/ProfileEvents.h>
 #include <Common/typeid_cast.h>
+#include "Interpreters/DistributedStages/PlanSegment.h"
 
 
 namespace ProfileEvents
@@ -152,15 +155,12 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     DistributedStagesSettings distributed_stages_settings = InterpreterDistributedStages::extractDistributedStagesSettings(query, context);
 
     bool use_distributed_stages = (distributed_stages_settings.enable_distributed_stages) && !options.is_internal;
+    use_distributed_stages = use_distributed_stages && !context->getSettingsRef().enable_optimizer && PlanSegmentHelper::supportDistributedStages(query);
 
-    if (use_distributed_stages)
+    if (use_distributed_stages && context->getComplexQueryActive() && QueryUseOptimizerChecker::check(query, context, true))
     {
-        if (!context->getComplexQueryActive())
-            throw Exception("Server config missing exchange_status_port and exchange_port cannot execute query with enable_distributed_stages enabled",
-                            ErrorCodes::LOGICAL_ERROR);
-
         if (query->as<ASTSelectQuery>() || query->as<ASTSelectWithUnionQuery>())
-            return std::make_unique<InterpreterDistributedStages>(query, context);
+            return std::make_unique<InterpreterSelectQueryUseOptimizer>(query, context, options);
     }
 
     if (query->as<ASTSelectQuery>())

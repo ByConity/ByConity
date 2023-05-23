@@ -48,6 +48,9 @@ extern const Metric DiskSpaceReservedForMerge;
 
 namespace DB
 {
+
+extern std::atomic<UInt64> next_disk_id;
+
 class IDiskDirectoryIterator;
 using DiskDirectoryIteratorPtr = std::unique_ptr<IDiskDirectoryIterator>;
 

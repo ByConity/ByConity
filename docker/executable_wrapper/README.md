@@ -1,15 +1,24 @@
-The current way to deploy ByConity to physical servers is deployed via a docker wrapper. The docker wrapper image can be upgraded by following this [guide](https://github.com/ByConity/ByConity/tree/master/docker/executable_wrapper/Update_docker_image.md). Please follow the below steps:
-- Deploy [Foundation](https://apple.github.io/foundationdb/) database. You can refer to the installation guide [here](https://github.com/ByConity/ByConity/tree/master/docker/executable_wrapper/FDB_installation.md). After this step will have a **fdb cluster config** file default located in `/etc/foundationdb/fdb.cluster`. Copy this file to `./config/fdb.clsuter`
-- Deploy an HDFS cluster consist of name node and data node, and create the directory `/user/clickhouse` in HDFS for store data. You can refer to the installation guide [here](https://github.com/ByConity/ByConity/tree/master/docker/executable_wrapper/HDFS_installation.md). After this step, you got the name node url which ussually the value of `fs.defaultFS` that you can find in the `core-site.xml` config. 
-- Update file `config/cnch_config.xml`: 
-    - Update the value of `hdfs_nnproxy` tag to your hdfs namenode url. 
-    - Update the `host` tag inside `service_discovery` tags with the approprate address, ussually the ip address of the machine where you plan to install ByConity
-- Execute `make image_pull` to pull the docker image to your local
-- For the machine you plan to deploy TSO, execute ./run.sh tso to run tso. And in the same way, go the other machine where you plan to run other component and execute below command to make it run.
-- Execute `./run.sh server` on 1 machine to run server
-- Execute `./run.sh read_worker` on 1 machine to run read worker. You can have many workers by repeated this command on different machines. And add the workers info in `service_discovery` tags in `config/cnch_config.xml` so that server can know them.
-- Execute `./run.sh write_worker` on 1 machine to run write worker
-- Execute `./run.sh dm` on 1 machine to run daemon manager. TSO and DM are light weight services and can be run in the same machine with server or worker for resource efficient.
-- Execute `./run.sh cli` on the machine that run server or `./run.sh cli2 {server_address}` from any machine to connect to server using clickhouse-cli interface.
-- To stop any component execute `./run.sh stop {component_name}` where `component_name` can be `tso`, `server`, .... After you stop if you want to run again then use `./run.sh start {component_name}` otherwise you have got an error about container already in use from `docker`.
+# README
 
+This directory has the docker file, Makefile, shell file and configration files which are used create docker wrapper images of ByConity.
+
+## deploy ByConity into physical serves with this docker wrapper
+
+If you want to deploy ByConity into physical serves with this docker wrapper, you can leverage the run.sh file to start ByConity services with docker command. Please check out the instructions from [here](https://byconity.github.io/docs/deployment/docker-wrapper).
+
+## How to build
+
+To update docker image for executable wrapper, following below steps:
+
+Step 1: build executable binary for ByConity
+
+- From root folder of git repo, rm folder `build_docker` if it exists
+- cd to `docker/builder`
+- Build binary with `make build` 
+
+Step 2:
+
+- cd to `docker/executable_wrapper`
+- edit the Makefile to update `tag` if necessary
+- execute `make image`
+- execute `make image_push`

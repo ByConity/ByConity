@@ -77,8 +77,9 @@ MergeTreeDataPartCNCH::MergeTreeDataPartCNCH(
     const String & name_,
     const VolumePtr & volume_,
     const std::optional<String> & relative_path_,
-    const IMergeTreeDataPart * parent_part_)
-    : IMergeTreeDataPart(storage_, name_, volume_, relative_path_, Type::CNCH, parent_part_, IStorage::StorageLocation::MAIN)
+    const IMergeTreeDataPart * parent_part_,
+    const UUID& part_id_)
+    : IMergeTreeDataPart(storage_, name_, volume_, relative_path_, Type::CNCH, parent_part_, IStorage::StorageLocation::MAIN, part_id_)
 {
 }
 
@@ -88,8 +89,9 @@ MergeTreeDataPartCNCH::MergeTreeDataPartCNCH(
     const MergeTreePartInfo & info_,
     const VolumePtr & volume_,
     const std::optional<String> & relative_path_,
-    const IMergeTreeDataPart * parent_part_)
-    : IMergeTreeDataPart(storage_, name_, info_, volume_, relative_path_, Type::CNCH, parent_part_, IStorage::StorageLocation::MAIN)
+    const IMergeTreeDataPart * parent_part_,
+    const UUID& part_id_)
+    : IMergeTreeDataPart(storage_, name_, info_, volume_, relative_path_, Type::CNCH, parent_part_, IStorage::StorageLocation::MAIN, part_id_)
 {
 }
 

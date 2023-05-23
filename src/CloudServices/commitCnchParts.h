@@ -81,6 +81,8 @@ private:
 
     String consumer_group;
     cppkafka::TopicPartitionList tpl;
+
+    UUID newPartID(const MergeTreePartInfo& part_info, UInt64 txn_timestamp);
 };
 
 }

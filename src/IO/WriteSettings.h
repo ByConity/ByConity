@@ -16,7 +16,9 @@
 #pragma once
 
 #include <cstddef>
+#include <map>
 #include <Core/Defines.h>
+#include <Core/Types.h>
 
 namespace DB
 {
@@ -27,13 +29,15 @@ namespace DB
 enum class WriteMode
 {
     Rewrite,
-    Append
+    Append,
+    Create
 };
 
 struct WriteSettings
 {
     size_t buffer_size = DBMS_DEFAULT_BUFFER_SIZE;
     WriteMode mode = WriteMode::Rewrite;
+    std::map<String, String> file_meta = {};
 };
 
 }

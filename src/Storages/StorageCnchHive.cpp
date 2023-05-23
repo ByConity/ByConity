@@ -229,8 +229,8 @@ void StorageCnchHive::checkStorageFormat()
 {
     auto table = getHiveTable();
     const String format = table->sd.outputFormat;
-    if (format.find("parquet") == String::npos)
-        throw Exception("CnchHive only support parquet format. Current format is " + format + " .", ErrorCodes::BAD_ARGUMENTS);
+    if ((format.find("parquet") == String::npos) && (format.find("orc") == String::npos))
+        throw Exception("CnchHive only support parquet/orc format. Current format is " + format + " .", ErrorCodes::BAD_ARGUMENTS);
 }
 
 bool StorageCnchHive::isBucketTable() const

@@ -375,10 +375,12 @@ IMergeTreeDataPart::IMergeTreeDataPart(
     const std::optional<String> & relative_path_,
     Type part_type_,
     const IMergeTreeDataPart * parent_part_,
-    IStorage::StorageLocation location_)
+    IStorage::StorageLocation location_,
+    const UUID& part_id_)
     : storage(storage_)
     , name(name_)
     , info(MergeTreePartInfo::fromPartName(name_, storage.format_version))
+    , uuid(part_id_)
     , volume(parent_part_ ? parent_part_->volume : volume_)
     , relative_path(relative_path_.value_or(name_))
     , index_granularity_info(storage_, part_type_)
@@ -401,10 +403,12 @@ IMergeTreeDataPart::IMergeTreeDataPart(
     const std::optional<String> & relative_path_,
     Type part_type_,
     const IMergeTreeDataPart * parent_part_,
-    IStorage::StorageLocation location_)
+    IStorage::StorageLocation location_,
+    const UUID& part_id_)
     : storage(storage_)
     , name(name_)
     , info(info_)
+    , uuid(part_id_)
     , volume(parent_part_ ? parent_part_->volume : volume_)
     , relative_path(relative_path_.value_or(name_))
     , index_granularity_info(storage_, part_type_)
