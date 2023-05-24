@@ -26,7 +26,7 @@ A minimal ByConity cluster include:
 
 ## Build ByConity
 
-The easiest way to build ByConity is built in [docker](https://github.com/ByConity/ByConity/tree/master/docker/builder). ByConity executable file depend on Foundation DB library `libfdb_c.so`. So in order to run it, we need to install the FoundationDB client package. This [link](https://apple.github.io/foundationdb/getting-started-linux.html) tells how to install. We can download client package from FoundationDB GitHub release pages, for example [here](https://github.com/apple/foundationdb/releases/tag/7.1.0). 
+The easiest way to build ByConity is built in [docker](https://github.com/ByConity/ByConity/tree/master/docker/builder). ByConity executable file depend on Foundation DB library `libfdb_c.so`. So in order to run it, we need to install the FoundationDB client package. This [link](https://apple.github.io/foundationdb/getting-started-linux.html) tells how to install. We can download client package from FoundationDB GitHub release pages, for example [here](https://github.com/apple/foundationdb/releases/tag/7.1.0).
 
 It can also be built through the following operating systems in physical machine:
 
@@ -85,7 +85,6 @@ resource_manager     # byconity resource manager
 
 The most convinience way for local development is to use `docker-compose`. You can use `docker-compose` to quickly create a [byconity cluster](/docker/local-deploy/README.md) from your local build binary. By using this approach, you do not need to worry about the setup of ByConity dependencies (FoundationDB and HDFS), it automatically launches them all. It is recommended to use this approach for ByConity development.
 
-
 ## Deploy ByConity in cluster
 
 There are ways to deploy ByConity to physical machines:
@@ -100,3 +99,5 @@ To test ByConity in development enviroment, follow this [guide](https://github.c
 ## Community
 
 - Join our [Discord server](https://discord.gg/V4BvTWGEQJ)
+- Follow up on [Twitter](https://twitter.com/ByConity)
+- Subscribe to our [Youtube Channel](https://www.youtube.com/@ByConity/featured)
