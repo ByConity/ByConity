@@ -195,7 +195,7 @@ void DatabaseCnch::detachTablePermanently(ContextPtr local_context, const String
 ASTPtr DatabaseCnch::getCreateDatabaseQuery() const
 {
     auto settings = getContext()->getSettingsRef();
-    String query = "CREATE DATABASE " + backQuoteIfNeed(getDatabaseName()) + " ENGINE = Cnch";
+    String query = "CREATE DATABASE " + backQuoteIfNeed(getDatabaseName()) + " UUID '" + UUIDHelpers::UUIDToString(db_uuid) + "' ENGINE = Cnch";
     ParserCreateQuery parser(ParserSettings::valueOf(settings.dialect_type));
     ASTPtr ast = parseQuery(parser, query.data(), query.data() + query.size(), "", 0, settings.max_parser_depth);
     return ast;
