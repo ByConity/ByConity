@@ -50,6 +50,7 @@
 #include <Interpreters/Set.h>
 #include <Interpreters/TableJoin.h>
 #include <Interpreters/evaluateConstantExpression.h>
+#include <Interpreters/replaceForPositionalArguments.h>
 
 #include <QueryPlan/ExpressionStep.h>
 
@@ -196,7 +197,6 @@ ExpressionAnalyzer::ExpressionAnalyzer(
     checkQuery();
 }
 
-
 void ExpressionAnalyzer::analyzeAggregation()
 {
     /** Find aggregation keys (aggregation_keys), information about aggregate functions (aggregate_descriptions),
@@ -304,6 +304,9 @@ void ExpressionAnalyzer::analyzeAggregation()
 
                         for (ssize_t j = 0; j < ssize_t(group_elements_ast.size()); ++j)
                         {
+                            if (getContext()->getSettingsRef().enable_positional_arguments)
+                                replaceForPositionalArguments(group_elements_ast[j], select_query, ASTSelectQuery::Expression::GROUP_BY);
+
                             getRootActionsNoMakeSet(group_elements_ast[j], true, temp_actions, false);
 
                             ssize_t group_size = group_elements_ast.size();
@@ -362,6 +365,9 @@ void ExpressionAnalyzer::analyzeAggregation()
                     }
                     else
                     {
+                        if (getContext()->getSettingsRef().enable_positional_arguments)
+                            replaceForPositionalArguments(group_asts[i], select_query, ASTSelectQuery::Expression::GROUP_BY);
+
                         getRootActionsNoMakeSet(group_asts[i], true, temp_actions, false);
 
                         const auto & column_name = group_asts[i]->getColumnName();
@@ -1506,15 +1512,24 @@ ActionsDAGPtr SelectQueryExpressionAnalyzer::appendOrderBy(
 
     ExpressionActionsChain::Step & step = chain.lastStep(aggregated_columns);
 
+    for (auto & child : select_query->orderBy()->children)
+    {
+        auto * ast = child->as<ASTOrderByElement>();
+        if (!ast || ast->children.empty())
+            throw Exception("Bad ORDER BY expression AST", ErrorCodes::UNKNOWN_TYPE_OF_AST_NODE);
+
+        if (getContext()->getSettingsRef().enable_positional_arguments)
+            replaceForPositionalArguments(ast->children.at(0), select_query, ASTSelectQuery::Expression::ORDER_BY);
+    }
+
     getRootActions(select_query->orderBy(), only_types, step.actions());
 
     bool with_fill = false;
     NameSet order_by_keys;
+
     for (auto & child : select_query->orderBy()->children)
     {
-        const auto * ast = child->as<ASTOrderByElement>();
-        if (!ast || ast->children.empty())
-            throw Exception("Bad order expression AST", ErrorCodes::UNKNOWN_TYPE_OF_AST_NODE);
+        auto * ast = child->as<ASTOrderByElement>();
         ASTPtr order_expression = ast->children.at(0);
         step.addRequiredOutput(order_expression->getColumnName());
 
@@ -1564,8 +1579,12 @@ bool SelectQueryExpressionAnalyzer::appendLimitBy(ExpressionActionsChain & chain
         aggregated_names.insert(column.name);
     }
 
-    for (const auto & child : select_query->limitBy()->children)
+    auto & children = select_query->limitBy()->children;
+    for (auto & child : children)
     {
+        if (getContext()->getSettingsRef().enable_positional_arguments)
+            replaceForPositionalArguments(child, select_query, ASTSelectQuery::Expression::LIMIT_BY);
+
         auto child_name = child->getColumnName();
         if (!aggregated_names.count(child_name))
             step.addRequiredOutput(std::move(child_name));
