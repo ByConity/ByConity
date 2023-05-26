@@ -40,6 +40,7 @@
 #include <Storages/VirtualColumnUtils.h>
 #include <Storages/StorageCloudMergeTree.h>
 #include <Storages/StorageCnchMergeTree.h>
+#include <Storages/StorageCnchHive.h>
 #include <Storages/StorageDistributed.h>
 #include <Storages/VirtualColumnUtils.h>
 #include <Common/FieldVisitorToString.h>
@@ -573,14 +574,31 @@ std::shared_ptr<IStorage> TableScanStep::getStorage() const
 void TableScanStep::allocate(ContextPtr context)
 {
     original_table = storage_id.table_name;
-    auto * cnch = dynamic_cast<StorageCnchMergeTree *>(storage.get());
+    auto * cnch_merge_tree = dynamic_cast<StorageCnchMergeTree *>(storage.get());
+    auto * cnch_hive = dynamic_cast<StorageCnchHive *>(storage.get());
 
-    if (!cnch)
+    if (!cnch_merge_tree && !cnch_hive)
         return;
 
-    storage_id.database_name = cnch->getDatabaseName();
-    auto prepare_res = cnch->prepareReadContext(column_names, cnch->getInMemoryMetadataPtr(),query_info, context);
-    storage_id.table_name = prepare_res.local_table_name;
+    if (cnch_merge_tree)
+    {
+        storage_id.database_name = cnch_merge_tree->getDatabaseName();
+        auto prepare_res = cnch_merge_tree->prepareReadContext(column_names, cnch_merge_tree->getInMemoryMetadataPtr(),query_info, context);
+        storage_id.table_name = prepare_res.local_table_name;
+    }
+    else if (cnch_hive)
+    {
+        size_t max_streams = context->getSettingsRef().max_threads;
+        if (max_block_size < context->getSettingsRef().max_block_size)
+            max_streams = 1; // single block single stream.
+
+        if (max_streams > 1 && !storage->isRemote())
+            max_streams *= context->getSettingsRef().max_streams_to_max_threads_ratio;
+
+        storage_id.database_name = cnch_hive->getDatabaseName();
+        auto prepare_res = cnch_hive->prepareReadContext(column_names, cnch_hive->getInMemoryMetadataPtr(),query_info, context, max_streams);
+        storage_id.table_name = prepare_res.local_table_name;
+    }
     storage_id.uuid = UUIDHelpers::Nil;
     if (query_info.query)
     {

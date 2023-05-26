@@ -240,10 +240,4 @@ private:
     void checkAlterInCnchServer(const AlterCommands & commands, ContextPtr local_context) const;
 };
 
-struct PrepareContextResult
-{
-    String local_table_name;
-    ServerDataPartsVector parts;
-};
-
 }

@@ -29,6 +29,7 @@
 #include <QueryPlan/QueryPlan.h>
 #include <Storages/StorageDistributed.h>
 #include <Storages/StorageView.h>
+#include <Storages/StorageCnchHive.h>
 //#include <Common/TestLog.h>
 
 namespace DB
@@ -175,7 +176,8 @@ checkDatabaseAndTable(const ASTTableExpression & table_expression, const Context
                 return QueryUseOptimizerChecker::check(subquery, context);
             }
 
-            if (!dynamic_cast<const MergeTreeMetaBase *>(storage_table.get()))
+            if (!dynamic_cast<const MergeTreeMetaBase *>(storage_table.get())
+                && !dynamic_cast<const StorageCnchHive *>(storage_table.get()))
                 return false;
         }
     }

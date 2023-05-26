@@ -15,10 +15,10 @@ class ORCBlockInputFormat : public IInputFormat
 {
 public:
     ORCBlockInputFormat(
-        ReadBuffer & in_,
-        Block header_,
-        const FormatSettings & format_settings_,
-        const std::map<String, String> & partition_kv_ = {});
+    ReadBuffer & in_,
+    Block header_,
+    const FormatSettings & format_settings_,
+    const std::map<String, String> & partition_kv_);
 
     String getName() const override { return "ORCBlockInputFormat"; }
 
