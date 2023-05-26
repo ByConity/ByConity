@@ -261,6 +261,19 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
 {
     frame.need_parens = false;
 
+    if (!catalog.empty() && database.empty() && table.empty())
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "")
+            << "CREATE EXTERNAL CATALOG "
+            << (if_not_exists ? "IF NOT EXISTS " : "")
+            << (settings.hilite ? hilite_none : "")
+            << backQuoteIfNeed(catalog)
+            << " PROPERTIES ";
+        if(catalog_properties)
+            catalog_properties->formatImpl(settings, state, frame);
+        return;
+    }
+
     if (!database.empty() && table.empty())
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "")

@@ -35,6 +35,7 @@
 #include <QueryPlan/SymbolAllocator.h>
 #include <QueryPlan/PlanNodeIdAllocator.h>
 #include <Storages/IStorage_fwd.h>
+#include "Common/DefaultCatalogName.h"
 #include <Common/CGroup/CGroupManager.h>
 #include <Common/MultiVersion.h>
 #include <Common/OpenTelemetryTraceContext.h>
@@ -62,7 +63,7 @@
 #include <mutex>
 #include <optional>
 #include <thread>
-
+#include <Common/DefaultCatalogName.h>
 
 namespace Poco::Net { class IPAddress; }
 namespace DB::Statistics { struct StatisticsMemoryStore; }
@@ -352,6 +353,7 @@ private:
     std::shared_ptr<const EnabledRowPolicies> initial_row_policy;
     CopyableAtomic<IResourceGroup*> resource_group{nullptr}; /// Current resource group.
     String current_database;
+    String current_catalog = DefaultCatalogName ;
     Settings settings;  /// Setting for query execution.
 
     using ProgressCallback = std::function<void(const Progress & progress)>;
@@ -664,8 +666,9 @@ public:
     {
          ResolveGlobal = 1u,                                           /// Database name must be specified
          ResolveCurrentDatabase = 2u,                                  /// Use current database
-         ResolveOrdinary = ResolveGlobal | ResolveCurrentDatabase,     /// If database name is not specified, use current database
-         ResolveExternal = 4u,                                         /// Try get external table
+         ResolveCurrentCatalog = 4u,                                   /// Use current catalog
+         ResolveOrdinary = ResolveGlobal | ResolveCurrentDatabase | ResolveCurrentCatalog,     /// If database/catalog name is not specified, use current database/catalog
+         ResolveExternal = 8u,                                         /// Try get external table
          ResolveAll = ResolveExternal | ResolveOrdinary                /// If database name is not specified, try get external table,
                                                                        ///    if external table not found use current database.
     };
@@ -720,6 +723,7 @@ public:
     String getInitialQueryId() const;
 
     void setCurrentDatabase(const String & name);
+    void setCurrentCatalog(const String & catalog_name);
     /// Set current_database for global context. We don't validate that database
     /// exists because it should be set before databases loading.
     void setCurrentDatabaseNameInGlobalContext(const String & name);

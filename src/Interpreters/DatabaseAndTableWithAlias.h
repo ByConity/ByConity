@@ -4,11 +4,12 @@
 #include <common/types.h>
 #include <Core/NamesAndTypes.h>
 #include <Parsers/IAST_fwd.h>
+#include <Common/DefaultCatalogName.h>
+#include "Interpreters/StorageID.h"
 
 #include <memory>
 #include <optional>
 #include <Core/UUID.h>
-
 
 namespace DB
 {
@@ -21,6 +22,7 @@ struct ASTTableExpression;
 struct DatabaseAndTableWithAlias
 {
     // TODO(ilezhankin): replace with ASTTableIdentifier
+    String catalog = DefaultCatalogName;
     String database;
     String table;
     String alias;
@@ -38,6 +40,7 @@ struct DatabaseAndTableWithAlias
     /// Check if it satisfies another db_table name. @note opterion is not symmetric.
     bool satisfies(const DatabaseAndTableWithAlias & table, bool table_may_be_an_alias) const;
 
+    StorageID getStorageID() const;
     /// Exactly the same table name
     bool same(const DatabaseAndTableWithAlias & db_table) const
     {

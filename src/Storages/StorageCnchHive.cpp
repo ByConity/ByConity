@@ -84,7 +84,7 @@ StorageCnchHive::StorageCnchHive(
     ASTPtr partition_by_ast_,
     ASTPtr cluster_by_ast_,
     ASTPtr order_by_ast_,
-    bool is_create_,
+    [[maybe_unused]] bool is_create_,
     const ColumnsDescription & columns_,
     const ConstraintsDescription & constraints_,
     ContextMutablePtr context_,
@@ -96,19 +96,17 @@ StorageCnchHive::StorageCnchHive(
     , log(&Poco::Logger::get("StorageCnchHive"))
     , settings(settings_)
 {
+    // TODO(renming):: This part is too tricy
+    LOG_INFO(log, "Hive columns {}", columns_.toString());
     if (columns_.empty())
     {
         HiveSchemaConverter converter(context_, getHiveTable());
         StorageInMemoryMetadata metadata = converter.convert();
         setInMemoryMetadata(metadata);
-    }
-    else if (is_create_)
-    {
-        // only when create table, need to check schema and storage format.
+    } else {
         StorageInMemoryMetadata metadata;
         metadata.setColumns(columns_);
         metadata.setConstraints(constraints_);
-
         if (partition_by_ast_)
         {
             metadata.partition_key = KeyDescription::getKeyFromAST(partition_by_ast_, columns_, context_);
@@ -125,9 +123,10 @@ StorageCnchHive::StorageCnchHive(
         }
 
         setInMemoryMetadata(metadata);
-        auto hms_client = HiveMetastoreClientFactory::instance().getOrCreate(remote_psm, settings);
     }
 
+
+    auto hms_client = HiveMetastoreClientFactory::instance().getOrCreate(remote_psm, settings);
     auto table = getHiveTable();
     const String format = table->sd.outputFormat;
     if ((format.find("parquet") == String::npos) && (format.find("orc") == String::npos))
@@ -191,14 +190,24 @@ PrepareContextResult StorageCnchHive::prepareReadContext(
     ContextPtr local_context,
     unsigned num_streams)
 {
+    // if (!local_context->tryGetCurrentWorkerGroup())
+    // {
+    //     auto vw_handle = local_context->getVirtualWarehousePool().get(settings.cnch_vw_default);
+    //     /// mutable
+    //     Context & mutable_context = const_cast<Context &>(*local_context);
+    //     mutable_context.setCurrentVW(std::move(vw_handle));
+    //     trySetWorkerGroup(mutable_context);
+    // }
+
+
     auto txn = local_context->getCurrentTransaction();
     if (local_context->getServerType() == ServerType::cnch_server && txn && txn->isReadOnly())
         local_context->getCnchTransactionCoordinator().touchActiveTimestampByTable(getStorageID(), txn);
 
     metadata_snapshot->check(column_names, getVirtuals(), getStorageID());
 
-    auto worker_group = local_context->getCurrentWorkerGroup();
-    healthCheckForWorkerGroup(local_context, worker_group);
+    // auto worker_group = local_context->getCurrentWorkerGroup();
+    // healthCheckForWorkerGroup(local_context, worker_group);
 
     auto parts = selectPartsToRead(column_names, local_context, query_info, num_streams);
     LOG_INFO(log, "Number of parts to read: {}", parts.size());

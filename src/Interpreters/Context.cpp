@@ -28,6 +28,7 @@
 #include <Poco/UUID.h>
 #include <Poco/Net/IPAddress.h>
 #include <Poco/Util/Application.h>
+#include "Common/DefaultCatalogName.h"
 #include "common/types.h"
 #include <Common/DNSResolver.h>
 #include <Common/Macros.h>
@@ -189,12 +190,13 @@
 #include <Storages/IndexFile/IndexFileWriter.h>
 #include <WorkerTasks/ManipulationList.h>
 
-#include <Transaction/TransactionCoordinatorRcCnch.h>
+#include <ExternalCatalog/IExternalCatalogMgr.h>
+#include <Statistics/StatisticsMemoryStore.h>
 #include <Transaction/CnchServerTransaction.h>
 #include <Transaction/CnchWorkerTransaction.h>
-#include <Statistics/StatisticsMemoryStore.h>
+#include <Transaction/TransactionCoordinatorRcCnch.h>
+#include <Common/DefaultCatalogName.h>
 #include <Common/HostWithPorts.h>
-
 namespace fs = std::filesystem;
 
 namespace ProfileEvents
@@ -248,6 +250,7 @@ namespace ErrorCodes
     extern const int BAD_ARGUMENTS;
     extern const int BAD_GET;
     extern const int UNKNOWN_DATABASE;
+    extern const int UNKNOWN_CATALOG;
     extern const int UNKNOWN_TABLE;
     extern const int TABLE_ALREADY_EXISTS;
     extern const int THERE_IS_NO_SESSION;
@@ -1551,6 +1554,16 @@ void Context::setCurrentDatabase(const String & name)
     auto lock = getLock();
     current_database = name;
     calculateAccessRights();
+}
+
+void Context::setCurrentCatalog(const String & name)
+{
+    //TODO(renming): add check here. 
+    if(ExternalCatalog::Mgr::instance().getCatalog(name) == nullptr){
+        throw Exception("Catalog " + name +" does not exists", ErrorCodes::LOGICAL_ERROR);
+    }
+    auto lock = getLock();
+    current_catalog= name;
 }
 
 void Context::setCurrentQueryId(const String & query_id)
@@ -3484,6 +3497,8 @@ void Context::resetInputCallbacks()
 
 StorageID Context::resolveStorageID(StorageID storage_id, StorageNamespace where) const
 {
+    Poco::Logger *log = &Poco::Logger::get("resolveStorageID");
+    LOG_INFO(log, "resolve input " + storage_id.catalog_name + " " + storage_id.database_name + " " +storage_id.table_name);
     if (storage_id.uuid != UUIDHelpers::Nil)
         return storage_id;
 
@@ -3505,8 +3520,19 @@ StorageID Context::resolveStorageID(StorageID storage_id, StorageNamespace where
     }
     if (exc)
         throw Exception(*exc);
-    if (!resolved.hasUUID() && resolved.database_name != DatabaseCatalog::TEMPORARY_DATABASE)
-        resolved.uuid = DatabaseCatalog::instance().getDatabase(resolved.database_name, shared_from_this())->tryGetTableUUID(resolved.table_name);
+    if (!resolved.hasUUID() && resolved.database_name != DatabaseCatalog::TEMPORARY_DATABASE){
+        LOG_INFO(log, "resolved " + resolved.catalog_name + " " + resolved.database_name + " " +resolved.table_name);
+        if(!resolved.inExternalCatalog()){
+            resolved.uuid = DatabaseCatalog::instance().getDatabase(resolved.database_name, shared_from_this())->tryGetTableUUID(resolved.table_name);
+        } else {
+            auto external_catalog = ExternalCatalog::Mgr::instance().getCatalog(resolved.catalog_name);
+            if(!external_catalog){
+                throw Exception(fmt::format("external catalog {} does not exist", resolved.catalog_name), ErrorCodes::UNKNOWN_CATALOG);
+            }
+            resolved.uuid =  external_catalog->getTableUUID(resolved.database_name, resolved.table_name);
+        } 
+    }
+    
     return resolved;
 }
 
@@ -3529,6 +3555,8 @@ StorageID Context::tryResolveStorageID(StorageID storage_id, StorageNamespace wh
     return resolved;
 }
 
+// TODO(renming)
+// table -> first check in temporary table, then resolve as current_catalog.current_database.table
 StorageID Context::resolveStorageIDImpl(StorageID storage_id, StorageNamespace where, std::optional<Exception> * exception) const
 {
     if (storage_id.uuid != UUIDHelpers::Nil)
@@ -3542,8 +3570,14 @@ StorageID Context::resolveStorageIDImpl(StorageID storage_id, StorageNamespace w
     }
 
     bool look_for_external_table = where & StorageNamespace::ResolveExternal;
+    // bool in_current_catalog = where & StorageNamespace::ResolveCurrentCatalog;
     bool in_current_database = where & StorageNamespace::ResolveCurrentDatabase;
     bool in_specified_database = where & StorageNamespace::ResolveGlobal;
+    
+
+    if(storage_id.catalog_name.empty()){
+        storage_id.catalog_name = current_catalog;
+    }
 
     if (!storage_id.database_name.empty())
     {
@@ -3555,6 +3589,12 @@ StorageID Context::resolveStorageIDImpl(StorageID storage_id, StorageNamespace w
         return StorageID::createEmpty();
     }
 
+    //TODO(renming):: add current_catalog_here?
+    // if(storage_id.catalog_name != DefaultCatalogName)
+    // {
+    //     ExternalCatalog::Mgr::Instance().getCatalog(storage_id.catalog_name).   
+    // }
+
     /// Database name is not specified. It's temporary table or table in current database.
 
     if (look_for_external_table)
@@ -3565,7 +3605,7 @@ StorageID Context::resolveStorageIDImpl(StorageID storage_id, StorageNamespace w
         auto resolved_id = StorageID::createEmpty();
         auto try_resolve = [&](ContextPtr context) -> bool
         {
-            const auto & tables = context->external_tables_mapping;
+                const auto & tables = context->external_tables_mapping;
             auto it = tables.find(storage_id.getTableName());
             if (it == tables.end())
                 return false;
@@ -3601,6 +3641,7 @@ StorageID Context::resolveStorageIDImpl(StorageID storage_id, StorageNamespace w
             return StorageID::createEmpty();
         }
         storage_id.database_name = current_database;
+        storage_id.catalog_name = current_catalog;
         /// NOTE There is no guarantees that table actually exists in database.
         return storage_id;
     }

@@ -51,13 +51,15 @@ struct CatalogConfig
 
     CatalogConfig() {}
 
-    CatalogConfig(const Poco::Util::AbstractConfiguration & poco_config)
+    CatalogConfig(const Poco::Util::AbstractConfiguration & poco_config, const std::string& prefix = "catalog_service")
     {
-        if (poco_config.has("catalog_service"))
+
+        if (poco_config.has(prefix))
         {
-            if (poco_config.has("catalog_service.type"))
+            std::string key_catalog_type = prefix + ".type";
+            if (poco_config.has(key_catalog_type))
             {
-                std::string metastore_type = poco_config.getString("catalog_service.type");
+                std::string metastore_type = poco_config.getString(key_catalog_type);
                 if (metastore_type == "fdb")
                     type = StoreType::FDB;
                 else if (metastore_type == "bytekv")
@@ -68,14 +70,19 @@ struct CatalogConfig
 
             if (type == StoreType::FDB)
             {
-                fdb_conf.cluster_conf_path = poco_config.getString("catalog_service.fdb.cluster_file");
+                std::string key_fdb_cluster_file = prefix + ".fdb.cluster_file";
+                fdb_conf.cluster_conf_path = poco_config.getString(key_fdb_cluster_file);
             }
             else if (type == StoreType::BYTEKV)
             {
-                bytekv_conf.service_name = poco_config.getString("catalog_service.bytekv.service_name");
-                bytekv_conf.cluster_name = poco_config.getString("catalog_service.bytekv.cluster_name");
-                bytekv_conf.name_space = poco_config.getString("catalog_service.bytekv.name_space");
-                bytekv_conf.table_name = poco_config.getString("catalog_service.bytekv.table_name");
+                std::string key_bytekv_service_name = prefix + ".bytekv.service_name";
+                std::string key_bytekv_cluster_name = prefix + "bytekv.cluster_name";
+                std::string key_bytekv_namespace = prefix + "bytekv.name_space";
+                std::string key_bytekv_table_name = prefix + "bytekv.table_name";
+                bytekv_conf.service_name = poco_config.getString(key_bytekv_service_name);
+                bytekv_conf.cluster_name = poco_config.getString(key_bytekv_cluster_name);
+                bytekv_conf.name_space = poco_config.getString(key_bytekv_namespace);
+                bytekv_conf.table_name = poco_config.getString(key_bytekv_table_name);
             }
         }
     }

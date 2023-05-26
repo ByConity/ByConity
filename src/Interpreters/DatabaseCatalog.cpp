@@ -40,14 +40,17 @@
 #include <filesystem>
 #include <Common/filesystemHelpers.h>
 
-#include <Transaction/ICnchTransaction.h>
 #include <Catalog/Catalog.h>
 #include <Catalog/CatalogFactory.h>
 #include <CloudServices/CnchWorkerResource.h>
 #include <Databases/DatabaseCnch.h>
-#include <Common/Status.h>
+#include <ExternalCatalog/IExternalCatalogMgr.h>
 #include <Protos/RPCHelpers.h>
-
+#include <Transaction/ICnchTransaction.h>
+#include <Common/DefaultCatalogName.h>
+#include <Common/Status.h>
+#include "Core/SettingsEnums.h"
+#include "Interpreters/StorageID.h"
 #if !defined(ARCADIA_BUILD)
 #    include "config_core.h"
 #endif
@@ -73,6 +76,7 @@ namespace DB
 
 namespace ErrorCodes
 {
+    extern const int UNKNOWN_CATALOG;
     extern const int UNKNOWN_DATABASE;
     extern const int UNKNOWN_TABLE;
     extern const int TABLE_ALREADY_EXISTS;
@@ -288,6 +292,7 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
         }
     }
 
+
     if (table_id.hasUUID() && table_id.database_name == TEMPORARY_DATABASE)
     {
         /// Shortcut for tables which have persistent UUID
@@ -331,7 +336,20 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
     }
 
     DatabasePtr database{};
-
+    // ExternalCatalog
+    // TODO(renming)::is there a good place to hack?
+    if (preferCnchCatalog(context_) && !table_id.catalog_name.empty() && table_id.catalog_name != DefaultCatalogName)
+    {
+        auto external_catalog = ExternalCatalog::Mgr::instance().tryGetCatalog(table_id.catalog_name);
+        if (!external_catalog)
+        {
+            if (exception)
+                exception->emplace(ErrorCodes::UNKNOWN_CATALOG, "Catalog {} returns nullptr", table_id.getCatalogName());
+            return {};
+        }
+        auto table = external_catalog->getTable(table_id.getDatabaseName(), table_id.getTableName(), context_);
+        return {nullptr,table};
+    }
     if (preferCnchCatalog(context_))
         database = tryGetDatabaseCnch(table_id.getDatabaseName(), context_);
 

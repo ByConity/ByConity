@@ -1,12 +1,14 @@
 #include <Parsers/ParserOptimizeQuery.h>
 
-#include <Parsers/ParserQueryWithOutput.h>
-#include <Parsers/parseQuery.h>
-#include <Parsers/formatAST.h>
-#include <IO/WriteBufferFromOStream.h>
-
+#include <memory>
 #include <string_view>
+#include <IO/WriteBufferFromOStream.h>
+#include <Parsers/ParserCreateQuery.h>
+#include <Parsers/ParserQueryWithOutput.h>
+#include <Parsers/formatAST.h>
+#include <Parsers/parseQuery.h>
 
+#include <Parsers/ParserDropQuery.h>
 #include <gtest/gtest.h>
 
 namespace
@@ -100,6 +102,8 @@ INSTANTIATE_TEST_SUITE_P(ParserOptimizeQuery, ParserTest, ::testing::Values(
     }
 ));
 
+
+
 INSTANTIATE_TEST_SUITE_P(ParserOptimizeQuery_FAIL, ParserTest, ::testing::Values(
     ParserTestCase
     {
@@ -130,5 +134,35 @@ INSTANTIATE_TEST_SUITE_P(ParserOptimizeQuery_FAIL, ParserTest, ::testing::Values
     {
         std::make_shared<ParserOptimizeQuery>(),
         "OPTIMIZE TABLE table_name DEDUPLICATE BY db.a, db.b, db.c",
+    }
+));
+
+INSTANTIATE_TEST_SUITE_P(
+    ParserCreateCatalogQuery,
+    ParserTest,
+    ::testing::Values(
+        ParserTestCase{
+            std::make_shared<ParserCreateQuery>(),
+            "CREATE EXTERNAL CATALOG mock_catalog PROPERTIES type = 'Mock'",
+            "CREATE EXTERNAL CATALOG mock_catalog PROPERTIES type = 'Mock'",
+        },
+        ParserTestCase{
+            std::make_shared<ParserCreateQuery>(),
+            "CREATE EXTERNAL CATALOG hive_catalog PROPERTIES type = 'hive', hive.metastore.uri = 'thrift://localhost:9183'"
+            "CREATE EXTERNAL CATALOG hive_catalog PROPERTIES type = 'hive', hive.metastore.uri = 'thrift://localhost:9183'"}));
+
+INSTANTIATE_TEST_SUITE_P(
+    ParserDropCatalogQuery,
+    ParserTest,
+    ::testing::Values(ParserTestCase{
+        std::make_shared<ParserDropQuery>(),
+        "DROP EXTERNAL CATALOG mock_catalog",
+        "DROP EXTERNAL CATALOG mock_catalog",
+    }));
+
+INSTANTIATE_TEST_SUITE_P(ParserCreateCatalogQuery_FAIL, ParserTest, ::testing::Values(
+    ParserTestCase{
+       std::make_shared<ParserCreateQuery>(),
+       "CREATE DATABASE mock_catalog.db" ,
     }
 ));

@@ -19,21 +19,22 @@
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
+#include <Access/AccessRightsElement.h>
+#include <Databases/DatabaseReplicated.h>
 #include <Databases/IDatabase.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/executeDDLQueryOnCluster.h>
-#include <Interpreters/InterpreterDropQuery.h>
 #include <Interpreters/ExternalDictionariesLoader.h>
+#include <Interpreters/InterpreterDropQuery.h>
 #include <Interpreters/QueryLog.h>
-#include <Access/AccessRightsElement.h>
+#include <Interpreters/executeDDLQueryOnCluster.h>
 #include <Parsers/ASTDropQuery.h>
 #include <Storages/IStorage.h>
+#include <Transaction/ICnchTransaction.h>
+#include <Transaction/IntentLock.h>
 #include <Common/escapeForFileName.h>
 #include <Common/quoteString.h>
 #include <Common/typeid_cast.h>
-#include <Transaction/IntentLock.h>
-#include <Transaction/ICnchTransaction.h>
-#include <Databases/DatabaseReplicated.h>
+#include "IExternalCatalogMgr.h"
 
 #if !defined(ARCADIA_BUILD)
 #    include "config_core.h"
@@ -55,6 +56,7 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
     extern const int SYNTAX_ERROR;
     extern const int UNKNOWN_TABLE;
+    extern const int UNKNOWN_CATALOG;
     extern const int NOT_IMPLEMENTED;
     extern const int INCORRECT_QUERY;
     extern const int SUPPORT_IS_DISABLED;
@@ -81,8 +83,9 @@ BlockIO InterpreterDropQuery::execute()
 
     if (getContext()->getSettingsRef().database_atomic_wait_for_drop_and_detach_synchronously)
         drop.no_delay = true;
-
-    if (!drop.table.empty())
+    if (drop.table.empty() && drop.database.empty() && !drop.catalog.empty())
+        return executeToCatalog(drop);
+    else if (!drop.table.empty())
         return executeToTable(drop);
     else if (!drop.database.empty())
         return executeToDatabase(drop);
@@ -100,6 +103,25 @@ void InterpreterDropQuery::waitForTableToBeActuallyDroppedOrDetached(const ASTDr
         DatabaseCatalog::instance().waitTableFinallyDropped(uuid_to_wait);
     else if (query.kind == ASTDropQuery::Kind::Detach)
         db->waitDetachedTableNotInUse(uuid_to_wait);
+}
+
+BlockIO InterpreterDropQuery::executeToCatalog(ASTDropQuery & query)
+{
+    const std::string & catalog_name = query.catalog;
+    bool exist = ExternalCatalog::Mgr::instance().isCatalogExist(catalog_name);
+    if (!exist)
+    {
+        if (!query.if_exists)
+        {
+            throw Exception("Externcal catalog" + backQuoteIfNeed(catalog_name) + "doesn't exist ", ErrorCodes::UNKNOWN_CATALOG);
+        }
+        else
+        {
+            return {};
+        }
+    }
+    ExternalCatalog::Mgr::instance().dropExternalCatalog(catalog_name);
+    return {};
 }
 
 BlockIO InterpreterDropQuery::executeToTable(ASTDropQuery & query)

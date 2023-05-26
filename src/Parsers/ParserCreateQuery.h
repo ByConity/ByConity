@@ -450,6 +450,15 @@ public:
     using IParserDialectBase::IParserDialectBase;
 };
 
+class ParserCreateCatalogQuery : public IParserDialectBase
+{
+protected:
+    const char * getName() const override { return "CREATE EXTERNAL CATALOG query"; }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
+};
+
 /// CREATE[OR REPLACE]|ATTACH [[MATERIALIZED] VIEW] | [VIEW]] [IF NOT EXISTS] [db.]name [UUID 'uuid'] [TO [db.]name] [ENGINE = engine] [POPULATE] AS SELECT ...
 class ParserCreateViewQuery : public IParserDialectBase
 {

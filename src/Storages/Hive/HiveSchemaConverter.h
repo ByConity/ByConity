@@ -2,17 +2,18 @@
 
 #include "DataTypes/IDataType.h"
 #include "Interpreters/Context_fwd.h"
+#include "Parsers/ASTCreateQuery.h"
 #include "Storages/ColumnsDescription.h"
 #include "Storages/StorageInMemoryMetadata.h"
-
 namespace Apache::Hadoop::Hive
 {
     class Table;
 }
 
+
 namespace DB
 {
-
+class ASTCreateQuery;
 class HiveSchemaConverter : WithContext
 {
 public:
@@ -25,6 +26,8 @@ public:
 
     /// check schema
     void check(const ColumnsDescription & columns) const;
+
+    ASTCreateQuery createQueryAST(const std::string & catalog_name) const;
 
 private:
     std::shared_ptr<Apache::Hadoop::Hive::Table> hive_table;

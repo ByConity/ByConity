@@ -13,15 +13,17 @@
  * limitations under the License.
  */
 
-#include <Catalog/MetastoreProxy.h>
-#include <Protos/DataModelHelpers.h>
 #include <cstddef>
 #include <random>
 #include <sstream>
 #include <vector>
 #include <string.h>
+#include <Catalog/MetastoreProxy.h>
 #include <DaemonManager/BGJobStatusInCatalog.h>
 #include <IO/ReadHelpers.h>
+#include <Protos/DataModelHelpers.h>
+#include <Protos/data_models.pb.h>
+#include "MetastoreCommon.h"
 
 namespace DB::ErrorCodes
 {
@@ -58,6 +60,58 @@ IMetaStore::IteratorPtr MetastoreProxy::getAllWorkerGroupMeta()
 {
     return metastore_ptr->getByPrefix(WORKER_GROUP_STORE_PREFIX);
 }
+
+void MetastoreProxy::addExternalCatalog(const String & name_space, const Protos::DataModelCatalog & catalog_model)
+{
+    String catalog_meta;
+    catalog_model.SerializeToString(&catalog_meta);
+    BatchCommitRequest batch_write;
+    batch_write.AddPut(SinglePutRequest(externalCatalogKey(name_space, catalog_model.name()), catalog_meta));
+    BatchCommitResponse resp;
+    try
+    {
+        metastore_ptr->batchWrite(batch_write, resp);
+    }
+    catch (Exception & e)
+    {
+        if (e.code() == ErrorCodes::METASTORE_COMMIT_CAS_FAILURE)
+        {
+            /// check if db uuid has conflict with current metainfo
+            if (resp.puts.count(0))
+                throw Exception(
+                    "Catalog with the same uuid(" + catalog_model.name()
+                        + ") already exists. Please use another name or "
+                          "drop old version of this external catalog and try again.",
+                    ErrorCodes::METASTORE_DB_UUID_CAS_ERROR);
+        }
+        else
+            throw e;
+    }
+}
+
+void MetastoreProxy::getExternalCatalog(const String & name_space, const String & name, Strings & catalog_info)
+{
+    auto it = metastore_ptr->getByPrefix(externalCatalogKey(name_space, name));
+    if (it->next())
+    {
+        catalog_info.emplace_back(it->value());
+    }
+}
+
+
+void MetastoreProxy::dropExternalCatalog(const String & name_space, const Protos::DataModelCatalog & catalog_model)
+{
+    const String & name = catalog_model.name();
+
+    BatchCommitRequest batch_write;
+
+
+    batch_write.AddDelete(SingleDeleteRequest(externalCatalogKey(name_space, name)));
+
+    BatchCommitResponse resp;
+    metastore_ptr->batchWrite(batch_write, resp);
+}
+
 
 void MetastoreProxy::addDatabase(const String & name_space, const Protos::DataModelDB & db_model)
 {

@@ -40,6 +40,7 @@
 namespace DB::Catalog
 {
 
+#define EX_CATALOG_STORE_PREFIX "EXCATA_" 
 #define DB_STORE_PREFIX "DB_"
 #define DB_UUID_UNIQUE_PREFIX "DU_"
 #define DELETE_BITMAP_PREFIX "DLB_"
@@ -96,7 +97,7 @@ public:
     using MetastorePtr = std::shared_ptr<IMetaStore>;
     using RepeatedFields = google::protobuf::RepeatedPtrField<std::string>;
 
-    MetastoreProxy(CatalogConfig & config)
+    explicit MetastoreProxy(CatalogConfig & config)
     {
         if (config.type == StoreType::FDB)
         {
@@ -134,9 +135,24 @@ public:
         return escapeString(name_space) + '_' + DB_STORE_PREFIX;
     }
 
+    static std::string allExternalCatalogPrefix(const std::string & name_space)
+    {
+        return escapeString(name_space) + '_' + EX_CATALOG_STORE_PREFIX;
+    }
+
     static std::string dbKeyPrefix(const std::string & name_space, const std::string & db)
     {
         return allDbPrefix(name_space) + escapeString(db) + '_';
+    }
+
+    // static std::string externalCatalogPrefix(const std::string & name_space, const std::string & catalog)
+    // {
+    //     return allDbPrefix(name_space) + escapeString(catalog) + '_'; 
+    // }
+
+    static std::string externalCatalogKey(const std::string & name_space, const std::string & catalog)
+    {
+        return allExternalCatalogPrefix(name_space) + escapeString(catalog);
     }
 
     static std::string dbUUIDUniqueKey(const std::string & name_space, const std::string & uuid)
@@ -148,6 +164,8 @@ public:
     {
         return allDbPrefix(name_space) + escapeString(db) + '_' + toString(ts);
     }
+
+
 
     static std::string deleteBitmapPrefix(const std::string & name_space, const std::string & uuid)
     {
@@ -584,6 +602,13 @@ public:
     void dropServerWorkerGroup(const String & worker_group_name);
     IMetaStore::IteratorPtr getAllWorkerGroupMeta();
 
+    // for external catalog
+    void addExternalCatalog(const String & name_space, const Protos::DataModelCatalog & catalog_model);
+    // Note(renming):: we follow the getDatabase here, in case in the future we will use mvcc. 
+    void getExternalCatalog(const String & name_space, const String & name, Strings & catalog_info);
+    void dropExternalCatalog(const String & name_space, const Protos::DataModelCatalog & catalog_model);
+
+
     void addDatabase(const String & name_space, const Protos::DataModelDB & db_model);
     void getDatabase(const String & name_space, const String & name, Strings & db_info);
     void dropDatabase(const String & name_space, const Protos::DataModelDB & db_model);
@@ -764,6 +789,10 @@ public:
         const String & name_space, const String & uuid, const String & column, const std::unordered_set<StatisticsTag> & tags);
     void setMergeMutateThreadStartTime(const String & name_space, const String & uuid, const UInt64 & start_time);
     UInt64 getMergeMutateThreadStartTime(const String & name_space, const String & uuid);
+
+
+    
+
 
 private:
 

@@ -1,4 +1,5 @@
 #include "Storages/Hive/HiveSchemaConverter.h"
+#include <memory>
 
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -12,6 +13,7 @@
 #include "DataTypes/DataTypeNullable.h"
 #include "DataTypes/DataTypesDecimal.h"
 #include "Interpreters/Context.h"
+#include "Parsers/ASTCreateQuery.h"
 #include "Parsers/ASTExpressionList.h"
 #include "Parsers/ASTFunction.h"
 #include "Parsers/ASTIdentifier.h"
@@ -19,10 +21,13 @@
 #include "Storages/KeyDescription.h"
 #include "Storages/StorageInMemoryMetadata.h"
 
+#include <IO/WriteHelpers.h>
+#include <Parsers/ParserCreateQuery.h>
+#include <Parsers/parseQuery.h>
+#include <TableFunctions/parseColumnsListForTableFunction.h>
 #include <boost/algorithm/string/split.hpp>
 #include "common/logger_useful.h"
 #include "hivemetastore/hive_metastore_types.h"
-
 namespace DB
 {
 
@@ -122,9 +127,8 @@ HiveSchemaConverter::HiveSchemaConverter(ContextPtr context_, std::shared_ptr<Ap
 StorageInMemoryMetadata HiveSchemaConverter::convert() const
 {
     ColumnsDescription columns;
-    auto addColumn = [&](const Apache::Hadoop::Hive::FieldSchema & hive_field) {
+    auto addColumn = [&](const Apache::Hadoop::Hive::FieldSchema & hive_field, bool make_columns_nullable) {
         // bool make_columns_nullable = getContext()->getSettingsRef().data_type_default_nullable;
-        bool make_columns_nullable = true;
         DataTypePtr ch_type = hiveTypeToCHType(hive_field.type, make_columns_nullable);
         if (ch_type)
             columns.add(ColumnDescription(hive_field.name, ch_type));
@@ -134,7 +138,7 @@ StorageInMemoryMetadata HiveSchemaConverter::convert() const
 
     for (const auto & hive_field : hive_table->sd.cols)
     {
-        addColumn(hive_field);
+        addColumn(hive_field,true);
     }
 
     auto partition_def = std::make_shared<ASTFunction>();
@@ -143,7 +147,7 @@ StorageInMemoryMetadata HiveSchemaConverter::convert() const
     for (const auto & hive_field : hive_table->partitionKeys)
     {
         if (!columns.has(hive_field.name))
-            addColumn(hive_field);
+            addColumn(hive_field, false);
 
         auto col = std::make_shared<ASTIdentifier>(hive_field.name);
         partition_def->arguments->children.emplace_back(col);
@@ -157,6 +161,7 @@ StorageInMemoryMetadata HiveSchemaConverter::convert() const
     metadata.partition_key = partition_key;
     return metadata;
 }
+
 
 void HiveSchemaConverter::check(const ColumnsDescription & columns) const
 {
@@ -180,4 +185,63 @@ void HiveSchemaConverter::check(const ColumnsDescription & columns) const
     }
 }
 
+ASTCreateQuery HiveSchemaConverter::createQueryAST(const std::string & catalog_name) const
+{
+    StorageInMemoryMetadata metadata = convert();
+    ASTCreateQuery create_query;
+    create_query.create = true;
+    create_query.table = hive_table->tableName;
+    create_query.database = hive_table->dbName;
+    create_query.catalog = catalog_name;
+    // craete_ast.catalog will be set explicitly .
+    const auto & name_and_types = metadata.getColumns().getAll();
+    std::string columns_str;
+    {
+        WriteBufferFromString wb(columns_str);
+        size_t count = 0;
+        for (auto it = name_and_types.begin(); it != name_and_types.end(); ++it, ++count)
+        {
+            writeBackQuotedString(it->name, wb);
+            writeChar(' ', wb);
+            writeString(it->type->getName(), wb);
+            if (count != (name_and_types.size() - 1))
+            {
+                writeChar(',', wb);
+            }
+        }
+    }
+    LOG_DEBUG(log, "columns list {}", columns_str);
+    ParserTablePropertiesDeclarationList parser;
+    ASTPtr columns_list_raw = parseQuery(parser, columns_str, "columns declaration list", 262144, 100);
+    create_query.set(create_query.columns_list, columns_list_raw);
+
+    auto storage = std::make_shared<ASTStorage>();
+    create_query.set(create_query.storage, storage);
+
+    auto engine = std::make_shared<ASTFunction>();
+    {
+        engine->name = "CnchHive";
+        engine->arguments = std::make_shared<ASTExpressionList>();
+        // We just fill a dummy str for psm field.
+        engine->arguments->children.push_back(std::make_shared<ASTIdentifier>(catalog_name));
+        engine->arguments->children.push_back(std::make_shared<ASTIdentifier>(hive_table->dbName));
+        engine->arguments->children.push_back(std::make_shared<ASTIdentifier>(hive_table->tableName));
+    }
+    create_query.storage->set(create_query.storage->engine, engine);
+
+    auto partition_def = std::make_shared<ASTFunction>();
+    {
+        partition_def->name = "tuple";
+        partition_def->arguments = std::make_shared<ASTExpressionList>();
+        for (const auto & hive_field : hive_table->partitionKeys)
+        {
+            auto col = std::make_shared<ASTIdentifier>(hive_field.name);
+            partition_def->arguments->children.emplace_back(col);
+        }
+
+        partition_def->children.push_back(partition_def->arguments);
+    }
+    create_query.storage->set(create_query.storage->partition_by, partition_def);
+    return create_query;
+}
 }

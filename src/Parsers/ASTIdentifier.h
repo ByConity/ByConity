@@ -39,7 +39,6 @@ class ASTTableIdentifier;
 
 /// FIXME: rewrite code about params - they should be substituted at the parsing stage,
 ///        or parsed as a separate AST entity.
-
 /// Generic identifier. ASTTableIdentifier - for table identifier.
 class ASTIdentifier : public ASTWithAlias
 {
@@ -104,6 +103,7 @@ public:
     explicit ASTTableIdentifier(const String & table_name, std::vector<ASTPtr> && name_params = {});
     explicit ASTTableIdentifier(const StorageID & table_id, std::vector<ASTPtr> && name_params = {});
     ASTTableIdentifier(const String & database_name, const String & table_name, std::vector<ASTPtr> && name_params = {});
+    ASTTableIdentifier(const String & catalog_name, const String & database_name, const String & table_name, std::vector<ASTPtr> && name_params = {});
     ASTTableIdentifier() = default;
 
     String getID(char delim) const override { return "TableIdentifier" + (delim + name()); }

@@ -474,6 +474,9 @@ namespace Catalog
             ProfileEvents::CatalogConstructorFailed);
     }
 
+    
+
+
     void Catalog::createDatabase(const String & database, const UUID & uuid, const TxnTimestamp & txnID, const TxnTimestamp & ts)
     {
         runWithMetricSupport(

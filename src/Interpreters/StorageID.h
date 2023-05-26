@@ -21,11 +21,13 @@
 
 #pragma once
 #include <common/types.h>
+#include <Common/DefaultCatalogName.h>
 #include <Core/UUID.h>
 #include <tuple>
 #include <Parsers/IAST_fwd.h>
 #include <Core/QualifiedTableName.h>
 #include <Common/Exception.h>
+#include <Common/DefaultCatalogName.h>
 #include <Interpreters/Context_fwd.h>
 
 namespace Poco
@@ -55,6 +57,7 @@ class ReadBuffer;
 // TODO(ilezhankin): refactor and merge |ASTTableIdentifier|
 struct StorageID
 {
+    String catalog_name;
     String database_name;
     String table_name;
     UUID uuid = UUIDHelpers::Nil;
@@ -64,10 +67,17 @@ struct StorageID
     {
         assertNotEmpty();
     }
+    StorageID(const String & catalog, const String & database, const String & table, UUID uuid_ = UUIDHelpers::Nil)
+        : catalog_name(catalog), database_name(database), table_name(table), uuid(uuid_)
+    {
+        assertNotEmpty();
+    }
 
     StorageID(const ASTQueryWithTableAndOutput & query);
     StorageID(const ASTTableIdentifier & table_identifier_node);
     StorageID(const ASTPtr & node);
+
+    String getCatalogName() const;
 
     String getDatabaseName() const;
 
@@ -92,6 +102,8 @@ struct StorageID
     {
         return uuid != UUIDHelpers::Nil;
     }
+
+    bool inExternalCatalog() const;
 
     bool operator<(const StorageID & rhs) const;
     bool operator==(const StorageID & rhs) const;

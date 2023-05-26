@@ -28,6 +28,7 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Interpreters/StorageID.h>
+#include "Parsers/IAST_fwd.h"
 
 namespace DB
 {
@@ -121,6 +122,8 @@ public:
 
     std::optional<UInt64> live_view_timeout;    /// For CREATE LIVE VIEW ... WITH TIMEOUT ...
     std::optional<UInt64> live_view_periodic_refresh;    /// For CREATE LIVE VIEW ... WITH [PERIODIC] REFRESH ...
+
+    ASTSetQuery* catalog_properties;
 
     bool attach_short_syntax{false};
 

@@ -403,7 +403,7 @@ ScopePtr QueryAnalyzerVisitor::analyzeTable(ASTTableIdentifier & db_and_table, c
               || dynamic_cast<const StorageCnchHive *>(storage.get())))
             throw Exception("Only cnch tables & system tables are supported", ErrorCodes::NOT_IMPLEMENTED);
 
-        analysis.storage_results[&db_and_table] = StorageAnalysis { storage_id.getDatabaseName(), storage_id.getTableName(), storage};
+        analysis.storage_results[&db_and_table] = StorageAnalysis {storage_id.getCatalogName(), storage_id.getDatabaseName(), storage_id.getTableName(), storage};
     }
 
     StorageMetadataPtr storage_metadata = storage->getInMemoryMetadataPtr();

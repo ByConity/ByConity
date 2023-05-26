@@ -72,6 +72,7 @@ add_subdirectory (ResourceManagement)
 add_subdirectory (Transaction)
 add_subdirectory (MergeTreeCommon)
 add_subdirectory (Catalog)
+add_subdirectory (ExternalCatalog)
 add_subdirectory (TSO)
 add_subdirectory (DaemonManager)
 add_subdirectory (Optimizer)
@@ -95,6 +96,7 @@ add_headers_and_sources(dbms Transaction)
 add_headers_and_sources(dbms Transaction/Actions)
 add_headers_and_sources(dbms MergeTreeCommon)
 add_headers_and_sources(dbms Catalog)
+add_headers_and_sources(dbms ExternalCatalog)
 add_headers_and_sources(dbms CloudServices)
 add_headers_and_sources(dbms WorkerTasks)
 add_headers_and_sources(dbms ResourceGroup)
@@ -433,6 +435,7 @@ dbms_target_link_libraries (
         clickhouse_common_io
         clickhouse_protos_lib
         catalog_lib
+        external_catalog_lib
         resource_manager_lib
         tso_lib
         daemon_manager_lib

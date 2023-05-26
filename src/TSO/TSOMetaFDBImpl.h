@@ -32,7 +32,7 @@ public:
     TSOMetaFDBImpl(const String & cluster_file, const String & key_name_)
         : TSOMetastore(key_name_)
     {
-        fdb_client = std::make_shared<FDB::FDBClient>(cluster_file);
+        fdb_client = FDB::FDBClient::Instance(cluster_file);
     }
 
     ~TSOMetaFDBImpl() override {}

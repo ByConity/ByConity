@@ -25,6 +25,7 @@
 #include <Interpreters/IdentifierSemantic.h>
 #include <Interpreters/StorageID.h>
 #include <Parsers/queryToString.h>
+#include <Common/DefaultCatalogName.h>
 #include <IO/Operators.h>
 #include <DataTypes/MapHelpers.h>
 
@@ -189,6 +190,7 @@ std::shared_ptr<ASTTableIdentifier> ASTIdentifier::createTable() const
 {
     if (name_parts.size() == 1) return std::make_shared<ASTTableIdentifier>(name_parts[0]);
     if (name_parts.size() == 2) return std::make_shared<ASTTableIdentifier>(name_parts[0], name_parts[1]);
+    if (name_parts.size() == 3) return std::make_shared<ASTTableIdentifier>(name_parts[0], name_parts[1], name_parts[2]);
     return nullptr;
 }
 
@@ -250,9 +252,15 @@ ASTTableIdentifier::ASTTableIdentifier(const StorageID & table_id, std::vector<A
 }
 
 ASTTableIdentifier::ASTTableIdentifier(const String & database_name, const String & table_name, std::vector<ASTPtr> && name_params)
-    : ASTIdentifier({database_name, table_name}, true, std::move(name_params))
+    : ASTIdentifier( {database_name, table_name},true, std::move(name_params))
 {
 }
+
+ASTTableIdentifier::ASTTableIdentifier(const String& catalog_name, const String & database_name, const String & table_name, std::vector<ASTPtr> && name_params)
+    : ASTIdentifier({catalog_name, database_name, table_name}, true, std::move(name_params))
+{
+}
+
 
 ASTPtr ASTTableIdentifier::clone() const
 {
@@ -263,12 +271,14 @@ ASTPtr ASTTableIdentifier::clone() const
 
 StorageID ASTTableIdentifier::getTableId() const
 {
-    if (name_parts.size() == 2) return {name_parts[0], name_parts[1], uuid};
-    else return {{}, name_parts[0], uuid};
+    if (name_parts.size() == 3) return {name_parts[0], name_parts[1], name_parts[2], uuid};
+    if (name_parts.size() ==2) return {{}, name_parts[0],name_parts[1], uuid};
+    else return {{},{}, name_parts[0], uuid};
 }
 
 String ASTTableIdentifier::getDatabaseName() const
 {
+    if (name_parts.size() == 3) return name_parts[1];
     if (name_parts.size() == 2) return name_parts[0];
     else return {};
 }

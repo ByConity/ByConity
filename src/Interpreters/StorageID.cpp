@@ -41,6 +41,7 @@ namespace ErrorCodes
 
 StorageID::StorageID(const ASTQueryWithTableAndOutput & query)
 {
+    catalog_name = query.catalog;
     database_name = query.database;
     table_name = query.table;
     uuid = query.uuid;
@@ -50,6 +51,7 @@ StorageID::StorageID(const ASTQueryWithTableAndOutput & query)
 StorageID::StorageID(const ASTTableIdentifier & table_identifier_node)
 {
     DatabaseAndTableWithAlias database_table(table_identifier_node);
+    catalog_name = database_table.catalog;
     database_name = database_table.database;
     table_name = database_table.table;
     uuid = database_table.uuid;
@@ -72,6 +74,12 @@ String StorageID::getTableName() const
     return table_name;
 }
 
+String StorageID::getCatalogName() const
+{
+    assertNotEmpty();
+    return catalog_name;
+}
+
 String StorageID::getDatabaseName() const
 {
     assertNotEmpty();
@@ -79,12 +87,17 @@ String StorageID::getDatabaseName() const
         throw Exception("Database name is empty", ErrorCodes::UNKNOWN_DATABASE);
     return database_name;
 }
+bool StorageID::inExternalCatalog() const
+{
+    return !catalog_name.empty() && catalog_name != DefaultCatalogName;
+}
 
 String StorageID::getNameForLogs() const
 {
     assertNotEmpty();
-    return (database_name.empty() ? "" : backQuoteIfNeed(database_name) + ".") + backQuoteIfNeed(table_name)
-           + (hasUUID() ? " (" + toString(uuid) + ")" : "");
+    return ((catalog_name.empty()) ? "" : backQuoteIfNeed(catalog_name) + ".")
+        + (database_name.empty() ? "" : backQuoteIfNeed(database_name) + ".") + backQuoteIfNeed(table_name)
+        + (hasUUID() ? " (" + toString(uuid) + ")" : "");
 }
 
 bool StorageID::operator<(const StorageID & rhs) const
@@ -93,7 +106,7 @@ bool StorageID::operator<(const StorageID & rhs) const
     /// It's needed for ViewDependencies
     if (!hasUUID() && !rhs.hasUUID())
         /// If both IDs don't have UUID, compare them like pair of strings
-        return std::tie(database_name, table_name) < std::tie(rhs.database_name, rhs.table_name);
+        return std::tie(catalog_name, database_name, table_name) < std::tie(catalog_name, rhs.database_name, rhs.table_name);
     else if (hasUUID() && rhs.hasUUID())
         /// If both IDs have UUID, compare UUIDs and ignore database and table name
         return uuid < rhs.uuid;
@@ -108,7 +121,7 @@ bool StorageID::operator==(const StorageID & rhs) const
     if (hasUUID() && rhs.hasUUID())
         return uuid == rhs.uuid;
     else
-        return std::tie(database_name, table_name) == std::tie(rhs.database_name, rhs.table_name);
+        return std::tie(catalog_name, database_name, table_name) == std::tie(catalog_name, rhs.database_name, rhs.table_name);
 }
 
 String StorageID::getFullTableName() const
@@ -142,9 +155,10 @@ String StorageID::getInternalDictionaryName() const
         return table_name;
     return database_name + "." + table_name;
 }
-
+// TODO(renming):: check whether to modify this.
 void StorageID::serialize(WriteBuffer & buffer) const
 {
+//    writeBinary(catalog_name, buffer);
     writeBinary(database_name, buffer);
     writeBinary(table_name, buffer);
     writeBinary(uuid, buffer);
@@ -152,6 +166,9 @@ void StorageID::serialize(WriteBuffer & buffer) const
 
 StorageID StorageID::deserialize(ReadBuffer & buffer, ContextPtr context)
 {
+//    String catalog_name;
+//    readBinary(catalog_name, buffer);
+
     String database_name;
     readBinary(database_name, buffer);
 
@@ -171,5 +188,7 @@ StorageID StorageID::deserialize(ReadBuffer & buffer, ContextPtr context)
         storage_id_recv = storage->getStorageID();
     return storage_id_recv;
 }
+
+
 
 }

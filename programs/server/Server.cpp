@@ -29,8 +29,15 @@
 #include <unistd.h>
 #include <Access/AccessControlManager.h>
 #include <AggregateFunctions/registerAggregateFunctions.h>
+#include <Catalog/Catalog.h>
+#include <Catalog/CatalogConfig.h>
+#include <CloudServices/CnchServerServiceImpl.h>
+#include <CloudServices/CnchWorkerClientPools.h>
+#include <CloudServices/CnchWorkerServiceImpl.h>
+#include <DataTypes/MapHelpers.h>
 #include <Dictionaries/registerDictionaries.h>
 #include <Disks/registerDisks.h>
+#include <ExternalCatalog/IExternalCatalogMgr.h>
 #include <Formats/registerFormats.h>
 #include <Functions/registerFunctions.h>
 #include <IO/HTTPCommon.h>
@@ -40,14 +47,14 @@
 #include <Interpreters/DNSCacheUpdater.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <Interpreters/DistributedStages/PlanSegmentManagerRpcService.h>
-#include <Interpreters/RuntimeFilter/RuntimeFilterService.h>
 #include <Interpreters/ExternalDictionariesLoader.h>
 #include <Interpreters/ExternalLoaderXMLConfigRepository.h>
 #include <Interpreters/ExternalModelsLoader.h>
 #include <Interpreters/InterserverCredentials.h>
 #include <Interpreters/JIT/CompiledExpressionCache.h>
-#include <Interpreters/ServerPartLog.h>
 #include <Interpreters/ProcessList.h>
+#include <Interpreters/RuntimeFilter/RuntimeFilterService.h>
+#include <Interpreters/ServerPartLog.h>
 #include <Interpreters/loadMetadata.h>
 #include <Processors/Exchange/DataTrans/Brpc/BrpcExchangeReceiverRegistryService.h>
 #include <Server/HTTP/HTTPServer.h>
@@ -56,6 +63,8 @@
 #include <Server/PostgreSQLHandlerFactory.h>
 #include <Server/ProtocolServerAdapter.h>
 #include <Server/TCPHandlerFactory.h>
+#include <ServiceDiscovery/registerServiceDiscovery.h>
+#include <Statistics/CacheManager.h>
 #include <Storages/DiskCache/DiskCacheFactory.h>
 #include <Storages/HDFS/HDFSCommon.h>
 #include <Storages/HDFS/HDFSFileSystem.h>
@@ -63,7 +72,6 @@
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/registerStorages.h>
 #include <TableFunctions/registerTableFunctions.h>
-#include <ServiceDiscovery/registerServiceDiscovery.h>
 #include <brpc/server.h>
 #include <google/protobuf/service.h>
 #include <sys/resource.h>
@@ -76,10 +84,11 @@
 #include <Poco/Net/NetException.h>
 #include <Poco/Util/HelpFormatter.h>
 #include <Poco/Version.h>
-#include <Common/CGroup/CGroupManagerFactory.h>
 #include <Common/Brpc/BrpcApplication.h>
+#include <Common/CGroup/CGroupManagerFactory.h>
 #include <Common/ClickHouseRevision.h>
 #include <Common/Config/ConfigReloader.h>
+#include <Common/Configurations.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/DNSResolver.h>
 #include <Common/Elf.h>
@@ -99,7 +108,6 @@
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
 #include <Common/remapExecutable.h>
-#include <Common/Configurations.h>
 #include <common/ErrorHandlers.h>
 #include <common/coverage.h>
 #include <common/defines.h>
@@ -110,14 +118,6 @@
 #include <common/phdr_cache.h>
 #include <common/scope_guard.h>
 #include "MetricsTransmitter.h"
-#include <DataTypes/MapHelpers.h>
-#include <Statistics/CacheManager.h>
-#include <CloudServices/CnchServerServiceImpl.h>
-#include <CloudServices/CnchWorkerServiceImpl.h>
-#include <CloudServices/CnchWorkerClientPools.h>
-#include <Catalog/CatalogConfig.h>
-#include <Catalog/Catalog.h>
-
 
 #include <CloudServices/CnchServerClientPool.h>
 #include <CloudServices/CnchWorkerClientPools.h>
@@ -1207,7 +1207,16 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         throw;
     }
-
+    
+    // Note:: just for test.
+    {
+        // WARNING: There is a undesired restriction on FDB. Each process could only init one fdb client otherwise it will panic.
+        // so if we use fdb as the kv storage, the config for external and internal catalog must be the same.
+        if (global_context->getCnchConfigRef().has(ExternalCatalog::Mgr::configPrefix()))
+        {
+            ExternalCatalog::Mgr::init(*global_context, global_context->getCnchConfigRef());
+        }
+    }
     /// Check sanity of MergeTreeSettings on server startup
     global_context->getMergeTreeSettings().sanityCheck(settings);
     global_context->getReplicatedMergeTreeSettings().sanityCheck(settings);
@@ -1299,6 +1308,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// start background task to sync metadata automatically. consider to remove it later.
     global_context->setMetaChecker();
+    
+
+
 
     /// Init trace collector only after trace_log system table was created
     /// Disable it if we collect test coverage information, because it will work extremely slow.

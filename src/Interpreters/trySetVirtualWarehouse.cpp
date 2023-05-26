@@ -46,11 +46,11 @@ static void setVirtualWarehouseByName(const String & vw_name, ContextMutablePtr 
     context->setCurrentVW(std::move(vw_handle));
 }
 
-[[maybe_unused]] static bool trySetVirtualWarehouseFromTable([[maybe_unused]] const String & database, [[maybe_unused]] const String & table, [[maybe_unused]] ContextMutablePtr & context)
+static bool trySetVirtualWarehouseFromStorageID(const  StorageID& table_id, [[maybe_unused]] ContextMutablePtr & context )
 {
-    LOG_DEBUG(&Poco::Logger::get("trySetVirtualWarehouse"), "Try set virtual warehouse for table `{}.{}`", database, table);
+
+    LOG_DEBUG(&Poco::Logger::get("trySetVirtualWarehouseFromStorageID"), "Try set virtual warehouse for table `{}`", table_id.getNameForLogs());
     auto & database_catalog = DatabaseCatalog::instance();
-    StorageID table_id(database, table);
     auto storage = database_catalog.tryGetTable(table_id, context);
     if (!storage)
         return false;
@@ -61,7 +61,7 @@ static void setVirtualWarehouseByName(const String & vw_name, ContextMutablePtr 
 
         setVirtualWarehouseByName(vw_name, context);
         LOG_DEBUG(
-            &Poco::Logger::get("trySetVirtualWarehouse"),
+            &Poco::Logger::get("trySetVirtualWarehouseFromStorageID"),
             "Set virtual warehouse {} from {}", context->getCurrentVW()->getName(), storage->getStorageID().getNameForLogs());
         return true;
     }
@@ -71,7 +71,7 @@ static void setVirtualWarehouseByName(const String & vw_name, ContextMutablePtr 
 
         setVirtualWarehouseByName(vw_name, context);
         LOG_DEBUG(
-            &Poco::Logger::get("trySetVirtualWarehouse"),
+            &Poco::Logger::get("trySetVirtualWarehouseFromStorageID"),
             "CnchHive Set virtual warehouse {} from {}", context->getCurrentVW()->getName(), storage->getStorageID().getNameForLogs());
         return true;
     }
@@ -88,6 +88,12 @@ static void setVirtualWarehouseByName(const String & vw_name, ContextMutablePtr 
 
     return false;
 }
+
+[[maybe_unused]] static bool trySetVirtualWarehouseFromTable([[maybe_unused]] const String & database, [[maybe_unused]] const String & table, [[maybe_unused]] ContextMutablePtr & context)
+{
+    return trySetVirtualWarehouseFromStorageID({database, table}, context);
+}
+
 
 static bool trySetVirtualWarehouseFromAST([[maybe_unused]] const ASTPtr & ast, [[maybe_unused]] ContextMutablePtr & context)
 {
@@ -120,7 +126,7 @@ static bool trySetVirtualWarehouseFromAST([[maybe_unused]] const ASTPtr & ast, [
 
             DatabaseAndTableWithAlias db_and_table(table_expr->database_and_table_name);
             if (db_and_table.database.empty()) db_and_table.database = context->getCurrentDatabase();
-            if (trySetVirtualWarehouseFromTable(db_and_table.database, db_and_table.table, context))
+            if (trySetVirtualWarehouseFromStorageID(db_and_table.getStorageID(), context))
                 return true;
         }
         /// XXX: This is a hack solution for an uncommonn query `SELECT ... WHERE x IN table`
@@ -144,7 +150,7 @@ static bool trySetVirtualWarehouseFromAST([[maybe_unused]] const ASTPtr & ast, [
         }
         else if (auto * refresh_mv = ast->as<ASTRefreshQuery>())
         {
-            auto storage = database_catalog.tryGetTable(StorageID(refresh_mv->database, refresh_mv->table), context);
+            auto storage = database_catalog.tryGetTable(refresh_mv->getTableInfo(), context);
             auto * view_table = dynamic_cast<StorageMaterializedView *>(storage.get());
             if (!view_table)
                 break;

@@ -545,6 +545,7 @@ include (cmake/find/hdfs3.cmake) # uses protobuf
 include (cmake/find/poco.cmake)
 include (cmake/find/curl.cmake)
 include (cmake/find/s3.cmake)
+include (cmake/find/glue.cmake) # uses aws-glue
 include (cmake/find/base64.cmake)
 include (cmake/find/parquet.cmake)
 include (cmake/find/simdjson.cmake)

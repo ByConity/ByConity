@@ -19,7 +19,10 @@
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
+#include <memory>
 #include <Common/typeid_cast.h>
+#include "Parsers/IAST.h"
+#include "Parsers/IAST_fwd.h"
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTIndexDeclaration.h>
@@ -556,9 +559,10 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
         query->attach = attach;
         query->if_not_exists = if_not_exists;
         query->cluster = cluster_str;
-
-        query->database = table_id.database_name;
-        query->table = table_id.table_name;
+        query->setTableInfo(table_id);
+        // query->catalog = table_id.catalog_name;
+        // query->database = table_id.database_name;
+        // query->table = table_id.table_name;
         query->uuid = table_id.uuid;
 
         return true;
@@ -658,9 +662,11 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     query->ignore_async = ignore_async;
     query->ignore_ttl = ignore_ttl;
 
-    query->database = table_id.database_name;
-    query->table = table_id.table_name;
-    query->uuid = table_id.uuid;
+    query->setTableInfo(table_id);
+    // query->catalog = table_id.catalog_name; 
+    // query->database = table_id.database_name;
+    // query->table = table_id.table_name;
+    // query->uuid = table_id.uuid;
     query->cluster = cluster_str;
 
     query->set(query->columns_list, columns_list);
@@ -806,9 +812,11 @@ bool ParserCreateLiveViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & e
     query->is_live_view = true;
 
     auto table_id = table->as<ASTTableIdentifier>()->getTableId();
-    query->database = table_id.database_name;
-    query->table = table_id.table_name;
-    query->uuid = table_id.uuid;
+    query->setTableInfo(table_id);
+    // query->catalog = table_id.database_name;
+    // query->database = table_id.database_name;
+    // query->table = table_id.table_name;
+    // query->uuid = table_id.uuid;
     query->cluster = cluster_str;
 
     if (to_table)
@@ -895,6 +903,58 @@ bool ParserCreateDatabaseQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & e
 
     return true;
 }
+
+bool ParserCreateCatalogQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+{
+    ParserKeyword s_create("CREATE");
+    ParserKeyword s_external("EXTERNAL");
+    ParserKeyword s_catalog("CATALOG");
+    ParserKeyword s_if_not_exists("IF NOT EXISTS");
+    ParserIdentifier name_p;
+    ParserKeyword s_properties("PROPERTIES");
+    ParserToken s_left_paren(TokenType::OpeningRoundBracket);
+    ParserSetQuery settings_p(/* parse_only_internals_ = */ true);
+    ParserToken s_right_paren(TokenType::ClosingRoundBracket);
+
+    ASTPtr catalog;
+    ASTPtr properties;
+    bool if_not_exists = false;
+    
+    if(!s_create.ignore(pos,expected))
+    {
+        return false;
+    }
+    if(!s_external.ignore(pos,expected))
+    {
+        return false;
+    }
+    if(!s_catalog.ignore(pos,expected))
+    {
+        return false;
+    }
+    if (s_if_not_exists.ignore(pos, expected))
+    {
+        if_not_exists = true;
+    }
+    if(!name_p.parse(pos,catalog,expected))
+    {
+        return false;
+    }
+    if(!s_properties.ignore(pos,expected)){
+        return false;
+    }
+    if(!settings_p.parse(pos, properties,expected)){
+        return false;
+    }
+
+    auto query = std::make_shared<ASTCreateQuery>();
+    node = query;
+    query->if_not_exists = if_not_exists;
+    query->set(query->catalog_properties, properties);
+    tryGetIdentifierNameInto(catalog,query->catalog);
+    return true;
+}
+
 
 bool ParserCreateViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
@@ -1143,12 +1203,14 @@ bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserCreateViewQuery view_p(dt);
     ParserCreateDictionaryQuery dictionary_p(dt);
     ParserCreateLiveViewQuery live_view_p(dt);
+    ParserCreateCatalogQuery catalog_p(dt);
 
     return table_p.parse(pos, node, expected)
         || database_p.parse(pos, node, expected)
         || view_p.parse(pos, node, expected)
         || dictionary_p.parse(pos, node, expected)
-        || live_view_p.parse(pos, node, expected);
+        || live_view_p.parse(pos, node, expected)
+        || catalog_p.parse(pos,node,expected);
 }
 
 }

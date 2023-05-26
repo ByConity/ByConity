@@ -31,7 +31,9 @@
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSubquery.h>
-
+#include <Poco/Logger.h>
+#include <common/logger_useful.h>
+#include <fmt/core.h>
 namespace DB
 {
 namespace ErrorCodes
@@ -44,9 +46,17 @@ DatabaseAndTableWithAlias::DatabaseAndTableWithAlias(const ASTTableIdentifier & 
     alias = identifier.tryGetAlias();
 
     auto table_id = identifier.getTableId();
-    std::tie(database, table, uuid) = std::tie(table_id.database_name, table_id.table_name, table_id.uuid);
+    std::tie(catalog, database, table, uuid) = std::tie(table_id.catalog_name,table_id.database_name, table_id.table_name, table_id.uuid);
+    LOG_INFO(&Poco::Logger::get("DatabaseAndTableWithAlias"), fmt::format("got {}.{}.{}",catalog,database, table));
+    // TODO(renming):: add current catalog here.
     if (database.empty())
         database = current_database;
+}
+
+
+StorageID DatabaseAndTableWithAlias::getStorageID() const
+{
+    return StorageID(catalog, database, table, uuid);
 }
 
 DatabaseAndTableWithAlias::DatabaseAndTableWithAlias(const ASTPtr & node, const String & current_database)

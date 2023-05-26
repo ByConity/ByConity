@@ -39,6 +39,8 @@ namespace UUIDHelpers
     PairInt64 UUIDToPairInt64(const UUID & uuid);
 
     const UUID Nil{};
+
+    UUID hashUUIDfromString(const String & str);
 }
 
 }

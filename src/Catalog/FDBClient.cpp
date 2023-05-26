@@ -75,6 +75,12 @@ FDBFutureRAII::~FDBFutureRAII()
     if (future)
         fdb_future_destroy(future);
 }
+FDBClientPtr FDBClient::Instance(const std::string & cluster_file)
+{
+    static FDBClientPtr client_ptr = FDBClientPtr(new FDBClient(cluster_file));
+    return client_ptr;
+}
+
 
 FDBClient::FDBClient(const std::string & cluster_file)
 {

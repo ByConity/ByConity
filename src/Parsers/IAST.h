@@ -125,6 +125,7 @@ class ReadBuffer;
     M(ASTTablesInSelectQuery) \
     M(ASTTTLElement) \
     M(ASTUseQuery) \
+    M(ASTSwitchQuery) \
     M(ASTUserNameWithHost) \
     M(ASTUserNamesWithHost) \
     M(ASTWatchQuery) \

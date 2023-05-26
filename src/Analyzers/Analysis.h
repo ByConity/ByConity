@@ -146,6 +146,7 @@ using WindowAnalysisPtr = std::shared_ptr<WindowAnalysis>;
 
 struct StorageAnalysis
 {
+    String catalog;
     String database;
     String table;
     StoragePtr storage;
