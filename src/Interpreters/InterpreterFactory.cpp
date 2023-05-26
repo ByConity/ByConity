@@ -19,29 +19,35 @@
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
+#include <Interpreters/Context.h>
+#include <Interpreters/DistributedStages/InterpreterDistributedStages.h>
 #include <Parsers/ASTAlterQuery.h>
 #include <Parsers/ASTAlterWarehouseQuery.h>
 #include <Parsers/ASTCheckQuery.h>
 #include <Parsers/ASTCreateQuery.h>
-#include <Parsers/ASTCreateUserQuery.h>
-#include <Parsers/ASTCreateRoleQuery.h>
 #include <Parsers/ASTCreateQuotaQuery.h>
+#include <Parsers/ASTCreateRoleQuery.h>
 #include <Parsers/ASTCreateRowPolicyQuery.h>
 #include <Parsers/ASTCreateSettingsProfileQuery.h>
+#include <Parsers/ASTCreateUserQuery.h>
 #include <Parsers/ASTCreateWarehouseQuery.h>
 #include <Parsers/ASTCreateWorkerGroupQuery.h>
 #include <Parsers/ASTDeleteQuery.h>
 #include <Parsers/ASTDropAccessEntityQuery.h>
 #include <Parsers/ASTDropQuery.h>
-#include <Parsers/ASTUndropQuery.h>
 #include <Parsers/ASTDropWarehouseQuery.h>
 #include <Parsers/ASTDropWorkerGroupQuery.h>
+#include <Parsers/ASTDumpInfoQuery.h>
+#include <Parsers/ASTExplainQuery.h>
+#include <Parsers/ASTGrantQuery.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTKillQueryQuery.h>
 #include <Parsers/ASTOptimizeQuery.h>
+#include <Parsers/ASTRefreshQuery.h>
 #include <Parsers/ASTRenameQuery.h>
-#include <Parsers/ASTSelectQuery.h>
+#include <Parsers/ASTReproduceQuery.h>
 #include <Parsers/ASTSelectIntersectExceptQuery.h>
+#include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTSetQuery.h>
 #include <Parsers/ASTSetRoleQuery.h>
@@ -53,20 +59,14 @@
 #include <Parsers/ASTShowProcesslistQuery.h>
 #include <Parsers/ASTShowTablesQuery.h>
 #include <Parsers/ASTShowWarehousesQuery.h>
-#include <Parsers/ASTUseQuery.h>
-#include <Parsers/ASTExplainQuery.h>
-#include <Parsers/ASTDumpInfoQuery.h>
-#include <Parsers/ASTReproduceQuery.h>
-#include <Parsers/TablePropertiesQueriesASTs.h>
-#include <Parsers/ASTWatchQuery.h>
-#include <Parsers/ASTGrantQuery.h>
-#include <Parsers/MySQL/ASTCreateQuery.h>
-#include <Parsers/ASTRefreshQuery.h>
 #include <Parsers/ASTStatsQuery.h>
+#include <Parsers/ASTSwitchQuery.h>
+#include <Parsers/ASTUndropQuery.h>
 #include <Parsers/ASTUpdateQuery.h>
-
-#include <Interpreters/Context.h>
-#include <Interpreters/DistributedStages/InterpreterDistributedStages.h>
+#include <Parsers/ASTUseQuery.h>
+#include <Parsers/ASTWatchQuery.h>
+#include <Parsers/MySQL/ASTCreateQuery.h>
+#include <Parsers/TablePropertiesQueriesASTs.h>
 
 #include <Interpreters/InterpreterAlterQuery.h>
 #include <Interpreters/InterpreterAlterWarehouseQuery.h>
@@ -139,6 +139,7 @@
 #include <Interpreters/InterpreterCommitQuery.h>
 #include <Interpreters/InterpreterRollbackQuery.h>
 #include <Interpreters/InterpreterShowStatementsQuery.h>
+#include <Interpreters/InterpreterSwitchQuery.h>
 #include <Parsers/ASTTransaction.h>
 
 
@@ -244,6 +245,10 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     {
         return std::make_unique<InterpreterUseQuery>(query, context);
     }
+    else if (query->as<ASTSwitchQuery>())
+    {
+        return std::make_unique<InterpreterSwitchQuery>(query, context);
+    }
     else if (query->as<ASTSetQuery>())
     {
         /// readonly is checked inside InterpreterSetQuery
@@ -282,6 +287,14 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
         return std::make_unique<InterpreterShowCreateQuery>(query, context);
     }
     else if (query->as<ASTShowCreateDatabaseQuery>())
+    {
+        return std::make_unique<InterpreterShowCreateQuery>(query, context);
+    }
+    else if (query->as<ASTShowCreateExternalCatalogQuery>())
+    {
+        return std::make_unique<InterpreterShowCreateQuery>(query, context);
+    }
+    else if (query->as<ASTShowCreateExternalTableQuery>())
     {
         return std::make_unique<InterpreterShowCreateQuery>(query, context);
     }

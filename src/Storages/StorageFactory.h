@@ -21,15 +21,15 @@
 
 #pragma once
 
-#include <Common/NamePrompter.h>
+#include <unordered_map>
+#include <Access/AccessType.h>
 #include <Parsers/IAST_fwd.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/ConstraintsDescription.h>
+#include <Storages/Hive/Metastore/IMetaClient.h>
 #include <Storages/IStorage_fwd.h>
 #include <Storages/registerStorages.h>
-#include <Access/AccessType.h>
-#include <unordered_map>
-
+#include <Common/NamePrompter.h>
 
 namespace DB
 {
@@ -68,10 +68,17 @@ public:
         bool create;  /// for CnchHive
         bool has_force_restore_data_flag;
         const String & comment;
-
+        IMetaClientPtr hive_client = nullptr;
         ContextMutablePtr getContext() const;
         ContextMutablePtr getLocalContext() const;
+        IMetaClientPtr getMetaClient() const;
     };
+
+    struct HiveParams
+    {
+        IMetaClientPtr hive_client = nullptr;
+    };
+    using HiveParamsPtr = std::unique_ptr<HiveParams>;
 
     /// Analog of the IStorage::supports*() helpers
     /// (But the former cannot be replaced with StorageFeatures due to nesting)
@@ -101,14 +108,15 @@ public:
 
     using Storages = std::unordered_map<std::string, Creator>;
 
-    StoragePtr get(
-        const ASTCreateQuery & query,
+    StoragePtr
+    get(const ASTCreateQuery & query,
         const String & relative_data_path,
         ContextMutablePtr local_context,
         ContextMutablePtr context,
         const ColumnsDescription & columns,
         const ConstraintsDescription & constraints,
-        bool has_force_restore_data_flag) const;
+        bool has_force_restore_data_flag,
+        HiveParamsPtr hive_params = nullptr) const;
 
     /// Register a table engine by its name.
     /// No locking, you must register all engines before usage of get.

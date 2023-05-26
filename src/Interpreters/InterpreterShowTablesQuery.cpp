@@ -20,19 +20,19 @@
  */
 
 #include <IO/ReadBufferFromString.h>
-#include <Parsers/ASTShowTablesQuery.h>
-#include <Parsers/formatAST.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DatabaseCatalog.h>
-#include <Interpreters/executeQuery.h>
 #include <Interpreters/InterpreterShowTablesQuery.h>
+#include <Interpreters/executeQuery.h>
+#include <Parsers/ASTShowTablesQuery.h>
+#include <Parsers/formatAST.h>
+#include <Parsers/formatTenantDatabaseName.h>
+#include <Poco/Logger.h>
 #include <Common/typeid_cast.h>
-#include <IO/Operators.h>
-
-
+#include <common/logger_useful.h>
+#include "IO/WriteBufferFromString.h"
 namespace DB
 {
-
 namespace ErrorCodes
 {
     extern const int SYNTAX_ERROR;
@@ -44,20 +44,37 @@ InterpreterShowTablesQuery::InterpreterShowTablesQuery(const ASTPtr & query_ptr_
 {
 }
 
+static String rewriteShowDatabaseForExternal(const ASTShowTablesQuery & query, const String & catalog_name);
+static String rewriteShowTableForExternal(const ASTShowTablesQuery & query, const String & catalog_name, const String & database_name);
+static String rewriteShowDatabaseForExternal(const ASTShowTablesQuery & query, const String & catalog_name);
 
 String InterpreterShowTablesQuery::getRewrittenQuery()
+{
+    const auto & query = query_ptr->as<ASTShowTablesQuery &>();
+    if (query.external)
+        return getRewrittenQueryForExternalCatalogImpl();
+    else
+        return getRewrittenQueryImpl();
+}
+
+String InterpreterShowTablesQuery::getRewrittenQueryImpl()
 {
     const auto & query = query_ptr->as<ASTShowTablesQuery &>();
 
     /// SHOW DATABASES
     if (query.databases)
     {
+        if (auto current_catalog = getContext()->getCurrentCatalog(); !current_catalog.empty())
+        {
+            return rewriteShowDatabaseForExternal(query, current_catalog);
+        }
         WriteBufferFromOwnString rewritten_query;
-        const auto& tenant_id = getContext()->getTenantId();
+        const auto & tenant_id = getContext()->getTenantId();
         if (!tenant_id.empty())
         {
             if (query.history)
-                rewritten_query << "SELECT arrayStringConcat(arraySlice(splitByChar('.',name), 2),'.') AS name, uuid, delete_time FROM system.cnch_databases_history";
+                rewritten_query << "SELECT arrayStringConcat(arraySlice(splitByChar('.',name), 2),'.') AS name, uuid, delete_time FROM "
+                                   "system.cnch_databases_history";
             else
                 rewritten_query << "SELECT arrayStringConcat(arraySlice(splitByChar('.',name), 2),'.') AS name FROM system.databases";
         }
@@ -68,23 +85,19 @@ String InterpreterShowTablesQuery::getRewrittenQuery()
             else
                 rewritten_query << "SELECT name FROM system.databases";
         }
-        
+
 
         if (!query.like.empty())
         {
-            rewritten_query
-                << " WHERE "
-                << (query.history ? "system.cnch_databases_history.name " : "system.databases.name ")
-                << (query.not_like ? "NOT " : "")
-                << (query.case_insensitive_like ? "ILIKE " : "LIKE ")
-                << DB::quote << query.like;
+            rewritten_query << " WHERE " << (query.history ? "system.cnch_databases_history.name " : "system.databases.name ")
+                            << (query.not_like ? "NOT " : "") << (query.case_insensitive_like ? "ILIKE " : "LIKE ") << DB::quote
+                            << query.like;
         }
         if (!tenant_id.empty())
         {
-            rewritten_query
-                << (!query.like.empty() ? " AND " : " WHERE ")
-                << (query.history ? "system.cnch_databases_history.name " : "system.databases.name ")
-                << "LIKE '" << tenant_id << ".%'";
+            rewritten_query << (!query.like.empty() ? " AND " : " WHERE ")
+                            << (query.history ? "system.cnch_databases_history.name " : "system.databases.name ") << "LIKE '" << tenant_id
+                            << ".%'";
         }
 
         if (query.limit_length)
@@ -101,11 +114,8 @@ String InterpreterShowTablesQuery::getRewrittenQuery()
 
         if (!query.like.empty())
         {
-            rewritten_query
-                << " WHERE cluster "
-                << (query.not_like ? "NOT " : "")
-                << (query.case_insensitive_like ? "ILIKE " : "LIKE ")
-                << DB::quote << query.like;
+            rewritten_query << " WHERE cluster " << (query.not_like ? "NOT " : "") << (query.case_insensitive_like ? "ILIKE " : "LIKE ")
+                            << DB::quote << query.like;
         }
 
         if (query.limit_length)
@@ -134,10 +144,8 @@ String InterpreterShowTablesQuery::getRewrittenQuery()
 
         if (!query.like.empty())
         {
-            rewritten_query
-                << (query.changed ? " AND name " : " WHERE name ")
-                << (query.case_insensitive_like ? "ILIKE " : "LIKE ")
-                << DB::quote << query.like;
+            rewritten_query << (query.changed ? " AND name " : " WHERE name ") << (query.case_insensitive_like ? "ILIKE " : "LIKE ")
+                            << DB::quote << query.like;
         }
 
         return rewritten_query.str();
@@ -148,6 +156,12 @@ String InterpreterShowTablesQuery::getRewrittenQuery()
 
     String database = getContext()->resolveDatabase(query.from);
     DatabaseCatalog::instance().assertDatabaseExists(database, getContext());
+
+    auto [catalog_opt, database_opt] = getCatalogNameAndDatabaseName(database);
+    if (catalog_opt.has_value() && database_opt.has_value())
+    {
+        return rewriteShowTableForExternal(query, catalog_opt.value(), database_opt.value());
+    }
 
     WriteBufferFromOwnString rewritten_query;
     rewritten_query << "SELECT name FROM system.";
@@ -177,11 +191,8 @@ String InterpreterShowTablesQuery::getRewrittenQuery()
         rewritten_query << "database = " << DB::quote << database;
 
     if (!query.like.empty())
-        rewritten_query
-            << " AND name "
-            << (query.not_like ? "NOT " : "")
-            << (query.case_insensitive_like ? "ILIKE " : "LIKE ")
-            << DB::quote << query.like;
+        rewritten_query << " AND name " << (query.not_like ? "NOT " : "") << (query.case_insensitive_like ? "ILIKE " : "LIKE ") << DB::quote
+                        << query.like;
     else if (query.where_expression)
         rewritten_query << " AND (" << query.where_expression << ")";
 
@@ -189,6 +200,94 @@ String InterpreterShowTablesQuery::getRewrittenQuery()
         rewritten_query << " LIMIT " << query.limit_length;
 
     return rewritten_query.str();
+}
+
+static String rewriteShowDatabaseForExternal(const ASTShowTablesQuery & query, const String & catalog_name)
+{
+    WriteBufferFromOwnString rewritten_query;
+    rewritten_query << "SELECT database FROM system.external_databases";
+
+    rewritten_query << " WHERE "
+                    << "catalog_name"
+                    << " = " << DB::quote << catalog_name;
+    if (!query.like.empty())
+    {
+        rewritten_query << " AND database " << (query.not_like ? "NOT " : "") << (query.case_insensitive_like ? "ILIKE " : "LIKE ")
+                        << DB::quote << query.like;
+    }
+    if (query.limit_length)
+        rewritten_query << " LIMIT " << query.limit_length;
+
+    return rewritten_query.str();
+}
+
+static String rewriteShowTableForExternal(const ASTShowTablesQuery & query, const String & catalog_name, const String & database_name)
+{
+    WriteBufferFromOwnString rewritten_query;
+    rewritten_query << "SELECT table FROM system.external_tables "
+                    << " WHERE "
+                    << "catalog_name "
+                    << " = " << DB::quote << catalog_name << " AND database "
+                    << " = " << DB::quote << database_name;
+
+    if (!query.like.empty())
+        rewritten_query << " AND table " << (query.not_like ? "NOT " : "") << (query.case_insensitive_like ? "ILIKE " : "LIKE ")
+                        << DB::quote << query.like;
+    else if (query.where_expression)
+        rewritten_query << " AND (" << query.where_expression << ")";
+
+    if (query.limit_length)
+        rewritten_query << " LIMIT " << query.limit_length;
+    return rewritten_query.str();
+}
+
+static String rewriteShowCatalogForExternal(const ASTShowTablesQuery & query, const String & tenant_id)
+{
+    WriteBufferFromOwnString rewritten_query;
+    if (!tenant_id.empty())
+    {
+        rewritten_query << "SELECT arrayStringConcat(arraySlice(splitByChar('.',catalog_name), 2),'.') AS catalog_name FROM "
+                           "system.external_catalogs";
+    }
+    else
+    {
+        rewritten_query << "SELECT catalog_name FROM system.external_catalogs";
+    }
+
+    if (!query.like.empty())
+    {
+        rewritten_query << " WHERE "
+                        << (tenant_id.empty() ? " catalog_name " : "  arrayStringConcat(arraySlice(splitByChar('.',catalog_name), 2),'.') ")
+                        << (query.not_like ? "NOT " : "") << (query.case_insensitive_like ? "ILIKE " : "LIKE ") << DB::quote << query.like;
+    }
+    if (!tenant_id.empty())
+    {
+        rewritten_query << (!query.like.empty() ? " AND " : " WHERE ") << " catalog_name "
+                        << "LIKE '" << tenant_id << ".%'";
+    }
+
+    if (query.limit_length)
+        rewritten_query << " LIMIT " << query.limit_length;
+    LOG_TRACE(&Poco::Logger::get("getRewrittenQueryForExternalCatalogImpl"), rewritten_query.str());
+
+    return rewritten_query.str();
+}
+
+String InterpreterShowTablesQuery::getRewrittenQueryForExternalCatalogImpl()
+{
+    const auto & query = query_ptr->as<ASTShowTablesQuery &>();
+
+    if (query.catalog) // SHOW EXTERNAL CATALOGS
+    {
+        const auto & tenant_id = getContext()->getTenantId();
+        return rewriteShowCatalogForExternal(query, tenant_id);
+    }
+
+    if (query.databases) // SHOW DATABASES
+    {
+        return rewriteShowDatabaseForExternal(query, query.from_catalog);
+    }
+    return rewriteShowTableForExternal(query, query.from_catalog, query.from);
 }
 
 

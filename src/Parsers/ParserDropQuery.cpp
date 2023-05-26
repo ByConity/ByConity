@@ -3,6 +3,7 @@
 
 #include <Parsers/CommonParsers.h>
 #include <Parsers/ParserDropQuery.h>
+#include "Parsers/IAST_fwd.h"
 
 
 namespace DB
@@ -17,6 +18,7 @@ bool parseDropQuery(IParser::Pos & pos, ASTPtr & node, Expected & expected, cons
     ParserKeyword s_table("TABLE");
     ParserKeyword s_dictionary("DICTIONARY");
     ParserKeyword s_view("VIEW");
+    ParserKeyword s_catalog("EXTERNAL CATALOG");
     ParserKeyword s_database("DATABASE");
     ParserToken s_dot(TokenType::Dot);
     ParserKeyword s_if_exists("IF EXISTS");
@@ -25,6 +27,7 @@ bool parseDropQuery(IParser::Pos & pos, ASTPtr & node, Expected & expected, cons
     ParserKeyword s_no_delay("NO DELAY");
     ParserKeyword s_sync("SYNC");
 
+    ASTPtr catalog;
     ASTPtr database;
     ASTPtr table;
     String cluster_str;
@@ -35,7 +38,16 @@ bool parseDropQuery(IParser::Pos & pos, ASTPtr & node, Expected & expected, cons
     bool no_delay = false;
     bool permanently = false;
 
-    if (s_database.ignore(pos, expected))
+    if (s_catalog.ignore(pos, expected))
+    {
+        if (s_if_exists.ignore(pos, expected))
+            if_exists = true;
+
+        if (!name_p.parse(pos, catalog, expected))
+            return false;
+        tryRewriteHiveCatalogName(catalog, pos.getContext());
+    }
+    else if (s_database.ignore(pos, expected))
     {
         if (s_if_exists.ignore(pos, expected))
             if_exists = true;
@@ -99,6 +111,7 @@ bool parseDropQuery(IParser::Pos & pos, ASTPtr & node, Expected & expected, cons
     query->no_delay = no_delay;
     query->permanently = permanently;
 
+    tryGetIdentifierNameInto(catalog, query->catalog);
     tryGetIdentifierNameInto(database, query->database);
     tryGetIdentifierNameInto(table, query->table);
 

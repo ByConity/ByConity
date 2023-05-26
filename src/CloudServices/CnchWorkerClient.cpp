@@ -29,7 +29,7 @@
 
 #include <brpc/channel.h>
 #include <brpc/controller.h>
-
+#include <common/logger_useful.h>
 namespace DB
 {
 CnchWorkerClient::CnchWorkerClient(String host_port_)

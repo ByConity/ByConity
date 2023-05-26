@@ -39,6 +39,19 @@ message DataModelDB
     optional UUID uuid = 8; // optional uuid for database.
 };
 
+message DataModelCatalog
+{
+    required string name = 1; 
+    required string catalog_type = 2;
+    message Property {
+        required string key = 1; 
+        required string value = 2;
+    }
+    repeated Property properties = 3;
+    required uint64 commit_time = 4;
+}
+
+
 message DataModelTableVersion
 {
     optional uint64 commit_time = 1;

@@ -41,12 +41,12 @@ namespace ErrorCodes
 
 void CnchWorkerResource::executeCreateQuery(ContextMutablePtr context, const String & create_query, bool skip_if_exists)
 {
+    LOG_DEBUG(&Poco::Logger::get("WorkerResource"), "start create cloud table {}", create_query);
     const char * begin = create_query.data();
     const char * end = create_query.data() + create_query.size();
     ParserQueryWithOutput parser{end};
     const auto & settings = context->getSettingsRef();
     ASTPtr ast_query = parseQuery(parser, begin, end, "CreateCloudTable", settings.max_query_size, settings.max_parser_depth);
-
     auto & ast_create_query = ast_query->as<ASTCreateQuery &>();
 
     /// set query settings

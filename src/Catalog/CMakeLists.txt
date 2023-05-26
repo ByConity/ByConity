@@ -1,4 +1,5 @@
 include(${ClickHouse_SOURCE_DIR}/cmake/dbms_glob_sources.cmake)
+
 add_headers_and_sources(catalog_lib .)
 
 add_library(catalog_lib ${catalog_lib_sources})

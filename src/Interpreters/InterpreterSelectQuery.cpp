@@ -99,17 +99,19 @@
 #include <Storages/IStorage.h>
 #include <Storages/StorageView.h>
 
-#include <Functions/IFunction.h>
-#include <Core/Field.h>
-#include <common/types.h>
+#include <memory>
 #include <Columns/Collator.h>
-#include <Common/FieldVisitorsAccurateComparison.h>
+#include <Core/Field.h>
+#include <Functions/IFunction.h>
 #include <Common/FieldVisitorToString.h>
-#include <Common/typeid_cast.h>
+#include <Common/FieldVisitorsAccurateComparison.h>
 #include <Common/checkStackSize.h>
+#include <Common/typeid_cast.h>
 #include <common/map.h>
 #include <common/scope_guard_safe.h>
-#include <memory>
+#include <common/types.h>
+#include "Formats/FormatSettings.h"
+#include "IO/WriteBufferFromString.h"
 
 
 namespace DB
@@ -398,6 +400,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
 
     max_streams = settings.max_threads;
     ASTSelectQuery & query = getSelectQuery();
+
     std::shared_ptr<TableJoin> table_join = joined_tables.makeTableJoin(query);
 
     if (storage)
@@ -1016,6 +1019,7 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, const BlockInpu
 
     /// Now we will compose block streams that perform the necessary actions.
     auto & query = getSelectQuery();
+
     const Settings & settings = context->getSettingsRef();
     auto & expressions = analysis_result;
     auto & subqueries_for_sets = query_analyzer->getSubqueriesForSets();

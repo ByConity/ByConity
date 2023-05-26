@@ -153,4 +153,8 @@ catalog_service:
   type: fdb
   fdb:
     cluster_file: /config/fdb.cluster
+external_catalog_mgr:
+  type: fdb
+  fdb:
+    cluster_file: /config/fdb/cluster
 hdfs_addr: "hdfs://COMPOSE_PROJECT_NAME-hdfs-namenode:9000"

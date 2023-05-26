@@ -1,0 +1,1 @@
+hive_hdfs.tpcds1g.call_center

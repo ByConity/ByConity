@@ -57,7 +57,6 @@ static bool trySetVirtualWarehouseFromTable(
     VirtualWarehouseType vw_type = VirtualWarehouseType::Default)
 {
     auto & database_catalog = DatabaseCatalog::instance();
-    StorageID table_id(database, table);
     auto storage = database_catalog.tryGetTable(table_id, context);
     if (!storage)
         return false;
@@ -105,6 +104,16 @@ static bool trySetVirtualWarehouseFromTable(
     }
 
     return false;
+}
+
+static bool trySetVirtualWarehouseFromTable(
+    const String & database,
+    const String & table,
+    ContextMutablePtr & context,
+    VirtualWarehouseType vw_type = VirtualWarehouseType::Default)
+{
+    StorageID table_id(database, table);
+    return trySetVirtualWarehouseFromStorageID(table_id, context, vw_type);
 }
 
 static bool trySetVirtualWarehouseFromAST(const ASTPtr & ast, ContextMutablePtr & context)
@@ -171,7 +180,7 @@ static bool trySetVirtualWarehouseFromAST(const ASTPtr & ast, ContextMutablePtr 
         }
         else if (auto * refresh_mv = ast->as<ASTRefreshQuery>())
         {
-            auto storage = database_catalog.tryGetTable(StorageID(refresh_mv->database, refresh_mv->table), context);
+            auto storage = database_catalog.tryGetTable(refresh_mv->getTableInfo(), context);
             auto * view_table = dynamic_cast<StorageMaterializedView *>(storage.get());
             if (!view_table)
                 break;

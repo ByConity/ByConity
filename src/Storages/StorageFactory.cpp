@@ -84,7 +84,8 @@ StoragePtr StorageFactory::get(
     ContextMutablePtr context,
     const ColumnsDescription & columns,
     const ConstraintsDescription & constraints,
-    bool has_force_restore_data_flag) const
+    bool has_force_restore_data_flag,
+    HiveParamsPtr hive_params) const
 {
     String name, comment;
     ASTStorage * storage_def = query.storage;
@@ -224,7 +225,7 @@ StoragePtr StorageFactory::get(
         .storage_def = storage_def,
         .query = query,
         .relative_data_path = relative_data_path,
-        .table_id = StorageID(query.database, query.table, query.uuid),
+        .table_id = query.getTableInfo(),
         .local_context = local_context,
         .context = context,
         .columns = columns,
@@ -232,7 +233,8 @@ StoragePtr StorageFactory::get(
         .attach = query.attach,
         .create = query.create,
         .has_force_restore_data_flag = has_force_restore_data_flag,
-        .comment = comment};
+        .comment = comment,
+        .hive_client = hive_params != nullptr ? hive_params->hive_client : nullptr};
 
     assert(arguments.getContext() == arguments.getContext()->getGlobalContext());
 

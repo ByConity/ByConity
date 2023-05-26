@@ -67,7 +67,7 @@
 #include <mutex>
 #include <optional>
 #include <thread>
-
+#include <Common/DefaultCatalogName.h>
 
 namespace Poco::Net
 {
@@ -757,8 +757,10 @@ public:
     {
         ResolveGlobal = 1u, /// Database name must be specified
         ResolveCurrentDatabase = 2u, /// Use current database
-        ResolveOrdinary = ResolveGlobal | ResolveCurrentDatabase, /// If database name is not specified, use current database
-        ResolveExternal = 4u, /// Try get external table
+        ResolveCurrentCatalog = 4u, /// Use current catalog
+        ResolveOrdinary = ResolveGlobal | ResolveCurrentDatabase
+            | ResolveCurrentCatalog, /// If database/catalog name is not specified, use current database/catalog
+        ResolveExternal = 8u, /// Try get external table
         ResolveAll = ResolveExternal | ResolveOrdinary /// If database name is not specified, try get external table,
         ///    if external table not found use current database.
     };
@@ -813,6 +815,9 @@ public:
     String getInitialQueryId() const;
 
     void setCurrentDatabase(const String & name);
+    void setCurrentDatabase(const String & name, ContextPtr local_context);
+
+    void setCurrentCatalog(const String & catalog_name);
     /// Set current_database for global context. We don't validate that database
     /// exists because it should be set before databases loading.
     void setCurrentDatabaseNameInGlobalContext(const String & name);
@@ -1336,10 +1341,20 @@ public:
             return settings.tenant_id.toString();
     }
 
+
     void setTenantId(const String & id)
     {
         tenant_id = id;
     }
+
+    const String & getCurrentCatalog() const
+    {
+        if (!current_catalog.empty())
+            return current_catalog;
+        else
+            return settings.default_catalog.toString();
+    }
+
 
     void setChecksumsCache(size_t cache_size_in_bytes);
     std::shared_ptr<ChecksumsCache> getChecksumsCache() const;
@@ -1479,6 +1494,7 @@ public:
 
 private:
     String tenant_id;
+    String current_catalog;
 
     std::unique_lock<std::recursive_mutex> getLock() const;
 

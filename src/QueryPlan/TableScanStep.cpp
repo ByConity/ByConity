@@ -51,7 +51,6 @@
 #include <Common/FieldVisitorToString.h>
 #include "Interpreters/DatabaseCatalog.h"
 #include <Common/Stopwatch.h>
-
 #include <fmt/format.h>
 
 namespace DB
@@ -1612,7 +1611,7 @@ void TableScanStep::allocate(ContextPtr context)
                 if (query_info.query)
                 {
                     ASTSelectQuery & select_query = query_info.query->as<ASTSelectQuery &>();
-                    select_query.replaceDatabaseAndTable(storage_id.database_name, storage_id.table_name);
+                    select_query.replaceDatabaseAndTable(storage_id);
                 }
             }
         }

@@ -140,7 +140,6 @@ void TCPHandler::runImpl()
 
     connection_context = Context::createCopy(server.context());
     connection_context->makeSessionContext();
-
     /// These timeouts can be changed after receiving query.
 
     auto global_receive_timeout = connection_context->getSettingsRef().receive_timeout;
@@ -208,6 +207,11 @@ void TCPHandler::runImpl()
             else /// {tenant_id}`
                 default_database.clear();
         }
+        else if (!default_database.empty() && !connection_context->getTenantId().empty())
+        {
+            default_database = connection_context->getTenantId() + '.' + default_database;
+        }
+
         if ((!default_database.empty()) && (!DatabaseCatalog::instance().isDatabaseExist(default_database, connection_context)))
         {
             Exception e("Database " + backQuote(default_database) + " doesn't exist", ErrorCodes::UNKNOWN_DATABASE);

@@ -1,3 +1,4 @@
+#include <memory>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/TablePropertiesQueriesASTs.h>
 
@@ -5,6 +6,7 @@
 #include <Parsers/ParserTablePropertiesQuery.h>
 
 #include <Common/typeid_cast.h>
+#include "Parsers/IAST_fwd.h"
 
 
 namespace DB
@@ -19,6 +21,7 @@ bool ParserTablePropertiesQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & 
     ParserKeyword s_desc("DESC");
     ParserKeyword s_show("SHOW");
     ParserKeyword s_create("CREATE");
+    ParserKeyword s_external_catalog("EXTERNAL CATALOG");
     ParserKeyword s_database("DATABASE");
     ParserKeyword s_table("TABLE");
     ParserKeyword s_view("VIEW");
@@ -26,10 +29,11 @@ bool ParserTablePropertiesQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & 
     ParserToken s_dot(TokenType::Dot);
     ParserIdentifier name_p;
 
+    ASTPtr catalog;
     ASTPtr database;
     ASTPtr table;
     std::shared_ptr<ASTQueryWithTableAndOutput> query;
-
+    bool parse_only_catalog_name = false;
     bool parse_only_database_name = false;
     bool parse_show_create_view = false;
     bool exists_view = false;
@@ -64,8 +68,12 @@ bool ParserTablePropertiesQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & 
     {
         if (!s_create.ignore(pos, expected))
             return false;
-
-        if (s_database.ignore(pos, expected))
+        if (s_external_catalog.ignore(pos, expected))
+        {
+            parse_only_catalog_name = true;
+            query = std::make_shared<ASTShowCreateExternalCatalogQuery>();
+        }
+        else if (s_database.ignore(pos, expected))
         {
             parse_only_database_name = true;
             query = std::make_shared<ASTShowCreateDatabaseQuery>();
@@ -84,8 +92,13 @@ bool ParserTablePropertiesQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & 
     {
         return false;
     }
-
-    if (parse_only_database_name)
+    if (parse_only_catalog_name)
+    {
+        if (!name_p.parse(pos, catalog, expected))
+            return false;
+        tryRewriteHiveCatalogName(catalog, pos.getContext());
+    }
+    else if (parse_only_database_name)
     {
         if (!name_p.parse(pos, database, expected))
             return false;
@@ -106,12 +119,25 @@ bool ParserTablePropertiesQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & 
         if (s_dot.ignore(pos, expected))
         {
             database = table;
-            tryRewriteCnchDatabaseName(database, pos.getContext());
             if (!name_p.parse(pos, table, expected))
                 return false;
+            if (s_dot.ignore(pos, expected))
+            {
+                catalog = database;
+                database = table;
+                if (!name_p.parse(pos, table, expected))
+                    return false;
+                query = std::make_shared<ASTShowCreateExternalTableQuery>();
+                tryRewriteHiveCatalogName(catalog, pos.getContext());
+            }
+            else
+            {
+                tryRewriteCnchDatabaseName(database, pos.getContext());
+            }
         }
     }
 
+    tryGetIdentifierNameInto(catalog, query->catalog);
     tryGetIdentifierNameInto(database, query->database);
     tryGetIdentifierNameInto(table, query->table);
 

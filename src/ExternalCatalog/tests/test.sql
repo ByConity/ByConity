@@ -1,0 +1,1 @@
+create external catalog hive_catalog properties type = 'hive', hive.metastore.uri = 'thrift://localhost:9183'

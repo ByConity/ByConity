@@ -1622,6 +1622,7 @@ executeQuery(const String & query, ContextMutablePtr context, bool internal, Que
     ASTPtr ast;
     BlockIO streams;
 
+
     std::tie(ast, streams)
         = executeQueryImpl(query.data(), query.data() + query.size(), nullptr, context, internal, stage, !may_have_embedded_data, nullptr);
 

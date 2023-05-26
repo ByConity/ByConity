@@ -73,6 +73,7 @@ add_subdirectory (ResourceManagement)
 add_subdirectory (Transaction)
 add_subdirectory (MergeTreeCommon)
 add_subdirectory (Catalog)
+add_subdirectory (ExternalCatalog)
 add_subdirectory (TSO)
 add_subdirectory (DaemonManager)
 add_subdirectory (Optimizer)
@@ -101,6 +102,7 @@ add_headers_and_sources(dbms Transaction)
 add_headers_and_sources(dbms Transaction/Actions)
 add_headers_and_sources(dbms MergeTreeCommon)
 add_headers_and_sources(dbms Catalog)
+add_headers_and_sources(dbms ExternalCatalog)
 add_headers_and_sources(dbms CloudServices)
 add_headers_and_sources(dbms WorkerTasks)
 add_headers_and_sources(dbms ResourceGroup)
@@ -454,6 +456,7 @@ dbms_target_link_libraries (
         clickhouse_common_io
         clickhouse_protos_lib
         catalog_lib
+        external_catalog_lib
         resource_manager_lib
         tso_lib
         daemon_manager_lib
@@ -581,8 +584,8 @@ if (USE_ROCKSDB)
 endif()
 
 if (USE_HIVE)
-    dbms_target_link_libraries(PRIVATE ${HIVE_METASTORE_LIBRARY})
-    dbms_target_include_directories (SYSTEM BEFORE PUBLIC ${HIVE_METASTORE_INCLUDE_DIR})
+    dbms_target_link_libraries(PRIVATE ${HIVE_METASTORE_LIBRARY} ${AWS_GLUE_LIBRARY})
+    dbms_target_include_directories (SYSTEM BEFORE PUBLIC ${HIVE_METASTORE_INCLUDE_DIR} ${AWS_GLUE_INCLUDE_DIR})
 endif()
 
 if (USE_LIBPQXX)

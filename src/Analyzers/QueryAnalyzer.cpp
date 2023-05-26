@@ -633,7 +633,8 @@ ScopePtr QueryAnalyzerVisitor::analyzeTableFunction(ASTFunction & /*table_functi
     // execute table function
     StoragePtr storage = context->getQueryContext()->executeTableFunction(table_function.ptr());
     StorageID storage_id = storage->getStorageID();
-    analysis.storage_results[&table_function] = StorageAnalysis {storage_id.getDatabaseName(), storage_id.getTableName(), storage};
+    analysis.storage_results[&table_function] =
+    StorageAnalysis{ .database = storage_id.getDatabaseName(), .table = storage_id.getTableName(), .storage = storage};
 
     // get columns information
     auto storage_metadata = storage->getInMemoryMetadataPtr();

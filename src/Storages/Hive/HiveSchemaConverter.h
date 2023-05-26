@@ -26,6 +26,8 @@ public:
     /// check schema
     void check(const StorageInMemoryMetadata & metadata) const;
 
+    ASTCreateQuery createQueryAST(const std::string & catalog_name) const;
+
 private:
     std::shared_ptr<Apache::Hadoop::Hive::Table> hive_table;
     Poco::Logger * log{&Poco::Logger::get("HiveSchemaConverter")};

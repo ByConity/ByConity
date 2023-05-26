@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Common/config.h"
+#include "Storages/Hive/Metastore/IMetaClient.h"
 #if USE_HIVE
 
 #include "MergeTreeCommon/CnchStorageCommon.h"
@@ -38,7 +39,8 @@ public:
         const String & hive_table_name_,
         StorageInMemoryMetadata metadata_,
         ContextPtr context_,
-        std::shared_ptr<CnchHiveSettings> settings_);
+        std::shared_ptr<CnchHiveSettings> settings_,
+        IMetaClientPtr client_from_catalog = nullptr);
 
     QueryProcessingStage::Enum
     getQueryProcessingStage(ContextPtr, QueryProcessingStage::Enum, const StorageMetadataPtr &, SelectQueryInfo &) const override;
@@ -73,7 +75,7 @@ public:
 
     NamesAndTypesList getVirtuals() const override;
 
-protected:
+    std::pair<UInt64, ApacheHive::TableStatsResult> getTableStats(const Strings & col_names, ContextPtr local_context);
 
     void collectResource(ContextPtr local_context, PrepareContextResult & result);
 

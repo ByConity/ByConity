@@ -175,7 +175,7 @@ private:
     {
         void * ptr;
         size_t size;
-        bool prof_active {false}
+        bool prof_active{false};
 
         Chunk(size_t size_, void * address_hint) : size(size_)
         {

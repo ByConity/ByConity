@@ -39,6 +39,20 @@ struct ASTExistsDictionaryQueryIDAndQueryNames
     static constexpr auto QueryTemporary = "EXISTS TEMPORARY DICTIONARY";
 };
 
+struct ASTShowCreateExternalCatalogQueryIDAndQueryNames
+{
+    static constexpr auto ID = "ShowCreateExternalCatalogQuery";
+    static constexpr auto Query = "SHOW CREATE EXTERNAL CATALOG";
+    static constexpr auto QueryTemporary = "";
+};
+
+struct ASTShowCreateExternalTableQueryIDAndQueryNames
+{
+    static constexpr auto ID = "ShowCreateExternalTableQuery";
+    static constexpr auto Query = "SHOW CREATE TABLE";
+    static constexpr auto QueryTemporary = "SHOW CREATE TEMPORARY TABLE";
+};
+
 struct ASTShowCreateTableQueryIDAndQueryNames
 {
     static constexpr auto ID = "ShowCreateTableQuery";
@@ -79,6 +93,8 @@ struct ASTDescribeQueryExistsQueryIDAndQueryNames
 using ASTExistsTableQuery = ASTQueryWithTableAndOutputImpl<ASTExistsTableQueryIDAndQueryNames>;
 using ASTExistsViewQuery = ASTQueryWithTableAndOutputImpl<ASTExistsViewQueryIDAndQueryNames>;
 using ASTExistsDictionaryQuery = ASTQueryWithTableAndOutputImpl<ASTExistsDictionaryQueryIDAndQueryNames>;
+using ASTShowCreateExternalCatalogQuery = ASTQueryWithTableAndOutputImpl<ASTShowCreateExternalCatalogQueryIDAndQueryNames>;
+using ASTShowCreateExternalTableQuery = ASTQueryWithTableAndOutputImpl<ASTShowCreateExternalTableQueryIDAndQueryNames>;
 using ASTShowCreateTableQuery = ASTQueryWithTableAndOutputImpl<ASTShowCreateTableQueryIDAndQueryNames>;
 using ASTShowCreateViewQuery = ASTQueryWithTableAndOutputImpl<ASTShowCreateViewQueryIDAndQueryNames>;
 using ASTShowCreateDictionaryQuery = ASTQueryWithTableAndOutputImpl<ASTShowCreateDictionaryQueryIDAndQueryNames>;

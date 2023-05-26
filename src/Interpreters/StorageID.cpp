@@ -72,6 +72,7 @@ String StorageID::getTableName() const
     return table_name;
 }
 
+
 String StorageID::getDatabaseName() const
 {
     assertNotEmpty();

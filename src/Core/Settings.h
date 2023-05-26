@@ -2266,8 +2266,18 @@ enum PreloadLevelSettings : UInt64
     M(Bool, cnch_enable_merge_prefetch, true, "Enable prefetching while merge", 0) \
     M(UInt64, cnch_merge_prefetch_segment_size, 256 * 1024 * 1024, "Min segment size of file when prefetching for merge", 0) \
     M(Bool, offloading_with_query_plan, false, "utilize query plan to offload the computation comoetely to worker", 0) \
-    M(Seconds, access_entity_ttl, 60 * 60, "TTL for access entities stored in memory in seconds", 0) \
-    M(Bool, enable_auto_query_forwarding, true, "Auto forward query to target server when having multiple servers", 0)
+\
+    M(String, s3_ak_id, "", "The access_key set by user when accessing ve s3.", 0) \
+    M(String, s3_ak_secret, "", "The secret_key set by user when accessing ve s3.", 0) \
+    M(String, s3_region, "", "The region set by user when accessing ve s3.", 0) \
+    M(String, s3_endpoint, "", "The endpoint set by user when accessing ve s3.", 0) \
+\
+    M(Bool, enable_cache_reader_buffer_reuse, false, "Decpreated settings, only a place holder", 0) \
+    M(Bool, enable_auto_query_forwarding, true, "Auto forward query to target server when having multiple servers", 0) \
+\
+    M(Bool, merge_partition_stats, false, "merge all partition stats", 0) \
+    M(Bool, enable_three_part_identifier, true, "merge all partition stats", 0) \
+    M(String, default_catalog, "", "current catalog", 0)
 
 
 // End of FORMAT_FACTORY_SETTINGS

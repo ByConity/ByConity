@@ -2,13 +2,14 @@
 
 #include <Interpreters/IInterpreter.h>
 #include <Parsers/IAST_fwd.h>
+#include "Parsers/ASTShowTablesQuery.h"
 
 
 namespace DB
 {
 
 class Context;
-
+class ASTShowTablesQuery;
 
 /** Return a list of tables or databases meets specified conditions.
   * Interprets a query through replacing it to SELECT query from system.tables or system.databases.
@@ -29,6 +30,8 @@ private:
     ASTPtr query_ptr;
 
     String getRewrittenQuery();
+    String getRewrittenQueryImpl();
+    String getRewrittenQueryForExternalCatalogImpl();
 };
 
 

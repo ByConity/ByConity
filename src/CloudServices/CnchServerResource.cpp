@@ -26,6 +26,7 @@
 #include <Storages/StorageCnchMergeTree.h>
 #include <brpc/controller.h>
 #include <Common/Exception.h>
+#include "Interpreters/Context_fwd.h"
 #include "Storages/Hive/HiveFile/IHiveFile.h"
 #include "Storages/Hive/StorageCnchHive.h"
 
@@ -126,6 +127,10 @@ void CnchServerResource::addCreateQuery(
     auto lock = getLock();
 
     auto it = assigned_table_resource.find(storage->getStorageUUID());
+    if (storage->getStorageUUID() == UUIDHelpers::Nil)
+    {
+        throw DB::Exception(ErrorCodes::LOGICAL_ERROR, "UUID for resources should not be nil");
+    }
     if (it == assigned_table_resource.end())
         it = assigned_table_resource.emplace(storage->getStorageUUID(), AssignedResource{storage}).first;
 

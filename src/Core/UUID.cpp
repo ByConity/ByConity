@@ -19,15 +19,16 @@
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
-#include <Core/UUID.h>
 #include <Core/Types.h>
-#include <Common/thread_local_rng.h>
-#include <common/wide_integer_impl.h>
-#include <common/strong_typedef.h>
-#include <IO/WriteBufferFromString.h>
-#include <IO/WriteHelpers.h>
+#include <Core/UUID.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/ReadHelpers.h>
+#include <IO/WriteBufferFromString.h>
+#include <IO/WriteHelpers.h>
+#include <Common/SipHash.h>
+#include <Common/thread_local_rng.h>
+#include <common/strong_typedef.h>
+#include <common/wide_integer_impl.h>
 
 
 namespace DB
@@ -62,6 +63,12 @@ namespace UUIDHelpers
     PairInt64 UUIDToPairInt64(const UUID & uuid)
     {   
         return PairInt64(uuid.toUnderType().items[0], uuid.toUnderType().items[1]);
+    }
+
+    UUID hashUUIDfromString(const String & str)
+    {
+        auto hash_val = sipHash128(str.data(), str.length());
+        return UUID(hash_val);
     }
 }
 

@@ -85,21 +85,22 @@
 #include <Interpreters/FunctionNameNormalizer.h>
 #include <Interpreters/ApplyWithSubqueryVisitor.h>
 
-#include <TableFunctions/TableFunctionFactory.h>
-#include <common/logger_useful.h>
-#include <Interpreters/executeQuery.h>
 #include <Interpreters/DatabaseCatalog.h>
+#include <Interpreters/executeQuery.h>
 #include <Interpreters/trySetVirtualWarehouse.h>
 #include <Storages/StorageCnchMergeTree.h>
+#include <TableFunctions/TableFunctionFactory.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 
 #include <Catalog/Catalog.h>
+#include <ExternalCatalog/IExternalCatalogMgr.h>
 
 namespace DB
 {
 
 namespace ErrorCodes
 {
+    extern const int UNSUPPORTED_METHOD;
     extern const int TABLE_ALREADY_EXISTS;
     extern const int DICTIONARY_ALREADY_EXISTS;
     extern const int EMPTY_LIST_OF_COLUMNS_PASSED;
@@ -107,6 +108,7 @@ namespace ErrorCodes
     extern const int UNKNOWN_DATABASE_ENGINE;
     extern const int DUPLICATE_COLUMN;
     extern const int DATABASE_ALREADY_EXISTS;
+    extern const int CATALOG_ALREADY_EXISTS;
     extern const int BAD_ARGUMENTS;
     extern const int BAD_DATABASE_FOR_TEMPORARY_TABLE;
     extern const int SUSPICIOUS_TYPE_FOR_LOW_CARDINALITY;
@@ -126,6 +128,39 @@ namespace fs = std::filesystem;
 InterpreterCreateQuery::InterpreterCreateQuery(const ASTPtr & query_ptr_, ContextMutablePtr context_)
     : WithMutableContext(context_), query_ptr(query_ptr_)
 {
+}
+
+static void createPlainConfigFromSettings(const ASTSetQuery & settings, ExternalCatalog::PlainConfigs & conf)
+{
+    for (const auto & change : settings.changes)
+    {
+        conf.setString(change.name, toString(change.value));
+    }
+}
+
+
+BlockIO InterpreterCreateQuery::createExternalCatalog(ASTCreateQuery & create)
+{
+    String catalog_name = create.catalog;
+    if (catalog_name.empty())
+        throw Exception("Database name is empty while creating database", ErrorCodes::BAD_ARGUMENTS);
+    //TODO(ExterncalCatalog):: add intent lock.
+    if (ExternalCatalog::Mgr::instance().isCatalogExist(catalog_name))
+    {
+        if (create.if_not_exists)
+            return {};
+        else
+            throw Exception("Catalog " + catalog_name + " already exists.", ErrorCodes::CATALOG_ALREADY_EXISTS);
+    }
+
+    ExternalCatalog::PlainConfigsPtr conf_ptr(new ExternalCatalog::PlainConfigs());
+    createPlainConfigFromSettings(*create.catalog_properties, *conf_ptr);
+
+    bool created = ExternalCatalog::Mgr::instance().createCatalog(catalog_name, conf_ptr.get(), TxnTimestamp(getContext()->getTimestamp()));
+    if (created)
+        return {};
+    else
+        throw Exception("Catalog " + catalog_name + " could not be created", ErrorCodes::LOGICAL_ERROR);
 }
 
 
@@ -1438,7 +1473,11 @@ BlockIO InterpreterCreateQuery::execute()
     ASTQueryWithOutput::resetOutputASTIfExist(create);
 
     /// CREATE|ATTACH DATABASE
-    if (!create.database.empty() && create.table.empty())
+    if (!create.catalog.empty() && create.database.empty() && create.table.empty())
+        return createExternalCatalog(create);
+    else if (!create.catalog.empty() && (!create.database.empty() || !create.table.empty()))
+        throw Exception("create database or table in externcal catalog is not supported", ErrorCodes::INCORRECT_QUERY);
+    else if (!create.database.empty() && create.table.empty())
         return createDatabase(create);
     else
         return createTable(create);
