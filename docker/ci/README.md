@@ -1,1 +1,1 @@
-copy from `https://ee.byted.org/madeira/repo/data-arch/gemini-dockerfile/-/blob/images/base/install.sh`
+Migrated from internal with modification.
