@@ -106,6 +106,12 @@ public:
         const HDFSConnectionParams & hdfs_paras,
         const std::set<Int64> & required_bucket_numbers = {});
 
+    HiveDataPartsCNCHVector getDataPartsInTable(
+        const StoragePtr & storage,
+        Table & table,
+        const HDFSConnectionParams & hdfs_paras,
+        const std::set<Int64> & required_bucket_numbers = {});
+
     //schema check
     void check(const ColumnsDescription & columns, const String & db_name, const String & table_name);
 

@@ -380,6 +380,42 @@ HiveDataPartsCNCHVector HiveMetastoreClient::getDataPartsInPartition(
     return res;
 }
 
+HiveDataPartsCNCHVector HiveMetastoreClient::getDataPartsInTable(
+    const StoragePtr & storage,
+    Table & table,
+    const HDFSConnectionParams &,
+    const std::set<Int64> & required_bucket_numbers)
+{
+    HiveDataPartsCNCHVector res;
+
+    auto disk = storage->getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
+    std::vector<String> parts_name = getPartsNameInPartition(disk, normalizeHdfsSchema(table.sd.location));
+    const String table_path = Poco::URI(table.sd.location).getPath();
+    std::unordered_set<Int64> skip_list = {};
+    const String format_name = table.sd.inputFormat;
+
+    for (auto & part_name : parts_name)
+    {
+        Int64 index = 0;
+        if (!required_bucket_numbers.empty() && getDataPartIndex(part_name, index))
+        {
+            if (required_bucket_numbers.find(index) == required_bucket_numbers.end())
+                continue;
+        }
+
+        auto info = std::make_shared<HivePartInfo>(part_name, "");
+
+        LOG_TRACE(&Poco::Logger::get("HiveMetastoreClient"), " getDataPartsInTable format_name = {}", format_name);
+
+        if (format_name.find("Orc") != String::npos)
+            res.push_back(std::make_shared<HiveORCFile>(part_name, disk->getName(), table_path, format_name, nullptr, *info, skip_list));
+        else if (format_name.find("Parquet") != String::npos)
+            res.push_back(std::make_shared<HiveParquetFile>(part_name, disk->getName(), table_path, format_name, nullptr, *info, skip_list));
+    }
+
+    return res;
+}
+
 String HiveMetastoreClient::normalizeHdfsSchema(const String & path)
 {
     Poco::URI uri(path);

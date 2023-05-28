@@ -171,22 +171,30 @@ ASTPtr StorageCnchHive::extractKeyExpressionList(const ASTPtr & node)
 
 void StorageCnchHive::setProperties()
 {
-    if (!partition_by_ast)
-        throw Exception("PARTITION BY cannot be empty", ErrorCodes::BAD_ARGUMENTS);
-
     size_t col_size = getColumns().size();
-
     LOG_TRACE(log, " setProperties col_size : {}  remote_database_name {} remote_table_name {}", col_size, remote_database, remote_table);
 
     auto all_columns = getInMemoryMetadataPtr()->getColumns().getAllPhysical();
-    partition_key_expr_list = extractKeyExpressionList(partition_by_ast);
-    if (!partition_key_expr_list->children.empty())
-    {
-        auto partition_key_syntax = TreeRewriter(getContext()).analyze(partition_key_expr_list, all_columns);
-        partition_key_expr = ExpressionAnalyzer(partition_key_expr_list, partition_key_syntax, getContext()).getActions(false);
 
-        partition_name_and_types = partition_key_expr->getSampleBlock().getNamesAndTypesList();
+    if (!partition_by_ast)
+    {
+        LOG_DEBUG(log, "No partition has been set when creating CnchHive table.");
+        partition_name_and_types = {};
+        partition_key_expr = nullptr;
+        partition_key_expr_list = nullptr;
     }
+    else
+    {
+        partition_key_expr_list = extractKeyExpressionList(partition_by_ast);
+        if (!partition_key_expr_list->children.empty())
+        {
+            auto partition_key_syntax = TreeRewriter(getContext()).analyze(partition_key_expr_list, all_columns);
+            partition_key_expr = ExpressionAnalyzer(partition_key_expr_list, partition_key_syntax, getContext()).getActions(false);
+
+            partition_name_and_types = partition_key_expr->getSampleBlock().getNamesAndTypesList();
+        }
+    }
+
 
     if (cluster_by_ast)
     {
@@ -278,31 +286,43 @@ void StorageCnchHive::checkPartitionByKey()
     auto table = getHiveTable();
 
     std::vector<FieldSchema> partitionkeys = table->partitionKeys;
-    auto partition_key_expr_list_local = extractKeyExpressionList(partition_by_ast);
-    if (partition_key_expr_list_local->children.size() != partitionkeys.size())
-        throw Exception("CnchHive partition Key doesn't match .", ErrorCodes::BAD_ARGUMENTS);
-
-    if (!partition_key_expr_list_local->children.empty())
+    if (!partitionkeys.empty())
     {
-        auto all_columns = getInMemoryMetadataPtr()->getColumns().getAllPhysical();
-        auto partition_key_syntax = TreeRewriter(getContext()).analyze(partition_key_expr_list_local, all_columns);
-        auto partition_key_expr_local
-            = ExpressionAnalyzer(partition_key_expr_list_local, partition_key_syntax, getContext()).getActions(false);
+        if (!partition_by_ast)
+            throw Exception("CnchHive partition Key doesn't match .", ErrorCodes::BAD_ARGUMENTS);
 
-        auto partition_name_and_types_local = partition_key_expr_local->getSampleBlock().getNamesAndTypesList();
-        for (const NameAndTypePair & column_data : partition_name_and_types_local)
+        auto partition_key_expr_list_local = extractKeyExpressionList(partition_by_ast);
+        if (partition_key_expr_list_local->children.size() != partitionkeys.size())
+            throw Exception("CnchHive partition Key doesn't match .", ErrorCodes::BAD_ARGUMENTS);
+
+        if (!partition_key_expr_list_local->children.empty())
         {
-            const String col_name = column_data.name;
-            size_t i = 0;
-            for (; i < partitionkeys.size(); i++)
+            auto all_columns = getInMemoryMetadataPtr()->getColumns().getAllPhysical();
+            auto partition_key_syntax = TreeRewriter(getContext()).analyze(partition_key_expr_list_local, all_columns);
+            auto partition_key_expr_local
+                = ExpressionAnalyzer(partition_key_expr_list_local, partition_key_syntax, getContext()).getActions(false);
+
+            auto partition_name_and_types_local = partition_key_expr_local->getSampleBlock().getNamesAndTypesList();
+            for (const NameAndTypePair & column_data : partition_name_and_types_local)
             {
-                if (partitionkeys[i].name == col_name)
-                    break;
+                const String col_name = column_data.name;
+                size_t i = 0;
+                for (; i < partitionkeys.size(); i++)
+                {
+                    if (partitionkeys[i].name == col_name)
+                        break;
+                }
+                if (i >= partitionkeys.size())
+                    throw Exception("CnchHive partition Key doesn't match .", ErrorCodes::BAD_ARGUMENTS);
             }
-            if (i >= partitionkeys.size())
-                throw Exception("CnchHive partition Key doesn't match .", ErrorCodes::BAD_ARGUMENTS);
         }
     }
+    else
+    {
+        if(partition_by_ast)
+            throw Exception("CnchHive partition Key doesn't match .", ErrorCodes::BAD_ARGUMENTS);
+    }
+
 }
 
 void StorageCnchHive::checkClusterByKey()
@@ -595,9 +615,6 @@ HiveDataPartsCNCHVector StorageCnchHive::getDataPartsInPartitions(
     unsigned num_streams,
     const std::set<Int64> & required_bucket_numbers)
 {
-    if (partitions.empty())
-        return {};
-
     HiveDataPartsCNCHVector hive_files;
     std::mutex hive_files_mutex;
 
@@ -606,26 +623,34 @@ HiveDataPartsCNCHVector StorageCnchHive::getDataPartsInPartitions(
 
     LOG_TRACE(log, " num_streams size = {} partitions size = {}", num_streams, partitions.size());
 
-
-    ThreadPool thread_pool(num_streams);
-    // ExceptionHandler exception_handler;
-
-    for (auto & partition : partitions)
+    if (!partitions.empty())
     {
-        thread_pool.scheduleOrThrow([&] {
-            auto hive_files_in_partition
-                = collectHiveFilesFromPartition(hms_client, partition, local_context, query_info, required_bucket_numbers);
-            if (!hive_files_in_partition.empty())
-            {
-                std::lock_guard<std::mutex> lock(hive_files_mutex);
-                hive_files.insert(std::end(hive_files), std::begin(hive_files_in_partition), std::end(hive_files_in_partition));
-            }
-        });
+        ThreadPool thread_pool(num_streams);
+        // ExceptionHandler exception_handler;
+        for (auto & partition : partitions)
+        {
+            thread_pool.scheduleOrThrow([&] {
+                auto hive_files_in_partition
+                    = collectHiveFilesFromPartition(hms_client, partition, local_context, query_info, required_bucket_numbers);
+                if (!hive_files_in_partition.empty())
+                {
+                    std::lock_guard<std::mutex> lock(hive_files_mutex);
+                    hive_files.insert(std::end(hive_files), std::begin(hive_files_in_partition), std::end(hive_files_in_partition));
+                }
+            });
+        }
+        thread_pool.wait();
     }
-    thread_pool.wait();
+    else
+    {
+        LOG_TRACE(log, "Read Hive table with No partition.");
+        auto table = getHiveTable();
+        hive_files = collectHiveFilesFromTable(hms_client, table, local_context, query_info, required_bucket_numbers);
+    }
+
     // exception_handler.throwIfException();
 
-    LOG_TRACE(log, " hive parts size = {}", hive_files.size());
+    LOG_TRACE(log, " Hive part files size = {}", hive_files.size());
 
     return hive_files;
 }
@@ -639,6 +664,17 @@ HiveDataPartsCNCHVector StorageCnchHive::collectHiveFilesFromPartition(
 {
     return hms_client->getDataPartsInPartition(
         shared_from_this(), partition, local_context->getHdfsConnectionParams(), required_bucket_numbers);
+}
+
+HiveDataPartsCNCHVector StorageCnchHive::collectHiveFilesFromTable(
+    std::shared_ptr<HiveMetastoreClient> & hms_client,
+    HiveTablePtr & table,
+    ContextPtr context,
+    const SelectQueryInfo & /*query_info*/,
+    const std::set<Int64> & required_bucket_numbers)
+{
+    return hms_client->getDataPartsInTable(
+        shared_from_this(), *table, local_context->getHdfsConnectionParams(), required_bucket_numbers);
 }
 
 void StorageCnchHive::collectResource(ContextPtr local_context, const HiveDataPartsCNCHVector & parts, const String & local_table_name)
