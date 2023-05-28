@@ -412,9 +412,6 @@ HiveDataPartsCNCHVector StorageCnchHive::getDataPartsInPartitions(
     unsigned num_streams,
     const std::set<Int64> & required_bucket_numbers)
 {
-    if (partitions.empty())
-        return {};
-
     HiveDataPartsCNCHVector hive_files;
     std::mutex hive_files_mutex;
 
@@ -423,26 +420,34 @@ HiveDataPartsCNCHVector StorageCnchHive::getDataPartsInPartitions(
 
     LOG_TRACE(log, " num_streams size = {} partitions size = {}", num_streams, partitions.size());
 
-
-    ThreadPool thread_pool(num_streams);
-    // ExceptionHandler exception_handler;
-
-    for (auto & partition : partitions)
+    if (!partitions.empty())
     {
-        thread_pool.scheduleOrThrow([&] {
-            auto hive_files_in_partition
-                = collectHiveFilesFromPartition(hms_client, partition, local_context, query_info, required_bucket_numbers);
-            if (!hive_files_in_partition.empty())
-            {
-                std::lock_guard<std::mutex> lock(hive_files_mutex);
-                hive_files.insert(std::end(hive_files), std::begin(hive_files_in_partition), std::end(hive_files_in_partition));
-            }
-        });
+        ThreadPool thread_pool(num_streams);
+        // ExceptionHandler exception_handler;
+        for (auto & partition : partitions)
+        {
+            thread_pool.scheduleOrThrow([&] {
+                auto hive_files_in_partition
+                    = collectHiveFilesFromPartition(hms_client, partition, local_context, query_info, required_bucket_numbers);
+                if (!hive_files_in_partition.empty())
+                {
+                    std::lock_guard<std::mutex> lock(hive_files_mutex);
+                    hive_files.insert(std::end(hive_files), std::begin(hive_files_in_partition), std::end(hive_files_in_partition));
+                }
+            });
+        }
+        thread_pool.wait();
     }
-    thread_pool.wait();
+    else
+    {
+        LOG_TRACE(log, "Read Hive table with No partition.");
+        auto table = getHiveTable();
+        hive_files = collectHiveFilesFromTable(hms_client, table, local_context, query_info, required_bucket_numbers);
+    }
+
     // exception_handler.throwIfException();
 
-    LOG_TRACE(log, " hive parts size = {}", hive_files.size());
+    LOG_TRACE(log, " Hive part files size = {}", hive_files.size());
 
     return hive_files;
 }
@@ -456,6 +461,17 @@ HiveDataPartsCNCHVector StorageCnchHive::collectHiveFilesFromPartition(
 {
     return hms_client->getDataPartsInPartition(
         shared_from_this(), partition, local_context->getHdfsConnectionParams(), required_bucket_numbers);
+}
+
+HiveDataPartsCNCHVector StorageCnchHive::collectHiveFilesFromTable(
+    std::shared_ptr<HiveMetastoreClient> & hms_client,
+    HiveTablePtr & table,
+    ContextPtr context,
+    const SelectQueryInfo & /*query_info*/,
+    const std::set<Int64> & required_bucket_numbers)
+{
+    return hms_client->getDataPartsInTable(
+        shared_from_this(), *table, local_context->getHdfsConnectionParams(), required_bucket_numbers);
 }
 
 void StorageCnchHive::collectResource(ContextPtr local_context, const HiveDataPartsCNCHVector & parts, const String & local_table_name)

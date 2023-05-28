@@ -71,25 +71,32 @@ struct HivePartInfo
     const std::map<String, String> getPartition() const
     {
         std::map<String, String> partition;
-        String temp = partition_id;
-        if(startsWith(temp, "/"))
+        if (!partition_id.empty())
         {
-            temp = temp.substr(1, temp.size());
+            String temp = partition_id;
+            if(startsWith(temp, "/"))
+            {
+                temp = temp.substr(1, temp.size());
+            }
+
+            if(endsWith(temp,"/"))
+            {
+                temp  = temp.substr(0, temp.size() - 1);
+            }
+
+            std::vector<String> values;
+            boost::split(values, temp, boost::is_any_of("/"), boost::token_compress_on);
+
+            for(auto elem : values)
+            {
+                std::vector<String> key_value;
+                boost::split(key_value, elem, boost::is_any_of("="), boost::token_compress_on);
+                partition.insert({key_value[0], key_value[1]});
+            }
         }
-
-        if(endsWith(temp,"/"))
+        else
         {
-            temp  = temp.substr(0, temp.size() - 1);
-        }
-
-        std::vector<String> values;
-        boost::split(values, temp, boost::is_any_of("/"), boost::token_compress_on);
-
-        for(auto elem : values)
-        {
-            std::vector<String> key_value;
-            boost::split(key_value, elem, boost::is_any_of("="), boost::token_compress_on);
-            partition.insert({key_value[0], key_value[1]});
+            partition.insert({"", ""});
         }
 
         return partition;
