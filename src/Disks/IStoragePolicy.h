@@ -75,7 +75,7 @@ public:
     virtual ReservationPtr makeEmptyReservationOnLargestDisk() const = 0;
     /// Get volume by index.
     virtual VolumePtr getVolume(size_t index) const = 0;
-    virtual VolumePtr getVolumeByName(const String & volume_name) const = 0;
+    virtual VolumePtr getVolumeByName(const String & volume_name, bool throw_when_not_exist) const = 0;
     /// Checks if storage policy can be replaced by another one.
     virtual void checkCompatibleWith(const StoragePolicyPtr & new_storage_policy) const = 0;
     /// Find volume index, which contains disk

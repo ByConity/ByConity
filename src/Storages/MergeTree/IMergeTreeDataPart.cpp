@@ -1785,6 +1785,7 @@ void IMergeTreeDataPart::createDeleteBitmapForDetachedPart() const
             /// It's necessary to do next() and sync() here, otherwise it will omit the error in WriteBufferFromHDFS::WriteBufferFromHDFSImpl::~WriteBufferFromHDFSImpl() which case file incomplete.
             bitmap_writer->next();
             bitmap_writer->sync();
+            bitmap_writer->finalize();
         }
     }
     meta_writer->next();

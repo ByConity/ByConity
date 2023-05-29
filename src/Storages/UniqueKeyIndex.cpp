@@ -44,7 +44,7 @@ UniqueKeyIndex::UniqueKeyIndex(
     auto local_reader = std::make_unique<IndexFile::IndexFileReader>(options);
     auto status = local_reader->Open(remote_file);
     if (!status.ok())
-        throw Exception("Failed to open index file " + remote_file.path + ": " + status.ToString(), ErrorCodes::UNKNOWN_EXCEPTION);
+        throw Exception("Failed to open index file " + String(std::filesystem::path(remote_file.disk->getPath()) / remote_file.rel_path) + ": " + status.ToString(), ErrorCodes::UNKNOWN_EXCEPTION);
     index_reader = std::move(local_reader);
 }
 

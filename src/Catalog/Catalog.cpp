@@ -5078,7 +5078,6 @@ namespace Catalog
                 createPartWrapperFromModel(storage, part_model)));
         }
         return parts_vec;
->>>>>>> a9743df0411 (add s3 gc/attach/detach and change s3 table path)
     }
 
     void fillUUIDForDictionary(DB::Protos::DataModelDictionary & d)

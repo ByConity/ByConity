@@ -964,26 +964,25 @@ void CnchAttachProcessor::loadUniqueDeleteMeta(IMergeTreeDataPartPtr & part, con
     meta_ptr->set_type(static_cast<Protos::DataModelDeleteBitmap_Type>(DeleteBitmapMetaType::Base));
     meta_ptr->set_txn_id(query_ctx->getCurrentTransaction()->getPrimaryTransactionID().toUInt64());
 
-    String meta_file_abs_path = disk->getPath() + meta_file_relative_path;
-    ReadBufferFromByteHDFS meta_file(meta_file_abs_path, /*pread=*/false, part->storage.getContext()->getHdfsConnectionParams());
+    std::unique_ptr<ReadBufferFromFileBase> meta_file = disk->readFile(meta_file_relative_path);
 
     UInt8 meta_format_version{0};
-    readIntBinary(meta_format_version, meta_file);
+    readIntBinary(meta_format_version, *meta_file);
     if (meta_format_version != DeleteBitmapMeta::delete_file_meta_format_version)
         throw Exception("Unknown delete meta file version: " + toString(meta_format_version), ErrorCodes::UNKNOWN_FORMAT_VERSION);
     size_t cardinality;
-    readIntBinary(cardinality, meta_file);
+    readIntBinary(cardinality, *meta_file);
     meta_ptr->set_cardinality(cardinality);
     if (cardinality <= DeleteBitmapMeta::kInlineBitmapMaxCardinality)
     {
         String inline_value;
-        readStringBinary(inline_value, meta_file);
+        readStringBinary(inline_value, *meta_file);
         meta_ptr->set_inlined_value(inline_value);
     }
     else
     {
         size_t bitmap_file_size;
-        readIntBinary(bitmap_file_size, meta_file);
+        readIntBinary(bitmap_file_size, *meta_file);
         meta_ptr->set_file_size(bitmap_file_size);
     }
 
