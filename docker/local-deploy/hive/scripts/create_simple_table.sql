@@ -46,5 +46,27 @@ OUTPUTFORMAT
 LOCATION
     '/user/byconity/par/par_tbl';
 
-INSERT INTO par_db.par_tbl partition(event_date='20220202') SELECT string_col, int_col FROM simple_csv_tbl;
-INSERT INTO par_db.par_tbl partition(event_date='20220302') SELECT string_col, int_col FROM simple_csv_tbl;
+INSERT INTO par_db.par_tbl partition(event_date='20220202') SELECT string_col, int_col FROM csv_db.simple_csv_tbl;
+INSERT INTO par_db.par_tbl partition(event_date='20220203') SELECT string_col, int_col FROM csv_db.simple_csv_tbl;
+
+
+CREATE DATABASE IF NOT EXISTS orc_db;
+DROP TABLE IF EXISTS orc_db.orc_tbl;
+CREATE TABLE IF NOT EXISTS orc_db.orc_tbl (
+    `name` string,
+    `value` int)
+PARTITIONED BY (
+    `event_date` string
+)
+ROW FORMAT SERDE
+    'org.apache.hadoop.hive.ql.io.orc.OrcSerde'
+STORED AS INPUTFORMAT
+    'org.apache.hadoop.hive.ql.io.orc.OrcInputFormat'
+OUTPUTFORMAT
+    'org.apache.hadoop.hive.ql.io.orc.OrcOutputFormat'
+LOCATION
+    '/user/byconity/orc/orc_tbl';
+
+
+INSERT INTO orc_db.orc_tbl partition(event_date='20220202') SELECT string_col, int_col FROM csv_db.simple_csv_tbl;
+INSERT INTO orc_db.orc_tbl partition(event_date='20220203') SELECT string_col, int_col FROM csv_db.simple_csv_tbl;

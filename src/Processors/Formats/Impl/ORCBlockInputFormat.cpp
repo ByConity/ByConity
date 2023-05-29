@@ -54,10 +54,13 @@ Chunk ORCBlockInputFormat::generate()
                                "Error while reading batch of ORC data: {}", batch_status.ToString());
 
     auto table_result = arrow::Table::FromRecordBatches({batch_result});
+    
     if (!table_result.ok())
         throw ParsingException(ErrorCodes::CANNOT_READ_ALL_DATA,
                                "Error while reading batch of ORC data: {}", table_result.status().ToString());
-
+    std::cout<< "ORC: " << (*table_result)->num_rows() << std::endl;
+    std::cout<< "ORC BATCH: " << (*batch_result).ToString() << std::endl;
+    
     ++stripe_current;
 
     arrow_column_to_ch_column->arrowTableToCHChunk(res, *table_result);

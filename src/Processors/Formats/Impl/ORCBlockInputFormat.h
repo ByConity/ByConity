@@ -11,7 +11,7 @@ namespace DB
 {
 
 class ArrowColumnToCHColumn;
-
+class
 class ORCBlockInputFormat : public IInputFormat
 {
 public:
