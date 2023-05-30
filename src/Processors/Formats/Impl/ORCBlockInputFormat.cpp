@@ -139,8 +139,6 @@ void ORCBlockInputFormat::prepareReader()
         format_settings.null_as_default,
         partition_kv);
 
-    /// In ReadStripe column indices should be started from 1,
-    /// because 0 indicates to select all columns.
     int index = 0;
     for (int i = 0; i < schema->num_fields(); ++i)
     {
