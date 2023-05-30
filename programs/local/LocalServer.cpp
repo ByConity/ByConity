@@ -282,11 +282,6 @@ try
     if (mark_cache_size)
         global_context->setMarkCache(mark_cache_size);
 
-    /// Size of cache for query. It is not necessary.
-    size_t query_cache_size = config().getUInt64("query_cache_size", 1000000);
-    if (query_cache_size)
-        global_context->setQueryCache(query_cache_size);
-
     /// A cache for mmapped files.
     size_t mmap_cache_size = config().getUInt64("mmap_cache_size", 1000);   /// The choice of default is arbitrary.
     if (mmap_cache_size)

@@ -54,6 +54,7 @@
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTShowProcesslistQuery.h>
 #include <Parsers/ASTWatchQuery.h>
+#include <Parsers/ASTExplainQuery.h>
 #include <Parsers/Lexer.h>
 #include <Parsers/ParserQuery.h>
 #include <Parsers/parseQuery.h>
@@ -80,7 +81,6 @@
 #include <Interpreters/executeQuery.h>
 #include <Interpreters/trySetVirtualWarehouse.h>
 #include <Interpreters/CnchQueryMetrics/QueryMetricLogHelper.h>
-#include <QueryPlan/QueryCacheStep.h>
 #include <Common/ProfileEvents.h>
 #include <Common/RpcClientPool.h>
 
@@ -636,6 +636,9 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     }
 
     setQuerySpecificSettings(ast, context);
+
+//    bool can_use_query_cache = settings.use_query_cache && !internal && !ast->as<ASTExplainQuery>();
+
     auto txn = prepareCnchTransaction(context, ast);
     if (txn && context->getServerType() == ServerType::cnch_server)
     {
@@ -752,6 +755,29 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             OpenTelemetrySpanHolder span("IInterpreter::execute()");
             res = interpreter->execute();
         }
+
+#if 0
+        auto query_cache = context->getQueryCache();
+        bool read_result_from_query_cache = false; /// a query must not read from *and* write to the query cache at the same time
+        if (query_cache != nullptr
+            && (can_use_query_cache && settings.enable_reads_from_query_cache)
+            && res.pipeline.pulling())
+        {
+            QueryCache::Key key(
+                ast, res.pipeline.getHeader(),
+                context->getUserName(), /*dummy for is_shared*/ false,
+                /*dummy value for expires_at*/ std::chrono::system_clock::from_time_t(1),
+                /*dummy value for is_compressed*/ false);
+            QueryCache::Reader reader = query_cache->createReader(key);
+            if (reader.hasCacheEntryForKey())
+            {
+                QueryPipeline pipeline;
+                pipeline.readFromQueryCache(reader.getSource(), reader.getSourceTotals(), reader.getSourceExtremes());
+                res.pipeline = std::move(pipeline);
+                read_result_from_query_cache = true;
+            }
+        }
+#endif
 
         QueryPipeline & pipeline = res.pipeline;
         bool use_processors = pipeline.initialized();
@@ -1564,7 +1590,7 @@ HostWithPorts getTargetServer(ContextPtr context, ASTPtr &ast)
     if (database.empty())
          database = context->getCurrentDatabase();
 
-    if (database == "system") 
+    if (database == "system")
         return {};
 
     auto table_id = context->getCnchCatalog()->getTableIDByName(database, table);
@@ -1592,9 +1618,9 @@ void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server
     const auto & query_client_info = context->getClientInfo();
     auto settings = context->getSettingsRef();
     res.remote_execution_conn = std::make_shared<Connection>(
-        server.getHost(), server.tcp_port, 
+        server.getHost(), server.tcp_port,
         context->getCurrentDatabase(), /*default_database_*/
-        query_client_info.current_user, query_client_info.current_password, 
+        query_client_info.current_user, query_client_info.current_password,
         "", /*cluster_*/
         "", /*cluster_secret*/
         "server", /*client_name_*/
