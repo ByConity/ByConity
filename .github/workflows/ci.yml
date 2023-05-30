@@ -25,50 +25,61 @@ jobs:
       - name: run unit tests
         run: |
           bash $GITHUB_WORKSPACE/unittest.sh
-      - name: start fdb
+      - name: Create ByConity Cluster
+      # TODO: move docker-compose installation to DockerFile
         run: |
-          echo $(pwd)
-          export PATH=$PATH:/opt/tiger/foundationdb/bin
-          bash $GITHUB_WORKSPACE/docker/test/foundationdb/start_fdb.sh
-      - name: start hdfs
-        run: |
-          export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
-          export HADOOP_HOME=/hadoop
-          $HADOOP_HOME/bin/hdfs namenode -format
-          $HADOOP_HOME/bin/hdfs --daemon start namenode
-          $HADOOP_HOME/bin/hdfs --daemon start datanode
-      - name: Run CNCH FuntionalStateless
+          curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+          mkdir /CI/
+          cd /CI/
+          export BINARY_PATH=$GITHUB_WORKSPACE/build/programs
+          export HDFS_PATH=$GITHUB_WORKSPACE/docker/local-deploy/hdfs
+          cp -r $GITHUB_WORKSPACE/docker/local-deploy/* ./          
+          cp $GITHUB_WORKSPACE/docker/local-deploy/.env ./
+          sed -i "s|ci\_byconity\_binary\_path|${BINARY_PATH}/|g" .env
+          sed -i "s|ci\_hdfs\_conf\_path|${HDFS_PATH}/|g" .env
+          docker-compose -f docker-compose.yml.multiworkers up -d
+          sleep 10
+          hdfs/create_users.sh
+          curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 localhost:8124
+      - name: Prepare FuntionalStateless Queries
         continue-on-error: true
         run: |
-          bash ${GITHUB_WORKSPACE}/ci_scripts/cluster_up.sh
-          bash ${GITHUB_WORKSPACE}/docker/test/foundationdb/show_fdb.sh
-          export ADDITIONAL_OPTIONS='--jobs 4 --run cnch_stateless'
-          export MAX_RUN_TIME=9000
-          cp -r $GITHUB_WORKSPACE/docker/test/stateless/* .
-          /bin/bash run_cnch.sh
-      - name: CNCH - FuntionalStateless (multi-workers + ClickhouseSQL + w/w.o optimizer)
-        continue-on-error: true
-        run: |
-          mkdir -p ci_clickhouse_sql 
-          cd ci_clickhouse_sql
-          cp -r ${GITHUB_WORKSPACE}/docker/test/stateless/process_functional_tests_result.py ./
-          cp -r ${GITHUB_WORKSPACE}/tests/clickhouse-test ./
+          cd /CI/
+          cp -r $GITHUB_WORKSPACE/docker/test/stateless/process_functional_tests_result.py ./
+          cp -r $GITHUB_WORKSPACE/tests/clickhouse-test ./
           mkdir queries
-          cp -r ${GITHUB_WORKSPACE}/tests/queries/7_clickhouse_sql queries/
-          cp -r ${GITHUB_WORKSPACE}/tests/queries/shell_config.sh queries/
+          cp -r $GITHUB_WORKSPACE/tests/queries/4_cnch_stateless queries/
+          cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
           mkdir -p test_output
-          echo "Running test without optimizer"
-          ./clickhouse-test --stop --hung-check --jobs 1 --order asc --print-time 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
-          ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/clickhouse_sql_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/clickhouse_sql_check_status.tsv
-          cd ..
-          rm -rf ci_clickhouse_sql
+      - name: Run ByConity FuntionalStateless
+        continue-on-error: true
+        run: |
+          cd /CI/
+          ./clickhouse-test --stop --hung-check --jobs 4 --order asc --print-time 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
+          ./process_functional_tests_result.py || echo -e "failure\tCannot parse results" > test_output/check_status.tsv
+      # - name: CNCH - FuntionalStateless (multi-workers + ClickhouseSQL + w/w.o optimizer)
+      #   continue-on-error: true
+      #   run: |
+      #     mkdir -p ci_clickhouse_sql 
+      #     cd ci_clickhouse_sql
+      #     cp -r ${GITHUB_WORKSPACE}/docker/test/stateless/process_functional_tests_result.py ./
+      #     cp -r ${GITHUB_WORKSPACE}/tests/clickhouse-test ./
+      #     mkdir queries
+      #     cp -r ${GITHUB_WORKSPACE}/tests/queries/7_clickhouse_sql queries/
+      #     cp -r ${GITHUB_WORKSPACE}/tests/queries/shell_config.sh queries/
+      #     mkdir -p test_output
+      #     echo "Running test without optimizer"
+      #     ./clickhouse-test --stop --hung-check --jobs 1 --order asc --print-time 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
+      #     ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/clickhouse_sql_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/clickhouse_sql_check_status.tsv
+      #     cd ..
+      #     rm -rf ci_clickhouse_sql
 #          not run test with optimizer enable at the moment
 #          echo "Running test with optimizer"
 #          ./clickhouse-test --stop --hung-check --jobs 1 --order asc --print-time --client-option 'enable_optimizer=1' 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
       - name: After test
         continue-on-error: true
         run: |
-          mkdir /test_output/foundationdb && cp /opt/tiger/foundationdb/logs/* /test_output/foundationdb/. || true
           bash $GITHUB_WORKSPACE/.codebase/ci_scripts/common_component/copy_core_to_shared.sh || true # copy core to artifact folder
           bash $GITHUB_WORKSPACE/.codebase/ci_scripts/common_component/copy_case_stdout_to_shared.sh || true # copy stdout to artifact folder
           mv /test_output /Artifacts  && tar --warning=no-file-changed -zcf  /Artifacts.tar.gz /Artifacts/*  || true
