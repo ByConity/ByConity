@@ -19,12 +19,12 @@ namespace ErrorCodes
     extern const int CANNOT_READ_ALL_DATA;
 }
 
-#define THROW_ARROW_NOT_OK(status)                                     \
-    do                                                                 \
-    {                                                                  \
-        if (::arrow::Status _s = (status); !_s.ok())                   \
-            throw Exception(_s.ToString(), ErrorCodes::BAD_ARGUMENTS); \
-    } while (false)
+    // #define THROW_ARROW_NOT_OK(status)                                     \
+    // do                                                                 \
+    // {                                                                  \
+    //     if (::arrow::Status _s = (status); !_s.ok())                   \
+    //         throw Exception(_s.ToString(), ErrorCodes::BAD_ARGUMENTS); \
+    // } while (false)
 
 ORCBlockInputFormat::ORCBlockInputFormat(
     ReadBuffer & in_,
@@ -47,23 +47,36 @@ Chunk ORCBlockInputFormat::generate()
     if (stripe_current >= stripe_total)
         return res;
 
-    std::shared_ptr<arrow::RecordBatch> batch_result;
-    arrow::Status batch_status = file_reader->ReadStripe(stripe_current, include_indices, &batch_result);
+    // std::shared_ptr<arrow::RecordBatch> batch_result;
+    std::shared_ptr<arrow::Table> table;    
+    
+    
+    /// We should extract the number of rows directly from the stripe, because in case when
+    /// record batch contains 0 columns (for example if we requested only columns that
+    /// are not presented in data) the number of rows in record batch will be 0.
+    if(!include_indices.empty())
+    {
+    auto batch_status = file_reader->ReadStripe(stripe_current, include_indices );
     if (!batch_status.ok())
         throw ParsingException(ErrorCodes::CANNOT_READ_ALL_DATA,
-                               "Error while reading batch of ORC data: {}", batch_status.ToString());
+                               "Error while reading batch of ORC data: {}", batch_status.status().ToString());
 
-    auto table_result = arrow::Table::FromRecordBatches({batch_result});
+
+    auto status = arrow::Table::FromRecordBatches({batch_status.ValueOrDie()}).Value(&table);
     
-    if (!table_result.ok())
+    if (!status.ok())
         throw ParsingException(ErrorCodes::CANNOT_READ_ALL_DATA,
-                               "Error while reading batch of ORC data: {}", table_result.status().ToString());
-    std::cout<< "ORC: " << (*table_result)->num_rows() << std::endl;
-    std::cout<< "ORC BATCH: " << (*batch_result).ToString() << std::endl;
+                               "Error while reading batch of ORC data: {}", status.ToString());
+    } else {
+        size_t num_rows = file_reader->GetRawORCReader()->getStripe(stripe_current)->getNumberOfRows();
+        std::vector<std::shared_ptr<arrow::ChunkedArray>> columns;
+        arrow::FieldVector fields; 
+        table = arrow::Table::Make(std::make_shared<arrow::Schema>(fields),columns, num_rows);
+    }
     
     ++stripe_current;
 
-    arrow_column_to_ch_column->arrowTableToCHChunk(res, *table_result);
+    arrow_column_to_ch_column->arrowTableToCHChunk(res, table);
     return res;
 }
 
@@ -101,12 +114,22 @@ static size_t countIndicesForType(std::shared_ptr<arrow::DataType> type)
 
 void ORCBlockInputFormat::prepareReader()
 {
-    THROW_ARROW_NOT_OK(arrow::adapters::orc::ORCFileReader::Open(asArrowFile(in), arrow::default_memory_pool(), &file_reader));
+    auto arrow_file = asArrowFile(in);
+    auto reader_status = arrow::adapters::orc::ORCFileReader::Open(arrow_file,arrow::default_memory_pool()).Value(&file_reader);
+    if(!reader_status.ok())
+    {
+        throw Exception(reader_status.ToString(), ErrorCodes::BAD_ARGUMENTS); 
+    }
     stripe_total = file_reader->NumberOfStripes();
     stripe_current = 0;
 
-    std::shared_ptr<arrow::Schema> schema;
-    THROW_ARROW_NOT_OK(file_reader->ReadSchema(&schema));
+    auto schema_status = file_reader->ReadSchema();
+    if(!schema_status.ok())
+    {
+        throw Exception(schema_status.status().ToString(), ErrorCodes::BAD_ARGUMENTS); 
+    }
+
+    auto & schema = schema_status.ValueOrDie();
 
     arrow_column_to_ch_column = std::make_unique<ArrowColumnToCHColumn>(
         getPort().getHeader(),
@@ -118,7 +141,7 @@ void ORCBlockInputFormat::prepareReader()
 
     /// In ReadStripe column indices should be started from 1,
     /// because 0 indicates to select all columns.
-    int index = 1;
+    int index = 0;
     for (int i = 0; i < schema->num_fields(); ++i)
     {
         /// LIST type require 2 indices, STRUCT - the number of elements + 1,

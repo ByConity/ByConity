@@ -43,7 +43,7 @@ TSaslClientTransport::~TSaslClientTransport()
     resetSaslNegotiationState();
 }
 
-bool TSaslClientTransport::isOpen()
+bool TSaslClientTransport::isOpen() const
 {
     return transport->isOpen();
 }
