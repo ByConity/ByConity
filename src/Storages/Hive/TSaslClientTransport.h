@@ -48,8 +48,7 @@ public:
 
     ~TSaslClientTransport() override;
 
-    bool 
-    isOpen() const override;
+    bool isOpen() const override;
 
     bool peek() override;
 
