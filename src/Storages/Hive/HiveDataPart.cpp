@@ -159,21 +159,20 @@ arrow::Status HiveParquetFile::tryGetTotalRowGroups(size_t & res) const
     if (!disk)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Hive disk is not set");
 
-    std::unique_ptr<parquet::arrow::FileReader> reader = nullptr;
     std::unique_ptr<ReadBuffer> in = disk->readFile(getFullDataPartPath());
-    arrow::Status read_status = parquet::arrow::OpenFile(asArrowFile(*in), arrow::default_memory_pool(), &reader);
-    if (read_status.ok())
+    // arrow::Status read_status = parquet::arrow::OpenFile(asArrowFile(*in), arrow::default_memory_pool(), &reader);
+    auto read_result = parquet::ParquetFileReader(asArrowFile(*in));
+    if (read_result.ok())
     {
-        auto parquet_meta = reader->parquet_reader()->metadata();
+        auto parquet_meta = (*read_result)->parquet_reader()->metadata();
         if (parquet_meta)
             res = parquet_meta->num_row_groups();
         else
             res = 0;
-    }
+    } 
     else
         res = 0;
-
-    return read_status;
+    return read_result.status();
 }
 
 size_t HiveParquetFile::getTotalRowGroups() const
@@ -274,17 +273,16 @@ arrow::Status HiveORCFile::tryGetTotalStripes(size_t & res) const
     if (!disk)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Hive disk is not set");
 
-    std::unique_ptr<arrow::adapters::orc::ORCFileReader> reader = nullptr;
     std::unique_ptr<ReadBuffer> in = disk->readFile(getFullDataPartPath());
-    arrow::Status read_status = arrow::adapters::orc::ORCFileReader::Open(asArrowFile(*in), arrow::default_memory_pool(), &reader);
-    if (read_status.ok())
+    auto read_result = arrow::adapters::orc::ORCFileReader::Open(asArrowFile(*in), arrow::default_memory_pool());
+    if (read_result.ok())
     {
-        res = reader->NumberOfStripes();
+        res = (*read_result)->NumberOfStripes();
     }
     else
         res = 0;
 
-    return read_status;
+    return read_result.status();
 }
 
 
