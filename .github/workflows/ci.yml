@@ -43,6 +43,7 @@ jobs:
           docker-compose -f docker-compose.yml.multiworkers up -d --remove-orphans --force-recreate
           sleep 10
           docker ps -a
+          docker ps -q | xargs -L 1 docker logs
           hdfs/create_users.sh
           curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 localhost:8124
       - name: Prepare FuntionalStateless Queries
