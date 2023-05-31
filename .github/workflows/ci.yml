@@ -40,7 +40,7 @@ jobs:
           cp $GITHUB_WORKSPACE/docker/local-deploy/.env ./
           sed -i "s|ci\_byconity\_binary\_path|${BINARY_PATH}/|g" .env
           sed -i "s|ci\_hdfs\_conf\_path|${HDFS_PATH}/|g" .env
-          docker-compose -f docker-compose.yml.multiworkers up -d
+          docker-compose -f docker-compose.yml.multiworkers up -d --remove-orphans --force-recreate
           sleep 10
           docker ps -a
           hdfs/create_users.sh
