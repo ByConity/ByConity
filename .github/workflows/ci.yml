@@ -38,8 +38,8 @@ jobs:
           export HDFS_PATH=$GITHUB_WORKSPACE/docker/local-deploy/hdfs
           cp -r $GITHUB_WORKSPACE/docker/local-deploy/* ./          
           cp $GITHUB_WORKSPACE/docker/local-deploy/.env ./
-          sed -i "s|ci\_byconity\_binary\_path|${BINARY_PATH}/|g" .env
-          sed -i "s|ci\_hdfs\_conf\_path|${HDFS_PATH}/|g" .env
+          sed -i "s|ci\_byconity\_binary\_path|${BINARY_PATH}|g" .env
+          sed -i "s|ci\_hdfs\_conf\_path|${HDFS_PATH}|g" .env
           echo $(pwd)
           cat .env
           ls $BINARY_PATH
