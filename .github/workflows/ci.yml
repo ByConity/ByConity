@@ -41,7 +41,8 @@ jobs:
           sed -i "s|ci\_byconity\_binary\_path|${BINARY_PATH}/|g" .env
           sed -i "s|ci\_hdfs\_conf\_path|${HDFS_PATH}/|g" .env
           docker-compose -f docker-compose.yml.multiworkers up -d
-          sleep 20
+          sleep 10
+          docker ps -a
           hdfs/create_users.sh
           curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 localhost:8124
       - name: Prepare FuntionalStateless Queries
