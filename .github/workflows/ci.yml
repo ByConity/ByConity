@@ -40,11 +40,14 @@ jobs:
           cp $GITHUB_WORKSPACE/docker/local-deploy/.env ./
           sed -i "s|ci\_byconity\_binary\_path|${BINARY_PATH}/|g" .env
           sed -i "s|ci\_hdfs\_conf\_path|${HDFS_PATH}/|g" .env
+          echo $(pwd)
+          cat .env
+          ls $BINARY_PATH
           docker-compose -f docker-compose.yml.multiworkers up -d --remove-orphans --force-recreate
           sleep 10
           docker ps -a
-          docker ps -aq | xargs -L 1 docker logs
-          docker ps -aq | xargs -L 1 docker inspect
+          docker ps -aq --filter status=exited | xargs -L 1 docker logs
+          docker ps -aq --filter status=exited | xargs -L 1 docker inspect
           hdfs/create_users.sh
           curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 localhost:8124
       - name: Prepare FuntionalStateless Queries
