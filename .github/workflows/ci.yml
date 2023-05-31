@@ -34,7 +34,6 @@ jobs:
           chmod +x /usr/local/bin/docker-compose
           mkdir /CI/
           cd /CI/
-          chmod -R 777 /
           export BINARY_PATH=$GITHUB_WORKSPACE/build/programs
           export HDFS_PATH=/CI/hdfs
           cp -r $GITHUB_WORKSPACE/docker/local-deploy/* ./          
@@ -43,6 +42,8 @@ jobs:
           sed -i "s|ci\_hdfs\_conf\_path|${HDFS_PATH}|g" .env
           cat .env
           ls $HDFS_PATH
+          chmod -R 777 $BINARY_PATH
+          chmod -R 777 $HDFS_PATH
           docker-compose -f docker-compose.yml.multiworkers up -d --remove-orphans --force-recreate
           sleep 10
           docker ps -a -n 3 --filter status=exited
