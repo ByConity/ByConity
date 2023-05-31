@@ -32,13 +32,17 @@ jobs:
           /bin/bash /get-docker.sh
           curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
           chmod +x /usr/local/bin/docker-compose
+          mkdir /CI/
+          cd /CI/
           export BINARY_PATH=$GITHUB_WORKSPACE/build/programs
           export HDFS_PATH=$GITHUB_WORKSPACE/docker/local-deploy/hdfs
+          cp -r $GITHUB_WORKSPACE/docker/local-deploy/* ./          
+          cp $GITHUB_WORKSPACE/docker/local-deploy/.env ./
+          docker-compose down
           cd $GITHUB_WORKSPACE/docker/local-deploy
           sed -i "s|ci\_byconity\_binary\_path|${BINARY_PATH}|g" .env
           sed -i "s|ci\_hdfs\_conf\_path|${HDFS_PATH}|g" .env
           cat .env
-          docker container prune -y
           docker-compose -f docker-compose.yml.multiworkers up -d --remove-orphans --force-recreate
           sleep 10
           docker ps -a -n 3 --filter status=exited
