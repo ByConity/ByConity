@@ -42,9 +42,8 @@ jobs:
           sed -i "s|ci\_hdfs\_conf\_path|${HDFS_PATH}|g" .env
           cat .env
           docker-compose -f docker-compose.yml.multiworkers down
-          docker rm -f $(docker ps -a -q)
           docker volume rm $(docker volume ls -q)
-          docker-compose -f docker-compose.yml.multiworkers up -d --remove-orphans --force-recreate -V
+          docker-compose -f docker-compose.yml.multiworkers up -d --remove-orphans --force-recreate
           sleep 10
           docker ps -a -n 3 --filter status=exited
           docker ps -aq -n 3 --filter status=exited | xargs -L 1 docker logs
