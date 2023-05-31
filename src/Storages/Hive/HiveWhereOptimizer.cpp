@@ -23,6 +23,7 @@
 #include <Parsers/queryToString.h>
 #include <Storages/Hive/HiveWhereOptimizer.h>
 #include <Storages/StorageCnchHive.h>
+#include <Storages/extractKeyExpressionList.h>
 #include <Common/typeid_cast.h>
 
 
@@ -43,7 +44,7 @@ HiveWhereOptimizer::HiveWhereOptimizer(const SelectQueryInfo & query_info_, Cont
         for (const NameAndTypePair & col : available_real_columns)
             table_columns.insert(col.name);
 
-        partition_expr_ast = cnchhive->getPartitionKeyList();
+        partition_expr_ast = extractKeyExpressionList(cnchhive->getPartitionKey());
     }
 }
 
