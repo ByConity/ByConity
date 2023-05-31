@@ -70,9 +70,9 @@ void turnOffOptimizer(ContextMutablePtr context, ASTPtr & node)
     changeDistributedStages(node);
 }
 
-bool QueryUseOptimizerChecker::check(ASTPtr & node, const ContextMutablePtr & context)
+bool QueryUseOptimizerChecker::check(ASTPtr & node, const ContextMutablePtr & context, bool use_distributed_stages)
 {
-    if (!node || !context->getSettingsRef().enable_optimizer)
+    if (!node || (!context->getSettingsRef().enable_optimizer && !use_distributed_stages))
     {
         turnOffOptimizer(context, node);
         return false;
@@ -97,13 +97,11 @@ bool QueryUseOptimizerChecker::check(ASTPtr & node, const ContextMutablePtr & co
             || explain->getKind() == ASTExplainQuery::ExplainKind::QueryPlan;
         support = explain_plan && check(explain->getExplainedQuery(), context);
     }
-
-    if (auto * dump = node->as<ASTDumpInfoQuery>())
+    else if (auto * dump = node->as<ASTDumpInfoQuery>())
     {
         return check(dump->dump_query, context);
     }
-
-    if (node->as<ASTSelectQuery>() || node->as<ASTSelectWithUnionQuery>() || node->as<ASTSelectIntersectExceptQuery>())
+    else if (node->as<ASTSelectQuery>() || node->as<ASTSelectWithUnionQuery>() || node->as<ASTSelectIntersectExceptQuery>())
     {
         // disable system query, array join, table function, no merge tree table
         NameSet with_tables;
@@ -212,6 +210,10 @@ bool QueryUseOptimizerVisitor::visitASTTableJoin(ASTPtr & node, QueryUseOptimize
     const auto & strictness = table_join.strictness;
 
     if (strictness == ASTTableJoin::Strictness::Semi || strictness == ASTTableJoin::Strictness::Anti)
+        return false;
+
+    /// ANY INNER JOIN with any_join_distinct_right_table_keys = 1 will becomes SEMI LEFT JOIN
+    if (strictness == ASTTableJoin::Strictness::Any && table_join.kind == ASTTableJoin::Kind::Inner && query_with_plan_context.context->getSettingsRef().any_join_distinct_right_table_keys)
         return false;
 
     return visitNode(node, query_with_plan_context);

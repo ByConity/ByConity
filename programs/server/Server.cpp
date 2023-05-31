@@ -1724,7 +1724,16 @@ int Server::main(const std::vector<std::string> & /*args*/)
                     stream_options.server_info_name = fmt::format("stm");
                 stream_options.has_builtin_services = enable_brpc_builtin_services;
                 if (exchange_server->Start(host_exchange_port.c_str(), &stream_options) != 0)
-                    throw Exception("Fail to start BrpcExchangeReceiverRegistryService", ErrorCodes::LOGICAL_ERROR) ;
+                {
+                    if (listen_try)
+                    {
+                        LOG_ERROR(log, "Fail to start BrpcExchangeReceiverRegistryService {}\n", host_exchange_port);
+                    }
+                    else
+                    {
+                        throw Exception("Fail to start BrpcExchangeReceiverRegistryService", ErrorCodes::LOGICAL_ERROR) ;
+                    }
+                }
 
                 std::string host_exchange_status_port = createHostPortString(listen_host, global_context->getExchangeStatusPort());
                 brpc::ServerOptions cmd_options;
@@ -1734,7 +1743,16 @@ int Server::main(const std::vector<std::string> & /*args*/)
                     cmd_options.server_info_name = fmt::format("cmd");
                 cmd_options.has_builtin_services = enable_brpc_builtin_services;
                 if (exchange_status_server->Start(host_exchange_status_port.c_str(), &cmd_options) != 0)
-                    throw Exception("Fail to start PlanSegmentManagerRpcService", ErrorCodes::LOGICAL_ERROR) ;
+                {
+                    if (listen_try)
+                    {
+                        LOG_ERROR(log, "Fail to start PlanSegmentManagerRpcService {}\n", host_exchange_status_port);
+                    }
+                    else
+                    {
+                        throw Exception("Fail to start PlanSegmentManagerRpcService", ErrorCodes::LOGICAL_ERROR) ;
+                    }
+                }
 
                 rpc_servers.emplace_back(std::move(exchange_server));
                 rpc_servers.emplace_back(std::move(exchange_status_server));

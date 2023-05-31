@@ -109,7 +109,8 @@ public:
         const std::optional<String> & relative_path,
         Type part_type_,
         const IMergeTreeDataPart * parent_part_,
-        IStorage::StorageLocation location_);
+        IStorage::StorageLocation location_,
+        const UUID& part_id_ = UUIDHelpers::Nil);
 
     IMergeTreeDataPart(
         const MergeTreeMetaBase & storage_,
@@ -118,7 +119,8 @@ public:
         const std::optional<String> & relative_path,
         Type part_type_,
         const IMergeTreeDataPart * parent_part_,
-        IStorage::StorageLocation location_);
+        IStorage::StorageLocation location_,
+        const UUID& part_id_ = UUIDHelpers::Nil);
 
     virtual MergeTreeReaderPtr getReader(
         const NamesAndTypesList & columns_,

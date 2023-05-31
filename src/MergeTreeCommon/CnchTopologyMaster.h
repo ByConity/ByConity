@@ -18,6 +18,7 @@
 #include <MergeTreeCommon/CnchServerTopology.h>
 #include <Core/BackgroundSchedulePool.h>
 #include <Interpreters/Context_fwd.h>
+#include <Core/Settings.h>
 
 namespace DB
 {
@@ -55,6 +56,7 @@ private:
     Poco::Logger * log = &Poco::Logger::get("CnchTopologyMaster");
     BackgroundSchedulePool::TaskHolder topology_fetcher;
     std::list<CnchServerTopology> topologies;
+    const Settings settings;
     mutable std::mutex mutex;
 };
 

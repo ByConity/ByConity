@@ -225,7 +225,7 @@ void NestedLoopJoin::joinImpl(
         {
             paddingRightBlockWithConstColumn(left_block, left_row_index, right_block);
             actions->execute(right_block, false);
-            auto filter_column = right_block.getByName(filter_name).column;
+            auto filter_column = right_block.getByName(filter_name).column->convertToFullColumnIfConst();
             FilterDescription filter_and_holder(*filter_column);
             auto filtered_size = countBytesInFilter(*filter_and_holder.data);
 

@@ -75,6 +75,7 @@ struct FormatSettings
     {
         UInt64 row_group_size = 1000000;
         bool low_cardinality_as_dictionary = false;
+        bool allow_missing_columns = false;
     } arrow;
 
     struct
@@ -121,11 +122,19 @@ struct FormatSettings
     struct
     {
         UInt64 row_group_size = 1000000;
+        bool allow_missing_columns = false;
         std::map<String, String> partition_kv = {};
         std::unordered_set<Int64> skip_row_groups = {};
         UInt64 current_row_group = 0;
         bool read_one_group = false;
     } parquet;
+
+    struct Orc
+    {
+        bool allow_missing_columns = false;
+        std::map<String, String> partition_kv = {};
+        std::unordered_set<Int64> skip_stripes = {};
+    } orc;
 
     struct Pretty
     {

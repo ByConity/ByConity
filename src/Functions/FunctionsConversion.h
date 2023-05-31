@@ -1014,6 +1014,7 @@ inline void convertFromTime<DataTypeDateTime>(DataTypeDateTime::FieldType & x, t
     else if (unlikely(time > 0xFFFFFFFF))
         x = 0xFFFFFFFF;
     else
+        // coverity[store_truncates_time_t:FALSE]
         x = time;
 }
 
@@ -1093,6 +1094,7 @@ inline bool tryParseImpl<DataTypeDateTime>(DataTypeDateTime::FieldType & x, Read
     time_t tmp = 0;
     if (!tryReadDateTimeText(tmp, rb, *time_zone))
         return false;
+    // coverity[store_truncates_time_t:FALSE]
     x = tmp;
     return true;
 }

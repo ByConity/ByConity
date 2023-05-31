@@ -63,6 +63,6 @@ private:
     Poco::Logger * log;
 
     Pipe spreadRowGroupsAmongStreams(
-        ContextPtr & context, RowGroupsInDataParts && parts, size_t num_streams, const Names & column_names, const UInt64 & max_block_size);
+        ContextPtr & context, BlocksInDataParts && parts, size_t num_streams, const Names & column_names, const UInt64 & max_block_size);
 };
 }

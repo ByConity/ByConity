@@ -236,7 +236,7 @@ void registerDiskS3(DiskFactory & factory)
 
         return std::make_shared<DiskRestartProxy>(s3disk);
     };
-    factory.registerDiskType("s3", creator);
+    factory.registerDiskType("communitys3", creator);
 }
 
 }

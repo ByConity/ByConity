@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <Disks/DiskType.h>
 #include <Disks/DiskHelpers.h>
 
 namespace DB
@@ -21,6 +22,8 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int INVALID_CONFIG_PARAMETER;
+    extern const int BAD_ARGUMENTS;
+    extern const int LOGICAL_ERROR;
 }
 
 String getDiskNameForPathId(const VolumePtr& volume, UInt32 path_id)
@@ -29,9 +32,13 @@ String getDiskNameForPathId(const VolumePtr& volume, UInt32 path_id)
     {
         return volume->getDefaultDisk()->getName();
     }
-    else
-    {
-        return "HDFS/" + toString(path_id);
+    switch (volume->getDisk()->getType())
+    {   
+        case DiskType::Type::ByteHDFS: return "HDFS/" + std::to_string(path_id);
+        case DiskType::Type::ByteS3: return "S3/" + std::to_string(path_id);
+        default:
+            throw Exception(fmt::format("Invalid volume type {}",
+                DiskType::toString(volume->getDisk()->getType())), ErrorCodes::BAD_ARGUMENTS);
     }
 }
 
@@ -49,6 +56,20 @@ DiskPtr getDiskForPathId(const StoragePolicyPtr& storage_policy, UInt32 path_id)
         throw Exception("Disk " + disk_name + " not found in " + storage_policy->getName(),
             ErrorCodes::INVALID_CONFIG_PARAMETER);
     return disk;
+}
+
+UInt32 getPartFromDisk(const VolumePtr& volume, const DiskPtr& disk)
+{
+    if (volume->getDefaultDisk()->getName() == disk->getName())
+        return 0;
+
+    const String& disk_name = disk->getName();
+    auto pos = disk_name.find('/');
+    if (pos == std::string::npos || pos == disk_name.size() - 1)
+        throw Exception("Invalid disk name for remote disk: " + disk->getName(),
+            ErrorCodes::LOGICAL_ERROR);
+
+    return std::stoul(disk_name.substr(pos + 1)); 
 }
 
 }
