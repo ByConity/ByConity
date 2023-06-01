@@ -407,6 +407,7 @@ public:
 
     struct Status
     {
+        // TODO: consider using UInt64 here to avoid Year 2038 problem
         UInt32 future_parts;
         UInt32 queue_size;
         UInt32 inserts_in_queue;
