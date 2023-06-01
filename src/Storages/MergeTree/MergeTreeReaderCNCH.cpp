@@ -80,6 +80,8 @@ MergeTreeReaderCNCH::MergeTreeReaderCNCH(
     : IMergeTreeReader(
         data_part_, columns_, metadata_snapshot_, uncompressed_cache_,
         mark_cache_, mark_ranges_, settings_, avg_value_size_hints_)
+    , segment_cache_strategy(nullptr)
+    , segment_cache(nullptr)
     , log(&Poco::Logger::get("MergeTreeReaderCNCH(" + data_part_->get_name() + ")"))
 
 {

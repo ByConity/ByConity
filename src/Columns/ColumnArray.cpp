@@ -72,15 +72,17 @@ ColumnArray::ColumnArray(MutableColumnPtr && nested_column, MutableColumnPtr && 
     const ColumnOffsets * offsets_concrete = typeid_cast<const ColumnOffsets *>(offsets.get());
 
     if (!offsets_concrete)
-        throw Exception("offsets_column must be a ColumnUInt64", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "offsets_column must be a ColumnUInt64");
 
-    if (!offsets_concrete->empty() && nested_column)
+    if (!offsets_concrete->empty() && data && !data->empty())
     {
         Offset last_offset = offsets_concrete->getData().back();
 
         /// This will also prevent possible overflow in offset.
-        if (nested_column->size() != last_offset)
-            throw Exception("offsets_column has data inconsistent with nested_column", ErrorCodes::LOGICAL_ERROR);
+        if (data->size() != last_offset)
+            throw Exception(ErrorCodes::LOGICAL_ERROR,
+                "offsets_column has data inconsistent with nested_column. Data size: {}, last offset: {}",
+                data->size(), last_offset);
     }
 
     /** NOTE
