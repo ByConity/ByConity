@@ -10,7 +10,7 @@ services:
     ports:
       - 9871:9870
     volumes:
-      - /CI/hdfs:${HADOOP_CONF_DIR}:ro
+      - ./hdfs:${HADOOP_CONF_DIR}:ro
       - /var/log/hadoop
       - /data1
       - /data2
@@ -24,7 +24,7 @@ services:
     environment:
       - HADOOP_CONF_DIR=${HADOOP_CONF_DIR}
     volumes:
-      - /CI/hdfs:${HADOOP_CONF_DIR}:ro
+      - ./hdfs:${HADOOP_CONF_DIR}:ro
       - /var/log/hadoop
       - /data1
       - /data2
@@ -47,7 +47,7 @@ services:
       - hdfs
     volumes:
       - ${BYCONITY_BINARY_PATH}/:/opt/byconity/bin/:ro
-      - /CI/multi-workers/:/config/:ro
+      - ./multi-workers/:/config/:ro
     # evironment:
     container_name: tso-0
     cap_add:
@@ -60,7 +60,7 @@ services:
       - tso
     volumes:
       - ${BYCONITY_BINARY_PATH}/:/opt/byconity/bin/:ro
-      - /CI/multi-workers/:/config/:ro
+      - ./multi-workers/:/config/:ro
     container_name: resource-manager-0
     cap_add:
       - SYS_PTRACE
@@ -77,7 +77,7 @@ services:
     container_name: server-0
     volumes:
       - ${BYCONITY_BINARY_PATH}/:/opt/byconity/bin/:ro
-      - /CI/multi-workers/:/config/:ro
+      - ./multi-workers/:/config/:ro
     cap_add:
       - SYS_PTRACE
 
@@ -89,7 +89,7 @@ services:
     container_name: worker-write-0
     volumes:
       - ${BYCONITY_BINARY_PATH}/:/opt/byconity/bin/:ro
-      - /CI/multi-workers/:/config/:ro
+      - ./multi-workers/:/config/:ro
     cap_add:
       - SYS_PTRACE
 
@@ -101,7 +101,7 @@ services:
     container_name: worker-default-0
     volumes:
       - ${BYCONITY_BINARY_PATH}/:/opt/byconity/bin/:ro
-      - /CI/multi-workers/:/config/:ro
+      - ./multi-workers/:/config/:ro
     cap_add:
       - SYS_PTRACE
 
@@ -113,7 +113,7 @@ services:
     container_name: worker-default-1
     volumes:
       - ${BYCONITY_BINARY_PATH}/:/opt/byconity/bin/:ro
-      - /CI/multi-workers/:/config/:ro
+      - ./multi-workers/:/config/:ro
     cap_add:
       - SYS_PTRACE
 
@@ -125,7 +125,7 @@ services:
     container_name: worker-default-2
     volumes:
       - ${BYCONITY_BINARY_PATH}/:/opt/byconity/bin/:ro
-      - /CI/multi-workers/:/config/:ro
+      - ./multi-workers/:/config/:ro
     cap_add:
       - SYS_PTRACE
 
@@ -138,6 +138,6 @@ services:
     container_name: daemon-manager-0
     volumes:
       - ${BYCONITY_BINARY_PATH}/:/opt/byconity/bin/:ro
-      - /CI/multi-workers/:/config/:ro
+      - ./multi-workers/:/config/:ro
     cap_add:
       - SYS_PTRACE
