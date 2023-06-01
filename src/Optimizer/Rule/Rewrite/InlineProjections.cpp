@@ -119,7 +119,7 @@ InlineProjections::inlineProjections(PlanNodePtr & parent_node, PlanNodePtr & ch
 
     for (const String & input : inputs)
     {
-        if (input_types.contains(input))
+        if (input_types.contains(input) && !new_child_assignments.count(input))
         {
             new_child_assignments.emplace_back(Assignment{input, std::make_shared<ASTIdentifier>(input)});
             new_child_types[input] = input_types.at(input);
