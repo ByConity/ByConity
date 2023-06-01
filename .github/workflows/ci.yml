@@ -31,7 +31,7 @@ jobs:
           mkdir /CI/
           cd /CI/
           export BINARY_PATH=$GITHUB_WORKSPACE/build/programs
-          export HDFS_PATH=/etc/hadoop/conf
+          export HDFS_PATH=/CI/hdfs
           cp -r $GITHUB_WORKSPACE/docker/local-deploy/* ./          
           cp $GITHUB_WORKSPACE/docker/local-deploy/.env ./
           sed -i "s|ci\_byconity\_binary\_path|${BINARY_PATH}|g" .env
