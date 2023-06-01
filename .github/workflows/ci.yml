@@ -31,7 +31,7 @@ jobs:
           mkdir /CI/
           cd /CI/
           export BINARY_PATH=$GITHUB_WORKSPACE/build/programs
-          export HDFS_PATH=$GITHUB_WORKSPACE/docker/local-deploy/hdfs
+          export HDFS_PATH=/etc/hadoop/conf
           cp -r $GITHUB_WORKSPACE/docker/local-deploy/* ./          
           cp $GITHUB_WORKSPACE/docker/local-deploy/.env ./
           sed -i "s|ci\_byconity\_binary\_path|${BINARY_PATH}|g" .env
@@ -39,7 +39,7 @@ jobs:
           cat .env
           ls $HDFS_PATH
           docker-compose -f docker-compose.yml.multiworkers down
-          docker-compose -f docker-compose.yml.multiworkers up -d --remove-orphans --force-recreate
+          docker-compose -f docker-compose.yml.multiworkers up -d --force-recreate
           sleep 10
           ls $HDFS_PATH
           docker ps -a -n 3 --filter status=exited
