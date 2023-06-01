@@ -46,10 +46,6 @@ TransformResult PushLimitIntoDistinct::transformImpl(PlanNodePtr node, const Cap
     if (limit_value == 0)
         return {};
 
-    // when limit 0, we skip this rule since another rule will delete the whole node
-    auto limit_value = limit_step->getLimit();
-    if (limit_value == 0)
-        return {};
 
     if (!isLimitNeeded(*limit_step, distinct))
         return {};
