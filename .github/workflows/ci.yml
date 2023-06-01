@@ -41,9 +41,11 @@ jobs:
           sed -i "s|ci\_byconity\_binary\_path|${BINARY_PATH}|g" .env
           sed -i "s|ci\_hdfs\_conf\_path|${HDFS_PATH}|g" .env
           cat .env
+          ls $HDFS_PATH
           docker-compose -f docker-compose.yml.multiworkers down
           docker-compose -f docker-compose.yml.multiworkers up -d --remove-orphans --force-recreate
           sleep 10
+          ls $HDFS_PATH
           docker ps -a -n 3 --filter status=exited
           docker ps -aq -n 3 --filter status=exited | xargs -L 1 docker logs
           docker ps -aq -n 3 --filter status=exited | xargs -L 1 docker inspect
