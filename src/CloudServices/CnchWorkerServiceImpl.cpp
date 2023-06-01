@@ -263,18 +263,19 @@ void CnchWorkerServiceImpl::sendCreateQuery(
         auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
 
         auto timeout = std::chrono::seconds(request->timeout());
-        auto & query_context = rpc_context->acquireNamedCnchSession(request->txn_id(), timeout, false)->context;
+        auto session = rpc_context->acquireNamedCnchSession(request->txn_id(), timeout, false);
+        auto & query_context = session->context;
         // session->context->setTemporaryTransaction(request->txn_id(), request->primary_txn_id());
-        auto worker_resource = query_context->getCnchWorkerResource();
 
-        /// store cloud tables in cnch_session_resource.
+        /// executeQuery may change the settings, so we copy a new context.
+        auto create_context = Context::createCopy(query_context);
+        auto worker_resource = query_context->getCnchWorkerResource();
         for (const auto & create_query: request->create_queries())
         {
-            /// create a copy of session_context to avoid modify in SessionResource
-            worker_resource->executeCreateQuery(rpc_context, create_query);
+            /// store cloud tables in cnch_session_resource.
+            worker_resource->executeCreateQuery(create_context, create_query);
         }
 
-        // query_context.worker_type = WorkerType::normal_worker;
         LOG_TRACE(log, "Successfully create {} queries for Session: {}", request->create_queries_size(), request->txn_id());
     }
     catch (...)
@@ -293,12 +294,14 @@ void CnchWorkerServiceImpl::sendQueryDataParts(
     brpc::ClosureGuard done_guard(done);
     try
     {
-        const auto & query_context = getContext()->acquireNamedCnchSession(request->txn_id(), {}, true)->context;
+        auto session = getContext()->acquireNamedCnchSession(request->txn_id(), {}, true);
+        const auto & query_context = session->context;
 
         auto storage = DatabaseCatalog::instance().getTable({request->database_name(), request->table_name()}, query_context);
         auto & cloud_merge_tree = dynamic_cast<StorageCloudMergeTree &>(*storage);
 
-        LOG_DEBUG(log,
+        LOG_DEBUG(
+            log,
             "Receiving {} parts for table {}(txn_id: {})",
             request->parts_size(), cloud_merge_tree.getStorageID().getNameForLogs(), request->txn_id());
 
@@ -350,7 +353,8 @@ void CnchWorkerServiceImpl::sendCnchHiveDataParts(
     brpc::ClosureGuard done_guard(done);
     try
     {
-        const auto & query_context = getContext()->acquireNamedCnchSession(request->txn_id(), {}, true)->context;
+        auto session = getContext()->acquireNamedCnchSession(request->txn_id(), {}, true);
+        const auto & query_context = session->context;
 
         auto storage = DatabaseCatalog::instance().getTable({request->database_name(), request->table_name()}, query_context);
         auto & hive_table = dynamic_cast<StorageCloudHive &>(*storage);
