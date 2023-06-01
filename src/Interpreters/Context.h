@@ -803,6 +803,7 @@ public:
     void setRemoteHostFilter(const Poco::Util::AbstractConfiguration & config);
     const RemoteHostFilter & getRemoteHostFilter() const;
 
+    UInt16 getPortFromEnvForConsul(const char * key) const;
     HostWithPorts getHostWithPorts() const;
 
     /// The port that the server listens for executing SQL queries.

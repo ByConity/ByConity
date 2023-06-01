@@ -740,6 +740,25 @@ static bool tryParseFrameDefinition(ASTWindowDefinition * node, IParser::Pos & p
         }
     }
 
+    ParserKeyword keyword_exclude("EXCLUDE");
+    ParserKeyword keyword_no("NO");
+    ParserKeyword keyword_others("OTHERS");
+    // TODO: add support for other exclude types
+    if (keyword_exclude.ignore(pos, expected))
+    {
+        if (keyword_no.ignore(pos, expected))
+        {
+            if (!keyword_others.ignore(pos, expected))
+            {
+                return false;
+            }
+        }
+        else
+        {
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Other exclude types are not supported currenlty");
+        }
+    }
+
     return true;
 }
 

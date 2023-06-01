@@ -426,7 +426,7 @@ void MergeTreeReaderCNCH::addStreamsIfNoBurden(
         };
 
         // Check if mark is present
-        auto mark_cache_key = mark_cache->hash(fullPath(source_data_part->volume->getDisk(), mark_path) + ":" + stream_name);
+        auto mark_cache_key = mark_cache->hash(mark_path + source_data_part->index_granularity_info.getMarksFilePath(stream_name));
 
         if (mark_cache->get(mark_cache_key))
         {
