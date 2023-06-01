@@ -442,6 +442,7 @@ namespace MySQLReplication
                         );
 
                         if (!meta)
+                            // coverity[store_truncates_time_t:FALSE]
                             row.push_back(Field{UInt32(date_time)});
                         else
                         {
@@ -473,6 +474,10 @@ namespace MySQLReplication
                                 static_cast<DateTime64::NativeType>(sec), 0};
 
                             components.fractional = fsp;
+                            // decimalFromComponents will use meta to call common::exp10_i64, which accesses an array of size 19
+                            if (meta > 18)
+                                throw Exception("Meta value is which is greater than 18", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+
                             row.push_back(Field(DecimalUtils::decimalFromComponents<DateTime64>(components, meta)));
                         }
 
