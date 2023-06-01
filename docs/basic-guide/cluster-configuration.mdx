@@ -237,33 +237,43 @@ Example:
 1. The next configuration level corresponds to the storage_configuration configuration level in the configuration file
 
 - storage_configuration
-- cnch_default_policy, specifies the StoragePolicy used by ByConity to store actual data, an optional configuration item, the default is cnch_default_hdfs, and this StoragePolicy should only include HDFSDisk
-- When creating a table, for a ByConity table, if the storage_policy MergeTreeSettings is not specified, it will be changed to ${cnch_default_policy} by default
-- cnch_auxility_policy, specifies the StoragePolicy used by ByConity to store temporary data on the local disk, optional configuration item, the default is default
-- disks
-- ${DISK_NAME}
-- type, the type of this disk, optional configuration item, the default is local
-- ByConity supports the selection of two disks, hdfs/bytehdfs, as remote storage. Currently, only a single Disk is supported in the StoragePolicy
-- In order to be compatible with the internal configuration, hdfs/bytehdfs are resolved to the internal bytehdfs Disk, and the type of the community version HDFSDisk is renamed to communityhdfs
-- The configuration items of HDFSDisk specified by the StoragePolicy used by ByConity should be the same in all Server/Worker configuration files
-- path
-- Which path of this Disk will the data be stored in, required configuration items
-- hdfs_params
-- A new optional configuration item for disks of type bytehdfs, including the following parameters
-- hdfs_user, the user used to connect to hdfs, an optional configuration item, the default is clickhouse
-- cfs_addr, the address of cfs, an optional configuration item, this configuration item needs to be configured only when using cfs
-- hdfs_addr, the namenode address of hdfs, optional configuration items, such as hdfs://nnip:nnport/path
-- hdfs_ha_nameservice, an optional configuration item. If you need to use hdfs HA, you can use this configuration item to specify the corresponding service. The corresponding hdfs configuration needs to be configured through the hdfs3_config configuration file
-- hdfs_nnproxy, nnproxy address of hdfs, optional configuration item, default is nnproxy
-- If DiskByteHDFS does not configure the hdfs_params configuration item, it will find the global configuration item in the configuration file, such as the value of the hdfs_user configuration item in the configuration file
-- policies
-- ${STORAGE_POLICY_NAME}
-- volumes
-- ${VOLUME_NAME}
-- default, the default disk in this Volume, a required configuration item, the default disk will be used to store some data that does not support multi-disk storage, such as metastore, etc.
-- disk, the name of all the disks contained in this Volume, the required configuration items, the corresponding Disk needs to be configured in storage_configuration.disks
+    - cnch_default_policy, specifies the StoragePolicy used by ByConity to store actual data, an optional configuration item, the default is cnch_default_hdfs, and the default storage policy for cnch should only include one HDFSDisk or S3Disk
+        - When creating a table, for a ByConity table, if the storage_policy MergeTreeSettings is not specified, it will be changed to ${cnch_default_policy} by default
+    - cnch_auxility_policy, specifies the StoragePolicy used by ByConity to store temporary data on the local disk, optional configuration item, the default is default
+    - disks
+        - ${DISK_NAME}
+            - type, the type of this disk, optional configuration item, the default is local
+                - ByConity supports the selection of four disks, hdfs/bytehdfs/s3/bytes3, as remote storage. Currently, only a single Disk is supported in the StoragePolicy
+                - In order to be compatible with the internal configuration, hdfs/bytehdfs are resolved to the internal bytehdfs Disk, s3/bytes3 are resolved to internal bytes3 disk, and the type of the community version HDFSDisk is renamed to communityhdfs, community version S3Disk is renamed to communitys3
+                - The configuration items of HDFSDisk/S3Disk specified by the StoragePolicy used by ByConity should be the same in all Server/Worker configuration files
+            - path
+                - Which path or data key prefix of this Disk will the data be stored in, required configuration items
+            - hdfs_params
+                - A new optional configuration item for disks of type bytehdfs, including the following parameters
+                    - hdfs_user, the user used to connect to hdfs, an optional configuration item, the default is clickhouse
+                    - cfs_addr, the address of cfs, an optional configuration item, this configuration item needs to be configured only when using cfs
+                    - hdfs_addr, the namenode address of hdfs, optional configuration items, such as hdfs://nnip:nnport/path
+                    - hdfs_ha_nameservice, an optional configuration item. If you need to use hdfs HA, you can use this configuration item to specify the corresponding service. The corresponding hdfs configuration needs to be configured through the hdfs3_config configuration file
+                    - hdfs_nnproxy, nnproxy address of hdfs, optional configuration item, default is nnproxy
+                    - If DiskByteHDFS does not configure the hdfs_params configuration item, it will find the global configuration item in the configuration file, such as the value of the hdfs_user configuration item in the configuration file
+            - region
+                - For bytes3 disk, specified the region of s3 service
+            - endpoint
+                - For bytes3 disk, specified the endpoint of s3 service
+            - bucket
+                - For bytes3 disk, specified the bucket of s3 service
+            - akid
+                - For bytes3 disk, specified the access key id of s3 service, if not configured, will check environment variable AWS_ACCESS_KEY_ID
+            - aksecret
+                - For bytes3 disk, specified the access key secret of s3 service, if not configured, will check environment variable AWS_SECRET_ACCESS_KEY
+    - policies
+        - ${STORAGE_POLICY_NAME}
+            - volumes
+                - ${VOLUME_NAME}
+                    - default, the default disk in this Volume, a required configuration item, the default disk will be used to store some data that does not support multi-disk storage, such as metastore, etc.
+                    - disk, the name of all the disks contained in this Volume, the required configuration items, the corresponding Disk needs to be configured in storage_configuration.disks
 
-1. configuration demo
+1. configuration demo (with both hdfs and s3 as storage, but hdfs as default)
 
 ```
 <storage_configuration>
@@ -279,6 +289,15 @@ Example:
             <path>/user/cnch/</path>
             <type>bytehdfs</type>
         </server_hdfs_disk0>
+        <server_s3_disk0>
+            <type>bytes3</type>
+            <region>cn-beijing</region>
+            <endpoint>https://tos-s3-cn-beijing.volces.com</endpoint>
+            <bucket>byconity</bucket>
+            <path>test-service/</path>
+            <ak_id>some_access_key_id</ak_id>
+            <ak_secret>some_access_key_secret</ak_secret>
+        </server_s3_disk0>
     </disks>
     <policies>
         <default>
@@ -299,12 +318,25 @@ Example:
                 </hdfs>
             </volumes>
         </cnch_default_hdfs>
+        <cnch_default_s3>
+            <volumes>
+                <s3>
+                    <default>server_s3_disk0</default>
+                    <disk>server_s3_disk0</disk>
+                </s3>
+            </volumes>
+        </cnch_default_s3>
     </policies>
 </storage_configuration>
 
 ```
 
 1. In order to be compatible with the internal configuration items of the old version, if the user only specifies a StoragePolicy of default, which also includes two volumes of hdfs and local, then this configuration item will be parsed into two StoragePolicy, one is default, but only contains The local volume, the other is ${cnch_default_policy}, which only includes the hdfs volume
+2. By specified multiple storage policy in storage_configuration, you can specified how the data of table is stored. For example, you can set cnch_default_policy to `cnch_default_hdfs` to let data store in hdfs by default, and specified some table stored in s3 by specify settings in create table query
+    ```
+        create table test_store (key Int) engine = CnchMergeTree order by key settings storage_policy = 'cnch_default_s3';
+    ```
+    1. One thing to note is that s3 storage is still a preview feature, the support for attach&detach is still WIP, data store layout and format may still have some changes before it's fully available
 
 ### hdfs3_config
 
