@@ -53,6 +53,7 @@ struct WindowFrame
 {
     enum class FrameType { Rows, Groups, Range };
     enum class BoundaryType { Unbounded, Current, Offset };
+    enum class ExcludeType { NoOthers, CurrentRow, Group, Tie};
 
     // This flag signifies that the frame properties were not set explicitly by
     // user, but the fields of this structure still have to contain proper values
