@@ -237,31 +237,41 @@ Example:
 1. 接下来的配置层级与配置文件中 storage_configuration 配置层级一一对应
 
 - storage_configuration
-- cnch_default_policy，指定 CNCH 存储实际数据所使用的 StoragePolicy，可选配置项，默认是 cnch_default_hdfs，这个 StoragePolicy 中应当仅包含 HDFSDisk
-- 当建表的时候，对于 CNCH 表，如果没有指定 storage_policy 这个 MergeTreeSettings，则会被默认修改为 ${cnch_default_policy}
-- cnch_auxility_policy，指定 CNCH 在本地磁盘上存储临时数据所使用的 StoragePolicy，可选配置项，默认是 default
-- disks
-- ${DISK_NAME}
-- type，这个磁盘的类型，可选配置项，默认是 local
-- CNCH 支持选用 hdfs/bytehdfs 这两种磁盘作为远端存储，目前该 StoragePolicy 中仅支持单个 Disk
-- 为了与内部的配置兼容，hdfs/bytehdfs 均解析为内部的 bytehdfs 这种 Disk，社区版本的 HDFSDisk 的 type 被重命名为 communityhdfs
-- CNCH 所使用的 StoragePolicy 所指定的 HDFSDisk，其配置项在所有的 Server/Worker 的配置文件中都应当相同
-- path
-- 数据将被存储在这个 Disk 的哪个路径中，必需的配置项
-- hdfs_params
-- 针对 bytehdfs 类型的磁盘所新增的可选配置项，包含如下参数
-- hdfs_user，连接 hdfs 所使用的 user，可选配置项，默认是 clickhouse
-- cfs_addr，cfs 的地址，可选配置项，仅在使用 cfs 时需要配置此配置项
-- hdfs_addr，hdfs 的 namenode 的地址，可选配置项，如 hdfs://nnip:nnport/path
-- hdfs_ha_nameservice，可选配置项，如果需要使用 hdfs 的 HA，可以使用该配置项指定对应的 service，对应的 hdfs 配置需要通过 hdfs3_config 配置文件来配置
-- hdfs_nnproxy，hdfs 的 nnproxy 的地址，可选配置项，默认是 nnproxy
-- 如果 DiskByteHDFS 没有配置 hdfs_params 配置项，则会去配置文件中找到全局的配置项，例如配置文件中 hdfs_user 这个配置项的值
-- policies
-- ${STORAGE_POLICY_NAME}
-- volumes
-- ${VOLUME_NAME}
-- default，这个 Volume 中的默认磁盘，必需的配置项，默认的磁盘会被用来存放部分不支持多盘存储的数据，例如 metastore 等
-- disk，这个 Volume 所包含的所有磁盘名称，必需的配置项，对应 Disk 需要在 storage_configuration.disks 中配置好
+    - cnch_default_policy，指定 CNCH 存储实际数据所使用的 StoragePolicy，可选配置项，默认是 cnch_default_hdfs，这个 StoragePolicy 中应当仅包含单个 HDFSDisk 或 S3Disk
+        - 当建表的时候，对于 CNCH 表，如果没有指定 storage_policy 这个 MergeTreeSettings，则会被默认修改为 ${cnch_default_policy}
+    - cnch_auxility_policy，指定 CNCH 在本地磁盘上存储临时数据所使用的 StoragePolicy，可选配置项，默认是 default
+    - disks
+        - ${DISK_NAME}
+            - type，这个磁盘的类型，可选配置项，默认是 local
+                - CNCH 支持选用 hdfs/bytehdfs/s3/bytes3 这四种磁盘作为远端存储
+                - 为了与内部的配置兼容，hdfs/bytehdfs 均解析为内部的 bytehdfs 这种 Disk，社区版本的 HDFSDisk 的 type 被重命名为 communityhdfs； s3/bytes3 会解析成内部的 bytes3 这种 Disk，社区版本的 S3Disk被重命名成 communitys3
+                - CNCH 所使用的 StoragePolicy 所指定的 HDFSDisk/S3Disk，其配置项在所有的 Server/Worker 的配置文件中都应当相同
+            - path
+                - 数据将被存储在这个 Disk 的哪个路径中，必需的配置项
+            - hdfs_params
+                - 针对 bytehdfs 类型的磁盘所新增的可选配置项，包含如下参数
+                - hdfs_user，连接 hdfs 所使用的 user，可选配置项，默认是 clickhouse
+                - cfs_addr，cfs 的地址，可选配置项，仅在使用 cfs 时需要配置此配置项
+                - hdfs_addr，hdfs 的 namenode 的地址，可选配置项，如 hdfs://nnip:nnport/path
+                - hdfs_ha_nameservice，可选配置项，如果需要使用 hdfs 的 HA，可以使用该配置项指定对应的 service，对应的 hdfs 配置需要通过 hdfs3_config 配置文件来配置
+                - hdfs_nnproxy，hdfs 的 nnproxy 的地址，可选配置项，默认是 nnproxy
+                - 如果 DiskByteHDFS 没有配置 hdfs_params 配置项，则会去配置文件中找到全局的配置项，例如配置文件中 hdfs_user 这个配置项的值
+            - region
+                - bytes3 disk的配置项，标识s3服务的region
+            - endpoint
+                - bytes3 disk的配置项，标识s3服务的endpoint
+            - bucket
+                - bytes3 disk的配置项，标识s3服务的bucket
+            - akid
+                - bytes3 disk的配置项，标示访问s3所使用的access key id，如果没有配置会检查 AWS_ACCESS_KEY_ID 这个环境变量
+            - aksecret
+                - bytes3 disk的配置项，标示访问s3所使用的access key secret，如果没有配置会检查 AWS_SECRET_ACCESS_KEY 这个环境变量
+    - policies
+        - ${STORAGE_POLICY_NAME}，byconity 使用的远端存储的 StoragePolicy 目前仅支持单个 Volume 同时 Volume 中仅包含单个 Disk
+            - volumes
+                - ${VOLUME_NAME}
+                    - default，这个 Volume 中的默认磁盘，必需的配置项，默认的磁盘会被用来存放部分不支持多盘存储的数据，例如 metastore 等
+                    - disk，这个 Volume 所包含的所有磁盘名称，必需的配置项，对应 Disk 需要在 storage_configuration.disks 中配置好
 
 1. 配置示例
 
@@ -279,6 +289,15 @@ Example:
             <path>/user/cnch/</path>
             <type>bytehdfs</type>
         </server_hdfs_disk0>
+        <server_s3_disk0>
+            <type>bytes3</type>
+            <region>cn-beijing</region>
+            <endpoint>https://tos-s3-cn-beijing.volces.com</endpoint>
+            <bucket>byconity</bucket>
+            <path>test-service/</path>
+            <ak_id>some_access_key_id</ak_id>
+            <ak_secret>some_access_key_secret</ak_secret>
+        </server_s3_disk0>
     </disks>
     <policies>
         <default>
@@ -299,12 +318,25 @@ Example:
                 </hdfs>
             </volumes>
         </cnch_default_hdfs>
+        <cnch_default_s3>
+            <volumes>
+                <s3>
+                    <default>server_s3_disk0</default>
+                    <disk>server_s3_disk0</disk>
+                </s3>
+            </volumes>
+        </cnch_default_s3>
     </policies>
 </storage_configuration>
 
 ```
 
 1. 为了兼容内部旧版本的配置项，如果用户仅指定了 default 这一个 StoragePolicy，同时包含 hdfs 和 local 这两个 volume，那么这个配置项会被解析成两个 StoragePolicy，一个是 default，但是仅包含 local 这个 volume，另一个是 ${cnch_default_policy}，仅包含 hdfs 这个 volume
+2. 可以通过在 storage_configuration 中配置多个 storage policy，我们可以指定表的数据需要存储到什么地方。比方说，可以将 cnch_default_policy 设置为 cnch_default_hdfs 来让数据默认存储到 hdfs 上，同时通过在建表的时候通过指定 storage policy 来让某张表的数据存储到 s3 上
+    ```
+        create table test_store (key Int) engine = CnchMergeTree order by key settings storage_policy = 'cnch_default_s3';
+    ```
+    1. 需要注意的是，目前 s3 storage 还是一个 preview 功能，部分功能如 attach/detach 尚在支持中，底层存储路径在功能完全合并前仍旧存在变化的可能
 
 ### hdfs3_config
 
