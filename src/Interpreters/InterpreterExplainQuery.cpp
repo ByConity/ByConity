@@ -607,7 +607,7 @@ void InterpreterExplainQuery::listRowsOfOnePartition(StoragePtr & storage, const
             query_buffer << "select count() as count from " << backQuoteIfNeed(storage->getStorageID().getDatabaseName()) << "."
                      << backQuoteIfNeed(storage->getStorageID().getTableName()) << " where " << *partition_condition;
 
-            String query_str = query_buffer.str();
+            const String query_str = query_buffer.str();
             const char * begin = query_str.data();
             const char * end = query_str.data() + query_str.size();
 
