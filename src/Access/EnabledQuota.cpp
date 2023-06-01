@@ -147,7 +147,9 @@ EnabledQuota::Interval::Interval()
 {
     for (auto resource_type : collections::range(MAX_RESOURCE_TYPE))
     {
+        // coverity[overrun-local:FALSE]
         used[resource_type].store(0);
+        // coverity[overrun-local:FALSE]
         max[resource_type] = 0;
     }
 }
@@ -163,7 +165,9 @@ EnabledQuota::Interval & EnabledQuota::Interval::operator =(const Interval & src
     end_of_interval.store(src.end_of_interval.load());
     for (auto resource_type : collections::range(MAX_RESOURCE_TYPE))
     {
+        // coverity[overrun-local:FALSE]
         max[resource_type] = src.max[resource_type];
+        // coverity[overrun-local:FALSE]
         used[resource_type].store(src.used[resource_type].load());
     }
     return *this;
@@ -189,8 +193,11 @@ std::optional<QuotaUsage> EnabledQuota::Intervals::getUsage(std::chrono::system_
         out.end_of_interval = Impl::getEndOfInterval(in, current_time, counters_were_reset);
         for (auto resource_type : collections::range(MAX_RESOURCE_TYPE))
         {
+            // coverity[overrun-local:FALSE]
             if (in.max[resource_type])
+                // coverity[overrun-local:FALSE]
                 out.max[resource_type] = in.max[resource_type];
+            // coverity[overrun-local:FALSE]
             out.used[resource_type] = in.used[resource_type];
         }
     }

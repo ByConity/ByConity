@@ -162,6 +162,7 @@ BlockInputStreamPtr MongoDBDictionarySource::loadIds(const std::vector<UInt64> &
     for (const UInt64 id : ids)
         ids_array->add(DB::toString(id), Int32(id));
 
+    // coverity[double_free:FALSE]
     cursor->query().selector().addNewDocument(dict_struct.id->name).add("$in", ids_array);
 
     return std::make_shared<MongoDBBlockInputStream>(connection, std::move(cursor), sample_block, max_block_size);
@@ -213,6 +214,7 @@ BlockInputStreamPtr MongoDBDictionarySource::loadKeys(const Columns & key_column
                     if (key_attribute.is_object_id)
                     {
                         Poco::MongoDB::ObjectId::Ptr loaded_id(new Poco::MongoDB::ObjectId(loaded_str));
+                        // coverity[double_free:FALSE]
                         key.add(key_attribute.name, loaded_id);
                     }
                     else
@@ -228,8 +230,9 @@ BlockInputStreamPtr MongoDBDictionarySource::loadKeys(const Columns & key_column
     }
 
     /// If more than one key we should use $or
+    // coverity[double_free:FALSE]
     cursor->query().selector().add("$or", keys_array);
-
+    // coverity[double_free:FALSE]
     return std::make_shared<MongoDBBlockInputStream>(connection, std::move(cursor), sample_block, max_block_size);
 }
 

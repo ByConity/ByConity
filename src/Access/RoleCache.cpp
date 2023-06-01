@@ -148,6 +148,7 @@ RolePtr RoleCache::getRole(const UUID & role_id)
     {
         auto cache_value = Poco::SharedPtr<std::pair<RolePtr, scope_guard>>(
             new std::pair<RolePtr, scope_guard>{role, std::move(subscription)});
+        // coverity[double_free:FALSE]
         cache.add(role_id, cache_value);
         return role;
     }
@@ -166,7 +167,9 @@ void RoleCache::roleChanged(const UUID & role_id, const RolePtr & changed_role)
     if (!role_from_cache)
         return;
     role_from_cache->first = changed_role;
+    // coverity[double_free:FALSE]
     cache.update(role_id, role_from_cache);
+    // coverity[double_free:FALSE]
     collectEnabledRoles(notifications);
 }
 

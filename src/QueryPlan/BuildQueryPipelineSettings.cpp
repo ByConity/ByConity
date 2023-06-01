@@ -25,6 +25,7 @@ BuildQueryPipelineSettings BuildQueryPipelineSettings::fromSettings(const Settin
 {
     BuildQueryPipelineSettings settings;
     settings.actions_settings = ExpressionActionsSettings::fromSettings(from, CompileExpressions::yes);
+     // coverity[uninit_use]
     return settings;
 }
 

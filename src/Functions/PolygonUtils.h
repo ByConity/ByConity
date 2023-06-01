@@ -643,6 +643,7 @@ UInt128 sipHash128(Polygon && polygon)
     auto hash_ring = [&hash](const auto & ring)
     {
         UInt32 size = ring.size();
+        // coverity[overrun-buffer-val:FALSE]
         hash.update(size);
         hash.update(reinterpret_cast<const char *>(ring.data()), size * sizeof(ring[0]));
     };

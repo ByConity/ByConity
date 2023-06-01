@@ -114,7 +114,7 @@ namespace
 
     /// TODO(GDY) doc
     class ReplacingSortedKeysIterator
-    {
+{
     public:
         ReplacingSortedKeysIterator(
             const IndexFile::Comparator * comparator_,
@@ -684,6 +684,7 @@ DeleteBitmapVector MergeTreeDataDeduper::repairImpl(const IMergeTreeDataPartsVec
 
     DeleteBitmapVector res(parts.size());
     DeleteCallback cb = [&res](const RowPos & pos) { addRowIdToBitmap(res[pos.child], pos.rowid); };
+    // coverity[out_of_scope:FALSE]
     ReplacingSortedKeysIterator keys_iter(IndexFile::BytewiseComparator(), parts, std::move(input_iters), cb, version_mode);
     keys_iter.SeekToFirst();
     while (keys_iter.Valid())

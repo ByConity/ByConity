@@ -317,6 +317,7 @@ public:
         if (readAndDecompress) return;
         size_t size_decompressed;
         // Record size_compressed here
+        // coverity[uninit_use_in_call:FALSE]
         size_compressed = readCompressedData(size_decompressed);
         //TODO: check whether we need check len here
         memory.resize(size_decompressed);

@@ -120,6 +120,7 @@ void insertPostgreSQLValue(
             readDateTimeText(time, in, assert_cast<const DataTypeDateTime *>(data_type.get())->getTimeZone());
             if (time < 0)
                 time = 0;
+            // coverity[store_truncates_time_t:FALSE]
             assert_cast<ColumnUInt32 &>(column).insertValue(time);
             break;
         }
@@ -171,7 +172,8 @@ void insertPostgreSQLValue(
             if (max_dimension < expected_dimensions)
                 throw Exception(ErrorCodes::BAD_ARGUMENTS,
                         "Got less dimensions than expected. ({} instead of {})", max_dimension, expected_dimensions);
-
+            
+            // coverity[mismatched_iterator:FALSE]
             assert_cast<ColumnArray &>(column).insert(Array(dimensions[1].begin(), dimensions[1].end()));
             break;
         }

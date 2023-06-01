@@ -14,6 +14,7 @@ namespace DB
 class ExecutableFunctionYesterday : public IExecutableFunction
 {
 public:
+    // coverity[store_truncates_time_t:FALSE]
     explicit ExecutableFunctionYesterday(time_t time_) : day_value(time_) {}
 
     String getName() const override { return "yesterday"; }

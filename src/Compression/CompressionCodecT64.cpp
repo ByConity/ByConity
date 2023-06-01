@@ -696,6 +696,7 @@ void CompressionCodecT64::updateHash(SipHash & hash) const
 {
     getCodecDesc()->updateTreeHash(hash);
     hash.update(type_idx);
+    // coverity[overrun-buffer-val:FALSE]
     hash.update(variant);
 }
 

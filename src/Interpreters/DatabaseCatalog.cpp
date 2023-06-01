@@ -167,6 +167,7 @@ StoragePtr TemporaryTableHolder::getTable() const
 
 void DatabaseCatalog::initializeAndLoadTemporaryDatabase()
 {
+    // coverity[store_truncates_time_t]
     drop_delay_sec = getContext()->getConfigRef().getInt("database_atomic_delay_before_drop_table_sec", default_drop_delay_sec);
 
     auto db_for_temporary_and_external_tables = std::make_shared<DatabaseMemory>(TEMPORARY_DATABASE, getContext());

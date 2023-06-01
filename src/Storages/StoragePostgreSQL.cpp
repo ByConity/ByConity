@@ -256,6 +256,7 @@ public:
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Type conversion not supported");
 
         if (is_nullable)
+            // coverity[use_after_move:FALSE]
             return ColumnNullable::create(std::move(nested_column), ColumnUInt8::create(nested_column->size(), 0));
 
         return nested_column;

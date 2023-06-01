@@ -115,6 +115,7 @@ void ColumnMap::insertData(const char *, size_t)
 void ColumnMap::insert(const Field & x)
 {
     const auto & map = DB::get<const Map &>(x);
+    // coverity[mismatched_iterator:FALSE]
     nested->insert(Array(map.begin(), map.end()));
 }
 
@@ -275,7 +276,9 @@ void ColumnMap::getExtremes(Field & min, Field & max) const
     Array nested_min_value = nested_min.get<Array>();
     Array nested_max_value = nested_max.get<Array>();
 
+    // coverity[mismatched_iterator:FALSE]
     Map map_min_value(nested_min_value.begin(), nested_min_value.end());
+    // coverity[mismatched_iterator:FALSE]
     Map map_max_value(nested_max_value.begin(), nested_max_value.end());
 
     min = std::move(map_min_value);

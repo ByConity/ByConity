@@ -1488,9 +1488,10 @@ namespace
                     read_function = [this]() -> UInt32
                     {
                         readStr(text_buffer);
+                        // coverity[store_truncates_time_t:FALSE]
                         return stringToDateTime(text_buffer);
                     };
-
+                    // coverity[store_truncates_time_t:FALSE]
                     default_function = [this]() -> UInt32 { return stringToDateTime(field_descriptor.default_value_string()); };
                     break;
                 }

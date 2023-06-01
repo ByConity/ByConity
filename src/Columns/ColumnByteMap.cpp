@@ -55,7 +55,7 @@ ColumnByteMap::ColumnByteMap(MutableColumnPtr && key_column_, MutableColumnPtr &
     :key_column(std::move(key_column_)), value_column(std::move(value_column_))
 {
     if (!key_column->empty() || !value_column->empty())
-       throw Exception("Not empty key, value passed to ColumnByteMap, but no offsets passed " + toString(key_column_->size()) + " : " + toString(value_column_->size()),
+       throw Exception("Not empty key, value passed to ColumnByteMap, but no offsets passed " + toString(key_column->size()) + " : " + toString(value_column->size()),
                ErrorCodes::BAD_ARGUMENTS);
     offsets = ColumnOffsets::create();
 }

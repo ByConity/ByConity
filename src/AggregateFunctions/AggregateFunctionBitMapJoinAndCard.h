@@ -229,7 +229,7 @@ struct AggregateFunctionBitMapJoinAndCardData
             }
 
             JoinTupleMapKey key(pos, attr_vals[pos-1], args);
-            JoinTuple tup = std::make_tuple(std::make_shared<BitMap64>(bitmap), pos, joinkey, std::move(attr_vals), std::move(args));
+            JoinTuple tup = std::make_tuple(std::make_shared<BitMap64>(bitmap), pos, joinkey, attr_vals, args);
             join_tuple_map.emplace(std::move(key), std::make_tuple(std::make_shared<BitMap64>(bitmap), pos, joinkey, std::move(attr_vals), std::move(args)));
 
         }

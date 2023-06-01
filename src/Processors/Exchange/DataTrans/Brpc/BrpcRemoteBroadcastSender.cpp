@@ -258,6 +258,7 @@ BroadcastStatus BrpcRemoteBroadcastSender::sendIOBuffer(const butil::IOBuf & io_
         int ret_code = brpc::StreamFinish(stream_id, actual_status_code, BroadcastStatusCode::SEND_TIMEOUT, true);
         if (ret_code != 0)
             return BroadcastStatus(static_cast<BroadcastStatusCode>(actual_status_code), false, "Stream Write receive finish request");
+         // coverity[uninit_use_in_call]
         return current_status;
     }
 #ifndef NDEBUG

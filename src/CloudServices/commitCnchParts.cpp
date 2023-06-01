@@ -491,11 +491,12 @@ void CnchDataWriter::publishStagedParts(
         undo_resources.emplace_back(bitmap->getUndoResource(txn_id));
 
     /// write undo buffer
-    Stopwatch watch;
     try
     {
+        size_t size = undo_resources.size();
+        Stopwatch watch;
         context->getCnchCatalog()->writeUndoBuffer(UUIDHelpers::UUIDToString(storage.getStorageUUID()), txn_id, std::move(undo_resources));
-        LOG_DEBUG(storage.getLogger(), "Wrote undo buffer for {} resources in {} ms", undo_resources.size(), watch.elapsedMilliseconds());
+        LOG_DEBUG(storage.getLogger(), "Wrote undo buffer for {} resources in {} ms", size, watch.elapsedMilliseconds());
     }
     catch (...)
     {
