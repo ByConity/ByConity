@@ -36,7 +36,8 @@ using TTLAggregateDescriptions = std::vector<TTLAggregateDescription>;
 /// Common struct for TTL record in storage
 struct TTLDescription
 {
-    TTLMode mode;
+    /// Set a default value in case some engines won't set TTL and cause it uninitialized, i.e Kafka/HaKafka
+    TTLMode mode = TTLMode::DELETE;
 
     /// Expression part of TTL AST:
     /// TTL d + INTERVAL 1 DAY
@@ -70,7 +71,7 @@ struct TTLDescription
 
     /// Destination type, only valid for table TTLs.
     /// For example DISK or VOLUME
-    DataDestinationType destination_type;
+    DataDestinationType destination_type = DataDestinationType::DELETE;
 
     /// Name of destination disk or volume
     String destination_name;
