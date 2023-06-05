@@ -126,7 +126,8 @@ private:
         bool active[size + 1];
         std::fill(active, active + size, true);
         active[size] = false;
-
+        
+        // coverity[uninit_use:FALSE]
         auto delete_node = [&](UInt32 i)
         {
             previous[next[i]] = previous[i];

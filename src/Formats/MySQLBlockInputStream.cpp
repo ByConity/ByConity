@@ -181,6 +181,7 @@ namespace
                 readDateTimeText(time, in, assert_cast<const DataTypeDateTime &>(data_type).getTimeZone());
                 if (time < 0)
                     time = 0;
+                // coverity[store_truncates_time_t:FALSE]
                 assert_cast<ColumnUInt32 &>(column).insertValue(time);
                 read_bytes_size += 4;
                 break;

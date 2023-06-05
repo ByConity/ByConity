@@ -613,6 +613,7 @@ std::string_view obfuscateWord(std::string_view src, WordMap & obfuscate_map, Wo
     /// Prevent collisions
     while (!used_nouns.insert(noun).second)
     {
+         // coverity[overrun-buffer-val:FALSE]
         hash_func.update('\0');
         noun = nouns.begin()[hash_func.get64() % nouns.size()];
     }

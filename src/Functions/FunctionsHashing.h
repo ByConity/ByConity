@@ -892,6 +892,7 @@ private:
     ImplementationSelector<IFunction> selector;
 };
 
+// coverity[overrun-buffer-val:FALSE]
 DECLARE_MULTITARGET_CODE(
 
 template <typename Impl, bool with_seed = false>

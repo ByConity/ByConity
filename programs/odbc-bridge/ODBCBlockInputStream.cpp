@@ -137,6 +137,7 @@ void ODBCBlockInputStream::insertValue(
             readDateTimeText(time, in, assert_cast<const DataTypeDateTime *>(data_type.get())->getTimeZone());
             if (time < 0)
                 time = 0;
+            // coverity[store_truncates_time_t:FALSE]
             assert_cast<ColumnUInt32 &>(column).insertValue(time);
             break;
         }

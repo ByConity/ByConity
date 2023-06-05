@@ -411,6 +411,9 @@ static String replaceCreateTableQuery(ContextPtr context, String & query, const 
             engine->arguments = std::make_shared<ASTExpressionList>();
             engine->arguments->children.push_back(std::make_shared<ASTIdentifier>(create_query.database));
             engine->arguments->children.push_back(std::make_shared<ASTIdentifier>(create_query.table));
+            /// NOTE: Used to pass the version column for unique table here.
+            if (create_query.storage->unique_key && create_query.storage->engine->arguments && create_query.storage->engine->arguments->children.size())
+                engine->arguments->children.push_back(create_query.storage->engine->arguments->children[0]);
 
             /// set cnch uuid for CloudMergeTree to commit data on worker side
             if (!storage->settings)

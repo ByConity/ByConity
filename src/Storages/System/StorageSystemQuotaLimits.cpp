@@ -84,7 +84,9 @@ void StorageSystemQuotaLimits::fillData(MutableColumns & res_columns, ContextPtr
     NullMap * column_max_null_map[MAX_RESOURCE_TYPE];
     for (auto resource_type : collections::range(MAX_RESOURCE_TYPE))
     {
+        // coverity[overrun-local:FALSE]
         column_max[resource_type] = &assert_cast<ColumnNullable &>(*res_columns[column_index]).getNestedColumn();
+        // coverity[overrun-local:FALSE]
         column_max_null_map[resource_type] = &assert_cast<ColumnNullable &>(*res_columns[column_index++]).getNullMapData();
     }
 

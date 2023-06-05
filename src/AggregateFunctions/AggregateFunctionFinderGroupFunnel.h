@@ -374,6 +374,7 @@ void calculateFunnel(std::function<UInt32(UInt32)> && getGroup, EventLists<Param
                     {
                         extra_group_index.push_back(i);
                     }
+                    // coverity[use_after_move:FALSE]
                     else if (funnel_index.size() > m_user_pro_idx && reuse_funnel_index.empty())
                     {
                         // here need reuse the fronts event

@@ -704,6 +704,7 @@ Block MergeTreeMetaBase::getBlockWithVirtualPartColumns(const DataPartsVector & 
         part_column->insert(part->name);
         partition_id_column->insert(part->info.partition_id);
         part_uuid_column->insert(part->uuid);
+        // coverity[mismatched_iterator]
         Tuple tuple(part->partition.value.begin(), part->partition.value.end());
         if (has_partition_value)
             partition_value_column->insert(tuple);

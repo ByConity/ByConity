@@ -172,7 +172,9 @@ public:
 
                 if (needle_pos != needle_end)
                 {
+                    // coverity[uninit_use_in_call]
                     cachel = _mm_insert_epi8(cachel, l_seq[j], n - 1);
+                    // coverity[uninit_use_in_call]
                     cacheu = _mm_insert_epi8(cacheu, u_seq[j], n - 1);
 
                     cachemask |= 1 << i;

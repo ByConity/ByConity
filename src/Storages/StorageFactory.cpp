@@ -218,6 +218,7 @@ StoragePtr StorageFactory::get(
     }
 
     ASTs empty_engine_args;
+     // coverity[out_of_scope:FALSE]
     Arguments arguments{
         .engine_name = name,
         .engine_args = has_engine_args ? storage_def->engine->arguments->children : empty_engine_args,

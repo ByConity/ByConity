@@ -866,7 +866,8 @@ static FillColumnDescription getWithFillDescription(const ASTOrderByElement & or
                 ErrorCodes::INVALID_WITH_FILL_EXPRESSION);
         }
     }
-
+    
+    // coverity[unit_use:FALSE]
     return descr;
 }
 

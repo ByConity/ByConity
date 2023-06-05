@@ -390,6 +390,7 @@ namespace
         {
             ColumnPtr column;
             if (rows)
+                // coverity[mismatched_iterator:FALSE]
                 column = partition_value_type->createColumnConst(rows, Tuple(partition_value.begin(), partition_value.end()))
                              ->convertToFullColumnIfConst();
             else
@@ -430,6 +431,7 @@ namespace
         {
             ColumnPtr column;
             if (rows)
+                // coverity[mismatched_iterator:FALSE]
                 column = partition_value_type->createColumnConst(rows, Tuple(partition_value.begin(), partition_value.end()))
                              ->convertToFullColumnIfConst();
             else

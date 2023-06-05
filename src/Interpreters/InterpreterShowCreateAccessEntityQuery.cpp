@@ -173,6 +173,7 @@ namespace
             create_query_limits.duration = limits.duration;
             create_query_limits.randomize_interval = limits.randomize_interval;
             for (auto resource_type : collections::range(Quota::MAX_RESOURCE_TYPE))
+                // coverity[overrun-local:FALSE]
                 create_query_limits.max[resource_type] = limits.max[resource_type];
             query->all_limits.push_back(create_query_limits);
         }

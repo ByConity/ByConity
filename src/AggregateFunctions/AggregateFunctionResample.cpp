@@ -39,7 +39,7 @@ public:
             throw Exception("Incorrect number of parameters for aggregate function with "
                     + getName() + " suffix",
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-
+        // coverity[mismatched_iterator:FALSE]
         return Array(params.begin(), params.end() - 3);
     }
 

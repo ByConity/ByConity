@@ -36,6 +36,7 @@ struct TableBuilder::Rep
         , index_block(&index_block_options)
         , num_entries(0)
         , closed(false)
+         // coverity[ctor_dtor_leak:FALSE]
         , filter_block(opt.filter_policy == nullptr ? nullptr : new FilterBlockBuilder(opt.filter_policy.get()))
         , pending_index_entry(false)
     {
