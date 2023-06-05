@@ -184,6 +184,7 @@ struct Settings;
     M(Bool, enable_async_init_metasotre, false, "", 0) \
     M(Bool, cnch_temporary_table, false, "", 0) \
     M(MaxThreads, cnch_parallel_prefetching, 0, "", 0) \
+    M(Bool, enable_calculate_columns_size_with_sample, 1, "", 0) \
                                                                                                               \
     M(Bool, disable_block_output, false, "", 0) \
     M(UInt64, min_drop_ranges_to_enable_cleanup, 365, "", 0) \
