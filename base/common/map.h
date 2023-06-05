@@ -19,7 +19,8 @@ auto map(const Collection<Params...> & collection, Mapper && mapper)
     using value_type = unqualified_t<decltype(mapper(*std::begin(collection)))>;
 
     return Collection<value_type>(
-        // coverity[use_after_move:FALSE]
+        // forward is used on f to do conditional cast on f to the correct value type
+        // coverity[use_after_move]
         boost::make_transform_iterator(std::begin(collection), std::forward<Mapper>(mapper)),
         boost::make_transform_iterator(std::end(collection), std::forward<Mapper>(mapper)));
 }
@@ -46,7 +47,8 @@ template <typename ResultCollection, typename Collection, typename Mapper>
 auto map(const Collection & collection, Mapper && mapper)
 {
     return ResultCollection(
-        // coverity[use_after_move:FALSE]
+        // forward is used on f to do conditional cast on f to the correct value type
+        // coverity[use_after_move]
         boost::make_transform_iterator(std::begin(collection), std::forward<Mapper>(mapper)),
         boost::make_transform_iterator(std::end(collection), std::forward<Mapper>(mapper)));
 }

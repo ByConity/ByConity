@@ -185,7 +185,8 @@ namespace
                 s.update(k.is_target_https);
                 s.update(k.proxy_host);
                 s.update(k.proxy_port);
-                // coverity[overrun-local:FALSE]
+                // checked update implementation no apparent out of bounds
+                // coverity[overrun-local]
                 s.update(k.is_proxy_https);
                 return s.get64();
             }

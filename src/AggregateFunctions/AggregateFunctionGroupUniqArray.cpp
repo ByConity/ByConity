@@ -62,7 +62,8 @@ inline AggregateFunctionPtr createAggregateFunctionGroupUniqArrayImpl(const std:
     AggregateFunctionPtr res(createWithNumericType<AggregateFunctionGroupUniqArray, HasLimit, const DataTypePtr &, TArgs...>(*argument_type, argument_type, std::forward<TArgs>(args)...));
 
     if (!res)
-        // coverity[use_after_move:FALSE]
+        // args here is scalar type (int), std::forward has no effect on it
+        // coverity[use_after_move]
         res = AggregateFunctionPtr(createWithExtraTypes<HasLimit>(argument_type, std::forward<TArgs>(args)...));
 
     if (!res)

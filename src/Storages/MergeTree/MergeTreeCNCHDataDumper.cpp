@@ -399,7 +399,8 @@ NamesAndTypesList MergeTreeCNCHDataDumper::getKeyColumns() const
 {
     Names sort_key_columns_vec = data.getInMemoryMetadata().getSortingKeyColumns();
     std::set<String> key_columns(sort_key_columns_vec.cbegin(), sort_key_columns_vec.cend());
-     // coverity[use_invalid:FALSE]
+    // no issue with data.getInMemoryMetadata().getSecondaryIndices() being a temporary variable
+    // coverity[use_invalid]
     for (const auto & index : data.getInMemoryMetadata().getSecondaryIndices())
     {
         const auto & index_columns_vec = index.column_names;

@@ -127,9 +127,11 @@ boost::shared_ptr<const EnabledQuota::Intervals> QuotaCache::QuotaInfo::rebuildI
         for (auto resource_type : collections::range(MAX_RESOURCE_TYPE))
         {
             if (limits.max[resource_type])
-                // coverity[overrun-local:FALSE]
+                // collections::range(MAX_REOURCE_TYPE) give us a range of [0, MAX_RESOURCE_TYPE) 
+                // coverity[overrun-local]
                 interval.max[resource_type] = *limits.max[resource_type];
-            // coverity[overrun-local:FALSE]
+            // collections::range(MAX_REOURCE_TYPE) give us a range of [0, MAX_RESOURCE_TYPE) 
+            // coverity[overrun-local]
             interval.used[resource_type] = 0;
         }
     }
@@ -163,7 +165,8 @@ boost::shared_ptr<const EnabledQuota::Intervals> QuotaCache::QuotaInfo::rebuildI
             const auto & current_interval = *lower_bound;
             for (auto resource_type : collections::range(MAX_RESOURCE_TYPE))
             {
-                // coverity[overrun-local:FALSE]
+                // collections::range(MAX_REOURCE_TYPE) give us a range of [0, MAX_RESOURCE_TYPE) 
+                // coverity[overrun-local]
                 new_interval.used[resource_type].store(current_interval.used[resource_type].load());
                 new_interval.end_of_interval.store(current_interval.end_of_interval.load());
             }

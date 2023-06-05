@@ -218,7 +218,8 @@ StoragePtr StorageFactory::get(
     }
 
     ASTs empty_engine_args;
-     // coverity[out_of_scope:FALSE]
+    //No issues with calling StorageID below with in braced initialization
+    // coverity[out_of_scope]
     Arguments arguments{
         .engine_name = name,
         .engine_args = has_engine_args ? storage_def->engine->arguments->children : empty_engine_args,
