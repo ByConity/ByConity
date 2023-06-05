@@ -128,7 +128,7 @@ private:
     HiveDataPartsCNCHVector collectHiveFilesFromTable(
         std::shared_ptr<HiveMetastoreClient> & hms_client,
         HiveTablePtr & table,
-        ContextPtr context,
+        ContextPtr local_context,
         const SelectQueryInfo & query_info,
         const std::set<Int64> & required_bucket_numbers);
 
