@@ -27,6 +27,18 @@
 
 namespace DB
 {
+
+PlanNodeCost CostCalculator::calculatePlanCost(QueryPlan & plan, const Context & context)
+{
+    PlanCostMap plan_cost_map;
+    if (!plan.getPlanNode()->getStatistics())
+        return {};
+    size_t worker_size = WorkerSizeFinder::find(plan, context);
+    auto cte_ref_counts = plan.getCTEInfo().collectCTEReferenceCounts(plan.getPlanNode());
+    PlanCostVisitor visitor{CostModel{context}, worker_size, plan.getCTEInfo(), cte_ref_counts};
+    return VisitorUtil::accept(plan.getPlanNode(), visitor, plan_cost_map).cost;
+}
+
 PlanCostMap CostCalculator::calculate(QueryPlan & plan, const Context & context)
 {
     PlanCostMap plan_cost_map;
@@ -189,7 +201,7 @@ PlanNodeCost CostVisitor::visitCTERefStep(const CTERefStep & step, CostContext &
 
 CostWithCTEReferenceCounts PlanCostVisitor::visitPlanNode(PlanNodeBase & node, PlanCostMap & plan_cost_map)
 {
-    double cost = 0;
+    PlanNodeCost cost;
     std::unordered_map<CTEId, UInt64> cte_reference_counts;
     std::vector<PlanNodeStatisticsPtr> children_stats;
     for (auto & child : node.getChildren())
