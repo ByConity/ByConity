@@ -259,8 +259,12 @@ void StorageSystemProjectionParts::processNextStorage(
 
         /// delete_ttl_info
         if (columns_mask[src_index++])
+            // TODO: time_t value is casted to UInt32 which has too few bits to accomodate it
+            // coverity[store_truncates_time_t]
             columns[res_index++]->insert(static_cast<UInt32>(part->ttl_infos.table_ttl.min));
         if (columns_mask[src_index++])
+            // TODO: time_t value is casted to UInt32 which has too few bits to accomodate it
+            // coverity[store_truncates_time_t]
             columns[res_index++]->insert(static_cast<UInt32>(part->ttl_infos.table_ttl.max));
 
         auto add_ttl_info_map = [&](const TTLInfoMap & ttl_info_map)

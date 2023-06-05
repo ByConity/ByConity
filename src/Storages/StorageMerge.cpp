@@ -668,7 +668,7 @@ void StorageMerge::convertingSourceStream(
         pipe_columns.emplace_back(NameAndTypePair(alias.name, alias.type));
         ASTPtr expr = std::move(alias.expression);
         auto syntax_result = TreeRewriter(local_context).analyze(expr, pipe_columns);
-        auto expression_analyzer = ExpressionAnalyzer{alias.expression, syntax_result, local_context};
+        auto expression_analyzer = ExpressionAnalyzer{expr, syntax_result, local_context};
 
         auto dag = std::make_shared<ActionsDAG>(pipe_columns);
         auto actions_dag = expression_analyzer.getActionsDAG(true, false);

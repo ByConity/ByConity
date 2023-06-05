@@ -14,7 +14,7 @@ namespace DB
 class ExecutableFunctionYesterday : public IExecutableFunction
 {
 public:
-    // Only called by FunctionBaseToday which passes UInt16
+    // Only called by FunctionBaseYesterday which passes UInt16
     // coverity[store_truncates_time_t]
     explicit ExecutableFunctionYesterday(time_t time_) : day_value(time_) {}
 

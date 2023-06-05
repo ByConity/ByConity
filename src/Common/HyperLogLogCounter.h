@@ -171,6 +171,8 @@ public:
 
     inline void update(UInt8 cur_rank, UInt8 new_rank)
     {
+        if (new_rank > max_rank)
+            return;
         --rank_count[cur_rank];
         ++rank_count[new_rank];
     }
