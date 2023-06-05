@@ -94,11 +94,6 @@ struct HivePartInfo
                 partition.insert({key_value[0], key_value[1]});
             }
         }
-        else
-        {
-            partition.insert({"", ""});
-        }
-
         return partition;
     }
 
