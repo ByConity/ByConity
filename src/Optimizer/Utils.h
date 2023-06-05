@@ -15,7 +15,6 @@
 
 #pragma once
 
-#include <Core/Names.h>
 #include <Interpreters/Context_fwd.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
@@ -44,7 +43,6 @@ namespace Utils
     bool isIdentity(const Assignment & assignment);
     bool isIdentity(const Assignments & assignments);
     bool isIdentity(const ProjectionStep & project);
-    NameToNameMap extractIdentities(const ProjectionStep & project);
     std::unordered_map<String, String> computeIdentityTranslations(Assignments & assignments);
     ASTPtr extractAggregateToFunction(const AggregateDescription & agg_descr);
 

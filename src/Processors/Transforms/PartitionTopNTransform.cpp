@@ -36,7 +36,7 @@ namespace ErrorCodes
     extern const int NOT_IMPLEMENTED;
 }
 
-PartitionTopNTransform::PartitionTopNTransform(Block header, size_t topN_, ColumnNumbers partition_by_columns_, ColumnNumbers order_by_columns_, TopNModel model_, bool reverse_)
+PartitionTopNTransform::PartitionTopNTransform(Block header, size_t topN_, ColumnNumbers partition_by_columns_, ColumnNumbers order_by_columns_, PartitionTopNModel model_, bool reverse_)
     : IProcessor(InputPorts{header}, OutputPorts{header})
     , model(model_)
     , topN(topN_)
@@ -49,7 +49,7 @@ PartitionTopNTransform::PartitionTopNTransform(Block header, size_t topN_, Colum
     {
         throw Exception("currently order by columns size only support one", ErrorCodes::LOGICAL_ERROR);
     }
-    if (model > TopNModel::DENSE_RANK)
+    if (model > PartitionTopNModel::DENSE_RANK)
     {
         throw Exception("invalid data", ErrorCodes::LOGICAL_ERROR);
     }

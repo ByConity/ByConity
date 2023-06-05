@@ -78,7 +78,6 @@ public:
     PlanNodeCost visitEnforceSingleRowStep(const EnforceSingleRowStep & step, CostContext & context) override;
     PlanNodeCost visitAssignUniqueIdStep(const AssignUniqueIdStep & step, CostContext & context) override;
     PlanNodeCost visitCTERefStep(const CTERefStep & step, CostContext & context) override;
-    PlanNodeCost visitTopNFilteringStep(const TopNFilteringStep & step, CostContext & context) override;
 };
 
 struct CostWithCTEReferenceCounts

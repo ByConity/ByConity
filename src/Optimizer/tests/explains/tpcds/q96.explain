@@ -4,7 +4,6 @@ Projection est. 1 rows
    │     Limit: 100
    └─ Sorting est. 1 rows
       │     Order by: {expr#count() asc}
-      │     Limit: 100
       └─ MergingAggregated est. 1 rows
          └─ Gather Exchange est. 1 rows
             └─ Aggregating est. 1 rows

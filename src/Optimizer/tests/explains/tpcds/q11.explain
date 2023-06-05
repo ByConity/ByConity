@@ -4,11 +4,9 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. 242049690714 rows
       │     Order by: {c_customer_id_5 asc, c_first_name_5 asc, c_last_name_5 asc, c_preferred_cust_flag_5 asc}
-      │     Limit: 100
       └─ Gather Exchange est. 242049690714 rows
          └─ Sorting est. 242049690714 rows
             │     Order by: {c_customer_id_5 asc, c_first_name_5 asc, c_last_name_5 asc, c_preferred_cust_flag_5 asc}
-            │     Limit: 100
             └─ Inner Join est. 1626312194445 rows
                │     Condition: c_customer_id_11 == c_customer_id_5
                │     Filter: multiIf(`expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))_5` > 0, `expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))_7` / `expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))_5`, '0.0') > multiIf(`expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))_1` > 0, `expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))_3` / `expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))_1`, '0.0')

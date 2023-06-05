@@ -280,11 +280,6 @@ ExchangeResult ExchangeVisitor::visitCTERefNode(CTERefNode & node, ExchangeConte
     throw Exception("Unsupported node " + node.getStep()->getName(), ErrorCodes::NOT_IMPLEMENTED);
 }
 
-ExchangeResult ExchangeVisitor::visitTopNFilteringNode(TopNFilteringNode & node, ExchangeContext & cxt)
-{
-    return visitPlanNode(node, cxt);
-}
-
 ExchangeResult ExchangeVisitor::visitChild(PlanNodePtr node, ExchangeContext & cxt)
 {
     return VisitorUtil::accept(node, *this, cxt);

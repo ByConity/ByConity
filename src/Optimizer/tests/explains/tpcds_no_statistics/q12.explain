@@ -4,11 +4,9 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. ? rows
       │     Order by: {i_category asc, i_class asc, i_item_id asc, i_item_desc asc, expr#divide(multiply(sum(ws_ext_sales_price), 100), sum(sum(ws_ext_sales_price)) OVER (PARTITION BY i_class)) asc}
-      │     Limit: 100
       └─ Gather Exchange est. ? rows
          └─ Sorting est. ? rows
             │     Order by: {i_category asc, i_class asc, i_item_id asc, i_item_desc asc, expr#divide(multiply(sum(ws_ext_sales_price), 100), sum(sum(ws_ext_sales_price)) OVER (PARTITION BY i_class)) asc}
-            │     Limit: 100
             └─ Projection est. ? rows
                │     Expressions: [expr#sum(ws_ext_sales_price), i_category, i_class, i_current_price, i_item_desc, i_item_id], expr#divide(multiply(sum(ws_ext_sales_price), 100), sum(sum(ws_ext_sales_price)) OVER (PARTITION BY i_class)):=(`expr#sum(ws_ext_sales_price)` * 100) / `expr#sum(sum(ws_ext_sales_price)) OVER (PARTITION BY i_class)`
                └─ Window est. ? rows

@@ -8,10 +8,8 @@ Projection est. 2 rows
       │     Limit: 2
       └─ Sorting est. ? rows
          │     Order by: {a_1 asc}
-         │     Limit: 2
          └─ Gather Exchange est. ? rows
             └─ Sorting est. ? rows
                │     Order by: {a_1 asc}
-               │     Limit: 2
                └─ TableScan correctness.q1_t1 est. ? rows
                         Outputs: a_1:=a, b_1:=b

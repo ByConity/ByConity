@@ -4,11 +4,9 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. ? rows
       │     Order by: {expr#multiIf(isNotNull(web.item_sk), web.item_sk, store.item_sk) asc, expr#multiIf(isNotNull(web.d_date), web.d_date, store.d_date) asc}
-      │     Limit: 100
       └─ Gather Exchange est. ? rows
          └─ Sorting est. ? rows
             │     Order by: {expr#multiIf(isNotNull(web.item_sk), web.item_sk, store.item_sk) asc, expr#multiIf(isNotNull(web.d_date), web.d_date, store.d_date) asc}
-            │     Limit: 100
             └─ Filter est. ? rows
                │     Condition: `expr#max(web_sales) OVER (PARTITION BY item_sk ORDER BY d_date ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)` > `expr#max(store_sales) OVER (PARTITION BY item_sk ORDER BY d_date ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)`
                └─ Window est. ? rows

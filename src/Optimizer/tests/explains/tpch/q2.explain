@@ -4,11 +4,9 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. 2809 rows
       │     Order by: {s_acctbal desc nulls_last, n_name asc, s_name asc, p_partkey asc}
-      │     Limit: 100
       └─ Gather Exchange est. 2809 rows
          └─ Sorting est. 2809 rows
             │     Order by: {s_acctbal desc nulls_last, n_name asc, s_name asc, p_partkey asc}
-            │     Limit: 100
             └─ Inner Join est. 2811 rows
                │     Condition: ps_suppkey == s_suppkey
                ├─ Repartition Exchange est. 14064 rows

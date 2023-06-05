@@ -4,11 +4,9 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. 146835 rows
       │     Order by: {i_item_id asc}
-      │     Limit: 100
       └─ Gather Exchange est. 146835 rows
          └─ Sorting est. 146835 rows
             │     Order by: {i_item_id asc}
-            │     Limit: 100
             └─ MergingAggregated est. 146835 rows
                └─ Repartition Exchange est. 146835 rows
                   │     Partition by: {i_item_id}

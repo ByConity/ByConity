@@ -4,11 +4,9 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. 38880 rows
       │     Order by: {ca_state asc, cd_gender asc, cd_marital_status asc, cd_dep_count asc, cd_dep_employed_count asc, cd_dep_college_count asc}
-      │     Limit: 100
       └─ Gather Exchange est. 38880 rows
          └─ Sorting est. 38880 rows
             │     Order by: {ca_state asc, cd_gender asc, cd_marital_status asc, cd_dep_count asc, cd_dep_employed_count asc, cd_dep_college_count asc}
-            │     Limit: 100
             └─ MergingAggregated est. 38880 rows
                └─ Repartition Exchange est. 38880 rows
                   │     Partition by: {ca_state, cd_dep_college_count, cd_dep_count, cd_dep_employed_count, cd_gender, cd_marital_status}

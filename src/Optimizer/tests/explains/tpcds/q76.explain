@@ -4,11 +4,9 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. 1924560 rows
       │     Order by: {expr#'store'_1 asc, expr#'ss_store_sk'_1 asc, d_year_3 asc, d_qoy_3 asc, i_category_3 asc}
-      │     Limit: 100
       └─ Gather Exchange est. 1924560 rows
          └─ Sorting est. 1924560 rows
             │     Order by: {expr#'store'_1 asc, expr#'ss_store_sk'_1 asc, d_year_3 asc, d_qoy_3 asc, i_category_3 asc}
-            │     Limit: 100
             └─ MergingAggregated est. 1924560 rows
                └─ Repartition Exchange est. 1924560 rows
                   │     Partition by: {d_qoy_3, d_year_3, expr#'ss_store_sk'_1, expr#'store'_1, i_category_3}

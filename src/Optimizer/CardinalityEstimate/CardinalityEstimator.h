@@ -81,7 +81,6 @@ public:
     PlanNodeStatisticsPtr visitAssignUniqueIdStep(const AssignUniqueIdStep & step, CardinalityContext & context) override;
     PlanNodeStatisticsPtr visitCTERefStep(const CTERefStep & step, CardinalityContext & context) override;
     PlanNodeStatisticsPtr visitPartitionTopNStep(const PartitionTopNStep & step, CardinalityContext & context) override;
-    PlanNodeStatisticsPtr visitTopNFilteringStep(const TopNFilteringStep &, CardinalityContext & context) override;
 };
 
 class PlanCardinalityVisitor : public PlanNodeVisitor<PlanNodeStatisticsPtr, CardinalityContext>

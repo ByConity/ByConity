@@ -66,8 +66,8 @@ TransformResult FilterWindowToPartitionTopN::transformImpl(PlanNodePtr node, con
                     {
                         auto window_func = window_desc.window_functions[0];
 
-                        static std::map<String, TopNModel> funcs{
-                            {"row_number", TopNModel::ROW_NUMBER}, {"rank", TopNModel::RANKER}, {"dense_rank", TopNModel::DENSE_RANK}};
+                        static std::map<String, PartitionTopNModel> funcs{
+                            {"row_number", RowNumber}, {"rank", RANKER}, {"dense_rank", DENSE_RANK}};
                         auto func_name = window_func.function_node->name;
                         if (window_func.column_name == symbol->getColumnName() && funcs.contains(func_name) && !window_desc.order_by.empty()
                             && !window_desc.partition_by.empty())

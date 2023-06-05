@@ -4,11 +4,9 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. 159867 rows
       │     Order by: {w_warehouse_name asc, i_item_id asc}
-      │     Limit: 100
       └─ Gather Exchange est. 159867 rows
          └─ Sorting est. 159867 rows
             │     Order by: {w_warehouse_name asc, i_item_id asc}
-            │     Limit: 100
             └─ Filter est. 159867 rows
                │     Condition: (multiIf(`expr#sum(multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0))` > 0, `expr#sum(multiIf(greaterOrEquals(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0))` / `expr#sum(multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0))`, NULL) >= '0.666666') AND (multiIf(`expr#sum(multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0))` > 0, `expr#sum(multiIf(greaterOrEquals(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0))` / `expr#sum(multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0))`, NULL) <= '1.500000')
                └─ MergingAggregated est. 177631 rows

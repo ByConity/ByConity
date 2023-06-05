@@ -4,7 +4,6 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. ? rows
       │     Order by: {expr#uniqExact(ws_order_number) asc}
-      │     Limit: 100
       └─ MergingAggregated est. ? rows
          └─ Gather Exchange est. ? rows
             └─ Aggregating est. ? rows

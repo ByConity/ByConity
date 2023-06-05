@@ -29,7 +29,6 @@
 #include <Optimizer/Rule/Rewrite/SimplifyExpressionRules.h>
 #include <Optimizer/Rule/Rewrite/SwapAdjacenRules.h>
 #include <Optimizer/Rule/Rewrite/FilterWindowToPartitionTopN.h>
-#include <Optimizer/Rule/Rewrite/TopNRules.h>
 
 namespace DB
 {
@@ -109,8 +108,7 @@ std::vector<RulePtr> Rules::pushDownLimitRules()
         std::make_shared<PushLimitThroughProjection>(),
         std::make_shared<PushLimitThroughExtremesStep>(),
         std::make_shared<PushLimitThroughOuterJoin>(),
-        std::make_shared<PushLimitThroughUnion>(),
-        std::make_shared<PushTopNThroughProjection>()};
+        std::make_shared<PushLimitThroughUnion>()};
 }
 
 std::vector<RulePtr> Rules::distinctToAggregateRules()
@@ -126,29 +124,6 @@ std::vector<RulePtr> Rules::pushIntoTableScanRules()
 std::vector<RulePtr> Rules::swapAdjacentRules()
 {
     return {std::make_shared<SwapAdjacentWindows>()};
-}
-
-std::vector<RulePtr> Rules::pushDownTopNRules()
-{
-    return {
-        std::make_shared<PushTopNThroughProjection>()
-    };
-}
-
-std::vector<RulePtr> Rules::createTopNFilteringRules()
-{
-    return {
-        std::make_shared<CreateTopNFilteringForAggregating>()
-    };
-}
-
-std::vector<RulePtr> Rules::pushDownTopNFilteringRules()
-{
-    /// PushTopNFilteringXXX rules cannot be mixed with CreateTopNFilteringXXX rules,
-    /// as create rules will produce redundant TopNFilteringSteps when the last produced one is pushdowned.
-    return {
-        std::make_shared<PushTopNFilteringThroughProjection>()
-    };
 }
 
 }

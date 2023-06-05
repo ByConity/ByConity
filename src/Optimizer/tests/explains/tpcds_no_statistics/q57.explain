@@ -4,11 +4,9 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. ? rows
       │     Order by: {expr#minus(sum_sales, avg_monthly_sales) asc, cc_name asc}
-      │     Limit: 100
       └─ Gather Exchange est. ? rows
          └─ Sorting est. ? rows
             │     Order by: {expr#minus(sum_sales, avg_monthly_sales) asc, cc_name asc}
-            │     Limit: 100
             └─ Projection est. ? rows
                │     Expressions: [cc_name, d_moy, d_year, expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year), expr#sum(cs_sales_price), expr#sum(cs_sales_price)_1, expr#sum(cs_sales_price)_2, i_brand, i_category], expr#minus(sum_sales, avg_monthly_sales):=`expr#sum(cs_sales_price)` - `expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year)`
                └─ Inner Join est. ? rows

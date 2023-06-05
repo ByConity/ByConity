@@ -4,11 +4,9 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. ? rows
       │     Order by: {expr#count() asc, ca_state asc}
-      │     Limit: 100
       └─ Gather Exchange est. ? rows
          └─ Sorting est. ? rows
             │     Order by: {expr#count() asc, ca_state asc}
-            │     Limit: 100
             └─ Filter est. ? rows
                │     Condition: `expr#count()` >= 10
                └─ MergingAggregated est. ? rows

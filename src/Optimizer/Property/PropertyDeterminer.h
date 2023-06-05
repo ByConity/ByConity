@@ -73,7 +73,6 @@ public:
     PropertySets visitEnforceSingleRowStep(const EnforceSingleRowStep &, DeterminerContext &) override;
     PropertySets visitAssignUniqueIdStep(const AssignUniqueIdStep & node, DeterminerContext & context) override;
     PropertySets visitCTERefStep(const CTERefStep &, DeterminerContext &) override;
-    PropertySets visitTopNFilteringStep(const TopNFilteringStep &, DeterminerContext & context) override;
 
 private:
     static PropertySet single()

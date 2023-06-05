@@ -4,11 +4,9 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. ? rows
       │     Order by: {c_customer_id asc}
-      │     Limit: 100
       └─ Gather Exchange est. ? rows
          └─ Sorting est. ? rows
             │     Order by: {c_customer_id asc}
-            │     Limit: 100
             └─ Inner Join est. ? rows
                │     Condition: s_store_sk == sr_store_sk_1
                │     Filter: `expr#sum(sr_return_amt)` > (`expr#avg(ctr_total_return)` * '1.2')

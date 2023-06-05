@@ -62,7 +62,6 @@
 #include <QueryPlan/ValuesStep.h>
 #include <QueryPlan/Void.h>
 #include <QueryPlan/WindowStep.h>
-#include <QueryPlan/TopNFilteringStep.h>
 #include <Parsers/IAST_fwd.h>
 
 #include <memory>

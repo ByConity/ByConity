@@ -98,15 +98,6 @@ bool isIdentity(const ProjectionStep & step)
     return !step.isFinalProject() && step.getDynamicFilters().empty() && Utils::isIdentity(step.getAssignments());
 }
 
-NameToNameMap extractIdentities(const ProjectionStep & project)
-{
-    NameToNameMap result;
-    for (const auto & assignment: project.getAssignments())
-        if (auto identifier = assignment.second->as<const ASTIdentifier>())
-            result.emplace(assignment.first, identifier->name());
-    return result;
-}
-
 std::unordered_map<String, String> computeIdentityTranslations(Assignments & assignments)
 {
     std::unordered_map<String, String> output_to_input;

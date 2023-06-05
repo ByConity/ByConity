@@ -4,11 +4,9 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. 216306305793 rows
       │     Order by: {d_year asc, ss_item_sk asc, ss_customer_sk asc, expr#sum(ss_quantity) desc nulls_last, expr#sum(ss_wholesale_cost) desc nulls_last, expr#sum(ss_sales_price) desc nulls_last, expr#plus(coalesce(ws_qty, 0), coalesce(cs_qty, 0)) asc, expr#plus(coalesce(ws_wc, 0), coalesce(cs_wc, 0)) asc, expr#plus(coalesce(ws_sp, 0), coalesce(cs_sp, 0)) asc, expr#round(divide(ss_qty, plus(coalesce(ws_qty, 0), coalesce(cs_qty, 0))), 2) asc}
-      │     Limit: 100
       └─ Gather Exchange est. 216306305793 rows
          └─ Sorting est. 216306305793 rows
             │     Order by: {d_year asc, ss_item_sk asc, ss_customer_sk asc, expr#sum(ss_quantity) desc nulls_last, expr#sum(ss_wholesale_cost) desc nulls_last, expr#sum(ss_sales_price) desc nulls_last, expr#plus(coalesce(ws_qty, 0), coalesce(cs_qty, 0)) asc, expr#plus(coalesce(ws_wc, 0), coalesce(cs_wc, 0)) asc, expr#plus(coalesce(ws_sp, 0), coalesce(cs_sp, 0)) asc, expr#round(divide(ss_qty, plus(coalesce(ws_qty, 0), coalesce(cs_qty, 0))), 2) asc}
-            │     Limit: 100
             └─ Projection est. 216306305793 rows
                │     Expressions: [d_year, expr#sum(ss_quantity), expr#sum(ss_sales_price), expr#sum(ss_wholesale_cost), ss_customer_sk, ss_item_sk], expr#plus(coalesce(ws_qty, 0), coalesce(cs_qty, 0)):=coalesce(`expr#sum(ws_quantity)`, 0) + coalesce(`expr#sum(cs_quantity)`, 0), expr#plus(coalesce(ws_sp, 0), coalesce(cs_sp, 0)):=coalesce(`expr#sum(ws_sales_price)`, 0) + coalesce(`expr#sum(cs_sales_price)`, 0), expr#plus(coalesce(ws_wc, 0), coalesce(cs_wc, 0)):=coalesce(`expr#sum(ws_wholesale_cost)`, 0) + coalesce(`expr#sum(cs_wholesale_cost)`, 0), expr#round(divide(ss_qty, plus(coalesce(ws_qty, 0), coalesce(cs_qty, 0))), 2):=round(`expr#sum(ss_quantity)` / (coalesce(`expr#sum(ws_quantity)`, 0) + coalesce(`expr#sum(cs_quantity)`, 0)), 2)
                └─ Filter est. 216306305793 rows

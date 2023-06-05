@@ -407,9 +407,4 @@ Property DeriverVisitor::visitCTERefStep(const CTERefStep &, DeriverContext &)
     //    return output_prop;
     throw Exception("CTERefStep is not supported", ErrorCodes::OPTIMIZER_NONSUPPORT);
 }
-
-Property DeriverVisitor::visitTopNFilteringStep(const TopNFilteringStep &, DeriverContext & context)
-{
-    return context.getInput()[0];
-}
 }

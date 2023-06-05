@@ -24,7 +24,7 @@
 namespace DB
 {
 PartitionTopNStep::PartitionTopNStep(
-    const DataStream & input_stream_, const Names & partition_, const Names & order_by_, UInt64 limit_, TopNModel model_)
+    const DataStream & input_stream_, const Names & partition_, const Names & order_by_, UInt64 limit_, PartitionTopNModel model_)
     : ITransformingStep(input_stream_, input_stream_.header, {}), partition(partition_), order_by(order_by_), limit(limit_), model(model_)
 {
 }
@@ -91,7 +91,7 @@ QueryPlanStepPtr PartitionTopNStep::deserialize(ReadBuffer & buffer, ContextPtr)
     UInt64 limit;
     readBinary(limit, buffer);
 
-    TopNModel model;
+    PartitionTopNModel model;
     deserializeEnum(model, buffer);
 
     auto step = std::make_unique<PartitionTopNStep>(input_stream, partition, order_by, limit, model);

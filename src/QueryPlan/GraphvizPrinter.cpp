@@ -90,7 +90,6 @@ static std::unordered_map<IQueryPlanStep::Type, std::string> NODE_COLORS = {
     {IQueryPlanStep::Type::EnforceSingleRow, "bisque"},
     {IQueryPlanStep::Type::AssignUniqueId, "bisque"},
     {IQueryPlanStep::Type::CTERef, "orange"},
-    {IQueryPlanStep::Type::TopNFiltering, "fuchsia"},
 };
 
 struct PrinterContext
@@ -395,15 +394,6 @@ Void PlanNodePrinter::visitPartitionTopNNode(PartitionTopNNode & node, PrinterCo
     String color{NODE_COLORS[step.getType()]};
     String label{"PartitionTopNNode"};
     printNode(node, label, StepPrinter::printPartitionTopNStep(step), color, context);
-    return visitChildren(node, context);
-}
-
-Void PlanNodePrinter::visitTopNFilteringNode(TopNFilteringNode & node, PrinterContext & context)
-{
-    auto step = *node.getStep();
-    String color{NODE_COLORS[step.getType()]};
-    String label{"TopNFilteringNode"};
-    printNode(node, label, StepPrinter::printTopNFilteringStep(step), color, context);
     return visitChildren(node, context);
 }
 
@@ -794,16 +784,6 @@ Void PlanSegmentNodePrinter::visitPartitionTopNNode(QueryPlan::Node * node, Prin
     String label{"PartitionTopNNode"};
     String color{NODE_COLORS.at(step_ptr->getType())};
     printNode(node, label, StepPrinter::printPartitionTopNStep(step), color, context);
-    return visitChildren(node, context);
-}
-
-Void PlanSegmentNodePrinter::visitTopNFilteringNode(QueryPlan::Node * node, PrinterContext & context)
-{
-    auto & step_ptr = node->step;
-    auto & step = dynamic_cast<const TopNFilteringStep &>(*step_ptr);
-    String label{"TopNFilteringNode"};
-    String color{NODE_COLORS.at(step_ptr->getType())};
-    printNode(node, label, StepPrinter::printTopNFilteringStep(step), color, context);
     return visitChildren(node, context);
 }
 
@@ -1711,7 +1691,7 @@ String StepPrinter::printPartitionTopNStep(const PartitionTopNStep & step)
     }
     details << "|";
 
-    details << static_cast<std::underlying_type_t<TopNModel>>(step.getModel());
+    details << step.getModel();
     details << "|";
 
     details << "Limit: " << step.getLimit();
@@ -1786,29 +1766,6 @@ String StepPrinter::printFilter(const ConstASTPtr & filter)
     }
 
     return buf.str();
-}
-
-String StepPrinter::printTopNFilteringStep(const TopNFilteringStep & step)
-{
-    std::stringstream details;
-    details << "Order By:\\n";
-    auto & descs = step.getSortDescription();
-    for (auto & desc : descs)
-    {
-        details << desc.column_name << " " << desc.direction << " " << desc.nulls_direction << "\\n";
-    }
-    details << "|";
-    details << "Size: " << step.getSize();
-    /*
-    details << "|";
-    details << "Output |";
-    for (auto & column : stepPtr->getOutputStream().header)
-    {
-        details << column.name << ":";
-        details << column.type->getName() << "\\n";
-    }
-     */
-    return details.str();
 }
 
 Void PlanNodeEdgePrinter::visitCTERefNode(CTERefNode & node, Void & c)

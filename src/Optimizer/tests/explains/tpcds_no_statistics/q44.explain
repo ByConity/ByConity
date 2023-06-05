@@ -4,11 +4,9 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. ? rows
       │     Order by: {expr#rank() OVER (ORDER BY rank_col ASC) asc}
-      │     Limit: 100
       └─ Gather Exchange est. ? rows
          └─ Sorting est. ? rows
             │     Order by: {expr#rank() OVER (ORDER BY rank_col ASC) asc}
-            │     Limit: 100
             └─ Inner Join est. ? rows
                │     Condition: ss_item_sk_2 == i_item_sk_1
                ├─ Repartition Exchange est. ? rows

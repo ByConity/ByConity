@@ -92,7 +92,6 @@ public:
     ExchangeResult visitEnforceSingleRowNode(EnforceSingleRowNode & node, ExchangeContext & cxt) override;
     ExchangeResult visitAssignUniqueIdNode(AssignUniqueIdNode & node, ExchangeContext & cxt) override;
     ExchangeResult visitCTERefNode(CTERefNode & node, ExchangeContext &) override;
-    ExchangeResult visitTopNFilteringNode(TopNFilteringNode & node, ExchangeContext & cxt) override;
 
 
 private:

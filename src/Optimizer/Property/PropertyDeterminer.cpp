@@ -315,10 +315,4 @@ PropertySets DeterminerVisitor::visitCTERefStep(const CTERefStep &, DeterminerCo
     return {{}};
 }
 
-PropertySets DeterminerVisitor::visitTopNFilteringStep(const TopNFilteringStep &, DeterminerContext & context)
-{
-    auto require = context.getRequired();
-    require.setPreferred(true);
-    return {{require}};
-}
 }

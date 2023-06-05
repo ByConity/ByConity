@@ -71,12 +71,6 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
 
         std::make_shared<MaterializedViewRewriter>(),
 
-        /// topn filtering optimization
-        /// rules use novel operators should be placed after MaterializedViewRewriter, in case of MV matching failure
-        std::make_shared<IterativeRewriter>(Rules::pushDownTopNRules(), "pushDownTopNRules"),
-        std::make_shared<IterativeRewriter>(Rules::createTopNFilteringRules(), "createTopNFiltering"),
-        std::make_shared<IterativeRewriter>(Rules::pushDownTopNFilteringRules(), "pushDownTopNFiltering"),
-
         // add exchange
         std::make_shared<AddExchange>(),
         std::make_shared<IterativeRewriter>(Rules::pushPartialStepRules(), "PushPartialStep"),
@@ -177,12 +171,6 @@ const Rewriters & PlanOptimizer::getFullRewriters()
 
         //
         std::make_shared<MaterializedViewRewriter>(),
-
-        /// topn filtering optimization
-        /// rules use novel operators should be placed after MaterializedViewRewriter, in case of MV matching failure
-        std::make_shared<IterativeRewriter>(Rules::pushDownTopNRules(), "pushDownTopNRules"),
-        std::make_shared<IterativeRewriter>(Rules::createTopNFilteringRules(), "createTopNFiltering"),
-        std::make_shared<IterativeRewriter>(Rules::pushDownTopNFilteringRules(), "pushDownTopNFiltering"),
 
         // Cost-based optimizer
         std::make_shared<CascadesOptimizer>(),

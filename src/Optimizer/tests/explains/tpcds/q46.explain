@@ -4,11 +4,9 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. 8259929 rows
       │     Order by: {c_last_name asc, c_first_name asc, ca_city_1 asc, ca_city asc, ss_ticket_number asc}
-      │     Limit: 100
       └─ Gather Exchange est. 8259929 rows
          └─ Sorting est. 8259929 rows
             │     Order by: {c_last_name asc, c_first_name asc, ca_city_1 asc, ca_city asc, ss_ticket_number asc}
-            │     Limit: 100
             └─ Inner Join est. 8259929 rows
                │     Condition: c_current_addr_sk == ca_address_sk_1
                │     Filter: ca_city_1 != ca_city

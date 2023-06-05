@@ -4,7 +4,6 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. ? rows
       │     Order by: {expr#sum(ws_ext_discount_amt) asc}
-      │     Limit: 100
       └─ MergingAggregated est. ? rows
          └─ Gather Exchange est. ? rows
             └─ Aggregating est. ? rows

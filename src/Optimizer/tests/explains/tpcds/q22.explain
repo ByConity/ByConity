@@ -4,11 +4,9 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. 783000000 rows
       │     Order by: {expr#avg(inv_quantity_on_hand) asc, i_product_name asc, i_brand asc, i_class asc, i_category asc}
-      │     Limit: 100
       └─ Gather Exchange est. 783000000 rows
          └─ Sorting est. 783000000 rows
             │     Order by: {expr#avg(inv_quantity_on_hand) asc, i_product_name asc, i_brand asc, i_class asc, i_category asc}
-            │     Limit: 100
             └─ MergingAggregated est. 783000000 rows
                └─ Repartition Exchange est. 783000000 rows
                   │     Partition by: {i_brand, i_category, i_class, i_product_name}

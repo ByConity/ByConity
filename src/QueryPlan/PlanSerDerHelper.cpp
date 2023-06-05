@@ -69,7 +69,6 @@
 #include <QueryPlan/UnionStep.h>
 #include <QueryPlan/ValuesStep.h>
 #include <QueryPlan/WindowStep.h>
-#include <QueryPlan/TopNFilteringStep.h>
 #include <Common/ClickHouseRevision.h>
 
 namespace DB

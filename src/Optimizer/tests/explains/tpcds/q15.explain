@@ -4,11 +4,9 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. 9393 rows
       │     Order by: {ca_zip asc}
-      │     Limit: 100
       └─ Gather Exchange est. 9393 rows
          └─ Sorting est. 9393 rows
             │     Order by: {ca_zip asc}
-            │     Limit: 100
             └─ MergingAggregated est. 9393 rows
                └─ Repartition Exchange est. 9393 rows
                   │     Partition by: {ca_zip}

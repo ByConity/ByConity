@@ -4,11 +4,9 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. 12170480 rows
       │     Order by: {expr#sum(act_sales) asc, ss_customer_sk asc}
-      │     Limit: 100
       └─ Gather Exchange est. 12170480 rows
          └─ Sorting est. 12170480 rows
             │     Order by: {expr#sum(act_sales) asc, ss_customer_sk asc}
-            │     Limit: 100
             └─ MergingAggregated est. 12170480 rows
                └─ Repartition Exchange est. 12170480 rows
                   │     Partition by: {ss_customer_sk}

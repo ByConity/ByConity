@@ -4,11 +4,9 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. ? rows
       │     Order by: {expr#'store channel'_1 asc, s_store_sk_2 asc}
-      │     Limit: 100
       └─ Gather Exchange est. ? rows
          └─ Sorting est. ? rows
             │     Order by: {expr#'store channel'_1 asc, s_store_sk_2 asc}
-            │     Limit: 100
             └─ Aggregating est. ? rows
                │     Group by: {expr#'store channel'_1, s_store_sk_2}
                │     Aggregates: expr#sum(sales):=AggNull(sum)(expr#sum(ss_ext_sales_price)_1), expr#sum(returns):=AggNull(sum)(expr#coalesce(returns, 0)_2), expr#sum(profit):=AggNull(sum)(expr#minus(profit, coalesce(profit_loss, 0))_2)

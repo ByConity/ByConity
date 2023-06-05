@@ -4,11 +4,9 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. ? rows
       │     Order by: {expr#sum(ss_ext_sales_price) desc nulls_last, d_year asc, i_category_id asc, i_category asc}
-      │     Limit: 100
       └─ Gather Exchange est. ? rows
          └─ Sorting est. ? rows
             │     Order by: {expr#sum(ss_ext_sales_price) desc nulls_last, d_year asc, i_category_id asc, i_category asc}
-            │     Limit: 100
             └─ MergingAggregated est. ? rows
                └─ Repartition Exchange est. ? rows
                   │     Partition by: {d_year, i_category, i_category_id}
