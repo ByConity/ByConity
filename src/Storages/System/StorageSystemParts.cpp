@@ -244,6 +244,8 @@ void StorageSystemParts::processNextStorage(
         if (columns_mask[src_index++])
             columns[res_index++]->insert(static_cast<UInt32>(part->ttl_infos.table_ttl.min));
         if (columns_mask[src_index++])
+            // TODO: time_t value is casted to UInt32 which has too few bits to accomodate it
+            // coverity[store_truncates_time_t]
             columns[res_index++]->insert(static_cast<UInt32>(part->ttl_infos.table_ttl.max));
 
         auto add_ttl_info_map = [&](const TTLInfoMap & ttl_info_map)
@@ -262,6 +264,8 @@ void StorageSystemParts::processNextStorage(
                 if (columns_mask[src_index])
                     expression_array.emplace_back(expression);
                 if (columns_mask[src_index + 1])
+                    // TODO: time_t value is casted to UInt32 which has too few bits to accomodate it
+                    // coverity[store_truncates_time_t]
                     min_array.push_back(static_cast<UInt32>(ttl_info.min));
                 if (columns_mask[src_index + 2])
                     max_array.push_back(static_cast<UInt32>(ttl_info.max));

@@ -867,7 +867,8 @@ static FillColumnDescription getWithFillDescription(const ASTOrderByElement & or
         }
     }
     
-    // coverity[unit_use:FALSE]
+    // one of fill_from, fill_step and fill_to is initialized
+    // coverity[unit_use]
     return descr;
 }
 

@@ -65,7 +65,11 @@ public:
         const auto list_idx = findFreeListIndex(size);
 
         /// If there is a free block.
-        // coverity[overrun-local:FALSE]
+        /*
+            findFreeListIndex accounts for leading 0 in the bits, hence it will not go as high as 63 as
+            indicated by coverity
+        */ 
+        // coverity[overrun-local]
         if (auto & free_block_ptr = free_lists[list_idx])
         {
             /// Let's take it. And change the head of the list to the next
@@ -94,7 +98,8 @@ public:
 
         /// Insert the released block into the head of the list.
         auto & free_block_ptr = free_lists[list_idx];
-        // coverity[overrun-local:FALSE]
+        // maximuum value of list_ixd is 15 when size is 65536
+        // coverity[overrun-local]
         const auto old_head = free_block_ptr;
         free_block_ptr = reinterpret_cast<Block *>(ptr);
         free_block_ptr->next = old_head;

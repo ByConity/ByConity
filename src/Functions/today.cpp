@@ -37,7 +37,8 @@ namespace
 class ExecutableFunctionToday : public IExecutableFunction
 {
 public:
-    // coverity[store_truncates_time_t:FALSE]
+    // Only called by FunctionBaseToday which passes UInt16
+    // coverity[store_truncates_time_t]
     explicit ExecutableFunctionToday(time_t time_) : day_value(time_) {}
 
     String getName() const override { return "today"; }

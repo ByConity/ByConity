@@ -64,7 +64,7 @@ private:
 class DaemonJobTxnGC : public DaemonJob
 {
 public:
-    DaemonJobTxnGC(ContextMutablePtr global_context_) : DaemonJob(global_context_, CnchBGThreadType::TxnGC) { }
+    DaemonJobTxnGC(ContextMutablePtr global_context_) : DaemonJob(std::move(global_context_), CnchBGThreadType::TxnGC) { }
     bool executeImpl() override;
     using TransactionRecords = std::vector<TransactionRecord>;
 

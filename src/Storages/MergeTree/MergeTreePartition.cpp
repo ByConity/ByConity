@@ -62,25 +62,29 @@ namespace
         void operator() (const Null &) const
         {
             UInt8 type = Field::Types::Null;
-            // coverity[overrun-buffer-val:FALSE]
+            // checked update implementation, no apparent out of bounds
+            // coverity[overrun-buffer-val]
             hash.update(type);
         }
         void operator() (const NegativeInfinity &) const
         {
             UInt8 type = Field::Types::NegativeInfinity;
-            // coverity[overrun-buffer-val:FALSE]
+            // checked update implementation, no apparent out of bounds
+            // coverity[overrun-buffer-val]
             hash.update(type);
         }
         void operator() (const PositiveInfinity &) const
         {
             UInt8 type = Field::Types::PositiveInfinity;
-            // coverity[overrun-buffer-val:FALSE]
+            // checked update implementation, no apparent out of bounds
+            // coverity[overrun-buffer-val]
             hash.update(type);
         }
         void operator() (const UInt64 & x) const
         {
             UInt8 type = Field::Types::UInt64;
-            // coverity[overrun-buffer-val:FALSE]
+            // checked update implementation, no apparent out of bounds
+            // coverity[overrun-buffer-val]
             hash.update(type);
             hash.update(x);
         }
@@ -99,14 +103,16 @@ namespace
         void operator() (const Int64 & x) const
         {
             UInt8 type = Field::Types::Int64;
-            // coverity[overrun-buffer-val:FALSE]
+            // checked update implementation, no apparent out of bounds
+            // coverity[overrun-buffer-val]
             hash.update(type);
             hash.update(x);
         }
         void operator() (const Int128 & x) const
         {
             UInt8 type = Field::Types::Int128;
-            // coverity[overrun-buffer-val:FALSE]
+            // checked update implementation, no apparent out of bounds
+            // coverity[overrun-buffer-val]
             hash.update(type);
             hash.update(x);
         }
@@ -123,14 +129,16 @@ namespace
         void operator() (const Float64 & x) const
         {
             UInt8 type = Field::Types::Float64;
-            // coverity[overrun-buffer-val:FALSE]
+            // checked update implementation, no apparent out of bounds
+            // coverity[overrun-buffer-val]
             hash.update(type);
             hash.update(x);
         }
         void operator() (const String & x) const
         {
             UInt8 type = Field::Types::String;
-            // coverity[overrun-buffer-val:FALSE]
+            // checked update implementation, no apparent out of bounds
+            // coverity[overrun-buffer-val]
             hash.update(type);
             hash.update(x.size());
             hash.update(x.data(), x.size());
@@ -138,7 +146,8 @@ namespace
         void operator() (const Array & x) const
         {
             UInt8 type = Field::Types::Array;
-            // coverity[overrun-buffer-val:FALSE]
+            // checked update implementation, no apparent out of bounds
+            // coverity[overrun-buffer-val]
             hash.update(type);
             hash.update(x.size());
 
@@ -148,7 +157,8 @@ namespace
         void operator() (const Tuple & x) const
         {
             UInt8 type = Field::Types::Tuple;
-            // coverity[overrun-buffer-val:FALSE]
+            // checked update implementation, no apparent out of bounds
+            // coverity[overrun-buffer-val]
             hash.update(type);
             hash.update(x.size());
 
@@ -158,7 +168,8 @@ namespace
         void operator() (const Map & x) const
         {
             UInt8 type = Field::Types::Map;
-            // coverity[overrun-buffer-val:FALSE]
+            // checked update implementation, no apparent out of bounds
+            // coverity[overrun-buffer-val]
             hash.update(type);
             hash.update(x.size());
 
@@ -174,7 +185,8 @@ namespace
         void operator() (const DecimalField<Decimal32> & x) const
         {
             UInt8 type = Field::Types::Decimal32;
-            // coverity[overrun-buffer-val:FALSE]
+            // checked update implementation, no apparent out of bounds
+            // coverity[overrun-buffer-val]
             hash.update(type);
             hash.update(x.getValue().value);
         }
@@ -193,14 +205,16 @@ namespace
         void operator() (const DecimalField<Decimal256> & x) const
         {
             UInt8 type = Field::Types::Decimal256;
-            // coverity[overrun-buffer-val:FALSE]
+            // checked update implementation, no apparent out of bounds
+            // coverity[overrun-buffer-val]
             hash.update(type);
             hash.update(x.getValue().value);
         }
         void operator() (const AggregateFunctionStateData & x) const
         {
             UInt8 type = Field::Types::AggregateFunctionState;
-            // coverity[overrun-buffer-val:FALSE]
+            // checked update implementation, no apparent out of bounds
+            // coverity[overrun-buffer-val]
             hash.update(type);
             hash.update(x.name.size());
             hash.update(x.name.data(), x.name.size());
@@ -210,7 +224,8 @@ namespace
         void operator() (const BitMap64 & x) const
         {
             UInt8 type = Field::Types::BitMap64;
-            // coverity[overrun-buffer-val:FALSE]
+            // checked update implementation, no apparent out of bounds
+            // coverity[overrun-buffer-val]
             hash.update(type);
             hash.update(x.cardinality());
 

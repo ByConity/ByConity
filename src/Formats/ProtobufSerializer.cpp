@@ -1488,10 +1488,12 @@ namespace
                     read_function = [this]() -> UInt32
                     {
                         readStr(text_buffer);
-                        // coverity[store_truncates_time_t:FALSE]
+                        // stringToDateTime calls readDateTimeText, which gives time that will not exceed UInt32
+                        // coverity[store_truncates_time_t]
                         return stringToDateTime(text_buffer);
                     };
-                    // coverity[store_truncates_time_t:FALSE]
+                    // stringToDateTime calls readDateTimeText, which gives time that will not exceed UInt32
+                    // coverity[store_truncates_time_t]
                     default_function = [this]() -> UInt32 { return stringToDateTime(field_descriptor.default_value_string()); };
                     break;
                 }

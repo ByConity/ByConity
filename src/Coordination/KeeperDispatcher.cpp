@@ -692,6 +692,8 @@ Keeper4LWInfo KeeperDispatcher::getKeeper4LWInfo() const
     }
     result.total_nodes_count = server->getKeeperStateMachine()->getNodesCount();
     result.last_zxid = server->getKeeperStateMachine()->getLastProcessedZxid();
+    // follower_count should only be initialized and used if it's a leader
+    // coverity[uninit_use]
     return result;
 }
 

@@ -1014,7 +1014,8 @@ inline void convertFromTime<DataTypeDateTime>(DataTypeDateTime::FieldType & x, t
     else if (unlikely(time > 0xFFFFFFFF))
         x = 0xFFFFFFFF;
     else
-        // coverity[store_truncates_time_t:FALSE]
+        // Handles exceeding 32 bit above
+        // coverity[store_truncates_time_t]
         x = time;
 }
 
@@ -1094,7 +1095,8 @@ inline bool tryParseImpl<DataTypeDateTime>(DataTypeDateTime::FieldType & x, Read
     time_t tmp = 0;
     if (!tryReadDateTimeText(tmp, rb, *time_zone))
         return false;
-    // coverity[store_truncates_time_t:FALSE]
+    // tryReadDateTimeText gives time that will not exceed UInt32
+    // coverity[store_truncates_time_t]
     x = tmp;
     return true;
 }

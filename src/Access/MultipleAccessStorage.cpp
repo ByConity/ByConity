@@ -376,7 +376,8 @@ void MultipleAccessStorage::updateSubscriptionsToNestedStorages(std::unique_lock
                 for (const auto & handler : handlers_by_type[static_cast<size_t>(type)])
                     notifications.push_back({handler, id, entity});
             };
-            // coverity[overrun-local:FALSE]
+            // uses boost_count_range in the underlying implementation, which is end exclusive
+            // coverity[overrun-local]
             for (auto & [storage, subscription] : added_subscriptions[static_cast<size_t>(type)])
                 subscription = storage->subscribeForChanges(type, on_changed);
         }

@@ -104,7 +104,8 @@ namespace
                 bool need_comma = false;
                 for (auto resource_type : collections::range(Quota::MAX_RESOURCE_TYPE))
                 {
-                    // coverity[overrun-local:FALSE]                    
+                    // collections::range is end exclusive
+                    // coverity[overrun-local]                    
                     if (limits.max[resource_type])
                     {
                         if (std::exchange(need_comma, true))

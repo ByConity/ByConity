@@ -592,7 +592,7 @@ void CnchWorkerServiceImpl::createDedupWorker(
         ThreadFromGlobalPool([log=this->log,
                               storage_id,
                               query,
-                              host_ports,
+                              host_ports = std::move(host_ports),
                               context = std::move(rpc_context)] {
             try
             {

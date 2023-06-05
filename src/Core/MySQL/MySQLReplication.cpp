@@ -442,7 +442,9 @@ namespace MySQLReplication
                         );
 
                         if (!meta)
-                            // coverity[store_truncates_time_t:FALSE]
+                            // The max value of the 64 bit int flagged here exceeds the year value that is
+                            // supported by ClickHouse as verified with Alfred
+                            // coverity[store_truncates_time_t]
                             row.push_back(Field{UInt32(date_time)});
                         else
                         {

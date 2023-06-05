@@ -119,13 +119,14 @@ void StorageSystemQuotaUsage::fillDataImpl(
     NullMap * column_max_null_map[MAX_RESOURCE_TYPE];
     for (auto resource_type : collections::range(MAX_RESOURCE_TYPE))
     {
-        // coverity[overrun-local:FALSE]
+        // collections::range is end exclusive, hence we can ignore all below
+        // coverity[overrun-local]
         column_usage[resource_type] = &assert_cast<ColumnNullable &>(*res_columns[column_index]).getNestedColumn();
-        // coverity[overrun-local:FALSE]        
+        // coverity[overrun-local]        
         column_usage_null_map[resource_type] = &assert_cast<ColumnNullable &>(*res_columns[column_index++]).getNullMapData();
-        // coverity[overrun-local:FALSE]
+        // coverity[overrun-local]
         column_max[resource_type] = &assert_cast<ColumnNullable &>(*res_columns[column_index]).getNestedColumn();
-        // coverity[overrun-local:FALSE]
+        // coverity[overrun-local]
         column_max_null_map[resource_type] = &assert_cast<ColumnNullable &>(*res_columns[column_index++]).getNullMapData();
     }
 
@@ -154,13 +155,14 @@ void StorageSystemQuotaUsage::fillDataImpl(
             column_duration_null_map.push_back(true);
             for (auto resource_type : collections::range(MAX_RESOURCE_TYPE))
             {
-                // coverity[overrun-local:FALSE]
+                // collections::range is end exclusive, hence we can ignore all below
+                // coverity[overrun-local]
                 column_usage[resource_type]->insertDefault();
-                // coverity[overrun-local:FALSE]
+                // coverity[overrun-local]
                 column_usage_null_map[resource_type]->push_back(true);
-                // coverity[overrun-local:FALSE]
+                // coverity[overrun-local]
                 column_max[resource_type]->insertDefault();
-                // coverity[overrun-local:FALSE]
+                // coverity[overrun-local]
                 column_max_null_map[resource_type]->push_back(true);
             }
             return;
