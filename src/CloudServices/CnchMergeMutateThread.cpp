@@ -194,6 +194,7 @@ std::unique_ptr<ManipulationTaskRecord> FutureManipulationTask::moveRecord()
 CnchMergeMutateThread::CnchMergeMutateThread(ContextPtr context_, const StorageID & id)
     : ICnchBGThread(context_->getGlobalContext(), CnchBGThreadType::MergeMutate, id)
 {
+    partition_selector = getContext()->getBGPartitionSelector();
 }
 
 CnchMergeMutateThread::~CnchMergeMutateThread()
@@ -603,17 +604,31 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
     /// Step 2: get parts & calc visible parts
     Stopwatch watch;
     ServerDataPartsVector data_parts;
-    Strings partitions_from_cache;
-    // bool cache_valid = isPartsCacheValid(storage);
-    // if (cache_valid)
-    // {
-    //     partitions_from_cache = selectPartitionsFromCache(storage);
-    //     data_parts = catalog->getServerDataPartsInPartitions(istorage, partitions_from_cache, local_context->getTimestamp(), nullptr);
-    // }
-    // else
+    
+    size_t num_partitions = storage_settings->max_partition_for_multi_select.value;
+    bool only_realtime_partition = storage_settings->cnch_merge_only_realtime_partition;
+
+    auto partitions = partition_selector->selectForMerge(istorage, num_partitions, only_realtime_partition); 
+    // partitions = removeLockedPartition(partitions);
+
+    if (partitions.empty())
     {
-        data_parts = catalog->getAllServerDataParts(istorage, getContext()->getTimestamp(), nullptr);
+        LOG_TRACE(log, "There is no partition to merge");
+        return false;
     }
+    else
+    {
+        data_parts = catalog->getServerDataPartsInPartitions(istorage, partitions, getContext()->getTimestamp(), nullptr);
+    }
+
+    if (data_parts.empty())
+    {
+        for (const auto & p : partitions)
+        {
+            partition_selector->postponeMerge(storage_id.uuid, p);
+        }
+    }
+
     metrics.elapsed_get_data_parts = watch.elapsedMicroseconds();
     watch.restart();
 
@@ -627,16 +642,11 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
         return false;
     }
 
-    // Cache is invalid means data parts are all parts from catalog, so we can calculate the expected max task size.
-    // if (!cache_valid)
-    // {
-    //     auto max_merge_task = calcTaskSize(storage, visible_parts.size());
-    //     if (running_merge_tasks >= int(max_merge_task))
-    //     {
-    //         LOG_DEBUG(log, "Too many concurrency merge tasks(curr: {}, max: {}), will retry after.", running_merge_tasks, max_merge_task);
-    //         return false;
-    //     }
-    // }
+    if (auto max_merge_task = storage_settings->max_addition_bg_task_num.value; running_merge_tasks >= max_merge_task)
+    {
+        LOG_DEBUG(log, "Too many concurrent merge tasks(curr: {}, max: {}. will retry later.", running_merge_tasks, max_merge_task);
+        return false;
+    }
 
     /// Calc merge parts
     /// visible_parts = calcServerMergeParts(storage, visible_parts, partitions_from_cache);
@@ -661,19 +671,30 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
     metrics.elapsed_select_parts = watch.elapsedMicroseconds();
     watch.restart();
 
-    LOG_DEBUG(log, "Selected {} groups candidate", res.size());
+    LOG_DEBUG(log, "Selected {} candidate groups", res.size());
 
     if (res.empty())
+    {
+        for (const auto & p : partitions)
+            partition_selector->postponeMerge(storage_id.uuid, p);
         return false;
+    }
 
     /// Step 4: Save to pending queue
+    std::unordered_set<String> postpone_partitions(partitions.begin(), partitions.end());
     for (auto & selected_parts : res)
     {
+        postpone_partitions.erase(selected_parts.front()->info().partition_id);
+
         auto future_task = std::make_unique<FutureManipulationTask>(*this, ManipulationType::Merge);
         future_task->assignSourceParts(std::move(selected_parts));
 
         merge_pending_queue.push(std::move(future_task));
     }
+
+    for (const auto & p : postpone_partitions)
+        partition_selector->postponeMerge(storage_id.uuid, p);
+
     LOG_DEBUG(log, "Push {} tasks to pending queue.", res.size());
 
     return true;
@@ -966,6 +987,7 @@ void CnchMergeMutateThread::finishTask(const String & task_id, const MergeTreeDa
         part_merge_log->add(part_merge_log_elem);
     }
 
+    auto partition_id = curr_task->parts.front()->info().partition_id;
     if (auto server_part_log = local_context->getServerPartLog())
     {
         ServerPartLogElement server_part_log_elem;
@@ -977,7 +999,7 @@ void CnchMergeMutateThread::finishTask(const String & task_id, const MergeTreeDa
         server_part_log_elem.table_name = storage_id.table_name;
         server_part_log_elem.uuid = storage_id.uuid;
         server_part_log_elem.part_name = curr_task->result_part_name;
-        server_part_log_elem.partition_id = curr_task->parts.front()->info().partition_id;
+        server_part_log_elem.partition_id = partition_id;
         for (auto & part : curr_task->parts)
             server_part_log_elem.source_part_names.push_back(part->name());
         server_part_log_elem.rows = merged_part->rows_count;
@@ -987,9 +1009,12 @@ void CnchMergeMutateThread::finishTask(const String & task_id, const MergeTreeDa
         server_part_log->add(server_part_log_elem);
     }
 
-    LOG_TRACE(log, "Finish manipulation task {}", task_id);
+    if(auto gc_thread = getContext()->tryGetCnchBGThread(CnchBGThreadType::PartGC, storage_id))
+        gc_thread->addCandidatePartition(partition_id);
 
-    updatePartCache(curr_task->parts.front()->info().partition_id, curr_task->parts.size());
+    partition_selector->addMergeParts(storage_id.uuid, partition_id, curr_task->parts.size(), now);
+
+    LOG_TRACE(log, "Finish manipulation task {}", task_id);
 }
 
 CnchWorkerClientPtr CnchMergeMutateThread::getWorker([[maybe_unused]] ManipulationType type, [[maybe_unused]] const ServerDataPartsVector & all_parts)

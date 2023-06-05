@@ -62,9 +62,13 @@ std::shared_ptr<TSystemLog> createSystemLog(
     const String & default_database_name,
     const String & default_table_name,
     const Poco::Util::AbstractConfiguration & config,
-    const String & config_prefix)
+    const String & config_prefix,
+    bool enable_by_default)
 {
-    if (!config.has(config_prefix))
+    if (!config.has(config_prefix) && !enable_by_default)
+        return {};
+    
+    if (config.has(config_prefix) && !config.getBool(config_prefix + ".enable", true))
         return {};
 
     String database = config.getString(config_prefix + ".database", default_database_name);
@@ -118,26 +122,29 @@ std::shared_ptr<TSystemLog> createSystemLog(
 
 SystemLogs::SystemLogs(ContextPtr global_context, const Poco::Util::AbstractConfiguration & config)
 {
-    query_log = createSystemLog<QueryLog>(global_context, "system", "query_log", config, "query_log");
-    query_thread_log = createSystemLog<QueryThreadLog>(global_context, "system", "query_thread_log", config, "query_thread_log");
-    query_exchange_log = createSystemLog<QueryExchangeLog>(global_context, "system", "query_exchange_log", config, "query_exchange_log");
-    part_log = createSystemLog<PartLog>(global_context, "system", "part_log", config, "part_log");
-    part_merge_log = createSystemLog<PartMergeLog>(global_context, "system", "part_merge_log", config, "part_merge_log");
-    server_part_log = createSystemLog<ServerPartLog>(global_context, "system", "server_part_log", config, "server_part_log");
-    trace_log = createSystemLog<TraceLog>(global_context, "system", "trace_log", config, "trace_log");
-    crash_log = createSystemLog<CrashLog>(global_context, "system", "crash_log", config, "crash_log");
-    text_log = createSystemLog<TextLog>(global_context, "system", "text_log", config, "text_log");
-    metric_log = createSystemLog<MetricLog>(global_context, "system", "metric_log", config, "metric_log");
+    bool on_server = global_context->getServerType() == ServerType::cnch_server;
+    bool on_worker = global_context->getServerType() == ServerType::cnch_worker;
+
+    query_log = createSystemLog<QueryLog>(global_context, "system", "query_log", config, "query_log", true);
+    query_thread_log = createSystemLog<QueryThreadLog>(global_context, "system", "query_thread_log", config, "query_thread_log", false);
+    query_exchange_log = createSystemLog<QueryExchangeLog>(global_context, "system", "query_exchange_log", config, "query_exchange_log", false);
+    part_log = createSystemLog<PartLog>(global_context, "system", "part_log", config, "part_log", on_worker);
+    part_merge_log = createSystemLog<PartMergeLog>(global_context, "system", "part_merge_log", config, "part_merge_log", on_server);
+    server_part_log = createSystemLog<ServerPartLog>(global_context, "system", "server_part_log", config, "server_part_log", on_server);
+    trace_log = createSystemLog<TraceLog>(global_context, "system", "trace_log", config, "trace_log", false);
+    crash_log = createSystemLog<CrashLog>(global_context, "system", "crash_log", config, "crash_log", false);
+    text_log = createSystemLog<TextLog>(global_context, "system", "text_log", config, "text_log", false);
+    metric_log = createSystemLog<MetricLog>(global_context, "system", "metric_log", config, "metric_log", false);
     asynchronous_metric_log = createSystemLog<AsynchronousMetricLog>(
         global_context, "system", "asynchronous_metric_log", config,
-        "asynchronous_metric_log");
+        "asynchronous_metric_log", false);
     opentelemetry_span_log = createSystemLog<OpenTelemetrySpanLog>(
         global_context, "system", "opentelemetry_span_log", config,
-        "opentelemetry_span_log");
-    mutation_log = createSystemLog<MutationLog>(global_context, "system", "mutation_log", config, "mutation_log");
-    kafka_log = createSystemLog<KafkaLog>(global_context, "system", "kafka_log", config, "kafka_log");
-    processors_profile_log = createSystemLog<ProcessorsProfileLog>(global_context, "system", "processors_profile_log", config, "processors_profile_log");
-    zookeeper_log = createSystemLog<ZooKeeperLog>(global_context, "system", "zookeeper_log", config, "zookeeper_log");
+        "opentelemetry_span_log", false);
+    mutation_log = createSystemLog<MutationLog>(global_context, "system", "mutation_log", config, "mutation_log", true);
+    kafka_log = createSystemLog<KafkaLog>(global_context, "system", "kafka_log", config, "kafka_log", true);
+    processors_profile_log = createSystemLog<ProcessorsProfileLog>(global_context, "system", "processors_profile_log", config, "processors_profile_log", false);
+    zookeeper_log = createSystemLog<ZooKeeperLog>(global_context, "system", "zookeeper_log", config, "zookeeper_log", false);
 
     if (query_log)
         logs.emplace_back(query_log.get());

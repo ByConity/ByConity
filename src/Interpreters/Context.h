@@ -42,6 +42,7 @@
 #include <Common/ThreadPool.h>
 #include <Common/isLocalAddress.h>
 #include <common/types.h>
+#include <CloudServices/CnchBGThreadPartitionSelector.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
 // #include <Storages/HDFS/HDFSCommon.h>
@@ -186,6 +187,8 @@ class CnchWorkerClientPools;
 class ICnchBGThread;
 using CnchBGThreadPtr = std::shared_ptr<ICnchBGThread>;
 class CnchBGThreadsMap;
+class CnchBGThreadPartitionSelector;
+using PartitionSelectorPtr = std::shared_ptr<CnchBGThreadPartitionSelector>;
 
 class IOutputFormat;
 using OutputFormatPtr = std::shared_ptr<IOutputFormat>;
@@ -1010,6 +1013,9 @@ public:
 
     /// Call after initialization before using system logs. Call for global context.
     void initializeSystemLogs();
+    
+    void initBGPartitionSelector();
+    PartitionSelectorPtr getBGPartitionSelector() const;
 
     /// Call after initialization before using trace collector.
     void initializeTraceCollector();
