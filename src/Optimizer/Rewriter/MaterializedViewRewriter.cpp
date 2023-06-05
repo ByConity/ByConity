@@ -972,8 +972,7 @@ protected:
                 // if rewrite expression is aggregate function, we should enforce an aggregate node.
                 if (isAggregateFunction(*rewrite))
                 {
-                    enforce_agg_node = true;
-                    return rewrite;
+                    return {};
                 }
                 if (!need_rollup)
                     return rewrite;
