@@ -32,7 +32,6 @@ jobs:
           cp -r $GITHUB_WORKSPACE/docker/local-deploy/* ./          
           cp $GITHUB_WORKSPACE/docker/local-deploy/.env ./
           cp $GITHUB_WORKSPACE/ci_scripts/create_docker_volume_ci.sh ./
-      # TODO: create only one volume and create ID for the volume
           /bin/bash create_docker_volume_ci.sh
           docker-compose -f docker-compose.yml.multiworkers up -d --force-recreate
           sleep 10
