@@ -36,6 +36,8 @@ public:
 
     std::unordered_map<CTEId, PlanNodePtr> & getCTEs() { return common_table_expressions; }
 
+    const std::unordered_map<CTEId, PlanNodePtr> & getCTEs() const { return common_table_expressions; }
+
     void add(CTEId id, PlanNodePtr plan)
     {
         checkNotExists(id);
