@@ -711,6 +711,8 @@ class IColumn;
     M(Bool, enable_materialized_view_join_rewriting, false, "Whether enable materialized view based rewriter for query using join materialized views", 0) \
     M(Bool, enable_sharding_optimize, false, "Whether enable sharding optimization, eg. local join", 0) \
     M(Bool, enable_filter_window_to_partition_topn, true, "Filter window to partition topn", 0) \
+    M(Bool, optimizer_projection_support, false, "Use projection in optimizer mode", 0) \
+    M(Bool, enable_topn_filtering_optimization, false, "Whether enable TopNFilterting optimization", 0) \
     /** Exchange setttings */ \
     M(UInt64, exchange_parallel_size, 1, "Exchange parallel size", 0) \
     M(UInt64, exchange_source_pipeline_threads, 16, "Recommend number of threads for pipeline which reading data from exchange, ingoned if exchange need keep data order", 0) \

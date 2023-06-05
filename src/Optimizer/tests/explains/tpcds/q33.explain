@@ -4,9 +4,11 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. 2985 rows
       │     Order by: {expr#sum(total_sales) asc}
+      │     Limit: 100
       └─ Gather Exchange est. 2985 rows
          └─ Sorting est. 2985 rows
             │     Order by: {expr#sum(total_sales) asc}
+            │     Limit: 100
             └─ Aggregating est. 2985 rows
                │     Group by: {i_manufact_id_6}
                │     Aggregates: expr#sum(total_sales):=AggNull(sum)(expr#sum(ss_ext_sales_price)_1)

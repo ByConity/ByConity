@@ -4,9 +4,11 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. 242049690714 rows
       │     Order by: {c_customer_id_5 asc, c_customer_id_5 asc, c_customer_id_5 asc}
+      │     Limit: 100
       └─ Gather Exchange est. 242049690714 rows
          └─ Sorting est. 242049690714 rows
             │     Order by: {c_customer_id_5 asc, c_customer_id_5 asc, c_customer_id_5 asc}
+            │     Limit: 100
             └─ Inner Join est. 1626312194445 rows
                │     Condition: c_customer_id_11 == c_customer_id_5
                │     Filter: multiIf(`expr#sum(ss_net_paid)_5` > 0, `expr#sum(ss_net_paid)_7` / `expr#sum(ss_net_paid)_5`, NULL) > multiIf(`expr#sum(ss_net_paid)_1` > 0, `expr#sum(ss_net_paid)_3` / `expr#sum(ss_net_paid)_1`, NULL)

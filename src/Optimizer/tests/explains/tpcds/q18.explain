@@ -4,9 +4,11 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. 3426756 rows
       │     Order by: {ca_country asc, ca_state asc, ca_county asc, i_item_id asc}
+      │     Limit: 100
       └─ Gather Exchange est. 3426756 rows
          └─ Sorting est. 3426756 rows
             │     Order by: {ca_country asc, ca_state asc, ca_county asc, i_item_id asc}
+            │     Limit: 100
             └─ MergingAggregated est. 3426756 rows
                └─ Repartition Exchange est. 3426756 rows
                   │     Partition by: {ca_country, ca_county, ca_state, i_item_id}

@@ -4,9 +4,11 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. 71604 rows
       │     Order by: {expr#sum(ss_ext_sales_price) desc nulls_last, i_brand asc, i_brand_id asc, i_manufact_id asc, i_manufact asc}
+      │     Limit: 100
       └─ Gather Exchange est. 71604 rows
          └─ Sorting est. 71604 rows
             │     Order by: {expr#sum(ss_ext_sales_price) desc nulls_last, i_brand asc, i_brand_id asc, i_manufact_id asc, i_manufact asc}
+            │     Limit: 100
             └─ MergingAggregated est. 71604 rows
                └─ Repartition Exchange est. 71604 rows
                   │     Partition by: {i_brand, i_brand_id, i_manufact, i_manufact_id}

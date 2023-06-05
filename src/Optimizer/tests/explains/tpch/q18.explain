@@ -4,9 +4,11 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. 5993742 rows
       │     Order by: {o_totalprice desc nulls_last, o_orderdate asc}
+      │     Limit: 100
       └─ Gather Exchange est. 5993742 rows
          └─ Sorting est. 5993742 rows
             │     Order by: {o_totalprice desc nulls_last, o_orderdate asc}
+            │     Limit: 100
             └─ Aggregating est. 6010988 rows
                │     Group by: {c_custkey, c_name, o_orderdate, o_orderkey, o_totalprice}
                │     Aggregates: expr#sum(l_quantity)_1:=AggNull(sum)(l_quantity)
