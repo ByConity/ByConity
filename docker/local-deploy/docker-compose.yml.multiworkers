@@ -55,7 +55,7 @@ services:
 
   resource-manager:
     image: byconity/debian:buster-runit-fdb7.1.27
-    command: bash -c "export PATH=$PATH:/opt/byconity/bin/programs && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 tso-0:18845 && resource-manager --config-file /config/multi-workers/resource-manager.yml"
+    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 tso-0:18845 && resource-manager --config-file /config/resource-manager.yml"
     depends_on:
       - tso
     volumes:
