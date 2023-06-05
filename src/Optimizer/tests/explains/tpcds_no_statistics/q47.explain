@@ -16,45 +16,47 @@ Projection est. 100 rows
                   │  └─ Inner Join est. ? rows
                   │     │     Condition: expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC) == plus(expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_1, 1), i_brand == i_brand_1, i_category == i_category_1, s_company_name == s_company_name_1, s_store_name == s_store_name_1
                   │     ├─ Filter est. ? rows
-                  │     │  │     Condition: (multiIf(`expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)` > 0, abs(`expr#sum(ss_sales_price)` - `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)`) / `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)`, NULL) > '0.1') AND (`expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)` > 0.) AND (d_year = 1999)
+                  │     │  │     Condition: (multiIf(`expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)` > 0, abs(`expr#sum(ss_sales_price)` - `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)`) / `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)`, NULL) > '0.1') AND (`expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)` > 0.)
                   │     │  └─ Window est. ? rows
-                  │     │     └─ Window est. ? rows
-                  │     │        └─ Repartition Exchange est. ? rows
-                  │     │           │     Partition by: {i_brand, i_category, s_company_name, s_store_name}
-                  │     │           └─ MergingAggregated est. ? rows
-                  │     │              └─ Repartition Exchange est. ? rows
-                  │     │                 │     Partition by: {d_moy, d_year, i_brand, i_category, s_company_name, s_store_name}
-                  │     │                 └─ Aggregating est. ? rows
-                  │     │                    │     Group by: {d_moy, d_year, i_brand, i_category, s_company_name, s_store_name}
-                  │     │                    │     Aggregates: expr#sum(ss_sales_price):=AggNull(sum)(ss_sales_price)
-                  │     │                    └─ Inner Join est. ? rows
-                  │     │                       │     Condition: ss_store_sk == s_store_sk
-                  │     │                       ├─ Repartition Exchange est. ? rows
-                  │     │                       │  │     Partition by: {ss_store_sk}
-                  │     │                       │  └─ Inner Join est. ? rows
-                  │     │                       │     │     Condition: ss_sold_date_sk == d_date_sk
-                  │     │                       │     ├─ Repartition Exchange est. ? rows
-                  │     │                       │     │  │     Partition by: {ss_sold_date_sk}
-                  │     │                       │     │  └─ Inner Join est. ? rows
-                  │     │                       │     │     │     Condition: i_item_sk == ss_item_sk
-                  │     │                       │     │     ├─ Repartition Exchange est. ? rows
-                  │     │                       │     │     │  │     Partition by: {i_item_sk}
-                  │     │                       │     │     │  └─ TableScan tpcds.item est. ? rows
-                  │     │                       │     │     │           Outputs: [i_brand, i_category, i_item_sk]
-                  │     │                       │     │     └─ Repartition Exchange est. ? rows
-                  │     │                       │     │        │     Partition by: {ss_item_sk}
-                  │     │                       │     │        └─ TableScan tpcds.store_sales est. ? rows
-                  │     │                       │     │                 Outputs: [ss_item_sk, ss_sales_price, ss_sold_date_sk, ss_store_sk]
-                  │     │                       │     └─ Repartition Exchange est. ? rows
-                  │     │                       │        │     Partition by: {d_date_sk}
-                  │     │                       │        └─ Filter est. ? rows
-                  │     │                       │           │     Condition: ((d_year = cast(1998, 'Int32')) AND (d_moy = 12)) OR ((d_year = cast(2000, 'UInt32')) AND (d_moy = 1)) OR (d_year = 1999)
-                  │     │                       │           └─ TableScan tpcds.date_dim est. ? rows
-                  │     │                       │                    Outputs: [d_date_sk, d_moy, d_year]
-                  │     │                       └─ Repartition Exchange est. ? rows
-                  │     │                          │     Partition by: {s_store_sk}
-                  │     │                          └─ TableScan tpcds.store est. ? rows
-                  │     │                                   Outputs: [s_company_name, s_store_name, s_store_sk]
+                  │     │     └─ Filter est. ? rows
+                  │     │        │     Condition: d_year = 1999
+                  │     │        └─ Window est. ? rows
+                  │     │           └─ Repartition Exchange est. ? rows
+                  │     │              │     Partition by: {i_brand, i_category, s_company_name, s_store_name}
+                  │     │              └─ MergingAggregated est. ? rows
+                  │     │                 └─ Repartition Exchange est. ? rows
+                  │     │                    │     Partition by: {d_moy, d_year, i_brand, i_category, s_company_name, s_store_name}
+                  │     │                    └─ Aggregating est. ? rows
+                  │     │                       │     Group by: {d_moy, d_year, i_brand, i_category, s_company_name, s_store_name}
+                  │     │                       │     Aggregates: expr#sum(ss_sales_price):=AggNull(sum)(ss_sales_price)
+                  │     │                       └─ Inner Join est. ? rows
+                  │     │                          │     Condition: ss_store_sk == s_store_sk
+                  │     │                          ├─ Repartition Exchange est. ? rows
+                  │     │                          │  │     Partition by: {ss_store_sk}
+                  │     │                          │  └─ Inner Join est. ? rows
+                  │     │                          │     │     Condition: ss_sold_date_sk == d_date_sk
+                  │     │                          │     ├─ Repartition Exchange est. ? rows
+                  │     │                          │     │  │     Partition by: {ss_sold_date_sk}
+                  │     │                          │     │  └─ Inner Join est. ? rows
+                  │     │                          │     │     │     Condition: i_item_sk == ss_item_sk
+                  │     │                          │     │     ├─ Repartition Exchange est. ? rows
+                  │     │                          │     │     │  │     Partition by: {i_item_sk}
+                  │     │                          │     │     │  └─ TableScan tpcds.item est. ? rows
+                  │     │                          │     │     │           Outputs: [i_brand, i_category, i_item_sk]
+                  │     │                          │     │     └─ Repartition Exchange est. ? rows
+                  │     │                          │     │        │     Partition by: {ss_item_sk}
+                  │     │                          │     │        └─ TableScan tpcds.store_sales est. ? rows
+                  │     │                          │     │                 Outputs: [ss_item_sk, ss_sales_price, ss_sold_date_sk, ss_store_sk]
+                  │     │                          │     └─ Repartition Exchange est. ? rows
+                  │     │                          │        │     Partition by: {d_date_sk}
+                  │     │                          │        └─ Filter est. ? rows
+                  │     │                          │           │     Condition: ((d_year = cast(1998, 'Int32')) AND (d_moy = 12)) OR ((d_year = cast(2000, 'UInt32')) AND (d_moy = 1)) OR (d_year = 1999)
+                  │     │                          │           └─ TableScan tpcds.date_dim est. ? rows
+                  │     │                          │                    Outputs: [d_date_sk, d_moy, d_year]
+                  │     │                          └─ Repartition Exchange est. ? rows
+                  │     │                             │     Partition by: {s_store_sk}
+                  │     │                             └─ TableScan tpcds.store est. ? rows
+                  │     │                                      Outputs: [s_company_name, s_store_name, s_store_sk]
                   │     └─ Projection est. ? rows
                   │        │     Expressions: [expr#sum(ss_sales_price)_1, i_brand_1, i_category_1, s_company_name_1, s_store_name_1], plus(expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_1, 1):=`expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_1` + 1
                   │        └─ Window est. ? rows
