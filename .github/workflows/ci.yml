@@ -26,23 +26,19 @@ jobs:
         run: |
           bash $GITHUB_WORKSPACE/unittest.sh
       - name: Create ByConity Cluster
-      # TODO: move docker-compose installation to DockerFile
         run: |
           mkdir /CI/
           cd /CI/
-          export BINARY_PATH=$GITHUB_WORKSPACE/build/programs
-          export HDFS_PATH=/CI/hdfs
           cp -r $GITHUB_WORKSPACE/docker/local-deploy/* ./          
           cp $GITHUB_WORKSPACE/docker/local-deploy/.env ./
-          sed -i "s|ci\_byconity\_binary\_path|${BINARY_PATH}|g" .env
-          docker-compose -f docker-compose.yml.multiworkers down
+          cp $GITHUB_WORKSPACE/ci_scripts/create_docker_volume_ci.sh ./
+      # TODO: create only one volume and create ID for the volume
+          /bin/bash create_docker_volume_ci.sh
           docker-compose -f docker-compose.yml.multiworkers up -d --force-recreate
           sleep 10
-          docker ps -a -n 3 --filter status=exited
-          docker ps -aq -n 3 --filter status=exited | xargs -L 1 docker logs
-          docker ps -aq -n 3 --filter status=exited | xargs -L 1 docker inspect
           hdfs/create_users.sh
-          curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 localhost:8124
+          server_ip=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.Gateway}}{{end}}' server-0)
+          curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 server_ip:8124
       - name: Prepare FuntionalStateless Queries
         continue-on-error: true
         run: |
@@ -57,7 +53,7 @@ jobs:
         continue-on-error: true
         run: |
           cd /CI/
-          ./clickhouse-test --stop --hung-check --jobs 4 --order asc --print-time 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
+          ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
           ./process_functional_tests_result.py || echo -e "failure\tCannot parse results" > test_output/check_status.tsv
       # - name: CNCH - FuntionalStateless (multi-workers + ClickhouseSQL + w/w.o optimizer)
       #   continue-on-error: true
