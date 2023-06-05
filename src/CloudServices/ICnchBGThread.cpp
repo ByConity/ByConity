@@ -30,9 +30,19 @@ ICnchBGThread::ICnchBGThread(ContextPtr global_context_, CnchBGThreadType thread
     , storage_id(storage_id_)
     , catalog(global_context_->getCnchCatalog())
     , log(&Poco::Logger::get(storage_id.getNameForLogs() + "(" + toString(thread_type) + ")"))
-    , scheduled_task(global_context_->getSchedulePool().createTask(log->name(), [this] { run(); }))
     , startup_time(time(nullptr))
 {
+    switch (thread_type)
+    {
+        case CnchBGThreadType::MergeMutate:
+            scheduled_task = global_context_->getMergeSelectSchedulePool().createTask(log->name(), [this] { run(); });
+            break;
+        case CnchBGThreadType::Consumer:
+            scheduled_task = global_context_->getConsumeSchedulePool().createTask(log->name(), [this] { run(); });
+            break;
+        default:
+            scheduled_task = global_context_->getSchedulePool().createTask(log->name(), [this] { run(); });
+    }
 }
 
 ICnchBGThread::~ICnchBGThread()

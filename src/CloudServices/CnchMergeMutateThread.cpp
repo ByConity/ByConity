@@ -22,6 +22,7 @@
 #include <CloudServices/CnchWorkerClient.h>
 #include <CloudServices/CnchWorkerClientPools.h>
 #include <Common/Configurations.h>
+#include <Common/ProfileEvents.h>
 #include <Interpreters/PartMergeLog.h>
 #include <Interpreters/ServerPartLog.h>
 #include <Storages/MergeTree/MergeTreeData.h>
@@ -32,6 +33,12 @@
 #include <WorkerTasks/ManipulationTaskParams.h>
 
 #include <chrono>
+
+namespace ProfileEvents
+{
+    extern const Event Manipulation;
+    extern const Event ManipulationSuccess;
+}
 
 namespace DB
 {
@@ -46,6 +53,7 @@ namespace ErrorCodes
 namespace
 {
     constexpr auto DELAY_SCHEDULE_TIME_IN_SECOND = 60ul;
+    constexpr auto DELAY_SCHEDULE_RANDOM_TIME_IN_SECOND = 20ul;
 
     /// XXX: some settings for MutateTask
     constexpr auto max_mutate_part_num = 100UL;
@@ -371,17 +379,25 @@ void CnchMergeMutateThread::runImpl()
                 fetched_thread_start_time,
                 task_records.size());
             task_records.clear();
+            running_merge_tasks = 0;
+            running_mutation_tasks = 0;
+            {
+                decltype(merge_pending_queue) empty_for_clear;
+                merge_pending_queue.swap(empty_for_clear);
+            }
         }
         return;
     }
     /// now fetched_thread_start_time == thread_start_time
 
-    /// Delay first schedule for some time (60s) to make sure other old duplicate threads has been killed.
+    /// Delay first schedule for some time (60+s) to make sure other old duplicate threads has been killed.
     if (last_schedule_time == 0)
     {
+        std::mt19937 generator(std::random_device{}());
         last_schedule_time = current_ts;
-        scheduled_task->scheduleAfter(DELAY_SCHEDULE_TIME_IN_SECOND * 1000);
-        LOG_DEBUG(log, "Schedule after {}s because of last_schedule_time = 0", DELAY_SCHEDULE_TIME_IN_SECOND);
+        auto delay_ms = 1000 * (DELAY_SCHEDULE_TIME_IN_SECOND + generator() % DELAY_SCHEDULE_RANDOM_TIME_IN_SECOND);
+        scheduled_task->scheduleAfter(delay_ms);
+        LOG_DEBUG(log, "Schedule after {} ms because of last_schedule_time = 0", delay_ms);
         return;
     }
     last_schedule_time = current_ts;
@@ -768,6 +784,7 @@ String CnchMergeMutateThread::submitFutureManipulationTask(FutureManipulationTas
             currently_synchronous_tasks.emplace(params.task_id);
         }
 
+        ProfileEvents::increment(ProfileEvents::Manipulation, 1);
         worker_client->submitManipulationTask(cnch_table, params, transaction_id, transaction->getStartTime());
         LOG_DEBUG(log, "Submitted manipulation task to {}, {}", worker_client->getHostWithPorts().toDebugString(), params.toDebugString());
     }
@@ -933,6 +950,7 @@ void CnchMergeMutateThread::finishTask(const String & task_id, const MergeTreeDa
 
     auto now = time(nullptr);
 
+    ProfileEvents::increment(ProfileEvents::ManipulationSuccess, 1);
     if (auto part_merge_log = local_context->getPartMergeLog())
     {
         PartMergeLogElement part_merge_log_elem;
