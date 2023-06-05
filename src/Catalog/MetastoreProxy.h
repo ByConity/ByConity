@@ -61,6 +61,7 @@ namespace DB::Catalog
 #define VIEW_DEPENDENCY_PREFIX "VD_"
 #define SYNC_LIST_PREFIX "SL_"
 #define KAFKA_OFFSETS_PREFIX "KO_"
+#define KAFKA_TRANSACTION_PREFIX "KT_"
 #define ROOT_PATH_PREFIX "RP_"
 #define ROOT_PATH_ID_UNIQUE_PREFIX "RU_"
 #define TABLE_MUTATION_PREFIX "MT_"
@@ -346,6 +347,11 @@ public:
     {
         return escapeString(name_space) + "_" + KAFKA_OFFSETS_PREFIX + escapeString(group_name) + "_"
                + escapeString(topic) + "_" + std::to_string(partition_num);
+    }
+
+    static std::string kafkaTransactionKey(const std::string & name_space, const std::string & uuid, const size_t consumer_index)
+    {
+        return escapeString(name_space) + "_" + KAFKA_TRANSACTION_PREFIX + escapeString(uuid) + "_" + std::to_string(consumer_index);
     }
 
     static std::string transactionRecordKey(const std::string & name_space, const UInt64 & txn_id)
@@ -688,6 +694,10 @@ public:
     void getKafkaTpl(const String & name_space, const String & consumer_group, cppkafka::TopicPartitionList & tpl);
     cppkafka::TopicPartitionList getKafkaTpl(const String & name_space, const String & consumer_group, const String & topic_name);
     void clearOffsetsForWholeTopic(const String & name_space, const String & topic, const String & consumer_group);
+    /// operations on kafka consumer transactions
+    void setTransactionForKafkaConsumer(const String & name_space, const String & uuid, const TxnTimestamp & txn_id, size_t consumer_index);
+    TxnTimestamp getTransactionForKafkaConsumer(const String & name_space, const String & uuid, size_t consumer_index);
+    void clearKafkaTransactions(const String & name_space, const String & uuid);
 
     void setTableClusterStatus(const String & name_space, const String & uuid, const bool & already_clustered);
     void getTableClusterStatus(const String & name_space, const String & uuid, bool & is_clustered);

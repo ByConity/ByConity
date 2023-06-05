@@ -156,6 +156,12 @@ namespace ProfileEvents
     extern const Event GetKafkaOffsetsTopicPartitionListFailed;
     extern const Event ClearOffsetsForWholeTopicSuccess;
     extern const Event ClearOffsetsForWholeTopicFailed;
+    extern const Event SetTransactionForKafkaConsumerSuccess;
+    extern const Event SetTransactionForKafkaConsumerFailed;
+    extern const Event GetTransactionForKafkaConsumerSuccess;
+    extern const Event GetTransactionForKafkaConsumerFailed;
+    extern const Event ClearKafkaTransactionsForTableSuccess;
+    extern const Event ClearKafkaTransactionsForTableFailed;
     extern const Event DropAllPartSuccess;
     extern const Event DropAllPartFailed;
     extern const Event GetPartitionListSuccess;
@@ -4383,6 +4389,33 @@ namespace Catalog
             [&] { meta_proxy->clearOffsetsForWholeTopic(name_space, topic, consumer_group); },
             ProfileEvents::ClearOffsetsForWholeTopicSuccess,
             ProfileEvents::ClearOffsetsForWholeTopicFailed);
+    }
+
+    void Catalog::setTransactionForKafkaConsumer(const UUID & uuid, const TxnTimestamp & txn_id, const size_t consumer_index)
+    {
+        runWithMetricSupport(
+            [&] { meta_proxy->setTransactionForKafkaConsumer(name_space, UUIDHelpers::UUIDToString(uuid), txn_id, consumer_index); },
+            ProfileEvents::SetTransactionForKafkaConsumerSuccess,
+            ProfileEvents::SetTransactionForKafkaConsumerFailed);
+    }
+
+    TxnTimestamp Catalog::getTransactionForKafkaConsumer(const UUID & uuid, const size_t consumer_index)
+    {
+        TxnTimestamp txn = TxnTimestamp::maxTS();
+        runWithMetricSupport(
+            [&] { txn = meta_proxy->getTransactionForKafkaConsumer(name_space, UUIDHelpers::UUIDToString(uuid), consumer_index); },
+            ProfileEvents::GetTransactionForKafkaConsumerSuccess,
+            ProfileEvents::GetTransactionForKafkaConsumerFailed);
+
+        return txn;
+    }
+
+    void Catalog::clearKafkaTransactions(const UUID & uuid)
+    {
+        runWithMetricSupport(
+            [&] { meta_proxy->clearKafkaTransactions(name_space, UUIDHelpers::UUIDToString(uuid)); },
+            ProfileEvents::ClearKafkaTransactionsForTableSuccess,
+            ProfileEvents::ClearKafkaTransactionsForTableFailed);
     }
 
     std::optional<DB::Protos::DataModelTable> Catalog::getTableByID(const Protos::TableIdentifier & identifier)

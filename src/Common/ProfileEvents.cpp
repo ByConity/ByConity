@@ -437,6 +437,12 @@
     M(GetKafkaOffsetsTopicPartitionListFailed, "") \
     M(ClearOffsetsForWholeTopicSuccess, "") \
     M(ClearOffsetsForWholeTopicFailed, "") \
+    M(SetTransactionForKafkaConsumerSuccess, "") \
+    M(SetTransactionForKafkaConsumerFailed, "") \
+    M(GetTransactionForKafkaConsumerSuccess, "") \
+    M(GetTransactionForKafkaConsumerFailed, "") \
+    M(ClearKafkaTransactionsForTableSuccess, "") \
+    M(ClearKafkaTransactionsForTableFailed, "") \
     M(DropAllPartSuccess, "") \
     M(DropAllPartFailed, "") \
     M(GetPartitionListSuccess, "") \
