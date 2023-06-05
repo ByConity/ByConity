@@ -79,8 +79,7 @@ void DatabaseCnch::createTable(ContextPtr local_context, const String & table_na
         (!create_query.storage->engine || !startsWith(create_query.storage->engine->name, "Cnch")))
         throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "Cnch database only suport creating Cnch tables");
 
-    String statement = serializeAST(*query);
-    CreateActionParams params = {getDatabaseName(), table_name, table->getStorageUUID(), statement, create_query.attach, table->isDictionary()};
+    CreateActionParams params = {getDatabaseName(), table_name, table->getStorageUUID(), serializeAST(*query), create_query.attach, table->isDictionary()};
     auto create_table = txn->createAction<DDLCreateAction>(std::move(params));
     txn->appendAction(std::move(create_table));
     txn->commitV1();

@@ -31,7 +31,7 @@ namespace ErrorCodes
 }
 
 CnchCatalogDictionaryCache::CnchCatalogDictionaryCache(ContextPtr context_)
-    : context{context_},
+    : context{std::move(context_)},
       catalog{context->getCnchCatalog()}
 {
     loadFromCatalog();

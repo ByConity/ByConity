@@ -30,7 +30,7 @@ class DaemonJobGlobalGC : public DaemonJob
 {
 public:
     DaemonJobGlobalGC(ContextMutablePtr global_context_)
-        : DaemonJob{global_context_, CnchBGThreadType::GlobalGC}
+        : DaemonJob{std::move(global_context_), CnchBGThreadType::GlobalGC}
     {}
 protected:
     bool executeImpl() override;

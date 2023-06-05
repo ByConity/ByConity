@@ -133,7 +133,7 @@ void runMissingAndRemoveDuplicateJob(
 template <CnchBGThreadType T, bool (*isTargetTableF)(const StoragePtr &)>
 struct DaemonJobForCnch : public DaemonJobServerBGThread
 {
-    DaemonJobForCnch(ContextMutablePtr global_context_) : DaemonJobServerBGThread(global_context_, T) { }
+    DaemonJobForCnch(ContextMutablePtr global_context_) : DaemonJobServerBGThread(std::move(global_context_), T) { }
     bool isTargetTable(const StoragePtr & storage) const override { return isTargetTableF(storage); }
 };
 
