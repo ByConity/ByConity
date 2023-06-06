@@ -36,7 +36,7 @@ jobs:
           cp -r $GITHUB_WORKSPACE/build/programs/* ./bin
           docker-compose -f docker-compose.yml.multiworkers down
           /bin/bash create_docker_volume_ci.sh
-          docker-compose -f docker-compose.yml.multiworkers up -d --force-recreate
+          docker-compose -f docker-compose.yml.multiworkers up -d --force-recreate --remove-orphans
           sleep 10
           hdfs/create_users.sh
           export CLICKHOUSE_HOST=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.Gateway}}{{end}}' server-0)
