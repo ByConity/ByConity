@@ -96,8 +96,10 @@ RuntimeSegmentsStatus PlanSegmentExecutor::execute(ThreadGroupStatusPtr thread_g
     catch (...)
     {
         int exception_code = getCurrentExceptionCode();
+        const auto & host = extractExchangeStatusHostPort(plan_segment->getCurrentAddress());
+        auto message = "Worker host:" + host + ", exception:" + getCurrentExceptionMessage(false);
         RuntimeSegmentsStatus status(
-            plan_segment->getQueryId(), plan_segment->getPlanSegmentId(), false, false, getCurrentExceptionMessage(false), exception_code);
+            plan_segment->getQueryId(), plan_segment->getPlanSegmentId(), false, false, message, exception_code);
         tryLogCurrentException(logger, __PRETTY_FUNCTION__);
         if (exception_code == ErrorCodes::QUERY_WAS_CANCELLED)
             status.is_canceled = true;
