@@ -51,7 +51,7 @@ Projection est. 100 rows
                                              └─ Projection est. 18 rows
                                                 │     Expressions: [s_state_1]
                                                 └─ Filter est. 18 rows
-                                                   │     Condition: `expr#rank() OVER (PARTITION BY s_state ORDER BY sum(ss_net_profit) DESC)` <= 5
+                                                   │     Condition: (`expr#rank() OVER (PARTITION BY s_state ORDER BY sum(ss_net_profit) DESC)` <= 5) AND isNotNull(s_state_1)
                                                    └─ Window est. 21 rows
                                                       └─ MergingAggregated est. 21 rows
                                                          └─ Repartition Exchange est. 21 rows
@@ -76,9 +76,7 @@ Projection est. 100 rows
                                                                   │           │     Condition: (d_month_seq_1 >= 1200) AND (d_month_seq_1 <= 1211)
                                                                   │           └─ TableScan tpcds.date_dim est. 73049 rows
                                                                   │                    Outputs: d_date_sk_1:=d_date_sk, d_month_seq_1:=d_month_seq
-                                                                  └─ Broadcast Exchange est. 997 rows
-                                                                     └─ Filter est. 997 rows
-                                                                        │     Condition: isNotNull(s_state_1)
-                                                                        └─ TableScan tpcds.store est. 1002 rows
-                                                                                 Outputs: s_state_1:=s_state, s_store_sk_1:=s_store_sk
+                                                                  └─ Broadcast Exchange est. 1002 rows
+                                                                     └─ TableScan tpcds.store est. 1002 rows
+                                                                              Outputs: s_state_1:=s_state, s_store_sk_1:=s_store_sk
 note: Dynamic Filter is applied for 4 times.

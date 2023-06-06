@@ -38,7 +38,6 @@ struct PredicateContext
 {
     ConstASTPtr predicate;
     ConstASTPtr extra_predicate_for_simplify_outer_join;
-    ContextMutablePtr context;
 };
 
 struct InnerJoinResult;
