@@ -117,19 +117,6 @@ services:
     cap_add:
       - SYS_PTRACE
 
-  worker-default-2:
-    image: byconity/debian:buster-runit-fdb7.1.27
-    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 server:21557  && VIRTUAL_WAREHOUSE_ID=vw_default WORKER_GROUP_ID=wg_default WORKER_ID=r2 clickhouse-server --config-file /config/worker.yml"
-    depends_on:
-      - server
-    container_name: worker-default-2
-    volumes:
-      - my_volume:/opt/byconity/bin/
-      - my_config_volume:/config/
-    cap_add:
-      - SYS_PTRACE
-
-
   daemon-manager:
     image: byconity/debian:buster-runit-fdb7.1.27
     command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 server:21557  && daemon-manager --config-file ./config/daemon-manager.yml"
