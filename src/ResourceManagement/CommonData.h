@@ -197,7 +197,9 @@ struct WorkerNodeResourceData
     UInt64 cpu_limit;
     UInt64 memory_limit;
 
+    // TODO: consider using UInt64 here to avoid Year 2038 problem
     UInt32 register_time;
+    // TODO: consider using UInt64 here to avoid Year 2038 problem
     UInt32 last_update_time;
 
     UInt64 reserved_memory_bytes;
@@ -284,18 +286,18 @@ struct WorkerGroupMetrics
     uint32_t num_workers; /// 0 means metrics (and the worker group) is unavailable.
 
     /// CPU state.
-    double min_cpu_usage;
-    double max_cpu_usage;
-    double avg_cpu_usage;
+    double min_cpu_usage {0};
+    double max_cpu_usage {0};
+    double avg_cpu_usage {0};
 
     /// MEM state.
-    double min_mem_usage;
-    double max_mem_usage;
-    double avg_mem_usage;
-    uint64_t min_mem_available;
+    double min_mem_usage {0};
+    double max_mem_usage {0};
+    double avg_mem_usage {0};
+    uint64_t min_mem_available {0};
 
     /// Query State.
-    uint32_t total_queries;
+    uint32_t total_queries {0};
 
     WorkerGroupMetrics(const String & _id = "") : id(_id)
     {

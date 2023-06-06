@@ -18,25 +18,23 @@
 
 namespace DB
 {
-
-struct RowGroupsInDataPart
+///
+/// Parquet: block means row group
+/// Orc: block means stripes
+struct BlocksInDataPart
 {
     HiveDataPartCNCHPtr data_part;
-    size_t total_row_groups;
+    size_t total_blocks;
 
-    RowGroupsInDataPart() = default;
+    BlocksInDataPart() = default;
 
-    RowGroupsInDataPart(const HiveDataPartCNCHPtr & data_part_, size_t total_row_groups_ = 0)
-        : data_part(data_part_)
-        , total_row_groups(total_row_groups_)
-    {}
-
-    size_t getRowGroups() const
+    BlocksInDataPart(const HiveDataPartCNCHPtr & data_part_, size_t total_blocks_ = 0) : data_part(data_part_), total_blocks(total_blocks_)
     {
-        return total_row_groups;
     }
 
+    size_t getBlocksNumber() const { return total_blocks; }
 };
 
-using RowGroupsInDataParts = std::vector<RowGroupsInDataPart>;
+using BlocksInDataParts = std::vector<BlocksInDataPart>;
 }
+

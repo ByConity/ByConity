@@ -132,6 +132,8 @@ void Settings::addProgramOptions(boost::program_options::options_description & o
         const std::string_view name = field.getName();
         auto on_program_option
             = boost::function1<void, const std::string &>([this, name](const std::string & value) { set(name, value); });
+        // on_program_option is initialized with the lambda within boost:program_options
+        // coverity[uninit_use_in_call]
         options.add(boost::shared_ptr<boost::program_options::option_description>(new boost::program_options::option_description(
             name.data(),
             boost::program_options::value<std::string>()->composing()->notifier(on_program_option),

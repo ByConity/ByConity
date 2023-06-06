@@ -106,6 +106,8 @@ namespace DB
                     readDateTimeText(time, in);
                     if (time < 0)
                         time = 0;
+                    // readDateTimeText gives time value that will not exceed UInt32
+                    // coverity[store_truncates_time_t]
                     assert_cast<ColumnUInt32 &>(column).insertValue(time);
                     break;
                 }

@@ -390,6 +390,8 @@ namespace
         {
             ColumnPtr column;
             if (rows)
+                // both inherit from FieldVector
+                // coverity[mismatched_iterator]
                 column = partition_value_type->createColumnConst(rows, Tuple(partition_value.begin(), partition_value.end()))
                              ->convertToFullColumnIfConst();
             else
@@ -430,6 +432,8 @@ namespace
         {
             ColumnPtr column;
             if (rows)
+                // both inherit from FieldVector
+                // coverity[mismatched_iterator]
                 column = partition_value_type->createColumnConst(rows, Tuple(partition_value.begin(), partition_value.end()))
                              ->convertToFullColumnIfConst();
             else

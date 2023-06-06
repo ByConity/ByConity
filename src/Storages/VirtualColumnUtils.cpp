@@ -299,7 +299,7 @@ void cascadingDrop(const StorageID & table_id, const ASTPtr & partition_or_predi
                          << (drop_where ? " PARTITION WHERE " : " PARTITION ")
                          << serializeAST(*partition_or_predicate, true);
 
-                String query_str = query_ss.str();
+                const String query_str = query_ss.str();
                 const char * begin = query_str.data();
                 const char * end = query_str.data() + query_str.size();
 

@@ -626,7 +626,8 @@ void ExpressionAnalyzer::getRootActions(const ASTPtr & ast, bool no_makeset_for_
         false /* no_makeset */,
         only_consts,
         !isRemoteStorage() /* create_source_for_in */,
-        getAggregationKeysInfo());
+        getAggregationKeysInfo(),
+        false /* build_expression_with_window_functions */);
     ActionsVisitor(visitor_data, log.stream()).visit(ast);
     actions = visitor_data.getActions();
 }
@@ -669,6 +670,28 @@ void ExpressionAnalyzer::getRootActionsForHaving(
         only_consts,
         true /* create_source_for_in */,
         getAggregationKeysInfo());
+    ActionsVisitor(visitor_data, log.stream()).visit(ast);
+    actions = visitor_data.getActions();
+}
+
+
+void ExpressionAnalyzer::getRootActionsForWindowFunctions(const ASTPtr & ast, bool no_makeset_for_subqueries, ActionsDAGPtr & actions)
+{
+    LogAST log;
+    ActionsVisitor::Data visitor_data(
+        getContext(),
+        settings.size_limits_for_set,
+        subquery_depth,
+        sourceColumns(),
+        std::move(actions),
+        prepared_sets,
+        subqueries_for_sets,
+        no_makeset_for_subqueries,
+        false /* no_makeset */,
+        false /*only_consts */,
+        !isRemoteStorage() /* create_source_for_in */,
+        getAggregationKeysInfo(),
+        true);
     ActionsVisitor(visitor_data, log.stream()).visit(ast);
     actions = visitor_data.getActions();
 }
@@ -1414,6 +1437,34 @@ void SelectQueryExpressionAnalyzer::appendWindowFunctionsArguments(ExpressionAct
     }
 }
 
+void SelectQueryExpressionAnalyzer::appendExpressionsAfterWindowFunctions(ExpressionActionsChain & chain, bool /* only_types */)
+{
+    ExpressionActionsChain::Step & step = chain.lastStep(columns_after_window);
+    for (const auto & expression : syntax->expressions_with_window_function)
+    {
+        getRootActionsForWindowFunctions(expression->clone(), true, step.actions());
+    }
+}
+
+void SelectQueryExpressionAnalyzer::appendSelectSkipWindowExpressions(ExpressionActionsChain::Step & step, ASTPtr const & node)
+{
+    if (auto * function = node->as<ASTFunction>())
+    {
+        // Skip window function columns here -- they are calculated after
+        // other SELECT expressions by a special step.
+        // Also skipping lambda functions because they can't be explicitly evaluated.
+        if (function->is_window_function || function->name == "lambda")
+            return;
+        if (function->compute_after_window_functions)
+        {
+            for (auto & arg : function->arguments->children)
+                appendSelectSkipWindowExpressions(step, arg);
+            return;
+        }
+    }
+    step.addRequiredOutput(node->getColumnName());
+}
+
 bool SelectQueryExpressionAnalyzer::appendHaving(ExpressionActionsChain & chain, bool only_types)
 {
     const auto * select_query = getAggregatingQuery();
@@ -1438,16 +1489,7 @@ void SelectQueryExpressionAnalyzer::appendSelect(ExpressionActionsChain & chain,
     getRootActions(select_query->select(), only_types, step.actions());
 
     for (const auto & child : select_query->select()->children)
-    {
-        if (const auto * function = typeid_cast<const ASTFunction *>(child.get()); function && function->is_window_function)
-        {
-            // Skip window function columns here -- they are calculated after
-            // other SELECT expressions by a special step.
-            continue;
-        }
-
-        step.addRequiredOutput(child->getColumnName());
-    }
+        appendSelectSkipWindowExpressions(step, child);
 }
 
 ActionsDAGPtr SelectQueryExpressionAnalyzer::appendOrderBy(
@@ -1856,6 +1898,12 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
 
             before_window = chain.getLastActions();
             finalize_chain(chain);
+
+            query_analyzer.appendExpressionsAfterWindowFunctions(chain, only_types || !first_stage);
+            for (const auto & x : chain.getLastActions()->getNamesAndTypesList())
+            {
+                query_analyzer.columns_after_window.push_back(x);
+            }
 
             auto & step = chain.lastStep(query_analyzer.columns_after_window);
 

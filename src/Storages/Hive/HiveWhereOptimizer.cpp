@@ -23,6 +23,7 @@
 #include <Parsers/queryToString.h>
 #include <Storages/Hive/HiveWhereOptimizer.h>
 #include <Storages/StorageCnchHive.h>
+#include <Storages/extractKeyExpressionList.h>
 #include <Common/typeid_cast.h>
 
 
@@ -31,6 +32,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
+    extern const int BAD_ARGUMENTS;
 }
 
 HiveWhereOptimizer::HiveWhereOptimizer(const SelectQueryInfo & query_info_, ContextPtr & /*context_*/, const StoragePtr & storage_)
@@ -42,7 +44,7 @@ HiveWhereOptimizer::HiveWhereOptimizer(const SelectQueryInfo & query_info_, Cont
         for (const NameAndTypePair & col : available_real_columns)
             table_columns.insert(col.name);
 
-        partition_expr_ast = cnchhive->getPartitionKeyList();
+        partition_expr_ast = extractKeyExpressionList(cnchhive->getPartitionKey());
     }
 }
 
@@ -221,7 +223,7 @@ bool HiveWhereOptimizer::convertImplicitWhereToUsefullFilter(String & filter)
     if (ret_conditions.empty())
     {
         const auto & func = typeid_cast<const ASTFunction *>(select.implicitWhere().get());
-        if (func->name == "in")
+        if (func && func->name == "in")
         {
             const ASTPtr left_arg = func->arguments->children[0];
             const ASTPtr right_arg = func->arguments->children[1];
@@ -291,11 +293,15 @@ bool HiveWhereOptimizer::getUsefullFilter(String & filter)
     if (ret_conditions.empty())
     {
         const auto & func = typeid_cast<const ASTFunction *>(select.implicitWhere().get());
-        String name = func->name;
-        if (!isComparisonFunctionName(func->name))
-            return false;
+        if (func)
+        {
+            String name = func->name;
+            if (!isComparisonFunctionName(func->name))
+                return false;
 
-        filter = queryToString(select.implicitWhere());
+            filter = queryToString(select.implicitWhere());
+        }
+
         return true;
     }
     else if (ret_conditions.size() == 1)
@@ -459,8 +465,16 @@ ASTs HiveWhereOptimizer::getWhereOptimizerConditions(const ASTPtr & ast) const
     if (ret_conditions.empty())
     {
         const auto & func = typeid_cast<const ASTFunction *>(ast.get());
-        if (isComparisonFunctionName(func->name) || isInFunctionName(func->name) || isLikeFunctionName(func->name))
-            return {ast};
+        if (func)
+        {
+           if (isComparisonFunctionName(func->name) || isInFunctionName(func->name) || isLikeFunctionName(func->name))
+               return {ast};
+        }
+        else
+        {
+            throw Exception("Query for CnchHive is not support to select with NULL value in WHERE condition.",
+                ErrorCodes::BAD_ARGUMENTS);
+        }
     }
 
     return ret_conditions;
@@ -493,8 +507,11 @@ ASTs HiveWhereOptimizer::getConditions(const ASTPtr & ast) const
     if (ret_conditions.empty())
     {
         const auto & func = typeid_cast<const ASTFunction *>(ast.get());
-        if (isComparisonFunctionName(func->name) || isInFunctionName(func->name) || isLikeFunctionName(func->name))
-            return {ast};
+        if (func)
+        {
+            if (isComparisonFunctionName(func->name) || isInFunctionName(func->name) || isLikeFunctionName(func->name))
+                return {ast};
+        }
     }
 
     return ret_conditions;

@@ -116,6 +116,8 @@ StatsData CachedStatsProxyImpl::get(const StatsTableIdentifier & table_id, bool 
             item_ptr = makePocoShared<StatsCollection>(catalog->readSingleStats(table_id, col_name));
             cache.update(key, item_ptr);
         }
+        // SharedPtr copy constructor invoked
+        // coverity[double_free]
         result.column_stats.emplace(pr.name, *item_ptr);
     }
     return result;

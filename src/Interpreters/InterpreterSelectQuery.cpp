@@ -866,7 +866,9 @@ static FillColumnDescription getWithFillDescription(const ASTOrderByElement & or
                 ErrorCodes::INVALID_WITH_FILL_EXPRESSION);
         }
     }
-
+    
+    // one of fill_from, fill_step and fill_to is initialized
+    // coverity[unit_use]
     return descr;
 }
 

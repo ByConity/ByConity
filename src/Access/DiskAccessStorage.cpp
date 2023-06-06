@@ -396,6 +396,8 @@ void DiskAccessStorage::clear()
 {
     entries_by_id.clear();
     for (auto type : collections::range(EntityType::MAX))
+        // collections::range(MAX_CONDITION_TYPE) give us a range of [0, MAX_CONDITION_TYPE) 
+        // coverity[overrun-local]
         entries_by_name_and_type[static_cast<size_t>(type)].clear();
 }
 

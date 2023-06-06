@@ -34,6 +34,8 @@
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/formatAST.h>
 #include <Core/Protocol.h>
+#include "Core/NamesAndTypes.h"
+#include "Interpreters/InterpreterCreateQuery.h"
 
 namespace DB
 {
@@ -306,7 +308,8 @@ String CnchStorageCommonHelper::getCreateQueryForCloudTable(
     const String & local_table_name,
     const ContextPtr & context,
     bool enable_staging_area,
-    const std::optional<StorageID> & cnch_storage_id) const
+    const std::optional<StorageID> & cnch_storage_id,
+    const StorageMetadataPtr & metadata) const
 {
     ParserCreateQuery parser;
     ASTPtr ast = parseQuery(parser, query.data(), query.data() + query.size(), "", 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
@@ -334,9 +337,21 @@ String CnchStorageCommonHelper::getCreateQueryForCloudTable(
         if (enable_staging_area)
             modifyOrAddSetting(create_query, "cloud_enable_staging_area", Field(UInt64(1)));
     }
-    else if(engine->name == "CnchHive")
+    else if(engine->name == "CloudHive")
     {
         modifyOrAddSetting(create_query, "cnch_temporary_table", Field(UInt64(1)));
+        if (!create_query.columns_list || !create_query.columns_list->columns)
+        {
+            if (!metadata)
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Hive schema inference must provide in memory metadata");
+
+            if (!create_query.columns_list)
+                create_query.set(create_query.columns_list, std::make_shared<ASTColumns>());
+
+            ASTPtr new_columns = InterpreterCreateQuery::formatColumns(metadata->getColumns().getAllPhysical());
+            create_query.columns_list->set(create_query.columns_list->columns, new_columns);
+            /// partition key and cluster key can be skipped, as pruning is on server side
+        }
     }
 
     /// query settings

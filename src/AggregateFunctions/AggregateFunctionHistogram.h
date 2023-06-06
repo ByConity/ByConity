@@ -126,7 +126,9 @@ private:
         bool active[size + 1];
         std::fill(active, active + size, true);
         active[size] = false;
-
+        
+        // variables are initialized in the body of the lambda
+        // coverity[uninit_use]
         auto delete_node = [&](UInt32 i)
         {
             previous[next[i]] = previous[i];

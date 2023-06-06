@@ -1,0 +1,10 @@
+1|100|1000|10000|true|0.5|0.5|Hello|YmluYXJ5X2RhdGE=|2023-05-25 10:00:00|123.4567|ABC                                               |XYZ|2023-05-25|1.234.56|applebanana
+2|200|2000|20000|false|1.5|1.5|World|YmluYXJ5X2RhdGE=|2023-05-26 12:30:00|987.6543|DEF                                               |PQR|2023-05-26|7.890.12|orangegrape
+3|300|3000|30000|true|2.5|2.5|Foo|YmluYXJ5X2RhdGE=|2023-05-27 15:45:00|456.789|GHI                                               |LMN|2023-05-27|3.142.71|watermelonpineapple
+4|400|4000|40000|false|3.5|3.5|Bar|YmluYXJ5X2RhdGE=|2023-05-28 18:15:00|9876.5432|JKL                                               |STU|2023-05-28|9.998.88|pearkiwi
+5|500|5000|50000|true|4.5|4.5|Baz|YmluYXJ5X2RhdGE=|2023-05-29 21:00:00|6543.2109|MNO                                               |VWX|2023-05-29|0.110.22|mangostrawberry
+1|100|1000|10000|true|0.5|0.5|Hello|YmluYXJ5X2RhdGE=|2023-05-25 10:00:00|123.4567|ABC                                               |XYZ|2023-05-25|1.234.56|applebanana
+2|200|2000|20000|false|1.5|1.5|World|YmluYXJ5X2RhdGE=|2023-05-26 12:30:00|987.6543|DEF                                               |PQR|2023-05-26|7.890.12|orangegrape
+3|300|3000|30000|true|2.5|2.5|Foo|YmluYXJ5X2RhdGE=|2023-05-27 15:45:00|456.789|GHI                                               |LMN|2023-05-27|3.142.71|watermelonpineapple
+4|400|4000|40000|false|3.5|3.5|Bar|YmluYXJ5X2RhdGE=|2023-05-28 18:15:00|9876.5432|JKL                                               |STU|2023-05-28|9.998.88|pearkiwi
+5|500|5000|50000|true|4.5|4.5|Baz|YmluYXJ5X2RhdGE=|2023-05-29 21:00:00|6543.2109|MNO                                               |VWX|2023-05-29|0.110.22|mangostrawberry

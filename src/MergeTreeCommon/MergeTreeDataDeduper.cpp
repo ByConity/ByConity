@@ -114,7 +114,7 @@ namespace
 
     /// TODO(GDY) doc
     class ReplacingSortedKeysIterator
-    {
+{
     public:
         ReplacingSortedKeysIterator(
             const IndexFile::Comparator * comparator_,
@@ -687,6 +687,8 @@ DeleteBitmapVector MergeTreeDataDeduper::repairImpl(const IMergeTreeDataPartsVec
     ReplacingSortedKeysIterator keys_iter(IndexFile::BytewiseComparator(), parts, std::move(input_iters), cb, version_mode);
     keys_iter.SeekToFirst();
     while (keys_iter.Valid())
+        // delete_flag_bitmaps is default initialized
+        // coverity[use_invalid_in_call]
         keys_iter.Next();
     return res;
 }

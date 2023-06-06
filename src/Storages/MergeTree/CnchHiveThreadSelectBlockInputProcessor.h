@@ -61,7 +61,7 @@ private:
 
     std::unique_ptr<ReadBuffer> read_buf;
 
-    BlockInputStreamPtr parquet_stream;
+    BlockInputStreamPtr stream;
 };
 
 }

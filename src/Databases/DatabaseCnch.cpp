@@ -79,8 +79,7 @@ void DatabaseCnch::createTable(ContextPtr local_context, const String & table_na
         (!create_query.storage->engine || !startsWith(create_query.storage->engine->name, "Cnch")))
         throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "Cnch database only suport creating Cnch tables");
 
-    String statement = serializeAST(*query);
-    CreateActionParams params = {getDatabaseName(), table_name, table->getStorageUUID(), statement, create_query.attach, table->isDictionary()};
+    CreateActionParams params = {getDatabaseName(), table_name, table->getStorageUUID(), serializeAST(*query), create_query.attach, table->isDictionary()};
     auto create_table = txn->createAction<DDLCreateAction>(std::move(params));
     txn->appendAction(std::move(create_table));
     txn->commitV1();
@@ -195,7 +194,7 @@ void DatabaseCnch::detachTablePermanently(ContextPtr local_context, const String
 ASTPtr DatabaseCnch::getCreateDatabaseQuery() const
 {
     auto settings = getContext()->getSettingsRef();
-    String query = "CREATE DATABASE " + backQuoteIfNeed(getDatabaseName()) + " ENGINE = Cnch";
+    String query = "CREATE DATABASE " + backQuoteIfNeed(getDatabaseName()) + " UUID '" + UUIDHelpers::UUIDToString(db_uuid) + "' ENGINE = Cnch";
     ParserCreateQuery parser(ParserSettings::valueOf(settings.dialect_type));
     ASTPtr ast = parseQuery(parser, query.data(), query.data() + query.size(), "", 0, settings.max_parser_depth);
     return ast;

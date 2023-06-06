@@ -717,19 +717,18 @@ namespace S3
         namespace po = boost::program_options;
         po::options_description s3_opts("s3_opts");
 
-        s3_opts.add_options()("s3.max_redirects", po::value<int>(&max_redirects)->default_value(10)->implicit_value(10), "max_redirects")(
-            "s3.connect_timeout_ms",
-            po::value<int>(&connect_timeout_ms)->default_value(30000)->implicit_value(30000),
-            "connect timeout ms")(
-            "s3.request_timeout_ms",
-            po::value<int>(&request_timeout_ms)->default_value(30000)->implicit_value(30000),
-            "request timeout ms")(
-            "s3.max_connections", po::value<int>(&max_connections)->default_value(200)->implicit_value(200), "max connections")(
-            "s3.region", po::value<String>(&region)->default_value("")->implicit_value(""), "region")(
-            "s3.endpoint", po::value<String>(&endpoint)->required(), "endpoint")(
-            "s3.bucket", po::value<String>(&bucket)->required(), "bucket")("s3.ak_id", po::value<String>(&ak_id)->required(), "ak id")(
-            "s3.ak_secret", po::value<String>(&ak_secret)->required(), "ak secret")(
-            "s3.root_prefix", po::value<String>(&root_prefix)->required(), "root prefix");
+        s3_opts.add_options()
+            ("s3.virtual_host_style", po::value<bool>(&virtual_host_style)->default_value(false)->implicit_value(false), "use virutal host style")
+            ("s3.max_redirects", po::value<int>(&max_redirects)->default_value(10)->implicit_value(10), "max_redirects")
+            ("s3.connect_timeout_ms", po::value<int>(&connect_timeout_ms)->default_value(30000)->implicit_value(30000), "connect timeout ms")
+            ("s3.request_timeout_ms", po::value<int>(&request_timeout_ms)->default_value(30000)->implicit_value(30000), "request timeout ms")
+            ("s3.max_connections", po::value<int>(&max_connections)->default_value(200)->implicit_value(200), "max connections")
+            ("s3.region", po::value<String>(&region)->default_value("")->implicit_value(""), "region")
+            ("s3.endpoint", po::value<String>(&endpoint)->required(), "endpoint")
+            ("s3.bucket", po::value<String>(&bucket)->required(), "bucket")
+            ("s3.ak_id", po::value<String>(&ak_id)->required(), "ak id")
+            ("s3.ak_secret", po::value<String>(&ak_secret)->required(), "ak secret")
+            ("s3.root_prefix", po::value<String>(&root_prefix)->required(), "root prefix");
 
         po::parsed_options opts = po::parse_config_file(ini_file_path.c_str(), s3_opts);
         po::variables_map vm;
@@ -742,6 +741,7 @@ namespace S3
 
     S3Config::S3Config(const Poco::Util::AbstractConfiguration & cfg, const String & cfg_prefix)
     {
+        virtual_host_style = cfg.getBool(cfg_prefix + ".virtual_host_style", false);
         max_redirects = cfg.getInt(cfg_prefix + ".max_redirects", 10);
         connect_timeout_ms = cfg.getInt(cfg_prefix + ".connect_timeout_ms", 10000);
         request_timeout_ms = cfg.getInt(cfg_prefix + ".request_timeout_ms", 30000);
@@ -794,7 +794,8 @@ namespace S3
         client_cfg.maxConnections = max_connections;
         client_cfg.enableTcpKeepAlive = true;
 
-        return S3::ClientFactory::instance().create(client_cfg, false, ak_id, ak_secret, "", {}, false, false);
+        return S3::ClientFactory::instance().create(client_cfg, virtual_host_style,
+            ak_id, ak_secret, "", {}, false, false);
     }
 
 

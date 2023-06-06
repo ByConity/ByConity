@@ -32,13 +32,25 @@ static void dummyFunctionForInterposing()
     void* dummy;
     /// Suppression for PVS-Studio and clang-tidy.
     free(nullptr); // -V575 NOLINT
+    // file and function not used
+    // coverity[leaked_storage]
     ignore(malloc(0)); // -V575 NOLINT
+    // file and function not used
+    // coverity[leaked_storage]
     ignore(calloc(0, 0)); // -V575 NOLINT
+    // file and function not used
+    // coverity[leaked_storage]
     ignore(realloc(nullptr, 0)); // -V575 NOLINT
     ignore(posix_memalign(&dummy, 0, 0)); // -V575 NOLINT
+    // file and function not used
+    // coverity[leaked_storage]
     ignore(aligned_alloc(0, 0)); // -V575 NOLINT
+    // file and function not used
+    // coverity[leaked_storage]
     ignore(valloc(0)); // -V575 NOLINT
     ignore(memalign(0, 0)); // -V575 NOLINT
     ignore(pvalloc(0)); // -V575 NOLINT
+    // file and function not used
+    // coverity[leaked_storage]
 }
 #endif

@@ -119,6 +119,7 @@ message CnchHivePartModel
     required int64 skip_lists = 3;
     repeated int64 skip_numbers = 4;
     optional string hdfs_uri = 5;
+    required string format_name = 6;
 }
 
 enum TransactionStatus

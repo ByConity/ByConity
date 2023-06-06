@@ -396,7 +396,8 @@ bool GlobalGCManager::schedule(std::vector<Protos::DataModelTable> tables)
             }
         }
     }
-
+    
+    // coverity[use_after_move]
     if ((!tables_bucket.empty()) &&
         (!scheduleImpl(std::move(tables_bucket)))
     )

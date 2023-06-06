@@ -320,7 +320,8 @@ public:
 
         uint64_t symbol_address = reinterpret_cast<uint64_t>(address_it->second);
         auto jit_symbol = llvm::JITSymbol(symbol_address, llvm::JITSymbolFlags::None);
-
+        // Checked the LLVM docs and the constructor is called correctly for JITSymbol
+        // coverity[uninit_use]
         return jit_symbol;
     }
 

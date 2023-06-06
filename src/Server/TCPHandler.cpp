@@ -778,6 +778,7 @@ void TCPHandler::processTablesStatusRequest()
         if (auto * replicated_table = dynamic_cast<StorageReplicatedMergeTree *>(table.get()))
         {
             status.is_replicated = true;
+             // coverity[store_truncates_time_t:FALSE]
             status.absolute_delay = replicated_table->getAbsoluteDelay();
         }
         else
