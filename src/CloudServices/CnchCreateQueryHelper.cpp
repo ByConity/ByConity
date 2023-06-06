@@ -24,6 +24,7 @@
 #include <Parsers/parseQuery.h>
 #include <Storages/IStorage.h>
 #include <Storages/StorageFactory.h>
+#include "Storages/ColumnsDescription.h"
 
 namespace DB
 {
@@ -44,6 +45,17 @@ StoragePtr createStorageFromQuery(const String & query, ContextMutablePtr & cont
 {
     auto ast = getASTCreateQueryFromString(query, context);
 
+    ColumnsDescription columns;
+    if (ast->columns_list && ast->columns_list->columns)
+    {
+        columns = InterpreterCreateQuery::getColumnsDescription(*ast->columns_list->columns, context, true /*attach*/);
+    }
+    ConstraintsDescription constrants;
+    if (ast->columns_list && ast->columns_list->constraints)
+    {
+        constrants = InterpreterCreateQuery::getConstraintsDescription(ast->columns_list->constraints);
+    }
+
     return StorageFactory::instance().get(
         *ast,
         "",
@@ -51,8 +63,8 @@ StoragePtr createStorageFromQuery(const String & query, ContextMutablePtr & cont
         context->getGlobalContext(),
         // Set attach = true to avoid making columns nullable due to ANSI settings, because the dialect change
         // should NOT affect existing tables.
-        InterpreterCreateQuery::getColumnsDescription(*ast->columns_list->columns, context, true /*attach*/),
-        InterpreterCreateQuery::getConstraintsDescription(ast->columns_list->constraints),
+        columns,
+        constrants,
         false /*has_force_restore_data_flag*/);
 }
 
