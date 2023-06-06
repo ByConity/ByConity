@@ -118,12 +118,18 @@ std::vector<std::pair<String, UInt64>> MetastoreByteKVImpl::multiGet(const std::
     MultiGetResponse mg_resp;
     auto code = client->MultiGet(mg_req, &mg_resp);
     assertStatus(OperationType::MULTIGET, code, {Errorcode::OK});
-    for (auto ele : mg_resp.results)
+    if (keys.size() != mg_resp.results.size())
+        throw Exception("Wrong response size in multiGet. ", ErrorCodes::METASTORE_OPERATION_ERROR);
+
+    for (size_t i = 0; i < mg_resp.results.size(); i++)
     {
+        const auto & ele = mg_resp.results[i];
         if (ele.first == Errorcode::OK)
             res.emplace_back(std::move(ele.second.value), ele.second.version);
-        else
+        else if (ele.first == Errorcode::KEY_NOT_FOUND)
             res.emplace_back("", 0);
+        else
+            throw Exception("Encounter bytekv error: " + String(ErrorString(ele.first)) + " while get record with key : " + keys[i], ele.first);
     }
 
     return res;
