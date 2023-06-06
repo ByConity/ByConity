@@ -494,8 +494,8 @@ bool StorageCloudKafka::streamToViews(/* required_column_names */)
     auto block_io = interpreter.execute();
 
     BlockInputStreamPtr in = std::make_shared<CnchKafkaBlockInputStream>(*this, getInMemoryMetadataPtr(),
-                             consume_context, block_io.out->getHeader().getNames(), block_size, assigned_consumer_index);
-
+                             consume_context, block_io.out->getHeader().getNames(), block_size, assigned_consumer_index,
+                             getInMemoryMetadataPtr()->getColumns().hasDefaults());
 
     streamCopyData(*in, *block_io.out, consume_context);
 
