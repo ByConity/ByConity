@@ -40,7 +40,7 @@ jobs:
           sleep 10
           hdfs/create_users.sh
           export CLICKHOUSE_HOST=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.Gateway}}{{end}}' server-0)
-          curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 $CLICKHOUSE_HOST:8123
+          curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 $CLICKHOUSE_HOST:8124
       - name: Prepare FuntionalStateless Queries
         continue-on-error: true
         run: |
@@ -56,6 +56,7 @@ jobs:
         run: |
           echo $CLICKHOUSE_HOST
           export CLICKHOUSE_PORT_TCP=9000
+          export CLICKHOUSE_PORT_HTTP=8124
           export CLICKHOUSE_HOST=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.Gateway}}{{end}}' server-0)
           cd /CI/
           ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt

@@ -73,7 +73,7 @@ services:
       - hdfs
     ports:
       - "9000:52145"
-      - "8123:21557"
+      - "8124:21557"
     container_name: server-0
     volumes:
       - my_volume:/opt/byconity/bin/
