@@ -54,10 +54,8 @@ void DedupWorkerManager::runImpl()
     scheduled_task->scheduleAfter(3 * 1000);
 }
 
-void DedupWorkerManager::stop()
+void DedupWorkerManager::clearData()
 {
-    ICnchBGThread::stop();
-
     stopDeduperWorker();
 }
 
