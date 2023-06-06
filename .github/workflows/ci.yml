@@ -41,7 +41,7 @@ jobs:
           hdfs/create_users.sh
           export CLICKHOUSE_HOST=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.Gateway}}{{end}}' server-0)
           curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 $CLICKHOUSE_HOST:8124
-      - name: Prepare FuntionalStateless Queries
+      - name: Run ByConity FuntionalStateless
         continue-on-error: true
         run: |
           cd /CI/
@@ -51,31 +51,27 @@ jobs:
           cp -r $GITHUB_WORKSPACE/tests/queries/4_cnch_stateless queries/
           cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
           mkdir -p /test_output
-      - name: Run ByConity FuntionalStateless
-        continue-on-error: true
-        run: |
           export CLICKHOUSE_PORT_TCP=9000
           export CLICKHOUSE_PORT_HTTP=8124
           export CLICKHOUSE_HOST=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.Gateway}}{{end}}' server-0)
-          cd /CI/
           ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a /test_output/test_result.txt
           ./process_functional_tests_result.py || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
-      # - name: CNCH - FuntionalStateless (multi-workers + ClickhouseSQL + w/w.o optimizer)
-      #   continue-on-error: true
-      #   run: |
-      #     mkdir -p ci_clickhouse_sql 
-      #     cd ci_clickhouse_sql
-      #     cp -r ${GITHUB_WORKSPACE}/docker/test/stateless/process_functional_tests_result.py ./
-      #     cp -r ${GITHUB_WORKSPACE}/tests/clickhouse-test ./
-      #     mkdir queries
-      #     cp -r ${GITHUB_WORKSPACE}/tests/queries/7_clickhouse_sql queries/
-      #     cp -r ${GITHUB_WORKSPACE}/tests/queries/shell_config.sh queries/
-      #     mkdir -p test_output
-      #     echo "Running test without optimizer"
-      #     ./clickhouse-test --stop --hung-check --jobs 1 --order asc --print-time 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
-      #     ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/clickhouse_sql_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/clickhouse_sql_check_status.tsv
-      #     cd ..
-      #     rm -rf ci_clickhouse_sql
+      - name: Run ByConity ClickhouseSQL FuntionalStateless (w.o optimizer)
+        continue-on-error: true
+        run: |
+          mkdir -p ci_clickhouse_sql
+          cd ci_clickhouse_sql
+          cp -r $GITHUB_WORKSPACE/docker/test/stateless/process_functional_tests_result.py ./
+          cp -r $GITHUB_WORKSPACE/tests/clickhouse-test ./
+          mkdir queries
+          cp -r $GITHUB_WORKSPACE/tests/queries/7_clickhouse_sql queries/
+          cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
+          mkdir -p /test_output
+          echo "Running test without optimizer"
+          ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 1 --order asc --print-time 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a /test_output/test_result.txt
+          ./process_functional_tests_result.py || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
+          cd ..
+          rm -rf ci_clickhouse_sql
 #          not run test with optimizer enable at the moment
 #          echo "Running test with optimizer"
 #          ./clickhouse-test --stop --hung-check --jobs 1 --order asc --print-time --client-option 'enable_optimizer=1' 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
