@@ -41,6 +41,23 @@ void PlanSegmentSplitter::split(QueryPlan & query_plan, PlanSegmentContext & pla
             plan_segment_context.plan_segment_tree->setRoot(&node);
     }
 
+    // 1. set segment parallel
+    for (auto & node : plan_segment_context.plan_segment_tree->getNodes())
+    {
+        auto inputs = node.plan_segment->getPlanSegmentInputs();
+        for (auto & input : inputs)
+        {
+            /***
+             * If a output is a gather node, its parallel size is always 1 since we should gather all data.
+             */
+            if (input->getExchangeMode() == ExchangeMode::GATHER)
+            {
+                node.plan_segment->setParallelSize(1);
+            }
+        }
+    }
+
+    // 2. set output parallel the same to segment parallel
     for (auto & node : plan_segment_context.plan_segment_tree->getNodes())
     {
         auto inputs = node.plan_segment->getPlanSegmentInputs();
