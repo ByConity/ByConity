@@ -24,7 +24,7 @@ tmp_path: /var/byconity/tmp_data/
 users_config: /config/users.yml
 default_profile: default
 default_database: default
-timezone: Asia/Shanghai
+timezone: Europe/Moscow
 mlock_executable: false
 macros:
   "-incl": macros

@@ -6,7 +6,7 @@ logger:
   size: 1000M
   count: 10
 path: /var/byconity/
-timezone: Asia/Shanghai
+timezone: Europe/Moscow
 daemon_manager:
   port: 17553
   daemon_jobs:

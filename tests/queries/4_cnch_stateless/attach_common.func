@@ -23,7 +23,7 @@ function table_detached_path() {
     table=${2}
 
     uuid=`${CLICKHOUSE_CLIENT} --query "select uuid from system.cnch_tables where database = '${database}' and name = '${table}' limit 1"`
-    root_path=`${CLICKHOUSE_CLIENT} --query "select path from system.disks where name = 'server_hdfs_disk0'"`
+    root_path=`${CLICKHOUSE_CLIENT} --query "select path from system.disks where type = 'bytehdfs'"`
 
     _TABLE_DETACHED_PATH="${root_path}/${uuid}/detached/"
 }
