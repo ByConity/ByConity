@@ -34,7 +34,6 @@ jobs:
           cp $GITHUB_WORKSPACE/ci_scripts/create_docker_volume_ci.sh ./
           mkdir bin
           cp -r $GITHUB_WORKSPACE/build/programs/* ./bin
-          docker-compose -f docker-compose.yml.multiworkers down
           /bin/bash create_docker_volume_ci.sh
           docker-compose -f docker-compose.yml.multiworkers up -d --force-recreate --remove-orphans
           sleep 10
