@@ -76,7 +76,7 @@ jobs:
           cd ..
           rm -rf ci_clickhouse_sql
 #          not run test with optimizer enable at the moment.
-#          echo "Running test with optimizer"
+#          echo "Running test with optimizer".
 #          ./clickhouse-test --stop --hung-check --jobs 1 --order asc --print-time --client-option 'enable_optimizer=1' 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
       - name: After test
         continue-on-error: true
