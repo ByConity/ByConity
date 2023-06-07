@@ -606,10 +606,15 @@ InterpretIMResult ExpressionInterpreter::visitInFunction(const ASTFunction & fun
     for (size_t i = 0; i < set_column->size(); ++i)
         set_values.push_back(LiteralEncoder::encodeForComparisonExpr((*set_column)[i], left_arg_result.type, context));
 
-    // rewrite `x IN 1` to `x = 1`
-    if (set_values.size() == 1)
+    // in some cases, there are no values filled in the set, e.g. IN NULL/NOT IN NULL, keep the original expression
+    if (set_values.empty())
     {
-        // TODO: x IN NULL?
+        ASTPtr rewritten_func = makeASTFunction(function.name, rewritten_left_arg, right_arg);
+        return {std::make_shared<DataTypeUInt8>(), rewritten_func};
+    }
+    // rewrite `x IN 1` to `x = 1`
+    else if (set_values.size() == 1)
+    {
         auto result_type = makeNullableByArgumentTypes<DataTypeUInt8>({left_arg_result});
         String comparison_op = (function.name == "in" || function.name == "globalIn") ? "equals" : "notEquals";
         auto comparison_func = makeASTFunction(comparison_op, rewritten_left_arg, set_values.front());
