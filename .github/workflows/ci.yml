@@ -6,13 +6,12 @@ on:
   pull_request:
     branches: [ "master" ]
 
-env:
-  BINARY_VOL: ${COMPOSE_PROJECT_NAME}_bin_volume
-  HDFS_VOL: ${COMPOSE_PROJECT_NAME}_hdfs_volume
-  CONFIG_VOL: ${COMPOSE_PROJECT_NAME}_config_volume
-  COMPOSE_PROJECT_NAME: byconity_$(cat /etc/hostname)
-
 jobs:
+  env:
+    BINARY_VOL: ${COMPOSE_PROJECT_NAME}_bin_volume
+    HDFS_VOL: ${COMPOSE_PROJECT_NAME}_hdfs_volume
+    CONFIG_VOL: ${COMPOSE_PROJECT_NAME}_config_volume
+    COMPOSE_PROJECT_NAME: byconity_$(cat /etc/hostname)
   scm_build:
     name: Build binary and run stateless tests
     container: byconity/byconity-ci:latest
