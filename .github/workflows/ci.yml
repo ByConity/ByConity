@@ -34,8 +34,7 @@ jobs:
           cp $GITHUB_WORKSPACE/ci_scripts/create_docker_volume_ci.sh ./
           mkdir bin
           cp -r $GITHUB_WORKSPACE/build/programs/* ./bin
-          docker network prune --force --filter until=5m
-          docker-compose -f docker-compose.yml.multiworkers down
+          export COMPOSE_PROJECT_NAME=byconity_network_$(cat /etc/hostname)
           /bin/bash create_docker_volume_ci.sh
           docker-compose -f docker-compose.yml.multiworkers up -d
           sleep 10
