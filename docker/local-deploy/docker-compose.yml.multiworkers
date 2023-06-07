@@ -10,7 +10,7 @@ services:
     ports:
       - 9871:9870
     volumes:
-      - ${HDFS_VOL}:${HADOOP_CONF_DIR}
+      - hdfs_volume:${HADOOP_CONF_DIR}
       - /var/log/hadoop
       - /data1
       - /data2
@@ -24,7 +24,7 @@ services:
     environment:
       - HADOOP_CONF_DIR=${HADOOP_CONF_DIR}
     volumes:
-      - ${HDFS_VOL}:${HADOOP_CONF_DIR}
+      - hdfs_volume:${HADOOP_CONF_DIR}
       - /var/log/hadoop
       - /data1
       - /data2
@@ -46,8 +46,8 @@ services:
       - fdb
       - hdfs
     volumes:
-      - ${BINARY_VOL}:/opt/byconity/bin/
-      - ${CONFIG_VOL}:/config/
+      - binary_volume:/opt/byconity/bin/
+      - config_volume:/config/
     # evironment:
     container_name: "${COMPOSE_PROJECT_NAME}_tso-0"
     cap_add:
@@ -59,8 +59,8 @@ services:
     depends_on:
       - tso
     volumes:
-      - ${BINARY_VOL}:/opt/byconity/bin/
-      - ${CONFIG_VOL}:/config/
+      - binary_volume:/opt/byconity/bin/
+      - config_volume:/config/
     container_name: "${COMPOSE_PROJECT_NAME}_resource-manager-0"
     cap_add:
       - SYS_PTRACE
@@ -76,8 +76,8 @@ services:
       - "8124:21557"
     container_name: "${COMPOSE_PROJECT_NAME}_server-0"
     volumes:
-      - ${BINARY_VOL}:/opt/byconity/bin/
-      - ${CONFIG_VOL}:/config/
+      - binary_volume:/opt/byconity/bin/
+      - config_volume:/config/
     cap_add:
       - SYS_PTRACE
 
@@ -88,8 +88,8 @@ services:
       - server
     container_name: "${COMPOSE_PROJECT_NAME}_worker-write-0"
     volumes:
-      - ${BINARY_VOL}:/opt/byconity/bin/
-      - ${CONFIG_VOL}:/config/
+      - binary_volume:/opt/byconity/bin/
+      - config_volume:/config/
     cap_add:
       - SYS_PTRACE
 
@@ -100,8 +100,8 @@ services:
       - server
     container_name: "${COMPOSE_PROJECT_NAME}_worker-default-0"
     volumes:
-      - ${BINARY_VOL}:/opt/byconity/bin/
-      - ${CONFIG_VOL}:/config/
+      - binary_volume:/opt/byconity/bin/
+      - config_volume:/config/
     cap_add:
       - SYS_PTRACE
 
@@ -112,8 +112,8 @@ services:
       - server
     container_name: "${COMPOSE_PROJECT_NAME}_worker-default-1"
     volumes:
-      - ${BINARY_VOL}:/opt/byconity/bin/
-      - ${CONFIG_VOL}:/config/
+      - binary_volume:/opt/byconity/bin/
+      - config_volume:/config/
     cap_add:
       - SYS_PTRACE
 
@@ -124,13 +124,18 @@ services:
       - server
     container_name: "${COMPOSE_PROJECT_NAME}_daemon-manager-0"
     volumes:
-      - ${BINARY_VOL}:/opt/byconity/bin/
-      - ${CONFIG_VOL}:/config/
+      - binary_volume:/opt/byconity/bin/
+      - config_volume:/config/
     cap_add:
       - SYS_PTRACE
 
 volumes:
-  external:
-    name: "${CONFIG_VOL}"
-    name: "${HDFS_VOL}"
-    name: "${BINARY_VOL}"
+    config_volume:
+      external: true
+      name: "${CONFIG_VOL}"
+    hdfs_volume:
+      external: true
+      name: "${HDFS_VOL}"
+    binary_volume:
+      external: true
+      name: "${BINARY_VOL}"
