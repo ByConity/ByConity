@@ -63,7 +63,7 @@ public:
 
     ASTType getType() const override { return ASTType::ASTLiteral; }
 
-    ASTPtr clone() const override { return std::make_shared<ASTLiteral>(*this); }
+    ASTPtr clone() const override;
 
     void updateTreeHashImpl(SipHash & hash_state) const override;
 

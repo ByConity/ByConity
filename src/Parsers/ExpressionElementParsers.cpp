@@ -534,6 +534,26 @@ bool ParserFunction::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         {
             return false;
         }
+
+        const auto &name = function_name_lowercase;
+        if (name.starts_with('l') && (name == "lead" || name == "lag"))
+        {
+            // fixed to ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+            auto &fn = function_node_as_iast->as<ASTFunction &>();
+            if (fn.window_definition)
+            {
+                auto &def = fn.window_definition->as<ASTWindowDefinition &>();
+
+                def.frame_is_default = false;
+                def.frame_type = WindowFrame::FrameType::Rows;
+                def.frame_begin_type = WindowFrame::BoundaryType::Unbounded;
+                def.frame_begin_offset = nullptr;
+                def.frame_begin_preceding = true;
+                def.frame_end_type = WindowFrame::BoundaryType::Unbounded;
+                def.frame_end_offset = nullptr;
+                def.frame_end_preceding = false;
+            }
+        }
     }
 
     node = function_node;
@@ -597,6 +617,11 @@ bool ParserWindowReference::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
         if (window_name_parser.parse(pos, window_name_ast, expected))
         {
             function.window_name = getIdentifierName(window_name_ast);
+            const auto name = Poco::toLower(function.name);
+            if (name.starts_with('l') && (name == "lead" || name == "lag"))
+            {
+                function.window_definition = std::make_shared<ASTWindowDefinition>();
+            }
             return true;
         }
         else
