@@ -39,6 +39,7 @@ jobs:
           export HDFS_VOL=${COMPOSE_PROJECT_NAME}_hdfs_volume
           export CONFIG_VOL=${COMPOSE_PROJECT_NAME}_config_volume
           sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" hdfs/core-site.xml
+          docker-compose -f docker-compose.yml.multiworkers down --volumes --project-name byconity-5d99467af02f_default
           /bin/bash create_docker_volume_ci.sh
           docker-compose -f docker-compose.yml.multiworkers up -d
           sleep 10
@@ -103,7 +104,7 @@ jobs:
         if: always()
         run: |
           cd /CI/
-          export COMPOSE_PROJECT_NAME=byconity_$(cat /etc/hostname)
+          export COMPOSE_PROJECT_NAME=byconity-$(cat /etc/hostname)
           export BINARY_VOL=${COMPOSE_PROJECT_NAME}_bin_volume
           export HDFS_VOL=${COMPOSE_PROJECT_NAME}_hdfs_volume
           export CONFIG_VOL=${COMPOSE_PROJECT_NAME}_config_volume
