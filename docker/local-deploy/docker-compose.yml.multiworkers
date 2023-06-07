@@ -130,9 +130,7 @@ services:
       - SYS_PTRACE
 
 volumes:
-  ${CONFIG_VOL}:
-    external: true
-  ${HDFS_VOL}:
-    external: true
-  ${BINARY_VOL}:
-    external: true
+  external:
+    name: "${CONFIG_VOL}":
+    name: "${HDFS_VOL}":
+    name: "${BINARY_VOL}":
