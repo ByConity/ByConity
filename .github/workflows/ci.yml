@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [ "master" ]
 
+env:
+  BINARY_VOL: ${COMPOSE_PROJECT_NAME}_bin_volume
+  HDFS_VOL: ${COMPOSE_PROJECT_NAME}_hdfs_volume
+  CONFIG_VOL: ${COMPOSE_PROJECT_NAME}_config_volume
+  COMPOSE_PROJECT_NAME: byconity_$(cat /etc/hostname)
+
 jobs:
   scm_build:
     name: Build binary and run stateless tests
@@ -34,7 +40,6 @@ jobs:
           cp $GITHUB_WORKSPACE/ci_scripts/create_docker_volume_ci.sh ./
           mkdir bin
           cp -r $GITHUB_WORKSPACE/build/programs/* ./bin
-          export COMPOSE_PROJECT_NAME=byconity_network_$(cat /etc/hostname)
           /bin/bash create_docker_volume_ci.sh
           docker-compose -f docker-compose.yml.multiworkers up -d
           sleep 10
@@ -85,8 +90,6 @@ jobs:
           bash $GITHUB_WORKSPACE/.codebase/ci_scripts/common_component/copy_case_stdout_to_shared.sh || true # copy stdout to artifact folder
           mv /test_output /Artifacts  && tar --warning=no-file-changed -zcf  /Artifacts.tar.gz /Artifacts/*  || true
           bash .codebase/ci_scripts/common_component/block_ci.sh || true # check block_ci_flag
-          cd /CI/
-          docker-compose -f docker-compose.yml.multiworkers down
       - name: Upload Artifact
         uses: actions/upload-artifact@v2
         with:
@@ -95,3 +98,8 @@ jobs:
       - name: Analyse Result
         run:
           /bin/bash $GITHUB_WORKSPACE/docker/test/result.sh
+      - name: Cleanup
+        if: always()
+        run: |
+          cd /CI/
+          docker-compose -f docker-compose.yml.multiworkers down --volumes

@@ -4,13 +4,13 @@ services:
   hdfs:
     image: gchq/hdfs:3.3
     command: namenode
-    container_name: hdfs-namenode
+    container_name: "${COMPOSE_PROJECT_NAME}_hdfs-namenode"
     environment:
       - HADOOP_CONF_DIR=${HADOOP_CONF_DIR}
     ports:
       - 9871:9870
     volumes:
-      - my_hdfs_volume:${HADOOP_CONF_DIR}
+      - ${HDFS_VOL}:${HADOOP_CONF_DIR}
       - /var/log/hadoop
       - /data1
       - /data2
@@ -20,11 +20,11 @@ services:
       - hdfs
     image: gchq/hdfs:3.3
     command: datanode
-    container_name: hdfs-datanode
+    container_name: "${COMPOSE_PROJECT_NAME}_hdfs-datanode"
     environment:
       - HADOOP_CONF_DIR=${HADOOP_CONF_DIR}
     volumes:
-      - my_hdfs_volume:${HADOOP_CONF_DIR}
+      - ${HDFS_VOL}:${HADOOP_CONF_DIR}
       - /var/log/hadoop
       - /data1
       - /data2
@@ -36,7 +36,7 @@ services:
       FDB_NETWORKING_MODE: container
       FDB_COORDINATOR_PORT: 4550
       FDB_PORT: 4550
-    container_name: fdb-0
+    container_name: "${COMPOSE_PROJECT_NAME}_fdb-0"
 
 # byconity:
   tso:
@@ -46,10 +46,10 @@ services:
       - fdb
       - hdfs
     volumes:
-      - my_volume:/opt/byconity/bin/
-      - my_config_volume:/config/
+      - ${BINARY_VOL}:/opt/byconity/bin/
+      - ${CONFIG_VOL}:/config/
     # evironment:
-    container_name: tso-0
+    container_name: "${COMPOSE_PROJECT_NAME}_tso-0"
     cap_add:
       - SYS_PTRACE
 
@@ -59,9 +59,9 @@ services:
     depends_on:
       - tso
     volumes:
-      - my_volume:/opt/byconity/bin/
-      - my_config_volume:/config/
-    container_name: resource-manager-0
+      - ${BINARY_VOL}:/opt/byconity/bin/
+      - ${CONFIG_VOL}:/config/
+    container_name: "${COMPOSE_PROJECT_NAME}_resource-manager-0"
     cap_add:
       - SYS_PTRACE
 
@@ -74,10 +74,10 @@ services:
     ports:
       - "9000:52145"
       - "8124:21557"
-    container_name: server-0
+    container_name: "${COMPOSE_PROJECT_NAME}_server-0"
     volumes:
-      - my_volume:/opt/byconity/bin/
-      - my_config_volume:/config/
+      - ${BINARY_VOL}:/opt/byconity/bin/
+      - ${CONFIG_VOL}:/config/
     cap_add:
       - SYS_PTRACE
 
@@ -86,10 +86,10 @@ services:
     command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 server:21557 && VIRTUAL_WAREHOUSE_ID=vw_write WORKER_GROUP_ID=wg_write WORKER_ID=w0 clickhouse-server --config-file /config/worker.yml"
     depends_on:
       - server
-    container_name: worker-write-0
+    container_name: "${COMPOSE_PROJECT_NAME}_worker-write-0"
     volumes:
-      - my_volume:/opt/byconity/bin/
-      - my_config_volume:/config/
+      - ${BINARY_VOL}:/opt/byconity/bin/
+      - ${CONFIG_VOL}:/config/
     cap_add:
       - SYS_PTRACE
 
@@ -98,10 +98,10 @@ services:
     command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 server:21557  && VIRTUAL_WAREHOUSE_ID=vw_default WORKER_GROUP_ID=wg_default WORKER_ID=r0 clickhouse-server --config-file /config/worker.yml"
     depends_on:
       - server
-    container_name: worker-default-0
+    container_name: "${COMPOSE_PROJECT_NAME}_worker-default-0"
     volumes:
-      - my_volume:/opt/byconity/bin/
-      - my_config_volume:/config/
+      - ${BINARY_VOL}:/opt/byconity/bin/
+      - ${CONFIG_VOL}:/config/
     cap_add:
       - SYS_PTRACE
 
@@ -110,10 +110,10 @@ services:
     command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 server:21557  && VIRTUAL_WAREHOUSE_ID=vw_default WORKER_GROUP_ID=wg_default WORKER_ID=r1 clickhouse-server --config-file /config/worker.yml"
     depends_on:
       - server
-    container_name: worker-default-1
+    container_name: "${COMPOSE_PROJECT_NAME}_worker-default-1"
     volumes:
-      - my_volume:/opt/byconity/bin/
-      - my_config_volume:/config/
+      - ${BINARY_VOL}:/opt/byconity/bin/
+      - ${CONFIG_VOL}:/config/
     cap_add:
       - SYS_PTRACE
 
@@ -122,17 +122,17 @@ services:
     command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 server:21557  && daemon-manager --config-file ./config/daemon-manager.yml"
     depends_on:
       - server
-    container_name: daemon-manager-0
+    container_name: "${COMPOSE_PROJECT_NAME}_daemon-manager-0"
     volumes:
-      - my_volume:/opt/byconity/bin/
-      - my_config_volume:/config/
+      - ${BINARY_VOL}:/opt/byconity/bin/
+      - ${CONFIG_VOL}:/config/
     cap_add:
       - SYS_PTRACE
 
 volumes:
-  my_config_volume:
+  ${CONFIG_VOL}:
     external: true
-  my_hdfs_volume:
+  ${HDFS_VOL}:
     external: true
-  my_volume:
+  ${BINARY_VOL}:
     external: true
