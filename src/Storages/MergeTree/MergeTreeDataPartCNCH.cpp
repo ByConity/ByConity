@@ -254,8 +254,6 @@ void MergeTreeDataPartCNCH::loadColumnsChecksumsIndexes([[maybe_unused]] bool re
     loadIndexGranularity();
     calculateEachColumnSizes(columns_sizes, total_columns_size);
 
-    calculateEachColumnSizes(columns_sizes, total_columns_size);
-
     /// FIXME:
     default_codec = CompressionCodecFactory::instance().getDefaultCodec();
 }
@@ -717,57 +715,6 @@ void MergeTreeDataPartCNCH::calculateEachColumnSizes(
         ColumnSize size = getColumnSizeImpl(column, &processed_substreams);
         each_columns_size[column.name] = size;
         total_size.add(size);
-
-#ifndef NDEBUG
-        /// Most trivial types
-        if (rows_count != 0 && column.type->isValueRepresentedByNumber() && !column.type->haveSubtypes())
-        {
-            size_t rows_in_column = size.data_uncompressed / column.type->getSizeOfValueInMemory();
-            if (rows_in_column != rows_count)
-            {
-                throw Exception(
-                    ErrorCodes::LOGICAL_ERROR,
-                    "Column {} has rows count {} according to size in memory "
-                    "and size of single value, but data part {} has {} rows", backQuote(column.name), rows_in_column, name, rows_count);
-            }
-        }
-#endif
-    }
-}
-
-ColumnSize MergeTreeDataPartCNCH::getColumnSizeImpl(const NameAndTypePair & column, std::unordered_set<String> * processed_substreams) const
-{
-    ColumnSize size;
-    auto checksums = getChecksums();
-    if (checksums->empty())
-        return size;
-
-    // Special handling flattened map type
-    if (column.type->isMap() && !column.type->isMapKVStore())
-        return getMapColumnSizeNotKV(checksums, column);
-
-    auto serialization = getSerializationForColumn(column);
-    serialization->enumerateStreams([&](const ISerialization::SubstreamPath & substream_path)
-    {
-        String file_name = ISerialization::getFileNameForStream(column, substream_path);
-
-        if (processed_substreams && !processed_substreams->insert(file_name).second)
-            return;
-
-        auto bin_checksum = checksums->files.find(file_name + DATA_FILE_EXTENSION);
-        if (bin_checksum != checksums->files.end())
-        {
-            size.data_compressed += bin_checksum->second.file_size;
-            size.data_uncompressed += bin_checksum->second.uncompressed_size;
-        }
-
-        auto mrk_checksum = checksums->files.find(file_name + index_granularity_info.marks_file_extension);
-        if (mrk_checksum != checksums->files.end())
-            size.marks += mrk_checksum->second.file_size;
-    }, {});
-
-    return size;
-}
 
 #ifndef NDEBUG
         /// Most trivial types

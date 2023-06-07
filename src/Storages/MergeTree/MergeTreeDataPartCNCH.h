@@ -118,11 +118,6 @@ private:
     void calculateEachColumnSizes(ColumnSizeByName & each_columns_size, ColumnSize & total_size) const override;
     ColumnSize getColumnSizeImpl(const NameAndTypePair & column, std::unordered_set<String> * processed_substreams) const;
 
-    void loadProjections(bool require_columns_checksums, bool check_consistency) override;
-
-    // for projection part
-    void updateCommitTimeForProjection();
-
     void removeImpl(bool keep_shared_data) const override;
 };
 
