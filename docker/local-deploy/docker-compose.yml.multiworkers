@@ -4,7 +4,7 @@ services:
   hdfs:
     image: gchq/hdfs:3.3
     command: namenode
-    container_name: "${COMPOSE_PROJECT_NAME}_hdfs-namenode"
+    container_name: "${COMPOSE_PROJECT_NAME}-hdfs-namenode"
     environment:
       - HADOOP_CONF_DIR=${HADOOP_CONF_DIR}
     ports:
@@ -20,7 +20,7 @@ services:
       - hdfs
     image: gchq/hdfs:3.3
     command: datanode
-    container_name: "${COMPOSE_PROJECT_NAME}_hdfs-datanode"
+    container_name: "${COMPOSE_PROJECT_NAME}-hdfs-datanode"
     environment:
       - HADOOP_CONF_DIR=${HADOOP_CONF_DIR}
     volumes:
