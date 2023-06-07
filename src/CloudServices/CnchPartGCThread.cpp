@@ -97,11 +97,6 @@ void CnchPartGCThread::runImpl()
     scheduled_task->scheduleAfter(sleep_ms);
 }
 
-void CnchPartGCThread::clearData()
-{
-    removeCandidatePartitions();
-}
-
 void CnchPartGCThread::clearOldPartsByPartition(const StoragePtr & istorage, StorageCnchMergeTree & storage, const String & partition_id, bool in_wakeup, TxnTimestamp gc_timestamp)
 {
     auto storage_settings = storage.getSettings();
