@@ -208,8 +208,11 @@ void StorageCloudKafka::subscribeBuffer(BufferPtr &buffer)
 
 void StorageCloudKafka::unsubscribeBuffer(BufferPtr &buffer)
 {
-    if (buffer)
-        buffer->subBufferAs<CnchReadBufferFromKafkaConsumer>()->unassign();
+    if (!buffer)
+        return;
+
+    buffer->subBufferAs<CnchReadBufferFromKafkaConsumer>()->unassign();
+    buffer->resetDelimiterStatus();
 }
 
 cppkafka::Configuration StorageCloudKafka::createConsumerConfiguration()
@@ -328,7 +331,6 @@ void StorageCloudKafka::stopStreamThread()
     /// Second, stop task: do not add lock here
     /// If exception occurs when stopping task, it needs to add lock to update some info,
     /// so if locked here, the dead lock would happen
-    unsubscribeBuffer(consumer_context.buffer);
     consumer_context.task->deactivate();
 
     /// Then reset `consumer_context`

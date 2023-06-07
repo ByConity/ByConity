@@ -104,6 +104,7 @@ public:
     NamesAndTypes getOutputNamesAndTypes() const { return getCurrentDataStream().header.getNamesAndTypes(); }
     NameToType getOutputNamesToTypes() const { return getCurrentDataStream().header.getNamesToTypes(); }
     Names getOutputNames() const { return getCurrentDataStream().header.getNames(); }
+    PlanNodePtr getNodeById(PlanNodeId node_id) const;
 
     static PlanNodePtr createPlanNode(
         [[maybe_unused]] PlanNodeId id_,

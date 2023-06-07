@@ -1716,6 +1716,12 @@ String StepPrinter::printWindowStep(const WindowStep & step)
     for (const auto & pk : window.partition_by)
         details << pk.column_name << "\\n";
     details << "|";
+    details << "Full Sort desc \\n";
+    for (const auto & sort : window.full_sort_description)
+        details << sort.column_name << "\\n";
+    details << "|";
+    details << "Need Sort:" << step.needSort() << "\\n";
+    details << "|";
     details << "Sort Key\\n";
     for (const auto & sk : window.order_by)
         details << sk.column_name << " " << (sk.direction == 1 ? "ASC" : "DESC") << "\\n";
@@ -2198,25 +2204,55 @@ void GraphvizPrinter::printPlanSegment(const PlanSegmentTreePtr & segment, const
     }
 }
 
-void GraphvizPrinter::printBlock(const String & stream, const Block & header, const Block & data)
+void GraphvizPrinter::printChunk(String transform, const Block & block, const Chunk & chunk)
 {
-    WriteBufferFromOwnString string;
-    //    FormatSettings settings;
-    //    CSVRowOutputStream csvRowOutputStream{string, header, true, settings};
-
-    std::cout << "====================" << stream << "========================" << std::endl;
-    for (auto & column : header)
+    std::cout << transform << ":";
+    for(const auto& column : block.getNames())
     {
-        std::cout << column.name << "|";
+        std::cout << column << ":";
     }
-
     std::cout << "\n";
-
-    for (size_t i = 0; i < data.rows(); ++i)
+    UInt64 rows = chunk.getNumRows();
+    Columns columns = chunk.getColumns();
+    for (UInt64 i = 0; i < rows; ++i)
     {
-        //        csvRowOutputStream.write(data, i);
+        for (auto & col : columns)
+        {
+            String col_name = col->getName();
+            if (col_name == "UInt64" || col_name == "UInt8")
+            {
+                auto col_value = col->getUInt(i);
+                std::cout << col_value << ":";
+            }
+            if (col_name == "Int64" || col_name == "Int8")
+            {
+                auto col_value = col->getInt(i);
+                std::cout << col_value << ":";
+            }
+            if (col_name == "Float64")
+            {
+                auto col_value = col->getFloat64(i);
+                std::cout << col_value << ":";
+            }
+            if (col_name == "Float32")
+            {
+                auto col_value = col->getFloat32(i);
+                std::cout << col_value << ":";
+            }
+            if (col_name == "String")
+            {
+                auto col_value = col->getDataAt(i);
+                std::cout << col_value.toString() << ":";
+            }
+            if (col_name == "Bool")
+            {
+                auto col_value = col->getBool(i);
+                std::cout << col_value << ":";
+            }
+        }
+        std::cout << "\n" << std::flush;
     }
-    std::cout << string.str();
+
     std::cout << "\n" << std::flush;
 }
 

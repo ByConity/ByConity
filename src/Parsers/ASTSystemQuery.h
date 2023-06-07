@@ -113,6 +113,7 @@ public:
         START_CONSUME,
         STOP_CONSUME,
         RESTART_CONSUME,
+        RESET_CONSUME_OFFSET,
         FETCH_PARTS,
         METASTORE,
         CLEAR_BROKEN_TABLES,
@@ -138,6 +139,9 @@ public:
     String volume;
     String disk;
     UInt64 seconds{};
+
+    /// Some parameters may need deeply parsed, such as json parameter string for ResetConsumeOffset
+    String string_data;
 
     // For execute/reload mutation
     String mutation_id;

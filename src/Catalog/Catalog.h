@@ -185,9 +185,13 @@ public:
         const bool is_merged_parts = false,
         const bool preallocate_mode = false);
 
+    /// APIs for CncnKafka
     void getKafkaOffsets(const String & consumer_group, cppkafka::TopicPartitionList & tpl);
     cppkafka::TopicPartitionList getKafkaOffsets(const String & consumer_group, const String & kafka_topic);
     void clearOffsetsForWholeTopic(const String & topic, const String & consumer_group);
+    void setTransactionForKafkaConsumer(const UUID & uuid, const TxnTimestamp & txn_id, size_t consumer_index);
+    TxnTimestamp getTransactionForKafkaConsumer(const UUID & uuid, size_t consumer_index);
+    void clearKafkaTransactions(const UUID & uuid);
 
     void dropAllPart(const StoragePtr & storage, const TxnTimestamp & txnID, const TxnTimestamp & ts);
 

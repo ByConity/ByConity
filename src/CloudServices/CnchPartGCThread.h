@@ -28,6 +28,8 @@
 
 namespace DB
 {
+class CnchBGThreadPartitionSelector;
+using PartitionSelectorPtr = std::shared_ptr<CnchBGThreadPartitionSelector>;
 
 /// A thread clean up the stale stuff (like parts, deleted bitmaps, labels) for table
 /// Also, mark expired parts accord to table level TTL
@@ -42,10 +44,11 @@ private:
 
     void runImpl() override;
 
-    void clearOldParts(const StoragePtr & istorage, StorageCnchMergeTree & storage);
+    void clearOldPartsByPartition(const StoragePtr & istorage, StorageCnchMergeTree & storage, const String & partition_id, bool in_wakeup, TxnTimestamp gc_timestamp);
     void clearOldInsertionLabels(const StoragePtr & istorage, StorageCnchMergeTree & storage);
 
     TxnTimestamp calculateGCTimestamp(UInt64 delay_second, bool in_wakeup);
+    Strings selectPartitions(const StoragePtr & istorage);
 
     static void tryMarkExpiredPartitions(StorageCnchMergeTree & storage, const ServerDataPartsVector & visible_parts);
 
@@ -82,7 +85,7 @@ private:
     //         merge->updatePartCache(partition_id, -1 * part_num);
     // }
 
-private:
+    PartitionSelectorPtr partition_selector;
     BackgroundSchedulePool::TaskHolder checkpoint_task;
 
     pcg64 rng;

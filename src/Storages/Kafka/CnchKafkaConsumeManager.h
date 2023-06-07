@@ -78,6 +78,8 @@ public:
     std::vector<KafkaConsumerRunningInfo> getConsumerInfos() const;
     void getOffsetsFromCatalog(cppkafka::TopicPartitionList & offsets, const StorageID & buffer_table, const String & consumer_group);
 
+    void setCurrentTransactionForConsumer(size_t consumer_index, const TxnTimestamp & txn_id);
+
 private:
     void updatePartitionCountOfTopics(StorageCnchKafka & kafka_table, bool & partitions_changed);
 
@@ -90,7 +92,10 @@ private:
     void dispatchConsumerToWorker(StorageCnchKafka & kafka_table, ConsumerInfo & info, std::exception_ptr & exception);
     void stopConsumerOnWorker(ConsumerInfo & info);
 
+    String getVWNameForConsumerTask(const StorageCnchKafka & kafka_table);
     void initConsumerScheduler();
+
+    bool checkConsumerHasActiveTransaction(size_t consumer_index);
 
     ContextPtr createQueryContext();
 

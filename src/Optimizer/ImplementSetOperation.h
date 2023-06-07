@@ -28,6 +28,7 @@ struct TranslationResult
 {
     PlanNodePtr plan_node;
     Names count_symbols;
+    std::optional<String> row_number_symbol;
 };
 
 class SetOperationNodeTranslator
@@ -36,6 +37,7 @@ public:
     explicit SetOperationNodeTranslator(Context & context_) : context(context_) { }
 
     TranslationResult makeSetContainmentPlanForDistinct(PlanNodeBase & node);
+    TranslationResult makeSetContainmentPlanForDistinctAll(PlanNodeBase & node);
 
 private:
     Names allocateSymbols(size_t count, const String & name)
@@ -57,6 +59,14 @@ private:
         }
         return result;
     }
+
+    PlanNodePtr appendCounts(
+        PlanNodePtr sourceNode,
+        Names & originalColumns,
+        std::vector<String> & markers,
+        std::vector<String> & countOutputs,
+        String & row_number_symbol);
+
 
     /// output symbol to child symbol mapping
     static Names sourceSymbolMapping(const PlanNodePtr & node, size_t child_index)
@@ -98,8 +108,10 @@ private:
         for (size_t i = 0; i < markers.size(); ++i)
         {
             auto expression = (i == markerIndex) ? std::make_shared<ASTLiteral>(1u) : std::make_shared<ASTLiteral>(0u);
-            assignments.emplace_back(markers[i], expression);
-            new_name_to_type[markers[i]] = std::make_shared<DataTypeUInt8>();
+
+            String marker_symbol = context.getSymbolAllocator()->newSymbol(markers[i]);
+            assignments.emplace_back(marker_symbol, expression);
+            new_name_to_type[marker_symbol] = std::make_shared<DataTypeUInt8>();
         }
 
         auto expression_step = std::make_shared<ProjectionStep>(output_stream, assignments, new_name_to_type);

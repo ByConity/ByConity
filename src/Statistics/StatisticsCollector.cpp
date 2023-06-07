@@ -21,6 +21,7 @@
 #include <Statistics/CacheManager.h>
 #include <Statistics/CachedStatsProxy.h>
 #include <Statistics/CollectStep.h>
+#include <Statistics/SimplifyHistogram.h>
 #include <Statistics/StatisticsCollector.h>
 #include <Statistics/StatsNdvBucketsImpl.h>
 #include <Statistics/SubqueryHelper.h>
@@ -106,6 +107,25 @@ void StatisticsCollector::readFromCatalogImpl(const ColumnDescVector & cols_desc
     }
 }
 
+static bool isInteger(SerdeDataType type)
+{
+    switch (type)
+    {
+        case SerdeDataType::UInt8:
+        case SerdeDataType::UInt16:
+        case SerdeDataType::UInt32:
+        case SerdeDataType::UInt64:
+        case SerdeDataType::Int8:
+        case SerdeDataType::Int16:
+        case SerdeDataType::Int32:
+        case SerdeDataType::Int64:
+            return true;
+
+        default:
+            return false;
+    }
+}
+
 std::optional<PlanNodeStatisticsPtr> StatisticsCollector::toPlanNodeStatistics() const
 {
     if (!table_stats.basic)
@@ -118,6 +138,8 @@ std::optional<PlanNodeStatisticsPtr> StatisticsCollector::toPlanNodeStatistics()
     auto table_row_count = table_stats.basic->getRowCount();
     result->updateRowCount(table_row_count);
     // whether to construct single bucket histogram from min/max if there is no histogram
+    auto storage = catalog->getStorageByTableId(table_info);
+
     for (const auto & [col, stats] : columns_stats)
     {
         auto symbol = std::make_shared<SymbolStatistics>();
@@ -135,12 +157,24 @@ std::optional<PlanNodeStatisticsPtr> StatisticsCollector::toPlanNodeStatistics()
             if (stats.ndv_buckets_result)
             {
                 stats.ndv_buckets_result->writeSymbolStatistics(*symbol);
+
+                if (context->getSettingsRef().statistics_simplify_histogram)
+                {
+                    auto is_integer = isInteger(stats.ndv_buckets_result->getSerdeDataType());
+
+                    auto ndv_thres = context->getSettingsRef().statistics_simplify_histogram_ndv_density_threshold;
+                    auto range_thres = context->getSettingsRef().statistics_simplify_histogram_range_density_threshold;
+
+                    symbol->histogram = simplifyHistogram(symbol->histogram, ndv_thres, range_thres, is_integer);
+                }
             }
             else if (construct_single_bucket_histogram)
             {
                 auto bucket = Bucket(symbol->min, symbol->max, symbol->ndv, nonnull_count, true, true);
                 symbol->histogram.emplaceBackBucket(std::move(bucket));
             }
+
+
             result->updateSymbolStatistics(col, symbol);
         }
     }

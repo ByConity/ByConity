@@ -121,6 +121,7 @@ private:
 
     bool nextImpl() override;
     bool hasExpired();
+    void drain();
 };
 
 }

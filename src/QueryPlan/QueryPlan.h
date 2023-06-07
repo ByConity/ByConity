@@ -155,6 +155,7 @@ public:
     UInt32 newPlanNodeId() { return (*max_node_id)++; }
     PlanNodePtr & getPlanNode() { return plan_node; }
     CTEInfo & getCTEInfo() { return cte_info; }
+    PlanNodePtr getPlanNodeById(PlanNodeId node_id) const;
 
     QueryPlan getSubPlan(QueryPlan::Node * node_);
 

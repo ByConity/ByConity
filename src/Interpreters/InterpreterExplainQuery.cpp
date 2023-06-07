@@ -194,6 +194,7 @@ struct QueryPlanSettings
     /// Apply query plan optimizations.
     bool optimize = true;
     bool json = false;
+    bool stats = true;
 
     constexpr static char name[] = "PLAN";
 
@@ -204,7 +205,8 @@ struct QueryPlanSettings
             {"actions", query_plan_options.actions},
             {"indexes", query_plan_options.indexes},
             {"optimize", optimize},
-            {"json", json}
+            {"json", json},
+            {"stats", stats}
     };
 };
 
@@ -817,14 +819,18 @@ void InterpreterExplainQuery::explainUsingOptimizer(const ASTPtr & ast, WriteBuf
     auto query_plan = interpreter.buildQueryPlan();
 
     CardinalityEstimator::estimate(*query_plan, context);
-    PlanCostMap costs = CostCalculator::calculate(*query_plan, *context);
     if (settings.json)
     {
-        buffer << PlanPrinter::jsonLogicalPlan(*query_plan, true, true);
+        auto plan_cost = CostCalculator::calculatePlanCost(*query_plan, *context);
+        buffer << PlanPrinter::jsonLogicalPlan(*query_plan, settings.stats, true, plan_cost);
         single_line = true;
     }
     else
+    {
+        PlanCostMap costs = CostCalculator::calculate(*query_plan, *context);
         buffer << PlanPrinter::textLogicalPlan(*query_plan, context, true, true, costs);
+    }
+        
 }
 
 }

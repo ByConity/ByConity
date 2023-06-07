@@ -42,6 +42,8 @@ using AnalysisPtr = std::shared_ptr<Analysis>;
 
 using ASTFunctionPtr = std::shared_ptr<ASTFunction>;
 
+using ExpressionTypes = std::unordered_map<ASTPtr, DataTypePtr>;
+
 using CTEId = UInt32;
 
 struct JoinUsingAnalysis
@@ -179,6 +181,18 @@ struct SubColumnReference
     }
 };
 
+struct ColumnWithType
+{
+    DataTypePtr type;
+    ColumnPtr column;
+
+    ColumnWithType() { }
+    ColumnWithType(const DataTypePtr & type_, const ColumnPtr & column_)
+        : type(type_), column(column_)
+    {}
+    ColumnWithType(const DataTypePtr & type_) : type(type_){}
+};
+
 template<typename Key, typename Val>
 using ListMultimap = std::unordered_map<Key, std::vector<Val>>;
 
@@ -219,9 +233,11 @@ struct Analysis
     */
 
     /// Expressions
-    std::unordered_map<ASTPtr, DataTypePtr> expression_types;
-    bool hasExpressionType(const ASTPtr & expression);
-    void setExpressionType(const ASTPtr & expression, const DataTypePtr & type);
+    std::unordered_map<ASTPtr, ColumnWithType> expression_column_with_types;
+    bool hasExpressionColumnWithType(const ASTPtr & expression);
+    void setExpressionColumnWithType(const ASTPtr & expression, const ColumnWithType & column_with_type);
+    std::optional<ColumnWithType> tryGetExpressionColumnWithType(const ASTPtr & expression);
+    ExpressionTypes getExpressionTypes();
     DataTypePtr getExpressionType(const ASTPtr & expression);
 
     // ASTIdentifier, ASTFieldReference

@@ -202,7 +202,7 @@ public:
     static void printMemo(const Memo & memo, const ContextMutablePtr & context, const String & name);
     static void printMemo(const Memo & memo, GroupId root_id, const ContextMutablePtr & context, const String & name);
     static void printPlanSegment(const PlanSegmentTreePtr &, const ContextMutablePtr &);
-    static void printBlock(const String & stream, const Block & header, const Block & data);
+    static void printChunk(String transform, const Block & block, const Chunk & chunk);
     static void printPipeline(const Processors & processors, const ExecutingGraphPtr & graph, const ContextPtr & context, size_t segment_id, const String & host);
 
 private:

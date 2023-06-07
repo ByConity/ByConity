@@ -663,4 +663,19 @@ void QueryPlan::allocateLocalTable(ContextPtr context)
     }
 }
 
+PlanNodePtr QueryPlan::getPlanNodeById(PlanNodeId node_id) const
+{
+    if (plan_node)
+        if (auto res = plan_node->getNodeById(node_id))
+            return res;
+
+    for (const auto & cte : cte_info.getCTEs())
+    {
+        if (auto res = cte.second->getNodeById(node_id))
+            return res;
+    }
+
+    return nullptr;
+}
+
 }

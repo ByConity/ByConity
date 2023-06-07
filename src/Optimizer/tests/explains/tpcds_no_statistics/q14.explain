@@ -68,16 +68,16 @@ Projection est. 100 rows
                   │     │                          └─ Repartition Exchange est. ? rows
                   │     │                             │     Partition by: {i_brand_id_6, i_category_id_6, i_class_id_6}
                   │     │                             └─ Filter est. ? rows
-                  │     │                                │     Condition: (sum_2 >= 1) AND (sum_1 >= 1) AND (sum >= 1)
+                  │     │                                │     Condition: (count_1 >= 1) AND (count_2 >= 1) AND (count >= 1)
                   │     │                                └─ MergingAggregated est. ? rows
                   │     │                                   └─ Repartition Exchange est. ? rows
                   │     │                                      │     Partition by: {i_brand_id_6, i_category_id_6, i_class_id_6}
                   │     │                                      └─ Aggregating est. ? rows
                   │     │                                         │     Group by: {i_brand_id_6, i_category_id_6, i_class_id_6}
-                  │     │                                         │     Aggregates: sum:=AggNull(sum)(marker), sum_1:=AggNull(sum)(marker_1), sum_2:=AggNull(sum)(marker_2)
+                  │     │                                         │     Aggregates: count:=AggNull(sum)(marker), count_1:=AggNull(sum)(marker_1), count_2:=AggNull(sum)(marker_2)
                   │     │                                         └─ Union est. ? rows
                   │     │                                            ├─ Projection est. ? rows
-                  │     │                                            │  │     Expressions: [i_brand_id_2, i_category_id_2, i_class_id_2], marker:=1, marker_1:=0, marker_2:=0
+                  │     │                                            │  │     Expressions: [i_brand_id_2, i_category_id_2, i_class_id_2], marker_3:=1, marker_4:=0, marker_5:=0
                   │     │                                            │  └─ Inner Join est. ? rows
                   │     │                                            │     │     Condition: ss_sold_date_sk_1 == d_date_sk_1
                   │     │                                            │     ├─ Repartition Exchange est. ? rows
@@ -99,7 +99,7 @@ Projection est. 100 rows
                   │     │                                            │           └─ TableScan tpcds.date_dim est. ? rows
                   │     │                                            │                    Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year
                   │     │                                            ├─ Projection est. ? rows
-                  │     │                                            │  │     Expressions: [i_brand_id_3, i_category_id_3, i_class_id_3], marker:=0, marker_1:=1, marker_2:=0
+                  │     │                                            │  │     Expressions: [i_brand_id_3, i_category_id_3, i_class_id_3], marker_6:=0, marker_7:=1, marker_8:=0
                   │     │                                            │  └─ Inner Join est. ? rows
                   │     │                                            │     │     Condition: cs_sold_date_sk == d_date_sk_2
                   │     │                                            │     ├─ Repartition Exchange est. ? rows
@@ -121,7 +121,7 @@ Projection est. 100 rows
                   │     │                                            │           └─ TableScan tpcds.date_dim est. ? rows
                   │     │                                            │                    Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year
                   │     │                                            └─ Projection est. ? rows
-                  │     │                                               │     Expressions: [i_brand_id_5, i_category_id_5, i_class_id_5], marker:=0, marker_1:=0, marker_2:=1
+                  │     │                                               │     Expressions: [i_brand_id_5, i_category_id_5, i_class_id_5], marker_10:=0, marker_11:=1, marker_9:=0
                   │     │                                               └─ Inner Join est. ? rows
                   │     │                                                  │     Condition: ws_sold_date_sk == d_date_sk_3
                   │     │                                                  ├─ Repartition Exchange est. ? rows
@@ -244,16 +244,16 @@ Projection est. 100 rows
                   │     │                          └─ Repartition Exchange est. ? rows
                   │     │                             │     Partition by: {i_brand_id_13, i_category_id_13, i_class_id_13}
                   │     │                             └─ Filter est. ? rows
-                  │     │                                │     Condition: (sum_4 >= 1) AND (sum_3 >= 1) AND (sum_5 >= 1)
+                  │     │                                │     Condition: (count_5 >= 1) AND (count_4 >= 1) AND (count_3 >= 1)
                   │     │                                └─ MergingAggregated est. ? rows
                   │     │                                   └─ Repartition Exchange est. ? rows
                   │     │                                      │     Partition by: {i_brand_id_13, i_category_id_13, i_class_id_13}
                   │     │                                      └─ Aggregating est. ? rows
                   │     │                                         │     Group by: {i_brand_id_13, i_category_id_13, i_class_id_13}
-                  │     │                                         │     Aggregates: sum_3:=AggNull(sum)(marker_3), sum_4:=AggNull(sum)(marker_4), sum_5:=AggNull(sum)(marker_5)
+                  │     │                                         │     Aggregates: count_3:=AggNull(sum)(marker_12), count_4:=AggNull(sum)(marker_13), count_5:=AggNull(sum)(marker_14)
                   │     │                                         └─ Union est. ? rows
                   │     │                                            ├─ Projection est. ? rows
-                  │     │                                            │  │     Expressions: [i_brand_id_9, i_category_id_9, i_class_id_9], marker_3:=1, marker_4:=0, marker_5:=0
+                  │     │                                            │  │     Expressions: [i_brand_id_9, i_category_id_9, i_class_id_9], marker_15:=1, marker_16:=0, marker_17:=0
                   │     │                                            │  └─ Inner Join est. ? rows
                   │     │                                            │     │     Condition: ss_sold_date_sk_3 == d_date_sk_8
                   │     │                                            │     ├─ Repartition Exchange est. ? rows
@@ -275,7 +275,7 @@ Projection est. 100 rows
                   │     │                                            │           └─ TableScan tpcds.date_dim est. ? rows
                   │     │                                            │                    Outputs: d_date_sk_8:=d_date_sk, d_year_8:=d_year
                   │     │                                            ├─ Projection est. ? rows
-                  │     │                                            │  │     Expressions: [i_brand_id_10, i_category_id_10, i_class_id_10], marker_3:=0, marker_4:=1, marker_5:=0
+                  │     │                                            │  │     Expressions: [i_brand_id_10, i_category_id_10, i_class_id_10], marker_18:=0, marker_19:=1, marker_20:=0
                   │     │                                            │  └─ Inner Join est. ? rows
                   │     │                                            │     │     Condition: cs_sold_date_sk_3 == d_date_sk_9
                   │     │                                            │     ├─ Repartition Exchange est. ? rows
@@ -297,7 +297,7 @@ Projection est. 100 rows
                   │     │                                            │           └─ TableScan tpcds.date_dim est. ? rows
                   │     │                                            │                    Outputs: d_date_sk_9:=d_date_sk, d_year_9:=d_year
                   │     │                                            └─ Projection est. ? rows
-                  │     │                                               │     Expressions: [i_brand_id_12, i_category_id_12, i_class_id_12], marker_3:=0, marker_4:=0, marker_5:=1
+                  │     │                                               │     Expressions: [i_brand_id_12, i_category_id_12, i_class_id_12], marker_21:=0, marker_22:=0, marker_23:=1
                   │     │                                               └─ Inner Join est. ? rows
                   │     │                                                  │     Condition: ws_sold_date_sk_2 == d_date_sk_10
                   │     │                                                  ├─ Repartition Exchange est. ? rows
@@ -420,16 +420,16 @@ Projection est. 100 rows
                         │                          └─ Repartition Exchange est. ? rows
                         │                             │     Partition by: {i_brand_id_20, i_category_id_20, i_class_id_20}
                         │                             └─ Filter est. ? rows
-                        │                                │     Condition: (sum_7 >= 1) AND (sum_8 >= 1) AND (sum_6 >= 1)
+                        │                                │     Condition: (count_8 >= 1) AND (count_6 >= 1) AND (count_7 >= 1)
                         │                                └─ MergingAggregated est. ? rows
                         │                                   └─ Repartition Exchange est. ? rows
                         │                                      │     Partition by: {i_brand_id_20, i_category_id_20, i_class_id_20}
                         │                                      └─ Aggregating est. ? rows
                         │                                         │     Group by: {i_brand_id_20, i_category_id_20, i_class_id_20}
-                        │                                         │     Aggregates: sum_6:=AggNull(sum)(marker_6), sum_7:=AggNull(sum)(marker_7), sum_8:=AggNull(sum)(marker_8)
+                        │                                         │     Aggregates: count_6:=AggNull(sum)(marker_24), count_7:=AggNull(sum)(marker_25), count_8:=AggNull(sum)(marker_26)
                         │                                         └─ Union est. ? rows
                         │                                            ├─ Projection est. ? rows
-                        │                                            │  │     Expressions: [i_brand_id_16, i_category_id_16, i_class_id_16], marker_6:=1, marker_7:=0, marker_8:=0
+                        │                                            │  │     Expressions: [i_brand_id_16, i_category_id_16, i_class_id_16], marker_27:=1, marker_28:=0, marker_29:=0
                         │                                            │  └─ Inner Join est. ? rows
                         │                                            │     │     Condition: ss_sold_date_sk_5 == d_date_sk_15
                         │                                            │     ├─ Repartition Exchange est. ? rows
@@ -451,7 +451,7 @@ Projection est. 100 rows
                         │                                            │           └─ TableScan tpcds.date_dim est. ? rows
                         │                                            │                    Outputs: d_date_sk_15:=d_date_sk, d_year_15:=d_year
                         │                                            ├─ Projection est. ? rows
-                        │                                            │  │     Expressions: [i_brand_id_17, i_category_id_17, i_class_id_17], marker_6:=0, marker_7:=1, marker_8:=0
+                        │                                            │  │     Expressions: [i_brand_id_17, i_category_id_17, i_class_id_17], marker_30:=0, marker_31:=1, marker_32:=0
                         │                                            │  └─ Inner Join est. ? rows
                         │                                            │     │     Condition: cs_sold_date_sk_5 == d_date_sk_16
                         │                                            │     ├─ Repartition Exchange est. ? rows
@@ -473,7 +473,7 @@ Projection est. 100 rows
                         │                                            │           └─ TableScan tpcds.date_dim est. ? rows
                         │                                            │                    Outputs: d_date_sk_16:=d_date_sk, d_year_16:=d_year
                         │                                            └─ Projection est. ? rows
-                        │                                               │     Expressions: [i_brand_id_19, i_category_id_19, i_class_id_19], marker_6:=0, marker_7:=0, marker_8:=1
+                        │                                               │     Expressions: [i_brand_id_19, i_category_id_19, i_class_id_19], marker_33:=0, marker_34:=0, marker_35:=1
                         │                                               └─ Inner Join est. ? rows
                         │                                                  │     Condition: ws_sold_date_sk_5 == d_date_sk_17
                         │                                                  ├─ Repartition Exchange est. ? rows
@@ -623,16 +623,16 @@ Projection est. 100 rows
                │  │  │                             └─ Repartition Exchange est. ? rows
                │  │  │                                │     Partition by: {i_brand_id_28, i_category_id_28, i_class_id_28}
                │  │  │                                └─ Filter est. ? rows
-               │  │  │                                   │     Condition: (sum_9 >= 1) AND (sum_11 >= 1) AND (sum_10 >= 1)
+               │  │  │                                   │     Condition: (count_9 >= 1) AND (count_10 >= 1) AND (count_11 >= 1)
                │  │  │                                   └─ MergingAggregated est. ? rows
                │  │  │                                      └─ Repartition Exchange est. ? rows
                │  │  │                                         │     Partition by: {i_brand_id_28, i_category_id_28, i_class_id_28}
                │  │  │                                         └─ Aggregating est. ? rows
                │  │  │                                            │     Group by: {i_brand_id_28, i_category_id_28, i_class_id_28}
-               │  │  │                                            │     Aggregates: sum_9:=AggNull(sum)(marker_9), sum_10:=AggNull(sum)(marker_10), sum_11:=AggNull(sum)(marker_11)
+               │  │  │                                            │     Aggregates: count_9:=AggNull(sum)(marker_36), count_10:=AggNull(sum)(marker_37), count_11:=AggNull(sum)(marker_38)
                │  │  │                                            └─ Union est. ? rows
                │  │  │                                               ├─ Projection est. ? rows
-               │  │  │                                               │  │     Expressions: [i_brand_id_24, i_category_id_24, i_class_id_24], marker_10:=0, marker_11:=0, marker_9:=1
+               │  │  │                                               │  │     Expressions: [i_brand_id_24, i_category_id_24, i_class_id_24], marker_39:=1, marker_40:=0, marker_41:=0
                │  │  │                                               │  └─ Inner Join est. ? rows
                │  │  │                                               │     │     Condition: ss_sold_date_sk_8 == d_date_sk_23
                │  │  │                                               │     ├─ Repartition Exchange est. ? rows
@@ -654,7 +654,7 @@ Projection est. 100 rows
                │  │  │                                               │           └─ TableScan tpcds.date_dim est. ? rows
                │  │  │                                               │                    Outputs: d_date_sk_23:=d_date_sk, d_year_23:=d_year
                │  │  │                                               ├─ Projection est. ? rows
-               │  │  │                                               │  │     Expressions: [i_brand_id_25, i_category_id_25, i_class_id_25], marker_10:=1, marker_11:=0, marker_9:=0
+               │  │  │                                               │  │     Expressions: [i_brand_id_25, i_category_id_25, i_class_id_25], marker_42:=0, marker_43:=1, marker_44:=0
                │  │  │                                               │  └─ Inner Join est. ? rows
                │  │  │                                               │     │     Condition: cs_sold_date_sk_7 == d_date_sk_24
                │  │  │                                               │     ├─ Repartition Exchange est. ? rows
@@ -676,7 +676,7 @@ Projection est. 100 rows
                │  │  │                                               │           └─ TableScan tpcds.date_dim est. ? rows
                │  │  │                                               │                    Outputs: d_date_sk_24:=d_date_sk, d_year_24:=d_year
                │  │  │                                               └─ Projection est. ? rows
-               │  │  │                                                  │     Expressions: [i_brand_id_27, i_category_id_27, i_class_id_27], marker_10:=0, marker_11:=1, marker_9:=0
+               │  │  │                                                  │     Expressions: [i_brand_id_27, i_category_id_27, i_class_id_27], marker_45:=0, marker_46:=0, marker_47:=1
                │  │  │                                                  └─ Inner Join est. ? rows
                │  │  │                                                     │     Condition: ws_sold_date_sk_7 == d_date_sk_25
                │  │  │                                                     ├─ Repartition Exchange est. ? rows
@@ -764,16 +764,16 @@ Projection est. 100 rows
                │  │                                └─ Repartition Exchange est. ? rows
                │  │                                   │     Partition by: {i_brand_id_35, i_category_id_35, i_class_id_35}
                │  │                                   └─ Filter est. ? rows
-               │  │                                      │     Condition: (sum_13 >= 1) AND (sum_14 >= 1) AND (sum_12 >= 1)
+               │  │                                      │     Condition: (count_13 >= 1) AND (count_12 >= 1) AND (count_14 >= 1)
                │  │                                      └─ MergingAggregated est. ? rows
                │  │                                         └─ Repartition Exchange est. ? rows
                │  │                                            │     Partition by: {i_brand_id_35, i_category_id_35, i_class_id_35}
                │  │                                            └─ Aggregating est. ? rows
                │  │                                               │     Group by: {i_brand_id_35, i_category_id_35, i_class_id_35}
-               │  │                                               │     Aggregates: sum_12:=AggNull(sum)(marker_12), sum_13:=AggNull(sum)(marker_13), sum_14:=AggNull(sum)(marker_14)
+               │  │                                               │     Aggregates: count_12:=AggNull(sum)(marker_48), count_13:=AggNull(sum)(marker_49), count_14:=AggNull(sum)(marker_50)
                │  │                                               └─ Union est. ? rows
                │  │                                                  ├─ Projection est. ? rows
-               │  │                                                  │  │     Expressions: [i_brand_id_31, i_category_id_31, i_class_id_31], marker_12:=1, marker_13:=0, marker_14:=0
+               │  │                                                  │  │     Expressions: [i_brand_id_31, i_category_id_31, i_class_id_31], marker_51:=1, marker_52:=0, marker_53:=0
                │  │                                                  │  └─ Inner Join est. ? rows
                │  │                                                  │     │     Condition: ss_sold_date_sk_11 == d_date_sk_31
                │  │                                                  │     ├─ Repartition Exchange est. ? rows
@@ -795,7 +795,7 @@ Projection est. 100 rows
                │  │                                                  │           └─ TableScan tpcds.date_dim est. ? rows
                │  │                                                  │                    Outputs: d_date_sk_31:=d_date_sk, d_year_31:=d_year
                │  │                                                  ├─ Projection est. ? rows
-               │  │                                                  │  │     Expressions: [i_brand_id_32, i_category_id_32, i_class_id_32], marker_12:=0, marker_13:=1, marker_14:=0
+               │  │                                                  │  │     Expressions: [i_brand_id_32, i_category_id_32, i_class_id_32], marker_54:=0, marker_55:=1, marker_56:=0
                │  │                                                  │  └─ Inner Join est. ? rows
                │  │                                                  │     │     Condition: cs_sold_date_sk_9 == d_date_sk_32
                │  │                                                  │     ├─ Repartition Exchange est. ? rows
@@ -817,7 +817,7 @@ Projection est. 100 rows
                │  │                                                  │           └─ TableScan tpcds.date_dim est. ? rows
                │  │                                                  │                    Outputs: d_date_sk_32:=d_date_sk, d_year_32:=d_year
                │  │                                                  └─ Projection est. ? rows
-               │  │                                                     │     Expressions: [i_brand_id_34, i_category_id_34, i_class_id_34], marker_12:=0, marker_13:=0, marker_14:=1
+               │  │                                                     │     Expressions: [i_brand_id_34, i_category_id_34, i_class_id_34], marker_57:=0, marker_58:=0, marker_59:=1
                │  │                                                     └─ Inner Join est. ? rows
                │  │                                                        │     Condition: ws_sold_date_sk_9 == d_date_sk_33
                │  │                                                        ├─ Repartition Exchange est. ? rows

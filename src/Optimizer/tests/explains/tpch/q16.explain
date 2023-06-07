@@ -14,7 +14,7 @@ Projection est. 2646 rows
                   └─ Projection est. 98999 rows
                      │     Expressions: [p_brand, p_size, p_type, ps_suppkey]
                      └─ Filter est. 98999 rows
-                        │     Condition: if(isNull(ps_suppkey), NULL, NOT cast(multiIf(build_side_non_null_symbol = 1, 1, NULL, 0, 0), 'UInt8'))
+                        │     Condition: if(isNull(ps_suppkey), NULL, NOT cast(multiIf(build_side_non_null_symbol = 1, 1, 0), 'UInt8'))
                         └─ Left Join est. 109999 rows
                            │     Condition: ps_suppkey == s_suppkey
                            ├─ Repartition Exchange est. 109999 rows

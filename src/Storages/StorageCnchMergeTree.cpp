@@ -1879,6 +1879,11 @@ void StorageCnchMergeTree::checkAlterSettings(const AlterCommands & commands) co
         "cnch_merge_max_total_rows_to_merge",
         "cnch_merge_only_realtime_partition",
         "cnch_merge_pick_worker_algo",
+        "cnch_merge_round_robin_partitions_interval",
+        "cnch_gc_round_robin_partitions_interval",
+        "cnch_gc_round_robin_partitions_number",
+        "gc_remove_part_thread_pool_size",
+        "gc_remove_part_batch_size",
     };
 
     /// Check whether the value is legal for Setting.
