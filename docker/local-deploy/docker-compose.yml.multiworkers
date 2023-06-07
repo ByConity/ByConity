@@ -131,6 +131,6 @@ services:
 
 volumes:
   external:
-    name: "${CONFIG_VOL}":
-    name: "${HDFS_VOL}":
-    name: "${BINARY_VOL}":
+    name: "${CONFIG_VOL}"
+    name: "${HDFS_VOL}"
+    name: "${BINARY_VOL}"
