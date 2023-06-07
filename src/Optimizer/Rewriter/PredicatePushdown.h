@@ -67,6 +67,7 @@ public:
     PlanNodePtr visitWindowNode(WindowNode &, PredicateContext &) override;
     PlanNodePtr visitMergeSortingNode(MergeSortingNode &, PredicateContext &) override;
     PlanNodePtr visitPartialSortingNode(PartialSortingNode &, PredicateContext &) override;
+    PlanNodePtr visitSortingNode(SortingNode &, PredicateContext &) override;
     PlanNodePtr visitUnionNode(UnionNode &, PredicateContext &) override;
     PlanNodePtr visitDistinctNode(DistinctNode &, PredicateContext &) override;
     PlanNodePtr visitAssignUniqueIdNode(AssignUniqueIdNode &, PredicateContext &) override;
