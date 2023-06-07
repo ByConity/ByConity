@@ -34,14 +34,14 @@ jobs:
           cp $GITHUB_WORKSPACE/ci_scripts/create_docker_volume_ci.sh ./
           mkdir bin
           cp -r $GITHUB_WORKSPACE/build/programs/* ./bin
+          docker container ls -a
           docker container prune -f
-          docker-compose -f docker-compose.yml.multiworkers down --volumes
           export COMPOSE_PROJECT_NAME=byconity_$(cat /etc/hostname)
           export BINARY_VOL=${COMPOSE_PROJECT_NAME}_bin_volume
           export HDFS_VOL=${COMPOSE_PROJECT_NAME}_hdfs_volume
           export CONFIG_VOL=${COMPOSE_PROJECT_NAME}_config_volume
           /bin/bash create_docker_volume_ci.sh
-          docker-compose -f docker-compose.yml.multiworkers up -d
+          docker-compose -f docker-compose.yml.multiworkers up -d --remove-orphans
           sleep 10
           hdfs/create_users.sh
           export CLICKHOUSE_HOST=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.Gateway}}{{end}}' server-0)

@@ -131,11 +131,8 @@ services:
 
 volumes:
     config_volume:
-      external: true
       name: "${CONFIG_VOL}"
     hdfs_volume:
-      external: true
       name: "${HDFS_VOL}"
     binary_volume:
-      external: true
       name: "${BINARY_VOL}"
