@@ -101,6 +101,7 @@ using AggregatedDataWithShortStringKey = StringHashMap<AggregateDataPtr>;
 
 using AggregatedDataWithStringKey = HashMapWithSavedHash<StringRef, AggregateDataPtr>;
 
+using AggregatedDataWithKeys64 = AggregatedDataWithUInt64Key;
 using AggregatedDataWithKeys128 = HashMap<UInt128, AggregateDataPtr, UInt128HashCRC32>;
 using AggregatedDataWithKeys256 = HashMap<UInt256, AggregateDataPtr, UInt256HashCRC32>;
 
@@ -111,6 +112,7 @@ using AggregatedDataWithShortStringKeyTwoLevel = TwoLevelStringHashMap<Aggregate
 
 using AggregatedDataWithStringKeyTwoLevel = TwoLevelHashMapWithSavedHash<StringRef, AggregateDataPtr>;
 
+using AggregatedDataWithKeys64TwoLevel = AggregatedDataWithUInt64KeyTwoLevel;
 using AggregatedDataWithKeys128TwoLevel = TwoLevelHashMap<UInt128, AggregateDataPtr, UInt128HashCRC32>;
 using AggregatedDataWithKeys256TwoLevel = TwoLevelHashMap<UInt256, AggregateDataPtr, UInt256HashCRC32>;
 
@@ -592,8 +594,10 @@ struct AggregatedDataVariants : private boost::noncopyable
     std::unique_ptr<AggregationMethodSerialized<AggregatedDataWithStringKeyHash64>>          serialized_hash64;
 
     /// Support for nullable keys.
+    std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys64, true>>              nullable_keys64;
     std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys128, true>>             nullable_keys128;
     std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys256, true>>             nullable_keys256;
+    std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys64TwoLevel, true>>      nullable_keys64_two_level;
     std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys128TwoLevel, true>>     nullable_keys128_two_level;
     std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys256TwoLevel, true>>     nullable_keys256_two_level;
 
@@ -644,8 +648,10 @@ struct AggregatedDataVariants : private boost::noncopyable
         M(keys128_hash64,             false) \
         M(keys256_hash64,             false) \
         M(serialized_hash64,          false) \
+        M(nullable_keys64,            false) \
         M(nullable_keys128,           false) \
         M(nullable_keys256,           false) \
+        M(nullable_keys64_two_level,  true) \
         M(nullable_keys128_two_level, true) \
         M(nullable_keys256_two_level, true) \
         M(low_cardinality_key8, false) \
@@ -759,6 +765,7 @@ struct AggregatedDataVariants : private boost::noncopyable
         M(keys128)          \
         M(keys256)          \
         M(serialized)       \
+        M(nullable_keys64)  \
         M(nullable_keys128) \
         M(nullable_keys256) \
         M(low_cardinality_key32) \
@@ -812,6 +819,7 @@ struct AggregatedDataVariants : private boost::noncopyable
         M(keys128_two_level)          \
         M(keys256_two_level)          \
         M(serialized_two_level)       \
+        M(nullable_keys64_two_level) \
         M(nullable_keys128_two_level) \
         M(nullable_keys256_two_level) \
         M(low_cardinality_key32_two_level) \
