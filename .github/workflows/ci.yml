@@ -39,11 +39,10 @@ jobs:
           export HDFS_VOL=${COMPOSE_PROJECT_NAME}_hdfs_volume
           export CONFIG_VOL=${COMPOSE_PROJECT_NAME}_config_volume
           /bin/bash create_docker_volume_ci.sh
-          docker-compose -f docker-compose.yml.multiworkers up -d --remove-orphans
+          docker-compose -f docker-compose.yml.multiworkers up -d
           sleep 10
           docker ps -a
           docker ps -aq -n 3 --filter status=exited | xargs --no-run-if-empty -L 1 docker logs
-          docker ps -aq -n 3 --filter status=exited | xargs --no-run-if-empty -L 1 docker inspect
           hdfs/create_users.sh
           export CLICKHOUSE_HOST=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.Gateway}}{{end}}' server-0)
           curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 $CLICKHOUSE_HOST:8124
