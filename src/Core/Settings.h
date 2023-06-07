@@ -575,6 +575,7 @@ class IColumn;
     M(Bool, decimal_division_use_extended_scale, false, "If enabled, the result scale of decimal division is determined by: max(6, S1)", 0) \
     M(Bool, decimal_arithmetic_promote_storage, false, "Promote storage for some cases of decimal arithmetic operation(e.g. Decimal32 * Decimal32 -> Decimal64)", 0) \
     M(Bool, allow_extended_type_conversion, false, "When enabled, implicit type conversion is allowed for more input types(e.g. UInt64 & Ints, Decimal & Float, Float & Int64)", 0) \
+    M(Bool, allow_multi_if_const_optimize, true, "Whether to optimize multiIf function for const case", 0)  \
     \
     /** settings in cnch **/ \
     M(UInt64, cnch_data_retention_time_in_sec, 3*24*60*60, "Waiting time when dropped table or database is actually removed.", 0) \

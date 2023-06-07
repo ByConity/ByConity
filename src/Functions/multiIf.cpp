@@ -57,12 +57,14 @@ class FunctionMultiIf final : public FunctionIfBase
 {
 private:
     bool allow_extended_conversion;
+    bool allow_const_optimize;
 public:
     static constexpr auto name = "multiIf";
     static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionMultiIf>(context); }
 
     explicit FunctionMultiIf(ContextPtr context):
-        allow_extended_conversion(context->getSettingsRef().allow_extended_type_conversion)
+        allow_extended_conversion(context->getSettingsRef().allow_extended_type_conversion),
+        allow_const_optimize(context->getSettingsRef().allow_multi_if_const_optimize)
     {}
 
     String getName() const override { return name; }
@@ -224,7 +226,14 @@ public:
         MutableColumnPtr res = return_type->createColumn();
 
         /// Special case if first instruction condition is always true and source is constant
-        if (instructions.size() == 1 && instructions.front().source_is_constant
+
+        /// TO BE OPTIMIZED.
+        ///
+        /// This optimization may cause header mismatch between filter transform processor and its filter step,
+        /// if compile_expressions is on.
+        /// Currently we add a setting to disable this optimization, it should be better supported in the future.
+        ///
+        if (allow_const_optimize && instructions.size() == 1 && instructions.front().source_is_constant
             && instructions.front().condition_always_true)
         {
             auto & instruction = instructions.front();
