@@ -66,7 +66,7 @@ public:
         {
             scheduler->updateException(
                 request->query_id(),
-                "Segment:" + std::to_string(request->segment_id()) + " failed, message: " + request->message(),
+                "Segment:" + std::to_string(request->segment_id()) + ", exception:" + request->message(),
                 request->code());
             try
             {
