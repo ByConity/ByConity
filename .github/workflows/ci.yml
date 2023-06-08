@@ -60,6 +60,7 @@ jobs:
           cp -r $GITHUB_WORKSPACE/tests/queries/4_cnch_stateless queries/
           cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
           mkdir -p /test_output
+          export COMPOSE_PROJECT_NAME=byconity-$(cat /etc/hostname)
           export CLICKHOUSE_PORT_TCP=9000
           export CLICKHOUSE_PORT_HTTP=8124
           export CLICKHOUSE_HOST=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.Gateway}}{{end}}' ${COMPOSE_PROJECT_NAME}_server-0)
@@ -75,6 +76,7 @@ jobs:
           mkdir queries
           cp -r $GITHUB_WORKSPACE/tests/queries/7_clickhouse_sql queries/
           cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
+          export COMPOSE_PROJECT_NAME=byconity-$(cat /etc/hostname)
           export CLICKHOUSE_PORT_TCP=9000
           export CLICKHOUSE_PORT_HTTP=8124
           export CLICKHOUSE_HOST=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.Gateway}}{{end}}' ) ${COMPOSE_PROJECT_NAME}_server-0
