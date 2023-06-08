@@ -263,33 +263,52 @@ int ResourceManager::main(const std::vector<std::string> &)
     // --------- END OF METRICS WRITER INIT ---------
 
     {
-        // Launch brpc service
-        brpc::Server brpc_server;
+        std::vector<std::string> listen_hosts = DB::getMultipleValuesFromConfig(config(), "", "listen_host");
+
+        bool listen_try = config().getBool("listen_try", false);
+        if (listen_hosts.empty())
+        {
+            listen_hosts.emplace_back("::");
+            listen_hosts.emplace_back("0.0.0.0");
+            listen_try = true;
+        }
 
         int port = config().getInt("resource_manager.port");
         auto resource_manager_service = std::make_unique<RM::ResourceManagerServiceImpl>(*rm_controller);
+        std::vector<std::unique_ptr<brpc::Server>> rpc_servers;
 
-        if (brpc_server.AddService(resource_manager_service.get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0)
+        for (const auto & listen : listen_hosts)
         {
-            LOG_ERROR(log, "Fail to add ResourceManager service.");
-            return Application::EXIT_UNAVAILABLE;
-        }
+            rpc_servers.push_back(std::make_unique<brpc::Server>());
+            auto & rpc_server = rpc_servers.back();
 
-        brpc::ServerOptions options;
-        options.idle_timeout_sec = -1;
-        std::string brpc_listen_interface = createHostPortString("::", port);
-        if (brpc_server.Start(brpc_listen_interface.c_str(), &options) != 0)
-        {
-            LOG_ERROR(log, "Fail to start Resource Manager RPC server on address {}", brpc_listen_interface);
-            return Application::EXIT_UNAVAILABLE;
-        }
+            if (rpc_server->AddService(resource_manager_service.get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0)
+            {
+                LOG_ERROR(log, "Fail to add ResourceManager service.");
+                return Application::EXIT_UNAVAILABLE;
+            }
 
-        LOG_INFO(log, "Resource Manager service starts on address {}", brpc_listen_interface);
+            brpc::ServerOptions options;
+            options.idle_timeout_sec = -1;
+            std::string brpc_listen_interface = createHostPortString(listen, port);
+            if (rpc_server->Start(brpc_listen_interface.c_str(), &options) != 0)
+            {
+                if (listen_try)
+                    LOG_WARNING(log, "Fail to start Resource Manager RPC server on address {}", brpc_listen_interface);
+                else
+                    return Application::EXIT_UNAVAILABLE;
+            }
+            else
+                LOG_INFO(log, "Resource Manager service is listenning on address {}", brpc_listen_interface);
+        }
 
         waitForTerminationRequest();
 
-        brpc_server.Stop(0);
-        brpc_server.Join();
+        for (auto & brpc_server : rpc_servers)
+        {
+            brpc_server->Stop(0);
+            brpc_server->Join();
+        }
     }
 
     LOG_INFO(log, "Wait for ResourceManager to finish.");
