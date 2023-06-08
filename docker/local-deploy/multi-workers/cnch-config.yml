@@ -153,4 +153,4 @@ catalog_service:
   type: fdb
   fdb:
     cluster_file: /config/fdb.cluster
-hdfs_addr: "hdfs://hdfs-namenode:9000"
+hdfs_addr: "hdfs://COMPOSE_PROJECT_NAME-hdfs-namenode:9000"
