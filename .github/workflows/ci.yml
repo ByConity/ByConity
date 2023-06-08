@@ -45,8 +45,6 @@ jobs:
           /bin/bash create_docker_volume_ci.sh
           docker-compose -f docker-compose.yml.multiworkers up -d
           sleep 10
-          docker ps -a
-          docker ps -aq | xargs --no-run-if-empty -L 1 docker logs
           hdfs/create_users.sh
           export CLICKHOUSE_HOST=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.Gateway}}{{end}}' ${COMPOSE_PROJECT_NAME}_server-0)
           curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 $CLICKHOUSE_HOST:8124
