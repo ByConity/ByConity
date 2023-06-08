@@ -38,9 +38,8 @@ jobs:
         run: |
           mkdir /CI/
           cd /CI/
-          cp -r $GITHUB_WORKSPACE/docker/local-deploy/* ./          
-          cp $GITHUB_WORKSPACE/docker/local-deploy/.env ./
-          cp $GITHUB_WORKSPACE/ci_scripts/create_docker_volume_ci.sh ./
+          cp -r $GITHUB_WORKSPACE/docker/ci-deploy/* ./          
+          cp $GITHUB_WORKSPACE/docker/ci-deploy/.env ./
           mkdir bin
           cp -r $GITHUB_WORKSPACE/build/programs/* ./bin
           sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" hdfs/core-site.xml
@@ -48,7 +47,7 @@ jobs:
           sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" multi-workers/cnch-config.yml
           sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" multi-workers/daemon-manager.yml
           /bin/bash create_docker_volume_ci.sh
-          docker-compose -f docker-compose.yml.multiworkers up -d
+          docker-compose up -d
           sleep 10
           hdfs/create_users.sh
           export CLICKHOUSE_HOST=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.Gateway}}{{end}}' ${COMPOSE_PROJECT_NAME}_server-0)
@@ -105,4 +104,4 @@ jobs:
         if: always()
         run: |
           cd /CI/
-          docker-compose -f docker-compose.yml.multiworkers down --volumes
+          docker-compose down --volumes

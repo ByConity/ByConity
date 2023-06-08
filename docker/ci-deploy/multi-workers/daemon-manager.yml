@@ -6,7 +6,7 @@ logger:
   size: 1000M
   count: 10
 path: /var/byconity/
-timezone: Asia/Shanghai
+timezone: Europe/Moscow
 daemon_manager:
   port: 17553
   daemon_jobs:
@@ -36,5 +36,5 @@ daemon_manager:
       interval: 3000
       disable: 0
 
-hdfs_addr: "hdfs://hdfs-namenode:9000"
+hdfs_addr: "hdfs://COMPOSE_PROJECT_NAME-hdfs-namenode:9000"
 cnch_config: /config/cnch-config.yml

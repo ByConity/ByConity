@@ -3,6 +3,6 @@
 <configuration>
 	<property>
 		<name>fs.defaultFS</name>
-		<value>hdfs://hdfs-namenode:9000</value>
+		<value>hdfs://COMPOSE_PROJECT_NAME-hdfs-namenode:9000</value>
 	</property>
 </configuration>

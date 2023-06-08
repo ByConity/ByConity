@@ -8,7 +8,7 @@ logger:
   count: 10
 listen_host: "0.0.0.0"
 path: /var/byconity/
-timezone: Asia/Shanghai
+timezone: Europe/Moscow
 catalog:
   name_space: default
 perQuery: 1

@@ -4,6 +4,8 @@ profiles:
     log_queries: 1
     max_execution_time: 180
     exchange_timeout_ms: 300000
+  readonly:
+    readonly: 1
 
 users:
   default:
@@ -11,6 +13,12 @@ users:
       ip: ::/0
     password: ""
     profile: default
+    quota: default
+  readonly:
+    networks:
+      ip: ::/0
+    password: ""
+    profile: readonly
     quota: default
   server:
     networks:

@@ -4,13 +4,13 @@ services:
   hdfs:
     image: gchq/hdfs:3.3
     command: namenode
-    container_name: "${COMPOSE_PROJECT_NAME}-hdfs-namenode"
+    container_name: hdfs-namenode
     environment:
       - HADOOP_CONF_DIR=${HADOOP_CONF_DIR}
     ports:
-      - "${CLICKHOUSE_PORT_HDFS}:9870"
+      - 9871:9870
     volumes:
-      - hdfs_volume:${HADOOP_CONF_DIR}
+      - ./hdfs:${HADOOP_CONF_DIR}:ro
       - /var/log/hadoop
       - /data1
       - /data2
@@ -20,11 +20,11 @@ services:
       - hdfs
     image: gchq/hdfs:3.3
     command: datanode
-    container_name: "${COMPOSE_PROJECT_NAME}-hdfs-datanode"
+    container_name: hdfs-datanode
     environment:
       - HADOOP_CONF_DIR=${HADOOP_CONF_DIR}
     volumes:
-      - hdfs_volume:${HADOOP_CONF_DIR}
+      - ./hdfs:${HADOOP_CONF_DIR}:ro
       - /var/log/hadoop
       - /data1
       - /data2
@@ -36,115 +36,108 @@ services:
       FDB_NETWORKING_MODE: container
       FDB_COORDINATOR_PORT: 4550
       FDB_PORT: 4550
-    container_name: "${COMPOSE_PROJECT_NAME}_fdb-0"
+    container_name: fdb-0
 
 # byconity:
   tso:
     image: byconity/debian:buster-runit-fdb7.1.27
-    command: bash -c "export PATH=$PATH:/opt/byconity/bin/; fdbcli -C /config/fdb.cluster --exec \"configure new single ssd\"; tso-server --config-file /config/tso.yml"
+    command: bash -c "fdbcli -C /config/fdb.cluster --exec \"configure new single ssd\"; export PATH=$PATH:/opt/byconity/bin/ && tso-server --config-file /config/tso.yml"
     depends_on:
       - fdb
       - hdfs
     volumes:
-      - binary_volume:/opt/byconity/bin/
-      - config_volume:/config/
+      - ${BYCONITY_BINARY_PATH}/:/opt/byconity/bin/:ro
+      - ./multi-workers/:/config/:ro
     # evironment:
-    container_name: "${COMPOSE_PROJECT_NAME}_tso-0"
+    container_name: tso-0
     cap_add:
       - SYS_PTRACE
 
   resource-manager:
     image: byconity/debian:buster-runit-fdb7.1.27
-    environment:
-      - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
-    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 ${COMPOSE_PROJECT_NAME}_tso-0:18845 && resource-manager --config-file /config/resource-manager.yml"
+    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 tso-0:18845 && resource-manager --config-file /config/resource-manager.yml"
     depends_on:
       - tso
     volumes:
-      - binary_volume:/opt/byconity/bin/
-      - config_volume:/config/
-    container_name: "${COMPOSE_PROJECT_NAME}_resource-manager-0"
+      - ${BYCONITY_BINARY_PATH}/:/opt/byconity/bin/:ro
+      - ./multi-workers/:/config/:ro
+    container_name: resource-manager-0
     cap_add:
       - SYS_PTRACE
 
   server:
     image: byconity/debian:buster-runit-fdb7.1.27
-    environment:
-      - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
-    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 ${COMPOSE_PROJECT_NAME}_tso-0:18845 && clickhouse-server --config-file /config/server.yml"
+    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 tso-0:18845 && clickhouse-server --config-file /config/server.yml"
     depends_on:
       - tso
       - hdfs
     ports:
-      - "${CLICKHOUSE_PORT_TCP}:52145"
-      - "${CLICKHOUSE_PORT_HTTP}:21557"
-    container_name: "${COMPOSE_PROJECT_NAME}_server-0"
+      - "9000:52145"
+      - "8124:21557"
+    container_name: server-0
     volumes:
-      - binary_volume:/opt/byconity/bin/
-      - config_volume:/config/
+      - ${BYCONITY_BINARY_PATH}/:/opt/byconity/bin/:ro
+      - ./multi-workers/:/config/:ro
     cap_add:
       - SYS_PTRACE
 
   worker-write:
     image: byconity/debian:buster-runit-fdb7.1.27
-    environment:
-      - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
-    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 ${COMPOSE_PROJECT_NAME}_server-0:21557 && VIRTUAL_WAREHOUSE_ID=vw_write WORKER_GROUP_ID=wg_write WORKER_ID=w0 clickhouse-server --config-file /config/worker.yml"
+    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 server:21557 && VIRTUAL_WAREHOUSE_ID=vw_write WORKER_GROUP_ID=wg_write WORKER_ID=w0 clickhouse-server --config-file /config/worker.yml"
     depends_on:
       - server
-    container_name: "${COMPOSE_PROJECT_NAME}_worker-write-0"
+    container_name: worker-write-0
     volumes:
-      - binary_volume:/opt/byconity/bin/
-      - config_volume:/config/
+      - ${BYCONITY_BINARY_PATH}/:/opt/byconity/bin/:ro
+      - ./multi-workers/:/config/:ro
     cap_add:
       - SYS_PTRACE
 
   worker-default-0:
     image: byconity/debian:buster-runit-fdb7.1.27
-    environment:
-      - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
-    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 ${COMPOSE_PROJECT_NAME}_server-0:21557  && VIRTUAL_WAREHOUSE_ID=vw_default WORKER_GROUP_ID=wg_default WORKER_ID=r0 clickhouse-server --config-file /config/worker.yml"
+    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 server:21557  && VIRTUAL_WAREHOUSE_ID=vw_default WORKER_GROUP_ID=wg_default WORKER_ID=r0 clickhouse-server --config-file /config/worker.yml"
     depends_on:
       - server
-    container_name: "${COMPOSE_PROJECT_NAME}_worker-default-0"
+    container_name: worker-default-0
     volumes:
-      - binary_volume:/opt/byconity/bin/
-      - config_volume:/config/
+      - ${BYCONITY_BINARY_PATH}/:/opt/byconity/bin/:ro
+      - ./multi-workers/:/config/:ro
     cap_add:
       - SYS_PTRACE
 
   worker-default-1:
     image: byconity/debian:buster-runit-fdb7.1.27
-    environment:
-      - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
-    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 ${COMPOSE_PROJECT_NAME}_server-0:21557  && VIRTUAL_WAREHOUSE_ID=vw_default WORKER_GROUP_ID=wg_default WORKER_ID=r1 clickhouse-server --config-file /config/worker.yml"
+    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 server:21557  && VIRTUAL_WAREHOUSE_ID=vw_default WORKER_GROUP_ID=wg_default WORKER_ID=r1 clickhouse-server --config-file /config/worker.yml"
     depends_on:
       - server
-    container_name: "${COMPOSE_PROJECT_NAME}_worker-default-1"
+    container_name: worker-default-1
     volumes:
-      - binary_volume:/opt/byconity/bin/
-      - config_volume:/config/
+      - ${BYCONITY_BINARY_PATH}/:/opt/byconity/bin/:ro
+      - ./multi-workers/:/config/:ro
     cap_add:
       - SYS_PTRACE
+
+  worker-default-2:
+    image: byconity/debian:buster-runit-fdb7.1.27
+    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 server:21557  && VIRTUAL_WAREHOUSE_ID=vw_default WORKER_GROUP_ID=wg_default WORKER_ID=r2 clickhouse-server --config-file /config/worker.yml"
+    depends_on:
+      - server
+    container_name: worker-default-2
+    volumes:
+      - ${BYCONITY_BINARY_PATH}/:/opt/byconity/bin/:ro
+      - ./multi-workers/:/config/:ro
+    cap_add:
+      - SYS_PTRACE
+
 
   daemon-manager:
     image: byconity/debian:buster-runit-fdb7.1.27
-    environment:
-      - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
-    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 ${COMPOSE_PROJECT_NAME}_server-0:21557  && daemon-manager --config-file ./config/daemon-manager.yml"
+    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 server:21557  && daemon-manager --config-file ./config/daemon-manager.yml"
     depends_on:
       - server
-    container_name: "${COMPOSE_PROJECT_NAME}_daemon-manager-0"
+    container_name: daemon-manager-0
     volumes:
-      - binary_volume:/opt/byconity/bin/
-      - config_volume:/config/
+      - ${BYCONITY_BINARY_PATH}/:/opt/byconity/bin/:ro
+      - ./multi-workers/:/config/:ro
     cap_add:
       - SYS_PTRACE
-
-volumes:
-    config_volume:
-      name: "${CONFIG_VOL}"
-    hdfs_volume:
-      name: "${HDFS_VOL}"
-    binary_volume:
-      name: "${BINARY_VOL}"

@@ -1,1 +1,1 @@
-docker:docker@COMPOSE_PROJECT_NAME_fdb-0:4550
+docker:docker@fdb-0:4550
