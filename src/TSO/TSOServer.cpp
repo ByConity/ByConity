@@ -409,19 +409,20 @@ int TSOServer::main(const std::vector<std::string> &)
     proxy_ptr = std::make_shared<TSOProxy>(TSOConfig{config()});
     tso_service = std::make_shared<TSOImpl>();
 
+    bool listen_try = config().getBool("listen_try", false);
+    auto listen_hosts = getMultipleValuesFromConfig(config(), "", "listen_host");
+
+    if (listen_hosts.empty())
+    {
+        listen_hosts.emplace_back("::1");
+        listen_hosts.emplace_back("127.0.0.1");
+        listen_hosts.emplace_back(tso_host);
+        listen_try = true;
+    }
+
     Poco::ThreadPool server_pool(3, config().getUInt("max_connections", 1024));
     if (config().has("keeper_server"))
     {
-        bool listen_try = config().getBool("listen_try", false);
-        auto listen_hosts = getMultipleValuesFromConfig(config(), "", "listen_host");
-
-        if (listen_hosts.empty())
-        {
-            listen_hosts.emplace_back("::1");
-            listen_hosts.emplace_back("127.0.0.1");
-            listen_try = true;
-        }
-
         /// Initialize keeper RAFT.
         global_context->initializeKeeperDispatcher(false);
         FourLetterCommandFactory::registerCommands(*global_context->getKeeperDispatcher());
@@ -479,29 +480,37 @@ int TSOServer::main(const std::vector<std::string> &)
         tso_service->setIsLeader(true);
     }
 
-    /// launch brpc service
-    brpc::Server server;
     static KillingErrorHandler error_handler;
     Poco::ErrorHandler::set(&error_handler);
 
-    if (server.AddService(tso_service.get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0)
+    /// launch brpc service on multiple interface
+    std::vector<std::unique_ptr<brpc::Server>> rpc_servers;
+    for (const auto & listen : listen_hosts)
     {
-        LOG_ERROR(log, "Failed to add rpc service.");
-        throw Exception("Failed to add rpc service.", ErrorCodes::TSO_INTERNAL_ERROR);
+        rpc_servers.push_back(std::make_unique<brpc::Server>());
+        auto & rpc_server = rpc_servers.back();
+
+        if (rpc_server->AddService(tso_service.get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0)
+        {
+            LOG_ERROR(log, "Failed to add rpc service.");
+            throw Exception("Failed to add rpc service.", ErrorCodes::TSO_INTERNAL_ERROR);
+        }
+        LOG_INFO(log, "Added rpc service");
+
+        brpc::ServerOptions options;
+        options.idle_timeout_sec = -1;
+
+        std::string brpc_listen_interface = createHostPortString(listen, tso_port);
+        if (rpc_server->Start(brpc_listen_interface.c_str(), &options) != 0)
+        {
+            if (listen_try)
+                LOG_WARNING(log, "Failed to start TSO server on address: {}", brpc_listen_interface);
+            else
+                throw Exception("Failed to start TSO server on address: " + brpc_listen_interface, ErrorCodes::TSO_INTERNAL_ERROR);
+        }
+        else
+            LOG_INFO(log, "TSO Service is listening on address {}", brpc_listen_interface);
     }
-    LOG_INFO(log, "Added rpc service");
-
-    brpc::ServerOptions options;
-    options.idle_timeout_sec = -1;
-
-    std::string brpc_listen_interface = createHostPortString("::", tso_port);
-    if (server.Start(brpc_listen_interface.c_str(), &options) != 0)
-    {
-        LOG_ERROR(log, "Failed to start TSO server on address: {}", brpc_listen_interface);
-        throw Exception("Failed to start TSO server on address: " + brpc_listen_interface, ErrorCodes::TSO_INTERNAL_ERROR);
-    }
-
-    LOG_INFO(log, "TSO Service start on address {}", brpc_listen_interface);
 
     // zkutil::EventPtr unused_event = std::make_shared<Poco::Event>();
     // zkutil::ZooKeeperNodeCache unused_cache([] { return nullptr; });
