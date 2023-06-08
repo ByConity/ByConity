@@ -6,8 +6,8 @@ service_discovery:
   server:
     psm: data.cnch.server
     node:
-      host: server-0
-      hostname: server-0
+      host: COMPOSE_PROJECT_NAME_server-0
+      hostname: COMPOSE_PROJECT_NAME_server-0
       ports:
         port:
         -
@@ -34,8 +34,8 @@ service_discovery:
   resource_manager:
     psm: data.cnch.resource_manager
     node:
-      host: resource-manager-0
-      hostname: resource-manager-0
+      host: COMPOSE_PROJECT_NAME_resource-manager-0
+      hostname: COMPOSE_PROJECT_NAME_resource-manager-0
       ports:
         port:
           name: PORT0
@@ -43,8 +43,8 @@ service_discovery:
   daemon_manager:
     psm: data.cnch.daemon_manager
     node:
-      host: daemon-manager-0
-      hostname: daemon-manager-0
+      host: COMPOSE_PROJECT_NAME_daemon-manager-0
+      hostname: COMPOSE_PROJECT_NAME_daemon-manager-0
       ports:
         port:
           name: PORT0
@@ -52,8 +52,8 @@ service_discovery:
   tso:
     psm: data.cnch.tso
     node:
-      host: tso-0
-      hostname: tso-0
+      host: COMPOSE_PROJECT_NAME_tso-0
+      hostname: COMPOSE_PROJECT_NAME_tso-0
       ports:
         port:
         -
@@ -67,8 +67,8 @@ service_discovery:
     psm: data.cnch.vw
     node:
     -
-      host: worker-write-0
-      hostname: worker-write
+      host: COMPOSE_PROJECT_NAME_worker-write-0
+      hostname: COMPOSE_PROJECT_NAME_worker-write
       ports:
         port:
         -
@@ -94,8 +94,8 @@ service_discovery:
           value: 60611
       vw_name: vw_write
     -
-      host: worker-default-0
-      hostname: worker-default
+      host: COMPOSE_PROJECT_NAME_worker-default-0
+      hostname: COMPOSE_PROJECT_NAME_worker-default
       ports:
         port:
         -
@@ -121,8 +121,8 @@ service_discovery:
           value: 60611
       vw_name: vw_default
     -
-      host: worker-default-1
-      hostname: worker-default-1
+      host: COMPOSE_PROJECT_NAME_worker-default-1
+      hostname: COMPOSE_PROJECT_NAME_worker-default-1
       ports:
         port:
         -
