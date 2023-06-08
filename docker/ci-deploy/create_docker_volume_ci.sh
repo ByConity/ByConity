@@ -3,10 +3,8 @@ docker cp ./bin dummy:/opt/byconity/
 docker rm dummy
 
 docker container create --name dummy -v ${HDFS_VOL}:/etc/hadoop/conf/ hello-world
-mv hdfs conf
 docker cp /CI/conf/ dummy:/etc/hadoop/
 docker rm dummy
-mv conf hdfs
 
 docker container create --name dummy -v ${CONFIG_VOL}:/config hello-world
 mv multi-workers config
