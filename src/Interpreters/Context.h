@@ -189,7 +189,6 @@ using CnchBGThreadPtr = std::shared_ptr<ICnchBGThread>;
 class CnchBGThreadsMap;
 class CnchBGThreadPartitionSelector;
 using PartitionSelectorPtr = std::shared_ptr<CnchBGThreadPartitionSelector>;
-struct ClusterTaskProgress;
 
 class IOutputFormat;
 using OutputFormatPtr = std::shared_ptr<IOutputFormat>;
@@ -1282,10 +1281,6 @@ public:
     CnchBGThreadPtr getCnchBGThread(CnchBGThreadType type, const StorageID & storage_id) const;
     CnchBGThreadPtr tryGetCnchBGThread(CnchBGThreadType type, const StorageID & storage_id) const;
     void controlCnchBGThread(const StorageID & storage_id, CnchBGThreadType type, CnchBGThreadAction action) const;
-
-    bool getTableReclusterTaskStatus(const StorageID & storage_id) const;
-    bool removeMergeMutateTasksOnPartition(const StorageID &, const String &);
-    ClusterTaskProgress getTableReclusterTaskProgress(const StorageID & storage_id) const;
 
     CnchBGThreadPtr tryGetDedupWorkerManager(const StorageID & storage_id) const;
 
