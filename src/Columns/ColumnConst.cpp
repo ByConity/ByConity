@@ -133,11 +133,13 @@ void ColumnConst::updateWeakHash32(WeakHash32 & hash) const
                         ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
 
     WeakHash32 element_hash(1);
-    data->updateWeakHash32(element_hash);
-    size_t data_hash = element_hash.getData()[0];
 
     for (auto & value : hash.getData())
-        value = intHashCRC32(data_hash, value);
+    {
+        element_hash.getData()[0] = value;
+        data->updateWeakHash32(element_hash);
+        value = element_hash.getData()[0];
+    }
 }
 
 void ColumnConst::compareColumn(
