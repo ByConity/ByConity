@@ -184,7 +184,7 @@ QueryProcessingStage::Enum StorageCnchHive::getQueryProcessingStage(
     }
 }
 
-HiveDataPartsCNCHVector StorageCnchHive::prepareReadContext(
+PrepareContextResult StorageCnchHive::prepareReadContext(
     const Names & column_names,
     const StorageMetadataPtr & metadata_snapshot,
     SelectQueryInfo & query_info,
@@ -208,7 +208,7 @@ HiveDataPartsCNCHVector StorageCnchHive::prepareReadContext(
     LOG_TRACE(log, " local table name = {}", local_table_name);
     collectResource(local_context, parts, local_table_name);
 
-    return parts;
+    return {std::move(local_table_name), {}, std::move(parts)};
 }
 
 HiveDataPartsCNCHVector StorageCnchHive::selectPartsToRead(
@@ -497,7 +497,7 @@ void StorageCnchHive::read(
 {
     LOG_TRACE(log, " read  num_streams = {}", num_streams);
 
-    auto data_parts = prepareReadContext(column_names, metadata_snapshot, query_info, local_context, num_streams);
+    auto prepare_result = prepareReadContext(column_names, metadata_snapshot, query_info, local_context, num_streams);
     Block header = InterpreterSelectQuery(query_info.query, local_context, SelectQueryOptions(processed_stage)).getSampleBlock();
 
     auto worker_group = local_context->getCurrentWorkerGroup();
@@ -512,11 +512,9 @@ void StorageCnchHive::read(
         return;
     }
 
-    LOG_TRACE(log, " data parts size = {}", data_parts.size());
-
     /// If no parts to read from - execute locally, must make sure that all stages are executed
     /// because CnchMergeTree is a high order storage
-    if (data_parts.empty())
+    if (prepare_result.hive_parts.empty())
     {
         /// Stage 1: read from source table, just assume we read everything
         const auto & source_columns = query_info.syntax_analyzer_result->required_source_columns;

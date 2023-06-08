@@ -42,6 +42,7 @@
 #include <QueryPlan/Void.h>
 #include <Storages/IStorage.h>
 #include <Storages/StorageDistributed.h>
+#include <Storages/StorageCnchHive.h>
 #include <Storages/StorageMemory.h>
 #include <Optimizer/Utils.h>
 
@@ -397,8 +398,10 @@ ScopePtr QueryAnalyzerVisitor::analyzeTable(ASTTableIdentifier & db_and_table, c
         full_table_name = storage_id.getFullTableName();
 
         if (storage_id.getDatabaseName() != "system" &&
-            !(dynamic_cast<const MergeTreeMetaBase *>(storage.get()) || dynamic_cast<const StorageMemory *>(storage.get())))
-            throw Exception("Only cnch tables & system tables are supported", ErrorCodes::NOT_IMPLEMENTED);
+            !(dynamic_cast<const MergeTreeMetaBase *>(storage.get()) || 
+            dynamic_cast<const StorageMemory *>(storage.get()) || 
+            dynamic_cast<const StorageCnchHive *>(storage.get())))
+            throw Exception("Only cnch tables, hive tables, system tables are supported", ErrorCodes::NOT_IMPLEMENTED);
 
         analysis.storage_results[&db_and_table] = StorageAnalysis { storage_id.getDatabaseName(), storage_id.getTableName(), storage};
     }

@@ -26,6 +26,8 @@
 
 namespace DB
 {
+struct PrepareContextResult;
+
 class StorageCnchHive final : public shared_ptr_helper<StorageCnchHive>,
                               public IStorage,
                               public WithMutableContext,
@@ -51,6 +53,13 @@ public:
     HiveTablePtr getHiveTable() const;
 
     StoragePolicyPtr getStoragePolicy(StorageLocation) const override;
+
+    PrepareContextResult prepareReadContext(
+        const Names & column_names,
+        const StorageMetadataPtr & metadata_snapshot,
+        SelectQueryInfo & query_info,
+        ContextPtr local_context,
+        unsigned num_streams);
 
     Pipe read(
         const Names & /*column_names*/,
@@ -89,13 +98,6 @@ private:
     void setProperties();
 
     std::set<Int64> getSelectedBucketNumbers(const SelectQueryInfo & query_info, ContextPtr & context);
-
-    HiveDataPartsCNCHVector prepareReadContext(
-        const Names & column_names,
-        const StorageMetadataPtr & metadata_snapshot,
-        SelectQueryInfo & query_info,
-        ContextPtr local_context,
-        unsigned num_streams);
 
     HiveDataPartsCNCHVector selectPartsToRead(
         const Names & /*column_names_to_return*/, ContextPtr context, const SelectQueryInfo & query_info, unsigned num_streams);
