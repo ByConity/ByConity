@@ -303,4 +303,63 @@ NullPresence getNullPresense(const ColumnsWithTypeAndName & args)
     return res;
 }
 
+bool isDecimalOrNullableDecimal(const DataTypePtr & type)
+{
+    WhichDataType which(type);
+    if (which.isDecimal())
+        return true;
+    if (!which.isNullable())
+        return false;
+    return isDecimal(assert_cast<const DataTypeNullable *>(type.get())->getNestedType());
+}
+
+void extractNullMapAndNestedCol(const ColumnsWithTypeAndName & args, ColumnPtr * raw_column_maps, const UInt8 ** nullable_args_map)
+{
+    size_t arg_size = args.size();
+    for (size_t arg_idx = 0; arg_idx < arg_size; arg_idx++)
+    {
+        if (args[arg_idx].column->isNullable())
+        {
+            const ColumnNullable * nullable_column = checkAndGetColumn<ColumnNullable>(*args[arg_idx].column);
+            nullable_args_map[arg_idx] = nullable_column->getNullMapData().data();
+            raw_column_maps[arg_idx] = nullable_column->getNestedColumnPtr();
+        }
+        else
+        {
+            nullable_args_map[arg_idx] = nullptr;
+            raw_column_maps[arg_idx] = args[arg_idx].column;
+        }
+    }
+}
+
+String getFunctionResultName(const String & function_name, const Strings & arg_result_names)
+{
+    auto result_name = function_name + "(";
+    for (size_t i = 0; i < arg_result_names.size(); ++i)
+    {
+        if (i)
+            result_name += ", ";
+        result_name += arg_result_names[i];
+    }
+    result_name += ")";
+    return result_name;
+}
+
+String argPositionToSequence(size_t pos)
+{
+    if (pos == 1) return "1st";
+    if (pos == 2) return "2nd";
+    if (pos == 3) return "3rd";
+    if (pos >= 4 && pos <= 20) return std::to_string(pos) + "th";
+
+    /// Generally speaking, function arguments number almost never exceed 20
+    int last_digit = pos % 10;
+    switch (last_digit) {
+        case 1: return std::to_string(pos) + "st";
+        case 2: return std::to_string(pos) + "nd";
+        case 3: return std::to_string(pos) + "rd";
+        default: return std::to_string(pos) + "th";
+    }
+}
+
 }

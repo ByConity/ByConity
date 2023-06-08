@@ -62,6 +62,13 @@ void registerFunctionsAppVersionCompare(FunctionFactory &);
 void registerFunctionUnicodeToUTF8(FunctionFactory &);
 void registerFunctionPumpZookeeper(FunctionFactory &);
 void registerFunctionFindInSet(FunctionFactory &);
+void registerFunctionBitLength(FunctionFactory &);
+void registerFunctionExportSet(FunctionFactory &);
+void registerFunctionField(FunctionFactory &);
+void registerFunctionInstr(FunctionFactory &);
+void registerFunctionOct(FunctionFactory &);
+void registerFunctionSubstringIndex(FunctionFactory &);
+void registerFunctionSplitPart(FunctionFactory &);
 
 
 #if USE_BASE64
@@ -106,6 +113,13 @@ void registerFunctionsString(FunctionFactory & factory)
     registerFunctionUnicodeToUTF8(factory);
     registerFunctionPumpZookeeper(factory);
     registerFunctionFindInSet(factory);
+    registerFunctionBitLength(factory);
+    registerFunctionExportSet(factory);
+    registerFunctionField(factory);
+    registerFunctionInstr(factory);
+    registerFunctionOct(factory);
+    registerFunctionSubstringIndex(factory);
+    registerFunctionSplitPart(factory);
 #if USE_BASE64
     registerFunctionBase64Encode(factory);
     registerFunctionBase64Decode(factory);
