@@ -228,8 +228,11 @@ public:
         throw Exception("Method hasEqualValues is not supported for ColumnAggregateFunction", ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    void getPermutation(bool reverse, size_t limit, int nan_direction_hint, Permutation & res) const override;
-    void updatePermutation(bool reverse, size_t limit, int, Permutation & res, EqualRanges & equal_range) const override;
+    void getPermutation(PermutationSortDirection direction, PermutationSortStability stability,
+                        size_t limit, int nan_direction_hint, Permutation & res) const override;
+
+    void updatePermutation(PermutationSortDirection direction, PermutationSortStability stability,
+                        size_t limit, int, Permutation & res, EqualRanges & equal_ranges) const override;
 
     /** More efficient manipulation methods */
     Container & getData()
