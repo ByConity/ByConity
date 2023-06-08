@@ -235,7 +235,7 @@ void CloudUniqueMergeTreeMergeTask::executeImpl()
     Stopwatch lock_watch;
     LockInfoPtr partition_lock = std::make_shared<LockInfo>(txn_id);
     partition_lock->setMode(LockMode::X);
-    partition_lock->setTimeout(10000); // 10s
+    partition_lock->setTimeout(storage.getSettings()->unique_acquire_write_lock_timeout.value.totalMilliseconds());
     partition_lock->setUUID(storage.getStorageUUID());
     /// need to lock table instead of partition for table-level uniqueness
     if (storage.getSettings()->partition_level_unique_keys)

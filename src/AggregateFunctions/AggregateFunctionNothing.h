@@ -26,6 +26,9 @@
 #include <Columns/IColumn.h>
 #include <AggregateFunctions/IAggregateFunction.h>
 
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
+
 
 namespace DB
 {
@@ -88,12 +91,16 @@ public:
     {
     }
 
-    void serialize(ConstAggregateDataPtr, WriteBuffer &) const override
+    void serialize(ConstAggregateDataPtr, WriteBuffer & buf) const override
     {
+        writeChar('\0', buf);
     }
 
-    void deserialize(AggregateDataPtr, ReadBuffer &, Arena *) const override
+    void deserialize(AggregateDataPtr, ReadBuffer & buf, Arena *) const override
     {
+        [[maybe_unused]] char symbol;
+        readChar(symbol, buf);
+        assert(symbol == '\0');
     }
 
     void insertResultInto(AggregateDataPtr, IColumn & to, Arena *) const override

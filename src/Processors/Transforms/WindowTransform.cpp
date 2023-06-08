@@ -2195,7 +2195,7 @@ void registerWindowFunctions(AggregateFunctionFactory & factory)
         {
             return std::make_shared<WindowFunctionRowNumber>(name, argument_types,
                 parameters);
-        });
+        }, AggregateFunctionFactory::CaseInsensitive);
 
 
     factory.registerFunction("lagInFrame", [](const std::string & name,

@@ -153,7 +153,7 @@ void Suggest::loadImpl(Connection & connection, const ConnectionTimeouts & timeo
             "SELECT DISTINCT name FROM system.columns LIMIT " << limit_str;
     }
 
-    query << ") WHERE notEmpty(res)";
+    query << ") WHERE notEmpty(arrayJoin(extractAll(name, '[\\\\w_]{2,}')))";
 
     fetch(connection, timeouts, query.str());
 }

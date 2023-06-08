@@ -18,6 +18,7 @@
 #include <Storages/UUIDAndPartName.h>
 #include <Catalog/DataModelPartWrapper.h>
 #include <Common/LRUCache.h>
+#include <Common/ScanWaitFreeMap.h>
 #include <Core/UUID.h>
 #include <Protos/data_models.pb.h>
 #include <Protos/DataModelHelpers.h>
@@ -32,7 +33,7 @@ namespace DB
 {
 
 using TableWithPartition = std::pair<UUID, String>;
-using DataPartModelsMap = std::map<String, DataModelPartWrapperPtr>;
+using DataPartModelsMap = ScanWaitFreeMap<String, DataModelPartWrapperPtr>;
 
 struct DataPartsWeightFunction
 {
@@ -71,29 +72,6 @@ public:
             ProfileEvents::increment(ProfileEvents::CnchDataPartCacheMisses);
 
         return result.first;
-    }
-
-    void insert(const Key & key, const String & part_name, const DataModelPartWrapperPtr & partPtr)
-    {
-        /// insert part into cache only if key has already exits.
-        auto value = Base::get(key);
-        if (value)
-        {
-            (*value)[part_name] = partPtr;
-            // call Base::set here to update cache status in LRU cache.
-            Base::set(key, value);
-        }
-        else
-        {
-            auto new_value = std::make_shared<DataPartModelsMap>();
-            new_value->emplace(part_name, partPtr);
-            Base::set(key, new_value);
-            if (inner_container)
-            {
-                String uuid_str = UUIDHelpers::UUIDToString(key.first);
-                inner_container->insert(uuid_str, key);
-            }
-        }
     }
 
     void insert(const Key & key, const MappedPtr & value)

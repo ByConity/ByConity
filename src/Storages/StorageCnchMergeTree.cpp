@@ -420,10 +420,9 @@ time_t StorageCnchMergeTree::getTTLForPartition(const MergeTreePartition & parti
     const auto & partition_key_sample = metadata_snapshot->getPartitionKey().sample_block;
     /// We can only compute ttl at this point if partition key expression includes all columns in TTL expression
     const auto & required_columns = table_ttl.rows_ttl.expression->getRequiredColumns();
-    if (std::any_of(
-            required_columns.begin(),
-            required_columns.end(),
-            [&partition_key_sample](const auto & name) { return !partition_key_sample.has(name); }))
+    if (std::any_of(required_columns.begin(), required_columns.end(), [&partition_key_sample](const auto & name) {
+            return !partition_key_sample.has(name);
+        }))
         return 0;
 
     MutableColumns columns = partition_key_sample.cloneEmptyColumns();
@@ -1220,7 +1219,7 @@ void StorageCnchMergeTree::executeDedupForRepair(const ASTPtr & partition, Conte
     CnchLockHolder cnch_lock(
         *getContext(),
         CnchDedupHelper::getLocksToAcquire(
-            scope, txn->getTransactionID(), *this, getSettings()->dedup_acquire_lock_timeout.value.totalMilliseconds()));
+            scope, txn->getTransactionID(), *this, getSettings()->unique_acquire_write_lock_timeout.value.totalMilliseconds()));
     if (!cnch_lock.tryLock())
         throw Exception("Failed to acquire lock for txn " + txn->getTransactionID().toString(), ErrorCodes::CNCH_LOCK_ACQUIRE_FAILED);
 
@@ -1314,7 +1313,7 @@ void StorageCnchMergeTree::sendPreloadTasks(ContextPtr local_context, ServerData
     server_resource->addCreateQuery(local_context, shared_from_this(), create_table_query, "");
     server_resource->addDataParts(getStorageUUID(), parts, bucket_numbers);
     /// TODO: async rpc?
-    server_resource->sendResource(local_context, [&](CnchWorkerClientPtr client, auto & resources, ExceptionHandler &handler) {
+    server_resource->sendResource(local_context, [&](CnchWorkerClientPtr client, auto & resources, ExceptionHandler & handler) {
         std::vector<brpc::CallId> ids;
         for (const auto & resource : resources)
         {
@@ -1350,7 +1349,6 @@ void StorageCnchMergeTree::filterPartsInExplicitTransaction(ServerDataPartsVecto
 
 namespace
 {
-
     /// Conversion that is allowed for serializable key (primary key, sorting key).
     /// Key should be serialized in the same way after conversion.
     /// NOTE: The list is not complete.
@@ -1920,8 +1918,8 @@ void StorageCnchMergeTree::truncate(
     dropPartitionOrPart(command, local_context);
 }
 
-void StorageCnchMergeTree::dropPartitionOrPart(const PartitionCommand & command,
-    ContextPtr local_context, IMergeTreeDataPartsVector* dropped_parts, size_t max_threads)
+void StorageCnchMergeTree::dropPartitionOrPart(
+    const PartitionCommand & command, ContextPtr local_context, IMergeTreeDataPartsVector * dropped_parts, size_t max_threads)
 {
     auto svr_parts = selectPartsByPartitionCommand(local_context, command);
     if (svr_parts.empty())
@@ -1941,8 +1939,11 @@ void StorageCnchMergeTree::dropPartitionOrPart(const PartitionCommand & command,
     }
 }
 
-void StorageCnchMergeTree::dropPartsImpl(ServerDataPartsVector& svr_parts_to_drop,
-    IMergeTreeDataPartsVector& parts_to_drop, bool detach, ContextPtr local_context,
+void StorageCnchMergeTree::dropPartsImpl(
+    ServerDataPartsVector & svr_parts_to_drop,
+    IMergeTreeDataPartsVector & parts_to_drop,
+    bool detach,
+    ContextPtr local_context,
     size_t max_threads)
 {
     auto txn = local_context->getCurrentTransaction();
@@ -1964,26 +1965,25 @@ void StorageCnchMergeTree::dropPartsImpl(ServerDataPartsVector& svr_parts_to_dro
         }
 
         UndoResources undo_resources;
-        auto write_undo_callback = [&](const DataPartPtr& part) {
-            UndoResource ub(txn->getTransactionID(), UndoResourceType::FileSystem, part->getFullRelativePath(),
+        auto write_undo_callback = [&](const DataPartPtr & part) {
+            UndoResource ub(
+                txn->getTransactionID(),
+                UndoResourceType::FileSystem,
+                part->getFullRelativePath(),
                 part->getRelativePathForDetachedPart(""));
             ub.setDiskName(part->volume->getDisk()->getName());
             undo_resources.push_back(ub);
         };
-        for (const auto& data_part : parts_to_drop)
+        for (const auto & data_part : parts_to_drop)
         {
             data_part->enumeratePreviousParts(write_undo_callback);
         }
-        local_context->getCnchCatalog()->writeUndoBuffer(UUIDHelpers::UUIDToString(getStorageUUID()),
-            txn->getTransactionID(), undo_resources);
+        local_context->getCnchCatalog()->writeUndoBuffer(
+            UUIDHelpers::UUIDToString(getStorageUUID()), txn->getTransactionID(), undo_resources);
 
         ThreadPool pool(std::min(parts_to_drop.size(), max_threads));
-        auto callback = [&pool] (const DataPartPtr& part) {
-            pool.scheduleOrThrowOnError([part]() {
-                part->renameToDetached("");
-            });
-        };
-        for (const auto& part : parts_to_drop)
+        auto callback = [&pool](const DataPartPtr & part) { pool.scheduleOrThrowOnError([part]() { part->renameToDetached(""); }); };
+        for (const auto & part : parts_to_drop)
         {
             part->enumeratePreviousParts(callback);
         }
@@ -2453,7 +2453,7 @@ void StorageCnchMergeTree::checkMutationIsPossible(const MutationCommands & comm
     for (const auto & command : commands)
     {
         if (command.type != MutationCommand::MATERIALIZE_INDEX)
-            throw Exception(ErrorCodes::NOT_IMPLEMENTED , "StorageCnchMergeTree doesn't support mutation of type {}\n", command.type);
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "StorageCnchMergeTree doesn't support mutation of type {}\n", command.type);
     }
 }
 

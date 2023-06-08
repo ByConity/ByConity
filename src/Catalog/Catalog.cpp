@@ -32,6 +32,7 @@
 #include <Common/Status.h>
 #include <Common/RpcClientPool.h>
 #include <Common/serverLocality.h>
+#include <Common/ScanWaitFreeMap.h>
 #include <Core/Types.h>
 // #include <Access/MaskingPolicyDataModel.h>
 // #include <Access/MaskingPolicyCommon.h>
@@ -1277,7 +1278,7 @@ namespace Catalog
                             partitions,
                             [&](const Strings & required_partitions, const Strings & full_partitions) {
                                 source = "KV(miss cache)";
-                                return getDataPartsMetaFromMetastore(storage, required_partitions, full_partitions, ts);
+                                return getDataPartsMetaFromMetastore(storage, required_partitions, full_partitions, TxnTimestamp{0});
                             },
                             ts.toUInt64());
                     }
@@ -1795,8 +1796,9 @@ namespace Catalog
 
                     auto cache_manager = context.getPartCacheManager();
 
-                    if (!cache_manager || !can_use_cache || !cache_manager->getTablePartitions(*cnch_table, partitions))
-                        getPartitionsFromMetastore(*cnch_table, partitions);
+                    if (cache_manager && can_use_cache && cache_manager->getPartitionList(*cnch_table, partition_list))
+                        return;
+                    getPartitionsFromMetastore(*cnch_table, partitions);
                 }
 
                 for (auto it = partitions.begin(); it != partitions.end(); it++)
@@ -1819,20 +1821,17 @@ namespace Catalog
                     can_use_cache = canUseCache(storage, session_context);
 
                 auto cache_manager = context.getPartCacheManager();
-                if (cache_manager && can_use_cache && cache_manager->getTablePartitions(*storage, partitions))
-                {
-                    for (auto it = partitions.begin(); it != partitions.end(); it++)
-                        partition_ids.push_back(it->first);
-                }
-                else
-                    partition_ids = getPartitionIDsFromMetastore(storage);
+                if (cache_manager && can_use_cache && cache_manager->getPartitionIDs(*storage, partition_ids))
+                    return;
+                partition_ids = getPartitionIDsFromMetastore(storage);
             },
             ProfileEvents::GetPartitionIDsSuccess,
             ProfileEvents::GetPartitionIDsFailed);
         return partition_ids;
     }
 
-    void Catalog::getPartitionsFromMetastore(const MergeTreeMetaBase & table, PartitionMap & partition_list)
+    template<typename Map>
+    void Catalog::getPartitionsFromMetastore(const MergeTreeMetaBase & table, Map & partition_list)
     {
         runWithMetricSupport(
             [&] {
@@ -1844,12 +1843,15 @@ namespace Catalog
                     Protos::PartitionMeta partition_meta;
                     partition_meta.ParseFromString(it->value());
                     auto partition_ptr = createPartitionFromMetaModel(table, partition_meta);
-                    partition_list.emplace(partition_meta.id(), std::make_shared<CnchPartitionInfo>(partition_ptr));
+                    partition_list.emplace(partition_meta.id(), std::make_shared<CnchPartitionInfo>(partition_ptr, partition_meta.id()));
                 }
             },
             ProfileEvents::GetPartitionsFromMetastoreSuccess,
             ProfileEvents::GetPartitionsFromMetastoreFailed);
     }
+
+    template void Catalog::getPartitionsFromMetastore<PartitionMap>(const MergeTreeMetaBase &, PartitionMap &);
+    template void Catalog::getPartitionsFromMetastore<ScanWaitFreeMap<String, PartitionInfoPtr>>(const MergeTreeMetaBase &, ScanWaitFreeMap<String, PartitionInfoPtr> &);
 
     Strings Catalog::getPartitionIDsFromMetastore(const ConstStoragePtr & storage)
     {
