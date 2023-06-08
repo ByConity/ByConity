@@ -20,7 +20,7 @@ jobs:
         run: |
           git config --global --add safe.directory /__w/ByConity/ByConity
           git -C "$GITHUB_WORKSPACE" submodule sync
-          git -C "$GITHUB_WORKSPACE" submodule update --init --recursive
+          git -C "$GITHUB_WORKSPACE" submodule update --init --recursive --force
           ./build_bin.sh
       - name: run unit tests
         run: |
