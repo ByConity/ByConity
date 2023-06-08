@@ -37,7 +37,11 @@ inline AggregateFunctionPtr createAggregateFunctionGroupArrayImpl(const DataType
 
     WhichDataType which(argument_type);
     if (which.idx == TypeIndex::String)
+    {
+        // In all its calls, the type of args is UInt64 so it's safe to reuse them after forwarding
+        // coverity[use_after_move]
         return std::make_shared<GroupArrayGeneralImpl<GroupArrayNodeString, Trait>>(argument_type, parameters, std::forward<TArgs>(args)...);
+    }
     
     // args here is scalar type (int), std::forward has no effect on it
     // coverity[use_after_move]

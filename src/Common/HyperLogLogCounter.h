@@ -427,6 +427,7 @@ private:
 
         if (rank > cur_rank)
         {
+            //Overruning is handled in update()
             if (cur_rank == 0)
                 --zeros;
             denominator.update(cur_rank, rank);

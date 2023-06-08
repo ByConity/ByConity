@@ -148,7 +148,8 @@ RolePtr RoleCache::getRole(const UUID & role_id)
     {
         auto cache_value = Poco::SharedPtr<std::pair<RolePtr, scope_guard>>(
             new std::pair<RolePtr, scope_guard>{role, std::move(subscription)});
-        // checked the underlying Poco SharedPtr implementation, it calls the copy constructor and increments count by 1
+        // SharedPtr is Poco's implementation of a shared pointer and
+        // it will only free the memory when the counter reaches 0
         // coverity[double_free]
         cache.add(role_id, cache_value);
         return role;
@@ -171,7 +172,8 @@ void RoleCache::roleChanged(const UUID & role_id, const RolePtr & changed_role)
     // checked the underlying Poco SharedPtr implementation, it calls the copy constructor and increments count by 1
     // coverity[double_free]
     cache.update(role_id, role_from_cache);
-    // checked the underlying Poco SharedPtr implementation, it calls the copy constructor and increments count by 1
+    // SharedPtr is Poco's implementation of a shared pointer and
+    // it will only free the memory when the counter reaches 0
     // coverity[double_free]
     collectEnabledRoles(notifications);
 }

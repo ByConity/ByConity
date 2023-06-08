@@ -25,7 +25,9 @@ BuildQueryPipelineSettings BuildQueryPipelineSettings::fromSettings(const Settin
 {
     BuildQueryPipelineSettings settings;
     settings.actions_settings = ExpressionActionsSettings::fromSettings(from, CompileExpressions::yes);
-     // coverity[uninit_use]
+    //In all of its usage, there is no use of an uninitialized variable
+    //settings.distributed_settings.coordinator_address.port will be initialized when it's used
+    //coverity[uninit_use]
     return settings;
 }
 

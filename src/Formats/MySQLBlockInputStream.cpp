@@ -181,7 +181,7 @@ namespace
                 readDateTimeText(time, in, assert_cast<const DataTypeDateTime &>(data_type).getTimeZone());
                 if (time < 0)
                     time = 0;
-                // readDateTimeText gives time value that will not exceed UInt32
+                // TODO: A 64-bit time_t value is stored in a smaller width integer (Y2K38_SAFETY)
                 // coverity[store_truncates_time_t]
                 assert_cast<ColumnUInt32 &>(column).insertValue(time);
                 read_bytes_size += 4;

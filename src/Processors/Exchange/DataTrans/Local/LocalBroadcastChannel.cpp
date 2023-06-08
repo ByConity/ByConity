@@ -118,7 +118,8 @@ BroadcastStatus LocalBroadcastChannel::finish(BroadcastStatusCode status_code, S
         send_metric.finish_code = new_status_ptr->code;
         send_metric.is_modifier = 1;
         send_metric.message = new_status_ptr->message;
-         // coverity[leaked_storage]
+        // new_status_ptr will be deleted in the destructor as it is stored in broadcast_status
+        // coverity[leaked_storage]
         return res;
     }
     else
