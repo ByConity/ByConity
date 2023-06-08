@@ -43,9 +43,9 @@ jobs:
           mkdir bin
           cp -r $GITHUB_WORKSPACE/build/programs/* ./bin
           sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" conf/core-site.xml
-          sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" multi-workers/fdb.cluster
-          sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" multi-workers/cnch-config.yml
-          sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" multi-workers/daemon-manager.yml
+          sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" config/fdb.cluster
+          sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" config/cnch-config.yml
+          sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" config/daemon-manager.yml
           /bin/bash create_docker_volume_ci.sh
           docker-compose up -d
           sleep 10
