@@ -249,6 +249,9 @@ class CnchWorkerClient;
 using CnchWorkerClientPtr = std::shared_ptr<CnchWorkerClient>;
 class CnchCatalogDictionaryCache;
 
+class VWCustomizedSettings;
+using VWCustomizedSettingsPtr = std::shared_ptr<VWCustomizedSettings>;
+
 enum class ServerType
 {
     standalone,
@@ -862,6 +865,10 @@ public:
     void makeGlobalContext() { initGlobal(); global_context = shared_from_this(); }
 
     const Settings & getSettingsRef() const { return settings; }
+    Settings & getSettingsRef() { return settings; }
+
+    VWCustomizedSettingsPtr getVWCustomizedSettings() const;
+    void setVWCustomizedSettings(VWCustomizedSettingsPtr vw_customized_settings_ptr_);
 
     void setProgressCallback(ProgressCallback callback);
     /// Used in InterpreterSelectQuery to pass it to the IBlockInputStream.

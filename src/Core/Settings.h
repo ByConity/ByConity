@@ -601,6 +601,7 @@ class IColumn;
     M(Bool, enable_preload_parts, false, "Enable preload parts", 0) \
     M(Bool, enable_async_preload_parts, true, "Allow to preload data parts asynchronously", 0) \
     M(DiskCacheMode, disk_cache_mode, DiskCacheMode::AUTO, "Whether to use local disk cache", 0) \
+    M(Bool, enable_vw_customized_setting, false, "Allow vw customized overwrite profile settings", 0)\
     /** Settings for Unique Table */ \
     M(Bool, enable_unique_partial_update, true, "Whether to use partial column update for INSERT", 0) \
     M(Milliseconds, dedup_worker_heartbeat_ms, 3000, "Dedup worker heartbeat interval time", 0) \
