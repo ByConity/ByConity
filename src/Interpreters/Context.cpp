@@ -29,6 +29,11 @@
 #include <Poco/Net/IPAddress.h>
 #include <Poco/Util/Application.h>
 #include "common/types.h"
+<<<<<<< HEAD
+=======
+#include <CloudServices/ReclusteringManagerThread.h>
+#include <CloudServices/CnchMergeMutateThread.h>
+>>>>>>> 874ce3f1e47 (Merge branch 'cherry-pick-5516735' into 'cnch-ce-merge')
 #include <Common/DNSResolver.h>
 #include <Common/Macros.h>
 #include <Common/escapeForFileName.h>
@@ -4307,6 +4312,61 @@ CnchBGThreadPtr Context::tryGetCnchBGThread(CnchBGThreadType type, const Storage
 void Context::controlCnchBGThread(const StorageID & storage_id, CnchBGThreadType type, CnchBGThreadAction action) const
 {
     getCnchBGThreadsMap(type)->controlThread(storage_id, action);
+}
+
+bool Context::getTableReclusterTaskStatus(const StorageID & storage_id) const
+{
+    CnchBGThreadsMap * thread_map = getCnchBGThreadsMap(CnchBGThreadType::Clustering);
+    if (!thread_map)
+        throw Exception("Fail to get merge thread map", ErrorCodes::SYSTEM_ERROR);
+    CnchBGThreadPtr bg_thread_ptr = thread_map->tryGetThread(storage_id);
+    if (!bg_thread_ptr)
+    {
+        LOG_DEBUG(&Poco::Logger::get(__PRETTY_FUNCTION__), "Fail to get reclustering manager thread for " + storage_id.getNameForLogs());
+        return false;
+    }
+
+    ReclusteringManagerThread * reclustering_manager_thread = dynamic_cast<ReclusteringManagerThread *>(bg_thread_ptr.get());
+    if (!reclustering_manager_thread)
+        throw Exception("Fail to cast to ReclusteringManagerThread", ErrorCodes::LOGICAL_ERROR);
+    return reclustering_manager_thread->getTableReclusterStatus();
+}
+
+bool Context::removeMergeMutateTasksOnPartition(const StorageID & storage_id, const String & partition_id)
+{
+    CnchBGThreadsMap * thread_map = getCnchBGThreadsMap(CnchBGThreadType::MergeMutate);
+    if (!thread_map)
+        throw Exception("Fail to get merge thread map", ErrorCodes::SYSTEM_ERROR);
+    CnchBGThreadPtr bg_thread_ptr = thread_map->tryGetThread(storage_id);
+    if (!bg_thread_ptr)
+    {
+        LOG_DEBUG(&Poco::Logger::get(__PRETTY_FUNCTION__), "Fail to get merge thread for {}", storage_id.getNameForLogs());
+        return false;
+    }
+
+    CnchMergeMutateThread * merge_mutate_thread = dynamic_cast<CnchMergeMutateThread *>(bg_thread_ptr.get());
+    if (!merge_mutate_thread)
+        throw Exception("Fail to cast to CnchMergeMutateThread", ErrorCodes::LOGICAL_ERROR);
+    return merge_mutate_thread->removeTasksOnPartition(partition_id);
+}
+
+ClusterTaskProgress Context::getTableReclusterTaskProgress(const StorageID & storage_id) const
+{
+    CnchBGThreadsMap * thread_map = getCnchBGThreadsMap(CnchBGThreadType::MergeMutate);
+    if (!thread_map)
+        throw Exception("Fail to get merge thread map", ErrorCodes::SYSTEM_ERROR);
+    CnchBGThreadPtr bg_thread_ptr = thread_map->tryGetThread(storage_id);
+    ClusterTaskProgress cluster_task_progress;
+    if (!bg_thread_ptr)
+    {
+        LOG_DEBUG(&Poco::Logger::get(__PRETTY_FUNCTION__), "Fail to get merge thread for " + storage_id.getNameForLogs());
+        return cluster_task_progress;
+    }
+
+    CnchMergeMutateThread * merge_mutate_thread = dynamic_cast<CnchMergeMutateThread *>(bg_thread_ptr.get());
+    if (!merge_mutate_thread)
+        throw Exception("Fail to cast to CnchMergeMutateThread", ErrorCodes::LOGICAL_ERROR);
+    return merge_mutate_thread->getReclusteringTaskProgress();
 }
 
 CnchBGThreadPtr Context::tryGetDedupWorkerManager(const StorageID & storage_id) const
