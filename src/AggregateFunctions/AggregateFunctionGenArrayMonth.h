@@ -26,15 +26,16 @@ class AggregateFunctionAttrGenArrayMonth final : public IAggregateFunctionDataHe
     T m_start_time;
     UInt32 start_month;
     UInt32 m_number_steps;
-    const DateLUTImpl & lut = DateLUT::instance();
+    const DateLUTImpl & lut;
 
 public:
-    AggregateFunctionAttrGenArrayMonth(UInt64 numberSteps, String startDate,
+    AggregateFunctionAttrGenArrayMonth(UInt64 numberSteps, String startDate, String timezone,
                                           const DataTypes & arguments, const Array & params) :
         IAggregateFunctionDataHelper<AggregateFunctionAttrGenArrayData, AggregateFunctionAttrGenArrayMonth<T, AttrType>>(arguments, params),
-        m_number_steps(numberSteps)
+        m_number_steps(numberSteps),lut(DateLUT::instance(timezone))
     {
-        m_start_time = time_t(LocalDate(startDate));
+        auto date = LocalDate(startDate);
+        m_start_time = lut.makeDate(date.year(), date.month(), date.day());
         start_month = lut.toRelativeMonthNum(m_start_time);
     }
 
@@ -153,15 +154,16 @@ class AggregateFunctionGenArrayMonth : public IAggregateFunctionDataHelper<Aggre
     UInt32 start_month;
     UInt32 m_number_steps;
     UInt32 m_words;
-    const DateLUTImpl & lut = DateLUT::instance();
+    const DateLUTImpl & lut;
 
 public:
-    AggregateFunctionGenArrayMonth(UInt64 numberSteps, String startDate,
+    AggregateFunctionGenArrayMonth(UInt64 numberSteps, String startDate, String timezone,
                                    const DataTypes & arguments, const Array & params) :
         IAggregateFunctionDataHelper<AggregateFunctionGenArrayData, AggregateFunctionGenArrayMonth>(arguments, params),
-        m_number_steps(numberSteps)
+        m_number_steps(numberSteps), lut(DateLUT::instance(timezone))
     {
-        m_start_time = time_t(LocalDate(startDate));
+        auto date = LocalDate(startDate);
+        m_start_time = lut.makeDate(date.year(), date.month(), date.day());
         start_month = lut.toRelativeMonthNum(m_start_time);
         m_words = (m_number_steps + sizeof(GAType) * 8 -1) / (sizeof(GAType) * 8 );
     }
