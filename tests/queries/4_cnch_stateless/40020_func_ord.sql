@@ -1,0 +1,13 @@
+SELECT ord('Ãa');
+SELECT ord('ÃÃÃ');
+SELECT ord('ÖÖ');
+SELECT ord('Ŝss');
+SELECT ord('ssŜ');
+SELECT ord('ǕŌ');
+SELECT ord(2000);
+create table table_1(val1 Int64,val2 String, val3 float, val4 DECIMAL(8,6)) engine=CnchMergeTree() order by val1;
+insert into table_1 values(-1, 'ada', 2.0, 6.9);
+insert into table_1 values(-2, 'ǕŌ', -3.0, -5.8);
+insert into table_1 values(3, '8787', 2.9999, -5);
+insert into table_1 values(4, '===', -551.556, 0);
+select ord(val1), ord(val2), ord(val3), ord(val4) from table_1 order by val1 ASC;

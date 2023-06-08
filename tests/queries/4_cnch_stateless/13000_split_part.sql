@@ -16,7 +16,7 @@ CREATE TABLE test.split_part_table
     c Nullable(Int64),
     d Int64
 )
-ENGINE = MergeTree()
+ENGINE = CnchMergeTree()
 ORDER BY b;
 
 INSERT INTO test.split_part_table (a, b, c, d) VALUES ('A#B#C', '#', 1, 1), ('', '#', 1, 2), ('A#B#C', '#', 4, 3), ('A##B#C', '#', 2, 4), ('A,B,C', '#', 1, 5), ('A##B##C', '##', 2, 6), ('###', '#', 3, 7), ('A#B#C', '#', -1, 8), (null, '#', 5, 9);

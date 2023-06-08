@@ -1109,7 +1109,7 @@ bool ParserSubstringExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & e
     ASTPtr start_node;
     ASTPtr length_node;
 
-    if (!ParserKeyword("SUBSTRING").ignore(pos, expected))
+    if (!ParserKeyword("SUBSTRING").ignore(pos, expected) && !ParserKeyword("SUBSTR").ignore(pos, expected))
         return false;
 
     if (pos->type != TokenType::OpeningRoundBracket)
