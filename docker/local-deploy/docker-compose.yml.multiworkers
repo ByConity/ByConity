@@ -89,7 +89,7 @@ services:
     image: byconity/debian:buster-runit-fdb7.1.27
     environment:
       - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
-    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 ${COMPOSE_PROJECT_NAME}_server:21557 && VIRTUAL_WAREHOUSE_ID=vw_write WORKER_GROUP_ID=wg_write WORKER_ID=w0 clickhouse-server --config-file /config/worker.yml"
+    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 ${COMPOSE_PROJECT_NAME}_server-0:21557 && VIRTUAL_WAREHOUSE_ID=vw_write WORKER_GROUP_ID=wg_write WORKER_ID=w0 clickhouse-server --config-file /config/worker.yml"
     depends_on:
       - server
     container_name: "${COMPOSE_PROJECT_NAME}_worker-write-0"
@@ -103,7 +103,7 @@ services:
     image: byconity/debian:buster-runit-fdb7.1.27
     environment:
       - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
-    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 ${COMPOSE_PROJECT_NAME}_server:21557  && VIRTUAL_WAREHOUSE_ID=vw_default WORKER_GROUP_ID=wg_default WORKER_ID=r0 clickhouse-server --config-file /config/worker.yml"
+    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 ${COMPOSE_PROJECT_NAME}_server-0:21557  && VIRTUAL_WAREHOUSE_ID=vw_default WORKER_GROUP_ID=wg_default WORKER_ID=r0 clickhouse-server --config-file /config/worker.yml"
     depends_on:
       - server
     container_name: "${COMPOSE_PROJECT_NAME}_worker-default-0"
@@ -117,7 +117,7 @@ services:
     image: byconity/debian:buster-runit-fdb7.1.27
     environment:
       - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
-    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 ${COMPOSE_PROJECT_NAME}_server:21557  && VIRTUAL_WAREHOUSE_ID=vw_default WORKER_GROUP_ID=wg_default WORKER_ID=r1 clickhouse-server --config-file /config/worker.yml"
+    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 ${COMPOSE_PROJECT_NAME}_server-0:21557  && VIRTUAL_WAREHOUSE_ID=vw_default WORKER_GROUP_ID=wg_default WORKER_ID=r1 clickhouse-server --config-file /config/worker.yml"
     depends_on:
       - server
     container_name: "${COMPOSE_PROJECT_NAME}_worker-default-1"
@@ -131,7 +131,7 @@ services:
     image: byconity/debian:buster-runit-fdb7.1.27
     environment:
       - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
-    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 ${COMPOSE_PROJECT_NAME}_server:21557  && daemon-manager --config-file ./config/daemon-manager.yml"
+    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 ${COMPOSE_PROJECT_NAME}_server-0:21557  && daemon-manager --config-file ./config/daemon-manager.yml"
     depends_on:
       - server
     container_name: "${COMPOSE_PROJECT_NAME}_daemon-manager-0"
