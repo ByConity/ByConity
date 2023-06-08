@@ -25,9 +25,9 @@ jobs:
       - name: run unit tests
         run: |
           bash $GITHUB_WORKSPACE/unittest.sh
+          echo "COMPOSE_PROJECT_NAME=byconity-$(cat /etc/hostname)" >> $GITHUB_ENV
       - name: Set environment variables
         run: |
-          echo "COMPOSE_PROJECT_NAME=byconity-$(cat /etc/hostname)" >> $GITHUB_ENV
           echo "BINARY_VOL=${COMPOSE_PROJECT_NAME}_bin_volume" >> $GITHUB_ENV
           echo "HDFS_VOL=${COMPOSE_PROJECT_NAME}_hdfs_volume" >> $GITHUB_ENV
           echo "CONFIG_VOL=${COMPOSE_PROJECT_NAME}_config_volume" >> $GITHUB_ENV

@@ -8,7 +8,7 @@ services:
     environment:
       - HADOOP_CONF_DIR=${HADOOP_CONF_DIR}
     ports:
-      - ${$CLICKHOUSE_PORT_HDFS}:9870
+      - "${CLICKHOUSE_PORT_HDFS}:9870"
     volumes:
       - hdfs_volume:${HADOOP_CONF_DIR}
       - /var/log/hadoop
@@ -76,8 +76,8 @@ services:
       - tso
       - hdfs
     ports:
-      - "${$CLICKHOUSE_PORT_TCP}:52145"
-      - "${$CLICKHOUSE_PORT_HTTP}:21557"
+      - "${CLICKHOUSE_PORT_TCP}:52145"
+      - "${CLICKHOUSE_PORT_HTTP}:21557"
     container_name: "${COMPOSE_PROJECT_NAME}_server-0"
     volumes:
       - binary_volume:/opt/byconity/bin/
