@@ -25,6 +25,15 @@ jobs:
       - name: run unit tests
         run: |
           bash $GITHUB_WORKSPACE/unittest.sh
+      - name: Set environment variables
+        run: |
+          echo "COMPOSE_PROJECT_NAME=byconity-$(cat /etc/hostname)" >> $GITHUB_ENV
+          echo "BINARY_VOL=${COMPOSE_PROJECT_NAME}_bin_volume" >> $GITHUB_ENV
+          echo "HDFS_VOL=${COMPOSE_PROJECT_NAME}_hdfs_volume" >> $GITHUB_ENV
+          echo "CONFIG_VOL=${COMPOSE_PROJECT_NAME}_config_volume" >> $GITHUB_ENV
+          echo "CLICKHOUSE_PORT_TCP=$(python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')" >> $GITHUB_ENV
+          echo "CLICKHOUSE_PORT_HTTP=$(python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')" >> $GITHUB_ENV
+          echo "CLICKHOUSE_PORT_HDFS=$(python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')" >> $GITHUB_ENV
       - name: Create ByConity Cluster
         run: |
           mkdir /CI/
@@ -34,10 +43,6 @@ jobs:
           cp $GITHUB_WORKSPACE/ci_scripts/create_docker_volume_ci.sh ./
           mkdir bin
           cp -r $GITHUB_WORKSPACE/build/programs/* ./bin
-          export COMPOSE_PROJECT_NAME=byconity-$(cat /etc/hostname)
-          export BINARY_VOL=${COMPOSE_PROJECT_NAME}_bin_volume
-          export HDFS_VOL=${COMPOSE_PROJECT_NAME}_hdfs_volume
-          export CONFIG_VOL=${COMPOSE_PROJECT_NAME}_config_volume
           sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" hdfs/core-site.xml
           sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" multi-workers/fdb.cluster
           sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" multi-workers/cnch-config.yml
@@ -47,7 +52,7 @@ jobs:
           sleep 10
           hdfs/create_users.sh
           export CLICKHOUSE_HOST=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.Gateway}}{{end}}' ${COMPOSE_PROJECT_NAME}_server-0)
-          curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 $CLICKHOUSE_HOST:8124
+          curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 $CLICKHOUSE_HOST:$CLICKHOUSE_PORT_HTTP
       - name: Run ByConity FuntionalStateless
         continue-on-error: true
         run: |
@@ -58,9 +63,6 @@ jobs:
           cp -r $GITHUB_WORKSPACE/tests/queries/4_cnch_stateless queries/
           cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
           mkdir -p /test_output
-          export COMPOSE_PROJECT_NAME=byconity-$(cat /etc/hostname)
-          export CLICKHOUSE_PORT_TCP=9000
-          export CLICKHOUSE_PORT_HTTP=8124
           export CLICKHOUSE_HOST=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.Gateway}}{{end}}' ${COMPOSE_PROJECT_NAME}_server-0)
           ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a /test_output/test_result.txt
           ./process_functional_tests_result.py || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
@@ -74,9 +76,6 @@ jobs:
           mkdir queries
           cp -r $GITHUB_WORKSPACE/tests/queries/7_clickhouse_sql queries/
           cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
-          export COMPOSE_PROJECT_NAME=byconity-$(cat /etc/hostname)
-          export CLICKHOUSE_PORT_TCP=9000
-          export CLICKHOUSE_PORT_HTTP=8124
           export CLICKHOUSE_HOST=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.Gateway}}{{end}}' ${COMPOSE_PROJECT_NAME}_server-0)
           echo "Running test without optimizer"
           mkdir -p test_output
@@ -106,8 +105,4 @@ jobs:
         if: always()
         run: |
           cd /CI/
-          export COMPOSE_PROJECT_NAME=byconity-$(cat /etc/hostname)
-          export BINARY_VOL=${COMPOSE_PROJECT_NAME}_bin_volume
-          export HDFS_VOL=${COMPOSE_PROJECT_NAME}_hdfs_volume
-          export CONFIG_VOL=${COMPOSE_PROJECT_NAME}_config_volume
           docker-compose -f docker-compose.yml.multiworkers down --volumes
