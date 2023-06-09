@@ -776,6 +776,11 @@ Counters Counters::getPartiallyAtomicSnapshot() const
     return res;
 }
 
+uint64_t Counters::getIOReadTime() const
+{
+    return counters[ProfileEvents::HDFSReadElapsedMilliseconds] * 1000 + counters[ProfileEvents::DiskReadElapsedMicroseconds];
+}
+
 const char * getName(Event event)
 {
     static const char * strings[] =

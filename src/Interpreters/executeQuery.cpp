@@ -936,6 +936,10 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
                 element.thread_ids = std::move(info.thread_ids);
                 element.profile_counters = std::move(info.profile_counters);
+
+                element.max_io_time_thread_name = std::move(info.max_io_time_thread_name);
+                element.max_io_time_thread_ms = info.max_io_time_thread_ms;
+                element.max_thread_io_profile_counters = std::move(info.max_io_thread_profile_counters);
             };
 
             auto query_id = context->getCurrentQueryId();
@@ -1099,6 +1103,9 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
                         elem.thread_ids = std::move(info.thread_ids);
                         elem.profile_counters = std::move(info.profile_counters);
+                        elem.max_io_time_thread_name = std::move(info.max_io_time_thread_name);
+                        elem.max_io_time_thread_ms = info.max_io_time_thread_ms;
+                        elem.max_thread_io_profile_counters = std::move(info.max_io_thread_profile_counters);
 
                         const auto & factories_info = context->getQueryFactoriesInfo();
                         elem.used_aggregate_functions = factories_info.aggregate_functions;
