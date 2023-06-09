@@ -28,6 +28,10 @@ public:
     static void SetUpTestSuite()
     {
         std::unordered_map<std::string, DB::Field> settings;
+        settings.emplace("iterative_optimizer_timeout", "30000000");
+        settings.emplace("enable_execute_uncorrelated_subquery", 0);
+        settings.emplace("enable_left_join_to_right_join", "false");
+
 #ifndef NDEBUG
         // debug mode may time out.
         settings.emplace("cascades_optimizer_timeout", "300000");

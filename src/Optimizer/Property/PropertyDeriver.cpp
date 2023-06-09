@@ -21,6 +21,7 @@
 #include <Optimizer/ExpressionRewriter.h>
 #include <Optimizer/Property/Property.h>
 #include <Optimizer/SymbolsExtractor.h>
+#include <Optimizer/DomainTranslator.h>
 #include <Optimizer/Utils.h>
 #include <QueryPlan/ExchangeStep.h>
 #include <QueryPlan/FilterStep.h>
@@ -37,20 +38,20 @@ namespace ErrorCodes
     extern const int OPTIMIZER_NONSUPPORT;
 }
 
-Property PropertyDeriver::deriveProperty(ConstQueryPlanStepPtr step, Context & context)
+Property PropertyDeriver::deriveProperty(ConstQueryPlanStepPtr step, ContextMutablePtr & context)
 {
     PropertySet property_set;
     return deriveProperty(step, property_set, context);
 }
 
-Property PropertyDeriver::deriveProperty(ConstQueryPlanStepPtr step, Property & input_property, Context & context)
+Property PropertyDeriver::deriveProperty(ConstQueryPlanStepPtr step, Property & input_property, ContextMutablePtr & context)
 {
     PropertySet input_properties = std::vector<Property>();
     input_properties.emplace_back(input_property);
     return deriveProperty(step, input_properties, context);
 }
 
-Property PropertyDeriver::deriveProperty(ConstQueryPlanStepPtr step, PropertySet & input_properties, Context & context)
+Property PropertyDeriver::deriveProperty(ConstQueryPlanStepPtr step, PropertySet & input_properties, ContextMutablePtr & context)
 {
     DeriverContext deriver_context{input_properties, context};
     static DeriverVisitor visitor{};
@@ -66,14 +67,14 @@ Property PropertyDeriver::deriveProperty(ConstQueryPlanStepPtr step, PropertySet
     return result;
 }
 
-Property PropertyDeriver::deriveStorageProperty(const StoragePtr & storage, Context & context)
+Property PropertyDeriver::deriveStorageProperty(const StoragePtr & storage, ContextMutablePtr & context)
 {
     if (storage->getStorageID().getDatabaseName() == "system")
     {
         return Property{Partitioning(Partitioning::Handle::SINGLE), Partitioning(Partitioning::Handle::ARBITRARY)};
     }
 
-    if (context.getSettingsRef().enable_sharding_optimize)
+    if (context->getSettingsRef().enable_sharding_optimize)
     {
         if (const auto * distribute_table = dynamic_cast<const StorageDistributed *>(storage.get()))
         {
@@ -147,9 +148,31 @@ Property DeriverVisitor::visitProjectionStep(const ProjectionStep & step, Derive
     return translated;
 }
 
-// TODO derive constants from predicate, e.g (where a = 1, ...)
-Property DeriverVisitor::visitFilterStep(const FilterStep &, DeriverContext & context)
+Property DeriverVisitor::visitFilterStep(const FilterStep & step, DeriverContext & context)
 {
+    Predicate::DomainTranslator translator{context.getContext()};
+    // TODO, remove clone. step.getFilter()->clone()
+    Predicate::ExtractionResult result
+        = translator.getExtractionResult(step.getFilter()->clone(), step.getOutputStream().header.getNamesAndTypes());
+    std::optional<Predicate::FieldWithTypeMap> values = result.tuple_domain.extractFixedValues();
+    if (values.has_value())
+    {
+        Property input = context.getInput()[0];
+        std::map<String, FieldWithType> filter_values;
+        const Constants & origin_constants = input.getConstants();
+        for (const auto & value : origin_constants.getValues())
+        {
+            filter_values[value.first] = value.second;
+        }
+        for (auto & value : values.value())
+        {
+            filter_values[value.first] = value.second;
+        }
+        Constants filter_constants{filter_values};
+        input.setConstants(filter_constants);
+        return input;
+    }
+
     return context.getInput()[0];
 }
 
@@ -160,15 +183,80 @@ Property DeriverVisitor::visitJoinStep(const JoinStep & step, DeriverContext & c
     {
         identities[item.name] = item.name;
     }
+    
     Property translated;
-    if (!context.getInput().empty())
+
+    if (step.getKind() == ASTTableJoin::Kind::Inner || step.getKind() == ASTTableJoin::Kind::Cross) 
     {
-        translated = context.getInput()[0].translate(identities);
+        Property left_translated = context.getInput()[0].translate(identities);
+        Property right_translated = context.getInput()[1].translate(identities);
+        
+        std::map<String, FieldWithType> filter_values;
+        const Constants & left_constants = left_translated.getConstants();
+        const Constants & right_constants = right_translated.getConstants();
+        for (const auto & value : left_constants.getValues())
+        {
+            filter_values[value.first] = value.second;
+        }
+        for (const auto & value : right_constants.getValues())
+        {
+            filter_values[value.first] = value.second;
+        }
+        Constants filter_constants{filter_values};
+        left_translated.setConstants(filter_constants);
+        
+        translated = left_translated;
+        
+        // if partition columns are pruned, the output data has no property.
+        if (translated.getNodePartitioning().getPartitioningColumns().size()
+            != context.getInput()[0].getNodePartitioning().getPartitioningColumns().size())
+        {
+            return Property{};
+        }
+        if (translated.getStreamPartitioning().getPartitioningColumns().size()
+            != context.getInput()[0].getStreamPartitioning().getPartitioningColumns().size())
+        {
+            // TODO stream partition
+        }
     }
 
-    // if partition columns are pruned, the output data has no property.
-    if (translated.getNodePartitioning().getPartitioningColumns().size()
-        != context.getInput()[0].getNodePartitioning().getPartitioningColumns().size())
+    if (step.getKind() == ASTTableJoin::Kind::Left) 
+    {
+        Property left_translated = context.getInput()[0].translate(identities);
+        translated = left_translated;
+        
+        // if partition columns are pruned, the output data has no property.
+        if (translated.getNodePartitioning().getPartitioningColumns().size()
+            != context.getInput()[0].getNodePartitioning().getPartitioningColumns().size())
+        {
+            return Property{};
+        }
+        if (translated.getStreamPartitioning().getPartitioningColumns().size()
+            != context.getInput()[0].getStreamPartitioning().getPartitioningColumns().size())
+        {
+            // TODO stream partition
+        }
+    } 
+        
+    if (step.getKind() == ASTTableJoin::Kind::Right) 
+    {
+        Property right_translated = context.getInput()[1].translate(identities);
+        translated = right_translated;
+        
+        // if partition columns are pruned, the output data has no property.
+        if (translated.getNodePartitioning().getPartitioningColumns().size()
+            != context.getInput()[1].getNodePartitioning().getPartitioningColumns().size())
+        {
+            return Property{};
+        }
+        if (translated.getStreamPartitioning().getPartitioningColumns().size()
+            != context.getInput()[1].getStreamPartitioning().getPartitioningColumns().size())
+        {
+            // TODO stream partition
+        }
+    }  
+    
+    if (step.getKind() == ASTTableJoin::Kind::Full) 
     {
         return Property{};
     }
@@ -272,24 +360,30 @@ Property DeriverVisitor::visitExchangeStep(const ExchangeStep & step, DeriverCon
     const ExchangeMode & mode = step.getExchangeMode();
     if (mode == ExchangeMode::GATHER)
     {
-        return Property{Partitioning{Partitioning::Handle::SINGLE}};
+        Property output = context.getInput()[0];
+        output.setNodePartitioning(Partitioning{Partitioning::Handle::SINGLE}); 
+        return output.clearSorting();
     }
 
     if (mode == ExchangeMode::REPARTITION)
     {
-        return Property{step.getSchema()};
+        Property output = context.getInput()[0];
+        output.setNodePartitioning(step.getSchema()); 
+        return output.clearSorting();
     }
 
     if (mode == ExchangeMode::BROADCAST)
     {
-        return Property{Partitioning{Partitioning::Handle::FIXED_BROADCAST}};
+        Property output = context.getInput()[0];
+        output.setNodePartitioning(Partitioning{Partitioning::Handle::FIXED_BROADCAST}); 
+        return output.clearSorting();
     }
 
     if (mode == ExchangeMode::LOCAL_NO_NEED_REPARTITION)
     {
         Property output = context.getInput()[0];
         output.setStreamPartitioning(Partitioning{});
-        return output;
+        return output.clearSorting();
     }
 
     return context.getInput()[0];
@@ -321,7 +415,8 @@ Property DeriverVisitor::visitValuesStep(const ValuesStep &, DeriverContext &)
 
 Property DeriverVisitor::visitLimitStep(const LimitStep &, DeriverContext & context)
 {
-    return Property{context.getInput()[0].getNodePartitioning(), Partitioning(Partitioning::Handle::SINGLE)};
+    return Property{
+        context.getInput()[0].getNodePartitioning(), Partitioning(Partitioning::Handle::SINGLE), context.getInput()[0].getSorting(), context.getInput()[0].getConstants()};
 }
 
 Property DeriverVisitor::visitLimitByStep(const LimitByStep &, DeriverContext & context)
@@ -348,15 +443,6 @@ Property DeriverVisitor::visitMergingSortedStep(const MergingSortedStep &, Deriv
 {
     return Property{context.getInput()[0].getNodePartitioning(), Partitioning(Partitioning::Handle::SINGLE)};
 }
-//Property DeriverVisitor::visitMaterializingStep(const MaterializingStep &, DeriverContext & context)
-//{
-//    return context.getInput()[0];
-//}
-//
-//Property DeriverVisitor::visitDecompressionStep(const DecompressionStep &, DeriverContext & context)
-//{
-//    return context.getInput()[0];
-//}
 
 Property DeriverVisitor::visitDistinctStep(const DistinctStep &, DeriverContext & context)
 {
@@ -367,11 +453,6 @@ Property DeriverVisitor::visitExtremesStep(const ExtremesStep &, DeriverContext 
 {
     return context.getInput()[0];
 }
-
-//Property DeriverVisitor::visitFinalSamplingStep(const FinalSamplingStep &, DeriverContext & context)
-//{
-//    return context.getInput()[0];
-//}
 
 Property DeriverVisitor::visitWindowStep(const WindowStep &, DeriverContext & context)
 {

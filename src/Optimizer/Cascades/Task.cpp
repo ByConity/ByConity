@@ -436,7 +436,7 @@ void OptimizeInput::execute()
             }
             else
             {
-                output_prop = PropertyDeriver::deriveProperty(group_expr->getStep(), actual_input_props, *context->getOptimizerContext().getContext());
+                output_prop = PropertyDeriver::deriveProperty(group_expr->getStep(), actual_input_props, context->getOptimizerContext().getContext());
             }
 
             // Not need to do pruning here because it has been done when we get the
@@ -455,12 +455,13 @@ void OptimizeInput::execute()
                     *context->getOptimizerContext().getContext(),
                     require.getNodePartitioningRef(),
                     output_prop.getNodePartitioning(),
-                    *equivalences))
+                    *equivalences,
+                    output_prop.getConstants()))
             {
                 // add remote exchange
                 remote_exchange
                     = PropertyEnforcer::enforceNodePartitioning(group_expr, require, actual, *context->getOptimizerContext().getContext());
-                actual = PropertyDeriver::deriveProperty(remote_exchange->getStep(), actual, *context->getOptimizerContext().getContext());
+                actual = PropertyDeriver::deriveProperty(remote_exchange->getStep(), actual, context->getOptimizerContext().getContext());
                 // add cost
                 cur_total_cost += CostCalculator::calculate(
                                       remote_exchange->getStep(),
@@ -481,7 +482,7 @@ void OptimizeInput::execute()
                 // add local exchange
                 local_exchange = PropertyEnforcer::enforceStreamPartitioning(
                     remote_exchange ? remote_exchange : group_expr, require, actual, *context->getOptimizerContext().getContext());
-                actual = PropertyDeriver::deriveProperty(local_exchange->getStep(), actual, *context->getOptimizerContext().getContext());
+                actual = PropertyDeriver::deriveProperty(local_exchange->getStep(), actual, context->getOptimizerContext().getContext());
                 // add cost
                 cur_total_cost += CostCalculator::calculate(
                                       local_exchange->getStep(),

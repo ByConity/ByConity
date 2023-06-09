@@ -34,7 +34,7 @@ size_t Partitioning::hash() const
     return hash;
 }
 
-bool Partitioning::satisfy(const Partitioning & requirement) const
+bool Partitioning::satisfy(const Partitioning & requirement, const Constants & constants) const
 {
     if (requirement.require_handle)
         return getPartitioningHandle() == requirement.getPartitioningHandle() && getBuckets() == requirement.getBuckets()
@@ -44,7 +44,7 @@ bool Partitioning::satisfy(const Partitioning & requirement) const
     switch (requirement.getPartitioningHandle())
     {
         case Handle::FIXED_HASH:
-            return getPartitioningColumns() == requirement.getPartitioningColumns() || this->isPartitionOn(requirement);
+            return getPartitioningColumns() == requirement.getPartitioningColumns() || this->isPartitionOn(requirement, constants);
         default:
             return getPartitioningHandle() == requirement.getPartitioningHandle() && getBuckets() == requirement.getBuckets()
                 && getPartitioningColumns() == requirement.getPartitioningColumns()
@@ -52,7 +52,7 @@ bool Partitioning::satisfy(const Partitioning & requirement) const
     }
 }
 
-bool Partitioning::isPartitionOn(const Partitioning & requirement) const
+bool Partitioning::isPartitionOn(const Partitioning & requirement, const Constants & constants) const
 {
     auto actual_columns = getPartitioningColumns();
     auto required_columns = requirement.getPartitioningColumns();
@@ -68,6 +68,9 @@ bool Partitioning::isPartitionOn(const Partitioning & requirement) const
 
     for (auto & actual_column : actual_columns)
     {
+        if (constants.contains(actual_column))
+            continue ;
+        
         if (!required_columns_set.count(actual_column))
         {
             return false;
@@ -93,11 +96,13 @@ Partitioning Partitioning::normalize(const SymbolEquivalences & symbol_equivalen
 Partitioning Partitioning::translate(const std::unordered_map<String, String> & identities) const
 {
     Names translate_columns;
-    for (const auto & column : columns)
+    for (const auto & column : columns) 
+    {
         if (identities.contains(column))
             translate_columns.emplace_back(identities.at(column));
         else // note: don't discard column
-            translate_columns.emplace_back(column);
+            translate_columns.emplace_back(column); 
+    }
     return Partitioning{handle, translate_columns, require_handle, buckets, sharding_expr, enforce_round_robin};
 }
 
@@ -191,6 +196,29 @@ String Sorting::toString() const
         std::next(begin()), end(), front().toString(), [](std::string a, const auto & b) { return std::move(a) + '-' + b.toString(); });
 }
 
+Constants Constants::translate(const std::unordered_map<String, String> & identities) const
+{
+    std::map<String, FieldWithType> translate_value;
+    for (const auto & item : values)
+        if (identities.contains(item.first))
+            translate_value[identities.at(item.first)] = item.second;
+        else
+            translate_value[item.first] = item.second;
+    return Constants{translate_value};
+}
+
+Constants Constants::normalize(const SymbolEquivalences & symbol_equivalences) const
+{
+    auto mapping = symbol_equivalences.representMap();
+    for (const auto & item : values)
+    {
+        if (!mapping.contains(item.first))
+        {
+            mapping[item.first] = item.first;
+        }
+    }
+    return translate(mapping);
+}
 
 size_t CTEDescriptions::hash() const
 {
@@ -229,7 +257,7 @@ String CTEDescriptions::toString() const
 
 Property Property::translate(const std::unordered_map<String, String> & identities) const
 {
-    Property result{node_partitioning.translate(identities), stream_partitioning.translate(identities), sorting.translate(identities)};
+    Property result{node_partitioning.translate(identities), stream_partitioning.translate(identities), sorting.translate(identities), constants.translate(identities)};
     result.setPreferred(preferred);
     result.setCTEDescriptions(cte_descriptions.translate(identities));
     return result;
@@ -237,7 +265,7 @@ Property Property::translate(const std::unordered_map<String, String> & identiti
 
 Property Property::normalize(const SymbolEquivalences & symbol_equivalences) const
 {
-    Property result{node_partitioning.normalize(symbol_equivalences), stream_partitioning.normalize(symbol_equivalences), sorting};
+    Property result{node_partitioning.normalize(symbol_equivalences), stream_partitioning.normalize(symbol_equivalences), sorting, constants.normalize(symbol_equivalences)};
     result.setPreferred(preferred);
     result.setCTEDescriptions(cte_descriptions);
     return result;
@@ -249,6 +277,7 @@ size_t Property::hash() const
     hash = MurmurHash3Impl64::combineHashes(hash, node_partitioning.hash());
     hash = MurmurHash3Impl64::combineHashes(hash, stream_partitioning.hash());
     hash = MurmurHash3Impl64::combineHashes(hash, sorting.hash());
+//    hash = MurmurHash3Impl64::combineHashes(hash, constants.hash());
     hash = MurmurHash3Impl64::combineHashes(hash, cte_descriptions.hash());
     return hash;
 }

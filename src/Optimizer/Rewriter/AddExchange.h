@@ -53,7 +53,7 @@ class ExchangeContext
 {
 public:
     ExchangeContext(ContextMutablePtr context_, Property & required_) : context(context_), required(required_) { }
-    ContextMutablePtr getContext() { return context; }
+    ContextMutablePtr & getContext() { return context; }
     Property & getRequired() { return required; }
 
 private:
@@ -93,7 +93,6 @@ public:
     ExchangeResult visitAssignUniqueIdNode(AssignUniqueIdNode & node, ExchangeContext & cxt) override;
     ExchangeResult visitCTERefNode(CTERefNode & node, ExchangeContext &) override;
 
-
 private:
     /**
      * Execute the AddExchange rewrite rule for child node.
@@ -111,7 +110,7 @@ private:
      * @param result child with it's output property.
      * @return node with it's output property.
      */
-    static ExchangeResult rebaseAndDeriveProperties(const PlanNodePtr & node, ExchangeResult & result, Context & cxt);
+    static ExchangeResult rebaseAndDeriveProperties(const PlanNodePtr & node, ExchangeResult & result, ContextMutablePtr & cxt);
 
     /**
      * Replace children first, then derive the output property.
@@ -120,7 +119,7 @@ private:
      * @param results children with it's output property.
      * @return node with it's output property.
      */
-    static ExchangeResult rebaseAndDeriveProperties(const PlanNodePtr & node, std::vector<ExchangeResult> & results, Context & cxt);
+    static ExchangeResult rebaseAndDeriveProperties(const PlanNodePtr & node, std::vector<ExchangeResult> & results, ContextMutablePtr & cxt);
 
     /**
      * Derive the actual property of node.
@@ -129,7 +128,7 @@ private:
      * @param inputProperty the actual property of child node.
      * @return node with it's actual property.
      */
-    static ExchangeResult deriveProperties(const PlanNodePtr & node, Property & inputProperty, Context & cxt);
+    static ExchangeResult deriveProperties(const PlanNodePtr & node, Property & inputProperty, ContextMutablePtr & cxt);
 
     /**
      * Derive the actual property of node.
@@ -138,7 +137,7 @@ private:
      * @param inputProperties the actual property of child node.
      * @return node with it's actual property.
      */
-    static ExchangeResult deriveProperties(const PlanNodePtr & node, PropertySet & inputProperties, Context & cxt);
+    static ExchangeResult deriveProperties(const PlanNodePtr & node, PropertySet & inputProperties, ContextMutablePtr & cxt);
 
     ExchangeResult enforceNodeAndStream(PlanNodeBase & node, ExchangeContext & cxt);
     ExchangeResult enforceNode(PlanNodeBase & node, ExchangeContext & cxt);
