@@ -49,6 +49,7 @@
 #include <Parsers/ASTSubquery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <Parsers/queryToString.h>
 
 #include <Functions/FunctionFactory.h>
 #include <Storages/IStorage.h>

@@ -96,6 +96,7 @@
 #include <Transaction/CnchWorkerTransaction.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 
+#include <Interpreters/InterpreterPerfectShard.h>
 
 #include <Processors/Formats/IOutputFormat.h>
 #include <Processors/Sources/SinkToOutputStream.h>
@@ -750,7 +751,26 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
         {
             OpenTelemetrySpanHolder span("IInterpreter::execute()");
-            res = interpreter->execute();
+            try
+            {
+                res = interpreter->execute();
+            }
+            catch (...)
+            {
+                if (!context->getSettingsRef().enable_optimizer
+                    && context->getSettingsRef().distributed_perfect_shard
+                    && context->getSettingsRef().fallback_perfect_shard)
+                {
+                    LOG_INFO(&Poco::Logger::get("executeQuery"), "Query failed in perfect-shard enabled, try to fallback to normal mode.");
+                    InterpreterPerfectShard::turnOffPerfectShard(context, ast);
+                    auto retry_interpreter = InterpreterFactory::get(ast, context, stage);
+                    res = retry_interpreter->execute();
+                }
+                else
+                {
+                    throw;
+                }
+            }
         }
 
         QueryPipeline & pipeline = res.pipeline;
