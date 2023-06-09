@@ -2578,6 +2578,10 @@ protected:
     }
 
     bool useDefaultImplementationForNulls() const override { return false; }
+    bool useDefaultImplementationForNothing() const override
+    {
+        return false;
+    }
     bool useDefaultImplementationForConstants() const override { return true; }
     bool useDefaultImplementationForLowCardinalityColumns() const override { return false; }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1}; }
@@ -3668,6 +3672,10 @@ protected:
     }
 
     bool useDefaultImplementationForNulls() const override { return false; }
+    bool useDefaultImplementationForNothing() const override
+    {
+        return false;
+    }
     bool useDefaultImplementationForLowCardinalityColumns() const override { return false; }
 
 private:
