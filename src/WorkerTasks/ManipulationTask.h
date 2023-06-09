@@ -29,7 +29,7 @@
 namespace DB
 {
 
-class ManipulationTask : public WithContext, private boost::noncopyable
+class ManipulationTask: private boost::noncopyable
 {
 public:
     ManipulationTask(ManipulationTaskParams params, ContextPtr context_);
@@ -48,15 +48,23 @@ public:
 
     auto & getParams() { return params; }
 
+    StoragePtr getStorage() const { return params.storage; }
+
+    auto getTaskID() const { return params.task_id; }
+
+    ContextPtr getContext() const { return context; }
+
 protected:
     ManipulationTaskParams params;
 
     std::unique_ptr<ManipulationListEntry> manipulation_entry;
+
+    /// ManipulationTask should hold context by itself, because of ManipulationTask is executed in BackgroundPool
+    ContextPtr context;
 };
 
 using ManipulationTaskPtr = std::shared_ptr<ManipulationTask>;
 
-/// Async
-void executeManipulationTask(ManipulationTaskParams params, ContextPtr context);
+void executeManipulationTask(ManipulationTaskPtr task, MergeTreeMutableDataPartsVector all_parts);
 
 }

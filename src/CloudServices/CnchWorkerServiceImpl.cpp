@@ -115,15 +115,29 @@ void CnchWorkerServiceImpl::submitManipulationTask(
 
         auto remote_address = addBracketsIfIpv6(rpc_context->getClientInfo().current_address.host().toString()) + ':' + toString(params.rpc_port);
         auto all_parts = createPartVectorFromModelsForSend<IMutableMergeTreeDataPartPtr>(*data, request->source_parts());
+        params.assignParts(all_parts);
 
         LOG_DEBUG(log, "Received manipulation from {} :{}", remote_address, params.toDebugString());
 
-        ThreadFromGlobalPool([p = std::move(params), c = std::move(rpc_context), all_parts = std::move(all_parts), data]() mutable {
-            /// CurrentThread::attachQueryContext(c);
-            data->loadDataParts(all_parts, 0);
-            p.assignParts(std::move(all_parts));
-            executeManipulationTask(p, c);
+        auto task = data->manipulate(params, rpc_context);
+        auto event = std::make_shared<Poco::Event>();
+
+        ThreadFromGlobalPool([task = std::move(task), all_parts = std::move(all_parts), event]() mutable {
+            try
+            {
+                task->setManipulationEntry();
+                event->set();
+                executeManipulationTask(std::move(task), std::move(all_parts));
+            }
+            catch (...)
+            {
+                event->set();
+                tryLogCurrentException(__PRETTY_FUNCTION__);
+            }
         }).detach();
+
+        /// Waiting for manipulation task to be added to the ManipulationList
+        event->wait(3 * 1000);
     }
     catch (...)
     {
