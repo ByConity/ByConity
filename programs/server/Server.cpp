@@ -1403,8 +1403,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     http_params->setTimeout(settings.http_receive_timeout);
     http_params->setKeepAliveTimeout(keep_alive_timeout);
 
-    std::vector<std::unique_ptr<brpc::Server>> rpc_servers;
     std::vector<std::unique_ptr<::google::protobuf::Service>> rpc_services;
+    std::vector<std::unique_ptr<brpc::Server>> rpc_servers;
     auto servers = std::make_shared<std::vector<ProtocolServerAdapter>>();
 
     std::vector<std::string> listen_hosts = DB::getMultipleValuesFromConfig(config(), "", "listen_host");
@@ -1868,6 +1868,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
             else
                 LOG_INFO(log, "Closed connections.");
 
+            for (auto & rpc_server : rpc_servers)
+                rpc_server->Join();
             /// Wait server pool to avoid use-after-free of destroyed context in the handlers
             server_pool.joinAll();
 
