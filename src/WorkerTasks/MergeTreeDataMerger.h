@@ -23,7 +23,7 @@
 #include <Storages/StorageInMemoryMetadata.h>
 #include <WorkerTasks/ManipulationList.h>
 #include <WorkerTasks/ManipulationProgress.h>
-
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <common/logger_useful.h>
 
 namespace Poco
@@ -46,7 +46,6 @@ class MergeTreeMetaBase;
 class MergeTreeDataMerger
 {
 public:
-    using MutableDataPartPtr = std::shared_ptr<IMergeTreeDataPart>;
     using CheckCancelCallback = std::function<bool()>;
 
     MergeTreeDataMerger(
@@ -57,9 +56,9 @@ public:
         CheckCancelCallback check_cancel_,
         bool build_rowid_mappings = false);
 
-    ~MergeTreeDataMerger();
+    ~MergeTreeDataMerger() = default;
 
-    MutableDataPartPtr mergePartsToTemporaryPart();
+    MergeTreeMutableDataPartPtr mergePartsToTemporaryPart();
 
     /// The i-th input row is mapped to the RowidMapping[i]-th output row in the merged part
     /// TODO: the elements are sorted integers, could apply encoding to reduce memory footprint
@@ -71,86 +70,46 @@ public:
     const RowidMapping & getRowidMapping(size_t part_index) const { return rowid_mappings[part_index]; }
 
 private:
-    void prepareColumnNamesAndTypes();
-    void prepareNewParts();
+    MergeTreeMutableDataPartPtr mergePartsToTemporaryPartImpl(
+        const MergeTreeDataPartsVector & source_data_parts,
+        const StorageMetadataPtr & metadata_snapshot,
+        const MergeTreeMetaBase::MergingParams & merging_params,
+        ManipulationListElement * manipulation_entry,
+        const IMergeTreeDataPart * parent_part);
 
-    void chooseMergeAlgorithm();
-    void prepareVerticalMerge();
-    void resetMergingColumns();
+    void prepareColumnNamesAndTypes(
+        const StorageMetadataPtr & metadata_snapshot,
+        const MergeTreeMetaBase::MergingParams & merging_params,
+        Names & all_column_names,
+        Names & gathering_column_names,
+        Names & merging_column_names,
+        NamesAndTypesList & storage_columns,
+        NamesAndTypesList & gathering_columns,
+        NamesAndTypesList & merging_columns);
+    
+    MergeTreeMutableDataPartPtr prepareNewParts(
+        const MergeTreeDataPartsVector & source_data_parts,
+        const IMergeTreeDataPart * parent_part,
+        const NamesAndTypesList & storage_columns);
 
-    void chooseCompressionCodec();
-
-    void prepareForProgress();
-
-    void createSources();
-    void createMergedStream();
-
-    void copyMergedData();
-
-    void gatherColumn(const String & column_name,  MergeStageProgress & column_progress);
-    void gatherColumns();
-
-    void finalizePart();
-
+    MergeAlgorithm chooseMergeAlgorithm(
+        const MergeTreeDataPartsVector & source_data_parts,
+        const NamesAndTypesList & gathering_columns, 
+        const MergeTreeMetaBase::MergingParams & merging_params,
+        size_t sum_input_rows_upper_bound);
+    
 private:
     MergeTreeMetaBase & data;
     MergeTreeSettingsPtr data_settings;
-    StorageMetadataPtr metadata_snapshot;
-
     const ManipulationTaskParams & params;
     ContextPtr context;
-    ManipulationListElement * manipulation_entry;
+    ManipulationListElement * task_manipulation_entry;
     CheckCancelCallback check_cancel;
     bool build_rowid_mappings;
-    std::vector<RowidMapping> rowid_mappings; /// rowid mapping for each input part
+    /// rowid mapping for each input part, only for normal parts
+    std::vector<RowidMapping> rowid_mappings;
     Poco::Logger * log = nullptr;
-
-    /// Some parameters
-    size_t sum_input_rows_upper_bound = 0;
-    MergeAlgorithm merge_alg = MergeAlgorithm::Horizontal;
-    CompressionCodecPtr compression_codec;
-
-    /// All about new parts
     ReservationPtr space_reservation;
-    MutableDataPartPtr new_data_part;
-
-    /// Define prefetcher before streams
-    /// std::unique_ptr<CnchMergePrefetcher> prefetcher;
-
-    /// All about source parts
-    Names all_column_names;
-    Names gathering_column_names;
-    Names merging_column_names;
-
-    NamesAndTypesList storage_columns;
-    NamesAndTypesList gathering_columns;
-    NamesAndTypesList merging_columns;
-
-    /// Streams
-    Pipes pipes;
-    BlockInputStreamPtr merged_stream;
-    std::unique_ptr<MergedBlockOutputStream> to;
-
-    /// For vertical merge
-    DiskPtr tmp_disk;
-    std::unique_ptr<Poco::TemporaryFile> rows_sources_file;
-    std::unique_ptr<WriteBuffer> rows_sources_uncompressed_write_buf;
-    std::unique_ptr<WriteBuffer> rows_sources_write_buf;
-    std::unique_ptr<CompressedReadBufferFromFile> rows_sources_read_buf;
-    std::unique_ptr<std::set<std::string>> written_offset_columns;
-    std::unique_ptr<MergeTreeWriterSettings> writer_settings;
-    MergeTreeDataPartChecksums additional_column_checksums;
-
-    /// For progress
-    ColumnSizeEstimator::ColumnToSize merged_column_to_size;
-    std::optional<ColumnSizeEstimator> column_sizes;
-    std::optional<MergeStageProgress> horizontal_stage_progress;
-
-    /// statistics
-    UInt64 watch_prev_elapsed = 0;
-    size_t rows_written = 0;
-    size_t normal_columns_gathered = 0;
-
     /// Used for building rowid mappings
     size_t output_rowid = 0;
 };

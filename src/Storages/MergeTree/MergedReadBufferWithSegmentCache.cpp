@@ -268,8 +268,8 @@ void MergedReadBufferWithSegmentCache::seekToPosition(size_t segment_idx,
     // No segment cache, trying to use source reader
     initSourceBufferIfNeeded();
 
-    LOG_TRACE(logger, fmt::format("Seek to {}, offset {}:{}, base offset {}, limit {}",
-        segment_idx, mark_pos.offset_in_compressed_file, mark_pos.offset_in_decompressed_block,
+    LOG_TRACE(logger, fmt::format("Seek to {} in part {}, offset {}:{}, base offset {}, limit {}",
+        segment_idx, part_name, mark_pos.offset_in_compressed_file, mark_pos.offset_in_decompressed_block,
         source_data_offset, source_data_size));
 
     // seek to mark

@@ -118,7 +118,16 @@ std::vector<RulePtr> Rules::distinctToAggregateRules()
 
 std::vector<RulePtr> Rules::pushIntoTableScanRules()
 {
-    return {std::make_shared<PushLimitIntoTableScan>(), std::make_shared<PushFilterIntoTableScan>()};
+    return {
+        std::make_shared<PushLimitIntoTableScan>(),
+
+        // enable when optimizer_projection_support = 0
+        std::make_shared<PushQueryInfoFilterIntoTableScan>(),
+
+        // enable when optimizer_projection_support = 1
+        std::make_shared<PushAggregationIntoTableScan>(),
+        std::make_shared<PushProjectionIntoTableScan>(),
+        std::make_shared<PushFilterIntoTableScan>()};
 }
 
 std::vector<RulePtr> Rules::swapAdjacentRules()

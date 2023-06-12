@@ -891,7 +891,7 @@ void cleanDotFiles(const ContextMutablePtr & context)
 }
 
 
-String StepPrinter::printProjectionStep(const ProjectionStep & step)
+String StepPrinter::printProjectionStep(const ProjectionStep & step, bool include_output)
 {
     std::stringstream details;
     bool has_new_symbol = false;
@@ -932,7 +932,7 @@ String StepPrinter::printProjectionStep(const ProjectionStep & step)
         details << project.first << ": " << sql << type << "\\n";
     }
 
-    if (has_new_symbol)
+    if (has_new_symbol && include_output)
     {
         details << "|";
         details << "Output \\n";
@@ -975,17 +975,22 @@ String StepPrinter::printProjectionStep(const ProjectionStep & step)
     }
     return details.str();
 }
-String StepPrinter::printFilterStep(const FilterStep & step)
+String StepPrinter::printFilterStep(const FilterStep & step, bool include_output)
 {
     std::stringstream details;
     details << printFilter(step.getFilter());
-    details << "|";
-    details << "Output \\n";
-    for (const auto & column : step.getOutputStream().header)
+
+    if (include_output)
     {
-        details << column.name << ":";
-        details << column.type->getName() << "\\n";
+        details << "|";
+        details << "Output \\n";
+        for (const auto & column : step.getOutputStream().header)
+        {
+            details << column.name << ":";
+            details << column.type->getName() << "\\n";
+        }
     }
+
     return details.str();
 }
 
@@ -1083,7 +1088,7 @@ String StepPrinter::printJoinStep(const JoinStep & step)
     return details.str();
 }
 
-String StepPrinter::printAggregatingStep(const AggregatingStep & step)
+String StepPrinter::printAggregatingStep(const AggregatingStep & step, bool include_output)
 {
     std::stringstream details;
     details << "GroupBy:\\n";
@@ -1154,13 +1159,17 @@ String StepPrinter::printAggregatingStep(const AggregatingStep & step)
         }
     }
 
-    details << "|";
-    details << "Output\\n";
-    for (const auto & column : step.getOutputStream().header)
+    if (include_output)
     {
-        details << column.name << ":";
-        details << column.type->getName() << "\\n";
+        details << "|";
+        details << "Output\\n";
+        for (const auto & column : step.getOutputStream().header)
+        {
+            details << column.name << ":";
+            details << column.type->getName() << "\\n";
+        }
     }
+
     if (step.isFinal())
         details << "|"
                 << "final";
@@ -1405,12 +1414,35 @@ String StepPrinter::printTableScanStep(const TableScanStep & step)
     //        details << assigment.second << ": " << assigment.first << "\\n";
     //    }
     //    details << "|";
+
+    if (auto * pushdown_filter = step.getPushdownFilterCast())
+    {
+        details << "Pushdown Filter |";
+        details << printFilterStep(*pushdown_filter, false);
+        details << "|";
+    }
+
+    if (auto * pushdown_projection = step.getPushdownProjectionCast())
+    {
+        details << "Pushdown Projection |";
+        details << printProjectionStep(*pushdown_projection, false);
+        details << "|";
+    }
+
+    if (auto * pushdown_aggregation = step.getPushdownAggregationCast())
+    {
+        details << "Pushdown Aggregation |";
+        details << printAggregatingStep(*pushdown_aggregation, false);
+        details << "|";
+    }
+
     details << "Output \\n";
     for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
         details << column.type->getName() << "\\n";
     }
+
     return details.str();
 }
 

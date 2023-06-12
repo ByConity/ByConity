@@ -21,9 +21,9 @@
 namespace DB
 {
 
-static inline String formatStorageName(const StoragePtr & storage, const String & column_name, char delim = '.')
+static inline String formatStorageName(const IStorage * storage, const String & column_name, char delim = '.')
 {
-    return storage->getStorageID().getFullTableName() + delim + std::to_string(reinterpret_cast<size_t>(storage.get()))
+    return storage->getStorageID().getFullTableName() + delim + std::to_string(reinterpret_cast<size_t>(storage))
         + delim + column_name;
 }
 

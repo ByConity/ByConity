@@ -28,6 +28,7 @@
 #include <Common/Exception.h>
 #include "DataTypes/DataTypeByteMap.h"
 #include "Storages/DiskCache/DiskCacheSegment.h"
+#include <Common/StringUtils/StringUtils.h>
 
 namespace ProfileEvents
 {
@@ -186,6 +187,7 @@ void MergeTreeDataPartCNCH::fromLocalPart(const IMergeTreeDataPart & local_part)
     covered_parts_size = local_part.covered_parts_size;
     covered_parts_rows = local_part.covered_parts_rows;
     delete_bitmap = local_part.delete_bitmap;
+    projection_parts = local_part.getProjectionParts();
 }
 
 String MergeTreeDataPartCNCH::getFileNameForColumn(const NameAndTypePair & column) const
@@ -211,7 +213,7 @@ void MergeTreeDataPartCNCH::loadIndexGranularity(size_t marks_count, [[maybe_unu
     if (index_granularity.isInitialized())
         return;
 
-    if (isPartial() && isEmpty())
+    if (!parent_part && isPartial() && isEmpty())
     {
         auto base_part = getBasePart();
         if (!base_part->index_granularity.isInitialized())
@@ -251,8 +253,12 @@ void MergeTreeDataPartCNCH::loadColumnsChecksumsIndexes([[maybe_unused]] bool re
     assertOnDisk();
     MemoryTracker::BlockerInThread temporarily_disable_memory_tracker(VariableContext::Global);
     getChecksums();
+    if (parent_part)
+        loadFromFileSystem();
     loadIndexGranularity();
     calculateEachColumnSizes(columns_sizes, total_columns_size);
+    if (!parent_part)
+        loadProjections(require_columns_checksums, check_consistency);
 
     /// FIXME:
     default_codec = CompressionCodecFactory::instance().getDefaultCodec();
@@ -260,8 +266,14 @@ void MergeTreeDataPartCNCH::loadColumnsChecksumsIndexes([[maybe_unused]] bool re
 
 void MergeTreeDataPartCNCH::loadFromFileSystem(bool load_hint_mutation)
 {
-    auto footer = loadPartDataFooter();
-    const auto & meta_info_pos = footer["metainfo.txt"];
+    MergeTreeDataPartChecksum meta_info_pos;
+    if (checksums_ptr)
+        meta_info_pos = checksums_ptr->files["metainfo.txt"];
+    else
+    {
+        auto footer = loadPartDataFooter();
+        meta_info_pos = footer["metainfo.txt"];
+    }
 
     String data_rel_path = fs::path(getFullRelativePath()) / DATA_FILE;
     DiskPtr disk = volume->getDisk();
@@ -291,6 +303,9 @@ UniqueKeyIndexPtr MergeTreeDataPartCNCH::getUniqueKeyIndex() const
 
 const ImmutableDeleteBitmapPtr & MergeTreeDataPartCNCH::getDeleteBitmap(bool is_unique_new_part) const
 {
+    if (parent_part)
+        throw Exception("Projection part has no bitmap", ErrorCodes::LOGICAL_ERROR);
+
     if (!storage.getInMemoryMetadataPtr()->hasUniqueKey() || deleted)
     {
         if (delete_bitmap != nullptr)
@@ -388,7 +403,17 @@ MergeTreeDataPartChecksums::FileChecksums MergeTreeDataPartCNCH::loadPartDataFoo
         throw Exception(ErrorCodes::NO_FILE_IN_DATA_PART, "No data file of part {} under path {}", name, data_file_path);
 
     auto data_file = openForReading(volume->getDisk(), data_file_path, MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE);
-    data_file->seek(data_file_size - MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE);
+
+    if (!parent_part)
+        data_file->seek(data_file_size - MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE);
+    else
+    {
+        // for projection part
+        auto [projection_offset, projection_size] = getFileOffsetAndSize(*parent_part, name + ".proj");
+        data_file->seek(projection_offset + projection_size - MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE);
+        LOG_DEBUG(storage.log, "Loaded data footer in hdfs for projection part {}, foot offset is {}",
+                  getUniquePartName(), projection_offset + projection_size - MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE);
+    }
 
     MergeTreeDataPartChecksums::FileChecksums file_checksums;
     auto add_file_checksum = [this, &buf = *data_file, &file_checksums] (const String & file_name) {
@@ -419,8 +444,8 @@ void MergeTreeDataPartCNCH::checkConsistency([[maybe_unused]] bool require_part_
 
 MergeTreeDataPartCNCH::IndexPtr MergeTreeDataPartCNCH::loadIndex()
 {
-    /// load index from base part if it's a partial part
-    if (isPartial())
+    // each projection always has the primary index in the current part
+    if (!parent_part && isPartial())
     {
         /// Partial parts may not have index; primary columns never get altered, so getting index from base parts
         auto base_part = getBasePart();
@@ -433,6 +458,9 @@ MergeTreeDataPartCNCH::IndexPtr MergeTreeDataPartCNCH::loadIndex()
         throw Exception("Index granularity is not loaded before index loading", ErrorCodes::LOGICAL_ERROR);
 
     auto metadata_snapshot = storage.getInMemoryMetadataPtr();
+    if (parent_part)
+        metadata_snapshot = metadata_snapshot->projections.get(name).metadata;
+
     const auto & primary_key = metadata_snapshot->getPrimaryKey();
     size_t key_size = primary_key.column_names.size();
 
@@ -485,7 +513,7 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_un
 {
     ChecksumsPtr checksums = std::make_shared<Checksums>();
     checksums->storage_type = StorageType::ByteHDFS;
-    if (deleted)
+    if ((!parent_part && deleted) || (parent_part && parent_part->deleted))
         return checksums;
 
     if (enableDiskCache())
@@ -500,6 +528,11 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_un
                 auto cache_buf = openForReading(cache_disk, segment_path, cache_disk->getFileSize(segment_path));
                 if (checksums->read(*cache_buf))
                     assertEOF(*cache_buf);
+                if (storage.getSettings()->enable_persistent_checksum || is_temp || isProjectionPart())
+                {
+                    std::lock_guard lock(checksums_mutex);
+                    checksums_ptr = checksums;
+                }
                 return checksums;
             }
             catch (...)
@@ -542,10 +575,12 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_un
     // and hint_mutation within part's checksums is untouched, so update it here
     for (auto & file : checksums->files)
     {
-        file.second.mutation = info.mutation;
+        file.second.mutation = parent_part ? parent_part->info.mutation : info.mutation;
     }
 
-    if (isPartial())
+    // For projections, we collect the projections' checkums into the head part
+    // If a projection/column is deleted, a partial part with the denoted deleted checksums for the projection/column will be generated
+    if (!parent_part && isPartial())
     {
         /// merge with previous checksums with current checksums
         const auto & prev_part = getPreviousPart();
@@ -559,6 +594,7 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_un
     }
 
     // remove deleted files in checksums
+    // this process should be done afther the above checksums collection process
     for (auto it = checksums->files.begin(); it != checksums->files.end();)
     {
         const auto & file = it->second;
@@ -581,9 +617,66 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_un
         auto disk_cache = DiskCacheFactory::instance().getDefault().first;
         disk_cache->cacheSegmentsToLocalDisk({std::move(segment)});
     }
+    if (parent_part)
+        LOG_DEBUG(storage.log, "Loaded checksums in hdfs for projection part {}", getUniquePartName());
+    return checksums;
+}
+
+IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadOwnedChecksums()
+{
+    ChecksumsPtr checksums = std::make_shared<Checksums>();
+    checksums->storage_type = StorageType::ByteHDFS;
+    if (parent_part)
+        throw Exception("Projection part cannot call this method. It's bug.", ErrorCodes::LOGICAL_ERROR);
+
+    if ((!parent_part && deleted))
+        return checksums;
+
+    String data_rel_path = fs::path(getFullRelativePath()) / DATA_FILE;
+    auto data_footer = loadPartDataFooter();
+    const auto & checksum_file = data_footer["checksums.txt"];
+
+    if (checksum_file.file_size == 0/* && isDeleted() */)
+        throw Exception(ErrorCodes::NO_FILE_IN_DATA_PART, "The size of checksums in part {} under path {} is zero", name, data_rel_path);
+    
+    auto data_file = openForReading(volume->getDisk(), data_rel_path, checksum_file.file_size);
+    LimitReadBuffer buf = readPartFile(*data_file, checksum_file.file_offset, checksum_file.file_size);
+
+    if (checksums->read(buf))
+    {
+        assertEOF(buf);
+    }
+
+    // remove deleted files in checksums
+    for (auto it = checksums->files.begin(); it != checksums->files.end();)
+    {
+        const auto & file = it->second;
+        if (file.is_deleted)
+            it = checksums->files.erase(it);
+        else
+            ++it;
+    }
 
     return checksums;
 }
+
+void MergeTreeDataPartCNCH::loadProjections([[maybe_unused]] bool require_columns_checksums, [[maybe_unused]] bool check_consistency)
+{
+    auto metadata_snapshot = storage.getInMemoryMetadataPtr();
+    auto checksums = loadOwnedChecksums();
+    for (const auto & projection : metadata_snapshot->projections)
+    {
+        if (auto it = checksums->files.find(projection.name + ".proj"); it != checksums->files.end())
+        {
+            auto part = storage.createPart(projection.name, MergeTreeDataPartType::CNCH, {"all", 0, 0, 0}, volume, projection.name + ".proj", this);
+            part->loadColumnsChecksumsIndexes(require_columns_checksums, check_consistency);
+            projection_parts.emplace(projection.name, std::move(part));
+            LOG_DEBUG(storage.log, "Loaded Projection Part {} for part {}", projection.name, name);
+        }
+        else
+            LOG_DEBUG(storage.log, "No find projection {} in current part {}", projection.name, name);
+    }
+ }
 
 UniqueKeyIndexPtr MergeTreeDataPartCNCH::loadUniqueKeyIndex()
 {
@@ -627,10 +720,8 @@ void MergeTreeDataPartCNCH::loadIndexGranularity()
     if (index_granularity.isInitialized())
         return;
 
-
     auto checksums = getChecksums();
     index_granularity_info.changeGranularityIfRequired(*checksums);
-
 
     String full_path = getFullRelativePath();
     if (columns_ptr->empty())
@@ -699,10 +790,24 @@ void MergeTreeDataPartCNCH::loadMetaInfoFromBuffer(ReadBuffer & buf, bool load_h
     }
 
     columns_ptr->readText(buf);
-    deserializePartitionAndMinMaxIndex(buf);
-    readIntBinary(bucket_number, buf);
-    readIntBinary(table_definition_hash, buf);
+    if (parent_part)
+    {
+        setColumnsPtr(columns_ptr);
+        loadTTLInfos(buf);
+        // shall we sync commit time for projection parts
+        updateCommitTimeForProjection();
+    }
 
+    if (!parent_part)
+        deserializePartitionAndMinMaxIndex(buf);
+    else
+        minmax_idx.initialized = true;
+
+    if (!parent_part)
+    {
+        readIntBinary(bucket_number, buf);
+        readIntBinary(table_definition_hash, buf);
+    }
     loadIndexGranularity(marks_count, {});
 }
 
@@ -765,6 +870,33 @@ ColumnSize MergeTreeDataPartCNCH::getColumnSizeImpl(const NameAndTypePair & colu
     }, {});
 
     return size;
+}
+
+String MergeTreeDataPartCNCH::getFullRelativePath() const
+{
+    if (relative_path.empty())
+        throw Exception("Part relative_path cannot be empty. It's bug.", ErrorCodes::LOGICAL_ERROR);
+    return fs::path(storage.getRelativeDataPath(location)) / (parent_part ? parent_part->relative_path : relative_path) / "";
+}
+
+String MergeTreeDataPartCNCH::getFullPath() const
+{
+    if (relative_path.empty())
+        throw Exception("Part relative_path cannot be empty. It's bug.", ErrorCodes::LOGICAL_ERROR);
+
+    return fs::path(storage.getFullPathOnDisk(location, volume->getDisk())) / (parent_part ? parent_part->relative_path : relative_path) / "";
+}
+
+void MergeTreeDataPartCNCH::updateCommitTimeForProjection()
+{
+    if (parent_part)
+    {
+        columns_commit_time = parent_part->columns_commit_time;
+        mutation_commit_time = parent_part->mutation_commit_time;
+        commit_time = parent_part->commit_time;
+    }
+    else
+        throw Exception("Parent part cannot be empty. It's bug.", ErrorCodes::LOGICAL_ERROR);
 }
 
 void MergeTreeDataPartCNCH::removeImpl(bool keep_shared_data) const

@@ -152,6 +152,7 @@ public:
     const Names & getKeys() const { return keys; }
     const GroupingSetsParamsList & getGroupingSetsParams() const { return grouping_sets_params; }
     bool isFinal() const { return final; }
+    bool isPartial() const { return !final; }
     bool isGroupingSet() const { return !grouping_sets_params.empty(); }
     const GroupingDescriptions & getGroupings() const { return groupings; }
     bool shouldProduceResultsInOrderOfBucketNumber() const { return should_produce_results_in_order_of_bucket_number; }

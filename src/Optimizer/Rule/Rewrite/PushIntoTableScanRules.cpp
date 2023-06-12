@@ -26,27 +26,58 @@
 namespace DB
 {
 
-PatternPtr PushFilterIntoTableScan::getPattern() const
+namespace
 {
-    return Patterns::filter()->withSingle(
-        Patterns::tableScan()->matchingStep<TableScanStep>([](const auto & step) { return !step.hasFilter(); }));
+    bool isOptimizerProjectionSupportEnabled(RuleContext & rule_context)
+    {
+        return rule_context.context->getSettingsRef().optimizer_projection_support;
+    }
 }
 
-TransformResult PushFilterIntoTableScan::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
+PatternPtr PushQueryInfoFilterIntoTableScan::getPattern() const
 {
+    return Patterns::filter()->withSingle(
+        Patterns::tableScan()->matchingStep<TableScanStep>([](const auto & step) { return !step.hasQueryInfoFilter(); }));
+}
+
+TransformResult PushQueryInfoFilterIntoTableScan::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
+{
+    if (isOptimizerProjectionSupportEnabled(rule_context))
+        return {};
+
     auto table_scan = node->getChildren()[0];
 
     const auto * filter_step = dynamic_cast<const FilterStep *>(node->getStep().get());
     auto filter_conjuncts = PredicateUtils::extractConjuncts(filter_step->getFilter());
+    auto copy_table_step = table_scan->getStep()->copy(rule_context.context);
 
-    auto pushdown_filters = extractPushDownFilter(filter_conjuncts, rule_context.context);
+    if (!pushQueryInfoFilter(dynamic_cast<TableScanStep &>(*copy_table_step), filter_conjuncts, rule_context.context))
+        return {}; // repeat calls
+
+    table_scan->setStep(copy_table_step);
+
+    auto remaining_filters = removeStorageFilter(filter_conjuncts);
+    if (remaining_filters.size() == filter_conjuncts.size())
+        return {};
+
+    ConstASTPtr new_predicate = PredicateUtils::combineConjuncts(remaining_filters);
+    if (PredicateUtils::isTruePredicate(new_predicate))
+        return table_scan;
+
+    auto new_filter_step
+        = std::make_shared<FilterStep>(table_scan->getStep()->getOutputStream(), new_predicate, filter_step->removesFilterColumn());
+    return PlanNodeBase::createPlanNode(
+        rule_context.context->nextNodeId(), std::move(new_filter_step), PlanNodes{table_scan}, node->getStatistics());
+}
+
+bool PushQueryInfoFilterIntoTableScan::pushQueryInfoFilter(TableScanStep & table_step, const std::vector<ConstASTPtr> & filter_conjuncts,
+                                                           ContextPtr context)
+{
+    auto pushdown_filters = extractPushDownFilter(filter_conjuncts, context);
     if (!pushdown_filters.empty())
     {
-        auto copy_table_step = table_scan->getStep()->copy(rule_context.context);
-        auto * table_step = dynamic_cast<TableScanStep *>(copy_table_step.get());
-
         std::unordered_map<String, String> inv_alias;
-        for (const auto & item : table_step->getColumnAlias())
+        for (auto & item : table_step.getColumnAlias())
             inv_alias.emplace(item.second, item.first);
 
         auto mapper = SymbolMapper::simpleMapper(inv_alias);
@@ -63,27 +94,15 @@ TransformResult PushFilterIntoTableScan::transformImpl(PlanNodePtr node, const C
                 conjuncts.emplace_back(mapper.map(filter));
         }
 
-        bool applied = table_step->setFilter(conjuncts);
+        bool applied = table_step.setQueryInfoFilter(conjuncts);
         if (!applied)
-            return {}; // repeat calls
-        table_scan->setStep(copy_table_step);
+            return false;
     }
 
-    auto remaining_filters = removeStorageFilter(filter_conjuncts);
-    if (remaining_filters.size() == filter_conjuncts.size())
-        return {};
-
-    ConstASTPtr new_predicate = PredicateUtils::combineConjuncts(remaining_filters);
-    if (PredicateUtils::isTruePredicate(new_predicate))
-        return table_scan;
-
-    auto new_filter_step
-        = std::make_shared<FilterStep>(table_scan->getStep()->getOutputStream(), new_predicate, filter_step->removesFilterColumn());
-    return PlanNodeBase::createPlanNode(
-        rule_context.context->nextNodeId(), std::move(new_filter_step), PlanNodes{table_scan}, node->getStatistics());
+    return true;
 }
 
-std::vector<ConstASTPtr> PushFilterIntoTableScan::extractPushDownFilter(const std::vector<ConstASTPtr> & conjuncts, ContextMutablePtr & context)
+std::vector<ConstASTPtr> PushQueryInfoFilterIntoTableScan::extractPushDownFilter(const std::vector<ConstASTPtr> & conjuncts, ContextPtr context)
 {
     std::vector<ConstASTPtr> filters;
     for (auto & conjunct : conjuncts)
@@ -103,7 +122,7 @@ std::vector<ConstASTPtr> PushFilterIntoTableScan::extractPushDownFilter(const st
     return filters;
 }
 
-std::vector<ConstASTPtr> PushFilterIntoTableScan::removeStorageFilter(const std::vector<ConstASTPtr> & conjuncts)
+std::vector<ConstASTPtr> PushQueryInfoFilterIntoTableScan::removeStorageFilter(const std::vector<ConstASTPtr> & conjuncts)
 {
     std::vector<ConstASTPtr> remove_array_set_check;
     for (const auto & conjunct : conjuncts)
@@ -127,7 +146,8 @@ PatternPtr PushLimitIntoTableScan::getPattern() const
 {
     return Patterns::limit()
         ->matchingStep<LimitStep>([](auto const & limit_step) { return !limit_step.isAlwaysReadTillEnd(); })
-        ->withSingle(Patterns::tableScan()->matchingStep<TableScanStep>([](const auto & step) { return !step.hasFilter(); }));
+        ->withSingle(Patterns::tableScan()->matchingStep<TableScanStep>(
+            [](const auto & step) { return !step.getPushdownAggregation() && !step.getPushdownFilter() && !step.hasQueryInfoFilter(); }));
 }
 
 TransformResult PushLimitIntoTableScan::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -145,6 +165,88 @@ TransformResult PushLimitIntoTableScan::transformImpl(PlanNodePtr node, const Ca
     table_scan->setStep(copy_table_step);
     node->replaceChildren({table_scan});
     return node;
+}
+
+
+PatternPtr PushAggregationIntoTableScan::getPattern() const
+{
+    return Patterns::aggregating()
+               ->matchingStep<AggregatingStep>([](auto & step) { return step.isPartial() && !step.isGroupingSet(); })
+               ->withSingle(Patterns::tableScan());
+}
+
+TransformResult PushAggregationIntoTableScan::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
+{
+    if (!isOptimizerProjectionSupportEnabled(rule_context))
+        return {};
+
+    auto copy_step = node->getChildren()[0]->getStep()->copy(rule_context.context);
+    auto *copy_table_step = dynamic_cast<TableScanStep *>(copy_step.get());
+
+    // TODO: combine aggregates if grouping keys are the same
+    if (copy_table_step->getPushdownAggregation())
+        return {};
+
+    copy_table_step->setPushdownAggregation(node->getStep()->copy(rule_context.context));
+    copy_table_step->formatOutputStream();
+    return PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(copy_step), {}, node->getStatistics());
+}
+
+PatternPtr PushProjectionIntoTableScan::getPattern() const
+{
+    return Patterns::project()->withSingle(
+               Patterns::tableScan()->matchingStep<TableScanStep>(
+                   [](const auto & step) { return !step.getPushdownAggregation(); }));
+}
+
+TransformResult PushProjectionIntoTableScan::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
+{
+    if (!isOptimizerProjectionSupportEnabled(rule_context))
+        return {};
+
+    auto copy_step = node->getChildren()[0]->getStep()->copy(rule_context.context);
+    auto *copy_table_step = dynamic_cast<TableScanStep *>(copy_step.get());
+
+    // TODO: inline projection
+    if (copy_table_step->getPushdownProjection())
+        return {};
+
+    copy_table_step->setPushdownProjection(node->getStep()->copy(rule_context.context));
+    copy_table_step->formatOutputStream();
+    return PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(copy_step), {}, node->getStatistics());
+}
+
+PatternPtr PushFilterIntoTableScan::getPattern() const
+{
+    return Patterns::filter()->withSingle(
+               Patterns::tableScan()->matchingStep<TableScanStep>(
+                   [](const auto & step) { return !step.getPushdownProjection() && !step.getPushdownAggregation(); }));
+}
+
+TransformResult PushFilterIntoTableScan::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
+{
+    if (!isOptimizerProjectionSupportEnabled(rule_context))
+        return {};
+
+    auto copy_step = node->getChildren()[0]->getStep()->copy(rule_context.context);
+    auto *copy_table_step = dynamic_cast<TableScanStep *>(copy_step.get());
+
+    // in case of TableScan has already a pushdown filter, combine them into one
+    if (const auto * pushdown_filter_step = copy_table_step->getPushdownFilterCast())
+    {
+        const auto & old_pushdown_filter = pushdown_filter_step->getFilter();
+        const auto & filter_step_filter = dynamic_cast<const FilterStep *>(node->getStep().get())->getFilter();
+
+        auto new_pushdown_filter = PredicateUtils::combineConjuncts({old_pushdown_filter, filter_step_filter});
+        copy_table_step->setPushdownFilter(std::make_shared<FilterStep>(pushdown_filter_step->getInputStreams()[0], new_pushdown_filter));
+    }
+    else
+    {
+        copy_table_step->setPushdownFilter(node->getStep()->copy(rule_context.context));
+    }
+
+    copy_table_step->formatOutputStream();
+    return PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(copy_step), {}, node->getStatistics());
 }
 
 }

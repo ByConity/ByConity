@@ -60,6 +60,9 @@ using ReadInOrderOptimizerPtr = std::shared_ptr<const ReadInOrderOptimizer>;
 class Cluster;
 using ClusterPtr = std::shared_ptr<Cluster>;
 
+struct MergeTreeDataSelectAnalysisResult;
+using MergeTreeDataSelectAnalysisResultPtr = std::shared_ptr<MergeTreeDataSelectAnalysisResult>;
+
 struct PrewhereInfo
 {
     /// Actions which are executed in order to alias columns are used for prewhere actions.
@@ -75,6 +78,7 @@ struct PrewhereInfo
     bool need_filter = false;
 
     PrewhereInfo() = default;
+    PrewhereInfo(const PrewhereInfo &) = default;
     explicit PrewhereInfo(ActionsDAGPtr prewhere_actions_, String prewhere_column_name_)
             : prewhere_actions(std::move(prewhere_actions_)), prewhere_column_name(std::move(prewhere_column_name_)) {}
 

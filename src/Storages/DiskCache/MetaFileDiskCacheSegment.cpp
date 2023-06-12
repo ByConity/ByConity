@@ -22,6 +22,8 @@
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeDataPartChecksum.h>
 
+#include <common/logger_useful.h>
+
 namespace DB
 {
 ChecksumsDiskCacheSegment::ChecksumsDiskCacheSegment(IMergeTreeDataPartPtr data_part_)
@@ -29,8 +31,10 @@ ChecksumsDiskCacheSegment::ChecksumsDiskCacheSegment(IMergeTreeDataPartPtr data_
     , data_part(std::move(data_part_))
     , storage(data_part->storage.shared_from_this())
     , segment_name(formatSegmentName(
-          UUIDHelpers::UUIDToString(data_part->storage.getStorageUUID()), data_part->name, "", segment_number, "checksums.txt"))
+          UUIDHelpers::UUIDToString(data_part->storage.getStorageUUID()), data_part->getUniquePartName(), "", segment_number, "checksums.txt"))
 {
+    if (data_part->isProjectionPart())
+        LOG_DEBUG(&Poco::Logger::get("ChecksumsDiskCacheSegment"), "Build ChecksumsDiskCache for projection {}", data_part->getUniquePartName());
 }
 
 String ChecksumsDiskCacheSegment::getSegmentName() const
@@ -59,8 +63,10 @@ PrimaryIndexDiskCacheSegment::PrimaryIndexDiskCacheSegment(IMergeTreeDataPartPtr
     , data_part(std::move(data_part_))
     , storage(data_part->storage.shared_from_this())
     , segment_name(formatSegmentName(
-          UUIDHelpers::UUIDToString(data_part->storage.getStorageUUID()), data_part->name, "", segment_number, "primary.idx"))
+          UUIDHelpers::UUIDToString(data_part->storage.getStorageUUID()), data_part->getUniquePartName(), "", segment_number, "primary.idx"))
 {
+    if (data_part->isProjectionPart())
+        LOG_DEBUG(&Poco::Logger::get("PrimaryIndexDiskCacheSegment"), "Build PrimaryIndexDiskCache for projection {}", data_part->getUniquePartName());
 }
 
 String PrimaryIndexDiskCacheSegment::getSegmentName() const
@@ -71,6 +77,10 @@ String PrimaryIndexDiskCacheSegment::getSegmentName() const
 void PrimaryIndexDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache)
 {
     auto metadata_snapshot = data_part->storage.getInMemoryMetadataPtr();
+    if (data_part->isProjectionPart())
+    {
+        metadata_snapshot = metadata_snapshot->projections.get(data_part->name).metadata;
+    }
     const auto & primary_key = metadata_snapshot->getPrimaryKey();
     size_t key_size = primary_key.column_names.size();
 

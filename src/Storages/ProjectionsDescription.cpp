@@ -89,6 +89,8 @@ ProjectionDescription ProjectionDescription::clone() const
     other.required_columns = required_columns;
     other.column_names = column_names;
     other.data_types = data_types;
+    for (const auto & column_ast: column_asts)
+        other.column_asts.push_back(column_ast->clone());
     other.sample_block = sample_block;
     other.sample_block_for_keys = sample_block_for_keys;
     other.metadata = metadata;
@@ -205,6 +207,35 @@ ProjectionDescription::getProjectionFromAST(const ASTPtr & definition_ast, const
     }
     metadata.primary_key.definition_ast = nullptr;
     result.metadata = std::make_shared<StorageInMemoryMetadata>(metadata);
+
+    std::unordered_map<String, ASTPtr> name_to_ast;
+
+    if (result.type == ProjectionDescription::Type::Aggregate)
+    {
+        const auto * select_analyzer = select.getQueryAnalyzer();
+
+        // keys
+        for (const auto & key_ast: select_analyzer->aggregationKeyAsts())
+            name_to_ast.emplace(key_ast->getColumnName(), key_ast);
+
+        // aggregates
+        for (const auto & agg_ast: select_analyzer->aggregateAsts())
+            name_to_ast.emplace(agg_ast->getColumnName(), agg_ast->clone());
+    }
+    else
+    {
+        for (const auto & select_elem: result.query_ast->as<ASTSelectQuery &>().select()->children)
+            name_to_ast.emplace(select_elem->getColumnName(), select_elem);
+    }
+
+    for (const auto & col_name: result.column_names)
+    {
+        if (!name_to_ast.count(col_name))
+            throw Exception("Unable to determine origin ast for projection column: " + col_name, ErrorCodes::LOGICAL_ERROR);
+
+        result.column_asts.push_back(name_to_ast.at(col_name));
+    }
+
     return result;
 }
 

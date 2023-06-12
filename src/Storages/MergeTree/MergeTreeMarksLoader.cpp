@@ -169,9 +169,9 @@ MarkCache::MappedPtr MergeTreeMarksLoader::loadMarksImpl()
 void MergeTreeMarksLoader::loadMarks()
 {
     String mrk_name = index_granularity_info.getMarksFilePath(stream_name);
-    if (mark_cache)
+    if (mark_cache && !part_name.empty())
     {
-        auto key = mark_cache->hash(mrk_path + mrk_name);
+        auto key = mark_cache->hash(mrk_path + part_name + mrk_name);
         if (save_marks_in_cache)
         {
             auto callback = [this]{ return loadMarksImpl(); };

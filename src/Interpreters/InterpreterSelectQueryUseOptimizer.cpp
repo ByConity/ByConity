@@ -33,23 +33,39 @@ QueryPlanPtr InterpreterSelectQueryUseOptimizer::buildQueryPlan()
     context->createSymbolAllocator();
     context->createOptimizerMetrics();
 
+    Stopwatch stage_watch;
+
+    stage_watch.start();
     query_ptr = QueryRewriter::rewrite(query_ptr, context);
-
+    LOG_DEBUG(log, "optimizer stage run time: rewrite, {} ms", stage_watch.elapsedMillisecondsAsDouble());
+ 
+    stage_watch.restart();
     AnalysisPtr analysis = QueryAnalyzer::analyze(query_ptr, context);
-
+    LOG_DEBUG(log, "optimizer stage run time: analyze, {} ms", stage_watch.elapsedMillisecondsAsDouble());
+ 
+    stage_watch.restart();
     QueryPlanPtr query_plan = QueryPlanner::plan(query_ptr, *analysis, context);
-
+    LOG_DEBUG(log, "optimizer stage run time: planning, {} ms", stage_watch.elapsedMillisecondsAsDouble());
+ 
+    stage_watch.restart();
     PlanOptimizer::optimize(*query_plan, context);
+    LOG_DEBUG(log, "optimizer stage run time: optimize, {} ms", stage_watch.elapsedMillisecondsAsDouble());
 
     return query_plan;
 }
 
 BlockIO InterpreterSelectQueryUseOptimizer::execute()
 {
+    Stopwatch stage_watch, total_watch;
+    total_watch.start();
     QueryPlanPtr query_plan = buildQueryPlan();
 
+    stage_watch.start();
     QueryPlan plan = PlanNodeToNodeVisitor::convert(*query_plan);
 
+    LOG_DEBUG(log, "optimizer stage run time: plan normalize, {} ms", stage_watch.elapsedMillisecondsAsDouble());
+ 
+    stage_watch.restart();
     PlanSegmentTreePtr plan_segment_tree = std::make_unique<PlanSegmentTree>();
 
     ClusterInfoContext cluster_info_context{.query_plan = plan, .context = context, .plan_segment_tree = plan_segment_tree};
@@ -57,9 +73,10 @@ BlockIO InterpreterSelectQueryUseOptimizer::execute()
 
     plan.allocateLocalTable(context);
     PlanSegmentSplitter::split(plan, plan_segment_context);
+    LOG_DEBUG(log, "optimizer stage run time: plan segment split, {} ms", stage_watch.elapsedMillisecondsAsDouble());
 
     GraphvizPrinter::printPlanSegment(plan_segment_tree, context);
-
+    LOG_DEBUG(log, "optimizer total run time: {} ms", total_watch.elapsedMillisecondsAsDouble());
     return executePlanSegmentTree(plan_segment_tree, context);
 }
 

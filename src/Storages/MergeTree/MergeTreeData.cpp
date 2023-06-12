@@ -3460,7 +3460,7 @@ static void selectBestProjection(
         query_info, // TODO syntax_analysis_result set in index
         query_context,
         settings.max_threads,
-        max_added_blocks);
+        max_added_blocks)->marks();
 
     if (normal_parts.empty())
     {
@@ -3478,7 +3478,7 @@ static void selectBestProjection(
             query_info, // TODO syntax_analysis_result set in index
             query_context,
             settings.max_threads,
-            max_added_blocks);
+            max_added_blocks)->marks();
     }
 
     // We choose the projection with least sum_marks to read.
@@ -3736,7 +3736,7 @@ bool MergeTreeData::getQueryProcessingStageWithAggregateProjection(
                 query_info, // TODO syntax_analysis_result set in index
                 query_context,
                 settings.max_threads,
-                max_added_blocks);
+                max_added_blocks)->marks();
 
             // Add 1 to base sum_marks so that we prefer projections even when they have equal number of marks to read.
             // NOTE: It is not clear if we need it. E.g. projections do not support skip index for now.

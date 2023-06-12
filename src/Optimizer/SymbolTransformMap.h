@@ -36,6 +36,14 @@ public:
 //    SymbolTransformMap & operator=(SymbolTransformMap &&) = default;
 
     ASTPtr inlineReferences(const ConstASTPtr & expression) const;
+    ASTPtr inlineReferences(const String & column) const
+    {
+        auto expr = std::make_shared<ASTIdentifier>(column);
+        return inlineReferences(expr);
+    }
+
+    SymbolTransformMap() = default;
+
 private:
     SymbolTransformMap(
         std::unordered_map<String, ConstASTPtr> symbol_to_expressions_,
@@ -52,5 +60,18 @@ private:
 
     class Visitor;
     class Rewriter;
+};
+
+
+class SymbolTranslationMap
+{
+public:
+    SymbolTranslationMap(const IStorage * storage_): storage(storage_) {}
+    void addTranslation(ASTPtr ast, String name);
+    std::optional<String> tryGetTranslation(const ASTPtr & expr) const;
+
+private:
+    const IStorage * storage;
+    ASTMap<String> translation;
 };
 }

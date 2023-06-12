@@ -1,0 +1,111 @@
+-- { echoOn }
+-- normal part return empty result
+SELECT key, sum(val)
+FROM test_proj_dist
+WHERE key >= 10
+GROUP BY key
+ORDER BY key;
+10	10000
+11	10000
+12	10000
+13	10000
+14	10000
+15	10000
+16	10000
+17	10000
+18	10000
+19	10000
+20	10000
+21	10000
+22	10000
+23	10000
+24	10000
+25	10000
+26	10000
+27	10000
+28	10000
+29	10000
+30	10000
+31	10000
+32	10000
+33	10000
+34	10000
+35	10000
+36	10000
+37	10000
+38	10000
+39	10000
+-- projection part return empty result
+SELECT key, sum(val)
+FROM test_proj_dist
+WHERE key < 30
+GROUP BY key
+ORDER BY key;
+0	10000
+1	10000
+2	10000
+3	10000
+4	10000
+5	10000
+6	10000
+7	10000
+8	10000
+9	10000
+10	10000
+11	10000
+12	10000
+13	10000
+14	10000
+15	10000
+16	10000
+17	10000
+18	10000
+19	10000
+20	10000
+21	10000
+22	10000
+23	10000
+24	10000
+25	10000
+26	10000
+27	10000
+28	10000
+29	10000
+-- all parts return empty result except a normal part
+SELECT key, sum(val)
+FROM test_proj_dist
+WHERE key < 10
+GROUP BY key
+ORDER BY key;
+0	10000
+1	10000
+2	10000
+3	10000
+4	10000
+5	10000
+6	10000
+7	10000
+8	10000
+9	10000
+-- all parts return empty result except a projection part
+SELECT key, sum(val)
+FROM test_proj_dist
+WHERE key >= 30
+GROUP BY key
+ORDER BY key;
+30	10000
+31	10000
+32	10000
+33	10000
+34	10000
+35	10000
+36	10000
+37	10000
+38	10000
+39	10000
+-- all parts return empty result
+SELECT key, sum(val)
+FROM test_proj_dist
+WHERE key < 0
+GROUP BY key
+ORDER BY key;

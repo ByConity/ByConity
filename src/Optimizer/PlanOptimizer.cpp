@@ -15,6 +15,7 @@
 
 #include <Optimizer/PlanOptimizer.h>
 
+#include <Common/Stopwatch.h>
 #include <Optimizer/Cascades/CascadesOptimizer.h>
 #include <Optimizer/Iterative/IterativeRewriter.h>
 #include <Optimizer/PlanCheck.h>
@@ -206,16 +207,19 @@ void PlanOptimizer::optimize(QueryPlan & plan, ContextMutablePtr context)
     // Check init plan to satisfy with :
     // 1 Symbol exist check
     PlanCheck::checkInitPlan(plan, context);
-    auto start = std::chrono::high_resolution_clock::now();
+    Stopwatch rule_watch, total_watch;
+    total_watch.start();
 
     auto rewrite = [&](const Rewriters & rewriters) {
         for (auto & rewriter : rewriters)
         {
-            auto rewriter_begin = std::chrono::high_resolution_clock::now();
+            rule_watch.restart();
             rewriter->rewrite(plan, context);
-            auto now = std::chrono::high_resolution_clock::now();
-            UInt64 elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - start).count();
-            UInt64 single_rewriter_duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - rewriter_begin).count();
+            UInt64 elapsed = total_watch.elapsedMilliseconds();
+            double single_rewriter_duration = rule_watch.elapsedMillisecondsAsDouble();
+
+            LOG_DEBUG(&Poco::Logger::get("PlanOptimizer"), "optimizer rule run time: {}, {} ms",
+                      rewriter->name(), single_rewriter_duration);
 
             if (single_rewriter_duration >= 1000)
                 LOG_WARNING(

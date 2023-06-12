@@ -22,6 +22,7 @@
 #include <string>
 #include <string_view>
 #include <Common/ErrorCodes.h>
+#include <Parsers/formatAST.h>
 namespace DB
 {
 namespace ErrorCodes
@@ -133,6 +134,21 @@ public:
     const auto& back() const
     {
         return ordered_storage.back();
+    }
+
+    String dump() const
+    {
+        if constexpr (std::is_same_v<Value, ConstASTPtr>)
+        {
+            std::stringstream os;
+            for (const auto & item: ordered_storage)
+                os << item.first << " := " << serializeAST(*item.second, true) << std::endl;
+            return os.str();
+        }
+        else
+        {
+            return "";
+        }
     }
 
     LinkedHashMap(const LinkedHashMap &) = default;

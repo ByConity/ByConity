@@ -1589,6 +1589,12 @@ void StorageCnchMergeTree::checkAlterInCnchServer(const AlterCommands & commands
         {
             throw Exception("ALTER ADD INDEX is not supported for tables with the old syntax", ErrorCodes::BAD_ARGUMENTS);
         }
+        if (command.type == AlterCommand::ADD_PROJECTION && old_metadata.hasUniqueKey())
+        {
+            throw Exception(
+                "ALTER ADD PROJECTION is not supported for tables with the unique index",
+                ErrorCodes::BAD_ARGUMENTS);
+        }
         if (command.type == AlterCommand::ADD_PROJECTION && !is_custom_partitioned)
         {
             throw Exception("ALTER ADD PROJECTION is not supported for tables with the old syntax", ErrorCodes::BAD_ARGUMENTS);

@@ -662,6 +662,10 @@ InterpreterCreateQuery::TableProperties InterpreterCreateQuery::setProperties(AS
         if (create.storage && endsWith(create.storage->engine->name, "MergeTree"))
             properties.indices = as_storage_metadata->getSecondaryIndices();
 
+        /// Create table as should set projections
+        if (as_storage_metadata->hasProjections())
+            properties.projections = as_storage_metadata->getProjections().clone();
+        
         properties.constraints = as_storage_metadata->getConstraints();
     }
     else if (create.select)
@@ -951,6 +955,8 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
 
     if (create.storage && create.storage->unique_key && create.storage->cluster_by)
         throw Exception("`CLUSTER BY` cannot be used together with `UNIQUE KEY`", ErrorCodes::BAD_ARGUMENTS);
+    if (create.storage && create.storage->unique_key && create.columns_list->projections)
+        throw Exception("`Projection` cannot be used together with `UNIQUE KEY`", ErrorCodes::BAD_ARGUMENTS);
 
     String current_database = getContext()->getCurrentDatabase();
     auto database_name = create.database.empty() ? current_database : create.database;

@@ -30,6 +30,7 @@
 #include <QueryPlan/SimplePlanRewriter.h>
 #include <QueryPlan/SimplePlanVisitor.h>
 #include <QueryPlan/TableScanStep.h>
+#include <Storages/IStorage.h>
 #include <common/logger_useful.h>
 
 #include <map>
@@ -117,7 +118,8 @@ public:
     ASTPtr visitASTTableColumnReference(ASTPtr & node, const TableInputRefMap & context) override
     {
         auto & table_column_ref = node->as<ASTTableColumnReference &>();
-        table_column_ref.storage = context.at(TableInputRef{table_column_ref.storage}).storage;
+        auto storage_ptr = (const_cast<IStorage *>(table_column_ref.storage))->shared_from_this();
+        table_column_ref.storage = context.at(TableInputRef{std::move(storage_ptr)}).storage.get();
         return node;
     }
 };
@@ -153,7 +155,7 @@ public:
 
     ASTPtr visitASTIdentifier(ASTPtr & node, const Void &) override
     {
-        return std::make_shared<ASTTableColumnReference>(storage, node->as<ASTIdentifier&>().name());
+        return std::make_shared<ASTTableColumnReference>(storage.get(), node->as<ASTIdentifier&>().name());
     }
 
     AddTableInputRefRewriter(StoragePtr storage_): storage(std::move(storage_)) {}
@@ -855,7 +857,7 @@ protected:
                         return {}; // bail out, if we can't clone a new table storage.
                     view_table_refs.emplace_back(TableInputRef{new_view_table_ref});
                     for (const auto & column : missing_columns)
-                        view_missing_columns.emplace(column, std::make_shared<ASTTableColumnReference>(new_view_table_ref, column));
+                        view_missing_columns.emplace(column, std::make_shared<ASTTableColumnReference>(new_view_table_ref.get(), column));
                 }
             }
 
@@ -1271,8 +1273,9 @@ private:
                 agg_argument_types.emplace_back(arguments_types.at(name));
             }
             Array parameters;
-            for (auto & argument : function.parameters->children)
-                parameters.emplace_back(argument->as<ASTLiteral &>().value);
+            if (function.parameters)
+                for (auto & argument : function.parameters->children)
+                    parameters.emplace_back(argument->as<ASTLiteral &>().value);
             auto output_column = context->getSymbolAllocator()->newSymbol(node);
             AggregateDescription aggregate_description;
             AggregateFunctionProperties properties;

@@ -70,7 +70,7 @@ public:
 private:
     static std::string printPrefix(PlanNodeBase & plan);
     static std::string printSuffix(PlanNodeBase & plan);
-    std::string printDetail(PlanNodeBase & plan, const TextPrinterIntent & intent) const;
+    std::string printDetail(ConstQueryPlanStepPtr plan, const TextPrinterIntent & intent) const;
     std::string printStatistics(const PlanNodeBase & plan) const;
 
     const bool print_stats;
@@ -85,7 +85,7 @@ public:
     Poco::JSON::Object::Ptr printLogicalPlan(PlanNodeBase & plan);
 
 private:
-    static void detail(Poco::JSON::Object::Ptr & json, PlanNodeBase & plan);
+    static void detail(Poco::JSON::Object::Ptr & json, ConstQueryPlanStepPtr plan);
 
     const bool print_stats;
 };

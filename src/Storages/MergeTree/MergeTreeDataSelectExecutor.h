@@ -26,8 +26,6 @@
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Storages/MergeTree/RangesInDataPart.h>
 #include <Storages/MergeTree/PartitionPruner.h>
-#include <Parsers/ASTSampleRatio.h>
-#include <boost/rational.hpp>   /// For calculations related to sampling coefficients.
 #include <QueryPlan/ReadFromMergeTree.h>
 
 namespace DB
@@ -36,17 +34,6 @@ namespace DB
 class KeyCondition;
 
 using PartitionIdToMaxBlock = std::unordered_map<String, Int64>;
-using RelativeSize = boost::rational<ASTSampleRatio::BigNum>;
-
-struct MergeTreeDataSelectSamplingData
-{
-    bool use_sampling = false;
-    bool read_nothing = false;
-    Float64 used_sample_factor = 1.0;
-    std::shared_ptr<ASTFunction> filter_function;
-    ActionsDAGPtr filter_expression;
-    RelativeSize relative_sample_size = 0;
-};
 
 /** Executes SELECT queries on data from the merge tree.
   */
@@ -80,12 +67,13 @@ public:
         ContextPtr context,
         UInt64 max_block_size,
         unsigned num_streams,
-        std::shared_ptr<PartitionIdToMaxBlock> max_block_numbers_to_read = nullptr) const;
+        std::shared_ptr<PartitionIdToMaxBlock> max_block_numbers_to_read = nullptr,
+        MergeTreeDataSelectAnalysisResultPtr merge_tree_select_result_ptr = nullptr) const;
 
     /// Get an estimation for the number of marks we are going to read.
     /// Reads nothing. Secondary indexes are not used.
     /// This method is used to select best projection for table.
-    size_t estimateNumMarksToRead(
+    MergeTreeDataSelectAnalysisResultPtr estimateNumMarksToRead(
         MergeTreeMetaBase::DataPartsVector parts,
         const Names & column_names,
         const StorageMetadataPtr & metadata_snapshot_base,

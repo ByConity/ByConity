@@ -83,6 +83,10 @@ public:
 
     UniqueKeyIndexPtr getUniqueKeyIndex() const override;
 
+    String getFullRelativePath() const override;
+
+    String getFullPath() const override;
+
     /// @param is_unique_new_part whether it's a part of unique table which has not been deduplicated
     /// For unique table, in normal case, the new part doesn't have delete_bitmap until it executes dedup action.
     /// But when the part has delete_flag info, delete_bitmap represent the delete_flag info which leads to that new part has delete_bitmap.
@@ -118,6 +122,14 @@ private:
     void calculateEachColumnSizes(ColumnSizeByName & each_columns_size, ColumnSize & total_size) const override;
     ColumnSize getColumnSizeImpl(const NameAndTypePair & column, std::unordered_set<String> * processed_substreams) const;
 
+    void loadProjections(bool require_columns_checksums, bool check_consistency) override;
+
+    // for projection part
+    void updateCommitTimeForProjection();
+
+    // Force the checksums to be loaded from the HDFS file, and do not copy the checksums from the previous part.
+    // this method is used for loading projections
+    IMergeTreeDataPart::ChecksumsPtr loadOwnedChecksums();
     void removeImpl(bool keep_shared_data) const override;
 };
 
