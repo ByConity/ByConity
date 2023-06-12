@@ -128,6 +128,8 @@ private:
     void updateCommitTimeForProjection();
 
     void removeImpl(bool keep_shared_data) const override;
+
+    void fillProjectionNamesFromChecksums(const MergeTreeDataPartChecksum & checksum_file);
 };
 
 }
