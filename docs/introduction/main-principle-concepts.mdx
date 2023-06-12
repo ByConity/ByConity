@@ -9,13 +9,13 @@ tags:
 
 # Introduction
 
-ByConity 's query execution process is shown in the figure below. First, obtain the Metadata information required for the query through the Metadata service. Then generate an efficient query plan through the optimizer according to the user's SQL , and schedule it to the corresponding calculation group to read the data and execute it. Finally, the result set is summarized and sent back to Client . In order for users to better understand the working principle of ByConity query, this chapter will introduce the main principle of ByConity.
+  This chapter will introduce the main principles of ByConity and it's query execution. ByConity's query execution process is shown in the figure below. First, ByConity will obtain the Metadata information required for the query through the Metadata service. Then ByConity will generate an efficient query plan through the optimizer according to the user's SQL, and schedule it to the corresponding calculation group to read the data and execute it. Finally, the result set is summarized and sent back to the Client.
 
 ![](./assets/boxcnCarlKKAt0hSPtXFOpfmo7c.png)
 
 ## Metadata Management（Catalog Service）
 
-The function of Metadata Management (Catalog Service) is mainly to read and write the Metadata of read and write requests. Metadata service is a very critical service, which determines the availability and correctness of queries. In ByConity , we not only provide highly available and scalable Metadata management services, but also implement complete transaction semantics guarantee (ACID) on top of it. In addition, ByConity also uses caching to provide low-delay reading of the raw data involved in queries to ensure efficient and stable query performance.
+The function of Metadata Management (Catalog Service) is mainly to read and write the Metadata of read and write requests. Metadata service is a very critical service, which determines the availability and correctness of queries. Not only does ByConity provide highly available and scalable Metadata management services, but it also implements complete transaction semantics guarantee (ACID) on top of it. In addition, ByConity also uses caching to provide low-delay reading of the raw data involved in queries to ensure efficient and stable query performance.
 
 ## Query Optimizer
 
@@ -34,10 +34,10 @@ Virtual Warehouse (VW for short) is a virtual organization of computing resource
 
 There are two ways to calculate volume expansion and contraction:
 
-- One is vertical expansion, that is, adjusting the number of CPU cores and memory size of the computing group;
-- The other is horizontal expansion, increase or decrease the number of computing groups, improve system concurrency;
+- One is vertical expansion, that is, adjusting the number of CPU cores and memory size of the computing group.
+- The other is horizontal expansion, increase or decrease the number of computing groups, improve system concurrency.
 
-In the architecture of storage-computing separation, computing resources and storage resources are decoupled and stateless. The volume expansion and contraction process does not need to migrate and balance data. So fast elastic volume expansion and contraction can be achieved.
+In the architecture of storage-computing separation, computing resources and storage resources are decoupled and stateless. The volume expansion and contraction process does not need to migrate and balance data. This enables fast elastic volume expansion and contraction can be achieved.
 
 Computing nodes are mainly responsible for computing tasks, which can be data writing, user queries, or some background tasks. Under the storage-computing separation architecture of ByConity, user queries can realize read and write separation to reduce mutual interference between read and write jobs. User queries and background tasks can share the same computing node to improve utilization, or independent computing nodes can be used to ensure strict resource isolation. Users can build multiple computing groups according to the characteristics, priorities and business categories of computing tasks, and set different resource elasticity strategies to improve computing efficiency and reduce costs.
 
@@ -45,7 +45,7 @@ Computing nodes are mainly responsible for computing tasks, which can be data wr
 
 ByConity uses cloud storage services such as HDFS or S3 as the data storage layer to store actual data, indexes, etc. The data files of the data table are stored in the remote unified distributed storage system, which is separated from the computing nodes. The underlying storage system may correspond to different types of distributed systems. Such as HDFS, Amazon S3, Google cloud storage, Azure blob storage, Alibaba Cloud object storage , etc.
 
-Different distributed storage systems have many different functions and different performance, which will affect the design and implementation of functions. For example, hdfs does not support file update; S3 object move operation requires reoperation to copy data, etc. ByConity provides a unified abstract file system interface to the computing layer through the service of storage. The storage layer adopts S3 or HDFS to be transparent to the computing layer; the computing layer can support ByConity's own computing engine, and can easily connect to other computing engines in the future, such as Presto , Spark , etc.
+Different distributed storage systems have many different functions and different performance, which will affect the design and implementation of functions. For example, HDFS does not support file update; S3 object move operation requires reoperation to copy data, etc. ByConity provides a unified abstract file system interface to the computing layer through the service of storage. The storage layer adopts S3 or HDFS to be transparent to the computing layer; the computing layer can support ByConity's own computing engine, and can easily connect to other computing engines in the future, such as Presto, Spark, etc.
 
 ## Columnar Storage
 
@@ -55,19 +55,19 @@ Similar to mainstream analytical data, ByConity adopts a columnar storage format
 
 ## Query execution
 
-1. Users submit Select Query to the service node;
-2. Obtain the required Metadata information from the Metadata service, perform Parsing, Planning, Optimising on Query, and generate Operating Plan;
-3. The service node schedules the Operating Plan according to the available computing resources and sends tasks to the computing node;
-4. The computing node receives the Query subquery;
-5. Query obtains data from the virtual file system (VFS), executes it on the computing node according to the Query's Operating Plan, and sends back the calculation results to the service node for summary;
+1. Users submit Select Query to the service node.
+2. Obtain the required Metadata information from the Metadata service, perform Parsing, Planning, Optimising on Query, and generate Operating Plan.
+3. The service node schedules the Operating Plan according to the available computing resources and sends tasks to the computing node.
+4. The computing node receives the Query subquery.
+5. Query obtains data from the virtual file system (VFS), executes it on the computing node according to the Query's Operating Plan, and sends back the calculation results to the service node for summary.
 
 ## Data write
 
-1. The user submits a Write Query to the service node;
-2. The service node selects the appropriate write node to execute the write request according to the scheduling policy;
-3. The write node performs the write, writes the data to the local disk and dumps it to the cloud storage side;
-4. Submit part Metadata to the Catalog Service, submit the transaction, and the write is completed;
+1. The user submits a Write Query to the service node.
+2. The service node selects the appropriate write node to execute the write request according to the scheduling policy.
+3. The write node performs the write, writes the data to the local disk and dumps it to the cloud storage side.
+4. Submit part Metadata to the Catalog Service, submit the transaction, and the write is completed.
 
 ## Calculate group volume expansion and contraction
 
-Resource Manager is responsible for unified management and scheduling of computing resources. It can collect performance data and resource usage of each computing group, dynamically allocate resources for read and write tasks and background tasks, and perform volume expansion and contraction to improve resources. The components of ByConity have been containerized, and it is very convenient to perform volume expansion and contraction on the specified computing group by adjusting the number of replicas of kubernets. In addition, dynamic volume expansion and contraction can be achieved by setting the volume expansion and contraction threshold of kubernets in combination with calculating group resource usage.
+The Resource Manager is responsible for unified management and scheduling of computing resources. It can collect performance data and resource usage of each computing group, dynamically allocate resources for read and write tasks and background tasks, and perform volume expansion and contraction to improve resources. The components of ByConity have been containerized, and it is very convenient to perform volume expansion and contraction on the specified computing group by adjusting the number of replicas of kubernets. In addition, dynamic volume expansion and contraction can be achieved by setting the volume expansion and contraction threshold of kubernets in combination with calculating group resource usage.
