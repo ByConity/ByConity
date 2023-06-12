@@ -390,12 +390,17 @@ namespace
         {
             ColumnPtr column;
             if (rows)
-                // both inherit from FieldVector
-                // coverity[mismatched_iterator]
+            {
+                //Tuple is just a vector hence
+                //partition_value.begin() and .end() is used here to initialize Tuple
+                //coverity[mismatched_iterator]
                 column = partition_value_type->createColumnConst(rows, Tuple(partition_value.begin(), partition_value.end()))
                              ->convertToFullColumnIfConst();
+            }
             else
+            {
                 column = partition_value_type->createColumn();
+            }
 
             block.insert({column, partition_value_type, name});
         }
@@ -432,12 +437,17 @@ namespace
         {
             ColumnPtr column;
             if (rows)
-                // both inherit from FieldVector
-                // coverity[mismatched_iterator]
+            {
+                //Tuple is just a vector hence
+                //.begin() and .end() is used here to initialize Tuple with the contents in the range
+                //coverity[mismatched_iterator]
                 column = partition_value_type->createColumnConst(rows, Tuple(partition_value.begin(), partition_value.end()))
                              ->convertToFullColumnIfConst();
+            }
             else
+            {
                 column = partition_value_type->createColumn();
+            }
             columns.push_back(column);
         }
 

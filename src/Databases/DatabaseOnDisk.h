@@ -110,7 +110,11 @@ protected:
         ContextPtr context,
         bool throw_on_error) const override;
 
-    ASTPtr getCreateQueryFromMetadata(const String & metadata_path, bool throw_on_error) const;
+    ASTPtr getCreateQueryFromMetadata(
+        const String & metadata_path,
+        bool throw_on_error) const;
+        
+    ASTPtr getCreateQueryFromStorage(const String & table_name, const StoragePtr & storage, bool throw_on_error) const;
 
     virtual void commitCreateTable(const ASTCreateQuery & query, const StoragePtr & table,
                                    const String & table_metadata_tmp_path, const String & table_metadata_path, ContextPtr query_context);

@@ -48,9 +48,11 @@ public:
     bool visitASTFunction(ASTPtr & node, QueryUseOptimizerContext &) override;
     bool visitASTOrderByElement(ASTPtr & node, QueryUseOptimizerContext &) override;
     bool visitASTQuantifiedComparison(ASTPtr & node, QueryUseOptimizerContext &) override;
+    const String & getReason() const { return reason; }
 
 private:
     void collectWithTableNames(ASTSelectQuery & query, NameSet & with_tables);
+    String reason;
 };
 
 }

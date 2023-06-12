@@ -126,8 +126,8 @@ private:
         bool active[size + 1];
         std::fill(active, active + size, true);
         active[size] = false;
-        
-        // variables are initialized in the body of the lambda
+
+        // elements previous and next will be assigned before delete_node is called
         // coverity[uninit_use]
         auto delete_node = [&](UInt32 i)
         {

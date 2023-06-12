@@ -1010,13 +1010,19 @@ template <>
 inline void convertFromTime<DataTypeDateTime>(DataTypeDateTime::FieldType & x, time_t & time)
 {
     if (unlikely(time < 0))
+    {
         x = 0;
+    }
     else if (unlikely(time > 0xFFFFFFFF))
+    {
         x = 0xFFFFFFFF;
+    }
     else
-        // Handles exceeding 32 bit above
+    {
+        // 0 <= time <= 0xFFFFFFFF hence it will not overflow here
         // coverity[store_truncates_time_t]
         x = time;
+    }
 }
 
 /** Conversion of strings to numbers, dates, datetimes: through parsing.
@@ -1085,6 +1091,8 @@ inline bool tryParseImpl<DataTypeDate32>(DataTypeDate32::FieldType & x, ReadBuff
     ExtendedDayNum tmp(0);
     if (!tryReadDateText(tmp, rb))
         return false;
+    // ExtendedDayNum is int32 and DataTypeData32::FieldType is also int32
+    // coverity[store_truncates_time_t]
     x = tmp;
     return true;
 }

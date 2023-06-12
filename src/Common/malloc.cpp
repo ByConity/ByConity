@@ -31,6 +31,7 @@ static void dummyFunctionForInterposing()
 {
     void* dummy;
     /// Suppression for PVS-Studio and clang-tidy.
+    /// coverity[leaked_storage]
     free(nullptr); // -V575 NOLINT
     // file and function not used
     // coverity[leaked_storage]

@@ -272,6 +272,7 @@ Cluster::Address Cluster::Address::fromFullString(const String & full_string)
         address.password = has_pw ? unescapeForFileName(std::string(colon + 1, user_pw_end)) : std::string();
         address.default_database = has_db ? unescapeForFileName(std::string(has_db + 1, address_end)) : std::string();
         // address.priority ignored
+        // address.exchange_port is uninitialized but it's unused
         // coverity[uninit_use]
         return address;
     }

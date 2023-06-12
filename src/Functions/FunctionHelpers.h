@@ -23,10 +23,12 @@
 
 #include <Common/typeid_cast.h>
 #include <Common/assert_cast.h>
+#include <DataTypes/DataTypeArray.h>
 #include <DataTypes/IDataType.h>
 #include <Columns/IColumn.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnConst.h>
+#include <Columns/ColumnNullable.h>
 #include <Core/Block.h>
 #include <Core/ColumnNumbers.h>
 #include <Core/callOnTypeIndex.h>
@@ -105,6 +107,15 @@ bool checkColumnConst(const IColumn * column)
 /// Returns non-nullptr if column is ColumnConst with ColumnString or ColumnFixedString inside.
 const ColumnConst * checkAndGetColumnConstStringOrFixedString(const IColumn * column);
 
+inline bool isArrayOfString(const DataTypePtr & data_type)
+{
+    if (const auto * array_type = dynamic_cast<const DataTypeArray *>(data_type.get()); array_type)
+    {
+        return isString(array_type->getNestedType());
+    }
+
+    return false;
+}
 
 /// Transform anything to Field.
 template <typename T>
@@ -204,6 +215,13 @@ bool areTypesEqual(const DataTypePtr & lhs, const DataTypePtr & rhs);
   */
 ColumnPtr wrapInNullable(const ColumnPtr & src, const ColumnsWithTypeAndName & args, const DataTypePtr & result_type, size_t input_rows_count);
 
+/**  Get an array of column pointers and nullmap pointers for each argument column.
+  *  For nullable columns: column pointer -> nested column pointer, nullmap pointer -> its nullmap data pointer
+  *  For non-nullable columns: column pointer -> its column pointer, nullmap pointer -> nullptr
+  *  Note that raw_column_maps and nullable_args_map need to be pre-allocated with the size of args
+  */
+void extractNullMapAndNestedCol(const ColumnsWithTypeAndName& args, ColumnPtr* raw_column_maps, const UInt8 ** nullable_args_map);
+
 struct NullPresence
 {
     bool has_nullable = false;
@@ -211,5 +229,12 @@ struct NullPresence
 };
 
 NullPresence getNullPresense(const ColumnsWithTypeAndName & args);
+
+bool isDecimalOrNullableDecimal(const DataTypePtr & type);
+
+String getFunctionResultName(const String & function_name, const Strings & arg_result_names);
+
+/// Notice, pos starts by 1, not 0
+String argPositionToSequence(size_t pos);
 
 }

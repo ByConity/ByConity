@@ -28,6 +28,7 @@ public:
     static NamesAndTypesList getNamesAndTypes();
 
     StorageSystemStackTrace(const StorageID & table_id_);
+    bool isSystemStorage() const override { return true; }
 
 protected:
     using IStorageSystemOneBlock::IStorageSystemOneBlock;

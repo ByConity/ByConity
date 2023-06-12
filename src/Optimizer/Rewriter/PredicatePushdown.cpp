@@ -28,6 +28,9 @@
 #include <Optimizer/SymbolUtils.h>
 #include <Optimizer/Utils.h>
 #include <Optimizer/makeCastFunction.h>
+#include <Optimizer/PredicateConst.h>
+#include <Optimizer/PredicateUtils.h>
+#include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/formatAST.h>
 #include <QueryPlan/AggregatingStep.h>
 #include <QueryPlan/AssignUniqueIdStep.h>
@@ -573,6 +576,19 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
 
     ASTPtr new_join_filter = PredicateUtils::combineConjuncts(join_filters);
 
+    // can not push normal filter into any inner join
+    auto strictness = step->getStrictness();
+    if (strictness != ASTTableJoin::Strictness::Unspecified && strictness != ASTTableJoin::Strictness::All
+        && (kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::Cross)
+        && (!(step->getFilter() && !PredicateUtils::isTruePredicate(step->getFilter()))))
+    {
+        auto join_conj = PredicateUtils::extractConjuncts(new_join_filter);
+        auto post_conj = PredicateUtils::extractConjuncts(post_join_predicate);
+        join_conj.insert(join_conj.end(), post_conj.begin(), post_conj.end());
+        post_join_predicate = PredicateUtils::combineConjuncts(join_conj);
+        new_join_filter = PredicateConst::TRUE_VALUE;
+    }
+    
     std::shared_ptr<JoinStep> join_step;
     if (kind == ASTTableJoin::Kind::Cross)
     {
@@ -756,11 +772,22 @@ PlanNodePtr PredicateVisitor::visitWindowNode(WindowNode & node, PredicateContex
 
 PlanNodePtr PredicateVisitor::visitMergeSortingNode(MergeSortingNode & node, PredicateContext & predicate_context)
 {
+    if (node.getStep()->getLimit() != 0)
+        return visitPlanNode(node, predicate_context);
     return processChild(node, predicate_context);
 }
 
 PlanNodePtr PredicateVisitor::visitPartialSortingNode(PartialSortingNode & node, PredicateContext & predicate_context)
 {
+    if (node.getStep()->getLimit() != 0)
+        return visitPlanNode(node, predicate_context);
+    return processChild(node, predicate_context);
+}
+
+PlanNodePtr PredicateVisitor::visitSortingNode(SortingNode & node, PredicateContext & predicate_context)
+{
+    if (node.getStep()->getLimit() != 0)
+        return visitPlanNode(node, predicate_context);
     return processChild(node, predicate_context);
 }
 

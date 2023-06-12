@@ -200,9 +200,11 @@ std::optional<QuotaUsage> EnabledQuota::Intervals::getUsage(std::chrono::system_
             // collections::range(MAX_REOURCE_TYPE) should give us a range of [0, MAX_RESOURCE_TYPE) 
             // coverity[overrun-local]
             if (in.max[resource_type])
+            {
                 // collections::range(MAX_REOURCE_TYPE) should give us a range of [0, MAX_RESOURCE_TYPE) 
                 // coverity[overrun-local]
                 out.max[resource_type] = in.max[resource_type];
+            }
             // collections::range(MAX_REOURCE_TYPE) should give us a range of [0, MAX_RESOURCE_TYPE) 
             // coverity[overrun-local]
             out.used[resource_type] = in.used[resource_type];

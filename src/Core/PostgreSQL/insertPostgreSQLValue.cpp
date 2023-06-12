@@ -120,7 +120,7 @@ void insertPostgreSQLValue(
             readDateTimeText(time, in, assert_cast<const DataTypeDateTime *>(data_type.get())->getTimeZone());
             if (time < 0)
                 time = 0;
-            // DataTypeDateTime will not exceed UInt32 due to readDateTimeText
+            // TODO: A 64-bit time_t value is stored in a smaller width integer (Y2K38_SAFETY)
             // coverity[store_truncates_time_t]
             assert_cast<ColumnUInt32 &>(column).insertValue(time);
             break;
@@ -163,6 +163,9 @@ void insertPostgreSQLValue(
                     if (dimension == 0)
                         break;
 
+                    //Array is just a vector hence
+                    //.begin() and .end() is used here to initialize Array with the contents in the range
+                    //coverity[mismatched_iterator]
                     dimensions[dimension].emplace_back(Array(dimensions[dimension + 1].begin(), dimensions[dimension + 1].end()));
                     dimensions[dimension + 1].clear();
                 }

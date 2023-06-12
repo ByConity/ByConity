@@ -71,6 +71,8 @@ const char * ParserComparisonExpression::operators[] =
     "=",             "equals",
     "LIKE",          "like",
     "ILIKE",         "ilike",
+    "RLIKE",         "rlike",
+    "REGEXP",        "regexp",
     "NOT LIKE",      "notLike",
     "NOT ILIKE",     "notILike",
     "IN",            "in",

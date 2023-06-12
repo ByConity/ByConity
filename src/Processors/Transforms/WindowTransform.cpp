@@ -2153,42 +2153,42 @@ void registerWindowFunctions(AggregateFunctionFactory & factory)
         {
             return std::make_shared<WindowFunctionRank>(name, argument_types,
                 parameters);
-        });
+        }, AggregateFunctionFactory::CaseInsensitive);
 
     factory.registerFunction("dense_rank", [](const std::string & name,
             const DataTypes & argument_types, const Array & parameters, const Settings *)
         {
             return std::make_shared<WindowFunctionDenseRank>(name, argument_types,
                 parameters);
-        });
+        }, AggregateFunctionFactory::CaseInsensitive);
 
     factory.registerFunction("percent_rank", [](const std::string & name,
         const DataTypes & argument_types, const Array & parameters, const Settings *)
     {
         return std::make_shared<WindowFunctionPercentRank>(name, argument_types,
             parameters);
-    });
+    }, AggregateFunctionFactory::CaseInsensitive);
 
     factory.registerFunction("cume_dist", [](const std::string & name,
         const DataTypes & argument_types, const Array & parameters, const Settings *)
     {
         return std::make_shared<WindowFunctionCumeDist>(name, argument_types,
             parameters);
-    });
+    }, AggregateFunctionFactory::CaseInsensitive);
 
     factory.registerFunction("ntile", [](const std::string & name,
         const DataTypes & argument_types, const Array & parameters, const Settings *)
     {
         return std::make_shared<WindowFunctionNtile>(name, argument_types,
             parameters);
-    });
+    }, AggregateFunctionFactory::CaseInsensitive);
 
     factory.registerFunction("nth_value", [](const std::string & name,
         const DataTypes & argument_types, const Array & parameters, const Settings *)
     {
         return std::make_shared<WindowFunctionNthValue>(name, argument_types,
             parameters);
-    });
+    }, AggregateFunctionFactory::CaseInsensitive);
 
     factory.registerFunction("row_number", [](const std::string & name,
             const DataTypes & argument_types, const Array & parameters, const Settings *)
@@ -2203,14 +2203,17 @@ void registerWindowFunctions(AggregateFunctionFactory & factory)
         {
             return std::make_shared<WindowFunctionLagLeadInFrame<false>>(
                 name, argument_types, parameters);
-        });
+        }, AggregateFunctionFactory::CaseInsensitive);
 
     factory.registerFunction("leadInFrame", [](const std::string & name,
             const DataTypes & argument_types, const Array & parameters, const Settings *)
         {
             return std::make_shared<WindowFunctionLagLeadInFrame<true>>(
                 name, argument_types, parameters);
-        });
+        }, AggregateFunctionFactory::CaseInsensitive);
+
+    factory.registerAlias("lag", "lagInFrame", AggregateFunctionFactory::CaseInsensitive);
+    factory.registerAlias("lead", "leadInFrame", AggregateFunctionFactory::CaseInsensitive);
 }
 
 }

@@ -101,6 +101,9 @@ StatsData CachedStatsProxyImpl::get(const StatsTableIdentifier & table_id, bool 
         if (!item_ptr)
         {
             item_ptr = makePocoShared<StatsCollection>(catalog->readSingleStats(table_id, std::nullopt));
+            // SharedPtr is Poco's implementation of a shared pointer and
+            // it will only free the memory when the counter reaches 0
+            // coverity[double_free]
             cache.update(key, item_ptr);
         }
         result.table_stats = *item_ptr;
@@ -116,7 +119,8 @@ StatsData CachedStatsProxyImpl::get(const StatsTableIdentifier & table_id, bool 
             item_ptr = makePocoShared<StatsCollection>(catalog->readSingleStats(table_id, col_name));
             cache.update(key, item_ptr);
         }
-        // SharedPtr copy constructor invoked
+        // SharedPtr is Poco's implementation of a shared pointer and
+        // it will only free the memory when the counter reaches 0
         // coverity[double_free]
         result.column_stats.emplace(pr.name, *item_ptr);
     }

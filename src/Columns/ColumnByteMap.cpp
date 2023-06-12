@@ -541,7 +541,8 @@ ColumnPtr ColumnByteMap::index(const IColumn & indexes, size_t limit) const
     return ColumnByteMap::create(key_index_column, value_index_column);
 }
 
-void ColumnByteMap::getPermutation([[maybe_unused]] bool reverse,
+void ColumnByteMap::getPermutation([[maybe_unused]] PermutationSortDirection direction,
+                               [[maybe_unused]] PermutationSortStability stability,
                                [[maybe_unused]] size_t limit,
                                [[maybe_unused]] int nan_direction_hint,
                                [[maybe_unused]] Permutation & res) const
@@ -549,7 +550,8 @@ void ColumnByteMap::getPermutation([[maybe_unused]] bool reverse,
     throw Exception("ColumnByteMap::getPermutation not implemented", ErrorCodes::NOT_IMPLEMENTED);
 }
 
-void ColumnByteMap::updatePermutation(bool, size_t, int, IColumn::Permutation &, EqualRanges &) const
+void ColumnByteMap::updatePermutation(PermutationSortDirection /* direction */, PermutationSortStability /* stability */,
+                            size_t /* limit */, int /* nan_direction_hint */, Permutation & /* res */, EqualRanges & /* equal_ranges */) const
 {
     throw Exception("ColumnByteMap::updatePermutation not implemented", ErrorCodes::NOT_IMPLEMENTED);
 }

@@ -461,6 +461,23 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeWindowFunction(ASTFunctionPtr 
     {
         window_name = function->window_name;
         resolved_window = analysis.getRegisteredWindow(*options.select_query, function->window_name);
+        // Lead and lag
+        if (function->window_definition)
+        {
+            const struct WindowFrame def =
+            {
+                .is_default = false,
+                .type = WindowFrame::FrameType::Rows,
+                .end_type = WindowFrame::BoundaryType::Unbounded,
+            };
+
+            if (resolved_window->frame != def)
+            {
+                window_name = function->window_name + "(ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)";
+                resolved_window = std::make_shared<ResolvedWindow>(*resolved_window);
+                resolved_window->frame = def;
+            }
+        }
     }
     else
     {
