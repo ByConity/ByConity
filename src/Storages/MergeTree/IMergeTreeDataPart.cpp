@@ -781,6 +781,18 @@ IMergeTreeDataPartPtr IMergeTreeDataPart::getMvccDataPart(const String & file_na
     }
 }
 
+void IMergeTreeDataPart::addProjectionPart(const String & projection_name, const std::shared_ptr<IMergeTreeDataPart> & projection_part)
+{
+    projection_parts.emplace(projection_name, projection_part);
+    projection_parts_names.insert(projection_name);
+}
+
+void IMergeTreeDataPart::setProjectionPartsNames(const NameSet & projection_parts_names_)
+{
+    projection_parts_names.clear();
+    projection_parts_names.insert(projection_parts_names_.begin(), projection_parts_names_.end());
+}
+
 void IMergeTreeDataPart::gatherProjections()
 {
     IMergeTreeDataPartPtr part = shared_from_this();

@@ -127,9 +127,6 @@ private:
     // for projection part
     void updateCommitTimeForProjection();
 
-    // Force the checksums to be loaded from the HDFS file, and do not copy the checksums from the previous part.
-    // this method is used for loading projections
-    IMergeTreeDataPart::ChecksumsPtr loadOwnedChecksums();
     void removeImpl(bool keep_shared_data) const override;
 };
 

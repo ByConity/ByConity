@@ -347,7 +347,7 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
         for (const auto & part : source_data_parts)
             part->accumulateColumnSizes(merged_column_to_size);
 
-        column_sizes = ColumnSizeEstimator(std::move(merged_column_to_size), merging_column_names, gathering_column_names);
+        column_sizes = ColumnSizeEstimator(merged_column_to_size, merging_column_names, gathering_column_names);
 
         tmp_disk = context->getTemporaryVolume()->getDisk();
         rows_sources_file = createTemporaryFile(tmp_disk->getPath());

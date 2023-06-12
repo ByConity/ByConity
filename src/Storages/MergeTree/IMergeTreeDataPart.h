@@ -449,10 +449,10 @@ public:
 
     const std::map<String, std::shared_ptr<IMergeTreeDataPart>> & getProjectionParts() const { return projection_parts; }
 
-    void addProjectionPart(const String & projection_name, const std::shared_ptr<IMergeTreeDataPart> & projection_part)
-    {
-        projection_parts.emplace(projection_name, projection_part);
-    }
+    const NameSet & getProjectionPartsNames() const { return projection_parts_names; }
+    void setProjectionPartsNames(const NameSet & projection_parts_names_);
+
+    void addProjectionPart(const String & projection_name, const std::shared_ptr<IMergeTreeDataPart> & projection_part);
 
     bool hasProjection(const String & projection_name) const
     {
@@ -583,6 +583,9 @@ protected:
     const IMergeTreeDataPart * parent_part;
 
     std::map<String, std::shared_ptr<IMergeTreeDataPart>> projection_parts;
+
+    // names of projections that are truly managed by current part, to distinguish from the projections gathered from the previous parts
+    NameSet projection_parts_names;
 
     /// Protect checksums_ptr. FIXME:  May need more protection in getChecksums()
     /// to prevent checksums_ptr from being modified and corvered by multiple threads.

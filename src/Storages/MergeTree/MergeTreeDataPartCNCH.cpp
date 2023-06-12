@@ -188,6 +188,7 @@ void MergeTreeDataPartCNCH::fromLocalPart(const IMergeTreeDataPart & local_part)
     covered_parts_rows = local_part.covered_parts_rows;
     delete_bitmap = local_part.delete_bitmap;
     projection_parts = local_part.getProjectionParts();
+    projection_parts_names = local_part.getProjectionPartsNames();
 }
 
 String MergeTreeDataPartCNCH::getFileNameForColumn(const NameAndTypePair & column) const
@@ -266,20 +267,45 @@ void MergeTreeDataPartCNCH::loadColumnsChecksumsIndexes([[maybe_unused]] bool re
 
 void MergeTreeDataPartCNCH::loadFromFileSystem(bool load_hint_mutation)
 {
-    MergeTreeDataPartChecksum meta_info_pos;
-    if (checksums_ptr)
-        meta_info_pos = checksums_ptr->files["metainfo.txt"];
-    else
+    const bool enable_disk_cache = storage.getSettings()->enable_local_disk_cache;
+    if (enable_disk_cache)
     {
-        auto footer = loadPartDataFooter();
-        meta_info_pos = footer["metainfo.txt"];
+        try
+        {
+            MetaInfoDiskCacheSegment metainfo_segment(shared_from_this());
+            auto disk_cache = DiskCacheFactory::instance().getDefault().first;
+            auto [cache_disk, segment_path] = disk_cache->get(metainfo_segment.getSegmentName());
+            if (cache_disk && cache_disk->exists(segment_path))
+            {
+                auto reader = openForReading(cache_disk, segment_path, cache_disk->getFileSize(segment_path));
+                loadMetaInfoFromBuffer(*reader, load_hint_mutation);
+
+                return;
+            }
+        }
+        catch (...)
+        {
+            tryLogCurrentException("Could not load meta infos from disk");
+        }
     }
+
+    MergeTreeDataPartChecksum meta_info_pos;
+    auto checksums_ptr = getChecksums();
+    meta_info_pos = checksums_ptr->files["metainfo.txt"];
 
     String data_rel_path = fs::path(getFullRelativePath()) / DATA_FILE;
     DiskPtr disk = volume->getDisk();
     auto reader = openForReading(disk, data_rel_path, meta_info_pos.file_size);
     LimitReadBuffer limit_reader = readPartFile(*reader, meta_info_pos.file_offset, meta_info_pos.file_size);
     loadMetaInfoFromBuffer(limit_reader, load_hint_mutation);
+
+    /// store in disk cache
+    if (enable_disk_cache)
+    {
+        auto segment = std::make_shared<MetaInfoDiskCacheSegment>(shared_from_this());
+        auto disk_cache = DiskCacheFactory::instance().getDefault().first;
+        disk_cache->cacheSegmentsToLocalDisk({std::move(segment)});
+    }
 }
 
 UniqueKeyIndexPtr MergeTreeDataPartCNCH::getUniqueKeyIndex() const
@@ -411,8 +437,6 @@ MergeTreeDataPartChecksums::FileChecksums MergeTreeDataPartCNCH::loadPartDataFoo
         // for projection part
         auto [projection_offset, projection_size] = getFileOffsetAndSize(*parent_part, name + ".proj");
         data_file->seek(projection_offset + projection_size - MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE);
-        LOG_DEBUG(storage.log, "Loaded data footer in hdfs for projection part {}, foot offset is {}",
-                  getUniquePartName(), projection_offset + projection_size - MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE);
     }
 
     MergeTreeDataPartChecksums::FileChecksums file_checksums;
@@ -617,45 +641,6 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_un
         auto disk_cache = DiskCacheFactory::instance().getDefault().first;
         disk_cache->cacheSegmentsToLocalDisk({std::move(segment)});
     }
-    if (parent_part)
-        LOG_DEBUG(storage.log, "Loaded checksums in hdfs for projection part {}", getUniquePartName());
-    return checksums;
-}
-
-IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadOwnedChecksums()
-{
-    ChecksumsPtr checksums = std::make_shared<Checksums>();
-    checksums->storage_type = StorageType::ByteHDFS;
-    if (parent_part)
-        throw Exception("Projection part cannot call this method. It's bug.", ErrorCodes::LOGICAL_ERROR);
-
-    if ((!parent_part && deleted))
-        return checksums;
-
-    String data_rel_path = fs::path(getFullRelativePath()) / DATA_FILE;
-    auto data_footer = loadPartDataFooter();
-    const auto & checksum_file = data_footer["checksums.txt"];
-
-    if (checksum_file.file_size == 0/* && isDeleted() */)
-        throw Exception(ErrorCodes::NO_FILE_IN_DATA_PART, "The size of checksums in part {} under path {} is zero", name, data_rel_path);
-    
-    auto data_file = openForReading(volume->getDisk(), data_rel_path, checksum_file.file_size);
-    LimitReadBuffer buf = readPartFile(*data_file, checksum_file.file_offset, checksum_file.file_size);
-
-    if (checksums->read(buf))
-    {
-        assertEOF(buf);
-    }
-
-    // remove deleted files in checksums
-    for (auto it = checksums->files.begin(); it != checksums->files.end();)
-    {
-        const auto & file = it->second;
-        if (file.is_deleted)
-            it = checksums->files.erase(it);
-        else
-            ++it;
-    }
 
     return checksums;
 }
@@ -663,18 +648,17 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadOwnedChecksums()
 void MergeTreeDataPartCNCH::loadProjections([[maybe_unused]] bool require_columns_checksums, [[maybe_unused]] bool check_consistency)
 {
     auto metadata_snapshot = storage.getInMemoryMetadataPtr();
-    auto checksums = loadOwnedChecksums();
     for (const auto & projection : metadata_snapshot->projections)
     {
-        if (auto it = checksums->files.find(projection.name + ".proj"); it != checksums->files.end())
+        if (auto it = projection_parts_names.find(projection.name); it != projection_parts_names.end())
         {
             auto part = storage.createPart(projection.name, MergeTreeDataPartType::CNCH, {"all", 0, 0, 0}, volume, projection.name + ".proj", this);
             part->loadColumnsChecksumsIndexes(require_columns_checksums, check_consistency);
             projection_parts.emplace(projection.name, std::move(part));
-            LOG_DEBUG(storage.log, "Loaded Projection Part {} for part {}", projection.name, name);
+            LOG_TRACE(storage.log, "Loaded Projection Part {} for part {}", projection.name, name);
         }
         else
-            LOG_DEBUG(storage.log, "No find projection {} in current part {}", projection.name, name);
+            LOG_TRACE(storage.log, "No find projection {} in current part {}", projection.name, name);
     }
  }
 

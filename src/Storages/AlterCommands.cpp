@@ -636,7 +636,8 @@ void AlterCommand::apply(StorageInMemoryMetadata & metadata, ContextPtr context)
     }
     else if (type == MATERIALIZE_PROJECTION)
     {
-
+        if (!metadata.projections.has(projection_name))
+            throw Exception{"Cannot materialize projection " + projection_name + ": projection with this name is not exists", ErrorCodes::ILLEGAL_COLUMN};
     }
     else if (type == MODIFY_TTL)
     {

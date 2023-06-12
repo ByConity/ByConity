@@ -395,9 +395,6 @@ void MergeTreeReaderCNCH::addStreamsIfNoBurden(
         off_t mark_file_offset = source_data_part->getFileOffsetOrZero(mark_file_name);
         size_t mark_file_size = source_data_part->getFileSizeOrZero(mark_file_name);
 
-        if (data_part->isProjectionPart())
-            LOG_DEBUG(&Poco::Logger::get("MergeTreeReaderCNCH"), "Build MergeTreeReaderStreamWithSegmentCache for {} and {} in projection part {}, data offset is {}, mrk offset is {}",
-                      stream_name + DATA_FILE_EXTENSION, mark_file_name, data_part->getUniquePartName(), data_file_offset, mark_file_offset);
 
         if (segment_cache_strategy)
         {

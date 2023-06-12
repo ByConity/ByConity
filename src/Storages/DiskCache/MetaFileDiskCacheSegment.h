@@ -51,4 +51,18 @@ private:
     String segment_name;
 };
 
+class MetaInfoDiskCacheSegment : public IDiskCacheSegment
+{
+public:
+    explicit MetaInfoDiskCacheSegment(IMergeTreeDataPartPtr data_part_);
+
+    String getSegmentName() const override;
+    void cacheToDisk(IDiskCache & diskcache) override;
+
+private:
+    IMergeTreeDataPartPtr data_part;
+    ConstStoragePtr storage;
+    String segment_name;
+};
+
 }
