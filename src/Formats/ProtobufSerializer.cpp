@@ -1488,9 +1488,13 @@ namespace
                     read_function = [this]() -> UInt32
                     {
                         readStr(text_buffer);
+                        // TODO: A 64-bit time_t value is stored in a smaller width integer (Y2K38_SAFETY)
+                        // coverity[store_truncates_time_t]
                         return stringToDateTime(text_buffer);
                     };
 
+                    // TODO: A 64-bit time_t value is stored in a smaller width integer (Y2K38_SAFETY)
+                    // coverity[store_truncates_time_t]
                     default_function = [this]() -> UInt32 { return stringToDateTime(field_descriptor.default_value_string()); };
                     break;
                 }

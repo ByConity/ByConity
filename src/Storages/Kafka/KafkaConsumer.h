@@ -34,6 +34,7 @@ public:
     void unassign();
     void commit(const cppkafka::TopicPartitionList& topic_partitions);
     cppkafka::TopicPartitionList get_offsets_committed(const cppkafka::TopicPartitionList& topic_partitions) const;
+    cppkafka::TopicPartitionList get_offsets_for_times(const TopicPartitionsTimestampsMap& queries) const;
 
     std::vector<std::string> get_subscription() const;
     cppkafka::TopicPartitionList get_assignment() const;

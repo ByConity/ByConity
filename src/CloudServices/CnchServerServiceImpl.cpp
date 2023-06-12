@@ -364,6 +364,9 @@ void CnchServerServiceImpl::createTransactionForKafka(
             auto & controller = static_cast<brpc::Controller &>(*cntl);
             transaction->setCreator(butil::endpoint2str(controller.remote_side()).c_str());
 
+            /// Store active transactions in catalog in case of consumer restarting
+            manager->setCurrentTransactionForConsumer(request->consumer_index(), transaction->getTransactionID());
+
             response->set_txn_id(transaction->getTransactionID());
             response->set_start_time(transaction->getStartTime());
             LOG_TRACE(log, "Create transaction by request: {}\n", transaction->getTransactionID().toUInt64());

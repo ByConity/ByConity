@@ -348,6 +348,13 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
             break;
         }
 
+        case Type::RESET_CONSUME_OFFSET:
+        {
+            if (!parseIdentifierOrStringLiteral(pos, expected, res->string_data))
+                return false;
+            break;
+        }
+
         default:
             /// There are no [db.table] after COMMAND NAME
             break;

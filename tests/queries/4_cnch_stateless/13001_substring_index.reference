@@ -1,0 +1,28 @@
+example
+example.domain
+example.domain.com
+example.domain.com
+
+example.domain.com
+example.domain.com
+com
+domain.com
+example.domain.com
+example.domain.com
+example.domain.com
+
+
+
+\N
+\N
+\N
+\N
+A#B	1
+	2
+A#B#C	3
+B#C	4
+A,B,C	5
+B##C	6
+##	7
+C	8
+\N	9

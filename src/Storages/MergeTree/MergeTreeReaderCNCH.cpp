@@ -80,6 +80,8 @@ MergeTreeReaderCNCH::MergeTreeReaderCNCH(
     : IMergeTreeReader(
         data_part_, columns_, metadata_snapshot_, uncompressed_cache_,
         mark_cache_, mark_ranges_, settings_, avg_value_size_hints_)
+    , segment_cache_strategy(nullptr)
+    , segment_cache(nullptr)
     , log(&Poco::Logger::get("MergeTreeReaderCNCH(" + data_part_->get_name() + ")"))
 
 {
@@ -426,7 +428,7 @@ void MergeTreeReaderCNCH::addStreamsIfNoBurden(
         };
 
         // Check if mark is present
-        auto mark_cache_key = mark_cache->hash(fullPath(source_data_part->volume->getDisk(), mark_path) + ":" + stream_name);
+        auto mark_cache_key = mark_cache->hash(mark_path + source_data_part->index_granularity_info.getMarksFilePath(stream_name));
 
         if (mark_cache->get(mark_cache_key))
         {

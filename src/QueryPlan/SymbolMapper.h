@@ -34,6 +34,7 @@ public:
 
     explicit SymbolMapper(MappingFunction mapping_function_) : mapping_function(std::move(mapping_function_)) { }
 
+    static SymbolMapper simpleMapper(std::unordered_map<Symbol, Symbol> & mapping);
     static SymbolMapper symbolMapper(const std::unordered_map<Symbol, Symbol> & mapping);
     static SymbolMapper symbolReallocator(std::unordered_map<Symbol, Symbol> & mapping, SymbolAllocator & symbolAllocator);
 

@@ -74,9 +74,12 @@ void StorageCnchKafka::drop()
     auto cnch_catalog = getContext()->getCnchCatalog();
     const String & group = getGroupForBytekv();
 
-    LOG_INFO(log, "Clear offsets for group '{}' before drop table: {}", group, getStorageID().getFullTableName());
+    LOG_INFO(log, "Clear all offsets in catalog for group '{}' before dropping table: {}", group, getStorageID().getFullTableName());
     for (const auto & topic : getTopics())
         cnch_catalog->clearOffsetsForWholeTopic(topic, group);
+
+    LOG_INFO(log, "Clear active transactions of consumers in catalog before dropping table {}", getStorageID().getFullTableName());
+    cnch_catalog->clearKafkaTransactions(getStorageUUID());
 }
 
 void StorageCnchKafka::checkAlterIsPossible(const AlterCommands & commands, ContextPtr) const
@@ -104,6 +107,14 @@ void StorageCnchKafka::checkAlterIsPossible(const AlterCommands & commands, Cont
 
 void StorageCnchKafka::alter(const AlterCommands & commands, ContextPtr local_context, TableLockHolder & /* alter_lock_holder */)
 {
+    /// Try to forward ALTER query to the target server if needs to
+    if (local_context->getSettings().enable_sql_forwarding)
+    {
+        auto cnch_table_helper = CnchStorageCommonHelper(getStorageID(), getDatabaseName(), getTableName());
+        if (cnch_table_helper.forwardQueryToServerIfNeeded(local_context, getStorageUUID()))
+            return;
+    }
+
     auto daemon_manager = getGlobalContext()->getDaemonManagerClient();
     bool kafka_table_is_active = tableIsActive();
 

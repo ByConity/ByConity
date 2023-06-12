@@ -33,6 +33,16 @@ private:
     MappingFunction & mapping_function;
 };
 
+SymbolMapper SymbolMapper::simpleMapper(std::unordered_map<Symbol, Symbol> & mapping)
+{
+    return SymbolMapper([&mapping](Symbol symbol) {
+        if (mapping.contains(symbol) && mapping.at(symbol) != symbol)
+        {
+            symbol = mapping.at(symbol);
+        }
+        return symbol;
+    });
+}
 
 SymbolMapper SymbolMapper::symbolMapper(const std::unordered_map<Symbol, Symbol> & mapping)
 {

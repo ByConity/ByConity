@@ -185,15 +185,20 @@ public:
         const bool is_merged_parts = false,
         const bool preallocate_mode = false);
 
+    /// APIs for CncnKafka
     void getKafkaOffsets(const String & consumer_group, cppkafka::TopicPartitionList & tpl);
     cppkafka::TopicPartitionList getKafkaOffsets(const String & consumer_group, const String & kafka_topic);
     void clearOffsetsForWholeTopic(const String & topic, const String & consumer_group);
+    void setTransactionForKafkaConsumer(const UUID & uuid, const TxnTimestamp & txn_id, size_t consumer_index);
+    TxnTimestamp getTransactionForKafkaConsumer(const UUID & uuid, size_t consumer_index);
+    void clearKafkaTransactions(const UUID & uuid);
 
     void dropAllPart(const StoragePtr & storage, const TxnTimestamp & txnID, const TxnTimestamp & ts);
 
     std::vector<std::shared_ptr<MergeTreePartition>> getPartitionList(const ConstStoragePtr & table, const Context * session_context);
 
-    void getPartitionsFromMetastore(const MergeTreeMetaBase & table, PartitionMap & partition_list);
+    template<typename Map>
+    void getPartitionsFromMetastore(const MergeTreeMetaBase & table, Map & partition_list);
 
     Strings getPartitionIDs(const ConstStoragePtr & storage, const Context * session_context);
 
@@ -575,7 +580,7 @@ private:
         const ConstStoragePtr & storage,
         const String & meta_prefix,
         const Strings & partitions,
-        const Strings & full_partitions,
+        const Strings & full_partitions_,
         const std::function<T(const String &)> & create_func,
         const TxnTimestamp & ts,
         UInt32 time_out_ms = 0)
@@ -586,11 +591,12 @@ private:
         String table_uuid = UUIDHelpers::UUIDToString(storage->getStorageID().uuid);
         UInt64 timestamp = ts.toUInt64();
 
-        std::vector<String> request_partitions;
+        std::set<String, partition_comparator> request_partitions;
+        std::set<String, partition_comparator> full_partitions;
         for (const auto & partition : partitions)
-            request_partitions.emplace_back(partition);
-
-        std::sort(request_partitions.begin(), request_partitions.end(), partition_comparator{});
+            request_partitions.insert(partition);
+        for (const auto & partition : full_partitions_)
+            full_partitions.insert(partition);
 
         auto plist_start = full_partitions.begin();
         auto plist_end = full_partitions.end();

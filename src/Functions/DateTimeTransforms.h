@@ -1267,6 +1267,8 @@ struct Transformer
             if constexpr (is_extended_result)
                 vec_to[i] = transform.executeExtendedResult(vec_from[i], time_zone);
             else
+                // narrowing conversions for time_t has a transformer to handle it
+                // coverity[store_truncates_time_t]
                 vec_to[i] = transform.execute(vec_from[i], time_zone);
     }
 };

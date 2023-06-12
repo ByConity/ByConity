@@ -70,7 +70,10 @@ void StorageSystemRowPolicies::fillData(MutableColumns & res_columns, ContextPtr
     NullMap * column_condition_null_map[MAX_CONDITION_TYPE];
     for (auto condition_type : collections::range(MAX_CONDITION_TYPE))
     {
+        // collections::range is end exclusive, hence we can ignore all below
+        // coverity[overrun-local]
         column_condition[condition_type] = &assert_cast<ColumnString &>(assert_cast<ColumnNullable &>(*res_columns[column_index]).getNestedColumn());
+        // coverity[overrun-local]
         column_condition_null_map[condition_type] = &assert_cast<ColumnNullable &>(*res_columns[column_index++]).getNullMapData();
     }
 
@@ -101,7 +104,10 @@ void StorageSystemRowPolicies::fillData(MutableColumns & res_columns, ContextPtr
             const String & condition = conditions[condition_type];
             if (condition.empty())
             {
+                // collections::range is end exclusive, hence we can ignore all below
+                // coverity[overrun-local]
                 column_condition[condition_type]->insertDefault();
+                // coverity[overrun-local]    
                 column_condition_null_map[condition_type]->push_back(true);
             }
             else

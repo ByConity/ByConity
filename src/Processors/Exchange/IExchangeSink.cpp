@@ -50,6 +50,10 @@ IExchangeSink::Status IExchangeSink::prepare()
 
     if (input.isFinished())
     {
+        if (!is_finished.load(std::memory_order_relaxed))
+        {
+            return Status::Ready;
+        }
         onFinish();
         return Status::Finished;
     }

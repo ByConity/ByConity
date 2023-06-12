@@ -194,6 +194,7 @@ struct QueryPlanSettings
     /// Apply query plan optimizations.
     bool optimize = true;
     bool json = false;
+    bool stats = true;
 
     constexpr static char name[] = "PLAN";
 
@@ -204,7 +205,8 @@ struct QueryPlanSettings
             {"actions", query_plan_options.actions},
             {"indexes", query_plan_options.indexes},
             {"optimize", optimize},
-            {"json", json}
+            {"json", json},
+            {"stats", stats}
     };
 };
 
@@ -607,7 +609,7 @@ void InterpreterExplainQuery::listRowsOfOnePartition(StoragePtr & storage, const
             query_buffer << "select count() as count from " << backQuoteIfNeed(storage->getStorageID().getDatabaseName()) << "."
                      << backQuoteIfNeed(storage->getStorageID().getTableName()) << " where " << *partition_condition;
 
-            String query_str = query_buffer.str();
+            const String query_str = query_buffer.str();
             const char * begin = query_str.data();
             const char * end = query_str.data() + query_str.size();
 
@@ -817,14 +819,18 @@ void InterpreterExplainQuery::explainUsingOptimizer(const ASTPtr & ast, WriteBuf
     auto query_plan = interpreter.buildQueryPlan();
 
     CardinalityEstimator::estimate(*query_plan, context);
-    PlanCostMap costs = CostCalculator::calculate(*query_plan, *context);
     if (settings.json)
     {
-        buffer << PlanPrinter::jsonLogicalPlan(*query_plan, true, true);
+        auto plan_cost = CostCalculator::calculatePlanCost(*query_plan, *context);
+        buffer << PlanPrinter::jsonLogicalPlan(*query_plan, settings.stats, true, plan_cost);
         single_line = true;
     }
     else
+    {
+        PlanCostMap costs = CostCalculator::calculate(*query_plan, *context);
         buffer << PlanPrinter::textLogicalPlan(*query_plan, context, true, true, costs);
+    }
+        
 }
 
 }

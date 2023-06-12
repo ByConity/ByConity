@@ -40,6 +40,53 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
+Catalog::PartitionMap TableMetaEntry::getPartitions(const Strings & wanted_partition_ids)
+{
+    Catalog::PartitionMap res;
+    if (wanted_partition_ids.size() < 100)
+    {
+        /// When wanted_partition_ids is small, then go with find
+        for (const auto & partition_id : wanted_partition_ids)
+        {
+            if (auto it = partitions.find(partition_id); it != partitions.end())
+                res.emplace(partition_id, *it);
+        }
+    }
+    else
+    {
+        /// Otherwise, leverage wait free scan
+        std::unordered_set<String> wanted_partition_set;
+        for (const auto & partition_id : wanted_partition_ids)
+            wanted_partition_set.insert(partition_id);
+        
+        for (auto it = partitions.begin(); it != partitions.end(); it++)
+        {
+            auto & partition_info_ptr = *it;
+            if (wanted_partition_set.contains(partition_info_ptr->partition_id))
+                res.emplace(partition_info_ptr->partition_id, partition_info_ptr);
+        }
+    }
+    return res;
+}
+
+Strings TableMetaEntry::getPartitionIDs()
+{
+    Strings partition_ids;
+    partition_ids.reserve(partitions.size());
+    for (auto it = partitions.begin(); it != partitions.end(); it++)
+        partition_ids.push_back((*it)->partition_id);
+    return partition_ids;
+}
+
+std::vector<std::shared_ptr<MergeTreePartition>> TableMetaEntry::getPartitionList()
+{
+    std::vector<std::shared_ptr<MergeTreePartition>> partition_list;
+    partition_list.reserve(partitions.size());
+    for (auto it = partitions.begin(); it != partitions.end(); it++)
+        partition_list.push_back((*it)->partition_ptr);
+    return partition_list;
+}
+
 PartCacheManager::PartCacheManager(ContextMutablePtr context_)
     : WithMutableContext(context_)
 {
@@ -346,16 +393,16 @@ bool PartCacheManager::getTablePartitionMetrics(const IStorage & i_storage, std:
     TableMetaEntryPtr table_entry = getTableMeta(i_storage.getStorageUUID());
     if (table_entry)
     {
-        auto lock = table_entry->readLock();
         if (table_entry->partition_metrics_loaded)
         {
             const auto * storage = dynamic_cast<const MergeTreeMetaBase*>(&i_storage);
             if (!storage)
                 return true;
             FormatSettings format_settings {};
-            for (auto & partition : table_entry->partitions)
+            auto & table_partitions = table_entry->partitions;
+            for (auto it = table_partitions.begin(); it != table_partitions.end(); it++)
             {
-                PartitionFullPtr partition_ptr = std::make_shared<CnchPartitionInfoFull>(partition.second);
+                PartitionFullPtr partition_ptr = std::make_shared<CnchPartitionInfoFull>(*it);
                 const auto & partition_key_sample = storage->getInMemoryMetadataPtr()->getPartitionKey().sample_block;
                 if (partition_key_sample.columns() > 0 && require_partition_info)
                 {
@@ -376,7 +423,7 @@ bool PartCacheManager::getTablePartitionMetrics(const IStorage & i_storage, std:
                         partition_ptr->first_partition = out.str();
                     }
                 }
-                partitions.emplace(partition.first, partition_ptr);
+                partitions.emplace(partition_ptr->partition_info_ptr->partition_id, partition_ptr);
             }
             return true;
         }
@@ -384,39 +431,24 @@ bool PartCacheManager::getTablePartitionMetrics(const IStorage & i_storage, std:
     return false;
 }
 
-bool PartCacheManager::getTablePartitions(const IStorage & storage, Catalog::PartitionMap & partitions)
+bool PartCacheManager::getPartitionList(const IStorage & table, std::vector<std::shared_ptr<MergeTreePartition>> & partition_list)
 {
-    TableMetaEntryPtr meta_ptr = getTableMeta(storage.getStorageUUID());
+    TableMetaEntryPtr meta_ptr = getTableMeta(table.getStorageUUID());
     if (meta_ptr)
     {
-        auto table_lock = meta_ptr->readLock();
-        partitions = meta_ptr->partitions;
+        partition_list = meta_ptr->getPartitionList();
         return true;
     }
     return false;
 }
 
-Strings PartCacheManager::getPartitionIDList(const IStorage & storage)
-{
-    Catalog::PartitionMap partitions;
-    getTablePartitions(storage, partitions);
-    Strings partition_ids;
-
-    for (auto & partition : partitions)
-        partition_ids.push_back(partition.first);
-
-    return partition_ids;
-}
-
-bool PartCacheManager::getPartitionList(const IStorage & storage, std::vector<std::shared_ptr<MergeTreePartition>> & partition_list)
+bool PartCacheManager::getPartitionIDs(const IStorage & storage, std::vector<String> & partition_ids)
 {
     TableMetaEntryPtr meta_ptr = getTableMeta(storage.getStorageUUID());
 
     if (meta_ptr)
     {
-        auto table_lock = meta_ptr->readLock();
-        for (auto & partition : meta_ptr->partitions)
-            partition_list.push_back(partition.second->partition_ptr);
+        partition_ids = meta_ptr->getPartitionIDs();
         return true;
     }
 
@@ -466,37 +498,39 @@ void PartCacheManager::invalidPartCache(const UUID & uuid, const DataPartsVector
     if (!meta_ptr)
         return;
 
-    /// TODO: optimized the lock here.
-    std::unordered_map<String, DataPartsVector> partition_to_parts;
+    std::unordered_map<String, Names> partition_to_parts;
+    Strings partition_ids;
     for (auto & part : parts)
     {
         const String & partition_id = part->info.partition_id;
         auto it = partition_to_parts.find(partition_id);
         if (it != partition_to_parts.end())
         {
-            it->second.emplace_back(part);
+            it->second.emplace_back(part->name);
         }
         else
         {
-            DataPartsVector part_list{part};
+            Names part_list{part->name};
             partition_to_parts.emplace(partition_id, part_list);
+            partition_ids.push_back(partition_id);
         }
     }
 
-    auto lock = meta_ptr->writeLock();
+    auto meta_partitions = meta_ptr->getPartitions(partition_ids);
 
     for (auto it = partition_to_parts.begin(); it != partition_to_parts.end(); it++)
     {
+        auto meta_it = meta_partitions.find(it->first);
+        if (meta_it == meta_partitions.end())
+            continue;
+        auto partition_write_lock = meta_it->second->writeLock();
         auto cached = part_cache_ptr->get({uuid, it->first});
 
-        for (auto & part : it->second)
+        if (cached)
         {
-            if (cached)
-            {
-                auto got = cached->find(part->name);
-                if (got != cached->end())
-                    cached->erase(got);
-            }
+            cached->erase(it->second);
+            /// Force LRU cache update status (weight/evict).
+            part_cache_ptr->set({uuid, it->first}, cached);
         }
     }
 }
@@ -510,37 +544,108 @@ void PartCacheManager::insertDataPartsIntoCache(const IStorage & table, const pb
     mayUpdateTableMeta(table);
     UUID uuid = table.getStorageUUID();
     TableMetaEntryPtr meta_ptr = getTableMeta(uuid);
-    if (meta_ptr)
-    {
-        UInt64 ts = getContext()->tryGetTimestamp();
-        auto table_lock = meta_ptr->writeLock();
-        for (const auto & part_model : parts_model)
-        {
-            const auto & storage = dynamic_cast<const MergeTreeMetaBase&>(table);
-            auto partition_ptr = createParitionFromMetaString(storage, part_model.partition_minmax());
-            String partition_id = partition_ptr->getID(storage);
-            Catalog::PartitionMap::iterator it = meta_ptr->partitions.emplace(partition_id, std::make_shared<CnchPartitionInfo>(partition_ptr)).first;
-            if (should_update_metrics)
-            {
-                meta_ptr->metrics_last_update_time = ts;
-                it->second->metrics_ptr->update(part_model);
-                if (!it->second->metrics_ptr->validateMetrics())
-                    meta_ptr->partition_metrics_loaded = false;
-            }
-            /// insert into cache directly if cache status of current partition is not UINIT;
-            if (it->second->cache_status != CacheStatus::UINIT)
-            {
-                auto part_wrapper_ptr = createPartWrapperFromModel(storage, part_model);
-                part_cache_ptr->insert({uuid, partition_id}, part_wrapper_ptr->name, part_wrapper_ptr);
-            }
-        }
-        if (!is_merged_parts)
-            meta_ptr->last_update_time = (ts==TxnTimestamp::maxTS()) ? 0: ts;
-    }
-    else
+    if (!meta_ptr)
     {
         throw Exception("Table is not initialized before save parts into cache.", ErrorCodes::UNKNOWN_STORAGE);
     }
+
+    /// Do all parse jobs outside lock
+    std::unordered_map<String, DataModelPartWrapperVector> partitionid_to_parts;
+    std::unordered_map<String, std::shared_ptr<MergeTreePartition>> partitionid_to_partition;
+    auto & storage = dynamic_cast<const MergeTreeMetaBase &>(table);
+    for (auto & part_model : parts_model)
+    {
+        auto part_wrapper_ptr = createPartWrapperFromModel(storage, part_model);
+        const auto & partition_id = part_wrapper_ptr->info->partition_id;
+        if (!partitionid_to_partition.contains(partition_id))
+            partitionid_to_partition[partition_id] = createParitionFromMetaString(storage, part_model.partition_minmax());
+        auto it = partitionid_to_parts.find(partition_id);
+        if (it != partitionid_to_parts.end())
+            it->second.emplace_back(part_wrapper_ptr);
+        else
+            partitionid_to_parts[partition_id] = DataModelPartWrapperVector{part_wrapper_ptr};
+    }
+
+    UInt64 ts = getContext()->tryGetTimestamp();
+    auto update_metrics = [&](const std::shared_ptr<Protos::DataModelPart> & model, std::shared_ptr<PartitionMetrics> metrics_ptr) {
+        if (!meta_ptr->partition_metrics_loaded)
+            return;
+        meta_ptr->metrics_last_update_time = ts;
+        metrics_ptr->update(*model);
+        if (!metrics_ptr->validateMetrics())
+            meta_ptr->partition_metrics_loaded = false;
+    };
+
+    /// Get or create partitions from meta_ptr
+    Strings partition_ids;
+    partition_ids.reserve(partitionid_to_parts.size());
+    for (const auto & pair : partitionid_to_parts)
+        partition_ids.push_back(pair.first);
+    auto meta_partitions = meta_ptr->getPartitions(partition_ids);
+    /// Create when there are new partitions
+    if (meta_partitions.size() < partitionid_to_parts.size())
+    {
+        auto & partitions = meta_ptr->partitions;
+        for (auto & p : partitionid_to_parts)
+        {
+            const auto & partition_id = p.first;
+            if (meta_partitions.contains(partition_id))
+                continue;
+            auto it = partitions.emplace(partition_id
+                , std::make_shared<CnchPartitionInfo>(partitionid_to_partition[partition_id], partition_id)).first;
+            meta_partitions.emplace(partition_id, *it);
+        }
+    }
+
+    for (auto & [partition_id, parts_wrapper_vector] : partitionid_to_parts)
+    {
+        auto & partition_info_ptr = meta_partitions[partition_id];
+        auto partition_write_lock = partition_info_ptr->writeLock();
+        bool need_insert_into_cache = false;
+        /// Check if new parts should be inserted into cache; Skip if cache status is UINIT
+        if (partition_info_ptr->cache_status != CacheStatus::UINIT)
+        {
+            need_insert_into_cache = true;
+            /// Check whether the partition cache has been invalidate by LRU.
+            if (partition_info_ptr->cache_status == CacheStatus::LOADED)
+            {
+                auto cached = part_cache_ptr->get({uuid, partition_id});
+                if (!cached)
+                {
+                    partition_info_ptr->cache_status = CacheStatus::UINIT;
+                    need_insert_into_cache = false;
+                }
+            }
+        }
+
+        if (need_insert_into_cache)
+        {
+            auto cached = part_cache_ptr->get({uuid, partition_id});
+            if (!cached)
+            {
+                /// directly insert all new parts into cache.
+                cached = std::make_shared<DataPartModelsMap>();
+                cached->insert(parts_wrapper_vector, [](const DataModelPartWrapperPtr & part_wrapper_ptr) { return part_wrapper_ptr->name; });
+                part_cache_ptr->insert({uuid, partition_id}, cached);
+            }
+            else
+            {
+                cached->insert(parts_wrapper_vector, [](const DataModelPartWrapperPtr & part_wrapper_ptr) { return part_wrapper_ptr->name; });
+                /// Force LRU cache update status (weight/evict).
+                part_cache_ptr->set({uuid, partition_id}, cached);
+            }
+        }
+        if (should_update_metrics)
+        {
+            for (const auto & part_wrapper_ptr : parts_wrapper_vector)
+            {
+                update_metrics(part_wrapper_ptr->part_model, partition_info_ptr->metrics_ptr);
+            }
+        }
+    }
+
+    if (!is_merged_parts)
+        meta_ptr->last_update_time = (ts==TxnTimestamp::maxTS()) ? 0: ts;
 }
 
 void PartCacheManager::reloadPartitionMetrics(const UUID & uuid, const TableMetaEntryPtr & table_meta)
@@ -553,16 +658,17 @@ void PartCacheManager::reloadPartitionMetrics(const UUID & uuid, const TableMeta
 
         {
             size_t total_parts_number {0};
-            auto lock = table_meta->writeLock();
-            for (auto & partition : table_meta->partitions)
+            auto & meta_partitions = table_meta->partitions;
+            for (auto it = meta_partitions.begin(); it != meta_partitions.end(); it++)
             {
-                const String & partition_id = partition.first;
+                auto & partition_info_ptr = *it;
+                const String & partition_id = partition_info_ptr->partition_id;
                 auto found = partitions.find(partition_id);
                 /// update metrics if we have recalculated it for current partition
                 if (found != partitions.end())
-                    partition.second->metrics_ptr = found->second;
+                    partition_info_ptr->metrics_ptr = found->second;
 
-                total_parts_number += partition.second->metrics_ptr->total_parts_number;
+                total_parts_number += partition_info_ptr->metrics_ptr->total_parts_number;
             }
             table_meta->metrics_last_update_time = getContext()->tryGetTimestamp(__PRETTY_FUNCTION__);
             table_meta->partition_metrics_loaded = true;
@@ -665,12 +771,10 @@ DB::ServerDataPartsVector PartCacheManager::getOrSetServerDataPartsInPartitions(
     if (!meta_ptr)
         return res;
 
-    Strings all_existing_partitions = getPartitionIDList(table);
-
     /// On cnch worker, we disable part cache to avoid cache synchronization with server.
     if (getContext()->getServerType() != ServerType::cnch_server)
     {
-        DataModelPartPtrVector fetched = load_func(partitions, all_existing_partitions);
+        DataModelPartPtrVector fetched = load_func(partitions,  meta_ptr->getPartitionIDs());
         for (auto & part_model_ptr : fetched)
         {
             auto part_wrapper_ptr = createPartWrapperFromModel(storage, *part_model_ptr);
@@ -681,9 +785,9 @@ DB::ServerDataPartsVector PartCacheManager::getOrSetServerDataPartsInPartitions(
     }
 
     if (meta_ptr->load_parts_by_partition)
-        res = getServerPartsByPartition(storage, meta_ptr, partitions, all_existing_partitions, load_func, ts);
+        res = getServerPartsByPartition(storage, meta_ptr, partitions, load_func, ts);
     else
-        res = getServerPartsInternal(storage, meta_ptr, partitions, all_existing_partitions, load_func, ts);
+        res = getServerPartsInternal(storage, meta_ptr, partitions, meta_ptr->getPartitionIDs(), load_func, ts);
 
     return res;
 }
@@ -703,44 +807,53 @@ DB::ServerDataPartsVector PartCacheManager::getServerPartsInternal(
     ServerDataPartsVector res;
     UUID uuid = storage.getStorageUUID();
 
-    DataModelPartWrapperVector data_from_cache;
+    auto meta_partitions = meta_ptr->getPartitions(partitions);
+
     Strings partitions_not_cached;
+    for (auto & [partition_id, partition_info_ptr] : meta_partitions)
     {
-        auto lock = meta_ptr->writeLock();
-        for (const auto & partition_id : partitions)
+        bool hit_cache = false;
         {
-            /// required partition may not exist. skip it.
-            if (!meta_ptr->partitions.count(partition_id))
-                continue;
-
-            PartitionInfoPtr partition_info_ptr = meta_ptr->partitions[partition_id];
-            auto cached = part_cache_ptr->get({uuid, partition_id});
-
-            if (partition_info_ptr->cache_status == CacheStatus::LOADED && cached)
+            if (partition_info_ptr->cache_status == CacheStatus::LOADED)
             {
-                for (auto & item : *cached)
-                    data_from_cache.push_back(item.second);
-            }
-            else
-            {
-                /// its okay if other task is loading the same partition.
-                partition_info_ptr->cache_status = CacheStatus::LOADING;
-                partitions_not_cached.push_back(partition_id);
+                auto cached = part_cache_ptr->get({uuid, partition_id});
+                if (cached)
+                {
+                    hit_cache = true;
+                    for (auto it = cached->begin(); it != cached->end(); ++it)
+                    {
+                        const auto & part_wrapper_ptr = *it;
+                        if (isVisible(part_wrapper_ptr, ts))
+                        {
+                            res.push_back(std::make_shared<ServerDataPart>(part_wrapper_ptr));
+                            logPartsVector(storage, res);
+                        }
+                    }
+                }
             }
         }
-    }
-
-    for (auto & data_wrapper_ptr : data_from_cache)
-    {
-        if (isVisible(data_wrapper_ptr, ts))
+        if (!hit_cache)
         {
-            res.push_back(std::make_shared<ServerDataPart>(data_wrapper_ptr));
-            logPartsVector(storage, res);
+            partitions_not_cached.push_back(partition_id);
+            auto partition_write_lock = partition_info_ptr->writeLock();
+            partition_info_ptr->cache_status = CacheStatus::LOADING;
         }
     }
 
     if (partitions_not_cached.empty())
         return res;
+
+    auto fallback_cache_status = [&partitions_not_cached, &meta_partitions]()
+    {
+        // change the partitino cache status to UINIT if loading failed.
+        for (auto & partition_id : partitions_not_cached)
+        {
+            auto & partition_info = meta_partitions[partition_id];
+            auto partition_write_lock = partition_info->writeLock();
+            if (partition_info->cache_status == CacheStatus::LOADING)
+                partition_info->cache_status = CacheStatus::UINIT;
+        } 
+    };
 
     try
     {
@@ -765,39 +878,75 @@ DB::ServerDataPartsVector PartCacheManager::getServerPartsInternal(
                 partition_to_parts[partition_id] = DataModelPartWrapperVector{part_wrapper_ptr};
         }
 
-        /// merge fetched parts with that in cache;
         {
-            auto lock = meta_ptr->writeLock();
-            for (auto & [partition_id, parts_wrapper_vector] : partition_to_parts)
+            /// merge fetched parts with that in cache;
+            for (const auto & partition_id : partitions_not_cached)
             {
-                auto cached = part_cache_ptr->get({uuid, partition_id});
-                for (const auto & part_wrapper_ptr : parts_wrapper_vector)
+                auto & partition_info_ptr = meta_partitions[partition_id];
+                auto partition_write_lock = partition_info_ptr->writeLock();
+
+                /// Other other task may fail to fetch and change CacheStatus to UINIT before.
+                /// If so, do not touch the cache since insert parts may be missed.
+                /// Also, other task may success to fetch and change CacheStatus to LOADED before.
+                /// If so, no need to modify cache again.
+                if (partition_info_ptr->cache_status != CacheStatus::LOADING)
+                    continue;
+
+                DataModelPartWrapperVector * parts_wrapper_vector;
+                std::optional<DataModelPartWrapperVector> empty_part_vector;
+                auto it = partition_to_parts.find(partition_id);
+                /// For empty partition, still need to insert an empty vector to cache
+                if (it == partition_to_parts.end())
                 {
-                    if (cached)
+                    empty_part_vector = std::make_optional<DataModelPartWrapperVector>();
+                    parts_wrapper_vector =  &empty_part_vector.value();
+                }
+                else
+                {
+                    parts_wrapper_vector = &it->second;
+                }
+
+                auto cached = part_cache_ptr->get({uuid, partition_id});
+                if (!cached)
+                {
+                    /// directly insert all fetched parts into cache.
+                    cached = std::make_shared<DataPartModelsMap>();
+                    for (const auto & part_wrapper_ptr : *parts_wrapper_vector)
+                    {
+                        cached->update(part_wrapper_ptr->name, part_wrapper_ptr);
+                    }
+                    part_cache_ptr->insert({uuid, partition_id}, cached);
+                }
+                else
+                {
+                    /// Its THREAD SAFE to update cache inplace
+                    for (const auto & part_wrapper_ptr : *parts_wrapper_vector)
                     {
                         auto it = cached->find(part_wrapper_ptr->name);
-                        // do not update cache if the cached data is newer than bytekv.
-                        if (it == cached->end() || it->second->part_model->commit_time() < part_wrapper_ptr->part_model->commit_time())
+                        /// do not update cache if the cached data is newer than kv.
+                        if (it == cached->end() || (*it)->part_model->commit_time() < part_wrapper_ptr->part_model->commit_time())
                         {
-                            part_cache_ptr->insert({uuid, partition_id}, part_wrapper_ptr->name, part_wrapper_ptr);
+                            cached->update(part_wrapper_ptr->name, part_wrapper_ptr);
                         }
                     }
-                    else
-                    {
-                        part_cache_ptr->insert({uuid, partition_id}, part_wrapper_ptr->name, part_wrapper_ptr);
-                    }
+                    /// Force LRU cache update status(weight/evict).
+                    part_cache_ptr->set({uuid, partition_id}, cached);
+                }
 
-                    /// Only filter the parts when both commit_time and txnid are smaller or equal to ts (txnid is helpful for intermediate parts).
+                partition_info_ptr->cache_status = CacheStatus::LOADED;
+            }
+
+            /// Add fetched parts to result outside to reduce write lock time
+            for (auto & [partition_id, parts_wrapper_vector] : partition_to_parts)
+            {
+                for (const auto & part_wrapper_ptr : parts_wrapper_vector)
+                {
                     if (isVisible(part_wrapper_ptr, ts))
                     {
                         res.push_back(std::make_shared<ServerDataPart>(part_wrapper_ptr));
                         logPartsVector(storage, res);
-                    }
+                    }                    
                 }
-
-                // change CacheStatus to LOADED only if it is LOADING. Other task may fail to fetch and change CacheStatus to UINIT before.
-                if (meta_ptr->partitions[partition_id]->cache_status == CacheStatus::LOADING)
-                    meta_ptr->partitions[partition_id]->cache_status = CacheStatus::LOADED;
             }
         }
     }
@@ -807,75 +956,63 @@ DB::ServerDataPartsVector PartCacheManager::getServerPartsInternal(
         if (e.code() == ErrorCodes::TIMEOUT_EXCEEDED)
             meta_ptr->load_parts_by_partition = true;
 
-        // change the partitino cache status to UINIT if loading failed.
-        for (auto & partition_id : partitions_not_cached)
-        {
-            if (meta_ptr->partitions[partition_id]->cache_status == CacheStatus::LOADING)
-                meta_ptr->partitions[partition_id]->cache_status = CacheStatus::UINIT;
-        }
+        fallback_cache_status();
         throw e;
+    }
+    catch (...)
+    {
+        fallback_cache_status();
+        throw;
     }
 
     return res;
 }
 
 ServerDataPartsVector PartCacheManager::getServerPartsByPartition(const MergeTreeMetaBase & storage, const TableMetaEntryPtr & meta_ptr,
-    const Strings & partitions, const Strings & all_existing_partitions,
-    PartCacheManager::LoadPartsFunc & load_func, const UInt64 & ts)
+    const Strings & partitions, PartCacheManager::LoadPartsFunc & load_func, const UInt64 & ts)
 {
     LOG_DEBUG(&Poco::Logger::get("PartCacheManager"), "Get parts by partitions for table : {}", storage.getLogName());
     Stopwatch watch;
     ServerDataPartsVector res;
     UUID uuid = storage.getStorageUUID();
 
-    for (size_t i = 0; i<partitions.size();)
+    auto meta_partitions = meta_ptr->getPartitions(partitions);
+
+    for (auto partition_it = meta_partitions.begin(); partition_it != meta_partitions.end();)
     {
-        String partition_id = partitions[i];
+        const auto & partition_id = partition_it->first;
+        PartitionInfoPtr & partition_info_ptr = partition_it->second;
         bool need_load_parts = false;
-        bool goto_next_partition = false;
-        PartitionInfoPtr partition_info_ptr;
-        DataModelPartWrapperVector data_from_cache;
 
         {
-            auto lock = meta_ptr->writeLock();
-             /// required partition may not exist. skip it.
-            if (!meta_ptr->partitions.count(partition_id))
+            if (partition_info_ptr->cache_status == CacheStatus::LOADED)
             {
-                i++;
-                continue;
+                auto cached = part_cache_ptr->get({uuid, partition_id});
+                if (cached)
+                {
+                    for (auto it = cached->begin(); it != cached->end(); ++it)
+                    {
+                        const auto & part_wrapper_ptr = *it;
+                        if (isVisible(part_wrapper_ptr, ts))
+                        {
+                            res.push_back(std::make_shared<ServerDataPart>(part_wrapper_ptr));
+                            logPartsVector(storage, res);
+                        }
+                    }
+
+                    /// already get parts from cache, continue to next partition
+                    partition_it++;
+                    continue;
+                }
             }
 
-            partition_info_ptr = meta_ptr->partitions[partition_id];
-            auto cached = part_cache_ptr->get({uuid, partition_id});
-
-            if (partition_info_ptr->cache_status == CacheStatus::LOADED && cached)
-            {
-                for (auto & item : *cached)
-                    data_from_cache.push_back(item.second);
-
-                /// already get parts from cache, continue to next partition
-                i++;
-                goto_next_partition = true;
-            }
-            else if (partition_info_ptr->cache_status == CacheStatus::LOADED || partition_info_ptr->cache_status == CacheStatus::UINIT)
+            auto partition_write_lock = partition_info_ptr->writeLock();
+            /// Double check
+            if (partition_info_ptr->cache_status != CacheStatus::LOADING)
             {
                 partition_info_ptr->cache_status = CacheStatus::LOADING;
                 need_load_parts = true;
             }
-        }
-
-        if (goto_next_partition)
-        {
-            for (auto & data_wrapper_ptr : data_from_cache)
-            {
-                if (isVisible(data_wrapper_ptr, ts))
-                {
-                    res.push_back(std::make_shared<ServerDataPart>(data_wrapper_ptr));
-                    logPartsVector(storage, res);
-                }
-            }
-            /// Data part in current partition have been loaded from cache, continue loading next partition.
-            continue;
         }
 
         /// Now cache status must be LOADING;
@@ -886,75 +1023,84 @@ ServerDataPartsVector PartCacheManager::getServerPartsByPartition(const MergeTre
             try
             {
                 std::unordered_map<String, DataModelPartWrapperVector> partition_to_parts;
-                fetched = load_func({partition_id}, all_existing_partitions);
+                fetched = load_func({partition_id}, {partition_id});
                 DataModelPartWrapperVector fetched_data;
-                for (auto & data_model_part_ptr : fetched)
+                for (auto & dataModelPartPtr : fetched)
                 {
-                    fetched_data.push_back(createPartWrapperFromModel(storage, *data_model_part_ptr));
+                    fetched_data.push_back(createPartWrapperFromModel(storage, *dataModelPartPtr));
                 }
 
-                auto lock = meta_ptr->writeLock();
-                /// It happens that new parts have been inserted into cache during loading parts from bytekv, we need merge them to make
+                /// It happens that new parts have been inserted into cache during loading parts from bytekv, we need merge them to make 
                 /// sure the cache contains all parts of the partition.
+                auto partition_write_lock = partition_info_ptr->writeLock();
                 auto cached = part_cache_ptr->get({uuid, partition_id});
                 if (!cached)
                 {
-                    /// Insert a Map to the cache to ensure the partition id exists in LRU even if there is no part
+                    /// directly insert all fetched parts into cache
                     cached = std::make_shared<DataPartModelsMap>();
+                    for (auto & data_wrapper_ptr : fetched_data)
+                    {
+                        cached->update(data_wrapper_ptr->name, data_wrapper_ptr);
+                    }
                     part_cache_ptr->insert({uuid, partition_id}, cached);
                 }
-
-                for (auto & data_wrapper_ptr : fetched_data)
+                else
                 {
-                    auto final_wrapper_ptr = data_wrapper_ptr;
-                    String partition_id = data_wrapper_ptr->info->partition_id;
-
-                    auto it = cached->find(data_wrapper_ptr->name);
-                    // do not update cache if the cached data is newer than bytekv.
-                    if (it != cached->end() && it->second->part_model->commit_time() > data_wrapper_ptr->part_model->commit_time())
+                    for (auto & data_wrapper_ptr : fetched_data)
                     {
-                        final_wrapper_ptr = createPartWrapperFromModel(storage, *(it->second->part_model));
+                        auto it = cached->find(data_wrapper_ptr->name);
+                        /// do not update cache if the cached data is newer than bytekv.
+                        if (it == cached->end() || (*it)->part_model->commit_time() < data_wrapper_ptr->part_model->commit_time())
+                        {
+                            cached->update(data_wrapper_ptr->name, data_wrapper_ptr);
+                        }
                     }
-                    else
-                    {
-                        part_cache_ptr->insert({uuid, partition_id}, data_wrapper_ptr->name, data_wrapper_ptr);
-                    }
-
-                    /// Only filter the parts when both commit_time and txnid are smaller or equal to ts (txnid is helpful for intermediate parts).
-                    if (isVisible(final_wrapper_ptr, ts))
-                    {
-                        res.push_back(std::make_shared<ServerDataPart>(final_wrapper_ptr));
-                        logPartsVector(storage, res);
-                    }
+                    /// Force LRU cache update status(weight/evict).
+                    part_cache_ptr->set({uuid, partition_id}, cached);
                 }
 
                 partition_info_ptr->cache_status = CacheStatus::LOADED;
 
+                /// Release partition lock before construct ServerDataPart
+                partition_write_lock.reset();
+
+                /// Finish fetching parts, notify other waiting tasks if any.
+                meta_ptr->fetch_cv.notify_all();
+
+                for (auto & data_wrapper_ptr : fetched_data)
+                {
+                    /// Only filter the parts when both commit_time and txnid are smaller or equal to ts (txnid is helpful for intermediate parts).
+                    if (isVisible(data_wrapper_ptr, ts))
+                    {
+                        res.push_back(std::make_shared<ServerDataPart>(data_wrapper_ptr));
+                        logPartsVector(storage, res);
+                    }                    
+                }
+
                 /// go to next partition;
-                i++;
+                partition_it++;
             }
-            catch(Exception & e)
+            catch (...)
             {
                 /// change cache status to UINIT if exception occurs during fetch.
-                auto lock = meta_ptr->writeLock();
+                auto partition_write_lock = partition_info_ptr->writeLock();
                 partition_info_ptr->cache_status = CacheStatus::UINIT;
-                throw e;
-            }
-
-            /// Finish fetching parts, notify other waiting tasks if any.
-            {
-                std::unique_lock<std::mutex> lock(meta_ptr->fetch_mutex);
-                meta_ptr->fetch_cv.notify_all();
+                throw;
             }
         }
         else /// other task is fetching parts now, just wait for the result
         {
             {
                 std::unique_lock<std::mutex> lock(meta_ptr->fetch_mutex);
-                meta_ptr->fetch_cv.wait_for(lock, std::chrono::milliseconds(5000), [&partition_info_ptr]() {return partition_info_ptr->cache_status == CacheStatus::LOADED;});
+                if (!meta_ptr->fetch_cv.wait_for(lock, std::chrono::milliseconds(5000)
+                    , [&partition_info_ptr]() {return partition_info_ptr->cache_status == CacheStatus::LOADED;}))
+                {
+                    LOG_TRACE(&Poco::Logger::get("PartCacheManager"), "Wait timeout 5000ms for other thread loading table: {}, partition: {}", storage.getStorageID().getNameForLogs(), partition_id);
+                    checkTimeLimit(watch);
+                    continue;
+                }
             }
 
-            auto lock = meta_ptr->readLock();
             if (partition_info_ptr->cache_status == CacheStatus::LOADED)
             {
                 auto cached = part_cache_ptr->get({uuid, partition_id});
@@ -962,17 +1108,17 @@ ServerDataPartsVector PartCacheManager::getServerPartsByPartition(const MergeTre
                 {
                     throw Exception("Cannot get already loaded parts from cache. Its a logic error.", ErrorCodes::LOGICAL_ERROR);
                 }
-                for (auto & item : *cached)
+                for (auto it = cached->begin(); it != cached->end(); ++it)
                 {
-                    // DataPartPtr data_part_ptr = createPartFromModel(storage, *(item.second->part_model));
+                    const auto & part_wrapper_ptr = *it;
                     /// Only filter the parts when both commit_time and txnid are smaller or equal to ts (txnid is helpful for intermediate parts).
-                    if (isVisible(item.second, ts))
+                    if (isVisible(part_wrapper_ptr, ts))
                     {
-                        res.push_back(std::make_shared<ServerDataPart>(item.second));
+                        res.push_back(std::make_shared<ServerDataPart>(part_wrapper_ptr));
                         logPartsVector(storage, res);
                     }
                 }
-                i++;
+                partition_it++;
             }
             // if cache status does not change to loaded, get parts of current partition again.
         }

@@ -59,7 +59,11 @@ namespace
             auto & quota_limits = *it;
             quota_limits.randomize_interval = query_limits.randomize_interval;
             for (auto resource_type : collections::range(Quota::MAX_RESOURCE_TYPE))
+            {
+                //range returns a half-closed interval [begin, end) so we won't overrun
+                //coverity[overrun-local]
                 quota_limits.max[resource_type] = query_limits.max[resource_type];
+            }
         }
 
         if (override_to_roles)

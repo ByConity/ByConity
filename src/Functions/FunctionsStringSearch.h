@@ -1,5 +1,6 @@
 #pragma once
 
+#include <type_traits>
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnFixedString.h>
@@ -45,6 +46,23 @@ namespace ErrorCodes
     extern const int ILLEGAL_TYPE_OF_ARGUMENT;
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 }
+
+template <bool like, bool revert, bool case_insensitive>
+struct EscapeMatchImpl;
+
+template <typename Impl>
+constexpr bool isEscapeMatchImpl()
+{
+    return (std::is_same_v<Impl, EscapeMatchImpl<true, false, false>>
+                    || std::is_same_v<Impl, EscapeMatchImpl<true, false, true>>
+                    || std::is_same_v<Impl, EscapeMatchImpl<false, false, false>>
+                    || std::is_same_v<Impl, EscapeMatchImpl<true, true, true>>
+                    || std::is_same_v<Impl, EscapeMatchImpl<true, true, false>>
+                    || std::is_same_v<Impl, EscapeMatchImpl<false, true, false>>
+                    || std::is_same_v<Impl, EscapeMatchImpl<false, true, true>>
+                    || std::is_same_v<Impl, EscapeMatchImpl<false, false, true>>);
+}
+struct NameInstr;
 
 template <typename Impl, typename Name>
 class FunctionsStringSearch : public IFunction
@@ -104,8 +122,22 @@ public:
     {
         using ResultType = typename Impl::ResultType;
 
-        const ColumnPtr & column_haystack = arguments[0].column;
-        const ColumnPtr & column_needle = arguments[1].column;
+        UInt8 column_haystack_index;
+        UInt8 column_needle_index;
+
+        if constexpr (std::is_same_v<Name, NameInstr>)
+        {
+            column_haystack_index = 1;
+            column_needle_index = 0;
+        }
+        else
+        {
+            column_haystack_index = 0;
+            column_needle_index = 1;
+        }
+
+        const ColumnPtr & column_haystack = arguments[column_haystack_index].column;
+        const ColumnPtr & column_needle = arguments[column_needle_index].column;
 
         ColumnPtr column_start_pos = nullptr;
         if (arguments.size() >= 3)

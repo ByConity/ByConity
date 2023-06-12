@@ -46,6 +46,7 @@ TransformResult PushLimitIntoDistinct::transformImpl(PlanNodePtr node, const Cap
     if (limit_value == 0)
         return {};
 
+
     if (!isLimitNeeded(*limit_step, distinct))
         return {};
 

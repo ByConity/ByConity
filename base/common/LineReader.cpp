@@ -159,6 +159,7 @@ LineReader::InputStatus LineReader::readOneLine(const String & prompt)
                 {
                     break;
                 }
+                dlclose(dl_handle);
             }
         }
     }

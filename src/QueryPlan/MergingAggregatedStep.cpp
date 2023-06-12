@@ -97,6 +97,11 @@ void MergingAggregatedStep::setInputStreams(const DataStreams & input_streams_)
 
 void MergingAggregatedStep::transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings & build_settings)
 {
+    if (hasNonParallelAggregateFunctions(params->params.aggregates))
+    {
+        pipeline.resize(1);
+    }
+
     if (!memory_efficient_aggregation)
     {
         /// We union several sources into one, paralleling the work.

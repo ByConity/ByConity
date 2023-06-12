@@ -1226,7 +1226,7 @@ void QueryAnalyzerVisitor::analyzeGroupBy(ASTSelectQuery & select_query, ASTs & 
                     }
 
                 // if grouping expr has been analyzed(i.e. it is from select expression), only check there is no agg/window/grouping
-                if (analysis.hasExpressionType(grouping_expr))
+                if (analysis.hasExpressionColumnWithType(grouping_expr))
                 {
                     verifyNoAggregateWindowOrGroupingOperations(grouping_expr, "GROUP BY expression");
                 }
@@ -1368,7 +1368,7 @@ void QueryAnalyzerVisitor::analyzeOrderBy(ASTSelectQuery & select_query, ASTs & 
                     order_item->children.push_back(select_expressions[index - 1]);
                 }
 
-            if (!analysis.hasExpressionType(order_item->children.front()))
+            if (!analysis.hasExpressionColumnWithType(order_item->children.front()))
                 ExprAnalyzer::analyze(order_item, output_scope, context, analysis, expr_options);
 
             result.push_back(std::dynamic_pointer_cast<ASTOrderByElement>(order_item));

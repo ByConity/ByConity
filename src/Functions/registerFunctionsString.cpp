@@ -61,6 +61,21 @@ void registerFunctionExtractTextFromHTML(FunctionFactory &);
 void registerFunctionsAppVersionCompare(FunctionFactory &);
 void registerFunctionUnicodeToUTF8(FunctionFactory &);
 void registerFunctionPumpZookeeper(FunctionFactory &);
+void registerFunctionFindInSet(FunctionFactory &);
+void registerFunctionBitLength(FunctionFactory &);
+void registerFunctionExportSet(FunctionFactory &);
+void registerFunctionField(FunctionFactory &);
+void registerFunctionInstr(FunctionFactory &);
+void registerFunctionOct(FunctionFactory &);
+void registerFunctionSubstringIndex(FunctionFactory &);
+void registerFunctionSplitPart(FunctionFactory &);
+void registerFunctionStrcmp(FunctionFactory &);
+void registerFunctionRLike(FunctionFactory &);
+void registerFunctionToUTF8(FunctionFactory &);
+void registerFunctionFromUTF8(FunctionFactory &);
+void registerFunctionCharCoding(FunctionFactory &);
+void registerFunctionElt(FunctionFactory &);
+void registerFunctionMakeSet(FunctionFactory &);
 
 
 #if USE_BASE64
@@ -104,6 +119,21 @@ void registerFunctionsString(FunctionFactory & factory)
     registerFunctionsAppVersionCompare(factory);
     registerFunctionUnicodeToUTF8(factory);
     registerFunctionPumpZookeeper(factory);
+    registerFunctionFindInSet(factory);
+    registerFunctionBitLength(factory);
+    registerFunctionExportSet(factory);
+    registerFunctionField(factory);
+    registerFunctionInstr(factory);
+    registerFunctionOct(factory);
+    registerFunctionSubstringIndex(factory);
+    registerFunctionSplitPart(factory);
+    registerFunctionStrcmp(factory);
+    registerFunctionRLike(factory);
+    registerFunctionToUTF8(factory);
+    registerFunctionFromUTF8(factory);
+    registerFunctionCharCoding(factory);
+    registerFunctionElt(factory);
+    registerFunctionMakeSet(factory);
 #if USE_BASE64
     registerFunctionBase64Encode(factory);
     registerFunctionBase64Decode(factory);

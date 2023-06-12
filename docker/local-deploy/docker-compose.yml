@@ -37,6 +37,7 @@ services:
       FDB_COORDINATOR_PORT: 4550
       FDB_PORT: 4550
     container_name: fdb-0
+  
 
   # byconity:
   tso:

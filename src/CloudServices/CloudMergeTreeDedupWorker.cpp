@@ -178,7 +178,7 @@ void CloudMergeTreeDedupWorker::iterate()
     CnchLockHolder cnch_lock(
         *context,
         CnchDedupHelper::getLocksToAcquire(
-            scope, txn->getTransactionID(), storage, storage.getSettings()->dedup_acquire_lock_timeout.value.totalMilliseconds()));
+            scope, txn->getTransactionID(), storage, storage.getSettings()->unique_acquire_write_lock_timeout.value.totalMilliseconds()));
     if (!cnch_lock.tryLock())
         return;
 

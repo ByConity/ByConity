@@ -46,6 +46,7 @@
 #include <Interpreters/ExternalModelsLoader.h>
 #include <Interpreters/InterserverCredentials.h>
 #include <Interpreters/JIT/CompiledExpressionCache.h>
+#include <Interpreters/ServerPartLog.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/loadMetadata.h>
 #include <Processors/Exchange/DataTrans/Brpc/BrpcExchangeReceiverRegistryService.h>
@@ -1280,6 +1281,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
         database_catalog.loadDatabases();
         /// After loading validate that default database exists
         database_catalog.assertDatabaseExists(default_database);
+
+        if (global_context->getServerType() == ServerType::cnch_server)
+        {
+            /// Load digest information from system.server_part_log for partition selector.
+            if (auto server_part_log = global_context->getServerPartLog())
+                server_part_log->prepareTable();
+            global_context->initBGPartitionSelector();
+        }
     }
     catch (...)
     {

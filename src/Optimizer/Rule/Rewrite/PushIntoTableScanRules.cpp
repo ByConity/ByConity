@@ -49,7 +49,7 @@ TransformResult PushFilterIntoTableScan::transformImpl(PlanNodePtr node, const C
         for (const auto & item : table_step->getColumnAlias())
             inv_alias.emplace(item.second, item.first);
 
-        auto mapper = SymbolMapper::symbolMapper(inv_alias);
+        auto mapper = SymbolMapper::simpleMapper(inv_alias);
 
         std::vector<ConstASTPtr> conjuncts;
         for (auto & filter : pushdown_filters)

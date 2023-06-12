@@ -213,6 +213,8 @@ void MySQLHandler::finishHandshake(MySQLProtocol::ConnectionPhase::HandshakeResp
     size_t pos = 0;
 
     /// Reads at least count and at most packet_size bytes.
+    // buf is initialized in lambda under receiveBytes
+    // coverity[uninit_use]
     auto read_bytes = [this, &buf, &pos, &packet_size](size_t count) -> void {
         while (pos < count)
         {
@@ -397,6 +399,8 @@ void MySQLHandlerSSL::finishHandshakeSSL(
     payload.ignore(PACKET_HEADER_SIZE);
     ssl_request.readPayloadWithUnpacked(payload);
     client_capabilities = ssl_request.capability_flags;
+    // capability_flags initialized under readPayloadWithUnpacked
+    // coverity[uninit_use]
     max_packet_size = ssl_request.max_packet_size ? ssl_request.max_packet_size : MAX_PACKET_LENGTH;
     secure_connection = true;
     ss = std::make_shared<SecureStreamSocket>(SecureStreamSocket::attach(socket(), SSLManager::instance().defaultServerContext()));

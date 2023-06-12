@@ -27,6 +27,9 @@
 
 namespace DB
 {
+
+NameSet PushPartialAggThroughExchange::BLOCK_AGGS{"pathCount", "attributionAnalysis", "attributionCorrelationMerge"};
+
 PatternPtr PushPartialAggThroughExchange::getPattern() const
 {
     return Patterns::aggregating()
@@ -42,6 +45,13 @@ TransformResult PushPartialAggThroughExchange::transformImpl(PlanNodePtr node, c
         return {};
     const auto * step = dynamic_cast<const AggregatingStep *>(node->getStep().get());
 
+    for (const auto & agg : step->getAggregates())
+    {
+        if (BLOCK_AGGS.count(agg.function->getName()))
+        {
+            return {};
+        }
+    }
     // TODO if aggregate data is almost pure distinct, then partial aggregate is useless.
     // Consider these two cases
     // 1: if group by keys is or contains primary key (may be need function dependency ...), then don't push partial aggregate.

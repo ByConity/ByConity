@@ -135,7 +135,7 @@ void IStorageCnchKafka::getKafkaTableInfo(KafkaTableInfo & table_info)
     table_info.database = getDatabaseName();
     table_info.table = getTableName();
     table_info.uuid = UUIDHelpers::UUIDToString(getStorageUUID());
-    table_info.cluster = settings.cluster.value;
+    table_info.cluster = getCluster();
     table_info.topics = topics;
     table_info.consumer_group = settings.group_name.value;
 }

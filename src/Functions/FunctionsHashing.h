@@ -892,6 +892,8 @@ private:
     ImplementationSelector<IFunction> selector;
 };
 
+// checked applyWithSeed calls and no apparent out of bound buffer
+// coverity[overrun-buffer-val]
 DECLARE_MULTITARGET_CODE(
 
 template <typename Impl, bool with_seed = false>

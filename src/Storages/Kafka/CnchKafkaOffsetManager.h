@@ -21,10 +21,10 @@
 
 namespace DB
 {
-class CnchKafkaOffsetManager
+class CnchKafkaOffsetManager : public WithMutableContext
 {
 public:
-    CnchKafkaOffsetManager(ContextPtr context, StorageID & storage_id);
+    CnchKafkaOffsetManager(const StorageID & storage_id, ContextMutablePtr context_);
     ~CnchKafkaOffsetManager() = default;
 
     /*** Reset all offsets for the Kafka table to the earliest offset
@@ -53,8 +53,6 @@ private:
 
     /// Create TopicPartitionList from metadata and update offsets with timestamp (if given)
     cppkafka::TopicPartitionList createTopicPartitionList(uint64_t timestamp);
-
-    ContextPtr global_context;
 
     StoragePtr storage = nullptr; /// Used to ensure the life cycle
     StorageCnchKafka * kafka_table = nullptr;

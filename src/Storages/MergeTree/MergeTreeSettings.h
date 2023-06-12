@@ -184,6 +184,7 @@ struct Settings;
     M(Bool, enable_async_init_metasotre, false, "", 0) \
     M(Bool, cnch_temporary_table, false, "", 0) \
     M(MaxThreads, cnch_parallel_prefetching, 0, "", 0) \
+    M(Bool, enable_calculate_columns_size_with_sample, 1, "", 0) \
                                                                                                               \
     M(Bool, disable_block_output, false, "", 0) \
     M(UInt64, min_drop_ranges_to_enable_cleanup, 365, "", 0) \
@@ -199,7 +200,7 @@ struct Settings;
     \
     M(Bool, cnch_merge_enable_batch_select, false, "", 0)                                                     \
     M(Bool, enable_addition_bg_task, false, "", 0) \
-    M(Int64, max_addition_bg_task_num, 200, "", 0) \
+    M(Int64, max_addition_bg_task_num, 32, "", 0) \
     M(Int64, max_addition_mutation_task_num, 10, "", 0) \
     M(Int64, max_partition_for_multi_select, 3, "", 0) \
     \
@@ -214,7 +215,7 @@ struct Settings;
     M(UInt64, dedup_worker_max_heartbeat_interval, 16, "", 0) \
     M(Bool, partition_level_unique_keys, true, "", 0) \
     M(UInt64, staged_part_lifetime_threshold_ms_to_block_kafka_consume, 10000, "", 0) \
-    M(Seconds, dedup_acquire_lock_timeout, 300, "", 0) \
+    M(Seconds, unique_acquire_write_lock_timeout, 300, "", 0) \
     M(MaxThreads, cnch_parallel_dumping_threads, 8, "", 0) \
     \
     /* Metastore settings */\
@@ -237,6 +238,11 @@ struct Settings;
     M(Bool, cnch_merge_only_realtime_partition, false, "", 0) \
     /** RM - using RM, RoundRobin: - local round robin strategy */ \
     M(String, cnch_merge_pick_worker_algo, "RM", "", 0) \
+    M(UInt64, cnch_merge_round_robin_partitions_interval, 600, "", 0) \
+    M(UInt64, cnch_gc_round_robin_partitions_interval, 600, "", 0) \
+    M(UInt64, cnch_gc_round_robin_partitions_number, 10, "", 0) \
+    M(UInt64, gc_remove_part_thread_pool_size, 2, "", 0) \
+    M(UInt64, gc_remove_part_batch_size, 5000, "", 0) \
     \
     /** uuid of CnchMergeTree, as we won't use uuid in CloudMergeTree */ \
     M(String, cnch_table_uuid, "", "Used for CloudMergeTree to get uuid of Cnch Table for ingestion task, like Kafka", 0) \

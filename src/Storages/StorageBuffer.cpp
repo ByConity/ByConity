@@ -512,6 +512,7 @@ static void appendBlock(const Block & from, Block & to)
                 /// If there is no column, then the exception was thrown in the middle of append, in the insertRangeFrom()
                 if (!col_to)
                 {
+                     // coverity[use_after_move]
                     col_to = std::move(last_col);
                     /// Suppress clang-tidy [bugprone-use-after-move]
                     last_col = {};

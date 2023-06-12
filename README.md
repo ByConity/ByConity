@@ -41,6 +41,7 @@ The following packages are required:
 - Ninja
 - C++ compiler: clang-11 or clang-12
 - Linker: lld
+- FoundationDB client [library](https://github.com/apple/foundationdb/releases/tag/7.1.0)
 
 ```sh
 sudo apt-get update

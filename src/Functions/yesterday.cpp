@@ -14,6 +14,8 @@ namespace DB
 class ExecutableFunctionYesterday : public IExecutableFunction
 {
 public:
+    // Only called by FunctionBaseYesterday which passes UInt16
+    // coverity[store_truncates_time_t]
     explicit ExecutableFunctionYesterday(time_t time_) : day_value(time_) {}
 
     String getName() const override { return "yesterday"; }

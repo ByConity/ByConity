@@ -28,6 +28,8 @@ namespace DB
 
 using namespace std::chrono_literals;
 
+const auto DRAIN_TIMEOUT_MS = 5000ms;
+
 CnchReadBufferFromKafkaConsumer::~CnchReadBufferFromKafkaConsumer()
 {
     try
@@ -46,11 +48,53 @@ CnchReadBufferFromKafkaConsumer::~CnchReadBufferFromKafkaConsumer()
 
     try
     {
-        while (consumer->get_consumer_queue().next_event(50ms));
+        drain();
     }
     catch (...)
     {
         LOG_ERROR(log, "{}(): {}", __func__, getCurrentExceptionMessage(false));
+    }
+}
+
+// Needed to drain rest of the messages / queued callback calls from the consumer
+// after unsubscribe, otherwise consumer will hang on destruction
+// see https://github.com/edenhill/librdkafka/issues/2077
+//     https://github.com/confluentinc/confluent-kafka-go/issues/189 etc.
+void CnchReadBufferFromKafkaConsumer::drain()
+{
+    auto start_time = std::chrono::steady_clock::now();
+    cppkafka::Error last_error(RD_KAFKA_RESP_ERR_NO_ERROR);
+
+    while (true)
+    {
+        auto msg = consumer->poll(100ms);
+        if (!msg)
+            break;
+
+        auto error = msg.get_error();
+
+        if (error)
+        {
+            if (msg.is_eof() || error == last_error)
+            {
+                break;
+            }
+            else
+            {
+                LOG_ERROR(log, "Error during draining: {}", error.to_string());
+            }
+        }
+
+        // i don't stop draining on first error,
+        // only if it repeats once again sequentially
+        last_error = error;
+
+        auto ts = std::chrono::steady_clock::now();
+        if (std::chrono::duration_cast<std::chrono::milliseconds>(ts-start_time) > DRAIN_TIMEOUT_MS)
+        {
+            LOG_ERROR(log, "Timeout during draining.");
+            break;
+        }
     }
 }
 
@@ -115,6 +159,8 @@ void CnchReadBufferFromKafkaConsumer::unsubscribe()
     /// Need clear recorded offsets to avoid messages loss
     offsets.clear();
     consumer->unsubscribe();
+
+    drain();
 }
 
 void CnchReadBufferFromKafkaConsumer::assign(const cppkafka::TopicPartitionList & topic_partition_list)
@@ -131,6 +177,8 @@ void CnchReadBufferFromKafkaConsumer::unassign()
     /// Need clear recorded offsets to avoid messages loss
     offsets.clear();
     consumer->unassign();
+
+    drain();
 }
 
 

@@ -54,6 +54,12 @@ SinglePartitionExchangeSink::SinglePartitionExchangeSink(
 
 void SinglePartitionExchangeSink::consume(Chunk chunk)
 {
+    if (!has_input)
+    {
+        buffered_sender.flush(true);
+        finish();
+        return;
+    }
     const ChunkInfoPtr & info = chunk.getChunkInfo();
     if (!info)
         throw Exception("Chunk info was not set for chunk.", ErrorCodes::LOGICAL_ERROR);

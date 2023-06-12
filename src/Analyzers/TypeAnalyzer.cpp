@@ -58,7 +58,7 @@ ExpressionTypes TypeAnalyzer::getExpressionTypes(const ConstASTPtr & expr) const
 {
     Analysis analysis;
     ExprAnalyzer::analyze(REMOVE_CONST(expr), &scope, context, analysis);
-    return std::move(analysis.expression_types);
+    return analysis.getExpressionTypes();
 }
 
 }

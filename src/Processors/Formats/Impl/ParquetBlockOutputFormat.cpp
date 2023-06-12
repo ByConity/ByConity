@@ -55,10 +55,11 @@ void ParquetBlockOutputFormat::consume(Chunk chunk)
             *arrow_table->schema(),
             arrow::default_memory_pool(),
             sink,
-            props, /*parquet::default_writer_properties(),*/
-            &file_writer);
+            props /*parquet::default_writer_properties(),*/
+            ).Value(&file_writer);
         if (!status.ok())
             throw Exception{"Error while opening a table: " + status.ToString(), ErrorCodes::UNKNOWN_EXCEPTION};
+        
     }
 
     // TODO: calculate row_group_size depending on a number of rows and table size

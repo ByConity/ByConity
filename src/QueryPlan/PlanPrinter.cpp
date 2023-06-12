@@ -113,11 +113,23 @@ std::string PlanPrinter::textLogicalPlan(
     return output;
 }
 
-std::string PlanPrinter::jsonLogicalPlan(QueryPlan & plan, bool print_stats, bool)
+String PlanPrinter::jsonLogicalPlan(QueryPlan & plan, bool print_stats, bool, const PlanNodeCost & plan_cost)
 {
     std::ostringstream os;
     JsonPrinter printer{print_stats};
-    auto json = printer.printLogicalPlan(*plan.getPlanNode());
+    Poco::JSON::Object::Ptr json = new Poco::JSON::Object(true);
+    if (!plan.getPlanNode()->getStatistics() && plan_cost.getCost() == 0)
+    {
+        json = printer.printLogicalPlan(*plan.getPlanNode());
+    }
+    else
+    {
+        json->set("total_cost", plan_cost.getCost());
+        json->set("cpu_cost_value", plan_cost.getCpuValue());
+        json->set("net_cost_value", plan_cost.getNetValue());
+        json->set("men_cost_value", plan_cost.getMenValue());
+        json->set("plan", printer.printLogicalPlan(*plan.getPlanNode()));
+    }
     json->stringify(os, 2);
     return os.str();
 }

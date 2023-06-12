@@ -28,6 +28,8 @@
 #include <DataTypes/DataTypeString.h>
 #include <Processors/Formats/IRowInputFormat.h>
 #include <Processors/Formats/InputStreamFromInputFormat.h>
+#include <Processors/Executors/PipelineExecutingBlockInputStream.h>
+#include <Processors/Transforms/AddingDefaultsTransform.h>
 
 namespace DB
 {
@@ -184,12 +186,6 @@ void CnchKafkaBlockInputStream::readPrefixImpl()
     auto child = FormatFactory::instance().getInput(storage.settings.format.value,
                                                  *delimited_buffer, non_virtual_header, context, max_block_size);
 
-    ///FIXME: Add default value if column has `DEFAULT` expression and no data read from topic
-    //if (need_add_defaults)
-    //    addChild(std::make_shared<AddingDefaultsBlockInputStream>(child, storage.getColumns().getDefaults(), context));
-    //else
-    //    addChild(child);
-
     if (auto *row_input = dynamic_cast<IRowInputFormat*>(child.get()))
     {
         row_input->setReadCallBack(read_callback);
@@ -209,8 +205,23 @@ void CnchKafkaBlockInputStream::readPrefixImpl()
     else
         throw Exception("An input format based on IRowInputFormat is expected, but provided: " + child->getName(), ErrorCodes::LOGICAL_ERROR);
 
-    BlockInputStreamPtr stream = std::make_shared<InputStreamFromInputFormat>(std::move(child));
-    addChild(stream);
+    if (context->getSettingsRef().insert_null_as_default && need_add_defaults)
+    {
+        Pipe pipe(child);
+        pipe.addSimpleTransform([&](const Block & header)
+        {
+            return std::make_shared<AddingDefaultsTransform>(header, metadata_snapshot->getColumns(), *child, context);
+        });
+        QueryPipeline pipeline;
+        pipeline.init(std::move(pipe));
+
+        BlockInputStreamPtr adding_default_stream = std::make_shared<PipelineExecutingBlockInputStream>(std::move(pipeline));
+        addChild(adding_default_stream);
+    }
+    else {
+        BlockInputStreamPtr stream = std::make_shared<InputStreamFromInputFormat>(std::move(child));
+        addChild(stream);
+    }
 
     broken = true;
 }

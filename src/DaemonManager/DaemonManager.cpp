@@ -288,29 +288,49 @@ int DaemonManager::main(const std::vector<std::string> &)
         }
     );
 
-    brpc::Server server;
+    bool listen_try = config().getBool("listen_try", false);
+    auto listen_hosts = getMultipleValuesFromConfig(config(), "", "listen_host");
 
-    // launch brpc service
+    if (listen_hosts.empty())
+    {
+        listen_hosts.emplace_back("::");
+        listen_hosts.emplace_back("0.0.0.0");
+        listen_try = true;
+    }
+
+    /// launch brpc service on multiple interface
     int port = config().getInt("daemon_manager.port", 8090);
     std::unique_ptr<DaemonManagerServiceImpl> daemon_manager_service =
         std::make_unique<DaemonManagerServiceImpl>(daemon_jobs_for_bg_thread_in_server);
+    std::vector<std::unique_ptr<brpc::Server>> rpc_servers;
 
-    if (server.AddService(daemon_manager_service.get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0)
+    for (const auto & listen : listen_hosts)
     {
-        LOG_ERROR(log, "Fail to add daemon manager service.");
-        exit(-1);
-    }
+        rpc_servers.push_back(std::make_unique<brpc::Server>());
+        auto & rpc_server = rpc_servers.back();
 
-    brpc::ServerOptions options;
-    options.idle_timeout_sec = -1;
-    std::string host_port = createHostPortString("::", port);
-    if (server.Start(host_port.c_str(), &options) != 0)
-    {
-        LOG_ERROR(log, "Fail to start Daemon Manager RPC server.");
-        exit(-1);
-    }
+        if (rpc_server->AddService(daemon_manager_service.get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0)
+        {
+            LOG_ERROR(log, "Fail to add daemon manager service.");
+            exit(-1);
+        }
 
-    LOG_INFO(log, "Daemon manager service starts on address {}", host_port);
+        LOG_INFO(log, "Added rpc service");
+
+        brpc::ServerOptions options;
+        options.idle_timeout_sec = -1;
+
+        const std::string brpc_listen_interface = createHostPortString(listen, port);
+        if (rpc_server->Start(brpc_listen_interface.c_str(), &options) != 0)
+        {
+            if (listen_try)
+                LOG_WARNING(log, "Failed to start Daemon manager server on address: {}", brpc_listen_interface);
+            else
+                throw Exception("Failed to start Daemon manager server on address: " + brpc_listen_interface, ErrorCodes::NETWORK_ERROR);
+        }
+        else
+            LOG_INFO(log, "Daemon manager service is listening on address {}", brpc_listen_interface);
+    }
 
     std::for_each(
         daemon_jobs_for_bg_thread_in_server.begin(),
@@ -332,17 +352,21 @@ int DaemonManager::main(const std::vector<std::string> &)
     waitForTerminationRequest();
 
     LOG_INFO(log, "Shutting down!");
-    LOG_INFO(log, "BRPC server stop accepting new connections and requests from existing connections");
-    if (0 == server.Stop(5000))
-        LOG_INFO(log, "BRPC server stop succesfully");
-    else
-        LOG_INFO(log, "BRPC server doesn't stop succesfully with in 5 second");
+    LOG_INFO(log, "BRPC servers stop accepting new connections and requests from existing connections");
+    std::for_each(rpc_servers.begin(), rpc_servers.end(),
+        [& log] (auto & server)
+        {
+            if (0 == server->Stop(5000))
+                LOG_INFO(log, "BRPC server stop succesfully");
+            else
+                LOG_INFO(log, "BRPC server doesn't stop succesfully with in 5 second");
 
-    LOG_INFO(log, "Wait until brpc requests in progress are done");
-    if (0 == server.Join())
-        LOG_INFO(log, "brpc joins succesfully");
-    else
-        LOG_INFO(log, "brpc doesn't join succesfully");
+            LOG_INFO(log, "Wait until brpc requests in progress are done");
+            if (0 == server->Join())
+                LOG_INFO(log, "brpc joins succesfully");
+            else
+                LOG_INFO(log, "brpc doesn't join succesfully");
+        });
 
     LOG_INFO(log, "Wait for daemons for bg thread to finish.");
     std::for_each(

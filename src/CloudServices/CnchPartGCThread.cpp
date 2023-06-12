@@ -31,6 +31,7 @@ namespace DB
 
 CnchPartGCThread::CnchPartGCThread(ContextPtr context_, const StorageID & id) : ICnchBGThread(context_, CnchBGThreadType::PartGC, id)
 {
+    partition_selector = getContext()->getBGPartitionSelector();
 }
 
 void CnchPartGCThread::runImpl()
@@ -40,8 +41,6 @@ void CnchPartGCThread::runImpl()
     try
     {
         auto istorage = getStorageFromCatalog();
-        auto & storage = checkAndGetCnchTable(istorage);
-        auto storage_settings = storage.getSettings();
         if (istorage->is_dropped)
         {
             LOG_DEBUG(log, "Table was dropped, wait for removing...");
@@ -49,9 +48,29 @@ void CnchPartGCThread::runImpl()
             return;
         }
 
+        auto & storage = checkAndGetCnchTable(istorage);
+        auto storage_settings = storage.getSettings();
+
         try
         {
-            clearOldParts(istorage, storage);
+            auto catalog = getContext()->getCnchCatalog();
+            bool in_wakeup = inWakeup();
+            Strings partitions = in_wakeup ? catalog->getPartitionIDs(istorage, nullptr) : selectPartitions(istorage);
+
+            /// Only inspect the parts small than gc_timestamp
+            TxnTimestamp gc_timestamp = calculateGCTimestamp(storage_settings->old_parts_lifetime.totalSeconds(), in_wakeup);
+            if (gc_timestamp <= last_gc_timestamp) /// Skip unnecessary gc
+            {
+                LOG_INFO(log, "Skip unnecessary GC as gc_timestamp <= last_gc_timestamp: {} vs. {}", gc_timestamp, last_gc_timestamp);
+            }
+            else
+            {
+                /// Do GC partition by partition to avoid holding too many ServerParts.
+                for (const auto & p : partitions)
+                    clearOldPartsByPartition(istorage, storage, p, in_wakeup, gc_timestamp);
+
+                last_gc_timestamp = gc_timestamp;
+            }
         }
         catch (...)
         {
@@ -78,25 +97,14 @@ void CnchPartGCThread::runImpl()
     scheduled_task->scheduleAfter(sleep_ms);
 }
 
-void CnchPartGCThread::clearOldParts(const StoragePtr & istorage, StorageCnchMergeTree & storage)
+void CnchPartGCThread::clearOldPartsByPartition(const StoragePtr & istorage, StorageCnchMergeTree & storage, const String & partition_id, bool in_wakeup, TxnTimestamp gc_timestamp)
 {
     auto storage_settings = storage.getSettings();
     auto now = time(nullptr);
 
-    bool in_wakeup = inWakeup();
-    Strings partitions = catalog->getPartitionIDs(istorage, nullptr);
-
-    /// Only inspect the parts small than gc_timestamp
-    TxnTimestamp gc_timestamp = calculateGCTimestamp(storage_settings->old_parts_lifetime.totalSeconds(), in_wakeup);
-    if (gc_timestamp <= last_gc_timestamp) /// Skip unnecessary gc
-    {
-        LOG_DEBUG(log, "Skip unnecessary GC as gc_timestamp {} <= last_gc_timestamp {} ", gc_timestamp, last_gc_timestamp);
-        return;
-    }
-
     Stopwatch watch;
-    auto all_parts = catalog->getServerDataPartsInPartitions(istorage, partitions, gc_timestamp, nullptr);
-    LOG_TRACE(log, "Get parts from Catalog cost {} us, all_parts: {}", watch.elapsedMicroseconds(), all_parts.size());
+    auto all_parts = catalog->getServerDataPartsInPartitions(istorage, {partition_id}, gc_timestamp, nullptr);
+    LOG_TRACE(log, "Get parts for {} from Catalog cost {} us, size: {}", partition_id, watch.elapsedMicroseconds(), all_parts.size());
     watch.restart();
 
     ServerDataPartsVector visible_alone_drop_ranges;
@@ -145,7 +153,7 @@ void CnchPartGCThread::clearOldParts(const StoragePtr & istorage, StorageCnchMer
     DeleteBitmapMetaPtrVector visible_bitmaps, visible_alone_tombstone_bitmaps, unvisible_bitmaps;
     if (storage.getInMemoryMetadataPtr()->hasUniqueKey())
     {
-        auto all_bitmaps = catalog->getDeleteBitmapsInPartitions(istorage, partitions, gc_timestamp);
+        auto all_bitmaps = catalog->getDeleteBitmapsInPartitions(istorage, {partition_id}, gc_timestamp);
         // TODO: filter out uncommitted bitmaps
         CnchPartsHelper::calcVisibleDeleteBitmaps(all_bitmaps, visible_bitmaps, true, &visible_alone_tombstone_bitmaps, &unvisible_bitmaps);
     }
@@ -202,8 +210,6 @@ void CnchPartGCThread::clearOldParts(const StoragePtr & istorage, StorageCnchMer
     {
         collectBetweenCheckpoints(storage, visible_parts, {}, checkpoints[i - 1], checkpoints[i]);
     }
-
-    last_gc_timestamp = gc_timestamp;
 }
 
 /// TODO: optimize me
@@ -420,6 +426,23 @@ TxnTimestamp CnchPartGCThread::calculateGCTimestamp(UInt64 delay_second, bool in
     return std::min({gc_timestamp, server_min_active_ts, max_gc_timestamp});
 }
 
+Strings CnchPartGCThread::selectPartitions(const StoragePtr & storage)
+{
+    StringSet res;
+    swapCandidatePartitions(res);
+    auto from_partition_selector = partition_selector->selectForGC(storage);
+    if (from_partition_selector.empty())
+    {
+        /// Partition selector would always return non-empty result (by round-robin or other strategies).
+        /// In some corner case (like the table was detached before calling partition selector), we fall back to Catalog API.
+        LOG_DEBUG(log, "Get all partitions from Catalog as partition selector returns empty result.");
+        return getContext()->getCnchCatalog()->getPartitionIDs(storage, nullptr);
+    }
+    for (const auto & p : from_partition_selector)
+        res.insert(p);
+    return {res.begin(), res.end()};
+}
+
 void CnchPartGCThread::pushToRemovingQueue(
     StorageCnchMergeTree & storage, const ServerDataPartsVector & parts, const String & part_type, bool is_staged_part)
 {
@@ -433,8 +456,7 @@ void CnchPartGCThread::pushToRemovingQueue(
 
     LOG_DEBUG(log, "Try to remove {} {} part(s) by GCThread", parts.size(), part_type);
 
-    /// ThreadPool remove_pool(storage_settings->gc_remove_part_thread_pool_size);
-    ThreadPool remove_pool(32);
+    ThreadPool remove_pool(storage_settings->gc_remove_part_thread_pool_size);
 
     auto batch_remove = [&](size_t start, size_t end)
     {
@@ -475,6 +497,7 @@ void CnchPartGCThread::pushToRemovingQueue(
             if (auto server_part_log = local_context->getServerPartLog())
             {
                 auto now = time(nullptr);
+                std::unordered_map<String, size_t> count_by_partition{};
 
                 for (auto & part : remove_parts)
                 {
@@ -489,13 +512,21 @@ void CnchPartGCThread::pushToRemovingQueue(
                     elem.is_staged_part = is_staged_part;
 
                     server_part_log->add(elem);
+
+                    if (elem.rows > 0)
+                        count_by_partition[elem.partition_id] += 1;
+                }
+
+                if (partition_selector)
+                {
+                    for (const auto & [partition, count] : count_by_partition)
+                        partition_selector->addRemoveParts(storage.getStorageUUID(), partition, count, now);
                 }
             }
         });
     };
 
-    /// size_t batch_size = storage_settings->gc_remove_part_batch_size;
-    constexpr static size_t batch_size = 1000;
+    size_t batch_size = storage_settings->gc_remove_part_batch_size;
 
     for (size_t start = 0; start < parts.size(); start += batch_size)
     {

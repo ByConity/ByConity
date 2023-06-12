@@ -442,6 +442,12 @@ static int bufferFromFile(Poco::Logger * log, const std::string & path, nuraft::
         return errno;
     }
     auto file_size = ::lseek(fd, 0, SEEK_END);
+    if (unlikely(file_size < 0))
+    {
+        LOG_WARNING(log, "Error using lseek, error: {}, errno: {}",std::strerror(errno), errno);
+        ::close(fd);
+        return errno;
+    }
     ::lseek(fd, 0, SEEK_SET);
     auto * chunk = reinterpret_cast<nuraft::byte *>(::mmap(nullptr, file_size, PROT_READ, MAP_FILE | MAP_SHARED, fd, 0));
     if (chunk == MAP_FAILED)

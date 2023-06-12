@@ -940,6 +940,34 @@ void ExpressionAnalyzer::makeWindowDescriptions(ActionsDAGPtr actions)
                     function_node->formatForErrorMessage());
             }
 
+            // a default window definition is allocated for lead and lag
+            if (function_node->window_definition)
+            {
+                const struct WindowFrame def =
+                {
+                    .is_default = false,
+                    .type = WindowFrame::FrameType::Rows,
+                    .end_type = WindowFrame::BoundaryType::Unbounded,
+                };
+
+                if (it->second.frame != def)
+                {
+                    WindowDescription desc = it->second;
+                    desc.window_name = desc.window_name + "(ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)";
+                    desc.window_functions.clear();
+                    desc.frame = def;
+
+                    auto [iter, inserted] = window_descriptions.insert(
+                        {desc.window_name, desc});
+                    if (!inserted)
+                    {
+                        chassert(iter->second.full_sort_description
+                            == desc.full_sort_description);
+                    }
+                    it = iter;
+                }
+            }
+
             it->second.window_functions.push_back(window_function);
         }
         else

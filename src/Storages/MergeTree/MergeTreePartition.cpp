@@ -62,27 +62,37 @@ namespace
         void operator() (const Null &) const
         {
             UInt8 type = Field::Types::Null;
+            //Bit access will be bounded by its size so it won't overrun
+            //coverity[overrun-buffer-val]
             hash.update(type);
         }
         void operator() (const NegativeInfinity &) const
         {
             UInt8 type = Field::Types::NegativeInfinity;
+            //Bit access will be bounded by its size so it won't overrun
+            //coverity[overrun-buffer-val]
             hash.update(type);
         }
         void operator() (const PositiveInfinity &) const
         {
             UInt8 type = Field::Types::PositiveInfinity;
+            //Bit access will be bounded by its size so it won't overrun
+            //coverity[overrun-buffer-val]
             hash.update(type);
         }
         void operator() (const UInt64 & x) const
         {
             UInt8 type = Field::Types::UInt64;
+            //Bit access will be bounded by its size so it won't overrun
+            //coverity[overrun-buffer-val]
             hash.update(type);
             hash.update(x);
         }
         void operator() (const UInt128 & x) const
         {
             UInt8 type = Field::Types::UInt128;
+            //Bit access will be bounded by its size so it won't overrun
+            //coverity[overrun-buffer-val]
             hash.update(type);
             hash.update(x);
         }
@@ -95,12 +105,16 @@ namespace
         void operator() (const Int64 & x) const
         {
             UInt8 type = Field::Types::Int64;
+            //Bit access will be bounded by its size so it won't overrun
+            //coverity[overrun-buffer-val]
             hash.update(type);
             hash.update(x);
         }
         void operator() (const Int128 & x) const
         {
             UInt8 type = Field::Types::Int128;
+            // checked update implementation, no apparent out of bounds
+            // coverity[overrun-buffer-val]
             hash.update(type);
             hash.update(x);
         }
@@ -117,12 +131,16 @@ namespace
         void operator() (const Float64 & x) const
         {
             UInt8 type = Field::Types::Float64;
+            //Bit access will be bounded by its size so it won't overrun
+            //coverity[overrun-buffer-val]
             hash.update(type);
             hash.update(x);
         }
         void operator() (const String & x) const
         {
             UInt8 type = Field::Types::String;
+            //Bit access will be bounded by its size so it won't overrun
+            //coverity[overrun-buffer-val]
             hash.update(type);
             hash.update(x.size());
             hash.update(x.data(), x.size());
@@ -130,6 +148,8 @@ namespace
         void operator() (const Array & x) const
         {
             UInt8 type = Field::Types::Array;
+            //Bit access will be bounded by its size so it won't overrun
+            //coverity[overrun-buffer-val]
             hash.update(type);
             hash.update(x.size());
 
@@ -139,6 +159,8 @@ namespace
         void operator() (const Tuple & x) const
         {
             UInt8 type = Field::Types::Tuple;
+            //Bit access will be bounded by its size so it won't overrun
+            //coverity[overrun-buffer-val]
             hash.update(type);
             hash.update(x.size());
 
@@ -148,6 +170,8 @@ namespace
         void operator() (const Map & x) const
         {
             UInt8 type = Field::Types::Map;
+            //Bit access will be bounded by its size so it won't overrun
+            //coverity[overrun-buffer-val]
             hash.update(type);
             hash.update(x.size());
 
@@ -163,7 +187,11 @@ namespace
         void operator() (const DecimalField<Decimal32> & x) const
         {
             UInt8 type = Field::Types::Decimal32;
+            // checked update implementation, no apparent out of bounds
+            // coverity[overrun-buffer-val]
             hash.update(type);
+            //Bit access will be bounded by its size so it won't overrun
+            //coverity[overrun-buffer-val]
             hash.update(x.getValue().value);
         }
         void operator() (const DecimalField<Decimal64> & x) const
@@ -181,12 +209,16 @@ namespace
         void operator() (const DecimalField<Decimal256> & x) const
         {
             UInt8 type = Field::Types::Decimal256;
+            // checked update implementation, no apparent out of bounds
+            // coverity[overrun-buffer-val]
             hash.update(type);
             hash.update(x.getValue().value);
         }
         void operator() (const AggregateFunctionStateData & x) const
         {
             UInt8 type = Field::Types::AggregateFunctionState;
+            //Bit access will be bounded by its size so it won't overrun
+            //coverity[overrun-buffer-val]
             hash.update(type);
             hash.update(x.name.size());
             hash.update(x.name.data(), x.name.size());
@@ -196,6 +228,8 @@ namespace
         void operator() (const BitMap64 & x) const
         {
             UInt8 type = Field::Types::BitMap64;
+            //Bit access will be bounded by its size so it won't overrun
+            //coverity[overrun-buffer-val]
             hash.update(type);
             hash.update(x.cardinality());
 
