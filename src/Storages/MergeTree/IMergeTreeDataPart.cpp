@@ -1646,7 +1646,7 @@ String IMergeTreeDataPart::getRelativePathForPrefix(const String & prefix) const
         */
     for (int try_no = 0; try_no < 10; try_no++)
     {
-        res = (prefix.empty() ? "" : prefix + "_") + name + (try_no ? "_try" + DB::toString(try_no) : "");
+        res = (prefix.empty() ? "" : prefix + "_") + info.getPartNameWithHintMutation() + (try_no ? "_try" + DB::toString(try_no) : "");
 
         if (!volume->getDisk()->exists(fs::path(getFullRelativePath()) / res))
             return res;

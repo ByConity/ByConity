@@ -290,7 +290,7 @@ void MergeTreeDataPartCNCH::loadFromFileSystem(bool load_hint_mutation)
     }
 
     MergeTreeDataPartChecksum meta_info_pos;
-    auto checksums_ptr = getChecksums();
+    auto checksums_ptr = loadChecksumsForPart(false);
     meta_info_pos = checksums_ptr->files["metainfo.txt"];
 
     String data_rel_path = fs::path(getFullRelativePath()) / DATA_FILE;
@@ -574,6 +574,32 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_un
         }
     }
 
+    checksums = loadChecksumsForPart(true);
+
+    if (storage.getSettings()->enable_persistent_checksum || is_temp || isProjectionPart())
+    {
+        std::lock_guard lock(checksums_mutex);
+        checksums_ptr = checksums;
+    }
+
+    /// store in disk cache
+    if (enableDiskCache())
+    {
+        auto segment = std::make_shared<ChecksumsDiskCacheSegment>(shared_from_this());
+        auto disk_cache = DiskCacheFactory::instance().getDefault().first;
+        disk_cache->cacheSegmentsToLocalDisk({std::move(segment)});
+    }
+
+    return checksums;
+}
+
+IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksumsForPart(bool follow_part_chain)
+{
+    ChecksumsPtr checksums = std::make_shared<Checksums>();
+    checksums->storage_type = StorageType::ByteHDFS;
+    if ((!parent_part && deleted) || (parent_part && parent_part->deleted))
+        return checksums;
+
     String data_rel_path = fs::path(getFullRelativePath()) / DATA_FILE;
     auto data_footer = loadPartDataFooter();
     const auto & checksum_file = data_footer["checksums.txt"];
@@ -608,7 +634,7 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_un
 
     // For projections, we collect the projections' checkums into the head part
     // If a projection/column is deleted, a partial part with the denoted deleted checksums for the projection/column will be generated
-    if (!parent_part && isPartial())
+    if (!parent_part && isPartial() && follow_part_chain)
     {
         /// merge with previous checksums with current checksums
         const auto & prev_part = getPreviousPart();
@@ -630,20 +656,6 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_un
             it = checksums->files.erase(it);
         else
             ++it;
-    }
-
-    if (storage.getSettings()->enable_persistent_checksum || is_temp || isProjectionPart())
-    {
-        std::lock_guard lock(checksums_mutex);
-        checksums_ptr = checksums;
-    }
-
-    /// store in disk cache
-    if (enableDiskCache())
-    {
-        auto segment = std::make_shared<ChecksumsDiskCacheSegment>(shared_from_this());
-        auto disk_cache = DiskCacheFactory::instance().getDefault().first;
-        disk_cache->cacheSegmentsToLocalDisk({std::move(segment)});
     }
 
     return checksums;

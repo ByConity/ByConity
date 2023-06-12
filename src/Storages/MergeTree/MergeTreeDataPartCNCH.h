@@ -107,6 +107,7 @@ private:
     MergeTreeDataPartChecksums::FileChecksums loadPartDataFooter() const;
 
     ChecksumsPtr loadChecksums(bool require) override;
+    ChecksumsPtr loadChecksumsForPart(bool follow_part_chain);
 
     UniqueKeyIndexPtr loadUniqueKeyIndex() override;
 
