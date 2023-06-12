@@ -323,7 +323,7 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
                     projection_part->checksums_ptr = std::make_shared<MergeTreeDataPartChecksums>();
                     projection_part->checksums_ptr->storage_type = StorageType::ByteHDFS;
                 }
-               size_t current_file_offset = writeProjectionPart(projection_name, projection_part, data_out, data_file_offset);
+               size_t current_file_offset = writeProjectionPart(projection_name, projection_part, data_out.get(), data_file_offset);
                it->second.file_offset = data_file_offset;
                it->second.file_size = current_file_offset - data_file_offset;
                data_file_offset = current_file_offset;

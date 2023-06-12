@@ -35,7 +35,10 @@ public:
         const NamesWithAliases & column_alias_,
         const SelectQueryInfo & query_info_,
         QueryProcessingStage::Enum processing_stage_,
-        size_t max_block_size_);
+        size_t max_block_size_,
+        QueryPlanStepPtr aggregation_ = nullptr,
+        QueryPlanStepPtr projection_ = nullptr,
+        QueryPlanStepPtr filter_ = nullptr);
 
     TableScanStep(
         ContextPtr context,
