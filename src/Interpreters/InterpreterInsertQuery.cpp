@@ -30,6 +30,7 @@
 #include <DataStreams/SquashingBlockOutputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
+#include <DataStreams/TransactionWrapperBlockInputStream.h>
 #include <DataStreams/OwningBlockInputStream.h>
 #include <DataStreams/NullAndDoCopyBlockInputStream.h>
 #include <DataStreams/copyData.h>
@@ -211,26 +212,26 @@ BlockIO InterpreterInsertQuery::execute()
         }
     }
 
+
+    StorageCnchMergeTree * cnch_merge_tree = dynamic_cast<StorageCnchMergeTree*>(table.get());
     /// Directly forward the query to cnch worker if select or infile
-    if (getContext()->getServerType() == ServerType::cnch_server && (query.select || query.in_file) && table->isRemote())
+    if (getContext()->getServerType() == ServerType::cnch_server && (query.select || query.in_file) && cnch_merge_tree)
     {
         /// Handle the insert commit for insert select/infile case in cnch server.
-        table->write(query_ptr, metadata_snapshot, getContext());
+        BlockInputStreamPtr in = cnch_merge_tree->writeInWorker(query_ptr, metadata_snapshot, getContext());
 
         bool enable_staging_area_for_write = settings.enable_staging_area_for_write;
         if (const auto * cnch_table = dynamic_cast<const StorageCnchMergeTree *>(table.get());
             cnch_table && metadata_snapshot->hasUniqueKey() && !enable_staging_area_for_write)
         {
             /// for unique table, insert select|infile is committed from worker side
-            return {};
+            res.in = std::move(in);
         }
         else
         {
-            TransactionCnchPtr txn = getContext()->getCurrentTransaction();
+            auto txn = getContext()->getCurrentTransaction();
             txn->setMainTableUUID(table->getStorageUUID());
-            txn->commitV2();
-            LOG_TRACE(&Logger::get("InterpreterInsertQuery::execute"), "Finish insert infile/select commit in cnch server.");
-            return {};
+            res.in = std::make_shared<TransactionWrapperBlockInputStream>(in, std::move(txn));
         }
     }
 
