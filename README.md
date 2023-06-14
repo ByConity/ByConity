@@ -4,11 +4,11 @@
     <img src="ByConity-architecture.png" alt="ByConity-architecture" width="800"/>
 </p>
 
-ByConity is a data warehouse designed for changes in modern cloud architecture. It adopts a cloud-native architecture design to meet the requirements of data warehouse users for flexible scaling, separation of reads and writes, resource isolation, and strong data consistency. At the same time, it provides excellent query and write performance.
+ByConity is a data warehouse designed for changes in modern cloud architecture. It adopts a cloud-native architecture design to meet the requirements of data warehouse users for flexible scaling, separation of reads and writes, resource isolation and strong consistency. At the same time, it provides excellent read and write performance.
 
-ByConity is using a large number of mature OLAP technologies, such as column storage engine, MPP execution, intelligent query optimization, vectorized execution, Codegen, indexing, and data compression; it also makes special technological innovations for the cloud scenarios and storage-computing separation architecture.
+ByConity adopted a bunch of mature Online Analytical Processing(OLAP) technologies, includes columnar storage, massively parallel processing(MPP), intelligent query optimization, vectorized execution, Codegen, indexing, and data compression. ByConity's disruptive innovation, designed for cloud scenarios, so have many Cloud-Native benefits: easy to manage, max adaptability and scalability, cost efficiency, and so many more.
 
-ByConity is built on top of [ClickHouse](https://github.com/ClickHouse/ClickHouse). We appreciate the excellent work of the ClickHouse team.
+ByConity is built from [ClickHouse](https://github.com/ClickHouse/ClickHouse)and take some ideas from Snowflake. We appreciate the excellent work of the ClickHouse team & Snowflake team. Hope to bring it as a public weal for you.
 
 ## Try ByConity
 
