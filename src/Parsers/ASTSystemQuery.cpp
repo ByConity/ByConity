@@ -168,6 +168,8 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "STOP CONSUME";
         case Type::RESTART_CONSUME:
             return "RESTART CONSUME";
+        case Type::RESET_CONSUME_OFFSET:
+            return "RESET CONSUME OFFSET";
         case Type::FETCH_PARTS:
             return "FETCH PARTS INTO";
         case Type::METASTORE:

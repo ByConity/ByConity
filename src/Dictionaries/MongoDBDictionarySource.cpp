@@ -162,8 +162,13 @@ BlockInputStreamPtr MongoDBDictionarySource::loadIds(const std::vector<UInt64> &
     for (const UInt64 id : ids)
         ids_array->add(DB::toString(id), Int32(id));
 
+    // Invokes SharedPtr copy constructor
+    // coverity[double_free]
     cursor->query().selector().addNewDocument(dict_struct.id->name).add("$in", ids_array);
 
+    // ids_array is a SharedPtr, which is Poco's implementation of a shared
+    // pointer and it will only free the memory when the counter reaches 0
+    // coverity[double_free]
     return std::make_shared<MongoDBBlockInputStream>(connection, std::move(cursor), sample_block, max_block_size);
 }
 
@@ -213,6 +218,9 @@ BlockInputStreamPtr MongoDBDictionarySource::loadKeys(const Columns & key_column
                     if (key_attribute.is_object_id)
                     {
                         Poco::MongoDB::ObjectId::Ptr loaded_id(new Poco::MongoDB::ObjectId(loaded_str));
+                        // loaded_id is a SharedPtr, which is Poco's implementation of a shared
+                        // pointer and it will only free the memory when the counter reaches 0
+                        // coverity[double_free]
                         key.add(key_attribute.name, loaded_id);
                     }
                     else
@@ -228,8 +236,13 @@ BlockInputStreamPtr MongoDBDictionarySource::loadKeys(const Columns & key_column
     }
 
     /// If more than one key we should use $or
+    // Invokes SharedPtr copy constructor
+    // coverity[double_free]
     cursor->query().selector().add("$or", keys_array);
 
+    // keys_array is a SharedPtr, which is Poco's implementation of a shared
+    // pointer and it will only free the memory when the counter reaches 0
+    // coverity[double_free]
     return std::make_shared<MongoDBBlockInputStream>(connection, std::move(cursor), sample_block, max_block_size);
 }
 

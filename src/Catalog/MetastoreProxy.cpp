@@ -1294,6 +1294,31 @@ void MetastoreProxy::getKafkaTpl(const String & name_space, const String & consu
     }
 }
 
+void MetastoreProxy::setTransactionForKafkaConsumer(const String & name_space, const String & uuid, const TxnTimestamp & txn_id, const size_t consumer_index)
+{
+    auto key = kafkaTransactionKey(name_space, uuid, consumer_index);
+    metastore_ptr->put(key, std::to_string(txn_id.toUInt64()));
+}
+
+TxnTimestamp MetastoreProxy::getTransactionForKafkaConsumer(const String & name_space, const String & uuid, const size_t consumer_index)
+{
+    auto key = kafkaTransactionKey(name_space, uuid, consumer_index);
+
+    String value;
+    metastore_ptr->get(key, value);
+
+    if (value.empty())
+        return TxnTimestamp::maxTS();
+    else
+        return TxnTimestamp(std::stoull(value));
+}
+
+void MetastoreProxy::clearKafkaTransactions(const String & name_space, const String & uuid)
+{
+    auto prefix = escapeString(name_space) + "_" + KAFKA_TRANSACTION_PREFIX + escapeString(uuid);
+    metastore_ptr->clean(prefix);
+}
+
 void MetastoreProxy::setTableClusterStatus(const String & name_space, const String & uuid, const bool & already_clustered)
 {
     metastore_ptr->put(clusterStatusKey(name_space, uuid), already_clustered ? "true" : "false");

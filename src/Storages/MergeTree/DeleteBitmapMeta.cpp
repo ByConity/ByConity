@@ -130,6 +130,9 @@ DeleteBitmapMetaPtr LocalDeleteBitmap::dump(const MergeTreeMetaBase & storage) c
                     throw Exception(ErrorCodes::LOGICAL_ERROR, "Writing part to hdfs but write buffer is not hdfs");
 
                 data_out->write(buf.data(), size);
+                /// It's necessary to do next() and sync() here, otherwise it will omit the error in WriteBufferFromHDFS::WriteBufferFromHDFSImpl::~WriteBufferFromHDFSImpl() which case file incomplete.
+                out->next();
+                out->sync();
             }
             model->set_file_size(size);
             LOG_TRACE(storage.getLogger(), "Dumped delete bitmap {}", dataModelName(model));

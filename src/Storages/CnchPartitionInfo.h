@@ -17,6 +17,7 @@
 
 #include <atomic>
 #include <Core/Types.h>
+#include <Common/RWLock.h>
 #include <Protos/data_models.pb.h>
 #include <Storages/MergeTree/MergeTreePartInfo.h>
 #include <Storages/MergeTree/MergeTreePartition.h>
@@ -28,6 +29,14 @@ struct PartitionMetrics
     std::atomic_int64_t total_parts_size{0};
     std::atomic_int64_t total_parts_number{0};
     std::atomic_int64_t total_rows_count{0};
+
+    PartitionMetrics & operator=(const PartitionMetrics & other)
+    {
+        total_parts_size = other.total_parts_size.load();
+        total_parts_number = other.total_parts_number.load();
+        total_rows_count = other.total_rows_count.load();
+        return *this;
+    }
 
     void update(const Protos::DataModelPart & part_model)
     {
@@ -59,24 +68,40 @@ struct PartitionMetrics
     bool validateMetrics() { return total_rows_count >= 0 && total_parts_size >= 0 && total_parts_number >= 0; }
 };
 
-enum class CacheStatus
+namespace CacheStatus
 {
-    UINIT,
-    LOADING,
-    LOADED
-};
+    static constexpr UInt32 UINIT = 0;
+    static constexpr UInt32 LOADING = 1;
+    static constexpr UInt32 LOADED = 2;
+}
 
 class CnchPartitionInfo
 {
 public:
-    explicit CnchPartitionInfo(const std::shared_ptr<MergeTreePartition> & partition_)
-        : partition_ptr(partition_)
+    explicit CnchPartitionInfo(const std::shared_ptr<MergeTreePartition> & partition_, const std::string & partition_id_)
+        : partition_ptr(partition_), partition_id(partition_id_)
     {
     }
 
+    typedef RWLockImpl::LockHolder PartitionLockHolder;
+
     std::shared_ptr<MergeTreePartition> partition_ptr;
-    CacheStatus cache_status {CacheStatus::UINIT};
+    std::string partition_id;
+    std::atomic<UInt32> cache_status = CacheStatus::UINIT;
     std::shared_ptr<PartitionMetrics> metrics_ptr = std::make_shared<PartitionMetrics>();
+
+    inline PartitionLockHolder readLock() const
+    {
+        return partition_mutex->getLock(RWLockImpl::Read, CurrentThread::getQueryId().toString());
+    }
+
+    inline PartitionLockHolder writeLock() const
+    {
+        return partition_mutex->getLock(RWLockImpl::Write, CurrentThread::getQueryId().toString());
+    }
+
+private:
+    RWLock partition_mutex = RWLockImpl::create();
 };
 
 /***

@@ -163,7 +163,9 @@ WorkerNodeResourceData WorkerNode::getResourceData() const
 
     res.cpu_limit = cpu_limit;
     res.memory_limit = memory_limit;
-
+    
+    // added TODO comment for 2k38 
+    // coverity[store_truncates_time_t]
     res.last_update_time = last_update_time;
 
     return res;
@@ -210,6 +212,8 @@ void WorkerNode::fillProto(Protos::WorkerNodeResourceData & entry) const
 
     entry.set_reserved_memory_bytes(reserved_memory_bytes.load(std::memory_order_relaxed));
     entry.set_reserved_cpu_cores(reserved_cpu_cores.load(std::memory_order_relaxed));
+    // added TODO comment for 2k38 
+    // coverity[store_truncates_time_t]
     entry.set_register_time(static_cast<UInt32>(register_time));
     entry.set_state(static_cast<UInt32>(state.load(std::memory_order_relaxed)));
 }

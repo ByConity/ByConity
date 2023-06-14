@@ -255,6 +255,56 @@ bool simplifyIf(const ASTFunction & function, const InterpretIMResults & argumen
 
     return false;
 }
+
+bool simplifyMultiIf(const ASTFunction & function, const InterpretIMResults & argument_results, InterpretIMResult & simplify_result, const ContextMutablePtr & context)
+{
+    if (function.name != "multiIf" || !(argument_results.size() >= 3 && argument_results.size() % 2 == 1))
+        return false;
+
+    InterpretIMResult new_default;
+    InterpretIMResults new_argument_results;
+    bool found_new_default = false;
+
+    for (size_t i = 0; i+1 < argument_results.size(); i += 2)
+    {
+        if (isBoolValue<false>(argument_results[i]))
+        {
+            continue;
+        }
+        else if (isBoolValue<true>(argument_results[i]))
+        {
+            new_default = argument_results[i+1];
+            found_new_default = true;
+            break;
+        }
+        else
+        {
+            new_argument_results.emplace_back(argument_results[i]);
+            new_argument_results.emplace_back(argument_results[i+1]);
+        }
+    }
+
+    if (new_argument_results.empty())
+    {
+        simplify_result = found_new_default ? new_default : argument_results.back();
+        return true;
+    }
+
+    if (found_new_default)
+        new_argument_results.emplace_back(new_default);
+    else
+        new_argument_results.emplace_back(argument_results.back());
+
+    if (new_argument_results.size() == argument_results.size())
+        return false;
+
+    // arguments' type may be changed by some simplify rules, so refresh current node's type
+    auto function_builder = FunctionFactory::instance().get(function.name, context);
+    FunctionBasePtr function_base = function_builder->build(convertToFunctionBuilderParams(new_argument_results));
+
+    simplify_result = {function_base->getResultType(), makeFunction(function.name, new_argument_results, context)};
+    return true;
+}
 }
 
 ExpressionInterpreter::ExpressionInterpreter(InterpretSetting setting_, ContextMutablePtr context_)
@@ -479,7 +529,8 @@ InterpretIMResult ExpressionInterpreter::visitOrdinaryFunction(const ASTFunction
             RewriteOr::apply(function, argument_results, simplify_result, context) ||
             simplifyNullPrediction(function, argument_results, simplify_result) ||
             simplifyTrivialEquals(function, argument_results, simplify_result) ||
-            simplifyIf(function, argument_results, simplify_result, reevaluate);
+            simplifyIf(function, argument_results, simplify_result, reevaluate) ||
+            simplifyMultiIf(function, argument_results, simplify_result, context);
     }
 
     if (!simplified)
@@ -555,10 +606,15 @@ InterpretIMResult ExpressionInterpreter::visitInFunction(const ASTFunction & fun
     for (size_t i = 0; i < set_column->size(); ++i)
         set_values.push_back(LiteralEncoder::encodeForComparisonExpr((*set_column)[i], left_arg_result.type, context));
 
-    // rewrite `x IN 1` to `x = 1`
-    if (set_values.size() == 1)
+    // in some cases, there are no values filled in the set, e.g. IN NULL/NOT IN NULL, keep the original expression
+    if (set_values.empty())
     {
-        // TODO: x IN NULL?
+        ASTPtr rewritten_func = makeASTFunction(function.name, rewritten_left_arg, right_arg);
+        return {std::make_shared<DataTypeUInt8>(), rewritten_func};
+    }
+    // rewrite `x IN 1` to `x = 1`
+    else if (set_values.size() == 1)
+    {
         auto result_type = makeNullableByArgumentTypes<DataTypeUInt8>({left_arg_result});
         String comparison_op = (function.name == "in" || function.name == "globalIn") ? "equals" : "notEquals";
         auto comparison_func = makeASTFunction(comparison_op, rewritten_left_arg, set_values.front());

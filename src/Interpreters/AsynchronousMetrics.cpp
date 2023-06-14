@@ -34,6 +34,8 @@
 #include <Storages/StorageMergeTree.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/MergeTree/ChecksumsCache.h>
+#include <Storages/CnchStorageCache.h>
+#include <Storages/PartCacheManager.h>
 #include <IO/UncompressedCache.h>
 #include <IO/MMappedFileCache.h>
 #include <IO/ReadHelpers.h>
@@ -542,6 +544,23 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
         {
             new_values["ChecksumsCacheCells"] = checksum_cache->weight();
             new_values["ChecksumsCacheBytes"] = checksum_cache->count();
+        }
+    }
+
+    {
+        if (auto part_cache_manager = getContext()->getPartCacheManager())
+        {
+            auto part_cache_metrics = part_cache_manager->dumpPartCache();
+            new_values["CnchPartCachePartitions"] = part_cache_metrics.first;
+            new_values["CnchPartCacheParts"] = part_cache_metrics.second;            
+        }
+    }
+
+    {
+        if (auto storage_cache = getContext()->getCnchStorageCache())
+        {
+            new_values["CnchStorageCacheBytes"] = storage_cache->weight();
+            new_values["CnchStorageCacheTables"] = storage_cache->count();
         }
     }
 

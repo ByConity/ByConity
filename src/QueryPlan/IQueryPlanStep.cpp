@@ -195,7 +195,7 @@ ActionsDAGPtr IQueryPlanStep::createExpressionActions(
 
 void IQueryPlanStep::projection(QueryPipeline & pipeline, const Block & target, const BuildQueryPipelineSettings & settings)
 {
-    if (!isCompatibleHeader(pipeline.getHeader(), target))
+    if (!blocksHaveEqualStructure(pipeline.getHeader(), target))
     {
         auto convert_actions_dag = ActionsDAG::makeConvertingActions(
             pipeline.getHeader().getColumnsWithTypeAndName(), target.getColumnsWithTypeAndName(), ActionsDAG::MatchColumnsMode::Name);

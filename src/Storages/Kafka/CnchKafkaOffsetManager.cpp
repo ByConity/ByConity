@@ -17,7 +17,7 @@
 #if USE_RDKAFKA
 
 #include <Catalog/Catalog.h>
-///#include <DaemonManager/DaemonManagerClient.h>
+#include <DaemonManager/DaemonManagerClient.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <Interpreters/InterpreterSystemQuery.h>
 #include <Parsers/parseQuery.h>
@@ -36,11 +36,11 @@ namespace ErrorCodes
 }
 constexpr auto RESET_CONSUME_OFFSET_BREAK_TIME = 1;
 
-CnchKafkaOffsetManager::CnchKafkaOffsetManager(ContextPtr context, StorageID &storage_id)
-    : global_context(context->getGlobalContext())
+CnchKafkaOffsetManager::CnchKafkaOffsetManager(const StorageID & storage_id, ContextMutablePtr context_)
+    : WithMutableContext(context_->getGlobalContext())
     , log(&Poco::Logger::get(storage_id.getFullTableName() + " (CnchKafkaOffsetManager)"))
 {
-    storage = DatabaseCatalog::instance().getTable(storage_id,  global_context);
+    storage = getContext()->getCnchCatalog()->getTable(*getContext(), storage_id.database_name, storage_id.table_name, getContext()->getTimestamp());
     kafka_table = dynamic_cast<StorageCnchKafka *>(storage.get());
     if (!kafka_table)
         throw Exception("CnchKafka is expected for CnchKafkaOffsetManager, but got " + storage_id.getNameForLogs(), ErrorCodes::LOGICAL_ERROR);
@@ -48,7 +48,7 @@ CnchKafkaOffsetManager::CnchKafkaOffsetManager(ContextPtr context, StorageID &st
 
 cppkafka::TopicPartitionList CnchKafkaOffsetManager::createTopicPartitionList(uint64_t timestamp = 0)
 {
-    auto conf = Kafka::createConsumerConfiguration(global_context, kafka_table->getStorageID(),
+    auto conf = Kafka::createConsumerConfiguration(getContext(), kafka_table->getStorageID(),
                                                    kafka_table->getTopics(), kafka_table->getSettings());
     auto tool_consumer = std::make_shared<KafkaConsumer>(conf);
 
@@ -90,19 +90,20 @@ bool CnchKafkaOffsetManager::offsetValueIsSpecialPosition(int64_t value)
 
 void CnchKafkaOffsetManager::resetOffsetImpl(const cppkafka::TopicPartitionList & tpl)
 {
-    /// FIXME: Start / Stop consume by Daemon-Manager when it is ready
-    ///auto daemon_manager = global_context.getDaemonManagerClient();
+    auto daemon_manager = getContext()->getDaemonManagerClient();
     /// Firstly, stop consumers
-    ///if (kafka_table->tableIsActive())
-    ///    daemon_manager->controlDaemonJob(kafka_table->getStorageID(), CnchBGThreadType::Consumer, Protos::ControlDaemonJobReq::Stop);
+    /// Record the original status of table as the new version of STOP action will change the status
+    bool kafka_table_is_active = kafka_table->tableIsActive();
+    if (kafka_table_is_active)
+        daemon_manager->controlDaemonJob(kafka_table->getStorageID(), CnchBGThreadType::Consumer, CnchBGThreadAction::Stop);
     std::this_thread::sleep_for(std::chrono::seconds(RESET_CONSUME_OFFSET_BREAK_TIME));
     SCOPE_EXIT({
                std::this_thread::sleep_for(std::chrono::seconds(RESET_CONSUME_OFFSET_BREAK_TIME));
                try
                {
-                   ///if (kafka_table->tableIsActive())
-                    ///   daemon_manager->controlDaemonJob(kafka_table->getStorageID(), CnchBGThreadType::Consumer,
-                    ///                                    Protos::ControlDaemonJobReq::Start);
+                   if (kafka_table_is_active)
+                       daemon_manager->controlDaemonJob(kafka_table->getStorageID(), CnchBGThreadType::Consumer,
+                                                        CnchBGThreadAction::Start);
                }
                catch (...)
                {
@@ -112,7 +113,7 @@ void CnchKafkaOffsetManager::resetOffsetImpl(const cppkafka::TopicPartitionList 
 
     /// Secondly, commit offsets in transaction
     auto target_table = kafka_table->tryGetTargetTable();
-    auto & txn_co = global_context->getCnchTransactionCoordinator();
+    auto & txn_co = getContext()->getCnchTransactionCoordinator();
     auto txn = txn_co.createTransaction(CreateTransactionOption().setPriority(CnchTransactionPriority::low));
     {
         /// Anyhow, the transaction should be finished even if exception occurs
@@ -130,7 +131,6 @@ void CnchKafkaOffsetManager::resetOffsetImpl(const cppkafka::TopicPartitionList 
 
         try {
             txn_co.commitV2(txn);
-            /// FIXME: add `tpl` in log
             LOG_INFO(log, "Successfully to reset offsets: {}", DB::Kafka::toString(tpl));
         }
         catch (...) {

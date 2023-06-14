@@ -159,14 +159,14 @@ void BrpcRemoteBroadcastSender::serializeChunkToIoBuffer(Chunk chunk, WriteBuffe
         const CompressionCodecPtr & codec = CompressionCodecFactory::instance().get(method, level);
         CompressedWriteBuffer compressed_out(out, codec, DBMS_DEFAULT_BUFFER_SIZE * 2);
         NativeChunkOutputStream chunk_out(
-            compressed_out, ClickHouseRevision::getVersionRevision(), header, !settings.low_cardinality_allow_in_native_format);
+            compressed_out, DBMS_TCP_PROTOCOL_VERSION, header, !settings.low_cardinality_allow_in_native_format);
         chunk_out.write(chunk);
         compressed_out.next();
     }
     else
     {
         NativeChunkOutputStream chunk_out(
-            out, ClickHouseRevision::getVersionRevision(), header, !settings.low_cardinality_allow_in_native_format);
+            out, DBMS_TCP_PROTOCOL_VERSION, header, !settings.low_cardinality_allow_in_native_format);
         chunk_out.write(chunk);
     }
 }
@@ -258,6 +258,7 @@ BroadcastStatus BrpcRemoteBroadcastSender::sendIOBuffer(const butil::IOBuf & io_
         int ret_code = brpc::StreamFinish(stream_id, actual_status_code, BroadcastStatusCode::SEND_TIMEOUT, true);
         if (ret_code != 0)
             return BroadcastStatus(static_cast<BroadcastStatusCode>(actual_status_code), false, "Stream Write receive finish request");
+         // coverity[uninit_use_in_call]
         return current_status;
     }
 #ifndef NDEBUG

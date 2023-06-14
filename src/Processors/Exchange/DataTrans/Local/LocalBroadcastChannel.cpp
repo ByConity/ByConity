@@ -34,7 +34,7 @@ namespace DB
 LocalBroadcastChannel::LocalBroadcastChannel(DataTransKeyPtr data_key_, LocalChannelOptions options_, std::shared_ptr<QueryExchangeLog> query_exchange_log_)
     : data_key(std::move(data_key_))
     , options(std::move(options_))
-    , receive_queue(options_.queue_size)
+    , receive_queue(options.queue_size)
     , logger(&Poco::Logger::get("LocalBroadcastChannel"))
     , query_exchange_log(query_exchange_log_)
 {
@@ -118,6 +118,8 @@ BroadcastStatus LocalBroadcastChannel::finish(BroadcastStatusCode status_code, S
         send_metric.finish_code = new_status_ptr->code;
         send_metric.is_modifier = 1;
         send_metric.message = new_status_ptr->message;
+        // new_status_ptr will be deleted in the destructor as it is stored in broadcast_status
+        // coverity[leaked_storage]
         return res;
     }
     else

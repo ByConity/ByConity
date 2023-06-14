@@ -185,6 +185,8 @@ namespace
                 s.update(k.is_target_https);
                 s.update(k.proxy_host);
                 s.update(k.proxy_port);
+                //Bit access will be bounded by its size so it won't overrun
+                //coverity[overrun-buffer-val]
                 s.update(k.is_proxy_https);
                 return s.get64();
             }

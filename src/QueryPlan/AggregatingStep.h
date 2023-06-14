@@ -28,6 +28,8 @@ using AggregatingTransformParamsPtr = std::shared_ptr<AggregatingTransformParams
 class WriteBuffer;
 class ReadBuffer;
 
+bool hasNonParallelAggregateFunctions(const AggregateDescriptions &);
+
 struct GroupingSetsParams
 {
     GroupingSetsParams() = default;

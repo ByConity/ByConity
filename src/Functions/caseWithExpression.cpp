@@ -100,19 +100,24 @@ public:
 
         auto multi_if = FunctionFactory::instance().get("multiIf", context);
         auto equals = FunctionFactory::instance().get("equals", context);
+        auto is_null = FunctionFactory::instance().get("isNull", context);
         auto eq_type = std::make_shared<DataTypeUInt8>();
 
         ColumnsWithTypeAndName eq_args(2);
+        eq_args[0] = args[0];
         ColumnsWithTypeAndName v;
 
-        eq_args[0] =args[0]; /* push expr */
+        ColumnsWithTypeAndName is_null_args(1);
+        is_null_args[0] = args[0];
         v.reserve(args.size() - 1);
 
         /* prepare (expr = caseX, thenX) pair */
         for (size_t i = 1; i < args.size() - 1; i += 2) {
             eq_args[1] = args[i]; /* push current case */
-
-            v.push_back({equals->build(eq_args)->execute(eq_args, eq_type, input_rows_count), eq_type, ""});
+            if (eq_args[1].name == "NULL" && eq_args[1].type->getName() == "Nullable(Nothing)")
+                v.push_back({is_null->build(is_null_args)->execute(is_null_args, eq_type, input_rows_count), eq_type, ""});
+            else
+                v.push_back({equals->build(eq_args)->execute(eq_args, eq_type, input_rows_count), eq_type, ""});
             v.push_back(args[i + 1]);
         }
 

@@ -155,15 +155,20 @@ DataTypePtr ExprAnalyzer::analyze(ASTPtr expression,
 
 ColumnWithTypeAndName ExprAnalyzerVisitor::process(ASTPtr & node)
 {
-    if (analysis.hasExpressionType(node))
-        return {analysis.getExpressionType(node), ""};
+    if (auto processed = analysis.tryGetExpressionColumnWithType(node))
+    {
+        if (processed->column)
+            return {processed->column, processed->type, ""};
+        else
+            return {processed->type, ""};
+    }
 
     auto result = ASTVisitorUtil::accept(node, *this, {});
 
     if (!result.type)
         throw Exception("Can not determine expression type: " + serializeAST(*node), ErrorCodes::LOGICAL_ERROR);
 
-    analysis.setExpressionType(node, result.type);
+    analysis.setExpressionColumnWithType(node, {result.type, result.column});
     return result;
 }
 
@@ -349,7 +354,7 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeOrdinaryFunction(ASTFunctionPt
 
             auto resolved_lambda_type = std::make_shared<DataTypeFunction>(lambda_type->getArgumentTypes(), lambda_ret_type);
             // since we don't call `process` for lambda argument, register its type manually
-            analysis.setExpressionType(arguments[index], resolved_lambda_type);
+            analysis.setExpressionColumnWithType(arguments[index], {resolved_lambda_type});
             processed_arguments[index] = {nullptr, resolved_lambda_type,""};
         }
     }
@@ -456,6 +461,23 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeWindowFunction(ASTFunctionPtr 
     {
         window_name = function->window_name;
         resolved_window = analysis.getRegisteredWindow(*options.select_query, function->window_name);
+        // Lead and lag
+        if (function->window_definition)
+        {
+            const struct WindowFrame def =
+            {
+                .is_default = false,
+                .type = WindowFrame::FrameType::Rows,
+                .end_type = WindowFrame::BoundaryType::Unbounded,
+            };
+
+            if (resolved_window->frame != def)
+            {
+                window_name = function->window_name + "(ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)";
+                resolved_window = std::make_shared<ResolvedWindow>(*resolved_window);
+                resolved_window->frame = def;
+            }
+        }
     }
     else
     {
@@ -594,7 +616,7 @@ DataTypePtr ExprAnalyzerVisitor::handleSubquery(const ASTPtr & subquery)
         type = std::make_shared<DataTypeTuple>(column_types);
     }
 
-    analysis.setExpressionType(subquery, type);
+    analysis.setExpressionColumnWithType(subquery, {type});
     return type;
 }
 

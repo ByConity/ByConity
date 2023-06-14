@@ -21,6 +21,8 @@ bool func_wrapper(Func && func, Arg && arg)
 template <typename T, T Begin, typename Func, T... Is>
 constexpr bool static_for_impl(Func && f, std::integer_sequence<T, Is...>)
 {
+    // forward is used on f to do conditional cast on f to the correct value type
+    // coverity[use_after_move]
     return (func_wrapper(std::forward<Func>(f), std::integral_constant<T, Begin + Is>{}) || ...);
 }
 

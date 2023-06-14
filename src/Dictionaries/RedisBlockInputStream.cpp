@@ -106,6 +106,8 @@ namespace DB
                     readDateTimeText(time, in);
                     if (time < 0)
                         time = 0;
+                    // TODO: A 64-bit time_t value is stored in a smaller width integer (Y2K38_SAFETY)
+                    // coverity[store_truncates_time_t]
                     assert_cast<ColumnUInt32 &>(column).insertValue(time);
                     break;
                 }

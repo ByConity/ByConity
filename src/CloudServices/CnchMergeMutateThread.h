@@ -34,6 +34,8 @@ using CnchWorkerClientPtr = std::shared_ptr<CnchWorkerClient>;
 
 class CnchMergeMutateThread;
 struct PartMergeLogElement;
+class CnchBGThreadPartitionSelector;
+using PartitionSelectorPtr = std::shared_ptr<CnchBGThreadPartitionSelector>;
 
 struct ManipulationTaskRecord
 {
@@ -159,6 +161,8 @@ private:
         std::lock_guard lock(currently_merging_mutating_parts_mutex);
         return currently_merging_mutating_parts;
     }
+
+    PartitionSelectorPtr partition_selector;
 
     std::mutex currently_merging_mutating_parts_mutex;
     NameSet currently_merging_mutating_parts;

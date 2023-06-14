@@ -55,7 +55,7 @@ ColumnByteMap::ColumnByteMap(MutableColumnPtr && key_column_, MutableColumnPtr &
     :key_column(std::move(key_column_)), value_column(std::move(value_column_))
 {
     if (!key_column->empty() || !value_column->empty())
-       throw Exception("Not empty key, value passed to ColumnByteMap, but no offsets passed " + toString(key_column_->size()) + " : " + toString(value_column_->size()),
+       throw Exception("Not empty key, value passed to ColumnByteMap, but no offsets passed " + toString(key_column->size()) + " : " + toString(value_column->size()),
                ErrorCodes::BAD_ARGUMENTS);
     offsets = ColumnOffsets::create();
 }
@@ -541,7 +541,8 @@ ColumnPtr ColumnByteMap::index(const IColumn & indexes, size_t limit) const
     return ColumnByteMap::create(key_index_column, value_index_column);
 }
 
-void ColumnByteMap::getPermutation([[maybe_unused]] bool reverse,
+void ColumnByteMap::getPermutation([[maybe_unused]] PermutationSortDirection direction,
+                               [[maybe_unused]] PermutationSortStability stability,
                                [[maybe_unused]] size_t limit,
                                [[maybe_unused]] int nan_direction_hint,
                                [[maybe_unused]] Permutation & res) const
@@ -549,7 +550,8 @@ void ColumnByteMap::getPermutation([[maybe_unused]] bool reverse,
     throw Exception("ColumnByteMap::getPermutation not implemented", ErrorCodes::NOT_IMPLEMENTED);
 }
 
-void ColumnByteMap::updatePermutation(bool, size_t, int, IColumn::Permutation &, EqualRanges &) const
+void ColumnByteMap::updatePermutation(PermutationSortDirection /* direction */, PermutationSortStability /* stability */,
+                            size_t /* limit */, int /* nan_direction_hint */, Permutation & /* res */, EqualRanges & /* equal_ranges */) const
 {
     throw Exception("ColumnByteMap::updatePermutation not implemented", ErrorCodes::NOT_IMPLEMENTED);
 }

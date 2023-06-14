@@ -42,6 +42,22 @@ BroadcastExchangeSink::~BroadcastExchangeSink() = default;
 
 void BroadcastExchangeSink::consume(Chunk chunk)
 {
+    if (!has_input)
+    {
+        if (options.force_use_buffer)
+        {
+            auto chunk_to_send = buffer_chunk.flush(true);
+            if (!chunk_to_send)
+                return;
+            for (auto & sender : senders)
+            {
+                ExchangeUtils::sendAndCheckReturnStatus(*sender, chunk_to_send.clone());
+            }
+        }
+        finish();
+        return;
+    }
+
     Chunk chunk_to_send;
     if (options.force_use_buffer)
     {
@@ -74,16 +90,6 @@ void BroadcastExchangeSink::consume(Chunk chunk)
 void BroadcastExchangeSink::onFinish()
 {
     LOG_TRACE(logger, "BroadcastExchangeSink finish");
-    if (!options.force_use_buffer)
-        return;
-
-    auto chunk = buffer_chunk.flush(true);
-    if (!chunk)
-        return;
-    for (auto & sender : senders)
-    {
-        ExchangeUtils::sendAndCheckReturnStatus(*sender, chunk.clone());
-    }
 }
 
 void BroadcastExchangeSink::onCancel()

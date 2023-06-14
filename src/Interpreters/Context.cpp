@@ -409,6 +409,7 @@ struct ContextSharedPart
     ActionLocksManagerPtr action_locks_manager;             /// Set of storages' action lockers
     std::unique_ptr<SystemLogs> system_logs;                /// Used to log queries and operations on parts
     std::unique_ptr<CnchSystemLogs> cnch_system_logs;         /// Used to log queries, kafka etc. Stores data in CnchMergeTree table
+    PartitionSelectorPtr bg_partition_selector;             /// Partition selector for GC and Merge threads.
 
     std::optional<StorageS3Settings> storage_s3_settings;   /// Settings of S3 storage
 
@@ -2529,6 +2530,9 @@ void Context::setExchangePort(UInt16 port)
 
 UInt16 Context::getExchangePort() const
 {
+    if (auto env_port = getPortFromEnvForConsul("PORT5"))
+        return env_port;
+
     if (shared->exchange_port == 0)
         throw Exception("Parameter 'exchange_port' required for replication is not specified in configuration file.",
                         ErrorCodes::NO_ELEMENTS_IN_CONFIG);
@@ -2542,6 +2546,9 @@ void Context::setExchangeStatusPort(UInt16 port)
 
 UInt16 Context::getExchangeStatusPort() const
 {
+    if (auto env_port = getPortFromEnvForConsul("PORT6"))
+        return env_port;
+
     if (shared->exchange_status_port == 0)
         throw Exception("Parameter 'exchange_status_port' required for replication is not specified in configuration file.",
                         ErrorCodes::NO_ELEMENTS_IN_CONFIG);
@@ -2579,6 +2586,22 @@ const RemoteHostFilter & Context::getRemoteHostFilter() const
     return shared->remote_host_filter;
 }
 
+UInt16 Context::getPortFromEnvForConsul(const char * key) const
+{
+    if(shared->server_type == ServerType::cnch_server || shared->server_type == ServerType::cnch_worker)
+    {
+        auto sd_client = this->getServiceDiscoveryClient();
+        if(sd_client->getName() == "consul")
+        {
+            const char * value = getenv(key);
+            if(value != nullptr)
+                return parse<UInt16>(value);
+        }
+    }
+
+    return 0;
+}
+
 HostWithPorts Context::getHostWithPorts() const
 {
     auto get_host_with_port = [this] ()
@@ -2605,6 +2628,9 @@ HostWithPorts Context::getHostWithPorts() const
 
 UInt16 Context::getTCPPort() const
 {
+    if (auto env_port = getPortFromEnvForConsul("PORT0"))
+        return env_port;
+
     auto lock = getLock();
 
     const auto & config = getConfigRef();
@@ -2748,6 +2774,16 @@ bool Context::hasTraceCollector() const
     return shared->hasTraceCollector();
 }
 
+void Context::initBGPartitionSelector()
+{
+    if (shared->server_type == ServerType::cnch_server && !shared->bg_partition_selector)
+        shared->bg_partition_selector = std::make_shared<CnchBGThreadPartitionSelector>(getGlobalContext());
+}
+
+PartitionSelectorPtr Context::getBGPartitionSelector() const
+{
+    return shared->bg_partition_selector;
+}
 
 std::shared_ptr<QueryLog> Context::getQueryLog() const
 {
@@ -4041,32 +4077,16 @@ std::shared_ptr<CnchTopologyMaster> Context::getCnchTopologyMaster() const
 
 UInt16 Context::getRPCPort() const
 {
-    if(shared->server_type == ServerType::cnch_server || shared->server_type == ServerType::cnch_worker)
-    {
-        auto sd_client = this->getServiceDiscoveryClient();
-        if(sd_client->getName() == "consul")
-        {
-            const char * rpc_port = getenv("PORT1");
-            if(rpc_port != nullptr)
-                return parse<UInt16>(rpc_port);
-        }
-    }
+    if (auto env_port = getPortFromEnvForConsul("PORT1"))
+        return env_port;
 
     return getRootConfig().rpc_port;
 }
 
 UInt16 Context::getHTTPPort() const
 {
-    if(shared->server_type == ServerType::cnch_server || shared->server_type == ServerType::cnch_worker)
-    {
-        auto sd_client = this->getServiceDiscoveryClient();
-        if(sd_client->getName() == "consul")
-        {
-            const char * http_port = getenv("PORT2");
-            if(http_port != nullptr)
-                return parse<UInt16>(http_port);
-        }
-    }
+    if (auto env_port = getPortFromEnvForConsul("PORT2"))
+        return env_port;
 
     return getRootConfig().http_port;
 }

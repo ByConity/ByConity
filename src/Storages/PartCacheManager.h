@@ -22,6 +22,7 @@
 #include <Common/RWLock.h>
 #include <Common/HostWithPorts.h>
 #include <Common/CurrentThread.h>
+#include <Common/ScanWaitFreeMap.h>
 #include <Interpreters/Context_fwd.h>
 #include <Catalog/DataModelPartWrapper_fwd.h>
 #include <Protos/DataModelHelpers.h>
@@ -37,12 +38,14 @@ using CnchDataPartCachePtr = std::shared_ptr<CnchDataPartCache>;
 
 struct TableMetaEntry
 {
-    RWLockImpl::LockHolder readLock() const
+    typedef RWLockImpl::LockHolder TableLockHolder;
+
+    TableLockHolder readLock() const
     {
         return meta_mutex->getLock(RWLockImpl::Read, CurrentThread::getQueryId().toString());
     }
 
-    RWLockImpl::LockHolder writeLock() const
+    TableLockHolder writeLock() const
     {
         return meta_mutex->getLock(RWLockImpl::Write, CurrentThread::getQueryId().toString());
     }
@@ -73,8 +76,13 @@ struct TableMetaEntry
     /// used to decide if the part/partition cache are still valid when enable write ha. If the fetched
     /// NHUT from metastore differs with cached one, we should update cache with metastore.
     std::atomic_uint64_t cached_non_host_update_ts {0};
-    bool need_invalid_cache {false};
-    Catalog::PartitionMap partitions;
+    std::atomic_bool need_invalid_cache {false};
+
+    ScanWaitFreeMap<String, PartitionInfoPtr> partitions;
+
+    Catalog::PartitionMap getPartitions(const Strings & wanted_partition_ids);
+    Strings getPartitionIDs();
+    std::vector<std::shared_ptr<MergeTreePartition>> getPartitionList();
 };
 
 using TableMetaEntryPtr = std::shared_ptr<TableMetaEntry>;
@@ -106,9 +114,9 @@ public:
 
     bool getTablePartitionMetrics(const IStorage & i_storage, std::unordered_map<String, PartitionFullPtr> & partitions, bool require_partition_info = true);
 
-    bool getTablePartitions(const IStorage & storage, Catalog::PartitionMap & partitions);
-
     bool getPartitionList(const IStorage & storage, std::vector<std::shared_ptr<MergeTreePartition>> & partition_list);
+
+    bool getPartitionIDs(const IStorage & storage, std::vector<String> & partition_ids);
 
     void invalidPartCache(const UUID & uuid);
 
@@ -140,7 +148,6 @@ public:
 
     void shutDown();
 
-    bool couldLeverageCache(const StoragePtr & storage);
 private:
     mutable std::mutex cache_mutex;
     CnchDataPartCachePtr part_cache_ptr;
@@ -173,11 +180,9 @@ private:
     ServerDataPartsVector getServerPartsInternal(const MergeTreeMetaBase & storage, const TableMetaEntryPtr & meta_ptr,
         const Strings & partitions, const Strings & all_existing_partitions, LoadPartsFunc & load_func, const UInt64 & ts);
     ServerDataPartsVector getServerPartsByPartition(const MergeTreeMetaBase & storage, const TableMetaEntryPtr & meta_ptr,
-        const Strings & partitions, const Strings & all_existing_partitions, LoadPartsFunc & load_func, const UInt64 & ts);
+        const Strings & partitions, LoadPartsFunc & load_func, const UInt64 & ts);
     //DataModelPartWrapperVector getPartsModelByPartition(const MergeTreeMetaBase & storage, const TableMetaEntryPtr & meta_ptr,
     //    const Strings & partitions, const Strings & all_existing_partitions, LoadPartsFunc & load_func, const UInt64 & ts);
-
-    Strings getPartitionIDList(const IStorage & storage);
 
     static void checkTimeLimit(Stopwatch & watch);
 };

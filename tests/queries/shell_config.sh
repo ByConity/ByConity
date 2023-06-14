@@ -70,7 +70,7 @@ else
   IP_ADDRESS=$(hostname -I | cut -d " " -f 1) # container's ipv4 address
 fi
 
-export CLICKHOUSE_HOST="${IP_ADDRESS}"
+export CLICKHOUSE_HOST="${CLICKHOUSE_HOST:=$IP_ADDRESS}"
 export CLICKHOUSE_PORT_TCP=${CLICKHOUSE_PORT_TCP:=$(${CLICKHOUSE_EXTRACT_CONFIG} --try --key=tcp_port 2>/dev/null)} 2>/dev/null
 export CLICKHOUSE_PORT_TCP=${CLICKHOUSE_PORT_TCP:="9000"}
 export CLICKHOUSE_PORT_TCP_SECURE=${CLICKHOUSE_PORT_TCP_SECURE:=$(${CLICKHOUSE_EXTRACT_CONFIG} --try --key=tcp_port_secure 2>/dev/null)} 2>/dev/null

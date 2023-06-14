@@ -323,7 +323,7 @@ void SelectStreamFactory::createForShard(
             return;
         }
 
-        UInt32 local_delay = replicated_storage->getAbsoluteDelay();
+        UInt64 local_delay = replicated_storage->getAbsoluteDelay();
 
         if (local_delay < max_allowed_delay)
         {

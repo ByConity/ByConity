@@ -398,7 +398,6 @@ DataTypes deserializeDataTypes(ReadBuffer & buf)
     DataTypes types;
     for (size_t index = 0; index < size; ++index)
     {
-        index++;
         types.emplace_back(deserializeDataType(buf));
     }
     return types;

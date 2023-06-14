@@ -89,3 +89,7 @@ select erf(10) = 1;
 select erfc(0) = 1;
 select erfc(-10) = 2;
 select erfc(28) = 0;
+
+select cot(0) = inf;
+select abs(cot(pi() / 4) - 1) < 1.0e-9;
+select sum(abs(cot(pi() / 4 + 2 * pi() * x) - 1) < 1.0e-8) / count() from system.one array join range(1000000) as x;

@@ -48,6 +48,8 @@ void LineAsStringRowInputFormat::readLineObject(IColumn & column)
     loadAtPosition(in, object, pos);
 
     /// Last character is always \n.
+    // Empty object will be caught by readRow(), so this will not happen
+    // coverity[overrun-buffer-arg]
     column.insertData(object.data(), object.size() - 1);
 }
 

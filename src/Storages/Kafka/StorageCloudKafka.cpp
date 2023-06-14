@@ -208,8 +208,11 @@ void StorageCloudKafka::subscribeBuffer(BufferPtr &buffer)
 
 void StorageCloudKafka::unsubscribeBuffer(BufferPtr &buffer)
 {
-    if (buffer)
-        buffer->subBufferAs<CnchReadBufferFromKafkaConsumer>()->unassign();
+    if (!buffer)
+        return;
+
+    buffer->subBufferAs<CnchReadBufferFromKafkaConsumer>()->unassign();
+    buffer->resetDelimiterStatus();
 }
 
 cppkafka::Configuration StorageCloudKafka::createConsumerConfiguration()
@@ -328,7 +331,6 @@ void StorageCloudKafka::stopStreamThread()
     /// Second, stop task: do not add lock here
     /// If exception occurs when stopping task, it needs to add lock to update some info,
     /// so if locked here, the dead lock would happen
-    unsubscribeBuffer(consumer_context.buffer);
     consumer_context.task->deactivate();
 
     /// Then reset `consumer_context`
@@ -492,8 +494,8 @@ bool StorageCloudKafka::streamToViews(/* required_column_names */)
     auto block_io = interpreter.execute();
 
     BlockInputStreamPtr in = std::make_shared<CnchKafkaBlockInputStream>(*this, getInMemoryMetadataPtr(),
-                             consume_context, block_io.out->getHeader().getNames(), block_size, assigned_consumer_index);
-
+                             consume_context, block_io.out->getHeader().getNames(), block_size, assigned_consumer_index,
+                             getInMemoryMetadataPtr()->getColumns().hasDefaults());
 
     streamCopyData(*in, *block_io.out, consume_context);
 

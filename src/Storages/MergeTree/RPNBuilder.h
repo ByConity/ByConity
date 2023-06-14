@@ -72,6 +72,8 @@ private:
                       * - in this case `n - 1` elements are added (where `n` is the number of arguments).
                       */
                     if (i != 0 || element.function == RPNElement::FUNCTION_NOT)
+                        // No issues with using move and emplace back
+                        // coverity[use_after_move]
                         rpn.emplace_back(std::move(element));
                 }
 

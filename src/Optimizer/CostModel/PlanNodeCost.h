@@ -43,6 +43,18 @@ public:
 
     double getCost() const;
 
+    double getCpuValue() const { return cpu_value; }
+    double getNetValue() const { return net_value; }
+    double getMenValue() const { return mem_value; }
+
+    PlanNodeCost & operator+=(const PlanNodeCost & other)
+    {
+        cpu_value = cpu_value + other.cpu_value;
+        net_value = net_value + other.net_value;
+        mem_value = mem_value + other.mem_value;
+        return *this;
+    }
+
     PlanNodeCost & operator+(const PlanNodeCost & other)
     {
         cpu_value = cpu_value + other.cpu_value;

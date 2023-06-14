@@ -157,118 +157,49 @@ void ColumnFixedString::updateHashFast(SipHash & hash) const
     hash.update(reinterpret_cast<const char *>(chars.data()), size() * n);
 }
 
-template <bool positive>
-struct ColumnFixedString::less
+struct ColumnFixedString::ComparatorBase
 {
     const ColumnFixedString & parent;
-    explicit less(const ColumnFixedString & parent_) : parent(parent_) {}
-    bool operator()(size_t lhs, size_t rhs) const
+
+    explicit ComparatorBase(const ColumnFixedString & parent_)
+        : parent(parent_)
+    {
+    }
+
+    ALWAYS_INLINE int compare(size_t lhs, size_t rhs) const
     {
         int res = memcmpSmallAllowOverflow15(parent.chars.data() + lhs * parent.n, parent.chars.data() + rhs * parent.n, parent.n);
-        return positive ? (res < 0) : (res > 0);
+
+        return res;
     }
 };
 
-void ColumnFixedString::getPermutation(bool reverse, size_t limit, int /*nan_direction_hint*/, Permutation & res) const
+void ColumnFixedString::getPermutation(IColumn::PermutationSortDirection direction, IColumn::PermutationSortStability stability,
+                                    size_t limit, int /*nan_direction_hint*/, Permutation & res) const
 {
-    size_t s = size();
-    res.resize(s);
-    for (size_t i = 0; i < s; ++i)
-        res[i] = i;
-
-    if (limit >= s)
-        limit = 0;
-
-    if (limit)
-    {
-        if (reverse)
-            partial_sort(res.begin(), res.begin() + limit, res.end(), less<false>(*this));
-        else
-            partial_sort(res.begin(), res.begin() + limit, res.end(), less<true>(*this));
-    }
-    else
-    {
-        if (reverse)
-            std::sort(res.begin(), res.end(), less<false>(*this));
-        else
-            std::sort(res.begin(), res.end(), less<true>(*this));
-    }
+    if (direction == IColumn::PermutationSortDirection::Ascending && stability == IColumn::PermutationSortStability::Unstable)
+        getPermutationImpl(limit, res, ComparatorAscendingUnstable(*this), DefaultSort(), DefaultPartialSort());
+    else if (direction == IColumn::PermutationSortDirection::Ascending && stability == IColumn::PermutationSortStability::Stable)
+        getPermutationImpl(limit, res, ComparatorAscendingStable(*this), DefaultSort(), DefaultPartialSort());
+    else if (direction == IColumn::PermutationSortDirection::Descending && stability == IColumn::PermutationSortStability::Unstable)
+        getPermutationImpl(limit, res, ComparatorDescendingUnstable(*this), DefaultSort(), DefaultPartialSort());
+    else if (direction == IColumn::PermutationSortDirection::Descending && stability == IColumn::PermutationSortStability::Stable)
+        getPermutationImpl(limit, res, ComparatorDescendingStable(*this), DefaultSort(), DefaultPartialSort());
 }
 
-void ColumnFixedString::updatePermutation(bool reverse, size_t limit, int, Permutation & res, EqualRanges & equal_ranges) const
+void ColumnFixedString::updatePermutation(IColumn::PermutationSortDirection direction, IColumn::PermutationSortStability stability,
+                                    size_t limit, int /*nan_direction_hint*/, Permutation & res, EqualRanges & equal_ranges) const
 {
-    if (equal_ranges.empty())
-        return;
+    auto comparator_equal = ComparatorEqual(*this);
 
-    if (limit >= size() || limit >= equal_ranges.back().second)
-        limit = 0;
-
-    size_t number_of_ranges = equal_ranges.size();
-    if (limit)
-        --number_of_ranges;
-
-    EqualRanges new_ranges;
-    SCOPE_EXIT({equal_ranges = std::move(new_ranges);});
-
-    for (size_t i = 0; i < number_of_ranges; ++i)
-    {
-        const auto& [first, last] = equal_ranges[i];
-        if (reverse)
-            std::sort(res.begin() + first, res.begin() + last, less<false>(*this));
-        else
-            std::sort(res.begin() + first, res.begin() + last, less<true>(*this));
-
-        auto new_first = first;
-        for (auto j = first + 1; j < last; ++j)
-        {
-            if (memcmpSmallAllowOverflow15(chars.data() + res[j] * n, chars.data() + res[new_first] * n, n) != 0)
-            {
-                if (j - new_first > 1)
-                    new_ranges.emplace_back(new_first, j);
-
-                new_first = j;
-            }
-        }
-        if (last - new_first > 1)
-            new_ranges.emplace_back(new_first, last);
-    }
-    if (limit)
-    {
-        const auto & [first, last] = equal_ranges.back();
-
-        if (limit < first || limit > last)
-            return;
-
-        /// Since then we are working inside the interval.
-
-        if (reverse)
-            partial_sort(res.begin() + first, res.begin() + limit, res.begin() + last, less<false>(*this));
-        else
-            partial_sort(res.begin() + first, res.begin() + limit, res.begin() + last, less<true>(*this));
-
-        auto new_first = first;
-        for (auto j = first + 1; j < limit; ++j)
-        {
-            if (memcmpSmallAllowOverflow15(chars.data() + res[j] * n, chars.data() + res[new_first] * n, n)  != 0)
-            {
-                if (j - new_first > 1)
-                    new_ranges.emplace_back(new_first, j);
-
-                new_first = j;
-            }
-        }
-        auto new_last = limit;
-        for (auto j = limit; j < last; ++j)
-        {
-            if (memcmpSmallAllowOverflow15(chars.data() + res[j] * n, chars.data() + res[new_first] * n, n)  == 0)
-            {
-                std::swap(res[new_last], res[j]);
-                ++new_last;
-            }
-        }
-        if (new_last - new_first > 1)
-            new_ranges.emplace_back(new_first, new_last);
-    }
+    if (direction == IColumn::PermutationSortDirection::Ascending && stability == IColumn::PermutationSortStability::Unstable)
+        updatePermutationImpl(limit, res, equal_ranges, ComparatorAscendingUnstable(*this), comparator_equal, DefaultSort(), DefaultPartialSort());
+    else if (direction == IColumn::PermutationSortDirection::Ascending && stability == IColumn::PermutationSortStability::Stable)
+        updatePermutationImpl(limit, res, equal_ranges, ComparatorAscendingStable(*this), comparator_equal, DefaultSort(), DefaultPartialSort());
+    else if (direction == IColumn::PermutationSortDirection::Descending && stability == IColumn::PermutationSortStability::Unstable)
+        updatePermutationImpl(limit, res, equal_ranges, ComparatorDescendingUnstable(*this), comparator_equal, DefaultSort(), DefaultPartialSort());
+    else if (direction == IColumn::PermutationSortDirection::Descending && stability == IColumn::PermutationSortStability::Stable)
+        updatePermutationImpl(limit, res, equal_ranges, ComparatorDescendingStable(*this), comparator_equal, DefaultSort(), DefaultPartialSort());
 }
 
 void ColumnFixedString::insertRangeFrom(const IColumn & src, size_t start, size_t length)
@@ -466,8 +397,7 @@ void ColumnFixedString::getExtremes(Field & min, Field & max) const
     size_t min_idx = 0;
     size_t max_idx = 0;
 
-    less<true> less_op(*this);
-
+    auto less_op = ComparatorAscendingUnstable(*this);
     for (size_t i = 1; i < col_size; ++i)
     {
         if (less_op(i, min_idx))

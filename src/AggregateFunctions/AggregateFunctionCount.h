@@ -32,6 +32,7 @@ struct AggregateFunctionCountData
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
+    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 }
 
 
@@ -291,4 +292,68 @@ public:
 
 };
 
+
+/// Count number of calls where all arguments are not NULL.
+class AggregateFunctionCountNotNullVariadic final : public IAggregateFunctionDataHelper<AggregateFunctionCountData, AggregateFunctionCountNotNullVariadic>
+{
+public:
+    AggregateFunctionCountNotNullVariadic(const DataTypes & arguments, const Array & params)
+        : IAggregateFunctionDataHelper<AggregateFunctionCountData, AggregateFunctionCountNotNullVariadic>(arguments, params)
+    {
+        number_of_arguments = arguments.size();
+
+        if (number_of_arguments == 1)
+            throw Exception("Logical error: single argument is passed to AggregateFunctionCountNotNullVariadic", ErrorCodes::LOGICAL_ERROR);
+
+        if (number_of_arguments > MAX_ARGS)
+            throw Exception("Maximum number of arguments for aggregate function with Nullable types is " + toString(size_t(MAX_ARGS)),
+                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+        for (size_t i = 0; i < number_of_arguments; ++i)
+            is_nullable[i] = arguments[i]->isNullable();
+    }
+
+    String getName() const override { return "count"; }
+
+    DataTypePtr getReturnType() const override
+    {
+        return std::make_shared<DataTypeUInt64>();
+    }
+
+    void add(AggregateDataPtr place, const IColumn ** columns, size_t row_num, Arena *) const override
+    {
+        for (size_t i = 0; i < number_of_arguments; ++i)
+            if (is_nullable[i] && assert_cast<const ColumnNullable &>(*columns[i]).isNullAt(row_num))
+                return;
+
+        ++data(place).count;
+    }
+
+    void merge(AggregateDataPtr place, ConstAggregateDataPtr rhs, Arena *) const override
+    {
+        data(place).count += data(rhs).count;
+    }
+
+    void serialize(ConstAggregateDataPtr place, WriteBuffer & buf) const override
+    {
+        writeVarUInt(data(place).count, buf);
+    }
+
+    void deserialize(AggregateDataPtr place, ReadBuffer & buf, Arena *) const override
+    {
+        readVarUInt(data(place).count, buf);
+    }
+
+    virtual void insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena *) const override
+    {
+        assert_cast<ColumnUInt64 &>(to).getData().push_back(data(place).count);
+    }
+
+    bool allocatesMemoryInArena() const override { return false; }
+
+private:
+    enum { MAX_ARGS = 8 };
+    size_t number_of_arguments = 0;
+    std::array<char, MAX_ARGS> is_nullable;    /// Plain array is better than std::vector due to one indirection less.
+};
 }

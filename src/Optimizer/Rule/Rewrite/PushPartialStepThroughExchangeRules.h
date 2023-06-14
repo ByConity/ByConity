@@ -27,6 +27,8 @@ public:
     PatternPtr getPattern() const override;
 
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
+
+    static NameSet BLOCK_AGGS;
 };
 
 class PushPartialSortingThroughExchange : public Rule

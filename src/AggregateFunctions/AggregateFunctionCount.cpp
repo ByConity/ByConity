@@ -10,7 +10,10 @@ struct Settings;
 AggregateFunctionPtr AggregateFunctionCount::getOwnNullAdapter(
     const AggregateFunctionPtr &, const DataTypes & types, const Array & params, const AggregateFunctionProperties & /*properties*/) const
 {
-    return std::make_shared<AggregateFunctionCountNotNullUnary>(types[0], params);
+    if (types.size() == 1)
+        return std::make_shared<AggregateFunctionCountNotNullUnary>(types[0], params);
+    else
+        return std::make_shared<AggregateFunctionCountNotNullVariadic>(types, params);
 }
 
 namespace

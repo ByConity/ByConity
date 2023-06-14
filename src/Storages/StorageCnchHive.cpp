@@ -47,6 +47,8 @@
 #include <Storages/StorageInMemoryMetadata.h>
 #include <Disks/HDFS/DiskByteHDFS.h>
 #include <Disks/SingleDiskVolume.h>
+#include <Storages/Hive/HiveSchemaConverter.h>
+#include <Storages/KeyDescription.h>
 
 namespace DB
 {
@@ -56,7 +58,6 @@ namespace ErrorCodes
     extern const int VIRTUAL_WAREHOUSE_NOT_FOUND;
     extern const int NOT_FOUND_COLUMN_IN_BLOCK;
     extern const int SUPPORT_IS_DISABLED;
-
 }
 
 StorageCnchHive::~StorageCnchHive()
@@ -92,38 +93,45 @@ StorageCnchHive::StorageCnchHive(
     , WithMutableContext(context_->getGlobalContext())
     , CnchStorageCommonHelper(table_id_, remote_database_name_, remote_table_name_)
     , remote_psm(remote_psm_)
-    , partition_by_ast(std::move(partition_by_ast_))
-    , cluster_by_ast(std::move(cluster_by_ast_))
-    , order_by_ast(std::move(order_by_ast_))
-    , is_create(is_create_)
     , log(&Poco::Logger::get("StorageCnchHive"))
     , settings(settings_)
 {
-    StorageInMemoryMetadata metadata;
-    metadata.setColumns(columns_);
-    metadata.setConstraints(constraints_);
-
-    for(const auto & col : columns_)
+    if (columns_.empty())
     {
-        LOG_TRACE(log, " StorageCnchHive : col name {}  table name {}, database name{} ", col.name, table_id_.table_name, table_id_.database_name);
-
+        HiveSchemaConverter converter(context_, getHiveTable());
+        StorageInMemoryMetadata metadata = converter.convert();
+        setInMemoryMetadata(metadata);
     }
-
-    setInMemoryMetadata(metadata);
-
-    //only when create table, need to check schema and storage format.
-    if (is_create)
+    else if (is_create_)
     {
+        // only when create table, need to check schema and storage format.
+        StorageInMemoryMetadata metadata;
+        metadata.setColumns(columns_);
+        metadata.setConstraints(constraints_);
+
+        if (partition_by_ast_)
+        {
+            metadata.partition_key = KeyDescription::getKeyFromAST(partition_by_ast_, columns_, context_);
+        }
+
+        if (cluster_by_ast_)
+        {
+            metadata.cluster_by_key = KeyDescription::getClusterByKeyFromAST(cluster_by_ast_, columns_, context_);
+        }
+
+        if (order_by_ast_)
+        {
+            metadata.primary_key = KeyDescription::getKeyFromAST(order_by_ast_, columns_, context_);
+        }
+
+        setInMemoryMetadata(metadata);
         auto hms_client = HiveMetastoreClientFactory::instance().getOrCreate(remote_psm, settings);
-        hms_client->check(columns_, remote_database, remote_table);
-        checkStorageFormat();
-        checkPartitionByKey();
-        checkClusterByKey();
-        checkSortByKey();
     }
 
-    //
-    setProperties();
+    auto table = getHiveTable();
+    const String format = table->sd.outputFormat;
+    if ((format.find("parquet") == String::npos) && (format.find("orc") == String::npos))
+        throw Exception("CnchHive only support parquet/orc format. Current format is " + format + " .", ErrorCodes::BAD_ARGUMENTS);
 }
 
 /// Get basic select query to read from prepared pipe: remove prewhere, sampling, offset, final
@@ -368,6 +376,11 @@ void StorageCnchHive::checkClusterByKey()
     else if (!hivebucket_cols.empty())
         throw Exception("CnchHive hiveBucket doesn't match .", ErrorCodes::BAD_ARGUMENTS);
 }
+  
+bool StorageCnchHive::isBucketTable() const
+{
+    return getInMemoryMetadata().isClusterByKeyDefined();
+}
 
 QueryProcessingStage::Enum StorageCnchHive::getQueryProcessingStage(
     ContextPtr local_context, QueryProcessingStage::Enum, const StorageMetadataPtr &, SelectQueryInfo &) const
@@ -532,7 +545,11 @@ HivePartitionVector StorageCnchHive::selectPartitionsByPredicate(
 /// TODO: handle more than one bucket column expression
 std::set<Int64> StorageCnchHive::getSelectedBucketNumbers(const SelectQueryInfo & query_info, ContextPtr & local_context)
 {
-    if (!isBucketTable() || cluster_by_columns.size() != 1)
+    auto metadata = getInMemoryMetadataPtr();
+    auto cluster_by_columns = metadata->getColumnsForClusterByKey();
+    auto cluster_by_key_expr = metadata->getClusterByKey().expression;
+
+    if (!isBucketTable())
         return {};
 
     std::set<Int64> bucket_numbers;
@@ -552,10 +569,9 @@ std::set<Int64> StorageCnchHive::getSelectedBucketNumbers(const SelectQueryInfo 
     ExpressionActionsPtr const_actions = ExpressionAnalyzer{bucket_column_expression, syntax_result, local_context}.getConstActions();
     const_actions->execute(sample_block);
 
+    auto cluster_by_total_bucket_number = getInMemoryMetadataPtr()->getBucketNumberFromClusterByKey();
     LOG_TRACE(log, "select total_bucket_number: {} sample block size: {}", cluster_by_total_bucket_number, sample_block.columns());
-
     createHiveBucketColumn(sample_block, cluster_by_key_expr->getSampleBlock(), cluster_by_total_bucket_number, local_context);
-
     auto bucket_number = sample_block.getByPosition(sample_block.columns() - 1).column->getInt(0); // this block only contains one row
     bucket_numbers.insert(bucket_number);
 
@@ -680,9 +696,9 @@ HiveDataPartsCNCHVector StorageCnchHive::collectHiveFilesFromTable(
 void StorageCnchHive::collectResource(ContextPtr local_context, const HiveDataPartsCNCHVector & parts, const String & local_table_name)
 {
     auto cnch_resource = local_context->getCnchServerResource();
-    auto create_table_query = getCreateQueryForCloudTable(getCreateTableSql(), local_table_name, local_context);
+    auto create_table_query = getCreateQueryForCloudTable(getCreateTableSql(), local_table_name, local_context, false, {}, getInMemoryMetadataPtr());
 
-    LOG_TRACE(log, " create table query {}", create_table_query);
+    LOG_DEBUG(log, " create table query {}", create_table_query);
 
     cnch_resource->setWorkerGroup(local_context->getCurrentWorkerGroup());
     cnch_resource->addCreateQuery(local_context, shared_from_this(), create_table_query, local_table_name);
@@ -770,8 +786,8 @@ void registerStorageCnchHive(StorageFactory & factory)
 {
     StorageFactory::StorageFeatures features{
         .supports_settings = true,
-        .supports_projections = true,
         .supports_sort_order = true,
+        .supports_schema_inference = true,
     };
 
     LOG_DEBUG(&Poco::Logger::get("registerStorageCnchHive"), "registerStorageCnchHive ");

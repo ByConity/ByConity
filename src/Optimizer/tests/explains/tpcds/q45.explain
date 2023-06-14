@@ -16,7 +16,7 @@ Projection est. 100 rows
                      └─ Projection est. 31202953 rows
                         │     Expressions: [ca_city, ca_zip, ws_sales_price]
                         └─ Filter est. 31202953 rows
-                           │     Condition: if(isNull(i_item_id), NULL, cast(multiIf(build_side_non_null_symbol = 1, 1, NULL, 0, 0), 'UInt8')) OR (substring(ca_zip, 1, 5) IN ('85669', '86197', '88274', '83405', '86475', '85392', '85460', '80348', '81792'))
+                           │     Condition: if(isNull(i_item_id), NULL, cast(multiIf(build_side_non_null_symbol = 1, 1, 0), 'UInt8')) OR (substring(ca_zip, 1, 5) IN ('85669', '86197', '88274', '83405', '86475', '85392', '85460', '80348', '81792'))
                            └─ Left Join est. 34669948 rows
                               │     Condition: i_item_id == i_item_id_1
                               ├─ Inner Join est. 34669948 rows

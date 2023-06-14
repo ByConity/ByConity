@@ -48,12 +48,14 @@ std::shared_ptr<ProjectionStep> CTERefStep::toProjectionStep() const
     NamesAndTypes inputs;
     Assignments assignments;
     NameToType name_to_type;
-    for (auto & item : output_columns)
-        assignments.emplace_back(item.first, std::make_shared<ASTIdentifier>(item.second));
-    for (auto & item : output_stream.value().header)
+    for (const auto & item : output_stream.value().header)
     {
-        name_to_type.emplace(item.name, item.type);
-        inputs.emplace_back(NameAndTypePair{output_columns.at(item.name), item.type});
+        if (output_columns.contains(item.name))
+        {
+            assignments.emplace_back(item.name, std::make_shared<ASTIdentifier>(output_columns.at(item.name)));
+            name_to_type.emplace(item.name, item.type);
+            inputs.emplace_back(NameAndTypePair{output_columns.at(item.name), item.type});
+        }
     }
     return std::make_shared<ProjectionStep>(DataStream{inputs}, assignments, name_to_type);
 }

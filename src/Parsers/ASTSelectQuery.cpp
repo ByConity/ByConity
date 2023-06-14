@@ -606,4 +606,8 @@ std::vector<ASTSelectQuery::Expression> ASTSelectQuery::getExpressionTypes() con
     return expression_types;
 }
 
+void ASTSelectQuery::removeSettingsAndOutputFormat()
+{
+    positions.erase(Expression::SETTINGS);
+}
 }

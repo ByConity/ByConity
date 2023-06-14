@@ -1,0 +1,8 @@
+SELECT BIT_LENGTH('text');
+SELECT BIT_LENGTH('textaa');
+SELECT BIT_LENGTH(NULL);
+SELECT BIT_LENGTH('ÃÃÃ');
+SELECT BIT_LENGTH('ssŜ');
+SELECT BIT_LENGTH('a');
+SELECT BIT_LENGTH(toFixedString('text', 4));
+SELECT BIT_LENGTH(toFixedString('aa', 2));

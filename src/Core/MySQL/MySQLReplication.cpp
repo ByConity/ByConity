@@ -19,6 +19,7 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
     extern const int ATTEMPT_TO_READ_AFTER_EOF;
     extern const int CANNOT_READ_ALL_DATA;
+    extern const int ARGUMENT_OUT_OF_BOUND;
 }
 
 namespace MySQLReplication
@@ -441,6 +442,9 @@ namespace MySQLReplication
                         );
 
                         if (!meta)
+                            // The max value of the 64 bit int flagged here exceeds the year value that is
+                            // supported by ClickHouse as verified with Alfred
+                            // coverity[store_truncates_time_t]
                             row.push_back(Field{UInt32(date_time)});
                         else
                         {
@@ -448,6 +452,11 @@ namespace MySQLReplication
                                 static_cast<DateTime64::NativeType>(date_time), 0};
 
                             components.fractional = fsp;
+
+                            // decimalFromComponents will use meta to call common::exp10_i64, which accesses an array of size 19
+                            if (meta > 18)
+                                throw Exception("Meta value is which is greater than 18", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+
                             row.push_back(Field(DecimalUtils::decimalFromComponents<DateTime64>(components, meta)));
                         }
 
@@ -467,6 +476,10 @@ namespace MySQLReplication
                                 static_cast<DateTime64::NativeType>(sec), 0};
 
                             components.fractional = fsp;
+                            // decimalFromComponents will use meta to call common::exp10_i64, which accesses an array of size 19
+                            if (meta > 18)
+                                throw Exception("Meta value is which is greater than 18", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+
                             row.push_back(Field(DecimalUtils::decimalFromComponents<DateTime64>(components, meta)));
                         }
 

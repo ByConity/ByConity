@@ -374,6 +374,9 @@ void calculateFunnel(std::function<UInt32(UInt32)> && getGroup, EventLists<Param
                     {
                         extra_group_index.push_back(i);
                     }
+                    // Calling reuse_funnel_index.empty() after moving it is safe and it will return true
+                    // The code below it then just inserts into the vector so it is safe too
+                    // coverity[use_after_move]
                     else if (funnel_index.size() > m_user_pro_idx && reuse_funnel_index.empty())
                     {
                         // here need reuse the fronts event

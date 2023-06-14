@@ -299,13 +299,14 @@ protected:
         {
             auto res = VisitorUtil::accept(child, *this, skip_children_match);
             if (!res.supported)
-                return {};
+                continue;
             if (res.top_aggregate_node)
             {
                 if (node.getChildren().size() != 1)
-                    return {};
+                    continue;
                 if (top_aggregate_node)
-                    return {};
+                    continue;
+                    
                 top_aggregate_node = res.top_aggregate_node;
             }
             base_tables.insert(base_tables.end(), res.base_tables.begin(), res.base_tables.end());
@@ -971,8 +972,7 @@ protected:
                 // if rewrite expression is aggregate function, we should enforce an aggregate node.
                 if (isAggregateFunction(*rewrite))
                 {
-                    enforce_agg_node = true;
-                    return rewrite;
+                    return {};
                 }
                 if (!need_rollup)
                     return rewrite;

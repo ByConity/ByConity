@@ -52,13 +52,26 @@ MultiPartitionExchangeSink::MultiPartitionExchangeSink(
 
 void MultiPartitionExchangeSink::consume(Chunk chunk)
 {
+
     if (partition_num == 1)
     {
+        if (!has_input) {
+            finish();
+            return;
+        }
         auto status = buffered_senders[0].sendThrough(std::move(chunk));
         if (status.code != BroadcastStatusCode::RUNNING)
             finish();
         return;
     }
+
+    if (!has_input) {
+        for(size_t i = 0; i < partition_num ; ++i)
+            buffered_senders[i].flush(true);
+        finish();
+        return;
+    }
+
     const auto & chunk_info = chunk.getChunkInfo();
     if (!buffered_senders[0].compareBufferChunkInfo(chunk_info))
     {
@@ -102,8 +115,6 @@ void MultiPartitionExchangeSink::consume(Chunk chunk)
 void MultiPartitionExchangeSink::onFinish()
 {
     LOG_TRACE(logger, "MultiPartitionExchangeSink finish");
-    for(size_t i = 0; i < partition_num ; ++i)
-        buffered_senders[i].flush(true);
 }
 
 void MultiPartitionExchangeSink::onCancel()

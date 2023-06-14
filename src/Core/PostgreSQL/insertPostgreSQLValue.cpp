@@ -120,6 +120,8 @@ void insertPostgreSQLValue(
             readDateTimeText(time, in, assert_cast<const DataTypeDateTime *>(data_type.get())->getTimeZone());
             if (time < 0)
                 time = 0;
+            // TODO: A 64-bit time_t value is stored in a smaller width integer (Y2K38_SAFETY)
+            // coverity[store_truncates_time_t]
             assert_cast<ColumnUInt32 &>(column).insertValue(time);
             break;
         }
@@ -161,6 +163,9 @@ void insertPostgreSQLValue(
                     if (dimension == 0)
                         break;
 
+                    //Array is just a vector hence
+                    //.begin() and .end() is used here to initialize Array with the contents in the range
+                    //coverity[mismatched_iterator]
                     dimensions[dimension].emplace_back(Array(dimensions[dimension + 1].begin(), dimensions[dimension + 1].end()));
                     dimensions[dimension + 1].clear();
                 }
@@ -171,7 +176,9 @@ void insertPostgreSQLValue(
             if (max_dimension < expected_dimensions)
                 throw Exception(ErrorCodes::BAD_ARGUMENTS,
                         "Got less dimensions than expected. ({} instead of {})", max_dimension, expected_dimensions);
-
+            
+            // Both inherit from FieldVector
+            // coverity[mismatched_iterator]
             assert_cast<ColumnArray &>(column).insert(Array(dimensions[1].begin(), dimensions[1].end()));
             break;
         }

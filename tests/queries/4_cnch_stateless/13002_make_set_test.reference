@@ -1,0 +1,21 @@
+hello
+hello,world
+hello
+hello,nice,world
+\N
+\N
+hello,world
+hello,1.2345
+hello,1.2345
+hello,1.2345
+5,1.2345
+-21,1.2345
+0	hello
+1	hello,world
+2	world
+3	\N
+4	hello,nice,world,5.978
+5	\N
+6	\N
+7	hello,world
+8	hello,1.2345

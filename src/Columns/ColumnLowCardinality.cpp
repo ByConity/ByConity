@@ -619,13 +619,14 @@ bool ColumnLowCardinality::hasEqualValues() const
     return getIndexes().hasEqualValues();
 }
 
-void ColumnLowCardinality::getPermutationImpl(bool reverse, size_t limit, int nan_direction_hint, Permutation & res, const Collator * collator) const
+void ColumnLowCardinality::getPermutationImpl(IColumn::PermutationSortDirection direction, IColumn::PermutationSortStability stability,
+                                            size_t limit, int nan_direction_hint, Permutation & res, const Collator * collator) const
 {
     if (full_state)
     {
         if (limit == 0)
             limit = getNestedColumn().size();
-        getNestedColumn().getPermutation(reverse, limit, nan_direction_hint, res);
+        getNestedColumn().getPermutation(direction, stability, limit, nan_direction_hint, res);
 
         return;
     }
@@ -636,9 +637,9 @@ void ColumnLowCardinality::getPermutationImpl(bool reverse, size_t limit, int na
     size_t unique_limit = getDictionary().size();
     Permutation unique_perm;
     if (collator)
-        getDictionary().getNestedColumn()->getPermutationWithCollation(*collator, reverse, unique_limit, nan_direction_hint, unique_perm);
+        getDictionary().getNestedColumn()->getPermutationWithCollation(*collator, direction, stability, unique_limit, nan_direction_hint, unique_perm);
     else
-        getDictionary().getNestedColumn()->getPermutation(reverse, unique_limit, nan_direction_hint, unique_perm);
+        getDictionary().getNestedColumn()->getPermutation(direction, stability, unique_limit, nan_direction_hint, unique_perm);
 
     /// TODO: optimize with sse.
 
@@ -666,123 +667,73 @@ void ColumnLowCardinality::getPermutationImpl(bool reverse, size_t limit, int na
     }
 }
 
-template <typename Cmp>
-void ColumnLowCardinality::updatePermutationImpl(size_t limit, Permutation & res, EqualRanges & equal_ranges, Cmp comparator) const
+void ColumnLowCardinality::getPermutation(IColumn::PermutationSortDirection direction, IColumn::PermutationSortStability stability,
+                                        size_t limit, int nan_direction_hint, IColumn::Permutation & res) const
 {
-    if (equal_ranges.empty())
-        return;
-
-    if (limit >= size() || limit >= equal_ranges.back().second)
-        limit = 0;
-
-    size_t number_of_ranges = equal_ranges.size();
-    if (limit)
-        --number_of_ranges;
-
-    EqualRanges new_ranges;
-    SCOPE_EXIT({equal_ranges = std::move(new_ranges);});
-
-    auto less = [&comparator](size_t lhs, size_t rhs){ return comparator(lhs, rhs) < 0; };
-
-    for (size_t i = 0; i < number_of_ranges; ++i)
-    {
-        const auto& [first, last] = equal_ranges[i];
-        std::sort(res.begin() + first, res.begin() + last, less);
-
-        auto new_first = first;
-        for (auto j = first + 1; j < last; ++j)
-        {
-            if (comparator(res[new_first], res[j]) != 0)
-            {
-                if (j - new_first > 1)
-                    new_ranges.emplace_back(new_first, j);
-
-                new_first = j;
-            }
-        }
-        if (last - new_first > 1)
-            new_ranges.emplace_back(new_first, last);
-    }
-
-    if (limit)
-    {
-        const auto & [first, last] = equal_ranges.back();
-
-        if (limit < first || limit > last)
-            return;
-
-        /// Since then we are working inside the interval.
-
-        partial_sort(res.begin() + first, res.begin() + limit, res.begin() + last, less);
-        auto new_first = first;
-
-        for (auto j = first + 1; j < limit; ++j)
-        {
-            if (comparator(res[new_first],res[j]) != 0)
-            {
-                if (j - new_first > 1)
-                    new_ranges.emplace_back(new_first, j);
-
-                new_first = j;
-            }
-        }
-
-        auto new_last = limit;
-        for (auto j = limit; j < last; ++j)
-        {
-            if (comparator(res[new_first], res[j]) == 0)
-            {
-                std::swap(res[new_last], res[j]);
-                ++new_last;
-            }
-        }
-        if (new_last - new_first > 1)
-            new_ranges.emplace_back(new_first, new_last);
-    }
+    getPermutationImpl(direction, stability, limit, nan_direction_hint, res);
 }
 
-void ColumnLowCardinality::getPermutation(bool reverse, size_t limit, int nan_direction_hint, Permutation & res) const
+void ColumnLowCardinality::updatePermutation(IColumn::PermutationSortDirection direction, IColumn::PermutationSortStability stability,
+                                        size_t limit, int nan_direction_hint, IColumn::Permutation & res, EqualRanges & equal_ranges) const
 {
-    getPermutationImpl(reverse, limit, nan_direction_hint, res);
-}
+    bool ascending = direction == IColumn::PermutationSortDirection::Ascending;
 
-void ColumnLowCardinality::updatePermutation(bool reverse, size_t limit, int nan_direction_hint, IColumn::Permutation & res, EqualRanges & equal_ranges) const
-{
-    if (full_state)
-    {
-        getNestedColumn().updatePermutation(reverse, limit, nan_direction_hint, res, equal_ranges);
-        return ;
-    }
-
-    auto comparator = [this, nan_direction_hint, reverse](size_t lhs, size_t rhs)
+    auto comparator = [this, ascending, stability, nan_direction_hint](size_t lhs, size_t rhs)
     {
         int ret = getDictionary().compareAt(getIndexes().getUInt(lhs), getIndexes().getUInt(rhs), getDictionary(), nan_direction_hint);
-        return reverse ? -ret : ret;
+        if (unlikely(stability == IColumn::PermutationSortStability::Stable && ret == 0))
+            return lhs < rhs;
+
+        if (ascending)
+            return ret < 0;
+        else
+            return ret > 0;
     };
 
-    updatePermutationImpl(limit, res, equal_ranges, comparator);
-}
-
-void ColumnLowCardinality::getPermutationWithCollation(const Collator & collator, bool reverse, size_t limit, int nan_direction_hint, Permutation & res) const
-{
-    getPermutationImpl(reverse, limit, nan_direction_hint, res, &collator);
-}
-
-void ColumnLowCardinality::updatePermutationWithCollation(const Collator & collator, bool reverse, size_t limit, int nan_direction_hint, Permutation & res, EqualRanges & equal_ranges) const
-{
-    if (full_state)
+    auto equal_comparator = [this, nan_direction_hint](size_t lhs, size_t rhs)
     {
-        getNestedColumn().updatePermutationWithCollation(collator, reverse, limit, nan_direction_hint, res, equal_ranges);
-        return ;
-    }
+        int ret = getDictionary().compareAt(getIndexes().getUInt(lhs), getIndexes().getUInt(rhs), getDictionary(), nan_direction_hint);
+        return ret == 0;
+    };
 
-    auto comparator = [this, &collator, reverse, nan_direction_hint](size_t lhs, size_t rhs)
+    updatePermutationImpl(limit, res, equal_ranges, comparator, equal_comparator, DefaultSort(), DefaultPartialSort());
+}
+
+void ColumnLowCardinality::getPermutationWithCollation(const Collator & collator, IColumn::PermutationSortDirection direction, IColumn::PermutationSortStability stability,
+                                                        size_t limit, int nan_direction_hint, IColumn::Permutation & res) const
+{
+    getPermutationImpl(direction, stability, limit, nan_direction_hint, res, &collator);
+}
+
+void ColumnLowCardinality::updatePermutationWithCollation(const Collator & collator, IColumn::PermutationSortDirection direction, IColumn::PermutationSortStability stability,
+                                                        size_t limit, int nan_direction_hint, IColumn::Permutation & res, EqualRanges & equal_ranges) const
+{
+    bool ascending = direction == IColumn::PermutationSortDirection::Ascending;
+
+    auto comparator = [this, &collator, ascending, stability, nan_direction_hint](size_t lhs, size_t rhs)
+    {
+        auto nested_column_ptr = getDictionary().getNestedColumn();
+        size_t lhs_index = getIndexes().getUInt(lhs);
+        size_t rhs_index = getIndexes().getUInt(rhs);
+
+        int ret = nested_column_ptr->compareAtWithCollation(lhs_index, rhs_index, *nested_column_ptr, nan_direction_hint, collator);
+
+        if (unlikely(stability == IColumn::PermutationSortStability::Stable && ret == 0))
+            return lhs < rhs;
+
+        if (ascending)
+            return ret < 0;
+        else
+            return ret > 0;
+    };
+
+    auto equal_comparator = [this, &collator, nan_direction_hint](size_t lhs, size_t rhs)
     {
         int ret = getDictionary().getNestedColumn()->compareAtWithCollation(getIndexes().getUInt(lhs), getIndexes().getUInt(rhs), *getDictionary().getNestedColumn(), nan_direction_hint, collator);
-        return reverse ? -ret : ret;
+        return ret == 0;
     };
 
-    updatePermutationImpl(limit, res, equal_ranges, comparator);
+    updatePermutationImpl(limit, res, equal_ranges, comparator, equal_comparator, DefaultSort(), DefaultPartialSort());
 }
 
 std::vector<MutableColumnPtr> ColumnLowCardinality::scatter(ColumnIndex num_columns, const Selector & selector) const

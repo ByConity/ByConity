@@ -164,6 +164,7 @@ public:
         else if (type == Field::Types::UInt64)
             step = static_cast<ITV>(params[1].safeGet<UInt64>());
 
+        // coverity[uinit_use]
         if (step < ITV(0))
             throw Exception("Step must be a non-negative number.", ErrorCodes::LOGICAL_ERROR);
 

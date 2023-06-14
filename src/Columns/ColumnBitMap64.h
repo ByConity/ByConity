@@ -70,11 +70,13 @@ private:
     ColumnBitMap64() = default;
     ColumnBitMap64(const ColumnBitMap64 & src);
 
-    template <typename Comparator>
-    void getPermutationImpl(size_t limit, Permutation & res, Comparator cmp) const;
+    struct ComparatorBase;
 
-    template <typename Comparator>
-    void updatePermutationImpl(size_t limit, Permutation & res, EqualRanges & equal_ranges, Comparator cmp) const;
+    using ComparatorAscendingUnstable = ComparatorAscendingUnstableImpl<ComparatorBase>;
+    using ComparatorAscendingStable = ComparatorAscendingStableImpl<ComparatorBase>;
+    using ComparatorDescendingUnstable = ComparatorDescendingUnstableImpl<ComparatorBase>;
+    using ComparatorDescendingStable = ComparatorDescendingStableImpl<ComparatorBase>;
+    using ComparatorEqual = ComparatorEqualImpl<ComparatorBase>;
 
 public:
     const char * getFamilyName() const override { return "BitMap64"; }
@@ -282,14 +284,14 @@ public:
     /// Variant of compareAt for string comparison with respect of collation.
     int compareAtWithCollation(size_t n, size_t m, const IColumn & rhs_, int, const Collator & collator) const override;
 
-    void getPermutation(bool reverse, size_t limit, int nan_direction_hint, Permutation & res) const override;
-
-    void updatePermutation(bool reverse, size_t limit, int, Permutation & res, EqualRanges & equal_ranges) const override;
-
-    /// Sorting with respect of collation.
-    void getPermutationWithCollation(const Collator & collator, bool reverse, size_t limit, int, Permutation & res) const override;
-
-    void updatePermutationWithCollation(const Collator & collator, bool reverse, size_t limit, int, Permutation & res, EqualRanges & equal_ranges) const override;
+    void getPermutation(PermutationSortDirection direction, PermutationSortStability stability,
+                            size_t limit, int nan_direction_hint, Permutation & res) const override;
+    void updatePermutation(PermutationSortDirection direction, PermutationSortStability stability,
+                            size_t limit, int nan_direction_hint, Permutation & res, EqualRanges & equal_ranges) const override;
+    void getPermutationWithCollation(const Collator & collator, PermutationSortDirection direction, PermutationSortStability stability,
+                                    size_t limit, int nan_direction_hint, Permutation & res) const override;
+    void updatePermutationWithCollation(const Collator & collator, PermutationSortDirection direction, PermutationSortStability stability,
+                                    size_t limit, int nan_direction_hint, Permutation & res, EqualRanges& equal_ranges) const override;
 
     ColumnPtr replicate(const Offsets & replicate_offsets) const override;
 

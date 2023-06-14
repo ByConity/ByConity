@@ -147,7 +147,11 @@ EnabledQuota::Interval::Interval()
 {
     for (auto resource_type : collections::range(MAX_RESOURCE_TYPE))
     {
+        // collections::range(MAX_REOURCE_TYPE) should give us a range of [0, MAX_RESOURCE_TYPE) 
+        // coverity[overrun-local]
         used[resource_type].store(0);
+        // collections::range(MAX_REOURCE_TYPE) should give us a range of [0, MAX_RESOURCE_TYPE) 
+        // coverity[overrun-local]
         max[resource_type] = 0;
     }
 }
@@ -163,7 +167,11 @@ EnabledQuota::Interval & EnabledQuota::Interval::operator =(const Interval & src
     end_of_interval.store(src.end_of_interval.load());
     for (auto resource_type : collections::range(MAX_RESOURCE_TYPE))
     {
+        // collections::range(MAX_REOURCE_TYPE) should give us a range of [0, MAX_RESOURCE_TYPE) 
+        // coverity[overrun-local]
         max[resource_type] = src.max[resource_type];
+        // collections::range(MAX_REOURCE_TYPE) should give us a range of [0, MAX_RESOURCE_TYPE) 
+        // coverity[overrun-local]
         used[resource_type].store(src.used[resource_type].load());
     }
     return *this;
@@ -189,8 +197,16 @@ std::optional<QuotaUsage> EnabledQuota::Intervals::getUsage(std::chrono::system_
         out.end_of_interval = Impl::getEndOfInterval(in, current_time, counters_were_reset);
         for (auto resource_type : collections::range(MAX_RESOURCE_TYPE))
         {
+            // collections::range(MAX_REOURCE_TYPE) should give us a range of [0, MAX_RESOURCE_TYPE) 
+            // coverity[overrun-local]
             if (in.max[resource_type])
+            {
+                // collections::range(MAX_REOURCE_TYPE) should give us a range of [0, MAX_RESOURCE_TYPE) 
+                // coverity[overrun-local]
                 out.max[resource_type] = in.max[resource_type];
+            }
+            // collections::range(MAX_REOURCE_TYPE) should give us a range of [0, MAX_RESOURCE_TYPE) 
+            // coverity[overrun-local]
             out.used[resource_type] = in.used[resource_type];
         }
     }

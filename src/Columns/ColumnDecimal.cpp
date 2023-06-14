@@ -149,102 +149,86 @@ void ColumnDecimal<T>::updateHashFast(SipHash & hash) const
 }
 
 template <typename T>
-void ColumnDecimal<T>::getPermutation(bool reverse, size_t limit, int , IColumn::Permutation & res) const
+void ColumnDecimal<T>::getPermutation(IColumn::PermutationSortDirection direction, IColumn::PermutationSortStability stability,
+                                    size_t limit, int, IColumn::Permutation & res) const
 {
-#if 1 /// TODO: perf test
-    if (data.size() <= std::numeric_limits<UInt32>::max())
+    auto comparator_ascending = [this](size_t lhs, size_t rhs) { return data[lhs] < data[rhs]; };
+    auto comparator_ascending_stable = [this](size_t lhs, size_t rhs)
     {
-        PaddedPODArray<UInt32> tmp_res;
-        permutation(reverse, limit, tmp_res);
+        if (unlikely(data[lhs] == data[rhs]))
+            return lhs < rhs;
 
-        res.resize(tmp_res.size());
-        for (size_t i = 0; i < tmp_res.size(); ++i)
-            res[i] = tmp_res[i];
-        return;
-    }
-#endif
+        return data[lhs] < data[rhs];
+    };
+    auto comparator_descending = [this](size_t lhs, size_t rhs) { return data[lhs] > data[rhs]; };
+    auto comparator_descending_stable = [this](size_t lhs, size_t rhs)
+    {
+        if (unlikely(data[lhs] == data[rhs]))
+            return lhs < rhs;
 
-    permutation(reverse, limit, res);
+        return data[lhs] > data[rhs];
+    };
+
+    if (direction == IColumn::PermutationSortDirection::Ascending && stability == IColumn::PermutationSortStability::Unstable)
+        this->getPermutationImpl(limit, res, comparator_ascending, DefaultSort(), DefaultPartialSort());
+    else if (direction == IColumn::PermutationSortDirection::Ascending && stability == IColumn::PermutationSortStability::Stable)
+        this->getPermutationImpl(limit, res, comparator_ascending_stable, DefaultSort(), DefaultPartialSort());
+    else if (direction == IColumn::PermutationSortDirection::Descending && stability == IColumn::PermutationSortStability::Unstable)
+        this->getPermutationImpl(limit, res, comparator_descending, DefaultSort(), DefaultPartialSort());
+    else
+        this->getPermutationImpl(limit, res, comparator_descending_stable, DefaultSort(), DefaultPartialSort());
 }
 
 template <typename T>
-void ColumnDecimal<T>::updatePermutation(bool reverse, size_t limit, int, IColumn::Permutation & res, EqualRanges & equal_ranges) const
+void ColumnDecimal<T>::updatePermutation(IColumn::PermutationSortDirection direction, IColumn::PermutationSortStability stability,
+                                        size_t limit, int, IColumn::Permutation & res, EqualRanges & equal_ranges) const
 {
-    if (equal_ranges.empty())
-        return;
-
-    if (limit >= data.size() || limit >= equal_ranges.back().second)
-        limit = 0;
-
-    size_t number_of_ranges = equal_ranges.size();
-    if (limit)
-        --number_of_ranges;
-
-    EqualRanges new_ranges;
-    SCOPE_EXIT({equal_ranges = std::move(new_ranges);});
-
-    for (size_t i = 0; i < number_of_ranges; ++i)
+    auto comparator_descending = [this](size_t lhs, size_t rhs) { return data[lhs] > data[rhs]; };
+    auto comparator_descending_stable = [this](size_t lhs, size_t rhs)
     {
-        const auto& [first, last] = equal_ranges[i];
-        if (reverse)
-            std::sort(res.begin() + first, res.begin() + last,
-                [this](size_t a, size_t b) { return data[a] > data[b]; });
-        else
-            std::sort(res.begin() + first, res.begin() + last,
-                [this](size_t a, size_t b) { return data[a] < data[b]; });
+        if (unlikely(data[lhs] == data[rhs]))
+            return lhs < rhs;
 
-        auto new_first = first;
-        for (auto j = first + 1; j < last; ++j)
-        {
-            if (data[res[new_first]] != data[res[j]])
-            {
-                if (j - new_first > 1)
-                    new_ranges.emplace_back(new_first, j);
+        return data[lhs] > data[rhs];
+    };
 
-                new_first = j;
-            }
-        }
-        if (last - new_first > 1)
-            new_ranges.emplace_back(new_first, last);
+    auto comparator_ascending = [this](size_t lhs, size_t rhs) { return data[lhs] < data[rhs]; };
+    auto comparator_ascending_stable = [this](size_t lhs, size_t rhs)
+    {
+        if (unlikely(data[lhs] == data[rhs]))
+            return lhs < rhs;
+
+        return data[lhs] < data[rhs];
+    };
+    auto equals_comparator = [this](size_t lhs, size_t rhs) { return data[lhs] == data[rhs]; };
+
+    if (direction == IColumn::PermutationSortDirection::Ascending && stability == IColumn::PermutationSortStability::Unstable)
+    {
+        this->updatePermutationImpl(
+            limit, res, equal_ranges,
+            comparator_ascending,
+            equals_comparator, DefaultSort(), DefaultPartialSort());
     }
-
-    if (limit)
+    else if (direction == IColumn::PermutationSortDirection::Ascending && stability == IColumn::PermutationSortStability::Stable)
     {
-        const auto & [first, last] = equal_ranges.back();
-
-        if (limit < first || limit > last)
-            return;
-
-        /// Since then we are working inside the interval.
-
-        if (reverse)
-            partial_sort(res.begin() + first, res.begin() + limit, res.begin() + last,
-                [this](size_t a, size_t b) { return data[a] > data[b]; });
-        else
-            partial_sort(res.begin() + first, res.begin() + limit, res.begin() + last,
-                [this](size_t a, size_t b) { return data[a] < data[b]; });
-        auto new_first = first;
-        for (auto j = first + 1; j < limit; ++j)
-        {
-            if (data[res[new_first]] != data[res[j]])
-            {
-                if (j - new_first > 1)
-                    new_ranges.emplace_back(new_first, j);
-
-                new_first = j;
-            }
-        }
-        auto new_last = limit;
-        for (auto j = limit; j < last; ++j)
-        {
-            if (data[res[new_first]] == data[res[j]])
-            {
-                std::swap(res[new_last], res[j]);
-                ++new_last;
-            }
-        }
-        if (new_last - new_first > 1)
-            new_ranges.emplace_back(new_first, new_last);
+        this->updatePermutationImpl(
+            limit, res, equal_ranges,
+            comparator_ascending_stable,
+            equals_comparator, DefaultSort(), DefaultPartialSort());
+    }
+    else if (direction == IColumn::PermutationSortDirection::Descending && stability == IColumn::PermutationSortStability::Unstable)
+    {
+        this->updatePermutationImpl(
+            limit, res, equal_ranges,
+            comparator_descending,
+            equals_comparator, DefaultSort(), DefaultPartialSort());
+    }
+    else
+    {
+        this->updatePermutationImpl(
+            limit, res, equal_ranges,
+            comparator_descending_stable,
+            equals_comparator, DefaultSort(), DefaultPartialSort());
     }
 }
 

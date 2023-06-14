@@ -13,11 +13,8 @@ respectively.  Most of the C++ arithmetic operators are overloaded for these
 classes, so big-integer calculations are as easy as:
 
     #include "BigIntegerLibrary.hh"
-
     BigInteger a = 65536;
     cout << (a * a * a * a * a * a * a * a);
-
-    (prints 340282366920938463463374607431768211456)
 
 The code in `sample.cc' demonstrates the most important features of the library.
 To get started quickly, read the code and explanations in that file and run it.
