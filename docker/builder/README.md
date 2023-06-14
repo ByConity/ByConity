@@ -20,3 +20,5 @@ If not, you must add this user to `docker` group: `sudo usermod -aG docker $USER
 
 Build results are available in `build_docker` directory at top level of your working copy.
 It builds only binaries, not packages.
+
+For CentOS build, follow the same instruction with the `centos` directory
