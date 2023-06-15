@@ -290,7 +290,7 @@ PrepareContextResult StorageCnchMergeTree::prepareReadContext(
     auto bucket_numbers = getRequiredBucketNumbers(query_info, local_context);
     collectResource(local_context, parts, local_table_name, bucket_numbers);
 
-    return {std::move(local_table_name), std::move(parts)};
+    return {std::move(local_table_name), std::move(parts), {}};
 }
 
 Strings StorageCnchMergeTree::selectPartitionsByPredicate(

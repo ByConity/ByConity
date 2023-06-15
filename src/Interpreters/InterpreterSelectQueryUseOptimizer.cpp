@@ -24,6 +24,7 @@
 #include <QueryPlan/GraphvizPrinter.h>
 #include <QueryPlan/QueryPlanner.h>
 #include <Storages/StorageCnchMergeTree.h>
+#include <Storages/StorageCnchHive.h>
 
 namespace DB
 {
@@ -154,7 +155,9 @@ std::optional<PlanSegmentContext> ClusterInfoFinder::visitTableScanNode(TableSca
 {
     auto source_step = node.getStep();
     const auto * cnch_table = dynamic_cast<StorageCnchMergeTree *>(source_step->getStorage().get());
-    if (cnch_table)
+    const auto * cnch_hive = dynamic_cast<StorageCnchHive *>(source_step->getStorage().get());
+
+    if (cnch_table || cnch_hive)
     {
         const auto & worker_group = cluster_info_context.context->getCurrentWorkerGroup();
         PlanSegmentContext plan_segment_context{

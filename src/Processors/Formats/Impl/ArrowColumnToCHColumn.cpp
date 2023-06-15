@@ -244,7 +244,7 @@ static void fillColumnWithDate32Data(std::shared_ptr<arrow::ChunkedArray> & arro
     }
 
 /// Arrow stores Parquet::DATETIME in Int64, while ClickHouse stores DateTime in UInt32. Therefore, it should be checked before saving
-    static void fillColumnWithDate64Data(std::shared_ptr<arrow::ChunkedArray> & arrow_column, IColumn & internal_column)
+    static void fillColumnWithDate64Data(std::shared_ptr<arrow::ChunkedArray> & arrow_column, IColumn & internal_column, const bool replace_null_with_default = false)
     {
         auto & column_data = assert_cast<ColumnVector<UInt32> &>(internal_column).getData();
         column_data.reserve(arrow_column->length());
@@ -254,13 +254,20 @@ static void fillColumnWithDate32Data(std::shared_ptr<arrow::ChunkedArray> & arro
             auto & chunk = static_cast<arrow::Date64Array &>(*(arrow_column->chunk(chunk_i)));
             for (size_t value_i = 0, length = static_cast<size_t>(chunk.length()); value_i < length; ++value_i)
             {
-                auto timestamp = static_cast<UInt32>(chunk.Value(value_i) / 1000); // Always? in ms
-                column_data.emplace_back(timestamp);
+                if (chunk.IsNull(value_i) && replace_null_with_default)
+                {
+                    column_data.emplace_back(UInt32());
+                }
+                else
+                {
+                    auto timestamp = static_cast<UInt32>(chunk.Value(value_i) / 1000); // Always? in ms
+                    column_data.emplace_back(timestamp);
+                }
             }
         }
     }
 
-    static void fillColumnWithTimestampData(std::shared_ptr<arrow::ChunkedArray> & arrow_column, IColumn & internal_column)
+    static void fillColumnWithTimestampData(std::shared_ptr<arrow::ChunkedArray> & arrow_column, IColumn & internal_column, const bool replace_null_with_default = false)
     {
         auto & column_data = assert_cast<ColumnVector<UInt32> &>(internal_column).getData();
         column_data.reserve(arrow_column->length());
@@ -290,8 +297,15 @@ static void fillColumnWithDate32Data(std::shared_ptr<arrow::ChunkedArray> & arro
 
             for (size_t value_i = 0, length = static_cast<size_t>(chunk.length()); value_i < length; ++value_i)
             {
-                auto timestamp = static_cast<UInt32>(chunk.Value(value_i) / divide); // ms! TODO: check other 's' 'ns' ...
-                column_data.emplace_back(timestamp);
+                if (chunk.IsNull(value_i) && replace_null_with_default)
+                {
+                    column_data.emplace_back(UInt32());
+                }
+                else
+                {
+                    auto timestamp = static_cast<UInt32>(chunk.Value(value_i) / divide); // ms! TODO: check other 's' 'ns' ...
+                    column_data.emplace_back(timestamp);
+                }
             }
         }
     }
@@ -397,23 +411,23 @@ static void fillColumnWithDate32Data(std::shared_ptr<arrow::ChunkedArray> & arro
                 fillColumnWithStringData(arrow_column, internal_column);
                 break;
             case arrow::Type::BOOL:
-                fillColumnWithBooleanData(arrow_column, internal_column);
+                fillColumnWithBooleanData(arrow_column, internal_column, replace_null_with_default);
                 break;
             case arrow::Type::DATE32:
                 if (WhichDataType(internal_column.getDataType()).isUInt16())
                 {
-                    fillColumnWithDate32Data(arrow_column, internal_column);
+                    fillColumnWithDate32Data(arrow_column, internal_column, replace_null_with_default);
                 }
                 else
                 {
-                    fillDate32ColumnWithDate32Data(arrow_column, internal_column);
+                    fillDate32ColumnWithDate32Data(arrow_column, internal_column, replace_null_with_default);
                 }
                 break;
             case arrow::Type::DATE64:
-                fillColumnWithDate64Data(arrow_column, internal_column);
+                fillColumnWithDate64Data(arrow_column, internal_column, replace_null_with_default);
                 break;
             case arrow::Type::TIMESTAMP:
-                fillColumnWithTimestampData(arrow_column, internal_column);
+                fillColumnWithTimestampData(arrow_column, internal_column, replace_null_with_default);
                 break;
             case arrow::Type::DECIMAL128:
                 fillColumnWithDecimalData<Decimal128, arrow::Decimal128Array>(arrow_column, internal_column /*, internal_nested_type*/);
