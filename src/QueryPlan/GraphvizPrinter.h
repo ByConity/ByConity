@@ -156,10 +156,10 @@ private:
 class StepPrinter
 {
 public:
-    static String printProjectionStep(const ProjectionStep & step);
-    static String printFilterStep(const FilterStep & step);
+    static String printProjectionStep(const ProjectionStep & step, bool include_output = true);
+    static String printFilterStep(const FilterStep & step, bool include_output = true);
     static String printJoinStep(const JoinStep & step);
-    static String printAggregatingStep(const AggregatingStep & step);
+    static String printAggregatingStep(const AggregatingStep & step, bool include_output = true);
     static String printMergingAggregatedStep(const MergingAggregatedStep & step);
     static String printUnionStep(const UnionStep & step);
     static String printIntersectStep(const IntersectStep & step);

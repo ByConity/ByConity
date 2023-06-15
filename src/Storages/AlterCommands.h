@@ -66,6 +66,7 @@ struct AlterCommand
         RENAME_COLUMN,
         REMOVE_TTL,
         CLEAR_MAP_KEY,
+        MATERIALIZE_PROJECTION,
     };
 
     /// Which property user wants to remove from column

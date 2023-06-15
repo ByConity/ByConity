@@ -116,12 +116,15 @@ ASTPtr extractAggregateToFunction(const AggregateDescription & aggregate_descrip
     const auto function = std::make_shared<ASTFunction>();
     function->name = aggregate_description.function->getName();
     function->arguments = std::make_shared<ASTExpressionList>();
-    function->parameters = std::make_shared<ASTExpressionList>();
     function->children.push_back(function->arguments);
     for (auto & argument : aggregate_description.argument_names)
         function->arguments->children.emplace_back(std::make_shared<ASTIdentifier>(argument));
-    for (auto & parameter : aggregate_description.parameters)
-        function->parameters->children.emplace_back(std::make_shared<ASTLiteral>(parameter));
+    if (!aggregate_description.parameters.empty())
+    {
+        function->parameters = std::make_shared<ASTExpressionList>();
+        for (auto & parameter : aggregate_description.parameters)
+            function->parameters->children.emplace_back(std::make_shared<ASTLiteral>(parameter));
+    }
     return function;
 }
 

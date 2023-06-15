@@ -287,6 +287,17 @@ std::optional<AlterCommand> AlterCommand::parse(const ASTAlterCommand * command_
 
         return command;
     }
+    else if (command_ast->type == ASTAlterCommand::MATERIALIZE_PROJECTION)
+    {
+        AlterCommand command;
+        command.ast = command_ast->clone();
+        command.type = AlterCommand::MATERIALIZE_PROJECTION;
+        command.projection_name = command_ast->projection->as<ASTIdentifier &>().name();
+        if (command_ast->partition)
+            command.partition = command_ast->partition;
+
+        return command;
+    }
     else if (command_ast->type == ASTAlterCommand::DROP_CONSTRAINT)
     {
         AlterCommand command;
@@ -623,6 +634,11 @@ void AlterCommand::apply(StorageInMemoryMetadata & metadata, ContextPtr context)
         if (!partition && !clear)
             metadata.projections.remove(projection_name, if_exists);
     }
+    else if (type == MATERIALIZE_PROJECTION)
+    {
+        if (!metadata.projections.has(projection_name))
+            throw Exception{"Cannot materialize projection " + projection_name + ": projection with this name is not exists", ErrorCodes::ILLEGAL_COLUMN};
+    }
     else if (type == MODIFY_TTL)
     {
         metadata.table_ttl = TTLTableDescription::getTTLForTableFromAST(ttl, metadata.columns, context, metadata.primary_key);
@@ -796,6 +812,8 @@ bool AlterCommand::isRequireMutationStage(const StorageInMemoryMetadata & metada
     if (type == MODIFY_CLUSTER_BY)
         return true;
 
+    if (type == MATERIALIZE_PROJECTION)
+        return true;
 
     if (type != MODIFY_COLUMN || data_type == nullptr)
         return false;
@@ -889,6 +907,17 @@ std::optional<MutationCommand> AlterCommand::tryConvertToMutationCommand(Storage
     else if (type == DROP_PROJECTION)
     {
         result.type = MutationCommand::Type::DROP_PROJECTION;
+        result.column_name = projection_name;
+        if (clear)
+            result.clear = true;
+        if (partition)
+            result.partition = partition;
+
+        result.predicate = nullptr;
+    }
+    else if (type == MATERIALIZE_PROJECTION)
+    {
+        result.type = MutationCommand::Type::MATERIALIZE_PROJECTION;
         result.column_name = projection_name;
         if (clear)
             result.clear = true;

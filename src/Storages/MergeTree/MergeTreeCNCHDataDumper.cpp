@@ -24,6 +24,7 @@
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <Storages/MergeTree/S3ObjectMetadata.h>
 #include <Poco/Logger.h>
+
 #include <Common/Exception.h>
 #include <Common/filesystemHelpers.h>
 #include <common/logger_useful.h>
@@ -31,6 +32,8 @@
 #include <Core/UUID.h>
 #include <IO/WriteSettings.h>
 #include <Storages/IStorage.h>
+#include <Common/StringUtils/StringUtils.h>
+#include <DataTypes/Serializations/ISerialization.h>
 
 #include <chrono>
 #include <filesystem>
@@ -45,6 +48,7 @@ namespace ErrorCodes
     extern const int BAD_CNCH_DATA_FILE;
     extern const int NOT_CONFIG_CLOUD_STORAGE;
     extern const int FILE_DOESNT_EXIST;
+    extern const int NO_FILE_IN_DATA_PART;
 }
 
 
@@ -100,7 +104,8 @@ size_t MergeTreeCNCHDataDumper::check(MergeTreeDataPartCNCHPtr remote_part, cons
     {
         for(auto & file : checksums->files)
         {
-            data_files_size += file.second.file_size;
+            if (!file.second.is_deleted)
+                data_files_size += file.second.file_size;
         }
     }
     data_files_size += (meta.index_size + meta.checksums_size + meta.meta_info_size + meta.unique_key_index_size);
@@ -249,7 +254,8 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
 
         for (auto & file : checksums_files)
         {
-            if (!file.second.is_deleted && !key_streams.count(file.first))
+            // do not add the projection directory here
+            if (!file.second.is_deleted && !key_streams.count(file.first) && !endsWith(file.first, ".proj"))
                 reordered_checksums.push_back(&file);
         }
 
@@ -259,7 +265,6 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
             data_file_offset += file->second.file_size;
         }
     }
-    off_t index_offset = data_file_offset;
 
     /// Write data file
     String data_file_rel_path = joinPaths({new_part_rel_path, "data"});
@@ -290,7 +295,7 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
                 String file_rel_path = local_part->getFullRelativePath() + file.first;
                 String file_full_path = local_part->getFullPath() + file.first;
                 if (!local_part_disk->exists(file_rel_path))
-                    throw Exception("Fail to dump local file: " + file_rel_path + " be cause file doesn't exists", ErrorCodes::FILE_DOESNT_EXIST);
+                    throw Exception("Fail to dump local file: " + file_rel_path + " because file doesn't exists", ErrorCodes::FILE_DOESNT_EXIST);
 
                 ReadBufferFromFile from(file_full_path);
                 copyData(from, *data_out);
@@ -303,8 +308,34 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
                 }
             }
         }
+        
+        /// Write projection parts
+       for (const auto & [projection_name, projection_part] : new_part->getProjectionParts())
+       {
+           if (auto it = new_part->checksums_ptr->files.find(projection_name + ".proj"); it != new_part->checksums_ptr->files.end() && !it->second.is_deleted)
+           {
+                projection_part->info.storage_type = StorageType::ByteHDFS;
+                if (projection_part->checksums_ptr)
+                    projection_part->checksums_ptr->storage_type = StorageType::ByteHDFS;
+                else
+                {
+                    /// anyway we need a checksums
+                    projection_part->checksums_ptr = std::make_shared<MergeTreeDataPartChecksums>();
+                    projection_part->checksums_ptr->storage_type = StorageType::ByteHDFS;
+                }
+               size_t current_file_offset = writeProjectionPart(projection_name, projection_part, data_out.get(), data_file_offset);
+               it->second.file_offset = data_file_offset;
+               it->second.file_size = current_file_offset - data_file_offset;
+               data_file_offset = current_file_offset;
+           }
+           else
+           {
+               throw Exception("Projection " + projection_name + " is missed in data part " + part_name, ErrorCodes::NO_FILE_IN_DATA_PART);
+           }
+       }
 
         /// Primary index
+        off_t index_offset = data_file_offset;
         String index_file_rel_path = local_part->getFullRelativePath() + "primary.idx";
         String index_file_full_path = local_part->getFullPath() + "primary.idx";
         size_t index_size = 0;
@@ -431,4 +462,192 @@ NamesAndTypesList MergeTreeCNCHDataDumper::getKeyColumns() const
     return merging_columns;
 }
 
+size_t MergeTreeCNCHDataDumper::writeProjectionPart(const String & projection_name, 
+    const IMutableMergeTreeDataPartPtr projection_part, WriteBuffer * out, size_t data_file_offset) const
+{   
+    const auto & projection_description = data.getInMemoryMetadataPtr()->getProjections().get(projection_name);
+    auto erase_file_in_checksums = [projection_part](const String & file_name)
+    {
+        if (projection_part->checksums_ptr == nullptr)
+            return;
+
+        projection_part->checksums_ptr->files.erase(file_name);
+    };
+    erase_file_in_checksums("ttl.txt");
+    erase_file_in_checksums("count.txt");
+    erase_file_in_checksums("columns.txt");
+//    erase_file_in_checksums("partition.dat");
+    MergeTreeDataPartChecksum index_checksum;
+    if (projection_part->checksums_ptr && projection_part->checksums_ptr->files.find("primary.idx") != projection_part->checksums_ptr->files.end())
+        index_checksum = projection_part->checksums_ptr->files.at("primary.idx");
+    erase_file_in_checksums("primary.idx");
+
+    MergeTreeDataPartChecksum uki_checksum; /// unique key index checksum
+    if (projection_part->checksums_ptr && projection_part->checksums_ptr->files.find("unique_key.idx") != projection_part->checksums_ptr->files.end())
+        uki_checksum = projection_part->checksums_ptr->files.at("unique_key.idx");
+    erase_file_in_checksums("unique_key.idx");
+
+    std::vector<MergeTreeDataPartChecksums::FileChecksums::value_type *> reordered_checksums;
+    
+     if (projection_part->checksums_ptr)
+    {
+        auto & checksums_files = projection_part->checksums_ptr->files;
+        reordered_checksums.reserve(checksums_files.size());
+        for (const auto & col_name : projection_description.column_names)
+        {
+            const auto & name = ISerialization::getFileNameForStream(col_name, {});
+            for (const auto & extension : {".bin", ".mrk"})
+            {
+                if (auto it = checksums_files.find(name + extension); it != checksums_files.end() && !it->second.is_deleted)
+                {
+                    reordered_checksums.push_back(&*it);
+                }
+                else
+                {
+                    LOG_ERROR(log, "Fail to find column {} in projection {}", name + extension, projection_name);
+                }
+            }
+        }
+        for (auto & file : reordered_checksums)
+        {
+            file->second.file_offset = data_file_offset;
+            data_file_offset += file->second.file_size;
+        }
+    }
+
+    // Write data file
+    CNCHDataMeta meta;
+    {   
+        auto * data_out = dynamic_cast<WriteBufferFromHDFS *>(out);
+        if (!data_out)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Writing part to hdfs but write buffer is not hdfs");
+        const DiskPtr& proj_part_disk = projection_part->volume->getDisk();
+        LOG_TRACE(log, "Getting local disk for projection {} at {}\n", proj_part_disk->getName(), proj_part_disk->getPath());
+
+        if (projection_part->checksums_ptr)
+        {
+            for (auto * file_ptr : reordered_checksums)
+            {
+                auto & file = *file_ptr;
+
+                String file_rel_path = projection_part->getFullRelativePath() + file.first;
+                String file_full_path = projection_part->getFullPath() + file.first;
+                if (!proj_part_disk->exists(file_rel_path))
+                    throw Exception("Fail to dump projection file: " + file_rel_path + " because file doesn't exists", ErrorCodes::FILE_DOESNT_EXIST);
+
+                ReadBufferFromFile from(file_full_path);
+                copyData(from, *data_out);
+                data_out->next();
+                /// TODO: fix getPositionInFile
+                if (file.second.file_offset + file.second.file_size != static_cast<UInt64>(data_out->getPositionInFile()))
+                {
+                    throw Exception(file.first + " in projection part "  + projection_name + " check error, checksum offset: " +
+                        std::to_string(file.second.file_offset) + " checksums size: " + std::to_string(file.second.file_size) +
+                        "disk size: " + std::to_string(proj_part_disk->getFileSize(file_rel_path)), ErrorCodes::BAD_CNCH_DATA_FILE);
+                }
+            }
+        }
+
+         /// Primary index
+        off_t index_offset = data_file_offset;
+        String index_file_rel_path = projection_part->getFullRelativePath() + "primary.idx";
+        String index_file_full_path = projection_part->getFullPath() + "primary.idx";
+        size_t index_size = 0;
+        uint128 index_hash;
+        if (proj_part_disk->exists(index_file_rel_path))
+        {
+            ReadBufferFromFile from(index_file_full_path);
+            copyData(from, *data_out);
+            index_size = index_checksum.file_size;
+            index_hash = index_checksum.file_hash;
+            data_out->next();
+            if (index_offset + index_size != static_cast<UInt64>(data_out->getPositionInFile()))
+            {
+                throw Exception(
+                    ErrorCodes::BAD_CNCH_DATA_FILE,
+                    "primary.idx in projection part {} check error, index offset: {} index size: {} disk size: {}",
+                    projection_name, index_offset, index_size, proj_part_disk->getFileSize(index_file_rel_path));
+            }
+        }
+
+        /// Checksums
+        off_t checksums_offset = index_offset + index_size;
+        size_t checksums_size = 0;
+        String checksum_file_rel_path = projection_part->getFullRelativePath() + "checksums.txt";
+        uint128 checksums_hash;
+        if (projection_part->checksums_ptr)
+        {
+            HashingWriteBuffer checksums_hashing(*data_out);
+            projection_part->checksums_ptr->write(checksums_hashing);
+            checksums_hashing.next();
+            checksums_size = data_out->getPositionInFile() - checksums_offset;
+            checksums_hash = checksums_hashing.getHash();
+            if (checksums_offset + checksums_size != static_cast<UInt64>(data_out->getPositionInFile()))
+            {
+                 throw Exception("checksums.txt in projection part "  + projection_name + " check error, checksum offset: " +
+                        std::to_string(checksums_offset) + " checksums size: " + std::to_string(checksums_size) +
+                        "disk size: " + std::to_string(proj_part_disk->getFileSize(checksum_file_rel_path)), ErrorCodes::BAD_CNCH_DATA_FILE);
+            }
+        }
+
+        /// MetaInfo
+        off_t meta_info_offset = checksums_offset + checksums_size;
+        size_t meta_info_size = 0;
+        uint128 meta_info_hash;
+        {
+            HashingWriteBuffer meta_info_hashing(*data_out);
+            writeProjectionBinary(*projection_part, meta_info_hashing);
+            meta_info_hashing.next();
+            meta_info_size = data_out->getPositionInFile() - meta_info_offset;
+            meta_info_hash = meta_info_hashing.getHash();
+            if (meta_info_offset + meta_info_size != static_cast<UInt64>(data_out->getPositionInFile()))
+            {
+                 throw Exception("meta info in projection part "  + projection_name + " check error, meta offset: " + std::to_string(meta_info_offset) + " meta size: " + std::to_string(meta_info_size), ErrorCodes::BAD_CNCH_DATA_FILE);
+            }
+        }
+
+        /// Data footer
+        off_t footer_offset = meta_info_offset + meta_info_size;
+        meta = CNCHDataMeta{index_offset, index_size, index_hash,
+                            checksums_offset, checksums_size, checksums_hash,
+                            meta_info_offset, meta_info_size, meta_info_hash,
+                            static_cast<off_t>(uki_checksum.file_offset), uki_checksum.file_size, uki_checksum.file_hash};
+        writeDataFileFooter(*data_out, meta);
+        data_out->next();
+        data_file_offset = footer_offset + MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE;
+        if (data_file_offset != static_cast<UInt64>(data_out->getPositionInFile()))
+        {
+            throw Exception("data footer in projection part "  + projection_name + " check error, footer offset: " +
+                                std::to_string(footer_offset) + " footer size: " + std::to_string(MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE), ErrorCodes::BAD_CNCH_DATA_FILE);
+        }
+    }
+
+    return data_file_offset;
 }
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

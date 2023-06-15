@@ -47,6 +47,7 @@ public:
 
     const ActionsDAGPtr & getExpression() const { return actions_dag; }
     const ConstASTPtr & getFilter() const { return filter; }
+    void setFilter(ConstASTPtr new_filter) { filter = std::move(new_filter);}
     const String & getFilterColumnName() const { return filter_column_name; }
     bool removesFilterColumn() const { return remove_filter_column; }
 

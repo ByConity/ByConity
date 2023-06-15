@@ -194,6 +194,13 @@ void MergeTreeCloudData::loadDataParts(MutableDataPartsVector & parts, UInt64)
 
     loadDataPartsInParallel(parts);
 
+    // iterate visible data parts, collect the projections from their previous parts
+    for (auto & part : parts)
+    {
+        if (part->state == DataPartState::Committed)
+            part->gatherProjections();
+    }
+
     calculateColumnSizesImpl();
 
     // check bitmap index; reuse cnch_parallel_prefetching to check in parallel.

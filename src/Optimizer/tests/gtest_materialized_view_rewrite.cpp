@@ -548,14 +548,14 @@ TEST_F(MaterializedViewRewriteTest, testAggregateRollUp1)
             "from emps group by empid, deptno",
         "select count(*) + 1 as c, deptno from emps group by deptno")
         .checkingThatResultContains("Projection\n"
-                                    "│     Expressions: c:=`expr#sum()(c)` + 1, deptno:=`expr#deptno`\n"
+                                    "│     Expressions: c:=`expr#sum(c)` + 1, deptno:=`expr#deptno`\n"
                                     "└─ Gather Exchange\n"
                                     "   └─ MergingAggregated\n"
                                     "      └─ Repartition Exchange\n"
                                     "         │     Partition by: {expr#deptno}\n"
                                     "         └─ Aggregating\n"
                                     "            │     Group by: {expr#deptno}\n"
-                                    "            │     Aggregates: expr#sum()(c):=AggNull(sum)(expr#c)\n"
+                                    "            │     Aggregates: expr#sum(c):=AggNull(sum)(expr#c)\n"
                                     "            └─ Projection\n"
                                     "               │     Expressions: expr#c:=c, expr#deptno:=deptno\n"
                                     "               └─ Filter\n"
@@ -678,14 +678,14 @@ TEST_F(MaterializedViewRewriteTest, testAggregateOnProject5)
             "group by empid, deptno, name",
         "select name, empid, count(*) from emps group by name, empid")
         .checkingThatResultContains("Projection\n"
-                                    "│     Expressions: count():=`expr#sum()(count())`, empid:=`expr#empid`, name:=`expr#name`\n"
+                                    "│     Expressions: count():=`expr#sum(count())`, empid:=`expr#empid`, name:=`expr#name`\n"
                                     "└─ Gather Exchange\n"
                                     "   └─ MergingAggregated\n"
                                     "      └─ Repartition Exchange\n"
                                     "         │     Partition by: {expr#empid, expr#name}\n"
                                     "         └─ Aggregating\n"
                                     "            │     Group by: {expr#empid, expr#name}\n"
-                                    "            │     Aggregates: expr#sum()(count()):=AggNull(sum)(expr#count()_2)\n"
+                                    "            │     Aggregates: expr#sum(count()):=AggNull(sum)(expr#count()_2)\n"
                                     "            └─ Projection\n"
                                     "               │     Expressions: expr#count()_2:=`count()`, expr#empid:=empid, expr#name:=name\n"
                                     "               └─ Filter\n"

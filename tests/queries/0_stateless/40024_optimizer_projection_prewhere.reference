@@ -1,0 +1,36 @@
+
+Segment[ 2 ] :
+(TableScan) # 1 parts from projection `proj`
+AggregatingTransform
+  StrictResize
+    ExpressionTransform
+      FilterTransform
+        MergeTree 0 → 1
+
+------------------------------------------
+
+Segment[ 1 ] :
+(MergingAggregated)
+Resize 1 → 8
+  MergingAggregatedTransform
+    (RemoteExchangeSource)
+    Source segment_id : [ 2 ]
+    DeserializeBufTransform
+      Resize 2 → 1
+        ExchangeSource 0 → 1
+          ExchangeSource 0 → 1
+
+------------------------------------------
+
+Segment[ 0 ] :
+(Projection)
+ExpressionTransform
+  (RemoteExchangeSource)
+  Source segment_id : [ 1 ]
+  DeserializeBufTransform
+    Resize 2 → 1
+      ExchangeSource 0 → 1
+        ExchangeSource 0 → 1
+
+------------------------------------------
+2022-01-01	1001	500

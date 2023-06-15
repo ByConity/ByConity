@@ -174,6 +174,9 @@ createPartFromModelCommon(const MergeTreeMetaBase & storage, const Protos::DataM
     part->covered_parts_count = part_model.has_covered_parts_count() ? part_model.covered_parts_count() : 0;
     part->covered_parts_size = part_model.has_covered_parts_size() ? part_model.covered_parts_size() : 0;
     part->covered_parts_rows = part_model.has_covered_parts_rows() ? part_model.covered_parts_rows() : 0;
+    std::unordered_set<std::string> projection_parts_names(part_model.projections().begin(), part_model.projections().end());
+    part->setProjectionPartsNames(projection_parts_names);
+
     return part;
 }
 
@@ -302,6 +305,10 @@ void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Pr
     }
     // For part in hdfs, it's id will be filled with 0
     RPCHelpers::fillUUID(part.getUUID(), *(part_model.mutable_part_id()));
+
+    for (const auto & projection : part.getProjectionPartsNames())
+        part_model.add_projections(projection);
+
 }
 
 void fillPartInfoModel(const IMergeTreeDataPart & part, Protos::DataModelPartInfo & part_info_model)

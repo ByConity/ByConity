@@ -1248,7 +1248,7 @@ static void selectColumnNames(
     }
 }
 
-size_t MergeTreeDataSelectExecutor::estimateNumMarksToRead(
+MergeTreeDataSelectAnalysisResultPtr MergeTreeDataSelectExecutor::estimateNumMarksToRead(
     MergeTreeMetaBase::DataPartsVector parts,
     const Names & column_names_to_return,
     const StorageMetadataPtr & metadata_snapshot_base,
@@ -1260,77 +1260,30 @@ size_t MergeTreeDataSelectExecutor::estimateNumMarksToRead(
 {
     size_t total_parts = parts.size();
     if (total_parts == 0)
-        return 0;
+        return std::make_shared<MergeTreeDataSelectAnalysisResult>(
+            MergeTreeDataSelectAnalysisResult{.result = ReadFromMergeTree::AnalysisResult()});
 
     Names real_column_names;
     Names virt_column_names;
     /// If query contains restrictions on the virtual column `_part` or `_part_index`, select only parts suitable for it.
     /// The virtual column `_sample_factor` (which is equal to 1 / used sample rate) can be requested in the query.
     bool sample_factor_column_queried = false;
-
     bool map_column_keys_column_queried = false;
 
     selectColumnNames(column_names_to_return, data, real_column_names, virt_column_names, sample_factor_column_queried, map_column_keys_column_queried);
 
-    auto part_values = filterPartsByVirtualColumns(data, parts, query_info.query, context);
-    if (part_values && part_values->empty())
-        return 0;
-
-    /// If there are only virtual columns in the query, you must request at least one non-virtual one.
-    if (real_column_names.empty())
-    {
-        NamesAndTypesList available_real_columns = metadata_snapshot->getColumns().getAllPhysical();
-        real_column_names.push_back(ExpressionActions::getSmallestColumn(available_real_columns));
-    }
-
-    metadata_snapshot->check(real_column_names, data.getVirtuals(), data.getStorageID());
-
-    const auto & primary_key = metadata_snapshot->getPrimaryKey();
-    Names primary_key_columns = primary_key.column_names;
-    KeyCondition key_condition(query_info, context, primary_key_columns, primary_key.expression);
-
-    if (key_condition.alwaysUnknownOrTrue())
-    {
-        size_t total_marks = 0;
-        for (const auto & part : parts)
-            total_marks += part->index_granularity.getMarksCountWithoutFinal();
-
-        return total_marks;
-    }
-
-    const auto & select = query_info.query->as<ASTSelectQuery &>();
-    ReadFromMergeTree::IndexStats index_stats;
-
-    filterPartsByPartition(
-        parts, part_values, metadata_snapshot_base, data, query_info,
-        context, max_block_numbers_to_read.get(), log, index_stats);
-
-    auto sampling = MergeTreeDataSelectExecutor::getSampling(
-        select, metadata_snapshot->getColumns().getAllPhysical(), parts, key_condition,
-        data, metadata_snapshot, context, sample_factor_column_queried, log);
-
-    if (sampling.read_nothing)
-        return 0;
-
-    /// Do not init. It is not used (cause skip index is ignored)
-    MergeTreeReaderSettings reader_settings;
-
-    auto parts_with_ranges = filterPartsByPrimaryKeyAndSkipIndexes(
+    return ReadFromMergeTree::selectRangesToRead(
         std::move(parts),
+        metadata_snapshot_base,
         metadata_snapshot,
         query_info,
         context,
-        key_condition,
-        reader_settings,
-        log,
         num_streams,
-        index_stats,
-        false,
+        max_block_numbers_to_read,
         data,
-        sampling.use_sampling,
-        sampling.relative_sample_size);
-
-    return index_stats.back().num_granules_after;
+        real_column_names,
+        sample_factor_column_queried,
+        log);
 }
 
 QueryPlanPtr MergeTreeDataSelectExecutor::readFromParts(
@@ -1343,10 +1296,16 @@ QueryPlanPtr MergeTreeDataSelectExecutor::readFromParts(
     ContextPtr context,
     const UInt64 max_block_size,
     const unsigned num_streams,
-    std::shared_ptr<PartitionIdToMaxBlock> max_block_numbers_to_read) const
+    std::shared_ptr<PartitionIdToMaxBlock> max_block_numbers_to_read,
+    MergeTreeDataSelectAnalysisResultPtr merge_tree_select_result_ptr) const
 {
-    size_t total_parts = parts.size();
-    if (total_parts == 0)
+    /// If merge_tree_select_result_ptr != nullptr, we use analyzed result so parts will always be empty.
+    if (merge_tree_select_result_ptr)
+    {
+        if (merge_tree_select_result_ptr->marks() == 0)
+            return std::make_unique<QueryPlan>();
+    }
+    else if (parts.empty())
         return std::make_unique<QueryPlan>();
 
     Names real_column_names;
@@ -1374,7 +1333,8 @@ QueryPlanPtr MergeTreeDataSelectExecutor::readFromParts(
         sample_factor_column_queried,
         map_column_keys_column_queried,
         max_block_numbers_to_read,
-        log
+        log,
+        merge_tree_select_result_ptr
     );
 
     QueryPlanPtr plan = std::make_unique<QueryPlan>();

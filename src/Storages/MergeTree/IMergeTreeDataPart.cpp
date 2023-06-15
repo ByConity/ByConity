@@ -591,7 +591,7 @@ IMergeTreeDataPart::ChecksumsPtr IMergeTreeDataPart::getChecksums() const
     }
 
     auto cache = storage.getContext()->getChecksumsCache();
-    if (cache && !is_temp && !isProjectionPart())
+    if (cache && !is_temp)
     {
         const String storage_unique_id = storage.getStorageUniqueID();
         auto load_func = [this] { return const_cast<IMergeTreeDataPart *>(this)->loadChecksums(true); };
@@ -778,6 +778,40 @@ IMergeTreeDataPartPtr IMergeTreeDataPart::getMvccDataPart(const String & file_na
                 file_name, file_mutation, relative_path);
 
         LOG_TRACE(&Poco::Logger::get(__func__), "Checked {} for {} with {}", part->name, file_name, file_mutation);
+    }
+}
+
+void IMergeTreeDataPart::addProjectionPart(const String & projection_name, const std::shared_ptr<IMergeTreeDataPart> & projection_part)
+{
+    projection_parts.emplace(projection_name, projection_part);
+    projection_parts_names.insert(projection_name);
+}
+
+void IMergeTreeDataPart::setProjectionPartsNames(const NameSet & projection_parts_names_)
+{
+    projection_parts_names.clear();
+    projection_parts_names.insert(projection_parts_names_.begin(), projection_parts_names_.end());
+}
+
+void IMergeTreeDataPart::gatherProjections()
+{
+    IMergeTreeDataPartPtr part = shared_from_this();
+    auto checksums = getChecksums();
+    while (part->isPartial())
+    {
+        if (part = part->tryGetPreviousPart(); !part)
+            throw Exception("Previous part of partial part " + name + " is absent", ErrorCodes::LOGICAL_ERROR);
+
+        for (const auto & [projection_name, projection_part] : part->projection_parts)
+        {
+            // if proj_with_name is absent in head part's checksums, it means that this projection is deleted and should not be loaded
+            if (auto it = checksums->files.find(projection_name + ".proj"); it != checksums->files.end())
+            {
+                auto ret = projection_parts.emplace(projection_name, projection_part);
+                if (ret.second)
+                    LOG_DEBUG(storage.log, "Gather projection {} from previous part {} to head part {}", projection_name, part->get_name(), name);
+            }
+        }
     }
 }
 
@@ -1248,7 +1282,7 @@ void IMergeTreeDataPart::loadColumns(bool require)
             if (volume->getDisk()->exists(fs::path(getFullRelativePath()) / (getFileNameForColumn(column) + ".bin")))
                 loaded_columns.push_back(column);
 
-        if (columns_ptr->empty())
+        if (!parent_part && columns_ptr->empty())
             throw Exception("No columns in part " + name, ErrorCodes::NO_FILE_IN_DATA_PART);
 
         {
@@ -1404,6 +1438,16 @@ void IMergeTreeDataPart::removeImpl(bool keep_shared_data) const
 {
     /// load checksums before move any part files
     auto checksums = getChecksums();
+
+    // remove deleted files in checksums to avoid removing the deleted columns/projections
+    for (auto it = checksums->files.begin(); it != checksums->files.end();)
+    {
+        const auto & file = it->second;
+        if (file.is_deleted)
+            it = checksums->files.erase(it);
+        else
+            ++it;
+    }
 
     /// load checksums for projections parts before removing parent part.
     for (const auto & [ _, projection_part] : projection_parts)
@@ -1602,7 +1646,7 @@ String IMergeTreeDataPart::getRelativePathForPrefix(const String & prefix) const
         */
     for (int try_no = 0; try_no < 10; try_no++)
     {
-        res = (prefix.empty() ? "" : prefix + "_") + name + (try_no ? "_try" + DB::toString(try_no) : "");
+        res = (prefix.empty() ? "" : prefix + "_") + info.getPartNameWithHintMutation() + (try_no ? "_try" + DB::toString(try_no) : "");
 
         if (!volume->getDisk()->exists(fs::path(getFullRelativePath()) / res))
             return res;
@@ -2212,4 +2256,22 @@ void writePartBinary(const IMergeTreeDataPart & part, WriteBuffer & buf)
     writeIntBinary(part.bucket_number, buf);
     writeIntBinary(part.table_definition_hash, buf);
 }
+
+// what meta info should be dumped for projection part
+void writeProjectionBinary(const IMergeTreeDataPart & part, WriteBuffer & buf)
+{
+    writeString("CHPT", buf); /// magic code: ClickHouse ParT
+    writeIntBinary(static_cast<UInt8>(1), buf); /// version
+
+    writeIntBinary(static_cast<UInt8>(part.deleted), buf);
+
+    writeVarUInt(part.bytes_on_disk, buf);
+    writeVarUInt(part.rows_count, buf);
+    writeVarUInt(part.getMarksCount(), buf);
+    writeVarUInt(part.info.hint_mutation, buf);
+
+    part.getColumnsPtr()->writeText(buf);
+    part.ttl_infos.write(buf);
+}
+
 }

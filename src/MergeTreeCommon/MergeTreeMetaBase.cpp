@@ -784,7 +784,7 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeMetaBase::createPart(
                 throw Exception("Create CNCH part in auxility storage is forbidden",
                     ErrorCodes::LOGICAL_ERROR);
             }
-            return std::make_shared<MergeTreeDataPartCNCH>(*this, name, part_info, volume, relative_path);
+            return std::make_shared<MergeTreeDataPartCNCH>(*this, name, part_info, volume, relative_path, parent_part);
         case MergeTreeDataPartType::UNKNOWN:
             throw Exception("Unknown type of part " + relative_path, ErrorCodes::UNKNOWN_PART_TYPE);
     }

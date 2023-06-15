@@ -1,0 +1,47 @@
+
+Segment[ 2 ] :
+(TableScan) # 50 parts from raw data, 30 parts from projection `proj1`, 100 parts from projection `proj1`
+Resize 24 → 1
+  AggregatingTransform × 8
+    StrictResize 8 → 8
+      ExpressionTransform × 8
+        FilterTransform × 8
+          MergeTreeThread × 8 0 → 1
+            AggregatingTransform × 8
+              StrictResize 8 → 8
+                ExpressionTransform × 8
+                  FilterTransform × 8
+                    MergeTreeThread × 8 0 → 1
+                      AggregatingTransform × 8
+                        StrictResize 8 → 8
+                          FilterTransform × 8
+                            MergeTreeThread × 8 0 → 1
+
+------------------------------------------
+
+Segment[ 1 ] :
+(MergingAggregated)
+Resize 1 → 8
+  MergingAggregatedTransform
+    (RemoteExchangeSource)
+    Source segment_id : [ 2 ]
+    DeserializeBufTransform
+      Resize 2 → 1
+        ExchangeSource 0 → 1
+          ExchangeSource 0 → 1
+
+------------------------------------------
+
+Segment[ 0 ] :
+(Projection)
+ExpressionTransform
+  (RemoteExchangeSource)
+  Source segment_id : [ 1 ]
+  DeserializeBufTransform
+    Resize 2 → 1
+      ExchangeSource 0 → 1
+        ExchangeSource 0 → 1
+
+------------------------------------------
+0	900000
+1	900000

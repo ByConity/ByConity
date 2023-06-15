@@ -22,6 +22,8 @@
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeDataPartChecksum.h>
 
+#include <common/logger_useful.h>
+
 namespace DB
 {
 ChecksumsDiskCacheSegment::ChecksumsDiskCacheSegment(IMergeTreeDataPartPtr data_part_)
@@ -29,7 +31,7 @@ ChecksumsDiskCacheSegment::ChecksumsDiskCacheSegment(IMergeTreeDataPartPtr data_
     , data_part(std::move(data_part_))
     , storage(data_part->storage.shared_from_this())
     , segment_name(formatSegmentName(
-          UUIDHelpers::UUIDToString(data_part->storage.getStorageUUID()), data_part->name, "", segment_number, "checksums.txt"))
+          UUIDHelpers::UUIDToString(data_part->storage.getStorageUUID()), data_part->getUniquePartName(), "", segment_number, "checksums.txt"))
 {
 }
 
@@ -59,7 +61,7 @@ PrimaryIndexDiskCacheSegment::PrimaryIndexDiskCacheSegment(IMergeTreeDataPartPtr
     , data_part(std::move(data_part_))
     , storage(data_part->storage.shared_from_this())
     , segment_name(formatSegmentName(
-          UUIDHelpers::UUIDToString(data_part->storage.getStorageUUID()), data_part->name, "", segment_number, "primary.idx"))
+          UUIDHelpers::UUIDToString(data_part->storage.getStorageUUID()), data_part->getUniquePartName(), "", segment_number, "primary.idx"))
 {
 }
 
@@ -71,6 +73,10 @@ String PrimaryIndexDiskCacheSegment::getSegmentName() const
 void PrimaryIndexDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache)
 {
     auto metadata_snapshot = data_part->storage.getInMemoryMetadataPtr();
+    if (data_part->isProjectionPart())
+    {
+        metadata_snapshot = metadata_snapshot->projections.get(data_part->name).metadata;
+    }
     const auto & primary_key = metadata_snapshot->getPrimaryKey();
     size_t key_size = primary_key.column_names.size();
 
@@ -96,6 +102,35 @@ void PrimaryIndexDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache)
     {
         disk_cache.set(getSegmentName(), *read_buffer, file_size);
         LOG_DEBUG(disk_cache.getLogger(), "cache primary index file: {}", getSegmentName());
+    }
+}
+
+MetaInfoDiskCacheSegment::MetaInfoDiskCacheSegment(IMergeTreeDataPartPtr data_part_)
+    : IDiskCacheSegment(0, 0)
+    , data_part(std::move(data_part_))
+    , storage(data_part->storage.shared_from_this())
+    , segment_name(formatSegmentName(
+          UUIDHelpers::UUIDToString(data_part->storage.getStorageUUID()), data_part->getUniquePartName(), "", segment_number, "metainfo.txt"))
+{
+}
+
+String MetaInfoDiskCacheSegment::getSegmentName() const
+{
+    return segment_name;
+}
+
+void MetaInfoDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache)
+{
+    MemoryWriteBuffer write_buffer;
+    if (data_part->isProjectionPart())
+        writeProjectionBinary(*data_part, write_buffer);
+    else
+        writePartBinary(*data_part, write_buffer);
+
+    size_t file_size = write_buffer.count();
+    if (auto read_buffer = write_buffer.tryGetReadBuffer())
+    {
+        disk_cache.set(getSegmentName(), *read_buffer, file_size);
     }
 }
 

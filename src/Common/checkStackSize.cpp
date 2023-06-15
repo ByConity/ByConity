@@ -3,6 +3,7 @@
 #include <common/scope_guard.h>
 #include <pthread.h>
 #include <cstdint>
+#include <bthread/task_group.h>
 
 #if defined(__FreeBSD__)
 #   include <pthread_np.h>
@@ -17,6 +18,10 @@ namespace DB
         extern const int LOGICAL_ERROR;
         extern const int TOO_DEEP_RECURSION;
     }
+}
+
+namespace bthread {
+    extern __thread bthread::TaskGroup* tls_task_group;
 }
 
 static thread_local void * stack_address = nullptr;
@@ -78,6 +83,11 @@ size_t getStackSize(void ** out_address)
 __attribute__((__weak__)) void checkStackSize()
 {
     using namespace DB;
+
+    // do not check the stack size in bthread mode
+    bthread::TaskGroup* g = bthread::tls_task_group;
+    if (g && !g->is_current_pthread_task())
+        return;
 
     if (!stack_address)
         max_stack_size = getStackSize(&stack_address);

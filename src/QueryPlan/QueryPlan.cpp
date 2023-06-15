@@ -512,7 +512,10 @@ void QueryPlan::explainPlan(WriteBuffer & buffer, const ExplainPlanOptions & opt
 
 static void explainPipelineStep(IQueryPlanStep & step, IQueryPlanStep::FormatSettings & settings)
 {
-    settings.out << String(settings.offset, settings.indent_char) << "(" << step.getName() << ")\n";
+    settings.out << String(settings.offset, settings.indent_char) << "(" << step.getName() << ")";
+    if (dynamic_cast<TableScanStep *>(&step))
+        settings.out << " # " << step.getStepDescription();
+    settings.out << "\n";
     size_t current_offset = settings.offset;
     step.describePipeline(settings);
     if (current_offset == settings.offset)

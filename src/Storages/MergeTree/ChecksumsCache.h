@@ -35,7 +35,7 @@ using ChecksumsName = std::string;
 inline String getChecksumsCacheKey(const String & storage_unique_id, const IMergeTreeDataPart & part)
 {
     /// for those table without uuid, directly use storage object address as unique key for checksum cache.
-    return storage_unique_id + "_" + part.name;
+    return storage_unique_id + "_" + part.getUniquePartName();
 }
 
 struct ChecksumsWeightFunction

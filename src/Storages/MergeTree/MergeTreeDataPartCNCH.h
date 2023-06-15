@@ -83,6 +83,10 @@ public:
 
     UniqueKeyIndexPtr getUniqueKeyIndex() const override;
 
+    String getFullRelativePath() const override;
+
+    String getFullPath() const override;
+
     /// @param is_unique_new_part whether it's a part of unique table which has not been deduplicated
     /// For unique table, in normal case, the new part doesn't have delete_bitmap until it executes dedup action.
     /// But when the part has delete_flag info, delete_bitmap represent the delete_flag info which leads to that new part has delete_bitmap.
@@ -103,6 +107,7 @@ private:
     MergeTreeDataPartChecksums::FileChecksums loadPartDataFooter() const;
 
     ChecksumsPtr loadChecksums(bool require) override;
+    ChecksumsPtr loadChecksumsForPart(bool follow_part_chain);
 
     UniqueKeyIndexPtr loadUniqueKeyIndex() override;
 
@@ -118,7 +123,14 @@ private:
     void calculateEachColumnSizes(ColumnSizeByName & each_columns_size, ColumnSize & total_size) const override;
     ColumnSize getColumnSizeImpl(const NameAndTypePair & column, std::unordered_set<String> * processed_substreams) const;
 
+    void loadProjections(bool require_columns_checksums, bool check_consistency) override;
+
+    // for projection part
+    void updateCommitTimeForProjection();
+
     void removeImpl(bool keep_shared_data) const override;
+
+    void fillProjectionNamesFromChecksums(const MergeTreeDataPartChecksum & checksum_file);
 };
 
 }
