@@ -186,22 +186,20 @@ ASTs CnchStorageCommonHelper::getConditions(const ASTPtr & ast)
     return ret_conditions;
 }
 
-void CnchStorageCommonHelper::sendQueryPerShard(
+BlockInputStreamPtr CnchStorageCommonHelper::sendQueryPerShard(
     ContextPtr context,
     const String & query,
     const WorkerGroupHandleImpl::ShardInfo & shard_info,
     bool need_extended_profile_info)
 {
     Block empty_header{};
-    RemoteBlockInputStream remote_stream(shard_info.pool, query, empty_header, context);
-    remote_stream.setPoolMode(PoolMode::GET_ONE);
-    remote_stream.readPrefix();
-    while (Block block = remote_stream.read());
-    remote_stream.readSuffix();
+    std::shared_ptr<RemoteBlockInputStream> remote_stream = std::make_shared<RemoteBlockInputStream>(shard_info.pool, query, empty_header, context);
+    remote_stream->setPoolMode(PoolMode::GET_ONE);
 
     /// Get the extended profile info which is mainly for INSERT SELECT/INFILE
     if (need_extended_profile_info)
-        context->setExtendedProfileInfo(remote_stream.getExtendedProfileInfo());
+        context->setExtendedProfileInfo(remote_stream->getExtendedProfileInfo());
+    return remote_stream;
 }
 
 void CnchStorageCommonHelper::filterCondition(
