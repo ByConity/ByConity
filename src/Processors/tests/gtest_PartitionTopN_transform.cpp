@@ -72,7 +72,7 @@ TEST(PartitionTopNTransform, doPartitionTopNTest)
     partition_by_column_numbers.emplace_back(0);
     ColumnNumbers order_by_column_numbers;
     order_by_column_numbers.emplace_back(1);
-    PartitionTopNTransform partition_transform{header, 2, partition_by_column_numbers, order_by_column_numbers, PartitionTopNModel::RowNumber, true};
+    PartitionTopNTransform partition_transform{header, 2, partition_by_column_numbers, order_by_column_numbers, TopNModel::ROW_NUMBER, true};
     partition_transform.setChunk(std::move(chunk1));
     partition_transform.work();
     partition_transform.setChunk(std::move(chunk2));

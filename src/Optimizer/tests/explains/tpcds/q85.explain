@@ -4,9 +4,11 @@ Projection est. 63 rows
    │     Limit: 100
    └─ Sorting est. 63 rows
       │     Order by: {expr#substring(r_reason_desc, 1, 20) asc, expr#avg(ws_quantity) asc, expr#avg(wr_refunded_cash) asc, expr#avg(wr_fee) asc}
+      │     Limit: 100
       └─ Gather Exchange est. 63 rows
          └─ Sorting est. 63 rows
             │     Order by: {expr#substring(r_reason_desc, 1, 20) asc, expr#avg(ws_quantity) asc, expr#avg(wr_refunded_cash) asc, expr#avg(wr_fee) asc}
+            │     Limit: 100
             └─ Projection est. 63 rows
                │     Expressions: [expr#avg(wr_fee), expr#avg(wr_refunded_cash), expr#avg(ws_quantity)], expr#substring(r_reason_desc, 1, 20):=substring(r_reason_desc, 1, 20)
                └─ MergingAggregated est. 63 rows

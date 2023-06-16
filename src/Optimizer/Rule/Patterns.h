@@ -54,6 +54,8 @@ inline PatternPtr apply() { return typeOf(IQueryPlanStep::Type::Apply); }
 inline PatternPtr enforceSingleRow() { return typeOf(IQueryPlanStep::Type::EnforceSingleRow); }
 inline PatternPtr assignUniqueId() { return typeOf(IQueryPlanStep::Type::AssignUniqueId); }
 inline PatternPtr cte() { return typeOf(IQueryPlanStep::Type::CTERef); }
+PatternPtr topN();
+inline PatternPtr topNFiltering() { return typeOf(IQueryPlanStep::Type::TopNFiltering); }
 
 // miscellaneous
 inline PatternPredicate predicateNot(const PatternPredicate & predicate)

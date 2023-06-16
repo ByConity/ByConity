@@ -4,9 +4,11 @@ Projection est. 16 rows
    │     Limit: 100
    └─ Sorting est. 16 rows
       │     Order by: {d_year asc, expr#sum(ss_ext_sales_price) desc nulls_last, i_brand_id asc}
+      │     Limit: 100
       └─ Gather Exchange est. 16 rows
          └─ Sorting est. 16 rows
             │     Order by: {d_year asc, expr#sum(ss_ext_sales_price) desc nulls_last, i_brand_id asc}
+            │     Limit: 100
             └─ MergingAggregated est. 16 rows
                └─ Repartition Exchange est. 16 rows
                   │     Partition by: {d_year, i_brand, i_brand_id}

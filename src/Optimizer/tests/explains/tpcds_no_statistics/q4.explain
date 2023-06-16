@@ -4,9 +4,11 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. ? rows
       │     Order by: {c_customer_id_7 asc, c_first_name_7 asc, c_last_name_7 asc, c_preferred_cust_flag_7 asc}
+      │     Limit: 100
       └─ Gather Exchange est. ? rows
          └─ Sorting est. ? rows
             │     Order by: {c_customer_id_7 asc, c_first_name_7 asc, c_last_name_7 asc, c_preferred_cust_flag_7 asc}
+            │     Limit: 100
             └─ Inner Join est. ? rows
                │     Condition: c_customer_id_11 == c_customer_id_23
                │     Filter: multiIf(`expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_5` > 0, `expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_7` / `expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_5`, NULL) > multiIf(`expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_9` > 0, `expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_11` / `expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_9`, NULL)

@@ -4,9 +4,11 @@ Projection est. 10 rows
    │     Limit: 100
    └─ Sorting est. 10 rows
       │     Order by: {s_store_name asc}
+      │     Limit: 100
       └─ Gather Exchange est. 10 rows
          └─ Sorting est. 10 rows
             │     Order by: {s_store_name asc}
+            │     Limit: 100
             └─ MergingAggregated est. 10 rows
                └─ Repartition Exchange est. 10 rows
                   │     Partition by: {s_store_name}
