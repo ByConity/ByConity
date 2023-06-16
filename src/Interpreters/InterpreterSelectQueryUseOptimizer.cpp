@@ -30,6 +30,14 @@ namespace DB
 {
 QueryPlanPtr InterpreterSelectQueryUseOptimizer::buildQueryPlan()
 {
+        // When interpret sub query, reuse context info, e.g. PlanNodeIdAllocator, SymbolAllocator.
+    if (interpret_sub_query) 
+    {
+        QueryPlanPtr sub_query_plan = std::make_unique<QueryPlan>(sub_plan_ptr, cte_info, context->getPlanNodeIdAllocator());
+        PlanOptimizer::optimize(*sub_query_plan, context);
+        return sub_query_plan;
+    }
+    
     context->createPlanNodeIdAllocator();
     context->createSymbolAllocator();
     context->createOptimizerMetrics();

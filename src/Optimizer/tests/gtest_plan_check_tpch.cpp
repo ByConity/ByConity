@@ -32,6 +32,7 @@ public:
 #endif
 
         settings.emplace("enable_left_join_to_right_join", "false");
+        settings.emplace("enable_execute_uncorrelated_subquery", 0);
         tester = std::make_shared<DB::BaseTpchPlanTest>(settings);
     }
 

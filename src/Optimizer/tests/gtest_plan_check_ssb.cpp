@@ -29,6 +29,7 @@ public:
 #ifndef NDEBUG
         // debug mode may time out.
         settings.emplace("cascades_optimizer_timeout", "300000");
+        settings.emplace("enable_execute_uncorrelated_subquery", 0);
 #endif
 
         tester = std::make_shared<DB::BaseSsbPlanTest>(settings);

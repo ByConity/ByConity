@@ -251,9 +251,10 @@ PlanNodeStatisticsPtr CardinalityVisitor::visitExtremesStep(const ExtremesStep &
 //    throw Exception("FinalSamplingNode current not support", ErrorCodes::NOT_IMPLEMENTED);
 //}
 
-PlanNodeStatisticsPtr CardinalityVisitor::visitApplyStep(const ApplyStep &, CardinalityContext &)
+PlanNodeStatisticsPtr CardinalityVisitor::visitApplyStep(const ApplyStep &, CardinalityContext & context)
 {
-    throw Exception("ApplyNode should rewritten to UnionNode", ErrorCodes::NOT_IMPLEMENTED);
+    PlanNodeStatisticsPtr child_stats = context.children_stats[0];
+    return child_stats;
 }
 
 PlanNodeStatisticsPtr CardinalityVisitor::visitCTERefStep(const CTERefStep & step, CardinalityContext & context)
