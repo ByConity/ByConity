@@ -94,7 +94,6 @@ message PreloadChecksumsAndPrimaryIndexResp
 message ShutdownManipulationTasksReq
 {
   required UUID table_uuid = 1;
-  repeated string task_ids = 2;
 }
 
 message ShutdownManipulationTasksResp

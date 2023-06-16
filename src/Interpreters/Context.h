@@ -1275,9 +1275,6 @@ public:
     CnchBGThreadPtr tryGetCnchBGThread(CnchBGThreadType type, const StorageID & storage_id) const;
     void controlCnchBGThread(const StorageID & storage_id, CnchBGThreadType type, CnchBGThreadAction action) const;
 
-    bool getTableReclusterTaskStatus(const StorageID & storage_id) const;
-    bool removeMergeMutateTasksOnPartition(const StorageID &, const String &);
-
     CnchBGThreadPtr tryGetDedupWorkerManager(const StorageID & storage_id) const;
 
     InterserverCredentialsPtr getCnchInterserverCredentials();

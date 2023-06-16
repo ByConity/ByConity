@@ -1757,14 +1757,11 @@ void StorageCnchMergeTree::checkAlterPartitionIsPossible(
                 getPartitionIDFromQuery(command.partition, getContext());
             }
         }
-
-        if ((command.type == PartitionCommand::INGEST_PARTITION) && (commands.size() != 1))
-            throw DB::Exception("Execute multiple INGEST PARTITION commands in single query is not supported",ErrorCodes::SUPPORT_IS_DISABLED);
     }
 }
 
 Pipe StorageCnchMergeTree::alterPartition(
-    const StorageMetadataPtr & /*metadata_snapshot*/, const PartitionCommands & commands, ContextPtr query_context)
+    const StorageMetadataPtr & metadata_snapshot, const PartitionCommands & commands, ContextPtr query_context)
 {
     if (unlikely(!query_context->getCurrentTransaction()))
         throw Exception("Transaction is not set", ErrorCodes::LOGICAL_ERROR);
@@ -1808,10 +1805,10 @@ Pipe StorageCnchMergeTree::alterPartition(
                 break;
 
             case PartitionCommand::INGEST_PARTITION:
-                ingestPartition(command, current_query_context);
-                break;
+                return ingestPartition(command, current_query_context);
+
             default:
-                throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Partition command {} are not supported by storage {}", command.typeToString(), getName());
+                IStorage::alterPartition(metadata_snapshot, commands, current_query_context);
         }
     }
     return {};

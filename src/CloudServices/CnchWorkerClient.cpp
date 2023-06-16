@@ -76,23 +76,13 @@ void CnchWorkerClient::submitManipulationTask(
     RPCHelpers::checkResponse(response);
 }
 
-void CnchWorkerClient::shutdownManipulationTasks(const UUID & table_uuid, const Strings & task_ids)
+void CnchWorkerClient::shutdownManipulationTasks(const UUID & table_uuid)
 {
     brpc::Controller cntl;
     Protos::ShutdownManipulationTasksReq request;
     Protos::ShutdownManipulationTasksResp response;
 
     RPCHelpers::fillUUID(table_uuid, *request.mutable_table_uuid());
-    if (!task_ids.empty())
-    {
-        std::for_each(task_ids.begin(), task_ids.end(),
-            [& request] (const String & task_id)
-            {
-                request.add_task_ids(task_id);
-            }
-        );
-    }
-
     stub->shutdownManipulationTasks(&cntl, &request, &response, nullptr);
 
     assertController(cntl);

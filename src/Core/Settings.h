@@ -630,9 +630,9 @@ class IColumn;
     M(HandleKafkaErrorMode, handle_kafka_error_mode, HandleKafkaErrorMode::DEFAULT, "Obsolete setting, does nothing.", 0) \
     M(Bool, database_replicated_ddl_output, true, "Obsolete setting, does nothing.", 0) \
     /** Ingestion */ \
-    M(UInt64, max_ingest_rows_size, 50000000, "The maximum rows for ingestion.", 0) \
     M(UInt64, max_ingest_columns_size, 10, "The maximum number of columns that can be ingested.", 0) \
-    M(UInt64, memory_efficient_ingest_partition_max_key_count_in_memory, 50000000, "The maximum number of key for ingestion to keep in memory during join.", 0) \
+    M(UInt64, ingest_partition_timeout, 3600, "The ingestion timeout in seconds.", 0) \
+    M(UInt64, max_ingest_rows_size, 50000000, "The maximum rows for ingestion.", 0) \
     M(UInt64, parallel_ingest_threads, 8, "The maximum threads for ingestion.", 0) \
     M(Bool, enable_replicas_create_ingest_node_in_zk, 0, "Whether to enable replicas to create ingest node in zk", 0) \
     M(Bool, allow_ingest_empty_partition, false, "Allow empty partition replace target table", 0) \
