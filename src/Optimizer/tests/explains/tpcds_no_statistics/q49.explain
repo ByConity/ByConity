@@ -4,6 +4,7 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. ? rows
       │     Order by: {expr#'web'_1 asc, expr#rank() OVER (ORDER BY return_ratio ASC)_3 asc, expr#rank() OVER (ORDER BY currency_ratio ASC)_3 asc, ws_item_sk_1 asc}
+      │     Limit: 100
       └─ Distinct est. ? rows
          └─ Union est. ? rows
             └─ Union est. ? rows

@@ -4,9 +4,11 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. ? rows
       │     Order by: {ca_zip asc, ca_city asc}
+      │     Limit: 100
       └─ Gather Exchange est. ? rows
          └─ Sorting est. ? rows
             │     Order by: {ca_zip asc, ca_city asc}
+            │     Limit: 100
             └─ MergingAggregated est. ? rows
                └─ Repartition Exchange est. ? rows
                   │     Partition by: {ca_city, ca_zip}

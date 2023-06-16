@@ -4,9 +4,11 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. ? rows
       │     Order by: {ca_state asc, cd_gender asc, cd_marital_status asc, cd_dep_count asc, cd_dep_employed_count asc, cd_dep_college_count asc}
+      │     Limit: 100
       └─ Gather Exchange est. ? rows
          └─ Sorting est. ? rows
             │     Order by: {ca_state asc, cd_gender asc, cd_marital_status asc, cd_dep_count asc, cd_dep_employed_count asc, cd_dep_college_count asc}
+            │     Limit: 100
             └─ MergingAggregated est. ? rows
                └─ Repartition Exchange est. ? rows
                   │     Partition by: {ca_state, cd_dep_college_count, cd_dep_count, cd_dep_employed_count, cd_gender, cd_marital_status}

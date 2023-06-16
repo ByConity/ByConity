@@ -4,9 +4,11 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. ? rows
       │     Order by: {expr#'store'_1 asc, i_brand_id_21 asc, i_class_id_21 asc, i_category_id_21 asc}
+      │     Limit: 100
       └─ Gather Exchange est. ? rows
          └─ Sorting est. ? rows
             │     Order by: {expr#'store'_1 asc, i_brand_id_21 asc, i_class_id_21 asc, i_category_id_21 asc}
+            │     Limit: 100
             └─ Aggregating est. ? rows
                │     Group by: {expr#'store'_1, i_brand_id_21, i_category_id_21, i_class_id_21}
                │     Aggregates: expr#sum(sales):=AggNull(sum)(expr#sum(multiply(ss_quantity, ss_list_price))_1), expr#sum(number_sales):=AggNull(sum)(expr#count()_3)
@@ -600,9 +602,11 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. ? rows
       │     Order by: {expr#'store'_2 asc, i_brand_id_22 asc, i_class_id_22 asc, i_category_id_22 asc}
+      │     Limit: 100
       └─ Gather Exchange est. ? rows
          └─ Sorting est. ? rows
             │     Order by: {expr#'store'_2 asc, i_brand_id_22 asc, i_class_id_22 asc, i_category_id_22 asc}
+            │     Limit: 100
             └─ Inner Join est. ? rows
                │     Condition: 
                │     Filter: `expr#sum(multiply(ss_quantity, ss_list_price))_3` > `expr#avg(multiply(quantity, list_price))_4`

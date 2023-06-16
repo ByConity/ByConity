@@ -4,9 +4,11 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. ? rows
       │     Order by: {expr#substring(w_warehouse_name, 1, 20) asc, sm_type asc, cc_name asc}
+      │     Limit: 100
       └─ Gather Exchange est. ? rows
          └─ Sorting est. ? rows
             │     Order by: {expr#substring(w_warehouse_name, 1, 20) asc, sm_type asc, cc_name asc}
+            │     Limit: 100
             └─ MergingAggregated est. ? rows
                └─ Repartition Exchange est. ? rows
                   │     Partition by: {cc_name, expr#substring(w_warehouse_name, 1, 20), sm_type}

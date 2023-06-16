@@ -1,0 +1,75 @@
+Projection est. 10 rows, cost 3.668000e+01
+│     Expressions: count():=`expr#count()`, n:=number_3
+└─ Limit est. 10 rows, cost 3.594000e+01
+   │     Limit: 10
+   └─ Sorting est. 90 rows, cost 3.594000e+01
+      │     Order by: {number_3 asc}
+      │     Limit: 10
+      └─ Gather Exchange est. 90 rows, cost 3.594000e+01
+         └─ Sorting est. 90 rows, cost 2.138000e+01
+            │     Order by: {number_3 asc}
+            │     Limit: 10
+            └─ MergingAggregated est. 90 rows, cost 2.138000e+01
+               └─ Repartition Exchange est. 90 rows, cost 2.138000e+01
+                  │     Partition by: {number_3}
+                  └─ Aggregating est. 90 rows, cost 6.660000e+00
+                     │     Group by: {number_3}
+                     │     Aggregates: expr#count():=AggNull(count)()
+                     └─ TopNFiltering est. 90 rows, cost 6.660000e+00
+                        │     Order by: {number_3 asc}
+                        │     Size: 10
+                        └─ Union est. 90 rows, cost 6.660000e+00
+                           ├─ Filter est. 30 rows, cost 2.220000e+00
+                           │  │     Condition: (number % 2) = 0
+                           │  └─ Limit est. 30 rows, cost 0.000000e+00
+                           │     │     Limit: 30
+                           │     └─ TableScan system.numbers est. ? rows, cost 0.000000e+00
+                           │              Outputs: [number]
+                           ├─ Filter est. 30 rows, cost 2.220000e+00
+                           │  │     Condition: (number_1 % 3) = 0
+                           │  └─ Limit est. 30 rows, cost 0.000000e+00
+                           │     │     Limit: 30
+                           │     └─ TableScan system.numbers est. ? rows, cost 0.000000e+00
+                           │              Outputs: number_1:=number
+                           └─ Filter est. 30 rows, cost 2.220000e+00
+                              │     Condition: (number_2 % 5) = 0
+                              └─ Limit est. 30 rows, cost 0.000000e+00
+                                 │     Limit: 30
+                                 └─ TableScan system.numbers est. ? rows, cost 0.000000e+00
+                                          Outputs: number_2:=number
+0	3
+2	1
+3	1
+4	1
+5	1
+6	2
+8	1
+9	1
+10	2
+12	2
+Projection est. 10 rows, cost 1.220000e+00
+│     Expressions: [block_number], gas_fee:=`expr#sum(multiply(gas, gas_price))`
+└─ Limit est. 10 rows, cost 4.800000e-01
+   │     Limit: 10
+   └─ Sorting est. ? rows, cost 4.800000e-01
+      │     Order by: {block_number asc}
+      │     Limit: 10
+      └─ Gather Exchange est. ? rows, cost 4.800000e-01
+         └─ Sorting est. ? rows, cost 3.200000e-01
+            │     Order by: {block_number asc}
+            │     Limit: 10
+            └─ MergingAggregated est. ? rows, cost 3.200000e-01
+               └─ Repartition Exchange est. ? rows, cost 3.200000e-01
+                  │     Partition by: {block_number}
+                  └─ Aggregating est. ? rows, cost 0.000000e+00
+                     │     Group by: {block_number}
+                     │     Aggregates: expr#sum(multiply(gas, gas_price)):=AggNull(sum)(expr#multiply(gas, gas_price))
+                     └─ Projection est. ? rows, cost 0.000000e+00
+                        │     Expressions: [block_number], expr#multiply(gas, gas_price):=gas * gas_price
+                        └─ TopNFiltering est. ? rows, cost 0.000000e+00
+                           │     Order by: {block_number asc}
+                           │     Size: 10
+                           └─ Filter est. ? rows, cost 0.000000e+00
+                              │     Condition: (block_number > 10000000) AND (block_number < 20000000)
+                              └─ TableScan test.polygon_tx_v87 est. ? rows, cost 0.000000e+00
+                                       Outputs: [block_number, gas, gas_price]

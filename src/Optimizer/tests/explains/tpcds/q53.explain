@@ -2,13 +2,15 @@ Projection est. 1 rows
 │     Expressions: [i_manufact_id], avg_quarterly_sales:=`expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manufact_id)`, sum_sales:=`expr#sum(ss_sales_price)`
 └─ Limit est. 1 rows
    │     Limit: 100
-   └─ Sorting est. 1 rows
-      │     Order by: {expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manufact_id) asc, expr#sum(ss_sales_price) asc, i_manufact_id asc}
-      └─ Gather Exchange est. 1 rows
-         └─ Sorting est. 1 rows
-            │     Order by: {expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manufact_id) asc, expr#sum(ss_sales_price) asc, i_manufact_id asc}
-            └─ Projection est. 1 rows
-               │     Expressions: [expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manufact_id), expr#sum(ss_sales_price), i_manufact_id]
+   └─ Projection est. 1 rows
+      │     Expressions: [expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manufact_id), expr#sum(ss_sales_price), i_manufact_id]
+      └─ Sorting est. 1 rows
+         │     Order by: {expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manufact_id) asc, expr#sum(ss_sales_price) asc, i_manufact_id asc}
+         │     Limit: 100
+         └─ Gather Exchange est. 1 rows
+            └─ Sorting est. 1 rows
+               │     Order by: {expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manufact_id) asc, expr#sum(ss_sales_price) asc, i_manufact_id asc}
+               │     Limit: 100
                └─ Filter est. 1 rows
                   │     Condition: multiIf(`expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manufact_id)` > 0, abs(`expr#sum(ss_sales_price)` - `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manufact_id)`) / `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manufact_id)`, NULL) > '0.1'
                   └─ Window est. 1 rows
