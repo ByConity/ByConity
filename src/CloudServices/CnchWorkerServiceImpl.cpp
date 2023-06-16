@@ -143,12 +143,16 @@ void CnchWorkerServiceImpl::shutdownManipulationTasks(
     try
     {
         auto uuid = RPCHelpers::createUUID(request->table_uuid());
+        std::unordered_set<String> task_ids(request->task_ids().begin(), request->task_ids().end());
 
         getContext()->getManipulationList().apply([&](std::list<ManipulationListElement> & container)
         {
             for (auto & e : container)
             {
                 if (uuid != e.storage_id.uuid)
+                    continue;
+
+                if (!task_ids.empty() && !task_ids.contains(e.task_id))
                     continue;
 
                 e.is_cancelled.store(true, std::memory_order_relaxed);

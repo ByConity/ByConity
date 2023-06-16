@@ -938,6 +938,26 @@ void CnchServerServiceImpl::removeMergeMutateTasksOnPartition(
     Protos::RemoveMergeMutateTasksOnPartitionResp * response,
     google::protobuf::Closure * done)
 {
+    RPCHelpers::serviceHandler(
+        done,
+        response,
+        [request = request, response = response, done = done, gc = getContext(), log = log] {
+            brpc::ClosureGuard done_guard(done);
+
+            try
+            {
+                auto storage_id = RPCHelpers::createStorageID(request->storage_id());
+                String partition_id = request->partition_id();
+                bool ret = gc->removeMergeMutateTasksOnPartition(storage_id, partition_id);
+                response->set_ret(ret);
+            }
+            catch (...)
+            {
+                tryLogCurrentException(log, __PRETTY_FUNCTION__);
+                RPCHelpers::handleException(response->mutable_exception());
+            }
+        }
+    );
 }
 
 void CnchServerServiceImpl::submitQueryWorkerMetrics(

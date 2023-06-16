@@ -37,7 +37,6 @@
 #include <WorkerTasks/ManipulationType.h>
 #include <CloudServices/CloudMergeTreeDedupWorker.h>
 #include <CloudServices/CnchPartsHelper.h>
-#include <Storages/IngestColumnCnch/IngestColumnCnchHelper.h>
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 
@@ -180,11 +179,8 @@ void StorageCloudMergeTree::checkMutationIsPossible(const MutationCommands & com
 
 void StorageCloudMergeTree::checkAlterPartitionIsPossible(const PartitionCommands & commands, const StorageMetadataPtr &, const Settings &) const
 {
-    for (const auto & command : commands)
-    {
-        if (command.type != PartitionCommand::Type::INGEST_PARTITION)
-            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "It's not allowed to execute any PARTITION commands except INGEST_PARTITON");
-    }
+    if ((commands.size() != 1) && (commands[0].type != PartitionCommand::Type::INGEST_PARTITION))
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Only accept single PARTITION command and the command type has to be INGEST_PARTITION. The current query either has more than one PARTITION command or the type is not INGEST_PARTITION");
 }
 
 Pipe StorageCloudMergeTree::alterPartition(
@@ -192,19 +188,7 @@ Pipe StorageCloudMergeTree::alterPartition(
     const PartitionCommands & commands,
     ContextPtr local_context)
 {
-    for (auto & command : commands)
-    {
-        switch (command.type)
-        {
-            case PartitionCommand::INGEST_PARTITION:
-                ingestPartition(metadata_snapshot, command, local_context);
-                break;
-            default:
-                throw Exception(ErrorCodes::NOT_IMPLEMENTED, "It's not allowed to execute any PARTITION commands except INGEST_PARTITON");
-        }
-    }
-
-    return {};
+    return ingestPartition(metadata_snapshot, commands[0], std::move(local_context));
 }
 
 bool StorageCloudMergeTree::checkStagedParts()
