@@ -50,6 +50,7 @@ public:
     DedupWorkerStatus getDedupWorkerStatus();
 
 private:
+    void clearData() override;
 
     void iterate(StoragePtr & istorage);
 

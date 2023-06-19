@@ -76,20 +76,11 @@ void CnchKafkaConsumeManager::preStart()
         throw Exception(storage_id.getFullTableName() + " is not active now", ErrorCodes::LOGICAL_ERROR);
 }
 
-void CnchKafkaConsumeManager::stop()
+void CnchKafkaConsumeManager::clearData()
 {
-    ICnchBGThread::stop();
-
     std::lock_guard lock(consumer_info_mutex);
     stopConsumers();
     num_partitions_of_topics.clear();
-}
-
-[[maybe_unused]]void CnchKafkaConsumeManager::restartConsumers()
-{
-    stop();
-
-    scheduled_task->activateAndSchedule();
 }
 
 /// The vw used for consumption of CnchKafka will have three possible settings:
