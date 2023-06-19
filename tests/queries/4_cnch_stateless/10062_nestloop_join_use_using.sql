@@ -1,5 +1,6 @@
 SET enable_nested_loop_join = 1;
 SET enable_shuffle_with_order = 1;
+SET enable_optimizer=0;
 
 DROP TABLE IF EXISTS nse_lhs;
 DROP TABLE IF EXISTS nse_rhs;
