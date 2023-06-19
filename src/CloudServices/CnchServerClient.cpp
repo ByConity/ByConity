@@ -480,7 +480,7 @@ void CnchServerClient::acquireLock(const LockInfoPtr & lock)
     Protos::AcquireLockReq request;
     Protos::AcquireLockResp response;
     // TODO: set a big enough waiting time
-    cntl.set_timeout_ms(10 * lock->timeout);
+    cntl.set_timeout_ms(3000 + (10 * lock->timeout));
     cntl.set_max_retry(0);
 
     fillLockInfoModel(*lock, *request.mutable_lock());
