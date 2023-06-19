@@ -43,11 +43,13 @@ public:
     ~CnchKafkaConsumeManager() override;
 
     void preStart() override;
+    void stop() override;
 
     void runImpl() override;
     void iterate(StorageCnchKafka & kafka_table);
 
     void stopConsumers();
+    void restartConsumers();
 
     bool checkDependencies(const StorageID & storage_id);
     ConsumerDependencies getDependenciesFromCatalog(const StorageID & storage_id);
@@ -79,8 +81,6 @@ public:
     void setCurrentTransactionForConsumer(size_t consumer_index, const TxnTimestamp & txn_id);
 
 private:
-    void clearData() override;
-
     void updatePartitionCountOfTopics(StorageCnchKafka & kafka_table, bool & partitions_changed);
 
     CnchWorkerClientPtr selectWorker(size_t index, const String & table_suffix);
