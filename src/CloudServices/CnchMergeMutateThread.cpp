@@ -199,9 +199,11 @@ CnchMergeMutateThread::CnchMergeMutateThread(ContextPtr context_, const StorageI
 
 CnchMergeMutateThread::~CnchMergeMutateThread()
 {
+    shutdown_called = true;
+
     try
     {
-        shutdown();
+        stop();
     }
     catch (...)
     {
@@ -211,21 +213,16 @@ CnchMergeMutateThread::~CnchMergeMutateThread()
 
 void CnchMergeMutateThread::preStart()
 {
-    LOG_TRACE(log, "Starting MergeMutateThread for table {}", storage_id.getFullTableName());
+    LOG_DEBUG(log, "preStarting MergeMutateThread for table {}", storage_id.getFullTableName());
 
     thread_start_time = getContext()->getTimestamp();
     catalog->setMergeMutateThreadStartTime(storage_id, thread_start_time);
     is_stale = false;
 }
 
-void CnchMergeMutateThread::shutdown()
+void CnchMergeMutateThread::clearData()
 {
-    shutdown_called = true;
-
-    LOG_DEBUG(log, "Shutting down MergeMutate thread for table {}", storage_id.getFullTableName());
-
-    // stop background task
-    stop();
+    LOG_DEBUG(log, "Dropping MergeMutate Data for table {}", storage_id.getFullTableName());
 
     std::lock_guard lock_merge(try_merge_parts_mutex);
     std::lock_guard lock_mutate(try_mutate_parts_mutex);
@@ -261,6 +258,12 @@ void CnchMergeMutateThread::shutdown()
 
         running_merge_tasks = 0;
         running_mutation_tasks = 0;
+    }
+
+    {
+        std::lock_guard lock(currently_synchronous_tasks_mutex);
+        currently_synchronous_tasks.clear();
+        currently_synchronous_tasks_cv.notify_all();
     }
 }
 
@@ -358,35 +361,13 @@ void CnchMergeMutateThread::runImpl()
     /// only if the thread_start_time equals to that in catalog the MergeMutateThread can schedule background tasks and accept task result.
     if (fetched_thread_start_time != thread_start_time)
     {
-        {
-            std::lock_guard lock(currently_merging_mutating_parts_mutex);
-            currently_merging_mutating_parts.clear();
-        }
+        /// If thread_start_time is not equal to that in catalog. The MergeMutateThread will stop running and wait to be removed or scheduled again.
+        LOG_ERROR(
+            log,
+            "Current MergeMutateThread start time {} does not equal to that in catalog {}. Remove all {} merge tasks and stop current BG thread.",
+            thread_start_time, fetched_thread_start_time, task_records.size());
 
-        {
-            std::lock_guard lock(currently_synchronous_tasks_mutex);
-            currently_synchronous_tasks.clear();
-            currently_synchronous_tasks_cv.notify_all();
-        }
-
-        {
-            std::lock_guard lock(task_records_mutex);
-            /// If thread_start_time is not equal to that in catalog. The MergeMutateThread will stop running and wait to be removed or scheduled again.
-            LOG_ERROR(
-                log,
-                "Current MergeMutateThread start time {} does not equal to that in catalog {}. Remove all {} merge tasks and stop current "
-                "BG thread.",
-                thread_start_time,
-                fetched_thread_start_time,
-                task_records.size());
-            task_records.clear();
-            running_merge_tasks = 0;
-            running_mutation_tasks = 0;
-            {
-                decltype(merge_pending_queue) empty_for_clear;
-                merge_pending_queue.swap(empty_for_clear);
-            }
-        }
+        clearData();
         return;
     }
     /// now fetched_thread_start_time == thread_start_time
@@ -604,11 +585,11 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
     /// Step 2: get parts & calc visible parts
     Stopwatch watch;
     ServerDataPartsVector data_parts;
-    
+
     size_t num_partitions = storage_settings->max_partition_for_multi_select.value;
     bool only_realtime_partition = storage_settings->cnch_merge_only_realtime_partition;
 
-    auto partitions = partition_selector->selectForMerge(istorage, num_partitions, only_realtime_partition); 
+    auto partitions = partition_selector->selectForMerge(istorage, num_partitions, only_realtime_partition);
     // partitions = removeLockedPartition(partitions);
 
     if (partitions.empty())
