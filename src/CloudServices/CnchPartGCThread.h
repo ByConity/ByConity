@@ -43,7 +43,6 @@ private:
     CnchBGThreadPtr getMergeThread();
 
     void runImpl() override;
-    void clearData() override;
 
     void clearOldPartsByPartition(const StoragePtr & istorage, StorageCnchMergeTree & storage, const String & partition_id, bool in_wakeup, TxnTimestamp gc_timestamp);
     void clearOldInsertionLabels(const StoragePtr & istorage, StorageCnchMergeTree & storage);

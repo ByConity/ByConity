@@ -119,6 +119,7 @@ public:
     CnchMergeMutateThread(ContextPtr context, const StorageID & id);
     ~CnchMergeMutateThread() override;
 
+    void shutdown();
 
     void tryRemoveTask(const String & task_id);
     void finishTask(const String & task_id, const MergeTreeDataPartPtr & merged_part, std::function<void()> && commit_parts);
@@ -131,7 +132,6 @@ public:
 
 private:
     void preStart() override;
-    void clearData() override;
 
     void runHeartbeatTask();
 
