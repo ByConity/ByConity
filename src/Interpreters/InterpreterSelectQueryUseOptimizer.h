@@ -34,6 +34,13 @@ public:
     InterpreterSelectQueryUseOptimizer(const ASTPtr & query_ptr_, ContextMutablePtr & context_, const SelectQueryOptions & options_)
         : query_ptr(query_ptr_), context(context_), options(options_), log(&Poco::Logger::get("InterpreterSelectQueryUseOptimizer"))
     {
+        interpret_sub_query = false;
+    }
+
+    InterpreterSelectQueryUseOptimizer(PlanNodePtr sub_plan_ptr_, CTEInfo cte_info_, ContextMutablePtr & context_, const SelectQueryOptions & options_)
+        : sub_plan_ptr(sub_plan_ptr_), cte_info(std::move(cte_info_)), context(context_), options(options_), log(&Poco::Logger::get("InterpreterSelectQueryUseOptimizer"))
+    {
+        interpret_sub_query = true;
     }
 
     QueryPlanPtr buildQueryPlan();
@@ -47,9 +54,12 @@ public:
 
 private:
     ASTPtr query_ptr;
+    PlanNodePtr sub_plan_ptr;
+    CTEInfo cte_info;
     ContextMutablePtr context;
     SelectQueryOptions options;
     Poco::Logger * log;
+    bool interpret_sub_query;
 };
 
 /**

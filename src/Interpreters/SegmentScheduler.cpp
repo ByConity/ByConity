@@ -36,6 +36,10 @@
 #include <Common/ProfileEvents.h>
 #include <common/getFQDNOrHostName.h>
 
+namespace ProfileEvents
+{
+    extern const Event ScheduleTimeMilliseconds;
+}
 namespace DB
 {
 namespace ErrorCodes
@@ -428,6 +432,7 @@ void SegmentScheduler::buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::s
 
 bool SegmentScheduler::scheduler(const String & query_id, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph_ptr)
 {
+    Stopwatch sw;
     try
     {
         UInt64 total_send_time_ms = 0;
@@ -574,6 +579,8 @@ bool SegmentScheduler::scheduler(const String & query_id, ContextPtr query_conte
         this->cancelPlanSegments(query_id, "receive unknown exception during scheduler", "coordinator", query_context, dag_graph_ptr);
         throw;
     }
+    sw.stop();
+    ProfileEvents::increment(ProfileEvents::ScheduleTimeMilliseconds, sw.elapsedMilliseconds());
     return true;
 }
 

@@ -59,15 +59,16 @@ ICnchBGThread::~ICnchBGThread()
 
 void ICnchBGThread::start()
 {
-    LOG_TRACE(log, "Starting");
     /// FIXME
     preStart();
+    LOG_DEBUG(log, "Starting {} for table {}", toString(thread_type), storage_id.getNameForLogs());
+    thread_status = CnchBGThread::Running;
     scheduled_task->activateAndSchedule();
 }
 
 void ICnchBGThread::wakeup()
 {
-    LOG_DEBUG(log, "Waking up");
+    LOG_DEBUG(log, "Waking up {} for table {}", toString(thread_type), storage_id.getNameForLogs());
 
     {
         std::lock_guard lock(wakeup_mutex);
@@ -86,13 +87,15 @@ void ICnchBGThread::wakeup()
             break;
     }
 
-    LOG_DEBUG(log, "Woke up");
+    LOG_DEBUG(log, "Woke up {} for table {}", toString(thread_type), storage_id.getNameForLogs());
 }
 
 void ICnchBGThread::stop()
 {
-    LOG_TRACE(log, "Stopping");
+    LOG_DEBUG(log, "Stopping {} for table {}", toString(thread_type), storage_id.getNameForLogs());
     scheduled_task->deactivate();
+    thread_status = CnchBGThread::Stopped;
+    clearData();
 }
 
 void ICnchBGThread::run()

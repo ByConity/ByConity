@@ -46,8 +46,8 @@ using StringSet = std::set<String>;
 
     void start();
     void wakeup();
-    virtual void stop();
-    virtual void drop() { }
+    void stop();
+    virtual void drop() { thread_status = CnchBGThread::Stopped; } /// FIXME: not used?
 
     bool error() { return failed_storage.load(std::memory_order_relaxed) >= 3; }
 
@@ -61,11 +61,9 @@ using StringSet = std::set<String>;
     static StorageCnchMergeTree & checkAndGetCnchTable(StoragePtr & storage);
     static StorageCnchKafka & checkAndGetCnchKafka(StoragePtr & storage);
 
-    /// TODO: REMOVE ME
-    CnchBGThreadStatus getThreadStatus()
+    CnchBGThreadStatus getThreadStatus() const
     {
-        /// return (scheduled_task->taskIsActive() && !is_stale) ? CnchBGThreadStatus::Running : CnchBGThreadStatus::Stopped;
-        return CnchBGThreadStatus::Running;
+        return thread_status;
     }
 
     virtual Strings getBestPartitionsForGC(const StoragePtr &) { return {}; }
@@ -90,6 +88,11 @@ using StringSet = std::set<String>;
        s.swap(candidate_partitions);
     }
 
+    void removeCandidatePartitions()
+    {
+        std::lock_guard lock(candidate_partitions_mutex);
+        candidate_partitions.clear();
+    }
 
 protected:
     ICnchBGThread(ContextPtr global_context_, CnchBGThreadType thread_type, const StorageID & storage_id);
@@ -101,7 +104,8 @@ protected:
     TxnTimestamp calculateMinActiveTimestamp() const;
 
 private:
-    virtual void preStart() { }
+    virtual void preStart() {}
+    virtual void clearData() {}
     void run();
 
 protected:
@@ -118,6 +122,7 @@ protected:
     std::mutex candidate_partitions_mutex;
     StringSet candidate_partitions;
 
+    CnchBGThreadStatus thread_status{CnchBGThread::Stopped};
 
 private:
     std::atomic_int failed_storage{false};

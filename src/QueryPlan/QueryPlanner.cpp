@@ -63,12 +63,11 @@ namespace ErrorCodes
     extern const int BAD_ARGUMENTS;
 }
 
-static thread_local UInt32 step_id;
-
 #define PRINT_PLAN(plan, NAME) \
-    do {                          \
-        GraphvizPrinter::printLogicalPlan(*(plan), context, std::to_string(step_id++) + "_" + #NAME); \
-    } while (false) \
+    do \
+    { \
+        GraphvizPrinter::printLogicalPlan(*(plan), context, std::to_string(context->getAndIncStepId()) + "_" + #NAME); \
+    } while (false)
 
 struct PlanWithSymbolMappings
 {
@@ -250,7 +249,8 @@ RelationPlan planExtremes(const RelationPlan & plan, ContextMutablePtr context)
 
 QueryPlanPtr QueryPlanner::plan(ASTPtr & query, Analysis & analysis, ContextMutablePtr context)
 {
-    step_id = GraphvizPrinter::PRINT_PLAN_BUILD_INDEX;
+    context->setStepId(GraphvizPrinter::PRINT_PLAN_BUILD_INDEX);
+    
     CTERelationPlans cte_plans;
     RelationPlan relation_plan = planQuery(query, nullptr, analysis, context, cte_plans);
     relation_plan = planExtremes(relation_plan, context);

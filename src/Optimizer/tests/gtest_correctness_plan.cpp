@@ -26,6 +26,7 @@ public:
     static void SetUpTestSuite()
     {
         std::unordered_map<std::string, DB::Field> settings;
+        settings.emplace("enable_execute_uncorrelated_subquery", 0);
         tester = std::make_shared<DB::CorrectnessPlanTest>(settings);
     }
 

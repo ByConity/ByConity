@@ -879,38 +879,6 @@ void PlanSegmentEdgePrinter::printEdge(QueryPlan::Node * from, QueryPlan::Node *
         << "plannode_" << to->id << ";" << std::endl;
 }
 
-void cleanDotFiles(const ContextMutablePtr & context)
-{
-    std::filesystem::path graphviz_path(context->getSettingsRef().graphviz_path.toString());
-
-    try
-    {
-        if (!std::filesystem::exists(graphviz_path))
-        {
-            std::filesystem::create_directory(graphviz_path);
-            return;
-        }
-
-        auto query_id = context->getInitialQueryId();
-
-        for (auto & dir_entry : std::filesystem::directory_iterator(graphviz_path))
-        {
-            if (dir_entry.is_regular_file() && dir_entry.path().extension() == ".dot")
-            {
-                if (dir_entry.path().filename().string().find(query_id) != std::string::npos)
-                {
-                    continue;
-                }
-                std::filesystem::remove_all(dir_entry.path());
-            }
-        }
-    }
-    catch (...)
-    {
-    }
-}
-
-
 String StepPrinter::printProjectionStep(const ProjectionStep & step, bool include_output)
 {
     std::stringstream details;
@@ -1867,8 +1835,51 @@ Void PlanNodeEdgePrinter::visitCTERefNode(CTERefNode & node, Void & c)
     return Void{};
 }
 
+void cleanDotFiles(const ContextMutablePtr & context)
+{
+    // when in the processing of sub query, DO NOT clean graphviz files.
+    if (context->getExecuteSubQueryPath() != "") 
+    {
+        return ;
+    }
+    
+    std::filesystem::path graphviz_path(context->getSettingsRef().graphviz_path.toString());
+    
+    try
+    {
+        if (!std::filesystem::exists(graphviz_path))
+        {
+            std::filesystem::create_directory(graphviz_path);
+            return;
+        }
+
+        auto query_id = context->getInitialQueryId();
+
+        for (auto & dir_entry : std::filesystem::directory_iterator(graphviz_path))
+        {
+            if (dir_entry.is_regular_file() && dir_entry.path().extension() == ".dot")
+            {
+                if (dir_entry.path().filename().string().find(query_id) != std::string::npos)
+                {
+                    continue;
+                }
+                std::filesystem::remove_all(dir_entry.path());
+            }
+        }
+    }
+    catch (...)
+    {
+    }
+}
+
 void cleanDotFiles(const ContextPtr & context)
 {
+     // when in the processing of sub query, DO NOT clean graphviz files.
+    if (context->getExecuteSubQueryPath() != "") 
+    {
+        return ;
+    }
+
     std::filesystem::path graphviz_path(context->getSettingsRef().graphviz_path.toString());
 
     try
@@ -1902,8 +1913,6 @@ void GraphvizPrinter::printAST(const ASTPtr & astPtr, ContextMutablePtr & contex
 {
     if (context->getSettingsRef().print_graphviz)
     {
-        cleanDotFiles(context);
-
         std::stringstream path;
         path << context->getSettingsRef().graphviz_path.toString();
         path << visitor << "-" << context->getInitialQueryId() << ".dot";
@@ -1921,7 +1930,7 @@ void GraphvizPrinter::printLogicalPlan(PlanNodeBase & root, ContextMutablePtr & 
 
         std::stringstream path;
         path << context->getSettingsRef().graphviz_path.toString();
-        path << name << "-" << context->getInitialQueryId() << ".dot";
+        path << context->getExecuteSubQueryPath() << name << "-" << context->getInitialQueryId() << ".dot";
 
         std::ofstream out(path.str());
         out << GraphvizPrinter::printLogicalPlan(root);
@@ -1937,7 +1946,7 @@ void GraphvizPrinter::printLogicalPlan(QueryPlan & plan, ContextMutablePtr & con
 
         std::stringstream path;
         path << context->getSettingsRef().graphviz_path.toString();
-        path << name << "-" << context->getInitialQueryId() << ".dot";
+        path << context->getExecuteSubQueryPath() << name << "-" << context->getInitialQueryId() << ".dot";
 
         std::ofstream out(path.str());
         out << GraphvizPrinter::printLogicalPlan(*plan.getPlanNode(), &plan.getCTEInfo());
@@ -1954,7 +1963,7 @@ void GraphvizPrinter::printPipeline(
         {
             std::stringstream path;
             path << context->getSettingsRef().graphviz_path.toString();
-            path << PIPELINE_PATH << "-grouped"
+            path << context->getExecuteSubQueryPath() << PIPELINE_PATH << "-grouped"
                  << "-" << context->getInitialQueryId() << "_" << segment_id << "_" << host << ".dot";
             std::ofstream out(path.str());
             out << printGroupedPipeline(processors, graph);
@@ -1963,7 +1972,7 @@ void GraphvizPrinter::printPipeline(
         {
             std::stringstream path;
             path << context->getSettingsRef().graphviz_path.toString();
-            path << PIPELINE_PATH << "-" << context->getInitialQueryId() << "_" << segment_id << "_" << host << ".dot";
+            path << context->getExecuteSubQueryPath() << PIPELINE_PATH << "-" << context->getInitialQueryId() << "_" << segment_id << "_" << host << ".dot";
             std::ofstream out(path.str());
             out << printPipeline(processors, graph);
             out.close();
@@ -2255,7 +2264,7 @@ void GraphvizPrinter::printMemo(const Memo & memo, GroupId root_id, const Contex
 
         std::stringstream path;
         path << context->getSettingsRef().graphviz_path.toString();
-        path << name << "-" << context->getInitialQueryId() << ".dot";
+        path << context->getExecuteSubQueryPath() << name << "-" << context->getInitialQueryId() << ".dot";
 
         std::ofstream out(path.str());
         out << GraphvizPrinter::printMemo(memo, root_id);
@@ -2267,11 +2276,9 @@ void GraphvizPrinter::printPlanSegment(const PlanSegmentTreePtr & segment, const
 {
     if (context->getSettingsRef().print_graphviz)
     {
-        cleanDotFiles(context);
-
         std::stringstream path;
         path << context->getSettingsRef().graphviz_path.toString();
-        path << "4000-PlanSegment"
+        path << context->getExecuteSubQueryPath() + "4000-PlanSegment"
              << "-" << context->getInitialQueryId() << ".dot";
         std::ofstream out(path.str());
         out << GraphvizPrinter::printPlanSegment(segment);
