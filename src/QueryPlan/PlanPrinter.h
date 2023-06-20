@@ -16,6 +16,7 @@
 #pragma once
 
 #include <QueryPlan/PlanVisitor.h>
+#include <Optimizer/CostModel/PlanNodeCost.h>
 
 #include <Poco/JSON/Object.h>
 
@@ -29,7 +30,7 @@ public:
     PlanPrinter() = delete;
 
     static std::string textLogicalPlan(QueryPlan & plan, ContextMutablePtr context, bool print_stats, bool verbose, PlanCostMap costs = {});
-    static std::string jsonLogicalPlan(QueryPlan & plan, bool print_stats, bool verbose);
+    static std::string jsonLogicalPlan(QueryPlan & plan, bool print_stats, bool verbose, const PlanNodeCost & plan_cost = {});
 
 private:
     class TextPrinter;
@@ -69,7 +70,7 @@ public:
 private:
     static std::string printPrefix(PlanNodeBase & plan);
     static std::string printSuffix(PlanNodeBase & plan);
-    std::string printDetail(PlanNodeBase & plan, const TextPrinterIntent & intent) const;
+    std::string printDetail(ConstQueryPlanStepPtr plan, const TextPrinterIntent & intent) const;
     std::string printStatistics(const PlanNodeBase & plan) const;
 
     const bool print_stats;
@@ -84,7 +85,7 @@ public:
     Poco::JSON::Object::Ptr printLogicalPlan(PlanNodeBase & plan);
 
 private:
-    static void detail(Poco::JSON::Object::Ptr & json, PlanNodeBase & plan);
+    static void detail(Poco::JSON::Object::Ptr & json, ConstQueryPlanStepPtr plan);
 
     const bool print_stats;
 };

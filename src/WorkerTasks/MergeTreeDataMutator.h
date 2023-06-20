@@ -66,6 +66,7 @@ private:
       */
     static void splitMutationCommands(
         MergeTreeMetaBase::DataPartPtr part,
+        const StorageMetadataPtr & metadata_snapshot,
         const MutationCommands & commands,
         MutationCommands & for_interpreter,
         MutationCommands & for_file_renames);
@@ -157,6 +158,13 @@ private:
         const ReservationPtr & space_reservation,
         TableLockHolder & holder,
         ContextPtr context);
+
+    // For projections that needed to be recaluated, we collect all the columns that are depended on by the projections
+    static void addColumnsForRecalculateProjections(
+        MergeTreeData::DataPartPtr part,
+        const StorageMetadataPtr & metadata_snapshot,
+        const NameSet & mutated_columns,
+        MutationCommands & for_interpreter);
 
 public :
     /// Initialize and write to disk new part fields like checksums, columns, etc.

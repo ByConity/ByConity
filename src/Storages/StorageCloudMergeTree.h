@@ -100,6 +100,9 @@ public:
     CloudMergeTreeDedupWorker * tryGetDedupWorker() { return dedup_worker.get(); }
     CloudMergeTreeDedupWorker * getDedupWorker();
 
+    QueryProcessingStage::Enum getQueryProcessingStage(ContextPtr, QueryProcessingStage::Enum, const StorageMetadataPtr &, SelectQueryInfo &) const override;
+    bool getQueryProcessingStageWithAggregateProjection(ContextPtr query_context, const StorageMetadataPtr & metadata_snapshot, SelectQueryInfo & query_info) const;
+
 protected:
     MutationCommands getFirstAlterMutationCommandsForPart(const DataPartPtr & part) const override;
 

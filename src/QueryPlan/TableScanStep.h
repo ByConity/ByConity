@@ -16,6 +16,10 @@
 #pragma once
 #include <Core/QueryProcessingStage.h>
 #include <QueryPlan/ISourceStep.h>
+#include <QueryPlan/AggregatingStep.h>
+#include <QueryPlan/FilterStep.h>
+#include <QueryPlan/ProjectionStep.h>
+#include <Interpreters/SelectQueryOptions.h>
 #include <Storages/IStorage.h>
 #include <Storages/SelectQueryInfo.h>
 
@@ -31,7 +35,10 @@ public:
         const NamesWithAliases & column_alias_,
         const SelectQueryInfo & query_info_,
         QueryProcessingStage::Enum processing_stage_,
-        size_t max_block_size_);
+        size_t max_block_size_,
+        QueryPlanStepPtr aggregation_ = nullptr,
+        QueryPlanStepPtr projection_ = nullptr,
+        QueryPlanStepPtr filter_ = nullptr);
 
     TableScanStep(
         ContextPtr context,
@@ -39,7 +46,10 @@ public:
         const NamesWithAliases & column_alias_,
         const SelectQueryInfo & query_info_,
         QueryProcessingStage::Enum processing_stage_,
-        size_t max_block_size_);
+        size_t max_block_size_,
+        QueryPlanStepPtr aggregation_ = nullptr,
+        QueryPlanStepPtr projection_ = nullptr,
+        QueryPlanStepPtr filter_ = nullptr);
 
 
     TableScanStep(
@@ -51,7 +61,11 @@ public:
         NamesWithAliases column_alias_,
         SelectQueryInfo query_info_,
         QueryProcessingStage::Enum processing_stage_,
-        size_t max_block_size_)
+        size_t max_block_size_,
+        QueryPlanStepPtr aggregation_,
+        QueryPlanStepPtr projection_,
+        QueryPlanStepPtr filter_,
+        DataStream table_output_stream_)
         : ISourceStep(std::move(output))
         , storage(storage_)
         , storage_id(storage_id_)
@@ -61,6 +75,10 @@ public:
         , query_info(std::move(query_info_))
         , processing_stage(processing_stage_)
         , max_block_size(max_block_size_)
+        , pushdown_aggregation(std::move(aggregation_))
+        , pushdown_projection(std::move(projection_))
+        , pushdown_filter(std::move(filter_))
+        , table_output_stream(std::move(table_output_stream_))
         , log(&Poco::Logger::get("TableScanStep"))
     {
     }
@@ -80,8 +98,24 @@ public:
     const NamesWithAliases & getColumnAlias() const { return column_alias; }
     QueryProcessingStage::Enum getProcessedStage() const;
     size_t getMaxBlockSize() const;
-    bool setFilter(const std::vector<ConstASTPtr> & filters) const;
-    bool hasFilter() const;
+
+    void setPushdownAggregation(QueryPlanStepPtr aggregation_) { pushdown_aggregation = std::move(aggregation_); }
+    void setPushdownProjection(QueryPlanStepPtr projection_) { pushdown_projection = std::move(projection_); }
+    void setPushdownFilter(QueryPlanStepPtr filter_) { pushdown_filter = std::move(filter_); }
+    const QueryPlanStepPtr & getPushdownAggregation() const { return pushdown_aggregation; }
+    const QueryPlanStepPtr & getPushdownProjection() const { return pushdown_projection; }
+    const QueryPlanStepPtr & getPushdownFilter() const { return pushdown_filter; }
+    const AggregatingStep * getPushdownAggregationCast() const { return dynamic_cast<AggregatingStep *>(pushdown_aggregation.get()); }
+    const ProjectionStep * getPushdownProjectionCast() const { return dynamic_cast<ProjectionStep *>(pushdown_projection.get()); }
+    const FilterStep * getPushdownFilterCast() const { return dynamic_cast<FilterStep *>(pushdown_filter.get()); }
+    AggregatingStep * getPushdownAggregationCast() { return dynamic_cast<AggregatingStep *>(pushdown_aggregation.get()); }
+    ProjectionStep * getPushdownProjectionCast() { return dynamic_cast<ProjectionStep *>(pushdown_projection.get()); }
+    FilterStep * getPushdownFilterCast() { return dynamic_cast<FilterStep *>(pushdown_filter.get()); }
+
+    void formatOutputStream();
+
+    bool setQueryInfoFilter(const std::vector<ConstASTPtr> & filters) const;
+    bool hasQueryInfoFilter() const;
     bool setLimit(size_t limit, const ContextMutablePtr & context);
     bool hasLimit() const;
 
@@ -110,6 +144,15 @@ private:
     QueryProcessingStage::Enum processing_stage;
     size_t max_block_size;
 
+    // Pushdown steps. Now TableScanStep is not like a single step anymore, but more like a sub plan
+    // with structure `Partial Aggregate->Projection->Filter->ReadTable`. And we are able to use
+    // **clickhouse projection** to optimize its execution.
+    // TODO: better to use a new kind of IQueryPlanStep
+    QueryPlanStepPtr pushdown_aggregation;
+    QueryPlanStepPtr pushdown_projection;
+    QueryPlanStepPtr pushdown_filter;
+    DataStream table_output_stream;
+
     // just for cascades, in order to distinguish between the same tables.
     Int32 unique_id{0};
     Poco::Logger * log;
@@ -117,6 +160,8 @@ private:
     // Optimises the where clauses for a bucket table by rewriting the IN clause and hence reducing the IN set size
     void rewriteInForBucketTable(ContextPtr context) const;
     static ASTPtr rewriteDynamicFilter(const ASTPtr & filter, QueryPipeline & pipeline, const BuildQueryPipelineSettings & build_context);
+    void aliasColumns(QueryPipeline & pipeline, const BuildQueryPipelineSettings &);
+    void setQuotaAndLimits(QueryPipeline & pipeline, const SelectQueryOptions & options, const BuildQueryPipelineSettings &);
 };
 
 }

@@ -87,6 +87,7 @@ struct ExpressionAnalyzerData
 
     bool has_aggregation = false;
     NamesAndTypesList aggregation_keys;
+    ASTs aggregation_key_asts;
     NamesAndTypesLists aggregation_keys_list;
     ColumnNumbersList aggregation_keys_indexes_list;
     bool has_const_aggregation_keys = false;
@@ -358,10 +359,13 @@ public:
     bool useGroupingSetKey() const { return aggregation_keys_list.size() > 1; }
 
     const NamesAndTypesList & aggregationKeys() const { return aggregation_keys; }
+    const ASTs & aggregationKeyAsts() const { return aggregation_key_asts; }
     bool hasConstAggregationKeys() const { return has_const_aggregation_keys; }
     const NamesAndTypesLists & aggregationKeysList() const { return aggregation_keys_list; }
     const AggregateDescriptions & aggregates() const { return aggregate_descriptions; }
 
+    const std::vector<const ASTFunction *> & aggregateAsts() const { return ExpressionAnalyzer::aggregates(); }
+    
     const PreparedSets & getPreparedSets() const { return prepared_sets; }
     std::unique_ptr<QueryPlan> getJoinedPlan();
 

@@ -522,7 +522,11 @@ void DatabaseOnDisk::renameTable(
 ASTPtr DatabaseOnDisk::getCreateTableQueryImpl(const String & table_name, ContextPtr, bool throw_on_error) const
 {
     ASTPtr ast;
-    bool has_table = tryGetTable(table_name, getContext()) != nullptr;
+    StoragePtr storage = tryGetTable(table_name, getContext());
+    bool has_table = storage != nullptr;
+    bool is_system_storage = false;
+    if (has_table)
+        is_system_storage = storage->isSystemStorage();
     auto table_metadata_path = getObjectMetadataPath(table_name);
     try
     {
@@ -533,9 +537,11 @@ ASTPtr DatabaseOnDisk::getCreateTableQueryImpl(const String & table_name, Contex
         if (!has_table && e.code() == ErrorCodes::FILE_DOESNT_EXIST && throw_on_error)
             throw Exception{"Table " + backQuote(table_name) + " doesn't exist",
                             ErrorCodes::CANNOT_GET_CREATE_TABLE_QUERY};
-        else if (throw_on_error)
+        else if (!is_system_storage && throw_on_error)
             throw;
     }
+    if (!ast && is_system_storage)
+        ast = getCreateQueryFromStorage(table_name, storage, throw_on_error);
     return ast;
 }
 
@@ -670,18 +676,20 @@ ASTPtr DatabaseOnDisk::parseQueryFromMetadata(
 {
     String query;
 
-    try
+    int metadata_file_fd = ::open(metadata_file_path.c_str(), O_RDONLY | O_CLOEXEC);
+
+    if (metadata_file_fd == -1)
     {
-        ReadBufferFromFile in(metadata_file_path, METADATA_FILE_BUFFER_SIZE);
-        readStringUntilEOF(query, in);
-    }
-    catch (const Exception & e)
-    {
-        if (!throw_on_error && e.code() == ErrorCodes::FILE_DOESNT_EXIST)
+        if (errno == ENOENT && !throw_on_error)
             return nullptr;
-        else
-            throw;
+
+        throwFromErrnoWithPath("Cannot open file " + metadata_file_path, metadata_file_path,
+                               errno == ENOENT ? ErrorCodes::FILE_DOESNT_EXIST : ErrorCodes::CANNOT_OPEN_FILE);
     }
+
+
+    ReadBufferFromFile in(metadata_file_fd, metadata_file_path, METADATA_FILE_BUFFER_SIZE);
+    readStringUntilEOF(query, in);
 
     /** Empty files with metadata are generated after a rough restart of the server.
       * Remove these files to slightly reduce the work of the admins on startup.
@@ -736,6 +744,34 @@ ASTPtr DatabaseOnDisk::getCreateQueryFromMetadata(const String & database_metada
     }
 
     return ast;
+}
+
+ASTPtr DatabaseOnDisk::getCreateQueryFromStorage(const String & table_name, const StoragePtr & storage, bool throw_on_error) const
+{
+    auto metadata_ptr = storage->getInMemoryMetadataPtr();
+    if (metadata_ptr == nullptr)
+    {
+        if (throw_on_error)
+            throw Exception(ErrorCodes::CANNOT_GET_CREATE_TABLE_QUERY, "Cannot get metadata of {}.{}", backQuote(getDatabaseName()), backQuote(table_name));
+        else
+            return nullptr;
+    }
+
+    /// setup create table query storage info.
+    auto ast_engine = std::make_shared<ASTFunction>();
+    ast_engine->name = storage->getName();
+    ast_engine->no_empty_args = true;
+    auto ast_storage = std::make_shared<ASTStorage>();
+    ast_storage->set(ast_storage->engine, ast_engine);
+
+    unsigned max_parser_depth = static_cast<unsigned>(getContext()->getSettingsRef().max_parser_depth);
+    auto create_table_query = DB::getCreateQueryFromStorage(storage,
+                                                            ast_storage,
+                                                            false,
+                                                            max_parser_depth,
+                                                            throw_on_error);
+
+    return create_table_query;
 }
 
 }

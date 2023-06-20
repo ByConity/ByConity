@@ -127,6 +127,8 @@ private:
         std::fill(active, active + size, true);
         active[size] = false;
 
+        // elements previous and next will be assigned before delete_node is called
+        // coverity[uninit_use]
         auto delete_node = [&](UInt32 i)
         {
             previous[next[i]] = previous[i];

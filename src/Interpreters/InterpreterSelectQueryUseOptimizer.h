@@ -14,11 +14,17 @@
  */
 
 #pragma once
+#include <Common/Stopwatch.h>
 #include <Interpreters/IInterpreter.h>
 #include <Interpreters/SelectQueryOptions.h>
 #include <QueryPlan/PlanVisitor.h>
 #include <Interpreters/DistributedStages/PlanSegmentSplitter.h>
 #include <Interpreters/QueryLog.h>
+
+namespace Poco
+{
+class Logger;
+}
 
 namespace DB
 {
@@ -26,7 +32,7 @@ class InterpreterSelectQueryUseOptimizer : public IInterpreter
 {
 public:
     InterpreterSelectQueryUseOptimizer(const ASTPtr & query_ptr_, ContextMutablePtr & context_, const SelectQueryOptions & options_)
-        : query_ptr(query_ptr_), context(context_), options(options_)
+        : query_ptr(query_ptr_), context(context_), options(options_), log(&Poco::Logger::get("InterpreterSelectQueryUseOptimizer"))
     {
     }
 
@@ -43,6 +49,7 @@ private:
     ASTPtr query_ptr;
     ContextMutablePtr context;
     SelectQueryOptions options;
+    Poco::Logger * log;
 };
 
 /**

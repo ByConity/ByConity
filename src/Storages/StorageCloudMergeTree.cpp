@@ -38,6 +38,8 @@
 #include <CloudServices/CloudMergeTreeDedupWorker.h>
 #include <CloudServices/CnchPartsHelper.h>
 #include <Storages/IngestColumnCnch/IngestColumnCnchHelper.h>
+#include <Interpreters/InterpreterSelectQuery.h>
+#include <Storages/StorageReplicatedMergeTree.h>
 
 namespace DB
 {
@@ -345,6 +347,377 @@ ASTs StorageCloudMergeTree::convertBucketNumbersToAstLiterals(const ASTPtr where
         }
     }
     return result;
+}
+
+QueryProcessingStage::Enum StorageCloudMergeTree::getQueryProcessingStage(
+    ContextPtr query_context,
+    QueryProcessingStage::Enum to_stage,
+    const StorageMetadataPtr & metadata_snapshot,
+    SelectQueryInfo & query_info) const
+{
+    if (to_stage >= QueryProcessingStage::Enum::WithMergeableState)
+    {
+        if (getQueryProcessingStageWithAggregateProjection(query_context, metadata_snapshot, query_info))
+        {
+            if (query_info.projection->desc->type == ProjectionDescription::Type::Aggregate)
+                return QueryProcessingStage::Enum::WithMergeableState;
+        }
+    }
+
+    return QueryProcessingStage::Enum::FetchColumns;
+}
+
+static void selectBestProjection(
+    const MergeTreeDataSelectExecutor & reader,
+    const StorageMetadataPtr & metadata_snapshot,
+    const SelectQueryInfo & query_info,
+    const Names & required_columns,
+    ProjectionCandidate & candidate,
+    ContextPtr query_context,
+    std::shared_ptr<PartitionIdToMaxBlock> max_added_blocks,
+    const Settings & settings,
+    const MergeTreeData::DataPartsVector & parts,
+    ProjectionCandidate *& selected_candidate,
+    size_t & min_sum_marks)
+{
+    MergeTreeData::DataPartsVector projection_parts;
+    MergeTreeData::DataPartsVector normal_parts;
+    for (const auto & part : parts)
+    {
+        const auto & projections = part->getProjectionParts();
+        auto it = projections.find(candidate.desc->name);
+        if (it != projections.end())
+            projection_parts.push_back(it->second);
+        else
+            normal_parts.push_back(part);
+    }
+
+    if (projection_parts.empty())
+        return;
+
+    auto sum_marks = reader.estimateNumMarksToRead(
+        projection_parts,
+        candidate.required_columns,
+        metadata_snapshot,
+        candidate.desc->metadata,
+        query_info, // TODO syntax_analysis_result set in index
+        query_context,
+        settings.max_threads,
+        max_added_blocks)->marks();
+
+    if (normal_parts.empty())
+    {
+        // All parts are projection parts which allows us to use in_order_optimization.
+        // TODO It might be better to use a complete projection even with more marks to read.
+        candidate.complete = true;
+    }
+    else
+    {
+        sum_marks += reader.estimateNumMarksToRead(
+            normal_parts,
+            required_columns,
+            metadata_snapshot,
+            metadata_snapshot,
+            query_info, // TODO syntax_analysis_result set in index
+            query_context,
+            settings.max_threads,
+            max_added_blocks)->marks();
+    }
+
+    // We choose the projection with least sum_marks to read.
+    if (sum_marks < min_sum_marks)
+    {
+        selected_candidate = &candidate;
+        min_sum_marks = sum_marks;
+    }
+}
+
+bool StorageCloudMergeTree::getQueryProcessingStageWithAggregateProjection(
+    ContextPtr query_context, const StorageMetadataPtr & metadata_snapshot, SelectQueryInfo & query_info) const
+{
+    const auto & settings = query_context->getSettingsRef();
+    if (!settings.allow_experimental_projection_optimization || query_info.ignore_projections || query_info.is_projection_query)
+        return false;
+
+    const auto & query_ptr = query_info.query;
+
+    // Currently projections don't support final yet.
+    if (auto * select = query_ptr->as<ASTSelectQuery>(); select && select->final())
+        return false;
+
+    InterpreterSelectQuery select(
+        query_ptr, query_context, SelectQueryOptions{QueryProcessingStage::WithMergeableState}.ignoreProjections().ignoreAlias());
+    const auto & analysis_result = select.getAnalysisResult();
+
+    bool can_use_aggregate_projection = true;
+    /// If the first stage of the query pipeline is more complex than Aggregating - Expression - Filter - ReadFromStorage,
+    /// we cannot use aggregate projection.
+    if (analysis_result.join != nullptr || analysis_result.array_join != nullptr)
+        can_use_aggregate_projection = false;
+
+    /// Check if all needed columns can be provided by some aggregate projection. Here we also try
+    /// to find expression matches. For example, suppose an aggregate projection contains a column
+    /// named sum(x) and the given query also has an expression called sum(x), it's a match. This is
+    /// why we need to ignore all aliases during projection creation and the above query planning.
+    /// It's also worth noting that, sqrt(sum(x)) will also work because we can treat sum(x) as a
+    /// required column.
+
+    /// The ownership of ProjectionDescription is hold in metadata_snapshot which lives along with
+    /// InterpreterSelect, thus we can store the raw pointer here.
+    std::vector<ProjectionCandidate> candidates;
+    NameSet keys;
+    std::unordered_map<std::string_view, size_t> key_name_pos_map;
+    size_t pos = 0;
+    for (const auto & desc : select.getQueryAnalyzer()->aggregationKeys())
+    {
+        keys.insert(desc.name);
+        key_name_pos_map.insert({desc.name, pos++});
+    }
+    auto actions_settings = ExpressionActionsSettings::fromSettings(settings);
+
+    // All required columns should be provided by either current projection or previous actions
+    // Let's traverse backward to finish the check.
+    // TODO what if there is a column with name sum(x) and an aggregate sum(x)?
+    auto rewrite_before_where =
+        [&](ProjectionCandidate & candidate, const ProjectionDescription & projection,
+            NameSet & required_columns, const Block & source_block, const Block & aggregates)
+    {
+        if (analysis_result.before_where)
+        {
+            candidate.where_column_name = analysis_result.where_column_name;
+            candidate.remove_where_filter = analysis_result.remove_where_filter;
+            candidate.before_where = analysis_result.before_where->clone();
+
+            required_columns = candidate.before_where->foldActionsByProjection(
+                required_columns,
+                projection.sample_block_for_keys,
+                candidate.where_column_name);
+
+            if (required_columns.empty())
+                return false;
+            candidate.before_where->addAggregatesViaProjection(aggregates);
+        }
+
+        if (analysis_result.prewhere_info)
+        {
+            candidate.prewhere_info = analysis_result.prewhere_info;
+
+            auto prewhere_actions = candidate.prewhere_info->prewhere_actions->clone();
+            auto prewhere_required_columns = required_columns;
+            // required_columns should not contain columns generated by prewhere
+            for (const auto & column : prewhere_actions->getResultColumns())
+                required_columns.erase(column.name);
+
+            // Prewhere_action should not add missing keys.
+            prewhere_required_columns = prewhere_actions->foldActionsByProjection(
+                prewhere_required_columns, projection.sample_block_for_keys, candidate.prewhere_info->prewhere_column_name, false);
+
+            if (prewhere_required_columns.empty())
+                return false;
+            candidate.prewhere_info->prewhere_actions = prewhere_actions;
+
+            if (candidate.prewhere_info->row_level_filter)
+            {
+                auto row_level_filter_actions = candidate.prewhere_info->row_level_filter->clone();
+                prewhere_required_columns = row_level_filter_actions->foldActionsByProjection(
+                    prewhere_required_columns, projection.sample_block_for_keys, candidate.prewhere_info->row_level_column_name, false);
+
+                if (prewhere_required_columns.empty())
+                    return false;
+                candidate.prewhere_info->row_level_filter = row_level_filter_actions;
+            }
+
+            if (candidate.prewhere_info->alias_actions)
+            {
+                auto alias_actions = candidate.prewhere_info->alias_actions->clone();
+                prewhere_required_columns
+                    = alias_actions->foldActionsByProjection(prewhere_required_columns, projection.sample_block_for_keys, {}, false);
+
+                if (prewhere_required_columns.empty())
+                    return false;
+                candidate.prewhere_info->alias_actions = alias_actions;
+            }
+            required_columns.insert(prewhere_required_columns.begin(), prewhere_required_columns.end());
+        }
+
+        bool match = true;
+        for (const auto & column : required_columns)
+        {
+            /// There are still missing columns, fail to match
+            if (!source_block.has(column))
+            {
+                match = false;
+                break;
+            }
+        }
+        return match;
+    };
+
+    for (const auto & projection : metadata_snapshot->projections)
+    {
+        ProjectionCandidate candidate{};
+        candidate.desc = &projection;
+
+        if (projection.type == ProjectionDescription::Type::Aggregate && analysis_result.need_aggregate && can_use_aggregate_projection)
+        {
+            bool match = true;
+            Block aggregates;
+            // Let's first check if all aggregates are provided by current projection
+            for (const auto & aggregate : select.getQueryAnalyzer()->aggregates())
+            {
+                const auto * column = projection.sample_block.findByName(aggregate.column_name);
+                if (column)
+                {
+                    aggregates.insert(*column);
+                }
+                else
+                {
+                    match = false;
+                    break;
+                }
+            }
+
+            if (!match)
+                continue;
+
+            // Check if all aggregation keys can be either provided by some action, or by current
+            // projection directly. Reshape the `before_aggregation` action DAG so that it only
+            // needs to provide aggregation keys, and certain children DAG might be substituted by
+            // some keys in projection.
+            candidate.before_aggregation = analysis_result.before_aggregation->clone();
+            auto required_columns = candidate.before_aggregation->foldActionsByProjection(keys, projection.sample_block_for_keys);
+
+            if (required_columns.empty() && !keys.empty())
+                continue;
+
+            if (analysis_result.optimize_aggregation_in_order)
+            {
+                for (const auto & key : keys)
+                {
+                    auto actions_dag = analysis_result.before_aggregation->clone();
+                    actions_dag->foldActionsByProjection({key}, projection.sample_block_for_keys);
+                    candidate.group_by_elements_actions.emplace_back(std::make_shared<ExpressionActions>(actions_dag, actions_settings));
+                }
+            }
+
+            // Reorder aggregation keys and attach aggregates
+            candidate.before_aggregation->reorderAggregationKeysForProjection(key_name_pos_map);
+            candidate.before_aggregation->addAggregatesViaProjection(aggregates);
+
+            if (rewrite_before_where(candidate, projection, required_columns, projection.sample_block_for_keys, aggregates))
+            {
+                candidate.required_columns = {required_columns.begin(), required_columns.end()};
+                for (const auto & aggregate : aggregates)
+                    candidate.required_columns.push_back(aggregate.name);
+                candidates.push_back(std::move(candidate));
+            }
+        }
+
+        if (projection.type == ProjectionDescription::Type::Normal && (analysis_result.hasWhere() || analysis_result.hasPrewhere()))
+        {
+            const auto & actions
+                = analysis_result.before_aggregation ? analysis_result.before_aggregation : analysis_result.before_order_by;
+            NameSet required_columns;
+            for (const auto & column : actions->getRequiredColumns())
+                required_columns.insert(column.name);
+
+            if (rewrite_before_where(candidate, projection, required_columns, projection.sample_block, {}))
+            {
+                candidate.required_columns = {required_columns.begin(), required_columns.end()};
+                candidates.push_back(std::move(candidate));
+            }
+        }
+    }
+
+    // Let's select the best projection to execute the query.
+    if (!candidates.empty())
+    {
+        std::shared_ptr<PartitionIdToMaxBlock> max_added_blocks;
+        // if (settings.select_sequential_consistency)
+        // {
+        //     if (const StorageReplicatedMergeTree * replicated = dynamic_cast<const StorageReplicatedMergeTree *>(this))
+        //         max_added_blocks = std::make_shared<PartitionIdToMaxBlock>(replicated->getMaxAddedBlocks());
+        // }
+
+        auto parts = getDataPartsVector();
+        MergeTreeDataSelectExecutor reader(*this);
+
+        ProjectionCandidate * selected_candidate = nullptr;
+        size_t min_sum_marks = std::numeric_limits<size_t>::max();
+        bool has_ordinary_projection = false;
+        /// Favor aggregate projections
+        for (auto & candidate : candidates)
+        {
+            if (candidate.desc->type == ProjectionDescription::Type::Aggregate)
+            {
+                selectBestProjection(
+                    reader,
+                    metadata_snapshot,
+                    query_info,
+                    analysis_result.required_columns,
+                    candidate,
+                    query_context,
+                    max_added_blocks,
+                    settings,
+                    parts,
+                    selected_candidate,
+                    min_sum_marks);
+            }
+            else
+                has_ordinary_projection = true;
+        }
+
+        /// Select the best normal projection if no aggregate projection is available
+        if (!selected_candidate && has_ordinary_projection)
+        {
+            min_sum_marks = reader.estimateNumMarksToRead(
+                parts,
+                analysis_result.required_columns,
+                metadata_snapshot,
+                metadata_snapshot,
+                query_info, // TODO syntax_analysis_result set in index
+                query_context,
+                settings.max_threads,
+                max_added_blocks)->marks();
+
+            // Add 1 to base sum_marks so that we prefer projections even when they have equal number of marks to read.
+            // NOTE: It is not clear if we need it. E.g. projections do not support skip index for now.
+            min_sum_marks += 1;
+
+            for (auto & candidate : candidates)
+            {
+                if (candidate.desc->type == ProjectionDescription::Type::Normal)
+                {
+                    selectBestProjection(
+                        reader,
+                        metadata_snapshot,
+                        query_info,
+                        analysis_result.required_columns,
+                        candidate,
+                        query_context,
+                        max_added_blocks,
+                        settings,
+                        parts,
+                        selected_candidate,
+                        min_sum_marks);
+                }
+            }
+        }
+
+        if (!selected_candidate)
+            return false;
+
+        if (selected_candidate->desc->type == ProjectionDescription::Type::Aggregate)
+        {
+            selected_candidate->aggregation_keys = select.getQueryAnalyzer()->aggregationKeys();
+            selected_candidate->aggregate_descriptions = select.getQueryAnalyzer()->aggregates();
+        }
+
+        query_info.projection = std::move(*selected_candidate);
+
+        return true;
+    }
+    return false;
 }
 
 

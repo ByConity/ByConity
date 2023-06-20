@@ -65,7 +65,7 @@ String DiskCacheSegment::getSegmentKey(
 String DiskCacheSegment::getSegmentName() const
 {
     return formatSegmentName(
-        UUIDHelpers::UUIDToString(storage->getStorageUUID()), data_part->name, stream_name, segment_number, extension);
+        UUIDHelpers::UUIDToString(storage->getStorageUUID()), data_part->getUniquePartName(), stream_name, segment_number, extension);
 }
 
 void DiskCacheSegment::cacheToDisk(IDiskCache & disk_cache)
@@ -123,7 +123,7 @@ void DiskCacheSegment::cacheToDisk(IDiskCache & disk_cache)
         /// cache mark segment
         data_file->seek(mrk_file_pos.file_offset);
         LimitReadBuffer marks_value(*data_file, mrk_file_pos.file_size, false);
-        String marks_key = formatSegmentName(UUIDHelpers::UUIDToString(storage->getStorageUUID()), data_part->name, stream_name, 0, MARKS_FILE_EXTENSION);
+        String marks_key = formatSegmentName(UUIDHelpers::UUIDToString(storage->getStorageUUID()), data_part->getUniquePartName(), stream_name, 0, MARKS_FILE_EXTENSION);
         disk_cache.set(marks_key, marks_value, mrk_file_pos.file_size);
     }
     catch (...)

@@ -4,9 +4,11 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. 4196808 rows
       │     Order by: {c_customer_id asc}
+      │     Limit: 100
       └─ Gather Exchange est. 4196808 rows
          └─ Sorting est. 4196808 rows
             │     Order by: {c_customer_id asc}
+            │     Limit: 100
             └─ Inner Join est. 1893016 rows
                │     Condition: c_customer_sk == sr_customer_sk
                ├─ Repartition Exchange est. 12000000 rows

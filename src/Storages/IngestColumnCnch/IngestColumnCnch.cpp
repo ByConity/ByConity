@@ -26,6 +26,8 @@
 #include <DataTypes/MapHelpers.h>
 #include <CloudServices/CnchServerClient.h>
 #include <Storages/MergeTree/MergeTreeSequentialSource.h>
+#include <Processors/Sources/SourceFromInputStream.h>
+#include <DataStreams/TransactionWrapperBlockInputStream.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
 #include <DataStreams/AddingDefaultBlockOutputStream.h>
 #include <CloudServices/CnchBGThreadCommon.h>
@@ -223,7 +225,7 @@ void checkIngestColumns(const Strings & column_names, const StorageInMemoryMetad
 
 } /// end namespace anonymous
 
-void forwardIngestPartitionToWorker(
+BlockInputStreamPtr forwardIngestPartitionToWorker(
     StorageCnchMergeTree & target_table,
     StorageCnchMergeTree & source_table,
     const struct PartitionCommand & command,
@@ -255,7 +257,7 @@ void forwardIngestPartitionToWorker(
     worker_client->sendCreateQueries(context,
         {create_target_cloud_merge_tree_query, create_source_cloud_merge_tree_query});
 
-    CnchStorageCommonHelper::sendQueryPerShard(context, query_for_send_to_worker, *write_shard_ptr, true);
+    return CnchStorageCommonHelper::sendQueryPerShard(context, query_for_send_to_worker, *write_shard_ptr, true);
 }
 
 void StorageCloudMergeTree::ingestPartition(const StorageMetadataPtr & metadata_snapshot, const PartitionCommand & command, ContextPtr local_context)
@@ -273,7 +275,7 @@ void StorageCloudMergeTree::ingestPartition(const StorageMetadataPtr & metadata_
     ingest_partition->ingestPartition();
 }
 
-void ingestPartitionInServer(
+Pipe ingestPartitionInServer(
     StorageCnchMergeTree & storage,
     const struct PartitionCommand & command,
     const ContextPtr local_context)
@@ -344,7 +346,7 @@ void ingestPartitionInServer(
     if (visible_source_parts.empty())
     {
         LOG_INFO(log, "There is no part to ingest, do nothing");
-        return;
+        return {};
     }
 
 /// TODO uncomment when merge ready
@@ -373,16 +375,15 @@ void ingestPartitionInServer(
     }
 #endif
 
-    forwardIngestPartitionToWorker(storage, *source_merge_tree, command, local_context);
+    BlockInputStreamPtr in = forwardIngestPartitionToWorker(storage, *source_merge_tree, command, local_context);
     cur_txn->setMainTableUUID(storage.getStorageUUID());
-    cur_txn->commitV2();
-    LOG_TRACE(log, "Finish ingestion partition, commit in cnch server.");
-    return;
+    in = std::make_shared<TransactionWrapperBlockInputStream>(in, std::move(cur_txn));
+    return Pipe{std::make_shared<SourceFromInputStream>(std::move(in))};
 }
 
-void StorageCnchMergeTree::ingestPartition(const struct PartitionCommand & command, const ContextPtr local_context)
+Pipe StorageCnchMergeTree::ingestPartition(const struct PartitionCommand & command, const ContextPtr local_context)
 {
-    ingestPartitionInServer(*this, command, local_context);
+    return ingestPartitionInServer(*this, command, local_context);
 }
 
 } /// end namespace

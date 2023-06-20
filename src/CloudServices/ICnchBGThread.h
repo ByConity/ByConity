@@ -36,6 +36,8 @@ class TxnTimestamp;
 class ICnchBGThread : protected WithContext, private boost::noncopyable
 {
 public:
+using StringSet = std::set<String>;
+
     virtual ~ICnchBGThread();
 
     auto getType() const { return thread_type; }
@@ -76,6 +78,19 @@ public:
     auto getLastWakeupTime() const { return last_wakeup_time.load(std::memory_order_relaxed); }
     auto getNumWakeup() const { return num_wakeup.load(std::memory_order_relaxed); }
 
+    void addCandidatePartition(String & p)
+    {
+       std::lock_guard lock(candidate_partitions_mutex);
+       candidate_partitions.insert(p);
+    }
+
+    void swapCandidatePartitions(StringSet & s)
+    {
+       std::lock_guard lock(candidate_partitions_mutex);
+       s.swap(candidate_partitions);
+    }
+
+
 protected:
     ICnchBGThread(ContextPtr global_context_, CnchBGThreadType thread_type, const StorageID & storage_id);
 
@@ -98,6 +113,11 @@ protected:
 
     /// Set to true when the BackgroundThread quit because of another same task already started on other servers. Only for MergeMutateThread.
     bool is_stale{false};
+
+    /// For merge/gc threads.
+    std::mutex candidate_partitions_mutex;
+    StringSet candidate_partitions;
+
 
 private:
     std::atomic_int failed_storage{false};

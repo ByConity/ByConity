@@ -704,6 +704,7 @@ Block MergeTreeMetaBase::getBlockWithVirtualPartColumns(const DataPartsVector & 
         part_column->insert(part->name);
         partition_id_column->insert(part->info.partition_id);
         part_uuid_column->insert(part->uuid);
+        // coverity[mismatched_iterator]
         Tuple tuple(part->partition.value.begin(), part->partition.value.end());
         if (has_partition_value)
             partition_value_column->insert(tuple);
@@ -783,7 +784,7 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeMetaBase::createPart(
                 throw Exception("Create CNCH part in auxility storage is forbidden",
                     ErrorCodes::LOGICAL_ERROR);
             }
-            return std::make_shared<MergeTreeDataPartCNCH>(*this, name, part_info, volume, relative_path);
+            return std::make_shared<MergeTreeDataPartCNCH>(*this, name, part_info, volume, relative_path, parent_part);
         case MergeTreeDataPartType::UNKNOWN:
             throw Exception("Unknown type of part " + relative_path, ErrorCodes::UNKNOWN_PART_TYPE);
     }
@@ -1378,12 +1379,49 @@ String MergeTreeMetaBase::getStorageUniqueID() const
 
 void MergeTreeMetaBase::calculateColumnSizesImpl()
 {
+    Stopwatch stopwatch;
+
     column_sizes.clear();
 
     /// Take into account only committed parts
     auto committed_parts_range = getDataPartsStateRange(DataPartState::Committed);
-    for (const auto & part : committed_parts_range)
+    DataPartsVector committed_parts{committed_parts_range.begin(), committed_parts_range.end()};
+    DataPartsVector calculated_parts;
+
+    double ratio = 1.0;
+    size_t sample_number = getContext()->getSettingsRef().merge_tree_calculate_columns_size_sample;
+    if (getSettings()->enable_calculate_columns_size_with_sample == 1 && committed_parts.size() > sample_number*2)
+    {
+        calculated_parts.reserve(sample_number);
+        std::sample(committed_parts.begin(), committed_parts.end(),
+                    std::back_inserter(calculated_parts), sample_number,
+                    std::mt19937{std::random_device{}()});
+        size_t m = committed_parts.size() / sample_number;
+        ratio = m + static_cast<double>(committed_parts.size() - m * sample_number) / sample_number;
+    }
+    else
+    {
+        calculated_parts = committed_parts;
+    }
+
+    for (const auto & part : calculated_parts)
         addPartContributionToColumnSizes(part);
+
+    if (ratio > 1.0)
+    {
+        ColumnSizeByName new_column_sizes = column_sizes;
+        /// Adjust size according to the sample ratio
+        for (auto & pair : new_column_sizes)
+        {
+            pair.second.marks = pair.second.marks * ratio;
+            pair.second.data_compressed = pair.second.data_compressed * ratio;
+            pair.second.data_uncompressed = pair.second.data_uncompressed * ratio;
+        }
+
+        column_sizes = std::move(new_column_sizes);
+    }
+
+    LOG_TRACE(log, "Calculate columns size elapsed: {} ms.", stopwatch.elapsedMilliseconds());
 }
 
 

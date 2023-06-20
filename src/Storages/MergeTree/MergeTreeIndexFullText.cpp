@@ -212,16 +212,16 @@ bool MergeTreeConditionFullText::alwaysUnknownOrTrue() const
         }
         else if (element.function == RPNElement::FUNCTION_AND)
         {
-            auto arg1 = rpn_stack.back();
+            bool arg1 = rpn_stack.back();
             rpn_stack.pop_back();
-            auto arg2 = rpn_stack.back();
+            bool arg2 = rpn_stack.back();
             rpn_stack.back() = arg1 && arg2;
         }
         else if (element.function == RPNElement::FUNCTION_OR)
         {
-            auto arg1 = rpn_stack.back();
+            bool arg1 = rpn_stack.back();
             rpn_stack.pop_back();
-            auto arg2 = rpn_stack.back();
+            bool arg2 = rpn_stack.back();
             rpn_stack.back() = arg1 || arg2;
         }
         else

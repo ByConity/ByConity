@@ -635,7 +635,7 @@ void StorageMaterializedView::refresh(const ASTPtr & partition,  ContextPtr loca
                 {
                     WriteBufferFromOwnString buf;
                     part->partition.serializeText(*merge_tree, buf, format_settings);
-                    String part_name = buf.str();
+                    const String & part_name = buf.str();
                     LOG_DEBUG(&Poco::Logger::get("refresh"), "all partition name-{}", part_name);
                     const char * begin = part_name.data();
                     const char * end = part_name.data() + part_name.size();
@@ -702,7 +702,7 @@ void StorageMaterializedView::refreshImpl(const ASTPtr & partition, ContextPtr l
         alter_query_ss << "ALTER TABLE " << backQuoteIfNeed(target_table->getStorageID().getDatabaseName()) << "." << backQuoteIfNeed(target_table->getStorageID().getTableName())
                        << (cascading ? " CASCADING " : " ") << "DROP " << "PARTITION " << serializeAST(*partition, true);
 
-        String alter_query_str = alter_query_ss.str();
+        const String alter_query_str = alter_query_ss.str();
 
         LOG_DEBUG(&Poco::Logger::get("refreshImpl"), "drop partition command: {}", alter_query_str);
 

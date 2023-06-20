@@ -69,6 +69,7 @@ namespace DB
             else if (exist_less_or_equals)
                 less_than = *(comparisons["lessOrEquals"].begin());
 
+            // coverity[uninit_use]
             return less_than;
         }
 
@@ -79,7 +80,8 @@ namespace DB
                 greater_than = *(comparisons["greater"].begin());
             else if (exist_greater_or_equals)
                 greater_than = *(comparisons["greaterOrEquals"].begin());
-
+            
+            // coverity[uninit_use]
             return greater_than;
         }
     };

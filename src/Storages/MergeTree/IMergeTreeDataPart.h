@@ -177,7 +177,6 @@ public:
 
     virtual void projectionRemove(const String & parent_to, bool keep_shared_data) const;
 
-
     /// Initialize columns (from columns.txt if exists, or create from column files if not).
     /// Load checksums from checksums.txt if exists. Load index if required.
     virtual void loadColumnsChecksumsIndexes(bool require_columns_checksums, bool check_consistency);
@@ -308,6 +307,12 @@ public:
         return name + " (state " + stateString() + ")";
     }
 
+    //  Unique identification for projection part and normal part, used in disk cache segment and mark_cache, etc
+    String getUniquePartName() const
+    {
+        return parent_part ? parent_part->name + "_" + name : name;
+    }
+
     /// Returns true if state of part is one of affordable_states
     bool checkState(const std::initializer_list<State> & affordable_states) const
     {
@@ -393,12 +398,16 @@ public:
     off_t getFileOffsetOrZero(const String & file_name) const;
 
     /// Returns path to part dir relatively to disk mount point
-    String getFullRelativePath() const;
+    virtual String getFullRelativePath() const;
 
     /// Returns full path to part dir
-    String getFullPath() const;
+    virtual String getFullPath() const;
 
     IMergeTreeDataPartPtr getMvccDataPart(const String & file_name) const;
+
+    // collect all the visible projection parts' and corresponding checksums from the historical parts into the current visible part (head part)
+    // this function must be called when finishing the loading parts
+    void gatherProjections();
 
     /// Moves a part to detached/ directory and adds prefix to its name
     void renameToDetached(const String & prefix) const;
@@ -440,17 +449,17 @@ public:
 
     const std::map<String, std::shared_ptr<IMergeTreeDataPart>> & getProjectionParts() const { return projection_parts; }
 
-    void addProjectionPart(const String & projection_name, std::shared_ptr<IMergeTreeDataPart> && projection_part)
-    {
-        projection_parts.emplace(projection_name, std::move(projection_part));
-    }
+    const NameSet & getProjectionPartsNames() const { return projection_parts_names; }
+    void setProjectionPartsNames(const NameSet & projection_parts_names_);
+
+    void addProjectionPart(const String & projection_name, const std::shared_ptr<IMergeTreeDataPart> & projection_part);
 
     bool hasProjection(const String & projection_name) const
     {
         return projection_parts.find(projection_name) != projection_parts.end();
     }
 
-    void loadProjections(bool require_columns_checksums, bool check_consistency);
+    virtual void loadProjections(bool require_columns_checksums, bool check_consistency);
 
     /// Return set of metadat file names without checksums. For example,
     /// columns.txt or checksums.txt itself.
@@ -575,6 +584,9 @@ protected:
 
     std::map<String, std::shared_ptr<IMergeTreeDataPart>> projection_parts;
 
+    // names of projections that are truly managed by current part, to distinguish from the projections gathered from the previous parts
+    NameSet projection_parts_names;
+
     /// Protect checksums_ptr. FIXME:  May need more protection in getChecksums()
     /// to prevent checksums_ptr from being modified and corvered by multiple threads.
     mutable std::mutex checksums_mutex;
@@ -611,7 +623,7 @@ private:
     void loadUUID();
 
     /// Reads columns names and types from columns.txt
-    void loadColumns(bool require);
+    virtual void loadColumns(bool require);
 
     /// If versions.txt exists, reads versions from it
     void loadVersions();
@@ -686,4 +698,5 @@ bool isInMemoryPart(const MergeTreeDataPartPtr & data_part);
 bool isCnchPart(const MergeTreeDataPartPtr & data_part);
 
 void writePartBinary(const IMergeTreeDataPart & part, WriteBuffer & buf);
+void writeProjectionBinary(const IMergeTreeDataPart & part, WriteBuffer & buf);
 }

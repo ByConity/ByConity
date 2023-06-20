@@ -163,6 +163,8 @@
     M(SelectedRows, "Number of rows SELECTed from all tables.") \
     M(SelectedBytes, "Number of bytes (uncompressed; for columns as they stored in memory) SELECTed from all tables.") \
     \
+    M(Manipulation, "Number of manipulations.") \
+    M(ManipulationSuccess, "Number of success manipulations.") \
     M(Merge, "Number of launched background merges.") \
     M(MergedRows, "Rows read for background merges. This is the number of rows before merge.") \
     M(MergedUncompressedBytes, "Uncompressed bytes (for columns as they stored in memory) that was read for background merges. This is the number before merge.") \
@@ -435,6 +437,12 @@
     M(GetKafkaOffsetsTopicPartitionListFailed, "") \
     M(ClearOffsetsForWholeTopicSuccess, "") \
     M(ClearOffsetsForWholeTopicFailed, "") \
+    M(SetTransactionForKafkaConsumerSuccess, "") \
+    M(SetTransactionForKafkaConsumerFailed, "") \
+    M(GetTransactionForKafkaConsumerSuccess, "") \
+    M(GetTransactionForKafkaConsumerFailed, "") \
+    M(ClearKafkaTransactionsForTableSuccess, "") \
+    M(ClearKafkaTransactionsForTableFailed, "") \
     M(DropAllPartSuccess, "") \
     M(DropAllPartFailed, "") \
     M(GetPartitionListSuccess, "") \

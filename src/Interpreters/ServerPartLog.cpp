@@ -24,6 +24,7 @@
 #include <DataTypes/DataTypeUUID.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context.h>
+#include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 
 #include <Common/CurrentThread.h>
 
@@ -93,6 +94,9 @@ void ServerPartLogElement::appendToBlock(MutableColumns & columns) const
 
 bool ServerPartLog::addNewParts(const ContextPtr & local_context, ServerPartLogElement::Type type, const MutableMergeTreeDataPartsCNCHVector & parts, UInt64 txn_id, UInt8 error)
 {
+    if (parts.empty())
+        return false;
+
     std::shared_ptr<ServerPartLog> server_part_log;
     try
     {
@@ -101,6 +105,8 @@ bool ServerPartLog::addNewParts(const ContextPtr & local_context, ServerPartLogE
             return false;
 
         auto event_time = time(nullptr);
+        std::unordered_map<String, size_t> count_by_partition;
+        UUID uuid = parts.front()->storage.getStorageUUID();
 
         for (const auto & part : parts)
         {
@@ -112,7 +118,7 @@ bool ServerPartLog::addNewParts(const ContextPtr & local_context, ServerPartLogE
 
             elem.database_name = part->storage.getDatabaseName();
             elem.table_name = part->storage.getTableName();
-            elem.uuid = part->storage.getStorageUUID();
+            elem.uuid = uuid;
 
             elem.part_name = part->name;
             elem.partition_id = part->info.partition_id;
@@ -122,6 +128,15 @@ bool ServerPartLog::addNewParts(const ContextPtr & local_context, ServerPartLogE
             elem.error = error;
 
             server_part_log->add(elem);
+
+            if (type == ServerPartLogElement::INSERT_PART)
+                count_by_partition[elem.partition_id] += 1;
+        }
+
+        if (auto partition_selector = local_context->getBGPartitionSelector())
+        {
+            for (const auto & [partition, count] : count_by_partition)
+                partition_selector->addInsertParts(uuid, partition, count, event_time);
         }
 
         return true;
@@ -131,6 +146,11 @@ bool ServerPartLog::addNewParts(const ContextPtr & local_context, ServerPartLogE
         tryLogCurrentException(server_part_log ? server_part_log->log : &Poco::Logger::get("ServerPartLog"), __PRETTY_FUNCTION__);
         return false;
     }
+}
+
+void ServerPartLog::prepareTable()
+{
+    SystemLog::prepareTable();
 }
 
 }

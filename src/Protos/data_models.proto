@@ -104,6 +104,7 @@ message DataModelPart
     optional bytes data_footer = 25;
     optional UUID part_id = 26; 
     repeated uint64 index_granularities = 30;
+    repeated string projections = 31; // record names of projections managed by the current part
 };
 
 message CnchHivePartInfo

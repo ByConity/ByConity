@@ -90,6 +90,7 @@ static std::unordered_map<IQueryPlanStep::Type, std::string> NODE_COLORS = {
     {IQueryPlanStep::Type::EnforceSingleRow, "bisque"},
     {IQueryPlanStep::Type::AssignUniqueId, "bisque"},
     {IQueryPlanStep::Type::CTERef, "orange"},
+    {IQueryPlanStep::Type::TopNFiltering, "fuchsia"},
 };
 
 struct PrinterContext
@@ -394,6 +395,15 @@ Void PlanNodePrinter::visitPartitionTopNNode(PartitionTopNNode & node, PrinterCo
     String color{NODE_COLORS[step.getType()]};
     String label{"PartitionTopNNode"};
     printNode(node, label, StepPrinter::printPartitionTopNStep(step), color, context);
+    return visitChildren(node, context);
+}
+
+Void PlanNodePrinter::visitTopNFilteringNode(TopNFilteringNode & node, PrinterContext & context)
+{
+    auto step = *node.getStep();
+    String color{NODE_COLORS[step.getType()]};
+    String label{"TopNFilteringNode"};
+    printNode(node, label, StepPrinter::printTopNFilteringStep(step), color, context);
     return visitChildren(node, context);
 }
 
@@ -787,6 +797,16 @@ Void PlanSegmentNodePrinter::visitPartitionTopNNode(QueryPlan::Node * node, Prin
     return visitChildren(node, context);
 }
 
+Void PlanSegmentNodePrinter::visitTopNFilteringNode(QueryPlan::Node * node, PrinterContext & context)
+{
+    auto & step_ptr = node->step;
+    auto & step = dynamic_cast<const TopNFilteringStep &>(*step_ptr);
+    String label{"TopNFilteringNode"};
+    String color{NODE_COLORS.at(step_ptr->getType())};
+    printNode(node, label, StepPrinter::printTopNFilteringStep(step), color, context);
+    return visitChildren(node, context);
+}
+
 void PlanSegmentNodePrinter::printNode(
     QueryPlan::Node * node, const String & label, const String & details, const String & color, PrinterContext & context)
 {
@@ -891,7 +911,7 @@ void cleanDotFiles(const ContextMutablePtr & context)
 }
 
 
-String StepPrinter::printProjectionStep(const ProjectionStep & step)
+String StepPrinter::printProjectionStep(const ProjectionStep & step, bool include_output)
 {
     std::stringstream details;
     bool has_new_symbol = false;
@@ -932,7 +952,7 @@ String StepPrinter::printProjectionStep(const ProjectionStep & step)
         details << project.first << ": " << sql << type << "\\n";
     }
 
-    if (has_new_symbol)
+    if (has_new_symbol && include_output)
     {
         details << "|";
         details << "Output \\n";
@@ -975,17 +995,22 @@ String StepPrinter::printProjectionStep(const ProjectionStep & step)
     }
     return details.str();
 }
-String StepPrinter::printFilterStep(const FilterStep & step)
+String StepPrinter::printFilterStep(const FilterStep & step, bool include_output)
 {
     std::stringstream details;
     details << printFilter(step.getFilter());
-    details << "|";
-    details << "Output \\n";
-    for (const auto & column : step.getOutputStream().header)
+
+    if (include_output)
     {
-        details << column.name << ":";
-        details << column.type->getName() << "\\n";
+        details << "|";
+        details << "Output \\n";
+        for (const auto & column : step.getOutputStream().header)
+        {
+            details << column.name << ":";
+            details << column.type->getName() << "\\n";
+        }
     }
+
     return details.str();
 }
 
@@ -1083,7 +1108,7 @@ String StepPrinter::printJoinStep(const JoinStep & step)
     return details.str();
 }
 
-String StepPrinter::printAggregatingStep(const AggregatingStep & step)
+String StepPrinter::printAggregatingStep(const AggregatingStep & step, bool include_output)
 {
     std::stringstream details;
     details << "GroupBy:\\n";
@@ -1154,13 +1179,17 @@ String StepPrinter::printAggregatingStep(const AggregatingStep & step)
         }
     }
 
-    details << "|";
-    details << "Output\\n";
-    for (const auto & column : step.getOutputStream().header)
+    if (include_output)
     {
-        details << column.name << ":";
-        details << column.type->getName() << "\\n";
+        details << "|";
+        details << "Output\\n";
+        for (const auto & column : step.getOutputStream().header)
+        {
+            details << column.name << ":";
+            details << column.type->getName() << "\\n";
+        }
     }
+
     if (step.isFinal())
         details << "|"
                 << "final";
@@ -1405,12 +1434,35 @@ String StepPrinter::printTableScanStep(const TableScanStep & step)
     //        details << assigment.second << ": " << assigment.first << "\\n";
     //    }
     //    details << "|";
+
+    if (auto * pushdown_filter = step.getPushdownFilterCast())
+    {
+        details << "Pushdown Filter |";
+        details << printFilterStep(*pushdown_filter, false);
+        details << "|";
+    }
+
+    if (auto * pushdown_projection = step.getPushdownProjectionCast())
+    {
+        details << "Pushdown Projection |";
+        details << printProjectionStep(*pushdown_projection, false);
+        details << "|";
+    }
+
+    if (auto * pushdown_aggregation = step.getPushdownAggregationCast())
+    {
+        details << "Pushdown Aggregation |";
+        details << printAggregatingStep(*pushdown_aggregation, false);
+        details << "|";
+    }
+
     details << "Output \\n";
     for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
         details << column.type->getName() << "\\n";
     }
+
     return details.str();
 }
 
@@ -1691,7 +1743,7 @@ String StepPrinter::printPartitionTopNStep(const PartitionTopNStep & step)
     }
     details << "|";
 
-    details << step.getModel();
+    details << static_cast<std::underlying_type_t<TopNModel>>(step.getModel());
     details << "|";
 
     details << "Limit: " << step.getLimit();
@@ -1715,6 +1767,12 @@ String StepPrinter::printWindowStep(const WindowStep & step)
     details << "Partition Key\\n";
     for (const auto & pk : window.partition_by)
         details << pk.column_name << "\\n";
+    details << "|";
+    details << "Full Sort desc \\n";
+    for (const auto & sort : window.full_sort_description)
+        details << sort.column_name << "\\n";
+    details << "|";
+    details << "Need Sort:" << step.needSort() << "\\n";
     details << "|";
     details << "Sort Key\\n";
     for (const auto & sk : window.order_by)
@@ -1766,6 +1824,29 @@ String StepPrinter::printFilter(const ConstASTPtr & filter)
     }
 
     return buf.str();
+}
+
+String StepPrinter::printTopNFilteringStep(const TopNFilteringStep & step)
+{
+    std::stringstream details;
+    details << "Order By:\\n";
+    auto & descs = step.getSortDescription();
+    for (auto & desc : descs)
+    {
+        details << desc.column_name << " " << desc.direction << " " << desc.nulls_direction << "\\n";
+    }
+    details << "|";
+    details << "Size: " << step.getSize();
+    /*
+    details << "|";
+    details << "Output |";
+    for (auto & column : stepPtr->getOutputStream().header)
+    {
+        details << column.name << ":";
+        details << column.type->getName() << "\\n";
+    }
+     */
+    return details.str();
 }
 
 Void PlanNodeEdgePrinter::visitCTERefNode(CTERefNode & node, Void & c)
@@ -2198,25 +2279,55 @@ void GraphvizPrinter::printPlanSegment(const PlanSegmentTreePtr & segment, const
     }
 }
 
-void GraphvizPrinter::printBlock(const String & stream, const Block & header, const Block & data)
+void GraphvizPrinter::printChunk(String transform, const Block & block, const Chunk & chunk)
 {
-    WriteBufferFromOwnString string;
-    //    FormatSettings settings;
-    //    CSVRowOutputStream csvRowOutputStream{string, header, true, settings};
-
-    std::cout << "====================" << stream << "========================" << std::endl;
-    for (auto & column : header)
+    std::cout << transform << ":";
+    for(const auto& column : block.getNames())
     {
-        std::cout << column.name << "|";
+        std::cout << column << ":";
     }
-
     std::cout << "\n";
-
-    for (size_t i = 0; i < data.rows(); ++i)
+    UInt64 rows = chunk.getNumRows();
+    Columns columns = chunk.getColumns();
+    for (UInt64 i = 0; i < rows; ++i)
     {
-        //        csvRowOutputStream.write(data, i);
+        for (auto & col : columns)
+        {
+            String col_name = col->getName();
+            if (col_name == "UInt64" || col_name == "UInt8")
+            {
+                auto col_value = col->getUInt(i);
+                std::cout << col_value << ":";
+            }
+            if (col_name == "Int64" || col_name == "Int8")
+            {
+                auto col_value = col->getInt(i);
+                std::cout << col_value << ":";
+            }
+            if (col_name == "Float64")
+            {
+                auto col_value = col->getFloat64(i);
+                std::cout << col_value << ":";
+            }
+            if (col_name == "Float32")
+            {
+                auto col_value = col->getFloat32(i);
+                std::cout << col_value << ":";
+            }
+            if (col_name == "String")
+            {
+                auto col_value = col->getDataAt(i);
+                std::cout << col_value.toString() << ":";
+            }
+            if (col_name == "Bool")
+            {
+                auto col_value = col->getBool(i);
+                std::cout << col_value << ":";
+            }
+        }
+        std::cout << "\n" << std::flush;
     }
-    std::cout << string.str();
+
     std::cout << "\n" << std::flush;
 }
 

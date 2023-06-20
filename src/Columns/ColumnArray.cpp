@@ -72,15 +72,17 @@ ColumnArray::ColumnArray(MutableColumnPtr && nested_column, MutableColumnPtr && 
     const ColumnOffsets * offsets_concrete = typeid_cast<const ColumnOffsets *>(offsets.get());
 
     if (!offsets_concrete)
-        throw Exception("offsets_column must be a ColumnUInt64", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "offsets_column must be a ColumnUInt64");
 
-    if (!offsets_concrete->empty() && nested_column)
+    if (!offsets_concrete->empty() && data && !data->empty())
     {
         Offset last_offset = offsets_concrete->getData().back();
 
         /// This will also prevent possible overflow in offset.
-        if (nested_column->size() != last_offset)
-            throw Exception("offsets_column has data inconsistent with nested_column", ErrorCodes::LOGICAL_ERROR);
+        if (data->size() != last_offset)
+            throw Exception(ErrorCodes::LOGICAL_ERROR,
+                "offsets_column has data inconsistent with nested_column. Data size: {}, last offset: {}",
+                data->size(), last_offset);
     }
 
     /** NOTE
@@ -406,31 +408,42 @@ bool ColumnArray::hasEqualValues() const
     return hasEqualValuesImpl<ColumnArray>();
 }
 
-namespace
+struct ColumnArray::ComparatorBase
 {
+    const ColumnArray & parent;
+    int nan_direction_hint;
 
-template <bool positive>
-struct Cmp
+    ComparatorBase(const ColumnArray & parent_, int nan_direction_hint_)
+        : parent(parent_), nan_direction_hint(nan_direction_hint_)
+    {
+    }
+
+    ALWAYS_INLINE int compare(size_t lhs, size_t rhs) const
+    {
+        int res = parent.compareAt(lhs, rhs, parent, nan_direction_hint);
+
+        return res;
+    }
+};
+
+struct ColumnArray::ComparatorCollationBase
 {
     const ColumnArray & parent;
     int nan_direction_hint;
     const Collator * collator;
 
-    Cmp(const ColumnArray & parent_, int nan_direction_hint_, const Collator * collator_=nullptr)
-        : parent(parent_), nan_direction_hint(nan_direction_hint_), collator(collator_) {}
-
-    int operator()(size_t lhs, size_t rhs) const
+    ComparatorCollationBase(const ColumnArray & parent_, int nan_direction_hint_, const Collator * collator_)
+        : parent(parent_), nan_direction_hint(nan_direction_hint_), collator(collator_)
     {
-        int res;
-        if (collator)
-            res = parent.compareAtWithCollation(lhs, rhs, parent, nan_direction_hint, *collator);
-        else
-            res = parent.compareAt(lhs, rhs, parent, nan_direction_hint);
-        return positive ? res : -res;
+    }
+
+    ALWAYS_INLINE int compare(size_t lhs, size_t rhs) const
+    {
+        int res = parent.compareAtWithCollation(lhs, rhs, parent, nan_direction_hint, *collator);
+
+        return res;
     }
 };
-
-}
 
 
 void ColumnArray::reserve(size_t n)
@@ -849,132 +862,88 @@ ColumnPtr ColumnArray::indexImpl(const PaddedPODArray<T> & indexes, size_t limit
 
 INSTANTIATE_INDEX_IMPL(ColumnArray)
 
-template <typename Comparator>
-void ColumnArray::getPermutationImpl(size_t limit, Permutation & res, Comparator cmp) const
+void ColumnArray::getPermutation(PermutationSortDirection direction, PermutationSortStability stability,
+                                size_t limit, int nan_direction_hint, Permutation & res) const
 {
-    size_t s = size();
-    if (limit >= s)
-        limit = 0;
-
-    res.resize(s);
-    for (size_t i = 0; i < s; ++i)
-        res[i] = i;
-
-    auto less = [&cmp](size_t lhs, size_t rhs){ return cmp(lhs, rhs) < 0; };
-
-    if (limit)
-        partial_sort(res.begin(), res.begin() + limit, res.end(), less);
-    else
-        std::sort(res.begin(), res.end(), less);
+    if (direction == IColumn::PermutationSortDirection::Ascending && stability == IColumn::PermutationSortStability::Unstable)
+        getPermutationImpl(limit, res, ComparatorAscendingUnstable(*this, nan_direction_hint), DefaultSort(), DefaultPartialSort());
+    else if (direction == IColumn::PermutationSortDirection::Ascending && stability == IColumn::PermutationSortStability::Stable)
+        getPermutationImpl(limit, res, ComparatorAscendingStable(*this, nan_direction_hint), DefaultSort(), DefaultPartialSort());
+    else if (direction == IColumn::PermutationSortDirection::Descending && stability == IColumn::PermutationSortStability::Unstable)
+        getPermutationImpl(limit, res, ComparatorDescendingUnstable(*this, nan_direction_hint), DefaultSort(), DefaultPartialSort());
+    else if (direction == IColumn::PermutationSortDirection::Descending && stability == IColumn::PermutationSortStability::Stable)
+        getPermutationImpl(limit, res, ComparatorDescendingStable(*this, nan_direction_hint), DefaultSort(), DefaultPartialSort());
 }
 
-template <typename Comparator>
-void ColumnArray::updatePermutationImpl(size_t limit, Permutation & res, EqualRanges & equal_range, Comparator cmp) const
+void ColumnArray::updatePermutation(PermutationSortDirection direction, PermutationSortStability stability,
+                                size_t limit, int nan_direction_hint, Permutation & res, EqualRanges & equal_ranges) const
 {
-    if (equal_range.empty())
-        return;
+    auto comparator_equal = ComparatorEqual(*this, nan_direction_hint);
 
-    if (limit >= size() || limit >= equal_range.back().second)
-        limit = 0;
-
-    size_t number_of_ranges = equal_range.size();
-
-    if (limit)
-        --number_of_ranges;
-
-    auto less = [&cmp](size_t lhs, size_t rhs){ return cmp(lhs, rhs) < 0; };
-
-    EqualRanges new_ranges;
-    for (size_t i = 0; i < number_of_ranges; ++i)
-    {
-        const auto & [first, last] = equal_range[i];
-
-        std::sort(res.begin() + first, res.begin() + last, less);
-        auto new_first = first;
-
-        for (auto j = first + 1; j < last; ++j)
-        {
-            if (cmp(res[new_first], res[j]) != 0)
-            {
-                if (j - new_first > 1)
-                    new_ranges.emplace_back(new_first, j);
-
-                new_first = j;
-            }
-        }
-
-        if (last - new_first > 1)
-            new_ranges.emplace_back(new_first, last);
-    }
-
-    if (limit)
-    {
-        const auto & [first, last] = equal_range.back();
-
-        if (limit < first || limit > last)
-            return;
-
-        /// Since then we are working inside the interval.
-        partial_sort(res.begin() + first, res.begin() + limit, res.begin() + last, less);
-        auto new_first = first;
-        for (auto j = first + 1; j < limit; ++j)
-        {
-            if (cmp(res[new_first], res[j]) != 0)
-            {
-                if (j - new_first > 1)
-                    new_ranges.emplace_back(new_first, j);
-
-                new_first = j;
-            }
-        }
-        auto new_last = limit;
-        for (auto j = limit; j < last; ++j)
-        {
-            if (cmp(res[new_first], res[j]) == 0)
-            {
-                std::swap(res[new_last], res[j]);
-                ++new_last;
-            }
-        }
-        if (new_last - new_first > 1)
-        {
-            new_ranges.emplace_back(new_first, new_last);
-        }
-    }
-    equal_range = std::move(new_ranges);
+    if (direction == IColumn::PermutationSortDirection::Ascending && stability == IColumn::PermutationSortStability::Unstable)
+        updatePermutationImpl(limit, res, equal_ranges, ComparatorAscendingUnstable(*this, nan_direction_hint), comparator_equal, DefaultSort(), DefaultPartialSort());
+    else if (direction == IColumn::PermutationSortDirection::Ascending && stability == IColumn::PermutationSortStability::Stable)
+        updatePermutationImpl(limit, res, equal_ranges, ComparatorAscendingStable(*this, nan_direction_hint), comparator_equal, DefaultSort(), DefaultPartialSort());
+    else if (direction == IColumn::PermutationSortDirection::Descending && stability == IColumn::PermutationSortStability::Unstable)
+        updatePermutationImpl(limit, res, equal_ranges, ComparatorDescendingUnstable(*this, nan_direction_hint), comparator_equal, DefaultSort(), DefaultPartialSort());
+    else if (direction == IColumn::PermutationSortDirection::Descending && stability == IColumn::PermutationSortStability::Stable)
+        updatePermutationImpl(limit, res, equal_ranges, ComparatorDescendingStable(*this, nan_direction_hint), comparator_equal, DefaultSort(), DefaultPartialSort());
 }
 
-void ColumnArray::getPermutation(bool reverse, size_t limit, int nan_direction_hint, Permutation & res) const
+void ColumnArray::getPermutationWithCollation(const Collator & collator, PermutationSortDirection direction, PermutationSortStability stability,
+                                            size_t limit, int nan_direction_hint, Permutation & res) const
 {
-    if (reverse)
-        getPermutationImpl(limit, res, Cmp<false>(*this, nan_direction_hint));
-    else
-        getPermutationImpl(limit, res, Cmp<true>(*this, nan_direction_hint));
-
+    if (direction == IColumn::PermutationSortDirection::Ascending && stability == IColumn::PermutationSortStability::Unstable)
+        getPermutationImpl(limit, res, ComparatorCollationAscendingUnstable(*this, nan_direction_hint, &collator), DefaultSort(), DefaultPartialSort());
+    else if (direction == IColumn::PermutationSortDirection::Ascending && stability == IColumn::PermutationSortStability::Stable)
+        getPermutationImpl(limit, res, ComparatorCollationAscendingStable(*this, nan_direction_hint, &collator), DefaultSort(), DefaultPartialSort());
+    else if (direction == IColumn::PermutationSortDirection::Descending && stability == IColumn::PermutationSortStability::Unstable)
+        getPermutationImpl(limit, res, ComparatorCollationDescendingUnstable(*this, nan_direction_hint, &collator), DefaultSort(), DefaultPartialSort());
+    else if (direction == IColumn::PermutationSortDirection::Descending && stability == IColumn::PermutationSortStability::Stable)
+        getPermutationImpl(limit, res, ComparatorCollationDescendingStable(*this, nan_direction_hint, &collator), DefaultSort(), DefaultPartialSort());
 }
 
-void ColumnArray::updatePermutation(bool reverse, size_t limit, int nan_direction_hint, Permutation & res, EqualRanges & equal_range) const
+void ColumnArray::updatePermutationWithCollation(const Collator & collator, PermutationSortDirection direction, PermutationSortStability stability,
+                                            size_t limit, int nan_direction_hint, Permutation & res, EqualRanges & equal_ranges) const
 {
-    if (reverse)
-        updatePermutationImpl(limit, res, equal_range, Cmp<false>(*this, nan_direction_hint));
-    else
-        updatePermutationImpl(limit, res, equal_range, Cmp<true>(*this, nan_direction_hint));
-}
+    auto comparator_equal = ComparatorCollationEqual(*this, nan_direction_hint, &collator);
 
-void ColumnArray::getPermutationWithCollation(const Collator & collator, bool reverse, size_t limit, int nan_direction_hint, Permutation & res) const
-{
-    if (reverse)
-        getPermutationImpl(limit, res, Cmp<false>(*this, nan_direction_hint, &collator));
-    else
-        getPermutationImpl(limit, res, Cmp<true>(*this, nan_direction_hint, &collator));
-}
-
-void ColumnArray::updatePermutationWithCollation(const Collator & collator, bool reverse, size_t limit, int nan_direction_hint, Permutation & res, EqualRanges & equal_range) const
-{
-    if (reverse)
-        updatePermutationImpl(limit, res, equal_range, Cmp<false>(*this, nan_direction_hint, &collator));
-    else
-        updatePermutationImpl(limit, res, equal_range, Cmp<true>(*this, nan_direction_hint, &collator));
+    if (direction == IColumn::PermutationSortDirection::Ascending && stability == IColumn::PermutationSortStability::Unstable)
+        updatePermutationImpl(
+            limit,
+            res,
+            equal_ranges,
+            ComparatorCollationAscendingUnstable(*this, nan_direction_hint, &collator),
+            comparator_equal,
+            DefaultSort(),
+            DefaultPartialSort());
+    else if (direction == IColumn::PermutationSortDirection::Ascending && stability == IColumn::PermutationSortStability::Stable)
+        updatePermutationImpl(
+            limit,
+            res,
+            equal_ranges,
+            ComparatorCollationAscendingStable(*this, nan_direction_hint, &collator),
+            comparator_equal,
+            DefaultSort(),
+            DefaultPartialSort());
+    else if (direction == IColumn::PermutationSortDirection::Descending && stability == IColumn::PermutationSortStability::Unstable)
+        updatePermutationImpl(
+            limit,
+            res,
+            equal_ranges,
+            ComparatorCollationDescendingUnstable(*this, nan_direction_hint, &collator),
+            comparator_equal,
+            DefaultSort(),
+            DefaultPartialSort());
+    else if (direction == IColumn::PermutationSortDirection::Descending && stability == IColumn::PermutationSortStability::Stable)
+        updatePermutationImpl(
+            limit,
+            res,
+            equal_ranges,
+            ComparatorCollationDescendingStable(*this, nan_direction_hint, &collator),
+            comparator_equal,
+            DefaultSort(),
+            DefaultPartialSort());
 }
 
 ColumnPtr ColumnArray::compress() const

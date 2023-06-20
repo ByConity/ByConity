@@ -4,9 +4,11 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. 121331 rows
       │     Order by: {cd_gender asc, cd_marital_status asc, cd_education_status asc, cd_purchase_estimate asc, cd_credit_rating asc, cd_dep_count asc, cd_dep_employed_count asc, cd_dep_college_count asc}
+      │     Limit: 100
       └─ Gather Exchange est. 121331 rows
          └─ Sorting est. 121331 rows
             │     Order by: {cd_gender asc, cd_marital_status asc, cd_education_status asc, cd_purchase_estimate asc, cd_credit_rating asc, cd_dep_count asc, cd_dep_employed_count asc, cd_dep_college_count asc}
+            │     Limit: 100
             └─ MergingAggregated est. 121331 rows
                └─ Repartition Exchange est. 121331 rows
                   │     Partition by: {cd_credit_rating, cd_dep_college_count, cd_dep_count, cd_dep_employed_count, cd_education_status, cd_gender, cd_marital_status, cd_purchase_estimate}

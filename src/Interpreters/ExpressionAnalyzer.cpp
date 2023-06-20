@@ -311,6 +311,7 @@ void ExpressionAnalyzer::analyzeAggregation()
 
                             ssize_t group_size = group_elements_ast.size();
                             const auto & column_name = group_elements_ast[j]->getColumnName();
+                            const auto & column_ast = group_elements_ast[j];
                             const auto * node = temp_actions->tryFindInIndex(column_name);
                             if (!node)
                                 throw Exception("Unknown identifier (in GROUP BY): " + column_name, ErrorCodes::UNKNOWN_IDENTIFIER);
@@ -350,6 +351,7 @@ void ExpressionAnalyzer::analyzeAggregation()
                                 unique_keys[key.name] = aggregation_keys.size();
                                 grouping_set_indexes_list.push_back(aggregation_keys.size());
                                 aggregation_keys.push_back(key);
+                                aggregation_key_asts.push_back(column_ast);
 
                                 /// Key is no longer needed, therefore we can save a little by moving it.
                                 aggregated_columns.push_back(std::move(key));
@@ -371,6 +373,7 @@ void ExpressionAnalyzer::analyzeAggregation()
                         getRootActionsNoMakeSet(group_asts[i], true, temp_actions, false);
 
                         const auto & column_name = group_asts[i]->getColumnName();
+                        const auto & column_ast = group_asts[i];
                         const auto * node = temp_actions->tryFindInIndex(column_name);
                         if (!node)
                             throw Exception("Unknown identifier (in GROUP BY): " + column_name, ErrorCodes::UNKNOWN_IDENTIFIER);
@@ -402,7 +405,7 @@ void ExpressionAnalyzer::analyzeAggregation()
                         {
                             unique_keys[key.name] = aggregation_keys.size();
                             aggregation_keys.push_back(key);
-
+                            aggregation_key_asts.push_back(column_ast);
                             /// Key is no longer needed, therefore we can save a little by moving it.
                             aggregated_columns.push_back(std::move(key));
                         }
@@ -946,6 +949,34 @@ void ExpressionAnalyzer::makeWindowDescriptions(ActionsDAGPtr actions)
                     function_node->formatForErrorMessage());
             }
 
+            // a default window definition is allocated for lead and lag
+            if (function_node->window_definition)
+            {
+                const struct WindowFrame def =
+                {
+                    .is_default = false,
+                    .type = WindowFrame::FrameType::Rows,
+                    .end_type = WindowFrame::BoundaryType::Unbounded,
+                };
+
+                if (it->second.frame != def)
+                {
+                    WindowDescription desc = it->second;
+                    desc.window_name = desc.window_name + "(ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)";
+                    desc.window_functions.clear();
+                    desc.frame = def;
+
+                    auto [iter, inserted] = window_descriptions.insert(
+                        {desc.window_name, desc});
+                    if (!inserted)
+                    {
+                        chassert(iter->second.full_sort_description
+                            == desc.full_sort_description);
+                    }
+                    it = iter;
+                }
+            }
+
             it->second.window_functions.push_back(window_function);
         }
         else
@@ -1144,7 +1175,7 @@ JoinPtr SelectQueryExpressionAnalyzer::makeTableJoin(
             * - this function shows the expression JOIN _data1.
             */
         auto interpreter = interpretSubquery(
-            join_element.table_expression, getContext(), original_right_columns, query_options.copy().setWithAllColumns());
+            join_element.table_expression, getContext(), original_right_columns, query_options.copy().setWithAllColumns().ignoreProjections(false).ignoreAlias(false));
         {
             joined_plan = std::make_unique<QueryPlan>();
             interpreter->buildQueryPlan(*joined_plan);

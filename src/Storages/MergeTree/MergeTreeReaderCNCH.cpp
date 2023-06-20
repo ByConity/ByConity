@@ -80,6 +80,8 @@ MergeTreeReaderCNCH::MergeTreeReaderCNCH(
     : IMergeTreeReader(
         data_part_, columns_, metadata_snapshot_, uncompressed_cache_,
         mark_cache_, mark_ranges_, settings_, avg_value_size_hints_)
+    , segment_cache_strategy(nullptr)
+    , segment_cache(nullptr)
     , log(&Poco::Logger::get("MergeTreeReaderCNCH(" + data_part_->get_name() + ")"))
 
 {
@@ -379,7 +381,8 @@ void MergeTreeReaderCNCH::addStreamsIfNoBurden(
         if (!data_file_exists)
             return;
 
-        IMergeTreeDataPartPtr source_data_part = data_part->getMvccDataPart(stream_name + DATA_FILE_EXTENSION);
+        // no need to do mvcc when read column in projection part
+        IMergeTreeDataPartPtr source_data_part = data_part->isProjectionPart() ? data_part : data_part->getMvccDataPart(stream_name + DATA_FILE_EXTENSION);
         String mark_file_name = source_data_part->index_granularity_info.getMarksFilePath(stream_name);
 
         /// data file
@@ -391,6 +394,7 @@ void MergeTreeReaderCNCH::addStreamsIfNoBurden(
         String mark_path = source_data_part->getFullRelativePath() + "data";
         off_t mark_file_offset = source_data_part->getFileOffsetOrZero(mark_file_name);
         size_t mark_file_size = source_data_part->getFileSizeOrZero(mark_file_name);
+
 
         if (segment_cache_strategy)
         {
@@ -410,7 +414,7 @@ void MergeTreeReaderCNCH::addStreamsIfNoBurden(
         std::function<MergeTreeReaderStreamUniquePtr()> stream_builder = [=, this]() {
             return std::make_unique<MergeTreeReaderStreamWithSegmentCache>(
                 source_data_part->storage.getStorageID(),
-                source_data_part->get_name(),
+                source_data_part->getUniquePartName(),
                 stream_name,
                 source_data_part->volume->getDisk(),
                 source_data_part->getMarksCount(),
@@ -426,8 +430,7 @@ void MergeTreeReaderCNCH::addStreamsIfNoBurden(
         };
 
         // Check if mark is present
-        auto mark_cache_key = mark_cache->hash(fullPath(source_data_part->volume->getDisk(), mark_path) + ":" + stream_name);
-
+        auto mark_cache_key = mark_cache->hash(mark_path + source_data_part->getUniquePartName() + source_data_part->index_granularity_info.getMarksFilePath(stream_name));
         if (mark_cache->get(mark_cache_key))
         {
             ProfileEvents::increment(ProfileEvents::CnchAddStreamsSequentialTasks);

@@ -78,6 +78,12 @@ public:
     ASTPtr clone() const override;
 
     void formatImpl(const FormatSettings & s, FormatState & state, FormatStateStacked frame) const override;
+
+    bool empty() const
+    {
+        return (!columns || columns->children.empty()) && (!indices || indices->children.empty()) && (!constraints || constraints->children.empty())
+            && (!projections || projections->children.empty());
+    }
 };
 
 
@@ -107,6 +113,7 @@ public:
     String as_table;
     ASTPtr as_table_function;
     ASTSelectWithUnionQuery * select = nullptr;
+    IAST * comment = nullptr;
 
     bool is_dictionary{false}; /// CREATE DICTIONARY
     ASTExpressionList * dictionary_attributes_list = nullptr; /// attributes of

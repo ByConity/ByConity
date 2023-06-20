@@ -669,4 +669,18 @@ PlanNodePtr ColumnPruningVisitor::visitCTERefNode(CTERefNode & node, NameSet & r
         = std::make_shared<CTERefStep>(DataStream{std::move(result_columns)}, with_step->getId(), std::move(output_columns), with_step->getFilter());
     return CTERefNode::createPlanNode(context->nextNodeId(), std::move(exchange_step), {}, node.getStatistics());
 }
+
+PlanNodePtr ColumnPruningVisitor::visitTopNFilteringNode(TopNFilteringNode & node, NameSet & require)
+{
+    auto & step_ptr = node.getStep();
+    auto step = dynamic_cast<const TopNFilteringStep *>(step_ptr.get());
+    for (const auto & item : step->getSortDescription())
+    {
+        require.insert(item.column_name);
+    }
+    auto child = VisitorUtil::accept(*node.getChildren()[0], *this, require);
+    auto topn_filter_step = std::make_shared<TopNFilteringStep>(child->getStep()->getOutputStream(), step->getSortDescription(), step->getSize(), step->getModel());
+    return TopNFilteringNode::createPlanNode(context->nextNodeId(), std::move(topn_filter_step), PlanNodes{child}, node.getStatistics());
+}
+
 }

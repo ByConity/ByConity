@@ -42,9 +42,29 @@
 #include <common/logger_useful.h>
 #include "Core/SettingsEnums.h"
 #include <DataStreams/IBlockInputStream.h>
+#include <Common/StringUtils/StringUtils.h>
 
 namespace DB
 {
+bool hasNonParallelAggregateFunctions(const AggregateDescriptions & aggregates)
+{
+    for (const auto & agg: aggregates)
+    {
+        auto agg_name = agg.function->getName();
+        if (startsWith(agg_name, "finderFunnel") ||
+            startsWith(agg_name, "finderGroupFunnel") ||
+            startsWith(agg_name, "pathSplit") ||
+            startsWith(agg_name, "pathCount") ||
+            startsWith(agg_name, "retention") ||
+            startsWith(agg_name, "attributionAnalysis") ||
+            startsWith(agg_name, "attributionCorrelation") ||
+            agg_name == "sessionAnalysis" ||
+            agg_name == "vSessionAnalysis")
+            return true;
+    }
+
+    return false;
+}
 
 static ITransformingStep::Traits getTraits(bool should_produce_results_in_order_of_bucket_number)
 {
@@ -280,6 +300,11 @@ void AggregatingStep::transformPipeline(QueryPipeline & pipeline, const BuildQue
 {
     QueryPipelineProcessorsCollector collector(pipeline, this);
     const auto & settings = build_settings.context->getSettingsRef();
+
+    if (isFinal() && hasNonParallelAggregateFunctions(params.aggregates))
+    {
+        pipeline.resize(1);
+    }
 
     auto merge_max_threads = merge_threads == 0 ? settings.max_threads : merge_threads;
     max_block_size = max_block_size == 0 ? settings.max_block_size : max_block_size;

@@ -183,6 +183,7 @@ class IColumn;
     M(UInt64, merge_tree_coarse_index_granularity, 8, "If the index segment can contain the required keys, divide it into as many parts and recursively check them.", 0) \
     M(UInt64, merge_tree_max_rows_to_use_cache, (128 * 8192), "The maximum number of rows per request, to use the cache of uncompressed data. If the request is large, the cache is not used. (For large queries not to flush out the cache.)", 0) \
     M(UInt64, merge_tree_max_bytes_to_use_cache, (192 * 10 * 1024 * 1024), "The maximum number of bytes per request, to use the cache of uncompressed data. If the request is large, the cache is not used. (For large queries not to flush out the cache.)", 0) \
+    M(UInt64, merge_tree_calculate_columns_size_sample, 1000, "The number of the sample parts to calculate columns size.", 0) \
     M(Bool, do_not_merge_across_partitions_select_final, false, "Merge parts only in one partition in select final", 0) \
     \
     M(UInt64, mysql_max_rows_to_insert, 65536, "The maximum number of rows in MySQL batch insertion of the MySQL storage engine", 0) \
@@ -575,6 +576,7 @@ class IColumn;
     M(Bool, decimal_division_use_extended_scale, false, "If enabled, the result scale of decimal division is determined by: max(6, S1)", 0) \
     M(Bool, decimal_arithmetic_promote_storage, false, "Promote storage for some cases of decimal arithmetic operation(e.g. Decimal32 * Decimal32 -> Decimal64)", 0) \
     M(Bool, allow_extended_type_conversion, false, "When enabled, implicit type conversion is allowed for more input types(e.g. UInt64 & Ints, Decimal & Float, Float & Int64)", 0) \
+    M(Bool, allow_multi_if_const_optimize, true, "Whether to optimize multiIf function for const case", 0)  \
     \
     /** settings in cnch **/ \
     M(UInt64, cnch_data_retention_time_in_sec, 3*24*60*60, "Waiting time when dropped table or database is actually removed.", 0) \
@@ -654,6 +656,9 @@ class IColumn;
     M(Float, statistics_sample_ratio, 0.1, "Ratio for sampling", 0) \
     M(StatisticsAccurateSampleNdvMode, statistics_accurate_sample_ndv, StatisticsAccurateSampleNdvMode::AUTO, "Mode of accurate sample ndv to estimate full ndv", 0) \
     M(UInt64, statistics_batch_max_columns, 30, "Max column size in a batch when collecting stats", 0) \
+    M(Bool, statistics_simplify_histogram, false, "Reduce buckets of histogram with simplifying", 0) \
+    M(Float, statistics_simplify_histogram_ndv_density_threshold, 0.2, "Histogram simplifying threshold for ndv", 0) \
+    M(Float, statistics_simplify_histogram_range_density_threshold, 0.2, "Histogram simplifying threshold for range", 0) \
     M(Float, cost_calculator_table_scan_weight, 1, "Table scan cost weight for cost calculator", 0) \
     M(Float, cost_calculator_aggregating_weight, 7, "Aggregate output weight for cost calculator", 0) \
     M(Float, cost_calculator_join_probe_weight, 0.5, "Join probe side weight for cost calculator", 0) \
@@ -712,6 +717,8 @@ class IColumn;
     M(Bool, enable_materialized_view_join_rewriting, false, "Whether enable materialized view based rewriter for query using join materialized views", 0) \
     M(Bool, enable_sharding_optimize, false, "Whether enable sharding optimization, eg. local join", 0) \
     M(Bool, enable_filter_window_to_partition_topn, true, "Filter window to partition topn", 0) \
+    M(Bool, optimizer_projection_support, false, "Use projection in optimizer mode", 0) \
+    M(Bool, enable_topn_filtering_optimization, false, "Whether enable TopNFilterting optimization", 0) \
     /** Exchange setttings */ \
     M(UInt64, exchange_parallel_size, 1, "Exchange parallel size", 0) \
     M(UInt64, exchange_source_pipeline_threads, 16, "Recommend number of threads for pipeline which reading data from exchange, ingoned if exchange need keep data order", 0) \
@@ -845,6 +852,7 @@ class IColumn;
     M(Bool, enable_low_cardinality_merge_new_algo, true, "Whether use the new merge algorithm during part merge for low cardinality column", 0) \
     M(UInt64, low_cardinality_distinct_threshold, 100000, "Threshold for fallback to native column from low cardinality column, 0 disable", 0) \
     \
+    M(Bool, enable_sql_forwarding, true, "Allow auto query forwarding to target host server.", 1)  \
     M(UInt64, cnch_part_attach_limit, 3000, "Maximum number of part for ATTACH PARTITION/PARTS command", 0)\
     M(UInt64, cnch_part_attach_drill_down, 1, "Maximum levels of path to find cnch data parts, 0 means no drill down", 0) \
     M(UInt64, cnch_part_attach_assert_parts_count, 0, "Assert total number of parts to attach.", 0) \

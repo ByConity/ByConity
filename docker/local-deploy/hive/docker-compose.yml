@@ -23,8 +23,7 @@ services:
     environment:
       SERVICE_PRECONDITION: "namenode:50070"
     container_name: datanode
-    expose:
-      - "50075"
+
 
   hive-server:
     image: bde2020/hive:2.3.2-postgresql-metastore

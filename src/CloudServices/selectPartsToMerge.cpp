@@ -58,7 +58,11 @@ ServerSelectPartsDecision selectPartsToMerge(
     // split parts into buckets if current table is bucket table.
     std::unordered_map<Int64, ServerDataPartsVector> buckets;
     if (data.isBucketTable())
+    {
+        /// Do aggressive merge for bucket table. (try to merge all parts in the bucket to 1 part)
+        aggressive = true;
         groupPartsByBucketNumber(data, buckets, data_parts);
+    }
     else
         buckets.emplace(0, data_parts);
 
@@ -191,7 +195,7 @@ ServerSelectPartsDecision selectPartsToMerge(
 
     std::unique_ptr<IMergeSelector> merge_selector;
     const auto & config = data.getContext()->getConfigRef();
-    auto merge_selector_str = config.getString("merge_selector", "simple");
+    auto merge_selector_str = config.getString("merge_selector", "dance");
     if (merge_selector_str == "dance")
     {
         DanceMergeSelector::Settings merge_settings;

@@ -285,6 +285,12 @@ PlanNodeStatisticsPtr CardinalityVisitor::visitAssignUniqueIdStep(const AssignUn
     return stats;
 }
 
+PlanNodeStatisticsPtr CardinalityVisitor::visitTopNFilteringStep(const TopNFilteringStep &, CardinalityContext & context)
+{
+    // TODO
+    PlanNodeStatisticsPtr child_stats = context.children_stats[0];
+    return child_stats;
+}
 
 PlanNodeStatisticsPtr PlanCardinalityVisitor::visitPlanNode(PlanNodeBase & node, CardinalityContext & context)
 {

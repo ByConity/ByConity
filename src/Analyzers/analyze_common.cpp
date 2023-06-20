@@ -43,7 +43,6 @@ bool isNormalInnerJoin(const ASTTableJoin & join)
 {
     return join.kind == ASTTableJoin::Kind::Inner && (
                join.strictness == ASTTableJoin::Strictness::All ||
-               join.strictness == ASTTableJoin::Strictness::Any ||
                join.strictness == ASTTableJoin::Strictness::Unspecified
            );
 }

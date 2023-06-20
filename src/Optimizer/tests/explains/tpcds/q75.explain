@@ -4,9 +4,11 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. 17044060824 rows
       │     Order by: {expr#minus(curr_yr.sales_cnt, prev_yr.sales_cnt) asc, expr#minus(curr_yr.sales_amt, prev_yr.sales_amt) asc}
+      │     Limit: 100
       └─ Gather Exchange est. 17044060824 rows
          └─ Sorting est. 17044060824 rows
             │     Order by: {expr#minus(curr_yr.sales_cnt, prev_yr.sales_cnt) asc, expr#minus(curr_yr.sales_amt, prev_yr.sales_amt) asc}
+            │     Limit: 100
             └─ Projection est. 17044060824 rows
                │     Expressions: [d_year_3, d_year_7, expr#sum(sales_cnt), expr#sum(sales_cnt)_1, i_brand_id_3, i_category_id_3, i_class_id_3, i_manufact_id_3], expr#minus(curr_yr.sales_amt, prev_yr.sales_amt):=`expr#sum(sales_amt)` - `expr#sum(sales_amt)_1`, expr#minus(curr_yr.sales_cnt, prev_yr.sales_cnt):=`expr#sum(sales_cnt)` - `expr#sum(sales_cnt)_1`
                └─ Inner Join est. 17044060824 rows

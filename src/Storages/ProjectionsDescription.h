@@ -53,6 +53,9 @@ struct ProjectionDescription
     /// Data types of projection columns
     DataTypes data_types;
 
+    /// origin asts of projection columns
+    ASTs column_asts;
+
     /// Sample block with projection columns. (NOTE: columns in block are empty, but not nullptr)
     Block sample_block;
 
@@ -86,6 +89,8 @@ struct ProjectionDescription
 
     bool isPrimaryKeyColumnPossiblyWrappedInFunctions(const ASTPtr & node) const;
 };
+
+using ProjectionDescriptionRawPtr = const ProjectionDescription *;
 
 /// All projections in storage
 struct ProjectionsDescription

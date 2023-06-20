@@ -378,6 +378,8 @@ size_t ConstantExpressionTemplate::TemplateStructure::getTemplateHash(const ASTP
 
     for (const auto & info : replaced_literals)
         hash_state.update(info.type->getName());
+    // checked update implementation, no apparent out of bounds
+    // coverity[overrun-buffer-val];
     hash_state.update(null_as_default);
 
     /// Allows distinguish expression in the last column in Values format

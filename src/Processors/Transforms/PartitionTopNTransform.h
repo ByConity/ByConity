@@ -19,6 +19,8 @@
 #include <Processors/IProcessor.h>
 #include <Core/ColumnNumbers.h>
 #include <Common/AlignedBuffer.h>
+#include <QueryPlan/TopNModel.h>
+
 #include <deque>
 #include <queue>
 #include <type_traits>
@@ -26,16 +28,9 @@
 namespace DB
 {
 
-enum PartitionTopNModel
-{
-    RowNumber       = 0,
-    RANKER          = 1,
-    DENSE_RANK      = 2
-};
-
 struct PartitionTopNTransform : IProcessor
 {
-    PartitionTopNTransform(Block header, size_t topN, ColumnNumbers partition_by_column_, ColumnNumbers order_by_columns_, PartitionTopNModel model, bool reverse = false);
+    PartitionTopNTransform(Block header, size_t topN, ColumnNumbers partition_by_column_, ColumnNumbers order_by_columns_, TopNModel model, bool reverse = false);
     String getName() const override { return "PartitionTopNTransform"; }
 
     Status prepare() override;
@@ -64,7 +59,7 @@ private:
         }
     };
 
-    PartitionTopNModel model;
+    TopNModel model;
 
     size_t topN;
     ColumnNumbers partition_by_columns;

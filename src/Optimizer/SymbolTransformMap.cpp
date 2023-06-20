@@ -19,6 +19,7 @@
 #include <Optimizer/Utils.h>
 #include <Parsers/ASTTableColumnReference.h>
 #include <QueryPlan/PlanVisitor.h>
+#include <Interpreters/InDepthNodeVisitor.h>
 
 namespace DB
 {
@@ -67,7 +68,7 @@ public:
         const auto * table_step = dynamic_cast<const TableScanStep *>(node.getStep().get());
         for (const auto & item : table_step->getColumnAlias())
         {
-            auto column_reference = std::make_shared<ASTTableColumnReference>(table_step->getStorage(), item.first);
+            auto column_reference = std::make_shared<ASTTableColumnReference>(table_step->getStorage().get(), item.first);
             addSymbolExpressionMapping(item.second, column_reference);
         }
         return Void{};
@@ -116,7 +117,7 @@ public:
             throw Exception("Unknown column " + name + " in SymbolTransformMap", ErrorCodes::LOGICAL_ERROR);
         ASTPtr rewrite = ASTVisitorUtil::accept(symbol_to_expressions.at(name)->clone(), *this, context);
         expression_lineage[name] = rewrite;
-        return rewrite;
+        return rewrite->clone();
     }
 
 private:
@@ -140,5 +141,41 @@ ASTPtr SymbolTransformMap::inlineReferences(const ConstASTPtr & expression) cons
     Rewriter rewriter{symbol_to_expressions, expression_lineage};
     Void context;
     return ASTVisitorUtil::accept(expression->clone(), rewriter, context);
+}
+
+namespace
+{
+    struct RewriteIdentifier
+    {
+        using TypeToVisit = ASTIdentifier;
+
+        void visit(ASTIdentifier & identifier, ASTPtr & ast)
+        {
+            ast = std::make_shared<ASTTableColumnReference>(storage, identifier.name());
+        }
+
+        const IStorage * storage;
+    };
+
+    using RewriteIdentifierMatcher = OneTypeMatcher<RewriteIdentifier>;
+    using RewriteIdentifierVisitor = InDepthNodeVisitor<RewriteIdentifierMatcher, true>;
+}
+
+void SymbolTranslationMap::addTranslation(ASTPtr ast, String name)
+{
+    RewriteIdentifier data {storage};
+    RewriteIdentifierVisitor visitor(data);
+    visitor.visit(ast);
+    translation.emplace(ast, std::move(name));
+}
+
+std::optional<String> SymbolTranslationMap::tryGetTranslation(const ASTPtr & expr) const
+{
+    std::optional<String> result = std::nullopt;
+
+    if (auto iter = translation.find(expr); iter != translation.end())
+        result = iter->second;
+
+    return result;
 }
 }

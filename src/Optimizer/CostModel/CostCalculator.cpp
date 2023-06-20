@@ -27,6 +27,18 @@
 
 namespace DB
 {
+
+PlanNodeCost CostCalculator::calculatePlanCost(QueryPlan & plan, const Context & context)
+{
+    PlanCostMap plan_cost_map;
+    if (!plan.getPlanNode()->getStatistics())
+        return {};
+    size_t worker_size = WorkerSizeFinder::find(plan, context);
+    auto cte_ref_counts = plan.getCTEInfo().collectCTEReferenceCounts(plan.getPlanNode());
+    PlanCostVisitor visitor{CostModel{context}, worker_size, plan.getCTEInfo(), cte_ref_counts};
+    return VisitorUtil::accept(plan.getPlanNode(), visitor, plan_cost_map).cost;
+}
+
 PlanCostMap CostCalculator::calculate(QueryPlan & plan, const Context & context)
 {
     PlanCostMap plan_cost_map;
@@ -187,9 +199,14 @@ PlanNodeCost CostVisitor::visitCTERefStep(const CTERefStep & step, CostContext &
     return CTECost::calculate(step, context);
 }
 
+PlanNodeCost CostVisitor::visitTopNFilteringStep(const TopNFilteringStep & step, CostContext & context)
+{
+    return visitStep(step, context);
+}
+
 CostWithCTEReferenceCounts PlanCostVisitor::visitPlanNode(PlanNodeBase & node, PlanCostMap & plan_cost_map)
 {
-    double cost = 0;
+    PlanNodeCost cost;
     std::unordered_map<CTEId, UInt64> cte_reference_counts;
     std::vector<PlanNodeStatisticsPtr> children_stats;
     for (auto & child : node.getChildren())
@@ -220,8 +237,8 @@ CostWithCTEReferenceCounts PlanCostVisitor::visitPlanNode(PlanNodeBase & node, P
     static CostVisitor visitor;
     CostContext cost_context{.cost_model = cost_model, .stats = node.getStatistics().value_or(nullptr),
                              .children_stats = children_stats, .worker_size = worker_size};
-    cost += VisitorUtil::accept(node.getStep(), visitor, cost_context).getCost();
-    plan_cost_map.emplace(node.getId(), cost);
+    cost += VisitorUtil::accept(node.getStep(), visitor, cost_context);
+    plan_cost_map.emplace(node.getId(), cost.getCost());
     return CostWithCTEReferenceCounts{cost, std::move(cte_reference_counts)};
 }
 

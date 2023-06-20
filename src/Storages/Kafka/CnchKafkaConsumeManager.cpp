@@ -92,6 +92,46 @@ void CnchKafkaConsumeManager::stop()
     scheduled_task->activateAndSchedule();
 }
 
+/// The vw used for consumption of CnchKafka will have three possible settings:
+/// 1. the `cnch_vw_write` of CnchKafka setting param if it has been changed;
+/// 2. the `cnch_vw_write` of target table for CnchKafka;
+/// 3. the default common `vw_write`
+String CnchKafkaConsumeManager::getVWNameForConsumerTask(const StorageCnchKafka & kafka_table)
+{
+    const auto & kafka_settings = kafka_table.getSettings();
+    if (kafka_settings.cnch_vw_write.changed)
+        return kafka_settings.cnch_vw_write.value;
+
+    try
+    {
+        /// TODO: Merge this code with `checkDependencies` to reduce code redundancy
+        auto local_dependencies = getDependenciesFromCatalog(kafka_table.getStorageID());
+        for (const auto & dependence : local_dependencies)
+        {
+            auto table = catalog->getTable(*createQueryContext(), dependence.getDatabaseName(), dependence.getTableName(), getContext()->getTimestamp());
+            if (auto *mv = dynamic_cast<StorageMaterializedView*>(table.get()))
+            {
+                auto target_table = mv->getTargetTable();
+                if (auto *cnch = dynamic_cast<StorageCnchMergeTree*>(target_table.get()))
+                {
+                    const auto & cnch_table_settings = cnch->getSettings();
+                    if (cnch_table_settings->cnch_vw_write.changed)
+                    {
+                        LOG_DEBUG(log, "'cnch_vw_write' of target table has been changed, will use it as vw for consumer");
+                        return cnch_table_settings->cnch_vw_write.value;
+                    }
+                }
+            }
+        }
+    }
+    catch(...)
+    {
+        tryLogCurrentException(log, "Failed to check `vw-write` of target table, will still use vw of CnchKafka");
+    }
+
+    return kafka_settings.cnch_vw_write.value;
+}
+
 void CnchKafkaConsumeManager::initConsumerScheduler()
 {
     /// DatabaseCatalog::getTable API requires transaction in params context
@@ -101,8 +141,10 @@ void CnchKafkaConsumeManager::initConsumerScheduler()
     if (!kafka_table)
         throw Exception("Expected StorageCnchKafka, but got: " + storage->getName(), ErrorCodes::LOGICAL_ERROR);
 
-    auto vw_name = kafka_table->getSettings().cnch_vw_write.value;
+    auto vw_name = getVWNameForConsumerTask(*kafka_table);
     auto schedule_mode = kafka_table->getSettings().cnch_schedule_mode.value;
+    LOG_INFO(log, "Setting kafka consumer vw name: {} with schedule mode: {}", vw_name, schedule_mode);
+
     if (schedule_mode == "random")
         consumer_scheduler = std::make_shared<KafkaConsumerSchedulerRandom>(vw_name, KafkaConsumerScheduleMode::Random, getContext());
     else if (schedule_mode == "hash")
@@ -411,6 +453,9 @@ static String replaceCreateTableQuery(ContextPtr context, String & query, const 
             engine->arguments = std::make_shared<ASTExpressionList>();
             engine->arguments->children.push_back(std::make_shared<ASTIdentifier>(create_query.database));
             engine->arguments->children.push_back(std::make_shared<ASTIdentifier>(create_query.table));
+            /// NOTE: Used to pass the version column for unique table here.
+            if (create_query.storage->unique_key && create_query.storage->engine->arguments && create_query.storage->engine->arguments->children.size())
+                engine->arguments->children.push_back(create_query.storage->engine->arguments->children[0]);
 
             /// set cnch uuid for CloudMergeTree to commit data on worker side
             if (!storage->settings)
@@ -531,6 +576,16 @@ void CnchKafkaConsumeManager::getOffsetsFromCatalog(
 
 void CnchKafkaConsumeManager::dispatchConsumerToWorker(StorageCnchKafka & kafka_table, ConsumerInfo & info, std::exception_ptr & exception)
 {
+    /// When cnch-server is under high load, the transaction (RPC call) may need more time to execute commit action;
+    /// If ConsumeManager launches a new consumer during this period, duplication consumption may occur.
+    /// Thus, we need ensure that there is no active transactions before launching a new consumer to guarantee Exactly-Once.
+    /// This checker is consumer-level; there is no conflict between consumers if the table has more than one consumers
+    if (checkConsumerHasActiveTransaction(info.index))
+    {
+        LOG_WARNING(log, "Consumer #{} has active transaction now, we will retry after it finishes to avoid data duplication", info.index);
+        return;
+    }
+
     /// the suffix will be used to mark and check the uniqueness of consumer-table on worker client
     String table_suffix = '_' + toString(std::chrono::system_clock::now().time_since_epoch().count())
         + '_' + toString(info.index);
@@ -584,7 +639,7 @@ void CnchKafkaConsumeManager::dispatchConsumerToWorker(StorageCnchKafka & kafka_
     getOffsetsFromCatalog(info.partitions, target_table->getStorageID(), kafka_table.getGroupForBytekv());
 
     for (auto & tp : info.partitions)
-        LOG_DEBUG(log, "topic: {}, partition: {}, offsets: {}", tp.get_topic(), tp.get_partition(), tp.get_offset());
+        LOG_TRACE(log, "topic: {}, partition: {}, offsets: {}", tp.get_topic(), tp.get_partition(), tp.get_offset());
 
     command.assigned_consumer = info.index;
     command.tpl = info.partitions;
@@ -612,7 +667,7 @@ void CnchKafkaConsumeManager::dispatchConsumerToWorker(StorageCnchKafka & kafka_
     info.table_suffix = table_suffix;
     info.worker_client = worker_client;
     info.is_running = true;
-    LOG_TRACE(log, "Successfully send command 'START_CONSUME' to {}", worker_client->getRPCAddress());
+    LOG_DEBUG(log, "Successfully send command 'START_CONSUME' to {}", worker_client->getRPCAddress());
 }
 
 bool CnchKafkaConsumeManager::checkWorkerClient(const String & consumer_table_name, size_t index) const
@@ -659,7 +714,7 @@ void CnchKafkaConsumeManager::stopConsumerOnWorker(ConsumerInfo & info)
     /// send stop-command to worker
     worker_client->submitKafkaConsumeTask(command);
 
-    LOG_TRACE(log, "Successfully send command 'STOP_CONSUME' to {}", worker_client->getRPCAddress());
+    LOG_DEBUG(log, "Successfully send command 'STOP_CONSUME' to {}", worker_client->getRPCAddress());
 }
 
 void CnchKafkaConsumeManager::stopConsumers()
@@ -752,6 +807,50 @@ void CnchKafkaConsumeManager::logExceptionToCnchKafkaLog(String msg, bool dedupl
     {
         tryLogCurrentException(log, __PRETTY_FUNCTION__);
     }
+}
+
+void CnchKafkaConsumeManager::setCurrentTransactionForConsumer(size_t consumer_index, const TxnTimestamp & txn_id)
+{
+    catalog->setTransactionForKafkaConsumer(storage_id.uuid, txn_id, consumer_index);
+}
+
+bool CnchKafkaConsumeManager::checkConsumerHasActiveTransaction(size_t consumer_index)
+{
+    auto txn_id = catalog->getTransactionForKafkaConsumer(storage_id.uuid, consumer_index);
+    if (txn_id == TxnTimestamp::maxTS())
+        return false;
+
+    auto txn_record_ptr = catalog->tryGetTransactionRecord(txn_id);
+    if (!txn_record_ptr)
+    {
+        LOG_TRACE(log, "The latest transaction #{} for consumer #{} has finished", txn_id.toUInt64(), consumer_index);
+        return false;
+    }
+
+    auto txn_record = txn_record_ptr.value();
+    LOG_DEBUG(
+        log,
+        "Consumer #{} has the latest transaction: {} with status: {}",
+         consumer_index, txn_id.toUInt64(), txnStatusToString(txn_record.status())
+    );
+    if (txn_record.status() == CnchTransactionStatus::Finished || txn_record.status() == CnchTransactionStatus::Aborted)
+        return false;
+
+    const auto MAX_ACTIVE_KAFKA_TXN_SEC = 60;
+    auto txn_running_sec = time(nullptr) - txn_id.toSecond();
+    if (txn_running_sec > MAX_ACTIVE_KAFKA_TXN_SEC)
+    {
+        LOG_WARNING(
+            log,
+            "Active transaction {} has run for {} seconds. We will try to rollback it to launch a new consumer.",
+             txn_id.toUInt64(), txn_running_sec
+        );
+        /// Rollback transaction by API of catalog;
+        /// it won't end transaction now, but the transaction will failed while committing as CAS failed and trigger real Rollback action then
+        catalog->rollbackTransaction(txn_record);
+    }
+
+    return true;
 }
 
 } // namespace DB

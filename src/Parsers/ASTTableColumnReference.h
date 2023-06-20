@@ -25,10 +25,10 @@ namespace DB
 class ASTTableColumnReference : public IAST
 {
 public:
-    StoragePtr storage;
+    const IStorage * storage;
     String column_name;
 
-    ASTTableColumnReference(StoragePtr storage_, String column_name_) : storage(std::move(storage_)), column_name(std::move(column_name_))
+    ASTTableColumnReference(const IStorage * storage_, String column_name_) : storage(storage_), column_name(std::move(column_name_))
     {
     }
 

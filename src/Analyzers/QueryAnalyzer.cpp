@@ -42,6 +42,7 @@
 #include <QueryPlan/Void.h>
 #include <Storages/IStorage.h>
 #include <Storages/StorageDistributed.h>
+#include <Storages/StorageCnchHive.h>
 #include <Storages/StorageMemory.h>
 #include <Optimizer/Utils.h>
 
@@ -397,7 +398,9 @@ ScopePtr QueryAnalyzerVisitor::analyzeTable(ASTTableIdentifier & db_and_table, c
         full_table_name = storage_id.getFullTableName();
 
         if (storage_id.getDatabaseName() != "system" &&
-            !(dynamic_cast<const MergeTreeMetaBase *>(storage.get()) || dynamic_cast<const StorageMemory *>(storage.get())))
+            !(dynamic_cast<const MergeTreeMetaBase *>(storage.get())
+              || dynamic_cast<const StorageMemory *>(storage.get())
+              || dynamic_cast<const StorageCnchHive *>(storage.get())))
             throw Exception("Only cnch tables & system tables are supported", ErrorCodes::NOT_IMPLEMENTED);
 
         analysis.storage_results[&db_and_table] = StorageAnalysis { storage_id.getDatabaseName(), storage_id.getTableName(), storage};
@@ -1226,7 +1229,7 @@ void QueryAnalyzerVisitor::analyzeGroupBy(ASTSelectQuery & select_query, ASTs & 
                     }
 
                 // if grouping expr has been analyzed(i.e. it is from select expression), only check there is no agg/window/grouping
-                if (analysis.hasExpressionType(grouping_expr))
+                if (analysis.hasExpressionColumnWithType(grouping_expr))
                 {
                     verifyNoAggregateWindowOrGroupingOperations(grouping_expr, "GROUP BY expression");
                 }
@@ -1368,7 +1371,7 @@ void QueryAnalyzerVisitor::analyzeOrderBy(ASTSelectQuery & select_query, ASTs & 
                     order_item->children.push_back(select_expressions[index - 1]);
                 }
 
-            if (!analysis.hasExpressionType(order_item->children.front()))
+            if (!analysis.hasExpressionColumnWithType(order_item->children.front()))
                 ExprAnalyzer::analyze(order_item, output_scope, context, analysis, expr_options);
 
             result.push_back(std::dynamic_pointer_cast<ASTOrderByElement>(order_item));

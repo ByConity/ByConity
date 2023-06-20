@@ -192,6 +192,8 @@ int main(int argc, char ** argv)
 {
     try
     {
+        // test file that will not be shipped to production
+        // coverity[path_manipulation_sink]
         return mainImpl(argc, argv);
     }
     catch (const Poco::Exception & e)

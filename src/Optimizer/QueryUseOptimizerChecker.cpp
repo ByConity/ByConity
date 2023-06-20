@@ -29,6 +29,7 @@
 #include <QueryPlan/QueryPlan.h>
 #include <Storages/StorageDistributed.h>
 #include <Storages/StorageView.h>
+#include <Storages/StorageCnchHive.h>
 //#include <Common/TestLog.h>
 
 namespace DB
@@ -119,6 +120,10 @@ bool QueryUseOptimizerChecker::check(ASTPtr & node, const ContextMutablePtr & co
             throw;
             //            support = false;
         }
+
+        if (!support)
+            LOG_INFO(
+                &Poco::Logger::get("QueryUseOptimizerChecker"), "query is unsupported for optimizer, reason: " + checker.getReason());
     }
 
     if (!support)
@@ -171,7 +176,8 @@ checkDatabaseAndTable(const ASTTableExpression & table_expression, const Context
                 return QueryUseOptimizerChecker::check(subquery, context);
             }
 
-            if (!dynamic_cast<const MergeTreeMetaBase *>(storage_table.get()))
+            if (!dynamic_cast<const MergeTreeMetaBase *>(storage_table.get())
+                && !dynamic_cast<const StorageCnchHive *>(storage_table.get()))
                 return false;
         }
     }
@@ -184,24 +190,31 @@ bool QueryUseOptimizerVisitor::visitASTSelectQuery(ASTPtr & node, QueryUseOptimi
     const ContextMutablePtr & context = query_with_plan_context.context;
 
     if (select->group_by_with_totals)
+    {
+        reason = "group by with totals";
         return false;
+    }
 
-    NameSet & with_tables = query_with_plan_context.with_tables;
-    collectWithTableNames(*select, with_tables);
+    NameSet old_with_tables = query_with_plan_context.with_tables;
+    collectWithTableNames(*select, query_with_plan_context.with_tables);
 
     for (const auto * table_expression : getTableExpressions(*select))
     {
-        if (!checkDatabaseAndTable(*table_expression, context, with_tables))
+        if (!checkDatabaseAndTable(*table_expression, context, query_with_plan_context.with_tables))
         {
+            reason = "unsupported storage";
             return false;
         }
         if (table_expression->table_function)
         {
+            reason = "table function";
             return false;
         }
     }
 
-    return visitNode(node, query_with_plan_context);
+    bool result = visitNode(node, query_with_plan_context);
+    query_with_plan_context.with_tables = std::move(old_with_tables);
+    return result;
 }
 
 bool QueryUseOptimizerVisitor::visitASTTableJoin(ASTPtr & node, QueryUseOptimizerContext & query_with_plan_context)
@@ -221,12 +234,16 @@ bool QueryUseOptimizerVisitor::visitASTTableJoin(ASTPtr & node, QueryUseOptimize
 
 bool QueryUseOptimizerVisitor::visitASTArrayJoin(ASTPtr &, QueryUseOptimizerContext &)
 {
+    reason = "array join";
     return false;
 }
 
 bool QueryUseOptimizerVisitor::visitASTIdentifier(ASTPtr & node, QueryUseOptimizerContext & context)
 {
-    return !context.external_tables.contains(node->as<ASTIdentifier>()->name());
+    bool support = !context.external_tables.contains(node->as<ASTIdentifier>()->name());
+    if (!support)
+        reason = "external table";
+    return support;
 }
 
 bool QueryUseOptimizerVisitor::visitASTFunction(ASTPtr & node, QueryUseOptimizerContext & query_with_plan_context)
@@ -237,10 +254,12 @@ bool QueryUseOptimizerVisitor::visitASTFunction(ASTPtr & node, QueryUseOptimizer
     // when optimizer enabled, rowNumberInBlock() will interperted to 256 value in CI pipeline, make test case fail.
     if (fun.name == "rowNumberInBlock")
     {
+        reason = "unsupported function";
         return false;
     }
     else if (fun.name == "untuple")
     {
+        reason = "unsupported function";
         return false;
     }
     else if (functionIsInOrGlobalInOperator(fun.name) && fun.arguments->getChildren().size() == 2)
@@ -249,8 +268,11 @@ bool QueryUseOptimizerVisitor::visitASTFunction(ASTPtr & node, QueryUseOptimizer
         {
             ASTTableExpression table_expression;
             table_expression.database_and_table_name = std::make_shared<ASTTableIdentifier>(identifier->name());
-            if (!checkDatabaseAndTable(table_expression, query_with_plan_context.context, {}))
+            if (!checkDatabaseAndTable(table_expression, query_with_plan_context.context, query_with_plan_context.with_tables))
+            {
+                reason = "unsupported storage";
                 return false;
+            }
         }
     }
     return visitNode(node, query_with_plan_context);

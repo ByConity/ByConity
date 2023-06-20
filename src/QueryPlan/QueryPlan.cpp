@@ -512,7 +512,10 @@ void QueryPlan::explainPlan(WriteBuffer & buffer, const ExplainPlanOptions & opt
 
 static void explainPipelineStep(IQueryPlanStep & step, IQueryPlanStep::FormatSettings & settings)
 {
-    settings.out << String(settings.offset, settings.indent_char) << "(" << step.getName() << ")\n";
+    settings.out << String(settings.offset, settings.indent_char) << "(" << step.getName() << ")";
+    if (dynamic_cast<TableScanStep *>(&step))
+        settings.out << " # " << step.getStepDescription();
+    settings.out << "\n";
     size_t current_offset = settings.offset;
     step.describePipeline(settings);
     if (current_offset == settings.offset)
@@ -661,6 +664,21 @@ void QueryPlan::allocateLocalTable(ContextPtr context)
             table_scan->allocate(context);
         }
     }
+}
+
+PlanNodePtr QueryPlan::getPlanNodeById(PlanNodeId node_id) const
+{
+    if (plan_node)
+        if (auto res = plan_node->getNodeById(node_id))
+            return res;
+
+    for (const auto & cte : cte_info.getCTEs())
+    {
+        if (auto res = cte.second->getNodeById(node_id))
+            return res;
+    }
+
+    return nullptr;
 }
 
 }

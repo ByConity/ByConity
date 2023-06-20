@@ -121,6 +121,29 @@ struct ColumnVector<T>::less
 };
 
 template <typename T>
+struct ColumnVector<T>::less_stable
+{
+    const Self & parent;
+    int nan_direction_hint;
+    less_stable(const Self & parent_, int nan_direction_hint_) : parent(parent_), nan_direction_hint(nan_direction_hint_) {}
+    bool operator()(size_t lhs, size_t rhs) const
+    {
+        if (unlikely(parent.data[lhs] == parent.data[rhs]))
+            return lhs < rhs;
+
+        if constexpr (std::is_floating_point_v<T>)
+        {
+            if (unlikely(std::isnan(parent.data[lhs]) && std::isnan(parent.data[rhs])))
+            {
+                return lhs < rhs;
+            }
+        }
+
+        return CompareHelper<T>::less(parent.data[lhs], parent.data[rhs], nan_direction_hint);
+    }
+};
+
+template <typename T>
 struct ColumnVector<T>::greater
 {
     const Self & parent;
@@ -129,6 +152,37 @@ struct ColumnVector<T>::greater
     bool operator()(size_t lhs, size_t rhs) const { return CompareHelper<T>::greater(parent.data[lhs], parent.data[rhs], nan_direction_hint); }
 };
 
+template <typename T>
+struct ColumnVector<T>::greater_stable
+{
+    const Self & parent;
+    int nan_direction_hint;
+    greater_stable(const Self & parent_, int nan_direction_hint_) : parent(parent_), nan_direction_hint(nan_direction_hint_) {}
+    bool operator()(size_t lhs, size_t rhs) const
+    {
+        if (unlikely(parent.data[lhs] == parent.data[rhs]))
+            return lhs < rhs;
+
+        if constexpr (std::is_floating_point_v<T>)
+        {
+            if (unlikely(std::isnan(parent.data[lhs]) && std::isnan(parent.data[rhs])))
+            {
+                return lhs < rhs;
+            }
+        }
+
+        return CompareHelper<T>::greater(parent.data[lhs], parent.data[rhs], nan_direction_hint);
+    }
+};
+
+template <typename T>
+struct ColumnVector<T>::equals
+{
+    const Self & parent;
+    int nan_direction_hint;
+    equals(const Self & parent_, int nan_direction_hint_) : parent(parent_), nan_direction_hint(nan_direction_hint_) {}
+    bool operator()(size_t lhs, size_t rhs) const { return CompareHelper<T>::equals(parent.data[lhs], parent.data[rhs], nan_direction_hint); }
+};
 
 namespace
 {
@@ -152,7 +206,8 @@ namespace
 
 
 template <typename T>
-void ColumnVector<T>::getPermutation(bool reverse, size_t limit, int nan_direction_hint, IColumn::Permutation & res) const
+void ColumnVector<T>::getPermutation(IColumn::PermutationSortDirection direction, IColumn::PermutationSortStability stability,
+                                    size_t limit, int nan_direction_hint, IColumn::Permutation & res) const
 {
     size_t s = data.size();
     res.resize(s);
@@ -168,18 +223,30 @@ void ColumnVector<T>::getPermutation(bool reverse, size_t limit, int nan_directi
         for (size_t i = 0; i < s; ++i)
             res[i] = i;
 
-        if (reverse)
-            partial_sort(res.begin(), res.begin() + limit, res.end(), greater(*this, nan_direction_hint));
-        else
+        if (direction == IColumn::PermutationSortDirection::Ascending && stability == IColumn::PermutationSortStability::Unstable)
             partial_sort(res.begin(), res.begin() + limit, res.end(), less(*this, nan_direction_hint));
+        else if (direction == IColumn::PermutationSortDirection::Ascending && stability == IColumn::PermutationSortStability::Stable)
+            partial_sort(res.begin(), res.begin() + limit, res.end(), less_stable(*this, nan_direction_hint));
+        else if (direction == IColumn::PermutationSortDirection::Descending && stability == IColumn::PermutationSortStability::Unstable)
+            partial_sort(res.begin(), res.begin() + limit, res.end(), greater(*this, nan_direction_hint));
+        else if (direction == IColumn::PermutationSortDirection::Descending && stability == IColumn::PermutationSortStability::Stable)
+            partial_sort(res.begin(), res.begin() + limit, res.end(), greater_stable(*this, nan_direction_hint));
     }
     else
     {
         /// A case for radix sort
+        /// LSD RadixSort is stable
         if constexpr (is_arithmetic_v<T> && !is_big_int_v<T>)
         {
+            bool reverse = direction == IColumn::PermutationSortDirection::Descending;
+            bool ascending = direction == IColumn::PermutationSortDirection::Ascending;
+            bool sort_is_stable = stability == IColumn::PermutationSortStability::Stable;
+
+            /// TODO: LSD RadixSort is currently not stable if direction is descending, or value is floating point
+            bool use_radix_sort = (sort_is_stable && ascending && !std::is_floating_point_v<T>) || !sort_is_stable;
+
             /// Thresholds on size. Lower threshold is arbitrary. Upper threshold is chosen by the type for histogram counters.
-            if (s >= 256 && s <= std::numeric_limits<UInt32>::max())
+            if (s >= 256 && s <= std::numeric_limits<UInt32>::max() && use_radix_sort)
             {
                 PaddedPODArray<ValueWithIndex<T>> pairs(s);
                 for (UInt32 i = 0; i < UInt32(s); ++i)
@@ -214,89 +281,52 @@ void ColumnVector<T>::getPermutation(bool reverse, size_t limit, int nan_directi
         for (size_t i = 0; i < s; ++i)
             res[i] = i;
 
-        if (reverse)
-            pdqsort(res.begin(), res.end(), greater(*this, nan_direction_hint));
-        else
-            pdqsort(res.begin(), res.end(), less(*this, nan_direction_hint));
+        if (direction == IColumn::PermutationSortDirection::Ascending && stability == IColumn::PermutationSortStability::Unstable)
+            std::sort(res.begin(), res.end(), less(*this, nan_direction_hint));
+        else if (direction == IColumn::PermutationSortDirection::Ascending && stability == IColumn::PermutationSortStability::Stable)
+            std::sort(res.begin(), res.end(), less_stable(*this, nan_direction_hint));
+        else if (direction == IColumn::PermutationSortDirection::Descending && stability == IColumn::PermutationSortStability::Unstable)
+            std::sort(res.begin(), res.end(), greater(*this, nan_direction_hint));
+        else if (direction == IColumn::PermutationSortDirection::Descending && stability == IColumn::PermutationSortStability::Stable)
+            std::sort(res.begin(), res.end(), greater_stable(*this, nan_direction_hint));
     }
 }
 
 template <typename T>
-void ColumnVector<T>::updatePermutation(bool reverse, size_t limit, int nan_direction_hint, IColumn::Permutation & res, EqualRanges & equal_range) const
+void ColumnVector<T>::updatePermutation(IColumn::PermutationSortDirection direction, IColumn::PermutationSortStability stability,
+                                    size_t limit, int nan_direction_hint, IColumn::Permutation & res, EqualRanges & equal_ranges) const
 {
-    if (equal_range.empty())
-        return;
-
-    if (limit >= data.size() || limit >= equal_range.back().second)
-        limit = 0;
-
-    EqualRanges new_ranges;
-    SCOPE_EXIT({equal_range = std::move(new_ranges);});
-
-    for (size_t i = 0; i < equal_range.size() - bool(limit); ++i)
+    if (direction == IColumn::PermutationSortDirection::Ascending && stability == IColumn::PermutationSortStability::Unstable)
     {
-        const auto & [first, last] = equal_range[i];
-        if (reverse)
-            pdqsort(res.begin() + first, res.begin() + last, greater(*this, nan_direction_hint));
-        else
-            pdqsort(res.begin() + first, res.begin() + last, less(*this, nan_direction_hint));
-        size_t new_first = first;
-        for (size_t j = first + 1; j < last; ++j)
-        {
-            if (less(*this, nan_direction_hint)(res[j], res[new_first]) || greater(*this, nan_direction_hint)(res[j], res[new_first]))
-            {
-                if (j - new_first > 1)
-                {
-                    new_ranges.emplace_back(new_first, j);
-                }
-                new_first = j;
-            }
-        }
-        if (last - new_first > 1)
-        {
-            new_ranges.emplace_back(new_first, last);
-        }
+        this->updatePermutationImpl(
+            limit, res, equal_ranges,
+            less(*this, nan_direction_hint),
+            equals(*this, nan_direction_hint),
+            DefaultSort(), DefaultPartialSort());
     }
-    if (limit)
+    else if (direction == IColumn::PermutationSortDirection::Ascending && stability == IColumn::PermutationSortStability::Stable)
     {
-        const auto & [first, last] = equal_range.back();
-
-        if (limit < first || limit > last)
-            return;
-
-        /// Since then, we are working inside the interval.
-
-        if (reverse)
-            partial_sort(res.begin() + first, res.begin() + limit, res.begin() + last, greater(*this, nan_direction_hint));
-        else
-            partial_sort(res.begin() + first, res.begin() + limit, res.begin() + last, less(*this, nan_direction_hint));
-
-        size_t new_first = first;
-        for (size_t j = first + 1; j < limit; ++j)
-        {
-            if (less(*this, nan_direction_hint)(res[j], res[new_first]) || greater(*this, nan_direction_hint)(res[j], res[new_first]))
-            {
-                if (j - new_first > 1)
-                {
-                    new_ranges.emplace_back(new_first, j);
-                }
-                new_first = j;
-            }
-        }
-
-        size_t new_last = limit;
-        for (size_t j = limit; j < last; ++j)
-        {
-            if (!less(*this, nan_direction_hint)(res[j], res[new_first]) && !greater(*this, nan_direction_hint)(res[j], res[new_first]))
-            {
-                std::swap(res[j], res[new_last]);
-                ++new_last;
-            }
-        }
-        if (new_last - new_first > 1)
-        {
-            new_ranges.emplace_back(new_first, new_last);
-        }
+        this->updatePermutationImpl(
+            limit, res, equal_ranges,
+            less_stable(*this, nan_direction_hint),
+            equals(*this, nan_direction_hint),
+            DefaultSort(), DefaultPartialSort());
+    }
+    else if (direction == IColumn::PermutationSortDirection::Descending && stability == IColumn::PermutationSortStability::Unstable)
+    {
+        this->updatePermutationImpl(
+            limit, res, equal_ranges,
+            greater(*this, nan_direction_hint),
+            equals(*this, nan_direction_hint),
+            DefaultSort(), DefaultPartialSort());
+    }
+    else if (direction == IColumn::PermutationSortDirection::Descending && stability == IColumn::PermutationSortStability::Stable)
+    {
+        this->updatePermutationImpl(
+            limit, res, equal_ranges,
+            greater_stable(*this, nan_direction_hint),
+            equals(*this, nan_direction_hint),
+            DefaultSort(), DefaultPartialSort());
     }
 }
 

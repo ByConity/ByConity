@@ -667,7 +667,8 @@ MutableColumns ColumnAggregateFunction::scatter(IColumn::ColumnIndex num_columns
     return columns;
 }
 
-void ColumnAggregateFunction::getPermutation(bool /*reverse*/, size_t /*limit*/, int /*nan_direction_hint*/, IColumn::Permutation & res) const
+void ColumnAggregateFunction::getPermutation(PermutationSortDirection /*direction*/, PermutationSortStability /*stability*/,
+                                            size_t /*limit*/, int /*nan_direction_hint*/, IColumn::Permutation & res) const
 {
     size_t s = data.size();
     res.resize(s);
@@ -675,7 +676,8 @@ void ColumnAggregateFunction::getPermutation(bool /*reverse*/, size_t /*limit*/,
         res[i] = i;
 }
 
-void ColumnAggregateFunction::updatePermutation(bool, size_t, int, Permutation &, EqualRanges&) const {}
+void ColumnAggregateFunction::updatePermutation(PermutationSortDirection, PermutationSortStability,
+                                            size_t, int, Permutation &, EqualRanges&) const {}
 
 void ColumnAggregateFunction::gather(ColumnGathererStream & gatherer)
 {

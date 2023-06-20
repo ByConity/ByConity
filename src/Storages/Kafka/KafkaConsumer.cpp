@@ -105,6 +105,11 @@ TopicPartitionList KafkaConsumer::get_offsets_committed(const TopicPartitionList
     exception_wrapper( return cppkafka::Consumer::get_offsets_committed(topic_partitions); )
 }
 
+TopicPartitionList KafkaConsumer::get_offsets_for_times(const TopicPartitionsTimestampsMap &queries) const
+{
+    exception_wrapper( return cppkafka::Consumer::get_offsets_for_times(queries); )
+}
+
 std::vector<std::string> KafkaConsumer::get_subscription() const
 {
     exception_wrapper( return cppkafka::Consumer::get_subscription(); )

@@ -73,6 +73,7 @@ public:
     Void visitWindowNode(WindowNode & node, PrinterContext & context) override;
     Void visitCTERefNode(CTERefNode & node, PrinterContext & context) override;
     Void visitPartitionTopNNode(PartitionTopNNode & node, PrinterContext & context) override;
+    Void visitTopNFilteringNode(TopNFilteringNode & node, PrinterContext & context) override;
 
 private:
     void printCTEDefNode(CTEId cte_id);
@@ -133,6 +134,7 @@ public:
     Void visitAssignUniqueIdNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitWindowNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitPartitionTopNNode(QueryPlan::Node * node, PrinterContext & context) override;
+    Void visitTopNFilteringNode(QueryPlan::Node * node, PrinterContext & context) override;
 
 private:
     std::stringstream & out;
@@ -156,10 +158,10 @@ private:
 class StepPrinter
 {
 public:
-    static String printProjectionStep(const ProjectionStep & step);
-    static String printFilterStep(const FilterStep & step);
+    static String printProjectionStep(const ProjectionStep & step, bool include_output = true);
+    static String printFilterStep(const FilterStep & step, bool include_output = true);
     static String printJoinStep(const JoinStep & step);
-    static String printAggregatingStep(const AggregatingStep & step);
+    static String printAggregatingStep(const AggregatingStep & step, bool include_output = true);
     static String printMergingAggregatedStep(const MergingAggregatedStep & step);
     static String printUnionStep(const UnionStep & step);
     static String printIntersectStep(const IntersectStep & step);
@@ -181,6 +183,7 @@ public:
     static String printWindowStep(const WindowStep & step);
     static String printCTERefStep(const CTERefStep & node);
     static String printPartitionTopNStep(const PartitionTopNStep & node);
+    static String printTopNFilteringStep(const TopNFilteringStep & step);
 
 private:
     static String printFilter(const ConstASTPtr & filter);
@@ -202,7 +205,7 @@ public:
     static void printMemo(const Memo & memo, const ContextMutablePtr & context, const String & name);
     static void printMemo(const Memo & memo, GroupId root_id, const ContextMutablePtr & context, const String & name);
     static void printPlanSegment(const PlanSegmentTreePtr &, const ContextMutablePtr &);
-    static void printBlock(const String & stream, const Block & header, const Block & data);
+    static void printChunk(String transform, const Block & block, const Chunk & chunk);
     static void printPipeline(const Processors & processors, const ExecutingGraphPtr & graph, const ContextPtr & context, size_t segment_id, const String & host);
 
 private:

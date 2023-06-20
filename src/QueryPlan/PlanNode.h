@@ -62,6 +62,7 @@
 #include <QueryPlan/ValuesStep.h>
 #include <QueryPlan/Void.h>
 #include <QueryPlan/WindowStep.h>
+#include <QueryPlan/TopNFilteringStep.h>
 #include <Parsers/IAST_fwd.h>
 
 #include <memory>
@@ -104,6 +105,7 @@ public:
     NamesAndTypes getOutputNamesAndTypes() const { return getCurrentDataStream().header.getNamesAndTypes(); }
     NameToType getOutputNamesToTypes() const { return getCurrentDataStream().header.getNamesToTypes(); }
     Names getOutputNames() const { return getCurrentDataStream().header.getNames(); }
+    PlanNodePtr getNodeById(PlanNodeId node_id) const;
 
     static PlanNodePtr createPlanNode(
         [[maybe_unused]] PlanNodeId id_,

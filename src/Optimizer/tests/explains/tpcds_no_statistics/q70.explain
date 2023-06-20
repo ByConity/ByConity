@@ -4,9 +4,11 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. ? rows
       │     Order by: {expr#plus(grouping(s_state), grouping(s_county)) desc nulls_last, expr#multiIf(equals(lochierarchy, 0), s_state, NULL) asc, expr#rank() OVER (PARTITION BY grouping(s_state) + grouping(s_county), multiIf(grouping(s_county) = 0, s_state, NULL) ORDER BY sum(ss_net_profit) DESC) asc}
+      │     Limit: 100
       └─ Gather Exchange est. ? rows
          └─ Sorting est. ? rows
             │     Order by: {expr#plus(grouping(s_state), grouping(s_county)) desc nulls_last, expr#multiIf(equals(lochierarchy, 0), s_state, NULL) asc, expr#rank() OVER (PARTITION BY grouping(s_state) + grouping(s_county), multiIf(grouping(s_county) = 0, s_state, NULL) ORDER BY sum(ss_net_profit) DESC) asc}
+            │     Limit: 100
             └─ Projection est. ? rows
                │     Expressions: [expr#plus(grouping(s_state), grouping(s_county)), expr#rank() OVER (PARTITION BY grouping(s_state) + grouping(s_county), multiIf(grouping(s_county) = 0, s_state, NULL) ORDER BY sum(ss_net_profit) DESC), expr#sum(ss_net_profit)_1, s_county, s_state], expr#multiIf(equals(lochierarchy, 0), s_state, NULL):=multiIf(`expr#plus(grouping(s_state), grouping(s_county))` = 0, s_state, NULL)
                └─ Window est. ? rows

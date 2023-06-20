@@ -75,6 +75,7 @@ public:
     Property visitEnforceSingleRowStep(const EnforceSingleRowStep &, DeriverContext & context) override;
     Property visitAssignUniqueIdStep(const AssignUniqueIdStep &, DeriverContext & context) override;
     Property visitCTERefStep(const CTERefStep &, DeriverContext & context) override;
+    Property visitTopNFilteringStep(const TopNFilteringStep &, DeriverContext & context) override;
 };
 
 }

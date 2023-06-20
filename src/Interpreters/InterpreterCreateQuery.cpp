@@ -662,6 +662,10 @@ InterpreterCreateQuery::TableProperties InterpreterCreateQuery::setProperties(AS
         if (create.storage && endsWith(create.storage->engine->name, "MergeTree"))
             properties.indices = as_storage_metadata->getSecondaryIndices();
 
+        /// Create table as should set projections
+        if (as_storage_metadata->hasProjections())
+            properties.projections = as_storage_metadata->getProjections().clone();
+        
         properties.constraints = as_storage_metadata->getConstraints();
     }
     else if (create.select)
@@ -680,7 +684,11 @@ InterpreterCreateQuery::TableProperties InterpreterCreateQuery::setProperties(AS
     {
         return {};
     }
-    else
+    else if (!create.storage || !create.storage->engine)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected application state. CREATE query is missing either its storage or engine.");
+    /// We can have queries like "CREATE TABLE <table> ENGINE=<engine>" if <engine>
+    /// supports schema inference (will determine table structure in it's constructor).
+    else if (!StorageFactory::instance().checkIfStorageSupportsSchemaInference(create.storage->engine->name))
         throw Exception("Incorrect CREATE query: required list of column descriptions or AS section or SELECT.", ErrorCodes::INCORRECT_QUERY);
 
     /// Even if query has list of columns, canonicalize it (unfold Nested columns).
@@ -947,6 +955,8 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
 
     if (create.storage && create.storage->unique_key && create.storage->cluster_by)
         throw Exception("`CLUSTER BY` cannot be used together with `UNIQUE KEY`", ErrorCodes::BAD_ARGUMENTS);
+    if (create.storage && create.storage->unique_key && create.columns_list->projections)
+        throw Exception("`Projection` cannot be used together with `UNIQUE KEY`", ErrorCodes::BAD_ARGUMENTS);
 
     String current_database = getContext()->getCurrentDatabase();
     auto database_name = create.database.empty() ? current_database : create.database;

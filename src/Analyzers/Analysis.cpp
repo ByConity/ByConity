@@ -84,19 +84,38 @@ ASTs & Analysis::getTableAliasColumns(ASTIdentifier & db_and_table)
     MAP_GET(table_alias_columns, &db_and_table);
 }
 
-bool Analysis::hasExpressionType(const ASTPtr & expression)
+bool Analysis::hasExpressionColumnWithType(const ASTPtr & expression)
 {
-    return expression_types.find(expression) != expression_types.end();
+    return expression_column_with_types.find(expression) != expression_column_with_types.end();
 }
 
-void Analysis::setExpressionType(const ASTPtr & expression, const DataTypePtr & type)
+void Analysis::setExpressionColumnWithType(const ASTPtr & expression, const ColumnWithType & column_with_type)
 {
-    expression_types[expression] = type;
+    expression_column_with_types[expression] = column_with_type;
+}
+
+std::optional<ColumnWithType> Analysis::tryGetExpressionColumnWithType(const ASTPtr & expression)
+{
+    if (auto it = expression_column_with_types.find(expression); it != expression_column_with_types.end())
+        return it->second;
+
+    return std::nullopt;
 }
 
 DataTypePtr Analysis::getExpressionType(const ASTPtr & expression)
 {
-    MAP_GET(expression_types, expression);
+    if(auto it = expression_column_with_types.find(expression); it != expression_column_with_types.end())
+        return expression_column_with_types[expression].type;
+    else
+        throw Exception("Object not found in expression_column_with_types", ErrorCodes::LOGICAL_ERROR);
+}
+
+ExpressionTypes Analysis::getExpressionTypes()
+{
+    ExpressionTypes expression_types;
+    for(auto & it : expression_column_with_types)
+        expression_types[it.first] = expression_column_with_types[it.first].type;
+    return expression_types;
 }
 
 JoinUsingAnalysis & Analysis::getJoinUsingAnalysis(ASTTableJoin & table_join)

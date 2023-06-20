@@ -81,6 +81,8 @@ public:
 
     BlockOutputStreamPtr write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr local_context) override;
 
+    BlockInputStreamPtr writeInWorker(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr local_context);
+
     HostWithPortsVec getWriteWorkers(const ASTPtr & query, ContextPtr local_context) override;
 
     bool optimize(
@@ -230,7 +232,7 @@ private:
     String extractTableSuffix(const String & gen_table_name);
     std::set<Int64> getRequiredBucketNumbers(const SelectQueryInfo & query_info, ContextPtr context) const;
 
-    void ingestPartition(const struct PartitionCommand & command, const ContextPtr local_context);
+    Pipe ingestPartition(const struct PartitionCommand & command, const ContextPtr local_context);
 
     /// Check if the ALTER can be performed:
     /// - all needed columns are present.
@@ -238,12 +240,6 @@ private:
     /// - columns corresponding to primary key, indices, sign, sampling expression and date are not affected.
     /// If something is wrong, throws an exception.
     void checkAlterInCnchServer(const AlterCommands & commands, ContextPtr local_context) const;
-};
-
-struct PrepareContextResult
-{
-    String local_table_name;
-    ServerDataPartsVector parts;
 };
 
 }

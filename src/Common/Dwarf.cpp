@@ -698,6 +698,7 @@ Dwarf::Die Dwarf::getDieAtOffset(const CompilationUnit & cu, uint64_t offset) co
     die.code = code;
     if (code == 0)
     {
+        // coverity[uinit_use]
         return die;
     }
     die.attr_offset = sp.data() - info_.data() - offset;

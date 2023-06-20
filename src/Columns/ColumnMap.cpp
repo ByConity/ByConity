@@ -115,6 +115,8 @@ void ColumnMap::insertData(const char *, size_t)
 void ColumnMap::insert(const Field & x)
 {
     const auto & map = DB::get<const Map &>(x);
+    // Iterators all inherit from FieldVector
+    // coverity[mismatched_iterator]
     nested->insert(Array(map.begin(), map.end()));
 }
 
@@ -223,14 +225,16 @@ bool ColumnMap::hasEqualValues() const
     return hasEqualValuesImpl<ColumnMap>();
 }
 
-void ColumnMap::getPermutation(bool reverse, size_t limit, int nan_direction_hint, Permutation & res) const
+void ColumnMap::getPermutation(IColumn::PermutationSortDirection direction, IColumn::PermutationSortStability stability,
+                            size_t limit, int nan_direction_hint, IColumn::Permutation & res) const
 {
-    nested->getPermutation(reverse, limit, nan_direction_hint, res);
+    nested->getPermutation(direction, stability, limit, nan_direction_hint, res);
 }
 
-void ColumnMap::updatePermutation(bool reverse, size_t limit, int nan_direction_hint, IColumn::Permutation & res, EqualRanges & equal_range) const
+void ColumnMap::updatePermutation(IColumn::PermutationSortDirection direction, IColumn::PermutationSortStability stability,
+                                size_t limit, int nan_direction_hint, IColumn::Permutation & res, EqualRanges & equal_ranges) const
 {
-    nested->updatePermutation(reverse, limit, nan_direction_hint, res, equal_range);
+    nested->updatePermutation(direction, stability, limit, nan_direction_hint, res, equal_ranges);
 }
 
 void ColumnMap::gather(ColumnGathererStream & gatherer)
@@ -275,7 +279,9 @@ void ColumnMap::getExtremes(Field & min, Field & max) const
     Array nested_min_value = nested_min.get<Array>();
     Array nested_max_value = nested_max.get<Array>();
 
+    // coverity[mismatched_iterator]
     Map map_min_value(nested_min_value.begin(), nested_min_value.end());
+    // coverity[mismatched_iterator]
     Map map_max_value(nested_max_value.begin(), nested_max_value.end());
 
     min = std::move(map_min_value);

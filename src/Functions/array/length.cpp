@@ -78,6 +78,7 @@ void registerFunctionLength(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionLength>(FunctionFactory::CaseInsensitive);
     factory.registerAlias("size", NameLength::name, FunctionFactory::CaseInsensitive);
+    factory.registerAlias("octet_length", NameLength::name, FunctionFactory::CaseInsensitive);
 }
 
 }

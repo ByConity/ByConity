@@ -1,28 +1,35 @@
-# ByConity
+# Welcome to ByConity
 
-<p align="center">
-    <img src="ByConity-architecture.png" alt="ByConity-architecture" width="800"/>
-</p>
+<p align="center"> 
+<img width="717" alt="ByConity Arch 2023" src="https://github.com/ByConity/ByConity/assets/23332032/c266aa89-c1b8-4a35-a47d-ee5718a9443a">
 
-ByConity is a data warehouse designed for changes in modern cloud architecture. It adopts a cloud-native architecture design to meet the requirements of data warehouse users for flexible scaling, separation of reads and writes, resource isolation, and strong data consistency. At the same time, it provides excellent query and write performance.
+Byconity is a unique open-source project designed to streamline your data processes. This cloud-native solution stands out with the ability to ingest both batch and streaming data, perform powerful queries on large scale data sets, and run seamlessly on both Kubernetes and physical clusters. Byconity reduces complexity, boosts efficiency, and empowers you with valuable insights faster.
 
-ByConity is using a large number of mature OLAP technologies, such as column storage engine, MPP execution, intelligent query optimization, vectorized execution, Codegen, indexing, and data compression; it also makes special technological innovations for the cloud scenarios and storage-computing separation architecture.
+**Query Large Scale Data with Speed and Precision**
+When dealing with large-scale data, performance is crucial. Byconity shines in this aspect by providing powerful querying capabilities that excel in large-scale environments. With Byconity, you can extract valuable insights from vast amounts of data quickly and accurately.
+    
+**Break Down Data Silos with Byconity**
+Data silos pose significant challenges in data management. With different systems and processes often resulting in isolated islands of data, it hampers data analysis and insights. Byconity addresses this issue by seamlessly ingesting both batch-loaded data and streaming data, thus enabling your systems to break down silos for smoother data flow.
 
-ByConity is built on top of [ClickHouse](https://github.com/ClickHouse/ClickHouse). We appreciate the excellent work of the ClickHouse team.
+**Designed for the Cloud, Flexible for Your Needs**
+Byconity is designed with a cloud-native approach, optimized to take full advantage of the cloud's scalability, resilience, and ease of deployment. It can work seamlessly on both Kubernetes clusters and physical clusters, offering you the flexibility to deploy in the environment that best meets your requirements. This broad compatibility ensures that you can leverage Byconity's benefits, irrespective of your infrastructure.
 
-## Try ByConity
+ByConity is built from [ClickHouse](https://github.com/ClickHouse/ClickHouse) and inspired by Snowflake. We appreciate the excellent work of the ClickHouse team & Snowflake team. Because of huge archtechture difference, ClickHouse team don't think it is a good iead to adopt it into ClickHouse project. Here we open source it as a downstream project. Hope to bring it as a public weal for you.
 
-You can quickly bring up a ByConity playground by following this simple [guide](https://github.com/ByConity/byconity-docker).
-
-A minimal ByConity cluster include:
-
-- A [FoundationDB](https://www.foundationdb.org/) database cluster to store meta data.
-- An [HDFS](https://hadoop.apache.org/docs/r1.2.1/hdfs_design.html) cluster to store data.
-- A ByConity server to receive request from clients.
-- A ByConity read worker to carry execution of read requests forward from server.
-- A ByConity write worker to carry execution of write requests forward from server.
-- A ByConity TSO server to provide timestamp.
-- A ByConity daemon manager to manage background jobs that run in server.
+## Benefits
+- **Unified Data Management**: Byconity eliminates the need to maintain separate processes for batch and streaming data, making your systems more efficient.
+- **High-Performance Data Querying** : Byconity's robust querying capabilities allow for quick and accurate data retrieval from large-scale datasets.
+- **Avoid Data Silos** : By handling both batch and streaming data, Byconity ensures all your data can be integrated, promoting better insights.
+- **Cloud-Native Design** : Byconity is built with a cloud-native approach, allowing it to efficiently leverage the advantages of the cloud and work seamlessly on both Kubernetes and physical clusters.
+- **Open Source**: Being an open-source project, Byconity encourages community collaboration. You can contribute, improve, and tailor the platform according to your needs.
+    
+## Useful Link
+    
+- [Official Website](https://byconity.github.io/): has a quick high-level overview of ByConity on the home page.
+- [Documentation](https://byconity.github.io/docs/introduction/main-principle-concepts): introduce basic usage guide and tech deep dive.
+- [Getting started with Kubernetes](https://byconity.github.io/docs/deployment/deploy-k8s): demonstrates how to deploy a ByConity cluster in your Kubernetes clusters.
+- [Getting started with physical machines](https://byconity.github.io/docs/deployment/package-deployment): demonstrateds how to deploy ByConity in your physical clusters.
+- **Contact Us** : you can easily find us in [Discord server](https://discord.gg/V4BvTWGEQJ), [Youtube Channel](https://www.youtube.com/@ByConity/featured) and [Twitter](https://twitter.com/ByConity)
 
 ## Build ByConity
 
@@ -33,7 +40,6 @@ It can also be built through the following operating systems in physical machine
 - Linux
 
 ### 1. Prepare Prerequisites
-
 The following packages are required:
 
 - Git
@@ -41,6 +47,7 @@ The following packages are required:
 - Ninja
 - C++ compiler: clang-11 or clang-12
 - Linker: lld
+- FoundationDB client [library](https://github.com/apple/foundationdb/releases/tag/7.1.0)
 
 ```sh
 sudo apt-get update
@@ -81,23 +88,3 @@ daemon_manager       # byconity daemon manager
 resource_manager     # byconity resource manager
 ```
 
-## Run ByConity Locally
-
-The most convinience way for local development is to use `docker-compose`. You can use `docker-compose` to quickly create a [byconity cluster](/docker/local-deploy/README.md) from your local build binary. By using this approach, you do not need to worry about the setup of ByConity dependencies (FoundationDB and HDFS), it automatically launches them all. It is recommended to use this approach for ByConity development.
-
-## Deploy ByConity in cluster
-
-There are ways to deploy ByConity to physical machines:
-
-- Deploy using [package manager](https://byconity.github.io/docs/deployment/package-deployment)
-- Deploy via docker [wrapper](https://byconity.github.io/docs/deployment/docker-wrapper)
-
-## Test ByConity in development enviroment
-
-To test ByConity in development enviroment, follow this [guide](https://github.com/ByConity/ByConity/tree/master/Testing.md).
-
-## Community
-
-- Join our [Discord server](https://discord.gg/V4BvTWGEQJ)
-- Follow up on [Twitter](https://twitter.com/ByConity)
-- Subscribe to our [Youtube Channel](https://www.youtube.com/@ByConity/featured)

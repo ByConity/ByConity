@@ -108,7 +108,8 @@ public:
         const String& ak_id_, const String& ak_secret_, const String& root_prefix_,
         int connect_timeout_ms_ = 10000, int request_timeout_ms_ = 30000,
         int max_redirects_ = 10, int max_connections_ = 100):
-            max_redirects(max_redirects_), connect_timeout_ms(connect_timeout_ms_),
+            virtual_host_style(false), max_redirects(max_redirects_),
+            connect_timeout_ms(connect_timeout_ms_),
             request_timeout_ms(request_timeout_ms_), max_connections(max_connections_),
             endpoint(endpoint_), region(region_), bucket(bucket_), ak_id(ak_id_),
             ak_secret(ak_secret_), root_prefix(root_prefix_) {}
@@ -119,6 +120,7 @@ public:
 
     std::shared_ptr<Aws::S3::S3Client> create() const;
 
+    bool virtual_host_style;
     int max_redirects;
     int connect_timeout_ms;
     int request_timeout_ms;

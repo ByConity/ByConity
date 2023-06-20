@@ -42,6 +42,7 @@
 #include <Common/ThreadPool.h>
 #include <Common/isLocalAddress.h>
 #include <common/types.h>
+#include <CloudServices/CnchBGThreadPartitionSelector.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
 // #include <Storages/HDFS/HDFSCommon.h>
@@ -186,6 +187,8 @@ class CnchWorkerClientPools;
 class ICnchBGThread;
 using CnchBGThreadPtr = std::shared_ptr<ICnchBGThread>;
 class CnchBGThreadsMap;
+class CnchBGThreadPartitionSelector;
+using PartitionSelectorPtr = std::shared_ptr<CnchBGThreadPartitionSelector>;
 
 class IOutputFormat;
 using OutputFormatPtr = std::shared_ptr<IOutputFormat>;
@@ -803,6 +806,7 @@ public:
     void setRemoteHostFilter(const Poco::Util::AbstractConfiguration & config);
     const RemoteHostFilter & getRemoteHostFilter() const;
 
+    UInt16 getPortFromEnvForConsul(const char * key) const;
     HostWithPorts getHostWithPorts() const;
 
     /// The port that the server listens for executing SQL queries.
@@ -1009,6 +1013,9 @@ public:
 
     /// Call after initialization before using system logs. Call for global context.
     void initializeSystemLogs();
+    
+    void initBGPartitionSelector();
+    PartitionSelectorPtr getBGPartitionSelector() const;
 
     /// Call after initialization before using trace collector.
     void initializeTraceCollector();

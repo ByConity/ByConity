@@ -4,9 +4,11 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. 654481 rows
       │     Order by: {c_customer_id asc, c_salutation asc, c_first_name asc, c_last_name asc, c_preferred_cust_flag asc, c_birth_day asc, c_birth_month asc, c_birth_year asc, c_birth_country asc, c_login asc, c_email_address asc, c_last_review_date_sk asc, expr#sum(wr_return_amt) asc}
+      │     Limit: 100
       └─ Gather Exchange est. 654481 rows
          └─ Sorting est. 654481 rows
             │     Order by: {c_customer_id asc, c_salutation asc, c_first_name asc, c_last_name asc, c_preferred_cust_flag asc, c_birth_day asc, c_birth_month asc, c_birth_year asc, c_birth_country asc, c_login asc, c_email_address asc, c_last_review_date_sk asc, expr#sum(wr_return_amt) asc}
+            │     Limit: 100
             └─ Inner Join est. 699045 rows
                │     Condition: ca_state == ca_state_2
                │     Filter: `expr#sum(wr_return_amt)` > (`expr#avg(ctr_total_return)` * '1.2')

@@ -73,6 +73,7 @@
 #include <Parsers/formatAST.h>
 #include <Poco/UUIDGenerator.h>
 #include <Poco/URI.h>
+#include <Poco/JSON/Parser.h>
 #include <TableFunctions/ITableFunction.h>
 #include <FormaterTool/HDFSDumper.h>
 #include <csignal>
@@ -85,6 +86,10 @@
 
 #if !defined(ARCADIA_BUILD)
 #    include "config_core.h"
+#endif
+
+#if USE_RDKAFKA
+#include <Storages/Kafka/CnchKafkaOffsetManager.h>
 #endif
 
 namespace DB
@@ -451,6 +456,9 @@ BlockIO InterpreterSystemQuery::executeCnchCommand(ASTSystemQuery & query, Conte
         case Type::RESTART_CONSUME:
             startOrStopConsume(query.type);
             break;
+        case Type::RESET_CONSUME_OFFSET:
+            resetConsumeOffset(query, system_context);
+            break;
         case Type::STOP_MERGES:
         case Type::START_MERGES:
         case Type::REMOVE_MERGES:
@@ -648,6 +656,59 @@ void InterpreterSystemQuery::startOrStopConsume(ASTSystemQuery::Type type)
         default:
             throw Exception("Unknown command type " + String(ASTSystemQuery::typeToString(type)), ErrorCodes::LOGICAL_ERROR);
     }
+}
+
+void InterpreterSystemQuery::resetConsumeOffset(ASTSystemQuery & query, ContextMutablePtr & system_context)
+{
+    Poco::JSON::Parser json_parser;
+    Poco::Dynamic::Var result = json_parser.parse(query.string_data);
+    auto object = result.extract<Poco::JSON::Object::Ptr>();
+
+    if (!object->has("database_name") || !object->has("table_name"))
+        throw Exception("Database and table name are required for ResetConsumeOffset", ErrorCodes::BAD_ARGUMENTS);
+
+    String database_name = object->getValue<std::string>("database_name");
+    String table_name = object->getValue<std::string>("table_name");
+    auto storage = system_context->getCnchCatalog()->getTable(*system_context, database_name, table_name, system_context->getTimestamp());
+    auto * cnch_kafka = dynamic_cast<StorageCnchKafka *>(storage.get());
+    if (!cnch_kafka)
+        throw Exception("CnchKafka is expected but provided " + storage->getName(), ErrorCodes::BAD_ARGUMENTS);
+    CnchKafkaOffsetManagerPtr kafka_offset_manager = std::make_shared<CnchKafkaOffsetManager>(cnch_kafka->getStorageID(), system_context);
+
+    if (object->has("offset_value"))
+    {
+        int64_t offset = object->getValue<int64_t>("offset_value");
+        kafka_offset_manager->resetOffsetToSpecialPosition(offset);
+    }
+    else if (object->has("timestamp"))
+    {
+        uint64_t timestamp = object->getValue<uint64_t>("timestamp");
+        kafka_offset_manager->resetOffsetWithTimestamp(timestamp);
+    }
+    else if (object->has("offset_values"))
+    {
+        String topic_name = object->getValue<std::string>("topic_name");
+        Poco::JSON::Array::Ptr children = object->getArray("offset_values");
+        cppkafka::TopicPartitionList tpl;
+        for (const auto & e : *children)
+        {
+            auto e_object = e.extract<Poco::JSON::Object::Ptr>();
+            if (e_object->has("offset") && e_object->has("partition"))
+            {
+                int64_t offset = e_object->getValue<int64_t>("offset");
+                int partition_number = e_object->getValue<int>("partition");
+                tpl.push_back({topic_name, partition_number, offset});
+            }
+            else
+                throw Exception("sub-object under offset_values Array need to has offset and partition!, input: "
+                                    + query.string_data, ErrorCodes::BAD_ARGUMENTS);
+        }
+
+        kafka_offset_manager->resetOffsetWithSpecificOffsets(tpl);
+    }
+    else
+        throw Exception("offset should be set by one of the parameters: timestamp, offset_value, offset_values. input: "
+                            + query.string_data, ErrorCodes::BAD_ARGUMENTS);
 }
 
 void InterpreterSystemQuery::restoreReplica()

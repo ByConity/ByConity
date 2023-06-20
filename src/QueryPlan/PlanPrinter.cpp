@@ -113,11 +113,23 @@ std::string PlanPrinter::textLogicalPlan(
     return output;
 }
 
-std::string PlanPrinter::jsonLogicalPlan(QueryPlan & plan, bool print_stats, bool)
+String PlanPrinter::jsonLogicalPlan(QueryPlan & plan, bool print_stats, bool, const PlanNodeCost & plan_cost)
 {
     std::ostringstream os;
     JsonPrinter printer{print_stats};
-    auto json = printer.printLogicalPlan(*plan.getPlanNode());
+    Poco::JSON::Object::Ptr json = new Poco::JSON::Object(true);
+    if (!plan.getPlanNode()->getStatistics() && plan_cost.getCost() == 0)
+    {
+        json = printer.printLogicalPlan(*plan.getPlanNode());
+    }
+    else
+    {
+        json->set("total_cost", plan_cost.getCost());
+        json->set("cpu_cost_value", plan_cost.getCpuValue());
+        json->set("net_cost_value", plan_cost.getNetValue());
+        json->set("men_cost_value", plan_cost.getMenValue());
+        json->set("plan", printer.printLogicalPlan(*plan.getPlanNode()));
+    }
     json->stringify(os, 2);
     return os.str();
 }
@@ -145,7 +157,7 @@ std::string PlanPrinter::TextPrinter::printLogicalPlan(PlanNodeBase & plan, cons
     std::stringstream out;
 
     auto step = plan.getStep();
-    out << intent.print() << printPrefix(plan) << step->getName() << printSuffix(plan) << printStatistics(plan) << printDetail(plan, intent)
+    out << intent.print() << printPrefix(plan) << step->getName() << printSuffix(plan) << printStatistics(plan) << printDetail(plan.getStep(), intent)
         << "\n";
     for (auto it = plan.getChildren().begin(); it != plan.getChildren().end();)
     {
@@ -237,12 +249,12 @@ std::string PlanPrinter::TextPrinter::printSuffix(PlanNodeBase & plan)
     return out.str();
 }
 
-std::string PlanPrinter::TextPrinter::printDetail(PlanNodeBase & plan, const TextPrinterIntent & intent) const
+std::string PlanPrinter::TextPrinter::printDetail(ConstQueryPlanStepPtr plan, const TextPrinterIntent & intent) const
 {
     std::stringstream out;
-    if (verbose && plan.getStep()->getType() == IQueryPlanStep::Type::Join)
+    if (verbose && plan->getType() == IQueryPlanStep::Type::Join)
     {
-        const auto * join = dynamic_cast<const JoinStep *>(plan.getStep().get());
+        const auto * join = dynamic_cast<const JoinStep *>(plan.get());
         out << intent.detailIntent() << "Condition: ";
         if (!join->getLeftKeys().empty())
             out << join->getLeftKeys()[0] << " == " << join->getRightKeys()[0];
@@ -256,20 +268,22 @@ std::string PlanPrinter::TextPrinter::printDetail(PlanNodeBase & plan, const Tex
         }
     }
 
-    if (verbose && plan.getStep()->getType() == IQueryPlanStep::Type::Sorting)
+    if (verbose && plan->getType() == IQueryPlanStep::Type::Sorting)
     {
-        auto sort = dynamic_cast<const SortingStep *>(plan.getStep().get());
+        auto sort = dynamic_cast<const SortingStep *>(plan.get());
         std::vector<String> sort_columns;
         for (auto & desc : sort->getSortDescription())
             sort_columns.emplace_back(
                 desc.column_name + (desc.direction == -1 ? " desc" : " asc") + (desc.nulls_direction == -1 ? " nulls_last" : ""));
         out << intent.detailIntent() << "Order by: " << join(sort_columns, ", ", "{", "}");
+        if (sort->getLimit())
+            out << intent.detailIntent() << "Limit: " << sort->getLimit();
     }
 
 
-    if (verbose && plan.getStep()->getType() == IQueryPlanStep::Type::Limit)
+    if (verbose && plan->getType() == IQueryPlanStep::Type::Limit)
     {
-        const auto * limit = dynamic_cast<const LimitStep *>(plan.getStep().get());
+        const auto * limit = dynamic_cast<const LimitStep *>(plan.get());
         out << intent.detailIntent();
         if (limit->getLimit())
             out << "Limit: " << limit->getLimit();
@@ -277,9 +291,9 @@ std::string PlanPrinter::TextPrinter::printDetail(PlanNodeBase & plan, const Tex
             out << "Offset: " << limit->getOffset();
     }
 
-    if (verbose && plan.getStep()->getType() == IQueryPlanStep::Type::Aggregating)
+    if (verbose && plan->getType() == IQueryPlanStep::Type::Aggregating)
     {
-        const auto * agg = dynamic_cast<const AggregatingStep *>(plan.getStep().get());
+        const auto * agg = dynamic_cast<const AggregatingStep *>(plan.get());
         auto keys = agg->getKeys();
         std::sort(keys.begin(), keys.end());
         out << intent.detailIntent() << "Group by: " << join(keys, ", ", "{", "}");
@@ -299,9 +313,9 @@ std::string PlanPrinter::TextPrinter::printDetail(PlanNodeBase & plan, const Tex
             out << intent.detailIntent() << "Aggregates: " << join(aggregates, ", ");
     }
 
-    if (verbose && plan.getStep()->getType() == IQueryPlanStep::Type::Exchange)
+    if (verbose && plan->getType() == IQueryPlanStep::Type::Exchange)
     {
-        const auto * exchange = dynamic_cast<const ExchangeStep *>(plan.getStep().get());
+        const auto * exchange = dynamic_cast<const ExchangeStep *>(plan.get());
         if (exchange->getExchangeMode() == ExchangeMode::REPARTITION)
         {
             auto keys = exchange->getSchema().getPartitioningColumns();
@@ -310,9 +324,9 @@ std::string PlanPrinter::TextPrinter::printDetail(PlanNodeBase & plan, const Tex
         }
     }
 
-    if (verbose && plan.getStep()->getType() == IQueryPlanStep::Type::Filter)
+    if (verbose && plan->getType() == IQueryPlanStep::Type::Filter)
     {
-        const auto * filter = dynamic_cast<const FilterStep *>(plan.getStep().get());
+        const auto * filter = dynamic_cast<const FilterStep *>(plan.get());
         auto filters = DynamicFilters::extractDynamicFilters(filter->getFilter());
         if (!filters.second.empty())
             out << intent.detailIntent() << "Condition: " << serializeAST(*PredicateUtils::combineConjuncts(filters.second));
@@ -326,9 +340,9 @@ std::string PlanPrinter::TextPrinter::printDetail(PlanNodeBase & plan, const Tex
         }
     }
 
-    if (verbose && plan.getStep()->getType() == IQueryPlanStep::Type::Projection)
+    if (verbose && plan->getType() == IQueryPlanStep::Type::Projection)
     {
-        const auto * projection = dynamic_cast<const ProjectionStep *>(plan.getStep().get());
+        const auto * projection = dynamic_cast<const ProjectionStep *>(plan.get());
 
         std::vector<String> identities;
         std::vector<String> assignments;
@@ -360,9 +374,9 @@ std::string PlanPrinter::TextPrinter::printDetail(PlanNodeBase & plan, const Tex
         }
     }
 
-    if (verbose && plan.getStep()->getType() == IQueryPlanStep::Type::TableScan)
+    if (verbose && plan->getType() == IQueryPlanStep::Type::TableScan)
     {
-        const auto * table_scan = dynamic_cast<const TableScanStep *>(plan.getStep().get());
+        const auto * table_scan = dynamic_cast<const TableScanStep *>(plan.get());
         std::vector<String> identities;
         std::vector<String> assignments;
         for (const auto & name_with_alias : table_scan->getColumnAlias())
@@ -381,6 +395,26 @@ std::string PlanPrinter::TextPrinter::printDetail(PlanNodeBase & plan, const Tex
         }
 
         out << intent.detailIntent() << "Outputs: " << join(assignments, ", ");
+
+        if (table_scan->getPushdownFilter())
+            out << printDetail(table_scan->getPushdownFilter(), intent);
+
+        if (table_scan->getPushdownProjection())
+            out << printDetail(table_scan->getPushdownProjection(), intent);
+
+        if (table_scan->getPushdownAggregation())
+            out << printDetail(table_scan->getPushdownAggregation(), intent);
+    }
+
+    if (verbose && plan->getType() == IQueryPlanStep::Type::TopNFiltering)
+    {
+        auto topn_filter = dynamic_cast<const TopNFilteringStep *>(plan.get());
+        std::vector<String> sort_columns;
+        for (auto & desc : topn_filter->getSortDescription())
+            sort_columns.emplace_back(
+                desc.column_name + (desc.direction == -1 ? " desc" : " asc") + (desc.nulls_direction == -1 ? " nulls_last" : ""));
+        out << intent.detailIntent() << "Order by: " << join(sort_columns, ", ", "{", "}");
+        out << intent.detailIntent() << "Size: " << topn_filter->getSize();
     }
     return out.str();
 }
@@ -390,15 +424,13 @@ Poco::JSON::Object::Ptr PlanPrinter::JsonPrinter::printLogicalPlan(PlanNodeBase 
     Poco::JSON::Object::Ptr json = new Poco::JSON::Object(true);
     json->set("id", plan.getId());
     json->set("type", IQueryPlanStep::toString(plan.getStep()->getType()));
-    detail(json, plan);
+    detail(json, plan.getStep());
 
     if (print_stats)
     {
         const auto & statistics = plan.getStatistics();
         if (statistics)
             json->set("statistics", statistics.value()->toJson());
-        else
-            json->set("statistics", nullptr);
     }
 
     if (!plan.getChildren().empty())
@@ -413,11 +445,11 @@ Poco::JSON::Object::Ptr PlanPrinter::JsonPrinter::printLogicalPlan(PlanNodeBase 
     return json;
 }
 
-void PlanPrinter::JsonPrinter::detail(Poco::JSON::Object::Ptr & json, PlanNodeBase & plan)
+void PlanPrinter::JsonPrinter::detail(Poco::JSON::Object::Ptr & json, ConstQueryPlanStepPtr plan)
 {
-    if (plan.getStep()->getType() == IQueryPlanStep::Type::Join)
+    if (plan->getType() == IQueryPlanStep::Type::Join)
     {
-        const auto *join = dynamic_cast<const JoinStep *>(plan.getStep().get());
+        const auto *join = dynamic_cast<const JoinStep *>(plan.get());
         Poco::JSON::Array left_keys;
         Poco::JSON::Array right_keys;
 
@@ -452,18 +484,18 @@ void PlanPrinter::JsonPrinter::detail(Poco::JSON::Object::Ptr & json, PlanNodeBa
         json->set("kind", f(join->getKind()));
     }
 
-    if (plan.getStep()->getType() == IQueryPlanStep::Type::Aggregating)
+    if (plan->getType() == IQueryPlanStep::Type::Aggregating)
     {
-        const auto * agg = dynamic_cast<const AggregatingStep *>(plan.getStep().get());
+        const auto * agg = dynamic_cast<const AggregatingStep *>(plan.get());
         Poco::JSON::Array keys;
         for (const auto & item : agg->getKeys())
             keys.add(item);
         json->set("groupKeys", keys);
     }
 
-    if (plan.getStep()->getType() == IQueryPlanStep::Type::Exchange)
+    if (plan->getType() == IQueryPlanStep::Type::Exchange)
     {
-        const auto * exchange = dynamic_cast<const ExchangeStep *>(plan.getStep().get());
+        const auto * exchange = dynamic_cast<const ExchangeStep *>(plan.get());
         Poco::JSON::Array keys;
         for (const auto & item : (exchange->getSchema().getPartitioningColumns()))
             keys.add(item);
@@ -488,20 +520,41 @@ void PlanPrinter::JsonPrinter::detail(Poco::JSON::Object::Ptr & json, PlanNodeBa
         json->set("mode", f(exchange->getExchangeMode()));
     }
 
-    if (plan.getStep()->getType() == IQueryPlanStep::Type::Filter)
+    if (plan->getType() == IQueryPlanStep::Type::Filter)
     {
-        const auto * filter = dynamic_cast<const FilterStep *>(plan.getStep().get());
+        const auto * filter = dynamic_cast<const FilterStep *>(plan.get());
         auto filters = DynamicFilters::extractDynamicFilters(filter->getFilter());
         json->set("filter", serializeAST(*PredicateUtils::combineConjuncts(filters.second)));
         if (!filters.first.empty())
             json->set("dynamicFilter", serializeAST(*PredicateUtils::combineConjuncts(filters.first)));
     }
 
-    if (plan.getStep()->getType() == IQueryPlanStep::Type::TableScan)
+    if (plan->getType() == IQueryPlanStep::Type::TableScan)
     {
-        const auto * table_scan = dynamic_cast<const TableScanStep *>(plan.getStep().get());
+        const auto * table_scan = dynamic_cast<const TableScanStep *>(plan.get());
         json->set("database", table_scan->getDatabase());
         json->set("table", table_scan->getTable());
+
+        if (table_scan->getPushdownFilter())
+        {
+            Poco::JSON::Object::Ptr sub_json = new Poco::JSON::Object(true);
+            detail(sub_json, table_scan->getPushdownFilter());
+            json->set("pushdownFilter", sub_json);
+        }
+
+        if (table_scan->getPushdownProjection())
+        {
+            Poco::JSON::Object::Ptr sub_json = new Poco::JSON::Object(true);
+            detail(sub_json, table_scan->getPushdownProjection());
+            json->set("pushdownProjection", sub_json);
+        }
+
+        if (table_scan->getPushdownAggregation())
+        {
+            Poco::JSON::Object::Ptr sub_json = new Poco::JSON::Object(true);
+            detail(sub_json, table_scan->getPushdownAggregation());
+            json->set("pushdownAggregation", sub_json);
+        }
     }
 }
 

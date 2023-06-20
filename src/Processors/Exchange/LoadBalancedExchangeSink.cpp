@@ -54,6 +54,11 @@ LoadBalancedExchangeSink::~LoadBalancedExchangeSink() = default;
 
 void LoadBalancedExchangeSink::consume(Chunk chunk)
 {
+    if (!has_input)
+    {
+        finish();
+        return;
+    }
     auto status = ExchangeUtils::sendAndCheckReturnStatus(*senders[partition_selector->selectNext()], std::move(chunk));
     if (status.code != BroadcastStatusCode::RUNNING)
         finish();

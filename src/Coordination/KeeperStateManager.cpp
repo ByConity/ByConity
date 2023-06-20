@@ -282,6 +282,8 @@ nuraft::ptr<nuraft::srv_state> KeeperStateManager::read_state()
             read_buf.read(reinterpret_cast<char *>(state_buf->data_begin()), buffer_size);
 
             SipHash hash;
+            // checked update implementation, no apparent buffer overflow
+            // coverity[overrun-buffer-val]
             hash.update(version);
             hash.update(reinterpret_cast<const char *>(state_buf->data_begin()), state_buf->size());
 

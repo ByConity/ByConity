@@ -56,6 +56,9 @@ void registerFunctionAtanh(FunctionFactory & factory);
 void registerFunctionPow(FunctionFactory & factory);
 void registerFunctionSign(FunctionFactory & factory);
 void registerFunctionConv(FunctionFactory & factory);
+void registerFunctionDegrees(FunctionFactory & factory);
+void registerFunctionRadians(FunctionFactory & factory);
+void registerFunctionCot(FunctionFactory & factory);
 
 
 void registerFunctionsMath(FunctionFactory & factory)
@@ -93,6 +96,9 @@ void registerFunctionsMath(FunctionFactory & factory)
     registerFunctionPow(factory);
     registerFunctionSign(factory);
     registerFunctionConv(factory);
+    registerFunctionDegrees(factory);
+    registerFunctionRadians(factory);
+    registerFunctionCot(factory);
 }
 
 }

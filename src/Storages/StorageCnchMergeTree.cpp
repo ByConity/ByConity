@@ -290,7 +290,7 @@ PrepareContextResult StorageCnchMergeTree::prepareReadContext(
     auto bucket_numbers = getRequiredBucketNumbers(query_info, local_context);
     collectResource(local_context, parts, local_table_name, bucket_numbers);
 
-    return {std::move(local_table_name), std::move(parts)};
+    return {std::move(local_table_name), std::move(parts), {}};
 }
 
 Strings StorageCnchMergeTree::selectPartitionsByPredicate(
@@ -420,10 +420,9 @@ time_t StorageCnchMergeTree::getTTLForPartition(const MergeTreePartition & parti
     const auto & partition_key_sample = metadata_snapshot->getPartitionKey().sample_block;
     /// We can only compute ttl at this point if partition key expression includes all columns in TTL expression
     const auto & required_columns = table_ttl.rows_ttl.expression->getRequiredColumns();
-    if (std::any_of(
-            required_columns.begin(),
-            required_columns.end(),
-            [&partition_key_sample](const auto & name) { return !partition_key_sample.has(name); }))
+    if (std::any_of(required_columns.begin(), required_columns.end(), [&partition_key_sample](const auto & name) {
+            return !partition_key_sample.has(name);
+        }))
         return 0;
 
     MutableColumns columns = partition_key_sample.cloneEmptyColumns();
@@ -706,100 +705,108 @@ StorageCnchMergeTree::write(const ASTPtr & query, const StorageMetadataPtr & met
     if (insert_query.table_id.database_name.empty())
         insert_query.table_id.database_name = local_context->getCurrentDatabase();
 
+    return std::make_shared<CloudMergeTreeBlockOutputStream>(*this, metadata_snapshot, local_context, enable_staging_area);
+}
+
+/// for insert select and insert infile
+BlockInputStreamPtr
+StorageCnchMergeTree::writeInWorker(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr local_context)
+{
+    bool enable_staging_area = metadata_snapshot->hasUniqueKey() && bool(local_context->getSettingsRef().enable_staging_area_for_write);
+    if (enable_staging_area)
+        LOG_DEBUG(log, "enable staging area for write");
+
+    auto modified_query_ast = query->clone();
+    auto & insert_query = modified_query_ast->as<ASTInsertQuery &>();
+
+    if (insert_query.table_id.database_name.empty())
+        insert_query.table_id.database_name = local_context->getCurrentDatabase();
+
     if (insert_query.select)
         touchActiveTimestampForInsertSelectQuery(insert_query, local_context);
 
-    if (insert_query.select || insert_query.in_file)
+    if (insert_query.select && local_context->getSettingsRef().restore_table_expression_in_distributed)
     {
-        if (insert_query.select && local_context->getSettingsRef().restore_table_expression_in_distributed)
+        RestoreTableExpressionsVisitor::Data data;
+        data.database = local_context->getCurrentDatabase();
+        RestoreTableExpressionsVisitor(data).visit(insert_query.select);
+    }
+
+    auto generated_tb_name = getCloudTableName(local_context);
+    auto local_table_name = generated_tb_name + "_write";
+    insert_query.table_id.table_name = local_table_name;
+
+    auto create_local_tb_query = getCreateQueryForCloudTable(getCreateTableSql(), local_table_name, local_context, enable_staging_area);
+
+    String query_statement = queryToString(insert_query);
+
+    WorkerGroupHandle worker_group = local_context->getCurrentWorkerGroup();
+
+    /// TODO: currently use only one write worker to do insert, use multiple write workers when distributed write is support
+    const Settings & settings = local_context->getSettingsRef();
+    int max_retry = 2, retry = 0;
+    auto num_of_workers = worker_group->getShardsInfo().size();
+    if (!num_of_workers)
+        throw Exception("No heathy worker available", ErrorCodes::VIRTUAL_WAREHOUSE_NOT_FOUND);
+
+    std::size_t index = std::hash<String>{}(local_context->getCurrentQueryId() + std::to_string(retry)) % num_of_workers;
+    const auto * write_shard_ptr = &(worker_group->getShardsInfo().at(index));
+
+    // TODO: healthy check by rpc
+    if (settings.query_worker_fault_tolerance)
+    {
+        ConnectionTimeouts connection_timeouts = DB::ConnectionTimeouts::getTCPTimeoutsWithoutFailover(local_context->getSettingsRef());
+
+        // Perform health check for selected write_shard and retry for 2 more times if there are enough write workers.
+        while (true)
         {
-            RestoreTableExpressionsVisitor::Data data;
-            data.database = local_context->getCurrentDatabase();
-            RestoreTableExpressionsVisitor(data).visit(insert_query.select);
-        }
+            LOG_TRACE(log, "Health check for worker: {}", write_shard_ptr->worker_id);
 
-        auto generated_tb_name = getCloudTableName(local_context);
-        auto local_table_name = generated_tb_name + "_write";
-        insert_query.table_id.table_name = local_table_name;
-
-        auto create_local_tb_query = getCreateQueryForCloudTable(getCreateTableSql(), local_table_name, local_context, enable_staging_area);
-
-        String query_statement = queryToString(insert_query);
-
-        WorkerGroupHandle worker_group = local_context->getCurrentWorkerGroup();
-
-        /// TODO: currently use only one write worker to do insert, use multiple write workers when distributed write is support
-        const Settings & settings = local_context->getSettingsRef();
-        int max_retry = 2, retry = 0;
-        auto num_of_workers = worker_group->getShardsInfo().size();
-        if (!num_of_workers)
-            throw Exception("No heathy worker available", ErrorCodes::VIRTUAL_WAREHOUSE_NOT_FOUND);
-
-        std::size_t index = std::hash<String>{}(local_context->getCurrentQueryId() + std::to_string(retry)) % num_of_workers;
-        const auto * write_shard_ptr = &(worker_group->getShardsInfo().at(index));
-
-        // TODO: healthy check by rpc
-        if (settings.query_worker_fault_tolerance)
-        {
-            ConnectionTimeouts connection_timeouts = DB::ConnectionTimeouts::getTCPTimeoutsWithoutFailover(local_context->getSettingsRef());
-
-            // Perform health check for selected write_shard and retry for 2 more times if there are enough write workers.
-            while (true)
+            try
             {
-                LOG_TRACE(log, "Health check for worker: {}", write_shard_ptr->worker_id);
+                // The checking task checks whether the current connection is connected or can connect.
+                auto entry = write_shard_ptr->pool->get(connection_timeouts, &settings, true);
+                Connection * conn = &(*entry);
+                conn->tryConnect(connection_timeouts);
+                break;
+            }
+            catch (const NetException &)
+            {
+                // Don't throw network exception, instead remove the unhealthy worker unless no more available workers or reach retry limit.
+                if (++retry > max_retry)
+                    throw Exception(
+                        "Cannot find healthy worker after " + std::to_string(max_retry) + " times retries.",
+                        ErrorCodes::VIRTUAL_WAREHOUSE_NOT_FOUND);
 
-                try
-                {
-                    // The checking task checks whether the current connection is connected or can connect.
-                    auto entry = write_shard_ptr->pool->get(connection_timeouts, &settings, true);
-                    Connection * conn = &(*entry);
-                    conn->tryConnect(connection_timeouts);
-                    break;
-                }
-                catch (const NetException &)
-                {
-                    // Don't throw network exception, instead remove the unhealthy worker unless no more available workers or reach retry limit.
-                    if (++retry > max_retry)
-                        throw Exception(
-                            "Cannot find healthy worker after " + std::to_string(max_retry) + " times retries.",
-                            ErrorCodes::VIRTUAL_WAREHOUSE_NOT_FOUND);
-
-                    index = (index + 1) % num_of_workers;
-                    write_shard_ptr = &(worker_group->getShardsInfo().at(index));
-                }
+                index = (index + 1) % num_of_workers;
+                write_shard_ptr = &(worker_group->getShardsInfo().at(index));
             }
         }
-
-        LOG_DEBUG(log, "Will send create query: {} to target worker: {}", create_local_tb_query, write_shard_ptr->worker_id);
-        auto worker_client = worker_group->getWorkerClients().at(index);
-
-        worker_client->sendCreateQueries(local_context, {create_local_tb_query});
-
-        auto table_suffix = extractTableSuffix(generated_tb_name);
-        Names dependency_create_queries = genViewDependencyCreateQueries(getStorageID(), local_context, table_suffix + "_write");
-        for (const auto & dependency_create_query : dependency_create_queries)
-        {
-            LOG_DEBUG(log, "Will send create query {}", dependency_create_query);
-        }
-        worker_client->sendCreateQueries(local_context, dependency_create_queries);
-
-        /// Ensure worker session local_context resource could be released
-        if (auto session_resource = local_context->tryGetCnchServerResource())
-        {
-            std::vector<size_t> index_values{index};
-            session_resource->setWorkerGroup(std::make_shared<WorkerGroupHandleImpl>(*worker_group, index_values));
-        }
-
-        LOG_DEBUG(log, "Prepare execute insert query: {}", query_statement);
-        /// TODO: send insert query by rpc.
-        sendQueryPerShard(local_context, query_statement, *write_shard_ptr, true);
-
-        return nullptr;
     }
-    else
+
+    LOG_DEBUG(log, "Will send create query: {} to target worker: {}", create_local_tb_query, write_shard_ptr->worker_id);
+    auto worker_client = worker_group->getWorkerClients().at(index);
+
+    worker_client->sendCreateQueries(local_context, {create_local_tb_query});
+
+    auto table_suffix = extractTableSuffix(generated_tb_name);
+    Names dependency_create_queries = genViewDependencyCreateQueries(getStorageID(), local_context, table_suffix + "_write");
+    for (const auto & dependency_create_query : dependency_create_queries)
     {
-        return std::make_shared<CloudMergeTreeBlockOutputStream>(*this, metadata_snapshot, local_context, enable_staging_area);
+        LOG_DEBUG(log, "Will send create query {}", dependency_create_query);
     }
+    worker_client->sendCreateQueries(local_context, dependency_create_queries);
+
+    /// Ensure worker session local_context resource could be released
+    if (auto session_resource = local_context->tryGetCnchServerResource())
+    {
+        std::vector<size_t> index_values{index};
+        session_resource->setWorkerGroup(std::make_shared<WorkerGroupHandleImpl>(*worker_group, index_values));
+    }
+
+    LOG_DEBUG(log, "Prepare execute insert query: {}", query_statement);
+    /// TODO: send insert query by rpc.
+    return sendQueryPerShard(local_context, query_statement, *write_shard_ptr, true);
 }
 
 HostWithPortsVec StorageCnchMergeTree::getWriteWorkers(const ASTPtr & /**/, ContextPtr local_context)
@@ -1220,7 +1227,7 @@ void StorageCnchMergeTree::executeDedupForRepair(const ASTPtr & partition, Conte
     CnchLockHolder cnch_lock(
         *getContext(),
         CnchDedupHelper::getLocksToAcquire(
-            scope, txn->getTransactionID(), *this, getSettings()->dedup_acquire_lock_timeout.value.totalMilliseconds()));
+            scope, txn->getTransactionID(), *this, getSettings()->unique_acquire_write_lock_timeout.value.totalMilliseconds()));
     if (!cnch_lock.tryLock())
         throw Exception("Failed to acquire lock for txn " + txn->getTransactionID().toString(), ErrorCodes::CNCH_LOCK_ACQUIRE_FAILED);
 
@@ -1314,7 +1321,7 @@ void StorageCnchMergeTree::sendPreloadTasks(ContextPtr local_context, ServerData
     server_resource->addCreateQuery(local_context, shared_from_this(), create_table_query, "");
     server_resource->addDataParts(getStorageUUID(), parts, bucket_numbers);
     /// TODO: async rpc?
-    server_resource->sendResource(local_context, [&](CnchWorkerClientPtr client, auto & resources, ExceptionHandler &handler) {
+    server_resource->sendResource(local_context, [&](CnchWorkerClientPtr client, auto & resources, ExceptionHandler & handler) {
         std::vector<brpc::CallId> ids;
         for (const auto & resource : resources)
         {
@@ -1350,7 +1357,6 @@ void StorageCnchMergeTree::filterPartsInExplicitTransaction(ServerDataPartsVecto
 
 namespace
 {
-
     /// Conversion that is allowed for serializable key (primary key, sorting key).
     /// Key should be serialized in the same way after conversion.
     /// NOTE: The list is not complete.
@@ -1591,6 +1597,12 @@ void StorageCnchMergeTree::checkAlterInCnchServer(const AlterCommands & commands
         {
             throw Exception("ALTER ADD INDEX is not supported for tables with the old syntax", ErrorCodes::BAD_ARGUMENTS);
         }
+        if (command.type == AlterCommand::ADD_PROJECTION && old_metadata.hasUniqueKey())
+        {
+            throw Exception(
+                "ALTER ADD PROJECTION is not supported for tables with the unique index",
+                ErrorCodes::BAD_ARGUMENTS);
+        }
         if (command.type == AlterCommand::ADD_PROJECTION && !is_custom_partitioned)
         {
             throw Exception("ALTER ADD PROJECTION is not supported for tables with the old syntax", ErrorCodes::BAD_ARGUMENTS);
@@ -1793,8 +1805,7 @@ Pipe StorageCnchMergeTree::alterPartition(
                 break;
 
             case PartitionCommand::INGEST_PARTITION:
-                ingestPartition(command, current_query_context);
-                break;
+                return ingestPartition(command, current_query_context);
 
             default:
                 IStorage::alterPartition(metadata_snapshot, commands, current_query_context);
@@ -1879,6 +1890,11 @@ void StorageCnchMergeTree::checkAlterSettings(const AlterCommands & commands) co
         "cnch_merge_max_total_rows_to_merge",
         "cnch_merge_only_realtime_partition",
         "cnch_merge_pick_worker_algo",
+        "cnch_merge_round_robin_partitions_interval",
+        "cnch_gc_round_robin_partitions_interval",
+        "cnch_gc_round_robin_partitions_number",
+        "gc_remove_part_thread_pool_size",
+        "gc_remove_part_batch_size",
     };
 
     /// Check whether the value is legal for Setting.
@@ -1915,8 +1931,8 @@ void StorageCnchMergeTree::truncate(
     dropPartitionOrPart(command, local_context);
 }
 
-void StorageCnchMergeTree::dropPartitionOrPart(const PartitionCommand & command,
-    ContextPtr local_context, IMergeTreeDataPartsVector* dropped_parts, size_t max_threads)
+void StorageCnchMergeTree::dropPartitionOrPart(
+    const PartitionCommand & command, ContextPtr local_context, IMergeTreeDataPartsVector * dropped_parts, size_t max_threads)
 {
     auto svr_parts = selectPartsByPartitionCommand(local_context, command);
     if (svr_parts.empty())
@@ -1936,8 +1952,11 @@ void StorageCnchMergeTree::dropPartitionOrPart(const PartitionCommand & command,
     }
 }
 
-void StorageCnchMergeTree::dropPartsImpl(ServerDataPartsVector& svr_parts_to_drop,
-    IMergeTreeDataPartsVector& parts_to_drop, bool detach, ContextPtr local_context,
+void StorageCnchMergeTree::dropPartsImpl(
+    ServerDataPartsVector & svr_parts_to_drop,
+    IMergeTreeDataPartsVector & parts_to_drop,
+    bool detach,
+    ContextPtr local_context,
     size_t max_threads)
 {
     auto txn = local_context->getCurrentTransaction();
@@ -1959,26 +1978,25 @@ void StorageCnchMergeTree::dropPartsImpl(ServerDataPartsVector& svr_parts_to_dro
         }
 
         UndoResources undo_resources;
-        auto write_undo_callback = [&](const DataPartPtr& part) {
-            UndoResource ub(txn->getTransactionID(), UndoResourceType::FileSystem, part->getFullRelativePath(),
+        auto write_undo_callback = [&](const DataPartPtr & part) {
+            UndoResource ub(
+                txn->getTransactionID(),
+                UndoResourceType::FileSystem,
+                part->getFullRelativePath(),
                 part->getRelativePathForDetachedPart(""));
             ub.setDiskName(part->volume->getDisk()->getName());
             undo_resources.push_back(ub);
         };
-        for (const auto& data_part : parts_to_drop)
+        for (const auto & data_part : parts_to_drop)
         {
             data_part->enumeratePreviousParts(write_undo_callback);
         }
-        local_context->getCnchCatalog()->writeUndoBuffer(UUIDHelpers::UUIDToString(getStorageUUID()),
-            txn->getTransactionID(), undo_resources);
+        local_context->getCnchCatalog()->writeUndoBuffer(
+            UUIDHelpers::UUIDToString(getStorageUUID()), txn->getTransactionID(), undo_resources);
 
         ThreadPool pool(std::min(parts_to_drop.size(), max_threads));
-        auto callback = [&pool] (const DataPartPtr& part) {
-            pool.scheduleOrThrowOnError([part]() {
-                part->renameToDetached("");
-            });
-        };
-        for (const auto& part : parts_to_drop)
+        auto callback = [&pool](const DataPartPtr & part) { pool.scheduleOrThrowOnError([part]() { part->renameToDetached(""); }); };
+        for (const auto & part : parts_to_drop)
         {
             part->enumeratePreviousParts(callback);
         }
@@ -2448,7 +2466,7 @@ void StorageCnchMergeTree::checkMutationIsPossible(const MutationCommands & comm
     for (const auto & command : commands)
     {
         if (command.type != MutationCommand::MATERIALIZE_INDEX)
-            throw Exception(ErrorCodes::NOT_IMPLEMENTED , "StorageCnchMergeTree doesn't support mutation of type {}\n", command.type);
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "StorageCnchMergeTree doesn't support mutation of type {}\n", command.type);
     }
 }
 

@@ -168,7 +168,8 @@ void calculateFunnelByTimes(std::function<UInt32(UInt32)> && getGroup, EventList
         // attribute related
         [[maybe_unused]] ParamType attr_check= {};
         [[maybe_unused]] bool      attr_set = {false};
-
+        
+        // coverity[use_after_move]
         if (unlikely(!reuse_funnel_index.empty()))
         {
             funnel_index = std::move(reuse_funnel_index);
@@ -359,6 +360,7 @@ void calculateFunnelByTimes(std::function<UInt32(UInt32)> && getGroup, EventList
 
         if (i >= num_events)
         {
+             // coverity[use_after_move]
             if (unlikely(!reuse_funnel_index.empty()))
                 countFunnel(reuse_funnel_index, slot_idx);
             break;

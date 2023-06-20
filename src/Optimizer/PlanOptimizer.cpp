@@ -15,6 +15,7 @@
 
 #include <Optimizer/PlanOptimizer.h>
 
+#include <Common/Stopwatch.h>
 #include <Optimizer/Cascades/CascadesOptimizer.h>
 #include <Optimizer/Iterative/IterativeRewriter.h>
 #include <Optimizer/PlanCheck.h>
@@ -70,6 +71,12 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
         std::make_shared<IterativeRewriter>(Rules::swapAdjacentRules(),"SwapAdjacent"),
 
         std::make_shared<MaterializedViewRewriter>(),
+
+        /// topn filtering optimization
+        /// rules use novel operators should be placed after MaterializedViewRewriter, in case of MV matching failure
+        std::make_shared<IterativeRewriter>(Rules::pushDownTopNRules(), "pushDownTopNRules"),
+        std::make_shared<IterativeRewriter>(Rules::createTopNFilteringRules(), "createTopNFiltering"),
+        std::make_shared<IterativeRewriter>(Rules::pushDownTopNFilteringRules(), "pushDownTopNFiltering"),
 
         // add exchange
         std::make_shared<AddExchange>(),
@@ -172,6 +179,12 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         //
         std::make_shared<MaterializedViewRewriter>(),
 
+        /// topn filtering optimization
+        /// rules use novel operators should be placed after MaterializedViewRewriter, in case of MV matching failure
+        std::make_shared<IterativeRewriter>(Rules::pushDownTopNRules(), "pushDownTopNRules"),
+        std::make_shared<IterativeRewriter>(Rules::createTopNFilteringRules(), "createTopNFiltering"),
+        std::make_shared<IterativeRewriter>(Rules::pushDownTopNFilteringRules(), "pushDownTopNFiltering"),
+
         // Cost-based optimizer
         std::make_shared<CascadesOptimizer>(),
 
@@ -206,16 +219,19 @@ void PlanOptimizer::optimize(QueryPlan & plan, ContextMutablePtr context)
     // Check init plan to satisfy with :
     // 1 Symbol exist check
     PlanCheck::checkInitPlan(plan, context);
-    auto start = std::chrono::high_resolution_clock::now();
+    Stopwatch rule_watch, total_watch;
+    total_watch.start();
 
     auto rewrite = [&](const Rewriters & rewriters) {
         for (auto & rewriter : rewriters)
         {
-            auto rewriter_begin = std::chrono::high_resolution_clock::now();
+            rule_watch.restart();
             rewriter->rewrite(plan, context);
-            auto now = std::chrono::high_resolution_clock::now();
-            UInt64 elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - start).count();
-            UInt64 single_rewriter_duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - rewriter_begin).count();
+            UInt64 elapsed = total_watch.elapsedMilliseconds();
+            double single_rewriter_duration = rule_watch.elapsedMillisecondsAsDouble();
+
+            LOG_DEBUG(&Poco::Logger::get("PlanOptimizer"), "optimizer rule run time: {}, {} ms",
+                      rewriter->name(), single_rewriter_duration);
 
             if (single_rewriter_duration >= 1000)
                 LOG_WARNING(

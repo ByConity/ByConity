@@ -84,8 +84,11 @@ namespace ErrorCodes
 
 TemporaryTableHolder::TemporaryTableHolder(ContextPtr context_, const TemporaryTableHolder::Creator & creator, const ASTPtr & query)
     : WithContext(context_->getGlobalContext())
-    , temporary_tables(DatabaseCatalog::instance().getDatabaseForTemporaryTables().get())
 {
+    auto & database_catalog = DatabaseCatalog::instance();
+    database_catalog.initializeAndLoadTemporaryDatabase();
+    temporary_tables = database_catalog.getDatabaseForTemporaryTables().get();
+
     ASTPtr original_create;
     ASTCreateQuery * create = dynamic_cast<ASTCreateQuery *>(query.get());
     String global_name;
@@ -167,6 +170,9 @@ StoragePtr TemporaryTableHolder::getTable() const
 
 void DatabaseCatalog::initializeAndLoadTemporaryDatabase()
 {
+    if (isDatabaseExist(TEMPORARY_DATABASE))
+        return;
+    // coverity[store_truncates_time_t]
     drop_delay_sec = getContext()->getConfigRef().getInt("database_atomic_delay_before_drop_table_sec", default_drop_delay_sec);
 
     auto db_for_temporary_and_external_tables = std::make_shared<DatabaseMemory>(TEMPORARY_DATABASE, getContext());
@@ -398,7 +404,8 @@ void DatabaseCatalog::assertDatabaseDoesntExistUnlocked(const String & database_
 
 void DatabaseCatalog::attachDatabase(const String & database_name, const DatabasePtr & database)
 {
-    if (database->getEngineName() == "Cnch")
+    // TEMPORARY_DATABASE is stored in DatabaseCatalog becase it is tiny
+    if (database->getEngineName() == "Cnch" && database_name != TEMPORARY_DATABASE)
         return;
     std::lock_guard lock{databases_mutex};
     assertDatabaseDoesntExistUnlocked(database_name);

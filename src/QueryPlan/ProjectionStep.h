@@ -47,7 +47,8 @@ public:
     const NameToType & getNameToType() const { return name_to_type; }
 
     const std::unordered_map<String, DynamicFilterBuildInfo> & getDynamicFilters() const { return dynamic_filters; }
-
+    bool hasDynamicFilters() const { return !dynamic_filters.empty(); }
+    
     bool isFinalProject() const { return final_project; }
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr) const override;
     void setInputStreams(const DataStreams & input_streams_) override;

@@ -32,24 +32,32 @@ FieldVisitorHash::FieldVisitorHash(SipHash & hash_) : hash(hash_) {}
 void FieldVisitorHash::operator() (const Null &) const
 {
     UInt8 type = Field::Types::Null;
+    // Checked update implementation and there is no out of bounds
+    // coverity[overrun-buffer-val]
     hash.update(type);
 }
 
 void FieldVisitorHash::operator() (const NegativeInfinity &) const
 {
     UInt8 type = Field::Types::NegativeInfinity;
+    // Checked update implementation and there is no out of bounds
+    // coverity[overrun-buffer-val]
     hash.update(type);
 }
 
 void FieldVisitorHash::operator() (const PositiveInfinity &) const
 {
     UInt8 type = Field::Types::PositiveInfinity;
+    // Checked update implementation and there is no out of bounds
+    // coverity[overrun-buffer-val]
     hash.update(type);
 }
 
 void FieldVisitorHash::operator() (const UInt64 & x) const
 {
     UInt8 type = Field::Types::UInt64;
+    // Checked update implementation and there is no out of bounds
+    // coverity[overrun-buffer-val]
     hash.update(type);
     hash.update(x);
 }
@@ -64,6 +72,8 @@ void FieldVisitorHash::operator() (const UInt128 & x) const
 void FieldVisitorHash::operator() (const Int64 & x) const
 {
     UInt8 type = Field::Types::Int64;
+    // Checked update implementation and there is no out of bounds
+    // coverity[overrun-buffer-val]
     hash.update(type);
     hash.update(x);
 }
@@ -78,6 +88,8 @@ void FieldVisitorHash::operator() (const Int128 & x) const
 void FieldVisitorHash::operator() (const UUID & x) const
 {
     UInt8 type = Field::Types::UUID;
+    // Checked update implementation and there is no out of bounds
+    // coverity[overrun-buffer-val]
     hash.update(type);
     hash.update(x);
 }
@@ -85,6 +97,8 @@ void FieldVisitorHash::operator() (const UUID & x) const
 void FieldVisitorHash::operator() (const Float64 & x) const
 {
     UInt8 type = Field::Types::Float64;
+    // Checked update implementation and there is no out of bounds
+    // coverity[overrun-buffer-val]
     hash.update(type);
     hash.update(x);
 }
@@ -92,6 +106,8 @@ void FieldVisitorHash::operator() (const Float64 & x) const
 void FieldVisitorHash::operator() (const String & x) const
 {
     UInt8 type = Field::Types::String;
+    // Checked and there is no apparent out of bounds
+    // coverity[overrun-buffer-val]
     hash.update(type);
     hash.update(x.size());
     hash.update(x.data(), x.size());
@@ -100,6 +116,8 @@ void FieldVisitorHash::operator() (const String & x) const
 void FieldVisitorHash::operator() (const Tuple & x) const
 {
     UInt8 type = Field::Types::Tuple;
+    // Checked update implementation and there is no out of bounds
+    // coverity[overrun-buffer-val]
     hash.update(type);
     hash.update(x.size());
 
@@ -110,6 +128,8 @@ void FieldVisitorHash::operator() (const Tuple & x) const
 void FieldVisitorHash::operator() (const Map & x) const
 {
     UInt8 type = Field::Types::Map;
+    // Checked update implementation and there is no out of bounds
+    // coverity[overrun-buffer-val]
     hash.update(type);
     hash.update(x.size());
 
@@ -125,6 +145,8 @@ void FieldVisitorHash::operator() ([[maybe_unused]] const ByteMap & x) const
 void FieldVisitorHash::operator() (const Array & x) const
 {
     UInt8 type = Field::Types::Array;
+    // Checked update implementation and there is no out of bounds
+    // coverity[overrun-buffer-val]
     hash.update(type);
     hash.update(x.size());
 
@@ -135,7 +157,11 @@ void FieldVisitorHash::operator() (const Array & x) const
 void FieldVisitorHash::operator() (const DecimalField<Decimal32> & x) const
 {
     UInt8 type = Field::Types::Decimal32;
+    // Checked update implementation and there is no out of bounds
+    // coverity[overrun-buffer-val]
     hash.update(type);
+    // Checked update implementation and there is no out of bounds
+    // coverity[overrun-buffer-val]
     hash.update(x.getValue().value);
 }
 
@@ -163,6 +189,8 @@ void FieldVisitorHash::operator() (const DecimalField<Decimal256> & x) const
 void FieldVisitorHash::operator() (const AggregateFunctionStateData & x) const
 {
     UInt8 type = Field::Types::AggregateFunctionState;
+    // Checked update implementation and there is no out of bounds
+    // coverity[overrun-buffer-val]
     hash.update(type);
     hash.update(x.name.size());
     hash.update(x.name.data(), x.name.size());
@@ -173,6 +201,8 @@ void FieldVisitorHash::operator() (const AggregateFunctionStateData & x) const
 void FieldVisitorHash::operator() (const UInt256 & x) const
 {
     UInt8 type = Field::Types::UInt256;
+    // Checked update implementation and there is no out of bounds
+    // coverity[overrun-buffer-val]
     hash.update(type);
     hash.update(x);
 }
@@ -187,6 +217,8 @@ void FieldVisitorHash::operator() (const Int256 & x) const
 void FieldVisitorHash::operator() (const BitMap64 & x) const
 {
     UInt8 type = Field::Types::BitMap64;
+    // Checked update implementation and there is no out of bounds
+    // coverity[overrun-buffer-val]
     hash.update(type);
     hash.update(x.cardinality());
 

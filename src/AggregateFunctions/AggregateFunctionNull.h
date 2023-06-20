@@ -517,7 +517,7 @@ public:
 #endif
 
 private:
-    enum { MAX_ARGS = 20 };
+    enum { MAX_ARGS = 24 };
     size_t number_of_arguments = 0;
     std::array<char, MAX_ARGS> is_nullable;    /// Plain array is better than std::vector due to one indirection less.
 };
