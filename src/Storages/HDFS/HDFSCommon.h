@@ -303,7 +303,7 @@ private:
     std::mt19937 generator;
 };
 
-static TTLBrokenNameNodes brokenNNs; // NameNode blacklist
+extern TTLBrokenNameNodes brokenNNs; // NameNode blacklist - TODO: make it singleton
 
 // set read/connect timeout, default value in libhdfs3 is about 1 hour, and too large
 /// TODO Allow to tune from query Settings.
