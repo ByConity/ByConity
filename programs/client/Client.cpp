@@ -1445,7 +1445,8 @@ private:
 
             if (have_error)
             {
-                fmt::print(stderr, "Error on processing query '{}': {}\n", ast_to_process->formatForErrorMessage(), exception->message());
+                if (likely(ast_to_process))
+                    fmt::print(stderr, "Error on processing query '{}': {}\n", ast_to_process->formatForErrorMessage(), exception->message());
 
                 // Try to reconnect after errors, for two reasons:
                 // 1. We might not have realized that the server died, e.g. if

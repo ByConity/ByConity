@@ -477,6 +477,8 @@ void optimizeMonotonousFunctionsInOrderBy(ASTSelectQuery * select_query, Context
 
         if (!data.isRejected())
         {
+            // data.identifier will be assigned in visit()
+            // coverity[var_deref_model]
             ast_func = data.identifier->clone();
             ast_func->setAlias("");
             if (!data.monotonicity.is_positive)

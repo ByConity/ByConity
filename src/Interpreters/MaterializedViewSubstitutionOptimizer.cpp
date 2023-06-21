@@ -652,6 +652,10 @@ namespace DB
                 target_expression = composeOr(target_predicates);
             }
 
+            // Under this else branch, target_expression and view_expression are both not nullptr
+            // This check is here because target_expression could be reassigned to the value of 
+            // composeOr(target_predicates) which could return a nullptr
+            // coverity[check_after_deref]
             if (target_expression)
             {
                 LOG_DEBUG(&Poco::Logger::get("matchWhere"),  "target expression-{}",  queryToString(target_expression));
