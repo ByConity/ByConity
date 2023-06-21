@@ -101,6 +101,8 @@ public:
     // cache.
     virtual size_t TotalCharge() const = 0;
 
+    virtual size_t TotalCapacity() const = 0;
+
 private:
     struct Rep;
     Rep * rep_;

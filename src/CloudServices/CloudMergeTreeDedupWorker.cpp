@@ -29,7 +29,12 @@
 
 namespace ProfileEvents
 {
-extern const Event BackgroundDedupSchedulePoolTask;
+    extern const Event ScheduledDedupTaskNumber;
+}
+
+namespace CurrentMetrics
+{
+    extern const Metric BackgroundDedupSchedulePoolTask;
 }
 
 namespace DB
@@ -106,7 +111,8 @@ void CloudMergeTreeDedupWorker::iterate()
         return;
     }
 
-    // ProfileEvents::increment(ProfileEvents::BackgroundDedupSchedulePoolTask);
+    ProfileEvents::increment(ProfileEvents::ScheduledDedupTaskNumber);
+    CurrentMetrics::Increment metric_increment{CurrentMetrics::BackgroundDedupSchedulePoolTask};
 
     DedupWorkerStatus copy_status = getDedupWorkerStatus();
 

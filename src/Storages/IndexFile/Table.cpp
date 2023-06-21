@@ -20,8 +20,15 @@
 #include <Storages/IndexFile/SelectIterator.h>
 #include <Storages/IndexFile/TwoLevelIterator.h>
 #include <Common/Coding.h>
+#include <Common/ProfileEvents.h>
 
 #include <memory>
+
+namespace ProfileEvents
+{
+    extern const Event UniqueKeyIndexBlockCacheHit;
+    extern const Event UniqueKeyIndexBlockCacheMiss;
+}
 
 namespace DB::IndexFile
 {
@@ -208,10 +215,12 @@ Iterator * Table::BlockReader(void * arg, const ReadOptions & options, const Sli
             cache_handle = block_cache->Lookup(key);
             if (cache_handle != nullptr)
             {
+                ProfileEvents::increment(ProfileEvents::UniqueKeyIndexBlockCacheHit);
                 block = reinterpret_cast<Block *>(block_cache->Value(cache_handle));
             }
             else
             {
+                ProfileEvents::increment(ProfileEvents::UniqueKeyIndexBlockCacheMiss);
                 s = ReadBlock(table->rep_->file.get(), options, handle, &contents);
                 if (s.ok())
                 {

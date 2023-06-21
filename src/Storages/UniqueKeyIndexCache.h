@@ -48,11 +48,11 @@ public:
         auto result = Base::getOrSet(key, load_func);
         if (!result.second)
         {
-            // ProfileEvents::increment(ProfileEvents::UniqueKeyIndexMetaCacheHit);
+            ProfileEvents::increment(ProfileEvents::UniqueKeyIndexMetaCacheHit);
         }
         else
         {
-            // ProfileEvents::increment(ProfileEvents::UniqueKeyIndexMetaCacheMiss);
+            ProfileEvents::increment(ProfileEvents::UniqueKeyIndexMetaCacheMiss);
         }
 
         return result;
