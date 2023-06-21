@@ -88,24 +88,17 @@ const std::unordered_set<String> possibly_injective_function_names
   * Instead, leave `GROUP BY const`.
   * Next, see deleting the constants in the analyzeAggregation method.
   */
-void appendUnusedGroupByColumn(ASTSelectQuery * select_query, const NameSet & source_columns)
+void appendUnusedGroupByColumn(ASTSelectQuery * select_query)
 {
     /// You must insert a constant that is not the name of the column in the table. Such a case is rare, but it happens.
-    UInt64 unused_column = 0;
-    String unused_column_name = toString(unused_column);
-
-    while (source_columns.count(unused_column_name))
-    {
-        ++unused_column;
-        unused_column_name = toString(unused_column);
-    }
-
+    /// Also start unused_column integer must not intersect with ([1, source_columns.size()])
+    /// might be in positional GROUP BY.
     select_query->setExpression(ASTSelectQuery::Expression::GROUP_BY, std::make_shared<ASTExpressionList>());
-    select_query->groupBy()->children.emplace_back(std::make_shared<ASTLiteral>(UInt64(unused_column)));
+    select_query->groupBy()->children.emplace_back(std::make_shared<ASTLiteral>(Int64(-1)));
 }
 
 /// Eliminates injective function calls and constant expressions from group by statement.
-void optimizeGroupBy(ASTSelectQuery * select_query, const NameSet & source_columns, ContextPtr context)
+void optimizeGroupBy(ASTSelectQuery * select_query, ContextPtr context)
 {
     const FunctionFactory & function_factory = FunctionFactory::instance();
 
@@ -127,6 +120,8 @@ void optimizeGroupBy(ASTSelectQuery * select_query, const NameSet & source_colum
 
         group_exprs.pop_back();
     };
+
+    const auto & settings = context->getSettingsRef();
 
     /// iterate over each GROUP BY expression, eliminate injective function calls and literals
     for (size_t i = 0; i < group_exprs.size();)
@@ -183,7 +178,22 @@ void optimizeGroupBy(ASTSelectQuery * select_query, const NameSet & source_colum
         }
         else if (is_literal(group_exprs[i]))
         {
-            remove_expr_at_index(i);
+            bool keep_position = false;
+            if (settings.enable_positional_arguments)
+            {
+                const auto & value = group_exprs[i]->as<ASTLiteral>()->value;
+                if (value.getType() == Field::Types::UInt64)
+                {
+                    auto pos = value.get<UInt64>();
+                    if (pos > 0 && pos <= select_query->select()->children.size())
+                        keep_position = true;
+                }
+            }
+
+            if (keep_position)
+                ++i;
+            else
+                remove_expr_at_index(i);
         }
         else
         {
@@ -193,7 +203,7 @@ void optimizeGroupBy(ASTSelectQuery * select_query, const NameSet & source_colum
     }
 
     if (group_exprs.empty())
-        appendUnusedGroupByColumn(select_query, source_columns);
+        appendUnusedGroupByColumn(select_query);
 }
 
 struct GroupByKeysInfo
@@ -659,7 +669,7 @@ void TreeOptimizer::apply(ASTPtr & query, TreeRewriterResult & result,
         result.rewrite_subqueries = PredicateExpressionsOptimizer(context, tables_with_columns, settings).optimize(*select_query);
 
     /// GROUP BY injective function elimination.
-    optimizeGroupBy(select_query, result.source_columns_set, context);
+    optimizeGroupBy(select_query, context);
 
     /// GROUP BY functions of other keys elimination.
     if (settings.optimize_group_by_function_keys)
