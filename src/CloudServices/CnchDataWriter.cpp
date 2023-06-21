@@ -13,8 +13,9 @@
  * limitations under the License.
  */
 
-#include <CloudServices/commitCnchParts.h>
 
+#include <memory>
+#include <CloudServices/CnchDataWriter.h>
 #include <CloudServices/CnchMergeMutateThread.h>
 #include <CloudServices/CnchServerClient.h>
 #include <CloudServices/CnchServerClientPool.h>
@@ -34,6 +35,11 @@
 #include <Core/Types.h>
 #include "Disks/IDisk.h"
 
+namespace ProfileEvents
+{
+    extern const Event CnchWriteDataElapsedMilliseconds;
+}
+
 namespace DB
 {
 
@@ -45,6 +51,51 @@ namespace ErrorCodes
     extern const int NULL_POINTER_DEREFERENCE;
     extern const int BUCKET_TABLE_ENGINE_MISMATCH;
 }
+
+void DumpedData::extend(DumpedData && data)
+{
+    auto extendImpl = [] (auto & src, auto && dst) {
+        if (src.empty())
+        {
+            src = std::move(dst);
+        }
+        else
+        {
+            src.reserve(src.size() + dst.size());
+            std::move(std::begin(dst), std::end(dst), std::back_inserter(src));
+        }
+    };
+
+    extendImpl(parts, std::move(data.parts));
+    extendImpl(bitmaps, std::move(data.bitmaps));
+    extendImpl(staged_parts, std::move(data.staged_parts));
+}
+
+using DumpCancelPred = std::function<bool()>;
+
+static std::function<void()> createCnchDumpJob(
+    std::function<void()> job, ExceptionHandler & handler, const ThreadGroupStatusPtr & thread_group, DumpCancelPred cancelled)
+{
+    return [job{std::move(job)}, &handler, thread_group, is_cancelled{std::move(cancelled)}]() {
+        try
+        {
+            SCOPE_EXIT({
+                if (thread_group)
+                    CurrentThread::detachQueryIfNotDetached();
+            });
+            if (thread_group)
+                CurrentThread::attachToIfDetached(thread_group);
+
+            if (!is_cancelled())
+                job();
+        }
+        catch (...)
+        {
+            handler.setException(std::current_exception());
+        }
+    };
+}
+
 
 CnchDataWriter::CnchDataWriter(
     MergeTreeMetaBase & storage_,
@@ -60,6 +111,15 @@ CnchDataWriter::CnchDataWriter(
     , consumer_group(std::move(consumer_group_))
     , tpl(tpl_)
 {
+}
+
+CnchDataWriter::~CnchDataWriter()
+{
+    if (thread_pool)
+    {
+        cancelled.store(true, std::memory_order_seq_cst);
+        thread_pool->wait();
+    }
 }
 
 DumpedData CnchDataWriter::dumpAndCommitCnchParts(
@@ -79,9 +139,9 @@ DumpedData CnchDataWriter::dumpAndCommitCnchParts(
             throw Exception("Attempt to submit illegal part " + part->info.getPartName(), ErrorCodes::BAD_DATA_PART_NAME);
     }
 
-    auto dumped_data = dumpCnchParts(temp_parts, temp_bitmaps, temp_staged_parts);
-    commitDumpedParts(dumped_data);
-    return dumped_data;
+    auto data = dumpCnchParts(temp_parts, temp_bitmaps, temp_staged_parts);
+    commitDumpedParts(data);
+    return data;
 }
 
 DumpedData CnchDataWriter::dumpCnchParts(
@@ -322,6 +382,105 @@ void CnchDataWriter::commitDumpedParts(const DumpedData & dumped_data)
         dumped_staged_parts.size(),
         toString(UInt64(txn_id)),
         watch.elapsedMilliseconds());
+}
+
+void CnchDataWriter::initialize(size_t max_threads)
+{
+    if (max_threads > 1)
+    {
+        thread_pool = std::make_unique<ThreadPool>(max_threads);
+    }
+}
+
+void CnchDataWriter::schedule(
+    const IMutableMergeTreeDataPartsVector & temp_parts,
+    const LocalDeleteBitmaps & temp_bitmaps,
+    const IMutableMergeTreeDataPartsVector & temp_staged_parts)
+{
+    Stopwatch watch;
+    SCOPE_EXIT({ ProfileEvents::increment(ProfileEvents::CnchWriteDataElapsedMilliseconds, watch.elapsedMilliseconds()); });
+
+    if (!thread_pool)
+    {
+        auto dumped = dumpAndCommitCnchParts(temp_parts, temp_bitmaps, temp_staged_parts);
+        {
+            /// just in case
+            std::lock_guard lock(write_mutex);
+            res.extend(std::move(dumped));
+        }
+        return;
+    }
+
+    /// check exception
+    handler.throwIfException();
+
+    auto cancel_pred = [this] { return handler.hasException() || cancelled.load(std::memory_order_seq_cst); };
+    auto thread_group = CurrentThread::getGroup();
+
+    /// dump temp parts
+    for (const auto & temp_part : temp_parts)
+    {
+        LOG_TRACE(storage.getLogger(), "dump temp_part {}", temp_part->name);
+
+        thread_pool->scheduleOrThrowOnError(createCnchDumpJob(
+            [temp_part, this] {
+                setThreadName("DumpPart");
+                auto dumped = dumpAndCommitCnchParts({temp_part});
+                {
+                    std::lock_guard lock(write_mutex);
+                    res.extend(std::move(dumped));
+                }
+            },
+            handler,
+            thread_group,
+            cancel_pred));
+    }
+
+    /// dump temp staged parts
+    for (const auto & temp_staged_part : temp_staged_parts)
+    {
+        thread_pool->scheduleOrThrowOnError(createCnchDumpJob(
+            [temp_staged_part, this] {
+                setThreadName("DumpStaged");
+                auto dumped = dumpAndCommitCnchParts({}, {}, {temp_staged_part});
+                {
+                    std::lock_guard lock(write_mutex);
+                    res.extend(std::move(dumped));
+                }
+            },
+            handler,
+            thread_group,
+            cancel_pred));
+    }
+
+    /// batch dump delete bitmap
+    thread_pool->scheduleOrThrowOnError(createCnchDumpJob(
+        [temp_bitmaps, this] {
+            setThreadName("DumpBitmap");
+            auto dumped = dumpAndCommitCnchParts({}, temp_bitmaps, {});
+            {
+                std::lock_guard lock(write_mutex);
+                res.extend(std::move(dumped));
+            }
+        },
+        handler,
+        thread_group,
+        cancel_pred));
+
+    /// check exception
+    handler.throwIfException();
+}
+
+void CnchDataWriter::finalize()
+{
+    Stopwatch watch;
+    SCOPE_EXIT({ ProfileEvents::increment(ProfileEvents::CnchWriteDataElapsedMilliseconds, watch.elapsedMilliseconds()); });
+
+    if (thread_pool)
+    {
+        thread_pool->wait();
+    }
+    handler.throwIfException();
 }
 
 TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_data)

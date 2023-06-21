@@ -56,7 +56,7 @@
 #include <Transaction/getCommitted.h>
 
 #include <Catalog/DataModelPartWrapper_fwd.h>
-#include <CloudServices/commitCnchParts.h>
+#include <CloudServices/CnchDataWriter.h>
 #include <Core/NamesAndTypes.h>
 #include <Core/QueryProcessingStage.h>
 #include <Interpreters/TreeRewriter.h>

@@ -336,6 +336,11 @@
     M(CnchTxnCleanElapsedMilliseconds, "Total number of milliseconds spent to clean transactions") \
     M(CnchTxnAllTransactionRecord, "Total number of transaction records") \
     M(CnchTxnFinishedTransactionRecord, "Total number of finished transaction records") \
+    M(CnchWriteDataElapsedMilliseconds, "") \
+    M(CnchDumpParts, "") \
+    M(CnchDumpPartsElapsedMilliseconds, "") \
+    M(CnchDumpPartsBytes, "") \
+    \
     \
     M(IntentLockElapsedMilliseconds, "Total time spent to acquire intent locks") \
     M(IntentLockWriteIntentElapsedMilliseconds, "Total time spent to write intents") \

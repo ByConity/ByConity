@@ -30,7 +30,7 @@
 #include <Transaction/LockManager.h>
 #include <Common/Exception.h>
 #include <CloudServices/CnchMergeMutateThread.h>
-#include <CloudServices/commitCnchParts.h>
+#include <CloudServices/CnchDataWriter.h>
 #include <CloudServices/DedupWorkerManager.h>
 #include <CloudServices/DedupWorkerStatus.h>
 #include <WorkerTasks/ManipulationType.h>

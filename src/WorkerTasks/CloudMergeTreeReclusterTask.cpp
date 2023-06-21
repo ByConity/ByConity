@@ -17,7 +17,7 @@
 #include <WorkerTasks/MergeTreeDataReclusterMutator.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <Storages/StorageCloudMergeTree.h>
-#include <CloudServices/commitCnchParts.h>
+#include <CloudServices/CnchDataWriter.h>
 
 namespace DB
 {
