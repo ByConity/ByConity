@@ -289,6 +289,7 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
             || type == Type::START_CONSUME
             || type == Type::STOP_CONSUME
             || type == Type::RESTART_CONSUME
+            || type == Type::SYNC_DEDUP_WORKER
             || type == Type::DROP_CNCH_PART_CACHE
             || type == Type::START_CLUSTER
             || type == Type::STOP_CLUSTER)
