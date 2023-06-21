@@ -45,6 +45,8 @@ namespace ErrorCodes
     extern const int NO_ELEMENTS_IN_CONFIG;
 }
 
+TTLBrokenNameNodes brokenNNs{};
+
 const String HDFSBuilderWrapper::CONFIG_PREFIX = "hdfs";
 
 void HDFSBuilderWrapper::loadFromConfig(const Poco::Util::AbstractConfiguration & config,
