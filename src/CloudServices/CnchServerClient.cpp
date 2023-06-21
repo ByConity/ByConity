@@ -502,6 +502,19 @@ void CnchServerClient::releaseLock(const LockInfoPtr & lock)
     RPCHelpers::checkResponse(response);
 }
 
+void CnchServerClient::assertLockAcquired(const TxnTimestamp & txn_id, LockID lock_id)
+{
+    brpc::Controller cntl;
+    Protos::AssertLockReq request;
+    Protos::AssertLockResp response;
+
+    request.set_txn_id(txn_id);
+    request.set_lock_id(lock_id);
+    stub->assertLockAcquired(&cntl, &request, &response, nullptr);
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+}
+
 void CnchServerClient::reportCnchLockHeartBeat(const TxnTimestamp & txn_id, UInt64 expire_time)
 {
     brpc::Controller cntl;
@@ -532,15 +545,16 @@ std::set<UUID> CnchServerClient::getDeletingTablesInGlobalGC()
     return res;
 }
 
-bool CnchServerClient::removeMergeMutateTasksOnPartition(const StorageID & storage_id, const String & partition_id)
+bool CnchServerClient::removeMergeMutateTasksOnPartitions(const StorageID & storage_id, const std::unordered_set<String> & partitions)
 {
     brpc::Controller cntl;
-    Protos::RemoveMergeMutateTasksOnPartitionReq request;
+    Protos::RemoveMergeMutateTasksOnPartitionsReq request;
     RPCHelpers::fillStorageID(storage_id, *request.mutable_storage_id());
-    request.set_partition_id(partition_id);
-    Protos::RemoveMergeMutateTasksOnPartitionResp response;
+    for (const auto & p : partitions)
+        request.add_partitions(p);
+    Protos::RemoveMergeMutateTasksOnPartitionsResp response;
 
-    stub->removeMergeMutateTasksOnPartition(&cntl, &request, &response, nullptr);
+    stub->removeMergeMutateTasksOnPartitions(&cntl, &request, &response, nullptr);
 
     assertController(cntl);
     return response.ret();

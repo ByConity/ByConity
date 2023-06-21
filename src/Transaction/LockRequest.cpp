@@ -174,7 +174,7 @@ const LockRequestPtrs & LockInfo::getLockRequests()
     Strings entities(LockLevelSize);
     Protos::DataModelLockField field_model;
     {
-        RPCHelpers::fillUUID(table_uuid, *(field_model.mutable_uuid()));
+        field_model.set_table_prefix(table_uuid_with_prefix);
         field_model.SerializeToString(&entities[to_underlying(LockLevel::TABLE)]);
     }
     if (hasBucket())
@@ -204,7 +204,7 @@ String LockInfo::toDebugString() const
 {
     WriteBufferFromOwnString buf;
     buf << "LockInfo{txn_id: " << txn_id.toString() << ", lock_id: " << lock_id << ", level: " << toString(getLockLevel())
-        << ", mode: " << toString(lock_mode) << ", timeout: " << timeout << ", uuid: " << table_uuid;
+        << ", mode: " << toString(lock_mode) << ", timeout: " << timeout << ", uuid: " << table_uuid_with_prefix;
     if (hasBucket())
     {
         buf << ", bucket: " << bucket;
