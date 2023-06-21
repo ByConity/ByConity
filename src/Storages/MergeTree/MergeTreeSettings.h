@@ -79,6 +79,8 @@ struct Settings;
     M(Bool, in_memory_parts_insert_sync, false, "If true insert of part with in-memory format will wait for fsync of WAL", 0) \
     M(UInt64, non_replicated_deduplication_window, 0, "How many last blocks of hashes should be kept on disk (0 - disabled).", 0) \
     M(UInt64, max_parts_to_merge_at_once, 100, "Max amount of parts which can be merged at once (0 - disabled). Doesn't affect OPTIMIZE FINAL query.", 0) \
+    M(UInt64, gc_remove_bitmap_batch_size, 1000, "Submit a batch of bitmaps to a background thread", 0) \
+    M(UInt64, gc_remove_bitmap_thread_pool_size, 16, "Turn up the thread pool size to speed up GC processing of bitmaps", 0) \
     \
     /** Inserts settings. */ \
     M(UInt64, parts_to_delay_insert, 150, "If table contains at least that many active parts in single partition, artificially slow down insert into table.", 0) \
@@ -241,7 +243,7 @@ struct Settings;
     M(UInt64, cnch_merge_round_robin_partitions_interval, 600, "", 0) \
     M(UInt64, cnch_gc_round_robin_partitions_interval, 600, "", 0) \
     M(UInt64, cnch_gc_round_robin_partitions_number, 10, "", 0) \
-    M(UInt64, gc_remove_part_thread_pool_size, 2, "", 0) \
+    M(UInt64, gc_remove_part_thread_pool_size, 2, "Turn up the thread pool size to speed up GC processing of parts", 0) \
     M(UInt64, gc_remove_part_batch_size, 5000, "", 0) \
     \
     /** uuid of CnchMergeTree, as we won't use uuid in CloudMergeTree */ \

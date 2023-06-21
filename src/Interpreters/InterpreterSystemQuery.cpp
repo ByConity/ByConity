@@ -467,6 +467,8 @@ BlockIO InterpreterSystemQuery::executeCnchCommand(ASTSystemQuery & query, Conte
         case Type::FORCE_GC:
         case Type::START_DEDUP_WORKER:
         case Type::STOP_DEDUP_WORKER:
+        case Type::START_CLUSTER:
+        case Type::STOP_CLUSTER:
             executeBGTaskInCnchServer(system_context, query.type);
             break;
         case Type::DEDUP:
@@ -606,6 +608,12 @@ void InterpreterSystemQuery::executeBGTaskInCnchServer(ContextMutablePtr & syste
             break;
         case Type::STOP_DEDUP_WORKER:
             daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::DedupWorker, CnchBGThreadAction::Stop);
+            break;
+        case Type::START_CLUSTER:
+            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::Clustering, CnchBGThreadAction::Start);
+            break;
+        case Type::STOP_CLUSTER:
+            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::Clustering, CnchBGThreadAction::Stop);
             break;
         default:
             throw Exception("Unknown command type " + toString(ASTSystemQuery::typeToString(type)), ErrorCodes::LOGICAL_ERROR);
