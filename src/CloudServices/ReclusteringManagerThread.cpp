@@ -44,9 +44,8 @@ void ReclusteringManagerThread::runImpl()
 }
 
 
-void ReclusteringManagerThread::stop()
+void ReclusteringManagerThread::clearData()
 {
-    ICnchBGThread::stop();
     recluster_task_status = false;
 }
 
