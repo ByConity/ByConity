@@ -48,10 +48,7 @@ public:
     DedupWorkerStatus getDedupWorkerStatus();
 
 private:
-<<<<<<< HEAD
 
-=======
->>>>>>> 211264d5eb0 (Merge branch 'cnch_ce_background_task' into 'cnch-ce-merge')
     void clearData() override;
 
     void iterate(StoragePtr & istorage);
