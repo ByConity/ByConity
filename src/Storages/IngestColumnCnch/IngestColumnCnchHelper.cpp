@@ -24,7 +24,7 @@
 #include <DataStreams/BlocksListBlockInputStream.h>
 #include <Processors/Executors/PipelineExecutingBlockInputStream.h>
 #include <CloudServices/CnchPartsHelper.h>
-#include <CloudServices/commitCnchParts.h>
+#include <CloudServices/CnchDataWriter.h>
 #include <DataTypes/DataTypeByteMap.h>
 #include <DataTypes/MapHelpers.h>
 #include <Parsers/queryToString.h>
