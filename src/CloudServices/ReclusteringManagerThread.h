@@ -9,9 +9,9 @@ namespace DB
 class StorageCnchMergeTree;
 
 /**
- * Manage recluster task for a table
+ * Manage reclustering background tasks.
  */
-class ReclusteringManagerThread : public ICnchBGThread
+class ReclusteringManagerThread: public ICnchBGThread
 {
 public:
 
@@ -21,10 +21,13 @@ public:
 
     void runImpl() override;
 
+
+    void stop() override;
+
     bool getTableReclusterStatus();
 
 private:
-    void clearData() override;
+    void clearData();
 
     // Pause/resume status of reclustering task for table with this thread's UUID. true = running, false = paused.
     std::atomic<bool> recluster_task_status{false};

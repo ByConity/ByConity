@@ -5,7 +5,7 @@ namespace DB
 {
 
 ReclusteringManagerThread::ReclusteringManagerThread(ContextPtr context_, const StorageID & id)
-    : ICnchBGThread(context_, CnchBGThreadType::Clustering, id)
+    : ICnchBGThread(context_->getGlobalContext(), CnchBGThreadType::Clustering, id)
 {
 }
 
@@ -43,8 +43,10 @@ void ReclusteringManagerThread::runImpl()
     }
 }
 
-void ReclusteringManagerThread::clearData()
+
+void ReclusteringManagerThread::stop()
 {
+    ICnchBGThread::stop();
     recluster_task_status = false;
 }
 

@@ -1293,6 +1293,7 @@ public:
     CnchBGThreadPtr getCnchBGThread(CnchBGThreadType type, const StorageID & storage_id) const;
     CnchBGThreadPtr tryGetCnchBGThread(CnchBGThreadType type, const StorageID & storage_id) const;
     void controlCnchBGThread(const StorageID & storage_id, CnchBGThreadType type, CnchBGThreadAction action) const;
+    bool getTableReclusterTaskStatus(const StorageID & storage_id) const;
 
     CnchBGThreadPtr tryGetDedupWorkerManager(const StorageID & storage_id) const;
 
