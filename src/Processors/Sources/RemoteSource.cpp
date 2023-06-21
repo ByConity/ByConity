@@ -189,11 +189,9 @@ Chunk RemoteExtremesSource::generate()
 
 Pipe createRemoteSourcePipe(
     RemoteQueryExecutorPtr query_executor,
-    bool add_aggregation_info, bool add_totals, bool add_extremes, bool async_read, size_t resize_number_after_remote_source)
+    bool add_aggregation_info, bool add_totals, bool add_extremes, bool async_read)
 {
     Pipe pipe(std::make_shared<RemoteSource>(query_executor, add_aggregation_info, async_read));
-    if (resize_number_after_remote_source > 1)
-        pipe.resize(resize_number_after_remote_source);
 
     if (add_totals)
         pipe.addTotalsSource(std::make_shared<RemoteTotalsSource>(query_executor));

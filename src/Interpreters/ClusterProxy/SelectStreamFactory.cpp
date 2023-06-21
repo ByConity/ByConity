@@ -267,7 +267,7 @@ void SelectStreamFactory::createForShard(
         if (!table_func_ptr)
             remote_query_executor->setMainTable(main_table);
 
-        remote_pipes.emplace_back(createRemoteSourcePipe(remote_query_executor, add_agg_info, add_totals, add_extremes, async_read, context->getSettingsRef().resize_number_after_remote_source));
+        remote_pipes.emplace_back(createRemoteSourcePipe(remote_query_executor, add_agg_info, add_totals, add_extremes, async_read));
         remote_pipes.back().addInterpreterContext(context);
         addConvertingActions(remote_pipes.back(), header);
     };
@@ -412,7 +412,7 @@ void SelectStreamFactory::createForShard(
                 auto remote_query_executor = std::make_shared<RemoteQueryExecutor>(
                     std::move(connections), modified_query, header, context, throttler, scalars, external_tables, stage);
 
-                return createRemoteSourcePipe(remote_query_executor, add_agg_info, add_totals, add_extremes, async_read, context->getSettingsRef().resize_number_after_remote_source);
+                return createRemoteSourcePipe(remote_query_executor, add_agg_info, add_totals, add_extremes, async_read);
             }
         };
 

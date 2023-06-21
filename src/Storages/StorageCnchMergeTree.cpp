@@ -1875,9 +1875,6 @@ void StorageCnchMergeTree::checkAlterSettings(const AlterCommands & commands) co
         "enable_flush_buffer_with_multi_threads",
         "max_flush_threads_num",
 
-        "gc_remove_bitmap_batch_size",
-        "gc_remove_bitmap_thread_pool_size",
-
         "insertion_label_ttl",
         "enable_local_disk_cache",
         "enable_preload_parts",
