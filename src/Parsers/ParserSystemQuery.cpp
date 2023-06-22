@@ -270,6 +270,8 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
         case Type::SYNC_DEDUP_WORKER:
         case Type::START_DEDUP_WORKER:
         case Type::STOP_DEDUP_WORKER:
+        case Type::START_CLUSTER:
+        case Type::STOP_CLUSTER:
         case Type::FLUSH_CNCH_LOG:
         case Type::STOP_CNCH_LOG:
         case Type::RESUME_CNCH_LOG:

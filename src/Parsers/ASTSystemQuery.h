@@ -121,6 +121,8 @@ public:
         SYNC_DEDUP_WORKER,
         START_DEDUP_WORKER,
         STOP_DEDUP_WORKER,
+        START_CLUSTER,
+        STOP_CLUSTER,
         DUMP_SERVER_STATUS,
         END
     };
