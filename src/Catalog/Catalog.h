@@ -35,7 +35,22 @@
 #include <common/getFQDNOrHostName.h>
 #include <Transaction/TransactionCommon.h>
 #include <ResourceManagement/CommonData.h>
+#include <Common/ProfileEvents.h>
 // #include <Access/MaskingPolicyDataModel.h>
+
+namespace ProfileEvents
+{    
+    extern const Event TryGetAccessEntitySuccess;
+    extern const Event TryGetAccessEntityFailed;
+    extern const Event GetAllAccessEntitySuccess;
+    extern const Event GetAllAccessEntityFailed;
+    extern const Event TryGetAccessEntityNameSuccess;
+    extern const Event TryGetAccessEntityNameFailed;
+    extern const Event PutAccessEntitySuccess;
+    extern const Event PutAccessEntityFailed;
+    extern const Event DropAccessEntitySuccess;
+    extern const Event DropAccessEntityFailed;
+}
 
 namespace DB::ErrorCodes
 {
@@ -505,6 +520,88 @@ public:
     void setMergeMutateThreadStartTime(const StorageID & storage_id, const UInt64 & startup_time) const;
 
     UInt64 getMergeMutateThreadStartTime(const StorageID & storage_id) const;
+
+    // Access Entities
+    template<EntityType type>
+    std::optional<AccessEntityModel> tryGetAccessEntity(const String & name)
+    {
+        String data;
+        String tenant_id = ""; // RABC TODO: use CurrentThread::get().getQueryContext().get() when tenant support is merged
+        runWithMetricSupport(
+            [&] {
+                data = meta_proxy->getAccessEntity<type>(name_space, name, tenant_id);
+            },
+            ProfileEvents::TryGetAccessEntitySuccess,
+            ProfileEvents::TryGetAccessEntityFailed);
+
+        if (data.empty())
+            return {};
+
+        AccessEntityModel entity;
+        entity.ParseFromString(std::move(data));
+        return entity;
+    }
+
+    template<EntityType type>
+    std::vector<AccessEntityModel> getAllAccessEntities()
+    {
+        std::vector<AccessEntityModel> entities;
+        String tenant_id = ""; // RABC TODO: use CurrentThread::get().getQueryContext().get()
+        runWithMetricSupport(
+            [&] {
+                Strings data = meta_proxy->getAllAccessEntities<type>(name_space, tenant_id);
+                entities.reserve(data.size());
+                for (const auto & s : data)
+                {
+                    AccessEntityModel model;
+                    model.ParseFromString(std::move(s));
+                    entities.push_back(std::move(model));
+                }
+            },
+            ProfileEvents::GetAllAccessEntitySuccess,
+            ProfileEvents::GetAllAccessEntityFailed);
+        return entities;
+    }
+
+    template<EntityType type>
+    String tryGetAccessEntityName(const UUID & uuid)
+    {
+        String data;
+        String tenant_id = ""; // RABC TODO: use CurrentThread::get().getQueryContext().get() when tenant support is merged
+        runWithMetricSupport(
+            [&] {
+                data = meta_proxy->getAccessEntityNameByUUID<type>(name_space, uuid, tenant_id);
+            },
+            ProfileEvents::TryGetAccessEntityNameSuccess,
+            ProfileEvents::TryGetAccessEntityNameFailed);
+
+        return data;
+    }
+
+    template<EntityType type>
+    void dropAccessEntity(const UUID & uuid, const String & name)
+    {
+        String tenant_id = ""; // RABC TODO: use CurrentThread::get().getQueryContext().get() when tenant support is merged
+        runWithMetricSupport(
+            [&] {
+                meta_proxy->dropAccessEntity<type>(name_space, uuid, name, tenant_id);
+            },
+            ProfileEvents::DropAccessEntitySuccess,
+            ProfileEvents::DropAccessEntityFailed);
+    }
+
+    template<EntityType type>
+    void putAccessEntity(AccessEntityModel & new_access_entity, const AccessEntityModel & old_access_entity = {}, bool replace_if_exists = false)
+    {
+        String tenant_id = ""; // RABC TODO: use CurrentThread::get().getQueryContext().get() when tenant support is merged
+        new_access_entity.set_commit_time(context.getTimestamp());
+        runWithMetricSupport(
+            [&] {
+                meta_proxy->putAccessEntity<type>(name_space, new_access_entity, old_access_entity, tenant_id, replace_if_exists);
+            },
+            ProfileEvents::PutAccessEntitySuccess,
+            ProfileEvents::PutAccessEntityFailed);
+    }
 
 private:
     Poco::Logger * log = &Poco::Logger::get("Catalog");

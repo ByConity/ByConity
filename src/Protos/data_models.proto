@@ -550,3 +550,11 @@ message DataModelUDF
     optional int64 udf_flags = 8; // bitmap of enum UDFFlags
     optional uint64 version = 9;
 }
+
+message DataModelAccessEntity
+{
+    required string name = 1;
+    required string create_sql = 2; // contains CREATE and GRANT queries of the entity
+    required uint64 commit_time = 3;
+    required UUID uuid = 4;
+}

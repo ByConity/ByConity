@@ -728,6 +728,18 @@
     M(ReadBufferFromS3ReadFailed, "s3 read failed count") \
     M(ReadBufferFromS3ReadBytes, "s3 read op size") \
     M(ReadBufferFromS3ReadMicro, "s3 read op time") \
+    \
+    M(PutAccessEntitySuccess, "") \
+    M(PutAccessEntityFailed, "") \
+    M(TryGetAccessEntitySuccess, "") \
+    M(TryGetAccessEntityFailed, "") \
+    M(GetAllAccessEntitySuccess, "") \
+    M(GetAllAccessEntityFailed, "") \
+    M(DropAccessEntitySuccess, "") \
+    M(DropAccessEntityFailed, "") \
+    M(TryGetAccessEntityNameSuccess, "") \
+    M(TryGetAccessEntityNameFailed, "") \
+    \
 
 namespace ProfileEvents
 {

@@ -5,6 +5,7 @@
 #include <Common/quoteString.h>
 #include <boost/algorithm/string.hpp>
 #include <memory>
+#include <Protos/data_models.pb.h>
 
 
 namespace DB
@@ -97,6 +98,7 @@ protected:
 };
 
 using AccessEntityPtr = std::shared_ptr<const IAccessEntity>;
+using AccessEntityModel = Protos::DataModelAccessEntity;
 
 
 inline const IAccessEntity::TypeInfo & IAccessEntity::TypeInfo::get(Type type_)

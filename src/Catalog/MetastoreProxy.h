@@ -36,6 +36,14 @@
 #include <ResourceManagement/CommonData.h>
 #include <Catalog/IMetastore.h>
 #include <CloudServices/CnchBGThreadCommon.h>
+#include <Access/IAccessEntity.h>
+
+namespace DB::ErrorCodes
+{
+    extern const int METASTORE_COMMIT_CAS_FAILURE;
+    extern const int METASTORE_ACCESS_ENTITY_CAS_ERROR;
+    extern const int METASTORE_ACCESS_ENTITY_EXISTS_ERROR;
+}
 
 namespace DB::Catalog
 {
@@ -89,6 +97,24 @@ namespace DB::Catalog
 #define FILESYS_LOCK_PREFIX "FSLK_"
 #define UDF_STORE_PREFIX "UDF_"
 #define MERGEMUTATE_THREAD_START_TIME "MTST_"
+
+using EntityType = IAccessEntity::Type;
+template <EntityType type>
+struct EntityMetastorePrefix;
+
+template <>
+struct EntityMetastorePrefix<EntityType::USER>
+{
+    static constexpr auto prefix = "UE_";
+    static constexpr auto uuid_mapping_prefix = "UUM_";
+};
+
+template <>
+struct EntityMetastorePrefix<EntityType::ROLE>
+{
+    static constexpr auto prefix = "RE_";
+    static constexpr auto uuid_mapping_prefix = "RUM_";
+};
 
 class MetastoreProxy
 {
@@ -544,6 +570,30 @@ public:
         return escapeString(name_sapce) + '_' + MERGEMUTATE_THREAD_START_TIME + uuid;
     }
 
+    template<EntityType type>
+    static std::string accessEntityPrefix(const std::string & name_space, const std::string & tenant_id)
+    {
+        return fmt::format("{}_{}_{}", escapeString(name_space), tenant_id, EntityMetastorePrefix<type>::prefix);
+    }
+    // RBAC TODO: use special separator betweem prefix and name
+    template<EntityType type>
+    static std::string accessEntityKey(const std::string & name_space, const std::string & name, const std::string & tenant_id)
+    {
+        return fmt::format("{}{}", accessEntityPrefix<type>(name_space, tenant_id), name);
+    }
+
+    template<EntityType type>
+    static std::string accessEntityUUIDNameMappingPrefix(const std::string & name_space, const std::string & tenant_id)
+    {
+        return fmt::format("{}_{}_{}", escapeString(name_space), tenant_id, EntityMetastorePrefix<type>::uuid_mapping_prefix);
+    }
+
+    template<EntityType type>
+    static std::string accessEntityUUIDNameMappingKey(const std::string & name_space, const std::string & uuid, const std::string & tenant_id)
+    {
+        return fmt::format("{}{}", accessEntityUUIDNameMappingPrefix<type>(name_space, tenant_id), uuid);
+    }
+
     /// end of Metastore Proxy keying schema
 
     void createTransactionRecord(const String & name_space, const UInt64 & txn_id, const String & txn_data);
@@ -764,6 +814,85 @@ public:
         const String & name_space, const String & uuid, const String & column, const std::unordered_set<StatisticsTag> & tags);
     void setMergeMutateThreadStartTime(const String & name_space, const String & uuid, const UInt64 & start_time);
     UInt64 getMergeMutateThreadStartTime(const String & name_space, const String & uuid);
+
+    // Access Entities
+    template <EntityType type>
+    String getAccessEntity(const String & name_space, const String & name, const String & tenant_id) const
+    {
+        String data;
+        metastore_ptr->get(accessEntityKey<type>(name_space, name, tenant_id), data);
+        return data;
+    }
+
+    template<EntityType type>
+    Strings getAllAccessEntities(const String & name_space, const String & tenant_id)
+    {
+        Strings models;
+        auto it = metastore_ptr->getByPrefix(accessEntityPrefix<type>(name_space, tenant_id));
+        while (it->next())
+        {
+            models.push_back(it->value());
+        }
+        return models;
+    }
+
+    template<EntityType type>
+    String getAccessEntityNameByUUID(const String & name_space, const UUID & id, const String & tenant_id) const
+    {
+        String data;
+        String uuid = UUIDHelpers::UUIDToString(id);
+        metastore_ptr->get(accessEntityUUIDNameMappingKey<type>(name_space, uuid, tenant_id), data);
+        return data;
+    }
+
+    template <EntityType type>
+    void dropAccessEntity(const String & name_space, const UUID & id, const String & name, const String & tenant_id) const
+    {
+        BatchCommitRequest batch_write;
+        BatchCommitResponse resp;
+        String uuid = UUIDHelpers::UUIDToString(id);
+        batch_write.AddDelete(SingleDeleteRequest(accessEntityUUIDNameMappingKey<type>(name_space, uuid, tenant_id)));
+        batch_write.AddDelete(SingleDeleteRequest(accessEntityKey<type>(name_space, name, tenant_id)));
+        metastore_ptr->batchWrite(batch_write, resp);
+    }
+
+    template <EntityType type>
+    void putAccessEntity(const String & name_space, const AccessEntityModel & new_access_entity, const AccessEntityModel & old_access_entity, const String & tenant_id, bool replace_if_exists) const
+    {
+        BatchCommitRequest batch_write;
+        BatchCommitResponse resp;
+        auto put_access_entity_request = SinglePutRequest(accessEntityKey<type>(name_space, new_access_entity.name(), tenant_id), new_access_entity.SerializeAsString(), !replace_if_exists);
+        String uuid = UUIDHelpers::UUIDToString(RPCHelpers::createUUID(new_access_entity.uuid()));
+        String serialized_old_access_entity = old_access_entity.SerializeAsString();
+        if (!serialized_old_access_entity.empty())
+            put_access_entity_request.expected_value = serialized_old_access_entity;
+        batch_write.AddPut(put_access_entity_request);
+        batch_write.AddPut(SinglePutRequest(accessEntityUUIDNameMappingKey<type>(name_space, uuid, tenant_id), new_access_entity.name(), !replace_if_exists));
+        
+        try
+        {
+            metastore_ptr->batchWrite(batch_write, resp);
+        }
+        catch (Exception & e)
+        {
+            if (e.code() == ErrorCodes::METASTORE_COMMIT_CAS_FAILURE)
+            {
+                if (resp.puts.count(0) && replace_if_exists && !serialized_old_access_entity.empty())
+                {
+                    throw Exception(
+                        "Access Entity has recently been changed in catalog. Please try the request again.",
+                        ErrorCodes::METASTORE_ACCESS_ENTITY_CAS_ERROR);
+                }
+                else if (resp.puts.count(1) && !replace_if_exists)
+                {
+                    throw Exception(
+                        "Access Entity with the same name already exists in catalog. Please use another name and try again.",
+                        ErrorCodes::METASTORE_ACCESS_ENTITY_EXISTS_ERROR);
+                }
+            }
+            throw e;
+        }
+    }
 
 private:
 
