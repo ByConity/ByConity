@@ -184,10 +184,6 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "START DEDUP WORKER";
         case Type::STOP_DEDUP_WORKER:
             return "STOP DEDUP WORKER";
-        case Type::START_CLUSTER:
-            return "START CLUSTER";
-        case Type::STOP_CLUSTER:
-            return "STOP CLUSTER";
         case Type::DUMP_SERVER_STATUS:
             return "DUMP SERVER STATUS";
         case Type::UNKNOWN:
@@ -289,10 +285,7 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
             || type == Type::START_CONSUME
             || type == Type::STOP_CONSUME
             || type == Type::RESTART_CONSUME
-            || type == Type::SYNC_DEDUP_WORKER
-            || type == Type::DROP_CNCH_PART_CACHE
-            || type == Type::START_CLUSTER
-            || type == Type::STOP_CLUSTER)
+            || type == Type::DROP_CNCH_PART_CACHE)
     {
         print_database_table();
     }
