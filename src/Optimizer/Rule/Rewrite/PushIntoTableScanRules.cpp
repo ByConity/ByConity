@@ -184,6 +184,8 @@ TransformResult PushAggregationIntoTableScan::transformImpl(PlanNodePtr node, co
     auto *copy_table_step = dynamic_cast<TableScanStep *>(copy_step.get());
 
     // TODO: combine aggregates if grouping keys are the same
+    chassert(copy_table_step != nullptr);
+    // coverity[var_deref_model]
     if (copy_table_step->getPushdownAggregation())
         return {};
 
@@ -208,6 +210,8 @@ TransformResult PushProjectionIntoTableScan::transformImpl(PlanNodePtr node, con
     auto *copy_table_step = dynamic_cast<TableScanStep *>(copy_step.get());
 
     // TODO: inline projection
+    chassert(copy_table_step != nullptr);
+    // coverity[var_deref_model]
     if (copy_table_step->getPushdownProjection())
         return {};
 
@@ -230,6 +234,7 @@ TransformResult PushFilterIntoTableScan::transformImpl(PlanNodePtr node, const C
 
     auto copy_step = node->getChildren()[0]->getStep()->copy(rule_context.context);
     auto *copy_table_step = dynamic_cast<TableScanStep *>(copy_step.get());
+    chassert(copy_table_step != nullptr);
 
     // in case of TableScan has already a pushdown filter, combine them into one
     if (const auto * pushdown_filter_step = copy_table_step->getPushdownFilterCast())
@@ -245,6 +250,7 @@ TransformResult PushFilterIntoTableScan::transformImpl(PlanNodePtr node, const C
         copy_table_step->setPushdownFilter(node->getStep()->copy(rule_context.context));
     }
 
+    // coverity[var_deref_model]
     copy_table_step->formatOutputStream();
     return PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(copy_step), {}, node->getStatistics());
 }

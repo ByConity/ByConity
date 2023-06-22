@@ -772,8 +772,12 @@ void ZooKeeper::receiveEvent()
 
     try
     {
-        if (!response)
+        if (!response) 
+        {
+            // The only time response is null, request_info is initialized
+            // coverity[var_deref_model]
             response = request_info.request->makeResponse();
+        }
 
         response->xid = xid;
         response->zxid = zxid;

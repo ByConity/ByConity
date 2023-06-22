@@ -196,6 +196,8 @@ MergeTreeData::MergeTreeData(
         {
             if (!version_file.first.empty())
             {
+                // If version_file.first is not empty, version_file.second is initialized too
+                // coverity[var_deref_model]
                 LOG_ERROR(log, "Duplication of version file {} and {}", fullPath(version_file.second, version_file.first), current_version_file_path);
                 throw Exception("Multiple format_version.txt file", ErrorCodes::CORRUPTED_DATA);
             }

@@ -119,6 +119,8 @@
     \
     M(DiskCacheEvictQueueLength, "Length of disk cache evict queue") \
     M(DiskCacheRoughSingleStatsBucketSize, "Diskcache single statistics bucket size") \
+    \
+    M(BackgroundDedupSchedulePoolTask, "Number of executing background dedup tasks") \
 
 
 namespace CurrentMetrics

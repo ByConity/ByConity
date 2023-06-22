@@ -434,6 +434,8 @@ QueryPipeline InterpreterSelectWithUnionQuery::executeTEALimit(QueryPipelinePtr 
     bool tealimit_order_keep = context->getSettingsRef().tealimit_order_keep;
 
     auto tea_limit =  dynamic_cast<ASTTEALimit*>(ast.tealimit.get());
+    chassert(tea_limit != nullptr);
+    // coverity[var_deref_model]
     String g_list_str = queryToString(*tea_limit->group_expr_list);
     postQuery << "(" << g_list_str << ") IN (";
     // SUBQUERY

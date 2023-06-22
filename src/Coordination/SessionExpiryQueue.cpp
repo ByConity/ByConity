@@ -10,10 +10,11 @@ bool SessionExpiryQueue::remove(int64_t session_id)
     if (session_it != session_to_expiration_time.end())
     {
         auto set_it = expiry_to_sessions.find(session_it->second);
-        if (set_it != expiry_to_sessions.end())
-            set_it->second.erase(session_id);
+        /// addNewSessionOrUpdate ensures that if it is in session_to_expiration_time, it will be in expiry_to_sessions
+        set_it->second.erase(session_id);
 
         /// No more sessions in this bucket
+        /// coverity[deref_iterator]
         if (set_it->second.empty())
             expiry_to_sessions.erase(set_it);
 
