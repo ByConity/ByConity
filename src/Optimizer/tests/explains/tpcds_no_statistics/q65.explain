@@ -4,9 +4,11 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. ? rows
       │     Order by: {s_store_name asc, i_item_desc asc}
+      │     Limit: 100
       └─ Gather Exchange est. ? rows
          └─ Sorting est. ? rows
             │     Order by: {s_store_name asc, i_item_desc asc}
+            │     Limit: 100
             └─ Inner Join est. ? rows
                │     Condition: ss_item_sk_1 == i_item_sk
                ├─ Repartition Exchange est. ? rows

@@ -276,6 +276,8 @@ std::string PlanPrinter::TextPrinter::printDetail(ConstQueryPlanStepPtr plan, co
             sort_columns.emplace_back(
                 desc.column_name + (desc.direction == -1 ? " desc" : " asc") + (desc.nulls_direction == -1 ? " nulls_last" : ""));
         out << intent.detailIntent() << "Order by: " << join(sort_columns, ", ", "{", "}");
+        if (sort->getLimit())
+            out << intent.detailIntent() << "Limit: " << sort->getLimit();
     }
 
 
@@ -402,6 +404,17 @@ std::string PlanPrinter::TextPrinter::printDetail(ConstQueryPlanStepPtr plan, co
 
         if (table_scan->getPushdownAggregation())
             out << printDetail(table_scan->getPushdownAggregation(), intent);
+    }
+
+    if (verbose && plan->getType() == IQueryPlanStep::Type::TopNFiltering)
+    {
+        auto topn_filter = dynamic_cast<const TopNFilteringStep *>(plan.get());
+        std::vector<String> sort_columns;
+        for (auto & desc : topn_filter->getSortDescription())
+            sort_columns.emplace_back(
+                desc.column_name + (desc.direction == -1 ? " desc" : " asc") + (desc.nulls_direction == -1 ? " nulls_last" : ""));
+        out << intent.detailIntent() << "Order by: " << join(sort_columns, ", ", "{", "}");
+        out << intent.detailIntent() << "Size: " << topn_filter->getSize();
     }
     return out.str();
 }

@@ -716,7 +716,6 @@
     \
     M(PartsToAttach, "") \
     M(NumOfRowsToAttach, "") \
-    \
     M(WriteBufferFromS3WriteOp, "S3 write op count") \
     M(WriteBufferFromS3WriteOpFailed, "s3 write op failed count") \
     M(WriteBufferFromS3WriteOpMicro, "s3 write op time") \
@@ -740,6 +739,8 @@
     M(TryGetAccessEntityNameSuccess, "") \
     M(TryGetAccessEntityNameFailed, "") \
     \
+    M(ScheduleTimeMilliseconds, "Total time spent to schedule plan segment") \
+
 
 namespace ProfileEvents
 {

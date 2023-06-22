@@ -4,9 +4,11 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. 95450352 rows
       │     Order by: {c_last_name asc, c_first_name asc, expr#substring(s_city, 1, 30) asc, expr#sum(ss_net_profit) asc}
+      │     Limit: 100
       └─ Gather Exchange est. 95450352 rows
          └─ Sorting est. 95450352 rows
             │     Order by: {c_last_name asc, c_first_name asc, expr#substring(s_city, 1, 30) asc, expr#sum(ss_net_profit) asc}
+            │     Limit: 100
             └─ Projection est. 95450352 rows
                │     Expressions: [c_first_name, c_last_name, expr#sum(ss_coupon_amt), expr#sum(ss_net_profit), ss_ticket_number], expr#substring(s_city, 1, 30):=substring(s_city, 1, 30)
                └─ Inner Join est. 95450352 rows

@@ -4,9 +4,11 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. ? rows
       │     Order by: {expr#'store channel'_1 asc, expr#concat('store', s_store_id)_1 asc}
+      │     Limit: 100
       └─ Gather Exchange est. ? rows
          └─ Sorting est. ? rows
             │     Order by: {expr#'store channel'_1 asc, expr#concat('store', s_store_id)_1 asc}
+            │     Limit: 100
             └─ MergingAggregated est. ? rows
                └─ Repartition Exchange est. ? rows
                   │     Partition by: {__grouping_set, expr#'store channel'_1, expr#concat('store', s_store_id)_1}

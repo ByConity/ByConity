@@ -4,9 +4,11 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. ? rows
       │     Order by: {i_category asc, i_class asc, i_brand asc, i_product_name asc, d_year asc, d_qoy asc, d_moy asc, s_store_id asc, expr#sum(coalesce(multiply(ss_sales_price, ss_quantity), 0)) asc, expr#rank() OVER (PARTITION BY i_category ORDER BY sumsales DESC) asc}
+      │     Limit: 100
       └─ Gather Exchange est. ? rows
          └─ Sorting est. ? rows
             │     Order by: {i_category asc, i_class asc, i_brand asc, i_product_name asc, d_year asc, d_qoy asc, d_moy asc, s_store_id asc, expr#sum(coalesce(multiply(ss_sales_price, ss_quantity), 0)) asc, expr#rank() OVER (PARTITION BY i_category ORDER BY sumsales DESC) asc}
+            │     Limit: 100
             └─ Filter est. ? rows
                │     Condition: `expr#rank() OVER (PARTITION BY i_category ORDER BY sumsales DESC)` <= 100
                └─ Window est. ? rows

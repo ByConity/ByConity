@@ -24,7 +24,7 @@ public:
     bool getTableReclusterStatus();
 
 private:
-    void clearData();
+    void clearData() override;
 
     // Pause/resume status of reclustering task for table with this thread's UUID. true = running, false = paused.
     std::atomic<bool> recluster_task_status{false};

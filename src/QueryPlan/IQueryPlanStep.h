@@ -141,7 +141,8 @@ public:
         M(Union) \
         M(Values) \
         M(Window) \
-        M(CTERef)
+        M(CTERef) \
+        M(TopNFiltering)
 
 #define ENUM_DEF(ITEM) ITEM,
 

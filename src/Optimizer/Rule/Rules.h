@@ -31,6 +31,9 @@ public:
     static std::vector<RulePtr> pushPartialStepRules();
     static std::vector<RulePtr> pushAggRules();
     static std::vector<RulePtr> pushDownLimitRules();
+    static std::vector<RulePtr> pushDownTopNRules();
+    static std::vector<RulePtr> createTopNFilteringRules();
+    static std::vector<RulePtr> pushDownTopNFilteringRules();
     static std::vector<RulePtr> removeRedundantRules();
     static std::vector<RulePtr> distinctToAggregateRules();
     static std::vector<RulePtr> pushIntoTableScanRules();

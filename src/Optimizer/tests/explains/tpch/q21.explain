@@ -4,9 +4,11 @@ Projection est. 100 rows
    │     Limit: 100
    └─ Sorting est. 8005 rows
       │     Order by: {expr#count() desc nulls_last, s_name asc}
+      │     Limit: 100
       └─ Gather Exchange est. 8005 rows
          └─ Sorting est. 8005 rows
             │     Order by: {expr#count() desc nulls_last, s_name asc}
+            │     Limit: 100
             └─ MergingAggregated est. 8005 rows
                └─ Repartition Exchange est. 8005 rows
                   │     Partition by: {s_name}

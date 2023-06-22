@@ -86,6 +86,8 @@ public:
     static bool isTruePredicate(const ConstASTPtr & predicate);
     static bool isFalsePredicate(const ConstASTPtr & predicate);
 
+    static bool containsAll(const Strings & partition_symbols, const std::set<String> & unique_symbols);
+
     static bool isInliningCandidate(ConstASTPtr & predicate, ProjectionNode & node);
     static ASTPtr extractJoinPredicate(JoinNode &);
     static bool isJoinClause(ConstASTPtr expression, std::set<String> & left_symbols, std::set<String> & right_symbols, ContextMutablePtr & context);

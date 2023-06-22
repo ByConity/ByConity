@@ -1158,6 +1158,25 @@ public:
     PlanNodeIdAllocatorPtr & getPlanNodeIdAllocator() { return id_allocator; }
     UInt32 nextNodeId() { return id_allocator->nextId(); }
     void createPlanNodeIdAllocator();
+
+        int step_id = 2000;
+    int getStepId() const { return step_id; }
+    void setStepId(int step_id_) { step_id = step_id_; }
+    int getAndIncStepId() { return ++step_id; }
+
+    int rule_id = 3000;
+    int getRuleId() const { return rule_id; }
+    void setRuleId(int rule_id_) { rule_id = rule_id_; }
+    void incRuleId() { ++rule_id; }
+
+    String graphviz_sub_query_path = "";
+    void setExecuteSubQueryPath(String path) { graphviz_sub_query_path = path; }
+    String getExecuteSubQueryPath() const { return graphviz_sub_query_path;  }
+    void removeExecuteSubQueryPath() { graphviz_sub_query_path = "";  }
+    
+    int sub_query_id = 0;
+    int incAndGetSubQueryId() { return ++sub_query_id; }
+    
     SymbolAllocatorPtr & getSymbolAllocator() { return symbol_allocator; }
 
     void createSymbolAllocator();

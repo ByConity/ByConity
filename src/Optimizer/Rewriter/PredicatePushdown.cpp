@@ -54,7 +54,7 @@ void PredicatePushdown::rewrite(QueryPlan & plan, ContextMutablePtr context) con
     auto cte_reference_counts = plan.getCTEInfo().collectCTEReferenceCounts(plan.getPlanNode());
     PredicateVisitor visitor{dynamic_filtering, context, plan.getCTEInfo(), cte_reference_counts};
     PredicateContext predicate_context{
-        .predicate = PredicateConst::TRUE_VALUE, .extra_predicate_for_simplify_outer_join = PredicateConst::TRUE_VALUE};
+        .predicate = PredicateConst::TRUE_VALUE, .extra_predicate_for_simplify_outer_join = PredicateConst::TRUE_VALUE, .context = context};
     auto result = VisitorUtil::accept(plan.getPlanNode(), visitor, predicate_context);
     plan.update(result);
 }
@@ -62,7 +62,8 @@ void PredicatePushdown::rewrite(QueryPlan & plan, ContextMutablePtr context) con
 PlanNodePtr PredicateVisitor::visitPlanNode(PlanNodeBase & node, PredicateContext & predicate_context)
 {
     PredicateContext true_context{.predicate = PredicateConst::TRUE_VALUE,
-                                  .extra_predicate_for_simplify_outer_join = PredicateConst::TRUE_VALUE};
+                                  .extra_predicate_for_simplify_outer_join = PredicateConst::TRUE_VALUE,
+                                  .context = predicate_context.context};
     PlanNodePtr rewritten = processChild(node, true_context);
     if (!PredicateUtils::isTruePredicate(predicate_context.predicate))
     {
@@ -133,7 +134,8 @@ PlanNodePtr PredicateVisitor::visitProjectionNode(ProjectionNode & node, Predica
     PredicateContext expression_context{
         .predicate = PredicateUtils::combineConjuncts(inlined_deterministic_conjuncts),
         .extra_predicate_for_simplify_outer_join =
-            ExpressionInliner::inlineSymbols(predicate_context.extra_predicate_for_simplify_outer_join, assignments)};
+            ExpressionInliner::inlineSymbols(predicate_context.extra_predicate_for_simplify_outer_join, assignments),
+        .context = predicate_context.context};
     PlanNodePtr rewritten = processChild(node, expression_context);
 
     // All deterministic conjuncts that contains non-inlining targets, and non-deterministic conjuncts,
@@ -159,7 +161,8 @@ PlanNodePtr PredicateVisitor::visitFilterNode(FilterNode & node, PredicateContex
     auto predicate = PredicateUtils::combineConjuncts(predicates);
     PredicateContext filter_context{
         .predicate = predicate,
-        .extra_predicate_for_simplify_outer_join = predicate_context.extra_predicate_for_simplify_outer_join};
+        .extra_predicate_for_simplify_outer_join = predicate_context.extra_predicate_for_simplify_outer_join,
+        .context = predicate_context.context};
     PlanNodePtr rewritten = process(*node.getChildren()[0], filter_context);
 
     if (rewritten->getStep()->getType() != IQueryPlanStep::Type::Filter)
@@ -253,7 +256,8 @@ PlanNodePtr PredicateVisitor::visitAggregatingNode(AggregatingNode & node, Predi
 
     PredicateContext agg_context{
         .predicate = PredicateUtils::combineConjuncts(pushdown_conjuncts),
-        .extra_predicate_for_simplify_outer_join = PredicateConst::TRUE_VALUE};
+        .extra_predicate_for_simplify_outer_join = PredicateConst::TRUE_VALUE,
+        .context = predicate_context.context};
     PlanNodePtr rewritten = process(*node.getChildren()[0], agg_context);
 
     PlanNodePtr output = node.shared_from_this();
@@ -450,8 +454,8 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
     }
 
     // TODO: combine join implicit filter with inherited extra_predicate_for_simplify_outer_join
-    PredicateContext left_context{.predicate = left_predicate, .extra_predicate_for_simplify_outer_join = left_implicit_filter};
-    PredicateContext right_context{.predicate = right_predicate, .extra_predicate_for_simplify_outer_join = right_implicit_filter};
+    PredicateContext left_context{.predicate = left_predicate, .extra_predicate_for_simplify_outer_join = left_implicit_filter, .context = predicate_context.context};
+    PredicateContext right_context{.predicate = right_predicate, .extra_predicate_for_simplify_outer_join = right_implicit_filter, .context = predicate_context.context};
     PlanNodePtr left_source;
     PlanNodePtr right_source;
 
@@ -722,52 +726,53 @@ PlanNodePtr PredicateVisitor::visitExchangeNode(ExchangeNode & node, PredicateCo
 
 PlanNodePtr PredicateVisitor::visitWindowNode(WindowNode & node, PredicateContext & predicate_context)
 {
-    //    auto & step_ptr = node.getStep();
-    //    auto & step = dynamic_cast<WindowStep &>(*step_ptr);
-    //
-    //    const WindowDescription & window_desc = step.getWindow();
-    //    WindowPartitionScheme scheme = window_desc.scheme;
-    //    Strings partition_symbols = scheme.partition_keys;
-    //
-    //    // TODO: This could be broader. We can push down conjucts if they are constant for all rows in a window partition.
-    //    // The simplest way to guarantee this is if the conjucts are deterministic functions of the partitioning symbols.
-    //    // This can leave out cases where they're both functions of some set of common expressions and the partitioning
-    //    // function is injective, but that's a rare case. The majority of window nodes are expected to be partitioned by
-    //    // pre-projected symbols.
-    //    ASTPtr predicate = predicate_context.predicate;
-    //    ContextMutablePtr context = predicate_context.context;
-    //    std::vector<ASTPtr> conjuncts = PredicateUtils::extractConjuncts(predicate);
-    //
-    //    std::vector<ASTPtr> push_down_conjuncts;
-    //    std::vector<ASTPtr> non_push_down_conjuncts;
-    //    for (auto & conjunct : conjuncts)
-    //    {
-    //        std::set<String> unique_symbols = SymbolsExtractor::extract(conjunct);
-    //        if (DeterminismEvaluator::isDeterministic(conjunct, context) && PredicateUtils::containsAll(unique_symbols, partition_symbols))
-    //        {
-    //            push_down_conjuncts.emplace_back(conjunct);
-    //        }
-    //        else
-    //        {
-    //            non_push_down_conjuncts.emplace_back(conjunct);
-    //        }
-    //    }
-    //
-    //    PredicateContext window_context{
-    //        .predicate = PredicateUtils::combineConjuncts(push_down_conjuncts), .context = context, .types = predicate_context.types};
-    //    PlanNodePtr rewritten = processChild(node, window_context);
-    //
-    //    ASTPtr non_push_down_predicate = PredicateUtils::combineConjuncts(non_push_down_conjuncts);
-    //    if (!PredicateUtils::isTruePredicate(non_push_down_predicate))
-    //    {
-    //        // Drop in a FilterNode b/c we cannot push our predicate down any further
-    //        ASTPtr extra_predicate = PredicateUtils::combineConjuncts(non_push_down_conjuncts);
-    //        auto filter_step = std::make_shared<FilterStep>(rewritten->getStep()->getOutputStream(), extra_predicate);
-    //        auto filter_node = std::make_shared<FilterNode>(context->nextNodeId(), std::move(filter_step), PlanNodes{rewritten});
-    //        return filter_node;
-    //    }
-    //    return rewritten;
-    return visitPlanNode(node, predicate_context);
+    auto & step_ptr = node.getStep();
+    const auto * step = dynamic_cast<const WindowStep *>(step_ptr.get());
+
+    const WindowDescription & window_desc = step->getWindow();
+    SortDescription scheme = window_desc.partition_by;
+    Strings partition_symbols;
+    for (auto & partition : scheme)
+    {
+        partition_symbols.emplace_back(partition.column_name);
+    }
+
+    auto predicate = predicate_context.predicate;
+    ContextMutablePtr & tmp_context = predicate_context.context;
+    auto conjuncts = PredicateUtils::extractConjuncts(predicate);
+
+    /// guarantee the predicates which can be pushed down through window step
+    /// are deterministic functions, and belongs to window partitioning symbols.
+    std::vector<ConstASTPtr> push_down_conjuncts;
+    std::vector<ConstASTPtr> non_push_down_conjuncts;
+    for (auto & conjunct : conjuncts)
+    {
+        std::set<String> unique_symbols = SymbolsExtractor::extract(conjunct);
+        if (ExpressionDeterminism::isDeterministic(conjunct, tmp_context) && PredicateUtils::containsAll(partition_symbols, unique_symbols))
+        {
+            push_down_conjuncts.emplace_back(conjunct);
+        }
+        else
+        {
+            non_push_down_conjuncts.emplace_back(conjunct);
+        }
+    }
+
+    PredicateContext window_context{
+        .predicate = PredicateUtils::combineConjuncts(push_down_conjuncts),
+        .extra_predicate_for_simplify_outer_join = predicate_context.extra_predicate_for_simplify_outer_join,
+        .context = tmp_context};
+    PlanNodePtr rewritten = processChild(node, window_context);
+
+    ASTPtr non_push_down_predicate = PredicateUtils::combineConjuncts(non_push_down_conjuncts);
+    if (!PredicateUtils::isTruePredicate(non_push_down_predicate))
+    {
+        ASTPtr extra_predicate = PredicateUtils::combineConjuncts(non_push_down_conjuncts);
+        auto filter_step = std::make_shared<FilterStep>(rewritten->getStep()->getOutputStream(), extra_predicate);
+        auto filter_node = std::make_shared<FilterNode>(tmp_context->nextNodeId(), std::move(filter_step), PlanNodes{rewritten});
+        return filter_node;
+    }
+    return rewritten;
 }
 
 PlanNodePtr PredicateVisitor::visitMergeSortingNode(MergeSortingNode & node, PredicateContext & predicate_context)
@@ -809,7 +814,8 @@ PlanNodePtr PredicateVisitor::visitUnionNode(UnionNode & node, PredicateContext 
             = ExpressionInliner::inlineSymbols(predicate_context.extra_predicate_for_simplify_outer_join, assignments);
         PredicateContext source_context{
             .predicate = source_predicate,
-            .extra_predicate_for_simplify_outer_join = source_extra_predicate};
+            .extra_predicate_for_simplify_outer_join = source_extra_predicate,
+            .context = predicate_context.context};
         PlanNodePtr child = process(*node.getChildren()[i], source_context);
         children.emplace_back(child);
         inputs.push_back(child->getStep()->getOutputStream());
@@ -859,13 +865,15 @@ PlanNodePtr PredicateVisitor::visitCTERefNode(CTERefNode & node, PredicateContex
             auto optimized_expression = ExpressionInterpreter::optimizePredicate(
                 PredicateUtils::combineDisjuncts(common_filters), cte_def->getStep()->getOutputStream().header.getNamesToTypes(), context);
             PredicateContext cte_predicate_context{
-                .predicate = optimized_expression, .extra_predicate_for_simplify_outer_join = PredicateConst::TRUE_VALUE};
+                .predicate = optimized_expression, .extra_predicate_for_simplify_outer_join = PredicateConst::TRUE_VALUE,
+                .context = predicate_context.context};
             cte_def = VisitorUtil::accept(cte_def, *this, cte_predicate_context);
         }
         else
         {
             PredicateContext cte_predicate_context{
-                .predicate = PredicateConst::TRUE_VALUE, .extra_predicate_for_simplify_outer_join = PredicateConst::TRUE_VALUE};
+                .predicate = PredicateConst::TRUE_VALUE, .extra_predicate_for_simplify_outer_join = PredicateConst::TRUE_VALUE,
+                .context = predicate_context.context};
             cte_def = VisitorUtil::accept(cte_def, *this, cte_predicate_context);
         }
     }

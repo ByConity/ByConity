@@ -56,6 +56,7 @@ private:
     PlanNodePtr visitAssignUniqueIdNode(AssignUniqueIdNode & node, NameSet & context) override;
     PlanNodePtr visitExchangeNode(ExchangeNode & node, NameSet & context) override;
     PlanNodePtr visitCTERefNode(CTERefNode & node, NameSet & context) override;
+    PlanNodePtr visitTopNFilteringNode(TopNFilteringNode & node, NameSet & context) override;
 
     CTEPostorderVisitHelper post_order_cte_helper;
     std::unordered_map<CTEId, NameSet> cte_require_columns{};

@@ -78,7 +78,7 @@ public:
 
     static bool healthCheckForWorkerGroup(ContextPtr context, WorkerGroupHandle & worker_group);
 
-    static void sendQueryPerShard(
+    static BlockInputStreamPtr sendQueryPerShard(
         ContextPtr context,
         const String & query,
         const WorkerGroupHandleImpl::ShardInfo & shard_info,

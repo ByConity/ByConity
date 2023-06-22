@@ -40,8 +40,6 @@ public:
 
     void runImpl() override;
 
-    void stop() override;
-
     /**
      * Check whether target dedup worker instance is valid.
      */
@@ -50,6 +48,8 @@ public:
     DedupWorkerStatus getDedupWorkerStatus();
 
 private:
+
+    void clearData() override;
 
     void iterate(StoragePtr & istorage);
 

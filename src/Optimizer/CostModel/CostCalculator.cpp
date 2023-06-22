@@ -199,6 +199,11 @@ PlanNodeCost CostVisitor::visitCTERefStep(const CTERefStep & step, CostContext &
     return CTECost::calculate(step, context);
 }
 
+PlanNodeCost CostVisitor::visitTopNFilteringStep(const TopNFilteringStep & step, CostContext & context)
+{
+    return visitStep(step, context);
+}
+
 CostWithCTEReferenceCounts PlanCostVisitor::visitPlanNode(PlanNodeBase & node, PlanCostMap & plan_cost_map)
 {
     PlanNodeCost cost;

@@ -407,6 +407,13 @@ void writeFieldBinary(const Field & field, WriteBuffer & buf)
             writeBinary(df.getScale(), buf);
             return;
         }
+        case Field::Types::AggregateFunctionState:
+        {
+            writeBinary(UInt8(type), buf);
+            writeStringBinary(field.get<AggregateFunctionStateData>().name, buf);
+            writeStringBinary(field.get<AggregateFunctionStateData>().data, buf);
+            return;
+        }
         default:
             throw Exception("Bad type of Field when serializing.", ErrorCodes::BAD_TYPE_OF_FIELD);
     }
@@ -529,6 +536,14 @@ void readFieldBinary(Field & field, ReadBuffer & buf)
             readBinary(value, buf);
             readBinary(scale, buf);
             field = DecimalField<Decimal256>(value, scale);
+            return;
+        }
+        case Field::Types::AggregateFunctionState:
+        {
+            AggregateFunctionStateData value;
+            DB::readStringBinary(value.name, buf);
+            DB::readStringBinary(value.data, buf);
+            field = value;
             return;
         }
         default:
