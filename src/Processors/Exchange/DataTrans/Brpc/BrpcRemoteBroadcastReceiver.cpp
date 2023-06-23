@@ -20,7 +20,7 @@
 #include "StreamHandler.h"
 #include <Interpreters/QueryExchangeLog.h>
 #include <Processors/Exchange/DataTrans/DataTransException.h>
-#include <Processors/Exchange/DataTrans/DataTransKey.h>
+#include <Processors/Exchange/ExchangeDataKey.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/Exchange/DataTrans/RpcClient.h>
 #include <Processors/Exchange/DataTrans/RpcChannelPool.h>
@@ -40,8 +40,9 @@ namespace ErrorCodes
 }
 
 BrpcRemoteBroadcastReceiver::BrpcRemoteBroadcastReceiver(
-    DataTransKeyPtr trans_key_, String registry_address_, ContextPtr context_, Block header_, bool keep_order_)
-    : trans_key(std::move(trans_key_))
+    ExchangeDataKeyPtr trans_key_, String registry_address_, ContextPtr context_, Block header_, bool keep_order_, const String &name_)
+    : name(name_)
+    , trans_key(std::move(trans_key_))
     , registry_address(std::move(registry_address_))
     , context(std::move(context_))
     , header(std::move(header_))
@@ -64,8 +65,7 @@ BrpcRemoteBroadcastReceiver::~BrpcRemoteBroadcastReceiver()
         if(auto key = std::dynamic_pointer_cast<const ExchangeDataKey>(trans_key))
         {
             element.initial_query_id = key->getQueryId();
-            element.write_segment_id = std::to_string(key->getWriteSegmentId());
-            element.read_segment_id = std::to_string(key->getReadSegmentId());
+            element.exchange_id = std::to_string(key->getExchangeId());
             element.partition_id = std::to_string(key->getParallelIndex());
             element.coordinator_address = key->getCoordinatorAddress();
         }
@@ -115,8 +115,7 @@ void BrpcRemoteBroadcastReceiver::registerToSenders(UInt32 timeout_ms)
     Protos::RegistryResponse response;
     auto exchange_key = std::dynamic_pointer_cast<ExchangeDataKey>(trans_key);
     request.set_query_id(exchange_key->getQueryId());
-    request.set_write_segment_id(exchange_key->getWriteSegmentId());
-    request.set_read_segment_id(exchange_key->getReadSegmentId());
+    request.set_exchange_id(exchange_key->getExchangeId());
     request.set_parallel_id(exchange_key->getParallelIndex());
     request.set_coordinator_address(exchange_key->getCoordinatorAddress());
     request.set_wait_timeout_ms(context->getSettingsRef().exchange_timeout_ms / 2);
@@ -238,7 +237,7 @@ BroadcastStatus BrpcRemoteBroadcastReceiver::finish(BroadcastStatusCode status_c
 
 String BrpcRemoteBroadcastReceiver::getName() const
 {
-    return "BrpcReciver[" + trans_key->getKey() + "]@" + registry_address;
+    return name;
 }
 
 AsyncRegisterResult BrpcRemoteBroadcastReceiver::registerToSendersAsync(UInt32 timeout_ms)
@@ -272,8 +271,7 @@ AsyncRegisterResult BrpcRemoteBroadcastReceiver::registerToSendersAsync(UInt32 t
     auto exchange_key = std::dynamic_pointer_cast<ExchangeDataKey>(trans_key);
 
     res.request->set_query_id(exchange_key->getQueryId());
-    res.request->set_write_segment_id(exchange_key->getWriteSegmentId());
-    res.request->set_read_segment_id(exchange_key->getReadSegmentId());
+    res.request->set_exchange_id(exchange_key->getExchangeId());
     res.request->set_parallel_id(exchange_key->getParallelIndex());
     res.request->set_coordinator_address(exchange_key->getCoordinatorAddress());
     res.request->set_wait_timeout_ms(context->getSettingsRef().exchange_timeout_ms / 2);

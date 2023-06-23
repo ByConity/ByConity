@@ -75,6 +75,10 @@ public:
 
     void setExchangeMode(const ExchangeMode & mode_) { exchange_mode = mode_; }
 
+    size_t getExchangeId() const {return exchange_id; }
+
+    void setExchangeId(size_t exchange_id_) { exchange_id = exchange_id_; }
+
     size_t getExchangeParallelSize() const { return exchange_parallel_size; }
 
     void setExchangeParallelSize(size_t exchange_parallel_size_) { exchange_parallel_size = exchange_parallel_size_;}
@@ -101,6 +105,7 @@ protected:
     Block header;
     PlanSegmentType type = PlanSegmentType::UNKNOWN;
     ExchangeMode exchange_mode = ExchangeMode::UNKNOWN;
+    size_t exchange_id = 0;
     size_t exchange_parallel_size = 0;
     String name;
     size_t segment_id = std::numeric_limits<size_t>::max();
@@ -188,6 +193,7 @@ private:
 };
 
 using PlanSegmentOutputPtr = std::shared_ptr<PlanSegmentOutput>;
+using PlanSegmentOutputs = std::vector<PlanSegmentOutputPtr>;
 
 /**
  * PlanSegment is a object that cannot be copy since queryPlan is only move-able.
@@ -241,9 +247,13 @@ public:
 
     void appendPlanSegmentInputs(const PlanSegmentInputs & inputs_) { inputs.insert(inputs.end(), inputs_.begin(), inputs_.end()); }
 
-    void setPlanSegmentOutput(const PlanSegmentOutputPtr & output_) { output = output_; }
+    void appendPlanSegmentOutput(const PlanSegmentOutputPtr & output_) { outputs.push_back(output_); }
 
-    PlanSegmentOutputPtr getPlanSegmentOutput() const { return output; }
+    void appendPlanSegmentOutputs(const PlanSegmentOutputs & outputs_) { outputs.insert(outputs.end(), outputs_.begin(), outputs_.end()); }
+
+    PlanSegmentOutputPtr getPlanSegmentOutput() const { return outputs.size() > 0 ? outputs[0] : std::make_shared<PlanSegmentOutput>(); }
+
+    PlanSegmentOutputs getPlanSegmentOutputs() const { return outputs; }
 
     AddressInfo getCoordinatorAddress() const { return coordinator_address; }
 
@@ -285,7 +295,7 @@ private:
     QueryPlan query_plan;
 
     PlanSegmentInputs inputs;
-    PlanSegmentOutputPtr output;
+    PlanSegmentOutputs outputs;
 
     AddressInfo coordinator_address;
     AddressInfo current_address;

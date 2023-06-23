@@ -38,10 +38,21 @@ public:
         BroadcastSenderPtrs partition_senders_,
         ExecutableFunctionPtr repartition_func_,
         ColumnNumbers repartition_keys,
-        ExchangeOptions options_);
-    virtual String getName() const override { return "MultiPartitionExchangeSink"; }
+        ExchangeOptions options_,
+        const String &name_);
+    virtual String getName() const override { return name; }
     virtual void onCancel() override;
     virtual ~MultiPartitionExchangeSink() override = default;
+
+    static String generateName(size_t exchange_id)
+    {
+        return fmt::format("MultiPartitionExchangeSink[{}]", exchange_id);
+    }
+
+    static String generateNameForTest()
+    {
+        return fmt::format("MultiPartitionExchangeSink[{}]", -1);
+    }
 
 
 protected:
@@ -49,6 +60,7 @@ protected:
     virtual void onFinish() override;
 
 private:
+    String name;
     const Block & header;
     BroadcastSenderPtrs partition_senders;
     size_t partition_num;
