@@ -29,7 +29,6 @@
 #include <Poco/Net/IPAddress.h>
 #include <Poco/Util/Application.h>
 #include "common/types.h"
-#include <CloudServices/ReclusteringManagerThread.h>
 #include <Common/DNSResolver.h>
 #include <Common/Macros.h>
 #include <Common/escapeForFileName.h>
