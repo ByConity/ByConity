@@ -34,6 +34,7 @@
 
 #include <functional>
 #include <map>
+#include <stack>
 #include <memory>
 
 
@@ -174,6 +175,9 @@ protected:
     /// Is used to send logs from logs_queue to client in case of fatal errors.
     std::function<void()> fatal_error_callback;
 
+    /// Used to save all the involved queries tenant_id
+    std::stack<String> tenant_ids;
+
 public:
     ThreadStatus();
     ~ThreadStatus();
@@ -198,6 +202,25 @@ public:
     StringRef getQueryId() const
     {
         return query_id;
+    }
+
+    String getTenantId() const
+    {
+        String result;
+        if (!tenant_ids.empty())
+            return tenant_ids.top();
+        return result;
+    }
+
+    void pushTenantId(const String& new_tenant_id) 
+    {
+        tenant_ids.push(new_tenant_id);
+    }
+
+    void popTenantId() 
+    {
+        if (!tenant_ids.empty())
+            tenant_ids.pop();
     }
 
     auto getQueryContext() const

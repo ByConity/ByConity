@@ -28,6 +28,7 @@
 #include <Interpreters/executeQuery.h>
 #include <Common/isLocalAddress.h>
 #include <common/logger_useful.h>
+#include <Parsers/formatTenantDatabaseName.h>
 #include "DictionarySourceFactory.h"
 #include "DictionaryStructure.h"
 #include "ExternalQueryBuilder.h"
@@ -228,7 +229,12 @@ BlockInputStreamPtr ClickHouseDictionarySource::createStreamForQuery(const Strin
 
     if (configuration.is_local)
     {
-        stream = executeQuery(query, context, true).getInputStream();
+        auto query_context = Context::createCopy(context);
+        if (!configuration.tenant_id.empty())
+            pushTenantId(configuration.tenant_id);
+        stream = executeQuery(query, query_context, true).getInputStream();
+        if (!configuration.tenant_id.empty())
+            popTenantId();
         stream = std::make_shared<ConvertingBlockInputStream>(stream, empty_sample_block, ConvertingBlockInputStream::MatchColumnsMode::Position);
     }
     else
@@ -253,7 +259,11 @@ std::string ClickHouseDictionarySource::doInvalidateQuery(const std::string & re
     if (configuration.is_local)
     {
         auto query_context = Context::createCopy(context);
+        if (!configuration.tenant_id.empty())
+            pushTenantId(configuration.tenant_id);
         auto input_block = executeQuery(request, query_context, true).getInputStream();
+        if (!configuration.tenant_id.empty())
+            popTenantId();
         return readInvalidateQuery(*input_block);
     }
     else
@@ -297,13 +307,15 @@ void registerDictionarySourceClickHouse(DictionarySourceFactory & factory)
             .update_lag = config.getUInt64(settings_config_prefix + ".update_lag", 1),
             .port = port,
             .is_local = host.empty() ? (context->getServerType() == ServerType::cnch_server) : isLocalAddress({host, port}, default_port),
-            .secure = config.getBool(settings_config_prefix + ".secure", false)
+            .secure = config.getBool(settings_config_prefix + ".secure", false),
+            .tenant_id = ""
         };
 
         /// We should set user info even for the case when the dictionary is loaded in-process (without TCP communication).
         if (configuration.is_local)
         {
             context_copy->setUser(configuration.user, configuration.password, Poco::Net::SocketAddress("127.0.0.1", 0));
+            configuration.tenant_id = context_copy->getTenantId();
             context_copy = copyContextAndApplySettings(config_prefix, context_copy, config);
         }
 
