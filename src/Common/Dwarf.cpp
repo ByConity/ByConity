@@ -1452,6 +1452,8 @@ Dwarf::LineNumberVM::StepResult Dwarf::LineNumberVM::step(std::string_view & pro
                 basicBlock_ = true;
                 return CONTINUE;
             case DW_LNS_const_add_pc:
+                // Max value will be 32 * 255 which is not enough to be sign extended with 1s
+                // coverity[sign_extension]
                 address_ += minLength_ * ((255 - opcodeBase_) / lineRange_);
                 return CONTINUE;
             case DW_LNS_fixed_advance_pc:

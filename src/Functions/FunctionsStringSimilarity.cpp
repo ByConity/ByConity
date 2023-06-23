@@ -83,6 +83,8 @@ struct NgramDistanceImpl
         /// |a0|a1|a2|a3|a4|a5|a6|a7|a8|a9|a10|a11|a12|a13|a14|a15|a16|a17|a18|
         /// And we copy                                ^^^^^^^^^^^^^^^ these bytes to the start
         /// Actually it is enough to copy 3 bytes, but memcpy for 4 bytes translates into 1 instruction
+        /// padding_offset will ensure that the destination buffer is always different from the source buffer
+        /// coverity[overlapping_buffer]
         memcpy(code_points, code_points + padding_offset, roundUpToPowerOfTwoOrZero(N - 1) * sizeof(CodePoint));
         /// Now we have an array
         /// |a13|a14|a15|a16|a4|a5|a6|a7|a8|a9|a10|a11|a12|a13|a14|a15|a16|a17|a18|

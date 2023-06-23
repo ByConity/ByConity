@@ -17,6 +17,13 @@
 #include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/MergeTree/DeleteBitmapCache.h>
+#include <Common/ProfileEvents.h>
+
+namespace ProfileEvents
+{
+    extern const Event DeleteBitmapCacheHit;
+    extern const Event DeleteBitmapCacheMiss;
+}
 
 namespace DB
 {
@@ -41,7 +48,8 @@ namespace
     }
 } /// anonymous namespace
 
-DeleteBitmapCache::DeleteBitmapCache(size_t max_size_in_bytes) : cache(IndexFile::NewLRUCache(max_size_in_bytes))
+DeleteBitmapCache::DeleteBitmapCache(size_t max_size_in_bytes_)
+    : max_size_in_bytes(max_size_in_bytes_), cache(IndexFile::NewLRUCache(max_size_in_bytes_))
 {
 }
 
@@ -64,16 +72,21 @@ void DeleteBitmapCache::insert(const String & key, UInt64 version, ImmutableDele
         delete value; /// insert failed
 }
 
+size_t DeleteBitmapCache::totalCharge()
+{
+    return cache->TotalCharge();
+}
+
 bool DeleteBitmapCache::lookup(const String & key, UInt64 & out_version, ImmutableDeleteBitmapPtr & out_bitmap)
 {
     auto * handle = cache->Lookup(key);
     if (!handle)
     {
-        // ProfileEvents::increment(ProfileEvents::DeleteBitmapCacheMiss);
+        ProfileEvents::increment(ProfileEvents::DeleteBitmapCacheMiss);
         return false;
     }
 
-    // ProfileEvents::increment(ProfileEvents::DeleteBitmapCacheHit);
+    ProfileEvents::increment(ProfileEvents::DeleteBitmapCacheHit);
     auto * value = reinterpret_cast<CachedBitmap *>(cache->Value(handle));
     out_version = value->version;
     out_bitmap = value->bitmap;

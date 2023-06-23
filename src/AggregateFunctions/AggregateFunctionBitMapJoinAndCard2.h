@@ -382,6 +382,8 @@ private:
                 throw Exception("AggregateFunction " + getName() + ": The memory is out of limit to contain any bitmap after several JOINs," +
                     " and the remaining JOINs can't go on", ErrorCodes::TOO_MANY_ROWS);
 
+            // Iterator it has not reached end yet as checked for in the for loop's condition
+            // coverity[deref_iterator]
             if (it->tuples.size() > max_size)
             {
                 max_size_pos = it->position;

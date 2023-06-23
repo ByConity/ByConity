@@ -186,6 +186,10 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "STOP DEDUP WORKER";
         case Type::DUMP_SERVER_STATUS:
             return "DUMP SERVER STATUS";
+        case Type::JEPROF_DUMP:
+            return "JEPROF DUMP";
+        case Type::LOCK_MEMORY_LOCK:
+            return "LOCK MEMORY LOCK";
         case Type::UNKNOWN:
         case Type::END:
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown SYSTEM query command");

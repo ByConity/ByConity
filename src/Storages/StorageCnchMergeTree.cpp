@@ -1224,12 +1224,9 @@ void StorageCnchMergeTree::executeDedupForRepair(const ASTPtr & partition, Conte
         scope = CnchDedupHelper::DedupScope::Partitions(partitions);
     }
 
-    CnchLockHolder cnch_lock(
-        *getContext(),
-        CnchDedupHelper::getLocksToAcquire(
-            scope, txn->getTransactionID(), *this, getSettings()->unique_acquire_write_lock_timeout.value.totalMilliseconds()));
-    if (!cnch_lock.tryLock())
-        throw Exception("Failed to acquire lock for txn " + txn->getTransactionID().toString(), ErrorCodes::CNCH_LOCK_ACQUIRE_FAILED);
+    auto cnch_lock = txn->createLockHolder(CnchDedupHelper::getLocksToAcquire(
+        scope, txn->getTransactionID(), *this, getSettings()->unique_acquire_write_lock_timeout.value.totalMilliseconds()));
+    cnch_lock->lock();
 
     TxnTimestamp ts = getContext()->getTimestamp();
     MergeTreeDataPartsCNCHVector visible_parts = CnchDedupHelper::getVisiblePartsToDedup(scope, *this, ts);

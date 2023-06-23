@@ -73,7 +73,7 @@ void SettingQuotaAndLimitsStep::transformPipeline(QueryPipeline & pipeline, cons
       * limits will be applied on the shards only (including the root node) but will be ignored
       * on the results merging stage.
       */
-    if (!storage->isRemote())
+    if (storage && !storage->isRemote())
         pipeline.setLeafLimits(leaf_limits);
 
     if (quota)

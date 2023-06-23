@@ -355,6 +355,28 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
             break;
         }
 
+        case Type::LOCK_MEMORY_LOCK:
+        {
+            parseDatabaseAndTableName(pos, expected, res->database, res->table);
+            if (ParserKeyword{"PARTITION"}.ignore(pos, expected) && !parser_partition.parse(pos, res->partition, expected))
+                return false;
+
+            ASTPtr seconds;
+            if (!(ParserKeyword{"FOR"}.ignore(pos, expected)
+                && ParserUnsignedInteger().parse(pos, seconds, expected)
+                && ParserKeyword{"SECOND"}.ignore(pos, expected)))   /// SECOND, not SECONDS to be consistent with INTERVAL parsing in SQL
+            {
+                return false;
+            }
+
+            res->seconds = seconds->as<ASTLiteral>()->value.get<UInt64>();
+
+            if (ParserKeyword{"DOMAIN"}.ignore(pos, expected))
+                res->string_data = "DOMAIN";
+
+            break;
+        }
+
         default:
             /// There are no [db.table] after COMMAND NAME
             break;
