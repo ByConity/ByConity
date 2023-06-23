@@ -79,14 +79,15 @@ public:
     Void visitASTSelectQuery(ASTPtr & node, const Void &) override;
     Void visitASTSubquery(ASTPtr & node, const Void &) override;
 
-    QueryAnalyzerVisitor(ContextMutablePtr context_, Analysis & analysis_, ScopePtr outer_query_scope_):
-        context(std::move(context_))
+    QueryAnalyzerVisitor(ContextMutablePtr context_, Analysis & analysis_, ScopePtr outer_query_scope_)
+        : context(std::move(context_))
         , analysis(analysis_)
         , outer_query_scope(outer_query_scope_)
         , use_ansi_semantic(context->getSettingsRef().dialect_type == DialectType::ANSI)
         , enable_shared_cte(context->getSettingsRef().cte_mode != CTEMode::INLINED)
         , enable_implicit_type_conversion(context->getSettingsRef().enable_implicit_type_conversion)
         , allow_extended_conversion(context->getSettingsRef().allow_extended_type_conversion)
+        , enable_subcolumn_optimization_through_union(context->getSettingsRef().enable_subcolumn_optimization_through_union)
     {}
 
 private:
@@ -97,6 +98,7 @@ private:
     const bool enable_shared_cte;
     const bool enable_implicit_type_conversion;
     const bool allow_extended_conversion;
+    const bool enable_subcolumn_optimization_through_union;
 
     void analyzeSetOperation(ASTPtr & node, ASTs & selects);
 
@@ -265,12 +267,25 @@ void QueryAnalyzerVisitor::analyzeSetOperation(ASTPtr & node, ASTs & selects)
         for (size_t column_idx = 0; column_idx < column_size; ++column_idx)
         {
             DataTypes elem_types;
+            FieldDescription::OriginColumns origin_columns;
+
             for (auto & select: selects)
-                elem_types.push_back(analysis.getOutputDescription(*select)[column_idx].type);
+            {
+                const auto & elem_field = analysis.getOutputDescription(*select)[column_idx];
+                elem_types.push_back(elem_field.type);
+
+                if (enable_subcolumn_optimization_through_union)
+                    origin_columns.insert(origin_columns.end(), elem_field.origin_columns.begin(), elem_field.origin_columns.end());
+            }
 
             // promote output type to super type if necessary
             auto output_type = getLeastSupertype(elem_types, allow_extended_conversion);
-            output_desc.emplace_back(first_input_desc[column_idx].name, output_type);
+            output_desc.emplace_back(
+                first_input_desc[column_idx].name,
+                output_type,
+                /* prefix*/ QualifiedName{},
+                std::move(origin_columns),
+                /* substituted_by_asterisk */ true);
         }
     }
 

@@ -26,11 +26,6 @@ std::optional<String> FieldSymbolInfo::tryGetSubColumnSymbol(const SubColumnID &
     return std::nullopt;
 }
 
-RelationPlan RelationPlan::withNewRoot(PlanNodePtr new_root) const
-{
-    return {std::move(new_root), field_symbol_infos};
-}
-
 const String & RelationPlan::getFirstPrimarySymbol() const
 {
     return field_symbol_infos.front().getPrimarySymbol();

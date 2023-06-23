@@ -58,7 +58,7 @@ struct RelationPlan
     {
     }
 
-    RelationPlan withNewRoot(PlanNodePtr new_root) const;
+    void withNewRoot(PlanNodePtr new_root) { root = std::move(new_root); }
     PlanNodePtr getRoot() const { return root; }
     const FieldSymbolInfos & getFieldSymbolInfos() const { return field_symbol_infos; }
     const String & getFirstPrimarySymbol() const;

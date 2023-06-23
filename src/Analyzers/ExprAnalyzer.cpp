@@ -364,22 +364,38 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeOrdinaryFunction(ASTFunctionPt
     // post analysis for sub column optimization
     String func_name_lowercase = Poco::toLower(function->name);
 
+    auto check_subcolumn = [](const FieldDescription & field, auto && pred) {
+        if (!field.hasOriginInfo())
+            return false;
+
+        for (const auto & origin_col : field.origin_columns)
+            if (!pred(origin_col))
+                return false;
+
+        return true;
+    };
+
+    auto register_subcolumn = [&](const ASTPtr & ast, const ResolvedField & column_ref, const SubColumnID & sub_column_id) {
+        analysis.setSubColumnReference(ast, SubColumnReference{column_ref, sub_column_id});
+
+        for (const auto & origin_col : column_ref.getFieldDescription().origin_columns)
+            analysis.addUsedSubColumn(origin_col.table_ast, origin_col.index_of_scope, sub_column_id);
+    };
     if ((startsWith(func_name_lowercase, "mapelement") || startsWith(func_name_lowercase, "arrayelement"))
         && function->arguments->children.size() == 2)
     {
         if (auto column_reference = analysis.tryGetColumnReference(function->arguments->children[0]))
         {
             const auto & resolved_field = column_reference->getFieldDescription();
-            if (resolved_field.origin_table &&
-                resolved_field.origin_table->supportsMapImplicitColumn() &&
-                !resolved_field.type->isMapKVStore())
+            if (resolved_field.hasOriginInfo() &&
+                !resolved_field.type->isMapKVStore() &&
+                check_subcolumn(resolved_field, [](const auto & origin_col) { return origin_col.storage->supportsMapImplicitColumn(); }))
             {
                 if (auto * key_lit = function->arguments->children[1]->as<ASTLiteral>())
                 {
                     auto key_name = key_lit->getColumnName();
                     auto column_id = SubColumnID::mapElement(key_name);
-                    analysis.setSubColumnReference(function, SubColumnReference {*column_reference, column_id});
-                    analysis.addUsedSubColumn(resolved_field.origin_table_ast, resolved_field.index_of_origin_scope, column_id);
+                    register_subcolumn(function, *column_reference, column_id);
                 }
             }
         }
@@ -389,14 +405,14 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeOrdinaryFunction(ASTFunctionPt
         if (auto column_reference = analysis.tryGetColumnReference(function->arguments->children[0]))
         {
             const auto & resolved_field = column_reference->getFieldDescription();
-            if (resolved_field.origin_table &&
-                resolved_field.origin_table->supportsMapImplicitColumn() &&
+            if (resolved_field.hasOriginInfo() && 
                 resolved_field.type->isMap() &&
-                resolved_field.type->isMapKVStore())
+                (check_subcolumn(resolved_field, [](const auto & origin_col) { return !origin_col.storage->supportsMapImplicitColumn(); })
+                || resolved_field.type->isMapKVStore()))
             {
                 auto column_id = SubColumnID::mapKeys();
                 analysis.setSubColumnReference(function, SubColumnReference {*column_reference, column_id});
-                analysis.addUsedSubColumn(resolved_field.origin_table_ast, resolved_field.index_of_origin_scope, column_id);
+                register_subcolumn(function, *column_reference, column_id);
             }
         }
     }
