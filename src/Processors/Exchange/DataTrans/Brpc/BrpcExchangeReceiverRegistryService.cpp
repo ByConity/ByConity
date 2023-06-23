@@ -18,6 +18,7 @@
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxy.h>
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxyRegistry.h>
 #include <Processors/Exchange/DataTrans/Brpc/BrpcRemoteBroadcastSender.h>
+#include <Processors/Exchange/DataTrans/DataTransKey.h>
 #include <Processors/Exchange/ExchangeUtils.h>
 #include <brpc/stream.h>
 #include <Common/Exception.h>
@@ -78,7 +79,8 @@ void BrpcExchangeReceiverRegistryService::registry(
 
     auto data_key = std::make_shared<ExchangeDataKey>(
         request->query_id(),
-        request->exchange_id(),
+        request->write_segment_id(),
+        request->read_segment_id(),
         request->parallel_id(),
         request->coordinator_address());
 

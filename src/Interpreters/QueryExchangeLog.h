@@ -28,7 +28,8 @@ namespace DB
 struct QueryExchangeLogElement
 {
     String initial_query_id{"-1"};
-    String exchange_id{"-1"};
+    String write_segment_id{"-1"};
+    String read_segment_id{"-1"};
     String partition_id{"-1"};
     String coordinator_address{};
     time_t event_time{};

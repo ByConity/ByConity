@@ -39,19 +39,9 @@ public:
     };
     using LoadBalanceSelectorPtr = std::unique_ptr<LoadBalanceSelector>;
 
-    explicit LoadBalancedExchangeSink(Block header_, BroadcastSenderPtrs senders_, const String &name_);
+    explicit LoadBalancedExchangeSink(Block header_, BroadcastSenderPtrs senders_);
     virtual ~LoadBalancedExchangeSink() override;
-    virtual String getName() const override { return name; }
-
-    static String generateName(size_t exchange_id)
-    {
-        return fmt::format("LoadBalancedExchangeSink[{}]", exchange_id);
-    }
-
-    static String generateNameForTest()
-    {
-        return fmt::format("LoadBalancedExchangeSink[{}]", -1);
-    }
+    virtual String getName() const override { return "LoadBalancedExchangeSink"; }
 
 
 protected:
@@ -60,7 +50,6 @@ protected:
     virtual void onCancel() override;
 
 private:
-    String name;
     Block header = getPort().getHeader();
     BroadcastSenderPtrs senders;
     LoadBalanceSelectorPtr partition_selector;

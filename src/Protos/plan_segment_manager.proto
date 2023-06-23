@@ -28,8 +28,7 @@ message SendPlanSegmentStatusResponse {
 
 message ExecutePlanSegmentRequest {
   // version number for plan segment serialize and deserialize
-  required uint32 brpc_protocol_minor_revision = 1;
-
+  required uint32 brpc_protocol_revision = 1;
   // the starting time of a distributed query
   required int64 initial_query_start_time = 2;
   // per query settings
@@ -67,8 +66,6 @@ message ExecutePlanSegmentRequest {
 
   // Cnch Transaction ID
   required uint64 txn_id = 24;
-
-  optional uint32 brpc_protocol_major_revision = 25;
 }
 
 message ExecutePlanSegmentResponse {

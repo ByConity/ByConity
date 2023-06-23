@@ -14,7 +14,6 @@
  */
 
 #pragma once
-#include <optional>
 #include <Optimizer/Property/Property.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/Context_fwd.h>
@@ -55,7 +54,6 @@ struct PlanSegmentVisitorContext
 {
     PlanSegmentInputs inputs;
     std::vector<PlanSegment *> children;
-    size_t & exchange_id;
 };
 
 class PlanSegmentVisitor: public NodeVisitor<PlanSegmentResult, PlanSegmentVisitorContext>
@@ -70,7 +68,7 @@ public:
     PlanSegmentResult visitExchangeNode(QueryPlan::Node * node, PlanSegmentVisitorContext & split_context) override;
     PlanSegmentResult visitCTERefNode(QueryPlan::Node * node, PlanSegmentVisitorContext & context) override;
 
-    PlanSegment * createPlanSegment(QueryPlan::Node * node, PlanSegmentVisitorContext & split_context);
+    PlanSegment * createPlanSegment(QueryPlan::Node * node);
     PlanSegment * createPlanSegment(QueryPlan::Node * node, size_t segment_id, PlanSegmentVisitorContext & split_context);
 
 private:

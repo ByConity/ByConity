@@ -1345,23 +1345,9 @@ String StepPrinter::printRemoteExchangeSourceStep(const RemoteExchangeSourceStep
     for (const auto & input : inputs)
     {
         const size_t segment_id = input->getPlanSegmentId();
-        details << segment_id << ":";
-        
-        for (const auto & column : input->getHeader())
-        {
-            details << column.name << " ";
-        }
-        details << "\\n";
+        details << segment_id << " ";
     }
     details << "]";
-
-    details << "|";
-    details << "Output \\n";
-    for (const auto & column : step.getOutputStream().header)
-    {
-        details << column.name << ":";
-        details << column.type->getName() << "\\n";
-    }
     return details.str();
 }
 
@@ -2602,31 +2588,6 @@ void GraphvizPrinter::appendPlanSegmentNode(std::stringstream & out, const PlanS
     out << "parallel_size " << segment_ptr->getParallelSize() << "\n";
     out << "cluster_name " << (segment_ptr->getClusterName().empty() ? "server" : segment_ptr->getClusterName()) << "\\n";
     out << "exchange_parallel_size " << segment_ptr->getExchangeParallelSize() << "\n";
-
-    out << "inputs:" ;
-    for (const auto & input : segment_ptr->getPlanSegmentInputs())
-    {
-        out << input->getExchangeId() << "mode(" << static_cast<UInt8>(input->getExchangeMode()) << "): ";
-        for (const auto & col : input->getHeader())
-        {
-            out << col.name << " ";
-        }
-        out << "\n";
-    }
-    out << "\n";
-
-    out << "output:" ;
-    for (const auto & input : segment_ptr->getPlanSegmentOutputs())
-    {
-        out << input->getExchangeId() << "mode(" << static_cast<UInt8>(input->getExchangeMode()) << "): ";
-        for (const auto & col : input->getHeader())
-        {
-            out << col.name << " ";
-        }
-        out << "\n";
-    }
-    out << "\n";
-
     //    out << "exchange_output_parallel_size " << segment_ptr->getExchangeOutputParallelSize() << "\n";
     out << "\"";
     QueryPlan::Node * node = segment_ptr->getQueryPlan().getRoot();
@@ -2783,13 +2744,6 @@ String GraphvizPrinter::printGroup(const Group & group)
 
     // type
     out << "<TR><TD COLSPAN=\"3\">" << head_step->getName() << " [" << group.getId() << "]</TD></TR>";
-
-    out << "<TR><TD COLSPAN=\"3\">" << head_step->getName() << " [";
-    for (const auto & col : head_step->getOutputStream().header)
-    {
-        out << col.name << " ";
-    }
-    out << "]</TD></TR>";
 
     if (head_step->getType() == IQueryPlanStep::Type::ReadFromStorage)
     {

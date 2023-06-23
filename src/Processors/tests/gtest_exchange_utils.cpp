@@ -40,8 +40,8 @@ TEST(ExchangeUtils, mergeSenderTest)
     const auto & context = getContext().context;
     Block header;
     LocalChannelOptions options{10, 1000};
-    auto data_key = std::make_shared<ExchangeDataKey>("", 1, 1, "");
-    auto channel = std::make_shared<LocalBroadcastChannel>(data_key, options, LocalBroadcastChannel::generateNameForTest());
+    auto data_key = std::make_shared<ExchangeDataKey>("", 1, 1, 1, "");
+    auto channel = std::make_shared<LocalBroadcastChannel>(data_key, options);
     BroadcastSenderProxyPtr local_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
     local_sender->becomeRealSender(channel);
 
@@ -50,7 +50,7 @@ TEST(ExchangeUtils, mergeSenderTest)
 
     for (int i = 0; i < 2; i++)
     {
-        auto bprc_data_key = std::make_shared<ExchangeDataKey>("", 2, i, "");
+        auto bprc_data_key = std::make_shared<ExchangeDataKey>("", 2, 1, i, "");
         BroadcastSenderProxyPtr sender_proxy = BroadcastSenderProxyRegistry::instance().getOrCreate(bprc_data_key);
         sender_proxy->accept(context, header);
         auto brpc_sender = std::make_shared<BrpcRemoteBroadcastSender>(bprc_data_key, brpc::INVALID_STREAM_ID ,context, header);

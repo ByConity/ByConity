@@ -118,7 +118,7 @@ PlanSegmentTreePtr BasePlanTest::planSegment(const String & query, ContextMutabl
 
     PlanSegmentTreePtr plan_segment_tree = std::make_unique<PlanSegmentTree>();
     ClusterInfoContext cluster_info_context{.query_plan = plan, .context = query_context, .plan_segment_tree = plan_segment_tree};
-    PlanSegmentContext plan_segment_context = ClusterInfoFinder::find(*query_plan, cluster_info_context);
+    PlanSegmentContext plan_segment_context = ClusterInfoFinder::find(query_plan->getPlanNode(), cluster_info_context);
     PlanSegmentSplitter::split(plan, plan_segment_context);
     return plan_segment_tree;
 }

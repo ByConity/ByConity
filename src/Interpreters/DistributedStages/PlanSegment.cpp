@@ -67,7 +67,6 @@ void IPlanSegment::serialize(WriteBuffer & buf) const
     serializeBlock(header, buf);
     writeBinary(UInt8(type), buf);
     writeBinary(UInt8(exchange_mode), buf);
-    writeBinary(exchange_id, buf);
     writeBinary(exchange_parallel_size, buf);
     writeBinary(name, buf);
     writeBinary(segment_id, buf);
@@ -89,7 +88,6 @@ void IPlanSegment::deserialize(ReadBuffer & buf, ContextPtr)
     readBinary(read_mode, buf);
     exchange_mode = ExchangeMode(read_mode);
 
-    readBinary(exchange_id, buf);
     readBinary(exchange_parallel_size, buf);
     readBinary(name, buf);
     readBinary(segment_id, buf);
@@ -250,11 +248,10 @@ void PlanSegment::serialize(WriteBuffer & buf) const
     for (auto & input : inputs)
         input->serialize(buf);
 
-    if (outputs.empty())
-        throw Exception("Cannot find output when serialize PlanSegment", ErrorCodes::LOGICAL_ERROR);
-    writeBinary(outputs.size(), buf);
-    for (auto & output : outputs)
+    if (output)
         output->serialize(buf);
+    else
+        throw Exception("Cannot find output when serialize PlanSegment", ErrorCodes::LOGICAL_ERROR);
 
     coordinator_address.serialize(buf);
     current_address.serialize(buf);
@@ -281,15 +278,8 @@ void PlanSegment::deserialize(ReadBuffer & buf)
         inputs.push_back(input);
     }
 
-    size_t output_size;
-    readBinary(output_size, buf);
-    for (size_t i = 0; i < output_size; ++i)
-    {
-        auto cur_output = std::make_shared<PlanSegmentOutput>();
-        cur_output->deserialize(buf, context);
-        outputs.emplace_back(std::move(cur_output));
-    }
-
+    output = std::make_shared<PlanSegmentOutput>();
+    output->deserialize(buf, context);
     coordinator_address.deserialize(buf);
     current_address.deserialize(buf);
 
@@ -330,8 +320,8 @@ String PlanSegment::toString() const
     ostr << "inputs: " << "\n";
     for (auto & input : inputs)
         ostr << input->toString(4) << "\n";
-    ostr << "outputs: " << "\n";
-    for (auto & output : outputs)
+    ostr << "output: " << "\n";
+    if (output)
         ostr << output->toString(4) << "\n";
 
     ostr << "coordinator_address: " << coordinator_address.toString() << "\n";

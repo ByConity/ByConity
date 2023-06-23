@@ -666,7 +666,6 @@ class IColumn;
     M(Float, cost_calculator_join_build_weight, 2, "Join build side weight for cost calculator", 0) \
     M(Float, cost_calculator_join_output_weight, 0.5, "Join output weight for cost calculator", 0) \
     M(Float, cost_calculator_cte_weight, 1, "CTE output weight for cost calculator", 0) \
-    M(Float, cost_calculator_cte_weight_for_join_build_side, 2.0, "Join build side weight for cost calculator", 0) \
     M(Float, cost_calculator_projection_weight, 0.1, "CTE output weight for cost calculator", 0) \
     M(Bool, print_graphviz, false, "Whether print graphviz", 0) \
     M(String, graphviz_path, "/tmp/plan/", "The path of graphviz plan", 0) \
@@ -728,7 +727,7 @@ class IColumn;
     M(UInt64, exchange_parallel_size, 1, "Exchange parallel size", 0) \
     M(UInt64, exchange_source_pipeline_threads, 16, "Recommend number of threads for pipeline which reading data from exchange, ingoned if exchange need keep data order", 0) \
     M(UInt64, exchange_timeout_ms, 100000, "Exchange request timeout ms",0) \
-    M(UInt64, exchange_local_receiver_queue_size, 300, "Queue size for local exchange receiver",0) \
+    M(UInt64, exchange_local_receiver_queue_size, 50, "Queue size for local exchange receiver",0) \
     M(UInt64, exchange_remote_receiver_queue_size, 100, "Queue size for remote exchange receiver",0) \
     M(Bool, exchange_enable_block_compress, false, "Whether enable exchange block compress ", 0) \
     M(UInt64, exchange_stream_max_buf_size, 209715200, "Default 200M, -1 means no limit", 0) \

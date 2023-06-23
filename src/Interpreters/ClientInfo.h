@@ -122,8 +122,7 @@ public:
 
     /// For brpc inter server communication protocol
     UInt16 rpc_port = 0;
-    UInt32 brpc_protocol_major_version = 0;
-    UInt32 brpc_protocol_minor_version = 0;
+    UInt32 brpc_protocol_version = 0;
 
     /// Client type
     ClientType client_type = ClientType::UNKNOWN;

@@ -117,7 +117,7 @@ PlanSegmentPtr MockPlanSegment(ContextPtr context)
 
     plan_segment->appendPlanSegmentInput(left);
     plan_segment->appendPlanSegmentInput(right);
-    plan_segment->appendPlanSegmentOutput(output);
+    plan_segment->setPlanSegmentOutput(output);
 
     /***
      * only read from system.one

@@ -32,7 +32,7 @@ PlanSegmentPtr createPlanSegment()
 
     plan_segment->appendPlanSegmentInput(left);
     plan_segment->appendPlanSegmentInput(right);
-    plan_segment->appendPlanSegmentOutput(output);
+    plan_segment->setPlanSegmentOutput(output);
 
     QueryPlan query_plan;
     plan_segment->setQueryPlan(std::move(query_plan));

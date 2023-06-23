@@ -19,6 +19,7 @@
 namespace DB
 {
 
+
 ExchangeStep::ExchangeStep(DataStreams input_streams_, const ExchangeMode & mode_, Partitioning schema_, bool keep_order_)
     : exchange_type(mode_)
     , schema(std::move(schema_))

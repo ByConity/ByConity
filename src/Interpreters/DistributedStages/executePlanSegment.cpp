@@ -140,8 +140,7 @@ void executePlanSegmentRemotely(const PlanSegment & plan_segment, ContextPtr con
     auto rpc_channel = RpcChannelPool::getInstance().getClient(execute_address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
     Protos::PlanSegmentManagerService_Stub manager_stub(&rpc_channel->getChannel());
     Protos::ExecutePlanSegmentRequest request;
-    request.set_brpc_protocol_major_revision(DBMS_BRPC_PROTOCOL_MAJOR_VERSION);
-    request.set_brpc_protocol_minor_revision(DBMS_BRPC_PROTOCOL_MINOR_VERSION);
+    request.set_brpc_protocol_revision(DBMS_BRPC_PROTOCOL_VERSION);
     request.set_query_id(plan_segment.getQueryId());
     request.set_plan_segment_id(plan_segment.getPlanSegmentId());
     request.set_initial_query_start_time(context->getClientInfo().initial_query_start_time_microseconds.value);
@@ -221,8 +220,7 @@ void executePlanSegmentLocally(const PlanSegment & plan_segment, ContextPtr init
     ClientInfo & client_info = context->getClientInfo();
     client_info.initial_query_id = plan_segment.getQueryId();
     client_info.current_query_id = client_info.initial_query_id + "_" + std::to_string(plan_segment.getPlanSegmentId());
-    client_info.brpc_protocol_major_version = DBMS_BRPC_PROTOCOL_MAJOR_VERSION;
-    client_info.brpc_protocol_minor_version = DBMS_BRPC_PROTOCOL_MINOR_VERSION;
+    client_info.brpc_protocol_version = DBMS_BRPC_PROTOCOL_VERSION;
     client_info.query_kind = ClientInfo::QueryKind::SECONDARY_QUERY;
     client_info.interface = ClientInfo::Interface::BRPC;
     context->setProcessListElement(nullptr);
@@ -236,7 +234,7 @@ void executePlanSegmentLocally(const PlanSegment & plan_segment, ContextPtr init
     plan_segment_clone->setCoordinatorAddress(plan_segment.getCoordinatorAddress());
     plan_segment_clone->setCurrentAddress(plan_segment.getCurrentAddress());
     plan_segment_clone->appendPlanSegmentInputs(plan_segment.getPlanSegmentInputs());
-    plan_segment_clone->appendPlanSegmentOutputs(plan_segment.getPlanSegmentOutputs());
+    plan_segment_clone->setPlanSegmentOutput(plan_segment.getPlanSegmentOutput());
     plan_segment_clone->setParallelSize(plan_segment.getParallelSize());
     plan_segment_clone->setExchangeParallelSize(plan_segment.getExchangeParallelSize());
 

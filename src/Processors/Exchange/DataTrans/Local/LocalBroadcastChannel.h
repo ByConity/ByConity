@@ -22,7 +22,7 @@
 #include <Processors/Exchange/DataTrans/BoundedDataQueue.h>
 #include <Processors/Exchange/DataTrans/Brpc/BrpcRemoteBroadcastReceiver.h>
 #include <Processors/Exchange/DataTrans/Brpc/BrpcRemoteBroadcastSender.h>
-#include <Processors/Exchange/ExchangeDataKey.h>
+#include <Processors/Exchange/DataTrans/DataTransKey.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/Exchange/DataTrans/IBroadcastReceiver.h>
 #include <Processors/Exchange/DataTrans/IBroadcastSender.h>
@@ -40,10 +40,7 @@ class LocalBroadcastChannel final : public IBroadcastReceiver,
 {
 public:
     explicit LocalBroadcastChannel(
-        ExchangeDataKeyPtr data_key_,
-        LocalChannelOptions options_,
-        const String &name_,
-        std::shared_ptr<QueryExchangeLog> query_exchange_log_ = nullptr);
+        DataTransKeyPtr data_key_, LocalChannelOptions options_, std::shared_ptr<QueryExchangeLog> query_exchange_log_ = nullptr);
     RecvDataPacket recv(UInt32 timeout_ms) override;
     void registerToSenders(UInt32 timeout_ms) override;
     void merge(IBroadcastSender &&) override;
@@ -53,32 +50,10 @@ public:
     BroadcastStatus send(Chunk chunk) override;
     ~LocalBroadcastChannel() override;
 
-    static String generateName(
-        String &query_id, size_t exchange_id, size_t write_segment_id, size_t read_segment_id, size_t parallel_index)
-    {
-        return fmt::format(
-            "Local[{}_{}_{}_{}_{}]",
-            query_id,
-            write_segment_id,
-            read_segment_id,
-            parallel_index,
-            exchange_id
-        );
-    }
-
-    static String generateNameForTest()
-    {
-        return fmt::format(
-            "Local[{}_{}_{}_{}_{}]",
-            "test-Local", -1, -1, -1, -1
-        );
-    }
-
 private:
-    String name;
     BrpcRecvMetric recv_metric;
     BrpcSendMetric send_metric;
-    ExchangeDataKeyPtr data_key;
+    DataTransKeyPtr data_key;
     LocalChannelOptions options;
     BoundedDataQueue<Chunk> receive_queue;
     BroadcastStatus init_status{BroadcastStatusCode::RUNNING, false, "init"};

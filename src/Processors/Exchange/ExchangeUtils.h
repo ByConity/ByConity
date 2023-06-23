@@ -18,6 +18,7 @@
 #include <memory>
 #include <Interpreters/Context.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
+#include <Processors/Exchange/DataTrans/DataTransKey.h>
 #include <Processors/Exchange/DataTrans/IBroadcastSender.h>
 #include <Processors/Exchange/ExchangeDataKey.h>
 #include <Processors/Exchange/ExchangeOptions.h>

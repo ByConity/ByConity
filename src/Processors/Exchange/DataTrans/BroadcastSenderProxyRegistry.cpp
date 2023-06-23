@@ -25,10 +25,12 @@ BroadcastSenderProxyRegistry::BroadcastSenderProxyRegistry() : logger(&Poco::Log
 {
 }
 
-BroadcastSenderProxyPtr BroadcastSenderProxyRegistry::getOrCreate(ExchangeDataKeyPtr data_key)
+BroadcastSenderProxyPtr BroadcastSenderProxyRegistry::getOrCreate(DataTransKeyPtr data_key)
 {
+    const String & key = data_key->getKey();
+
     std::lock_guard lock(mutex);
-    auto it = proxies.find(*data_key);
+    auto it = proxies.find(key);
     if (it != proxies.end())
     {
         auto channel_ptr = it->second.lock();
@@ -38,14 +40,14 @@ BroadcastSenderProxyPtr BroadcastSenderProxyRegistry::getOrCreate(ExchangeDataKe
 
     LOG_TRACE(logger, "Register sender proxy {} ", data_key->dump());
     auto channel_ptr = std::shared_ptr<BroadcastSenderProxy>(new BroadcastSenderProxy(std::move(data_key)));
-    proxies.emplace(*channel_ptr->getDataKey(), BroadcastSenderProxyEntry(channel_ptr));
+    proxies.emplace(key, BroadcastSenderProxyEntry(channel_ptr));
     return channel_ptr;
 }
 
-void BroadcastSenderProxyRegistry::remove(ExchangeDataKeyPtr data_key)
+void BroadcastSenderProxyRegistry::remove(DataTransKeyPtr data_key)
 {
     std::lock_guard lock(mutex);
-    auto result = proxies.erase(*data_key);
+    auto result = proxies.erase(data_key->getKey());
     LOG_TRACE(logger, "remove proxy {} with result: {} ", data_key->dump(), result);
 }
 

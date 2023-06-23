@@ -24,8 +24,7 @@
 #include <QueryPlan/GraphvizPrinter.h>
 #include <QueryPlan/QueryPlanner.h>
 #include <Storages/StorageCnchMergeTree.h>
-#include <Storages/StorageDistributed.h>
-#include "QueryPlan/QueryPlan.h"
+#include <Storages/StorageCnchHive.h>
 
 namespace DB
 {
@@ -76,10 +75,10 @@ BlockIO InterpreterSelectQueryUseOptimizer::execute()
     LOG_DEBUG(log, "optimizer stage run time: plan normalize, {} ms", stage_watch.elapsedMillisecondsAsDouble());
  
     stage_watch.restart();
-
     PlanSegmentTreePtr plan_segment_tree = std::make_unique<PlanSegmentTree>();
-    ClusterInfoContext cluster_info_context{.query_plan = *query_plan, .context = context, .plan_segment_tree = plan_segment_tree};
-    PlanSegmentContext plan_segment_context = ClusterInfoFinder::find(*query_plan, cluster_info_context);
+
+    ClusterInfoContext cluster_info_context{.query_plan = plan, .context = context, .plan_segment_tree = plan_segment_tree};
+    PlanSegmentContext plan_segment_context = ClusterInfoFinder::find(query_plan->getPlanNode(), cluster_info_context);
 
     plan.allocateLocalTable(context);
     PlanSegmentSplitter::split(plan, plan_segment_context);
@@ -127,12 +126,12 @@ QueryPlan::Node * PlanNodeToNodeVisitor::visitPlanNode(PlanNodeBase & node, Void
     return plan.getLastNode();
 }
 
-PlanSegmentContext ClusterInfoFinder::find(QueryPlan & plan, ClusterInfoContext & cluster_info_context)
+PlanSegmentContext ClusterInfoFinder::find(PlanNodePtr & node, ClusterInfoContext & cluster_info_context)
 {
-    ClusterInfoFinder visitor{plan.getCTEInfo()};
+    ClusterInfoFinder visitor;
 
     // default schedule to worker cluster
-    std::optional<PlanSegmentContext> result = VisitorUtil::accept(plan.getPlanNode(), visitor, cluster_info_context);
+    std::optional<PlanSegmentContext> result = VisitorUtil::accept(node, visitor, cluster_info_context);
     if (result.has_value())
     {
         return result.value();
@@ -180,11 +179,4 @@ std::optional<PlanSegmentContext> ClusterInfoFinder::visitTableScanNode(TableSca
     }
     return std::nullopt;
 }
-
-std::optional<PlanSegmentContext> ClusterInfoFinder::visitCTERefNode(CTERefNode & node, ClusterInfoContext & cluster_info_context)
-{
-    const auto * cte = dynamic_cast<const CTERefStep *>(node.getStep().get());
-    return cte_helper.accept(cte->getId(), *this, cluster_info_context);
-}
-
 }
