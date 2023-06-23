@@ -25,7 +25,7 @@
 #include <Processors/Chunk.h>
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxy.h>
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxyRegistry.h>
-#include <Processors/Exchange/DataTrans/DataTransKey.h>
+#include <Processors/Exchange/ExchangeDataKey.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/Exchange/DataTrans/Local/LocalChannelOptions.h>
 #include <Poco/Logger.h>
@@ -42,7 +42,7 @@ namespace ErrorCodes
     extern const int EXCHANGE_DATA_TRANS_EXCEPTION;
 }
 
-BroadcastSenderProxy::BroadcastSenderProxy(DataTransKeyPtr data_key_)
+BroadcastSenderProxy::BroadcastSenderProxy(ExchangeDataKeyPtr data_key_)
     : data_key(std::move(data_key_)), wait_timeout_ms(5000), logger(&Poco::Logger::get("BroadcastSenderProxy"))
 {
 }
@@ -189,7 +189,7 @@ Block BroadcastSenderProxy::getHeader() const
     return header;
 }
 
-DataTransKeyPtr BroadcastSenderProxy::getDataKey() const
+ExchangeDataKeyPtr BroadcastSenderProxy::getDataKey() const
 {
     return data_key;
 }

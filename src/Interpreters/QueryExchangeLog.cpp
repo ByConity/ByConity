@@ -33,8 +33,7 @@ NamesAndTypesList QueryExchangeLogElement::getNamesAndTypes()
         {"event_date", std::make_shared<DataTypeDate>()},
         {"event_time", std::make_shared<DataTypeDateTime>()},
         {"type", std::make_shared<DataTypeString>()},
-        {"write_segment_id", std::make_shared<DataTypeString>()},
-        {"read_segment_id", std::make_shared<DataTypeString>()},
+        {"exchange_id", std::make_shared<DataTypeString>()},
         {"partition_id", std::make_shared<DataTypeString>()},
         {"coordinator_address", std::make_shared<DataTypeString>()},
 
@@ -81,8 +80,7 @@ void QueryExchangeLogElement::appendToBlock(MutableColumns & columns) const
     columns[i++]->insert(DateLUT::instance().toDayNum(event_time).toUnderType());
     columns[i++]->insert(event_time);
     columns[i++]->insertData(type.data(), type.size());
-    columns[i++]->insert(write_segment_id);
-    columns[i++]->insert(read_segment_id);
+    columns[i++]->insert(exchange_id);
     columns[i++]->insert(partition_id);
     columns[i++]->insert(coordinator_address);
 

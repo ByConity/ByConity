@@ -35,6 +35,7 @@ public:
         settings.emplace("cascades_optimizer_timeout", "10000");
 #endif
 
+        settings.emplace("cte_mode", "AUTO");
         settings.emplace("enable_left_join_to_right_join", "false");
         settings.emplace("enable_execute_uncorrelated_subquery", 0);
         tester = std::make_shared<DB::BaseTpcdsPlanTest>(WITH_STATISTICS, settings);

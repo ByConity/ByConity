@@ -20,7 +20,6 @@
 #include <Core/Block.h>
 #include <DataTypes/IDataType.h>
 #include <Interpreters/Context_fwd.h>
-#include <Processors/Exchange/DataTrans/DataTransKey.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/Exchange/DataTrans/IBroadcastSender.h>
 #include <Processors/Exchange/ExchangeDataKey.h>
@@ -46,18 +45,18 @@ public:
 
     ContextPtr getContext() const;
     Block getHeader() const;
-    DataTransKeyPtr getDataKey() const;
+    ExchangeDataKeyPtr getDataKey() const;
 
 private:
     friend class BroadcastSenderProxyRegistry;
-    explicit BroadcastSenderProxy(DataTransKeyPtr data_key_);
+    explicit BroadcastSenderProxy(ExchangeDataKeyPtr data_key_);
 
     mutable bthread::Mutex mutex;
     bthread::ConditionVariable wait_become_real;
     bthread::ConditionVariable wait_accept;
     std::atomic_bool has_real_sender {false};
     bool closed {false};
-    DataTransKeyPtr data_key;
+    ExchangeDataKeyPtr data_key;
 
     ContextPtr context;
     Block header;
