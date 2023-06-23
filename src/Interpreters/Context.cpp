@@ -175,6 +175,7 @@
 #include <CloudServices/CnchWorkerClient.h>
 #include <CloudServices/CnchWorkerClientPools.h>
 #include <CloudServices/CnchBGThreadsMap.h>
+#include <CloudServices/CnchMergeMutateThread.h>
 #include <CloudServices/CnchWorkerResource.h>
 #include <CloudServices/CnchServerResource.h>
 #include <Catalog/Catalog.h>
@@ -1888,7 +1889,7 @@ std::shared_ptr<PrimaryIndexCache> Context::getPrimaryIndexCache() const
     return shared->primary_index_cache;
 }
 
-void Context::dropPrimaryIndexCache() const 
+void Context::dropPrimaryIndexCache() const
 {
     if (shared->primary_index_cache)
         shared->primary_index_cache->reset();
@@ -4326,6 +4327,24 @@ bool Context::getTableReclusterTaskStatus(const StorageID & storage_id) const
     if (!reclustering_manager_thread)
         throw Exception("Fail to cast to ReclusteringManagerThread", ErrorCodes::LOGICAL_ERROR);
     return reclustering_manager_thread->getTableReclusterStatus();
+}
+
+bool Context::removeMergeMutateTasksOnPartitions(const StorageID & storage_id, const std::unordered_set<String> & partitions)
+{
+    CnchBGThreadsMap * thread_map = getCnchBGThreadsMap(CnchBGThreadType::MergeMutate);
+    if (!thread_map)
+        throw Exception("Fail to get merge thread map", ErrorCodes::SYSTEM_ERROR);
+    CnchBGThreadPtr bg_thread_ptr = thread_map->tryGetThread(storage_id);
+    if (!bg_thread_ptr)
+    {
+        LOG_DEBUG(&Poco::Logger::get(__PRETTY_FUNCTION__), "Fail to get merge thread for {}", storage_id.getNameForLogs());
+        return false;
+    }
+
+    CnchMergeMutateThread * merge_mutate_thread = dynamic_cast<CnchMergeMutateThread *>(bg_thread_ptr.get());
+    if (!merge_mutate_thread)
+        throw Exception("Fail to cast to CnchMergeMutateThread", ErrorCodes::LOGICAL_ERROR);
+    return merge_mutate_thread->removeTasksOnPartitions(partitions);
 }
 
 CnchBGThreadPtr Context::tryGetDedupWorkerManager(const StorageID & storage_id) const

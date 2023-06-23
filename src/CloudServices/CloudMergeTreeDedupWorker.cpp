@@ -181,12 +181,11 @@ void CloudMergeTreeDedupWorker::iterate()
         : CnchDedupHelper::DedupScope::Table();
 
     Stopwatch watch;
-    CnchLockHolder cnch_lock(
-        *context,
+    auto cnch_lock = txn->createLockHolder(
         CnchDedupHelper::getLocksToAcquire(
             scope, txn->getTransactionID(), storage, storage.getSettings()->unique_acquire_write_lock_timeout.value.totalMilliseconds()));
-    if (!cnch_lock.tryLock())
-        return;
+
+    cnch_lock->lock();
 
     /// get staged parts again after acquired the locks
     ts = context->getTimestamp(); /// must get a new ts after locks are acquired

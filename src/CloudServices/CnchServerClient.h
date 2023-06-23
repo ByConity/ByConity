@@ -103,10 +103,11 @@ public:
     void controlCnchBGThread(const StorageID & storage_id, CnchBGThreadType type, CnchBGThreadAction action);
     void cleanTransaction(const TransactionRecord & txn_record);
     std::set<UUID> getDeletingTablesInGlobalGC();
-    bool removeMergeMutateTasksOnPartition(const StorageID &, const String &);
+    bool removeMergeMutateTasksOnPartitions(const StorageID &, const std::unordered_set<String> &);
 
     void acquireLock(const LockInfoPtr & info);
     void releaseLock(const LockInfoPtr & info);
+    void assertLockAcquired(const TxnTimestamp & txn_id, LockID lock_ids);
     void reportCnchLockHeartBeat(const TxnTimestamp & txn_id, UInt64 expire_time = 0);
 
     std::optional<TxnTimestamp> getMinActiveTimestamp(const StorageID & storage_id);
