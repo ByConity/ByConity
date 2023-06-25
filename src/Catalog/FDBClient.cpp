@@ -19,6 +19,8 @@
 #include <Catalog/FDBClient.h>
 #include <Catalog/FDBError.h>
 #include <Common/Exception.h>
+#include <Catalog/MetastoreFDBImpl.h>
+
 
 namespace DB
 {
@@ -140,7 +142,7 @@ fdb_error_t FDBClient::Put(FDBTransactionPtr tr, const PutRequest & put)
 std::shared_ptr<Iterator> FDBClient::Scan(FDBTransactionPtr tr, const ScanRequest & scan_req)
 {
     AssertTrsansactionStatus(tr);
-    return std::make_shared<Iterator>(tr, scan_req);
+    return std::make_shared<Iterator>(this, tr, scan_req);
 }
 
 /*
@@ -378,8 +380,8 @@ void FDBClient::DestroyTransaction(FDBTransactionPtr tr)
     fdb_transaction_destroy(tr->transaction);
 }
 
-Iterator::Iterator(FDBTransactionPtr tr_, const ScanRequest & req_)
-    : tr(tr_), req(req_)
+Iterator::Iterator(FDBClient * client_, FDBTransactionPtr tr_, const ScanRequest & req_)
+    : client{client_}, tr(tr_), req(req_)
 {
     AssertTrsansactionStatus(tr);
     start_key_batch = req.start_key;
@@ -402,14 +404,17 @@ bool Iterator::Next(fdb_error_t & code)
             batch_future = std::make_shared<FDBFutureRAII>(fdb_transaction_get_range(tr->transaction,
                 FDB_KEYSEL_FIRST_GREATER_OR_EQUAL(reinterpret_cast<const uint8_t*>(start_key_batch.c_str()), start_key_batch.size()),
                 FDB_KEYSEL_FIRST_GREATER_OR_EQUAL(reinterpret_cast<const uint8_t*>(req.end_key.c_str()), req.end_key.size()),
-                req.row_limit, 0, FDB_STREAMING_MODE_ITERATOR, iteration, 1, req.reverse_order));
+                req.row_limit, 0, FDB_STREAMING_MODE_LARGE, iteration, 1, req.reverse_order));
         }
         else
         {
+            /// create a new transaction for each get_range to avoid 5 sec timeout
+            tr = std::make_shared<FDB::FDBTransactionRAII>();
+            Catalog::MetastoreFDBImpl::check_fdb_op(client->CreateTransaction(tr));
             batch_future = std::make_shared<FDBFutureRAII>(fdb_transaction_get_range(tr->transaction,
                 FDB_KEYSEL_FIRST_GREATER_THAN(reinterpret_cast<const uint8_t*>(start_key_batch.c_str()), start_key_batch.size()),
                 FDB_KEYSEL_FIRST_GREATER_OR_EQUAL(reinterpret_cast<const uint8_t*>(req.end_key.c_str()), req.end_key.size()),
-                req.row_limit, 0, FDB_STREAMING_MODE_ITERATOR, iteration, 1, req.reverse_order));
+                req.row_limit, 0, FDB_STREAMING_MODE_LARGE, iteration, 1, req.reverse_order));
         }
 
         code = fdb_future_block_until_ready(batch_future->future);
