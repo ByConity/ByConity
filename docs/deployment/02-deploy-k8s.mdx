@@ -6,7 +6,7 @@ tags:
 
 # Deploy ByConity in Kubernetes
 
-This repos demonstrates how to deploy a ByConity cluster in your Kubernetes cluster.
+This page demonstrates how to deploy a ByConity cluster in your Kubernetes cluster.
 
 ## Deploy local to try a demo
 
@@ -104,6 +104,29 @@ You may copy from ./chart/byconity/values.yaml and modify some fields like:
 - timezone
 - replicas for server/worker
 - hdfs storage request
+
+  if you want to use your own existing hdfs cluster please set hdfs.enabled=true
+  you can override the hdfs address configuration in values.yaml
+```dash
+byconity:
+  hdfs_address: hdfs://your own hdfs:port
+hdfs:
+  enabled: false
+```
+- fdb configuration
+
+  if you want to use your own fdb. please set fdb.enabled=false and fdb-operator.enabled=false
+  you can refer to values_use_existing_fdb.yaml
+```dash
+byconity:
+  hdfs_address: hdfs://byconity-hdfs-namenodes:8020 # can using your own hdfs
+  use_existing_fdb: true
+  fdb_cluster_file: your fdb-cluster-file content. #byconity_fdb:Is0hBgl6iICdHuspBmhAODmD5WISXKzI@192.168.224.150:4501,192.168.226.83:4501,192.168.228.152:4501
+fdb:
+  enabled: false
+fdb-operator:
+  enabled: false
+```
 
 ### Initialize the Byconity cluster
 

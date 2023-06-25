@@ -106,6 +106,28 @@ docker stop byconity-cluster-control-plane byconity-cluster-worker byconity-clus
 - 服务器/工人的副本
 - hdfs存储请求
 
+  如果您想使用自己现有的HDFS集群，请将hdfs.enabled设置为true。您可以在values.yaml中覆盖HDFS的配置
+```dash
+byconity:
+  hdfs_address: hdfs://your own hdfs:port
+hdfs:
+  enabled: false
+```
+- fdb configuration
+
+  如果您想使用自己的FDB，请将fdb.enabled和fdb-operator.enabled都设置为false。您可以参考values_use_existing_fdb.yaml进行配置
+```dash
+byconity:
+  hdfs_address: hdfs://byconity-hdfs-namenodes:8020 # can using your own hdfs
+  use_existing_fdb: true
+  fdb_cluster_file: your fdb-cluster-file content. #byconity_fdb:Is0hBgl6iICdHuspBmhAODmD5WISXKzI@192.168.224.150:4501,192.168.226.83:4501,192.168.228.152:4501
+fdb:
+  enabled: false
+fdb-operator:
+  enabled: false
+```
+
+
 ### 初始化 Byconity 集群
 
 ```bash
