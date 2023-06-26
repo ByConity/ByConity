@@ -83,6 +83,7 @@
 #include <Interpreters/CnchSystemLog.h>
 #include <Interpreters/CnchQueryMetrics/QueryMetricLog.h>
 #include <Interpreters/CnchQueryMetrics/QueryWorkerMetricLog.h>
+#include "common/sleep.h"
 
 #if !defined(ARCADIA_BUILD)
 #    include "config_core.h"
@@ -467,8 +468,6 @@ BlockIO InterpreterSystemQuery::executeCnchCommand(ASTSystemQuery & query, Conte
         case Type::FORCE_GC:
         case Type::START_DEDUP_WORKER:
         case Type::STOP_DEDUP_WORKER:
-        case Type::START_CLUSTER:
-        case Type::STOP_CLUSTER:
             executeBGTaskInCnchServer(system_context, query.type);
             break;
         case Type::DEDUP:
@@ -482,6 +481,9 @@ BlockIO InterpreterSystemQuery::executeCnchCommand(ASTSystemQuery & query, Conte
             break;
         case Type::SYNC_DEDUP_WORKER:
             executeSyncDedupWorker(system_context);
+            break;
+        case Type::LOCK_MEMORY_LOCK:
+            lockMemoryLock(query, table_id, system_context);
             break;
         default:
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "System command {} is not supported in CNCH", ASTSystemQuery::typeToString(query.type));
@@ -608,12 +610,6 @@ void InterpreterSystemQuery::executeBGTaskInCnchServer(ContextMutablePtr & syste
             break;
         case Type::STOP_DEDUP_WORKER:
             daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::DedupWorker, CnchBGThreadAction::Stop);
-            break;
-        case Type::START_CLUSTER:
-            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::Clustering, CnchBGThreadAction::Start);
-            break;
-        case Type::STOP_CLUSTER:
-            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::Clustering, CnchBGThreadAction::Stop);
             break;
         default:
             throw Exception("Unknown command type " + toString(ASTSystemQuery::typeToString(type)), ErrorCodes::LOGICAL_ERROR);
@@ -1417,4 +1413,53 @@ void InterpreterSystemQuery::executeActionOnCNCHLog(const String & table_name, A
             CNCH_SYSTEM_LOG_QUERY_METRICS_TABLE_NAME,
             CNCH_SYSTEM_LOG_QUERY_WORKER_METRICS_TABLE_NAME);
 }
+
+void InterpreterSystemQuery::lockMemoryLock(const ASTSystemQuery & query, const StorageID & table_id, ContextPtr local_context)
+{
+    /// SYSTEM LOCK MEMORY LOCK db.tb PARTITON '2012-01-01' FOR 4 SECONDS TASK_DOMAIN
+
+    auto & txn_coordinator = local_context->getCnchTransactionCoordinator();
+    auto transaction = txn_coordinator.createTransaction(
+        CreateTransactionOption().setInitiator(CnchTransactionInitiator::Merge).setPriority(CnchTransactionPriority::low));
+
+    SCOPE_EXIT({
+        try
+        {
+            txn_coordinator.finishTransaction(transaction);
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        }
+    });
+
+    StoragePtr storage = local_context->getCnchCatalog()->tryGetTable(*local_context, table_id.database_name, table_id.table_name);
+    if (!storage)
+        throw Exception("Failed to get StoragePtr for table", ErrorCodes::BAD_ARGUMENTS);
+
+    auto * merge_tree = dynamic_cast<StorageCnchMergeTree *>(storage.get());
+    if (!merge_tree)
+        throw Exception("storage is not merge tree table", ErrorCodes::LOGICAL_ERROR);
+
+    String partition_id = merge_tree->getPartitionIDFromQuery(query.partition, local_context);
+    LOG_DEBUG(log, "execute lock Memory lock on partition_id {} on table {} for {} s with string data {}", partition_id, table_id.getFullTableName(), query.seconds, query.string_data);
+
+    TxnTimestamp txn_id = transaction->getTransactionID();
+    LockInfoPtr partition_lock = std::make_shared<LockInfo>(txn_id);
+    partition_lock->setMode(LockMode::X);
+    partition_lock->setTimeout(1000); //1 seconds
+    if (!query.string_data.empty())
+        partition_lock->setTablePrefix(LockInfo::task_domain + UUIDHelpers::UUIDToString(storage->getStorageUUID()));
+    else
+        partition_lock->setUUID(storage->getStorageUUID());
+    partition_lock->setPartition(partition_id);
+
+    Stopwatch lock_watch;
+
+    auto cnch_lock = transaction->createLockHolder({std::move(partition_lock)});
+    cnch_lock->lock();
+    LOG_DEBUG(log, "Acquired lock in {} ms", lock_watch.elapsedMilliseconds());
+    sleepForSeconds(query.seconds);
+}
+
 }

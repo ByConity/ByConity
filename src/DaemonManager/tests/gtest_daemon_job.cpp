@@ -396,6 +396,7 @@ TEST(daemon_job, checkLivenessIfNeed_counter_test_checking_at_right_time)
 
     DaemonJobServerBGThread daemon_job(getContext().context, CnchBGThreadType::MergeMutate, std::make_unique<UnstableExecutor>(), std::make_unique<StablePersistentStoreProxy>(), std::make_unique<MockTargetServerCalculater>());
     BackgroundJobs empty_bgjs;
+    std::set<UUID> new_bg_job_uuids{uuid4, uuid5};
     std::vector<String> servers;
     size_t counter = LIVENESS_CHECK_INTERVAL;
     counter = checkLivenessIfNeed(
@@ -404,6 +405,7 @@ TEST(daemon_job, checkLivenessIfNeed_counter_test_checking_at_right_time)
         *getContext().context,
         daemon_job,
         empty_bgjs,
+        new_bg_job_uuids,
         servers,
         fetch_bg_thread_from_server
     );
@@ -421,6 +423,7 @@ TEST(daemon_job, checkLivenessIfNeed_counter_test_not_checking_when_not_in_time)
 
     DaemonJobServerBGThread daemon_job(getContext().context, CnchBGThreadType::MergeMutate, std::make_unique<UnstableExecutor>(), std::make_unique<StablePersistentStoreProxy>(), std::make_unique<MockTargetServerCalculater>());
     BackgroundJobs empty_bgjs;
+    std::set<UUID> new_bg_job_uuids{uuid4, uuid5};
     std::vector<String> servers;
     size_t counter = LIVENESS_CHECK_INTERVAL - 1;
     counter = checkLivenessIfNeed(
@@ -429,6 +432,7 @@ TEST(daemon_job, checkLivenessIfNeed_counter_test_not_checking_when_not_in_time)
         *getContext().context,
         daemon_job,
         empty_bgjs,
+        new_bg_job_uuids,
         servers,
         fetch_bg_thread_from_server
     );
@@ -446,6 +450,7 @@ TEST(daemon_job, checkLivenessIfNeed_counter_test_fetch_from_server_failed)
 
     DaemonJobServerBGThread daemon_job(getContext().context, CnchBGThreadType::MergeMutate, std::make_unique<UnstableExecutor>(), std::make_unique<StablePersistentStoreProxy>(), std::make_unique<MockTargetServerCalculater>());
     BackgroundJobs empty_bgjs;
+    std::set<UUID> new_bg_job_uuids{uuid4, uuid5};
     std::vector<String> servers;
     size_t counter = LIVENESS_CHECK_INTERVAL;
     counter = checkLivenessIfNeed(
@@ -454,6 +459,7 @@ TEST(daemon_job, checkLivenessIfNeed_counter_test_fetch_from_server_failed)
         *getContext().context,
         daemon_job,
         empty_bgjs,
+        new_bg_job_uuids,
         servers,
         fetch_bg_thread_from_server
     );
@@ -689,6 +695,7 @@ TEST(daemon_job, checkLiveness_run_missing)
         {storage_id2.uuid, running_job2},
         {storage_id3.uuid, stopped_job}
     };
+    std::set<UUID> new_bg_job_uuids{uuid4, uuid5};
     std::vector<String> servers;
     size_t counter = LIVENESS_CHECK_INTERVAL;
     counter = checkLivenessIfNeed(
@@ -697,6 +704,7 @@ TEST(daemon_job, checkLiveness_run_missing)
         *getContext().context,
         daemon_job,
         bgs,
+        new_bg_job_uuids,
         servers,
         fetch_bg_thread_from_server
     );
@@ -706,6 +714,33 @@ TEST(daemon_job, checkLiveness_run_missing)
     EXPECT_EQ(executor->events.size(), 1);
     Event expected{uuid2, CnchBGThreadAction::Start, SERVER2};
     EXPECT_EQ(executor->events.at(0), expected);
+}
+
+TEST(daemon_job, findZombieJobsInServer)
+{
+    DaemonJobServerBGThread daemon_job(getContext().context, CnchBGThreadType::MergeMutate, std::make_unique<UnstableExecutor>(), std::make_unique<StablePersistentStoreProxy>(), std::make_unique<MockTargetServerCalculater>());
+    BackgroundJobPtr running_job1 = std::make_shared<BackgroundJob>(storage_id1, CnchBGThreadStatus::Running, daemon_job, "169.128.0.1:1223");
+    BackgroundJobPtr running_job2 = std::make_shared<BackgroundJob>(storage_id2, CnchBGThreadStatus::Running, daemon_job, "169.128.0.1:1223");
+    BackgroundJobPtr stopped_job = std::make_shared<BackgroundJob>(storage_id3, CnchBGThreadStatus::Stopped, daemon_job, "169.128.0.1:1223");
+
+    BackgroundJobs bgs {
+        {storage_id1.uuid, running_job1},
+        {storage_id2.uuid, running_job2},
+        {storage_id3.uuid, stopped_job}
+    };
+
+    std::set<UUID> new_bg_job_uuids{uuid4, uuid5};
+
+    std::unordered_multimap<UUID, BGJobInfoFromServer> bg_jobs_from_servers {
+        {storage_id1.uuid, BGJobInfoFromServer{storage_id1, CnchBGThreadStatus::Running, "169.128.0.1:1223"}},
+        {storage_id4.uuid, BGJobInfoFromServer{storage_id4, CnchBGThreadStatus::Running, "169.128.0.1:1223"}},
+        {storage_id6.uuid, BGJobInfoFromServer{storage_id6, CnchBGThreadStatus::Running, "169.128.0.1:1223"}},
+    };
+
+    std::vector<BGJobInfoFromServer> zombie_jobs = findZombieJobsInServer(new_bg_job_uuids, bgs, bg_jobs_from_servers);
+    EXPECT_EQ(zombie_jobs.size(), 1);
+    BGJobInfoFromServer expected_zombie_job{storage_id6, CnchBGThreadStatus::Running, "169.128.0.1:1223"};
+    EXPECT_EQ(zombie_jobs[0], expected_zombie_job);
 }
 
 } // end namespace

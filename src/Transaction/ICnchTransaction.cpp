@@ -20,6 +20,7 @@
 #include <CloudServices/CnchServerClient.h>
 #include <CloudServices/CnchServerClientPool.h>
 #include <ResourceGroup/IResourceGroupManager.h>
+#include <Transaction/CnchLock.h>
 #include <Transaction/LockManager.h>
 #include <cppkafka/topic_partition_list.h>
 #include <Common/serverLocality.h>
@@ -54,6 +55,25 @@ void ICnchTransaction::setTransactionRecord(TransactionRecord record)
 {
     auto lock = getLock();
     txn_record = std::move(record);
+}
+
+std::shared_ptr<CnchLockHolder> ICnchTransaction::createLockHolder(std::vector<LockInfoPtr> && elems)
+{
+    // if (lock_holder.has_value())
+    //     throw Exception("Invalid operation, should only acquired lock once", ErrorCodes::LOGICAL_ERROR);
+    /// TODO: should avoid acquired lock multiple time
+    auto holder = std::make_shared<CnchLockHolder>(global_context, std::move(elems));
+    lock_holder = holder;
+    return holder;
+}
+
+void ICnchTransaction::assertLockAcquired() const
+{
+    /// threadsafe
+    if (auto impl = lock_holder.lock())
+    {
+        impl->assertLockAcquired();
+    }
 }
 
 // IntentLockPtr ICnchTransaction::createIntentLock(const LockEntity & entity, const Strings & intent_names)

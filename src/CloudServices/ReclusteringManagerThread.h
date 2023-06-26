@@ -9,9 +9,9 @@ namespace DB
 class StorageCnchMergeTree;
 
 /**
- * Manage reclustering background tasks.
+ * Manage recluster task for a table
  */
-class ReclusteringManagerThread: public ICnchBGThread
+class ReclusteringManagerThread : public ICnchBGThread
 {
 public:
 
@@ -20,7 +20,6 @@ public:
     ~ReclusteringManagerThread() override;
 
     void runImpl() override;
-
 
     bool getTableReclusterStatus();
 

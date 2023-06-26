@@ -362,7 +362,7 @@ void fillLockInfoModel(const LockInfo & info, Protos::DataModelLockInfo & model)
     model.set_timeout(info.timeout);
     model.set_lock_id(info.lock_id);
     Protos::DataModelLockField * field = model.mutable_lock_field();
-    RPCHelpers::fillUUID(info.table_uuid, *(field->mutable_uuid()));
+    field->set_table_prefix(info.table_uuid_with_prefix);
     if (info.hasBucket())
         field->set_bucket(info.bucket);
     if (info.hasPartition())
@@ -373,12 +373,11 @@ LockInfoPtr createLockInfoFromModel(const Protos::DataModelLockInfo & model)
 {
     LockMode mode = static_cast<LockMode>(model.lock_mode());
     const auto & field = model.lock_field();
-    UUID uuid = RPCHelpers::createUUID(field.uuid());
     Int64 bucket = field.has_bucket() ? field.bucket() : -1;
     const String & partition = field.has_partition() ? field.partition() : "";
 
     auto lock_info = std::make_shared<LockInfo>(model.txn_id());
-    lock_info->setLockID(model.lock_id()).setMode(mode).setTimeout(model.timeout()).setUUID(uuid).setBucket(bucket).setPartition(partition);
+    lock_info->setLockID(model.lock_id()).setMode(mode).setTimeout(model.timeout()).setTablePrefix(field.table_prefix()).setBucket(bucket).setPartition(partition);
     return lock_info;
 }
 
