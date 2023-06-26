@@ -333,6 +333,17 @@ message ReleaseLockResp
   optional string exception = 1;
 }
 
+message AssertLockReq
+{
+  optional uint64 txn_id = 1;
+  optional uint64 lock_id = 2;
+}
+
+message AssertLockResp
+{
+  optional string exception = 1;
+}
+
 message ReportCnchLockHeartBeatReq
 {
   required uint64 txn_id = 1;
@@ -392,13 +403,13 @@ message RedirectCommitPartsResp
   optional string exception = 1;
 }
 
-message RemoveMergeMutateTasksOnPartitionReq
+message RemoveMergeMutateTasksOnPartitionsReq
 {
   required StorageID storage_id = 1;
-  required string partition_id = 2;
+  repeated string partitions = 2;
 }
 
-message RemoveMergeMutateTasksOnPartitionResp
+message RemoveMergeMutateTasksOnPartitionsResp
 {
   optional bool ret = 1;
   optional string exception = 2;
@@ -476,6 +487,8 @@ service CnchServerService
 
   rpc releaseLock(ReleaseLockReq) returns (ReleaseLockResp);
 
+  rpc assertLockAcquired(AssertLockReq) returns (AssertLockResp);
+
   rpc reportCnchLockHeartBeat(ReportCnchLockHeartBeatReq) returns (ReportCnchLockHeartBeatResp);
 
   rpc getServerStartTime(GetServerStartTimeReq) returns (GetServerStartTimeResp);
@@ -490,7 +503,7 @@ service CnchServerService
 
   rpc redirectSetCommitTime(RedirectCommitPartsReq) returns (RedirectCommitPartsResp);
 
-  rpc removeMergeMutateTasksOnPartition(RemoveMergeMutateTasksOnPartitionReq) returns (RemoveMergeMutateTasksOnPartitionResp);
+  rpc removeMergeMutateTasksOnPartitions(RemoveMergeMutateTasksOnPartitionsReq) returns (RemoveMergeMutateTasksOnPartitionsResp);
 
   rpc submitQueryWorkerMetrics(SubmitQueryWorkerMetricsReq) returns (SubmitQueryWorkerMetricsResp);
 

@@ -109,6 +109,9 @@ private:
     void fetchParts(const ASTSystemQuery & query, const StorageID & table_id, ContextPtr local_context);
 
     void executeActionOnCNCHLog(const String & table, ASTSystemQuery::Type type);
+
+    /// a command to test MemoryLock
+    void lockMemoryLock(const ASTSystemQuery & query, const StorageID & table_id, ContextPtr local_context);
 };
 
 

@@ -547,52 +547,24 @@ void CnchPartGCThread::removeDeleteBitmaps(StorageCnchMergeTree & storage, const
     if (bitmaps.empty())
         return;
 
-    LOG_DEBUG(log, "Try to remove {} bitmap(s) by GCThread, reason: {}", bitmaps.size(), reason);
+    DeleteBitmapMetaPtrVector remove_bitmaps;
 
-    ThreadPool remove_pool(storage.getSettings()->gc_remove_bitmap_thread_pool_size);
-
-    auto batch_remove = [&](size_t start, size_t end) 
+    for (const auto & bitmap : bitmaps)
     {
-        remove_pool.scheduleOrThrowOnError([&, start, end] {
-            DeleteBitmapMetaPtrVector remove_bitmaps;
-
-            for (auto it = bitmaps.begin() + start; it != bitmaps.begin() + end; ++it)
-            {
-                auto & bitmap = *it;
-                try
-                {
-                    bitmap->removeFile();
-                    remove_bitmaps.emplace_back(bitmap);
-                }
-                catch (...)
-                {
-                    tryLogCurrentException(log, "Error occurs when remove bitmap " + bitmap->getNameForLogs());
-                }
-            }
-
-            LOG_DEBUG(log, "Will remove {} delete bitmap(s), reason: {}", bitmaps.size(), reason);
-
-            try
-            {
-                getContext()->getCnchCatalog()->removeDeleteBitmaps(storage.shared_from_this(), remove_bitmaps);
-            }
-            catch (Exception & e)
-            {
-                LOG_WARNING(log, "Error occurs when remove bitmaps from catalog. Message : ", e.what());
-            }
-        });
-    };
-
-    size_t batch_size = storage.getSettings()->gc_remove_bitmap_batch_size;
-    size_t s = 0;
-
-    while (s + batch_size < bitmaps.size())
-    {
-        batch_remove(s, s + batch_size);
-        s += batch_size;
+        try
+        {
+            bitmap->removeFile();
+            remove_bitmaps.emplace_back(bitmap);
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, "Error occurs when remove bitmap " + bitmap->getNameForLogs());
+        }
     }
-    batch_remove(s, bitmaps.size());
-    remove_pool.wait();
+
+    LOG_DEBUG(log, "Will remove {} delete bitmap(s), reason: {}", remove_bitmaps.size(), reason);
+
+    catalog->removeDeleteBitmaps(storage.shared_from_this(), remove_bitmaps);
 }
 
 void CnchPartGCThread::clearOldInsertionLabels(const StoragePtr &, StorageCnchMergeTree & storage)

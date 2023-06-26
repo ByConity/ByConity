@@ -31,7 +31,7 @@ NamesAndTypesList StorageSystemLockMap::getNamesAndTypes()
 {
     return {
         {"level", std::make_shared<DataTypeString>()},
-        {"uuid", std::make_shared<DataTypeUUID>()},
+        {"table_prefix", std::make_shared<DataTypeString>()},
         {"bucket_id", std::make_shared<DataTypeInt64>()},
         {"partition", std::make_shared<DataTypeString>()},
         {"granted_modes", std::make_shared<DataTypeString>()},
@@ -54,7 +54,7 @@ void StorageSystemLockMap::fillData(MutableColumns & res_columns, ContextPtr, co
             {
                 Protos::DataModelLockField lock_key_model;
                 lock_key_model.ParseFromString(key);
-                UUID uuid = RPCHelpers::createUUID(lock_key_model.uuid());
+                String table_prefix = lock_key_model.table_prefix();
                 Int64 bucket_id = lock_key_model.has_bucket() ? lock_key_model.bucket() : -1;
                 String partition = lock_key_model.has_partition() ? lock_key_model.partition() : "";
 
@@ -68,7 +68,7 @@ void StorageSystemLockMap::fillData(MutableColumns & res_columns, ContextPtr, co
 
                 size_t c = 0;
                 res_columns[c++]->insert(toString(static_cast<LockLevel>(level)));
-                res_columns[c++]->insert(uuid);
+                res_columns[c++]->insert(table_prefix);
                 res_columns[c++]->insert(bucket_id);
                 res_columns[c++]->insert(partition);
                 res_columns[c++]->insert(lockModesToDebugString(granted_mode));

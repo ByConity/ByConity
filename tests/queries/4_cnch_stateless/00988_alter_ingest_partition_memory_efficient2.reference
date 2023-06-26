@@ -1,0 +1,17 @@
+Source data have 2 parts unsorted join to 1 target data part: START
+SOURCE
+2010-01-01	1	2	a	b
+2010-01-01	2	2	a	b
+2010-01-01	2	3	a	b
+2010-01-01	3	4	a	b
+TARGET
+2010-01-01	1	2	c	d	e
+2010-01-01	2	2	c	d	e
+2010-01-01	2	3	c	d	e
+2010-01-01	3	4	c	d	e
+RESULT
+2010-01-01	1	2	a	b	e
+2010-01-01	2	2	a	b	e
+2010-01-01	2	3	a	b	e
+2010-01-01	3	4	a	b	e
+Source data have 2 parts unsorted join to 1 target data part: END

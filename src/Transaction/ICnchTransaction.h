@@ -34,6 +34,7 @@
 #include <Common/TypePromotion.h>
 #include <Common/serverLocality.h>
 #include <common/logger_useful.h>
+#include "Transaction/LockRequest.h"
 
 #include <memory>
 #include <string>
@@ -41,6 +42,7 @@
 namespace DB
 {
 struct TxnCleanTask;
+class CnchLockHolder;
 
 namespace ErrorCodes
 {
@@ -52,6 +54,7 @@ bool isReadOnlyTransaction(const DB::IAST * ast);
 class ICnchTransaction : public TypePromotion<ICnchTransaction>, public WithContext
 {
 public:
+    friend class CnchLockHolder;
     explicit ICnchTransaction(const ContextPtr & context_) : WithContext(context_), global_context(context_->getGlobalContext()) { }
     explicit ICnchTransaction(const ContextPtr & context_, TransactionRecord record)
         : WithContext(context_), global_context(context_->getGlobalContext()), txn_record(std::move(record))
@@ -180,6 +183,8 @@ public:
     // Clean intermediate parts synchronously
     virtual void removeIntermediateData() { }
 
+    std::shared_ptr<CnchLockHolder> createLockHolder(std::vector<LockInfoPtr> && elems);
+
     bool force_clean_by_dm = false;
 
     DatabasePtr tryGetDatabaseViaCache(const String & database_name);
@@ -189,6 +194,8 @@ public:
 protected:
     void setStatus(CnchTransactionStatus status);
     void setTransactionRecord(TransactionRecord record);
+    void assertLockAcquired() const;
+    void setLockHolder(std::shared_ptr<CnchLockHolder> p) { lock_holder = p; }
 
 protected:
     /// Transaction still needs global context because the query context will expired after query is finished, but
@@ -202,6 +209,7 @@ protected:
     cppkafka::TopicPartitionList tpl;
 
     InsertionLabelPtr insertion_label;
+    std::weak_ptr<CnchLockHolder> lock_holder;
 
 private:
     String creator;

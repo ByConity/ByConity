@@ -175,6 +175,12 @@ public:
         Protos::ReleaseLockResp * response,
         google::protobuf::Closure * done) override;
 
+    void assertLockAcquired(
+        google::protobuf::RpcController * cntl,
+        const Protos::AssertLockReq * request,
+        Protos::AssertLockResp * response,
+        google::protobuf::Closure * done) override;
+
     void reportCnchLockHeartBeat(
         google::protobuf::RpcController * cntl,
         const Protos::ReportCnchLockHeartBeatReq * request,
@@ -228,10 +234,10 @@ public:
         Protos::RedirectCommitPartsResp * response,
         google::protobuf::Closure * done) override;
 
-    void removeMergeMutateTasksOnPartition(
+    void removeMergeMutateTasksOnPartitions(
         google::protobuf::RpcController * cntl,
-        const Protos::RemoveMergeMutateTasksOnPartitionReq * request,
-        Protos::RemoveMergeMutateTasksOnPartitionResp * response,
+        const Protos::RemoveMergeMutateTasksOnPartitionsReq * request,
+        Protos::RemoveMergeMutateTasksOnPartitionsResp * response,
         google::protobuf::Closure * done) override;
 
     void submitQueryWorkerMetrics(
