@@ -1,5 +1,7 @@
-use test;
 set enable_optimizer=1;
+
+CREATE DATABASE IF NOT EXISTS test;
+USE test;
 
 drop table if exists tt1;
 drop table if exists tt2;
