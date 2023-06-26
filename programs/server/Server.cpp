@@ -1698,9 +1698,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         if (global_context->getComplexQueryActive())
         {
-            global_context->setExchangePort(config().getInt("exchange_port"));
-            global_context->setExchangeStatusPort(config().getInt("exchange_status_port"));
-
             Statistics::CacheManager::initialize(global_context);
 
             for (size_t i = 0; i < listen_hosts.size(); i++)
@@ -1724,7 +1721,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 if (exchange_status_server->AddService(runtime_filter_service.get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0)
                     throw Exception("Fail to add RuntimeFilterService", ErrorCodes::LOGICAL_ERROR);
 
-                std::string host_exchange_port = createHostPortString(listen_host, global_context->getExchangePort());
+                std::string host_exchange_port = createHostPortString(listen_host, global_context->getExchangePort(true));
                 brpc::ServerOptions stream_options;
                 stream_options.idle_timeout_sec = -1;
                 if (i > 0)
@@ -1744,7 +1741,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                     }
                 }
 
-                std::string host_exchange_status_port = createHostPortString(listen_host, global_context->getExchangeStatusPort());
+                std::string host_exchange_status_port = createHostPortString(listen_host, global_context->getExchangeStatusPort(true));
                 brpc::ServerOptions cmd_options;
                 if (i > 0)
                     cmd_options.server_info_name = fmt::format("cmd{}", i);
