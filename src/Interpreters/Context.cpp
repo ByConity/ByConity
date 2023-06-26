@@ -300,8 +300,6 @@ struct ContextSharedPart
     UInt16 interserver_io_port = 0;                         /// and port.
     String interserver_scheme;                              /// http or https
 
-    UInt16 exchange_port;                                   /// Exchange port
-    UInt16 exchange_status_port;                            /// Exchange status port
     bool complex_query_active {false};
 
     MultiVersion<InterserverCredentials> interserver_io_credentials;
@@ -640,7 +638,6 @@ void Context::copyFrom(const ContextPtr & other)
 }
 
 Context::~Context() = default;
-
 
 InterserverIOHandler & Context::getInterserverIOHandler() { return shared->interserver_io_handler; }
 
@@ -2523,37 +2520,30 @@ std::pair<String, UInt16> Context::getInterserverIOAddress() const
     return { shared->interserver_io_host, shared->interserver_io_port };
 }
 
-void Context::setExchangePort(UInt16 port)
-{
-    shared->exchange_port = port;
-}
-
-
-UInt16 Context::getExchangePort() const
+UInt16 Context::getExchangePort(bool check_port_exists) const
 {
     if (auto env_port = getPortFromEnvForConsul("PORT5"))
         return env_port;
 
-    if (shared->exchange_port == 0)
-        throw Exception("Parameter 'exchange_port' required for replication is not specified in configuration file.",
-                        ErrorCodes::NO_ELEMENTS_IN_CONFIG);
-    return shared->exchange_port;
+    if (check_port_exists && !getRootConfig().exchange_port)
+        throw Exception(
+            ErrorCodes::NO_ELEMENTS_IN_CONFIG,
+            "Parameter 'exchange_port' required for replication is not specified in configuration file.");
+
+    return getRootConfig().exchange_port;
 }
 
-void Context::setExchangeStatusPort(UInt16 port)
-{
-    shared->exchange_status_port = port;
-}
-
-UInt16 Context::getExchangeStatusPort() const
+UInt16 Context::getExchangeStatusPort(bool check_port_exists) const
 {
     if (auto env_port = getPortFromEnvForConsul("PORT6"))
         return env_port;
 
-    if (shared->exchange_status_port == 0)
-        throw Exception("Parameter 'exchange_status_port' required for replication is not specified in configuration file.",
-                        ErrorCodes::NO_ELEMENTS_IN_CONFIG);
-    return shared->exchange_status_port;
+    if (check_port_exists && !getRootConfig().exchange_status_port)
+        throw Exception(
+            ErrorCodes::NO_ELEMENTS_IN_CONFIG,
+            "Parameter 'exchange_status_port' required for replication is not specified in configuration file.");
+
+    return getRootConfig().exchange_status_port;
 }
 
 void Context::setComplexQueryActive(bool active)

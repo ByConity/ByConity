@@ -85,6 +85,7 @@ jobs:
 #          echo "Running test with optimizer"
 #          ./clickhouse-test --stop --hung-check --jobs 1 --order asc --print-time --client-option 'enable_optimizer=1' 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
       - name: After test
+        if: always()
         continue-on-error: true
         run: |
           bash $GITHUB_WORKSPACE/.codebase/ci_scripts/common_component/copy_core_to_shared.sh || true # copy core to artifact folder
@@ -94,6 +95,8 @@ jobs:
           mv /test_output /Artifacts  && tar --warning=no-file-changed -zcf  /Artifacts.tar.gz /Artifacts/*  || true
           bash .codebase/ci_scripts/common_component/block_ci.sh || true # check block_ci_flag
       - name: Upload Artifact
+        if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v2
         with:
           name: Artifacts
