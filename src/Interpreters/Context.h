@@ -783,11 +783,8 @@ public:
     void setInterserverIOAddress(const String & host, UInt16 port);
     std::pair<String, UInt16> getInterserverIOAddress() const;
 
-    void setExchangePort(UInt16 port);
-    UInt16 getExchangePort() const;
-
-    void setExchangeStatusPort(UInt16 port);
-    UInt16 getExchangeStatusPort() const;
+    UInt16 getExchangePort(bool check_port_exists = false) const;
+    UInt16 getExchangeStatusPort(bool check_port_exists = false) const;
 
     void setComplexQueryActive(bool active);
     bool getComplexQueryActive();
