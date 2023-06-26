@@ -30,7 +30,6 @@
 #include <Functions/materialize.h>
 #include <Functions/FunctionsLogical.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/ArrayJoinAction.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/Operators.h>
 #include <IO/ReadHelpers.h>
@@ -299,8 +298,7 @@ const ActionsDAG::Node & ActionsDAG::addAlias(const Node & child, std::string al
 
 const ActionsDAG::Node & ActionsDAG::addArrayJoin(const Node & child, std::string result_name)
 {
-    const auto & array_type = getArrayJoinDataType(child.result_type);
-
+    const DataTypeArray * array_type = typeid_cast<const DataTypeArray *>(child.result_type.get());
     if (!array_type)
         throw Exception("ARRAY JOIN requires array argument", ErrorCodes::TYPE_MISMATCH);
 
@@ -616,8 +614,8 @@ static ColumnWithTypeAndName executeActionForHeader(const ActionsDAG::Node * nod
         {
             auto key = arguments.at(0);
             key.column = key.column->convertToFullColumnIfConst();
-            const auto * array = getArrayJoinColumnRawPtr(key.column);
 
+            const ColumnArray * array = typeid_cast<const ColumnArray *>(key.column.get());
             if (!array)
                 throw Exception(ErrorCodes::TYPE_MISMATCH,
                                 "ARRAY JOIN of not array: {}", node->result_name);
