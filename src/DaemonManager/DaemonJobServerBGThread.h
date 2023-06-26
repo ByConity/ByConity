@@ -41,6 +41,12 @@ struct BGJobInfoFromServer
     StorageID storage_id;
     CnchBGThreadStatus status;
     String host_port;
+    bool operator == (const BGJobInfoFromServer & other) const
+    {
+        return (other.storage_id == storage_id) &&
+                (other.status == status) &&
+                (other.host_port == host_port);
+    }
 };
 
 using BGJobsFromServersFetcher = std::function<std::optional<std::unordered_multimap<UUID, BGJobInfoFromServer>>(
@@ -121,6 +127,7 @@ size_t checkLivenessIfNeed(
     Context & context,
     DaemonJobServerBGThread & daemon_job,
     BackgroundJobs & check_bg_jobs,
+    const std::set<UUID> & new_bg_jobs_uuids,
     const std::vector<String> & servers,
     BGJobsFromServersFetcher fetch_bg_jobs_from_server
 );
@@ -144,5 +151,10 @@ struct DaemonJobForMergeMutate : public DaemonJobForCnch<CnchBGThreadType::Merge
     using DaemonJobForCnch<CnchBGThreadType::MergeMutate, isCnchMergeTree>::DaemonJobForCnch;
     void executeOptimize(const StorageID & storage_id, const String & partition_id, bool enable_try, bool mutations_sync, UInt64 timeout_ms) const;
 };
+
+std::vector<BGJobInfoFromServer> findZombieJobsInServer(
+    const std::set<UUID> & new_bg_jobs_uuids,
+    BackgroundJobs & managed_job_exclude_new_job,
+    const std::unordered_multimap<UUID, BGJobInfoFromServer> & jobs_from_server);
 
 } /// end namespace DB::DaemonManager

@@ -70,6 +70,10 @@ IMergingAlgorithm::Status ReplacingSortedAlgorithm::merge()
             current_row_sources.emplace_back(current.impl->order, true);
 
         /// A non-strict comparison, since we select the last row for the same version values.
+        
+        // If we call selected_row.clear(), selected_row.empty() will return true
+        // Thus, checking selected_row.empty() first will ensure that all_columns is not a nullptr when we dereference it
+        // coverity[var_deref_model]
         if (version_column_number == -1
             || selected_row.empty()
             || current->all_columns[version_column_number]->compareAt(

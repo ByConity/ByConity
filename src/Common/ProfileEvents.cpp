@@ -740,6 +740,14 @@
     M(TryGetAccessEntityNameFailed, "") \
     \
     M(ScheduleTimeMilliseconds, "Total time spent to schedule plan segment") \
+    \
+    M(ScheduledDedupTaskNumber, "Total number of scheduled dedup task") \
+    M(DeleteBitmapCacheHit, "Total number of times to hit the cache to get delete bitmap for a part") \
+    M(DeleteBitmapCacheMiss, "Total number of times to miss the cache to get delete bitmap for a part") \
+    M(UniqueKeyIndexMetaCacheHit, "Total number of times to hit the unique key index cache") \
+    M(UniqueKeyIndexMetaCacheMiss, "Total number of times to miss the unique key index cache") \
+    M(UniqueKeyIndexBlockCacheHit, "Total number of times to hit the unique key index block cache") \
+    M(UniqueKeyIndexBlockCacheMiss, "Total number of times to miss the unique key index block cache") \
 
 
 namespace ProfileEvents

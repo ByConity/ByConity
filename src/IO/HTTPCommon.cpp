@@ -235,6 +235,8 @@ namespace
                     key, std::make_shared<SingleEndpointHTTPSessionPool>(host, port, https, proxy_host, proxy_port, proxy_https, max_connections_per_endpoint, resolve_host));
 
             auto retry_timeout = timeouts.connection_timeout.totalMicroseconds();
+            // pool_ptr gets reassigned to a valid position if it's at the end 
+            // coverity[deref_iterator]
             auto session = pool_ptr->second->get(retry_timeout);
 
             /// We store exception messages in session data.

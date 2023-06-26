@@ -558,6 +558,8 @@ ASTPtr DatabaseOnDisk::getCreateDatabaseQuery() const
         ast_create_query.attach = false;
         ast_create_query.database = database_name;
     }
+    // ast was assigned before it was dereferenced earlier
+    // coverity[check_after_deref]
     if (!ast)
     {
         /// Handle databases (such as default) for which there are no database.sql files.

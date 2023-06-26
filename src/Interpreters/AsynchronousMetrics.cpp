@@ -36,6 +36,8 @@
 #include <Storages/MergeTree/ChecksumsCache.h>
 #include <Storages/CnchStorageCache.h>
 #include <Storages/PartCacheManager.h>
+#include <Storages/MergeTree/DeleteBitmapCache.h>
+#include <Storages/UniqueKeyIndexCache.h>
 #include <IO/UncompressedCache.h>
 #include <IO/MMappedFileCache.h>
 #include <IO/ReadHelpers.h>
@@ -561,6 +563,30 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
         {
             new_values["CnchStorageCacheBytes"] = storage_cache->weight();
             new_values["CnchStorageCacheTables"] = storage_cache->count();
+        }
+    }
+
+    {
+        if (auto delete_bitmap_cache = getContext()->getDeleteBitmapCache())
+        {
+            new_values["DeleteBitmapCapacityBytes"] = delete_bitmap_cache->totalCapacity();
+            new_values["DeleteBitmapCacheBytes"] = delete_bitmap_cache->totalCharge();
+        }
+    }
+
+    {
+        if (auto uniquekey_index_cache = getContext()->getUniqueKeyIndexCache())
+        {
+            new_values["UniqueKeyIndexMetaCacheBytes"] = uniquekey_index_cache->weight();
+            new_values["UniqueKeyIndexMetaCacheFiles"] = uniquekey_index_cache->count();
+        }
+    }
+
+    {
+        if (auto uniquekey_index_block_cache = getContext()->getUniqueKeyIndexBlockCache())
+        {
+            new_values["UniqueKeyIndexBlockCapacityBytes"] = uniquekey_index_block_cache->TotalCapacity();
+            new_values["UniqueKeyIndexBlockCacheBytes"] = uniquekey_index_block_cache->TotalCharge();
         }
     }
 

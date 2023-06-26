@@ -57,6 +57,9 @@ public:
     bool poll();
 
     // Return values for the message that's being read.
+    // Since it has been read, current will have already moved and no longer points
+    // to the beginning of the vector. Hence current[-1] here will be valid.
+    // coverity[negative_returns]
     String currentTopic() const { return current[-1].get_topic(); }
     String currentKey() const { return current[-1].get_key(); }
     auto currentOffset() const { return current[-1].get_offset(); }

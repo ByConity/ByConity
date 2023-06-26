@@ -61,6 +61,7 @@ ASTs OptimizeIfChainsVisitor::ifChain(const ASTPtr & child)
         throw Exception("Unexpected AST for function 'if'", ErrorCodes::UNEXPECTED_AST_STRUCTURE);
 
     const auto * function_args = function_node->arguments->as<ASTExpressionList>();
+    chassert(function_args);
 
     if (!function_args || function_args->children.size() != 3)
         throw Exception("Wrong number of arguments for function 'if' (" + toString(function_args->children.size()) + " instead of 3)",

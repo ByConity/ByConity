@@ -122,6 +122,8 @@ public:
         START_DEDUP_WORKER,
         STOP_DEDUP_WORKER,
         DUMP_SERVER_STATUS,
+        JEPROF_DUMP,
+        LOCK_MEMORY_LOCK,
         END
     };
 

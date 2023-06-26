@@ -39,7 +39,16 @@ public:
 
     static String buildKey(UUID storage_uuid, const String & partition_id, Int64 min_block, Int64 max_block);
 
+    size_t totalCharge();
+
+    size_t totalCapacity() const
+    {
+        return max_size_in_bytes;
+    }
+
 private:
+    size_t max_size_in_bytes;
+
     std::shared_ptr<IndexFile::Cache> cache;
 };
 

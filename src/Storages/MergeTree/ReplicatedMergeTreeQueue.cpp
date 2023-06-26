@@ -554,6 +554,8 @@ int32_t ReplicatedMergeTreeQueue::pullLogsToQueue(zkutil::ZooKeeperPtr zookeeper
             if (current_multi_batch_size < MAX_MULTI_OPS)
                 current_multi_batch_size = std::min<size_t>(MAX_MULTI_OPS, current_multi_batch_size * 2);
 
+            // last is assigned to end - 1 so it will never be at the end 
+            // coverity[deref_iterator]
             String last_entry = *last;
             if (!startsWith(last_entry, "log-"))
                 throw Exception("Error in zookeeper data: unexpected node " + last_entry + " in " + zookeeper_path + "/log",

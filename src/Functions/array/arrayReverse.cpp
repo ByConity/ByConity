@@ -90,6 +90,10 @@ ColumnPtr FunctionArrayReverse::executeImpl(const ColumnsWithTypeAndName & argum
         || executeFixedString(*src_inner_col, offsets, *res_inner_col)
         || executeGeneric(*src_inner_col, offsets, *res_inner_col);
 
+    // res_data is an empty clone of src_data
+    // typeid_cast on both should behave similarly
+    chassert(bool(src_nullable_col) == bool(res_nullable_col));
+
     if (src_nullable_col)
         if (!executeNumber<UInt8>(src_nullable_col->getNullMapColumn(), offsets, res_nullable_col->getNullMapColumn()))
             throw Exception("Illegal column " + src_nullable_col->getNullMapColumn().getName()

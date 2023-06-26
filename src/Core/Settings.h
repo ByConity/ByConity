@@ -504,6 +504,7 @@ class IColumn;
     M(Bool, allow_experimental_projection_optimization, false, "Enable projection optimization when processing SELECT queries", 0) \
     M(Bool, force_optimize_projection, false, "If projection optimization is enabled, SELECT queries need to use projection", 0) \
     M(Bool, async_socket_for_remote, false, "Asynchronously read from socket executing remote query", 0) \
+    M(UInt64, resize_number_after_remote_source, 1, "Resize number after remote source, will be useful if shard is small", 0) \
     M(Bool, insert_null_as_default, true, "Insert DEFAULT values instead of NULL in INSERT SELECT (UNION ALL)", 0) \
     \
     M(Bool, optimize_rewrite_sum_if_to_count_if, true, "Rewrite sumIf() and sum(if()) function countIf() function when logically equivalent", 0) \
@@ -632,6 +633,7 @@ class IColumn;
     M(Bool, database_replicated_ddl_output, true, "Obsolete setting, does nothing.", 0) \
     /** Ingestion */ \
     M(UInt64, max_ingest_columns_size, 10, "The maximum number of columns that can be ingested.", 0) \
+    M(UInt64, memory_efficient_ingest_partition_max_key_count_in_memory, 50000000, "The maximum number of key for ingestion to keep in memory during join.", 0) \
     M(UInt64, ingest_partition_timeout, 3600, "The ingestion timeout in seconds.", 0) \
     M(UInt64, max_ingest_rows_size, 50000000, "The maximum rows for ingestion.", 0) \
     M(UInt64, parallel_ingest_threads, 8, "The maximum threads for ingestion.", 0) \

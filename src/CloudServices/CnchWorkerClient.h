@@ -61,7 +61,7 @@ public:
         TxnTimestamp txn_id,
         TxnTimestamp begin_ts);
 
-    void shutdownManipulationTasks(const UUID & table_uuid);
+    void shutdownManipulationTasks(const UUID & table_uuid, const Strings & task_ids = Strings{});
     std::unordered_set<String> touchManipulationTasks(const UUID & table_uuid, const Strings & tasks_id);
     std::vector<ManipulationInfo> getManipulationTasksStatus();
 

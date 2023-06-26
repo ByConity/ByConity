@@ -65,6 +65,8 @@ ExchangeStepResult ExchangeStepVisitor::visitMergingAggregatedNode(QueryPlan::No
 
     MergingAggregatedStep * step = dynamic_cast<MergingAggregatedStep *>(node->step.get());
 
+    chassert(step != nullptr);
+    // coverity[var_deref_model]
     auto params = step->getParams()->params;
 
     Block result_header = params.getHeader(false);
@@ -90,6 +92,8 @@ ExchangeStepResult ExchangeStepVisitor::visitJoinNode(QueryPlan::Node * node, Ex
     visitNode(node, exchange_context);
 
     JoinStep * step = dynamic_cast<JoinStep *>(node->step.get());
+    chassert(step != nullptr);
+    // coverity[var_deref_model]
     auto join = step->getJoin();
     auto join_infos = join->getTableJoin();
 

@@ -278,7 +278,7 @@ message DataModelLockInfo
 
 message DataModelLockField
 {
-    optional UUID uuid = 1;
+    optional string table_prefix = 1;
     optional int64 bucket = 2;
     optional string partition = 3;
 }
