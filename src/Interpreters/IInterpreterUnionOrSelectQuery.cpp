@@ -9,4 +9,29 @@ void IInterpreterUnionOrSelectQuery::extendQueryLogElemImpl(QueryLogElement & el
     elem.query_kind = "Select";
 }
 
+std::set<StorageID> IInterpreterUnionOrSelectQuery::getUsedStorageIDs() const
+{
+    return used_storage_ids;
+}
+
+void IInterpreterUnionOrSelectQuery::addUsedStorageIDs(const std::set<StorageID> & used_storage_ids_)
+{
+    used_storage_ids.insert(used_storage_ids_.begin(), used_storage_ids_.end());
+}
+
+void IInterpreterUnionOrSelectQuery::addUsedStorageID(const StorageID & storage_id)
+{
+    used_storage_ids.insert(storage_id);
+}
+
+void IInterpreterUnionOrSelectQuery::setHasAllUsedStorageIDs(bool val)
+{
+    has_all_used_storage_ids = val;
+}
+
+bool IInterpreterUnionOrSelectQuery::hasAllUsedStorageIDs() const
+{
+    return has_all_used_storage_ids;
+}
+
 }

@@ -113,6 +113,7 @@ class QueryCache;
 class Macros;
 struct Progress;
 class Clusters;
+class QueryCache;
 class QueryLog;
 class QueryThreadLog;
 class QueryExchangeLog;
@@ -945,17 +946,16 @@ public:
     std::shared_ptr<PrimaryIndexCache> getPrimaryIndexCache() const;
     void dropPrimaryIndexCache() const;
 
-    /// Create a cache of queries of specified size. This can be done only once.
-    void setQueryCache(size_t cache_size_in_bytes);
-    std::shared_ptr<QueryCache> getQueryCache() const;
-    void dropQueryCache() const;
-    void dropQueryCache(const String & name) const;
-    void dropQueryCache(const String & database, const String & table) const;
-
     /// Create a cache of mapped files to avoid frequent open/map/unmap/close and to reuse from several threads.
     void setMMappedFileCache(size_t cache_size_in_num_entries);
     std::shared_ptr<MMappedFileCache> getMMappedFileCache() const;
     void dropMMappedFileCache() const;
+
+    /// Create a cache of query results for statements which run repeatedly.
+    void setQueryCache(const Poco::Util::AbstractConfiguration & config);
+    void updateQueryCacheConfiguration(const Poco::Util::AbstractConfiguration & config);
+    std::shared_ptr<QueryCache> getQueryCache() const;
+    void dropQueryCache() const;
 
     /** Clear the caches of the uncompressed blocks and marks.
       * This is usually done when renaming tables, changing the type of columns, deleting a table.

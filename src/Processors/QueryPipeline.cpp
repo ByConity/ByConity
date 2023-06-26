@@ -570,4 +570,44 @@ Processors QueryPipelineProcessorsCollector::detachProcessors(size_t group)
     return res;
 }
 
+void QueryPipeline::writeResultIntoQueryCache(std::shared_ptr<QueryCache::Writer> query_cache_writer)
+{
+    assert(pipeline.getNumStreams() > 0);
+    pipe.addQueryCacheTransform(std::move(query_cache_writer));
 }
+
+void QueryPipeline::finalizeWriteInQueryCache()
+{
+    pipe.finalizeWriteInQueryCache();
+}
+
+void QueryPipeline::readFromQueryCache(
+        std::unique_ptr<SourceFromChunks> source,
+        std::unique_ptr<SourceFromChunks> source_totals,
+        std::unique_ptr<SourceFromChunks> source_extremes)
+{
+    pipe.readFromQueryCache(std::move(source), std::move(source_totals), std::move(source_extremes));
+}
+
+void QueryPipeline::addUsedStorageIDs(const std::set<StorageID> & used_storage_ids_)
+{
+    used_storage_ids.insert(used_storage_ids_.begin(), used_storage_ids_.end());
+}
+
+std::set<StorageID> QueryPipeline::getUsedStorageIDs() const
+{
+    return used_storage_ids;
+}
+
+bool QueryPipeline::hasAllUsedStorageIDs() const
+{
+    return has_all_used_storage_ids;
+}
+
+void QueryPipeline::setHasAllUsedStorageIDs(bool val)
+{
+    has_all_used_storage_ids = val;
+}
+
+}
+

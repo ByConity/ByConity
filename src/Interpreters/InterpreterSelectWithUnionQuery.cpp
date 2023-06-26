@@ -334,6 +334,14 @@ void InterpreterSelectWithUnionQuery::buildQueryPlan(QueryPlan & query_plan)
         }
     }
 
+    std::for_each(nested_interpreters.begin(), nested_interpreters.end(),
+        [this] (const auto & nested_interpreter)
+        {
+            addUsedStorageIDs(nested_interpreter->getUsedStorageIDs());
+            if (!nested_interpreter->hasAllUsedStorageIDs())
+                setHasAllUsedStorageIDs(false);
+        }
+    );
 }
 
 BlockIO InterpreterSelectWithUnionQuery::execute()
@@ -353,10 +361,12 @@ BlockIO InterpreterSelectWithUnionQuery::execute()
     else
         res.pipeline = std::move(*pipeline);
     res.pipeline.addInterpreterContext(context);
+    res.pipeline.addUsedStorageIDs(used_storage_ids);
+    if (!hasAllUsedStorageIDs())
+        res.pipeline.setHasAllUsedStorageIDs(false);
 
     return res;
 }
-
 
 void InterpreterSelectWithUnionQuery::ignoreWithTotals()
 {

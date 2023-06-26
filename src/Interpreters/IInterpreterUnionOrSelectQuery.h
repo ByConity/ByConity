@@ -53,6 +53,13 @@ public:
 
     ASTPtr getQuery() const { return query_ptr; }
 
+    void setHasAllUsedStorageIDs(bool);
+    bool hasAllUsedStorageIDs() const;
+
+    std::set<StorageID> getUsedStorageIDs() const;
+    void addUsedStorageIDs(const std::set<StorageID> & storage_ids);
+    void addUsedStorageID(const StorageID & storage_id);
+
 protected:
     ASTPtr query_ptr;
     ContextMutablePtr context;
@@ -61,6 +68,8 @@ protected:
     size_t max_streams = 1;
     bool settings_limit_offset_needed = false;
     bool settings_limit_offset_done = false;
+    std::set<StorageID> used_storage_ids;
+    bool has_all_used_storage_ids = true;
 };
 }
 

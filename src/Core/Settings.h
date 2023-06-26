@@ -300,7 +300,6 @@ class IColumn;
     M(Float, opentelemetry_start_trace_probability, 0., "Probability to start an OpenTelemetry trace for an incoming query.", 0) \
     M(Bool, prefer_column_name_to_alias, false, "Prefer using column names instead of aliases if possible.", 0) \
     M(Bool, prefer_global_in_and_join, false, "If enabled, all IN/JOIN operators will be rewritten as GLOBAL IN/JOIN. It's useful when the to-be-joined tables are only available on the initiator and we need to always scatter their data on-the-fly during distributed processing with the GLOBAL keyword. It's also useful to reduce the need to access the external sources joining external tables.", 0) \
-    M(Bool, enable_query_cache, false, "Whether to enable query cache", 0) \
     M(UInt64, connection_check_pool_size, 16, "Number of thread for connection check", 0) \
     M(Bool, query_worker_fault_tolerance, false, "Whether to retry when worker failures are detected when allocating metadata during query execution.", 0) \
     M(Bool, enable_partition_prune, true, "prune partition based on where expression analysis.", 0) \
@@ -580,8 +579,18 @@ class IColumn;
     M(Bool, allow_extended_type_conversion, false, "When enabled, implicit type conversion is allowed for more input types(e.g. UInt64 & Ints, Decimal & Float, Float & Int64)", 0) \
     M(Bool, allow_multi_if_const_optimize, true, "Whether to optimize multiIf function for const case", 0)  \
     M(Bool, use_query_cache, false, "Enable the query cache", 0) \
+    M(Bool, enable_transactional_query_cache, true, "Enable transactional query cache for CNCH engine table", IMPORTANT) \
     M(Bool, enable_writes_to_query_cache, true, "Enable storing results of SELECT queries in the query cache", 0) \
     M(Bool, enable_reads_from_query_cache, true, "Enable reading results of SELECT queries from the query cache", 0) \
+    M(Bool, query_cache_store_results_of_queries_with_nondeterministic_functions, false, "Store results of queries with non-deterministic functions (e.g. rand(), now()) in the query cache", 0) \
+    M(UInt64, query_cache_max_size_in_bytes, 0, "The maximum amount of memory (in bytes) the current user may allocate in the query cache. 0 means unlimited. ", 0) \
+    M(UInt64, query_cache_max_entries, 0, "The maximum number of query results the current user may store in the query cache. 0 means unlimited.", 0) \
+    M(UInt64, query_cache_min_query_runs, 0, "Minimum number a SELECT query must run before its result is stored in the query cache", 0) \
+    M(Milliseconds, query_cache_min_query_duration, 0, "Minimum time in milliseconds for a query to run for its result to be stored in the query cache.", 0) \
+    M(Bool, query_cache_compress_entries, true, "Compress cache entries.", 0) \
+    M(Bool, query_cache_squash_partial_results, true, "Squash partial result blocks to blocks of size 'max_block_size'. Reduces performance of inserts into the query cache but improves the compressability of cache entries.", 0) \
+    M(Seconds, query_cache_ttl, 60, "After this time in seconds entries in the query cache become stale", 0) \
+    M(Bool, query_cache_share_between_users, false, "Allow other users to read entry in the query cache", 0) \
     \
     /** settings in cnch **/ \
     M(UInt64, cnch_data_retention_time_in_sec, 3*24*60*60, "Waiting time when dropped table or database is actually removed.", 0) \

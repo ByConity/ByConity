@@ -680,6 +680,18 @@ void InterpreterSelectQuery::buildQueryPlan(QueryPlan & query_plan)
             query_plan.addStep(std::move(sampling));
         }
     }
+
+    if (!table_id.empty())
+        addUsedStorageID(table_id);
+    if (query_plan.hasJoin())
+        setHasAllUsedStorageIDs(false);
+
+    if (interpreter_subquery)
+    {
+        addUsedStorageIDs(interpreter_subquery->getUsedStorageIDs());
+        if (!interpreter_subquery->hasAllUsedStorageIDs())
+            setHasAllUsedStorageIDs(false);
+    }
 }
 
 BlockIO InterpreterSelectQuery::execute()
@@ -691,6 +703,8 @@ BlockIO InterpreterSelectQuery::execute()
 
     res.pipeline = std::move(*query_plan.buildQueryPipeline(
         QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context)));
+
+    res.pipeline.addUsedStorageIDs(getUsedStorageIDs());
     return res;
 }
 
@@ -866,7 +880,7 @@ static FillColumnDescription getWithFillDescription(const ASTOrderByElement & or
                 ErrorCodes::INVALID_WITH_FILL_EXPRESSION);
         }
     }
-    
+
     // one of fill_from, fill_step and fill_to is initialized
     // coverity[unit_use]
     return descr;

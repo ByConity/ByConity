@@ -654,16 +654,21 @@ void QueryPlan::deserialize(ReadBuffer & buffer)
         root = map_to_node[root_id];
 }
 
-void QueryPlan::allocateLocalTable(ContextPtr context)
+std::set<StorageID> QueryPlan::allocateLocalTable(ContextPtr context)
 {
+    std::set<StorageID> res;
     for (const auto & node : nodes)
     {
         if (node.step->getType() == IQueryPlanStep::Type::TableScan)
         {
             auto * table_scan = dynamic_cast<TableScanStep *>(node.step.get());
+            /// have to get storage_id before allocate to get original storage_id
+            /// instead of storage_id in cloud
+            res.insert(table_scan->getStorageID());
             table_scan->allocate(context);
         }
     }
+    return res;
 }
 
 PlanNodePtr QueryPlan::getPlanNodeById(PlanNodeId node_id) const
@@ -679,6 +684,14 @@ PlanNodePtr QueryPlan::getPlanNodeById(PlanNodeId node_id) const
     }
 
     return nullptr;
+}
+
+bool QueryPlan::hasJoin() const
+{
+    return std::any_of(nodes.begin(), nodes.end(),
+        [](const auto & node) {
+            return (node.step->getType() == IQueryPlanStep::Type::Join);
+        });
 }
 
 }

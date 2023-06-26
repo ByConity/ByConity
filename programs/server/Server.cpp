@@ -1070,6 +1070,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (mmap_cache_size)
         global_context->setMMappedFileCache(mmap_cache_size);
 
+    /// A cache for query results.
+    if (global_context->getServerType() == ServerType::cnch_server)
+        global_context->setQueryCache(config());
+
     /// Size of delete bitmap for HaMergeTree engine to be cached in memory; default is 1GB
     size_t delete_bitmap_cache_size = config().getUInt64("delete_bitmap_cache_size", 1073741824);
     global_context->setDeleteBitmapCache(delete_bitmap_cache_size);
