@@ -20,6 +20,7 @@
 #include <Catalog/FDBError.h>
 #include <Common/Exception.h>
 #include <Catalog/MetastoreFDBImpl.h>
+#include <common/logger_useful.h>
 
 
 namespace DB
@@ -399,29 +400,41 @@ bool Iterator::Next(fdb_error_t & code)
         if (iteration > 1 && !has_more)
             return false;
 
-        if (iteration==1)
+        while (true)
         {
-            batch_future = std::make_shared<FDBFutureRAII>(fdb_transaction_get_range(tr->transaction,
-                FDB_KEYSEL_FIRST_GREATER_OR_EQUAL(reinterpret_cast<const uint8_t*>(start_key_batch.c_str()), start_key_batch.size()),
-                FDB_KEYSEL_FIRST_GREATER_OR_EQUAL(reinterpret_cast<const uint8_t*>(req.end_key.c_str()), req.end_key.size()),
-                req.row_limit, 0, FDB_STREAMING_MODE_LARGE, iteration, 1, req.reverse_order));
-        }
-        else
-        {
-            /// create a new transaction for each get_range to avoid 5 sec timeout
-            tr = std::make_shared<FDB::FDBTransactionRAII>();
-            Catalog::MetastoreFDBImpl::check_fdb_op(client->CreateTransaction(tr));
-            batch_future = std::make_shared<FDBFutureRAII>(fdb_transaction_get_range(tr->transaction,
-                FDB_KEYSEL_FIRST_GREATER_THAN(reinterpret_cast<const uint8_t*>(start_key_batch.c_str()), start_key_batch.size()),
-                FDB_KEYSEL_FIRST_GREATER_OR_EQUAL(reinterpret_cast<const uint8_t*>(req.end_key.c_str()), req.end_key.size()),
-                req.row_limit, 0, FDB_STREAMING_MODE_LARGE, iteration, 1, req.reverse_order));
+            if (iteration==1)
+            {
+                batch_future = std::make_shared<FDBFutureRAII>(fdb_transaction_get_range(tr->transaction,
+                    FDB_KEYSEL_FIRST_GREATER_OR_EQUAL(reinterpret_cast<const uint8_t*>(start_key_batch.c_str()), start_key_batch.size()),
+                    FDB_KEYSEL_FIRST_GREATER_OR_EQUAL(reinterpret_cast<const uint8_t*>(req.end_key.c_str()), req.end_key.size()),
+                    req.row_limit, 0, FDB_STREAMING_MODE_LARGE, iteration, 1, req.reverse_order));
+            }
+            else
+            {
+                batch_future = std::make_shared<FDBFutureRAII>(fdb_transaction_get_range(tr->transaction,
+                    FDB_KEYSEL_FIRST_GREATER_THAN(reinterpret_cast<const uint8_t*>(start_key_batch.c_str()), start_key_batch.size()),
+                    FDB_KEYSEL_FIRST_GREATER_OR_EQUAL(reinterpret_cast<const uint8_t*>(req.end_key.c_str()), req.end_key.size()),
+                    req.row_limit, 0, FDB_STREAMING_MODE_LARGE, iteration, 1, req.reverse_order));
+            }
+
+            code = fdb_future_block_until_ready(batch_future->future);
+            if (code = fdb_future_block_until_ready(batch_future->future); code)
+                return false;
+            if (code = fdb_future_get_error(batch_future->future); code)
+            {
+                // if timeout retry with new transaction
+                if (code == 1031)
+                {
+                    LOG_DEBUG(&Poco::Logger::get("FDBIterator"), "Transaction timeout, create new transaction");
+                    tr = std::make_shared<FDB::FDBTransactionRAII>();
+                    Catalog::MetastoreFDBImpl::check_fdb_op(client->CreateTransaction(tr));
+                    continue;
+                }
+                return false;
+            }
+            break;
         }
 
-        code = fdb_future_block_until_ready(batch_future->future);
-        if (code = fdb_future_block_until_ready(batch_future->future); code)
-            return false;
-        if (code = fdb_future_get_error(batch_future->future); code)
-            return false;
         if (code = fdb_future_get_keyvalue_array(batch_future->future, &batch_kvs, &batch_count, &has_more); code)
             return false;
 
