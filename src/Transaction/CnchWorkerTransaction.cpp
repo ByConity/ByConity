@@ -177,6 +177,7 @@ TxnTimestamp CnchWorkerTransaction::commitV2()
 
     try
     {
+        assertLockAcquired();
         return commit();
     }
     catch (Exception & e)

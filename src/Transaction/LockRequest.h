@@ -82,17 +82,17 @@ using LockID = UInt64;
 struct LockInfo
 {
 public:
-    TxnTimestamp txn_id;
-    LockMode lock_mode;
+    TxnTimestamp txn_id {0};
+    LockMode lock_mode {LockMode::NONE};
     UInt64 timeout{0};
-    UUID table_uuid;
+    String table_uuid_with_prefix;
     Int64 bucket{-1};
     String partition;
 
-    LockID lock_id;
+    LockID lock_id {0};
     LockStatus status{LockStatus::LOCK_INIT};
     LockRequestPtrs requests;
-
+    static constexpr auto task_domain{"task_"};
 public:
     LockInfo(TxnTimestamp txn_id_) : txn_id(txn_id_) { }
 
@@ -122,9 +122,15 @@ public:
         return *this;
     }
 
-    inline LockInfo & setUUID(UUID uuid)
+    inline LockInfo & setUUID(UUID table_uuid)
     {
-        table_uuid = uuid;
+        table_uuid_with_prefix = UUIDHelpers::UUIDToString(table_uuid);
+        return *this;
+    }
+
+    inline LockInfo & setTablePrefix(const String & prefix)
+    {
+        table_uuid_with_prefix = prefix;
         return *this;
     }
 

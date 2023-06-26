@@ -134,6 +134,7 @@ TxnTimestamp CnchServerTransaction::commitV2()
     try
     {
         precommit();
+        assertLockAcquired();
         return commit();
     }
     catch (const Exception & e)

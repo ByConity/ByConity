@@ -1013,7 +1013,7 @@ public:
 
     /// Call after initialization before using system logs. Call for global context.
     void initializeSystemLogs();
-    
+
     void initBGPartitionSelector();
     PartitionSelectorPtr getBGPartitionSelector() const;
 
@@ -1173,10 +1173,10 @@ public:
     void setExecuteSubQueryPath(String path) { graphviz_sub_query_path = path; }
     String getExecuteSubQueryPath() const { return graphviz_sub_query_path;  }
     void removeExecuteSubQueryPath() { graphviz_sub_query_path = "";  }
-    
+
     int sub_query_id = 0;
     int incAndGetSubQueryId() { return ++sub_query_id; }
-    
+
     SymbolAllocatorPtr & getSymbolAllocator() { return symbol_allocator; }
 
     void createSymbolAllocator();
@@ -1293,7 +1293,7 @@ public:
     CnchBGThreadPtr getCnchBGThread(CnchBGThreadType type, const StorageID & storage_id) const;
     CnchBGThreadPtr tryGetCnchBGThread(CnchBGThreadType type, const StorageID & storage_id) const;
     void controlCnchBGThread(const StorageID & storage_id, CnchBGThreadType type, CnchBGThreadAction action) const;
-    bool getTableReclusterTaskStatus(const StorageID & storage_id) const;
+    bool removeMergeMutateTasksOnPartitions(const StorageID &, const std::unordered_set<String> &);
 
     CnchBGThreadPtr tryGetDedupWorkerManager(const StorageID & storage_id) const;
 

@@ -37,7 +37,6 @@
 #include <WorkerTasks/ManipulationType.h>
 #include <CloudServices/CloudMergeTreeDedupWorker.h>
 #include <CloudServices/CnchPartsHelper.h>
-#include <Storages/IngestColumnCnch/IngestColumnCnchHelper.h>
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 
@@ -192,19 +191,7 @@ Pipe StorageCloudMergeTree::alterPartition(
     const PartitionCommands & commands,
     ContextPtr local_context)
 {
-    for (auto & command : commands)
-    {
-        switch (command.type)
-        {
-            case PartitionCommand::INGEST_PARTITION:
-                ingestPartition(metadata_snapshot, command, local_context);
-                break;
-            default:
-                throw Exception(ErrorCodes::NOT_IMPLEMENTED, "It's not allowed to execute any PARTITION commands except INGEST_PARTITON");
-        }
-    }
-
-    return {};
+    return ingestPartition(metadata_snapshot, commands[0], std::move(local_context));
 }
 
 bool StorageCloudMergeTree::checkStagedParts()
