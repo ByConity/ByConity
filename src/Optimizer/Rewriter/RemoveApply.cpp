@@ -142,15 +142,16 @@ PlanNodePtr CorrelatedScalarSubqueryVisitor::visitApplyNode(ApplyNode & node, Vo
     }
 
     DecorrelationResult & result_value = result.value();
+    PlanNodePtr join_left = node.getChildren()[0];
+    PlanNodePtr join_right = result_value.node;
+    std::pair<Names, Names> key_pairs = result_value.buildJoinClause(join_left, join_right, correlation, context);
 
     // step 2 : Assign unique id symbol for join left
-    PlanNodePtr join_left = node.getChildren()[0];
     String unique = context->getSymbolAllocator()->newSymbol("assign_unique_id_symbol");
     auto unique_id_step = std::make_unique<AssignUniqueIdStep>(join_left->getStep()->getOutputStream(), unique);
     auto unique_id_node = std::make_shared<AssignUniqueIdNode>(context->nextNodeId(), std::move(unique_id_step), PlanNodes{join_left});
 
     // step 3 : Assign non null symbol for build side.
-    PlanNodePtr join_right = result_value.node;
     Assignments null_value_assignments;
     NameToType null_value_name_to_type;
     for (const auto & column : join_right->getStep()->getOutputStream().header)
@@ -184,7 +185,6 @@ PlanNodePtr CorrelatedScalarSubqueryVisitor::visitApplyNode(ApplyNode & node, Vo
     {
         output.emplace_back(NameAndTypePair{item.name, item.type});
     }
-    std::pair<Names, Names> key_pairs = result_value.extractJoinClause(correlation);
     auto join_step = std::make_shared<JoinStep>(
         streams,
         DataStream{.header = output},
@@ -448,15 +448,7 @@ PlanNodePtr CorrelatedInSubqueryVisitor::visitApplyNode(ApplyNode & node, Void &
     PlanNodePtr input_ptr = apply_ptr->getChildren()[0];
     PlanNodePtr subquery_ptr = apply_ptr->getChildren()[1];
 
-    // step 1 : Assign unique id symbol for join left
-    String unique = context->getSymbolAllocator()->newSymbol("assign_unique_id_symbol");
-    auto unique_id_step = std::make_unique<AssignUniqueIdStep>(input_ptr->getStep()->getOutputStream(), unique);
-    auto unique_id_node = std::make_shared<AssignUniqueIdNode>(context->nextNodeId(), std::move(unique_id_step), PlanNodes{input_ptr});
-
-    // try to get the un-correlation part of subquery
-    PlanNodePtr source = subquery_ptr;
-
-    std::optional<DecorrelationResult> result = Decorrelation::decorrelateFilters(source, correlation, *context);
+    std::optional<DecorrelationResult> result = Decorrelation::decorrelateFilters(subquery_ptr, correlation, *context);
     if (!result.has_value())
     {
         throw Exception(
@@ -466,7 +458,13 @@ PlanNodePtr CorrelatedInSubqueryVisitor::visitApplyNode(ApplyNode & node, Void &
 
     DecorrelationResult & result_value = result.value();
     PlanNodePtr decorrelation_source = result_value.node;
-    std::pair<Names, Names> correlation_predicate = result_value.extractJoinClause(correlation);
+    std::pair<Names, Names> correlation_predicate = result_value.buildJoinClause(input_ptr, decorrelation_source, correlation, context);
+
+    // step 1 : Assign unique id symbol for join left
+    String unique = context->getSymbolAllocator()->newSymbol("assign_unique_id_symbol");
+    auto unique_id_step = std::make_unique<AssignUniqueIdStep>(input_ptr->getStep()->getOutputStream(), unique);
+    auto unique_id_node = std::make_shared<AssignUniqueIdNode>(context->nextNodeId(), std::move(unique_id_step), PlanNodes{input_ptr});
+
     const DataStream & decorrelation_output = decorrelation_source->getStep()->getOutputStream();
 
     // step 2 : Assign non null symbol with default value 0.
@@ -932,11 +930,11 @@ PlanNodePtr CorrelatedExistsSubqueryVisitor::visitApplyNode(ApplyNode & node, Vo
     DecorrelationResult & result_value = result.value();
     subquery_ptr = result_value.node;
 
+    std::pair<Names, Names> key_pairs = result->buildJoinClause(input_ptr, subquery_ptr, correlation, context);
+
     std::vector<ConstASTPtr> filter = result->extractFilter();
     if (filter.empty())
     {
-        std::pair<Names, Names> key_pairs = result->extractJoinClause(correlation);
-
         // step 1 : projection correlation symbols of subquery part.
         Assignments right_correlation_assignments;
         NameToType right_correlation_name_to_type;
@@ -1091,7 +1089,6 @@ PlanNodePtr CorrelatedExistsSubqueryVisitor::visitApplyNode(ApplyNode & node, Vo
         output.emplace_back(NameAndTypePair{item.name, item.type});
     }
 
-    std::pair<Names, Names> key_pairs = result->extractJoinClause(correlation);
     auto join_step = std::make_shared<JoinStep>(
         streams,
         DataStream{.header = output},
@@ -1520,15 +1517,7 @@ PlanNodePtr CorrelatedQuantifiedComparisonSubqueryVisitor::visitApplyNode(ApplyN
     PlanNodePtr input_ptr = apply_ptr->getChildren()[0];
     PlanNodePtr subquery_ptr = apply_ptr->getChildren()[1];
 
-    //step1 : Assign unique id symbol for join left
-    String unique = context->getSymbolAllocator()->newSymbol("assign_unique_id_symbol");
-    auto unique_id_step = std::make_unique<AssignUniqueIdStep>(input_ptr->getStep()->getOutputStream(), unique);
-    auto unique_id_node = std::make_shared<AssignUniqueIdNode>(context->nextNodeId(), std::move(unique_id_step), PlanNodes{input_ptr});
-
-    // try to get the un-correlation part of subquery
-    PlanNodePtr source = subquery_ptr;
-
-    std::optional<DecorrelationResult> result = Decorrelation::decorrelateFilters(source, correlation, *context);
+    std::optional<DecorrelationResult> result = Decorrelation::decorrelateFilters(subquery_ptr, correlation, *context);
     if (!result.has_value())
     {
         throw Exception(
@@ -1538,7 +1527,13 @@ PlanNodePtr CorrelatedQuantifiedComparisonSubqueryVisitor::visitApplyNode(ApplyN
 
     DecorrelationResult & result_value = result.value();
     PlanNodePtr decorrelation_source = result_value.node;
-    std::pair<Names, Names> correlation_predicate = result_value.extractJoinClause(correlation);
+    std::pair<Names, Names> correlation_predicate = result_value.buildJoinClause(input_ptr, decorrelation_source, correlation, context);
+
+    //step1 : Assign unique id symbol for join left
+    String unique = context->getSymbolAllocator()->newSymbol("assign_unique_id_symbol");
+    auto unique_id_step = std::make_unique<AssignUniqueIdStep>(input_ptr->getStep()->getOutputStream(), unique);
+    auto unique_id_node = std::make_shared<AssignUniqueIdNode>(context->nextNodeId(), std::move(unique_id_step), PlanNodes{input_ptr});
+
     const DataStream & decorrelation_output = decorrelation_source->getStep()->getOutputStream();
 
     // step 2 : Assign non null symbol with default value 1.

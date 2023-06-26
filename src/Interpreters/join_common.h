@@ -33,6 +33,7 @@ ColumnRawPtrs extractKeysForJoin(const Block & block_keys, const Names & key_nam
 
 /// Throw an exception if blocks have different types of key columns. Compare up to Nullability.
 void checkTypesOfKeys(const Block & block_left, const Names & key_names_left, const Block & block_right, const Names & key_names_right);
+bool isJoinCompatibleTypes(const DataTypePtr & left, const DataTypePtr & right);
 
 void createMissedColumns(Block & block);
 void joinTotals(Block left_totals, Block right_totals, const TableJoin & table_join, Block & out_block);
