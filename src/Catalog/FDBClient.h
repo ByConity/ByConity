@@ -83,13 +83,15 @@ public:
 using FDBTransactionPtr = std::shared_ptr<FDBTransactionRAII>;
 using FDBFuturePtr = std::shared_ptr<FDBFutureRAII>;
 
+class FDBClient;
 class Iterator {
 public:
-    Iterator(FDBTransactionPtr tr_, const ScanRequest & req_);
+    Iterator(FDBClient * client_, FDBTransactionPtr tr_, const ScanRequest & req_);
     bool Next(fdb_error_t & code);
     std::string Key();
     std::string Value();
 private:
+    FDBClient * client = nullptr;
     FDBTransactionPtr tr = nullptr;
     ScanRequest req;
     FDBFuturePtr batch_future = nullptr;
