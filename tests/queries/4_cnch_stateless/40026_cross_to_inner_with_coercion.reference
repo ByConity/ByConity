@@ -1,8 +1,0 @@
--- { echoOn }
-
-select count(*) from tt1, tt2 where a = b;
-1
-select count(*) from tt1, tt2 where toInt32(a) = toInt64(b);
-1
-select count(*) from tt1, tt2 where toInt32(a + 1) = toInt64(b + 1);
-1

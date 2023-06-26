@@ -25,8 +25,6 @@
 namespace DB
 {
 
-class TypeAnalyzer;
-using TypeAnalyzerPtr = std::shared_ptr<TypeAnalyzer>;
 using ExpressionTypes = std::unordered_map<ASTPtr, DataTypePtr>;
 
 /**
@@ -34,7 +32,7 @@ using ExpressionTypes = std::unordered_map<ASTPtr, DataTypePtr>;
  *
  * Analyze and return the type of given expression.
  */
-class TypeAnalyzer
+class TypeAnalyzer : boost::noncopyable
 {
 public:
     // WARNING: this can be slow
@@ -50,8 +48,6 @@ public:
     static TypeAnalyzer create(ContextMutablePtr context, const NamesAndTypes & input_types);
     DataTypePtr getType(const ConstASTPtr & expr) const;
     ExpressionTypes getExpressionTypes(const ConstASTPtr & expr) const;
-
-    TypeAnalyzer(TypeAnalyzer && other) = default;
 
 private:
     TypeAnalyzer(ContextMutablePtr context_, Scope && scope_) : context(std::move(context_)), scope(std::move(scope_)) { }

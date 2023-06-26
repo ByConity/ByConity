@@ -19,7 +19,6 @@
 #include <Analyzers/TypeAnalyzer.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <DataTypes/DataTypeNullable.h>
-#include <Interpreters/join_common.h>
 #include <Optimizer/DynamicFilters.h>
 #include <Optimizer/EqualityInference.h>
 #include <Optimizer/ExpressionDeterminism.h>
@@ -32,7 +31,6 @@
 #include <Optimizer/PredicateConst.h>
 #include <Optimizer/PredicateUtils.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
-#include <Optimizer/ProjectionPlanner.h>
 #include <Parsers/formatAST.h>
 #include <QueryPlan/AggregatingStep.h>
 #include <QueryPlan/AssignUniqueIdStep.h>
@@ -482,13 +480,13 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
     }
 
     auto left_source_expression_step
-        = std::make_shared<ProjectionStep>(left_source->getStep()->getOutputStream(), left_assignments, left_types);
-    PlanNodePtr left_source_expression_node
+        = std::make_shared<ProjectionStep>(left_source->getStep()->getOutputStream(), std::move(left_assignments), std::move(left_types));
+    auto left_source_expression_node
         = std::make_shared<ProjectionNode>(context->nextNodeId(), std::move(left_source_expression_step), PlanNodes{left_source});
 
     auto right_source_expression_step = std::make_shared<ProjectionStep>(
-        right_source->getStep()->getOutputStream(), right_assignments, right_types, false, dynamic_filters_results.dynamic_filters);
-    PlanNodePtr right_source_expression_node
+        right_source->getStep()->getOutputStream(), std::move(right_assignments), std::move(right_types), false, std::move(dynamic_filters_results.dynamic_filters));
+    auto right_source_expression_node
         = std::make_shared<ProjectionNode>(context->nextNodeId(), std::move(right_source_expression_step), PlanNodes{right_source});
 
     PlanNodePtr output_node = node.shared_from_this();
@@ -514,35 +512,69 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
     Names left_keys;
     Names right_keys;
     {
-        ProjectionPlanner left_planner(left_source_expression_node, context);
-        ProjectionPlanner right_planner(right_source_expression_node, context);
+        bool need_project_left = false;
+        bool need_project_right = false;
+        Assignments left_project_assignments;
+        NameToType left_project_types = left_source_expression_node->getOutputNamesToTypes();
+        Assignments right_project_assignments;
+        NameToType right_project_types = right_source_expression_node->getOutputNamesToTypes();
         const bool allow_extended_type_conversion = context->getSettingsRef().allow_extended_type_conversion;
-        bool need_project = false;
+
+        auto put_identities = [](Assignments & assignments, const Names & input_symbols)
+        {
+            for (const auto & symbol: input_symbols)
+                assignments.emplace_back(symbol, std::make_shared<ASTIdentifier>(symbol));
+        };
+
+        put_identities(left_project_assignments, left_source_expression_node->getOutputNames());
+        put_identities(right_project_assignments, right_source_expression_node->getOutputNames());
 
         for (const auto & clause : join_clauses)
         {
             String left_key = clause.first;
             String right_key = clause.second;
-            auto left_type = left_planner.getColumnType(left_key);
-            auto right_type = right_planner.getColumnType(right_key);
+            auto left_type = left_project_types.at(left_key);
+            auto right_type = right_project_types.at(right_key);
+            auto res_type = getLeastSupertype({left_type, right_type}, allow_extended_type_conversion);
 
-            if (!JoinCommon::isJoinCompatibleTypes(left_type, right_type))
+            auto add_join_key = [&](
+                                    const auto & name,
+                                    const auto & type,
+                                    auto & keys,
+                                    auto & assignments,
+                                    auto & name_to_type,
+                                    auto & need_project)
             {
-                auto common_type = getLeastSupertype({left_type, right_type}, allow_extended_type_conversion);
-                left_key = left_planner.addColumn(makeCastFunction(std::make_shared<ASTIdentifier>(left_key), common_type)).first;
-                right_key = right_planner.addColumn(makeCastFunction(std::make_shared<ASTIdentifier>(right_key), common_type)).first;
-                need_project = true;
-            }
+                if (removeNullable(res_type)->equals(*removeNullable(type)))
+                    keys.emplace_back(name);
+                else
+                {
+                    auto casted_name = context->getSymbolAllocator()->newSymbol(name);
+                    assignments.emplace_back(casted_name, makeCastFunction(std::make_shared<ASTIdentifier>(name), res_type));
+                    name_to_type[casted_name] = res_type;
+                    keys.emplace_back(casted_name);
+                    need_project = true;
+                }
+            };
 
-            left_keys.emplace_back(left_key);
-            right_keys.emplace_back(right_key);
+            add_join_key(left_key, left_type, left_keys, left_project_assignments, left_project_types, need_project_left);
+            add_join_key(right_key, right_type, right_keys, right_project_assignments, right_project_types, need_project_right);
         }
 
-        // TODO: without `need_project`, addDynamicFilter have a different result for ssb q10
-        if (need_project)
+        if (need_project_left)
         {
-            left_source_expression_node = left_planner.build();
-            right_source_expression_node = right_planner.build();
+            auto left_project_step
+                = std::make_shared<ProjectionStep>(left_source_expression_node->getStep()->getOutputStream(), left_project_assignments, left_project_types);
+            left_source_expression_node
+                = std::make_shared<ProjectionNode>(context->nextNodeId(), std::move(left_project_step), PlanNodes{left_source_expression_node});
+        }
+
+        if (need_project_right)
+        {
+            auto right_project_step
+                = std::make_shared<ProjectionStep>(right_source_expression_node->getStep()->getOutputStream(), right_project_assignments, right_project_types);
+            right_source_expression_node
+                = std::make_shared<ProjectionNode>(context->nextNodeId(), std::move(right_project_step), PlanNodes{right_source_expression_node});
         }
     }
 

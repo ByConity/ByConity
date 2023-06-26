@@ -31,7 +31,7 @@ class Correlation
 public:
     static std::vector<String> prune(PlanNodePtr & node, const Names & origin_correlation);
     static bool containsCorrelation(PlanNodePtr & node, Names & correlation);
-    static bool isCorrelated(ConstASTPtr expression, const Names & correlation);
+    static bool isCorrelated(ConstASTPtr & expression, Names & correlation);
     static bool isUnreferencedScalar(PlanNodePtr & node);
 };
 
@@ -42,8 +42,7 @@ struct DecorrelationResult
     std::vector<ConstASTPtr> correlation_predicates{};
     bool at_most_single_row = false;
     std::pair<Names, Names> extractCorrelations(Names & correlation);
-    std::pair<Names, Names> buildJoinClause(PlanNodePtr & query_node, PlanNodePtr & subquery_node, const Names & correlation,
-                                            ContextMutablePtr context);
+    std::pair<Names, Names> extractJoinClause(Names & correlation);
     std::vector<ConstASTPtr> extractFilter();
 };
 
