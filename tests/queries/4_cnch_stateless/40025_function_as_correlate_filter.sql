@@ -1,3 +1,4 @@
+CREATE DATABASE IF NOT EXISTS test;
 use test;
 set enable_optimizer=1;
 
