@@ -423,14 +423,15 @@ bool Iterator::Next(fdb_error_t & code)
             if (code = fdb_future_get_error(batch_future->future); code)
             {
                 // if timeout retry with new transaction
-                if (code == 1031)
+                if (code == FDBError::FDB_transaction_timed_out)
                 {
                     LOG_DEBUG(&Poco::Logger::get("FDBIterator"), "Transaction timeout, create new transaction");
                     tr = std::make_shared<FDB::FDBTransactionRAII>();
                     Catalog::MetastoreFDBImpl::check_fdb_op(client->CreateTransaction(tr));
                     continue;
                 }
-                return false;
+                else
+                    return false;
             }
             break;
         }
