@@ -590,7 +590,7 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
     bool only_realtime_partition = storage_settings->cnch_merge_only_realtime_partition;
 
     auto partitions = partition_selector->selectForMerge(istorage, num_partitions, only_realtime_partition);
-    // partitions = removeLockedPartition(partitions);
+    partitions = removeLockedPartition(partitions);
 
     if (partitions.empty())
     {
@@ -681,6 +681,55 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
     return true;
 }
 
+Strings CnchMergeMutateThread::removeLockedPartition(const Strings & partitions)
+{
+    constexpr UInt64 SLOW_THRESHOLD_MS = 200;
+    Stopwatch watch;
+    auto & txn_coordinator = getContext()->getCnchTransactionCoordinator();
+    auto transaction = txn_coordinator.createTransaction(
+        CreateTransactionOption().setInitiator(CnchTransactionInitiator::Merge).setPriority(CnchTransactionPriority::low));
+
+    SCOPE_EXIT({
+        try
+        {
+            txn_coordinator.finishTransaction(transaction);
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        }
+    });
+
+    auto txn_id = transaction->getTransactionID();
+    Strings res;
+    std::for_each(partitions.begin(), partitions.end(),
+        [& res, & transaction, txn_id, this] (const String & partition)
+        {
+            LockInfoPtr partition_lock = std::make_shared<LockInfo>(txn_id);
+            partition_lock->setMode(LockMode::X);
+            partition_lock->setTablePrefix(LockInfo::task_domain + UUIDHelpers::UUIDToString(getStorageID().uuid));
+            partition_lock->setPartition(partition);
+
+            auto cnch_lock = transaction->createLockHolder({std::move(partition_lock)});
+            if (cnch_lock->tryLock())
+            {
+                LOG_TRACE(log, "partition {} is not lock", partition);
+                res.push_back(partition);
+            }
+            else
+            {
+                LOG_TRACE(log, "partition {} is lock", partition);
+                partition_selector->postponeMerge(storage_id.uuid, partition);
+            }
+        });
+
+    transaction->abort();
+    UInt64 milliseconds = watch.elapsedMilliseconds();
+    if (milliseconds >= SLOW_THRESHOLD_MS)
+        LOG_INFO(log, "removeLockedPartition tooks {} ms.", milliseconds);
+    return res;
+}
+
 String CnchMergeMutateThread::submitFutureManipulationTask(FutureManipulationTask & future_task, bool maybe_sync_task)
 {
     auto local_context = getContext();
@@ -697,7 +746,7 @@ String CnchMergeMutateThread::submitFutureManipulationTask(FutureManipulationTas
 
     LockInfoPtr partition_lock = std::make_shared<LockInfo>(transaction_id);
     partition_lock->setMode(LockMode::X);
-    partition_lock->setUUID(getStorageID().uuid);
+    partition_lock->setTablePrefix(LockInfo::task_domain + UUIDHelpers::UUIDToString(getStorageID().uuid));
 
     /*
     if (type == ManipulationType::Merge)
@@ -722,10 +771,15 @@ String CnchMergeMutateThread::submitFutureManipulationTask(FutureManipulationTas
         }
     }
 
+    auto cnch_lock = transaction->createLockHolder({std::move(partition_lock)});
+
+    if (type == ManipulationType::Merge || type == ManipulationType::Mutate || type == ManipulationType::Clustering)
+        cnch_lock->lock();
+
     SCOPE_EXIT(if (type == ManipulationType::Merge || type == ManipulationType::Mutate || type == ManipulationType::Clustering) {
         try
         {
-            transaction->unlock();
+            cnch_lock->unlock();
             LOG_TRACE(log, "Successful call unlock on transaction");
         }
         catch (...)
@@ -1046,9 +1100,6 @@ bool CnchMergeMutateThread::tryMutateParts([[maybe_unused]] StoragePtr & istorag
         current_mutate_entry = std::make_optional<CnchMergeTreeMutationEntry>(entry);
     }
 
-    if (current_mutate_entry->isReclusterMutation() && !getContext()->getTableReclusterTaskStatus(storage_id))
-        return false;
-
     auto generate_tasks = [&](const ServerDataPartsVector & visible_parts, const NameSet & merging_mutating_parts_snapshot)
     {
         auto type = current_mutate_entry->isReclusterMutation() ? ManipulationType::Clustering : ManipulationType::Mutate;
@@ -1241,6 +1292,58 @@ void CnchMergeMutateThread::triggerPartMutate(StoragePtr storage)
     }
 
     tryMutateParts(storage, *cnch);
+}
+
+bool CnchMergeMutateThread::removeTasksOnPartitions(const std::unordered_set<String> & partitions)
+{
+    std::lock_guard lock_merge(try_merge_parts_mutex);
+    std::lock_guard lock_mutate(try_mutate_parts_mutex);
+    {
+        decltype(merge_pending_queue) empty_for_clear;
+        merge_pending_queue.swap(empty_for_clear);
+    }
+
+    std::vector<String> remove_task_ids;
+    std::unordered_map<CnchWorkerClientPtr, Strings> worker_with_tasks;
+
+    {
+        std::lock_guard lock(task_records_mutex);
+
+        std::for_each(task_records.begin(), task_records.end(), [&remove_task_ids, &partitions](auto & p) {
+            auto & task_ptr = p.second;
+            if (task_ptr->parts.empty())
+                return;
+            if ((task_ptr->type == ManipulationType::Clustering) || (task_ptr->type == ManipulationType::Mutate))
+                remove_task_ids.push_back(p.first);
+
+            if ((task_ptr->type == ManipulationType::Merge) && partitions.contains(task_ptr->parts.front()->info().partition_id))
+                remove_task_ids.push_back(p.first);
+        });
+
+        std::for_each(remove_task_ids.begin(), remove_task_ids.end(), [this, &worker_with_tasks](const String & task_id) {
+            auto it = task_records.find(task_id);
+            if (it == task_records.end())
+                return;
+            worker_with_tasks[it->second->worker].push_back(task_id);
+        });
+    }
+
+    std::for_each(worker_with_tasks.begin(), worker_with_tasks.end(), [this](auto & p) {
+        if (!p.first)
+            throw Exception("Worker is null for task " + p.second[0], ErrorCodes::LOGICAL_ERROR);
+        p.first->shutdownManipulationTasks(storage_id.uuid, p.second);
+    });
+
+    {
+        std::lock_guard lock(task_records_mutex);
+
+        std::for_each(remove_task_ids.begin(), remove_task_ids.end(), [this, &lock](const String & task_id) {
+            LOG_INFO(log, "Remove task: {} for ingest partition", task_id);
+            removeTaskImpl(task_id, lock);
+        });
+    }
+
+    return true;
 }
 
 }

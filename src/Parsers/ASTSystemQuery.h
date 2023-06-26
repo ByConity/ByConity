@@ -121,9 +121,9 @@ public:
         SYNC_DEDUP_WORKER,
         START_DEDUP_WORKER,
         STOP_DEDUP_WORKER,
-        START_CLUSTER,
-        STOP_CLUSTER,
         DUMP_SERVER_STATUS,
+        JEPROF_DUMP,
+        LOCK_MEMORY_LOCK,
         END
     };
 

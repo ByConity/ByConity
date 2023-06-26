@@ -122,7 +122,7 @@ public:
 
     void tryRemoveTask(const String & task_id);
     void finishTask(const String & task_id, const MergeTreeDataPartPtr & merged_part, std::function<void()> && commit_parts);
-    bool removeTasksOnPartition(const String & partition_id);
+    bool removeTasksOnPartitions(const std::unordered_set<String> & partitions);
 
     String triggerPartMerge(StoragePtr & istorage, const String & partition_id, bool aggressive, bool try_select, bool try_execute);
     void triggerPartMutate(StoragePtr storage);
@@ -161,6 +161,8 @@ private:
         std::lock_guard lock(currently_merging_mutating_parts_mutex);
         return currently_merging_mutating_parts;
     }
+
+    Strings removeLockedPartition(const Strings & partitions);
 
     PartitionSelectorPtr partition_selector;
 

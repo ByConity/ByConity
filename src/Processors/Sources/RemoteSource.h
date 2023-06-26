@@ -107,6 +107,6 @@ private:
 /// Create pipe with remote sources.
 Pipe createRemoteSourcePipe(
     RemoteQueryExecutorPtr query_executor,
-    bool add_aggregation_info, bool add_totals, bool add_extremes, bool async_read, size_t resize_number_after_remote_source = 1);
+    bool add_aggregation_info, bool add_totals, bool add_extremes, bool async_read);
 
 }

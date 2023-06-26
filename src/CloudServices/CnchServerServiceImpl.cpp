@@ -758,6 +758,27 @@ void CnchServerServiceImpl::releaseLock(
     });
 }
 
+void CnchServerServiceImpl::assertLockAcquired(
+    google::protobuf::RpcController *,
+    const Protos::AssertLockReq * request,
+    Protos::AssertLockResp * response,
+    google::protobuf::Closure * done)
+{
+    RPCHelpers::serviceHandler(done, response, [req = request, resp = response, d = done, logger = log] {
+        brpc::ClosureGuard done_guard(d);
+
+        try
+        {
+            LockManager::instance().assertLockAcquired(req->txn_id(), req->lock_id());
+        }
+        catch (...)
+        {
+            tryLogCurrentException(logger, __PRETTY_FUNCTION__);
+            RPCHelpers::handleException(resp->mutable_exception());
+        }
+    });
+}
+
 void CnchServerServiceImpl::reportCnchLockHeartBeat(
     google::protobuf::RpcController * cntl,
     const Protos::ReportCnchLockHeartBeatReq * request,
@@ -932,14 +953,35 @@ void CnchServerServiceImpl::redirectSetCommitTime(
 {
     handleRedirectCommitRequest(controller, request, response, done, true);
 }
-void CnchServerServiceImpl::removeMergeMutateTasksOnPartition(
+void CnchServerServiceImpl::removeMergeMutateTasksOnPartitions(
     google::protobuf::RpcController * cntl,
-    const Protos::RemoveMergeMutateTasksOnPartitionReq * request,
-    Protos::RemoveMergeMutateTasksOnPartitionResp * response,
+    const Protos::RemoveMergeMutateTasksOnPartitionsReq * request,
+    Protos::RemoveMergeMutateTasksOnPartitionsResp * response,
     google::protobuf::Closure * done)
 {
-}
+    RPCHelpers::serviceHandler(
+        done,
+        response,
+        [request = request, response = response, done = done, gc = getContext(), log = log] {
+            brpc::ClosureGuard done_guard(done);
 
+            try
+            {
+                auto storage_id = RPCHelpers::createStorageID(request->storage_id());
+                std::unordered_set<String> partitions;
+                for (const auto & p : request->partitions())
+                    partitions.insert(p);
+                bool ret = gc->removeMergeMutateTasksOnPartitions(storage_id, partitions);
+                response->set_ret(ret);
+            }
+            catch (...)
+            {
+                tryLogCurrentException(log, __PRETTY_FUNCTION__);
+                RPCHelpers::handleException(response->mutable_exception());
+            }
+        }
+    );
+}
 void CnchServerServiceImpl::submitQueryWorkerMetrics(
     google::protobuf::RpcController * /*cntl*/,
     const Protos::SubmitQueryWorkerMetricsReq * request,
