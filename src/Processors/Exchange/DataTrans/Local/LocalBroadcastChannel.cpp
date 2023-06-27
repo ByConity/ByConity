@@ -19,8 +19,6 @@
 #include <optional>
 #include <string>
 #include <Processors/Chunk.h>
-#include <Processors/Exchange/DataTrans/BroadcastSenderProxy.h>
-#include <Processors/Exchange/DataTrans/BroadcastSenderProxyRegistry.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/Exchange/DataTrans/Local/LocalBroadcastChannel.h>
 #include <Processors/Exchange/DataTrans/Local/LocalChannelOptions.h>
@@ -34,7 +32,17 @@ namespace DB
 LocalBroadcastChannel::LocalBroadcastChannel(DataTransKeyPtr data_key_, LocalChannelOptions options_, std::shared_ptr<QueryExchangeLog> query_exchange_log_)
     : data_key(std::move(data_key_))
     , options(std::move(options_))
-    , receive_queue(options.queue_size)
+    , receive_queue(std::make_shared<MultiPathBoundedQueue>(options_.queue_size))
+    , logger(&Poco::Logger::get("LocalBroadcastChannel"))
+    , query_exchange_log(query_exchange_log_)
+{
+}
+
+LocalBroadcastChannel::LocalBroadcastChannel(ExchangeDataKeyPtr data_key_, LocalChannelOptions options_, const String &name_, MultiPathQueuePtr collector, std::shared_ptr<QueryExchangeLog> query_exchange_log_)
+    : name(name_)
+    , data_key(std::move(data_key_))
+    , options(std::move(options_))
+    , receive_queue(collector)
     , logger(&Poco::Logger::get("LocalBroadcastChannel"))
     , query_exchange_log(query_exchange_log_)
 {
@@ -43,32 +51,38 @@ LocalBroadcastChannel::LocalBroadcastChannel(DataTransKeyPtr data_key_, LocalCha
 RecvDataPacket LocalBroadcastChannel::recv(UInt32 timeout_ms)
 {
     Stopwatch s;
-    Chunk recv_chunk;
+    MultiPathDataPacket data_packet;
 
     BroadcastStatus * current_status_ptr = broadcast_status.load(std::memory_order_acquire);
     /// Positive status code means that we should close immediately and negative code means we should conusme all in flight data before close
     if (current_status_ptr->code > 0)
         return *current_status_ptr;
 
-    if (receive_queue.tryPop(recv_chunk, timeout_ms))
+    if (receive_queue->tryPop(data_packet, timeout_ms))
     {
-        if (recv_chunk)
+        if (std::holds_alternative<Chunk>(data_packet))
         {
+            Chunk& recv_chunk = std::get<Chunk>(data_packet);
             recv_metric.recv_bytes += recv_chunk.bytes();
             ExchangeUtils::transferGlobalMemoryToThread(recv_chunk.allocatedBytes());
             return RecvDataPacket(std::move(recv_chunk));
         }
-        else
+        else if (std::holds_alternative<SendDoneMark>(data_packet))
+        {
             return RecvDataPacket(*broadcast_status.load(std::memory_order_acquire));
+        }
+        else
+        {
+            // 
+        }
     }
 
     BroadcastStatus current_status = finish(
         BroadcastStatusCode::RECV_TIMEOUT,
-        "Receive from channel " + data_key->getKey() + " timeout after ms: " + std::to_string(timeout_ms));
+        "Receive from channel " + name + " timeout after ms: " + std::to_string(timeout_ms));
     recv_metric.recv_time_ms += s.elapsedMilliseconds();
     return current_status;
 }
-
 
 BroadcastStatus LocalBroadcastChannel::send(Chunk chunk)
 {
@@ -79,19 +93,18 @@ BroadcastStatus LocalBroadcastChannel::send(Chunk chunk)
 
     auto bytes = chunk.allocatedBytes();
     send_metric.send_uncompressed_bytes += bytes;
-    if (receive_queue.tryEmplace(options.max_timeout_ms / 2, std::move(chunk)))
+    if (receive_queue->tryEmplace(options.max_timeout_ms / 2, MultiPathDataPacket(std::move(chunk))))
     {
-        ExchangeUtils::transferThreadMemoryToGlobal(bytes);
+        ExchangeUtils::transferThreadMemoryToGlobal(bytes);     
         return *broadcast_status.load(std::memory_order_acquire);
     }
 
     BroadcastStatus current_status = finish(
         BroadcastStatusCode::SEND_TIMEOUT,
-        "Send to channel " + data_key->getKey() + " timeout after ms: " + std::to_string(options.max_timeout_ms));
+        "Send to channel " + name + " timeout after ms: " + std::to_string(options.max_timeout_ms));
     send_metric.send_time_ms += s.elapsedMilliseconds();
     return current_status;
 }
-
 
 BroadcastStatus LocalBroadcastChannel::finish(BroadcastStatusCode status_code, String message)
 {
@@ -104,15 +117,15 @@ BroadcastStatus LocalBroadcastChannel::finish(BroadcastStatusCode status_code, S
         LOG_INFO(
             logger,
             "{} BroadcastStatus from {} to {} with message: {}",
-            data_key->getKey(),
+            name,
             current_status_ptr->code,
             new_status_ptr->code,
             new_status_ptr->message);
         if (new_status_ptr->code > 0)
             // close queue immediately
-            receive_queue.close();
+            receive_queue->close();
         else
-            receive_queue.tryEmplace(options.max_timeout_ms, Chunk());
+            receive_queue->tryEmplace(options.max_timeout_ms, getName());
         auto res = *new_status_ptr;
         res.is_modifer = true;
         send_metric.finish_code = new_status_ptr->code;
@@ -132,6 +145,7 @@ BroadcastStatus LocalBroadcastChannel::finish(BroadcastStatusCode status_code, S
         return *current_status_ptr;
     }
 }
+
 
 void LocalBroadcastChannel::registerToSenders(UInt32 timeout_ms)
 {

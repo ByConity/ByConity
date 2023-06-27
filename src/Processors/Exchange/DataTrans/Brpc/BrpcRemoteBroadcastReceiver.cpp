@@ -45,8 +45,19 @@ BrpcRemoteBroadcastReceiver::BrpcRemoteBroadcastReceiver(
     , registry_address(std::move(registry_address_))
     , context(std::move(context_))
     , header(std::move(header_))
-    , queue(context->getSettingsRef().exchange_remote_receiver_queue_size)
-    , data_key(trans_key->getKey())
+    , queue(std::make_shared<MultiPathBoundedQueue>(context->getSettingsRef().exchange_remote_receiver_queue_size))
+    , keep_order(keep_order_)
+{
+}
+
+BrpcRemoteBroadcastReceiver::BrpcRemoteBroadcastReceiver(
+    ExchangeDataKeyPtr trans_key_, String registry_address_, ContextPtr context_, Block header_, MultiPathQueuePtr collator, bool keep_order_, const String &name_)
+    : name(name_)
+    , trans_key(std::move(trans_key_))
+    , registry_address(std::move(registry_address_))
+    , context(std::move(context_))
+    , header(std::move(header_))
+    , queue(collator)
     , keep_order(keep_order_)
 {
 }
@@ -58,7 +69,7 @@ BrpcRemoteBroadcastReceiver::~BrpcRemoteBroadcastReceiver()
         if (stream_id != brpc::INVALID_STREAM_ID)
         {
             brpc::StreamClose(stream_id);
-            LOG_TRACE(log, "Stream {} for {} @ {} Close", stream_id, data_key, registry_address);
+            LOG_TRACE(log, "Stream {} for {} @ {} Close", stream_id, name, registry_address);
         }
         QueryExchangeLogElement element;
         if(auto key = std::dynamic_pointer_cast<const ExchangeDataKey>(trans_key))
@@ -129,20 +140,20 @@ void BrpcRemoteBroadcastReceiver::registerToSenders(UInt32 timeout_ms)
             log,
             "Receiver register sender successfully but sender already finished, host-{} , data_key-{}, stream_id-{}",
             registry_address,
-            data_key,
+            name,
             stream_id);
         return;
     }
     rpc_client->assertController(cntl);
     metric.register_time_ms += s.elapsedMilliseconds();
-    LOG_DEBUG(log, "Receiver register sender successfully, host-{} , data_key-{}, stream_id-{}", registry_address, data_key, stream_id);
+    LOG_DEBUG(log, "Receiver register sender successfully, host-{} , data_key-{}, stream_id-{}", registry_address, name, stream_id);
 }
 
-void BrpcRemoteBroadcastReceiver::pushReceiveQueue(Chunk chunk)
+void BrpcRemoteBroadcastReceiver::pushReceiveQueue(MultiPathDataPacket packet)
 {
-    if (queue.closed())
+    if (queue->closed())
         return;
-    if (!queue.tryEmplace(context->getSettingsRef().exchange_timeout_ms, std::move(chunk)))
+    if (!queue->tryEmplace(context->getSettingsRef().exchange_timeout_ms, std::move(packet)))
         throw Exception(
             "Push exchange data to receiver for " + getName() + " timeout for "
                 + std::to_string(context->getSettingsRef().exchange_timeout_ms) + " ms.",
@@ -152,42 +163,50 @@ void BrpcRemoteBroadcastReceiver::pushReceiveQueue(Chunk chunk)
 RecvDataPacket BrpcRemoteBroadcastReceiver::recv(UInt32 timeout_ms) noexcept
 {
     Stopwatch s;
-    Chunk received_chunk;
-    if (!queue.tryPop(received_chunk, timeout_ms))
+    MultiPathDataPacket data_packet;
+    if (!queue->tryPop(data_packet, timeout_ms))
     {
         const auto error_msg = "Try pop receive queue for " + getName() + " timeout for " + std::to_string(timeout_ms) + " ms.";
         BroadcastStatus current_status = finish(BroadcastStatusCode::RECV_TIMEOUT, error_msg);
         return std::move(current_status);
     }
 
-    // receive a empty chunk without any chunk info means the receive is done.
-    if (!received_chunk && !received_chunk.getChunkInfo())
+    if (std::holds_alternative<Chunk>(data_packet))
+    {
+        auto& received_chunk = std::get<Chunk>(data_packet);
+        if (!received_chunk && !received_chunk.getChunkInfo())
+        {
+            LOG_DEBUG(log, "{} finished ", getName());
+            return RecvDataPacket(BroadcastStatus(BroadcastStatusCode::ALL_SENDERS_DONE, false, "receiver done"));
+        }
+
+        if (keep_order)
+        {
+            // Chunk in queue is created in StreamHanlder's on_received_messages callback, which is run in bthread.
+            // Allocator (ref srcs/Common/Allocator.cpp) will add the momory of chunk to global memory tacker.
+            // When this chunk is poped, we should add this memory to current query momory tacker, and subtract from global memory tacker.
+            ExchangeUtils::transferGlobalMemoryToThread(received_chunk.allocatedBytes());
+            metric.recv_bytes += received_chunk.bytes();
+        }
+        else
+        {
+            const ChunkInfoPtr & info = received_chunk.getChunkInfo();
+            if (info)
+            {
+                if(auto iobuf_info = std::dynamic_pointer_cast<const DeserializeBufTransform::IOBufChunkInfo>(info))
+                {
+                    metric.recv_bytes += iobuf_info->io_buf.length();
+                }
+            }
+        }
+        metric.recv_time_ms += s.elapsedMilliseconds();
+        return RecvDataPacket(std::move(received_chunk));
+    }
+    else
     {
         LOG_DEBUG(log, "{} finished ", getName());
         return RecvDataPacket(BroadcastStatus(BroadcastStatusCode::ALL_SENDERS_DONE, false, "receiver done"));
     }
-
-    if (keep_order)
-    {
-        // Chunk in queue is created in StreamHanlder's on_received_messages callback, which is run in bthread.
-        // Allocator (ref srcs/Common/Allocator.cpp) will add the momory of chunk to global memory tacker.
-        // When this chunk is poped, we should add this memory to current query momory tacker, and subtract from global memory tacker.
-        ExchangeUtils::transferGlobalMemoryToThread(received_chunk.allocatedBytes());
-        metric.recv_bytes += received_chunk.bytes();
-    }
-    else
-    {
-        const ChunkInfoPtr & info = received_chunk.getChunkInfo();
-        if (info)
-        {
-            if(auto iobuf_info = std::dynamic_pointer_cast<const DeserializeBufTransform::IOBufChunkInfo>(info))
-            {
-                metric.recv_bytes += iobuf_info->io_buf.length();
-            }
-        }
-    }
-    metric.recv_time_ms += s.elapsedMilliseconds();
-    return RecvDataPacket(std::move(received_chunk));
 }
 
 BroadcastStatus BrpcRemoteBroadcastReceiver::finish(BroadcastStatusCode status_code_, String message)
@@ -199,7 +218,7 @@ BroadcastStatus BrpcRemoteBroadcastReceiver::finish(BroadcastStatusCode status_c
         LOG_TRACE(
             log,
             "Broadcast {} finished and status can't be changed to {} any more. Current status: {}",
-            data_key,
+            name,
             status_code_,
             current_fin_code);
         metric.finish_code = current_fin_code;
@@ -220,7 +239,7 @@ BroadcastStatus BrpcRemoteBroadcastReceiver::finish(BroadcastStatusCode status_c
     if (finish_status_code.compare_exchange_strong(current_fin_code, new_fin_code, std::memory_order_relaxed, std::memory_order_relaxed))
     {
         if (new_fin_code > 0)
-            queue.close();
+            queue->close();
         brpc::StreamFinish(stream_id, actual_status_code, new_fin_code, new_fin_code > 0);
         metric.finish_code = new_fin_code;
         metric.is_modifier = 1;
