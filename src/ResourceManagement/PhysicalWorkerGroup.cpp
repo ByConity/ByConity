@@ -15,9 +15,7 @@
 
 #include <ResourceManagement/PhysicalWorkerGroup.h>
 #include <ResourceManagement/CommonData.h>
-#include <ResourceManagement/WorkerNode.h>
 
-#include <atomic>
 #include <iterator>
 #include <algorithm>
 #include <random>
@@ -54,32 +52,63 @@ WorkerGroupData PhysicalWorkerGroup::getData(bool with_metrics, bool only_runnin
     data.vw_uuid = getVWUUID();
     data.vw_name = getVWName();
     data.psm = psm;
-
     for (const auto & [_, worker] : getWorkers())
     {
-        if (only_running_state && worker->state.load(std::memory_order_relaxed) != WorkerState::Running)
-            continue;
-        data.host_ports_vec.push_back(worker->host);
-        data.worker_node_resource_vec.push_back(worker->getResourceData());
-        
-        if (with_metrics)
-            data.metrics.worker_metrics_vec.push_back(worker->getMetrics());
+        if(!only_running_state || worker->state.load(std::memory_order_relaxed) == WorkerState::Running)
+            data.host_ports_vec.push_back(worker->host);
     }
-    
     data.num_workers = data.host_ports_vec.size();
 
     if (with_metrics)
-        data.metrics.id = id;
+        data.metrics = getAggregatedMetrics();
     return data;
 }
 
-WorkerGroupMetrics PhysicalWorkerGroup::getMetrics() const
+/// A background task refreshing the worker group's aggregated metrics.
+void PhysicalWorkerGroup::refreshAggregatedMetrics()
 {
-    WorkerGroupMetrics metrics(id);
-    auto all_workers = getWorkers();
-    for (const auto & [_, worker] : all_workers)
-        metrics.worker_metrics_vec.push_back(worker->getMetrics());
-    return metrics;
+    {
+        std::lock_guard lock(state_mutex);
+        aggregated_metrics.reset();
+
+        auto workers_ = getWorkersImpl(lock);
+        auto count = workers_.size();
+        for (const auto & [_, worker] : workers_)
+        {
+            auto worker_cpu_usage = worker->cpu_usage.load(std::memory_order_relaxed);
+            if (worker_cpu_usage < aggregated_metrics.min_cpu_usage)
+                aggregated_metrics.min_cpu_usage = worker_cpu_usage;
+            if (worker_cpu_usage > aggregated_metrics.max_cpu_usage)
+                aggregated_metrics.max_cpu_usage = worker_cpu_usage;
+            aggregated_metrics.avg_cpu_usage += worker_cpu_usage;
+
+            auto worker_mem_usage = worker->memory_usage.load(std::memory_order_relaxed);
+            if (worker_mem_usage < aggregated_metrics.min_mem_usage)
+                aggregated_metrics.min_mem_usage = worker_mem_usage;
+            if (worker_mem_usage > aggregated_metrics.max_mem_usage)
+                aggregated_metrics.max_mem_usage = worker_mem_usage;
+            aggregated_metrics.avg_mem_usage += worker_mem_usage;
+
+            auto worker_mem_available = worker->memory_available.load(std::memory_order::relaxed);
+            if (worker_mem_available < aggregated_metrics.min_mem_available)
+                aggregated_metrics.min_mem_available = worker_mem_available;
+
+            /// For now, we do not count in a worker's disk space.
+
+            aggregated_metrics.total_queries += worker->query_num.load(std::memory_order_relaxed);
+        }
+        aggregated_metrics.avg_cpu_usage /= count;
+        aggregated_metrics.avg_mem_usage /= count;
+        aggregated_metrics.num_workers = count;
+    }
+
+    refresh_metrics_task->scheduleAfter(1 * 1000);
+}
+
+WorkerGroupMetrics PhysicalWorkerGroup::getAggregatedMetrics() const
+{
+    std::lock_guard lock(state_mutex);
+    return aggregated_metrics;
 }
 
 void PhysicalWorkerGroup::registerNode(const WorkerNodePtr & node)

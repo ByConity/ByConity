@@ -49,8 +49,7 @@ public:
 private:
     ResourceManagerController & rm_controller;
     Poco::Logger * log{nullptr};
-    /// Use bthread::Mutex but not std::mutex to avoid deadlock issue as we call other rpc API (catalog) in the lock scope.
-    mutable bthread::Mutex vw_mgr_mutex;
+    mutable std::mutex vw_mgr_mutex;
 
     auto & getMutex() const
     {
@@ -59,20 +58,20 @@ private:
 
     auto getLock() const
     {
-        return std::lock_guard<bthread::Mutex>(vw_mgr_mutex);
+        return std::lock_guard<std::mutex>(vw_mgr_mutex);
     }
 
-    void loadVirtualWarehousesImpl(std::lock_guard<bthread::Mutex> * vw_lock);
+    void loadVirtualWarehousesImpl(std::lock_guard<std::mutex> * vw_lock);
 
-    VirtualWarehousePtr createVirtualWarehouseImpl(const std::string & name, const VirtualWarehouseSettings & settings, const bool if_not_exists, std::lock_guard<bthread::Mutex> * vw_lock);
-    VirtualWarehousePtr tryGetVirtualWarehouseImpl(const std::string & name, std::lock_guard<bthread::Mutex> * vw_lock);
-    VirtualWarehousePtr getVirtualWarehouseImpl(const std::string & name, std::lock_guard<bthread::Mutex> * vw_lock);
-    void alterVirtualWarehouseImpl(const std::string & name, const VirtualWarehouseAlterSettings & settings, std::lock_guard<bthread::Mutex> * vw_lock);
-    void dropVirtualWarehouseImpl(const std::string & name, const bool if_exists, std::lock_guard<bthread::Mutex> * vw_lock);
+    VirtualWarehousePtr createVirtualWarehouseImpl(const std::string & name, const VirtualWarehouseSettings & settings, const bool if_not_exists, std::lock_guard<std::mutex> * vw_lock);
+    VirtualWarehousePtr tryGetVirtualWarehouseImpl(const std::string & name, std::lock_guard<std::mutex> * vw_lock);
+    VirtualWarehousePtr getVirtualWarehouseImpl(const std::string & name, std::lock_guard<std::mutex> * vw_lock);
+    void alterVirtualWarehouseImpl(const std::string & name, const VirtualWarehouseAlterSettings & settings, std::lock_guard<std::mutex> * vw_lock);
+    void dropVirtualWarehouseImpl(const std::string & name, const bool if_exists, std::lock_guard<std::mutex> * vw_lock);
 
-    std::unordered_map<String, VirtualWarehousePtr> getAllVirtualWarehousesImpl(std::lock_guard<bthread::Mutex> * vw_lock);
+    std::unordered_map<String, VirtualWarehousePtr> getAllVirtualWarehousesImpl(std::lock_guard<std::mutex> * vw_lock);
 
-    void clearVirtualWarehousesImpl(std::lock_guard<bthread::Mutex> * vw_lock);
+    void clearVirtualWarehousesImpl(std::lock_guard<std::mutex> * vw_lock);
 
     std::atomic_bool need_sync_with_catalog{false};
 

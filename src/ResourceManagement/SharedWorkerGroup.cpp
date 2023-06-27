@@ -55,33 +55,39 @@ std::map<String, WorkerNodePtr> SharedWorkerGroup::getWorkersImpl(std::lock_guar
 WorkerGroupData SharedWorkerGroup::getData(bool with_metrics, bool only_running_state) const
 {
     WorkerGroupData data;
+    data.id = getID();
+    data.type = WorkerGroupType::Shared;
+    data.vw_uuid = getVWUUID();
+    data.vw_name = getVWName();
 
     {
         std::lock_guard lock(state_mutex);
 
         if (auto linked_group_ptr = tryGetLinkedGroup())
-        {
-            data = linked_group_ptr->getData(with_metrics, only_running_state);
             data.linked_id = linked_group_ptr->getID();
-            data.id = getID();
-            data.type = WorkerGroupType::Shared;
-            data.vw_uuid = getVWUUID();
-            data.vw_name = getVWName();
-            data.is_auto_linked = isAutoLinked();
-            data.linked_vw_name = linked_group_ptr->getVWName();
-
+        for (const auto & [_, worker] : getWorkersImpl(lock))
+        {
+            if(!only_running_state || worker->state.load(std::memory_order_relaxed) == WorkerState::Running)
+                data.host_ports_vec.push_back(worker->host);
         }
     }
 
+    data.num_workers = data.host_ports_vec.size();
+
+    if (with_metrics)
+        data.metrics = getAggregatedMetrics();
+
+    data.is_auto_linked = isAutoLinked();
+    data.linked_vw_name = tryGetLinkedGroupVWName();
     return data;
 }
 
-WorkerGroupMetrics SharedWorkerGroup::getMetrics() const
+WorkerGroupMetrics SharedWorkerGroup::getAggregatedMetrics() const
 {
     std::lock_guard lock(state_mutex);
     WorkerGroupMetrics res;
     if (auto linked_grp_shared_ptr = tryGetLinkedGroup())
-        res = linked_grp_shared_ptr->getMetrics();
+        res = linked_grp_shared_ptr->getAggregatedMetrics();
     return res;
 }
 

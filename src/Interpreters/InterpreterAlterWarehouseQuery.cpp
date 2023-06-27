@@ -111,21 +111,21 @@ BlockIO InterpreterAlterWarehouseQuery::execute()
             {
                 vw_alter_settings.max_auto_lend_links = change.value.safeGet<size_t>();
             }
-            else if (change.name == "cpu_busy_threshold")
+            else if (change.name == "cpu_threshold_for_borrow")
             {
-                vw_alter_settings.cpu_busy_threshold = change.value.safeGet<size_t>();
+                vw_alter_settings.cpu_threshold_for_borrow = change.value.safeGet<size_t>();
             }
-            else if (change.name == "mem_busy_threshold")
+            else if (change.name == "mem_threshold_for_borrow")
             {
-                vw_alter_settings.mem_busy_threshold = change.value.safeGet<size_t>();
+                vw_alter_settings.mem_threshold_for_borrow = change.value.safeGet<size_t>();
             }
-            else if (change.name == "cpu_idle_threshold")
+            else if (change.name == "cpu_threshold_for_lend")
             {
-                vw_alter_settings.cpu_idle_threshold = change.value.safeGet<size_t>();
+                vw_alter_settings.cpu_threshold_for_lend = change.value.safeGet<size_t>();
             }
-            else if (change.name == "mem_idle_threshold")
+            else if (change.name == "mem_threshold_for_lend")
             {
-                vw_alter_settings.mem_idle_threshold = change.value.safeGet<size_t>();
+                vw_alter_settings.mem_threshold_for_lend = change.value.safeGet<size_t>();
             }
             else if (change.name == "cpu_threshold_for_recall")
             {
@@ -135,13 +135,13 @@ BlockIO InterpreterAlterWarehouseQuery::execute()
             {
                 vw_alter_settings.mem_threshold_for_recall = change.value.safeGet<size_t>();
             }
-            else if (change.name == "cooldown_seconds_after_scaleup")
+            else if (change.name == "cooldown_seconds_after_auto_link")
             {
-                vw_alter_settings.cooldown_seconds_after_scaleup = change.value.safeGet<size_t>();
+                vw_alter_settings.cooldown_seconds_after_auto_link = change.value.safeGet<size_t>();
             }
-            else if (change.name == "cooldown_seconds_after_scaledown")
+            else if (change.name == "cooldown_seconds_after_auto_unlink")
             {
-                vw_alter_settings.cooldown_seconds_after_scaledown = change.value.safeGet<size_t>();
+                vw_alter_settings.cooldown_seconds_after_auto_unlink = change.value.safeGet<size_t>();
             }
             else
             {

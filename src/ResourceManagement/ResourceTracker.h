@@ -22,7 +22,6 @@
 #include <ResourceManagement/WorkerNode.h>
 
 #include <boost/noncopyable.hpp>
-#include <bthread/mutex.h>
 #include <common/logger_useful.h>
 
 #include <unordered_map>
@@ -50,14 +49,13 @@ public:
 
 private:
     ContextPtr getContext() const;
-    std::pair<bool, WorkerNodePtr> registerNodeImpl(const WorkerNodeResourceData & data, std::lock_guard<bthread::Mutex> &);
+    std::pair<bool, WorkerNodePtr> registerNodeImpl(const WorkerNodeResourceData & data, std::lock_guard<std::mutex> &);
 
     void clearLostWorkers();
 
     ResourceManagerController & rm_controller;
     Poco::Logger * log;
-    /// Use bthread::Mutex but not std::mutex to avoid deadlock issue as this lock may lock other rpc API (catalog) in the lock scope.
-    bthread::Mutex node_mutex;
+    std::mutex node_mutex;
     std::unordered_map<std::string, WorkerNodePtr> worker_nodes;
     BackgroundSchedulePool::TaskHolder background_task;
     size_t register_granularity_sec;

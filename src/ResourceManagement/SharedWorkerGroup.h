@@ -33,8 +33,8 @@ public:
 
     size_t getNumWorkers() const override;
     std::map<String, WorkerNodePtr> getWorkers() const override;
-    WorkerGroupData getData(bool with_metrics, bool only_running_state) const override;
-    WorkerGroupMetrics getMetrics() const override;
+    WorkerGroupData getData(bool with_metrics = false, bool only_running_state = true) const override;
+    WorkerGroupMetrics getAggregatedMetrics() const override;
 
     void registerNode(const WorkerNodePtr &) override;
     void removeNode(const String &) override;

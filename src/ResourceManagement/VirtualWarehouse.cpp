@@ -74,22 +74,22 @@ void VirtualWarehouse::applySettings(const VirtualWarehouseAlterSettings & setti
         new_settings.max_auto_borrow_links = *setting_changes.max_auto_borrow_links;
     if (setting_changes.max_auto_lend_links)
         new_settings.max_auto_lend_links = *setting_changes.max_auto_lend_links;
-    if (setting_changes.cpu_busy_threshold)
-        new_settings.cpu_busy_threshold = *setting_changes.cpu_busy_threshold;
-    if (setting_changes.mem_busy_threshold)
-        new_settings.mem_busy_threshold = *setting_changes.mem_busy_threshold;
-    if (setting_changes.cpu_idle_threshold)
-        new_settings.cpu_idle_threshold = *setting_changes.cpu_idle_threshold;
-    if (setting_changes.mem_idle_threshold)
-        new_settings.mem_idle_threshold = *setting_changes.mem_idle_threshold;
+    if (setting_changes.cpu_threshold_for_borrow)
+        new_settings.cpu_threshold_for_borrow = *setting_changes.cpu_threshold_for_borrow;
+    if (setting_changes.mem_threshold_for_borrow)
+        new_settings.mem_threshold_for_borrow = *setting_changes.mem_threshold_for_borrow;
+    if (setting_changes.cpu_threshold_for_lend)
+        new_settings.cpu_threshold_for_lend = *setting_changes.cpu_threshold_for_lend;
+    if (setting_changes.mem_threshold_for_lend)
+        new_settings.mem_threshold_for_lend = *setting_changes.mem_threshold_for_lend;
     if (setting_changes.cpu_threshold_for_recall)
         new_settings.cpu_threshold_for_recall = *setting_changes.cpu_threshold_for_recall;
     if (setting_changes.mem_threshold_for_recall)
         new_settings.mem_threshold_for_recall = *setting_changes.mem_threshold_for_recall;
-    if (setting_changes.cooldown_seconds_after_scaleup)
-        new_settings.cooldown_seconds_after_scaleup = *setting_changes.cooldown_seconds_after_scaleup;
-    if (setting_changes.cooldown_seconds_after_scaledown)
-        new_settings.cooldown_seconds_after_scaledown = *setting_changes.cooldown_seconds_after_scaledown;
+    if (setting_changes.cooldown_seconds_after_auto_link)
+        new_settings.cooldown_seconds_after_auto_link = *setting_changes.cooldown_seconds_after_auto_link;
+    if (setting_changes.cooldown_seconds_after_auto_unlink)
+        new_settings.cooldown_seconds_after_auto_unlink = *setting_changes.cooldown_seconds_after_auto_unlink;
 
     catalog->alterVirtualWarehouse(name, data);
     {

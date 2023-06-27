@@ -107,8 +107,8 @@ void ResourceManagerServiceImpl::registerWorkerNode(
             return;
 
         auto data = WorkerNodeResourceData::createFromProto(request->resource_data());
-        LOG_DEBUG(&Poco::Logger::get("ResourceManagerServiceImpl"), "Register worker {} - {}", data.host_ports.toDebugString(), data.toDebugString());
         rm_controller.registerWorkerNode(data);
+        LOG_TRACE(&Poco::Logger::get("ResourceManagerServiceImpl"), "Register worker {} - {}", data.host_ports.toDebugString(), data.toDebugString());
     }
     catch (...)
     {
@@ -132,10 +132,10 @@ void ResourceManagerServiceImpl::removeWorkerNode(
         if (!checkForLeader(response))
             return;
 
-        LOG_DEBUG(&Poco::Logger::get("ResourceManagerServiceImpl"), "Removed worker {}", worker_id);
-        const auto & vw_name = request->vw_name();
-        const auto & worker_group_id = request->worker_group_id();
+        auto vw_name = request->vw_name();
+        auto worker_group_id = request->worker_group_id();
         rm_controller.removeWorkerNode(worker_id, vw_name, worker_group_id);
+        LOG_TRACE(&Poco::Logger::get("ResourceManagerServiceImpl"), "Removed worker {}", worker_id);
     }
     catch (...)
     {
@@ -352,8 +352,7 @@ void ResourceManagerServiceImpl::getWorkerGroups(
         auto groups = vw_manager.getVirtualWarehouse(request->vw_name())->getAllWorkerGroups();
         LOG_TRACE(&Poco::Logger::get("ResourceManagerServiceImpl"), "Got {} worker groups of {}", groups.size(), request->vw_name());
         for (const auto & group : groups)
-            group->getData(/*with_metrics*/true, /*only_running_state*/true)
-                .fillProto(*response->add_worker_group_data(), /*with_host_ports*/true, /*with_metrics*/true);
+            group->getData(true).fillProto(*response->add_worker_group_data(), true, true);
     }
     catch (...)
     {
@@ -379,8 +378,7 @@ void ResourceManagerServiceImpl::getAllWorkerGroups(
         auto with_metrics = request->with_metrics();
         for (auto & [_, group] : groups)
         {
-            group->getData(/*with_metrics*/with_metrics, /*only_running_state*/true)
-                .fillProto(*response->add_worker_group_data(), /*with_host_ports*/false, with_metrics);
+            group->getData(with_metrics).fillProto(*response->add_worker_group_data(), false, with_metrics);
         }
     }
     catch (...)
@@ -486,7 +484,7 @@ void ResourceManagerServiceImpl::pickWorkerGroup(
         if (requirement.expected_workers == 0)
             requirement.expected_workers = vw->getExpectedNumWorkers() >> 1;
         auto group = query_scheduler.pickWorkerGroup(vw_schedule_algo, requirement);
-        const auto & group_data = group->getData(/*with_metrics*/false, /*only_running_state*/true);
+        const auto & group_data = group->getData();
         if (group_data.host_ports_vec.empty() && group_data.psm.empty())
             throw Exception("No available worker group for " + request->vw_name(), ErrorCodes::RESOURCE_MANAGER_NO_AVAILABLE_WORKER_GROUP);
 

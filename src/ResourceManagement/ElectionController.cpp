@@ -81,9 +81,10 @@ void ElectionController::onLeader()
     else
     {
         LOG_INFO(log, "Current RM node " + current_address + " has become leader.");
-        auto & coordinator = rm_controller.getWorkerGroupResourceCoordinator();
-        coordinator.setMode(getContext()->getRootConfig().resource_manager.resource_coordinate_mode);
-        coordinator.start();
+        if (getContext()->getRootConfig().resource_manager.enable_auto_resource_sharing)
+        {
+            rm_controller.getWorkerGroupResourceCoordinator().start();
+        }
         is_leader = true;
     }
 }

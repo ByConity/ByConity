@@ -340,40 +340,29 @@ message ColumnStatistic
 
 message VirtualWarehouseSettings
 {
-    /// basic information ///
     // {READ, WRITE, TASK}
     required uint32 type = 1;
     reserved 2;
-    reserved "size"; // replace by num_workers. 
-    optional uint32 min_worker_groups = 3; // include shared groups
-    optional uint32 max_worker_groups = 4; // include shared groups
-    required uint32 num_workers = 5; // #worker per group
+    reserved "size";
+    optional uint32 min_worker_groups = 3;
+    optional uint32 max_worker_groups = 4;
+    required uint32 num_workers = 5;
     optional uint32 auto_suspend = 6;
     optional uint32 auto_resume = 7;
-
-    /// vw queue (resource group) ///
     optional uint32 max_concurrent_queries = 8;
     optional uint32 vw_schedule_algo = 9;
     optional uint32 max_queued_queries = 10;
     optional uint32 max_queued_waiting_ms = 11;
-
-    /// resource coordinator (auto-sharing & auto-scaling) ///
     optional uint32 max_auto_borrow_links = 12;
     optional uint32 max_auto_lend_links = 13;
-    // vw is allowed to create a new shared wg link to other wg(in other vw) if metric > threshold
-    optional uint32 cpu_busy_threshold = 14;
-    optional uint32 mem_busy_threshold = 15;
-
-    // vw is allowed to share its wg to other vws if metric < threshold.
-    optional uint32 cpu_idle_threshold = 16;
-    optional uint32 mem_idle_threshold = 17;
-
-    // if vw has lent wgs and metrc > threshold, recall the lent wg (by drop the shared wg).
+    optional uint32 cpu_threshold_for_borrow = 14;
+    optional uint32 mem_threshold_for_borrow = 15;
+    optional uint32 cpu_threshold_for_lend = 16;
+    optional uint32 mem_threshold_for_lend = 17;
     optional uint32 cpu_threshold_for_recall = 18;
     optional uint32 mem_threshold_for_recall = 19;
-
-    optional uint32 cooldown_seconds_after_scaleup = 20;
-    optional uint32 cooldown_seconds_after_scaledown = 21;
+    optional uint32 cooldown_seconds_after_auto_link = 20;
+    optional uint32 cooldown_seconds_after_auto_unlink = 21;
 };
 
 message VirtualWarehouseAlterSettings
@@ -393,14 +382,14 @@ message VirtualWarehouseAlterSettings
     optional uint32 max_queued_waiting_ms = 11;
     optional uint32 max_auto_borrow_links = 12;
     optional uint32 max_auto_lend_links = 13;
-    optional uint32 cpu_busy_threshold = 14;
-    optional uint32 mem_busy_threshold = 15;
-    optional uint32 cpu_idle_threshold = 16;
-    optional uint32 mem_idle_threshold = 17;
+    optional uint32 cpu_threshold_for_borrow = 14;
+    optional uint32 mem_threshold_for_borrow = 15;
+    optional uint32 cpu_threshold_for_lend = 16;
+    optional uint32 mem_threshold_for_lend = 17;
     optional uint32 cpu_threshold_for_recall = 18;
     optional uint32 mem_threshold_for_recall = 19;
-    optional uint32 cooldown_seconds_after_scaleup = 20;
-    optional uint32 cooldown_seconds_after_scaledown = 21;
+    optional uint32 cooldown_seconds_after_auto_link = 20;
+    optional uint32 cooldown_seconds_after_auto_unlink = 21;
 };
 
 message VirtualWarehouseData
@@ -414,10 +403,6 @@ message VirtualWarehouseData
     optional uint32 num_lent_worker_groups = 7;
     optional uint64 last_borrow_timestamp = 8;
     optional uint64 last_lend_timestamp = 9;
-
-    optional double cpu_usage_1min = 17;
-    optional double memory_usage_1min = 18;
-
 };
 
 // WorkNodeCatalogData
@@ -433,9 +418,7 @@ message WorkerNodeResourceData
     required string id = 1;
     required HostWithPorts host_ports = 2;
 
-    // number of queries in process list.
     required uint32 query_num = 3;
-
     required double cpu_usage = 4;
     required double memory_usage = 5;
     required uint64 memory_available = 6;
@@ -453,15 +436,6 @@ message WorkerNodeResourceData
     optional uint32 reserved_cpu_cores = 14;
     optional uint32 register_time = 15;
     optional uint32 state = 16;
-    optional double cpu_usage_1min = 17;
-    optional double memory_usage_1min = 18;
-
-
-    optional uint32 manipulation_num = 19;
-    optional uint32 consumer_num = 20;
-    optional uint32 dedup_num = 21;
-
-    optional uint32 last_status_create_time = 22;
 }
 
 message WorkerGroupData
@@ -479,36 +453,21 @@ message WorkerGroupData
   optional string linked_vw_name = 11;
 }
 
-message WorkerMetrics
-{
-    required string id = 1;
-
-    optional float cpu_1min = 2;
-    optional float mem_1min = 3;
-    optional uint32 num_queries = 4;
-    optional uint32 num_manipulations = 5;
-    optional uint32 num_consumers = 6;
-    optional uint32 num_dedups = 7;
-}
-
 message WorkerGroupMetrics
 {
-    reserved 3 to 12;
-
-    // Remove those deprecated fields in future.
-    reserved "min_cpu_usage";
-    reserved "max_cpu_usage";
-    reserved "avg_cpu_usage";
-    reserved "min_mem_usage";
-    reserved "max_mem_usage";
-    reserved "avg_mem_usage";
-    reserved "min_mem_available";
-    reserved "total_queries";
-    reserved "avg_cpu_usage_1min";
-    reserved "avg_mem_usage_1min";
-
     required string id = 1;
-    repeated WorkerMetrics worker_metrics_vec = 13;
+    required uint32 num_workers = 2;
+
+    required double min_cpu_usage = 3;
+    required double max_cpu_usage = 4;
+    required double avg_cpu_usage = 5;
+
+    required double min_mem_usage = 6;
+    required double max_mem_usage = 7;
+    required double avg_mem_usage = 8;
+    required uint64 min_mem_available = 9;
+
+    required uint32 total_queries = 10;
 }
 
 message ResourceRequirement

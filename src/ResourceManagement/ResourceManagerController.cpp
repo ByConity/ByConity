@@ -31,12 +31,11 @@
 
 namespace DB::ErrorCodes
 {
-    extern const int UNKNOWN_WORKER_GROUP;
+    extern const int KNOWN_WORKER_GROUP;
     extern const int RESOURCE_MANAGER_ILLEGAL_CONFIG;
     extern const int RESOURCE_MANAGER_REMOVE_WORKER_ERROR;
     extern const int VIRTUAL_WAREHOUSE_NOT_INITIALIZED;
     extern const int WORKER_GROUP_NOT_FOUND;
-    extern const int WORKER_NODE_INCONSISTENTCY;
 }
 
 namespace DB::ResourceManagement
@@ -246,7 +245,7 @@ void ResourceManagerController::initialize()
             else
             {
                 LOG_DEBUG(log, "Linking WG {} from VW {} to VW {}", group->getID(), source_vw_name, vw->getName());
-                auto data = shared_group->getData(/*with_metrics*/false, /*only_running_state*/true);
+                auto data = shared_group->getData();
                 auto source_group = group_manager->getWorkerGroup(data.linked_id);
                 auto source_physical_group = dynamic_pointer_cast<PhysicalWorkerGroup>(source_group);
                 if (!source_physical_group)
@@ -262,21 +261,13 @@ void ResourceManagerController::initialize()
 void ResourceManagerController::registerWorkerNode(const WorkerNodeResourceData & data)
 {
     if (data.worker_group_id.empty())
-        throw Exception("The group_id of node must not be empty", ErrorCodes::UNKNOWN_WORKER_GROUP);
-
-    /// Check the vw here to ensure not insert bad entries into resource tracker.
-    auto vw = vw_manager->tryGetVirtualWarehouse(data.vw_name);
-    if (!vw)
-        throw Exception("Worker node's Virtual Warehouse `" + data.vw_name + "` has not been created", ErrorCodes::VIRTUAL_WAREHOUSE_NOT_INITIALIZED);
+        throw Exception("The group_id of node must not be empty", ErrorCodes::KNOWN_WORKER_GROUP);
 
     auto [outdated, worker_node] = resource_tracker->registerNode(data);
 
     const auto & vw_name = worker_node->vw_name;
     const auto & worker_id = worker_node->getID();
     const auto & worker_group_id = worker_node->worker_group_id;
-
-    if (data.worker_group_id != worker_group_id || data.vw_name != vw_name)
-        throw Exception("It's not allowed to use the same worker id in different VW and WG.", ErrorCodes::WORKER_NODE_INCONSISTENTCY);
 
     WorkerGroupPtr group;
     {
@@ -285,6 +276,10 @@ void ResourceManagerController::registerWorkerNode(const WorkerNodeResourceData 
         group = group_manager->tryGetWorkerGroupImpl(worker_group_id, &vw_lock, &wg_lock);
         if (!group)
         {
+            auto vw = vw_manager->tryGetVirtualWarehouseImpl(vw_name, &vw_lock);
+            if (!vw)
+                throw Exception("Worker node's Virtual Warehouse `" + vw_name + "` has not been created", ErrorCodes::VIRTUAL_WAREHOUSE_NOT_INITIALIZED);
+
             // Create group if not found
             WorkerGroupData worker_group_data;
             worker_group_data.id = worker_group_id;
@@ -328,23 +323,18 @@ void ResourceManagerController::removeWorkerNode(const std::string & worker_id, 
 }
 
 WorkerGroupPtr ResourceManagerController::createWorkerGroup(
-    const std::string & group_id,
-    bool if_not_exists,
-    const std::string & vw_name,
-    const WorkerGroupData & data,
-    std::lock_guard<bthread::Mutex> * vw_lock,
-    std::lock_guard<bthread::Mutex> * wg_lock)
+    const std::string & group_id, bool if_not_exists, const std::string & vw_name, WorkerGroupData data, std::lock_guard<std::mutex> * vw_lock, std::lock_guard<std::mutex> * wg_lock)
 {
-    std::unique_ptr<std::lock_guard<bthread::Mutex>> vw_lock_guard;
-    std::unique_ptr<std::lock_guard<bthread::Mutex>> wg_lock_guard;
+    std::unique_ptr<std::lock_guard<std::mutex>> vw_lock_guard;
+    std::unique_ptr<std::lock_guard<std::mutex>> wg_lock_guard;
 
     if ((wg_lock != nullptr) ^ (vw_lock != nullptr))
         throw Exception("vw_lock and wg_lock must both be set or left empty", ErrorCodes::LOGICAL_ERROR);
     else if (wg_lock == nullptr && vw_lock == nullptr)
     {
         // VirtualWarehouseManager's lock should be obtained before WorkerGroupManager's
-        vw_lock_guard = std::make_unique<std::lock_guard<bthread::Mutex>>(vw_manager->getMutex());
-        wg_lock_guard = std::make_unique<std::lock_guard<bthread::Mutex>>(group_manager->getMutex());
+        vw_lock_guard = std::make_unique<std::lock_guard<std::mutex>>(vw_manager->getMutex());
+        wg_lock_guard = std::make_unique<std::lock_guard<std::mutex>>(group_manager->getMutex());
         vw_lock = vw_lock_guard.get();
         wg_lock = wg_lock_guard.get();
     }
@@ -373,22 +363,18 @@ WorkerGroupPtr ResourceManagerController::createWorkerGroup(
     return dest_group;
 }
 
-void ResourceManagerController::dropWorkerGroup(
-    const std::string & group_id,
-    bool if_exists,
-    std::lock_guard<bthread::Mutex> * vw_lock,
-    std::lock_guard<bthread::Mutex> * wg_lock)
+void ResourceManagerController::dropWorkerGroup(const std::string & group_id, bool if_exists, std::lock_guard<std::mutex> * vw_lock, std::lock_guard<std::mutex> * wg_lock)
 {
-    std::unique_ptr<std::lock_guard<bthread::Mutex>> vw_lock_guard;
-    std::unique_ptr<std::lock_guard<bthread::Mutex>> wg_lock_guard;
+    std::unique_ptr<std::lock_guard<std::mutex>> vw_lock_guard;
+    std::unique_ptr<std::lock_guard<std::mutex>> wg_lock_guard;
 
     if ((wg_lock != nullptr) ^ (vw_lock != nullptr))
         throw Exception("vw_lock and wg_lock must both be set or left empty", ErrorCodes::LOGICAL_ERROR);
     else if (wg_lock == nullptr && vw_lock == nullptr)
     {
         // VirtualWarehouseManager's lock should be obtained before WorkerGroupManager's
-        vw_lock_guard = std::make_unique<std::lock_guard<bthread::Mutex>>(vw_manager->getMutex());
-        wg_lock_guard = std::make_unique<std::lock_guard<bthread::Mutex>>(group_manager->getMutex());
+        vw_lock_guard = std::make_unique<std::lock_guard<std::mutex>>(vw_manager->getMutex());
+        wg_lock_guard = std::make_unique<std::lock_guard<std::mutex>>(group_manager->getMutex());
         vw_lock = vw_lock_guard.get();
         wg_lock = wg_lock_guard.get();
     }
@@ -417,7 +403,7 @@ void ResourceManagerController::dropWorkerGroup(
                 if (lender_vw)
                 {
                     auto time_now = time(nullptr);
-                    lender_vw->unlendGroup(shared_group->getData(/*with_metrics*/false, /*only_running_state*/true).linked_id);
+                    lender_vw->unlendGroup(shared_group->getData().linked_id);
                     lender_vw->setLastLendTimestamp(time_now);
                 }
                 else
@@ -453,11 +439,6 @@ void ResourceManagerController::dropWorkerGroup(
         vw->removeGroup(group_id);
     }
     group_manager->dropWorkerGroupImpl(group_id, wg_lock);
-}
-
-CoordinateDecisions ResourceManagerController::swapCoordinateDecisions()
-{
-    return wg_resource_coordinator->flushDecisions();
 }
 
 }

@@ -107,14 +107,14 @@ void StorageSystemVirtualWarehouses::fillData(MutableColumns & res_columns, cons
         res_columns[i++]->insert(ResourceManagement::toString(vw_settings.vw_schedule_algo));
         res_columns[i++]->insert(vw_settings.max_auto_borrow_links);
         res_columns[i++]->insert(vw_settings.max_auto_lend_links);
-        res_columns[i++]->insert(vw_settings.cpu_busy_threshold);
-        res_columns[i++]->insert(vw_settings.mem_busy_threshold);
-        res_columns[i++]->insert(vw_settings.cpu_idle_threshold);
-        res_columns[i++]->insert(vw_settings.mem_idle_threshold);
+        res_columns[i++]->insert(vw_settings.cpu_threshold_for_borrow);
+        res_columns[i++]->insert(vw_settings.mem_threshold_for_borrow);
+        res_columns[i++]->insert(vw_settings.cpu_threshold_for_lend);
+        res_columns[i++]->insert(vw_settings.mem_threshold_for_lend);
         res_columns[i++]->insert(vw_settings.cpu_threshold_for_recall);
         res_columns[i++]->insert(vw_settings.mem_threshold_for_recall);
-        res_columns[i++]->insert(vw_settings.cooldown_seconds_after_scaleup);
-        res_columns[i++]->insert(vw_settings.cooldown_seconds_after_scaledown);
+        res_columns[i++]->insert(vw_settings.cooldown_seconds_after_auto_link);
+        res_columns[i++]->insert(vw_settings.cooldown_seconds_after_auto_unlink);
     }
 }
 

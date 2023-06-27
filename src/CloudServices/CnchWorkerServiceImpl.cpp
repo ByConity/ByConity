@@ -39,7 +39,6 @@
 #include <brpc/closure_guard.h>
 #include <brpc/controller.h>
 #include <brpc/stream.h>
-#include "Common/Configurations.h"
 #include <condition_variable>
 #include <mutex>
 
@@ -88,10 +87,10 @@ void CnchWorkerServiceImpl::submitManipulationTask(
         rpc_context->getClientInfo().rpc_port = request->rpc_port();
         rpc_context->setCurrentTransaction(std::make_shared<CnchWorkerTransaction>(rpc_context, TxnTimestamp(request->txn_id())));
 
-        const auto & settings = getContext()->getSettingsRef();
-        UInt64 max_running_task = settings.max_threads * getContext()->getRootConfig().max_ratio_of_cnch_tasks_to_threads;
-        if (getContext()->getManipulationList().size() > max_running_task)
-            throw Exception(ErrorCodes::TOO_MANY_SIMULTANEOUS_TASKS, "Too many simultaneous tasks. Maximum: {}", max_running_task);
+        /// const auto & settings = global_context->getSettingsRef();
+        /// UInt64 max_running_task = settings.max_ratio_of_cnch_tasks_to_threads * settings.max_threads;
+        // if (global_context->getManipulationList().size() > max_running_task)
+        //     throw Exception(ErrorCodes::TOO_MANY_SIMULTANEOUS_TASKS, "Too many simultaneous tasks. Maximum: {}", max_running_task);
 
         StoragePtr storage = createStorageFromQuery(request->create_table_query(), rpc_context);
         auto * data = dynamic_cast<StorageCloudMergeTree *>(storage.get());

@@ -30,12 +30,12 @@ namespace DB::ResourceManagement
 
 static inline bool cmp_group_cpu(const WorkerGroupAndMetrics & a, const WorkerGroupAndMetrics & b)
 {
-    return a.second.avg_cpu_1min() < b.second.avg_cpu_1min();
+    return a.second.avg_cpu_usage < b.second.avg_cpu_usage;
 }
 
 static inline bool cmp_group_mem(const WorkerGroupAndMetrics & a, const WorkerGroupAndMetrics & b)
 {
-    return a.second.avg_mem_1min() < b.second.avg_mem_1min();
+    return a.second.avg_mem_usage < b.second.avg_mem_usage;
 }
 
 static inline bool cmp_worker_cpu(const WorkerNodePtr & a, const WorkerNodePtr & b)
@@ -67,7 +67,7 @@ void QueryScheduler::filterGroup(const Requirement & requirement, std::vector<Wo
     auto rlock = vw.getReadLock();
     for (const auto & [_, group] : vw.groups)
     {
-        if (auto metrics = group->getMetrics(); metrics.available(requirement))
+        if (auto metrics = group->getAggregatedMetrics(); metrics.available(requirement))
             res.emplace_back(group, metrics);
     }
 }

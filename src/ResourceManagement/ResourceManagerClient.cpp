@@ -33,6 +33,7 @@ namespace DB::ErrorCodes
 {
 extern const int RESOURCE_MANAGER_ILLEGAL_CONFIG;
 extern const int RESOURCE_MANAGER_NO_AVAILABLE_WORKER;
+extern const int RESOURCE_MANAGER_NOT_FOUND;
 extern const int NOT_A_LEADER;
 }
 

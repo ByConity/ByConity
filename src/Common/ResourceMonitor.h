@@ -17,8 +17,6 @@
 
 #include <Core/Types.h>
 #include <Interpreters/Context_fwd.h>
-#include <boost/circular_buffer.hpp>
-#include "common/types.h"
 
 namespace DB
 {
@@ -35,12 +33,7 @@ class CPUMonitor
     static constexpr auto filename = "/proc/stat";
 
 public:
-    struct CommonData
-    {
-        double cpu_usage;
-        double cpu_usage_avg_1min;
-    };
-    struct Data : public CommonData
+    struct Data
     {
         UInt64 total_ticks;
         UInt64 active_ticks;
@@ -54,8 +47,6 @@ public:
 
 private:
     int fd;
-    boost::circular_buffer<double> buffer{60};
-    double cpu_usage_accumulate{0};
     Data data{};
 };
 
@@ -69,21 +60,14 @@ public:
         UInt64 memory_total;
         UInt64 memory_available;
         double memory_usage;
-        double memory_usage_avg_1min;
     };
 
     MemoryMonitor();
     ~MemoryMonitor();
 
-    Data get();
-    std::optional<Data> getContainerData();
-    Data getPhysicalMachineData();
-
+    Data get() const;
 private:
     int fd;
-    bool in_container {false};
-    boost::circular_buffer<double> buffer{60};
-    double memory_usage_accumulate{0};
 };
 
 class ResourceMonitor : protected WithContext
@@ -99,8 +83,7 @@ private:
 
     UInt64 getDiskSpace();
     UInt64 getQueryCount();
-    UInt64 getManipulationTaskCount();
-    UInt64 getConsumerCount();
+    UInt64 getBackgroundTaskCount();
 
 private:
     MemoryMonitor mem_monitor;

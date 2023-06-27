@@ -46,7 +46,7 @@ void VirtualWarehouseManager::loadVirtualWarehouses()
     loadVirtualWarehousesImpl(&vw_lock);
 }
 
-void VirtualWarehouseManager::loadVirtualWarehousesImpl(std::lock_guard<bthread::Mutex> * /*vw_lock*/)
+void VirtualWarehouseManager::loadVirtualWarehousesImpl(std::lock_guard<std::mutex> * /*vw_lock*/)
 {
     auto catalog = rm_controller.getCnchCatalog();
 
@@ -72,7 +72,7 @@ VirtualWarehousePtr VirtualWarehouseManager::createVirtualWarehouse(const std::s
     return createVirtualWarehouseImpl(name, settings, if_not_exists, &vw_lock);
 }
 
-VirtualWarehousePtr VirtualWarehouseManager::createVirtualWarehouseImpl(const std::string & name, const VirtualWarehouseSettings & settings, const bool if_not_exists, std::lock_guard<bthread::Mutex> * vw_lock)
+VirtualWarehousePtr VirtualWarehouseManager::createVirtualWarehouseImpl(const std::string & name, const VirtualWarehouseSettings & settings, const bool if_not_exists, std::lock_guard<std::mutex> * vw_lock)
 {
     if (if_not_exists)
     {
@@ -120,7 +120,7 @@ VirtualWarehousePtr VirtualWarehouseManager::tryGetVirtualWarehouse(const std::s
     return tryGetVirtualWarehouseImpl(name, &vw_lock);
 }
 
-VirtualWarehousePtr VirtualWarehouseManager::tryGetVirtualWarehouseImpl(const std::string & name, std::lock_guard<bthread::Mutex> * /*vw_lock*/)
+VirtualWarehousePtr VirtualWarehouseManager::tryGetVirtualWarehouseImpl(const std::string & name, std::lock_guard<std::mutex> * /*vw_lock*/)
 {
     auto res = tryGet(name);
     if (!res && need_sync_with_catalog.load(std::memory_order_relaxed))
@@ -142,7 +142,7 @@ VirtualWarehousePtr VirtualWarehouseManager::getVirtualWarehouse(const std::stri
     return getVirtualWarehouseImpl(name, &vw_lock);
 }
 
-VirtualWarehousePtr VirtualWarehouseManager::getVirtualWarehouseImpl(const std::string & name, std::lock_guard<bthread::Mutex> * vw_lock)
+VirtualWarehousePtr VirtualWarehouseManager::getVirtualWarehouseImpl(const std::string & name, std::lock_guard<std::mutex> * vw_lock)
 {
     auto res = tryGetVirtualWarehouseImpl(name, vw_lock);
     if (!res)
@@ -156,7 +156,7 @@ void VirtualWarehouseManager::alterVirtualWarehouse(const std::string & name, co
     alterVirtualWarehouseImpl(name, settings, &vw_lock);
 }
 
-void VirtualWarehouseManager::alterVirtualWarehouseImpl(const std::string & name, const VirtualWarehouseAlterSettings & settings, std::lock_guard<bthread::Mutex> * vw_lock)
+void VirtualWarehouseManager::alterVirtualWarehouseImpl(const std::string & name, const VirtualWarehouseAlterSettings & settings, std::lock_guard<std::mutex> * vw_lock)
 {
     auto res = getVirtualWarehouseImpl(name, vw_lock);
     auto catalog = rm_controller.getCnchCatalog();
@@ -178,7 +178,7 @@ void VirtualWarehouseManager::dropVirtualWarehouse(const std::string & name, con
     dropVirtualWarehouseImpl(name, if_exists, &vw_lock);
 }
 
-void VirtualWarehouseManager::dropVirtualWarehouseImpl(const std::string & name, const bool if_exists, std::lock_guard<bthread::Mutex> * vw_lock)
+void VirtualWarehouseManager::dropVirtualWarehouseImpl(const std::string & name, const bool if_exists, std::lock_guard<std::mutex> * vw_lock)
 {
     auto res = tryGetVirtualWarehouseImpl(name, vw_lock);
 
@@ -220,7 +220,7 @@ std::unordered_map<String, VirtualWarehousePtr> VirtualWarehouseManager::getAllV
     return getAllVirtualWarehousesImpl(&vw_lock);
 }
 
-std::unordered_map<String, VirtualWarehousePtr> VirtualWarehouseManager::getAllVirtualWarehousesImpl(std::lock_guard<bthread::Mutex> * /*vw_lock*/)
+std::unordered_map<String, VirtualWarehousePtr> VirtualWarehouseManager::getAllVirtualWarehousesImpl(std::lock_guard<std::mutex> * /*vw_lock*/)
 {
     return getAll();
 }
@@ -231,7 +231,7 @@ void VirtualWarehouseManager::clearVirtualWarehouses()
     clearVirtualWarehousesImpl(&vw_lock);
 }
 
-void VirtualWarehouseManager::clearVirtualWarehousesImpl(std::lock_guard<bthread::Mutex> * /*vw_lock*/)
+void VirtualWarehouseManager::clearVirtualWarehousesImpl(std::lock_guard<std::mutex> * /*vw_lock*/)
 {
     std::lock_guard cells_lock(cells_mutex);
     cells.clear();

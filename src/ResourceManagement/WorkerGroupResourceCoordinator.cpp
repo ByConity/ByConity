@@ -29,61 +29,29 @@ namespace ErrorCodes
 {
     const extern int LOGICAL_ERROR;
     const extern int VIRTUAL_WAREHOUSE_NOT_FOUND;
-    const extern int RESOURCE_MANAGER_WRONG_COORDINATE_MODE;
 }
 }
 
 namespace DB::ResourceManagement
 {
 
-String toString(CoordinateMode mode)
-{
-    switch (mode)
-    {
-    case CoordinateMode::Sharing:
-        return "Sharing";
-    case CoordinateMode::Scaling:
-        return "Scaling";
-    case CoordinateMode::None:
-        return "None";
-    }
-    return "";
-}
-
 WorkerGroupResourceCoordinator::WorkerGroupResourceCoordinator(ResourceManagerController & rm_controller_)
     : rm_controller(rm_controller_)
-    , log(&Poco::Logger::get("ResourceCoordinator"))
-    , background_task(rm_controller.getContext()->getSchedulePool().createTask("ResourceCoordinator", [&]() { run(); }))
-    , task_interval_ms(rm_controller.getContext()->getRootConfig().resource_manager.resource_coordinate_task_interval_ms)
+    , log(&Poco::Logger::get("WorkerGroupResourceCoordinator"))
+    , background_task(rm_controller.getContext()->getSchedulePool().createTask("WorkerGroupResourceCoordinator", [&]() { run(); }))
+    , task_interval_ms(rm_controller.getContext()->getRootConfig().resource_manager.auto_resource_sharing_task_interval_ms)
     {
     }
-
-void WorkerGroupResourceCoordinator::setMode(const String & mode_)
-{
-    if (mode_.empty() || mode_ == "None")
-        mode = CoordinateMode::None;
-    else if (mode_ == "Sharing")
-        mode = CoordinateMode::Sharing;
-    else if (mode_ == "Scaling")
-        mode = CoordinateMode::Scaling;
-    else
-        throw Exception("Wrong coordinate_mode:" + mode_, ErrorCodes::RESOURCE_MANAGER_WRONG_COORDINATE_MODE);
-}
 
 void WorkerGroupResourceCoordinator::start()
 {
-    if (mode == CoordinateMode::None)
-    {
-        LOG_DEBUG(log, "No need to start coordinate task as mode is None");
-        return;
-    }
-    LOG_DEBUG(log, "Activating resource coordinator background task in mode: {}.", toString(mode));
+    LOG_DEBUG(log, "Activating auto-sharing background task");
     background_task->activateAndSchedule();
 }
 
 void WorkerGroupResourceCoordinator::stop()
 {
-    LOG_DEBUG(log, "Dectivating resource coordinator background task");
+    LOG_DEBUG(log, "Dectivating auto-sharing background task");
     background_task->deactivate();
 }
 
@@ -91,7 +59,7 @@ WorkerGroupResourceCoordinator::~WorkerGroupResourceCoordinator()
 {
     try
     {
-        LOG_DEBUG(log, "Stopping WorkerGroupResourceCoordinator");
+        LOG_TRACE(log, "Stopping WorkerGroupResourceCoordinator");
         stop();
     }
     catch (...)
@@ -100,12 +68,7 @@ WorkerGroupResourceCoordinator::~WorkerGroupResourceCoordinator()
     }
 }
 
-
-//////////////////// Start: methods for auto sharing ////////////////////
-void WorkerGroupResourceCoordinator::unlinkBusyAndOverlentGroups(
-    const VirtualWarehousePtr & vw,
-    std::lock_guard<bthread::Mutex> * vw_lock,
-    std::lock_guard<bthread::Mutex> * wg_lock)
+void WorkerGroupResourceCoordinator::unlinkBusyAndOverlentGroups(const VirtualWarehousePtr & vw, std::lock_guard<std::mutex> * vw_lock, std::lock_guard<std::mutex> * wg_lock)
 {
     auto lent_groups = vw->getLentGroups();
     auto num_lent_groups = vw->getNumLentGroups();
@@ -118,7 +81,7 @@ void WorkerGroupResourceCoordinator::unlinkBusyAndOverlentGroups(
             LOG_ERROR(log, "Lent group is not of Physical type");
             continue;
         }
-        auto group_metrics = lent_group->getMetrics();
+        auto group_metrics = lent_group->getAggregatedMetrics();
         auto vw_settings = vw->getSettings();
         auto drop_worker_group = [this, &vw, &vw_settings, &group_metrics, num_lent_groups, &vw_lock, &wg_lock] (const String & lent_group_id)
             {
@@ -127,9 +90,9 @@ void WorkerGroupResourceCoordinator::unlinkBusyAndOverlentGroups(
                     "Unlending shared group " + lent_group_id + " from vw " + vw->getName() + " due to resource limitations \
                         \nCurrent/max number of lent groups: "
                         + std::to_string(num_lent_groups) + "/" + std::to_string(vw_settings.max_auto_lend_links)
-                        + "\nCurrent/threshold CPU usage: " + std::to_string(group_metrics.avg_cpu_1min()) + "/"
+                        + "\nCurrent/threshold CPU usage: " + std::to_string(group_metrics.max_cpu_usage) + "/"
                         + std::to_string(vw_settings.cpu_threshold_for_recall) + "\nCurrent/threshold mem usage: "
-                        + std::to_string(group_metrics.avg_mem_1min()) + "/" + std::to_string(vw_settings.mem_threshold_for_recall));
+                        + std::to_string(group_metrics.max_mem_usage) + "/" + std::to_string(vw_settings.mem_threshold_for_recall));
                 rm_controller.dropWorkerGroup(lent_group_id, true, vw_lock, wg_lock);
         };
 
@@ -148,8 +111,8 @@ void WorkerGroupResourceCoordinator::unlinkBusyAndOverlentGroups(
                 ++lent_group_id_it;
             }
         }
-        else if (group_metrics.avg_cpu_1min() >= vw_settings.cpu_threshold_for_recall
-            || group_metrics.avg_mem_1min() >= vw_settings.mem_threshold_for_recall)
+        else if (group_metrics.max_cpu_usage >= vw_settings.cpu_threshold_for_recall
+            || group_metrics.max_mem_usage >= vw_settings.mem_threshold_for_recall)
         {
             // Return busy groups
             auto lent_groups_ids = physical_group->getLentGroupsDestIDs();
@@ -161,10 +124,7 @@ void WorkerGroupResourceCoordinator::unlinkBusyAndOverlentGroups(
     }
 }
 
-void WorkerGroupResourceCoordinator::unlinkOverborrowedGroups(
-    const VirtualWarehousePtr & vw,
-    std::lock_guard<bthread::Mutex> * vw_lock,
-    std::lock_guard<bthread::Mutex> * wg_lock)
+void WorkerGroupResourceCoordinator::unlinkOverborrowedGroups(const VirtualWarehousePtr & vw, std::lock_guard<std::mutex> * vw_lock, std::lock_guard<std::mutex> * wg_lock)
 {
     const auto & borrowed_groups = vw->getBorrowedGroups();
 
@@ -186,12 +146,10 @@ void WorkerGroupResourceCoordinator::unlinkOverborrowedGroups(
             ++borrowed_it;
         }
     }
+
 }
 
-void WorkerGroupResourceCoordinator::unlinkIneligibleGroups(
-    const std::unordered_map<String, VirtualWarehousePtr> & vws, 
-    std::lock_guard<bthread::Mutex> * vw_lock, 
-    std::lock_guard<bthread::Mutex> * wg_lock)
+void WorkerGroupResourceCoordinator::unlinkIneligibleGroups(const std::unordered_map<String, VirtualWarehousePtr> & vws, std::lock_guard<std::mutex> * vw_lock, std::lock_guard<std::mutex> * wg_lock)
 {
     for (const auto & [name, vw] : vws)
     {
@@ -200,12 +158,7 @@ void WorkerGroupResourceCoordinator::unlinkIneligibleGroups(
     }
 }
 
-void WorkerGroupResourceCoordinator::getEligibleGroups(
-    std::unordered_map<String, VirtualWarehousePtr> & vws,
-    std::vector<VirtualWarehousePtr> & eligible_vw_borrowers,
-    std::vector<WorkerGroupPtr> & eligible_wg_lenders,
-    size_t & borrow_slots,
-    size_t & lend_slots)
+void WorkerGroupResourceCoordinator::getEligibleGroups(std::unordered_map<String, VirtualWarehousePtr> & vws, std::vector<VirtualWarehousePtr> & eligible_vw_borrowers, std::vector<WorkerGroupPtr> & eligible_wg_lenders, size_t & borrow_slots, size_t & lend_slots)
 {
     for (const auto & vw_it : vws)
     {
@@ -216,16 +169,16 @@ void WorkerGroupResourceCoordinator::getEligibleGroups(
         size_t time_now = time(nullptr);
         bool require_borrowing = borrowed_groups.size() < vw_settings.max_auto_borrow_links
                 && (vw->getLastBorrowTimestamp() == 0
-                || vw->getLastBorrowTimestamp() + vw_settings.cooldown_seconds_after_scaleup <= time_now);
+                || vw->getLastBorrowTimestamp() + vw_settings.cooldown_seconds_after_auto_link <= time_now);
 
         if (require_borrowing)
         {
             for (const auto & wg : vw->getNonborrowedGroups())
             {
-                auto wg_data = wg->getMetrics();
+                auto wg_data = wg->getAggregatedMetrics();
                 // TODO: Update with more configurable strategy
-                if (wg_data.avg_cpu_1min() < vw_settings.cpu_busy_threshold
-                    && wg_data.avg_mem_1min() < vw_settings.mem_busy_threshold)
+                if (wg_data.max_cpu_usage < vw_settings.cpu_threshold_for_borrow
+                    && wg_data.max_mem_usage < vw_settings.mem_threshold_for_borrow)
                 {
                     // If there is at least one free worker group, then we do not require borrowing
                     require_borrowing = false;
@@ -238,14 +191,14 @@ void WorkerGroupResourceCoordinator::getEligibleGroups(
         {
             if (borrowed_groups.empty() && vw->getNumLentGroups() < vw_settings.max_auto_lend_links
                     && (vw->getLastLendTimestamp() == 0
-                        || (vw->getLastLendTimestamp() + vw_settings.cooldown_seconds_after_scaledown <= time_now)))
+                        || (vw->getLastLendTimestamp() + vw_settings.cooldown_seconds_after_auto_unlink <= time_now)))
             {
                 for (const auto & wg : vw->getNonborrowedGroups())
                 {
-                    auto wg_data = wg->getMetrics();
+                    auto wg_data = wg->getAggregatedMetrics();
                     // Offer worker group for lending if eligible
-                    if (wg_data.avg_cpu_1min() < vw_settings.cpu_idle_threshold
-                        && wg_data.avg_mem_1min() < vw_settings.mem_idle_threshold)
+                    if (wg_data.max_cpu_usage < vw_settings.cpu_threshold_for_lend
+                        && wg_data.max_mem_usage < vw_settings.mem_threshold_for_lend)
                     {
                         eligible_wg_lenders.push_back(wg);
                         ++lend_slots;
@@ -262,14 +215,7 @@ void WorkerGroupResourceCoordinator::getEligibleGroups(
     }
 }
 
-void WorkerGroupResourceCoordinator::linkEligibleGroups(
-    std::unordered_map<String, VirtualWarehousePtr> & vws,
-    std::vector<VirtualWarehousePtr> & eligible_vw_borrowers,
-    std::vector<WorkerGroupPtr> & eligible_wg_lenders,
-    size_t & borrow_slots,
-    size_t & lend_slots,
-    std::lock_guard<bthread::Mutex> * vw_lock,
-    std::lock_guard<bthread::Mutex> * wg_lock)
+void WorkerGroupResourceCoordinator::linkEligibleGroups(std::unordered_map<String, VirtualWarehousePtr> & vws, std::vector<VirtualWarehousePtr> & eligible_vw_borrowers, std::vector<WorkerGroupPtr> & eligible_wg_lenders, size_t & borrow_slots, size_t & lend_slots, std::lock_guard<std::mutex> * vw_lock, std::lock_guard<std::mutex> * wg_lock)
 {
     if (borrow_slots == 0 || lend_slots == 0)
         return;
@@ -372,162 +318,27 @@ void WorkerGroupResourceCoordinator::linkEligibleGroups(
     }
 }
 
-void WorkerGroupResourceCoordinator::runAutoSharing()
-{
-    std::vector<VirtualWarehousePtr> eligible_vw_borrowers;
-    std::vector<WorkerGroupPtr> eligible_wg_lenders;
-
-    size_t borrow_slots = 0;
-    size_t lend_slots = 0;
-
-    // Prevent changes to VWs and WGs
-    auto vw_lock = rm_controller.getVirtualWarehouseManager().getLock();
-    auto wg_lock = rm_controller.getWorkerGroupManager().getLock();
-
-    auto vws = rm_controller.getVirtualWarehouseManager().getAllVirtualWarehousesImpl(&vw_lock);
-    getEligibleGroups(vws, eligible_vw_borrowers, eligible_wg_lenders, borrow_slots, lend_slots);
-
-    // Unlend currently loaned WG that are ineligible
-    unlinkIneligibleGroups(vws, &vw_lock, &wg_lock);
-    linkEligibleGroups(vws, eligible_vw_borrowers, eligible_wg_lenders, borrow_slots, lend_slots, &vw_lock, &wg_lock);
-}
-//////////////////// End: methods for auto sharing ////////////////////
-
-
-//////////////////// Start: methods for auto scaling ////////////////////
-void WorkerGroupResourceCoordinator::runAutoScaling()
-{
-    auto vw_lock = rm_controller.getVirtualWarehouseManager().getLock();
-    auto vws = rm_controller.getVirtualWarehouseManager().getAllVirtualWarehousesImpl(&vw_lock); 
-
-    for (const auto & [vw_name, vw] : vws)
-    {
-        auto settings = vw->getSettings();
-        bool decide_scaleup = true;
-        bool decide_scaledown = true;
-        auto groups = vw->getAllWorkerGroups();
-
-        /// 0. the vw is not in a consistent or ready state.
-        if (groups.empty())
-            continue;
-        /// 1. check min_worker_groups < #wg < max_worker_groups
-        if (groups.size() >= settings.max_worker_groups)
-        {
-            decide_scaleup = false;
-        }
-        if (groups.size() <= settings.min_worker_groups)
-        {
-            decide_scaledown = false;
-        }
-
-        if (!decide_scaleup && !decide_scaledown)
-            continue;
-
-        /// 2. check cooldown period
-        size_t now = time(nullptr);
-        if (now <= last_scaleup_timestamps[vw_name] + settings.cooldown_seconds_after_scaleup)
-        {
-            decide_scaleup = false;
-        }
-        if (now <= last_scaledown_timestamps[vw_name] + settings.cooldown_seconds_after_scaledown)
-        {
-            decide_scaledown = false;
-        }
-        if (!decide_scaleup && !decide_scaledown)
-            continue;
-
-        auto expected_workers = vw->getExpectedNumWorkers();
-        for (const auto & group : groups)
-        {
-            /// 3. check all worker groups are ready
-            if (auto current = group->getNumWorkers(); current != expected_workers)
-            {
-                decide_scaleup = false;
-                decide_scaledown = false;
-                break;
-            }
-
-            /// 4. check metrics
-            auto metrics = group->getMetrics();
-            if (metrics.avg_cpu_1min() >= settings.cpu_idle_threshold && metrics.avg_mem_1min() >= settings.mem_idle_threshold)
-            {
-                decide_scaledown = false;
-            }
-            if (metrics.avg_cpu_1min() <= settings.cpu_busy_threshold && metrics.avg_mem_1min() <= settings.mem_busy_threshold)
-            {
-                decide_scaleup = false;
-            }
-        }
-
-        if (decide_scaleup && decide_scaledown)
-            throw Exception("Conflicting decision: scaleup and scaledown are both decided.", ErrorCodes::LOGICAL_ERROR);
-        
-        /// Store decisions (will be pulled by metrics writer)
-        if (decide_scaleup)
-        {
-            Decision decision = Decision("Scaleup", vw_name, "", groups.size() + 1);
-            decideScaleup(decision);
-        }
-
-        if (decide_scaledown)
-        {
-            Decision decision = Decision("Scaledown", vw_name, groups.back()->getID(), 0);
-            decideScaledown(decision);
-        }
-
-        using namespace std::chrono_literals;
-        std::this_thread::sleep_for(1s);
-    }
-}
-
-std::vector<ResourceCoordinateDecision> WorkerGroupResourceCoordinator::flushDecisions()
-{
-    std::vector<ResourceCoordinateDecision> res{};
-    {
-        std::lock_guard lock(decisions_mutex);
-        res.swap(decisions);
-    }
-    return res;
-}
-
-void WorkerGroupResourceCoordinator::decideScaleup(const Decision & decision)
-{
-    LOG_INFO(log, "ScaleupDecision: " + decision.toDebugString());
-    last_scaleup_timestamps[decision.vw] = time(nullptr);
-    std::lock_guard lock(decisions_mutex);
-    decisions.push_back(decision);
-}
-
-void WorkerGroupResourceCoordinator::decideScaledown(const Decision & decision)
-{
-    LOG_INFO(log, "ScaledownDecision: " + decision.toDebugString());
-
-    /// FIXME: (zuochuang.zema) It's gateway's responsibility to drop this worker group.
-    auto & wg_manager = rm_controller.getWorkerGroupManager();
-    wg_manager.dropWorkerGroup(decision.wg);
-
-    last_scaledown_timestamps[decision.vw] = time(nullptr);
-    std::lock_guard lock(decisions_mutex);
-    decisions.push_back(decision);
-}
-
-//////////////////// End: methods for auto scaling ////////////////////
-
 void WorkerGroupResourceCoordinator::run()
 {
     try
     {
-        switch (mode)
-        {
-        case CoordinateMode::Sharing:
-            runAutoSharing();
-            break;
-        case CoordinateMode::Scaling:
-            runAutoScaling();
-            break;
-        default:
-            throw Exception("Wrong coordinate mode: " + toString(mode), ErrorCodes::RESOURCE_MANAGER_WRONG_COORDINATE_MODE);
-        }
+        std::vector<VirtualWarehousePtr> eligible_vw_borrowers;
+        std::vector<WorkerGroupPtr> eligible_wg_lenders;
+
+        size_t borrow_slots = 0;
+        size_t lend_slots = 0;
+
+        // Prevent changes to VWs and WGs
+        auto vw_lock = rm_controller.getVirtualWarehouseManager().getLock();
+        auto wg_lock = rm_controller.getWorkerGroupManager().getLock();
+
+        auto vws = rm_controller.getVirtualWarehouseManager().getAllVirtualWarehousesImpl(&vw_lock);
+        getEligibleGroups(vws, eligible_vw_borrowers, eligible_wg_lenders, borrow_slots, lend_slots);
+
+        // Unlend currently loaned WG that are ineligible
+        unlinkIneligibleGroups(vws, &vw_lock, &wg_lock);
+        linkEligibleGroups(vws, eligible_vw_borrowers, eligible_wg_lenders, borrow_slots, lend_slots, &vw_lock, &wg_lock);
+
     }
     catch (...)
     {

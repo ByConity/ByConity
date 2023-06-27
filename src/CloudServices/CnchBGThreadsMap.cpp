@@ -252,19 +252,4 @@ void CnchBGThreadsMapArray::cleanThread()
     cleaner->scheduleAfter(30 * 1000);
 }
 
-void CnchBGThreadsMapArray::startResourceReport()
-{
-    resource_reporter_task->start();
-}
-
-void CnchBGThreadsMapArray::stopResourceReport()
-{
-    resource_reporter_task->stop();
-}
-
-bool CnchBGThreadsMapArray::isResourceReportRegistered()
-{
-    return resource_reporter_task->registered();
-}
-
 }

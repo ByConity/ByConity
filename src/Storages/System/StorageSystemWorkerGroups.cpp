@@ -40,6 +40,12 @@ NamesAndTypesList StorageSystemWorkerGroups::getNamesAndTypes()
         {"vw_name", std::make_shared<DataTypeString>()},
         {"linked_id", std::make_shared<DataTypeString>()},
         {"active_workers", std::make_shared<DataTypeUInt32>()},
+        {"min_cpu_usage", std::make_shared<DataTypeUInt32>()},
+        {"max_cpu_usage", std::make_shared<DataTypeUInt32>()},
+        {"avg_cpu_usage", std::make_shared<DataTypeUInt32>()},
+        {"min_mem_usage", std::make_shared<DataTypeUInt32>()},
+        {"max_mem_usage", std::make_shared<DataTypeUInt32>()},
+        {"avg_mem_usage", std::make_shared<DataTypeUInt32>()},
         {"is_auto_linked", std::make_shared<DataTypeUInt32>()},
     };
 }
@@ -70,6 +76,12 @@ void StorageSystemWorkerGroups::fillData(MutableColumns & res_columns, const Con
         res_columns[i++]->insert(data.vw_name);
         res_columns[i++]->insert(data.linked_id);
         res_columns[i++]->insert(data.num_workers);
+        res_columns[i++]->insert(static_cast<uint32_t>(data.metrics.min_cpu_usage));
+        res_columns[i++]->insert(static_cast<uint32_t>(data.metrics.max_cpu_usage));
+        res_columns[i++]->insert(static_cast<uint32_t>(data.metrics.avg_cpu_usage));
+        res_columns[i++]->insert(static_cast<uint32_t>(data.metrics.min_mem_usage));
+        res_columns[i++]->insert(static_cast<uint32_t>(data.metrics.max_mem_usage));
+        res_columns[i++]->insert(static_cast<uint32_t>(data.metrics.avg_mem_usage));
         res_columns[i++]->insert(static_cast<uint32_t>(data.is_auto_linked));
     }
 }
