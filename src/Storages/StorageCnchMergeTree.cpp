@@ -2077,14 +2077,10 @@ void StorageCnchMergeTree::dropPartsImpl(
         drop_ranges = createDropRangesFromParts(svr_parts_to_drop, txn);
     }
 
-    auto bitmap_tombstones = createDeleteBitmapTombstones(drop_parts, txn->getPrimaryTransactionID());
+    auto bitmap_tombstones = createDeleteBitmapTombstones(drop_ranges, txn->getPrimaryTransactionID());
 
     CnchDataWriter cnch_writer(*this, local_context, ManipulationType::Drop);
-<<<<<<< HEAD
-    cnch_writer.dumpAndCommitCnchParts(drop_ranges);
-=======
-    cnch_writer.dumpAndCommitCnchParts(drop_parts, bitmap_tombstones);
->>>>>>> 09af4df0e4e (Merge branch 'unique_table_support_detach_and_attach_commands4cnch-ce-merge' into 'cnch-ce-merge')
+    cnch_writer.dumpAndCommitCnchParts(drop_ranges, bitmap_tombstones);
 }
 
 StorageCnchMergeTree::MutableDataPartsVector
