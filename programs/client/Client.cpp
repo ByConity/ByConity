@@ -2264,7 +2264,7 @@ private:
                     if (is_interactive && is_default_format)
                         current_format = "TabSeparated";
 
-                    String compression_method_str; 
+                    String compression_method_str;
                     UInt64 compression_level = 1;
 
                     OutfileTarget::setOufileCompression(query_with_output, compression_method_str, compression_level);

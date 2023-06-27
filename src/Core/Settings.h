@@ -2042,6 +2042,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, allow_full_scan_txn_records, false, "Whether to allow full scan of all transaction records on catalog", 0) \
     \
     /* Outfile related Settings */ \
+    M(Bool, outfile_in_server_with_tcp, false, "Out file in sever with tcp and return client empty block", 0) \
     M(UInt64, outfile_buffer_size_in_mb, 1, "Out file buffer size in 'OUT FILE'", 0) \
     M(String, tos_access_key, "", "The access_key set by user when accessing ve tos.", 0) \
     M(String, tos_secret_key, "", "The secret_key set by user when accessing ve tos.", 0) \

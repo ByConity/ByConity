@@ -40,7 +40,7 @@
 #include <IO/SnappyReadBuffer.h>
 #include <Interpreters/Context.h>
 #include <IO/S3Common.h>
-#include <Storages/S3/RAReadBufferFromS3.h>
+#include <IO/RAReadBufferFromS3.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/InterpreterWatchQuery.h>
 #include <Interpreters/QueryLog.h>

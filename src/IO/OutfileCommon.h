@@ -8,6 +8,7 @@
 #include <IO/WriteBufferFromFileBase.h>
 #include <Parsers/ASTQueryWithOutput.h>
 #include <Interpreters/Context.h>
+#include "Interpreters/Context_fwd.h"
 
 
 namespace DB
@@ -50,6 +51,9 @@ public:
 
     static void setOufileCompression(
         const ASTQueryWithOutput * query_with_output, String & outfile_compression_method_str, UInt64 & outfile_compression_level);
+
+    // return true if it can export on server with tcp
+    static bool checkOutfileWithTcpOnServer(const ContextMutablePtr & context);
 
 private:
     std::unique_ptr<WriteBuffer> out_buf_raw;
