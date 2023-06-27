@@ -469,7 +469,19 @@ namespace
         // 5. Call `TreeOptimizer` since some optimizations will change the query result
         TreeOptimizer::apply(node, result, tables_with_columns, context, false);
 
-        // 6. Execute subquery in prewhere
+        // 6. Check JOIN ON
+        if (const auto * join_ast = select_query.join(); join_ast && tables_with_columns.size() >= 2)
+        {
+            auto & table_join = join_ast->table_join->as<ASTTableJoin &>();
+            if (table_join.on_expression)
+            {
+                bool is_asof = (table_join.strictness == ASTTableJoin::Strictness::Asof);
+                CollectJoinOnKeysVisitor::Data data{*result.analyzed_join, tables_with_columns[0], tables_with_columns[1], result.aliases, is_asof};
+                CollectJoinOnKeysVisitor(data).visit(table_join.on_expression);
+            }
+        }
+
+        // 7. Execute subquery in prewhere
         if (select_query.prewhere())
         {
             ExecutePrewhereSubquery execute_prewhere_subquery(context);
