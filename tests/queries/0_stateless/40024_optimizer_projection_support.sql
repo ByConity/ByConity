@@ -1,4 +1,5 @@
 USE test;
+create database if not exists test;
 SET enable_optimizer=1;
 SET optimizer_projection_support=1;
 
