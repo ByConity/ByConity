@@ -24,7 +24,6 @@ namespace DB
 class IBroadcastReceiver;
 class IBroadcastSender;
 using BroadcastReceiverPtr = std::shared_ptr<IBroadcastReceiver>;
-using BroadcastReceiverPtrs = std::vector<BroadcastReceiverPtr>;
 using BroadcastSenderPtr = std::shared_ptr<IBroadcastSender>;
 using BroadcastSenderPtrs = std::vector<BroadcastSenderPtr>;
 
@@ -40,8 +39,7 @@ enum BroadcastStatusCode
     SEND_TIMEOUT = 9013,
     RECV_CANCELLED = 9014,
     SEND_CANCELLED = 9015,
-    RECV_NOT_READY = 9016,
-    SEND_NOT_READY = 9017,
+    SEND_NOT_READY = 9016,
     RECV_UNKNOWN_ERROR = 90099,
     SEND_UNKNOWN_ERROR = 900100
 };

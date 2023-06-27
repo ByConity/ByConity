@@ -40,15 +40,14 @@ public:
     void push(const T & x)
     {
         std::unique_lock<bthread::Mutex> lock(mutex);
-        while (queue.size() >= capacity && !is_closed)
+        while (queue.size() == capacity && !is_closed)
         {
             full_cv.wait(lock);
         }
         if (is_closed)
             throw Exception("Queue is closed", ErrorCodes::STD_EXCEPTION);
         queue.push(x);
-        lock.unlock();
-        empty_cv.notify_one();
+        empty_cv.notify_all();
     }
 
     void pop(T & x)
@@ -62,14 +61,13 @@ public:
             throw Exception("Queue is closed", ErrorCodes::STD_EXCEPTION);
         ::detail::moveOrCopyIfThrow(std::move(queue.front()), x);
         queue.pop();
-        lock.unlock();
-        full_cv.notify_one();
+        full_cv.notify_all();
     }
 
     bool tryPush(const T & x, UInt64 milliseconds = 0)
     {
         std::unique_lock<bthread::Mutex> lock(mutex);
-        while (queue.size() >= capacity && !is_closed)
+        while (queue.size() == capacity && !is_closed)
         {
             if (ETIMEDOUT == full_cv.wait_for(lock, milliseconds * 1000))
                 return false;
@@ -77,8 +75,7 @@ public:
         if (is_closed)
             return false;
         queue.push(x);
-        lock.unlock();
-        empty_cv.notify_one();
+        empty_cv.notify_all();
         return true;
     }
 
@@ -96,8 +93,7 @@ public:
 
         ::detail::moveOrCopyIfThrow(std::move(queue.front()), x);
         queue.pop();
-        lock.unlock();
-        full_cv.notify_one();
+        full_cv.notify_all();
         return true;
     }
 
@@ -105,7 +101,7 @@ public:
     bool tryEmplace(UInt64 milliseconds, Args &&... args)
     {
         std::unique_lock<bthread::Mutex> lock(mutex);
-        while (queue.size() >= capacity && !is_closed)
+        while (queue.size() == capacity && !is_closed)
         {
             if (ETIMEDOUT == full_cv.wait_for(lock, milliseconds * 1000))
                 return false;
@@ -113,8 +109,7 @@ public:
         if (is_closed)
             return false;
         queue.emplace(std::forward<Args>(args)...);
-        lock.unlock();
-        empty_cv.notify_one();
+        empty_cv.notify_all();
         return true;
     }
 
@@ -154,7 +149,6 @@ public:
             return false;
 
         is_closed = true;
-        lock.unlock();
         empty_cv.notify_all();
         full_cv.notify_all();
         return true;
