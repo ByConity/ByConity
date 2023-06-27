@@ -107,6 +107,28 @@ struct MergeSelectionMetrics
     size_t elapsed_select_parts = 0;
 };
 
+struct ClusterTaskProgress
+{
+    UInt64 progress{100}; // default is completed because all parts of a table has same table_definition_hash intially
+    UInt64 start_time_seconds{0};
+
+    String toString()
+    {
+        String result = std::to_string(progress) + "%";
+        if (start_time_seconds)
+        {
+            time_t sec_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::time_point(std::chrono::seconds(start_time_seconds)));
+            char buffer[80];
+            struct tm * timeinfo;
+            timeinfo = localtime(&sec_time);
+            strftime(buffer, 80, "%Y-%m-%d %H:%M:%S", timeinfo);
+            std::string str_time(buffer);
+            result += " start at " + str_time;
+        }
+        return result;
+    }
+};
+
 class CnchMergeMutateThread : public ICnchBGThread
 {
     using TaskRecord = ManipulationTaskRecord;
@@ -128,6 +150,7 @@ public:
     void triggerPartMutate(StoragePtr storage);
 
     void waitTasksFinish(const std::vector<String> & task_ids, UInt64 timeout_ms);
+    ClusterTaskProgress getReclusteringTaskProgress();
 
 private:
     void preStart() override;
