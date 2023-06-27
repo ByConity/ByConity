@@ -97,8 +97,16 @@ RuntimeSegmentsStatus PlanSegmentExecutor::execute(ThreadGroupStatusPtr thread_g
     {
         int exception_code = getCurrentExceptionCode();
         RuntimeSegmentsStatus status(
-            plan_segment->getQueryId(), plan_segment->getPlanSegmentId(), false, false, getCurrentExceptionMessage(false), exception_code);
-        tryLogCurrentException(logger, __PRETTY_FUNCTION__);
+            plan_segment->getQueryId(), plan_segment->getPlanSegmentId(), false, false, message, exception_code);
+        if (exception_code == ErrorCodes::MEMORY_LIMIT_EXCEEDED)
+        {
+            // ErrorCodes::MEMORY_LIMIT_EXCEEDED doesn't print stack trace.
+            LOG_ERROR(&Poco::Logger::get("PlanSegmentExecutor"), "query_id: {} segment_id: {} code: {} messaage: {}",
+                plan_segment->getQueryId(), plan_segment->getPlanSegmentId(), exception_code, message);
+        } else
+        {
+            tryLogCurrentException(logger, __PRETTY_FUNCTION__);
+        }
         if (exception_code == ErrorCodes::QUERY_WAS_CANCELLED)
             status.is_canceled = true;
         sendSegmentStatus(status);

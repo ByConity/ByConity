@@ -124,6 +124,7 @@ public:
         std::unique_ptr<QueryPipeline> right,
         JoinPtr join,
         size_t max_block_size,
+        bool join_parallel_left_right,
         Processors * collected_processors = nullptr);
 
     /// Add other pipeline and execute it before current one.

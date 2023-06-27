@@ -171,7 +171,7 @@ QueryPipelinePtr JoinStep::updatePipeline(QueryPipelines pipelines, const BuildQ
         max_block_size = settings.context->getSettingsRef().max_block_size;
     }
 
-    auto pipeline = QueryPipeline::joinPipelines(std::move(pipelines[0]), std::move(pipelines[1]), join, max_block_size, &processors);
+    auto pipeline = QueryPipeline::joinPipelines(std::move(pipelines[0]), std::move(pipelines[1]), join, max_block_size, settings.context->getSettingsRef().join_parallel_left_right, &processors);
 
     // if NestLoopJoin is choose, no need to add filter stream.
     if (filter && !PredicateUtils::isTruePredicate(filter) && join->getType() != JoinType::NestedLoop)
@@ -414,7 +414,7 @@ void FilledJoinStep::setInputStreams(const DataStreams & input_streams_)
     output_stream->header = JoiningTransform::transformHeader(input_streams_[0].header, join);
 }
 
-void FilledJoinStep::transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &)
+void FilledJoinStep::transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &settings)
 {
     bool default_totals = false;
     if (!pipeline.hasTotals() && join->getTotals())
@@ -428,7 +428,7 @@ void FilledJoinStep::transformPipeline(QueryPipeline & pipeline, const BuildQuer
     pipeline.addSimpleTransform([&](const Block & header, QueryPipeline::StreamType stream_type) {
         bool on_totals = stream_type == QueryPipeline::StreamType::Totals;
         auto counter = on_totals ? nullptr : finish_counter;
-        return std::make_shared<JoiningTransform>(header, join, max_block_size, on_totals, default_totals, counter);
+        return std::make_shared<JoiningTransform>(header, join, max_block_size, on_totals, default_totals, settings.context->getSettingsRef().join_parallel_left_right, counter);
     });
 }
 
