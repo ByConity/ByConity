@@ -336,6 +336,20 @@ void PushingToViewsBlockOutputStream::writeSuffix()
             storage->getStorageID().getNameForLogs(), views.size(),
             milliseconds);
     }
+
+    /// A trick way to commit insert transaction for multi MVs
+    /// Implicit commit is used in kafka consumer and insert values executed in worker
+    /// TODO: it should be changed into interactive transaction when it is ready
+    if (getContext()->getServerType() == ServerType::cnch_worker)
+    {
+        auto txn = getContext()->getCurrentTransaction();
+        if (auto worker_txn = dynamic_pointer_cast<CnchWorkerTransaction>(txn);
+            worker_txn && worker_txn->hasEnableExplicitCommit() &&
+            worker_txn->getExplicitCommitStorageID() == storage->getStorageID())
+        {
+            txn->commitV2();
+        }
+    }
 }
 
 void PushingToViewsBlockOutputStream::flush()

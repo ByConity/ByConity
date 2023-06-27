@@ -196,7 +196,7 @@ Pipe StorageCloudMergeTree::alterPartition(
 
 bool StorageCloudMergeTree::checkStagedParts()
 {
-    if (getInMemoryMetadataPtr()->hasUniqueKey())
+    if (!getInMemoryMetadataPtr()->hasUniqueKey())
         return true;
 
     auto catalog = getContext()->getCnchCatalog();
