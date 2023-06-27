@@ -102,7 +102,8 @@ message DataModelPart
     optional uint64 covered_parts_size = 23;     /// record deleted part size. Used by deleted part as well as drop range.
     optional uint64 covered_parts_rows = 24;     /// record deleted rows. Used by deleted part as well as drop range.
     optional bytes data_footer = 25;
-    optional UUID part_id = 26; 
+    optional bool delete_flag = 27;              /// Whether to take delete bitmap as delete flag info
+    optional bool low_priority = 28;             /// Whether the part belongs to unique table engine and from dumper tool
     repeated uint64 index_granularities = 30;
     repeated string projections = 31; // record names of projections managed by the current part
 };

@@ -168,9 +168,14 @@ namespace
             return cur_row;
         }
 
+        bool IsCurrentLowPriority() const
+        {
+            return parts[cur_row.child]->low_priority;
+        }
+
     private:
         /// Find final record pos of all rows with the same key
-        size_t FindFinalPos(std::vector<RowPos> rows_with_key)
+        size_t FindFinalPos(std::vector<RowPos> & rows_with_key)
         {
             if (rows_with_key.size() == 1)
                 return 0;
@@ -258,9 +263,18 @@ namespace
                 auto slice = iter.key();
                 cur_key.assign(slice.data(), slice.size());
 
-                /// positions of all rows having `cur_key`
-                std::vector<RowPos> rows_with_key;
-                rows_with_key.push_back(decodeCurrentRowPos(iter, version_mode, parts, part_implicit_versions, delete_flag_bitmaps));
+                /// positions of all rows having `cur_key` with high priority
+                std::vector<RowPos> rows_with_key_high_p;
+                /// positions of all rows having `cur_key` with low priority
+                std::vector<RowPos> rows_with_key_low_p;
+
+                auto fill_rows = [&](RowPos && row) {
+                    if (parts[row.child]->low_priority)
+                        rows_with_key_low_p.push_back(std::move(row));
+                    else
+                        rows_with_key_high_p.push_back(std::move(row));
+                };
+                fill_rows(decodeCurrentRowPos(iter, version_mode, parts, part_implicit_versions, delete_flag_bitmaps));
 
                 /// record pos of all rows with the same key
                 do
@@ -269,20 +283,32 @@ namespace
                     if (!iter.Valid() || comparator->Compare(cur_key, iter.key()) != 0)
                         break;
 
-                    rows_with_key.push_back(decodeCurrentRowPos(iter, version_mode, parts, part_implicit_versions, delete_flag_bitmaps));
+                    fill_rows(decodeCurrentRowPos(iter, version_mode, parts, part_implicit_versions, delete_flag_bitmaps));
                 } while (1);
 
-                size_t max_pos = FindFinalPos(rows_with_key);
-                /// Set the row with maxinum version as the current row
-                cur_row = rows_with_key[max_pos];
-
-                /// mark deleted rows with lower version
-                for (size_t i = 0; i < rows_with_key.size(); ++i)
-                {
-                    if (i != max_pos && !rows_with_key[i].delete_info)
+                auto delete_rows = [&](std::vector<RowPos> & rows_with_key, size_t target_pos) {
+                    /// mark deleted rows with lower version
+                    for (size_t i = 0; i < rows_with_key.size(); ++i)
                     {
-                        delete_cb(rows_with_key[i]);
+                        if (i != target_pos && !rows_with_key[i].delete_info)
+                            delete_cb(rows_with_key[i]);
                     }
+                };
+
+                if (rows_with_key_high_p.empty())
+                {
+                    size_t max_pos = FindFinalPos(rows_with_key_low_p);
+                    /// Set the row with maximum version as the current row
+                    cur_row = rows_with_key_low_p[max_pos];
+                    delete_rows(rows_with_key_low_p, max_pos);
+                }
+                else
+                {
+                    size_t max_pos = FindFinalPos(rows_with_key_high_p);
+                    /// Set the row with maximum version as the current row
+                    cur_row = rows_with_key_high_p[max_pos];
+                    delete_rows(rows_with_key_high_p, max_pos);
+                    delete_rows(rows_with_key_low_p, rows_with_key_low_p.size()); /// Remove all rows with low priority
                 }
             }
         }
@@ -297,11 +323,16 @@ namespace
 
         bool valid = false;
         String cur_key; /// cache the data of current key
-        RowPos cur_row; /// cache the maxinum version of the decoded current row
+        RowPos cur_row; /// cache the maximum version of the decoded current row
     };
 
+    using DeleteBitmapGetter = std::function<ImmutableDeleteBitmapPtr(const IMergeTreeDataPartPtr &)>;
+
     IndexFileIterators openUniqueKeyIndexIterators(
-        const IMergeTreeDataPartsVector & parts, std::vector<UniqueKeyIndexPtr> & index_holders, bool fill_cache, bool use_delete_bitmap)
+        const IMergeTreeDataPartsVector & parts,
+        std::vector<UniqueKeyIndexPtr> & index_holders,
+        bool fill_cache,
+        DeleteBitmapGetter delete_bitmap_getter)
     {
         index_holders.clear();
         index_holders.reserve(parts.size());
@@ -314,10 +345,9 @@ namespace
         {
             IndexFile::ReadOptions opts;
             opts.fill_cache = fill_cache;
-            if (use_delete_bitmap)
             {
-                ImmutableDeleteBitmapPtr delete_bitmap = parts[i]->getDeleteBitmap();
-                if (!delete_bitmap->isEmpty())
+                ImmutableDeleteBitmapPtr delete_bitmap = delete_bitmap_getter(parts[i]);
+                if (delete_bitmap && !delete_bitmap->isEmpty())
                 {
                     opts.select_predicate = [bitmap = std::move(delete_bitmap)](const Slice &, const Slice & val) {
                         UInt32 rowid;
@@ -356,8 +386,8 @@ namespace
         const IndexFile::Comparator * comparator = IndexFile::BytewiseComparator();
 
         std::vector<UniqueKeyIndexPtr> key_indices;
-        IndexFileIterators base_input_iters
-            = openUniqueKeyIndexIterators(parts, key_indices, /*fill_cache*/ true, /*use_delete_bitmap*/ true);
+        DeleteBitmapGetter delete_bitmap_getter = [](const IMergeTreeDataPartPtr & part) { return part->getDeleteBitmap(); };
+        IndexFileIterators base_input_iters = openUniqueKeyIndexIterators(parts, key_indices, /*fill_cache*/ true, delete_bitmap_getter);
 
         std::vector<UInt64> base_implicit_versions(parts.size(), 0);
         if (version_mode == MergeTreeDataDeduper::VersionMode::PartitionValueAsVersion)
@@ -405,24 +435,29 @@ namespace
             {
                 RowPos lhs = decodeCurrentRowPos(base_iter, version_mode, parts, base_implicit_versions);
                 const RowPos & rhs = keys.CurrentRowPos();
-                if (rhs.delete_info)
+                if (keys.IsCurrentLowPriority())
+                    addRowIdToBitmap(delta_bitmaps[rhs.child + parts.size()], rhs.rowid);
+                else
                 {
-                    if (!rhs.delete_info->delete_version || rhs.delete_info->delete_version >= lhs.version)
-                        addRowIdToBitmap(delta_bitmaps[lhs.child], lhs.rowid);
-                    else if (!rhs.delete_info->just_delete_row)
+                    if (rhs.delete_info)
+                    {
+                        if (!rhs.delete_info->delete_version || rhs.delete_info->delete_version >= lhs.version)
+                            addRowIdToBitmap(delta_bitmaps[lhs.child], lhs.rowid);
+                        else if (!rhs.delete_info->just_delete_row)
+                        {
+                            if (lhs.version <= rhs.version)
+                                addRowIdToBitmap(delta_bitmaps[lhs.child], lhs.rowid);
+                            else
+                                addRowIdToBitmap(delta_bitmaps[rhs.child + parts.size()], rhs.rowid);
+                        }
+                    }
+                    else
                     {
                         if (lhs.version <= rhs.version)
                             addRowIdToBitmap(delta_bitmaps[lhs.child], lhs.rowid);
                         else
                             addRowIdToBitmap(delta_bitmaps[rhs.child + parts.size()], rhs.rowid);
                     }
-                }
-                else
-                {
-                    if (lhs.version <= rhs.version)
-                        addRowIdToBitmap(delta_bitmaps[lhs.child], lhs.rowid);
-                    else
-                        addRowIdToBitmap(delta_bitmaps[rhs.child + parts.size()], rhs.rowid);
                 }
 
                 exact_match = false;
@@ -474,7 +509,7 @@ LocalDeleteBitmaps MergeTreeDataDeduper::dedupParts(
             }
             else /// new part
             {
-                auto base_bitmap = new_parts[i - visible_parts.size()]->getDeleteBitmap(/*is_new_part*/ true);
+                auto base_bitmap = new_parts[i - visible_parts.size()]->getDeleteBitmap(/*allow_null*/ true);
                 LOG_DEBUG(
                     log,
                     "Preparing bitmap for new part: {}, base bitmap cardinality: {}, delta bitmap cardinality: {}, txn_id: {}",
@@ -658,15 +693,23 @@ MergeTreeDataDeduper::dedupImpl(const IMergeTreeDataPartsVector & visible_parts,
         throw Exception("Delta part is empty when MergeTreeDataDeduper handles dedup task.", ErrorCodes::LOGICAL_ERROR);
 
     std::vector<UniqueKeyIndexPtr> new_part_indices;
+    DeleteBitmapGetter delete_bitmap_getter = [](const IMergeTreeDataPartPtr & part) -> ImmutableDeleteBitmapPtr {
+        if (!part->delete_flag)
+            return part->getDeleteBitmap(/*allow_null*/ true);
+        return nullptr;
+    };
     IndexFileIterators input_iters
-        = openUniqueKeyIndexIterators(new_parts, new_part_indices, /*fill_cache*/ true, /*use_delete_bitmap*/ false);
+        = openUniqueKeyIndexIterators(new_parts, new_part_indices, /*fill_cache*/ true, delete_bitmap_getter);
 
     DeleteBitmapVector res(visible_parts.size() + new_parts.size());
     DeleteCallback cb = [start = visible_parts.size(), &res](const RowPos & pos) { addRowIdToBitmap(res[start + pos.child], pos.rowid); };
 
     ImmutableDeleteBitmapVector delete_flag_bitmaps(new_parts.size());
     for (size_t i = 0; i < new_parts.size(); ++i)
-        delete_flag_bitmaps[i] = new_parts[i]->getDeleteBitmap(/*is_new_part*/ true);
+    {
+        if (new_parts[i]->delete_flag)
+            delete_flag_bitmaps[i] = new_parts[i]->getDeleteBitmap(/*allow_null*/ true);
+    }
     ReplacingSortedKeysIterator keys_iter(
         IndexFile::BytewiseComparator(), new_parts, std::move(input_iters), cb, version_mode, delete_flag_bitmaps);
 
@@ -680,7 +723,8 @@ DeleteBitmapVector MergeTreeDataDeduper::repairImpl(const IMergeTreeDataPartsVec
         return {};
 
     std::vector<UniqueKeyIndexPtr> key_indices;
-    IndexFileIterators input_iters = openUniqueKeyIndexIterators(parts, key_indices, /*fill_cache*/ false, /*use_delete_bitmap*/ true);
+    DeleteBitmapGetter delete_bitmap_getter = [](const IMergeTreeDataPartPtr & part) { return part->getDeleteBitmap(/*allow_null*/ true); };
+    IndexFileIterators input_iters = openUniqueKeyIndexIterators(parts, key_indices, /*fill_cache*/ false, delete_bitmap_getter);
 
     DeleteBitmapVector res(parts.size());
     DeleteCallback cb = [&res](const RowPos & pos) { addRowIdToBitmap(res[pos.child], pos.rowid); };

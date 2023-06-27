@@ -1030,17 +1030,11 @@ void InterpreterSystemQuery::executeDedup(const ASTSystemQuery & query)
     if (auto server_type = getContext()->getServerType(); server_type != ServerType::cnch_server && server_type != ServerType::cnch_worker)
         throw Exception("SYSTEM DEDUP is only available on CNCH server or worker", ErrorCodes::NOT_IMPLEMENTED);
 
-    auto ts = getContext()->getTimestamp();
-    auto catalog = getContext()->getCnchCatalog();
-    auto storage = catalog->getTable(*getContext(), query.database, query.table, ts);
+    auto storage = DatabaseCatalog::instance().getTable(table_id, getContext());
     if (auto * cnch_table = dynamic_cast<StorageCnchMergeTree *>(storage.get()))
-    {
         cnch_table->executeDedupForRepair(query.partition, getContext());
-    }
     else
-    {
-        throw Exception("Table " + query.database + "." + query.table + " is not a CnchMergeTree", ErrorCodes::BAD_ARGUMENTS);
-    }
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Table {} is not a CnchMergeTree", table_id.getNameForLogs());
 }
 
 void InterpreterSystemQuery::dumpCnchServerManagerStatus()

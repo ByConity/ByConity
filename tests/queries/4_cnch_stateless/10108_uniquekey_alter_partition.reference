@@ -1,3 +1,4 @@
+test drop partition: 
 2021-01-01	1	100	4950
 2021-01-01	2	100	4950
 2021-01-02	1	100	4950
@@ -15,3 +16,19 @@ drop partition where d=\'2021-01-02\'
 2021-01-02	3	100	4950
 2021-01-03	1	100	4950
 2021-01-03	2	100	4950
+
+test detach/attach partition: 
+2023-01-01	1	100	4950
+detach partition 2023-01-01
+attach partition 2023-01-01
+2023-01-01	1	100	4950
+u10108_pl_helper table detach partition 2023-01-01
+attach detached partition 2023-01-01 from u10108_pl_helper
+2023-01-01	1	100	4950
+attach detached partition 2023-01-01 from u10108_pl_helper without dedup, it will has duplicated data
+2023-01-01	1	200	9900
+using repair command to dedup data
+2023-01-01	1	100	4950
+u10108_pl_helper table detach partition without bitmap
+attach detached partition 2023-01-01 from u10108_pl_helper without dedup, it will not has duplicated data because part to be attached does not have bitmap
+2023-01-01	1	100	4950

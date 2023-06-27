@@ -37,21 +37,6 @@ static String dataModelName(const DataModelDeleteBitmapPtr & model)
     return ss.str();
 }
 
-static String deleteBitmapDirRelativePath(const String & partition_id)
-{
-    std::stringstream ss;
-    ss << "DeleteFiles/" << partition_id <<  "/";
-    return ss.str();
-}
-
-static String deleteBitmapFileRelativePath(const Protos::DataModelDeleteBitmap & model)
-{
-    std::stringstream ss;
-    ss << deleteBitmapDirRelativePath(model.partition_id()) << model.part_min_block() << "_" << model.part_max_block() << "_"
-       << model.reserved() << "_" << model.type() << "_" << model.txn_id() << ".bitmap";
-    return ss.str();
-}
-
 std::shared_ptr<LocalDeleteBitmap> LocalDeleteBitmap::createBaseOrDelta(
     const MergeTreePartInfo & part_info,
     const ImmutableDeleteBitmapPtr & base_bitmap,
@@ -92,7 +77,7 @@ LocalDeleteBitmap::LocalDeleteBitmap(
 
 UndoResource LocalDeleteBitmap::getUndoResource(const TxnTimestamp & new_txn_id) const
 {
-    return UndoResource(new_txn_id, UndoResourceType::DeleteBitmap, dataModelName(model), deleteBitmapFileRelativePath(*model));
+    return UndoResource(new_txn_id, UndoResourceType::DeleteBitmap, dataModelName(model), DeleteBitmapMeta::deleteBitmapFileRelativePath(*model));
 }
 
 bool LocalDeleteBitmap::canInlineStoreInCatalog() const
@@ -120,10 +105,10 @@ DeleteBitmapMetaPtr LocalDeleteBitmap::dump(const MergeTreeMetaBase & storage) c
             size = bitmap->write(buf.data());
             {
                 DiskPtr disk = storage.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
-                String dir_rel_path = fs::path(storage.getRelativeDataPath(IStorage::StorageLocation::MAIN)) / deleteBitmapDirRelativePath(model->partition_id());
+                String dir_rel_path = fs::path(storage.getRelativeDataPath(IStorage::StorageLocation::MAIN)) / DeleteBitmapMeta::deleteBitmapDirRelativePath(model->partition_id());
                 disk->createDirectories(dir_rel_path);
 
-                String file_rel_path = fs::path(storage.getRelativeDataPath(IStorage::StorageLocation::MAIN)) / deleteBitmapFileRelativePath(*model);
+                String file_rel_path = fs::path(storage.getRelativeDataPath(IStorage::StorageLocation::MAIN)) / DeleteBitmapMeta::deleteBitmapFileRelativePath(*model);
                 auto out = disk->writeFile(file_rel_path);
                 auto * data_out = dynamic_cast<WriteBufferFromHDFS *>(out.get());
                 if (!data_out)
@@ -194,6 +179,21 @@ String DeleteBitmapMeta::getNameForLogs() const
     return dataModelName(model);
 }
 
+String DeleteBitmapMeta::deleteBitmapDirRelativePath(const String & partition_id)
+{
+    std::stringstream ss;
+    ss << delete_files_dir << partition_id <<  "/";
+    return ss.str();
+}
+
+String DeleteBitmapMeta::deleteBitmapFileRelativePath(const Protos::DataModelDeleteBitmap & model)
+{
+    std::stringstream ss;
+    ss << deleteBitmapDirRelativePath(model.partition_id()) << model.part_min_block() << "_" << model.part_max_block() << "_"
+       << model.reserved() << "_" << model.type() << "_" << model.txn_id() << ".bitmap";
+    return ss.str();
+}
+
 void DeleteBitmapMeta::removeFile()
 {
     if (model->has_file_size())
@@ -252,8 +252,7 @@ void deserializeDeleteBitmapInfo(const MergeTreeMetaBase & storage, const DataMo
         Roaring bitmap;
         {
             PODArray<char> buf(meta->file_size());
-            String path
-                = fs::path(storage.getFullPathOnDisk(IStorage::StorageLocation::MAIN, storage.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk())) / deleteBitmapFileRelativePath(*meta);
+            String path = fs::path(storage.getFullPathOnDisk(IStorage::StorageLocation::MAIN, storage.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk())) / DeleteBitmapMeta::deleteBitmapFileRelativePath(*meta);
             ReadBufferFromByteHDFS in(
                 path,
                 /*pread=*/false,
@@ -266,6 +265,7 @@ void deserializeDeleteBitmapInfo(const MergeTreeMetaBase & storage, const DataMo
             if (is_eof)
                 throw Exception(
                     "Unexpected EOF when reading " + path + ",  size=" + toString(meta->file_size()), ErrorCodes::LOGICAL_ERROR);
+
             bitmap = Roaring::read(buf.data());
             assert(bitmap.cardinality() == cardinality);
         }

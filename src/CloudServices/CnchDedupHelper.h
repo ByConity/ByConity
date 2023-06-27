@@ -61,7 +61,8 @@ getLocksToAcquire(const DedupScope & scope, TxnTimestamp txn_id, const MergeTree
 
 MergeTreeDataPartsCNCHVector getStagedPartsToDedup(const DedupScope & scope, StorageCnchMergeTree & cnch_table, TxnTimestamp ts);
 
-MergeTreeDataPartsCNCHVector getVisiblePartsToDedup(const DedupScope & scope, StorageCnchMergeTree & cnch_table, TxnTimestamp ts);
+MergeTreeDataPartsCNCHVector
+getVisiblePartsToDedup(const DedupScope & scope, StorageCnchMergeTree & cnch_table, TxnTimestamp ts, bool force_bitmap = true);
 
 struct FilterInfo
 {

@@ -1014,7 +1014,7 @@ ServerDataPartsVector StorageCnchMergeTree::selectPartsToRead(
     return parts;
 }
 
-MergeTreeDataPartsCNCHVector StorageCnchMergeTree::getUniqueTableMeta(TxnTimestamp ts, const Strings & input_partitions)
+MergeTreeDataPartsCNCHVector StorageCnchMergeTree::getUniqueTableMeta(TxnTimestamp ts, const Strings & input_partitions, bool force_bitmap)
 {
     auto catalog = getContext()->getCnchCatalog();
     auto storage = shared_from_this();
@@ -1033,7 +1033,7 @@ MergeTreeDataPartsCNCHVector StorageCnchMergeTree::getUniqueTableMeta(TxnTimesta
     for (auto & part : parts)
         res.emplace_back(dynamic_pointer_cast<const MergeTreeDataPartCNCH>(part->getBasePart()->toCNCHDataPart(*this)));
 
-    getDeleteBitmapMetaForParts(res, getContext(), ts);
+    getDeleteBitmapMetaForParts(res, getContext(), ts, force_bitmap);
     return res;
 }
 
@@ -1049,8 +1049,16 @@ StorageCnchMergeTree::getStagedParts(const TxnTimestamp & ts, const NameSet * pa
     return res;
 }
 
-void StorageCnchMergeTree::getDeleteBitmapMetaForParts(
-    const MergeTreeDataPartsCNCHVector & parts, ContextPtr local_context, TxnTimestamp start_time)
+void StorageCnchMergeTree::getDeleteBitmapMetaForParts(IMergeTreeDataPartsVector & parts, ContextPtr local_context, TxnTimestamp start_time, bool force_found)
+{
+    MergeTreeDataPartsCNCHVector cnch_parts;
+    cnch_parts.reserve(parts.size());
+    for (auto & part : parts)
+        cnch_parts.emplace_back(dynamic_pointer_cast<const MergeTreeDataPartCNCH>(part));
+    getDeleteBitmapMetaForParts(cnch_parts, local_context, start_time, force_found);
+}
+
+void StorageCnchMergeTree::getDeleteBitmapMetaForParts(const MergeTreeDataPartsCNCHVector & parts, ContextPtr local_context, TxnTimestamp start_time, bool force_found)
 {
     auto catalog = local_context->getCnchCatalog();
     if (!catalog)
@@ -1082,16 +1090,33 @@ void StorageCnchMergeTree::getDeleteBitmapMetaForParts(
     auto bitmap_it = bitmaps.begin();
     for (auto & part : parts)
     {
-        /// search for the first bitmap
-        while (bitmap_it != bitmaps.end() && !(*bitmap_it)->sameBlock(part->info))
+        if (force_found)
+        {
+            /// search for the first bitmap
+            while (bitmap_it != bitmaps.end() && !(*bitmap_it)->sameBlock(part->info))
+                bitmap_it++;
+
+            if (bitmap_it == bitmaps.end())
+                throw Exception("Delete bitmap metadata of " + part->name + " is not found", ErrorCodes::LOGICAL_ERROR);
+
+            /// add all visible bitmaps (from new to old) part
+            part->setDeleteBitmapMeta(*bitmap_it);
             bitmap_it++;
-
-        if (bitmap_it == bitmaps.end())
-            throw Exception("Delete bitmap metadata of " + part->name + " is not found", ErrorCodes::LOGICAL_ERROR);
-
-        /// add all visible bitmaps (from new to old) part
-        part->setDeleteBitmapMeta(*bitmap_it);
-        bitmap_it++;
+        }
+        else
+        {
+            while (bitmap_it != bitmaps.end() && (*(*bitmap_it)) <= part->info)
+            {
+                if (!(*bitmap_it)->sameBlock(part->info))
+                    bitmap_it++;
+                else
+                {
+                    /// add all visible bitmaps (from new to old) part
+                    part->setDeleteBitmapMeta(*bitmap_it, /*force_set*/ false);
+                    bitmap_it++;
+                }
+            }
+        }
     }
 }
 
@@ -1209,12 +1234,12 @@ void StorageCnchMergeTree::executeDedupForRepair(const ASTPtr & partition, Conte
     if (partition && !getSettings()->partition_level_unique_keys)
         throw Exception("SYSTEM DEDUP PARTITION can only be used on table with partition_level_unique_keys=1", ErrorCodes::BAD_ARGUMENTS);
 
-    auto txn = getContext()->getCurrentTransaction();
+    auto txn = local_context->getCurrentTransaction();
     if (!txn)
         throw Exception("Transaction is not set", ErrorCodes::LOGICAL_ERROR);
     txn->setMainTableUUID(getStorageUUID());
 
-    auto catalog = getContext()->getCnchCatalog();
+    auto catalog = local_context->getCnchCatalog();
 
     CnchDedupHelper::DedupScope scope = CnchDedupHelper::DedupScope::Table();
     if (partition)
@@ -1228,8 +1253,8 @@ void StorageCnchMergeTree::executeDedupForRepair(const ASTPtr & partition, Conte
         scope, txn->getTransactionID(), *this, getSettings()->unique_acquire_write_lock_timeout.value.totalMilliseconds()));
     cnch_lock->lock();
 
-    TxnTimestamp ts = getContext()->getTimestamp();
-    MergeTreeDataPartsCNCHVector visible_parts = CnchDedupHelper::getVisiblePartsToDedup(scope, *this, ts);
+    TxnTimestamp ts = local_context->getTimestamp();
+    MergeTreeDataPartsCNCHVector visible_parts = CnchDedupHelper::getVisiblePartsToDedup(scope, *this, ts, /*force_bitmap*/ false);
     MergeTreeDataDeduper deduper(*this, local_context);
     LocalDeleteBitmaps bitmaps_to_dump
         = deduper.repairParts(txn->getTransactionID(), CnchPartsHelper::toIMergeTreeDataPartsVector(visible_parts));
@@ -1964,8 +1989,6 @@ void StorageCnchMergeTree::dropPartsImpl(
     if (detach)
     {
         auto metadata_snapshot = getInMemoryMetadataPtr();
-        if (metadata_snapshot->hasUniqueKey())
-            throw Exception("detach partition command is not supported on unique table", ErrorCodes::NOT_IMPLEMENTED);
 
         /// XXX: Detach parts will break MVCC: queries and tasks which reference those parts will fail.
         // VolumePtr hdfs_volume = getStoragePolicy(IStorage::StorageLocation::MAIN)->local_store_volume();
@@ -1974,7 +1997,10 @@ void StorageCnchMergeTree::dropPartsImpl(
         Disks disks = getStoragePolicy(IStorage::StorageLocation::MAIN)->getDisks();
         for (DiskPtr & disk : disks)
         {
-            disk->createDirectories(getRelativeDataPath(IStorage::StorageLocation::MAIN) + "/detached");
+            String detached_rel_path = fs::path(getRelativeDataPath(IStorage::StorageLocation::MAIN)) / "detached";
+            if (metadata_snapshot->hasUniqueKey())
+                detached_rel_path = fs::path(detached_rel_path) / DeleteBitmapMeta::delete_files_dir;
+            disk->createDirectories(detached_rel_path);
         }
 
         UndoResources undo_resources;
@@ -1994,8 +2020,19 @@ void StorageCnchMergeTree::dropPartsImpl(
         local_context->getCnchCatalog()->writeUndoBuffer(
             UUIDHelpers::UUIDToString(getStorageUUID()), txn->getTransactionID(), undo_resources);
 
+        if (metadata_snapshot->hasUniqueKey() && !local_context->getSettingsRef().enable_unique_table_detach_ignore_delete_bitmap)
+            getDeleteBitmapMetaForParts(parts_to_drop, local_context, local_context->getCurrentCnchStartTime(), /*force_found*/ false);
+
         ThreadPool pool(std::min(parts_to_drop.size(), max_threads));
-        auto callback = [&pool](const DataPartPtr & part) { pool.scheduleOrThrowOnError([part]() { part->renameToDetached(""); }); };
+        auto callback = [&pool, &metadata_snapshot, &local_context](const DataPartPtr & part) {
+            bool create_delete_bitmap
+                = metadata_snapshot->hasUniqueKey() && !local_context->getSettingsRef().enable_unique_table_detach_ignore_delete_bitmap;
+            pool.scheduleOrThrowOnError([part, create_delete_bitmap]() {
+                part->renameToDetached("");
+                if (create_delete_bitmap)
+                    part->createDeleteBitmapForDetachedPart();
+            });
+        };
         for (const auto & part : parts_to_drop)
         {
             part->enumeratePreviousParts(callback);
@@ -2040,8 +2077,14 @@ void StorageCnchMergeTree::dropPartsImpl(
         drop_ranges = createDropRangesFromParts(svr_parts_to_drop, txn);
     }
 
+    auto bitmap_tombstones = createDeleteBitmapTombstones(drop_parts, txn->getPrimaryTransactionID());
+
     CnchDataWriter cnch_writer(*this, local_context, ManipulationType::Drop);
+<<<<<<< HEAD
     cnch_writer.dumpAndCommitCnchParts(drop_ranges);
+=======
+    cnch_writer.dumpAndCommitCnchParts(drop_parts, bitmap_tombstones);
+>>>>>>> 09af4df0e4e (Merge branch 'unique_table_support_detach_and_attach_commands4cnch-ce-merge' into 'cnch-ce-merge')
 }
 
 StorageCnchMergeTree::MutableDataPartsVector
@@ -2098,6 +2141,31 @@ StorageCnchMergeTree::createDropRangesFromPartitions(const PartitionDropInfos & 
     }
 
     return drop_ranges;
+}
+
+LocalDeleteBitmaps
+StorageCnchMergeTree::createDeleteBitmapTombstones(const IMutableMergeTreeDataPartsVector & drop_ranges, UInt64 txnID)
+{
+    LocalDeleteBitmaps bitmap_tombstones;
+    if (getInMemoryMetadataPtr()->hasUniqueKey())
+    {
+        for (auto & part : drop_ranges)
+        {
+            if (part->isDropRangePart())
+            {
+                auto temp_bitmap = LocalDeleteBitmap::createRangeTombstone(part->info.partition_id, part->info.max_block, txnID);
+                bitmap_tombstones.push_back(std::move(temp_bitmap));
+                LOG_DEBUG(log, "Range tombstone of delete bitmap has been created for drop range part " + part->info.getPartName());
+            }
+            else
+            {
+                auto temp_bitmap = LocalDeleteBitmap::createTombstone(part->info, txnID);
+                bitmap_tombstones.push_back(std::move(temp_bitmap));
+                LOG_DEBUG(log, "Tombstone of delete bitmap has been created for part {}", part->info.getPartName());
+            }
+        }
+    }
+    return bitmap_tombstones;
 }
 
 StoragePolicyPtr StorageCnchMergeTree::getStoragePolicy(StorageLocation location) const
