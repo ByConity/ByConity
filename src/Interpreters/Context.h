@@ -1295,6 +1295,9 @@ public:
     bool getTableReclusterTaskStatus(const StorageID & storage_id) const;
     bool removeMergeMutateTasksOnPartition(const StorageID &, const String &);
     ClusterTaskProgress getTableReclusterTaskProgress(const StorageID & storage_id) const;
+    void startResourceReport();
+    void stopResourceReport();
+    bool isResourceReportRegistered();
 
     CnchBGThreadPtr tryGetDedupWorkerManager(const StorageID & storage_id) const;
 

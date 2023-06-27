@@ -73,10 +73,14 @@ struct WorkerNode
 
     /// metrics
     std::atomic<double> cpu_usage;
+    std::atomic<double> cpu_usage_1min;
     std::atomic<double> memory_usage;
+    std::atomic<double> memory_usage_1min;
     std::atomic<UInt64> memory_available;
     std::atomic<UInt64> disk_space;
     std::atomic<UInt32> query_num;
+    std::atomic<UInt32> manipulation_num;
+    std::atomic<UInt32> consumer_num;
     std::atomic<WorkerState> state{WorkerState::Registering};
 
     UInt32 cpu_limit = 0;
@@ -98,6 +102,7 @@ struct WorkerNode
     WorkerNodeResourceData getResourceData() const;
     void fillProto(Protos::WorkerNodeData & entry) const;
     void fillProto(Protos::WorkerNodeResourceData & entry) const;
+    WorkerMetrics getMetrics() const;
 
     inline double convertCoresToPercents() const
     {

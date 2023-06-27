@@ -13,12 +13,18 @@
  * limitations under the License.
  */
 
+#include <atomic>
 #include <ResourceManagement/WorkerNode.h>
 
 #include <ResourceManagement/CommonData.h>
 #include <Protos/data_models.pb.h>
 #include <Protos/RPCHelpers.h>
 #include <common/logger_useful.h>
+
+namespace DB::ErrorCodes
+{
+    extern const int WORKER_NODE_INCONSISTENTCY;
+}
 
 namespace DB::ResourceManagement
 {
@@ -101,17 +107,32 @@ String WorkerNode::toDebugString() const
        << " memory_available:" << memory_available.load(std::memory_order_relaxed)
        << " reserved_memory_bytes:" << reserved_memory_bytes.load(std::memory_order_relaxed)
        << " disk_space:" << disk_space.load(std::memory_order_relaxed)
-       << " query_num:" << query_num.load(std::memory_order_relaxed);
+       << " query_num:" << query_num.load(std::memory_order_relaxed)
+       << " manipulation_num:" << manipulation_num.load(std::memory_order_relaxed)
+       << " consumer_num:" << consumer_num.load(std::memory_order_relaxed);
     return ss.str();
 }
 
 void WorkerNode::update(const WorkerNodeResourceData & data, const size_t register_granularity)
 {
+    /// Ensure worker's hostname or ports are consistent.
+    const auto & host_in_heartbeat = data.host_ports;
+    if (!host.empty() && !host_in_heartbeat.isSameEndpoint(host))
+    {
+        throw Exception("Worker is inconsistent! RM: " + host.toDebugString() + ", Heartbeat: " + host_in_heartbeat.toDebugString(), 
+            ErrorCodes::WORKER_NODE_INCONSISTENTCY);
+    }
+
     cpu_usage.store(data.cpu_usage, std::memory_order_relaxed);
+    cpu_usage_1min.store(data.cpu_usage_1min, std::memory_order_relaxed);
     memory_usage.store(data.memory_usage, std::memory_order_relaxed);
+    memory_usage_1min.store(data.memory_usage_1min, std::memory_order_relaxed);
     memory_available.store(data.memory_available, std::memory_order_relaxed);
     disk_space.store(data.disk_space, std::memory_order_relaxed);
     query_num.store(data.query_num, std::memory_order_relaxed);
+    manipulation_num.store(data.manipulation_num, std::memory_order_relaxed);
+    consumer_num.store(data.consumer_num, std::memory_order_relaxed);
+
     auto now = time(nullptr);
     last_update_time = now;
 
@@ -160,6 +181,7 @@ WorkerNodeResourceData WorkerNode::getResourceData() const
     res.memory_available = memory_available.load(std::memory_order_relaxed);
     res.disk_space = disk_space.load(std::memory_order_relaxed);
     res.query_num = query_num.load(std::memory_order_relaxed);
+    res.manipulation_num= manipulation_num.load(std::memory_order_relaxed);
 
     res.cpu_limit = cpu_limit;
     res.memory_limit = memory_limit;
@@ -167,14 +189,22 @@ WorkerNodeResourceData WorkerNode::getResourceData() const
     // added TODO comment for 2k38 
     // coverity[store_truncates_time_t]
     res.last_update_time = last_update_time;
+    res.id = id;
+    res.last_status_create_time = last_status_create_time.load(std::memory_order_relaxed);
+    res.register_time = register_time;
 
     return res;
 }
 
-void WorkerNode::init(const WorkerNodeResourceData & data, const bool set_running)
+void WorkerNode::init(const WorkerNodeResourceData & data, [[maybe_unused]] const bool set_running)
 {
     register_time = time(nullptr);
-    state.store(set_running ? WorkerState::Running : WorkerState::Registering, std::memory_order_relaxed);
+
+    /// NOTE: if we set a worker node's state to WorkerState::Registering, the worker node will be invisible in the worker group. 
+    /// This is conflict to the design of checking registered from worker side. so for now we set worker's state to Running directly.
+    // state.store(set_running ? WorkerState::Running : WorkerState::Registering, std::memory_order_relaxed);
+    state.store(WorkerState::Running, std::memory_order_relaxed);
+
 
     update(data);
 
@@ -200,8 +230,11 @@ void WorkerNode::fillProto(Protos::WorkerNodeResourceData & entry) const
     RPCHelpers::fillHostWithPorts(host, *entry.mutable_host_ports());
 
     entry.set_query_num(query_num.load(std::memory_order_relaxed));
+    entry.set_manipulation_num(manipulation_num.load(std::memory_order_relaxed));
     entry.set_cpu_usage(cpu_usage.load(std::memory_order_relaxed));
+    entry.set_cpu_usage_1min(cpu_usage_1min.load(std::memory_order_relaxed));
     entry.set_memory_usage(memory_usage.load(std::memory_order_relaxed));
+    entry.set_memory_usage_1min(memory_usage_1min.load(std::memory_order_relaxed));
     entry.set_disk_space(disk_space.load(std::memory_order_relaxed));
     entry.set_memory_available(memory_available.load(std::memory_order_relaxed));
 
@@ -216,6 +249,19 @@ void WorkerNode::fillProto(Protos::WorkerNodeResourceData & entry) const
     // coverity[store_truncates_time_t]
     entry.set_register_time(static_cast<UInt32>(register_time));
     entry.set_state(static_cast<UInt32>(state.load(std::memory_order_relaxed)));
+}
+
+WorkerMetrics WorkerNode::getMetrics() const
+{
+    WorkerMetrics res;
+    res.id = id;
+    res.cpu_1min = cpu_usage_1min.load(std::memory_order_relaxed);
+    res.mem_1min = memory_usage_1min.load(std::memory_order_relaxed);
+    res.num_queries = query_num.load(std::memory_order_relaxed);
+    res.num_manipulations = manipulation_num.load(std::memory_order_relaxed);
+    res.num_consumers = consumer_num.load(std::memory_order_relaxed);
+    /// TODO: num_dedups 
+    return res;
 }
 
 }
