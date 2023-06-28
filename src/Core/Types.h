@@ -87,6 +87,7 @@ enum class TypeIndex
     ByteMap,
     BitMap64,
     Time,
+    SketchBinary,
 };
 #if !defined(__clang__)
 #pragma GCC diagnostic pop
@@ -347,6 +348,7 @@ inline constexpr const char * getTypeName(TypeIndex idx)
         case TypeIndex::Map:        return "Map";
         case TypeIndex::ByteMap:    return "Map";
         case TypeIndex::BitMap64:  return "BitMap64";
+        case TypeIndex::SketchBinary: return "SketchBinary";
     }
 
     __builtin_unreachable();

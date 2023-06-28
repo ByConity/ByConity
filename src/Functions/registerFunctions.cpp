@@ -92,6 +92,8 @@ void registerInternalFunctionDynamicFilter(FunctionFactory &);
 void registerFunctionBucketBoundsSearch(FunctionFactory & factory);
 void registerFunctionGetHostWithPorts(FunctionFactory & factory);
 
+void registerFunctionSketch(FunctionFactory & factory);
+
 void registerFunctions()
 {
     auto & factory = FunctionFactory::instance();
@@ -164,6 +166,8 @@ void registerFunctions()
     registerFunctionGetHostWithPorts(factory);
 
     registerFunctionDtsPartition(factory);
+
+    registerFunctionSketch(factory);
 }
 
 }
