@@ -37,6 +37,9 @@ fi
 mkdir -p ../output/usr
 mv ../output/bin ../output/usr/
 
-# create symlink to make CI tests happy
+# create symlink to make CI and deployment tests happy
 cd ../output
 ln -s usr/bin bin
+cd etc
+ln -s clickhouse-server cnch-server
+ln -s clickhouse-server cnch-worker
