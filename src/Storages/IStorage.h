@@ -240,6 +240,9 @@ public:
     virtual bool isBucketTable() const {return false;}
     virtual UInt64 getTableHashForClusterBy() const {return 0;}
 
+    /// Return true if storage can execute lightweight delete.
+    virtual bool supportsLightweightDelete() const { return false; }
+
 protected:
     /// Returns whether the column is virtual - by default all columns are real.
     /// Initially reserved virtual column name may be shadowed by real column.

@@ -51,7 +51,7 @@ void ResourceManager::defineOptions(Poco::Util::OptionSet & _options)
 
     _options.addOption(Poco::Util::Option("help", "h", "show help and exit").required(false).repeatable(false).binding("help"));
 
-    _options.addOption(Poco::Util::Option("config-file", "", "set config file path")
+    _options.addOption(Poco::Util::Option("config-file", "C", "set config file path")
                            .required(false)
                            .repeatable(false)
                            .argument("config-file", true)

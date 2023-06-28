@@ -29,6 +29,7 @@
 #include <Parsers/ParserCreateUserQuery.h>
 #include <Parsers/ParserCreateWarehouseQuery.h>
 #include <Parsers/ParserCreateWorkerGroupQuery.h>
+#include <Parsers/ParserDeleteQuery.h>
 #include <Parsers/ParserDropAccessEntityQuery.h>
 #include <Parsers/ParserDropQuery.h>
 #include <Parsers/ParserDropWarehouseQuery.h>
@@ -73,6 +74,7 @@ bool ParserQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserShowWarehousesQuery show_warehouse_p;
     ParserCreateWorkerGroupQuery create_worker_group_p;
     ParserDropWorkerGroupQuery drop_worker_group_p;
+    ParserDeleteQuery delete_p;
 
     bool res = query_with_output_p.parse(pos, node, expected)
         || insert_p.parse(pos, node, expected)
@@ -93,7 +95,8 @@ bool ParserQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         || drop_warehouse_p.parse(pos, node, expected)
         || show_warehouse_p.parse(pos, node, expected)
         || create_worker_group_p.parse(pos, node, expected)
-        || drop_worker_group_p.parse(pos, node, expected);
+        || drop_worker_group_p.parse(pos, node, expected)
+        || delete_p.parse(pos, node, expected);
 
     return res;
 }

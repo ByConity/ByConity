@@ -51,6 +51,7 @@ class ReadBuffer;
 
 #define APPLY_AST_TYPES(M) \
     M(ASTAlterQuery) \
+    M(ASTDeleteQuery) \
     M(ASTAlterCommand) \
     M(ASTAssignment) \
     M(ASTAsterisk) \
