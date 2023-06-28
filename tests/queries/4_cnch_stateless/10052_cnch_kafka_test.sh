@@ -56,19 +56,19 @@ EOF
 
 # Start consume
 start_consume_time=$(date +%s%3N)
-sleep 2
+sleep 10
 # 1. Check running consumer number, result should be '1'
 $CLICKHOUSE_CLIENT --query "SELECT num_consumers FROM system.cnch_kafka_tables WHERE database = 'test' AND name = 'kafka_consumer'"
 
 # Consuming: greater than twice of flush_interval_milliseconds for kafka_log to ensure read kafka_log
-sleep 21
+sleep 100
 
 # 2. Check consumption result, result should be '1'
 $CLICKHOUSE_CLIENT --query "SELECT count() > 0 FROM test.kafka_store"
 
 # Alter kafka table (TODO: support forward Alter query to target server)
 $CLICKHOUSE_CLIENT --query "ALTER TABLE test.kafka_consumer MODIFY SETTING kafka_num_consumers = 2"
-sleep 3
+sleep 10
 # 3. Check running consumer number after ALTER, result should be '2'
 $CLICKHOUSE_CLIENT --query "SELECT num_consumers FROM system.cnch_kafka_tables WHERE database = 'test' AND name = 'kafka_consumer'"
 
@@ -109,14 +109,14 @@ SYSTEM START CONSUME test.kafka_consumer;
 EOF
 
 # Consuming: greater than twice of flush_interval_milliseconds
-sleep 21
+sleep 100
 
 # 2. Check consumption result, result should be '1'
 $CLICKHOUSE_CLIENT --query "SELECT count() > 0 FROM test.kafka_store_v2"
 
 #END Consume
 $CLICKHOUSE_CLIENT --query "SYSTEM STOP CONSUME test.kafka_consumer"
-sleep 2
+sleep 10
 
 # Check count
 count1=`$CLICKHOUSE_CLIENT --query "SELECT count() FROM test.kafka_store_v2"`
