@@ -19,11 +19,11 @@ Projection est. 100 rows
                         │     Aggregates: expr#sum(multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0)):=AggNull(sum)(expr#multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0)), expr#sum(multiIf(greaterOrEquals(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0)):=AggNull(sum)(expr#multiIf(greaterOrEquals(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0))
                         └─ Projection est. 11416805 rows
                            │     Expressions: [i_item_id, w_warehouse_name], expr#multiIf(greaterOrEquals(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0):=multiIf(CAST(d_date, 'date') >= cast(11027, 'Date'), inv_quantity_on_hand, 0), expr#multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0):=multiIf(CAST(d_date, 'date') < cast(11027, 'Date'), inv_quantity_on_hand, 0)
-                           └─ Inner Join est. 5708402 rows
+                           └─ Inner Join est. 11416805 rows
                               │     Condition: inv_warehouse_sk == w_warehouse_sk
-                              ├─ Inner Join est. 5708402 rows
+                              ├─ Inner Join est. 11416805 rows
                               │  │     Condition: inv_date_sk == d_date_sk
-                              │  ├─ Inner Join est. 24926692 rows
+                              │  ├─ Inner Join est. 49853384 rows
                               │  │  │     Condition: inv_item_sk == i_item_sk
                               │  │  ├─ Local Exchange est. 783000000 rows
                               │  │  │  └─ Filter est. 783000000 rows

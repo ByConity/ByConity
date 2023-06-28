@@ -11,13 +11,13 @@ Projection est. 2421 rows
                └─ Aggregating est. 2421 rows
                   │     Group by: {P_BRAND, expr#toYear(LO_ORDERDATE)}
                   │     Aggregates: expr#sum(LO_REVENUE):=AggNull(sum)(LO_REVENUE)
-                  └─ Projection est. 843854 rows
+                  └─ Projection est. 1687709 rows
                      │     Expressions: [LO_REVENUE, P_BRAND], expr#toYear(LO_ORDERDATE):=toYear(LO_ORDERDATE)
-                     └─ Inner Join est. 843854 rows
+                     └─ Inner Join est. 1687709 rows
                         │     Condition: LO_SUPPKEY == S_SUPPKEY
-                        ├─ Repartition Exchange est. 4212051 rows
+                        ├─ Repartition Exchange est. 8424102 rows
                         │  │     Partition by: {LO_SUPPKEY}
-                        │  └─ Inner Join est. 4212051 rows
+                        │  └─ Inner Join est. 8424102 rows
                         │     │     Condition: LO_PARTKEY == P_PARTKEY
                         │     ├─ Local Exchange est. 5999989813 rows
                         │     │  └─ Filter est. 5999989813 rows

@@ -11,15 +11,15 @@ Projection est. 12105 rows
                └─ Aggregating est. 12105 rows
                   │     Group by: {C_NATION, expr#toYear(LO_ORDERDATE)}
                   │     Aggregates: expr#sum(minus(LO_REVENUE, LO_SUPPLYCOST)):=AggNull(sum)(expr#minus(LO_REVENUE, LO_SUPPLYCOST))
-                  └─ Projection est. 100275643 rows
+                  └─ Projection est. 200551286 rows
                      │     Expressions: [C_NATION], expr#minus(LO_REVENUE, LO_SUPPLYCOST):=LO_REVENUE - LO_SUPPLYCOST, expr#toYear(LO_ORDERDATE):=toYear(LO_ORDERDATE)
-                     └─ Inner Join est. 100275643 rows
+                     └─ Inner Join est. 200551286 rows
                         │     Condition: LO_PARTKEY == P_PARTKEY
-                        ├─ Repartition Exchange est. 175770964 rows
+                        ├─ Repartition Exchange est. 351541928 rows
                         │  │     Partition by: {LO_PARTKEY}
-                        │  └─ Inner Join est. 175770964 rows
+                        │  └─ Inner Join est. 351541928 rows
                         │     │     Condition: LO_CUSTKEY == C_CUSTKEY
-                        │     ├─ Repartition Exchange est. 599928512 rows
+                        │     ├─ Repartition Exchange est. 1199857024 rows
                         │     │  │     Partition by: {LO_CUSTKEY}
                         │     │  └─ Inner Join est. 1199857024 rows
                         │     │     │     Condition: LO_SUPPKEY == S_SUPPKEY

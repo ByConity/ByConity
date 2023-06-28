@@ -14,11 +14,11 @@ Projection est. 100 rows
             │     └─ Aggregating est. 1 rows
             │        │     Group by: {}
             │        │     Aggregates: expr#count():=AggNull(count)()
-            │        └─ Inner Join est. 62393 rows
+            │        └─ Inner Join est. 124787 rows
             │           │     Condition: ws_ship_hdemo_sk == hd_demo_sk
-            │           ├─ Inner Join est. 625757 rows
+            │           ├─ Inner Join est. 1251515 rows
             │           │  │     Condition: ws_sold_time_sk == t_time_sk
-            │           │  ├─ Inner Join est. 7572624 rows
+            │           │  ├─ Inner Join est. 15145249 rows
             │           │  │  │     Condition: ws_web_page_sk == wp_web_page_sk
             │           │  │  ├─ Local Exchange est. 720000376 rows
             │           │  │  │  └─ Filter est. 720000376 rows
@@ -55,11 +55,11 @@ Projection est. 100 rows
                      └─ Aggregating est. 1 rows
                         │     Group by: {}
                         │     Aggregates: expr#count()_1:=AggNull(count)()
-                        └─ Inner Join est. 62393 rows
+                        └─ Inner Join est. 124787 rows
                            │     Condition: ws_ship_hdemo_sk_1 == hd_demo_sk_1
-                           ├─ Inner Join est. 625757 rows
+                           ├─ Inner Join est. 1251515 rows
                            │  │     Condition: ws_sold_time_sk_1 == t_time_sk_1
-                           │  ├─ Inner Join est. 7572624 rows
+                           │  ├─ Inner Join est. 15145249 rows
                            │  │  │     Condition: ws_web_page_sk_1 == wp_web_page_sk_1
                            │  │  ├─ Local Exchange est. 720000376 rows
                            │  │  │  └─ Filter est. 720000376 rows

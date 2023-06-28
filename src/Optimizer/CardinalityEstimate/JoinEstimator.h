@@ -17,7 +17,6 @@
 #include <Optimizer/CardinalityEstimate/PlanNodeStatistics.h>
 #include <Parsers/ASTLiteral.h>
 #include <QueryPlan/JoinStep.h>
-#include <Parsers/IAST_fwd.h>
 
 namespace DB
 {
@@ -46,7 +45,6 @@ public:
         PlanNodeStatisticsPtr & left_stats,
         PlanNodeStatisticsPtr & right_stats,
         const JoinStep & join_step,
-        Context & context,
         bool enable_pk_fk,
         bool is_left_base_table = false,
         bool is_right_base_table = false);
@@ -57,7 +55,6 @@ public:
         const Names & left_keys,
         const Names & right_keys,
         ASTTableJoin::Kind kind,
-        Context & context,
         bool enable_pk_fk,
         bool is_left_base_table = false,
         bool is_right_base_table = false);
@@ -70,7 +67,6 @@ private:
         UInt64 fk_rows,
         UInt64 fk_ndv,
         UInt64 pk_ndv,
-        double pk_selectivity,
         PlanNodeStatistics & fk_stats,
         PlanNodeStatistics & pk_stats,
         SymbolStatistics & fk_key_stats,

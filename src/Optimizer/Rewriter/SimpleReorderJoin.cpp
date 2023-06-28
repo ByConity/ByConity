@@ -114,7 +114,6 @@ PlanNodePtr SimpleReorderJoinVisitor::getJoinOrder(JoinGraph & graph)
                                        left_keys,
                                        right_keys,
                                        ASTTableJoin::Kind::Inner,
-                                       *context,
                                        enable_pk_fk,
                                        // todo is base table
                                        left_base_table,

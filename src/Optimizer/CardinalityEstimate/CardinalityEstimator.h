@@ -34,12 +34,9 @@ public:
         bool simple_children,
         std::vector<bool> is_table_scan);
 
-    static std::optional<PlanNodeStatisticsPtr> estimate(PlanNodeBase & node,
-        CTEInfo & cte_info,
-        ContextMutablePtr context,
-        bool recursive = false);
-    static void estimate(QueryPlan & plan, ContextMutablePtr context);
 
+    static std::optional<PlanNodeStatisticsPtr> estimate(PlanNodeBase & node, CTEInfo & cte_info, ContextMutablePtr context, bool recursive = false);
+    static void estimate(QueryPlan & plan, ContextMutablePtr context);
 };
 
 struct CardinalityContext

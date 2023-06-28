@@ -24,72 +24,75 @@ Projection est. 100 rows
                            │  └─ Left Join est. 4365273481 rows
                            │     │     Condition: cs_promo_sk == p_promo_sk
                            │     ├─ Inner Join est. 4365273481 rows
-                           │     │  │     Condition: d_date_sk == cs_sold_date_sk, i_item_sk == cs_item_sk
+                           │     │  │     Condition: cs_item_sk == i_item_sk, cs_sold_date_sk == d_date_sk
                            │     │  │     Filter: (d_date_2 > (d_date + toIntervalDay(5))) AND (inv_quantity_on_hand < cs_quantity)
-                           │     │  ├─ Repartition Exchange est. 27456528 rows
-                           │     │  │  │     Partition by: {d_date_sk, i_item_sk}
-                           │     │  │  └─ Inner Join est. 27456528 rows
-                           │     │  │     │     Condition: inv_warehouse_sk == w_warehouse_sk
-                           │     │  │     ├─ Inner Join est. 27456528 rows
-                           │     │  │     │  │     Condition: inv_item_sk == i_item_sk
-                           │     │  │     │  ├─ Repartition Exchange est. 27456528 rows
-                           │     │  │     │  │  │     Partition by: {inv_item_sk}
-                           │     │  │     │  │  └─ Inner Join est. 391500000 rows
-                           │     │  │     │  │     │     Condition: inv_date_sk == d_date_sk_1
-                           │     │  │     │  │     ├─ TableScan tpcds.inventory est. 783000000 rows
-                           │     │  │     │  │     │        Outputs: [inv_date_sk, inv_item_sk, inv_quantity_on_hand, inv_warehouse_sk]
-                           │     │  │     │  │     └─ Broadcast Exchange est. 2561 rows
-                           │     │  │     │  │        └─ Inner Join est. 2561 rows
-                           │     │  │     │  │           │     Condition: d_week_seq_1 == d_week_seq
-                           │     │  │     │  │           ├─ TableScan tpcds.date_dim est. 73049 rows
-                           │     │  │     │  │           │        Outputs: d_date_sk_1:=d_date_sk, d_week_seq_1:=d_week_seq
-                           │     │  │     │  │           └─ Broadcast Exchange est. 365 rows
-                           │     │  │     │  │              └─ Filter est. 365 rows
-                           │     │  │     │  │                 │     Condition: d_year = 1999
-                           │     │  │     │  │                 └─ TableScan tpcds.date_dim est. 73049 rows
-                           │     │  │     │  │                          Outputs: [d_date, d_date_sk, d_week_seq, d_year]
-                           │     │  │     │  └─ Repartition Exchange est. 300000 rows
-                           │     │  │     │     │     Partition by: {i_item_sk}
-                           │     │  │     │     └─ TableScan tpcds.item est. 300000 rows
-                           │     │  │     │              Outputs: [i_item_desc, i_item_sk]
-                           │     │  │     └─ Broadcast Exchange est. 20 rows
-                           │     │  │        └─ TableScan tpcds.warehouse est. 20 rows
-                           │     │  │                 Outputs: [w_warehouse_name, w_warehouse_sk]
-                           │     │  └─ Repartition Exchange est. 23929865 rows
-                           │     │     │     Partition by: {cs_item_sk, cs_sold_date_sk}
-                           │     │     └─ Inner Join est. 23929865 rows
-                           │     │        │     Condition: cs_ship_date_sk == d_date_sk_2
-                           │     │        ├─ Inner Join est. 23929865 rows
-                           │     │        │  │     Condition: cs_bill_cdemo_sk == cd_demo_sk
-                           │     │        │  ├─ Repartition Exchange est. 119649390 rows
-                           │     │        │  │  │     Partition by: {cs_bill_cdemo_sk}
-                           │     │        │  │  └─ Inner Join est. 119649390 rows
-                           │     │        │  │     │     Condition: cs_bill_hdemo_sk == hd_demo_sk
-                           │     │        │  │     ├─ Local Exchange est. 1439980416 rows
-                           │     │        │  │     │  └─ Filter est. 1439980416 rows
-                           │     │        │  │     │     │     Dynamic Filters: {cs_bill_cdemo_sk:bloomfilter,cs_bill_cdemo_sk:range,cs_bill_hdemo_sk:bloomfilter,cs_bill_hdemo_sk:range}
-                           │     │        │  │     │     └─ TableScan tpcds.catalog_sales est. 1439980416 rows
-                           │     │        │  │     │              Outputs: [cs_bill_cdemo_sk, cs_bill_hdemo_sk, cs_item_sk, cs_order_number, cs_promo_sk, cs_quantity, cs_ship_date_sk, cs_sold_date_sk]
-                           │     │        │  │     └─ Broadcast Exchange est. 1200 rows
-                           │     │        │  │        └─ Projection est. 1200 rows
-                           │     │        │  │           │     Expressions: [hd_buy_potential, hd_demo_sk]
-                           │     │        │  │           │     Dynamic Filters Builder: {hd_demo_sk}
-                           │     │        │  │           └─ Filter est. 1200 rows
-                           │     │        │  │              │     Condition: hd_buy_potential = '>10000'
-                           │     │        │  │              └─ TableScan tpcds.household_demographics est. 7200 rows
-                           │     │        │  │                       Outputs: [hd_buy_potential, hd_demo_sk]
-                           │     │        │  └─ Repartition Exchange est. 384160 rows
-                           │     │        │     │     Partition by: {cd_demo_sk}
-                           │     │        │     └─ Projection est. 384160 rows
-                           │     │        │        │     Expressions: [cd_demo_sk, cd_marital_status]
-                           │     │        │        │     Dynamic Filters Builder: {cd_demo_sk}
-                           │     │        │        └─ Filter est. 384160 rows
-                           │     │        │           │     Condition: cd_marital_status = 'D'
-                           │     │        │           └─ TableScan tpcds.customer_demographics est. 1920800 rows
-                           │     │        │                    Outputs: [cd_demo_sk, cd_marital_status]
-                           │     │        └─ Broadcast Exchange est. 73049 rows
-                           │     │           └─ TableScan tpcds.date_dim est. 73049 rows
-                           │     │                    Outputs: d_date_2:=d_date, d_date_sk_2:=d_date_sk
+                           │     │  ├─ Repartition Exchange est. 47859731 rows
+                           │     │  │  │     Partition by: {cs_item_sk, cs_sold_date_sk}
+                           │     │  │  └─ Inner Join est. 47859731 rows
+                           │     │  │     │     Condition: cs_ship_date_sk == d_date_sk_2
+                           │     │  │     ├─ Inner Join est. 47859731 rows
+                           │     │  │     │  │     Condition: cs_bill_cdemo_sk == cd_demo_sk
+                           │     │  │     │  ├─ Repartition Exchange est. 239298781 rows
+                           │     │  │     │  │  │     Partition by: {cs_bill_cdemo_sk}
+                           │     │  │     │  │  └─ Inner Join est. 239298781 rows
+                           │     │  │     │  │     │     Condition: cs_bill_hdemo_sk == hd_demo_sk
+                           │     │  │     │  │     ├─ Local Exchange est. 1439980416 rows
+                           │     │  │     │  │     │  └─ Filter est. 1439980416 rows
+                           │     │  │     │  │     │     │     Dynamic Filters: {cs_bill_cdemo_sk:bloomfilter,cs_bill_cdemo_sk:range,cs_bill_hdemo_sk:bloomfilter,cs_bill_hdemo_sk:range,cs_sold_date_sk:bloomfilter,cs_sold_date_sk:range}
+                           │     │  │     │  │     │     └─ TableScan tpcds.catalog_sales est. 1439980416 rows
+                           │     │  │     │  │     │              Outputs: [cs_bill_cdemo_sk, cs_bill_hdemo_sk, cs_item_sk, cs_order_number, cs_promo_sk, cs_quantity, cs_ship_date_sk, cs_sold_date_sk]
+                           │     │  │     │  │     └─ Broadcast Exchange est. 1200 rows
+                           │     │  │     │  │        └─ Projection est. 1200 rows
+                           │     │  │     │  │           │     Expressions: [hd_buy_potential, hd_demo_sk]
+                           │     │  │     │  │           │     Dynamic Filters Builder: {hd_demo_sk}
+                           │     │  │     │  │           └─ Filter est. 1200 rows
+                           │     │  │     │  │              │     Condition: hd_buy_potential = '>10000'
+                           │     │  │     │  │              └─ TableScan tpcds.household_demographics est. 7200 rows
+                           │     │  │     │  │                       Outputs: [hd_buy_potential, hd_demo_sk]
+                           │     │  │     │  └─ Repartition Exchange est. 384160 rows
+                           │     │  │     │     │     Partition by: {cd_demo_sk}
+                           │     │  │     │     └─ Projection est. 384160 rows
+                           │     │  │     │        │     Expressions: [cd_demo_sk, cd_marital_status]
+                           │     │  │     │        │     Dynamic Filters Builder: {cd_demo_sk}
+                           │     │  │     │        └─ Filter est. 384160 rows
+                           │     │  │     │           │     Condition: cd_marital_status = 'D'
+                           │     │  │     │           └─ TableScan tpcds.customer_demographics est. 1920800 rows
+                           │     │  │     │                    Outputs: [cd_demo_sk, cd_marital_status]
+                           │     │  │     └─ Broadcast Exchange est. 73049 rows
+                           │     │  │        └─ TableScan tpcds.date_dim est. 73049 rows
+                           │     │  │                 Outputs: d_date_2:=d_date, d_date_sk_2:=d_date_sk
+                           │     │  └─ Repartition Exchange est. 27456528 rows
+                           │     │     │     Partition by: {d_date_sk, i_item_sk}
+                           │     │     └─ Projection est. 27456528 rows
+                           │     │        │     Expressions: [d_date, d_date_sk, d_week_seq, i_item_desc, i_item_sk, inv_quantity_on_hand, w_warehouse_name]
+                           │     │        │     Dynamic Filters Builder: {d_date_sk}
+                           │     │        └─ Inner Join est. 27456528 rows
+                           │     │           │     Condition: inv_warehouse_sk == w_warehouse_sk
+                           │     │           ├─ Inner Join est. 27456528 rows
+                           │     │           │  │     Condition: inv_item_sk == i_item_sk
+                           │     │           │  ├─ Repartition Exchange est. 27456528 rows
+                           │     │           │  │  │     Partition by: {inv_item_sk}
+                           │     │           │  │  └─ Inner Join est. 783000000 rows
+                           │     │           │  │     │     Condition: inv_date_sk == d_date_sk_1
+                           │     │           │  │     ├─ TableScan tpcds.inventory est. 783000000 rows
+                           │     │           │  │     │        Outputs: [inv_date_sk, inv_item_sk, inv_quantity_on_hand, inv_warehouse_sk]
+                           │     │           │  │     └─ Broadcast Exchange est. 2561 rows
+                           │     │           │  │        └─ Inner Join est. 2561 rows
+                           │     │           │  │           │     Condition: d_week_seq_1 == d_week_seq
+                           │     │           │  │           ├─ TableScan tpcds.date_dim est. 73049 rows
+                           │     │           │  │           │        Outputs: d_date_sk_1:=d_date_sk, d_week_seq_1:=d_week_seq
+                           │     │           │  │           └─ Broadcast Exchange est. 365 rows
+                           │     │           │  │              └─ Filter est. 365 rows
+                           │     │           │  │                 │     Condition: d_year = 1999
+                           │     │           │  │                 └─ TableScan tpcds.date_dim est. 73049 rows
+                           │     │           │  │                          Outputs: [d_date, d_date_sk, d_week_seq, d_year]
+                           │     │           │  └─ Repartition Exchange est. 300000 rows
+                           │     │           │     │     Partition by: {i_item_sk}
+                           │     │           │     └─ TableScan tpcds.item est. 300000 rows
+                           │     │           │              Outputs: [i_item_desc, i_item_sk]
+                           │     │           └─ Broadcast Exchange est. 20 rows
+                           │     │              └─ TableScan tpcds.warehouse est. 20 rows
+                           │     │                       Outputs: [w_warehouse_name, w_warehouse_sk]
                            │     └─ Broadcast Exchange est. 1500 rows
                            │        └─ TableScan tpcds.promotion est. 1500 rows
                            │                 Outputs: [p_promo_sk]
@@ -97,4 +100,4 @@ Projection est. 100 rows
                               │     Partition by: {cr_item_sk, cr_order_number}
                               └─ TableScan tpcds.catalog_returns est. 143996756 rows
                                        Outputs: [cr_item_sk, cr_order_number]
-note: Dynamic Filter is applied for 4 times.
+note: Dynamic Filter is applied for 6 times.

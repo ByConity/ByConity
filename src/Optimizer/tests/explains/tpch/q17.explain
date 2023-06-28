@@ -25,9 +25,9 @@ Projection est. 1 rows
                         └─ Aggregating est. 197 rows
                            │     Group by: {l_partkey_1}
                            │     Aggregates: expr#avg(l_quantity):=AggNull(avgIf)(l_quantity_1,build_side_non_null_symbol)
-                           └─ Projection est. 2972 rows
+                           └─ Projection est. 5945 rows
                               │     Expressions: [l_partkey_1, l_quantity_1], build_side_non_null_symbol:=1
-                              └─ Inner Join est. 2972 rows
+                              └─ Inner Join est. 5945 rows
                                  │     Condition: l_partkey_1 == p_partkey_1
                                  ├─ Local Exchange est. 6001215 rows
                                  │  └─ Filter est. 6001215 rows

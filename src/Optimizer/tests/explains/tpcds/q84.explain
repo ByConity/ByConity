@@ -2,34 +2,37 @@ Projection est. 100 rows
 │     Expressions: customer_id:=c_customer_id, customername:=concat(coalesce(c_last_name, ''), ', ', coalesce(c_first_name, ''))
 └─ Limit est. 100 rows
    │     Limit: 100
-   └─ Sorting est. 583386 rows
+   └─ Sorting est. 4650089 rows
       │     Order by: {c_customer_id asc}
       │     Limit: 100
-      └─ Gather Exchange est. 583386 rows
-         └─ Sorting est. 583386 rows
+      └─ Gather Exchange est. 4650089 rows
+         └─ Sorting est. 4650089 rows
             │     Order by: {c_customer_id asc}
             │     Limit: 100
-            └─ Inner Join est. 583386 rows
+            └─ Inner Join est. 4650089 rows
                │     Condition: sr_cdemo_sk == c_current_cdemo_sk
                ├─ Local Exchange est. 287999764 rows
                │  └─ Filter est. 287999764 rows
-               │     │     Dynamic Filters: {sr_cdemo_sk:bloomfilter,sr_cdemo_sk:range}
+               │     │     Dynamic Filters: {sr_cdemo_sk:range}
                │     └─ TableScan tpcds.store_returns est. 287999764 rows
                │              Outputs: [sr_cdemo_sk]
-               └─ Broadcast Exchange est. 7753 rows
-                  └─ Projection est. 7753 rows
-                     │     Expressions: [c_current_cdemo_sk, c_customer_id, c_first_name, c_last_name]
-                     │     Dynamic Filters Builder: {c_current_cdemo_sk}
-                     └─ Inner Join est. 7753 rows
-                        │     Condition: cd_demo_sk == c_current_cdemo_sk
-                        ├─ TableScan tpcds.customer_demographics est. 1920800 rows
-                        │        Outputs: [cd_demo_sk]
-                        └─ Broadcast Exchange est. 15449 rows
-                           └─ Inner Join est. 7724 rows
+               └─ Broadcast Exchange est. 31013 rows
+                  └─ Inner Join est. 31013 rows
+                     │     Condition: cd_demo_sk == c_current_cdemo_sk
+                     ├─ Repartition Exchange est. 1920800 rows
+                     │  │     Partition by: {cd_demo_sk}
+                     │  └─ TableScan tpcds.customer_demographics est. 1920800 rows
+                     │           Outputs: [cd_demo_sk]
+                     └─ Repartition Exchange est. 30899 rows
+                        │     Partition by: {c_current_cdemo_sk}
+                        └─ Projection est. 30899 rows
+                           │     Expressions: [c_current_cdemo_sk, c_customer_id, c_first_name, c_last_name]
+                           │     Dynamic Filters Builder: {c_current_cdemo_sk}
+                           └─ Inner Join est. 30899 rows
                               │     Condition: c_current_hdemo_sk == hd_demo_sk
-                              ├─ Repartition Exchange est. 61979 rows
+                              ├─ Repartition Exchange est. 123958 rows
                               │  │     Partition by: {c_current_hdemo_sk}
-                              │  └─ Inner Join est. 61979 rows
+                              │  └─ Inner Join est. 123958 rows
                               │     │     Condition: c_current_addr_sk == ca_address_sk
                               │     ├─ Local Exchange est. 12000000 rows
                               │     │  └─ Filter est. 12000000 rows
@@ -44,12 +47,12 @@ Projection est. 100 rows
                               │              │     Condition: ca_city = 'Edgewood'
                               │              └─ TableScan tpcds.customer_address est. 6000000 rows
                               │                       Outputs: [ca_address_sk, ca_city]
-                              └─ Repartition Exchange est. 900 rows
+                              └─ Repartition Exchange est. 1800 rows
                                  │     Partition by: {hd_demo_sk}
-                                 └─ Projection est. 900 rows
+                                 └─ Projection est. 1800 rows
                                     │     Expressions: [hd_demo_sk]
                                     │     Dynamic Filters Builder: {hd_demo_sk}
-                                    └─ Inner Join est. 900 rows
+                                    └─ Inner Join est. 1800 rows
                                        │     Condition: hd_income_band_sk == ib_income_band_sk
                                        ├─ TableScan tpcds.household_demographics est. 7200 rows
                                        │        Outputs: [hd_demo_sk, hd_income_band_sk]
@@ -58,4 +61,4 @@ Projection est. 100 rows
                                              │     Condition: (ib_lower_bound >= 38128) AND (ib_upper_bound <= 88128)
                                              └─ TableScan tpcds.income_band est. 20 rows
                                                       Outputs: [ib_income_band_sk, ib_lower_bound, ib_upper_bound]
-note: Dynamic Filter is applied for 6 times.
+note: Dynamic Filter is applied for 5 times.

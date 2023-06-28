@@ -27,11 +27,11 @@ Projection est. 60525 rows
                         │        │     Partition by: {o_orderkey}
                         │        └─ TableScan tpch.orders est. 1500000 rows
                         │                 Outputs: [o_orderdate, o_orderkey]
-                        └─ Repartition Exchange est. 359998 rows
+                        └─ Repartition Exchange est. 719996 rows
                            │     Partition by: {p_partkey, ps_suppkey}
-                           └─ Inner Join est. 359998 rows
+                           └─ Inner Join est. 719996 rows
                               │     Condition: ps_suppkey == s_suppkey
-                              ├─ Repartition Exchange est. 359998 rows
+                              ├─ Repartition Exchange est. 719996 rows
                               │  │     Partition by: {ps_suppkey}
                               │  └─ Inner Join est. 719996 rows
                               │     │     Condition: ps_partkey == p_partkey
@@ -47,7 +47,7 @@ Projection est. 60525 rows
                               │                    Outputs: [p_name, p_partkey]
                               └─ Repartition Exchange est. 10000 rows
                                  │     Partition by: {s_suppkey}
-                                 └─ Inner Join est. 5000 rows
+                                 └─ Inner Join est. 10000 rows
                                     │     Condition: s_nationkey == n_nationkey
                                     ├─ TableScan tpch.supplier est. 10000 rows
                                     │        Outputs: [s_nationkey, s_suppkey]

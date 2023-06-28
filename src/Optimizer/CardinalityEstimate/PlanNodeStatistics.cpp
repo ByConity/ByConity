@@ -54,8 +54,8 @@ String PlanNodeStatistics::toString() const
     details << "Symbol\\n";
     for (const auto & symbol : symbol_statistics)
     {
-        details << symbol.first << "NDV:" << std::to_string(symbol.second->getNdv()) << ",Min:" << std::to_string(symbol.second->getMin()) << ",Max:" << std::to_string(symbol.second->getMax())
-                << ",Hist:" << symbol.second->getHistogram().getBuckets().size() << "\\n";
+        details << symbol.first << ": " << symbol.second->getNdv() << ", " << symbol.second->getMin() << ", " << symbol.second->getMax()
+                << ", hist:" << symbol.second->getHistogram().getBuckets().size() << "\\n";
     }
     return details.str();
 }

@@ -19,11 +19,11 @@ Projection est. ? rows
    │  │  │  │  │  │  │     └─ Aggregating est. 1 rows
    │  │  │  │  │  │  │        │     Group by: {}
    │  │  │  │  │  │  │        │     Aggregates: expr#count():=AggNull(count)()
-   │  │  │  │  │  │  │        └─ Inner Join est. 3710577 rows
+   │  │  │  │  │  │  │        └─ Inner Join est. 7421155 rows
    │  │  │  │  │  │  │           │     Condition: ss_hdemo_sk == hd_demo_sk
-   │  │  │  │  │  │  │           ├─ Inner Join est. 13991688 rows
+   │  │  │  │  │  │  │           ├─ Inner Join est. 27983377 rows
    │  │  │  │  │  │  │           │  │     Condition: ss_store_sk == s_store_sk
-   │  │  │  │  │  │  │           │  ├─ Inner Join est. 55078393 rows
+   │  │  │  │  │  │  │           │  ├─ Inner Join est. 110156787 rows
    │  │  │  │  │  │  │           │  │  │     Condition: ss_sold_time_sk == t_time_sk
    │  │  │  │  │  │  │           │  │  ├─ Local Exchange est. 2879987999 rows
    │  │  │  │  │  │  │           │  │  │  └─ Filter est. 2879987999 rows
@@ -60,11 +60,11 @@ Projection est. ? rows
    │  │  │  │  │  │           └─ Aggregating est. 1 rows
    │  │  │  │  │  │              │     Group by: {}
    │  │  │  │  │  │              │     Aggregates: expr#count()_1:=AggNull(count)()
-   │  │  │  │  │  │              └─ Inner Join est. 3834263 rows
+   │  │  │  │  │  │              └─ Inner Join est. 7668527 rows
    │  │  │  │  │  │                 │     Condition: ss_hdemo_sk_1 == hd_demo_sk_1
-   │  │  │  │  │  │                 ├─ Inner Join est. 14458078 rows
+   │  │  │  │  │  │                 ├─ Inner Join est. 28916156 rows
    │  │  │  │  │  │                 │  │     Condition: ss_store_sk_1 == s_store_sk_1
-   │  │  │  │  │  │                 │  ├─ Inner Join est. 56914339 rows
+   │  │  │  │  │  │                 │  ├─ Inner Join est. 113828679 rows
    │  │  │  │  │  │                 │  │  │     Condition: ss_sold_time_sk_1 == t_time_sk_1
    │  │  │  │  │  │                 │  │  ├─ Local Exchange est. 2879987999 rows
    │  │  │  │  │  │                 │  │  │  └─ Filter est. 2879987999 rows
@@ -101,11 +101,11 @@ Projection est. ? rows
    │  │  │  │  │           └─ Aggregating est. 1 rows
    │  │  │  │  │              │     Group by: {}
    │  │  │  │  │              │     Aggregates: expr#count()_2:=AggNull(count)()
-   │  │  │  │  │              └─ Inner Join est. 3710577 rows
+   │  │  │  │  │              └─ Inner Join est. 7421155 rows
    │  │  │  │  │                 │     Condition: ss_hdemo_sk_2 == hd_demo_sk_2
-   │  │  │  │  │                 ├─ Inner Join est. 13991688 rows
+   │  │  │  │  │                 ├─ Inner Join est. 27983377 rows
    │  │  │  │  │                 │  │     Condition: ss_store_sk_2 == s_store_sk_2
-   │  │  │  │  │                 │  ├─ Inner Join est. 55078393 rows
+   │  │  │  │  │                 │  ├─ Inner Join est. 110156787 rows
    │  │  │  │  │                 │  │  │     Condition: ss_sold_time_sk_2 == t_time_sk_2
    │  │  │  │  │                 │  │  ├─ Local Exchange est. 2879987999 rows
    │  │  │  │  │                 │  │  │  └─ Filter est. 2879987999 rows
@@ -142,11 +142,11 @@ Projection est. ? rows
    │  │  │  │           └─ Aggregating est. 1 rows
    │  │  │  │              │     Group by: {}
    │  │  │  │              │     Aggregates: expr#count()_3:=AggNull(count)()
-   │  │  │  │              └─ Inner Join est. 3834263 rows
+   │  │  │  │              └─ Inner Join est. 7668527 rows
    │  │  │  │                 │     Condition: ss_hdemo_sk_3 == hd_demo_sk_3
-   │  │  │  │                 ├─ Inner Join est. 14458078 rows
+   │  │  │  │                 ├─ Inner Join est. 28916156 rows
    │  │  │  │                 │  │     Condition: ss_store_sk_3 == s_store_sk_3
-   │  │  │  │                 │  ├─ Inner Join est. 56914339 rows
+   │  │  │  │                 │  ├─ Inner Join est. 113828679 rows
    │  │  │  │                 │  │  │     Condition: ss_sold_time_sk_3 == t_time_sk_3
    │  │  │  │                 │  │  ├─ Local Exchange est. 2879987999 rows
    │  │  │  │                 │  │  │  └─ Filter est. 2879987999 rows
@@ -183,11 +183,11 @@ Projection est. ? rows
    │  │  │           └─ Aggregating est. 1 rows
    │  │  │              │     Group by: {}
    │  │  │              │     Aggregates: expr#count()_4:=AggNull(count)()
-   │  │  │              └─ Inner Join est. 3710577 rows
+   │  │  │              └─ Inner Join est. 7421155 rows
    │  │  │                 │     Condition: ss_hdemo_sk_4 == hd_demo_sk_4
-   │  │  │                 ├─ Inner Join est. 13991688 rows
+   │  │  │                 ├─ Inner Join est. 27983377 rows
    │  │  │                 │  │     Condition: ss_store_sk_4 == s_store_sk_4
-   │  │  │                 │  ├─ Inner Join est. 55078393 rows
+   │  │  │                 │  ├─ Inner Join est. 110156787 rows
    │  │  │                 │  │  │     Condition: ss_sold_time_sk_4 == t_time_sk_4
    │  │  │                 │  │  ├─ Local Exchange est. 2879987999 rows
    │  │  │                 │  │  │  └─ Filter est. 2879987999 rows
@@ -224,11 +224,11 @@ Projection est. ? rows
    │  │           └─ Aggregating est. 1 rows
    │  │              │     Group by: {}
    │  │              │     Aggregates: expr#count()_5:=AggNull(count)()
-   │  │              └─ Inner Join est. 3834263 rows
+   │  │              └─ Inner Join est. 7668527 rows
    │  │                 │     Condition: ss_hdemo_sk_5 == hd_demo_sk_5
-   │  │                 ├─ Inner Join est. 14458078 rows
+   │  │                 ├─ Inner Join est. 28916156 rows
    │  │                 │  │     Condition: ss_store_sk_5 == s_store_sk_5
-   │  │                 │  ├─ Inner Join est. 56914339 rows
+   │  │                 │  ├─ Inner Join est. 113828679 rows
    │  │                 │  │  │     Condition: ss_sold_time_sk_5 == t_time_sk_5
    │  │                 │  │  ├─ Local Exchange est. 2879987999 rows
    │  │                 │  │  │  └─ Filter est. 2879987999 rows
@@ -265,11 +265,11 @@ Projection est. ? rows
    │           └─ Aggregating est. 1 rows
    │              │     Group by: {}
    │              │     Aggregates: expr#count()_6:=AggNull(count)()
-   │              └─ Inner Join est. 3710577 rows
+   │              └─ Inner Join est. 7421155 rows
    │                 │     Condition: ss_hdemo_sk_6 == hd_demo_sk_6
-   │                 ├─ Inner Join est. 13991688 rows
+   │                 ├─ Inner Join est. 27983377 rows
    │                 │  │     Condition: ss_store_sk_6 == s_store_sk_6
-   │                 │  ├─ Inner Join est. 55078393 rows
+   │                 │  ├─ Inner Join est. 110156787 rows
    │                 │  │  │     Condition: ss_sold_time_sk_6 == t_time_sk_6
    │                 │  │  ├─ Local Exchange est. 2879987999 rows
    │                 │  │  │  └─ Filter est. 2879987999 rows
@@ -306,11 +306,11 @@ Projection est. ? rows
             └─ Aggregating est. 1 rows
                │     Group by: {}
                │     Aggregates: expr#count()_7:=AggNull(count)()
-               └─ Inner Join est. 3834263 rows
+               └─ Inner Join est. 7668527 rows
                   │     Condition: ss_hdemo_sk_7 == hd_demo_sk_7
-                  ├─ Inner Join est. 14458078 rows
+                  ├─ Inner Join est. 28916156 rows
                   │  │     Condition: ss_store_sk_7 == s_store_sk_7
-                  │  ├─ Inner Join est. 56914339 rows
+                  │  ├─ Inner Join est. 113828679 rows
                   │  │  │     Condition: ss_sold_time_sk_7 == t_time_sk_7
                   │  │  ├─ Local Exchange est. 2879987999 rows
                   │  │  │  └─ Filter est. 2879987999 rows

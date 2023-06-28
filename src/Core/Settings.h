@@ -728,7 +728,6 @@ class IColumn;
     M(Bool, enable_execute_uncorrelated_subquery, false, "Whether enable execute uncorrelated subquery", 0) \
     M(UInt64, execute_uncorrelated_in_subquery_size, 10000, "Size of execute uncorrelated in subquery", 0) \
     M(Bool, enable_subcolumn_optimization_through_union, true, "Whether enable sub column optimization through set operation.", 0) \
-    M(Float, pk_selectivity, 0.5, "PK selectivity for join estimation", 0) \
     /** Exchange setttings */ \
     M(UInt64, exchange_parallel_size, 1, "Exchange parallel size", 0) \
     M(UInt64, exchange_source_pipeline_threads, 16, "Recommend number of threads for pipeline which reading data from exchange, ingoned if exchange need keep data order", 0) \

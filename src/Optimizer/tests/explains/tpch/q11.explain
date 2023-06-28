@@ -16,18 +16,18 @@ Projection est. ? rows
             │        │     Aggregates: expr#sum(multiply(ps_supplycost, ps_availqty)):=AggNull(sum)(expr#multiply(ps_supplycost, ps_availqty))
             │        └─ Projection est. 32000 rows
             │           │     Expressions: [ps_partkey], expr#multiply(ps_supplycost, ps_availqty):=ps_supplycost * ps_availqty
-            │           └─ Inner Join est. 8017 rows
+            │           └─ Inner Join est. 31990 rows
             │              │     Condition: ps_suppkey == s_suppkey
             │              ├─ Local Exchange est. 800000 rows
             │              │  └─ Filter est. 800000 rows
             │              │     │     Dynamic Filters: {ps_suppkey:bloomfilter,ps_suppkey:range}
             │              │     └─ TableScan tpch.partsupp est. 800000 rows
             │              │              Outputs: [ps_availqty, ps_partkey, ps_suppkey, ps_supplycost]
-            │              └─ Broadcast Exchange est. 200 rows
-            │                 └─ Projection est. 200 rows
+            │              └─ Broadcast Exchange est. 400 rows
+            │                 └─ Projection est. 400 rows
             │                    │     Expressions: [s_suppkey]
             │                    │     Dynamic Filters Builder: {s_suppkey}
-            │                    └─ Inner Join est. 200 rows
+            │                    └─ Inner Join est. 400 rows
             │                       │     Condition: s_nationkey == n_nationkey
             │                       ├─ Local Exchange est. 10000 rows
             │                       │  └─ Filter est. 10000 rows
@@ -52,18 +52,18 @@ Projection est. ? rows
                            │     Aggregates: expr#sum(multiply(ps_supplycost, ps_availqty))_1:=AggNull(sum)(expr#multiply(ps_supplycost, ps_availqty)_1)
                            └─ Projection est. 32000 rows
                               │     Expressions: expr#multiply(ps_supplycost, ps_availqty)_1:=ps_supplycost_1 * ps_availqty_1
-                              └─ Inner Join est. 8017 rows
+                              └─ Inner Join est. 31990 rows
                                  │     Condition: ps_suppkey_1 == s_suppkey_1
                                  ├─ Local Exchange est. 800000 rows
                                  │  └─ Filter est. 800000 rows
                                  │     │     Dynamic Filters: {ps_suppkey_1:bloomfilter,ps_suppkey_1:range}
                                  │     └─ TableScan tpch.partsupp est. 800000 rows
                                  │              Outputs: ps_availqty_1:=ps_availqty, ps_suppkey_1:=ps_suppkey, ps_supplycost_1:=ps_supplycost
-                                 └─ Broadcast Exchange est. 200 rows
-                                    └─ Projection est. 200 rows
+                                 └─ Broadcast Exchange est. 400 rows
+                                    └─ Projection est. 400 rows
                                        │     Expressions: [s_suppkey_1]
                                        │     Dynamic Filters Builder: {s_suppkey_1}
-                                       └─ Inner Join est. 200 rows
+                                       └─ Inner Join est. 400 rows
                                           │     Condition: s_nationkey_1 == n_nationkey_1
                                           ├─ Local Exchange est. 10000 rows
                                           │  └─ Filter est. 10000 rows

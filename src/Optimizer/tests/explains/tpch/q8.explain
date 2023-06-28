@@ -40,9 +40,9 @@ Projection est. 736 rows
                               │        │     │     │     Dynamic Filters: {o_custkey:bloomfilter,o_custkey:range}
                               │        │     │     └─ TableScan tpch.orders est. 1500000 rows
                               │        │     │              Outputs: [o_custkey, o_orderdate, o_orderkey]
-                              │        │     └─ Repartition Exchange est. 21759 rows
+                              │        │     └─ Repartition Exchange est. 43518 rows
                               │        │        │     Partition by: {l_orderkey}
-                              │        │        └─ Inner Join est. 21759 rows
+                              │        │        └─ Inner Join est. 43518 rows
                               │        │           │     Condition: l_partkey == p_partkey
                               │        │           ├─ Local Exchange est. 6001215 rows
                               │        │           │  └─ Filter est. 6001215 rows
@@ -57,12 +57,12 @@ Projection est. 736 rows
                               │        │                    │     Condition: p_type = 'ECONOMY ANODIZED STEEL'
                               │        │                    └─ TableScan tpch.part est. 200000 rows
                               │        │                             Outputs: [p_partkey, p_type]
-                              │        └─ Repartition Exchange est. 6000 rows
+                              │        └─ Repartition Exchange est. 30000 rows
                               │           │     Partition by: {c_custkey}
-                              │           └─ Projection est. 6000 rows
+                              │           └─ Projection est. 30000 rows
                               │              │     Expressions: [c_custkey]
                               │              │     Dynamic Filters Builder: {c_custkey}
-                              │              └─ Inner Join est. 6000 rows
+                              │              └─ Inner Join est. 30000 rows
                               │                 │     Condition: c_nationkey == n_nationkey
                               │                 ├─ Local Exchange est. 150000 rows
                               │                 │  └─ Filter est. 150000 rows

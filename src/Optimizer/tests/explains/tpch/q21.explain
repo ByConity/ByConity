@@ -51,7 +51,7 @@ Projection est. 100 rows
                                     │                 │        │              Outputs: [o_orderkey, o_orderstatus]
                                     │                 │        └─ Repartition Exchange est. 240048 rows
                                     │                 │           │     Partition by: {l_orderkey}
-                                    │                 │           └─ Inner Join est. 120288 rows
+                                    │                 │           └─ Inner Join est. 239976 rows
                                     │                 │              │     Condition: l_suppkey == s_suppkey
                                     │                 │              ├─ Local Exchange est. 6001215 rows
                                     │                 │              │  └─ Filter est. 6001215 rows
@@ -59,11 +59,11 @@ Projection est. 100 rows
                                     │                 │              │     │     Dynamic Filters: {l_suppkey:bloomfilter,l_suppkey:range}
                                     │                 │              │     └─ TableScan tpch.lineitem est. 6001215 rows
                                     │                 │              │              Outputs: [l_commitdate, l_orderkey, l_receiptdate, l_suppkey]
-                                    │                 │              └─ Broadcast Exchange est. 200 rows
-                                    │                 │                 └─ Projection est. 200 rows
+                                    │                 │              └─ Broadcast Exchange est. 400 rows
+                                    │                 │                 └─ Projection est. 400 rows
                                     │                 │                    │     Expressions: [n_name, n_nationkey, s_name, s_nationkey, s_suppkey]
                                     │                 │                    │     Dynamic Filters Builder: {s_suppkey}
-                                    │                 │                    └─ Inner Join est. 200 rows
+                                    │                 │                    └─ Inner Join est. 400 rows
                                     │                 │                       │     Condition: s_nationkey == n_nationkey
                                     │                 │                       ├─ Local Exchange est. 10000 rows
                                     │                 │                       │  └─ Filter est. 10000 rows

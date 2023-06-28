@@ -15,9 +15,9 @@ Projection est. 16 rows
                   └─ Aggregating est. 16 rows
                      │     Group by: {d_year, i_brand, i_brand_id}
                      │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price)
-                     └─ Inner Join est. 2557058 rows
+                     └─ Inner Join est. 5114116 rows
                         │     Condition: ss_sold_date_sk == d_date_sk
-                        ├─ Inner Join est. 2557058 rows
+                        ├─ Inner Join est. 5114116 rows
                         │  │     Condition: ss_item_sk == i_item_sk
                         │  ├─ Local Exchange est. 2879987999 rows
                         │  │  └─ Filter est. 2879987999 rows

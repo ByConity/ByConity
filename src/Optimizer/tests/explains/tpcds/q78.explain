@@ -29,9 +29,9 @@ Projection est. 100 rows
                      │  │              │     Condition: isNull(sr_ticket_number)
                      │  │              └─ Left Join est. 683045296 rows
                      │  │                 │     Condition: ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
-                     │  │                 ├─ Repartition Exchange est. 284731390 rows
+                     │  │                 ├─ Repartition Exchange est. 569462781 rows
                      │  │                 │  │     Partition by: {ss_item_sk, ss_ticket_number}
-                     │  │                 │  └─ Inner Join est. 284731390 rows
+                     │  │                 │  └─ Inner Join est. 569462781 rows
                      │  │                 │     │     Condition: ss_sold_date_sk == d_date_sk
                      │  │                 │     ├─ Local Exchange est. 2879987999 rows
                      │  │                 │     │  └─ Filter est. 2879987999 rows
@@ -62,9 +62,9 @@ Projection est. 100 rows
                      │                 │     Condition: isNull(wr_order_number)
                      │                 └─ Left Join est. 170797020 rows
                      │                    │     Condition: ws_item_sk == wr_item_sk, ws_order_number == wr_order_number
-                     │                    ├─ Repartition Exchange est. 71183181 rows
+                     │                    ├─ Repartition Exchange est. 142366362 rows
                      │                    │  │     Partition by: {ws_item_sk, ws_order_number}
-                     │                    │  └─ Inner Join est. 71183181 rows
+                     │                    │  └─ Inner Join est. 142366362 rows
                      │                    │     │     Condition: ws_sold_date_sk == d_date_sk_1
                      │                    │     ├─ Local Exchange est. 720000376 rows
                      │                    │     │  └─ Filter est. 720000376 rows
@@ -91,13 +91,13 @@ Projection est. 100 rows
                               │     Aggregates: expr#sum(cs_quantity):=AggNull(sum)(cs_quantity), expr#sum(cs_wholesale_cost):=AggNull(sum)(cs_wholesale_cost), expr#sum(cs_sales_price):=AggNull(sum)(cs_sales_price)
                               └─ Projection est. 283012857 rows
                                  │     Expressions: [cs_bill_customer_sk, cs_item_sk, cs_quantity, cs_sales_price, cs_wholesale_cost, d_year_2]
-                                 └─ Filter est. 129597080 rows
+                                 └─ Filter est. 254605232 rows
                                     │     Condition: isNull(cr_order_number)
-                                    └─ Left Join est. 143996756 rows
+                                    └─ Left Join est. 282894703 rows
                                        │     Condition: cs_item_sk == cr_item_sk, cs_order_number == cr_order_number
-                                       ├─ Repartition Exchange est. 141447351 rows
+                                       ├─ Repartition Exchange est. 282894703 rows
                                        │  │     Partition by: {cs_item_sk, cs_order_number}
-                                       │  └─ Inner Join est. 141447351 rows
+                                       │  └─ Inner Join est. 282894703 rows
                                        │     │     Condition: cs_sold_date_sk == d_date_sk_2
                                        │     ├─ Local Exchange est. 1439980416 rows
                                        │     │  └─ Filter est. 1439980416 rows

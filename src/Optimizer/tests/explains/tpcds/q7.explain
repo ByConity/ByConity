@@ -15,15 +15,15 @@ Projection est. 100 rows
                   └─ Aggregating est. 146835 rows
                      │     Group by: {i_item_id}
                      │     Aggregates: expr#avg(ss_quantity):=AggNull(avg)(ss_quantity), expr#avg(ss_list_price):=AggNull(avg)(ss_list_price), expr#avg(ss_coupon_amt):=AggNull(avg)(ss_coupon_amt), expr#avg(ss_sales_price):=AggNull(avg)(ss_sales_price)
-                     └─ Inner Join est. 4067493 rows
+                     └─ Inner Join est. 8134986 rows
                         │     Condition: ss_promo_sk == p_promo_sk
-                        ├─ Inner Join est. 4067493 rows
+                        ├─ Inner Join est. 8134986 rows
                         │  │     Condition: ss_item_sk == i_item_sk
-                        │  ├─ Repartition Exchange est. 4067493 rows
+                        │  ├─ Repartition Exchange est. 8134986 rows
                         │  │  │     Partition by: {ss_item_sk}
-                        │  │  └─ Inner Join est. 4067493 rows
+                        │  │  └─ Inner Join est. 8134986 rows
                         │  │     │     Condition: ss_sold_date_sk == d_date_sk
-                        │  │     ├─ Inner Join est. 20570848 rows
+                        │  │     ├─ Inner Join est. 41141696 rows
                         │  │     │  │     Condition: ss_cdemo_sk == cd_demo_sk
                         │  │     │  ├─ Local Exchange est. 2879987999 rows
                         │  │     │  │  └─ Filter est. 2879987999 rows

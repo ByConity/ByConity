@@ -17,15 +17,15 @@ Projection est. 100 rows
                │     └─ Aggregating est. 62265 rows
                │        │     Group by: {i_item_id_1}
                │        │     Aggregates: expr#sum(cr_return_quantity):=AggNull(sum)(cr_return_quantity)
-               │        └─ Inner Join est. 31174 rows
+               │        └─ Inner Join est. 62349 rows
                │           │     Condition: i_item_sk_1 == cr_item_sk
                │           ├─ Repartition Exchange est. 300000 rows
                │           │  │     Partition by: {i_item_sk_1}
                │           │  └─ TableScan tpcds.item est. 300000 rows
                │           │           Outputs: i_item_id_1:=i_item_id, i_item_sk_1:=i_item_sk
-               │           └─ Repartition Exchange est. 31132 rows
+               │           └─ Repartition Exchange est. 62265 rows
                │              │     Partition by: {cr_item_sk}
-               │              └─ Inner Join est. 1054298 rows
+               │              └─ Inner Join est. 2108596 rows
                │                 │     Condition: cr_returned_date_sk == d_date_sk_3
                │                 ├─ Local Exchange est. 143996756 rows
                │                 │  └─ Filter est. 143996756 rows
@@ -74,15 +74,15 @@ Projection est. 100 rows
                   │     └─ Aggregating est. 124534 rows
                   │        │     Group by: {i_item_id}
                   │        │     Aggregates: expr#sum(sr_return_quantity):=AggNull(sum)(sr_return_quantity)
-                  │        └─ Inner Join est. 62351 rows
+                  │        └─ Inner Join est. 124703 rows
                   │           │     Condition: i_item_sk == sr_item_sk
                   │           ├─ Repartition Exchange est. 300000 rows
                   │           │  │     Partition by: {i_item_sk}
                   │           │  └─ TableScan tpcds.item est. 300000 rows
                   │           │           Outputs: [i_item_id, i_item_sk]
-                  │           └─ Repartition Exchange est. 62267 rows
+                  │           └─ Repartition Exchange est. 124534 rows
                   │              │     Partition by: {sr_item_sk}
-                  │              └─ Inner Join est. 2213186 rows
+                  │              └─ Inner Join est. 4426372 rows
                   │                 │     Condition: sr_returned_date_sk == d_date_sk
                   │                 ├─ Local Exchange est. 287999764 rows
                   │                 │  └─ Filter est. 287999764 rows
@@ -129,15 +129,15 @@ Projection est. 100 rows
                         └─ Aggregating est. 31132 rows
                            │     Group by: {i_item_id_2}
                            │     Aggregates: expr#sum(wr_return_quantity):=AggNull(sum)(wr_return_quantity)
-                           └─ Inner Join est. 15587 rows
+                           └─ Inner Join est. 31174 rows
                               │     Condition: i_item_sk_2 == wr_item_sk
                               ├─ Repartition Exchange est. 300000 rows
                               │  │     Partition by: {i_item_sk_2}
                               │  └─ TableScan tpcds.item est. 300000 rows
                               │           Outputs: i_item_id_2:=i_item_id, i_item_sk_2:=i_item_sk
-                              └─ Repartition Exchange est. 15566 rows
+                              └─ Repartition Exchange est. 31132 rows
                                  │     Partition by: {wr_item_sk}
-                                 └─ Inner Join est. 508874 rows
+                                 └─ Inner Join est. 1017748 rows
                                     │     Condition: wr_returned_date_sk == d_date_sk_6
                                     ├─ Local Exchange est. 71997522 rows
                                     │  └─ Filter est. 71997522 rows
