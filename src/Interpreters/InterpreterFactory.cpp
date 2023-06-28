@@ -1,138 +1,3 @@
-/*
- * Copyright 2016-2023 ClickHouse, Inc.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-
-/*
- * This file may have been modified by Bytedance Ltd. and/or its affiliates (“ Bytedance's Modifications”).
- * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
- */
-
-#include <Parsers/ASTAlterQuery.h>
-#include <Parsers/ASTAlterWarehouseQuery.h>
-#include <Parsers/ASTCheckQuery.h>
-#include <Parsers/ASTCreateQuery.h>
-#include <Parsers/ASTCreateUserQuery.h>
-#include <Parsers/ASTCreateRoleQuery.h>
-#include <Parsers/ASTCreateQuotaQuery.h>
-#include <Parsers/ASTCreateRowPolicyQuery.h>
-#include <Parsers/ASTCreateSettingsProfileQuery.h>
-#include <Parsers/ASTCreateWarehouseQuery.h>
-#include <Parsers/ASTCreateWorkerGroupQuery.h>
-#include <Parsers/ASTDeleteQuery.h>
-#include <Parsers/ASTDropAccessEntityQuery.h>
-#include <Parsers/ASTDropQuery.h>
-#include <Parsers/ASTUndropQuery.h>
-#include <Parsers/ASTDropWarehouseQuery.h>
-#include <Parsers/ASTDropWorkerGroupQuery.h>
-#include <Parsers/ASTInsertQuery.h>
-#include <Parsers/ASTKillQueryQuery.h>
-#include <Parsers/ASTOptimizeQuery.h>
-#include <Parsers/ASTRenameQuery.h>
-#include <Parsers/ASTSelectQuery.h>
-#include <Parsers/ASTSelectIntersectExceptQuery.h>
-#include <Parsers/ASTSelectWithUnionQuery.h>
-#include <Parsers/ASTSetQuery.h>
-#include <Parsers/ASTSetRoleQuery.h>
-#include <Parsers/ASTShowAccessEntitiesQuery.h>
-#include <Parsers/ASTShowAccessQuery.h>
-#include <Parsers/ASTShowCreateAccessEntityQuery.h>
-#include <Parsers/ASTShowGrantsQuery.h>
-#include <Parsers/ASTShowPrivilegesQuery.h>
-#include <Parsers/ASTShowProcesslistQuery.h>
-#include <Parsers/ASTShowTablesQuery.h>
-#include <Parsers/ASTShowWarehousesQuery.h>
-#include <Parsers/ASTUseQuery.h>
-#include <Parsers/ASTExplainQuery.h>
-#include <Parsers/ASTDumpInfoQuery.h>
-#include <Parsers/ASTReproduceQuery.h>
-#include <Parsers/TablePropertiesQueriesASTs.h>
-#include <Parsers/ASTWatchQuery.h>
-#include <Parsers/ASTGrantQuery.h>
-#include <Parsers/MySQL/ASTCreateQuery.h>
-#include <Parsers/ASTRefreshQuery.h>
-#include <Parsers/ASTStatsQuery.h>
-#include <Parsers/ASTUpdateQuery.h>
-
-#include <Interpreters/Context.h>
-#include <Interpreters/DistributedStages/InterpreterDistributedStages.h>
-
-#include <Interpreters/InterpreterAlterQuery.h>
-#include <Interpreters/InterpreterAlterWarehouseQuery.h>
-#include <Interpreters/InterpreterCheckQuery.h>
-#include <Interpreters/InterpreterCreateQuery.h>
-#include <Interpreters/InterpreterCreateQuotaQuery.h>
-#include <Interpreters/InterpreterCreateRoleQuery.h>
-#include <Interpreters/InterpreterCreateRowPolicyQuery.h>
-#include <Interpreters/InterpreterCreateSettingsProfileQuery.h>
-#include <Interpreters/InterpreterCreateUserQuery.h>
-#include <Interpreters/InterpreterCreateWarehouseQuery.h>
-#include <Interpreters/InterpreterCreateWorkerGroupQuery.h>
-#include <Interpreters/InterpreterDeleteQuery.h>
-#include <Interpreters/InterpreterDescribeQuery.h>
-#include <Interpreters/InterpreterDropAccessEntityQuery.h>
-#include <Interpreters/InterpreterDropWarehouseQuery.h>
-#include <Interpreters/InterpreterDropWorkerGroupQuery.h>
-#include <Interpreters/InterpreterDropQuery.h>
-#include <Interpreters/InterpreterUndropQuery.h>
-#include <Interpreters/InterpreterDumpInfoQueryUseOptimizer.h>
-#include <Interpreters/InterpreterExistsQuery.h>
-#include <Interpreters/InterpreterExplainQuery.h>
-#include <Interpreters/InterpreterExternalDDLQuery.h>
-#include <Interpreters/InterpreterFactory.h>
-#include <Interpreters/InterpreterGrantQuery.h>
-#include <Interpreters/InterpreterInsertQuery.h>
-#include <Interpreters/InterpreterKillQueryQuery.h>
-#include <Interpreters/InterpreterOptimizeQuery.h>
-#include <Interpreters/InterpreterRefreshQuery.h>
-#include <Interpreters/InterpreterRenameQuery.h>
-#include <Interpreters/InterpreterSelectQuery.h>
-#include <Interpreters/InterpreterSelectQueryUseOptimizer.h>
-#include <Interpreters/InterpreterSelectWithUnionQuery.h>
-#include <Interpreters/InterpreterSetQuery.h>
-#include <Interpreters/InterpreterSetRoleQuery.h>
-#include <Interpreters/InterpreterShowAccessEntitiesQuery.h>
-#include <Interpreters/InterpreterShowAccessQuery.h>
-#include <Interpreters/InterpreterShowCreateAccessEntityQuery.h>
-#include <Interpreters/InterpreterShowCreateQuery.h>
-#include <Interpreters/InterpreterShowGrantsQuery.h>
-#include <Interpreters/InterpreterShowPrivilegesQuery.h>
-#include <Interpreters/InterpreterShowProcesslistQuery.h>
-#include <Interpreters/InterpreterShowTablesQuery.h>
-#include <Interpreters/InterpreterShowWarehousesQuery.h>
-#include <Interpreters/InterpreterSystemQuery.h>
-#include <Interpreters/InterpreterReproduceQueryUseOptimizer.h>
-#include <Interpreters/InterpreterUseQuery.h>
-#include <Interpreters/InterpreterWatchQuery.h>
-#include <Interpreters/OpenTelemetrySpanLog.h>
-#include <Interpreters/InterpreterUpdateQuery.h>
-#include <Optimizer/QueryUseOptimizerChecker.h>
-#include <Interpreters/InterpreterCreateStatsQuery.h>
-#include <Interpreters/InterpreterDropStatsQuery.h>
-#include <Interpreters/InterpreterShowStatsQuery.h>
-#include <Interpreters/PlanSegmentHelper.h>
-
-#include <Parsers/ASTSystemQuery.h>
-
-#include <Databases/MySQL/MaterializeMySQLSyncThread.h>
-#include <Parsers/ASTExternalDDLQuery.h>
-#include "common/logger_useful.h"
-#include <Common/ProfileEvents.h>
-#include <Common/typeid_cast.h>
-#include "Interpreters/DistributedStages/PlanSegment.h"
-
-
 namespace ProfileEvents
 {
     extern const Event Query;
@@ -159,12 +24,15 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     DistributedStagesSettings distributed_stages_settings = InterpreterDistributedStages::extractDistributedStagesSettings(query, context);
 
     bool use_distributed_stages = (distributed_stages_settings.enable_distributed_stages) && !options.is_internal;
-    use_distributed_stages = use_distributed_stages && !context->getSettingsRef().enable_optimizer && PlanSegmentHelper::supportDistributedStages(query);
 
-    if (use_distributed_stages && context->getComplexQueryActive() && QueryUseOptimizerChecker::check(query, context, true))
+    if (use_distributed_stages)
     {
+        if (!context->getComplexQueryActive())
+            throw Exception("Server config missing exchange_status_port and exchange_port cannot execute query with enable_distributed_stages enabled",
+                            ErrorCodes::LOGICAL_ERROR);
+
         if (query->as<ASTSelectQuery>() || query->as<ASTSelectWithUnionQuery>())
-            return std::make_unique<InterpreterSelectQueryUseOptimizer>(query, context, options);
+            return std::make_unique<InterpreterDistributedStages>(query, context);
     }
 
     if (query->as<ASTSelectQuery>())
@@ -193,9 +61,6 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     }
     else if (query->as<ASTInsertQuery>())
     {
-        /// currently, the optimizer hasn't support insert select, call the check to force close optimizer.
-        QueryUseOptimizerChecker::check(query, context);
-
         ProfileEvents::increment(ProfileEvents::InsertQuery);
         bool allow_materialized = static_cast<bool>(context->getSettingsRef().insert_allow_materialized_columns);
         return std::make_unique<InterpreterInsertQuery>(query, context, allow_materialized);
