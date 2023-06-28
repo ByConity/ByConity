@@ -1,24 +1,3 @@
-/*
- * Copyright 2016-2023 ClickHouse, Inc.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-
-/*
- * This file may have been modified by Bytedance Ltd. and/or its affiliates (“ Bytedance's Modifications”).
- * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
- */
-
 #pragma once
 
 #include <Core/BaseSettings.h>
@@ -149,7 +128,6 @@ class IColumn;
     M(UInt64, group_by_two_level_threshold_bytes, 50000000, "From what size of the aggregation state in bytes, a two-level aggregation begins to be used. 0 - the threshold is not set. Two-level aggregation is used when at least one of the thresholds is triggered.", 0) \
     M(Bool, distributed_aggregation_memory_efficient, true, "Is the memory-saving mode of distributed aggregation enabled.", 0) \
     M(UInt64, aggregation_memory_efficient_merge_threads, 0, "Number of threads to use for merge intermediate aggregation results in memory efficient mode. When bigger, then more memory is consumed. 0 means - same as 'max_threads'.", 0) \
-    M(Bool, enable_positional_arguments, true, "Enable positional arguments in ORDER BY, GROUP BY and LIMIT BY", 0) \
     \
     M(Bool, enable_extended_results_for_datetime_functions, false, "Enable date functions like toLastDayOfMonth return Date32 results (instead of Date results) for Date32/DateTime64 arguments.", 0) \
     \
@@ -451,6 +429,7 @@ class IColumn;
     M(Bool, debug_cnch_remain_temp_part, false, "Debug mode: remain temp (inserted, merged, altered) part", 0) \
     M(Bool, debug_cnch_force_commit_parts_rpc, false, "Debug mode: force to commit parts by RPC", 0) \
     M(Bool, show_table_uuid_in_table_create_query_if_not_nil, false, "For tables in databases with Engine=Atomic show UUID of the table in its CREATE query.", 0) \
+    M(UInt64, max_threads_for_cnch_dump, 1, "The maximum number of threads for dumping data in cnch.", 0) \
     M(Bool, database_atomic_wait_for_drop_and_detach_synchronously, false, "When executing DROP or DETACH TABLE in Atomic database, wait for table data to be finally dropped or detached.", 0) \
     M(Bool, enable_scalar_subquery_optimization, true, "If it is set to true, prevent scalar subqueries from (de)serializing large scalar values and possibly avoid running the same subquery more than once.", 0) \
     M(Bool, optimize_trivial_count_query, true, "Process trivial 'SELECT count() FROM table' query from metadata.", 0) \
@@ -504,16 +483,12 @@ class IColumn;
     M(Bool, allow_experimental_window_functions, true, "Allow experimental window functions", 0) \
     M(Bool, allow_experimental_projection_optimization, false, "Enable projection optimization when processing SELECT queries", 0) \
     M(Bool, force_optimize_projection, false, "If projection optimization is enabled, SELECT queries need to use projection", 0) \
-    M(Bool, async_socket_for_remote, false, "Asynchronously read from socket executing remote query", 0) \
+    M(Bool, async_socket_for_remote, true, "Asynchronously read from socket executing remote query", 0) \
     M(UInt64, resize_number_after_remote_source, 1, "Resize number after remote source, will be useful if shard is small", 0) \
     M(Bool, insert_null_as_default, true, "Insert DEFAULT values instead of NULL in INSERT SELECT (UNION ALL)", 0) \
     \
     M(Bool, optimize_rewrite_sum_if_to_count_if, true, "Rewrite sumIf() and sum(if()) function countIf() function when logically equivalent", 0) \
     M(UInt64, insert_shard_id, 0, "If non zero, when insert into a distributed table, the data will be inserted into the shard `insert_shard_id` synchronously. Possible values range from 1 to `shards_number` of corresponding distributed table", 0) \
-    \
-    M(Bool, collect_hash_table_stats_during_aggregation, true, "Enable collecting hash table statistics to optimize memory allocation", 0) \
-    M(UInt64, max_entries_for_hash_table_stats, 10'000, "How many entries hash table statistics collected during aggregation is allowed to have", 0) \
-    M(UInt64, max_size_to_preallocate_for_aggregation, 10'000'000, "For how many elements it is allowed to preallocate space in all hash tables in total before aggregation", 0) \
     \
     /** Experimental feature for moving data between shards. */ \
     \
@@ -587,7 +562,7 @@ class IColumn;
     M(Milliseconds, topology_lease_life_ms, 12000, "Expiration time of topology lease.", 0) \
     M(Milliseconds, topology_session_restart_check_ms, 120, "Check and try to restart leader election for server master", 0) \
     M(UInt64, catalog_max_commit_size, 2000, "Max record number to be committed in one batch.", 0) \
-    M(Bool, server_write_ha, false, "Whether to enable write on non-host server if host server is not available. Directly commit from non-host server.", 0) \
+    M(Bool, server_write_ha, true, "Whether to enable write on non-host server if host server is not available. Directly commit from non-host server.", 0) \
     M(Bool, enable_write_non_host_server, true, "Whether to eable write on non-host server. Will root write request to host server.", 0) \
     M(UInt64, cnch_clear_parts_timeout, 10, "Wait for actions to clear the parts in workers within the specified number of seconds. 0 - wait unlimited time.", 0) \
     M(Seconds, cnch_fetch_parts_timeout, 60, "The timeout for gettting parts from metastore. 0 - wait unlimited time.", 0) \
@@ -595,7 +570,7 @@ class IColumn;
     M(UInt64, part_cache_manager_thread_pool_size, 16, "Number of thread performing background parts info collection in PartCacheManager.", 0) \
     M(String, username_for_internal_communication, "server", "Username to be used by server for authentication on worker side.", 0) \
     M(UInt64, cnch_part_allocation_algorithm, 2, "Part allocation algorithm, 0: jump consistent hashing, 1: bounded hash ring consistent hashing, 2: strict ring consistent hashing.", 0) \
-    M(UInt64, cnch_max_cached_storage, 2048, "Cnch storage cache size.", 0) \
+    M(UInt64, cnch_max_cached_storage, 0, "Cnch storage cache size.", 0) \
     M(Bool, enable_multiple_tables_for_cnch_parts, 0, "Allow to query multiple tables for system.cnch_parts", 0) \
     M(Bool, enable_query_level_profiling, false, "Enable profiling at query and operator level", 0) \
     M(Bool, enable_kafka_log_profiling, false, "Enable query profiling for cnch_kafka_log table", 0) \
@@ -619,7 +594,7 @@ class IColumn;
     M(Bool, allow_experimental_funnel_functions, false, "Enable experimental functions for funnel analysis.", 0) \
     \
     /** Complex query settings **/\
-    M(Bool, enable_distributed_stages, true, "Enable complex query mode to split plan to distributed stages", 0)\
+    M(Bool, enable_distributed_stages, false, "Enable complex query mode to split plan to distributed stages", 0)\
     M(Bool, fallback_to_simple_query, false, "Enable fallback if there is any syntax error", 0)\
     M(Bool, debug_plan_generation, false, "Enable complex query mode to split plan to distributed stages", 0)\
     M(Bool, send_plan_segment_by_brpc, true, "Whether to send plan segment by BRPC", 0)\
@@ -636,10 +611,9 @@ class IColumn;
     M(HandleKafkaErrorMode, handle_kafka_error_mode, HandleKafkaErrorMode::DEFAULT, "Obsolete setting, does nothing.", 0) \
     M(Bool, database_replicated_ddl_output, true, "Obsolete setting, does nothing.", 0) \
     /** Ingestion */ \
+    M(UInt64, max_ingest_rows_size, 50000000, "The maximum rows for ingestion.", 0) \
     M(UInt64, max_ingest_columns_size, 10, "The maximum number of columns that can be ingested.", 0) \
     M(UInt64, memory_efficient_ingest_partition_max_key_count_in_memory, 50000000, "The maximum number of key for ingestion to keep in memory during join.", 0) \
-    M(UInt64, ingest_partition_timeout, 3600, "The ingestion timeout in seconds.", 0) \
-    M(UInt64, max_ingest_rows_size, 50000000, "The maximum rows for ingestion.", 0) \
     M(UInt64, parallel_ingest_threads, 8, "The maximum threads for ingestion.", 0) \
     M(Bool, enable_replicas_create_ingest_node_in_zk, 0, "Whether to enable replicas to create ingest node in zk", 0) \
     M(Bool, allow_ingest_empty_partition, false, "Allow empty partition replace target table", 0) \
@@ -671,6 +645,7 @@ class IColumn;
     M(Float, cost_calculator_join_build_weight, 2, "Join build side weight for cost calculator", 0) \
     M(Float, cost_calculator_join_output_weight, 0.5, "Join output weight for cost calculator", 0) \
     M(Float, cost_calculator_cte_weight, 1, "CTE output weight for cost calculator", 0) \
+    M(Float, cost_calculator_cte_weight_for_join_build_side, 2.0, "Join build side weight for cost calculator", 0) \
     M(Float, cost_calculator_projection_weight, 0.1, "CTE output weight for cost calculator", 0) \
     M(Bool, print_graphviz, false, "Whether print graphviz", 0) \
     M(String, graphviz_path, "/tmp/plan/", "The path of graphviz plan", 0) \
@@ -686,6 +661,7 @@ class IColumn;
     M(UInt64, max_replicate_build_size, 200000, "Max join build size, when enum replicate", 0) \
     M(UInt64, max_replicate_shuffle_size, 50000000, "Max join build size, when enum replicate", 0) \
     M(Bool, add_parallel_before_agg, false, "Add parallel before agg", 0) \
+    M(Bool, enable_adaptive_scheduler, false, "Whether enable adaptive scheduler", 0) \
     M(Bool, add_parallel_after_join, false, "Add parallel after join", 0) \
     M(Bool, enforce_round_robin, false, "Whether add round robin exchange node", 0) \
     M(Bool, enable_pk_fk, true, "Whether enable PK-FK join estimation", 0) \
@@ -728,12 +704,15 @@ class IColumn;
     M(Bool, enable_execute_uncorrelated_subquery, false, "Whether enable execute uncorrelated subquery", 0) \
     M(UInt64, execute_uncorrelated_in_subquery_size, 10000, "Size of execute uncorrelated in subquery", 0) \
     M(Bool, enable_subcolumn_optimization_through_union, true, "Whether enable sub column optimization through set operation.", 0) \
-    /** Exchange setttings */ \
+    M(Float, pk_selectivity, 0.5, "PK selectivity for join estimation", 0) \
+    /** Exchange settings */ \
+    M(Bool, exchange_enable_multipath_reciever, true, "Whether enable exchange new mode ", 0) \
     M(UInt64, exchange_parallel_size, 1, "Exchange parallel size", 0) \
     M(UInt64, exchange_source_pipeline_threads, 16, "Recommend number of threads for pipeline which reading data from exchange, ingoned if exchange need keep data order", 0) \
     M(UInt64, exchange_timeout_ms, 100000, "Exchange request timeout ms",0) \
-    M(UInt64, exchange_local_receiver_queue_size, 50, "Queue size for local exchange receiver",0) \
+    M(UInt64, exchange_local_receiver_queue_size, 300, "Queue size for local exchange receiver",0) \
     M(UInt64, exchange_remote_receiver_queue_size, 100, "Queue size for remote exchange receiver",0) \
+    M(UInt64, exchange_multi_path_receiver_queue_size, 200, "Queue size for multi path exchange receiver", 0) \
     M(Bool, exchange_enable_block_compress, false, "Whether enable exchange block compress ", 0) \
     M(UInt64, exchange_stream_max_buf_size, 209715200, "Default 200M, -1 means no limit", 0) \
     M(UInt64, exchange_buffer_send_threshold_in_bytes, 1000000, "The minimum bytes when exchange will flush send buffer ", 0) \
@@ -775,7 +754,7 @@ class IColumn;
     \
     /* Transaction and catalog */ \
     M(Bool, ignore_duplicate_insertion_label, true, "Throw an exception if false", 0) \
-    M(Bool, bypass_ddl_db_lock, true, "Bypass locking database while creating tables", 0) \
+    M(Bool, bypass_ddl_db_lock, false, "Bypass locking database while creating tables", 0) \
     M(Bool, prefer_cnch_catalog, false, "Force using cnch catalog to get table first when resolving database and table", 0) \
     /** The section above is for obsolete settings. Do not add anything there. */\
 
@@ -823,9 +802,6 @@ class IColumn;
     M(Bool, output_format_pretty_color, true, "Use ANSI escape sequences to paint colors in Pretty formats", 0) \
     M(String, output_format_pretty_grid_charset, "UTF-8", "Charset for printing grid borders. Available charsets: ASCII, UTF-8 (default one).", 0) \
     M(UInt64, output_format_parquet_row_group_size, 1000000, "Row group size in rows.", 0) \
-    M(Bool, input_format_orc_allow_missing_columns, false, "Allow missing columns while reading ORC input formats", 0) \
-    M(Bool, input_format_parquet_allow_missing_columns, false, "Allow missing columns while reading Parquet input formats", 0) \
-    M(Bool, input_format_arrow_allow_missing_columns, false, "Allow missing columns while reading Arrow input formats", 0) \
     M(String, output_format_avro_codec, "", "Compression codec used for output. Possible values: 'null', 'deflate', 'snappy'.", 0) \
     M(UInt64, output_format_avro_sync_interval, 16 * 1024, "Sync interval in bytes.", 0) \
     M(Bool, output_format_tsv_crlf_end_of_line, false, "If it is set true, end of line in TSV format will be \\r\\n instead of \\n.", 0) \
@@ -861,17 +837,16 @@ class IColumn;
     M(Bool, enable_low_cardinality_merge_new_algo, true, "Whether use the new merge algorithm during part merge for low cardinality column", 0) \
     M(UInt64, low_cardinality_distinct_threshold, 100000, "Threshold for fallback to native column from low cardinality column, 0 disable", 0) \
     \
-    M(Bool, enable_sql_forwarding, true, "Allow auto query forwarding to target host server.", 1)  \
     M(UInt64, cnch_part_attach_limit, 3000, "Maximum number of part for ATTACH PARTITION/PARTS command", 0)\
     M(UInt64, cnch_part_attach_drill_down, 1, "Maximum levels of path to find cnch data parts, 0 means no drill down", 0) \
     M(UInt64, cnch_part_attach_assert_parts_count, 0, "Assert total number of parts to attach.", 0) \
     M(UInt64, cnch_part_attach_assert_rows_count, 0, "Assert totol number of part rows to attach.", 0) \
     M(UInt64, cnch_part_attach_max_source_discover_level, 1, "Maximum levels of drill down to lookup for different sources", 0) \
-    M(Bool, skip_table_definition_hash_check, false, "Whether skip table definition hash check when attach data parts.", 0)  \
     M(UInt64, cnch_part_attach_max_threads, 16, "Max threads to use when attach parts", 0) \
     M(UInt64, attach_failure_injection_knob, 0, "Attach failure injection knob, for test only", 0) \
-    M(Bool, async_post_commit, false, "Txn post commit asynchronously", 0) \
-    M(Bool, enable_auto_query_forwarding, false, "Auto forward query to target server when having multiple servers", 0) \
+    M(Bool, skip_table_definition_hash_check, false, "Whether skip table definition hash check when attach data parts.", 0)  \
+    M(Bool, enable_sql_forwarding, true, "Allow auto query forwarding to target host server.", 1)  \
+    M(Bool, async_post_commit, true, "Txn post commit asynchronously", 0) \
 
 
 // End of FORMAT_FACTORY_SETTINGS
