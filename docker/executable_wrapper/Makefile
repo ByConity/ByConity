@@ -1,8 +1,8 @@
-tag?=v0.2.2
+tag?=0.1.0-GA
 image:
-	test -f ../../build/programs/foundationdb-clients_7.1.27-1_amd64.deb || curl -L -o ../../build/programs/foundationdb-clients_7.1.27-1_amd64.deb https://github.com/apple/foundationdb/releases/download/7.1.27/foundationdb-clients_7.1.27-1_amd64.deb
-	cp ./app/run.sh ../../build/programs/
-	docker build --network=host -t byconity/byconity-server ../../build/programs -f Dockerfile
+	test -f ../../build_docker/programs/foundationdb-clients_7.1.27-1_amd64.deb || curl -L -o ../../build_docker/programs/foundationdb-clients_7.1.27-1_amd64.deb https://github.com/apple/foundationdb/releases/download/7.1.27/foundationdb-clients_7.1.27-1_amd64.deb
+	cp ./app/run.sh ../../build_docker/programs/
+	docker build --network=host -t byconity/byconity-server ../../build_docker/programs -f Dockerfile
 image_pull:
 	docker pull byconity/byconity-server:stable
 image_push:
