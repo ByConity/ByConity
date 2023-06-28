@@ -11,12 +11,12 @@ Projection est. 1 rows
                │     Expressions: expr#multiIf(and(isNotNull(ssci.customer_sk), isNotNull(csci.customer_sk)), 1, 0):=multiIf(isNotNull(ss_customer_sk) AND isNotNull(cs_bill_customer_sk), 1, 0), expr#multiIf(and(isNotNull(ssci.customer_sk), isNull(csci.customer_sk)), 1, 0):=multiIf(isNotNull(ss_customer_sk) AND isNull(cs_bill_customer_sk), 1, 0), expr#multiIf(and(isNull(ssci.customer_sk), isNotNull(csci.customer_sk)), 1, 0):=multiIf(isNull(ss_customer_sk) AND isNotNull(cs_bill_customer_sk), 1, 0)
                └─ Full Join est. 10637181801 rows
                   │     Condition: ss_customer_sk == cs_bill_customer_sk, ss_item_sk == cs_item_sk
-                  ├─ MergingAggregated est. 521229594 rows
-                  │  └─ Repartition Exchange est. 521229594 rows
+                  ├─ MergingAggregated est. 260614797 rows
+                  │  └─ Repartition Exchange est. 260614797 rows
                   │     │     Partition by: {ss_customer_sk, ss_item_sk}
-                  │     └─ Aggregating est. 521229594 rows
+                  │     └─ Aggregating est. 260614797 rows
                   │        │     Group by: {ss_customer_sk, ss_item_sk}
-                  │        └─ Inner Join est. 521229594 rows
+                  │        └─ Inner Join est. 260614797 rows
                   │           │     Condition: ss_sold_date_sk == d_date_sk
                   │           ├─ Local Exchange est. 2879987999 rows
                   │           │  └─ Filter est. 2879987999 rows
@@ -31,12 +31,12 @@ Projection est. 1 rows
                   │                    │     Condition: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
                   │                    └─ TableScan tpcds.date_dim est. 73049 rows
                   │                             Outputs: [d_date_sk, d_month_seq]
-                  └─ MergingAggregated est. 258933676 rows
-                     └─ Repartition Exchange est. 258933676 rows
+                  └─ MergingAggregated est. 129466838 rows
+                     └─ Repartition Exchange est. 129466838 rows
                         │     Partition by: {cs_bill_customer_sk, cs_item_sk}
-                        └─ Aggregating est. 258933676 rows
+                        └─ Aggregating est. 129466838 rows
                            │     Group by: {cs_bill_customer_sk, cs_item_sk}
-                           └─ Inner Join est. 258933676 rows
+                           └─ Inner Join est. 129466838 rows
                               │     Condition: cs_sold_date_sk == d_date_sk_1
                               ├─ Local Exchange est. 1439980416 rows
                               │  └─ Filter est. 1439980416 rows

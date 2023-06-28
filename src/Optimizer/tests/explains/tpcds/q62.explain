@@ -17,13 +17,13 @@ Projection est. 100 rows
                      │     Aggregates: expr#sum(multiIf(lessOrEquals(minus(ws_ship_date_sk, ws_sold_date_sk), 30), 1, 0)):=AggNull(sum)(expr#multiIf(lessOrEquals(minus(ws_ship_date_sk, ws_sold_date_sk), 30), 1, 0)), expr#sum(multiIf(and(greater(minus(ws_ship_date_sk, ws_sold_date_sk), 30), lessOrEquals(minus(ws_ship_date_sk, ws_sold_date_sk), 60)), 1, 0)):=AggNull(sum)(expr#multiIf(and(greater(minus(ws_ship_date_sk, ws_sold_date_sk), 30), lessOrEquals(minus(ws_ship_date_sk, ws_sold_date_sk), 60)), 1, 0)), expr#sum(multiIf(and(greater(minus(ws_ship_date_sk, ws_sold_date_sk), 60), lessOrEquals(minus(ws_ship_date_sk, ws_sold_date_sk), 90)), 1, 0)):=AggNull(sum)(expr#multiIf(and(greater(minus(ws_ship_date_sk, ws_sold_date_sk), 60), lessOrEquals(minus(ws_ship_date_sk, ws_sold_date_sk), 90)), 1, 0)), expr#sum(multiIf(and(greater(minus(ws_ship_date_sk, ws_sold_date_sk), 90), lessOrEquals(minus(ws_ship_date_sk, ws_sold_date_sk), 120)), 1, 0)):=AggNull(sum)(expr#multiIf(and(greater(minus(ws_ship_date_sk, ws_sold_date_sk), 90), lessOrEquals(minus(ws_ship_date_sk, ws_sold_date_sk), 120)), 1, 0)), expr#sum(multiIf(greater(minus(ws_ship_date_sk, ws_sold_date_sk), 120), 1, 0)):=AggNull(sum)(expr#multiIf(greater(minus(ws_ship_date_sk, ws_sold_date_sk), 120), 1, 0))
                      └─ Projection est. 123312947 rows
                         │     Expressions: [sm_type, web_name], expr#multiIf(and(greater(minus(ws_ship_date_sk, ws_sold_date_sk), 30), lessOrEquals(minus(ws_ship_date_sk, ws_sold_date_sk), 60)), 1, 0):=multiIf(((ws_ship_date_sk - ws_sold_date_sk) > 30) AND ((ws_ship_date_sk - ws_sold_date_sk) <= 60), 1, 0), expr#multiIf(and(greater(minus(ws_ship_date_sk, ws_sold_date_sk), 60), lessOrEquals(minus(ws_ship_date_sk, ws_sold_date_sk), 90)), 1, 0):=multiIf(((ws_ship_date_sk - ws_sold_date_sk) > 60) AND ((ws_ship_date_sk - ws_sold_date_sk) <= 90), 1, 0), expr#multiIf(and(greater(minus(ws_ship_date_sk, ws_sold_date_sk), 90), lessOrEquals(minus(ws_ship_date_sk, ws_sold_date_sk), 120)), 1, 0):=multiIf(((ws_ship_date_sk - ws_sold_date_sk) > 90) AND ((ws_ship_date_sk - ws_sold_date_sk) <= 120), 1, 0), expr#multiIf(greater(minus(ws_ship_date_sk, ws_sold_date_sk), 120), 1, 0):=multiIf((ws_ship_date_sk - ws_sold_date_sk) > 120, 1, 0), expr#multiIf(lessOrEquals(minus(ws_ship_date_sk, ws_sold_date_sk), 30), 1, 0):=multiIf((ws_ship_date_sk - ws_sold_date_sk) <= 30, 1, 0), expr#substring(w_warehouse_name, 1, 20):=substring(w_warehouse_name, 1, 20)
-                        └─ Inner Join est. 123312947 rows
+                        └─ Inner Join est. 61656473 rows
                            │     Condition: ws_web_site_sk == web_site_sk
-                           ├─ Inner Join est. 123312947 rows
+                           ├─ Inner Join est. 61656473 rows
                            │  │     Condition: ws_warehouse_sk == w_warehouse_sk
-                           │  ├─ Inner Join est. 123312947 rows
+                           │  ├─ Inner Join est. 61656473 rows
                            │  │  │     Condition: ws_ship_mode_sk == sm_ship_mode_sk
-                           │  │  ├─ Inner Join est. 123312947 rows
+                           │  │  ├─ Inner Join est. 61656473 rows
                            │  │  │  │     Condition: ws_ship_date_sk == d_date_sk
                            │  │  │  ├─ Local Exchange est. 720000376 rows
                            │  │  │  │  └─ Filter est. 720000376 rows
