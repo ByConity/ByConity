@@ -6,11 +6,11 @@ services:
     command: namenode
     container_name: "${COMPOSE_PROJECT_NAME}-hdfs-namenode"
     environment:
-      - HADOOP_CONF_DIR=${HADOOP_CONF_DIR}
+      - HADOOP_CONF_DIR=/etc/hadoop/conf
     ports:
       - "${CLICKHOUSE_PORT_HDFS}:9870"
     volumes:
-      - hdfs_volume:${HADOOP_CONF_DIR}
+      - hdfs_volume:/etc/hadoop/conf
       - /var/log/hadoop
       - /data1
       - /data2
@@ -22,9 +22,9 @@ services:
     command: datanode
     container_name: "${COMPOSE_PROJECT_NAME}-hdfs-datanode"
     environment:
-      - HADOOP_CONF_DIR=${HADOOP_CONF_DIR}
+      - HADOOP_CONF_DIR=/etc/hadoop/conf
     volumes:
-      - hdfs_volume:${HADOOP_CONF_DIR}
+      - hdfs_volume:/etc/hadoop/conf
       - /var/log/hadoop
       - /data1
       - /data2
@@ -148,33 +148,34 @@ services:
       - namenode:/hadoop/dfs/name
     environment:
       - CLUSTER_NAME=test
+      - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
     env_file:
-      - ./hive/hadoop-hive.env
+      - ./.env
     container_name: ${COMPOSE_PROJECT_NAME}_namenode
     ports:
-      - "${FS_PORT}:${FS_PORT}"
+      - "${FS_PORT}:8120"
       - "${HIVE_NAMENODE_PORT}:50070"
 
   datanode:
     image: bde2020/hadoop-datanode:2.0.0-hadoop2.7.4-java8
     volumes:
       - datanode:/hadoop/dfs/data
-    env_file:
-      - ./hive/hadoop-hive.env
     environment:
+      COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME}
       SERVICE_PRECONDITION: "${COMPOSE_PROJECT_NAME}_namenode:50070"
+    env_file:
+      - ./.env
     container_name: ${COMPOSE_PROJECT_NAME}_datanode
-    ports:
-      - "${HIVE_DATANODE_PORT}:50075"
 
 
   hive-server:
     image: bde2020/hive:2.3.2-postgresql-metastore
-    env_file:
-      - ./hive/hadoop-hive.env
     environment:
+      COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME}
       HIVE_CORE_CONF_javax_jdo_option_ConnectionURL: "jdbc:postgresql://${COMPOSE_PROJECT_NAME}_hive-metastore-postgresql:5432/metastore"
       SERVICE_PRECONDITION: "${COMPOSE_PROJECT_NAME}_hive-metastore:9083"
+    env_file:
+      - ./.env
     container_name: ${COMPOSE_PROJECT_NAME}_hive-server
     volumes:
       - scripts:/mnt/scripts
@@ -186,11 +187,12 @@ services:
 
   hive-metastore:
     image: bde2020/hive:2.3.2-postgresql-metastore
-    env_file:
-      - ./hive/hadoop-hive.env
     command: /bin/bash /mnt/scripts/hive-metastore.sh
     environment:
+      COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME}
       SERVICE_PRECONDITION: "${COMPOSE_PROJECT_NAME}_namenode:50070 ${COMPOSE_PROJECT_NAME}_datanode:50075 ${COMPOSE_PROJECT_NAME}_hive-metastore-postgresql:5432"
+    env_file:
+      - ./.env
     container_name: ${COMPOSE_PROJECT_NAME}_hive-metastore
     volumes:
       - scripts:/mnt/scripts
@@ -204,8 +206,8 @@ services:
   hive-metastore-postgresql:
     image: bde2020/hive-metastore-postgresql:2.3.0
     container_name: ${COMPOSE_PROJECT_NAME}_hive-metastore-postgresql
-    ports:
-      - "${HIVE_METASTORE_POSTGRESQL}:5432"
+    environment:
+      COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME}
 
 volumes:
     config_volume:
