@@ -4465,6 +4465,14 @@ std::shared_ptr<Cluster> Context::mockCnchServersCluster() const
 
 }
 
+std::vector<std::pair<UInt64, CnchWorkerResourcePtr>> Context::getAllWorkerResources() const
+{
+    if (!shared->named_cnch_sessions)
+        return {};
+
+    return shared->named_cnch_sessions->getAllWorkerResources();
+}
+
 Context::PartAllocator Context::getPartAllocationAlgo() const
 {
     /// we prefer the config setting first

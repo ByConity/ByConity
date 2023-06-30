@@ -285,7 +285,7 @@ struct StorageInMemoryMetadata
     /// Returns structure with unique key.
     const KeyDescription & getUniqueKey() const;
     /// Returns ASTExpressionList of unique key expression for storage or nullptr if there is none.
-    ASTPtr getUniqueKeyAST() const { return primary_key.definition_ast; }
+    ASTPtr getUniqueKeyAST() const { return unique_key.definition_ast; }
     /// Storage has user-defined (in CREATE query) sorting key.
     bool isUniqueKeyDefined() const;
     /// Storage has unique key (maybe part of some other key). It means, that

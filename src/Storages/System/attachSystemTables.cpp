@@ -62,6 +62,7 @@
 #include <Storages/System/StorageSystemTableEngines.h>
 #include <Storages/System/StorageSystemTableFunctions.h>
 #include <Storages/System/StorageSystemTables.h>
+#include <Storages/System/StorageSystemCloudTables.h>
 #include <Storages/System/StorageSystemZooKeeper.h>
 #include <Storages/System/StorageSystemContributors.h>
 #include <Storages/System/StorageSystemResourceGroups.h>
@@ -171,6 +172,7 @@ void attachSystemTablesLocal(IDatabase & system_database)
     attach<StorageSystemErrors>(system_database, "errors");
     attach<StorageSystemDataSkippingIndices>(system_database, "data_skipping_indices");
     attach<StorageSystemManipulations>(system_database, "manipulations");
+    attach<StorageSystemCloudTables>(system_database, "cloud_tables");
 #if !defined(ARCADIA_BUILD)
     attach<StorageSystemLicenses>(system_database, "licenses");
     attach<StorageSystemTimeZones>(system_database, "time_zones");

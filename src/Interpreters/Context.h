@@ -1174,8 +1174,8 @@ public:
     void setRuleId(int rule_id_) { rule_id = rule_id_; }
     void incRuleId() { ++rule_id; }
 
-    String graphviz_sub_query_path = "";
-    void setExecuteSubQueryPath(String path) { graphviz_sub_query_path = path; }
+    String graphviz_sub_query_path;
+    void setExecuteSubQueryPath(String path) { graphviz_sub_query_path = std::move(path); }
     String getExecuteSubQueryPath() const { return graphviz_sub_query_path;  }
     void removeExecuteSubQueryPath() { graphviz_sub_query_path = "";  }
 
@@ -1307,6 +1307,8 @@ public:
 
     InterserverCredentialsPtr getCnchInterserverCredentials();
     std::shared_ptr<Cluster> mockCnchServersCluster() const;
+
+    std::vector<std::pair<UInt64, CnchWorkerResourcePtr>> getAllWorkerResources() const;
 
     /// Part allocation
     // Consistent hash algorithm for part allocation

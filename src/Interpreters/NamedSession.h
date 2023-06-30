@@ -17,6 +17,7 @@
 #include <Core/Types.h>
 #include <Common/SipHash.h>
 #include <Common/ThreadPool.h>
+#include <Interpreters/Context_fwd.h>
 
 #include <memory>
 #include <vector>
@@ -29,8 +30,7 @@
 namespace DB
 {
 
-class Context;
-using ContextMutablePtr = std::shared_ptr<Context>;
+class CnchWorkerResource;
 
 template<typename NamedSession>
 class NamedSessionsImpl
@@ -54,6 +54,7 @@ public:
         scheduleCloseSession(session, lock);
     }
 
+    std::vector<std::pair<Key, std::shared_ptr<CnchWorkerResource>>> getAllWorkerResources() const;
 private:
 
     /// TODO it's very complicated. Make simple std::map with time_t or boost::multi_index.
@@ -72,7 +73,7 @@ private:
     /// Close sessions, that has been expired. Returns how long to wait for next session to be expired, if no new sessions will be added.
     std::chrono::steady_clock::duration closeSessions(std::unique_lock<std::mutex> & lock);
 
-    std::mutex mutex;
+    mutable std::mutex mutex;
     std::condition_variable cond;
     std::atomic<bool> quit{false};
     ThreadFromGlobalPool thread{&NamedSessionsImpl::cleanThread, this};
