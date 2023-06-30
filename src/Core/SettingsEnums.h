@@ -221,7 +221,8 @@ struct SettingFieldDialectType
     explicit operator Field() const { return toString(); }
 
     String toString() const { return Traits::toString(value); }
-    void parseFromString(const String & str) {
+    void parseFromString(const String & str)
+    {
         *this = Traits::fromString(str);
     }
 

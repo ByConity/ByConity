@@ -22,6 +22,7 @@
 #include <Storages/IStorage.h>
 #include <Transaction/ICnchTransaction.h>
 #include <CloudServices/DedupWorkerStatus.h>
+#include <CloudServices/CnchServerResource.h>
 #include <WorkerTasks/ManipulationList.h>
 #include <WorkerTasks/ManipulationTaskParams.h>
 
@@ -185,7 +186,7 @@ brpc::CallId CnchWorkerClient::sendCnchHiveDataParts(
     const StoragePtr & storage,
     const String & local_table_name,
     const HiveDataPartsCNCHVector & parts,
-    ExceptionHandler & handler)
+    const ExceptionHandlerPtr & handler)
 {
     Protos::SendCnchHiveDataPartsReq request;
 
@@ -201,7 +202,7 @@ brpc::CallId CnchWorkerClient::sendCnchHiveDataParts(
     cntl->set_timeout_ms(send_timeout);
 
     auto call_id = cntl->call_id();
-    stub->sendCnchHiveDataParts(cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDone, response, cntl, &handler));
+    stub->sendCnchHiveDataParts(cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDone, response, cntl, handler));
 
     return call_id;
 }
@@ -213,7 +214,7 @@ brpc::CallId CnchWorkerClient::preloadDataParts(
     const String & create_local_table_query,
     const ServerDataPartsVector & parts,
     bool sync,
-    ExceptionHandler & handler)
+    const ExceptionHandlerPtr & handler)
 {
     Protos::PreloadDataPartsReq request;
     request.set_txn_id(txn_id);
@@ -229,7 +230,7 @@ brpc::CallId CnchWorkerClient::preloadDataParts(
     cntl->set_timeout_ms(send_timeout);
 
     auto call_id = cntl->call_id();
-    stub->preloadDataParts(cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDone, response, cntl, &handler));
+    stub->preloadDataParts(cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDone, response, cntl, handler));
     return call_id;
 }
 
@@ -239,7 +240,8 @@ brpc::CallId CnchWorkerClient::sendQueryDataParts(
     const String & local_table_name,
     const ServerDataPartsVector & data_parts,
     const std::set<Int64> & required_bucket_numbers,
-    ExceptionHandler & handler)
+    const ExceptionHandlerWithFailedInfoPtr & handler,
+    const WorkerId & worker_id)
 {
     Protos::SendDataPartsReq request;
     request.set_txn_id(context->getCurrentTransactionID());
@@ -269,20 +271,79 @@ brpc::CallId CnchWorkerClient::sendQueryDataParts(
     cntl->set_timeout_ms(send_timeout);
 
     auto call_id = cntl->call_id();
-    stub->sendQueryDataParts(cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDone, response, cntl, &handler));
+    stub->sendQueryDataParts(cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDoneWithFailedInfo, response, cntl, handler, worker_id));
 
     return call_id;
 }
 
-brpc::CallId CnchWorkerClient::sendOffloadingInfo(
+brpc::CallId CnchWorkerClient::sendOffloadingInfo( // NOLINT
     [[maybe_unused]] const ContextPtr & context,
     [[maybe_unused]] const HostWithPortsVec & read_workers,
     [[maybe_unused]] const std::vector<std::pair<StorageID, String>> & worker_table_names,
     [[maybe_unused]] const std::vector<HostWithPortsVec> & buffer_workers_vec,
-    [[maybe_unused]] ExceptionHandler & handler)
+    [[maybe_unused]] const ExceptionHandlerPtr & handler)
 {
     /// TODO:
     return {};
+}
+
+ brpc::CallId CnchWorkerClient::sendResources(
+    const ContextPtr & context,
+    const std::vector<AssignedResource> & resources_to_send,
+    const ExceptionHandlerWithFailedInfoPtr & handler,
+    const WorkerId & worker_id)
+{
+    Protos::SendResourcesReq request;
+
+    const auto & settings = context->getSettingsRef();
+    auto max_execution_time = settings.max_execution_time.value.totalSeconds();
+
+    request.set_txn_id(context->getCurrentTransactionID());
+    request.set_primary_txn_id(context->getCurrentTransaction()->getPrimaryTransactionID());
+    /// recycle_timeout refers to the time when the session is recycled under abnormal case,
+    /// so it should be larger than max_execution_time to make sure the session is not to be destroyed in advance.
+    auto recycle_timeout = max_execution_time ? max_execution_time + 60 : 3600;
+    request.set_timeout(recycle_timeout);
+
+    for (const auto & resource: resources_to_send)
+    {
+        if (!resource.sent_create_query)
+            request.add_create_queries(resource.create_table_query);
+
+        /// parts
+        auto & table_data_parts = *request.mutable_data_parts()->Add();
+
+        table_data_parts.set_database(resource.storage->getDatabaseName());
+        table_data_parts.set_table(resource.worker_table_name);
+
+        if (!resource.server_parts.empty())
+        {
+            fillBasePartAndDeleteBitmapModels(
+                *resource.storage, resource.server_parts, *table_data_parts.mutable_server_parts(), *table_data_parts.mutable_server_part_bitmaps());
+        }
+
+        if (!resource.hive_parts.empty())
+        {
+            fillCnchHivePartsModel(resource.hive_parts, *table_data_parts.mutable_hive_parts());
+        }
+
+        /// bucket numbers
+        for (const auto & bucket_num: resource.bucket_numbers)
+            *table_data_parts.mutable_bucket_numbers()->Add() = bucket_num;
+    }
+
+    request.set_disk_cache_mode(context->getSettingsRef().disk_cache_mode.toString());
+
+    brpc::Controller * cntl = new brpc::Controller;
+    /// send_timeout refers to the time to send resource to worker
+    /// If max_execution_time is not set, the send_timeout will be set to 30s
+    auto send_timeout_ms = max_execution_time ? max_execution_time * 1000L : 30 * 1000L;
+    cntl->set_timeout_ms(send_timeout_ms);
+    const auto call_id = cntl->call_id();
+    auto * response = new Protos::SendResourcesResp();
+    stub->sendResources(cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDoneWithFailedInfo, response, cntl, handler, worker_id));
+
+    return call_id;
 }
 
 void CnchWorkerClient::removeWorkerResource(TxnTimestamp txn_id)

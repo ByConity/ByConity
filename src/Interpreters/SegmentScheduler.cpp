@@ -87,13 +87,13 @@ SegmentScheduler::insertPlanSegments(const String & query_id, PlanSegmentTree * 
         }
         query_map.emplace(std::make_pair(query_id, dag_ptr));
     }
-    /// send resource to worker before scheduler
 
+    /// send resource to worker before scheduler
     auto server_resource = query_context->tryGetCnchServerResource();
     if (server_resource)
     {
         /// TODO: we can skip some worker
-        server_resource->sendResource(query_context);
+        server_resource->sendResources(query_context);
     }
 
     scheduler(query_id, query_context, dag_ptr);

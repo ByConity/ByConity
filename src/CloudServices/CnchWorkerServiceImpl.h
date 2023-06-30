@@ -153,6 +153,12 @@ public:
         Protos::SendDataPartsResp * response,
         google::protobuf::Closure * done) override;
 
+    void sendResources(
+        google::protobuf::RpcController * cntl,
+        const Protos::SendResourcesReq * request,
+        Protos::SendResourcesResp * response,
+        google::protobuf::Closure * done) override;
+
     void removeWorkerResource(
         google::protobuf::RpcController * cntl,
         const Protos::RemoveWorkerResourceReq * request,

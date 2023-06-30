@@ -134,7 +134,7 @@ namespace DB::RPCHelpers
     void assertController(const brpc::Controller & cntl);
 
     template <typename Resp>
-    void onAsyncCallDone(Resp * response, brpc::Controller * cntl, ExceptionHandler * handler)
+    void onAsyncCallDone(Resp * response, brpc::Controller * cntl, ExceptionHandlerPtr handler)
     {
         try
         {
@@ -145,6 +145,25 @@ namespace DB::RPCHelpers
         }
         catch (...)
         {
+            handler->setException(std::current_exception());
+        }
+    }
+
+    template <typename Resp>
+    void onAsyncCallDoneWithFailedInfo(Resp * response, brpc::Controller * cntl, ExceptionHandlerWithFailedInfoPtr handler, const DB::WorkerId worker_id)
+    {
+        int32_t error_code = 0;
+        try
+        {
+            std::unique_ptr<Resp> response_guard(response);
+            std::unique_ptr<brpc::Controller> cntl_guard(cntl);
+            error_code = cntl->ErrorCode();
+            RPCHelpers::assertController(*cntl);
+            RPCHelpers::checkResponse(*response);
+        }
+        catch (...)
+        {
+            handler->addFailedRpc(worker_id, error_code);
             handler->setException(std::current_exception());
         }
     }

@@ -498,6 +498,93 @@ void CnchWorkerServiceImpl::sendOffloading(
     }
 }
 
+void CnchWorkerServiceImpl::sendResources(
+    google::protobuf::RpcController * cntl,
+    const Protos::SendResourcesReq * request,
+    Protos::SendResourcesResp * response,
+    google::protobuf::Closure * done)
+{
+    brpc::ClosureGuard done_guard(done);
+    try
+    {
+        LOG_TRACE(log, "Receiving resources for Session: {}", request->txn_id());
+
+        auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
+
+        auto timeout = std::chrono::seconds(request->timeout());
+        auto session = rpc_context->acquireNamedCnchSession(request->txn_id(), timeout, false);
+        auto query_context = session->context;
+        query_context->setTemporaryTransaction(request->txn_id(), request->primary_txn_id());
+        auto worker_resource = query_context->getCnchWorkerResource();
+
+        /// store cloud tables in cnch_session_resource.
+        {
+            /// create a copy of session_context to avoid modify settings in SessionResource
+            auto context_for_create = Context::createCopy(query_context);
+            for (const auto & create_query: request->create_queries())
+                worker_resource->executeCreateQuery(context_for_create, create_query);
+
+            LOG_DEBUG(log, "Successfully create {} queries for Session: {}", request->create_queries_size(), request->txn_id());
+        }
+
+        for (const auto & data: request->data_parts())
+        {
+            auto storage = DatabaseCatalog::instance().getTable({data.database(), data.table()}, query_context);
+
+            if (auto * cloud_merge_tree = dynamic_cast<StorageCloudMergeTree *>(storage.get()))
+            {
+                if (!data.server_parts().empty())
+                {
+                    MergeTreeMutableDataPartsVector server_parts;
+                    if (cloud_merge_tree->getInMemoryMetadata().hasUniqueKey())
+                        server_parts = createBasePartAndDeleteBitmapFromModelsForSend<IMergeTreeMutableDataPartPtr>(*cloud_merge_tree, data.server_parts(), data.server_part_bitmaps());
+                    else
+                        server_parts = createPartVectorFromModelsForSend<IMergeTreeMutableDataPartPtr>(*cloud_merge_tree, data.server_parts());
+
+                    if (request->has_disk_cache_mode())
+                    {
+                        auto disk_cache_mode = SettingFieldDiskCacheModeTraits::fromString(request->disk_cache_mode());
+                        if (disk_cache_mode != DiskCacheMode::AUTO)
+                        {
+                            for (auto & part : server_parts)
+                                part->disk_cache_mode = disk_cache_mode;
+                        }
+                    }
+
+                    cloud_merge_tree->loadDataParts(server_parts);
+
+                    LOG_DEBUG(
+                        log,
+                        "Received and loaded  {} parts for table {}(txn_id: {})",
+                        data.server_parts_size(), cloud_merge_tree->getStorageID().getNameForLogs(), request->txn_id());
+                }
+
+                std::set<Int64> required_bucket_numbers;
+                for (const auto & bucket_number: data.bucket_numbers())
+                    required_bucket_numbers.insert(bucket_number);
+
+                cloud_merge_tree->setRequiredBucketNumbers(required_bucket_numbers);
+            }
+            else if (auto * hive_table = dynamic_cast<StorageCloudHive *>(storage.get()))
+            {
+                auto hive_parts = createCnchHiveDataParts(getContext(), data.hive_parts());
+                hive_table->loadDataParts(hive_parts);
+
+                LOG_DEBUG(log, "Received and loaded {} hive parts for table {}" , hive_parts.size(), hive_table->getStorageID().getNameForLogs());
+            }
+            else
+                throw Exception("Unknown table engine: " + storage->getName(), ErrorCodes::UNKNOWN_TABLE);
+        }
+
+        LOG_TRACE(log, "Received all resource for session: {}", request->txn_id());
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        RPCHelpers::handleException(response->mutable_exception());
+    }
+}
+
 void CnchWorkerServiceImpl::removeWorkerResource(
     google::protobuf::RpcController *,
     const Protos::RemoveWorkerResourceReq * request,
