@@ -100,7 +100,6 @@
 #include <Common/getNumberOfPhysicalCPUCores.h>
 #include <Common/remapExecutable.h>
 #include <Common/Configurations.h>
-#include <Common/Config/MetastoreConfig.h>
 #include <Common/Config/VWCustomizedSettings.h>
 #include <common/ErrorHandlers.h>
 #include <common/coverage.h>
