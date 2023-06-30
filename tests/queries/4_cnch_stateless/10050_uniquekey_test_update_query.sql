@@ -21,15 +21,15 @@ INSERT INTO unique_update_query VALUES ('2023-01-02', 1004, 9999, 'c4', 'e4');
 SELECT * FROM unique_update_query ORDER BY id;
 -- test update columns with filter
 UPDATE unique_update_query SET number = 10, content = 'x1' WHERE p_date = '2023-01-02';
-SELECT ' ';
+SELECT '';
 SELECT * FROM unique_update_query ORDER BY id;
 -- test update specific rows by using filter and order by limit
 UPDATE unique_update_query SET number = number+1, content = concat('new_',content) WHERE p_date = '2023-01-01' ORDER BY id LIMIT 1;
-SELECT ' ';
+SELECT '';
 SELECT * FROM unique_update_query ORDER BY id;
 -- test swap two columns
 UPDATE unique_update_query SET content=extra, extra=content WHERE p_date = '2023-01-01';
-SELECT ' ';
+SELECT '';
 SELECT * FROM unique_update_query ORDER BY id;
 -- test update unique keys (throw exception)
 UPDATE unique_update_query SET id=1000 WHERE p_date = '2023-01-01'; -- { serverError 36 }
