@@ -12,9 +12,9 @@ Projection est. 100 rows
             └─ Projection est. 1169859574800 rows
                │     Expressions: [cc_name, d_moy, d_year, expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year), expr#sum(cs_sales_price), expr#sum(cs_sales_price)_1, expr#sum(cs_sales_price)_2, i_brand, i_category], expr#minus(sum_sales, avg_monthly_sales):=`expr#sum(cs_sales_price)` - `expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year)`
                └─ Inner Join est. 1169859574800 rows
-                  │     Condition: cc_name == cc_name_2, expr#rank() OVER (PARTITION BY i_category, i_brand, cc_name ORDER BY d_year ASC, d_moy ASC)_3 == minus(expr#rank() OVER (PARTITION BY i_category, i_brand, cc_name ORDER BY d_year ASC, d_moy ASC)_2, 1)_1, i_brand == i_brand_2, i_category == i_category_2
+                  │     Condition: cc_name == cc_name_2, expr#cast(expr#rank() OVER (PARTITION BY i_category, i_brand, cc_name ORDER BY d_year ASC, d_moy ASC), 'Int128') == expr#cast(minus(expr#rank() OVER (PARTITION BY i_category, i_brand, cc_name ORDER BY d_year ASC, d_moy ASC)_2, 1), 'Int128'), i_brand == i_brand_2, i_category == i_category_2
                   ├─ Projection est. 928459980 rows
-                  │  │     Expressions: [cc_name, d_moy, d_year, expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year), expr#sum(cs_sales_price), expr#sum(cs_sales_price)_1, i_brand, i_category], expr#rank() OVER (PARTITION BY i_category, i_brand, cc_name ORDER BY d_year ASC, d_moy ASC)_3:=cast(`expr#rank() OVER (PARTITION BY i_category, i_brand, cc_name ORDER BY d_year ASC, d_moy ASC)`, 'Int128')
+                  │  │     Expressions: [cc_name, d_moy, d_year, expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year), expr#sum(cs_sales_price), expr#sum(cs_sales_price)_1, i_brand, i_category], expr#cast(expr#rank() OVER (PARTITION BY i_category, i_brand, cc_name ORDER BY d_year ASC, d_moy ASC), 'Int128'):=cast(`expr#rank() OVER (PARTITION BY i_category, i_brand, cc_name ORDER BY d_year ASC, d_moy ASC)`, 'Int128')
                   │  └─ Inner Join est. 928459980 rows
                   │     │     Condition: cc_name_1 == cc_name, i_brand_1 == i_brand, i_category_1 == i_category, plus(expr#rank() OVER (PARTITION BY i_category, i_brand, cc_name ORDER BY d_year ASC, d_moy ASC)_1, 1) == expr#rank() OVER (PARTITION BY i_category, i_brand, cc_name ORDER BY d_year ASC, d_moy ASC)
                   │     ├─ Projection est. 909720 rows
@@ -100,7 +100,7 @@ Projection est. 100 rows
                   │                                            Outputs: [cc_call_center_sk, cc_name]
                   └─ Broadcast Exchange est. 909720 rows
                      └─ Projection est. 909720 rows
-                        │     Expressions: [cc_name_2, expr#sum(cs_sales_price)_2, i_brand_2, i_category_2], minus(expr#rank() OVER (PARTITION BY i_category, i_brand, cc_name ORDER BY d_year ASC, d_moy ASC)_2, 1)_1:=cast(`expr#rank() OVER (PARTITION BY i_category, i_brand, cc_name ORDER BY d_year ASC, d_moy ASC)_2` - 1, 'Int128')
+                        │     Expressions: [cc_name_2, expr#sum(cs_sales_price)_2, i_brand_2, i_category_2], expr#cast(minus(expr#rank() OVER (PARTITION BY i_category, i_brand, cc_name ORDER BY d_year ASC, d_moy ASC)_2, 1), 'Int128'):=cast(`expr#rank() OVER (PARTITION BY i_category, i_brand, cc_name ORDER BY d_year ASC, d_moy ASC)_2` - 1, 'Int128')
                         └─ Window est. 909720 rows
                            └─ Repartition Exchange est. 909720 rows
                               │     Partition by: {cc_name_2, i_brand_2, i_category_2}

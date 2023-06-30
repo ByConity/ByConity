@@ -83,6 +83,11 @@ public:
     {
         return blocksHaveEqualStructure(header, other.header);
     }
+
+    NamesAndTypes getNamesAndTypes() const
+    {
+        return header.getNamesAndTypes();
+    }
 };
 
 using DataStreams = std::vector<DataStream>;

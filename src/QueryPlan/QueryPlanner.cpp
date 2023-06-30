@@ -15,15 +15,16 @@
 
 #include <QueryPlan/QueryPlanner.h>
 
-#include <Analyzers/analyze_common.h>
 #include <Analyzers/ExpressionVisitor.h>
-#include <QueryPlan/planning_common.h>
-#include <QueryPlan/PlanBuilder.h>
+#include <Analyzers/analyze_common.h>
+#include <Columns/Collator.h>
+#include <Core/ColumnWithTypeAndName.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/WindowDescription.h>
+#include <Interpreters/getTableExpressions.h>
 #include <Optimizer/PredicateUtils.h>
-#include <Optimizer/makeCastFunction.h>
 #include <Optimizer/Utils.h>
+#include <Optimizer/makeCastFunction.h>
 #include <QueryPlan/AggregatingStep.h>
 #include <QueryPlan/ApplyStep.h>
 #include <QueryPlan/DistinctStep.h>
@@ -36,14 +37,16 @@
 #include <QueryPlan/JoinStep.h>
 #include <QueryPlan/LimitByStep.h>
 #include <QueryPlan/LimitStep.h>
-#include <QueryPlan/SortingStep.h>
-#include <QueryPlan/MergingSortedStep.h>
 #include <QueryPlan/MergeSortingStep.h>
+#include <QueryPlan/MergingSortedStep.h>
 #include <QueryPlan/PartialSortingStep.h>
+#include <QueryPlan/PlanBuilder.h>
 #include <QueryPlan/ProjectionStep.h>
-#include <QueryPlan/UnionStep.h>
+#include <QueryPlan/SortingStep.h>
 #include <QueryPlan/TableScanStep.h>
+#include <QueryPlan/UnionStep.h>
 #include <QueryPlan/WindowStep.h>
+#include <QueryPlan/planning_common.h>
 #include <Common/FieldVisitors.h>
 #include <Columns/Collator.h>
 #include <Interpreters/getTableExpressions.h>
@@ -94,6 +97,7 @@ public:
         , use_ansi_semantic(context->getSettingsRef().dialect_type == DialectType::ANSI)
         , enable_shared_cte(context->getSettingsRef().cte_mode != CTEMode::INLINED)
         , enable_implicit_type_conversion(context->getSettingsRef().enable_implicit_type_conversion)
+        , enable_subcolumn_optimization_through_union(context->getSettingsRef().enable_subcolumn_optimization_through_union)
     {
     }
 
@@ -112,6 +116,7 @@ private:
     const bool use_ansi_semantic;
     const bool enable_shared_cte;
     const bool enable_implicit_type_conversion;
+    const bool enable_subcolumn_optimization_through_union;
 
     /// plan FROM
     PlanBuilder planFrom(ASTSelectQuery &);
@@ -163,7 +168,9 @@ private:
     RelationPlan combineSubqueryOutputsToTuple(const RelationPlan & plan, const ASTPtr & subquery);
 
     /// plan UNION/INTERSECT/EXCEPT
-    RelationPlan projectFieldSymbols(const RelationPlan & plan);
+    using FieldSubColumnID = std::pair<size_t, SubColumnID>;
+    using FieldSubColumnIDs = std::vector<FieldSubColumnID>;
+    RelationPlan projectFieldSymbols(const RelationPlan & plan, const FieldSubColumnIDs & sub_column_positions);
     RelationPlan planSetOperation(ASTs & selects, ASTSelectWithUnionQuery::Mode union_mode);
 
     /// type coercion
@@ -171,7 +178,7 @@ private:
     PlanWithSymbolMappings coerceTypesForSymbols(const PlanNodePtr & node, const NameToType & symbol_and_types, bool replace_symbol);
     NameToNameMap coerceTypesForSymbols(PlanBuilder & builder, const NameToType & symbol_and_types, bool replace_symbol);
     // coerce types for the first output column of a subquery plan
-    RelationPlan coerceTypeForSubquery(const RelationPlan & plan, const DataTypePtr & type);
+    void coerceTypeForSubquery(RelationPlan & plan, const DataTypePtr & type);
     // project expressions and cast their types
     PlanWithSymbols projectExpressionsWithCoercion(const PlanNodePtr & node, const TranslationMapPtr & translation,
                                                    const ExpressionsAndTypes & expression_and_types);
@@ -235,15 +242,14 @@ PlanNodePtr planOutput(const RelationPlan & plan, ASTPtr & query, Analysis & ana
     return new_root;
 }
 
-RelationPlan planExtremes(const RelationPlan & plan, ContextMutablePtr context)
+void planExtremes(RelationPlan & plan, ContextMutablePtr context)
 {
     if (context->getSettingsRef().extremes)
     {
         auto extremes_step = std::make_shared<ExtremesStep>(plan.getRoot()->getCurrentDataStream());
         auto extremes = plan.getRoot()->addStep(context->nextNodeId(), std::move(extremes_step));
-        return plan.withNewRoot(extremes);
+        plan.withNewRoot(extremes);
     }
-    return plan;
 }
 }
 
@@ -253,7 +259,7 @@ QueryPlanPtr QueryPlanner::plan(ASTPtr & query, Analysis & analysis, ContextMuta
     
     CTERelationPlans cte_plans;
     RelationPlan relation_plan = planQuery(query, nullptr, analysis, context, cte_plans);
-    relation_plan = planExtremes(relation_plan, context);
+    planExtremes(relation_plan, context);
     PlanNodePtr plan_root = planOutput(relation_plan, query, analysis, context);
     CTEInfo cte_info;
     for (const auto & cte_plan : cte_plans)
@@ -1212,12 +1218,12 @@ void QueryPlannerVisitor::planAggregate(PlanBuilder & builder, ASTSelectQuery & 
         builder.getCurrentDataStream(),
         std::move(keys_for_all_group),
         std::move(aggregate_descriptions),
-        select_query.group_by_with_grouping_sets || grouping_sets_params.size() > 1 ? std::move(grouping_sets_params) : GroupingSetsParamsList{},
+        select_query.group_by_with_grouping_sets || grouping_sets_params.size() > 1 ? std::move(grouping_sets_params)
+                                                                                    : GroupingSetsParamsList{},
         true,
         grouping_operations_descs,
         select_query.group_by_with_totals,
-        context->getSettingsRef().distributed_aggregation_memory_efficient 
-        );
+        context->getSettingsRef().distributed_aggregation_memory_efficient);
 
     builder.addStep(std::move(agg_step));
     builder.withAdditionalMappings(mappings_for_aggregate);
@@ -1366,7 +1372,7 @@ void QueryPlannerVisitor::planDistinct(PlanBuilder & builder, ASTSelectQuery & s
         extractDistinctSizeLimits(),
         limit_for_distinct,
         builder.translateToSymbols(select_expressions),
-        true);
+        false);
 
     builder.addStep(std::move(distinct_step));
     PRINT_PLAN(builder.plan, plan_distinct);
@@ -1435,7 +1441,7 @@ void QueryPlannerVisitor::planLimitBy(PlanBuilder & builder, ASTSelectQuery & se
     PRINT_PLAN(builder.plan, plan_limit_by);
 }
 
-RelationPlan QueryPlannerVisitor::projectFieldSymbols(const RelationPlan & plan)
+RelationPlan QueryPlannerVisitor::projectFieldSymbols(const RelationPlan & plan, const FieldSubColumnIDs & sub_column_positions)
 {
     const auto & old_root = plan.getRoot();
     const auto & old_mappings = plan.getFieldSymbolInfos();
@@ -1455,11 +1461,24 @@ RelationPlan QueryPlannerVisitor::projectFieldSymbols(const RelationPlan & plan)
             new_mappings.emplace_back(field_symbol);
         }
 
+        // when enable_subcolumn_optimization_through_union, append sub-columns after primary columns.
+        for (const auto & field_sub_col_id : sub_column_positions)
+        {
+            auto field_id = field_sub_col_id.first;
+            const auto & sub_col_id = field_sub_col_id.second;
+            auto sub_col_sym = old_mappings.at(field_id).tryGetSubColumnSymbol(sub_col_id);
+            if (!sub_col_sym)
+                throw Exception("Sub column not found in union element.", ErrorCodes::LOGICAL_ERROR);
+            assignments.emplace_back(*sub_col_sym, toSymbolRef(*sub_col_sym));
+            output_types[*sub_col_sym] = input_types.at(*sub_col_sym);
+            new_mappings[field_id].sub_column_symbols[sub_col_id] = *sub_col_sym;
+        }
+
         auto project_step = std::make_shared<ProjectionStep>(old_root->getCurrentDataStream(), assignments, output_types);
         new_root = old_root->addStep(context->nextNodeId(), std::move(project_step));
     }
 
-    return { new_root, new_mappings };
+    return {new_root, std::move(new_mappings)};
 }
 
 static bool hasWithTotalsInAnySubqueryInFromClause(const ASTSelectQuery & query)
@@ -1709,13 +1728,13 @@ void QueryPlannerVisitor::planScalarSubquery(PlanBuilder & builder, const ASTPtr
 
     if (auto coerced_type = analysis.getTypeCoercion(scalar_subquery))
     {
-        subquery_plan = coerceTypeForSubquery(subquery_plan, coerced_type);
+        coerceTypeForSubquery(subquery_plan, coerced_type);
     }
 
     // Add EnforceSingleRow Step
     auto enforce_single_row_step = std::make_shared<EnforceSingleRowStep>(subquery_plan.getRoot()->getCurrentDataStream());
     auto enforce_single_row_node = subquery_plan.getRoot()->addStep(context->nextNodeId(), std::move(enforce_single_row_step));
-    subquery_plan = subquery_plan.withNewRoot(enforce_single_row_node);
+    subquery_plan.withNewRoot(enforce_single_row_node);
 
     // Add Apply Step
     String subquery_output_symbol = subquery_plan.getFirstPrimarySymbol();
@@ -1898,6 +1917,31 @@ RelationPlan QueryPlannerVisitor::planSetOperation(ASTs & selects, ASTSelectWith
     if (sub_plans.size() == 1)
         return sub_plans.front();
 
+    FieldSubColumnIDs sub_column_positions;
+    // compute common subcolumns for each field
+    if (enable_subcolumn_optimization_through_union)
+    {
+        auto field_size = sub_plans.front().getFieldSymbolInfos().size();
+        for (size_t field_id = 0; field_id < field_size; ++field_id)
+        {
+            SubColumnIDSet common_sub_col_ids_prev;
+            SubColumnIDSet common_sub_col_ids;
+
+            for (size_t select_id = 0; select_id < selects.size(); ++select_id)
+            {
+                common_sub_col_ids_prev.swap(common_sub_col_ids);
+                common_sub_col_ids.clear();
+
+                for (const auto & sub_col : sub_plans[select_id].getFieldSymbolInfos().at(field_id).sub_column_symbols)
+                    if (select_id == 0 || common_sub_col_ids_prev.count(sub_col.first))
+                        common_sub_col_ids.emplace(sub_col.first);
+            }
+
+            for (const auto & sub_col_id : common_sub_col_ids)
+                sub_column_positions.emplace_back(field_id, sub_col_id);
+        }
+    }
+
     // 2. prepare sub plan & collect input info
     DataStreams input_streams;
     PlanNodes source_nodes;
@@ -1907,7 +1951,7 @@ RelationPlan QueryPlannerVisitor::planSetOperation(ASTs & selects, ASTSelectWith
         auto & select = selects[select_id];
         auto & sub_plan = sub_plans[select_id];
         // prune invisible columns, copy duplicated columns
-        sub_plan = projectFieldSymbols(sub_plan);
+        sub_plan = projectFieldSymbols(sub_plan, sub_column_positions);
 
         // coerce to common type
         if (enable_implicit_type_conversion && analysis.hasRelationTypeCoercion(*select))
@@ -1928,6 +1972,9 @@ RelationPlan QueryPlannerVisitor::planSetOperation(ASTs & selects, ASTSelectWith
             sub_plan = RelationPlan {coerced_plan.plan, field_symbol_infos};
         }
 
+        assert(
+            sub_plan.getRoot()->getCurrentDataStream().header.columns() == sub_plans[0].getRoot()->getCurrentDataStream().header.columns());
+        assert(sub_plan.getFieldSymbolInfos().size() == sub_plans[0].getFieldSymbolInfos().size());
         source_nodes.push_back(sub_plan.getRoot());
         input_streams.push_back(sub_plan.getRoot()->getCurrentDataStream());
     }
@@ -1935,14 +1982,29 @@ RelationPlan QueryPlannerVisitor::planSetOperation(ASTs & selects, ASTSelectWith
     // 3. build output info
     DataStream output_stream;
     FieldSymbolInfos field_symbols;
-    auto & first_sub_plan = sub_plans[0];
 
-    for (auto & col : first_sub_plan.getRoot()->getOutputNamesAndTypes())
+    const auto & field_symbol_info = sub_plans[0].getFieldSymbolInfos();
+    const auto & columns = sub_plans[0].getRoot()->getCurrentDataStream().header;
+
+    for (size_t i = 0; i < field_symbol_info.size(); ++i)
     {
+        const auto & col = columns.getByPosition(i);
         auto new_name = context->getSymbolAllocator()->newSymbol(col.name);
         output_stream.header.insert(ColumnWithTypeAndName{col.type, new_name});
         field_symbols.emplace_back(new_name);
     }
+
+    assert(field_symbol_info.size() + sub_column_positions.size() == columns.columns());
+    for (size_t i = 0; i < sub_column_positions.size(); ++i)
+    {
+        auto & field_sub_col_id = sub_column_positions.at(i);
+        const auto & col = columns.getByPosition(field_symbol_info.size() + i);
+        auto new_name = context->getSymbolAllocator()->newSymbol(col.name);
+        output_stream.header.insert(ColumnWithTypeAndName{col.type, new_name});
+        field_symbols.at(field_sub_col_id.first).sub_column_symbols.emplace(field_sub_col_id.second, new_name);
+    }
+
+    assert(output_stream.header.columns() == columns.columns());
 
     // 4. build step
     QueryPlanStepPtr set_operation_step;
@@ -1968,23 +2030,28 @@ RelationPlan QueryPlannerVisitor::planSetOperation(ASTs & selects, ASTSelectWith
             throw Exception("Unsupported union mode: " + std::to_string(static_cast<UInt8>(union_mode)), ErrorCodes::PLAN_BUILD_ERROR);
     }
 
-    auto set_operation_node = first_sub_plan.getRoot()->addStep(context->nextNodeId(), std::move(set_operation_step), source_nodes);
+    auto set_operation_node = sub_plans[0].getRoot()->addStep(context->nextNodeId(), std::move(set_operation_step), source_nodes);
 
     if (union_mode == ASTSelectWithUnionQuery::Mode::DISTINCT)
     {
+        // this logic depends on how `projectFieldSymbols` handle subcolumns
+        Names distinct_columns;
+        for (size_t i = 0; i < field_symbols.size(); ++i)
+            distinct_columns.push_back(set_operation_node->getCurrentDataStream().header.getByPosition(i).name);
+
         auto distinct_step = std::make_shared<DistinctStep>(
             set_operation_node->getCurrentDataStream(),
             extractDistinctSizeLimits(),
             0,
-            set_operation_node->getOutputNames(),
-            true);
+            distinct_columns,
+            false);
 
         auto distinct_node = set_operation_node->addStep(context->nextNodeId(), std::move(distinct_step));
 
-        return {distinct_node, field_symbols};
+        return {distinct_node, std::move(field_symbols)};
     }
 
-    return {set_operation_node, field_symbols};
+    return {set_operation_node, std::move(field_symbols)};
 }
 
 PlanWithSymbolMappings QueryPlannerVisitor::coerceTypesForSymbols(const PlanNodePtr & node, const NameToType & symbol_and_types, bool replace_symbol)
@@ -2034,11 +2101,11 @@ NameToNameMap QueryPlannerVisitor::coerceTypesForSymbols(PlanBuilder & builder, 
     return plan_with_mapping.mappings;
 }
 
-RelationPlan QueryPlannerVisitor::coerceTypeForSubquery(const RelationPlan & plan, const DataTypePtr & type)
+void QueryPlannerVisitor::coerceTypeForSubquery(RelationPlan & plan, const DataTypePtr & type)
 {
     NameToType symbol_and_types {{plan.getFirstPrimarySymbol(), type}};
     auto plan_with_mapping = coerceTypesForSymbols(plan.getRoot(), symbol_and_types, true);
-    return plan.withNewRoot(plan_with_mapping.plan);
+    plan.withNewRoot(plan_with_mapping.plan);
 }
 
 PlanWithSymbols QueryPlannerVisitor::projectExpressionsWithCoercion(const PlanNodePtr & node, const TranslationMapPtr & translation,
@@ -2132,7 +2199,7 @@ void QueryPlannerVisitor::processSubqueryArgs(PlanBuilder & builder, ASTs & chil
 
     if (auto coerced_type = analysis.getTypeCoercion(rhs_ast))
     {
-        rhs_plan = coerceTypeForSubquery(rhs_plan, coerced_type);
+        coerceTypeForSubquery(rhs_plan, coerced_type);
     }
     rhs_symbol = rhs_plan.getFirstPrimarySymbol();
 }

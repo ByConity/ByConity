@@ -377,8 +377,9 @@ static void executeAction(const ExpressionActions::Action & action, ExecutionCon
 
             array_join_key.column = array_join_key.column->convertToFullColumnIfConst();
 
-            const ColumnArray * array = typeid_cast<const ColumnArray *>(array_join_key.column.get());
-            if (!array)
+            const ColumnArray * array = getArrayJoinColumnRawPtr(array_join_key.column);
+            const auto & type = getArrayJoinDataType(array_join_key.type);
+            if (!array || !type)
                 throw Exception("ARRAY JOIN of not array: " + action.node->result_name, ErrorCodes::TYPE_MISMATCH);
 
             for (auto & column : columns)
@@ -392,7 +393,7 @@ static void executeAction(const ExpressionActions::Action & action, ExecutionCon
             auto & res_column = columns[action.result_position];
 
             res_column.column = array->getDataPtr();
-            res_column.type = assert_cast<const DataTypeArray &>(*array_join_key.type).getNestedType();
+            res_column.type = assert_cast<const DataTypeArray &>(*type).getNestedType();
             res_column.name = action.node->result_name;
 
             num_rows = res_column.column->size();
