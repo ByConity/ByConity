@@ -25,6 +25,7 @@
 #include <Common/ThreadProfileEvents.h>
 #include <Common/formatReadable.h>
 #include <Common/typeid_cast.h>
+#include <Common/Config/VWCustomizedSettings.h>
 
 #include <IO/LimitReadBuffer.h>
 #include <IO/WriteBufferFromFile.h>
@@ -89,6 +90,7 @@
 #include <DataStreams/RemoteQueryExecutor.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Transaction/TxnTimestamp.h>
+#include <Interpreters/VirtualWarehouseHandle.h>
 #include <Interpreters/trySetVirtualWarehouse.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <Parsers/ASTSystemQuery.h>
@@ -640,6 +642,11 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     if (txn && context->getServerType() == ServerType::cnch_server)
     {
         trySetVirtualWarehouseAndWorkerGroup(ast, context);
+        if (context->getSettingsRef().enable_vw_customized_setting)
+        {
+            auto current_vw = context->tryGetCurrentVW();
+            context->getVWCustomizedSettings()->overwriteDefaultSettings(current_vw->getName(), context->getSettingsRef());
+        }
         context->initCnchServerResource(txn->getTransactionID());
     }
 

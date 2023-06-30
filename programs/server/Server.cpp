@@ -100,6 +100,8 @@
 #include <Common/getNumberOfPhysicalCPUCores.h>
 #include <Common/remapExecutable.h>
 #include <Common/Configurations.h>
+#include <Common/Config/MetastoreConfig.h>
+#include <Common/Config/VWCustomizedSettings.h>
 #include <common/ErrorHandlers.h>
 #include <common/coverage.h>
 #include <common/defines.h>
@@ -1048,6 +1050,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setUncompressedCache(uncompressed_cache_size);
 
     /// Load global settings from default_profile and system_profile.
+    if (global_context->getServerType() == ServerType::cnch_server && global_context->getSettingsRef().enable_vw_customized_setting)
+    {
+        auto vw_customized_settings_ptr = std::make_shared<VWCustomizedSettings>(config());
+        vw_customized_settings_ptr->loadCustomizedSettings();
+        global_context->setVWCustomizedSettings(vw_customized_settings_ptr);
+    }
+
     global_context->setDefaultProfiles(config());
     const Settings & settings = global_context->getSettingsRef();
 
