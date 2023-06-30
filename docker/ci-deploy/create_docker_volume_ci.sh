@@ -9,3 +9,7 @@ docker rm dummy
 docker container create --name dummy -v ${CONFIG_VOL}:/config hello-world
 docker cp /CI/config/ dummy:/
 docker rm dummy
+
+docker container create --name dummy -v ${SCRIPTS_VOL}:/mnt/scripts hello-world
+docker cp /CI/hive/scripts/ dummy:/mnt/
+docker rm dummy

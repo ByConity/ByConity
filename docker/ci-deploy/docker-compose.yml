@@ -141,6 +141,72 @@ services:
     cap_add:
       - SYS_PTRACE
 
+  # HIVE docker-compose
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop2.7.4-java8
+    volumes:
+      - namenode:/hadoop/dfs/name
+    environment:
+      - CLUSTER_NAME=test
+    env_file:
+      - ./hive/hadoop-hive.env
+    container_name: ${COMPOSE_PROJECT_NAME}_namenode
+    ports:
+      - "${FS_PORT}:${FS_PORT}"
+      - "${HIVE_NAMENODE_PORT}:50070"
+
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop2.7.4-java8
+    volumes:
+      - datanode:/hadoop/dfs/data
+    env_file:
+      - ./hive/hadoop-hive.env
+    environment:
+      SERVICE_PRECONDITION: "${COMPOSE_PROJECT_NAME}_namenode:50070"
+    container_name: ${COMPOSE_PROJECT_NAME}_datanode
+    ports:
+      - "${HIVE_DATANODE_PORT}:50075"
+
+
+  hive-server:
+    image: bde2020/hive:2.3.2-postgresql-metastore
+    env_file:
+      - ./hive/hadoop-hive.env
+    environment:
+      HIVE_CORE_CONF_javax_jdo_option_ConnectionURL: "jdbc:postgresql://${COMPOSE_PROJECT_NAME}_hive-metastore-postgresql:5432/metastore"
+      SERVICE_PRECONDITION: "${COMPOSE_PROJECT_NAME}_hive-metastore:9083"
+    container_name: ${COMPOSE_PROJECT_NAME}_hive-server
+    volumes:
+      - scripts:/mnt/scripts
+    ports:
+      - "${HIVE_SERVER_PORT}:10000"
+    depends_on:
+      - datanode
+      - namenode
+
+  hive-metastore:
+    image: bde2020/hive:2.3.2-postgresql-metastore
+    env_file:
+      - ./hive/hadoop-hive.env
+    command: /bin/bash /mnt/scripts/hive-metastore.sh
+    environment:
+      SERVICE_PRECONDITION: "${COMPOSE_PROJECT_NAME}_namenode:50070 ${COMPOSE_PROJECT_NAME}_datanode:50075 ${COMPOSE_PROJECT_NAME}_hive-metastore-postgresql:5432"
+    container_name: ${COMPOSE_PROJECT_NAME}_hive-metastore
+    volumes:
+      - scripts:/mnt/scripts
+    ports:
+      - "${HMS_PORT}:9083"
+    depends_on:
+      - hive-metastore-postgresql
+      - datanode
+      - namenode
+
+  hive-metastore-postgresql:
+    image: bde2020/hive-metastore-postgresql:2.3.0
+    container_name: ${COMPOSE_PROJECT_NAME}_hive-metastore-postgresql
+    ports:
+      - "${HIVE_METASTORE_POSTGRESQL}:5432"
+
 volumes:
     config_volume:
       name: "${CONFIG_VOL}"
@@ -148,3 +214,9 @@ volumes:
       name: "${HDFS_VOL}"
     binary_volume:
       name: "${BINARY_VOL}"
+    namenode:
+      name: "${COMPOSE_PROJECT_NAME}_namenode_volume"
+    datanode:
+      name: "${COMPOSE_PROJECT_NAME}_datanode_volume"
+    scripts:
+      name: "${SCRIPTS_VOL}"
