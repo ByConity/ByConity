@@ -45,7 +45,6 @@ struct StorageID;
 struct ManipulationInfo;
 struct ManipulationTaskParams;
 struct DedupWorkerStatus;
-struct AssignedResource;
 
 class CnchWorkerClient : public RpcClientBase
 {
@@ -75,15 +74,14 @@ public:
         const String & local_table_name,
         const ServerDataPartsVector & parts,
         const std::set<Int64> & required_bucket_numbers,
-        const ExceptionHandlerWithFailedInfoPtr & handler,
-        const WorkerId & worker_id = WorkerId{});
+        ExceptionHandler & handler);
 
     brpc::CallId sendCnchHiveDataParts(
         const ContextPtr & context,
         const StoragePtr & storage,
         const String & local_table_name,
         const HiveDataPartsCNCHVector & parts,
-        const ExceptionHandlerPtr & handler);
+        ExceptionHandler & handler);
 
     brpc::CallId preloadDataParts(
         const ContextPtr & context,
@@ -92,20 +90,14 @@ public:
         const String & create_local_table_query,
         const ServerDataPartsVector & parts,
         bool sync,
-        const ExceptionHandlerPtr & handler);
+        ExceptionHandler & handler);
 
     brpc::CallId sendOffloadingInfo(
         const ContextPtr & context,
         const HostWithPortsVec & read_workers,
         const std::vector<std::pair<StorageID, String>> & worker_table_names,
         const std::vector<HostWithPortsVec> & buffer_workers_vec,
-        const ExceptionHandlerPtr & handler);
-
-    brpc::CallId sendResources(
-        const ContextPtr & context,
-        const std::vector<AssignedResource> & resources_to_send,
-        const ExceptionHandlerWithFailedInfoPtr & handler,
-        const WorkerId & worker_id);
+        ExceptionHandler & handler);
 
     void removeWorkerResource(TxnTimestamp txn_id);
 

@@ -248,33 +248,10 @@ class ExceptionHandler
 public:
     void setException(std::exception_ptr && exception);
     void throwIfException();
-    bool hasException() const;
-
-protected:
-    std::exception_ptr first_exception;
-    mutable std::mutex mutex;
-};
-
-class ExceptionHandlerWithFailedInfo : public ExceptionHandler
-{
-    using ErrorCode = int32_t;
-    using WorkerIdErrorCodeMap = std::unordered_map<DB::WorkerId, ErrorCode, DB::WorkerIdHash, DB::WorkerIdEqual>;
-
-public:
-    void addFailedRpc(const DB::WorkerId & worker_id, int32_t error_code)
-    {
-        std::unique_lock lock(mutex);
-        failed_rpc_info.emplace(worker_id, error_code);
-    }
-
-    const WorkerIdErrorCodeMap & getFailedRpcInfo() { return failed_rpc_info; }
 
 private:
     std::exception_ptr first_exception;
     std::mutex mutex;
 };
-
-using ExceptionHandlerWithFailedInfoPtr = std::shared_ptr<ExceptionHandlerWithFailedInfo>;
-using ExceptionHandlerPtr = std::shared_ptr<ExceptionHandler>;
 
 }

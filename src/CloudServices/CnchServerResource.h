@@ -74,12 +74,13 @@ struct AssignedResource
 {
     explicit AssignedResource(const StoragePtr & storage);
 
-    AssignedResource(AssignedResource && resource);
-
     StoragePtr storage;
     String worker_table_name;
     String create_table_query;
     bool sent_create_query{false};
+
+    /// offloading info
+    HostWithPortsVec buffer_workers;
 
     /// parts info
     ServerDataPartsVector server_parts;
@@ -129,14 +130,19 @@ public:
             assigned_resource.bucket_numbers = required_bucket_numbers;
     }
 
+    void addBufferWorkers(const UUID & storage_id, const HostWithPortsVec & buffer_workers);
+
     /// Send resource to worker
     void sendResource(const ContextPtr & context, const HostWithPorts & worker);
     /// allocate and send resource to worker_group
-    void sendResources(const ContextPtr & context);
+    void sendResource(const ContextPtr & context);
 
     /// WorkerAction should not throw
-    using WorkerAction = std::function<std::vector<brpc::CallId>(CnchWorkerClientPtr, const std::vector<AssignedResource> &, const ExceptionHandlerPtr &)>;
-    void sendResources(const ContextPtr & context, WorkerAction act);
+    using WorkerAction = std::function<std::vector<brpc::CallId>(CnchWorkerClientPtr, std::vector<AssignedResource> &, ExceptionHandler &)>;
+    void sendResource(const ContextPtr & context, WorkerAction act);
+
+    /// remove all resource in server
+    void removeAll();
 
 private:
     auto getLock() const { return std::lock_guard(mutex); }
