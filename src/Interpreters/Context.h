@@ -1204,6 +1204,19 @@ public:
         return true;
     }
 
+    const String &getTenantId() const
+    {
+        if (!tenant_id.empty())
+            return tenant_id;
+        else
+            return settings.tenant_id.toString();
+    }
+
+    void setTenantId(const String &id)
+    {
+        tenant_id = id;
+    }
+
     void setChecksumsCache(size_t cache_size_in_bytes);
     std::shared_ptr<ChecksumsCache> getChecksumsCache() const;
 
@@ -1324,6 +1337,8 @@ public:
     String getCnchAuxilityPolicyName() const;
 
 private:
+    String tenant_id;
+
     std::unique_lock<std::recursive_mutex> getLock() const;
 
     void initGlobal();

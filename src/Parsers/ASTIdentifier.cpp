@@ -22,8 +22,10 @@
 #include <Parsers/ASTIdentifier.h>
 
 #include <IO/WriteHelpers.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/IdentifierSemantic.h>
 #include <Interpreters/StorageID.h>
+#include <Parsers/formatTenantDatabaseName.h>
 #include <Parsers/queryToString.h>
 #include <IO/Operators.h>
 #include <DataTypes/MapHelpers.h>
@@ -235,6 +237,26 @@ ASTPtr ASTIdentifier::deserialize(ReadBuffer & buf)
     return identifier;
 }
 
+void ASTIdentifier::rewriteCnchDatabaseName(const Context *context)
+{
+    if (context && !cnch_rewritten)
+    {
+        switch (name_parts.size())
+        {
+        /// Only database name
+        case 1:
+        /// Only database name + table name
+        case 2:
+            name_parts[0] = formatTenantDatabaseName(name_parts[0]);
+            resetFullName();
+            break;
+        default:
+            break;
+        }
+        cnch_rewritten = true;
+    }  
+}
+
 ASTTableIdentifier::ASTTableIdentifier(const String & table_name, std::vector<ASTPtr> && name_params)
     : ASTIdentifier({table_name}, true, std::move(name_params))
 {
@@ -313,6 +335,27 @@ ASTPtr ASTTableIdentifier::deserialize(ReadBuffer & buf)
     return identifier;
 }
 
+void ASTTableIdentifier::rewriteCnchDatabaseName(const Context *context)
+{
+    if (context && !cnch_rewritten)
+    {
+        switch (name_parts.size())
+        {
+        /// Only table name
+        case 1:
+            break;
+        /// Only database name + table name
+        case 2:
+            name_parts[0] = formatTenantDatabaseName(name_parts[0]);
+            resetFullName();
+            break;
+        default:
+            break;
+        }
+        cnch_rewritten = true;
+    }
+}
+
 String getIdentifierName(const IAST * ast)
 {
     String res;
@@ -340,6 +383,13 @@ bool tryGetIdentifierNameInto(const IAST * ast, String & name)
         }
     }
     return false;
+}
+void tryRewriteCnchDatabaseName(ASTPtr & ast_database, const Context *context)
+{
+    if (!context)
+        return;
+    if (auto * astdb = dynamic_cast<ASTIdentifier *>(ast_database.get()))
+        astdb->rewriteCnchDatabaseName(context);
 }
 
 void setIdentifierSpecial(ASTPtr & ast)

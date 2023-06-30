@@ -159,7 +159,7 @@ LoadablesConfigurationPtr ExternalLoaderCnchCatalogRepository::load(const std::s
     return cache.load(loadable_definition_name);
 }
 
-StorageID ExternalLoaderCnchCatalogRepository::parseStorageID(const std::string & loadable_definition_name)
+StorageID ExternalLoaderCnchCatalogRepository::parseStorageID(const std::string & loadable_definition_name, const Context* context)
 {
     constexpr size_t max_size = 10000;
     constexpr unsigned long max_parser_depth = 10;
@@ -180,6 +180,8 @@ StorageID ExternalLoaderCnchCatalogRepository::parseStorageID(const std::string 
         throw Exception("Failed to parse table id: " + loadable_definition_name, ErrorCodes::LOGICAL_ERROR);
 
     database = table;
+    if (context)
+        tryRewriteCnchDatabaseName(database, context);
     if (!name_p.parse(pos, table, expected))
         throw Exception("Failed to parse table id: " + loadable_definition_name, ErrorCodes::LOGICAL_ERROR);
 
@@ -188,7 +190,7 @@ StorageID ExternalLoaderCnchCatalogRepository::parseStorageID(const std::string 
 
 std::optional<UUID> ExternalLoaderCnchCatalogRepository::resolveDictionaryName(const std::string & name, const std::string & current_database_name, ContextPtr context)
 {
-    StorageID storage_id = (name.find('.') == std::string::npos) ? StorageID{current_database_name, name} : ExternalLoaderCnchCatalogRepository::parseStorageID(name);
+    StorageID storage_id = (name.find('.') == std::string::npos) ? StorageID{current_database_name, name} : ExternalLoaderCnchCatalogRepository::parseStorageID(name, context.get());
     CnchCatalogDictionaryCache & cache = context->getCnchCatalogDictionaryCache();
     std::optional<UUID> res = cache.findUUID(storage_id);
     if ((!res) && (context->getServerType() == ServerType::cnch_worker))

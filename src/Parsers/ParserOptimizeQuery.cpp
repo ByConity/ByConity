@@ -71,6 +71,7 @@ bool ParserOptimizeQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expecte
     if (s_dot.ignore(pos, expected))
     {
         database = table;
+        tryRewriteCnchDatabaseName(database, pos.getContext());
         if (!name_p.parse(pos, table, expected))
             return false;
     }

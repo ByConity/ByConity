@@ -28,6 +28,7 @@
 #include <Parsers/ASTDictionary.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTCreateQuery.h>
+#include <Parsers/formatTenantDatabaseName.h>
 #include <Parsers/ParserDictionaryAttributeDeclaration.h>
 
 #include <Poco/String.h>
@@ -222,6 +223,22 @@ bool ParserDictionary::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
             if (!key_value_pairs_p.parse(pos, ast_source, expected))
                 return false;
+
+            //Rewrite the binded databasename in source!
+            auto ast_func = ast_source->as<ASTFunctionWithKeyValueArguments>();
+            auto & ele = ast_func->elements;
+            if (ele && ast_func->name == "clickhouse")
+            {
+                for (auto &kv : ele->children)
+                {
+                    auto kv_pair = kv->as<ASTPair>();
+                    if (kv_pair->first == "db")
+                    {
+                        auto & value = kv_pair->second->as<ASTLiteral>()->value;
+                        value = formatTenantDefaultDatabaseName(value.get<String>());
+                    }
+                }
+            }
 
             if (!close.ignore(pos))
                 return false;

@@ -159,6 +159,7 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
                     ASTPtr database;
                     if (!database_parser.parse(pos, database, expected))
                         return false;
+                    tryRewriteCnchDatabaseName(database, pos.getContext());
                     tryGetIdentifierNameInto(database, res->database);
                 }
                 else if (ParserKeyword{"TABLE"}.ignore(pos, expected))

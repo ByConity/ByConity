@@ -168,6 +168,7 @@ bool ParserPartToolkitQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
 
     /// table name is optional, just ignore it.
     table_name_p.parse(pos, table, expected);
+    tryRewriteCnchDatabaseName(table, pos.getContext());
 
     if (!s_lparen.ignore(pos, expected))
         return false;

@@ -169,21 +169,31 @@ void TCPHandler::runImpl()
         throw;
     }
 
+    Settings connection_settings = connection_context->getSettings();
     /// When connecting, the default database can be specified.
     if (!default_database.empty())
     {
-        if (!DatabaseCatalog::instance().isDatabaseExist(default_database))
+        //CNCH multi-tenant default database pattern from gateway client: {tenant_id}`{default_database}
+        if (auto pos = default_database.find('`'); pos != String::npos)
+        {
+            connection_context->setSetting("tenant_id", String(default_database.c_str(), pos)); /// {tenant_id}`*
+            connection_context->setTenantId(String(default_database.c_str(), pos));
+            if (pos + 1 != default_database.size())  ///multi-tenant default database storage pattern: {tenant_id}.{default_database}
+                default_database[pos] = '.';
+            else                                     /// {tenant_id}`
+                default_database.clear();
+        }
+        if ((!default_database.empty()) && (!DatabaseCatalog::instance().isDatabaseExist(default_database)))
         {
             Exception e("Database " + backQuote(default_database) + " doesn't exist", ErrorCodes::UNKNOWN_DATABASE);
             LOG_ERROR(log, "Code: {}, e.displayText() = {}, Stack trace:\n\n{}", e.code(), e.displayText(), e.getStackTraceString());
             sendException(e, connection_context->getSettingsRef().calculate_text_stack_trace);
             return;
         }
-
-        connection_context->setCurrentDatabase(default_database);
+        if (!default_database.empty())
+            connection_context->setCurrentDatabase(default_database);
     }
 
-    Settings connection_settings = connection_context->getSettings();
     UInt64 idle_connection_timeout = connection_settings.idle_connection_timeout;
     UInt64 poll_interval = connection_settings.poll_interval;
 

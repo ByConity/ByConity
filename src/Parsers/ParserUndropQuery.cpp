@@ -49,6 +49,7 @@ bool ParserUndropQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     {
         if (!name_p.parse(pos, database, expected))
             return false;
+        tryRewriteCnchDatabaseName(database, pos.getContext());
     }
     else if (s_table.ignore(pos, expected))
     {
@@ -58,6 +59,7 @@ bool ParserUndropQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         if (s_dot.ignore(pos, expected))
         {
             database = table;
+            tryRewriteCnchDatabaseName(database, pos.getContext());
             if (!name_p.parse(pos, table, expected))
                 return false;
         }

@@ -554,6 +554,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     try
     {
         ParserQuery parser(end, ParserSettings::valueOf(settings.dialect_type));
+        parser.setContext(context.get());
 
         /// TODO: parser should fail early when max_query_size limit is reached.
         ast = parseQuery(parser, begin, end, "", max_query_size, settings.max_parser_depth);

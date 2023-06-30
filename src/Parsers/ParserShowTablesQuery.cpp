@@ -169,6 +169,7 @@ bool ParserShowTablesQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
         {
             if (!name_p.parse(pos, database, expected))
                 return false;
+            tryRewriteCnchDatabaseName(database, pos.getContext());
         }
 
         if (s_not.ignore(pos, expected))
