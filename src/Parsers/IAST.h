@@ -142,8 +142,7 @@ class ReadBuffer;
     M(ASTReproduceQuery) \
     M(ASTPartToolKit) \
     M(ASTQuantifiedComparison) \
-    M(ASTTableColumnReference) \
-    M(ASTUpdateQuery)
+    M(ASTTableColumnReference)
 #define ENUM_TYPE(ITEM) ITEM,
 
 enum class ASTType : UInt8

@@ -46,7 +46,6 @@
 #include <Parsers/ParserSystemQuery.h>
 #include <Parsers/ParserUseQuery.h>
 #include <Parsers/ParserExternalDDLQuery.h>
-#include <Parsers/ParserUpdateQuery.h>
 
 
 namespace DB
@@ -76,7 +75,6 @@ bool ParserQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserCreateWorkerGroupQuery create_worker_group_p;
     ParserDropWorkerGroupQuery drop_worker_group_p;
     ParserDeleteQuery delete_p;
-    ParserUpdateQuery update_query_p;
 
     bool res = query_with_output_p.parse(pos, node, expected)
         || insert_p.parse(pos, node, expected)
@@ -98,8 +96,7 @@ bool ParserQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         || show_warehouse_p.parse(pos, node, expected)
         || create_worker_group_p.parse(pos, node, expected)
         || drop_worker_group_p.parse(pos, node, expected)
-        || delete_p.parse(pos, node, expected)
-        || update_query_p.parse(pos, node ,expected);
+        || delete_p.parse(pos, node, expected);
 
     return res;
 }

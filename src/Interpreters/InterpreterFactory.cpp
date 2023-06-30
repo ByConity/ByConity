@@ -63,7 +63,6 @@
 #include <Parsers/MySQL/ASTCreateQuery.h>
 #include <Parsers/ASTRefreshQuery.h>
 #include <Parsers/ASTStatsQuery.h>
-#include <Parsers/ASTUpdateQuery.h>
 
 #include <Interpreters/Context.h>
 #include <Interpreters/DistributedStages/InterpreterDistributedStages.h>
@@ -116,7 +115,6 @@
 #include <Interpreters/InterpreterUseQuery.h>
 #include <Interpreters/InterpreterWatchQuery.h>
 #include <Interpreters/OpenTelemetrySpanLog.h>
-#include <Interpreters/InterpreterUpdateQuery.h>
 #include <Optimizer/QueryUseOptimizerChecker.h>
 #include <Interpreters/InterpreterCreateStatsQuery.h>
 #include <Interpreters/InterpreterDropStatsQuery.h>
@@ -199,10 +197,6 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
         ProfileEvents::increment(ProfileEvents::InsertQuery);
         bool allow_materialized = static_cast<bool>(context->getSettingsRef().insert_allow_materialized_columns);
         return std::make_unique<InterpreterInsertQuery>(query, context, allow_materialized);
-    }
-    else if (query->as<ASTUpdateQuery>())
-    {
-        return std::make_unique<InterpreterUpdateQuery>(query, context);
     }
     else if (query->as<ASTCreateQuery>())
     {
