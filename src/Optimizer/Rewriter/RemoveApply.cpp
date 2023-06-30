@@ -75,7 +75,6 @@ PlanNodePtr CorrelatedScalarSubqueryVisitor::visitApplyNode(ApplyNode & node, Vo
     auto apply_ptr = visitPlanNode(node, v);
     const auto & apply_step = *node.getStep();
 
-
     if (apply_step.getSubqueryType() != ApplyStep::SubqueryType::SCALAR)
     {
         return apply_ptr;
@@ -90,10 +89,80 @@ PlanNodePtr CorrelatedScalarSubqueryVisitor::visitApplyNode(ApplyNode & node, Vo
     PlanNodePtr input_ptr = apply_ptr->getChildren()[0];
     PlanNodePtr subquery_ptr = apply_ptr->getChildren()[1];
 
+    auto subquery_step_ptr = subquery_ptr->getStep();
+    // match pattern : scalar subquery without aggregation
+    if (subquery_step_ptr->getType() == IQueryPlanStep::Type::EnforceSingleRow) 
+    {
+        // step 1 : try to get the un-correlation part of subquery
+        std::optional<DecorrelationResult> result = Decorrelation::decorrelateFilters(subquery_ptr->getChildren()[0], correlation, *context);
+        if (!result.has_value())
+        {
+            throw Exception(
+                "Correlated Scalar subquery de-correlation error, correlation filter not exists: ", ErrorCodes::REMOVE_SUBQUERY_ERROR);
+        }
+        
+        DecorrelationResult & result_value = result.value();
+        PlanNodePtr join_left = input_ptr;
+        PlanNodePtr join_right = result_value.node;
+        std::pair<Names, Names> key_pairs = result_value.buildJoinClause(join_left, join_right, correlation, context);
+
+        // step 2 : Assign unique id symbol for join left
+        String unique = context->getSymbolAllocator()->newSymbol("assign_unique_id_symbol");
+        auto unique_id_step = std::make_unique<AssignUniqueIdStep>(join_left->getStep()->getOutputStream(), unique);
+        auto unique_id_node = std::make_shared<AssignUniqueIdNode>(context->nextNodeId(), std::move(unique_id_step), PlanNodes{join_left});
+        
+        // step 3 : construct a Left JoinNode to replace ApplyNode
+        const DataStream & left_data_stream = unique_id_node->getStep()->getOutputStream();
+        const DataStream & right_data_stream = join_right->getStep()->getOutputStream();
+        DataStreams streams = {left_data_stream, right_data_stream};
+        
+        auto left_header = left_data_stream.header;
+        auto right_header = right_data_stream.header;
+        NamesAndTypes output;
+        for (const auto & item : left_header)
+        {
+            output.emplace_back(NameAndTypePair{item.name, item.type});
+        }
+        for (const auto & item : right_header)
+        {
+            output.emplace_back(NameAndTypePair{item.name, item.type});
+        }
+        auto join_step = std::make_shared<JoinStep>(
+            streams,
+            DataStream{.header = output},
+            ASTTableJoin::Kind::Left,
+            ASTTableJoin::Strictness::All,
+            key_pairs.first,
+            key_pairs.second,
+            PredicateConst::TRUE_VALUE,
+            false,
+            std::nullopt,
+            ASOF::Inequality::GreaterOrEquals,
+            DistributionType::UNKNOWN);
+        PlanNodePtr join_node
+            = std::make_shared<JoinNode>(context->nextNodeId(), std::move(join_step), PlanNodes{unique_id_node, join_right});
+        
+        String marker = context->getSymbolAllocator()->newSymbol("is_distinct");
+        std::vector<String> distinct_symbols_list;
+        for (const auto & item : left_header)
+        {
+            distinct_symbols_list.emplace_back(item.name);
+        }
+        auto mark_distinct_step
+            = std::make_shared<MarkDistinctStep>(join_node->getStep()->getOutputStream(), marker, distinct_symbols_list);
+        auto mark_distinct_node = PlanNodeBase::createPlanNode(context->nextNodeId(), std::move(mark_distinct_step), PlanNodes{join_node});
+        
+        auto check_subquery = makeASTFunction("check_subquery_return_single_row", ASTs{std::make_shared<ASTIdentifier>(marker)});
+        
+        auto filter_step = std::make_shared<FilterStep>(join_node->getStep()->getOutputStream(), check_subquery);
+        PlanNodePtr filter_node = std::make_shared<FilterNode>(context->nextNodeId(), std::move(filter_step), PlanNodes{mark_distinct_node}); 
+        
+        return filter_node;
+    }
+        
     bool match = false;
     PlanNodePtr scalar_agg;
     PlanNodePtr scalar_agg_source;
-    auto subquery_step_ptr = subquery_ptr->getStep();
     // match pattern : scalar subquery with aggregation
     if (subquery_step_ptr->getType() == IQueryPlanStep::Type::Aggregating)
     {
@@ -142,7 +211,7 @@ PlanNodePtr CorrelatedScalarSubqueryVisitor::visitApplyNode(ApplyNode & node, Vo
     }
 
     DecorrelationResult & result_value = result.value();
-    PlanNodePtr join_left = node.getChildren()[0];
+    PlanNodePtr join_left = input_ptr;
     PlanNodePtr join_right = result_value.node;
     std::pair<Names, Names> key_pairs = result_value.buildJoinClause(join_left, join_right, correlation, context);
 
