@@ -102,7 +102,7 @@ private:
     std::optional<CnchServerClientPtr> getTargetServer() const
     {
         auto context = getContext();
-        auto server = context->getCnchTopologyMaster()->getTargetServer(lock_info->table_uuid_with_prefix, false);
+        auto server = context->getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(lock_info->table_uuid), false);
         String host_with_rpc = server.getRPCAddress();
 
         bool is_local = isLocalServer(host_with_rpc, std::to_string(context->getRPCPort()));
