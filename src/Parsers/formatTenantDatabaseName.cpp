@@ -84,6 +84,18 @@ String formatTenantDefaultDatabaseName(const String & database_name)
     return formatTenantDatabaseNameImpl(database_name, '`');
 }
 
+//Format pattern {tenant_id}`{user_name}
+String formatTenantConnectUserName(const String & user_name)
+{
+    return formatTenantUserNameImpl(user_name, '`');
+}
+
+//Format pattern {tenant_id}_{entity prefix}
+String formatTenantEntityPrefix(const String & prefix)
+{
+    return formatTenantUserNameImpl(prefix, '.');
+}
+
 // {tenant_id}.{original_database_name}
 String getOriginalDatabaseName(const String & tenant_database_name)
 {

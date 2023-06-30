@@ -42,6 +42,8 @@ extern const int VIRTUAL_WAREHOUSE_NOT_FOUND;
 extern const int FUNCTION_ALREADY_EXISTS;
 extern const int METASTORE_COMMIT_CAS_FAILURE;
 extern const int METASTORE_TABLE_TDH_CAS_ERROR;
+extern const int METASTORE_ACCESS_ENTITY_CAS_ERROR;
+extern const int METASTORE_ACCESS_ENTITY_EXISTS_ERROR;
 }
 
 namespace DB::Catalog
@@ -2239,6 +2241,86 @@ IMetaStore::IteratorPtr MetastoreProxy::getDetachedPartsInRange(
     String prefix = detachedPartPrefix(name_space, tbl_uuid);
     return metastore_ptr->getByRange(prefix + range_start, prefix + range_end,
         include_start, include_end);
+}
+
+// Access Entities
+String MetastoreProxy::getAccessEntity(EntityType type, const String & name_space, const String & name) const
+{
+    String data;
+    metastore_ptr->get(accessEntityKey(type, name_space, name), data);
+    return data;
+}
+
+Strings MetastoreProxy::getAllAccessEntities(EntityType type, const String & name_space) const
+{
+    Strings models;
+    auto it = metastore_ptr->getByPrefix(accessEntityPrefix(type, name_space));
+    while (it->next())
+    {
+        models.push_back(it->value());
+    }
+    return models;
+}
+
+String MetastoreProxy::getAccessEntityNameByUUID(const String & name_space, const UUID & id) const
+{
+    String data;
+    String uuid = UUIDHelpers::UUIDToString(id);
+    metastore_ptr->get(accessEntityUUIDNameMappingKey(name_space, uuid), data);
+    return data;
+}
+
+bool MetastoreProxy::dropAccessEntity(EntityType type, const String & name_space, const UUID & id, const String & name) const
+{
+    BatchCommitRequest batch_write;
+    BatchCommitResponse resp;
+    String uuid = UUIDHelpers::UUIDToString(id);
+    batch_write.AddDelete(accessEntityUUIDNameMappingKey(name_space, uuid));
+    batch_write.AddDelete(accessEntityKey(type, name_space, name));
+    return metastore_ptr->batchWrite(batch_write, resp);
+}
+
+bool MetastoreProxy::putAccessEntity(EntityType type, const String & name_space, const AccessEntityModel & new_access_entity, const AccessEntityModel & old_access_entity, bool replace_if_exists) const
+{
+    BatchCommitRequest batch_write;
+    BatchCommitResponse resp;
+    auto put_access_entity_request = SinglePutRequest(accessEntityKey(type, name_space, new_access_entity.name()), new_access_entity.SerializeAsString(), !replace_if_exists);
+    String uuid = UUIDHelpers::UUIDToString(RPCHelpers::createUUID(new_access_entity.uuid()));
+    String serialized_old_access_entity = old_access_entity.SerializeAsString();
+    if (!serialized_old_access_entity.empty())
+        put_access_entity_request.expected_value = serialized_old_access_entity;
+    batch_write.AddPut(put_access_entity_request);
+    batch_write.AddPut(SinglePutRequest(accessEntityUUIDNameMappingKey(name_space, uuid), new_access_entity.name(), !replace_if_exists));
+
+    try
+    {
+        return metastore_ptr->batchWrite(batch_write, resp);
+    }
+    catch (Exception & e)
+    {
+        if (e.code() == ErrorCodes::METASTORE_COMMIT_CAS_FAILURE)
+        {
+            if (resp.puts.count(0) && replace_if_exists && !serialized_old_access_entity.empty())
+            {
+                throw Exception(
+                    "Access Entity has recently been changed in catalog. Please try the request again.",
+                    ErrorCodes::METASTORE_ACCESS_ENTITY_CAS_ERROR);
+            }
+            else if (resp.puts.count(0) && !replace_if_exists)
+            {
+                throw Exception(
+                    "Access Entity with the same name already exists in catalog. Please use another name and try again.",
+                    ErrorCodes::METASTORE_ACCESS_ENTITY_EXISTS_ERROR);
+            }
+            else if (resp.puts.count(1) && !replace_if_exists)
+            {
+                throw Exception(
+                    "Access Entity with the same UUID already exists in catalog. Please use another name and try again.",
+                    ErrorCodes::METASTORE_ACCESS_ENTITY_EXISTS_ERROR);
+            }
+        }
+        throw e;
+    }
 }
 
 IMetaStore::IteratorPtr MetastoreProxy::getItemsInTrash(const String & name_space, const String & table_uuid, const size_t & limit)

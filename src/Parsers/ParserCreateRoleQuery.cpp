@@ -42,13 +42,13 @@ namespace
         });
     }
 
-    bool parseOnCluster(IParserBase::Pos & pos, Expected & expected, String & cluster)
-    {
-        return IParserBase::wrapParseImpl(pos, [&]
-        {
-            return ParserKeyword{"ON"}.ignore(pos, expected) && ASTQueryWithOnCluster::parse(pos, cluster, expected);
-        });
-    }
+    // bool parseOnCluster(IParserBase::Pos & pos, Expected & expected, String & cluster)
+    // {
+    //     return IParserBase::wrapParseImpl(pos, [&]
+    //     {
+    //         return ParserKeyword{"ON"}.ignore(pos, expected) && ASTQueryWithOnCluster::parse(pos, cluster, expected);
+    //     });
+    // }
 }
 
 
@@ -90,7 +90,7 @@ bool ParserCreateRoleQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
 
     String new_name;
     std::shared_ptr<ASTSettingsProfileElements> settings;
-    String cluster;
+    // String cluster;
 
     while (true)
     {
@@ -106,8 +106,8 @@ bool ParserCreateRoleQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
             continue;
         }
 
-        if (cluster.empty() && parseOnCluster(pos, expected, cluster))
-            continue;
+        // if (cluster.empty() && parseOnCluster(pos, expected, cluster))
+        //     continue;
 
         break;
     }
@@ -120,7 +120,7 @@ bool ParserCreateRoleQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     query->if_exists = if_exists;
     query->if_not_exists = if_not_exists;
     query->or_replace = or_replace;
-    query->cluster = std::move(cluster);
+    // query->cluster = std::move(cluster);
     query->names = std::move(names);
     query->new_name = std::move(new_name);
     query->settings = std::move(settings);

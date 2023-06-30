@@ -717,4 +717,18 @@ void CnchServerClient::executeOptimize(const StorageID & storage_id, const Strin
     RPCHelpers::checkResponse(response);
 }
 
+void CnchServerClient::notifyAccessEntityChange(IAccessEntity::Type type, const String & name)
+{
+    brpc::Controller cntl;
+    Protos::notifyAccessEntityChangeReq request;
+    Protos::notifyAccessEntityChangeResp response;
+
+    request.set_type(toString(type));
+    request.set_name(name);
+    stub->notifyAccessEntityChange(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+}
+
 }

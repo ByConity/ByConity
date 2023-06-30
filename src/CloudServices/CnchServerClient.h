@@ -25,6 +25,7 @@
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include <Catalog/CatalogUtils.h>
+#include <Access/IAccessEntity.h>
 
 namespace DB
 {
@@ -124,6 +125,7 @@ public:
     UInt32 reportDeduperHeartbeat(const StorageID & cnch_storage_id, const String & worker_table_name);
 
     void executeOptimize(const StorageID & storage_id, const String & partition_id, bool enable_try, bool mutations_sync, UInt64 timeout_ms);
+    void notifyAccessEntityChange(IAccessEntity::Type type, const String & name);
 private:
     std::unique_ptr<Protos::CnchServerService_Stub> stub;
 };

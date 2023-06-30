@@ -1,7 +1,7 @@
 #include <Interpreters/InterpreterCreateUserQuery.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterSetRoleQuery.h>
-#include <Interpreters/executeDDLQueryOnCluster.h>
+// #include <Interpreters/executeDDLQueryOnCluster.h>
 #include <Parsers/ASTCreateUserQuery.h>
 #include <Parsers/ASTUserNameWithHost.h>
 #include <Parsers/ASTRolesOrUsersSet.h>
@@ -33,18 +33,18 @@ namespace
         if (query.authentication)
             user.authentication = *query.authentication;
 
-        if (override_name && !override_name->host_pattern.empty())
-        {
-            user.allowed_client_hosts = AllowedClientHosts{};
-            user.allowed_client_hosts.addLikePattern(override_name->host_pattern);
-        }
-        else if (query.hosts)
-            user.allowed_client_hosts = *query.hosts;
+        // if (override_name && !override_name->host_pattern.empty())
+        // {
+        //     user.allowed_client_hosts = AllowedClientHosts{};
+        //     user.allowed_client_hosts.addLikePattern(override_name->host_pattern);
+        // }
+        // else if (query.hosts)
+        //     user.allowed_client_hosts = *query.hosts;
 
-        if (query.remove_hosts)
-            user.allowed_client_hosts.remove(*query.remove_hosts);
-        if (query.add_hosts)
-            user.allowed_client_hosts.add(*query.add_hosts);
+        // if (query.remove_hosts)
+        //     user.allowed_client_hosts.remove(*query.remove_hosts);
+        // if (query.add_hosts)
+        //     user.allowed_client_hosts.add(*query.add_hosts);
 
         auto set_default_roles = [&](const RolesOrUsersSet & default_roles_)
         {
@@ -90,8 +90,8 @@ BlockIO InterpreterCreateUserQuery::execute()
         }
     }
 
-    if (!query.cluster.empty())
-        return executeDDLQueryOnCluster(query_ptr, getContext());
+    // if (!query.cluster.empty())
+    //     return executeDDLQueryOnCluster(query_ptr, getContext());
 
     std::optional<SettingsProfileElements> settings_from_query;
     if (query.settings)
