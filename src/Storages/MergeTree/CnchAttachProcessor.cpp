@@ -45,6 +45,7 @@ namespace ErrorCodes
     extern const int NOT_IMPLEMENTED;
     extern const int LOGICAL_ERROR;
     extern const int NETWORK_ERROR;
+    extern const int UNKNOWN_FORMAT_VERSION;
 }
 
 IMergeTreeDataPartsVector fromCNCHPartsVec(const MutableMergeTreeDataPartsCNCHVector& parts)
@@ -188,17 +189,31 @@ String AttachFilter::toString() const
     __builtin_unreachable();
 }
 
-void AttachContext::writeRenameRecord(const DiskPtr &disk, const String &from,
-    const String &to)
+void AttachContext::writeRenameRecord(const DiskPtr & disk, const String & from, const String & to)
 {
-    LOG_TRACE(logger, fmt::format("Write rename record, disk path {}, relative path {} -> {}",
-        disk->getPath(), from, to));
+    LOG_TRACE(logger, fmt::format("Write rename record, disk path {}, relative path {} -> {}", disk->getPath(), from, to));
 
     std::lock_guard<std::mutex> lock(mu);
 
-    auto& res = resources[disk->getName()];
+    auto & res = resources[disk->getName()];
     res.disk = disk;
     res.rename_map[from] = to;
+}
+
+void AttachContext::writeMetaFilesNameRecord(const DB::DiskPtr & disk, const DB::String & meta_file_name)
+{
+    LOG_TRACE(
+        logger,
+        fmt::format(
+            "Write meta files name to delete record for attaching unique table parts, in disk {}, relative file path {}",
+            disk->getPath(),
+            meta_file_name));
+
+    std::lock_guard<std::mutex> lock(mu);
+
+    auto & res = meta_files_to_delete[disk->getName()];
+    res.disk = disk;
+    res.rename_map[meta_file_name] = "";
 }
 
 void AttachContext::writeRenameMapToKV(Catalog::Catalog& catalog, const String& uuid,
@@ -222,6 +237,20 @@ void AttachContext::commit()
     if (new_txn != nullptr)
     {
         query_ctx.getCnchTransactionCoordinator().finishTransaction(new_txn);
+    }
+
+    if (!meta_files_to_delete.empty())
+    {
+        size_t total_records = 0;
+        for (const auto & [_, meta_name_records] : meta_files_to_delete)
+            total_records += meta_name_records.rename_map.size();
+        ThreadPool & pool = getWorkerPool(total_records);
+        for (const auto & [_, meta_name_records] : meta_files_to_delete)
+        {
+            for (const auto & [file_path, _] : meta_name_records.rename_map)
+                pool.scheduleOrThrowOnError([&disk = meta_name_records.disk, path = file_path]() { disk->removeFileIfExists(path); });
+        }
+        pool.wait();
     }
 }
 
@@ -280,24 +309,14 @@ ThreadPool& AttachContext::getWorkerPool(int job_nums)
 
 void CnchAttachProcessor::exec()
 {
-    if (is_unique_tbl)
-    {
-        if (target_tbl.merging_params.hasVersionColumn())
-        {
-            throw Exception("Attach parition to a storage with version column is not supported",
-                ErrorCodes::NOT_IMPLEMENTED);
-        }
-        if (command.replace)
-        {
-            throw Exception("Replace partition or part is not supported for unique table",
-                ErrorCodes::NOT_IMPLEMENTED);
-        }
-    }
+    if (is_unique_tbl && command.replace)
+        throw Exception("Replace partition or part is not supported for unique table", ErrorCodes::NOT_IMPLEMENTED);
 
     AttachContext attach_ctx(*query_ctx, 8,
         query_ctx->getSettingsRef().cnch_part_attach_max_threads, logger);
 
-    NameSet staged_parts_name;
+    NameSet staged_part_names;
+    NameSet partitions_filter;
     AttachFilter filter;
     try
     {
@@ -318,38 +337,9 @@ void CnchAttachProcessor::exec()
 
         if (!parts_to_commit.empty())
         {
-            // Commit transaction
-            {
-                injectFailure(AttachFailurePoint::BEFORE_COMMIT_FAIL);
-
-                CnchDataWriter cnch_writer(target_tbl, query_ctx, ManipulationType::Insert);
-                if (is_unique_tbl)
-                {
-                    for (const auto& part : parts_to_commit)
-                    {
-                        staged_parts_name.insert(part->info.getPartName());
-                    }
-                    cnch_writer.commitPreparedCnchParts(DumpedData{
-                        .staged_parts = std::move(parts_to_commit),
-                    });
-                }
-                else
-                {
-                    cnch_writer.commitPreparedCnchParts(DumpedData{
-                        .parts = std::move(parts_to_commit),
-                    });
-                }
-
-                injectFailure(AttachFailurePoint::MID_COMMIT_FAIL);
-            }
-
-            if (is_unique_tbl)
-            {
-                for (const auto & part : parts_to_commit)
-                {
-                    staged_parts_name.insert(part->info.getPartName());
-                }
-            }
+            for (const auto & part : parts_to_commit)
+                partitions_filter.emplace(part->info.partition_id);
+            commitParts(parts_to_commit, staged_part_names);
         }
     }
     catch(...)
@@ -373,10 +363,8 @@ void CnchAttachProcessor::exec()
 
         injectFailure(AttachFailurePoint::AFTER_COMMIT_FAIL);
 
-        if (is_unique_tbl)
-        {
-            waitingForDedup(filter.object_id, staged_parts_name);
-        }
+        if (is_unique_tbl && query_ctx->getSettingsRef().enable_wait_attached_staged_parts_to_visible && !staged_part_names.empty())
+            waitingForDedup(partitions_filter, staged_part_names);
 
         refreshView();
     }
@@ -429,8 +417,7 @@ String CnchAttachProcessor::relativePathTo(const String& from, const String& to)
     return relative_path.toString();
 }
 
-std::pair<AttachFilter, CnchAttachProcessor::PartsFromSources> CnchAttachProcessor::collectParts(
-    AttachContext& attach_ctx)
+std::pair<AttachFilter, CnchAttachProcessor::PartsFromSources> CnchAttachProcessor::collectParts(AttachContext & attach_ctx)
 {
     AttachFilter filter;
     PartsFromSources chained_parts_from_sources;
@@ -439,45 +426,22 @@ std::pair<AttachFilter, CnchAttachProcessor::PartsFromSources> CnchAttachProcess
 
     if (!command.from_table.empty())
     {
-        String database = command.from_database.empty() ?
-            query_ctx->getCurrentDatabase() : command.from_database;
-        from_storage = DatabaseCatalog::instance().getTable(
-            StorageID(database, command.from_table), query_ctx);
+        String database = command.from_database.empty() ? query_ctx->getCurrentDatabase() : command.from_database;
+        from_storage = DatabaseCatalog::instance().getTable(StorageID(database, command.from_table), query_ctx);
         auto * from_cnch_table = target_tbl.checkStructureAndGetCnchMergeTree(from_storage);
 
         if (command.attach_from_detached)
         {
             auto partition_id = from_cnch_table->getPartitionIDFromQuery(command.partition, query_ctx);
 
-            if (is_unique_tbl && partition_id.empty())
-            {
-                /// NOTE: For now, we only support `ATTACH DETACHED PARTITION 'xxx' FROM target`, the other
-                /// variants might work as well, but we did not tested well.
-                throw Exception("Unique table try to attach from a empty partition",
-                   ErrorCodes::NOT_IMPLEMENTED);
-            }
             filter = AttachFilter::createPartitionFilter(partition_id);
             chained_parts_from_sources = collectPartsFromTableDetached(*from_cnch_table, filter, attach_ctx);
         }
         else
-        {
-            if (is_unique_tbl)
-            {
-                throw Exception("Attach parts from other table's active partition is not "
-                    "supported for unique table", ErrorCodes::NOT_IMPLEMENTED);
-            }
-
             chained_parts_from_sources = collectPartsFromActivePartition(*from_cnch_table, attach_ctx);
-        }
     }
     else
     {
-        if (is_unique_tbl)
-        {
-            throw Exception("Attach parts from path is not supported for unique table",
-                ErrorCodes::NOT_IMPLEMENTED);
-        }
-
         // Construct filter
         filter = AttachFilter::createPartsFilter();
         if (command.part)
@@ -720,6 +684,161 @@ CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromSourc
     return parts_from_sources;
 }
 
+void CnchAttachProcessor::commitParts(MutableMergeTreeDataPartsCNCHVector & prepared_parts, NameSet & staged_parts_name)
+{
+    injectFailure(AttachFailurePoint::BEFORE_COMMIT_FAIL);
+
+    TxnTimestamp commit_time;
+    CnchDataWriter cnch_writer(target_tbl, query_ctx, ManipulationType::Insert);
+    if (is_unique_tbl)
+    {
+        DeleteBitmapMetaPtrVector bitmap_metas;
+        size_t parts_num = prepared_parts.size();
+        bitmap_metas.reserve(parts_num);
+        for (const auto & part : prepared_parts)
+        {
+            std::lock_guard<std::mutex> lock(unique_table_info_mutex);
+            auto & attach_meta = attach_metas[part->name];
+            if (attach_meta)
+            {
+                bitmap_metas.emplace_back(std::make_shared<DeleteBitmapMeta>(target_tbl, attach_meta));
+                LOG_TRACE(logger, "Delete bitmap of part {} exists, will be attached.", part->name);
+            }
+        }
+
+        if (query_ctx->getSettingsRef().enable_unique_table_attach_without_dedup)
+        {
+            MutableMergeTreeDataPartsCNCHVector visible_parts;
+            MutableMergeTreeDataPartsCNCHVector staged_parts;
+            visible_parts.reserve(parts_num);
+            staged_parts.reserve(parts_num);
+            for (const auto & part : prepared_parts)
+            {
+                std::lock_guard<std::mutex> lock(unique_table_info_mutex);
+                if (attach_metas[part->name])
+                {
+                    LOG_TRACE(
+                        logger,
+                        "Part {} to be attached will be visible directly for unique table {} when enable_unique_table_attach_without_dedup",
+                        part->name,
+                        target_tbl.getStorageID().getNameForLogs());
+                    visible_parts.emplace_back(std::move(part));
+                }
+                else
+                {
+                    LOG_TRACE(
+                        logger,
+                        "Part {} to be attached will be staged for unique table {} when enable_unique_table_attach_without_dedup",
+                        part->name,
+                        target_tbl.getStorageID().getNameForLogs());
+                    staged_parts.emplace_back(std::move(part));
+                    staged_parts_name.insert(part->info.getPartName());
+                }
+            }
+            size_t visible_parts_size = visible_parts.size();
+            size_t staged_parts_size = staged_parts.size();
+            size_t bitmap_metas_size = bitmap_metas.size();
+            cnch_writer.commitPreparedCnchParts(DumpedData{
+                .parts = std::move(visible_parts),
+                .bitmaps = std::move(bitmap_metas),
+                .staged_parts = std::move(staged_parts),
+            });
+            LOG_DEBUG(
+                logger,
+                "Unique table {} attach {} visible parts, {} staged parts, {} bitmaps.",
+                target_tbl.getStorageID().getNameForLogs(),
+                visible_parts_size,
+                staged_parts_size,
+                bitmap_metas_size);
+        }
+        else
+        {
+            for (const auto & part : prepared_parts)
+                staged_parts_name.insert(part->info.getPartName());
+
+            size_t staged_parts_size = prepared_parts.size();
+            size_t bitmap_metas_size = bitmap_metas.size();
+            cnch_writer.commitPreparedCnchParts(DumpedData{
+                .bitmaps = std::move(bitmap_metas),
+                .staged_parts = std::move(prepared_parts),
+            });
+
+            LOG_DEBUG(
+                logger,
+                "Unique table {} attach {} staged parts, {} bitmaps.",
+                target_tbl.getStorageID().getNameForLogs(),
+                staged_parts_size,
+                bitmap_metas_size);
+        }
+    }
+    else
+    {
+        cnch_writer.commitPreparedCnchParts(DumpedData{
+            .parts = std::move(prepared_parts),
+        });
+    }
+    injectFailure(AttachFailurePoint::MID_COMMIT_FAIL);
+}
+
+void CnchAttachProcessor::loadUniqueDeleteMeta(IMergeTreeDataPartPtr & part, const MergeTreePartInfo & info)
+{
+    const auto & disk = part->volume->getDisk();
+    String meta_file_relative_path;
+    /// Check if delete bitmap meta exists.
+    {
+        std::lock_guard<std::mutex> lock(unique_table_info_mutex);
+        auto & delete_file_relative_path = part_delete_file_relative_paths[part->name];
+        if (delete_file_relative_path.empty())
+        {
+            LOG_DEBUG(logger,
+                "Part " + part->name + " delete_file_relative_path is empty, it may happen when unique table attach detach partition from non-unique table, ignore it.");
+            return;
+        }
+
+        meta_file_relative_path = std::filesystem::path(target_tbl.getRelativeDataPath(IStorage::StorageLocation::MAIN))
+            / delete_file_relative_path / (part->name + ".meta");
+        if (!disk->exists(meta_file_relative_path))
+        {
+            LOG_DEBUG(
+                logger, "Delete bitmap meta (path: " + meta_file_relative_path + ") of part " + part->name + " doesn't exist. Ignore it.");
+            return;
+        }
+    }
+
+    DataModelDeleteBitmapPtr meta_ptr = std::make_shared<Protos::DataModelDeleteBitmap>();
+    meta_ptr->set_partition_id(info.partition_id);
+    meta_ptr->set_part_min_block(info.min_block);
+    meta_ptr->set_part_max_block(info.max_block);
+    meta_ptr->set_type(static_cast<Protos::DataModelDeleteBitmap_Type>(DeleteBitmapMetaType::Base));
+    meta_ptr->set_txn_id(query_ctx->getCurrentTransaction()->getPrimaryTransactionID().toUInt64());
+
+    String meta_file_abs_path = disk->getPath() + meta_file_relative_path;
+    ReadBufferFromByteHDFS meta_file(meta_file_abs_path, /*pread=*/false, part->storage.getContext()->getHdfsConnectionParams());
+
+    UInt8 meta_format_version{0};
+    readIntBinary(meta_format_version, meta_file);
+    if (meta_format_version != DeleteBitmapMeta::delete_file_meta_format_version)
+        throw Exception("Unknown delete meta file version: " + toString(meta_format_version), ErrorCodes::UNKNOWN_FORMAT_VERSION);
+    size_t cardinality;
+    readIntBinary(cardinality, meta_file);
+    meta_ptr->set_cardinality(cardinality);
+    if (cardinality <= DeleteBitmapMeta::kInlineBitmapMaxCardinality)
+    {
+        String inline_value;
+        readStringBinary(inline_value, meta_file);
+        meta_ptr->set_inlined_value(inline_value);
+    }
+    else
+    {
+        size_t bitmap_file_size;
+        readIntBinary(bitmap_file_size, meta_file);
+        meta_ptr->set_file_size(bitmap_file_size);
+    }
+
+    std::lock_guard<std::mutex> lock(unique_table_info_mutex);
+    attach_metas[part->name] = std::move(meta_ptr);
+}
+
 void CnchAttachProcessor::collectPartsFromUnit(const StorageCnchMergeTree& tbl,
     const DiskPtr& disk, String& path, int max_drill_down_level,
     const AttachFilter& filter, MutableMergeTreeDataPartsCNCHVector& founded_parts)
@@ -747,6 +866,14 @@ void CnchAttachProcessor::collectPartsFromUnit(const StorageCnchMergeTree& tbl,
                     founded_parts.push_back(std::make_shared<MergeTreeDataPartCNCH>(
                         tbl, iter->name(), volume,
                         relativePathTo(tbl.getRelativeDataPath(IStorage::StorageLocation::MAIN), current_entry_path)));
+                    // load delete bitmap for unique table
+                    if (is_unique_tbl)
+                    {
+                        std::lock_guard<std::mutex> lock(unique_table_info_mutex);
+                        part_delete_file_relative_paths[iter->name()] = relativePathTo(
+                            target_tbl.getRelativeDataPath(IStorage::StorageLocation::MAIN),
+                            std::filesystem::path(path) / DeleteBitmapMeta::delete_files_dir);
+                    }
                 }
             }
             else
@@ -968,9 +1095,34 @@ MutableMergeTreeDataPartsCNCHVector CnchAttachProcessor::prepareParts(
             IMergeTreeDataPartPtr part = part_and_info.first;
             MergeTreePartInfo part_info = part_and_info.second;
             String part_name = part_info.getPartNameWithHintMutation();
-            String target_path = std::filesystem::path(target_tbl.getRelativeDataPath(IStorage::StorageLocation::MAIN))
-                / part_name / "";
+            String tbl_rel_path = target_tbl.getRelativeDataPath(IStorage::StorageLocation::MAIN);
+            String target_path = std::filesystem::path(tbl_rel_path) / part_name / "";
             attach_ctx.writeRenameRecord(part->volume->getDefaultDisk(), part->getFullRelativePath(), target_path);
+            if (is_unique_tbl)
+            {
+                loadUniqueDeleteMeta(part, part_info);
+
+                DataModelDeleteBitmapPtr attach_meta;
+                String part_delete_file_relative_path;
+                {
+                    std::lock_guard<std::mutex> lock(unique_table_info_mutex);
+                    attach_meta = attach_metas[part->name];
+                    part_delete_file_relative_path = part_delete_file_relative_paths[part->name];
+                }
+                if (attach_meta)
+                {
+                    String bitmap_rel_path = std::filesystem::path(tbl_rel_path) / part_delete_file_relative_path;
+                    String bitmap_target_path = std::filesystem::path(bitmap_rel_path) / (part->name + ".meta");
+                    attach_ctx.writeMetaFilesNameRecord(part->volume->getDefaultDisk(), bitmap_target_path);
+                    if (attach_meta->cardinality() > DeleteBitmapMeta::kInlineBitmapMaxCardinality)
+                    {
+                        // Write delete bitmap rename record
+                        String from_path = std::filesystem::path(bitmap_rel_path) / (part->name + ".bitmap");
+                        String to_path = std::filesystem::path(tbl_rel_path) / DeleteBitmapMeta::deleteBitmapFileRelativePath(*attach_meta);
+                        attach_ctx.writeRenameRecord(part->volume->getDefaultDisk(), from_path, to_path);
+                    }
+                }
+            }
         }
     }
     attach_ctx.writeRenameMapToKV(*(query_ctx->getCnchCatalog()),
@@ -986,8 +1138,31 @@ MutableMergeTreeDataPartsCNCHVector CnchAttachProcessor::prepareParts(
         {
             worker_pool.scheduleOrThrowOnError([&prepared_parts, table_def_hash, offset, part = part_and_info.first, part_info = part_and_info.second, this]() {
                 String part_name = part_info.getPartNameWithHintMutation();
-                String target_path = std::filesystem::path(target_tbl.getRelativeDataPath(IStorage::StorageLocation::MAIN)) / part_name / "";
-                part->volume->getDisk()->moveDirectory(part->getFullRelativePath(), target_path);
+                String tbl_rel_path = target_tbl.getRelativeDataPath(IStorage::StorageLocation::MAIN);
+                String target_path = std::filesystem::path(tbl_rel_path) / part_name / "";
+                const auto & disk = part->volume->getDisk();
+                disk->moveDirectory(part->getFullRelativePath(), target_path);
+                DataModelDeleteBitmapPtr attach_meta;
+                if (is_unique_tbl)
+                {
+                    String bitmap_rel_path;
+                    {
+                        std::lock_guard<std::mutex> lock(unique_table_info_mutex);
+                        attach_meta = attach_metas[part->name];
+                        bitmap_rel_path = part_delete_file_relative_paths[part->name];
+                    }
+                    if (attach_meta && attach_meta->cardinality() > DeleteBitmapMeta::kInlineBitmapMaxCardinality)
+                    {
+                        // Move delete files
+                        String dir_rel_path
+                            = std::filesystem::path(tbl_rel_path) / DeleteBitmapMeta::deleteBitmapDirRelativePath(part_info.partition_id);
+                        disk->createDirectories(dir_rel_path);
+                        String from_path
+                            = std::filesystem::path(tbl_rel_path) / bitmap_rel_path / (part->name + ".bitmap");
+                        String to_path = std::filesystem::path(tbl_rel_path) / DeleteBitmapMeta::deleteBitmapFileRelativePath(*attach_meta);
+                        disk->moveFile(from_path, to_path);
+                    }
+                }
 
                 Protos::DataModelPart part_model;
                 fillPartModel(target_tbl, *part, part_model, true);
@@ -1004,6 +1179,12 @@ MutableMergeTreeDataPartsCNCHVector CnchAttachProcessor::prepareParts(
                 part_model.set_commit_time(IMergeTreeDataPart::NOT_INITIALIZED_COMMIT_TIME);
                 prepared_parts[offset] = createPartFromModel(target_tbl, part_model, part_name);
                 prepared_parts[offset]->table_definition_hash = table_def_hash;
+
+                if (is_unique_tbl && attach_meta)
+                {
+                    std::lock_guard<std::mutex> lock(unique_table_info_mutex);
+                    attach_metas[prepared_parts[offset]->name] = std::move(attach_meta);
+                }
 
                 injectFailure(AttachFailurePoint::MOVE_PART_FAIL);
             });
@@ -1056,15 +1237,16 @@ void CnchAttachProcessor::genPartsDeleteMark(MutableMergeTreeDataPartsCNCHVector
     }
 }
 
-void CnchAttachProcessor::waitingForDedup(const String& partition_id,
-    const NameSet& staged_parts_name)
+void CnchAttachProcessor::waitingForDedup(const NameSet & partitions_filter, const NameSet & staged_parts_name)
 {
-    LOG_INFO(logger, fmt::format("Attach partition committed {} staged parts. "
-        "waiting for dedup in {}", staged_parts_name.size(), partition_id));
+    LOG_INFO(
+        logger,
+        "Attach partition committed {} staged parts. waiting to dedup in {}",
+        staged_parts_name.size(),
+        toString(partitions_filter));
 
     /// Sync the attach process to wait for the dedup to finish before returns.
-    NameSet partitions_filter = {partition_id};
-    auto unique_key_attach_partition_timeout = query_ctx->getSettingsRef().unique_key_attach_partition_timeout;
+    UInt64 unique_key_attach_partition_timeout = query_ctx->getSettingsRef().unique_key_attach_partition_timeout.totalMilliseconds();
 
     Stopwatch timer;
     while (true)
@@ -1077,15 +1259,14 @@ void CnchAttachProcessor::waitingForDedup(const String& partition_id,
 
         if (!exists)
             break;
-        else if (timer.elapsedMilliseconds() >= 1000 * unique_key_attach_partition_timeout)
+        else if (timer.elapsedMilliseconds() >= unique_key_attach_partition_timeout)
             throw Exception("Attach partition timeout for unique table", ErrorCodes::TIMEOUT_EXCEEDED);
 
         /// Sleep for a while, not burning cpu cycles.
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
-    LOG_INFO(logger, fmt::format("Attach partition dedup {} parts finished, costs {} ms",
-        staged_parts_name.size(), timer.elapsedMilliseconds()));
+    LOG_INFO(logger, "Attach partition dedup {} parts finished, costs {} ms", staged_parts_name.size(), timer.elapsedMilliseconds());
 }
 
 void CnchAttachProcessor::refreshView()

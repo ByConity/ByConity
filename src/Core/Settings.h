@@ -608,7 +608,10 @@ class IColumn;
     M(Milliseconds, dedup_worker_heartbeat_ms, 3000, "Dedup worker heartbeat interval time", 0) \
     M(Bool, enable_staging_area_for_write, false, "Whether INSERTs on unique tables should commit to the staging area or not.", 0) \
     M(UInt64, max_string_size_for_unique_key, 1048576, "Max string size limit for unique key.", 0) \
-    M(UInt64, unique_key_attach_partition_timeout, 3600, "Default timeout (seconds) for attaching partiton for unique key", 0) \
+    M(Bool, enable_wait_attached_staged_parts_to_visible, true, "Enable wait for all staged parts become visible in attach process", 0) \
+    M(Seconds, unique_key_attach_partition_timeout, 3600, "Default timeout (seconds) for attaching partition for unique key", 0) \
+    M(Bool, enable_unique_table_attach_without_dedup, false, "Enable directly make attached parts visible without dedup for unique table, for example: override mode of offline loading", 0) \
+    M(Bool, enable_unique_table_detach_ignore_delete_bitmap, false, "Enable ignore delete bitmap info when handling detach commands for unique table, for example: delete bitmap has been broken, we can just ignore it via this parameter.", 0) \
     \
     M(UInt64, resource_group_unmatched_behavior, 0, "The behavior when there is no resource group matched: 0 for let go, 1 for exception, 2 for the first root group.", 0) \
     /** Experimental functions */ \

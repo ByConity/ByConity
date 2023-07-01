@@ -100,6 +100,12 @@ class DeleteBitmapMeta
 {
 public:
     static constexpr auto kInlineBitmapMaxCardinality = 16;
+    static constexpr auto delete_files_dir = "DeleteFiles/";
+    static constexpr UInt8 delete_file_meta_format_version = 1;
+
+    static String deleteBitmapDirRelativePath(const String & partition_id);
+
+    static String deleteBitmapFileRelativePath(const Protos::DataModelDeleteBitmap & model);
 
     DeleteBitmapMeta(const MergeTreeMetaBase & storage_, const DataModelDeleteBitmapPtr & model_) : storage(storage_), model(model_) { }
 

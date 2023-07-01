@@ -70,11 +70,12 @@ void CloudMergeTreeBlockOutputStream::write(const Block & block)
     const auto & txn = context->getCurrentTransaction();
     for (const auto & part : parts)
     {
-        auto delete_bitmap = part->getDeleteBitmap(/*is_new_part*/ true);
+        auto delete_bitmap = part->getDeleteBitmap(/*allow_null*/ true);
         if (delete_bitmap && delete_bitmap->cardinality())
         {
             bitmaps.emplace_back(LocalDeleteBitmap::createBase(
                 part->info, std::const_pointer_cast<Roaring>(delete_bitmap), txn->getPrimaryTransactionID().toUInt64()));
+            part->delete_flag = true;
         }
     }
     LOG_DEBUG(storage.getLogger(), "Finish converting block into parts, elapsed {} ms", watch.elapsedMilliseconds());

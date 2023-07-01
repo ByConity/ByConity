@@ -462,6 +462,7 @@ void CnchDataWriter::publishStagedParts(
         new_part_model.mutable_part_info()->set_mutation(txn_id);
         new_part_model.set_txnid(txn_id);
         new_part_model.clear_commit_time();
+        new_part_model.set_delete_flag(false);
         new_part_model.set_staging_txn_id(staged_part->info.mutation);
         // storage may not have part columns info (CloudMergeTree), so set columns/columns_commit_time manually
         auto new_part = createPartFromModelCommon(storage, new_part_model);

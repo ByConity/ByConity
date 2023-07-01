@@ -30,5 +30,3 @@ SELECT '---all column across granu----';
 select id, c2, c3, _part_row_number from (SELECT *, _part_row_number, _part FROM test.part_row_number order by _part limit 2, 5);
 
 DROP TABLE IF EXISTS test.part_row_number;
-
-

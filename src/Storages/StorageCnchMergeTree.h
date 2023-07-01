@@ -103,7 +103,7 @@ public:
 
     /// Return all base parts and delete bitmap metas in the given partitions.
     /// If `partitions` is empty, return meta for all partitions.
-    MergeTreeDataPartsCNCHVector getUniqueTableMeta(TxnTimestamp ts, const Strings & partitions = {});
+    MergeTreeDataPartsCNCHVector getUniqueTableMeta(TxnTimestamp ts, const Strings & partitions = {}, bool force_bitmap = true);
 
     /// return table's committed staged parts (excluding deleted ones).
     /// if partitions != null, ignore staged parts not belong to `partitions`.
@@ -111,10 +111,11 @@ public:
     getStagedParts(const TxnTimestamp & ts, const NameSet * partitions = nullptr, bool skip_delete_bitmap = false);
 
     /// Pre-condition: "parts" should have been sorted in part info order
-    void getDeleteBitmapMetaForParts(const MergeTreeDataPartsCNCHVector & parts, ContextPtr context, TxnTimestamp start_time);
+    void getDeleteBitmapMetaForParts(const MergeTreeDataPartsCNCHVector & parts, ContextPtr context, TxnTimestamp start_time, bool force_found = true);
     /// For staged parts, delete bitmap represents delete_flag info which is optional, it's valid if it doesn't have delete_bitmap metadata.
     void getDeleteBitmapMetaForStagedParts(const MergeTreeDataPartsCNCHVector & parts, ContextPtr context, TxnTimestamp start_time);
     void getDeleteBitmapMetaForParts(const ServerDataPartsVector & parts, ContextPtr context, TxnTimestamp start_time) const;
+    void getDeleteBitmapMetaForParts(IMergeTreeDataPartsVector & parts, ContextPtr context, TxnTimestamp start_time, bool force_found = true);
 
     /// Used by the "SYSTEM DEDUP" command to repair unique table by removing duplicate keys in visible parts.
     void executeDedupForRepair(const ASTPtr & partition, ContextPtr context);
@@ -170,6 +171,7 @@ public:
     using PartitionDropInfos = std::unordered_map<String, PartitionDropInfo>;
     MutableDataPartsVector createDropRangesFromPartitions(const PartitionDropInfos & partition_infos, const TransactionCnchPtr & txn);
     MutableDataPartsVector createDropRangesFromParts(const ServerDataPartsVector & parts_to_drop, const TransactionCnchPtr & txn);
+    LocalDeleteBitmaps createDeleteBitmapTombstones(const IMutableMergeTreeDataPartsVector & drop_range_parts, UInt64 txnID);
 
     StorageCnchMergeTree * checkStructureAndGetCnchMergeTree(const StoragePtr & source_table) const;
 

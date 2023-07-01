@@ -87,10 +87,12 @@ public:
 
     String getFullPath() const override;
 
-    /// @param is_unique_new_part whether it's a part of unique table which has not been deduplicated
-    /// For unique table, in normal case, the new part doesn't have delete_bitmap until it executes dedup action.
-    /// But when the part has delete_flag info, delete_bitmap represent the delete_flag info which leads to that new part has delete_bitmap.
-    const ImmutableDeleteBitmapPtr & getDeleteBitmap(bool is_unique_new_part = false) const override;
+    /// @param allow_null whether allow delete bitmap to be nullptr
+    /// There are following cases that allow delete bitmap to be nullptr:
+    /// 1. For new part of unique table, it's valid if its delete_bitmap_metas is empty
+    /// 2. Detach commands can force detach parts even if the delete bitmap of part is broken.
+    /// 3. Repair part command
+    const ImmutableDeleteBitmapPtr & getDeleteBitmap(bool allow_null = false) const override;
 
     virtual void projectionRemove(const String & parent_to, bool keep_shared_data) const override;
 

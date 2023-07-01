@@ -1128,6 +1128,21 @@ void writeQuoted(const std::vector<T> & x, WriteBuffer & buf)
 }
 
 template <typename T>
+void writeQuoted(const std::unordered_set<T> & x, WriteBuffer & buf)
+{
+    writeChar('[', buf);
+    size_t i = 0;
+    for (const auto & item : x)
+    {
+        if (i != 0)
+            writeChar(',', buf);
+        writeQuoted(item, buf);
+        ++i;
+    }
+    writeChar(']', buf);
+}
+
+template <typename T>
 void writeDoubleQuoted(const std::vector<T> & x, WriteBuffer & buf)
 {
     writeChar('[', buf);
@@ -1146,6 +1161,11 @@ void writeText(const std::vector<T> & x, WriteBuffer & buf)
     writeQuoted(x, buf);
 }
 
+template <typename T>
+void writeText(const std::unordered_set<T> & x, WriteBuffer & buf)
+{
+    writeQuoted(x, buf);
+}
 
 /// Serialize exception (so that it can be transferred over the network)
 void writeException(const Exception & e, WriteBuffer & buf, bool with_stack_trace);
