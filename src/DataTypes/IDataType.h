@@ -333,6 +333,8 @@ public:
             flags ^= flag;
     }
 
+    /// Checks if this type is LowCardinality(Nullable(...))
+    virtual bool isLowCardinalityNullable() const { return false; }
 protected:
     friend class DataTypeFactory;
     friend class AggregateFunctionSimpleState;

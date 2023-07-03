@@ -814,8 +814,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
         std::string tmp_path = config().getString("tmp_path", path + "tmp/");
         std::string tmp_policy = config().getString("tmp_policy", "");
         const VolumePtr & volume = global_context->setTemporaryStorage(tmp_path, tmp_policy);
+        // todo aron max_temporary_data_on_disk_size
+        // global_context->setTemporaryStoragePath(tmp_path, 0);
+
         for (const DiskPtr & disk : volume->getDisks())
             setupTmpPath(log, disk->getPath());
+        global_context->setTemporaryStoragePath();
     }
 
     /** Directory with 'flags': files indicating temporary settings for the server set by system administrator.

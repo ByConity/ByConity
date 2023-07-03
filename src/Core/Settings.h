@@ -620,6 +620,10 @@ class IColumn;
     M(UInt64, resource_group_unmatched_behavior, 0, "The behavior when there is no resource group matched: 0 for let go, 1 for exception, 2 for the first root group.", 0) \
     /** Experimental functions */ \
     M(Bool, allow_experimental_funnel_functions, false, "Enable experimental functions for funnel analysis.", 0) \
+    M(UInt64, grace_hash_join_initial_buckets, 1, "Initial number of grace hash join buckets", 0) \
+    M(UInt64, grace_hash_join_max_buckets, 1024, "Limit on the number of grace hash join buckets", 0)                                          \
+    M(UInt64, filesystem_cache_max_download_size, (128UL * 1024 * 1024 * 1024), "Max remote filesystem cache size that can be downloaded by a single query", 0) \
+    M(Bool, skip_download_if_exceeds_query_cache, true, "Skip download from remote filesystem if exceeds query cache size", 0) \
     \
     /** Complex query settings **/\
     M(Bool, enable_distributed_stages, true, "Enable complex query mode to split plan to distributed stages", 0)\

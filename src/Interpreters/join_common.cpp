@@ -1,6 +1,7 @@
 #include <Interpreters/join_common.h>
 #include <Interpreters/TableJoin.h>
 #include <Interpreters/ActionsDAG.h>
+#include <Columns/ColumnConst.h>
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnLowCardinality.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -65,6 +66,14 @@ void changeLowCardinalityInplace(ColumnWithTypeAndName & column)
     }
 }
 
+bool isNullable(const DataTypePtr & type)
+{
+    bool is_nullable = type->isNullable();
+    if (const auto * low_cardinality_type = typeid_cast<const DataTypeLowCardinality *>(type.get()))
+        is_nullable |= low_cardinality_type->getDictionaryType()->isNullable();
+    return is_nullable;
+}
+
 bool canBecomeNullable(const DataTypePtr & type)
 {
     bool can_be_inside = type->canBeInsideNullable();
@@ -119,6 +128,64 @@ void convertColumnsToNullable(Block & block, size_t starting_pos)
 {
     for (size_t i = starting_pos; i < block.columns(); ++i)
         convertColumnToNullable(block.getByPosition(i));
+}
+
+/// Convert column to nullable. If column LowCardinality or Const, convert nested column.
+/// Returns nullptr if conversion cannot be performed.
+static ColumnPtr tryConvertColumnToNullable(ColumnPtr col)
+{
+    // todo aron sparse
+    // if (col->isSparse())
+    //     col = recursiveRemoveSparse(col);
+
+    if (isColumnNullable(*col) || col->canBeInsideNullable())
+        return makeNullable(col);
+
+    if (col->lowCardinality())
+    {
+        auto mut_col = IColumn::mutate(std::move(col));
+        ColumnLowCardinality * col_lc = assert_cast<ColumnLowCardinality *>(mut_col.get());
+        if (col_lc->nestedIsNullable())
+        {
+            return mut_col;
+        }
+        else if (col_lc->nestedCanBeInsideNullable())
+        {
+            col_lc->nestedToNullable();
+            return mut_col;
+        }
+    }
+    else if (const ColumnConst * col_const = checkAndGetColumn<ColumnConst>(*col))
+    {
+        const auto & nested = col_const->getDataColumnPtr();
+        if (nested->isNullable() || nested->canBeInsideNullable())
+        {
+            return makeNullable(col);
+        }
+        else if (nested->lowCardinality())
+        {
+            ColumnPtr nested_nullable = tryConvertColumnToNullable(nested);
+            if (nested_nullable)
+                return ColumnConst::create(nested_nullable, col_const->size());
+        }
+    }
+    return nullptr;
+}
+
+void convertColumnToNullable2(ColumnWithTypeAndName & column)
+{
+    if (!column.column)
+    {
+        column.type = convertTypeToNullable(column.type);
+        return;
+    }
+
+    ColumnPtr nullable_column = tryConvertColumnToNullable(column.column);
+    if (nullable_column)
+    {
+        column.type = convertTypeToNullable(column.type);
+        column.column = std::move(nullable_column);
+    }
 }
 
 /// @warning It assumes that every NULL has default value in nested column (or it does not matter)

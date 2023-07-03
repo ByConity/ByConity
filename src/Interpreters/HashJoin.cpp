@@ -1588,6 +1588,100 @@ void HashJoin::reuseJoinedData(const HashJoin & join)
     });
 }
 
+static void correctNullabilityInplace(ColumnWithTypeAndName & column, bool nullable)
+{
+    if (nullable)
+    {
+        JoinCommon::convertColumnToNullable(column);
+    }
+    else
+    {
+        /// We have to replace values masked by NULLs with defaults.
+        if (column.column)
+            if (const auto * nullable_column = checkAndGetColumn<ColumnNullable>(*column.column))
+                column.column = filterWithBlanks(column.column, nullable_column->getNullMapColumn().getData(), true);
+
+        JoinCommon::removeColumnNullability(column);
+    }
+}
+
+BlocksList HashJoin::releaseJoinedBlocks(bool restructure)
+{
+    LOG_TRACE(log, "({}) Join data is being released, {} bytes and {} rows in hash table", fmt::ptr(this), getTotalByteCount(), getTotalRowCount());
+
+    BlocksList right_blocks = std::move(data->blocks);
+    if (!restructure)
+    {
+        data.reset();
+        return right_blocks;
+    }
+
+    // todo aron join support "or"
+    // todo aron clean this maps
+    // data->maps.clear();
+    data->blocks_nullmaps.clear();
+
+    BlocksList restored_blocks;
+
+    /// names to positions optimization
+    std::vector<size_t> positions;
+    std::vector<bool> is_nullable;
+    if (!right_blocks.empty())
+    {
+        positions.reserve(right_sample_block.columns());
+        const Block & tmp_block = *right_blocks.begin();
+        for (const auto & sample_column : right_sample_block)
+        {
+            positions.emplace_back(tmp_block.getPositionByName(sample_column.name));
+            is_nullable.emplace_back(JoinCommon::isNullable(sample_column.type));
+        }
+    }
+
+    for (Block & saved_block : right_blocks)
+    {
+        Block restored_block;
+        for (size_t i = 0; i < positions.size(); ++i)
+        {
+            auto & column = saved_block.getByPosition(positions[i]);
+            correctNullabilityInplace(column, is_nullable[i]);
+            restored_block.insert(column);
+        }
+        restored_blocks.emplace_back(std::move(restored_block));
+    }
+
+    data.reset();
+    return restored_blocks;
+}
+
+Block HashJoin::prepareRightBlock(const Block & block, const Block & saved_block_sample_)
+{
+    Block structured_block;
+    for (const auto & sample_column : saved_block_sample_.getColumnsWithTypeAndName())
+    {
+        ColumnWithTypeAndName column = block.getByName(sample_column.name);
+        if (sample_column.column->isNullable())
+            JoinCommon::convertColumnToNullable2(column);
+
+        if (column.column->lowCardinality() && !sample_column.column->lowCardinality())
+        {
+            column.column = column.column->convertToFullColumnIfLowCardinality();
+            column.type = removeLowCardinality(column.type);
+        }
+
+        /// There's no optimization for right side const columns. Remove constness if any.
+        // todo aron ColumnSparse
+        // column.column = recursiveRemoveSparse(column.column->convertToFullColumnIfConst());
+        structured_block.insert(std::move(column));
+    }
+
+    return structured_block;
+}
+
+Block HashJoin::prepareRightBlock(const Block & block) const
+{
+    return prepareRightBlock(block, savedBlockSample());
+}
+
 void HashJoin::serialize(WriteBuffer & buf) const
 {
     table_join->serialize(buf);

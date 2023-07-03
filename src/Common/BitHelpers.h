@@ -117,3 +117,24 @@ inline T maskLowBits(unsigned char bits)
 
     return result;
 }
+
+template <typename E>
+constexpr auto to_underlying(E e) noexcept
+{
+    return static_cast<std::underlying_type_t<E>>(e);
+}
+
+#define bf_shf(x) (__builtin_ffsll(x) - 1)
+#define GENMASK(h, l) (((~0UL) - (1UL << (l)) + 1) & (~0UL >> (sizeof(long)*8 - 1 - (h))))
+#define FIELD_GET(_mask, _reg) static_cast<decltype(_mask)>(((_reg) & (_mask)) >> bf_shf(_mask))
+#define FIELD_PREP(_mask, _val) (static_cast<decltype(_mask)>(_val) << bf_shf(_mask) & (_mask))
+
+#ifndef BIT
+#define BIT(x) (1UL << static_cast<unsigned int>(x))
+#endif
+
+template <typename T>
+constexpr bool isPowerOf2(T number)
+{
+    return number > 0 && (number & (number - 1)) == 0;
+}
