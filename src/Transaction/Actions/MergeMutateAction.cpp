@@ -15,7 +15,7 @@
 
 #include <Transaction/Actions/MergeMutateAction.h>
 #include <Catalog/Catalog.h>
-#include <CloudServices/commitCnchParts.h>
+#include <CloudServices/CnchDataWriter.h>
 #include <Storages/StorageCnchMergeTree.h>
 
 namespace DB

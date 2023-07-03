@@ -16,7 +16,7 @@
 #pragma once
 
 #include <memory>
-#include <CloudServices/commitCnchParts.h>
+#include <CloudServices/CnchDataWriter.h>
 #include <Core/Types.h>
 #include <Storages/MergeTree/DeleteBitmapMeta.h>
 #include <WorkerTasks/ManipulationTask.h>

@@ -15,7 +15,7 @@
 
 #include <WorkerTasks/CloudMergeTreeMergeTask.h>
 
-#include <CloudServices/commitCnchParts.h>
+#include <CloudServices/CnchDataWriter.h>
 #include <Interpreters/Context.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <Storages/StorageCloudMergeTree.h>

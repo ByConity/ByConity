@@ -18,7 +18,7 @@
 #include <random>
 #include <Catalog/Catalog.h>
 #include <CloudServices/CnchPartsHelper.h>
-#include <CloudServices/commitCnchParts.h>
+#include <CloudServices/CnchDataWriter.h>
 #include <Interpreters/ServerPartLog.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>

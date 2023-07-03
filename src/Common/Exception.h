@@ -248,10 +248,11 @@ class ExceptionHandler
 public:
     void setException(std::exception_ptr && exception);
     void throwIfException();
+    bool hasException() const;
 
 private:
     std::exception_ptr first_exception;
-    std::mutex mutex;
+    mutable std::mutex mutex;
 };
 
 }

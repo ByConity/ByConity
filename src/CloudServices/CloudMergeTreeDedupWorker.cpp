@@ -19,7 +19,7 @@
 #include <CloudServices/CnchPartsHelper.h>
 #include <CloudServices/CnchServerClientPool.h>
 #include <CloudServices/DedupWorkerStatus.h>
-#include <CloudServices/commitCnchParts.h>
+#include <CloudServices/CnchDataWriter.h>
 #include <Interpreters/InterpreterDropQuery.h>
 #include <MergeTreeCommon/MergeTreeDataDeduper.h>
 #include <Parsers/ASTDropQuery.h>

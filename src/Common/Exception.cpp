@@ -624,4 +624,10 @@ void ExceptionHandler::throwIfException()
         std::rethrow_exception(first_exception);
 }
 
+bool ExceptionHandler::hasException() const
+{
+    std::unique_lock lock(mutex);
+    return first_exception != nullptr;
+}
+
 }

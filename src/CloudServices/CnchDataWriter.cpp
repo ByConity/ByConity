@@ -13,11 +13,13 @@
  * limitations under the License.
  */
 
-#include <CloudServices/commitCnchParts.h>
+#include <memory>
+#include <CloudServices/CnchDataWriter.h>
 
 #include <CloudServices/CnchMergeMutateThread.h>
 #include <CloudServices/CnchServerClient.h>
 #include <CloudServices/CnchServerClientPool.h>
+#include <Core/Types.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/PartLog.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
@@ -26,17 +28,20 @@
 #include <Transaction/Actions/DropRangeAction.h>
 #include <Transaction/Actions/InsertAction.h>
 #include <Transaction/Actions/MergeMutateAction.h>
+#include <Transaction/CnchWorkerTransaction.h>
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
-#include <Transaction/CnchWorkerTransaction.h>
 #include <Transaction/TxnTimestamp.h>
 #include <common/strong_typedef.h>
-#include <Core/Types.h>
 #include "Disks/IDisk.h"
+
+namespace ProfileEvents
+{
+extern const Event CnchWriteDataElapsedMilliseconds;
+}
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
@@ -46,6 +51,51 @@ namespace ErrorCodes
     extern const int BUCKET_TABLE_ENGINE_MISMATCH;
 }
 
+void DumpedData::extend(DumpedData && data)
+{
+    auto extendImpl = [](auto & src, auto && dst) {
+        if (src.empty())
+        {
+            src = std::move(dst);
+        }
+        else
+        {
+            src.reserve(src.size() + dst.size());
+            std::move(std::begin(dst), std::end(dst), std::back_inserter(src));
+        }
+    };
+
+    extendImpl(parts, std::move(data.parts));
+    extendImpl(bitmaps, std::move(data.bitmaps));
+    extendImpl(staged_parts, std::move(data.staged_parts));
+}
+
+using DumpCancelPred = std::function<bool()>;
+
+static std::function<void()> createCnchDumpJob(
+    std::function<void()> job, ExceptionHandler & handler, const ThreadGroupStatusPtr & thread_group, DumpCancelPred cancelled)
+{
+    return [job{std::move(job)}, &handler, thread_group, is_cancelled{std::move(cancelled)}]() {
+        try
+        {
+            SCOPE_EXIT({
+                if (thread_group)
+                    CurrentThread::detachQueryIfNotDetached();
+            });
+            if (thread_group)
+                CurrentThread::attachToIfDetached(thread_group);
+
+            if (!is_cancelled())
+                job();
+        }
+        catch (...)
+        {
+            handler.setException(std::current_exception());
+        }
+    };
+}
+
+
 CnchDataWriter::CnchDataWriter(
     MergeTreeMetaBase & storage_,
     ContextPtr context_,
@@ -53,13 +103,17 @@ CnchDataWriter::CnchDataWriter(
     String task_id_,
     String consumer_group_,
     const cppkafka::TopicPartitionList & tpl_)
-    : storage(storage_)
-    , context(context_)
-    , type(type_)
-    , task_id(std::move(task_id_))
-    , consumer_group(std::move(consumer_group_))
-    , tpl(tpl_)
+    : storage(storage_), context(context_), type(type_), task_id(std::move(task_id_)), consumer_group(std::move(consumer_group_)), tpl(tpl_)
 {
+}
+
+CnchDataWriter::~CnchDataWriter()
+{
+    if (thread_pool)
+    {
+        cancelled.store(true, std::memory_order_seq_cst);
+        thread_pool->wait();
+    }
 }
 
 DumpedData CnchDataWriter::dumpAndCommitCnchParts(
@@ -71,17 +125,22 @@ DumpedData CnchDataWriter::dumpAndCommitCnchParts(
         // Nothing to dump and commit, returns
         return {};
 
-    LOG_DEBUG(storage.getLogger(), "Start dump and commit {} parts, {} bitmaps, {} staged parts", temp_parts.size(), temp_bitmaps.size(), temp_staged_parts.size());
+    LOG_DEBUG(
+        storage.getLogger(),
+        "Start dump and commit {} parts, {} bitmaps, {} staged parts",
+        temp_parts.size(),
+        temp_bitmaps.size(),
+        temp_staged_parts.size());
     // FIXME: find the root case.
-    for (const auto & part: temp_parts)
+    for (const auto & part : temp_parts)
     {
         if (part->info.min_block < 0 || part->info.max_block <= 0)
             throw Exception("Attempt to submit illegal part " + part->info.getPartName(), ErrorCodes::BAD_DATA_PART_NAME);
     }
 
-    auto dumped_data = dumpCnchParts(temp_parts, temp_bitmaps, temp_staged_parts);
-    commitDumpedParts(dumped_data);
-    return dumped_data;
+    auto data = dumpCnchParts(temp_parts, temp_bitmaps, temp_staged_parts);
+    commitDumpedParts(data);
+    return data;
 }
 
 DumpedData CnchDataWriter::dumpCnchParts(
@@ -89,7 +148,7 @@ DumpedData CnchDataWriter::dumpCnchParts(
     const LocalDeleteBitmaps & temp_bitmaps,
     const IMutableMergeTreeDataPartsVector & temp_staged_parts)
 {
-   if (temp_parts.empty() && temp_bitmaps.empty() && temp_staged_parts.empty())
+    if (temp_parts.empty() && temp_bitmaps.empty() && temp_staged_parts.empty())
         // Nothing to dump, returns
         return {};
 
@@ -140,7 +199,7 @@ DumpedData CnchDataWriter::dumpCnchParts(
     {
         String part_name = part->info.getPartNameWithHintMutation();
         auto disk = storage.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
-        
+
         // Assign part id here, since we need to record it into undo buffer before dump part to filesystem
         String relative_path = part_name;
         if (disk->getType() == DiskType::Type::ByteS3)
@@ -190,8 +249,8 @@ DumpedData CnchDataWriter::dumpCnchParts(
 
     /// Parallel dumping to shared storage
     DumpedData result;
-    S3ObjectMetadata::PartGeneratorID part_generator_id(S3ObjectMetadata::PartGeneratorID::TRANSACTION,
-        curr_txn->getTransactionID().toString());
+    S3ObjectMetadata::PartGeneratorID part_generator_id(
+        S3ObjectMetadata::PartGeneratorID::TRANSACTION, curr_txn->getTransactionID().toString());
     MergeTreeCNCHDataDumper dumper(storage, part_generator_id);
 
     watch.restart();
@@ -216,8 +275,7 @@ DumpedData CnchDataWriter::dumpCnchParts(
     {
         dump_pool.scheduleOrThrowOnError([&, i]() {
             const auto & temp_staged_part = temp_staged_parts[i];
-            auto staged_part
-                = dumper.dumpTempPart(temp_staged_part, false, part_disks[i + temp_parts.size()]);
+            auto staged_part = dumper.dumpTempPart(temp_staged_part, false, part_disks[i + temp_parts.size()]);
             LOG_TRACE(storage.getLogger(), "Dumped staged part {}", temp_staged_part->name);
             result.staged_parts[i] = std::move(staged_part);
         });
@@ -258,7 +316,8 @@ void CnchDataWriter::commitDumpedParts(const DumpedData & dumped_data)
             if (settings.debug_cnch_force_commit_parts_rpc)
             {
                 auto server_client = context->getCnchServerClient("0.0.0.0", context->getRPCPort());
-                commit_time = server_client->commitParts(txn_id, type, storage, dumped_parts, delete_bitmaps, dumped_staged_parts, task_id, false, consumer_group, tpl);
+                commit_time = server_client->commitParts(
+                    txn_id, type, storage, dumped_parts, delete_bitmaps, dumped_staged_parts, task_id, false, consumer_group, tpl);
             }
             else
             {
@@ -311,7 +370,7 @@ void CnchDataWriter::commitDumpedParts(const DumpedData & dumped_data)
     if (auto part_log = context->getPartLog(storage.getDatabaseName()))
     {
         // for (auto & dumped_part : dumped_parts)
-            // part_log->add(PartLog::createElement(PartLogElement::COMMIT_PART, dumped_part, watch.elapsed()));
+        // part_log->add(PartLog::createElement(PartLogElement::COMMIT_PART, dumped_part, watch.elapsed()));
     }
 
     LOG_DEBUG(
@@ -322,6 +381,105 @@ void CnchDataWriter::commitDumpedParts(const DumpedData & dumped_data)
         dumped_staged_parts.size(),
         toString(UInt64(txn_id)),
         watch.elapsedMilliseconds());
+}
+
+void CnchDataWriter::initialize(size_t max_threads)
+{
+    if (max_threads > 1)
+    {
+        thread_pool = std::make_unique<ThreadPool>(max_threads);
+    }
+}
+
+void CnchDataWriter::schedule(
+    const IMutableMergeTreeDataPartsVector & temp_parts,
+    const LocalDeleteBitmaps & temp_bitmaps,
+    const IMutableMergeTreeDataPartsVector & temp_staged_parts)
+{
+    Stopwatch watch;
+    SCOPE_EXIT({ ProfileEvents::increment(ProfileEvents::CnchWriteDataElapsedMilliseconds, watch.elapsedMilliseconds()); });
+
+    if (!thread_pool)
+    {
+        auto dumped = dumpAndCommitCnchParts(temp_parts, temp_bitmaps, temp_staged_parts);
+        {
+            /// just in case
+            std::lock_guard lock(write_mutex);
+            res.extend(std::move(dumped));
+        }
+        return;
+    }
+
+    /// check exception
+    handler.throwIfException();
+
+    auto cancel_pred = [this] { return handler.hasException() || cancelled.load(std::memory_order_seq_cst); };
+    auto thread_group = CurrentThread::getGroup();
+
+    /// dump temp parts
+    for (const auto & temp_part : temp_parts)
+    {
+        LOG_TRACE(storage.getLogger(), "dump temp_part {}", temp_part->name);
+
+        thread_pool->scheduleOrThrowOnError(createCnchDumpJob(
+            [temp_part, this] {
+                setThreadName("DumpPart");
+                auto dumped = dumpAndCommitCnchParts({temp_part});
+                {
+                    std::lock_guard lock(write_mutex);
+                    res.extend(std::move(dumped));
+                }
+            },
+            handler,
+            thread_group,
+            cancel_pred));
+    }
+
+    /// dump temp staged parts
+    for (const auto & temp_staged_part : temp_staged_parts)
+    {
+        thread_pool->scheduleOrThrowOnError(createCnchDumpJob(
+            [temp_staged_part, this] {
+                setThreadName("DumpStaged");
+                auto dumped = dumpAndCommitCnchParts({}, {}, {temp_staged_part});
+                {
+                    std::lock_guard lock(write_mutex);
+                    res.extend(std::move(dumped));
+                }
+            },
+            handler,
+            thread_group,
+            cancel_pred));
+    }
+
+    /// batch dump delete bitmap
+    thread_pool->scheduleOrThrowOnError(createCnchDumpJob(
+        [temp_bitmaps, this] {
+            setThreadName("DumpBitmap");
+            auto dumped = dumpAndCommitCnchParts({}, temp_bitmaps, {});
+            {
+                std::lock_guard lock(write_mutex);
+                res.extend(std::move(dumped));
+            }
+        },
+        handler,
+        thread_group,
+        cancel_pred));
+
+    /// check exception
+    handler.throwIfException();
+}
+
+void CnchDataWriter::finalize()
+{
+    Stopwatch watch;
+    SCOPE_EXIT({ ProfileEvents::increment(ProfileEvents::CnchWriteDataElapsedMilliseconds, watch.elapsedMilliseconds()); });
+
+    if (thread_pool)
+    {
+        thread_pool->wait();
+    }
+    handler.throwIfException();
 }
 
 TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_data)
@@ -347,8 +505,7 @@ TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_d
     {
         if (type == ManipulationType::Insert)
         {
-            if (dumped_data.parts.empty() && dumped_data.bitmaps.empty() && dumped_data.staged_parts.empty()
-                && consumer_group.empty())
+            if (dumped_data.parts.empty() && dumped_data.bitmaps.empty() && dumped_data.staged_parts.empty() && consumer_group.empty())
             {
                 LOG_DEBUG(log, "Nothing to commit, we skip this call.");
                 break;
@@ -379,8 +536,7 @@ TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_d
             // }
 
             // Precommit stage. Write intermediate parts to KV
-            auto action
-                = txn->createAction<InsertAction>(storage_ptr, dumped_data.parts, dumped_data.bitmaps, dumped_data.staged_parts);
+            auto action = txn->createAction<InsertAction>(storage_ptr, dumped_data.parts, dumped_data.bitmaps, dumped_data.staged_parts);
             txn->appendAction(action);
             action->executeV2();
         }
@@ -447,9 +603,7 @@ TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_d
     return commit_time;
 }
 
-void CnchDataWriter::publishStagedParts(
-    const MergeTreeDataPartsCNCHVector & staged_parts,
-    const LocalDeleteBitmaps & bitmaps_to_dump)
+void CnchDataWriter::publishStagedParts(const MergeTreeDataPartsCNCHVector & staged_parts, const LocalDeleteBitmaps & bitmaps_to_dump)
 {
     DumpedData items;
     TxnTimestamp txn_id = context->getCurrentTransactionID();
@@ -485,9 +639,11 @@ void CnchDataWriter::publishStagedParts(
     /// setMetadata() return reference, so need to cast move
     std::vector<UndoResource> undo_resources;
     for (auto & part : items.parts)
-        undo_resources.emplace_back(std::move(UndoResource(txn_id, UndoResourceType::Part, part->info.getPartNameWithHintMutation()).setMetadataOnly(true)));
+        undo_resources.emplace_back(
+            std::move(UndoResource(txn_id, UndoResourceType::Part, part->info.getPartNameWithHintMutation()).setMetadataOnly(true)));
     for (auto & staged_part : items.staged_parts)
-        undo_resources.emplace_back(std::move(UndoResource(txn_id, UndoResourceType::StagedPart, staged_part->info.getPartNameWithHintMutation()).setMetadataOnly(true)));
+        undo_resources.emplace_back(std::move(
+            UndoResource(txn_id, UndoResourceType::StagedPart, staged_part->info.getPartNameWithHintMutation()).setMetadataOnly(true)));
     for (auto & bitmap : bitmaps_to_dump)
         undo_resources.emplace_back(bitmap->getUndoResource(txn_id));
 
@@ -533,7 +689,10 @@ void CnchDataWriter::preload(const MutableMergeTreeDataPartsCNCHVector & dumped_
                 server_client->submitPreloadTask(storage, preload_parts, sync_preload, max_timeout);
                 LOG_DEBUG(
                     storage.getLogger(),
-                    "Finish submit preload task for {} parts to server {}, elapsed {} ms", preload_parts.size(), server_client->getRPCAddress(), timer.elapsedMilliseconds());
+                    "Finish submit preload task for {} parts to server {}, elapsed {} ms",
+                    preload_parts.size(),
+                    server_client->getRPCAddress(),
+                    timer.elapsedMilliseconds());
             }
             // TODO: invalidate deleted part's disk cache
         }
@@ -546,12 +705,12 @@ void CnchDataWriter::preload(const MutableMergeTreeDataPartsCNCHVector & dumped_
     }
 }
 
-UUID CnchDataWriter::newPartID(const MergeTreePartInfo& part_info, UInt64 txn_timestamp)
+UUID CnchDataWriter::newPartID(const MergeTreePartInfo & part_info, UInt64 txn_timestamp)
 {
     UUID random_id = UUIDHelpers::generateV4();
     PairInt64 random_id_pair = UUIDHelpers::UUIDToPairInt64(random_id);
-    UInt64& random_id_low = random_id_pair.low;
-    UInt64& random_id_high = random_id_pair.high;
+    UInt64 & random_id_low = random_id_pair.low;
+    UInt64 & random_id_high = random_id_pair.high;
     boost::hash_combine(random_id_low, part_info.min_block);
     boost::hash_combine(random_id_high, part_info.max_block);
     boost::hash_combine(random_id_low, part_info.mutation);

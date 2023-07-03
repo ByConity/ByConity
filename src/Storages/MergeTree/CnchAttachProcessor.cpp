@@ -20,7 +20,7 @@
 #include <set>
 #include <utility>
 #include <Databases/DatabasesCommon.h>
-#include <CloudServices/commitCnchParts.h>
+#include <CloudServices/CnchDataWriter.h>
 #include <CloudServices/CnchPartsHelper.h>
 #include <Interpreters/trySetVirtualWarehouse.h>
 #include <Parsers/ASTLiteral.h>

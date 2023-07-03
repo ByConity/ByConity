@@ -9,7 +9,7 @@
 #include <DataStreams/SquashingBlockInputStream.h>
 #include <DataStreams/BlocksListBlockInputStream.h>
 #include <DataStreams/AddingDefaultBlockOutputStream.h>
-#include <CloudServices/commitCnchParts.h>
+#include <CloudServices/CnchDataWriter.h>
 #include <Common/HashTable/HashMap.h>
 #include <DataTypes/MapHelpers.h>
 #include <string>
