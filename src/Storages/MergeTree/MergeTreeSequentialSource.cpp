@@ -19,6 +19,7 @@
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
+#include <algorithm>
 #include <Storages/MergeTree/MergeTreeSequentialSource.h>
 #include <Storages/MergeTree/MergeTreeBlockReadUtils.h>
 #include <Interpreters/Context.h>
@@ -132,7 +133,10 @@ try
 
         const auto & sample = reader->getColumns();
         Columns columns(sample.size());
-        size_t rows_read = reader->readRows(current_mark, continue_reading, rows_to_read, columns);
+        size_t rows_read = reader->readRows(current_mark, continue_reading, rows_to_read, columns); 
+        /// if the column is null, rows_read is zero, we should still fill it with default value
+        if (rows_read == 0)
+            rows_read = std::min(data_part->rows_count - current_row, rows_to_read);
 
         if (rows_read)
         {

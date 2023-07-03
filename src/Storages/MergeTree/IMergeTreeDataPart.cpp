@@ -1914,8 +1914,32 @@ ColumnSize IMergeTreeDataPart::getColumnSize(const String & column_name, const I
 
 void IMergeTreeDataPart::accumulateColumnSizes(ColumnToSize & column_to_size) const
 {
-    for (const auto & [column_name, size] : columns_sizes)
-        column_to_size[column_name] = size.data_compressed;
+    auto checksums = getChecksums();
+    auto & files = checksums->files;
+
+    for (const NameAndTypePair & name_type : storage.getInMemoryMetadataPtr()->getColumns().getAllPhysical())
+    {
+        if (name_type.type->isMap() && !name_type.type->isMapKVStore())
+        {
+            auto [curr, end] = getMapColumnRangeFromOrderedFiles(name_type.name, files);
+            for (; curr != end; ++curr)
+            {
+                auto & filename = curr->first;
+                if (endsWith(filename, DATA_FILE_EXTENSION))
+                    column_to_size[parseImplicitColumnFromImplicitFileName(filename, name_type.name)] += curr->second.file_size;
+            }
+        }
+        else
+        {
+            auto serialization = getSerializationForColumn(name_type);
+            serialization->enumerateStreams(
+                [&](const ISerialization::SubstreamPath & substream_path) {
+                    auto bin_checksum = files.find(ISerialization::getFileNameForStream(name_type.name, substream_path) + DATA_FILE_EXTENSION);
+                    if (bin_checksum != files.end())
+                        column_to_size[name_type.name] += bin_checksum->second.file_size;
+            });
+        }
+    }
 }
 
 
