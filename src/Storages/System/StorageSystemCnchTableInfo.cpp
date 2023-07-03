@@ -28,6 +28,7 @@
 #include <Catalog/Catalog.h>
 #include <TSO/TSOClient.h>
 #include <DataStreams/NullBlockInputStream.h>
+#include <Protos/DataModelHelpers.h>
 
 namespace DB
 {
@@ -199,7 +200,7 @@ Pipe StorageSystemCnchTableInfo::read(
     for (size_t i=0; i<filtered_index_column->size(); i++)
     {
         auto current_table = table_ids[(*filtered_index_column)[i].get<UInt64>()];
-        auto host_ports = context->getCnchTopologyMaster()->getTargetServer(current_table->uuid(), ts, true);
+        auto host_ports = context->getCnchTopologyMaster()->getTargetServer(current_table->uuid(), getServerVwNameFrom(*current_table.get()), ts, true);
         /// TODO: If cannot determine target server for the table, should we return some info to user?
         if (host_ports.empty())
             continue;

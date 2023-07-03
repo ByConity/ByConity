@@ -58,6 +58,7 @@ struct StorageID
     String database_name;
     String table_name;
     UUID uuid = UUIDHelpers::Nil;
+    String server_vw_name = DEFAULT_SERVER_VW_NAME;
 
     StorageID(const String & database, const String & table, UUID uuid_ = UUIDHelpers::Nil)
         : database_name(database), table_name(table), uuid(uuid_)

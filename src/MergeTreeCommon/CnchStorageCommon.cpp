@@ -448,9 +448,11 @@ String CnchStorageCommonHelper::getCreateQueryForCloudTable(
     return statement_buf.str();
 }
 
-bool CnchStorageCommonHelper::forwardQueryToServerIfNeeded(ContextPtr query_context, const UUID & storage_uuid) const
+bool CnchStorageCommonHelper::forwardQueryToServerIfNeeded(ContextPtr query_context, const StorageID & storage_id) const
 {
-    auto host_port = query_context->getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(storage_uuid), false);
+    if (query_context->getSettingsRef().force_execute_alter)
+        return false;
+    auto host_port = query_context->getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(storage_id.uuid), storage_id.server_vw_name, false);
     if (isLocalServer(host_port.getRPCAddress(), std::to_string(query_context->getRPCPort())))
         return false;
 

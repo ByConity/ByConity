@@ -23,13 +23,40 @@
 namespace DB
 {
 
+class CnchServerVwTopology
+{
+public:
+    CnchServerVwTopology(const String & vw_name_);
+
+    void addServer(const HostWithPorts & server);
+    const HostWithPortsVec & getServerList() const;
+    
+    String getServerVwName() const;
+
+    String format() const;
+
+    bool isSameToplogyWith(const CnchServerVwTopology & other_vw_topology) const;
+
+private:
+    String server_vw_name;
+    HostWithPortsVec servers;
+};
+
 class CnchServerTopology
 {
 
 public:
-    CnchServerTopology(const UInt64 & lease_expiration_, HostWithPortsVec && servers_);
+    CnchServerTopology() {}
+
+    void addServer(const HostWithPorts & server, const String & server_vw_name = DEFAULT_SERVER_VW_NAME);
+
+    std::map<String, CnchServerVwTopology> getVwTopologies() const;
+
+    HostWithPorts getTargetServer(const String & uuid, const String & server_vw_name) const;
 
     HostWithPortsVec getServerList() const;
+
+    bool empty() const;
     size_t getServerSize() const;
 
     void setExpiration(const UInt64 & new_expiration);
@@ -38,9 +65,12 @@ public:
 
     String format() const;
 
+    bool isSameTopologyWith(const CnchServerTopology & other_topology) const;
+
 private:
-    UInt64 lease_expiration;
+    UInt64 lease_expiration = 0;
     HostWithPortsVec servers;
+    std::map<String, CnchServerVwTopology> vw_topologies;
 };
 
 
