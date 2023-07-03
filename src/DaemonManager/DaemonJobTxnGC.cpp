@@ -111,7 +111,7 @@ void DaemonJobTxnGC::cleanTxnRecord(
                     if (txn_record.hasMainTableUUID())
                     {
                         auto host_port = context.getCnchTopologyMaster()->getTargetServer(
-                            UUIDHelpers::UUIDToString(txn_record.mainTableUUID()), DEFAULT_SERVER_VW_NAME, false);
+                            UUIDHelpers::UUIDToString(txn_record.mainTableUUID()), false);
                         client = server_pool.get(host_port);
                     }
                     client->cleanTransaction(txn_record);

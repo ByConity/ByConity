@@ -150,13 +150,11 @@ UUID uuid9 = UUID{UInt128{0, 9}};
 StorageID storage_id9 = {"db9", "tb9", uuid9};
 UUID uuid10 = UUID{UInt128{0, 10}};
 StorageID storage_id10 = {"db10", "tb10", uuid10};
-UUID uuid11 = UUID{UInt128{0, 11}};
-StorageID storage_id11 = {"db11", "tb11", uuid11};
 
-TEST(daemon_job, getUUIDVWsFromBackgroundJobs)
+TEST(daemon_job, getUUIDsFromBackgroundJobs)
 {
     BackgroundJobs bg_jobs;
-    auto uuids = getUUIDVWsFromBackgroundJobs(bg_jobs);
+    auto uuids = getUUIDsFromBackgroundJobs(bg_jobs);
     EXPECT_EQ(uuids.empty(), true);
 
     DaemonJobServerBGThread daemon_job(getContext().context, CnchBGThreadType::MergeMutate, std::make_unique<StableExecutor>(), std::make_unique<StablePersistentStoreProxy>(), std::make_unique<MockTargetServerCalculater>());
@@ -164,12 +162,10 @@ TEST(daemon_job, getUUIDVWsFromBackgroundJobs)
     bg_jobs.insert(std::make_pair(uuid1, std::make_shared<BackgroundJob>(storage_id1, CnchBGThreadStatus::Running, daemon_job, "")));
 
     bg_jobs.insert(std::make_pair(uuid2, std::make_shared<BackgroundJob>(storage_id2, CnchBGThreadStatus::Running, daemon_job, "")));
-    uuids = getUUIDVWsFromBackgroundJobs(bg_jobs);
+    uuids = getUUIDsFromBackgroundJobs(bg_jobs);
 
     EXPECT_EQ(uuids.size(), 2);
-    std::map<UUID, String> expected_res;
-    expected_res[uuid1] = storage_id1.server_vw_name;
-    expected_res[uuid2] = storage_id2.server_vw_name;
+    std::set<UUID> expected_res {uuid1, uuid2};
     EXPECT_EQ(uuids, expected_res);
 }
 
@@ -212,16 +208,10 @@ TEST(daemon_job, getUpdateBGJobs)
     bg_job10->setExpectedStatus(CnchBGThreadStatus::Running);
     bg_jobs.insert(std::make_pair(uuid10, bg_job10));
 
-    bg_jobs.insert(std::make_pair(uuid11, std::make_shared<BackgroundJob>(storage_id11, CnchBGThreadStatus::Running, daemon_job, SERVER1))); /// remove and add uuid, server alive, running state, server vw changes
-
-    StorageID storage_id11_changed = storage_id11;
-    storage_id11_changed.server_vw_name = "vw1";
-
     std::unordered_map<UUID, StorageID> new_uuid_map {
         {uuid1, storage_id1},
         {uuid9, storage_id9},
         {uuid10, storage_id10},
-        {uuid11, storage_id11_changed}
     };
 
     std::vector<String> alive_servers = {SERVER2};
@@ -235,10 +225,10 @@ TEST(daemon_job, getUpdateBGJobs)
     EXPECT_EQ(bg_jobs.at(uuid7)->isRemoved(), true);
     EXPECT_EQ(bg_jobs.at(uuid8)->isRunning(), true);
     EXPECT_EQ(bg_jobs.at(uuid10)->isRemoved(), true);
-    UUIDs expected_remove_uuids{uuid2, uuid3, uuid4, uuid5, uuid6, uuid7, uuid11};
+    UUIDs expected_remove_uuids{uuid2, uuid3, uuid4, uuid5, uuid6, uuid7};
     EXPECT_EQ(update_res.remove_uuids, expected_remove_uuids);
 
-    UUIDs expected_add_uuids{uuid9, uuid11};
+    UUIDs expected_add_uuids{uuid9};
     EXPECT_EQ(update_res.add_uuids, expected_add_uuids);
 }
 

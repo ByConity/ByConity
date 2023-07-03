@@ -37,9 +37,9 @@ public:
     std::list<CnchServerTopology> getCurrentTopology();
 
     /// Get target server for table with current timestamp.
-    HostWithPorts getTargetServer(const String & table_uuid, const String & server_vw_name, bool allow_empty_result, bool allow_tso_unavailable = false);
+    HostWithPorts getTargetServer(const String & table_uuid, bool allow_empty_result, bool allow_tso_unavailable = false);
     /// Get target server with provided timestamp.
-    HostWithPorts getTargetServer(const String & table_uuid, const String & server_vw_name, const UInt64 ts,  bool allow_empty_result, bool allow_tso_unavailable = false);
+    HostWithPorts getTargetServer(const String & table_uuid, UInt64 ts,  bool allow_empty_result, bool allow_tso_unavailable = false);
 
     void shutDown();
 private:
@@ -48,7 +48,6 @@ private:
 
     HostWithPorts getTargetServerImpl(
         const String & table_uuid,
-        const String server_vw_name,
         std::list<CnchServerTopology> & current_topology,
         UInt64 current_ts,
         bool allow_empty_result,

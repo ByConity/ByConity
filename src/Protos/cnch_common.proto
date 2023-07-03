@@ -12,7 +12,6 @@ message StorageID
   required string database = 1;
   required string table = 2;
   required UUID uuid = 3;
-  optional string server_vw_name = 4;
 }
 
 message Checkpoint {

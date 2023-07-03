@@ -700,7 +700,6 @@ protected:
     const String cnch_table_name;
     UUID uuid;
     bool is_stop = false;
-    String server_vw_name;
 
     void prepareTable() override;
 
@@ -724,7 +723,6 @@ CnchSystemLog<LogElement>::CnchSystemLog(ContextPtr global_context_,
 {
     StoragePtr cnch_table = getContext()->getCnchCatalog()->getTable(*getContext(), database_name_, cnch_table_name, TxnTimestamp::maxTS());
     uuid = cnch_table->getStorageUUID();
-    server_vw_name = cnch_table->getServerVwName();
 
     if (global_context_->getServerType() == ServerType::cnch_server)
         table = std::move(cnch_table);
@@ -868,7 +866,7 @@ void CnchSystemLog<LogElement>::writeToCnchTable(Block & block, ContextMutablePt
     insert->table_id = table_id;
     ASTPtr query_ptr(insert.release());
 
-    auto host_with_port = getContext()->getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(uuid), server_vw_name, false);
+    auto host_with_port = getContext()->getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(uuid), false);
     auto host_address = host_with_port.getHost();
     auto host_port = host_with_port.rpc_port;
     auto server_client = query_context->getCnchServerClient(host_address, host_port);

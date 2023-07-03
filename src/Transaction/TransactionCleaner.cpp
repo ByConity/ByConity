@@ -99,12 +99,7 @@ void TransactionCleaner::cleanCommittedTxn(const TransactionRecord & txn_record)
         for (const auto & [uuid, resources] : undo_buffer)
         {
             LOG_DEBUG(log, "Get undo buffer of the table {}\n", uuid);
-
-            StoragePtr table = catalog->tryGetTableByUUID(global_context, uuid, TxnTimestamp::maxTS(), true);
-            if (!table)
-                continue;
-        
-            auto host_port = global_context.getCnchTopologyMaster()->getTargetServer(uuid, table->getServerVwName(), false);
+            auto host_port = global_context.getCnchTopologyMaster()->getTargetServer(uuid, false);
             auto rpc_address = host_port.getRPCAddress();
             if (!isLocalServer(rpc_address, std::to_string(global_context.getRPCPort())))
             {
@@ -113,6 +108,9 @@ void TransactionCleaner::cleanCommittedTxn(const TransactionRecord & txn_record)
                 // global_context.getCnchServerClientPool().get(rpc_address)->cleanTransaction(txn_record);
                 return;
             }
+            StoragePtr table = catalog->tryGetTableByUUID(global_context, uuid, TxnTimestamp::maxTS(), true);
+            if (!table)
+                continue;
 
             UndoResourceNames names = integrateResources(resources);
             auto intermediate_parts = catalog->getDataPartsByNames(names.parts, table, 0);

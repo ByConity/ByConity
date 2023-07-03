@@ -26,13 +26,12 @@
 namespace DB
 {
 
-CnchServerManager::CnchServerManager(ContextPtr context_, const Poco::Util::AbstractConfiguration & config)
+CnchServerManager::CnchServerManager(ContextPtr context_)
     : WithContext(context_)
     , LeaderElectionBase(getContext()->getConfigRef().getUInt64("server_master.election_check_ms", 100))
     , topology_refresh_task(getContext()->getTopologySchedulePool().createTask("TopologyRefresher", [&]() { refreshTopology(); } ))
     , lease_renew_task(getContext()->getTopologySchedulePool().createTask("LeaseRenewer", [&]() { renewLease(); }))
 {
-    updateServerVirtualWarehouses(config);
     if (!getContext()->hasZooKeeper())
     {
         // throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Can't start server manage due to lack of zookeeper");
@@ -132,26 +131,8 @@ void CnchServerManager::refreshTopology()
 
             {
                 std::unique_lock<std::mutex> lock(topology_mutex);
-                auto temp_topology = Topology();
-                for (const auto & server : server_vector)
-                {
-                    const auto & hostname = server.id;
-                    String server_vw_name;
-                    for (auto vw_it = server_virtual_warehouses.begin(); vw_it != server_virtual_warehouses.end(); ++vw_it)
-                    {
-                        if (hostname.starts_with(vw_it->first))
-                        {
-                            server_vw_name = vw_it->second;
-                            break;
-                        }
-                    }
-                    if (server_vw_name.empty())
-                        temp_topology.addServer(server);
-                    else
-                        temp_topology.addServer(server, server_vw_name);
-                }
-                if (cached_topologies.empty() || !cached_topologies.back().isSameTopologyWith(temp_topology))
-                    next_version_topology = temp_topology;
+                if (cached_topologies.empty() || !HostWithPorts::isExactlySameVec(cached_topologies.back().getServerList(), server_vector))
+                    next_version_topology = Topology(UInt64{0}, std::move(server_vector));
             }
         }
         else
@@ -272,37 +253,6 @@ void CnchServerManager::partialShutdown()
     {
         tryLogCurrentException(log);
     }
-}
-
-void CnchServerManager::updateServerVirtualWarehouses(const Poco::Util::AbstractConfiguration & config, const String & config_name)
-{
-    Poco::Util::AbstractConfiguration::Keys config_keys;
-    config.keys(config_name, config_keys);
-
-    std::unordered_map<String, String> new_server_virtual_warehouses;
-
-    for (const auto & server_virtual_warehouse : config_keys)
-    {
-        Poco::Util::AbstractConfiguration::Keys host_keys;
-        auto prefix = config_name + "." + server_virtual_warehouse;
-        config.keys(prefix, host_keys);
-        for (const auto & host : host_keys)
-        {
-            auto host_name = config.getString(prefix + "." + host);
-            if (new_server_virtual_warehouses.contains(host_name))
-            {
-                LOG_ERROR(log, "Invalid server virtual warehouse config, host `" + host_name + "` duplicated.");
-                return;
-            }
-            else
-            {
-                new_server_virtual_warehouses[host_name] = server_virtual_warehouse;
-            }
-        }
-    }
-
-    std::lock_guard lock(topology_mutex);
-    server_virtual_warehouses = new_server_virtual_warehouses;
 }
 
 }

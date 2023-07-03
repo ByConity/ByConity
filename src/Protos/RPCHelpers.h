@@ -27,7 +27,6 @@
 #include <Interpreters/StorageID.h>
 #include <Interpreters/Context_fwd.h>
 #include <Protos/cnch_common.pb.h>
-#include <Protos/data_models.pb.h>
 
 #include <brpc/closure_guard.h>
 #include <brpc/controller.h>
@@ -51,27 +50,12 @@ namespace DB::RPCHelpers
         pb_uuid.set_high(uuid.toUnderType().items[1]);
     }
 
-    inline StorageID createStorageID(const Protos::StorageID & id)
-    { 
-        auto storage_id = StorageID(id.database(), id.table(), createUUID(id.uuid()));
-        if (id.has_server_vw_name())
-            storage_id.server_vw_name = id.server_vw_name();
-        return storage_id;
-    }
+    inline StorageID createStorageID(const Protos::StorageID & id) { return StorageID(id.database(), id.table(), createUUID(id.uuid())); }
     inline void fillStorageID(const StorageID & id, Protos::StorageID & pb_id)
     {
         pb_id.set_database(id.database_name);
         pb_id.set_table(id.table_name);
         fillUUID(id.uuid, *pb_id.mutable_uuid());
-        if (id.server_vw_name != DEFAULT_SERVER_VW_NAME)
-            pb_id.set_server_vw_name(id.server_vw_name);
-    }
-    inline StorageID createStorageID(const Protos::DataModelTable & table)
-    {
-        auto storage_id = StorageID(table.database(), table.name(), createUUID(table.uuid()));
-        if (table.has_server_vw_name())
-            storage_id.server_vw_name = table.server_vw_name();
-        return storage_id;
     }
 
     inline HostWithPorts createHostWithPorts(const Protos::HostWithPorts & hp)

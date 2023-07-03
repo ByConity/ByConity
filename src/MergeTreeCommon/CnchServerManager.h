@@ -43,7 +43,7 @@ class CnchServerManager: public WithContext, public LeaderElectionBase
 using Topology = CnchServerTopology;
 
 public:
-    explicit CnchServerManager(ContextPtr context_, const Poco::Util::AbstractConfiguration & config);
+    explicit CnchServerManager(ContextPtr context_);
 
     ~CnchServerManager() override;
 
@@ -52,7 +52,6 @@ public:
     void shutDown();
     void partialShutdown();
 
-    void updateServerVirtualWarehouses(const Poco::Util::AbstractConfiguration & config, const String & config_name = "server_virtual_warehouses");
 private:
     void onLeader() override;
     void exitLeaderElection() override;
@@ -76,7 +75,6 @@ private:
     std::atomic_bool need_stop{false};
     std::atomic_bool is_leader{false};
     std::atomic_bool leader_initialized{false};
-    std::unordered_map<String, String> server_virtual_warehouses;
 };
 
 using CnchServerManagerPtr = std::shared_ptr<CnchServerManager>;

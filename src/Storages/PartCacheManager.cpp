@@ -192,7 +192,6 @@ void PartCacheManager::mayUpdateTableMeta(const IStorage & storage)
     };
 
     UUID uuid = storage.getStorageUUID();
-    String server_vw_name = cnch_table->getSettings()->cnch_server_vw;
 
     TableMetaEntryPtr meta_ptr = nullptr;
 
@@ -200,7 +199,7 @@ void PartCacheManager::mayUpdateTableMeta(const IStorage & storage)
         std::unique_lock<std::mutex> lock(cache_mutex);
         auto it = active_tables.find(uuid);
 
-        if (it == active_tables.end() || it->second->server_vw_name != server_vw_name)
+        if (it == active_tables.end())
         {
             /// table is not in active table list, need load partition info;
             auto meta_lock_it = meta_lock_container.find(uuid);
@@ -215,7 +214,6 @@ void PartCacheManager::mayUpdateTableMeta(const IStorage & storage)
                 /// insert the new meta lock into lock container.
                 meta_lock_container.emplace(uuid, meta_ptr->meta_mutex);
             }
-            meta_ptr->server_vw_name = server_vw_name;
             active_tables.emplace(uuid, meta_ptr);
         }
     }
@@ -463,17 +461,17 @@ void PartCacheManager::invalidPartCache(const UUID & uuid)
     invalidPartCacheWithoutLock(uuid, lock);
 }
 
-void PartCacheManager::invalidCacheWithNewTopology(const CnchServerTopology & topology)
+void PartCacheManager::invalidCacheWithNewTopology(const HostWithPortsVec & servers)
 {
     // do nothing if servers is empty
-    if (topology.empty())
+    if (servers.empty())
         return;
     String rpc_port = std::to_string(getContext()->getRPCPort());
     std::unique_lock<std::mutex> lock(cache_mutex);
     for (auto it=active_tables.begin(); it!= active_tables.end();)
     {
-        auto server = topology.getTargetServer(UUIDHelpers::UUIDToString(it->first), it->second->server_vw_name);
-        if (!isLocalServer(server.getRPCAddress(), rpc_port))
+        auto hashed_index = consistentHashForString(UUIDHelpers::UUIDToString(it->first), servers.size());
+        if (!isLocalServer(servers[hashed_index].getRPCAddress(), rpc_port))
         {
             LOG_DEBUG(&Poco::Logger::get("PartCacheManager::invalidCacheWithNewTopology"), "Dropping part cache of {}", UUIDHelpers::UUIDToString(it->first));
             part_cache_ptr->dropCache(it->first);
@@ -722,7 +720,7 @@ void PartCacheManager::loadActiveTables()
         {
             StoragePtr table = Catalog::CatalogFactory::getTableByDataModel(getContext(), &table_meta);
 
-            auto host_port = getContext()->getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(table->getStorageUUID()), table->getServerVwName(), true);
+            auto host_port = getContext()->getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(table->getStorageUUID()), true);
             if (host_port.empty())
                 continue;
 

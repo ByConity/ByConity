@@ -79,7 +79,7 @@ void DatabaseCnch::createTable(ContextPtr local_context, const String & table_na
         (!create_query.storage->engine || !startsWith(create_query.storage->engine->name, "Cnch")))
         throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "Cnch database only suport creating Cnch tables");
 
-    CreateActionParams params = {table->getStorageID(), serializeAST(*query), create_query.attach, table->isDictionary()};
+    CreateActionParams params = {getDatabaseName(), table_name, table->getStorageUUID(), serializeAST(*query), create_query.attach, table->isDictionary()};
     auto create_table = txn->createAction<DDLCreateAction>(std::move(params));
     txn->appendAction(std::move(create_table));
     txn->commitV1();
@@ -331,8 +331,7 @@ void DatabaseCnch::createEntryInCnchCatalog(ContextPtr local_context) const
     if (!txn)
         throw Exception("Cnch transaction is not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
 
-    CreateActionParams params = {{getDatabaseName(), "fake", getUUID()}, ""};
-    params.is_database = true;
+    CreateActionParams params = {getDatabaseName(), "", getUUID(), ""};
     auto create_db = txn->createAction<DDLCreateAction>(std::move(params));
     txn->appendAction(std::move(create_db));
     txn->commitV1();
