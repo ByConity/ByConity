@@ -187,6 +187,44 @@ static bool jemallocOptionEnabled(const char *name)
 static bool jemallocOptionEnabled(const char *) { return 0; }
 #endif
 
+namespace DB::ErrorCodes
+{
+    extern const int NO_ELEMENTS_IN_CONFIG;
+    extern const int SUPPORT_IS_DISABLED;
+    extern const int ARGUMENT_OUT_OF_BOUND;
+    extern const int EXCESSIVE_ELEMENT_IN_CONFIG;
+    extern const int INVALID_CONFIG_PARAMETER;
+    extern const int SYSTEM_ERROR;
+    extern const int FAILED_TO_GETPWUID;
+    extern const int MISMATCHING_USERS_FOR_PROCESS_AND_DATA;
+    extern const int NETWORK_ERROR;
+    extern const int CORRUPTED_DATA;
+    extern const int UNKNOWN_POLICY;
+    extern const int PATH_ACCESS_DENIED;
+    extern const int PROF_NOT_SET;
+}
+
+/* Since the jemalloc read MALLOC_CONF only during program start,
+ * set env when running does not work.
+ * So leverage `execv` to replace the running image with the new MALLOC_CONF env
+ */
+static int generalExevc(int argc_, char ** argv_)
+{
+    std::vector<char *> argv(argv_, argv_ + argc_);
+
+    std::string server = "server";
+    /// Handle the removal logic in `isClickhouseApp` method
+    if(std::string(argv[0]) == "clickhouse" || endsWith(argv[0], "/clickhouse"))
+        argv.insert(argv.begin()+1, server.data());
+
+    argv.push_back(nullptr);
+    if (execvp(argv[0], argv.data()) < 0)
+    {
+        std::cerr << "execv failed, error code: " << errno << ", " << strerror(errno) << std::endl;
+        return -1;
+    }
+    return 0;
+}
 
 int mainEntryClickHouseServer(int argc, char ** argv)
 {
@@ -201,8 +239,8 @@ int mainEntryClickHouseServer(int argc, char ** argv)
             "(that can be disabled with CLICKHOUSE_WATCHDOG_ENABLE=0)");
     }
 
-    /// Do not fork separate process from watchdog if we attached to terminal.
-    /// Otherwise it breaks gdb usage.
+    /// Do not fork separate process from watchdog by default
+    /// Otherwise it breaks minidump and jeprof usage
     /// Can be overridden by environment variable (cannot use server config at this moment).
     if (argc > 0)
     {
@@ -214,13 +252,24 @@ int mainEntryClickHouseServer(int argc, char ** argv)
 
             /// Other values disable watchdog explicitly.
         }
-        else if (!isatty(STDIN_FILENO) && !isatty(STDOUT_FILENO) && !isatty(STDERR_FILENO))
-            app.shouldSetupWatchdog(argv[0]);
     }
 
     try
     {
         return app.run(argc, argv);
+    }
+    catch (DB::Exception & e)
+    {
+        if (e.code() == DB::ErrorCodes::PROF_NOT_SET)
+        {
+            return generalExevc(argc, argv);
+        }
+        else
+        {
+            std::cerr << DB::getCurrentExceptionMessage(true) << "\n";
+            auto code = DB::getCurrentExceptionCode();
+            return code ? code : 1;    
+        }
     }
     catch (...)
     {
@@ -286,23 +335,6 @@ int waitServersToFinish(std::vector<DB::ProtocolServerAdapter> & servers, size_t
 
 namespace DB
 {
-
-namespace ErrorCodes
-{
-    extern const int NO_ELEMENTS_IN_CONFIG;
-    extern const int SUPPORT_IS_DISABLED;
-    extern const int ARGUMENT_OUT_OF_BOUND;
-    extern const int EXCESSIVE_ELEMENT_IN_CONFIG;
-    extern const int INVALID_CONFIG_PARAMETER;
-    extern const int SYSTEM_ERROR;
-    extern const int FAILED_TO_GETPWUID;
-    extern const int MISMATCHING_USERS_FOR_PROCESS_AND_DATA;
-    extern const int NETWORK_ERROR;
-    extern const int CORRUPTED_DATA;
-    extern const int UNKNOWN_POLICY;
-    extern const int PATH_ACCESS_DENIED;
-}
-
 
 static std::string getCanonicalPath(std::string && path)
 {
