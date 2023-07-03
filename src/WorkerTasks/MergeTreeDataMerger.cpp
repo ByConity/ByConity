@@ -555,7 +555,6 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
     while (!check_cancel() && (block = merged_stream->read()))
     {
         rows_written += block.rows();
-
         to->write(block);
 
         manipulation_entry->rows_written = merged_stream->getProfileInfo().rows;
