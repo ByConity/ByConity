@@ -70,7 +70,6 @@ TEST(ExchangeSourceStep, InitializePipelineTest)
         input->setParallelIndex(i);
         input->setExchangeParallelSize(1);
         input->setPlanSegmentId(1);
-        input->setExchangeId(1);
         input->insertSourceAddress(local_address);
         inputs.push_back(input);
     }
@@ -83,11 +82,11 @@ TEST(ExchangeSourceStep, InitializePipelineTest)
     ExchangeOptions exchange_options{.exhcange_timeout_ms = 1000, .send_threshold_in_bytes = 0};
     exchange_source_step.setExchangeOptions(exchange_options);
 
-    auto data_key_1 = std::make_shared<ExchangeDataKey>(plan_segment.getQueryId(), 1, 1, coordinator_address_str);
+    auto data_key_1 = std::make_shared<ExchangeDataKey>(plan_segment.getQueryId(), 1, 2, 1, coordinator_address_str);
     BroadcastSenderProxyPtr local_sender_1 = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key_1);
     local_sender_1->accept(context, header);
 
-    auto data_key_2 = std::make_shared<ExchangeDataKey>(plan_segment.getQueryId(), 1, 2, coordinator_address_str);
+    auto data_key_2 = std::make_shared<ExchangeDataKey>(plan_segment.getQueryId(), 1, 2, 2, coordinator_address_str);
     BroadcastSenderProxyPtr local_sender_2 = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key_2);
     local_sender_2->accept(context, header);
 

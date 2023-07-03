@@ -13,35 +13,32 @@
  * limitations under the License.
  */
 
-#include <cstddef>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/DistributedStages/PlanSegmentSplitter.h>
 #include <QueryPlan/ExchangeStep.h>
 #include <QueryPlan/PlanSegmentSourceStep.h>
-#include <QueryPlan/ReadNothingStep.h>
 #include <QueryPlan/RemoteExchangeSourceStep.h>
 #include <QueryPlan/TableScanStep.h>
 #include <QueryPlan/ValuesStep.h>
-#include <Storages/StorageCnchHive.h>
-#include <Storages/StorageCnchMergeTree.h>
+#include <QueryPlan/ReadNothingStep.h>
 #include <Storages/StorageMemory.h>
+#include <Storages/StorageCnchMergeTree.h>
+#include <Storages/StorageCnchHive.h>
 
 namespace DB
 {
+
 void PlanSegmentSplitter::split(QueryPlan & query_plan, PlanSegmentContext & plan_segment_context)
 {
     PlanSegmentVisitor visitor{plan_segment_context, query_plan.getCTENodes()};
-
-    size_t exchange_id = 0;
-    PlanSegmentVisitorContext split_context{{}, {}, exchange_id};
-    visitor.createPlanSegment(query_plan.getRoot(), split_context);
+    visitor.createPlanSegment(query_plan.getRoot());
 
     std::unordered_map<size_t, PlanSegmentTree::Node *> plan_mapping;
 
     for (auto & node : plan_segment_context.plan_segment_tree->getNodes())
     {
         plan_mapping[node.plan_segment->getPlanSegmentId()] = &node;
-        if (node.plan_segment->getPlanSegmentOutputs()[0]->getPlanSegmentType() == PlanSegmentType::OUTPUT)
+        if (node.plan_segment->getPlanSegmentOutput()->getPlanSegmentType() == PlanSegmentType::OUTPUT)
             plan_segment_context.plan_segment_tree->setRoot(&node);
     }
 
@@ -75,17 +72,10 @@ void PlanSegmentSplitter::split(QueryPlan & query_plan, PlanSegmentContext & pla
             {
                 auto child_node = plan_mapping[input->getPlanSegmentId()];
                 node.children.push_back(child_node);
-
-                for (auto & output : child_node->plan_segment->getPlanSegmentOutputs())
-                {
-                    if (output->getExchangeId() == input->getExchangeId())
-                    {
-                        output->setShufflekeys(input->getShufflekeys());
-                        output->setPlanSegmentId(node.plan_segment->getPlanSegmentId());
-                        output->setExchangeMode(input->getExchangeMode());
-                        output->setParallelSize(node.plan_segment->getParallelSize());
-                    }
-                }
+                child_node->plan_segment->getPlanSegmentOutput()->setShufflekeys(input->getShufflekeys());
+                child_node->plan_segment->getPlanSegmentOutput()->setPlanSegmentId(node.plan_segment->getPlanSegmentId());
+                child_node->plan_segment->getPlanSegmentOutput()->setExchangeMode(input->getExchangeMode());
+                child_node->plan_segment->getPlanSegmentOutput()->setParallelSize(node.plan_segment->getParallelSize());
                 /**
                  * If a output is a gather node, its parallel size is always 1 since we should gather all data.
                  */
@@ -122,15 +112,12 @@ PlanSegmentResult PlanSegmentVisitor::visitExchangeNode(QueryPlan::Node * node, 
     PlanSegmentInputs inputs;
     for (auto & child : node->children)
     {
-        PlanSegmentVisitorContext child_context{{}, {}, split_context.exchange_id};
-        auto plan_segment = createPlanSegment(child, child_context);
+        auto plan_segment = createPlanSegment(child);
 
         auto input = std::make_shared<PlanSegmentInput>(step->getHeader(), PlanSegmentType::EXCHANGE);
         input->setShufflekeys(step->getSchema().getPartitioningColumns());
         input->setPlanSegmentId(plan_segment->getPlanSegmentId());
         input->setExchangeMode(step->getExchangeMode());
-        // TODO: Not support one ExchangeStep with multi children yet(multi children can't share one exchange id), we may need to support it later.
-        input->setExchangeId(plan_segment->getPlanSegmentOutputs().back()->getExchangeId());
 
         inputs.push_back(input);
 
@@ -140,10 +127,7 @@ PlanSegmentResult PlanSegmentVisitor::visitExchangeNode(QueryPlan::Node * node, 
     QueryPlanStepPtr remote_step = std::make_unique<RemoteExchangeSourceStep>(inputs, step->getOutputStream());
     remote_step->setStepDescription(step->getStepDescription());
     QueryPlan::Node remote_node{
-        .step = std::move(remote_step),
-        .children = {},
-        .id
-        = plan_segment_context.context->getPlanNodeIdAllocator() ? plan_segment_context.context->getPlanNodeIdAllocator()->nextId() : 1};
+        .step = std::move(remote_step), .children = {}, .id = plan_segment_context.context->getPlanNodeIdAllocator() ? plan_segment_context.context->getPlanNodeIdAllocator()->nextId() : 1};
     plan_segment_context.query_plan.addNode(std::move(remote_node));
     return plan_segment_context.query_plan.getLastNode();
 }
@@ -161,23 +145,17 @@ PlanSegmentResult PlanSegmentVisitor::visitCTERefNode(QueryPlan::Node * node, Pl
         if (cte_node->step->getType() == IQueryPlanStep::Type::Exchange)
         {
             exchange_step = dynamic_cast<ExchangeStep *>(cte_node->step.get());
-            plan_segment = createPlanSegment(cte_node->children[0], split_context);
+            plan_segment = createPlanSegment(cte_node->children[0]);
         }
         else
-            plan_segment = createPlanSegment(cte_node, split_context);
+            plan_segment = createPlanSegment(cte_node);
         cte_plan_segments.emplace(step->getId(), std::make_pair(plan_segment, exchange_step));
     }
     else
-    {
         std::tie(plan_segment, exchange_step) = cte_plan_segments.at(step->getId());
-        auto output = std::make_shared<PlanSegmentOutput>(*plan_segment->getPlanSegmentOutput());
-        output->setExchangeId(split_context.exchange_id++);
-        plan_segment->appendPlanSegmentOutput(output);
-    }
 
     std::shared_ptr<PlanSegmentInput> input = std::make_shared<PlanSegmentInput>(header, PlanSegmentType::EXCHANGE);
     input->setPlanSegmentId(plan_segment->getPlanSegmentId());
-    input->setExchangeId(plan_segment->getPlanSegmentOutputs().back()->getExchangeId());
     if (exchange_step)
     {
         input->setShufflekeys(exchange_step->getSchema().getPartitioningColumns());
@@ -240,8 +218,7 @@ PlanSegment * PlanSegmentVisitor::createPlanSegment(QueryPlan::Node * node, size
             output->setParallelSize(parallel);
     }
     output->setExchangeParallelSize(plan_segment_context.context->getSettingsRef().exchange_parallel_size);
-    output->setExchangeId(split_context.exchange_id++);
-    plan_segment->appendPlanSegmentOutput(output);
+    plan_segment->setPlanSegmentOutput(output);
 
     auto inputs = findInputs(plan_segment->getQueryPlan().getRoot());
     if (inputs.empty())
@@ -261,9 +238,10 @@ PlanSegment * PlanSegmentVisitor::createPlanSegment(QueryPlan::Node * node, size
     return plan_segment_context.plan_segment_tree->getLastNode()->getPlanSegment();
 }
 
-PlanSegment * PlanSegmentVisitor::createPlanSegment(QueryPlan::Node * node, PlanSegmentVisitorContext & split_context)
+PlanSegment * PlanSegmentVisitor::createPlanSegment(QueryPlan::Node * node)
 {
     size_t segment_id = plan_segment_context.getSegmentId();
+    PlanSegmentVisitorContext split_context{};
     auto result_node = VisitorUtil::accept(node, *this, split_context);
     if (!result_node)
         result_node = node;
@@ -284,8 +262,8 @@ PlanSegmentInputs PlanSegmentVisitor::findInputs(QueryPlan::Node * node)
             //            if (child->step->getType() == IQueryPlanStep::Type::RemoteExchangeSource)
             //            {
             auto child_input = findInputs(child);
-            //            if (child_input.size() != 1)
-            //                throw Exception("Join step should contain one input in each child", ErrorCodes::LOGICAL_ERROR);
+//            if (child_input.size() != 1)
+//                throw Exception("Join step should contain one input in each child", ErrorCodes::LOGICAL_ERROR);
             inputs.insert(inputs.end(), child_input.begin(), child_input.end());
             //            }
         }
@@ -442,4 +420,5 @@ std::optional<Partitioning::Handle> SourceNodeFinder::visitRemoteExchangeSourceN
     }
     return {};
 }
+
 }

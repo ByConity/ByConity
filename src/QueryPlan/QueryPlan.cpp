@@ -215,7 +215,7 @@ QueryPlan QueryPlan::getSubPlan(QueryPlan::Node * node_)
     QueryPlan sub_plan;
 
     std::stack<QueryPlan::Node *> plan_nodes;
-    sub_plan.addRoot(Node{.step = node_->step, .children = node_->children, .id = node_->id});
+    sub_plan.addRoot(Node{.step = std::move(node_->step), .children = std::move(node_->children), .id = node_->id});
     plan_nodes.push(sub_plan.getRoot());
 
     while (!plan_nodes.empty())
@@ -226,7 +226,7 @@ QueryPlan QueryPlan::getSubPlan(QueryPlan::Node * node_)
         std::vector<Node *> result_children;
         for (auto & child : current->children)
         {
-            sub_plan.addNode(Node{.step = child->step, .children = child->children, .id = child->id});
+            sub_plan.addNode(Node{.step = std::move(child->step), .children = std::move(child->children), .id = child->id});
             result_children.push_back(sub_plan.getLastNode());
             plan_nodes.push(sub_plan.getLastNode());
         }

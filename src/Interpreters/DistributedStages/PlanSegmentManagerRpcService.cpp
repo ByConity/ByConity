@@ -26,12 +26,6 @@
 
 namespace DB
 {
-
-namespace ErrorCodes
-{
-    extern const int BRPC_PROTOCOL_VERSION_UNSUPPORT;
-}
-
 void PlanSegmentManagerRpcService::executeQuery(
     ::google::protobuf::RpcController * controller,
     const ::DB::Protos::ExecutePlanSegmentRequest * request,
@@ -62,14 +56,7 @@ void PlanSegmentManagerRpcService::executeQuery(
 
         /// Set client info.
         ClientInfo & client_info = query_context->getClientInfo();
-        client_info.brpc_protocol_major_version = request->brpc_protocol_major_revision();
-        client_info.brpc_protocol_minor_version = request->brpc_protocol_minor_revision();
-        if (client_info.brpc_protocol_major_version != DBMS_BRPC_PROTOCOL_MAJOR_VERSION)
-            throw Exception(
-                "brpc protocol major version different - current is " + std::to_string(client_info.brpc_protocol_major_version) +
-                "remote is " + std::to_string(DBMS_BRPC_PROTOCOL_MAJOR_VERSION) +
-                ", plan segment is not compatible", ErrorCodes::BRPC_PROTOCOL_VERSION_UNSUPPORT
-            );
+        client_info.brpc_protocol_version = request->brpc_protocol_revision();
         client_info.query_kind = ClientInfo::QueryKind::SECONDARY_QUERY;
         client_info.interface = ClientInfo::Interface::BRPC;
         Decimal64 initial_query_start_time_microseconds {request->initial_query_start_time()};

@@ -21,8 +21,8 @@
 #include <vector>
 #include <Interpreters/Context_fwd.h>
 #include <Processors/Chunk.h>
+#include <Processors/Exchange/DataTrans/DataTransKey.h>
 #include <Processors/Exchange/ExchangeOptions.h>
-#include <Processors/Exchange/ExchangeDataKey.h>
 #include <boost/noncopyable.hpp>
 #include <bthread/mtx_cv_base.h>
 #include <Poco/Logger.h>
@@ -43,9 +43,9 @@ public:
         return instance;
     }
 
-    BroadcastSenderProxyPtr getOrCreate(ExchangeDataKeyPtr data_key);
+    BroadcastSenderProxyPtr getOrCreate(DataTransKeyPtr data_key);
 
-    void remove(ExchangeDataKeyPtr data_key);
+    void remove(DataTransKeyPtr data_key);
 
     size_t countProxies();
 
@@ -53,7 +53,7 @@ private:
     BroadcastSenderProxyRegistry();
     mutable bthread::Mutex mutex;
     using BroadcastSenderProxyEntry = std::weak_ptr<BroadcastSenderProxy>;
-    std::unordered_map<ExchangeDataKey, BroadcastSenderProxyEntry, ExchangeDataKeyHashFunc> proxies;
+    std::unordered_map<String, BroadcastSenderProxyEntry> proxies;
     Poco::Logger * logger;
 };
 

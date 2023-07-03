@@ -23,23 +23,21 @@
 #include <Optimizer/PlanOptimizer.h>
 #include <QueryPlan/GraphvizPrinter.h>
 #include <QueryPlan/QueryPlanner.h>
-#include <Storages/StorageCnchHive.h>
 #include <Storages/StorageCnchMergeTree.h>
-#include <Storages/StorageDistributed.h>
-#include "QueryPlan/QueryPlan.h"
+#include <Storages/StorageCnchHive.h>
 
 namespace DB
 {
 QueryPlanPtr InterpreterSelectQueryUseOptimizer::buildQueryPlan()
 {
-    // When interpret sub query, reuse context info, e.g. PlanNodeIdAllocator, SymbolAllocator.
-    if (interpret_sub_query)
+        // When interpret sub query, reuse context info, e.g. PlanNodeIdAllocator, SymbolAllocator.
+    if (interpret_sub_query) 
     {
         QueryPlanPtr sub_query_plan = std::make_unique<QueryPlan>(sub_plan_ptr, cte_info, context->getPlanNodeIdAllocator());
         PlanOptimizer::optimize(*sub_query_plan, context);
         return sub_query_plan;
     }
-
+    
     context->createPlanNodeIdAllocator();
     context->createSymbolAllocator();
     context->createOptimizerMetrics();
@@ -49,15 +47,15 @@ QueryPlanPtr InterpreterSelectQueryUseOptimizer::buildQueryPlan()
     stage_watch.start();
     query_ptr = QueryRewriter::rewrite(query_ptr, context);
     LOG_DEBUG(log, "optimizer stage run time: rewrite, {} ms", stage_watch.elapsedMillisecondsAsDouble());
-
+ 
     stage_watch.restart();
     AnalysisPtr analysis = QueryAnalyzer::analyze(query_ptr, context);
     LOG_DEBUG(log, "optimizer stage run time: analyze, {} ms", stage_watch.elapsedMillisecondsAsDouble());
-
+ 
     stage_watch.restart();
     QueryPlanPtr query_plan = QueryPlanner::plan(query_ptr, *analysis, context);
     LOG_DEBUG(log, "optimizer stage run time: planning, {} ms", stage_watch.elapsedMillisecondsAsDouble());
-
+ 
     stage_watch.restart();
     PlanOptimizer::optimize(*query_plan, context);
     LOG_DEBUG(log, "optimizer stage run time: optimize, {} ms", stage_watch.elapsedMillisecondsAsDouble());
@@ -75,12 +73,12 @@ BlockIO InterpreterSelectQueryUseOptimizer::execute()
     QueryPlan plan = PlanNodeToNodeVisitor::convert(*query_plan);
 
     LOG_DEBUG(log, "optimizer stage run time: plan normalize, {} ms", stage_watch.elapsedMillisecondsAsDouble());
-
+ 
     stage_watch.restart();
-
     PlanSegmentTreePtr plan_segment_tree = std::make_unique<PlanSegmentTree>();
-    ClusterInfoContext cluster_info_context{.query_plan = *query_plan, .context = context, .plan_segment_tree = plan_segment_tree};
-    PlanSegmentContext plan_segment_context = ClusterInfoFinder::find(*query_plan, cluster_info_context);
+
+    ClusterInfoContext cluster_info_context{.query_plan = plan, .context = context, .plan_segment_tree = plan_segment_tree};
+    PlanSegmentContext plan_segment_context = ClusterInfoFinder::find(query_plan->getPlanNode(), cluster_info_context);
 
     plan.allocateLocalTable(context);
     PlanSegmentSplitter::split(plan, plan_segment_context);
@@ -108,7 +106,8 @@ QueryPlan::Node * PlanNodeToNodeVisitor::visitPlanNode(PlanNodeBase & node, Void
 {
     if (node.getChildren().empty())
     {
-        auto res = QueryPlan::Node{.step = std::const_pointer_cast<IQueryPlanStep>(node.getStep()), .children = {}, .id = node.getId()};
+        auto res = QueryPlan::Node{
+            .step = std::const_pointer_cast<IQueryPlanStep>(node.getStep()), .children = {}, .id = node.getId()};
         node.setStep(res.step);
         plan.addNode(std::move(res));
         return plan.getLastNode();
@@ -127,12 +126,12 @@ QueryPlan::Node * PlanNodeToNodeVisitor::visitPlanNode(PlanNodeBase & node, Void
     return plan.getLastNode();
 }
 
-PlanSegmentContext ClusterInfoFinder::find(QueryPlan & plan, ClusterInfoContext & cluster_info_context)
+PlanSegmentContext ClusterInfoFinder::find(PlanNodePtr & node, ClusterInfoContext & cluster_info_context)
 {
-    ClusterInfoFinder visitor{plan.getCTEInfo()};
+    ClusterInfoFinder visitor;
 
     // default schedule to worker cluster
-    std::optional<PlanSegmentContext> result = VisitorUtil::accept(plan.getPlanNode(), visitor, cluster_info_context);
+    std::optional<PlanSegmentContext> result = VisitorUtil::accept(node, visitor, cluster_info_context);
     if (result.has_value())
     {
         return result.value();
@@ -173,18 +172,11 @@ std::optional<PlanSegmentContext> ClusterInfoFinder::visitTableScanNode(TableSca
             .context = cluster_info_context.context,
             .query_plan = cluster_info_context.query_plan,
             .query_id = cluster_info_context.context->getCurrentQueryId(),
-            .shard_number = worker_group->getShardsInfo().size(),
+            .shard_number =  worker_group->getShardsInfo().size(),
             .cluster_name = worker_group->getID(),
             .plan_segment_tree = cluster_info_context.plan_segment_tree.get()};
         return plan_segment_context;
     }
     return std::nullopt;
 }
-
-std::optional<PlanSegmentContext> ClusterInfoFinder::visitCTERefNode(CTERefNode & node, ClusterInfoContext & cluster_info_context)
-{
-    const auto * cte = dynamic_cast<const CTERefStep *>(node.getStep().get());
-    return cte_helper.accept(cte->getId(), *this, cluster_info_context);
-}
-
 }

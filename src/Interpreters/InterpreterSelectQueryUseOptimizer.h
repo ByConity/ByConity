@@ -17,11 +17,9 @@
 #include <Common/Stopwatch.h>
 #include <Interpreters/IInterpreter.h>
 #include <Interpreters/SelectQueryOptions.h>
-#include <QueryPlan/CTEVisitHelper.h>
 #include <QueryPlan/PlanVisitor.h>
 #include <Interpreters/DistributedStages/PlanSegmentSplitter.h>
 #include <Interpreters/QueryLog.h>
-#include "QueryPlan/QueryPlan.h"
 
 namespace Poco
 {
@@ -88,12 +86,8 @@ struct ClusterInfoContext
 class ClusterInfoFinder : public PlanNodeVisitor<std::optional<PlanSegmentContext>, ClusterInfoContext>
 {
 public:
-    static PlanSegmentContext find(QueryPlan & plan, ClusterInfoContext & cluster_info_context);
-    explicit ClusterInfoFinder(CTEInfo & cte_info_) : cte_helper(cte_info_) { }
+    static PlanSegmentContext find(PlanNodePtr & node, ClusterInfoContext & cluster_info_context);
     std::optional<PlanSegmentContext> visitPlanNode(PlanNodeBase & node, ClusterInfoContext & cluster_info_context) override;
     std::optional<PlanSegmentContext> visitTableScanNode(TableScanNode & node, ClusterInfoContext & cluster_info_context) override;
-    std::optional<PlanSegmentContext> visitCTERefNode(CTERefNode & node, ClusterInfoContext & cluster_info_context) override;
-private:
-    SimpleCTEVisitHelper<std::optional<PlanSegmentContext>> cte_helper;
 };
 }

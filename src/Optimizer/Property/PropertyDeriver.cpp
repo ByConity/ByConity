@@ -22,13 +22,13 @@
 #include <Optimizer/Property/Property.h>
 #include <Optimizer/SymbolsExtractor.h>
 #include <Optimizer/Utils.h>
-#include <Parsers/ASTLiteral.h>
-#include <Parsers/IAST_fwd.h>
 #include <QueryPlan/ExchangeStep.h>
 #include <QueryPlan/FilterStep.h>
 #include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/UnionStep.h>
 #include <Storages/StorageDistributed.h>
+#include <Parsers/ASTLiteral.h>
+#include <Parsers/IAST_fwd.h>
 
 namespace DB
 {
@@ -97,7 +97,12 @@ Property PropertyDeriver::deriveStorageProperty(const StoragePtr & storage, Cont
                 Names partition_keys{symbols.begin(), symbols.end()};
                 std::sort(partition_keys.begin(), partition_keys.end());
                 return Property{
-                    Partitioning{Partitioning::Handle::BUCKET_TABLE, partition_keys, true, distribute_table->getShardCount(), rewritten},
+                    Partitioning{
+                        Partitioning::Handle::BUCKET_TABLE,
+                        partition_keys,
+                        true,
+                        distribute_table->getShardCount(),
+                        rewritten},
                     Partitioning{}};
             }
         }
@@ -195,22 +200,13 @@ Property DeriverVisitor::visitUnionStep(const UnionStep & step, DeriverContext &
     Property first_child_property = context.getInput()[0];
     if (first_child_property.getNodePartitioning().getPartitioningHandle() == Partitioning::Handle::SINGLE)
     {
-        bool all_single = true;
-        for (const auto & input : context.getInput())
+        if (step.isLocal())
         {
-            all_single &= input.getNodePartitioning().getPartitioningHandle() == Partitioning::Handle::SINGLE;
+            return Property{Partitioning{Partitioning::Handle::SINGLE}, Partitioning{Partitioning::Handle::SINGLE}};
         }
-
-        if (all_single)
+        else
         {
-            if (step.isLocal())
-            {
-                return Property{Partitioning{Partitioning::Handle::SINGLE}, Partitioning{Partitioning::Handle::SINGLE}};
-            }
-            else
-            {
-                return Property{Partitioning{Partitioning::Handle::SINGLE}};
-            }
+            return Property{Partitioning{Partitioning::Handle::SINGLE}};
         }
     }
 

@@ -16,75 +16,39 @@
 #pragma once
 
 #include <string>
+#include <Processors/Exchange/DataTrans/DataTransKey.h>
 #include <fmt/core.h>
 
 namespace DB
 {
-struct ExchangeDataKey
+class ExchangeDataKey : public DataTransKey
 {
-    const String query_id;
-    const UInt64 exchange_id;
-    const UInt64 parallel_index;
-    const String coordinator_address;
-
+public:
     ExchangeDataKey(
-        String query_id_, UInt64 exchange_id_, UInt64 parallel_index_, String coordinator_address_)
+        String query_id_, UInt64 write_segment_id_, UInt64 read_segment_id_, UInt64 parallel_index_, String coordinator_address_)
         : query_id(std::move(query_id_))
-        , exchange_id(exchange_id_)
+        , write_segment_id(write_segment_id_)
+        , read_segment_id(read_segment_id_)
         , parallel_index(parallel_index_)
         , coordinator_address(std::move(coordinator_address_))
     {
     }
 
-    bool operator==(const ExchangeDataKey & compare_to) const
+    ~ExchangeDataKey() override = default;
+
+    String getKey() const override
     {
-        return (
-            exchange_id == compare_to.exchange_id &&
-            parallel_index == compare_to.parallel_index &&
-            0 == query_id.compare(compare_to.query_id) &&
-            0 == coordinator_address.compare(coordinator_address)
-        );
-    }
-
-    bool operator<(const ExchangeDataKey & compare_to) const
-    {
-        if (exchange_id < compare_to.exchange_id)
-            return true;
-        if (exchange_id > compare_to.exchange_id)
-            return false;
-
-        if (parallel_index < compare_to.parallel_index)
-            return true;
-        if (parallel_index > compare_to.parallel_index)
-            return false;
-
-        int query_id_compare = query_id.compare(compare_to.query_id);
-        if (query_id_compare < 0)
-            return true;
-        if (query_id_compare > 0)
-            return false;
-
-        int coordinator_address_compare = coordinator_address.compare(compare_to.coordinator_address);
-        if (coordinator_address_compare < 0)
-            return true;
-        if (coordinator_address_compare > 0)
-            return false;
-
-        return true;
-    }
-
-    String getKey() const
-    {
-        return query_id + "_" + std::to_string(exchange_id) + "_"
+        return query_id + "_" + std::to_string(write_segment_id) + "_" + std::to_string(read_segment_id) + "_"
             + std::to_string(parallel_index) + "_" + coordinator_address;
     }
 
-    String dump() const
+    String dump() const override
     {
         return fmt::format(
-            "ExchangeDataKey: [query_id: {}, exchange_id: {}, parallel_index: {}, coordinator_address: {}]",
+            "ExchangeDataKey: [query_id: {}, write_segment_id: {}, read_segment_id: {}, parallel_index: {}, coordinator_address: {}]",
             query_id,
-            exchange_id,
+            write_segment_id,
+            read_segment_id,
             parallel_index,
             coordinator_address);
     }
@@ -93,25 +57,17 @@ struct ExchangeDataKey
 
     inline const String & getCoordinatorAddress() const { return coordinator_address; }
 
-    inline UInt64 getExchangeId() const {return exchange_id;}
+    inline UInt64 getWriteSegmentId() const {return write_segment_id;}
+
+    inline UInt64 getReadSegmentId() const {return read_segment_id;}
 
     inline UInt64 getParallelIndex() const {return parallel_index;}
+
+private:
+    String query_id;
+    UInt64 write_segment_id;
+    UInt64 read_segment_id;
+    UInt64 parallel_index;
+    String coordinator_address;
 };
-
-using ExchangeDataKeyPtr = std::shared_ptr<ExchangeDataKey>;
-using ExchangeDataKeyPtrs = std::vector<ExchangeDataKeyPtr>;
-
-struct ExchangeDataKeyHashFunc
-{
-    size_t operator()(const ExchangeDataKey & key) const
-    {
-        size_t h1 = std::hash<int>()(key.exchange_id);
-        size_t h2 = std::hash<int>()(key.parallel_index);
-        size_t h3 = std::hash<String>()(key.query_id);
-        size_t h4 = std::hash<String>()(key.coordinator_address);
-
-        return h1 ^ h2 ^ h3 ^ h4;
-    }
-};
-
 }
