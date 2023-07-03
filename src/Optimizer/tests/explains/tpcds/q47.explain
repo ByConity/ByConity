@@ -9,25 +9,14 @@ Projection est. 100 rows
          └─ Sorting est. 51936480000 rows
             │     Order by: {expr#minus(sum_sales, avg_monthly_sales) asc, s_store_name_1 asc}
             │     Limit: 100
-<<<<<<< HEAD
-            └─ Projection est. 126321120000 rows
-               │     Expressions: [d_moy, d_year, expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year), expr#sum(ss_sales_price), expr#sum(ss_sales_price)_1, expr#sum(ss_sales_price)_2, i_brand, i_category, s_company_name, s_store_name], expr#minus(sum_sales, avg_monthly_sales):=`expr#sum(ss_sales_price)` - `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)`
-               └─ Inner Join est. 126321120000 rows
-                  │     Condition: expr#cast(expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC), 'Int128') == expr#cast(minus(expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_2, 1), 'Int128'), i_brand == i_brand_2, i_category == i_category_2, s_company_name == s_company_name_2, s_store_name == s_store_name_2
-                  ├─ Projection est. 210535200 rows
-                  │  │     Expressions: [d_moy, d_year, expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year), expr#sum(ss_sales_price), expr#sum(ss_sales_price)_1, i_brand, i_category, s_company_name, s_store_name], expr#cast(expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC), 'Int128'):=cast(`expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)`, 'Int128')
-                  │  └─ Inner Join est. 210535200 rows
-                  │     │     Condition: i_brand_1 == i_brand, i_category_1 == i_category, plus(expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_1, 1) == expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC), s_company_name_1 == s_company_name, s_store_name_1 == s_store_name
-=======
             └─ Projection est. 51936480000 rows
                │     Expressions: [d_moy_1, d_year_1, expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)_1, expr#sum(ss_sales_price)_1, expr#sum(ss_sales_price)_2, expr#sum(ss_sales_price)_3, i_brand_1, i_category_1, s_company_name_1, s_store_name_1], expr#minus(sum_sales, avg_monthly_sales):=`expr#sum(ss_sales_price)_1` - `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)_1`
                └─ Inner Join est. 51936480000 rows
-                  │     Condition: expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_4 == minus(expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_3, 1)_1, i_brand_1 == i_brand_3, i_category_1 == i_category_3, s_company_name_1 == s_company_name_3, s_store_name_1 == s_store_name_3
+                  │     Condition: expr#cast(expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_1, 'Int128') == expr#cast(minus(expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_3, 1), 'Int128'), i_brand_1 == i_brand_3, i_category_1 == i_category_3, s_company_name_1 == s_company_name_3, s_store_name_1 == s_store_name_3
                   ├─ Projection est. 86560800 rows
-                  │  │     Expressions: [d_moy_1, d_year_1, expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)_1, expr#sum(ss_sales_price)_1, expr#sum(ss_sales_price)_2, i_brand_1, i_category_1, s_company_name_1, s_store_name_1], expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_4:=cast(`expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_1`, 'Int128')
+                  │  │     Expressions: [d_moy_1, d_year_1, expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)_1, expr#sum(ss_sales_price)_1, expr#sum(ss_sales_price)_2, i_brand_1, i_category_1, s_company_name_1, s_store_name_1], expr#cast(expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_1, 'Int128'):=cast(`expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_1`, 'Int128')
                   │  └─ Inner Join est. 233928000 rows
                   │     │     Condition: i_brand_2 == i_brand_1, i_category_2 == i_category_1, plus(expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_2, 1) == expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_1, s_company_name_2 == s_company_name_1, s_store_name_2 == s_store_name_1
->>>>>>> plan change
                   │     ├─ Projection est. 433200 rows
                   │     │  │     Expressions: [expr#sum(ss_sales_price)_2, i_brand_2, i_category_2, s_company_name_2, s_store_name_2], plus(expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_2, 1):=`expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_2` + 1
                   │     │  └─ CTERef [1] est. 433200 rows
@@ -36,56 +25,7 @@ Projection est. 100 rows
                   │        └─ CTERef [1] est. 433200 rows
                   └─ Broadcast Exchange est. 433200 rows
                      └─ Projection est. 433200 rows
-<<<<<<< HEAD
-                        │     Expressions: [expr#sum(ss_sales_price)_2, i_brand_2, i_category_2, s_company_name_2, s_store_name_2], expr#cast(minus(expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_2, 1), 'Int128'):=cast(`expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_2` - 1, 'Int128')
-=======
-<<<<<<< HEAD
-                        │     Expressions: [expr#sum(ss_sales_price)_2, i_brand_2, i_category_2, s_company_name_2, s_store_name_2], minus(expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_2, 1)_1:=cast(`expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_2` - 1, 'Int128')
-=======
-<<<<<<< HEAD
-                        │     Expressions: [expr#sum(ss_sales_price)_2, i_brand_2, i_category_2, s_company_name_2, s_store_name_2], expr#cast(minus(expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_2, 1), 'Int128'):=cast(`expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_2` - 1, 'Int128')
->>>>>>> 96f87e1718d (change plan)
->>>>>>> 6c23d169fd2 (change plan)
-                        └─ Window est. 433200 rows
-                           └─ Repartition Exchange est. 433200 rows
-                              │     Partition by: {i_brand_2, i_category_2, s_company_name_2, s_store_name_2}
-                              └─ MergingAggregated est. 433200 rows
-                                 └─ Repartition Exchange est. 433200 rows
-                                    │     Partition by: {d_moy_2, d_year_2, i_brand_2, i_category_2, s_company_name_2, s_store_name_2}
-                                    └─ Aggregating est. 433200 rows
-                                       │     Group by: {d_moy_2, d_year_2, i_brand_2, i_category_2, s_company_name_2, s_store_name_2}
-                                       │     Aggregates: expr#sum(ss_sales_price)_2:=AggNull(sum)(ss_sales_price_2)
-                                       └─ Inner Join est. 664373244 rows
-                                          │     Condition: ss_store_sk_2 == s_store_sk_2
-                                          ├─ Inner Join est. 664373244 rows
-                                          │  │     Condition: ss_item_sk_2 == i_item_sk_2
-                                          │  ├─ Repartition Exchange est. 664373244 rows
-                                          │  │  │     Partition by: {ss_item_sk_2}
-                                          │  │  └─ Inner Join est. 664373244 rows
-                                          │  │     │     Condition: ss_sold_date_sk_2 == d_date_sk_2
-                                          │  │     ├─ Local Exchange est. 2879987999 rows
-                                          │  │     │  └─ Filter est. 2879987999 rows
-                                          │  │     │     │     Dynamic Filters: {ss_sold_date_sk_2:bloomfilter,ss_sold_date_sk_2:range}
-                                          │  │     │     └─ TableScan tpcds.store_sales est. 2879987999 rows
-                                          │  │     │              Outputs: ss_item_sk_2:=ss_item_sk, ss_sales_price_2:=ss_sales_price, ss_sold_date_sk_2:=ss_sold_date_sk, ss_store_sk_2:=ss_store_sk
-                                          │  │     └─ Broadcast Exchange est. 427 rows
-                                          │  │        └─ Projection est. 427 rows
-                                          │  │           │     Expressions: [d_date_sk_2, d_moy_2, d_year_2]
-                                          │  │           │     Dynamic Filters Builder: {d_date_sk_2}
-                                          │  │           └─ Filter est. 427 rows
-                                          │  │              │     Condition: (d_year_2 = 1999) OR ((d_year_2 = cast(1998, 'Int32')) AND (d_moy_2 = 12)) OR ((d_moy_2 = 1) AND (d_year_2 = cast(2000, 'UInt32')))
-                                          │  │              └─ TableScan tpcds.date_dim est. 73049 rows
-                                          │  │                       Outputs: d_date_sk_2:=d_date_sk, d_moy_2:=d_moy, d_year_2:=d_year
-                                          │  └─ Repartition Exchange est. 300000 rows
-                                          │     │     Partition by: {i_item_sk_2}
-                                          │     └─ TableScan tpcds.item est. 300000 rows
-                                          │              Outputs: i_brand_2:=i_brand, i_category_2:=i_category, i_item_sk_2:=i_item_sk
-                                          └─ Broadcast Exchange est. 1002 rows
-                                             └─ TableScan tpcds.store est. 1002 rows
-                                                      Outputs: s_company_name_2:=s_company_name, s_store_name_2:=s_store_name, s_store_sk_2:=s_store_sk
-note: Dynamic Filter is applied for 6 times.
-=======
-                        │     Expressions: [expr#sum(ss_sales_price)_3, i_brand_3, i_category_3, s_company_name_3, s_store_name_3], minus(expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_3, 1)_1:=cast(`expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_3` - 1, 'Int128')
+                        │     Expressions: [expr#sum(ss_sales_price)_3, i_brand_3, i_category_3, s_company_name_3, s_store_name_3], expr#cast(minus(expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_3, 1), 'Int128'):=cast(`expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_3` - 1, 'Int128')
                         └─ CTERef [1] est. 433200 rows
 CTEDef [1]
 Window est. 433200 rows
@@ -128,4 +68,3 @@ Window est. 433200 rows
                               Outputs: [s_company_name, s_store_name, s_store_sk]
 note: Dynamic Filter is applied for 2 times.
 note: CTE(Common Table Expression) is applied for 3 times.
->>>>>>> change plan

@@ -80,7 +80,7 @@ CTEDef [0]
 Projection est. ? rows
 │     Expressions: [d_moy_3, expr#avg(inv_quantity_on_hand)_3, i_item_sk_3, w_warehouse_sk_3], expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_3:=caseWithExpression(`expr#avg(inv_quantity_on_hand)_3`, 0, NULL, `expr#stddevSamp(inv_quantity_on_hand)_3` / `expr#avg(inv_quantity_on_hand)_3`)
 └─ Filter est. ? rows
-   │     Condition: (caseWithExpression(`expr#avg(inv_quantity_on_hand)_3`, 0, 0, `expr#stddevSamp(inv_quantity_on_hand)_3` / `expr#avg(inv_quantity_on_hand)_3`) > 1) AND ((d_moy_3 = 2) OR ((d_moy_3 = 1) AND (caseWithExpression(`expr#avg(inv_quantity_on_hand)_3`, 0, NULL, `expr#stddevSamp(inv_quantity_on_hand)_3` / `expr#avg(inv_quantity_on_hand)_3`) > 1.5)))
+   │     Condition: (((d_moy_3 = 1) AND (caseWithExpression(`expr#avg(inv_quantity_on_hand)_3`, 0, NULL, `expr#stddevSamp(inv_quantity_on_hand)_3` / `expr#avg(inv_quantity_on_hand)_3`) > 1.5)) OR (d_moy_3 = 2)) AND (caseWithExpression(`expr#avg(inv_quantity_on_hand)_3`, 0, 0, `expr#stddevSamp(inv_quantity_on_hand)_3` / `expr#avg(inv_quantity_on_hand)_3`) > 1)
    └─ MergingAggregated est. ? rows
       └─ Repartition Exchange est. ? rows
          │     Partition by: {d_moy_3, i_item_sk_3, w_warehouse_name_3, w_warehouse_sk_3}
