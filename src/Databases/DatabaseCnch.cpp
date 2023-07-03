@@ -282,15 +282,12 @@ ASTPtr DatabaseCnch::getCreateTableQueryImpl(const String & name, ContextPtr loc
         }
         catch (...)
         {
-            if (throw_on_error)
-                throw;
-            else
-                LOG_DEBUG(
-                    log,
-                    "Fail to get create query for dictionary {} in datase {} query id {}",
-                    name,
-                    getDatabaseName(),
-                    local_context->getCurrentQueryId());
+            LOG_DEBUG(
+                log,
+                "Fail to try to get create query for dictionary {} in datase {} query id {}",
+                name,
+                getDatabaseName(),
+                local_context->getCurrentQueryId());
         }
     }
 
