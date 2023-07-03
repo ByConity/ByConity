@@ -247,10 +247,10 @@ void CloudMergeTreeBlockOutputStream::writeSuffixForInsert()
         txn->commitV2();
         LOG_DEBUG(storage.getLogger(), "Finishing insert values commit in cnch server.");
     }
-    else if (dynamic_pointer_cast<CnchWorkerTransaction>(txn))
+    else if (auto worker_txn = dynamic_pointer_cast<CnchWorkerTransaction>(txn))
     {
         auto kafka_table_id = txn->getKafkaTableID();
-        if (!kafka_table_id.empty())
+        if (!kafka_table_id.empty() && !worker_txn->hasEnableExplicitCommit())
         {
             txn->setMainTableUUID(UUIDHelpers::toUUID(storage.getSettings()->cnch_table_uuid.value));
             Stopwatch watch;

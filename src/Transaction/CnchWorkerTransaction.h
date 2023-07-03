@@ -63,6 +63,11 @@ public:
     void setKafkaConsumerIndex(size_t index) override { kafka_consumer_index = index; }
     size_t getKafkaConsumerIndex() const override { return kafka_consumer_index; }
 
+    void enableExplicitCommit() { enable_explicit_commit = true; }
+    bool hasEnableExplicitCommit() const { return enable_explicit_commit; }
+    void setExplicitCommitStorageID(StorageID storage_id) {explicit_commit_table_id = std::move(storage_id);}
+    StorageID getExplicitCommitStorageID() const {return explicit_commit_table_id;}
+
     // Commit API for 2PC
     // Check status in Catalog if commit on server times out.
     TxnTimestamp commitV2() override;
@@ -84,7 +89,9 @@ private:
     size_t kafka_consumer_index{SIZE_MAX};
     Poco::Logger * log {&Poco::Logger::get("CnchWorkerTransaction")};
 
-
+    /// Transaction should only be committed explicitly
+    bool enable_explicit_commit{false};
+    StorageID explicit_commit_table_id {StorageID::createEmpty()};
     // Transaction is initiated by us or get from somewhere else
     bool is_initiator {false};
 };

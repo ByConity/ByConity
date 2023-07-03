@@ -1069,6 +1069,23 @@ bool CnchMergeMutateThread::needCollectExtendedMergeMetrics()
     return false;
 }
 
+ClusterTaskProgress CnchMergeMutateThread::getReclusteringTaskProgress()
+{
+    ClusterTaskProgress cluster_task_progress;
+    if (!current_mutate_entry->isReclusterMutation())
+        return cluster_task_progress;
+    
+    auto istorage = getStorageFromCatalog();
+    auto partition_list = catalog->getPartitionList(istorage, nullptr);
+    if (partition_list.size() == 0)
+        return cluster_task_progress;
+    
+    cluster_task_progress.progress = (scheduled_mutation_partitions.size() / static_cast<double>(partition_list.size())) * 100;
+    cluster_task_progress.start_time_seconds = current_mutate_entry->commit_time.toSecond();
+    return cluster_task_progress;
+}
+
+
 /// Mutate
 bool CnchMergeMutateThread::tryMutateParts([[maybe_unused]] StoragePtr & istorage, [[maybe_unused]] StorageCnchMergeTree & storage)
 {

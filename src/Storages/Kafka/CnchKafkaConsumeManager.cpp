@@ -565,6 +565,45 @@ void CnchKafkaConsumeManager::getOffsetsFromCatalog(
     getContext()->getCnchCatalog()->getKafkaOffsets(consumer_group, offsets);
 }
 
+StoragePtr CnchKafkaConsumeManager::rewriteCreateTableSQL(const DB::StorageID & dependence,
+                                                    const StorageID & replace_storage_id,
+                                                    const String & table_suffix,
+                                                    std::vector<String> & create_commands)
+{
+    StoragePtr target_table = nullptr;
+
+    auto storage = getContext()->getCnchCatalog()->getTableByUUID(*getContext(), toString(dependence.uuid), getContext()->getTimestamp());
+    if (auto * mv = dynamic_cast<StorageMaterializedView*>(storage.get()))
+    {
+        LOG_DEBUG(log, "Rewrite sql for dependence: {}", dependence.getNameForLogs());
+
+        target_table = mv->getTargetTable();
+        /// All other Cnch**MergeTree can be dynamic_cast as CnchMergeTree
+        if (auto * cnch_table = dynamic_cast<StorageCnchMergeTree *>(target_table.get()))
+        {
+            auto crete_query = cnch_table->getCreateTableSql();
+            replaceCreateTableQuery(getContext(), crete_query, cnch_table->getTableName() + table_suffix, true, false);
+            create_commands.push_back(crete_query);
+
+            create_commands.push_back(replaceMaterializedViewQuery(mv, replace_storage_id, table_suffix));
+
+            if (!cnch_table->getInMemoryMetadataPtr()->hasUniqueKey())
+            {
+                /// The target table may have other MaterializedView tables and deeper sink tables,
+                /// e.g CnchKafka -> MV1 -> CnchMergeTree1 -> MV2 -> CnchMergeTree2
+                /// XXX: CnchUniqueKey don't support it now
+                auto target_dependencies = getDependenciesFromCatalog(target_table->getStorageID());
+                for (const auto & table_id : target_dependencies)
+                    rewriteCreateTableSQL(table_id, cnch_table->getStorageID(), table_suffix, create_commands);
+            }
+        }
+        else
+            throw Exception("Only CnchMergeTree family is supported now", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    return target_table;
+}
+
 void CnchKafkaConsumeManager::dispatchConsumerToWorker(StorageCnchKafka & kafka_table, ConsumerInfo & info, std::exception_ptr & exception)
 {
     /// When cnch-server is under high load, the transaction (RPC call) may need more time to execute commit action;
@@ -595,31 +634,10 @@ void CnchKafkaConsumeManager::dispatchConsumerToWorker(StorageCnchKafka & kafka_
     command.create_table_commands.push_back(create_kafka_query);
 
     StoragePtr target_table;
-    for (const auto & storage_id : dependencies)
-    {
-        LOG_TRACE(log, "Dependencies: {}", storage_id.getNameForLogs());
-
-        auto table = getContext()->getCnchCatalog()->getTableByUUID(
-            *getContext(), toString(storage_id.uuid), getContext()->getTimestamp());
-        if (auto * mv = dynamic_cast<StorageMaterializedView *>(table.get()))
-        {
-            target_table = mv->getTargetTable();
-
-            auto * cnch_merge = dynamic_cast<StorageCnchMergeTree *>(target_table.get());
-            if (!cnch_merge)
-                throw Exception("CnchMergeTree is expected for " + target_table->getTableName(), ErrorCodes::LOGICAL_ERROR);
-
-            auto create_target_query = target_table->getCreateTableSql();
-            /// FIXME: bool enable_staging_area = cloud_table_has_unique_key && kafka_table.getSettings().enable_staging_area;
-            replaceCreateTableQuery(getContext(), create_target_query, target_table->getTableName() + table_suffix, true, false);
-            //command.create_table_commands.push_back(
-            //    cnch_merge->getCreateQueryForCloudTable(create_target_query, target_table->getTableName() + table_suffix));
-            command.create_table_commands.push_back(create_target_query);
-
-            /// replace mv table
-            command.create_table_commands.push_back(replaceMaterializedViewQuery(mv, this->storage_id, table_suffix));
-        }
-    }
+    for (const auto & dependency : dependencies)
+        target_table = rewriteCreateTableSQL(dependency, this->storage_id, table_suffix, command.create_table_commands);
+    if (!target_table)
+        throw Exception("Unable to get target table for CnchKafka, this is unexpected", ErrorCodes::LOGICAL_ERROR);
 
     for (auto & query : command.create_table_commands)
     {

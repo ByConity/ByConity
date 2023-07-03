@@ -266,7 +266,8 @@ void StorageCloudKafka::checkStagedArea()
 {
     try
     {
-        if (!checkDependencies(getDatabaseName(), getTableName(), /**check staged area**/true))
+        [[maybe_unused]] size_t num_tables_to_write{0};
+        if (!checkDependencies(getDatabaseName(), getTableName(), /**check staged area**/true, num_tables_to_write))
             LOG_ERROR(log, "Check dependencies failed when checking for staged area.");
     }
     catch(...)
@@ -375,7 +376,11 @@ void StorageCloudKafka::streamThread()
 
         while (!dependencies.empty())
         {
-            if (!checkDependencies(getDatabaseName(), getTableName(), false))
+            /// Use a passed reference parameter instead of member variable
+            /// due to `checkDependencies` will be called by `checkStagedArea` as well
+            /// though `checkStagedArea` is currently unused
+            number_tables_to_write = 0;
+            if (!checkDependencies(getDatabaseName(), getTableName(), false, number_tables_to_write))
                 throw Exception("Check dependencies failed, just restart consumer task", ErrorCodes::CNCH_KAFKA_TASK_NEED_STOP);
 
             if (wait_for_staged_parts_to_publish)
@@ -470,6 +475,12 @@ bool StorageCloudKafka::streamToViews(/* required_column_names */)
         auto table_id = getStorageID();
         table_id.uuid = cnch_storage_id.uuid;
         auto txn = std::make_shared<CnchWorkerTransaction>(consume_context, server_client, table_id, assigned_consumer_index);
+        if (number_tables_to_write > 1)
+        {
+            LOG_DEBUG(&Poco::Logger::get("CnchKafkaWorker"), "Enable explicit commit txn while consumer needs to write {} tables", number_tables_to_write);
+            txn->enableExplicitCommit();
+            txn->setExplicitCommitStorageID(getStorageID());
+        }
         consume_context->setCurrentTransaction(txn);
     }
     catch (...)
@@ -597,7 +608,8 @@ void StorageCloudKafka::streamCopyData(IBlockInputStream &from, IBlockOutputStre
     from.readSuffix();
 }
 
-bool StorageCloudKafka::checkDependencies(const String &database_name, const String &table_name, bool check_staged_area)
+bool StorageCloudKafka::checkDependencies(const String &database_name, const String &table_name,
+                                          bool check_staged_area, size_t & num_tables_to_write)
 {
     /// check if all dependencies are attached
     auto dependencies = DatabaseCatalog::instance().getDependencies({database_name, table_name});
@@ -624,6 +636,10 @@ bool StorageCloudKafka::checkDependencies(const String &database_name, const Str
             auto * cloud = dynamic_cast<StorageCloudMergeTree *> (target_table.get());
             if (!cloud)
                 return false;
+
+            /// Add number of tables to write here
+            ++num_tables_to_write;
+
             if (table_name == getTableName() && database_name == getDatabaseName())
             {
                 /* FIXME: unique table
@@ -633,11 +649,10 @@ bool StorageCloudKafka::checkDependencies(const String &database_name, const Str
                     wait_for_staged_parts_to_publish = !cloud->checkStagedParts();
                 } */
             }
+            /// check its dependencies
+            if (!checkDependencies(target_table->getDatabaseName(), target_table->getTableName(), check_staged_area, num_tables_to_write))
+                return false;
         }
-
-        /// check its dependencies
-        if (!checkDependencies(db_tab.database_name, db_tab.table_name, check_staged_area))
-            return false;
     }
 
     return true;
@@ -774,6 +789,32 @@ cppkafka::TopicPartitionList StorageCloudKafka::getConsumerAssignment() const
     return consumer_context.assignment;
 }
 
+static void getTablesToDropByDependence(const StorageID & db_tb, const ContextMutablePtr & context, std::unordered_set<String> & tables_to_drop)
+{
+    auto table = DatabaseCatalog::instance().tryGetTable({db_tb.database_name, db_tb.table_name}, context);
+    if (!table)
+        return;
+
+    if (auto *mv = dynamic_cast<StorageMaterializedView*>(table.get()))
+    {
+        tables_to_drop.emplace(backQuoteIfNeed(mv->getDatabaseName()) + "." + backQuoteIfNeed(mv->getTableName()));
+
+        auto target_table = mv->tryGetTargetTable();
+        if (!target_table)
+            return;
+
+        if (auto * cloud_table = dynamic_cast<StorageCloudMergeTree*>(target_table.get()))
+        {
+            tables_to_drop.emplace(backQuoteIfNeed(mv->getTargetDatabaseName()) + "." + backQuoteIfNeed(mv->getTargetTableName()));
+        }
+
+        /// Get dependencies of target table (if has
+        auto dependencies = DatabaseCatalog::instance().getDependencies({target_table->getDatabaseName(), target_table->getTableName()});
+        for (const auto & db : dependencies)
+            getTablesToDropByDependence(db, context, tables_to_drop);
+    }
+}
+
 void dropConsumerTables(ContextMutablePtr context, const String & db_name, const String & tb_name)
 {
     std::unordered_set<String> tables_to_drop;
@@ -789,26 +830,7 @@ void dropConsumerTables(ContextMutablePtr context, const String & db_name, const
     {
         for (auto & db_tb : dependencies)
         {
-            auto table = DatabaseCatalog::instance().getTable({db_tb.database_name, db_tb.table_name}, context);
-            if (auto *mv = dynamic_cast<StorageMaterializedView*>(table.get()))
-            {
-                tables_to_drop.emplace(backQuoteIfNeed(mv->getDatabaseName()) + "." + backQuoteIfNeed(mv->getTableName()));
-                ///tables_to_drop.emplace(backQuoteIfNeed(mv->getSelectDatabaseName()) + "." + backQuoteIfNeed(mv->getSelectTableName()));
-
-                try
-                {
-                    auto target_table = mv->getTargetTable();
-                    if (auto * cloud_table = dynamic_cast<StorageCloudMergeTree *>(target_table.get()))
-                    {
-                        tables_to_drop.emplace(backQuoteIfNeed(mv->getTargetDatabaseName()) + "." + backQuoteIfNeed(mv->getTargetTableName()));
-                    }
-                }
-                catch (...)
-                {
-                    LOG_WARNING(&Poco::Logger::get("CnchKafkaWorker"), "Get local target table failed");
-                }
-
-            }
+            getTablesToDropByDependence(db_tb, context, tables_to_drop);
         }
         tables_to_drop.emplace(backQuoteIfNeed(db_name)  + "." + backQuoteIfNeed(tb_name));
     }
