@@ -31,8 +31,10 @@ MultiPartitionExchangeSink::MultiPartitionExchangeSink(
     BroadcastSenderPtrs partition_senders_,
     ExecutableFunctionPtr repartition_func_,
     ColumnNumbers repartition_keys_,
-    ExchangeOptions options_)
+    ExchangeOptions options_,
+    const String &name_)
     : IExchangeSink(std::move(header_))
+    , name(name_)
     , header(getPort().getHeader())
     , partition_senders(std::move(partition_senders_))
     , partition_num(partition_senders.size())
