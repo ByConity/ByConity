@@ -165,6 +165,7 @@ class IColumn;
     M(Bool, optimize_distributed_group_by_sharding_key, false, "Optimize GROUP BY sharding_key queries (by avoiding costly aggregation on the initiator server).", 0) \
     M(UInt64, optimize_skip_unused_shards_limit, 1000, "Limit for number of sharding key values, turns off optimize_skip_unused_shards if the limit is reached", 0) \
     M(Bool, distributed_perfect_shard, false, "Whether to enalbe aggregation finished in worker side, to avoid merge aggregation states in coordinator", 0) \
+    M(Bool, fallback_perfect_shard, true, "Whether to fallback if there is any exception", 0) \
     M(Bool, optimize_skip_unused_shards, false, "Assumes that data is distributed by sharding_key. Optimization to skip unused shards if SELECT query filters by sharding_key.", 0) \
     M(Bool, optimize_skip_unused_shards_rewrite_in, true, "Rewrite IN in query for remote shards to exclude values that does not belong to the shard (requires optimize_skip_unused_shards)", 0) \
     M(Bool, allow_nondeterministic_optimize_skip_unused_shards, false, "Allow non-deterministic functions (includes dictGet) in sharding_key for optimize_skip_unused_shards", 0) \
@@ -637,6 +638,7 @@ class IColumn;
     M(Bool, allow_experimental_bigint_types, true, "Obsolete setting, does nothing.", 0) \
     M(HandleKafkaErrorMode, handle_kafka_error_mode, HandleKafkaErrorMode::DEFAULT, "Obsolete setting, does nothing.", 0) \
     M(Bool, database_replicated_ddl_output, true, "Obsolete setting, does nothing.", 0) \
+    M(Bool, enable_dictionary_compression, false, "Enable the dictioanry compression and decompression when performing a query (deprecated setting).", 0)\
     /** Ingestion */ \
     M(UInt64, max_ingest_columns_size, 10, "The maximum number of columns that can be ingested.", 0) \
     M(UInt64, memory_efficient_ingest_partition_max_key_count_in_memory, 50000000, "The maximum number of key for ingestion to keep in memory during join.", 0) \
@@ -646,6 +648,11 @@ class IColumn;
     M(Bool, enable_replicas_create_ingest_node_in_zk, 0, "Whether to enable replicas to create ingest node in zk", 0) \
     M(Bool, allow_ingest_empty_partition, false, "Allow empty partition replace target table", 0) \
     M(Bool, enable_async_ingest, false, "Allow ingest in aync mode", 0) \
+    /** Early Stop **/ \
+    M(Milliseconds, query_shard_timeout_time, 0, "Timeout for query shard", 0) \
+    M(Milliseconds, late_shard_relax_time, 1000, "Relaxition time for late shard", 0) \
+    M(Float, exception_threshold_for_timeout_query, 0.1, "Timeout for query shard, if timeout shards beyond this threshold, then throw exception", 0) \
+    M(Bool, enable_early_stop_metric, 0, "Whether output metrics of early stop", 0) \
     \
     /** Optimizer relative settings */ \
     M(Bool, enable_optimizer, false, "Whether enable query optimizer", 0) \
@@ -766,6 +773,7 @@ class IColumn;
     M(Bool, enable_sample_by_range, false, "Sample by range if it is true", 0) \
     M(Bool, enable_deterministic_sample_by_range, false, "Deterministic sample by range if it is true", 0) \
     M(Bool, enable_final_sample, false, "Sample from result rows if it is true", 0) \
+    M(Bool, uniform_final_sample, false, "Final sample with uniform mode", 0)\
     \
     /** clone strategy **/ \
     M(Bool, stop_clone_in_utc_time, false, "Enable stop executing clone log in utc time", 0) \

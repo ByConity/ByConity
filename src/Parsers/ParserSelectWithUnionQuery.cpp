@@ -25,6 +25,7 @@
 #include <Parsers/ParserUnionQueryElement.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ParserTEALimit.h>
+#include <Parsers/ParserSetQuery.h>
 
 namespace DB
 {
