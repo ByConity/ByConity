@@ -115,3 +115,6 @@
 #define DBMS_BRPC_PROTOCOL_VERSION 1
 
 #define TEST_KNOB_FORCE_META_REBUILD 0x08ull
+
+/// SERVER VW
+constexpr auto DEFAULT_SERVER_VW_NAME = "server_vw_default";

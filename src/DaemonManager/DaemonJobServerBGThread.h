@@ -115,7 +115,7 @@ UpdateResult getUpdateBGJobs(
 
 bool checkIfServerDied(const std::vector<String> & alive_host_port, const String & host_port);
 std::vector<String> findAliveServers(const std::map<String, UInt64> &);
-std::set<UUID> getUUIDsFromBackgroundJobs(const BackgroundJobs & background_jobs);
+std::map<UUID, String> getUUIDVWsFromBackgroundJobs(const BackgroundJobs & background_jobs);
 std::unordered_map<UUID, String> getAllTargetServerForBGJob(
     const BackgroundJobs & bg_jobs,
     UInt64 ts,

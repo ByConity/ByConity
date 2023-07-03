@@ -23,6 +23,7 @@
 #include <IO/ReadBufferFromString.h>
 #include <IO/WriteBufferFromString.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
+#include <MergeTreeCommon/CnchServerTopology.h>
 #include <Protos/RPCHelpers.h>
 #include <Protos/data_models.pb.h>
 #include <Storages/Hive/HiveDataPart.h>
@@ -508,6 +509,16 @@ createCnchHiveDataParts(const ContextPtr & context, const pb::RepeatedPtrField<P
     }
 
     return res;
+}
+
+String getServerVwNameFrom(const Protos::DataModelTable & model)
+{
+    return model.has_server_vw_name() ? model.server_vw_name() : DEFAULT_SERVER_VW_NAME;
+}
+
+String getServerVwNameFrom(const Protos::TableIdentifier & model)
+{
+    return model.has_server_vw_name() ? model.server_vw_name() : DEFAULT_SERVER_VW_NAME;
 }
 
 }

@@ -24,6 +24,7 @@ message TableIdentifier
     required string name = 2;
     required string uuid = 3;
     optional uint32 meta_version = 4;
+    optional string server_vw_name = 5;
 }
 
 message DataModelDB
@@ -59,6 +60,7 @@ message DataModelTable
     optional uint32 meta_version = 11;
     optional uint64 worker_topology_hash = 12;
     optional string worker_group_name = 13;   // worker group name
+    optional string server_vw_name = 14; // server virtual warehouse name
 };
 
 message DataModelPartInfo
@@ -304,10 +306,17 @@ message DataModelHostWithPorts
     optional uint32 http_port =5;
 }
 
+message DataModelVwTopology
+{
+    required string server_vw_name = 1;
+    repeated DataModelHostWithPorts servers = 2;
+}
+
 message DataModelTopology
 {
     required uint64 expiration = 1;
-    repeated DataModelHostWithPorts servers = 2;
+    repeated DataModelHostWithPorts servers = 2; // deprecated
+    repeated DataModelVwTopology vw_topologies = 3;
 }
 
 message DataModelTopologyVersions

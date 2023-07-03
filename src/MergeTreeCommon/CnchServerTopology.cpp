@@ -14,19 +14,86 @@
  */
 
 #include <MergeTreeCommon/CnchServerTopology.h>
+#include <Common/ConsistentHashUtils/Hash.h>
 #include <sstream>
 
 namespace DB
 {
 
-CnchServerTopology::CnchServerTopology(const UInt64 & lease_expiration_, HostWithPortsVec && servers_)
-    :lease_expiration(lease_expiration_), servers(std::move(servers_))
+CnchServerVwTopology::CnchServerVwTopology(const String & server_vw_name_)
+    :server_vw_name(server_vw_name_)
 {
+}
+
+void CnchServerVwTopology::addServer(const HostWithPorts & server)
+{
+    servers.push_back(server);
+}
+
+const HostWithPortsVec & CnchServerVwTopology::getServerList() const
+{
+    return servers;
+}
+
+String CnchServerVwTopology::getServerVwName() const
+{
+    return server_vw_name;
+}
+
+String CnchServerVwTopology::format() const
+{
+    std::stringstream ss;
+    ss << "{server_vw_name: " << server_vw_name;
+    ss << ", [";
+    for (size_t i=0; i<servers.size(); i++)
+    {
+        if (i>0)
+            ss << ", ";
+        ss << servers[i].getHost();
+    }
+    ss << "]}";
+
+    return ss.str();
+}
+
+bool CnchServerVwTopology::isSameToplogyWith(const CnchServerVwTopology & other_vw_topology) const
+{
+    return server_vw_name == other_vw_topology.server_vw_name
+        && HostWithPorts::isExactlySameVec(servers, other_vw_topology.servers);
+}
+
+void CnchServerTopology::addServer(const HostWithPorts & server, const String & server_vw_name)
+{
+    auto it = vw_topologies.find(server_vw_name);
+    if (it == vw_topologies.end())
+        it = vw_topologies.emplace(server_vw_name, CnchServerVwTopology(server_vw_name)).first;
+    it->second.addServer(server);
+    servers.push_back(server);
+}
+
+std::map<String, CnchServerVwTopology> CnchServerTopology::getVwTopologies() const
+{
+    return vw_topologies;
+}
+
+HostWithPorts CnchServerTopology::getTargetServer(const String & uuid, const String & server_vw_name) const
+{
+    auto it = vw_topologies.find(server_vw_name);
+    if (it == vw_topologies.end() || it->second.getServerList().empty())
+        return {};
+    const auto & servers = it->second.getServerList();
+    auto hashed_index = consistentHashForString(uuid, servers.size());
+    return servers[hashed_index];
 }
 
 HostWithPortsVec CnchServerTopology::getServerList() const
 {
     return servers;
+}
+
+bool CnchServerTopology::empty() const
+{
+    return servers.empty();
 }
 
 size_t CnchServerTopology::getServerSize() const
@@ -49,11 +116,11 @@ String CnchServerTopology::format() const
     std::stringstream ss;
     ss << "{expiration: " << lease_expiration;
     ss << ", [";
-    for (size_t i=0; i<servers.size(); i++)
+    for (auto it = vw_topologies.begin(); it != vw_topologies.end(); ++it)
     {
-        if (i>0)
+        if (it != vw_topologies.begin())
             ss << ", ";
-        ss << servers[i].getHost();
+        ss << it->second.format();
     }
     ss << "]}";
 
@@ -73,6 +140,24 @@ String dumpTopologies(const std::list<CnchServerTopology> & topologies)
     ss << "]";
 
     return ss.str();
+}
+
+bool CnchServerTopology::isSameTopologyWith(const CnchServerTopology & other_topology) const
+{
+    if (vw_topologies.size() != other_topology.vw_topologies.size())
+        return false;
+    auto it = vw_topologies.begin();
+    auto other_it = other_topology.vw_topologies.begin();
+    while (it != vw_topologies.end() && other_it != other_topology.vw_topologies.end())
+    {
+        if (!it->second.isSameToplogyWith(other_it->second))
+            return false;
+
+        ++it;
+        ++other_it;
+    }
+
+    return true;
 }
 
 }
