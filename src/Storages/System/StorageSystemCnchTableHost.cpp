@@ -24,7 +24,6 @@
 #include <Storages/System/CollectWhereClausePredicate.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <common/logger_useful.h>
-#include <Protos/DataModelHelpers.h>
 
 namespace DB
 {
@@ -34,7 +33,6 @@ NamesAndTypesList StorageSystemCnchTableHost::getNamesAndTypes()
         {"database", std::make_shared<DataTypeString>()},
         {"name", std::make_shared<DataTypeString>()},
         {"uuid", std::make_shared<DataTypeString>()},
-        {"server_vw_name", std::make_shared<DataTypeString>()},
         {"host", std::make_shared<DataTypeString>()},
         {"tcp_port", std::make_shared<DataTypeUInt16>()},
         {"http_port", std::make_shared<DataTypeUInt16>()},
@@ -102,12 +100,10 @@ void StorageSystemCnchTableHost::fillData(MutableColumns & res_columns, ContextP
         if (table_id)
         {
             size_t col_num = 0;
-            auto server_vw_name = getServerVwNameFrom(*table_id);
             res_columns[col_num++]->insert(table_id->database());
             res_columns[col_num++]->insert(table_id->name());
             res_columns[col_num++]->insert(table_id->uuid());
-            res_columns[col_num++]->insert(server_vw_name);
-            auto target_server = context->getCnchTopologyMaster()->getTargetServer(table_id->uuid(), server_vw_name, ts, true, true);
+            auto target_server = context->getCnchTopologyMaster()->getTargetServer(table_id->uuid(), ts, true, true);
             res_columns[col_num++]->insert(target_server.getHost());
             res_columns[col_num++]->insert(target_server.getTCPPort());
             res_columns[col_num++]->insert(target_server.getHTTPPort());

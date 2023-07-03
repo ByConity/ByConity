@@ -18,7 +18,6 @@
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <Storages/MutationCommands.h>
 #include <Transaction/Actions/IAction.h>
-#include <Core/Settings.h>
 
 namespace DB
 {
@@ -26,11 +25,10 @@ namespace DB
 class DDLAlterAction : public IAction
 {
 public:
-    DDLAlterAction(const ContextPtr & query_context_, const TxnTimestamp & txn_id_, StoragePtr table_, const Settings & query_settings_)
+    DDLAlterAction(const ContextPtr & query_context_, const TxnTimestamp & txn_id_, StoragePtr table_)
         : IAction(query_context_, txn_id_),
         log(&Poco::Logger::get("AlterAction")),
-        table(std::move(table_)),
-        query_settings(query_settings_)
+        table(std::move(table_))
     {
     }
 
@@ -54,7 +52,6 @@ private:
 
     String new_schema;
     MutationCommands mutation_commands;
-    Settings query_settings;
 };
 
 using DDLAlterActionPtr = std::shared_ptr<DDLAlterAction>;

@@ -1049,8 +1049,7 @@ StorageCnchMergeTree::getStagedParts(const TxnTimestamp & ts, const NameSet * pa
     return res;
 }
 
-void StorageCnchMergeTree::getDeleteBitmapMetaForParts(
-    IMergeTreeDataPartsVector & parts, ContextPtr local_context, TxnTimestamp start_time, bool force_found)
+void StorageCnchMergeTree::getDeleteBitmapMetaForParts(IMergeTreeDataPartsVector & parts, ContextPtr local_context, TxnTimestamp start_time, bool force_found)
 {
     MergeTreeDataPartsCNCHVector cnch_parts;
     cnch_parts.reserve(parts.size());
@@ -1059,8 +1058,7 @@ void StorageCnchMergeTree::getDeleteBitmapMetaForParts(
     getDeleteBitmapMetaForParts(cnch_parts, local_context, start_time, force_found);
 }
 
-void StorageCnchMergeTree::getDeleteBitmapMetaForParts(
-    const MergeTreeDataPartsCNCHVector & parts, ContextPtr local_context, TxnTimestamp start_time, bool force_found)
+void StorageCnchMergeTree::getDeleteBitmapMetaForParts(const MergeTreeDataPartsCNCHVector & parts, ContextPtr local_context, TxnTimestamp start_time, bool force_found)
 {
     auto catalog = local_context->getCnchCatalog();
     if (!catalog)
@@ -1623,7 +1621,9 @@ void StorageCnchMergeTree::checkAlterInCnchServer(const AlterCommands & commands
         }
         if (command.type == AlterCommand::ADD_PROJECTION && old_metadata.hasUniqueKey())
         {
-            throw Exception("ALTER ADD PROJECTION is not supported for tables with the unique index", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(
+                "ALTER ADD PROJECTION is not supported for tables with the unique index",
+                ErrorCodes::BAD_ARGUMENTS);
         }
         if (command.type == AlterCommand::ADD_PROJECTION && !is_custom_partitioned)
         {
@@ -1788,7 +1788,7 @@ Pipe StorageCnchMergeTree::alterPartition(
     if (unlikely(!query_context->getCurrentTransaction()))
         throw Exception("Transaction is not set", ErrorCodes::LOGICAL_ERROR);
 
-    if (query_context->getSettingsRef().enable_sql_forwarding && forwardQueryToServerIfNeeded(query_context, getStorageID()))
+    if (forwardQueryToServerIfNeeded(query_context, getStorageUUID()))
         return {};
 
     auto current_query_context = Context::createCopy(query_context);
@@ -1843,7 +1843,7 @@ void StorageCnchMergeTree::alter(const AlterCommands & commands, ContextPtr loca
     StorageInMemoryMetadata old_metadata = getInMemoryMetadata();
 
     TransactionCnchPtr txn = local_context->getCurrentTransaction();
-    auto action = txn->createAction<DDLAlterAction>(shared_from_this(), local_context->getSettingsRef());
+    auto action = txn->createAction<DDLAlterAction>(shared_from_this());
     auto & alter_act = action->as<DDLAlterAction &>();
     alter_act.setMutationCommands(commands.getMutationCommands(old_metadata, false, local_context));
 
@@ -1882,7 +1882,6 @@ void StorageCnchMergeTree::checkAlterSettings(const AlterCommands & commands) co
         "cnch_vw_read",
         "cnch_vw_write",
         "cnch_vw_task",
-        "cnch_server_vw",
 
         /// Setting for memory buffer
         "cnch_enable_memory_buffer",
@@ -2140,7 +2139,8 @@ StorageCnchMergeTree::createDropRangesFromPartitions(const PartitionDropInfos & 
     return drop_ranges;
 }
 
-LocalDeleteBitmaps StorageCnchMergeTree::createDeleteBitmapTombstones(const IMutableMergeTreeDataPartsVector & drop_ranges, UInt64 txnID)
+LocalDeleteBitmaps
+StorageCnchMergeTree::createDeleteBitmapTombstones(const IMutableMergeTreeDataPartsVector & drop_ranges, UInt64 txnID)
 {
     LocalDeleteBitmaps bitmap_tombstones;
     if (getInMemoryMetadataPtr()->hasUniqueKey())
@@ -2540,7 +2540,7 @@ void StorageCnchMergeTree::mutate(const MutationCommands & commands, ContextPtr 
         return;
 
     auto txn = query_context->getCurrentTransaction();
-    auto action = txn->createAction<DDLAlterAction>(shared_from_this(), query_context->getSettingsRef());
+    auto action = txn->createAction<DDLAlterAction>(shared_from_this());
     auto & alter_act = action->as<DDLAlterAction &>();
     alter_act.setMutationCommands(commands);
     txn->appendAction(std::move(action));

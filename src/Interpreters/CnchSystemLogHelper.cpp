@@ -198,7 +198,7 @@ bool createCnchTable(
     auto & txn_coordinator = global_context->getCnchTransactionCoordinator();
     TransactionCnchPtr txn = txn_coordinator.createTransaction(CreateTransactionOption().setContext(query_context));
 
-    CreateActionParams params = {{database, table, create.uuid}, create_table_sql};
+    CreateActionParams params = {database, table, create.uuid, create_table_sql};
     auto create_table = txn->createAction<DDLCreateAction>(std::move(params));
     txn->appendAction(std::move(create_table));
 

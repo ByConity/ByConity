@@ -196,7 +196,6 @@ struct Settings;
     M(String, cnch_vw_read, "vw_read", "", 0) \
     M(String, cnch_vw_write, "vw_write", "", 0) \
     M(String, cnch_vw_task, "vw_task", "", 0) \
-    M(String, cnch_server_vw, DEFAULT_SERVER_VW_NAME, "", 0) \
     \
     M(UInt64, time_travel_retention_days, 0, "", 0) \
     M(UInt64, insertion_label_ttl, 8400 * 2, "", 0) \

@@ -155,8 +155,6 @@ MergeTreeMetaBase::MergeTreeMetaBase(
     checkTTLExpressions(metadata_, metadata_);
 
     storage_address = fmt::format("{}", fmt::ptr(this));
-
-    setServerVwName(getSettings()->cnch_server_vw);
 }
 
 StoragePolicyPtr MergeTreeMetaBase::getStoragePolicy(StorageLocation location) const

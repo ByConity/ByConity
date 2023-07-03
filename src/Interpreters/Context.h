@@ -1242,9 +1242,8 @@ public:
     void initDaemonManagerClientPool(const String & service_name);
     DaemonManagerClientPtr getDaemonManagerClient() const;
 
-    void setCnchServerManager(const Poco::Util::AbstractConfiguration & config);
+    void setCnchServerManager();
     std::shared_ptr<CnchServerManager> getCnchServerManager() const;
-    void updateServerVirtualWarehouses(const ConfigurationPtr & config);
     void setCnchTopologyMaster();
     std::shared_ptr<CnchTopologyMaster> getCnchTopologyMaster() const;
 

@@ -18,17 +18,17 @@
 #include <Core/UUID.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Transaction/Actions/IAction.h>
-#include <Interpreters/StorageID.h>
 
 namespace DB
 {
 struct CreateActionParams
 {
-    StorageID storage_id;
+    String database;
+    String table;
+    UUID uuid;
     String statement;
     bool attach = false;
     bool is_dictionary = false;
-    bool is_database = false;
 };
 
 class DDLCreateAction : public IAction

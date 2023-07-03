@@ -139,7 +139,6 @@ public:
     std::string getTableName() const { return storage_id.table_name; }
     std::string getDatabaseName() const { return storage_id.database_name; }
     UUID getStorageUUID() const { return storage_id.uuid; }
-    std::string getServerVwName() const { return storage_id.server_vw_name; }
 
     /// Returns true if the storage receives data from a remote server or servers.
     virtual bool isRemote() const { return false; }
@@ -248,8 +247,6 @@ protected:
     /// Returns whether the column is virtual - by default all columns are real.
     /// Initially reserved virtual column name may be shadowed by real column.
     bool isVirtualColumn(const String & column_name, const StorageMetadataPtr & metadata_snapshot) const;
-
-    void setServerVwName(const std::string & server_vw_name) { storage_id.server_vw_name = server_vw_name; }
 
 private:
 

@@ -106,12 +106,12 @@ std::unordered_map<UUID, StorageID> getUUIDsFromCatalog(DaemonJobServerBGThread 
     return ret;
 }
 
-std::map<UUID, String> getUUIDVWsFromBackgroundJobs(const BackgroundJobs & background_jobs)
+std::set<UUID> getUUIDsFromBackgroundJobs(const BackgroundJobs & background_jobs)
 {
-    std::map<UUID, String> ret;
+    std::set<UUID> ret;
     std::transform(background_jobs.begin(), background_jobs.end()
         , std::inserter(ret, ret.end()),
-        [] (const auto & p) { return std::make_pair(p.first, p.second->getStorageID().server_vw_name);}
+        [] (const auto & p) { return p.first;}
     );
     return ret;
 }
@@ -226,7 +226,7 @@ std::unordered_map<UUID, String> getAllTargetServerForBGJob(
     std::unordered_map<UUID, String> ret;
     for (const auto & p : bg_jobs)
     {
-        StorageID storage_id = p.second->getStorageID();
+        StorageID storage_id({}, TABLE_WITH_UUID_NAME_PLACEHOLDER, p.first);
         CnchServerClientPtr client_ptr = nullptr;
         try
         {
@@ -276,54 +276,28 @@ UpdateResult getUpdateBGJobs(
     const std::vector<String> & alive_servers
 )
 {
-    std::map<UUID, String> new_uuid_vws;
+    std::set<UUID> new_uuids;
     std::transform(new_uuid_map.begin(), new_uuid_map.end()
-        , std::inserter(new_uuid_vws, new_uuid_vws.end()),
-        [] (const auto & p) { return std::make_pair(p.first, p.second.server_vw_name);}
+        , std::inserter(new_uuids, new_uuids.end()),
+        [] (const auto & p) { return p.first;}
     );
 
-    auto current_uuid_vws = getUUIDVWsFromBackgroundJobs(background_jobs);
+    std::set<UUID> current_uuids = getUUIDsFromBackgroundJobs(background_jobs);
 
     UUIDs add_uuids;
     UUIDs remove_uuid_candidates;
 
-    auto current_it = current_uuid_vws.begin();
-    auto new_it = new_uuid_vws.begin();
-    while (current_it != current_uuid_vws.end() && new_it != new_uuid_vws.end())
-    {
-        if (current_it->first < new_it->first)
-        {
-            remove_uuid_candidates.insert(current_it->first);
-            current_it++;
-        }
-        else if (current_it->first > new_it->first)
-        {
-            add_uuids.insert(new_it->first);
-            new_it++;
-        }
-        else
-        {
-            /// Check whether server vw changed
-            /// if so, remove and add again
-            if (current_it->second != new_it->second)
-            {
-                remove_uuid_candidates.insert(current_it->first);
-                add_uuids.insert(current_it->first);
-            }
-            current_it++;
-            new_it++;
-        }
-    }
-    while (current_it != current_uuid_vws.end())
-    {
-        remove_uuid_candidates.insert(current_it->first);
-        current_it++;
-    }
-    while (new_it != new_uuid_vws.end())
-    {
-        add_uuids.insert(new_it->first);
-        new_it++;
-    }
+    std::set_difference(
+        new_uuids.begin(), new_uuids.end(),
+        current_uuids.begin(), current_uuids.end(),
+        std::inserter(add_uuids, add_uuids.begin())
+    );
+
+    std::set_difference(
+        current_uuids.begin(), current_uuids.end(),
+        new_uuids.begin(), new_uuids.end(),
+        std::inserter(remove_uuid_candidates, remove_uuid_candidates.begin())
+    );
 
     UUIDs remove_uuids;
     std::for_each(background_jobs.begin(), background_jobs.end(),

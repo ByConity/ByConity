@@ -479,7 +479,7 @@ static TransactionCnchPtr prepareCnchTransaction(ContextMutablePtr context, [[ma
                 return {};
 
             auto storage = context->getCnchCatalog()->getTable(*context, database, table, TxnTimestamp::maxTS());
-            auto host_ports = context->getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(storage->getStorageUUID()), storage->getServerVwName(), true);
+            auto host_ports = context->getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(storage->getStorageUUID()), true);
             auto server_client
                 = host_ports.empty() ? context->getCnchServerClientPool().get() : context->getCnchServerClientPool().get(host_ports);
             auto txn = std::make_shared<CnchWorkerTransaction>(context->getGlobalContext(), server_client);

@@ -7,10 +7,10 @@
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <Transaction/LockDefines.h>
 #include <Transaction/LockManager.h>
-#include <Poco/Logger.h>
 #include <Common/Exception.h>
 #include <Common/serverLocality.h>
 #include "Interpreters/Context_fwd.h"
+#include <Poco/Logger.h>
 
 #include <atomic>
 
@@ -24,8 +24,7 @@ namespace ErrorCodes
 
 class CnchLockHolder::CnchLock : WithContext
 {
-    friend class CnchLockHolder;
-
+friend class CnchLockHolder;
 public:
     explicit CnchLock(const ContextPtr & context_, LockInfoPtr info) : WithContext(context_), lock_info(std::move(info)) { }
 
@@ -49,9 +48,7 @@ public:
 
         LOG_DEBUG(
             &Poco::Logger::get("CnchLockManagerClient"),
-            "try lock {}, target server: {}",
-            lock_info->toDebugString(),
-            (client.has_value() ? (*client)->getRPCAddress() : "local"));
+            "try lock {}, target server: {}", lock_info->toDebugString(), (client.has_value() ? (*client)->getRPCAddress() : "local"));
 
         if (!client)
         {
@@ -74,9 +71,7 @@ public:
         {
             LOG_DEBUG(
                 &Poco::Logger::get("CnchLockManagerClient"),
-                "unlock lock {}, target server: {}",
-                lock_info->toDebugString(),
-                (server_client ? server_client->getRPCAddress() : "local"));
+                "unlock lock {}, target server: {}", lock_info->toDebugString(), (server_client ? server_client->getRPCAddress() : "local"));
 
             if (server_client)
                 server_client->releaseLock(lock_info);
@@ -107,8 +102,7 @@ private:
     std::optional<CnchServerClientPtr> getTargetServer() const
     {
         auto context = getContext();
-        auto server = context->getCnchTopologyMaster()->getTargetServer(
-            UUIDHelpers::UUIDToString(lock_info->table_uuid), DEFAULT_SERVER_VW_NAME, false);
+        auto server = context->getCnchTopologyMaster()->getTargetServer(lock_info->table_uuid_with_prefix, false);
         String host_with_rpc = server.getRPCAddress();
 
         bool is_local = isLocalServer(host_with_rpc, std::to_string(context->getRPCPort()));

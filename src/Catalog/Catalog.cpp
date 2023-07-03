@@ -669,12 +669,6 @@ namespace Catalog
                 tb_data.set_txnid(txnID.toUInt64());
                 tb_data.set_commit_time(ts.toUInt64());
                 RPCHelpers::fillUUID(storage_id.uuid, *(tb_data.mutable_uuid()));
-                if (storage_id.server_vw_name != DEFAULT_SERVER_VW_NAME)
-                {
-                    if (context.getCnchTopologyMaster()->getTargetServer(uuid_str, storage_id.server_vw_name, true).empty())
-                        throw Exception("Cannot create table because no server in vw: " + storage_id.server_vw_name, ErrorCodes::CNCH_TOPOLOGY_NOT_MATCH_ERROR);
-                    tb_data.set_server_vw_name(storage_id.server_vw_name);
-                }
 
                 if (!virtual_warehouse.empty())
                     tb_data.set_vw_name(virtual_warehouse);
@@ -797,8 +791,6 @@ namespace Catalog
     }
 
     void Catalog::alterTable(
-        const Context & query_context,
-        const Settings & query_settings,
         const StoragePtr & storage,
         const String & new_create,
         const TxnTimestamp & previous_version,
@@ -824,35 +816,18 @@ namespace Catalog
                 if (table->commit_time() >= ts.toUInt64())
                     throw Exception("Cannot alter table with an earlier timestamp", ErrorCodes::CATALOG_SERVICE_INTERNAL_ERROR);
 
-                if (!query_settings.force_execute_alter)
-                {
-                    auto host_port = context.getCnchTopologyMaster()
-                                        ->getTargetServer(table_uuid, storage->getServerVwName(), false)
-                                        .getRPCAddress();
-                    if (!isLocalServer(host_port, std::to_string(context.getRPCPort())))
-                        throw Exception(
-                            "Cannot alter table because of choosing wrong server according to current topology, chosen server: " + host_port,
-                            ErrorCodes::CNCH_TOPOLOGY_NOT_MATCH_ERROR);
-                }
+                auto host_port = context.getCnchTopologyMaster()
+                                     ->getTargetServer(UUIDHelpers::UUIDToString(storage->getStorageID().uuid), false)
+                                     .getRPCAddress();
+                if (!isLocalServer(host_port, std::to_string(context.getRPCPort())))
+                    throw Exception(
+                        "Cannot alter table because of choosing wrong server according to current topology, chosen server: " + host_port,
+                        ErrorCodes::CNCH_TOPOLOGY_NOT_MATCH_ERROR);
 
                 table->set_definition(new_create);
                 table->set_txnid(txnID.toUInt64());
                 table->set_commit_time(ts.toUInt64());
                 table->set_previous_version(previous_version.toUInt64());
-
-                StoragePtr new_table = CatalogFactory::getTableByDefinition(const_cast<Context&>(query_context).shared_from_this(), storage->getDatabaseName(), storage->getTableName(), new_create);
-                bool server_vw_changed = false;
-                if (new_table->getServerVwName() != getServerVwNameFrom(*table))
-                {
-                    if (!query_settings.force_execute_alter && context.getCnchTopologyMaster()->getTargetServer(table_uuid, new_table->getServerVwName(), true).empty())
-                        throw Exception("Cannot alter table because no server in vw: " + new_table->getServerVwName(), ErrorCodes::CNCH_TOPOLOGY_NOT_MATCH_ERROR);
-
-                    if (new_table->getServerVwName() == DEFAULT_SERVER_VW_NAME)
-                        table->clear_server_vw_name();
-                    else
-                        table->set_server_vw_name(new_table->getServerVwName());
-                    server_vw_changed = true;
-                }
 
                 // auto res = meta_proxy->alterTable(
                 //     name_space, *table, storage->getOutDatedMaskingPolicy(), storage->getColumns().getAllMaskingPolicy());
@@ -867,14 +842,6 @@ namespace Catalog
                     /// update cache with nullptr and latest table commit_time to prevent an old version be inserted into cache. the cache will be reloaded in following getTable
                     context.getCnchStorageCache()->insert(
                         storage->getDatabaseName(), storage->getTableName(), table->commit_time(), nullptr);
-                }
-                if (server_vw_changed)
-                {
-                    if (auto part_cache_manager = context.getPartCacheManager())
-                    {
-                        /// Invalidate part cache since this server is no longer table's host server
-                        part_cache_manager->invalidPartCache(storage->getStorageUUID());
-                    }
                 }
             },
             ProfileEvents::AlterTableSuccess,
@@ -1040,7 +1007,7 @@ namespace Catalog
                 /// Try insert the storage into cache.
                 if (res && storage_cache)
                 {
-                    auto server = context.getCnchTopologyMaster()->getTargetServer(table_uuid, res->getServerVwName(), true);
+                    auto server = context.getCnchTopologyMaster()->getTargetServer(table_uuid, true);
                     if (!server.empty() && isLocalServer(server.getRPCAddress(), std::to_string(context.getRPCPort())))
                         storage_cache->insert(db, name, table->commit_time(), res);
                 }
@@ -1278,7 +1245,7 @@ namespace Catalog
                     return;
                 }
                 auto host_port
-                    = context.getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(storage->getStorageID().uuid), storage->getServerVwName(), true);
+                    = context.getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(storage->getStorageID().uuid), true);
                 auto host_with_rpc = host_port.getRPCAddress();
 
                 String source;
@@ -1476,7 +1443,7 @@ namespace Catalog
 
     void Catalog::assertLocalServerThrowIfNot(const StoragePtr & storage) const
     {
-        auto host_port = context.getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(storage->getStorageID().uuid), storage->getServerVwName(), false);
+        auto host_port = context.getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(storage->getStorageID().uuid), false);
 
         if (!isLocalServer(host_port.getRPCAddress(), std::to_string(context.getRPCPort())))
             throw Exception(
@@ -1496,7 +1463,7 @@ namespace Catalog
         runWithMetricSupport(
             [&] {
                 const auto host_port
-                    = context.getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(storage->getStorageID().uuid), storage->getServerVwName(), true);
+                    = context.getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(storage->getStorageID().uuid), true);
                 outRes = isLocalServer(host_port.getRPCAddress(), std::to_string(context.getRPCPort()));
             },
             ProfileEvents::IsHostServerSuccess,
@@ -2391,7 +2358,7 @@ namespace Catalog
                     ,txnID);
 
                 const auto host_port
-                    = context.getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(table->getStorageUUID()), table->getServerVwName(), true);
+                    = context.getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(table->getStorageUUID()), true);
 
                 if (!host_port.empty() && !isLocalServer(host_port.getRPCAddress(), std::to_string(context.getRPCPort()))
                     && (context.getSettingsRef().enable_write_non_host_server || context.getSettingsRef().server_write_ha))
@@ -2488,7 +2455,7 @@ namespace Catalog
                     ,txn_id);
 
                 const auto host_port
-                    = context.getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(table->getStorageUUID()), table->getServerVwName(), true);
+                    = context.getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(table->getStorageUUID()), true);
 
                 if (!host_port.empty() && !isLocalServer(host_port.getRPCAddress(), std::to_string(context.getRPCPort()))
                     && (context.getSettingsRef().enable_write_non_host_server || context.getSettingsRef().server_write_ha))

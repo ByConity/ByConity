@@ -227,8 +227,6 @@ void MetastoreProxy::createTable(const String & name_space, const DB::Protos::Da
     identifier.set_database(database);
     identifier.set_name(name);
     identifier.set_uuid(uuid);
-    if (table_data.has_server_vw_name())
-        identifier.set_server_vw_name(table_data.server_vw_name());
     batch_write.AddPut(SinglePutRequest(tableUUIDMappingKey(name_space, database, name), identifier.SerializeAsString(), true));
     batch_write.AddPut(SinglePutRequest(tableUUIDUniqueKey(name_space, uuid), "", true));
 
@@ -589,15 +587,6 @@ bool MetastoreProxy::alterTable(const String & name_space, const Protos::DataMod
 
     String table_uuid = UUIDHelpers::UUIDToString(RPCHelpers::createUUID(table.uuid()));
     batch_write.AddPut(SinglePutRequest(tableStoreKey(name_space, table_uuid, table.commit_time()), table.SerializeAsString(), true));
-
-    Protos::TableIdentifier identifier;
-    identifier.set_database(table.database());
-    identifier.set_name(table.name());
-    identifier.set_uuid(table_uuid);
-    if (table.has_server_vw_name())
-        identifier.set_server_vw_name(table.server_vw_name());
-    batch_write.AddPut(SinglePutRequest(tableUUIDMappingKey(name_space, table.database(), table.name()), identifier.SerializeAsString()));
-
     for (const auto & name : masks_to_remove)
         batch_write.AddDelete(SingleDeleteRequest(maskingPolicyTableMappingKey(name_space, name, table_uuid)));
 
