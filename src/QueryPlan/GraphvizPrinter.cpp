@@ -2288,12 +2288,12 @@ void GraphvizPrinter::printPlanSegment(const PlanSegmentTreePtr & segment, const
 
 void GraphvizPrinter::printChunk(String transform, const Block & block, const Chunk & chunk)
 {
-    std::stringstream value;
-    value << transform << ":";
+    std::cout << transform << ":";
     for(const auto& column : block.getNames())
     {
-        value << column << ":";
+        std::cout << column << ":";
     }
+    std::cout << "\n";
     UInt64 rows = chunk.getNumRows();
     Columns columns = chunk.getColumns();
     for (UInt64 i = 0; i < rows; ++i)
@@ -2301,51 +2301,41 @@ void GraphvizPrinter::printChunk(String transform, const Block & block, const Ch
         for (auto & col : columns)
         {
             String col_name = col->getName();
-            value << col_name << ":";
-            try
+            if (col_name == "UInt64" || col_name == "UInt8")
             {
-                if (col_name == "UInt64" || col_name == "Int64" || col_name == "Nullable(Int64)")
-                {
-                    auto col_value = col->get64(i);
-                    value << col_value << ":";
-                }
-                if (col_name == "UInt8" || col_name == "Int8")
-                {
-                    auto col_value = col->getInt(i);
-
-                    value << col_value << ":";
-                }
-                if (col_name == "Float64")
-                {
-                    auto col_value = col->getFloat64(i);
-                    value << col_value << ":";
-                }
-                if (col_name == "Float32")
-                {
-                    auto col_value = col->getFloat32(i);
-                    value << col_value << ":";
-                }
-                if (col_name == "String")
-                {
-                    auto col_value = col->getDataAt(i);
-                    value << col_value.toString() << ":";
-                }
-                if (col_name == "Bool")
-                {
-                    auto col_value = col->getBool(i);
-                    value << col_value << ":";
-                }
+                auto col_value = col->getUInt(i);
+                std::cout << col_value << ":";
             }
-            catch (...)
+            if (col_name == "Int64" || col_name == "Int8")
             {
-                value << "NaN"
-                      << ":";
+                auto col_value = col->getInt(i);
+                std::cout << col_value << ":";
+            }
+            if (col_name == "Float64")
+            {
+                auto col_value = col->getFloat64(i);
+                std::cout << col_value << ":";
+            }
+            if (col_name == "Float32")
+            {
+                auto col_value = col->getFloat32(i);
+                std::cout << col_value << ":";
+            }
+            if (col_name == "String")
+            {
+                auto col_value = col->getDataAt(i);
+                std::cout << col_value.toString() << ":";
+            }
+            if (col_name == "Bool")
+            {
+                auto col_value = col->getBool(i);
+                std::cout << col_value << ":";
             }
         }
-        value << "\n";
+        std::cout << "\n" << std::flush;
     }
 
-    LOG_DEBUG(&Poco::Logger::get("GraphvizPrinter"), value.str());
+    std::cout << "\n" << std::flush;
 }
 
 void appendAST(
