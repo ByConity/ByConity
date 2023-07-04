@@ -49,7 +49,9 @@
 #include <Disks/SingleDiskVolume.h>
 #include <Storages/Hive/HiveSchemaConverter.h>
 #include <Storages/KeyDescription.h>
-
+#include <thrift/TToString.h>
+#include <sstream>
+#include <common/logger_useful.h>
 namespace DB
 {
 namespace ErrorCodes
@@ -84,7 +86,7 @@ StorageCnchHive::StorageCnchHive(
     ASTPtr partition_by_ast_,
     ASTPtr cluster_by_ast_,
     ASTPtr order_by_ast_,
-    bool is_create_,
+    [[maybe_unused]] bool is_create_,
     const ColumnsDescription & columns_,
     const ConstraintsDescription & constraints_,
     ContextMutablePtr context_,
@@ -96,19 +98,17 @@ StorageCnchHive::StorageCnchHive(
     , log(&Poco::Logger::get("StorageCnchHive"))
     , settings(settings_)
 {
+    // TODO(renming):: This part is too tricy
+    LOG_TRACE(log, "Hive columns {}", columns_.toString());
     if (columns_.empty())
     {
         HiveSchemaConverter converter(context_, getHiveTable());
         StorageInMemoryMetadata metadata = converter.convert();
         setInMemoryMetadata(metadata);
-    }
-    else if (is_create_)
-    {
-        // only when create table, need to check schema and storage format.
+    } else {
         StorageInMemoryMetadata metadata;
         metadata.setColumns(columns_);
         metadata.setConstraints(constraints_);
-
         if (partition_by_ast_)
         {
             metadata.partition_key = KeyDescription::getKeyFromAST(partition_by_ast_, columns_, context_);
@@ -125,9 +125,10 @@ StorageCnchHive::StorageCnchHive(
         }
 
         setInMemoryMetadata(metadata);
-        auto hms_client = HiveMetastoreClientFactory::instance().getOrCreate(remote_psm, settings);
     }
 
+
+    auto hms_client = HiveMetastoreClientFactory::instance().getOrCreate(remote_psm, settings);
     auto table = getHiveTable();
     const String format = table->sd.outputFormat;
     if ((format.find("parquet") == String::npos) && (format.find("orc") == String::npos))
@@ -374,7 +375,7 @@ StorageCnchHive::HiveTablePtr StorageCnchHive::getHiveTable() const
         auto hms_client = HiveMetastoreClientFactory::instance().getOrCreate(remote_psm, settings);
         auto temp = std::make_shared<Apache::Hadoop::Hive::Table>();
         hms_client->getTable(*temp, remote_database, remote_table);
-
+        LOG_TRACE(log, "table define: {}", ::apache::thrift::to_string(*temp));
         Poco::URI uri(temp->sd.location);
         LOG_TRACE(log, "table location: {}", temp->sd.location);
 
