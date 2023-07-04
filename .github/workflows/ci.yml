@@ -51,13 +51,18 @@ jobs:
           sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" config/fdb.cluster
           sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" config/cnch-config.yml
           sed -i "s|COMPOSE\_PROJECT\_NAME|${COMPOSE_PROJECT_NAME}|g" config/daemon-manager.yml
+          echo "Create volumes for ByConity Cluster"
           /bin/bash create_docker_volume_ci.sh
+          echo "Bring up ByConity Cluster"
           docker-compose up -d
           sleep 10
           conf/create_users.sh
           echo "CLICKHOUSE_HOST=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.Gateway}}{{end}}' ${COMPOSE_PROJECT_NAME}_server-0)" >> $GITHUB_ENV
           export CLICKHOUSE_HOST=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.Gateway}}{{end}}' ${COMPOSE_PROJECT_NAME}_server-0)
+          echo "Check connection to ByConity Server"
           curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 $CLICKHOUSE_HOST:$CLICKHOUSE_PORT_HTTP
+          echo "Check status of cluster"
+          docker ps --filter name=$COMPOSE_PROJECT_NAME
       - name: Run ByConity FuntionalStateless
         continue-on-error: true
         run: |

@@ -1,28 +1,22 @@
 # Hive quick start
 
-## Start hive
-```sh
-docker-compose --env-file hadoop-hive.env -p hive up
-```
-
 ## How to access hive
 ```sh
-docker-compose --env-file hadoop-hive.env exec hive-metastore bash
+docker-compose exec hive-metastore bash
 $ hive
 ```
+**OR**
 
-alternative
 ```sh
-docker-compose --env-file hadoop-hive.env exec hive-server bash
+docker-compose exec hive-server bash
 $ /opt/hive/bin/beeline -u jdbc:hive2://localhost:10000
 ```
 
-## Byconity client
-```sh
-echo "127.0.0.1 namenode" >> /etc/hosts
-```
+## CREATE TABLE syntax 
+You can enter the following queries after connecting to ByConity client using the following command:
+`$GITHUB_WORKSPACE/build/programs/clickhouse-client --host $CLICKHOUSE_HOST --port $CLICKHOUSE_PORT_TCP`
 
-parquet table
+### parquet table
 ```sql
 CREATE TABLE hive.par_tbl
 (
@@ -30,11 +24,11 @@ CREATE TABLE hive.par_tbl
     `value` Int32,
     `event_date` String
 )
-ENGINE = CnchHive('thrift://localhost:9183', 'par_db', 'par_tbl')
+ENGINE = CnchHive('thrift://hive-metastore:9083', 'par_db', 'par_tbl')
 PARTITION BY event_date
 ```
 
-orc table
+### orc table
 ```sql
 CREATE TABLE hive.orc_tbl
 (
@@ -42,6 +36,6 @@ CREATE TABLE hive.orc_tbl
     `value` Int32,
     `event_date` String
 )
-ENGINE = CnchHive('thrift://localhost:9183', 'orc_db', 'orc_tbl')
+ENGINE = CnchHive('thrift://hive-metastore:9083', 'orc_db', 'orc_tbl')
 PARTITION BY event_date
 ```
