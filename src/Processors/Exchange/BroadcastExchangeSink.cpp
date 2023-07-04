@@ -26,8 +26,9 @@
 
 namespace DB
 {
-BroadcastExchangeSink::BroadcastExchangeSink(Block header_, BroadcastSenderPtrs senders_, ExchangeOptions options_)
+BroadcastExchangeSink::BroadcastExchangeSink(Block header_, BroadcastSenderPtrs senders_, ExchangeOptions options_, const String &name_)
     : IExchangeSink(std::move(header_))
+    , name(name_)
     , senders(std::move(senders_))
     , options(std::move(options_))
     , buffer_chunk(getPort().getHeader(), options.send_threshold_in_bytes, options.send_threshold_in_row_num)

@@ -68,15 +68,15 @@ protected:
 private:
     ContextMutablePtr context;
     PlanSegmentPtr plan_segment;
-    PlanSegmentOutputPtr plan_segment_output;
+    PlanSegmentOutputs plan_segment_outputs;
     ExchangeOptions options;
     Poco::Logger * logger;
 
-    void addRepartitionExchangeSink(QueryPipelinePtr & pipeline, BroadcastSenderPtrs & senders, bool keep_order);
+    Processors buildRepartitionExchangeSink(BroadcastSenderPtrs & senders, bool keep_order, size_t output_index, const Block &header, OutputPortRawPtrs &ports);
 
-    void addBroadcastExchangeSink(QueryPipelinePtr & pipeline, BroadcastSenderPtrs & senders);
+    Processors buildBroadcastExchangeSink(BroadcastSenderPtrs & senders, size_t output_index, const Block &header, OutputPortRawPtrs &ports);
 
-    void addLoadBalancedExchangeSink(QueryPipelinePtr & pipeline, BroadcastSenderPtrs & senders);
+    Processors buildLoadBalancedExchangeSink(BroadcastSenderPtrs & senders, size_t output_index, const Block &header, OutputPortRawPtrs &ports);
 
     void sendSegmentStatus(const RuntimeSegmentsStatus & status) noexcept;
 };

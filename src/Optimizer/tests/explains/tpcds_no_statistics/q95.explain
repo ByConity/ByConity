@@ -13,7 +13,7 @@ Projection est. 100 rows
                └─ Inner Join est. ? rows
                   │     Condition: ws_order_number == wr_order_number
                   ├─ Inner Join est. ? rows
-                  │  │     Condition: ws_order_number == ws_order_number_1
+                  │  │     Condition: ws_order_number == ws_order_number_3
                   │  ├─ Repartition Exchange est. ? rows
                   │  │  │     Partition by: {ws_order_number}
                   │  │  └─ Inner Join est. ? rows
@@ -51,44 +51,37 @@ Projection est. 100 rows
                   │  │           └─ TableScan tpcds.web_site est. ? rows
                   │  │                    Outputs: [web_company_name, web_site_sk]
                   │  └─ Aggregating est. ? rows
-                  │     │     Group by: {ws_order_number_1}
-                  │     └─ Inner Join est. ? rows
-                  │        │     Condition: ws_order_number_1 == ws_order_number_2
-                  │        │     Filter: ws_warehouse_sk_1 != ws_warehouse_sk_2
-                  │        ├─ Repartition Exchange est. ? rows
-                  │        │  │     Partition by: {ws_order_number_1}
-                  │        │  └─ Filter est. ? rows
-                  │        │     │     Condition: isNotNull(ws_order_number_1)
-                  │        │     └─ TableScan tpcds.web_sales est. ? rows
-                  │        │              Outputs: ws_order_number_1:=ws_order_number, ws_warehouse_sk_1:=ws_warehouse_sk
-                  │        └─ Repartition Exchange est. ? rows
-                  │           │     Partition by: {ws_order_number_2}
-                  │           └─ Filter est. ? rows
-                  │              │     Condition: isNotNull(ws_order_number_2)
-                  │              └─ TableScan tpcds.web_sales est. ? rows
-                  │                       Outputs: ws_order_number_2:=ws_order_number, ws_warehouse_sk_2:=ws_warehouse_sk
+                  │     │     Group by: {ws_order_number_3}
+                  │     └─ Filter est. ? rows
+                  │        │     Condition: isNotNull(ws_order_number_3)
+                  │        └─ CTERef [0] est. ? rows
                   └─ Aggregating est. ? rows
                      │     Group by: {wr_order_number}
                      └─ Inner Join est. ? rows
-                        │     Condition: wr_order_number == ws_order_number_3
+                        │     Condition: wr_order_number == ws_order_number_4
                         ├─ Repartition Exchange est. ? rows
                         │  │     Partition by: {wr_order_number}
                         │  └─ Filter est. ? rows
                         │     │     Condition: isNotNull(wr_order_number)
                         │     └─ TableScan tpcds.web_returns est. ? rows
                         │              Outputs: [wr_order_number]
-                        └─ Inner Join est. ? rows
-                           │     Condition: ws_order_number_3 == ws_order_number_4
-                           │     Filter: ws_warehouse_sk_3 != ws_warehouse_sk_4
-                           ├─ Repartition Exchange est. ? rows
-                           │  │     Partition by: {ws_order_number_3}
-                           │  └─ Filter est. ? rows
-                           │     │     Condition: isNotNull(ws_order_number_3)
-                           │     └─ TableScan tpcds.web_sales est. ? rows
-                           │              Outputs: ws_order_number_3:=ws_order_number, ws_warehouse_sk_3:=ws_warehouse_sk
-                           └─ Repartition Exchange est. ? rows
-                              │     Partition by: {ws_order_number_4}
-                              └─ Filter est. ? rows
-                                 │     Condition: isNotNull(ws_order_number_4)
-                                 └─ TableScan tpcds.web_sales est. ? rows
-                                          Outputs: ws_order_number_4:=ws_order_number, ws_warehouse_sk_4:=ws_warehouse_sk
+                        └─ Filter est. ? rows
+                           │     Condition: isNotNull(ws_order_number_4)
+                           └─ CTERef [0] est. ? rows
+CTEDef [0]
+Inner Join est. ? rows
+│     Condition: ws_order_number_1 == ws_order_number_2
+│     Filter: ws_warehouse_sk_1 != ws_warehouse_sk_2
+├─ Repartition Exchange est. ? rows
+│  │     Partition by: {ws_order_number_1}
+│  └─ Filter est. ? rows
+│     │     Condition: isNotNull(ws_order_number_1)
+│     └─ TableScan tpcds.web_sales est. ? rows
+│              Outputs: ws_order_number_1:=ws_order_number, ws_warehouse_sk_1:=ws_warehouse_sk
+└─ Repartition Exchange est. ? rows
+   │     Partition by: {ws_order_number_2}
+   └─ Filter est. ? rows
+      │     Condition: isNotNull(ws_order_number_2)
+      └─ TableScan tpcds.web_sales est. ? rows
+               Outputs: ws_order_number_2:=ws_order_number, ws_warehouse_sk_2:=ws_warehouse_sk
+note: CTE(Common Table Expression) is applied for 2 times.
