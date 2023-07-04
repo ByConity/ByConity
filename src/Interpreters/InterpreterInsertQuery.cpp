@@ -22,22 +22,30 @@
 #include <Interpreters/InterpreterInsertQuery.h>
 
 #include <Access/AccessFlags.h>
+#include <CloudServices/CnchServerResource.h>
+#include <Columns/ColumnNullable.h>
 #include <DataStreams/AddingDefaultBlockOutputStream.h>
 #include <DataStreams/CheckConstraintsBlockOutputStream.h>
 #include <DataStreams/CountingBlockOutputStream.h>
-#include <Processors/Transforms/getSourceFromFromASTInsertQuery.h>
-#include <DataStreams/PushingToViewsBlockOutputStream.h>
-#include <DataStreams/SquashingBlockOutputStream.h>
-#include <DataStreams/SquashingBlockInputStream.h>
-#include <DataStreams/UnionBlockInputStream.h>
-#include <DataStreams/TransactionWrapperBlockInputStream.h>
-#include <DataStreams/OwningBlockInputStream.h>
 #include <DataStreams/NullAndDoCopyBlockInputStream.h>
+#include <DataStreams/OwningBlockInputStream.h>
+#include <DataStreams/PushingToViewsBlockOutputStream.h>
+#include <DataStreams/SquashingBlockInputStream.h>
+#include <DataStreams/SquashingBlockOutputStream.h>
+#include <DataStreams/TransactionWrapperBlockInputStream.h>
+#include <DataStreams/UnionBlockInputStream.h>
 #include <DataStreams/copyData.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <IO/ConnectionTimeoutsContext.h>
 #include <IO/SnappyReadBuffer.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/InterpreterWatchQuery.h>
+#include <Interpreters/QueryLog.h>
+#include <Interpreters/TranslateQualifiedNamesVisitor.h>
+#include <Interpreters/getTableExpressions.h>
+#include <Interpreters/processColumnTransformers.h>
+#include <Interpreters/trySetVirtualWarehouse.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTSelectQuery.h>
@@ -46,27 +54,18 @@
 #include <Processors/Sources/SinkToOutputStream.h>
 #include <Processors/Sources/SourceFromInputStream.h>
 #include <Processors/Transforms/ExpressionTransform.h>
+#include <Processors/Transforms/getSourceFromFromASTInsertQuery.h>
+#include <Storages/HDFS/ReadBufferFromByteHDFS.h>
+#include <Storages/StorageCloudMergeTree.h>
+#include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageDistributed.h>
 #include <Storages/StorageMaterializedView.h>
-#include <Storages/StorageCnchMergeTree.h>
-#include <Storages/StorageCloudMergeTree.h>
-#include <Storages/HDFS/ReadBufferFromByteHDFS.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Common/checkStackSize.h>
-#include <Interpreters/Context.h>
-#include <Interpreters/QueryLog.h>
-#include <Interpreters/TranslateQualifiedNamesVisitor.h>
-#include <Interpreters/getTableExpressions.h>
-#include <Interpreters/processColumnTransformers.h>
-#include <Interpreters/trySetVirtualWarehouse.h>
-#include <CloudServices/CnchServerResource.h>
-#include <DataTypes/DataTypeNullable.h>
-#include <Columns/ColumnNullable.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
     extern const int NO_SUCH_COLUMN_IN_TABLE;
@@ -100,9 +99,7 @@ StoragePtr InterpreterInsertQuery::getTable(ASTInsertQuery & query)
 }
 
 Block InterpreterInsertQuery::getSampleBlock(
-    const ASTInsertQuery & query,
-    const StoragePtr & table,
-    const StorageMetadataPtr & metadata_snapshot) const
+    const ASTInsertQuery & query, const StoragePtr & table, const StorageMetadataPtr & metadata_snapshot) const
 {
     /// If the query does not include information about columns
     if (!query.columns)
@@ -131,7 +128,8 @@ Block InterpreterInsertQuery::getSampleBlock(
 
         /// The table does not have a column with that name
         if (!table_sample.has(current_name))
-            throw Exception("No such column " + current_name + " in table " + table->getStorageID().getNameForLogs(),
+            throw Exception(
+                "No such column " + current_name + " in table " + table->getStorageID().getNameForLogs(),
                 ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
 
         if (!allow_materialized && !table_sample_non_materialized.has(current_name))
@@ -170,14 +168,9 @@ static bool isTrivialSelect(const ASTPtr & select)
             return false;
 
         /// Note: how to write it in more generic way?
-        return (!select_query->distinct
-            && !select_query->limit_with_ties
-            && !select_query->prewhere()
-            && !select_query->where()
-            && !select_query->groupBy()
-            && !select_query->having()
-            && !select_query->orderBy()
-            && !select_query->limitBy());
+        return (
+            !select_query->distinct && !select_query->limit_with_ties && !select_query->prewhere() && !select_query->where()
+            && !select_query->groupBy() && !select_query->having() && !select_query->orderBy() && !select_query->limitBy());
     }
     /// This query is ASTSelectWithUnionQuery subquery
     return false;
@@ -201,8 +194,7 @@ BlockIO InterpreterInsertQuery::execute()
 
     bool is_distributed_insert_select = false;
 
-    if (query.select && table->isRemote() &&
-        (settings.parallel_distributed_insert_select || settings.distributed_perfect_shard))
+    if (query.select && table->isRemote() && (settings.parallel_distributed_insert_select || settings.distributed_perfect_shard))
     {
         // Distributed INSERT SELECT
         if (auto maybe_pipeline = table->distributedWrite(query, getContext()))
@@ -213,7 +205,7 @@ BlockIO InterpreterInsertQuery::execute()
     }
 
 
-    StorageCnchMergeTree * cnch_merge_tree = dynamic_cast<StorageCnchMergeTree*>(table.get());
+    StorageCnchMergeTree * cnch_merge_tree = dynamic_cast<StorageCnchMergeTree *>(table.get());
     /// Directly forward the query to cnch worker if select or infile
     if (getContext()->getServerType() == ServerType::cnch_server && (query.select || query.in_file) && cnch_merge_tree)
     {
@@ -233,6 +225,7 @@ BlockIO InterpreterInsertQuery::execute()
             txn->setMainTableUUID(table->getStorageUUID());
             res.in = std::make_shared<TransactionWrapperBlockInputStream>(in, std::move(txn));
         }
+        return res;
     }
 
     BlockOutputStreams out_streams;
@@ -251,7 +244,9 @@ BlockIO InterpreterInsertQuery::execute()
                 insert_select_context->initCnchServerResource(insert_select_context->getCurrentTransactionID());
                 LOG_DEBUG(
                     &Logger::get("VirtualWarehouse"),
-                    "Set worker group {} for table {}", worker_group->getQualifiedName(), cloud_table->getStorageID().getNameForLogs());
+                    "Set worker group {} for table {}",
+                    worker_group->getQualifiedName(),
+                    cloud_table->getStorageID().getNameForLogs());
             }
 
             bool is_trivial_insert_select = false;
@@ -265,8 +260,7 @@ BlockIO InterpreterInsertQuery::execute()
                 /// ASTSelectWithUnionQuery is not normalized now, so it may pass some queries which can be Trivial select queries
                 const auto mode_is_all = [](const auto & mode) { return mode == ASTSelectWithUnionQuery::Mode::ALL; };
 
-                is_trivial_insert_select =
-                    std::all_of(union_modes.begin(), union_modes.end(), std::move(mode_is_all))
+                is_trivial_insert_select = std::all_of(union_modes.begin(), union_modes.end(), std::move(mode_is_all))
                     && std::all_of(selects.begin(), selects.end(), isTrivialSelect);
             }
 
@@ -331,15 +325,21 @@ BlockIO InterpreterInsertQuery::execute()
                     {
                         /// Change query sample block columns to Nullable to allow inserting nullable columns, where NULL values will be substituted with
                         /// default column values (in AddingDefaultBlockOutputStream), so all values will be cast correctly.
-                        if (input_columns[col_idx].type->isNullable() && !query_columns[col_idx].type->isNullable() && output_columns.hasDefault(query_columns[col_idx].name))
-                            query_sample_block.setColumn(col_idx, ColumnWithTypeAndName(makeNullable(query_columns[col_idx].column), makeNullable(query_columns[col_idx].type), query_columns[col_idx].name));
+                        if (input_columns[col_idx].type->isNullable() && !query_columns[col_idx].type->isNullable()
+                            && output_columns.hasDefault(query_columns[col_idx].name))
+                            query_sample_block.setColumn(
+                                col_idx,
+                                ColumnWithTypeAndName(
+                                    makeNullable(query_columns[col_idx].column),
+                                    makeNullable(query_columns[col_idx].type),
+                                    query_columns[col_idx].name));
                     }
                 }
             }
         }
         else if (query.watch)
         {
-            InterpreterWatchQuery interpreter_watch{ query.watch, getContext() };
+            InterpreterWatchQuery interpreter_watch{query.watch, getContext()};
             res = interpreter_watch.execute();
             res.pipeline.init(Pipe(std::make_shared<SourceFromInputStream>(std::move(res.in))));
         }
@@ -416,18 +416,16 @@ BlockIO InterpreterInsertQuery::execute()
     {
         const auto & header = out_streams.at(0)->getHeader();
         auto actions_dag = ActionsDAG::makeConvertingActions(
-                res.pipeline.getHeader().getColumnsWithTypeAndName(),
-                header.getColumnsWithTypeAndName(),
-                ActionsDAG::MatchColumnsMode::Position);
-        auto actions = std::make_shared<ExpressionActions>(actions_dag, ExpressionActionsSettings::fromContext(getContext(), CompileExpressions::yes));
+            res.pipeline.getHeader().getColumnsWithTypeAndName(),
+            header.getColumnsWithTypeAndName(),
+            ActionsDAG::MatchColumnsMode::Position);
+        auto actions = std::make_shared<ExpressionActions>(
+            actions_dag, ExpressionActionsSettings::fromContext(getContext(), CompileExpressions::yes));
 
-        res.pipeline.addSimpleTransform([&](const Block & in_header) -> ProcessorPtr
-        {
-            return std::make_shared<ExpressionTransform>(in_header, actions);
-        });
+        res.pipeline.addSimpleTransform(
+            [&](const Block & in_header) -> ProcessorPtr { return std::make_shared<ExpressionTransform>(in_header, actions); });
 
-        res.pipeline.setSinks([&](const Block &, QueryPipeline::StreamType type) -> ProcessorPtr
-        {
+        res.pipeline.setSinks([&](const Block &, QueryPipeline::StreamType type) -> ProcessorPtr {
             if (type != QueryPipeline::StreamType::Main)
                 return nullptr;
 
@@ -441,7 +439,8 @@ BlockIO InterpreterInsertQuery::execute()
         {
             for (const auto & column : metadata_snapshot->getColumns())
                 if (column.default_desc.kind == ColumnDefaultKind::Materialized && header.has(column.name))
-                    throw Exception("Cannot insert column " + column.name + ", because it is MATERIALIZED column.", ErrorCodes::ILLEGAL_COLUMN);
+                    throw Exception(
+                        "Cannot insert column " + column.name + ", because it is MATERIALIZED column.", ErrorCodes::ILLEGAL_COLUMN);
         }
     }
     else if (query.data && !query.has_tail) /// can execute without additional data
@@ -449,10 +448,7 @@ BlockIO InterpreterInsertQuery::execute()
         auto pipe = getSourceFromFromASTInsertQuery(query_ptr, nullptr, query_sample_block, getContext(), nullptr);
         res.pipeline.init(std::move(pipe));
         res.pipeline.resize(1);
-        res.pipeline.setSinks([&](const Block &, Pipe::StreamType)
-        {
-            return std::make_shared<SinkToOutputStream>(out_streams.at(0));
-        });
+        res.pipeline.setSinks([&](const Block &, Pipe::StreamType) { return std::make_shared<SinkToOutputStream>(out_streams.at(0)); });
     }
     else
         res.out = std::move(out_streams.at(0));
@@ -486,7 +482,8 @@ void InterpreterInsertQuery::extendQueryLogElemImpl(QueryLogElement & elem, cons
     }
 }
 
-BlockInputStreamPtr InterpreterInsertQuery::buildInputStreamFromSource(const ContextPtr context_ptr, const Block & sample, const Settings & settings, const String & source_uri, const String & format)
+BlockInputStreamPtr InterpreterInsertQuery::buildInputStreamFromSource(
+    const ContextPtr context_ptr, const Block & sample, const Settings & settings, const String & source_uri, const String & format)
 {
     // Assume no query and fragment in uri, todo, add sanity check
     String fuzzyFileNames;
@@ -510,37 +507,47 @@ BlockInputStreamPtr InterpreterInsertQuery::buildInputStreamFromSource(const Con
 #if USE_HDFS
     if (DB::isHdfsOrCfsScheme(scheme))
     {
-        std::unique_ptr<ReadBuffer> read_buf = std::make_unique<ReadBufferFromByteHDFS>(source_uri, false, context_ptr->getHdfsConnectionParams(), DBMS_DEFAULT_BUFFER_SIZE, nullptr,  0,  false, context_ptr->getProcessList().getHDFSDownloadThrottler());
+        std::unique_ptr<ReadBuffer> read_buf = std::make_unique<ReadBufferFromByteHDFS>(
+            source_uri,
+            false,
+            context_ptr->getHdfsConnectionParams(),
+            DBMS_DEFAULT_BUFFER_SIZE,
+            nullptr,
+            0,
+            false,
+            context_ptr->getProcessList().getHDFSDownloadThrottler());
         // snappy compression suport
         if (endsWith(source_uri, "snappy"))
         {
             if (settings.snappy_format_blocked)
             {
-                read_buf = std::make_unique<SnappyReadBuffer<true> >(std::move(read_buf));
+                read_buf = std::make_unique<SnappyReadBuffer<true>>(std::move(read_buf));
             }
             else
             {
-                read_buf = std::make_unique<SnappyReadBuffer<false> >(std::move(read_buf));
+                read_buf = std::make_unique<SnappyReadBuffer<false>>(std::move(read_buf));
             }
         }
-        inputs.emplace_back(
-            std::make_shared<OwningBlockInputStream<ReadBuffer>>(
-                context_ptr->getInputFormat(format, *read_buf,
-                                        sample, // sample_block
-                                        settings.max_insert_block_size),
-                std::move(read_buf)));
+        inputs.emplace_back(std::make_shared<OwningBlockInputStream<ReadBuffer>>(
+            context_ptr->getInputFormat(
+                format,
+                *read_buf,
+                sample, // sample_block
+                settings.max_insert_block_size),
+            std::move(read_buf)));
     }
     else
 #endif
     {
-        std::vector<String> fuzzyNameList = parseDescription(fuzzyFileNames, 0, fuzzyFileNames.length(), ',' , 100/* hard coded max files */);
-        std::vector<std::vector<String> > fileNames;
-        for(auto fuzzyName : fuzzyNameList)
+        std::vector<String> fuzzyNameList
+            = parseDescription(fuzzyFileNames, 0, fuzzyFileNames.length(), ',', 100 /* hard coded max files */);
+        std::vector<std::vector<String>> fileNames;
+        for (auto fuzzyName : fuzzyNameList)
             fileNames.push_back(parseDescription(fuzzyName, 0, fuzzyName.length(), '|', 100));
 
         for (auto & vecNames : fileNames)
         {
-            for (auto & name: vecNames)
+            for (auto & name : vecNames)
             {
                 std::unique_ptr<ReadBuffer> read_buf = nullptr;
 
@@ -551,7 +558,15 @@ BlockInputStreamPtr InterpreterInsertQuery::buildInputStreamFromSource(const Con
 #if USE_HDFS
                 else if (DB::isHdfsOrCfsScheme(scheme))
                 {
-                    read_buf = std::make_unique<ReadBufferFromByteHDFS>(uriPrefix + name, false, context_ptr->getHdfsConnectionParams(), DBMS_DEFAULT_BUFFER_SIZE, nullptr,  0,  false, context_ptr->getProcessList().getHDFSDownloadThrottler());
+                    read_buf = std::make_unique<ReadBufferFromByteHDFS>(
+                        uriPrefix + name,
+                        false,
+                        context_ptr->getHdfsConnectionParams(),
+                        DBMS_DEFAULT_BUFFER_SIZE,
+                        nullptr,
+                        0,
+                        false,
+                        context_ptr->getProcessList().getHDFSDownloadThrottler());
                 }
 #endif
                 else
@@ -564,19 +579,20 @@ BlockInputStreamPtr InterpreterInsertQuery::buildInputStreamFromSource(const Con
                 {
                     if (settings.snappy_format_blocked)
                     {
-                        read_buf = std::make_unique<SnappyReadBuffer<true> >(std::move(read_buf));
+                        read_buf = std::make_unique<SnappyReadBuffer<true>>(std::move(read_buf));
                     }
                     else
                     {
-                        read_buf = std::make_unique<SnappyReadBuffer<false> >(std::move(read_buf));
+                        read_buf = std::make_unique<SnappyReadBuffer<false>>(std::move(read_buf));
                     }
                 }
-                inputs.emplace_back(
-                        std::make_shared<OwningBlockInputStream<ReadBuffer>>(
-                            context_ptr->getInputFormat(format, *read_buf,
-                                sample, // sample_block
-                                settings.max_insert_block_size),
-                            std::move(read_buf)));
+                inputs.emplace_back(std::make_shared<OwningBlockInputStream<ReadBuffer>>(
+                    context_ptr->getInputFormat(
+                        format,
+                        *read_buf,
+                        sample, // sample_block
+                        settings.max_insert_block_size),
+                    std::move(read_buf)));
             }
         }
     }
