@@ -26,10 +26,12 @@
 #include <Optimizer/CardinalityEstimate/TableScanEstimator.h>
 #include <Optimizer/CardinalityEstimate/UnionEstimator.h>
 #include <Optimizer/CardinalityEstimate/WindowEstimator.h>
+#include <Optimizer/PredicateUtils.h>
 #include <QueryPlan/MergeSortingStep.h>
 #include <QueryPlan/MergingSortedStep.h>
 #include <QueryPlan/PartialSortingStep.h>
 #include <QueryPlan/QueryPlan.h>
+#include <Functions/InternalFunctionsDynamicFilter.h>
 
 #include <utility>
 
@@ -109,6 +111,7 @@ PlanNodeStatisticsPtr CardinalityVisitor::visitJoinStep(const JoinStep & step, C
         left_child_stats,
         right_child_stats,
         step,
+        *context.context,
         context.context->getSettingsRef().enable_pk_fk,
         context.children_are_table_scan[0],
         context.children_are_table_scan[1]);
@@ -313,6 +316,25 @@ PlanNodeStatisticsPtr PlanCardinalityVisitor::visitPlanNode(PlanNodeBase & node,
         if (node.getStep()->getType() == IQueryPlanStep::Type::Projection)
         {
             is_table_scan = children_context.is_table_scan;
+        }
+        
+        // ignore runtime filter 
+        if (node.getStep()->getType() == IQueryPlanStep::Type::Filter)
+        {
+            const FilterStep * step = dynamic_cast<const FilterStep *>(node.getStep().get());
+            bool all_runtime_filters = true;
+            for (auto & conjunct : PredicateUtils::extractConjuncts(step->getFilter()))
+            {
+                // $runtimeFilter(1265, `ws_sold_date_sk`, 0.8028399781540142)
+                if (conjunct->getColumnName().find(InternalFunctionDynamicFilter::name) == std::string::npos)
+                {
+                    all_runtime_filters = false;
+                }
+            }
+            if (all_runtime_filters) 
+            {
+                is_table_scan = children_context.is_table_scan;
+            }
         }
     }
 
