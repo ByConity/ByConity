@@ -41,6 +41,7 @@
 #include <Common/thread_local_rng.h>
 #include <Common/FieldVisitorToString.h>
 #include <Common/Configurations.h>
+#include <Common/Config/VWCustomizedSettings.h>
 #include <Coordination/KeeperDispatcher.h>
 #include <Compression/ICompressionCodec.h>
 #include <Core/BackgroundSchedulePool.h>
@@ -448,6 +449,8 @@ struct ContextSharedPart
     std::vector<std::unique_ptr<ShellCommand>> bridge_commands;
 
     Context::ConfigReloadCallback config_reload_callback;
+
+    VWCustomizedSettingsPtr vw_customized_settings_ptr;
 
     /// @ByteDance
     bool ready_for_query = false;                           /// Server is ready for incoming queries
@@ -974,6 +977,17 @@ ConfigurationPtr Context::getUsersConfig()
     auto lock = getLock();
     return shared->users_config;
 }
+
+VWCustomizedSettingsPtr Context::getVWCustomizedSettings() const
+{
+    return shared->vw_customized_settings_ptr;
+}
+
+void Context::setVWCustomizedSettings(VWCustomizedSettingsPtr vw_customized_settings_ptr_)
+{
+    shared->vw_customized_settings_ptr = vw_customized_settings_ptr_;
+}
+
 
 void Context::initResourceGroupManager([[maybe_unused]] const ConfigurationPtr & config)
 {
@@ -4449,6 +4463,14 @@ std::shared_ptr<Cluster> Context::mockCnchServersCluster() const
     //local_settings.skip_unavailable_shards = true;
     return std::make_shared<Cluster>(this->getSettings(), addresses, false);
 
+}
+
+std::vector<std::pair<UInt64, CnchWorkerResourcePtr>> Context::getAllWorkerResources() const
+{
+    if (!shared->named_cnch_sessions)
+        return {};
+
+    return shared->named_cnch_sessions->getAllWorkerResources();
 }
 
 Context::PartAllocator Context::getPartAllocationAlgo() const

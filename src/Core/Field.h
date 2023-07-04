@@ -297,6 +297,7 @@ public:
             UUID = 27,
             ByteMap = 28,
             BitMap64 = 29,
+            SketchBinary  = 30,
 
             // Special types for index analysis
             NegativeInfinity = 254,
@@ -329,6 +330,7 @@ public:
                 case Decimal256: return "Decimal256";
                 case AggregateFunctionState: return "AggregateFunctionState";
                 case BitMap64: return "BitMap64";
+                case SketchBinary: return "SketchBinary";
             }
 
             throw Exception("Bad type of Field", ErrorCodes::BAD_TYPE_OF_FIELD);
@@ -385,6 +387,19 @@ public:
     Field(const CharT * data, size_t size)
     {
         create(data, size);
+    }
+
+    Field(const char8_t * data, size_t size, bool is_sketch_binary)
+    {
+        if (is_sketch_binary)
+        {
+            new (&storage) String(reinterpret_cast<const char *>(data), size);
+            which = Types::SketchBinary;
+        }
+        else
+        {
+            create(data, size);
+        }
     }
 
     Field & operator= (const Field & rhs)
@@ -511,6 +526,7 @@ public:
             case Types::UUID:    return get<UUID>()    < rhs.get<UUID>();
             case Types::Float64: return get<Float64>() < rhs.get<Float64>();
             case Types::String:  return get<String>()  < rhs.get<String>();
+            case Types::SketchBinary:  return get<String>()  < rhs.get<String>();
             case Types::Array:   return get<Array>()   < rhs.get<Array>();
             case Types::Tuple:   return get<Tuple>()   < rhs.get<Tuple>();
             case Types::Map:     return get<Map>()     < rhs.get<Map>();
@@ -553,6 +569,7 @@ public:
             case Types::UUID:    return get<UUID>().toUnderType() <= rhs.get<UUID>().toUnderType();
             case Types::Float64: return get<Float64>() <= rhs.get<Float64>();
             case Types::String:  return get<String>()  <= rhs.get<String>();
+            case Types::SketchBinary:  return get<String>()  <= rhs.get<String>();
             case Types::Array:   return get<Array>()   <= rhs.get<Array>();
             case Types::Tuple:   return get<Tuple>()   <= rhs.get<Tuple>();
             case Types::Map:     return get<Map>()     <= rhs.get<Map>();
@@ -595,6 +612,7 @@ public:
             }
             case Types::UUID:    return get<UUID>()    == rhs.get<UUID>();
             case Types::String:  return get<String>()  == rhs.get<String>();
+            case Types::SketchBinary:  return get<String>()  == rhs.get<String>();
             case Types::Array:   return get<Array>()   == rhs.get<Array>();
             case Types::Tuple:   return get<Tuple>()   == rhs.get<Tuple>();
             case Types::Map:     return get<Map>()     == rhs.get<Map>();
@@ -643,6 +661,7 @@ public:
             case Types::UUID:    return f(field.template get<UUID>());
             case Types::Float64: return f(field.template get<Float64>());
             case Types::String:  return f(field.template get<String>());
+            case Types::SketchBinary:  return f(field.template get<String>());
             case Types::Array:   return f(field.template get<Array>());
             case Types::Tuple:   return f(field.template get<Tuple>());
             case Types::Map:     return f(field.template get<Map>());

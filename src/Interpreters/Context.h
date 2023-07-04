@@ -249,6 +249,9 @@ class CnchWorkerClient;
 using CnchWorkerClientPtr = std::shared_ptr<CnchWorkerClient>;
 class CnchCatalogDictionaryCache;
 
+class VWCustomizedSettings;
+using VWCustomizedSettingsPtr = std::shared_ptr<VWCustomizedSettings>;
+
 enum class ServerType
 {
     standalone,
@@ -859,6 +862,10 @@ public:
     void makeGlobalContext() { initGlobal(); global_context = shared_from_this(); }
 
     const Settings & getSettingsRef() const { return settings; }
+    Settings & getSettingsRef() { return settings; }
+
+    VWCustomizedSettingsPtr getVWCustomizedSettings() const;
+    void setVWCustomizedSettings(VWCustomizedSettingsPtr vw_customized_settings_ptr_);
 
     void setProgressCallback(ProgressCallback callback);
     /// Used in InterpreterSelectQuery to pass it to the IBlockInputStream.
@@ -1167,8 +1174,8 @@ public:
     void setRuleId(int rule_id_) { rule_id = rule_id_; }
     void incRuleId() { ++rule_id; }
 
-    String graphviz_sub_query_path = "";
-    void setExecuteSubQueryPath(String path) { graphviz_sub_query_path = path; }
+    String graphviz_sub_query_path;
+    void setExecuteSubQueryPath(String path) { graphviz_sub_query_path = std::move(path); }
     String getExecuteSubQueryPath() const { return graphviz_sub_query_path;  }
     void removeExecuteSubQueryPath() { graphviz_sub_query_path = "";  }
 
@@ -1300,6 +1307,8 @@ public:
 
     InterserverCredentialsPtr getCnchInterserverCredentials();
     std::shared_ptr<Cluster> mockCnchServersCluster() const;
+
+    std::vector<std::pair<UInt64, CnchWorkerResourcePtr>> getAllWorkerResources() const;
 
     /// Part allocation
     // Consistent hash algorithm for part allocation

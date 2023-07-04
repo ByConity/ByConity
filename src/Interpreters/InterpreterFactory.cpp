@@ -30,6 +30,7 @@
 #include <Parsers/ASTCreateSettingsProfileQuery.h>
 #include <Parsers/ASTCreateWarehouseQuery.h>
 #include <Parsers/ASTCreateWorkerGroupQuery.h>
+#include <Parsers/ASTDeleteQuery.h>
 #include <Parsers/ASTDropAccessEntityQuery.h>
 #include <Parsers/ASTDropQuery.h>
 #include <Parsers/ASTUndropQuery.h>
@@ -77,6 +78,7 @@
 #include <Interpreters/InterpreterCreateUserQuery.h>
 #include <Interpreters/InterpreterCreateWarehouseQuery.h>
 #include <Interpreters/InterpreterCreateWorkerGroupQuery.h>
+#include <Interpreters/InterpreterDeleteQuery.h>
 #include <Interpreters/InterpreterDescribeQuery.h>
 #include <Interpreters/InterpreterDropAccessEntityQuery.h>
 #include <Interpreters/InterpreterDropWarehouseQuery.h>
@@ -401,6 +403,10 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     else if (query->as<ASTReproduceQuery>())
     {
         return std::make_unique<InterpreterReproduceQueryUseOptimizer>(query, context);
+    }
+    else if (query->as<ASTDeleteQuery>())
+    {
+        return std::make_unique<InterpreterDeleteQuery>(query, context);
     }
     else
     {

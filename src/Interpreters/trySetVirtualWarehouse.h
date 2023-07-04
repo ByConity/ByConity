@@ -17,6 +17,7 @@
 
 #include <Parsers/IAST_fwd.h>
 #include <Interpreters/Context_fwd.h>
+#include <ResourceManagement/VirtualWarehouseType.h>
 
 namespace DB
 {
@@ -29,6 +30,7 @@ using VirtualWarehouseHandle = std::shared_ptr<VirtualWarehouseHandleImpl>;
 
 class WorkerGroupHandleImpl;
 using WorkerGroupHandle = std::shared_ptr<WorkerGroupHandleImpl>;
+using VirtualWarehouseType = ResourceManagement::VirtualWarehouseType;
 
 bool trySetVirtualWarehouse(const ASTPtr & ast, ContextMutablePtr & context);
 bool trySetVirtualWarehouseAndWorkerGroup(const ASTPtr & ast, ContextMutablePtr & context);

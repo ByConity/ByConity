@@ -85,6 +85,19 @@ std::shared_ptr<NamedSession> NamedSessionsImpl<NamedSession>::acquireSession(
 }
 
 template<typename NamedSession>
+std::vector<std::pair<typename NamedSession::NamedSessionKey, std::shared_ptr<CnchWorkerResource>>> NamedSessionsImpl<NamedSession>::getAllWorkerResources() const
+{
+    std::lock_guard lock(mutex);
+    std::vector<std::pair<Key, CnchWorkerResourcePtr>> res;
+    for (const auto & [key, session]: sessions)
+    {
+        if (auto resource = session->context->getCnchWorkerResource())
+            res.emplace_back(key, resource);
+    }
+    return res;
+}
+
+template<typename NamedSession>
 void NamedSessionsImpl<NamedSession>::scheduleCloseSession(NamedSession & session, std::unique_lock<std::mutex> &)
 {
     /// Push it on a queue of sessions to close, on a position corresponding to the timeout.

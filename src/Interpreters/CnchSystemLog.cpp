@@ -117,14 +117,14 @@ bool prepareDatabaseAndTable(
     }
     else
     {
-        String partition_by = config.getString(config_prefix + ".partition_by", "toYYYYMM(event_date)");
+        String partition_by = config.getString(config_prefix + ".partition_by", "event_date");
         engine = "ENGINE = CnchMergeTree";
         if (!partition_by.empty())
             engine += " PARTITION BY (" + partition_by + ")";
         String ttl = config.getString(config_prefix + ".ttl", "event_date + INTERVAL 31 DAY");
         if (!ttl.empty())
             engine += " TTL " + ttl;
-        engine += " ORDER BY (event_date, event_time)";
+        engine += " ORDER BY event_time";
     }
 
     ASTPtr create_query = constructCreateTableQuery<LogElement>(database_name, table_name, engine);

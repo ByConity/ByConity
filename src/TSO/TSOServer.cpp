@@ -123,7 +123,7 @@ void TSOServer::defineOptions(Poco::Util::OptionSet &_options)
             .binding("help"));
 
     _options.addOption(
-        Poco::Util::Option("config-file", "", "set config file path")
+        Poco::Util::Option("config-file", "C", "set config file path")
             .required(false)
             .repeatable(false)
             .argument("config-file", true)

@@ -42,6 +42,9 @@ public:
     bool supportsIndexForIn() const override { return true; }
     bool supportsMapImplicitColumn() const override { return true; }
     bool supportsTrivialCount() const override { return true; }
+    
+    /// Whether support DELETE FROM. We only support for Unique MergeTree for now.
+    bool supportsLightweightDelete() const override { return getInMemoryMetadataPtr()->hasUniqueKey(); }
 
     std::optional<UInt64> totalRows(const ContextPtr &) const override;
     std::optional<UInt64> totalRowsByPartitionPredicate(const SelectQueryInfo &, ContextPtr) const override;

@@ -106,6 +106,7 @@ void registerAggregateFunctionKllSketch(AggregateFunctionFactory & factory);
 void registerAggregateFunctionNdvBuckets(AggregateFunctionFactory & factory);
 void registerAggregateFunctionNdvBucketsExtend(AggregateFunctionFactory & factory);
 void registerAggregateFunctionNothing(AggregateFunctionFactory & factory);
+void registerAggregateFunctionHllSketchEstimate(AggregateFunctionFactory &);
 
 class AggregateFunctionCombinatorFactory;
 void registerAggregateFunctionCombinatorIf(AggregateFunctionCombinatorFactory &);
@@ -211,6 +212,7 @@ void registerAggregateFunctions()
         registerAggregateFunctionNdvBuckets(factory);
         registerAggregateFunctionNdvBucketsExtend(factory);
         registerAggregateFunctionNothing(factory);
+        registerAggregateFunctionHllSketchEstimate(factory);
     }
 
     {
