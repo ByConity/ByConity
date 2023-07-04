@@ -41,8 +41,9 @@ private:
     UInt32 count = rand(); // NOLINT
 };
 
-LoadBalancedExchangeSink::LoadBalancedExchangeSink(Block header_, BroadcastSenderPtrs senders_)
+LoadBalancedExchangeSink::LoadBalancedExchangeSink(Block header_, BroadcastSenderPtrs senders_, const String &name_)
     : IExchangeSink(std::move(header_))
+    , name(name_)
     , senders(std::move(senders_))
     , partition_selector(std::make_unique<RoundRobinSelector>(senders.size()))
     , logger(&Poco::Logger::get("LoadBalancedExchangeSink"))

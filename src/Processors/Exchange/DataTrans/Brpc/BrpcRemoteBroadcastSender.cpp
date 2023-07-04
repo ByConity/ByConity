@@ -54,7 +54,7 @@ namespace ErrorCodes
  * 1-1 sender, to make 1-n sener, merge n 1-1 sender
  */
 BrpcRemoteBroadcastSender::BrpcRemoteBroadcastSender(
-    DataTransKeyPtr trans_key_, brpc::StreamId stream_id, ContextPtr context_, Block header_)
+    ExchangeDataKeyPtr trans_key_, brpc::StreamId stream_id, ContextPtr context_, Block header_)
     : context(std::move(context_)), header(std::move(header_))
 {
     trans_keys.emplace_back(std::move(trans_key_));
@@ -73,11 +73,10 @@ BrpcRemoteBroadcastSender::~BrpcRemoteBroadcastSender()
         if (trans_keys.empty())
             return;
         QueryExchangeLogElement element;
-        if (auto key = std::dynamic_pointer_cast<const ExchangeDataKey>(trans_keys.front()))
+        if (auto key = trans_keys.front())
         {
             element.initial_query_id = key->getQueryId();
-            element.write_segment_id = std::to_string(key->getWriteSegmentId());
-            element.read_segment_id = std::to_string(key->getReadSegmentId());
+            element.exchange_id = std::to_string(key->getExchangeId());
             element.partition_id = std::to_string(key->getParallelIndex());
             element.coordinator_address = key->getCoordinatorAddress();
         }

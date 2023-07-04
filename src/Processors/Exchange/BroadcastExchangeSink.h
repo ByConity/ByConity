@@ -30,9 +30,19 @@ namespace DB
 class BroadcastExchangeSink : public IExchangeSink
 {
 public:
-    BroadcastExchangeSink(Block header_, BroadcastSenderPtrs senders_, ExchangeOptions options_);
+    BroadcastExchangeSink(Block header_, BroadcastSenderPtrs senders_, ExchangeOptions options_, const String &name_);
     virtual ~BroadcastExchangeSink() override;
-    String getName() const override { return "BroadcastExchangeSink"; }
+    String getName() const override { return name; }
+
+    static String generateName(size_t exchange_id)
+    {
+        return fmt::format("BroadcastExchangeSink[{}]", exchange_id);
+    }
+
+    static String generateNameForTest()
+    {
+        return fmt::format("BroadcastExchangeSink[{}]", -1);
+    }
 
 protected:
     virtual void consume(Chunk) override;
@@ -40,6 +50,7 @@ protected:
     virtual void onCancel() override;
 
 private:
+    String name;
     BroadcastSenderPtrs senders;
     ExchangeOptions options;
     BufferChunk buffer_chunk;

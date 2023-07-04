@@ -77,7 +77,6 @@ struct DAGGraph {
         id_to_segment = std::move(other.id_to_segment);
         id_to_address = std::move(other.id_to_address);
         plan_segment_status_ptr = std::move(other.plan_segment_status_ptr);
-        local_exchange_ids = other.local_exchange_ids;
     }
     Source sources;
     size_t final = std::numeric_limits<size_t>::max();
@@ -86,10 +85,6 @@ struct DAGGraph {
     std::unordered_map<size_t, AddressInfos> id_to_address;
     std::set<AddressInfo> plan_send_addresses;
     PlanSegmentsStatusPtr plan_segment_status_ptr;
-    bool has_set_local_exchange = false;
-    size_t local_exchange_parallel_size=0;
-    std::set<size_t> local_exchange_ids;
-    AddressInfos first_local_exchange_address;
 #if defined(TASK_ASSIGN_DEBUG)
     std::unordered_map<size_t, std::vector<std::pair<size_t, AddressInfo>>> exchange_data_assign_node_mappings;
 #endif
