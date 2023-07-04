@@ -15,13 +15,13 @@ Projection est. 10 rows
                   └─ Aggregating est. 10 rows
                      │     Group by: {s_store_name}
                      │     Aggregates: expr#sum(ss_net_profit):=AggNull(sum)(ss_net_profit)
-                     └─ Inner Join est. 140031831 rows
+                     └─ Inner Join est. 70015915 rows
                         │     Condition: substring(s_zip, 1, 2) == substring(expr#substring(ca_zip, 1, 5)_2, 1, 2)
-                        ├─ Projection est. 140031831 rows
+                        ├─ Projection est. 70015915 rows
                         │  │     Expressions: [s_store_name, ss_net_profit], substring(s_zip, 1, 2):=substring(s_zip, 1, 2)
-                        │  └─ Inner Join est. 140031831 rows
+                        │  └─ Inner Join est. 70015915 rows
                         │     │     Condition: ss_store_sk == s_store_sk
-                        │     ├─ Inner Join est. 140031831 rows
+                        │     ├─ Inner Join est. 70015915 rows
                         │     │  │     Condition: ss_sold_date_sk == d_date_sk
                         │     │  ├─ Local Exchange est. 2879987999 rows
                         │     │  │  └─ Filter est. 2879987999 rows

@@ -5,7 +5,7 @@ Projection est. 1 rows
    └─ Gather Exchange est. 1 rows
       └─ Sorting est. 1 rows
          │     Order by: {s_suppkey asc}
-         └─ Inner Join est. 1 rows
+         └─ Inner Join est. 0 rows
             │     Condition: s_suppkey == l_suppkey_1
             ├─ TableScan tpch.supplier est. 10000 rows
             │        Outputs: [s_address, s_name, s_phone, s_suppkey]
