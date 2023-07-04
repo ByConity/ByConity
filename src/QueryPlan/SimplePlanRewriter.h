@@ -57,7 +57,12 @@ public:
         auto cte_step = node.getStep();
         auto cte_id = cte_step->getId();
         auto cte_plan = cte_helper.acceptAndUpdate(cte_id, *this, c);
-        return cte_plan;
+        auto new_step = std::dynamic_pointer_cast<CTERefStep>(node.getStep()->copy(context));
+        DataStreams input_streams;
+        input_streams.emplace_back(cte_plan->getStep()->getOutputStream());
+        new_step->setInputStreams(input_streams);
+        node.setStep(new_step);
+        return node.shared_from_this();
     }
 
 protected:

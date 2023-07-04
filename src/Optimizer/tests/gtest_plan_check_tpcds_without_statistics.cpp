@@ -34,6 +34,7 @@ public:
         settings.emplace("enable_execute_uncorrelated_subquery", 0);
 #endif
 
+        settings.emplace("cte_mode", "AUTO");
         tester = std::make_shared<DB::BaseTpcdsPlanTest>(WITH_STATISTICS, settings);
     }
 
