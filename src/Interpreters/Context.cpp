@@ -24,6 +24,48 @@
 #include <memory>
 #include <optional>
 #include <set>
+#include <Poco/Mutex.h>
+#include <Poco/UUID.h>
+#include <Poco/Net/IPAddress.h>
+#include <Poco/Util/Application.h>
+#include "common/types.h"
+#include <CloudServices/ReclusteringManagerThread.h>
+#include <CloudServices/CnchMergeMutateThread.h>
+#include <Common/DNSResolver.h>
+#include <Common/Macros.h>
+#include <Common/escapeForFileName.h>
+#include <Common/setThreadName.h>
+#include <Common/Stopwatch.h>
+#include <Common/formatReadable.h>
+#include <Common/Throttler.h>
+#include <Common/thread_local_rng.h>
+#include <Common/FieldVisitorToString.h>
+#include <Common/Configurations.h>
+#include <Common/Config/VWCustomizedSettings.h>
+#include <Coordination/KeeperDispatcher.h>
+#include <Compression/ICompressionCodec.h>
+#include <Core/BackgroundSchedulePool.h>
+#include <Formats/FormatFactory.h>
+#include <Processors/Formats/InputStreamFromInputFormat.h>
+#include <Databases/IDatabase.h>
+#include <Storages/IStorage.h>
+#include <Storages/MarkCache.h>
+#include <Storages/MergeTree/MergeList.h>
+#include <Storages/MergeTree/ReplicatedFetchList.h>
+#include <Storages/MergeTree/MergeTreeData.h>
+#include <Storages/MergeTree/MergeTreeSettings.h>
+#include <Storages/MergeTree/CnchHiveSettings.h>
+#include <Storages/CompressionCodecSelector.h>
+#include <Storages/StorageS3Settings.h>
+#include <Storages/MergeTree/ChecksumsCache.h>
+#include <Storages/PrimaryIndexCache.h>
+#include <Disks/DiskLocal.h>
+#include <TableFunctions/TableFunctionFactory.h>
+#include <Interpreters/ActionLocksManager.h>
+#include <Interpreters/ExternalLoaderXMLConfigRepository.h>
+#include <Core/Settings.h>
+#include <Core/SettingsQuirks.h>
+#include <Core/AnsiSettings.h>
 #include <Access/AccessControlManager.h>
 #include <Access/ContextAccess.h>
 #include <Access/Credentials.h>
@@ -4585,6 +4627,14 @@ std::shared_ptr<Cluster> Context::mockCnchServersCluster() const
     //auto local_settings = context.getSettings();
     //local_settings.skip_unavailable_shards = true;
     return std::make_shared<Cluster>(this->getSettings(), addresses, false);
+}
+
+std::vector<std::pair<UInt64, CnchWorkerResourcePtr>> Context::getAllWorkerResources() const
+{
+    if (!shared->named_cnch_sessions)
+        return {};
+
+    return shared->named_cnch_sessions->getAllWorkerResources();
 }
 
 std::vector<std::pair<UInt64, CnchWorkerResourcePtr>> Context::getAllWorkerResources() const

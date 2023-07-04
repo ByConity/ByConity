@@ -257,6 +257,9 @@ using WorkerGroupStatusPtr = std::shared_ptr<WorkerGroupStatus>;
 class VWCustomizedSettings;
 using VWCustomizedSettingsPtr = std::shared_ptr<VWCustomizedSettings>;
 
+class VWCustomizedSettings;
+using VWCustomizedSettingsPtr = std::shared_ptr<VWCustomizedSettings>;
+
 enum class ServerType
 {
     standalone,
