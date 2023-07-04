@@ -27,6 +27,7 @@
 #include <Storages/StorageCnchHive.h>
 #include <Storages/StorageDistributed.h>
 #include "QueryPlan/QueryPlan.h"
+#include <Interpreters/WorkerStatusManager.h>
 
 namespace DB
 {
@@ -83,6 +84,15 @@ BlockIO InterpreterSelectQueryUseOptimizer::execute()
     PlanSegmentContext plan_segment_context = ClusterInfoFinder::find(*query_plan, cluster_info_context);
 
     plan.allocateLocalTable(context);
+    // select health worker before split
+    if (context->getSettingsRef().enable_adaptive_scheduler && context->tryGetCurrentWorkerGroup())
+    {
+        context->selectWorkerNodesWithMetrics();
+        auto wg_health = context->getWorkerGroupStatusPtr()->getWorkerGroupHealth();
+        if (wg_health == WorkerGroupHealthStatus::Critical)
+            throw Exception("no worker available", ErrorCodes::LOGICAL_ERROR);
+    }
+
     PlanSegmentSplitter::split(plan, plan_segment_context);
     LOG_DEBUG(log, "optimizer stage run time: plan segment split, {} ms", stage_watch.elapsedMillisecondsAsDouble());
 
@@ -170,13 +180,17 @@ std::optional<PlanSegmentContext> ClusterInfoFinder::visitTableScanNode(TableSca
     if (cnch_table || cnch_hive)
     {
         const auto & worker_group = cluster_info_context.context->getCurrentWorkerGroup();
+        auto worker_group_status_ptr = cluster_info_context.context->getWorkerGroupStatusPtr();
         PlanSegmentContext plan_segment_context{
             .context = cluster_info_context.context,
             .query_plan = cluster_info_context.query_plan,
             .query_id = cluster_info_context.context->getCurrentQueryId(),
             .shard_number =  worker_group->getShardsInfo().size(),
             .cluster_name = worker_group->getID(),
-            .plan_segment_tree = cluster_info_context.plan_segment_tree.get()};
+            .plan_segment_tree = cluster_info_context.plan_segment_tree.get(),
+            .health_parallel = worker_group_status_ptr ? 
+                std::optional<size_t>(worker_group_status_ptr->getAvaiableComputeWorkerSize()) : std::nullopt};
+
         return plan_segment_context;
     }
     return std::nullopt;

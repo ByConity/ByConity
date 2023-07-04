@@ -279,6 +279,7 @@ void WorkerNodeResourceData::parseFromString(const std::string & s)
     reserved_cpu_cores = pb_data.reserved_cpu_cores();
     register_time = pb_data.register_time();
     state = WorkerState(pb_data.state());
+    last_status_create_time = pb_data.last_status_create_time();
 }
 
 void WorkerNodeResourceData::fillProto(Protos::WorkerNodeResourceData & resource_info) const
@@ -314,6 +315,42 @@ void WorkerNodeResourceData::fillProto(Protos::WorkerNodeResourceData & resource
     if (register_time)
         resource_info.set_register_time(register_time);
     resource_info.set_state(static_cast<uint32_t>(state));
+    if (last_status_create_time)
+        resource_info.set_last_status_create_time(last_status_create_time);
+}
+
+WorkerNodeResourceData::WorkerNodeResourceData(const Protos::WorkerNodeResourceData & resource_info)
+{
+    id = resource_info.id();
+    host_ports = RPCHelpers::createHostWithPorts(resource_info.host_ports());
+
+    cpu_usage = resource_info.cpu_usage();
+    memory_usage = resource_info.memory_usage();
+    memory_available = resource_info.memory_available();
+    disk_space = resource_info.disk_space();
+    query_num = resource_info.query_num();
+
+    if (resource_info.has_cpu_limit())
+        cpu_limit = resource_info.cpu_limit();
+    if (resource_info.has_memory_limit())
+        memory_limit = resource_info.memory_limit();
+
+    if (resource_info.has_vw_name())
+        vw_name = resource_info.vw_name();
+
+    if (resource_info.has_worker_group_id())
+        worker_group_id = resource_info.worker_group_id();
+
+    if (resource_info.has_last_update_time())
+        last_update_time = resource_info.last_update_time();
+    
+    if (resource_info.has_register_time())
+        register_time = resource_info.register_time();
+    
+    if (resource_info.has_last_status_create_time())
+        last_status_create_time = resource_info.last_status_create_time();
+    if (resource_info.has_state())
+        state = WorkerState(resource_info.state());
 }
 
 WorkerNodeResourceData WorkerNodeResourceData::createFromProto(const Protos::WorkerNodeResourceData & resource_info)
@@ -349,6 +386,8 @@ WorkerNodeResourceData WorkerNodeResourceData::createFromProto(const Protos::Wor
     if (resource_info.has_register_time())
         res.register_time = resource_info.register_time();
     res.state = WorkerState(resource_info.state());
+    if (resource_info.has_last_status_create_time())
+        res.last_status_create_time = resource_info.last_status_create_time();
 
     return res;
 }
@@ -473,6 +512,8 @@ void WorkerGroupData::fillProto(Protos::WorkerGroupData & pb_data, const bool wi
     pb_data.set_is_auto_linked(is_auto_linked);
     if (!linked_vw_name.empty())
         pb_data.set_linked_vw_name(linked_vw_name);
+    for (const auto & worker_source : worker_node_resource_vec)
+        worker_source.fillProto(*pb_data.add_worker_node_resource_vec());
 }
 
 void WorkerGroupData::parseFromProto(const Protos::WorkerGroupData & pb_data)
@@ -501,6 +542,8 @@ void WorkerGroupData::parseFromProto(const Protos::WorkerGroupData & pb_data)
 
     if (pb_data.has_linked_vw_name())
         linked_vw_name = pb_data.linked_vw_name();
+    for (auto & worker_source_pb : pb_data.worker_node_resource_vec())
+        worker_node_resource_vec.emplace_back(worker_source_pb);
 }
 
 void QueryQueueInfo::fillProto(Protos::QueryQueueInfo & pb_data) const

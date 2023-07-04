@@ -16,13 +16,12 @@
 #include <Common/HostWithPorts.h>
 #include <Common/parseAddress.h>
 
+#include <IO/Operators.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteBufferFromString.h>
-#include <IO/Operators.h>
+#include <Interpreters/Context.h>
 #include <Common/Exception.h>
-#include <Interpreters/Context.h>
 #include <common/getFQDNOrHostName.h>
-#include <Interpreters/Context.h>
 
 namespace DB
 {
@@ -74,19 +73,19 @@ std::ostream & operator<<(std::ostream & os, const HostWithPorts & host_ports)
 
 namespace
 {
-std::string getFromEnvOrConfig(ContextPtr context, const std::string & name)
-{
-    char * ret = std::getenv(name.c_str());
-    if (ret)
-        return ret;
+    std::string getFromEnvOrConfig(ContextPtr context, const std::string & name)
+    {
+        char * ret = std::getenv(name.c_str());
+        if (ret)
+            return ret;
 
-    return context->getConfigRef().getString(name, "");
-}
+        return context->getConfigRef().getString(name, "");
+    }
 } /// end namespace
 
 std::string getWorkerID(ContextPtr context)
 {
-    auto get_worker_id_lambda = [] (ContextPtr c) {
+    auto get_worker_id_lambda = [](ContextPtr c) {
         std::string worker_id = getFromEnvOrConfig(c, "WORKER_ID");
         if (worker_id.empty())
             worker_id = getHostIPFromEnv();
@@ -109,4 +108,8 @@ std::string getVirtualWareHouseID(ContextPtr context)
     return virtual_warehouse_id;
 }
 
+const String WorkerId::ToString() const
+{
+    return vw_name + "." + wg_name + "." + id;
+}
 }

@@ -269,6 +269,9 @@ void ResourceManagerClient::getWorkerGroups(const std::string & vw_name, std::ve
 	{
         request.set_vw_name(vw_name);
         stub_->getWorkerGroups(&cntl, &request, &response, nullptr);
+        LOG_TRACE(
+            &Poco::Logger::get("adaptiveScheduler"),
+            "getWorkerGroups response: {}", response.ShortDebugString().c_str());
 
         assertController(cntl);
         RPCHelpers::checkResponse(response);
@@ -412,6 +415,9 @@ WorkerGroupData ResourceManagerClient::pickWorkerGroup(const String & vw_name, V
         requirement.fillProto(*request.mutable_requirement());
 
         stub_->pickWorkerGroup(&cntl, &request, &response, nullptr);
+        LOG_TRACE(
+            &Poco::Logger::get("adaptiveScheduler"),
+            "pickWorkerGroup response: {}", response.ShortDebugString().c_str());
 
         assertController(cntl);
         RPCHelpers::checkResponse(response);

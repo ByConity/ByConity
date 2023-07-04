@@ -24,48 +24,6 @@
 #include <memory>
 #include <optional>
 #include <set>
-#include <Poco/Mutex.h>
-#include <Poco/UUID.h>
-#include <Poco/Net/IPAddress.h>
-#include <Poco/Util/Application.h>
-#include "common/types.h"
-#include <CloudServices/ReclusteringManagerThread.h>
-#include <CloudServices/CnchMergeMutateThread.h>
-#include <Common/DNSResolver.h>
-#include <Common/Macros.h>
-#include <Common/escapeForFileName.h>
-#include <Common/setThreadName.h>
-#include <Common/Stopwatch.h>
-#include <Common/formatReadable.h>
-#include <Common/Throttler.h>
-#include <Common/thread_local_rng.h>
-#include <Common/FieldVisitorToString.h>
-#include <Common/Configurations.h>
-#include <Common/Config/VWCustomizedSettings.h>
-#include <Coordination/KeeperDispatcher.h>
-#include <Compression/ICompressionCodec.h>
-#include <Core/BackgroundSchedulePool.h>
-#include <Formats/FormatFactory.h>
-#include <Processors/Formats/InputStreamFromInputFormat.h>
-#include <Databases/IDatabase.h>
-#include <Storages/IStorage.h>
-#include <Storages/MarkCache.h>
-#include <Storages/MergeTree/MergeList.h>
-#include <Storages/MergeTree/ReplicatedFetchList.h>
-#include <Storages/MergeTree/MergeTreeData.h>
-#include <Storages/MergeTree/MergeTreeSettings.h>
-#include <Storages/MergeTree/CnchHiveSettings.h>
-#include <Storages/CompressionCodecSelector.h>
-#include <Storages/StorageS3Settings.h>
-#include <Storages/MergeTree/ChecksumsCache.h>
-#include <Storages/PrimaryIndexCache.h>
-#include <Disks/DiskLocal.h>
-#include <TableFunctions/TableFunctionFactory.h>
-#include <Interpreters/ActionLocksManager.h>
-#include <Interpreters/ExternalLoaderXMLConfigRepository.h>
-#include <Core/Settings.h>
-#include <Core/SettingsQuirks.h>
-#include <Core/AnsiSettings.h>
 #include <Access/AccessControlManager.h>
 #include <Access/ContextAccess.h>
 #include <Access/Credentials.h>
@@ -77,89 +35,109 @@
 #include <Access/SettingsConstraints.h>
 #include <Access/SettingsProfile.h>
 #include <Access/User.h>
+#include <Catalog/Catalog.h>
+#include <CloudServices/CnchBGThreadsMap.h>
+#include <CloudServices/CnchMergeMutateThread.h>
+#include <CloudServices/CnchServerClient.h>
+#include <CloudServices/CnchServerResource.h>
+#include <CloudServices/CnchWorkerClient.h>
+#include <CloudServices/CnchWorkerClientPools.h>
+#include <CloudServices/CnchWorkerResource.h>
+#include <CloudServices/ReclusteringManagerThread.h>
 #include <Compression/ICompressionCodec.h>
-#include <Coordination/KeeperDispatcher.h>
 #include <Coordination/Defines.h>
+#include <Coordination/KeeperDispatcher.h>
 #include <Core/AnsiSettings.h>
 #include <Core/BackgroundSchedulePool.h>
 #include <Core/Settings.h>
 #include <Core/SettingsQuirks.h>
+#include <DaemonManager/DaemonManagerClient.h>
+#include <DataStreams/BlockStreamProfileInfo.h>
 #include <Databases/IDatabase.h>
 #include <Dictionaries/Embedded/GeoDictionariesLoader.h>
 #include <Disks/DiskLocal.h>
 #include <Formats/FormatFactory.h>
 #include <IO/MMappedFileCache.h>
-#include <Interpreters/EmbeddedDictionaries.h>
-#include <Interpreters/ExternalDictionariesLoader.h>
-#include <Interpreters/ExternalModelsLoader.h>
-#include <Interpreters/ExpressionActions.h>
-#include <Interpreters/ProcessList.h>
-#include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
-#include <Interpreters/InterserverCredentials.h>
-#include <Interpreters/Cluster.h>
-#include <Interpreters/InterserverIOHandler.h>
-#include <ResourceGroup/IResourceGroupManager.h>
-#include <Interpreters/SystemLog.h>
-#include <Interpreters/CnchSystemLog.h>
-#include <Interpreters/CnchQueryMetrics/QueryMetricLog.h>
-#include <Interpreters/CnchQueryMetrics/QueryWorkerMetricLog.h>
-#include <Interpreters/SegmentScheduler.h>
-#include <Interpreters/VirtualWarehousePool.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/UncompressedCache.h>
 #include <Interpreters/ActionLocksManager.h>
 #include <Interpreters/Cluster.h>
+#include <Interpreters/CnchQueryMetrics/QueryMetricLog.h>
+#include <Interpreters/CnchQueryMetrics/QueryWorkerMetricLog.h>
+#include <Interpreters/CnchSystemLog.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DDLTask.h>
 #include <Interpreters/DDLWorker.h>
 #include <Interpreters/DatabaseCatalog.h>
-#include <Interpreters/ExternalLoaderXMLConfigRepository.h>
+#include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
+#include <Interpreters/EmbeddedDictionaries.h>
+#include <Interpreters/ExpressionActions.h>
+#include <Interpreters/ExternalDictionariesLoader.h>
 #include <Interpreters/ExternalLoaderCnchCatalogRepository.h>
+#include <Interpreters/ExternalLoaderXMLConfigRepository.h>
+#include <Interpreters/ExternalModelsLoader.h>
 #include <Interpreters/InterserverCredentials.h>
 #include <Interpreters/InterserverIOHandler.h>
-#include <Interpreters/NamedSession.h>
 #include <Interpreters/JIT/CompiledExpressionCache.h>
+#include <Interpreters/NamedSession.h>
 #include <Interpreters/ProcessList.h>
+#include <Interpreters/SegmentScheduler.h>
 #include <Interpreters/SystemLog.h>
+#include <Interpreters/VirtualWarehousePool.h>
 #include <Interpreters/WorkerGroupHandle.h>
-#include <DataStreams/BlockStreamProfileInfo.h>
+#include <Interpreters/WorkerStatusManager.h>
+#include <MergeTreeCommon/CnchServerManager.h>
+#include <MergeTreeCommon/CnchServerTopology.h>
+#include <MergeTreeCommon/CnchTopologyMaster.h>
+#include <Optimizer/OptimizerMetrics.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
 #include <Processors/Formats/InputStreamFromInputFormat.h>
+#include <Processors/QueryCache.h>
 #include <ResourceGroup/IResourceGroupManager.h>
 #include <ResourceGroup/InternalResourceGroupManager.h>
 #include <ResourceGroup/VWResourceGroupManager.h>
 #include <ResourceManagement/ResourceManagerClient.h>
+#include <ServiceDiscovery/ServiceDiscoveryFactory.h>
+#include <Storages/CnchStorageCache.h>
 #include <Storages/CompressionCodecSelector.h>
 #include <Storages/DiskCache/KeyIndexFileCache.h>
+#include <Storages/HDFS/HDFSCommon.h>
+#include <Storages/HDFS/HDFSFileSystem.h>
 #include <Storages/IStorage.h>
 #include <Storages/MarkCache.h>
-#include <Processors/QueryCache.h>
 #include <Storages/MergeTree/BackgroundJobsExecutor.h>
+#include <Storages/MergeTree/ChecksumsCache.h>
+#include <Storages/MergeTree/CnchHiveSettings.h>
 #include <Storages/MergeTree/DeleteBitmapCache.h>
+#include <Storages/MergeTree/MergeList.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeDataPartUUID.h>
 #include <Storages/MergeTree/MergeTreeSettings.h>
 #include <Storages/MergeTree/ReplicatedFetchList.h>
-#include <Storages/UniqueKeyIndexCache.h>
-#include <Storages/StorageS3Settings.h>
-#include <Storages/CnchStorageCache.h>
 #include <Storages/PartCacheManager.h>
-#include <Storages/HDFS/HDFSCommon.h>
-#include <Storages/HDFS/HDFSFileSystem.h>
+#include <Storages/PrimaryIndexCache.h>
+#include <Storages/StorageS3Settings.h>
+#include <Storages/UniqueKeyIndexCache.h>
+#include <TSO/TSOClient.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Poco/Mutex.h>
 #include <Poco/Net/IPAddress.h>
 #include <Poco/UUID.h>
 #include <Poco/Util/Application.h>
-#include <Common/Config/AbstractConfigurationComparison.h>
-#include <Common/Config/ConfigProcessor.h>
+#include "common/types.h"
 #include <Common/CGroup/CGroupManagerFactory.h>
 #include <Common/CGroup/CpuSetScaleManager.h>
+#include <Common/Config/AbstractConfigurationComparison.h>
+#include <Common/Config/ConfigProcessor.h>
+#include <Common/Config/VWCustomizedSettings.h>
+#include <Common/Configurations.h>
+#include <Common/DNSResolver.h>
 #include <Common/FieldVisitorToString.h>
 #include <Common/Macros.h>
 #include <Common/RemoteHostFilter.h>
+#include <Common/RpcClientPool.h>
 #include <Common/ShellCommand.h>
 #include <Common/StackTrace.h>
 #include <Common/Stopwatch.h>
@@ -170,65 +148,55 @@
 #include <Common/formatReadable.h>
 #include <Common/setThreadName.h>
 #include <Common/thread_local_rng.h>
-#include <Common/RpcClientPool.h>
 #include <common/logger_useful.h>
-#include <ServiceDiscovery/ServiceDiscoveryFactory.h>
-#include <CloudServices/CnchServerClient.h>
-#include <CloudServices/CnchWorkerClient.h>
-#include <CloudServices/CnchWorkerClientPools.h>
-#include <CloudServices/CnchBGThreadsMap.h>
-#include <CloudServices/CnchMergeMutateThread.h>
-#include <CloudServices/CnchWorkerResource.h>
-#include <CloudServices/CnchServerResource.h>
-#include <Catalog/Catalog.h>
-#include <MergeTreeCommon/CnchServerTopology.h>
-#include <MergeTreeCommon/CnchServerManager.h>
-#include <MergeTreeCommon/CnchTopologyMaster.h>
-#include <TSO/TSOClient.h>
-#include <DaemonManager/DaemonManagerClient.h>
-#include <Optimizer/OptimizerMetrics.h>
 
 #include <Storages/IndexFile/FilterPolicy.h>
 #include <Storages/IndexFile/IndexFileWriter.h>
 #include <WorkerTasks/ManipulationList.h>
 
-#include <Transaction/TransactionCoordinatorRcCnch.h>
+#include <Statistics/StatisticsMemoryStore.h>
 #include <Transaction/CnchServerTransaction.h>
 #include <Transaction/CnchWorkerTransaction.h>
-#include <Statistics/StatisticsMemoryStore.h>
+#include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Common/HostWithPorts.h>
 
 namespace fs = std::filesystem;
 
 namespace ProfileEvents
 {
-    extern const Event ContextLock;
-    extern const Event CompiledCacheSizeBytes;
+extern const Event ContextLock;
+extern const Event CompiledCacheSizeBytes;
+extern const Event AllWorkerSize;
+extern const Event HealthWorkerSize;
+extern const Event HeavyLoadWorkerSize;
+extern const Event SourceOnlyWorkerSize;
+extern const Event UnhealthWorkerSize;
+extern const Event NotConnectedWorkerSize;
+extern const Event SelectHealthWorkerMilliSeconds;
 }
 
 namespace CurrentMetrics
 {
-    extern const Metric ContextLockWait;
-    extern const Metric BackgroundMovePoolTask;
-    extern const Metric BackgroundSchedulePoolTask;
-    extern const Metric BackgroundBufferFlushSchedulePoolTask;
-    extern const Metric BackgroundDistributedSchedulePoolTask;
-    extern const Metric BackgroundMessageBrokerSchedulePoolTask;
-    extern const Metric BackgroundConsumeSchedulePoolTask;
-    extern const Metric BackgroundRestartSchedulePoolTask;
-    extern const Metric BackgroundHaLogSchedulePoolTask;
-    extern const Metric BackgroundMutationSchedulePoolTask;
-    extern const Metric BackgroundLocalSchedulePoolTask;
-    extern const Metric BackgroundMergeSelectSchedulePoolTask;
-    extern const Metric BackgroundUniqueTableSchedulePoolTask;
-    extern const Metric BackgroundMemoryTableSchedulePoolTask;
-    extern const Metric BackgroundCNCHTopologySchedulePoolTask;
+extern const Metric ContextLockWait;
+extern const Metric BackgroundMovePoolTask;
+extern const Metric BackgroundSchedulePoolTask;
+extern const Metric BackgroundBufferFlushSchedulePoolTask;
+extern const Metric BackgroundDistributedSchedulePoolTask;
+extern const Metric BackgroundMessageBrokerSchedulePoolTask;
+extern const Metric BackgroundConsumeSchedulePoolTask;
+extern const Metric BackgroundRestartSchedulePoolTask;
+extern const Metric BackgroundHaLogSchedulePoolTask;
+extern const Metric BackgroundMutationSchedulePoolTask;
+extern const Metric BackgroundLocalSchedulePoolTask;
+extern const Metric BackgroundMergeSelectSchedulePoolTask;
+extern const Metric BackgroundUniqueTableSchedulePoolTask;
+extern const Metric BackgroundMemoryTableSchedulePoolTask;
+extern const Metric BackgroundCNCHTopologySchedulePoolTask;
 }
 
 
 namespace DB
 {
-
 namespace SchedulePool
 {
     enum Type
@@ -288,42 +256,43 @@ struct ContextSharedPart
     /// Separate mutex for re-initialization of zookeeper session. This operation could take a long time and must not interfere with another operations.
     mutable std::mutex zookeeper_mutex;
 
-    mutable zkutil::ZooKeeperPtr zookeeper;                 /// Client for ZooKeeper.
-    ConfigurationPtr zookeeper_config;                      /// Stores zookeeper configs
+    mutable zkutil::ZooKeeperPtr zookeeper; /// Client for ZooKeeper.
+    ConfigurationPtr zookeeper_config; /// Stores zookeeper configs
 
 #if USE_NURAFT
     mutable std::mutex keeper_dispatcher_mutex;
     mutable std::shared_ptr<KeeperDispatcher> keeper_dispatcher;
 #endif
     mutable std::mutex auxiliary_zookeepers_mutex;
-    mutable std::map<String, zkutil::ZooKeeperPtr> auxiliary_zookeepers;    /// Map for auxiliary ZooKeeper clients.
-    ConfigurationPtr auxiliary_zookeepers_config;           /// Stores auxiliary zookeepers configs
+    mutable std::map<String, zkutil::ZooKeeperPtr> auxiliary_zookeepers; /// Map for auxiliary ZooKeeper clients.
+    ConfigurationPtr auxiliary_zookeepers_config; /// Stores auxiliary zookeepers configs
 
-    String interserver_io_host;                             /// The host name by which this server is available for other servers.
-    UInt16 interserver_io_port = 0;                         /// and port.
-    String interserver_scheme;                              /// http or https
+    String interserver_io_host; /// The host name by which this server is available for other servers.
+    UInt16 interserver_io_port = 0; /// and port.
+    String interserver_scheme; /// http or https
 
-    bool complex_query_active {false};
+    bool complex_query_active{false};
 
     MultiVersion<InterserverCredentials> interserver_io_credentials;
 
-    String path;                                            /// Path to the data directory, with a slash at the end.
-    String flags_path;                                      /// Path to the directory with some control flags for server maintenance.
-    String user_files_path;                                 /// Path to the directory with user provided files, usable by 'file' table function.
-    String dictionaries_lib_path;                           /// Path to the directory with user provided binaries and libraries for external dictionaries.
-    String metastore_path;                                  /// Path to metastore. We use a seperate path to hold all metastore to make it more easier to manage the metadata on server.
-    ConfigurationPtr config;                                /// Global configuration settings.
-    ConfigurationPtr cnch_config;                           /// Config used in cnch.
-    RootConfiguration root_config;                          /// Predefined global configuration settings.
+    String path; /// Path to the data directory, with a slash at the end.
+    String flags_path; /// Path to the directory with some control flags for server maintenance.
+    String user_files_path; /// Path to the directory with user provided files, usable by 'file' table function.
+    String dictionaries_lib_path; /// Path to the directory with user provided binaries and libraries for external dictionaries.
+    String
+        metastore_path; /// Path to metastore. We use a seperate path to hold all metastore to make it more easier to manage the metadata on server.
+    ConfigurationPtr config; /// Global configuration settings.
+    ConfigurationPtr cnch_config; /// Config used in cnch.
+    RootConfiguration root_config; /// Predefined global configuration settings.
 
-    String tmp_path;                                        /// Path to the temporary files that occur when processing the request.
-    mutable VolumePtr tmp_volume;                           /// Volume for the the temporary files that occur when processing the request.
+    String tmp_path; /// Path to the temporary files that occur when processing the request.
+    mutable VolumePtr tmp_volume; /// Volume for the the temporary files that occur when processing the request.
 
 
     String hdfs_user; // libhdfs3 user name
     String hdfs_nn_proxy; // libhdfs3 namenode proxy
     HDFSConnectionParams hdfs_connection_params;
-    mutable std::optional<EmbeddedDictionaries> embedded_dictionaries;    /// Metrica's dictionaries. Have lazy initialization.
+    mutable std::optional<EmbeddedDictionaries> embedded_dictionaries; /// Metrica's dictionaries. Have lazy initialization.
     mutable std::optional<CnchCatalogDictionaryCache> cnch_catalog_dict_cache;
     mutable std::optional<ExternalDictionariesLoader> external_dictionaries_loader;
     mutable std::optional<ExternalModelsLoader> external_models_loader;
@@ -333,32 +302,38 @@ struct ContextSharedPart
     scope_guard dictionaries_xmls;
     scope_guard dictionaries_cnch_catalog;
 
-    String default_profile_name;                            /// Default profile name used for default values.
-    String system_profile_name;                             /// Profile used by system processes
-    String buffer_profile_name;                             /// Profile used by Buffer engine for flushing to the underlying
+    String default_profile_name; /// Default profile name used for default values.
+    String system_profile_name; /// Profile used by system processes
+    String buffer_profile_name; /// Profile used by Buffer engine for flushing to the underlying
     AccessControlManager access_control_manager;
-    mutable ResourceGroupManagerPtr resource_group_manager;              /// Known resource groups
-    mutable UncompressedCachePtr uncompressed_cache;        /// The cache of decompressed blocks.
-    mutable MarkCachePtr mark_cache;                        /// Cache of marks in compressed files.
-    mutable QueryCachePtr query_cache;                      /// Cache of queries' results.
-    mutable MMappedFileCachePtr mmap_cache; /// Cache of mmapped files to avoid frequent open/map/unmap/close and to reuse from several threads.
-    ProcessList process_list;                               /// Executing queries at the moment.
+    mutable ResourceGroupManagerPtr resource_group_manager; /// Known resource groups
+    mutable UncompressedCachePtr uncompressed_cache; /// The cache of decompressed blocks.
+    mutable MarkCachePtr mark_cache; /// Cache of marks in compressed files.
+    mutable QueryCachePtr query_cache; /// Cache of queries' results.
+    mutable MMappedFileCachePtr
+        mmap_cache; /// Cache of mmapped files to avoid frequent open/map/unmap/close and to reuse from several threads.
+    ProcessList process_list; /// Executing queries at the moment.
     SegmentSchedulerPtr segment_scheduler;
-    MergeList merge_list;                                   /// The list of executable merge (for (Replicated)?MergeTree)
+    MergeList merge_list; /// The list of executable merge (for (Replicated)?MergeTree)
     ManipulationList manipulation_list;
-    PlanSegmentProcessList plan_segment_process_list;       /// The list of running plansegments in the moment;
+    PlanSegmentProcessList plan_segment_process_list; /// The list of running plansegments in the moment;
     ReplicatedFetchList replicated_fetch_list;
-    ConfigurationPtr users_config;                          /// Config with the users, profiles and quotas sections.
-    InterserverIOHandler interserver_io_handler;            /// Handler for interserver communication.
+    ConfigurationPtr users_config; /// Config with the users, profiles and quotas sections.
+    InterserverIOHandler interserver_io_handler; /// Handler for interserver communication.
 
-    mutable std::optional<BackgroundSchedulePool> buffer_flush_schedule_pool; /// A thread pool that can do background flush for Buffer tables.
-    mutable std::optional<BackgroundSchedulePool> schedule_pool;    /// A thread pool that can run different jobs in background (used in replicated tables)
-    mutable std::optional<BackgroundSchedulePool> distributed_schedule_pool; /// A thread pool that can run different jobs in background (used for distributed sends)
-    mutable std::optional<BackgroundSchedulePool> message_broker_schedule_pool; /// A thread pool that can run different jobs in background (used for message brokers, like RabbitMQ and Kafka)
+    mutable std::optional<BackgroundSchedulePool>
+        buffer_flush_schedule_pool; /// A thread pool that can do background flush for Buffer tables.
+    mutable std::optional<BackgroundSchedulePool>
+        schedule_pool; /// A thread pool that can run different jobs in background (used in replicated tables)
+    mutable std::optional<BackgroundSchedulePool>
+        distributed_schedule_pool; /// A thread pool that can run different jobs in background (used for distributed sends)
+    mutable std::optional<BackgroundSchedulePool>
+        message_broker_schedule_pool; /// A thread pool that can run different jobs in background (used for message brokers, like RabbitMQ and Kafka)
 
-    std::optional<ThreadPool> part_cache_manager_thread_pool;  /// A thread pool to collect partition metrics in background.
-    mutable std::optional<ThreadPool> local_disk_cache_thread_pool;  /// A thread pool that can run parts caching from cloud storage in background (used in cloud tables)
-    mutable std::optional<ThreadPool> local_disk_cache_evict_thread_pool;  /// A thread pool that asynchronous remove local disk cache file
+    std::optional<ThreadPool> part_cache_manager_thread_pool; /// A thread pool to collect partition metrics in background.
+    mutable std::optional<ThreadPool>
+        local_disk_cache_thread_pool; /// A thread pool that can run parts caching from cloud storage in background (used in cloud tables)
+    mutable std::optional<ThreadPool> local_disk_cache_evict_thread_pool; /// A thread pool that asynchronous remove local disk cache file
     mutable ThrottlerPtr disk_cache_throttler;
 
     mutable std::array<std::optional<BackgroundSchedulePool>, SchedulePool::Size> extra_schedule_pools;
@@ -366,8 +341,8 @@ struct ContextSharedPart
     mutable ThrottlerPtr replicated_fetches_throttler; /// A server-wide throttler for replicated fetches
     mutable ThrottlerPtr replicated_sends_throttler; /// A server-wide throttler for replicated sends
 
-    MultiVersion<Macros> macros;                            /// Substitutions extracted from config.
-    std::unique_ptr<DDLWorker> ddl_worker;                  /// Process ddl commands from zk.
+    MultiVersion<Macros> macros; /// Substitutions extracted from config.
+    std::unique_ptr<DDLWorker> ddl_worker; /// Process ddl commands from zk.
     /// Rules for selecting the compression settings, depending on the size of the part.
     mutable std::unique_ptr<CompressionCodecSelector> compression_codec_selector;
     /// Storage disk chooser for MergeTree engines
@@ -380,8 +355,8 @@ struct ContextSharedPart
     mutable PrimaryIndexCachePtr primary_index_cache;
 
     mutable ServiceDiscoveryClientPtr sd;
-    mutable PartCacheManagerPtr cache_manager;           /// Manage cache of parts for cnch tables.
-    mutable CnchStorageCachePtr storage_cache;          /// Storage cache used in cnch.
+    mutable PartCacheManagerPtr cache_manager; /// Manage cache of parts for cnch tables.
+    mutable CnchStorageCachePtr storage_cache; /// Storage cache used in cnch.
     mutable std::shared_ptr<Catalog::Catalog> cnch_catalog;
     mutable CnchServerManagerPtr server_manager;
     mutable CnchTopologyMasterPtr topology_master;
@@ -402,35 +377,36 @@ struct ContextSharedPart
     BackgroundSchedulePool::TaskHolder meta_checker;
 
     std::optional<CnchHiveSettings> cnchhive_settings;
-    std::optional<MergeTreeSettings> merge_tree_settings;   /// Settings of MergeTree* engines.
-    std::optional<MergeTreeSettings> replicated_merge_tree_settings;   /// Settings of ReplicatedMergeTree* engines.
+    std::optional<MergeTreeSettings> merge_tree_settings; /// Settings of MergeTree* engines.
+    std::optional<MergeTreeSettings> replicated_merge_tree_settings; /// Settings of ReplicatedMergeTree* engines.
     std::atomic_size_t max_table_size_to_drop = 50000000000lu; /// Protects MergeTree tables from accidental DROP (50GB by default)
     std::atomic_size_t max_partition_size_to_drop = 50000000000lu; /// Protects MergeTree partitions from accidental DROP (50GB by default)
-    String format_schema_path;                              /// Path to a directory that contains schema files used by input formats.
+    String format_schema_path; /// Path to a directory that contains schema files used by input formats.
     String remote_format_schema_path;
-    ActionLocksManagerPtr action_locks_manager;             /// Set of storages' action lockers
-    std::unique_ptr<SystemLogs> system_logs;                /// Used to log queries and operations on parts
-    std::unique_ptr<CnchSystemLogs> cnch_system_logs;         /// Used to log queries, kafka etc. Stores data in CnchMergeTree table
-    PartitionSelectorPtr bg_partition_selector;             /// Partition selector for GC and Merge threads.
+    ActionLocksManagerPtr action_locks_manager; /// Set of storages' action lockers
+    std::unique_ptr<SystemLogs> system_logs; /// Used to log queries and operations on parts
+    std::unique_ptr<CnchSystemLogs> cnch_system_logs; /// Used to log queries, kafka etc. Stores data in CnchMergeTree table
+    PartitionSelectorPtr bg_partition_selector; /// Partition selector for GC and Merge threads.
 
-    std::optional<StorageS3Settings> storage_s3_settings;   /// Settings of S3 storage
+    std::optional<StorageS3Settings> storage_s3_settings; /// Settings of S3 storage
 
     RemoteHostFilter remote_host_filter; /// Allowed URL from config.xml
 
-    std::optional<TraceCollector> trace_collector;        /// Thread collecting traces from threads executing queries
-    std::optional<NamedSessions> named_sessions;          /// Controls named HTTP sessions.
+    std::optional<TraceCollector> trace_collector; /// Thread collecting traces from threads executing queries
+    std::optional<NamedSessions> named_sessions; /// Controls named HTTP sessions.
     std::optional<NamedCnchSessions> named_cnch_sessions; /// Controls named Cnch sessions.
 
     /// Clusters for distributed tables
     /// Initialized on demand (on distributed storages initialization) since Settings should be initialized
     std::shared_ptr<Clusters> clusters;
-    ConfigurationPtr clusters_config;                        /// Stores updated configs
-    mutable std::mutex clusters_mutex;                       /// Guards clusters and clusters_config
+    ConfigurationPtr clusters_config; /// Stores updated configs
+    mutable std::mutex clusters_mutex; /// Guards clusters and clusters_config
+    WorkerStatusManagerPtr worker_status_manager;
 
     mutable DeleteBitmapCachePtr delete_bitmap_cache; /// Cache of delete bitmaps
-    mutable UniqueKeyIndexBlockCachePtr unique_key_index_block_cache;   /// Shared block cache of unique key indexes
-    mutable UniqueKeyIndexFileCachePtr unique_key_index_file_cache;     /// Shared file cache of unique key indexes
-    mutable UniqueKeyIndexCachePtr unique_key_index_cache;              /// Shared object cache of unique key indexes
+    mutable UniqueKeyIndexBlockCachePtr unique_key_index_block_cache; /// Shared block cache of unique key indexes
+    mutable UniqueKeyIndexFileCachePtr unique_key_index_file_cache; /// Shared file cache of unique key indexes
+    mutable UniqueKeyIndexCachePtr unique_key_index_cache; /// Shared object cache of unique key indexes
 
     CpuSetScaleManagerPtr cpu_set_scale_manager;
 
@@ -453,10 +429,9 @@ struct ContextSharedPart
     VWCustomizedSettingsPtr vw_customized_settings_ptr;
 
     /// @ByteDance
-    bool ready_for_query = false;                           /// Server is ready for incoming queries
+    bool ready_for_query = false; /// Server is ready for incoming queries
 
-    ContextSharedPart()
-        : macros(std::make_unique<Macros>())
+    ContextSharedPart() : macros(std::make_unique<Macros>())
     {
         /// TODO: make it singleton (?)
         static std::atomic<size_t> num_calls{0};
@@ -510,7 +485,7 @@ struct ContextSharedPart
         {
             auto lock = std::lock_guard(mutex);
 
-        /** Compiled expressions stored in cache need to be destroyed before destruction of static objects.
+            /** Compiled expressions stored in cache need to be destroyed before destruction of static objects.
           * Because CHJIT instance can be static object.
           */
 #if USE_EMBEDDED_COMPILER
@@ -573,10 +548,7 @@ struct ContextSharedPart
         delete_cnch_system_logs.reset();
     }
 
-    bool hasTraceCollector() const
-    {
-        return trace_collector.has_value();
-    }
+    bool hasTraceCollector() const { return trace_collector.has_value(); }
 
     void initializeTraceCollector(std::shared_ptr<TraceLog> trace_log)
     {
@@ -598,10 +570,14 @@ SharedContextHolder::SharedContextHolder(SharedContextHolder &&) noexcept = defa
 SharedContextHolder & SharedContextHolder::operator=(SharedContextHolder &&) = default;
 SharedContextHolder::SharedContextHolder() = default;
 SharedContextHolder::~SharedContextHolder() = default;
-SharedContextHolder::SharedContextHolder(std::unique_ptr<ContextSharedPart> shared_context)
-    : shared(std::move(shared_context)) {}
+SharedContextHolder::SharedContextHolder(std::unique_ptr<ContextSharedPart> shared_context) : shared(std::move(shared_context))
+{
+}
 
-void SharedContextHolder::reset() { shared.reset(); }
+void SharedContextHolder::reset()
+{
+    shared.reset();
+}
 
 ContextMutablePtr Context::createGlobal(ContextSharedPart * shared)
 {
@@ -628,7 +604,8 @@ ContextMutablePtr Context::createCopy(const ContextPtr & other)
 ContextMutablePtr Context::createCopy(const ContextWeakPtr & other)
 {
     auto ptr = other.lock();
-    if (!ptr) throw Exception("Can't copy an expired context", ErrorCodes::LOGICAL_ERROR);
+    if (!ptr)
+        throw Exception("Can't copy an expired context", ErrorCodes::LOGICAL_ERROR);
     return createCopy(ptr);
 }
 
@@ -644,7 +621,59 @@ void Context::copyFrom(const ContextPtr & other)
 
 Context::~Context() = default;
 
-InterserverIOHandler & Context::getInterserverIOHandler() { return shared->interserver_io_handler; }
+WorkerStatusManagerPtr Context::getWorkerStatusManager()
+{
+    if (!shared->worker_status_manager)
+        shared->worker_status_manager = std::make_shared<WorkerStatusManager>();
+    return shared->worker_status_manager;
+}
+
+void Context::updateAdaptiveSchdulerConfig(const ConfigurationPtr & config)
+{
+    auto worker_status_manager = getWorkerStatusManager();
+    worker_status_manager->updateConfig(*config);
+}
+
+WorkerStatusManagerPtr Context::getWorkerStatusManager() const
+{
+    if (!shared->worker_status_manager)
+        shared->worker_status_manager = std::make_shared<WorkerStatusManager>();
+    return shared->worker_status_manager;
+}
+
+void Context::selectWorkerNodesWithMetrics()
+{
+    if (tryGetCurrentWorkerGroup())
+    {
+        Stopwatch sw;
+        worker_group_status = getWorkerStatusManager()->getWorkerGroupStatus(
+            this, current_worker_group->getHostWithPortsVec(), current_worker_group->getVWName(), current_worker_group->getID());
+
+        auto indices = worker_group_status->selectHealthNode(current_worker_group->getHostWithPortsVec());
+        if (indices)
+        {
+            health_worker_group.reset(new WorkerGroupHandleImpl(*current_worker_group, *indices));
+            setCurrentWorkerGroup(health_worker_group);
+        }
+        ProfileEvents::increment(ProfileEvents::AllWorkerSize, worker_group_status->getAllWorkerSize());
+        ProfileEvents::increment(ProfileEvents::HeavyLoadWorkerSize, worker_group_status->getHeavyLoadWorkerSize());
+        ProfileEvents::increment(ProfileEvents::SourceOnlyWorkerSize, worker_group_status->getOnlySourceWorkerSize());
+        ProfileEvents::increment(ProfileEvents::UnhealthWorkerSize, worker_group_status->getUnhealthWorkerSize());
+        ProfileEvents::increment(ProfileEvents::HealthWorkerSize, worker_group_status->getHealthWorkerSize());
+        ProfileEvents::increment(ProfileEvents::NotConnectedWorkerSize, worker_group_status->getNotConnectedWorkerSize());
+        ProfileEvents::increment(ProfileEvents::SelectHealthWorkerMilliSeconds, sw.elapsedMilliseconds());
+    }
+}
+
+WorkerGroupHandle Context::tryGetHealthWorkerGroup() const
+{
+    return health_worker_group;
+}
+
+InterserverIOHandler & Context::getInterserverIOHandler()
+{
+    return shared->interserver_io_handler;
+}
 
 std::unique_lock<std::recursive_mutex> Context::getLock() const
 {
@@ -653,16 +682,46 @@ std::unique_lock<std::recursive_mutex> Context::getLock() const
     return std::unique_lock(shared->mutex);
 }
 
-ProcessList & Context::getProcessList() { return shared->process_list; }
-const ProcessList & Context::getProcessList() const { return shared->process_list; }
-PlanSegmentProcessList & Context::getPlanSegmentProcessList() { return shared->plan_segment_process_list; }
-const PlanSegmentProcessList & Context::getPlanSegmentProcessList() const { return shared->plan_segment_process_list; }
-MergeList & Context::getMergeList() { return shared->merge_list; }
-const MergeList & Context::getMergeList() const { return shared->merge_list; }
-ManipulationList & Context::getManipulationList() { return shared->manipulation_list; }
-const ManipulationList & Context::getManipulationList() const { return shared->manipulation_list; }
-ReplicatedFetchList & Context::getReplicatedFetchList() { return shared->replicated_fetch_list; }
-const ReplicatedFetchList & Context::getReplicatedFetchList() const { return shared->replicated_fetch_list; }
+ProcessList & Context::getProcessList()
+{
+    return shared->process_list;
+}
+const ProcessList & Context::getProcessList() const
+{
+    return shared->process_list;
+}
+PlanSegmentProcessList & Context::getPlanSegmentProcessList()
+{
+    return shared->plan_segment_process_list;
+}
+const PlanSegmentProcessList & Context::getPlanSegmentProcessList() const
+{
+    return shared->plan_segment_process_list;
+}
+MergeList & Context::getMergeList()
+{
+    return shared->merge_list;
+}
+const MergeList & Context::getMergeList() const
+{
+    return shared->merge_list;
+}
+ManipulationList & Context::getManipulationList()
+{
+    return shared->manipulation_list;
+}
+const ManipulationList & Context::getManipulationList() const
+{
+    return shared->manipulation_list;
+}
+ReplicatedFetchList & Context::getReplicatedFetchList()
+{
+    return shared->replicated_fetch_list;
+}
+const ReplicatedFetchList & Context::getReplicatedFetchList() const
+{
+    return shared->replicated_fetch_list;
+}
 
 SegmentSchedulerPtr Context::getSegmentScheduler()
 {
@@ -853,13 +912,14 @@ VolumePtr Context::setTemporaryStorage(const String & path, const String & polic
     {
         StoragePolicyPtr tmp_policy = getStoragePolicySelector(lock)->get(policy_name);
         if (tmp_policy->getVolumes().size() != 1)
-             throw Exception("Policy " + policy_name + " is used temporary files, such policy should have exactly one volume",
-                             ErrorCodes::NO_ELEMENTS_IN_CONFIG);
+            throw Exception(
+                "Policy " + policy_name + " is used temporary files, such policy should have exactly one volume",
+                ErrorCodes::NO_ELEMENTS_IN_CONFIG);
         shared->tmp_volume = tmp_policy->getVolume(0);
     }
 
     if (shared->tmp_volume->getDisks().empty())
-         throw Exception("No disks volume for temporary files", ErrorCodes::NO_ELEMENTS_IN_CONFIG);
+        throw Exception("No disks volume for temporary files", ErrorCodes::NO_ELEMENTS_IN_CONFIG);
 
     return shared->tmp_volume;
 }
@@ -1045,8 +1105,14 @@ IResourceGroupManager * Context::tryGetResourceGroupManager() const
     return nullptr;
 }
 
-void Context::startResourceGroup() { shared->resource_group_manager->enable(); }
-void Context::stopResourceGroup() { shared->resource_group_manager->disable(); }
+void Context::startResourceGroup()
+{
+    shared->resource_group_manager->enable();
+}
+void Context::stopResourceGroup()
+{
+    shared->resource_group_manager->disable();
+}
 
 void Context::setUser(const Credentials & credentials, const Poco::Net::SocketAddress & address)
 {
@@ -1055,18 +1121,17 @@ void Context::setUser(const Credentials & credentials, const Poco::Net::SocketAd
     client_info.current_user = credentials.getUserName();
     client_info.current_address = address;
 
-//#if defined(ARCADIA_BUILD)
+    //#if defined(ARCADIA_BUILD)
     /// This is harmful field that is used only in foreign "Arcadia" build.
     client_info.current_password.clear();
     if (const auto * basic_credentials = dynamic_cast<const BasicCredentials *>(&credentials))
         client_info.current_password = basic_credentials->getPassword();
-//#endif
+    //#endif
 
     /// Find a user with such name and check the credentials.
     auto new_user_id = getAccessControlManager().login(credentials, address.host());
     auto new_access = getAccessControlManager().getContextAccess(
-        new_user_id, /* current_roles = */ {}, /* use_default_roles = */ true,
-        settings, current_database, client_info);
+        new_user_id, /* current_roles = */ {}, /* use_default_roles = */ true, settings, current_database, client_info);
 
     user_id = new_user_id;
     access = std::move(new_access);
@@ -1149,7 +1214,8 @@ void Context::calculateAccessRights()
 {
     auto lock = getLock();
     if (user_id)
-        access = getAccessControlManager().getContextAccess(*user_id, current_roles, use_default_roles, settings, current_database, client_info);
+        access = getAccessControlManager().getContextAccess(
+            *user_id, current_roles, use_default_roles, settings, current_database, client_info);
 }
 
 
@@ -1159,18 +1225,60 @@ void Context::checkAccessImpl(const Args &... args) const
     return getAccess()->checkAccess(args...);
 }
 
-void Context::checkAccess(const AccessFlags & flags) const { return checkAccessImpl(flags); }
-void Context::checkAccess(const AccessFlags & flags, const std::string_view & database) const { return checkAccessImpl(flags, database); }
-void Context::checkAccess(const AccessFlags & flags, const std::string_view & database, const std::string_view & table) const { return checkAccessImpl(flags, database, table); }
-void Context::checkAccess(const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const std::string_view & column) const { return checkAccessImpl(flags, database, table, column); }
-void Context::checkAccess(const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const std::vector<std::string_view> & columns) const { return checkAccessImpl(flags, database, table, columns); }
-void Context::checkAccess(const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const Strings & columns) const { return checkAccessImpl(flags, database, table, columns); }
-void Context::checkAccess(const AccessFlags & flags, const StorageID & table_id) const { checkAccessImpl(flags, table_id.getDatabaseName(), table_id.getTableName()); }
-void Context::checkAccess(const AccessFlags & flags, const StorageID & table_id, const std::string_view & column) const { checkAccessImpl(flags, table_id.getDatabaseName(), table_id.getTableName(), column); }
-void Context::checkAccess(const AccessFlags & flags, const StorageID & table_id, const std::vector<std::string_view> & columns) const { checkAccessImpl(flags, table_id.getDatabaseName(), table_id.getTableName(), columns); }
-void Context::checkAccess(const AccessFlags & flags, const StorageID & table_id, const Strings & columns) const { checkAccessImpl(flags, table_id.getDatabaseName(), table_id.getTableName(), columns); }
-void Context::checkAccess(const AccessRightsElement & element) const { return checkAccessImpl(element); }
-void Context::checkAccess(const AccessRightsElements & elements) const { return checkAccessImpl(elements); }
+void Context::checkAccess(const AccessFlags & flags) const
+{
+    return checkAccessImpl(flags);
+}
+void Context::checkAccess(const AccessFlags & flags, const std::string_view & database) const
+{
+    return checkAccessImpl(flags, database);
+}
+void Context::checkAccess(const AccessFlags & flags, const std::string_view & database, const std::string_view & table) const
+{
+    return checkAccessImpl(flags, database, table);
+}
+void Context::checkAccess(
+    const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const std::string_view & column) const
+{
+    return checkAccessImpl(flags, database, table, column);
+}
+void Context::checkAccess(
+    const AccessFlags & flags,
+    const std::string_view & database,
+    const std::string_view & table,
+    const std::vector<std::string_view> & columns) const
+{
+    return checkAccessImpl(flags, database, table, columns);
+}
+void Context::checkAccess(
+    const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const Strings & columns) const
+{
+    return checkAccessImpl(flags, database, table, columns);
+}
+void Context::checkAccess(const AccessFlags & flags, const StorageID & table_id) const
+{
+    checkAccessImpl(flags, table_id.getDatabaseName(), table_id.getTableName());
+}
+void Context::checkAccess(const AccessFlags & flags, const StorageID & table_id, const std::string_view & column) const
+{
+    checkAccessImpl(flags, table_id.getDatabaseName(), table_id.getTableName(), column);
+}
+void Context::checkAccess(const AccessFlags & flags, const StorageID & table_id, const std::vector<std::string_view> & columns) const
+{
+    checkAccessImpl(flags, table_id.getDatabaseName(), table_id.getTableName(), columns);
+}
+void Context::checkAccess(const AccessFlags & flags, const StorageID & table_id, const Strings & columns) const
+{
+    checkAccessImpl(flags, table_id.getDatabaseName(), table_id.getTableName(), columns);
+}
+void Context::checkAccess(const AccessRightsElement & element) const
+{
+    return checkAccessImpl(element);
+}
+void Context::checkAccess(const AccessRightsElements & elements) const
+{
+    return checkAccessImpl(elements);
+}
 
 
 std::shared_ptr<const ContextAccess> Context::getAccess() const
@@ -1383,7 +1491,8 @@ void Context::addViewSource(const StoragePtr & storage)
 {
     if (view_source)
         throw Exception(
-            "Temporary view source storage " + backQuoteIfNeed(view_source->getName()) + " already exists.", ErrorCodes::TABLE_ALREADY_EXISTS);
+            "Temporary view source storage " + backQuoteIfNeed(view_source->getName()) + " already exists.",
+            ErrorCodes::TABLE_ALREADY_EXISTS);
     view_source = storage;
 }
 
@@ -1409,7 +1518,8 @@ void Context::setSettings(const Settings & settings_)
 
     settings = settings_;
 
-    if ((settings.readonly != old_readonly) || (settings.allow_ddl != old_allow_ddl) || (settings.allow_introspection_functions != old_allow_introspection_functions))
+    if ((settings.readonly != old_readonly) || (settings.allow_ddl != old_allow_ddl)
+        || (settings.allow_introspection_functions != old_allow_introspection_functions))
         calculateAccessRights();
 }
 
@@ -1452,8 +1562,8 @@ void Context::applySettingChange(const SettingChange & change)
     }
     catch (Exception & e)
     {
-        e.addMessage(fmt::format("in attempt to set the value of setting '{}' to {}",
-                                 change.name, applyVisitor(FieldVisitorToString(), change.value)));
+        e.addMessage(fmt::format(
+            "in attempt to set the value of setting '{}' to {}", change.name, applyVisitor(FieldVisitorToString(), change.value)));
         throw;
     }
 }
@@ -1465,9 +1575,8 @@ void Context::applySettingsChanges(const SettingsChanges & changes)
 
     // set ansi related settings first, as they may be overwritten explicitly later
     std::optional<String> dialect_type_opt;
-    std::function<void(const SettingsChanges &)> find_dialect_type_if_any = [&](const SettingsChanges & setting_changes)
-    {
-        for (const auto & change: setting_changes)
+    std::function<void(const SettingsChanges &)> find_dialect_type_if_any = [&](const SettingsChanges & setting_changes) {
+        for (const auto & change : setting_changes)
         {
             if (change.name == "profile")
             {
@@ -1550,13 +1659,13 @@ String Context::getInitialQueryId() const
 void Context::setCurrentDatabaseNameInGlobalContext(const String & name)
 {
     if (!isGlobalContext())
-        throw Exception("Cannot set current database for non global context, this method should be used during server initialization",
-                        ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "Cannot set current database for non global context, this method should be used during server initialization",
+            ErrorCodes::LOGICAL_ERROR);
     auto lock = getLock();
 
     if (!current_database.empty())
-        throw Exception("Default database name cannot be changed in global context without server restart",
-                        ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Default database name cannot be changed in global context without server restart", ErrorCodes::LOGICAL_ERROR);
 
     current_database = name;
 }
@@ -1600,8 +1709,7 @@ void Context::setCurrentQueryId(const String & query_id)
     {
         // If this is an initial query without any parent OpenTelemetry trace, we
         // might start the trace ourselves, with some configurable probability.
-        std::bernoulli_distribution should_start_trace{
-            settings.opentelemetry_start_trace_probability};
+        std::bernoulli_distribution should_start_trace{settings.opentelemetry_start_trace_probability};
 
         if (should_start_trace(thread_local_rng))
         {
@@ -1614,13 +1722,12 @@ void Context::setCurrentQueryId(const String & query_id)
     }
 
     String query_id_to_set = query_id;
-    if (query_id_to_set.empty())    /// If the user did not submit his query_id, then we generate it ourselves.
+    if (query_id_to_set.empty()) /// If the user did not submit his query_id, then we generate it ourselves.
     {
         /// Use protected constructor.
         struct QueryUUID : Poco::UUID
         {
-            QueryUUID(const char * bytes, Poco::UUID::Version version)
-                : Poco::UUID(bytes, version) {}
+            QueryUUID(const char * bytes, Poco::UUID::Version version) : Poco::UUID(bytes, version) { }
         };
 
         query_id_to_set = QueryUUID(random.bytes, Poco::UUID::UUID_RANDOM).toString();
@@ -1661,7 +1768,8 @@ void Context::setMacros(std::unique_ptr<Macros> && macros)
 ContextMutablePtr Context::getQueryContext() const
 {
     auto ptr = query_context.lock();
-    if (!ptr) throw Exception("There is no query or query context has expired", ErrorCodes::THERE_IS_NO_QUERY);
+    if (!ptr)
+        throw Exception("There is no query or query context has expired", ErrorCodes::THERE_IS_NO_QUERY);
     return ptr;
 }
 
@@ -1674,20 +1782,23 @@ bool Context::isInternalSubquery() const
 ContextMutablePtr Context::getSessionContext() const
 {
     auto ptr = session_context.lock();
-    if (!ptr) throw Exception("There is no session or session context has expired", ErrorCodes::THERE_IS_NO_SESSION);
+    if (!ptr)
+        throw Exception("There is no session or session context has expired", ErrorCodes::THERE_IS_NO_SESSION);
     return ptr;
 }
 
 ContextMutablePtr Context::getGlobalContext() const
 {
     auto ptr = global_context.lock();
-    if (!ptr) throw Exception("There is no global context or global context has expired", ErrorCodes::LOGICAL_ERROR);
+    if (!ptr)
+        throw Exception("There is no global context or global context has expired", ErrorCodes::LOGICAL_ERROR);
     return ptr;
 }
 
 ContextMutablePtr Context::getBufferContext() const
 {
-    if (!buffer_context) throw Exception("There is no buffer context", ErrorCodes::LOGICAL_ERROR);
+    if (!buffer_context)
+        throw Exception("There is no buffer context", ErrorCodes::LOGICAL_ERROR);
     return buffer_context;
 }
 
@@ -1755,9 +1866,9 @@ void Context::setExternalModelsConfig(const ConfigurationPtr & config, const std
         return;
 
     shared->external_models_config = config;
-    shared->models_repository_guard .reset();
-    shared->models_repository_guard = getExternalModelsLoaderUnlocked().addConfigRepository(
-        std::make_unique<ExternalLoaderXMLConfigRepository>(*config, config_name));
+    shared->models_repository_guard.reset();
+    shared->models_repository_guard
+        = getExternalModelsLoaderUnlocked().addConfigRepository(std::make_unique<ExternalLoaderXMLConfigRepository>(*config, config_name));
 }
 
 
@@ -1769,10 +1880,7 @@ EmbeddedDictionaries & Context::getEmbeddedDictionariesImpl(const bool throw_on_
     {
         auto geo_dictionaries_loader = std::make_unique<GeoDictionariesLoader>();
 
-        shared->embedded_dictionaries.emplace(
-            std::move(geo_dictionaries_loader),
-            getGlobalContext(),
-            throw_on_error);
+        shared->embedded_dictionaries.emplace(std::move(geo_dictionaries_loader), getGlobalContext(), throw_on_error);
     }
 
     return *shared->embedded_dictionaries;
@@ -1813,7 +1921,7 @@ ProgressCallback Context::getProgressCallback() const
 void Context::setProcessListEntry(std::shared_ptr<ProcessListEntry> process_list_entry_)
 {
     process_list_entry = process_list_entry_;
-    if(process_list_entry_)
+    if (process_list_entry_)
         process_list_elem = &process_list_entry_->get();
     else
         process_list_elem = nullptr;
@@ -1999,9 +2107,7 @@ BackgroundSchedulePool & Context::getBufferFlushSchedulePool() const
     auto lock = getLock();
     if (!shared->buffer_flush_schedule_pool)
         shared->buffer_flush_schedule_pool.emplace(
-            settings.background_buffer_flush_schedule_pool_size,
-            CurrentMetrics::BackgroundBufferFlushSchedulePoolTask,
-            "BgBufSchPool");
+            settings.background_buffer_flush_schedule_pool_size, CurrentMetrics::BackgroundBufferFlushSchedulePoolTask, "BgBufSchPool");
     return *shared->buffer_flush_schedule_pool;
 }
 
@@ -2012,11 +2118,16 @@ BackgroundTaskSchedulingSettings Context::getBackgroundProcessingTaskSchedulingS
     const auto & config = getConfigRef();
     task_settings.thread_sleep_seconds = config.getDouble("background_processing_pool_thread_sleep_seconds", 10);
     task_settings.thread_sleep_seconds_random_part = config.getDouble("background_processing_pool_thread_sleep_seconds_random_part", 1.0);
-    task_settings.thread_sleep_seconds_if_nothing_to_do = config.getDouble("background_processing_pool_thread_sleep_seconds_if_nothing_to_do", 0.1);
-    task_settings.task_sleep_seconds_when_no_work_min = config.getDouble("background_processing_pool_task_sleep_seconds_when_no_work_min", 10);
-    task_settings.task_sleep_seconds_when_no_work_max = config.getDouble("background_processing_pool_task_sleep_seconds_when_no_work_max", 600);
-    task_settings.task_sleep_seconds_when_no_work_multiplier = config.getDouble("background_processing_pool_task_sleep_seconds_when_no_work_multiplier", 1.1);
-    task_settings.task_sleep_seconds_when_no_work_random_part = config.getDouble("background_processing_pool_task_sleep_seconds_when_no_work_random_part", 1.0);
+    task_settings.thread_sleep_seconds_if_nothing_to_do
+        = config.getDouble("background_processing_pool_thread_sleep_seconds_if_nothing_to_do", 0.1);
+    task_settings.task_sleep_seconds_when_no_work_min
+        = config.getDouble("background_processing_pool_task_sleep_seconds_when_no_work_min", 10);
+    task_settings.task_sleep_seconds_when_no_work_max
+        = config.getDouble("background_processing_pool_task_sleep_seconds_when_no_work_max", 600);
+    task_settings.task_sleep_seconds_when_no_work_multiplier
+        = config.getDouble("background_processing_pool_task_sleep_seconds_when_no_work_multiplier", 1.1);
+    task_settings.task_sleep_seconds_when_no_work_random_part
+        = config.getDouble("background_processing_pool_task_sleep_seconds_when_no_work_random_part", 1.0);
     return task_settings;
 }
 
@@ -2026,12 +2137,18 @@ BackgroundTaskSchedulingSettings Context::getBackgroundMoveTaskSchedulingSetting
 
     const auto & config = getConfigRef();
     task_settings.thread_sleep_seconds = config.getDouble("background_move_processing_pool_thread_sleep_seconds", 10);
-    task_settings.thread_sleep_seconds_random_part = config.getDouble("background_move_processing_pool_thread_sleep_seconds_random_part", 1.0);
-    task_settings.thread_sleep_seconds_if_nothing_to_do = config.getDouble("background_move_processing_pool_thread_sleep_seconds_if_nothing_to_do", 0.1);
-    task_settings.task_sleep_seconds_when_no_work_min = config.getDouble("background_move_processing_pool_task_sleep_seconds_when_no_work_min", 10);
-    task_settings.task_sleep_seconds_when_no_work_max = config.getDouble("background_move_processing_pool_task_sleep_seconds_when_no_work_max", 600);
-    task_settings.task_sleep_seconds_when_no_work_multiplier = config.getDouble("background_move_processing_pool_task_sleep_seconds_when_no_work_multiplier", 1.1);
-    task_settings.task_sleep_seconds_when_no_work_random_part = config.getDouble("background_move_processing_pool_task_sleep_seconds_when_no_work_random_part", 1.0);
+    task_settings.thread_sleep_seconds_random_part
+        = config.getDouble("background_move_processing_pool_thread_sleep_seconds_random_part", 1.0);
+    task_settings.thread_sleep_seconds_if_nothing_to_do
+        = config.getDouble("background_move_processing_pool_thread_sleep_seconds_if_nothing_to_do", 0.1);
+    task_settings.task_sleep_seconds_when_no_work_min
+        = config.getDouble("background_move_processing_pool_task_sleep_seconds_when_no_work_min", 10);
+    task_settings.task_sleep_seconds_when_no_work_max
+        = config.getDouble("background_move_processing_pool_task_sleep_seconds_when_no_work_max", 600);
+    task_settings.task_sleep_seconds_when_no_work_multiplier
+        = config.getDouble("background_move_processing_pool_task_sleep_seconds_when_no_work_multiplier", 1.1);
+    task_settings.task_sleep_seconds_when_no_work_random_part
+        = config.getDouble("background_move_processing_pool_task_sleep_seconds_when_no_work_random_part", 1.0);
 
     return task_settings;
 }
@@ -2040,10 +2157,7 @@ BackgroundSchedulePool & Context::getSchedulePool() const
 {
     auto lock = getLock();
     if (!shared->schedule_pool)
-        shared->schedule_pool.emplace(
-            settings.background_schedule_pool_size,
-            CurrentMetrics::BackgroundSchedulePoolTask,
-            "BgSchPool");
+        shared->schedule_pool.emplace(settings.background_schedule_pool_size, CurrentMetrics::BackgroundSchedulePoolTask, "BgSchPool");
     return *shared->schedule_pool;
 }
 
@@ -2052,9 +2166,7 @@ BackgroundSchedulePool & Context::getDistributedSchedulePool() const
     auto lock = getLock();
     if (!shared->distributed_schedule_pool)
         shared->distributed_schedule_pool.emplace(
-            settings.background_distributed_schedule_pool_size,
-            CurrentMetrics::BackgroundDistributedSchedulePoolTask,
-            "BgDistSchPool");
+            settings.background_distributed_schedule_pool_size, CurrentMetrics::BackgroundDistributedSchedulePoolTask, "BgDistSchPool");
     return *shared->distributed_schedule_pool;
 }
 
@@ -2063,9 +2175,7 @@ BackgroundSchedulePool & Context::getMessageBrokerSchedulePool() const
     auto lock = getLock();
     if (!shared->message_broker_schedule_pool)
         shared->message_broker_schedule_pool.emplace(
-            settings.background_message_broker_schedule_pool_size,
-            CurrentMetrics::BackgroundMessageBrokerSchedulePoolTask,
-            "BgMBSchPool");
+            settings.background_message_broker_schedule_pool_size, CurrentMetrics::BackgroundMessageBrokerSchedulePoolTask, "BgMBSchPool");
     return *shared->message_broker_schedule_pool;
 }
 
@@ -2073,7 +2183,8 @@ BackgroundSchedulePool & Context::getConsumeSchedulePool() const
 {
     auto lock = getLock();
     LOG_DEBUG(&Poco::Logger::get("BackgroundSchedulePool"), "getConsumeSchedulePool");
-    if (!shared->extra_schedule_pools[SchedulePool::Consume]) {
+    if (!shared->extra_schedule_pools[SchedulePool::Consume])
+    {
         CpuSetPtr cpu_set;
         if (auto & cgroup_manager = CGroupManagerFactory::instance(); cgroup_manager.isInit())
         {
@@ -2081,7 +2192,10 @@ BackgroundSchedulePool & Context::getConsumeSchedulePool() const
         }
 
         shared->extra_schedule_pools[SchedulePool::Consume].emplace(
-            settings.background_consume_schedule_pool_size, CurrentMetrics::BackgroundConsumeSchedulePoolTask, "BgConsumePool", std::move(cpu_set));
+            settings.background_consume_schedule_pool_size,
+            CurrentMetrics::BackgroundConsumeSchedulePoolTask,
+            "BgConsumePool",
+            std::move(cpu_set));
     }
 
     return *shared->extra_schedule_pools[SchedulePool::Consume];
@@ -2196,8 +2310,7 @@ ThrottlerPtr Context::getReplicatedSendsThrottler() const
 {
     auto lock = getLock();
     if (!shared->replicated_sends_throttler)
-        shared->replicated_sends_throttler = std::make_shared<Throttler>(
-            settings.max_replicated_sends_network_bandwidth_for_server);
+        shared->replicated_sends_throttler = std::make_shared<Throttler>(settings.max_replicated_sends_network_bandwidth_for_server);
 
     return shared->replicated_sends_throttler;
 }
@@ -2206,8 +2319,7 @@ ThrottlerPtr Context::getReplicatedFetchesThrottler() const
 {
     auto lock = getLock();
     if (!shared->replicated_fetches_throttler)
-        shared->replicated_fetches_throttler = std::make_shared<Throttler>(
-            settings.max_replicated_fetches_network_bandwidth_for_server);
+        shared->replicated_fetches_throttler = std::make_shared<Throttler>(settings.max_replicated_fetches_network_bandwidth_for_server);
 
     return shared->replicated_fetches_throttler;
 }
@@ -2266,23 +2378,22 @@ zkutil::ZooKeeperPtr Context::getZooKeeper() const
 
 namespace
 {
-
-bool checkZooKeeperConfigIsLocal(const Poco::Util::AbstractConfiguration & config, const std::string & config_name)
-{
-    Poco::Util::AbstractConfiguration::Keys keys;
-    config.keys(config_name, keys);
-
-    for (const auto & key : keys)
+    bool checkZooKeeperConfigIsLocal(const Poco::Util::AbstractConfiguration & config, const std::string & config_name)
     {
-        if (startsWith(key, "node"))
+        Poco::Util::AbstractConfiguration::Keys keys;
+        config.keys(config_name, keys);
+
+        for (const auto & key : keys)
         {
-            String host = config.getString(config_name + "." + key + ".host");
-            if (isLocalAddress(DNSResolver::instance().resolveHost(host)))
-                return true;
+            if (startsWith(key, "node"))
+            {
+                String host = config.getString(config_name + "." + key + ".host");
+                if (isLocalAddress(DNSResolver::instance().resolveHost(host)))
+                    return true;
+            }
         }
+        return false;
     }
-    return false;
-}
 
 }
 
@@ -2309,7 +2420,10 @@ bool Context::tryCheckClientConnectionToMyKeeperCluster() const
             {
                 if (checkZooKeeperConfigIsLocal(getConfigRef(), "auxiliary_zookeepers." + aux_zk_name))
                 {
-                    LOG_DEBUG(shared->log, "Our Keeper server is participant of the auxiliary zookeeper cluster ({}), will try to connect to it", aux_zk_name);
+                    LOG_DEBUG(
+                        shared->log,
+                        "Our Keeper server is participant of the auxiliary zookeeper cluster ({}), will try to connect to it",
+                        aux_zk_name);
                     getAuxiliaryZooKeeper(aux_zk_name);
                     /// Connected, return true
                     return true;
@@ -2341,13 +2455,17 @@ void Context::initializeKeeperDispatcher(bool start_async) const
         if (start_async)
         {
             assert(!is_standalone_app);
-            LOG_INFO(shared->log, "Connected to ZooKeeper (or Keeper) before internal Keeper start or we don't depend on our Keeper cluster"
-                     ", will wait for Keeper asynchronously");
+            LOG_INFO(
+                shared->log,
+                "Connected to ZooKeeper (or Keeper) before internal Keeper start or we don't depend on our Keeper cluster"
+                ", will wait for Keeper asynchronously");
         }
         else
         {
-            LOG_INFO(shared->log, "Cannot connect to ZooKeeper (or Keeper) before internal Keeper start,"
-                     "will wait for Keeper synchronously");
+            LOG_INFO(
+                shared->log,
+                "Cannot connect to ZooKeeper (or Keeper) before internal Keeper start,"
+                "will wait for Keeper synchronously");
         }
 
         shared->keeper_dispatcher = std::make_shared<KeeperDispatcher>();
@@ -2407,9 +2525,12 @@ zkutil::ZooKeeperPtr Context::getAuxiliaryZooKeeper(const String & name) const
                 "config.xml",
                 name);
 
-        zookeeper = shared->auxiliary_zookeepers.emplace(
-            name,
-            std::make_shared<zkutil::ZooKeeper>(config, "auxiliary_zookeepers." + name, getZooKeeperLog(), ServiceEndpoints{})).first;
+        zookeeper
+            = shared->auxiliary_zookeepers
+                  .emplace(
+                      name,
+                      std::make_shared<zkutil::ZooKeeper>(config, "auxiliary_zookeepers." + name, getZooKeeperLog(), ServiceEndpoints{}))
+                  .first;
     }
     else if (zookeeper->second->expired())
         zookeeper->second = zookeeper->second->startNewSession();
@@ -2425,7 +2546,8 @@ void Context::resetZooKeeper() const
 
 static void reloadZooKeeperIfChangedImpl(
     const ConfigurationPtr & config,
-    const std::string & config_name, zkutil::ZooKeeperPtr & zk,
+    const std::string & config_name,
+    zkutil::ZooKeeperPtr & zk,
     std::shared_ptr<ZooKeeperLog> zk_log,
     const ServiceEndpoints & endpoints)
 {
@@ -2512,7 +2634,7 @@ std::pair<String, String> Context::getCnchInterserverCredentials() const
     String user_name = getSettingsRef().username_for_internal_communication.toString();
     auto password = shared->users_config->getString("users." + user_name + ".password", "");
 
-    return { user_name, password };
+    return {user_name, password};
 }
 
 void Context::updateInterserverCredentials(const Poco::Util::AbstractConfiguration & config)
@@ -2530,10 +2652,11 @@ void Context::setInterserverIOAddress(const String & host, UInt16 port)
 std::pair<String, UInt16> Context::getInterserverIOAddress() const
 {
     if (shared->interserver_io_host.empty() || shared->interserver_io_port == 0)
-        throw Exception("Parameter 'interserver_http(s)_port' required for replication is not specified in configuration file.",
-                        ErrorCodes::NO_ELEMENTS_IN_CONFIG);
+        throw Exception(
+            "Parameter 'interserver_http(s)_port' required for replication is not specified in configuration file.",
+            ErrorCodes::NO_ELEMENTS_IN_CONFIG);
 
-    return { shared->interserver_io_host, shared->interserver_io_port };
+    return {shared->interserver_io_host, shared->interserver_io_port};
 }
 
 UInt16 Context::getExchangePort(bool check_port_exists) const
@@ -2595,13 +2718,13 @@ const RemoteHostFilter & Context::getRemoteHostFilter() const
 
 UInt16 Context::getPortFromEnvForConsul(const char * key) const
 {
-    if(shared->server_type == ServerType::cnch_server || shared->server_type == ServerType::cnch_worker)
+    if (shared->server_type == ServerType::cnch_server || shared->server_type == ServerType::cnch_worker)
     {
         auto sd_client = this->getServiceDiscoveryClient();
-        if(sd_client->getName() == "consul")
+        if (sd_client->getName() == "consul")
         {
             const char * value = getenv(key);
-            if(value != nullptr)
+            if (value != nullptr)
                 return parse<UInt16>(value);
         }
     }
@@ -2611,22 +2734,14 @@ UInt16 Context::getPortFromEnvForConsul(const char * key) const
 
 HostWithPorts Context::getHostWithPorts() const
 {
-    auto get_host_with_port = [this] ()
-    {
+    auto get_host_with_port = [this]() {
         String host = getHostIPFromEnv();
         String id = getWorkerID(shared_from_this());
         if (id.empty())
             id = host;
 
-        return HostWithPorts {
-            std::move(host),
-            getRPCPort(),
-            getTCPPort(),
-            getHTTPPort(),
-            getExchangePort(),
-            getExchangeStatusPort(),
-            std::move(id)
-        };
+        return HostWithPorts{
+            std::move(host), getRPCPort(), getTCPPort(), getHTTPPort(), getExchangePort(), getExchangeStatusPort(), std::move(id)};
     };
 
     static HostWithPorts cache = get_host_with_port();
@@ -2649,13 +2764,14 @@ UInt16 Context::getTCPPort(const String & host, UInt16 rpc_port) const
     String psm = getConfigRef().getString("service_discovery.server.psm", "data.cnch.server");
     HostWithPortsVec server_vector = getServiceDiscoveryClient()->lookup(psm, ComponentType::SERVER);
 
-    for (auto & server: server_vector)
+    for (auto & server : server_vector)
     {
         if (isSameHost(server.getHost(), host) && rpc_port == server.rpc_port)
             return server.tcp_port;
     }
 
-    throw Exception("Can't get tcp_port by host: " + host + " and rpc_port: " + std::to_string(rpc_port), ErrorCodes::CNCH_SERVER_NOT_FOUND);
+    throw Exception(
+        "Can't get tcp_port by host: " + host + " and rpc_port: " + std::to_string(rpc_port), ErrorCodes::CNCH_SERVER_NOT_FOUND);
 }
 
 std::optional<UInt16> Context::getTCPPortSecure() const
@@ -2866,8 +2982,7 @@ std::shared_ptr<ServerPartLog> Context::getServerPartLog() const
 
 void Context::initializeCnchSystemLogs()
 {
-    if ((shared->server_type != ServerType::cnch_server) &&
-        (shared->server_type != ServerType::cnch_worker))
+    if ((shared->server_type != ServerType::cnch_server) && (shared->server_type != ServerType::cnch_worker))
         return;
     auto lock = getLock();
     shared->cnch_system_logs = std::make_unique<CnchSystemLogs>(getGlobalContext());
@@ -3094,8 +3209,8 @@ StoragePolicySelectorPtr Context::getStoragePolicySelector(std::lock_guard<std::
         constexpr auto config_name = "storage_configuration.policies";
         const auto & config = getConfigRef();
 
-        shared->merge_tree_storage_policy_selector = std::make_shared<StoragePolicySelector>(
-            config, config_name, getDiskSelector(lock), getDefaultCnchPolicyName());
+        shared->merge_tree_storage_policy_selector
+            = std::make_shared<StoragePolicySelector>(config, config_name, getDiskSelector(lock), getDefaultCnchPolicyName());
     }
     return shared->merge_tree_storage_policy_selector;
 }
@@ -3218,19 +3333,24 @@ void Context::checkCanBeDropped(const String & database, const String & table, c
 
     String size_str = formatReadableSizeWithDecimalSuffix(size);
     String max_size_to_drop_str = formatReadableSizeWithDecimalSuffix(max_size_to_drop);
-    throw Exception(ErrorCodes::TABLE_SIZE_EXCEEDS_MAX_DROP_SIZE_LIMIT,
-                    "Table or Partition in {}.{} was not dropped.\nReason:\n"
-                    "1. Size ({}) is greater than max_[table/partition]_size_to_drop ({})\n"
-                    "2. File '{}' intended to force DROP {}\n"
-                    "How to fix this:\n"
-                    "1. Either increase (or set to zero) max_[table/partition]_size_to_drop in server config\n"
-                    "2. Either create forcing file {} and make sure that ClickHouse has write permission for it.\n"
-                    "Example:\nsudo touch '{}' && sudo chmod 666 '{}'",
-                    backQuoteIfNeed(database), backQuoteIfNeed(table),
-                    size_str, max_size_to_drop_str,
-                    force_file.string(), force_file_exists ? "exists but not writeable (could not be removed)" : "doesn't exist",
-                    force_file.string(),
-                    force_file.string(), force_file.string());
+    throw Exception(
+        ErrorCodes::TABLE_SIZE_EXCEEDS_MAX_DROP_SIZE_LIMIT,
+        "Table or Partition in {}.{} was not dropped.\nReason:\n"
+        "1. Size ({}) is greater than max_[table/partition]_size_to_drop ({})\n"
+        "2. File '{}' intended to force DROP {}\n"
+        "How to fix this:\n"
+        "1. Either increase (or set to zero) max_[table/partition]_size_to_drop in server config\n"
+        "2. Either create forcing file {} and make sure that ClickHouse has write permission for it.\n"
+        "Example:\nsudo touch '{}' && sudo chmod 666 '{}'",
+        backQuoteIfNeed(database),
+        backQuoteIfNeed(table),
+        size_str,
+        max_size_to_drop_str,
+        force_file.string(),
+        force_file_exists ? "exists but not writeable (could not be removed)" : "doesn't exist",
+        force_file.string(),
+        force_file.string(),
+        force_file.string());
 }
 
 
@@ -3522,7 +3642,8 @@ StorageID Context::resolveStorageID(StorageID storage_id, StorageNamespace where
     if (exc)
         throw Exception(*exc);
     if (!resolved.hasUUID() && resolved.database_name != DatabaseCatalog::TEMPORARY_DATABASE)
-        resolved.uuid = DatabaseCatalog::instance().getDatabase(resolved.database_name, shared_from_this())->tryGetTableUUID(resolved.table_name);
+        resolved.uuid
+            = DatabaseCatalog::instance().getDatabase(resolved.database_name, shared_from_this())->tryGetTableUUID(resolved.table_name);
     return resolved;
 }
 
@@ -3564,10 +3685,11 @@ StorageID Context::resolveStorageIDImpl(StorageID storage_id, StorageNamespace w
     if (!storage_id.database_name.empty())
     {
         if (in_specified_database)
-            return storage_id;     /// NOTE There is no guarantees that table actually exists in database.
+            return storage_id; /// NOTE There is no guarantees that table actually exists in database.
         if (exception)
-            exception->emplace("External and temporary tables have no database, but " +
-                        storage_id.database_name + " is specified", ErrorCodes::UNKNOWN_TABLE);
+            exception->emplace(
+                "External and temporary tables have no database, but " + storage_id.database_name + " is specified",
+                ErrorCodes::UNKNOWN_TABLE);
         return StorageID::createEmpty();
     }
 
@@ -3579,8 +3701,7 @@ StorageID Context::resolveStorageIDImpl(StorageID storage_id, StorageNamespace w
         assert(!isGlobalContext() || getApplicationType() == ApplicationType::LOCAL);
 
         auto resolved_id = StorageID::createEmpty();
-        auto try_resolve = [&](ContextPtr context) -> bool
-        {
+        auto try_resolve = [&](ContextPtr context) -> bool {
             const auto & tables = context->external_tables_mapping;
             auto it = tables.find(storage_id.getTableName());
             if (it == tables.end())
@@ -3705,11 +3826,13 @@ String Context::getHdfsNNProxy() const
 }
 
 
-void Context::setHdfsConnectionParams(const HDFSConnectionParams& params)  {
+void Context::setHdfsConnectionParams(const HDFSConnectionParams & params)
+{
     shared->hdfs_connection_params = params;
 }
 
-HDFSConnectionParams Context::getHdfsConnectionParams() const{
+HDFSConnectionParams Context::getHdfsConnectionParams() const
+{
     return shared->hdfs_connection_params;
 }
 
@@ -3772,7 +3895,7 @@ DeleteBitmapCachePtr Context::getDeleteBitmapCache() const
 void Context::setMetaChecker()
 {
     auto meta_checker = [this]() {
-        Poco::Logger *log = &Poco::Logger::get("MetaChecker");
+        Poco::Logger * log = &Poco::Logger::get("MetaChecker");
 
         Stopwatch stopwatch;
         LOG_DEBUG(log, "Start to run metadata synchronization task.");
@@ -3783,7 +3906,7 @@ void Context::setMetaChecker()
         if (this->shared->stop_sync)
         {
             /// if task stopped. we should make sure it is not been scheduled too often.
-            task_min_interval = 5*60*1000;
+            task_min_interval = 5 * 60 * 1000;
             LOG_WARNING(log, "Metadata synchronization task has been stopped.");
         }
         else
@@ -3808,8 +3931,8 @@ void Context::setMetaChecker()
                         /// lock current table to avoid conflict with drop query.
                         auto lock = current_table->lockForShare("SYNC_META_TASK", this->getSettingsRef().lock_acquire_timeout);
 
-                        MergeTreeData &data = dynamic_cast<MergeTreeData &>(*current_table);
-                        LOG_INFO(log, "Start check metadata of table " + current_database_name+ "." + current_table_name);
+                        MergeTreeData & data = dynamic_cast<MergeTreeData &>(*current_table);
+                        LOG_INFO(log, "Start check metadata of table " + current_database_name + "." + current_table_name);
 
                         /// To avoid blocking whole task, we may skip current table if failed to get data part lock.
                         data.trySyncMetaData();
@@ -3826,13 +3949,13 @@ void Context::setMetaChecker()
         LOG_DEBUG(log, "Finish the metadata synchronization task for {} tables in {}ms.", table_count, stopwatch.elapsedMilliseconds());
         /// default interval is 10min.
         size_t delay_ms = this->getSettingsRef().meta_sync_task_interval_ms.totalMilliseconds();
-        this->shared->meta_checker->scheduleAfter(std::max(delay_ms,task_min_interval));
+        this->shared->meta_checker->scheduleAfter(std::max(delay_ms, task_min_interval));
     };
 
     shared->meta_checker = getLocalSchedulePool().createTask("MetaCheck", meta_checker);
     shared->meta_checker->activate();
     /// do not start sync immediately, delay 10min
-    shared->meta_checker->scheduleAfter(10*60*1000);
+    shared->meta_checker->scheduleAfter(10 * 60 * 1000);
 }
 
 void Context::setMetaCheckerStatus(bool stop)
@@ -3885,8 +4008,8 @@ ServiceDiscoveryClientPtr Context::getServiceDiscoveryClient() const
 
 void Context::initTSOClientPool(const String & service_name)
 {
-    shared->tso_client_pool
-        = std::make_unique<TSOClientPool>(service_name, [sd = shared->sd, service_name] { return sd->lookup(service_name, ComponentType::TSO); });
+    shared->tso_client_pool = std::make_unique<TSOClientPool>(
+        service_name, [sd = shared->sd, service_name] { return sd->lookup(service_name, ComponentType::TSO); });
 }
 
 std::shared_ptr<TSO::TSOClient> Context::getCnchTSOClient() const
@@ -3936,7 +4059,8 @@ void Context::updateTSOLeaderHostPort() const
     auto current_leader_node = tso_election_path + "/" + children.front();
     String current_leader = current_zookeeper->get(current_leader_node);
     if (current_leader.empty())
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Can't get current tso-leader, leader_node `{}` in keeper is empty.", current_leader_node);
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR, "Can't get current tso-leader, leader_node `{}` in keeper is empty.", current_leader_node);
 
     {
         std::lock_guard lock(shared->tso_mutex);
@@ -3964,8 +4088,7 @@ UInt64 Context::tryGetTimestamp(const String & pretty_func_name) const
     catch (...)
     {
         tryLogCurrentException(
-            pretty_func_name.c_str(),
-            fmt::format("Unable to reach TSO from {} during call to tryGetTimestamp", getTSOLeaderHostPort()));
+            pretty_func_name.c_str(), fmt::format("Unable to reach TSO from {} during call to tryGetTimestamp", getTSOLeaderHostPort()));
         return TxnTimestamp::fallbackTS();
     }
 }
@@ -4035,8 +4158,8 @@ std::shared_ptr<Catalog::Catalog> Context::getCnchCatalog() const
 
 void Context::initDaemonManagerClientPool(const String & service_name)
 {
-    shared->daemon_manager_pool
-        = std::make_unique<DaemonManagerClientPool>(service_name, [sd = shared->sd, service_name] { return sd->lookup(service_name, ComponentType::DAEMON_MANAGER); });
+    shared->daemon_manager_pool = std::make_unique<DaemonManagerClientPool>(
+        service_name, [sd = shared->sd, service_name] { return sd->lookup(service_name, ComponentType::DAEMON_MANAGER); });
 }
 
 DaemonManagerClientPtr Context::getDaemonManagerClient() const
@@ -4125,7 +4248,7 @@ UInt64 Context::getNonHostUpdateTime(const UUID & uuid)
 {
     {
         std::lock_guard<std::mutex> lock(*nhut_mutex);
-        if (auto it = session_nhuts.find(uuid); it!=session_nhuts.end())
+        if (auto it = session_nhuts.find(uuid); it != session_nhuts.end())
             return it->second;
     }
 
@@ -4219,7 +4342,7 @@ VirtualWarehousePool & Context::getVirtualWarehousePool() const
     return *shared->vw_pool;
 }
 
-StoragePtr Context::tryGetCnchTable(const String & , const String & ) const
+StoragePtr Context::tryGetCnchTable(const String &, const String &) const
 {
     throw Exception("Not implemented yet. ", ErrorCodes::NOT_IMPLEMENTED);
 }
@@ -4288,7 +4411,7 @@ void Context::initResourceManagerClient()
 
 ResourceManagerClientPtr Context::getResourceManagerClient() const
 {
-   return shared->rm_client;
+    return shared->rm_client;
 }
 
 void Context::initCnchBGThreads()
@@ -4462,7 +4585,6 @@ std::shared_ptr<Cluster> Context::mockCnchServersCluster() const
     //auto local_settings = context.getSettings();
     //local_settings.skip_unavailable_shards = true;
     return std::make_shared<Cluster>(this->getSettings(), addresses, false);
-
 }
 
 std::vector<std::pair<UInt64, CnchWorkerResourcePtr>> Context::getAllWorkerResources() const
@@ -4478,23 +4600,34 @@ Context::PartAllocator Context::getPartAllocationAlgo() const
     /// we prefer the config setting first
     if (getConfigRef().has("part_allocation_algorithm"))
     {
-        LOG_DEBUG(&Poco::Logger::get(__PRETTY_FUNCTION__), "Using part allocation algorithm from config: {}.", getConfigRef().getInt("part_allocation_algorithm"));
-        switch(getConfigRef().getInt("part_allocation_algorithm"))
+        LOG_DEBUG(
+            &Poco::Logger::get(__PRETTY_FUNCTION__),
+            "Using part allocation algorithm from config: {}.",
+            getConfigRef().getInt("part_allocation_algorithm"));
+        switch (getConfigRef().getInt("part_allocation_algorithm"))
         {
-            case 0: return PartAllocator::JUMP_CONSISTENT_HASH;
-            case 1: return PartAllocator::RING_CONSISTENT_HASH;
-            case 2: return PartAllocator::STRICT_RING_CONSISTENT_HASH;
-            default: return PartAllocator::JUMP_CONSISTENT_HASH;
+            case 0:
+                return PartAllocator::JUMP_CONSISTENT_HASH;
+            case 1:
+                return PartAllocator::RING_CONSISTENT_HASH;
+            case 2:
+                return PartAllocator::STRICT_RING_CONSISTENT_HASH;
+            default:
+                return PartAllocator::JUMP_CONSISTENT_HASH;
         }
     }
 
     /// if not set, we use the query settings
     switch (settings.cnch_part_allocation_algorithm)
     {
-        case 0: return PartAllocator::JUMP_CONSISTENT_HASH;
-        case 1: return PartAllocator::RING_CONSISTENT_HASH;
-        case 2: return PartAllocator::STRICT_RING_CONSISTENT_HASH;
-        default: return PartAllocator::JUMP_CONSISTENT_HASH;
+        case 0:
+            return PartAllocator::JUMP_CONSISTENT_HASH;
+        case 1:
+            return PartAllocator::RING_CONSISTENT_HASH;
+        case 2:
+            return PartAllocator::STRICT_RING_CONSISTENT_HASH;
+        default:
+            return PartAllocator::JUMP_CONSISTENT_HASH;
     }
 }
 

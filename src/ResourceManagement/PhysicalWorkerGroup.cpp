@@ -55,7 +55,10 @@ WorkerGroupData PhysicalWorkerGroup::getData(bool with_metrics, bool only_runnin
     for (const auto & [_, worker] : getWorkers())
     {
         if(!only_running_state || worker->state.load(std::memory_order_relaxed) == WorkerState::Running)
+        {
             data.host_ports_vec.push_back(worker->host);
+            data.worker_node_resource_vec.push_back(worker->getResourceData());
+        }
     }
     data.num_workers = data.host_ports_vec.size();
 

@@ -196,4 +196,26 @@ private:
     BackgroundSchedulePoolTaskInfoPtr task_info;
 };
 
+class RepeatedTimerTask {
+public:
+    RepeatedTimerTask(BackgroundSchedulePool &pool_, UInt64 interval_, const std::string& name_);
+
+    virtual ~RepeatedTimerTask() = default;
+
+    void start()
+    {
+        task->activateAndSchedule();
+    }
+
+    void stop()
+    {
+        task->deactivate();
+    }
+
+protected:
+    virtual void run() = 0;
+    UInt64 interval; /// in seconds;
+    BackgroundSchedulePool::TaskHolder task;
+};
+
 }

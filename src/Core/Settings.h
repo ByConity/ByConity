@@ -690,6 +690,7 @@ class IColumn;
     M(UInt64, max_replicate_build_size, 200000, "Max join build size, when enum replicate", 0) \
     M(UInt64, max_replicate_shuffle_size, 50000000, "Max join build size, when enum replicate", 0) \
     M(Bool, add_parallel_before_agg, false, "Add parallel before agg", 0) \
+    M(Bool, enable_adaptive_scheduler, false, "Whether enable adaptive scheduler", 0) \
     M(Bool, add_parallel_after_join, false, "Add parallel after join", 0) \
     M(Bool, enforce_round_robin, false, "Whether add round robin exchange node", 0) \
     M(Bool, enable_pk_fk, true, "Whether enable PK-FK join estimation", 0) \

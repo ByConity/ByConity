@@ -365,8 +365,15 @@ std::pair<String, size_t> PlanSegmentVisitor::findClusterAndParallelSize(QueryPl
             if (!input_has_table && !split_context.inputs.empty())
             {
                 size_t max_parallel_size = plan_segment_context.context->getSettingsRef().distributed_max_parallel_size;
-                if (max_parallel_size > 0)
-                    return {plan_segment_context.cluster_name, std::min(max_parallel_size, plan_segment_context.shard_number)};
+                size_t ret = plan_segment_context.shard_number;
+                if (max_parallel_size > 0 || plan_segment_context.health_parallel)
+                {
+                    if (max_parallel_size > 0 && max_parallel_size < ret)
+                        ret = max_parallel_size;
+                    if (plan_segment_context.health_parallel && *plan_segment_context.health_parallel < ret)
+                        ret = *plan_segment_context.health_parallel;
+                    return {plan_segment_context.cluster_name, ret};
+                }
             }
             return {plan_segment_context.cluster_name, plan_segment_context.shard_number};
         default:

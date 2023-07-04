@@ -248,6 +248,11 @@ using WorkerGroupHandle = std::shared_ptr<WorkerGroupHandleImpl>;
 class CnchWorkerClient;
 using CnchWorkerClientPtr = std::shared_ptr<CnchWorkerClient>;
 class CnchCatalogDictionaryCache;
+class WorkerStatusManager;
+using WorkerStatusManagerPtr = std::shared_ptr<WorkerStatusManager>;
+
+class WorkerGroupStatus;
+using WorkerGroupStatusPtr = std::shared_ptr<WorkerGroupStatus>;
 
 class VWCustomizedSettings;
 using VWCustomizedSettingsPtr = std::shared_ptr<VWCustomizedSettings>;
@@ -461,6 +466,9 @@ private:
     std::shared_ptr<OptimizerMetrics> optimizer_metrics = nullptr;
 
     std::unordered_map<std::string, bool> function_deterministic;
+    // worker status
+    WorkerGroupStatusPtr worker_group_status;
+
 public:
     // Top-level OpenTelemetry trace context for the query. Makes sense only for a query context.
     OpenTelemetryTraceContext query_trace_context;
@@ -493,6 +501,7 @@ private:
     /// VirtualWarehouse for each query, session level
     mutable VirtualWarehouseHandle current_vw;
     mutable WorkerGroupHandle current_worker_group;
+    mutable WorkerGroupHandle health_worker_group;
 
     /// Transaction for each query, query level
     TransactionCnchPtr current_cnch_txn;
@@ -626,6 +635,14 @@ public:
     void checkAccess(const AccessRightsElements & elements) const;
 
     std::shared_ptr<const ContextAccess> getAccess() const;
+    WorkerGroupStatusPtr & getWorkerGroupStatusPtr() { return worker_group_status; }
+    const WorkerGroupStatusPtr & getWorkerGroupStatusPtr() const { return worker_group_status; }
+
+    void updateAdaptiveSchdulerConfig(const ConfigurationPtr & config);
+    WorkerStatusManagerPtr getWorkerStatusManager();
+    WorkerStatusManagerPtr getWorkerStatusManager() const;
+    WorkerGroupHandle tryGetHealthWorkerGroup() const;
+    void selectWorkerNodesWithMetrics();
 
     ASTPtr getRowPolicyCondition(const String & database, const String & table_name, RowPolicy::ConditionType type) const;
 

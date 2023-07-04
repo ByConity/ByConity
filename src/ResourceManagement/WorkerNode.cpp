@@ -146,6 +146,8 @@ void WorkerNode::update(const WorkerNodeResourceData & data, const size_t regist
     {
         state.store(WorkerState::Running, std::memory_order_relaxed);
     }
+    last_status_create_time.store(data.last_status_create_time, std::memory_order_relaxed);
+
 }
 
 WorkerNodeResourceData WorkerNode::getResourceData() const
@@ -167,6 +169,8 @@ WorkerNodeResourceData WorkerNode::getResourceData() const
     // added TODO comment for 2k38 
     // coverity[store_truncates_time_t]
     res.last_update_time = last_update_time;
+    res.id = id;
+    res.last_status_create_time = last_status_create_time.load(std::memory_order_relaxed);
 
     return res;
 }
@@ -216,6 +220,8 @@ void WorkerNode::fillProto(Protos::WorkerNodeResourceData & entry) const
     // coverity[store_truncates_time_t]
     entry.set_register_time(static_cast<UInt32>(register_time));
     entry.set_state(static_cast<UInt32>(state.load(std::memory_order_relaxed)));
+    entry.set_last_status_create_time(last_status_create_time.load(std::memory_order_relaxed));
+
 }
 
 }
