@@ -20,7 +20,7 @@ SeLECT * from left_table_view Settings use_query_cache = 1, enable_optimizer = 0
 SElECT * from left_table_view Settings use_query_cache = 1, enable_optimizer = 0;
 
 sELECT a, r.a from left_table_view as l INNER JOIN right_table as r on l.id = r.id ORDER BY id Settings use_query_cache = 1, enable_optimizer = 0;
-SeLECT a, r.a from left_table_view  as l INNER JOIN right_table as r on l.id = r.id ORDER BY id Settings use_query_cache = 1, enable_optimizer = 0;
+SeLECT a, r.a from left_table_view as l INNER JOIN right_table as r on l.id = r.id ORDER BY id Settings use_query_cache = 1, enable_optimizer = 0;
 SElECT a, r.a from left_table_view as l INNER JOIN right_table as r on l.id = r.id ORDER BY id Settings use_query_cache = 1, enable_optimizer = 0;
 
 DROP TABLE left_table_view;
