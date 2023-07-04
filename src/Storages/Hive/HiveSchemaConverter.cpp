@@ -122,9 +122,8 @@ HiveSchemaConverter::HiveSchemaConverter(ContextPtr context_, std::shared_ptr<Ap
 StorageInMemoryMetadata HiveSchemaConverter::convert() const
 {
     ColumnsDescription columns;
-    auto addColumn = [&](const Apache::Hadoop::Hive::FieldSchema & hive_field) {
+    auto addColumn = [&](const Apache::Hadoop::Hive::FieldSchema & hive_field, bool make_columns_nullable) {
         // bool make_columns_nullable = getContext()->getSettingsRef().data_type_default_nullable;
-        bool make_columns_nullable = true;
         DataTypePtr ch_type = hiveTypeToCHType(hive_field.type, make_columns_nullable);
         if (ch_type)
             columns.add(ColumnDescription(hive_field.name, ch_type));
@@ -134,7 +133,7 @@ StorageInMemoryMetadata HiveSchemaConverter::convert() const
 
     for (const auto & hive_field : hive_table->sd.cols)
     {
-        addColumn(hive_field);
+        addColumn(hive_field,true);
     }
 
     auto partition_def = std::make_shared<ASTFunction>();
@@ -143,7 +142,7 @@ StorageInMemoryMetadata HiveSchemaConverter::convert() const
     for (const auto & hive_field : hive_table->partitionKeys)
     {
         if (!columns.has(hive_field.name))
-            addColumn(hive_field);
+            addColumn(hive_field, false);
 
         auto col = std::make_shared<ASTIdentifier>(hive_field.name);
         partition_def->arguments->children.emplace_back(col);
