@@ -83,6 +83,9 @@ public:
     //static constexpr auto DATA_FILE_EXTENSION = ".bin";
     static constexpr UInt64 NOT_INITIALIZED_COMMIT_TIME = 0;
 
+    static constexpr UInt8 DELETED_FLAG = 1 << 0;
+    static constexpr UInt8 LOW_PRIORITY_FLAG = 1 << 1;
+
     using Checksums = MergeTreeDataPartChecksums;
     using Checksum = MergeTreeDataPartChecksums::Checksum;
     using ChecksumsPtr = std::shared_ptr<Checksums>;
@@ -413,6 +416,8 @@ public:
     void renameToDetached(const String & prefix) const;
     String getRelativePathForDetachedPart(const String & prefix) const;
 
+    void createDeleteBitmapForDetachedPart() const;
+
     /// Makes checks and move part to new directory
     /// Changes only relative_dir_name, you need to update other metadata (name, is_temp) explicitly
     virtual void renameTo(const String & new_relative_path, bool remove_new_dir_if_exists) const;
@@ -500,6 +505,8 @@ public:
 
     bool isPartial() const { return info.hint_mutation; }
 
+    bool isDropRangePart() const { return deleted && info.min_block == 0 && info.level == MergeTreePartInfo::MAX_LEVEL; }
+
     /// FIXME: move to PartMetaEntry once metastore is added
     /// Used to prevent concurrent modification to a part.
     /// Can be removed once all data modification tasks (e.g, build bitmap index, recode) are
@@ -532,6 +539,13 @@ public:
     size_t covered_parts_size = 0; /// only for deleted part. used to record bytes_on_disk before the part is deleted.
     size_t covered_parts_rows = 0; /// only for deleted part. used to record rows_count before the part is deleted.
 
+    /// If true it means that delete bitmap info will be considered as delete flag info
+    /// Notice that it's only valid for invisible committed parts
+    bool delete_flag = false;
+
+    /// If true it means that the part is belongs to unique table engine and from dumper tool
+    bool low_priority = false;
+
     Int64 bucket_number = -1;               /// bucket_number > 0 if the part is assigned to bucket
     UInt64 table_definition_hash = 0;       // cluster by definition hash for data file
 
@@ -541,13 +555,13 @@ public:
     /// stored in descending order of commit time
     mutable std::forward_list<DataModelDeleteBitmapPtr> delete_bitmap_metas;
 
-    void setDeleteBitmapMeta(DeleteBitmapMetaPtr bitmap_meta) const;
+    void setDeleteBitmapMeta(DeleteBitmapMetaPtr bitmap_meta, bool force_set = true) const;
 
     void setDeleteBitmap(ImmutableDeleteBitmapPtr delete_bitmap_) { delete_bitmap = std::move(delete_bitmap_); }
 
     /// Return null if the part doesn't have delete bitmap.
     /// Otherwise load the bitmap on demand and return.
-    virtual const ImmutableDeleteBitmapPtr & getDeleteBitmap([[maybe_unused]] bool is_unique_new_part = false) const
+    virtual const ImmutableDeleteBitmapPtr & getDeleteBitmap([[maybe_unused]] bool allow_null = false) const
     {
         return delete_bitmap;
     }

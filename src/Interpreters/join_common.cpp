@@ -311,6 +311,13 @@ void checkTypesOfKeys(const Block & block_left, const Names & key_names_left, co
     }
 }
 
+bool isJoinCompatibleTypes(const DataTypePtr & left, const DataTypePtr & right)
+{
+    auto left_base = removeNullable(recursiveRemoveLowCardinality(left));
+    auto right_base = removeNullable(recursiveRemoveLowCardinality(right));
+    return left_base->equals(*right_base);
+}
+
 void createMissedColumns(Block & block)
 {
     for (size_t i = 0; i < block.columns(); ++i)

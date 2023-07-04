@@ -48,11 +48,18 @@ struct FieldDescription
     /// ANSI SQL specific.
     QualifiedName prefix;
 
+    struct OriginColumn
+    {
+        StoragePtr storage;
+        IAST * table_ast;
+        String column;
+        size_t index_of_scope;
+    };
+
+    using OriginColumns = std::vector<OriginColumn>;
+
     /// track where this field comes from
-    StoragePtr origin_table;
-    IAST * origin_table_ast;
-    String origin_column;
-    size_t index_of_origin_scope;
+    OriginColumns origin_columns;
 
     /// ANSI SQL specific.
     /// Materialized columns, alias columns and virtual columns are not substituted by asterisks,
@@ -60,34 +67,45 @@ struct FieldDescription
     /// s.a. https://clickhouse.com/docs/zh/sql-reference/statements/create/table/#materialized
     bool substituted_by_asterisk;
 
-    FieldDescription(String name_,
-                     DataTypePtr type_,
-                     QualifiedName prefix_ = {})
-        : FieldDescription(std::move(name_), std::move(type_), std::move(prefix_), nullptr, nullptr, "", -1, true)
-    {}
+    FieldDescription(String name_, DataTypePtr type_, QualifiedName prefix_ = {})
+        : FieldDescription(std::move(name_), std::move(type_), std::move(prefix_), {}, true)
+    {
+    }
 
-    FieldDescription(String name_,
-                     DataTypePtr type_,
-                     QualifiedName prefix_,
-                     StoragePtr origin_table_,
-                     IAST * origin_table_ast_,
-                     String origin_column_,
-                     size_t index_of_origin_scope_,
-                     bool substituted_by_asterisk_) :
-        name(std::move(name_)),
-        type(std::move(type_)),
-        prefix(std::move(prefix_)),
-        origin_table(std::move(origin_table_)),
-        origin_table_ast(origin_table_ast_),
-        origin_column(std::move(origin_column_)),
-        index_of_origin_scope(index_of_origin_scope_),
-        substituted_by_asterisk(substituted_by_asterisk_)
+    FieldDescription(String name_, DataTypePtr type_, QualifiedName prefix_, OriginColumns origin_columns_, bool substituted_by_asterisk_)
+        : name(std::move(name_))
+        , type(std::move(type_))
+        , prefix(std::move(prefix_))
+        , origin_columns(std::move(origin_columns_))
+        , substituted_by_asterisk(substituted_by_asterisk_)
+    {
+    }
+    FieldDescription(
+        String name_,
+        DataTypePtr type_,
+        QualifiedName prefix_,
+        StoragePtr origin_table_,
+        IAST * origin_table_ast_,
+        String origin_column_,
+        size_t index_of_origin_scope_,
+        bool substituted_by_asterisk_)
+        : name(std::move(name_))
+        , type(std::move(type_))
+        , prefix(std::move(prefix_))
+        , origin_columns{OriginColumn{std::move(origin_table_), origin_table_ast_, std::move(origin_column_), index_of_origin_scope_}}
+        , substituted_by_asterisk(substituted_by_asterisk_)
     {
     }
 
     FieldDescription withNewName(const String & new_name) const;
     FieldDescription withNewPrefix(const QualifiedName & new_prefix) const;
+    bool hasOriginInfo() const { return !origin_columns.empty(); }
     void copyOriginInfo(const FieldDescription & source_field);
+    String getOriginColumnName() const
+    {
+        assert(origin_columns.size() == 1);
+        return origin_columns.front().column;
+    }
 
     // ANSI sql
     bool matchName(const QualifiedName & target_name) const;
@@ -147,15 +165,9 @@ private:
     bool query_boundary;
     FieldDescriptions field_descriptions;
 public:
-    ScopeType getType() const
-    {
-        return type;
-    }
+    ScopeType getType() const { return type; }
 
-    const FieldDescriptions& getFields() const
-    {
-        return field_descriptions;
-    }
+    const FieldDescriptions & getFields() const { return field_descriptions; }
 
     /// For ansi SQL, a qualified name will be resolved by below rules:
     ///   1) identifer's last name equal to field's name;

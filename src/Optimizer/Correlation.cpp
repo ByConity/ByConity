@@ -13,10 +13,15 @@
  * limitations under the License.
  */
 
+
+#include <DataTypes/getLeastSupertype.h>
 #include <Optimizer/Correlation.h>
 #include <Optimizer/PlanNodeCardinality.h>
 #include <Optimizer/PredicateUtils.h>
 #include <Optimizer/SymbolsExtractor.h>
+#include <Optimizer/ProjectionPlanner.h>
+#include <Optimizer/makeCastFunction.h>
+#include <Interpreters/join_common.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <QueryPlan/Assignment.h>
@@ -50,7 +55,7 @@ bool Correlation::containsCorrelation(PlanNodePtr & node, Names & correlation)
     return false;
 }
 
-bool Correlation::isCorrelated(ConstASTPtr & expression, Names & correlation)
+bool Correlation::isCorrelated(ConstASTPtr expression, const Names & correlation)
 {
     std::set<String> symbols = SymbolsExtractor::extract(expression);
     for (const auto & symbol : symbols)
@@ -101,38 +106,46 @@ std::pair<Names, Names> DecorrelationResult::extractCorrelations(Names & correla
     return std::make_pair(left, right);
 }
 
-std::pair<Names, Names> DecorrelationResult::extractJoinClause(Names & correlation)
+std::pair<Names, Names> DecorrelationResult::buildJoinClause(PlanNodePtr & query_node, PlanNodePtr & subquery_node,
+                                                             const Names & correlation, ContextMutablePtr context)
 {
-    Names left;
-    Names right;
+    Names query_keys;
+    Names subquery_keys;
+    ProjectionPlanner query_planner(query_node, context);
+    ProjectionPlanner subquery_planner(subquery_node, context);
 
-    // As correlation symbol belongs to outer query, hence correlation symbol is left key.
     for (auto & predicate : correlation_predicates)
     {
-        const auto & fun = predicate->as<ASTFunction &>();
-        if (fun.name == "equals")
+        const auto & func = predicate->as<ASTFunction &>();
+        if (func.name != "equals")
+            continue;
+
+        auto build_join_clause_for_conjunct = [&](ASTPtr query_expr, ASTPtr subquery_expr)
         {
-            ASTIdentifier & left_symbol = fun.arguments->getChildren()[0]->as<ASTIdentifier &>();
-            if (std::find(correlation.begin(), correlation.end(), left_symbol.name()) != correlation.end())
+            auto [query_key_name, query_key_type] = query_planner.addColumn(query_expr);
+            auto [subquery_key_name, subquery_key_type] = subquery_planner.addColumn(subquery_expr);
+
+            if (!JoinCommon::isJoinCompatibleTypes(query_key_type, subquery_key_type))
             {
-                left.emplace_back(left_symbol.name());
+                auto common_type = getLeastSupertype({query_key_type, subquery_key_type},
+                                                     context->getSettingsRef().allow_extended_type_conversion);
+                query_key_name = query_planner.addColumn(makeCastFunction(query_expr, common_type)).first;
+                subquery_key_name = subquery_planner.addColumn(makeCastFunction(subquery_expr, common_type)).first;
             }
-            else
-            {
-                right.emplace_back(left_symbol.name());
-            }
-            ASTIdentifier & right_symbol = fun.arguments->getChildren()[1]->as<ASTIdentifier &>();
-            if (std::find(correlation.begin(), correlation.end(), right_symbol.name()) != correlation.end())
-            {
-                left.emplace_back(right_symbol.name());
-            }
-            else
-            {
-                right.emplace_back(right_symbol.name());
-            }
-        }
+
+            query_keys.emplace_back(query_key_name);
+            subquery_keys.emplace_back(subquery_key_name);
+        };
+
+        if (Correlation::isCorrelated(func.arguments->children[0], correlation))
+            build_join_clause_for_conjunct(func.arguments->children[0], func.arguments->children[1]);
+        else
+            build_join_clause_for_conjunct(func.arguments->children[1], func.arguments->children[0]);
     }
-    return std::make_pair(left, right);
+
+    query_node = query_planner.build();
+    subquery_node = subquery_planner.build();
+    return std::make_pair(query_keys, subquery_keys);
 }
 
 std::vector<ConstASTPtr> DecorrelationResult::extractFilter()

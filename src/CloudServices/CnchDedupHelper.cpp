@@ -88,18 +88,18 @@ MergeTreeDataPartsCNCHVector getStagedPartsToDedup(const DedupScope & scope, Sto
     }
 }
 
-MergeTreeDataPartsCNCHVector getVisiblePartsToDedup(const DedupScope & scope, StorageCnchMergeTree & cnch_table, TxnTimestamp ts)
+MergeTreeDataPartsCNCHVector getVisiblePartsToDedup(const DedupScope & scope, StorageCnchMergeTree & cnch_table, TxnTimestamp ts, bool force_bitmap)
 {
     checkDedupScope(scope, cnch_table);
 
     if (scope.isPartitions())
     {
         Names partitions_filter{scope.getPartitions().begin(), scope.getPartitions().end()};
-        return cnch_table.getUniqueTableMeta(ts, partitions_filter);
+        return cnch_table.getUniqueTableMeta(ts, partitions_filter, force_bitmap);
     }
     else
     {
-        return cnch_table.getUniqueTableMeta(ts);
+        return cnch_table.getUniqueTableMeta(ts, {}, force_bitmap);
     }
 }
 

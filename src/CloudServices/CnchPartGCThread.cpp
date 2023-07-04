@@ -294,10 +294,10 @@ void CnchPartGCThread::tryMarkExpiredPartitions(StorageCnchMergeTree & storage, 
     query_context->setQueryContext(query_context);
 
     auto drop_ranges = storage.createDropRangesFromPartitions(partition_infos, txn);
-    // auto bitmap_tombstones = storage.createDeleteBitmapRangeTombstones(drop_ranges, txn->getTransactionID());
+    auto bitmap_tombstones = storage.createDeleteBitmapTombstones(drop_ranges, txn->getTransactionID());
 
     auto cnch_writer = CnchDataWriter(storage, query_context, ManipulationType::Drop);
-    cnch_writer.dumpAndCommitCnchParts(drop_ranges);
+    cnch_writer.dumpAndCommitCnchParts(drop_ranges, bitmap_tombstones);
 }
 
 std::vector<TxnTimestamp> CnchPartGCThread::getCheckpoints(StorageCnchMergeTree & storage, TxnTimestamp max_timestamp)

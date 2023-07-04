@@ -1,7 +1,8 @@
-#include <Functions/IFunction.h>
-#include <Functions/FunctionHelpers.h>
-#include <Functions/FunctionFactory.h>
 #include <DataTypes/DataTypeArray.h>
+#include <Functions/FunctionFactory.h>
+#include <Functions/FunctionHelpers.h>
+#include <Functions/IFunction.h>
+#include <Interpreters/ArrayJoinAction.h>
 
 
 namespace DB
@@ -37,6 +38,8 @@ public:
         return 1;
     }
 
+    bool useDefaultImplementationForNulls() const override { return false; }
+
     /** It could return many different values for single argument. */
     bool isDeterministic() const override { return false; }
 
@@ -47,7 +50,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        const DataTypeArray * arr = checkAndGetDataType<DataTypeArray>(arguments[0].get());
+        const auto arr = getArrayJoinDataType(arguments[0]);
         if (!arr)
             throw Exception("Argument for function " + getName() + " must be Array.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 

@@ -739,8 +739,8 @@ void CnchWorkerServiceImpl::submitKafkaConsumeTask(
 
             command->assigned_consumer = request->assigned_consumer();
 
-            if (request->create_table_command_size() != 2 && request->create_table_command_size() != 3)
-                throw Exception("The number of tables to be created should be 2/3, but provided with "
+            if (request->create_table_command_size() < 2)
+                throw Exception("The number of tables to be created should be larger than 2, but provided with "
                                 + toString(request->create_table_command_size()), ErrorCodes::BAD_ARGUMENTS);
             for (const auto & cmd : request->create_table_command())
                 command->create_table_commands.push_back(cmd);

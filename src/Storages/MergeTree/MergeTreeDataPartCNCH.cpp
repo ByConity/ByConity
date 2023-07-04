@@ -187,6 +187,8 @@ void MergeTreeDataPartCNCH::fromLocalPart(const IMergeTreeDataPart & local_part)
     covered_parts_size = local_part.covered_parts_size;
     covered_parts_rows = local_part.covered_parts_rows;
     delete_bitmap = local_part.delete_bitmap;
+    delete_flag = local_part.delete_flag;
+    low_priority = local_part.low_priority;
     projection_parts = local_part.getProjectionParts();
     projection_parts_names = local_part.getProjectionPartsNames();
 }
@@ -331,7 +333,7 @@ UniqueKeyIndexPtr MergeTreeDataPartCNCH::getUniqueKeyIndex() const
         return const_cast<MergeTreeDataPartCNCH *>(this)->loadUniqueKeyIndex();
 }
 
-const ImmutableDeleteBitmapPtr & MergeTreeDataPartCNCH::getDeleteBitmap(bool is_unique_new_part) const
+const ImmutableDeleteBitmapPtr & MergeTreeDataPartCNCH::getDeleteBitmap(bool allow_null) const
 {
     if (parent_part)
         throw Exception("Projection part has no bitmap", ErrorCodes::LOGICAL_ERROR);
@@ -348,8 +350,7 @@ const ImmutableDeleteBitmapPtr & MergeTreeDataPartCNCH::getDeleteBitmap(bool is_
         /// bitmap hasn't been set, load it from cache and metas
         if (delete_bitmap_metas.empty())
         {
-            /// for new part of unique table, it's valid if its delete_bitmap_metas is empty
-            if (is_unique_new_part)
+            if (allow_null)
                 return delete_bitmap;
             throw Exception("No metadata for delete bitmap of part " + name, ErrorCodes::LOGICAL_ERROR);
         }
@@ -773,9 +774,12 @@ void MergeTreeDataPartCNCH::loadMetaInfoFromBuffer(ReadBuffer & buf, bool load_h
     UInt8 version {0};
     readIntBinary(version, buf);
 
-    UInt8 is_deleted;
-    readIntBinary(is_deleted, buf);
-    deleted = is_deleted;
+    UInt8 flags;
+    readIntBinary(flags, buf);
+    if (flags & IMergeTreeDataPart::DELETED_FLAG)
+        deleted = true;
+    if (flags & IMergeTreeDataPart::LOW_PRIORITY_FLAG)
+        low_priority = true;
 
     readVarUInt(bytes_on_disk, buf);
     readVarUInt(rows_count, buf);

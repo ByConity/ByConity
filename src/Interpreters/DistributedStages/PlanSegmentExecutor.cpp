@@ -21,8 +21,8 @@
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/DistributedStages/PlanSegmentExecutor.h>
 #include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
-#include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
 #include <Interpreters/ProcessList.h>
+#include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
 #include <Processors/Exchange/BroadcastExchangeSink.h>
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxy.h>
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxyRegistry.h>
@@ -31,8 +31,8 @@
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/Exchange/DataTrans/Local/LocalBroadcastChannel.h>
 #include <Processors/Exchange/DataTrans/Local/LocalChannelOptions.h>
-#include <Processors/Exchange/DataTrans/RpcClient.h>
 #include <Processors/Exchange/DataTrans/RpcChannelPool.h>
+#include <Processors/Exchange/DataTrans/RpcClient.h>
 #include <Processors/Exchange/ExchangeDataKey.h>
 #include <Processors/Exchange/ExchangeOptions.h>
 #include <Processors/Exchange/ExchangeSource.h>
@@ -63,6 +63,7 @@ namespace ErrorCodes
     extern const int NOT_IMPLEMENTED;
     extern const int LOGICAL_ERROR;
     extern const int QUERY_WAS_CANCELLED;
+    extern const int MEMORY_LIMIT_EXCEEDED;
 }
 
 PlanSegmentExecutor::PlanSegmentExecutor(PlanSegmentPtr plan_segment_, ContextMutablePtr context_)
@@ -96,9 +97,24 @@ RuntimeSegmentsStatus PlanSegmentExecutor::execute(ThreadGroupStatusPtr thread_g
     catch (...)
     {
         int exception_code = getCurrentExceptionCode();
-        RuntimeSegmentsStatus status(
-            plan_segment->getQueryId(), plan_segment->getPlanSegmentId(), false, false, getCurrentExceptionMessage(false), exception_code);
-        tryLogCurrentException(logger, __PRETTY_FUNCTION__);
+        const auto & host = extractExchangeStatusHostPort(plan_segment->getCurrentAddress());
+        auto message = "Worker host:" + host + ", exception:" + getCurrentExceptionMessage(false);
+        RuntimeSegmentsStatus status(plan_segment->getQueryId(), plan_segment->getPlanSegmentId(), false, false, message, exception_code);
+        if (exception_code == ErrorCodes::MEMORY_LIMIT_EXCEEDED)
+        {
+            // ErrorCodes::MEMORY_LIMIT_EXCEEDED doesn't print stack trace.
+            LOG_ERROR(
+                &Poco::Logger::get("PlanSegmentExecutor"),
+                "query_id: {} segment_id: {} code: {} messaage: {}",
+                plan_segment->getQueryId(),
+                plan_segment->getPlanSegmentId(),
+                exception_code,
+                message);
+        }
+        else
+        {
+            tryLogCurrentException(logger, __PRETTY_FUNCTION__);
+        }
         if (exception_code == ErrorCodes::QUERY_WAS_CANCELLED)
             status.is_canceled = true;
         sendSegmentStatus(status);
@@ -175,7 +191,12 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
         plan_segment->getPlanSegmentId(),
         num_threads);
     pipeline_executor->execute(num_threads);
-    GraphvizPrinter::printPipeline(pipeline_executor->getProcessors(), pipeline_executor->getExecutingGraph(), context, plan_segment->getPlanSegmentId(), extractExchangeStatusHostPort(plan_segment->getCurrentAddress()));
+    GraphvizPrinter::printPipeline(
+        pipeline_executor->getProcessors(),
+        pipeline_executor->getExecutingGraph(),
+        context,
+        plan_segment->getPlanSegmentId(),
+        extractExchangeStatusHostPort(plan_segment->getCurrentAddress()));
     for (const auto & sender : senders)
         sender->finish(BroadcastStatusCode::ALL_SENDERS_DONE, "Upstream pipeline finished");
 }
@@ -290,7 +311,6 @@ void PlanSegmentExecutor::registerAllExchangeReceivers(const QueryPipeline & pip
     {
         exception = std::current_exception();
     }
-
 
 
     /// Wait all brpc register rpc done
@@ -417,7 +437,8 @@ void PlanSegmentExecutor::sendSegmentStatus(const RuntimeSegmentsStatus & status
             return;
         auto address = extractExchangeStatusHostPort(plan_segment->getCoordinatorAddress());
 
-        std::shared_ptr<RpcClient> rpc_client = RpcChannelPool::getInstance().getClient(address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
+        std::shared_ptr<RpcClient> rpc_client
+            = RpcChannelPool::getInstance().getClient(address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
         Protos::PlanSegmentManagerService_Stub manager(&rpc_client->getChannel());
         brpc::Controller cntl;
         Protos::SendPlanSegmentStatusRequest request;

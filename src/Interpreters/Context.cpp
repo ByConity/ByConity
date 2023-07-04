@@ -29,6 +29,8 @@
 #include <Poco/Net/IPAddress.h>
 #include <Poco/Util/Application.h>
 #include "common/types.h"
+#include <CloudServices/ReclusteringManagerThread.h>
+#include <CloudServices/CnchMergeMutateThread.h>
 #include <Common/DNSResolver.h>
 #include <Common/Macros.h>
 #include <Common/escapeForFileName.h>
@@ -4316,6 +4318,25 @@ bool Context::removeMergeMutateTasksOnPartitions(const StorageID & storage_id, c
     if (!merge_mutate_thread)
         throw Exception("Fail to cast to CnchMergeMutateThread", ErrorCodes::LOGICAL_ERROR);
     return merge_mutate_thread->removeTasksOnPartitions(partitions);
+}
+
+ClusterTaskProgress Context::getTableReclusterTaskProgress(const StorageID & storage_id) const
+{
+    CnchBGThreadsMap * thread_map = getCnchBGThreadsMap(CnchBGThreadType::MergeMutate);
+    if (!thread_map)
+        throw Exception("Fail to get merge thread map", ErrorCodes::SYSTEM_ERROR);
+    CnchBGThreadPtr bg_thread_ptr = thread_map->tryGetThread(storage_id);
+    ClusterTaskProgress cluster_task_progress;
+    if (!bg_thread_ptr)
+    {
+        LOG_DEBUG(&Poco::Logger::get(__PRETTY_FUNCTION__), "Fail to get merge thread for " + storage_id.getNameForLogs());
+        return cluster_task_progress;
+    }
+
+    CnchMergeMutateThread * merge_mutate_thread = dynamic_cast<CnchMergeMutateThread *>(bg_thread_ptr.get());
+    if (!merge_mutate_thread)
+        throw Exception("Fail to cast to CnchMergeMutateThread", ErrorCodes::LOGICAL_ERROR);
+    return merge_mutate_thread->getReclusteringTaskProgress();
 }
 
 CnchBGThreadPtr Context::tryGetDedupWorkerManager(const StorageID & storage_id) const

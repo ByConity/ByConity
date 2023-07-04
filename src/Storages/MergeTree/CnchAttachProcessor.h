@@ -123,6 +123,8 @@ public:
     void writeRenameRecord(const DiskPtr& disk, const String& from, const String& to);
     // Persist rename map to kv in form of undo-buffer
     void writeRenameMapToKV(Catalog::Catalog & catalog, const String& uuid, const TxnTimestamp& txn_id);
+    // Record delete Meta files name to delete for attaching unique table parts
+    void writeMetaFilesNameRecord(const DiskPtr& disk, const String& meta_file_name);
 
     void commit();
     void rollback();
@@ -149,6 +151,7 @@ private:
     std::mutex mu;
     /// Temporary resource created during ATTACH, including temp dictionary, file movement records... 
     std::map<String, TempResource> resources;
+    std::map<String, TempResource> meta_files_to_delete;
 
     Poco::Logger* logger;
 };
@@ -207,11 +210,14 @@ private:
         AttachContext& attach_ctx);
 
     void genPartsDeleteMark(MutableMergeTreeDataPartsCNCHVector& parts_to_write);
-    void waitingForDedup(const String& partition_id, const NameSet& staged_parts_name);
     void refreshView();
 
     void verifyPartsNum(size_t total_parts_num) const;
     inline void injectFailure(AttachFailurePoint point) const;
+
+    void commitParts(MutableMergeTreeDataPartsCNCHVector & prepared_parts, NameSet & staged_parts_name);
+    void loadUniqueDeleteMeta(IMergeTreeDataPartPtr & part, const MergeTreePartInfo & info);
+    void waitingForDedup(const NameSet & partitions_filter, const NameSet & staged_parts_name);
 
     UInt64 failure_injection_knob;
 
@@ -222,6 +228,11 @@ private:
     ContextMutablePtr query_ctx;
 
     Poco::Logger* logger;
+
+    // For unique table
+    std::mutex unique_table_info_mutex;
+    std::unordered_map<String, String> part_delete_file_relative_paths;  // part_name -> relative path(related to path of target_tbl)
+    std::unordered_map<String, DataModelDeleteBitmapPtr> attach_metas;   // part_name -> attach meta of delete bitmap
 };
 
 }

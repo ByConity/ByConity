@@ -66,6 +66,7 @@ NamesAndTypesList StorageSystemCnchParts::getNamesAndTypes()
         {"previous_version", std::make_shared<DataTypeUInt64>()},
         {"partition_id", std::make_shared<DataTypeString>()},
         {"bucket_number", std::make_shared<DataTypeInt64>()},
+        {"table_definition_hash", std::make_shared<DataTypeUInt64>()},
         {"outdated", std::make_shared<DataTypeUInt8>()},
         {"visible", std::make_shared<DataTypeUInt8>()},
         {"part_type", std::move(type_enum)},
@@ -260,6 +261,7 @@ void StorageSystemCnchParts::fillData(MutableColumns & res_columns, ContextPtr c
                 res_columns[col_num++]->insert(curr_part->info().hint_mutation);
                 res_columns[col_num++]->insert(curr_part->info().partition_id);
                 res_columns[col_num++]->insert(curr_part->part_model().bucket_number());
+                res_columns[col_num++]->insert(curr_part->part_model().table_definition_hash());
 
                 res_columns[col_num++]->insert(outdated);
                 res_columns[col_num++]->insert(visible);

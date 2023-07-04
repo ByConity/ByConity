@@ -79,6 +79,7 @@ private:
     };
     ConsumerContext consumer_context;
     size_t assigned_consumer_index;
+    size_t number_tables_to_write{0};
 
     const SettingsChanges settings_adjustments;
 
@@ -117,7 +118,7 @@ private:
     bool streamToViews();
     void streamCopyData(IBlockInputStream & from, IBlockOutputStream & to, ContextMutablePtr consume_context);
 
-    bool checkDependencies(const String & database_name, const String & table_name, bool check_staged_area);
+    bool checkDependencies(const String & database_name, const String & table_name, bool check_staged_area, size_t & num_tables_to_write);
     Names filterVirtualNames(const Names & names) const;
 
     KafkaLogElement createKafkaLog(KafkaLogElement::Type type, size_t consumer_index);

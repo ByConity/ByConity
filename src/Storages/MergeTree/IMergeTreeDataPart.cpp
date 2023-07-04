@@ -33,6 +33,7 @@
 #include <Storages/MergeTree/checkDataPart.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/MergeTree/ChecksumsCache.h>
+#include <Common/Coding.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/escapeForFileName.h>
 #include <Common/ZooKeeper/ZooKeeper.h>
@@ -1657,7 +1658,7 @@ String IMergeTreeDataPart::getRelativePathForPrefix(const String & prefix) const
     return res;
 }
 
-void IMergeTreeDataPart::setDeleteBitmapMeta(DeleteBitmapMetaPtr bitmap_meta) const
+void IMergeTreeDataPart::setDeleteBitmapMeta(DeleteBitmapMetaPtr bitmap_meta, bool force_set) const
 {
     if (!delete_bitmap_metas.empty())
         throw Exception("Part " + name + " already has delete bitmap meta, can't set twice", ErrorCodes::LOGICAL_ERROR);
@@ -1676,7 +1677,15 @@ void IMergeTreeDataPart::setDeleteBitmapMeta(DeleteBitmapMetaPtr bitmap_meta) co
         bitmap_meta = bitmap_meta->tryGetPrevious();
     }
     if (!found_base)
-        throw Exception("Base delete bitmap of part " + name + " is not found", ErrorCodes::LOGICAL_ERROR);
+    {
+        if (force_set)
+            throw Exception("Base delete bitmap of part " + name + " is not found", ErrorCodes::LOGICAL_ERROR);
+        else
+        {
+            LOG_ERROR(storage.log, "Base delete bitmap of part " + name + " is not found");
+            delete_bitmap_metas.clear();
+        }
+    }
 }
 
 UniqueKeyIndexPtr IMergeTreeDataPart::getUniqueKeyIndex() const
@@ -1725,6 +1734,60 @@ void IMergeTreeDataPart::makeCloneInDetached(const String & prefix, const Storag
     /// Backup is not recursive (max_level is 0), so do not copy inner directories
     localBackup(volume->getDisk(), getFullRelativePath(), destination_path, 0);
     volume->getDisk()->removeFileIfExists(fs::path(destination_path) / DELETE_ON_DESTROY_MARKER_FILE_NAME);
+}
+
+void IMergeTreeDataPart::createDeleteBitmapForDetachedPart() const
+{
+    if (!storage.getInMemoryMetadataPtr()->hasUniqueKey())
+        return;
+    auto bitmap = getDeleteBitmap(/*allow_null*/ true);
+    if (!bitmap)
+    {
+        LOG_DEBUG(storage.log, "Delete bitmap of part " + name + " is nullptr, ignore detach delete bitmap.");
+        return;
+    }
+
+    String delete_bitmap_meta_rel_path = fs::path(storage.getRelativeDataPath(location))
+        / ("detached/" + toString(DeleteBitmapMeta::delete_files_dir) + info.getPartNameWithHintMutation() + ".meta");
+    volume->getDisk()->removeFileIfExists(delete_bitmap_meta_rel_path);
+
+    auto meta_writer = volume->getDisk()->writeFile(delete_bitmap_meta_rel_path);
+    writeIntBinary(DeleteBitmapMeta::delete_file_meta_format_version, *meta_writer);
+    writeIntBinary(bitmap->cardinality(), *meta_writer);
+    if (delete_bitmap->cardinality() <= DeleteBitmapMeta::kInlineBitmapMaxCardinality)
+    {
+        String value;
+        value.reserve(bitmap->cardinality() * sizeof(UInt32));
+        for (auto it = bitmap->begin(); it != bitmap->end(); ++it)
+            PutFixed32(&value, *it);
+        writeStringBinary(value, *meta_writer);
+    }
+    else
+    {
+        size_t size = bitmap->getSizeInBytes();
+        PODArray<char> buf(size);
+        size = bitmap->write(buf.data());
+        writeIntBinary(size, *meta_writer);
+        {
+            String delete_bitmap_rel_path = fs::path(storage.getRelativeDataPath(location))
+                / ("detached/" + toString(DeleteBitmapMeta::delete_files_dir) + info.getPartNameWithHintMutation() + ".bitmap");
+            volume->getDisk()->removeFileIfExists(delete_bitmap_rel_path);
+
+            auto bitmap_writer = volume->getDisk()->writeFile(delete_bitmap_rel_path);
+            bitmap_writer->write(buf.data(), size);
+            /// It's necessary to do next() and sync() here, otherwise it will omit the error in WriteBufferFromHDFS::WriteBufferFromHDFSImpl::~WriteBufferFromHDFSImpl() which case file incomplete.
+            bitmap_writer->next();
+            bitmap_writer->sync();
+        }
+    }
+    meta_writer->next();
+    meta_writer->sync();
+    LOG_DEBUG(
+        storage.log,
+        "Write delete bitmap for detached part {} to path: {}, cardinality: {}",
+        name,
+        delete_bitmap_meta_rel_path,
+        bitmap->cardinality());
 }
 
 bool IMergeTreeDataPart::hasOnlyOneCompactedMapColumnNotKV() const
@@ -1851,8 +1914,32 @@ ColumnSize IMergeTreeDataPart::getColumnSize(const String & column_name, const I
 
 void IMergeTreeDataPart::accumulateColumnSizes(ColumnToSize & column_to_size) const
 {
-    for (const auto & [column_name, size] : columns_sizes)
-        column_to_size[column_name] = size.data_compressed;
+    auto checksums = getChecksums();
+    auto & files = checksums->files;
+
+    for (const NameAndTypePair & name_type : storage.getInMemoryMetadataPtr()->getColumns().getAllPhysical())
+    {
+        if (name_type.type->isMap() && !name_type.type->isMapKVStore())
+        {
+            auto [curr, end] = getMapColumnRangeFromOrderedFiles(name_type.name, files);
+            for (; curr != end; ++curr)
+            {
+                auto & filename = curr->first;
+                if (endsWith(filename, DATA_FILE_EXTENSION))
+                    column_to_size[parseImplicitColumnFromImplicitFileName(filename, name_type.name)] += curr->second.file_size;
+            }
+        }
+        else
+        {
+            auto serialization = getSerializationForColumn(name_type);
+            serialization->enumerateStreams(
+                [&](const ISerialization::SubstreamPath & substream_path) {
+                    auto bin_checksum = files.find(ISerialization::getFileNameForStream(name_type.name, substream_path) + DATA_FILE_EXTENSION);
+                    if (bin_checksum != files.end())
+                        column_to_size[name_type.name] += bin_checksum->second.file_size;
+            });
+        }
+    }
 }
 
 
@@ -2243,7 +2330,12 @@ void writePartBinary(const IMergeTreeDataPart & part, WriteBuffer & buf)
     writeString("CHPT", buf); /// magic code: ClickHouse ParT
     writeIntBinary(static_cast<UInt8>(1), buf); /// version
 
-    writeIntBinary(static_cast<UInt8>(part.deleted), buf);
+    UInt8 flags = 0;
+    if (part.deleted)
+        flags |= IMergeTreeDataPart::DELETED_FLAG;
+    if (part.low_priority)
+        flags |= IMergeTreeDataPart::LOW_PRIORITY_FLAG;
+    writeIntBinary(flags, buf);
 
     writeVarUInt(part.bytes_on_disk, buf);
     writeVarUInt(part.rows_count, buf);
@@ -2263,7 +2355,12 @@ void writeProjectionBinary(const IMergeTreeDataPart & part, WriteBuffer & buf)
     writeString("CHPT", buf); /// magic code: ClickHouse ParT
     writeIntBinary(static_cast<UInt8>(1), buf); /// version
 
-    writeIntBinary(static_cast<UInt8>(part.deleted), buf);
+    UInt8 flags = 0;
+    if (part.deleted)
+        flags |= IMergeTreeDataPart::DELETED_FLAG;
+    if (part.low_priority)
+        flags |= IMergeTreeDataPart::LOW_PRIORITY_FLAG;
+    writeIntBinary(flags, buf);
 
     writeVarUInt(part.bytes_on_disk, buf);
     writeVarUInt(part.rows_count, buf);
