@@ -19,6 +19,7 @@
 #include <Interpreters/VirtualWarehousePool.h>
 #include <Parsers/ASTDeleteQuery.h>
 #include <Parsers/ASTInsertQuery.h>
+#include <Parsers/ASTUpdateQuery.h>
 #include <Parsers/ASTRefreshQuery.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
@@ -104,7 +105,13 @@ static bool trySetVirtualWarehouseFromAST(const ASTPtr & ast, ContextMutablePtr 
             if (trySetVirtualWarehouseFromTable(database, delete_query->table, context, VirtualWarehouseType::Write))
                 return true;
         }
-        if (auto * insert = ast->as<ASTInsertQuery>())
+        else if (auto * update = ast->as<ASTUpdateQuery>())
+        {
+            auto database = update->database.empty() ? context->getCurrentDatabase() : update->database;
+            if (trySetVirtualWarehouseFromTable(database, update->table, context, VirtualWarehouseType::Write))
+                return true;
+        }
+        else if (auto * insert = ast->as<ASTInsertQuery>())
         {
             auto table_id = insert->table_id;
             if (table_id.database_name.empty())
