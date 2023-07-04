@@ -1,3 +1,4 @@
+TRUNCATE system.query_log;
 CREATE TABLE left_table (d Date, id UInt64, a String)
     ENGINE = CnchMergeTree()
     PARTITION BY `d`

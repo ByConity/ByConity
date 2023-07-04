@@ -560,7 +560,7 @@ TxnTimestamp getMaxUpdateTime(const std::set<StorageID> & storage_ids, ContextPt
 
         if (static_cast<size_t>(table_infos.size()) != p.second.size())
         {
-            LOG_WARNING(&Poco::Logger::get("getMaxUpdateTime"), "getTableInfo does return all info: send size {}, receive size {}", p.second.size(), table_infos.size());
+            LOG_INFO(&Poco::Logger::get("getMaxUpdateTime"), "getTableInfo does return all info: send size {}, receive size {}", p.second.size(), table_infos.size());
             return 0;
         }
 
@@ -569,7 +569,7 @@ TxnTimestamp getMaxUpdateTime(const std::set<StorageID> & storage_ids, ContextPt
             UInt64 last_modification_time = table_info.last_modification_time();
             if (last_modification_time == 0)
             {
-                LOG_WARNING(&Poco::Logger::get("getMaxUpdateTime"), "last_modification time for table {}.{} is 0", table_info.database(), table_info.table());
+                LOG_INFO(&Poco::Logger::get("getMaxUpdateTime"), "last_modification time for table {}.{} is 0", table_info.database(), table_info.table());
                 return 0;
             }
 
