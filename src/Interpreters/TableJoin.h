@@ -162,6 +162,7 @@ public:
     bool preferMergeJoin() const { return join_algorithm == JoinAlgorithm::PREFER_PARTIAL_MERGE; }
     bool forceMergeJoin() const { return join_algorithm == JoinAlgorithm::PARTIAL_MERGE; }
     bool forceNestedLoopJoin() const { return join_algorithm == JoinAlgorithm::NESTED_LOOP_JOIN; }
+    bool forceGraceHashLoopJoin() const { return join_algorithm == JoinAlgorithm::GRACE_HASH; }
     bool forceHashJoin() const
     {
         /// HashJoin always used for DictJoin
@@ -245,6 +246,10 @@ public:
     void serialize(WriteBuffer & buf) const;
     void deserializeImpl(ReadBuffer & buf, ContextPtr context);
     static std::shared_ptr<TableJoin> deserialize(ReadBuffer & buf, ContextPtr context);
+
+    // The communary introduced support for "The 'OR' operator in 'ON' section for join",
+    // but in our scenario, there only one disjunct at a time yet
+    bool oneDisjunct() const { return true; }
 };
 
 }

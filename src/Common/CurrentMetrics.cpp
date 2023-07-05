@@ -121,7 +121,12 @@
     M(DiskCacheRoughSingleStatsBucketSize, "Diskcache single statistics bucket size") \
     \
     M(BackgroundDedupSchedulePoolTask, "Number of executing background dedup tasks") \
-
+    M(CacheFileSegments, "Number of existing cache file segments") \
+    M(CacheDetachedFileSegments, "Number of existing detached cache file segments") \
+    M(FilesystemCacheSize, "Filesystem cache size in bytes") \
+    M(FilesystemCacheElements, "Filesystem cache elements (file segments)") \
+    M(TemporaryFilesForJoin, "Number of temporary files created for JOIN") \
+    M(TemporaryFilesUnknown, "Number of temporary files created without known purpose") \
 
 namespace CurrentMetrics
 {

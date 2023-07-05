@@ -1662,16 +1662,20 @@ class IColumn;
       0) \
     /** Experimental functions */ \
     M(Bool, allow_experimental_funnel_functions, false, "Enable experimental functions for funnel analysis.", 0) \
-\
-    /** Complex query settings **/ \
-    M(Bool, enable_distributed_stages, true, "Enable complex query mode to split plan to distributed stages", 0) \
-    M(Bool, fallback_to_simple_query, false, "Enable fallback if there is any syntax error", 0) \
-    M(Bool, debug_plan_generation, false, "Enable complex query mode to split plan to distributed stages", 0) \
-    M(Bool, send_plan_segment_by_brpc, true, "Whether to send plan segment by BRPC", 0) \
-\
-    /** Brpc config **/ \
-    M(Bool, enable_brpc_builtin_services, true, "Whether to enable brpc builtin services", 0) \
-\
+    M(UInt64, grace_hash_join_initial_buckets, 1, "Initial number of grace hash join buckets", 0) \
+    M(UInt64, grace_hash_join_max_buckets, 1024, "Limit on the number of grace hash join buckets", 0)                                          \
+    M(UInt64, filesystem_cache_max_download_size, (128UL * 1024 * 1024 * 1024), "Max remote filesystem cache size that can be downloaded by a single query", 0) \
+    M(Bool, skip_download_if_exceeds_query_cache, true, "Skip download from remote filesystem if exceeds query cache size", 0) \
+    \
+    /** Complex query settings **/\
+    M(Bool, enable_distributed_stages, false, "Enable complex query mode to split plan to distributed stages", 0)\
+    M(Bool, fallback_to_simple_query, false, "Enable fallback if there is any syntax error", 0)\
+    M(Bool, debug_plan_generation, false, "Enable complex query mode to split plan to distributed stages", 0)\
+    M(Bool, send_plan_segment_by_brpc, true, "Whether to send plan segment by BRPC", 0)\
+    \
+    /** Brpc config **/\
+    M(Bool, enable_brpc_builtin_services, true, "Whether to enable brpc builtin services", 0)\
+    \
     /** Obsolete settings that do nothing but left for compatibility reasons. Remove each one after half a year of obsolescence. */ \
     M(UInt64, max_memory_usage_for_all_queries, 0, "Obsolete setting, does nothing.", 0) \
     M(UInt64, multiple_joins_rewriter_version, 0, "Obsolete setting, does nothing.", 0) \

@@ -43,6 +43,7 @@
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/ExternalDictionariesLoader.h>
+#include <Interpreters/GraceHashJoin.h>
 #include <Interpreters/HashJoin.h>
 #include <Interpreters/JoinSwitcher.h>
 #include <Interpreters/MergeJoin.h>
@@ -1119,7 +1120,7 @@ static bool allowDictJoin(StoragePtr joined_storage, ContextPtr context, String 
     return false;
 }
 
-static std::shared_ptr<IJoin> makeJoin(std::shared_ptr<TableJoin> analyzed_join, const Block & sample_block, ContextPtr context)
+static std::shared_ptr<IJoin> makeJoin(std::shared_ptr<TableJoin> analyzed_join, const Block & l_sample_block, const Block & r_sample_block, ContextPtr context)
 {
     bool allow_merge_join = analyzed_join->allowMergeJoin();
 
@@ -1130,20 +1131,22 @@ static std::shared_ptr<IJoin> makeJoin(std::shared_ptr<TableJoin> analyzed_join,
     {
         Names original_names;
         NamesAndTypesList result_columns;
-        if (analyzed_join->allowDictJoin(key_name, sample_block, original_names, result_columns))
+        if (analyzed_join->allowDictJoin(key_name, r_sample_block, original_names, result_columns))
         {
             analyzed_join->dictionary_reader = std::make_shared<DictionaryReader>(dict_name, original_names, result_columns, context);
-            return std::make_shared<HashJoin>(analyzed_join, sample_block);
+            return std::make_shared<HashJoin>(analyzed_join, r_sample_block);
         }
     }
 
     if (analyzed_join->forceHashJoin() || (analyzed_join->preferMergeJoin() && !allow_merge_join))
-        return std::make_shared<HashJoin>(analyzed_join, sample_block);
+        return std::make_shared<HashJoin>(analyzed_join, r_sample_block);
     else if (analyzed_join->forceMergeJoin() || (analyzed_join->preferMergeJoin() && allow_merge_join))
-        return std::make_shared<MergeJoin>(analyzed_join, sample_block);
+        return std::make_shared<MergeJoin>(analyzed_join, r_sample_block);
     else if (analyzed_join->forceNestedLoopJoin())
-        return std::make_shared<NestedLoopJoin>(analyzed_join, sample_block, context);
-    return std::make_shared<JoinSwitcher>(analyzed_join, sample_block);
+        return std::make_shared<NestedLoopJoin>(analyzed_join, r_sample_block, context);
+    else if (analyzed_join->forceGraceHashLoopJoin())
+        return std::make_shared<GraceHashJoin>(context, analyzed_join, l_sample_block, r_sample_block, context->getTempDataOnDisk());
+    return std::make_shared<JoinSwitcher>(analyzed_join, r_sample_block);
 }
 
 JoinPtr SelectQueryExpressionAnalyzer::makeTableJoin(
@@ -1212,7 +1215,13 @@ JoinPtr SelectQueryExpressionAnalyzer::makeTableJoin(
             joined_plan->addStep(std::move(converting_step));
         }
 
-        join = makeJoin(syntax->analyzed_join, joined_plan->getCurrentDataStream().header, getContext());
+        Block left_sample_block(left_sample_columns);
+        for (auto & column : left_sample_block)
+        {
+            if (!column.column)
+                column.column = column.type->createColumn();
+        }
+        join = makeJoin(syntax->analyzed_join, left_sample_block, joined_plan->getCurrentDataStream().header, getContext());
 
         /// Do not make subquery for join over dictionary.
         if (syntax->analyzed_join->dictionary_reader)
