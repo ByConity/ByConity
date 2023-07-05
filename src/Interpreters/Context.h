@@ -464,8 +464,6 @@ private:
     std::shared_ptr<OptimizerMetrics> optimizer_metrics = nullptr;
 
     std::unordered_map<std::string, bool> function_deterministic;
-    // worker status
-    WorkerGroupStatusPtr worker_group_status;
 
     /// Temporary data for query execution accounting.
     TemporaryDataOnDiskScopePtr temp_data_on_disk;
