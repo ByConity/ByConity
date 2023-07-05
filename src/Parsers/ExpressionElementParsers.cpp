@@ -281,7 +281,10 @@ bool ParserCompoundIdentifier::parseImpl(Pos & pos, ASTPtr & node, Expected & ex
         }
 
         if (parts.size() == 1) node = std::make_shared<ASTTableIdentifier>(parts[0], std::move(params));
-        else node = std::make_shared<ASTTableIdentifier>(parts[0], parts[1], std::move(params));
+        else{
+            node = std::make_shared<ASTTableIdentifier>(parts[0], parts[1], std::move(params));
+            node->as<ASTTableIdentifier>()->rewriteCnchDatabaseName(pos.getContext());
+        }
         node->as<ASTTableIdentifier>()->uuid = uuid;
     }
     else

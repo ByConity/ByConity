@@ -1,6 +1,7 @@
 #include <Storages/IStorage.h>
 #include <Parsers/TablePropertiesQueriesASTs.h>
 #include <Parsers/formatAST.h>
+#include <Parsers/formatTenantDatabaseName.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/copyData.h>
@@ -61,6 +62,7 @@ BlockInputStreamPtr InterpreterShowCreateQuery::executeImpl()
         create_query = DatabaseCatalog::instance().getDatabase(table_id.database_name)->getCreateTableQuery(table_id.table_name, getContext());
 
         auto & ast_create_query = create_query->as<ASTCreateQuery &>();
+        getOriginalDatabaseName(ast_create_query.database).swap(ast_create_query.database);
         if (query_ptr->as<ASTShowCreateViewQuery>())
         {
             if (!ast_create_query.isView())
@@ -73,6 +75,7 @@ BlockInputStreamPtr InterpreterShowCreateQuery::executeImpl()
                 throw Exception(ErrorCodes::BAD_ARGUMENTS, "{}.{} is not a DICTIONARY",
                     backQuote(ast_create_query.database), backQuote(ast_create_query.table));
         }
+
     }
     else if ((show_query = query_ptr->as<ASTShowCreateDatabaseQuery>()))
     {
@@ -81,6 +84,8 @@ BlockInputStreamPtr InterpreterShowCreateQuery::executeImpl()
         show_query->database = getContext()->resolveDatabase(show_query->database);
         getContext()->checkAccess(AccessType::SHOW_DATABASES, show_query->database);
         create_query = DatabaseCatalog::instance().getDatabase(show_query->database)->getCreateDatabaseQuery();
+        auto & ast_create_query = create_query->as<ASTCreateQuery &>();
+        getOriginalDatabaseName(ast_create_query.database).swap(ast_create_query.database);
     }
 
     if (!create_query)

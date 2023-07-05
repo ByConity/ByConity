@@ -124,6 +124,7 @@
 #include <Interpreters/WorkerGroupHandle.h>
 #include <DataStreams/BlockStreamProfileInfo.h>
 #include <Parsers/ASTCreateQuery.h>
+#include <Parsers/formatTenantDatabaseName.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
 #include <Processors/Formats/InputStreamFromInputFormat.h>
@@ -1536,8 +1537,13 @@ std::shared_ptr<const SettingsConstraints> Context::getSettingsConstraints() con
 
 String Context::getCurrentDatabase() const
 {
-    auto lock = getLock();
-    return current_database;
+    String tenant_db;
+    {
+        auto lock = getLock();
+        tenant_db = current_database;
+    }
+
+    return formatTenantDatabaseName(tenant_db);
 }
 
 

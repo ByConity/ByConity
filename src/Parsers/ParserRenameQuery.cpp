@@ -25,6 +25,7 @@ static bool parseDatabaseAndTable(
     if (s_dot.ignore(pos, expected))
     {
         database = table;
+        tryRewriteCnchDatabaseName(database, pos.getContext());
         if (!name_p.parse(pos, table, expected))
             return false;
     }
@@ -73,6 +74,9 @@ bool ParserRenameQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
             return false;
         if (!db_name_p.parse(pos, to_db, expected))
             return false;
+
+        tryRewriteCnchDatabaseName(from_db, pos.getContext());
+        tryRewriteCnchDatabaseName(to_db, pos.getContext());
 
         String cluster_str;
         if (ParserKeyword{"ON"}.ignore(pos, expected))

@@ -53,6 +53,7 @@ bool ParserCheckQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         if (!table_parser.parse(pos, table, expected))
             return false;
 
+        tryRewriteCnchDatabaseName(database, pos.getContext());
         tryGetIdentifierNameInto(database, query->database);
         tryGetIdentifierNameInto(table, query->table);
     }

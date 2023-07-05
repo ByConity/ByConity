@@ -265,6 +265,7 @@ static inline bool parseRenameCommand(IParser::Pos & pos, ASTPtr & node, Expecte
     {
         if (!ParserCompoundIdentifier(true).parse(pos, new_name, expected))
             return false;
+        tryRewriteCnchDatabaseName(new_name, pos.getContext());
 
         auto new_table_id = new_name->as<ASTTableIdentifier>()->getTableId();
         alter_command->type = ASTAlterCommand::RENAME_TABLE;

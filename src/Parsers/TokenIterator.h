@@ -14,11 +14,14 @@ namespace DB
 /** Used as an input for parsers.
   * All whitespace and comment tokens are transparently skipped.
   */
+
+class Context;
 class Tokens
 {
 private:
     std::vector<Token> data;
     Lexer lexer;
+    const Context *context = nullptr;
 
 public:
     Tokens(const char * begin, const char * end, size_t max_query_size = 0) : lexer(begin, end, max_query_size) {}
@@ -45,6 +48,16 @@ public:
         if (data.empty())
             return (*this)[0];
         return data.back();
+    }
+
+    const Context *getContext() const 
+    {
+        return this->context;
+    }
+
+    void setContext(const Context *s)
+    {
+        this->context = s;
     }
 };
 
@@ -75,6 +88,8 @@ public:
 
     /// Rightmost token we had looked.
     const Token & max() { return tokens->max(); }
+
+    const Context *getContext() const { return tokens->getContext();}
 };
 
 

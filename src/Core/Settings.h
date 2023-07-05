@@ -1515,33 +1515,18 @@ class IColumn;
     M(Bool, enable_view_based_query_rewrite, false, "Whether to enable view-based query rewriting.", 0) \
     M(Bool, enable_mv_estimate_read_cost, false, "Enable materialized view estimate with read cost", 0) \
     M(Bool, cascading_refresh_materialized_view, true, "Whether cascading refresh the materialized view", 0) \
-    M(UInt64, \
-      max_rows_to_refresh_by_partition, \
-      100000000, \
-      "The maximum rows to refresh a materialized view by partition. If exceed, we'll refresh the materialized view part by part.", \
-      0) \
-    M(UInt64, slow_query_ms, 0, "Slow query criterial in ms. 0 means all related function will not be executed", 0) \
-    M(UInt64, max_rows_to_schedule_merge, 500000000, "Max rows of merged part for merge scheduler", 0) \
-    M(UInt64, total_rows_to_schedule_merge, 0, "Max total rows of merged parts for merge scheduler, 0 means unlimit", 0) \
-    M(UInt64, \
-      expired_start_hour_to_merge, \
-      12, \
-      "The hour of UTC time, if current time is greater than it, merge scheduler can lower the merge frequency", \
-      0) \
-    M(UInt64, \
-      expired_end_hour_to_merge, \
-      12, \
-      "The hour of UTC time, if current time is smaller than it, merge scheduler can lower the merge frequency", \
-      0) \
-    M(UInt64, \
-      strict_rows_to_schedule_merge, \
-      50000000, \
-      "Max rows of merged part for merge scheduler when the current time is expired according to expired_hour_to_merge", \
-      0) \
-    M(UInt64, max_parts_to_optimize, 1000, "Max number of parts to optimize", 0) \
-    M(Bool, enable_merge_scheduler, false, "Whether to enable MergeScheduler to excute merge", 0) \
-    M(Bool, conservative_merge_predicate, true, "Judge merge tree parts whether can be merged conservatively", 0) \
-    M(Bool, snappy_format_blocked, false, "Using blocked decompress flow for Snappy input", 0) \
+    M(UInt64, max_rows_to_refresh_by_partition, 100000000, "The maximum rows to refresh a materialized view by partition. If exceed, we'll refresh the materialized view part by part.", 0) \
+    M(UInt64, slow_query_ms, 0, "Slow query criterial in ms. 0 means all related function will not be executed", 0)\
+    M(UInt64, max_rows_to_schedule_merge, 500000000, "Max rows of merged part for merge scheduler", 0)\
+    M(UInt64, total_rows_to_schedule_merge, 0, "Max total rows of merged parts for merge scheduler, 0 means unlimit", 0)\
+    M(UInt64, expired_start_hour_to_merge, 12, "The hour of UTC time, if current time is greater than it, merge scheduler can lower the merge frequency", 0)\
+    M(UInt64, expired_end_hour_to_merge, 12, "The hour of UTC time, if current time is smaller than it, merge scheduler can lower the merge frequency", 0)\
+    M(UInt64, strict_rows_to_schedule_merge, 50000000, "Max rows of merged part for merge scheduler when the current time is expired according to expired_hour_to_merge", 0)\
+    M(UInt64, max_parts_to_optimize, 1000, "Max number of parts to optimize", 0)\
+    M(Bool, enable_merge_scheduler, false, "Whether to enable MergeScheduler to excute merge", 0)\
+    M(Bool, conservative_merge_predicate, true, "Judge merge tree parts whether can be merged conservatively", 0)\
+    M(Bool, snappy_format_blocked, false, "Using blocked decompress flow for Snappy input", 0)\
+    M(String, vw, "", "The vw name set by user on which the query run without tenant information", 0) \
     M(String, virtual_warehouse, "", "The vw name set by user on which the query run", 0) \
     M(String, virtual_warehouse_write, "", "The write vw name set by user on which the query run", 0) \
     M(String, \
@@ -2029,7 +2014,8 @@ class IColumn;
     M(UInt64, cnch_part_attach_max_threads, 16, "Max threads to use when attach parts", 0) \
     M(UInt64, attach_failure_injection_knob, 0, "Attach failure injection knob, for test only", 0) \
     M(Bool, async_post_commit, false, "Txn post commit asynchronously", 0) \
-    M(Bool, enable_auto_query_forwarding, false, "Auto forward query to target server when having multiple servers", 0)
+    M(Bool, enable_auto_query_forwarding, false, "Auto forward query to target server when having multiple servers", 0)\
+    M(String, tenant_id, "", "tenant_id of cnch user", 0) \
 
 
 // End of FORMAT_FACTORY_SETTINGS

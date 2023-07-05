@@ -89,6 +89,7 @@ bool ParserTablePropertiesQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & 
     {
         if (!name_p.parse(pos, database, expected))
             return false;
+        tryRewriteCnchDatabaseName(database, pos.getContext());
     }
     else
     {
@@ -105,6 +106,7 @@ bool ParserTablePropertiesQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & 
         if (s_dot.ignore(pos, expected))
         {
             database = table;
+            tryRewriteCnchDatabaseName(database, pos.getContext());
             if (!name_p.parse(pos, table, expected))
                 return false;
         }

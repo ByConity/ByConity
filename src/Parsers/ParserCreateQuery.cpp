@@ -530,6 +530,8 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
 
     if (!table_name_p.parse(pos, table, expected))
         return false;
+    tryRewriteCnchDatabaseName(table, pos.getContext());
+
 
     if (attach && s_from.ignore(pos, expected))
     {
@@ -611,6 +613,7 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
                 if (s_dot.ignore(pos, expected))
                 {
                     as_database = as_table;
+                    tryRewriteCnchDatabaseName(as_database, pos.getContext());
                     if (!name_p.parse(pos, as_table, expected))
                         return false;
                 }
@@ -735,6 +738,7 @@ bool ParserCreateLiveViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & e
 
     if (!table_name_p.parse(pos, table, expected))
         return false;
+    tryRewriteCnchDatabaseName(table, pos.getContext());
 
     if (ParserKeyword{"WITH"}.ignore(pos, expected))
     {
@@ -778,6 +782,7 @@ bool ParserCreateLiveViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & e
     {
         if (!table_name_p.parse(pos, to_table, expected))
             return false;
+        tryRewriteCnchDatabaseName(to_table, pos.getContext());
     }
 
     /// Optional - a list of columns can be specified. It must fully comply with SELECT.
@@ -862,6 +867,7 @@ bool ParserCreateDatabaseQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & e
 
     if (!name_p.parse(pos, database, expected))
         return false;
+    tryRewriteCnchDatabaseName(database, pos.getContext());
 
     if (ParserKeyword("UUID").ignore(pos, expected))
     {
@@ -962,6 +968,7 @@ bool ParserCreateViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
 
     if (!table_name_p.parse(pos, table, expected))
         return false;
+    tryRewriteCnchDatabaseName(table, pos.getContext());
 
     if (ParserKeyword{"ON"}.ignore(pos, expected))
     {
@@ -981,6 +988,7 @@ bool ParserCreateViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
         // TO [db.]table
         if (!table_name_p.parse(pos, to_table, expected))
             return false;
+        tryRewriteCnchDatabaseName(to_table, pos.getContext());
     }
 
     /// Optional - a list of columns can be specified. It must fully comply with SELECT.
@@ -1093,6 +1101,7 @@ bool ParserCreateDictionaryQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, E
 
     if (!dict_name_p.parse(pos, name, expected))
         return false;
+    tryRewriteCnchDatabaseName(name, pos.getContext());    
 
     if (s_on.ignore(pos, expected))
     {

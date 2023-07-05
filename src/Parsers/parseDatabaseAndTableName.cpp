@@ -28,7 +28,7 @@ bool parseDatabaseAndTableName(IParser::Pos & pos, Expected & expected, String &
             database_str = "";
             return false;
         }
-
+        tryRewriteCnchDatabaseName(database, pos.getContext());
         tryGetIdentifierNameInto(database, database_str);
         tryGetIdentifierNameInto(table, table_str);
     }
@@ -69,41 +69,45 @@ bool parseDatabaseAndTableNameOrAsterisks(IParser::Pos & pos, Expected & expecte
             return true;
         }
 
-        ASTPtr ast;
+        ASTPtr ast_db;
+        ASTPtr ast_tb;
         ParserIdentifier identifier_parser;
-        if (identifier_parser.parse(pos, ast, expected))
+        if (identifier_parser.parse(pos, ast_db, expected))
         {
-            String first_identifier = getIdentifierName(ast);
             auto pos_before_dot = pos;
-
             if (ParserToken{TokenType::Dot}.ignore(pos, expected))
             {
                 if (ParserToken{TokenType::Asterisk}.ignore(pos, expected))
                 {
                     /// db.*
+                    tryRewriteCnchDatabaseName(ast_db, pos.getContext());
+                    
                     any_database = false;
-                    database = std::move(first_identifier);
+                    database = getIdentifierName(ast_db);
                     any_table = true;
                     table.clear();
                     return true;
                 }
-                else if (identifier_parser.parse(pos, ast, expected))
+                else if (identifier_parser.parse(pos, ast_tb, expected))
                 {
                     /// db.table
+                    tryRewriteCnchDatabaseName(ast_db, pos.getContext());
+
                     any_database = false;
-                    database = std::move(first_identifier);
+                    database = getIdentifierName(ast_db);
                     any_table = false;
-                    table = getIdentifierName(ast);
+                    table = getIdentifierName(ast_tb);
                     return true;
                 }
             }
 
             /// table
+            ast_tb = ast_db;
             pos = pos_before_dot;
             any_database = false;
             database.clear();
             any_table = false;
-            table = std::move(first_identifier);
+            table = getIdentifierName(ast_tb);
             return true;
         }
 

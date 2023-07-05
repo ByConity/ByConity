@@ -13,6 +13,7 @@
 namespace DB
 {
 
+class Context;
 namespace ErrorCodes
 {
     extern const int TOO_DEEP_RECURSION;
@@ -124,6 +125,19 @@ public:
     }
 
     virtual ~IParser() = default;
+    
+    const Context *getContext() const 
+    {
+        return this->context;
+    }
+
+    void setContext(const Context *s)
+    {
+        this->context = s;
+    }
+
+private:    
+    const Context *context = nullptr;
 };
 
 using ParserPtr = std::unique_ptr<IParser>;
