@@ -23,6 +23,7 @@
 #include <Storages/IStorage.h>
 #include <Storages/SelectQueryInfo.h>
 
+
 namespace DB
 {
 
@@ -111,6 +112,8 @@ public:
     AggregatingStep * getPushdownAggregationCast() { return dynamic_cast<AggregatingStep *>(pushdown_aggregation.get()); }
     ProjectionStep * getPushdownProjectionCast() { return dynamic_cast<ProjectionStep *>(pushdown_projection.get()); }
     FilterStep * getPushdownFilterCast() { return dynamic_cast<FilterStep *>(pushdown_filter.get()); }
+    const DataStream & getTableOutputStream() const { return table_output_stream; }
+
 
     void formatOutputStream();
 
