@@ -152,6 +152,26 @@ PropertySets DeterminerVisitor::visitAggregatingStep(const AggregatingStep & ste
     return sets;
 }
 
+PropertySets DeterminerVisitor::visitMarkDistinctStep(const MarkDistinctStep & step, DeterminerContext &)
+{
+    auto keys = step.getDistinctSymbols();
+    if (keys.empty())
+    {
+        PropertySet set;
+        set.emplace_back(Property{Partitioning{Partitioning::Handle::SINGLE}});
+        return {set};
+    }
+
+    PropertySets sets;
+
+    sets.emplace_back(PropertySet{Property{Partitioning{
+        Partitioning::Handle::FIXED_HASH,
+        keys,
+    }}});
+
+    return sets;
+}
+
 PropertySets DeterminerVisitor::visitMergingAggregatedStep(const MergingAggregatedStep & step, DeterminerContext &)
 {
     auto keys = step.getKeys();

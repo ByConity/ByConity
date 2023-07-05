@@ -49,6 +49,7 @@
 #include <QueryPlan/LimitByStep.h>
 #include <QueryPlan/LimitStep.h>
 #include <QueryPlan/SortingStep.h>
+#include <QueryPlan/MarkDistinctStep.h>
 #include <QueryPlan/MergeSortingStep.h>
 #include <QueryPlan/MergingAggregatedStep.h>
 #include <QueryPlan/MergingSortedStep.h>

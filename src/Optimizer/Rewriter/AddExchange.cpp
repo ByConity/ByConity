@@ -119,6 +119,11 @@ ExchangeResult ExchangeVisitor::visitAggregatingNode(AggregatingNode & node, Exc
     return enforceNodeAndStream(node, cxt);
 }
 
+ExchangeResult ExchangeVisitor::visitMarkDistinctNode(MarkDistinctNode & node, ExchangeContext & cxt)
+{
+    return enforceNodeAndStream(node, cxt);
+}
+
 ExchangeResult ExchangeVisitor::visitMergingAggregatedNode(MergingAggregatedNode & node, ExchangeContext & cxt)
 {
     return enforceNodeAndStream(node, cxt);

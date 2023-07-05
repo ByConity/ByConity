@@ -27,18 +27,30 @@ namespace DB
 
 bool ParserPWStorage::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
+    ParserKeyword s_engine("ENGINE");
+    ParserToken s_eq(TokenType::Equals);
     ParserKeyword s_partition_by("PARTITION BY");
     ParserKeyword s_primary_key("PRIMARY KEY");
     ParserKeyword s_order_by("ORDER BY");
     ParserKeyword s_unique_key("UNIQUE KEY");
 
+    ParserIdentifierWithOptionalParameters ident_with_optional_params_p(dt);
     ParserExpression expression_p(dt);
 
+    ASTPtr engine;
     ASTPtr partition_by;
     ASTPtr primary_key;
     ASTPtr order_by;
     ASTPtr unique_key;
 
+    bool has_explicit_engine = s_engine.checkWithoutMoving(pos, expected);
+    if (has_explicit_engine)
+    {
+        s_engine.ignore(pos, expected);
+        s_eq.ignore(pos, expected);
+        if (!ident_with_optional_params_p.parse(pos, engine, expected))
+            return false;
+    }
 
     while (true)
     {
@@ -66,7 +78,6 @@ bool ParserPWStorage::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
                 return false;
         }
 
-        /// only parse but never used. PW do not support HaUnique table.
         if (!unique_key && s_unique_key.ignore(pos, expected))
         {
             if (expression_p.parse(pos, unique_key, expected))
@@ -84,14 +95,19 @@ bool ParserPWStorage::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     storage->set(storage->order_by, order_by);
     storage->set(storage->unique_key, unique_key);
 
-    /// Mock a CloudMergeTree engine
-    std::shared_ptr<ASTFunction> engine = std::make_shared<ASTFunction>();
-    engine->name = "CloudMergeTree";
-    engine->arguments = std::make_shared<ASTExpressionList>();
-    engine->arguments->children.emplace_back(std::make_shared<ASTIdentifier>("default"));
-    engine->arguments->children.emplace_back(std::make_shared<ASTIdentifier>("tmp"));
-    engine->no_empty_args = true;
-    storage->set(storage->engine, engine);
+    if (has_explicit_engine)
+        storage->set(storage->engine, engine);
+    else
+    {
+        /// Mock a CloudMergeTree engine 
+        std::shared_ptr<ASTFunction> implicit_engine = std::make_shared<ASTFunction>();
+        implicit_engine->name = "CloudMergeTree";
+        implicit_engine->arguments = std::make_shared<ASTExpressionList>();
+        implicit_engine->arguments->children.emplace_back(std::make_shared<ASTIdentifier>("default"));
+        implicit_engine->arguments->children.emplace_back(std::make_shared<ASTIdentifier>("tmp"));
+        implicit_engine->no_empty_args = true;
+        storage->set(storage->engine, implicit_engine);
+    }
 
     node = storage;
     return true;

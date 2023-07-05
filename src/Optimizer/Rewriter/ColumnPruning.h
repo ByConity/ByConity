@@ -47,6 +47,7 @@ private:
     PlanNodePtr visitPartialSortingNode(PartialSortingNode & node, NameSet & context) override;
     PlanNodePtr visitAggregatingNode(AggregatingNode & node, NameSet & context) override;
     PlanNodePtr visitTableScanNode(TableScanNode & node, NameSet & context) override;
+    PlanNodePtr visitMarkDistinctNode(MarkDistinctNode & node, NameSet & require) override;
     PlanNodePtr visitFilterNode(FilterNode & node, NameSet & c) override;
     PlanNodePtr visitProjectionNode(ProjectionNode & node, NameSet & c) override;
     PlanNodePtr visitApplyNode(ApplyNode & node, NameSet & c) override;

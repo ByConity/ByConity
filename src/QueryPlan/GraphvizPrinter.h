@@ -49,6 +49,7 @@ public:
     Void visitFilterNode(FilterNode & node, PrinterContext & context) override;
     Void visitJoinNode(JoinNode & node, PrinterContext & context) override;
     Void visitAggregatingNode(AggregatingNode & node, PrinterContext & context) override;
+    Void visitMarkDistinctNode(MarkDistinctNode & node, PrinterContext & context) override;
     Void visitMergingAggregatedNode(MergingAggregatedNode & node, PrinterContext & context) override;
     Void visitUnionNode(UnionNode & node, PrinterContext & context) override;
     Void visitIntersectNode(IntersectNode & node, PrinterContext & context) override;
@@ -111,6 +112,7 @@ public:
     Void visitFilterNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitJoinNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitAggregatingNode(QueryPlan::Node * node, PrinterContext & context) override;
+    Void visitMarkDistinctNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitMergingAggregatedNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitUnionNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitIntersectNode(QueryPlan::Node * node, PrinterContext & context) override;
@@ -162,6 +164,7 @@ public:
     static String printFilterStep(const FilterStep & step, bool include_output = true);
     static String printJoinStep(const JoinStep & step);
     static String printAggregatingStep(const AggregatingStep & step, bool include_output = true);
+    static String printMarkDistinctStep(const MarkDistinctStep & step, bool include_output = true);
     static String printMergingAggregatedStep(const MergingAggregatedStep & step);
     static String printUnionStep(const UnionStep & step);
     static String printIntersectStep(const IntersectStep & step);
