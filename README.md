@@ -14,7 +14,7 @@ Data silos pose significant challenges in data management. With different system
 **Designed for the Cloud, Flexible for Your Needs**
 Byconity is designed with a cloud-native approach, optimized to take full advantage of the cloud's scalability, resilience, and ease of deployment. It can work seamlessly on both Kubernetes clusters and physical clusters, offering you the flexibility to deploy in the environment that best meets your requirements. This broad compatibility ensures that you can leverage Byconity's benefits, irrespective of your infrastructure.
 
-ByConity is built from [ClickHouse](https://github.com/ClickHouse/ClickHouse) and inspired by Snowflake. We appreciate the excellent work of the ClickHouse team & Snowflake team. Because of huge archtechture difference, ClickHouse team don't think it is a good iead to adopt it into ClickHouse project. Here we open source it as a downstream project. Hope to bring it as a public weal for you.
+ByConity is built from [ClickHouse](https://github.com/ClickHouse/ClickHouse) and inspired by Snowflake. We appreciate the excellent work of the ClickHouse team & Snowflake team. Because of huge archtechture difference, ClickHouse team don't think it is a good idea to adopt it into ClickHouse project. Here we open source it as a downstream project. Hope to bring it as a public weal for you.
 
 ## Benefits
 - **Unified Data Management**: Byconity eliminates the need to maintain separate processes for batch and streaming data, making your systems more efficient.
