@@ -34,6 +34,7 @@ ORCBlockInputFormat::ORCBlockInputFormat(
     : IInputFormat(std::move(header_), in_)
     , format_settings(format_settings_)
     , partition_kv{partition_kv_}
+    , read_stripe(format_settings_.orc.read_stripe)
  {
  }
 
@@ -121,6 +122,8 @@ void ORCBlockInputFormat::prepareReader()
         throw Exception(reader_status.ToString(), ErrorCodes::BAD_ARGUMENTS); 
     }
     stripe_total = file_reader->NumberOfStripes();
+    if(read_stripe)
+        stripe_current = format_settings.orc.current_stripe;
     stripe_current = 0;
 
     auto schema_status = file_reader->ReadSchema();

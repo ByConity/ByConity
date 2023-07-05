@@ -46,6 +46,8 @@ private:
 
     std::map<String, String> partition_kv;
 
+    bool read_stripe;
+
     void prepareReader();
 };
 
