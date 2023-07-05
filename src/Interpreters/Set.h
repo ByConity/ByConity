@@ -68,6 +68,9 @@ public:
 
     /// Returns false, if some limit was exceeded and no need to insert more data.
     bool insertFromBlock(const Block & block);
+
+    /// Returns distinct set
+    ColumnUInt8::MutablePtr markDistinctBlock(const Block & block);
     /// Call after all blocks were inserted. To get the information that set is already created.
     void finishInsert() { is_created = true; }
 

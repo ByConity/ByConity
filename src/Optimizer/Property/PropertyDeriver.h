@@ -53,6 +53,7 @@ public:
     Property visitFilterStep(const FilterStep &, DeriverContext & context) override;
     Property visitJoinStep(const JoinStep & step, DeriverContext & context) override;
     Property visitAggregatingStep(const AggregatingStep & step, DeriverContext & context) override;
+    Property visitMarkDistinctStep(const MarkDistinctStep & step, DeriverContext & context) override;
     Property visitMergingAggregatedStep(const MergingAggregatedStep &, DeriverContext & context) override;
     Property visitUnionStep(const UnionStep & step, DeriverContext & context) override;
     Property visitExceptStep(const ExceptStep &, DeriverContext & context) override;

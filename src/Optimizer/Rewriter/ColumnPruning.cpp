@@ -23,7 +23,6 @@
 #include <QueryPlan/ApplyStep.h>
 #include <QueryPlan/AssignUniqueIdStep.h>
 #include <QueryPlan/DistinctStep.h>
-#include <Optimizer/Rewriter/RemoveUnusedCTE.h>
 #include <QueryPlan/ExceptStep.h>
 #include <QueryPlan/FilterStep.h>
 #include <QueryPlan/IntersectStep.h>
@@ -331,6 +330,17 @@ PlanNodePtr ColumnPruningVisitor::visitAggregatingNode(AggregatingNode & node, N
     PlanNodes children{child};
     auto agg_node = AggregatingNode::createPlanNode(context->nextNodeId(), std::move(agg_step), children, node.getStatistics());
     return agg_node;
+}
+
+PlanNodePtr ColumnPruningVisitor::visitMarkDistinctNode(MarkDistinctNode & node, NameSet & require)
+{
+    const auto * step = node.getStep().get();
+    for(const auto & distinct_symbol : step->getDistinctSymbols()) {
+        require.insert(distinct_symbol);
+    }
+    auto child = VisitorUtil::accept(node.getChildren()[0], *this, require);
+    auto mark_distinct_step = std::make_shared<MarkDistinctStep>(child->getStep()->getOutputStream(), step->getMarkerSymbol(), step->getDistinctSymbols());
+    return MarkDistinctNode::createPlanNode(context->nextNodeId(), std::move(mark_distinct_step), PlanNodes{child}, node.getStatistics());
 }
 
 PlanNodePtr ColumnPruningVisitor::visitSortingNode(SortingNode & node, NameSet & require)

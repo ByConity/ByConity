@@ -38,6 +38,7 @@
 #include <QueryPlan/MergingSortedStep.h>
 #include <QueryPlan/PartialSortingStep.h>
 #include <QueryPlan/PartitionTopNStep.h>
+#include <QueryPlan/PlanPrinter.h>
 #include <QueryPlan/PlanVisitor.h>
 #include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/QueryPlan.h>
@@ -91,6 +92,7 @@ static std::unordered_map<IQueryPlanStep::Type, std::string> NODE_COLORS = {
     {IQueryPlanStep::Type::AssignUniqueId, "bisque"},
     {IQueryPlanStep::Type::CTERef, "orange"},
     {IQueryPlanStep::Type::TopNFiltering, "fuchsia"},
+    {IQueryPlanStep::Type::MarkDistinct, "violet"},
 };
 
 struct PrinterContext
@@ -164,6 +166,15 @@ Void PlanNodePrinter::visitAggregatingNode(AggregatingNode & node, PrinterContex
     auto step = *node.getStep();
     String color{NODE_COLORS[step.getType()]};
     printNode(node, label, StepPrinter::printAggregatingStep(step), color, context);
+    return visitChildren(node, context);
+}
+
+Void PlanNodePrinter::visitMarkDistinctNode(MarkDistinctNode & node, PrinterContext & context)
+{
+    String label{"MarkDistinctNode"};
+    auto & step = dynamic_cast<const MarkDistinctStep &>(*node.getStep());
+    String color{NODE_COLORS[step.getType()]};
+    printNode(node, label, StepPrinter::printMarkDistinctStep(step), color, context);
     return visitChildren(node, context);
 }
 
@@ -544,6 +555,16 @@ Void PlanSegmentNodePrinter::visitAggregatingNode(QueryPlan::Node * node, Printe
     const auto & step = dynamic_cast<const AggregatingStep &>(*step_ptr);
     String color{NODE_COLORS[step_ptr->getType()]};
     printNode(node, label, StepPrinter::printAggregatingStep(step), color, context);
+    return visitChildren(node, context);
+}
+
+Void PlanSegmentNodePrinter::visitMarkDistinctNode(QueryPlan::Node * node, PrinterContext & context)
+{
+    auto & step_ptr = node->step;
+    String label{"MarkDistinctNode"};
+    const auto & step = dynamic_cast<const MarkDistinctStep &>(*step_ptr);
+    String color{NODE_COLORS[step_ptr->getType()]};
+    printNode(node, label, StepPrinter::printMarkDistinctStep(step), color, context);
     return visitChildren(node, context);
 }
 
@@ -1164,6 +1185,27 @@ String StepPrinter::printAggregatingStep(const AggregatingStep & step, bool incl
     //    if (step.isTotals())
     //        details << "|"
     //                << "totals";
+    return details.str();
+}
+
+String StepPrinter::printMarkDistinctStep(const MarkDistinctStep & step, bool include_output)
+{
+    std::stringstream details;
+    details << "Marker Symbol:\\n";
+    details << step.getMarkerSymbol() << "\\n";
+    details << "|";
+    details << "Distinct Symbols :\\n";
+    for (auto & symbol : step.getDistinctSymbols())
+    {
+        details << symbol << ',';
+    }
+    details << "|";
+    details << "Output |";
+    for (const auto & column : step.getOutputStream().header)
+    {
+        details << column.name << ":";
+        details << column.type->getName() << "\\n";
+    }
     return details.str();
 }
 

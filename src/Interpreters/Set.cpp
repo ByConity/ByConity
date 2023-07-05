@@ -253,6 +253,54 @@ bool Set::insertFromBlock(const Block & block)
     return limits.check(data.getTotalRowCount(), data.getTotalByteCount(), "IN-set", ErrorCodes::SET_SIZE_LIMIT_EXCEEDED);
 }
 
+ColumnUInt8::MutablePtr Set::markDistinctBlock(const Block & block)
+{
+    std::unique_lock lock(rwlock);
+
+    if (data.empty())
+        throw Exception("Method Set::setHeader must be called before Set::insertFromBlock", ErrorCodes::LOGICAL_ERROR);
+
+    ColumnRawPtrs key_columns;
+    key_columns.reserve(keys_size);
+
+    /// The constant columns to the right of IN are not supported directly. For this, they first materialize.
+    Columns materialized_columns;
+
+    /// Remember the columns we will work with
+    for (size_t i = 0; i < keys_size; ++i)
+    {
+        materialized_columns.emplace_back(block.safeGetByPosition(i).column->convertToFullColumnIfConst()->convertToFullColumnIfLowCardinality());
+        key_columns.emplace_back(materialized_columns.back().get());
+    }
+
+    size_t rows = block.rows();
+
+    /// We will insert to the Set only keys, where all components are not NULL.
+    ConstNullMapPtr null_map{};
+    ColumnPtr null_map_holder;
+    if (!transform_null_in)
+        null_map_holder = extractNestedColumnsAndNullMap(key_columns, null_map);
+
+    /// Filter to extract distinct values from the block.
+    ColumnUInt8::MutablePtr filter;
+    if (fill_set_elements)
+        filter = ColumnUInt8::create(block.rows());
+
+    switch (data.type)
+    {
+        case SetVariants::Type::EMPTY:
+            break;
+#define M(NAME) \
+        case SetVariants::Type::NAME: \
+            insertFromBlockImpl(*data.NAME, key_columns, rows, data, null_map, filter ? &filter->getData() : nullptr); \
+            break;
+            APPLY_FOR_SET_VARIANTS(M)
+#undef M
+    }
+
+    return filter;
+}
+
 
 ColumnPtr Set::execute(const Block & block, bool negative) const
 {

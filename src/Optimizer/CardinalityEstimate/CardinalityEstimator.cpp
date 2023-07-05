@@ -78,9 +78,10 @@ void CardinalityEstimator::estimate(QueryPlan & node, ContextMutablePtr context)
     estimate(*node.getPlanNode(), node.getCTEInfo(), context, true);
 }
 
-PlanNodeStatisticsPtr CardinalityVisitor::visitStep(const IQueryPlanStep &, CardinalityContext &)
+PlanNodeStatisticsPtr CardinalityVisitor::visitStep(const IQueryPlanStep &, CardinalityContext & context)
 {
-    throw Exception("Not impl card estimate", ErrorCodes::NOT_IMPLEMENTED);
+    //    throw Exception("Not impl card estimate", ErrorCodes::NOT_IMPLEMENTED);
+    return context.children_stats[0];
 }
 
 PlanNodeStatisticsPtr CardinalityVisitor::visitProjectionStep(const ProjectionStep & step, CardinalityContext & context)
@@ -98,8 +99,7 @@ PlanNodeStatisticsPtr CardinalityVisitor::visitProjectionStep(const ProjectionSt
 PlanNodeStatisticsPtr CardinalityVisitor::visitFilterStep(const FilterStep & step, CardinalityContext & context)
 {
     PlanNodeStatisticsPtr child_stats = context.children_stats[0];
-    PlanNodeStatisticsPtr stats
-        = FilterEstimator::estimate(child_stats, step, context.context, context.simple_children);
+    PlanNodeStatisticsPtr stats = FilterEstimator::estimate(child_stats, step, context.context, context.simple_children);
     return stats;
 }
 
@@ -307,8 +307,7 @@ PlanNodeStatisticsPtr PlanCardinalityVisitor::visitPlanNode(PlanNodeBase & node,
 
     for (auto & child : node.getChildren())
     {
-        CardinalityContext children_context{
-            .context = context.context, .cte_info = context.cte_info, .children_stats = {}};
+        CardinalityContext children_context{.context = context.context, .cte_info = context.cte_info, .children_stats = {}};
         children_stats.emplace_back(VisitorUtil::accept(*child, *this, children_context));
 
         simple_children &= children_context.simple_children;
