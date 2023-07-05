@@ -22,9 +22,9 @@ Projection est. 100 rows
                               └─ Aggregating est. 468 rows
                                  │     Group by: {s_county, s_state}
                                  │     Aggregates: expr#sum(ss_net_profit)_1:=AggNull(sum)(ss_net_profit)
-                                 └─ Inner Join est. 521229594 rows
+                                 └─ Inner Join est. 260614797 rows
                                     │     Condition: ss_store_sk == s_store_sk
-                                    ├─ Inner Join est. 521229594 rows
+                                    ├─ Inner Join est. 260614797 rows
                                     │  │     Condition: ss_sold_date_sk == d_date_sk
                                     │  ├─ Local Exchange est. 2879987999 rows
                                     │  │  └─ Filter est. 2879987999 rows
@@ -61,9 +61,9 @@ Projection est. 100 rows
                                                             └─ Aggregating est. 21 rows
                                                                │     Group by: {s_state_1}
                                                                │     Aggregates: expr#sum(ss_net_profit):=AggNull(sum)(ss_net_profit_1)
-                                                               └─ Inner Join est. 521229594 rows
+                                                               └─ Inner Join est. 260614797 rows
                                                                   │     Condition: ss_store_sk_1 == s_store_sk_1
-                                                                  ├─ Inner Join est. 521229594 rows
+                                                                  ├─ Inner Join est. 260614797 rows
                                                                   │  │     Condition: ss_sold_date_sk_1 == d_date_sk_1
                                                                   │  ├─ Local Exchange est. 2879987999 rows
                                                                   │  │  └─ Filter est. 2879987999 rows

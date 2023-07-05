@@ -31,7 +31,6 @@
 
 namespace DB
 {
-
 enum class MetastoreOperation
 {
     UNKNOWN,
@@ -47,13 +46,12 @@ const char * metaOptToString(MetastoreOperation opt);
 struct MetastoreOptions
 {
     MetastoreOperation operation = MetastoreOperation::UNKNOWN;
-    String drop_key {};
+    String drop_key{};
 };
 
 class ASTSystemQuery : public IAST, public ASTQueryWithOnCluster
 {
 public:
-
     enum class Type
     {
         UNKNOWN,
@@ -170,7 +168,6 @@ public:
     }
 
 protected:
-
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
 };
 

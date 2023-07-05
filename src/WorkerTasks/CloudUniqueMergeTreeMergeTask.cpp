@@ -15,7 +15,7 @@
 
 #include <Catalog/Catalog.h>
 #include <CloudServices/CnchPartsHelper.h>
-#include <CloudServices/commitCnchParts.h>
+#include <CloudServices/CnchDataWriter.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
 #include <Storages/StorageCloudMergeTree.h>
 #include <Transaction/ICnchTransaction.h>

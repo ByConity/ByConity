@@ -17,7 +17,7 @@
 
 #include <CloudServices/CnchDedupHelper.h>
 #include <CloudServices/CnchPartsHelper.h>
-#include <CloudServices/commitCnchParts.h>
+#include <CloudServices/CnchDataWriter.h>
 #include <Interpreters/PartLog.h>
 #include <MergeTreeCommon/MergeTreeDataDeduper.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
@@ -60,15 +60,22 @@ Block CloudMergeTreeBlockOutputStream::getHeader() const
     return metadata_snapshot->getSampleBlock();
 }
 
+void CloudMergeTreeBlockOutputStream::writePrefix()
+{
+    auto max_threads = context->getSettingsRef().max_threads_for_cnch_dump;
+    LOG_DEBUG(log, "dump with {} threads", max_threads);
+    cnch_writer.initialize(max_threads);
+}
+
 void CloudMergeTreeBlockOutputStream::write(const Block & block)
 {
     Stopwatch watch;
     LOG_DEBUG(storage.getLogger(), "Start to write new block");
-    auto parts = convertBlockIntoDataParts(block);
+    auto temp_parts = convertBlockIntoDataParts(block);
     /// Generate delete bitmaps, delete bitmap is valid only when using delete_flag info for unique table
     LocalDeleteBitmaps bitmaps;
     const auto & txn = context->getCurrentTransaction();
-    for (const auto & part : parts)
+    for (const auto & part : temp_parts)
     {
         auto delete_bitmap = part->getDeleteBitmap(/*allow_null*/ true);
         if (delete_bitmap && delete_bitmap->cardinality())
@@ -81,27 +88,13 @@ void CloudMergeTreeBlockOutputStream::write(const Block & block)
     LOG_DEBUG(storage.getLogger(), "Finish converting block into parts, elapsed {} ms", watch.elapsedMilliseconds());
     watch.restart();
 
-    MutableMergeTreeDataPartsCNCHVector res;
+    IMutableMergeTreeDataPartsVector temp_staged_parts;
     if (to_staging_area)
     {
-        auto dumped = cnch_writer.dumpAndCommitCnchParts({}, bitmaps, /*staged_parts*/ parts);
-        res = std::move(dumped.staged_parts);
+        temp_staged_parts.swap(temp_parts);
     }
-    else
-    {
-        auto dumped = cnch_writer.dumpAndCommitCnchParts(parts, bitmaps);
-        res = std::move(dumped.parts);
-    }
-    LOG_DEBUG(
-        storage.getLogger(),
-        "Dump and commit {} parts, {} bitmaps, elapsed {} ms, pushing {} parts to preload vector.",
-        res.size(),
-        bitmaps.size(),
-        watch.elapsedMilliseconds(),
-        res.size());
 
-    // batch all part to preload_parts for batch preloading in writeSuffix
-    std::move(res.begin(), res.end(), std::back_inserter(preload_parts));
+    cnch_writer.schedule(temp_parts, bitmaps, temp_staged_parts);
 }
 
 MergeTreeMutableDataPartsVector CloudMergeTreeBlockOutputStream::convertBlockIntoDataParts(const Block & block, bool use_inner_block_id)
@@ -202,6 +195,19 @@ MergeTreeMutableDataPartsVector CloudMergeTreeBlockOutputStream::convertBlockInt
 
 void CloudMergeTreeBlockOutputStream::writeSuffix()
 {
+    cnch_writer.finalize();
+    auto & dumped_data = cnch_writer.res;
+
+    if (!dumped_data.parts.empty())
+    {
+        preload_parts = std::move(dumped_data.parts);
+    }
+
+    if (!dumped_data.staged_parts.empty())
+    {
+        std::move(std::begin(dumped_data.staged_parts), std::end(dumped_data.staged_parts), std::back_inserter(preload_parts));
+    }
+
     try
     {
         writeSuffixImpl();

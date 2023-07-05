@@ -2,27 +2,27 @@ Projection est. 100 rows
 │     Expressions: [i_category, i_class, i_current_price, i_item_desc, i_item_id], itemrevenue:=`expr#sum(cs_ext_sales_price)`, revenueratio:=`expr#divide(multiply(sum(cs_ext_sales_price), 100), sum(sum(cs_ext_sales_price)) OVER (PARTITION BY i_class))`
 └─ Limit est. 100 rows
    │     Limit: 100
-   └─ Sorting est. 6717520 rows
+   └─ Sorting est. 3358760 rows
       │     Order by: {i_category asc, i_class asc, i_item_id asc, i_item_desc asc, expr#divide(multiply(sum(cs_ext_sales_price), 100), sum(sum(cs_ext_sales_price)) OVER (PARTITION BY i_class)) asc}
       │     Limit: 100
-      └─ Gather Exchange est. 6717520 rows
-         └─ Sorting est. 6717520 rows
+      └─ Gather Exchange est. 3358760 rows
+         └─ Sorting est. 3358760 rows
             │     Order by: {i_category asc, i_class asc, i_item_id asc, i_item_desc asc, expr#divide(multiply(sum(cs_ext_sales_price), 100), sum(sum(cs_ext_sales_price)) OVER (PARTITION BY i_class)) asc}
             │     Limit: 100
-            └─ Projection est. 6717520 rows
+            └─ Projection est. 3358760 rows
                │     Expressions: [expr#sum(cs_ext_sales_price), i_category, i_class, i_current_price, i_item_desc, i_item_id], expr#divide(multiply(sum(cs_ext_sales_price), 100), sum(sum(cs_ext_sales_price)) OVER (PARTITION BY i_class)):=(`expr#sum(cs_ext_sales_price)` * 100) / `expr#sum(sum(cs_ext_sales_price)) OVER (PARTITION BY i_class)`
-               └─ Window est. 6717520 rows
-                  └─ Repartition Exchange est. 6717520 rows
+               └─ Window est. 3358760 rows
+                  └─ Repartition Exchange est. 3358760 rows
                      │     Partition by: {i_class}
-                     └─ MergingAggregated est. 6717520 rows
-                        └─ Repartition Exchange est. 6717520 rows
+                     └─ MergingAggregated est. 3358760 rows
+                        └─ Repartition Exchange est. 3358760 rows
                            │     Partition by: {i_category, i_class, i_current_price, i_item_desc, i_item_id}
-                           └─ Aggregating est. 6717520 rows
+                           └─ Aggregating est. 3358760 rows
                               │     Group by: {i_category, i_class, i_current_price, i_item_desc, i_item_id}
                               │     Aggregates: expr#sum(cs_ext_sales_price):=AggNull(sum)(cs_ext_sales_price)
-                              └─ Inner Join est. 6717520 rows
+                              └─ Inner Join est. 3358760 rows
                                  │     Condition: cs_item_sk == i_item_sk
-                                 ├─ Inner Join est. 22415154 rows
+                                 ├─ Inner Join est. 11207577 rows
                                  │  │     Condition: cs_sold_date_sk == d_date_sk
                                  │  ├─ Local Exchange est. 1439980416 rows
                                  │  │  └─ Filter est. 1439980416 rows

@@ -42,8 +42,8 @@ if (OS_LINUX)
     # Enable background thread to recycle memory
     #
     # Since the percpu_arena will increase malloc lock race condition,
-    # keep the percpu_arena the default value to leverage 4*CPU cores arena
-    set (JEMALLOC_CONFIG_MALLOC_CONF "percpu_arena:disabled,oversize_threshold:0,muzzy_decay_ms:100,dirty_decay_ms:100,background_thread:true")
+    # keep the percpu_arena the default value to leverage 4*CPU cores arena 
+    set (JEMALLOC_CONFIG_MALLOC_CONF "percpu_arena:disabled,oversize_threshold:0,muzzy_decay_ms:5000,dirty_decay_ms:5000")
 else()
     set (JEMALLOC_CONFIG_MALLOC_CONF "oversize_threshold:0,muzzy_decay_ms:5000,dirty_decay_ms:5000")
 endif()

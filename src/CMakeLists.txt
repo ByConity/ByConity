@@ -23,6 +23,7 @@ set (CONFIG_COMMON "${CMAKE_CURRENT_BINARY_DIR}/Common/config.h")
 
 include (../cmake/version.cmake)
 message (STATUS "Will build ${VERSION_FULL} revision ${VERSION_REVISION} ${VERSION_OFFICIAL}")
+include (configure_config.cmake)
 configure_file (Common/config.h.in ${CONFIG_COMMON})
 configure_file (Common/config_version.h.in ${CONFIG_VERSION})
 configure_file (Core/config_core.h.in "${CMAKE_CURRENT_BINARY_DIR}/Core/include/config_core.h")
@@ -180,6 +181,10 @@ if (((SANITIZE STREQUAL "thread") OR (SANITIZE STREQUAL "address")) AND COMPILER
 else()
     add_library (clickhouse_new_delete STATIC Common/new_delete.cpp)
     target_link_libraries (clickhouse_new_delete PRIVATE clickhouse_common_io jemalloc)
+endif()
+
+if (USE_JEMALLOC)
+    target_link_libraries (clickhouse_common_io PRIVATE jemalloc)
 endif()
 
 add_subdirectory(Common/ZooKeeper)

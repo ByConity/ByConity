@@ -16,7 +16,7 @@
 #pragma once
 
 #include <CloudServices/CnchDedupHelper.h>
-#include <CloudServices/commitCnchParts.h>
+#include <CloudServices/CnchDataWriter.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <Storages/MergeTree/MergeTreeCNCHDataDumper.h>
 #include <Storages/MergeTree/MergeTreeDataWriter.h>
@@ -41,6 +41,7 @@ public:
 
     Block getHeader() const override;
 
+    void writePrefix() override;
     void write(const Block & block) override;
     MergeTreeMutableDataPartsVector convertBlockIntoDataParts(const Block & block, bool use_inner_block_id = false);
     void writeSuffix() override;

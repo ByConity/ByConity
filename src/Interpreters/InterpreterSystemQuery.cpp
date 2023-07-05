@@ -25,6 +25,7 @@
 #include <Common/ActionLock.h>
 #include <Common/typeid_cast.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
+#include <Common/JeprofControl.h>
 #include <Common/SymbolIndex.h>
 #include <Common/ThreadPool.h>
 #include <Common/escapeForFileName.h>
@@ -436,6 +437,13 @@ BlockIO InterpreterSystemQuery::execute()
         case Type::STOP_RESOURCE_GROUP:
             system_context->stopResourceGroup();
             break;
+        case Type::JEPROF_DUMP:
+#if USE_JEMALLOC
+            JeprofControl::instance().dump();
+            break;
+#else
+            throw Exception("Jemalloc is not used", ErrorCodes::BAD_ARGUMENTS);
+#endif
         default:
         {
             if (getContext()->getServerType() == ServerType::cnch_server)

@@ -9,28 +9,28 @@ Projection est. 100 rows
          └─ Sorting est. 4196808 rows
             │     Order by: {c_customer_id asc}
             │     Limit: 100
-            └─ Inner Join est. 1893016 rows
+            └─ Inner Join est. 4196808 rows
                │     Condition: c_customer_sk == sr_customer_sk_1
                ├─ Repartition Exchange est. 12000000 rows
                │  │     Partition by: {c_customer_sk}
                │  └─ TableScan tpcds.customer est. 12000000 rows
                │           Outputs: [c_customer_id, c_customer_sk]
-               └─ Repartition Exchange est. 1948518 rows
+               └─ Repartition Exchange est. 2159929 rows
                   │     Partition by: {sr_customer_sk_1}
-                  └─ Inner Join est. 1948518 rows
+                  └─ Inner Join est. 3702301 rows
                      │     Condition: sr_store_sk_1 == s_store_sk
                      │     Filter: `expr#sum(sr_return_amt)_1` > (`expr#avg(ctr_total_return)` * '1.2')
-                     ├─ Projection est. 4319858 rows
+                     ├─ Projection est. 2159929 rows
                      │  │     Expressions: expr#sum(sr_return_amt)_1:=`expr#sum(sr_return_amt)`, sr_customer_sk_1:=sr_customer_sk, sr_store_sk_1:=sr_store_sk
-                     │  └─ MergingAggregated est. 4319858 rows
-                     │     └─ Repartition Exchange est. 4319858 rows
+                     │  └─ MergingAggregated est. 2159929 rows
+                     │     └─ Repartition Exchange est. 2159929 rows
                      │        │     Partition by: {sr_customer_sk, sr_store_sk}
-                     │        └─ Aggregating est. 4319858 rows
+                     │        └─ Aggregating est. 2159929 rows
                      │           │     Group by: {sr_customer_sk, sr_store_sk}
                      │           │     Aggregates: expr#sum(sr_return_amt):=AggNull(sum)(sr_return_amt)
-                     │           └─ Inner Join est. 4319858 rows
+                     │           └─ Inner Join est. 2159929 rows
                      │              │     Condition: sr_returned_date_sk == d_date_sk
-                     │              ├─ Inner Join est. 23806432 rows
+                     │              ├─ Inner Join est. 11903216 rows
                      │              │  │     Condition: sr_store_sk == s_store_sk_1
                      │              │  ├─ Local Exchange est. 287999764 rows
                      │              │  │  └─ Filter est. 287999764 rows
@@ -60,8 +60,8 @@ Projection est. 100 rows
                      │                       │     Condition: d_year = 2000
                      │                       └─ TableScan tpcds.date_dim est. 73049 rows
                      │                                Outputs: [d_date_sk, d_year]
-                     └─ Broadcast Exchange est. 48 rows
-                        └─ Inner Join est. 42 rows
+                     └─ Broadcast Exchange est. 91 rows
+                        └─ Inner Join est. 82 rows
                            │     Condition: sr_store_sk_2 == s_store_sk
                            ├─ MergingAggregated est. 41 rows
                            │  └─ Repartition Exchange est. 41 rows
@@ -69,17 +69,17 @@ Projection est. 100 rows
                            │     └─ Aggregating est. 41 rows
                            │        │     Group by: {sr_store_sk_2}
                            │        │     Aggregates: expr#avg(ctr_total_return):=AggNull(avgIf)(expr#sum(sr_return_amt)_2,build_side_non_null_symbol)
-                           │        └─ Projection est. 4319858 rows
+                           │        └─ Projection est. 2159929 rows
                            │           │     Expressions: build_side_non_null_symbol:=1, expr#sum(sr_return_amt)_2:=`expr#sum(sr_return_amt)`, sr_store_sk_2:=sr_store_sk
-                           │           └─ MergingAggregated est. 4319858 rows
-                           │              └─ Repartition Exchange est. 4319858 rows
+                           │           └─ MergingAggregated est. 2159929 rows
+                           │              └─ Repartition Exchange est. 2159929 rows
                            │                 │     Partition by: {sr_customer_sk, sr_store_sk}
-                           │                 └─ Aggregating est. 4319858 rows
+                           │                 └─ Aggregating est. 2159929 rows
                            │                    │     Group by: {sr_customer_sk, sr_store_sk}
                            │                    │     Aggregates: expr#sum(sr_return_amt):=AggNull(sum)(sr_return_amt)
-                           │                    └─ Inner Join est. 4319858 rows
+                           │                    └─ Inner Join est. 2159929 rows
                            │                       │     Condition: sr_returned_date_sk == d_date_sk
-                           │                       ├─ Inner Join est. 23806432 rows
+                           │                       ├─ Inner Join est. 11903216 rows
                            │                       │  │     Condition: sr_store_sk == s_store_sk_2
                            │                       │  ├─ Local Exchange est. 287999764 rows
                            │                       │  │  └─ Filter est. 287999764 rows

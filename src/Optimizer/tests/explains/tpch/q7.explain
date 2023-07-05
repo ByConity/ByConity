@@ -34,7 +34,7 @@ Projection est. 482500 rows
                         │        │           Outputs: [o_custkey, o_orderkey]
                         │        └─ Repartition Exchange est. 150000 rows
                         │           │     Partition by: {c_custkey}
-                        │           └─ Inner Join est. 150000 rows
+                        │           └─ Inner Join est. 75000 rows
                         │              │     Condition: c_nationkey == n_nationkey_1
                         │              ├─ TableScan tpch.customer est. 150000 rows
                         │              │        Outputs: [c_custkey, c_nationkey]
@@ -42,7 +42,7 @@ Projection est. 482500 rows
                         │                 └─ TableScan tpch.nation est. 25 rows
                         │                          Outputs: n_name_1:=n_name, n_nationkey_1:=n_nationkey
                         └─ Broadcast Exchange est. 10000 rows
-                           └─ Inner Join est. 10000 rows
+                           └─ Inner Join est. 5000 rows
                               │     Condition: s_nationkey == n_nationkey
                               ├─ TableScan tpch.supplier est. 10000 rows
                               │        Outputs: [s_nationkey, s_suppkey]

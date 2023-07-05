@@ -22,6 +22,7 @@ PlanNodeStatisticsPtr JoinEstimator::estimate(
     PlanNodeStatisticsPtr & opt_left_stats,
     PlanNodeStatisticsPtr & opt_right_stats,
     const JoinStep & join_step,
+    Context & context,
     bool enable_pk_fk,
     bool is_left_base_table,
     bool is_right_base_table)
@@ -39,7 +40,7 @@ PlanNodeStatisticsPtr JoinEstimator::estimate(
 
     ASTTableJoin::Kind kind = join_step.getKind();
 
-    return computeCardinality(left_stats, right_stats, left_keys, right_keys, kind, enable_pk_fk, is_left_base_table, is_right_base_table);
+    return computeCardinality(left_stats, right_stats, left_keys, right_keys, kind, context, enable_pk_fk, is_left_base_table, is_right_base_table);
 }
 
 PlanNodeStatisticsPtr JoinEstimator::computeCardinality(
@@ -48,6 +49,7 @@ PlanNodeStatisticsPtr JoinEstimator::computeCardinality(
     const Names & left_keys,
     const Names & right_keys,
     ASTTableJoin::Kind kind,
+    Context & context,
     bool enable_pk_fk,
     bool is_left_base_table,
     bool is_right_base_table)
@@ -123,6 +125,7 @@ PlanNodeStatisticsPtr JoinEstimator::computeCardinality(
                 right_rows,
                 right_ndv,
                 left_ndv,
+                context.getSettingsRef().pk_selectivity,
                 right_stats,
                 left_stats,
                 right_key_stats,
@@ -141,6 +144,7 @@ PlanNodeStatisticsPtr JoinEstimator::computeCardinality(
                 left_rows,
                 left_ndv,
                 right_ndv,
+                context.getSettingsRef().pk_selectivity,
                 left_stats,
                 right_stats,
                 left_key_stats,
@@ -268,6 +272,7 @@ UInt64 JoinEstimator::computeCardinalityByFKPK(
     UInt64 fk_rows,
     UInt64 fk_ndv,
     UInt64 pk_ndv,
+    double pk_selectivity,
     PlanNodeStatistics & fk_stats,
     PlanNodeStatistics & pk_stats,
     SymbolStatistics & fk_key_stats,
@@ -287,13 +292,6 @@ UInt64 JoinEstimator::computeCardinalityByFKPK(
     {
         join_card = fk_rows;
     }
-
-    if (is_fk_base_table && !is_pk_base_table)
-    {
-        join_card = join_card * 0.5;
-    }
-
-    // update output statistics
 
     // FK side all match;
     if (fk_ndv <= pk_ndv)
@@ -368,6 +366,11 @@ UInt64 JoinEstimator::computeCardinalityByFKPK(
         }
     }
 
+    if (is_fk_base_table && !is_pk_base_table)
+    {
+        join_card = join_card * pk_selectivity;
+    }
+    
     return join_card;
 }
 

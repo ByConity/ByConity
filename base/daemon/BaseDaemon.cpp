@@ -67,7 +67,9 @@
 #include <IO/ReadBufferFromFileDescriptor.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
+#include <Common/ErrorCodes.h>
 #include <Common/Exception.h>
+#include <Common/JeprofControl.h>
 #include <Common/PipeFDs.h>
 #include <Common/StackTrace.h>
 #include <Common/getMultipleKeysFromConfig.h>
@@ -96,6 +98,35 @@
 #include <ucontext.h>
 
 namespace fs = std::filesystem;
+
+namespace DB::ErrorCodes
+{
+    extern const int PROF_NOT_SET; 
+}
+
+/* Check whether prof:true has been set in MALLOC_CONF env
+ * If not, set env
+ */
+static bool checkProfEnv()
+{
+    char *env_val = getenv("MALLOC_CONF");
+    bool pass_check = true;
+    if (nullptr == env_val)
+    {
+        setenv("MALLOC_CONF", "prof:true", 1);
+        pass_check = false;
+    }
+    else
+    {
+        std::string val(env_val);
+        if (val.find("prof:") == std::string::npos)
+        {
+            setenv("MALLOC_CONF", (val+",prof:true").c_str(), 1);
+            pass_check = false;
+        }
+    }
+    return pass_check;
+}
 
 DB::PipeFDs signal_pipe;
 
@@ -269,11 +300,18 @@ public:
                 LOG_INFO(log, "Stop SignalListener thread");
                 break;
             }
-            else if (sig == SIGHUP || sig == SIGUSR1)
+            else if (sig == SIGHUP)
             {
                 LOG_DEBUG(log, "Received signal to close logs.");
                 BaseDaemon::instance().closeLogs(BaseDaemon::instance().logger());
                 LOG_INFO(log, "Opened new log file after received signal.");
+            }
+            else if (sig == SIGUSR1)
+            {
+                LOG_DEBUG(log, "Received signal to dump jeprof");
+#if USE_JEMALLOC
+                DB::JeprofControl::instance().dump();
+#endif
             }
             else if (sig == SIGUSR2)
             {
@@ -795,14 +833,31 @@ void BaseDaemon::initialize(Application & self)
             throw Poco::Exception("Cannot change directory to /tmp");
     }
 
+    /// sensitive data masking rules are not used here
+    buildLoggers(config(), logger(), self.commandName());
+
+#if USE_JEMALLOC
+    bool status = DB::JeprofControl::instance().jeprofInitialize(config().getBool("enable_jeprof", false));
+    LOG_INFO(&logger(), "jeprof status: {}", status);
+
+    if (status)
+    {
+        if (!checkProfEnv())
+        {
+            LOG_INFO(&logger(), "auto-restart server and set prof:true to MALLOC_CONF");
+            throw DB::Exception("MALLOC_CONF not set prof", DB::ErrorCodes::PROF_NOT_SET);
+        }
+        auto prof_path_str = log_path.empty() ? "/tmp/" : log_path;
+        DB::JeprofControl::instance().setProfPath(prof_path_str);
+    }
+#endif
+
 #if USE_BREAKPAD
     use_minidump = config().getBool("use_minidump", true);
     if (use_minidump)
         descriptor = std::make_shared<google_breakpad::MinidumpDescriptor>(getMinidumpPath(config().getString("logger.log", "")));
 #endif
 
-    /// sensitive data masking rules are not used here
-    buildLoggers(config(), logger(), self.commandName());
 
     /// After initialized loggers but before initialized signal handling.
     if (should_setup_watchdog)
