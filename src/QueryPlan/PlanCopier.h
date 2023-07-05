@@ -18,97 +18,26 @@
 #include <Core/Names.h>
 #include <QueryPlan/PlanNode.h>
 #include <QueryPlan/SymbolAllocator.h>
-#include <QueryPlan/SymbolMapper.h>
-#include <Interpreters/Context.h>
-#include <Interpreters/Context_fwd.h>
-#include <QueryPlan/CTEInfo.h>
-#include <QueryPlan/ExceptStep.h>
-#include <QueryPlan/PlanVisitor.h>
-#include <QueryPlan/SimplePlanRewriter.h>
+#include <QueryPlan/ProjectionStep.h>
 
 #include <memory>
 
 namespace DB
 {
-class PlanCopier 
+
+// todo@kaixi: implement for all plan nodes
+class PlanCopier
 {
 public:
     static std::shared_ptr<ProjectionStep> reallocateWithProjection(
         const DataStream & data_stream, SymbolAllocator & symbolAllocator,
         std::unordered_map<std::string, std::string> & reallocated_names);
 
-    /// copy will copy the current PlanNode, and replace all of its symbols to new symbols recursively
-    static PlanNodePtr copy(const PlanNodePtr & plan, ContextMutablePtr & context, std::unordered_map<SymbolMapper::Symbol, SymbolMapper::Symbol> & mapping);
-    static QueryPlanPtr copy(const QueryPlanPtr & plan, ContextMutablePtr & context);
-
-    static PlanNodePtr copyWithoutReplacingSymbol(const PlanNodePtr & plan, ContextMutablePtr & context);
-
-    static QueryPlanPtr copyWithoutReplacingSymbol(const QueryPlanPtr & plan, ContextMutablePtr & context);
+    static PlanNodePtr copy(const PlanNodePtr & plan, ContextMutablePtr & context);
 
     static bool isOverlapping(const DataStream & data_stream, const DataStream & data_stream2);
 
-private:
-    static PlanNodePtr copyPlanNode(const PlanNodePtr & plan, ContextMutablePtr & context, std::unordered_map<SymbolMapper::Symbol, SymbolMapper::Symbol>& mapping);
-};
-
-class PlanCopierVisitor : public PlanNodeVisitor<PlanNodePtr, Void>
-{
-public:
-    
-    explicit PlanCopierVisitor(ContextMutablePtr context_,  std::unordered_map<SymbolMapper::Symbol, SymbolMapper::Symbol>& mapping_) : id_allocator(context_->getPlanNodeIdAllocator()), mapping(mapping_), context_mut_ptr(context_), symbol_mapper(nullptr, nullptr) {
-        symbol_mapper = SymbolMapper::symbolReallocator(this->mapping, *context_->getSymbolAllocator(), context_);
-    }
-
-    std::unordered_map<SymbolMapper::Symbol, SymbolMapper::Symbol> getMappings() { return mapping; }
-    /// this function will copy planNode and reallocate new symbols from bottom to top
-    PlanNodePtr copy(const PlanNodePtr & plan, ContextMutablePtr & context);
-    static QueryPlanPtr copy(const QueryPlanPtr & plan, ContextMutablePtr & context);
-
-    static bool isOverlapping(const DataStream & data_stream, const DataStream & data_stream2);
-
-
-    PlanNodePtr visitPlanNode(PlanNodeBase &, Void &) override;
-    PlanNodePtr visitProjectionNode(ProjectionNode &, Void &) override;
-    PlanNodePtr visitAggregatingNode(AggregatingNode &, Void &) override;
-    PlanNodePtr visitApplyNode(ApplyNode &, Void &) override;
-    PlanNodePtr visitArrayJoinNode(ArrayJoinNode &, Void &) override;
-    PlanNodePtr visitAssignUniqueIdNode(AssignUniqueIdNode &, Void &) override;
-    PlanNodePtr visitCreatingSetsNode(CreatingSetsNode &, Void &) override;
-    PlanNodePtr visitCubeNode(CubeNode &, Void &) override;
-    PlanNodePtr visitDistinctNode(DistinctNode &, Void &) override;
-    PlanNodePtr visitEnforceSingleRowNode(EnforceSingleRowNode &, Void &) override;
-    PlanNodePtr visitExpressionNode(ExpressionNode &, Void &) override;
-    PlanNodePtr visitExceptNode(ExceptNode &, Void &) override;
-    PlanNodePtr visitExtremesNode(ExtremesNode &, Void &) override;
-    PlanNodePtr visitExchangeNode(ExchangeNode &, Void &) override;
-    PlanNodePtr visitFillingNode(FillingNode &, Void &) override;
-    PlanNodePtr visitFinalSampleNode(FinalSampleNode &, Void &) override;
-    PlanNodePtr visitFinishSortingNode(FinishSortingNode &, Void &) override;
-    PlanNodePtr visitFilterNode(FilterNode &, Void &) override;
-    PlanNodePtr visitIntersectNode(IntersectNode &, Void &) override;
-    PlanNodePtr visitJoinNode(JoinNode &, Void &) override;
-    PlanNodePtr visitTableScanNode(TableScanNode &, Void &) override;
-    PlanNodePtr visitLimitNode(LimitNode &, Void &) override;
-    PlanNodePtr visitLimitByNode(LimitByNode &, Void &) override;
-    PlanNodePtr visitTopNFilteringNode(TopNFilteringNode &, Void &) override;
-    PlanNodePtr visitSortingNode(SortingNode &, Void &) override;
-    PlanNodePtr visitOffsetNode(OffsetNode &, Void &) override;
-    PlanNodePtr visitPartitionTopNNode(PartitionTopNNode &, Void &) override;
-    PlanNodePtr visitPartialSortingNode(PartialSortingNode &, Void &) override;
-    PlanNodePtr visitReadNothingNode(ReadNothingNode &, Void &) override;
-    PlanNodePtr visitRemoteExchangeSourceNode(RemoteExchangeSourceNode &, Void &) override;
-    PlanNodePtr visitTotalsHavingNode(TotalsHavingNode &, Void &) override;
-    PlanNodePtr visitUnionNode(UnionNode &, Void &) override;
-    PlanNodePtr visitValuesNode(ValuesNode &, Void &) override;
-    PlanNodePtr visitWindowNode(WindowNode &, Void &) override;
-    PlanNodePtr visitMergeSortingNode(MergeSortingNode &, Void &) override;
-    PlanNodePtr visitMergingSortedNode(MergingSortedNode &, Void &) override;
-    PlanNodePtr visitMergingAggregatedNode(MergingAggregatedNode &, Void &) override;
-private:
-    PlanNodeIdAllocatorPtr id_allocator;
-    std::unordered_map<SymbolMapper::Symbol, SymbolMapper::Symbol> mapping;
-    ContextMutablePtr context_mut_ptr;
-    SymbolMapper symbol_mapper;
+    PlanCopier() = delete;
 };
 
 }

@@ -42,7 +42,6 @@ public:
     void serialize(WriteBuffer & buf) const override;
     static QueryPlanStepPtr deserialize(ReadBuffer & buf, ContextPtr);
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
-    ArrayJoinActionPtr getArrayJoinAction() const { return array_join; }
     void setInputStreams(const DataStreams & input_streams_) override;
 
 private:

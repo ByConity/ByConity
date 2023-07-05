@@ -40,11 +40,6 @@ public:
     void describeActions(JSONBuilder::JSONMap & map) const override;
     void describeActions(FormatSettings & settings) const override;
 
-    SortDescription getPrefixDescription() const { return prefix_description; }
-    SortDescription getResultDescription() const { return result_description; }
-    size_t getMaxBlockSize() const { return max_block_size; }
-    UInt64 getLimit() const { return limit; }
-
     /// Add limit or change it to lower value.
     void updateLimit(size_t limit_);
 

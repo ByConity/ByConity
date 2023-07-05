@@ -58,61 +58,61 @@ Projection est. ? rows
                               Outputs: [d_date_sk, d_moy, d_year]
 note: CTE(Common Table Expression) is applied for 2 times.
 Projection est. ? rows
-│     Expressions: cov:=`expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_10`, cov_1:=`expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_11`, d_moy:=d_moy_10, d_moy_1:=d_moy_11, i_item_sk:=i_item_sk_10, i_item_sk_1:=i_item_sk_11, mean:=`expr#avg(inv_quantity_on_hand)_10`, mean_1:=`expr#avg(inv_quantity_on_hand)_11`, w_warehouse_sk:=w_warehouse_sk_10, w_warehouse_sk_1:=w_warehouse_sk_11
+│     Expressions: cov:=`expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_4`, cov_1:=`expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_5`, d_moy:=d_moy_4, d_moy_1:=d_moy_5, i_item_sk:=i_item_sk_4, i_item_sk_1:=i_item_sk_5, mean:=`expr#avg(inv_quantity_on_hand)_4`, mean_1:=`expr#avg(inv_quantity_on_hand)_5`, w_warehouse_sk:=w_warehouse_sk_4, w_warehouse_sk_1:=w_warehouse_sk_5
 └─ Sorting est. ? rows
-   │     Order by: {w_warehouse_sk_10 asc, i_item_sk_10 asc, d_moy_10 asc, expr#avg(inv_quantity_on_hand)_10 asc, expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_10 asc, d_moy_11 asc, expr#avg(inv_quantity_on_hand)_11 asc, expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_11 asc}
+   │     Order by: {w_warehouse_sk_4 asc, i_item_sk_4 asc, d_moy_4 asc, expr#avg(inv_quantity_on_hand)_4 asc, expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_4 asc, d_moy_5 asc, expr#avg(inv_quantity_on_hand)_5 asc, expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_5 asc}
    └─ Gather Exchange est. ? rows
       └─ Sorting est. ? rows
-         │     Order by: {w_warehouse_sk_10 asc, i_item_sk_10 asc, d_moy_10 asc, expr#avg(inv_quantity_on_hand)_10 asc, expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_10 asc, d_moy_11 asc, expr#avg(inv_quantity_on_hand)_11 asc, expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_11 asc}
+         │     Order by: {w_warehouse_sk_4 asc, i_item_sk_4 asc, d_moy_4 asc, expr#avg(inv_quantity_on_hand)_4 asc, expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_4 asc, d_moy_5 asc, expr#avg(inv_quantity_on_hand)_5 asc, expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_5 asc}
          └─ Inner Join est. ? rows
-            │     Condition: i_item_sk_10 == i_item_sk_11, w_warehouse_sk_10 == w_warehouse_sk_11
+            │     Condition: i_item_sk_4 == i_item_sk_5, w_warehouse_sk_4 == w_warehouse_sk_5
             ├─ Repartition Exchange est. ? rows
-            │  │     Partition by: {i_item_sk_10, w_warehouse_sk_10}
+            │  │     Partition by: {i_item_sk_4, w_warehouse_sk_4}
             │  └─ Filter est. ? rows
-            │     │     Condition: (`expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_10` > 1.5) AND (d_moy_10 = 1)
+            │     │     Condition: (d_moy_4 = 1) AND (`expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_4` > 1.5)
             │     └─ CTERef [0] est. ? rows
             └─ Repartition Exchange est. ? rows
-               │     Partition by: {i_item_sk_11, w_warehouse_sk_11}
+               │     Partition by: {i_item_sk_5, w_warehouse_sk_5}
                └─ Filter est. ? rows
-                  │     Condition: d_moy_11 = 2
+                  │     Condition: d_moy_5 = 2
                   └─ CTERef [0] est. ? rows
 CTEDef [0]
 Projection est. ? rows
-│     Expressions: [d_moy_9, expr#avg(inv_quantity_on_hand)_9, i_item_sk_9, w_warehouse_sk_9], expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_9:=caseWithExpression(`expr#avg(inv_quantity_on_hand)_9`, 0, NULL, `expr#stddevSamp(inv_quantity_on_hand)_9` / `expr#avg(inv_quantity_on_hand)_9`)
+│     Expressions: [d_moy_3, expr#avg(inv_quantity_on_hand)_3, i_item_sk_3, w_warehouse_sk_3], expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_3:=caseWithExpression(`expr#avg(inv_quantity_on_hand)_3`, 0, NULL, `expr#stddevSamp(inv_quantity_on_hand)_3` / `expr#avg(inv_quantity_on_hand)_3`)
 └─ Filter est. ? rows
-   │     Condition: ((d_moy_9 = 2) OR ((caseWithExpression(`expr#avg(inv_quantity_on_hand)_9`, 0, NULL, `expr#stddevSamp(inv_quantity_on_hand)_9` / `expr#avg(inv_quantity_on_hand)_9`) > 1.5) AND (d_moy_9 = 1))) AND (caseWithExpression(`expr#avg(inv_quantity_on_hand)_9`, 0, 0, `expr#stddevSamp(inv_quantity_on_hand)_9` / `expr#avg(inv_quantity_on_hand)_9`) > 1)
+   │     Condition: (((d_moy_3 = 1) AND (caseWithExpression(`expr#avg(inv_quantity_on_hand)_3`, 0, NULL, `expr#stddevSamp(inv_quantity_on_hand)_3` / `expr#avg(inv_quantity_on_hand)_3`) > 1.5)) OR (d_moy_3 = 2)) AND (caseWithExpression(`expr#avg(inv_quantity_on_hand)_3`, 0, 0, `expr#stddevSamp(inv_quantity_on_hand)_3` / `expr#avg(inv_quantity_on_hand)_3`) > 1)
    └─ MergingAggregated est. ? rows
       └─ Repartition Exchange est. ? rows
-         │     Partition by: {d_moy_9, i_item_sk_9, w_warehouse_name_9, w_warehouse_sk_9}
+         │     Partition by: {d_moy_3, i_item_sk_3, w_warehouse_name_3, w_warehouse_sk_3}
          └─ Aggregating est. ? rows
-            │     Group by: {d_moy_9, i_item_sk_9, w_warehouse_name_9, w_warehouse_sk_9}
-            │     Aggregates: expr#stddevSamp(inv_quantity_on_hand)_9:=AggNull(stddevSamp)(inv_quantity_on_hand_7), expr#avg(inv_quantity_on_hand)_9:=AggNull(avg)(inv_quantity_on_hand_7)
+            │     Group by: {d_moy_3, i_item_sk_3, w_warehouse_name_3, w_warehouse_sk_3}
+            │     Aggregates: expr#stddevSamp(inv_quantity_on_hand)_3:=AggNull(stddevSamp)(inv_quantity_on_hand_1), expr#avg(inv_quantity_on_hand)_3:=AggNull(avg)(inv_quantity_on_hand_1)
             └─ Inner Join est. ? rows
-               │     Condition: inv_date_sk_7 == d_date_sk_7
+               │     Condition: inv_date_sk_1 == d_date_sk_1
                ├─ Repartition Exchange est. ? rows
-               │  │     Partition by: {inv_date_sk_7}
+               │  │     Partition by: {inv_date_sk_1}
                │  └─ Inner Join est. ? rows
-               │     │     Condition: inv_warehouse_sk_7 == w_warehouse_sk_9
+               │     │     Condition: inv_warehouse_sk_1 == w_warehouse_sk_3
                │     ├─ Repartition Exchange est. ? rows
-               │     │  │     Partition by: {inv_warehouse_sk_7}
+               │     │  │     Partition by: {inv_warehouse_sk_1}
                │     │  └─ Inner Join est. ? rows
-               │     │     │     Condition: inv_item_sk_7 == i_item_sk_9
+               │     │     │     Condition: inv_item_sk_1 == i_item_sk_3
                │     │     ├─ Repartition Exchange est. ? rows
-               │     │     │  │     Partition by: {inv_item_sk_7}
+               │     │     │  │     Partition by: {inv_item_sk_1}
                │     │     │  └─ TableScan tpcds.inventory est. ? rows
-               │     │     │           Outputs: inv_date_sk_7:=inv_date_sk, inv_item_sk_7:=inv_item_sk, inv_quantity_on_hand_7:=inv_quantity_on_hand, inv_warehouse_sk_7:=inv_warehouse_sk
+               │     │     │           Outputs: inv_date_sk_1:=inv_date_sk, inv_item_sk_1:=inv_item_sk, inv_quantity_on_hand_1:=inv_quantity_on_hand, inv_warehouse_sk_1:=inv_warehouse_sk
                │     │     └─ Repartition Exchange est. ? rows
-               │     │        │     Partition by: {i_item_sk_9}
+               │     │        │     Partition by: {i_item_sk_3}
                │     │        └─ TableScan tpcds.item est. ? rows
-               │     │                 Outputs: i_item_sk_9:=i_item_sk
+               │     │                 Outputs: i_item_sk_3:=i_item_sk
                │     └─ Repartition Exchange est. ? rows
-               │        │     Partition by: {w_warehouse_sk_9}
+               │        │     Partition by: {w_warehouse_sk_3}
                │        └─ TableScan tpcds.warehouse est. ? rows
-               │                 Outputs: w_warehouse_name_9:=w_warehouse_name, w_warehouse_sk_9:=w_warehouse_sk
+               │                 Outputs: w_warehouse_name_3:=w_warehouse_name, w_warehouse_sk_3:=w_warehouse_sk
                └─ Repartition Exchange est. ? rows
-                  │     Partition by: {d_date_sk_7}
+                  │     Partition by: {d_date_sk_1}
                   └─ Filter est. ? rows
-                     │     Condition: d_year_7 = 2001
+                     │     Condition: d_year_1 = 2001
                      └─ TableScan tpcds.date_dim est. ? rows
-                              Outputs: d_date_sk_7:=d_date_sk, d_moy_9:=d_moy, d_year_7:=d_year
+                              Outputs: d_date_sk_1:=d_date_sk, d_moy_3:=d_moy, d_year_1:=d_year
 note: CTE(Common Table Expression) is applied for 2 times.

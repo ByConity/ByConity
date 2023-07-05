@@ -34,8 +34,7 @@ public:
 
     /// For LEFT ARRAY JOIN.
     FunctionOverloadResolverPtr function_builder;
-    ArrayJoinAction(const NameSet & array_joined_columns_, bool is_left, bool is_unaligned, FunctionOverloadResolverPtr function_length
-                    ,FunctionOverloadResolverPtr function_greatest, FunctionOverloadResolverPtr function_array_resize, FunctionOverloadResolverPtr function_builder);
+
     ArrayJoinAction(const NameSet & array_joined_columns_, bool array_join_is_left, ContextPtr context);
     void prepare(ColumnsWithTypeAndName & sample) const;
     void execute(Block & block);

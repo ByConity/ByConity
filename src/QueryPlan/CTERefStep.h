@@ -17,7 +17,6 @@
 
 #include <QueryPlan/ISourceStep.h>
 #include <QueryPlan/ProjectionStep.h>
-#include <QueryPlan/SymbolMapper.h>
 
 #include <memory>
 
@@ -54,7 +53,6 @@ public:
     void serialize(WriteBuffer &) const override;
 
     std::shared_ptr<ProjectionStep> toProjectionStep() const;
-    std::shared_ptr<ProjectionStep> toProjectionStepWithNewSymbols(SymbolMapper & mapper) const;
     PlanNodePtr toInlinedPlanNode(CTEInfo & cte_info, ContextMutablePtr & context, bool with_filter = false) const;
 
 private:

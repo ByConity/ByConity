@@ -17,123 +17,122 @@ Projection est. 100 rows
                   ├─ Repartition Exchange est. 2261358 rows
                   │  │     Partition by: {i_brand_id_4, i_category_id_4, i_class_id_4, i_manufact_id_4}
                   │  └─ Projection est. 4522716 rows
-                  │     │     Expressions: d_year_4:=d_year_33, expr#sum(sales_amt)_1:=`expr#sum(sales_amt)_9`, expr#sum(sales_cnt)_1:=`expr#sum(sales_cnt)_9`, i_brand_id_4:=i_brand_id_33, i_category_id_4:=i_category_id_33, i_class_id_4:=i_class_id_33, i_manufact_id_4:=i_manufact_id_33
-                  │     └─ MergingAggregated est. 3768930 rows
-                  │        └─ Repartition Exchange est. 3768930 rows
-                  │           │     Partition by: {d_year_33, i_brand_id_33, i_category_id_33, i_class_id_33, i_manufact_id_33}
-                  │           └─ Aggregating est. 3768930 rows
-                  │              │     Group by: {d_year_33, i_brand_id_33, i_category_id_33, i_class_id_33, i_manufact_id_33}
-                  │              │     Aggregates: expr#sum(sales_cnt)_9:=AggNull(sum)(expr#minus(cs_quantity, coalesce(cr_return_quantity, 0))_15), expr#sum(sales_amt)_9:=AggNull(sum)(expr#minus(cs_ext_sales_price, coalesce(cr_return_amount, CAST('0.0', 'Decimal(18, 1)')))_15)
+                  │     │     Expressions: d_year_4:=d_year_3, expr#sum(sales_amt)_1:=`expr#sum(sales_amt)`, expr#sum(sales_cnt)_1:=`expr#sum(sales_cnt)`, i_brand_id_4:=i_brand_id_3, i_category_id_4:=i_category_id_3, i_class_id_4:=i_class_id_3, i_manufact_id_4:=i_manufact_id_3
+                  │     └─ MergingAggregated est. 3015144 rows
+                  │        └─ Repartition Exchange est. 3015144 rows
+                  │           │     Partition by: {d_year_3, i_brand_id_3, i_category_id_3, i_class_id_3, i_manufact_id_3}
+                  │           └─ Aggregating est. 3015144 rows
+                  │              │     Group by: {d_year_3, i_brand_id_3, i_category_id_3, i_class_id_3, i_manufact_id_3}
+                  │              │     Aggregates: expr#sum(sales_cnt):=AggNull(sum)(expr#minus(cs_quantity, coalesce(cr_return_quantity, 0))_1), expr#sum(sales_amt):=AggNull(sum)(expr#minus(cs_ext_sales_price, coalesce(cr_return_amount, CAST('0.0', 'Decimal(18, 1)')))_1)
                   │              └─ Union est. 49439210 rows
                   │                 ├─ Projection est. 14060275 rows
-                  │                 │  │     Expressions: [d_year_30, i_brand_id_30, i_category_id_30, i_class_id_30, i_manufact_id_30], expr#minus(cs_ext_sales_price, coalesce(cr_return_amount, CAST('0.0', 'Decimal(18, 1)')))_14:=cs_ext_sales_price_7 - coalesce(cr_return_amount_7, '0.0'), expr#minus(cs_quantity, coalesce(cr_return_quantity, 0))_14:=cs_quantity_7 - coalesce(cr_return_quantity_7, 0)
+                  │                 │  │     Expressions: [d_year, i_brand_id, i_category_id, i_class_id, i_manufact_id], expr#minus(cs_ext_sales_price, coalesce(cr_return_amount, CAST('0.0', 'Decimal(18, 1)'))):=cs_ext_sales_price - coalesce(cr_return_amount, '0.0'), expr#minus(cs_quantity, coalesce(cr_return_quantity, 0)):=cs_quantity - coalesce(cr_return_quantity, 0)
                   │                 │  └─ Left Join est. 20971211 rows
-                  │                 │     │     Condition: cs_item_sk_7 == cr_item_sk_7, cs_order_number_7 == cr_order_number_7
+                  │                 │     │     Condition: cs_item_sk == cr_item_sk, cs_order_number == cr_order_number
                   │                 │     ├─ Repartition Exchange est. 14060275 rows
-                  │                 │     │  │     Partition by: {cs_item_sk_7, cs_order_number_7}
+                  │                 │     │  │     Partition by: {cs_item_sk, cs_order_number}
                   │                 │     │  └─ Inner Join est. 14060275 rows
-                  │                 │     │     │     Condition: cs_sold_date_sk_7 == d_date_sk_21
+                  │                 │     │     │     Condition: cs_sold_date_sk == d_date_sk
                   │                 │     │     ├─ Inner Join est. 71765186 rows
-                  │                 │     │     │  │     Condition: cs_item_sk_7 == i_item_sk_21
+                  │                 │     │     │  │     Condition: cs_item_sk == i_item_sk
                   │                 │     │     │  ├─ Local Exchange est. 1439980416 rows
                   │                 │     │     │  │  └─ Filter est. 1439980416 rows
-                  │                 │     │     │  │     │     Dynamic Filters: {cs_item_sk_7:bloomfilter,cs_item_sk_7:range,cs_sold_date_sk_7:bloomfilter,cs_sold_date_sk_7:range}
+                  │                 │     │     │  │     │     Dynamic Filters: {cs_item_sk:bloomfilter,cs_item_sk:range,cs_sold_date_sk:bloomfilter,cs_sold_date_sk:range}
                   │                 │     │     │  │     └─ TableScan tpcds.catalog_sales est. 1439980416 rows
-                  │                 │     │     │  │              Outputs: cs_ext_sales_price_7:=cs_ext_sales_price, cs_item_sk_7:=cs_item_sk, cs_order_number_7:=cs_order_number, cs_quantity_7:=cs_quantity, cs_sold_date_sk_7:=cs_sold_date_sk
+                  │                 │     │     │  │              Outputs: [cs_ext_sales_price, cs_item_sk, cs_order_number, cs_quantity, cs_sold_date_sk]
                   │                 │     │     │  └─ Broadcast Exchange est. 29902 rows
                   │                 │     │     │     └─ Projection est. 29902 rows
-                  │                 │     │     │        │     Expressions: [i_brand_id_30, i_category_21, i_category_id_30, i_class_id_30, i_item_sk_21, i_manufact_id_30]
-                  │                 │     │     │        │     Dynamic Filters Builder: {i_item_sk_21}
+                  │                 │     │     │        │     Expressions: [i_brand_id, i_category, i_category_id, i_class_id, i_item_sk, i_manufact_id]
+                  │                 │     │     │        │     Dynamic Filters Builder: {i_item_sk}
                   │                 │     │     │        └─ Filter est. 29902 rows
-                  │                 │     │     │           │     Condition: i_category_21 = 'Men'
+                  │                 │     │     │           │     Condition: i_category = 'Men'
                   │                 │     │     │           └─ TableScan tpcds.item est. 300000 rows
-                  │                 │     │     │                    Outputs: i_brand_id_30:=i_brand_id, i_category_21:=i_category, i_category_id_30:=i_category_id, i_class_id_30:=i_class_id, i_item_sk_21:=i_item_sk, i_manufact_id_30:=i_manufact_id
+                  │                 │     │     │                    Outputs: [i_brand_id, i_category, i_category_id, i_class_id, i_item_sk, i_manufact_id]
                   │                 │     │     └─ Broadcast Exchange est. 365 rows
                   │                 │     │        └─ Projection est. 365 rows
-                  │                 │     │           │     Expressions: [d_date_sk_21, d_year_30]
-                  │                 │     │           │     Dynamic Filters Builder: {d_date_sk_21}
+                  │                 │     │           │     Expressions: [d_date_sk, d_year]
+                  │                 │     │           │     Dynamic Filters Builder: {d_date_sk}
                   │                 │     │           └─ Filter est. 365 rows
-                  │                 │     │              │     Condition: (d_year_30 = 2002) AND (d_year_30 IN (2001, 2002)) AND (2002 = d_year_30)
+                  │                 │     │              │     Condition: (d_year IN (2001, 2002)) AND (d_year = 2002) AND (2002 = d_year)
                   │                 │     │              └─ TableScan tpcds.date_dim est. 73049 rows
-                  │                 │     │                       Outputs: d_date_sk_21:=d_date_sk, d_year_30:=d_year
+                  │                 │     │                       Outputs: [d_date_sk, d_year]
                   │                 │     └─ Repartition Exchange est. 143996756 rows
-                  │                 │        │     Partition by: {cr_item_sk_7, cr_order_number_7}
+                  │                 │        │     Partition by: {cr_item_sk, cr_order_number}
                   │                 │        └─ TableScan tpcds.catalog_returns est. 143996756 rows
-                  │                 │                 Outputs: cr_item_sk_7:=cr_item_sk, cr_order_number_7:=cr_order_number, cr_return_amount_7:=cr_return_amount, cr_return_quantity_7:=cr_return_quantity
+                  │                 │                 Outputs: [cr_item_sk, cr_order_number, cr_return_amount, cr_return_quantity]
                   │                 ├─ Projection est. 28303122 rows
-                  │                 │  │     Expressions: [d_year_31, i_brand_id_31, i_category_id_31, i_class_id_31, i_manufact_id_31], expr#minus(ss_ext_sales_price, coalesce(sr_return_amt, CAST('0.0', 'Decimal(18, 1)')))_7:=ss_ext_sales_price_7 - coalesce(sr_return_amt_7, '0.0'), expr#minus(ss_quantity, coalesce(sr_return_quantity, 0))_7:=ss_quantity_7 - coalesce(sr_return_quantity_7, 0)
+                  │                 │  │     Expressions: [d_year_1, i_brand_id_1, i_category_id_1, i_class_id_1, i_manufact_id_1], expr#minus(ss_ext_sales_price, coalesce(sr_return_amt, CAST('0.0', 'Decimal(18, 1)'))):=ss_ext_sales_price - coalesce(sr_return_amt, '0.0'), expr#minus(ss_quantity, coalesce(sr_return_quantity, 0)):=ss_quantity - coalesce(sr_return_quantity, 0)
                   │                 │  └─ Left Join est. 47236015 rows
-                  │                 │     │     Condition: ss_item_sk_7 == sr_item_sk_7, ss_ticket_number_7 == sr_ticket_number_7
+                  │                 │     │     Condition: ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
                   │                 │     ├─ Repartition Exchange est. 28303122 rows
-                  │                 │     │  │     Partition by: {ss_item_sk_7, ss_ticket_number_7}
+                  │                 │     │  │     Partition by: {ss_item_sk, ss_ticket_number}
                   │                 │     │  └─ Inner Join est. 28303122 rows
-                  │                 │     │     │     Condition: ss_sold_date_sk_7 == d_date_sk_22
+                  │                 │     │     │     Condition: ss_sold_date_sk == d_date_sk_1
                   │                 │     │     ├─ Inner Join est. 143531727 rows
-                  │                 │     │     │  │     Condition: ss_item_sk_7 == i_item_sk_22
+                  │                 │     │     │  │     Condition: ss_item_sk == i_item_sk_1
                   │                 │     │     │  ├─ Local Exchange est. 2879987999 rows
                   │                 │     │     │  │  └─ Filter est. 2879987999 rows
-                  │                 │     │     │  │     │     Dynamic Filters: {ss_item_sk_7:bloomfilter,ss_item_sk_7:range,ss_sold_date_sk_7:bloomfilter,ss_sold_date_sk_7:range}
+                  │                 │     │     │  │     │     Dynamic Filters: {ss_item_sk:bloomfilter,ss_item_sk:range,ss_sold_date_sk:bloomfilter,ss_sold_date_sk:range}
                   │                 │     │     │  │     └─ TableScan tpcds.store_sales est. 2879987999 rows
-                  │                 │     │     │  │              Outputs: ss_ext_sales_price_7:=ss_ext_sales_price, ss_item_sk_7:=ss_item_sk, ss_quantity_7:=ss_quantity, ss_sold_date_sk_7:=ss_sold_date_sk, ss_ticket_number_7:=ss_ticket_number
+                  │                 │     │     │  │              Outputs: [ss_ext_sales_price, ss_item_sk, ss_quantity, ss_sold_date_sk, ss_ticket_number]
                   │                 │     │     │  └─ Broadcast Exchange est. 29902 rows
                   │                 │     │     │     └─ Projection est. 29902 rows
-                  │                 │     │     │        │     Expressions: [i_brand_id_31, i_category_22, i_category_id_31, i_class_id_31, i_item_sk_22, i_manufact_id_31]
-                  │                 │     │     │        │     Dynamic Filters Builder: {i_item_sk_22}
+                  │                 │     │     │        │     Expressions: [i_brand_id_1, i_category_1, i_category_id_1, i_class_id_1, i_item_sk_1, i_manufact_id_1]
+                  │                 │     │     │        │     Dynamic Filters Builder: {i_item_sk_1}
                   │                 │     │     │        └─ Filter est. 29902 rows
-                  │                 │     │     │           │     Condition: i_category_22 = 'Men'
+                  │                 │     │     │           │     Condition: i_category_1 = 'Men'
                   │                 │     │     │           └─ TableScan tpcds.item est. 300000 rows
-                  │                 │     │     │                    Outputs: i_brand_id_31:=i_brand_id, i_category_22:=i_category, i_category_id_31:=i_category_id, i_class_id_31:=i_class_id, i_item_sk_22:=i_item_sk, i_manufact_id_31:=i_manufact_id
+                  │                 │     │     │                    Outputs: i_brand_id_1:=i_brand_id, i_category_1:=i_category, i_category_id_1:=i_category_id, i_class_id_1:=i_class_id, i_item_sk_1:=i_item_sk, i_manufact_id_1:=i_manufact_id
                   │                 │     │     └─ Broadcast Exchange est. 365 rows
                   │                 │     │        └─ Projection est. 365 rows
-                  │                 │     │           │     Expressions: [d_date_sk_22, d_year_31]
-                  │                 │     │           │     Dynamic Filters Builder: {d_date_sk_22}
+                  │                 │     │           │     Expressions: [d_date_sk_1, d_year_1]
+                  │                 │     │           │     Dynamic Filters Builder: {d_date_sk_1}
                   │                 │     │           └─ Filter est. 365 rows
-                  │                 │     │              │     Condition: (2002 = d_year_31) AND (d_year_31 = 2002) AND (d_year_31 IN (2001, 2002))
+                  │                 │     │              │     Condition: (d_year_1 = 2002) AND (d_year_1 IN (2001, 2002)) AND (2002 = d_year_1)
                   │                 │     │              └─ TableScan tpcds.date_dim est. 73049 rows
-                  │                 │     │                       Outputs: d_date_sk_22:=d_date_sk, d_year_31:=d_year
+                  │                 │     │                       Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year
                   │                 │     └─ Repartition Exchange est. 287999764 rows
-                  │                 │        │     Partition by: {sr_item_sk_7, sr_ticket_number_7}
+                  │                 │        │     Partition by: {sr_item_sk, sr_ticket_number}
                   │                 │        └─ TableScan tpcds.store_returns est. 287999764 rows
-                  │                 │                 Outputs: sr_item_sk_7:=sr_item_sk, sr_return_amt_7:=sr_return_amt, sr_return_quantity_7:=sr_return_quantity, sr_ticket_number_7:=sr_ticket_number
+                  │                 │                 Outputs: [sr_item_sk, sr_return_amt, sr_return_quantity, sr_ticket_number]
                   │                 └─ Projection est. 7075813 rows
-                  │                    │     Expressions: [d_year_32, i_brand_id_32, i_category_id_32, i_class_id_32, i_manufact_id_32], expr#minus(ws_ext_sales_price, coalesce(wr_return_amt, CAST('0.0', 'Decimal(18, 1)')))_7:=ws_ext_sales_price_7 - coalesce(wr_return_amt_7, '0.0'), expr#minus(ws_quantity, coalesce(wr_return_quantity, 0))_7:=ws_quantity_7 - coalesce(wr_return_quantity_7, 0)
+                  │                    │     Expressions: [d_year_2, i_brand_id_2, i_category_id_2, i_class_id_2, i_manufact_id_2], expr#minus(ws_ext_sales_price, coalesce(wr_return_amt, CAST('0.0', 'Decimal(18, 1)'))):=ws_ext_sales_price - coalesce(wr_return_amt, '0.0'), expr#minus(ws_quantity, coalesce(wr_return_quantity, 0)):=ws_quantity - coalesce(wr_return_quantity, 0)
                   │                    └─ Left Join est. 11524380 rows
-                  │                       │     Condition: ws_item_sk_7 == wr_item_sk_7, ws_order_number_7 == wr_order_number_7
+                  │                       │     Condition: ws_item_sk == wr_item_sk, ws_order_number == wr_order_number
                   │                       ├─ Repartition Exchange est. 7075813 rows
-                  │                       │  │     Partition by: {ws_item_sk_7, ws_order_number_7}
+                  │                       │  │     Partition by: {ws_item_sk, ws_order_number}
                   │                       │  └─ Inner Join est. 7075813 rows
-                  │                       │     │     Condition: ws_sold_date_sk_7 == d_date_sk_23
+                  │                       │     │     Condition: ws_sold_date_sk == d_date_sk_2
                   │                       │     ├─ Inner Join est. 35883100 rows
-                  │                       │     │  │     Condition: ws_item_sk_7 == i_item_sk_23
+                  │                       │     │  │     Condition: ws_item_sk == i_item_sk_2
                   │                       │     │  ├─ Local Exchange est. 720000376 rows
                   │                       │     │  │  └─ Filter est. 720000376 rows
-                  │                       │     │  │     │     Dynamic Filters: {ws_item_sk_7:bloomfilter,ws_item_sk_7:range,ws_sold_date_sk_7:bloomfilter,ws_sold_date_sk_7:range}
+                  │                       │     │  │     │     Dynamic Filters: {ws_item_sk:bloomfilter,ws_item_sk:range,ws_sold_date_sk:bloomfilter,ws_sold_date_sk:range}
                   │                       │     │  │     └─ TableScan tpcds.web_sales est. 720000376 rows
-                  │                       │     │  │              Outputs: ws_ext_sales_price_7:=ws_ext_sales_price, ws_item_sk_7:=ws_item_sk, ws_order_number_7:=ws_order_number, ws_quantity_7:=ws_quantity, ws_sold_date_sk_7:=ws_sold_date_sk
+                  │                       │     │  │              Outputs: [ws_ext_sales_price, ws_item_sk, ws_order_number, ws_quantity, ws_sold_date_sk]
                   │                       │     │  └─ Broadcast Exchange est. 29902 rows
                   │                       │     │     └─ Projection est. 29902 rows
-                  │                       │     │        │     Expressions: [i_brand_id_32, i_category_23, i_category_id_32, i_class_id_32, i_item_sk_23, i_manufact_id_32]
-                  │                       │     │        │     Dynamic Filters Builder: {i_item_sk_23}
+                  │                       │     │        │     Expressions: [i_brand_id_2, i_category_2, i_category_id_2, i_class_id_2, i_item_sk_2, i_manufact_id_2]
+                  │                       │     │        │     Dynamic Filters Builder: {i_item_sk_2}
                   │                       │     │        └─ Filter est. 29902 rows
-                  │                       │     │           │     Condition: i_category_23 = 'Men'
+                  │                       │     │           │     Condition: i_category_2 = 'Men'
                   │                       │     │           └─ TableScan tpcds.item est. 300000 rows
-                  │                       │     │                    Outputs: i_brand_id_32:=i_brand_id, i_category_23:=i_category, i_category_id_32:=i_category_id, i_class_id_32:=i_class_id, i_item_sk_23:=i_item_sk, i_manufact_id_32:=i_manufact_id
+                  │                       │     │                    Outputs: i_brand_id_2:=i_brand_id, i_category_2:=i_category, i_category_id_2:=i_category_id, i_class_id_2:=i_class_id, i_item_sk_2:=i_item_sk, i_manufact_id_2:=i_manufact_id
                   │                       │     └─ Broadcast Exchange est. 365 rows
                   │                       │        └─ Projection est. 365 rows
-                  │                       │           │     Expressions: [d_date_sk_23, d_year_32]
-                  │                       │           │     Dynamic Filters Builder: {d_date_sk_23}
+                  │                       │           │     Expressions: [d_date_sk_2, d_year_2]
+                  │                       │           │     Dynamic Filters Builder: {d_date_sk_2}
                   │                       │           └─ Filter est. 365 rows
-                  │                       │              │     Condition: (d_year_32 = 2002) AND (2002 = d_year_32) AND (d_year_32 IN (2001, 2002))
+                  │                       │              │     Condition: (d_year_2 IN (2001, 2002)) AND (d_year_2 = 2002) AND (2002 = d_year_2)
                   │                       │              └─ TableScan tpcds.date_dim est. 73049 rows
-                  │                       │                       Outputs: d_date_sk_23:=d_date_sk, d_year_32:=d_year
+                  │                       │                       Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year
                   │                       └─ Repartition Exchange est. 71997522 rows
-                  │                          │     Partition by: {wr_item_sk_7, wr_order_number_7}
+                  │                          │     Partition by: {wr_item_sk, wr_order_number}
                   │                          └─ TableScan tpcds.web_returns est. 71997522 rows
-                  │                                   Outputs: wr_item_sk_7:=wr_item_sk, wr_order_number_7:=wr_order_number, wr_return_amt_7:=wr_return_amt, wr_return_quantity_7:=wr_return_quantity
+                  │                                   Outputs: [wr_item_sk, wr_order_number, wr_return_amt, wr_return_quantity]
                   └─ Repartition Exchange est. 2261358 rows
                      │     Partition by: {i_brand_id_5, i_category_id_5, i_class_id_5, i_manufact_id_5}
                      └─ Projection est. 4522716 rows
-<<<<<<< HEAD
                         │     Expressions: d_year_5:=d_year_3, expr#sum(sales_amt)_2:=`expr#sum(sales_amt)`, expr#sum(sales_cnt)_2:=`expr#sum(sales_cnt)`, i_brand_id_5:=i_brand_id_3, i_category_id_5:=i_category_id_3, i_class_id_5:=i_class_id_3, i_manufact_id_5:=i_manufact_id_3
                         └─ MergingAggregated est. 2261358 rows
                            └─ Repartition Exchange est. 2261358 rows
@@ -141,119 +140,110 @@ Projection est. 100 rows
                               └─ Aggregating est. 2261358 rows
                                  │     Group by: {d_year_3, i_brand_id_3, i_category_id_3, i_class_id_3, i_manufact_id_3}
                                  │     Aggregates: expr#sum(sales_cnt):=AggNull(sum)(expr#minus(cs_quantity, coalesce(cr_return_quantity, 0))_1), expr#sum(sales_amt):=AggNull(sum)(expr#minus(cs_ext_sales_price, coalesce(cr_return_amount, CAST('0.0', 'Decimal(18, 1)')))_1)
-=======
-                        │     Expressions: d_year_5:=d_year_37, expr#sum(sales_amt)_2:=`expr#sum(sales_amt)_10`, expr#sum(sales_cnt)_2:=`expr#sum(sales_cnt)_10`, i_brand_id_5:=i_brand_id_37, i_category_id_5:=i_category_id_37, i_class_id_5:=i_class_id_37, i_manufact_id_5:=i_manufact_id_37
-                        └─ MergingAggregated est. 3015144 rows
-                           └─ Repartition Exchange est. 3015144 rows
-                              │     Partition by: {d_year_37, i_brand_id_37, i_category_id_37, i_class_id_37, i_manufact_id_37}
-                              └─ Aggregating est. 3015144 rows
-                                 │     Group by: {d_year_37, i_brand_id_37, i_category_id_37, i_class_id_37, i_manufact_id_37}
-                                 │     Aggregates: expr#sum(sales_cnt)_10:=AggNull(sum)(expr#minus(cs_quantity, coalesce(cr_return_quantity, 0))_17), expr#sum(sales_amt)_10:=AggNull(sum)(expr#minus(cs_ext_sales_price, coalesce(cr_return_amount, CAST('0.0', 'Decimal(18, 1)')))_17)
->>>>>>> aa98715ca22 (Merge branch 'cnch-ce-merge-symbolmapper' into 'cnch-ce-merge')
                                  └─ Union est. 49439210 rows
                                     ├─ Projection est. 14060275 rows
-                                    │  │     Expressions: [d_year_34, i_brand_id_34, i_category_id_34, i_class_id_34, i_manufact_id_34], expr#minus(cs_ext_sales_price, coalesce(cr_return_amount, CAST('0.0', 'Decimal(18, 1)')))_16:=cs_ext_sales_price_8 - coalesce(cr_return_amount_8, '0.0'), expr#minus(cs_quantity, coalesce(cr_return_quantity, 0))_16:=cs_quantity_8 - coalesce(cr_return_quantity_8, 0)
+                                    │  │     Expressions: [d_year, i_brand_id, i_category_id, i_class_id, i_manufact_id], expr#minus(cs_ext_sales_price, coalesce(cr_return_amount, CAST('0.0', 'Decimal(18, 1)'))):=cs_ext_sales_price - coalesce(cr_return_amount, '0.0'), expr#minus(cs_quantity, coalesce(cr_return_quantity, 0)):=cs_quantity - coalesce(cr_return_quantity, 0)
                                     │  └─ Left Join est. 20971211 rows
-                                    │     │     Condition: cs_item_sk_8 == cr_item_sk_8, cs_order_number_8 == cr_order_number_8
+                                    │     │     Condition: cs_item_sk == cr_item_sk, cs_order_number == cr_order_number
                                     │     ├─ Repartition Exchange est. 14060275 rows
-                                    │     │  │     Partition by: {cs_item_sk_8, cs_order_number_8}
+                                    │     │  │     Partition by: {cs_item_sk, cs_order_number}
                                     │     │  └─ Inner Join est. 14060275 rows
-                                    │     │     │     Condition: cs_sold_date_sk_8 == d_date_sk_24
+                                    │     │     │     Condition: cs_sold_date_sk == d_date_sk
                                     │     │     ├─ Inner Join est. 71765186 rows
-                                    │     │     │  │     Condition: cs_item_sk_8 == i_item_sk_24
+                                    │     │     │  │     Condition: cs_item_sk == i_item_sk
                                     │     │     │  ├─ Local Exchange est. 1439980416 rows
                                     │     │     │  │  └─ Filter est. 1439980416 rows
-                                    │     │     │  │     │     Dynamic Filters: {cs_item_sk_8:bloomfilter,cs_item_sk_8:range,cs_sold_date_sk_8:bloomfilter,cs_sold_date_sk_8:range}
+                                    │     │     │  │     │     Dynamic Filters: {cs_item_sk:bloomfilter,cs_item_sk:range,cs_sold_date_sk:bloomfilter,cs_sold_date_sk:range}
                                     │     │     │  │     └─ TableScan tpcds.catalog_sales est. 1439980416 rows
-                                    │     │     │  │              Outputs: cs_ext_sales_price_8:=cs_ext_sales_price, cs_item_sk_8:=cs_item_sk, cs_order_number_8:=cs_order_number, cs_quantity_8:=cs_quantity, cs_sold_date_sk_8:=cs_sold_date_sk
+                                    │     │     │  │              Outputs: [cs_ext_sales_price, cs_item_sk, cs_order_number, cs_quantity, cs_sold_date_sk]
                                     │     │     │  └─ Broadcast Exchange est. 29902 rows
                                     │     │     │     └─ Projection est. 29902 rows
-                                    │     │     │        │     Expressions: [i_brand_id_34, i_category_24, i_category_id_34, i_class_id_34, i_item_sk_24, i_manufact_id_34]
-                                    │     │     │        │     Dynamic Filters Builder: {i_item_sk_24}
+                                    │     │     │        │     Expressions: [i_brand_id, i_category, i_category_id, i_class_id, i_item_sk, i_manufact_id]
+                                    │     │     │        │     Dynamic Filters Builder: {i_item_sk}
                                     │     │     │        └─ Filter est. 29902 rows
-                                    │     │     │           │     Condition: i_category_24 = 'Men'
+                                    │     │     │           │     Condition: i_category = 'Men'
                                     │     │     │           └─ TableScan tpcds.item est. 300000 rows
-                                    │     │     │                    Outputs: i_brand_id_34:=i_brand_id, i_category_24:=i_category, i_category_id_34:=i_category_id, i_class_id_34:=i_class_id, i_item_sk_24:=i_item_sk, i_manufact_id_34:=i_manufact_id
+                                    │     │     │                    Outputs: [i_brand_id, i_category, i_category_id, i_class_id, i_item_sk, i_manufact_id]
                                     │     │     └─ Broadcast Exchange est. 365 rows
                                     │     │        └─ Projection est. 365 rows
-                                    │     │           │     Expressions: [d_date_sk_24, d_year_34]
-                                    │     │           │     Dynamic Filters Builder: {d_date_sk_24}
+                                    │     │           │     Expressions: [d_date_sk, d_year]
+                                    │     │           │     Dynamic Filters Builder: {d_date_sk}
                                     │     │           └─ Filter est. 365 rows
-                                    │     │              │     Condition: (d_year_34 IN (2001, 2002)) AND (2001 = d_year_34) AND (d_year_34 = 2001)
+                                    │     │              │     Condition: (2001 = d_year) AND (d_year IN (2001, 2002)) AND (d_year = 2001)
                                     │     │              └─ TableScan tpcds.date_dim est. 73049 rows
-                                    │     │                       Outputs: d_date_sk_24:=d_date_sk, d_year_34:=d_year
+                                    │     │                       Outputs: [d_date_sk, d_year]
                                     │     └─ Repartition Exchange est. 143996756 rows
-                                    │        │     Partition by: {cr_item_sk_8, cr_order_number_8}
+                                    │        │     Partition by: {cr_item_sk, cr_order_number}
                                     │        └─ TableScan tpcds.catalog_returns est. 143996756 rows
-                                    │                 Outputs: cr_item_sk_8:=cr_item_sk, cr_order_number_8:=cr_order_number, cr_return_amount_8:=cr_return_amount, cr_return_quantity_8:=cr_return_quantity
+                                    │                 Outputs: [cr_item_sk, cr_order_number, cr_return_amount, cr_return_quantity]
                                     ├─ Projection est. 28303122 rows
-                                    │  │     Expressions: [d_year_35, i_brand_id_35, i_category_id_35, i_class_id_35, i_manufact_id_35], expr#minus(ss_ext_sales_price, coalesce(sr_return_amt, CAST('0.0', 'Decimal(18, 1)')))_8:=ss_ext_sales_price_8 - coalesce(sr_return_amt_8, '0.0'), expr#minus(ss_quantity, coalesce(sr_return_quantity, 0))_8:=ss_quantity_8 - coalesce(sr_return_quantity_8, 0)
+                                    │  │     Expressions: [d_year_1, i_brand_id_1, i_category_id_1, i_class_id_1, i_manufact_id_1], expr#minus(ss_ext_sales_price, coalesce(sr_return_amt, CAST('0.0', 'Decimal(18, 1)'))):=ss_ext_sales_price - coalesce(sr_return_amt, '0.0'), expr#minus(ss_quantity, coalesce(sr_return_quantity, 0)):=ss_quantity - coalesce(sr_return_quantity, 0)
                                     │  └─ Left Join est. 47236015 rows
-                                    │     │     Condition: ss_item_sk_8 == sr_item_sk_8, ss_ticket_number_8 == sr_ticket_number_8
+                                    │     │     Condition: ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
                                     │     ├─ Repartition Exchange est. 28303122 rows
-                                    │     │  │     Partition by: {ss_item_sk_8, ss_ticket_number_8}
+                                    │     │  │     Partition by: {ss_item_sk, ss_ticket_number}
                                     │     │  └─ Inner Join est. 28303122 rows
-                                    │     │     │     Condition: ss_sold_date_sk_8 == d_date_sk_25
+                                    │     │     │     Condition: ss_sold_date_sk == d_date_sk_1
                                     │     │     ├─ Inner Join est. 143531727 rows
-                                    │     │     │  │     Condition: ss_item_sk_8 == i_item_sk_25
+                                    │     │     │  │     Condition: ss_item_sk == i_item_sk_1
                                     │     │     │  ├─ Local Exchange est. 2879987999 rows
                                     │     │     │  │  └─ Filter est. 2879987999 rows
-                                    │     │     │  │     │     Dynamic Filters: {ss_item_sk_8:bloomfilter,ss_item_sk_8:range,ss_sold_date_sk_8:bloomfilter,ss_sold_date_sk_8:range}
+                                    │     │     │  │     │     Dynamic Filters: {ss_item_sk:bloomfilter,ss_item_sk:range,ss_sold_date_sk:bloomfilter,ss_sold_date_sk:range}
                                     │     │     │  │     └─ TableScan tpcds.store_sales est. 2879987999 rows
-                                    │     │     │  │              Outputs: ss_ext_sales_price_8:=ss_ext_sales_price, ss_item_sk_8:=ss_item_sk, ss_quantity_8:=ss_quantity, ss_sold_date_sk_8:=ss_sold_date_sk, ss_ticket_number_8:=ss_ticket_number
+                                    │     │     │  │              Outputs: [ss_ext_sales_price, ss_item_sk, ss_quantity, ss_sold_date_sk, ss_ticket_number]
                                     │     │     │  └─ Broadcast Exchange est. 29902 rows
                                     │     │     │     └─ Projection est. 29902 rows
-                                    │     │     │        │     Expressions: [i_brand_id_35, i_category_25, i_category_id_35, i_class_id_35, i_item_sk_25, i_manufact_id_35]
-                                    │     │     │        │     Dynamic Filters Builder: {i_item_sk_25}
+                                    │     │     │        │     Expressions: [i_brand_id_1, i_category_1, i_category_id_1, i_class_id_1, i_item_sk_1, i_manufact_id_1]
+                                    │     │     │        │     Dynamic Filters Builder: {i_item_sk_1}
                                     │     │     │        └─ Filter est. 29902 rows
-                                    │     │     │           │     Condition: i_category_25 = 'Men'
+                                    │     │     │           │     Condition: i_category_1 = 'Men'
                                     │     │     │           └─ TableScan tpcds.item est. 300000 rows
-                                    │     │     │                    Outputs: i_brand_id_35:=i_brand_id, i_category_25:=i_category, i_category_id_35:=i_category_id, i_class_id_35:=i_class_id, i_item_sk_25:=i_item_sk, i_manufact_id_35:=i_manufact_id
+                                    │     │     │                    Outputs: i_brand_id_1:=i_brand_id, i_category_1:=i_category, i_category_id_1:=i_category_id, i_class_id_1:=i_class_id, i_item_sk_1:=i_item_sk, i_manufact_id_1:=i_manufact_id
                                     │     │     └─ Broadcast Exchange est. 365 rows
                                     │     │        └─ Projection est. 365 rows
-                                    │     │           │     Expressions: [d_date_sk_25, d_year_35]
-                                    │     │           │     Dynamic Filters Builder: {d_date_sk_25}
+                                    │     │           │     Expressions: [d_date_sk_1, d_year_1]
+                                    │     │           │     Dynamic Filters Builder: {d_date_sk_1}
                                     │     │           └─ Filter est. 365 rows
-                                    │     │              │     Condition: (d_year_35 IN (2001, 2002)) AND (2001 = d_year_35) AND (d_year_35 = 2001)
+                                    │     │              │     Condition: (2001 = d_year_1) AND (d_year_1 IN (2001, 2002)) AND (d_year_1 = 2001)
                                     │     │              └─ TableScan tpcds.date_dim est. 73049 rows
-                                    │     │                       Outputs: d_date_sk_25:=d_date_sk, d_year_35:=d_year
+                                    │     │                       Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year
                                     │     └─ Repartition Exchange est. 287999764 rows
-                                    │        │     Partition by: {sr_item_sk_8, sr_ticket_number_8}
+                                    │        │     Partition by: {sr_item_sk, sr_ticket_number}
                                     │        └─ TableScan tpcds.store_returns est. 287999764 rows
-                                    │                 Outputs: sr_item_sk_8:=sr_item_sk, sr_return_amt_8:=sr_return_amt, sr_return_quantity_8:=sr_return_quantity, sr_ticket_number_8:=sr_ticket_number
+                                    │                 Outputs: [sr_item_sk, sr_return_amt, sr_return_quantity, sr_ticket_number]
                                     └─ Projection est. 7075813 rows
-                                       │     Expressions: [d_year_36, i_brand_id_36, i_category_id_36, i_class_id_36, i_manufact_id_36], expr#minus(ws_ext_sales_price, coalesce(wr_return_amt, CAST('0.0', 'Decimal(18, 1)')))_8:=ws_ext_sales_price_8 - coalesce(wr_return_amt_8, '0.0'), expr#minus(ws_quantity, coalesce(wr_return_quantity, 0))_8:=ws_quantity_8 - coalesce(wr_return_quantity_8, 0)
+                                       │     Expressions: [d_year_2, i_brand_id_2, i_category_id_2, i_class_id_2, i_manufact_id_2], expr#minus(ws_ext_sales_price, coalesce(wr_return_amt, CAST('0.0', 'Decimal(18, 1)'))):=ws_ext_sales_price - coalesce(wr_return_amt, '0.0'), expr#minus(ws_quantity, coalesce(wr_return_quantity, 0)):=ws_quantity - coalesce(wr_return_quantity, 0)
                                        └─ Left Join est. 11524380 rows
-                                          │     Condition: ws_item_sk_8 == wr_item_sk_8, ws_order_number_8 == wr_order_number_8
+                                          │     Condition: ws_item_sk == wr_item_sk, ws_order_number == wr_order_number
                                           ├─ Repartition Exchange est. 7075813 rows
-                                          │  │     Partition by: {ws_item_sk_8, ws_order_number_8}
+                                          │  │     Partition by: {ws_item_sk, ws_order_number}
                                           │  └─ Inner Join est. 7075813 rows
-                                          │     │     Condition: ws_sold_date_sk_8 == d_date_sk_26
+                                          │     │     Condition: ws_sold_date_sk == d_date_sk_2
                                           │     ├─ Inner Join est. 35883100 rows
-                                          │     │  │     Condition: ws_item_sk_8 == i_item_sk_26
+                                          │     │  │     Condition: ws_item_sk == i_item_sk_2
                                           │     │  ├─ Local Exchange est. 720000376 rows
                                           │     │  │  └─ Filter est. 720000376 rows
-                                          │     │  │     │     Dynamic Filters: {ws_item_sk_8:bloomfilter,ws_item_sk_8:range,ws_sold_date_sk_8:bloomfilter,ws_sold_date_sk_8:range}
+                                          │     │  │     │     Dynamic Filters: {ws_item_sk:bloomfilter,ws_item_sk:range,ws_sold_date_sk:bloomfilter,ws_sold_date_sk:range}
                                           │     │  │     └─ TableScan tpcds.web_sales est. 720000376 rows
-                                          │     │  │              Outputs: ws_ext_sales_price_8:=ws_ext_sales_price, ws_item_sk_8:=ws_item_sk, ws_order_number_8:=ws_order_number, ws_quantity_8:=ws_quantity, ws_sold_date_sk_8:=ws_sold_date_sk
+                                          │     │  │              Outputs: [ws_ext_sales_price, ws_item_sk, ws_order_number, ws_quantity, ws_sold_date_sk]
                                           │     │  └─ Broadcast Exchange est. 29902 rows
                                           │     │     └─ Projection est. 29902 rows
-                                          │     │        │     Expressions: [i_brand_id_36, i_category_26, i_category_id_36, i_class_id_36, i_item_sk_26, i_manufact_id_36]
-                                          │     │        │     Dynamic Filters Builder: {i_item_sk_26}
+                                          │     │        │     Expressions: [i_brand_id_2, i_category_2, i_category_id_2, i_class_id_2, i_item_sk_2, i_manufact_id_2]
+                                          │     │        │     Dynamic Filters Builder: {i_item_sk_2}
                                           │     │        └─ Filter est. 29902 rows
-                                          │     │           │     Condition: i_category_26 = 'Men'
+                                          │     │           │     Condition: i_category_2 = 'Men'
                                           │     │           └─ TableScan tpcds.item est. 300000 rows
-                                          │     │                    Outputs: i_brand_id_36:=i_brand_id, i_category_26:=i_category, i_category_id_36:=i_category_id, i_class_id_36:=i_class_id, i_item_sk_26:=i_item_sk, i_manufact_id_36:=i_manufact_id
+                                          │     │                    Outputs: i_brand_id_2:=i_brand_id, i_category_2:=i_category, i_category_id_2:=i_category_id, i_class_id_2:=i_class_id, i_item_sk_2:=i_item_sk, i_manufact_id_2:=i_manufact_id
                                           │     └─ Broadcast Exchange est. 365 rows
                                           │        └─ Projection est. 365 rows
-                                          │           │     Expressions: [d_date_sk_26, d_year_36]
-                                          │           │     Dynamic Filters Builder: {d_date_sk_26}
+                                          │           │     Expressions: [d_date_sk_2, d_year_2]
+                                          │           │     Dynamic Filters Builder: {d_date_sk_2}
                                           │           └─ Filter est. 365 rows
-                                          │              │     Condition: (d_year_36 = 2001) AND (2001 = d_year_36) AND (d_year_36 IN (2001, 2002))
+                                          │              │     Condition: (2001 = d_year_2) AND (d_year_2 IN (2001, 2002)) AND (d_year_2 = 2001)
                                           │              └─ TableScan tpcds.date_dim est. 73049 rows
-                                          │                       Outputs: d_date_sk_26:=d_date_sk, d_year_36:=d_year
+                                          │                       Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year
                                           └─ Repartition Exchange est. 71997522 rows
-                                             │     Partition by: {wr_item_sk_8, wr_order_number_8}
+                                             │     Partition by: {wr_item_sk, wr_order_number}
                                              └─ TableScan tpcds.web_returns est. 71997522 rows
-                                                      Outputs: wr_item_sk_8:=wr_item_sk, wr_order_number_8:=wr_order_number, wr_return_amt_8:=wr_return_amt, wr_return_quantity_8:=wr_return_quantity
+                                                      Outputs: [wr_item_sk, wr_order_number, wr_return_amt, wr_return_quantity]
 note: Dynamic Filter is applied for 24 times.

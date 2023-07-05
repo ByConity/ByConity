@@ -21,12 +21,6 @@
 #include <QueryPlan/FilterStep.h>
 #include <QueryPlan/PlanCopier.h>
 #include <QueryPlan/PlanNode.h>
-#include <QueryPlan/PlanSerDerHelper.h>
-#include <QueryPlan/SymbolMapper.h>
-#include <QueryPlan/ProjectionStep.h>
-#include <IO/ReadHelpers.h>
-#include <IO/VarInt.h>
-
 
 namespace DB
 {
@@ -68,31 +62,13 @@ std::shared_ptr<ProjectionStep> CTERefStep::toProjectionStep() const
 
 PlanNodePtr CTERefStep::toInlinedPlanNode(CTEInfo & cte_info, ContextMutablePtr & context, bool with_filter) const
 {
-    std::unordered_map<SymbolMapper::Symbol, SymbolMapper::Symbol> mapping;
-    auto with_clause_plan = PlanCopier::copy(cte_info.getCTEDef(id), context, mapping);
-    SymbolMapper mapper = SymbolMapper::symbolReallocator(mapping, *(context->getSymbolAllocator()), context);
+    auto with_clause_plan = PlanCopier::copy(cte_info.getCTEDef(id), context);
     if (with_filter)
-    {  
-        auto filter_step = mapper.map(*std::make_shared<FilterStep>(with_clause_plan->getStep()->getOutputStream(), filter));
+    {
+        auto filter_step = std::make_shared<FilterStep>(with_clause_plan->getStep()->getOutputStream(), filter);
         with_clause_plan = PlanNodeBase::createPlanNode(context->nextNodeId(), filter_step, {with_clause_plan});
     }
-    return PlanNodeBase::createPlanNode(context->nextNodeId(), toProjectionStepWithNewSymbols(mapper), {with_clause_plan});
-}
-std::shared_ptr<ProjectionStep> CTERefStep::toProjectionStepWithNewSymbols(SymbolMapper & mapper) const 
-{
-    NamesAndTypes inputs;
-    Assignments assignments;
-    NameToType name_to_type;
-    for (const auto & item : output_stream.value().header)
-    {
-        if (output_columns.contains(item.name))
-        {
-            assignments.emplace_back(item.name, std::make_shared<ASTIdentifier>(mapper.map(output_columns.at(item.name))));
-            name_to_type.emplace(item.name, item.type);
-            inputs.emplace_back(NameAndTypePair{output_columns.at(item.name), item.type});
-        }
-    }
-    return std::make_shared<ProjectionStep>(mapper.map(DataStream{inputs}), assignments, name_to_type);
+    return PlanNodeBase::createPlanNode(context->nextNodeId(), toProjectionStep(), {with_clause_plan});
 }
 
 std::unordered_map<String, String> CTERefStep::getReverseOutputColumns() const

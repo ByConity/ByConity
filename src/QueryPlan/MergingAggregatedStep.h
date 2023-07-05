@@ -60,13 +60,7 @@ public:
     const Names & getKeys() const { return keys; }
     const AggregateDescriptions & getAggregates() const { return params->params.aggregates; }
     const GroupingDescriptions & getGroupings() const { return groupings; }
-    const GroupingSetsParamsList & getGroupingSetsParamsList() const { return grouping_sets_params; }
-    const AggregatingTransformParamsPtr & getAggregatingTransformParams() const { return params; }
-    bool MemoryEfficientAggregation() const { return memory_efficient_aggregation; }
-    size_t getMaxThreads() const { return max_threads; }
-    size_t getMemoryEfficientMergeThreads() const { return memory_efficient_merge_threads; }
-    bool ShouldProduceResultsInOrderOfBucketNumber() const { return should_produce_results_in_order_of_bucket_number; }
-    
+
     void serialize(WriteBuffer & buf) const override;
     static QueryPlanStepPtr deserialize(ReadBuffer & buf, ContextPtr);
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;

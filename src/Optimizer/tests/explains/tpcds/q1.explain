@@ -21,22 +21,22 @@ Projection est. 100 rows
                      │     Condition: sr_store_sk_1 == s_store_sk
                      │     Filter: `expr#sum(sr_return_amt)_1` > (`expr#avg(ctr_total_return)` * '1.2')
                      ├─ Projection est. 2159929 rows
-                     │  │     Expressions: expr#sum(sr_return_amt)_1:=`expr#sum(sr_return_amt)_9`, sr_customer_sk_1:=sr_customer_sk_9, sr_store_sk_1:=sr_store_sk_9
+                     │  │     Expressions: expr#sum(sr_return_amt)_1:=`expr#sum(sr_return_amt)`, sr_customer_sk_1:=sr_customer_sk, sr_store_sk_1:=sr_store_sk
                      │  └─ MergingAggregated est. 2159929 rows
                      │     └─ Repartition Exchange est. 2159929 rows
-                     │        │     Partition by: {sr_customer_sk_9, sr_store_sk_9}
+                     │        │     Partition by: {sr_customer_sk, sr_store_sk}
                      │        └─ Aggregating est. 2159929 rows
-                     │           │     Group by: {sr_customer_sk_9, sr_store_sk_9}
-                     │           │     Aggregates: expr#sum(sr_return_amt)_9:=AggNull(sum)(sr_return_amt_7)
+                     │           │     Group by: {sr_customer_sk, sr_store_sk}
+                     │           │     Aggregates: expr#sum(sr_return_amt):=AggNull(sum)(sr_return_amt)
                      │           └─ Inner Join est. 2159929 rows
-                     │              │     Condition: sr_returned_date_sk_7 == d_date_sk_7
+                     │              │     Condition: sr_returned_date_sk == d_date_sk
                      │              ├─ Inner Join est. 11903216 rows
-                     │              │  │     Condition: sr_store_sk_9 == s_store_sk_1
+                     │              │  │     Condition: sr_store_sk == s_store_sk_1
                      │              │  ├─ Local Exchange est. 287999764 rows
                      │              │  │  └─ Filter est. 287999764 rows
-                     │              │  │     │     Dynamic Filters: {sr_returned_date_sk_7:bloomfilter,sr_returned_date_sk_7:range,sr_store_sk_9:bloomfilter,sr_store_sk_9:bloomfilter,sr_store_sk_9:range,sr_store_sk_9:range}
+                     │              │  │     │     Dynamic Filters: {sr_returned_date_sk:bloomfilter,sr_returned_date_sk:range,sr_store_sk:bloomfilter,sr_store_sk:bloomfilter,sr_store_sk:range,sr_store_sk:range}
                      │              │  │     └─ TableScan tpcds.store_returns est. 287999764 rows
-                     │              │  │              Outputs: sr_customer_sk_9:=sr_customer_sk, sr_return_amt_7:=sr_return_amt, sr_returned_date_sk_7:=sr_returned_date_sk, sr_store_sk_9:=sr_store_sk
+                     │              │  │              Outputs: [sr_customer_sk, sr_return_amt, sr_returned_date_sk, sr_store_sk]
                      │              │  └─ Broadcast Exchange est. 41 rows
                      │              │     └─ Projection est. 41 rows
                      │              │        │     Expressions: [s_store_sk_1]
@@ -54,12 +54,12 @@ Projection est. 100 rows
                      │              │                                Outputs: [s_state, s_store_sk]
                      │              └─ Broadcast Exchange est. 366 rows
                      │                 └─ Projection est. 366 rows
-                     │                    │     Expressions: [d_date_sk_7, d_year_7]
-                     │                    │     Dynamic Filters Builder: {d_date_sk_7}
+                     │                    │     Expressions: [d_date_sk, d_year]
+                     │                    │     Dynamic Filters Builder: {d_date_sk}
                      │                    └─ Filter est. 366 rows
-                     │                       │     Condition: d_year_7 = 2000
+                     │                       │     Condition: d_year = 2000
                      │                       └─ TableScan tpcds.date_dim est. 73049 rows
-                     │                                Outputs: d_date_sk_7:=d_date_sk, d_year_7:=d_year
+                     │                                Outputs: [d_date_sk, d_year]
                      └─ Broadcast Exchange est. 91 rows
                         └─ Inner Join est. 82 rows
                            │     Condition: sr_store_sk_2 == s_store_sk
@@ -70,22 +70,22 @@ Projection est. 100 rows
                            │        │     Group by: {sr_store_sk_2}
                            │        │     Aggregates: expr#avg(ctr_total_return):=AggNull(avgIf)(expr#sum(sr_return_amt)_2,build_side_non_null_symbol)
                            │        └─ Projection est. 2159929 rows
-                           │           │     Expressions: build_side_non_null_symbol:=1, expr#sum(sr_return_amt)_2:=`expr#sum(sr_return_amt)_10`, sr_store_sk_2:=sr_store_sk_10
+                           │           │     Expressions: build_side_non_null_symbol:=1, expr#sum(sr_return_amt)_2:=`expr#sum(sr_return_amt)`, sr_store_sk_2:=sr_store_sk
                            │           └─ MergingAggregated est. 2159929 rows
                            │              └─ Repartition Exchange est. 2159929 rows
-                           │                 │     Partition by: {sr_customer_sk_10, sr_store_sk_10}
+                           │                 │     Partition by: {sr_customer_sk, sr_store_sk}
                            │                 └─ Aggregating est. 2159929 rows
-                           │                    │     Group by: {sr_customer_sk_10, sr_store_sk_10}
-                           │                    │     Aggregates: expr#sum(sr_return_amt)_10:=AggNull(sum)(sr_return_amt_8)
+                           │                    │     Group by: {sr_customer_sk, sr_store_sk}
+                           │                    │     Aggregates: expr#sum(sr_return_amt):=AggNull(sum)(sr_return_amt)
                            │                    └─ Inner Join est. 2159929 rows
-                           │                       │     Condition: sr_returned_date_sk_8 == d_date_sk_8
+                           │                       │     Condition: sr_returned_date_sk == d_date_sk
                            │                       ├─ Inner Join est. 11903216 rows
-                           │                       │  │     Condition: sr_store_sk_10 == s_store_sk_2
+                           │                       │  │     Condition: sr_store_sk == s_store_sk_2
                            │                       │  ├─ Local Exchange est. 287999764 rows
                            │                       │  │  └─ Filter est. 287999764 rows
-                           │                       │  │     │     Dynamic Filters: {sr_returned_date_sk_8:bloomfilter,sr_returned_date_sk_8:range,sr_store_sk_10:bloomfilter,sr_store_sk_10:bloomfilter,sr_store_sk_10:range,sr_store_sk_10:range}
+                           │                       │  │     │     Dynamic Filters: {sr_returned_date_sk:bloomfilter,sr_returned_date_sk:range,sr_store_sk:bloomfilter,sr_store_sk:bloomfilter,sr_store_sk:range,sr_store_sk:range}
                            │                       │  │     └─ TableScan tpcds.store_returns est. 287999764 rows
-                           │                       │  │              Outputs: sr_customer_sk_10:=sr_customer_sk, sr_return_amt_8:=sr_return_amt, sr_returned_date_sk_8:=sr_returned_date_sk, sr_store_sk_10:=sr_store_sk
+                           │                       │  │              Outputs: [sr_customer_sk, sr_return_amt, sr_returned_date_sk, sr_store_sk]
                            │                       │  └─ Broadcast Exchange est. 41 rows
                            │                       │     └─ Projection est. 41 rows
                            │                       │        │     Expressions: [s_store_sk_2]
@@ -103,12 +103,12 @@ Projection est. 100 rows
                            │                       │                                Outputs: [s_state, s_store_sk]
                            │                       └─ Broadcast Exchange est. 366 rows
                            │                          └─ Projection est. 366 rows
-                           │                             │     Expressions: [d_date_sk_8, d_year_8]
-                           │                             │     Dynamic Filters Builder: {d_date_sk_8}
+                           │                             │     Expressions: [d_date_sk, d_year]
+                           │                             │     Dynamic Filters Builder: {d_date_sk}
                            │                             └─ Filter est. 366 rows
-                           │                                │     Condition: d_year_8 = 2000
+                           │                                │     Condition: d_year = 2000
                            │                                └─ TableScan tpcds.date_dim est. 73049 rows
-                           │                                         Outputs: d_date_sk_8:=d_date_sk, d_year_8:=d_year
+                           │                                         Outputs: [d_date_sk, d_year]
                            └─ Repartition Exchange est. 41 rows
                               │     Partition by: {s_store_sk}
                               └─ Projection est. 41 rows
