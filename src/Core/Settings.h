@@ -446,6 +446,7 @@ class IColumn;
       false, \
       "Whether to enalbe aggregation finished in worker side, to avoid merge aggregation states in coordinator", \
       0) \
+    M(Bool, fallback_perfect_shard, true, "Whether to fallback if there is any exception", 0) \
     M(Bool, \
       optimize_skip_unused_shards, \
       false, \
@@ -1515,17 +1516,33 @@ class IColumn;
     M(Bool, enable_view_based_query_rewrite, false, "Whether to enable view-based query rewriting.", 0) \
     M(Bool, enable_mv_estimate_read_cost, false, "Enable materialized view estimate with read cost", 0) \
     M(Bool, cascading_refresh_materialized_view, true, "Whether cascading refresh the materialized view", 0) \
-    M(UInt64, max_rows_to_refresh_by_partition, 100000000, "The maximum rows to refresh a materialized view by partition. If exceed, we'll refresh the materialized view part by part.", 0) \
-    M(UInt64, slow_query_ms, 0, "Slow query criterial in ms. 0 means all related function will not be executed", 0)\
-    M(UInt64, max_rows_to_schedule_merge, 500000000, "Max rows of merged part for merge scheduler", 0)\
-    M(UInt64, total_rows_to_schedule_merge, 0, "Max total rows of merged parts for merge scheduler, 0 means unlimit", 0)\
-    M(UInt64, expired_start_hour_to_merge, 12, "The hour of UTC time, if current time is greater than it, merge scheduler can lower the merge frequency", 0)\
-    M(UInt64, expired_end_hour_to_merge, 12, "The hour of UTC time, if current time is smaller than it, merge scheduler can lower the merge frequency", 0)\
-    M(UInt64, strict_rows_to_schedule_merge, 50000000, "Max rows of merged part for merge scheduler when the current time is expired according to expired_hour_to_merge", 0)\
-    M(UInt64, max_parts_to_optimize, 1000, "Max number of parts to optimize", 0)\
-    M(Bool, enable_merge_scheduler, false, "Whether to enable MergeScheduler to excute merge", 0)\
-    M(Bool, conservative_merge_predicate, true, "Judge merge tree parts whether can be merged conservatively", 0)\
-    M(Bool, snappy_format_blocked, false, "Using blocked decompress flow for Snappy input", 0)\
+    M(UInt64, \
+      max_rows_to_refresh_by_partition, \
+      100000000, \
+      "The maximum rows to refresh a materialized view by partition. If exceed, we'll refresh the materialized view part by part.", \
+      0) \
+    M(UInt64, slow_query_ms, 0, "Slow query criterial in ms. 0 means all related function will not be executed", 0) \
+    M(UInt64, max_rows_to_schedule_merge, 500000000, "Max rows of merged part for merge scheduler", 0) \
+    M(UInt64, total_rows_to_schedule_merge, 0, "Max total rows of merged parts for merge scheduler, 0 means unlimit", 0) \
+    M(UInt64, \
+      expired_start_hour_to_merge, \
+      12, \
+      "The hour of UTC time, if current time is greater than it, merge scheduler can lower the merge frequency", \
+      0) \
+    M(UInt64, \
+      expired_end_hour_to_merge, \
+      12, \
+      "The hour of UTC time, if current time is smaller than it, merge scheduler can lower the merge frequency", \
+      0) \
+    M(UInt64, \
+      strict_rows_to_schedule_merge, \
+      50000000, \
+      "Max rows of merged part for merge scheduler when the current time is expired according to expired_hour_to_merge", \
+      0) \
+    M(UInt64, max_parts_to_optimize, 1000, "Max number of parts to optimize", 0) \
+    M(Bool, enable_merge_scheduler, false, "Whether to enable MergeScheduler to excute merge", 0) \
+    M(Bool, conservative_merge_predicate, true, "Judge merge tree parts whether can be merged conservatively", 0) \
+    M(Bool, snappy_format_blocked, false, "Using blocked decompress flow for Snappy input", 0) \
     M(String, vw, "", "The vw name set by user on which the query run without tenant information", 0) \
     M(String, virtual_warehouse, "", "The vw name set by user on which the query run", 0) \
     M(String, virtual_warehouse_write, "", "The write vw name set by user on which the query run", 0) \
@@ -1663,7 +1680,11 @@ class IColumn;
     M(Bool, allow_experimental_bigint_types, true, "Obsolete setting, does nothing.", 0) \
     M(HandleKafkaErrorMode, handle_kafka_error_mode, HandleKafkaErrorMode::DEFAULT, "Obsolete setting, does nothing.", 0) \
     M(Bool, database_replicated_ddl_output, true, "Obsolete setting, does nothing.", 0) \
-    M(Bool, enable_dictionary_compression, false, "Enable the dictioanry compression and decompression when performing a query (deprecated setting).", 0)\
+    M(Bool, \
+      enable_dictionary_compression, \
+      false, \
+      "Enable the dictioanry compression and decompression when performing a query (deprecated setting).", \
+      0) \
     /** Ingestion */ \
     M(UInt64, max_ingest_columns_size, 10, "The maximum number of columns that can be ingested.", 0) \
     M(UInt64, \
@@ -1680,9 +1701,13 @@ class IColumn;
     /** Early Stop **/ \
     M(Milliseconds, query_shard_timeout_time, 0, "Timeout for query shard", 0) \
     M(Milliseconds, late_shard_relax_time, 1000, "Relaxition time for late shard", 0) \
-    M(Float, exception_threshold_for_timeout_query, 0.1, "Timeout for query shard, if timeout shards beyond this threshold, then throw exception", 0) \
+    M(Float, \
+      exception_threshold_for_timeout_query, \
+      0.1, \
+      "Timeout for query shard, if timeout shards beyond this threshold, then throw exception", \
+      0) \
     M(Bool, enable_early_stop_metric, 0, "Whether output metrics of early stop", 0) \
-    \
+\
     /** Optimizer relative settings */ \
     M(Bool, enable_optimizer, false, "Whether enable query optimizer", 0) \
     M(Bool, enable_optimizer_fallback, true, "Whether enable query optimizer fallback to clickhouse origin when failed", 0) \
@@ -1780,7 +1805,7 @@ class IColumn;
     M(UInt64, execute_uncorrelated_in_subquery_size, 10000, "Size of execute uncorrelated in subquery", 0) \
     M(Bool, enable_subcolumn_optimization_through_union, true, "Whether enable sub column optimization through set operation.", 0) \
     M(Float, pk_selectivity, 0.5, "PK selectivity for join estimation", 0) \
-    M(Bool, enable_mark_distinct_optimzation, false, "Whether enable Mark distinct optimization", 0)                                            \
+    M(Bool, enable_mark_distinct_optimzation, false, "Whether enable Mark distinct optimization", 0) \
     /** Exchange settings */ \
     M(Bool, exchange_enable_multipath_reciever, true, "Whether enable exchange new mode ", 0) \
     M(UInt64, exchange_parallel_size, 1, "Exchange parallel size", 0) \
@@ -1826,8 +1851,8 @@ class IColumn;
     M(Bool, enable_sample_by_range, false, "Sample by range if it is true", 0) \
     M(Bool, enable_deterministic_sample_by_range, false, "Deterministic sample by range if it is true", 0) \
     M(Bool, enable_final_sample, false, "Sample from result rows if it is true", 0) \
-    M(Bool, uniform_final_sample, false, "Final sample with uniform mode", 0)\
-    \
+    M(Bool, uniform_final_sample, false, "Final sample with uniform mode", 0) \
+\
     /** clone strategy **/ \
     M(Bool, stop_clone_in_utc_time, false, "Enable stop executing clone log in utc time", 0) \
     M(UInt64, utc_time_to_stop_clone, 2, "The hour of UTC time, if current time is greater than it, clone is stopepd", 0) \
