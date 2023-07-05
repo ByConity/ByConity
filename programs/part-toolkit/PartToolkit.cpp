@@ -79,7 +79,7 @@ void run(const std::string & query, Poco::Logger * log)
         executor = std::make_shared<DB::PartWriter>(ast, mutable_context_ptr);
     else if (query_ast.type == DB::PartToolType::MERGER)
     {
-        LOG_ERROR(log, "Part merger is not implmented in cnch. ");
+        LOG_ERROR(log, "Part merger is not implemented in cnch. ");
         return;
     }
     else if (query_ast.type == DB::PartToolType::CONVERTER)
