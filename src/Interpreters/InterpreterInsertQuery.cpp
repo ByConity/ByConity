@@ -233,6 +233,7 @@ BlockIO InterpreterInsertQuery::execute()
             txn->setMainTableUUID(table->getStorageUUID());
             res.in = std::make_shared<TransactionWrapperBlockInputStream>(in, std::move(txn));
         }
+        return res;
     }
 
     BlockOutputStreams out_streams;
