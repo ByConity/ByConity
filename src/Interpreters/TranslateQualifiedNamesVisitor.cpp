@@ -129,6 +129,9 @@ void TranslateQualifiedNamesMatcher::visit(ASTIdentifier & identifier, ASTPtr &,
                                 ErrorCodes::UNKNOWN_IDENTIFIER);
             }
 
+            std::string before_identifier = identifier.getColumnName();
+            bool need_rewrite = data.rewrite_unknown_identifiers && data.unknown_left_join_identifiers.count(before_identifier);
+            
             IdentifierSemantic::setMembership(identifier, table_pos);
 
             /// In case if column from the joined table are in source columns, change it's name to qualified.
@@ -138,6 +141,19 @@ void TranslateQualifiedNamesMatcher::visit(ASTIdentifier & identifier, ASTPtr &,
                 IdentifierSemantic::setColumnLongName(identifier, table);
             else
                 IdentifierSemantic::setColumnShortName(identifier, table);
+
+            /**
+            * to record column to replace in join sql like:
+            * select t1.a from 
+            *   (select * from 
+            *       (select a from table) as t1 
+            *           join (select * from 
+            *       (select a from table ) as t2 on t1.a = t2.a)
+            *   join (select a from table) as t3 on t1.a = t2.a
+            * here we want to replace outter t1.a to a so that we can use column from child instead of grandchild
+            **/
+            if (need_rewrite)
+                data.rewritten_identifiers.emplace(before_identifier, identifier.getColumnName());
         }
     }
 }

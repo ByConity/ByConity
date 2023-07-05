@@ -9,6 +9,7 @@
 #include <common/getFQDNOrHostName.h>
 #include <Common/isLocalAddress.h>
 #include <Common/ProfileEvents.h>
+#include <Core/SettingsEnums.h>
 #include <Core/Settings.h>
 
 #include <IO/ConnectionTimeouts.h>
@@ -78,6 +79,9 @@ IConnectionPool::Entry ConnectionPoolWithFailover::get(const ConnectionTimeouts 
          * ...
          * */
         get_priority = [&](size_t i) { ++i; return i < last_used ? nested_pools.size() - i : i - last_used; };
+        break;
+    case LoadBalancing::REVERSE_ORDER:
+        get_priority = [&](size_t i) { return !nested_pools.empty() ? (nested_pools.size() - 1 - i % nested_pools.size()) : i; };
         break;
     }
 
@@ -201,6 +205,9 @@ ConnectionPoolWithFailover::Base::GetPriorityFunc ConnectionPoolWithFailover::ma
              * ...
              * */
             get_priority = [&](size_t i) { ++i; return i < last_used ? nested_pools.size() - i : i - last_used; };
+            break;
+        case LoadBalancing::REVERSE_ORDER:
+            get_priority = [&](size_t i) { return !nested_pools.empty() ? (nested_pools.size() - 1 - i % nested_pools.size()) : i; };
             break;
     }
 

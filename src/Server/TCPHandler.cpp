@@ -1308,7 +1308,9 @@ void TCPHandler::receiveQuery()
     /// compatibility.
     if (client_info.query_kind == ClientInfo::QueryKind::SECONDARY_QUERY)
     {
-        query_context->setSetting("normalize_function_names", Field(0));
+        // for distributed_perfect_shard, it will send original query, so that we want remote node optimize the query itself.
+        if (!query_context->getSettingsRef().distributed_perfect_shard)
+            query_context->setSetting("normalize_function_names", Field(0));
     }
 
     // Use the received query id, or generate a random default. It is convenient

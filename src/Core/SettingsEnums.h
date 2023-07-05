@@ -43,6 +43,8 @@ enum class LoadBalancing
     FIRST_OR_RANDOM,
     // round robin across replicas with the same number of errors.
     ROUND_ROBIN,
+    // pick replica in reverse order. 
+    REVERSE_ORDER,
 };
 
 DECLARE_SETTING_ENUM(LoadBalancing)
