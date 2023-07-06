@@ -362,7 +362,7 @@ Projection est. 100 rows
                │  │  │                 │              │           │     Partition by: {i_brand_id_127, i_category_id_127, i_class_id_127}
                │  │  │                 │              │           └─ Aggregating est. 4116960 rows
                │  │  │                 │              │              │     Group by: {i_brand_id_127, i_category_id_127, i_class_id_127}
-               │  │  │                 │              │              │     Aggregates: count_69:=AggNull(sum)(marker_287), count_70:=AggNull(sum)(marker_286), count_71:=AggNull(sum)(marker_285)
+               │  │  │                 │              │              │     Aggregates: count_69:=AggNull(sum)(marker_285), count_70:=AggNull(sum)(marker_286), count_71:=AggNull(sum)(marker_287)
                │  │  │                 │              │              └─ Union est. 2978735891 rows
                │  │  │                 │              │                 ├─ Projection est. 1705276524 rows
                │  │  │                 │              │                 │  │     Expressions: [i_brand_id_124, i_category_id_124, i_class_id_124], marker_276:=1, marker_277:=0, marker_278:=0
@@ -511,7 +511,7 @@ Projection est. 100 rows
                │  │                    │              │           │     Partition by: {i_brand_id_132, i_category_id_132, i_class_id_132}
                │  │                    │              │           └─ Aggregating est. 4116960 rows
                │  │                    │              │              │     Group by: {i_brand_id_132, i_category_id_132, i_class_id_132}
-               │  │                    │              │              │     Aggregates: count_72:=AggNull(sum)(marker_299), count_73:=AggNull(sum)(marker_298), count_74:=AggNull(sum)(marker_297)
+               │  │                    │              │              │     Aggregates: count_72:=AggNull(sum)(marker_297), count_73:=AggNull(sum)(marker_298), count_74:=AggNull(sum)(marker_299)
                │  │                    │              │              └─ Union est. 2978735891 rows
                │  │                    │              │                 ├─ Projection est. 1705276524 rows
                │  │                    │              │                 │  │     Expressions: [i_brand_id_129, i_category_id_129, i_class_id_129], marker_288:=1, marker_289:=0, marker_290:=0

@@ -18,10 +18,10 @@ Projection est. 100 rows
                   │  │     Partition by: {i_brand_id_4, i_category_id_4, i_class_id_4, i_manufact_id_4}
                   │  └─ Projection est. 4522716 rows
                   │     │     Expressions: d_year_4:=d_year_33, expr#sum(sales_amt)_1:=`expr#sum(sales_amt)_9`, expr#sum(sales_cnt)_1:=`expr#sum(sales_cnt)_9`, i_brand_id_4:=i_brand_id_33, i_category_id_4:=i_category_id_33, i_class_id_4:=i_class_id_33, i_manufact_id_4:=i_manufact_id_33
-                  │     └─ MergingAggregated est. 3768930 rows
-                  │        └─ Repartition Exchange est. 3768930 rows
+                  │     └─ MergingAggregated est. 4522716 rows
+                  │        └─ Repartition Exchange est. 4522716 rows
                   │           │     Partition by: {d_year_33, i_brand_id_33, i_category_id_33, i_class_id_33, i_manufact_id_33}
-                  │           └─ Aggregating est. 3768930 rows
+                  │           └─ Aggregating est. 4522716 rows
                   │              │     Group by: {d_year_33, i_brand_id_33, i_category_id_33, i_class_id_33, i_manufact_id_33}
                   │              │     Aggregates: expr#sum(sales_cnt)_9:=AggNull(sum)(expr#minus(cs_quantity, coalesce(cr_return_quantity, 0))_15), expr#sum(sales_amt)_9:=AggNull(sum)(expr#minus(cs_ext_sales_price, coalesce(cr_return_amount, CAST('0.0', 'Decimal(18, 1)')))_15)
                   │              └─ Union est. 49439210 rows
@@ -133,15 +133,6 @@ Projection est. 100 rows
                   └─ Repartition Exchange est. 2261358 rows
                      │     Partition by: {i_brand_id_5, i_category_id_5, i_class_id_5, i_manufact_id_5}
                      └─ Projection est. 4522716 rows
-<<<<<<< HEAD
-                        │     Expressions: d_year_5:=d_year_3, expr#sum(sales_amt)_2:=`expr#sum(sales_amt)`, expr#sum(sales_cnt)_2:=`expr#sum(sales_cnt)`, i_brand_id_5:=i_brand_id_3, i_category_id_5:=i_category_id_3, i_class_id_5:=i_class_id_3, i_manufact_id_5:=i_manufact_id_3
-                        └─ MergingAggregated est. 2261358 rows
-                           └─ Repartition Exchange est. 2261358 rows
-                              │     Partition by: {d_year_3, i_brand_id_3, i_category_id_3, i_class_id_3, i_manufact_id_3}
-                              └─ Aggregating est. 2261358 rows
-                                 │     Group by: {d_year_3, i_brand_id_3, i_category_id_3, i_class_id_3, i_manufact_id_3}
-                                 │     Aggregates: expr#sum(sales_cnt):=AggNull(sum)(expr#minus(cs_quantity, coalesce(cr_return_quantity, 0))_1), expr#sum(sales_amt):=AggNull(sum)(expr#minus(cs_ext_sales_price, coalesce(cr_return_amount, CAST('0.0', 'Decimal(18, 1)')))_1)
-=======
                         │     Expressions: d_year_5:=d_year_37, expr#sum(sales_amt)_2:=`expr#sum(sales_amt)_10`, expr#sum(sales_cnt)_2:=`expr#sum(sales_cnt)_10`, i_brand_id_5:=i_brand_id_37, i_category_id_5:=i_category_id_37, i_class_id_5:=i_class_id_37, i_manufact_id_5:=i_manufact_id_37
                         └─ MergingAggregated est. 3015144 rows
                            └─ Repartition Exchange est. 3015144 rows
@@ -149,7 +140,6 @@ Projection est. 100 rows
                               └─ Aggregating est. 3015144 rows
                                  │     Group by: {d_year_37, i_brand_id_37, i_category_id_37, i_class_id_37, i_manufact_id_37}
                                  │     Aggregates: expr#sum(sales_cnt)_10:=AggNull(sum)(expr#minus(cs_quantity, coalesce(cr_return_quantity, 0))_17), expr#sum(sales_amt)_10:=AggNull(sum)(expr#minus(cs_ext_sales_price, coalesce(cr_return_amount, CAST('0.0', 'Decimal(18, 1)')))_17)
->>>>>>> aa98715ca22 (Merge branch 'cnch-ce-merge-symbolmapper' into 'cnch-ce-merge')
                                  └─ Union est. 49439210 rows
                                     ├─ Projection est. 14060275 rows
                                     │  │     Expressions: [d_year_34, i_brand_id_34, i_category_id_34, i_class_id_34, i_manufact_id_34], expr#minus(cs_ext_sales_price, coalesce(cr_return_amount, CAST('0.0', 'Decimal(18, 1)')))_16:=cs_ext_sales_price_8 - coalesce(cr_return_amount_8, '0.0'), expr#minus(cs_quantity, coalesce(cr_return_quantity, 0))_16:=cs_quantity_8 - coalesce(cr_return_quantity_8, 0)
