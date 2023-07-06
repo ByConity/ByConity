@@ -47,6 +47,19 @@ public:
         ordered_storage.emplace_back(std::forward<KeyArg>(key_arg), std::forward<ValueArg>(value_args));
     }
 
+    template<typename KeyArg, typename ValueArg>
+    void emplace(KeyArg&& key_arg, ValueArg&& value_args)
+    {
+        auto index = ordered_storage.size();
+        if (mapping.count(key_arg))
+        {
+            throw Exception("duplicated key is not allowed", ErrorCodes::LOGICAL_ERROR);
+        }
+        mapping[key_arg] = index;
+        ordered_storage.emplace_back(std::forward<KeyArg>(key_arg), std::forward<ValueArg>(value_args));
+    }
+
+
     LinkedHashMap(std::initializer_list<std::pair<Key, Value>>&& init_list): ordered_storage(std::move(init_list)) {
         size_t index = 0;
         for(auto& [k, v]: ordered_storage)

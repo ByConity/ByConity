@@ -41,6 +41,12 @@ public:
 
     Type getType() const override { return Type::TotalsHaving; }
 
+    bool isOverflowRow() const { return overflow_row; }
+    String getFilterColumnName() const { return filter_column_name; }
+    TotalsMode getTotalsMode() const { return totals_mode; }
+    double getAutoIncludeThreshols() const { return auto_include_threshold; }
+    bool isFinal() const { return final; }
+
     void transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings & settings) override;
 
     void describeActions(JSONBuilder::JSONMap & map) const override;
