@@ -125,8 +125,6 @@ public:
         JoinPtr join,
         size_t max_block_size,
         bool join_parallel_left_right,
-        size_t max_streams,
-        bool keep_left_read_in_order,
         Processors * collected_processors = nullptr);
 
     /// Add other pipeline and execute it before current one.

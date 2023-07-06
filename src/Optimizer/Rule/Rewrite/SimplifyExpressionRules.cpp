@@ -224,8 +224,6 @@ TransformResult SimplifyJoinFilterRewriteRule::transformImpl(PlanNodePtr node, c
         step.getOutputStream(),
         step.getKind(),
         step.getStrictness(),
-        step.getMaxStreams(),
-        step.getKeepLeftReadInOrder(),
         step.getLeftKeys(),
         step.getRightKeys(),
         rewritten,

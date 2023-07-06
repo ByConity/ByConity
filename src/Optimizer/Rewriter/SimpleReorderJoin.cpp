@@ -195,8 +195,6 @@ PlanNodePtr SimpleReorderJoinVisitor::getJoinOrder(JoinGraph & graph)
                 DataStream{.header = output},
                 ASTTableJoin::Kind::Inner,
                 ASTTableJoin::Strictness::All,
-                context->getSettingsRef().max_threads,
-                context->getSettingsRef().optimize_read_in_order,
                 left_keys,
                 right_keys);
             auto new_join_node

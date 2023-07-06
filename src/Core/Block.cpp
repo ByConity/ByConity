@@ -705,7 +705,6 @@ void getBlocksDifference(const Block & lhs, const Block & rhs, std::string & out
 }
 
 
-
 void Block::clear()
 {
     info = BlockInfo();

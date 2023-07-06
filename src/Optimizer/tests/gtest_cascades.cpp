@@ -67,8 +67,6 @@ PlanNodePtr join(const PlanNodePtr & left, const PlanNodePtr & right, const Name
         output,
         ASTTableJoin::Kind::Inner,
         ASTTableJoin::Strictness::All,
-        1,
-        false,
         left_keys,
         right_keys,
         PredicateConst::TRUE_VALUE);

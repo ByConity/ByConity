@@ -41,17 +41,13 @@ public:
         const DataStream & left_stream_,
         const DataStream & right_stream_,
         JoinPtr join_,
-        size_t max_block_size_,
-        size_t max_streams_,
-        bool keep_left_read_in_order_);
-    
+        size_t max_block_size_);
+
     JoinStep(
         DataStreams input_streams_,
         DataStream output_stream_,
         ASTTableJoin::Kind kind,
         ASTTableJoin::Strictness strictness_,
-        size_t max_streams_ = 1,
-        bool keep_left_read_in_order_ = false,
         Names left_keys_ = {},
         Names right_keys_ = {},
         ConstASTPtr filter_ = PredicateConst::TRUE_VALUE,
@@ -74,11 +70,8 @@ public:
 
     ASTTableJoin::Kind getKind() const { return kind; }
     void setKind(ASTTableJoin::Kind kind_) { kind = kind_; }
-    ASTTableJoin::Strictness getStrictness() const { return strictness; }
 
-    size_t getMaxStreams() const { return max_streams; }
-    bool getKeepLeftReadInOrder() const { return keep_left_read_in_order; }
-    
+    ASTTableJoin::Strictness getStrictness() const { return strictness; }
     const Names & getLeftKeys() const { return left_keys; }
     const Names & getRightKeys() const { return right_keys; }
     const ConstASTPtr & getFilter() const { return filter; }
@@ -136,9 +129,6 @@ private:
     ASTTableJoin::Kind kind;
     ASTTableJoin::Strictness strictness;
 
-    size_t max_streams;
-    bool keep_left_read_in_order;
-    
     Names left_keys;
     Names right_keys;
 

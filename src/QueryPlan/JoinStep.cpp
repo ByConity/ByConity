@@ -26,7 +26,6 @@
 #include <Processors/Transforms/FilterTransform.h>
 #include <Processors/Transforms/JoiningTransform.h>
 #include <QueryPlan/JoinStep.h>
-#include <Interpreters/ConcurrentHashJoin.h>
 
 namespace DB
 {
@@ -113,21 +112,14 @@ JoinPtr JoinStep::makeJoin(ContextPtr context)
     if (table_join->forceNestedLoopJoin())
         return std::make_shared<NestedLoopJoin>(table_join, sample_block, context);
     else if (table_join->forceHashJoin() || (table_join->preferMergeJoin() && !allow_merge_join))
-    {
-        if (table_join->allowParallelHashJoin())
-        {
-            LOG_TRACE(&Poco::Logger::get("JoinStep::makeJoin"), "will use ConcurrentHashJoin");
-            return std::make_shared<ConcurrentHashJoin>(table_join, context->getSettings().max_threads, sample_block);
-        }
         return std::make_shared<HashJoin>(table_join, sample_block);
-    }
     else if (table_join->forceMergeJoin() || (table_join->preferMergeJoin() && allow_merge_join))
         return std::make_shared<MergeJoin>(table_join, sample_block);
     return std::make_shared<JoinSwitcher>(table_join, sample_block);
 }
 
-JoinStep::JoinStep(const DataStream & left_stream_, const DataStream & right_stream_, JoinPtr join_, size_t max_block_size_, size_t max_streams_, bool keep_left_read_in_order_)
-    : join(std::move(join_)), max_block_size(max_block_size_), max_streams(max_streams_), keep_left_read_in_order(keep_left_read_in_order_)
+JoinStep::JoinStep(const DataStream & left_stream_, const DataStream & right_stream_, JoinPtr join_, size_t max_block_size_)
+    : join(std::move(join_)), max_block_size(max_block_size_)
 {
     input_streams = {left_stream_, right_stream_};
     output_stream = DataStream{
@@ -140,8 +132,6 @@ JoinStep::JoinStep(
     DataStream output_stream_,
     ASTTableJoin::Kind kind_,
     ASTTableJoin::Strictness strictness_,
-    size_t max_streams_,
-    bool keep_left_read_in_order_,
     Names left_keys_,
     Names right_keys_,
     ConstASTPtr filter_,
@@ -152,8 +142,6 @@ JoinStep::JoinStep(
     bool is_magic_)
     : kind(kind_)
     , strictness(strictness_)
-    , max_streams(max_streams_)
-    , keep_left_read_in_order(keep_left_read_in_order_)
     , left_keys(std::move(left_keys_))
     , right_keys(std::move(right_keys_))
     , filter(std::move(filter_))
@@ -183,7 +171,7 @@ QueryPipelinePtr JoinStep::updatePipeline(QueryPipelines pipelines, const BuildQ
         max_block_size = settings.context->getSettingsRef().max_block_size;
     }
 
-    auto pipeline = QueryPipeline::joinPipelines(std::move(pipelines[0]), std::move(pipelines[1]), join, max_block_size, settings.context->getSettingsRef().join_parallel_left_right, max_streams, keep_left_read_in_order, &processors);
+    auto pipeline = QueryPipeline::joinPipelines(std::move(pipelines[0]), std::move(pipelines[1]), join, max_block_size, settings.context->getSettingsRef().join_parallel_left_right, &processors);
 
     // if NestLoopJoin is choose, no need to add filter stream.
     if (filter && !PredicateUtils::isTruePredicate(filter) && join->getType() != JoinType::NestedLoop)
@@ -265,8 +253,6 @@ void JoinStep::serialize(WriteBuffer & buf, bool with_output) const
         serializeEnum(join->getType(), buf);
         join->serialize(buf);
         writeBinary(max_block_size, buf);
-        writeBinary(max_streams, buf);
-        writeBinary(keep_left_read_in_order, buf);
     }
     else
     {
@@ -275,9 +261,6 @@ void JoinStep::serialize(WriteBuffer & buf, bool with_output) const
             serializeDataStream(output_stream.value(), buf);
         SERIALIZE_ENUM(kind, buf)
         SERIALIZE_ENUM(strictness, buf)
-
-        writeBinary(max_streams, buf);
-        writeBinary(keep_left_read_in_order, buf);
 
         writeVectorBinary(left_keys, buf);
         writeVectorBinary(right_keys, buf);
@@ -338,19 +321,12 @@ QueryPlanStepPtr JoinStep::deserialize(ReadBuffer & buf, ContextPtr context)
             case JoinType::Switcher:
                 join = JoinSwitcher::deserialize(buf, context);
                 break;
-            case JoinType::PARALLEL_HASH:
-                join = ConcurrentHashJoin::deserialize(buf, context);
-                break;
         }
 
         size_t max_block_size;
         readBinary(max_block_size, buf);
-        size_t max_streams;
-        readBinary(max_streams, buf);
-        bool keep_left_read_in_order;
-        readBinary(keep_left_read_in_order, buf);
 
-        step = std::make_unique<JoinStep>(left_stream, right_stream, std::move(join), max_block_size, max_streams, keep_left_read_in_order);
+        step = std::make_unique<JoinStep>(left_stream, right_stream, std::move(join), max_block_size);
     }
     else
     {
@@ -359,11 +335,6 @@ QueryPlanStepPtr JoinStep::deserialize(ReadBuffer & buf, ContextPtr context)
 
         DESERIALIZE_ENUM(ASTTableJoin::Kind, kind, buf)
         DESERIALIZE_ENUM(ASTTableJoin::Strictness, strictness, buf)
-
-        size_t max_streams;
-        readBinary(max_streams, buf);
-        bool keep_left_read_in_order;
-        readBinary(keep_left_read_in_order, buf);
 
         Names left_keys;
         readVectorBinary(left_keys, buf);
@@ -400,8 +371,6 @@ QueryPlanStepPtr JoinStep::deserialize(ReadBuffer & buf, ContextPtr context)
             output,
             kind,
             strictness,
-            max_streams,
-            keep_left_read_in_order,
             left_keys,
             right_keys,
             filter,
@@ -507,9 +476,6 @@ QueryPlanStepPtr FilledJoinStep::deserialize(ReadBuffer & buf, ContextPtr contex
             case JoinType::Switcher:
                 join = JoinSwitcher::deserialize(buf, context);
                 break;
-            case JoinType::PARALLEL_HASH:
-                join = ConcurrentHashJoin::deserialize(buf, context);
-                break;
         }
     }
 
@@ -529,8 +495,6 @@ std::shared_ptr<IQueryPlanStep> JoinStep::copy(ContextPtr) const
         output_stream.value(),
         kind,
         strictness,
-        max_streams,
-        keep_left_read_in_order,
         left_keys,
         right_keys,
         filter,

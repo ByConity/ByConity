@@ -374,8 +374,6 @@ PlanWithScanRows AddDynamicFilters::DynamicFilterPredicatesRewriter::visitJoinNo
                 join_step->getOutputStream(),
                 join_step->getKind(),
                 join_step->getStrictness(),
-                join_step->getMaxStreams(),
-                join_step->getKeepLeftReadInOrder(),
                 join_step->getLeftKeys(),
                 join_step->getRightKeys(),
                 filters,

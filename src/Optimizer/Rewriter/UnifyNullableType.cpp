@@ -142,8 +142,6 @@ PlanNodePtr UnifyNullableVisitor::visitJoinNode(JoinNode & node, Void & v)
         output_stream_set_null,
         join_step.getKind(),
         join_step.getStrictness(),
-        join_step.getMaxStreams(),
-        join_step.getKeepLeftReadInOrder(),
         join_step.getLeftKeys(),
         join_step.getRightKeys(),
         join_step.getFilter(),

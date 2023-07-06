@@ -124,8 +124,6 @@ static PlanNodePtr createJoinNode(
         DataStream{output},
         ASTTableJoin::Kind::Inner,
         ASTTableJoin::Strictness::All,
-        context->getOptimizerContext().getContext()->getSettingsRef().max_threads,
-        context->getOptimizerContext().getContext()->getSettingsRef().optimize_read_in_order,
         join_keys.first,
         join_keys.second,
         filter,
