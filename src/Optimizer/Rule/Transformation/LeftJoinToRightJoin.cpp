@@ -45,6 +45,8 @@ TransformResult LeftJoinToRightJoin::transformImpl(PlanNodePtr node, const Captu
         step.getOutputStream(),
         ASTTableJoin::Kind::Right,
         step.getStrictness(),
+        step.getMaxStreams(),
+        step.getKeepLeftReadInOrder(),
         step.getRightKeys(),
         step.getLeftKeys(),
         step.getFilter(),

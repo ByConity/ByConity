@@ -333,6 +333,17 @@ bool TableJoin::allowMergeJoin() const
     return all_join || special_left;
 }
 
+bool TableJoin::allowParallelHashJoin() const
+{
+    if (dictionary_reader || join_algorithm != JoinAlgorithm::PARALLEL_HASH)
+        return false;
+    if (table_join.kind != ASTTableJoin::Kind::Left && table_join.kind != ASTTableJoin::Kind::Inner)
+        return false;
+    if (isSpecialStorage() || !oneDisjunct())
+        return false;
+    return true;
+}
+
 bool TableJoin::needStreamWithNonJoinedRows() const
 {
     if (strictness() == ASTTableJoin::Strictness::Asof ||

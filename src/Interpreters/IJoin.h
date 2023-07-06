@@ -47,6 +47,8 @@ enum JoinType : UInt8
     Merge,
     NestedLoop,
     Switcher,
+    GRACE_HASH,
+    PARALLEL_HASH,
 };
 
 class IJoin
@@ -77,6 +79,9 @@ public:
     /// StorageJoin/Dictionary is already filled. No need to call addJoinedBlock.
     /// Different query plan is used for such joins.
     virtual bool isFilled() const { return false; }
+
+    // That can run FillingRightJoinSideTransform parallelly
+    virtual bool supportParallelJoin() const { return false; }
 
     virtual BlockInputStreamPtr createStreamWithNonJoinedRows(const Block &, UInt64) const { return {}; }
 

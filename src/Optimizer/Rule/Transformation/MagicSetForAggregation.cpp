@@ -120,6 +120,8 @@ PlanNodePtr MagicSetRule::buildMagicSetAsFilterJoin(
         source->getStep()->getOutputStream(),
         ASTTableJoin::Kind::Inner,
         ASTTableJoin::Strictness::All,
+        context->getSettingsRef().max_threads,
+        context->getSettingsRef().optimize_read_in_order,
         source_names,
         reallocated_filter_names);
     filter_join_step->setMagic(true);
