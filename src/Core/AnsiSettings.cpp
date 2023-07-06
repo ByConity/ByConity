@@ -21,7 +21,7 @@ namespace DB::ANSI {
 
 void onSettingChanged(Settings *s)
 {
-    bool ansi = static_cast<DialectType>(s->dialect_type) == DialectType::ANSI || static_cast<DialectType>(s->dialect_type) == DialectType::MYSQL;
+    bool ansi = static_cast<DialectType>(s->dialect_type) == DialectType::ANSI;
 
     // optimizer settings
     s->enable_optimizer = ansi;

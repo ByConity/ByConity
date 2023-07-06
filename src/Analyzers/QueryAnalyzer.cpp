@@ -83,7 +83,7 @@ public:
         : context(std::move(context_))
         , analysis(analysis_)
         , outer_query_scope(outer_query_scope_)
-        , use_ansi_semantic(context->getSettingsRef().dialect_type != DialectType::CLICKHOUSE)
+        , use_ansi_semantic(context->getSettingsRef().dialect_type == DialectType::ANSI)
         , enable_shared_cte(context->getSettingsRef().cte_mode != CTEMode::INLINED)
         , enable_implicit_type_conversion(context->getSettingsRef().enable_implicit_type_conversion)
         , allow_extended_conversion(context->getSettingsRef().allow_extended_type_conversion)

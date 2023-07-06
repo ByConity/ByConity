@@ -139,8 +139,7 @@ IMPLEMENT_SETTING_ENUM(HandleKafkaErrorMode, ErrorCodes::BAD_ARGUMENTS,
 
 IMPLEMENT_SETTING_ENUM(DialectType, ErrorCodes::BAD_ARGUMENTS,
     {{"CLICKHOUSE", DialectType::CLICKHOUSE},
-     {"ANSI",       DialectType::ANSI},
-     {"MYSQL",      DialectType::MYSQL}})
+     {"ANSI",       DialectType::ANSI}})
 
 IMPLEMENT_SETTING_ENUM(CTEMode, ErrorCodes::BAD_ARGUMENTS,
     {{"INLINED", CTEMode::INLINED},

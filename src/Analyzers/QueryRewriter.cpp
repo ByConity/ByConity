@@ -508,7 +508,7 @@ ASTPtr QueryRewriter::rewrite(ASTPtr query, ContextMutablePtr context, bool enab
     graphviz_index = GraphvizPrinter::PRINT_AST_INDEX;
     GraphvizPrinter::printAST(query, context, std::to_string(graphviz_index++) + "-AST-init");
 
-    if (context->getSettingsRef().dialect_type != DialectType::CLICKHOUSE)
+    if (context->getSettingsRef().dialect_type == DialectType::ANSI)
     {
         /// Statement rewriting
         expandCte(query, context);

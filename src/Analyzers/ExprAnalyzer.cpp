@@ -76,7 +76,7 @@ public:
         context(std::move(context_)),
         analysis(analysis_),
         options(std::move(options_)),
-        use_ansi_semantic(context->getSettingsRef().dialect_type != DialectType::CLICKHOUSE),
+        use_ansi_semantic(context->getSettingsRef().dialect_type == DialectType::ANSI),
         enable_implicit_type_conversion(context->getSettingsRef().enable_implicit_type_conversion),
         allow_extended_conversion(context->getSettingsRef().allow_extended_type_conversion),
         scopes({scope_})

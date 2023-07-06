@@ -15,21 +15,3 @@ join_use_nulls	0
 ---
 dialect_type	CLICKHOUSE
 join_use_nulls	1
----
-dialect_type	MYSQL
-join_use_nulls	0
----
-dialect_type	CLICKHOUSE
-join_use_nulls	1
----
-dialect_type	MYSQL
-join_use_nulls	0
----
-dialect_type	CLICKHOUSE
-join_use_nulls	1
----
-dialect_type	MYSQL
-join_use_nulls	0
----
-dialect_type	CLICKHOUSE
-join_use_nulls	1

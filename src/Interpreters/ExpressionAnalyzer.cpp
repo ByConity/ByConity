@@ -287,7 +287,7 @@ void ExpressionAnalyzer::analyzeAggregation()
                 if (group_by_kind != GroupByKind::ORDINARY)
                     aggregated_columns.emplace_back("__grouping_set", std::make_shared<DataTypeUInt64>());
 
-                bool ansi_enabled = getContext()->getSettingsRef().dialect_type != DialectType::CLICKHOUSE;
+                bool ansi_enabled = getContext()->getSettingsRef().dialect_type == DialectType::ANSI;
 
                 for (ssize_t i = 0; i < static_cast<ssize_t>(group_asts.size()); ++i)
                 {
@@ -1367,7 +1367,7 @@ bool SelectQueryExpressionAnalyzer::appendGroupBy(
     /// When ANSI mode is on, converts group keys into nullable types if they are not. The purpose of conversion is to
     /// ensure that (default) values of empty keys are NULLs with the modifiers as GROUPING SETS, ROLLUP and CUBE.
     /// The conversion occurs before the aggregation to adapt different aggregation variants.
-    if (getContext()->getSettingsRef().dialect_type != DialectType::CLICKHOUSE)
+    if (getContext()->getSettingsRef().dialect_type == DialectType::ANSI)
     {
         const auto & src_columns = step.actions()->getResultColumns();
         ColumnsWithTypeAndName dst_columns;

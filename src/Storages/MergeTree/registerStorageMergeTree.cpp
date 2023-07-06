@@ -893,19 +893,9 @@ static StoragePtr create(const StorageFactory::Arguments & args)
 
     if (arg_num != arg_cnt)
         throw Exception("Wrong number of engine arguments.", ErrorCodes::BAD_ARGUMENTS);
-    
-    /// In ANSI mode, allow_nullable_key must be true
-    if (args.getLocalContext()->getSettingsRef().dialect_type != DialectType::CLICKHOUSE)
-    {
-        // If user sets allow_nullable_key=0.
-        if (storage_settings->allow_nullable_key.changed && !storage_settings->allow_nullable_key.value)
-            throw Exception("In ANSI mode, allow_nullable_key must be true.", ErrorCodes::BAD_ARGUMENTS);
-        
-        storage_settings->allow_nullable_key.value = true;
-    }
 
     /// In ANSI mode, allow_nullable_key must be true
-    if (args.getLocalContext()->getSettingsRef().dialect_type != DialectType::CLICKHOUSE)
+    if (args.getLocalContext()->getSettingsRef().dialect_type == DialectType::ANSI)
     {
         // If user sets allow_nullable_key=0.
         if (storage_settings->allow_nullable_key.changed && !storage_settings->allow_nullable_key.value)

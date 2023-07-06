@@ -98,8 +98,6 @@ struct ParserSettings
                 return CLICKHOUSE;
             case DialectType::ANSI:
                 return ANSI;
-            case DialectType::MYSQL:
-                return ANSI;
         }
     }
 };
