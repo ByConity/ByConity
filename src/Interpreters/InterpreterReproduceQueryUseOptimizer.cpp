@@ -98,7 +98,7 @@ ASTPtr InterpreterReproduceQueryUseOptimizer::parse(const String & query)
     const char * end = begin + query.size();
 
     ParserQuery parser(
-        end, (context->getSettingsRef().dialect_type == DialectType::ANSI ? ParserSettings::ANSI : ParserSettings::CLICKHOUSE));
+        end, (context->getSettingsRef().dialect_type != DialectType::CLICKHOUSE ? ParserSettings::ANSI : ParserSettings::CLICKHOUSE));
     std::string out_error_message;
     auto ast = tryParseQuery(
         parser, begin, end, out_error_message, false, "", false, context->getSettingsRef().max_query_size, DBMS_DEFAULT_MAX_PARSER_DEPTH);

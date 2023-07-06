@@ -874,7 +874,7 @@ void ActionsMatcher::visit(const ASTFunction & node, const ASTPtr & ast, Data & 
             arguments_indexes.push_back(pos);
         }
 
-        const bool ansi_mode = data.getContext()->getSettingsRef().dialect_type == DialectType::ANSI;
+        const bool ansi_mode = data.getContext()->getSettingsRef().dialect_type != DialectType::CLICKHOUSE;
         switch (keys_info.group_by_kind)
         {
             case GroupByKind::GROUPING_SETS: {

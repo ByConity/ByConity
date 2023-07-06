@@ -26,6 +26,17 @@ SELECT
 FROM wfnav1
 ORDER BY a, b, 5;
 
+set dialect_type = 'MYSQL';
+
+SELECT
+  a,
+  b,
+  percent_rank() OVER (PARTITION BY a ORDER BY b ROWS UNBOUNDED PRECEDING),
+  cume_dist() OVER (PARTITION by a ORDER BY b ROWS UNBOUNDED PRECEDING),
+  ntile(3) OVER (PARTITION BY a ORDER BY b ROWS UNBOUNDED PRECEDING)
+FROM wfnav1
+ORDER BY a, b, 5;
+
 set dialect_type = 'CLICKHOUSE';
 
 DROP TABLE wfnav1;
