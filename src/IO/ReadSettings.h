@@ -32,6 +32,8 @@ struct ReadSettings
     size_t mmap_threshold = 0;
     MMappedFileCache* mmap_cache = nullptr;
     bool byte_hdfs_pread = true;
+    size_t filesystem_cache_max_download_size = (128UL * 1024 * 1024 * 1024);
+    bool skip_download_if_exceeds_query_cache = true;
 };
 
 }

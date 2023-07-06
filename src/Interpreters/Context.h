@@ -219,6 +219,9 @@ using InputInitializer = std::function<void(ContextPtr, const StoragePtr &)>;
 /// Callback for reading blocks of data from client for function input()
 using InputBlocksReader = std::function<Block(ContextPtr)>;
 
+class TemporaryDataOnDiskScope;
+using TemporaryDataOnDiskScopePtr = std::shared_ptr<TemporaryDataOnDiskScope>;
+
 /// Used in distributed task processing
 using ReadTaskCallback = std::function<String()>;
 
@@ -461,6 +464,9 @@ private:
     std::shared_ptr<OptimizerMetrics> optimizer_metrics = nullptr;
 
     std::unordered_map<std::string, bool> function_deterministic;
+
+    /// Temporary data for query execution accounting.
+    TemporaryDataOnDiskScopePtr temp_data_on_disk;
 public:
     // Top-level OpenTelemetry trace context for the query. Makes sense only for a query context.
     OpenTelemetryTraceContext query_trace_context;
@@ -531,6 +537,8 @@ public:
     String getMetastorePath() const;
 
     VolumePtr getTemporaryVolume() const;
+    TemporaryDataOnDiskScopePtr getTempDataOnDisk() const;
+    void setTempDataOnDisk(TemporaryDataOnDiskScopePtr temp_data_on_disk_);
 
     void setPath(const String & path);
     void setFlagsPath(const String & path);
@@ -539,6 +547,10 @@ public:
     void setMetastorePath(const String & path);
 
     VolumePtr setTemporaryStorage(const String & path, const String & policy_name = "");
+    void setTemporaryStoragePath();
+    void setTemporaryStoragePath(const String & path, size_t max_size);
+    // void setTemporaryStorageInCache(const String & cache_disk_name, size_t max_size);
+    void setTemporaryStoragePolicy(const String & policy_name, size_t max_size);
 
     void setReadyForQuery();
     bool isReadyForQuery() const;
