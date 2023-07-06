@@ -88,6 +88,7 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserKeyword s_detach_partition("DETACH PARTITION");
     ParserKeyword s_detach_part("DETACH PART");
     ParserKeyword s_detach_partition_where("DETACH PARTITION WHERE");
+    ParserKeyword s_recluster_partition("RECLUSTER PARTITION");
     ParserKeyword s_drop_partition("DROP PARTITION");
     ParserKeyword s_drop_part("DROP PART");
     ParserKeyword s_drop_partition_where("DROP PARTITION WHERE");
@@ -535,12 +536,23 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
             command->detach = false;
         }
         else if (s_detach_partition_where.ignore(pos, expected))
-	{
+	    {
             if (!parser_exp_elem.parse(pos, command->predicate, expected))
 		return false;
 
             command->type = ASTAlterCommand::DROP_PARTITION_WHERE;
             command->detach = true;
+        }
+        else if (s_recluster_partition.ignore(pos, expected))
+        {
+            if (s_where.ignore(pos, expected))
+            {
+                if (!parser_exp_elem.parse(pos, command->predicate, expected))
+                    return false;
+            }
+            else if (!parser_partition.parse(pos, command->partition, expected))
+                return false;
+            command->type = ASTAlterCommand::RECLUSTER_PARTITION_WHERE;
         }
         else if (s_detach_partition.ignore(pos, expected))
         {

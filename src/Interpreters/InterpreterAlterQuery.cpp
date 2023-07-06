@@ -399,6 +399,11 @@ AccessRightsElements InterpreterAlterQuery::getRequiredAccessForCommand(const AS
             required_access.emplace_back(AccessType::ALTER_FREEZE_PARTITION, database, table);
             break;
         }
+        case ASTAlterCommand::RECLUSTER_PARTITION_WHERE:
+        {
+            required_access.emplace_back(AccessType::ALTER_RECLUSTER_PARTITION, database, table);
+            break;
+        }
         case ASTAlterCommand::MODIFY_QUERY:
         {
             required_access.emplace_back(AccessType::ALTER_VIEW_MODIFY_QUERY, database, table);

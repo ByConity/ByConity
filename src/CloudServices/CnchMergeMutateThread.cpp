@@ -1080,7 +1080,10 @@ ClusterTaskProgress CnchMergeMutateThread::getReclusteringTaskProgress()
     if (partition_list.size() == 0)
         return cluster_task_progress;
     
-    cluster_task_progress.progress = (scheduled_mutation_partitions.size() / static_cast<double>(partition_list.size())) * 100;
+    if (scheduled_mutation_partitions.size() != 0)
+        cluster_task_progress.progress = (scheduled_mutation_partitions.size() / static_cast<double>(partition_list.size())) * 100;
+    else if (finish_mutation_partitions.size() != 0)
+        cluster_task_progress.progress = (finish_mutation_partitions.size() / static_cast<double>(partition_list.size())) * 100;
     cluster_task_progress.start_time_seconds = current_mutate_entry->commit_time.toSecond();
     return cluster_task_progress;
 }
@@ -1125,31 +1128,59 @@ bool CnchMergeMutateThread::tryMutateParts([[maybe_unused]] StoragePtr & istorag
         size_t curr_mutate_part_size = 0;
         ServerDataPartsVector alter_parts;
 
-        for (const auto & part : visible_parts)
+        String command_partition_id;
+        if (type == ManipulationType::Clustering)
         {
-            /// We wouldn't commit new storage version for BUILD_BITMAP, MATERIALIZED_INDEX, CLEAR_MAP_KEY command
-            /// so we use mutation_commit_time to check whether the part already has executed this alter command.
-            if (part->getColumnsCommitTime() >= current_mutate_entry->commit_time
-                || part->getMutationCommitTime() >= current_mutate_entry->commit_time)
-                continue;
-
-            found_tasks = true;
-
-            if (merging_mutating_parts_snapshot.count(part->name()))
-                continue;
-
-            alter_parts.push_back(part);
-            curr_mutate_part_size += part->part_model().size();
-
-            if (alter_parts.size() >= max_mutate_part_num || curr_mutate_part_size >= max_mutate_part_size)
+            auto mutation_command = current_mutate_entry->commands[0];
+            if (mutation_command.partition)
+                command_partition_id = storage.getPartitionIDFromQuery(mutation_command.partition, getContext());
+            else if (mutation_command.predicate)
             {
-                submitFutureManipulationTask(
-                    FutureManipulationTask(*this, type).setMutationEntry(*current_mutate_entry).assignSourceParts(std::move(alter_parts)));
+                ServerDataPartsVector parts_to_mutate;
+                for (const auto & part : visible_parts)
+                {   
+                    if (part->part_model().table_definition_hash() != storage.getTableHashForClusterBy())
+                        parts_to_mutate.push_back(part);
+                }
+                alter_parts = storage.getServerPartsByPredicate(mutation_command.predicate, [&]{ return parts_to_mutate; }, getContext());
+                found_tasks = alter_parts.size() > 0;
+            }
 
-                alter_parts.clear();
-                curr_mutate_part_size = 0;
-                if (running_mutation_tasks >= storage.getSettings()->max_addition_mutation_task_num)
-                    return true;
+        }
+
+        if (!found_tasks)
+        {
+            for (const auto & part : visible_parts)
+            {
+                /// We wouldn't commit new storage version for BUILD_BITMAP, MATERIALIZED_INDEX, CLEAR_MAP_KEY command
+                /// so we use mutation_commit_time to check whether the part already has executed this alter command.
+                if (part->getColumnsCommitTime() >= current_mutate_entry->commit_time
+                    || part->getMutationCommitTime() >= current_mutate_entry->commit_time)
+                    continue;
+
+                found_tasks = true;
+
+                if (merging_mutating_parts_snapshot.count(part->name()))
+                    continue;
+
+                if (type == ManipulationType::Clustering 
+                    && command_partition_id != part->partition().getID(storage))
+                    continue;
+
+
+                alter_parts.push_back(part);
+                curr_mutate_part_size += part->part_model().size();
+
+                if (alter_parts.size() >= max_mutate_part_num || curr_mutate_part_size >= max_mutate_part_size)
+                {
+                    submitFutureManipulationTask(
+                        FutureManipulationTask(*this, type).setMutationEntry(*current_mutate_entry).assignSourceParts(std::move(alter_parts)));
+
+                    alter_parts.clear();
+                    curr_mutate_part_size = 0;
+                    if (running_mutation_tasks >= storage.getSettings()->max_addition_mutation_task_num)
+                        return true;
+                }
             }
         }
 
@@ -1158,6 +1189,11 @@ bool CnchMergeMutateThread::tryMutateParts([[maybe_unused]] StoragePtr & istorag
             submitFutureManipulationTask(
                 FutureManipulationTask(*this, type).setMutationEntry(*current_mutate_entry).assignSourceParts(std::move(alter_parts)));
         }
+        else if (alter_parts.empty() && type == ManipulationType::Clustering)
+        {
+            found_tasks = false;
+        }
+
 
         return found_tasks;
     };
@@ -1184,6 +1220,7 @@ bool CnchMergeMutateThread::tryMutateParts([[maybe_unused]] StoragePtr & istorag
     /// generate mutations tasks for the earliest mutation
     /// TODO: verify tables which don't have partition key
     bool is_finish = true;
+    bool is_recluster_partition_finish = false;
     auto partition_id_list = catalog->getPartitionIDs(istorage, nullptr);
 
     for (const auto & partition_id : partition_id_list)
@@ -1204,12 +1241,14 @@ bool CnchMergeMutateThread::tryMutateParts([[maybe_unused]] StoragePtr & istorag
         if (scheduled_mutation_partitions.contains(partition_id))
         {
             /// TODO: check staged parts for unique table.
-            if (check_parts(visible_parts, {}))
+            if (check_parts(visible_parts, {}) || is_recluster_partition_finish)
                 finish_mutation_partitions.emplace(partition_id);
         }
         else if (!generate_tasks(visible_parts, merging_mutating_parts_snapshot))
         {
             scheduled_mutation_partitions.emplace(partition_id);
+            if (current_mutate_entry->isReclusterMutation())
+                is_recluster_partition_finish = true;
         }
         else
         {
@@ -1282,8 +1321,7 @@ void CnchMergeMutateThread::removeMutationEntry(const TxnTimestamp & commit_ts, 
     /// modify cluster status before removing recluster mutation entry.
     if (entry.isReclusterMutation() && recluster_finish)
     {
-        LOG_DEBUG(log, "All data parts are clustered in table {}, reset cluster status.", storage_id.getNameForLogs());
-        catalog->setTableClusterStatus(storage_id.uuid, true);
+        LOG_DEBUG(log, "Data parts are clustered in table {}.", storage_id.getNameForLogs());
     }
 
     WriteBufferFromOwnString buf;
