@@ -11,6 +11,7 @@
 
 #include <Disks/IVolume.h>
 #include <Disks/TemporaryFileOnDisk.h>
+#include <QueryPlan/PlanSerDerHelper.h>
 #include <Common/thread_local_rng.h>
 
 #include <fmt/format.h>
@@ -678,4 +679,24 @@ GraceHashJoin::Buckets GraceHashJoin::getCurrentBuckets() const
     return buckets;
 }
 
+void GraceHashJoin::serialize(WriteBuffer & buf) const
+{
+    table_join->serialize(buf);
+    serializeBlock(left_sample_block, buf);
+    serializeBlock(right_sample_block, buf);
+    writeBinary(any_take_last_row, buf);
+}
+
+JoinPtr GraceHashJoin::deserialize(ReadBuffer & buf, ContextPtr context)
+{
+    auto table_join = TableJoin::deserialize(buf, context);
+    auto left_sample_block = deserializeBlock(buf);
+    auto right_sample_block = deserializeBlock(buf);
+
+    bool any_take_last_rows;
+    readBinary(any_take_last_rows, buf);
+
+    return std::make_shared<GraceHashJoin>(
+        context, table_join, left_sample_block, right_sample_block, context->getTempDataOnDisk(), any_take_last_rows);
+}
 }
