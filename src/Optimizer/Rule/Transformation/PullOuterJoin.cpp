@@ -95,6 +95,8 @@ static std::optional<PlanNodePtr> createNewJoin(
         DataStream{output},
         ASTTableJoin::Kind::Inner,
         ASTTableJoin::Strictness::All,
+        context.getSettingsRef().max_threads,
+        context.getSettingsRef().optimize_read_in_order,
         inner_join->getLeftKeys(),
         inner_join->getRightKeys());
     auto new_left_node = JoinNode::createPlanNode(context.nextNodeId(), std::move(new_left), {first, C});
@@ -117,6 +119,8 @@ static std::optional<PlanNodePtr> createNewJoin(
         data_stream,
         ASTTableJoin::Kind::Left,
         left_join->getStrictness(),
+        left_join->getMaxStreams(),
+        left_join->getKeepLeftReadInOrder(),
         left_join->getLeftKeys(),
         left_join->getRightKeys(),
         PredicateConst::TRUE_VALUE,

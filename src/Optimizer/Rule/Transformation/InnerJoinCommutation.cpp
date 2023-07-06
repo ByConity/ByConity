@@ -45,6 +45,8 @@ PlanNodePtr InnerJoinCommutation::swap(JoinNode & node, RuleContext & rule_conte
         step.getOutputStream(),
         ASTTableJoin::Kind::Inner,
         step.getStrictness(),
+        step.getMaxStreams(),
+        step.getKeepLeftReadInOrder(),
         step.getRightKeys(),
         step.getLeftKeys(),
         step.getFilter(),

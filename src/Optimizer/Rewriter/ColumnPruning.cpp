@@ -472,6 +472,8 @@ PlanNodePtr ColumnPruningVisitor::visitJoinNode(JoinNode & node, NameSet & requi
         DataStream{output_header},
         step->getKind(),
         step->getStrictness(),
+        step->getMaxStreams(),
+        step->getKeepLeftReadInOrder(),
         step->getLeftKeys(),
         step->getRightKeys(),
         step->getFilter(),

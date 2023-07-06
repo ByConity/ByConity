@@ -212,6 +212,8 @@ std::optional<PlanNodePtr> PushProjectionThroughJoin::pushProjectionThroughJoin(
         DataStream{.header = step.getOutputStream().header},
         join_step.getKind(),
         join_step.getStrictness(),
+        join_step.getMaxStreams(),
+        join_step.getKeepLeftReadInOrder(),
         join_step.getLeftKeys(),
         join_step.getRightKeys(),
         join_step.getFilter(),
