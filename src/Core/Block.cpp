@@ -730,6 +730,7 @@ Block concatenateBlocks(const std::vector<Block> & blocks)
     return out;
 }
 
+
 void Block::clear()
 {
     info = BlockInfo();

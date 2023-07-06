@@ -39,6 +39,7 @@
 
 #include <Interpreters/ArrayJoinAction.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/ConcurrentHashJoin.h>
 #include <Interpreters/DictionaryReader.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/ExpressionAnalyzer.h>
@@ -67,6 +68,7 @@
 #include <Dictionaries/DictionaryStructure.h>
 
 #include <Core/NamesAndTypes.h>
+#include <common/logger_useful.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/typeid_cast.h>
 
@@ -1139,7 +1141,14 @@ static std::shared_ptr<IJoin> makeJoin(std::shared_ptr<TableJoin> analyzed_join,
     }
 
     if (analyzed_join->forceHashJoin() || (analyzed_join->preferMergeJoin() && !allow_merge_join))
+    {
+        if (analyzed_join->allowParallelHashJoin())
+        {
+            LOG_TRACE(&Poco::Logger::get("SelectQueryExpressionAnalyzer::makeJoin"), "will use ConcurrentHashJoin");
+            return std::make_shared<ConcurrentHashJoin>(analyzed_join, context->getSettings().max_threads, r_sample_block);
+        }
         return std::make_shared<HashJoin>(analyzed_join, r_sample_block);
+    }
     else if (analyzed_join->forceMergeJoin() || (analyzed_join->preferMergeJoin() && allow_merge_join))
         return std::make_shared<MergeJoin>(analyzed_join, r_sample_block);
     else if (analyzed_join->forceNestedLoopJoin())

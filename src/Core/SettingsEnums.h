@@ -67,6 +67,7 @@ enum class JoinAlgorithm
     PREFER_PARTIAL_MERGE,
     NESTED_LOOP_JOIN,
     GRACE_HASH,
+    PARALLEL_HASH,
 };
 
 DECLARE_SETTING_ENUM(JoinAlgorithm)
