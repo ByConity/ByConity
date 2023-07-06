@@ -89,6 +89,9 @@ StoragePtr PartToolkitBase::getTable()
         if (!create.storage || !create.columns_list)
             throw Exception("Wrong create query.", ErrorCodes::INCORRECT_QUERY);
 
+        if (create.storage->engine != nullptr && create.storage->engine->name != "CloudMergeTree")
+            throw Exception("Only support CloudMergeTree in Part Tool.", ErrorCodes::INCORRECT_QUERY);
+
         ColumnsDescription columns = InterpreterCreateQuery::getColumnsDescription(*create.columns_list->columns, getContext(), create.attach);
         ConstraintsDescription constraints = InterpreterCreateQuery::getConstraintsDescription(create.columns_list->constraints);
 

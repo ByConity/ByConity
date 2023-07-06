@@ -70,6 +70,7 @@ public:
     ExchangeResult visitFilterNode(FilterNode & node, ExchangeContext & cxt) override;
     ExchangeResult visitJoinNode(JoinNode & node, ExchangeContext & cxt) override;
     ExchangeResult visitAggregatingNode(AggregatingNode & node, ExchangeContext & cxt) override;
+    ExchangeResult visitMarkDistinctNode(MarkDistinctNode & node, ExchangeContext & cxt) override;
     ExchangeResult visitMergingAggregatedNode(MergingAggregatedNode & node, ExchangeContext & cxt) override;
     ExchangeResult visitUnionNode(UnionNode & node, ExchangeContext & cxt) override;
     ExchangeResult visitExchangeNode(ExchangeNode & node, ExchangeContext & cxt) override;

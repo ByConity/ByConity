@@ -38,6 +38,7 @@
 #include <QueryPlan/MergingSortedStep.h>
 #include <QueryPlan/PartialSortingStep.h>
 #include <QueryPlan/PartitionTopNStep.h>
+#include <QueryPlan/PlanPrinter.h>
 #include <QueryPlan/PlanVisitor.h>
 #include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/QueryPlan.h>
@@ -91,6 +92,7 @@ static std::unordered_map<IQueryPlanStep::Type, std::string> NODE_COLORS = {
     {IQueryPlanStep::Type::AssignUniqueId, "bisque"},
     {IQueryPlanStep::Type::CTERef, "orange"},
     {IQueryPlanStep::Type::TopNFiltering, "fuchsia"},
+    {IQueryPlanStep::Type::MarkDistinct, "violet"},
 };
 
 struct PrinterContext
@@ -164,6 +166,15 @@ Void PlanNodePrinter::visitAggregatingNode(AggregatingNode & node, PrinterContex
     auto step = *node.getStep();
     String color{NODE_COLORS[step.getType()]};
     printNode(node, label, StepPrinter::printAggregatingStep(step), color, context);
+    return visitChildren(node, context);
+}
+
+Void PlanNodePrinter::visitMarkDistinctNode(MarkDistinctNode & node, PrinterContext & context)
+{
+    String label{"MarkDistinctNode"};
+    auto & step = dynamic_cast<const MarkDistinctStep &>(*node.getStep());
+    String color{NODE_COLORS[step.getType()]};
+    printNode(node, label, StepPrinter::printMarkDistinctStep(step), color, context);
     return visitChildren(node, context);
 }
 
@@ -544,6 +555,16 @@ Void PlanSegmentNodePrinter::visitAggregatingNode(QueryPlan::Node * node, Printe
     const auto & step = dynamic_cast<const AggregatingStep &>(*step_ptr);
     String color{NODE_COLORS[step_ptr->getType()]};
     printNode(node, label, StepPrinter::printAggregatingStep(step), color, context);
+    return visitChildren(node, context);
+}
+
+Void PlanSegmentNodePrinter::visitMarkDistinctNode(QueryPlan::Node * node, PrinterContext & context)
+{
+    auto & step_ptr = node->step;
+    String label{"MarkDistinctNode"};
+    const auto & step = dynamic_cast<const MarkDistinctStep &>(*step_ptr);
+    String color{NODE_COLORS[step_ptr->getType()]};
+    printNode(node, label, StepPrinter::printMarkDistinctStep(step), color, context);
     return visitChildren(node, context);
 }
 
@@ -1164,6 +1185,27 @@ String StepPrinter::printAggregatingStep(const AggregatingStep & step, bool incl
     //    if (step.isTotals())
     //        details << "|"
     //                << "totals";
+    return details.str();
+}
+
+String StepPrinter::printMarkDistinctStep(const MarkDistinctStep & step, bool include_output)
+{
+    std::stringstream details;
+    details << "Marker Symbol:\\n";
+    details << step.getMarkerSymbol() << "\\n";
+    details << "|";
+    details << "Distinct Symbols :\\n";
+    for (auto & symbol : step.getDistinctSymbols())
+    {
+        details << symbol << ',';
+    }
+    details << "|";
+    details << "Output |";
+    for (const auto & column : step.getOutputStream().header)
+    {
+        details << column.name << ":";
+        details << column.type->getName() << "\\n";
+    }
     return details.str();
 }
 
@@ -2302,12 +2344,12 @@ void GraphvizPrinter::printPlanSegment(const PlanSegmentTreePtr & segment, const
 
 void GraphvizPrinter::printChunk(String transform, const Block & block, const Chunk & chunk)
 {
-    std::cout << transform << ":";
+    std::stringstream value;
+    value << transform << ":";
     for(const auto& column : block.getNames())
     {
-        std::cout << column << ":";
+        value << column << ":";
     }
-    std::cout << "\n";
     UInt64 rows = chunk.getNumRows();
     Columns columns = chunk.getColumns();
     for (UInt64 i = 0; i < rows; ++i)
@@ -2315,41 +2357,51 @@ void GraphvizPrinter::printChunk(String transform, const Block & block, const Ch
         for (auto & col : columns)
         {
             String col_name = col->getName();
-            if (col_name == "UInt64" || col_name == "UInt8")
+            value << col_name << ":";
+            try
             {
-                auto col_value = col->getUInt(i);
-                std::cout << col_value << ":";
+                if (col_name == "UInt64" || col_name == "Int64" || col_name == "Nullable(Int64)")
+                {
+                    auto col_value = col->get64(i);
+                    value << col_value << ":";
+                }
+                if (col_name == "UInt8" || col_name == "Int8")
+                {
+                    auto col_value = col->getInt(i);
+
+                    value << col_value << ":";
+                }
+                if (col_name == "Float64")
+                {
+                    auto col_value = col->getFloat64(i);
+                    value << col_value << ":";
+                }
+                if (col_name == "Float32")
+                {
+                    auto col_value = col->getFloat32(i);
+                    value << col_value << ":";
+                }
+                if (col_name == "String")
+                {
+                    auto col_value = col->getDataAt(i);
+                    value << col_value.toString() << ":";
+                }
+                if (col_name == "Bool")
+                {
+                    auto col_value = col->getBool(i);
+                    value << col_value << ":";
+                }
             }
-            if (col_name == "Int64" || col_name == "Int8")
+            catch (...)
             {
-                auto col_value = col->getInt(i);
-                std::cout << col_value << ":";
-            }
-            if (col_name == "Float64")
-            {
-                auto col_value = col->getFloat64(i);
-                std::cout << col_value << ":";
-            }
-            if (col_name == "Float32")
-            {
-                auto col_value = col->getFloat32(i);
-                std::cout << col_value << ":";
-            }
-            if (col_name == "String")
-            {
-                auto col_value = col->getDataAt(i);
-                std::cout << col_value.toString() << ":";
-            }
-            if (col_name == "Bool")
-            {
-                auto col_value = col->getBool(i);
-                std::cout << col_value << ":";
+                value << "NaN"
+                      << ":";
             }
         }
-        std::cout << "\n" << std::flush;
+        value << "\n";
     }
 
-    std::cout << "\n" << std::flush;
+    LOG_DEBUG(&Poco::Logger::get("GraphvizPrinter"), value.str());
 }
 
 void appendAST(

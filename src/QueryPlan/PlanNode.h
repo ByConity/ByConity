@@ -50,6 +50,7 @@
 #include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/QueryCacheStep.h>
 #include <QueryPlan/ReadFromMergeTree.h>
+#include <QueryPlan/MarkDistinctStep.h>
 #include <QueryPlan/ReadFromPreparedSource.h>
 #include <QueryPlan/ReadNothingStep.h>
 #include <QueryPlan/RemoteExchangeSourceStep.h>

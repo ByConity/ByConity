@@ -185,6 +185,15 @@ Property DeriverVisitor::visitAggregatingStep(const AggregatingStep & step, Deri
     return context.getInput()[0];
 }
 
+Property DeriverVisitor::visitMarkDistinctStep(const MarkDistinctStep & step, DeriverContext & context)
+{
+    if (step.getDistinctSymbols().empty())
+    {
+        return Property{Partitioning{Partitioning::Handle::SINGLE}, Partitioning{Partitioning::Handle::SINGLE}};
+    }
+    return context.getInput()[0];
+}
+
 Property DeriverVisitor::visitMergingAggregatedStep(const MergingAggregatedStep &, DeriverContext & context)
 {
     return context.getInput()[0];

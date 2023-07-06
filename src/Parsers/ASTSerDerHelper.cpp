@@ -32,6 +32,7 @@
 #include <Parsers/ASTDictionaryAttributeDeclaration.h>
 #include <Parsers/ASTDropAccessEntityQuery.h>
 #include <Parsers/ASTDropQuery.h>
+#include <Parsers/ASTUpdateQuery.h>
 #include <Parsers/ASTDumpInfoQuery.h>
 #include <Parsers/ASTExplainQuery.h>
 #include <Parsers/ASTExpressionList.h>

@@ -51,6 +51,7 @@ public:
     PropertySets visitFilterStep(const FilterStep &, DeterminerContext & context) override;
     PropertySets visitJoinStep(const JoinStep & step, DeterminerContext &) override;
     PropertySets visitAggregatingStep(const AggregatingStep & step, DeterminerContext &) override;
+    PropertySets visitMarkDistinctStep(const MarkDistinctStep & step, DeterminerContext &) override;
     PropertySets visitMergingAggregatedStep(const MergingAggregatedStep & step, DeterminerContext &) override;
     PropertySets visitUnionStep(const UnionStep & step, DeterminerContext & context) override;
     PropertySets visitIntersectStep(const IntersectStep & node, DeterminerContext & context) override;

@@ -16,9 +16,11 @@
 #include <Optimizer/Rule/Rules.h>
 
 #include <Optimizer/Rule/Rewrite/DistinctToAggregate.h>
+#include <Optimizer/Rule/Rewrite/FilterWindowToPartitionTopN.h>
 #include <Optimizer/Rule/Rewrite/ImplementSetOperationRules.h>
 #include <Optimizer/Rule/Rewrite/InlineProjections.h>
 #include <Optimizer/Rule/Rewrite/MergeSetOperationRules.h>
+#include <Optimizer/Rule/Rewrite/MultipleDistinctAggregationToMarkDistinct.h>
 #include <Optimizer/Rule/Rewrite/PullProjectionOnJoinThroughJoin.h>
 #include <Optimizer/Rule/Rewrite/PushAggThroughJoinRules.h>
 #include <Optimizer/Rule/Rewrite/PushDownLimitRules.h>
@@ -59,8 +61,7 @@ std::vector<RulePtr> Rules::simplifyExpressionRules()
 
 std::vector<RulePtr> Rules::mergePredicatesRules()
 {
-    return {
-        std::make_shared<MergePredicatesUsingDomainTranslator>()};
+    return {std::make_shared<MergePredicatesUsingDomainTranslator>()};
 }
 
 std::vector<RulePtr> Rules::inlineProjectionRules()
@@ -94,7 +95,7 @@ std::vector<RulePtr> Rules::removeRedundantRules()
         std::make_shared<RemoveRedundantJoin>(),
         std::make_shared<RemoveRedundantLimit>(),
         // std::make_shared<RemoveRedundantOuterJoin>()
-        };
+    };
 }
 
 std::vector<RulePtr> Rules::pushAggRules()
@@ -115,7 +116,9 @@ std::vector<RulePtr> Rules::pushDownLimitRules()
 
 std::vector<RulePtr> Rules::distinctToAggregateRules()
 {
-    return {std::make_shared<DistinctToAggregate>()};
+    return {
+        std::make_shared<DistinctToAggregate>(),
+        std::make_shared<MultipleDistinctAggregationToMarkDistinct>()};
 }
 
 std::vector<RulePtr> Rules::pushIntoTableScanRules()
@@ -139,25 +142,19 @@ std::vector<RulePtr> Rules::swapAdjacentRules()
 
 std::vector<RulePtr> Rules::pushDownTopNRules()
 {
-    return {
-        std::make_shared<PushTopNThroughProjection>()
-    };
+    return {std::make_shared<PushTopNThroughProjection>()};
 }
 
 std::vector<RulePtr> Rules::createTopNFilteringRules()
 {
-    return {
-        std::make_shared<CreateTopNFilteringForAggregating>()
-    };
+    return {std::make_shared<CreateTopNFilteringForAggregating>()};
 }
 
 std::vector<RulePtr> Rules::pushDownTopNFilteringRules()
 {
     /// PushTopNFilteringXXX rules cannot be mixed with CreateTopNFilteringXXX rules,
     /// as create rules will produce redundant TopNFilteringSteps when the last produced one is pushdowned.
-    return {
-        std::make_shared<PushTopNFilteringThroughProjection>()
-    };
+    return {std::make_shared<PushTopNFilteringThroughProjection>()};
 }
 
 }
