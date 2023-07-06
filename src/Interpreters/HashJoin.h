@@ -357,10 +357,17 @@ public:
         return data;
     }
 
+    BlocksList releaseJoinedBlocks(bool restructure = false);
+
+    /// Modify right block (update structure according to sample block) to save it in block list
+    static Block prepareRightBlock(const Block & block, const Block & saved_block_sample_);
+    Block prepareRightBlock(const Block & block) const;
+
     bool isUsed(size_t off) const { return used_flags.getUsedSafe(off); }
 
     void serialize(WriteBuffer & buf) const override;
     static JoinPtr deserialize(ReadBuffer & buf, ContextPtr context);
+    const Block & savedBlockSample() const { return data->sample_block; }
 
 private:
     friend class NonJoinedBlockInputStream;
@@ -412,8 +419,6 @@ private:
     std::shared_lock<std::shared_mutex> storage_join_lock;
 
     void init(Type type_);
-
-    const Block & savedBlockSample() const { return data->sample_block; }
 
     /// Modify (structure) right block to save it in block list
     Block structureRightBlock(const Block & stored_block) const;

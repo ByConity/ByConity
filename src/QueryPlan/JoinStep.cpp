@@ -206,6 +206,11 @@ bool JoinStep::enforceNestLoopJoin() const
     return false;
 }
 
+bool JoinStep::enforceGraceHashJoin() const
+{
+    return false;
+}
+
 bool JoinStep::supportReorder(bool support_filter, bool support_cross) const
 {
     if (!support_filter && !PredicateUtils::isTruePredicate(filter))

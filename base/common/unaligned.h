@@ -2,6 +2,7 @@
 
 #include <string.h>
 #include <type_traits>
+#include <bit>
 
 
 template <typename T>
@@ -22,4 +23,15 @@ inline void unalignedStore(void * address,
 {
     static_assert(std::is_trivially_copyable_v<T>);
     memcpy(address, &src, sizeof(src));
+}
+
+template <typename T>
+inline T unalignedLoadLE(const void * address)
+{
+    T res {};
+    if constexpr (std::endian::native == std::endian::little)
+        memcpy(&res, address, sizeof(res));
+    else
+        reverseMemcpy(&res, address, sizeof(res));
+    return res;
 }

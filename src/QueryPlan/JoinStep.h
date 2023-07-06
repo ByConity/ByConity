@@ -114,6 +114,8 @@ public:
 
     JoinPtr makeJoin(ContextPtr context);
 
+    bool enforceGraceHashJoin() const;
+
     void serialize(WriteBuffer & buf) const override;
     void serialize(WriteBuffer & buffer, bool with_output) const;
 
