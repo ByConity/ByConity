@@ -94,7 +94,7 @@ public:
         , cte_plans(cte_plans_)
         , analysis(analysis_)
         , outer_context(std::move(outer_context_))
-        , use_ansi_semantic(context->getSettingsRef().dialect_type == DialectType::ANSI)
+        , use_ansi_semantic(context->getSettingsRef().dialect_type != DialectType::CLICKHOUSE)
         , enable_shared_cte(context->getSettingsRef().cte_mode != CTEMode::INLINED)
         , enable_implicit_type_conversion(context->getSettingsRef().enable_implicit_type_conversion)
         , enable_subcolumn_optimization_through_union(context->getSettingsRef().enable_subcolumn_optimization_through_union)

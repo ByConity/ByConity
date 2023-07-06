@@ -187,6 +187,7 @@ DECLARE_SETTING_ENUM(HandleKafkaErrorMode)
 enum class DialectType {
     CLICKHOUSE,
     ANSI,
+    MYSQL,
 };
 
 struct SettingFieldDialectTypeTraits
