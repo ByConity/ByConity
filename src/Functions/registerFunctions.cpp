@@ -78,6 +78,7 @@ void registerFunctionBayesAB(FunctionFactory &);
 #endif
 void registerFunctionTid(FunctionFactory & factory);
 void registerFunctionLogTrace(FunctionFactory & factory);
+void registerFunctionToBool(FunctionFactory &);
 void registerFunctionTopoFindDown(FunctionFactory &);
 void registerFunctionDtsPartition(FunctionFactory &);
 
@@ -149,6 +150,7 @@ void registerFunctions()
     registerFunctionTupleHammingDistance(factory);
     registerFunctionsStringHash(factory);
     registerFunctionValidateNestedArraySizes(factory);
+    registerFunctionToBool(factory);
 
 #if !defined(ARCADIA_BUILD)
     registerFunctionBayesAB(factory);

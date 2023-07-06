@@ -14,7 +14,7 @@ protected:
     SerializationPtr nested_serialization;
 
 public:
-    SerializationWrapper(const SerializationPtr & nested_serialization_) : nested_serialization(nested_serialization_) {}
+    explicit SerializationWrapper(const SerializationPtr & nested_serialization_) : nested_serialization(nested_serialization_) {}
 
     void enumerateStreams(const StreamCallback & callback, SubstreamPath & path) const override;
 
