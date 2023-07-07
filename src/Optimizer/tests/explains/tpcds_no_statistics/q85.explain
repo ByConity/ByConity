@@ -36,7 +36,7 @@ Projection est. 100 rows
                            │     │     │     │  │     Partition by: {cd_education_status, cd_marital_status, wr_returning_cdemo_sk}
                            │     │     │     │  └─ Inner Join est. ? rows
                            │     │     │     │     │     Condition: wr_refunded_cdemo_sk == cd_demo_sk
-                           │     │     │     │     │     Filter: ((cd_education_status = 'College') AND (ws_sales_price <= '100.00') AND (cd_marital_status = 'S') AND (ws_sales_price >= '50.00')) OR ((ws_sales_price <= '150.00') AND (ws_sales_price >= '100.00') AND (cd_marital_status = 'M') AND (cd_education_status = 'Advanced Degree')) OR ((ws_sales_price <= '200.00') AND (cd_education_status = '2 yr Degree') AND (ws_sales_price >= '150.00') AND (cd_marital_status = 'W'))
+                           │     │     │     │     │     Filter: ((ws_sales_price >= '150.00') AND (cd_education_status = '2 yr Degree') AND (cd_marital_status = 'W') AND (ws_sales_price <= '200.00')) OR ((ws_sales_price <= '150.00') AND (cd_marital_status = 'M') AND (ws_sales_price >= '100.00') AND (cd_education_status = 'Advanced Degree')) OR ((cd_education_status = 'College') AND (ws_sales_price <= '100.00') AND (cd_marital_status = 'S') AND (ws_sales_price >= '50.00'))
                            │     │     │     │     ├─ Repartition Exchange est. ? rows
                            │     │     │     │     │  │     Partition by: {wr_refunded_cdemo_sk}
                            │     │     │     │     │  └─ Inner Join est. ? rows
