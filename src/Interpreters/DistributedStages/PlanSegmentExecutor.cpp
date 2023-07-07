@@ -217,22 +217,12 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
         num_threads);
 
     pipeline_executor->execute(num_threads);
-<<<<<<< HEAD
-    GraphvizPrinter::printPipeline(
-        pipeline_executor->getProcessors(),
-        pipeline_executor->getExecutingGraph(),
-        context,
-        plan_segment->getPlanSegmentId(),
-        extractExchangeStatusHostPort(plan_segment->getCurrentAddress()));
-=======
 
     if (CurrentThread::getGroup())
     {
         runtime_segment_status.metrics.cpu_micros = CurrentThread::getGroup()->performance_counters[ProfileEvents::SystemTimeMicroseconds]
                 + CurrentThread::getGroup()->performance_counters[ProfileEvents::UserTimeMicroseconds];
     }
-    GraphvizPrinter::printPipeline(pipeline_executor->getProcessors(), pipeline_executor->getExecutingGraph(), context, plan_segment->getPlanSegmentId(), extractExchangeStatusHostPort(plan_segment->getCurrentAddress()));
->>>>>>> a1d724a725a (Merge branch 'refine_exchange_error_report_cnch_ce_merge' into 'cnch-ce-merge')
     for (const auto & sender : senders)
         sender->finish(BroadcastStatusCode::ALL_SENDERS_DONE, "Upstream pipeline finished");
 }
