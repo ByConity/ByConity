@@ -34,6 +34,10 @@ public:
     {
     }
 
+    size_t getSampleSize() const { return sample_size; }
+    size_t getMaxChunkSize() const { return max_chunk_size; }
+
+
     String getName() const override { return "FinalSample"; }
 
     Type getType() const override { return Type::FinalSample; }

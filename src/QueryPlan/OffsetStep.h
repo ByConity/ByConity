@@ -31,7 +31,7 @@ public:
     Type getType() const override { return Type::Offset; }
 
     void transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &) override;
-
+    size_t getOffset() const { return offset; }
     void describeActions(JSONBuilder::JSONMap & map) const override;
     void describeActions(FormatSettings & settings) const override;
 
