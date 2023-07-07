@@ -470,7 +470,6 @@ private:
 
     /// Temporary data for query execution accounting.
     TemporaryDataOnDiskScopePtr temp_data_on_disk;
-    QueueThrottlerDeleterPtr queue_throttler_ptr;
 
     std::weak_ptr<PlanSegmentProcessListEntry> segment_process_list_entry;
 public:
