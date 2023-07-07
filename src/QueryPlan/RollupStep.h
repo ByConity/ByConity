@@ -32,6 +32,7 @@ public:
     String getName() const override { return "Rollup"; }
 
     Type getType() const override { return Type::Rollup; }
+    AggregatingTransformParamsPtr getParams() const { return params; }
 
     void transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &) override;
 
