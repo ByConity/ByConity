@@ -59,6 +59,8 @@ namespace ProfileEvents
             } while (current != nullptr);
         }
 
+        uint64_t getIOReadTime() const;
+
         /// Every single value is fetched atomically, but not all values as a whole.
         Counters getPartiallyAtomicSnapshot() const;
 

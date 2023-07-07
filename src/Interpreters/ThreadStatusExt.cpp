@@ -269,6 +269,12 @@ void ThreadStatus::finalizePerformanceCounters()
         if (global_context_ptr && query_context_ptr)
         {
             const auto & settings = query_context_ptr->getSettingsRef();
+
+            if (settings.log_queries && settings.log_max_io_thread_queries)
+            {
+                tryUpdateMaxIOThreadProfile();
+            }
+
             if (settings.log_queries && settings.log_query_threads)
             {
                 const auto now = std::chrono::system_clock::now();
@@ -453,6 +459,20 @@ void ThreadStatus::logToQueryThreadLog(QueryThreadLog & thread_log, const String
     }
 
     thread_log.add(elem);
+}
+
+void ThreadStatus::tryUpdateMaxIOThreadProfile()
+{
+    auto current_thread_profile = performance_counters.getPartiallyAtomicSnapshot();
+    if (!thread_group)
+        return;
+    std::lock_guard lock(thread_group->mutex);
+    if (current_thread_profile.getIOReadTime() > thread_group->max_io_thread_profile_counters.getIOReadTime())
+    {
+        thread_group->max_io_time_thread_ms = (time_in_microseconds(std::chrono::system_clock::now()) - query_start_time_microseconds) / 1000;
+        thread_group->max_io_time_thread_name = getThreadName();
+        thread_group->max_io_thread_profile_counters = std::move(current_thread_profile);
+    }
 }
 
 void CurrentThread::initializeQuery()

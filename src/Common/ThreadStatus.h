@@ -75,6 +75,9 @@ public:
     mutable bthread::Mutex mutex;
 
     ProfileEvents::Counters performance_counters{VariableContext::Process};
+    String max_io_time_thread_name;
+    uint64_t max_io_time_thread_ms{0};
+    ProfileEvents::Counters max_io_thread_profile_counters{VariableContext::Process};
     MemoryTracker memory_tracker{VariableContext::Process};
 
     ContextWeakPtr query_context;
@@ -232,6 +235,8 @@ public:
 
     /// Detaches thread from the thread group and the query, dumps performance counters if they have not been dumped
     void detachQuery(bool exit_if_already_detached = false, bool thread_exits = false);
+
+    void tryUpdateMaxIOThreadProfile();
 
 protected:
     void applyQuerySettings();
