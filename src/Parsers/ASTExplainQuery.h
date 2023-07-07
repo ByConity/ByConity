@@ -42,6 +42,10 @@ public:
         QueryElement, /// 'EXPLAIN ELEMENT ...'
         PlanSegment, /// 'EXPLAIN PLANSEGMENT ...'
         OptimizerPlan, /// 'EXPLAIN OPT_PLAN ...'
+        PreWhereEffect, /// 'EXPLAIN PREWHERE_EFFECT ...'
+        DistributedAnalyze, /// 'EXPLAIN ANALYZE DISTRIBUTED SELECT...'
+        Distributed, /// 'EXPLAIN DISTRIBUTED SELECT...'
+        LogicalAnalyze,    /// 'EXPLAIN ANALYZE SELECT...'
     };
 
     explicit ASTExplainQuery(ExplainKind kind_) : kind(kind_) {}
@@ -108,6 +112,10 @@ private:
             case QueryElement: return "EXPLAIN ELEMENT";
             case PlanSegment: return "EXPLAIN PLANSEGMENT";
             case OptimizerPlan: return "EXPLAIN OPT_PLAN";
+            case PreWhereEffect: return "EXPLAIN PREWHERE_EFFECT";
+            case DistributedAnalyze: return "EXPLAIN ANALYZE DISTRIBUTED";
+            case LogicalAnalyze: return "EXPLAIN ANALYZE";
+            case Distributed: return "EXPLAIN DISTRIBUTED";
         }
 
         __builtin_unreachable();

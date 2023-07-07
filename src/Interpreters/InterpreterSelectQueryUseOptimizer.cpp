@@ -71,6 +71,7 @@ BlockIO InterpreterSelectQueryUseOptimizer::execute()
     total_watch.start();
     QueryPlanPtr query_plan = buildQueryPlan();
 
+    query_plan->setResetStepId(false);
     stage_watch.start();
     QueryPlan plan = PlanNodeToNodeVisitor::convert(*query_plan);
 

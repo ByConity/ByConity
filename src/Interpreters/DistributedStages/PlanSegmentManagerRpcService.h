@@ -13,11 +13,13 @@
  * limitations under the License.
  */
 
+#include <memory>
 #include <Interpreters/Context.h>
 #include <Interpreters/SegmentScheduler.h>
 #include <Interpreters/ProcessList.h>
 #include <Protos/plan_segment_manager.pb.h>
 #include <brpc/server.h>
+#include <common/types.h>
 #include <common/logger_useful.h>
 
 #include <Common/ResourceMonitor.h>
@@ -25,13 +27,17 @@
 #include <Core/BackgroundSchedulePool.h>
 #include <Interpreters/DistributedStages/MPPQueryCoordinator.h>
 #include <Interpreters/DistributedStages/MPPQueryManager.h>
+#include <Interpreters/ProcessorsProfileLog.h>
+#include <Interpreters/profile/ProfileLogHub.h>
+
 namespace DB
 {
 class PlanSegmentManagerRpcService : public Protos::PlanSegmentManagerService
 {
 public:
     explicit PlanSegmentManagerRpcService(ContextMutablePtr context_)
-        : context(context_), log(&Poco::Logger::get("PlanSegmentManagerRpcService"))
+        : context(context_)
+        , log(&Poco::Logger::get("PlanSegmentManagerRpcService"))
     {
     }
 
@@ -68,6 +74,18 @@ public:
         const SegmentSchedulerPtr & scheduler = context->getSegmentScheduler();
         scheduler->updateSegmentStatus(status);
         scheduler->updateQueryStatus(status);
+
+        if (scheduler->needCheckRecivedSegmentStatusCounter(request->query_id()))
+        {
+            scheduler->updateReceivedSegmentStausCounter(request->query_id(), request->segment_id());
+            auto already_received_all_segment_status = scheduler->alreadyReceivedAllSegmentStatus(status.query_id);
+            if (already_received_all_segment_status)
+            {
+                ProfileLogHub<ProcessorProfileLogElement>::getInstance().stopConsume(status.query_id);
+                LOG_DEBUG(log, "Query:{} have received all segment status.", status.query_id);
+            }
+        }
+
         if (!status.is_canceled && status.code == 0)
         {
             try
@@ -91,6 +109,18 @@ public:
         }
         // todo  scheduler.cancelSchedule
     }
+
+    void reportProcessorProfileMetrics(
+        ::google::protobuf::RpcController * /*controller*/,
+        const ::DB::Protos::ReportProcessorProfileMetricRequest * request,
+        ::DB::Protos::ReportProcessorProfileMetricResponse * /*response*/,
+        ::google::protobuf::Closure * done) override;
+
+    void batchReportProcessorProfileMetrics(
+        ::google::protobuf::RpcController * /*controller*/,
+        const ::DB::Protos::BatchReportProcessorProfileMetricRequest * request,
+        ::DB::Protos::ReportProcessorProfileMetricResponse * /*response*/,
+        ::google::protobuf::Closure * done) override;
 
 private:
     ContextMutablePtr context;

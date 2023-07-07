@@ -22,6 +22,8 @@
 #include <Processors/Exchange/DataTrans/Brpc/ReadBufferFromBrpcBuf.h>
 #include <brpc/controller.h>
 #include <butil/iobuf.h>
+#include <mutex>
+#include <common/types.h>
 #include <Common/Exception.h>
 
 namespace DB
@@ -134,4 +136,74 @@ void PlanSegmentManagerRpcService::executeQuery(
     }
 }
 
+void parseReportProcessorProfileMetricRequest(ProcessorProfileLogElement & profile_element, const ::DB::Protos::ReportProcessorProfileMetricRequest * request)
+{
+    profile_element.query_id = request->query_id();
+    profile_element.event_time = request->event_time();
+    profile_element.event_time_microseconds = request->event_time_microseconds();
+    profile_element.elapsed_us = request->elapsed_us();
+    profile_element.input_wait_elapsed_us = request->input_wait_elapsed_us();
+    profile_element.output_wait_elapsed_us = request->output_wait_elapsed_us();
+    profile_element.id = request->id();
+    profile_element.input_rows = request->input_rows();
+    profile_element.input_bytes = request->input_bytes();
+    profile_element.output_rows = request->output_rows();
+    profile_element.output_bytes = request->output_bytes();
+    profile_element.processor_name = request->processor_name();
+    profile_element.plan_group = request->plan_group();
+    profile_element.plan_step = request->plan_step();
+    profile_element.step_id = request->step_id();
+    profile_element.worker_address = request->worker_address();
+    profile_element.parent_ids = std::vector<UInt64>(request->parent_ids().begin(), request->parent_ids().end());
+}
+
+void PlanSegmentManagerRpcService::reportProcessorProfileMetrics(
+    ::google::protobuf::RpcController * controller,
+    const ::DB::Protos::ReportProcessorProfileMetricRequest * request,
+    ::DB::Protos::ReportProcessorProfileMetricResponse * /*response*/,
+    ::google::protobuf::Closure * done)
+{
+    brpc::ClosureGuard done_guard(done);
+    ProcessorProfileLogElement element;
+    try
+    {
+        parseReportProcessorProfileMetricRequest(element, request);
+        auto query_id = element.query_id;
+        auto timeout = context->getSettingsRef().report_processors_profiles_timeout_millseconds;
+
+        if (ProfileLogHub<ProcessorProfileLogElement>::getInstance().hasConsumer())
+            ProfileLogHub<ProcessorProfileLogElement>::getInstance().tryPushElement(query_id, element, timeout);
+    }
+    catch (...)
+    {
+        controller->SetFailed("Report fail.");
+    }
+}
+
+void PlanSegmentManagerRpcService::batchReportProcessorProfileMetrics(
+    ::google::protobuf::RpcController * controller,
+    const ::DB::Protos::BatchReportProcessorProfileMetricRequest * request,
+    ::DB::Protos::ReportProcessorProfileMetricResponse * /*response*/,
+    ::google::protobuf::Closure * done)
+{
+    brpc::ClosureGuard done_guard(done);
+    std::vector<ProcessorProfileLogElement> elements;
+    try
+    {
+        const auto & query_id = request->query_id();
+        for (const auto & inner_request : request->request())
+        {
+            ProcessorProfileLogElement element;
+            parseReportProcessorProfileMetricRequest(element, &inner_request);
+            elements.emplace_back(std::move(element));
+        }
+        auto timeout = context->getSettingsRef().report_processors_profiles_timeout_millseconds;
+        if (ProfileLogHub<ProcessorProfileLogElement>::getInstance().hasConsumer())
+            ProfileLogHub<ProcessorProfileLogElement>::getInstance().tryPushElement(query_id, elements, timeout);
+    }
+    catch (...)
+    {
+        controller->SetFailed("Report fail.");
+    }
+}
 }

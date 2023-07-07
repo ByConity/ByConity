@@ -160,7 +160,7 @@ BlockIO PlanSegmentExecutor::lazyExecute(bool /*add_output_processors*/)
     res.plan_segment_process_entry = context->getPlanSegmentProcessList().insert(*plan_segment, context);
 
     res.pipeline = std::move(*buildPipeline());
-
+    context->setPlanSegmentProcessListEntry(res.plan_segment_process_entry);
     return res;
 }
 
@@ -194,6 +194,7 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
     }
 
     PlanSegmentProcessList::EntryPtr process_plan_segment_entry = context->getPlanSegmentProcessList().insert(*plan_segment, context);
+    context->setPlanSegmentProcessListEntry(process_plan_segment_entry);
 
     QueryPipelinePtr pipeline;
     BroadcastSenderPtrs senders;

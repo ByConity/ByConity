@@ -459,6 +459,9 @@ struct ContextSharedPart
     /// @ByteDance
     bool ready_for_query = false;                           /// Server is ready for incoming queries
 
+    std::shared_ptr<ProfileElementConsumer<ProcessorProfileLogElement>> processor_log_element_consumer;
+    bool is_explain_query;
+
     ContextSharedPart()
         : macros(std::make_unique<Macros>())
     {
@@ -1975,6 +1978,45 @@ void Context::setProcessListEntry(std::shared_ptr<ProcessListEntry> process_list
 std::weak_ptr<ProcessListEntry> Context::getProcessListEntry() const
 {
     return process_list_entry;
+}
+
+void Context::setPlanSegmentProcessListEntry(std::shared_ptr<PlanSegmentProcessListEntry> segment_process_list_entry_)
+{
+    segment_process_list_entry = segment_process_list_entry_;
+}
+
+std::weak_ptr<PlanSegmentProcessListEntry> Context::getPlanSegmentProcessListEntry() const
+{
+    return segment_process_list_entry;
+}
+
+void Context::setProcessorProfileElementConsumer(
+    std::shared_ptr<ProfileElementConsumer<ProcessorProfileLogElement>> processor_log_element_consumer_)
+{
+    auto lock = getLock();
+    shared->processor_log_element_consumer = processor_log_element_consumer_;
+}
+
+std::shared_ptr<ProfileElementConsumer<ProcessorProfileLogElement>> Context::getProcessorProfileElementConsumer() const
+{
+    auto lock = getLock();
+    
+    if (!shared->processor_log_element_consumer)
+        return {};
+    return shared->processor_log_element_consumer;
+}
+
+void Context::setIsExplainQuery(const bool & is_explain_query_)
+{
+    auto lock = getLock();
+    shared->is_explain_query = is_explain_query_;
+}
+
+bool Context::isExplainQuery() const
+{
+    auto lock = getLock();
+    
+    return shared->is_explain_query;
 }
 
 void Context::setProcessListElement(ProcessList::Element * elem)

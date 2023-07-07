@@ -24,6 +24,9 @@
 #include <Interpreters/IInterpreter.h>
 #include <Parsers/IAST_fwd.h>
 #include <Parsers/ASTSelectQuery.h>
+#include <Parsers/ASTExplainQuery.h>
+#include <Interpreters/ProcessorsProfileLog.h>
+#include <Interpreters/profile/ProfileLogHub.h>
 
 namespace DB
 {
@@ -66,5 +69,15 @@ private:
     void explainUsingOptimizer(const ASTPtr & ast, WriteBuffer & buffer, bool & single_line);
 };
 
+
+class ExplainConsumer: public ProfileElementConsumer<ProcessorProfileLogElement>
+{
+public:
+    explicit ExplainConsumer(std::string query_id): ProfileElementConsumer(query_id) {}
+    void consume(ProcessorProfileLogElement & element) override;
+
+    std::vector<ProcessorProfileLogElement> getStoreResult() const {return store_vector;}
+    std::vector<ProcessorProfileLogElement> store_vector;
+};
 
 }

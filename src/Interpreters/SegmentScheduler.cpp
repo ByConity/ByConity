@@ -207,6 +207,7 @@ bool SegmentScheduler::finishPlanSegments(const String & query_id)
     query_status_map.erase(query_id);
 
     query_to_exception_with_code.remove(query_id);
+    query_status_received_counter_map.erase(query_id);
     return true;
 }
 
@@ -333,7 +334,63 @@ void SegmentScheduler::checkQueryCpuTime(const String & query_id)
     }
 }
 
+bool SegmentScheduler::needCheckRecivedSegmentStatusCounter(const String & query_id) const
+{
+    std::unique_lock<bthread::Mutex> lock(mutex);
+    auto query_map_ite = query_map.find(query_id);
+    if (query_map_ite == query_map.end())
+    {
+        LOG_INFO(log, "query_id-" + query_id + " is not exist in scheduler query map");
+        return false;
+    }
 
+    std::shared_ptr<DAGGraph> dag_ptr = query_map_ite->second;
+    if (dag_ptr == nullptr)
+        return false;
+    ContextPtr query_context = dag_ptr->query_context;
+    return query_context->isExplainQuery();
+}
+
+void SegmentScheduler::updateReceivedSegmentStausCounter(const String & query_id, const size_t & segment_id)
+{
+    std::unique_lock<bthread::Mutex> lock(segment_status_mutex);
+    auto segment_status_counter_iterator = query_status_received_counter_map[query_id].find(segment_id);
+    if (segment_status_counter_iterator == query_status_received_counter_map[query_id].end())
+    {
+        query_status_received_counter_map[query_id][segment_id] = 0;
+    }
+    query_status_received_counter_map[query_id][segment_id] += 1;
+}
+
+bool SegmentScheduler::alreadyReceivedAllSegmentStatus(const String & query_id) const
+{
+    std::unique_lock<bthread::Mutex> lock(segment_status_mutex);
+    auto all_segments_iterator = query_map.find(query_id);
+    auto received_status_segments_counter_iterator = query_status_received_counter_map.find(query_id);
+
+    if (received_status_segments_counter_iterator == query_status_received_counter_map.end() && all_segments_iterator == query_map.end())
+        return true;
+
+    if (received_status_segments_counter_iterator == query_status_received_counter_map.end())
+        return false;
+
+    if (all_segments_iterator == query_map.end())
+        return true;
+
+    auto dag_ptr = all_segments_iterator->second;
+    auto received_status_segments_counter = received_status_segments_counter_iterator->second;
+
+    for (auto & parallel : dag_ptr->segment_paralle_size_map)
+    {
+        if (parallel.first == 0)
+            continue;
+            
+        if (received_status_segments_counter[parallel.first] < parallel.second)
+            return false;
+    }
+
+    return true;
+}
 
 void SegmentScheduler::buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::shared_ptr<DAGGraph> graph_ptr)
 {
@@ -483,6 +540,7 @@ void SegmentScheduler::buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::s
                 }
             }
         }
+        graph_ptr->segment_paralle_size_map.emplace(it->first, it->second->getParallelSize());
     }
 }
 

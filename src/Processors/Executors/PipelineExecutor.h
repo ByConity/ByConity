@@ -41,6 +41,12 @@ class QueryStatus;
 class ExecutingGraph;
 using ExecutingGraphPtr = std::unique_ptr<ExecutingGraph>;
 
+struct PipelineExecutorOptions
+{
+    bool need_processors_profiles = false;
+    bool report_processors_profile = false;
+};
+
 /// Executes query pipeline.
 class PipelineExecutor
 {
@@ -51,7 +57,7 @@ public:
     /// During pipeline execution new processors can appear. They will be added to existing set.
     ///
     /// Explicit graph representation is built in constructor. Throws if graph is not correct.
-    explicit PipelineExecutor(Processors & processors_, QueryStatus * elem = nullptr, bool need_processors_profiles_ = false);
+    explicit PipelineExecutor(Processors & processors_, QueryStatus * elem = nullptr, const PipelineExecutorOptions & executor_options = PipelineExecutorOptions());
     ~PipelineExecutor();
 
     /// Execute pipeline in multiple threads. Must be called once.
@@ -82,6 +88,8 @@ private:
     std::mutex processors_mutex;
 
     bool need_processors_profiles;
+
+    bool report_processors_profile;
 
     ExecutingGraphPtr graph;
 
@@ -192,6 +200,9 @@ private:
     void finish();
 
     void dumpPipelineToFile(const String & suffix) const;
+
+    void reportProcessorProfile(const IProcessor * processor) const;
+    void reportProcessorProfileOnCancel(const Processors & processors) const;
 };
 
 using PipelineExecutorPtr = std::shared_ptr<PipelineExecutor>;

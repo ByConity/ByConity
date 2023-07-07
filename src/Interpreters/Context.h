@@ -135,6 +135,9 @@ struct QueryMetricElement;
 struct QueryWorkerMetricElement;
 using QueryWorkerMetricElementPtr = std::shared_ptr<QueryWorkerMetricElement>;
 using QueryWorkerMetricElements = std::vector<QueryWorkerMetricElementPtr>;
+struct ProcessorProfileLogElement;
+template <typename>
+class ProfileElementConsumer;
 struct MergeTreeSettings;
 class StorageS3Settings;
 struct CnchHiveSettings;
@@ -467,6 +470,9 @@ private:
 
     /// Temporary data for query execution accounting.
     TemporaryDataOnDiskScopePtr temp_data_on_disk;
+    QueueThrottlerDeleterPtr queue_throttler_ptr;
+
+    std::weak_ptr<PlanSegmentProcessListEntry> segment_process_list_entry;
 public:
     // Top-level OpenTelemetry trace context for the query. Makes sense only for a query context.
     OpenTelemetryTraceContext query_trace_context;
@@ -903,6 +909,16 @@ public:
     /// List all plan segment queries;
     PlanSegmentProcessList & getPlanSegmentProcessList();
     const PlanSegmentProcessList & getPlanSegmentProcessList() const;
+
+    void setPlanSegmentProcessListEntry(std::shared_ptr<PlanSegmentProcessListEntry> segment_process_list_entry_);
+    std::weak_ptr<PlanSegmentProcessListEntry> getPlanSegmentProcessListEntry() const;
+
+    void setProcessorProfileElementConsumer(
+        std::shared_ptr<ProfileElementConsumer<ProcessorProfileLogElement>> processor_log_element_consumer_);
+    std::shared_ptr<ProfileElementConsumer<ProcessorProfileLogElement>> getProcessorProfileElementConsumer() const;
+    
+    void setIsExplainQuery(const bool & is_explain_query_);
+    bool isExplainQuery() const;
 
     SegmentSchedulerPtr getSegmentScheduler();
     SegmentSchedulerPtr getSegmentScheduler() const;

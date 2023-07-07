@@ -15,6 +15,12 @@
 
 #pragma once
 
+<<<<<<< HEAD
+=======
+#include <algorithm>
+#include <random>
+#include <unordered_map>
+>>>>>>> 0d8b634072b (Merge branch 'cherry-pick-002f5c72c9893601c2ccb77926271363e306fcb1' into 'cnch-ce-merge')
 #include <unordered_set>
 #include <Core/Block.h>
 #include <Core/Types.h>
@@ -64,6 +70,8 @@ using PlanSegmentsStatusPtr = std::shared_ptr<PlanSegmentsStatus>;
 using RuntimeSegmentsStatusPtr = std::shared_ptr<RuntimeSegmentsStatus>;
 using PlanSegmentsPtr = std::vector<PlanSegmentPtr>;
 using Source = std::vector<size_t>;
+// <query_id, <segment_id, number of segment's received status >>
+using RuntimeSegmentsStatusCounter = std::unordered_map<size_t, UInt64>;
 // <query_id, <segment_id, status>>
 using SegmentStatusMap = std::map<String, std::map<size_t, RuntimeSegmentsStatusPtr>>;
 enum class OverflowMode;
@@ -80,6 +88,8 @@ struct DAGGraph {
         id_to_address = std::move(other.id_to_address);
         plan_segment_status_ptr = std::move(other.plan_segment_status_ptr);
         query_context = other.query_context;
+        async_context = std::move(other.async_context);
+        segment_paralle_size_map = std::move(other.segment_paralle_size_map);
     }
     Source sources;
     size_t final = std::numeric_limits<size_t>::max();
@@ -93,6 +103,8 @@ struct DAGGraph {
     std::unordered_map<size_t, std::vector<std::pair<size_t, AddressInfo>>> exchange_data_assign_node_mappings;
 #endif
     mutable bthread::Mutex status_mutex;
+    AsyncContextPtr async_context;
+    std::unordered_map<size_t, UInt64> segment_paralle_size_map;
 };
 
 using DAGGraphPtr = std::shared_ptr<DAGGraph>;
@@ -124,6 +136,10 @@ public:
     void checkQueryCpuTime(const String & query_id);
     void updateSegmentStatus(const RuntimeSegmentsStatus & segment_status);
     void updateQueryStatus(const RuntimeSegmentsStatus & segment_status);
+    
+    bool needCheckRecivedSegmentStatusCounter(const String & query_id) const;
+    bool alreadyReceivedAllSegmentStatus(const String & query_id) const;
+    void updateReceivedSegmentStausCounter(const String & query_id, const size_t & segment_id);
 
 private:
     std::unordered_map<String, std::shared_ptr<DAGGraph>> query_map;
@@ -134,6 +150,7 @@ private:
     // record exception when exception occurred
     ConcurrentShardMap<String, ExceptionWithCode> query_to_exception_with_code;
     Poco::Logger * log;
+    std::unordered_map<String, RuntimeSegmentsStatusCounter> query_status_received_counter_map;
 
     void buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::shared_ptr<DAGGraph> graph);
     bool scheduler(const String & query_id, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph);
