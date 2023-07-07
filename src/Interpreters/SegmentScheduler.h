@@ -83,7 +83,6 @@ struct DAGGraph {
         id_to_address = std::move(other.id_to_address);
         plan_segment_status_ptr = std::move(other.plan_segment_status_ptr);
         query_context = other.query_context;
-        async_context = std::move(other.async_context);
         segment_paralle_size_map = std::move(other.segment_paralle_size_map);
     }
     Source sources;
