@@ -1,4 +1,5 @@
 #include <Common/typeid_cast.h>
+#include <Columns/IColumn.h>
 #include <Columns/ColumnArray.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeMap.h>
@@ -67,6 +68,17 @@ ColumnWithTypeAndName convertArrayJoinColumn(const ColumnWithTypeAndName & src_c
     array_col.column = getArrayJoinColumn(src_col.column->convertToFullColumnIfConst());
     return array_col;
 }
+
+ArrayJoinAction::ArrayJoinAction(const NameSet & array_joined_columns_, bool is_left_, bool is_unaligned_, FunctionOverloadResolverPtr function_length_
+                    ,FunctionOverloadResolverPtr function_greatest_, FunctionOverloadResolverPtr function_array_resize_, FunctionOverloadResolverPtr function_builder_)
+    : columns(array_joined_columns_)
+    , is_left(is_left_)
+    , is_unaligned(is_unaligned_)
+    , function_length(function_length_)
+    , function_greatest(function_greatest_)
+    , function_array_resize(function_array_resize_)
+    , function_builder(function_builder_)
+{}
 
 ArrayJoinAction::ArrayJoinAction(const NameSet & array_joined_columns_, bool array_join_is_left, ContextPtr context)
     : columns(array_joined_columns_)

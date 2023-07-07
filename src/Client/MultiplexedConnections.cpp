@@ -163,6 +163,13 @@ void MultiplexedConnections::sendQuery(
     size_t num_replicas = replica_states.size();
     bool is_cnch_query = (nullptr != current_context->getCurrentTransaction());
 
+    if (CurrentThread::isInitialized())
+    {
+        auto context = CurrentThread::get().getQueryContext();
+        if (context && !context->getTenantId().empty())
+            modified_settings.tenant_id = context->getTenantId();
+    }
+
     if (num_replicas > 1)
     {
         if (is_cnch_query)

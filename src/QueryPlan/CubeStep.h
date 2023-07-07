@@ -36,6 +36,7 @@ public:
 
     void transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &) override;
 
+    const AggregatingTransformParamsPtr getAggParams() const { return params; }
     const Aggregator::Params & getParams() const;
 
     void serialize(WriteBuffer & buf) const override;

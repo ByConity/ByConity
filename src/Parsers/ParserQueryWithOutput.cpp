@@ -128,18 +128,26 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
         query_with_output.children.push_back(query_with_output.out_file);
     }
 
-    ParserKeyword s_format("FORMAT");
-
-    if (s_format.ignore(pos, expected))
+    auto parse_format = [&]()
     {
-        ParserIdentifier format_p;
+        ParserKeyword s_format("FORMAT");
 
-        if (!format_p.parse(pos, query_with_output.format, expected))
-            return false;
-        setIdentifierSpecial(query_with_output.format);
+        if (s_format.ignore(pos, expected))
+        {
+            ParserIdentifier format_p;
 
-        query_with_output.children.push_back(query_with_output.format);
-    }
+            if (!format_p.parse(pos, query_with_output.format, expected))
+                return false;
+            setIdentifierSpecial(query_with_output.format);
+
+            query_with_output.children.push_back(query_with_output.format);
+        }
+
+        return true;
+    };
+
+    if (!parse_format())
+        return false;
 
     // SETTINGS key1 = value1, key2 = value2, ...
     ParserKeyword s_settings("SETTINGS");
@@ -157,6 +165,15 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
             QueryWithOutputSettingsPushDownVisitor::Data data{query_with_output.settings_ast};
             QueryWithOutputSettingsPushDownVisitor(data).visit(query);
         }
+    }
+
+    /**
+     * if no format before, try parse format after settings, i.g. (select 1) settings xxxxx format xxxxx; 
+     */
+    if (!query_with_output.format)
+    {
+        if (!parse_format())
+            return false;
     }
 
     node = std::move(query);

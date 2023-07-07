@@ -62,7 +62,7 @@ public:
 
     LoadablesConfigurationPtr load(const std::string & loadable_definition_name) override;
 
-    static StorageID parseStorageID(const std::string & loadable_definition_name);
+    static StorageID parseStorageID(const std::string & loadable_definition_name, const Context* context = nullptr);
     static std::optional<UUID> resolveDictionaryName(const std::string & name, const std::string & current_database_name, ContextPtr context);
 private:
     /// cache data from catalog

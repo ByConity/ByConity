@@ -8,6 +8,7 @@
 #include <memory>
 #include <optional>
 #include <Core/UUID.h>
+#include <DataTypes/MapHelpers.h>
 
 
 namespace DB
@@ -61,7 +62,17 @@ struct TableWithColumnNamesAndTypes
             names.insert(col.name);
     }
 
-    bool hasColumn(const String & name) const { return names.contains(name); }
+    //bool hasColumn(const String & name) const { return names.contains(name); }
+
+    bool hasColumn(const String & name) const 
+    {  
+        bool exists = names.contains(name);
+        if (!exists && isMapImplicitKey(name))
+        {
+            return names.count(parseMapNameFromImplicitColName(name));
+        }
+        return exists;
+    }
 
     void addHiddenColumns(const NamesAndTypesList & addition)
     {

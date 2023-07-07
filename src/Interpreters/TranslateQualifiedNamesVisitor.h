@@ -49,11 +49,17 @@ public:
         const TablesWithColumns & tables;
         std::unordered_set<String> join_using_columns;
         bool has_columns;
+        const NameSet & unknown_left_join_identifiers;
+        bool rewrite_unknown_identifiers; /// try rewrite unknown left join identifier
+        std::set<std::pair<String, String>> rewritten_identifiers;
 
-        Data(const NameSet & source_columns_, const TablesWithColumns & tables_, bool has_columns_ = true)
+        Data(const NameSet & source_columns_, const TablesWithColumns & tables_, bool has_columns_ = true,
+            const NameSet & unknown_left_join_identifiers_ = {}, bool rewrite_ = false)
             : source_columns(source_columns_)
             , tables(tables_)
             , has_columns(has_columns_)
+            , unknown_left_join_identifiers(unknown_left_join_identifiers_)
+            , rewrite_unknown_identifiers(rewrite_)
         {}
 
         bool hasColumn(const String & name) const { return source_columns.count(name); }

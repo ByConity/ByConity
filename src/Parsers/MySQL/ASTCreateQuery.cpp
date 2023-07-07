@@ -65,11 +65,13 @@ bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
     if (!ParserCompoundIdentifier(true).parse(pos, table, expected))
         return false;
+    tryRewriteCnchDatabaseName(table, pos.getContext());
 
     if (ParserKeyword("LIKE").ignore(pos, expected))
     {
         if (!ParserCompoundIdentifier(true).parse(pos, like_table, expected))
             return false;
+        tryRewriteCnchDatabaseName(like_table, pos.getContext());
     }
     else if (ParserToken(TokenType::OpeningRoundBracket).ignore(pos, expected))
     {
@@ -77,6 +79,7 @@ bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         {
             if (!ParserCompoundIdentifier(true).parse(pos, like_table, expected))
                 return false;
+            tryRewriteCnchDatabaseName(like_table, pos.getContext());
 
             if (!ParserToken(TokenType::ClosingRoundBracket).ignore(pos, expected))
                 return false;

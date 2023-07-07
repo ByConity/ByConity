@@ -61,6 +61,7 @@ public:
 
 protected:
     virtual bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) = 0;
+
 };
 
 struct ParserSettingsImpl

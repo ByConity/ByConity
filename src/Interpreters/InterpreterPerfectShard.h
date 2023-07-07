@@ -25,6 +25,7 @@
 #include <Interpreters/DatabaseAndTableWithAlias.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Storages/SelectQueryInfo.h>
+#include <Parsers/queryToString.h>
 
 namespace DB
 {
@@ -47,7 +48,7 @@ class InterpreterPerfectShard
 public:
     InterpreterPerfectShard(InterpreterSelectQuery & interpreter_)
     : interpreter(interpreter_)
-    , query(interpreter.query_ptr->clone())
+    , query(interpreter.query_for_perfect_shard->clone())
     , context(interpreter.context)
     , log(&Poco::Logger::get("InterpreterPerfectShard"))
     {
@@ -60,6 +61,8 @@ public:
     void buildQueryPlan(QueryPlan & query_plan);
 
     bool checkPerfectShardable();
+
+    static void turnOffPerfectShard(ContextMutablePtr context, ASTPtr & node);
 
 private:
 

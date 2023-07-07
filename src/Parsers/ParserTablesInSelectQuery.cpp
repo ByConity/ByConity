@@ -19,6 +19,7 @@
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
+#include <Parsers/ASTIdentifier.h>
 #include <Parsers/CommonParsers.h>
 #include <Parsers/ExpressionElementParsers.h>
 #include <Parsers/ExpressionListParsers.h>
@@ -68,8 +69,10 @@ bool ParserTableExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
         }
     }
 
-    if (res->database_and_table_name)
+    if (res->database_and_table_name) {
+        tryRewriteCnchDatabaseName(res->database_and_table_name, pos.getContext());
         res->children.emplace_back(res->database_and_table_name);
+    }
     if (res->table_function)
         res->children.emplace_back(res->table_function);
     if (res->subquery)

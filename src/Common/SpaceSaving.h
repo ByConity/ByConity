@@ -48,6 +48,8 @@ struct SpaceSavingArena<StringRef>
 {
     const StringRef emplace(const StringRef & key)
     {
+        if (!key.data)
+            return key;
         auto ptr = arena.alloc(key.size);
         std::copy(key.data, key.data + key.size, ptr);
         return StringRef{ptr, key.size};
@@ -164,6 +166,7 @@ public:
             return;
         }
 
+        if (counter_list.empty()) return;
         auto * min = counter_list.back();
         // The key doesn't exist and cannot fit in the current top K, but
         // the new key has a bigger weight and is virtually more present

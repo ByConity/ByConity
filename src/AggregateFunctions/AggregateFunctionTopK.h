@@ -184,10 +184,13 @@ public:
 
         if constexpr (is_plain_column)
         {
+            auto key = columns[0]->getDataAt(row_num);
+            if (!key.data)
+                return;
             if constexpr (is_weighted)
-                set.insert(columns[0]->getDataAt(row_num), columns[1]->getUInt(row_num));
+                set.insert(key, columns[1]->getUInt(row_num));
             else
-                set.insert(columns[0]->getDataAt(row_num));
+                set.insert(key);
         }
         else
         {

@@ -157,15 +157,17 @@ public:
     const SizeLimits & sizeLimits() const { return size_limits; }
     VolumePtr getTemporaryVolume() { return tmp_volume; }
     bool allowMergeJoin() const;
+    bool allowParallelHashJoin() const;
     bool allowDictJoin(const String & dict_key, const Block & sample_block, Names &, NamesAndTypesList &) const;
     void setJoinAlgorithm(JoinAlgorithm join_algorithm_) { join_algorithm = join_algorithm_; }
     bool preferMergeJoin() const { return join_algorithm == JoinAlgorithm::PREFER_PARTIAL_MERGE; }
     bool forceMergeJoin() const { return join_algorithm == JoinAlgorithm::PARTIAL_MERGE; }
     bool forceNestedLoopJoin() const { return join_algorithm == JoinAlgorithm::NESTED_LOOP_JOIN; }
+    bool forceGraceHashLoopJoin() const { return join_algorithm == JoinAlgorithm::GRACE_HASH; }
     bool forceHashJoin() const
     {
         /// HashJoin always used for DictJoin
-        return dictionary_reader || join_algorithm == JoinAlgorithm::HASH;
+        return dictionary_reader || join_algorithm == JoinAlgorithm::HASH || join_algorithm == JoinAlgorithm::PARALLEL_HASH;
     }
 
     bool forceNullableRight() const { return join_use_nulls && isLeftOrFull(table_join.kind); }
@@ -236,6 +238,8 @@ public:
     /// StorageJoin overrides key names (cause of different names qualification)
     void setRightKeys(const Names & keys) { key_names_right = keys; }
 
+    bool isSpecialStorage() const {return !!joined_storage; }
+
     /// Split key and other columns by keys name list
     void splitAdditionalColumns(const Block & sample_block, Block & block_keys, Block & block_others) const;
     Block getRequiredRightKeys(const Block & right_table_keys, std::vector<String> & keys_sources) const;
@@ -245,6 +249,10 @@ public:
     void serialize(WriteBuffer & buf) const;
     void deserializeImpl(ReadBuffer & buf, ContextPtr context);
     static std::shared_ptr<TableJoin> deserialize(ReadBuffer & buf, ContextPtr context);
+
+    // The communary introduced support for "The 'OR' operator in 'ON' section for join",
+    // but in our scenario, there only one disjunct at a time yet
+    bool oneDisjunct() const { return true; }
 };
 
 }

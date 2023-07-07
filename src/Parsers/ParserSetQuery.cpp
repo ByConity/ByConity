@@ -18,6 +18,7 @@
  * This file may have been modified by Bytedance Ltd. and/or its affiliates (“ Bytedance's Modifications”).
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
+#include <algorithm>
 
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
@@ -25,6 +26,7 @@
 
 #include <Parsers/CommonParsers.h>
 #include <Parsers/ParserSetQuery.h>
+#include <Parsers/rewriteVwSettings.h>
 
 #include <Common/typeid_cast.h>
 #include <Common/SettingsChanges.h>
@@ -59,6 +61,7 @@ bool ParserSetQuery::parseNameValuePair(SettingChange & change, IParser::Pos & p
 
     tryGetIdentifierNameInto(name, change.name);
     change.value = value->as<ASTLiteral &>().value;
+    tryRewriteVwSettings(change.name, change.value, pos);
 
     return true;
 }
