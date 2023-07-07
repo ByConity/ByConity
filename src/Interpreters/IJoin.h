@@ -24,6 +24,7 @@
 #include <memory>
 #include <vector>
 
+#include <Core/Block.h>
 #include <Core/Names.h>
 #include <Columns/IColumn.h>
 #include <DataStreams/IBlockStream_fwd.h>
@@ -37,6 +38,9 @@ struct ExtraBlock;
 using ExtraBlockPtr = std::shared_ptr<ExtraBlock>;
 
 class TableJoin;
+class NotJoinedBlocks;
+class IBlocksStream;
+using IBlocksStreamPtr = std::shared_ptr<IBlocksStream>;
 
 class IJoin;
 using JoinPtr = std::shared_ptr<IJoin>;
@@ -47,6 +51,8 @@ enum JoinType : UInt8
     Merge,
     NestedLoop,
     Switcher,
+    GRACE_HASH,
+    PARALLEL_HASH,
 };
 
 class IJoin
@@ -61,6 +67,12 @@ public:
     /// Add block of data from right hand of JOIN.
     /// @returns false, if some limit was exceeded and you should not insert more data.
     virtual bool addJoinedBlock(const Block & block, bool check_limits = true) = 0;
+
+    /* Some initialization may be required before joinBlock() call.
+     * It's better to done in in constructor, but left block exact structure is not known at that moment.
+     * TODO: pass correct left block sample to the constructor.
+     */
+    virtual void initialize(const Block & /* left_sample_block */) {}
 
     /// Join the block with data from left hand of JOIN to the right hand data (that was previously built by calls to addJoinedBlock).
     /// Could be called from different threads in parallel.
@@ -78,10 +90,43 @@ public:
     /// Different query plan is used for such joins.
     virtual bool isFilled() const { return false; }
 
+    // That can run FillingRightJoinSideTransform parallelly
+    virtual bool supportParallelJoin() const { return false; }
+
     virtual BlockInputStreamPtr createStreamWithNonJoinedRows(const Block &, UInt64) const { return {}; }
 
     virtual void serialize(WriteBuffer &) const { throw Exception("Not implement join serialize", ErrorCodes::NOT_IMPLEMENTED); }
     static JoinPtr deserialize(ReadBuffer &, ContextPtr) { throw Exception("Not implement join deserialize", ErrorCodes::NOT_IMPLEMENTED); }
+
+    /// Peek next stream of delayed joined blocks.
+    virtual IBlocksStreamPtr getDelayedBlocks() { return nullptr; }
+    virtual bool hasDelayedBlocks() const { return false; }
+};
+
+class IBlocksStream
+{
+public:
+    /// Returns empty block on EOF
+    Block next()
+    {
+        if (finished)
+            return {};
+
+        if (Block res = nextImpl())
+            return res;
+
+        finished = true;
+        return {};
+    }
+
+    virtual ~IBlocksStream() = default;
+
+    bool isFinished() const { return finished; }
+
+protected:
+    virtual Block nextImpl() = 0;
+
+    std::atomic_bool finished{false};
 };
 
 }

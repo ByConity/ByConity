@@ -36,6 +36,7 @@ struct IdentifierSemanticImpl;
 struct StorageID;
 
 class ASTTableIdentifier;
+class Context;
 
 /// FIXME: rewrite code about params - they should be substituted at the parsing stage,
 ///        or parsed as a separate AST entity.
@@ -81,12 +82,17 @@ public:
     void deserializeImpl(ReadBuffer & buf) override;
     static ASTPtr deserialize(ReadBuffer & buf);
 
+    /// All the global identifiers will be rewritten in multi-tenant context settings.
+    /// Todo: we will rewrite all the global identifiers one by one: database name, user name, vw name...
+    virtual void rewriteCnchDatabaseName(const Context *context);
+
     String full_name;
     std::vector<String> name_parts;
     std::shared_ptr<IdentifierSemanticImpl> semantic; /// pimpl
-
+    bool cnch_rewritten = false;
     void formatImplWithoutAlias(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
     void appendColumnNameImpl(WriteBuffer & ostr) const override;
+    void resetFullName();
 
 private:
     using ASTWithAlias::children; /// ASTIdentifier is child free
@@ -95,7 +101,6 @@ private:
     friend struct IdentifierSemantic;
     friend void setIdentifierSpecial(ASTPtr & ast);
 
-    void resetFullName();
 };
 
 class ASTTableIdentifier : public ASTIdentifier
@@ -125,6 +130,8 @@ public:
     void serialize(WriteBuffer & buf) const override;
     void deserializeImpl(ReadBuffer & buf) override;
     static ASTPtr deserialize(ReadBuffer & buf);
+
+    void rewriteCnchDatabaseName(const Context *context) override;
 };
 
 
@@ -135,6 +142,7 @@ void setIdentifierSpecial(ASTPtr & ast);
 String getIdentifierName(const IAST * ast);
 std::optional<String> tryGetIdentifierName(const IAST * ast);
 bool tryGetIdentifierNameInto(const IAST * ast, String & name);
+void tryRewriteCnchDatabaseName(ASTPtr & ast_database, const Context *context);
 
 inline String getIdentifierName(const ASTPtr & ast) { return getIdentifierName(ast.get()); }
 inline std::optional<String> tryGetIdentifierName(const ASTPtr & ast) { return tryGetIdentifierName(ast.get()); }

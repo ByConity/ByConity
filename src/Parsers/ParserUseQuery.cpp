@@ -19,6 +19,7 @@ bool ParserUseQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ASTPtr database;
     if (!name_p.parse(pos, database, expected))
         return false;
+    tryRewriteCnchDatabaseName(database, pos.getContext());
 
     auto query = std::make_shared<ASTUseQuery>();
     tryGetIdentifierNameInto(database, query->database);

@@ -314,6 +314,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
 
     query_info.ignore_projections = options.ignore_projections;
     query_info.is_projection_query = options.is_projection_query;
+    query_for_perfect_shard = query_ptr->clone();
 
     initSettings();
     const Settings & settings = context->getSettingsRef();
@@ -1247,7 +1248,9 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, const BlockInpu
                         query_plan.getCurrentDataStream(),
                         joined_plan->getCurrentDataStream(),
                         expressions.join,
-                        settings.max_block_size);
+                        settings.max_block_size,
+                        max_streams,
+                        analysis_result.optimize_read_in_order);
 
                     join_step->setStepDescription("JOIN");
                     std::vector<QueryPlanPtr> plans;

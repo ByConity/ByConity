@@ -753,6 +753,34 @@ std::vector<MutableColumnPtr> ColumnLowCardinality::scatter(ColumnIndex num_colu
     return columns;
 }
 
+ColumnPtr ColumnLowCardinality::cloneWithDefaultOnNull() const
+{
+    if (!nestedIsNullable())
+        return getPtr();
+
+    auto res = cloneEmpty();
+    auto & lc_res = assert_cast<ColumnLowCardinality &>(*res);
+    lc_res.nestedRemoveNullable();
+    size_t end = size();
+    size_t start = 0;
+    while (start < end)
+    {
+        size_t next_null_index = start;
+        while (next_null_index < end && !isNullAt(next_null_index))
+            ++next_null_index;
+
+        if (next_null_index != start)
+            lc_res.insertRangeFrom(*this, start, next_null_index - start);
+
+        if (next_null_index < end)
+            lc_res.insertDefault();
+
+        start = next_null_index + 1;
+    }
+
+    return res;
+}
+
 void ColumnLowCardinality::setSharedDictionary(const ColumnPtr & column_unique)
 {
     if (full_state)

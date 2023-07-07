@@ -42,6 +42,7 @@ bool parseDropQuery(IParser::Pos & pos, ASTPtr & node, Expected & expected, cons
 
         if (!name_p.parse(pos, database, expected))
             return false;
+        tryRewriteCnchDatabaseName(database, pos.getContext());
     }
     else
     {
@@ -67,6 +68,7 @@ bool parseDropQuery(IParser::Pos & pos, ASTPtr & node, Expected & expected, cons
         if (s_dot.ignore(pos, expected))
         {
             database = table;
+            tryRewriteCnchDatabaseName(database, pos.getContext());
             if (!name_p.parse(pos, table, expected))
                 return false;
         }

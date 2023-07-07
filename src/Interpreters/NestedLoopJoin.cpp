@@ -16,19 +16,17 @@
 #include <limits>
 
 #include <unordered_set>
-#include <Columns/ColumnNullable.h>
+#include <Columns/ColumnConst.h>
 #include <Columns/ColumnsCommon.h>
 #include <Columns/FilterDescription.h>
 #include <Core/NamesAndTypes.h>
-#include <DataStreams/MergingSortedBlockInputStream.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <DataStreams/TemporaryFileStream.h>
 #include <DataStreams/materializeBlock.h>
-#include <Interpreters/TableJoin.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/NestedLoopJoin.h>
+#include <Interpreters/TableJoin.h>
 #include <Interpreters/join_common.h>
-#include <QueryPlan/PlanSerDerHelper.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <QueryPlan/PlanSerDerHelper.h>
@@ -157,10 +155,23 @@ void NestedLoopJoin::joinBlock(Block & left_block, ExtraBlockPtr &)
     NamesAndTypesList total_columns = left_block.cloneEmpty().getNamesAndTypesList();
     completeColumnsAfterJoin(total_columns);
 
-    if (table_join->hasOn())
+    if (table_join->hasOn() || table_join->hasUsing())
     {
         // generate actions for on expression
-        ASTPtr expression_list = table_join->getOnExpression();
+        ASTPtr expression_list = nullptr;
+        if (table_join->hasOn())
+            expression_list = table_join->getOnExpression();
+        else
+        {
+            std::vector<std::shared_ptr<ASTFunction>> conds;
+            for (size_t i = 0; i < table_join->keyNamesLeft().size(); i++)
+                conds.emplace_back(makeASTFunction("equals",
+                                                   std::make_shared<ASTIdentifier>(table_join->keyNamesLeft()[i]),
+                                                   std::make_shared<ASTIdentifier>(table_join->keyNamesRight()[i])));
+            expression_list = conds[0];
+            for (size_t i = 1; i < conds.size(); i++)
+                expression_list = makeASTFunction("and", expression_list, conds[i]);
+        }
         auto syntax_result
                 = TreeRewriter(context).analyze(expression_list, total_columns);
 
@@ -226,8 +237,8 @@ void NestedLoopJoin::joinImpl(
             paddingRightBlockWithConstColumn(left_block, left_row_index, right_block);
             actions->execute(right_block, false);
             auto filter_column = right_block.getByName(filter_name).column->convertToFullColumnIfConst();
-            FilterDescription filter_and_holder(*filter_column);
-            auto filtered_size = countBytesInFilter(*filter_and_holder.data);
+            auto filter_and_holder = std::make_unique<FilterDescription>(*filter_column);
+            auto filtered_size = countBytesInFilter(*filter_and_holder->data);
 
             if (new_block.columns() == 0)
             {
@@ -257,11 +268,11 @@ void NestedLoopJoin::joinImpl(
                         }
                         else if (is_any_join && filtered_size != 0)
                         {
-                            right_col.column = right_col.column->filter(*filter_and_holder.data, 1);
+                            right_col.column = right_col.column->filter(*filter_and_holder->data, 1);
                             new_block.insert({right_col.column->cut(0, 1), right_col.type, right_col.name});
                         }
                         else
-                            new_block.insert({right_col.column->filter(*filter_and_holder.data, 1), right_col.type, right_col.name});
+                            new_block.insert({right_col.column->filter(*filter_and_holder->data, 1), right_col.type, right_col.name});
                     }
                 }
             }
@@ -291,13 +302,13 @@ void NestedLoopJoin::joinImpl(
                             mutable_column->insertDefault();
                         else if (is_any_join && filtered_size != 0)
                         {
-                            right_col.column = right_col.column->filter(*filter_and_holder.data, 1);
+                            right_col.column = right_col.column->filter(*filter_and_holder->data, 1);
                             const auto source_column = right_col.column->cut(0, 1);
                             mutable_column->insertRangeFrom(*source_column, 0, source_column->size());
                         }
                         else
                         {
-                            const auto source_column = right_col.column->filter(*filter_and_holder.data, 1);
+                            const auto source_column = right_col.column->filter(*filter_and_holder->data, 1);
                             mutable_column->insertRangeFrom(*source_column, 0, source_column->size());
                         }
                         new_block.getByPosition(i).column = std::move(mutable_column);

@@ -38,7 +38,7 @@ bool ParserAlterQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & e
 
     if (!ParserCompoundIdentifier(true).parse(pos, table, expected))
         return false;
-
+    tryRewriteCnchDatabaseName(table, pos.getContext());
     if (!ParserList(std::make_unique<ParserAlterCommand>(), std::make_unique<ParserToken>(TokenType::Comma)).parse(pos, command_list, expected))
         return false;
 

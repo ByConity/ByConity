@@ -446,6 +446,7 @@ class IColumn;
       false, \
       "Whether to enalbe aggregation finished in worker side, to avoid merge aggregation states in coordinator", \
       0) \
+    M(Bool, fallback_perfect_shard, true, "Whether to fallback if there is any exception", 0) \
     M(Bool, \
       optimize_skip_unused_shards, \
       false, \
@@ -1542,6 +1543,7 @@ class IColumn;
     M(Bool, enable_merge_scheduler, false, "Whether to enable MergeScheduler to excute merge", 0) \
     M(Bool, conservative_merge_predicate, true, "Judge merge tree parts whether can be merged conservatively", 0) \
     M(Bool, snappy_format_blocked, false, "Using blocked decompress flow for Snappy input", 0) \
+    M(String, vw, "", "The vw name set by user on which the query run without tenant information", 0) \
     M(String, virtual_warehouse, "", "The vw name set by user on which the query run", 0) \
     M(String, virtual_warehouse_write, "", "The write vw name set by user on which the query run", 0) \
     M(String, \
@@ -1660,16 +1662,20 @@ class IColumn;
       0) \
     /** Experimental functions */ \
     M(Bool, allow_experimental_funnel_functions, false, "Enable experimental functions for funnel analysis.", 0) \
-\
-    /** Complex query settings **/ \
-    M(Bool, enable_distributed_stages, true, "Enable complex query mode to split plan to distributed stages", 0) \
-    M(Bool, fallback_to_simple_query, false, "Enable fallback if there is any syntax error", 0) \
-    M(Bool, debug_plan_generation, false, "Enable complex query mode to split plan to distributed stages", 0) \
-    M(Bool, send_plan_segment_by_brpc, true, "Whether to send plan segment by BRPC", 0) \
-\
-    /** Brpc config **/ \
-    M(Bool, enable_brpc_builtin_services, true, "Whether to enable brpc builtin services", 0) \
-\
+    M(UInt64, grace_hash_join_initial_buckets, 1, "Initial number of grace hash join buckets", 0) \
+    M(UInt64, grace_hash_join_max_buckets, 1024, "Limit on the number of grace hash join buckets", 0)                                          \
+    M(UInt64, filesystem_cache_max_download_size, (128UL * 1024 * 1024 * 1024), "Max remote filesystem cache size that can be downloaded by a single query", 0) \
+    M(Bool, skip_download_if_exceeds_query_cache, true, "Skip download from remote filesystem if exceeds query cache size", 0) \
+    \
+    /** Complex query settings **/\
+    M(Bool, enable_distributed_stages, false, "Enable complex query mode to split plan to distributed stages", 0)\
+    M(Bool, fallback_to_simple_query, false, "Enable fallback if there is any syntax error", 0)\
+    M(Bool, debug_plan_generation, false, "Enable complex query mode to split plan to distributed stages", 0)\
+    M(Bool, send_plan_segment_by_brpc, true, "Whether to send plan segment by BRPC", 0)\
+    \
+    /** Brpc config **/\
+    M(Bool, enable_brpc_builtin_services, true, "Whether to enable brpc builtin services", 0)\
+    \
     /** Obsolete settings that do nothing but left for compatibility reasons. Remove each one after half a year of obsolescence. */ \
     M(UInt64, max_memory_usage_for_all_queries, 0, "Obsolete setting, does nothing.", 0) \
     M(UInt64, multiple_joins_rewriter_version, 0, "Obsolete setting, does nothing.", 0) \
@@ -1678,6 +1684,11 @@ class IColumn;
     M(Bool, allow_experimental_bigint_types, true, "Obsolete setting, does nothing.", 0) \
     M(HandleKafkaErrorMode, handle_kafka_error_mode, HandleKafkaErrorMode::DEFAULT, "Obsolete setting, does nothing.", 0) \
     M(Bool, database_replicated_ddl_output, true, "Obsolete setting, does nothing.", 0) \
+    M(Bool, \
+      enable_dictionary_compression, \
+      false, \
+      "Enable the dictioanry compression and decompression when performing a query (deprecated setting).", \
+      0) \
     /** Ingestion */ \
     M(UInt64, max_ingest_columns_size, 10, "The maximum number of columns that can be ingested.", 0) \
     M(UInt64, \
@@ -1691,6 +1702,15 @@ class IColumn;
     M(Bool, enable_replicas_create_ingest_node_in_zk, 0, "Whether to enable replicas to create ingest node in zk", 0) \
     M(Bool, allow_ingest_empty_partition, false, "Allow empty partition replace target table", 0) \
     M(Bool, enable_async_ingest, false, "Allow ingest in aync mode", 0) \
+    /** Early Stop **/ \
+    M(Milliseconds, query_shard_timeout_time, 0, "Timeout for query shard", 0) \
+    M(Milliseconds, late_shard_relax_time, 1000, "Relaxition time for late shard", 0) \
+    M(Float, \
+      exception_threshold_for_timeout_query, \
+      0.1, \
+      "Timeout for query shard, if timeout shards beyond this threshold, then throw exception", \
+      0) \
+    M(Bool, enable_early_stop_metric, 0, "Whether output metrics of early stop", 0) \
 \
     /** Optimizer relative settings */ \
     M(Bool, enable_optimizer, false, "Whether enable query optimizer", 0) \
@@ -1789,7 +1809,7 @@ class IColumn;
     M(UInt64, execute_uncorrelated_in_subquery_size, 10000, "Size of execute uncorrelated in subquery", 0) \
     M(Bool, enable_subcolumn_optimization_through_union, true, "Whether enable sub column optimization through set operation.", 0) \
     M(Float, pk_selectivity, 0.5, "PK selectivity for join estimation", 0) \
-    M(Bool, enable_mark_distinct_optimzation, false, "Whether enable Mark distinct optimization", 0)                                            \
+    M(Bool, enable_mark_distinct_optimzation, false, "Whether enable Mark distinct optimization", 0) \
     /** Exchange settings */ \
     M(Bool, exchange_enable_multipath_reciever, true, "Whether enable exchange new mode ", 0) \
     M(UInt64, exchange_parallel_size, 1, "Exchange parallel size", 0) \
@@ -1835,6 +1855,7 @@ class IColumn;
     M(Bool, enable_sample_by_range, false, "Sample by range if it is true", 0) \
     M(Bool, enable_deterministic_sample_by_range, false, "Deterministic sample by range if it is true", 0) \
     M(Bool, enable_final_sample, false, "Sample from result rows if it is true", 0) \
+    M(Bool, uniform_final_sample, false, "Final sample with uniform mode", 0) \
 \
     /** clone strategy **/ \
     M(Bool, stop_clone_in_utc_time, false, "Enable stop executing clone log in utc time", 0) \
@@ -2029,7 +2050,8 @@ class IColumn;
     M(UInt64, cnch_part_attach_max_threads, 16, "Max threads to use when attach parts", 0) \
     M(UInt64, attach_failure_injection_knob, 0, "Attach failure injection knob, for test only", 0) \
     M(Bool, async_post_commit, false, "Txn post commit asynchronously", 0) \
-    M(Bool, enable_auto_query_forwarding, false, "Auto forward query to target server when having multiple servers", 0)
+    M(Bool, enable_auto_query_forwarding, false, "Auto forward query to target server when having multiple servers", 0)\
+    M(String, tenant_id, "", "tenant_id of cnch user", 0) \
 
 
 // End of FORMAT_FACTORY_SETTINGS

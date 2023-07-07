@@ -257,6 +257,7 @@ ASTPtr tryParseQuery(
 {
     const char * query_begin = _out_query_end;
     Tokens tokens(query_begin, all_queries_end, max_query_size);
+    tokens.setContext(parser.getContext());
     IParser::Pos token_iterator(tokens, max_parser_depth);
 
     if (token_iterator->isEnd()

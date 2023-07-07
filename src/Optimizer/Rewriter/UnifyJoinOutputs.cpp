@@ -161,6 +161,8 @@ PlanNodePtr UnifyJoinOutputs::Rewriter::visitJoinNode(JoinNode & node, std::set<
         DataStream{new_outputs},
         step->getKind(),
         step->getStrictness(),
+        step->getMaxStreams(),
+        step->getKeepLeftReadInOrder(),
         std::move(left_keys),
         std::move(right_keys),
         step->getFilter(),

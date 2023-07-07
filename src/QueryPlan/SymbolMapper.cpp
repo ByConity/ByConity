@@ -224,6 +224,8 @@ std::shared_ptr<JoinStep> SymbolMapper::map(const JoinStep & join)
         map(join.getOutputStream()),
         join.getKind(),
         join.getStrictness(),
+        join.getMaxStreams(),
+        join.getKeepLeftReadInOrder(),
         map(join.getLeftKeys()),
         map(join.getRightKeys()),
         map(join.getFilter()),

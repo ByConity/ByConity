@@ -197,6 +197,7 @@ public:
 
     /// Check that size of null map equals to size of nested column.
     void checkConsistency() const;
+    ColumnPtr getNestedColumnWithDefaultOnNull() const;
 
 private:
     WrappedPtr nested_column;

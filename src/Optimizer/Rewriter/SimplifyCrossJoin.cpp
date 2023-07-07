@@ -173,6 +173,8 @@ SimplifyCrossJoinVisitor::buildJoinTree(std::vector<String> & expected_output_sy
             DataStream{.header = output},
             ASTTableJoin::Kind::Inner,
             ASTTableJoin::Strictness::All,
+            context->getSettingsRef().max_threads,
+            context->getSettingsRef().optimize_read_in_order,
             left_keys,
             right_keys);
         result = std::make_shared<JoinNode>(context->nextNodeId(), std::move(new_join_step), PlanNodes{result, right_node});

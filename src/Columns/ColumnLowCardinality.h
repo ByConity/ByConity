@@ -421,6 +421,8 @@ public:
 
     const ColumnPtr & getNestedColumnPtr() const { return nested_column; }
     ColumnPtr & getNestedColumnPtr() { return nested_column; }
+    bool nestedCanBeInsideNullable() const { return dictionary.getColumnUnique().getNestedColumn()->canBeInsideNullable(); }
+    ColumnPtr cloneWithDefaultOnNull() const;
 
     void switchToFull()
     {

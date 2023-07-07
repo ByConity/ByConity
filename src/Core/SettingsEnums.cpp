@@ -42,7 +42,8 @@ IMPLEMENT_SETTING_ENUM(LoadBalancing, ErrorCodes::UNKNOWN_LOAD_BALANCING,
      {"nearest_hostname", LoadBalancing::NEAREST_HOSTNAME},
      {"in_order",         LoadBalancing::IN_ORDER},
      {"first_or_random",  LoadBalancing::FIRST_OR_RANDOM},
-     {"round_robin",      LoadBalancing::ROUND_ROBIN}})
+     {"round_robin",      LoadBalancing::ROUND_ROBIN},
+     {"reverse_order",    LoadBalancing::REVERSE_ORDER}})
 
 
 IMPLEMENT_SETTING_ENUM(JoinStrictness, ErrorCodes::UNKNOWN_JOIN,
@@ -55,7 +56,10 @@ IMPLEMENT_SETTING_ENUM(JoinAlgorithm, ErrorCodes::UNKNOWN_JOIN,
     {{"auto",                 JoinAlgorithm::AUTO},
      {"hash",                 JoinAlgorithm::HASH},
      {"partial_merge",        JoinAlgorithm::PARTIAL_MERGE},
-     {"prefer_partial_merge", JoinAlgorithm::PREFER_PARTIAL_MERGE}})
+     {"prefer_partial_merge", JoinAlgorithm::PREFER_PARTIAL_MERGE},
+     {"nested_loop",          JoinAlgorithm::NESTED_LOOP_JOIN},
+     {"grace_hash",           JoinAlgorithm::GRACE_HASH},
+     {"parallel_hash",        JoinAlgorithm::PARALLEL_HASH}})
 
 
 IMPLEMENT_SETTING_ENUM(TotalsMode, ErrorCodes::UNKNOWN_TOTALS_MODE,
