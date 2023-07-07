@@ -98,7 +98,6 @@ struct DAGGraph {
     std::unordered_map<size_t, std::vector<std::pair<size_t, AddressInfo>>> exchange_data_assign_node_mappings;
 #endif
     mutable bthread::Mutex status_mutex;
-    AsyncContextPtr async_context;
     std::unordered_map<size_t, UInt64> segment_paralle_size_map;
 };
 
