@@ -199,19 +199,19 @@ Projection est. 100 rows
                │        └─ Projection est. ? rows
                │           │     Expressions: [c_first_name_2, c_last_name_2], expr#multiply(cs_quantity, cs_list_price)_2:=cs_quantity_1 * cs_list_price_1
                │           └─ Inner Join est. ? rows
-               │              │     Condition: c_customer_sk_4 == c_customer_sk_7
+               │              │     Condition: c_customer_sk_20 == c_customer_sk_23
                │              ├─ Repartition Exchange est. ? rows
-               │              │  │     Partition by: {c_customer_sk_4}
+               │              │  │     Partition by: {c_customer_sk_20}
                │              │  └─ Inner Join est. ? rows
-               │              │     │     Condition: cs_item_sk_1 == i_item_sk_4
+               │              │     │     Condition: cs_item_sk_1 == i_item_sk_12
                │              │     ├─ Repartition Exchange est. ? rows
                │              │     │  │     Partition by: {cs_item_sk_1}
                │              │     │  └─ Inner Join est. ? rows
-               │              │     │     │     Condition: cs_sold_date_sk_1 == d_date_sk_4
+               │              │     │     │     Condition: cs_sold_date_sk_1 == d_date_sk_20
                │              │     │     ├─ Repartition Exchange est. ? rows
                │              │     │     │  │     Partition by: {cs_sold_date_sk_1}
                │              │     │     │  └─ Inner Join est. ? rows
-               │              │     │     │     │     Condition: cs_bill_customer_sk_1 == c_customer_sk_4
+               │              │     │     │     │     Condition: cs_bill_customer_sk_1 == c_customer_sk_20
                │              │     │     │     ├─ Repartition Exchange est. ? rows
                │              │     │     │     │  │     Partition by: {cs_bill_customer_sk_1}
                │              │     │     │     │  └─ Filter est. ? rows
@@ -219,26 +219,26 @@ Projection est. 100 rows
                │              │     │     │     │     └─ TableScan tpcds.catalog_sales est. ? rows
                │              │     │     │     │              Outputs: cs_bill_customer_sk_1:=cs_bill_customer_sk, cs_item_sk_1:=cs_item_sk, cs_list_price_1:=cs_list_price, cs_quantity_1:=cs_quantity, cs_sold_date_sk_1:=cs_sold_date_sk
                │              │     │     │     └─ Repartition Exchange est. ? rows
-               │              │     │     │        │     Partition by: {c_customer_sk_4}
+               │              │     │     │        │     Partition by: {c_customer_sk_20}
                │              │     │     │        └─ Filter est. ? rows
-               │              │     │     │           │     Condition: isNotNull(c_customer_sk_4)
+               │              │     │     │           │     Condition: isNotNull(c_customer_sk_20)
                │              │     │     │           └─ TableScan tpcds.customer est. ? rows
-               │              │     │     │                    Outputs: c_customer_sk_4:=c_customer_sk, c_first_name_2:=c_first_name, c_last_name_2:=c_last_name
+               │              │     │     │                    Outputs: c_customer_sk_20:=c_customer_sk, c_first_name_2:=c_first_name, c_last_name_2:=c_last_name
                │              │     │     └─ Repartition Exchange est. ? rows
-               │              │     │        │     Partition by: {d_date_sk_4}
+               │              │     │        │     Partition by: {d_date_sk_20}
                │              │     │        └─ Filter est. ? rows
-               │              │     │           │     Condition: (d_year_4 = 2000) AND (d_moy_4 = 2)
+               │              │     │           │     Condition: (d_year_20 = 2000) AND (d_moy_4 = 2)
                │              │     │           └─ TableScan tpcds.date_dim est. ? rows
-               │              │     │                    Outputs: d_date_sk_4:=d_date_sk, d_moy_4:=d_moy, d_year_4:=d_year
+               │              │     │                    Outputs: d_date_sk_20:=d_date_sk, d_moy_4:=d_moy, d_year_20:=d_year
                │              │     └─ Aggregating est. ? rows
-               │              │        │     Group by: {i_item_sk_4}
+               │              │        │     Group by: {i_item_sk_12}
                │              │        └─ Filter est. ? rows
-               │              │           │     Condition: isNotNull(i_item_sk_4)
+               │              │           │     Condition: isNotNull(i_item_sk_12)
                │              │           └─ CTERef [0] est. ? rows
                │              └─ Aggregating est. ? rows
-               │                 │     Group by: {c_customer_sk_7}
+               │                 │     Group by: {c_customer_sk_23}
                │                 └─ Filter est. ? rows
-               │                    │     Condition: isNotNull(c_customer_sk_7)
+               │                    │     Condition: isNotNull(c_customer_sk_23)
                │                    └─ CTERef [1] est. ? rows
                └─ MergingAggregated est. ? rows
                   └─ Repartition Exchange est. ? rows
@@ -249,19 +249,19 @@ Projection est. 100 rows
                         └─ Projection est. ? rows
                            │     Expressions: [c_first_name_5, c_last_name_5], expr#multiply(ws_quantity, ws_list_price)_1:=ws_quantity_1 * ws_list_price_1
                            └─ Inner Join est. ? rows
-                              │     Condition: c_customer_sk_8 == c_customer_sk_9
+                              │     Condition: c_customer_sk_24 == c_customer_sk_25
                               ├─ Repartition Exchange est. ? rows
-                              │  │     Partition by: {c_customer_sk_8}
+                              │  │     Partition by: {c_customer_sk_24}
                               │  └─ Inner Join est. ? rows
-                              │     │     Condition: ws_item_sk_1 == i_item_sk_5
+                              │     │     Condition: ws_item_sk_1 == i_item_sk_13
                               │     ├─ Repartition Exchange est. ? rows
                               │     │  │     Partition by: {ws_item_sk_1}
                               │     │  └─ Inner Join est. ? rows
-                              │     │     │     Condition: ws_sold_date_sk_1 == d_date_sk_7
+                              │     │     │     Condition: ws_sold_date_sk_1 == d_date_sk_23
                               │     │     ├─ Repartition Exchange est. ? rows
                               │     │     │  │     Partition by: {ws_sold_date_sk_1}
                               │     │     │  └─ Inner Join est. ? rows
-                              │     │     │     │     Condition: ws_bill_customer_sk_1 == c_customer_sk_8
+                              │     │     │     │     Condition: ws_bill_customer_sk_1 == c_customer_sk_24
                               │     │     │     ├─ Repartition Exchange est. ? rows
                               │     │     │     │  │     Partition by: {ws_bill_customer_sk_1}
                               │     │     │     │  └─ Filter est. ? rows
@@ -269,126 +269,126 @@ Projection est. 100 rows
                               │     │     │     │     └─ TableScan tpcds.web_sales est. ? rows
                               │     │     │     │              Outputs: ws_bill_customer_sk_1:=ws_bill_customer_sk, ws_item_sk_1:=ws_item_sk, ws_list_price_1:=ws_list_price, ws_quantity_1:=ws_quantity, ws_sold_date_sk_1:=ws_sold_date_sk
                               │     │     │     └─ Repartition Exchange est. ? rows
-                              │     │     │        │     Partition by: {c_customer_sk_8}
+                              │     │     │        │     Partition by: {c_customer_sk_24}
                               │     │     │        └─ Filter est. ? rows
-                              │     │     │           │     Condition: isNotNull(c_customer_sk_8)
+                              │     │     │           │     Condition: isNotNull(c_customer_sk_24)
                               │     │     │           └─ TableScan tpcds.customer est. ? rows
-                              │     │     │                    Outputs: c_customer_sk_8:=c_customer_sk, c_first_name_5:=c_first_name, c_last_name_5:=c_last_name
+                              │     │     │                    Outputs: c_customer_sk_24:=c_customer_sk, c_first_name_5:=c_first_name, c_last_name_5:=c_last_name
                               │     │     └─ Repartition Exchange est. ? rows
-                              │     │        │     Partition by: {d_date_sk_7}
+                              │     │        │     Partition by: {d_date_sk_23}
                               │     │        └─ Filter est. ? rows
-                              │     │           │     Condition: (d_year_7 = 2000) AND (d_moy_7 = 2)
+                              │     │           │     Condition: (d_moy_7 = 2) AND (d_year_23 = 2000)
                               │     │           └─ TableScan tpcds.date_dim est. ? rows
-                              │     │                    Outputs: d_date_sk_7:=d_date_sk, d_moy_7:=d_moy, d_year_7:=d_year
+                              │     │                    Outputs: d_date_sk_23:=d_date_sk, d_moy_7:=d_moy, d_year_23:=d_year
                               │     └─ Aggregating est. ? rows
-                              │        │     Group by: {i_item_sk_5}
+                              │        │     Group by: {i_item_sk_13}
                               │        └─ Filter est. ? rows
-                              │           │     Condition: isNotNull(i_item_sk_5)
+                              │           │     Condition: isNotNull(i_item_sk_13)
                               │           └─ CTERef [0] est. ? rows
                               └─ Aggregating est. ? rows
-                                 │     Group by: {c_customer_sk_9}
+                                 │     Group by: {c_customer_sk_25}
                                  └─ Filter est. ? rows
-                                    │     Condition: isNotNull(c_customer_sk_9)
+                                    │     Condition: isNotNull(c_customer_sk_25)
                                     └─ CTERef [1] est. ? rows
 CTEDef [1]
 Inner Join est. ? rows
 │     Condition: 
-│     Filter: `expr#sum(multiply(ss_quantity, ss_sales_price))_4` > ('0.500000' * `expr#max(csales)_1`)
+│     Filter: `expr#sum(multiply(ss_quantity, ss_sales_price))_20` > ('0.500000' * `expr#max(csales)_9`)
 ├─ MergingAggregated est. ? rows
 │  └─ Repartition Exchange est. ? rows
-│     │     Partition by: {c_customer_sk_5}
+│     │     Partition by: {c_customer_sk_21}
 │     └─ Aggregating est. ? rows
-│        │     Group by: {c_customer_sk_5}
-│        │     Aggregates: expr#sum(multiply(ss_quantity, ss_sales_price))_4:=AggNull(sum)(expr#multiply(ss_quantity, ss_sales_price)_2)
+│        │     Group by: {c_customer_sk_21}
+│        │     Aggregates: expr#sum(multiply(ss_quantity, ss_sales_price))_20:=AggNull(sum)(expr#multiply(ss_quantity, ss_sales_price)_18)
 │        └─ Projection est. ? rows
-│           │     Expressions: [c_customer_sk_5], expr#multiply(ss_quantity, ss_sales_price)_2:=ss_quantity_4 * ss_sales_price_4
+│           │     Expressions: [c_customer_sk_21], expr#multiply(ss_quantity, ss_sales_price)_18:=ss_quantity_20 * ss_sales_price_20
 │           └─ Inner Join est. ? rows
-│              │     Condition: ss_customer_sk_4 == c_customer_sk_5
+│              │     Condition: ss_customer_sk_20 == c_customer_sk_21
 │              ├─ Repartition Exchange est. ? rows
-│              │  │     Partition by: {ss_customer_sk_4}
+│              │  │     Partition by: {ss_customer_sk_20}
 │              │  └─ Filter est. ? rows
-│              │     │     Condition: isNotNull(ss_customer_sk_4)
+│              │     │     Condition: isNotNull(ss_customer_sk_20)
 │              │     └─ TableScan tpcds.store_sales est. ? rows
-│              │              Outputs: ss_customer_sk_4:=ss_customer_sk, ss_quantity_4:=ss_quantity, ss_sales_price_4:=ss_sales_price
+│              │              Outputs: ss_customer_sk_20:=ss_customer_sk, ss_quantity_20:=ss_quantity, ss_sales_price_20:=ss_sales_price
 │              └─ Repartition Exchange est. ? rows
-│                 │     Partition by: {c_customer_sk_5}
+│                 │     Partition by: {c_customer_sk_21}
 │                 └─ Filter est. ? rows
-│                    │     Condition: isNotNull(c_customer_sk_5)
+│                    │     Condition: isNotNull(c_customer_sk_21)
 │                    └─ TableScan tpcds.customer est. ? rows
-│                             Outputs: c_customer_sk_5:=c_customer_sk
+│                             Outputs: c_customer_sk_21:=c_customer_sk
 └─ Broadcast Exchange est. ? rows
    └─ MergingAggregated est. ? rows
       └─ Gather Exchange est. ? rows
          └─ Aggregating est. ? rows
             │     Group by: {}
-            │     Aggregates: expr#max(csales)_1:=AggNull(max)(expr#sum(multiply(ss_quantity, ss_sales_price))_5)
+            │     Aggregates: expr#max(csales)_9:=AggNull(max)(expr#sum(multiply(ss_quantity, ss_sales_price))_21)
             └─ Projection est. ? rows
-               │     Expressions: [expr#sum(multiply(ss_quantity, ss_sales_price))_5]
+               │     Expressions: [expr#sum(multiply(ss_quantity, ss_sales_price))_21]
                └─ MergingAggregated est. ? rows
                   └─ Repartition Exchange est. ? rows
-                     │     Partition by: {c_customer_sk_6}
+                     │     Partition by: {c_customer_sk_22}
                      └─ Aggregating est. ? rows
-                        │     Group by: {c_customer_sk_6}
-                        │     Aggregates: expr#sum(multiply(ss_quantity, ss_sales_price))_5:=AggNull(sum)(expr#multiply(ss_quantity, ss_sales_price)_3)
+                        │     Group by: {c_customer_sk_22}
+                        │     Aggregates: expr#sum(multiply(ss_quantity, ss_sales_price))_21:=AggNull(sum)(expr#multiply(ss_quantity, ss_sales_price)_19)
                         └─ Projection est. ? rows
-                           │     Expressions: [c_customer_sk_6], expr#multiply(ss_quantity, ss_sales_price)_3:=ss_quantity_5 * ss_sales_price_5
+                           │     Expressions: [c_customer_sk_22], expr#multiply(ss_quantity, ss_sales_price)_19:=ss_quantity_21 * ss_sales_price_21
                            └─ Inner Join est. ? rows
-                              │     Condition: ss_sold_date_sk_5 == d_date_sk_6
+                              │     Condition: ss_sold_date_sk_21 == d_date_sk_22
                               ├─ Repartition Exchange est. ? rows
-                              │  │     Partition by: {ss_sold_date_sk_5}
+                              │  │     Partition by: {ss_sold_date_sk_21}
                               │  └─ Inner Join est. ? rows
-                              │     │     Condition: ss_customer_sk_5 == c_customer_sk_6
+                              │     │     Condition: ss_customer_sk_21 == c_customer_sk_22
                               │     ├─ Repartition Exchange est. ? rows
-                              │     │  │     Partition by: {ss_customer_sk_5}
+                              │     │  │     Partition by: {ss_customer_sk_21}
                               │     │  └─ TableScan tpcds.store_sales est. ? rows
-                              │     │           Outputs: ss_customer_sk_5:=ss_customer_sk, ss_quantity_5:=ss_quantity, ss_sales_price_5:=ss_sales_price, ss_sold_date_sk_5:=ss_sold_date_sk
+                              │     │           Outputs: ss_customer_sk_21:=ss_customer_sk, ss_quantity_21:=ss_quantity, ss_sales_price_21:=ss_sales_price, ss_sold_date_sk_21:=ss_sold_date_sk
                               │     └─ Repartition Exchange est. ? rows
-                              │        │     Partition by: {c_customer_sk_6}
+                              │        │     Partition by: {c_customer_sk_22}
                               │        └─ TableScan tpcds.customer est. ? rows
-                              │                 Outputs: c_customer_sk_6:=c_customer_sk
+                              │                 Outputs: c_customer_sk_22:=c_customer_sk
                               └─ Repartition Exchange est. ? rows
-                                 │     Partition by: {d_date_sk_6}
+                                 │     Partition by: {d_date_sk_22}
                                  └─ Filter est. ? rows
-                                    │     Condition: d_year_6 IN (2000, 2001, 2002, 2003)
+                                    │     Condition: d_year_22 IN (2000, 2001, 2002, 2003)
                                     └─ TableScan tpcds.date_dim est. ? rows
-                                             Outputs: d_date_sk_6:=d_date_sk, d_year_6:=d_year
+                                             Outputs: d_date_sk_22:=d_date_sk, d_year_22:=d_year
 CTEDef [0]
 Repartition Exchange est. ? rows
-│     Partition by: {i_item_sk_3}
+│     Partition by: {i_item_sk_11}
 └─ Projection est. ? rows
-   │     Expressions: [i_item_sk_3]
+   │     Expressions: [i_item_sk_11]
    └─ Filter est. ? rows
-      │     Condition: `expr#count()_3` > 4
+      │     Condition: `expr#count()_11` > 4
       └─ MergingAggregated est. ? rows
          └─ Repartition Exchange est. ? rows
-            │     Partition by: {d_date_7, expr#substring(i_item_desc, 1, 30)_3, i_item_sk_3}
+            │     Partition by: {d_date_15, expr#substring(i_item_desc, 1, 30)_11, i_item_sk_11}
             └─ Aggregating est. ? rows
-               │     Group by: {d_date_7, expr#substring(i_item_desc, 1, 30)_3, i_item_sk_3}
-               │     Aggregates: expr#count()_3:=AggNull(count)()
+               │     Group by: {d_date_15, expr#substring(i_item_desc, 1, 30)_11, i_item_sk_11}
+               │     Aggregates: expr#count()_11:=AggNull(count)()
                └─ Projection est. ? rows
-                  │     Expressions: [d_date_7, i_item_sk_3], expr#substring(i_item_desc, 1, 30)_3:=substring(i_item_desc_1, 1, 30)
+                  │     Expressions: [d_date_15, i_item_sk_11], expr#substring(i_item_desc, 1, 30)_11:=substring(i_item_desc_9, 1, 30)
                   └─ Inner Join est. ? rows
-                     │     Condition: ss_item_sk_3 == i_item_sk_3
+                     │     Condition: ss_item_sk_11 == i_item_sk_11
                      ├─ Repartition Exchange est. ? rows
-                     │  │     Partition by: {ss_item_sk_3}
+                     │  │     Partition by: {ss_item_sk_11}
                      │  └─ Inner Join est. ? rows
-                     │     │     Condition: ss_sold_date_sk_3 == d_date_sk_5
+                     │     │     Condition: ss_sold_date_sk_19 == d_date_sk_21
                      │     ├─ Repartition Exchange est. ? rows
-                     │     │  │     Partition by: {ss_sold_date_sk_3}
+                     │     │  │     Partition by: {ss_sold_date_sk_19}
                      │     │  └─ Filter est. ? rows
-                     │     │     │     Condition: isNotNull(ss_item_sk_3)
+                     │     │     │     Condition: isNotNull(ss_item_sk_11)
                      │     │     └─ TableScan tpcds.store_sales est. ? rows
-                     │     │              Outputs: ss_item_sk_3:=ss_item_sk, ss_sold_date_sk_3:=ss_sold_date_sk
+                     │     │              Outputs: ss_item_sk_11:=ss_item_sk, ss_sold_date_sk_19:=ss_sold_date_sk
                      │     └─ Repartition Exchange est. ? rows
-                     │        │     Partition by: {d_date_sk_5}
+                     │        │     Partition by: {d_date_sk_21}
                      │        └─ Filter est. ? rows
-                     │           │     Condition: d_year_5 IN (2000, 2001, 2002, 2003)
+                     │           │     Condition: d_year_21 IN (2000, 2001, 2002, 2003)
                      │           └─ TableScan tpcds.date_dim est. ? rows
-                     │                    Outputs: d_date_7:=d_date, d_date_sk_5:=d_date_sk, d_year_5:=d_year
+                     │                    Outputs: d_date_15:=d_date, d_date_sk_21:=d_date_sk, d_year_21:=d_year
                      └─ Repartition Exchange est. ? rows
-                        │     Partition by: {i_item_sk_3}
+                        │     Partition by: {i_item_sk_11}
                         └─ Filter est. ? rows
-                           │     Condition: isNotNull(i_item_sk_3)
+                           │     Condition: isNotNull(i_item_sk_11)
                            └─ TableScan tpcds.item est. ? rows
-                                    Outputs: i_item_desc_1:=i_item_desc, i_item_sk_3:=i_item_sk
+                                    Outputs: i_item_desc_9:=i_item_desc, i_item_sk_11:=i_item_sk
 note: CTE(Common Table Expression) is applied for 4 times.
