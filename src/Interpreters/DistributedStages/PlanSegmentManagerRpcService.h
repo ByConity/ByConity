@@ -15,10 +15,16 @@
 
 #include <Interpreters/Context.h>
 #include <Interpreters/SegmentScheduler.h>
+#include <Interpreters/ProcessList.h>
 #include <Protos/plan_segment_manager.pb.h>
 #include <brpc/server.h>
 #include <common/logger_useful.h>
 
+#include <Common/ResourceMonitor.h>
+#include <ResourceManagement/CommonData.h>
+#include <Core/BackgroundSchedulePool.h>
+#include <Interpreters/DistributedStages/MPPQueryCoordinator.h>
+#include <Interpreters/DistributedStages/MPPQueryManager.h>
 namespace DB
 {
 class PlanSegmentManagerRpcService : public Protos::PlanSegmentManagerService
@@ -57,25 +63,31 @@ public:
         ::google::protobuf::Closure * done) override
     {
         brpc::ClosureGuard done_guard(done);
-        RuntimeSegmentsStatus status(
-            request->query_id(), request->segment_id(), request->is_succeed(), request->is_canceled(), request->message(), request->code());
+        RuntimeSegmentsStatus status{
+            request->query_id(), request->segment_id(), request->is_succeed(), request->is_canceled(), RuntimeSegmentsMetrics(request->metrics()), request->message(), request->code()};
         const SegmentSchedulerPtr & scheduler = context->getSegmentScheduler();
         scheduler->updateSegmentStatus(status);
-        // this means exception happened during execution.
-        if (!request->is_succeed() && !request->is_canceled())
+        scheduler->updateQueryStatus(status);
+        if (!status.is_canceled && status.code == 0)
         {
-            scheduler->updateException(
-                request->query_id(),
-                "Segment:" + std::to_string(request->segment_id()) + " failed, message: " + request->message(),
-                request->code());
             try
             {
-                scheduler->cancelPlanSegmentsFromCoordinator(request->query_id(), request->message(), context);
+                scheduler->checkQueryCpuTime(status.query_id);
             }
-            catch (...)
+            catch (const Exception & e)
             {
-                LOG_WARNING(log, "Call cancelPlanSegmentsFromCoordinator failed: " + getCurrentExceptionMessage(true));
+                status.message = e.message();
+                status.code = e.code();
+                status.is_succeed = false;
             }
+        }
+
+        // this means exception happened during execution.
+        if (!status.is_succeed && !status.is_canceled)
+        {
+            auto coodinator = MPPQueryManager::instance().getCoordinator(request->query_id());
+            if(coodinator)
+                coodinator->updateSegmentInstanceStatus(status);
         }
         // todo  scheduler.cancelSchedule
     }

@@ -274,7 +274,7 @@ AsyncRegisterResult BrpcRemoteBroadcastReceiver::registerToSendersAsync(UInt32 t
     res.request->set_exchange_id(exchange_key->getExchangeId());
     res.request->set_parallel_id(exchange_key->getParallelIndex());
     res.request->set_coordinator_address(exchange_key->getCoordinatorAddress());
-    res.request->set_wait_timeout_ms(context->getSettingsRef().exchange_timeout_ms / 2);
+    res.request->set_wait_timeout_ms(std::max(timeout_ms - 500u, 1000u));
     stub.registry(&cntl, res.request.get(), res.response.get(), brpc::DoNothing());
     metric.register_time_ms += s.elapsedMilliseconds();
     return res;

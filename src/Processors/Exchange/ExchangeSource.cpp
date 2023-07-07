@@ -99,16 +99,17 @@ std::optional<Chunk> ExchangeSource::tryGenerate()
             throw Exception(
                 getName() + " fail to receive data: " + status.message + " code: " + std::to_string(status.code),
                 ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION);
-
-        if (fetch_exception_from_scheduler)
-        {
-            auto context = CurrentThread::get().getQueryContext();
-            auto query_id = context->getClientInfo().initial_query_id;
-            auto exception_with_code = context->getSegmentScheduler()->getException(query_id, 1000);
-            throw Exception(
-                getName() + " fail to receive data: " + status.message + " code: " + std::to_string(status.code)
-                    + " exception: " + exception_with_code.exception, exception_with_code.code);
-        }
+        
+        // FIXME 
+        // if (fetch_exception_from_scheduler)
+        // {
+        //     auto context = CurrentThread::get().getQueryContext();
+        //     auto query_id = context->getClientInfo().initial_query_id;
+        //     auto exception_with_code = context->getSegmentScheduler()->getException(query_id, options.distributed_query_wait_exception_ms);
+        //     throw Exception(
+        //         getName() + " fail to receive data: " + status.message + " code: " + std::to_string(status.code)
+        //             + " exception: " + exception_with_code.exception, exception_with_code.code);
+        // }
 
         // If receiver is finihsed and not cancelly by pipeline, we should cancel pipeline here
         if (status.code != BroadcastStatusCode::RECV_CANCELLED)

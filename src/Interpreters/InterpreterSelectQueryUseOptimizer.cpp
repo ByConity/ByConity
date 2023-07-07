@@ -16,7 +16,7 @@
 #include <Analyzers/QueryAnalyzer.h>
 #include <Analyzers/QueryRewriter.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/DistributedStages/executePlanSegment.h>
+#include <Interpreters/DistributedStages/MPPQueryCoordinator.h>
 #include <Interpreters/InterpreterSelectQueryUseOptimizer.h>
 #include <Interpreters/SegmentScheduler.h>
 #include <Optimizer/PlanNodeSearcher.h>
@@ -88,7 +88,9 @@ BlockIO InterpreterSelectQueryUseOptimizer::execute()
 
     GraphvizPrinter::printPlanSegment(plan_segment_tree, context);
     LOG_DEBUG(log, "optimizer total run time: {} ms", total_watch.elapsedMillisecondsAsDouble());
-    return executePlanSegmentTree(plan_segment_tree, context);
+
+    auto coodinator = std::make_shared<MPPQueryCoordinator>(std::move(plan_segment_tree), context, MPPQueryOptions());
+    return coodinator->execute();
 }
 
 QueryPlan PlanNodeToNodeVisitor::convert(QueryPlan & query_plan)

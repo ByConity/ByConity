@@ -33,6 +33,7 @@
 #include <brpc/controller.h>
 #include <bthread/condition_variable.h>
 #include <bthread/mutex.h>
+#include <common/types.h>
 #include <Common/Stopwatch.h>
 #include <algorithm>
 #include <random>
@@ -65,6 +66,7 @@ using PlanSegmentsPtr = std::vector<PlanSegmentPtr>;
 using Source = std::vector<size_t>;
 // <query_id, <segment_id, status>>
 using SegmentStatusMap = std::map<String, std::map<size_t, RuntimeSegmentsStatusPtr>>;
+enum class OverflowMode;
 
 struct DAGGraph {
     DAGGraph(){}
@@ -77,6 +79,8 @@ struct DAGGraph {
         id_to_segment = std::move(other.id_to_segment);
         id_to_address = std::move(other.id_to_address);
         plan_segment_status_ptr = std::move(other.plan_segment_status_ptr);
+        query_context = other.query_context;
+        async_context = std::move(other.async_context);
     }
     Source sources;
     size_t final = std::numeric_limits<size_t>::max();
@@ -85,6 +89,7 @@ struct DAGGraph {
     std::unordered_map<size_t, AddressInfos> id_to_address;
     std::set<AddressInfo> plan_send_addresses;
     PlanSegmentsStatusPtr plan_segment_status_ptr;
+    ContextPtr query_context = nullptr;
 #if defined(TASK_ASSIGN_DEBUG)
     std::unordered_map<size_t, std::vector<std::pair<size_t, AddressInfo>>> exchange_data_assign_node_mappings;
 #endif
@@ -117,15 +122,16 @@ public:
     AddressInfos getWorkerAddress(const String & query_id, size_t segment_id);
 
     String getCurrentDispatchStatus(const String & query_id);
+    void checkQueryCpuTime(const String & query_id);
     void updateSegmentStatus(const RuntimeSegmentsStatus & segment_status);
-    void updateException(const String & query_id, const String & exception, int code);
-    ExceptionWithCode getException(const String & query_id, size_t timeout_ms);
+    void updateQueryStatus(const RuntimeSegmentsStatus & segment_status);
 
 private:
     std::unordered_map<String, std::shared_ptr<DAGGraph>> query_map;
     mutable bthread::Mutex mutex;
     mutable bthread::Mutex segment_status_mutex;
     mutable SegmentStatusMap segment_status_map;
+    mutable std::unordered_map<String, RuntimeSegmentsStatusPtr> query_status_map;
     // record exception when exception occurred
     ConcurrentShardMap<String, ExceptionWithCode> query_to_exception_with_code;
     Poco::Logger * log;

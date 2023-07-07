@@ -258,3 +258,6 @@
 [submodule "contrib/udns"]
 	path = contrib/udns
 	url = https://github.com/ortclib/udns.git
+[submodule "contrib/parallel-hashmap"]
+	path = contrib/parallel-hashmap
+	url = https://github.com/greg7mdp/parallel-hashmap.git

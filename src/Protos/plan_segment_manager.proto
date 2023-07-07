@@ -13,13 +13,18 @@ message CancelQueryResponse {
   optional string message = 2;
 };
 
+message RuntimeSegmentsMetrics {
+      required int64 cpu_micros = 1;
+}
+
 message SendPlanSegmentStatusRequest {
   required string query_id = 1;
   required int32 segment_id = 2;
   required bool is_succeed = 3;
   required bool is_canceled = 4;
-  required int32 code = 5;
-  optional string message = 6;
+  optional RuntimeSegmentsMetrics metrics = 5;
+  required int32 code = 6;
+  optional string message = 7;
 }
 
 message SendPlanSegmentStatusResponse {

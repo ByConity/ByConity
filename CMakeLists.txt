@@ -559,6 +559,7 @@ include (cmake/find/nuraft.cmake)
 include (cmake/find/yaml-cpp.cmake)
 include (cmake/find/json-c.cmake)
 include (cmake/find/libnuma.cmake)
+include (cmake/find/phmap.cmake)
 
 if(NOT USE_INTERNAL_PARQUET_LIBRARY)
     set (ENABLE_ORC OFF CACHE INTERNAL "")

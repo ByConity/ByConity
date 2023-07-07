@@ -26,25 +26,44 @@
 #include <boost/core/noncopyable.hpp>
 #include <Poco/Logger.h>
 #include <common/types.h>
+#include <Protos/plan_segment_manager.pb.h>
 
 namespace DB
 {
 class ThreadGroupStatus;
 struct BlockIO;
-struct RuntimeSegmentsStatus
+
+namespace Protos
 {
-    RuntimeSegmentsStatus(
-        const String & queryId_, int32_t segmentId_, bool isSucceed_, bool isCanceled_, const String & message_, int32_t code_)
-        : query_id(queryId_), segment_id(segmentId_), is_succeed(isSucceed_), is_canceled(isCanceled_), message(message_), code(code_)
+    class RuntimeSegmentsMetrics;
+}
+
+struct RuntimeSegmentsMetrics
+{
+    UInt64 cpu_micros;
+
+    RuntimeSegmentsMetrics() : cpu_micros(0)
     {
     }
 
-    RuntimeSegmentsStatus() { }
+    RuntimeSegmentsMetrics(const Protos::RuntimeSegmentsMetrics & metrics_)
+    {
+        cpu_micros = metrics_.cpu_micros();
+    }
 
+    void setProtos(Protos::RuntimeSegmentsMetrics & metrics_) const
+    {
+        metrics_.set_cpu_micros(cpu_micros);
+    }
+};
+
+struct RuntimeSegmentsStatus
+{
     String query_id;
     int32_t segment_id;
     bool is_succeed;
     bool is_canceled;
+    RuntimeSegmentsMetrics metrics;
     String message;
     int32_t code;
 };
@@ -71,6 +90,7 @@ private:
     PlanSegmentOutputs plan_segment_outputs;
     ExchangeOptions options;
     Poco::Logger * logger;
+    RuntimeSegmentsStatus runtime_segment_status;
 
     Processors buildRepartitionExchangeSink(BroadcastSenderPtrs & senders, bool keep_order, size_t output_index, const Block &header, OutputPortRawPtrs &ports);
 
