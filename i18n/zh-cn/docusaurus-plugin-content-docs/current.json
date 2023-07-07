@@ -11,6 +11,10 @@
     "message": "ByConity简介",
     "description": "The label for category Introduction in sidebar tutorialSidebar"
   },
+  "sidebar.tutorialSidebar.category.Quick Start": {
+    "message": "快速上手",
+    "description": "The label for category Quick Start in sidebar tutorialSidebar"
+  },
   "sidebar.tutorialSidebar.category.SQL Syntax": {
     "message": "SQL语法说明",
     "description": "The label for category SQL Syntax in sidebar tutorialSidebar"

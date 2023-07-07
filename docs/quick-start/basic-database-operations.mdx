@@ -1,24 +1,32 @@
 ---
-title: 快速上手
+title: Basic Database Operations
 sidebar_position: 2
 tags:
   - Docs
 ---
-   
-您可以通过[包部署](../deployment/package-deployment)、使用[docker包装器](../deployment/docker-wrapper)或[在Kubernetes中部署ByConity](../deployment/deploy-k8s)来安装部署ByConity。
 
-在集群搭建和启动之后，让我们快速的试用一下：）
 
-# 快速上手
+There are a few ways to get started with ByConity. You have the choice to deploy ByConity through [package deployment](../deployment/package-deployment), using [docker wrapper](../deployment/docker-wrapper) or [deploy ByConity in Kubernetes](../deployment/deploy-k8s). To get started quickly, we recommend that you use the [ByConity Playground](https://github.com/ByConity/byconity-docker) with docker-compose/the docker wrapper. 
 
-## 连接数据库
+The playground only requires a few dependencies:
+- Colima (Docker runtime)
+- Docker
+- Docker Compose
+
+After you've downloaded all of the dependencies, get your cluster up and running, follow the tutorial below, and give ByConity a quick spin!   
+
+
+
+# Getting Started Tutorial
+
+## Connect to the database
 
 ```
 ./clickhouse-client -m -h HOST --port PORT
 
 ```
 
-## 创建库表
+## Create database and table
 
 ```
 CREATE DATABASE IF NOT EXISTS helloworld;
@@ -35,7 +43,7 @@ ORDER BY (user_id, timestamp);
 
 ```
 
-## 写入和查询
+## Insert and query
 
 ```
 INSERT INTO helloworld.my_first_table (user_id, message, timestamp) VALUES
@@ -54,9 +62,9 @@ exit;
 
 ```
 
-## 写入文件
+## Insert file
 
-假设我们有一个数据文件 data.csv
+Suppose we have a file data.csv
 
 ```
 102,This is data in a file,2022-02-22 10:43:28
@@ -72,7 +80,7 @@ exit;
 
 ```
 
-# 查看计算组状态
+# view VW status
 
 ```
 SELECT * FROM system.worker_groups
@@ -124,7 +132,7 @@ state:                 1
 
 ```
 
-# 查看历史查询
+# view history query
 
 [https://clickhouse.com/docs/en/operations/system-tables/query_log/](https://clickhouse.com/docs/en/operations/system-tables/query_log/)
 
