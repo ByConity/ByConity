@@ -15,12 +15,9 @@
 
 #pragma once
 
-<<<<<<< HEAD
-=======
 #include <algorithm>
 #include <random>
 #include <unordered_map>
->>>>>>> 0d8b634072b (Merge branch 'cherry-pick-002f5c72c9893601c2ccb77926271363e306fcb1' into 'cnch-ce-merge')
 #include <unordered_set>
 #include <Core/Block.h>
 #include <Core/Types.h>
@@ -39,10 +36,8 @@
 #include <brpc/controller.h>
 #include <bthread/condition_variable.h>
 #include <bthread/mutex.h>
-#include <common/types.h>
 #include <Common/Stopwatch.h>
-#include <algorithm>
-#include <random>
+#include <common/types.h>
 
 #ifndef NDEBUG
 #    define TASK_ASSIGN_DEBUG
