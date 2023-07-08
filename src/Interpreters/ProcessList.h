@@ -242,6 +242,7 @@ public:
     bool checkCpuTimeLimit(String node_name);
     /// Checks the query time limits (cancelled or timeout)
     bool checkTimeLimit();
+    [[noreturn]] void throwKilledException();
     /// Same as checkTimeLimit but it never throws
     [[nodiscard]] bool checkTimeLimitSoft();
     Int64 getUsedMemory() const { return thread_group == nullptr ? 0 : thread_group->memory_tracker.get(); }

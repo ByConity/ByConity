@@ -30,6 +30,8 @@
 #include <Common/tests/gtest_global_context.h>
 #include <Common/tests/gtest_utils.h>
 #include <Processors/Exchange/DataTrans/Brpc/BrpcRemoteBroadcastSender.h>
+#include <parallel_hashmap/phmap.h>
+#include <unordered_map>
 
 using namespace DB;
 namespace UnitTest
@@ -60,6 +62,27 @@ TEST(ExchangeUtils, mergeSenderTest)
 
     ExchangeUtils::mergeSenders(senders);
     ASSERT_TRUE(senders.size() == 2);
+}
+
+TEST(ExchangeUtils, parallelHashmapTest)
+{
+    typedef phmap::parallel_flat_hash_map<int, int,
+		phmap::priv::hash_default_hash<int>,
+		phmap::priv::hash_default_eq<int>,
+		std::allocator<std::pair<int, int>>,
+		4, bthread::Mutex> Map;
+
+    Map m = { {1, 7}, {2, 9} };
+    m.lazy_emplace_l(5, 
+                     [](Map::value_type& v) { v.second = 6; },           // called only when key was already present
+                     [](const Map::constructor& ctor) { ctor(5, 13); }); // construct value_type in place when key not present 
+    ASSERT_TRUE(m[5] == 13);
+
+    // change a value that is present. Currently m[5] == 13
+    m.lazy_emplace_l(5, 
+                     [](Map::value_type& v) { v.second = 6; },           // called only when key was already present
+                     [](const Map::constructor& ctor) { ctor(5, 13); }); // construct value_type in place when key not present
+    ASSERT_TRUE(m[5] == 6);
 }
 
 }

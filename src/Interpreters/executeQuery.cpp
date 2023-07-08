@@ -99,6 +99,9 @@
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 
 #include <Interpreters/InterpreterPerfectShard.h>
+#include <Interpreters/DistributedStages/PlanSegmentExecutor.h>
+#include <Interpreters/DistributedStages/MPPQueryManager.h>
+#include <Interpreters/DistributedStages/MPPQueryCoordinator.h>
 
 #include <Processors/Formats/IOutputFormat.h>
 #include <Processors/Sources/SinkToOutputStream.h>
@@ -1301,10 +1304,15 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                     ProfileEvents::increment(ProfileEvents::FailedInsertQuery);
                 }
 
-                context->getPlanSegmentProcessList().tryCancelPlanSegmentGroup(query_id);
-                SegmentSchedulerPtr scheduler = context->getSegmentScheduler();
-                scheduler->finishPlanSegments(query_id);
-                RuntimeFilterManager::getInstance().removeQuery(query_id);
+                auto coodinator = MPPQueryManager::instance().getCoordinator(query_id);
+                if(coodinator)
+                    coodinator->updateSegmentInstanceStatus(RuntimeSegmentsStatus{
+                        .query_id = query_id,
+                        .segment_id = 0,
+                        .is_succeed = false,
+                        .message = elem.exception,
+                        .code = elem.exception_code
+                        });
             };
 
             res.finish_callback = std::move(finish_callback);

@@ -220,6 +220,7 @@ add_object_library(clickhouse_interpreters Interpreters)
 add_object_library(clickhouse_interpreters_cache Interpreters/Cache)
 add_object_library(clickhouse_interpreters_mysql Interpreters/MySQL)
 add_object_library(clickhouse_interpreters_clusterproxy Interpreters/ClusterProxy)
+add_object_library(clickhouse_interpreters_profile Interpreters/profile)
 add_object_library(clickhouse_interpreters_jit Interpreters/JIT)
 add_object_library(clickhouse_interpreters_distributedstages Interpreters/DistributedStages)
 add_object_library(clickhouse_interpreters_runtimefilters Interpreters/RuntimeFilter)
@@ -576,6 +577,8 @@ dbms_target_link_libraries(PUBLIC datasketches_lib)
 
 dbms_target_link_libraries(PRIVATE _boost_context)
 
+dbms_target_include_directories (SYSTEM BEFORE PUBLIC ${PARALLEL_HASHMAP_INCLUDE_DIR})
+
 include ("${ClickHouse_SOURCE_DIR}/cmake/add_check.cmake")
 
 if (ENABLE_TESTS AND USE_GTEST)
@@ -595,6 +598,7 @@ if (ENABLE_TESTS AND USE_GTEST)
     add_executable(unit_tests_dbms ${dbms_gtest_sources})
 
     target_include_directories(unit_tests_dbms PRIVATE ${dbms_gtest_headers})
+    target_include_directories (unit_tests_dbms PRIVATE ${PARALLEL_HASHMAP_INCLUDE_DIR})
 
     # gtest framework has substandard code
     target_compile_options(unit_tests_dbms PRIVATE

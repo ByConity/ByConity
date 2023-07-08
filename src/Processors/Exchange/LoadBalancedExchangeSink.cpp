@@ -26,11 +26,6 @@
 
 namespace DB
 {
-namespace ErrorCodes
-{
-    extern const int EXCHANGE_DATA_TRANS_EXCEPTION;
-}
-
 class RoundRobinSelector : public LoadBalancedExchangeSink::LoadBalanceSelector
 {
 public:

@@ -89,6 +89,8 @@ public:
         const QueryPlanOptimizationSettings & optimization_settings,
         const BuildQueryPipelineSettings & build_pipeline_settings);
 
+    /// add step_id for processors
+    static void updatePipelineStepInfo(QueryPipelinePtr & pipeline_ptr, QueryPlanStepPtr & step,size_t step_id);
     /// If initialized, build pipeline and convert to pipe. Otherwise, return empty pipe.
     Pipe convertToPipe(
         const QueryPlanOptimizationSettings & optimization_settings,
@@ -163,6 +165,7 @@ public:
 
     size_t getSize() const { return nodes.size(); }
 
+    void setResetStepId(bool reset_id) { reset_step_id = reset_id; }
 private:
     Poco::Logger * log = &Poco::Logger::get("QueryPlan");
     Nodes nodes;
@@ -180,6 +183,8 @@ private:
     size_t max_threads = 0;
     std::vector<std::shared_ptr<Context>> interpreter_context;
     std::shared_ptr<UInt32> max_node_id;
+    //Whether reset step id in serialize()，use for explain analyze.
+    bool reset_step_id = true;
 };
 
 std::string debugExplainStep(const IQueryPlanStep & step);

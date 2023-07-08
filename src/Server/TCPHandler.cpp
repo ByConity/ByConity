@@ -48,6 +48,9 @@
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/DistributedStages/executePlanSegment.h>
 #include <Interpreters/CnchQueryMetrics/QueryWorkerMetricLog.h>
+#include <Interpreters/DistributedStages/MPPQueryCoordinator.h>
+#include <Interpreters/DistributedStages/MPPQueryStatus.h>
+#include <Interpreters/ProcessList.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/MergeTree/MergeTreeDataPartUUID.h>
 #include <Storages/StorageS3Cluster.h>
@@ -84,6 +87,9 @@ namespace ErrorCodes
     extern const int UNEXPECTED_PACKET_FROM_CLIENT;
     extern const int SUPPORT_IS_DISABLED;
     extern const int UNKNOWN_PROTOCOL;
+    extern const int QUERY_WAS_CANCELLED;
+    extern const int EXCHANGE_DATA_TRANS_EXCEPTION;
+    extern const int TIMEOUT_EXCEEDED;
 }
 
 TCPHandler::TCPHandler(IServer & server_, const Poco::Net::StreamSocket & socket_, bool parse_proxy_protocol_, std::string server_display_name_)
@@ -393,8 +399,15 @@ void TCPHandler::runImpl()
         }
         catch (const Exception & e)
         {
+
             state.io.onException();
-            exception.emplace(e);
+            if (state.io.coordinator && isAmbiguosError(e.code()))
+            {
+                auto query_status =state.io.coordinator->waitUntilFinish(e.code(), e.message());
+                exception.emplace(query_status.summarized_error_msg, query_status.error_code);
+            }
+            else
+                exception.emplace(e);
 
             if (e.code() == ErrorCodes::UNKNOWN_PACKET_FROM_CLIENT)
                 throw;

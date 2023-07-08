@@ -324,6 +324,9 @@ public:
     uint64_t getElapsedUs() const { return elapsed_us; }
     uint64_t getInputWaitElapsedUs() const { return input_wait_elapsed_us; }
     uint64_t getOutputWaitElapsedUs() const { return output_wait_elapsed_us; }
+    uint32_t getWorkCount() const { return work_count; }
+    int64_t getStepId() const { return step_id; }
+    void setStepId(int64_t step_id_) { step_id = step_id_; }
 
     struct ProcessorDataStats
     {
@@ -371,6 +374,9 @@ private:
     uint64_t input_wait_elapsed_us = 0;
     Stopwatch output_wait_watch;
     uint64_t output_wait_elapsed_us = 0;
+    /// the number of times of calling work()
+    uint32_t work_count = 0;
+    int64_t step_id = -1 ;
 
     size_t stream_number = NO_STREAM;
 

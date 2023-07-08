@@ -217,6 +217,7 @@ QueryPlan QueryPlan::getSubPlan(QueryPlan::Node * node_)
     std::stack<QueryPlan::Node *> plan_nodes;
     sub_plan.addRoot(Node{.step = node_->step, .children = node_->children, .id = node_->id});
     plan_nodes.push(sub_plan.getRoot());
+    sub_plan.setResetStepId(reset_step_id);
 
     while (!plan_nodes.empty())
     {
@@ -277,6 +278,7 @@ QueryPipelinePtr QueryPlan::buildQueryPipeline(
             try
             {
                 last_pipeline = frame.node->step->updatePipeline(std::move(frame.pipelines), build_pipeline_settings);
+                updatePipelineStepInfo(last_pipeline, frame.node->step, frame.node->id);
             }
             catch (const Exception & e) /// Typical for an incorrect username, password, or address.
             {
@@ -309,6 +311,14 @@ QueryPipelinePtr QueryPlan::buildQueryPipeline(
 
     LOG_DEBUG(log, "Build pipeline takes:{}", watch.elapsedMilliseconds());
     return last_pipeline;
+}
+
+void QueryPlan::updatePipelineStepInfo(QueryPipelinePtr & pipeline_ptr, QueryPlanStepPtr & step, size_t step_id)
+{
+    auto *source_step = dynamic_cast<ISourceStep *>(step.get());
+    for (const auto & processor : pipeline_ptr->getProcessors())
+        if (processor->getStepId() == -1 || source_step)
+            processor->setStepId(step_id);
 }
 
 Pipe QueryPlan::convertToPipe(
@@ -572,9 +582,12 @@ void QueryPlan::serialize(WriteBuffer & buffer) const
     /**
      * we first encode the query plan node for serialize / deserialize
      */
-    size_t id = 0;
-    for (auto it = nodes.begin(); it != nodes.end(); ++it)
-        it->id = id++;
+    if (reset_step_id)
+    {
+        size_t id = 0;
+        for (auto it = nodes.begin(); it != nodes.end(); ++it)
+            it->id = id++;
+    }
 
     for (auto it = nodes.begin(); it != nodes.end(); ++it)
     {

@@ -47,18 +47,6 @@ void BrpcExchangeReceiverRegistryService::registry(
         {
             try
             {
-                sender_proxy->waitAccept(accpet_timeout_ms);
-            }
-            catch (...)
-            {
-                brpc::StreamClose(sender_stream_id);
-                String error_msg
-                    = "Create stream for " + sender_proxy->getDataKey()->getKey() + " failed by exception: " + getCurrentExceptionMessage(false);
-                LOG_ERROR(log, error_msg);
-                return;
-            }
-            try
-            {
                 auto real_sender = std::dynamic_pointer_cast<IBroadcastSender>(std::make_shared<BrpcRemoteBroadcastSender>(
                     sender_proxy->getDataKey(), sender_stream_id, sender_proxy->getContext(), sender_proxy->getHeader()));
                 sender_proxy->becomeRealSender(std::move(real_sender));
@@ -66,7 +54,7 @@ void BrpcExchangeReceiverRegistryService::registry(
             catch (...)
             {
                 brpc::StreamClose(sender_stream_id);
-                LOG_ERROR(log, "Create stream failed for {} by exception: {}", sender_proxy->getDataKey()->getKey(), getCurrentExceptionMessage(false));
+                LOG_ERROR(log, "Create stream failed when becomeRealSender for {} by exception: {}", sender_proxy->getDataKey()->getKey(), getCurrentExceptionMessage(false));
             }
         }
     });
@@ -81,6 +69,18 @@ void BrpcExchangeReceiverRegistryService::registry(
         request->exchange_id(),
         request->parallel_id(),
         request->coordinator_address());
+    try
+    {
+        sender_proxy = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
+        sender_proxy->waitAccept(accpet_timeout_ms);
+    }
+    catch (...)
+    {
+        String error_msg = "Create stream for " + data_key->getKey() + " failed by exception: " + getCurrentExceptionMessage(false);
+        LOG_ERROR(log, error_msg);
+        cntl->SetFailed(error_msg);
+        return;
+    }
 
     if (brpc::StreamAccept(&sender_stream_id, *cntl, &stream_options) != 0)
     {
@@ -90,8 +90,6 @@ void BrpcExchangeReceiverRegistryService::registry(
         cntl->SetFailed(error_msg);
         return;
     }
-    sender_proxy = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
-
 }
 
 }

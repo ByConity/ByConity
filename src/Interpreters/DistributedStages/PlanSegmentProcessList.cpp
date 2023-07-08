@@ -89,7 +89,9 @@ PlanSegmentProcessList::insert(const PlanSegment & plan_segment, ContextMutableP
     else
         entry = query_context->getProcessList().insert("\n" + pipeline_string, nullptr, query_context, force);
 
-    auto res = std::make_unique<PlanSegmentProcessListEntry>(*this, &entry->get(), initial_query_id, plan_segment.getPlanSegmentId());
+    auto res = std::make_shared<PlanSegmentProcessListEntry>(*this, &entry->get(), initial_query_id, plan_segment.getPlanSegmentId());
+    res->setCoordinatorAddress(plan_segment.getCoordinatorAddress());
+    res->setCurrentAddress(plan_segment.getCurrentAddress());
 
     std::unique_lock lock(mutex);
     if (need_wait_cancel)

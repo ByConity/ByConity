@@ -24,6 +24,8 @@
 #include <Client/Connection.h>
 #include <DataStreams/IBlockStream_fwd.h>
 #include <functional>
+#include <memory>
+
 #include <Processors/QueryPipeline.h>
 
 
@@ -32,6 +34,7 @@ namespace DB
 
 class ProcessListEntry;
 class PlanSegmentProcessListEntry;
+class MPPQueryCoordinator;
 
 struct BlockIO
 {
@@ -44,6 +47,7 @@ struct BlockIO
     BlockIO(const BlockIO &) = delete;
     BlockIO & operator= (const BlockIO & rhs) = delete;
 
+    std::shared_ptr<MPPQueryCoordinator> coordinator;
     std::shared_ptr<ProcessListEntry> process_list_entry;
     std::shared_ptr<PlanSegmentProcessListEntry> plan_segment_process_entry;
 

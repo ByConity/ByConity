@@ -40,52 +40,10 @@
 namespace DB
 {
 
-BlockIO executePlanSegmentTree(PlanSegmentTreePtr & plan_segment_tree, ContextMutablePtr context)
+namespace ErrorCodes
 {
-    BlockIO res;
-    auto * log = &Poco::Logger::get("executePlanSegmentTree");
-
-    LOG_DEBUG(log, "Generate QueryPipeline from PlanSegment");
-
-    PlanSegmentsStatusPtr scheduler_status;
-
-    if (plan_segment_tree->getNodes().size() > 1)
-    {
-        RuntimeFilterManager::getInstance().registerQuery(context->getCurrentQueryId(), *plan_segment_tree);
-        scheduler_status = context->getSegmentScheduler()->insertPlanSegments(context->getCurrentQueryId(), plan_segment_tree.get(), context);
-    }
-    else
-    {
-        scheduler_status = std::make_shared<PlanSegmentsStatus>();
-        scheduler_status->is_final_stage_start = true;
-    }
-
-    if (!scheduler_status)
-    {
-        RuntimeFilterManager::getInstance().removeQuery(context->getCurrentQueryId());
-        throw Exception("Cannot get scheduler status from segment scheduler", ErrorCodes::LOGICAL_ERROR);
-    }
-
-    Stopwatch s;
-    while (1)
-    {
-        if (context->getSettingsRef().max_execution_time.value.seconds() > 0 && s.elapsedSeconds() > context->getSettingsRef().max_execution_time.value.seconds())
-            throw Exception("Final stage not start", ErrorCodes::LOGICAL_ERROR);
-
-        if (scheduler_status->is_final_stage_start)
-        {
-            auto * final_segment = plan_segment_tree->getRoot()->getPlanSegment();
-            final_segment->update();
-            LOG_TRACE(log, "EXECUTE\n" + final_segment->toString());
-
-            if (context->getSettingsRef().debug_plan_generation)
-                break;
-            res = DB::lazyExecutePlanSegmentLocally(std::make_unique<PlanSegment>(std::move(*final_segment)), context);
-            break;
-        }
-    }
-
-    return res;
+    extern const int LOGICAL_ERROR;
+    extern const int SUPPORT_IS_DISABLED;
 }
 
 BlockIO lazyExecutePlanSegmentLocally(PlanSegmentPtr plan_segment, ContextMutablePtr context)

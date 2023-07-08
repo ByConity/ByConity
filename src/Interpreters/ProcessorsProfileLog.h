@@ -49,6 +49,9 @@ struct ProcessorProfileLogElement
     size_t output_rows{};
     size_t output_bytes{};
 
+    Int64 step_id{};
+    String worker_address;
+    
     static std::string name() { return "ProcessorsProfileLog"; }
     static NamesAndTypesList getNamesAndTypes();
     static NamesAndAliases getNamesAndAliases() { return {}; }
