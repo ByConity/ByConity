@@ -1574,6 +1574,8 @@ String StepPrinter::printSortingStep(const SortingStep & step)
     details << "|";
     details << "Limit: " << step.getLimit();
     details << "|";
+    details << "IsPartial: " << step.isPartial();
+    details << "|";
     details << "Output |";
     for (auto & column : step.getOutputStream().header)
     {

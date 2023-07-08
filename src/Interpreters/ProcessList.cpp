@@ -595,6 +595,8 @@ QueryStatusInfo QueryStatus::getInfo(bool get_thread_list, bool get_profile_even
     {
         res.memory_usage = thread_group->memory_tracker.get();
         res.peak_memory_usage = thread_group->memory_tracker.getPeak();
+        res.max_io_time_thread_name = thread_group->max_io_time_thread_name;
+        res.max_io_time_thread_ms = thread_group->max_io_time_thread_ms;
 
         if (get_thread_list)
         {
@@ -603,7 +605,12 @@ QueryStatusInfo QueryStatus::getInfo(bool get_thread_list, bool get_profile_even
         }
 
         if (get_profile_events)
+        {
             res.profile_counters = std::make_shared<ProfileEvents::Counters>(thread_group->performance_counters.getPartiallyAtomicSnapshot());
+            res.max_io_thread_profile_counters
+                = std::make_shared<ProfileEvents::Counters>(thread_group->max_io_thread_profile_counters.getPartiallyAtomicSnapshot());
+        }
+           
     }
 
     if (get_settings && getContext())

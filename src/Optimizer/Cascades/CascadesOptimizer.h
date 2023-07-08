@@ -61,7 +61,7 @@ public:
         GroupId target_group = UNDEFINED_GROUP);
     GroupExprPtr makeGroupExpression(const PlanNodePtr & plan_node, RuleType produce_rule = RuleType::UNDEFINED);
 
-    ContextMutablePtr getContext() const { return context; }
+    ContextMutablePtr & getContext() { return context; }
     TaskStack & getTaskStack() { return task_stack; }
     Memo & getMemo() { return memo; }
     size_t getWorkerSize() const { return worker_size; }

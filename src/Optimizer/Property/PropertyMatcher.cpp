@@ -20,19 +20,19 @@
 namespace DB
 {
 bool PropertyMatcher::matchNodePartitioning(
-    const Context & context, Partitioning & required, const Partitioning & actual, const SymbolEquivalences & equivalences)
+    const Context & context, Partitioning & required, const Partitioning & actual, const SymbolEquivalences & equivalences, const Constants & constants)
 {
     if (required.getPartitioningHandle() == Partitioning::Handle::ARBITRARY)
         return true;
 
     if (required.getPartitioningHandle() == Partitioning::Handle::FIXED_HASH && context.getSettingsRef().enforce_round_robin
-        && required.isEnforceRoundRobin() && actual.normalize(equivalences).satisfy(required.normalize(equivalences)))
+        && required.isEnforceRoundRobin() && actual.normalize(equivalences).satisfy(required.normalize(equivalences), constants))
     {
         required.setHandle(Partitioning::Handle::FIXED_ARBITRARY);
         return false;
     }
 
-    return actual.normalize(equivalences).satisfy(required.normalize(equivalences));
+    return actual.normalize(equivalences).satisfy(required.normalize(equivalences), constants);
 }
 
 bool PropertyMatcher::matchStreamPartitioning(
@@ -63,7 +63,6 @@ Property PropertyMatcher::compatibleCommonRequiredProperty(const std::unordered_
         res = *it;
         break;
     }
-
 
     const auto & node_partition = res.getNodePartitioning();
     const auto handle = node_partition.getPartitioningHandle();

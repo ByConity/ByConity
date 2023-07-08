@@ -27,6 +27,7 @@
 #include <Core/SortDescription.h>
 #include <Core/Types.h>
 #include <Functions/FunctionsHashing.h>
+#include <Optimizer/FunctionInvoker.h>
 #include <Parsers/IAST_fwd.h>
 #include <Analyzers/ASTEquals.h>
 
@@ -36,6 +37,8 @@ class Property;
 using PropertySet = std::vector<Property>;
 using PropertySets = std::vector<PropertySet>;
 using SymbolEquivalences = Equivalences<String>;
+
+class Constants;
 
 using CTEId = UInt32;
 
@@ -96,11 +99,10 @@ public:
     void setRequireHandle(bool require_handle_) { require_handle = require_handle_; }
     ASTPtr getSharingExpr() { return sharding_expr; }
 
-
     Partitioning translate(const std::unordered_map<String, String> & identities) const;
     Partitioning normalize(const SymbolEquivalences & symbol_equivalences) const;
-    bool satisfy(const Partitioning &) const;
-    bool isPartitionOn(const Partitioning &) const;
+    bool satisfy(const Partitioning &, const Constants & constants) const;
+    bool isPartitionOn(const Partitioning &, const Constants & constants) const;
 
     size_t hash() const;
     bool operator==(const Partitioning & other) const
@@ -118,17 +120,6 @@ private:
     ASTPtr sharding_expr;
     bool enforce_round_robin;
 };
-
-class Grouping
-{
-public:
-    explicit Grouping(Names columns_) : columns(std::move(columns_)) { }
-    Names getColumns() { return columns; }
-
-private:
-    Names columns;
-};
-
 
 enum class SortOrder : UInt8
 {
@@ -187,6 +178,31 @@ public:
     String toString() const;
 };
 
+class Grouping
+{
+public:
+    explicit Grouping(Names columns_) : columns(std::move(columns_)) { }
+    Names getColumns() { return columns; }
+
+private:
+    Names columns;
+};
+
+class Constants
+{
+public:
+    Constants() = default;
+    explicit Constants(std::map<String, FieldWithType> values_) : values(std::move(values_)) { }
+    const std::map<String, FieldWithType> & getValues() const { return values; }
+    bool contains(const String & name) const { return values.contains(name); }
+
+    Constants translate(const std::unordered_map<String, String> & identities) const;
+    Constants normalize(const SymbolEquivalences & symbol_equivalences) const;
+
+private:
+    std::map<String, FieldWithType> values {};
+};
+
 class CTEDescription
 {
 public:
@@ -236,28 +252,18 @@ public:
     String toString() const;
 };
 
-
-class Constants
-{
-public:
-private:
-    std::map<String, String> values;
-};
-
-class FunctionalDependency
-{
-};
-
 class Property
 {
 public:
     explicit Property(
         Partitioning node_partitioning_ = Partitioning(Partitioning::Handle::ARBITRARY),
         Partitioning stream_partitioning_ = Partitioning(Partitioning::Handle::ARBITRARY),
-        Sorting sorting_ = {})
+        Sorting sorting_ = {},
+        Constants constants_ = {})
         : node_partitioning(std::move(node_partitioning_))
         , stream_partitioning(std::move(stream_partitioning_))
         , sorting(std::move(sorting_))
+        , constants(std::move(constants_))
     {
     }
 
@@ -266,6 +272,7 @@ public:
     Partitioning & getNodePartitioningRef() { return node_partitioning; }
     const Partitioning & getStreamPartitioning() const { return stream_partitioning; }
     const Sorting & getSorting() const { return sorting; }
+    const Constants & getConstants() const { return constants; }
     const CTEDescriptions & getCTEDescriptions() const { return cte_descriptions; }
     CTEDescriptions & getCTEDescriptions() { return cte_descriptions; }
 
@@ -273,7 +280,15 @@ public:
     void setNodePartitioning(Partitioning node_partitioning_) { node_partitioning = std::move(node_partitioning_); }
     void setStreamPartitioning(Partitioning stream_partitioning_) { stream_partitioning = std::move(stream_partitioning_); }
     void setCTEDescriptions(CTEDescriptions descriptions) { cte_descriptions = std::move(descriptions); }
+    void setSorting(Sorting sorting_) { sorting = std::move(sorting_); }
+    void setConstants(Constants constants_) { constants = std::move(constants_); }
 
+    Property clearSorting() const
+    {
+        auto result = Property{node_partitioning, stream_partitioning, {}, constants};
+        result.setCTEDescriptions(cte_descriptions);
+        return result;
+    }
     Property translate(const std::unordered_map<String, String> & identities) const;
     Property normalize(const SymbolEquivalences & symbol_equivalences) const;
 
@@ -298,11 +313,12 @@ private:
     Partitioning stream_partitioning;
     // Description of the sort order of the columns
     Sorting sorting;
+    // Description of the group property of the columns
+    // Grouping grouping;
+    // Description of the constant columns
+    Constants constants;
     // Description of the requirements of the common table expressions.
     CTEDescriptions cte_descriptions;
-    // Grouping grouping;
-    // Constants constants;
-    // FunctionalDependency fd;
 };
 
 /**
