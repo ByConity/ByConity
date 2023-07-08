@@ -1546,14 +1546,8 @@ class IColumn;
     M(String, vw, "", "The vw name set by user on which the query run without tenant information", 0) \
     M(String, virtual_warehouse, "", "The vw name set by user on which the query run", 0) \
     M(String, virtual_warehouse_write, "", "The write vw name set by user on which the query run", 0) \
-    M(String, \
-      vw_schedule_algo, \
-      "Unknown", \
-      "algorithm for picking a worker group from vw. " \
-      "{Random(1),LocalRoundRobin(2),LocalLowCpu(3),LocalLowMem(4),LocalLowDisk(5),GlobalRoundRobin(102),GlobalLowCpu(103),GlobalLowMem(" \
-      "104),GlobalLowDisk(105)}", \
-      0) \
-    M(DialectType, dialect_type, DialectType::CLICKHOUSE, "Dialect type, e.g. CLICKHOUSE, ANSI", 0) \
+    M(String, vw_schedule_algo, "Unknown", "algorithm for picking a worker group from vw. {Random(1),LocalRoundRobin(2),LocalLowCpu(3),LocalLowMem(4),LocalLowDisk(5),GlobalRoundRobin(102),GlobalLowCpu(103),GlobalLowMem(104),GlobalLowDisk(105)}", 0) \
+    M(DialectType, dialect_type, DialectType::CLICKHOUSE, "Dialect type, e.g. CLICKHOUSE, ANSI, MYSQL", 0) \
     M(Bool, adaptive_type_cast, false, "Performs type cast operations adaptively, according to the value", 0) \
     M(Bool, tealimit_order_keep, false, "Whether tealimit output keep order by clause", 0) \
     M(UInt64, early_limit_for_map_virtual_columns, 0, "Enable early limit while quering _map_column_keys column", 0) \
@@ -1925,7 +1919,8 @@ class IColumn;
       FormatSettings::DateTimeOutputFormat::Simple, \
       "Method to write DateTime to text output. Possible values: 'simple', 'iso', 'unix_timestamp'.", \
       0) \
-\
+    M(String, bool_true_representation, "true", "Text to represent bool value in TSV/CSV formats.", 0) \
+    M(String, bool_false_representation, "false", "Text to represent bool value in TSV/CSV formats.", 0) \
     M(UInt64, max_hdfs_write_buffer_size, DBMS_DEFAULT_BUFFER_SIZE, "The maximum size of the buffer to write data to hdfs.", 0) \
 \
     M(Bool, \
@@ -2050,8 +2045,8 @@ class IColumn;
     M(UInt64, cnch_part_attach_max_threads, 16, "Max threads to use when attach parts", 0) \
     M(UInt64, attach_failure_injection_knob, 0, "Attach failure injection knob, for test only", 0) \
     M(Bool, async_post_commit, false, "Txn post commit asynchronously", 0) \
-    M(Bool, enable_auto_query_forwarding, false, "Auto forward query to target server when having multiple servers", 0)\
-    M(String, tenant_id, "", "tenant_id of cnch user", 0) \
+    M(Bool, enable_auto_query_forwarding, false, "Auto forward query to target server when having multiple servers", 0) \
+    M(String, tenant_id, "", "tenant_id of cnch user", 0)
 
 
 // End of FORMAT_FACTORY_SETTINGS

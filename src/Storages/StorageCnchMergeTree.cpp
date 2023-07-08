@@ -39,6 +39,7 @@
 #include <Interpreters/evaluateConstantExpression.h>
 #include <Interpreters/inplaceBlockConversions.h>
 #include <Interpreters/trySetVirtualWarehouse.h>
+#include <Interpreters/IdentifierSemantic.h>
 #include <MergeTreeCommon/CnchBucketTableCommon.h>
 #include <MergeTreeCommon/MergeTreeDataDeduper.h>
 #include <Parsers/ASTCheckQuery.h>
@@ -398,6 +399,50 @@ Strings StorageCnchMergeTree::selectPartitionsByPredicate(
 
     return res_partitions;
 }
+
+ServerDataPartsVector StorageCnchMergeTree::getServerPartsByPredicate(
+    const ASTPtr & predicate_, const std::function<ServerDataPartsVector()> & get_parts, ContextPtr local_context)
+{
+    const auto partition_key = MergeTreePartition::adjustPartitionKey(getInMemoryMetadataPtr(), local_context);
+    const auto & partition_key_sample = partition_key.sample_block;
+
+    /// Execute expr on block
+    auto predicate = predicate_->clone();
+    auto syntax_result = TreeRewriter(local_context).analyze(predicate, partition_key_sample.getNamesAndTypesList());
+    ExpressionActionsPtr actions = ExpressionAnalyzer{predicate, syntax_result, local_context}.getActions(true);
+
+    auto parts = get_parts();
+    MutableColumns name_columns = partition_key_sample.cloneEmptyColumns();
+    for (const auto & part : parts)
+    {
+        auto & current_partition_key = part->partition().value;
+        for (size_t c = 0; c < current_partition_key.size(); ++c)
+        {
+            name_columns[c]->insert(current_partition_key[c]);
+        }
+    }
+
+    auto block = partition_key_sample.cloneWithColumns(std::move(name_columns));
+    actions->execute(block);
+
+    /// Check the result
+    if (1 != block.columns())
+        throw Exception("Wrong column number of WHERE clause's calculation result", ErrorCodes::LOGICAL_ERROR);
+
+    if (block.getNamesAndTypesList().front().type->getName() != "UInt8")
+        throw Exception("Wrong column type of WHERE clause's calculation result", ErrorCodes::LOGICAL_ERROR);
+
+    /// Got the candidate parts
+    ServerDataPartsVector candidate_parts;
+    const auto & res_column = block.getColumnsWithTypeAndName().front().column;
+    for (size_t i = 0; i < parts.size(); ++i)
+    {
+        if (res_column->getBool(i))
+            candidate_parts.emplace_back(parts[i]);
+    }
+    return candidate_parts;
+}
+
 
 static Block getBlockWithPartColumn(ServerDataPartsVector & parts)
 {
@@ -1829,11 +1874,51 @@ Pipe StorageCnchMergeTree::alterPartition(
             case PartitionCommand::INGEST_PARTITION:
                 return ingestPartition(command, current_query_context);
 
+
+            case PartitionCommand::RECLUSTER_PARTITION:
+            case PartitionCommand::RECLUSTER_PARTITION_WHERE:
+                reclusterPartition(command, current_query_context);
+                break;
+
             default:
                 IStorage::alterPartition(metadata_snapshot, commands, current_query_context);
         }
     }
     return {};
+}
+
+void StorageCnchMergeTree::reclusterPartition(const PartitionCommand & command, ContextPtr query_context)
+{
+    // create mutation command with partition or predicate attribute
+    MutationCommand mutation_command;
+    mutation_command.type = MutationCommand::Type::RECLUSTER;
+    mutation_command.ast = command.ast->clone();
+    mutation_command.predicate = command.type == PartitionCommand::RECLUSTER_PARTITION_WHERE ? command.partition : nullptr;
+    mutation_command.partition = command.type == PartitionCommand::RECLUSTER_PARTITION ? command.partition : nullptr;
+
+    if (mutation_command.predicate)
+    {
+        // if there are columns in the predicate, they must be a subset of partition key columns
+        NameSet columns;
+        auto idents = IdentifiersCollector::collect(mutation_command.predicate);
+        for (const auto * ident : idents)
+            columns.insert(ident->shortName());
+        
+        auto partition_keys = getInMemoryMetadataPtr()->getColumnsRequiredForPartitionKey();
+        for (const auto & col : columns)
+            if (std::find(partition_keys.begin(), partition_keys.end(), col) == partition_keys.end())
+                throw Exception("Only partition key columns are allowed for reclustering partitions", ErrorCodes::BAD_ARGUMENTS);
+    }
+
+    // create mutation entry
+    CnchMergeTreeMutationEntry mutation_entry;
+    MutationCommands mutation_commands;
+    mutation_commands.emplace_back(mutation_command);
+    mutation_entry.commands = mutation_commands;
+    mutation_entry.txn_id = query_context->getCurrentTransaction()->getPrimaryTransactionID().toUInt64();
+    mutation_entry.commit_time = commit_time;
+    mutation_entry.columns_commit_time = commit_time;
+    query_context->getCnchCatalog()->createMutation(getStorageID(), mutation_entry.txn_id.toString(), mutation_entry.toString());
 }
 
 void StorageCnchMergeTree::alter(const AlterCommands & commands, ContextPtr local_context, TableLockHolder & /*table_lock_holder*/)

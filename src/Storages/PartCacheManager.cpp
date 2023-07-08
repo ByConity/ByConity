@@ -189,6 +189,7 @@ void PartCacheManager::mayUpdateTableMeta(const IStorage & storage)
         getContext()->getCnchCatalog()->getPartitionsFromMetastore(*cnch_table, meta_ptr->partitions);
         getContext()->getCnchCatalog()->getTableClusterStatus(storage.getStorageUUID(), meta_ptr->is_clustered);
         getContext()->getCnchCatalog()->getTablePreallocateVW(storage.getStorageUUID(), meta_ptr->preallocate_vw);
+        meta_ptr->table_definition_hash = storage.getTableHashForClusterBy();
     };
 
     UUID uuid = storage.getStorageUUID();
@@ -215,6 +216,11 @@ void PartCacheManager::mayUpdateTableMeta(const IStorage & storage)
                 meta_lock_container.emplace(uuid, meta_ptr->meta_mutex);
             }
             active_tables.emplace(uuid, meta_ptr);
+        }
+        else
+        {
+            // update table_definition_hash for active tables
+            it->second->table_definition_hash = storage.getTableHashForClusterBy();
         }
     }
 
@@ -343,6 +349,9 @@ void PartCacheManager::setTableClusterStatus(const UUID & uuid, const bool clust
     {
         auto lock = table_entry->writeLock();
         table_entry->is_clustered = clustered;
+        auto table = getContext()->getCnchCatalog()->getTableByUUID(*getContext(), UUIDHelpers::UUIDToString(uuid), TxnTimestamp::maxTS());
+        if (table)
+            table_entry->table_definition_hash = table->getTableHashForClusterBy();
     }
 }
 
@@ -655,7 +664,7 @@ void PartCacheManager::reloadPartitionMetrics(const UUID & uuid, const TableMeta
     {
         auto cnch_catalog = getContext()->getCnchCatalog();
         auto partitions = cnch_catalog->getTablePartitionMetricsFromMetastore(UUIDHelpers::UUIDToString(uuid));
-
+        auto is_fully_clustered = true;
         {
             size_t total_parts_number {0};
             auto & meta_partitions = table_meta->partitions;
@@ -669,12 +678,20 @@ void PartCacheManager::reloadPartitionMetrics(const UUID & uuid, const TableMeta
                     partition_info_ptr->metrics_ptr = found->second;
 
                 total_parts_number += partition_info_ptr->metrics_ptr->total_parts_number;
+                if (!partition_info_ptr->metrics_ptr->is_deleted)
+                {
+                    auto is_partition_clustered = (partition_info_ptr->metrics_ptr->is_single_table_definition_hash && partition_info_ptr->metrics_ptr->table_definition_hash == table_meta->table_definition_hash) && !partition_info_ptr->metrics_ptr->has_bucket_number_neg_one;
+                    if(!is_partition_clustered)
+                        is_fully_clustered = false;
+                }
             }
             table_meta->metrics_last_update_time = getContext()->tryGetTimestamp(__PRETTY_FUNCTION__);
             table_meta->partition_metrics_loaded = true;
             /// reset load_parts_by_partition if parts number of current table is less than 5 million;
             if (table_meta->load_parts_by_partition && total_parts_number<5000000)
                 table_meta->load_parts_by_partition = false;
+            if (is_fully_clustered && table_meta->is_clustered == false)
+                cnch_catalog->setTableClusterStatus(uuid, is_fully_clustered);
         }
     }
     catch (...)

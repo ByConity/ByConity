@@ -1635,6 +1635,21 @@ static const char *get_decimal_pt(const char *buf)
     return pt;
 }
 
+bool ParserBool::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+{
+    if (ParserKeyword("true").parse(pos, node, expected))
+    {
+        node = std::make_shared<ASTLiteral>(true);
+        return true;
+    }
+    else if (ParserKeyword("false").parse(pos, node, expected))
+    {
+        node = std::make_shared<ASTLiteral>(false);
+        return true;
+    }
+    else
+        return false;
+}
 bool ParserNumber::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     const char * data_begin = pos->begin;
@@ -1905,12 +1920,16 @@ bool ParserLiteral::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserNull null_p;
     ParserNumber num_p(dt);
+    ParserBool bool_p;
     ParserStringLiteral str_p;
 
     if (null_p.parse(pos, node, expected))
         return true;
 
     if (num_p.parse(pos, node, expected))
+        return true;
+
+    if (bool_p.parse(pos, node, expected))
         return true;
 
     if (str_p.parse(pos, node, expected))

@@ -90,6 +90,9 @@ public:
 
     JoinType getType() const override { return JoinType::GRACE_HASH; }
 
+    void serialize(WriteBuffer & buf) const override;
+    static JoinPtr deserialize(ReadBuffer & buf, ContextPtr context);
+
 private:
     void initBuckets();
     /// Create empty join for in-memory processing.

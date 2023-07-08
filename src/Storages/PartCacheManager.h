@@ -66,6 +66,7 @@ struct TableMetaEntry
     /// track the metrics change. Because metrics update time is not the same with data update time, so we track them separately.
     UInt64 metrics_last_update_time {0};
     bool is_clustered {true};
+    std::atomic_uint64_t table_definition_hash{0};
     String preallocate_vw;
     mutable RWLock meta_mutex;
     std::atomic_bool partition_metrics_loaded= false;

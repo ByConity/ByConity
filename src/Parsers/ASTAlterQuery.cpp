@@ -276,6 +276,20 @@ void ASTAlterCommand::formatImpl(
                       << (settings.hilite ? hilite_none : "");
         predicate->formatImpl(settings, state, frame);
     }
+    else if (type == ASTAlterCommand::RECLUSTER_PARTITION_WHERE)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "RECLUSTER"
+                      << (settings.hilite ? hilite_none : "");
+        if (partition || predicate)
+        {
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str
+                        << (predicate ? " PARTITION WHERE " : " PARTITION ") << (settings.hilite ? hilite_none : "");
+            if (partition)
+                partition->formatImpl(settings, state, frame);
+            else if (predicate)
+                predicate->formatImpl(settings, state, frame);
+        }
+    }
     else if (type == ASTAlterCommand::DROP_DETACHED_PARTITION)
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "DROP DETACHED" << (part ? " PART " : " PARTITION ")

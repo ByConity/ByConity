@@ -180,7 +180,13 @@ public:
 
     const String & getLocalStorePath() const;
 
+    void reclusterPartition(const PartitionCommand & command, ContextPtr query_context);
+
     String genCreateTableQueryForWorker(const String & suffix);
+
+    ServerDataPartsVector
+    getServerPartsByPredicate(const ASTPtr & predicate, const std::function<ServerDataPartsVector()> & get_parts, ContextPtr local_context);
+
 
     void sendPreloadTasks(ContextPtr local_context, ServerDataPartsVector parts, bool sync = true);
 

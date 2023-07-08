@@ -92,7 +92,7 @@ protected:
             if (columns_mask[src_index++])
             {
                 // If clustering has started but progress is still at 100%, set it to 0%
-                if (current_table_info.cluster_status() == 0 && cluster_task_progress.progress == 100)
+                if (current_table_info.cluster_status() == 0 && cluster_task_progress.progress == 100 && cluster_task_progress.start_time_seconds == 0)
                     cluster_task_progress.progress = 0;
                 res_columns[res_index++]->insert(cluster_task_progress.toString());
             }

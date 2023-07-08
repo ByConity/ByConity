@@ -14,6 +14,8 @@
  */
 
 #include <memory>
+#include <Interpreters/ConcurrentHashJoin.h>
+#include <Interpreters/GraceHashJoin.h>
 #include <Interpreters/HashJoin.h>
 #include <Interpreters/IJoin.h>
 #include <Interpreters/JoinSwitcher.h>
@@ -26,7 +28,6 @@
 #include <Processors/Transforms/FilterTransform.h>
 #include <Processors/Transforms/JoiningTransform.h>
 #include <QueryPlan/JoinStep.h>
-#include <Interpreters/ConcurrentHashJoin.h>
 
 namespace DB
 {
@@ -107,6 +108,7 @@ JoinPtr JoinStep::makeJoin(ContextPtr context)
     bool allow_merge_join = table_join->allowMergeJoin();
 
     /// HashJoin with Dictionary optimisation
+    auto l_sample_block = input_streams[1].header;
     auto sample_block = input_streams[1].header;
     String dict_name;
     String key_name;
@@ -123,6 +125,8 @@ JoinPtr JoinStep::makeJoin(ContextPtr context)
     }
     else if (table_join->forceMergeJoin() || (table_join->preferMergeJoin() && allow_merge_join))
         return std::make_shared<MergeJoin>(table_join, sample_block);
+    else if (table_join->forceGraceHashLoopJoin())
+        return std::make_shared<GraceHashJoin>(context, table_join, l_sample_block, sample_block, context->getTempDataOnDisk());
     return std::make_shared<JoinSwitcher>(table_join, sample_block);
 }
 
@@ -346,6 +350,9 @@ QueryPlanStepPtr JoinStep::deserialize(ReadBuffer & buf, ContextPtr context)
             case JoinType::PARALLEL_HASH:
                 join = ConcurrentHashJoin::deserialize(buf, context);
                 break;
+            case JoinType::GRACE_HASH:
+                join = GraceHashJoin::deserialize(buf, context);
+                break;
         }
 
         size_t max_block_size;
@@ -514,6 +521,9 @@ QueryPlanStepPtr FilledJoinStep::deserialize(ReadBuffer & buf, ContextPtr contex
                 break;
             case JoinType::PARALLEL_HASH:
                 join = ConcurrentHashJoin::deserialize(buf, context);
+                break;
+            case JoinType::GRACE_HASH:
+                join = GraceHashJoin::deserialize(buf, context);
                 break;
         }
     }

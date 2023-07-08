@@ -127,7 +127,8 @@ public:
         const String & new_create,
         const TxnTimestamp & previous_version,
         const TxnTimestamp & txnID,
-        const TxnTimestamp & ts);
+        const TxnTimestamp & ts,
+        const bool is_recluster);
 
 
     void renameTable(

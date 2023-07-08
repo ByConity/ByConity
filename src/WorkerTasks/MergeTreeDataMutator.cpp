@@ -205,6 +205,16 @@ IMutableMergeTreeDataPartsVector MergeTreeDataMutator::mutatePartsToTemporaryPar
             mutatePartToTemporaryPart(part, metadata_snapshot, *params.mutation_commands, manipulation_entry, params.txn_id, context, reserved_space, holder));
         new_partial_parts.back()->columns_commit_time = params.columns_commit_time;
         new_partial_parts.back()->mutation_commit_time = params.mutation_commit_time;
+        /// Copy bucket info for bucket table
+        if (params.is_bucket_table) 
+        {
+            // NOTE: Assuming that PARTITION BY and ORDER BY are immutable
+            if (part->table_definition_hash != table->getTableHashForClusterBy())
+                new_partial_parts.back()->bucket_number = -1;
+            else
+                new_partial_parts.back()->bucket_number = part->bucket_number;
+        }
+
     }
 
     return new_partial_parts;

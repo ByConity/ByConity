@@ -204,8 +204,18 @@ struct ConvertImpl
                 vec_null_map_to = &col_null_map_to->getData();
             }
 
+            bool result_is_bool = isBool(result_type);
             for (size_t i = 0; i < input_rows_count; ++i)
             {
+                if constexpr (std::is_same_v<ToDataType, DataTypeUInt8>)
+                {
+                    if (result_is_bool)
+                    {
+                        vec_to[i] = vec_from[i] != FromFieldType(0);
+                        continue;
+                    }
+                }
+
                 if constexpr (std::is_same_v<FromDataType, DataTypeUUID> != std::is_same_v<ToDataType, DataTypeUUID>)
                 {
                     throw Exception("Conversion between numeric types and UUID is not supported", ErrorCodes::NOT_IMPLEMENTED);
@@ -1424,40 +1434,42 @@ template <typename ToDataType, typename Name>
 struct ConvertImpl<std::enable_if_t<!std::is_same_v<ToDataType, DataTypeFixedString>, DataTypeFixedString>, ToDataType, Name, ConvertReturnNullOnErrorTag>
     : ConvertThroughParsing<DataTypeFixedString, ToDataType, Name, ConvertFromStringExceptionMode::Null, ConvertFromStringParsingMode::Normal> {};
 
-/// Generic conversion of any type from String. Used for complex types: Array and Tuple.
+/// Generic conversion of any type from String. Used for complex types: Array and Tuple or types with custom serialization.
+template <typename StringColumnType>
 struct ConvertImplGenericFromString
 {
-    static ColumnPtr execute(ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type)
+    static ColumnPtr execute(ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, const ColumnNullable * column_nullable, size_t input_rows_count)
     {
+        static_assert(std::is_same_v<StringColumnType, ColumnString> || std::is_same_v<StringColumnType, ColumnFixedString>,
+                "Can be used only to parse from ColumnString or ColumnFixedString");
+
         const IColumn & col_from = *arguments[0].column;
-        size_t size = col_from.size();
-
         const IDataType & data_type_to = *result_type;
-
-        if (const ColumnString * col_from_string = checkAndGetColumn<ColumnString>(&col_from))
+        if (const StringColumnType * col_from_string = checkAndGetColumn<StringColumnType>(&col_from))
         {
             auto res = data_type_to.createColumn();
 
             IColumn & column_to = *res;
-            column_to.reserve(size);
-
-            const ColumnString::Chars & chars = col_from_string->getChars();
-            const IColumn::Offsets & offsets = col_from_string->getOffsets();
-
-            size_t current_offset = 0;
+            column_to.reserve(input_rows_count);
 
             FormatSettings format_settings;
             auto serialization = data_type_to.getDefaultSerialization();
-            for (size_t i = 0; i < size; ++i)
+            const auto * null_map = column_nullable ? &column_nullable->getNullMapData() : nullptr;
+            for (size_t i = 0; i < input_rows_count; ++i)
             {
-                ReadBufferFromMemory read_buffer(&chars[current_offset], offsets[i] - current_offset - 1);
+                if (null_map && (*null_map)[i])
+                {
+                    column_to.insertDefault();
+                    continue;
+                }
+
+                const auto & val = col_from_string->getDataAt(i);
+                ReadBufferFromMemory read_buffer(val.data, val.size);
 
                 serialization->deserializeWholeText(column_to, read_buffer, format_settings);
 
                 if (!read_buffer.eof())
                     throwExceptionForIncompletelyParsedValue(read_buffer, result_type);
-
-                current_offset = offsets[i];
             }
 
             return res;
@@ -2758,6 +2770,34 @@ private:
         };
     }
 
+    template <typename ToDataType>
+    WrapperType createBoolWrapper(const DataTypePtr & from_type, const ToDataType * const to_type, bool requested_result_is_nullable) const
+    {
+        if (checkAndGetDataType<DataTypeString>(from_type.get()))
+        {
+            return &ConvertImplGenericFromString<ColumnString>::execute;
+        }
+
+        return createWrapper<ToDataType>(from_type, to_type, requested_result_is_nullable);
+    }
+
+    WrapperType createUInt8ToBoolWrapper(const DataTypePtr from_type, const DataTypePtr to_type) const
+    {
+        return [from_type, to_type] (ColumnsWithTypeAndName & arguments, const DataTypePtr &, const ColumnNullable *, size_t /*input_rows_count*/) -> ColumnPtr
+        {
+            /// Special case when we convert UInt8 column to Bool column.
+            /// both columns have type UInt8, but we shouldn't use identity wrapper,
+            /// because Bool column can contain only 0 and 1.
+            auto res_column = to_type->createColumn();
+            const auto & data_from = checkAndGetColumn<ColumnUInt8>(arguments[0].column.get())->getData();
+            auto & data_to = assert_cast<ColumnUInt8 *>(res_column.get())->getData();
+            data_to.resize(data_from.size());
+            for (size_t i = 0; i != data_from.size(); ++i)
+                data_to[i] = static_cast<bool>(data_from[i]);
+            return res_column;
+        };
+    }
+
     static WrapperType createStringWrapper(const DataTypePtr & from_type)
     {
         FunctionPtr function = FunctionToString::create();
@@ -2878,10 +2918,7 @@ private:
         /// Conversion from String through parsing.
         if (checkAndGetDataType<DataTypeString>(from_type_untyped.get()))
         {
-            return [] (ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, const ColumnNullable *, size_t /*input_rows_count*/)
-            {
-                return ConvertImplGenericFromString::execute(arguments, result_type);
-            };
+            return &ConvertImplGenericFromString<ColumnString>::execute;
         }
         else
         {
@@ -2898,10 +2935,7 @@ private:
         /// Conversion from String through parsing.
         if (checkAndGetDataType<DataTypeString>(from_type_untyped.get()))
         {
-            return [] (ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, const ColumnNullable *, size_t /*input_rows_count*/)
-            {
-                return ConvertImplGenericFromString::execute(arguments, result_type);
-            };
+            return &ConvertImplGenericFromString<ColumnString>::execute;
         }
 
         const auto * from_type = checkAndGetDataType<DataTypeArray>(from_type_untyped.get());
@@ -2969,10 +3003,7 @@ private:
         /// Conversion from String through parsing.
         if (checkAndGetDataType<DataTypeString>(from_type_untyped.get()))
         {
-            return [] (ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, const ColumnNullable *, size_t /*input_rows_count*/)
-            {
-                return ConvertImplGenericFromString::execute(arguments, result_type);
-            };
+            return &ConvertImplGenericFromString<ColumnString>::execute;
         }
 
         const auto * from_type = checkAndGetDataType<DataTypeTuple>(from_type_untyped.get());
@@ -3442,6 +3473,8 @@ private:
     /// 'requested_result_is_nullable' is true if CAST to Nullable type is requested.
     WrapperType prepareImpl(const DataTypePtr & from_type, const DataTypePtr & to_type, bool requested_result_is_nullable) const
     {
+        if (isUInt8(from_type) && isBool(to_type))
+            return createUInt8ToBoolWrapper(from_type, to_type);
         if (from_type->equals(*to_type))
             return createIdentityWrapper(from_type);
         else if (WhichDataType(from_type).isNothing())
@@ -3455,7 +3488,6 @@ private:
             using ToDataType = typename Types::LeftType;
 
             if constexpr (
-                std::is_same_v<ToDataType, DataTypeUInt8> ||
                 std::is_same_v<ToDataType, DataTypeUInt16> ||
                 std::is_same_v<ToDataType, DataTypeUInt32> ||
                 std::is_same_v<ToDataType, DataTypeUInt64> ||
@@ -3475,6 +3507,14 @@ private:
                 std::is_same_v<ToDataType, DataTypeUUID>)
             {
                 ret = createWrapper(from_type, checkAndGetDataType<ToDataType>(to_type.get()), requested_result_is_nullable);
+                return true;
+            }
+            if constexpr (std::is_same_v<ToDataType, DataTypeUInt8>)
+            {
+                if (isBool(to_type))
+                    ret = createBoolWrapper<ToDataType>(from_type, checkAndGetDataType<ToDataType>(to_type.get()), requested_result_is_nullable);
+                else
+                    ret = createWrapper(from_type, checkAndGetDataType<ToDataType>(to_type.get()), requested_result_is_nullable);
                 return true;
             }
             if constexpr (
