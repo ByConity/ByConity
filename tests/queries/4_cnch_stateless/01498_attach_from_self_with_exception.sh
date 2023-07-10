@@ -88,7 +88,7 @@ EOF
 `
     ${CLICKHOUSE_CLIENT} --multiquery --query "${prepare_query}"
 
-    detached_part_name=`${CLICKHOUSE_CLIENT} --query "select name from system.cnch_parts where database='${CLICKHOUSE_TENANT_DATABASE}' and table = '${table_name}' and partition like '%3%' order by name asc limit 1"`
+    detached_part_name=`${CLICKHOUSE_CLIENT} --query "select name from system.cnch_parts where database='${CLICKHOUSE_DATABASE}' and table = '${table_name}' and partition like '%3%' order by name asc limit 1"`
 
     attach_query=`cat <<EOF
         alter table ${table_name} detach partition 3;

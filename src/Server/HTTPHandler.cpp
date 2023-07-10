@@ -716,12 +716,6 @@ void HTTPHandler::processQuery(
             if (default_format.empty())
                 default_format = value;
         }
-        else if (key == "tenant_id")
-        {
-            //Even this is a GET request or with "readonly=1" setting, we force to apply the tenant_id setting change.
-            context->setSetting("tenant_id", value);
-            context->setTenantId(value);
-        }
         else if (param_could_be_skipped(key))
         {
         }
@@ -740,8 +734,7 @@ void HTTPHandler::processQuery(
         //CNCH multi-tenant default database pattern from gateway client: {tenant_id}`{default_database}
         if (auto pos = default_database.find('`'); pos != String::npos)
         {
-            //Even this is a GET request or with "readonly=1" setting, we force to apply the tenant_id setting change.
-            connection_context->setSetting("tenant_id", String(default_database.c_str(), pos));
+            settings_changes.push_back({"tenant_id", String(default_database.c_str(), pos)});
             connection_context->setTenantId(String(default_database.c_str(), pos));
             if (pos + 1 != default_database.size())  ///multi-tenant default database storage pattern: {tenant_id}.{default_database}
                 default_database[pos] = '.';

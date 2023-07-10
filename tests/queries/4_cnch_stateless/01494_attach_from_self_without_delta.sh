@@ -56,7 +56,7 @@ select * from afs_detached_part order by (pt, key);
 
 EOF
 
-DETACHED_PART_NAME=`${CLICKHOUSE_CLIENT} --query "select name from system.cnch_parts where database = '${CLICKHOUSE_TENANT_DATABASE}' and table = 'afs_detached_part' and partition like '%1%' order by name asc limit 1"`
+DETACHED_PART_NAME=`${CLICKHOUSE_CLIENT} --query "select name from system.cnch_parts where database = '${CLICKHOUSE_DATABASE}' and table = 'afs_detached_part' and partition like '%1%' order by name asc limit 1"`
 
 ${CLICKHOUSE_CLIENT} --multiquery <<'EOF'
 alter table afs_detached_part detach partition 1;

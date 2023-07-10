@@ -48,7 +48,7 @@ EOF
 
     set +e
 
-    table_detached_path ${CLICKHOUSE_TENANT_DATABASE} ${src_table_name}
+    table_detached_path ${CLICKHOUSE_DATABASE} ${src_table_name}
     result=$(${CLICKHOUSE_CLIENT} --query "alter table ${tgt_table_name} attach partition 5 from '${_TABLE_DETACHED_PATH}' settings attach_failure_injection_knob=${all_exception_points[${exception_name}]}, async_post_commit=0" 2>&1)
 
     echo $([ $? -eq 0 ] && echo "attach success" || echo "attach fail")
@@ -117,7 +117,7 @@ EOF
 
     set +e
 
-    table_detached_path ${CLICKHOUSE_TENANT_DATABASE} ${src_table_name}
+    table_detached_path ${CLICKHOUSE_DATABASE} ${src_table_name}
     result=$(${CLICKHOUSE_CLIENT} --query "alter table ${tgt_table_name} attach parts from '${_TABLE_DETACHED_PATH}' settings attach_failure_injection_knob=${all_exception_points[${exception_name}]}, async_post_commit=0" 2>&1)
 
     echo $([ $? -eq 0 ] && echo "attach success" || echo "attach fail")

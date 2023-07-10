@@ -93,29 +93,29 @@ alter table afo_detached_partition_multi_with_delta_src drop column value;
 alter table afs_partition_multi_with_delta modify column key String;
 alter table afp_partition_multi_with_delta_src drop column value;
 
-system start merges \`${CLICKHOUSE_TENANT_DATABASE}\`.afo_partition_with_delta_src;
-system start merges \`${CLICKHOUSE_TENANT_DATABASE}\`.afo_detached_partition_with_delta_src;
-system start merges \`${CLICKHOUSE_TENANT_DATABASE}\`.afs_partition_with_delta;
-system start merges \`${CLICKHOUSE_TENANT_DATABASE}\`.afs_part_with_delta;
-system start merges \`${CLICKHOUSE_TENANT_DATABASE}\`.afp_partition_with_delta_src;
-system start merges \`${CLICKHOUSE_TENANT_DATABASE}\`.afp_parts_with_delta_src;
-system start merges \`${CLICKHOUSE_TENANT_DATABASE}\`.afo_partition_multi_with_delta_src;
-system start merges \`${CLICKHOUSE_TENANT_DATABASE}\`.afo_detached_partition_multi_with_delta_src;
-system start merges \`${CLICKHOUSE_TENANT_DATABASE}\`.afs_partition_multi_with_delta;
-system start merges \`${CLICKHOUSE_TENANT_DATABASE}\`.afp_partition_multi_with_delta_src;
+system start merges ${CLICKHOUSE_DATABASE}.afo_partition_with_delta_src;
+system start merges ${CLICKHOUSE_DATABASE}.afo_detached_partition_with_delta_src;
+system start merges ${CLICKHOUSE_DATABASE}.afs_partition_with_delta;
+system start merges ${CLICKHOUSE_DATABASE}.afs_part_with_delta;
+system start merges ${CLICKHOUSE_DATABASE}.afp_partition_with_delta_src;
+system start merges ${CLICKHOUSE_DATABASE}.afp_parts_with_delta_src;
+system start merges ${CLICKHOUSE_DATABASE}.afo_partition_multi_with_delta_src;
+system start merges ${CLICKHOUSE_DATABASE}.afo_detached_partition_multi_with_delta_src;
+system start merges ${CLICKHOUSE_DATABASE}.afs_partition_multi_with_delta;
+system start merges ${CLICKHOUSE_DATABASE}.afp_partition_multi_with_delta_src;
 
-system stop merges \`${CLICKHOUSE_TENANT_DATABASE}\`.afo_partition_with_delta_tgt;
-system stop merges \`${CLICKHOUSE_TENANT_DATABASE}\`.afo_detached_partition_with_delta_tgt;
-system stop merges \`${CLICKHOUSE_TENANT_DATABASE}\`.afp_partition_with_delta_tgt;
-system stop merges \`${CLICKHOUSE_TENANT_DATABASE}\`.afp_parts_with_delta_tgt;
-system stop merges \`${CLICKHOUSE_TENANT_DATABASE}\`.afo_partition_multi_with_delta_tgt;
-system stop merges \`${CLICKHOUSE_TENANT_DATABASE}\`.afo_detached_partition_multi_with_delta_tgt;
-system stop merges \`${CLICKHOUSE_TENANT_DATABASE}\`.afp_partition_multi_with_delta_tgt;
+system stop merges ${CLICKHOUSE_DATABASE}.afo_partition_with_delta_tgt;
+system stop merges ${CLICKHOUSE_DATABASE}.afo_detached_partition_with_delta_tgt;
+system stop merges ${CLICKHOUSE_DATABASE}.afp_partition_with_delta_tgt;
+system stop merges ${CLICKHOUSE_DATABASE}.afp_parts_with_delta_tgt;
+system stop merges ${CLICKHOUSE_DATABASE}.afo_partition_multi_with_delta_tgt;
+system stop merges ${CLICKHOUSE_DATABASE}.afo_detached_partition_multi_with_delta_tgt;
+system stop merges ${CLICKHOUSE_DATABASE}.afp_partition_multi_with_delta_tgt;
 "
 echo "${QUERY}" | ${CLICKHOUSE_CLIENT} --multiquery 
 
 echo "TEST attach from other table's active parition with delta"
-wait_for_mutate ${CLICKHOUSE_TENANT_DATABASE} afo_partition_with_delta_src 4
+wait_for_mutate ${CLICKHOUSE_DATABASE} afo_partition_with_delta_src 4
 
 QUERY="
 select '---(afo_partition)src before attach---';
@@ -130,12 +130,12 @@ select * from afo_partition_with_delta_src order by (pt, key);
 select '---(afo_partition)tgt after attach---';
 select * from afo_partition_with_delta_tgt order by (pt, key);
 
-select '(afo_partition)Part count of target table', count() from system.cnch_parts where database = '${CLICKHOUSE_TENANT_DATABASE}' and table = 'afo_partition_with_delta_tgt';
+select '(afo_partition)Part count of target table', count() from system.cnch_parts where database = '${CLICKHOUSE_DATABASE}' and table = 'afo_partition_with_delta_tgt';
 "
 echo "${QUERY}" | ${CLICKHOUSE_CLIENT} --multiquery
 
 echo "TEST attach from other table's detached partition with delta"
-wait_for_mutate ${CLICKHOUSE_TENANT_DATABASE} afo_detached_partition_with_delta_src 4
+wait_for_mutate ${CLICKHOUSE_DATABASE} afo_detached_partition_with_delta_src 4
 
 QUERY="
 select '(afo_detached_partition)---src before detach---';
@@ -157,12 +157,12 @@ select * from afo_detached_partition_with_delta_src order by (pt, key);
 select '(afo_detached_partition)---tgt after attach---';
 select * from afo_detached_partition_with_delta_tgt order by (pt, key);
 
-select '(afo_detached_partition)Part count of target table', count() from system.cnch_parts where database = '${CLICKHOUSE_TENANT_DATABASE}' and table = 'afo_detached_partition_with_delta_tgt';
+select '(afo_detached_partition)Part count of target table', count() from system.cnch_parts where database = '${CLICKHOUSE_DATABASE}' and table = 'afo_detached_partition_with_delta_tgt';
 "
 echo "${QUERY}" | ${CLICKHOUSE_CLIENT} --multiquery
 
 echo "TEST attach from current table's detach partition with delta"
-wait_for_mutate ${CLICKHOUSE_TENANT_DATABASE} afs_partition_with_delta 4
+wait_for_mutate ${CLICKHOUSE_DATABASE} afs_partition_with_delta 4
 
 QUERY="
 select '(afs_partition)---from partition before detach---';
@@ -186,9 +186,9 @@ select * from afs_partition_with_delta order by (pt, key);
 echo "${QUERY}" | ${CLICKHOUSE_CLIENT} --multiquery
 
 echo "TEST attach from current table's detach part with delta"
-wait_for_mutate ${CLICKHOUSE_TENANT_DATABASE} afs_part_with_delta 4
+wait_for_mutate ${CLICKHOUSE_DATABASE} afs_part_with_delta 4
 
-PART_NAME=`${CLICKHOUSE_CLIENT} --query "select name from system.cnch_parts where database = '${CLICKHOUSE_TENANT_DATABASE}' and table = 'afs_part_with_delta' and visible order by name asc limit 1"`
+PART_NAME=`${CLICKHOUSE_CLIENT} --query "select name from system.cnch_parts where database = '${CLICKHOUSE_DATABASE}' and table = 'afs_part_with_delta' and visible order by name asc limit 1"`
 
 QUERY="
 select '(afs_detached_part)---from part before detach---';
@@ -217,7 +217,7 @@ select * from afs_part_with_delta order by (pt, key);
 echo "${QUERY}" | ${CLICKHOUSE_CLIENT} --multiquery
 
 echo "TEST attach partition from path with delta"
-wait_for_mutate ${CLICKHOUSE_TENANT_DATABASE} afp_partition_with_delta_src 4
+wait_for_mutate ${CLICKHOUSE_DATABASE} afp_partition_with_delta_src 4
 
 ${CLICKHOUSE_CLIENT} --multiquery <<'EOF'
 select '(afp_partition_ss)---src before detach---';
@@ -233,7 +233,7 @@ select '(afp_partition_ss)---tgt after detach---';
 select * from afp_partition_with_delta_tgt order by (pt, key);
 EOF
 
-table_detached_path ${CLICKHOUSE_TENANT_DATABASE} afp_partition_with_delta_src
+table_detached_path ${CLICKHOUSE_DATABASE} afp_partition_with_delta_src
 
 QUERY="
 alter table afp_partition_with_delta_tgt attach partition 1 from '${_TABLE_DETACHED_PATH}';
@@ -243,12 +243,12 @@ select * from afp_partition_with_delta_src order by (pt, key);
 select '(afp_partition_ss)---tgt after attach---';
 select * from afp_partition_with_delta_tgt order by (pt, key);
 
-select '(afp_partition_ss)Part count of target table', count() from system.cnch_parts where database = '${CLICKHOUSE_TENANT_DATABASE}' and table = 'afp_partition_with_delta_tgt';
+select '(afp_partition_ss)Part count of target table', count() from system.cnch_parts where database = '${CLICKHOUSE_DATABASE}' and table = 'afp_partition_with_delta_tgt';
 "
 echo "${QUERY}" | ${CLICKHOUSE_CLIENT} --multiquery
 
 echo "TEST attach parts from path with delta"
-wait_for_mutate ${CLICKHOUSE_TENANT_DATABASE} afp_parts_with_delta_src 4
+wait_for_mutate ${CLICKHOUSE_DATABASE} afp_parts_with_delta_src 4
 
 ${CLICKHOUSE_CLIENT} --multiquery <<'EOF'
 select '(afp_parts_ss)---src before detach---';
@@ -265,7 +265,7 @@ select '(afp_parts_ss)---tgt after detach---';
 select * from afp_parts_with_delta_tgt order by (pt, key);
 EOF
 
-table_detached_path ${CLICKHOUSE_TENANT_DATABASE} afp_parts_with_delta_src
+table_detached_path ${CLICKHOUSE_DATABASE} afp_parts_with_delta_src
 
 QUERY="
 alter table afp_parts_with_delta_tgt attach parts from '${_TABLE_DETACHED_PATH}';
@@ -275,12 +275,12 @@ select * from afp_parts_with_delta_src order by (pt, key);
 select '(afp_parts_ss)---tgt after attach---';
 select * from afp_parts_with_delta_tgt order by (pt, key);
 
-select '(afp_parts_ss)Part count of target table', count() from system.cnch_parts where database = '${CLICKHOUSE_TENANT_DATABASE}' and table = 'afp_parts_with_delta_tgt';
+select '(afp_parts_ss)Part count of target table', count() from system.cnch_parts where database = '${CLICKHOUSE_DATABASE}' and table = 'afp_parts_with_delta_tgt';
 "
 echo "${QUERY}" | ${CLICKHOUSE_CLIENT} --multiquery
 
 echo "TEST attach one partition from other table's multi"
-wait_for_mutate ${CLICKHOUSE_TENANT_DATABASE} afo_partition_multi_with_delta_src 4
+wait_for_mutate ${CLICKHOUSE_DATABASE} afo_partition_multi_with_delta_src 4
 
 QUERY="
 select '---(afo_partition_multi)src before attach---';
@@ -295,12 +295,12 @@ select * from afo_partition_multi_with_delta_src order by (pt, key);
 select '---(afo_partition_multi)tgt after attach---';
 select * from afo_partition_multi_with_delta_tgt order by (pt, key);
 
-select 'Part count of target table', count() from system.cnch_parts where database = '${CLICKHOUSE_TENANT_DATABASE}' and table = 'afo_partition_multi_with_delta_tgt';
+select 'Part count of target table', count() from system.cnch_parts where database = '${CLICKHOUSE_DATABASE}' and table = 'afo_partition_multi_with_delta_tgt';
 "
 echo "${QUERY}" | ${CLICKHOUSE_CLIENT} --multiquery
 
 echo "TEST attach one partition form other table's detached multi"
-wait_for_mutate ${CLICKHOUSE_TENANT_DATABASE} afo_detached_partition_multi_with_delta_src 4
+wait_for_mutate ${CLICKHOUSE_DATABASE} afo_detached_partition_multi_with_delta_src 4
 
 QUERY="
 select '(afo_detached_partition_multi)---src before detach---';
@@ -323,7 +323,7 @@ select * from afo_detached_partition_multi_with_delta_src order by (pt, key);
 select '(afo_detached_partition_multi)---tgt after attach---';
 select * from afo_detached_partition_multi_with_delta_tgt order by (pt, key);
 
-select '(afo_detached_partition_multi)Part count of target table', count() from system.cnch_parts where database = '${CLICKHOUSE_TENANT_DATABASE}' and table = 'afo_detached_partition_multi_with_delta_tgt';
+select '(afo_detached_partition_multi)Part count of target table', count() from system.cnch_parts where database = '${CLICKHOUSE_DATABASE}' and table = 'afo_detached_partition_multi_with_delta_tgt';
 
 alter table afo_detached_partition_multi_with_delta_src attach partition 1;
 
@@ -335,7 +335,7 @@ select * from afo_detached_partition_multi_with_delta_tgt order by (pt, key);
 echo "${QUERY}" | ${CLICKHOUSE_CLIENT} --multiquery
 
 echo "TEST attach from self's detached partition multi"
-wait_for_mutate ${CLICKHOUSE_TENANT_DATABASE} afs_partition_multi_with_delta 4
+wait_for_mutate ${CLICKHOUSE_DATABASE} afs_partition_multi_with_delta 4
 
 ${CLICKHOUSE_CLIENT} --multiquery <<'EOF'
 select '(afs_partition_multi)---self before detach---';
@@ -365,7 +365,7 @@ EOF
 
 
 echo "TEST attach partition from path with multi"
-wait_for_mutate ${CLICKHOUSE_TENANT_DATABASE} afp_partition_multi_with_delta_src 4
+wait_for_mutate ${CLICKHOUSE_DATABASE} afp_partition_multi_with_delta_src 4
 
 ${CLICKHOUSE_CLIENT} --multiquery <<'EOF'
 select '(afp_partition_multi)---src before detach---';
@@ -382,7 +382,7 @@ select '(afp_partition_multi)---tgt after detach---';
 select * from afp_partition_multi_with_delta_tgt order by (pt, key);
 EOF
 
-table_detached_path ${CLICKHOUSE_TENANT_DATABASE} afp_partition_multi_with_delta_src
+table_detached_path ${CLICKHOUSE_DATABASE} afp_partition_multi_with_delta_src
 QUERY="
 alter table afp_partition_multi_with_delta_tgt attach partition 2 from '${_TABLE_DETACHED_PATH}';
 
@@ -391,7 +391,7 @@ select * from afp_partition_multi_with_delta_src order by (pt, key);
 select '(afp_partition_multi)---tgt after detach---';
 select * from afp_partition_multi_with_delta_tgt order by (pt, key);
 
-select '(afp_partition_multi)Part count of target table', count() from system.cnch_parts where database = '${CLICKHOUSE_TENANT_DATABASE}' and table = 'afp_partition_multi_with_delta_tgt';
+select '(afp_partition_multi)Part count of target table', count() from system.cnch_parts where database = '${CLICKHOUSE_DATABASE}' and table = 'afp_partition_multi_with_delta_tgt';
 
 alter table afp_partition_multi_with_delta_tgt attach partition 1 from '${_TABLE_DETACHED_PATH}';
 
@@ -400,6 +400,6 @@ select * from afp_partition_multi_with_delta_src order by (pt, key);
 select '(afp_partition_multi)---tgt final detach---';
 select * from afp_partition_multi_with_delta_tgt order by (pt, key);
 
-select '(afp_partition_multi)Part count of target table', count() from system.cnch_parts where database = '${CLICKHOUSE_TENANT_DATABASE}' and table = 'afp_partition_multi_with_delta_tgt';
+select '(afp_partition_multi)Part count of target table', count() from system.cnch_parts where database = '${CLICKHOUSE_DATABASE}' and table = 'afp_partition_multi_with_delta_tgt';
 "
 echo "${QUERY}" | ${CLICKHOUSE_CLIENT} --multiquery

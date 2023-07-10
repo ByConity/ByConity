@@ -39,7 +39,7 @@ select '(afp_partition_ss)--tgt after detach---';
 select * from afp_partition_tgt_no_delta order by (pt, key);
 EOF
 
-table_detached_path ${CLICKHOUSE_TENANT_DATABASE} afp_partition_src_no_delta
+table_detached_path ${CLICKHOUSE_DATABASE} afp_partition_src_no_delta
 ${CLICKHOUSE_CLIENT} --query "alter table afp_partition_tgt_no_delta attach partition 1 from '${_TABLE_DETACHED_PATH}'"
 
 ${CLICKHOUSE_CLIENT} --multiquery <<'EOF'
@@ -94,7 +94,7 @@ select '(afp_parts_ss)---tgt after detach---';
 select * from afp_parts_tgt_no_delta order by (pt, key);
 EOF
 
-table_detached_path ${CLICKHOUSE_TENANT_DATABASE} afp_parts_src_no_delta
+table_detached_path ${CLICKHOUSE_DATABASE} afp_parts_src_no_delta
 ${CLICKHOUSE_CLIENT} --query "alter table afp_parts_tgt_no_delta attach parts from '${_TABLE_DETACHED_PATH}'"
 
 ${CLICKHOUSE_CLIENT} --multiquery <<'EOF'

@@ -1227,36 +1227,12 @@ void Context::setUser(const Credentials & credentials, const Poco::Net::SocketAd
 
 void Context::setUser(const String & name, const String & password, const Poco::Net::SocketAddress & address)
 {
-    //CNCH multi-tenant user name pattern from gateway client: {tenant_id}`{user_name}
-    String user = name;
-    if (auto pos = user.find('`'); pos != String::npos)
-    {
-        this->setSetting("tenant_id", String(user.c_str(), pos)); /// {tenant_id}`*
-        this->setTenantId(String(user.c_str(), pos));
-        auto sub_user = user.substr(pos + 1);
-        if (sub_user != "default")
-            user[pos] = '.';            ///{tenant_id}`{user_name}=>{tenant_id}.{user_name}
-        else                                   
-            user = std::move(sub_user); ///{tenant_id}`default=>default
-    }
-    setUser(BasicCredentials(user, password), address);
+    setUser(BasicCredentials(name, password), address);
 }
 
 void Context::setUserWithoutCheckingPassword(const String & name, const Poco::Net::SocketAddress & address)
 {
-    //CNCH multi-tenant user name pattern from gateway client: {tenant_id}`{user_name}
-    String user = name;
-    if (auto pos = user.find('`'); pos != String::npos)
-    {
-        this->setSetting("tenant_id", String(user.c_str(), pos)); /// {tenant_id}`*
-        this->setTenantId(String(user.c_str(), pos));
-        auto sub_user = user.substr(pos + 1);
-        if (sub_user != "default")
-            user[pos] = '.';            ///{tenant_id}`{user_name}=>{tenant_id}.{user_name}
-        else                                   
-            user = std::move(sub_user); ///{tenant_id}`default=>default
-    }
-    setUser(AlwaysAllowCredentials(user), address);
+    setUser(AlwaysAllowCredentials(name), address);
 }
 
 std::shared_ptr<const User> Context::getUser() const
