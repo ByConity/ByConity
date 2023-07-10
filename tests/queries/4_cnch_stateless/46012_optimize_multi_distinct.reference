@@ -18,7 +18,7 @@ Projection est. ? rows
                   └─ MarkDistinct est. ? rows
                      └─ Repartition Exchange est. ? rows
                         │     Partition by: {a, b}
-                        └─ TableScan test.multi_dist est. ? rows
+                        └─ TableScan ${TENANT_DB_PREFIX}test.multi_dist est. ? rows
                                  Outputs: [a, b, c]
 Projection est. ? rows
 │     Expressions: [c], sum(b):=`expr#sum(b)`, uniqExact(a):=`expr#uniqExact(a)`
@@ -32,5 +32,5 @@ Projection est. ? rows
             └─ MarkDistinct est. ? rows
                └─ Repartition Exchange est. ? rows
                   │     Partition by: {a, c}
-                  └─ TableScan test.multi_dist est. ? rows
+                  └─ TableScan ${TENANT_DB_PREFIX}test.multi_dist est. ? rows
                            Outputs: [a, b, c]
