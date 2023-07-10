@@ -175,14 +175,33 @@ public:
           */
         bool enable_heuristic_to_remove_small_parts_at_right = true;
         double heuristic_to_remove_small_parts_at_right_max_ratio = 0.01;
+
+        /**
+         * For batch select mode.
+         *
+         * Currently, only part-merger tool use thesis options.
+         */
+        bool enable_batch_select = false;
+        size_t min_parts_to_merge_at_once = 3;
+        size_t max_rows_to_merge_at_once = 30000000;
     };
 
-    explicit SimpleMergeSelector(const Settings & settings_) : settings(settings_) {}
+    explicit SimpleMergeSelector(const Settings & settings_) : settings(settings_)
+    {
+    }
 
-    PartsRange select(
-        const PartsRanges & parts_ranges,
-        const size_t max_total_size_to_merge,
-        MergeScheduler * merge_scheduler = nullptr) override;
+    PartsRange
+    select(const PartsRanges & parts_ranges, const size_t max_total_size_to_merge, MergeScheduler * merge_scheduler = nullptr) override;
+
+    /**
+     * Implement multi-merge-select in a very naive way.
+     *
+     * When 'enable_batch_select' is enabled, this function chooses
+     * as many candidates for merge from each partition as possible.
+     * Will fallback to single-select otherwise.
+     */
+    virtual PartsRanges
+    selectMulti(const PartsRanges & partitions, size_t max_total_size_to_merge, MergeScheduler * merge_scheduler) override;
 
 private:
     const Settings settings;

@@ -87,6 +87,9 @@ public:
     /// expecting that config would be reloaded with zookeeper later.
     LoadedConfig loadConfig(bool allow_zk_includes = false);
 
+    /// Directly load config from `config_str`.
+    LoadedConfig loadConfig(const std::string & config_str);
+
     /// If fallback_to_preprocessed is true, then if KeeperException is thrown during config
     /// processing, load the configuration from the preprocessed file.
     LoadedConfig loadConfigWithZooKeeperIncludes(

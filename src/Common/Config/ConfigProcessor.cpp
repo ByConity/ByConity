@@ -1,29 +1,29 @@
 #if !defined(ARCADIA_BUILD)
-    #include <Common/config.h>
+#    include <Common/config.h>
 #endif
 #include "ConfigProcessor.h"
 #include "YAMLParser.h"
 
-#include <sys/utsname.h>
+#include <algorithm>
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
-#include <algorithm>
-#include <functional>
 #include <filesystem>
+#include <functional>
+#include <IO/Operators.h>
+#include <IO/WriteBufferFromString.h>
 #include <boost/algorithm/string.hpp>
-#include <Poco/DOM/Text.h>
+#include <sys/utsname.h>
 #include <Poco/DOM/Attr.h>
 #include <Poco/DOM/Comment.h>
+#include <Poco/DOM/Text.h>
 #include <Poco/Util/XMLConfiguration.h>
-#include <Common/ZooKeeper/ZooKeeperNodeCache.h>
-#include <Common/ZooKeeper/KeeperException.h>
-#include <Common/StringUtils/StringUtils.h>
 #include <Common/Exception.h>
-#include <common/getResource.h>
+#include <Common/StringUtils/StringUtils.h>
+#include <Common/ZooKeeper/KeeperException.h>
+#include <Common/ZooKeeper/ZooKeeperNodeCache.h>
 #include <common/errnoToString.h>
-#include <IO/WriteBufferFromString.h>
-#include <IO/Operators.h>
+#include <common/getResource.h>
 
 #define PREPROCESSED_SUFFIX "-preprocessed"
 
@@ -624,10 +624,18 @@ ConfigProcessor::LoadedConfig ConfigProcessor::loadConfig(bool allow_zk_includes
     return LoadedConfig{configuration, has_zk_includes, /* loaded_from_preprocessed = */ false, config_xml, path};
 }
 
+ConfigProcessor::LoadedConfig ConfigProcessor::loadConfig(const std::string & config_str)
+{
+    std::istringstream is(config_str);
+    Poco::XML::InputSource input(is);
+    XMLDocumentPtr config_xml = dom_parser.parse(&input);
+
+    ConfigurationPtr configuration(new Poco::Util::XMLConfiguration(config_xml));
+    return LoadedConfig{configuration, false, /* loaded_from_preprocessed = */ false, config_xml, ""};
+}
+
 ConfigProcessor::LoadedConfig ConfigProcessor::loadConfigWithZooKeeperIncludes(
-        zkutil::ZooKeeperNodeCache & zk_node_cache,
-        const zkutil::EventPtr & zk_changed_event,
-        bool fallback_to_preprocessed)
+    zkutil::ZooKeeperNodeCache & zk_node_cache, const zkutil::EventPtr & zk_changed_event, bool fallback_to_preprocessed)
 {
     XMLDocumentPtr config_xml;
     bool has_zk_includes;

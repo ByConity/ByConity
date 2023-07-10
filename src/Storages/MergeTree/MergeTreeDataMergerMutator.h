@@ -126,7 +126,8 @@ public:
         bool merge_with_ttl_allowed,
         String * out_disable_reason = nullptr,
         MergeScheduler * merge_scheduler = nullptr,
-        const bool enable_batch_select = false);
+        bool enable_batch_select = false,
+        bool check_intersection = true);
 
     /** Select all the parts in the specified partition for merge, if possible.
       * final - choose to merge even a single part - that is, allow to merge one part "with itself",

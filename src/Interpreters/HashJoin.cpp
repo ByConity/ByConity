@@ -220,7 +220,7 @@ HashJoin::HashJoin(std::shared_ptr<TableJoin> table_join_, const Block & right_s
     JoinCommon::removeLowCardinalityInplace(right_table_keys);
     initRightBlockStructure(data->sample_block);
 
-    ColumnRawPtrs key_columns = JoinCommon::extractKeysForJoin(right_table_keys, key_names_right);
+    ColumnRawPtrs key_columns = JoinCommon::extractKeysForJoin(right_table_keys, key_names_right, table_join->keyIdsNullSafe());
 
     JoinCommon::createMissedColumns(sample_block_with_columns_to_add);
     if (nullable_right_side)
@@ -243,6 +243,8 @@ HashJoin::HashJoin(std::shared_ptr<TableJoin> table_join_, const Block & right_s
         if (key_columns.size() <= 1)
             throw Exception("ASOF join needs at least one equi-join column", ErrorCodes::SYNTAX_ERROR);
 
+        /// extractKeysForJoin() and materializeColumns() assume ASOF column should not be nullable,
+        /// both functions need to be changed if the assumption has been changed in future
         if (right_table_keys.getByName(key_names_right.back()).type->isNullable())
             throw Exception("ASOF join over right table Nullable column is not implemented", ErrorCodes::NOT_IMPLEMENTED);
 
@@ -635,14 +637,15 @@ bool HashJoin::addJoinedBlock(const Block & source_block, bool check_limits)
         throw Exception("Too many rows in right table block for HashJoin: " + toString(source_block.rows()), ErrorCodes::NOT_IMPLEMENTED);
 
     /// There's no optimization for right side const columns. Remove constness if any.
+    const auto *null_safe_columns = table_join->keyIdsNullSafe();
     Block block = materializeBlock(source_block);
     size_t rows = block.rows();
 
-    ColumnRawPtrs key_columns = JoinCommon::materializeColumnsInplace(block, key_names_right);
+    ColumnRawPtrs key_columns = JoinCommon::materializeColumnsInplace(block, key_names_right, null_safe_columns);
 
     /// We will insert to the map only keys, where all components are not NULL.
     ConstNullMapPtr null_map{};
-    ColumnPtr null_map_holder = extractNestedColumnsAndNullMap(key_columns, null_map);
+    ColumnPtr null_map_holder = extractNestedColumnsAndNullMap(key_columns, null_map, null_safe_columns);
 
     /// If RIGHT or FULL save blocks with nulls for NonJoinedBlockInputStream
     UInt8 save_nullmap = 0;
@@ -1095,12 +1098,13 @@ void HashJoin::joinBlockImpl(
     constexpr bool need_filter = !need_replication && (inner || right || (is_semi_join && left) || (is_anti_join && left));
 
     /// Rare case, when keys are constant or low cardinality. To avoid code bloat, simply materialize them.
-    Columns materialized_keys = JoinCommon::materializeColumns(block, key_names_left);
+    const auto *null_safe_columns = table_join->keyIdsNullSafe();
+    Columns materialized_keys = JoinCommon::materializeColumns(block, key_names_left, null_safe_columns);
     ColumnRawPtrs left_key_columns = JoinCommon::getRawPointers(materialized_keys);
 
     /// Keys with NULL value in any column won't join to anything.
     ConstNullMapPtr null_map{};
-    ColumnPtr null_map_holder = extractNestedColumnsAndNullMap(left_key_columns, null_map);
+    ColumnPtr null_map_holder = extractNestedColumnsAndNullMap(left_key_columns, null_map, null_safe_columns);
 
     size_t existing_columns = block.columns();
 

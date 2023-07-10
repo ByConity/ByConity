@@ -25,14 +25,17 @@ void convertColumnToNullable2(ColumnWithTypeAndName & column);
 void removeColumnNullability(ColumnWithTypeAndName & column);
 void changeColumnRepresentation(const ColumnPtr & src_column, ColumnPtr & dst_column);
 ColumnPtr emptyNotNullableClone(const ColumnPtr & column);
-Columns materializeColumns(const Block & block, const Names & names);
-ColumnRawPtrs materializeColumnsInplace(Block & block, const Names & names);
+Columns materializeColumns(const Block & block, const Names & names,
+                           const std::vector<bool> *null_safeColumns);
+ColumnRawPtrs materializeColumnsInplace(Block & block, const Names & names,
+                                        const std::vector<bool> *null_safeColumns);
 ColumnRawPtrs getRawPointers(const Columns & columns);
 void removeLowCardinalityInplace(Block & block);
 void removeLowCardinalityInplace(Block & block, const Names & names, bool change_type = true);
 void restoreLowCardinalityInplace(Block & block);
 
-ColumnRawPtrs extractKeysForJoin(const Block & block_keys, const Names & key_names_right);
+ColumnRawPtrs extractKeysForJoin(Block & block_keys, const Names & key_names_right,
+                                 const std::vector<bool> *null_safeColumns);
 
 /// Throw an exception if blocks have different types of key columns. Compare up to Nullability.
 void checkTypesOfKeys(const Block & block_left, const Names & key_names_left, const Block & block_right, const Names & key_names_right);

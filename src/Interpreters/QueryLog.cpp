@@ -144,7 +144,8 @@ NamesAndTypesList QueryLogElement::getNamesAndTypes()
         {"used_formats", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())},
         {"used_functions", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())},
         {"used_storages", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())},
-        {"used_table_functions", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())}
+        {"used_table_functions", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())},
+        {"partition_ids", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())}
     };
 
 }
@@ -271,6 +272,7 @@ void QueryLogElement::appendToBlock(MutableColumns & columns) const
         auto & column_function_factory_objects = typeid_cast<ColumnArray &>(*columns[i++]);
         auto & column_storage_factory_objects = typeid_cast<ColumnArray &>(*columns[i++]);
         auto & column_table_function_factory_objects = typeid_cast<ColumnArray &>(*columns[i++]);
+        auto & column_partition_ids = typeid_cast<ColumnArray &>(*columns[i++]);
 
         auto fill_column = [](const std::unordered_set<String> & data, ColumnArray & column)
         {
@@ -293,6 +295,7 @@ void QueryLogElement::appendToBlock(MutableColumns & columns) const
         fill_column(used_functions, column_function_factory_objects);
         fill_column(used_storages, column_storage_factory_objects);
         fill_column(used_table_functions, column_table_function_factory_objects);
+        fill_column(partition_ids, column_partition_ids);
     }
 }
 

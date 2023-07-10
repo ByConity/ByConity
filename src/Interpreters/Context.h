@@ -447,6 +447,7 @@ private:
     /// TODO: maybe replace with temporary tables?
     StoragePtr view_source;                 /// Temporary StorageValues used to generate alias columns for materialized views
     Tables table_function_results;          /// Temporary tables obtained by execution of table functions. Keyed by AST tree id.
+    std::unordered_set<String> partition_ids;
 
     ContextWeakMutablePtr query_context;
     ContextWeakMutablePtr session_context;  /// Session context or nullptr. Could be equal to this.
@@ -672,6 +673,7 @@ public:
 
     ClientInfo & getClientInfo() { return client_info; }
     const ClientInfo & getClientInfo() const { return client_info; }
+    const std::unordered_set<String> & getPartitionIds() const { return partition_ids;}
 
     void initResourceGroupManager(const ConfigurationPtr & config);
     void setResourceGroup(const IAST *ast);
@@ -1021,8 +1023,6 @@ public:
     BackgroundSchedulePool & getMemoryTableSchedulePool() const;
     BackgroundSchedulePool & getTopologySchedulePool() const;
 
-    ThreadPool & getLocalDiskCacheThreadPool() const;
-    ThreadPool & getLocalDiskCacheEvictThreadPool() const;
     ThrottlerPtr getDiskCacheThrottler() const;
 
     ThrottlerPtr getReplicatedFetchesThrottler() const;

@@ -64,12 +64,12 @@ JoinPtr JoinStep::makeJoin(ContextPtr context)
         if (has_using)
         {
             table_join->renames[left_keys[index]] = right_keys[index];
-            table_join->addUsingKey(left);
+            table_join->addUsingKey(left, settings.join_using_null_safe);
             using_ast->children.emplace_back(left);
         }
         else
         {
-            table_join->addOnKeys(left, right);
+            table_join->addOnKeys(left, right, false);
         }
     }
 

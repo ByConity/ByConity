@@ -176,6 +176,7 @@ createPartFromModelCommon(const MergeTreeMetaBase & storage, const Protos::DataM
     part->covered_parts_count = part_model.has_covered_parts_count() ? part_model.covered_parts_count() : 0;
     part->covered_parts_size = part_model.has_covered_parts_size() ? part_model.covered_parts_size() : 0;
     part->covered_parts_rows = part_model.has_covered_parts_rows() ? part_model.covered_parts_rows() : 0;
+    
     std::unordered_set<std::string> projection_parts_names(part_model.projections().begin(), part_model.projections().end());
     part->setProjectionPartsNames(projection_parts_names);
 
@@ -401,7 +402,7 @@ createServerPartsFromModels(const MergeTreeMetaBase & storage, const pb::Repeate
     return res;
 }
 
-static ServerDataPartPtr createServerPartFromDataPart(const MergeTreeMetaBase & storage, const IMergeTreeDataPartPtr & part)
+ServerDataPartPtr createServerPartFromDataPart(const MergeTreeMetaBase & storage, const IMergeTreeDataPartPtr & part)
 {
     auto part_model = std::make_shared<Protos::DataModelPart>();
     fillPartModel(storage, *part, *part_model);

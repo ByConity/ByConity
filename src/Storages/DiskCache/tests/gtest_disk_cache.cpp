@@ -111,11 +111,13 @@ public:
         fs::remove_all("tmp/");
         fs::create_directories("tmp/");
         UnitTest::initLogger();
+        DB::IDiskCache::init(*getContext().context);
     }
 
     void TearDown() override
     {
         fs::remove_all("tmp/");
+        DB::IDiskCache::close();
     }
 
     static constexpr const UInt32 segment_size = 8192;
@@ -134,7 +136,7 @@ TEST_F(DiskCacheTest, Collect)
     }
 
     DB::DiskCacheSettings settings;
-    DB::DiskCacheLRU cache(*getContext().context, volume, settings);
+    DB::DiskCacheLRU cache(volume, getContext().context->getDiskCacheThrottler(), settings);
     cache.load();
     EXPECT_EQ(cache.getKeyCount(), total_cache_num);
 

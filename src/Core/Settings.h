@@ -587,6 +587,7 @@ class IColumn;
     M(LogQueriesType, log_queries_min_type, QueryLogElementType::QUERY_START, "Minimal type in query_log to log, possible values (from low to high): QUERY_START, QUERY_FINISH, EXCEPTION_BEFORE_START, EXCEPTION_WHILE_PROCESSING.", 0) \
     M(Milliseconds, log_queries_min_query_duration_ms, 0, "Minimal time for the query to run, to get to the query_log/query_thread_log.", 0) \
     M(UInt64, log_queries_cut_to_length, 100000, "If query length is greater than specified threshold (in bytes), then cut query when writing to query log. Also limit length of printed query in ordinary text log.", 0) \
+    M(Bool, log_queries_with_partition_ids, 0, "Log requests partition ids and write the log to the system table.", 0) \
     \
     M(Bool, log_processors_profiles, false, "Log Processors profile events.", 0) \
     M(Bool, report_processors_profiles, false, "Report processors profile to coordinator.", 0)\
@@ -674,61 +675,23 @@ class IColumn;
     M(String, count_distinct_implementation, "uniqExact", "What aggregate function to use for implementation of count(DISTINCT ...)", 0) \
 \
     M(Bool, add_http_cors_header, false, "Write add http CORS header.", 0) \
-\
-    M(UInt64, \
-      max_http_get_redirects, \
-      0, \
-      "Max number of http GET redirects hops allowed. Make sure additional security measures are in place to prevent a malicious server " \
-      "to redirect your requests to unexpected services.", \
-      0) \
-\
-    M(Bool, \
-      use_client_time_zone, \
-      false, \
-      "Use client timezone for interpreting DateTime string values, instead of adopting server timezone.", \
-      0) \
-\
-    M(Bool, \
-      send_progress_in_http_headers, \
-      false, \
-      "Send progress notifications using X-ClickHouse-Progress headers. Some clients do not support high amount of HTTP headers (Python " \
-      "requests in particular), so it is disabled by default.", \
-      0) \
-\
-    M(UInt64, \
-      http_headers_progress_interval_ms, \
-      100, \
-      "Do not send HTTP headers X-ClickHouse-Progress more frequently than at each specified interval.", \
-      0) \
-\
-    M(Bool, \
-      fsync_metadata, \
-      1, \
-      "Do fsync after changing metadata for tables and databases (.sql files). Could be disabled in case of poor latency on server with " \
-      "high load of DDL queries and high load of disk subsystem.", \
-      0) \
-\
-    M(Bool, \
-      join_use_nulls, \
-      1, \
-      "Use NULLs for non-joined rows of outer JOINs for types that can be inside Nullable. If false, use default value of corresponding " \
-      "columns data type.", \
-      IMPORTANT) \
-\
-    M(JoinStrictness, \
-      join_default_strictness, \
-      JoinStrictness::ALL, \
-      "Set default strictness in JOIN query. Possible values: empty string, 'ANY', 'ALL'. If empty, query without strictness will throw " \
-      "exception.", \
-      0) \
-    M(Bool, \
-      any_join_distinct_right_table_keys, \
-      false, \
-      "Enable old ANY JOIN logic with many-to-one left-to-right table keys mapping for all ANY JOINs. It leads to confusing not equal " \
-      "results for 't1 ANY LEFT JOIN t2' and 't2 ANY RIGHT JOIN t1'. ANY RIGHT JOIN needs one-to-many keys mapping to be consistent with " \
-      "LEFT one.", \
-      IMPORTANT) \
-\
+    \
+    M(UInt64, max_http_get_redirects, 0, "Max number of http GET redirects hops allowed. Make sure additional security measures are in place to prevent a malicious server to redirect your requests to unexpected services.", 0) \
+    \
+    M(Bool, use_client_time_zone, false, "Use client timezone for interpreting DateTime string values, instead of adopting server timezone.", 0) \
+    \
+    M(Bool, send_progress_in_http_headers, false, "Send progress notifications using X-ClickHouse-Progress headers. Some clients do not support high amount of HTTP headers (Python requests in particular), so it is disabled by default.", 0) \
+    \
+    M(UInt64, http_headers_progress_interval_ms, 100, "Do not send HTTP headers X-ClickHouse-Progress more frequently than at each specified interval.", 0) \
+    \
+    M(Bool, fsync_metadata, 1, "Do fsync after changing metadata for tables and databases (.sql files). Could be disabled in case of poor latency on server with high load of DDL queries and high load of disk subsystem.", 0) \
+    \
+    M(Bool, join_use_nulls, 1, "Use NULLs for non-joined rows of outer JOINs for types that can be inside Nullable. If false, use default value of corresponding columns data type.", IMPORTANT) \
+    M(Bool, join_using_null_safe, 0, "Force null safe equal comparison for USING keys except the last key of ASOF join", 0) \
+    \
+    M(JoinStrictness, join_default_strictness, JoinStrictness::ALL, "Set default strictness in JOIN query. Possible values: empty string, 'ANY', 'ALL'. If empty, query without strictness will throw exception.", 0) \
+    M(Bool, any_join_distinct_right_table_keys, false, "Enable old ANY JOIN logic with many-to-one left-to-right table keys mapping for all ANY JOINs. It leads to confusing not equal results for 't1 ANY LEFT JOIN t2' and 't2 ANY RIGHT JOIN t1'. ANY RIGHT JOIN needs one-to-many keys mapping to be consistent with LEFT one.", IMPORTANT) \
+    \
     M(UInt64, preferred_block_size_bytes, 1000000, "", 0) \
 \
     M(UInt64, \
@@ -1373,18 +1336,6 @@ class IColumn;
     M(UInt64, resize_number_after_remote_source, 1, "Resize number after remote source, will be useful if shard is small", 0) \
     M(Bool, insert_null_as_default, true, "Insert DEFAULT values instead of NULL in INSERT SELECT (UNION ALL)", 0) \
 \
-    M(Bool, \
-      optimize_rewrite_sum_if_to_count_if, \
-      true, \
-      "Rewrite sumIf() and sum(if()) function countIf() function when logically equivalent", \
-      0) \
-    M(UInt64, \
-      insert_shard_id, \
-      0, \
-      "If non zero, when insert into a distributed table, the data will be inserted into the shard `insert_shard_id` synchronously. " \
-      "Possible values range from 1 to `shards_number` of corresponding distributed table", \
-      0) \
-\
     M(Bool, collect_hash_table_stats_during_aggregation, true, "Enable collecting hash table statistics to optimize memory allocation", 0) \
     M(UInt64, \
       max_entries_for_hash_table_stats, \
@@ -1396,7 +1347,12 @@ class IColumn;
       10'000'000, \
       "For how many elements it is allowed to preallocate space in all hash tables in total before aggregation", \
       0) \
-\
+    \
+    M(Bool, optimize_rewrite_sum_if_to_count_if, true, "Rewrite sumIf() and sum(if()) function countIf() function when logically equivalent", 0) \
+    M(UInt64, insert_shard_id, 0, "If non zero, when insert into a distributed table, the data will be inserted into the shard `insert_shard_id` synchronously. Possible values range from 1 to `shards_number` of corresponding distributed table", 0) \
+    M(Bool, ignore_array_join_check_in_join_on_condition, false, "Ignore array-join function check in join on condition", 0) \
+    M(Bool, check_identifier_begin_valid, true, "Whether to check identifier", 0) \
+    \
     /** Experimental feature for moving data between shards. */ \
 \
     M(Bool, allow_experimental_query_deduplication, false, "Experimental data deduplication for SELECT queries based on part UUIDs", 0) \
@@ -2009,19 +1965,13 @@ class IColumn;
     M(Bool, cross_to_inner_join_rewrite, true, "Use inner join instead of comma/cross join if possible", 0) \
 \
     M(Bool, output_format_arrow_low_cardinality_as_dictionary, false, "Enable output LowCardinality type as Dictionary Arrow type", 0) \
-    M(Bool, \
-      enable_low_cardinality_merge_new_algo, \
-      true, \
-      "Whether use the new merge algorithm during part merge for low cardinality column", \
-      0) \
-    M(UInt64, \
-      low_cardinality_distinct_threshold, \
-      100000, \
-      "Threshold for fallback to native column from low cardinality column, 0 disable", \
-      0) \
 \
     M(Bool, enable_sql_forwarding, true, "Allow auto query forwarding to target host server.", 1) \
-    M(UInt64, cnch_part_attach_limit, 3000, "Maximum number of part for ATTACH PARTITION/PARTS command", 0) \
+    M(Bool, enable_low_cardinality_merge_new_algo, true, "Whether use the new merge algorithm during part merge for low cardinality column", 0) \
+    M(UInt64, low_cardinality_distinct_threshold, 100000, "Threshold for fallback to native column from low cardinality column, 0 disable", 0) \
+    M(String, skip_shard_list, "", "Set slow shards that query want to skip, shard num is split by comma", 0) \
+    \
+    M(UInt64, cnch_part_attach_limit, 3000, "Maximum number of part for ATTACH PARTITION/PARTS command", 0)\
     M(UInt64, cnch_part_attach_drill_down, 1, "Maximum levels of path to find cnch data parts, 0 means no drill down", 0) \
     M(UInt64, cnch_part_attach_assert_parts_count, 0, "Assert total number of parts to attach.", 0) \
     M(UInt64, cnch_part_attach_assert_rows_count, 0, "Assert totol number of part rows to attach.", 0) \

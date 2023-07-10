@@ -80,28 +80,31 @@ void TableJoin::resetCollected()
     right_type_map.clear();
     left_converting_actions = nullptr;
     right_converting_actions = nullptr;
+    key_ids_null_safe.clear();
 }
 
-void TableJoin::addUsingKey(const ASTPtr & ast)
+void TableJoin::addUsingKey(const ASTPtr & ast, bool null_safe)
 {
     key_names_left.push_back(ast->getColumnName());
     key_names_right.push_back(ast->getAliasOrColumnName());
 
     key_asts_left.push_back(ast);
     key_asts_right.push_back(ast);
+    key_ids_null_safe.push_back(null_safe);
 
     auto & right_key = key_names_right.back();
     if (renames.count(right_key))
         right_key = renames[right_key];
 }
 
-void TableJoin::addOnKeys(ASTPtr & left_table_ast, ASTPtr & right_table_ast)
+void TableJoin::addOnKeys(ASTPtr & left_table_ast, ASTPtr & right_table_ast, bool null_safe)
 {
     key_names_left.push_back(left_table_ast->getColumnName());
     key_names_right.push_back(right_table_ast->getAliasOrColumnName());
 
     key_asts_left.push_back(left_table_ast);
     key_asts_right.push_back(right_table_ast);
+    key_ids_null_safe.push_back(null_safe);
 }
 
 /// @return how many times right key appears in ON section.
@@ -573,6 +576,8 @@ void TableJoin::serialize(WriteBuffer & buf) const
         writeBinary(item.first, buf);
         writeBinary(item.second, buf);
     }
+
+    writeBinary(key_ids_null_safe, buf);
 }
 
 void TableJoin::deserializeImpl(ReadBuffer & buf, ContextPtr context)
@@ -641,6 +646,8 @@ void TableJoin::deserializeImpl(ReadBuffer & buf, ContextPtr context)
         readBinary(value, buf);
         renames[key] = value;
     }
+
+    readBinary(key_ids_null_safe, buf);
 }
 
 std::shared_ptr<TableJoin> TableJoin::deserialize(ReadBuffer & buf, ContextPtr context)

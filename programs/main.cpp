@@ -85,6 +85,7 @@ int mainEntryClickHouseKeeperConverter(int argc, char ** argv);
 #endif
 #if ENABLE_CLICKHOUSE_PART_TOOLKIT
 int mainEntryClickhousePartToolkit(int argc, char ** argv);
+int mainEntryClickhousePartMerger(int argc, char ** argv);
 #endif
 #if ENABLE_CLICKHOUSE_META_INSPECTOR
 int mainEntryClickhouseMetaInspector(int argc, char ** argv);
@@ -165,6 +166,7 @@ std::pair<const char *, MainFunc> clickhouse_applications[] =
     {"part-toolkit", mainEntryClickhousePartToolkit},
     {"part-writer", mainEntryClickhousePartToolkit},
     {"part-converter", mainEntryClickhousePartToolkit},
+    {"part-merger", mainEntryClickhousePartMerger},
 #endif
 #if ENABLE_CLICKHOUSE_META_INSPECTOR
     {"meta-inspector", mainEntryClickhouseMetaInspector},

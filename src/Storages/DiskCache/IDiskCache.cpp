@@ -27,25 +27,67 @@ extern const Event DiskCacheScheduleCacheTaskMicroSeconds;
 
 namespace DB
 {
-IDiskCache::IDiskCache(Context & context_, VolumePtr volume_, const DiskCacheSettings & settings_)
-    : context(context_)
-    , volume(std::move(volume_))
-    , settings(settings_)
-    , disk_cache_throttler(context.getDiskCacheThrottler())
+namespace ErrorCodes
 {
+    extern const int LOGICAL_ERROR;
+    extern const int CANNOT_SCHEDULE_TASK;
 }
 
-void IDiskCache::asyncLoad()
+std::unique_ptr<ThreadPool> IDiskCache::local_disk_cache_thread_pool;
+std::unique_ptr<ThreadPool> IDiskCache::local_disk_cache_evict_thread_pool;
+
+void IDiskCache::init(const Context & global_context)
 {
-    sync_task = context.getSchedulePool().createTask("DiskCacheMetaSync", [this] { load(); });
-    sync_task->activateAndSchedule();
+    if (local_disk_cache_thread_pool)
+        throw Exception("disk cache thread pool is inited twice", ErrorCodes::LOGICAL_ERROR);
+
+    if (local_disk_cache_evict_thread_pool)
+        throw Exception("disk cache evict thread pool is initialized twice", ErrorCodes::LOGICAL_ERROR);
+
+    auto settings = global_context.getSettingsRef();
+
+    /// copy the old init logic.
+    local_disk_cache_thread_pool = std::make_unique<ThreadPool>(
+            settings.local_disk_cache_thread_pool_size,
+            settings.local_disk_cache_thread_pool_size,
+            settings.local_disk_cache_thread_pool_size * 100);
+
+    local_disk_cache_evict_thread_pool = std::make_unique<ThreadPool>(
+            settings.local_disk_cache_evict_thread_pool_size,
+            settings.local_disk_cache_evict_thread_pool_size,
+            settings.local_disk_cache_evict_thread_pool_size * 100);
+}
+
+void IDiskCache::close()
+{
+    if (local_disk_cache_thread_pool)
+        local_disk_cache_thread_pool.reset();
+    if (local_disk_cache_evict_thread_pool)
+        local_disk_cache_evict_thread_pool.reset();
+}
+
+ThreadPool & IDiskCache::getThreadPool()
+{
+    if (!local_disk_cache_thread_pool)
+        throw Exception("Uninitialized disk cache thread pool", ErrorCodes::CANNOT_SCHEDULE_TASK);
+    return *local_disk_cache_thread_pool;
+}
+
+ThreadPool & IDiskCache::getEvictPool()
+{
+    if (!local_disk_cache_evict_thread_pool)
+        throw Exception("Uninitialized disk cache thread pool", ErrorCodes::CANNOT_SCHEDULE_TASK);
+    return *local_disk_cache_evict_thread_pool;
+}
+
+IDiskCache::IDiskCache(const VolumePtr & volume_, const ThrottlerPtr & throttler_, const DiskCacheSettings & settings_)
+    : volume(volume_), disk_cache_throttler(throttler_), settings(settings_)
+{
 }
 
 void IDiskCache::shutdown()
 {
     shutdown_called = true;
-    if (sync_task)
-        sync_task->deactivate();
 }
 
 void IDiskCache::cacheSegmentsToLocalDisk(IDiskCacheSegmentsVector hit_segments)
@@ -83,7 +125,7 @@ bool IDiskCache::scheduleCacheTask(const std::function<void()> & task)
     if (shutdown_called)
         return false;
 
-    auto & thread_pool = context.getLocalDiskCacheThreadPool();
+    auto & thread_pool = IDiskCache::getThreadPool();
     size_t active_task_size = thread_pool.active();
     size_t max_queue_size = thread_pool.getMaxQueueSize();
     // (Running + Pending tasks) / (Max Running + Max Pending tasks)
