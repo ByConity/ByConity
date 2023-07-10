@@ -17,29 +17,26 @@
 
 #include <Core/BackgroundSchedulePool.h>
 #include <Disks/IDisk.h>
+#include <Disks/IVolume.h>
 #include <Storages/DiskCache/DiskCacheSettings.h>
 #include <Storages/DiskCache/IDiskCacheSegment.h>
-
+#include <Common/Throttler.h>
 #include <common/logger_useful.h>
-#include <optional>
 
 namespace DB
 {
 class Context;
-class ReadBuffer;
-class WriteBuffer;
-class Throttler;
-class IVolume;
-class IDisk;
-
-using ThrottlerPtr = std::shared_ptr<Throttler>;
-using VolumePtr = std::shared_ptr<IVolume>;
-using DiskPtr = std::shared_ptr<IDisk>;
 
 class IDiskCache
 {
 public:
-    explicit IDiskCache(Context & context_, VolumePtr volume_, const DiskCacheSettings & settings);
+    static void init(const Context & global_context);
+    static void close();
+    static ThreadPool & getThreadPool();
+    static ThreadPool & getEvictPool();
+
+    explicit IDiskCache(const VolumePtr & volume_, const ThrottlerPtr & throttler, const DiskCacheSettings & settings);
+
     virtual ~IDiskCache()
     {
         try
@@ -52,17 +49,13 @@ public:
     IDiskCache(const IDiskCache &) = delete;
     IDiskCache & operator=(const IDiskCache &) = delete;
 
-    void shutdown();
-    void asyncLoad();
+    virtual void shutdown();
 
     /// set segment name in cache and write value to disk cache
     virtual void set(const String & key, ReadBuffer & value, size_t weight_hint) = 0;
 
     /// get segment from cache and return local path if exists.
     virtual std::pair<DiskPtr, String> get(const String & key) = 0;
-
-    /// initialize disk cache from local disk
-    virtual void load() = 0;
 
     /// get number of keys
     virtual size_t getKeyCount() const = 0;
@@ -77,15 +70,17 @@ public:
     Poco::Logger * getLogger() const { return log; }
 
 protected:
-    Context & context;
     VolumePtr volume;
-    DiskCacheSettings settings;
     ThrottlerPtr disk_cache_throttler;
+    DiskCacheSettings settings;
+
     std::atomic<bool> shutdown_called {false};
-    BackgroundSchedulePool::TaskHolder sync_task;
 
 private:
     bool scheduleCacheTask(const std::function<void()> & task);
+
+    static std::unique_ptr<ThreadPool> local_disk_cache_thread_pool;
+    static std::unique_ptr<ThreadPool> local_disk_cache_evict_thread_pool;
 
     Poco::Logger * log = &Poco::Logger::get("DiskCache");
 };

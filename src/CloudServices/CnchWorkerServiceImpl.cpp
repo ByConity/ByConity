@@ -31,6 +31,7 @@
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <Storages/StorageCloudMergeTree.h>
+#include <Storages/DiskCache/IDiskCache.h>
 #include <Transaction/CnchWorkerTransaction.h>
 #include <WorkerTasks/ManipulationList.h>
 #include <WorkerTasks/ManipulationTask.h>
@@ -460,7 +461,7 @@ void CnchWorkerServiceImpl::preloadDataParts(
             pool_ptr = pool.get();
         }
         else
-            pool_ptr = &(rpc_context->getLocalDiskCacheThreadPool());
+            pool_ptr = &(IDiskCache::getThreadPool());
 
         for (const auto & part : data_parts)
         {

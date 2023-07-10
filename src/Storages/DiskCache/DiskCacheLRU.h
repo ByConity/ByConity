@@ -66,11 +66,11 @@ class DiskCacheLRU: public IDiskCache
 public:
     using KeyType = UInt128;
 
-    DiskCacheLRU(Context & context_, const VolumePtr & volume, const DiskCacheSettings & settings);
+    DiskCacheLRU(const VolumePtr & volume, const ThrottlerPtr & throttler, const DiskCacheSettings & settings);
 
     void set(const String& seg_name, ReadBuffer& value, size_t weight_hint) override;
     std::pair<DiskPtr, String> get(const String& seg_name) override;
-    void load() override;
+    void load();
 
     size_t getKeyCount() const override { return containers.count(); }
     size_t getCachedSize() const override { return containers.weight(); }

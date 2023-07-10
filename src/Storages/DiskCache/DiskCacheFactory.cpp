@@ -31,13 +31,23 @@ void DiskCacheFactory::init(Context & context)
     cache_settings.loadFromConfig(config, "lru");
     strategy_settings.loadFromConfig(config, "simple");
 
+    /// init pool
+    IDiskCache::init(context);
+
     // TODO: volume
     VolumePtr disk_cache_volume = context.getStoragePolicy("default")->getVolume(0);
-    auto disk_cache = std::make_shared<DiskCacheLRU>(context, disk_cache_volume, cache_settings);
-    disk_cache->asyncLoad();
+    auto throttler = context.getDiskCacheThrottler();
+    auto disk_cache = std::make_shared<DiskCacheLRU>(disk_cache_volume, throttler, cache_settings);
 
     auto cache_strategy = std::make_shared<DiskCacheSimpleStrategy>(strategy_settings);
     default_cache = std::make_pair(std::move(disk_cache), std::move(cache_strategy));
+}
+
+void DiskCacheFactory::shutdown() const
+{
+    IDiskCache::close();
+
+    default_cache.first->shutdown();
 }
 
 }

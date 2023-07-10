@@ -361,8 +361,6 @@ struct ContextSharedPart
     mutable std::optional<BackgroundSchedulePool> message_broker_schedule_pool; /// A thread pool that can run different jobs in background (used for message brokers, like RabbitMQ and Kafka)
 
     std::optional<ThreadPool> part_cache_manager_thread_pool;  /// A thread pool to collect partition metrics in background.
-    mutable std::optional<ThreadPool> local_disk_cache_thread_pool;  /// A thread pool that can run parts caching from cloud storage in background (used in cloud tables)
-    mutable std::optional<ThreadPool> local_disk_cache_evict_thread_pool;  /// A thread pool that asynchronous remove local disk cache file
     mutable ThrottlerPtr disk_cache_throttler;
 
     mutable std::array<std::optional<BackgroundSchedulePool>, SchedulePool::Size> extra_schedule_pools;
@@ -2352,28 +2350,6 @@ BackgroundSchedulePool & Context::getTopologySchedulePool() const
         shared->extra_schedule_pools[SchedulePool::CNCHTopology].emplace(
             settings.background_topology_thread_pool_size, CurrentMetrics::BackgroundCNCHTopologySchedulePoolTask, "CNCHTopoPol");
     return *shared->extra_schedule_pools[SchedulePool::CNCHTopology];
-}
-
-ThreadPool & Context::getLocalDiskCacheThreadPool() const
-{
-    auto lock = getLock();
-    if (!shared->local_disk_cache_thread_pool)
-        shared->local_disk_cache_thread_pool.emplace(
-            settings.local_disk_cache_thread_pool_size,
-            settings.local_disk_cache_thread_pool_size,
-            settings.local_disk_cache_thread_pool_size * 100);
-    return *shared->local_disk_cache_thread_pool;
-}
-
-ThreadPool & Context::getLocalDiskCacheEvictThreadPool() const
-{
-    auto lock = getLock();
-    if (!shared->local_disk_cache_evict_thread_pool)
-        shared->local_disk_cache_evict_thread_pool.emplace(
-            settings.local_disk_cache_evict_thread_pool_size,
-            settings.local_disk_cache_evict_thread_pool_size,
-            settings.local_disk_cache_evict_thread_pool_size * 100);
-    return *shared->local_disk_cache_evict_thread_pool;
 }
 
 ThrottlerPtr Context::getDiskCacheThrottler() const
