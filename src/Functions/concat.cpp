@@ -74,10 +74,10 @@ public:
                     + ", should be at least 2.",
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-        if (arguments.size() > FormatImpl::argument_threshold)
+        if (arguments.size() > FormatStringImpl::argument_threshold)
             throw Exception(
                 "Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
-                    + ", should be at most " + std::to_string(FormatImpl::argument_threshold),
+                    + ", should be at most " + std::to_string(FormatStringImpl::argument_threshold),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         for (const auto arg_idx : collections::range(0, arguments.size()))
@@ -174,7 +174,7 @@ protected:
         for (size_t i = 0; i < num_arguments; ++i)
             pattern += "{}";
 
-        FormatImpl::formatExecute(
+        FormatStringImpl::formatExecute(
             has_column_string,
             has_column_fixed_string,
             std::move(pattern),

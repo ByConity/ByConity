@@ -69,7 +69,12 @@ class FunctionsStringSearch : public IFunction
 {
 public:
     static constexpr auto name = Name::name;
-    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionsStringSearch>(); }
+    bool mysql_mode_ = false;
+    FunctionsStringSearch(bool mysql_mode = false) : mysql_mode_(mysql_mode) { }
+    static FunctionPtr create(ContextPtr context)
+    {
+        return std::make_shared<FunctionsStringSearch>(context->getSettingsRef().dialect_type == DialectType::MYSQL);
+    }
 
     String getName() const override { return name; }
 
@@ -125,7 +130,7 @@ public:
         UInt8 column_haystack_index;
         UInt8 column_needle_index;
 
-        if constexpr (std::is_same_v<Name, NameInstr>)
+        if (mysql_mode_ && (this->name == "locate" || this->name == "position"))
         {
             column_haystack_index = 1;
             column_needle_index = 0;

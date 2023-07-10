@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include "formatNumber.h"
 #include "formatString.h"
 
 namespace DB
@@ -30,16 +31,33 @@ class FormatFunction : public IFunction
 {
 public:
     static constexpr auto name = Name::name;
+    static constexpr size_t argument_threshold = std::numeric_limits<UInt32>::max();
+    bool mysql_mode_ = false;
+    FormatFunction(bool mysql_mode) : mysql_mode_(mysql_mode) { }
 
-    static FunctionPtr create(ContextPtr) { return std::make_shared<FormatFunction>(); }
+    static FunctionPtr create(ContextPtr context)
+    {
+        return std::make_shared<FormatFunction>(context->getSettingsRef().dialect_type == DialectType::MYSQL);
+    }
+
+    bool useDefaultImplementationForConstants() const override
+    {
+        // MySQL format function uses default implementation for constants
+        return mysql_mode_;
+    }
+
+    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override
+    {
+        // Clickhouse format function -> arg 0 is constant
+        // MySQL format function -> arg 1 is constant
+        return {static_cast<size_t>(mysql_mode_)};
+    }
 
     String getName() const override { return name; }
 
     bool isVariadic() const override { return true; }
 
     size_t getNumberOfArguments() const override { return 0; }
-
-    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {0}; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -49,12 +67,33 @@ public:
                     + ", should be at least 1",
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-        if (arguments.size() > FormatImpl::argument_threshold)
+        if (arguments.size() > FormatStringImpl::argument_threshold)
             throw Exception(
                 "Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
-                    + ", should be at most " + std::to_string(FormatImpl::argument_threshold),
+                    + ", should be at most " + std::to_string(FormatStringImpl::argument_threshold),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
+        if (mysql_mode_)
+        {
+            // MySQL compatibility: select format(X, D) -> format number X to D decimal places with comma
+            if (arguments.size() != 2)
+                throw Exception(
+                    "Currently " + getName() + " only support 2 arguments, the number of passed arguments: " + toString(arguments.size()),
+                    ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            if (!isNumber(arguments[0]))
+                throw Exception(
+                    "Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+            if (!isNumber(arguments[1]))
+                throw Exception(
+                    "Illegal type " + arguments[1]->getName() + " of argument of function " + getName(),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+            return std::make_shared<DataTypeString>();
+        }
+
+        // clickhouse format string function
         for (const auto arg_idx : collections::range(0, arguments.size()))
         {
             const auto * arg = arguments[arg_idx].get();
@@ -67,8 +106,13 @@ public:
         return std::make_shared<DataTypeString>();
     }
 
-    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
+    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & return_type, size_t input_rows_count) const override
     {
+
+        if (mysql_mode_)
+        {
+            return FormatNumberImpl::formatExecute(arguments, return_type, input_rows_count);
+        }
         const ColumnPtr & c0 = arguments[0].column;
         const ColumnConst * c0_const_string = typeid_cast<const ColumnConst *>(&*c0);
 
@@ -110,7 +154,7 @@ public:
                     "Illegal column " + column->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_COLUMN);
         }
 
-        FormatImpl::formatExecute(
+        FormatStringImpl::formatExecute(
             has_column_string,
             has_column_fixed_string,
             std::move(pattern),
@@ -137,7 +181,7 @@ using FunctionFormat = FormatFunction<NameFormat>;
 
 void registerFunctionFormat(FunctionFactory & factory)
 {
-    factory.registerFunction<FunctionFormat>();
+    factory.registerFunction<FunctionFormat>(FunctionFactory::CaseInsensitive);
 }
 
 }
