@@ -2429,7 +2429,7 @@ zkutil::ZooKeeperPtr Context::getZooKeeper() const
         if (!shared->zookeeper)
             shared->zookeeper = std::make_shared<zkutil::ZooKeeper>(config, "zookeeper", getZooKeeperLog(), endpoints);
         else if (shared->zookeeper->expired())
-            shared->zookeeper = shared->zookeeper->startNewSession();
+            shared->zookeeper = shared->zookeeper->startNewSession(endpoints);
     }
 
     return shared->zookeeper;
