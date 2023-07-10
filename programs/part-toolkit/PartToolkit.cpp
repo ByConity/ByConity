@@ -15,35 +15,38 @@
 
 #include <iostream>
 #include <string>
+#include <Dictionaries/registerDictionaries.h>
+#include <Disks/registerDisks.h>
+#include <FormaterTool/PartConverter.h>
+#include <FormaterTool/PartWriter.h>
+#include <Formats/registerFormats.h>
+#include <Functions/registerFunctions.h>
+#include <Parsers/ASTPartToolKit.h>
+#include <Parsers/ParserPartToolkitQuery.h>
+#include <Parsers/parseQuery.h>
+#include <Storages/registerStorages.h>
+#include <loggers/OwnFormattingChannel.h>
+#include <Poco/ConsoleChannel.h>
+#include <Poco/FileChannel.h>
+#include <Poco/FormattingChannel.h>
+#include <Poco/Logger.h>
+#include <Poco/Path.h>
+#include <Poco/PatternFormatter.h>
+#include <Poco/SplitterChannel.h>
+#include <Poco/Util/XMLConfiguration.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/config.h>
 #include <common/logger_useful.h>
-#include <loggers/OwnFormattingChannel.h>
-#include <Parsers/parseQuery.h>
-#include <Parsers/ParserPartToolkitQuery.h>
-#include <Parsers/ASTPartToolKit.h>
-#include <Formats/registerFormats.h>
-#include <Functions/registerFunctions.h>
-#include <Storages/registerStorages.h>
-#include <Dictionaries/registerDictionaries.h>
-#include <Disks/registerDisks.h>
-#include <FormaterTool/PartMerger.h>
-#include <FormaterTool/PartConverter.h>
-#include <FormaterTool/PartWriter.h>
-#include <Poco/Path.h>
-#include <Poco/FileChannel.h>
-#include <Poco/ConsoleChannel.h>
-#include <Poco/SplitterChannel.h>
-#include <Poco/FormattingChannel.h>
-#include <Poco/PatternFormatter.h>
-#include <Poco/Util/XMLConfiguration.h>
-#include <Poco/Logger.h>
 
-int mainHelp(int , char **)
+#include "PartMergerApp.h"
+
+int mainHelp(int, char **)
 {
     /// TODO: make help more clear
     std::cout << "Usage : \n";
     std::cout << "clickhouse [part-writer|part-converter] query" << std::endl;
+    std::cout << PartMergerApp::help_message << std::endl;
+
     return 0;
 }
 
@@ -67,7 +70,7 @@ void run(const std::string & query, Poco::Logger * log)
     mutable_context_ptr->setMarkCache(1000000);
 
     const char * begin = query.data();
-    const char * end =  query.data() + query.size();
+    const char * end = query.data() + query.size();
 
     DB::ParserPartToolkitQuery parser(end);
     auto ast = DB::parseQuery(parser, begin, end, "", 10000, 100);

@@ -442,7 +442,8 @@ SelectPartsDecision MergeTreeDataMergerMutator::selectPartsToMergeMulti(
     bool merge_with_ttl_allowed,
     String * out_disable_reason,
     MergeScheduler * merge_scheduler,
-    const bool enable_batch_select)
+    const bool enable_batch_select,
+    const bool check_intersection)
 {
     const auto data_settings = data.getSettings();
     auto metadata_snapshot = data.getInMemoryMetadataPtr();
@@ -536,7 +537,7 @@ SelectPartsDecision MergeTreeDataMergerMutator::selectPartsToMergeMulti(
         parts_ranges.back().emplace_back(part_info);
 
         /// Check for consistency of data parts. If assertion is failed, it requires immediate investigation.
-        if (prev_part && part->info.partition_id == (*prev_part)->info.partition_id
+        if (check_intersection && prev_part && part->info.partition_id == (*prev_part)->info.partition_id
             && part->info.min_block <= (*prev_part)->info.max_block)
         {
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Part {} intersects previous part {}", part->name, (*prev_part)->name);
@@ -609,6 +610,7 @@ SelectPartsDecision MergeTreeDataMergerMutator::selectPartsToMergeMulti(
         SimpleMergeSelector::Settings merge_settings;
         /// Override value from table settings
         merge_settings.max_parts_to_merge_at_once = data_settings->max_parts_to_merge_at_once;
+        merge_settings.enable_batch_select = enable_batch_select;
         if (aggressive)
             merge_settings.base = 1;
         merge_selector = std::make_unique<SimpleMergeSelector>(merge_settings);

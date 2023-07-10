@@ -214,6 +214,7 @@ ServerSelectPartsDecision selectPartsToMerge(
         /// Override value from table settings
         merge_settings.max_parts_to_merge_at_once = data_settings->max_parts_to_merge_at_once;
         merge_settings.max_total_rows_to_merge = data_settings->cnch_merge_max_total_rows_to_merge;
+        merge_settings.enable_batch_select = enable_batch_select;
         if (aggressive)
             merge_settings.base = 1;
         merge_selector = std::make_unique<SimpleMergeSelector>(merge_settings);

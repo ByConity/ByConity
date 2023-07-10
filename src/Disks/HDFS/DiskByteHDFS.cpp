@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <filesystem>
 #include <memory>
 #include <Disks/DiskFactory.h>
 #include <Disks/DiskType.h>
@@ -163,11 +164,6 @@ void DiskByteHDFS::replaceFile(const String & from_path, const String & to_path)
         hdfs_fs.renameTo(to_abs_path, origin_backup_file);
     }
     hdfs_fs.renameTo(from_abs_path, to_abs_path);
-}
-
-void DiskByteHDFS::copy(const String &, const std::shared_ptr<IDisk> &, const String &)
-{
-    throw Exception("DiskByteHDFS didn't support copy to another disk", ErrorCodes::NOT_IMPLEMENTED);
 }
 
 void DiskByteHDFS::listFiles(const String & path, std::vector<String> & file_names)

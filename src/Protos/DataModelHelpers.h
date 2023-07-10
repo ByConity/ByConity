@@ -247,6 +247,8 @@ DataModelPartWrapperPtr createPartWrapperFromModel(const MergeTreeMetaBase & sto
 
 DataModelPartWrapperPtr createPartWrapperFromModelBasic(const Protos::DataModelPart & part_model);
 
+ServerDataPartPtr createServerPartFromDataPart(const MergeTreeMetaBase & storage, const IMergeTreeDataPartPtr & part);
+
 ServerDataPartsVector createServerPartsFromModels(const MergeTreeMetaBase & storage, const pb::RepeatedPtrField<Protos::DataModelPart> & parts_model);
 
 ServerDataPartsVector createServerPartsFromDataParts(const MergeTreeMetaBase & storage, const MergeTreeDataPartsCNCHVector & parts);
