@@ -48,10 +48,19 @@ MergeTreeIndexReader::MergeTreeIndexReader(
         case StorageType::RAM:
         {
             stream = std::make_unique<MergeTreeReaderStream>(
-                part_->volume->getDisk(),
-                part_->getFullRelativePath() + index->getFileName(),
+                IMergeTreeReaderStream::StreamFileMeta {
+                    .disk = part_->volume->getDisk(),
+                    .rel_path = part_->getFullRelativePath() + index->getFileName() + INDEX_FILE_EXTENSION,
+                    .offset = part_->getFileOffsetOrZero(index->getFileName() + INDEX_FILE_EXTENSION),
+                    .size = part_->getFileSizeOrZero(index->getFileName() + INDEX_FILE_EXTENSION)
+                },
+                IMergeTreeReaderStream::StreamFileMeta {
+                    .disk = part_->volume->getDisk(),
+                    .rel_path = part_->index_granularity_info.getMarksFilePath(part_->getFullRelativePath() + index->getFileName() + part_->getMarksFileExtension()),
+                    .offset = part_->getFileOffsetOrZero(index->getFileName() + part_->getMarksFileExtension()),
+                    .size = part_->getFileSizeOrZero(index->getFileName() + part_->getMarksFileExtension())
+                },
                 index->getFileName(),
-                INDEX_FILE_EXTENSION,
                 marks_count_,
                 all_mark_ranges_,
                 std::move(settings),
@@ -59,11 +68,7 @@ MergeTreeIndexReader::MergeTreeIndexReader(
                 nullptr,
                 &part_->index_granularity_info,
                 ReadBufferFromFileBase::ProfileCallback{},
-                CLOCK_MONOTONIC_COARSE,
-                part_->getFileOffsetOrZero(index->getFileName() + INDEX_FILE_EXTENSION),
-                part_->getFileSizeOrZero(index->getFileName() + INDEX_FILE_EXTENSION),
-                part_->getFileOffsetOrZero(index->getFileName() + part_->getMarksFileExtension()),
-                part_->getFileSizeOrZero(index->getFileName() + part_->getMarksFileExtension())
+                CLOCK_MONOTONIC_COARSE
             );
             break;
         }

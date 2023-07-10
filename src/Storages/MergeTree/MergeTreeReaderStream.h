@@ -41,25 +41,24 @@ class MergeTreeReaderStream: public IMergeTreeReaderStream
 {
 public:
     MergeTreeReaderStream(
-        DiskPtr disk_,
-        const String & path_prefix_, const String & stream_name_, const String & data_file_extension_,
+        const StreamFileMeta& bin_file_,
+        const StreamFileMeta& mrk_file_,
+        const String& stream_name_,
         size_t marks_count_,
-        const MarkRanges & all_mark_ranges,
+        const MarkRanges & all_mark_ranges_,
         const MergeTreeReaderSettings & settings_,
-        MarkCache * mark_cache, UncompressedCache * uncompressed_cache,
+        MarkCache * mark_cache_, UncompressedCache * uncompressed_cache_,
         const MergeTreeIndexGranularityInfo * index_granularity_info_,
-        const ReadBufferFromFileBase::ProfileCallback & profile_callback, clockid_t clock_type,
-        off_t data_file_offset_, size_t data_file_size_,
-        off_t mark_file_offset_, size_t mark_file_size_);
+        const ReadBufferFromFileBase::ProfileCallback & profile_callback_,
+        clockid_t clock_type_);
 
     virtual void seekToStart() override;
     virtual void seekToMark(size_t index) override;
 
 private:
-    DiskPtr disk;
-    std::string path_prefix;
+    DiskPtr data_disk;
+    std::string data_rel_path;
     std::string stream_name;
-    std::string data_file_extension;
 
     size_t marks_count;
 

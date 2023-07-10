@@ -17,6 +17,7 @@
 
 #include <Core/Types.h>
 #include <IO/ReadBuffer.h>
+#include <Disks/IDisk.h>
 
 namespace DB
 {
@@ -24,6 +25,14 @@ namespace DB
 class IMergeTreeReaderStream
 {
 public:
+    struct StreamFileMeta
+    {
+        DiskPtr disk;
+        String rel_path;
+        off_t offset;
+        size_t size;
+    };
+
     IMergeTreeReaderStream(): data_buffer(nullptr) {}
 
     virtual ~IMergeTreeReaderStream() {}
