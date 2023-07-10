@@ -406,7 +406,8 @@ QueryPlanPtr MergeTreeDataSelectExecutor::read(
     pipes.emplace_back(std::move(projection_pipe));
     pipes.emplace_back(std::move(ordinary_pipe));
     auto pipe = Pipe::unitePipes(std::move(pipes));
-    pipe.resize(1);
+    if (query_info.projection->desc->type == ProjectionDescription::Type::Aggregate)
+        pipe.resize(1);
 
     auto step = std::make_unique<ReadFromStorageStep>(
         std::move(pipe),
@@ -1336,6 +1337,15 @@ QueryPlanPtr MergeTreeDataSelectExecutor::readFromParts(
         log,
         merge_tree_select_result_ptr
     );
+
+    if (context->getSettingsRef().log_queries_with_partition_ids)
+    {
+        auto & partition_ids = const_cast<std::unordered_set<String> &>(context->getQueryContext()->getPartitionIds());
+        for (auto & part_with_ranges : read_from_merge_tree->getAnalysisResult().parts_with_ranges)
+        {
+            partition_ids.emplace(part_with_ranges.data_part->partition.getID(data));
+        }
+    }
 
     QueryPlanPtr plan = std::make_unique<QueryPlan>();
     plan->addStep(std::move(read_from_merge_tree));

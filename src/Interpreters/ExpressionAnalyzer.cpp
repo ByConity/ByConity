@@ -1268,7 +1268,10 @@ SelectQueryExpressionAnalyzer::appendPrewhere(ExpressionActionsChain & chain, bo
         /// Remove unused source_columns from prewhere actions.
         auto tmp_actions_dag = std::make_shared<ActionsDAG>(sourceColumns());
         getRootActions(select_query->prewhere(), only_types, tmp_actions_dag);
-        tmp_actions_dag->removeUnusedActions(NameSet{prewhere_column_name});
+        /// Constants cannot be removed since they can be used in other parts of the query.
+        /// And if they are not used anywhere, except PREWHERE, they will be removed on the next step.
+        /// follow change: https://github.com/ClickHouse/ClickHouse/commit/fbf98bea0ba56440b973fabbfe755aeb13f078ef
+        tmp_actions_dag->removeUnusedActions(NameSet{prewhere_column_name}, false);
 
         auto required_columns = tmp_actions_dag->getRequiredColumnsNames();
         NameSet required_source_columns(required_columns.begin(), required_columns.end());

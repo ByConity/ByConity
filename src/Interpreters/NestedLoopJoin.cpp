@@ -163,11 +163,16 @@ void NestedLoopJoin::joinBlock(Block & left_block, ExtraBlockPtr &)
             expression_list = table_join->getOnExpression();
         else
         {
+            const auto & null_safe_columns = table_join->keyIdsNullSafe();
             std::vector<std::shared_ptr<ASTFunction>> conds;
-            for (size_t i = 0; i < table_join->keyNamesLeft().size(); i++)
-                conds.emplace_back(makeASTFunction("equals",
+
+            for (size_t i = 0; i < table_join->keyNamesLeft().size(); i++) {
+                const String fn = null_safe_columns && (*null_safe_columns)[i] ? "bitEquals" : "equals";
+
+                conds.emplace_back(makeASTFunction(fn,
                                                    std::make_shared<ASTIdentifier>(table_join->keyNamesLeft()[i]),
                                                    std::make_shared<ASTIdentifier>(table_join->keyNamesRight()[i])));
+            }
             expression_list = conds[0];
             for (size_t i = 1; i < conds.size(); i++)
                 expression_list = makeASTFunction("and", expression_list, conds[i]);

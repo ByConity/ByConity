@@ -64,6 +64,7 @@ const char * ParserComparisonExpression::operators[] =
     "==",            "equals",
     "!=",            "notEquals",
     "<>",            "notEquals",
+    "<=>",           "bitEquals",
     "<=",            "lessOrEquals",
     ">=",            "greaterOrEquals",
     "<",             "less",
@@ -79,6 +80,8 @@ const char * ParserComparisonExpression::operators[] =
     "NOT IN",        "notIn",
     "GLOBAL IN",     "globalIn",
     "GLOBAL NOT IN", "globalNotIn",
+    "IS NOT DISTINCT FROM", "bitEquals",
+    "IS DISTINCT FROM",     "bitNotEquals",
     nullptr
 };
 

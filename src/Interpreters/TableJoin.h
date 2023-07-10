@@ -120,6 +120,9 @@ private:
     // Used to generate TableJoin during serialization
     ASTPtr select_query;
 
+    // Collect null safe comparison columns
+    std::vector<bool> key_ids_null_safe;
+
     Names requiredJoinedNames() const;
 
     /// Create converting actions and change key column names if required
@@ -182,8 +185,8 @@ public:
     bool needStreamWithNonJoinedRows() const;
 
     void resetCollected();
-    void addUsingKey(const ASTPtr & ast);
-    void addOnKeys(ASTPtr & left_table_ast, ASTPtr & right_table_ast);
+    void addUsingKey(const ASTPtr & ast, bool null_safe);
+    void addOnKeys(ASTPtr & left_table_ast, ASTPtr & right_table_ast, bool null_safe);
 
     bool hasUsing() const { return table_join.using_expression_list != nullptr; }
     bool hasOn() const { return table_join.on_expression != nullptr; }
@@ -225,6 +228,7 @@ public:
 
     const Names & keyNamesLeft() const { return key_names_left; }
     const Names & keyNamesRight() const { return key_names_right; }
+    const std::vector<bool> *keyIdsNullSafe() const { return key_ids_null_safe.empty() ? nullptr : &key_ids_null_safe; }
     const NamesAndTypesList & columnsFromJoinedTable() const { return columns_from_joined_table; }
     void setColumnsFromJoinedTable(const NamesAndTypesList & columns) { columns_from_joined_table = columns; }
     Names columnsAddedByJoin() const

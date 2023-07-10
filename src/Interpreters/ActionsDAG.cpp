@@ -485,7 +485,7 @@ std::string ActionsDAG::dumpNames() const
     return out.str();
 }
 
-void ActionsDAG::removeUnusedActions(const NameSet & required_names)
+void ActionsDAG::removeUnusedActions(const NameSet & required_names, bool allow_constant_folding)
 {
     NodeRawConstPtrs required_nodes;
     required_nodes.reserve(required_names.size());
@@ -509,10 +509,10 @@ void ActionsDAG::removeUnusedActions(const NameSet & required_names)
     }
 
     index.swap(required_nodes);
-    removeUnusedActions();
+    removeUnusedActions(true, allow_constant_folding);
 }
 
-void ActionsDAG::removeUnusedActions(const Names & required_names)
+void ActionsDAG::removeUnusedActions(const Names & required_names, bool allow_constant_folding)
 {
     NodeRawConstPtrs required_nodes;
     required_nodes.reserve(required_names.size());
@@ -532,10 +532,10 @@ void ActionsDAG::removeUnusedActions(const Names & required_names)
     }
 
     index.swap(required_nodes);
-    removeUnusedActions();
+    removeUnusedActions(true, allow_constant_folding);
 }
 
-void ActionsDAG::removeUnusedActions(bool allow_remove_inputs)
+void ActionsDAG::removeUnusedActions(bool allow_remove_inputs, bool allow_constant_folding)
 {
     std::unordered_set<const Node *> visited_nodes;
     std::stack<Node *> stack;
@@ -566,7 +566,7 @@ void ActionsDAG::removeUnusedActions(bool allow_remove_inputs)
         auto * node = stack.top();
         stack.pop();
 
-        if (!node->children.empty() && node->column && isColumnConst(*node->column))
+        if (allow_constant_folding && !node->children.empty() && node->column && isColumnConst(*node->column))
         {
             /// Constant folding.
             node->type = ActionsDAG::ActionType::COLUMN;
@@ -1559,7 +1559,7 @@ ActionsDAG::SplitResult ActionsDAG::split(std::unordered_set<const Node *> split
                         new_inputs.push_back(cur.node);
                     }
                 }
-                
+
                 stack.pop();
             }
         }

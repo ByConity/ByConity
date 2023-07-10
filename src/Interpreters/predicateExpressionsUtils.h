@@ -75,7 +75,8 @@ namespace DB
     inline bool isComparisonFunctionName(const String & name)
     {
         return name == "equals" || name == "notEquals" || name == "less" || name == "greater" ||
-               name == "lessOrEquals" || name == "greaterOrEquals";
+               name == "lessOrEquals" || name == "greaterOrEquals" ||
+               name == "bitEquals" || name == "bitNotEquals";
     }
 
     inline bool isInFunctionName(const String & name)

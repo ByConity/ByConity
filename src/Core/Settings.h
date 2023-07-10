@@ -587,6 +587,7 @@ class IColumn;
     M(LogQueriesType, log_queries_min_type, QueryLogElementType::QUERY_START, "Minimal type in query_log to log, possible values (from low to high): QUERY_START, QUERY_FINISH, EXCEPTION_BEFORE_START, EXCEPTION_WHILE_PROCESSING.", 0) \
     M(Milliseconds, log_queries_min_query_duration_ms, 0, "Minimal time for the query to run, to get to the query_log/query_thread_log.", 0) \
     M(UInt64, log_queries_cut_to_length, 100000, "If query length is greater than specified threshold (in bytes), then cut query when writing to query log. Also limit length of printed query in ordinary text log.", 0) \
+    M(Bool, log_queries_with_partition_ids, 0, "Log requests partition ids and write the log to the system table.", 0) \
     \
     M(Bool, log_processors_profiles, false, "Log Processors profile events.", 0) \
     M(Bool, report_processors_profiles, false, "Report processors profile to coordinator.", 0)\
@@ -674,6 +675,7 @@ class IColumn;
     M(String, count_distinct_implementation, "uniqExact", "What aggregate function to use for implementation of count(DISTINCT ...)", 0) \
 \
     M(Bool, add_http_cors_header, false, "Write add http CORS header.", 0) \
+<<<<<<< HEAD
 \
     M(UInt64, \
       max_http_get_redirects, \
@@ -715,6 +717,7 @@ class IColumn;
       "columns data type.", \
       IMPORTANT) \
 \
+    M(Bool, join_using_null_safe, 0, "Force null safe equal comparison for USING keys except the last key of ASOF join", 0) \
     M(JoinStrictness, \
       join_default_strictness, \
       JoinStrictness::ALL, \
@@ -1372,6 +1375,7 @@ class IColumn;
     M(Bool, async_socket_for_remote, false, "Asynchronously read from socket executing remote query", 0) \
     M(UInt64, resize_number_after_remote_source, 1, "Resize number after remote source, will be useful if shard is small", 0) \
     M(Bool, insert_null_as_default, true, "Insert DEFAULT values instead of NULL in INSERT SELECT (UNION ALL)", 0) \
+<<<<<<< HEAD
 \
     M(Bool, \
       optimize_rewrite_sum_if_to_count_if, \
@@ -1397,6 +1401,14 @@ class IColumn;
       "For how many elements it is allowed to preallocate space in all hash tables in total before aggregation", \
       0) \
 \
+=======
+    \
+    M(Bool, optimize_rewrite_sum_if_to_count_if, true, "Rewrite sumIf() and sum(if()) function countIf() function when logically equivalent", 0) \
+    M(UInt64, insert_shard_id, 0, "If non zero, when insert into a distributed table, the data will be inserted into the shard `insert_shard_id` synchronously. Possible values range from 1 to `shards_number` of corresponding distributed table", 0) \
+    M(Bool, ignore_array_join_check_in_join_on_condition, false, "Ignore array-join function check in join on condition", 0) \
+    M(Bool, check_identifier_begin_valid, true, "Whether to check identifier", 0) \
+    \
+>>>>>>> 293ab1fc10d (Merge branch 'cnch-ce-merge-dyf' into 'cnch-ce-merge')
     /** Experimental feature for moving data between shards. */ \
 \
     M(Bool, allow_experimental_query_deduplication, false, "Experimental data deduplication for SELECT queries based on part UUIDs", 0) \
@@ -2009,6 +2021,7 @@ class IColumn;
     M(Bool, cross_to_inner_join_rewrite, true, "Use inner join instead of comma/cross join if possible", 0) \
 \
     M(Bool, output_format_arrow_low_cardinality_as_dictionary, false, "Enable output LowCardinality type as Dictionary Arrow type", 0) \
+<<<<<<< HEAD
     M(Bool, \
       enable_low_cardinality_merge_new_algo, \
       true, \
@@ -2022,6 +2035,13 @@ class IColumn;
 \
     M(Bool, enable_sql_forwarding, true, "Allow auto query forwarding to target host server.", 1) \
     M(UInt64, cnch_part_attach_limit, 3000, "Maximum number of part for ATTACH PARTITION/PARTS command", 0) \
+=======
+    M(Bool, enable_low_cardinality_merge_new_algo, true, "Whether use the new merge algorithm during part merge for low cardinality column", 0) \
+    M(UInt64, low_cardinality_distinct_threshold, 100000, "Threshold for fallback to native column from low cardinality column, 0 disable", 0) \
+    M(String, skip_shard_list, "", "Set slow shards that query want to skip, shard num is split by comma", 0) \
+    \
+    M(UInt64, cnch_part_attach_limit, 3000, "Maximum number of part for ATTACH PARTITION/PARTS command", 0)\
+>>>>>>> 293ab1fc10d (Merge branch 'cnch-ce-merge-dyf' into 'cnch-ce-merge')
     M(UInt64, cnch_part_attach_drill_down, 1, "Maximum levels of path to find cnch data parts, 0 means no drill down", 0) \
     M(UInt64, cnch_part_attach_assert_parts_count, 0, "Assert total number of parts to attach.", 0) \
     M(UInt64, cnch_part_attach_assert_rows_count, 0, "Assert totol number of part rows to attach.", 0) \

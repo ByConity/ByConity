@@ -38,15 +38,16 @@ namespace ErrorCodes
 }
 
 void CollectJoinOnKeysMatcher::Data::addJoinKeys(const ASTPtr & left_ast, const ASTPtr & right_ast,
-                                                 const std::pair<size_t, size_t> & table_no)
+                                                 const std::pair<size_t, size_t> & table_no,
+                                                 bool null_safe_equal)
 {
     ASTPtr left = left_ast->clone();
     ASTPtr right = right_ast->clone();
 
     if (table_no.first == 1 || table_no.second == 2)
-        analyzed_join.addOnKeys(left, right);
+        analyzed_join.addOnKeys(left, right, null_safe_equal);
     else if (table_no.first == 2 || table_no.second == 1)
-        analyzed_join.addOnKeys(right, left);
+        analyzed_join.addOnKeys(right, left, null_safe_equal);
     else
         throw Exception("Cannot detect left and right JOIN keys. JOIN ON section is ambiguous.",
                         ErrorCodes::AMBIGUOUS_COLUMN_NAME);
@@ -74,7 +75,7 @@ void CollectJoinOnKeysMatcher::Data::asofToJoinKeys()
 {
     if (!asof_left_key || !asof_right_key)
         throw Exception("No inequality in ASOF JOIN ON section.", ErrorCodes::INVALID_JOIN_ON_EXPRESSION);
-    addJoinKeys(asof_left_key, asof_right_key, {1, 2});
+    addJoinKeys(asof_left_key, asof_right_key, {1, 2}, false);
 }
 
 void CollectJoinOnKeysMatcher::visit(const ASTFunction & func, const ASTPtr & ast, Data & data)
@@ -86,7 +87,7 @@ void CollectJoinOnKeysMatcher::visit(const ASTFunction & func, const ASTPtr & as
         throw Exception("JOIN ON does not support OR. Unexpected '" + queryToString(ast) + "'", ErrorCodes::NOT_IMPLEMENTED);
 
     ASOF::Inequality inequality = ASOF::getInequality(func.name);
-    if (func.name == "equals" || func.name == "notEquals" || inequality != ASOF::Inequality::None)
+    if (func.name == "equals" || func.name == "bitEquals" || func.name == "notEquals" || func.name == "bitNotEquals" || inequality != ASOF::Inequality::None)
     {
         if (func.arguments->children.size() != 2)
             throw Exception("Function " + func.name + " takes two arguments, got '" + func.formatForErrorMessage() + "' instead",
@@ -100,7 +101,14 @@ void CollectJoinOnKeysMatcher::visit(const ASTFunction & func, const ASTPtr & as
         ASTPtr left = func.arguments->children.at(0);
         ASTPtr right = func.arguments->children.at(1);
         auto table_numbers = getTableNumbers(ast, left, right, data);
-        data.addJoinKeys(left, right, table_numbers);
+        data.addJoinKeys(left, right, table_numbers, false);
+    }
+    else if (func.name == "bitEquals")
+    {
+        ASTPtr left = func.arguments->children.at(0);
+        ASTPtr right = func.arguments->children.at(1);
+        auto table_numbers = getTableNumbers(ast, left, right, data);
+        data.addJoinKeys(left, right, table_numbers, true);
     }
     else if (inequality != ASOF::Inequality::None && data.is_asof)
     {
@@ -120,16 +128,16 @@ void CollectJoinOnKeysMatcher::visit(const ASTFunction & func, const ASTPtr & as
         ASTPtr left = func.arguments->children.at(0);
         ASTPtr right = func.arguments->children.at(1);
         auto table_numbers = getTableNumbers(ast, left, right, data);
-        data.addJoinKeys(left, right, table_numbers);
+        data.addJoinKeys(left, right, table_numbers, func.name == "bitNotEquals");
         data.is_nest_loop_join = true;
     }
 }
 
-void CollectJoinOnKeysMatcher::getIdentifiers(const ASTPtr & ast, std::vector<const ASTIdentifier *> & out)
+void CollectJoinOnKeysMatcher::getIdentifiers(const ASTPtr & ast, std::vector<const ASTIdentifier *> & out, bool ignore_array_join_check_in_join_on_condition)
 {
     if (const auto * func = ast->as<ASTFunction>())
     {
-        if (func->name == "arrayJoin")
+        if (func->name == "arrayJoin" && !ignore_array_join_check_in_join_on_condition)
             throw Exception("Not allowed function in JOIN ON. Unexpected '" + queryToString(ast) + "'",
                             ErrorCodes::INVALID_JOIN_ON_EXPRESSION);
     }
@@ -150,7 +158,7 @@ std::pair<size_t, size_t> CollectJoinOnKeysMatcher::getTableNumbers(const ASTPtr
     std::vector<const ASTIdentifier *> left_identifiers;
     std::vector<const ASTIdentifier *> right_identifiers;
 
-    getIdentifiers(left_ast, left_identifiers);
+    getIdentifiers(left_ast, left_identifiers, data.ignore_array_join_check_in_join_on_condition);
     getIdentifiers(right_ast, right_identifiers);
 
     if (left_identifiers.empty() || right_identifiers.empty())

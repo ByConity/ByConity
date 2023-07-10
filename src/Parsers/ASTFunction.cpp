@@ -335,6 +335,7 @@ void ASTFunction::formatImplWithoutAlias(const FormatSettings & settings, Format
                 "plus",            " + ",
                 "minus",           " - ",
                 "notEquals",       " != ",
+                "bitEquals",       " <=> ",
                 "lessOrEquals",    " <= ",
                 "greaterOrEquals", " >= ",
                 "less",            " < ",
@@ -348,6 +349,8 @@ void ASTFunction::formatImplWithoutAlias(const FormatSettings & settings, Format
                 "notIn",           " NOT IN ",
                 "globalIn",        " GLOBAL IN ",
                 "globalNotIn",     " GLOBAL NOT IN ",
+                "bitEquals",       " IS NOT DISTINCT FROM ",
+                "bitNotEquals",    " IS DISTINCT FROM ",
                 nullptr
             };
 

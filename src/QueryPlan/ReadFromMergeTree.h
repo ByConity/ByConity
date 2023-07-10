@@ -135,7 +135,7 @@ public:
     const Names & real_column_names,
     bool sample_factor_column_queried,
     Poco::Logger * log);
-
+    ReadFromMergeTree::AnalysisResult getAnalysisResult() const;
 private:
     const MergeTreeReaderSettings reader_settings;
 
@@ -192,7 +192,6 @@ private:
         ActionsDAGPtr & out_projection);
 
     MergeTreeDataSelectAnalysisResultPtr selectRangesToRead(MergeTreeData::DataPartsVector parts) const;
-    ReadFromMergeTree::AnalysisResult getAnalysisResult() const;
     MergeTreeDataSelectAnalysisResultPtr analyzed_result_ptr;
 };
 

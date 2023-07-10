@@ -1301,6 +1301,9 @@ void readBinary(std::vector<T> & x, ReadBuffer & buf)
         readBinary(x[i], buf);
 }
 
+template<>
+void readBinary(std::vector<bool> & x, ReadBuffer & buf);
+
 template <typename T>
 void readQuoted(std::vector<T> & x, ReadBuffer & buf)
 {
