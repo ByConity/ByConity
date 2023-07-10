@@ -42,6 +42,7 @@ namespace ErrorCodes
 {
     extern const int RAFT_ERROR;
     extern const int CORRUPTED_DATA;
+    extern const int NO_SUCH_SERVICE;
 }
 namespace
 {
@@ -61,9 +62,15 @@ std::vector<KeeperEndpoint> parseKeeperEndpointsFromServiceDiscovery(const Poco:
     std::vector<KeeperEndpoint> result;
 
     auto service_discovery = ServiceDiscoveryFactory::instance().get(config);
-    /// TODO: fallback to service_discovery.tso.psm
-    auto psm = config.getString("service_discovery.keeper.psm");
-    auto endpoints = service_discovery->lookupEndpoints(psm);
+    ServiceEndpoints endpoints;
+    if (config.has("service_discovery.keeper"))
+        endpoints = service_discovery->lookupEndpoints(config.getString("service_discovery.keeper.psm"));
+    else if (config.has("service_discovery.tso"))
+        endpoints = service_discovery->lookupEndpoints(config.getString("service_discovery.tso.psm"));
+    else
+        throw Exception(
+            ErrorCodes::NO_SUCH_SERVICE,
+            "Can't get keeper endpoints from service_discovery, because both service_discovery.keeper.psm and service_discovery.tso.psm are not found");
 
     for (auto & endpoint: endpoints)
     {
