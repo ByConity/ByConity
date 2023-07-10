@@ -300,8 +300,12 @@ Token Lexer::nextTokenImpl()
         case '<':   /// <, <=, <>
         {
             ++pos;
-            if (pos < end && *pos == '=')
-                return Token(TokenType::LessOrEquals, token_begin, ++pos);
+            if (pos < end && *pos == '=') {
+                ++pos;
+                if (pos < end && *pos == '>')
+                    return Token(TokenType::BitEquals, token_begin, ++pos);
+                return Token(TokenType::LessOrEquals, token_begin, pos);
+            }
             if (pos < end && *pos == '>')
                 return Token(TokenType::NotEquals, token_begin, ++pos);
             return Token(TokenType::Less, token_begin, pos);

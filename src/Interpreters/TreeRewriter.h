@@ -113,7 +113,7 @@ struct TreeRewriterResult
     Names getExpandedAliases() const { return {expanded_aliases.begin(), expanded_aliases.end()}; }
     const Scalars & getScalars() const { return scalars; }
     void collectJoinTableAndAlias(const ContextPtr & context, const ASTPtr & select);
-    void rewriteUnknownLeftJoinIdentifier(ASTPtr & query, NameSet & available_columns, NameSet & required, NameSet & unknown_identifier_set);
+    void rewriteUnknownLeftJoinIdentifier(ASTPtr & query, NameSet & available_columns, NameSet & required, NameSet & unknown_identifier_set, bool check_identifier_begin_valid);
 };
 
 using TreeRewriterResultPtr = std::shared_ptr<const TreeRewriterResult>;

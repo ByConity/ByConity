@@ -51,7 +51,7 @@ namespace
 {
 
 template <bool has_left_nulls, bool has_right_nulls>
-int nullableCompareAt(const IColumn & left_column, const IColumn & right_column, size_t lhs_pos, size_t rhs_pos)
+int nullableCompareAt(const IColumn & left_column, const IColumn & right_column, size_t lhs_pos, size_t rhs_pos, bool null_safe_comparison)
 {
     static constexpr int null_direction_hint = 1;
 
@@ -65,6 +65,14 @@ int nullableCompareAt(const IColumn & left_column, const IColumn & right_column,
             int res = left_column.compareAt(lhs_pos, rhs_pos, right_column, null_direction_hint);
             if (res)
                 return res;
+
+            if (null_safe_comparison) {
+                if (left_column.isNullAt(lhs_pos) == right_column.isNullAt(rhs_pos))
+                    return 0;
+
+                /* compare NULL <=> 0 */
+                return left_column.isNullAt(lhs_pos) ? null_direction_hint : -null_direction_hint;
+            }
 
             /// NULL != NULL case
             if (left_column.isNullAt(lhs_pos))
@@ -225,18 +233,18 @@ public:
         }
     }
 
-    Range getNextEqualRange(MergeJoinCursor & rhs)
+    Range getNextEqualRange(MergeJoinCursor & rhs, const std::vector<bool> *null_safe_keys)
     {
         if (has_left_nullable && has_right_nullable)
-            return getNextEqualRangeImpl<true, true>(rhs);
+            return getNextEqualRangeImpl<true, true>(rhs, null_safe_keys);
         else if (has_left_nullable)
-            return getNextEqualRangeImpl<true, false>(rhs);
+            return getNextEqualRangeImpl<true, false>(rhs, null_safe_keys);
         else if (has_right_nullable)
-            return getNextEqualRangeImpl<false, true>(rhs);
-        return getNextEqualRangeImpl<false, false>(rhs);
+            return getNextEqualRangeImpl<false, true>(rhs, null_safe_keys);
+        return getNextEqualRangeImpl<false, false>(rhs, nullptr);
     }
 
-    int intersect(const Block & min_max, const Names & key_names)
+    int intersect(const Block & min_max, const Names & key_names, const std::vector<bool> *null_safe_keys)
     {
         if (end() == 0 || min_max.rows() != 2)
             throw Exception("Unexpected block size", ErrorCodes::LOGICAL_ERROR);
@@ -251,10 +259,10 @@ public:
             const auto & right_column = *min_max.getByName(key_names[i]).column; /// cannot get by position cause of possible duplicates
 
             if (!first_vs_max)
-                first_vs_max = nullableCompareAt<true, true>(left_column, right_column, position(), 1);
+                first_vs_max = nullableCompareAt<true, true>(left_column, right_column, position(), 1, null_safe_keys ? (*null_safe_keys)[i] : false);
 
             if (!last_vs_min)
-                last_vs_min = nullableCompareAt<true, true>(left_column, right_column, last_position, 0);
+                last_vs_min = nullableCompareAt<true, true>(left_column, right_column, last_position, 0, null_safe_keys ? (*null_safe_keys)[i] : false);
         }
 
         if (first_vs_max > 0)
@@ -270,11 +278,11 @@ private:
     bool has_right_nullable = false;
 
     template <bool left_nulls, bool right_nulls>
-    Range getNextEqualRangeImpl(MergeJoinCursor & rhs)
+    Range getNextEqualRangeImpl(MergeJoinCursor & rhs, const std::vector<bool> *null_safe_keys)
     {
         while (!atEnd() && !rhs.atEnd())
         {
-            int cmp = compareAtCursor<left_nulls, right_nulls>(rhs);
+            int cmp = compareAtCursor<left_nulls, right_nulls>(rhs, null_safe_keys);
             if (cmp < 0)
                 impl.next();
             else if (cmp > 0)
@@ -287,14 +295,14 @@ private:
     }
 
     template <bool left_nulls, bool right_nulls>
-    int ALWAYS_INLINE compareAtCursor(const MergeJoinCursor & rhs) const
+    int ALWAYS_INLINE compareAtCursor(const MergeJoinCursor & rhs, const std::vector<bool> *null_safe_keys) const
     {
         for (size_t i = 0; i < impl.sort_columns_size; ++i)
         {
             const auto * left_column = impl.sort_columns[i];
             const auto * right_column = rhs.impl.sort_columns[i];
 
-            int res = nullableCompareAt<left_nulls, right_nulls>(*left_column, *right_column, impl.getRow(), rhs.impl.getRow());
+            int res = nullableCompareAt<left_nulls, right_nulls>(*left_column, *right_column, impl.getRow(), rhs.impl.getRow(), null_safe_keys ? (*null_safe_keys)[i] : false);
             if (res)
                 return res;
         }
@@ -708,6 +716,7 @@ void MergeJoin::joinSortedBlock(Block & block, ExtraBlockPtr & not_processed)
         not_processed.reset();
     }
 
+    const auto *null_safe_keys = table_join->keyIdsNullSafe();
     bool with_left_inequals = (is_left && !is_semi_join) || is_full;
     if (with_left_inequals)
     {
@@ -718,7 +727,7 @@ void MergeJoin::joinSortedBlock(Block & block, ExtraBlockPtr & not_processed)
 
             if (skip_not_intersected)
             {
-                int intersection = left_cursor.intersect(min_max_right_blocks[i], table_join->keyNamesRight());
+                int intersection = left_cursor.intersect(min_max_right_blocks[i], table_join->keyNamesRight(), null_safe_keys);
                 if (intersection < 0)
                     break; /// (left) ... (right)
                 if (intersection > 0)
@@ -751,7 +760,7 @@ void MergeJoin::joinSortedBlock(Block & block, ExtraBlockPtr & not_processed)
 
             if (skip_not_intersected)
             {
-                int intersection = left_cursor.intersect(min_max_right_blocks[i], table_join->keyNamesRight());
+                int intersection = left_cursor.intersect(min_max_right_blocks[i], table_join->keyNamesRight(), null_safe_keys);
                 if (intersection < 0)
                     break; /// (left) ... (right)
                 if (intersection > 0)
@@ -811,7 +820,7 @@ bool MergeJoin::leftJoin(MergeJoinCursor & left_cursor, const Block & left_block
         size_t left_unequal_position = left_cursor.position() + left_key_tail;
         left_key_tail = 0;
 
-        Range range = left_cursor.getNextEqualRange(right_cursor);
+        Range range = left_cursor.getNextEqualRange(right_cursor, table_join->keyIdsNullSafe());
 
         joinInequalsLeft<is_all>(left_block, left_columns, right_columns_to_add, right_columns, left_unequal_position, range.left_start);
 
@@ -864,7 +873,7 @@ bool MergeJoin::allInnerJoin(MergeJoinCursor & left_cursor, const Block & left_b
 
     while (!left_cursor.atEnd() && !right_cursor.atEnd())
     {
-        Range range = left_cursor.getNextEqualRange(right_cursor);
+        Range range = left_cursor.getNextEqualRange(right_cursor, table_join->keyIdsNullSafe());
         if (range.empty())
             break;
 
@@ -902,7 +911,7 @@ bool MergeJoin::semiLeftJoin(MergeJoinCursor & left_cursor, const Block & left_b
 
     while (!left_cursor.atEnd() && !right_cursor.atEnd())
     {
-        Range range = left_cursor.getNextEqualRange(right_cursor);
+        Range range = left_cursor.getNextEqualRange(right_cursor, table_join->keyIdsNullSafe());
         if (range.empty())
             break;
 

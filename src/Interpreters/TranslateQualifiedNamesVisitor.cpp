@@ -137,7 +137,7 @@ void TranslateQualifiedNamesMatcher::visit(ASTIdentifier & identifier, ASTPtr &,
             /// In case if column from the joined table are in source columns, change it's name to qualified.
             /// Also always leave unusual identifiers qualified.
             const auto & table = data.tables[table_pos].table;
-            if (table_pos && (data.hasColumn(short_name) || !isValidIdentifierBegin(short_name.at(0))))
+            if (table_pos && (data.hasColumn(short_name) || (data.check_identifier_begin_valid && !isValidIdentifierBegin(short_name.at(0)))))
                 IdentifierSemantic::setColumnLongName(identifier, table);
             else
                 IdentifierSemantic::setColumnShortName(identifier, table);

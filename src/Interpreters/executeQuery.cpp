@@ -337,6 +337,7 @@ static void onExceptionBeforeStart(const String & query_for_logging, ContextMuta
     elem.exception = getCurrentExceptionMessage(false);
 
     elem.client_info = context->getClientInfo();
+    elem.partition_ids = context->getPartitionIds();
 
     elem.log_comment = settings.log_comment;
     if (elem.log_comment.size() > settings.max_query_size)
@@ -527,6 +528,12 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
     const Settings & settings = context->getSettingsRef();
 
+    if (settings.enable_distributed_stages)
+    {
+        context->setSetting("enable_optimizer", Field(1));
+        context->setSetting("enable_distributed_stages", Field(0));
+    }
+
     /// FIXME: Use global join for cnch join works for sql mode first.
     /// Will be replaced by distributed query after @youzhiyuan add query plan runtime.
     if (context->getServerType() == ServerType::cnch_server)
@@ -595,6 +602,13 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 if (last_select && last_select->settings())
                 {
                     InterpreterSetQuery(last_select->settings(), context).executeForCurrentContext();
+                }
+
+
+                if (settings.enable_distributed_stages)
+                {
+                    context->setSetting("enable_optimizer", Field(1));
+                    context->setSetting("enable_distributed_stages", Field(0));
                 }
             }
         }
@@ -871,6 +885,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             elem.normalized_query_hash = normalizedQueryHash<false>(query_for_logging);
 
             elem.client_info = client_info;
+            elem.partition_ids = context->getPartitionIds();
 
             bool log_queries = settings.log_queries && !internal;
 
@@ -1118,6 +1133,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                         elem.max_io_time_thread_ms = info.max_io_time_thread_ms;
                         elem.max_thread_io_profile_counters = std::move(info.max_io_thread_profile_counters);
 
+
                         const auto & factories_info = context->getQueryFactoriesInfo();
                         elem.used_aggregate_functions = factories_info.aggregate_functions;
                         elem.used_aggregate_function_combinators = factories_info.aggregate_function_combinators;
@@ -1128,6 +1144,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                         elem.used_functions = factories_info.functions;
                         elem.used_storages = factories_info.storages;
                         elem.used_table_functions = factories_info.table_functions;
+                        elem.partition_ids = context->getPartitionIds();
 
                         if (log_queries && elem.type >= log_queries_min_type
                             && Int64(elem.query_duration_ms) >= log_queries_min_query_duration_ms)
@@ -1250,6 +1267,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 elem.query_duration_ms = 1000 * (elem.event_time - elem.query_start_time);
                 elem.exception_code = getCurrentExceptionCode();
                 elem.exception = getCurrentExceptionMessage(false);
+                elem.partition_ids = context->getPartitionIds();
 
                 QueryStatus * process_list_elem = context->getProcessListElement();
                 const Settings & current_settings = context->getSettingsRef();

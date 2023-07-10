@@ -1,0 +1,53 @@
+# Null safe join (equi hash join)
+1	1
+4	\N
+
+# Null safe join (equi hash join) non-nullable<=>non-nullable
+1	1
+4	\N
+
+# Null safe join (equi hash join) non-nullable<=>nullable
+1	1
+2	2
+
+# Null safe join (merge join)
+1	1
+4	\N
+1	1
+4	\N
+1	1
+2	2
+
+# Null safe join (nested loop join)
+1	1
+4	\N
+1	1
+4	\N
+1	1
+2	2
+
+# Null safe equal
+1
+0
+1
+0
+
+# IS DISTINCT FROM
+1
+0
+1
+0
+1
+1
+
+# USING <=> hash
+1	1
+4	\N
+
+# USING <=> partial_merge
+1	1
+4	\N
+
+# USING <=> nested_loop
+1	1
+4	\N

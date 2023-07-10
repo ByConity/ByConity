@@ -125,4 +125,45 @@ void writePointerHex(const void * ptr, WriteBuffer & buf)
     buf.write(hex_str, 2 * sizeof(ptr));
 }
 
+template<>
+void writeBinary(const std::vector<bool> & x, WriteBuffer & buf)
+{
+    size_t size = x.size();
+    writeVarUInt(size, buf);
+
+    if (!size)
+        return;
+
+    size_t bitmap_cnt = (size + 63) / 64;
+    size_t s = 0;
+
+    for (size_t i = 0; i < bitmap_cnt - 1; i++) {
+        uint64_t val = 0;
+
+        for (size_t j = 0; j < 64; ++j) {
+            if (!x[s++])
+                continue;
+
+            val |= 1UL << j;
+        }
+
+        writeBinary(val, buf);
+        size -= 64;
+    }
+
+    {
+        uint64_t val = 0;
+
+        for (size_t j = 0; j < size; ++j) {
+            if (!x[s++])
+                continue;
+
+            val |= 1UL << j;
+        }
+
+        writeBinary(val, buf);
+    }
+}
+
+
 }

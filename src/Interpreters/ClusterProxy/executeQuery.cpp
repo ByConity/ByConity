@@ -36,6 +36,9 @@
 #include <QueryPlan/UnionStep.h>
 #include <Storages/SelectQueryInfo.h>
 
+#include <boost/algorithm/string/split.hpp>
+#include <boost/algorithm/string/classification.hpp>
+
 
 namespace DB
 {
@@ -43,6 +46,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int TOO_LARGE_DISTRIBUTED_DEPTH;
+    extern const int UNKNOWN_SETTING;
 }
 
 namespace ClusterProxy
@@ -221,6 +225,24 @@ void executeQuery(
         throttler = user_level_throttler;
 
     ASTPtr rewrite_ast = query_ast;
+
+    std::set<UInt32> skip_shards;
+    std::vector<String> skip_shards_str;
+    String skip_shard_list = settings.skip_shard_list;
+    boost::split(skip_shards_str, skip_shard_list, boost::is_any_of(" ,"));
+    for (auto& shard : skip_shards_str)
+    {
+        if (shard.empty()) continue; // default empty setting
+        try
+        {
+            skip_shards.insert(std::stoi(shard));
+        }
+        catch(...)
+        {
+            throw Exception("skip_shard_list setting wrong " + skip_shard_list, ErrorCodes::UNKNOWN_SETTING);
+        }
+    }
+
     size_t shards = query_info.getCluster()->getShardCount();
 
     if (!settings.enable_final_sample)
@@ -228,6 +250,8 @@ void executeQuery(
 
     for (const auto & shard_info : query_info.getCluster()->getShardsInfo())
     {
+        if ((!skip_shards.empty()) && skip_shards.count(shard_info.shard_num) != 0)
+            continue;
         ASTPtr query_ast_for_shard;
         if (query_info.optimized_cluster && settings.optimize_skip_unused_shards_rewrite_in && shards > 1)
         {

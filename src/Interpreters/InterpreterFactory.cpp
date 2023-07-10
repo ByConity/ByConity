@@ -156,6 +156,8 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
 
     ProfileEvents::increment(ProfileEvents::Query);
 
+    // in ce, we will disable complex query without optimizer
+    /*
     DistributedStagesSettings distributed_stages_settings = InterpreterDistributedStages::extractDistributedStagesSettings(query, context);
 
     bool use_distributed_stages = (distributed_stages_settings.enable_distributed_stages) && !options.is_internal;
@@ -166,6 +168,7 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
         if (query->as<ASTSelectQuery>() || query->as<ASTSelectWithUnionQuery>())
             return std::make_unique<InterpreterSelectQueryUseOptimizer>(query, context, options);
     }
+    */
 
     if (query->as<ASTSelectQuery>())
     {

@@ -921,10 +921,10 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinOn(ASTTableJoin & table_join, ScopePtr
     {
         // forbid arrayJoin in JOIN ON, see also the same check in CollectJoinOnKeysVisitor
         auto array_join_exprs = extractExpressions(context, analysis, table_join.on_expression, false,
-                                                   [](const ASTPtr & node)
+                                                   [&](const ASTPtr & node)
                                                    {
                                                        if (const auto * func = node->as<ASTFunction>())
-                                                           if (func->name == "arrayJoin")
+                                                           if (func->name == "arrayJoin" && (!context->getSettingsRef().ignore_array_join_check_in_join_on_condition))
                                                                return true;
 
                                                        return false;

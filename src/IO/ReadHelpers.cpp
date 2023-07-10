@@ -1229,4 +1229,33 @@ bool loadAtPosition(ReadBuffer & in, DB::Memory<> & memory, char * & current)
     return loaded_more;
 }
 
+template<>
+void readBinary(std::vector<bool> & x, ReadBuffer & buf)
+{
+    size_t size = 0;
+    readVarUInt(size, buf);
+
+    if (!size)
+        return;
+
+    size_t bitmap_cnt = (size + 63) / 64;
+
+    for (size_t i = 0; i < bitmap_cnt - 1; i++) {
+        uint64_t val = 0;
+        readBinary(val, buf);
+
+        for (size_t j = 0; j < 64; ++j)
+            x.push_back(!!(val & (1UL << j)));
+        size -= 64;
+    }
+
+    {
+        uint64_t val = 0;
+        readBinary(val, buf);
+
+        for (size_t j = 0; j < size; ++j)
+            x.push_back(!!(val & (1UL << j)));
+    }
+}
+
 }

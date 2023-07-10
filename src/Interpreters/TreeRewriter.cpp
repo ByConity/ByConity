@@ -365,10 +365,10 @@ using ReplacePositionalArgumentsVisitor = InDepthNodeVisitor<OneTypeMatcher<Repl
 /// Expand asterisks and qualified asterisks with column names.
 /// There would be columns in normal form & column aliases after translation. Column & column alias would be normalized in QueryNormalizer.
 void translateQualifiedNames(ASTPtr & query, const ASTSelectQuery & select_query, const NameSet & source_columns_set,
-                             const TablesWithColumns & tables_with_columns)
+                             const TablesWithColumns & tables_with_columns, bool check_identifier_begin_valid)
 {
     LogAST log;
-    TranslateQualifiedNamesVisitor::Data visitor_data(source_columns_set, tables_with_columns);
+    TranslateQualifiedNamesVisitor::Data visitor_data(source_columns_set, tables_with_columns, true, {}, false, check_identifier_begin_valid);
     TranslateQualifiedNamesVisitor visitor(visitor_data, log.stream());
     visitor.visit(query);
 
@@ -623,7 +623,9 @@ void setJoinStrictness(ASTSelectQuery & select_query, JoinStrictness join_defaul
 
 /// Find the columns that are obtained by JOIN.
 void collectJoinedColumns(TableJoin & analyzed_join, const ASTTableJoin & table_join,
-                          const TablesWithColumns & tables, const Aliases & aliases)
+                          const TablesWithColumns & tables, const Aliases & aliases,
+                          bool join_using_null_safe,
+                          bool ignore_array_join_check_in_join_on_condition)
 {
     assert(tables.size() >= 2);
 
@@ -631,7 +633,7 @@ void collectJoinedColumns(TableJoin & analyzed_join, const ASTTableJoin & table_
     {
         const auto & keys = table_join.using_expression_list->as<ASTExpressionList &>();
         for (const auto & key : keys.children)
-            analyzed_join.addUsingKey(key);
+            analyzed_join.addUsingKey(key, join_using_null_safe);
 
         /// `USING` semantic allows to have columns with changed types in result table.
         /// `JOIN ON` should preserve types from original table
@@ -644,7 +646,7 @@ void collectJoinedColumns(TableJoin & analyzed_join, const ASTTableJoin & table_
     {
         bool is_asof = (table_join.strictness == ASTTableJoin::Strictness::Asof);
 
-        CollectJoinOnKeysVisitor::Data data{analyzed_join, tables[0], tables[1], aliases, is_asof};
+        CollectJoinOnKeysVisitor::Data data{analyzed_join, tables[0], tables[1], aliases, is_asof, false, {}, {}, false, ignore_array_join_check_in_join_on_condition};
         CollectJoinOnKeysVisitor(data).visit(table_join.on_expression);
         if (!data.has_some && !data.is_nest_loop_join)
             throw Exception("Cannot get JOIN keys from JOIN ON section: " + queryToString(table_join.on_expression),
@@ -957,7 +959,7 @@ void TreeRewriterResult::collectUsedColumns(const ContextPtr & context, ASTPtr &
     {
         // try rewrite unknown columns
         collectJoinTableAndAlias(context, query);
-        rewriteUnknownLeftJoinIdentifier(query, source_column_names, required, unknown_required_source_columns);
+        rewriteUnknownLeftJoinIdentifier(query, source_column_names, required, unknown_required_source_columns, context->getSettingsRef().check_identifier_begin_valid);
     }
 
     if (!unknown_required_source_columns.empty())
@@ -1080,7 +1082,7 @@ void TreeRewriterResult::collectJoinTableAndAlias(const ContextPtr & context, co
  * in this way, try rewrite identifier table_0.date to date
  */
 
-void TreeRewriterResult::rewriteUnknownLeftJoinIdentifier(ASTPtr & query, NameSet & available_columns, NameSet & required, NameSet & unknown_identifier_set)
+void TreeRewriterResult::rewriteUnknownLeftJoinIdentifier(ASTPtr & query, NameSet & available_columns, NameSet & required, NameSet & unknown_identifier_set, bool check_identifier_begin_valid)
 {
     for(auto it = join_tables_to_rewrite.begin(); it != join_tables_to_rewrite.end(); ++it)
     {
@@ -1105,7 +1107,7 @@ void TreeRewriterResult::rewriteUnknownLeftJoinIdentifier(ASTPtr & query, NameSe
             LOG_DEBUG(&Poco::Logger::get("ExpressionAnalyzer"), ss.str());
 
             TablesWithColumns tables {*it};
-            TranslateQualifiedNamesVisitor::Data visitor_data(available_columns, tables, true, need_rewrite_identifiers, true);
+            TranslateQualifiedNamesVisitor::Data visitor_data(available_columns, tables, true, need_rewrite_identifiers, true, check_identifier_begin_valid);
             TranslateQualifiedNamesVisitor visitor(visitor_data);
             visitor.visit(query);
 
@@ -1169,7 +1171,7 @@ TreeRewriterResultPtr TreeRewriter::analyzeSelect(
             source_columns_set, right_table.table.getQualifiedNamePrefix());
     }
 
-    translateQualifiedNames(query, *select_query, source_columns_set, tables_with_columns);
+    translateQualifiedNames(query, *select_query, source_columns_set, tables_with_columns, settings.check_identifier_begin_valid);
 
     /// Optimizes logical expressions.
     LogicalExpressionsOptimizer(select_query, settings.optimize_min_equality_disjunction_chain_length.value).perform();
@@ -1211,7 +1213,7 @@ TreeRewriterResultPtr TreeRewriter::analyzeSelect(
         if (table_join_ast.on_expression && result.metadata_snapshot)
             replaceAliasColumnsInQuery(table_join_ast.on_expression, result.metadata_snapshot->getColumns(), result.array_join_result_to_source, getContext());
 
-        collectJoinedColumns(*result.analyzed_join, table_join_ast, tables_with_columns, result.aliases);
+        collectJoinedColumns(*result.analyzed_join, table_join_ast, tables_with_columns, result.aliases, settings.join_using_null_safe, settings.ignore_array_join_check_in_join_on_condition);
     }
 
     result.aggregates = getAggregates(query, *select_query);
