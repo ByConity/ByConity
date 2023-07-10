@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 /**
  * Get next valid (vacated) part name.
  */
@@ -312,12 +311,14 @@ void PartMergerImpl::executeMergeTask(MergeTreeMetaBase & merge_tree, DiskPtr & 
 
     LOG_INFO(log, "Finish merging {} parts into part {}", source_part_count, merged_part->name);
 
+    S3ObjectMetadata::PartGeneratorID part_generator_id(
+        S3ObjectMetadata::PartGeneratorID::DUMPER, UUIDHelpers::UUIDToString(UUIDHelpers::generateV4()));
+
     /// Dump.
-    MergeTreeCNCHDataDumper dumper(merge_tree);
+    MergeTreeCNCHDataDumper dumper(merge_tree, part_generator_id);
 
     LOG_DEBUG(log, "Start dumping {} part", merged_part->name);
-    HDFSConnectionParams hdfs_params{HDFSConnectionParams::CONN_NNPROXY, getContext()->getHdfsUser(), getContext()->getHdfsNNProxy()};
-    auto dumped_part = dumper.dumpTempPart(merged_part, hdfs_params, false, disk);
+    auto dumped_part = dumper.dumpTempPart(merged_part, false, disk);
 
     LOG_INFO(log, "Finish dumping local part {} to remote part {}", merged_part->name, dumped_part->name);
 }
