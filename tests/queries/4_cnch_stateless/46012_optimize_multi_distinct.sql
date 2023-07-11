@@ -1,7 +1,3 @@
-DROP database if exists test;
-create database test;
-
-use test;
 DROP TABLE IF EXISTS test.multi_dist;
 
 CREATE TABLE test.multi_dist (a UInt64, b UInt64, c UInt64) ENGINE = CnchMergeTree() PARTITION BY a ORDER BY a UNIQUE KEY a;
