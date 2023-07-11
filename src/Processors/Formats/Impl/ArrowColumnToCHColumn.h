@@ -38,7 +38,6 @@
 #include <Core/Block.h>
 #include <Formats/FormatSettings.h>
 
-
 namespace DB
 {
 

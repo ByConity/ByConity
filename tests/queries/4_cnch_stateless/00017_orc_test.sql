@@ -1,0 +1,15 @@
+DROP TABLE IF EXISTS orc_test_test;
+
+CREATE TABLE orc_test_test
+(
+    `d` String,
+    `id` Int64,
+    `name` String,
+    `p` String
+)
+ENGINE = CnchHive(`data.olap.cnch_hms.service.lf`, `cnch_hive_external_table`, `orc_test`)
+PARTITION BY d;
+
+select * from orc_test_test where d = '20220914' order by id;
+
+DROP TABLE IF EXISTS orc_test_test;

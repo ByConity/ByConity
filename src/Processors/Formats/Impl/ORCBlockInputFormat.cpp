@@ -19,12 +19,12 @@ namespace ErrorCodes
     extern const int CANNOT_READ_ALL_DATA;
 }
 
-    // #define THROW_ARROW_NOT_OK(status)                                     \
-    // do                                                                 \
-    // {                                                                  \
-    //     if (::arrow::Status _s = (status); !_s.ok())                   \
-    //         throw Exception(_s.ToString(), ErrorCodes::BAD_ARGUMENTS); \
-    // } while (false)
+#define THROW_ARROW_NOT_OK(status)                                     \
+    do                                                                 \
+    {                                                                  \
+        if (::arrow::Status _s = (status); !_s.ok())                   \
+            throw Exception(_s.ToString(), ErrorCodes::BAD_ARGUMENTS); \
+    } while (false)
 
 ORCBlockInputFormat::ORCBlockInputFormat(
     ReadBuffer & in_,

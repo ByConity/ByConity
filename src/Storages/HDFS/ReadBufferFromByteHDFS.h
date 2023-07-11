@@ -157,6 +157,8 @@ namespace ErrorCodes
                 return hdfs_name;
             }
 
+            size_t getFileSize();
+
             off_t seek(off_t offset, int whence = SEEK_SET) override
             {
                return doSeek(offset, whence);

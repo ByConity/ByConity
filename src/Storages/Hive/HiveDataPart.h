@@ -194,7 +194,6 @@ protected:
     String format_name;
     DiskPtr disk;
     HivePartInfo info;
-
     std::unordered_set<Int64> skip_splits = {};
     NamesAndTypesList index_names_and_types = {};
 

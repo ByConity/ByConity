@@ -21,6 +21,7 @@
 #include <Storages/Hive/ParquetBlockInputStream.h>
 #include <Storages/Hive/ORCBlockInputStream.h>
 #include <Storages/MergeTree/CnchHiveThreadSelectBlockInputProcessor.h>
+#include <Storages/Hive/ORCBlockInputStream.h>
 
 namespace DB
 {
@@ -47,7 +48,6 @@ Block CnchHiveThreadSelectBlockInputProcessor::getHeader() const
 
 Chunk CnchHiveThreadSelectBlockInputProcessor::generate()
 {
-    LOG_TRACE(&Poco::Logger::get("CnchHiveThreadSelectBlockInputProcessor"), " generate ");
     Block res;
 
     while (!res && !isCancelled())
@@ -62,7 +62,7 @@ Chunk CnchHiveThreadSelectBlockInputProcessor::generate()
         const auto * parquet = dynamic_cast<const ParquetBlockInputStream *>(stream.get());
         const auto * orc = dynamic_cast<const ORCBlockInputStream *>(stream.get());
         if (!parquet && !orc)
-            throw Exception("Unexpected Format in CnchHive ,currently only support Parquet/ORC", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Unexpected Format in CnchHive ,currently only support Parquet/ORC", ErrorCodes::LOGICAL_ERROR);10b7bc9d1e (Merge branch 'cnchhive_support_orc_cnch_ce' into 'cnch-ce-merge')
 
         // if(parquet->isFinished())
         // {
