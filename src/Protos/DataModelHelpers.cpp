@@ -484,29 +484,6 @@ createCnchHiveDataParts(const ContextPtr & context, const pb::RepeatedPtrField<P
             }
             disk = std::make_shared<DiskByteHDFS>(part.hdfs_uri(), "", params);
         }
-        if (format_name.find("Orc") != String::npos)
-            res.emplace_back(std::make_shared<const HiveORCFile>(
-                part_name,
-                part.relative_path(),
-                format_name,
-                nullptr,
-                HivePartInfo(part_name, partition_id),
-                context->getHdfsConnectionParams(),
-                required_skip_lists));
-        else if (format_name.find("Parquet") != String::npos)
-            res.emplace_back(std::make_shared<const HiveParquetFile>(
-                part_name,
-                part.relative_path(),
-                format_name,
-                nullptr,
-                HivePartInfo(part_name, partition_id),
-                context->getHdfsConnectionParams(),
-                required_skip_lists));
-    }
-
-    return res;
-}
-
         LOG_TRACE(&Poco::Logger::get("createCnchHiveDataParts"), " createCnchHiveDataParts format_name = {}", format_name);
 
 
