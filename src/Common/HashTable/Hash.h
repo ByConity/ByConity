@@ -193,6 +193,12 @@ inline size_t DefaultHash64(std::enable_if_t<(sizeof(T) > sizeof(UInt64)), T> ke
             static_cast<UInt64>(key >> 128) ^
             static_cast<UInt64>(key >> 256));
     }
+    else if constexpr (is_pair_int64_v<T>)
+    {
+        return intHash64(
+            static_cast<UInt64>(key.low) ^
+            static_cast<UInt64>(key.high));
+    }
     assert(false);
     __builtin_unreachable();
 }

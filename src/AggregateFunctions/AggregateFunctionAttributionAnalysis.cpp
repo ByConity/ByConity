@@ -48,8 +48,8 @@ namespace
         UInt64 back_time = params[3].get<UInt64>();
         UInt64 attribution_mode = params[4].get<UInt64>();
 
-        UInt64 transformVal = params[5].safeGet<UInt64>();
-        bool other_transform = transformVal > 0;
+        UInt64 transform_val = params[5].safeGet<UInt64>();
+        bool other_transform = transform_val > 0;
 
         std::vector<UInt16> relation_matrix = transformArrayIntoVector<UInt16>(params[6].get<Array>());
         relation_matrix[0] = argument_types.size()-4;

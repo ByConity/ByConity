@@ -86,7 +86,8 @@ private:
         const DataTypes & argument_types,
         const Array & parameters,
         AggregateFunctionProperties & out_properties,
-        bool has_null_arguments) const;
+        bool has_null_arguments,
+        bool handle_null_itself = false) const;
 
     std::optional<AggregateFunctionProperties> tryGetPropertiesImpl(const String & name) const;
 

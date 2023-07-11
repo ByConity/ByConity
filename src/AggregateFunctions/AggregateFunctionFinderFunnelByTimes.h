@@ -84,7 +84,7 @@ private:
         size_t i = 0;
         std::vector<size_t> funnel_index;
 
-        auto countFunnel = [&](std::vector<size_t> &current_window_funnel, UInt32 slot_idx)
+        auto count_funnel = [&](std::vector<size_t> &current_window_funnel, UInt32 slot_idx)
         {
             auto funnel  = current_window_funnel.size();
             if (funnel > 0)
@@ -156,7 +156,7 @@ private:
                 if (window_start && (ctime > window_end))
                 {
                     // 1. record the current max funnel
-                    countFunnel(funnel_index, slot_idx);
+                    count_funnel(funnel_index, slot_idx);
                     if ((stime >= slot_begin && stime < slot_end))
                     {
                         window_start = 0; // new window
@@ -221,6 +221,12 @@ private:
                                         attr_check = events[i].param;
                                         attr_set = true;
                                     }
+                                }
+
+                                if (!is_legal && funnel_index.size() == 1)
+                                {
+                                    if (last_start == -1)
+                                        last_start = i;
                                 }
                             }
 
@@ -314,7 +320,7 @@ private:
             }
 
             // count funnel
-            countFunnel(funnel_index, slot_idx);
+            count_funnel(funnel_index, slot_idx);
 
             // start new round
             i = last_start != -1 ? last_start : i;
@@ -359,7 +365,7 @@ public:
     DataTypePtr getReturnTypeWithTimeInterval() const
     {
         DataTypes types;
-        types.emplace_back(std::make_shared<DataTypeArray>(std::make_shared<DataTypeNumber<UInt8>>()));
+        types.emplace_back(std::make_shared<DataTypeArray>(std::make_shared<DataTypeNumber<LEVELType>>()));
         types.emplace_back(std::make_shared<DataTypeArray>(std::make_shared<DataTypeArray>(std::make_shared<DataTypeNumber<UInt64>>())));
         return std::make_shared<DataTypeTuple>(types);
     }
@@ -369,7 +375,7 @@ public:
         if (time_interval)
             return getReturnTypeWithTimeInterval();
 
-        return std::make_shared<DataTypeArray>(std::make_shared<DataTypeNumber<UInt8> >());
+        return std::make_shared<DataTypeArray>(std::make_shared<DataTypeNumber<LEVELType> >());
     }
 
     void add(AggregateDataPtr place, const IColumn ** columns, size_t row_num, Arena *) const override

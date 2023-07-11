@@ -30,6 +30,7 @@
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <common/logger_useful.h>
+#include <Common/ArenaAllocator.h>
 
 
 namespace DB
@@ -42,6 +43,9 @@ namespace ErrorCodes
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 }
 
+template <typename T>
+using Vector = std::vector<T, TrackAllocator<T>>;
+
 struct AttrAnalysisEvent
 {
     UInt64 event_time{};
@@ -50,7 +54,7 @@ struct AttrAnalysisEvent
     UInt64 type_index{};
     String event_attribution_value_string;
     Float64 event_attribution_value_float{};
-    std::vector<Field> relation_attr;
+    Vector<Field> relation_attr;
 
     bool operator < (const AttrAnalysisEvent & event) const
     {
@@ -59,7 +63,7 @@ struct AttrAnalysisEvent
 
     AttrAnalysisEvent() = default;
     AttrAnalysisEvent(UInt64 event_time_, String event_name_, String event_type_, UInt64 type_index_, String event_attribution_value_string_, Float64 event_attribution_value_float_) : event_time(event_time_), event_name(event_name_), event_type(event_type_), type_index(type_index_), event_attribution_value_string(event_attribution_value_string_), event_attribution_value_float(event_attribution_value_float_) {}
-    AttrAnalysisEvent(UInt64 event_time_, String event_name_, String event_type_, UInt64 type_index_, String event_attribution_value_string_, Float64 event_attribution_value_float_, std::vector<Field> relation_attr_) : event_time(event_time_), event_name(event_name_), event_type(event_type_), type_index(type_index_), event_attribution_value_string(event_attribution_value_string_), event_attribution_value_float(event_attribution_value_float_), relation_attr(relation_attr_) {}
+    AttrAnalysisEvent(UInt64 event_time_, String event_name_, String event_type_, UInt64 type_index_, String event_attribution_value_string_, Float64 event_attribution_value_float_, Vector<Field> relation_attr_) : event_time(event_time_), event_name(event_name_), event_type(event_type_), type_index(type_index_), event_attribution_value_string(event_attribution_value_string_), event_attribution_value_float(event_attribution_value_float_), relation_attr(relation_attr_) {}
 
     void eventSerialize(WriteBuffer & buf) const
     {
@@ -98,18 +102,18 @@ struct AttrAnalysisEvent
 
 };
 
-using Events = std::vector<AttrAnalysisEvent>;
-using MultipleEvents = std::vector<Events>;
+using Events = Vector<AttrAnalysisEvent>;
+using MultipleEvents = Vector<Events>;
 
 struct AttributionAnalysisResult
 {
-    std::vector<std::vector<String>> touch_events;
-    std::vector<UInt64> click_cnt;
-    std::vector<UInt64> valid_transform_cnt;
-    std::vector<std::vector<UInt64>> transform_times;
-    std::vector<std::vector<UInt64>> transform_steps;
-    std::vector<Float64> contribution;
-    std::vector<Float64> value;
+    Vector<Vector<String>> touch_events;
+    Vector<UInt64> click_cnt;
+    Vector<UInt64> valid_transform_cnt;
+    Vector<Vector<UInt64>> transform_times;
+    Vector<Vector<UInt64>> transform_steps;
+    Vector<Float64> contribution;
+    Vector<Float64> value;
 };
 
 struct AggregateFunctionAttributionAnalysisData
@@ -128,7 +132,7 @@ struct AggregateFunctionAttributionAnalysisData
     }
 
     void add(UInt64 event_time, const String& event_name, const String& event_type, UInt64 type_index,
-             String event_attribution_value_string, Float64 event_attribution_value_float, std::vector<Field> relation_attr,
+             String event_attribution_value_string, Float64 event_attribution_value_float, Vector<Field> relation_attr,
              Arena *)
     {
         AttrAnalysisEvent event {event_time, event_name, event_type, type_index, event_attribution_value_string, event_attribution_value_float, relation_attr};
@@ -254,7 +258,7 @@ public:
             if (event_attribution_value_float < 0)
                 event_attribution_value_float = -1;
 
-            std::vector<Field> relation_attr;
+            Vector<Field> relation_attr;
             relation_attr.reserve(relation_matrix[0]);
             for (size_t i = 0; i < relation_matrix[0]; i++)
                 relation_attr.push_back(columns[4+i]->operator[](row_num));
@@ -267,7 +271,7 @@ public:
         {
             if (event_name == procedure_events[i])
             {
-                std::vector<Field> relation_attr;
+                Vector<Field> relation_attr;
                 if (2*i+1 >= relation_matrix.size())
                 {
                     this->data(place).add(event_time, event_name, "procedure_event", i, "", -1, arena);
@@ -369,7 +373,7 @@ public:
                 }
                 if (!exist)
                 {
-                    res.touch_events.emplace_back(std::vector<String>{event.event_name, event.event_attribution_value_string});
+                    res.touch_events.emplace_back(Vector<String>{event.event_name, event.event_attribution_value_string});
                     res.click_cnt.push_back(1);
                     event.type_index = res.touch_events.size()-1;
                 }
@@ -389,7 +393,7 @@ public:
 
         if (other_transform)
         {
-            res.touch_events.emplace_back(std::vector<String>{"$other_conversions", ""});
+            res.touch_events.emplace_back(Vector<String>{"$other_conversions", ""});
             res.click_cnt.push_back(0);
         }
     }
@@ -574,11 +578,11 @@ public:
         }
     }
 
-    void integrateResult(std::map<std::vector<String>, int>& touch_events_map, AttributionAnalysisResult & outer_result, const AttributionAnalysisResult& result) const
+    void integrateResult(std::map<Vector<String>, int>& touch_events_map, AttributionAnalysisResult & outer_result, const AttributionAnalysisResult& result) const
     {
         for (size_t i = 0; i < result.touch_events.size(); i++)
         {
-            std::vector<String> key = std::vector{result.touch_events[i][0], result.touch_events[i][1]};
+            Vector<String> key = Vector<String>{result.touch_events[i][0], result.touch_events[i][1]};
             if (!touch_events_map.count(key))
             {
                 touch_events_map.insert(make_pair(key, touch_events_map.size()));
@@ -608,7 +612,7 @@ public:
         MultipleEvents multiple_events = this->data(place).multiple_events;
 
         AttributionAnalysisResult result;
-        std::map<std::vector<String>, int> touch_events_map;
+        std::map<Vector<String>, int> touch_events_map;
         for (auto & multiple_event : multiple_events)
         {
             getAndProcessValidEvents(multiple_event, const_cast<AggregateDataPtr>(place));
@@ -621,7 +625,7 @@ public:
     }
 
     template<typename ColumnNum, typename Num>
-    void insertNestedVectorNumberIntoColumn(ColumnArray& vec_to, const std::vector<Num>& vec) const
+    void insertNestedVectorNumberIntoColumn(ColumnArray& vec_to, const Vector<Num>& vec) const
     {
         auto& vec_to_offset = vec_to.getOffsets();
         vec_to_offset.push_back((vec_to_offset.empty() ? 0 : vec_to_offset.back()) + vec.size());
@@ -638,7 +642,7 @@ public:
     }
 
     template<typename ColumnNum, typename Num>
-    void insertVectorNumberIntoColumn(ColumnArray& vec_to, const std::vector<Num>& vec) const
+    void insertVectorNumberIntoColumn(ColumnArray& vec_to, const Vector<Num>& vec) const
     {
         auto& vec_to_offset = vec_to.getOffsets();
         vec_to_offset.push_back((vec_to_offset.empty() ? 0 : vec_to_offset.back()) + vec.size());

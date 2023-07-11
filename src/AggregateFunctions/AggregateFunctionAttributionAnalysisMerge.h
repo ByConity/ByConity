@@ -41,30 +41,30 @@ namespace ErrorCodes
     extern const int CANNOT_ALLOCATE_MEMORY;
 }
 
-using std::vector;
-using std::map;
+template <typename T>
+using Vector = std::vector<T, TrackAllocator<T>>;
 
 static const int TRANSFORM_TIME_GAP = 10;
 static const int TRANSFORM_STEP_GAP = 10;
 
 struct AnalysisEnum
 {
-    vector<vector<String>> touch_events;
-    vector<UInt64> click_cnt;
-    vector<UInt64> valid_transform_cnt;
-    vector<Float64> valid_transform_ratio;
-    vector<vector<UInt64>> transform_times;
-    vector<vector<UInt64>> transform_time_distribution;
-    vector<vector<UInt64>> transform_steps;
-    vector<vector<UInt64>> transform_step_distribution;
-    vector<Float64> value;
-    vector<Float64> contribution;
+    Vector<Vector<String>> touch_events;
+    Vector<UInt64> click_cnt;
+    Vector<UInt64> valid_transform_cnt;
+    Vector<Float64> valid_transform_ratio;
+    Vector<Vector<UInt64>> transform_times;
+    Vector<Vector<UInt64>> transform_time_distribution;
+    Vector<Vector<UInt64>> transform_steps;
+    Vector<Vector<UInt64>> transform_step_distribution;
+    Vector<Float64> value;
+    Vector<Float64> contribution;
 };
 
 struct AggregateFunctionAttributionAnalysisMergeData
 {
     AnalysisEnum outer_result;
-    map<vector<String>, int> touch_events_map;
+    std::map<Vector<String>, int> touch_events_map;
 
     void moreSpace()
     {
@@ -83,7 +83,7 @@ struct AggregateFunctionAttributionAnalysisMergeData
     {
         for (size_t i = 0; i < analysis_enum.touch_events.size(); i++)
         {
-            vector<String> key = vector{analysis_enum.touch_events[i][0], analysis_enum.touch_events[i][1]};
+            Vector<String> key = Vector<String>{analysis_enum.touch_events[i][0], analysis_enum.touch_events[i][1]};
             if (!touch_events_map.count(key))
             {
                 touch_events_map.insert(make_pair(key, touch_events_map.size()));
@@ -104,6 +104,48 @@ struct AggregateFunctionAttributionAnalysisMergeData
         }
     }
 
+    template <typename Type>
+    void serializeVector(const Vector<Type> & vector, WriteBuffer &buf) const
+    {
+        writeBinary(vector.size(), buf);
+        for (const auto & item : vector)
+            writeBinary(item, buf);
+    }
+
+    template <typename Type>
+    void serializeVectorVector(const Vector<Type> & vector, WriteBuffer &buf) const
+    {
+        writeBinary(vector.size(), buf);
+        for (const auto & item : vector)
+            serializeVector(item, buf);
+    }
+
+    template <typename Type>
+    void deserializeVector(Vector<Type> & vector, ReadBuffer &buf) const
+    {
+        size_t size;
+        readBinary(size, buf);
+        for (size_t i = 0; i < size; i++)
+        {
+            Type item;
+            readBinary(item, buf);
+            vector.emplace_back(item);
+        }
+    }
+
+    template <typename Type>
+    void deserializeVectorVector(Vector<Type> & vector, ReadBuffer &buf) const
+    {
+        size_t size;
+        readBinary(size, buf);
+        for (size_t i = 0; i < size; i++)
+        {
+            Type item;
+            deserializeVector(item, buf);
+            vector.emplace_back(item);
+        }
+    }
+
     void add(const AnalysisEnum& analysis_enum, Arena *)
     {
         integrateOuterResult(analysis_enum);
@@ -117,18 +159,18 @@ struct AggregateFunctionAttributionAnalysisMergeData
     void serialize(WriteBuffer & buf) const
     {
         writeBinary(touch_events_map.size(), buf);
-        for (const auto &map : touch_events_map)
+        for (const auto & map : touch_events_map)
         {
-            writeBinary(map.first, buf);
+            serializeVector(map.first, buf);
             writeBinary(map.second, buf);
         }
 
-        writeBinary(outer_result.touch_events, buf);
-        writeBinary(outer_result.click_cnt, buf);
-        writeBinary(outer_result.valid_transform_cnt, buf);
-        writeBinary(outer_result.transform_times, buf);
-        writeBinary(outer_result.transform_steps, buf);
-        writeBinary(outer_result.value, buf);
+        serializeVectorVector(outer_result.touch_events, buf);
+        serializeVector(outer_result.click_cnt, buf);
+        serializeVector(outer_result.valid_transform_cnt, buf);
+        serializeVectorVector(outer_result.transform_times, buf);
+        serializeVectorVector(outer_result.transform_steps, buf);
+        serializeVector(outer_result.value, buf);
     }
 
     void deserialize(ReadBuffer & buf, Arena *)
@@ -140,19 +182,19 @@ struct AggregateFunctionAttributionAnalysisMergeData
         String event_attribute;
         int index;
         touch_events_map.clear();
-        for (size_t i = 0; i < size; i++)
+        for(size_t i = 0; i < size; i++) 
         {
             readBinary(touch_event, buf);
             readBinary(index, buf);
-            touch_events_map.insert(make_pair(vector<String>{touch_event, event_attribute}, index));
+            touch_events_map.insert(make_pair(Vector<String>{touch_event, event_attribute}, index));
         }
 
-        readBinary(outer_result.touch_events, buf);
-        readBinary(outer_result.click_cnt, buf);
-        readBinary(outer_result.valid_transform_cnt, buf);
-        readBinary(outer_result.transform_times, buf);
-        readBinary(outer_result.transform_steps, buf);
-        readBinary(outer_result.value, buf);
+        deserializeVectorVector(outer_result.touch_events, buf);
+        deserializeVector(outer_result.click_cnt, buf);
+        deserializeVector(outer_result.valid_transform_cnt, buf);
+        deserializeVectorVector(outer_result.transform_times, buf);
+        deserializeVectorVector(outer_result.transform_steps, buf);
+        deserializeVector(outer_result.value, buf);
     }
 };
 
@@ -212,7 +254,7 @@ public:
     }
 
     template <typename TYPE>
-    void transformArrayIntoVector(vector<TYPE>& vec, const ColumnArray* columnArray, size_t row_num) const
+    void transformArrayIntoVector(Vector<TYPE>& vec, const ColumnArray* columnArray, size_t row_num) const
     {
         const auto& field_col = static_cast<const Field &>(columnArray->operator[](row_num));
         for(const Field& field : field_col.get<Array>())
@@ -220,12 +262,12 @@ public:
     }
 
     template <typename TYPE>
-    void transformArrayIntoNestedVector(vector<vector<TYPE>>& vec, const ColumnArray* columnArray, size_t row_num) const
+    void transformArrayIntoNestedVector(Vector<Vector<TYPE>>& vec, const ColumnArray* columnArray, size_t row_num) const
     {
         const auto& field_col = static_cast<const Field &>(columnArray->operator[](row_num));
         for (const Field& field : field_col.get<Array>())
         {
-            vector<TYPE> res;
+            Vector<TYPE> res;
             for (const Field& f : field.get<Array>())
                 res.push_back(f.get<TYPE>());
 
@@ -300,7 +342,7 @@ public:
     }
 
     template<typename TYPE>
-    void getTopFromIndexVector(vector<TYPE>& vec, const vector<std::pair<Float64, UInt64>>& index_vec) const
+    void getTopFromIndexVector(Vector<TYPE>& vec, const Vector<std::pair<Float64, UInt64>>& index_vec) const
     {
         for (size_t i = 0; i < index_vec.size(); i++)
             std::swap(vec[index_vec[i].second], vec[i]);
@@ -310,7 +352,7 @@ public:
 
     void getTopByValue(AnalysisEnum& outer_result) const
     {
-        vector<std::pair<Float64, UInt64>> index_vec;
+        Vector<std::pair<Float64, UInt64>> index_vec;
         int other_index = -1;
         for (size_t i = 0; i < outer_result.value.size(); i++)
         {
@@ -344,7 +386,7 @@ public:
         getTopFromIndexVector(outer_result.contribution, index_vec);
     }
 
-    void getDistributionByOriginal(const vector<vector<UInt64>> & original, vector<vector<UInt64>> & distribution, int gap_count) const
+    void getDistributionByOriginal(const Vector<Vector<UInt64>> & original, Vector<Vector<UInt64>> & distribution, int gap_count) const
     {
         for (size_t i = 0; i < original.size(); i++)
         {
@@ -354,7 +396,7 @@ public:
                 return;
             }
 
-            vector<UInt64> max_and_min = getMaxAndMinIndex(original[i]);
+            Vector<UInt64> max_and_min = getMaxAndMinIndex(original[i]);
 
             UInt64 gap = ceil((max_and_min[0]-max_and_min[1]) / gap_count) + 1;
             distribution[i].insert(distribution[i].begin(), gap_count, 0);
@@ -366,7 +408,7 @@ public:
         }
     }
 
-    vector<UInt64> getMaxAndMinIndex(const vector<UInt64>& vec) const
+    Vector<UInt64> getMaxAndMinIndex(const Vector<UInt64>& vec) const
     {
         UInt64 max = 0, min = UINT_MAX;
         for (UInt64 i : vec)
@@ -374,11 +416,11 @@ public:
             max = (i > max) ? i : max;
             min = (i < min) ? i : min;
         }
-        return vector<UInt64>{max, min};
+        return Vector<UInt64>{max, min};
     }
 
     template<typename ColumnNum, typename Num>
-    void insertNestedVectorNumberIntoColumn(ColumnArray& vec_to, const vector<Num>& vec) const
+    void insertNestedVectorNumberIntoColumn(ColumnArray& vec_to, const Vector<Num>& vec) const
     {
         auto& vec_to_offset = vec_to.getOffsets();
         vec_to_offset.push_back((vec_to_offset.empty() ? 0 : vec_to_offset.back()) + vec.size());
@@ -395,7 +437,7 @@ public:
     }
 
     template<typename ColumnNum, typename Num>
-    void insertVectorNumberIntoColumn(ColumnArray& vec_to, const vector<Num>& vec) const
+    void insertVectorNumberIntoColumn(ColumnArray& vec_to, const Vector<Num>& vec) const
     {
         auto& vec_to_offset = vec_to.getOffsets();
         vec_to_offset.push_back((vec_to_offset.empty() ? 0 : vec_to_offset.back()) + vec.size());
