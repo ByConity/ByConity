@@ -62,7 +62,7 @@ Chunk CnchHiveThreadSelectBlockInputProcessor::generate()
         const auto * parquet = dynamic_cast<const ParquetBlockInputStream *>(stream.get());
         const auto * orc = dynamic_cast<const ORCBlockInputStream *>(stream.get());
         if (!parquet && !orc)
-            throw Exception("Unexpected Format in CnchHive ,currently only support Parquet/ORC", ErrorCodes::LOGICAL_ERROR);10b7bc9d1e (Merge branch 'cnchhive_support_orc_cnch_ce' into 'cnch-ce-merge')
+            throw Exception("Unexpected Format in CnchHive ,currently only support Parquet/ORC", ErrorCodes::LOGICAL_ERROR);
 
         // if(parquet->isFinished())
         // {

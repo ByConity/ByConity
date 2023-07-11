@@ -178,58 +178,6 @@ ASTPtr StorageCnchHive::extractKeyExpressionList(const ASTPtr & node)
     }
 }
 
-void StorageCnchHive::setProperties()
-{
-    if (!partition_by_ast)
-        throw Exception("PARTITION BY cannot be empty", ErrorCodes::BAD_ARGUMENTS);
-
-    auto all_columns = getInMemoryMetadataPtr()->getColumns().getAllPhysical();
-    partition_key_expr_list = extractKeyExpressionList(partition_by_ast);
-    if (!partition_key_expr_list->children.empty())
-    {
-        auto partition_key_syntax = TreeRewriter(getContext()).analyze(partition_key_expr_list, all_columns);
-        partition_key_expr = ExpressionAnalyzer(partition_key_expr_list, partition_key_syntax, getContext()).getActions(false);
-
-        partition_name_and_types = partition_key_expr->getSampleBlock().getNamesAndTypesList();
-    }
-
-    if (cluster_by_ast)
-    {
-        cluster_by_expr_list = extractKeyExpressionList(cluster_by_ast->children.front());
-
-        auto cluster_by_key_syntax = TreeRewriter(getContext()).analyze(cluster_by_expr_list, all_columns);
-        cluster_by_key_expr = ExpressionAnalyzer(cluster_by_expr_list, cluster_by_key_syntax, getContext()).getActions(false);
-
-        ASTLiteral * literal = cluster_by_ast->children.back()->as<ASTLiteral>();
-        cluster_by_total_bucket_number = literal->value.get<Int64>();
-        cluster_by_columns = cluster_by_key_expr->getSampleBlock().getNames();
-    }
-
-    if (order_by_ast)
-    {
-        sorting_key_expr_list = extractKeyExpressionList(order_by_ast);
-        if (!sorting_key_expr_list->children.empty())
-        {
-            auto sorting_key_syntax = TreeRewriter(getContext()).analyze(sorting_key_expr_list, all_columns);
-            sorting_key_expr = ExpressionAnalyzer(sorting_key_expr_list, sorting_key_syntax, getContext()).getActions(false);
-
-            sorting_name_and_types = sorting_key_expr->getSampleBlock().getNamesAndTypesList();
-            sorting_key_columns = sorting_key_expr->getSampleBlock().getNames();
-        }
-
-        const NamesAndTypesList & minmax_idx_columns_with_types = sorting_key_expr->getRequiredColumnsWithTypes();
-        minmax_idx_expr = std::make_shared<ExpressionActions>(std::make_shared<ActionsDAG>(minmax_idx_columns_with_types));
-        for (const NameAndTypePair & column : minmax_idx_columns_with_types)
-        {
-            if (minmax_idx_columns.end() == std::find(minmax_idx_columns.begin(), minmax_idx_columns.end(), column.name))
-            {
-                minmax_idx_columns.emplace_back(column.name);
-                minmax_idx_column_types.emplace_back(column.type);
-            }
-        }
-    }
-}
-
 void StorageCnchHive::checkStorageFormat()
 {
     if (table == nullptr)
