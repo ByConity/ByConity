@@ -85,6 +85,10 @@ struct QueryLogElement
     std::shared_ptr<ProfileEvents::Counters> max_thread_io_profile_counters;
     std::shared_ptr<Settings> query_settings;
 
+    Int64 segment_id{};
+    Int64 segment_parallel{};
+    Int64 segment_parallel_index{};
+
     static std::string name() { return "QueryLog"; }
 
     static NamesAndTypesList getNamesAndTypes();
