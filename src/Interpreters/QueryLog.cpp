@@ -145,7 +145,10 @@ NamesAndTypesList QueryLogElement::getNamesAndTypes()
         {"used_functions", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())},
         {"used_storages", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())},
         {"used_table_functions", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())},
-        {"partition_ids", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())}
+        {"partition_ids", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())},
+        {"segment_id", std::make_shared<DataTypeInt64>()},
+        {"segment_parallel", std::make_shared<DataTypeInt64>()},
+        {"segment_parallel_index", std::make_shared<DataTypeInt64>()}
     };
 
 }
@@ -297,6 +300,10 @@ void QueryLogElement::appendToBlock(MutableColumns & columns) const
         fill_column(used_table_functions, column_table_function_factory_objects);
         fill_column(partition_ids, column_partition_ids);
     }
+
+    columns[i++]->insert(segment_id);
+    columns[i++]->insert(segment_parallel);
+    columns[i++]->insert(segment_parallel_index);
 }
 
 void QueryLogElement::appendClientInfo(const ClientInfo & client_info, MutableColumns & columns, size_t & i)

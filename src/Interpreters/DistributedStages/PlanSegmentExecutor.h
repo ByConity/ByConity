@@ -17,6 +17,7 @@
 
 #include <memory>
 #include <Interpreters/Context_fwd.h>
+#include <Interpreters/QueryLog.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
@@ -74,6 +75,8 @@ public:
     explicit PlanSegmentExecutor(PlanSegmentPtr plan_segment_, ContextMutablePtr context_);
     explicit PlanSegmentExecutor(PlanSegmentPtr plan_segment_, ContextMutablePtr context_, ExchangeOptions options_);
 
+    ~PlanSegmentExecutor() noexcept;
+
     RuntimeSegmentsStatus execute(std::shared_ptr<ThreadGroupStatus> thread_group = nullptr);
     BlockIO lazyExecute(bool add_output_processors = false);
 
@@ -91,6 +94,7 @@ private:
     ExchangeOptions options;
     Poco::Logger * logger;
     RuntimeSegmentsStatus runtime_segment_status;
+    std::unique_ptr<QueryLogElement> query_log_element;
 
     Processors buildRepartitionExchangeSink(BroadcastSenderPtrs & senders, bool keep_order, size_t output_index, const Block &header, OutputPortRawPtrs &ports);
 
@@ -99,6 +103,9 @@ private:
     Processors buildLoadBalancedExchangeSink(BroadcastSenderPtrs & senders, size_t output_index, const Block &header, OutputPortRawPtrs &ports);
 
     void sendSegmentStatus(const RuntimeSegmentsStatus & status) noexcept;
+
+    void collectSegmentQueryRuntimeMetric(const QueryStatus * query_status);
+    void prepareSegmentInfo() const;
 };
 
 }

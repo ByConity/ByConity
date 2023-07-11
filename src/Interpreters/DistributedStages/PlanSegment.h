@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <optional>
 #include <Core/Types.h>
 #include <Core/Block.h>
@@ -288,6 +289,8 @@ public:
     void addRuntimeFilter(DynamicFilterId id) { runtime_filters.emplace_back(id); }
 
     std::vector<DynamicFilterId> & getRuntimeFilters() { return runtime_filters; }
+
+    size_t getParallelIndex() const;
 
 private:
     size_t segment_id;
