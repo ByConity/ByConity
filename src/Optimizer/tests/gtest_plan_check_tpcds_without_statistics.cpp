@@ -66,24 +66,7 @@ public:
 
 std::shared_ptr<DB::BaseTpcdsPlanTest> PlanCheckTpcdsWihtoutStatistics::tester;
 
-TEST_F(PlanCheckTpcdsWihtoutStatistics, generate)
-{
-    if (!AbstractPlanTestSuite::enforce_regenerate())
-        GTEST_SKIP() << "skip generate. set env REGENERATE=1 to regenerate explains.";
-    for (auto & query : tester->loadQueries())
-    {
-        try
-        {
-            std::cout << " try generate for " + query + "." << std::endl;
-            tester->saveExplain(query, explain(query));
-        }
-        catch (...)
-        {
-            std::cerr << " generate for " + query + " failed." << std::endl;
-            tester->saveExplain(query, "");
-        }
-    }
-}
+DECLARE_GENERATE_TEST(PlanCheckTpcdsWihtoutStatistics)
 
 TEST_F(PlanCheckTpcdsWihtoutStatistics, q1)
 {

@@ -15,31 +15,32 @@
 
 #include <Analyzers/QueryRewriter.h>
 
+#include <AggregateFunctions/AggregateFunctionFactory.h>
+#include <Analyzers/CheckAliasVisitor.h>
 #include <Analyzers/ExecutePrewhereSubqueryVisitor.h>
 #include <Analyzers/ImplementFunctionVisitor.h>
 #include <Analyzers/ReplaceViewWithSubqueryVisitor.h>
-#include <Analyzers/CheckAliasVisitor.h>
-#include <AggregateFunctions/AggregateFunctionFactory.h>
-#include <Interpreters/ApplyWithSubqueryVisitor.h>
+#include <Analyzers/RewriteAliasesVisitor.h>
 #include <Interpreters/ApplyWithAliasVisitor.h>
+#include <Interpreters/ApplyWithSubqueryVisitor.h>
+#include <Interpreters/CollectJoinOnKeysVisitor.h>
+#include <Interpreters/CrossToInnerJoinVisitor.h>
 #include <Interpreters/DatabaseAndTableWithAlias.h>
+#include <Interpreters/FunctionNameNormalizer.h>
+#include <Interpreters/JoinToSubqueryTransformVisitor.h>
+#include <Interpreters/JoinedTables.h>
+#include <Interpreters/LogicalExpressionsOptimizer.h>
+#include <Interpreters/MarkTableIdentifiersVisitor.h>
+#include <Interpreters/NormalizeSelectWithUnionQueryVisitor.h>
 #include <Interpreters/QueryAliasesVisitor.h>
 #include <Interpreters/QueryNormalizer.h>
-#include <Interpreters/TranslateQualifiedNamesVisitor.h>
-#include <Interpreters/CrossToInnerJoinVisitor.h>
-#include <Interpreters/JoinToSubqueryTransformVisitor.h>
-#include <Interpreters/LogicalExpressionsOptimizer.h>
-#include <Interpreters/JoinedTables.h>
-#include <Interpreters/TreeRewriter.h>
-#include <Interpreters/TreeOptimizer.h>
-#include <Interpreters/MarkTableIdentifiersVisitor.h>
-#include <Interpreters/FunctionNameNormalizer.h>
-#include <Interpreters/misc.h>
-#include <Interpreters/CollectJoinOnKeysVisitor.h>
-#include <Interpreters/getTableExpressions.h>
-#include <Interpreters/TableJoin.h>
-#include <Interpreters/NormalizeSelectWithUnionQueryVisitor.h>
 #include <Interpreters/SelectIntersectExceptQueryVisitor.h>
+#include <Interpreters/TableJoin.h>
+#include <Interpreters/TranslateQualifiedNamesVisitor.h>
+#include <Interpreters/TreeOptimizer.h>
+#include <Interpreters/TreeRewriter.h>
+#include <Interpreters/getTableExpressions.h>
+#include <Interpreters/misc.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/queryToString.h>
@@ -181,11 +182,17 @@ namespace
         GraphvizPrinter::printAST(query, context, std::to_string(graphviz_index++) + "-AST-expand-cte");
     }
 
+    void rewriteAliases(ASTPtr & query, ContextMutablePtr context)
+    {
+        RewriteAliasesVisitor::Data data{context};
+        RewriteAliasesVisitor(data).visit(query);
+        GraphvizPrinter::printAST(query, context, std::to_string(graphviz_index++) + "-AST-rewrite-alias");
+    }
+
     void checkAlias(ASTPtr & query)
     {
         CheckAliasVisitor().visit(query);
     }
-
 
     void expandView(ASTPtr & query, ContextMutablePtr context)
     {
@@ -517,6 +524,7 @@ ASTPtr QueryRewriter::rewrite(ASTPtr query, ContextMutablePtr context, bool enab
         checkAlias(query);
 
         /// Expression rewriting
+        rewriteAliases(query, context);
         markTupleLiteralsAsLegacy(query, context);
         markTableIdentifiers(query);
         rewriteInTableExpression(query);

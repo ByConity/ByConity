@@ -384,6 +384,7 @@ void QueryNormalizer::visit(ASTIdentifier & node, ASTPtr & ast, Data & data)
     }
 }
 
+/// special visitChildren() for ASTTablesInSelectQueryElement
 void QueryNormalizer::visit(ASTTablesInSelectQueryElement & node, const ASTPtr &, Data & data)
 {
     /// normalize JOIN ON section
@@ -392,6 +393,14 @@ void QueryNormalizer::visit(ASTTablesInSelectQueryElement & node, const ASTPtr &
         auto & join = node.table_join->as<ASTTableJoin &>();
         if (join.on_expression)
             visit(join.on_expression, data);
+
+        if (join.using_expression_list && !data.aliases_rewrite_scope)
+            visit(join.using_expression_list, data);
+    }
+
+    if (node.array_join)
+    {
+        visit(node.array_join, data);
     }
 }
 
@@ -405,6 +414,9 @@ void QueryNormalizer::visit(ASTSelectQuery & select, const ASTPtr &, Data & data
 {
     for (auto & child : select.children)
     {
+        if (data.aliases_rewrite_scope && child.get() == select.refSelect().get())
+            continue;
+
         if (needVisitChild(child))
             visit(child, data);
     }
@@ -457,7 +469,7 @@ void QueryNormalizer::visitChildren(IAST * node, Data & data)
             visitChildren(func_node->window_definition.get(), data);
         }
     }
-    else if (!node->as<ASTSelectQuery>())
+    else if (!node->as<ASTSelectQuery>() && !node->as<ASTTablesInSelectQueryElement>())
     {
         for (auto & child : node->children)
             if (needVisitChild(child))
