@@ -478,8 +478,9 @@ void BaseSettings<Traits_>::read(ReadBuffer & in, SettingsWriteFormat read_forma
         Flags flags{0};
         if (read_format >= SettingsWriteFormat::STRINGS_WITH_FLAGS)
             flags = BaseSettingsHelpers::readFlags(in);
-        bool is_important = (flags & Flags::IMPORTANT);
-        bool is_custom = (flags & Flags::CUSTOM);
+        bool no_flags = (read_format < SettingsWriteFormat::STRINGS_WITH_FLAGS);
+        bool is_important = (flags & Flags::IMPORTANT) || no_flags;
+        bool is_custom = (flags & Flags::CUSTOM) && (!no_flags);
 
         if (index != static_cast<size_t>(-1))
         {

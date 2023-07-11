@@ -76,6 +76,31 @@ static bool isBoolCompatibleType(const DataTypePtr & type)
     return isUInt8(nonnull_type) || isNothing(nonnull_type);
 }
 
+static bool inFunctionIsPositive(const String & func_name)
+{
+    return func_name == "in" || func_name == "globalIn" || func_name == "nullIn" || func_name == "globalNullIn";
+}
+
+static bool inFunctionIsNegative(const String & func_name)
+{
+    return func_name == "notIn" || func_name == "globalNotIn" || func_name == "notNullIn" || func_name == "globalNotNullIn";
+}
+
+static bool inFunctionIsNullSkipped(const String & func_name)
+{
+    return func_name == "in" || func_name == "globalIn" || func_name == "notIn" || func_name == "globalNotIn";
+}
+
+static bool inFunctionIsNotNullSkipped(const String & func_name)
+{
+    return func_name == "nullIn" || func_name == "globalNullIn" || func_name == "notNullIn" || func_name == "globalNotNullIn";
+}
+
+static bool isInFunction(const String & func_name)
+{
+    return inFunctionIsPositive(func_name) || inFunctionIsNegative(func_name);
+}
+
 namespace function_simplify_rules_
 {
 template <bool value>
@@ -384,29 +409,22 @@ InterpretIMResult ExpressionInterpreter::visit(const ConstASTPtr & node) const
     if (const auto * ast_func = node->as<ASTFunction>())
     {
         const auto & func_name = ast_func->name;
-        const static NameSet functions_not_evaluate
-            {
-                "arrayJoin",
+        const static NameSet functions_not_evaluate{
+            "arrayJoin",
 
-                "arraySetCheck",
-                "arraySetGet",
-                "arraySetGetAny",
+            "arraySetCheck",
+            "arraySetGet",
+            "arraySetGetAny",
 
-                InternalFunctionDynamicFilter::name,
+            InternalFunctionDynamicFilter::name,
 
-                "str_to_map",
-                "getMapKeys",
-
-                // TODO: support nullIn
-                "nullIn",
-                "notNullIn",
-                "globalNullIn",
-                "globalNotNullIn"
-            };
+            "str_to_map",
+            "getMapKeys",
+        };
 
         if (functions_not_evaluate.count(func_name))
             return originalNode(node);
-        if (func_name == "in" || func_name == "globalIn" || func_name == "notIn" || func_name == "globalNotIn")
+        if (isInFunction(func_name))
             return visitInFunction(*ast_func, node);
         return visitOrdinaryFunction(*ast_func, node);
     }
@@ -612,11 +630,11 @@ InterpretIMResult ExpressionInterpreter::visitInFunction(const ASTFunction & fun
         ASTPtr rewritten_func = makeASTFunction(function.name, rewritten_left_arg, right_arg);
         return {std::make_shared<DataTypeUInt8>(), rewritten_func};
     }
-    // rewrite `x IN 1` to `x = 1`
-    else if (set_values.size() == 1)
+    // rewrite `x IN 1` to `x = 1`, notice `NULL nullIn (NULL)` should return 1 so it can't be rewritten
+    else if (set_values.size() == 1 && inFunctionIsNullSkipped(function.name))
     {
         auto result_type = makeNullableByArgumentTypes<DataTypeUInt8>({left_arg_result});
-        String comparison_op = (function.name == "in" || function.name == "globalIn") ? "equals" : "notEquals";
+        String comparison_op = inFunctionIsPositive(function.name) ? "equals" : "notEquals";
         auto comparison_func = makeASTFunction(comparison_op, rewritten_left_arg, set_values.front());
         return {result_type, comparison_func};
     }

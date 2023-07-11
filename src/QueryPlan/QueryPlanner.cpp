@@ -256,7 +256,7 @@ void planExtremes(RelationPlan & plan, ContextMutablePtr context)
 QueryPlanPtr QueryPlanner::plan(ASTPtr & query, Analysis & analysis, ContextMutablePtr context)
 {
     context->setStepId(GraphvizPrinter::PRINT_PLAN_BUILD_INDEX);
-    
+
     CTERelationPlans cte_plans;
     RelationPlan relation_plan = planQuery(query, nullptr, analysis, context, cte_plans);
     planExtremes(relation_plan, context);
@@ -1763,6 +1763,9 @@ void QueryPlannerVisitor::planInSubquery(PlanBuilder & builder, const ASTPtr & n
         return;
 
     auto & function = node->as<ASTFunction &>();
+    if (function.name == "nullIn" || function.name == "globalNullIn" || function.name == "notNullIn" || function.name == "globalNotNullIn")
+        throw Exception(
+            "nullIn,globalNullIn,notNullIn and globalNotNullIn are not implemented, when optimizer is opened", ErrorCodes::NOT_IMPLEMENTED);
 
     //process two children of function
     RelationPlan rhs_plan;
