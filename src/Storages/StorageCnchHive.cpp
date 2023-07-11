@@ -159,38 +159,6 @@ static ASTPtr getBasicSelectQuery(const ASTPtr & original_query)
     return query;
 }
 
-ASTPtr StorageCnchHive::extractKeyExpressionList(const ASTPtr & node)
-{
-    if (!node)
-        return std::make_shared<ASTExpressionList>();
-
-    const auto * expr_func = node->as<ASTFunction>();
-
-    if (expr_func && expr_func->name == "tuple")
-    {
-        return expr_func->arguments->clone();
-    }
-    else
-    {
-        auto res = std::make_shared<ASTExpressionList>();
-        res->children.push_back(node);
-        return res;
-    }
-}
-
-void StorageCnchHive::checkStorageFormat()
-{
-    if (table == nullptr)
-    {
-        auto hms_client = HiveMetastoreClientFactory::instance().getOrCreate(remote_psm, settings);
-        table = std::make_shared<Apache::Hadoop::Hive::Table>();
-        hms_client->getTable(*table, remote_database, remote_table);
-    }
-
-    const String format = (*table).sd.outputFormat;
-    if ((format.find("parquet") == String::npos) && (format.find("orc") == String::npos))
-        throw Exception("CnchHive only support parquet/orc format. Current format is " + format + " .", ErrorCodes::BAD_ARGUMENTS);
-}
 
 bool StorageCnchHive::isBucketTable() const
 {
