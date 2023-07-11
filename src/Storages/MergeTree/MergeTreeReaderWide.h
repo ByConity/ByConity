@@ -28,15 +28,12 @@
 namespace DB
 {
 
-class MergeTreeDataPartWide;
-using DataPartWidePtr = std::shared_ptr<const MergeTreeDataPartWide>;
-
 /// Reader for Wide parts.
 class MergeTreeReaderWide : public IMergeTreeReader
 {
 public:
     MergeTreeReaderWide(
-        DataPartWidePtr data_part_,
+        MergeTreeMetaBase::DataPartPtr data_part_,
         NamesAndTypesList columns_,
         const StorageMetadataPtr & metadata_snapshot_,
         UncompressedCache * uncompressed_cache_,
@@ -45,7 +42,8 @@ public:
         MergeTreeReaderSettings settings_,
         ValueSizeMap avg_value_size_hints_ = {},
         const ReadBufferFromFileBase::ProfileCallback & profile_callback_ = {},
-        clockid_t clock_type_ = CLOCK_MONOTONIC_COARSE);
+        clockid_t clock_type_ = CLOCK_MONOTONIC_COARSE,
+        bool create_streams_ = true);
 
     /// Return the number of rows has been read or zero if there is no columns to read.
     /// If continue_reading is true, continue reading from last state, otherwise seek to from_mark

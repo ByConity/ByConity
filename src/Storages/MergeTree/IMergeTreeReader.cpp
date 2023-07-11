@@ -362,10 +362,19 @@ void IMergeTreeReader::addByteMapStreams(const NameAndTypePair & name_and_type, 
         streams.emplace(
             implicit_stream_name,
             std::make_unique<MergeTreeReaderStream>(
-                data_part->volume->getDisk(),
-                data_part->getFullRelativePath() + col_stream_name,
+                IMergeTreeReaderStream::StreamFileMeta {
+                    .disk = data_part->volume->getDisk(),
+                    .rel_path = data_part->getFullRelativePath() + col_stream_name + DATA_FILE_EXTENSION,
+                    .offset = data_part->getFileOffsetOrZero(implicit_stream_name + DATA_FILE_EXTENSION),
+                    .size = data_part->getFileSizeOrZero(implicit_stream_name + DATA_FILE_EXTENSION)
+                },
+                IMergeTreeReaderStream::StreamFileMeta {
+                    .disk = data_part->volume->getDisk(),
+                    .rel_path = data_part->index_granularity_info.getMarksFilePath(data_part->getFullRelativePath() + col_stream_name),
+                    .offset = data_part->getFileOffsetOrZero(data_part->index_granularity_info.getMarksFilePath(implicit_stream_name)),
+                    .size = data_part->getFileSizeOrZero(data_part->index_granularity_info.getMarksFilePath(implicit_stream_name)),
+                },
                 implicit_stream_name,
-                DATA_FILE_EXTENSION,
                 data_part->getMarksCount(),
                 all_mark_ranges,
                 settings,
@@ -373,11 +382,9 @@ void IMergeTreeReader::addByteMapStreams(const NameAndTypePair & name_and_type, 
                 uncompressed_cache,
                 &data_part->index_granularity_info,
                 profile_callback,
-                clock_type,
-                data_part->getFileOffsetOrZero(implicit_stream_name + DATA_FILE_EXTENSION),
-                data_part->getFileSizeOrZero(implicit_stream_name + DATA_FILE_EXTENSION),
-                data_part->getFileOffsetOrZero(data_part->index_granularity_info.getMarksFilePath(implicit_stream_name)),
-                data_part->getFileSizeOrZero(data_part->index_granularity_info.getMarksFilePath(implicit_stream_name))));
+                clock_type
+            )
+        );
     };
 
     auto serialization = data_part->getSerializationForColumn(name_and_type);

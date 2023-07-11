@@ -32,6 +32,7 @@
 #include <Storages/MergeTree/MergeTreeDataPartWide.h>
 #include <Common/escapeForFileName.h>
 #include <Common/typeid_cast.h>
+#include "Storages/MergeTree/IMergeTreeReaderStream.h"
 #include <utility>
 
 namespace DB
@@ -48,7 +49,7 @@ namespace ErrorCodes
 }
 
 MergeTreeReaderWide::MergeTreeReaderWide(
-    DataPartWidePtr data_part_,
+    MergeTreeMetaBase::DataPartPtr data_part_,
     NamesAndTypesList columns_,
     const StorageMetadataPtr & metadata_snapshot_,
     UncompressedCache * uncompressed_cache_,
@@ -57,7 +58,8 @@ MergeTreeReaderWide::MergeTreeReaderWide(
     MergeTreeReaderSettings settings_,
     IMergeTreeDataPart::ValueSizeMap avg_value_size_hints_,
     const ReadBufferFromFileBase::ProfileCallback & profile_callback_,
-    clockid_t clock_type_)
+    clockid_t clock_type_,
+    bool create_streams_)
     : IMergeTreeReader(
         std::move(data_part_),
         std::move(columns_),
@@ -68,6 +70,11 @@ MergeTreeReaderWide::MergeTreeReaderWide(
         std::move(settings_),
         std::move(avg_value_size_hints_))
 {
+    if (!create_streams_)
+    {
+        return;
+    }
+
     try
     {
         for (const NameAndTypePair & column : columns)
@@ -266,10 +273,19 @@ void MergeTreeReaderWide::addStreams(const NameAndTypePair & name_and_type,
         streams.emplace(
             stream_name,
             std::make_unique<MergeTreeReaderStream>(
-                data_part->volume->getDisk(),
-                data_part->getFullRelativePath() + stream_name,
+                IMergeTreeReaderStream::StreamFileMeta {
+                    .disk = data_part->volume->getDisk(),
+                    .rel_path = data_part->getFullRelativePath() + stream_name + DATA_FILE_EXTENSION,
+                    .offset = data_part->getFileOffsetOrZero(stream_name + DATA_FILE_EXTENSION),
+                    .size = data_part->getFileSizeOrZero(stream_name + DATA_FILE_EXTENSION),
+                },
+                IMergeTreeReaderStream::StreamFileMeta {
+                    .disk = data_part->volume->getDisk(),
+                    .rel_path = data_part->index_granularity_info.getMarksFilePath(data_part->getFullRelativePath() + stream_name),
+                    .offset = data_part->getFileOffsetOrZero(data_part->index_granularity_info.getMarksFilePath(stream_name)),
+                    .size = data_part->getFileSizeOrZero(data_part->index_granularity_info.getMarksFilePath(stream_name)),
+                },
                 stream_name,
-                DATA_FILE_EXTENSION,
                 data_part->getMarksCount(),
                 all_mark_ranges,
                 settings,
@@ -277,11 +293,9 @@ void MergeTreeReaderWide::addStreams(const NameAndTypePair & name_and_type,
                 uncompressed_cache,
                 &data_part->index_granularity_info,
                 profile_callback,
-                clock_type,
-                data_part->getFileOffsetOrZero(stream_name + DATA_FILE_EXTENSION),
-                data_part->getFileSizeOrZero(stream_name + DATA_FILE_EXTENSION),
-                data_part->getFileOffsetOrZero(data_part->index_granularity_info.getMarksFilePath(stream_name)),
-                data_part->getFileSizeOrZero(data_part->index_granularity_info.getMarksFilePath(stream_name))));
+                clock_type
+            )
+        );
     };
 
     auto serialization = data_part->getSerializationForColumn(name_and_type);

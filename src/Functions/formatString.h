@@ -20,7 +20,7 @@ namespace ErrorCodes
     extern const int BAD_ARGUMENTS;
 }
 
-struct FormatImpl
+struct FormatStringImpl
 {
     static constexpr size_t small_argument_threshold = 1024;
     static constexpr size_t argument_threshold = std::numeric_limits<UInt32>::max();
