@@ -2159,7 +2159,7 @@ void StorageCnchMergeTree::dropPartsImpl(
     else
     {
         // drop_range parts should belong to the primary transaction
-        drop_parts = createDropRangesFromParts(local_context, svr_parts_to_drop, txn);
+        drop_ranges = createDropRangesFromParts(local_context, svr_parts_to_drop, txn);
     }
 
     auto bitmap_tombstones = createDeleteBitmapTombstones(drop_ranges, txn->getPrimaryTransactionID());
