@@ -356,7 +356,7 @@ HiveDataPartsCNCHVector HiveMetastoreClient::getDataPartsInTable(
         }
 
         auto info = std::make_shared<HivePartInfo>(part_name, "");
-
+        
         LOG_TRACE(&Poco::Logger::get("HiveMetastoreClient"), " getDataPartsInTable format_name = {}", format_name);
 
         if (format_name.find("Orc") != String::npos)

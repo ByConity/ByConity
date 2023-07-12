@@ -70,3 +70,20 @@ LOCATION
 
 INSERT INTO orc_db.orc_tbl partition(event_date='20220202') SELECT string_col, int_col FROM csv_db.simple_csv_tbl;
 INSERT INTO orc_db.orc_tbl partition(event_date='20220203') SELECT string_col, int_col FROM csv_db.simple_csv_tbl;
+
+CREATE DATABASE IF NOT EXISTS str_test_db;
+DROP TABLE IF EXISTS str_test_db.fixed_str;
+CREATE TABLE IF NOT EXISTS str_test_db.fixed_str (
+    `fixed_str` char(16),
+    `varchar_str` varchar(10),
+    `str` string )
+ROW FORMAT SERDE
+    'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
+STORED AS INPUTFORMAT
+    'org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat'
+OUTPUTFORMAT
+    'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat'
+LOCATION
+    '/user/byconity/str_test_db/fixed_str';
+
+INSERT INTO str_test_db.fixed_str values('1234567890123456', 'abc', 'abc'), ('2345678901234567','def','def')
