@@ -102,8 +102,12 @@ Void NodeDumper::visitTableScanNode(TableScanNode & node, Void & void_context)
     if (!visited_tables.count(database_table))
     {
         visited_tables.insert(database_table);
-        auto create_query = DatabaseCatalog::instance().getTable(StorageID(database, table),context)->getCreateTableSql();
-        query_ddl.set(database_table, create_query);
+        ASTPtr create_query = DatabaseCatalog::instance().getDatabase(database, context)->getCreateTableQuery(table, context);
+        WriteBufferFromOwnString buf;
+        formatAST(*create_query, buf, false, false);
+        String res = buf.str();
+
+        query_ddl.set(database_table, res);
         query_stats.set(database_table, tableJson(context, database, table));
     }
     StoragePtr storage = step.getStorage();
@@ -115,7 +119,7 @@ Void NodeDumper::visitTableScanNode(TableScanNode & node, Void & void_context)
         if (!visited_tables.count(local_database_table))
         {
             visited_tables.insert(local_database_table);
-            ASTPtr create_query = DatabaseCatalog::instance().getDatabase(local_database)->getCreateTableQuery(local_table, context);
+            ASTPtr create_query = DatabaseCatalog::instance().getDatabase(local_database, context)->getCreateTableQuery(local_table, context);
             WriteBufferFromOwnString buf;
             formatAST(*create_query, buf, false, false);
             String res = buf.str();

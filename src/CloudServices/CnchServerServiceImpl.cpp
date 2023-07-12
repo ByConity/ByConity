@@ -28,6 +28,7 @@
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Transaction/LockManager.h>
+#include "Common/tests/gtest_global_context.h"
 #include <Common/Exception.h>
 #include <CloudServices/CnchMergeMutateThread.h>
 #include <CloudServices/CnchDataWriter.h>
@@ -801,6 +802,7 @@ void CnchServerServiceImpl::reportCnchLockHeartBeat(
         }
     });
 }
+
 void CnchServerServiceImpl::getServerStartTime(
     google::protobuf::RpcController * cntl,
     const Protos::GetServerStartTimeReq * request,
@@ -863,6 +865,7 @@ void CnchServerServiceImpl::getNumOfTablesCanSendForGlobalGC(
         response->set_num_of_tables_can_send(0);
     }
 }
+
 void CnchServerServiceImpl::getDeletingTablesInGlobalGC(
     google::protobuf::RpcController * cntl,
     const Protos::GetDeletingTablesInGlobalGCReq * request,
@@ -938,18 +941,19 @@ void CnchServerServiceImpl::handleRedirectCommitRequest(
 }
 
 void CnchServerServiceImpl::redirectCommitParts(
-    google::protobuf::RpcController * controller,
-    const Protos::RedirectCommitPartsReq * request,
-    Protos::RedirectCommitPartsResp * response,
-    google::protobuf::Closure * done)
+    [[maybe_unused]] google::protobuf::RpcController* controller,
+    [[maybe_unused]] const Protos::RedirectCommitPartsReq * request,
+    [[maybe_unused]] Protos::RedirectCommitPartsResp * response,
+    [[maybe_unused]] google::protobuf::Closure * done)
 {
     handleRedirectCommitRequest(controller, request, response, done, false);
 }
+
 void CnchServerServiceImpl::redirectSetCommitTime(
-    google::protobuf::RpcController * controller,
-    const Protos::RedirectCommitPartsReq * request,
-    Protos::RedirectCommitPartsResp * response,
-    google::protobuf::Closure * done)
+    [[maybe_unused]] google::protobuf::RpcController* controller,
+    [[maybe_unused]] const Protos::RedirectCommitPartsReq * request,
+    [[maybe_unused]] Protos::RedirectCommitPartsResp * response,
+    [[maybe_unused]] google::protobuf::Closure * done)
 {
     handleRedirectCommitRequest(controller, request, response, done, true);
 }

@@ -36,7 +36,7 @@ void ReplicasStatusHandler::handleRequest(HTTPServerRequest & request, HTTPServe
         bool ok = true;
         WriteBufferFromOwnString message;
 
-        auto databases = DatabaseCatalog::instance().getDatabases();
+        auto databases = DatabaseCatalog::instance().getDatabases(getContext());
 
         /// Iterate through all the replicated tables.
         for (const auto & db : databases)

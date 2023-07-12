@@ -584,7 +584,7 @@ void DatabaseReplicated::recoverLostReplica(const ZooKeeperPtr & current_zookeep
             LOG_DEBUG(log, "Will RENAME TABLE {} TO {}.{}", backQuoteIfNeed(table_name), backQuoteIfNeed(to_db_name), backQuoteIfNeed(to_name));
             assert(db_name < to_db_name);
             DDLGuardPtr to_table_guard = DatabaseCatalog::instance().getDDLGuard(to_db_name, to_name);
-            auto to_db_ptr = DatabaseCatalog::instance().getDatabase(to_db_name);
+            auto to_db_ptr = DatabaseCatalog::instance().getDatabase(to_db_name, getContext());
             DatabaseAtomic::renameTable(make_query_context(), table_name, *to_db_ptr, to_name, false, false);
             ++moved_tables;
         }

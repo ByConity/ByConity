@@ -92,6 +92,7 @@
 #include <Transaction/TxnTimestamp.h>
 #include <Interpreters/VirtualWarehouseHandle.h>
 #include <Interpreters/trySetVirtualWarehouse.h>
+#include "Interpreters/DatabaseCatalog.h"
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <Parsers/ASTSystemQuery.h>
 #include <Storages/StorageCloudMergeTree.h>
@@ -478,12 +479,10 @@ static TransactionCnchPtr prepareCnchTransaction(ContextMutablePtr context, [[ma
             if (database.empty())
                 database = context->getCurrentDatabase();
 
-            /// XXX:
-            if (auto local_storage = context->getCnchCatalog()->tryGetTable(*context, database, table);
-                local_storage && !dynamic_cast<StorageCloudMergeTree *>(local_storage.get()))
+            auto storage = DatabaseCatalog::instance().getTable(StorageID(database, table), context);
+             if (!dynamic_cast<StorageCnchMergeTree *>(storage.get()) && !dynamic_cast<StorageCloudMergeTree *>(storage.get()))
                 return {};
 
-            auto storage = context->getCnchCatalog()->getTable(*context, database, table, TxnTimestamp::maxTS());
             auto host_ports = context->getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(storage->getStorageUUID()), true);
             auto server_client
                 = host_ports.empty() ? context->getCnchServerClientPool().get() : context->getCnchServerClientPool().get(host_ports);
@@ -658,7 +657,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
     setQuerySpecificSettings(ast, context);
     auto txn = prepareCnchTransaction(context, ast);
-    if (txn && context->getServerType() == ServerType::cnch_server)
+    if (txn)
     {
         trySetVirtualWarehouseAndWorkerGroup(ast, context);
         if (context->getSettingsRef().enable_vw_customized_setting)
@@ -666,7 +665,12 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             auto current_vw = context->tryGetCurrentVW();
             context->getVWCustomizedSettings()->overwriteDefaultSettings(current_vw->getName(), context->getSettingsRef());
         }
-        context->initCnchServerResource(txn->getTransactionID());
+        if (context->getServerType() == ServerType::cnch_server)
+        {
+            context->initCnchServerResource(txn->getTransactionID());
+            if (!internal && !ast->as<ASTShowProcesslistQuery>() && context->getSettingsRef().enable_query_queue)
+                tryQueueQuery(context);
+        }
     }
 
     /// Copy query into string. It will be written to log and presented in processlist. If an INSERT query, string will not include data to insertion.

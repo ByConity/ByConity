@@ -1717,7 +1717,7 @@ void Context::setCurrentDatabaseNameInGlobalContext(const String & name)
 
 void Context::setCurrentDatabase(const String & name)
 {
-    DatabaseCatalog::instance().assertDatabaseExists(name);
+    DatabaseCatalog::instance().assertDatabaseExists(name, shared_from_this());
     auto lock = getLock();
     current_database = name;
     calculateAccessRights();
@@ -2852,7 +2852,7 @@ std::shared_ptr<Cluster> Context::getCluster(const std::string & cluster_name) c
     if (res)
         return res;
     if (!cluster_name.empty())
-        res = tryGetReplicatedDatabaseCluster(cluster_name);
+        res = tryGetReplicatedDatabaseCluster(cluster_name, shared_from_this());
     if (res)
         return res;
 
@@ -3968,7 +3968,7 @@ void Context::setMetaChecker()
                     String current_database_name = database_snapshot.first;
                     DatabasePtr current_database = database_snapshot.second;
 
-                    DatabaseCatalog::instance().assertDatabaseExists(current_database_name);
+                    DatabaseCatalog::instance().assertDatabaseExists(current_database_name, shared_from_this());
                     for (auto tb_it = current_database->getTablesIterator(this->shared_from_this()); tb_it->isValid(); tb_it->next())
                     {
                         String current_table_name = tb_it->name();

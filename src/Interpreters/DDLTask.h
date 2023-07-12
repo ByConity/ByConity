@@ -199,6 +199,6 @@ public:
     ~ZooKeeperMetadataTransaction() { assert(isExecuted() || std::uncaught_exceptions() || ops.empty()); }
 };
 
-ClusterPtr tryGetReplicatedDatabaseCluster(const String & cluster_name);
+ClusterPtr tryGetReplicatedDatabaseCluster(const String & cluster_name, ContextPtr context);
 
 }

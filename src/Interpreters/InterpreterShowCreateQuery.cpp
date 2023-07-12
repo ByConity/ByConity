@@ -59,7 +59,7 @@ BlockInputStreamPtr InterpreterShowCreateQuery::executeImpl()
         else
             getContext()->checkAccess(AccessType::SHOW_COLUMNS, table_id);
 
-        create_query = DatabaseCatalog::instance().getDatabase(table_id.database_name)->getCreateTableQuery(table_id.table_name, getContext());
+        create_query = DatabaseCatalog::instance().getDatabase(table_id.database_name, getContext())->getCreateTableQuery(table_id.table_name, getContext());
 
         auto & ast_create_query = create_query->as<ASTCreateQuery &>();
         getOriginalDatabaseName(ast_create_query.database).swap(ast_create_query.database);
@@ -83,7 +83,7 @@ BlockInputStreamPtr InterpreterShowCreateQuery::executeImpl()
             throw Exception("Temporary databases are not possible.", ErrorCodes::SYNTAX_ERROR);
         show_query->database = getContext()->resolveDatabase(show_query->database);
         getContext()->checkAccess(AccessType::SHOW_DATABASES, show_query->database);
-        create_query = DatabaseCatalog::instance().getDatabase(show_query->database)->getCreateDatabaseQuery();
+        create_query = DatabaseCatalog::instance().getDatabase(show_query->database, getContext())->getCreateDatabaseQuery();
         auto & ast_create_query = create_query->as<ASTCreateQuery &>();
         getOriginalDatabaseName(ast_create_query.database).swap(ast_create_query.database);
     }

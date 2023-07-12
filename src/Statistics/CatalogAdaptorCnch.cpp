@@ -179,7 +179,7 @@ void CatalogAdaptorCnch::dropStatsDataAll(const String & database_name)
 std::vector<StatsTableIdentifier> CatalogAdaptorCnch::getAllTablesID(const String & database_name) const
 {
     std::vector<StatsTableIdentifier> results;
-    auto db = DatabaseCatalog::instance().getDatabase(database_name);
+    auto db = DatabaseCatalog::instance().getDatabase(database_name, context);
     for (auto iter = db->getTablesIterator(context); iter->isValid(); iter->next())
     {
         auto table = iter->table();
@@ -191,7 +191,9 @@ std::vector<StatsTableIdentifier> CatalogAdaptorCnch::getAllTablesID(const Strin
 
 std::optional<StatsTableIdentifier> CatalogAdaptorCnch::getTableIdByName(const String & database_name, const String & table_name) const
 {
-    auto table = DatabaseCatalog::instance().getDatabaseAndTable(StorageID(database_name, table_name), context).second;
+    auto & ins = DatabaseCatalog::instance();
+    auto db_storage = ins.getDatabase(database_name, context);
+    auto table = db_storage->tryGetTable(table_name, context);
     if (!table)
     {
         return std::nullopt;

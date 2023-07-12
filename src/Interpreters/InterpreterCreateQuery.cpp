@@ -138,7 +138,7 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
     auto guard = DatabaseCatalog::instance().getDDLGuard(database_name, "");
 
     /// Database can be created before or it can be created concurrently in another thread, while we were waiting in DDLGuard
-    if (DatabaseCatalog::instance().isDatabaseExist(database_name))
+    if (DatabaseCatalog::instance().isDatabaseExist(database_name, getContext()))
     {
         if (create.if_not_exists)
             return {};
@@ -280,7 +280,7 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
         /// Need to acquire kv lock before creating entry
         auto db_lock = txn->createIntentLock(IntentLock::DB_LOCK_PREFIX, database_name);
         db_lock->lock();
-        if (DatabaseCatalog::instance().isDatabaseExist(database_name))
+        if (DatabaseCatalog::instance().isDatabaseExist(database_name, getContext()))
         {
             if (create.if_not_exists)
                 return {};
@@ -791,7 +791,7 @@ void InterpreterCreateQuery::setEngine(ASTCreateQuery & create) const
         String as_database_name = getContext()->resolveDatabase(create.as_database);
         String as_table_name = create.as_table;
 
-        ASTPtr as_create_ptr = DatabaseCatalog::instance().getDatabase(as_database_name)->getCreateTableQuery(as_table_name, getContext());
+        ASTPtr as_create_ptr = DatabaseCatalog::instance().getDatabase(as_database_name, getContext())->getCreateTableQuery(as_table_name, getContext());
         const auto & as_create = as_create_ptr->as<ASTCreateQuery &>();
 
         const String qualified_name = backQuoteIfNeed(as_database_name) + "." + backQuoteIfNeed(as_table_name);
@@ -964,7 +964,7 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
     // If this is a stub ATTACH query, read the query definition from the database
     if (create.attach && !create.storage && !create.columns_list)
     {
-        auto database = DatabaseCatalog::instance().getDatabase(database_name);
+        auto database = DatabaseCatalog::instance().getDatabase(database_name, getContext());
 
         if (database->getEngineName() == "Replicated")
         {
@@ -1059,7 +1059,7 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
     bool need_add_to_database = !create.temporary;
     if (need_add_to_database)
     {
-        database = DatabaseCatalog::instance().tryGetDatabase(database_name);
+        database = DatabaseCatalog::instance().tryGetDatabase(database_name, getContext());
         if (!database)
         {
             if (getContext()->getServerType() != ServerType::cnch_worker)
@@ -1070,7 +1070,7 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
             create_database.if_not_exists = true;
 
             createDatabase(create_database);
-            database = DatabaseCatalog::instance().getDatabase(database_name);
+            database = DatabaseCatalog::instance().getDatabase(database_name, getContext());
         }
     }
 
@@ -1140,7 +1140,7 @@ bool InterpreterCreateQuery::doCreateTable(ASTCreateQuery & create,
           */
         guard = DatabaseCatalog::instance().getDDLGuard(create.database, create.table);
 
-        database = DatabaseCatalog::instance().getDatabase(create.database);
+        database = DatabaseCatalog::instance().getDatabase(create.database, getContext());
         if (database->getEngineName().starts_with("Cnch"))
         {
             auto txn = getContext()->getCurrentTransaction();

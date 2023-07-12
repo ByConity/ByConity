@@ -346,7 +346,7 @@ void StorageMaterializedView::alter(
     }
     /// end modify query
 
-    DatabaseCatalog::instance().getDatabase(table_id.database_name)->alterTable(local_context, table_id, new_metadata);
+    DatabaseCatalog::instance().getDatabase(table_id.database_name, local_context)->alterTable(local_context, table_id, new_metadata);
     setInMemoryMetadata(new_metadata);
 }
 

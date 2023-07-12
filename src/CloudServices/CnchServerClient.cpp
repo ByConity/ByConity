@@ -274,10 +274,18 @@ TxnTimestamp CnchServerClient::commitParts(
     }
     else
     {
-        StorageCloudMergeTree & cloud_storage = dynamic_cast<StorageCloudMergeTree &>(storage);
-        request.set_database(cloud_storage.getCnchDatabase());
-        request.set_table(cloud_storage.getCnchTable());
-        RPCHelpers::fillUUID(cloud_storage.getStorageUUID(), *request.mutable_uuid());
+        if (auto * cnch_storage = dynamic_cast<StorageCnchMergeTree *>(&storage))
+        {
+            request.set_database(cnch_storage->getDatabaseName());
+            request.set_table(cnch_storage->getTableName());
+            RPCHelpers::fillUUID(cnch_storage->getStorageUUID(), *request.mutable_uuid());
+        }
+        else if (auto * cloud_storage = dynamic_cast<StorageCloudMergeTree *>(&storage))
+        {
+            request.set_database(cloud_storage->getCnchDatabase());
+            request.set_table(cloud_storage->getCnchTable());
+            RPCHelpers::fillUUID(cloud_storage->getStorageUUID(), *request.mutable_uuid());
+        }
     }
 
     request.set_type(UInt32(type));

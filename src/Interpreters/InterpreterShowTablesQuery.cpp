@@ -147,7 +147,7 @@ String InterpreterShowTablesQuery::getRewrittenQuery()
         throw Exception("The `FROM` and `TEMPORARY` cannot be used together in `SHOW TABLES`", ErrorCodes::SYNTAX_ERROR);
 
     String database = getContext()->resolveDatabase(query.from);
-    DatabaseCatalog::instance().assertDatabaseExists(database);
+    DatabaseCatalog::instance().assertDatabaseExists(database, getContext());
 
     WriteBufferFromOwnString rewritten_query;
     rewritten_query << "SELECT name FROM system.";

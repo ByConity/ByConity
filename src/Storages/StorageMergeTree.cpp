@@ -320,7 +320,7 @@ void StorageMergeTree::alter(
     {
         changeSettings(new_metadata.settings_changes, table_lock_holder);
 
-        DatabaseCatalog::instance().getDatabase(table_id.database_name)->alterTable(local_context, table_id, new_metadata);
+        DatabaseCatalog::instance().getDatabase(table_id.database_name, local_context)->alterTable(local_context, table_id, new_metadata);
     }
     else
     {
@@ -330,7 +330,7 @@ void StorageMergeTree::alter(
             /// Reinitialize primary key because primary key column types might have changed.
             setProperties(new_metadata, old_metadata);
 
-            DatabaseCatalog::instance().getDatabase(table_id.database_name)->alterTable(local_context, table_id, new_metadata);
+            DatabaseCatalog::instance().getDatabase(table_id.database_name, local_context)->alterTable(local_context, table_id, new_metadata);
 
             if (!maybe_mutation_commands.empty())
                 mutation_version = startMutation(maybe_mutation_commands, mutation_file_name);

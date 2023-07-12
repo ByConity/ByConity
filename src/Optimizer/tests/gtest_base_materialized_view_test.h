@@ -143,7 +143,7 @@ public:
                 "  name Nullable(String)"
                 ") ENGINE=Memory();");
 
-        if (DatabaseCatalog::instance().tryGetDatabase("foodmart"))
+        if (DatabaseCatalog::instance().tryGetDatabase("foodmart", session_context))
             DatabaseCatalog::instance().detachDatabase(session_context, "foodmart", true, false);
 
         auto database = std::make_shared<DatabaseMemory>("foodmart", session_context);

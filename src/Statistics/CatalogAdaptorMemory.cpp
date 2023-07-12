@@ -189,7 +189,7 @@ public:
     std::vector<StatsTableIdentifier> getAllTablesID(const String & database_name) const override
     {
         std::vector<StatsTableIdentifier> results;
-        auto db = DatabaseCatalog::instance().getDatabase(database_name);
+        auto db = DatabaseCatalog::instance().getDatabase(database_name, context);
         for (auto iter = db->getTablesIterator(context); iter->isValid(); iter->next())
         {
             auto table = iter->table();
@@ -202,7 +202,7 @@ public:
     std::optional<StatsTableIdentifier> getTableIdByName(const String & database_name, const String & table_name) const override
     {
         auto & ins = DatabaseCatalog::instance();
-        auto db_storage = ins.getDatabase(database_name);
+        auto db_storage = ins.getDatabase(database_name, context);
         auto table = db_storage->tryGetTable(table_name, context);
         if (!table)
         {

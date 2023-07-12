@@ -1327,7 +1327,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         loadMetadata(global_context, default_database);
         database_catalog.loadDatabases();
         /// After loading validate that default database exists
-        database_catalog.assertDatabaseExists(default_database);
+        database_catalog.assertDatabaseExists(default_database, global_context);
 
         if (global_context->getServerType() == ServerType::cnch_server)
         {
