@@ -25,8 +25,10 @@ std::pair<std::string, UInt16> parseAddress(const std::string & str, UInt16 defa
     {
         const char * closing_square_bracket = find_first_symbols<']'>(begin + 1, end);
         if (closing_square_bracket >= end)
-            throw Exception("Illegal address passed to function parseAddress: "
-                "the address begins with opening square bracket, but no closing square bracket found", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(
+                ErrorCodes::BAD_ARGUMENTS,
+                "Illegal address {} passed to function parseAddress, the address begins with opening square bracket, but no closing square bracket found",
+                str);
 
         port = closing_square_bracket + 1;
     }
