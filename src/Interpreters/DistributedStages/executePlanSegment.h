@@ -28,9 +28,9 @@ class Context;
 
 BlockIO lazyExecutePlanSegmentLocally(PlanSegmentPtr plan_segment, ContextMutablePtr context);
 
-void executePlanSegmentInternal(PlanSegmentPtr plan_segment, ContextPtr context, bool async, const WorkerId& worker_id = WorkerId{});
+void executePlanSegmentInternal(PlanSegmentPtr plan_segment, ContextMutablePtr context, bool async);
 
-void executePlanSegmentRemotely(const PlanSegment & plan_segment, ContextPtr context, bool async);
+void executePlanSegmentRemotely(const PlanSegment & plan_segment, ContextPtr context, bool async, const WorkerId& worker_id = WorkerId{});
 
 void executePlanSegmentLocally(const PlanSegment & plan_segment, ContextPtr initial_query_context);
 

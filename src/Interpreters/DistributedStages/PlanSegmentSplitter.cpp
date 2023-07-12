@@ -364,6 +364,7 @@ std::pair<String, size_t> PlanSegmentVisitor::findClusterAndParallelSize(QueryPl
             /// if all input are not table type, parallel size should respect distributed_max_parallel_size setting
             if (!input_has_table && !split_context.inputs.empty())
             {
+                size_t max_parallel_size = plan_segment_context.context->getSettingsRef().distributed_max_parallel_size; 
                 size_t ret = plan_segment_context.shard_number;
                 if (max_parallel_size > 0 || plan_segment_context.health_parallel)
                 {

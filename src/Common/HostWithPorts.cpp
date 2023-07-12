@@ -72,11 +72,6 @@ std::ostream & operator<<(std::ostream & os, const HostWithPorts & host_ports)
     return os;
 }
 
-const String WorkerId::ToString() const
-{
-    return vw_name + "." + wg_name + "." + id;
-}
-
 namespace
 {
 std::string getFromEnvOrConfig(ContextPtr context, const std::string & name)

@@ -191,7 +191,7 @@ std::optional<PlanSegmentContext> ClusterInfoFinder::visitTableScanNode(TableSca
             .query_id = cluster_info_context.context->getCurrentQueryId(),
             .shard_number =  worker_group->getShardsInfo().size(),
             .cluster_name = worker_group->getID(),
-            .plan_segment_tree = cluster_info_context.plan_segment_tree.get()
+            .plan_segment_tree = cluster_info_context.plan_segment_tree.get(),
             .health_parallel = worker_group_status_ptr ? 
                 std::optional<size_t>(worker_group_status_ptr->getAvaiableComputeWorkerSize()) : std::nullopt};
         return plan_segment_context;

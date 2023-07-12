@@ -59,7 +59,7 @@ void ResourceMonitorTimer::run() {
 void PlanSegmentManagerRpcService::executeQuery(
     ::google::protobuf::RpcController * controller,
     const ::DB::Protos::ExecutePlanSegmentRequest * request,
-    ::DB::Protos::ExecutePlanSegmentResponse * /*response*/,
+    ::DB::Protos::ExecutePlanSegmentResponse * response,
     ::google::protobuf::Closure * done)
 {
     brpc::ClosureGuard done_guard(done);
