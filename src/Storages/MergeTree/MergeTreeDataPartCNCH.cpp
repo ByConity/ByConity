@@ -26,9 +26,8 @@
 #include <Storages/UUIDAndPartName.h>
 #include <Storages/UniqueKeyIndexCache.h>
 #include <Common/Exception.h>
-#include "DataTypes/DataTypeByteMap.h"
-#include "Storages/DiskCache/DiskCacheSegment.h"
 #include <Common/StringUtils/StringUtils.h>
+#include "DataTypes/DataTypeByteMap.h"
 #include "Storages/DiskCache/FileDiskCacheSegment.h"
 #include "Storages/DiskCache/PartFileDiskCacheSegment.h"
 
