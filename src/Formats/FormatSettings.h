@@ -138,6 +138,8 @@ struct FormatSettings
         bool allow_missing_columns = false;
         std::map<String, String> partition_kv = {};
         std::unordered_set<Int64> skip_stripes = {};
+        UInt64 current_stripe = 0;
+        bool read_stripe = false;
     } orc;
 
     struct Pretty
