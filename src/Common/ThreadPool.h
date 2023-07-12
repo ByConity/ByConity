@@ -105,6 +105,8 @@ public:
     size_t getMaxQueueSize() const;
 
 private:
+    friend class DiskCacheTest;
+
     mutable std::mutex mutex;
     std::condition_variable job_finished;
     std::condition_variable new_job_or_shutdown;

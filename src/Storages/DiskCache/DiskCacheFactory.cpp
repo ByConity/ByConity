@@ -23,33 +23,82 @@
 
 namespace DB
 {
+
 void DiskCacheFactory::init(Context & context)
 {
+    if (!caches.empty())
+        throw Exception("Can't repeat register DiskCache!", DB::ErrorCodes::LOGICAL_ERROR);
     const auto & config = context.getConfigRef();
-    DiskCacheSettings cache_settings;
-    DiskCacheStrategySettings strategy_settings;
-    cache_settings.loadFromConfig(config, "lru");
-    strategy_settings.loadFromConfig(config, "simple");
-
-    /// init pool
-    IDiskCache::init(context);
 
     // TODO: volume
     VolumePtr disk_cache_volume = context.getStoragePolicy("default")->getVolume(0);
     auto throttler = context.getDiskCacheThrottler();
-    auto disk_cache = std::make_shared<DiskCacheLRU>(disk_cache_volume, throttler, cache_settings);
 
-    auto cache_strategy = std::make_shared<DiskCacheSimpleStrategy>(strategy_settings);
-    default_cache = std::make_pair(std::move(disk_cache), std::move(cache_strategy));
+    /// init pool
+    IDiskCache::init(context);
+
+
+    // create default cache for all DiskCacheType
+    for(auto type : std::vector<DB::DiskCacheType>{DiskCacheType::File,DiskCacheType::Hive,DiskCacheType::MergeTree}){
+        DiskCacheSettings cache_settings;
+        auto disk_cache = std::make_shared<DiskCacheLRU>(disk_cache_volume,throttler,cache_settings);
+        caches.emplace(type, disk_cache);
+    }
+
+    // build disk cache for each type
+    if (config.has(DiskCacheSettings::root))
+    {
+        Poco::Util::AbstractConfiguration::Keys keys;
+        config.keys(DiskCacheSettings::root, keys);
+        for (const auto & key : keys)
+        {
+            DiskCacheSettings cache_settings;
+            cache_settings.loadFromConfig(config, key);
+            auto disk_cache = std::make_shared<DiskCacheLRU>(disk_cache_volume, throttler, cache_settings);
+            caches.emplace(stringToDiskCacheType(key), disk_cache);
+        }
+    }
 }
 
-void DiskCacheFactory::shutdown() const
+std::string diskCacheTypeToString(const DiskCacheType type)
 {
-    /// shutdown disk caches to prevent scheduling new tasks
-    default_cache.first->shutdown();
+    switch (type)
+    {
+        case DiskCacheType::File:
+            return "File";
+        case DiskCacheType::MergeTree:
+            return "MergeTree";
+        case DiskCacheType::Hive:
+            return "Hive";
+    }
 
-    /// close shared thread pool
+    return "InvalidDiskCacheType";
+}
+
+DiskCacheType stringToDiskCacheType(const std::string & type)
+{
+    if (type == "File")
+        return DiskCacheType::File;
+
+    if (type == "simple" || type == "MergeTree") // `simple` for compatible with old config
+        return DiskCacheType::MergeTree;
+
+    if (type == "parquet" || type == "Hive") // `parquet` for compatible with old config
+        return DiskCacheType::Hive;
+
+    throw Poco::Exception("Invalid strategy name: " + type + " should be `simple`, `parquet`, `File`, `MergeTree`, `Hive`", ErrorCodes::BAD_ARGUMENTS);
+}
+
+
+void DiskCacheFactory::shutdown()
+{
+    for (const auto & disk_cache : caches)
+    {
+        if (disk_cache.second)
+            disk_cache.second->shutdown();
+    }
     IDiskCache::close();
 }
+
 
 }

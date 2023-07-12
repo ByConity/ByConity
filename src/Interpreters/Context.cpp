@@ -198,6 +198,7 @@
 #include <Transaction/CnchWorkerTransaction.h>
 #include <Statistics/StatisticsMemoryStore.h>
 #include <Common/HostWithPorts.h>
+#include <Storages/DiskCache/DiskCacheFactory.h>
 
 #include <Interpreters/TemporaryDataOnDisk.h>
 

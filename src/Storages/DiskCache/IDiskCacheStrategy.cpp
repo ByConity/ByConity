@@ -16,7 +16,7 @@
 #include "IDiskCacheStrategy.h"
 
 #include <Storages/DiskCache/IDiskCache.h>
-#include <Storages/DiskCache/DiskCacheSegment.h>
+#include <Storages/DiskCache/PartFileDiskCacheSegment.h>
 #include <Common/escapeForFileName.h>
 
 namespace DB

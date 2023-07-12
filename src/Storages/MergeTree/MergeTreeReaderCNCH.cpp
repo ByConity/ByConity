@@ -15,31 +15,30 @@
 
 #include <Storages/MergeTree/MergeTreeReaderCNCH.h>
 
+#include <utility>
 #include <Columns/ColumnArray.h>
+#include <Core/NamesAndTypes.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeByteMap.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/MapHelpers.h>
 #include <DataTypes/NestedUtils.h>
-#include <Interpreters/inplaceBlockConversions.h>
-#include <IO/ReadBufferFromFileBase.h>
-#include <Storages/DiskCache/DiskCacheFactory.h>
-#include <Storages/DiskCache/IDiskCacheStrategy.h>
-#include <Storages/DiskCache/DiskCacheSegment.h>
-#include <Storages/MergeTree/IMergeTreeReader.h>
-#include <Storages/MergeTree/MergeTreeDataPartWide.h>
-#include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
-#include <Storages/MergeTree/MergeTreeReaderStreamWithSegmentCache.h>
-#include <bits/types/clockid_t.h>
-#include <Common/escapeForFileName.h>
-#include <Common/typeid_cast.h>
-#include <Core/NamesAndTypes.h>
 #include <DataTypes/Serializations/ISerialization.h>
 #include <IO/ReadBufferFromFileBase.h>
 #include <Interpreters/InDepthNodeVisitor.h>
+#include <Interpreters/inplaceBlockConversions.h>
+#include <Storages/DiskCache/DiskCacheFactory.h>
 #include <Storages/DiskCache/DiskCache_fwd.h>
+#include <Storages/DiskCache/IDiskCacheStrategy.h>
+#include <Storages/DiskCache/PartFileDiskCacheSegment.h>
+#include <Storages/MergeTree/IMergeTreeReader.h>
+#include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
+#include <Storages/MergeTree/MergeTreeDataPartWide.h>
+#include <Storages/MergeTree/MergeTreeReaderStreamWithSegmentCache.h>
+#include <bits/types/clockid_t.h>
 #include <Poco/Logger.h>
-#include <utility>
+#include <Common/escapeForFileName.h>
+#include <Common/typeid_cast.h>
 
 namespace ProfileEvents
 {
@@ -87,10 +86,8 @@ MergeTreeReaderCNCH::MergeTreeReaderCNCH(
 {
     if (data_part->enableDiskCache())
     {
-        auto [cache, cache_strategy] = DiskCacheFactory::instance().getDefault();
-
-        segment_cache_strategy = std::move(cache_strategy);
-        segment_cache = std::move(cache);
+        segment_cache = DiskCacheFactory::instance().get(DiskCacheType::MergeTree);
+        segment_cache_strategy = segment_cache->getStrategy();
     }
 
     initializeStreams(profile_callback_, clock_type_);
@@ -400,14 +397,14 @@ void MergeTreeReaderCNCH::addStreamsIfNoBurden(
         {
             // Cache segment if necessary
             IDiskCacheSegmentsVector segments
-                = segment_cache_strategy->getCacheSegments(segment_cache_strategy->transferRangesToSegments<DiskCacheSegment>(
+                = segment_cache_strategy->getCacheSegments(segment_cache_strategy->transferRangesToSegments<PartFileDiskCacheSegment>(
                     all_mark_ranges,
                     source_data_part,
-                    DiskCacheSegment::FileOffsetAndSize{mark_file_offset, mark_file_size},
+                    PartFileDiskCacheSegment::FileOffsetAndSize{mark_file_offset, mark_file_size},
                     source_data_part->getMarksCount(),
                     stream_name,
                     DATA_FILE_EXTENSION,
-                    DiskCacheSegment::FileOffsetAndSize{data_file_offset, data_file_size}));
+                    PartFileDiskCacheSegment::FileOffsetAndSize{data_file_offset, data_file_size}));
             segment_cache->cacheSegmentsToLocalDisk(segments);
         }
 

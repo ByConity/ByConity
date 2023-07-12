@@ -21,7 +21,7 @@
 
 #include <Storages/MergeTree/MergeTreeIndexReader.h>
 #include <Storages/DiskCache/DiskCacheFactory.h>
-#include <Storages/DiskCache/DiskCacheSegment.h>
+#include <Storages/DiskCache/PartFileDiskCacheSegment.h>
 #include <Storages/DiskCache/IDiskCache.h>
 #include <Storages/DiskCache/IDiskCacheStrategy.h>
 #include <Storages/IStorage.h>
@@ -82,10 +82,10 @@ MergeTreeIndexReader::MergeTreeIndexReader(
             MergeTreeDataPartPtr source_data_part = part_->getMvccDataPart(index_name + INDEX_FILE_EXTENSION);
             if (source_data_part->enableDiskCache())
             {
-                auto [cache, cache_strategy] = DiskCacheFactory::instance().getDefault();
+                auto disk_cache = DiskCacheFactory::instance().get(DiskCacheType::MergeTree);
 
-                segment_cache_strategy = std::move(cache_strategy);
-                segment_cache = std::move(cache);
+                segment_cache_strategy = disk_cache->getStrategy();
+                segment_cache = disk_cache;
             }
             String mark_file_name = source_data_part->index_granularity_info.getMarksFilePath(index_name);
 
@@ -102,14 +102,14 @@ MergeTreeIndexReader::MergeTreeIndexReader(
             {
                 // Cache segment if necessary
                 IDiskCacheSegmentsVector segments
-                    = segment_cache_strategy->getCacheSegments(segment_cache_strategy->transferRangesToSegments<DiskCacheSegment>(
+                    = segment_cache_strategy->getCacheSegments(segment_cache_strategy->transferRangesToSegments<PartFileDiskCacheSegment>(
                         all_mark_ranges_,
                         source_data_part,
-                        DiskCacheSegment::FileOffsetAndSize{mark_file_offset, mark_file_size},
-                        marks_count_,
+                        PartFileDiskCacheSegment::FileOffsetAndSize{mark_file_offset, mark_file_size},
+                        source_data_part->getMarksCount(),
                         index_name,
                         INDEX_FILE_EXTENSION,
-                        DiskCacheSegment::FileOffsetAndSize{data_file_offset, data_file_size}));
+                        PartFileDiskCacheSegment::FileOffsetAndSize{data_file_offset, data_file_size}));
                 segment_cache->cacheSegmentsToLocalDisk(segments);
             }
             stream = std::make_unique<MergeTreeReaderStreamWithSegmentCache>(

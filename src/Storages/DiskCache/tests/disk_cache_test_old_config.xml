@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+<yandex>
+    <disk_cache_strategies>
+        <parquet>
+            <hits_to_cache>1</hits_to_cache>
+            <segment_size>1</segment_size>
+            <disk_cache_dir>parquet_disk_cache</disk_cache_dir>
+        </parquet>
+        <simple>
+            <hits_to_cache>1</hits_to_cache>
+            <segment_size>1</segment_size>
+            <disk_cache_dir>disk_cache_v1</disk_cache_dir>
+        </simple>
+    </disk_cache_strategies>
+    <storage_configuration>
+        <disks>
+            <default></default>
+            <server_local_disk1>
+                <path>/tmp/</path>
+            </server_local_disk1>
+        </disks>
+        <policies>
+            <default>
+                <volumes>
+                    <local>
+                        <default>default</default>
+                        <disk>default</disk>
+                        <disk>server_local_disk1</disk>
+                    </local>
+                </volumes>
+            </default>
+        </policies>
+    </storage_configuration>
+</yandex>
