@@ -50,6 +50,8 @@ private:
     QueryStatus * status;
     String initial_query_id;
     size_t segment_id;
+    AddressInfo coordinator_address;
+    AddressInfo current_address;
 
 public:
     PlanSegmentProcessListEntry(PlanSegmentProcessList & parent_, QueryStatus * status_, String initial_query_id_, size_t segment_id_);
@@ -58,6 +60,11 @@ public:
     const QueryStatus * operator->() const { return status; }
     QueryStatus & get() { return *status; }
     const QueryStatus & get() const { return *status; }
+    void setCoordinatorAddress(const AddressInfo & coordinator_address_) {coordinator_address = coordinator_address_;}
+    AddressInfo getCoordinatorAddress() const {return coordinator_address;}
+    void setCurrentAddress(const AddressInfo & current_address_) {current_address = current_address_;}
+    AddressInfo getCurrentAddress() const {return current_address;}
+    size_t getSegmentId() const {return segment_id;}
 };
 
 /// List of currently executing query created from plan segment.
@@ -67,7 +74,7 @@ public:
     /// distributed query_id -> GroupIdToElement(s). There can be multiple queries with the same query_id as long as all queries except one are cancelled.
     using InitialQueryToSegmentGroup = std::unordered_map<String, PlanSegmentGroup>;
 
-    using EntryPtr = std::unique_ptr<PlanSegmentProcessListEntry>;
+    using EntryPtr = std::shared_ptr<PlanSegmentProcessListEntry>;
 
     friend class PlanSegmentProcessListEntry;
 

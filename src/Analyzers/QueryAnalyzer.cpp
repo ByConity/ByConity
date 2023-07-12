@@ -83,7 +83,7 @@ public:
         : context(std::move(context_))
         , analysis(analysis_)
         , outer_query_scope(outer_query_scope_)
-        , use_ansi_semantic(context->getSettingsRef().dialect_type == DialectType::ANSI)
+        , use_ansi_semantic(context->getSettingsRef().dialect_type != DialectType::CLICKHOUSE)
         , enable_shared_cte(context->getSettingsRef().cte_mode != CTEMode::INLINED)
         , enable_implicit_type_conversion(context->getSettingsRef().enable_implicit_type_conversion)
         , allow_extended_conversion(context->getSettingsRef().allow_extended_type_conversion)
@@ -921,10 +921,10 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinOn(ASTTableJoin & table_join, ScopePtr
     {
         // forbid arrayJoin in JOIN ON, see also the same check in CollectJoinOnKeysVisitor
         auto array_join_exprs = extractExpressions(context, analysis, table_join.on_expression, false,
-                                                   [](const ASTPtr & node)
+                                                   [&](const ASTPtr & node)
                                                    {
                                                        if (const auto * func = node->as<ASTFunction>())
-                                                           if (func->name == "arrayJoin")
+                                                           if (func->name == "arrayJoin" && (!context->getSettingsRef().ignore_array_join_check_in_join_on_condition))
                                                                return true;
 
                                                        return false;

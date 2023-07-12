@@ -114,14 +114,9 @@ public:
                         }
                         else
                         {
-                            Field sketch;
-                            nullable_sketch.get(i, sketch);
-                            if (sketch.getType() != Field::Types::SketchBinary)
-                                throw Exception("Argument 1 for function " + getName() + " must be sketch", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-                            String & sketch_str = sketch.get<String>();
-
                             Array array;
-                            datasketches::quantiles_sketch<Float64> quantiles_sketch_data = datasketches::quantiles_sketch<Float64>::deserialize(sketch_str.data(), sketch_str.size(), datasketches::serde<Float64>(), AggregateFunctionHllSketchAllocator());
+                            datasketches::quantiles_sketch<Float64> quantiles_sketch_data = datasketches::quantiles_sketch<Float64>::deserialize(nullable_sketch.getDataAt(i).data, nullable_sketch.getDataAt(i).size, datasketches::serde<Float64>(), AggregateFunctionHllSketchAllocator());
+
                             for (size_t j = 0; j < column_detail->size(); j++)
                             {
                                 Float64 quantile_res = quantiles_sketch_data.get_quantile(column_detail->getFloat64(j));
@@ -226,12 +221,7 @@ public:
                 }
                 else
                 {
-                    Field sketch;
-                    nullable_sketch.get(i, sketch);
-                    if (sketch.getType() != Field::Types::SketchBinary)
-                        throw Exception("Argument 1 for function " + getName() + " must be sketch", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-                    String & sketch_str = sketch.get<String>();
-                    datasketches::hll_sketch hll_sketch_data = datasketches::hll_sketch::deserialize(sketch_str.data(), sketch_str.size(), AggregateFunctionHllSketchAllocator());
+                    datasketches::hll_sketch hll_sketch_data = datasketches::hll_sketch::deserialize(nullable_sketch.getDataAt(i).data, nullable_sketch.getDataAt(i).size, AggregateFunctionHllSketchAllocator());
                     result_column->insert(hll_sketch_data.get_estimate());
                 }
             }

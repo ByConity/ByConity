@@ -583,31 +583,17 @@ class IColumn;
       0) \
 \
     M(Bool, log_queries, 1, "Log requests and write the log to the system table.", 0) \
-    M(LogQueriesType, \
-      log_queries_min_type, \
-      QueryLogElementType::QUERY_START, \
-      "Minimal type in query_log to log, possible values (from low to high): QUERY_START, QUERY_FINISH, EXCEPTION_BEFORE_START, " \
-      "EXCEPTION_WHILE_PROCESSING.", \
-      0) \
-    M(Milliseconds, \
-      log_queries_min_query_duration_ms, \
-      0, \
-      "Minimal time for the query to run, to get to the query_log/query_thread_log.", \
-      0) \
-    M(UInt64, \
-      log_queries_cut_to_length, \
-      100000, \
-      "If query length is greater than specified threshold (in bytes), then cut query when writing to query log. Also limit length of " \
-      "printed query in ordinary text log.", \
-      0) \
-\
+    M(Bool, log_max_io_thread_queries, 1, "Log max io time thread requests and write the log to the system table", 0) \
+    M(LogQueriesType, log_queries_min_type, QueryLogElementType::QUERY_START, "Minimal type in query_log to log, possible values (from low to high): QUERY_START, QUERY_FINISH, EXCEPTION_BEFORE_START, EXCEPTION_WHILE_PROCESSING.", 0) \
+    M(Milliseconds, log_queries_min_query_duration_ms, 0, "Minimal time for the query to run, to get to the query_log/query_thread_log.", 0) \
+    M(UInt64, log_queries_cut_to_length, 100000, "If query length is greater than specified threshold (in bytes), then cut query when writing to query log. Also limit length of printed query in ordinary text log.", 0) \
+    M(Bool, log_queries_with_partition_ids, 0, "Log requests partition ids and write the log to the system table.", 0) \
+    \
     M(Bool, log_processors_profiles, false, "Log Processors profile events.", 0) \
-    M(DistributedProductMode, \
-      distributed_product_mode, \
-      DistributedProductMode::DENY, \
-      "How are distributed subqueries performed inside IN or JOIN sections?", \
-      IMPORTANT) \
-\
+    M(Bool, report_processors_profiles, false, "Report processors profile to coordinator.", 0)\
+    M(UInt64, report_processors_profiles_timeout_millseconds, 10, "Report processors profile to coordinator timeout millseconds.", 0)\
+    M(DistributedProductMode, distributed_product_mode, DistributedProductMode::DENY, "How are distributed subqueries performed inside IN or JOIN sections?", IMPORTANT) \
+    \
     M(UInt64, max_concurrent_queries_for_all_users, 0, "The maximum number of concurrent requests for all users.", 0) \
     M(UInt64, max_concurrent_queries_for_user, 0, "The maximum number of concurrent requests per user.", 0) \
 \
@@ -689,61 +675,23 @@ class IColumn;
     M(String, count_distinct_implementation, "uniqExact", "What aggregate function to use for implementation of count(DISTINCT ...)", 0) \
 \
     M(Bool, add_http_cors_header, false, "Write add http CORS header.", 0) \
-\
-    M(UInt64, \
-      max_http_get_redirects, \
-      0, \
-      "Max number of http GET redirects hops allowed. Make sure additional security measures are in place to prevent a malicious server " \
-      "to redirect your requests to unexpected services.", \
-      0) \
-\
-    M(Bool, \
-      use_client_time_zone, \
-      false, \
-      "Use client timezone for interpreting DateTime string values, instead of adopting server timezone.", \
-      0) \
-\
-    M(Bool, \
-      send_progress_in_http_headers, \
-      false, \
-      "Send progress notifications using X-ClickHouse-Progress headers. Some clients do not support high amount of HTTP headers (Python " \
-      "requests in particular), so it is disabled by default.", \
-      0) \
-\
-    M(UInt64, \
-      http_headers_progress_interval_ms, \
-      100, \
-      "Do not send HTTP headers X-ClickHouse-Progress more frequently than at each specified interval.", \
-      0) \
-\
-    M(Bool, \
-      fsync_metadata, \
-      1, \
-      "Do fsync after changing metadata for tables and databases (.sql files). Could be disabled in case of poor latency on server with " \
-      "high load of DDL queries and high load of disk subsystem.", \
-      0) \
-\
-    M(Bool, \
-      join_use_nulls, \
-      1, \
-      "Use NULLs for non-joined rows of outer JOINs for types that can be inside Nullable. If false, use default value of corresponding " \
-      "columns data type.", \
-      IMPORTANT) \
-\
-    M(JoinStrictness, \
-      join_default_strictness, \
-      JoinStrictness::ALL, \
-      "Set default strictness in JOIN query. Possible values: empty string, 'ANY', 'ALL'. If empty, query without strictness will throw " \
-      "exception.", \
-      0) \
-    M(Bool, \
-      any_join_distinct_right_table_keys, \
-      false, \
-      "Enable old ANY JOIN logic with many-to-one left-to-right table keys mapping for all ANY JOINs. It leads to confusing not equal " \
-      "results for 't1 ANY LEFT JOIN t2' and 't2 ANY RIGHT JOIN t1'. ANY RIGHT JOIN needs one-to-many keys mapping to be consistent with " \
-      "LEFT one.", \
-      IMPORTANT) \
-\
+    \
+    M(UInt64, max_http_get_redirects, 0, "Max number of http GET redirects hops allowed. Make sure additional security measures are in place to prevent a malicious server to redirect your requests to unexpected services.", 0) \
+    \
+    M(Bool, use_client_time_zone, false, "Use client timezone for interpreting DateTime string values, instead of adopting server timezone.", 0) \
+    \
+    M(Bool, send_progress_in_http_headers, false, "Send progress notifications using X-ClickHouse-Progress headers. Some clients do not support high amount of HTTP headers (Python requests in particular), so it is disabled by default.", 0) \
+    \
+    M(UInt64, http_headers_progress_interval_ms, 100, "Do not send HTTP headers X-ClickHouse-Progress more frequently than at each specified interval.", 0) \
+    \
+    M(Bool, fsync_metadata, 1, "Do fsync after changing metadata for tables and databases (.sql files). Could be disabled in case of poor latency on server with high load of DDL queries and high load of disk subsystem.", 0) \
+    \
+    M(Bool, join_use_nulls, 1, "Use NULLs for non-joined rows of outer JOINs for types that can be inside Nullable. If false, use default value of corresponding columns data type.", IMPORTANT) \
+    M(Bool, join_using_null_safe, 0, "Force null safe equal comparison for USING keys except the last key of ASOF join", 0) \
+    \
+    M(JoinStrictness, join_default_strictness, JoinStrictness::ALL, "Set default strictness in JOIN query. Possible values: empty string, 'ANY', 'ALL'. If empty, query without strictness will throw exception.", 0) \
+    M(Bool, any_join_distinct_right_table_keys, false, "Enable old ANY JOIN logic with many-to-one left-to-right table keys mapping for all ANY JOINs. It leads to confusing not equal results for 't1 ANY LEFT JOIN t2' and 't2 ANY RIGHT JOIN t1'. ANY RIGHT JOIN needs one-to-many keys mapping to be consistent with LEFT one.", IMPORTANT) \
+    \
     M(UInt64, preferred_block_size_bytes, 1000000, "", 0) \
 \
     M(UInt64, \
@@ -901,7 +849,8 @@ class IColumn;
     M(OverflowMode, read_overflow_mode_leaf, OverflowMode::THROW, "What to do when the leaf limit is exceeded.", 0) \
 \
     M(UInt64, max_query_cpu_second, 0, "Limit the maximum amount of CPU resources such a query segment can consume.", 0) \
-\
+    M(UInt64, max_distributed_query_cpu_seconds, 0, "Limit the maximum amount of CPU resources such a distribute query can consume.", 0) \
+    \
     M(UInt64, max_rows_to_group_by, 0, "", 0) \
     M(OverflowModeGroupBy, group_by_overflow_mode, OverflowMode::THROW, "What to do when the limit is exceeded.", 0) \
     M(UInt64, max_bytes_before_external_group_by, 0, "", 0) \
@@ -1387,18 +1336,6 @@ class IColumn;
     M(UInt64, resize_number_after_remote_source, 1, "Resize number after remote source, will be useful if shard is small", 0) \
     M(Bool, insert_null_as_default, true, "Insert DEFAULT values instead of NULL in INSERT SELECT (UNION ALL)", 0) \
 \
-    M(Bool, \
-      optimize_rewrite_sum_if_to_count_if, \
-      true, \
-      "Rewrite sumIf() and sum(if()) function countIf() function when logically equivalent", \
-      0) \
-    M(UInt64, \
-      insert_shard_id, \
-      0, \
-      "If non zero, when insert into a distributed table, the data will be inserted into the shard `insert_shard_id` synchronously. " \
-      "Possible values range from 1 to `shards_number` of corresponding distributed table", \
-      0) \
-\
     M(Bool, collect_hash_table_stats_during_aggregation, true, "Enable collecting hash table statistics to optimize memory allocation", 0) \
     M(UInt64, \
       max_entries_for_hash_table_stats, \
@@ -1410,7 +1347,12 @@ class IColumn;
       10'000'000, \
       "For how many elements it is allowed to preallocate space in all hash tables in total before aggregation", \
       0) \
-\
+    \
+    M(Bool, optimize_rewrite_sum_if_to_count_if, true, "Rewrite sumIf() and sum(if()) function countIf() function when logically equivalent", 0) \
+    M(UInt64, insert_shard_id, 0, "If non zero, when insert into a distributed table, the data will be inserted into the shard `insert_shard_id` synchronously. Possible values range from 1 to `shards_number` of corresponding distributed table", 0) \
+    M(Bool, ignore_array_join_check_in_join_on_condition, false, "Ignore array-join function check in join on condition", 0) \
+    M(Bool, check_identifier_begin_valid, true, "Whether to check identifier", 0) \
+    \
     /** Experimental feature for moving data between shards. */ \
 \
     M(Bool, allow_experimental_query_deduplication, false, "Experimental data deduplication for SELECT queries based on part UUIDs", 0) \
@@ -1546,14 +1488,8 @@ class IColumn;
     M(String, vw, "", "The vw name set by user on which the query run without tenant information", 0) \
     M(String, virtual_warehouse, "", "The vw name set by user on which the query run", 0) \
     M(String, virtual_warehouse_write, "", "The write vw name set by user on which the query run", 0) \
-    M(String, \
-      vw_schedule_algo, \
-      "Unknown", \
-      "algorithm for picking a worker group from vw. " \
-      "{Random(1),LocalRoundRobin(2),LocalLowCpu(3),LocalLowMem(4),LocalLowDisk(5),GlobalRoundRobin(102),GlobalLowCpu(103),GlobalLowMem(" \
-      "104),GlobalLowDisk(105)}", \
-      0) \
-    M(DialectType, dialect_type, DialectType::CLICKHOUSE, "Dialect type, e.g. CLICKHOUSE, ANSI", 0) \
+    M(String, vw_schedule_algo, "Unknown", "algorithm for picking a worker group from vw. {Random(1),LocalRoundRobin(2),LocalLowCpu(3),LocalLowMem(4),LocalLowDisk(5),GlobalRoundRobin(102),GlobalLowCpu(103),GlobalLowMem(104),GlobalLowDisk(105)}", 0) \
+    M(DialectType, dialect_type, DialectType::CLICKHOUSE, "Dialect type, e.g. CLICKHOUSE, ANSI, MYSQL", 0) \
     M(Bool, adaptive_type_cast, false, "Performs type cast operations adaptively, according to the value", 0) \
     M(Bool, tealimit_order_keep, false, "Whether tealimit output keep order by clause", 0) \
     M(UInt64, early_limit_for_map_virtual_columns, 0, "Enable early limit while quering _map_column_keys column", 0) \
@@ -1587,7 +1523,8 @@ class IColumn;
     M(Bool, allow_multi_if_const_optimize, true, "Whether to optimize multiIf function for const case", 0) \
 \
     /** settings in cnch **/ \
-    M(UInt64, cnch_data_retention_time_in_sec, 3 * 24 * 60 * 60, "Waiting time when dropped table or database is actually removed.", 0) \
+    M(Seconds, drop_range_memory_lock_timeout, 5, "The time that spend on wait for memory lock when doing drop range", 0) \
+    M(UInt64, cnch_data_retention_time_in_sec, 3*24*60*60, "Waiting time when dropped table or database is actually removed.", 0) \
     M(Milliseconds, topology_lease_renew_interval_ms, 1000, "Interval of background task to renew topology lease.", 0) \
     M(Milliseconds, topology_refresh_interval_ms, 500, "Interval of background task to sync topology from consul.", 0) \
     M(Milliseconds, topology_lease_life_ms, 12000, "Expiration time of topology lease.", 0) \
@@ -1813,14 +1750,12 @@ class IColumn;
     /** Exchange settings */ \
     M(Bool, exchange_enable_multipath_reciever, true, "Whether enable exchange new mode ", 0) \
     M(UInt64, exchange_parallel_size, 1, "Exchange parallel size", 0) \
-    M(UInt64, \
-      exchange_source_pipeline_threads, \
-      16, \
-      "Recommend number of threads for pipeline which reading data from exchange, ingoned if exchange need keep data order", \
-      0) \
-    M(UInt64, exchange_timeout_ms, 100000, "Exchange request timeout ms", 0) \
-    M(UInt64, exchange_local_receiver_queue_size, 300, "Queue size for local exchange receiver", 0) \
-    M(UInt64, exchange_remote_receiver_queue_size, 100, "Queue size for remote exchange receiver", 0) \
+    M(UInt64, exchange_source_pipeline_threads, 16, "Recommend number of threads for pipeline which reading data from exchange, ingoned if exchange need keep data order", 0) \
+    M(UInt64, exchange_timeout_ms, 100000, "Exchange request timeout ms",0) \
+    M(UInt64, exchange_wait_accept_max_timeout_ms, 10000, "Exchange receiver wait accept max timeout ms",0) \
+    M(UInt64, exchange_local_receiver_queue_size, 300, "Queue size for local exchange receiver",0) \
+    M(UInt64, exchange_remote_receiver_queue_size, 100, "Queue size for remote exchange receiver",0) \
+    M(UInt64, exchange_multi_path_receiver_queue_size, 200, "Queue size for multi path exchange receiver", 0) \
     M(Bool, exchange_enable_block_compress, false, "Whether enable exchange block compress ", 0) \
     M(UInt64, exchange_stream_max_buf_size, 209715200, "Default 200M, -1 means no limit", 0) \
     M(UInt64, exchange_buffer_send_threshold_in_bytes, 1000000, "The minimum bytes when exchange will flush send buffer ", 0) \
@@ -1834,6 +1769,7 @@ class IColumn;
     M(Bool, exchange_enable_force_remote_mode, false, "Force exchange data transfer through network", 0) \
     M(Bool, exchange_enable_force_keep_order, false, "Force exchange keep data order", 0) \
     M(Bool, exchange_force_use_buffer, false, "Force exchange use buffer as possible", 0) \
+    M(UInt64, distributed_query_wait_exception_ms, 1000,"Wait final planSegment exception from segmentScheduler.", 0) \
     M(UInt64, distributed_max_parallel_size, false, "Max distributed execution parallel size", 0) \
 \
     /** Dynamic Filter settings */ \
@@ -1925,7 +1861,8 @@ class IColumn;
       FormatSettings::DateTimeOutputFormat::Simple, \
       "Method to write DateTime to text output. Possible values: 'simple', 'iso', 'unix_timestamp'.", \
       0) \
-\
+    M(String, bool_true_representation, "true", "Text to represent bool value in TSV/CSV formats.", 0) \
+    M(String, bool_false_representation, "false", "Text to represent bool value in TSV/CSV formats.", 0) \
     M(UInt64, max_hdfs_write_buffer_size, DBMS_DEFAULT_BUFFER_SIZE, "The maximum size of the buffer to write data to hdfs.", 0) \
 \
     M(Bool, \
@@ -2029,19 +1966,13 @@ class IColumn;
     M(Bool, cross_to_inner_join_rewrite, true, "Use inner join instead of comma/cross join if possible", 0) \
 \
     M(Bool, output_format_arrow_low_cardinality_as_dictionary, false, "Enable output LowCardinality type as Dictionary Arrow type", 0) \
-    M(Bool, \
-      enable_low_cardinality_merge_new_algo, \
-      true, \
-      "Whether use the new merge algorithm during part merge for low cardinality column", \
-      0) \
-    M(UInt64, \
-      low_cardinality_distinct_threshold, \
-      100000, \
-      "Threshold for fallback to native column from low cardinality column, 0 disable", \
-      0) \
 \
     M(Bool, enable_sql_forwarding, true, "Allow auto query forwarding to target host server.", 1) \
-    M(UInt64, cnch_part_attach_limit, 3000, "Maximum number of part for ATTACH PARTITION/PARTS command", 0) \
+    M(Bool, enable_low_cardinality_merge_new_algo, true, "Whether use the new merge algorithm during part merge for low cardinality column", 0) \
+    M(UInt64, low_cardinality_distinct_threshold, 100000, "Threshold for fallback to native column from low cardinality column, 0 disable", 0) \
+    M(String, skip_shard_list, "", "Set slow shards that query want to skip, shard num is split by comma", 0) \
+    \
+    M(UInt64, cnch_part_attach_limit, 3000, "Maximum number of part for ATTACH PARTITION/PARTS command", 0)\
     M(UInt64, cnch_part_attach_drill_down, 1, "Maximum levels of path to find cnch data parts, 0 means no drill down", 0) \
     M(UInt64, cnch_part_attach_assert_parts_count, 0, "Assert total number of parts to attach.", 0) \
     M(UInt64, cnch_part_attach_assert_rows_count, 0, "Assert totol number of part rows to attach.", 0) \
@@ -2050,8 +1981,10 @@ class IColumn;
     M(UInt64, cnch_part_attach_max_threads, 16, "Max threads to use when attach parts", 0) \
     M(UInt64, attach_failure_injection_knob, 0, "Attach failure injection knob, for test only", 0) \
     M(Bool, async_post_commit, false, "Txn post commit asynchronously", 0) \
-    M(Bool, enable_auto_query_forwarding, false, "Auto forward query to target server when having multiple servers", 0)\
+    M(Bool, enable_auto_query_forwarding, false, "Auto forward query to target server when having multiple servers", 0) \
     M(String, tenant_id, "", "tenant_id of cnch user", 0) \
+    M(Bool, cnch_enable_merge_prefetch, true, "Enable prefetching while merge", 0) \
+    M(UInt64, cnch_merge_prefetch_segment_size, 256 * 1024 * 1024, "Min segment size of file when prefetching for merge", 0) \
 
 
 // End of FORMAT_FACTORY_SETTINGS

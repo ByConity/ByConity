@@ -50,6 +50,7 @@
 #include <QueryPlan/GraphvizPrinter.h>
 #include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <QueryPlan/QueryPlan.h>
+#include <fmt/core.h>
 #include <Common/Brpc/BrpcChannelPoolOptions.h>
 #include <Common/CurrentThread.h>
 #include <Common/Exception.h>
@@ -57,6 +58,12 @@
 #include <common/defines.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
+
+namespace ProfileEvents
+{
+    extern const Event SystemTimeMicroseconds;
+    extern const Event UserTimeMicroseconds;
+}
 
 namespace DB
 {
@@ -68,13 +75,26 @@ namespace ErrorCodes
     extern const int MEMORY_LIMIT_EXCEEDED;
 }
 
+void PlanSegmentExecutor::prepareSegmentInfo() const
+{
+    query_log_element->client_info = plan_segment->getContext()->getClientInfo();
+    query_log_element->segment_id = plan_segment->getPlanSegmentId();
+    query_log_element->segment_parallel = plan_segment->getParallelSize();
+    query_log_element->segment_parallel_index = plan_segment->getParallelIndex();
+    query_log_element->type = QueryLogElementType::QUERY_START;
+    query_log_element->event_time = time(nullptr);
+    query_log_element->query_start_time = time(nullptr);
+}
+
 PlanSegmentExecutor::PlanSegmentExecutor(PlanSegmentPtr plan_segment_, ContextMutablePtr context_)
     : context(std::move(context_))
     , plan_segment(std::move(plan_segment_))
     , plan_segment_outputs(plan_segment->getPlanSegmentOutputs())
     , logger(&Poco::Logger::get("PlanSegmentExecutor"))
+    , query_log_element(std::make_unique<QueryLogElement>())
 {
     options = ExchangeUtils::getExchangeOptions(context);
+    prepareSegmentInfo();
 }
 
 PlanSegmentExecutor::PlanSegmentExecutor(PlanSegmentPtr plan_segment_, ContextMutablePtr context_, ExchangeOptions options_)
@@ -83,7 +103,31 @@ PlanSegmentExecutor::PlanSegmentExecutor(PlanSegmentPtr plan_segment_, ContextMu
     , plan_segment_outputs(plan_segment->getPlanSegmentOutputs())
     , options(std::move(options_))
     , logger(&Poco::Logger::get("PlanSegmentExecutor"))
+    , query_log_element(std::make_unique<QueryLogElement>())
 {
+    prepareSegmentInfo();
+}
+
+PlanSegmentExecutor::~PlanSegmentExecutor() noexcept
+{
+    try
+    {
+        if (context->getSettingsRef().log_queries && query_log_element->type >= context->getSettingsRef().log_queries_min_type)
+        {
+            if (auto query_log = context->getQueryLog())
+                query_log->add(*query_log_element);
+        }
+    }
+    catch (...)
+    {
+        LOG_ERROR(
+            logger,
+            "QueryLogElement:[query_id-{}, segment_id-{}, segment_parallel_index-{}] save to table fail with exception:{}",
+            query_log_element->client_info.initial_query_id,
+            query_log_element->segment_id,
+            query_log_element->segment_parallel_index,
+            getCurrentExceptionCode());
+    }
 }
 
 RuntimeSegmentsStatus PlanSegmentExecutor::execute(ThreadGroupStatusPtr thread_group)
@@ -92,35 +136,59 @@ RuntimeSegmentsStatus PlanSegmentExecutor::execute(ThreadGroupStatusPtr thread_g
     try
     {
         doExecute(std::move(thread_group));
-        RuntimeSegmentsStatus status(plan_segment->getQueryId(), plan_segment->getPlanSegmentId(), true, false, "execute success", 0);
-        sendSegmentStatus(status);
-        return status;
+
+        runtime_segment_status.query_id = plan_segment->getQueryId();
+        runtime_segment_status.segment_id = plan_segment->getPlanSegmentId();
+        runtime_segment_status.is_succeed = true;
+        runtime_segment_status.is_canceled = false;
+        runtime_segment_status.code = 0;
+        runtime_segment_status.message = "execute success";
+
+        query_log_element->type = QueryLogElementType::QUERY_FINISH;
+        sendSegmentStatus(runtime_segment_status);
+        return runtime_segment_status;
     }
     catch (...)
     {
         int exception_code = getCurrentExceptionCode();
+        auto exception_message = getCurrentExceptionMessage(false);
+
+        query_log_element->type = QueryLogElementType::EXCEPTION_WHILE_PROCESSING;
+        query_log_element->exception_code = exception_code;
+        query_log_element->stack_trace = exception_message;
+
         const auto & host = extractExchangeStatusHostPort(plan_segment->getCurrentAddress());
-        auto message = "Worker host:" + host + ", exception:" + getCurrentExceptionMessage(false);
-        RuntimeSegmentsStatus status(plan_segment->getQueryId(), plan_segment->getPlanSegmentId(), false, false, message, exception_code);
+        runtime_segment_status.query_id = plan_segment->getQueryId();
+        runtime_segment_status.segment_id = plan_segment->getPlanSegmentId();
+        runtime_segment_status.is_succeed = false;
+        runtime_segment_status.is_canceled = false;
+        runtime_segment_status.code = exception_code;
+        runtime_segment_status.message = "Worker host:" + host + ", exception:" + exception_message;
         if (exception_code == ErrorCodes::MEMORY_LIMIT_EXCEEDED)
         {
-            // ErrorCodes::MEMORY_LIMIT_EXCEEDED doesn't print stack trace.
+            // ErrorCodes::MEMORY_LIMIT_EXCEEDED don't print stack trace.
             LOG_ERROR(
-                &Poco::Logger::get("PlanSegmentExecutor"),
-                "query_id: {} segment_id: {} code: {} messaage: {}",
+                logger,
+                " [{}_{}] Query has excpetion with code: {}, msg: {}",
                 plan_segment->getQueryId(),
                 plan_segment->getPlanSegmentId(),
                 exception_code,
-                message);
+                exception_message);
         }
         else
         {
-            tryLogCurrentException(logger, __PRETTY_FUNCTION__);
+            tryLogCurrentException(
+                logger,
+                fmt::format(
+                    "[{}_{}]: Query has excpetion with code: {}, detail \n",
+                    plan_segment->getQueryId(),
+                    plan_segment->getPlanSegmentId(),
+                    exception_code));
         }
         if (exception_code == ErrorCodes::QUERY_WAS_CANCELLED)
-            status.is_canceled = true;
-        sendSegmentStatus(status);
-        return status;
+            runtime_segment_status.is_canceled = true;
+        sendSegmentStatus(runtime_segment_status);
+        return runtime_segment_status;
     }
 
     //TODO notify segment scheduler with finished or exception status.
@@ -136,8 +204,28 @@ BlockIO PlanSegmentExecutor::lazyExecute(bool /*add_output_processors*/)
     res.plan_segment_process_entry = context->getPlanSegmentProcessList().insert(*plan_segment, context);
 
     res.pipeline = std::move(*buildPipeline());
-
+    context->setPlanSegmentProcessListEntry(res.plan_segment_process_entry);
     return res;
+}
+
+void PlanSegmentExecutor::collectSegmentQueryRuntimeMetric(const QueryStatus * query_status)
+{
+    auto query_status_info = query_status->getInfo(true, context->getSettingsRef().log_profile_events);
+    const auto & query_access_info = context->getQueryAccessInfo();
+
+    query_log_element->read_bytes = query_status_info.read_bytes;
+    query_log_element->read_rows = query_status_info.read_rows;
+    query_log_element->written_bytes = query_status_info.written_bytes;
+    query_log_element->written_rows = query_status_info.written_bytes;
+    query_log_element->memory_usage = query_status_info.peak_memory_usage > 0 ? query_status_info.peak_memory_usage : 0;
+    query_log_element->query_duration_ms = query_status_info.elapsed_seconds * 1000;
+    query_log_element->max_io_time_thread_ms = query_status_info.max_io_time_thread_ms;
+    query_log_element->max_io_time_thread_name = query_status_info.max_io_time_thread_name;
+    query_log_element->thread_ids = std::move(query_status_info.thread_ids);
+    query_log_element->profile_counters = query_status_info.profile_counters;
+    query_log_element->max_thread_io_profile_counters = query_status_info.max_io_thread_profile_counters;
+
+    query_log_element->query_tables = query_access_info.tables;
 }
 
 void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
@@ -170,6 +258,7 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
     }
 
     PlanSegmentProcessList::EntryPtr process_plan_segment_entry = context->getPlanSegmentProcessList().insert(*plan_segment, context);
+    context->setPlanSegmentProcessListEntry(process_plan_segment_entry);
 
     QueryPipelinePtr pipeline;
     BroadcastSenderPtrs senders;
@@ -185,29 +274,32 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
     if (max_threads)
         pipeline->setMaxThreads(max_threads);
     size_t num_threads = pipeline->getNumThreads();
-
     LOG_DEBUG(
         logger,
         "Runing plansegment id {}, segment: {} pipeline with {} threads",
         plan_segment->getQueryId(),
         plan_segment->getPlanSegmentId(),
         num_threads);
+
     pipeline_executor->execute(num_threads);
-    GraphvizPrinter::printPipeline(
-        pipeline_executor->getProcessors(),
-        pipeline_executor->getExecutingGraph(),
-        context,
-        plan_segment->getPlanSegmentId(),
-        extractExchangeStatusHostPort(plan_segment->getCurrentAddress()));
+
+    if (CurrentThread::getGroup())
+    {
+        runtime_segment_status.metrics.cpu_micros = CurrentThread::getGroup()->performance_counters[ProfileEvents::SystemTimeMicroseconds]
+                + CurrentThread::getGroup()->performance_counters[ProfileEvents::UserTimeMicroseconds];
+    }
     for (const auto & sender : senders)
         sender->finish(BroadcastStatusCode::ALL_SENDERS_DONE, "Upstream pipeline finished");
+
+    if (context->getSettingsRef().log_queries)
+        collectSegmentQueryRuntimeMetric(query_status);
 }
 
 QueryPipelinePtr PlanSegmentExecutor::buildPipeline()
 {
     QueryPipelinePtr pipeline = plan_segment->getQueryPlan().buildQueryPipeline(
         QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromPlanSegment(plan_segment.get(), context));
-    registerAllExchangeReceivers(*pipeline, options.exhcange_timeout_ms / 3);
+    registerAllExchangeReceivers(*pipeline, context->getSettingsRef().exchange_wait_accept_max_timeout_ms);
     return pipeline;
 }
 
@@ -259,7 +351,7 @@ void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSe
         BuildQueryPipelineSettings::fromPlanSegment(plan_segment.get(), context)
     );
 
-    registerAllExchangeReceivers(*pipeline, options.exhcange_timeout_ms / 3);
+    registerAllExchangeReceivers(*pipeline, context->getSettingsRef().exchange_wait_accept_max_timeout_ms);
 
     pipeline->setMaxThreads(pipeline->getNumThreads());
 
@@ -652,12 +744,13 @@ void PlanSegmentExecutor::sendSegmentStatus(const RuntimeSegmentsStatus & status
         request.set_segment_id(status.segment_id);
         request.set_is_succeed(status.is_succeed);
         request.set_is_canceled(status.is_canceled);
+        status.metrics.setProtos(*request.mutable_metrics());
         request.set_code(status.code);
         request.set_message(status.message);
 
         manager.sendPlanSegmentStatus(&cntl, &request, &response, nullptr);
         rpc_client->assertController(cntl);
-        LOG_TRACE(logger, "PlanSegment-{} send status to coordinator successfully, query id-{}.", request.segment_id(), request.query_id());
+        LOG_TRACE(logger, "PlanSegment-{} send status to coordinator successfully, query id-{} status.cpu_micros-{}.", request.segment_id(), request.query_id(), status.metrics.cpu_micros);
     }
     catch (...)
     {

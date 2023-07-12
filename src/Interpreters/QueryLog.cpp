@@ -123,12 +123,16 @@ NamesAndTypesList QueryLogElement::getNamesAndTypes()
         {"log_comment", std::make_shared<DataTypeString>()},
 
         {"thread_ids", std::make_shared<DataTypeArray>(std::make_shared<DataTypeUInt64>())},
+        {"max_io_thread_name", std::make_shared<DataTypeString>()},
+        {"max_io_thread_query_ms", std::make_shared<DataTypeUInt64>()},
 
 #ifdef USE_COMMUNITY_MAP
         {"ProfileEvents", std::make_shared<DataTypeMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeUInt64>())},
+        {"MaxIOThreadProfileEvents", std::make_shared<DataTypeMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeUInt64>())},
         {"Settings", std::make_shared<DataTypeMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeString>())},
 #else
         {"ProfileEvents", std::make_shared<DataTypeByteMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeUInt64>())},
+        {"MaxIOThreadProfileEvents", std::make_shared<DataTypeByteMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeUInt64>())},
         {"Settings", std::make_shared<DataTypeByteMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeString>())},
 #endif
 
@@ -140,7 +144,11 @@ NamesAndTypesList QueryLogElement::getNamesAndTypes()
         {"used_formats", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())},
         {"used_functions", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())},
         {"used_storages", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())},
-        {"used_table_functions", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())}
+        {"used_table_functions", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())},
+        {"partition_ids", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())},
+        {"segment_id", std::make_shared<DataTypeInt64>()},
+        {"segment_parallel", std::make_shared<DataTypeInt64>()},
+        {"segment_parallel_index", std::make_shared<DataTypeInt64>()}
     };
 
 }
@@ -224,10 +232,23 @@ void QueryLogElement::appendToBlock(MutableColumns & columns) const
         columns[i++]->insert(threads_array);
     }
 
+    columns[i++]->insert(max_io_time_thread_name);
+    columns[i++]->insert(max_io_time_thread_ms);
+
     if (profile_counters)
     {
         auto * column = columns[i++].get();
         ProfileEvents::dumpToMapColumn(*profile_counters, column, true);
+    }
+    else
+    {
+        columns[i++]->insertDefault();
+    }
+
+    if (max_thread_io_profile_counters)
+    {
+        auto * column = columns[i++].get();
+        ProfileEvents::dumpToMapColumn(*max_thread_io_profile_counters, column, true);
     }
     else
     {
@@ -254,6 +275,7 @@ void QueryLogElement::appendToBlock(MutableColumns & columns) const
         auto & column_function_factory_objects = typeid_cast<ColumnArray &>(*columns[i++]);
         auto & column_storage_factory_objects = typeid_cast<ColumnArray &>(*columns[i++]);
         auto & column_table_function_factory_objects = typeid_cast<ColumnArray &>(*columns[i++]);
+        auto & column_partition_ids = typeid_cast<ColumnArray &>(*columns[i++]);
 
         auto fill_column = [](const std::unordered_set<String> & data, ColumnArray & column)
         {
@@ -276,7 +298,12 @@ void QueryLogElement::appendToBlock(MutableColumns & columns) const
         fill_column(used_functions, column_function_factory_objects);
         fill_column(used_storages, column_storage_factory_objects);
         fill_column(used_table_functions, column_table_function_factory_objects);
+        fill_column(partition_ids, column_partition_ids);
     }
+
+    columns[i++]->insert(segment_id);
+    columns[i++]->insert(segment_parallel);
+    columns[i++]->insert(segment_parallel_index);
 }
 
 void QueryLogElement::appendClientInfo(const ClientInfo & client_info, MutableColumns & columns, size_t & i)

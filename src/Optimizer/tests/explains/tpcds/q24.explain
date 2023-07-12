@@ -7,7 +7,7 @@ Projection est. ? rows
          │     Order by: {c_last_name_1 asc, c_first_name_1 asc, s_store_name_1 asc}
          └─ Inner Join est. ? rows
             │     Condition: 
-            │     Filter: `expr#sum(netpaid)` > `expr#multiply(CAST('0.05', 'Decimal(18, 2)'), avg(netpaid))`
+            │     Filter: `expr#sum(netpaid)` > `expr#multiply('0.05', avg(netpaid))`
             ├─ MergingAggregated est. 12321 rows
             │  └─ Repartition Exchange est. 12321 rows
             │     │     Partition by: {c_first_name_1, c_last_name_1, s_store_name_1}
@@ -76,7 +76,7 @@ Projection est. ? rows
             │                                   Outputs: ca_address_sk_4:=ca_address_sk, ca_country_4:=ca_country, ca_state_6:=ca_state, ca_zip_4:=ca_zip
             └─ Broadcast Exchange est. 1 rows
                └─ Projection est. 1 rows
-                  │     Expressions: expr#multiply(CAST('0.05', 'Decimal(18, 2)'), avg(netpaid)):='0.05' * `expr#avg(netpaid)`
+                  │     Expressions: expr#multiply('0.05', avg(netpaid)):='0.05' * `expr#avg(netpaid)`
                   └─ MergingAggregated est. 1 rows
                      └─ Gather Exchange est. 1 rows
                         └─ Aggregating est. 1 rows
@@ -148,7 +148,7 @@ Projection est. ? rows
          │     Order by: {c_last_name_9 asc, c_first_name_9 asc, s_store_name_9 asc}
          └─ Inner Join est. ? rows
             │     Condition: 
-            │     Filter: `expr#sum(netpaid)_1` > `expr#multiply(CAST('0.05', 'Decimal(18, 2)'), avg(netpaid))_1`
+            │     Filter: `expr#sum(netpaid)_1` > `expr#multiply('0.05', avg(netpaid))_1`
             ├─ MergingAggregated est. 12432 rows
             │  └─ Repartition Exchange est. 12432 rows
             │     │     Partition by: {c_first_name_9, c_last_name_9, s_store_name_9}
@@ -217,7 +217,7 @@ Projection est. ? rows
             │                                   Outputs: ca_address_sk_10:=ca_address_sk, ca_country_10:=ca_country, ca_state_14:=ca_state, ca_zip_10:=ca_zip
             └─ Broadcast Exchange est. 1 rows
                └─ Projection est. 1 rows
-                  │     Expressions: expr#multiply(CAST('0.05', 'Decimal(18, 2)'), avg(netpaid))_1:='0.05' * `expr#avg(netpaid)_1`
+                  │     Expressions: expr#multiply('0.05', avg(netpaid))_1:='0.05' * `expr#avg(netpaid)_1`
                   └─ MergingAggregated est. 1 rows
                      └─ Gather Exchange est. 1 rows
                         └─ Aggregating est. 1 rows

@@ -44,6 +44,7 @@ namespace DB
     M(DoubleColon) \
     M(Equals) \
     M(NotEquals) \
+    M(BitEquals) \
     M(Less) \
     M(Greater) \
     M(LessOrEquals) \

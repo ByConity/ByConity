@@ -7,7 +7,7 @@ Projection est. ? rows
          │     Order by: {c_last_name_1 asc, c_first_name_1 asc, s_store_name_1 asc}
          └─ Inner Join est. ? rows
             │     Condition: 
-            │     Filter: `expr#sum(netpaid)` > `expr#multiply(CAST('0.05', 'Decimal(18, 2)'), avg(netpaid))`
+            │     Filter: `expr#sum(netpaid)` > `expr#multiply('0.05', avg(netpaid))`
             ├─ MergingAggregated est. ? rows
             │  └─ Repartition Exchange est. ? rows
             │     │     Partition by: {c_first_name_1, c_last_name_1, s_store_name_1}
@@ -19,7 +19,7 @@ Projection est. ? rows
             │           └─ CTERef [0] est. ? rows
             └─ Broadcast Exchange est. ? rows
                └─ Projection est. ? rows
-                  │     Expressions: expr#multiply(CAST('0.05', 'Decimal(18, 2)'), avg(netpaid)):='0.05' * `expr#avg(netpaid)`
+                  │     Expressions: expr#multiply('0.05', avg(netpaid)):='0.05' * `expr#avg(netpaid)`
                   └─ MergingAggregated est. ? rows
                      └─ Gather Exchange est. ? rows
                         └─ Aggregating est. ? rows
@@ -90,7 +90,7 @@ Projection est. ? rows
          │     Order by: {c_last_name_7 asc, c_first_name_7 asc, s_store_name_7 asc}
          └─ Inner Join est. ? rows
             │     Condition: 
-            │     Filter: `expr#sum(netpaid)_1` > `expr#multiply(CAST('0.05', 'Decimal(18, 2)'), avg(netpaid))_1`
+            │     Filter: `expr#sum(netpaid)_1` > `expr#multiply('0.05', avg(netpaid))_1`
             ├─ MergingAggregated est. ? rows
             │  └─ Repartition Exchange est. ? rows
             │     │     Partition by: {c_first_name_7, c_last_name_7, s_store_name_7}
@@ -102,7 +102,7 @@ Projection est. ? rows
             │           └─ CTERef [0] est. ? rows
             └─ Broadcast Exchange est. ? rows
                └─ Projection est. ? rows
-                  │     Expressions: expr#multiply(CAST('0.05', 'Decimal(18, 2)'), avg(netpaid))_1:='0.05' * `expr#avg(netpaid)_1`
+                  │     Expressions: expr#multiply('0.05', avg(netpaid))_1:='0.05' * `expr#avg(netpaid)_1`
                   └─ MergingAggregated est. ? rows
                      └─ Gather Exchange est. ? rows
                         └─ Aggregating est. ? rows

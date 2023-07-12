@@ -795,7 +795,8 @@ namespace Catalog
         const String & new_create,
         const TxnTimestamp & previous_version,
         const TxnTimestamp & txnID,
-        const TxnTimestamp & ts)
+        const TxnTimestamp & ts,
+        const bool is_recluster)
     {
         runWithMetricSupport(
             [&] {
@@ -836,6 +837,10 @@ namespace Catalog
                     name_space, *table, {}, {});
                 if (!res)
                     throw Exception("Alter table failed.", ErrorCodes::CATALOG_ALTER_TABLE_FAILURE);
+
+                // Set cluster status after Alter table is successful to update PartCacheManager with new table metadata
+                if (is_recluster)
+                    setTableClusterStatus(storage->getStorageUUID(), false);
 
                 if (context.getCnchStorageCache())
                 {

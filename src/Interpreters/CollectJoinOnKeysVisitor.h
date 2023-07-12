@@ -55,8 +55,9 @@ public:
         ASTPtr asof_left_key{};
         ASTPtr asof_right_key{};
         bool has_some{false};
+        bool ignore_array_join_check_in_join_on_condition{false};
 
-        void addJoinKeys(const ASTPtr & left_ast, const ASTPtr & right_ast, const std::pair<size_t, size_t> & table_no);
+        void addJoinKeys(const ASTPtr & left_ast, const ASTPtr & right_ast, const std::pair<size_t, size_t> & table_no, bool null_safe_equal);
         void addAsofJoinKeys(const ASTPtr & left_ast, const ASTPtr & right_ast, const std::pair<size_t, size_t> & table_no,
                              const ASOF::Inequality & asof_inequality);
         void asofToJoinKeys();
@@ -78,7 +79,7 @@ public:
 private:
     static void visit(const ASTFunction & func, const ASTPtr & ast, Data & data);
 
-    static void getIdentifiers(const ASTPtr & ast, std::vector<const ASTIdentifier *> & out);
+    static void getIdentifiers(const ASTPtr & ast, std::vector<const ASTIdentifier *> & out, bool ignore_array_join_check_in_join_on_condition=false);
     static std::pair<size_t, size_t> getTableNumbers(const ASTPtr & expr, const ASTPtr & left_ast, const ASTPtr & right_ast, Data & data);
     static const ASTIdentifier * unrollAliases(const ASTIdentifier * identifier, const Aliases & aliases);
     static size_t getTableForIdentifiers(std::vector<const ASTIdentifier *> & identifiers, const Data & data);

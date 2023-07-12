@@ -48,6 +48,9 @@
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/DistributedStages/executePlanSegment.h>
 #include <Interpreters/CnchQueryMetrics/QueryWorkerMetricLog.h>
+#include <Interpreters/DistributedStages/MPPQueryCoordinator.h>
+#include <Interpreters/DistributedStages/MPPQueryStatus.h>
+#include <Interpreters/ProcessList.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/MergeTree/MergeTreeDataPartUUID.h>
 #include <Storages/StorageS3Cluster.h>
@@ -84,6 +87,9 @@ namespace ErrorCodes
     extern const int UNEXPECTED_PACKET_FROM_CLIENT;
     extern const int SUPPORT_IS_DISABLED;
     extern const int UNKNOWN_PROTOCOL;
+    extern const int QUERY_WAS_CANCELLED;
+    extern const int EXCHANGE_DATA_TRANS_EXCEPTION;
+    extern const int TIMEOUT_EXCEEDED;
 }
 
 TCPHandler::TCPHandler(IServer & server_, const Poco::Net::StreamSocket & socket_, bool parse_proxy_protocol_, std::string server_display_name_)
@@ -393,8 +399,15 @@ void TCPHandler::runImpl()
         }
         catch (const Exception & e)
         {
+
             state.io.onException();
-            exception.emplace(e);
+            if (state.io.coordinator && isAmbiguosError(e.code()))
+            {
+                auto query_status =state.io.coordinator->waitUntilFinish(e.code(), e.message());
+                exception.emplace(query_status.summarized_error_msg, query_status.error_code);
+            }
+            else
+                exception.emplace(e);
 
             if (e.code() == ErrorCodes::UNKNOWN_PACKET_FROM_CLIENT)
                 throw;
@@ -1007,13 +1020,16 @@ void TCPHandler::receiveHello()
     readStringBinary(default_database, *in);
     readStringBinary(user, *in);
     readStringBinary(password, *in);
+    if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_PLAN_SEGMENT_VERSION)
+        readVarUInt(client_plan_segment_version, *in);
 
     if (user.empty())
         throw NetException("Unexpected packet from client (no user in Hello package)", ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
 
-    LOG_DEBUG(log, "Connected {} version {}.{}.{}, revision: {}{}{}.",
+    LOG_DEBUG(log, "Connected {} version {}.{}.{}, plansegment verison:{}, revision: {}{}{}.",
         client_name,
         client_version_major, client_version_minor, client_version_patch,
+        client_plan_segment_version,
         client_tcp_protocol_version,
         (!default_database.empty() ? ", database: " + default_database : ""),
         (!user.empty() ? ", user: " + user : "")
@@ -1060,6 +1076,8 @@ void TCPHandler::sendHello()
         writeStringBinary(server_display_name, *out);
     if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_VERSION_PATCH)
         writeVarUInt(DBMS_VERSION_PATCH, *out);
+    if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_PLAN_SEGMENT_VERSION)
+        writeVarUInt(DBMS_PLAN_SEGMENT_VERSION, *out);
     out->next();
 }
 
@@ -1495,6 +1513,12 @@ void TCPHandler::receiveUnexpectedQuery()
 
 void TCPHandler::receivePlanSegment()
 {
+    // check planSegment version, received in receivehello
+    if (client_plan_segment_version != DBMS_PLAN_SEGMENT_VERSION)
+    {
+        throw Exception("Logical error: receive segment version " + toString(client_plan_segment_version) + ", server segment version " + toString(DBMS_PLAN_SEGMENT_VERSION), ErrorCodes::LOGICAL_ERROR);
+    }
+
     state.is_empty = false;
 
     /// Client info

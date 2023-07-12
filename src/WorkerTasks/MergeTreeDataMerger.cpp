@@ -39,6 +39,7 @@
 #include <Storages/MergeTree/MergedBlockOutputStream.h>
 #include <Storages/MergeTree/MergedColumnOnlyOutputStream.h>
 #include <WorkerTasks/ManipulationTaskParams.h>
+#include <WorkerTasks/CnchMergePrefetcher.h>
 
 namespace ProfileEvents
 {
@@ -387,9 +388,25 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
     Pipes pipes;
     UInt64 watch_prev_elapsed = 0;
 
+    // create merge prefetcher if necessary
+    std::unique_ptr<CnchMergePrefetcher> prefetcher = nullptr;
+    if (context->getSettingsRef().cnch_enable_merge_prefetch)
+    {
+        if (std::any_of(merging_columns.begin(), merging_columns.end(), [](auto & c) { return c.type->isMap(); }))
+        {
+            LOG_DEBUG(log, "Prefetcher is disabled as there is some Map column in merging_columns");
+        }
+        else
+        {
+            prefetcher = std::make_unique<CnchMergePrefetcher>(*context, data, params.task_id);
+            for (const auto & part : params.source_data_parts)
+                prefetcher->submitDataPart(part, merging_columns, gathering_columns);
+        }
+    }
+
     for (const auto & part : source_data_parts)
     {
-        /// CnchMergePrefetcher::PartFutureFiles * future_files = prefetcher ? prefetcher->tryGetFutureFiles(part->name) : nullptr;
+        CnchMergePrefetcher::PartFutureFiles* future_files = prefetcher ? prefetcher->tryGetFutureFiles(part->name) : nullptr;
 
         auto input = std::make_unique<MergeTreeSequentialSource>(
             data,
@@ -399,7 +416,8 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
             merging_column_names,
             false, // read_with_direct_io: We believe source parts will be mostly in page cache
             true, /// take_column_types_from_storage
-            false /// quiet
+            false, /// quiet
+            future_files
         );
         input->setProgressCallback(ManipulationProgressCallback(manipulation_entry, watch_prev_elapsed, horizontal_stage_progress));
 
@@ -637,7 +655,7 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
 
             for (size_t part_num = 0; part_num < source_data_parts.size(); ++part_num)
             {
-                /// CnchMergePrefetcher::PartFutureFiles * future_files = prefetcher ? prefetcher->tryGetFutureFiles(parts[part_num]->name) : nullptr;
+                CnchMergePrefetcher::PartFutureFiles * future_files = prefetcher ? prefetcher->tryGetFutureFiles(source_data_parts[part_num]->name) : nullptr;
 
                 auto column_part_source = std::make_shared<MergeTreeSequentialSource>(
                     data,
@@ -646,7 +664,8 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
                     nullptr, // delete bitmap
                     Names{column_name},
                     false, /// read_with_direct_io: We believe source parts will be mostly in page cache
-                    true // take_column_types_from_storage
+                    true, // take_column_types_from_storage
+                    future_files
                 );
                 column_part_source->setProgressCallback(
                     ManipulationProgressCallback(manipulation_entry, watch_prev_elapsed, column_progress));

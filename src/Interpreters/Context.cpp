@@ -361,8 +361,6 @@ struct ContextSharedPart
     mutable std::optional<BackgroundSchedulePool> message_broker_schedule_pool; /// A thread pool that can run different jobs in background (used for message brokers, like RabbitMQ and Kafka)
 
     std::optional<ThreadPool> part_cache_manager_thread_pool;  /// A thread pool to collect partition metrics in background.
-    mutable std::optional<ThreadPool> local_disk_cache_thread_pool;  /// A thread pool that can run parts caching from cloud storage in background (used in cloud tables)
-    mutable std::optional<ThreadPool> local_disk_cache_evict_thread_pool;  /// A thread pool that asynchronous remove local disk cache file
     mutable ThrottlerPtr disk_cache_throttler;
 
     mutable std::array<std::optional<BackgroundSchedulePool>, SchedulePool::Size> extra_schedule_pools;
@@ -458,6 +456,9 @@ struct ContextSharedPart
 
     /// @ByteDance
     bool ready_for_query = false;                           /// Server is ready for incoming queries
+
+    std::shared_ptr<ProfileElementConsumer<ProcessorProfileLogElement>> processor_log_element_consumer;
+    bool is_explain_query;
 
     ContextSharedPart()
         : macros(std::make_unique<Macros>())
@@ -1977,6 +1978,45 @@ std::weak_ptr<ProcessListEntry> Context::getProcessListEntry() const
     return process_list_entry;
 }
 
+void Context::setPlanSegmentProcessListEntry(std::shared_ptr<PlanSegmentProcessListEntry> segment_process_list_entry_)
+{
+    segment_process_list_entry = segment_process_list_entry_;
+}
+
+std::weak_ptr<PlanSegmentProcessListEntry> Context::getPlanSegmentProcessListEntry() const
+{
+    return segment_process_list_entry;
+}
+
+void Context::setProcessorProfileElementConsumer(
+    std::shared_ptr<ProfileElementConsumer<ProcessorProfileLogElement>> processor_log_element_consumer_)
+{
+    auto lock = getLock();
+    shared->processor_log_element_consumer = processor_log_element_consumer_;
+}
+
+std::shared_ptr<ProfileElementConsumer<ProcessorProfileLogElement>> Context::getProcessorProfileElementConsumer() const
+{
+    auto lock = getLock();
+    
+    if (!shared->processor_log_element_consumer)
+        return {};
+    return shared->processor_log_element_consumer;
+}
+
+void Context::setIsExplainQuery(const bool & is_explain_query_)
+{
+    auto lock = getLock();
+    shared->is_explain_query = is_explain_query_;
+}
+
+bool Context::isExplainQuery() const
+{
+    auto lock = getLock();
+    
+    return shared->is_explain_query;
+}
+
 void Context::setProcessListElement(ProcessList::Element * elem)
 {
     /// Set to a session or query. In the session, only one query is processed at a time. Therefore, the lock is not needed.
@@ -2312,28 +2352,6 @@ BackgroundSchedulePool & Context::getTopologySchedulePool() const
     return *shared->extra_schedule_pools[SchedulePool::CNCHTopology];
 }
 
-ThreadPool & Context::getLocalDiskCacheThreadPool() const
-{
-    auto lock = getLock();
-    if (!shared->local_disk_cache_thread_pool)
-        shared->local_disk_cache_thread_pool.emplace(
-            settings.local_disk_cache_thread_pool_size,
-            settings.local_disk_cache_thread_pool_size,
-            settings.local_disk_cache_thread_pool_size * 100);
-    return *shared->local_disk_cache_thread_pool;
-}
-
-ThreadPool & Context::getLocalDiskCacheEvictThreadPool() const
-{
-    auto lock = getLock();
-    if (!shared->local_disk_cache_evict_thread_pool)
-        shared->local_disk_cache_evict_thread_pool.emplace(
-            settings.local_disk_cache_evict_thread_pool_size,
-            settings.local_disk_cache_evict_thread_pool_size,
-            settings.local_disk_cache_evict_thread_pool_size * 100);
-    return *shared->local_disk_cache_evict_thread_pool;
-}
-
 ThrottlerPtr Context::getDiskCacheThrottler() const
 {
     auto lock = getLock();
@@ -2411,7 +2429,7 @@ zkutil::ZooKeeperPtr Context::getZooKeeper() const
         if (!shared->zookeeper)
             shared->zookeeper = std::make_shared<zkutil::ZooKeeper>(config, "zookeeper", getZooKeeperLog(), endpoints);
         else if (shared->zookeeper->expired())
-            shared->zookeeper = shared->zookeeper->startNewSession();
+            shared->zookeeper = shared->zookeeper->startNewSession(endpoints);
     }
 
     return shared->zookeeper;
@@ -4467,6 +4485,24 @@ CnchBGThreadPtr Context::tryGetCnchBGThread(CnchBGThreadType type, const Storage
 void Context::controlCnchBGThread(const StorageID & storage_id, CnchBGThreadType type, CnchBGThreadAction action) const
 {
     getCnchBGThreadsMap(type)->controlThread(storage_id, action);
+}
+
+bool Context::getTableReclusterTaskStatus(const StorageID & storage_id) const
+{
+    CnchBGThreadsMap * thread_map = getCnchBGThreadsMap(CnchBGThreadType::Clustering);
+    if (!thread_map)
+        throw Exception("Fail to get merge thread map", ErrorCodes::SYSTEM_ERROR);
+    CnchBGThreadPtr bg_thread_ptr = thread_map->tryGetThread(storage_id);
+    if (!bg_thread_ptr)
+    {
+        LOG_DEBUG(&Poco::Logger::get(__PRETTY_FUNCTION__), "Fail to get reclustering manager thread for " + storage_id.getNameForLogs());
+        return false;
+    }
+
+    ReclusteringManagerThread * reclustering_manager_thread = dynamic_cast<ReclusteringManagerThread *>(bg_thread_ptr.get());
+    if (!reclustering_manager_thread)
+        throw Exception("Fail to cast to ReclusteringManagerThread", ErrorCodes::LOGICAL_ERROR);
+    return reclustering_manager_thread->getTableReclusterStatus();
 }
 
 bool Context::removeMergeMutateTasksOnPartitions(const StorageID & storage_id, const std::unordered_set<String> & partitions)

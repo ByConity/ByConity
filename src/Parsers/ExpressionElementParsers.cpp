@@ -21,13 +21,18 @@
 
 #include <errno.h>
 #include <cstdlib>
+#include <type_traits>
+#include <errno.h>
 
 #include <Poco/String.h>
 
-#include <IO/ReadHelpers.h>
+#include <Core/Field.h>
+#include <DataTypes/DataTypesDecimal.h>
+#include <Functions/castTypeToEither.h>
 #include <IO/ReadBufferFromMemory.h>
-#include <Common/typeid_cast.h>
+#include <IO/ReadHelpers.h>
 #include <Parsers/DumpASTNode.h>
+#include <Common/typeid_cast.h>
 
 #include <Parsers/ASTAsterisk.h>
 #include <Parsers/ASTClusterByElement.h>
@@ -1635,6 +1640,21 @@ static const char *get_decimal_pt(const char *buf)
     return pt;
 }
 
+bool ParserBool::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+{
+    if (ParserKeyword("true").parse(pos, node, expected))
+    {
+        node = std::make_shared<ASTLiteral>(true);
+        return true;
+    }
+    else if (ParserKeyword("false").parse(pos, node, expected))
+    {
+        node = std::make_shared<ASTLiteral>(false);
+        return true;
+    }
+    else
+        return false;
+}
 bool ParserNumber::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     const char * data_begin = pos->begin;
@@ -1679,7 +1699,6 @@ bool ParserNumber::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         UInt32 integral = dot - buf;
         UInt32 precision = sz - 1; /* remove point */
         UInt32 scale = precision - integral;
-        ASTs elements;
 
         /* check valid decimal */
         if (precision > DecimalUtils::max_precision<Decimal256> ||
@@ -1700,21 +1719,26 @@ bool ParserNumber::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
             return false;
         }
 
-        elements.reserve(2);
-        elements.push_back(std::make_shared<ASTLiteral>(precision));
-        elements.push_back(std::make_shared<ASTLiteral>(scale));
+        String decimal_str(data_begin, pos->begin - data_begin + sz);
+        DataTypePtr decimal_type = createDecimal<DataTypeDecimal>(precision, scale);
+        Field field;
 
-        auto list = std::make_shared<ASTExpressionList>();
-        list->children = std::move(elements);
+        if (!castTypeToEither<
+                DataTypeDecimal<Decimal32>,
+                DataTypeDecimal<Decimal64>,
+                DataTypeDecimal<Decimal128>,
+                DataTypeDecimal<Decimal256>>(decimal_type.get(), [&](auto && type) {
+                using FieldType = typename std::decay_t<decltype(type)>::FieldType;
+                auto value = type.parseFromString(decimal_str);
+                field = DecimalField<FieldType>(value, scale);
+                return true;
+            }))
+        {
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected data type for parsing decimal literal");
+        }
 
-        auto function_node = std::make_shared<ASTFunction>();
-        function_node->name = "Decimal";
-        function_node->no_empty_args = true;
-        function_node->arguments = list;
-        function_node->children.push_back(function_node->arguments);
-
-        auto literal = std::make_shared<ASTLiteral>(String(data_begin, pos->begin - data_begin + sz));
-        node = createFunctionCast(literal, function_node);
+        auto literal = std::make_shared<ASTLiteral>(field);
+        node = literal;
         ++pos;
         return true;
     }
@@ -1905,12 +1929,16 @@ bool ParserLiteral::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserNull null_p;
     ParserNumber num_p(dt);
+    ParserBool bool_p;
     ParserStringLiteral str_p;
 
     if (null_p.parse(pos, node, expected))
         return true;
 
     if (num_p.parse(pos, node, expected))
+        return true;
+
+    if (bool_p.parse(pos, node, expected))
         return true;
 
     if (str_p.parse(pos, node, expected))

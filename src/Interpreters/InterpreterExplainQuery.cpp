@@ -125,6 +125,19 @@ namespace
 BlockIO InterpreterExplainQuery::execute()
 {
     BlockIO res;
+
+    const auto & ast = query->as<ASTExplainQuery &>();
+
+    if ((ast.getKind() == ASTExplainQuery::DistributedAnalyze || ast.getKind() == ASTExplainQuery::LogicalAnalyze)
+        && QueryUseOptimizerChecker::check(query, getContext()))
+    {
+        std::shared_ptr<ProfileElementConsumer<ProcessorProfileLogElement>> consumer
+            = std::make_shared<ExplainConsumer>(getContext()->getCurrentQueryId());
+        ProfileLogHub<ProcessorProfileLogElement>::getInstance().initLogChannel(getContext()->getCurrentQueryId(), consumer);
+        getContext()->setProcessorProfileElementConsumer(consumer);
+        getContext()->setIsExplainQuery(true);
+    }
+
     res.in = executeImpl();
     return res;
 }
@@ -831,6 +844,11 @@ void InterpreterExplainQuery::explainUsingOptimizer(const ASTPtr & ast, WriteBuf
         buffer << PlanPrinter::textLogicalPlan(*query_plan, context, true, true, costs);
     }
         
+}
+
+void ExplainConsumer::consume(ProcessorProfileLogElement & element)
+{
+    store_vector.emplace_back(element);
 }
 
 }

@@ -16,7 +16,7 @@ Projection est. ? rows
             │     │  │     Partition by: {ss_addr_sk}
             │     │  └─ Inner Join est. ? rows
             │     │     │     Condition: ss_hdemo_sk == hd_demo_sk
-            │     │     │     Filter: ((ss_sales_price <= '200.00') AND (cd_education_status = '2 yr Degree') AND (hd_dep_count = 1) AND (cd_marital_status = 'W') AND (ss_sales_price >= '150.00')) OR ((ss_sales_price >= '100.00') AND (hd_dep_count = 3) AND (ss_sales_price <= '150.00') AND (cd_marital_status = 'M') AND (cd_education_status = 'Advanced Degree')) OR ((ss_sales_price <= '100.00') AND (cd_education_status = 'College') AND (hd_dep_count = 1) AND (cd_marital_status = 'S') AND (ss_sales_price >= '50.00'))
+            │     │     │     Filter: ((ss_sales_price >= '100.00') AND (hd_dep_count = 3) AND (ss_sales_price <= '150.00') AND (cd_marital_status = 'M') AND (cd_education_status = 'Advanced Degree')) OR ((cd_education_status = '2 yr Degree') AND (hd_dep_count = 1) AND (cd_marital_status = 'W') AND (ss_sales_price >= '150.00') AND (ss_sales_price <= '200.00')) OR ((cd_education_status = 'College') AND (ss_sales_price <= '100.00') AND (hd_dep_count = 1) AND (cd_marital_status = 'S') AND (ss_sales_price >= '50.00'))
             │     │     ├─ Repartition Exchange est. ? rows
             │     │     │  │     Partition by: {ss_hdemo_sk}
             │     │     │  └─ Inner Join est. ? rows

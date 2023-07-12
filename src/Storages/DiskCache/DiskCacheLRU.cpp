@@ -88,9 +88,8 @@ namespace
     }
 }
 
-DiskCacheLRU::DiskCacheLRU(
-    Context & context_, const VolumePtr & volume_, const DiskCacheSettings & settings_)
-    : IDiskCache(context_, volume_, settings_)
+DiskCacheLRU::DiskCacheLRU(const VolumePtr & volume_, const ThrottlerPtr & throttler_, const DiskCacheSettings & settings_)
+    : IDiskCache(volume_, throttler_, settings_)
     , set_rate_throttler(settings_.cache_set_rate_limit == 0 ? nullptr : std::make_shared<Throttler>(settings_.cache_set_rate_limit))
     , containers(
           settings.cache_shard_num,
@@ -116,6 +115,11 @@ DiskCacheLRU::DiskCacheLRU(
             "must be positive or -1", settings.cache_load_dispatcher_drill_down_level),
             ErrorCodes::BAD_ARGUMENTS);
     }
+
+    auto & thread_pool = IDiskCache::getThreadPool();
+    thread_pool.scheduleOrThrow([this] {
+        load();
+    });
 }
 
 DiskCacheLRU::KeyType DiskCacheLRU::hash(const String & seg_key)
@@ -294,7 +298,7 @@ void DiskCacheLRU::afterEvictSegment([[maybe_unused]]const std::vector<std::pair
     if (shutdown_called)
         return;
 
-    auto& thread_pool = context.getLocalDiskCacheEvictThreadPool();
+    auto& thread_pool = IDiskCache::getThreadPool();
     for (auto iter = updated_elements.begin(); iter != updated_elements.end(); ++iter)
     {
         DiskPtr disk = iter->second->disk;

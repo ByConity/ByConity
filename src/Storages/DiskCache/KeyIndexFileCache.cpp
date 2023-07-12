@@ -22,6 +22,7 @@
 #include <IO/WriteBufferFromString.h>
 #include <IO/copyData.h>
 #include <Storages/HDFS/ReadBufferFromByteHDFS.h>
+#include <Storages/DiskCache/IDiskCache.h>
 #include <Poco/DirectoryIterator.h>
 #include <Poco/File.h>
 #include <Common/LRUCache.h>
@@ -122,7 +123,7 @@ struct KeyIndexFileCache::Rep
     Rep(Context & context_, size_t max_size)
         : context(context_)
         , base_path(context.getPath() + "unique_key_index_cache/")
-        , loading_thread_pool(context.getLocalDiskCacheThreadPool())
+        , loading_thread_pool(IDiskCache::getThreadPool())
         , cache(max_size, base_path)
     {
     }

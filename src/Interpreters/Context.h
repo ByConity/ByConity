@@ -135,6 +135,9 @@ struct QueryMetricElement;
 struct QueryWorkerMetricElement;
 using QueryWorkerMetricElementPtr = std::shared_ptr<QueryWorkerMetricElement>;
 using QueryWorkerMetricElements = std::vector<QueryWorkerMetricElementPtr>;
+struct ProcessorProfileLogElement;
+template <typename>
+class ProfileElementConsumer;
 struct MergeTreeSettings;
 class StorageS3Settings;
 struct CnchHiveSettings;
@@ -444,6 +447,7 @@ private:
     /// TODO: maybe replace with temporary tables?
     StoragePtr view_source;                 /// Temporary StorageValues used to generate alias columns for materialized views
     Tables table_function_results;          /// Temporary tables obtained by execution of table functions. Keyed by AST tree id.
+    std::unordered_set<String> partition_ids;
 
     ContextWeakMutablePtr query_context;
     ContextWeakMutablePtr session_context;  /// Session context or nullptr. Could be equal to this.
@@ -467,6 +471,8 @@ private:
 
     /// Temporary data for query execution accounting.
     TemporaryDataOnDiskScopePtr temp_data_on_disk;
+
+    std::weak_ptr<PlanSegmentProcessListEntry> segment_process_list_entry;
 public:
     // Top-level OpenTelemetry trace context for the query. Makes sense only for a query context.
     OpenTelemetryTraceContext query_trace_context;
@@ -667,6 +673,7 @@ public:
 
     ClientInfo & getClientInfo() { return client_info; }
     const ClientInfo & getClientInfo() const { return client_info; }
+    const std::unordered_set<String> & getPartitionIds() const { return partition_ids;}
 
     void initResourceGroupManager(const ConfigurationPtr & config);
     void setResourceGroup(const IAST *ast);
@@ -904,6 +911,16 @@ public:
     PlanSegmentProcessList & getPlanSegmentProcessList();
     const PlanSegmentProcessList & getPlanSegmentProcessList() const;
 
+    void setPlanSegmentProcessListEntry(std::shared_ptr<PlanSegmentProcessListEntry> segment_process_list_entry_);
+    std::weak_ptr<PlanSegmentProcessListEntry> getPlanSegmentProcessListEntry() const;
+
+    void setProcessorProfileElementConsumer(
+        std::shared_ptr<ProfileElementConsumer<ProcessorProfileLogElement>> processor_log_element_consumer_);
+    std::shared_ptr<ProfileElementConsumer<ProcessorProfileLogElement>> getProcessorProfileElementConsumer() const;
+    
+    void setIsExplainQuery(const bool & is_explain_query_);
+    bool isExplainQuery() const;
+
     SegmentSchedulerPtr getSegmentScheduler();
     SegmentSchedulerPtr getSegmentScheduler() const;
 
@@ -1006,8 +1023,6 @@ public:
     BackgroundSchedulePool & getMemoryTableSchedulePool() const;
     BackgroundSchedulePool & getTopologySchedulePool() const;
 
-    ThreadPool & getLocalDiskCacheThreadPool() const;
-    ThreadPool & getLocalDiskCacheEvictThreadPool() const;
     ThrottlerPtr getDiskCacheThrottler() const;
 
     ThrottlerPtr getReplicatedFetchesThrottler() const;
@@ -1325,7 +1340,6 @@ public:
     void controlCnchBGThread(const StorageID & storage_id, CnchBGThreadType type, CnchBGThreadAction action) const;
     bool removeMergeMutateTasksOnPartitions(const StorageID &, const std::unordered_set<String> &);
     bool getTableReclusterTaskStatus(const StorageID & storage_id) const;
-    bool removeMergeMutateTasksOnPartition(const StorageID &, const String &);
     ClusterTaskProgress getTableReclusterTaskProgress(const StorageID & storage_id) const;
 
     CnchBGThreadPtr tryGetDedupWorkerManager(const StorageID & storage_id) const;

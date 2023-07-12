@@ -35,7 +35,7 @@ NamesAndTypesList ProcessorProfileLogElement::getNamesAndTypes()
 {
     return
     {
-        {"event_date", std::make_shared<DataTypeDate>()},
+        {"event_date", std::make_shared<DataTypeDate>()},       
         {"event_time", std::make_shared<DataTypeDateTime>()},
         {"event_time_microseconds", std::make_shared<DataTypeDateTime64>(6)},
 

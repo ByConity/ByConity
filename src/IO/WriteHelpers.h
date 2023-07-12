@@ -1114,6 +1114,9 @@ void writeBinary(const std::vector<T> & x, WriteBuffer & buf)
         writeBinary(x[i], buf);
 }
 
+template<>
+void writeBinary(const std::vector<bool> & x, WriteBuffer & buf);
+
 template <typename T>
 void writeQuoted(const std::vector<T> & x, WriteBuffer & buf)
 {

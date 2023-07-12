@@ -786,9 +786,22 @@ bool ZooKeeper::waitForDisappear(const std::string & path, const WaitCondition &
     return false;
 }
 
-ZooKeeperPtr ZooKeeper::startNewSession() const
+ZooKeeperPtr ZooKeeper::startNewSession(const DB::ServiceEndpoints & endpoints) const
 {
-    return std::make_shared<ZooKeeper>(hosts, identity, session_timeout_ms, operation_timeout_ms, chroot, implementation);
+    /// startNewSession from new endpoints
+    Strings new_hosts;
+    for (const auto & endpoint : endpoints)
+    {
+        if (!endpoint.tags.count("PORT2"))
+            throw DB::Exception(DB::ErrorCodes::BAD_ARGUMENTS, "Can't find `PORT2`(Keeper TCP port) from service_discovery");
+        new_hosts.push_back(endpoint.tags.count("secure") ? "secure://" : "" + endpoint.host + ":" + endpoint.tags.at("PORT2"));
+    }
+
+    /// startNewSession from old endpoints if new endpoints are empty
+    if (new_hosts.empty())
+        new_hosts = hosts;
+
+    return std::make_shared<ZooKeeper>(new_hosts, identity, session_timeout_ms, operation_timeout_ms, chroot, implementation);
 }
 
 

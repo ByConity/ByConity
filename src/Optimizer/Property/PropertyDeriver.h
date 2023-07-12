@@ -25,23 +25,23 @@ namespace DB
 class PropertyDeriver
 {
 public:
-    static Property deriveProperty(ConstQueryPlanStepPtr step, Context & context);
-    static Property deriveProperty(ConstQueryPlanStepPtr step, Property & input_property, Context & context);
-    static Property deriveProperty(ConstQueryPlanStepPtr step, PropertySet & input_properties, Context & context);
-    static Property deriveStorageProperty(const StoragePtr& storage, Context & context);
+    static Property deriveProperty(ConstQueryPlanStepPtr step, ContextMutablePtr & context);
+    static Property deriveProperty(ConstQueryPlanStepPtr step, Property & input_property, ContextMutablePtr & context);
+    static Property deriveProperty(ConstQueryPlanStepPtr step, PropertySet & input_properties, ContextMutablePtr & context);
+    static Property deriveStorageProperty(const StoragePtr& storage, ContextMutablePtr & context);
 };
 
 class DeriverContext
 {
 public:
-    DeriverContext(PropertySet input_properties_, Context & context_)
+    DeriverContext(PropertySet input_properties_, ContextMutablePtr & context_)
         : input_properties(std::move(input_properties_)), context(context_) { }
-    PropertySet getInput() { return input_properties; }
-    Context & getContext() { return context; }
+    const PropertySet & getInput() { return input_properties; }
+    ContextMutablePtr & getContext() { return context; }
 
 private:
     PropertySet input_properties;
-    Context & context;
+    ContextMutablePtr & context;
 };
 
 class DeriverVisitor : public StepVisitor<Property, DeriverContext>

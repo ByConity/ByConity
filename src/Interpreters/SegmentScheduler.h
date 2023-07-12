@@ -15,6 +15,9 @@
 
 #pragma once
 
+#include <algorithm>
+#include <random>
+#include <unordered_map>
 #include <unordered_set>
 #include <Core/Block.h>
 #include <Core/Types.h>
@@ -34,8 +37,7 @@
 #include <bthread/condition_variable.h>
 #include <bthread/mutex.h>
 #include <Common/Stopwatch.h>
-#include <algorithm>
-#include <random>
+#include <common/types.h>
 
 #ifndef NDEBUG
 #    define TASK_ASSIGN_DEBUG
@@ -63,8 +65,11 @@ using PlanSegmentsStatusPtr = std::shared_ptr<PlanSegmentsStatus>;
 using RuntimeSegmentsStatusPtr = std::shared_ptr<RuntimeSegmentsStatus>;
 using PlanSegmentsPtr = std::vector<PlanSegmentPtr>;
 using Source = std::vector<size_t>;
+// <query_id, <segment_id, number of segment's received status >>
+using RuntimeSegmentsStatusCounter = std::unordered_map<size_t, UInt64>;
 // <query_id, <segment_id, status>>
 using SegmentStatusMap = std::map<String, std::map<size_t, RuntimeSegmentsStatusPtr>>;
+enum class OverflowMode;
 
 struct DAGGraph {
     DAGGraph(){}
@@ -77,6 +82,8 @@ struct DAGGraph {
         id_to_segment = std::move(other.id_to_segment);
         id_to_address = std::move(other.id_to_address);
         plan_segment_status_ptr = std::move(other.plan_segment_status_ptr);
+        query_context = other.query_context;
+        segment_paralle_size_map = std::move(other.segment_paralle_size_map);
     }
     Source sources;
     size_t final = std::numeric_limits<size_t>::max();
@@ -85,10 +92,12 @@ struct DAGGraph {
     std::unordered_map<size_t, AddressInfos> id_to_address;
     std::set<AddressInfo> plan_send_addresses;
     PlanSegmentsStatusPtr plan_segment_status_ptr;
+    ContextPtr query_context = nullptr;
 #if defined(TASK_ASSIGN_DEBUG)
     std::unordered_map<size_t, std::vector<std::pair<size_t, AddressInfo>>> exchange_data_assign_node_mappings;
 #endif
     mutable bthread::Mutex status_mutex;
+    std::unordered_map<size_t, UInt64> segment_paralle_size_map;
 };
 
 using DAGGraphPtr = std::shared_ptr<DAGGraph>;
@@ -117,18 +126,24 @@ public:
     AddressInfos getWorkerAddress(const String & query_id, size_t segment_id);
 
     String getCurrentDispatchStatus(const String & query_id);
+    void checkQueryCpuTime(const String & query_id);
     void updateSegmentStatus(const RuntimeSegmentsStatus & segment_status);
-    void updateException(const String & query_id, const String & exception, int code);
-    ExceptionWithCode getException(const String & query_id, size_t timeout_ms);
+    void updateQueryStatus(const RuntimeSegmentsStatus & segment_status);
+    
+    bool needCheckRecivedSegmentStatusCounter(const String & query_id) const;
+    bool alreadyReceivedAllSegmentStatus(const String & query_id) const;
+    void updateReceivedSegmentStausCounter(const String & query_id, const size_t & segment_id);
 
 private:
     std::unordered_map<String, std::shared_ptr<DAGGraph>> query_map;
     mutable bthread::Mutex mutex;
     mutable bthread::Mutex segment_status_mutex;
     mutable SegmentStatusMap segment_status_map;
+    mutable std::unordered_map<String, RuntimeSegmentsStatusPtr> query_status_map;
     // record exception when exception occurred
     ConcurrentShardMap<String, ExceptionWithCode> query_to_exception_with_code;
     Poco::Logger * log;
+    std::unordered_map<String, RuntimeSegmentsStatusCounter> query_status_received_counter_map;
 
     void buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::shared_ptr<DAGGraph> graph);
     bool scheduler(const String & query_id, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph);

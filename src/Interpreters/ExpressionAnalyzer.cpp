@@ -290,7 +290,7 @@ void ExpressionAnalyzer::analyzeAggregation()
                 if (group_by_kind != GroupByKind::ORDINARY)
                     aggregated_columns.emplace_back("__grouping_set", std::make_shared<DataTypeUInt64>());
 
-                bool ansi_enabled = getContext()->getSettingsRef().dialect_type == DialectType::ANSI;
+                bool ansi_enabled = getContext()->getSettingsRef().dialect_type != DialectType::CLICKHOUSE;
 
                 for (ssize_t i = 0; i < static_cast<ssize_t>(group_asts.size()); ++i)
                 {
@@ -1268,7 +1268,10 @@ SelectQueryExpressionAnalyzer::appendPrewhere(ExpressionActionsChain & chain, bo
         /// Remove unused source_columns from prewhere actions.
         auto tmp_actions_dag = std::make_shared<ActionsDAG>(sourceColumns());
         getRootActions(select_query->prewhere(), only_types, tmp_actions_dag);
-        tmp_actions_dag->removeUnusedActions(NameSet{prewhere_column_name});
+        /// Constants cannot be removed since they can be used in other parts of the query.
+        /// And if they are not used anywhere, except PREWHERE, they will be removed on the next step.
+        /// follow change: https://github.com/ClickHouse/ClickHouse/commit/fbf98bea0ba56440b973fabbfe755aeb13f078ef
+        tmp_actions_dag->removeUnusedActions(NameSet{prewhere_column_name}, false);
 
         auto required_columns = tmp_actions_dag->getRequiredColumnsNames();
         NameSet required_source_columns(required_columns.begin(), required_columns.end());
@@ -1385,7 +1388,7 @@ bool SelectQueryExpressionAnalyzer::appendGroupBy(
     /// When ANSI mode is on, converts group keys into nullable types if they are not. The purpose of conversion is to
     /// ensure that (default) values of empty keys are NULLs with the modifiers as GROUPING SETS, ROLLUP and CUBE.
     /// The conversion occurs before the aggregation to adapt different aggregation variants.
-    if (getContext()->getSettingsRef().dialect_type == DialectType::ANSI)
+    if (getContext()->getSettingsRef().dialect_type != DialectType::CLICKHOUSE)
     {
         const auto & src_columns = step.actions()->getResultColumns();
         ColumnsWithTypeAndName dst_columns;

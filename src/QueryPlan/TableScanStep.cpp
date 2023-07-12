@@ -1022,6 +1022,10 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
     query_info = fillQueryInfo(build_context.context);
     LOG_DEBUG(log, "init pipeline stage run time: make up query info, {} ms", stage_watch.elapsedMillisecondsAsDouble());
 
+    // always do filter underneath, as WHERE filter won't reuse PREWHERE result in optimizer mode
+    if (query_info.prewhere_info)
+        query_info.prewhere_info->need_filter = true;
+
     ExecutePlan execute_plan;
 
     stage_watch.restart();

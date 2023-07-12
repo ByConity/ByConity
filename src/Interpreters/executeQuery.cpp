@@ -99,6 +99,9 @@
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 
 #include <Interpreters/InterpreterPerfectShard.h>
+#include <Interpreters/DistributedStages/PlanSegmentExecutor.h>
+#include <Interpreters/DistributedStages/MPPQueryManager.h>
+#include <Interpreters/DistributedStages/MPPQueryCoordinator.h>
 
 #include <Processors/Formats/IOutputFormat.h>
 #include <Processors/Sources/SinkToOutputStream.h>
@@ -334,6 +337,7 @@ static void onExceptionBeforeStart(const String & query_for_logging, ContextMuta
     elem.exception = getCurrentExceptionMessage(false);
 
     elem.client_info = context->getClientInfo();
+    elem.partition_ids = context->getPartitionIds();
 
     elem.log_comment = settings.log_comment;
     if (elem.log_comment.size() > settings.max_query_size)
@@ -524,6 +528,12 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
     const Settings & settings = context->getSettingsRef();
 
+    if (settings.enable_distributed_stages)
+    {
+        context->setSetting("enable_optimizer", Field(1));
+        context->setSetting("enable_distributed_stages", Field(0));
+    }
+
     /// FIXME: Use global join for cnch join works for sql mode first.
     /// Will be replaced by distributed query after @youzhiyuan add query plan runtime.
     if (context->getServerType() == ServerType::cnch_server)
@@ -592,6 +602,13 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 if (last_select && last_select->settings())
                 {
                     InterpreterSetQuery(last_select->settings(), context).executeForCurrentContext();
+                }
+
+
+                if (settings.enable_distributed_stages)
+                {
+                    context->setSetting("enable_optimizer", Field(1));
+                    context->setSetting("enable_distributed_stages", Field(0));
                 }
             }
         }
@@ -868,6 +885,20 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             elem.normalized_query_hash = normalizedQueryHash<false>(query_for_logging);
 
             elem.client_info = client_info;
+            elem.partition_ids = context->getPartitionIds();
+
+            if (!context->getSettingsRef().enable_optimizer)
+            {
+                elem.segment_id = -1;
+                elem.segment_parallel = -1;
+                elem.segment_parallel_index = -1;
+            }
+            else
+            {
+                elem.segment_id = 0;
+                elem.segment_parallel = 1;
+                elem.segment_parallel_index = 1;
+            }
 
             bool log_queries = settings.log_queries && !internal;
 
@@ -944,6 +975,10 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
                 element.thread_ids = std::move(info.thread_ids);
                 element.profile_counters = std::move(info.profile_counters);
+
+                element.max_io_time_thread_name = std::move(info.max_io_time_thread_name);
+                element.max_io_time_thread_ms = info.max_io_time_thread_ms;
+                element.max_thread_io_profile_counters = std::move(info.max_io_thread_profile_counters);
             };
 
             auto query_id = context->getCurrentQueryId();
@@ -1107,6 +1142,10 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
                         elem.thread_ids = std::move(info.thread_ids);
                         elem.profile_counters = std::move(info.profile_counters);
+                        elem.max_io_time_thread_name = std::move(info.max_io_time_thread_name);
+                        elem.max_io_time_thread_ms = info.max_io_time_thread_ms;
+                        elem.max_thread_io_profile_counters = std::move(info.max_io_thread_profile_counters);
+
 
                         const auto & factories_info = context->getQueryFactoriesInfo();
                         elem.used_aggregate_functions = factories_info.aggregate_functions;
@@ -1118,6 +1157,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                         elem.used_functions = factories_info.functions;
                         elem.used_storages = factories_info.storages;
                         elem.used_table_functions = factories_info.table_functions;
+                        elem.partition_ids = context->getPartitionIds();
 
                         if (log_queries && elem.type >= log_queries_min_type
                             && Int64(elem.query_duration_ms) >= log_queries_min_query_duration_ms)
@@ -1240,6 +1280,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 elem.query_duration_ms = 1000 * (elem.event_time - elem.query_start_time);
                 elem.exception_code = getCurrentExceptionCode();
                 elem.exception = getCurrentExceptionMessage(false);
+                elem.partition_ids = context->getPartitionIds();
 
                 QueryStatus * process_list_elem = context->getProcessListElement();
                 const Settings & current_settings = context->getSettingsRef();
@@ -1294,10 +1335,15 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                     ProfileEvents::increment(ProfileEvents::FailedInsertQuery);
                 }
 
-                context->getPlanSegmentProcessList().tryCancelPlanSegmentGroup(query_id);
-                SegmentSchedulerPtr scheduler = context->getSegmentScheduler();
-                scheduler->finishPlanSegments(query_id);
-                RuntimeFilterManager::getInstance().removeQuery(query_id);
+                auto coodinator = MPPQueryManager::instance().getCoordinator(query_id);
+                if(coodinator)
+                    coodinator->updateSegmentInstanceStatus(RuntimeSegmentsStatus{
+                        .query_id = query_id,
+                        .segment_id = 0,
+                        .is_succeed = false,
+                        .message = elem.exception,
+                        .code = elem.exception_code
+                        });
             };
 
             res.finish_callback = std::move(finish_callback);

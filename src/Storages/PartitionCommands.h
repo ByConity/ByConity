@@ -51,6 +51,8 @@ struct PartitionCommand
         DROP_PARTITION,
         DROP_DETACHED_PARTITION,
         DROP_PARTITION_WHERE,
+        RECLUSTER_PARTITION,
+        RECLUSTER_PARTITION_WHERE,
         FETCH_PARTITION,
         FETCH_PARTITION_WHERE,
         REPAIR_PARTITION,
@@ -103,6 +105,9 @@ struct PartitionCommand
 
     /// expression for sample / split / resharding
     ASTPtr sharding_exp;
+
+    // ASTAlterCommand for RECLUSTER PARTITION
+    ASTPtr ast;
 
     enum MoveDestinationType
     {

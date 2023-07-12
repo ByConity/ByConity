@@ -9,7 +9,7 @@ Projection est. 1 rows
             │     Condition: ss_store_sk == s_store_sk
             ├─ Inner Join est. 276061125 rows
             │  │     Condition: ss_hdemo_sk == hd_demo_sk
-            │  │     Filter: ((ss_sales_price <= '200.00') AND (cd_education_status = '2 yr Degree') AND (hd_dep_count = 1) AND (cd_marital_status = 'W') AND (ss_sales_price >= '150.00')) OR ((ss_sales_price >= '100.00') AND (hd_dep_count = 3) AND (ss_sales_price <= '150.00') AND (cd_marital_status = 'M') AND (cd_education_status = 'Advanced Degree')) OR ((ss_sales_price <= '100.00') AND (cd_education_status = 'College') AND (hd_dep_count = 1) AND (cd_marital_status = 'S') AND (ss_sales_price >= '50.00'))
+            │  │     Filter: ((ss_sales_price >= '100.00') AND (hd_dep_count = 3) AND (ss_sales_price <= '150.00') AND (cd_marital_status = 'M') AND (cd_education_status = 'Advanced Degree')) OR ((cd_education_status = '2 yr Degree') AND (hd_dep_count = 1) AND (cd_marital_status = 'W') AND (ss_sales_price >= '150.00') AND (ss_sales_price <= '200.00')) OR ((cd_education_status = 'College') AND (ss_sales_price <= '100.00') AND (hd_dep_count = 1) AND (cd_marital_status = 'S') AND (ss_sales_price >= '50.00'))
             │  ├─ Inner Join est. 276866304 rows
             │  │  │     Condition: ss_cdemo_sk == cd_demo_sk
             │  │  ├─ Repartition Exchange est. 276866304 rows

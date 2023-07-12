@@ -23,6 +23,7 @@
 #include <Core/Settings.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DatabaseAndTableWithAlias.h>
+#include <Interpreters/SegmentScheduler.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTKillQueryQuery.h>
@@ -33,6 +34,7 @@
 #include <IO/WriteHelpers.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <common/logger_useful.h>
+#include <Interpreters/DistributedStages/MPPQueryManager.h>
 #include <chrono>
 
 namespace ProfileEvents
@@ -466,8 +468,10 @@ bool QueryStatus::checkCpuTimeLimit(String node_name)
     if (is_killed.load())
         return false;
 
+    ContextPtr context = thread_group->query_context.lock();
+    const Settings & settings = context->getSettingsRef();
     // query thread group Counters.
-    if (thread_group != nullptr)
+    if (settings.max_query_cpu_second > 0 && thread_group != nullptr)
     {
         UInt64 total_query_cpu_micros = thread_group->performance_counters[ProfileEvents::SystemTimeMicroseconds]
                 + thread_group->performance_counters[ProfileEvents::UserTimeMicroseconds];
@@ -476,12 +480,10 @@ bool QueryStatus::checkCpuTimeLimit(String node_name)
 
         double total_query_cpu_seconds = total_query_cpu_micros * 1.0 / 1000000;
         double thread_cpu_seconds = thread_cpu_micros * 1.0 / 1000000;
-
-        ContextPtr context = thread_group->query_context.lock();
-        const Settings & settings = context->getSettingsRef();
+ 
         LOG_TRACE(&Poco::Logger::get("ThreadStatus"), "node {} checkCpuTimeLimit thread cpu secs = {}, total cpu secs = {}, max = {}",
                     node_name, thread_cpu_seconds, total_query_cpu_seconds, settings.max_query_cpu_second);
-        if (settings.max_query_cpu_second > 0 && total_query_cpu_micros > settings.max_query_cpu_second * 1000000)
+        if (total_query_cpu_micros > settings.max_query_cpu_second * 1000000)
         {
             switch (overflow_mode)
             {
@@ -497,6 +499,11 @@ bool QueryStatus::checkCpuTimeLimit(String node_name)
     }
 
     return true;
+}
+
+void QueryStatus::throwKilledException()
+{
+    throw Exception("Query was cancelled", ErrorCodes::QUERY_WAS_CANCELLED);
 }
 
 bool QueryStatus::checkTimeLimit()
@@ -595,6 +602,8 @@ QueryStatusInfo QueryStatus::getInfo(bool get_thread_list, bool get_profile_even
     {
         res.memory_usage = thread_group->memory_tracker.get();
         res.peak_memory_usage = thread_group->memory_tracker.getPeak();
+        res.max_io_time_thread_name = thread_group->max_io_time_thread_name;
+        res.max_io_time_thread_ms = thread_group->max_io_time_thread_ms;
 
         if (get_thread_list)
         {
@@ -603,7 +612,12 @@ QueryStatusInfo QueryStatus::getInfo(bool get_thread_list, bool get_profile_even
         }
 
         if (get_profile_events)
+        {
             res.profile_counters = std::make_shared<ProfileEvents::Counters>(thread_group->performance_counters.getPartiallyAtomicSnapshot());
+            res.max_io_thread_profile_counters
+                = std::make_shared<ProfileEvents::Counters>(thread_group->max_io_thread_profile_counters.getPartiallyAtomicSnapshot());
+        }
+           
     }
 
     if (get_settings && getContext())

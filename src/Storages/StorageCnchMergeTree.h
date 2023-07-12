@@ -173,14 +173,20 @@ public:
     };
     using PartitionDropInfos = std::unordered_map<String, PartitionDropInfo>;
     MutableDataPartsVector createDropRangesFromPartitions(const PartitionDropInfos & partition_infos, const TransactionCnchPtr & txn);
-    MutableDataPartsVector createDropRangesFromParts(const ServerDataPartsVector & parts_to_drop, const TransactionCnchPtr & txn);
+    MutableDataPartsVector createDropRangesFromParts(ContextPtr query_context, const ServerDataPartsVector & parts_to_drop, const TransactionCnchPtr & txn);
     LocalDeleteBitmaps createDeleteBitmapTombstones(const IMutableMergeTreeDataPartsVector & drop_range_parts, UInt64 txnID);
 
     StorageCnchMergeTree * checkStructureAndGetCnchMergeTree(const StoragePtr & source_table) const;
 
     const String & getLocalStorePath() const;
 
+    void reclusterPartition(const PartitionCommand & command, ContextPtr query_context);
+
     String genCreateTableQueryForWorker(const String & suffix);
+
+    ServerDataPartsVector
+    getServerPartsByPredicate(const ASTPtr & predicate, const std::function<ServerDataPartsVector()> & get_parts, ContextPtr local_context);
+
 
     void sendPreloadTasks(ContextPtr local_context, ServerDataPartsVector parts, bool sync = true);
 

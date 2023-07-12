@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <Storages/MergeTree/MergeTreeSequentialSource.h>
 #include <Storages/MergeTree/MergeTreeBlockReadUtils.h>
+#include <Storages/MergeTree/MergeTreePrefetchedReaderCNCH.h>
 #include <Interpreters/Context.h>
 #include <DataTypes/DataTypeFactory.h>
 
@@ -39,10 +40,11 @@ MergeTreeSequentialSource::MergeTreeSequentialSource(
     Names columns_to_read_,
     bool read_with_direct_io_,
     bool take_column_types_from_storage,
-    bool quiet)
+    bool quiet,
+    CnchMergePrefetcher::PartFutureFiles* future_files)
     : MergeTreeSequentialSource(storage_, metadata_snapshot_,
     data_part_, data_part_->getDeleteBitmap(), columns_to_read_, read_with_direct_io_,
-    take_column_types_from_storage, quiet) {}
+    take_column_types_from_storage, quiet, future_files) {}
 
 MergeTreeSequentialSource::MergeTreeSequentialSource(
     const MergeTreeMetaBase & storage_,
@@ -52,7 +54,8 @@ MergeTreeSequentialSource::MergeTreeSequentialSource(
     Names columns_to_read_,
     bool read_with_direct_io_,
     bool take_column_types_from_storage,
-    bool quiet)
+    bool quiet,
+    CnchMergePrefetcher::PartFutureFiles* future_files)
     : SourceWithProgress(metadata_snapshot_->getSampleBlockForColumns(
             columns_to_read_, storage_.getVirtuals(), storage_.getStorageID()))
     , storage(storage_)
@@ -68,7 +71,8 @@ MergeTreeSequentialSource::MergeTreeSequentialSource(
     addTotalRowsApprox(data_part->rows_count - num_deletes);
 
     /// Add columns because we don't want to read empty blocks
-    injectRequiredColumns(storage, metadata_snapshot, data_part, columns_to_read);
+    injectRequiredColumns(storage, metadata_snapshot, data_part, columns_to_read,
+        future_files == nullptr ? "" : future_files->getFixedInjectedColumn());
     NamesAndTypesList columns_for_reader;
     if (take_column_types_from_storage)
     {
@@ -99,9 +103,20 @@ MergeTreeSequentialSource::MergeTreeSequentialSource(
         .save_marks_in_cache = false,
     };
 
-    reader = data_part->getReader(columns_for_reader, metadata_snapshot,
-        MarkRanges{MarkRange(0, data_part->getMarksCount())},
-        /* uncompressed_cache = */ nullptr, mark_cache.get(), reader_settings);
+    if (future_files)
+    {
+        reader = std::make_unique<MergeTreePrefetchedReaderCNCH>(
+            data_part, columns_for_reader, metadata_snapshot, nullptr,
+            MarkRanges{MarkRange(0, data_part->getMarksCount())}, reader_settings,
+            future_files
+        );
+    }
+    else
+    {
+        reader = data_part->getReader(columns_for_reader, metadata_snapshot,
+            MarkRanges{MarkRange(0, data_part->getMarksCount())},
+            /* uncompressed_cache = */ nullptr, mark_cache.get(), reader_settings);
+    }
 }
 
 Chunk MergeTreeSequentialSource::generate()

@@ -342,6 +342,17 @@ String PlanSegment::toString() const
     return ostr.str();
 }
 
+size_t PlanSegment::getParallelIndex() const
+{
+    if (!inputs.empty())
+    {
+        auto first_input = inputs.front();
+        return first_input->getParallelIndex();
+    }
+
+    return 1;
+}
+
 std::unordered_map<size_t, PlanSegmentPtr &> PlanSegmentTree::getPlanSegmentsMap()
 {
     std::unordered_map<size_t, PlanSegmentPtr &> all_segments;

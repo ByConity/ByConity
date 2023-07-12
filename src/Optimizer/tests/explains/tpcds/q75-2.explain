@@ -23,10 +23,10 @@ Projection est. 100 rows
                   │           │     Partition by: {d_year_33, i_brand_id_33, i_category_id_33, i_class_id_33, i_manufact_id_33}
                   │           └─ Aggregating est. 4522716 rows
                   │              │     Group by: {d_year_33, i_brand_id_33, i_category_id_33, i_class_id_33, i_manufact_id_33}
-                  │              │     Aggregates: expr#sum(sales_cnt)_9:=AggNull(sum)(expr#minus(cs_quantity, coalesce(cr_return_quantity, 0))_15), expr#sum(sales_amt)_9:=AggNull(sum)(expr#minus(cs_ext_sales_price, coalesce(cr_return_amount, CAST('0.0', 'Decimal(18, 1)')))_15)
+                  │              │     Aggregates: expr#sum(sales_cnt)_9:=AggNull(sum)(expr#minus(cs_quantity, coalesce(cr_return_quantity, 0))_15), expr#sum(sales_amt)_9:=AggNull(sum)(expr#minus(cs_ext_sales_price, coalesce(cr_return_amount, '0.0'))_15)
                   │              └─ Union est. 49439210 rows
                   │                 ├─ Projection est. 14060275 rows
-                  │                 │  │     Expressions: [d_year_30, i_brand_id_30, i_category_id_30, i_class_id_30, i_manufact_id_30], expr#minus(cs_ext_sales_price, coalesce(cr_return_amount, CAST('0.0', 'Decimal(18, 1)')))_14:=cs_ext_sales_price_7 - coalesce(cr_return_amount_7, '0.0'), expr#minus(cs_quantity, coalesce(cr_return_quantity, 0))_14:=cs_quantity_7 - coalesce(cr_return_quantity_7, 0)
+                  │                 │  │     Expressions: [d_year_30, i_brand_id_30, i_category_id_30, i_class_id_30, i_manufact_id_30], expr#minus(cs_ext_sales_price, coalesce(cr_return_amount, '0.0'))_14:=cs_ext_sales_price_7 - coalesce(cr_return_amount_7, '0.0'), expr#minus(cs_quantity, coalesce(cr_return_quantity, 0))_14:=cs_quantity_7 - coalesce(cr_return_quantity_7, 0)
                   │                 │  └─ Left Join est. 20971211 rows
                   │                 │     │     Condition: cs_item_sk_7 == cr_item_sk_7, cs_order_number_7 == cr_order_number_7
                   │                 │     ├─ Repartition Exchange est. 14060275 rows
@@ -61,7 +61,7 @@ Projection est. 100 rows
                   │                 │        └─ TableScan tpcds.catalog_returns est. 143996756 rows
                   │                 │                 Outputs: cr_item_sk_7:=cr_item_sk, cr_order_number_7:=cr_order_number, cr_return_amount_7:=cr_return_amount, cr_return_quantity_7:=cr_return_quantity
                   │                 ├─ Projection est. 28303122 rows
-                  │                 │  │     Expressions: [d_year_31, i_brand_id_31, i_category_id_31, i_class_id_31, i_manufact_id_31], expr#minus(ss_ext_sales_price, coalesce(sr_return_amt, CAST('0.0', 'Decimal(18, 1)')))_7:=ss_ext_sales_price_7 - coalesce(sr_return_amt_7, '0.0'), expr#minus(ss_quantity, coalesce(sr_return_quantity, 0))_7:=ss_quantity_7 - coalesce(sr_return_quantity_7, 0)
+                  │                 │  │     Expressions: [d_year_31, i_brand_id_31, i_category_id_31, i_class_id_31, i_manufact_id_31], expr#minus(ss_ext_sales_price, coalesce(sr_return_amt, '0.0'))_7:=ss_ext_sales_price_7 - coalesce(sr_return_amt_7, '0.0'), expr#minus(ss_quantity, coalesce(sr_return_quantity, 0))_7:=ss_quantity_7 - coalesce(sr_return_quantity_7, 0)
                   │                 │  └─ Left Join est. 47236015 rows
                   │                 │     │     Condition: ss_item_sk_7 == sr_item_sk_7, ss_ticket_number_7 == sr_ticket_number_7
                   │                 │     ├─ Repartition Exchange est. 28303122 rows
@@ -96,7 +96,7 @@ Projection est. 100 rows
                   │                 │        └─ TableScan tpcds.store_returns est. 287999764 rows
                   │                 │                 Outputs: sr_item_sk_7:=sr_item_sk, sr_return_amt_7:=sr_return_amt, sr_return_quantity_7:=sr_return_quantity, sr_ticket_number_7:=sr_ticket_number
                   │                 └─ Projection est. 7075813 rows
-                  │                    │     Expressions: [d_year_32, i_brand_id_32, i_category_id_32, i_class_id_32, i_manufact_id_32], expr#minus(ws_ext_sales_price, coalesce(wr_return_amt, CAST('0.0', 'Decimal(18, 1)')))_7:=ws_ext_sales_price_7 - coalesce(wr_return_amt_7, '0.0'), expr#minus(ws_quantity, coalesce(wr_return_quantity, 0))_7:=ws_quantity_7 - coalesce(wr_return_quantity_7, 0)
+                  │                    │     Expressions: [d_year_32, i_brand_id_32, i_category_id_32, i_class_id_32, i_manufact_id_32], expr#minus(ws_ext_sales_price, coalesce(wr_return_amt, '0.0'))_7:=ws_ext_sales_price_7 - coalesce(wr_return_amt_7, '0.0'), expr#minus(ws_quantity, coalesce(wr_return_quantity, 0))_7:=ws_quantity_7 - coalesce(wr_return_quantity_7, 0)
                   │                    └─ Left Join est. 11524380 rows
                   │                       │     Condition: ws_item_sk_7 == wr_item_sk_7, ws_order_number_7 == wr_order_number_7
                   │                       ├─ Repartition Exchange est. 7075813 rows
@@ -139,10 +139,10 @@ Projection est. 100 rows
                               │     Partition by: {d_year_37, i_brand_id_37, i_category_id_37, i_class_id_37, i_manufact_id_37}
                               └─ Aggregating est. 3015144 rows
                                  │     Group by: {d_year_37, i_brand_id_37, i_category_id_37, i_class_id_37, i_manufact_id_37}
-                                 │     Aggregates: expr#sum(sales_cnt)_10:=AggNull(sum)(expr#minus(cs_quantity, coalesce(cr_return_quantity, 0))_17), expr#sum(sales_amt)_10:=AggNull(sum)(expr#minus(cs_ext_sales_price, coalesce(cr_return_amount, CAST('0.0', 'Decimal(18, 1)')))_17)
+                                 │     Aggregates: expr#sum(sales_cnt)_10:=AggNull(sum)(expr#minus(cs_quantity, coalesce(cr_return_quantity, 0))_17), expr#sum(sales_amt)_10:=AggNull(sum)(expr#minus(cs_ext_sales_price, coalesce(cr_return_amount, '0.0'))_17)
                                  └─ Union est. 49439210 rows
                                     ├─ Projection est. 14060275 rows
-                                    │  │     Expressions: [d_year_34, i_brand_id_34, i_category_id_34, i_class_id_34, i_manufact_id_34], expr#minus(cs_ext_sales_price, coalesce(cr_return_amount, CAST('0.0', 'Decimal(18, 1)')))_16:=cs_ext_sales_price_8 - coalesce(cr_return_amount_8, '0.0'), expr#minus(cs_quantity, coalesce(cr_return_quantity, 0))_16:=cs_quantity_8 - coalesce(cr_return_quantity_8, 0)
+                                    │  │     Expressions: [d_year_34, i_brand_id_34, i_category_id_34, i_class_id_34, i_manufact_id_34], expr#minus(cs_ext_sales_price, coalesce(cr_return_amount, '0.0'))_16:=cs_ext_sales_price_8 - coalesce(cr_return_amount_8, '0.0'), expr#minus(cs_quantity, coalesce(cr_return_quantity, 0))_16:=cs_quantity_8 - coalesce(cr_return_quantity_8, 0)
                                     │  └─ Left Join est. 20971211 rows
                                     │     │     Condition: cs_item_sk_8 == cr_item_sk_8, cs_order_number_8 == cr_order_number_8
                                     │     ├─ Repartition Exchange est. 14060275 rows
@@ -177,7 +177,7 @@ Projection est. 100 rows
                                     │        └─ TableScan tpcds.catalog_returns est. 143996756 rows
                                     │                 Outputs: cr_item_sk_8:=cr_item_sk, cr_order_number_8:=cr_order_number, cr_return_amount_8:=cr_return_amount, cr_return_quantity_8:=cr_return_quantity
                                     ├─ Projection est. 28303122 rows
-                                    │  │     Expressions: [d_year_35, i_brand_id_35, i_category_id_35, i_class_id_35, i_manufact_id_35], expr#minus(ss_ext_sales_price, coalesce(sr_return_amt, CAST('0.0', 'Decimal(18, 1)')))_8:=ss_ext_sales_price_8 - coalesce(sr_return_amt_8, '0.0'), expr#minus(ss_quantity, coalesce(sr_return_quantity, 0))_8:=ss_quantity_8 - coalesce(sr_return_quantity_8, 0)
+                                    │  │     Expressions: [d_year_35, i_brand_id_35, i_category_id_35, i_class_id_35, i_manufact_id_35], expr#minus(ss_ext_sales_price, coalesce(sr_return_amt, '0.0'))_8:=ss_ext_sales_price_8 - coalesce(sr_return_amt_8, '0.0'), expr#minus(ss_quantity, coalesce(sr_return_quantity, 0))_8:=ss_quantity_8 - coalesce(sr_return_quantity_8, 0)
                                     │  └─ Left Join est. 47236015 rows
                                     │     │     Condition: ss_item_sk_8 == sr_item_sk_8, ss_ticket_number_8 == sr_ticket_number_8
                                     │     ├─ Repartition Exchange est. 28303122 rows
@@ -212,7 +212,7 @@ Projection est. 100 rows
                                     │        └─ TableScan tpcds.store_returns est. 287999764 rows
                                     │                 Outputs: sr_item_sk_8:=sr_item_sk, sr_return_amt_8:=sr_return_amt, sr_return_quantity_8:=sr_return_quantity, sr_ticket_number_8:=sr_ticket_number
                                     └─ Projection est. 7075813 rows
-                                       │     Expressions: [d_year_36, i_brand_id_36, i_category_id_36, i_class_id_36, i_manufact_id_36], expr#minus(ws_ext_sales_price, coalesce(wr_return_amt, CAST('0.0', 'Decimal(18, 1)')))_8:=ws_ext_sales_price_8 - coalesce(wr_return_amt_8, '0.0'), expr#minus(ws_quantity, coalesce(wr_return_quantity, 0))_8:=ws_quantity_8 - coalesce(wr_return_quantity_8, 0)
+                                       │     Expressions: [d_year_36, i_brand_id_36, i_category_id_36, i_class_id_36, i_manufact_id_36], expr#minus(ws_ext_sales_price, coalesce(wr_return_amt, '0.0'))_8:=ws_ext_sales_price_8 - coalesce(wr_return_amt_8, '0.0'), expr#minus(ws_quantity, coalesce(wr_return_quantity, 0))_8:=ws_quantity_8 - coalesce(wr_return_quantity_8, 0)
                                        └─ Left Join est. 11524380 rows
                                           │     Condition: ws_item_sk_8 == wr_item_sk_8, ws_order_number_8 == wr_order_number_8
                                           ├─ Repartition Exchange est. 7075813 rows

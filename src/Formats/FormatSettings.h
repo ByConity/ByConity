@@ -86,6 +86,9 @@ struct FormatSettings
         bool allow_missing_fields = false;
     } avro;
 
+    String bool_true_representation = "true";
+    String bool_false_representation = "false";
+
     struct CSV
     {
         char delimiter = ',';
@@ -117,6 +120,7 @@ struct FormatSettings
         bool escape_forward_slashes = true;
         bool named_tuples_as_objects = false;
         bool serialize_as_strings = false;
+        bool read_bools_as_numbers = true;
     } json;
 
     struct

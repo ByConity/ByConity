@@ -29,6 +29,10 @@ struct PartitionMetrics
     std::atomic_int64_t total_parts_size{0};
     std::atomic_int64_t total_parts_number{0};
     std::atomic_int64_t total_rows_count{0};
+    std::atomic_bool has_bucket_number_neg_one{false}; // will be true if there is one part that has bucket_number == -1
+    std::atomic_bool is_single_table_definition_hash{true}; // false if there are multiple table_definition_hash in this partition
+    std::atomic_uint64_t table_definition_hash{0}; // will represent the single table_definition_hash if true, else any other table_definition_hash
+    std::atomic_bool is_deleted{true}; // do not consider deleted parts
 
     PartitionMetrics & operator=(const PartitionMetrics & other)
     {
@@ -62,6 +66,12 @@ struct PartitionMetrics
             total_rows_count += part_model.rows_count();
             total_parts_size += part_model.size();
             total_parts_number += 1;
+            if (part_model.bucket_number() == -1)
+                has_bucket_number_neg_one = true;
+            if (table_definition_hash != 0 && table_definition_hash != part_model.table_definition_hash())
+                is_single_table_definition_hash = false;
+            table_definition_hash = part_model.table_definition_hash();
+            is_deleted = false;
         }
     }
 

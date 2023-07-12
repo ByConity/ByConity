@@ -8,6 +8,7 @@
 #include <Columns/ColumnNullable.h>
 #include <Common/FieldVisitorConvertToNumber.h>
 #include <Common/typeid_cast.h>
+#include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
@@ -92,7 +93,7 @@ void convertAnyColumnToBool(const IColumn * column, UInt8Container & res)
 
 
 template <class Op, typename Func>
-static bool extractConstColumns(ColumnRawPtrs & in, UInt8 & res, Func && func)
+bool extractConstColumns(ColumnRawPtrs & in, UInt8 & res, Func && func)
 {
     bool has_res = false;
 
@@ -339,7 +340,7 @@ struct OperationApplier<Op, OperationApplierImpl, 0>
 
 
 template <class Op>
-static ColumnPtr executeForTernaryLogicImpl(ColumnRawPtrs arguments, const DataTypePtr & result_type, size_t input_rows_count)
+ColumnPtr executeForTernaryLogicImpl(ColumnRawPtrs arguments, const DataTypePtr & result_type, size_t input_rows_count)
 {
     /// Combine all constant columns into a single constant value.
     UInt8 const_3v_value = 0;
@@ -414,7 +415,7 @@ struct TypedExecutorInvoker<Op>
 
 /// Types of all of the arguments are guaranteed to be non-nullable here
 template <class Op>
-static ColumnPtr basicExecuteImpl(ColumnRawPtrs arguments, size_t input_rows_count)
+ColumnPtr basicExecuteImpl(ColumnRawPtrs arguments, size_t input_rows_count)
 {
     /// Combine all constant columns into a single constant value.
     UInt8 const_val = 0;
@@ -478,9 +479,13 @@ DataTypePtr FunctionAnyArityLogical<Impl, Name>::getReturnTypeImpl(const DataTyp
             ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION);
 
     bool has_nullable_arguments = false;
+    bool has_bool_arguments = false;
     for (size_t i = 0; i < arguments.size(); ++i)
     {
         const auto & arg_type = arguments[i];
+
+        if (isBool(arg_type))
+            has_bool_arguments = true;
 
         if (!has_nullable_arguments)
         {
@@ -498,7 +503,7 @@ DataTypePtr FunctionAnyArityLogical<Impl, Name>::getReturnTypeImpl(const DataTyp
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
-    auto result_type = std::make_shared<DataTypeUInt8>();
+    auto result_type = has_bool_arguments ? DataTypeFactory::instance().get("Bool") : std::make_shared<DataTypeUInt8>();
     return has_nullable_arguments
             ? makeNullable(result_type)
             : result_type;
@@ -607,7 +612,7 @@ DataTypePtr FunctionUnaryLogical<Impl, Name>::getReturnTypeImpl(const DataTypes 
             + ") of argument of function " + getName(),
             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-    return std::make_shared<DataTypeUInt8>();
+    return isBool(arguments[0]) ? DataTypeFactory::instance().get("Bool") : std::make_shared<DataTypeUInt8>();
 }
 
 template <template <typename> class Impl, typename T>

@@ -249,15 +249,7 @@ bool QueryUseOptimizerVisitor::visitASTIdentifier(ASTPtr & node, QueryUseOptimiz
 bool QueryUseOptimizerVisitor::visitASTFunction(ASTPtr & node, QueryUseOptimizerContext & query_with_plan_context)
 {
     auto & fun = node->as<ASTFunction &>();
-    // TODO for test case : 00700_decimal_casts/00700_decimal_casts_2/00811_garbage/00700_to_decimal_or_something
-    // for example: SELECT toDecimal32(0, rowNumberInBlock()); -- { serverError 44 }
-    // when optimizer enabled, rowNumberInBlock() will interperted to 256 value in CI pipeline, make test case fail.
-    if (fun.name == "rowNumberInBlock")
-    {
-        reason = "unsupported function";
-        return false;
-    }
-    else if (fun.name == "untuple")
+    if (fun.name == "untuple")
     {
         reason = "unsupported function";
         return false;

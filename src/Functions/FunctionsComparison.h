@@ -31,6 +31,7 @@
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnTuple.h>
 #include <Columns/ColumnArray.h>
+#include <Columns/ColumnNullable.h>
 
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -566,6 +567,8 @@ template <> struct CompileOp<GreaterOrEqualsOp>
 
 
 struct NameEquals          { static constexpr auto name = "equals"; };
+struct NameBitEquals       { static constexpr auto name = "bitEquals"; };
+struct NameBitNotEquals    { static constexpr auto name = "bitNotEquals"; };
 struct NameNotEquals       { static constexpr auto name = "notEquals"; };
 struct NameLess            { static constexpr auto name = "less"; };
 struct NameGreater         { static constexpr auto name = "greater"; };
@@ -573,7 +576,7 @@ struct NameLessOrEquals    { static constexpr auto name = "lessOrEquals"; };
 struct NameGreaterOrEquals { static constexpr auto name = "greaterOrEquals"; };
 
 
-template <template <typename, typename> class Op, typename Name>
+template <template <typename, typename> class Op, typename Name, bool comp_null = false>
 class FunctionComparison : public IFunction
 {
 public:
@@ -582,6 +585,8 @@ public:
 
     explicit FunctionComparison(ContextPtr context_)
         : context(context_), check_decimal_overflow(decimalCheckComparisonOverflow(context)) {}
+
+    bool useDefaultImplementationForNulls() const override { return !comp_null; }
 
 private:
     ContextPtr context;
@@ -1124,6 +1129,9 @@ public:
             }
         }
 
+        if constexpr (comp_null)
+            return std::make_shared<DataTypeUInt8>();
+
         if (left_tuple && right_tuple)
         {
             auto func = FunctionToOverloadResolverAdaptor(FunctionComparison<Op, Name>::create(context));
@@ -1152,7 +1160,94 @@ public:
         return std::make_shared<DataTypeUInt8>();
     }
 
+    static const NullMap &getNullMapFromColumn(const IColumn &c)
+    {
+        const auto & input_col = checkAndGetColumn<ColumnNullable>(c)->getNullMapColumnPtr();
+        return assert_cast<const ColumnUInt8 &>(*input_col).getData();
+    }
+
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
+    {
+        if constexpr (!comp_null)
+            return executeImplWithoutNullable(arguments, result_type, input_rows_count);
+
+        ColumnsWithTypeAndName temporary_columns = createBlockWithNestedColumns(arguments);
+        ColumnPtr res = executeImplWithoutNullable(temporary_columns, result_type, input_rows_count);
+        bool lhs_is_nullable = arguments[0].type->isNullable();
+        ColumnPtr lhs = arguments[0].column;
+        ColumnPtr rhs = arguments[1].column;
+
+        /* both arguments' nullable status are the same */
+        if (lhs_is_nullable == arguments[1].type->isNullable()) {
+            /* both arguments are not nullable */
+            if (!lhs_is_nullable)
+                return res;
+
+            /* onlyNull op onlyNull */
+            if (lhs->onlyNull() && rhs->onlyNull())
+                return res;
+
+            /* onlyNull op Nullable */
+            if (lhs->onlyNull() || rhs->onlyNull()) {
+                if (isColumnConst(*res))
+                    res = res->convertToFullColumnIfConst();
+
+                const NullMap &input_map = getNullMapFromColumn(lhs->onlyNull() ? *rhs : *lhs);
+                /* NULL vs Nullable(val), if nullable is not NULL */
+                NullMap &output_map = const_cast<ColumnUInt8 &>(assert_cast<const ColumnUInt8 &>(*res)).getData();
+                for (size_t i = 0, size = output_map.size(); i < size; ++i) {
+                    /* change result for NULL vs non-NULL */
+                    if (!input_map[i])
+                        output_map[i] = IsOperation<Op>::not_equals;
+                }
+
+                return res;
+            }
+
+            /* Nullable op Nullable */
+            if (isColumnConst(*res))
+                res = res->convertToFullColumnIfConst();
+
+            if (isColumnConst(*lhs))
+                lhs = lhs->convertToFullColumnIfConst();
+
+            if (isColumnConst(*rhs))
+                rhs = rhs->convertToFullColumnIfConst();
+
+            const NullMap &lhs_nullmap = getNullMapFromColumn(*lhs);
+            const NullMap &rhs_nullmap = getNullMapFromColumn(*rhs);
+            NullMap &output_map = const_cast<ColumnUInt8 &>(assert_cast<const ColumnUInt8 &>(*res)).getData();
+            for (size_t i = 0, size = output_map.size(); i < size; ++i) {
+                if (lhs_nullmap[i] != rhs_nullmap[i])
+                    output_map[i] = IsOperation<Op>::not_equals;
+            }
+
+            return res;
+        }
+
+        /* take care of 0 <=> NULL when only one input is nullable */
+        ColumnPtr input = lhs_is_nullable ? lhs : rhs;
+
+        if (input->onlyNull())
+            return DataTypeUInt8().createColumnConst(input_rows_count, IsOperation<Op>::not_equals);
+
+        input = input->convertToFullColumnIfConst();
+        res = res->convertToFullColumnIfConst();
+
+        const NullMap &input_map = getNullMapFromColumn(*input);
+
+        NullMap &output_map = const_cast<ColumnUInt8 &>(assert_cast<const ColumnUInt8 &>(*res)).getData();
+        for (size_t i = 0, size = output_map.size(); i < size; ++i) {
+            // TODO: use SIMD to fill the output
+            /* change result for NULL vs non-NULL */
+            if (input_map[i])
+                output_map[i] = IsOperation<Op>::not_equals;
+        }
+
+        return res;
+    }
+
+    ColumnPtr executeImplWithoutNullable(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const
     {
         const auto & col_with_type_and_name_left = arguments[0];
         const auto & col_with_type_and_name_right = arguments[1];

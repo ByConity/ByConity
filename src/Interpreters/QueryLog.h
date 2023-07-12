@@ -68,6 +68,7 @@ struct QueryLogElement
     std::unordered_set<String> used_functions;
     std::unordered_set<String> used_storages;
     std::unordered_set<String> used_table_functions;
+    std::unordered_set<String> partition_ids;
 
     Int32 exception_code{}; // because ErrorCodes are int
     String exception;
@@ -79,7 +80,14 @@ struct QueryLogElement
 
     std::vector<UInt64> thread_ids;
     std::shared_ptr<ProfileEvents::Counters> profile_counters;
+    String max_io_time_thread_name;
+    uint64_t max_io_time_thread_ms;
+    std::shared_ptr<ProfileEvents::Counters> max_thread_io_profile_counters;
     std::shared_ptr<Settings> query_settings;
+
+    Int64 segment_id{};
+    Int64 segment_parallel{};
+    Int64 segment_parallel_index{};
 
     static std::string name() { return "QueryLog"; }
 

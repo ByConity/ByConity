@@ -72,6 +72,22 @@ std::optional<PartitionCommand> PartitionCommand::parse(const ASTAlterCommand * 
         res.detach = command_ast->detach;
         return res;
     }
+    else if (command_ast->type == ASTAlterCommand::RECLUSTER_PARTITION_WHERE)
+    {
+        PartitionCommand res;
+        if (command_ast->predicate)
+        {
+            res.type = RECLUSTER_PARTITION_WHERE;
+            res.partition = command_ast->predicate;
+        }
+        else
+        {
+            res.type = RECLUSTER_PARTITION;
+            res.partition = command_ast->partition;
+        }
+        res.ast = command_ast->clone();
+        return res;
+    }
     else if (command_ast->type == ASTAlterCommand::ATTACH_PARTITION)
     {
         PartitionCommand res;
@@ -396,6 +412,7 @@ Pipe convertCommandsResultToSource(const PartitionCommandsResultInfo & commands_
 bool partitionCommandHasWhere(const PartitionCommand & command)
 {
     return command.type == PartitionCommand::Type::DROP_PARTITION_WHERE || command.type == PartitionCommand::Type::FETCH_PARTITION_WHERE
-        || command.type == PartitionCommand::Type::REPLACE_PARTITION_WHERE || command.type == PartitionCommand::Type::SAMPLE_PARTITION_WHERE;
+        || command.type == PartitionCommand::Type::REPLACE_PARTITION_WHERE || command.type == PartitionCommand::Type::SAMPLE_PARTITION_WHERE
+        || command.type == PartitionCommand::Type::RECLUSTER_PARTITION_WHERE;
 }
 }

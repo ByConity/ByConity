@@ -1130,10 +1130,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setUniqueKeyIndexCache(uki_meta_cache_size);
     global_context->setUniqueKeyIndexBlockCache(uki_data_cache_size);
 
-    /// Disk cache for unique key index
-    size_t unique_key_index_file_cache_size = config().getUInt64("unique_key_index_disk_cache_max_bytes", 53687091200); /// 50GB
-    global_context->setUniqueKeyIndexFileCache(unique_key_index_file_cache_size);
-
 #if USE_HDFS
     /// Init hdfs user
     std::string hdfs_user = global_context->getCnchConfigRef().getString("hdfs_user", "clickhouse");
@@ -1226,6 +1222,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
         throw;
     }
 
+    /// Disk cache for unique key index
+    size_t unique_key_index_file_cache_size = config().getUInt64("unique_key_index_disk_cache_max_bytes", 53687091200); /// 50GB
+    global_context->setUniqueKeyIndexFileCache(unique_key_index_file_cache_size);
+
 #if USE_EMBEDDED_COMPILER
     constexpr size_t compiled_expression_cache_size_default = 1024 * 1024 * 128;
     size_t compiled_expression_cache_size = config().getUInt64("compiled_expression_cache_size", compiled_expression_cache_size_default);
@@ -1285,6 +1285,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
           * It is important to do early, not in destructor of Context, because
           *  table engines could use Context on destroy.
           */
+
+        DiskCacheFactory::instance().shutdown();
+
         LOG_INFO(log, "Shutting down storages.");
 
         global_context->shutdown();

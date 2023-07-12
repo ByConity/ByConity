@@ -17,6 +17,7 @@
 
 #include <memory>
 #include <Interpreters/Context_fwd.h>
+#include <Interpreters/QueryLog.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
@@ -26,25 +27,44 @@
 #include <boost/core/noncopyable.hpp>
 #include <Poco/Logger.h>
 #include <common/types.h>
+#include <Protos/plan_segment_manager.pb.h>
 
 namespace DB
 {
 class ThreadGroupStatus;
 struct BlockIO;
-struct RuntimeSegmentsStatus
+
+namespace Protos
 {
-    RuntimeSegmentsStatus(
-        const String & queryId_, int32_t segmentId_, bool isSucceed_, bool isCanceled_, const String & message_, int32_t code_)
-        : query_id(queryId_), segment_id(segmentId_), is_succeed(isSucceed_), is_canceled(isCanceled_), message(message_), code(code_)
+    class RuntimeSegmentsMetrics;
+}
+
+struct RuntimeSegmentsMetrics
+{
+    UInt64 cpu_micros;
+
+    RuntimeSegmentsMetrics() : cpu_micros(0)
     {
     }
 
-    RuntimeSegmentsStatus() { }
+    RuntimeSegmentsMetrics(const Protos::RuntimeSegmentsMetrics & metrics_)
+    {
+        cpu_micros = metrics_.cpu_micros();
+    }
 
+    void setProtos(Protos::RuntimeSegmentsMetrics & metrics_) const
+    {
+        metrics_.set_cpu_micros(cpu_micros);
+    }
+};
+
+struct RuntimeSegmentsStatus
+{
     String query_id;
     int32_t segment_id;
     bool is_succeed;
     bool is_canceled;
+    RuntimeSegmentsMetrics metrics;
     String message;
     int32_t code;
 };
@@ -54,6 +74,8 @@ class PlanSegmentExecutor : private boost::noncopyable
 public:
     explicit PlanSegmentExecutor(PlanSegmentPtr plan_segment_, ContextMutablePtr context_);
     explicit PlanSegmentExecutor(PlanSegmentPtr plan_segment_, ContextMutablePtr context_, ExchangeOptions options_);
+
+    ~PlanSegmentExecutor() noexcept;
 
     RuntimeSegmentsStatus execute(std::shared_ptr<ThreadGroupStatus> thread_group = nullptr);
     BlockIO lazyExecute(bool add_output_processors = false);
@@ -71,6 +93,8 @@ private:
     PlanSegmentOutputs plan_segment_outputs;
     ExchangeOptions options;
     Poco::Logger * logger;
+    RuntimeSegmentsStatus runtime_segment_status;
+    std::unique_ptr<QueryLogElement> query_log_element;
 
     Processors buildRepartitionExchangeSink(BroadcastSenderPtrs & senders, bool keep_order, size_t output_index, const Block &header, OutputPortRawPtrs &ports);
 
@@ -79,6 +103,9 @@ private:
     Processors buildLoadBalancedExchangeSink(BroadcastSenderPtrs & senders, size_t output_index, const Block &header, OutputPortRawPtrs &ports);
 
     void sendSegmentStatus(const RuntimeSegmentsStatus & status) noexcept;
+
+    void collectSegmentQueryRuntimeMetric(const QueryStatus * query_status);
+    void prepareSegmentInfo() const;
 };
 
 }

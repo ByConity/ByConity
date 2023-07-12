@@ -21,11 +21,12 @@
 
 #include <Storages/MergeTree/SimpleMergeSelector.h>
 #include <Storages/MergeTree/MergeScheduler.h>
+#include <Storages/MergeTree/SimpleMergeSelector.h>
 
 #include <Common/interpolate.h>
 
-#include <cmath>
 #include <cassert>
+#include <cmath>
 #include <iostream>
 
 
@@ -256,4 +257,46 @@ SimpleMergeSelector::PartsRange SimpleMergeSelector::select(
     return estimator.getBest();
 }
 
+SimpleMergeSelector::PartsRanges
+SimpleMergeSelector::selectMulti(const PartsRanges & partitions, size_t max_total_size_to_merge, MergeScheduler * merge_scheduler)
+{
+    // Fall back to default behavior when enable_batch_select is not turned on.
+    if (!settings.enable_batch_select)
+    {
+        return IMergeSelector::selectMulti(partitions, max_total_size_to_merge, merge_scheduler);
+    }
+
+    PartsRanges res;
+    for (const auto & partition : partitions)
+    {
+        // No need to merge if there is only one part in the partition.
+        if (partition.size() <= 1)
+            continue;
+
+        PartsRange current_parts;
+        size_t rows_count = 0;
+
+        for (const auto & part : partition)
+        {
+            rows_count += part.rows;
+            current_parts.push_back(part);
+
+            if (current_parts.size() >= settings.max_parts_to_merge_at_once || rows_count >= settings.max_rows_to_merge_at_once)
+            {
+                PartsRange new_parts;
+                new_parts.swap(current_parts);
+                rows_count = 0;
+                if (new_parts.size() >= settings.min_parts_to_merge_at_once)
+                    res.push_back(new_parts);
+            }
+        }
+
+        if (current_parts.size() >= settings.min_parts_to_merge_at_once)
+            res.push_back(current_parts);
+    }
+
+    LOG_DEBUG(&Poco::Logger::get("SimpleBatchMergeSelector"), "Selected {} groups to merge", res.size());
+
+    return res;
+}
 }

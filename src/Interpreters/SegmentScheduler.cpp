@@ -72,6 +72,7 @@ SegmentScheduler::insertPlanSegments(const String & query_id, PlanSegmentTree * 
 {
     std::shared_ptr<DAGGraph> dag_ptr = std::make_shared<DAGGraph>();
     buildDAGGraph(plan_segments_ptr, dag_ptr);
+    dag_ptr->query_context = query_context;
     {
         std::unique_lock<bthread::Mutex> lock(mutex);
         if (query_map.find(query_id) != query_map.end())
@@ -96,7 +97,8 @@ SegmentScheduler::insertPlanSegments(const String & query_id, PlanSegmentTree * 
         server_resource->sendResource(query_context);
     }
 
-    scheduler(query_id, query_context, dag_ptr);
+    if (!dag_ptr->plan_segment_status_ptr->is_final_stage_start)
+        scheduler(query_id, query_context, dag_ptr);
 #if defined(TASK_ASSIGN_DEBUG)
     String res;
     res += "dump statics:" + std::to_string(dag_ptr->exchange_data_assign_node_mappings.size()) + "\n";
@@ -177,7 +179,9 @@ void SegmentScheduler::cancelWorkerPlanSegments(const String & query_id, const D
         Protos::CancelQueryResponse response;
         request.set_query_id(query_id);
         request.set_coordinator_address(coordinator_addr);
+        //TODO: parallel cancel
         manager.cancelQuery(&cntl, &request, &response, nullptr);
+        //FIXME 
         rpc_client->assertController(cntl);
         LOG_INFO(log, "Cancel plan segment query_id-{} on host-{}, ret_code-{}", query_id, extractExchangeHostPort(addr), response.ret_code());
     }
@@ -200,7 +204,10 @@ bool SegmentScheduler::finishPlanSegments(const String & query_id)
     if (seg_status_map_ite != segment_status_map.end())
         segment_status_map.erase(seg_status_map_ite);
 
+    query_status_map.erase(query_id);
+
     query_to_exception_with_code.remove(query_id);
+    query_status_received_counter_map.erase(query_id);
     return true;
 }
 
@@ -231,6 +238,29 @@ String SegmentScheduler::getCurrentDispatchStatus(const String & query_id)
     return status;
 }
 
+void SegmentScheduler::updateQueryStatus(const RuntimeSegmentsStatus & segment_status)
+{
+    std::unique_lock<bthread::Mutex> lock(segment_status_mutex);
+    auto query_iter = query_status_map.find(segment_status.query_id);
+    if (query_iter == query_status_map.end())
+    {
+        RuntimeSegmentsStatusPtr status = std::make_shared<RuntimeSegmentsStatus>();
+        status->query_id = segment_status.query_id;
+        status->segment_id = segment_status.segment_id;
+        status->is_succeed = segment_status.is_succeed;
+        status->is_canceled = segment_status.is_canceled;
+        status->metrics.cpu_micros = segment_status.metrics.cpu_micros;
+        query_status_map[segment_status.query_id] = status;
+    }
+    else
+    {
+        RuntimeSegmentsStatusPtr status = query_status_map[segment_status.query_id];
+        status->is_succeed &= segment_status.is_succeed;
+        status->is_canceled |= segment_status.is_canceled;
+        status->metrics.cpu_micros += segment_status.metrics.cpu_micros;
+    }
+}
+
 void SegmentScheduler::updateSegmentStatus(const RuntimeSegmentsStatus & segment_status)
 {
     std::unique_lock<bthread::Mutex> lock(segment_status_mutex);
@@ -247,47 +277,131 @@ void SegmentScheduler::updateSegmentStatus(const RuntimeSegmentsStatus & segment
     status->segment_id = segment_status.segment_id;
     status->is_succeed = segment_status.is_succeed;
     status->is_canceled = segment_status.is_canceled;
+    status->metrics.cpu_micros += segment_status.metrics.cpu_micros;
     status->message = segment_status.message;
     status->code = segment_status.code;
 }
 
-void SegmentScheduler::updateException(const String & query_id, const String & exception, int code)
+void SegmentScheduler::checkQueryCpuTime(const String & query_id)
 {
-    std::unique_lock<bthread::Mutex> lock(mutex);
-    // if query map can not find query_id means query has already finished
-    if (query_map.count(query_id))
-    {
-        if (query_to_exception_with_code.exist(query_id))
-        {
-            const auto ptr = query_to_exception_with_code.get(query_id, 10);
-            if (ptr)
-            {
-                const auto & new_exception = ptr->exception + ":" + exception;
-                query_to_exception_with_code.put(query_id, std::make_shared<ExceptionWithCode>(new_exception, code));
-            }
-            else
-                query_to_exception_with_code.put(query_id, std::make_shared<ExceptionWithCode>(exception, code));
+    UInt64 max_cpu_seconds = 0;
+    OverflowMode overflow_mode = OverflowMode::THROW;
 
-        }
-        else
+    std::unique_lock<bthread::Mutex> lock(mutex);
+    auto query_map_ite = query_map.find(query_id);
+    if (query_map_ite == query_map.end())
+    {
+        LOG_INFO(log, "query_id-" + query_id + " is not exist in scheduler query map");
+        return;
+    }
+
+    // get limit settings from final segemnt.
+    std::shared_ptr<DAGGraph> dag_ptr = query_map_ite->second;
+    if (dag_ptr == nullptr)
+        return;
+    ContextPtr final_segment_context = dag_ptr->query_context;
+    if (final_segment_context) {
+        auto& settings = final_segment_context->getSettingsRef();
+        max_cpu_seconds = settings.max_distributed_query_cpu_seconds;
+        overflow_mode = settings.timeout_overflow_mode;
+    }
+
+    if (max_cpu_seconds <= 0)
+        return;
+
+    std::unique_lock<bthread::Mutex> status_lock(segment_status_mutex);
+    UInt64 total_cpu_micros = 0;
+    auto query_iter = query_status_map.find(query_id);
+    if (query_iter != query_status_map.end())
+    {
+        total_cpu_micros = query_status_map[query_id]->metrics.cpu_micros;
+    }
+
+    LOG_TRACE(log, "DistributedQuery total CpuTime-{} / {}", total_cpu_micros * 1.0 / 1000000, max_cpu_seconds);
+
+    if (total_cpu_micros > max_cpu_seconds * 1000000)
+    {
+        switch (overflow_mode)
         {
-            query_to_exception_with_code.put(query_id, std::make_shared<ExceptionWithCode>(exception, code));
+            case OverflowMode::THROW:
+                throw Exception("Timeout exceeded: distribute cpu time " + toString(static_cast<double>(total_cpu_micros * 1.0 / 1000000))
+                                + " seconds, maximum: " + toString(static_cast<double>(max_cpu_seconds)), ErrorCodes::TIMEOUT_EXCEEDED);
+            case OverflowMode::BREAK:
+                break;
+            default:
+                throw Exception("Logical error: unknown overflow mode", ErrorCodes::LOGICAL_ERROR);
         }
     }
 }
 
-ExceptionWithCode SegmentScheduler::getException(const String & query_id, size_t timeout_ms) {
-    const auto ptr = query_to_exception_with_code.get(query_id, timeout_ms);
-    if (ptr)
-        return *ptr;
-    else
-        return {"Unknown", ErrorCodes::UNKNOWN_EXCEPTION};
+bool SegmentScheduler::needCheckRecivedSegmentStatusCounter(const String & query_id) const
+{
+    std::unique_lock<bthread::Mutex> lock(mutex);
+    auto query_map_ite = query_map.find(query_id);
+    if (query_map_ite == query_map.end())
+    {
+        LOG_INFO(log, "query_id-" + query_id + " is not exist in scheduler query map");
+        return false;
+    }
+
+    std::shared_ptr<DAGGraph> dag_ptr = query_map_ite->second;
+    if (dag_ptr == nullptr)
+        return false;
+    ContextPtr query_context = dag_ptr->query_context;
+    return query_context->isExplainQuery();
+}
+
+void SegmentScheduler::updateReceivedSegmentStausCounter(const String & query_id, const size_t & segment_id)
+{
+    std::unique_lock<bthread::Mutex> lock(segment_status_mutex);
+    auto segment_status_counter_iterator = query_status_received_counter_map[query_id].find(segment_id);
+    if (segment_status_counter_iterator == query_status_received_counter_map[query_id].end())
+    {
+        query_status_received_counter_map[query_id][segment_id] = 0;
+    }
+    query_status_received_counter_map[query_id][segment_id] += 1;
+}
+
+bool SegmentScheduler::alreadyReceivedAllSegmentStatus(const String & query_id) const
+{
+    std::unique_lock<bthread::Mutex> lock(segment_status_mutex);
+    auto all_segments_iterator = query_map.find(query_id);
+    auto received_status_segments_counter_iterator = query_status_received_counter_map.find(query_id);
+
+    if (received_status_segments_counter_iterator == query_status_received_counter_map.end() && all_segments_iterator == query_map.end())
+        return true;
+
+    if (received_status_segments_counter_iterator == query_status_received_counter_map.end())
+        return false;
+
+    if (all_segments_iterator == query_map.end())
+        return true;
+
+    auto dag_ptr = all_segments_iterator->second;
+    auto received_status_segments_counter = received_status_segments_counter_iterator->second;
+
+    for (auto & parallel : dag_ptr->segment_paralle_size_map)
+    {
+        if (parallel.first == 0)
+            continue;
+            
+        if (received_status_segments_counter[parallel.first] < parallel.second)
+            return false;
+    }
+
+    return true;
 }
 
 void SegmentScheduler::buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::shared_ptr<DAGGraph> graph_ptr)
 {
     graph_ptr->plan_segment_status_ptr = std::make_shared<PlanSegmentsStatus>();
     PlanSegmentTree::Nodes & nodes = plan_segments_ptr->getNodes();
+
+    if (nodes.size() <= 1)
+    {
+        graph_ptr->plan_segment_status_ptr->is_final_stage_start = true;
+        return;
+    }
 
     // use to traversal the tree
     std::stack<PlanSegmentTree::Node *> plan_segment_stack;
@@ -426,6 +540,7 @@ void SegmentScheduler::buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::s
                 }
             }
         }
+        graph_ptr->segment_paralle_size_map.emplace(it->first, it->second->getParallelSize());
     }
 }
 

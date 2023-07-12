@@ -28,6 +28,8 @@ public:
     using CacheEntry = std::pair<IDiskCachePtr, IDiskCacheStrategyPtr>;
 
     void init(Context & global_context);
+    void shutdown() const;
+
     CacheEntry getDefault() const { return default_cache; }
 
 private:

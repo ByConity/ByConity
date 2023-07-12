@@ -126,7 +126,7 @@ void BroadcastSenderProxy::waitAccept(UInt32 timeout_ms)
     if (!wait_accept.wait_for(lock, std::chrono::milliseconds(timeout_ms), [this] {
             return this->header.operator bool() || closed;
         }))
-        throw Exception("Wait accept timeout for " + data_key->dump(), ErrorCodes::TIMEOUT_EXCEEDED);
+        throw Exception("Wait accept timeout for " + data_key->dump(), ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION);
     else if (closed)
         throw Exception("Interrput accept for " + data_key->dump(), ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION);
 }
@@ -165,7 +165,7 @@ void BroadcastSenderProxy::waitBecomeRealSender(UInt32 timeout_ms)
         return;
     if (!wait_become_real.wait_for(
             lock, std::chrono::milliseconds(timeout_ms), [this] { return this->real_sender.operator bool() || closed; }))
-        throw Exception("Wait become real sender timeout for " + data_key->dump(), ErrorCodes::TIMEOUT_EXCEEDED);
+        throw Exception("Wait become real sender timeout for " + data_key->dump(), ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION);
     else if (closed)
         throw Exception("Interrput accept for " + data_key->dump(), ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION);
 }

@@ -53,6 +53,7 @@ void DDLAlterAction::executeV1(TxnTimestamp commit_time)
     /// In DDLAlter, we only update schema.
     LOG_DEBUG(log, "Wait for change schema in Catalog.");
     auto catalog = global_context.getCnchCatalog();
+    bool is_recluster = false;
     try
     {
         if (!mutation_commands.empty())
@@ -63,10 +64,13 @@ void DDLAlterAction::executeV1(TxnTimestamp commit_time)
             mutation_entry.commands = mutation_commands;
             mutation_entry.columns_commit_time = mutation_commands.changeSchema() ? commit_time : table->commit_time;
             catalog->createMutation(table->getStorageID(), mutation_entry.txn_id.toString(), mutation_entry.toString());
-            /// table default cluster status is true. Change to false if current mutation is resluster mutation.
-            if (mutation_entry.isReclusterMutation())
-                catalog->setTableClusterStatus(table->getStorageUUID(), false);
+            
+            // Don't create mutation task for reclustering. It will manually triggered by user
+            is_recluster = table->isBucketTable() && mutation_entry.isReclusterMutation();
+            if (!is_recluster)
+                catalog->createMutation(table->getStorageID(), mutation_entry.txn_id.toString(), mutation_entry.toString());
             LOG_DEBUG(log, "Successfully create mutation for alter query.");
+
         }
 
         // auto cache = global_context.getMaskingPolicyCache();
@@ -75,7 +79,8 @@ void DDLAlterAction::executeV1(TxnTimestamp commit_time)
         updateTsCache(table->getStorageUUID(), commit_time);
         if (!new_schema.empty())
         {
-            catalog->alterTable(table, new_schema, static_cast<StorageCnchMergeTree &>(*table).commit_time, txn_id, commit_time);
+            catalog->alterTable(
+                table, new_schema, static_cast<StorageCnchMergeTree &>(*table).commit_time, txn_id, commit_time, is_recluster);
             LOG_DEBUG(log, "Successfully change schema in catalog.");
         }
     }
