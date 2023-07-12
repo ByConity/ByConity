@@ -20,8 +20,8 @@
 #include <Optimizer/Property/Property.h>
 #include <Optimizer/Rewriter/Rewriter.h>
 #include <Optimizer/Rule/Rule.h>
-#include <QueryPlan/PlanNode.h>
 #include <QueryPlan/CTEVisitHelper.h>
+#include <QueryPlan/PlanNode.h>
 
 #include <stack>
 
@@ -95,6 +95,8 @@ public:
 
     UInt64 getTaskExecutionTimeout() const { return task_execution_timeout; }
 
+    bool isEnablePruning() const { return enable_pruning; }
+
 private:
     ContextMutablePtr context;
     CTEInfo & cte_info;
@@ -104,24 +106,33 @@ private:
     std::vector<RulePtr> transformation_rules;
     std::vector<RulePtr> implementation_rules;
     size_t worker_size = 1;
-    size_t max_join_size;
     bool support_filter;
     UInt64 task_execution_timeout;
+    bool enable_pruning;
     Poco::Logger * log;
 };
 
 class OptimizationContext
 {
 public:
-    OptimizationContext(
-        CascadesContext & context_, const Property & required_prop_, double cost_upper_bound_ = std::numeric_limits<double>::max())
+    OptimizationContext(CascadesContext & context_, const Property & required_prop_, double cost_upper_bound_)
         : context(context_), required_prop(required_prop_), cost_upper_bound(cost_upper_bound_)
     {
+        if (!context.isEnablePruning())
+        {
+            cost_upper_bound = std::numeric_limits<double>::max();
+        }
     }
 
     const Property & getRequiredProp() const { return required_prop; }
     double getCostUpperBound() const { return cost_upper_bound; }
-    void setCostUpperBound(double cost_upper_bound_) { cost_upper_bound = cost_upper_bound_; }
+    void setCostUpperBound(double cost_upper_bound_)
+    {
+        if (context.isEnablePruning())
+        {
+            cost_upper_bound = cost_upper_bound_;
+        }
+    }
     void pushTask(const OptimizerTaskPtr & task) const { context.getTaskStack().push(task); }
 
     const std::vector<RulePtr> & getTransformationRules() const { return context.getTransformationRules(); }

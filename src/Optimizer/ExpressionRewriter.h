@@ -19,13 +19,14 @@
 #include <Optimizer/Utils.h>
 #include <Optimizer/SimpleExpressionRewriter.h>
 #include <Parsers/ASTVisitor.h>
+#include <Optimizer/EqualityASTMap.h>
 #include <Parsers/IAST_fwd.h>
 
 #include <unordered_map>
 
 namespace DB
 {
-using ConstASTMap = ASTMap<ConstASTPtr, ConstASTPtr>;
+using ConstASTMap = EqualityASTMap<ConstHashAST>;
 
 class ExpressionRewriter
 {

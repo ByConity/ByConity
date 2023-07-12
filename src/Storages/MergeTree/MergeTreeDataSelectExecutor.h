@@ -229,7 +229,13 @@ public:
         bool sample_factor_column_queried,
         Poco::Logger * log);
 
-    static MarkRanges sampleByRange(const MergeTreeMetaBase::DataPartPtr& part, const MarkRanges & ranges, const RelativeSize & relative_sample_size, bool deterministic);
+    static MarkRanges sampleByRange(
+        const MergeTreeMetaBase::DataPartPtr & part,
+        const MarkRanges & ranges,
+        const RelativeSize & relative_sample_size,
+        bool deterministic,
+        bool uniform);
+
     static MarkRanges sliceRange(const MarkRange & range, const UInt64 & sample_size);
 
     /// Check query limits: max_partitions_to_read, max_concurrent_queries.

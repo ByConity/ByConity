@@ -25,7 +25,7 @@ class TupleDomain;
 
 using Domains = std::vector<Domain>;
 using TupleDomains = std::vector<TupleDomain>;
-using FieldWithTypeMap = std::unordered_map<String, FieldWithType>;
+using FieldWithTypeMap = LinkedHashMap<String, FieldWithType>;
 class Domain
 {
 private:
@@ -107,7 +107,7 @@ private:
     }
 };
 
-using DomainMap = std::unordered_map<String, Domain>;
+using DomainMap = LinkedHashMap<String, Domain>;
 
 /** TupleDomain defines a set of valid tuples according to the constraints on each of its constituent columns
     * TupleDomain is internally represented as a normalized map of each column to its
@@ -147,7 +147,7 @@ public:
         return is_none == other.isNone() && domains == other.getDomains();
     }
     std::optional<FieldWithTypeMap> extractFixedValues() const;
-    std::optional<std::unordered_map<String, Array>> extractDiscreteValues() const;
+    std::optional<LinkedHashMap<String, Array>> extractDiscreteValues() const;
 
     static TupleDomain none() { return TupleDomain{true}; }
     static TupleDomain all() { return TupleDomain{false}; }

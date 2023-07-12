@@ -35,6 +35,7 @@
 #include <QueryPlan/QueryPlanner.h>
 #include <Statistics/CacheManager.h>
 #include <Statistics/CatalogAdaptor.h>
+#include <Poco/NumberParser.h>
 #include <Poco/Util/MapConfiguration.h>
 #include <Common/tests/gtest_global_context.h>
 #include <Common/tests/gtest_global_register.h>
@@ -59,6 +60,7 @@ BasePlanTest::BasePlanTest(const String & database_name_, const std::unordered_m
     tryRegisterFormats();
     tryRegisterStorages();
     tryRegisterAggregateFunctions();
+    tryRegisterHints();
 
     SettingsChanges setting_changes;
 
@@ -103,9 +105,9 @@ QueryPlanPtr BasePlanTest::plan(const String & query, ContextMutablePtr query_co
     NormalizeSelectWithUnionQueryVisitor::Data data{query_context->getSettingsRef().union_default_mode};
     NormalizeSelectWithUnionQueryVisitor{data}.visit(ast);
 
-    ast = QueryRewriter::rewrite(ast, query_context);
+    ast = QueryRewriter().rewrite(ast, query_context);
     AnalysisPtr analysis = QueryAnalyzer::analyze(ast, query_context);
-    QueryPlanPtr query_plan = QueryPlanner::plan(ast, *analysis, query_context);
+    QueryPlanPtr query_plan = QueryPlanner().plan(ast, *analysis, query_context);
     PlanOptimizer::optimize(*query_plan, query_context);
     return query_plan;
 }
@@ -326,9 +328,9 @@ String AbstractPlanTestSuite::dump(const String & name)
             context->createSymbolAllocator();
             context->createOptimizerMetrics();
 
-            ast = QueryRewriter::rewrite(ast, context);
+            ast = QueryRewriter().rewrite(ast, context);
             AnalysisPtr analysis = QueryAnalyzer::analyze(ast, context);
-            QueryPlanPtr query_plan = QueryPlanner::plan(ast, *analysis, context);
+            QueryPlanPtr query_plan = QueryPlanner().plan(ast, *analysis, context);
             dumpDdlStats(*query_plan, context);
             PlanOptimizer::optimize(*query_plan, context);
             CardinalityEstimator::estimate(*query_plan, context);
@@ -529,4 +531,16 @@ bool AbstractPlanTestSuite::enforce_regenerate()
     return std::getenv("REGENERATE") != nullptr;
 }
 
+int AbstractPlanTestSuite::regenerate_task_thread_size()
+{
+    if (auto * str = std::getenv("REGENERATE_TASK_THREAD_SIZE"))
+    {
+        int value;
+        if (Poco::NumberParser::tryParse(String{str}, value) && value > 0 && value < 100)
+        {
+            return value;
+        }
+    }
+    return 8;
+}
 }

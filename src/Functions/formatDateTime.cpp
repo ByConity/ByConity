@@ -19,11 +19,12 @@
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
-#include <DataTypes/DataTypeString.h>
+#include <Columns/ColumnString.h>
 #include <DataTypes/DataTypeDate.h>
+#include <DataTypes/DataTypeDate32.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDateTime64.h>
-#include <Columns/ColumnString.h>
+#include <DataTypes/DataTypeString.h>
 
 #include <Functions/DateTimeTransforms.h>
 #include <Functions/FunctionFactory.h>
@@ -66,6 +67,11 @@ template <> struct ActionValueTypeMap<DataTypeUInt32>     { using ActionValueTyp
 template <> struct ActionValueTypeMap<DataTypeInt64>      { using ActionValueType = UInt32; };
 template <> struct ActionValueTypeMap<DataTypeUInt64>     { using ActionValueType = UInt32; };
 template <> struct ActionValueTypeMap<DataTypeDate>       { using ActionValueType = UInt16; };
+template <>
+struct ActionValueTypeMap<DataTypeDate32>
+{
+    using ActionValueType = Int32;
+};
 template <> struct ActionValueTypeMap<DataTypeDateTime>   { using ActionValueType = UInt32; };
 // TODO(vnemkov): to add sub-second format instruction, make that DateTime64 and do some math in Action<T>.
 template <> struct ActionValueTypeMap<DataTypeDateTime64> { using ActionValueType = Int64; };
@@ -303,9 +309,14 @@ public:
 
 private:
     bool adaptive_cast;
+    ContextPtr context;
 
 public:
     static constexpr auto name = Name::name;
+
+    explicit FunctionFormatDateTimeImpl(bool adaptive_cast, ContextPtr context_) : adaptive_cast(adaptive_cast), context(context_)
+    {
+    }
 
     static FunctionPtr create(ContextPtr context)
     {
@@ -336,15 +347,18 @@ public:
                     "Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
                         + ", should be 1, 2 or 3",
                     ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-            if (arguments.size() == 1 && !isInteger(arguments[0].type))
+            if (arguments.size() == 1 && !isInteger(arguments[0].type) && !isStringOrFixedString(arguments[0].type))
                 throw Exception(
                     "Illegal type " + arguments[0].type->getName() + " of 1 argument of function " + getName()
-                        + " when arguments size is 1. Should be integer",
+                        + " when arguments size is 1. Should be integer or a string literal of an integer",
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-            if (arguments.size() > 1 && !(isInteger(arguments[0].type) || isDate(arguments[0].type) || isDateTime(arguments[0].type) || isDateTime64(arguments[0].type)))
+            if (arguments.size() > 1
+                && !(
+                    isInteger(arguments[0].type) || isDate(arguments[0].type) || isDateTime(arguments[0].type)
+                    || isDateTime64(arguments[0].type) || isStringOrFixedString(arguments[0].type)))
                 throw Exception(
                     "Illegal type " + arguments[0].type->getName() + " of 1 argument of function " + getName()
-                        + " when arguments size is 2 or 3. Should be a integer or a date with time",
+                        + " when arguments size is 2 or 3. Should be a integer, a string literal of an integer or a date with time",
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
         else
@@ -381,60 +395,76 @@ public:
         ColumnPtr res;
         if constexpr (support_integer)
         {
+            ColumnsWithTypeAndName converted;
+            if (isStringOrFixedString(arguments[0].type))
+            {
+                ColumnsWithTypeAndName temp{arguments[0]};
+                auto to_int = FunctionFactory::instance().get("toInt64", context);
+                auto col = to_int->build(temp)->execute(temp, arguments[0].type, input_rows_count);
+                ColumnWithTypeAndName converted_col(col, std::make_shared<DataTypeInt64>(), "unixtime");
+                converted.emplace_back(converted_col);
+                for (int i = 1; i < arguments.size(); i++)
+                {
+                    converted.emplace_back(arguments[i]);
+                }
+            }
+            else
+            {
+                converted = arguments;
+            }
             if (arguments.size() == 1)
             {
-                if (!castType(arguments[0].type.get(), [&](const auto & type)
-                    {
+                if (!castType(converted[0].type.get(), [&](const auto & type) {
                         using FromDataType = std::decay_t<decltype(type)>;
                         if constexpr (std::is_same_v<FromDataType, DataTypeInt64> || std::is_same_v<FromDataType, DataTypeUInt64>)
                         {
                             if (adaptive_cast)
                                 res = ConvertImpl<FromDataType, DataTypeDateTime, Name, ConvertDefaultBehaviorTag, true>::execute(
-                                        arguments, result_type, input_rows_count);
+                                    converted, result_type, input_rows_count);
                             else
                                 res = ConvertImpl<FromDataType, DataTypeDateTime, Name, ConvertDefaultBehaviorTag, false>::execute(
-                                        arguments, result_type, input_rows_count);
+                                    converted, result_type, input_rows_count);
                         }
                         else
-                            res = ConvertImpl<FromDataType, DataTypeDateTime, Name>::execute(arguments, result_type, input_rows_count);
+                            res = ConvertImpl<FromDataType, DataTypeDateTime, Name>::execute(converted, result_type, input_rows_count);
 
                         return true;
                     }))
                 {
                     throw Exception(
                         "Illegal column " + arguments[0].column->getName() + " of function " + getName()
-                            + ", must be Integer or DateTime when arguments size is 1.",
+                            + ", must be Integer, String or DateTime when arguments size is 1.",
                         ErrorCodes::ILLEGAL_COLUMN);
                 }
             }
             else
             {
-                if (!castType(arguments[0].type.get(), [&](const auto & type)
-                    {
+                if (!castType(converted[0].type.get(), [&](const auto & type) {
                         using FromDataType = std::decay_t<decltype(type)>;
-                        if (!(res = executeType<FromDataType>(arguments, result_type)))
+                        if (!(res = executeType<FromDataType>(converted, result_type)))
                             throw Exception(
                                 "Illegal column " + arguments[0].column->getName() + " of function " + getName()
-                                    + ", must be Integer or DateTime.",
+                                    + ", must be Integer, String or DateTime.",
                                 ErrorCodes::ILLEGAL_COLUMN);
                         return true;
                     }))
                 {
-                    if (!((res = executeType<DataTypeDate>(arguments, result_type))
-                        || (res = executeType<DataTypeDateTime>(arguments, result_type))
-                        || (res = executeType<DataTypeDateTime64>(arguments, result_type))))
+                    if (!((res = executeType<DataTypeDate>(converted, result_type))
+                          || (res = executeType<DataTypeDate32>(converted, result_type))
+                          || (res = executeType<DataTypeDateTime>(converted, result_type))
+                          || (res = executeType<DataTypeDateTime64>(converted, result_type))))
                         throw Exception(
                             "Illegal column " + arguments[0].column->getName() + " of function " + getName()
-                                + ", must be Integer or DateTime.",
+                                + ", must be Integer, String or DateTime.",
                             ErrorCodes::ILLEGAL_COLUMN);
                 }
             }
         }
         else
         {
-            if (!((res = executeType<DataTypeDate>(arguments, result_type))
-                || (res = executeType<DataTypeDateTime>(arguments, result_type))
-                || (res = executeType<DataTypeDateTime64>(arguments, result_type))))
+            if (!((res = executeType<DataTypeDate>(arguments, result_type)) || (res = executeType<DataTypeDate32>(arguments, result_type))
+                  || (res = executeType<DataTypeDateTime>(arguments, result_type))
+                  || (res = executeType<DataTypeDateTime64>(arguments, result_type))))
                 throw Exception(
                     "Illegal column " + arguments[0].column->getName() + " of function " + getName()
                         + ", must be Date or DateTime.",
@@ -773,8 +803,8 @@ using FunctionFROM_UNIXTIME = FunctionFormatDateTimeImpl<NameFromUnixTime, true>
 
 void registerFunctionFormatDateTime(FunctionFactory & factory)
 {
-    factory.registerFunction<FunctionFormatDateTime>();
-    factory.registerFunction<FunctionFROM_UNIXTIME>();
+    factory.registerFunction<FunctionFormatDateTime>(FunctionFactory::CaseInsensitive);
+    factory.registerFunction<FunctionFROM_UNIXTIME>(FunctionFactory::CaseInsensitive);
     factory.registerAlias("fromUnixTimestamp", "FROM_UNIXTIME");
 }
 

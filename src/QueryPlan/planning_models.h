@@ -67,4 +67,17 @@ struct RelationPlan
 using RelationPlans = std::vector<RelationPlan>;
 
 using CTERelationPlans = std::unordered_map<CTEId, RelationPlan>;
+
+struct PlanWithSymbolMappings
+{
+    PlanNodePtr plan;
+    NameToNameMap mappings;
+};
+
+struct PlanWithSymbols
+{
+    PlanNodePtr plan;
+    Names symbols;
+};
+
 }

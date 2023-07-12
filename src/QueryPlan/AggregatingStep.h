@@ -14,6 +14,7 @@
  */
 
 #pragma once
+#include <Core/SortDescription.h>
 #include <DataStreams/SizeLimits.h>
 #include <Interpreters/Aggregator.h>
 #include <Interpreters/Context_fwd.h>
@@ -22,7 +23,6 @@
 
 namespace DB
 {
-
 struct AggregatingTransformParams;
 using AggregatingTransformParamsPtr = std::shared_ptr<AggregatingTransformParams>;
 class WriteBuffer;
@@ -36,7 +36,10 @@ struct GroupingSetsParams
 
     GroupingSetsParams(Names used_key_names_) : used_key_names(std::move(used_key_names_)) { }
 
-    GroupingSetsParams(ColumnNumbers used_keys_, ColumnNumbers missing_keys_) : used_keys(std::move(used_keys_)), missing_keys(std::move(missing_keys_)) { }
+    GroupingSetsParams(ColumnNumbers used_keys_, ColumnNumbers missing_keys_)
+        : used_keys(std::move(used_keys_)), missing_keys(std::move(missing_keys_))
+    {
+    }
 
     Names used_key_names;
 
@@ -56,8 +59,12 @@ using GroupingDescriptions = std::vector<GroupingDescription>;
 
 Block appendGroupingSetColumn(Block header);
 
-void computeGroupingFunctions(QueryPipeline & pipeline, const GroupingDescriptions & groupings, const Names & keys,
-                              const GroupingSetsParamsList & grouping_set_params, const BuildQueryPipelineSettings & build_settings);
+void computeGroupingFunctions(
+    QueryPipeline & pipeline,
+    const GroupingDescriptions & groupings,
+    const Names & keys,
+    const GroupingSetsParamsList & grouping_set_params,
+    const BuildQueryPipelineSettings & build_settings);
 
 /// Aggregation. See AggregatingTransform.
 class AggregatingStep : public ITransformingStep
@@ -99,8 +106,10 @@ public:
         AggregateDescriptions aggregates_,
         GroupingSetsParamsList grouping_sets_params_,
         bool final_,
-        GroupingDescriptions groupings_ = {}, bool /*totals_*/ = false,
-        bool should_produce_results_in_order_of_bucket_number_ = true)
+        SortDescription group_by_sort_description_ = {},
+        GroupingDescriptions groupings_ = {},
+        bool /*totals_*/ = false,
+        bool should_produce_results_in_order_of_bucket_number_ = false)
         : AggregatingStep(
             input_stream_,
             keys_,
@@ -112,7 +121,7 @@ public:
             0,
             false,
             nullptr,
-            SortDescription(),
+            group_by_sort_description_,
             groupings_,
             false,
             should_produce_results_in_order_of_bucket_number_)
@@ -151,6 +160,11 @@ public:
     const AggregateDescriptions & getAggregates() const { return params.aggregates; }
     const Names & getKeys() const { return keys; }
     const GroupingSetsParamsList & getGroupingSetsParams() const { return grouping_sets_params; }
+    const SortDescription & getGroupBySortDescription() const { return group_by_sort_description; }
+    void setGroupBySortDescription(const SortDescription & group_by_sort_description_)
+    {
+        group_by_sort_description = group_by_sort_description_;
+    }
     bool isFinal() const { return final; }
     bool isPartial() const { return !final; }
     bool isGroupingSet() const { return !grouping_sets_params.empty(); }

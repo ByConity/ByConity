@@ -23,8 +23,8 @@ namespace DB
 PatternPtr LeftJoinToRightJoin::getPattern() const
 {
     return Patterns::join()
-        ->matchingStep<JoinStep>([&](const JoinStep & s) { return supportSwap(s); })
-        ->with({Patterns::any(), Patterns::any()});
+        .matchingStep<JoinStep>([&](const JoinStep & s) { return supportSwap(s) && !s.isOrdered(); })
+        .with(Patterns::any(), Patterns::any()).result();
 }
 
 TransformResult LeftJoinToRightJoin::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -43,7 +43,7 @@ TransformResult LeftJoinToRightJoin::transformImpl(PlanNodePtr node, const Captu
     auto join_step = std::make_shared<JoinStep>(
         streams,
         step.getOutputStream(),
-        ASTTableJoin::Kind::Right,
+        step.getKind() == ASTTableJoin::Kind::Left ? ASTTableJoin::Kind::Right : step.getKind(),
         step.getStrictness(),
         step.getMaxStreams(),
         step.getKeepLeftReadInOrder(),
@@ -53,7 +53,11 @@ TransformResult LeftJoinToRightJoin::transformImpl(PlanNodePtr node, const Captu
         step.isHasUsing(),
         step.getRequireRightKeys(),
         step.getAsofInequality(),
-        step.getDistributionType());
+        step.getDistributionType(),
+        JoinAlgorithm::AUTO,
+        false,
+        step.isOrdered(),
+        step.getHints());
     PlanNodePtr join_node = std::make_shared<JoinNode>(
         rule_context.context->nextNodeId(), std::move(join_step), PlanNodes{node->getChildren()[1], node->getChildren()[0]});
 

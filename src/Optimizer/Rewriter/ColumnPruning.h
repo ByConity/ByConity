@@ -26,6 +26,7 @@ class ColumnPruning : public Rewriter
 public:
     void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     String name() const override { return "ColumnPruning"; }
+    static void selectColumnWithMinSize(NamesAndTypesList source_columns, StoragePtr storage, NameSet & required);
 };
 
 class ColumnPruningVisitor : public SimplePlanRewriter<NameSet>
@@ -37,27 +38,30 @@ public:
     }
 
 private:
+    PlanNodePtr visitArrayJoinNode(ArrayJoinNode & node, NameSet & require) override;
     PlanNodePtr visitLimitByNode(LimitByNode & node, NameSet & context) override;
     PlanNodePtr visitWindowNode(WindowNode & node, NameSet & context) override;
     PlanNodePtr visitDistinctNode(DistinctNode & node, NameSet & context) override;
     PlanNodePtr visitJoinNode(JoinNode & node, NameSet & context) override;
     PlanNodePtr visitSortingNode(SortingNode & node, NameSet & require) override;
-    PlanNodePtr visitMergeSortingNode(MergeSortingNode & node, NameSet & context) override;
-    PlanNodePtr visitMergingSortedNode(MergingSortedNode & node, NameSet & context) override;
-    PlanNodePtr visitPartialSortingNode(PartialSortingNode & node, NameSet & context) override;
-    PlanNodePtr visitAggregatingNode(AggregatingNode & node, NameSet & context) override;
-    PlanNodePtr visitTableScanNode(TableScanNode & node, NameSet & context) override;
+    PlanNodePtr visitMergeSortingNode(MergeSortingNode & node, NameSet & require) override;
+    PlanNodePtr visitMergingSortedNode(MergingSortedNode & node, NameSet & require) override;
+    PlanNodePtr visitPartialSortingNode(PartialSortingNode & node, NameSet & require) override;
+    PlanNodePtr visitAggregatingNode(AggregatingNode & node, NameSet & require) override;
     PlanNodePtr visitMarkDistinctNode(MarkDistinctNode & node, NameSet & require) override;
+    PlanNodePtr visitTableScanNode(TableScanNode & node, NameSet & require) override;
     PlanNodePtr visitFilterNode(FilterNode & node, NameSet & c) override;
     PlanNodePtr visitProjectionNode(ProjectionNode & node, NameSet & c) override;
     PlanNodePtr visitApplyNode(ApplyNode & node, NameSet & c) override;
-    PlanNodePtr visitUnionNode(UnionNode & node, NameSet & context) override;
-    PlanNodePtr visitExceptNode(ExceptNode & node, NameSet & context) override;
-    PlanNodePtr visitIntersectNode(IntersectNode & node, NameSet & context) override;
-    PlanNodePtr visitAssignUniqueIdNode(AssignUniqueIdNode & node, NameSet & context) override;
-    PlanNodePtr visitExchangeNode(ExchangeNode & node, NameSet & context) override;
-    PlanNodePtr visitCTERefNode(CTERefNode & node, NameSet & context) override;
-    PlanNodePtr visitTopNFilteringNode(TopNFilteringNode & node, NameSet & context) override;
+    PlanNodePtr visitUnionNode(UnionNode & node, NameSet & require) override;
+    PlanNodePtr visitExceptNode(ExceptNode & node, NameSet & require) override;
+    PlanNodePtr visitIntersectNode(IntersectNode & node, NameSet & require) override;
+    PlanNodePtr visitAssignUniqueIdNode(AssignUniqueIdNode & node, NameSet & require) override;
+    PlanNodePtr visitExchangeNode(ExchangeNode & node, NameSet & require) override;
+    PlanNodePtr visitCTERefNode(CTERefNode & node, NameSet & require) override;
+    PlanNodePtr visitExplainAnalyzeNode(ExplainAnalyzeNode & node, NameSet & require) override;
+    PlanNodePtr visitTopNFilteringNode(TopNFilteringNode & node, NameSet & require) override;
+    PlanNodePtr visitFillingNode(FillingNode & node, NameSet & require) override;
 
     CTEPostorderVisitHelper post_order_cte_helper;
     std::unordered_map<CTEId, NameSet> cte_require_columns{};

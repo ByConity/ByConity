@@ -30,6 +30,7 @@
 #include <QueryPlan/ExchangeStep.h>
 #include <QueryPlan/ExpressionStep.h>
 #include <QueryPlan/ExtremesStep.h>
+#include <QueryPlan/ExplainAnalyzeStep.h>
 #include <QueryPlan/FillingStep.h>
 #include <QueryPlan/FilterStep.h>
 #include <QueryPlan/FinalSampleStep.h>
@@ -78,7 +79,7 @@ class PlanNodeBase;
 using PlanNodePtr = std::shared_ptr<PlanNodeBase>;
 using PlanNodes = std::vector<PlanNodePtr>;
 
-using ConstQueryPlanStepPtr = std::shared_ptr<const IQueryPlanStep>;
+using QueryPlanStepPtr = std::shared_ptr<IQueryPlanStep>;
 using PlanNodeId = UInt32;
 
 class PlanNodeBase : public std::enable_shared_from_this<PlanNodeBase>
@@ -89,12 +90,13 @@ public:
     PlanNodeId getId() const { return id; }
 
     PlanNodes & getChildren() { return children; }
+    const PlanNodes & getChildren() const { return children; }
     void replaceChildren(const PlanNodes & children_) { replaceChildrenImpl(children_); }
 
     void replaceChildren(PlanNodes && children_) { children = std::move(children_); }
     void setStatistics(const PlanNodeStatisticsEstimate & statistics_) { statistics = statistics_; }
     const PlanNodeStatisticsEstimate & getStatistics() const { return statistics; }
-    ConstQueryPlanStepPtr getStep() const { return getStepImpl(); }
+    QueryPlanStepPtr getStep() const { return getStepImpl(); }
     void setStep(QueryPlanStepPtr & step_) { setStepImpl(step_); }
 
 
@@ -110,7 +112,7 @@ public:
 
     static PlanNodePtr createPlanNode(
         [[maybe_unused]] PlanNodeId id_,
-        [[maybe_unused]] ConstQueryPlanStepPtr step_,
+        [[maybe_unused]] QueryPlanStepPtr step_,
         [[maybe_unused]] const PlanNodes & children_ = {},
         [[maybe_unused]] const PlanNodeStatisticsEstimate & statistics_ = {})
     {
@@ -118,7 +120,7 @@ public:
 #define CREATE_PLAN_NODE(TYPE) \
     if (step_->getType() == IQueryPlanStep::Type::TYPE) \
     { \
-        auto spec_step = std::dynamic_pointer_cast<const TYPE##Step>(step_); \
+        auto spec_step = std::dynamic_pointer_cast<TYPE##Step>(step_); \
         plan_node = std::dynamic_pointer_cast<PlanNodeBase>(std::make_shared<PlanNode<TYPE##Step>>(id_, std::move(spec_step), children_)); \
     }
 
@@ -136,7 +138,7 @@ protected:
 
 private:
 
-    virtual ConstQueryPlanStepPtr getStepImpl() const = 0;
+    virtual QueryPlanStepPtr getStepImpl() const = 0;
     virtual void setStepImpl(QueryPlanStepPtr & step_) = 0;
     virtual void replaceChildrenImpl(const PlanNodes & children_) = 0;
 
@@ -146,7 +148,6 @@ template <class Step>
 class PlanNode : public PlanNodeBase
 {
 public:
-    using ConstStepPtr = std::shared_ptr<const Step>;
     using StepPtr = std::shared_ptr<Step>;
     PlanNode(const PlanNode &) = delete;
     PlanNode(const PlanNode &&) = delete;
@@ -155,13 +156,13 @@ public:
     PlanNode & operator=(PlanNode &&) = delete;
 
     IQueryPlanStep::Type getType() const override { return step->getType(); }
-    ConstStepPtr & getStep() { return step; }
+    StepPtr & getStep() { return step; }
 
     void setStep(StepPtr & step_) { step = step_; }
     const DataStream & getCurrentDataStream() const override { return step->getOutputStream(); }
 
     static PlanNodePtr createPlanNode(
-        PlanNodeId id_, ConstStepPtr step_, const PlanNodes & children_ = {}, const PlanNodeStatisticsEstimate & statistics_ = {})
+        PlanNodeId id_, StepPtr step_, const PlanNodes & children_ = {}, const PlanNodeStatisticsEstimate & statistics_ = {})
     {
         PlanNodePtr plan_node = std::make_shared<PlanNode<Step>>(id_, std::move(step_), children_);
         plan_node->setStatistics(statistics_);
@@ -191,10 +192,10 @@ public:
         return PlanNodeBase::createPlanNode(new_id, std::move(new_step), new_children);
     }
 
-    PlanNode(PlanNodeId id_, ConstStepPtr step_, PlanNodes children_ = {}) : PlanNodeBase(id_, children_), step(std::move(step_)) { }
+    PlanNode(PlanNodeId id_, StepPtr step_, PlanNodes children_ = {}) : PlanNodeBase(id_, children_), step(std::move(step_)) { }
 
 private:
-    ConstQueryPlanStepPtr getStepImpl() const override { return step; }
+    QueryPlanStepPtr getStepImpl() const override { return step; }
 
     void replaceChildrenImpl(const PlanNodes & children_) override
     {
@@ -216,7 +217,7 @@ private:
         }
     }
 
-    ConstStepPtr step;
+    StepPtr step;
 };
 
 #define PLAN_NODE_DEF(TYPE) \

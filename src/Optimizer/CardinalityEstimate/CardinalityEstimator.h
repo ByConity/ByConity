@@ -27,7 +27,7 @@ class CardinalityEstimator
 {
 public:
     static std::optional<PlanNodeStatisticsPtr> estimate(
-        ConstQueryPlanStepPtr & step,
+        QueryPlanStepPtr & step,
         CTEInfo & cte_info,
         std::vector<PlanNodeStatisticsPtr> children_stats,
         ContextMutablePtr context,
@@ -37,8 +37,9 @@ public:
     static std::optional<PlanNodeStatisticsPtr> estimate(PlanNodeBase & node,
         CTEInfo & cte_info,
         ContextMutablePtr context,
-        bool recursive = false);
-    static void estimate(QueryPlan & plan, ContextMutablePtr context);
+        bool recursive = false, 
+        bool re_estimate = false);
+    static void estimate(QueryPlan & plan, ContextMutablePtr context, bool re_estimate = false);
 
 };
 
@@ -50,6 +51,7 @@ struct CardinalityContext
     bool simple_children = false;
     std::vector<bool> children_are_table_scan = {};
     bool is_table_scan = false;
+    bool re_estimate = false;
 };
 
 class CardinalityVisitor : public StepVisitor<PlanNodeStatisticsPtr, CardinalityContext>
@@ -60,6 +62,7 @@ public:
     PlanNodeStatisticsPtr visitProjectionStep(const ProjectionStep & step, CardinalityContext & context) override;
     PlanNodeStatisticsPtr visitFilterStep(const FilterStep & step, CardinalityContext & context) override;
     PlanNodeStatisticsPtr visitJoinStep(const JoinStep & step, CardinalityContext & context) override;
+    PlanNodeStatisticsPtr visitArrayJoinStep(const ArrayJoinStep & step, CardinalityContext & context) override;
     PlanNodeStatisticsPtr visitAggregatingStep(const AggregatingStep & step, CardinalityContext & context) override;
     PlanNodeStatisticsPtr visitWindowStep(const WindowStep & step, CardinalityContext & context) override;
     PlanNodeStatisticsPtr visitMergingAggregatedStep(const MergingAggregatedStep & step, CardinalityContext & context) override;
@@ -84,7 +87,9 @@ public:
     PlanNodeStatisticsPtr visitAssignUniqueIdStep(const AssignUniqueIdStep & step, CardinalityContext & context) override;
     PlanNodeStatisticsPtr visitCTERefStep(const CTERefStep & step, CardinalityContext & context) override;
     PlanNodeStatisticsPtr visitPartitionTopNStep(const PartitionTopNStep & step, CardinalityContext & context) override;
+    PlanNodeStatisticsPtr visitExplainAnalyzeStep(const ExplainAnalyzeStep & step, CardinalityContext & context) override;
     PlanNodeStatisticsPtr visitTopNFilteringStep(const TopNFilteringStep &, CardinalityContext & context) override;
+    PlanNodeStatisticsPtr visitFillingStep(const FillingStep & step, CardinalityContext & context) override;
 };
 
 class PlanCardinalityVisitor : public PlanNodeVisitor<PlanNodeStatisticsPtr, CardinalityContext>

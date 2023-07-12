@@ -27,8 +27,8 @@ namespace DB
 PatternPtr PushDynamicFilterBuilderThroughExchange::getPattern() const
 {
     return Patterns::project()
-        ->matchingStep<ProjectionStep>([](const auto & project) { return !project.getDynamicFilters().empty(); })
-        ->withSingle(Patterns::exchange());
+        .matchingStep<ProjectionStep>([](const auto & project) { return !project.getDynamicFilters().empty(); })
+        .withSingle(Patterns::exchange()).result();
 }
 
 TransformResult PushDynamicFilterBuilderThroughExchange::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)

@@ -85,6 +85,7 @@ public:
     static SymbolMapper symbolMapper(const std::unordered_map<Symbol, Symbol> & mapping);
     static SymbolMapper symbolReallocator(std::unordered_map<Symbol, Symbol> & mapping, SymbolAllocator & symbolAllocator, ContextPtr context);
 
+    std::string map(const std::string & symbol) { return mapping_function(symbol); }
     template <typename T>
     std::vector<T> map(const std::vector<T> & items)
     {
@@ -92,8 +93,7 @@ public:
         std::transform(items.begin(), items.end(), std::back_inserter(ret), [&](const auto & param) { return map(param); });
         return ret;
     }
-    std::string map(const std::string & symbol) { return mapping_function(symbol); }
-    Names map(const Names & symbols);
+
     NameSet mapToDistinct(const Names & symbols);
     NamesAndTypes map(const NamesAndTypes & name_and_types);
     NameSet map(const NameSet & names);
@@ -103,7 +103,6 @@ public:
     Assignments map(const Assignments & assignments);
     Assignment map(const Assignment & assignment);
     Block map(const Block & name_and_types);
-    DataStreams map(const DataStreams & data_streams);
     DataStream map(const DataStream & data_stream);
     ASTPtr map(const ASTPtr & expr);
     ASTPtr map(const ConstASTPtr & expr);
@@ -146,8 +145,8 @@ public:
     std::shared_ptr<ProjectionStep> map(const ProjectionStep & projection);
     std::shared_ptr<PartitionTopNStep> map(const PartitionTopNStep & partition_topn);
     std::shared_ptr<PartialSortingStep> map(const PartialSortingStep & partition_sorting);
-    std::shared_ptr<RemoteExchangeSourceStep> map(const RemoteExchangeSourceStep & remote_exchange);
     std::shared_ptr<ReadNothingStep> map(const ReadNothingStep & read_nothing);
+    std::shared_ptr<RemoteExchangeSourceStep> map(const RemoteExchangeSourceStep & remote_exchange);
     std::shared_ptr<SortingStep> map(const SortingStep & sorting);
     std::shared_ptr<TopNFilteringStep> map(const TopNFilteringStep & topn_filter);
     std::shared_ptr<TableScanStep> map(const TableScanStep & table_scan);

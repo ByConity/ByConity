@@ -43,7 +43,9 @@ using MergeTreeBlockSizePredictorPtr = std::unique_ptr<MergeTreeBlockSizePredict
   * so that you can calculate the DEFAULT expression for these columns.
   * Adds them to the `columns`.
   */
-NameSet injectRequiredColumns(const MergeTreeMetaBase & storage, const StorageMetadataPtr & metadata_snapshot, const MergeTreeMetaBase::DataPartPtr & part, Names & columns);
+NameSet injectRequiredColumns(const MergeTreeMetaBase & storage,
+    const StorageMetadataPtr & metadata_snapshot, const MergeTreeMetaBase::DataPartPtr & part,
+    Names & columns, const String& default_injected_column);
 
 
 /// A batch of work for MergeTreeThreadSelectBlockInputStream

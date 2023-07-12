@@ -36,6 +36,8 @@ class SwapPredicateRewriteRule : public Rule
 public:
     RuleType getType() const override { return RuleType::SWAP_PREDICATE_REWRITE; }
     String getName() const override { return "SWAP_PREDICATE_REWRITE"; }
+    bool excludeIfTransformSuccess() const override { return true; }
+    bool excludeIfTransformFailure() const override { return true; }
 
     PatternPtr getPattern() const override;
 
@@ -48,6 +50,8 @@ class SimplifyPredicateRewriteRule : public Rule
 public:
     RuleType getType() const override { return RuleType::SIMPLIFY_PREDICATE_REWRITE; }
     String getName() const override { return "SIMPLIFY_PREDICATE_REWRITE"; }
+    bool excludeIfTransformSuccess() const override { return true; }
+    bool excludeIfTransformFailure() const override { return true; }
 
     PatternPtr getPattern() const override;
 
@@ -60,6 +64,8 @@ class MergePredicatesUsingDomainTranslator : public Rule
 public:
     RuleType getType() const override { return RuleType::MERGE_PREDICATES_USING_DOMAIN_TRANSLATOR; }
     String getName() const override { return "MERGE_PREDICATES_USING_DOMAIN_TRANSLATOR"; }
+    bool excludeIfTransformSuccess() const override { return true; }
+    bool excludeIfTransformFailure() const override { return true; }
 
     PatternPtr getPattern() const override;
 
@@ -72,6 +78,8 @@ class UnWarpCastInPredicateRewriteRule : public Rule
 public:
     RuleType getType() const override { return RuleType::UN_WARP_CAST_IN_PREDICATE_REWRITE; }
     String getName() const override { return "UN_WARP_CAST_IN_PREDICATE_REWRITE"; }
+    bool excludeIfTransformSuccess() const override { return true; }
+    bool excludeIfTransformFailure() const override { return true; }
 
     PatternPtr getPattern() const override;
 
@@ -84,6 +92,8 @@ class SimplifyJoinFilterRewriteRule : public Rule
 public:
     RuleType getType() const override { return RuleType::SIMPLIFY_JOIN_FILTER_REWRITE; }
     String getName() const override { return "SIMPLIFY_JOIN_FILTER_REWRITE"; }
+    bool excludeIfTransformSuccess() const override { return true; }
+    bool excludeIfTransformFailure() const override { return true; }
 
     PatternPtr getPattern() const override;
 
@@ -96,6 +106,8 @@ class SimplifyExpressionRewriteRule : public Rule
 public:
     RuleType getType() const override { return RuleType::SIMPLIFY_EXPRESSION_REWRITE; }
     String getName() const override { return "SIMPLIFY_EXPRESSION_REWRITE"; }
+    bool excludeIfTransformSuccess() const override { return true; }
+    bool excludeIfTransformFailure() const override { return true; }
 
     PatternPtr getPattern() const override;
 

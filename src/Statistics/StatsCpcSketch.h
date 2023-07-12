@@ -33,7 +33,7 @@ public:
     void deserialize(std::string_view blob) override;
     StatisticsTag getTag() const override { return tag; }
 
-    double get_estimate() const { return data.get_estimate(); }
+    double getEstimate() const { return getFullResult().get_estimate(); }
 
     template <typename T>
     void update(const T & value)
@@ -52,17 +52,37 @@ public:
 
     void merge(const StatsCpcSketch & rhs)
     {
-        datasketches::cpc_union un(default_lg_k);
-        un.update(data);
+        if (!un_opt.has_value())
+        {
+            un_opt.emplace(default_lg_k);
+        }
+        auto & un = un_opt.value();
         un.update(rhs.data);
-        data = un.get_result();
+
+        if (rhs.un_opt.has_value())
+        {
+            un.update(rhs.un_opt->get_result());
+        }
     }
 
-    // To human-readable text
-    String to_string() const { return data.to_string(); }
+private:
+    datasketches::cpc_sketch getFullResult() const
+    {
+        if (un_opt.has_value())
+        {
+            auto tmp_un = *un_opt;
+            tmp_un.update(data);
+            return tmp_un.get_result();
+        }
+        else
+        {
+            return data;
+        }
+    }
 
 private:
     datasketches::cpc_sketch data;
+    std::optional<datasketches::cpc_union> un_opt;
 };
 
 // transform ndv to integer, and make it no greater than count

@@ -21,6 +21,7 @@
 #include <Parsers/ASTVisitor.h>
 #include <QueryPlan/PlanVisitor.h>
 #include <QueryPlan/SimplePlanRewriter.h>
+#include <QueryPlan/SimplePlanVisitor.h>
 
 #include <utility>
 
@@ -38,12 +39,12 @@ class SimpleReorderJoinVisitor : public SimplePlanRewriter<Void>
 public:
     explicit SimpleReorderJoinVisitor(ContextMutablePtr context_, CTEInfo & cte_info_) : SimplePlanRewriter(context_, cte_info_), cte_info(cte_info_) { }
     PlanNodePtr visitJoinNode(JoinNode &, Void &) override;
+    static PlanNodePtr buildJoinTree(std::vector<String> & expected_output_symbols, JoinGraph & graph, PlanNodePtr join_node, ContextMutablePtr & context_ptr);
 
 private:
     CTEInfo & cte_info;
     std::unordered_set<PlanNodeId> reordered;
     PlanNodePtr getJoinOrder(JoinGraph & graph);
-    PlanNodePtr buildJoinTree(std::vector<String> & expected_output_symbols, JoinGraph & graph, PlanNodePtr join_node);
 };
 
 struct EdgeSelectivity

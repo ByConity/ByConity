@@ -85,7 +85,7 @@ public:
     const BucketBounds & getBucketBounds() const override { return bounds; }
 
     uint64_t getCount(size_t bucket_id) const { return counts[bucket_id]; }
-    double getNdv(size_t bucket_id) const { return cpc_sketches[bucket_id].get_estimate(); }
+    double getNdv(size_t bucket_id) const { return cpc_sketches[bucket_id].getEstimate(); }
     std::shared_ptr<StatsNdvBucketsResultImpl<T>> asResultImpl() const;
 
     std::shared_ptr<StatsNdvBucketsResult> asResult() const override { return asResultImpl(); }
@@ -172,7 +172,7 @@ std::shared_ptr<StatsNdvBucketsResultImpl<T>> StatsNdvBucketsImpl<T>::asResultIm
     std::vector<double> ndvs;
     for (auto & cpc : this->cpc_sketches)
     {
-        auto ndv = cpc.get_estimate();
+        auto ndv = cpc.getEstimate();
         ndvs.emplace_back(ndv);
     }
     return StatsNdvBucketsResultImpl<T>::createImpl(this->bounds, this->counts, std::move(ndvs));

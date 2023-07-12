@@ -20,8 +20,8 @@
 #include <Optimizer/Rule/Patterns.h>
 #include <Parsers/ASTFunction.h>
 #include <QueryPlan/AggregatingStep.h>
-#include <QueryPlan/JoinStep.h>
 #include <QueryPlan/AnyStep.h>
+#include <QueryPlan/JoinStep.h>
 #include <QueryPlan/PlanNode.h>
 #include <QueryPlan/ProjectionStep.h>
 
@@ -109,7 +109,11 @@ PlanNodePtr MagicSetRule::buildMagicSetAsFilterJoin(
         filter_node = PlanNodeBase::createPlanNode(
             context->nextNodeId(),
             std::make_shared<AggregatingStep>(
-                filter_node->getStep()->getOutputStream(), reallocated_filter_names, AggregateDescriptions{}, GroupingSetsParamsList{}, true, GroupingDescriptions{}, false, false),
+                filter_node->getStep()->getOutputStream(),
+                reallocated_filter_names,
+                AggregateDescriptions{},
+                GroupingSetsParamsList{},
+                true),
             PlanNodes{filter_node});
     }
 
@@ -132,10 +136,11 @@ PlanNodePtr MagicSetRule::buildMagicSetAsFilterJoin(
 PatternPtr MagicSetForProjectionAggregation::getPattern() const
 {
     return Patterns::join()
-        ->matchingStep<JoinStep>([&](const JoinStep & s) {
+        .matchingStep<JoinStep>([&](const JoinStep & s) {
             return (s.getKind() == ASTTableJoin::Kind::Inner || s.getKind() == ASTTableJoin::Kind::Right) && !s.isMagic();
         })
-        ->with({Patterns::project()->withSingle(Patterns::aggregating()->withSingle(Patterns::any())), Patterns::any()});
+        .with(Patterns::project().withSingle(Patterns::aggregating().withSingle(Patterns::any())), Patterns::any())
+        .result();
 }
 
 TransformResult MagicSetForProjectionAggregation::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -222,10 +227,11 @@ TransformResult MagicSetForProjectionAggregation::transformImpl(PlanNodePtr node
 PatternPtr MagicSetForAggregation::getPattern() const
 {
     return Patterns::join()
-        ->matchingStep<JoinStep>([&](const JoinStep & s) {
+        .matchingStep<JoinStep>([&](const JoinStep & s) {
             return (s.getKind() == ASTTableJoin::Kind::Inner || s.getKind() == ASTTableJoin::Kind::Right) && !s.isMagic();
         })
-        ->with({Patterns::aggregating()->withSingle(Patterns::any()), Patterns::any()});
+        .with(Patterns::aggregating().withSingle(Patterns::any()), Patterns::any())
+        .result();
 }
 
 TransformResult MagicSetForAggregation::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -287,5 +293,91 @@ TransformResult MagicSetForAggregation::transformImpl(PlanNodePtr node, const Ca
             PlanNodeBase::createPlanNode(context->nextNodeId(), target_agg_step.copy(context), PlanNodes{filter_join_node}),
             node->getChildren()[1]});
 }
+
+// PatternPtr MagicSetForJoinAggregation::getPattern() const
+// {
+//     return Patterns::join()
+//         .matchingStep<JoinStep>([&](const JoinStep & s) { return s.supportReorder(false, false); })
+//         .with(Patterns::aggregating().withSingle(Patterns::any()), Patterns::join().matchingStep<JoinStep>([&](const JoinStep & s) {
+//             return s.supportReorder(false, false);
+//         }))
+//         .result();
+// }
+
+// TransformResult MagicSetForJoinAggregation::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
+// {
+//     const auto & join_step = dynamic_cast<const JoinStep &>(*node->getStep());
+//     const auto & down_join_step = dynamic_cast<const JoinStep &>(*node->getChildren()[1]->getStep());
+
+//     auto magic_set_node = node->getChildren()[1]->getChildren()[0];
+//     auto magic_set_group_id = dynamic_cast<const AnyStep &>(*magic_set_node->getStep().get()).getGroupId();
+//     auto magic_set_group = rule_context.optimization_context->getOptimizerContext().getMemo().getGroupById(magic_set_group_id);
+//     if (magic_set_group->getMaxTableScans() > MAX_SEARCH_TREE_THRESHOLD)
+//     {
+//         return {};
+//     }
+
+//     auto target_agg_node = node->getChildren()[0];
+//     const auto & target_agg_step = dynamic_cast<const AggregatingStep &>(*target_agg_node->getStep().get());
+
+//     const auto & source_statistics = target_agg_node->getStatistics();
+//     const auto & filter_statistics = magic_set_node->getStatistics();
+//     if (!source_statistics || !filter_statistics || source_statistics.value()->getRowCount() <= filter_statistics.value()->getRowCount())
+//     {
+//         return {};
+//     }
+
+//     NameSet grouping_key{target_agg_step.getKeys().begin(), target_agg_step.getKeys().end()};
+//     std::vector<String> target_keys;
+//     std::vector<String> filter_keys;
+//     for (auto left_key = join_step.getLeftKeys().begin(), right_key = join_step.getRightKeys().begin();
+//          left_key != join_step.getLeftKeys().end();
+//          ++left_key, ++right_key)
+//     {
+//         if (!grouping_key.contains(*left_key))
+//         {
+//             continue;
+//         }
+//         target_keys.emplace_back(*left_key);
+//         filter_keys.emplace_back(*right_key);
+//     }
+
+//     if (target_keys.empty())
+//     {
+//         return {};
+//     }
+
+//     if (!checkFilterFactor(source_statistics.value(), filter_statistics.value(), target_keys, filter_keys))
+//     {
+//         return {};
+//     }
+
+//     auto context = rule_context.context;
+
+//     PlanNodePtr filter_join_node
+//         = buildMagicSetAsFilterJoin(target_agg_node->getChildren()[0], magic_set_node, target_keys, filter_keys, context);
+
+    
+//     Names left_keys;
+//     Names right_keys;
+//         for (auto left_key = join_step.getLeftKeys().begin(), right_key = join_step.getRightKeys().begin();
+//          left_key != join_step.getLeftKeys().end();
+//          ++left_key, ++right_key)
+//     {
+//         if (!grouping_key.contains(*left_key))
+//         {
+//             continue;
+//         }
+//         target_keys.emplace_back(*left_key);
+//         filter_keys.emplace_back(*right_key);
+//     }
+
+//     return PlanNodeBase::createPlanNode(
+//         context->nextNodeId(),
+//         join_step.copy(context),
+//         PlanNodes{
+//             PlanNodeBase::createPlanNode(context->nextNodeId(), target_agg_step.copy(context), PlanNodes{filter_join_node}),
+//             node->getChildren()[1]});
+// }
 
 }

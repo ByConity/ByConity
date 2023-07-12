@@ -129,7 +129,7 @@ struct AggregateFunctionPathSplitData
 };
 
 
-template <typename EventIndex, bool is_terminating_event = false>
+template <typename EventIndex, bool is_terminating_event = false, bool deduplicate = false>
 class AggregateFunctionPathSplit final : public IAggregateFunctionDataHelper<
                                              AggregateFunctionPathSplitData<EventIndex>,
                                              AggregateFunctionPathSplit<EventIndex, is_terminating_event>>
@@ -148,9 +148,14 @@ public:
     {
     }
 
-    String getName() const override
-    {
-        return "pathSplit";
+    String getName() const override 
+    { 
+        String name = "pathSplit";
+        if constexpr (is_terminating_event)
+            name += "R";
+        if constexpr (deduplicate)
+            name += "D";
+        return name; 
     }
 
     //[[(event,param)...]...]
@@ -219,12 +224,23 @@ public:
         auto & param_col = arr_data_data.getColumn(1);
 
         auto insert_session = [&](size_t start, size_t end) {
-            for (size_t i = start; i < end; ++i)
+            event_col.insertValue(events[start].index);
+            param_col.insertData(events[start].param.data, events[start].param.size);
+            size_t n = 1;
+            for (size_t i = start + 1; i < end && n < max_session_depth; ++i)
             {
+                if constexpr (deduplicate)
+                {
+                    if (events[i].index == events[i - 1].index && events[i].param == events[i - 1].param)
+                    {
+                        continue;
+                    }
+                }
                 event_col.insertValue(events[i].index);
                 param_col.insertData(events[i].param.data, events[i].param.size);
+                ++n;
             }
-            arr_data_offset.push_back(end - start + (!arr_data_offset.empty() ? arr_data_offset.back() : 0));
+            arr_data_offset.push_back(n + (!arr_data_offset.empty() ? arr_data_offset.back() : 0));
             ++session_num;
         };
 
@@ -238,7 +254,7 @@ public:
 
         while (find_first_event())
         {
-            size_t start = i, end = size;
+            size_t start = i;
             ++i;
             while (i < size)
             {
@@ -259,9 +275,8 @@ public:
                 }
                 ++i;
             }
-            end = std::min<size_t>(start + max_session_depth, i);
             //process session
-            insert_session(start, end);
+            insert_session(start, i);
             //next session
         }
         arr_offset.push_back(session_num + (!arr_offset.empty() ? arr_offset.back() : 0));

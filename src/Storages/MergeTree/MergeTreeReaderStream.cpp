@@ -33,25 +33,23 @@ namespace ErrorCodes
     extern const int ARGUMENT_OUT_OF_BOUND;
 }
 
-
 MergeTreeReaderStream::MergeTreeReaderStream(
-        DiskPtr disk_,
-        const String & path_prefix_, const String & stream_name_, const String & data_file_extension_,
-        size_t marks_count_,
-        const MarkRanges & all_mark_ranges,
-        const MergeTreeReaderSettings & settings,
-        MarkCache * mark_cache_,
-        UncompressedCache * uncompressed_cache,
-        const MergeTreeIndexGranularityInfo * index_granularity_info_,
-        const ReadBufferFromFileBase::ProfileCallback & profile_callback, clockid_t clock_type,
-        off_t data_file_offset_, size_t data_file_size_, off_t mark_file_offset_, size_t mark_file_size_)
-        : disk(std::move(disk_)), path_prefix(path_prefix_), stream_name(stream_name_)
-        , data_file_extension(data_file_extension_), marks_count(marks_count_)
-        , mark_cache(mark_cache_), save_marks_in_cache(settings.save_marks_in_cache)
-        , data_file_offset(data_file_offset_)
-        , index_granularity_info(index_granularity_info_)
-        , marks_loader(disk, mark_cache, index_granularity_info->getMarksFilePath(path_prefix), stream_name_,
-            marks_count, *index_granularity_info, save_marks_in_cache, mark_file_offset_, mark_file_size_)
+    const StreamFileMeta& bin_file_,
+    const StreamFileMeta& mrk_file_,
+    const String& stream_name_,
+    size_t marks_count_,
+    const MarkRanges & all_mark_ranges,
+    const MergeTreeReaderSettings & settings_,
+    MarkCache * mark_cache_, UncompressedCache * uncompressed_cache_,
+    const MergeTreeIndexGranularityInfo * index_granularity_info_,
+    const ReadBufferFromFileBase::ProfileCallback & profile_callback_,
+    clockid_t clock_type_):
+        data_disk(bin_file_.disk), data_rel_path(bin_file_.rel_path),
+        stream_name(stream_name_), marks_count(marks_count_),
+        mark_cache(mark_cache_), save_marks_in_cache(settings_.save_marks_in_cache),
+        data_file_offset(bin_file_.offset), index_granularity_info(index_granularity_info_),
+        marks_loader(mrk_file_.disk, mark_cache_, mrk_file_.rel_path, stream_name_,
+            marks_count_, *index_granularity_info_, save_marks_in_cache, mrk_file_.offset, mrk_file_.size)
 {
     /// Compute the size of the buffer.
     size_t max_mark_range_bytes = 0;
@@ -84,7 +82,7 @@ MergeTreeReaderStream::MergeTreeReaderStream(
             || (right_mark + 1 == marks_count
                 && marks_loader.getMark(right_mark).offset_in_compressed_file == marks_loader.getMark(mark_range.end).offset_in_compressed_file))
         {
-            mark_range_bytes = data_file_size_ - (left_mark < marks_count ? marks_loader.getMark(left_mark).offset_in_compressed_file : 0);
+            mark_range_bytes = bin_file_.size - (left_mark < marks_count ? marks_loader.getMark(left_mark).offset_in_compressed_file : 0);
         }
         else
         {
@@ -98,38 +96,38 @@ MergeTreeReaderStream::MergeTreeReaderStream(
     /// Avoid empty buffer. May happen while reading dictionary for DataTypeLowCardinality.
     /// For example: part has single dictionary and all marks point to the same position.
     if (max_mark_range_bytes == 0)
-        max_mark_range_bytes = settings.max_read_buffer_size;
+        max_mark_range_bytes = settings_.max_read_buffer_size;
 
-    size_t buffer_size = std::min(settings.max_read_buffer_size, max_mark_range_bytes);
+    size_t buffer_size = std::min(settings_.max_read_buffer_size, max_mark_range_bytes);
 
     /// Initialize the objects that shall be used to perform read operations.
-    if (uncompressed_cache)
+    if (uncompressed_cache_)
     {
         auto buffer = std::make_unique<CachedCompressedReadBuffer>(
-            fullPath(disk, path_prefix + data_file_extension),
-            [this, buffer_size, sum_mark_range_bytes, &settings]()
+            fullPath(data_disk, data_rel_path),
+            [this, buffer_size, sum_mark_range_bytes, &settings_]()
             {
-                return disk->readFile(
-                    path_prefix + data_file_extension,
+                return data_disk->readFile(
+                    data_rel_path,
                     {
                         .buffer_size = buffer_size,
                         .estimated_size = sum_mark_range_bytes,
-                        .aio_threshold = settings.min_bytes_to_use_direct_io,
-                        .mmap_threshold = settings.min_bytes_to_use_mmap_io,
-                        .mmap_cache = settings.mmap_cache.get()
+                        .aio_threshold = settings_.min_bytes_to_use_direct_io,
+                        .mmap_threshold = settings_.min_bytes_to_use_mmap_io,
+                        .mmap_cache = settings_.mmap_cache.get()
                     }
                 );
             },
-            uncompressed_cache,
+            uncompressed_cache_,
             /* allow_different_codecs = */false,
-            data_file_offset,
-            data_file_size_,
+            bin_file_.offset,
+            bin_file_.size,
             /* is_limit = */true);
 
-        if (profile_callback)
-            buffer->setProfileCallback(profile_callback, clock_type);
+        if (profile_callback_)
+            buffer->setProfileCallback(profile_callback_, clock_type_);
 
-        if (!settings.checksum_on_read)
+        if (!settings_.checksum_on_read)
             buffer->disableChecksumming();
 
         cached_buffer = std::move(buffer);
@@ -138,25 +136,25 @@ MergeTreeReaderStream::MergeTreeReaderStream(
     else
     {
         auto buffer = std::make_unique<CompressedReadBufferFromFile>(
-            disk->readFile(
-                path_prefix + data_file_extension,
+            data_disk->readFile(
+                data_rel_path,
                 {
                     .buffer_size = buffer_size,
                     .estimated_size = sum_mark_range_bytes,
-                    .aio_threshold = settings.min_bytes_to_use_direct_io,
-                    .mmap_threshold = settings.min_bytes_to_use_mmap_io,
-                    .mmap_cache = settings.mmap_cache.get()
+                    .aio_threshold = settings_.min_bytes_to_use_direct_io,
+                    .mmap_threshold = settings_.min_bytes_to_use_mmap_io,
+                    .mmap_cache = settings_.mmap_cache.get()
                 }
             ),
             /* allow_different_codecs = */false,
-            data_file_offset,
-            data_file_size_,
+            bin_file_.offset,
+            bin_file_.size,
             /* is_limit = */true);
 
-        if (profile_callback)
-            buffer->setProfileCallback(profile_callback, clock_type);
+        if (profile_callback_)
+            buffer->setProfileCallback(profile_callback_, clock_type_);
 
-        if (!settings.checksum_on_read)
+        if (!settings_.checksum_on_read)
             buffer->disableChecksumming();
 
         non_cached_buffer = std::move(buffer);
@@ -181,7 +179,7 @@ void MergeTreeReaderStream::seekToMark(size_t index)
         /// Better diagnostics.
         if (e.code() == ErrorCodes::ARGUMENT_OUT_OF_BOUND)
             e.addMessage("(while seeking to mark " + toString(index)
-                         + " of column " + path_prefix + "; offsets are: "
+                         + " of column " + stream_name + "; offsets are: "
                          + toString(mark.offset_in_compressed_file + data_file_offset) + " "
                          + toString(mark.offset_in_decompressed_block) + ")");
 
@@ -203,7 +201,7 @@ void MergeTreeReaderStream::seekToStart()
     {
         /// Better diagnostics.
         if (e.code() == ErrorCodes::ARGUMENT_OUT_OF_BOUND)
-            e.addMessage("(while seeking to start of column " + path_prefix + ")");
+            e.addMessage("(while seeking to start of column " + stream_name + ")");
 
         throw;
     }

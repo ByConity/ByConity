@@ -1523,7 +1523,8 @@ class IColumn;
     M(Bool, allow_multi_if_const_optimize, true, "Whether to optimize multiIf function for const case", 0) \
 \
     /** settings in cnch **/ \
-    M(UInt64, cnch_data_retention_time_in_sec, 3 * 24 * 60 * 60, "Waiting time when dropped table or database is actually removed.", 0) \
+    M(Seconds, drop_range_memory_lock_timeout, 5, "The time that spend on wait for memory lock when doing drop range", 0) \
+    M(UInt64, cnch_data_retention_time_in_sec, 3*24*60*60, "Waiting time when dropped table or database is actually removed.", 0) \
     M(Milliseconds, topology_lease_renew_interval_ms, 1000, "Interval of background task to renew topology lease.", 0) \
     M(Milliseconds, topology_refresh_interval_ms, 500, "Interval of background task to sync topology from consul.", 0) \
     M(Milliseconds, topology_lease_life_ms, 12000, "Expiration time of topology lease.", 0) \
@@ -1620,11 +1621,8 @@ class IColumn;
     M(Bool, allow_experimental_bigint_types, true, "Obsolete setting, does nothing.", 0) \
     M(HandleKafkaErrorMode, handle_kafka_error_mode, HandleKafkaErrorMode::DEFAULT, "Obsolete setting, does nothing.", 0) \
     M(Bool, database_replicated_ddl_output, true, "Obsolete setting, does nothing.", 0) \
-    M(Bool, \
-      enable_dictionary_compression, \
-      false, \
-      "Enable the dictioanry compression and decompression when performing a query (deprecated setting).", \
-      0) \
+    M(Bool, enable_dictionary_compression, false, "Enable the dictioanry compression and decompression when performing a query (deprecated setting).", 0)\
+    M(Bool, enable_rewrite_alias_in_select, true, "Whether rewrite alias in select (Obsolete setting).", 0) \
     /** Ingestion */ \
     M(UInt64, max_ingest_columns_size, 10, "The maximum number of columns that can be ingested.", 0) \
     M(UInt64, \
@@ -1650,12 +1648,26 @@ class IColumn;
 \
     /** Optimizer relative settings */ \
     M(Bool, enable_optimizer, false, "Whether enable query optimizer", 0) \
+<<<<<<< HEAD
+=======
+    M(Bool, enable_optimizer_white_list, true, "Whether enable query optimizer whilte list inorder to only support join and agg", 0) \
+    M(Bool, log_optimizer_run_time, false, "Whether Log optimizer runtime", 0) \
+    M(Bool, enable_query_queue, true, "Whether enable query queue", 0) \
+    M(UInt64, query_queue_size, 100, "Max query queue size", 0) \
+    M(UInt64, query_queue_timeout_ms, 100000, "Max queue pending time in ms", 0) \
+>>>>>>> 2877fddd80d (Merge branch 'dog-cnch-ce-dev-pick-optimizer' into 'cnch-ce-merge')
     M(Bool, enable_optimizer_fallback, true, "Whether enable query optimizer fallback to clickhouse origin when failed", 0) \
+    M(Bool, enable_plan_cache, false, "Whether enable plan cache", 0) \
+    M(Bool, enable_concurrency_control, false, "Whether enable concurrency control", 0) \
+    M(Bool, explain_print_stats, true, "Whether print stats when explain sql", 0) \
+    M(Bool, enable_histogram, true, "Whether enable plan cache", 0) \
+    M(UInt64, max_plan_mem_size, 1024 * 16 * 16, "The max plan size (byte)", 0) \
     M(Bool, enable_memory_catalog, false, "Enable memory catalog for unittest", 0) \
     M(UInt64, memory_catalog_worker_size, 8, "Memory catalog work size for unittest", 0) \
     M(Bool, enable_optimizer_explain, false, "Enable query return explain for unittest", 0) \
     M(UInt64, statistics_collect_debug_level, 0, "Debug level for statistics collector", 0) \
     M(Bool, create_stats_time_output, true, "Enable time output in create stats, should be disabled at regression test", 0) \
+    M(Bool, rewrite_like_function, true, "Rewrite simple pattern like function", 0) \
     M(Bool, statistics_collect_histogram, true, "Enable histogram collection", 0) \
     M(Bool, statistics_collect_floating_histogram, true, "Collect histogram for float/double/Decimal columns", 0) \
     M(Bool, statistics_collect_floating_histogram_ndv, true, "Collect histogram ndv for float/double/Decimal columns", 0) \
@@ -1676,6 +1688,7 @@ class IColumn;
     M(Bool, statistics_simplify_histogram, false, "Reduce buckets of histogram with simplifying", 0) \
     M(Float, statistics_simplify_histogram_ndv_density_threshold, 0.2, "Histogram simplifying threshold for ndv", 0) \
     M(Float, statistics_simplify_histogram_range_density_threshold, 0.2, "Histogram simplifying threshold for range", 0) \
+    M(StatisticsCachePolicy, statistics_cache_policy, StatisticsCachePolicy::Default, "Cache policy for stats command and SQLs: (default|cache|catalog)", 0) \
     M(Float, cost_calculator_table_scan_weight, 1, "Table scan cost weight for cost calculator", 0) \
     M(Float, cost_calculator_aggregating_weight, 7, "Aggregate output weight for cost calculator", 0) \
     M(Float, cost_calculator_join_probe_weight, 0.5, "Join probe side weight for cost calculator", 0) \
@@ -1684,19 +1697,23 @@ class IColumn;
     M(Float, cost_calculator_cte_weight, 1, "CTE output weight for cost calculator", 0) \
     M(Float, cost_calculator_cte_weight_for_join_build_side, 2.0, "Join build side weight for cost calculator", 0) \
     M(Float, cost_calculator_projection_weight, 0.1, "CTE output weight for cost calculator", 0) \
+    M(Float, stats_estimator_join_filter_selectivity, 1, "Join filter selectivity", 0) \
     M(Bool, print_graphviz, false, "Whether print graphviz", 0) \
+    M(Bool, print_explain_analyze_graphviz, false, "Whether print explain analyze graphviz", 0) \
     M(String, graphviz_path, "/tmp/plan/", "The path of graphviz plan", 0) \
     M(Bool, eliminate_cross_joins, true, "Whether eliminate cross joins", 0) \
-    M(Bool, enable_rewrite_alias_in_select, true, "Whether rewrite alias in select", 0) \
     M(UInt64, iterative_optimizer_timeout, 10000, "Max running time of a single iterative optimizer in ms", 0) \
     M(UInt64, cascades_optimizer_timeout, 10000, "Max running time of a single cascades optimizer in ms", 0) \
+    M(UInt64, operator_profile_receive_timeout, 3000, "Max waiting time for operator profile in ms", 0) \
     M(UInt64, plan_optimizer_timeout, 600000, "Max running time of a plan rewriter optimizer in ms", 0) \
     M(Bool, enable_nested_loop_join, true, "Whether enable nest loop join for outer join with filter", 0) \
     M(Bool, enable_cbo, true, "Whether enable CBO", 0) \
+    M(Bool, enable_cascades_pruning, false, "Whether enable cascades pruning", 0) \
     M(Bool, enum_replicate, true, "Enum replicate join", 0) \
     M(Bool, enum_repartition, true, "Enum repartition join", 0) \
     M(UInt64, max_replicate_build_size, 200000, "Max join build size, when enum replicate", 0) \
     M(UInt64, max_replicate_shuffle_size, 50000000, "Max join build size, when enum replicate", 0) \
+    M(UInt64, parallel_join_threshold, 2000000, "Parallel join right source rows threshold", 0) \
     M(Bool, add_parallel_before_agg, false, "Add parallel before agg", 0) \
     M(Bool, add_parallel_after_join, false, "Add parallel after join", 0) \
     M(Bool, enforce_round_robin, false, "Whether add round robin exchange node", 0) \
@@ -1704,6 +1721,7 @@ class IColumn;
     M(Bool, enable_left_join_to_right_join, true, "Whether enable convert left join to right join", 0) \
     M(Bool, enable_shuffle_with_order, false, "Whether enable keep data order when shuffle", 0) \
     M(Bool, enable_distinct_to_aggregate, true, "Whether enable convert distinct to group by", 0) \
+    M(Bool, enable_single_distinct_to_group_by, true, "Whether enable convert single count distinct to group by", 0) \
     M(Bool, enable_magic_set, true, "Whether enable magic set rewriting for join aggregation", 0) \
     M(Bool, enable_dynamic_filter, true, "Whether enable dynamic filter for join", 0) \
     M(UInt64, dynamic_filter_min_filter_rows, 10000, "Set minimum row to enable dynamic filter", 0) \
@@ -1715,8 +1733,14 @@ class IColumn;
     M(CTEMode, cte_mode, CTEMode::INLINED, "CTE mode: SHARED|INLINED|AUTO", 0) \
     M(Bool, enable_cte_property_enum, false, "Whether enumerate all possible properties for cte", 0) \
     M(Bool, enable_cte_common_property, true, "Whether search common property for cte", 0) \
+<<<<<<< HEAD
     M(UInt64, max_graph_reorder_size, 10, "Max tables join order enum on graph", 0) \
     M(Float, enable_partial_aggregate_ratio, 0.9, "Enable partial aggregate ratio : group by keys ndv / total row count", 0) \
+=======
+    M(UInt64 , max_graph_reorder_size, 4, "Max tables join order enum on graph", 0) \
+    M(Bool, enable_join_graph_support_filter, true, "Whether enable join graph support filter", 0) \
+    M(Float, enable_partial_aggregate_ratio , 0.9, "Enable partial aggregate ratio : group by keys ndv / total row count", 0) \
+>>>>>>> 2877fddd80d (Merge branch 'dog-cnch-ce-dev-pick-optimizer' into 'cnch-ce-merge')
     M(Bool, enable_simplify_expression, true, "Whether enable simplify predicates", 0) \
     M(Bool, enable_unwarp_cast_in, true, "Whether enable unwrap cast function", 0) \
     M(Bool, enable_common_predicate_rewrite, true, "Whether enable common predicate rewrite", 0) \
@@ -1739,13 +1763,19 @@ class IColumn;
       0) \
     M(Bool, enable_sharding_optimize, false, "Whether enable sharding optimization, eg. local join", 0) \
     M(Bool, enable_filter_window_to_partition_topn, true, "Filter window to partition topn", 0) \
+    M(Bool, enable_optimizer_support_window, true, "Optimizer support window", 0) \
     M(Bool, optimizer_projection_support, false, "Use projection in optimizer mode", 0) \
     M(Bool, enable_topn_filtering_optimization, false, "Whether enable TopNFilterting optimization", 0) \
+    M(Bool, enable_mark_distinct_optimzation, false, "Whether enable Mark distinct optimization", 0)                                            \
+    M(Bool, enable_setoperation_to_agg, true, "Whether enable rewrite set operation to aggregation", 0)                                            \
     M(Bool, enable_execute_uncorrelated_subquery, false, "Whether enable execute uncorrelated subquery", 0) \
     M(UInt64, execute_uncorrelated_in_subquery_size, 10000, "Size of execute uncorrelated in subquery", 0) \
     M(Bool, enable_subcolumn_optimization_through_union, true, "Whether enable sub column optimization through set operation.", 0) \
     M(Float, pk_selectivity, 0.5, "PK selectivity for join estimation", 0) \
+<<<<<<< HEAD
     M(Bool, enable_mark_distinct_optimzation, false, "Whether enable Mark distinct optimization", 0) \
+=======
+>>>>>>> 2877fddd80d (Merge branch 'dog-cnch-ce-dev-pick-optimizer' into 'cnch-ce-merge')
     /** Exchange settings */ \
     M(Bool, exchange_enable_multipath_reciever, true, "Whether enable exchange new mode ", 0) \
     M(UInt64, exchange_parallel_size, 1, "Exchange parallel size", 0) \
@@ -1790,8 +1820,14 @@ class IColumn;
     M(Bool, enable_sample_by_range, false, "Sample by range if it is true", 0) \
     M(Bool, enable_deterministic_sample_by_range, false, "Deterministic sample by range if it is true", 0) \
     M(Bool, enable_final_sample, false, "Sample from result rows if it is true", 0) \
+<<<<<<< HEAD
     M(Bool, uniform_final_sample, false, "Final sample with uniform mode", 0) \
 \
+=======
+    M(Bool, uniform_sample_by_range, false, "Sample by range with uniform mode", 0) \
+    M(Bool, uniform_final_sample, false, "Final sample with uniform mode", 0)\
+    \
+>>>>>>> 2877fddd80d (Merge branch 'dog-cnch-ce-dev-pick-optimizer' into 'cnch-ce-merge')
     /** clone strategy **/ \
     M(Bool, stop_clone_in_utc_time, false, "Enable stop executing clone log in utc time", 0) \
     M(UInt64, utc_time_to_stop_clone, 2, "The hour of UTC time, if current time is greater than it, clone is stopepd", 0) \
@@ -1804,7 +1840,12 @@ class IColumn;
     M(Bool, ignore_duplicate_insertion_label, true, "Throw an exception if false", 0) \
     M(Bool, bypass_ddl_db_lock, true, "Bypass locking database while creating tables", 0) \
     M(Bool, prefer_cnch_catalog, false, "Force using cnch catalog to get table first when resolving database and table", 0) \
+<<<<<<< HEAD
     /** The section above is for obsolete settings. Do not add anything there. */
+=======
+    /** The section above is for obsolete settings. Do not add anything there. */\
+    M(Bool, count_distinct_optimization, false, "Rewrite count distinct to subquery of group by", 0) \
+>>>>>>> 2877fddd80d (Merge branch 'dog-cnch-ce-dev-pick-optimizer' into 'cnch-ce-merge')
 
 // End of COMMON_SETTINGS
 // Please add settings related to formats into the FORMAT_FACTORY_SETTINGS below.
@@ -1981,7 +2022,9 @@ class IColumn;
     M(UInt64, attach_failure_injection_knob, 0, "Attach failure injection knob, for test only", 0) \
     M(Bool, async_post_commit, false, "Txn post commit asynchronously", 0) \
     M(Bool, enable_auto_query_forwarding, false, "Auto forward query to target server when having multiple servers", 0) \
-    M(String, tenant_id, "", "tenant_id of cnch user", 0)
+    M(String, tenant_id, "", "tenant_id of cnch user", 0) \
+    M(Bool, cnch_enable_merge_prefetch, true, "Enable prefetching while merge", 0) \
+    M(UInt64, cnch_merge_prefetch_segment_size, 256 * 1024 * 1024, "Min segment size of file when prefetching for merge", 0) \
 
 
 // End of FORMAT_FACTORY_SETTINGS

@@ -41,12 +41,20 @@ public:
     String serialize() const override;
     void deserialize(std::string_view blob) override;
 
-    void update(const T & value, UInt64 block_value)
+    void update(const T & value, UInt64 mark_id)
     {
         auto bucket_id = bounds_.binarySearchBucket(value);
         counts_[bucket_id] += 1;
         cpc_sketches_[bucket_id].update(value);
-        block_cpc_sketches_[bucket_id].update(block_value);
+        if (block_mark_id != mark_id)
+        {
+            block_mark_id = mark_id;
+            block_filter.clear();
+        }
+
+        // ok means a new unique value
+        auto [_, ok] = block_filter.insert(value);
+        block_ndv_counts_[bucket_id] += ok;
     }
 
     void merge(const StatsNdvBucketsExtendImpl & rhs)
@@ -60,7 +68,7 @@ public:
         {
             counts_[i] += rhs.counts_[i];
             cpc_sketches_[i].merge(rhs.cpc_sketches_[i]);
-            block_cpc_sketches_[i].merge(rhs.block_cpc_sketches_[i]);
+            block_ndv_counts_[i] += rhs.block_ndv_counts_[i];
         }
     }
 
@@ -71,7 +79,7 @@ public:
         auto num_buckets = bounds.numBuckets();
         counts_.resize(num_buckets);
         cpc_sketches_.resize(num_buckets);
-        block_cpc_sketches_.resize(num_buckets);
+        block_ndv_counts_.resize(num_buckets);
         bounds_ = std::move(bounds);
     }
 
@@ -85,7 +93,7 @@ public:
 
     std::vector<UInt64> getCounts() const override { return counts_; }
     std::vector<double> getNdvs() const override { return cpcToNdv(cpc_sketches_); }
-    std::vector<double> getBlockNdvs() const override { return cpcToNdv(block_cpc_sketches_); }
+    std::vector<double> getBlockNdvs() const override { return block_ndv_counts_; }
 
 private:
     static std::vector<double> cpcToNdv(const std::vector<StatsCpcSketch> & cpcs)
@@ -93,7 +101,7 @@ private:
         std::vector<double> result;
         for (auto & cpc : cpcs)
         {
-            result.emplace_back(cpc.get_estimate());
+            result.emplace_back(cpc.getEstimate());
         }
         return result;
     }
@@ -102,7 +110,10 @@ private:
     BucketBoundsImpl<T> bounds_;
     std::vector<UInt64> counts_; // of size buckets
     std::vector<StatsCpcSketch> cpc_sketches_; // of size buckets
-    std::vector<StatsCpcSketch> block_cpc_sketches_; // of size buckets
+    std::vector<double> block_ndv_counts_; // of size buckets
+    //
+    UInt64 block_mark_id = 0;
+    std::unordered_set<T> block_filter;
 };
 
 template <typename T>
@@ -135,10 +146,7 @@ String StatsNdvBucketsExtendImpl<T>::serialize() const
     {
         pb.add_cpc_sketch_blobs(cpc.serialize());
     }
-    for (const auto & block_cpc : block_cpc_sketches_)
-    {
-        pb.add_block_cpc_sketch_blobs(block_cpc.serialize());
-    }
+    for (auto & block_ndv_count : block_ndv_counts_) { pb.add_block_ndv_counts(block_ndv_count); }
     pb.SerializeToOstream(&ss);
     return ss.str();
 }
@@ -146,7 +154,7 @@ String StatsNdvBucketsExtendImpl<T>::serialize() const
 template <typename T>
 void StatsNdvBucketsExtendImpl<T>::deserialize(std::string_view raw_blob)
 {
-    std::tie(bounds_, counts_, cpc_sketches_, block_cpc_sketches_) = [raw_blob] {
+    std::tie(bounds_, counts_, cpc_sketches_, block_ndv_counts_) = [raw_blob] {
         if (raw_blob.size() <= sizeof(SerdeDataType))
         {
             throw Exception("corrupted blob", ErrorCodes::LOGICAL_ERROR);
@@ -168,14 +176,14 @@ void StatsNdvBucketsExtendImpl<T>::deserialize(std::string_view raw_blob)
         }
         decltype(counts_) counts(num_buckets);
         decltype(cpc_sketches_) cpc_sketches(num_buckets);
-        decltype(block_cpc_sketches_) block_cpc_sketches(num_buckets);
+        decltype(block_ndv_counts_) block_ndv_counts(num_buckets);
         for (int64_t i = 0; i < num_buckets; ++i)
         {
             counts[i] = pb.counts(i);
             cpc_sketches[i].deserialize(pb.cpc_sketch_blobs(i));
-            block_cpc_sketches[i].deserialize(pb.block_cpc_sketch_blobs(i));
+            block_ndv_counts[i] = pb.block_ndv_counts(i);
         }
-        return std::tuple{std::move(bounds), std::move(counts), std::move(cpc_sketches), std::move(block_cpc_sketches)};
+        return std::tuple{std::move(bounds), std::move(counts), std::move(cpc_sketches), std::move(block_ndv_counts)};
     }();
     checkValid();
 }

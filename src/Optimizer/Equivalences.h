@@ -22,14 +22,17 @@
 
 namespace DB
 {
+template<typename V>
+using DefaultTMap = std::unordered_map<std::string, V>;
 // forward declaration
-template <typename T, typename Hash, typename Equal>
+
+template <typename T, template<typename V> typename TMap = DefaultTMap>
 class Equivalences;
 
-template <typename T, typename Hash = std::hash<T>, typename Equal = std::equal_to<T>>
+template <typename T, template<typename V> typename TMap = DefaultTMap>
 struct UnionFind
 {
-    mutable std::unordered_map<T, T, Hash, Equal> parent;
+    mutable TMap<T> parent;
 
     UnionFind() = default;
 
@@ -63,8 +66,9 @@ struct UnionFind
 
     std::vector<std::unordered_set<T>> getSets()
     {
-        std::vector<std::unordered_set<T, Hash, Equal>> result;
-        std::unordered_map<T, size_t, Hash, Equal> parent_to_index;
+        static_assert(std::is_same_v<T, std::string>);
+        std::vector<std::unordered_set<T>> result;
+        TMap<size_t> parent_to_index;
 
         for (auto & item : parent)
         {
@@ -81,12 +85,12 @@ struct UnionFind
     }
 };
 
-template <typename T, typename Hash = std::hash<T>, typename Equal = std::equal_to<T>>
+template <typename T, template<typename V> typename TMap>
 class Equivalences
 {
-    using EquivalencesType = Equivalences<T, Hash, Equal>;
+    using EquivalencesType = Equivalences<T, TMap>;
     using Ptr = std::shared_ptr<EquivalencesType>;
-    using Map = std::unordered_map<T, T, Hash, Equal>;
+    using Map = TMap<T>;
 public:
     Equivalences() = default;
     Equivalences(const EquivalencesType & left, const EquivalencesType & right) : union_find(left.union_find, right.union_find) { }
@@ -110,7 +114,7 @@ public:
     Ptr translate(std::unordered_map<T, T> & identities) const
     {
         auto result = std::make_shared<EquivalencesType>();
-        std::unordered_map<T, std::unordered_set<T>> str_to_set;
+        TMap<std::unordered_set<T>> str_to_set;
         for (auto & item : union_find.parent)
         {
             if (identities.contains(item.first))
@@ -166,7 +170,7 @@ public:
         if (map)
             return *map;
 
-        std::unordered_map<T, std::unordered_set<T>, Hash, Equal> str_to_set;
+        TMap<std::unordered_set<T>> str_to_set;
         for (auto & item : union_find.parent)
         {
             str_to_set[item.second].insert(item.first);
@@ -186,7 +190,7 @@ public:
     }
 
 private:
-    UnionFind<T, Hash, Equal> union_find;
+    UnionFind<T, TMap> union_find;
     mutable std::unique_ptr<Map> map {}; // cache
 };
 }

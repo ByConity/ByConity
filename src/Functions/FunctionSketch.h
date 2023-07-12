@@ -115,7 +115,7 @@ public:
                         else
                         {
                             Array array;
-                            datasketches::quantiles_sketch<Float64> quantiles_sketch_data = datasketches::quantiles_sketch<Float64>::deserialize(nullable_sketch.getDataAt(i).data, nullable_sketch.getDataAt(i).size, datasketches::serde<Float64>(), AggregateFunctionHllSketchAllocator());
+                            datasketches::quantiles_sketch<Float64> quantiles_sketch_data = datasketches::quantiles_sketch<Float64>::deserialize(nullable_sketch.getDataAt(i).data, nullable_sketch.getDataAt(i).size, datasketches::serde<Float64>(), std::less<Float64>(), AggregateFunctionHllSketchAllocator());
 
                             for (size_t j = 0; j < column_detail->size(); j++)
                             {
@@ -135,7 +135,7 @@ public:
                     for (size_t i = 0; i < input_rows_count; i++)
                     {
                         Array array;
-                        datasketches::quantiles_sketch<Float64> quantiles_sketch_data = datasketches::quantiles_sketch<Float64>::deserialize(value.getDataAt(i).data, value.getDataAt(i).size, datasketches::serde<Float64>(), AggregateFunctionHllSketchAllocator());
+                        datasketches::quantiles_sketch<Float64> quantiles_sketch_data = datasketches::quantiles_sketch<Float64>::deserialize(value.getDataAt(i).data, value.getDataAt(i).size, datasketches::serde<Float64>(), std::less<Float64>(), AggregateFunctionHllSketchAllocator());
                         for (size_t j = 0; j < column_detail->size(); j++)
                         {
                             Float64 quantile_res = quantiles_sketch_data.get_quantile(column_detail->getFloat64(j));

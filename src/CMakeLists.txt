@@ -253,6 +253,7 @@ add_object_library(clickhouse_processors_exchange_datatrans_local Processors/Exc
 add_object_library(clickhouse_analyzers Analyzers)
 add_object_library(clickhouse_queryplan QueryPlan)
 add_object_library(clickhouse_queryplan_optimizations QueryPlan/Optimizations)
+add_object_library(clickhouse_queryplan_hints QueryPlan/Hints)
 add_object_library(clickhouse_optimizer Optimizer)
 add_object_library(clickhouse_optimizer_iterative Optimizer/Iterative)
 add_object_library(clickhouse_optimizer_costmodel Optimizer/CostModel)

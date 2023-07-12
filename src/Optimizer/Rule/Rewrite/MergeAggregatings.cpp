@@ -26,8 +26,8 @@ namespace DB
 PatternPtr MergeAggregatings::getPattern() const
 {
     return Patterns::aggregating()
-        ->matchingStep<AggregatingStep>([](const AggregatingStep & step) { return step.getAggregates().empty(); })
-        ->withSingle(Patterns::aggregating());
+        .matchingStep<AggregatingStep>([](const AggregatingStep & step) { return step.getAggregates().empty(); })
+        .withSingle(Patterns::aggregating()).result();
 }
 
 TransformResult MergeAggregatings::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)

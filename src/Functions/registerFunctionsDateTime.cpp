@@ -91,6 +91,13 @@ void registerFunctionToTimeZone(FunctionFactory &);
 void registerFunctionFormatDateTime(FunctionFactory &);
 void registerFunctionFromModifiedJulianDay(FunctionFactory &);
 void registerFunctionDateTrunc(FunctionFactory &);
+void registerFunctionFromDays(FunctionFactory &);
+void registerFunctionToDays(FunctionFactory &);
+void registerFunctionUTCDate(FunctionFactory &);
+void registerFunctionUTCTimestamp(FunctionFactory &);
+void registerFunctionPeriodAdd(FunctionFactory &);
+void registerFunctionPeriodDiff(FunctionFactory &);
+void registerFunctionMakeDate(FunctionFactory &);
 
 void registerFunctiontimezoneOffset(FunctionFactory &);
 void registerFunctionNextDay(FunctionFactory &);
@@ -170,6 +177,13 @@ void registerFunctionsDateTime(FunctionFactory & factory)
     registerFunctionNextDay(factory);
     registerFunctionLastDay(factory);
     registerFunctionDateFormat(factory);
+    registerFunctionFromDays(factory);
+    registerFunctionToDays(factory);
+    registerFunctionUTCDate(factory);
+    registerFunctionUTCTimestamp(factory);
+    registerFunctionPeriodAdd(factory);
+    registerFunctionPeriodDiff(factory);
+    registerFunctionMakeDate(factory);
 }
 
 }

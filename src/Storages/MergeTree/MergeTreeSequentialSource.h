@@ -24,6 +24,7 @@
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Storages/MergeTree/IMergeTreeReader.h>
 #include <Storages/MergeTree/MarkRange.h>
+#include <WorkerTasks/CnchMergePrefetcher.h>
 #include <memory>
 
 namespace DB
@@ -42,7 +43,8 @@ public:
         Names columns_to_read_,
         bool read_with_direct_io_,
         bool take_column_types_from_storage,
-        bool quiet = false);
+        bool quiet = false,
+        CnchMergePrefetcher::PartFutureFiles* future_files = nullptr);
 
     MergeTreeSequentialSource(
         const MergeTreeMetaBase & storage_,
@@ -52,7 +54,8 @@ public:
         Names columns_to_read_,
         bool read_with_direct_io_,
         bool take_column_types_from_storage,
-        bool quiet = false);
+        bool quiet = false,
+        CnchMergePrefetcher::PartFutureFiles* future_files = nullptr);
 
     ~MergeTreeSequentialSource() override;
 

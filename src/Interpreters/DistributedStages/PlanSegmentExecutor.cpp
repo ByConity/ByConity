@@ -75,13 +75,26 @@ namespace ErrorCodes
     extern const int MEMORY_LIMIT_EXCEEDED;
 }
 
+void PlanSegmentExecutor::prepareSegmentInfo() const
+{
+    query_log_element->client_info = plan_segment->getContext()->getClientInfo();
+    query_log_element->segment_id = plan_segment->getPlanSegmentId();
+    query_log_element->segment_parallel = plan_segment->getParallelSize();
+    query_log_element->segment_parallel_index = plan_segment->getParallelIndex();
+    query_log_element->type = QueryLogElementType::QUERY_START;
+    query_log_element->event_time = time(nullptr);
+    query_log_element->query_start_time = time(nullptr);
+}
+
 PlanSegmentExecutor::PlanSegmentExecutor(PlanSegmentPtr plan_segment_, ContextMutablePtr context_)
     : context(std::move(context_))
     , plan_segment(std::move(plan_segment_))
     , plan_segment_outputs(plan_segment->getPlanSegmentOutputs())
     , logger(&Poco::Logger::get("PlanSegmentExecutor"))
+    , query_log_element(std::make_unique<QueryLogElement>())
 {
     options = ExchangeUtils::getExchangeOptions(context);
+    prepareSegmentInfo();
 }
 
 PlanSegmentExecutor::PlanSegmentExecutor(PlanSegmentPtr plan_segment_, ContextMutablePtr context_, ExchangeOptions options_)
@@ -90,7 +103,31 @@ PlanSegmentExecutor::PlanSegmentExecutor(PlanSegmentPtr plan_segment_, ContextMu
     , plan_segment_outputs(plan_segment->getPlanSegmentOutputs())
     , options(std::move(options_))
     , logger(&Poco::Logger::get("PlanSegmentExecutor"))
+    , query_log_element(std::make_unique<QueryLogElement>())
 {
+    prepareSegmentInfo();
+}
+
+PlanSegmentExecutor::~PlanSegmentExecutor() noexcept
+{
+    try
+    {
+        if (context->getSettingsRef().log_queries && query_log_element->type >= context->getSettingsRef().log_queries_min_type)
+        {
+            if (auto query_log = context->getQueryLog())
+                query_log->add(*query_log_element);
+        }
+    }
+    catch (...)
+    {
+        LOG_ERROR(
+            logger,
+            "QueryLogElement:[query_id-{}, segment_id-{}, segment_parallel_index-{}] save to table fail with exception:{}",
+            query_log_element->client_info.initial_query_id,
+            query_log_element->segment_id,
+            query_log_element->segment_parallel_index,
+            getCurrentExceptionCode());
+    }
 }
 
 RuntimeSegmentsStatus PlanSegmentExecutor::execute(ThreadGroupStatusPtr thread_group)
@@ -107,19 +144,26 @@ RuntimeSegmentsStatus PlanSegmentExecutor::execute(ThreadGroupStatusPtr thread_g
         runtime_segment_status.code = 0;
         runtime_segment_status.message = "execute success";
 
+        query_log_element->type = QueryLogElementType::QUERY_FINISH;
         sendSegmentStatus(runtime_segment_status);
         return runtime_segment_status;
     }
     catch (...)
     {
         int exception_code = getCurrentExceptionCode();
+        auto exception_message = getCurrentExceptionMessage(false);
+
+        query_log_element->type = QueryLogElementType::EXCEPTION_WHILE_PROCESSING;
+        query_log_element->exception_code = exception_code;
+        query_log_element->stack_trace = exception_message;
+
         const auto & host = extractExchangeStatusHostPort(plan_segment->getCurrentAddress());
         runtime_segment_status.query_id = plan_segment->getQueryId();
         runtime_segment_status.segment_id = plan_segment->getPlanSegmentId();
         runtime_segment_status.is_succeed = false;
         runtime_segment_status.is_canceled = false;
         runtime_segment_status.code = exception_code;
-        runtime_segment_status.message = "Worker host:" + host + ", exception:" + getCurrentExceptionMessage(false);
+        runtime_segment_status.message = "Worker host:" + host + ", exception:" + exception_message;
         if (exception_code == ErrorCodes::MEMORY_LIMIT_EXCEEDED)
         {
             // ErrorCodes::MEMORY_LIMIT_EXCEEDED don't print stack trace.
@@ -129,7 +173,7 @@ RuntimeSegmentsStatus PlanSegmentExecutor::execute(ThreadGroupStatusPtr thread_g
                 plan_segment->getQueryId(),
                 plan_segment->getPlanSegmentId(),
                 exception_code,
-                getCurrentExceptionMessage(false));
+                exception_message);
         }
         else
         {
@@ -162,6 +206,26 @@ BlockIO PlanSegmentExecutor::lazyExecute(bool /*add_output_processors*/)
     res.pipeline = std::move(*buildPipeline());
     context->setPlanSegmentProcessListEntry(res.plan_segment_process_entry);
     return res;
+}
+
+void PlanSegmentExecutor::collectSegmentQueryRuntimeMetric(const QueryStatus * query_status)
+{
+    auto query_status_info = query_status->getInfo(true, context->getSettingsRef().log_profile_events);
+    const auto & query_access_info = context->getQueryAccessInfo();
+
+    query_log_element->read_bytes = query_status_info.read_bytes;
+    query_log_element->read_rows = query_status_info.read_rows;
+    query_log_element->written_bytes = query_status_info.written_bytes;
+    query_log_element->written_rows = query_status_info.written_bytes;
+    query_log_element->memory_usage = query_status_info.peak_memory_usage > 0 ? query_status_info.peak_memory_usage : 0;
+    query_log_element->query_duration_ms = query_status_info.elapsed_seconds * 1000;
+    query_log_element->max_io_time_thread_ms = query_status_info.max_io_time_thread_ms;
+    query_log_element->max_io_time_thread_name = query_status_info.max_io_time_thread_name;
+    query_log_element->thread_ids = std::move(query_status_info.thread_ids);
+    query_log_element->profile_counters = query_status_info.profile_counters;
+    query_log_element->max_thread_io_profile_counters = query_status_info.max_io_thread_profile_counters;
+
+    query_log_element->query_tables = query_access_info.tables;
 }
 
 void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
@@ -226,6 +290,9 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
     }
     for (const auto & sender : senders)
         sender->finish(BroadcastStatusCode::ALL_SENDERS_DONE, "Upstream pipeline finished");
+
+    if (context->getSettingsRef().log_queries)
+        collectSegmentQueryRuntimeMetric(query_status);
 }
 
 QueryPipelinePtr PlanSegmentExecutor::buildPipeline()

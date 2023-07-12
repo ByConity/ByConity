@@ -25,17 +25,16 @@
 #include <Parsers/parseQuery.h>
 #include <Transaction/Actions/DDLCreateAction.h>
 #include <Transaction/Actions/DDLDropAction.h>
+#include <Transaction/Actions/DDLRenameAction.h>
 #include <Transaction/ICnchTransaction.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
-#include <Common/StringUtils/StringUtils.h>
-#include <common/scope_guard.h>
 #include <Common/Exception.h>
+#include <Common/StringUtils/StringUtils.h>
 #include <common/logger_useful.h>
-#include <Transaction/Actions/DDLRenameAction.h>
+#include <common/scope_guard.h>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
     extern const int CNCH_TRANSACTION_NOT_INITIALIZED;
@@ -75,11 +74,12 @@ void DatabaseCnch::createTable(ContextPtr local_context, const String & table_na
     if (!create_query.storage && create_query.as_table_function)
         throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "create table as table function is not supported under cnch database");
 
-    if ((!create_query.is_dictionary) && (!create_query.isView()) &&
-        (!create_query.storage->engine || !startsWith(create_query.storage->engine->name, "Cnch")))
+    if ((!create_query.is_dictionary) && (!create_query.isView())
+        && (!create_query.storage->engine || !startsWith(create_query.storage->engine->name, "Cnch")))
         throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "Cnch database only suport creating Cnch tables");
 
-    CreateActionParams params = {getDatabaseName(), table_name, table->getStorageUUID(), serializeAST(*query), create_query.attach, table->isDictionary()};
+    CreateActionParams params
+        = {getDatabaseName(), table_name, table->getStorageUUID(), serializeAST(*query), create_query.attach, table->isDictionary()};
     auto create_table = txn->createAction<DDLCreateAction>(std::move(params));
     txn->appendAction(std::move(create_table));
     txn->commitV1();
@@ -194,7 +194,8 @@ void DatabaseCnch::detachTablePermanently(ContextPtr local_context, const String
 ASTPtr DatabaseCnch::getCreateDatabaseQuery() const
 {
     auto settings = getContext()->getSettingsRef();
-    String query = "CREATE DATABASE " + backQuoteIfNeed(getDatabaseName()) + " UUID '" + UUIDHelpers::UUIDToString(db_uuid) + "' ENGINE = Cnch";
+    String query = "CREATE DATABASE " + backQuoteIfNeed(getDatabaseName())
+        + (db_uuid != UUIDHelpers::Nil ? (" UUID " + quoteString(UUIDHelpers::UUIDToString(db_uuid))) : "") + " ENGINE = Cnch";
     ParserCreateQuery parser(ParserSettings::valueOf(settings.dialect_type));
     ASTPtr ast = parseQuery(parser, query.data(), query.data() + query.size(), "", 0, settings.max_parser_depth);
     return ast;
@@ -202,8 +203,8 @@ ASTPtr DatabaseCnch::getCreateDatabaseQuery() const
 
 bool DatabaseCnch::isTableExist(const String & name, ContextPtr local_context) const
 {
-    return (local_context->getCnchCatalog()->isTableExists(getDatabaseName(), name, local_context->getCurrentTransactionID().toUInt64())) ||
-        (local_context->getCnchCatalog()->isDictionaryExists(getDatabaseName(), name));
+    return (local_context->getCnchCatalog()->isTableExists(getDatabaseName(), name, local_context->getCurrentTransactionID().toUInt64()))
+        || (local_context->getCnchCatalog()->isDictionaryExists(getDatabaseName(), name));
 }
 
 StoragePtr DatabaseCnch::tryGetTable(const String & name, ContextPtr local_context) const
@@ -272,7 +273,7 @@ bool DatabaseCnch::empty() const
 ASTPtr DatabaseCnch::getCreateTableQueryImpl(const String & name, ContextPtr local_context, bool throw_on_error) const
 {
     StoragePtr storage = getContext()->getCnchCatalog()->tryGetTable(
-            *local_context, getDatabaseName(), name, local_context->getCurrentTransactionID().toUInt64());
+        *local_context, getDatabaseName(), name, local_context->getCurrentTransactionID().toUInt64());
 
     if (!storage)
     {
@@ -361,18 +362,23 @@ void DatabaseCnch::renameDatabase(ContextPtr local_context, const String & new_n
 }
 
 void DatabaseCnch::renameTable(
-    ContextPtr local_context, const String & table_name, IDatabase & to_database, const String & to_table_name, bool /*exchange*/, bool /*dictionary*/)
+    ContextPtr local_context,
+    const String & table_name,
+    IDatabase & to_database,
+    const String & to_table_name,
+    bool /*exchange*/,
+    bool /*dictionary*/)
 {
     auto txn = local_context->getCurrentTransaction();
     if (to_database.isTableExist(to_table_name, local_context))
-        throw Exception("Table " + to_database.getDatabaseName() + "." + to_table_name + " already exists.", ErrorCodes::TABLE_ALREADY_EXISTS);
+        throw Exception(
+            "Table " + to_database.getDatabaseName() + "." + to_table_name + " already exists.", ErrorCodes::TABLE_ALREADY_EXISTS);
     StoragePtr from_table = tryGetTableImpl(table_name, local_context);
     if (!from_table)
         throw Exception("Table " + database_name + "." + table_name + " doesn't exist.", ErrorCodes::UNKNOWN_TABLE);
     std::vector<IntentLockPtr> locks;
 
-    if (std::make_pair(database_name, table_name)
-        < std::make_pair(to_database.getDatabaseName(), to_table_name))
+    if (std::make_pair(database_name, table_name) < std::make_pair(to_database.getDatabaseName(), to_table_name))
     {
         locks.push_back(txn->createIntentLock(IntentLock::TB_LOCK_PREFIX, database_name, from_table->getStorageID().table_name));
         locks.push_back(txn->createIntentLock(IntentLock::TB_LOCK_PREFIX, to_database.getDatabaseName(), to_table_name));
@@ -386,7 +392,8 @@ void DatabaseCnch::renameTable(
     std::lock(*locks[0], *locks[1]);
 
     RenameActionParams params;
-    params.table_params = RenameActionParams::RenameTableParams{database_name, table_name, from_table->getStorageUUID(), to_database.getDatabaseName(), to_table_name};
+    params.table_params = RenameActionParams::RenameTableParams{
+        database_name, table_name, from_table->getStorageUUID(), to_database.getDatabaseName(), to_table_name};
     auto rename_table = txn->createAction<DDLRenameAction>(std::move(params));
     txn->appendAction(std::move(rename_table));
     /// Commit in InterpreterRenameQuery because we can rename multiple tables in a same transaction

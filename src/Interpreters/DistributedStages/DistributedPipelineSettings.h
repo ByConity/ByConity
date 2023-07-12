@@ -27,6 +27,7 @@ struct DistributedPipelineSettings
     String query_id{};
     size_t plan_segment_id = 0;
     size_t parallel_size = 1;
+    bool is_explian = false; // explain pipeline sql set is_explian to true
     AddressInfo coordinator_address{};
     AddressInfo current_address{};
 

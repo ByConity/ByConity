@@ -25,6 +25,8 @@ class LimitEstimator
 public:
     static PlanNodeStatisticsPtr estimate(PlanNodeStatisticsPtr & child_stats, const LimitStep &);
     static PlanNodeStatisticsPtr estimate(PlanNodeStatisticsPtr & child_stats, const LimitByStep &);
+
+    static PlanNodeStatisticsPtr getLimitStatistics(PlanNodeStatisticsPtr & child_stats, size_t limit);
 };
 
 }

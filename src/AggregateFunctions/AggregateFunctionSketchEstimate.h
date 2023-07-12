@@ -199,7 +199,7 @@ public:
     void add(AggregateDataPtr place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
         const auto & value = static_cast<const ColumnSketchBinary &>(*columns[0]).getDataAt(row_num);
-        datasketches::kll_sketch<T> kll_sketch_data = datasketches::kll_sketch<T>::deserialize(value.data, value.size, datasketches::serde<T>(), AggregateFunctionHllSketchAllocator());
+        datasketches::kll_sketch<T> kll_sketch_data = datasketches::kll_sketch<T>::deserialize(value.data, value.size, datasketches::serde<T>(), std::less<T>(), AggregateFunctionHllSketchAllocator());
         this->data(place).u.merge(kll_sketch_data);
     }
 
@@ -233,7 +233,7 @@ private:
     {
         String d;
         readBinary(d, buf);
-        return datasketches::kll_sketch<T>::deserialize(d.data(), d.size(), datasketches::serde<T>(), AggregateFunctionHllSketchAllocator());
+        return datasketches::kll_sketch<T>::deserialize(d.data(), d.size(), datasketches::serde<T>(), std::less<T>(), AggregateFunctionHllSketchAllocator());
     }
 };
 
@@ -270,7 +270,7 @@ public:
     void add(AggregateDataPtr place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
         const auto & value = static_cast<const ColumnSketchBinary &>(*columns[0]).getDataAt(row_num);
-        datasketches::quantiles_sketch<T> quantiles_sketch_data = datasketches::quantiles_sketch<T>::deserialize(value.data, value.size, datasketches::serde<T>(), AggregateFunctionHllSketchAllocator());
+        datasketches::quantiles_sketch<T> quantiles_sketch_data = datasketches::quantiles_sketch<T>::deserialize(value.data, value.size, datasketches::serde<T>(), std::less<T>(), AggregateFunctionHllSketchAllocator());
         this->data(place).u.merge(quantiles_sketch_data);
     }
 
@@ -303,7 +303,7 @@ private:
     {
         String d;
         readBinary(d, buf);
-        return datasketches::quantiles_sketch<T>::deserialize(d.data(), d.size(), datasketches::serde<T>(), AggregateFunctionHllSketchAllocator());
+        return datasketches::quantiles_sketch<T>::deserialize(d.data(), d.size(), datasketches::serde<T>(), std::less<T>(), AggregateFunctionHllSketchAllocator());
     }
 };
 
@@ -328,7 +328,7 @@ public:
     void add(AggregateDataPtr place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
         const auto & value = static_cast<const ColumnSketchBinary &>(*columns[0]).getDataAt(row_num);
-        datasketches::quantiles_sketch<T> quantiles_sketch_data = datasketches::quantiles_sketch<T>::deserialize(value.data, value.size, datasketches::serde<T>(), AggregateFunctionHllSketchAllocator());
+        datasketches::quantiles_sketch<T> quantiles_sketch_data = datasketches::quantiles_sketch<T>::deserialize(value.data, value.size, datasketches::serde<T>(), std::less<T>(), AggregateFunctionHllSketchAllocator());
         this->data(place).u.merge(quantiles_sketch_data);
     }
 
@@ -363,7 +363,7 @@ private:
     {
         String d;
         readBinary(d, buf);
-        return datasketches::quantiles_sketch<T>::deserialize(d.data(), d.size(), datasketches::serde<T>(), AggregateFunctionHllSketchAllocator());
+        return datasketches::quantiles_sketch<T>::deserialize(d.data(), d.size(), datasketches::serde<T>(), std::less<T>(), AggregateFunctionHllSketchAllocator());
     }
 };
 

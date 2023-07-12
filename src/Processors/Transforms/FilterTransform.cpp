@@ -48,7 +48,8 @@ FilterTransform::FilterTransform(
     ExpressionActionsPtr expression_,
     String filter_column_name_,
     bool remove_filter_column_,
-    bool on_totals_)
+    bool on_totals_,
+    bool dynamic_)
     : ISimpleTransform(
             header_,
             transformHeader(header_, expression_->getActionsDAG(), filter_column_name_, remove_filter_column_),
@@ -57,6 +58,7 @@ FilterTransform::FilterTransform(
     , filter_column_name(std::move(filter_column_name_))
     , remove_filter_column(remove_filter_column_)
     , on_totals(on_totals_)
+    , dynamic(dynamic_)
 {
     transformed_header = getInputPort().getHeader();
     expression->execute(transformed_header);
@@ -111,7 +113,7 @@ void FilterTransform::transform(Chunk & chunk)
         columns = block.getColumns();
     }
 
-    if (constant_filter_description.always_true || on_totals)
+    if ((!dynamic && constant_filter_description.always_true) || on_totals)
     {
         chunk.setColumns(std::move(columns), num_rows_before_filtration);
         removeFilterIfNeed(chunk);

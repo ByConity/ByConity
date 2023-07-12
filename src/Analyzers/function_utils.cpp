@@ -76,9 +76,10 @@ bool isComparisonFunction(const ASTFunction & function)
 
 bool functionIsInSubquery(const ASTFunction & function)
 {
-    return (function.name == "in" || function.name == "notIn" || function.name == "globalIn" || function.name == "globalNotIn")
-        && function.arguments->children.size() == 2
-        && function.arguments->children[1]->as<ASTSubquery>();
+    return (function.name == "in" || function.name == "notIn" || function.name == "globalIn" || function.name == "globalNotIn"
+            || function.name == "nullIn" || function.name == "globalNullIn" || function.name == "notNullIn"
+            || function.name == "globalNotNullIn")
+        && function.arguments->children.size() == 2 && function.arguments->children[1]->as<ASTSubquery>();
 }
 
 }

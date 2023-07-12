@@ -33,8 +33,8 @@ namespace DB
 PatternPtr MagicSetPushThroughProject::getPattern() const
 {
     return Patterns::join()
-        ->matchingStep<JoinStep>([](const JoinStep & s) { return s.isMagic(); })
-        ->with({Patterns::project()->with({Patterns::any()}), Patterns::any()});
+        .matchingStep<JoinStep>([](const JoinStep & s) { return s.isMagic(); })
+        .with(Patterns::project().with(Patterns::any()), Patterns::any()).result();
 }
 
 TransformResult MagicSetPushThroughProject::transformImpl(PlanNodePtr magic_set, const Captures &, RuleContext & rule_context)
@@ -105,12 +105,12 @@ static std::optional<Names> try_mapping(const Names & from, const Names & to, co
 PatternPtr MagicSetPushThroughJoin::getPattern() const
 {
     return Patterns::join()
-        ->matchingStep<JoinStep>([](const JoinStep & s) { return s.isMagic(); })
-        ->with(
-            {Patterns::join()
-                 ->matchingStep<JoinStep>([](const JoinStep & s) { return !s.isMagic(); })
-                 ->with({Patterns::any(), Patterns::any()}),
-             Patterns::any()});
+        .matchingStep<JoinStep>([](const JoinStep & s) { return s.isMagic(); })
+        .with(
+            Patterns::join()
+                 .matchingStep<JoinStep>([](const JoinStep & s) { return !s.isMagic(); })
+                 .with(Patterns::any(), Patterns::any()),
+             Patterns::any()).result();
 }
 
 TransformResult MagicSetPushThroughJoin::transformImpl(PlanNodePtr magic_set, const Captures &, RuleContext & rule_context)
@@ -220,8 +220,8 @@ const std::vector<RuleType> & MagicSetPushThroughJoin::blockRules() const
 PatternPtr MagicSetPushThroughFilter::getPattern() const
 {
     return Patterns::join()
-        ->matchingStep<JoinStep>([&](const JoinStep & s) { return s.isMagic(); })
-        ->with({Patterns::filter()->with({Patterns::any()}), Patterns::any()});
+        .matchingStep<JoinStep>([&](const JoinStep & s) { return s.isMagic(); })
+        .with(Patterns::filter().with(Patterns::any()), Patterns::any()).result();
 }
 
 TransformResult MagicSetPushThroughFilter::transformImpl(PlanNodePtr magic_set, const Captures &, RuleContext & rule_context)
@@ -240,8 +240,8 @@ TransformResult MagicSetPushThroughFilter::transformImpl(PlanNodePtr magic_set, 
 PatternPtr MagicSetPushThroughAggregating::getPattern() const
 {
     return Patterns::join()
-        ->matchingStep<JoinStep>([&](const JoinStep & s) { return s.isMagic(); })
-        ->with({Patterns::aggregating()->with({Patterns::any()}), Patterns::any()});
+        .matchingStep<JoinStep>([&](const JoinStep & s) { return s.isMagic(); })
+        .with(Patterns::aggregating().with(Patterns::any()), Patterns::any()).result();
 }
 
 TransformResult MagicSetPushThroughAggregating::transformImpl(PlanNodePtr magic_set, const Captures &, RuleContext & rule_context)

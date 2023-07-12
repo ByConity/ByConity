@@ -718,7 +718,7 @@ def run_tests_array(all_tests_with_params):
                             result_is_different = subprocess.call(['diff', '-q', reference_file, stdout_file], stdout=PIPE)
 
                             if result_is_different:
-                                diff = Popen(['diff', '-U', str(testcase_args.unified), reference_file, stdout_file], stdout=PIPE, universal_newlines=True).communicate()[0]
+                                diff = Popen(['diff', '-U', str(testcase_args.unified), reference_file, stdout_file], stdout=PIPE, universal_newlines=True, errors='replace').communicate()[0]
                                 failures += 1
                                 status += MSG_FAIL
                                 status += print_test_time(total_time)

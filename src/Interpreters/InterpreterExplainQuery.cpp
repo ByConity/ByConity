@@ -37,7 +37,6 @@
 #include <Optimizer/CostModel/CostCalculator.h>
 #include <Parsers/DumpASTNode.h>
 #include <Parsers/queryToString.h>
-#include <Parsers/ASTExplainQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/ParserQuery.h>
 #include <Storages/StorageDistributed.h>
@@ -50,6 +49,10 @@
 #include <Storages/StorageMaterializedView.h>
 #include <Common/JSONBuilder.h>
 #include <IO/WriteBufferFromString.h>
+#include <QueryPlan/GraphvizPrinter.h>
+#include <Interpreters/SegmentScheduler.h>
+#include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
+#include <Analyzers/QueryRewriter.h>
 
 namespace DB
 {
@@ -125,6 +128,36 @@ namespace
 BlockIO InterpreterExplainQuery::execute()
 {
     BlockIO res;
+    auto context = getContext();
+    // TODO: support explain analyze
+    #if 0  
+    const auto & ast = query->as<ASTExplainQuery &>();
+    if ((ast.getKind() == ASTExplainQuery::DistributedAnalyze || ast.getKind() == ASTExplainQuery::LogicalAnalyze)
+        && QueryUseOptimizerChecker::check(query, context))
+    {
+        if (!context->getSettingsRef().log_processors_profiles || !context->getSettingsRef().report_processors_profiles)
+        {
+            throw Exception("log_processors_profiles=1 and report_processors_profiles=1 must be set when using Explain Analyze", ErrorCodes::NOT_IMPLEMENTED);
+        }
+
+        std::shared_ptr<ProfileElementConsumer<ProcessorProfileLogElement>> consumer
+            = std::make_shared<ExplainConsumer>(context->getCurrentQueryId());
+        ProfileLogHub<ProcessorProfileLogElement>::getInstance().initLogChannel(context->getCurrentQueryId(), consumer);
+        context->setProcessorProfileElementConsumer(consumer);
+        context->setIsExplainQuery(true);
+        try
+        {
+            res = explainAnalyze();
+        }
+        catch (...)
+        {
+            if (context->getProcessorProfileElementConsumer())
+                context->getProcessorProfileElementConsumer()->finish();
+        }
+
+        return res;
+    }
+#endif
 
     const auto & ast = query->as<ASTExplainQuery &>();
 
@@ -174,7 +207,7 @@ Block InterpreterExplainQuery::getSampleBlock()
 }
 
 /// Split str by line feed and write as separate row to ColumnString.
-static void fillColumn(IColumn & column, const std::string & str)
+void InterpreterExplainQuery::fillColumn(IColumn & column, const std::string & str)
 {
     size_t start = 0;
     size_t end = 0;
@@ -825,25 +858,161 @@ void InterpreterExplainQuery::elementGroupBy(const ASTPtr & group_by, WriteBuffe
 void InterpreterExplainQuery::explainUsingOptimizer(const ASTPtr & ast, WriteBuffer & buffer, bool & single_line)
 {
     const auto & explain = ast->as<ASTExplainQuery &>();
-    auto settings = checkAndGetSettings<QueryPlanSettings>(explain.getSettings());
-
     auto context = Context::createCopy(getContext());
+
+    if (explain.getKind() == ASTExplainQuery::AnalyzedSyntax)
+    {
+        if (explain.getSettings())
+            throw Exception("Settings are not supported for EXPLAIN SYNTAX query.", ErrorCodes::UNKNOWN_SETTING);
+
+        auto query_ptr = explain.getExplainedQuery();
+        query_ptr = QueryRewriter().rewrite(query_ptr, context);
+        query_ptr->format(IAST::FormatSettings(buffer, false));
+        return;
+    }
+    else if (explain.getKind() == ASTExplainQuery::TraceOptimizer || explain.getKind() == ASTExplainQuery::TraceOptimizerRule)
+    {
+        if (explain.getSettings())
+            throw Exception("Settings are not supported for EXPLAIN TRACE OPTIMIZER query.", ErrorCodes::UNKNOWN_SETTING);
+
+        context->initOptimizerProfile();
+        try
+        {
+            InterpreterSelectQueryUseOptimizer interpreter(explain.getExplainedQuery(), context, SelectQueryOptions());
+            interpreter.getPlanSegment();
+        }
+        catch (...)
+        {
+            context->clearOptimizerProfile();
+            throw;
+        }
+
+        if (explain.getKind() == ASTExplainQuery::TraceOptimizerRule)
+            buffer << context->getOptimizerProfile(true);
+        else
+            buffer << context->getOptimizerProfile();
+
+        return;
+    }
+
     InterpreterSelectQueryUseOptimizer interpreter(explain.getExplainedQuery(), context, SelectQueryOptions());
     auto query_plan = interpreter.buildQueryPlan();
+    if (explain.getKind() == ASTExplainQuery::ExplainKind::OptimizerPlan || explain.getKind() == ASTExplainQuery::ExplainKind::QueryPlan )
+    {
+        explainPlanWithOptimizer(explain, *query_plan, buffer, context, single_line);
+    }
+    // TODO: support explain
+    #if 0
+    else if (explain.getKind() == ASTExplainQuery::ExplainKind::Distributed)
+    {
+        explainDistributedWithOptimizer(explain, *query_plan, buffer, context);
+    }
+    #endif
+    else if (explain.getKind() == ASTExplainQuery::ExplainKind::QueryPipeline)
+    {
+        explainPipelineWithOptimizer(explain, *query_plan, buffer, context);
+    }
+}
 
-    CardinalityEstimator::estimate(*query_plan, context);
+BlockIO InterpreterExplainQuery::explainAnalyze()
+{
+    auto contxt = getContext();
+    auto interpreter = std::make_unique<InterpreterSelectQueryUseOptimizer>(query->clone(), contxt, options);
+    return interpreter->execute();
+}
+
+void InterpreterExplainQuery::explainPlanWithOptimizer(const ASTExplainQuery & explain_ast, QueryPlan & plan, WriteBuffer & buffer, ContextMutablePtr & contextptr, bool & single_line)
+{
+    auto settings = checkAndGetSettings<QueryPlanSettings>(explain_ast.getSettings());
+    CardinalityEstimator::estimate(plan, contextptr);
+    PlanCostMap costs = CostCalculator::calculate(plan, *contextptr);
     if (settings.json)
     {
-        auto plan_cost = CostCalculator::calculatePlanCost(*query_plan, *context);
-        buffer << PlanPrinter::jsonLogicalPlan(*query_plan, settings.stats, true, plan_cost);
+        buffer << PlanPrinter::jsonLogicalPlan(plan, true, true);
         single_line = true;
     }
     else
+        buffer << PlanPrinter::textLogicalPlan(plan, contextptr, true, true, costs);
+}
+
+void InterpreterExplainQuery::explainDistributedWithOptimizer(const ASTExplainQuery & explain_ast, QueryPlan & plan, WriteBuffer & buffer, ContextMutablePtr & contextptr)
+{
+    auto settings = checkAndGetSettings<QueryPipelineSettings>(explain_ast.getSettings());
+    QueryPlan query_plan = PlanNodeToNodeVisitor::convert(plan);
+    PlanSegmentTreePtr plan_segment_tree = std::make_unique<PlanSegmentTree>();
+
+    ClusterInfoContext cluster_info_context{.query_plan = query_plan, .context = contextptr, .plan_segment_tree = plan_segment_tree};
+    PlanSegmentContext plan_segment_context = ClusterInfoFinder::find(plan, cluster_info_context);
+
+    PlanSegmentSplitter::split(query_plan, plan_segment_context);
+    GraphvizPrinter::printPlanSegment(plan_segment_tree, contextptr);
+
+    PlanCostMap costs = CostCalculator::calculate(plan, *contextptr);
+
+    PlanSegmentDescriptions plan_segment_descriptions;
+    for (auto & node : plan_segment_context.plan_segment_tree->getNodes())
+        plan_segment_descriptions.emplace_back(node.plan_segment->getPlanSegmentDescription());
+
+    buffer << PlanPrinter::textDistributedPlan(plan_segment_descriptions, true, true, costs, {}, plan);
+}
+
+void InterpreterExplainQuery::explainPipelineWithOptimizer(const ASTExplainQuery & explain_ast, QueryPlan & plan, WriteBuffer & buffer, ContextMutablePtr & contextptr)
+{
+    auto settings = checkAndGetSettings<QueryPipelineSettings>(explain_ast.getSettings());
+    QueryPlan query_plan = PlanNodeToNodeVisitor::convert(plan);
+    PlanSegmentTreePtr plan_segment_tree = std::make_unique<PlanSegmentTree>();
+
+    ClusterInfoContext cluster_info_context{.query_plan = query_plan, .context = contextptr, .plan_segment_tree = plan_segment_tree};
+    PlanSegmentContext plan_segment_context = ClusterInfoFinder::find(plan, cluster_info_context);
+
+    query_plan.allocateLocalTable(contextptr);
+    PlanSegmentSplitter::split(query_plan, plan_segment_context);
+    auto & plan_segments = plan_segment_tree->getNodes();
+    GraphvizPrinter::printPlanSegment(plan_segment_tree, contextptr);
+
+//    PlanSegmentsStatusPtr scheduler_status;
+//    if (plan_segment_tree->getNodes().size() > 1)
+//    {
+//        RuntimeFilterManager::getInstance().registerQuery(contextptr->getCurrentQueryId(), *plan_segment_tree);
+//        scheduler_status = contextptr->getSegmentScheduler()->insertPlanSegments(contextptr->getCurrentQueryId(), plan_segment_tree.get(), contextptr);
+//    }
+//    else
+//    {
+//        scheduler_status = contextptr->getSegmentScheduler()->insertPlanSegments(contextptr->getCurrentQueryId(), plan_segment_tree.get(), contextptr);
+//    }
+//    if (!scheduler_status)
+//    {
+//        RuntimeFilterManager::getInstance().removeQuery(contextptr->getCurrentQueryId());
+//        throw Exception("Cannot get scheduler status from segment scheduler", ErrorCodes::LOGICAL_ERROR);
+//    }
+
+    for (auto it = plan_segments.begin(); it != plan_segments.end(); ++it)
     {
-        PlanCostMap costs = CostCalculator::calculate(*query_plan, *context);
-        buffer << PlanPrinter::textLogicalPlan(*query_plan, context, true, true, costs);
+        auto * segment = it->getPlanSegment();
+        buffer << "\nSegment[ " << std::to_string(segment->getPlanSegmentId()) <<" ] :\n" ;
+        auto & segment_plan = segment->getQueryPlan();
+        auto pipeline = segment_plan.buildQueryPipeline(
+            QueryPlanOptimizationSettings::fromContext(contextptr),
+            BuildQueryPipelineSettings::fromPlanSegment(segment, contextptr, true));
+        if (pipeline)
+        {
+            if (settings.graph)
+            {
+                /// Pipe holds QueryPlan, should not go out-of-scope
+                auto pipe = QueryPipeline::getPipe(std::move(*pipeline));
+                const auto & processors = pipe.getProcessors();
+                if (settings.compact)
+                    printPipelineCompact(processors, buffer, settings.query_pipeline_options.header);
+                else
+                    printPipeline(processors, buffer);
+            }
+            else
+            {
+                segment_plan.explainPipeline(buffer, settings.query_pipeline_options);
+            }
+            buffer << "\n------------------------------------------\n" ;
+        }
     }
-        
 }
 
 void ExplainConsumer::consume(ProcessorProfileLogElement & element)

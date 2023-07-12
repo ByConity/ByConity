@@ -4,9 +4,10 @@
 namespace DB
 {
 
-ISourceStep::ISourceStep(DataStream output_stream_)
+ISourceStep::ISourceStep(DataStream output_stream_, PlanHints hints_)
 {
     output_stream = std::move(output_stream_);
+    hints = std::move(hints_);
 }
 
 QueryPipelinePtr ISourceStep::updatePipeline(QueryPipelines, const BuildQueryPipelineSettings & settings)

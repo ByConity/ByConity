@@ -15,6 +15,7 @@
 
 #include <QueryPlan/PlanPrinter.h>
 #include <Optimizer/tests/gtest_base_tpcds_plan_test.h>
+#include <Optimizer/Iterative/IterativeRewriter.h>
 
 #include <gtest/gtest.h>
 
@@ -28,6 +29,7 @@ public:
     static void SetUpTestSuite()
     {
         std::unordered_map<std::string, DB::Field> settings;
+        settings.emplace("iterative_optimizer_timeout", "30000000");
 #ifndef NDEBUG
         // debug mode may time out.
         settings.emplace("cascades_optimizer_timeout", "300000");
@@ -64,24 +66,7 @@ public:
 
 std::shared_ptr<DB::BaseTpcdsPlanTest> PlanCheckTpcds::tester;
 
-TEST_F(PlanCheckTpcds, generate)
-{
-    if (!AbstractPlanTestSuite::enforce_regenerate())
-        GTEST_SKIP() << "skip generate. set env REGENERATE=1 to regenerate explains.";
-    for (auto & query : tester->loadQueries())
-    {
-        try
-        {
-            std::cout << " try generate for " + query + "." << std::endl;
-            tester->saveExplain(query, explain(query));
-        }
-        catch (...)
-        {
-            std::cerr << " generate for " + query + " failed." << std::endl;
-            tester->saveExplain(query, "");
-        }
-    }
-}
+DECLARE_GENERATE_TEST(PlanCheckTpcds)
 
 TEST_F(PlanCheckTpcds, q1)
 {
@@ -576,4 +561,11 @@ TEST_F(PlanCheckTpcds, q98)
 TEST_F(PlanCheckTpcds, q99)
 {
     EXPECT_TRUE(equals(explain("q99"), expected("q99")));
+}
+
+TEST_F(PlanCheckTpcds, summary)
+{
+    std::cout << "rule call times:" << std::endl;
+    for (const auto & x: IterativeRewriter::getRuleCallTimes())
+        std::cout << x.first << ": " << x.second << std::endl;
 }

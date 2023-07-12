@@ -31,6 +31,7 @@
 #include <Statistics/SerdeUtils.h>
 #include <Statistics/StatsNdvBucketsResultImpl.h>
 #include <Statistics/serde_extend.hpp>
+#include <Statistics/StringHash.h>
 
 namespace DB::Statistics
 {
@@ -111,6 +112,9 @@ namespace impl
             // normally
             // just use get_quantiles api
             auto quantiles = kll.get_quantiles(350);
+            // NOTE: API returns split points only, so we need to add min/max back
+            quantiles.insert(quantiles.begin(), kll.get_min_item());
+            quantiles.push_back(kll.get_max_item());
             return trimBucketBounds(quantiles);
         }
     }
@@ -130,7 +134,7 @@ public:
         // enable only when T is string
         // using sfinae
         static_assert(is_string);
-        return CityHash_v1_0_2::CityHash64(str.data(), str.size());
+        return Statistics::stringHash64(str);
     }
 
     StatsKllSketchImpl() = default;
@@ -156,8 +160,8 @@ public:
 
     bool isEmpty() const override { return data.is_empty(); }
 
-    T get_min_value() { return data.get_min_value(); }
-    T get_max_value() { return data.get_max_value(); }
+    T getMinItem() { return data.get_min_item(); }
+    T getMaxItem() { return data.get_max_item(); }
 
     std::shared_ptr<BucketBounds> getBucketBounds() const override;
 
@@ -182,7 +186,7 @@ protected:
         }
         else
         {
-            return Statistics::toDouble(data.get_min_value());
+            return Statistics::toDouble(data.get_min_item());
         }
     }
     std::optional<double> maxAsDouble() const override
@@ -193,7 +197,7 @@ protected:
         }
         else
         {
-            return Statistics::toDouble(data.get_max_value());
+            return Statistics::toDouble(data.get_max_item());
         }
     }
 

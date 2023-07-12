@@ -41,6 +41,7 @@ public:
     std::vector<StatsTableIdentifier> getAllTablesID(const String & database_name) const override;
     std::optional<StatsTableIdentifier> getTableIdByName(const String & database_name, const String & table_name) const override;
     StoragePtr getStorageByTableId(const StatsTableIdentifier & identifier) const override;
+    void invalidateAllServerStatsCache() const override { Statistics::CacheManager::reset(); }
     UInt64 getUpdateTime() override;
     bool isTableCollectable(const StatsTableIdentifier & identifier) const override;
     bool isTableAutoUpdated(const StatsTableIdentifier & table) const override;
@@ -178,8 +179,13 @@ void CatalogAdaptorCnch::dropStatsDataAll(const String & database_name)
 
 std::vector<StatsTableIdentifier> CatalogAdaptorCnch::getAllTablesID(const String & database_name) const
 {
+    auto db = DatabaseCatalog::instance().getDatabase(database_name, context);
+    if (!db) 
+    {
+        return {};
+    }
+
     std::vector<StatsTableIdentifier> results;
-    auto db = DatabaseCatalog::instance().getDatabase(database_name);
     for (auto iter = db->getTablesIterator(context); iter->isValid(); iter->next())
     {
         auto table = iter->table();

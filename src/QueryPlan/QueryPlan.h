@@ -117,6 +117,7 @@ public:
     JSONBuilder::ItemPtr explainPlan(const ExplainPlanOptions & options);
     void explainPlan(WriteBuffer & buffer, const ExplainPlanOptions & options) const;
     void explainPipeline(WriteBuffer & buffer, const ExplainPipelineOptions & options) const;
+    void explainPipelineWithOptimizer(WriteBuffer & buffer, const ExplainPipelineOptions & options) const;
 
     /// Set upper limit for the recommend number of threads. Will be applied to the newly-created pipelines.
     /// TODO: make it in a better way.
@@ -146,7 +147,10 @@ public:
     Nodes & getNodes() { return nodes; }
 
     Node * getRoot() { return root; }
+    const Node * getRoot() const { return root; }
+    PlanNodePtr getPlanNodeRoot() const { return plan_node; }
     void setRoot(Node * root_) { root = root_; }
+    void setPlanNodeRoot(PlanNodePtr plan_node_) { plan_node = plan_node_; }
     CTENodes & getCTENodes() { return cte_nodes; }
 
     Node * getLastNode() { return &nodes.back(); }
@@ -158,6 +162,7 @@ public:
     PlanNodePtr & getPlanNode() { return plan_node; }
     CTEInfo & getCTEInfo() { return cte_info; }
     PlanNodePtr getPlanNodeById(PlanNodeId node_id) const;
+    const CTEInfo & getCTEInfo() const { return cte_info; }
 
     QueryPlan getSubPlan(QueryPlan::Node * node_);
 

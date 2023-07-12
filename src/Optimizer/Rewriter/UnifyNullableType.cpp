@@ -151,7 +151,10 @@ PlanNodePtr UnifyNullableVisitor::visitJoinNode(JoinNode & node, Void & v)
         join_step.getRequireRightKeys(),
         join_step.getAsofInequality(),
         join_step.getDistributionType(),
-        join_step.isMagic());
+        join_step.getJoinAlgorithm(),
+        join_step.isMagic(),
+        join_step.isOrdered(),
+        join_step.getHints());
     return JoinNode::createPlanNode(context->nextNodeId(), std::move(join_step_set_null), children, node.getStatistics());
 }
 
@@ -202,6 +205,7 @@ PlanNodePtr UnifyNullableVisitor::visitAggregatingNode(AggregatingNode & node, V
         descs_set_nullable,
         step.getGroupingSetsParams(),
         step.isFinal(),
+        step.getGroupBySortDescription(),
         step.getGroupings(),
         false,
         step.shouldProduceResultsInOrderOfBucketNumber()

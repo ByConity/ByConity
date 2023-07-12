@@ -723,6 +723,10 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         /// Load external tables if they were provided
         context->initializeExternalTablesIfSet();
 
+        // disable optimizer for internal query
+        if (internal)
+            context->setSetting("enable_optimizer", Field(0));
+
         auto * insert_query = ast->as<ASTInsertQuery>();
         if (insert_query && insert_query->select)
         {
@@ -886,6 +890,19 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
             elem.client_info = client_info;
             elem.partition_ids = context->getPartitionIds();
+
+            if (!context->getSettingsRef().enable_optimizer)
+            {
+                elem.segment_id = -1;
+                elem.segment_parallel = -1;
+                elem.segment_parallel_index = -1;
+            }
+            else
+            {
+                elem.segment_id = 0;
+                elem.segment_parallel = 1;
+                elem.segment_parallel_index = 1;
+            }
 
             bool log_queries = settings.log_queries && !internal;
 

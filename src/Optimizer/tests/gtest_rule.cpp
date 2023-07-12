@@ -35,7 +35,7 @@ struct TestRule : public Rule
     }
     PatternPtr getPattern() const override{
         using namespace DB::Patterns;
-        return aggregating()->capturedAs(aggregatingCap)->withSingle(filter()->capturedAs(filterCap));
+        return aggregating().capturedAs(aggregatingCap).withSingle(filter().capturedAs(filterCap)).result();
     }
     TransformResult transformImpl(PlanNodePtr, const Captures & captures, RuleContext &) override
     {

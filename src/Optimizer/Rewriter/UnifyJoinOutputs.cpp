@@ -82,10 +82,7 @@ PlanNodePtr UnifyJoinOutputs::Rewriter::visitPlanNode(PlanNodeBase & node, std::
         inputs.push_back(result->getStep()->getOutputStream());
     }
 
-    auto new_step = node.getStep()->copy(context);
-    new_step->setInputStreams(inputs);
-    node.setStep(new_step);
-
+    node.getStep()->setInputStreams(inputs);
     node.replaceChildren(children);
     return node.shared_from_this();
 }
@@ -170,7 +167,10 @@ PlanNodePtr UnifyJoinOutputs::Rewriter::visitJoinNode(JoinNode & node, std::set<
         step->getRequireRightKeys(),
         step->getAsofInequality(),
         step->getDistributionType(),
-        step->isMagic());
+        step->getJoinAlgorithm(),
+        step->isMagic(),
+        step->isOrdered(),
+        step->getHints());
     return PlanNodeBase::createPlanNode(node.getId(), new_step, PlanNodes{left, right});
 }
 
@@ -183,11 +183,6 @@ PlanNodePtr UnifyJoinOutputs::Rewriter::visitCTERefNode(CTERefNode & node, std::
             mapped.emplace(step->getOutputColumns().at(item));
 
     auto cte_plan = cte_helper.acceptAndUpdate(step->getId(), *this, mapped);
-    auto new_step = std::dynamic_pointer_cast<CTERefStep>(node.getStep()->copy(context));
-    DataStreams input_streams;
-    input_streams.emplace_back(cte_plan->getStep()->getOutputStream());
-    new_step->setInputStreams(input_streams);
-    node.setStep(new_step);
     return node.shared_from_this();
 }
 

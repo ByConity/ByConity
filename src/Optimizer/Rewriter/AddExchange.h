@@ -74,6 +74,8 @@ public:
     ExchangeResult visitMergingAggregatedNode(MergingAggregatedNode & node, ExchangeContext & cxt) override;
     ExchangeResult visitUnionNode(UnionNode & node, ExchangeContext & cxt) override;
     ExchangeResult visitExchangeNode(ExchangeNode & node, ExchangeContext & cxt) override;
+    ExchangeResult visitExplainAnalyzeNode(ExplainAnalyzeNode & node, ExchangeContext & cxt) override;
+    ExchangeResult visitFillingNode(FillingNode & node, ExchangeContext & cxt) override;
     ExchangeResult visitRemoteExchangeSourceNode(RemoteExchangeSourceNode & node, ExchangeContext & cxt) override;
     ExchangeResult visitTableScanNode(TableScanNode & node, ExchangeContext &) override;
     ExchangeResult visitReadNothingNode(ReadNothingNode & node, ExchangeContext &) override;

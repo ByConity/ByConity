@@ -103,7 +103,7 @@ void RemoteExchangeSourceStep::setPlanSegment(PlanSegment * plan_segment_)
     options = ExchangeUtils::getExchangeOptions(context);
 }
 
-void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings & /*settings*/)
+void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings & settings)
 {
     if (!plan_segment)
         throw Exception("Should setPlanSegment before initializePipeline!", ErrorCodes::LOGICAL_ERROR);
@@ -210,8 +210,9 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
 }
 
 
-void RemoteExchangeSourceStep::describePipeline(FormatSettings & /*settings*/) const {
-    //TODO
-};
+void RemoteExchangeSourceStep::describePipeline(FormatSettings & settings) const
+{
+    // TODO
+}
 
 }

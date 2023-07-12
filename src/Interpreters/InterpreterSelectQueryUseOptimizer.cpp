@@ -19,14 +19,19 @@
 #include <Interpreters/DistributedStages/MPPQueryCoordinator.h>
 #include <Interpreters/InterpreterSelectQueryUseOptimizer.h>
 #include <Interpreters/SegmentScheduler.h>
+#include <Optimizer/JoinOrderUtils.h>
 #include <Optimizer/PlanNodeSearcher.h>
 #include <Optimizer/PlanOptimizer.h>
 #include <QueryPlan/GraphvizPrinter.h>
+#include <QueryPlan/PlanCache.h>
+#include <QueryPlan/QueryPlan.h>
 #include <QueryPlan/QueryPlanner.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageCnchHive.h>
 #include <Storages/StorageDistributed.h>
 #include "QueryPlan/QueryPlan.h"
+#include <Interpreters/WorkerStatusManager.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -39,37 +44,103 @@ QueryPlanPtr InterpreterSelectQueryUseOptimizer::buildQueryPlan()
         PlanOptimizer::optimize(*sub_query_plan, context);
         return sub_query_plan;
     }
-    
+
+    QueryPlanPtr query_plan;
+    UInt128 query_hash;
     context->createPlanNodeIdAllocator();
     context->createSymbolAllocator();
     context->createOptimizerMetrics();
 
-    Stopwatch stage_watch;
+    {
+        if (context->getSettingsRef().enable_plan_cache)
+        {
+            query_hash = PlanCacheManager::hash(query_ptr, context->getSettingsRef());
+            auto & cache = PlanCacheManager::instance();
+            auto cached = cache.get(query_hash);
+            if (cached)
+            {
+                query_plan = std::make_unique<QueryPlan>();
+                ReadBufferFromString query_buffer(*cached);
+                query_plan->addInterpreterContext(context);
+                query_plan->deserialize(query_buffer);
+                LOG_INFO(log, "hit plan cache");
+            }
+        }
 
-    stage_watch.start();
-    query_ptr = QueryRewriter::rewrite(query_ptr, context);
-    LOG_DEBUG(log, "optimizer stage run time: rewrite, {} ms", stage_watch.elapsedMillisecondsAsDouble());
- 
-    stage_watch.restart();
-    AnalysisPtr analysis = QueryAnalyzer::analyze(query_ptr, context);
-    LOG_DEBUG(log, "optimizer stage run time: analyze, {} ms", stage_watch.elapsedMillisecondsAsDouble());
- 
-    stage_watch.restart();
-    QueryPlanPtr query_plan = QueryPlanner::plan(query_ptr, *analysis, context);
-    LOG_DEBUG(log, "optimizer stage run time: planning, {} ms", stage_watch.elapsedMillisecondsAsDouble());
- 
-    stage_watch.restart();
-    PlanOptimizer::optimize(*query_plan, context);
-    LOG_DEBUG(log, "optimizer stage run time: optimize, {} ms", stage_watch.elapsedMillisecondsAsDouble());
+        if (!query_plan)
+        {
+            Stopwatch stage_watch;
+            stage_watch.start();
+            auto cloned_query = query_ptr->clone();
+            cloned_query = QueryRewriter().rewrite(cloned_query, context);
+            context->logOptimizerProfile(log, "Optimizer stage run time: ", "Rewrite", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
 
+            stage_watch.restart();
+            AnalysisPtr analysis = QueryAnalyzer::analyze(cloned_query, context);
+            context->logOptimizerProfile(log, "Optimizer stage run time: ", "Analyzer", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
+
+            stage_watch.restart();
+            query_plan = QueryPlanner().plan(cloned_query, *analysis, context);
+            context->logOptimizerProfile(log, "Optimizer stage run time: ", "Planning", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
+
+            stage_watch.restart();
+            PlanOptimizer::optimize(*query_plan, context);
+            context->logOptimizerProfile(log, "Optimizer stage run time: ", "Optimizer", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
+            if (context->getSettingsRef().enable_plan_cache)
+            {
+                WriteBufferFromOwnString query_buffer;
+                query_plan->serialize(query_buffer);
+                auto & query_str = query_buffer.str();
+                if (query_str.size() <= context->getSettingsRef().max_plan_mem_size)
+                {
+                    auto & cache = PlanCacheManager::instance();
+                    cache.add(query_hash, query_str);
+                }
+            }
+        }
+    }
+
+    LOG_DEBUG(log, "join order {}", JoinOrderUtils::getJoinOrder(*query_plan));
     return query_plan;
 }
 
-BlockIO InterpreterSelectQueryUseOptimizer::execute()
+PlanSegmentTreePtr InterpreterSelectQueryUseOptimizer::getPlanSegment()
 {
     Stopwatch stage_watch, total_watch;
     total_watch.start();
-    QueryPlanPtr query_plan = buildQueryPlan();
+    QueryPlanPtr query_plan;
+    if (context->getSettingsRef().enable_plan_cache)
+    {
+        auto hash = PlanCacheManager::hash(query_ptr, context->getSettingsRef());
+        auto & cache = PlanCacheManager::instance();
+        if (cache.has(hash))
+        {
+            query_plan = std::make_unique<QueryPlan>();
+            String plan_str = *cache.get(hash);
+
+            ReadBufferFromString query_buffer(plan_str);
+            query_plan->addInterpreterContext(context);
+            query_plan->deserialize(query_buffer);
+            LOG_INFO(log, "hit plan cache");
+        }
+        else
+        {
+            query_plan = buildQueryPlan();
+
+            WriteBufferFromOwnString query_buffer;
+            query_plan->serialize(query_buffer);
+            auto & query_str = query_buffer.str();
+            if (query_str.size() <= context->getSettingsRef().max_plan_mem_size)
+            {
+                cache.add(hash, query_str);
+            }
+        }
+    }
+
+    if (!query_plan)
+    {
+        query_plan = buildQueryPlan();
+    }
 
     query_plan->setResetStepId(false);
     stage_watch.start();
@@ -83,12 +154,19 @@ BlockIO InterpreterSelectQueryUseOptimizer::execute()
     ClusterInfoContext cluster_info_context{.query_plan = *query_plan, .context = context, .plan_segment_tree = plan_segment_tree};
     PlanSegmentContext plan_segment_context = ClusterInfoFinder::find(*query_plan, cluster_info_context);
 
+    stage_watch.restart();
     plan.allocateLocalTable(context);
     PlanSegmentSplitter::split(plan, plan_segment_context);
-    LOG_DEBUG(log, "optimizer stage run time: plan segment split, {} ms", stage_watch.elapsedMillisecondsAsDouble());
+    context->logOptimizerProfile(log, "Optimizer total run time: ", "PlanSegment build", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
 
     GraphvizPrinter::printPlanSegment(plan_segment_tree, context);
-    LOG_DEBUG(log, "optimizer total run time: {} ms", total_watch.elapsedMillisecondsAsDouble());
+    context->logOptimizerProfile(log, "Optimizer total run time: ", "Optimizer Total", std::to_string(total_watch.elapsedMillisecondsAsDouble()) + "ms");
+    return plan_segment_tree;
+}
+
+BlockIO InterpreterSelectQueryUseOptimizer::execute()
+{
+    PlanSegmentTreePtr plan_segment_tree = getPlanSegment();
 
     auto coodinator = std::make_shared<MPPQueryCoordinator>(std::move(plan_segment_tree), context, MPPQueryOptions());
     return coodinator->execute();
@@ -111,8 +189,7 @@ QueryPlan::Node * PlanNodeToNodeVisitor::visitPlanNode(PlanNodeBase & node, Void
 {
     if (node.getChildren().empty())
     {
-        auto res = QueryPlan::Node{
-            .step = std::const_pointer_cast<IQueryPlanStep>(node.getStep()), .children = {}, .id = node.getId()};
+        auto res = QueryPlan::Node{.step = std::const_pointer_cast<IQueryPlanStep>(node.getStep()), .children = {}, .id = node.getId()};
         node.setStep(res.step);
         plan.addNode(std::move(res));
         return plan.getLastNode();

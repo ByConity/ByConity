@@ -316,7 +316,7 @@ PlanNodePtr CorrelatedScalarSubqueryVisitor::visitApplyNode(ApplyNode & node, Vo
         desc_with_mask.arguments = desc.arguments;
         descs_with_mask.emplace_back(desc_with_mask);
     }
-    auto group_agg_step = std::make_shared<AggregatingStep>(join_node->getStep()->getOutputStream(), keys, descs_with_mask, GroupingSetsParamsList{} , true, GroupingDescriptions{}, false, false);
+    auto group_agg_step = std::make_shared<AggregatingStep>(join_node->getStep()->getOutputStream(), keys, descs_with_mask, GroupingSetsParamsList{} , true);
     auto group_agg_node = std::make_shared<AggregatingNode>(context->nextNodeId(), std::move(group_agg_step), PlanNodes{join_node});
 
     // step 6 : project used columns
@@ -761,7 +761,7 @@ PlanNodePtr CorrelatedInSubqueryVisitor::visitApplyNode(ApplyNode & node, Void &
     aggregate_desc_2.argument_names = Names{null_match_condition_symbol};
 
     AggregateDescriptions aggregate_descs{aggregate_desc_1, aggregate_desc_2};
-    auto count_step = std::make_shared<AggregatingStep>(pre_expression_node->getStep()->getOutputStream(), keys, aggregate_descs, GroupingSetsParamsList{}, true, GroupingDescriptions{}, false, false);
+    auto count_step = std::make_shared<AggregatingStep>(pre_expression_node->getStep()->getOutputStream(), keys, aggregate_descs, GroupingSetsParamsList{}, true);
     auto count_node = std::make_shared<AggregatingNode>(context->nextNodeId(), std::move(count_step), PlanNodes{pre_expression_node});
 
     // step 8 project match values
@@ -933,12 +933,20 @@ PlanNodePtr UnCorrelatedInSubqueryVisitor::visitApplyNode(ApplyNode & node, Void
         auto multi_if = makeASTFunction("multiIf", true_predicate, true_value, false_predicate, false_value, else_value);
         auto cast = makeASTFunction("cast", multi_if, std::make_shared<ASTLiteral>("UInt8"));
 
-        // if left is NULL, then result is null
-        ASTPtr left_is_null = makeASTFunction("isNull", std::make_shared<ASTIdentifier>(fun_left));
+        if (context->getSettingsRef().join_use_nulls)
+        {
+            // if left is NULL, then result is null
+            ASTPtr left_is_null = makeASTFunction("isNull", std::make_shared<ASTIdentifier>(fun_left));
 
-        Assignment in_ass{
-            apply_step.getAssignment().first, makeASTFunction("if", left_is_null, std::make_shared<ASTLiteral>(Field()), cast)};
-        in_assignments.emplace_back(in_ass);
+            Assignment in_ass{
+                apply_step.getAssignment().first, makeASTFunction("if", left_is_null, std::make_shared<ASTLiteral>(Field()), cast)};
+            in_assignments.emplace_back(in_ass);
+        }
+        else
+        {
+            Assignment in_ass{apply_step.getAssignment().first, cast};
+            in_assignments.emplace_back(in_ass);
+        }
         in_name_to_type[apply_step.getAssignment().first] = apply_step.getAssignmentDataType();
     }
     if (in_fun.name == "notIn" || in_fun.name == "globalNotIn")
@@ -953,12 +961,20 @@ PlanNodePtr UnCorrelatedInSubqueryVisitor::visitApplyNode(ApplyNode & node, Void
         auto cast = makeASTFunction("cast", multi_if, std::make_shared<ASTLiteral>("UInt8"));
         ASTPtr not_equals_fn = makeASTFunction("not", cast);
 
-        // if left is NULL, then result is null
-        ASTPtr left_is_null = makeASTFunction("isNull", std::make_shared<ASTIdentifier>(fun_left));
+        if (context->getSettingsRef().join_use_nulls)
+        {
+            // if left is NULL, then result is null
+            ASTPtr left_is_null = makeASTFunction("isNull", std::make_shared<ASTIdentifier>(fun_left));
 
-        Assignment not_in_ass{
-            apply_step.getAssignment().first, makeASTFunction("if", left_is_null, std::make_shared<ASTLiteral>(Field()), not_equals_fn)};
-        in_assignments.emplace_back(not_in_ass);
+            Assignment not_in_ass{
+                apply_step.getAssignment().first, makeASTFunction("if", left_is_null, std::make_shared<ASTLiteral>(Field()), not_equals_fn)};
+            in_assignments.emplace_back(not_in_ass);
+        }
+        else
+        {
+            Assignment not_in_ass{apply_step.getAssignment().first, not_equals_fn};
+            in_assignments.emplace_back(not_in_ass);
+        }
         in_name_to_type[apply_step.getAssignment().first] = apply_step.getAssignmentDataType();
     }
 
@@ -1271,7 +1287,7 @@ PlanNodePtr CorrelatedExistsSubqueryVisitor::visitApplyNode(ApplyNode & node, Vo
     AggregateDescriptions aggregate_descs{aggregate_desc};
 
     auto count_non_null_step
-        = std::make_shared<AggregatingStep>(remove_null_node->getStep()->getOutputStream(), keys, aggregate_descs, GroupingSetsParamsList{}, true, GroupingDescriptions{}, false, false);
+        = std::make_shared<AggregatingStep>(remove_null_node->getStep()->getOutputStream(), keys, aggregate_descs, GroupingSetsParamsList{}, true);
     auto count_non_null_node
         = std::make_shared<AggregatingNode>(context->nextNodeId(), std::move(count_non_null_step), PlanNodes{remove_null_node});
 
@@ -1342,7 +1358,7 @@ PlanNodePtr UnCorrelatedExistsSubqueryVisitor::visitApplyNode(ApplyNode & node, 
     aggregate_desc.parameters = parameters;
     aggregate_desc.function = agg_fun;
     AggregateDescriptions aggregate_descs{aggregate_desc};
-    auto count_subquery_step = std::make_shared<AggregatingStep>(subquery_ptr->getStep()->getOutputStream(), keys, aggregate_descs, GroupingSetsParamsList{}, true, GroupingDescriptions{}, false, false);
+    auto count_subquery_step = std::make_shared<AggregatingStep>(subquery_ptr->getStep()->getOutputStream(), keys, aggregate_descs, GroupingSetsParamsList{}, true);
     auto count_subquery_node
         = std::make_shared<AggregatingNode>(context->nextNodeId(), std::move(count_subquery_step), PlanNodes{subquery_ptr});
 
@@ -1495,7 +1511,7 @@ PlanNodePtr UnCorrelatedQuantifiedComparisonSubqueryVisitor::visitApplyNode(Appl
     makeAggDescriptionsMinMaxCountCount2(aggregate_descriptions, context, min_value, max_value, count_all_value, count_non_null_value, subquery_ptr, qc_right);
 
     Names keys;
-    auto agg_step = std::make_shared<AggregatingStep>(right_data_stream, keys, aggregate_descriptions, GroupingSetsParamsList{}, true, GroupingDescriptions{}, false, false);
+    auto agg_step = std::make_shared<AggregatingStep>(right_data_stream, keys, aggregate_descriptions, GroupingSetsParamsList{}, true);
     auto agg_node
         = std::make_shared<AggregatingNode>(context->nextNodeId(), std::move(agg_step), PlanNodes{subquery_ptr});
 
@@ -1717,7 +1733,7 @@ PlanNodePtr CorrelatedQuantifiedComparisonSubqueryVisitor::visitApplyNode(ApplyN
         keys.emplace_back(item.name);
     }
 
-    auto count_step = std::make_shared<AggregatingStep>(join_node->getStep()->getOutputStream(), keys, aggregate_descriptions, GroupingSetsParamsList{}, true, GroupingDescriptions{}, false, false);
+    auto count_step = std::make_shared<AggregatingStep>(join_node->getStep()->getOutputStream(), keys, aggregate_descriptions, GroupingSetsParamsList{}, true);
     auto count_node = std::make_shared<AggregatingNode>(context->nextNodeId(), std::move(count_step), PlanNodes{join_node});
 
     // step5 : project match values;

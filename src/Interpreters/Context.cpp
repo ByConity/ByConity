@@ -1998,7 +1998,7 @@ void Context::setProcessorProfileElementConsumer(
 std::shared_ptr<ProfileElementConsumer<ProcessorProfileLogElement>> Context::getProcessorProfileElementConsumer() const
 {
     auto lock = getLock();
-    
+
     if (!shared->processor_log_element_consumer)
         return {};
     return shared->processor_log_element_consumer;
@@ -2013,7 +2013,7 @@ void Context::setIsExplainQuery(const bool & is_explain_query_)
 bool Context::isExplainQuery() const
 {
     auto lock = getLock();
-    
+
     return shared->is_explain_query;
 }
 
@@ -2429,7 +2429,7 @@ zkutil::ZooKeeperPtr Context::getZooKeeper() const
         if (!shared->zookeeper)
             shared->zookeeper = std::make_shared<zkutil::ZooKeeper>(config, "zookeeper", getZooKeeperLog(), endpoints);
         else if (shared->zookeeper->expired())
-            shared->zookeeper = shared->zookeeper->startNewSession();
+            shared->zookeeper = shared->zookeeper->startNewSession(endpoints);
     }
 
     return shared->zookeeper;
@@ -4074,7 +4074,10 @@ std::shared_ptr<TSO::TSOClient> Context::getCnchTSOClient() const
     if (host_port.empty())
         updateTSOLeaderHostPort();
 
-    return shared->tso_client_pool->get(host_port);
+    if (auto updated_host_port = getTSOLeaderHostPort(); !updated_host_port.empty())
+        return shared->tso_client_pool->get(updated_host_port);
+    else
+        throw Exception(ErrorCodes::NOT_A_LEADER, "Get an empty tso leader from keeper");
 }
 
 String Context::getTSOLeaderHostPort() const
@@ -4096,6 +4099,7 @@ void Context::updateTSOLeaderHostPort() const
         /// leader election maybe disabled, there should be one tso-server
         std::lock_guard lock(shared->tso_mutex);
         shared->tso_leader_host_port = "";
+        LOG_WARNING(&Poco::Logger::get("Context::updateTSO"), "TSO leader election path {} doesn't exists in keeper", tso_election_path);
         return;
     }
 
@@ -4487,6 +4491,24 @@ void Context::controlCnchBGThread(const StorageID & storage_id, CnchBGThreadType
     getCnchBGThreadsMap(type)->controlThread(storage_id, action);
 }
 
+bool Context::getTableReclusterTaskStatus(const StorageID & storage_id) const
+{
+    CnchBGThreadsMap * thread_map = getCnchBGThreadsMap(CnchBGThreadType::Clustering);
+    if (!thread_map)
+        throw Exception("Fail to get merge thread map", ErrorCodes::SYSTEM_ERROR);
+    CnchBGThreadPtr bg_thread_ptr = thread_map->tryGetThread(storage_id);
+    if (!bg_thread_ptr)
+    {
+        LOG_DEBUG(&Poco::Logger::get(__PRETTY_FUNCTION__), "Fail to get reclustering manager thread for " + storage_id.getNameForLogs());
+        return false;
+    }
+
+    ReclusteringManagerThread * reclustering_manager_thread = dynamic_cast<ReclusteringManagerThread *>(bg_thread_ptr.get());
+    if (!reclustering_manager_thread)
+        throw Exception("Fail to cast to ReclusteringManagerThread", ErrorCodes::LOGICAL_ERROR);
+    return reclustering_manager_thread->getTableReclusterStatus();
+}
+
 bool Context::removeMergeMutateTasksOnPartitions(const StorageID & storage_id, const std::unordered_set<String> & partitions)
 {
     CnchBGThreadsMap * thread_map = getCnchBGThreadsMap(CnchBGThreadType::MergeMutate);
@@ -4697,6 +4719,35 @@ std::shared_ptr<Statistics::StatisticsMemoryStore> Context::getStatisticsMemoryS
 String Context::getDefaultCnchPolicyName() const
 {
     return getConfigRef().getString("storage_configuration.cnch_default_policy", "cnch_default_hdfs");
+}
+
+String Context::getOptimizerProfile(bool print_rule)
+{
+    if (optimizer_profile)
+    {
+        String profile = optimizer_profile->getOptimizerProfile(print_rule);
+        clearOptimizerProfile();
+        return profile;
+    }
+    else
+        throw Exception("OptimizerProfile is not initialized", ErrorCodes::LOGICAL_ERROR);
+}
+
+void Context::clearOptimizerProfile()
+{
+    if (!optimizer_profile)
+        return;
+    optimizer_profile->clear();
+    optimizer_profile = nullptr;
+}
+
+void Context::logOptimizerProfile(Poco::Logger * log, String prefix, String name, String time, bool is_rule)
+{
+    if (settings.log_optimizer_run_time && log)
+        LOG_DEBUG(log, prefix + name + " " + time);
+
+    if (optimizer_profile)
+        optimizer_profile->setTime(name, time, is_rule);
 }
 
 String Context::getCnchAuxilityPolicyName() const

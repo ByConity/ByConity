@@ -30,6 +30,7 @@ class DataStream;
 
 class IQueryPlanStep;
 using QueryPlanStepPtr = std::shared_ptr<IQueryPlanStep>;
+using QueryPlanStepPtr = std::shared_ptr<IQueryPlanStep>;
 
 class Context;
 using ContextPtr = std::shared_ptr<const Context>;

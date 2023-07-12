@@ -25,7 +25,7 @@ public:
     RuleType getType() const override { return RuleType::FILTER_WINDOW_TO_PARTITION_TOPN; }
     String getName() const override { return "FILTER_WINDOW_TO_PARTITION_TOPN"; }
 
-    PatternPtr getPattern() const override { return Patterns::filter()->withSingle(Patterns::window()->withSingle(Patterns::exchange())); }
+    PatternPtr getPattern() const override { return Patterns::filter().withSingle(Patterns::window().withSingle(Patterns::exchange())).result(); }
 
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 };

@@ -127,7 +127,7 @@ public:
     void waitForStagedPartsToPublish(ContextPtr context);
 
     // Allocate parts to workers before we want to do some calculation on the parts, support non-select query.
-    void allocateParts(ContextPtr local_context, ServerDataPartsVector & parts, WorkerGroupHandle & worker_group);
+    void allocateParts(ContextPtr local_context, ServerDataPartsVector & parts);
 
     UInt64 getTimeTravelRetention();
 
@@ -173,7 +173,7 @@ public:
     };
     using PartitionDropInfos = std::unordered_map<String, PartitionDropInfo>;
     MutableDataPartsVector createDropRangesFromPartitions(const PartitionDropInfos & partition_infos, const TransactionCnchPtr & txn);
-    MutableDataPartsVector createDropRangesFromParts(const ServerDataPartsVector & parts_to_drop, const TransactionCnchPtr & txn);
+    MutableDataPartsVector createDropRangesFromParts(ContextPtr query_context, const ServerDataPartsVector & parts_to_drop, const TransactionCnchPtr & txn);
     LocalDeleteBitmaps createDeleteBitmapTombstones(const IMutableMergeTreeDataPartsVector & drop_range_parts, UInt64 txnID);
 
     StorageCnchMergeTree * checkStructureAndGetCnchMergeTree(const StoragePtr & source_table) const;

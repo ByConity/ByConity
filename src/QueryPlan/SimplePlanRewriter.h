@@ -15,12 +15,11 @@
 
 #pragma once
 
-#include <memory>
 #include <Interpreters/Context.h>
-#include <QueryPlan/CTEVisitHelper.h>
-#include <QueryPlan/PlanVisitor.h>
 #include <QueryPlan/CTERefStep.h>
+#include <QueryPlan/CTEVisitHelper.h>
 #include <QueryPlan/PlanNode.h>
+#include <QueryPlan/PlanVisitor.h>
 
 namespace DB
 {
@@ -32,7 +31,6 @@ public:
 
     PlanNodePtr visitPlanNode(PlanNodeBase & node, C & c) override
     {
-
         if (node.getChildren().empty())
             return node.shared_from_this();
         PlanNodes children;
@@ -44,10 +42,7 @@ public:
             inputs.push_back(child->getStep()->getOutputStream());
         }
 
-        auto new_step = node.getStep()->copy(context);
-        new_step->setInputStreams(inputs);
-        node.setStep(new_step);
-
+        node.getStep()->setInputStreams(inputs);
         node.replaceChildren(children);
         return node.shared_from_this();
     }
@@ -57,11 +52,6 @@ public:
         auto cte_step = node.getStep();
         auto cte_id = cte_step->getId();
         auto cte_plan = cte_helper.acceptAndUpdate(cte_id, *this, c);
-        auto new_step = std::dynamic_pointer_cast<CTERefStep>(node.getStep()->copy(context));
-        DataStreams input_streams;
-        input_streams.emplace_back(cte_plan->getStep()->getOutputStream());
-        new_step->setInputStreams(input_streams);
-        node.setStep(new_step);
         return node.shared_from_this();
     }
 

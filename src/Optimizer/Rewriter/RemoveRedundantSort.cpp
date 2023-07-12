@@ -58,21 +58,17 @@ PlanNodePtr RedundantSortVisitor::processChildren(PlanNodeBase & node, Redundant
         inputs.push_back(child->getStep()->getOutputStream());
     }
 
-    auto new_step = node.getStep()->copy(context);
-    new_step->setInputStreams(inputs);
-    node.setStep(new_step);
+    node.getStep()->setInputStreams(inputs);
     node.replaceChildren(children);
     return node.shared_from_this();
 }
 
-PlanNodePtr RedundantSortVisitor::resetChild(PlanNodeBase & node, PlanNodes & children, RedundantSortContext & sort_context)
+PlanNodePtr RedundantSortVisitor::resetChild(PlanNodeBase & node, PlanNodes & children, RedundantSortContext &)
 {
     DataStreams inputs;
     for (auto & child : children)
         inputs.push_back(child->getStep()->getOutputStream());
-    auto new_step = node.getStep()->copy(sort_context.context);
-    new_step->setInputStreams(inputs);
-    node.setStep(new_step);
+    node.getStep()->setInputStreams(inputs);
     node.replaceChildren(children);
     return node.shared_from_this();
 }
@@ -91,7 +87,7 @@ bool RedundantSortVisitor::isStateful(ConstASTPtr expression, ContextMutablePtr 
 
 PlanNodePtr RedundantSortVisitor::visitProjectionNode(ProjectionNode & node, RedundantSortContext & sort_context)
 {
-    auto step = std::dynamic_pointer_cast<ProjectionStep>(node.getStep()->copy(sort_context.context));
+    auto step = std::dynamic_pointer_cast<ProjectionStep>(node.getStep());
     const Assignments & assignments = step->getAssignments();
     if (sort_context.can_sort_be_removed)
     {
@@ -194,12 +190,6 @@ PlanNodePtr RedundantSortVisitor::visitCTERefNode(CTERefNode & node, RedundantSo
 
     RedundantSortContext child_context(cte_require_context.at(cte_id));
     auto cte_plan = post_order_cte_helper.acceptAndUpdate(cte_id, *this, child_context);
-
-    auto new_step = std::dynamic_pointer_cast<CTERefStep>(node.getStep()->copy(sort_context.context));
-    DataStreams input_streams;
-    input_streams.emplace_back(cte_plan->getStep()->getOutputStream());
-    new_step->setInputStreams(input_streams);
-    node.setStep(new_step);
     return node.shared_from_this();
 }
 

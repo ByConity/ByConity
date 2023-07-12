@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <memory>
 #include <Optimizer/Rule/Implementation/SetJoinDistribution.h>
 
 #include <Optimizer/Cascades/CascadesOptimizer.h>
@@ -25,25 +26,9 @@ namespace DB
 PatternPtr SetJoinDistribution::getPattern() const
 {
     return Patterns::join()
-        ->matchingStep<JoinStep>([](const JoinStep & s) { return s.getDistributionType() == DistributionType::UNKNOWN; })
-        ->with({Patterns::any(), Patterns::any()});
-}
-
-static bool mustRepartition(const JoinStep & join_step)
-{
-    return join_step.getKind() == ASTTableJoin::Kind::Right || join_step.getKind() == ASTTableJoin::Kind::Full;
-}
-
-static bool mustReplicate(const JoinStep & join_step)
-{
-    if (join_step.getLeftKeys().empty()
-        && (join_step.getKind() == ASTTableJoin::Kind::Inner || join_step.getKind() == ASTTableJoin::Kind::Left
-            || join_step.getKind() == ASTTableJoin::Kind::Cross))
-    {
-        // There is nothing to partition on
-        return true;
-    }
-    return false;
+        .matchingStep<JoinStep>([](const JoinStep & s) { return s.getDistributionType() == DistributionType::UNKNOWN; })
+        .with(Patterns::any(), Patterns::any())
+        .result();
 }
 
 TransformResult SetJoinDistribution::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
@@ -54,10 +39,8 @@ TransformResult SetJoinDistribution::transformImpl(PlanNodePtr node, const Captu
         return {};
 
     const auto & step = *join_node->getStep();
-    auto repartition_step = node->getStep()->copy(context.context);
-    dynamic_cast<JoinStep *>(repartition_step.get())->setDistributionType(DistributionType::REPARTITION);
-    auto repartition_node = PlanNodeBase::createPlanNode(context.context->nextNodeId(), std::move(repartition_step), node->getChildren());
-
+    auto repartition_step = std::dynamic_pointer_cast<JoinStep>(node->getStep()->copy(context.context));
+    repartition_step->setDistributionType(DistributionType::REPARTITION);
     auto left_group_id = dynamic_cast<const AnyStep *>(node->getChildren()[0]->getStep().get())->getGroupId();
     auto left_stats = context.optimization_context->getMemo().getGroupById(left_group_id)->getStatistics();
     auto right_group_id = dynamic_cast<const AnyStep *>(node->getChildren()[1]->getStep().get())->getGroupId();
@@ -72,14 +55,21 @@ TransformResult SetJoinDistribution::transformImpl(PlanNodePtr node, const Captu
                 max_ndv = std::max(max_ndv, double(right_stats.value()->getSymbolStatistics(right_key)->getNdv()));
             }
         }
+
+        if (!step.getRightKeys().empty() && right_stats.value()->getRowCount() > context.context->getSettingsRef().parallel_join_threshold)
+        {
+            repartition_step->setJoinAlgorithm(JoinAlgorithm::PARALLEL_HASH);
+        }
+
         if (max_ndv > context.context->getSettingsRef().max_replicate_build_size
             || right_stats.value()->getRowCount() > context.context->getSettingsRef().max_replicate_shuffle_size)
         {
-            return {repartition_node};
+            return {PlanNodeBase::createPlanNode(context.context->nextNodeId(), std::move(repartition_step), node->getChildren())};
         }
     }
 
-    if (mustRepartition(step))
+    auto repartition_node = PlanNodeBase::createPlanNode(context.context->nextNodeId(), std::move(repartition_step), node->getChildren());
+    if (step.mustRepartition())
     {
         return {repartition_node};
     }
@@ -88,7 +78,7 @@ TransformResult SetJoinDistribution::transformImpl(PlanNodePtr node, const Captu
     dynamic_cast<JoinStep *>(broadcast_step.get())->setDistributionType(DistributionType::BROADCAST);
     auto replicate_node = PlanNodeBase::createPlanNode(context.context->nextNodeId(), std::move(broadcast_step), node->getChildren());
 
-    if (mustReplicate(step))
+    if (step.mustReplicate())
     {
         return {replicate_node};
     }

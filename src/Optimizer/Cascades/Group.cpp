@@ -37,7 +37,8 @@ void Group::addExpression(const GroupExprPtr & expression, CascadesContext & con
     {
         logical_expressions.emplace_back(expression);
         if (!(expression->getStep()->getType() == IQueryPlanStep::Type::Join
-              && dynamic_cast<const JoinStep &>(*expression->getStep()).supportReorder(context.isSupportFilter())))
+              && dynamic_cast<const JoinStep &>(*expression->getStep()).supportReorder(context.isSupportFilter())
+              && !dynamic_cast<const JoinStep &>(*expression->getStep()).isOrdered()))
         {
             join_sets.insert(JoinSet(id));
         }

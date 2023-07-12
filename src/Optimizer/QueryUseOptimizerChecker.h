@@ -43,16 +43,28 @@ public:
     bool visitNode(ASTPtr & node, QueryUseOptimizerContext &) override;
     bool visitASTSelectQuery(ASTPtr & node, QueryUseOptimizerContext &) override;
     bool visitASTTableJoin(ASTPtr & node, QueryUseOptimizerContext &) override;
-    bool visitASTArrayJoin(ASTPtr & node, QueryUseOptimizerContext &) override;
     bool visitASTIdentifier(ASTPtr & node, QueryUseOptimizerContext &) override;
     bool visitASTFunction(ASTPtr & node, QueryUseOptimizerContext &) override;
-    bool visitASTOrderByElement(ASTPtr & node, QueryUseOptimizerContext &) override;
     bool visitASTQuantifiedComparison(ASTPtr & node, QueryUseOptimizerContext &) override;
     const String & getReason() const { return reason; }
 
 private:
     void collectWithTableNames(ASTSelectQuery & query, NameSet & with_tables);
     String reason;
+};
+
+class QuerySupportOptimizerVisitor : public ASTVisitor<bool, QueryUseOptimizerContext>
+{
+public:
+    bool visitNode(ASTPtr & node, QueryUseOptimizerContext &) override;
+    bool visitASTSelectQuery(ASTPtr & node, QueryUseOptimizerContext &) override;
+    bool visitASTSelectIntersectExceptQuery(ASTPtr & node, QueryUseOptimizerContext &) override;
+    bool visitASTSelectWithUnionQuery(ASTPtr & node, QueryUseOptimizerContext &) override;
+    bool visitASTTableJoin(ASTPtr & node, QueryUseOptimizerContext &) override;
+    bool visitASTFunction(ASTPtr & node, QueryUseOptimizerContext &) override;
+    bool visitASTQuantifiedComparison(ASTPtr & node, QueryUseOptimizerContext &) override;
+
+private:
 };
 
 }

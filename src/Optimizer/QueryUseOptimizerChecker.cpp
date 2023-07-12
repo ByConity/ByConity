@@ -34,8 +34,7 @@
 
 namespace DB
 {
-
-void changeDistributedStages(ASTPtr &node)
+void changeDistributedStages(ASTPtr & node)
 {
     if (!node)
         return;
@@ -46,7 +45,7 @@ void changeDistributedStages(ASTPtr &node)
         if (!settings_ptr)
             return;
         auto & ast = settings_ptr->as<ASTSetQuery &>();
-        for (auto it = ast.changes.begin(); it != ast.changes.end();++it)
+        for (auto it = ast.changes.begin(); it != ast.changes.end(); ++it)
         {
             if (it->name == "enable_distributed_stages")
             {
@@ -95,7 +94,14 @@ bool QueryUseOptimizerChecker::check(ASTPtr & node, const ContextMutablePtr & co
     if (auto * explain = node->as<ASTExplainQuery>())
     {
         bool explain_plan = explain->getKind() == ASTExplainQuery::ExplainKind::OptimizerPlan
-            || explain->getKind() == ASTExplainQuery::ExplainKind::QueryPlan;
+            || explain->getKind() == ASTExplainQuery::ExplainKind::QueryPlan
+            || explain->getKind() == ASTExplainQuery::ExplainKind::QueryPipeline
+            || explain->getKind() ==  ASTExplainQuery::AnalyzedSyntax
+            // || explain->getKind() ==  ASTExplainQuery::DistributedAnalyze
+            // || explain->getKind() ==  ASTExplainQuery::LogicalAnalyze
+            // || explain->getKind() ==  ASTExplainQuery::Distributed
+            || explain->getKind() ==  ASTExplainQuery::TraceOptimizerRule
+            || explain->getKind() ==  ASTExplainQuery::TraceOptimizer;
         support = explain_plan && check(explain->getExplainedQuery(), context);
     }
     else if (auto * dump = node->as<ASTDumpInfoQuery>())
@@ -121,6 +127,21 @@ bool QueryUseOptimizerChecker::check(ASTPtr & node, const ContextMutablePtr & co
             //            support = false;
         }
 
+
+        if (support && context->getSettingsRef().enable_optimizer_white_list)
+        {
+            QuerySupportOptimizerVisitor support_checker;
+            try
+            {
+                support = ASTVisitorUtil::accept(node, support_checker, query_with_plan_context);
+            }
+            catch (Exception &)
+            {
+                //            if (e.code() != ErrorCodes::NOT_IMPLEMENTED)
+                throw;
+                //            support = false;
+            }
+        }
         if (!support)
             LOG_INFO(
                 &Poco::Logger::get("QueryUseOptimizerChecker"), "query is unsupported for optimizer, reason: " + checker.getReason());
@@ -219,23 +240,7 @@ bool QueryUseOptimizerVisitor::visitASTSelectQuery(ASTPtr & node, QueryUseOptimi
 
 bool QueryUseOptimizerVisitor::visitASTTableJoin(ASTPtr & node, QueryUseOptimizerContext & query_with_plan_context)
 {
-    const auto & table_join = node->as<ASTTableJoin &>();
-    const auto & strictness = table_join.strictness;
-
-    if (strictness == ASTTableJoin::Strictness::Semi || strictness == ASTTableJoin::Strictness::Anti)
-        return false;
-
-    /// ANY INNER JOIN with any_join_distinct_right_table_keys = 1 will becomes SEMI LEFT JOIN
-    if (strictness == ASTTableJoin::Strictness::Any && table_join.kind == ASTTableJoin::Kind::Inner && query_with_plan_context.context->getSettingsRef().any_join_distinct_right_table_keys)
-        return false;
-
     return visitNode(node, query_with_plan_context);
-}
-
-bool QueryUseOptimizerVisitor::visitASTArrayJoin(ASTPtr &, QueryUseOptimizerContext &)
-{
-    reason = "array join";
-    return false;
 }
 
 bool QueryUseOptimizerVisitor::visitASTIdentifier(ASTPtr & node, QueryUseOptimizerContext & context)
@@ -249,15 +254,7 @@ bool QueryUseOptimizerVisitor::visitASTIdentifier(ASTPtr & node, QueryUseOptimiz
 bool QueryUseOptimizerVisitor::visitASTFunction(ASTPtr & node, QueryUseOptimizerContext & query_with_plan_context)
 {
     auto & fun = node->as<ASTFunction &>();
-    // TODO for test case : 00700_decimal_casts/00700_decimal_casts_2/00811_garbage/00700_to_decimal_or_something
-    // for example: SELECT toDecimal32(0, rowNumberInBlock()); -- { serverError 44 }
-    // when optimizer enabled, rowNumberInBlock() will interperted to 256 value in CI pipeline, make test case fail.
-    if (fun.name == "rowNumberInBlock")
-    {
-        reason = "unsupported function";
-        return false;
-    }
-    else if (fun.name == "untuple")
+    if (fun.name == "untuple")
     {
         reason = "unsupported function";
         return false;
@@ -283,12 +280,6 @@ bool QueryUseOptimizerVisitor::visitASTQuantifiedComparison(ASTPtr & node, Query
     return visitNode(node, query_with_plan_context);
 }
 
-bool QueryUseOptimizerVisitor::visitASTOrderByElement(ASTPtr & node, QueryUseOptimizerContext &)
-{
-    auto & order_by = node->as<ASTOrderByElement &>();
-    return !order_by.with_fill;
-}
-
 void QueryUseOptimizerVisitor::collectWithTableNames(ASTSelectQuery & query, NameSet & with_tables)
 {
     if (auto with = query.with())
@@ -297,6 +288,89 @@ void QueryUseOptimizerVisitor::collectWithTableNames(ASTSelectQuery & query, Nam
             if (auto * with_elem = child->as<ASTWithElement>())
                 with_tables.emplace(with_elem->name);
     }
+}
+
+bool QuerySupportOptimizerVisitor::visitNode(ASTPtr & node, QueryUseOptimizerContext & context)
+{
+    for (auto & child : node->children)
+    {
+        if (ASTVisitorUtil::accept(child, *this, context))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool QuerySupportOptimizerVisitor::visitASTTableJoin(ASTPtr &, QueryUseOptimizerContext &)
+{
+    return true;
+}
+
+bool QuerySupportOptimizerVisitor::visitASTSelectQuery(ASTPtr & node, QueryUseOptimizerContext & query_with_plan_context)
+{
+    auto * select = node->as<ASTSelectQuery>();
+
+    if (select->groupBy())
+        return true;
+
+    return visitNode(node, query_with_plan_context);
+}
+
+bool QuerySupportOptimizerVisitor::visitASTSelectIntersectExceptQuery(ASTPtr & node, QueryUseOptimizerContext & query_with_plan_context)
+{
+    auto & intersect_or_except = node->as<ASTSelectIntersectExceptQuery &>();
+    switch (intersect_or_except.final_operator)
+    {
+        case ASTSelectIntersectExceptQuery::Operator::INTERSECT_ALL:
+        case ASTSelectIntersectExceptQuery::Operator::INTERSECT_DISTINCT:
+        case ASTSelectIntersectExceptQuery::Operator::EXCEPT_ALL:
+        case ASTSelectIntersectExceptQuery::Operator::EXCEPT_DISTINCT:
+            return true;
+        default:
+            break;
+    }
+    return visitNode(node, query_with_plan_context);
+}
+
+bool QuerySupportOptimizerVisitor::visitASTSelectWithUnionQuery(ASTPtr & node, QueryUseOptimizerContext & query_with_plan_context)
+{
+    auto * select = node->as<ASTSelectWithUnionQuery>();
+
+    switch (select->union_mode)
+    {
+        case ASTSelectWithUnionQuery::Mode::INTERSECT_ALL:
+        case ASTSelectWithUnionQuery::Mode::INTERSECT_DISTINCT:
+        case ASTSelectWithUnionQuery::Mode::EXCEPT_ALL:
+        case ASTSelectWithUnionQuery::Mode::EXCEPT_DISTINCT:
+            return true;
+        case ASTSelectWithUnionQuery::Mode::ALL:
+        case ASTSelectWithUnionQuery::Mode::DISTINCT:
+        default:
+            break;
+    }
+    return visitNode(node, query_with_plan_context);
+}
+
+
+bool QuerySupportOptimizerVisitor::visitASTFunction(ASTPtr & node, QueryUseOptimizerContext & query_with_plan_context)
+{
+    auto & fun = node->as<ASTFunction &>();
+    static const std::set<String> distinct_func{"uniqexact", "countdistinct"};
+    if (distinct_func.contains(Poco::toLower(fun.name)))
+    {
+        return true;
+    }
+    if (fun.is_window_function && query_with_plan_context.context->getSettingsRef().enable_optimizer_support_window)
+    {
+        return true;
+    }
+    return visitNode(node, query_with_plan_context);
+}
+
+bool QuerySupportOptimizerVisitor::visitASTQuantifiedComparison(ASTPtr &, QueryUseOptimizerContext &)
+{
+    return true;
 }
 
 }

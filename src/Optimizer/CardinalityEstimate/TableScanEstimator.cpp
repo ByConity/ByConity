@@ -18,6 +18,9 @@
 #include <Statistics/StatsTableBasic.h>
 #include <Poco/Logger.h>
 #include <common/ErrorHandlers.h>
+#include <Parsers/ASTSelectQuery.h>
+#include <Optimizer/CardinalityEstimate/LimitEstimator.h>
+#include <Interpreters/convertFieldToType.h>
 
 namespace DB
 {
@@ -60,6 +63,21 @@ PlanNodeStatisticsPtr TableScanEstimator::estimate(ContextMutablePtr context, co
                 step.getDatabase() + "-" + step.getTable() + "-" + alias_to_column[col.name]);
         }
     }
+    if (!context->getSettingsRef().enable_histogram)
+    {
+        for (auto & item : plan_node_stats->getSymbolStatistics())
+        {
+            item.second->getHistogram().clear();
+        }
+    }
+
+    auto query_info = step.getQueryInfo();
+    auto *query = query_info.query->as<ASTSelectQuery>();
+    if (step.hasLimit() && query->getLimitLength())
+    {
+        Field converted = convertFieldToType(query->refLimitLength()->as<ASTLiteral>()->value, DataTypeUInt64());
+        return LimitEstimator::getLimitStatistics(plan_node_stats, converted.safeGet<UInt64>());
+    }
 
     return plan_node_stats;
 }
@@ -91,6 +109,14 @@ std::optional<PlanNodeStatisticsPtr> TableScanEstimator::estimate(
         auto * logger = &Poco::Logger::get("TableScanEstimator");
         tryLogCurrentException(logger);
         return std::nullopt;
+    }
+
+    if (!context->getSettingsRef().enable_histogram)
+    {
+        for (auto & item : plan_node_stats->getSymbolStatistics())
+        {
+            item.second->getHistogram().clear();
+        }
     }
 
     return plan_node_stats;

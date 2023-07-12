@@ -41,6 +41,8 @@ void ValuesStep::initializePipeline(QueryPipeline & pipeline, const BuildQueryPi
     }
 
     pipeline.init(Pipe(std::make_shared<SourceFromSingleChunk>(getOutputStream().header, Chunk(block.getColumns(), block.rows()))));
+    for (const auto & processor : pipeline.getProcessors())
+        processors.emplace_back(processor);
 }
 
 void ValuesStep::serialize(WriteBuffer & buffer) const

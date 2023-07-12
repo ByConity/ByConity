@@ -89,7 +89,12 @@ public:
 
     const std::vector<GroupExprPtr> & getLogicalExpressions() const { return logical_expressions; }
     const std::vector<GroupExprPtr> & getPhysicalExpressions() const { return physical_expressions; }
-    ConstQueryPlanStepPtr & getStep() const { return logical_expressions[0]->getStep(); }
+    QueryPlanStepPtr & getStep() const
+    {
+        if (logical_expressions.size() == 0)
+            return physical_expressions[0]->getStep();
+        return logical_expressions[0]->getStep();
+    }
     PlanNodePtr createLeafNode(ContextMutablePtr context) const;
 
     /**

@@ -235,6 +235,11 @@ ExchangeResult ExchangeVisitor::visitExceptNode(ExceptNode & node, ExchangeConte
     return visitPlanNode(node, cxt);
 }
 
+ExchangeResult ExchangeVisitor::visitFillingNode(FillingNode & node, ExchangeContext & cxt)
+{
+    return visitPlanNode(node, cxt);
+}
+
 //ExchangeResult ExchangeVisitor::visitMaterializingNode(MaterializingNode & node, ExchangeContext & cxt)
 //{
 //    return visitPlan(node, cxt);
@@ -278,6 +283,11 @@ ExchangeResult ExchangeVisitor::visitEnforceSingleRowNode(EnforceSingleRowNode &
 ExchangeResult ExchangeVisitor::visitAssignUniqueIdNode(AssignUniqueIdNode & node, ExchangeContext & cxt)
 {
     return visitPlanNode(node, cxt);
+}
+
+ExchangeResult ExchangeVisitor::visitExplainAnalyzeNode(ExplainAnalyzeNode & node, ExchangeContext & cxt)
+{
+    return enforceNodeAndStream(node, cxt);
 }
 
 ExchangeResult ExchangeVisitor::visitCTERefNode(CTERefNode & node, ExchangeContext &)

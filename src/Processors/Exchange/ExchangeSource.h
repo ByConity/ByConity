@@ -36,6 +36,7 @@ public:
 
     IProcessor::Status prepare() override;
     String getName() const override;
+    String getClassName() const;
     BroadcastReceiverPtr & getReceiver() { return receiver; }
 
 protected:

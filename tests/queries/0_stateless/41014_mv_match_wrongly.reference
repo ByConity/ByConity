@@ -22,6 +22,6 @@ Projection Est. ? rows
    └─ Gather Exchange Est. ? rows
       └─ Aggregating Est. ? rows
          │     Group by: {}
-         │     Aggregates: expr#count(int_col_1):=AggNull(count)(int_col_1)
+         │     Aggregates: expr#count(int_col_1):=AggNull(count)(int_col)
          └─ TableScan test.store1_1 Est. ? rows
-                  Outputs: [int_col_1]
+                  Outputs: int_col:=int_col_1

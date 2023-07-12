@@ -25,9 +25,9 @@ namespace DB
 class PropertyDeriver
 {
 public:
-    static Property deriveProperty(ConstQueryPlanStepPtr step, ContextMutablePtr & context);
-    static Property deriveProperty(ConstQueryPlanStepPtr step, Property & input_property, ContextMutablePtr & context);
-    static Property deriveProperty(ConstQueryPlanStepPtr step, PropertySet & input_properties, ContextMutablePtr & context);
+    static Property deriveProperty(QueryPlanStepPtr step, ContextMutablePtr & context);
+    static Property deriveProperty(QueryPlanStepPtr step, Property & input_property, ContextMutablePtr & context);
+    static Property deriveProperty(QueryPlanStepPtr step, PropertySet & input_properties, ContextMutablePtr & context);
     static Property deriveStorageProperty(const StoragePtr& storage, ContextMutablePtr & context);
 };
 
@@ -52,6 +52,7 @@ public:
     Property visitProjectionStep(const ProjectionStep & step, DeriverContext & context) override;
     Property visitFilterStep(const FilterStep &, DeriverContext & context) override;
     Property visitJoinStep(const JoinStep & step, DeriverContext & context) override;
+    Property visitArrayJoinStep(const ArrayJoinStep & step, DeriverContext & context) override;
     Property visitAggregatingStep(const AggregatingStep & step, DeriverContext & context) override;
     Property visitMarkDistinctStep(const MarkDistinctStep & step, DeriverContext & context) override;
     Property visitMergingAggregatedStep(const MergingAggregatedStep &, DeriverContext & context) override;
@@ -76,7 +77,9 @@ public:
     Property visitEnforceSingleRowStep(const EnforceSingleRowStep &, DeriverContext & context) override;
     Property visitAssignUniqueIdStep(const AssignUniqueIdStep &, DeriverContext & context) override;
     Property visitCTERefStep(const CTERefStep &, DeriverContext & context) override;
+    Property visitExplainAnalyzeStep(const ExplainAnalyzeStep &, DeriverContext & context) override;
     Property visitTopNFilteringStep(const TopNFilteringStep &, DeriverContext & context) override;
+    Property visitFillingStep(const FillingStep &, DeriverContext & context) override;
 };
 
 }

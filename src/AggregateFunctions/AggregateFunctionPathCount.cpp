@@ -41,10 +41,10 @@ AggregateFunctionPtr createAggregateFunctionPathCount(const String & name, const
     if (argument_types.size() == 1 && argument_types[0]->getName() == "Array(Array(Tuple(UInt16, String)))")
         return std::make_shared<AggregateFunctionPathCount<UInt16, true>>(max_node_size, max_step_size, argument_types, params);
 
-    if (argument_types.size() == 3)
+    if (argument_types.size() == 3 && argument_types[0]->getName() == "Array(Tuple(UInt16, String))")
         return std::make_shared<AggregateFunctionPathCount<UInt16, false>>(max_node_size, max_step_size, argument_types, params);
 
-    throw Exception("Aggregate function " + name + "(...)([[(UInt16, String)]]) or " + name + "(...)([(UInt16, String)], UInt64, UInt64).", ErrorCodes::BAD_ARGUMENTS);
+    throw Exception("Aggregate function " + name + "(...)([[(UInt16, String)]]) or " + name + "(...)([(UInt16, String)], UInt64, UInt64)", ErrorCodes::BAD_ARGUMENTS);
 }
 
 void registerAggregateFunctionPathCount(AggregateFunctionFactory & factory)

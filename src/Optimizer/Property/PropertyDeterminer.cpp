@@ -24,7 +24,7 @@
 
 namespace DB
 {
-PropertySets PropertyDeterminer::determineRequiredProperty(ConstQueryPlanStepPtr step, const Property & property)
+PropertySets PropertyDeterminer::determineRequiredProperty(QueryPlanStepPtr step, const Property & property)
 {
     DeterminerContext context{property};
     static DeterminerVisitor visitor{};
@@ -32,7 +32,7 @@ PropertySets PropertyDeterminer::determineRequiredProperty(ConstQueryPlanStepPtr
 }
 
 PropertySets PropertyDeterminer::determineRequiredProperty(
-    ConstQueryPlanStepPtr step, const Property & property, const std::vector<std::unordered_set<CTEId>> & child_with_clause)
+    QueryPlanStepPtr step, const Property & property, const std::vector<std::unordered_set<CTEId>> & child_with_clause)
 {
     auto input_properties = determineRequiredProperty(step, property);
     for (auto & property_set : input_properties)
@@ -60,6 +60,11 @@ PropertySets DeterminerVisitor::visitProjectionStep(const ProjectionStep & step,
         return {{Property{}}};
     translated.setPreferred(true);
     return {{translated}};
+}
+
+PropertySets DeterminerVisitor::visitArrayJoinStep(const ArrayJoinStep &, DeterminerContext &)
+{
+    return {{Property{Partitioning{Partitioning::Handle::SINGLE}}}};
 }
 
 PropertySets DeterminerVisitor::visitFilterStep(const FilterStep &, DeterminerContext & context)
@@ -96,8 +101,7 @@ PropertySets DeterminerVisitor::visitJoinStep(const JoinStep & step, DeterminerC
 
     if (step.getDistributionType() == DistributionType::BROADCAST)
     {
-        return {
-            {Property{Partitioning{Partitioning::Handle::ARBITRARY}}, Property{Partitioning{Partitioning::Handle::FIXED_BROADCAST}}}};
+        return {{Property{Partitioning{Partitioning::Handle::ARBITRARY}}, Property{Partitioning{Partitioning::Handle::FIXED_BROADCAST}}}};
     }
 
     if (left_keys.empty() && right_keys.empty())
@@ -120,10 +124,10 @@ PropertySets DeterminerVisitor::visitJoinStep(const JoinStep & step, DeterminerC
 
 PropertySets DeterminerVisitor::visitAggregatingStep(const AggregatingStep & step, DeterminerContext &)
 {
-//    if (/*step.isTotals() || */)
-//    {
-//        return {{Property{Partitioning{Partitioning::Handle::SINGLE}}}};
-//    }
+    //    if (/*step.isTotals() || */)
+    //    {
+    //        return {{Property{Partitioning{Partitioning::Handle::SINGLE}}}};
+    //    }
 
     auto keys = step.getKeys();
     if (keys.empty())
@@ -211,9 +215,18 @@ PropertySets DeterminerVisitor::visitUnionStep(const UnionStep & step, Determine
     return {set};
 }
 
-PropertySets DeterminerVisitor::visitIntersectStep(const IntersectStep & node, DeterminerContext & context)
+PropertySets DeterminerVisitor::visitIntersectStep(const IntersectStep & node, DeterminerContext &)
 {
-    return visitStep(node, context);
+    PropertySet set;
+    for (const auto & input : node.getInputStreams())
+    {
+        set.emplace_back(Property{Partitioning{
+            Partitioning::Handle::FIXED_HASH,
+            input.header.getNames(),
+        }});
+    }
+
+    return {set};
 }
 
 PropertySets DeterminerVisitor::visitExceptStep(const ExceptStep & node, DeterminerContext & context)
@@ -284,7 +297,7 @@ PropertySets DeterminerVisitor::visitMergingSortedStep(const MergingSortedStep &
 
 PropertySets DeterminerVisitor::visitDistinctStep(const DistinctStep &, DeterminerContext &)
 {
-    return {{Property{Partitioning{Partitioning::Handle::SINGLE}, Partitioning{Partitioning::Handle::SINGLE}}}};
+    return {{Property{Partitioning{Partitioning::Handle::SINGLE}}}};
 }
 
 PropertySets DeterminerVisitor::visitExtremesStep(const ExtremesStep &, DeterminerContext &)
@@ -335,10 +348,21 @@ PropertySets DeterminerVisitor::visitCTERefStep(const CTERefStep &, DeterminerCo
     return {{}};
 }
 
+PropertySets DeterminerVisitor::visitExplainAnalyzeStep(const ExplainAnalyzeStep &, DeterminerContext &)
+{
+    return {{Property{Partitioning{Partitioning::Handle::SINGLE}}}};
+}
+
 PropertySets DeterminerVisitor::visitTopNFilteringStep(const TopNFilteringStep &, DeterminerContext & context)
 {
     auto require = context.getRequired();
     require.setPreferred(true);
     return {{require}};
 }
+
+PropertySets DeterminerVisitor::visitFillingStep(const FillingStep & , DeterminerContext & )
+{
+    return {{Property{Partitioning{Partitioning::Handle::SINGLE}}}};
+}
+
 }

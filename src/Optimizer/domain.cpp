@@ -215,13 +215,13 @@ std::optional<FieldWithTypeMap> TupleDomain::extractFixedValues() const
 
 ///Extract all column constraints that define a non-empty set of discrete values allowed for the columns in their respective Domains.
 ///Returns an empty Optional if the Domain is none or all.
-std::optional<std::unordered_map<String, Array>> TupleDomain::extractDiscreteValues() const
+std::optional<LinkedHashMap<String, Array>> TupleDomain::extractDiscreteValues() const
 {
     //if tuple_domain is "none" or is "all"
     if (domainsIsEmpty())
         return std::nullopt;
 
-    std::unordered_map<String, Array> discrete_values_map;
+    LinkedHashMap<String, Array> discrete_values_map;
     for (const auto & domain : domains)
     {
         if (domain.second.isNullableDiscreteSet())
@@ -236,7 +236,7 @@ std::optional<std::unordered_map<String, Array>> TupleDomain::extractDiscreteVal
 ///those columns to be fixed to those values. Null is allowed as a fixed value.
 TupleDomain TupleDomain::fromFixedValues(const FieldWithTypeMap & fixed_values)
 {
-    std::unordered_map<String, Domain> domains;
+    DomainMap domains;
     for (const auto & item : fixed_values)
     {
         const FieldWithType & type_and_field = item.second;
@@ -280,7 +280,7 @@ TupleDomain TupleDomain::intersect(const std::vector<TupleDomain> & others)
     {
         for (const auto & domains_ref : candidate[i].getDomains())
         {
-            if (root_domains.find(domains_ref.first) == root_domains.end())
+            if (!root_domains.count(domains_ref.first))
             {
                 root_domains.emplace(domains_ref.first, domains_ref.second);
             }
@@ -443,9 +443,9 @@ TupleDomain TupleDomain::columnWiseUnion(const std::vector<TupleDomain> & tuple_
         }
     }
     // finally, do the column-wise union
-    std::unordered_map<String, Domain> result;
+    DomainMap result;
     for (const auto & multiple_domains : domains_by_column) {
-        result.insert(std::make_pair(multiple_domains.first, Domain::unionDomains((multiple_domains.second))));
+        result.emplace_back(std::make_pair(multiple_domains.first, Domain::unionDomains((multiple_domains.second))));
     }
     return TupleDomain(result);
 }

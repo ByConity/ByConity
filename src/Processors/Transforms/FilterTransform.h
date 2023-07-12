@@ -20,7 +20,7 @@ class FilterTransform : public ISimpleTransform
 public:
     FilterTransform(
         const Block & header_, ExpressionActionsPtr expression_, String filter_column_name_,
-        bool remove_filter_column_, bool on_totals_ = false);
+        bool remove_filter_column_, bool on_totals_ = false, bool dynamic_ = false);
 
     static Block transformHeader(
             Block header,
@@ -40,6 +40,7 @@ private:
     String filter_column_name;
     bool remove_filter_column;
     bool on_totals;
+    bool dynamic;
 
     ConstantFilterDescription constant_filter_description;
     size_t filter_column_position = 0;

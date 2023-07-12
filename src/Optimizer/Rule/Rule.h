@@ -62,8 +62,10 @@ enum class RuleType : UInt32
     PULL_PROJECTION_ON_JOIN_THROUGH_JOIN,
 
     PUSH_PARTIAL_AGG_THROUGH_EXCHANGE,
+    PUSH_PARTIAL_AGG_THROUGH_UNION,
     PUSH_PARTIAL_SORTING_THROUGH_EXCHANGE,
     PUSH_PARTIAL_LIMIT_THROUGH_EXCHANGE,
+    PUSH_PARTIAL_DISTINCT_THROUGH_EXCHANGE,
 
     REMOVE_REDUNDANT_FILTER,
     REMOVE_REDUNDANT_UNION,
@@ -75,17 +77,20 @@ enum class RuleType : UInt32
     REMOVE_REDUNDANT_AGGREGATE,
     REMOVE_REDUNDANT_ENFORCE_SINGLE_ROW,
     REMOVE_READ_NOTHING,
+    REMOVE_REDUNDANT_TWO_APPLY,
 
     PUSH_AGG_THROUGH_OUTER_JOIN,
+    PUSH_AGG_THROUGH_INNER_JOIN,
 
     JOIN_ENUM_ON_GRAPH,
     INNER_JOIN_COMMUTATION,
-    PULL_Left_JOIN_THROUGH_INNER_JOIN,
-    PULL_Left_JOIN_PROJECTION_THROUGH_INNER_JOIN,
-    PULL_Left_JOIN_FILTER_THROUGH_INNER_JOIN,
+    PULL_LEFT_JOIN_THROUGH_INNER_JOIN,
+    PULL_LEFT_JOIN_PROJECTION_THROUGH_INNER_JOIN,
+    PULL_LEFT_JOIN_FILTER_THROUGH_INNER_JOIN,
 
     MAGIC_SET_FOR_AGGREGATION,
     MAGIC_SET_FOR_PROJECTION_AGGREGATION,
+    MAGIC_SET_FOR_JOIN_AGGREGATION,
 
     MAGIC_SET_PUSH_THROUGH_FILTER,
     MAGIC_SET_PUSH_THROUGH_JOIN,
@@ -93,15 +98,18 @@ enum class RuleType : UInt32
     MAGIC_SET_PUSH_THROUGH_AGGREGATING,
 
     INLINE_CTE,
+    INLINE_CTE_WITH_FILTER,
 
     PUSH_JOIN_THROUGH_UNION,
     PUSH_DYNAMIC_FILTER_BUILDER_THROUGH_EXCHANGE,
 
+    LIMIT_ZERO_TO_READNOTHING,
     PUSH_LIMIT_INTO_DISTINCT,
     PUSH_LIMIT_THROUGH_PROJECTION,
     PUSH_LIMIT_THROUGH_EXTREMES,
     PUSH_LIMIT_THROUGH_UNION,
     PUSH_LIMIT_THROUGH_OUTER_JOIN,
+    PUSH_LIMIT_INTO_WINDOW,
 
     PUSH_LIMIT_INTO_TABLE_SCAN,
     PUSH_AGGREGATION_INTO_TABLE_SCAN,
@@ -111,7 +119,7 @@ enum class RuleType : UInt32
     INNER_JOIN_REORDER,
 
     MERGE_AGGREGATINGS,
-
+    SINGLE_DISTINCT_AGG_TO_GROUPBY,
     MULTIPLE_DISTINCT_AGG_TO_MARKDISTINCT,
 
     SWAP_WINDOWS,
@@ -119,10 +127,14 @@ enum class RuleType : UInt32
 
     FILTER_WINDOW_TO_PARTITION_TOPN,
 
+    EXPLAIN_ANALYZE,
+
     PUSH_TOPN_THROUGH_PROJECTION,
 
     CREATE_TOPN_FILTERING_FOR_AGGREGATING,
     PUSH_TOPN_FILTERING_THROUGH_PROJECTION,
+    
+    PUSH_DOWN_APPLY_THROUGH_JOIN,
 
     // Implementation
     SET_JOIN_DISTRIBUTION,
@@ -150,6 +162,12 @@ public:
     virtual String getName() const = 0;
     virtual PatternPtr getPattern() const = 0;
     virtual bool isEnabled(ContextPtr) { return true; }
+    // exclude this rule for a specific plan node after a successful `Rule::transform` call happens,
+    // this effectively prevent a plan node being rewritten by a rule multiple times
+    virtual bool excludeIfTransformSuccess() const { return false; }
+    // exclude this rule for a specific plan node after a failed `Rule::transform` call happens,
+    // this effectively prevent an unqualified plan node being called by a rule multiple times
+    virtual bool excludeIfTransformFailure() const { return false; }
     virtual const std::vector<RuleType> & blockRules() const
     {
         static std::vector<RuleType> empty;
