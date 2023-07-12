@@ -20,6 +20,7 @@
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/Context_fwd.h>
 #include <Protos/plan_segment_manager.pb.h>
+#include <Interpreters/WorkerStatusManager.h>
 
 namespace DB
 {
@@ -27,7 +28,7 @@ class Context;
 
 BlockIO lazyExecutePlanSegmentLocally(PlanSegmentPtr plan_segment, ContextMutablePtr context);
 
-void executePlanSegmentInternal(PlanSegmentPtr plan_segment, ContextMutablePtr context, bool async);
+void executePlanSegmentInternal(PlanSegmentPtr plan_segment, ContextPtr context, bool async, const WorkerId& worker_id = WorkerId{});
 
 void executePlanSegmentRemotely(const PlanSegment & plan_segment, ContextPtr context, bool async);
 

@@ -34,6 +34,28 @@ namespace ErrorCodes
     extern const int BRPC_PROTOCOL_VERSION_UNSUPPORT;
 }
 
+WorkerNodeResourceData ResourceMonitorTimer::getResourceData() const {
+    std::lock_guard lock(resource_data_mutex);
+    return cached_resource_data;
+}
+
+void ResourceMonitorTimer::updateResourceData() {
+    auto data = resource_monitor.createResourceData();
+    data.id = data.host_ports.id;
+    if (auto vw = getenv("VIRTUAL_WAREHOUSE_ID"))
+        data.vw_name = vw;
+    if (auto group_id = getenv("WORKER_GROUP_ID"))
+        data.worker_group_id = group_id;
+    std::lock_guard lock(resource_data_mutex);
+    cached_resource_data = data;
+
+}
+
+void ResourceMonitorTimer::run() {
+    updateResourceData();
+    task->scheduleAfter(interval);
+}
+
 void PlanSegmentManagerRpcService::executeQuery(
     ::google::protobuf::RpcController * controller,
     const ::DB::Protos::ExecutePlanSegmentRequest * request,
@@ -111,6 +133,9 @@ void PlanSegmentManagerRpcService::executeQuery(
 
         if (!query_context->hasQueryContext())
             query_context->makeQueryContext();
+
+        report_metrics_timer->getResourceData().fillProto(*response->mutable_worker_resource_data());
+        LOG_DEBUG(log, "adaptive scheduler worker status: {}", response->worker_resource_data().ShortDebugString());
 
         ThreadFromGlobalPool async_thread([query_context = std::move(query_context),
                                            plan_segment_buf = std::make_shared<butil::IOBuf>(cntl->request_attachment().movable())]() {

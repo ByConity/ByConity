@@ -239,7 +239,8 @@ brpc::CallId CnchWorkerClient::sendQueryDataParts(
     const String & local_table_name,
     const ServerDataPartsVector & data_parts,
     const std::set<Int64> & required_bucket_numbers,
-    ExceptionHandler & handler)
+    ExceptionHandlerWithFailedInfo & handler,
+    const WorkerId & worker_id)
 {
     Protos::SendDataPartsReq request;
     request.set_txn_id(context->getCurrentTransactionID());
@@ -269,7 +270,7 @@ brpc::CallId CnchWorkerClient::sendQueryDataParts(
     cntl->set_timeout_ms(send_timeout);
 
     auto call_id = cntl->call_id();
-    stub->sendQueryDataParts(cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDone, response, cntl, &handler));
+    stub->sendQueryDataParts(cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDoneWithFailedInfo, response, cntl, &handler, worker_id));
 
     return call_id;
 }

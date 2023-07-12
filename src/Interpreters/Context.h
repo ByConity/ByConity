@@ -258,6 +258,12 @@ class CnchCatalogDictionaryCache;
 class VWCustomizedSettings;
 using VWCustomizedSettingsPtr = std::shared_ptr<VWCustomizedSettings>;
 
+class WorkerStatusManager;
+using WorkerStatusManagerPtr = std::shared_ptr<WorkerStatusManager>;
+
+class WorkerGroupStatus;
+using WorkerGroupStatusPtr = std::shared_ptr<WorkerGroupStatus>;
+
 enum class ServerType
 {
     standalone,
@@ -468,6 +474,7 @@ private:
 
     std::unordered_map<std::string, bool> function_deterministic;
 
+    WorkerGroupStatusPtr worker_group_status;
     /// Temporary data for query execution accounting.
     TemporaryDataOnDiskScopePtr temp_data_on_disk;
 
@@ -504,6 +511,7 @@ private:
     /// VirtualWarehouse for each query, session level
     mutable VirtualWarehouseHandle current_vw;
     mutable WorkerGroupHandle current_worker_group;
+    mutable WorkerGroupHandle health_worker_group;
 
     /// Transaction for each query, query level
     TransactionCnchPtr current_cnch_txn;
@@ -643,6 +651,15 @@ public:
     void checkAccess(const AccessRightsElements & elements) const;
 
     std::shared_ptr<const ContextAccess> getAccess() const;
+
+    WorkerGroupStatusPtr & getWorkerGroupStatusPtr() { return worker_group_status; }
+    const WorkerGroupStatusPtr & getWorkerGroupStatusPtr() const { return worker_group_status; }
+
+    void updateAdaptiveSchdulerConfig(const ConfigurationPtr & config);
+    WorkerStatusManagerPtr getWorkerStatusManager();
+    WorkerStatusManagerPtr getWorkerStatusManager() const;
+    WorkerGroupHandle tryGetHealthWorkerGroup() const;
+    void selectWorkerNodesWithMetrics();
 
     ASTPtr getRowPolicyCondition(const String & database, const String & table_name, RowPolicy::ConditionType type) const;
 
