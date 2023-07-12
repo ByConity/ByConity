@@ -88,6 +88,14 @@ void ASTQuantifiedComparison::deserializeImpl(ReadBuffer & buf)
     children = deserializeASTs(buf);
 }
 
+ASTPtr ASTQuantifiedComparison::deserialize(ReadBuffer & buf)
+{
+    auto ast = std::make_shared<ASTQuantifiedComparison>();
+    ast->deserializeImpl(buf);
+    return ast;
+}
+
+
 void ASTQuantifiedComparison::formatImplWithoutAlias(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
 {
     FormatStateStacked nested_need_parens = frame;

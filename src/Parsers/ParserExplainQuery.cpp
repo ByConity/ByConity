@@ -44,6 +44,10 @@ bool ParserExplainQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserKeyword s_element("ELEMENT");
     ParserKeyword s_plansegment("PLANSEGMENT");
     ParserKeyword s_opt_plan("OPT_PLAN");
+    ParserKeyword s_distributed("DISTRIBUTED");
+    ParserKeyword s_analyze("ANALYZE");
+    ParserKeyword s_trace("TRACE_OPT");
+    ParserKeyword s_rule("RULE");
 
 
     if (s_explain.ignore(pos, expected))
@@ -65,6 +69,22 @@ bool ParserExplainQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
             kind = ASTExplainQuery::ExplainKind::PlanSegment;
         else if (s_opt_plan.ignore(pos, expected))
             kind = ASTExplainQuery::ExplainKind::OptimizerPlan;
+        // else if (s_distributed.ignore(pos, expected))
+        //     kind = ASTExplainQuery::ExplainKind::Distributed;
+        // else if (s_analyze.ignore(pos, expected))
+        // {
+        //     if (s_distributed.ignore(pos, expected))
+        //         kind = ASTExplainQuery::ExplainKind::DistributedAnalyze;
+        //     else
+        //         kind = ASTExplainQuery::ExplainKind::LogicalAnalyze;
+        // }
+        else if (s_trace.ignore(pos, expected))
+        {
+            if (s_rule.ignore(pos, expected))
+                kind = ASTExplainQuery::ExplainKind::TraceOptimizerRule;
+            else
+                kind = ASTExplainQuery::ExplainKind::TraceOptimizer;
+        }
     }
     else
         return false;

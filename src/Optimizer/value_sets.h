@@ -17,6 +17,7 @@
 
 #include <Core/Field.h>
 #include <Common/Exception.h>
+#include <Common/LinkedHashSet.h>
 #include <DataTypes/IDataType.h>
 #include <Optimizer/Utils.h>
 #include <unordered_set>
@@ -107,7 +108,7 @@ namespace Predicate
     };
 
     // TODO: test correctness for std::unordered_set<Field, FieldHash>
-    using FieldSet = std::unordered_set<Field, FieldHashing>;
+    using FieldSet = LinkedHashSet<Field, FieldHashing>;
 
     class DiscreteValueSet
     {

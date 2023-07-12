@@ -20,22 +20,17 @@ namespace DB
 PlanNodeStatisticsPtr LimitEstimator::estimate(PlanNodeStatisticsPtr & child_stats, const LimitStep & step)
 {
     size_t limit = step.getLimit();
-    if (!child_stats)
-    {
-        return std::make_shared<PlanNodeStatistics>(limit);
-    }
-
-    if (child_stats->getRowCount() <= limit)
-    {
-        return child_stats->copy();
-    }
-
-    return std::make_shared<PlanNodeStatistics>(limit, child_stats->getSymbolStatistics());
+    return getLimitStatistics(child_stats, limit);
 }
 
 PlanNodeStatisticsPtr LimitEstimator::estimate(PlanNodeStatisticsPtr & child_stats, const LimitByStep & step)
 {
-    UInt64 limit = step.getGroupLength();
+    size_t limit = step.getGroupLength();
+    return getLimitStatistics(child_stats, limit);
+}
+
+PlanNodeStatisticsPtr LimitEstimator::getLimitStatistics(PlanNodeStatisticsPtr & child_stats, size_t limit)
+{
     if (!child_stats)
     {
         return std::make_shared<PlanNodeStatistics>(limit);

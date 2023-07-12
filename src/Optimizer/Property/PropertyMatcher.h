@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Core/SortDescription.h>
 #include <Optimizer/Property/Property.h>
 #include <Optimizer/SymbolEquivalencesDeriver.h>
 
@@ -27,10 +28,14 @@ public:
         const Context & context, Partitioning & required, const Partitioning & actual, const SymbolEquivalences & equivalences = {}, const Constants & constants = {});
 
     static bool matchStreamPartitioning(
-        const Context & context,
-        const Partitioning & required,
-        const Partitioning & actual,
-        const SymbolEquivalences & equivalences = {});
+        const Context & context, const Partitioning & required, const Partitioning & actual, const SymbolEquivalences & equivalences = {});
+
+    static Sorting
+    matchSorting(const Context & context, const Sorting & required, const Sorting & actual, const SymbolEquivalences & equivalences = {});
+
+    static Sorting matchSorting(
+        const Context & context, const SortDescription & required, const Sorting & actual, const SymbolEquivalences & equivalences = {});
+
     static Property compatibleCommonRequiredProperty(const std::unordered_set<Property, PropertyHash> & properties);
 };
 }

@@ -55,7 +55,7 @@ struct OverlappedRange
 /**
  * A bucket in an histogram. We use double type for lower/higher bound for simplicity.
  */
-class Bucket : public std::enable_shared_from_this<Bucket>
+class Bucket
 {
 private:
     // lower bound of bucket

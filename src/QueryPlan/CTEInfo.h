@@ -34,9 +34,8 @@ public:
 
     bool contains(CTEId cte_id) const { return common_table_expressions.contains(cte_id); }
 
-    std::unordered_map<CTEId, PlanNodePtr> & getCTEs() { return common_table_expressions; }
-
     const std::unordered_map<CTEId, PlanNodePtr> & getCTEs() const { return common_table_expressions; }
+    std::unordered_map<CTEId, PlanNodePtr> & getCTEs() { return common_table_expressions; }
 
     void add(CTEId id, PlanNodePtr plan)
     {

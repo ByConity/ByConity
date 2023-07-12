@@ -15,6 +15,7 @@
 
 #include <Optimizer/DynamicFilters.h>
 
+#include <Functions/FunctionsInBloomFilter.h>
 #include <Functions/InternalFunctionsDynamicFilter.h>
 #include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
 #include <Optimizer/CardinalityEstimate/CardinalityEstimator.h>
@@ -49,6 +50,21 @@ ConstASTPtr DynamicFilters::createDynamicFilterExpression(const DynamicFilterDes
         std::make_shared<ASTLiteral>(description.original_symbol),
         description.expr->clone(),
         std::make_shared<ASTLiteral>(static_cast<UInt8>(description.type)));
+}
+
+bool DynamicFilters::containsDynamicFilters(const ConstASTPtr & filter)
+{
+    if (!filter)
+        return false;
+    if (filter->getType() == ASTType::ASTFunction)
+    {
+        const auto * function = filter->as<ASTFunction>();
+        return function->name == InternalFunctionDynamicFilter::name || function->name == FunctionInBloomFilter::name;
+    }
+    for (const auto & child : filter->children)
+        if (containsDynamicFilters(child))
+            return true;
+    return false;
 }
 
 bool DynamicFilters::isDynamicFilter(const ConstASTPtr & expr)
@@ -153,7 +169,7 @@ std::vector<ASTPtr> DynamicFilters::createDynamicFilterRuntime(
     {
         case DynamicFilterType::BloomFilter: {
             const auto bloom_function = std::make_shared<ASTFunction>();
-            bloom_function->name = "bloomFilterExist";
+            bloom_function->name = FunctionInBloomFilter::name;
             bloom_function->arguments = std::make_shared<ASTExpressionList>();
             bloom_function->children.push_back(bloom_function->arguments);
             bloom_function->arguments->children.push_back(std::make_shared<ASTLiteral>(RuntimeFilterManager::makeKey(query_id, segment_id, description.id)));

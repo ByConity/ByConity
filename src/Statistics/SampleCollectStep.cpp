@@ -28,7 +28,7 @@
 namespace DB::Statistics
 {
 
-static const String virtual_mark_id = "cityHash64(blockNumber(), _part_uuid), intDiv(rowNumberInBlock(), 8192)";
+static const String virtual_mark_id = "cityHash64(blockNumber(), _part_uuid, intDiv(rowNumberInBlock(), 8192))";
 
 // cpc is like HyperLogLog, kll is to calculate bucket bounds for equal-height histogram
 // this fetch data via the following sql:
@@ -46,7 +46,7 @@ public:
     {
         col_name = col_desc.name;
         data_type = decayDataType(col_desc.type);
-        config = get_column_config(handler_context.settings, data_type);
+        config = getColumnConfig(handler_context.settings, data_type);
     }
 
     std::vector<String> getSqls() override
@@ -82,25 +82,37 @@ public:
         // count(col) SAMPLE
         auto sample_nonnull_count = static_cast<double>(getSingleValue<UInt64>(block, index_offset + 0));
         // cpc(col) SAMPLE
-        auto ndv_b64 = getSingleValue<std::string_view>(block, index_offset + 1);
+        auto ndv_blob = getSingleValue<std::string_view>(block, index_offset + 1);
         // cpc(cityHash64(col, _mark_id)  SAMPLE
-        auto block_ndv_b64 = getSingleValue<std::string_view>(block, index_offset + 2);
+        auto block_ndv_blob = getSingleValue<std::string_view>(block, index_offset + 2);
         // kll(col) SAMPLE
-        auto histogram_b64 = getSingleValue<std::string_view>(block, index_offset + 3);
+        auto histogram_blob = getSingleValue<std::string_view>(block, index_offset + 3);
 
         // select count(*) SAMPLE
         double full_count = handler_context.full_count;
         // select count(*) FULL
         double sample_row_count = handler_context.query_row_count.value_or(0);
 
+        // due to snapshot is not implemented,
+        // and we get full_count from first sql and sample_row_count from second sql
+        // there are possiblity that full_count < sample_row_count when insertion happens between them
+        // then sample_ratio > 1, leading to unexpected exception
+        // dirty hack this by assign full_count to sample_row_count when this case occurs
+
+        /// TODO: remove this hack when snapshot is ready
+        if (full_count < sample_row_count)
+        {
+            handler_context.full_count = sample_row_count;
+            full_count = sample_row_count;
+        }
 
         HandlerColumnData result;
 
         // algorithm requires block_ndv as sample_nonnull
         if (sample_nonnull_count != 0)
         {
-            double sample_ndv = getNdvFromBase64(ndv_b64);
-            double block_ndv = getNdvFromBase64(block_ndv_b64);
+            double sample_ndv = getNdvFromSketchBinary(ndv_blob);
+            double block_ndv = getNdvFromSketchBinary(block_ndv_blob);
             block_ndv = std::min(block_ndv, sample_nonnull_count);
 
             result.nonnull_count = scaleCount(full_count, sample_row_count, sample_nonnull_count);
@@ -150,9 +162,9 @@ public:
                 result.ndv_value_opt = std::nullopt;
             }
 
-            if (!histogram_b64.empty())
+            if (!histogram_blob.empty())
             {
-                auto histogram = createStatisticsTyped<StatsKllSketch>(StatisticsTag::KllSketch, base64Decode(histogram_b64));
+                auto histogram = createStatisticsTyped<StatsKllSketch>(StatisticsTag::KllSketch, histogram_blob);
                 result.min_as_double = histogram->minAsDouble().value_or(std::nan(""));
                 result.max_as_double = histogram->maxAsDouble().value_or(std::nan(""));
 
@@ -214,7 +226,7 @@ public:
     {
         col_name = col_desc.name;
         data_type = decayDataType(col_desc.type);
-        config = get_column_config(handler_context.settings, data_type);
+        config = getColumnConfig(handler_context.settings, data_type);
     }
 
     std::vector<String> getSqls() override
@@ -224,9 +236,8 @@ public:
 
         auto bounds_b64 = base64Encode(bucket_bounds->serialize());
 
-        auto block_value_sql = fmt::format(FMT_STRING("cityHash64({}, {})"), wrapped_col_name, virtual_mark_id);
         auto ndv_buckets_extend_sql
-            = fmt::format(FMT_STRING("ndv_buckets_extend('{}')({}, {})"), bounds_b64, wrapped_col_name, block_value_sql);
+            = fmt::format(FMT_STRING("ndv_buckets_extend('{}')({}, {})"), bounds_b64, wrapped_col_name, virtual_mark_id);
         // to estimate ndv
         return {ndv_buckets_extend_sql};
     }
@@ -235,11 +246,22 @@ public:
 
     void parse(const Block & block, size_t index_offset) override
     {
-        auto ndv_buckets_extend_b64 = getSingleValue<std::string_view>(block, index_offset + 0);
+        auto ndv_buckets_extend_blob = getSingleValue<std::string_view>(block, index_offset + 0);
 
         double full_count = handler_context.full_count;
         double sample_row_count = handler_context.query_row_count.value_or(0);
+        // due to snapshot is not implemented,
+        // and we get full_count from first sql and sample_row_count from second sql
+        // there are possiblity that full_count < sample_row_count when insertion happens between them
+        // then sample_ratio > 1, leading to unexpected exception
+        // dirty hack this by assign full_count to sample_row_count when this case occurs
 
+        /// TODO: remove this hack when snapshot is ready
+        if (full_count < sample_row_count)
+        {
+            handler_context.full_count = sample_row_count;
+            full_count = sample_row_count;
+        }
 
         if (!handler_context.columns_data.count(col_name))
         {
@@ -247,8 +269,7 @@ public:
         }
 
         // write result to context
-        auto ndv_buckets_extend
-            = createStatisticsTyped<StatsNdvBucketsExtend>(StatisticsTag::NdvBucketsExtend, base64Decode(ndv_buckets_extend_b64));
+        auto ndv_buckets_extend = createStatisticsTyped<StatsNdvBucketsExtend>(StatisticsTag::NdvBucketsExtend, ndv_buckets_extend_blob);
         auto nonnull_counts = ndv_buckets_extend->getCounts();
         auto ndvs = ndv_buckets_extend->getNdvs();
         auto block_ndvs = ndv_buckets_extend->getBlockNdvs();
@@ -317,7 +338,7 @@ String constructThirdSql(
     const String & sample_tail)
 {
     auto data_type = decayDataType(col_desc.type);
-    auto config = get_column_config(settings, data_type);
+    auto config = getColumnConfig(settings, data_type);
     auto wrapped_col_name = getWrappedColumnName(config, backQuoteIfNeed(col_desc.name));
     auto bounds_b64 = base64Encode(bucket_bounds.serialize());
 
@@ -490,6 +511,19 @@ public:
 
             auto sample_nonnull_count = std::accumulate(sample_counts.begin(), sample_counts.end(), 0.0);
             auto sample_row_count = sample_nonnull_count + sample_null_count;
+
+            // due to snapshot is not implemented,
+            // and we get full_count from first sql and sample_row_count from second sql
+            // there are possiblity that full_count < sample_row_count when insertion happens between them
+            // then sample_ratio > 1, leading to unexpected exception
+            // dirty hack this by assign full_count to sample_row_count when this case occurs
+
+            /// TODO: remove this hack when snapshot is ready
+            if (full_count < sample_row_count)
+            {
+                handler_context.full_count = sample_row_count;
+                full_count = sample_row_count;
+            }
 
             {
                 // column level stats

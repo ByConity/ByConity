@@ -31,7 +31,7 @@ namespace DB
 class MaterializedViewStepChecker : public StepVisitor<bool, ContextMutablePtr>
 {
 public:
-    static bool isSupported(const ConstQueryPlanStepPtr & step, ContextMutablePtr context)
+    static bool isSupported(const QueryPlanStepPtr & step, ContextMutablePtr context)
     {
         static MaterializedViewStepChecker visitor;
         return VisitorUtil::accept(step, visitor, context);

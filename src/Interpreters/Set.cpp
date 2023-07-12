@@ -290,6 +290,25 @@ ColumnUInt8::MutablePtr Set::markDistinctBlock(const Block & block)
     {
         case SetVariants::Type::EMPTY:
             break;
+        // TODO(dongyifeng): support bitmap64
+        #if 0 
+        case SetVariants::Type::bitmap64:
+        {
+            if (key_columns.size() == 1 && rows == 1)
+            {
+                if (auto * bitmap_column =  dynamic_cast<const ColumnBitMap64 *>(key_columns[0]);
+                    bitmap_column)
+                {
+                    bitmap_set |= bitmap_column->getBitMapAt(0);
+                }
+                else
+                    throw Exception("in bitmap get exception, not found ColumnBitMap64", ErrorCodes::LOGICAL_ERROR);
+            }
+            else
+                throw Exception("size of Set(BitMap64) should be only one when using IN operator", ErrorCodes::LOGICAL_ERROR);
+            break;
+        }
+        #endif
 #define M(NAME) \
         case SetVariants::Type::NAME: \
             insertFromBlockImpl(*data.NAME, key_columns, rows, data, null_map, filter ? &filter->getData() : nullptr); \

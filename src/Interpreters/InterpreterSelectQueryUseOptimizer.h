@@ -21,7 +21,7 @@
 #include <QueryPlan/PlanVisitor.h>
 #include <Interpreters/DistributedStages/PlanSegmentSplitter.h>
 #include <Interpreters/QueryLog.h>
-#include "QueryPlan/QueryPlan.h"
+#include <Poco/Logger.h>
 
 namespace Poco
 {
@@ -46,6 +46,7 @@ public:
     }
 
     QueryPlanPtr buildQueryPlan();
+    PlanSegmentTreePtr getPlanSegment();
 
     BlockIO execute() override;
 

@@ -52,6 +52,7 @@ public:
 
     // invalidate cache on current server
     static void invalidate(const ContextPtr context, const StatsTableIdentifier & table);
+    static void reset();
 
 private:
     static std::unique_ptr<CacheType> cache;

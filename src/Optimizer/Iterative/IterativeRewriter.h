@@ -23,6 +23,7 @@
 #include <unordered_map>
 #include <vector>
 #include <chrono>
+#include <map>
 
 namespace DB
 {
@@ -36,6 +37,7 @@ struct IterativeRewriterContext
     CTEInfo & cte_info;
     std::chrono::time_point<std::chrono::system_clock> start_time;
     UInt64 optimizer_timeout;
+    ExcludedRulesMap * excluded_rules_map;
 };
 
 /**
@@ -49,6 +51,7 @@ public:
     String name() const override { return names; }
     void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
 
+    static std::map<std::underlying_type_t<RuleType>, size_t> getRuleCallTimes();
 private:
     String names;
     RuleIndex rules;

@@ -18,6 +18,7 @@
 #include <QueryPlan/PlanVisitor.h>
 #include <QueryPlan/QueryPlan.h>
 #include <QueryPlan/SimplePlanVisitor.h>
+#include "QueryPlan/PlanNode.h"
 
 namespace DB
 {
@@ -73,15 +74,30 @@ private:
     bool has_outer_join = false;
 };
 
-class GetMaxJoinSizeVisitor : public SimplePlanVisitor<Void>
+class GetMaxJoinSizeVisitor : public PlanNodeVisitor<size_t, Void>
 {
 public:
-    explicit GetMaxJoinSizeVisitor( ContextMutablePtr context_, CTEInfo & cte_info) : SimplePlanVisitor(cte_info), context(context_) { }
-    Void visitJoinNode(JoinNode &, Void &) override;
+    explicit GetMaxJoinSizeVisitor(ContextMutablePtr context_, CTEInfo & cte_info) : context(context_), cte_helper(cte_info) { }
+    size_t visitJoinNode(JoinNode &, Void &) override;
+    size_t visitPlanNode(PlanNodeBase & node, Void & c) override
+    {
+        for (const auto & child : node.getChildren())
+            VisitorUtil::accept(*child, *this, c);
+        return 1;
+    }
+    size_t visitCTERefNode(CTERefNode & node, Void & c) override
+    {
+        const auto * cte_step = dynamic_cast<const CTERefStep *>(node.getStep().get());
+        auto cte_id = cte_step->getId();
+        cte_helper.accept(cte_id, *this, c);
+        return 1;
+    }
+
     size_t getMaxSize() const { return max_size; }
 
 private:
     ContextMutablePtr context;
+    CTEPreorderVisitHelper cte_helper;
     size_t max_size = 0;
 };
 

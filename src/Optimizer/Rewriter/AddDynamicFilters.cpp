@@ -383,7 +383,10 @@ PlanWithScanRows AddDynamicFilters::DynamicFilterPredicatesRewriter::visitJoinNo
                 join_step->getRequireRightKeys(),
                 join_step->getAsofInequality(),
                 join_step->getDistributionType(),
-                join_step->isMagic()),
+                join_step->getJoinAlgorithm(),
+                join_step->isMagic(),
+                join_step->isOrdered(),
+                join_step->getHints()),
             PlanNodes{left.plan, right.plan},
             plan.getStatistics()),
         left.scan_rows + right.scan_rows};

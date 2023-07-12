@@ -24,6 +24,8 @@
 #include <Processors/IProcessor.h>
 #include <Processors/QueryPipeline.h>
 #include <Processors/Transforms/ExpressionTransform.h>
+#include <Processors/Exchange/ExchangeSource.h>
+#include <QueryPlan/Hints/PlanHintFactory.h>
 
 namespace DB
 {
@@ -77,7 +79,12 @@ static void doDescribeHeader(const Block & header, size_t count, IQueryPlanStep:
 
 static void doDescribeProcessor(const IProcessor & processor, size_t count, IQueryPlanStep::FormatSettings & settings)
 {
-    settings.out << String(settings.offset, settings.indent_char) << processor.getName();
+    auto exchange_source = dynamic_cast<const ExchangeSource *>(&processor);
+    if (exchange_source)
+        settings.out << String(settings.offset, settings.indent_char) << exchange_source->getClassName();
+    else
+        settings.out << String(settings.offset, settings.indent_char) << processor.getName();
+
     if (count > 1)
         settings.out << " × " << std::to_string(count);
 
@@ -212,6 +219,17 @@ void IQueryPlanStep::aliases(QueryPipeline & pipeline, const Block & target, con
     auto convert_actions = std::make_shared<ExpressionActions>(convert_actions_dag, settings.getActionsSettings());
 
     pipeline.addSimpleTransform([&](const Block & header) { return std::make_shared<ExpressionTransform>(header, convert_actions); });
+}
+
+void IQueryPlanStep::addHints(SqlHints & sql_hints, ContextMutablePtr & context)
+{
+    PlanHintPtr plan_hint;
+    for (auto & hint : sql_hints)
+    {
+        plan_hint = PlanHintFactory::instance().tryGet(hint.getName(), context, hint);
+        if (plan_hint)
+            hints.emplace_back(plan_hint);
+    }
 }
 
 String IQueryPlanStep::toString(Type type)

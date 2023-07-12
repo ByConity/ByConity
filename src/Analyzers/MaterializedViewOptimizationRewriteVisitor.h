@@ -108,7 +108,7 @@ private:
         if (!target_table)
             return {};
 
-        auto materialized_view_ast = QueryRewriter::rewrite(materialized_view->getInnerQuery(), context, false);
+        auto materialized_view_ast = QueryRewriter().rewrite(materialized_view->getInnerQuery(), context, false);
         AnalysisPtr analysis = QueryAnalyzer::analyze(materialized_view_ast, context);
         if (!analysis->non_deterministic_functions.empty())
             return {};

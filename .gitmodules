@@ -205,7 +205,7 @@
 	url = https://github.com/ClickHouse-Extras/nanodbc.git
 [submodule "contrib/datasketches-cpp"]
 	path = contrib/datasketches-cpp
-	url = https://github.com/apache/datasketches-cpp.git
+	url = git@code.byted.org:dp/clickhouse-datasketches-cpp.git
 [submodule "contrib/yaml-cpp"]
 	path = contrib/yaml-cpp
 	url = https://github.com/ClickHouse-Extras/yaml-cpp.git

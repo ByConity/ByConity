@@ -292,9 +292,9 @@ std::unique_ptr<QueryPipeline> QueryPipeline::joinPipelines(
     std::unique_ptr<QueryPipeline> right,
     JoinPtr join,
     size_t max_block_size,
-    bool join_parallel_left_right,
     size_t max_streams,
     bool keep_left_read_in_order,
+    bool join_parallel_left_right,
     Processors * collected_processors)
 {
     left->checkInitializedAndNotCompleted();

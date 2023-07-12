@@ -41,10 +41,14 @@ namespace ErrorCodes
 using namespace Statistics;
 
 std::vector<FormattedOutputData> getTableFormattedOutput(
-    ContextPtr context, CatalogAdaptorPtr catalog, const StatsTableIdentifier & table_info, const std::vector<String> & column_names)
+    ContextPtr context,
+    CatalogAdaptorPtr catalog,
+    const CollectorSettings & collector_settings,
+    const StatsTableIdentifier & table_info,
+    const std::vector<String> & column_names)
 {
     std::vector<FormattedOutputData> results;
-    StatisticsCollector collector_impl(context, catalog, table_info);
+    StatisticsCollector collector_impl(context, catalog, table_info, collector_settings);
     ColumnDescVector cols_desc;
     if (column_names.empty())
     {
@@ -264,7 +268,7 @@ BlockIO InterpreterShowStatsQuery::executeTable()
 
     for (auto & table_info : tables)
     {
-        auto fods = getTableFormattedOutput(context, catalog, table_info, query->columns);
+        auto fods = getTableFormattedOutput(context, catalog, collector_settings, table_info, query->columns);
         // adjust here to change the order
         auto block = outputFormattedBlock(fods, {"identifier", "type", "count", "null_count", "ndv", "min", "max", "has_histogram"});
         blocks.emplace_back(std::move(block));
@@ -317,9 +321,13 @@ std::vector<FormattedOutputData> getColumnFormattedOutput(const String & full_co
 }
 
 BlocksList getColumnsFormattedOutput(
-    ContextPtr context, CatalogAdaptorPtr catalog, const StatsTableIdentifier & table_info, const std::vector<String> & target_columns)
+    ContextPtr context,
+    CatalogAdaptorPtr catalog,
+    const CollectorSettings & collector_settings,
+    const StatsTableIdentifier & table_info,
+    const std::vector<String> & target_columns)
 {
-    StatisticsCollector collector_impl(context, catalog, table_info);
+    StatisticsCollector collector_impl(context, catalog, table_info, collector_settings);
 
     if (!target_columns.empty())
     {
@@ -387,14 +395,14 @@ BlockIO InterpreterShowStatsQuery::executeColumn()
         }
 
         auto table_info = tables[0];
-        auto new_blocks = getColumnsFormattedOutput(context, catalog, table_info, query->columns);
+        auto new_blocks = getColumnsFormattedOutput(context, catalog, collector_settings, table_info, query->columns);
         blocks.splice(blocks.end(), std::move(new_blocks));
     }
     else
     {
         for (auto & table_info : tables)
         {
-            auto new_blocks = getColumnsFormattedOutput(context, catalog, table_info, {});
+            auto new_blocks = getColumnsFormattedOutput(context, catalog, collector_settings, table_info, {});
             blocks.splice(blocks.end(), std::move(new_blocks));
         }
     }
@@ -415,6 +423,18 @@ void InterpreterShowStatsQuery::executeSpecial()
     auto query = query_ptr->as<const ASTShowStatsQuery>();
     auto context = getContext();
     auto catalog = Statistics::createCatalogAdaptor(context);
+
+    // when special, cache settings will be invalid
+    if (collector_settings.cache_policy != StatisticsCachePolicy::Default)
+    {
+        throw Exception("cache policy is not supported for special functions", ErrorCodes::BAD_ARGUMENTS);
+    }
+
+    if (context->getSettingsRef().statistics_cache_policy != StatisticsCachePolicy::Default)
+    {
+        throw Exception(
+            "statistics_cache_policy is not supported for special functions, must set it to default", ErrorCodes::BAD_ARGUMENTS);
+    }
 
     // refactor this into an explicit command
     if (query->table == "__save")
@@ -473,6 +493,19 @@ BlockIO InterpreterShowStatsQuery::execute()
     auto query = query_ptr->as<const ASTShowStatsQuery>();
     auto context = getContext();
     auto catalog = Statistics::createCatalogAdaptor(context);
+
+    collector_settings.cache_policy = query->cache_policy;
+    if (query->cache_policy == StatisticsCachePolicy::Default)
+    {
+        collector_settings.cache_policy = context->getSettingsRef().statistics_cache_policy;
+    }
+
+    // when enable_memory_catalog is true, we won't use cache
+    if (catalog->getSettingsRef().enable_memory_catalog)
+    {
+        if (collector_settings.cache_policy != StatisticsCachePolicy::Default)
+            throw Exception("memory catalog don't support cache policy", ErrorCodes::BAD_ARGUMENTS);
+    }
 
     if (isSpecialFunction(query->table))
     {

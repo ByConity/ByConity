@@ -52,7 +52,7 @@ ASTPtr LiteralEncoder::encode(Field field, const DataTypePtr & type, ContextMuta
 ASTPtr LiteralEncoder::encodeForComparisonExpr(Field field, const DataTypePtr & type, ContextMutablePtr context)
 {
     // do not add cast for NULL & simple types
-    auto base_type = removeNullable(removeLowCardinality(type));
+    auto base_type = removeNullable(recursiveRemoveLowCardinality(type));
     if (field.isNull() || isNumber(base_type) || isStringOrFixedString(base_type))
         return std::make_shared<ASTLiteral>(std::move(field));
 

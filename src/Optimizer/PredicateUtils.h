@@ -21,12 +21,15 @@
 
 namespace DB
 {
+class ConstHashAST;
+
 class PredicateUtils
 {
 public:
 
     static bool equals(ASTPtr & p1, ASTPtr & p2);
     static bool equals(ConstASTPtr & p1, ConstASTPtr & p2);
+    static bool equals(ConstHashAST & p1, ConstHashAST & p2);
 
     /**
      * Extract predicate according 'and' function.
@@ -109,7 +112,7 @@ private:
     static void extractPredicate(ConstASTPtr & predicate, const std::string & fun_name, std::vector<ConstASTPtr> & result);
     static std::vector<std::pair<ConstASTPtr, String>>
     removeAll(std::vector<std::pair<ConstASTPtr, String>> & collection, std::set<String> & elements_to_remove);
-    static std::set<std::vector<ConstASTPtr>> cartesianProduct(std::vector<std::set<ConstASTPtr>> &);
+    static std::vector<std::vector<ConstASTPtr>> cartesianProduct(std::vector<std::vector<ConstASTPtr>> &);
 };
 
 }

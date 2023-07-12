@@ -153,12 +153,39 @@ enum class ASTType : UInt8
 
 #undef ENUM_TYPE
 
+using StringPair = std::pair<String, String>;
+using StringPairs = std::vector<StringPair>;
+
+class SqlHint
+{
+private:
+    String name;
+
+    // one of below fields is non-empty
+    Strings options;
+    StringPairs kv_options;
+
+public:
+    explicit SqlHint(String name_): name(std::move(name_)) {}
+    SqlHint(String name_, Strings options_): name(std::move(name_)), options(std::move(options_)) {}
+    SqlHint(String name_, StringPairs kv_options_): name(std::move(name_)), kv_options(std::move(kv_options_)) {}
+
+    void setKvOption(String & key, String & value) {kv_options.emplace_back(StringPair{key, value});}
+    void setOption(const String & option) {options.emplace_back(option);}
+    String getName() const {return name;}
+    StringPairs getKvOptions() const {return kv_options;}
+    Strings getOptions() const {return options;}
+};
+
+using SqlHints = std::vector<SqlHint>;
+
 /** Element of the syntax tree (hereinafter - directed acyclic graph with elements of semantics)
   */
 class IAST : public std::enable_shared_from_this<IAST>, public TypePromotion<IAST>
 {
 public:
     ASTs children;
+    SqlHints hints;
 
     virtual ~IAST() = default;
     IAST() = default;

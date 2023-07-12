@@ -37,6 +37,7 @@
 #include <QueryPlan/ExchangeStep.h>
 #include <QueryPlan/ExpressionStep.h>
 #include <QueryPlan/ExtremesStep.h>
+#include <QueryPlan/ExplainAnalyzeStep.h>
 #include <QueryPlan/FillingStep.h>
 #include <QueryPlan/FilterStep.h>
 #include <QueryPlan/FinalSampleStep.h>

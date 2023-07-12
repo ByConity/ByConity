@@ -410,8 +410,6 @@ InterpretIMResult ExpressionInterpreter::visit(const ConstASTPtr & node) const
     {
         const auto & func_name = ast_func->name;
         const static NameSet functions_not_evaluate{
-            "arrayJoin",
-
             "arraySetCheck",
             "arraySetGet",
             "arraySetGetAny",

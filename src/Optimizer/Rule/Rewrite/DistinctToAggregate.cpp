@@ -16,6 +16,7 @@
 #include <Optimizer/Rule/Rewrite/DistinctToAggregate.h>
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
+#include <Core/SortDescription.h>
 #include <Optimizer/Rule/Patterns.h>
 #include <QueryPlan/AggregatingStep.h>
 #include <QueryPlan/DistinctStep.h>
@@ -24,7 +25,7 @@ namespace DB
 {
 PatternPtr DistinctToAggregate::getPattern() const
 {
-    return Patterns::distinct();
+    return Patterns::distinct().result();
 }
 
 TransformResult DistinctToAggregate::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -75,8 +76,10 @@ TransformResult DistinctToAggregate::transformImpl(PlanNodePtr node, const Captu
             aggregate_desc.function = AggregateFunctionFactory::instance().get("any", {name_and_type.type}, parameters, properties);
             descriptions.emplace_back(aggregate_desc);
         }
-        auto group_agg_step = std::make_shared<AggregatingStep>(node->getStep()->getOutputStream(), step.getColumns(), descriptions, GroupingSetsParamsList{}, true, GroupingDescriptions{}, false, false);
-        auto group_agg_node = PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(group_agg_step), node->getChildren());
+        auto group_agg_step = std::make_shared<AggregatingStep>(
+            node->getStep()->getOutputStream(), step.getColumns(), descriptions, GroupingSetsParamsList{}, true);
+        auto group_agg_node
+            = PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(group_agg_step), node->getChildren());
         return group_agg_node;
     }
 

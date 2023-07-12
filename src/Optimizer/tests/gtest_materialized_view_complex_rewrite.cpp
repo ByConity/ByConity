@@ -35,6 +35,7 @@ public:
 #endif
         settings.emplace("enable_materialized_view_join_rewriting", "1");
         settings.emplace("enable_materialized_view_rewrite_verbose_log", "1");
+        settings.emplace("enable_single_distinct_to_group_by", "0");
         tester = std::make_shared<BaseMaterializedViewTest>(settings);
     }
 
@@ -129,12 +130,19 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationNoAggrega
             "from emps where deptno = 10 group by empid, deptno",
         "select deptno from emps where deptno = 10 group by deptno")
         .checkingThatResultContains("Projection\n"
-                                    "│     Expressions: [deptno]\n"
+                                    "│     Expressions: deptno:=`expr#deptno`\n"
                                     "└─ Gather Exchange\n"
-                                    "   └─ Filter\n"
-                                    "      │     Condition: 1\n"
-                                    "      └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "               Outputs: [deptno]")
+                                    "   └─ MergingAggregated\n"
+                                    "      └─ Repartition Exchange\n"
+                                    "         │     Partition by: {expr#deptno}\n"
+                                    "         └─ Aggregating\n"
+                                    "            │     Group by: {expr#deptno}\n"
+                                    "            └─ Projection\n"
+                                    "               │     Expressions: expr#deptno:=deptno\n"
+                                    "               └─ Filter\n"
+                                    "                  │     Condition: 1\n"
+                                    "                  └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "                           Outputs: [deptno]")
         .ok();
 }
 

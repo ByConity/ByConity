@@ -13,16 +13,14 @@
  * limitations under the License.
  */
 
+#include <Optimizer/Property/Property.h>
 #include <QueryPlan/ExchangeStep.h>
 
 
 namespace DB
 {
-
 ExchangeStep::ExchangeStep(DataStreams input_streams_, const ExchangeMode & mode_, Partitioning schema_, bool keep_order_)
-    : exchange_type(mode_)
-    , schema(std::move(schema_))
-    , keep_order(keep_order_)
+    : exchange_type(mode_), schema(std::move(schema_)), keep_order(keep_order_)
 {
     setInputStreams(input_streams_);
 }
@@ -49,14 +47,36 @@ QueryPipelinePtr ExchangeStep::updatePipeline(QueryPipelines pipelines, const Bu
     return std::move(pipelines[0]);
 }
 
-void ExchangeStep::serialize(WriteBuffer &) const
+void ExchangeStep::serialize(WriteBuffer & buf) const
 {
-    throw Exception("ExchangeStep should be rewritten into RemoteExchangeSourceStep", ErrorCodes::NOT_IMPLEMENTED);
+    writeBinary(input_streams.size(), buf);
+    for (const auto & input_stream : input_streams)
+        serializeDataStream(input_stream, buf);
+    serializeEnum(exchange_type, buf);
+    schema.serialize(buf);
+    writeBinary(keep_order, buf);
 }
 
-QueryPlanStepPtr ExchangeStep::deserialize(ReadBuffer &, ContextPtr &)
+QueryPlanStepPtr ExchangeStep::deserialize(ReadBuffer & buf, ContextPtr &)
 {
-    throw Exception("ExchangeStep should be rewritten into RemoteExchangeSourceStep", ErrorCodes::NOT_IMPLEMENTED);
+    size_t size;
+    readBinary(size, buf);
+
+    DataStreams input_streams(size);
+    for (size_t i = 0; i < size; ++i)
+        input_streams[i] = deserializeDataStream(buf);
+
+    ExchangeMode exchange_type;
+    deserializeEnum(exchange_type, buf);
+
+    Partitioning schema;
+    schema.deserialize(buf);
+
+    bool keep_order;
+    readBinary(keep_order, buf);
+
+    auto step = std::make_unique<ExchangeStep>(input_streams, exchange_type, schema, keep_order);
+    return step;
 }
 
 std::shared_ptr<IQueryPlanStep> ExchangeStep::copy(ContextPtr) const

@@ -22,6 +22,7 @@
 
 namespace DB
 {
+using ExpressionsAndTypes = std::vector<std::pair<ASTPtr, DataTypePtr>>;
 
 struct PlanBuilder
 {
@@ -68,9 +69,9 @@ struct PlanBuilder
     ScopePtr getScope() const { return translation->scope; }
     bool isLocalScope(ScopePtr other) const { return translation->isLocalScope(other); }
     bool isCalculatedExpression(const ASTPtr & expression) const { return translation->isCalculatedExpression(expression); }
-    TranslationMap & withScope(ScopePtr scope, const FieldSymbolInfos & field_symbol_infos, bool remove_mappings = true) // NOLINT(readability-make-member-function-const)
+    TranslationMap & withScope(ScopePtr scope, FieldSymbolInfos field_symbol_infos, bool remove_mappings = true) // NOLINT(readability-make-member-function-const)
     {
-        return translation->withScope(scope, field_symbol_infos, remove_mappings);
+        return translation->withScope(scope, std::move(field_symbol_infos), remove_mappings);
     }
     TranslationMap & withNewMappings(const FieldSymbolInfos & field_symbol_infos, const AstToSymbol & expression_symbols)
     {
@@ -93,12 +94,15 @@ struct PlanBuilder
     // utils
     Names translateToSymbols(ASTs & expressions) const;
     Names translateToUniqueSymbols(ASTs & expressions) const;
+    Names applyProjection(ASTs & expressions);
     void appendProjection(ASTs & expressions);
     void appendProjection(const ASTPtr & expression)
     {
         ASTs list{expression};
         appendProjection(list);
     }
+    // project expressions and cast their types
+    Names projectExpressionsWithCoercion(const ExpressionsAndTypes & expression_and_types);
 };
 
 }

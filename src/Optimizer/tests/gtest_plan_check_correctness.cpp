@@ -79,3 +79,53 @@ TEST_F(PlanCheckCorrectness, q5)
 {
     EXPECT_TRUE(equals(explain("q5"), expected("q5")));
 }
+
+TEST_F(PlanCheckCorrectness, q6)
+{
+    EXPECT_TRUE(equals(explain("q6"), expected("q6")));
+}
+
+TEST_F(PlanCheckCorrectness, q7)
+{
+    EXPECT_TRUE(equals(explain("q7"), expected("q7")));
+}
+
+TEST_F(PlanCheckCorrectness, q8)
+{
+    EXPECT_TRUE(equals(explain("q8"), expected("q8")));
+}
+
+TEST_F(PlanCheckCorrectness, q9)
+{
+    EXPECT_TRUE(equals(explain("q9"), expected("q9")));
+}
+
+TEST_F(PlanCheckCorrectness, q10)
+{
+    EXPECT_TRUE(equals(explain("q10"), expected("q10")));
+}
+
+TEST_F(PlanCheckCorrectness, q11)
+{
+    EXPECT_TRUE(equals(explain("q11"), expected("q11")));
+}
+
+TEST_F(PlanCheckCorrectness, q12)
+{
+    EXPECT_TRUE(equals(explain("q12"), expected("q12")));
+}
+
+TEST_F(PlanCheckCorrectness, q13)
+{
+    EXPECT_TRUE(equals(explain("q13"), expected("q13")));
+}
+
+TEST_F(PlanCheckCorrectness, q14)
+{
+    EXPECT_TRUE(equals(explain("q14"), expected("q14")));
+}
+
+TEST_F(PlanCheckCorrectness, q15)
+{
+    EXPECT_TRUE(equals(explain("q15"), expected("q15")));
+}

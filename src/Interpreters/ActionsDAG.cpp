@@ -103,7 +103,7 @@ void ActionsDAG::Node::serialize(WriteBuffer & buf) const
     writeBinary(children.size(), buf);
     for (const auto & child : children)
         writeBinary(child->id, buf);
-
+    
     serializeEnum(type, buf);
 
     writeBinary(result_name, buf);

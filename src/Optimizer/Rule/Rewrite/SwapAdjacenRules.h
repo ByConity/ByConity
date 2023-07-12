@@ -26,7 +26,7 @@ public:
     RuleType getType() const override { return RuleType::SWAP_WINDOWS; }
     String getName() const override { return "SWAP_ADJACENT_WINDOWS"; }
 
-    PatternPtr getPattern() const override { return Patterns::window(); }
+    PatternPtr getPattern() const override { return Patterns::window().result(); }
 
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 };

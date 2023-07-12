@@ -37,7 +37,7 @@ struct BuildQueryPipelineSettings
 
     static BuildQueryPipelineSettings fromSettings(const Settings & from);
     static BuildQueryPipelineSettings fromContext(ContextPtr from);
-    static BuildQueryPipelineSettings fromPlanSegment(PlanSegment * plan_segment, ContextPtr context);
+    static BuildQueryPipelineSettings fromPlanSegment(PlanSegment * plan_segment, ContextPtr context, bool is_explain = false);
 };
 
 }

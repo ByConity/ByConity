@@ -34,6 +34,7 @@
 #include <Storages/ReadInOrderOptimizer.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/TableLockHolder.h>
+#include <Parsers/ASTOrderByElement.h>
 
 #include <Columns/FilterDescription.h>
 
@@ -137,6 +138,7 @@ public:
 
     MaterializedViewOptimizerResultPtr getMaterializeViewMatchResult() { return mv_optimizer_result; }
 
+    static FillColumnDescription getWithFillDescription(const ASTOrderByElement & order_by_elem, ContextPtr context);
 private:
     friend class InterpreterPerfectShard;
 

@@ -22,8 +22,8 @@ using namespace DB::Patterns;
 
 TEST(OptimizerPatternsTest, GetPatternTargetType)
 {
-    PatternPtr pattern1 = filter();
-    PatternPtr pattern2 = join()->withSingle(filter()->withSingle(tableScan()));
+    PatternPtr pattern1 = filter().result();
+    PatternPtr pattern2 = join().withSingle(filter().withSingle(tableScan())).result();
 
     ASSERT_TRUE(pattern1->getTargetType() == IQueryPlanStep::Type::Filter);
     ASSERT_TRUE(pattern2->getTargetType() == IQueryPlanStep::Type::Join);
@@ -43,7 +43,7 @@ TEST(OptimizerPatternsTest, ToString)
 {
     Capture cap1;
     PatternPtr pattern
-        = Patterns::any()->matching([](const auto &, const auto &) { return true; })->capturedAs(cap1)->withSingle(Patterns::any());
+        = Patterns::any().matching([](const auto &, const auto &) { return true; }).capturedAs(cap1).withSingle(Patterns::any()).result();
 
     std::cout << pattern->toString() << std::endl;
 }

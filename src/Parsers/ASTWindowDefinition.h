@@ -55,6 +55,10 @@ struct ASTWindowDefinition : public IAST
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
 
     std::string getDefaultWindowName() const;
+
+    void serialize(WriteBuffer & buf) const override;
+    void deserializeImpl(ReadBuffer & buf) override;
+    static ASTPtr deserialize(ReadBuffer & buf);
 };
 
 struct ASTWindowListElement : public IAST
@@ -71,6 +75,10 @@ struct ASTWindowListElement : public IAST
     String getID(char delimiter) const override;
 
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
+
+    void serialize(WriteBuffer & buf) const override;
+    void deserializeImpl(ReadBuffer & buf) override;
+    static ASTPtr deserialize(ReadBuffer & buf);
 };
 
 }

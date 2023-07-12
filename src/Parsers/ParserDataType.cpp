@@ -48,7 +48,11 @@ private:
     {
         ParserNestedTable nested_parser;
         ParserDataType data_type_parser;
+        // Note: community of ClickHouse use ParserAllCollectionsOfLiterals
+        // but we don't have it yet, so just handle single, Array and Tuple
         ParserLiteral literal_parser(ParserSettings::CLICKHOUSE);
+        ParserArrayOfLiterals array_literal_parser(ParserSettings::CLICKHOUSE);
+        ParserTupleOfLiterals tuple_literal_parser(ParserSettings::CLICKHOUSE);
 
         const char * operators[] = {"=", "equals", nullptr};
         ParserLeftAssociativeBinaryOperatorList enum_parser(operators, std::make_unique<ParserLiteral>(ParserSettings::CLICKHOUSE));
@@ -58,6 +62,8 @@ private:
 
         return enum_parser.parse(pos, node, expected)
             || literal_parser.parse(pos, node, expected)
+            || array_literal_parser.parse(pos, node, expected)
+            || tuple_literal_parser.parse(pos, node, expected)
             || data_type_parser.parse(pos, node, expected);
     }
 };

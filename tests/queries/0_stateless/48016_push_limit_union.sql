@@ -1,0 +1,1 @@
+select * from (select dummy as a from system.one limit 10 union all select dummy as a from system.one) limit 10;

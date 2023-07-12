@@ -69,7 +69,7 @@ GroupExprPtr PropertyEnforcer::enforceStreamPartitioning(
 }
 
 QueryPlanStepPtr PropertyEnforcer::enforceNodePartitioning(
-    ConstQueryPlanStepPtr step, const Property & required, const Property &, const Context & context)
+    QueryPlanStepPtr step, const Property & required, const Property &, const Context & context)
 {
     const auto & output_stream = step->getOutputStream();
     DataStreams streams{output_stream};
@@ -107,7 +107,7 @@ QueryPlanStepPtr PropertyEnforcer::enforceNodePartitioning(
 }
 
 QueryPlanStepPtr
-PropertyEnforcer::enforceStreamPartitioning(ConstQueryPlanStepPtr step, const Property & required, const Property &, const Context &)
+PropertyEnforcer::enforceStreamPartitioning(QueryPlanStepPtr step, const Property & required, const Property &, const Context &)
 {
     DataStreams streams;
     const DataStream & input_stream = step->getOutputStream();

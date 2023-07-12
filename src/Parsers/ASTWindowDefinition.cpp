@@ -2,6 +2,7 @@
 
 #include <Common/quoteString.h>
 #include <IO/Operators.h>
+#include <Parsers/ASTSerDerHelper.h>
 
 
 namespace DB
@@ -141,6 +142,55 @@ std::string ASTWindowDefinition::getDefaultWindowName() const
     return ostr.str();
 }
 
+void ASTWindowDefinition::serialize(WriteBuffer & buf) const
+{
+    writeBinary(parent_window_name, buf);
+    serializeAST(partition_by, buf);
+    serializeAST(order_by, buf);
+    writeBinary(frame_is_default, buf);
+    writeBinary(static_cast<UInt8>(frame_type), buf);
+    writeBinary(static_cast<UInt8>(frame_begin_type), buf);
+    serializeAST(frame_begin_offset, buf);
+    writeBinary(frame_begin_preceding, buf);
+    writeBinary(static_cast<UInt8>(frame_end_type), buf);
+    serializeAST(frame_end_offset, buf);
+    writeBinary(frame_end_preceding, buf);
+}
+
+void ASTWindowDefinition::deserializeImpl(ReadBuffer & buf)
+{
+    readBinary(parent_window_name, buf);
+    partition_by = deserializeASTWithChildren(children, buf);
+    order_by = deserializeASTWithChildren(children, buf);
+
+    readBinary(frame_is_default, buf);
+    UInt8 frame_type_num = 0;
+    readBinary(frame_type_num, buf);
+    frame_type = static_cast<WindowFrame::FrameType>(frame_type_num);
+
+    UInt8 frame_begin_type_num = 0;
+    readBinary(frame_begin_type_num, buf);
+    frame_begin_type = static_cast<WindowFrame::BoundaryType>(frame_begin_type_num);
+
+    frame_begin_offset = deserializeAST(buf);
+    readBinary(frame_begin_preceding, buf);
+
+    UInt8 frame_end_type_num = 0;
+    readBinary(frame_end_type_num, buf);
+    frame_end_type = static_cast<WindowFrame::BoundaryType>(frame_end_type_num);
+
+    frame_end_offset = deserializeAST(buf);
+    readBinary(frame_end_preceding, buf);
+
+}
+
+ASTPtr ASTWindowDefinition::deserialize(ReadBuffer & buf)
+{
+    auto ast = std::make_shared<ASTWindowDefinition>();
+    ast->deserializeImpl(buf);
+    return ast;
+}
+
 ASTPtr ASTWindowListElement::clone() const
 {
     auto result = std::make_shared<ASTWindowListElement>();
@@ -164,6 +214,25 @@ void ASTWindowListElement::formatImpl(const FormatSettings & settings,
     settings.ostr << " AS (";
     definition->formatImpl(settings, state, frame);
     settings.ostr << ")";
+}
+
+void ASTWindowListElement::serialize(WriteBuffer & buf) const
+{
+    writeBinary(name, buf);
+    serializeAST(definition, buf);
+}
+
+void ASTWindowListElement::deserializeImpl(ReadBuffer & buf)
+{
+    readBinary(name, buf);
+    definition = deserializeAST(buf);
+}
+
+ASTPtr ASTWindowListElement::deserialize(ReadBuffer & buf)
+{
+    auto ast = std::make_shared<ASTWindowListElement>();
+    ast->deserializeImpl(buf);
+    return ast;
 }
 
 }

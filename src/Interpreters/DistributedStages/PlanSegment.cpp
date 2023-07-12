@@ -247,13 +247,13 @@ void PlanSegment::serialize(WriteBuffer & buf) const
     query_plan.serialize(buf);
 
     writeBinary(inputs.size(), buf);
-    for (auto & input : inputs)
+    for (const auto & input : inputs)
         input->serialize(buf);
 
     if (outputs.empty())
         throw Exception("Cannot find output when serialize PlanSegment", ErrorCodes::LOGICAL_ERROR);
     writeBinary(outputs.size(), buf);
-    for (auto & output : outputs)
+    for (const auto & output : outputs)
         output->serialize(buf);
 
     coordinator_address.serialize(buf);
@@ -341,6 +341,38 @@ String PlanSegment::toString() const
 
     return ostr.str();
 }
+
+PlanSegmentDescriptionPtr PlanSegment::getPlanSegmentDescription()
+{
+    auto plan_segment_desc = std::make_shared<PlanSegmentDescription>();
+    plan_segment_desc->segment_id = segment_id;
+    plan_segment_desc->root_id = query_plan.getRoot()->id;
+    plan_segment_desc->root_child_id = query_plan.getRoot()->children.empty() ? query_plan.getRoot()->id : query_plan.getRoot()->children[0]->id;
+    plan_segment_desc->query_id = query_id;
+    plan_segment_desc->cluster_name = cluster_name;
+    plan_segment_desc->parallel = parallel;
+    plan_segment_desc->exchange_parallel_size = exchange_parallel_size;
+    // plan_segment_desc->shard_num = shard_num;
+    plan_segment_desc->shuffle_keys = getPlanSegmentOutput()->getShufflekeys();
+    plan_segment_desc->mode = getPlanSegmentOutput()->getExchangeMode();
+    plan_segment_desc->is_source = getPlanSegmentInputs().empty();
+    std::unordered_map<PlanNodeId, size_t> exchange_to_segment;
+    getRemoteSegmentId(query_plan.getRoot(), exchange_to_segment);
+    plan_segment_desc->exchange_to_segment = exchange_to_segment;
+
+    return plan_segment_desc;
+}
+
+void PlanSegment::getRemoteSegmentId(const QueryPlan::Node * node, std::unordered_map<PlanNodeId, size_t> & exchange_to_segment)
+{
+    auto * step = dynamic_cast<RemoteExchangeSourceStep *>(node->step.get());
+    if (step)
+        exchange_to_segment[node->id] = step->getInput()[0]->getPlanSegmentId();
+
+    for (const auto & child : node->children)
+        getRemoteSegmentId(child, exchange_to_segment);
+}
+
 
 size_t PlanSegment::getParallelIndex() const
 {

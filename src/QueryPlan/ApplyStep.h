@@ -16,6 +16,7 @@
 #pragma once
 #include <QueryPlan/Assignment.h>
 #include <QueryPlan/ITransformingStep.h>
+#include "Core/Names.h"
 
 namespace DB
 {
@@ -38,7 +39,7 @@ public:
         QUANTIFIED_COMPARISON
     };
 
-    ApplyStep(DataStreams input_streams_, Names correlation_, ApplyType apply_type_, SubqueryType subquery_type_, Assignment assignment_);
+    ApplyStep(DataStreams input_streams_, Names correlation_, ApplyType apply_type_, SubqueryType subquery_type_, Assignment assignment_, NameSet outer_columns_);
 
     String getName() const override { return "Apply"; }
     Type getType() const override { return Type::Apply; }
@@ -51,6 +52,8 @@ public:
     ApplyType getApplyType() const { return apply_type; }
     SubqueryType getSubqueryType() const { return subquery_type; }
     const Assignment & getAssignment() const { return assignment; }
+    const NameSet & getOuterColumns() const { return outer_columns; }
+    void setOuterColumns(NameSet outer_columns_) { outer_columns = outer_columns_; }
     DataTypePtr getAssignmentDataType() const;
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr) const override;
     void setInputStreams(const DataStreams & input_streams_) override;
@@ -83,6 +86,7 @@ private:
      * <p>
      */
     Assignment assignment;
+    NameSet outer_columns;
 };
 
 }

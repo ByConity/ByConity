@@ -19,6 +19,7 @@
 #include <AggregateFunctions/Helpers.h>
 #include <Statistics/Base64.h>
 #include <Statistics/StatsKllSketchImpl.h>
+#include "Columns/ColumnSketchBinary.h"
 
 // TODO: use datasketches
 namespace DB
@@ -54,9 +55,8 @@ struct KllData
 
     void insertResultInto(IColumn & to) const
     {
-        auto blob_raw = data_.serialize();
-        auto blob_b64 = base64Encode(blob_raw);
-        static_cast<ColumnString &>(to).insertData(blob_b64.c_str(), blob_b64.size());
+        auto blob = data_.serialize();
+        static_cast<ColumnSketchBinary &>(to).insertData(blob.c_str(), blob.size());
     }
 
     static String getName() { return "kll"; }

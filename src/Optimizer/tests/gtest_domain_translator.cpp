@@ -1213,7 +1213,6 @@ TEST_F(DomainTranslatorTest, testImplicitCastOnValueSide)
         context);
 }
 
-/*
 TEST_F(DomainTranslatorTest, testInPredicateWithInteger)
 {
     ContextMutablePtr context = Context::createCopy(getContext().context);
@@ -1229,7 +1228,6 @@ TEST_F(DomainTranslatorTest, testInPredicateWithBigint)
 
     testInPredicate(int64_sym, int64_type, field_1, field_2, context);
 }
- */
 /* TODO: can not support the expression which is 'symbol(narrow type) operator value(wide type)' unless use 'cast' function;
 TEST_F(DomainTranslatorTest, testInPredicateWithReal)
 {
@@ -1250,7 +1248,7 @@ TEST_F(DomainTranslatorTest, testInPredicateWithDouble)
 
     testInPredicateWithFloatingPoint(float64_sym, float64_type, Field(Float64(1.0)),  Field(Float64(2.0)),  Field(Float64(std::sqrt(-1.0))), context);
 }
-
+*/
 TEST_F(DomainTranslatorTest, testInPredicateWithShortDecimal)
 {
     ContextMutablePtr context = Context::createCopy(getContext().context);
@@ -1275,8 +1273,8 @@ TEST_F(DomainTranslatorTest, testInPredicateWithLongDecimal)
     testInPredicate(
         decimal_38_3_sym,
         decimal_38_3_type,
-        DecimalField<Decimal128>(10, 3),
-        DecimalField<Decimal128>(20, 3), context);
+        DecimalField<Decimal128>(Int128(10), 3),
+        DecimalField<Decimal128>(Int128(20), 3), context);
 }
 
 TEST_F(DomainTranslatorTest, testInPredicateWithVarchar)
@@ -1291,7 +1289,6 @@ TEST_F(DomainTranslatorTest, testInPredicateWithVarchar)
         "second",
         context);
 }
- */
 /*
 TEST_F(DomainTranslatorTest, testNonImplicitCastOnSymbolSide)
     public void testInPredicateWithEquitableType()

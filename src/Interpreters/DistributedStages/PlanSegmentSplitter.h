@@ -95,4 +95,11 @@ public:
     std::optional<Partitioning::Handle> visitRemoteExchangeSourceNode(QueryPlan::Node * node, const Context & context) override;
 };
 
+class ExplainAnalyzeVisitor : public NodeVisitor<void, PlanSegmentDescriptions>
+{
+public:
+    void visitExplainAnalyzeNode(QueryPlan::Node * node, PlanSegmentDescriptions &) override;
+    void visitNode(QueryPlan::Node * node, PlanSegmentDescriptions &) override;
+};
+
 }

@@ -1,0 +1,4 @@
+AggregateFunction(sumMapFiltered, Array(UInt8), Array(UInt8))
+02010A020A
+020000010A
+([[0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0]],[[],[]])

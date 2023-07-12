@@ -17,6 +17,12 @@
 
 #include <Core/Block.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/ExpressionActions.h>
+#include <Processors/QueryPipeline.h>
+#include <Processors/ResizeProcessor.h>
+#include <Processors/Sources/NullSource.h>
+#include <Processors/Transforms/ExpressionTransform.h>
+
 
 namespace DB
 {
@@ -34,19 +40,103 @@ void ExceptStep::setInputStreams(const DataStreams & input_streams_)
     input_streams = input_streams_;
 }
 
-QueryPipelinePtr ExceptStep::updatePipeline(QueryPipelines, const BuildQueryPipelineSettings &)
+QueryPipelinePtr ExceptStep::updatePipeline(QueryPipelines pipelines, const BuildQueryPipelineSettings & context)
 {
-    throw Exception("ExceptStep should be rewritten into UnionStep", ErrorCodes::NOT_IMPLEMENTED);
+    (void) pipelines;
+    (void) context;
+    throw Exception("except step is not implemented", ErrorCodes::NOT_IMPLEMENTED);
+    #if 0
+    auto pipeline = std::make_unique<QueryPipeline>();
+    QueryPipelineProcessorsCollector collector(*pipeline, this);
+
+    if (pipelines.empty())
+    {
+        pipeline->init(Pipe(std::make_shared<NullSource>(output_stream->header)));
+        processors = collector.detachProcessors();
+        return pipeline;
+    }
+
+    for (auto & cur_pipeline : pipelines)
+    {
+        /// Just in case.
+        if (!isCompatibleHeader(cur_pipeline->getHeader(), getOutputStream().header))
+        {
+            auto converting_dag = ActionsDAG::makeConvertingActions(
+                cur_pipeline->getHeader().getColumnsWithTypeAndName(),
+                getOutputStream().header.getColumnsWithTypeAndName(),
+                ActionsDAG::MatchColumnsMode::Position);
+
+            auto converting_actions = std::make_shared<ExpressionActions>(std::move(converting_dag));
+            cur_pipeline->addSimpleTransform(
+                [&](const Block & cur_header) { return std::make_shared<ExpressionTransform>(cur_header, converting_actions); });
+        }
+
+        /// For the case of union.
+        cur_pipeline->addTransform(std::make_shared<ResizeProcessor>(getOutputStream().header, cur_pipeline->getNumStreams(), 1));
+    }
+
+    *pipeline = QueryPipeline::unitePipelines(std::move(pipelines), context.context->getSettingsRef().max_threads);
+    pipeline->addTransform(std::make_shared<IntersectOrExceptTransform>(
+        getOutputStream().header,
+        distinct ? ASTSelectIntersectExceptQuery::Operator::EXCEPT_DISTINCT: ASTSelectIntersectExceptQuery::Operator::EXCEPT_ALL));
+
+    processors = collector.detachProcessors();
+    return pipeline;
+    #endif
 }
 
-void ExceptStep::serialize(WriteBuffer &) const
+void ExceptStep::serialize(WriteBuffer & buffer) const
 {
-    throw Exception("ExceptStep should be rewritten into UnionStep", ErrorCodes::NOT_IMPLEMENTED);
+    writeBinary(input_streams.size(), buffer);
+    for (const auto & input_stream : input_streams)
+        serializeDataStream(input_stream, buffer);
+
+    serializeDataStream(output_stream.value(), buffer);
+
+    writeBinary(distinct, buffer);
+
+    writeVarUInt(output_to_inputs.size(), buffer);
+    for (const auto & item : output_to_inputs)
+    {
+        writeStringBinary(item.first, buffer);
+        writeVarUInt(item.second.size(), buffer);
+        for (const auto & str : item.second)
+        {
+            writeStringBinary(str, buffer);
+        }
+    }
 }
 
-QueryPlanStepPtr ExceptStep::deserialize(ReadBuffer &, ContextPtr)
+QueryPlanStepPtr ExceptStep::deserialize(ReadBuffer & buffer, ContextPtr)
 {
-    throw Exception("ExceptStep should be rewritten into UnionStep", ErrorCodes::NOT_IMPLEMENTED);
+    size_t size;
+    readBinary(size, buffer);
+
+    DataStreams input_streams(size);
+    for (size_t i = 0; i < size; ++i)
+        input_streams[i] = deserializeDataStream(buffer);
+
+    auto output_stream = deserializeDataStream(buffer);
+
+    bool distinct;
+    readBinary(distinct, buffer);
+
+    std::unordered_map<String, std::vector<String>> output_to_inputs;
+    readVarUInt(size, buffer);
+    for (size_t index = 0; index < size; index++)
+    {
+        String output;
+        readStringBinary(output, buffer);
+        size_t count;
+        readVarUInt(count, buffer);
+        for (size_t i = 0; i < count; i++)
+        {
+            String str;
+            readStringBinary(str, buffer);
+            output_to_inputs[output].emplace_back(str);
+        }
+    }
+    return std::make_unique<ExceptStep>(input_streams, output_stream, output_to_inputs, distinct);
 }
 
 bool ExceptStep::isDistinct() const

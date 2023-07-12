@@ -25,7 +25,7 @@ public:
     RuleType getType() const override { return RuleType::REMOVE_REDUNDANT_FILTER; }
     String getName() const override { return "REMOVE_REDUNDANT_FILTER"; }
 
-    PatternPtr getPattern() const override { return Patterns::filter(); }
+    PatternPtr getPattern() const override { return Patterns::filter().result(); }
 
 
 protected:
@@ -38,7 +38,7 @@ public:
     RuleType getType() const override { return RuleType::REMOVE_REDUNDANT_UNION; }
     String getName() const override { return "REMOVE_REDUNDANT_UNION"; }
 
-    PatternPtr getPattern() const override { return Patterns::unionn(); }
+    PatternPtr getPattern() const override { return Patterns::unionn().result(); }
 
 
 protected:
@@ -51,7 +51,7 @@ public:
     RuleType getType() const override { return RuleType::REMOVE_REDUNDANT_PROJECTION; }
     String getName() const override { return "REMOVE_REDUNDANT_PROJECTION"; }
 
-    PatternPtr getPattern() const override { return Patterns::project(); }
+    PatternPtr getPattern() const override { return Patterns::project().result(); }
 
 protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
@@ -63,7 +63,7 @@ public:
     RuleType getType() const override { return RuleType::REMOVE_REDUNDANT_ENFORCE_SINGLE_ROW; }
     String getName() const override { return "REMOVE_REDUNDANT_ENFORCE_SINGLE_ROW"; }
 
-    PatternPtr getPattern() const override { return Patterns::enforceSingleRow(); }
+    PatternPtr getPattern() const override { return Patterns::enforceSingleRow().result(); }
 
 protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
@@ -136,6 +136,18 @@ class RemoveRedundantAggregate: public Rule
 public:
     RuleType getType() const override { return RuleType::REMOVE_REDUNDANT_AGGREGATE; }
     String getName() const override { return "REMOVE_REDUNDANT_AGGREGATE"; }
+
+    PatternPtr getPattern() const override;
+
+protected:
+    TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
+};
+
+class RemoveRedundantTwoApply: public Rule
+{
+public:
+    RuleType getType() const override { return RuleType::REMOVE_REDUNDANT_TWO_APPLY; }
+    String getName() const override { return "REMOVE_REDUNDANT_TWO_APPLY"; }
 
     PatternPtr getPattern() const override;
 

@@ -13,16 +13,26 @@
  * limitations under the License.
  */
 
+#include <memory>
 #include <Optimizer/Rule/Rewrite/RemoveRedundantRules.h>
 
 #include <DataTypes/DataTypeNullable.h>
 #include <Optimizer/ExpressionInterpreter.h>
 #include <Optimizer/PlanNodeCardinality.h>
+#include <Optimizer/PredicateUtils.h>
+#include <Optimizer/Rule/Pattern.h>
+#include <Optimizer/Rule/Patterns.h>
 #include <Optimizer/Utils.h>
+#include <QueryPlan/ApplyStep.h>
 #include <QueryPlan/FilterStep.h>
 #include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/ReadNothingStep.h>
 #include <QueryPlan/UnionStep.h>
+#include "Parsers/ASTFunction.h"
+#include "Parsers/IAST_fwd.h"
+#include "QueryPlan/CTERefStep.h"
+#include "QueryPlan/IQueryPlanStep.h"
+#include "QueryPlan/PlanNode.h"
 
 namespace DB
 {
@@ -166,8 +176,9 @@ TransformResult RemoveRedundantEnforceSingleRow::transformImpl(PlanNodePtr node,
 PatternPtr RemoveRedundantCrossJoin::getPattern() const
 {
     return Patterns::join()
-        ->matchingStep<JoinStep>([&](const JoinStep & s) { return s.getKind() == ASTTableJoin::Kind::Cross; })
-        ->with({Patterns::any(), Patterns::any()});
+        .matchingStep<JoinStep>([&](const JoinStep & s) { return s.getKind() == ASTTableJoin::Kind::Cross; })
+        .with(Patterns::any(), Patterns::any())
+        .result();
 }
 
 TransformResult RemoveRedundantCrossJoin::transformImpl(PlanNodePtr node, const Captures &, RuleContext &)
@@ -189,7 +200,7 @@ TransformResult RemoveRedundantCrossJoin::transformImpl(PlanNodePtr node, const 
 
 PatternPtr RemoveReadNothing::getPattern() const
 {
-    return Patterns::any()->withSingle(Patterns::readNothing());
+    return Patterns::any().withSingle(Patterns::readNothing()).result();
 }
 
 TransformResult RemoveReadNothing::transformImpl(PlanNodePtr, const Captures &, RuleContext &)
@@ -200,9 +211,10 @@ TransformResult RemoveReadNothing::transformImpl(PlanNodePtr, const Captures &, 
 PatternPtr RemoveRedundantJoin::getPattern() const
 {
     return Patterns::join()
-        ->matchingStep<JoinStep>(
+        .matchingStep<JoinStep>(
             [&](const JoinStep & s) { return s.getKind() == ASTTableJoin::Kind::Inner || s.getKind() == ASTTableJoin::Kind::Cross; })
-        ->withAny(Patterns::readNothing());
+        .withAny(Patterns::readNothing())
+        .result();
 }
 
 TransformResult RemoveRedundantJoin::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
@@ -219,8 +231,9 @@ TransformResult RemoveRedundantJoin::transformImpl(PlanNodePtr node, const Captu
 PatternPtr RemoveRedundantOuterJoin::getPattern() const
 {
     return Patterns::join()
-        ->matchingStep<JoinStep>(
-            [&](const JoinStep & s) { return s.getKind() == ASTTableJoin::Kind::Left || s.getKind() == ASTTableJoin::Kind::Right; });
+        .matchingStep<JoinStep>(
+            [&](const JoinStep & s) { return s.getKind() == ASTTableJoin::Kind::Left || s.getKind() == ASTTableJoin::Kind::Right; })
+        .result();
 }
 
 TransformResult RemoveRedundantOuterJoin::transformImpl(PlanNodePtr node, const Captures &, RuleContext &)
@@ -237,7 +250,7 @@ TransformResult RemoveRedundantOuterJoin::transformImpl(PlanNodePtr node, const 
             }
             if (type->isNullable())
             {
-                if (const auto * nullable_type= dynamic_cast<const DataTypeNullable *>(type.get()))
+                if (const auto * nullable_type = dynamic_cast<const DataTypeNullable *>(type.get()))
                 {
                     if (nullable_type->getNestedType()->getTypeId() == TypeIndex::Nothing)
                     {
@@ -277,7 +290,7 @@ TransformResult RemoveRedundantOuterJoin::transformImpl(PlanNodePtr node, const 
 
 PatternPtr RemoveRedundantLimit::getPattern() const
 {
-    return Patterns::limit();
+    return Patterns::limit().result();
 }
 
 TransformResult RemoveRedundantLimit::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
@@ -295,11 +308,94 @@ TransformResult RemoveRedundantLimit::transformImpl(PlanNodePtr node, const Capt
 
 PatternPtr RemoveRedundantAggregate::getPattern() const
 {
-    return Patterns::aggregating();
+    return Patterns::aggregating().result();
 }
 
 TransformResult RemoveRedundantAggregate::transformImpl(PlanNodePtr, const Captures &, RuleContext &)
 {
+    return {};
+}
+
+PatternPtr RemoveRedundantTwoApply::getPattern() const
+{
+    return Patterns::filter()
+        .withSingle(
+            Patterns::apply()
+                .matchingStep<ApplyStep>([](const ApplyStep & apply) { return apply.getSubqueryType() == ApplyStep::SubqueryType::IN; })
+                .with(
+                    Patterns::apply()
+                        .matchingStep<ApplyStep>(
+                            [](const ApplyStep & apply) { return apply.getSubqueryType() == ApplyStep::SubqueryType::IN; })
+                        .with(Patterns::any(), Patterns::cte()),
+                    Patterns::project().withSingle(Patterns::filter().withSingle(Patterns::join().with(Patterns::any(), Patterns::cte())))))
+        .result();
+}
+
+TransformResult RemoveRedundantTwoApply::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
+{
+    auto * filter = dynamic_cast<FilterStep *>(node->getStep().get());
+
+    auto * first_apply = dynamic_cast<ApplyStep *>(node->getChildren()[0]->getStep().get());
+    auto * first_cte = dynamic_cast<CTERefStep *>(
+        node->getChildren()[0]->getChildren()[1]->getChildren()[0]->getChildren()[0]->getChildren()[1]->getStep().get());
+    auto * second_apply = dynamic_cast<ApplyStep *>(node->getChildren()[0]->getChildren()[0]->getStep().get());
+    auto * second_cte = dynamic_cast<CTERefStep *>(node->getChildren()[0]->getChildren()[0]->getChildren()[1]->getStep().get());
+
+    if (first_cte->getId() != second_cte->getId())
+        return {};
+
+
+    auto conjuncts = PredicateUtils::extractConjuncts(filter->getFilter());
+    bool match_first = false;
+    bool match_second = false;
+    for (const auto & conjunct : conjuncts)
+    {
+        if (const auto * id = conjunct->as<ASTIdentifier>())
+        {
+            if (id->getColumnName() == first_apply->getAssignment().first)
+            {
+                match_first = true;
+            }
+            if (id->getColumnName() == second_apply->getAssignment().first)
+            {
+                match_second = true;
+            }
+        }
+    }
+
+    if (match_first && match_second)
+    {
+        auto second_apply_left = node->getChildren()[0]->getChildren()[0]->getChildren()[0];
+        auto new_apply = std::make_shared<ApplyStep>(
+            DataStreams{second_apply_left->getCurrentDataStream(), first_apply->getInputStreams()[1]},
+            first_apply->getCorrelation(),
+            first_apply->getApplyType(),
+            first_apply->getSubqueryType(),
+            first_apply->getAssignment(),
+            first_apply->getOuterColumns());
+        auto new_apply_node = PlanNodeBase::createPlanNode(
+            context.context->nextNodeId(), new_apply, {second_apply_left, node->getChildren()[0]->getChildren()[1]});
+
+
+        std::vector<ConstASTPtr> new_filter;
+        for (const auto & conjunct : conjuncts)
+        {
+            if (const auto * id = conjunct->as<ASTIdentifier>())
+            {
+                if (id->getColumnName() == second_apply->getAssignment().first)
+                {
+                    continue;
+                }
+            }
+            new_filter.emplace_back(conjunct);
+        }
+
+        ConstASTPtr filter_ast = PredicateUtils::combineConjuncts(new_filter);
+        auto new_filter_step = std::make_shared<FilterStep>(new_apply_node->getCurrentDataStream(), filter_ast);
+        return PlanNodeBase::createPlanNode(context.context->nextNodeId(), new_filter_step, {new_apply_node});
+    }
+
+
     return {};
 }
 

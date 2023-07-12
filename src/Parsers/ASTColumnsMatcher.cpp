@@ -4,6 +4,7 @@
 #include <re2/re2.h>
 #include <Common/SipHash.h>
 #include <IO/Operators.h>
+#include <Parsers/ASTSerDerHelper.h>
 
 
 namespace DB
@@ -59,6 +60,27 @@ bool ASTColumnsMatcher::isColumnMatching(const String & column_name) const
 {
     return RE2::PartialMatch(column_name, *column_matcher);
 }
+
+
+void ASTColumnsMatcher::serialize(WriteBuffer & buf) const
+{
+    writeBinary(original_pattern, buf);
+    serializeAST(column_list, buf);
+}
+
+void ASTColumnsMatcher::deserializeImpl(ReadBuffer & buf)
+{
+    readBinary(original_pattern, buf);
+    column_list = deserializeAST(buf);
+}
+
+ASTPtr ASTColumnsMatcher::deserialize(ReadBuffer & buf)
+{
+    auto columns_matcher = std::make_shared<ASTColumnsMatcher>();
+    columns_matcher->deserializeImpl(buf);
+    return columns_matcher;
+}
+
 
 
 }

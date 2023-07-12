@@ -12,6 +12,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#pragma once
 
 #include <initializer_list>
 #include <type_traits>
@@ -38,13 +39,7 @@ public:
     template<typename KeyArg, typename ValueArg>
     void emplace_back(KeyArg&& key_arg, ValueArg&& value_args)
     {
-        auto index = ordered_storage.size();
-        if (mapping.count(key_arg))
-        {
-            throw Exception("duplicated key is not allowed", ErrorCodes::LOGICAL_ERROR);
-        }
-        mapping[key_arg] = index;
-        ordered_storage.emplace_back(std::forward<KeyArg>(key_arg), std::forward<ValueArg>(value_args));
+        emplace(std::forward<KeyArg>(key_arg), std::forward<ValueArg>(value_args));
     }
 
     template<typename KeyArg, typename ValueArg>
@@ -59,7 +54,6 @@ public:
         ordered_storage.emplace_back(std::forward<KeyArg>(key_arg), std::forward<ValueArg>(value_args));
     }
 
-
     LinkedHashMap(std::initializer_list<std::pair<Key, Value>>&& init_list): ordered_storage(std::move(init_list)) {
         size_t index = 0;
         for(auto& [k, v]: ordered_storage)
@@ -73,6 +67,12 @@ public:
     LinkedHashMap(Iter beg, Iter end)
     {
         insert_back(beg, end);
+    }
+
+    template<typename KeyArg>
+    bool contains(const KeyArg & key_arg)
+    {
+        return mapping.count(key_arg);
     }
 
     void emplace_back(const std::pair<Key, Value> & assignment)
@@ -92,6 +92,19 @@ public:
         {
             this->emplace_back(iter->first, iter->second);
         }
+    }
+
+    template<typename Iter>
+    Iter erase(Iter iter)
+    {
+        mapping.erase(iter->first);
+        return ordered_storage.erase(iter);
+    }
+
+    void clear()
+    {
+        ordered_storage.clear();
+        mapping.clear();
     }
 
     // TODO: use user-defined key to avoid it
@@ -162,6 +175,22 @@ public:
         {
             return "";
         }
+    }
+
+    bool operator==(const LinkedHashMap & other) const
+    {
+        if (mapping.size() != other.mapping.size()) {
+            return false;
+        }
+        for (const auto & entry : mapping) {
+            if (!other.count(entry.first)) {
+                return false;
+            }
+            if (ordered_storage.at(entry.second).second != other.at(entry.first)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     LinkedHashMap(const LinkedHashMap &) = default;

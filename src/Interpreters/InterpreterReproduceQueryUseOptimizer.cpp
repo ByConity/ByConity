@@ -113,9 +113,9 @@ QueryPlanPtr InterpreterReproduceQueryUseOptimizer::plan(ASTPtr ast)
     context->createSymbolAllocator();
     context->createOptimizerMetrics();
 
-    ast = QueryRewriter::rewrite(ast, context);
+    ast = QueryRewriter().rewrite(ast, context);
     AnalysisPtr ast_result = QueryAnalyzer::analyze(ast, context);
-    QueryPlanPtr query_plan = QueryPlanner::plan(ast, *ast_result, context);
+    QueryPlanPtr query_plan = QueryPlanner().plan(ast, *ast_result, context);
     PlanOptimizer::optimize(*query_plan, context);
     return query_plan;
 }

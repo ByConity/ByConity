@@ -15,6 +15,7 @@
 
 #include <Common/FieldVisitors.h>
 #include <Common/SipHash.h>
+#include <DataTypes/DataTypeLowCardinality.h>
 #include <Optimizer/value_sets.h>
 #include <algorithm>
 
@@ -712,7 +713,8 @@ ValueSet createSingleValueSet(const DataTypePtr & type, const Field & value)
 
 bool isTypeOrderable(const DataTypePtr & type)
 {
-    auto t = removeNullable(type);
+    auto t = recursiveRemoveLowCardinality(type);
+    t = removeNullable(t);
     return isNumber(t) || isDecimal(t) || isString(t) || isDateOrDateTime(t);
 }
 

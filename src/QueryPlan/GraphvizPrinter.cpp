@@ -19,6 +19,7 @@
 #include <DataTypes/FieldToDataType.h>
 #include <IO/WriteBufferFromString.h>
 #include <Interpreters/AggregateDescription.h>
+#include <Interpreters/ProcessList.h>
 #include <Interpreters/convertFieldToType.h>
 #include <Parsers/formatAST.h>
 #include <Processors/Transforms/AggregatingTransform.h>
@@ -27,12 +28,14 @@
 #include <QueryPlan/ApplyStep.h>
 #include <QueryPlan/DistinctStep.h>
 #include <QueryPlan/ExchangeStep.h>
+#include <QueryPlan/ExplainAnalyzeStep.h>
 #include <QueryPlan/FilterStep.h>
+#include <QueryPlan/GraphvizPrinter.h>
+#include <QueryPlan/Hints/Leading.h>
 #include <QueryPlan/IQueryPlanStep.h>
 #include <QueryPlan/JoinStep.h>
 #include <QueryPlan/LimitByStep.h>
 #include <QueryPlan/LimitStep.h>
-#include <QueryPlan/SortingStep.h>
 #include <QueryPlan/MergeSortingStep.h>
 #include <QueryPlan/MergingAggregatedStep.h>
 #include <QueryPlan/MergingSortedStep.h>
@@ -42,10 +45,12 @@
 #include <QueryPlan/PlanVisitor.h>
 #include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/QueryPlan.h>
+#include <QueryPlan/SortingStep.h>
 #include <QueryPlan/UnionStep.h>
 #include <QueryPlan/WindowStep.h>
 #include <Storages/StorageDistributed.h>
 #include <boost/algorithm/string/replace.hpp>
+#include <QueryPlan/Hints/Leading.h>
 
 #include <filesystem>
 #include <iostream>
@@ -64,6 +69,7 @@ static std::unordered_map<IQueryPlanStep::Type, std::string> NODE_COLORS = {
     {IQueryPlanStep::Type::Projection, "bisque"},
     {IQueryPlanStep::Type::Filter, "yellow"},
     {IQueryPlanStep::Type::Join, "orange"},
+    {IQueryPlanStep::Type::ArrayJoin, "orange"},
     {IQueryPlanStep::Type::Aggregating, "chartreuse3"},
     {IQueryPlanStep::Type::MergingAggregated, "chartreuse3"},
     {IQueryPlanStep::Type::Window, "darkolivegreen4"},
@@ -78,6 +84,7 @@ static std::unordered_map<IQueryPlanStep::Type, std::string> NODE_COLORS = {
     {IQueryPlanStep::Type::Values, "deepskyblue"},
     {IQueryPlanStep::Type::Limit, "gray83"},
     {IQueryPlanStep::Type::LimitBy, "gray83"},
+    {IQueryPlanStep::Type::Filling, "gray83"},
     {IQueryPlanStep::Type::Sorting, "aliceblue"},
     {IQueryPlanStep::Type::MergeSorting, "aliceblue"},
     {IQueryPlanStep::Type::PartialSorting, "aliceblue"},
@@ -91,8 +98,18 @@ static std::unordered_map<IQueryPlanStep::Type, std::string> NODE_COLORS = {
     {IQueryPlanStep::Type::EnforceSingleRow, "bisque"},
     {IQueryPlanStep::Type::AssignUniqueId, "bisque"},
     {IQueryPlanStep::Type::CTERef, "orange"},
+    {IQueryPlanStep::Type::ExplainAnalyze, "orange"},
     {IQueryPlanStep::Type::TopNFiltering, "fuchsia"},
     {IQueryPlanStep::Type::MarkDistinct, "violet"},
+};
+
+static auto escapeSpecialCharacters = [](String content) {
+    boost::replace_all(content, "<", "\\<");
+    boost::replace_all(content, ">", "\\>");
+    boost::replace_all(content, "{", "\\{");
+    boost::replace_all(content, "}", "\\}");
+    boost::replace_all(content, "\"", "\\\">");
+    return content;
 };
 
 struct PrinterContext
@@ -158,6 +175,15 @@ Void PlanNodePrinter::visitJoinNode(JoinNode & node, PrinterContext & context)
         VisitorUtil::accept(*node.getChildren()[1], *this, context);
     }
     return Void{};
+}
+
+Void PlanNodePrinter::visitArrayJoinNode(ArrayJoinNode & node, PrinterContext & context)
+{
+    String label{"ArrayJoinNode"};
+    auto step = *node.getStep();
+    String color{NODE_COLORS[step.getType()]};
+    printNode(node, label, StepPrinter::printArrayJoinStep(step), color, context);
+    return visitChildren(node, context);
 }
 
 Void PlanNodePrinter::visitAggregatingNode(AggregatingNode & node, PrinterContext & context)
@@ -421,29 +447,52 @@ Void PlanNodePrinter::visitTopNFilteringNode(TopNFilteringNode & node, PrinterCo
 void PlanNodePrinter::printNode(
     const PlanNodeBase & node, const String & label, const String & details, const String & color, PrinterContext & context)
 {
-    auto escapeSpecialCharacters = [](String content) {
-        boost::replace_all(content, "<", "\\<");
-        boost::replace_all(content, ">", "\\>");
-        boost::replace_all(content, "{", "\\{");
-        boost::replace_all(content, "}", "\\}");
-        boost::replace_all(content, "\"", "\\\">");
-        return content;
-    };
-
     out << "plannode_" << node.getId() << R"([label="{)" << escapeSpecialCharacters(label) << "|" << escapeSpecialCharacters(details);
 
     if (with_id)
         out << "|" << node.getId();
 
+    printHints(node);
+
     if (node.getStatistics().isDerived())
     {
         out << "|";
         out << "Stats \\n";
-        auto statistics = node.getStatistics();
+        const auto & statistics = node.getStatistics();
         if (statistics)
-            out << statistics.value()->toString();
+            out << escapeSpecialCharacters(statistics.value()->toString());
         else
             out << "None";
+    }
+
+    if (!profiles.empty() && profiles.count(node.getId()))
+    {
+        const auto & profile = profiles.at(node.getId());
+        out << "|";
+        out << "Actual Stats \\n";
+        out << "Output " << PlanPrinter::TextPrinter::prettyNum(profile->output_rows) << " rows \\n";
+
+        if (!node.getChildren().empty() && profile->inputs_profile.contains(node.getChildren()[0]->getId()))
+        {
+            if (node.getChildren().size() == 1)
+            {
+                out << "Input: ";
+                out << PlanPrinter::TextPrinter::prettyNum(profile->inputs_profile[node.getChildren()[0]->getId()].input_rows)
+                    << " rows \\n";
+            }
+            else
+            {
+                int num = 1;
+                out << "Input: \\n";
+                for (const auto & child : node.getChildren())
+                {
+                    auto input_profile = profile->inputs_profile[child->getId()];
+                    out << "source [" << num << "] : ";
+                    out << PlanPrinter::TextPrinter::prettyNum(input_profile.input_rows) << " rows \\n";
+                    ++num;
+                }
+            }
+        }
     }
 
     String style = context.is_magic ? "rounded, filled, dashed" : "rounded, filled";
@@ -461,7 +510,31 @@ Void PlanNodePrinter::visitChildren(PlanNodeBase & node, PrinterContext & contex
     }
     return Void{};
 }
-
+void PlanNodePrinter::printHints(const PlanNodeBase & node)
+{
+    auto step = node.getStep();
+    if (!step->getHints().empty())
+    {
+        out << "|";
+        out << "Hints \\n";
+        for (auto hint : step->getHints())
+        {
+            out << hint->getName() << ":";
+            if (hint->getName() == "LEADING")
+            {
+                auto leading_hint = std::dynamic_pointer_cast<Leading>(hint);
+                if (leading_hint)
+                    out << leading_hint->getJoinOrderString();
+            }
+            else
+            {
+                for (auto option : hint->getOptions())
+                    out << option << ",";
+            }
+            out << "\\n";
+        }
+    }
+}
 Void PlanNodePrinter::visitCTERefNode(CTERefNode & node, PrinterContext & context)
 {
     const auto & step = *node.getStep();
@@ -478,9 +551,27 @@ Void PlanNodePrinter::visitCTERefNode(CTERefNode & node, PrinterContext & contex
     return Void{};
 }
 
+Void PlanNodePrinter::visitExplainAnalyzeNode(ExplainAnalyzeNode & node, PrinterContext & context)
+{
+    String label{"ExplainAnalyzeNode"};
+    auto step = *node.getStep();
+    String color{NODE_COLORS[step.getType()]};
+    printNode(node, label, StepPrinter::printExplainAnalyzeStep(step), color, context);
+    return visitChildren(node, context);
+}
+
+Void PlanNodePrinter::visitFillingNode(FillingNode & node, PrinterContext & context)
+{
+    String label{"FillingNode"};
+    auto step = *node.getStep();
+    String color{NODE_COLORS[step.getType()]};
+    printNode(node, label, StepPrinter::printFillingStep(step), color, context);
+    return visitChildren(node, context);
+}
+
 void PlanNodePrinter::printCTEDefNode(CTEId cte_id)
 {
-    out << "cte_" << cte_id << R"([label="{CTEDef|CTEId: )" << cte_id << R"(}", style="rounded, filled", shape=record];)" << std::endl;
+    out << "cte_" << cte_id << R"([label="{CTEDefNode|CTEId: )" << cte_id << R"(}", style="rounded, filled", shape=record];)" << std::endl;
 }
 
 Void PlanNodeEdgePrinter::visitPlanNode(PlanNodeBase & node, Void & context)
@@ -546,6 +637,16 @@ Void PlanSegmentNodePrinter::visitJoinNode(QueryPlan::Node * node, PrinterContex
         VisitorUtil::accept(node->children[1], *this, context);
     }
     return Void{};
+}
+
+Void PlanSegmentNodePrinter::visitArrayJoinNode(QueryPlan::Node * node, PrinterContext & context)
+{
+    auto & step_ptr = node->step;
+    String label{"ArrayJoin"};
+    const auto & step = dynamic_cast<const ArrayJoinStep &>(*step_ptr);
+    String color{NODE_COLORS[step.getType()]};
+    printNode(node, label, StepPrinter::printArrayJoinStep(step), color, context);
+    return visitChildren(node, context);
 }
 
 Void PlanSegmentNodePrinter::visitAggregatingNode(QueryPlan::Node * node, PrinterContext & context)
@@ -698,6 +799,16 @@ Void PlanSegmentNodePrinter::visitSortingNode(QueryPlan::Node * node, PrinterCon
     return visitChildren(node, context);
 }
 
+Void PlanSegmentNodePrinter::visitFillingNode(QueryPlan::Node * node, PrinterContext & context)
+{
+    auto & stepPtr = node->step;
+    String label{"FillingNode"};
+    auto & step = dynamic_cast<const FillingStep &>(*stepPtr);
+    String color{NODE_COLORS[stepPtr->getType()]};
+    printNode(node, label, StepPrinter::printFillingStep(step), color, context);
+    return visitChildren(node, context);
+}
+
 Void PlanSegmentNodePrinter::visitPartialSortingNode(QueryPlan::Node * node, PrinterContext & context)
 {
     auto & step_ptr = node->step;
@@ -818,6 +929,16 @@ Void PlanSegmentNodePrinter::visitPartitionTopNNode(QueryPlan::Node * node, Prin
     return visitChildren(node, context);
 }
 
+Void PlanSegmentNodePrinter::visitExplainAnalyzeNode(QueryPlan::Node * node, PrinterContext & context)
+{
+    auto & step_ptr = node->step;
+    const auto & step = dynamic_cast<const ExplainAnalyzeStep &>(*step_ptr);
+    String label{"ExplainAnalyzeStep"};
+    String color{NODE_COLORS[step_ptr->getType()]};
+    printNode(node, label, StepPrinter::printExplainAnalyzeStep(step), color, context);
+    return visitChildren(node, context);
+}
+
 Void PlanSegmentNodePrinter::visitTopNFilteringNode(QueryPlan::Node * node, PrinterContext & context)
 {
     auto & step_ptr = node->step;
@@ -831,15 +952,6 @@ Void PlanSegmentNodePrinter::visitTopNFilteringNode(QueryPlan::Node * node, Prin
 void PlanSegmentNodePrinter::printNode(
     QueryPlan::Node * node, const String & label, const String & details, const String & color, PrinterContext & context)
 {
-    auto escapeSpecialCharacters = [](String content) {
-        boost::replace_all(content, "<", "\\<");
-        boost::replace_all(content, ">", "\\>");
-        boost::replace_all(content, "{", "\\{");
-        boost::replace_all(content, "}", "\\}");
-        boost::replace_all(content, "\"", "\\\">");
-        return content;
-    };
-
     out << "plannode_" << node->id << R"([label="{)" << escapeSpecialCharacters(label) << "|" << escapeSpecialCharacters(details);
 
     if (with_id)
@@ -1088,11 +1200,40 @@ String StepPrinter::printJoinStep(const JoinStep & step)
     }
     details << inequality(step.getAsofInequality());
     details << "|";
+
+    if (step.getJoinAlgorithm() == JoinAlgorithm::PARALLEL_HASH)
+    {
+        details << "parallel|";
+    }
+
+    if (step.isOrdered())
+    {
+        details << "isOrdered:" << step.isOrdered() << "|";
+    }
+
     details << "Output: \\n";
     for (const auto & item : step.getOutputStream().header)
     {
         details << item.name << ":";
         details << item.type->getName() << "\\n";
+    }
+    return details.str();
+}
+
+String StepPrinter::printArrayJoinStep(const ArrayJoinStep & step)
+{
+    std::stringstream details;
+    details << "is left array join : " << step.isLeft();
+    details << "|";
+    details << "Array Join columns : ";
+    for (const auto & column : step.getResultNameSet())
+        details << column << ", ";
+    details << "|";
+    details << "Output |";
+    for (const auto & column : step.getOutputStream().header)
+    {
+        details << column.name << ":";
+        details << column.type->getName() << "\\n";
     }
     return details.str();
 }
@@ -1113,7 +1254,7 @@ String StepPrinter::printAggregatingStep(const AggregatingStep & step, bool incl
     {
         String func_name = desc.function->getName();
         auto type_name = String(typeid(desc.function.get()).name());
-        if (type_name.find("AggregateFunctionNull"))
+        if (type_name.find("AggregateFunctionNull") != String::npos)
         {
             func_name = String("AggNull(").append(std::move(func_name)).append(")");
         }
@@ -1160,9 +1301,9 @@ String StepPrinter::printAggregatingStep(const AggregatingStep & step, bool incl
         for (const auto & set : step.getGroupings())
         {
             details << set.output_name << ':';
-            for (auto arg : set.argument_names)
+            for (const auto & arg : set.argument_names)
             {
-                details << arg<< ',';
+                details << arg << ',';
             }
             details << "; ";
         }
@@ -1221,11 +1362,11 @@ String StepPrinter::printMergingAggregatedStep(const MergingAggregatedStep & ste
     details << "|";
     details << "Functions:\\n";
     const AggregateDescriptions & descs = step.getParams()->params.aggregates;
-    for (auto & desc : descs)
+    for (const auto & desc : descs)
     {
         String func_name = desc.function->getName();
         auto type_name = String(typeid(desc.function.get()).name());
-        if (type_name.find("AggregateFunctionNull"))
+        if (type_name.find("AggregateFunctionNull") != String::npos)
         {
             func_name = String("AggNull(").append(std::move(func_name)).append(")");
         }
@@ -1257,9 +1398,9 @@ String StepPrinter::printMergingAggregatedStep(const MergingAggregatedStep & ste
         for (const auto & set : step.getGroupings())
         {
             details << set.output_name << ':';
-            for (auto arg : set.argument_names)
+            for (const auto & arg : set.argument_names)
             {
-                details << arg<< ',';
+                details << arg << ',';
             }
             details << "; ";
         }
@@ -1270,7 +1411,7 @@ String StepPrinter::printMergingAggregatedStep(const MergingAggregatedStep & ste
                 << "final";
     details << "|";
     details << "Output |";
-    for (auto & column : step.getOutputStream().header)
+    for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
         details << column.type->getName() << "\\n";
@@ -1289,10 +1430,10 @@ String StepPrinter::printUnionStep(const UnionStep & step)
     details << "OutputToInputs"
             << "|";
 
-    for (auto & output_to_input : step.getOutToInputs())
+    for (const auto & output_to_input : step.getOutToInputs())
     {
         details << output_to_input.first << ":";
-        for (auto & output : output_to_input.second)
+        for (const auto & output : output_to_input.second)
         {
             details << output << ",";
         }
@@ -1300,7 +1441,7 @@ String StepPrinter::printUnionStep(const UnionStep & step)
     }
     details << "|";
     details << "Output |";
-    for (auto & column : step.getOutputStream().header)
+    for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
         details << column.type->getName() << "\\n";
@@ -1316,7 +1457,7 @@ String StepPrinter::printIntersectStep(const IntersectStep & step)
     details << "Distinct: " << step.isDistinct();
     details << "|";
     details << "Output |";
-    for (auto & column : step.getOutputStream().header)
+    for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
         details << column.type->getName() << "\\n";
@@ -1330,7 +1471,7 @@ String StepPrinter::printExceptStep(const ExceptStep & step)
     details << "ExceptNode";
     details << "|";
     details << "Output |";
-    for (auto & column : step.getOutputStream().header)
+    for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
         details << column.type->getName() << "\\n";
@@ -1366,7 +1507,7 @@ String StepPrinter::printExchangeStep(const ExchangeStep & step)
     }
     details << "|";
     details << "Shuffle Keys \\n";
-    for (auto & column : step.getSchema().getPartitioningColumns())
+    for (const auto & column : step.getSchema().getPartitioningColumns())
     {
         details << column << " ";
     }
@@ -1388,7 +1529,7 @@ String StepPrinter::printRemoteExchangeSourceStep(const RemoteExchangeSourceStep
     {
         const size_t segment_id = input->getPlanSegmentId();
         details << segment_id << ":";
-        
+
         for (const auto & column : input->getHeader())
         {
             details << column.name << " ";
@@ -1410,8 +1551,8 @@ String StepPrinter::printRemoteExchangeSourceStep(const RemoteExchangeSourceStep
 String StepPrinter::printTableScanStep(const TableScanStep & step)
 {
     //    auto distributed_table = dynamic_cast<StorageDistributed *>(step->getStorage().get());
-    String database = step.getDatabase();
-    String table = step.getTable();
+    const String & database = step.getDatabase();
+    const String & table = step.getTable();
     std::stringstream details;
     details << database << "." << table << "|";
 
@@ -1426,8 +1567,8 @@ String StepPrinter::printTableScanStep(const TableScanStep & step)
     //        details << "into " << storage.cluster_by_total_bucket_number << '|';
     //    }
     //
-    auto & query_info = step.getQueryInfo();
-    auto query = query_info.query->as<ASTSelectQuery>();
+    const auto & query_info = step.getQueryInfo();
+    auto * query = query_info.query->as<ASTSelectQuery>();
     if (query->getWhere())
     {
         details << "Filter : \\n";
@@ -1439,6 +1580,20 @@ String StepPrinter::printTableScanStep(const TableScanStep & step)
     {
         details << "Prewhere : \\n";
         details << printFilter(query->refPrewhere());
+        details << "|";
+    }
+
+    if (step.getQueryInfo().input_order_info)
+    {
+        const auto & prefix_descs = step.getQueryInfo().input_order_info->order_key_prefix_descr;
+        if (!prefix_descs.empty())
+        {
+            details << "prefix desc";
+            for (const auto & desc : prefix_descs)
+            {
+                details << desc.column_name << " " << desc.direction << " " << desc.nulls_direction << "\\n";
+            }
+        }
         details << "|";
     }
 
@@ -1459,21 +1614,21 @@ String StepPrinter::printTableScanStep(const TableScanStep & step)
     //    }
     //    details << "|";
 
-    if (auto * pushdown_filter = step.getPushdownFilterCast())
+    if (const auto * pushdown_filter = step.getPushdownFilterCast())
     {
         details << "Pushdown Filter |";
         details << printFilterStep(*pushdown_filter, false);
         details << "|";
     }
 
-    if (auto * pushdown_projection = step.getPushdownProjectionCast())
+    if (const auto * pushdown_projection = step.getPushdownProjectionCast())
     {
         details << "Pushdown Projection |";
         details << printProjectionStep(*pushdown_projection, false);
         details << "|";
     }
 
-    if (auto * pushdown_aggregation = step.getPushdownAggregationCast())
+    if (const auto * pushdown_aggregation = step.getPushdownAggregationCast())
     {
         details << "Pushdown Aggregation |";
         details << printAggregatingStep(*pushdown_aggregation, false);
@@ -1494,7 +1649,7 @@ String StepPrinter::printValuesStep(const ValuesStep & step)
 {
     std::stringstream details;
     details << "Output |";
-    for (auto & column : step.getOutputStream().header)
+    for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
         details << column.type->getName() << "\\n";
@@ -1513,7 +1668,7 @@ String StepPrinter::printLimitStep(const LimitStep & step)
     details << "Offset:" << offset;
     details << "|";
     details << "Output\\n";
-    for (auto & column : step.getOutputStream().header)
+    for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
         details << column.type->getName() << "\\n";
@@ -1529,11 +1684,11 @@ String StepPrinter::printLimitByStep(const LimitByStep & step)
     details << "Limit value : " << step.getGroupLength();
     details << "|";
     details << "Limit columns : ";
-    for (auto & column : step.getColumns())
+    for (const auto & column : step.getColumns())
         details << column << ", ";
     details << "|";
     details << "Output |";
-    for (auto & column : step.getOutputStream().header)
+    for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
         details << column.type->getName() << "\\n";
@@ -1545,8 +1700,8 @@ String StepPrinter::printMergeSortingStep(const MergeSortingStep & step)
 {
     std::stringstream details;
     details << "Order By:\\n";
-    auto & descs = step.getSortDescription();
-    for (auto & desc : descs)
+    const auto & descs = step.getSortDescription();
+    for (const auto & desc : descs)
     {
         details << desc.column_name << " " << desc.direction << " " << desc.nulls_direction << "\\n";
     }
@@ -1554,7 +1709,7 @@ String StepPrinter::printMergeSortingStep(const MergeSortingStep & step)
     details << "Limit: " << step.getLimit();
     details << "|";
     details << "Output |";
-    for (auto & column : step.getOutputStream().header)
+    for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
         details << column.type->getName() << "\\n";
@@ -1566,10 +1721,20 @@ String StepPrinter::printSortingStep(const SortingStep & step)
 {
     std::stringstream details;
     details << "Order By:\\n";
-    auto & descs = step.getSortDescription();
-    for (auto & desc : descs)
+    const auto & descs = step.getSortDescription();
+    for (const auto & desc : descs)
     {
         details << desc.column_name << " " << desc.direction << " " << desc.nulls_direction << "\\n";
+    }
+    const auto & prefix_descs = step.getPrefixDescription();
+    if (!prefix_descs.empty())
+    {
+        details << "|";
+        details << "prefix desc";
+        for (const auto & desc : prefix_descs)
+        {
+            details << desc.column_name << " " << desc.direction << " " << desc.nulls_direction << "\\n";
+        }
     }
     details << "|";
     details << "Limit: " << step.getLimit();
@@ -1577,7 +1742,7 @@ String StepPrinter::printSortingStep(const SortingStep & step)
     details << "IsPartial: " << step.isPartial();
     details << "|";
     details << "Output |";
-    for (auto & column : step.getOutputStream().header)
+    for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
         details << column.type->getName() << "\\n";
@@ -1589,8 +1754,8 @@ String StepPrinter::printPartialSortingStep(const PartialSortingStep & step)
 {
     std::stringstream details;
     details << "Order By:\\n";
-    auto & descs = step.getSortDescription();
-    for (auto & desc : descs)
+    const auto & descs = step.getSortDescription();
+    for (const auto & desc : descs)
     {
         details << desc.column_name << " " << desc.direction << " " << desc.nulls_direction << "\\n";
     }
@@ -1612,8 +1777,8 @@ String StepPrinter::printMergingSortedStep(const MergingSortedStep & step)
 {
     std::stringstream details;
     details << "Order By:\\n";
-    auto & descs = step.getSortDescription();
-    for (auto & desc : descs)
+    const auto & descs = step.getSortDescription();
+    for (const auto & desc : descs)
     {
         details << desc.column_name << "\\n";
     }
@@ -1623,7 +1788,7 @@ String StepPrinter::printMergingSortedStep(const MergingSortedStep & step)
 
     details << "|";
     details << "Output |";
-    for (auto & column : step.getOutputStream().header)
+    for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
         details << column.type->getName() << "\\n";
@@ -1635,7 +1800,7 @@ String StepPrinter::printDistinctStep(const DistinctStep & step)
 {
     std::stringstream details;
     details << "Columns:\\n";
-    for (auto & name : step.getColumns())
+    for (const auto & name : step.getColumns())
     {
         details << name << "\\n";
     }
@@ -1644,7 +1809,7 @@ String StepPrinter::printDistinctStep(const DistinctStep & step)
     details << step.getLimitHint();
     details << "|";
     details << "Output |";
-    for (auto & column : step.getOutputStream().header)
+    for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
         details << column.type->getName() << "\\n";
@@ -1672,12 +1837,19 @@ String StepPrinter::printApplyStep(const ApplyStep & step)
     details << "ApplyType : " << f(step.getApplyType());
     details << "|";
     details << "Correlation \\n";
-    for (auto & name : step.getCorrelation())
+    for (const auto & name : step.getCorrelation())
     {
         details << name << " ";
     }
 
-    auto subqueryType = [](ApplyStep::SubqueryType v) {
+    details << "|";
+    details << "Outer Columns\\n";
+    for (const auto & name : step.getOuterColumns())
+    {
+        details << name << " ";
+    }
+
+    auto subquery_type = [](ApplyStep::SubqueryType v) {
         switch (v)
         {
             case ApplyStep::SubqueryType::SCALAR:
@@ -1692,7 +1864,7 @@ String StepPrinter::printApplyStep(const ApplyStep & step)
     };
 
     details << "|";
-    details << "SubqueryType " << subqueryType(step.getSubqueryType());
+    details << "SubqueryType " << subquery_type(step.getSubqueryType());
     if (step.getAssignment().second)
     {
         details << "|";
@@ -1701,7 +1873,7 @@ String StepPrinter::printApplyStep(const ApplyStep & step)
     }
     details << "|";
     details << "Output |";
-    for (auto & column : step.getOutputStream().header)
+    for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
         details << column.type->getName() << "\\n";
@@ -1713,7 +1885,7 @@ String StepPrinter::printEnforceSingleRowStep(const EnforceSingleRowStep & step)
     std::stringstream details;
 
     details << "Output |";
-    for (auto & column : step.getOutputStream().header)
+    for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
         details << column.type->getName() << "\\n";
@@ -1724,7 +1896,7 @@ String StepPrinter::printAssignUniqueIdStep(const AssignUniqueIdStep & step)
 {
     std::stringstream details;
     details << "Output |";
-    for (auto & column : step.getOutputStream().header)
+    for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
         details << column.type->getName() << "\\n";
@@ -1756,14 +1928,14 @@ String StepPrinter::printPartitionTopNStep(const PartitionTopNStep & step)
 {
     std::stringstream details;
     details << "Partition";
-    for (auto & desc : step.getPartition())
+    for (const auto & desc : step.getPartition())
     {
         details << desc << ", ";
     }
     details << "|";
 
     details << "Order by";
-    for (auto & desc : step.getOrderBy())
+    for (const auto & desc : step.getOrderBy())
     {
         details << desc << ", ";
     }
@@ -1776,7 +1948,7 @@ String StepPrinter::printPartitionTopNStep(const PartitionTopNStep & step)
     details << "|";
 
     details << "Output |";
-    for (auto & column : step.getOutputStream().header)
+    for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
         details << column.type->getName() << "\\n";
@@ -1819,6 +1991,17 @@ String StepPrinter::printWindowStep(const WindowStep & step)
             details << arg << ",";
         details << ")\\n";
     }
+
+    const auto & prefix_descs = step.getPrefixDescription();
+    if (!prefix_descs.empty())
+    {
+        details << "|";
+        details << "prefix desc";
+        for (const auto & desc : prefix_descs)
+        {
+            details << desc.column_name << " " << desc.direction << " " << desc.nulls_direction << "\\n";
+        }
+    }
     /*
     details << "|";
     details << "Output |";
@@ -1852,6 +2035,27 @@ String StepPrinter::printFilter(const ConstASTPtr & filter)
     return buf.str();
 }
 
+String StepPrinter::printExplainAnalyzeStep(const ExplainAnalyzeStep & step)
+{
+    std::stringstream details;
+
+    // details << "ExplainAnalyzeKind: ";
+    // if (step.getKind() == ASTExplainQuery::ExplainKind::LogicalAnalyze)
+    //     details << "LogicalAnalyze";
+    // else
+    //     details << "DistributedAnalyze";
+
+    details << "|";
+
+    details << "Output |";
+    for (auto & column : step.getOutputStream().header)
+    {
+        details << column.name << ":";
+        details << column.type->getName() << "\\n";
+    }
+    return details.str();
+}
+
 String StepPrinter::printTopNFilteringStep(const TopNFilteringStep & step)
 {
     std::stringstream details;
@@ -1872,6 +2076,33 @@ String StepPrinter::printTopNFilteringStep(const TopNFilteringStep & step)
         details << column.type->getName() << "\\n";
     }
      */
+    return details.str();
+}
+
+String StepPrinter::printFillingStep(const FillingStep & step)
+{
+    std::stringstream details;
+    details << "Order By With Fill:\\n";
+    const auto & descs = step.getSortDescription();
+    for (const auto & desc : descs)
+    {
+        details << "name: "<< desc.column_name << " direction:" << desc.direction << " nulls_direction" << desc.nulls_direction;
+        if (desc.with_fill)
+        {
+            details << " from:" << desc.fill_description.fill_from.toString()
+                    << " to:" << desc.fill_description.fill_to.toString()
+                    << " step:" << desc.fill_description.fill_step.toString();
+        }
+        details << "\\n";
+    }
+
+    details << "|";
+    details << "Output |";
+    for (const auto & column : step.getOutputStream().header)
+    {
+        details << column.name << ":";
+        details << column.type->getName() << "\\n";
+    }
     return details.str();
 }
 
@@ -1950,7 +2181,7 @@ void cleanDotFiles(const ContextPtr & context)
 
         auto query_id = context->getInitialQueryId();
 
-        for (auto & dir_entry : std::filesystem::directory_iterator(graphviz_path))
+        for (const auto & dir_entry : std::filesystem::directory_iterator(graphviz_path))
         {
             if (dir_entry.is_regular_file() && dir_entry.path().extension() == ".dot")
             {
@@ -1977,6 +2208,10 @@ void GraphvizPrinter::printAST(const ASTPtr & astPtr, ContextMutablePtr & contex
         std::ofstream out(path.str());
         out << GraphvizPrinter::printAST(astPtr);
         out.close();
+
+        // QueryStatus * process_list_elem = context->getProcessListElement();
+        // if (process_list_elem)
+        //     process_list_elem->addGraphviz(visitor, graphviz);
     }
 }
 
@@ -1993,13 +2228,19 @@ void GraphvizPrinter::printLogicalPlan(PlanNodeBase & root, ContextMutablePtr & 
         std::ofstream out(path.str());
         out << GraphvizPrinter::printLogicalPlan(root);
         out.close();
+
+        // QueryStatus * process_list_elem = context->getProcessListElement();
+        // if (process_list_elem)
+        //     process_list_elem->addGraphviz(name, graphviz);
     }
 }
 
-void GraphvizPrinter::printLogicalPlan(QueryPlan & plan, ContextMutablePtr & context, const String & name)
+void GraphvizPrinter::printLogicalPlan(
+    QueryPlan & plan, ContextMutablePtr & context, const String & name, StepAggregatedOperatorProfiles profiles)
 {
     if (context->getSettingsRef().print_graphviz)
     {
+        auto const graphviz = GraphvizPrinter::printLogicalPlan(*plan.getPlanNode(), &plan.getCTEInfo(), profiles);
         cleanDotFiles(context);
 
         std::stringstream path;
@@ -2026,6 +2267,12 @@ void GraphvizPrinter::printPipeline(
             std::ofstream out(path.str());
             out << printGroupedPipeline(processors, graph);
             out.close();
+
+            std::stringstream name;
+            name << PIPELINE_PATH << "-grouped_" << segment_id << "_" << host;
+            // QueryStatus * process_list_elem = context->getProcessListElement();
+            // if (process_list_elem)
+            //     process_list_elem->addGraphviz(name.str(), graphviz);
         }
         {
             std::stringstream path;
@@ -2068,6 +2315,8 @@ String GraphvizPrinter::printPipeline(const Processors & processors, const Execu
                        << "execution time: " << node->execution_time_ns / 1e9 << " sec.";
                 buffer << "\\n"
                        << "preparation time: " << node->preparation_time_ns / 1e9 << " sec.";
+                buffer << "\\n"
+                       << "step_id : " << node->processor->getStepId();
 #endif
 
                 buffer << "|";
@@ -2096,7 +2345,7 @@ String GraphvizPrinter::printPipeline(const Processors & processors, const Execu
 
 String GraphvizPrinter::printGroupedPipeline(const Processors & processors, const ExecutingGraphPtr & graph)
 {
-    using ProcessorId = size_t;
+    //    using ProcessorId = size_t;
     std::vector<ProcessorId> roots;
     std::unordered_map<ProcessorId, std::vector<ProcessorId>> dag;
 
@@ -2334,6 +2583,9 @@ void GraphvizPrinter::printPlanSegment(const PlanSegmentTreePtr & segment, const
 {
     if (context->getSettingsRef().print_graphviz)
     {
+        auto const graphviz = GraphvizPrinter::printPlanSegment(segment);
+        cleanDotFiles(context);
+
         std::stringstream path;
         path << context->getSettingsRef().graphviz_path.toString();
         path << context->getExecuteSubQueryPath() + "4000-PlanSegment"
@@ -2354,6 +2606,8 @@ void GraphvizPrinter::printChunk(String transform, const Block & block, const Ch
     }
     UInt64 rows = chunk.getNumRows();
     Columns columns = chunk.getColumns();
+    value << columns.size() << ":";
+    value << "\n";
     for (UInt64 i = 0; i < rows; ++i)
     {
         for (auto & col : columns)
@@ -2566,13 +2820,13 @@ void GraphvizPrinter::addID(ASTPtr & ast, std::unordered_map<ASTPtr, UInt16> & a
     }
 }
 
-String GraphvizPrinter::printLogicalPlan(PlanNodeBase & node, CTEInfo * cte_info)
+String GraphvizPrinter::printLogicalPlan(PlanNodeBase & node, CTEInfo * cte_info, StepAggregatedOperatorProfiles profiles)
 {
     std::stringstream out;
     out << "digraph logical_plan {\n rankdir=\"BT\" \n";
     out << "subgraph {\n";
     PrinterContext printer_context{};
-    PlanNodePrinter node_printer{out, true, cte_info};
+    PlanNodePrinter node_printer{out, true, cte_info, {}, profiles};
     VisitorUtil::accept(node, node_printer, printer_context);
     out << "}\n";
     PlanNodeEdgePrinter edge_printer{out, cte_info};
@@ -2657,7 +2911,7 @@ void GraphvizPrinter::appendPlanSegmentNode(std::stringstream & out, const PlanS
     out << "cluster_name " << (segment_ptr->getClusterName().empty() ? "server" : segment_ptr->getClusterName()) << "\\n";
     out << "exchange_parallel_size " << segment_ptr->getExchangeParallelSize() << "\n";
 
-    out << "inputs:" ;
+    out << "inputs:";
     for (const auto & input : segment_ptr->getPlanSegmentInputs())
     {
         out << input->getExchangeId() << "mode(" << static_cast<UInt8>(input->getExchangeMode()) << "): ";
@@ -2669,7 +2923,7 @@ void GraphvizPrinter::appendPlanSegmentNode(std::stringstream & out, const PlanS
     }
     out << "\n";
 
-    out << "output:" ;
+    out << "output:";
     for (const auto & input : segment_ptr->getPlanSegmentOutputs())
     {
         out << input->getExchangeId() << "mode(" << static_cast<UInt8>(input->getExchangeMode()) << "): ";
@@ -2703,9 +2957,12 @@ static String printGroupEdges(const Memo & memo, GroupId root)
         auto required_properties = winner->getRequireChildren();
         for (size_t index = 0; index < required_properties.size(); ++index)
         {
-            auto & children_id = winner->getGroupExpr()->getChildrenGroups()[index];
-            edge_winner[children_id].emplace(group_id);
-            findGroupWinner(children_id, required_properties[index]);
+            if (winner->getGroupExpr())
+            {
+                auto & children_id = winner->getGroupExpr()->getChildrenGroups()[index];
+                edge_winner[children_id].emplace(group_id);
+                findGroupWinner(children_id, required_properties[index]);
+            }
         }
     };
     try
@@ -2791,12 +3048,19 @@ String GraphvizPrinter::printMemo(const Memo & memo, GroupId root)
 String GraphvizPrinter::printGroup(const Group & group)
 {
     std::stringstream out;
-    auto head_step = group.getLogicalExpressions()[0]->getStep().get();
+    const IQueryPlanStep * head_step;
+    if (group.getLogicalExpressions().empty())
+        head_step = group.getPhysicalExpressions()[0]->getStep().get();
+    else
+        head_step = group.getLogicalExpressions()[0]->getStep().get();
 
     auto fold = [](std::string a, GroupId b) { return std::move(a) + ", " + std::to_string(b); };
     auto fold_string = [](String a, const String & b) { return std::move(a) + ", " + b; };
 
     auto expr_to_str = [&](const GroupExprPtr & expr) {
+        if (!expr)
+            return String("");
+
         String result = expr->getStep()->getName();
 
         if (expr->getChildrenGroups().empty())
@@ -2860,14 +3124,28 @@ String GraphvizPrinter::printGroup(const Group & group)
         out << "<TR><TD COLSPAN=\"3\">Magic</TD></TR>";
     }
 
+    for (const auto & join_set : group.getJoinSets())
+    {
+        out << "<TR><TD COLSPAN=\"3\">Magic";
+        if (join_set.getGroups().size() > 1)
+        {
+            for (const auto group_id : join_set.getGroups())
+            {
+                out << group_id << ",";
+            }
+            out << "; ";
+        }
+        out << "</TD></TR>";
+    }
+
     if (group.isStatsDerived())
     {
         out << "<TR><TD COLSPAN=\"3\">";
         if (group.getStatistics())
         {
-            auto stats = group.getStatistics().value()->toString();
-            boost::replace_all(stats, "\\n", "<BR/>");
-            out << stats;
+            // auto stats = escapeSpecialCharacters(group.getStatistics().value()->toString());
+            // boost::replace_all(stats, "\\n", "<BR/>");
+            // out << stats;
         }
         else
         {
@@ -2891,7 +3169,6 @@ String GraphvizPrinter::printGroup(const Group & group)
     out << "<TR><TD>Winner</TD>";
 
     // winners
-    out << R"(<TD><TABLE CELLBORDER="1" BORDER="0" CELLSPACING="0">)";
 
     auto partition_str = [&](const Partitioning & partitioning) {
         if (partitioning.getPartitioningHandle() == Partitioning::Handle::SINGLE)
@@ -2947,46 +3224,50 @@ String GraphvizPrinter::printGroup(const Group & group)
         return ss.str();
     };
 
-    for (auto & pair : group.getLowestCostExpressions())
+    if (!group.getLowestCostExpressions().empty())
     {
-        auto & winner = pair.second;
-        out << "<TR>";
-
-        // property
-        out << "<TD>";
-        out << "cost: " << winner->getCost() << "<BR/>";
-        out << "require: " << property_str(pair.first);
-        out << "</TD>";
-        // property end
-
-        // winner
-        out << "<TD>";
-
-        if (winner->getRemoteExchange())
+        out << R"(<TD><TABLE CELLBORDER="1" BORDER="0" CELLSPACING="0">)";
+        for (auto & pair : group.getLowestCostExpressions())
         {
-            if (auto exchange_step = dynamic_cast<const ExchangeStep *>(winner->getRemoteExchange()->getStep().get()))
+            auto & winner = pair.second;
+            out << "<TR>";
+
+            // property
+            out << "<TD>";
+            out << "cost: " << winner->getCost() << "<BR/>";
+            out << "require: " << property_str(pair.first);
+            out << "</TD>";
+            // property end
+
+            // winner
+            out << "<TD>";
+
+            if (winner->getRemoteExchange())
             {
-                out << "enforce: ";
-                out << partition_str(exchange_step->getSchema());
-                out << "<BR/>";
+                if (auto exchange_step = dynamic_cast<const ExchangeStep *>(winner->getRemoteExchange()->getStep().get()))
+                {
+                    out << "enforce: ";
+                    out << partition_str(exchange_step->getSchema());
+                    out << "<BR/>";
+                }
             }
+            out << "actual: ";
+            out << property_str(winner->getActual());
+            out << "<BR/>";
+
+            out << expr_to_str(winner->getGroupExpr());
+            out << "\n";
+
+            out << join(
+                winner->getRequireChildren(), [&](const auto & item) { return property_str(item); }, ", ", "child: ")
+                << "\n";
+            out << "</TD>";
+            // winner end
+
+            out << "</TR>";
         }
-        out << "actual: ";
-        out << property_str(winner->getActual());
-        out << "<BR/>";
-
-        out << expr_to_str(winner->getGroupExpr());
-        out << "\n";
-
-        out << join(
-            winner->getRequireChildren(), [&](const auto & item) { return property_str(item); }, ", ", "child: ")
-            << "\n";
-        out << "</TD>";
-        // winner end
-
-        out << "</TR>";
+        out << "</TABLE></TD>";
     }
-    out << "</TABLE></TD>";
     // winner end
 
     out << "</TR>";

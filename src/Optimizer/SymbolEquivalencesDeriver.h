@@ -28,7 +28,7 @@ using SymbolEquivalencesPtr = std::shared_ptr<SymbolEquivalences>;
 class SymbolEquivalencesDeriver
 {
 public:
-    static SymbolEquivalencesPtr deriveEquivalences(ConstQueryPlanStepPtr step, std::vector<SymbolEquivalencesPtr> children_equivalences);
+    static SymbolEquivalencesPtr deriveEquivalences(QueryPlanStepPtr step, std::vector<SymbolEquivalencesPtr> children_equivalences);
 };
 
 class SymbolEquivalencesDeriverVisitor : public StepVisitor<SymbolEquivalencesPtr, std::vector<SymbolEquivalencesPtr>>

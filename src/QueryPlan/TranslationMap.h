@@ -55,7 +55,7 @@ struct TranslationMap
                    Analysis & analysis_,
                    ContextPtr context_);
 
-    TranslationMap & withScope(ScopePtr scope_, const FieldSymbolInfos & field_symbol_infos_, bool remove_mappings = true);
+    TranslationMap & withScope(ScopePtr scope_, FieldSymbolInfos field_symbol_infos_, bool remove_mappings = true);
 
     TranslationMap & withNewMappings(const FieldSymbolInfos & field_symbol_infos_, const AstToSymbol & expression_symbols_);
 

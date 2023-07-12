@@ -36,8 +36,8 @@ public:
     static GroupExprPtr
     enforceStreamPartitioning(const GroupExprPtr & group_expr, const Property & required, const Property & actual, const Context & context);
     static QueryPlanStepPtr
-    enforceNodePartitioning(ConstQueryPlanStepPtr step, const Property & required, const Property & actual, const Context & context);
+    enforceNodePartitioning(QueryPlanStepPtr step, const Property & required, const Property & actual, const Context & context);
     static QueryPlanStepPtr
-    enforceStreamPartitioning(ConstQueryPlanStepPtr step, const Property & required, const Property & actual, const Context & context);
+    enforceStreamPartitioning(QueryPlanStepPtr step, const Property & required, const Property & actual, const Context & context);
 };
 }

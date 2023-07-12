@@ -26,7 +26,8 @@ namespace ErrorCodes
 }
 
 std::optional<MaterializedViewStructurePtr>
-MaterializedViewStructure::buildFrom(StorageMaterializedView & view, PlanNodePtr & query, ContextMutablePtr context)
+MaterializedViewStructure::buildFrom(
+    const StorageID & view_storage_id, const StorageID & target_storage_id, PlanNodePtr & query, ContextMutablePtr context)
 {
     static Poco::Logger * log = &Poco::Logger::get("MaterializedViewStructure");
     MaterializedViewPlanChecker checker;
@@ -34,7 +35,7 @@ MaterializedViewStructure::buildFrom(StorageMaterializedView & view, PlanNodePtr
     if (!is_valid)
         return {};
 
-    auto target_table = DatabaseCatalog::instance().tryGetTable(view.getTargetTableId(), context);
+    auto target_table = DatabaseCatalog::instance().tryGetTable(target_storage_id, context);
     if (!target_table)
     {
         LOG_WARNING(log, "materialized view target table not found.");
@@ -86,7 +87,7 @@ MaterializedViewStructure::buildFrom(StorageMaterializedView & view, PlanNodePtr
         LOG_WARNING(
             log,
             "size of materialized view physical columns is inconsistent with select outputs for " +
-                view.getTargetTableId().getFullTableName());
+                target_storage_id.getFullTableName());
         return {};
     }
 
@@ -99,7 +100,7 @@ MaterializedViewStructure::buildFrom(StorageMaterializedView & view, PlanNodePtr
             LOG_WARNING(
                 log,
                 "materialized view physical columns type is inconsistent with select outputs for column " + table_column.name + " in "
-                    + view.getTargetTableId().getFullTableName());
+                    + target_storage_id.getFullTableName());
             return {};
         }
 
@@ -112,8 +113,8 @@ MaterializedViewStructure::buildFrom(StorageMaterializedView & view, PlanNodePtr
         ? dynamic_pointer_cast<const AggregatingStep>(top_aggregate_node->getStep())
         : std::shared_ptr<const AggregatingStep>{};
     return std::make_shared<MaterializedViewStructure>(
-        view.getStorageID(),
-        view.getTargetTableId(),
+        view_storage_id,
+        target_storage_id,
         std::move(join_graph),
         std::move(other_predicates),
         std::move(*symbol_map),

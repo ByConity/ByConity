@@ -48,7 +48,7 @@ public:
         TransformTraits transform_traits;
     };
 
-    ITransformingStep(DataStream input_stream, Block output_header, Traits traits, bool collect_processors_ = true);
+    ITransformingStep(DataStream input_stream, Block output_header, Traits traits, bool collect_processors_ = true, PlanHints hints_ = {});
 
     QueryPipelinePtr updatePipeline(QueryPipelines pipelines, const BuildQueryPipelineSettings & settings) override;
 

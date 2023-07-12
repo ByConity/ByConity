@@ -60,6 +60,7 @@ BasePlanTest::BasePlanTest(const String & database_name_, const std::unordered_m
     tryRegisterFormats();
     tryRegisterStorages();
     tryRegisterAggregateFunctions();
+    tryRegisterHints();
 
     SettingsChanges setting_changes;
 
@@ -104,9 +105,9 @@ QueryPlanPtr BasePlanTest::plan(const String & query, ContextMutablePtr query_co
     NormalizeSelectWithUnionQueryVisitor::Data data{query_context->getSettingsRef().union_default_mode};
     NormalizeSelectWithUnionQueryVisitor{data}.visit(ast);
 
-    ast = QueryRewriter::rewrite(ast, query_context);
+    ast = QueryRewriter().rewrite(ast, query_context);
     AnalysisPtr analysis = QueryAnalyzer::analyze(ast, query_context);
-    QueryPlanPtr query_plan = QueryPlanner::plan(ast, *analysis, query_context);
+    QueryPlanPtr query_plan = QueryPlanner().plan(ast, *analysis, query_context);
     PlanOptimizer::optimize(*query_plan, query_context);
     return query_plan;
 }
@@ -327,9 +328,9 @@ String AbstractPlanTestSuite::dump(const String & name)
             context->createSymbolAllocator();
             context->createOptimizerMetrics();
 
-            ast = QueryRewriter::rewrite(ast, context);
+            ast = QueryRewriter().rewrite(ast, context);
             AnalysisPtr analysis = QueryAnalyzer::analyze(ast, context);
-            QueryPlanPtr query_plan = QueryPlanner::plan(ast, *analysis, context);
+            QueryPlanPtr query_plan = QueryPlanner().plan(ast, *analysis, context);
             dumpDdlStats(*query_plan, context);
             PlanOptimizer::optimize(*query_plan, context);
             CardinalityEstimator::estimate(*query_plan, context);

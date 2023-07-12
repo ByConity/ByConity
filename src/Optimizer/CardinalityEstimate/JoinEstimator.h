@@ -47,7 +47,6 @@ public:
         PlanNodeStatisticsPtr & right_stats,
         const JoinStep & join_step,
         Context & context,
-        bool enable_pk_fk,
         bool is_left_base_table = false,
         bool is_right_base_table = false);
 
@@ -58,9 +57,9 @@ public:
         const Names & right_keys,
         ASTTableJoin::Kind kind,
         Context & context,
-        bool enable_pk_fk,
         bool is_left_base_table = false,
-        bool is_right_base_table = false);
+        bool is_right_base_table = false,
+        ConstASTPtr filter = nullptr);
 
 private:
     static bool matchPKFK(UInt64 left_rows, UInt64 right_rows, UInt64 left_ndv, UInt64 right_ndv);

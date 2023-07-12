@@ -19,6 +19,7 @@
 #include <Parsers/IAST_fwd.h>
 #include <QueryPlan/PlanSerDerHelper.h>
 #include <QueryPlan/BuildQueryPipelineSettings.h>
+#include <QueryPlan/Hints/IPlanHint.h>
 
 
 namespace JSONBuilder { class JSONMap; }
@@ -88,6 +89,11 @@ public:
     {
         return header.getNamesAndTypes();
     }
+
+    NameToType getNamesToTypes() const
+    {
+        return header.getNamesToTypes();
+    }
 };
 
 using DataStreams = std::vector<DataStream>;
@@ -96,6 +102,8 @@ class IQueryPlanStep;
 using QueryPlanStepPtr = std::shared_ptr<IQueryPlanStep>;
 class Context;
 using ContextPtr = std::shared_ptr<const Context>;
+
+using PlanHints = std::vector<PlanHintPtr>;
 
 /// Single step of query plan.
 class IQueryPlanStep
@@ -115,6 +123,7 @@ public:
         M(Extremes) \
         M(Except) \
         M(Exchange) \
+        M(ExplainAnalyze) \
         M(Filling) \
         M(FilledJoin) \
         M(Filter) \
@@ -149,6 +158,7 @@ public:
         M(CTERef) \
         M(TopNFiltering) \
         M(MarkDistinct)
+        
 #define ENUM_DEF(ITEM) ITEM,
 
     enum class Type
@@ -186,6 +196,19 @@ public:
 
     const DataStreams & getInputStreams() const { return input_streams; }
     virtual void setInputStreams(const DataStreams & input_streams_) = 0;
+
+    void addHints(SqlHints & sql_hints, ContextMutablePtr & context);
+
+    const PlanHints & getHints() const
+    {
+        return hints;
+    }
+
+    void setHints(const PlanHints & new_hints)
+    {
+        hints = new_hints;
+    }
+
 
     bool hasOutputStream() const { return output_stream.has_value(); }
     const DataStream & getOutputStream() const;
@@ -234,6 +257,7 @@ protected:
 
     /// Text description about what current step does.
     std::string step_description;
+    PlanHints hints;
 
     static void describePipeline(const Processors & processors, FormatSettings & settings);
 

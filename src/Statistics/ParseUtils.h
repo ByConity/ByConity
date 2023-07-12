@@ -30,8 +30,9 @@ enum class WrapperKind
 {
     Invalid = 0,
     None = 1,
-    StringToHash64 = 2, // when necessary, apply "cityHash64" in sql
-    DecimalToFloat64 = 3, // when necessary, apply "toFloat64" in sql
+    StringToHash64 = 2, // apply "cityHash64" in sql
+    DecimalToFloat64 = 3, // apply "toFloat64" in sql
+    FixedStringToHash64 = 4, // apply "cityHash64 . toString" in sql
 };
 
 
@@ -44,7 +45,7 @@ struct ColumnCollectConfig
     bool need_minmax = false;
 };
 
-inline ColumnCollectConfig get_column_config(const CollectorSettings & settings, const DataTypePtr & type)
+inline ColumnCollectConfig getColumnConfig(const CollectorSettings & settings, const DataTypePtr & type)
 {
     ColumnCollectConfig config;
     config.need_count = true;
@@ -64,9 +65,13 @@ inline ColumnCollectConfig get_column_config(const CollectorSettings & settings,
         }
     }
 
-    if (isStringOrFixedString(type))
+    if (isString(type))
     {
         config.wrapper_kind = WrapperKind::StringToHash64;
+    } 
+    else if (isFixedString(type))
+    {
+        config.wrapper_kind = WrapperKind::FixedStringToHash64;
     }
     else if (isColumnedAsDecimal(type))
     {
@@ -100,15 +105,14 @@ inline T getSingleValue(const Block & block, size_t index)
     }
 }
 
-inline Float64 getNdvFromBase64(std::string_view b64_blob)
+inline Float64 getNdvFromSketchBinary(std::string_view blob)
 {
-    if (b64_blob.empty())
+    if (blob.empty())
     {
         return 0;
     }
-    auto blob = base64Decode(b64_blob);
     auto cpc = createStatisticsUntyped<StatsCpcSketch>(StatisticsTag::CpcSketch, blob);
-    return cpc->get_estimate();
+    return cpc->getEstimate();
 }
 
 inline String getWrappedColumnName(const ColumnCollectConfig & config, const String & col_name)
@@ -120,6 +124,8 @@ inline String getWrappedColumnName(const ColumnCollectConfig & config, const Str
             return col_name;
         case WrapperKind::StringToHash64:
             return fmt::format(FMT_STRING("cityHash64({})"), col_name);
+        case WrapperKind::FixedStringToHash64:
+            return fmt::format(FMT_STRING("cityHash64(toString({}))"), col_name);
         case WrapperKind::DecimalToFloat64:
             return fmt::format(FMT_STRING("toFloat64({})"), col_name);
         default:

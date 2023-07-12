@@ -39,10 +39,10 @@ TranslationMap::TranslationMap(TranslationMapPtr outer_context_,
     checkSymbols();
 }
 
-TranslationMap & TranslationMap::withScope(ScopePtr scope_, const FieldSymbolInfos & field_symbol_infos_, bool remove_mappings)
+TranslationMap & TranslationMap::withScope(ScopePtr scope_, FieldSymbolInfos field_symbol_infos_, bool remove_mappings)
 {
     scope = scope_;
-    field_symbol_infos = field_symbol_infos_;
+    field_symbol_infos = std::move(field_symbol_infos_);
 
     checkSymbols();
 
@@ -273,7 +273,11 @@ ASTPtr TranslationMapVisitor::visitASTQuantifiedComparison(ASTPtr & node, const 
 ASTPtr TranslationMapVisitor::handleColumnReference(const ResolvedField & column_reference, const ASTPtr & node)
 {
     if (translation_map.scope->isLocalScope(column_reference.scope))
-        return toSymbolRef(translation_map.getFieldSymbol(column_reference.hierarchy_index));
+    {
+        auto field_symbol = translation_map.getFieldSymbol(column_reference.hierarchy_index);
+        assert(!field_symbol.empty());
+        return toSymbolRef(field_symbol);
+    }
     else if (translation_map.outer_context)
         return translation_map.outer_context->translate(node);
     else

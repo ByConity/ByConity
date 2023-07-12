@@ -1,17 +1,24 @@
-use test;
+DROP TABLE IF EXISTS t40034_t1_local;
+DROP TABLE IF EXISTS t40034_t2_local;
+DROP TABLE IF EXISTS t40034_t3_local;
 DROP TABLE IF EXISTS t40034_t1;
 DROP TABLE IF EXISTS t40034_t2;
 DROP TABLE IF EXISTS t40034_t3;
 
-CREATE TABLE t40034_t1(int1 Int32, str1 String, `map1` Map(String, Int64), `map2` Map(String, Int64)) ENGINE = CnchMergeTree() ORDER BY tuple();
-CREATE TABLE t40034_t2(int2 Int32, str2 String, `map3` Map(String, Int64), `map4` Map(String, Int64)) ENGINE = CnchMergeTree() ORDER BY tuple();
-CREATE TABLE t40034_t3(int3 Int32, str3 String, `map5` Map(String, Int64), `map6` Map(String, Int64)) ENGINE = CnchMergeTree() ORDER BY tuple();
+CREATE TABLE t40034_t1_local(int1 Int32, str1 String, `map1` Map(String, Int64), `map2` Map(String, Int64)) ENGINE = MergeTree() ORDER BY tuple();
+CREATE TABLE t40034_t2_local(int2 Int32, str2 String, `map3` Map(String, Int64), `map4` Map(String, Int64)) ENGINE = MergeTree() ORDER BY tuple();
+CREATE TABLE t40034_t3_local(int3 Int32, str3 String, `map5` Map(String, Int64), `map6` Map(String, Int64)) ENGINE = MergeTree() ORDER BY tuple();
 
-INSERT INTO t40034_t1 VALUES (100, 'str1', {'a': 1, 'b': 2, 'c': 5, 'd': 6, 'e': 7, 'f': 8}, {'x': 3, 'y': 4, 'z': 9, 'p': 10, 'q': 11});
-INSERT INTO t40034_t2 VALUES (200, 'str2', {'x': 30, 'y': 40, 'z': 90, 'p': 100, 'q': 110}, {'a': 10, 'b': 20, 'c': 50, 'd': 60, 'e': 70, 'f': 80});
-INSERT INTO t40034_t3 VALUES (300, 'str3', {'a': 100, 'b': 200, 'c': 500, 'd': 600, 'e': 700, 'f': 800}, {'x': 300, 'y': 400, 'z': 900, 'p': 1000, 'q': 1100});
+CREATE TABLE t40034_t1 AS t40034_t1_local ENGINE = Distributed(test_shard_localhost, currentDatabase(), 't40034_t1_local');
+CREATE TABLE t40034_t2 AS t40034_t2_local ENGINE = Distributed(test_shard_localhost, currentDatabase(), 't40034_t2_local');
+CREATE TABLE t40034_t3 AS t40034_t3_local ENGINE = Distributed(test_shard_localhost, currentDatabase(), 't40034_t3_local');
+
+INSERT INTO t40034_t1_local VALUES (100, 'str1', {'a': 1, 'b': 2, 'c': 5, 'd': 6, 'e': 7, 'f': 8}, {'x': 3, 'y': 4, 'z': 9, 'p': 10, 'q': 11});
+INSERT INTO t40034_t2_local VALUES (200, 'str2', {'x': 30, 'y': 40, 'z': 90, 'p': 100, 'q': 110}, {'a': 10, 'b': 20, 'c': 50, 'd': 60, 'e': 70, 'f': 80});
+INSERT INTO t40034_t3_local VALUES (300, 'str3', {'a': 100, 'b': 200, 'c': 500, 'd': 600, 'e': 700, 'f': 800}, {'x': 300, 'y': 400, 'z': 900, 'p': 1000, 'q': 1100});
 
 SET enable_optimizer=1;
+SET enable_optimizer_white_list=0;
 
 EXPLAIN SELECT mapElement(map1, 'a') FROM t40034_t1;
 SELECT mapElement(map1, 'a') FROM t40034_t1;

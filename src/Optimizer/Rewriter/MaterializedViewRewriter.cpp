@@ -31,7 +31,9 @@
 #include <QueryPlan/SimplePlanVisitor.h>
 #include <QueryPlan/TableScanStep.h>
 #include <Storages/IStorage.h>
+#include <Storages/StorageDistributed.h>
 #include <common/logger_useful.h>
+#include <Optimizer/EqualityASTMap.h>
 
 #include <map>
 #include <utility>
@@ -124,8 +126,8 @@ public:
     }
 };
 
-using ExpressionEquivalences = Equivalences<ConstASTPtr, ASTEquality::ASTHash, ASTEquality::ASTEquals>;
-using ConstASTMap = std::unordered_map<ConstASTPtr, ConstASTPtr, ASTEquality::ASTHash, ASTEquality::ASTEquals>;
+using ExpressionEquivalences = Equivalences<ConstASTPtr, EqualityASTMap>;
+using ConstASTMap = EqualityASTMap<ConstASTPtr>;
 class EquivalencesRewriter : public SimpleExpressionRewriter<const ConstASTMap>
 {
 public:
@@ -137,9 +139,8 @@ public:
 
     ASTPtr visitNode(ASTPtr & node, const ConstASTMap & context) override
     {
-        auto it = context.find(node);
-        if (it != context.end())
-            return it->second->clone();
+        if (context.contains(node))
+            return context.at(node)->clone();
         return SimpleExpressionRewriter::visitNode(node, context);
     }
 };
@@ -147,7 +148,7 @@ public:
 class AddTableInputRefRewriter : public SimpleExpressionRewriter<const Void>
 {
 public:
-    static ASTPtr rewrite(ASTPtr expression, StoragePtr storage)
+    static ASTPtr rewrite(ASTPtr expression, const IStorage * storage)
     {
         AddTableInputRefRewriter rewriter(storage);
         return ASTVisitorUtil::accept(expression, rewriter, {});
@@ -155,12 +156,30 @@ public:
 
     ASTPtr visitASTIdentifier(ASTPtr & node, const Void &) override
     {
-        return std::make_shared<ASTTableColumnReference>(storage.get(), node->as<ASTIdentifier&>().name());
+        return std::make_shared<ASTTableColumnReference>(storage, node->as<ASTIdentifier&>().name());
     }
 
-    AddTableInputRefRewriter(StoragePtr storage_): storage(std::move(storage_)) {}
+    AddTableInputRefRewriter(const IStorage * storage_): storage(storage_) {}
 private:
-    StoragePtr storage;
+    const IStorage * storage;
+};
+
+class ExtractResult
+{
+public:
+    std::map<String, std::vector<StorageID>> table_based_materialized_views;
+    std::map<String, std::vector<StorageID>> table_based_local_materialized_views;
+    std::map<String, StorageID> local_table_to_distributed_table;
+
+    ExtractResult(
+        const std::map<String, std::vector<StorageID>> & tableBasedMaterializedViews,
+        const std::map<String, std::vector<StorageID>> & tableBasedLocalMaterializedViews,
+        const std::map<String, StorageID> & localTableToDistributedTable)
+        : table_based_materialized_views(tableBasedMaterializedViews)
+        , table_based_local_materialized_views(tableBasedLocalMaterializedViews)
+        , local_table_to_distributed_table(localTableToDistributedTable)
+    {
+    }
 };
 
 /**
@@ -169,12 +188,16 @@ private:
 class RelatedMaterializedViewExtractor : public SimplePlanVisitor<Void>
 {
 public:
-    static std::map<String, std::vector<StorageID>> extract(QueryPlan & plan, ContextMutablePtr context_)
+    static ExtractResult
+        extract(QueryPlan & plan, ContextMutablePtr context_)
     {
         Void c;
         RelatedMaterializedViewExtractor finder{context_, plan.getCTEInfo()};
         VisitorUtil::accept(plan.getPlanNode(), finder, c);
-        return finder.table_based_materialized_views;
+        return ExtractResult{
+            finder.table_based_materialized_views,
+            finder.table_based_local_materialized_views,
+            finder.local_table_to_distributed_table};
     }
 
 protected:
@@ -182,16 +205,28 @@ protected:
 
     Void visitTableScanNode(TableScanNode & node, Void &) override
     {
-        const auto * storage = dynamic_cast<const TableScanStep *>(node.getStep().get());
-        auto dependencies = DatabaseCatalog::instance().getDependencies(storage->getStorageID());
-        if (!dependencies.empty())
-            table_based_materialized_views.emplace(storage->getStorageID().getFullTableName(), std::move(dependencies));
+        const auto * table_scan = dynamic_cast<const TableScanStep *>(node.getStep().get());
+        if (auto * distributed = table_scan->getStorage()->as<StorageDistributed>()) {
+            StorageID storage_id{distributed->getRemoteDatabaseName(), distributed->getRemoteTableName()};
+            auto dependencies = DatabaseCatalog::instance().getDependencies(storage_id);
+            if (!dependencies.empty()) {
+                table_based_local_materialized_views.emplace(table_scan->getStorageID().getFullTableName(), std::move(dependencies));
+                local_table_to_distributed_table.emplace(
+                    storage_id.getFullTableName(), table_scan->getStorageID());
+            }
+        }
+        auto dependencies = DatabaseCatalog::instance().getDependencies(table_scan->getStorageID());
+        if (!dependencies.empty()) {
+            table_based_materialized_views.emplace(table_scan->getStorageID().getFullTableName(), std::move(dependencies));
+        }
         return Void{};
     }
 
 private:
     ContextMutablePtr context;
     std::map<String, std::vector<StorageID>> table_based_materialized_views;
+    std::map<String, std::vector<StorageID>> table_based_local_materialized_views;
+    std::map<String, StorageID> local_table_to_distributed_table;
 };
 
 /**
@@ -503,13 +538,16 @@ protected:
             if (query_aggregate && !view_aggregate)
                 need_rollup = true;
 
-            std::unordered_set<ASTPtr, ASTEquality::ASTHash, ASTEquality::ASTEquals> view_based_query_keys;
+            EqualityASTSet origin_view_based_query_keys;
             if (query_aggregate)
                 for (const auto & query_key : query_aggregate->getKeys())
-                    view_based_query_keys.emplace(normalizeExpression(
+                    origin_view_based_query_keys.emplace(normalizeExpression(
                         makeASTIdentifier(query_key), *query_map, query_to_view_table_mappings, view_based_query_equivalences_map));
 
-            std::unordered_set<ASTPtr, ASTEquality::ASTHash, ASTEquality::ASTEquals> view_keys;
+            EqualityASTSet view_based_query_keys (
+                origin_view_based_query_keys.begin(), origin_view_based_query_keys.end());
+
+            EqualityASTSet view_keys;
             if (view_aggregate)
                 for (const auto & view_key : view_aggregate->getKeys())
                     view_keys.emplace(normalizeExpression(makeASTIdentifier(view_key), view_map, view_based_query_equivalences_map));
@@ -540,7 +578,7 @@ protected:
 
             // 4. check output columns
             // 4-1. build lineage expression to output columns map using view-based query equivalences map.
-            std::unordered_map<ConstASTPtr, ConstASTPtr, ASTEquality::ASTHash, ASTEquality::ASTEquals> view_output_columns_map;
+            EqualityASTMap<ConstASTPtr> view_output_columns_map;
             for (const auto & view_output : view_outputs)
             {
                 // {
@@ -593,9 +631,9 @@ protected:
             std::vector<ASTPtr> rollup_keys;
             if (need_rollup || enforce_agg_node)
             {
-                for (const auto & query_key : view_based_query_keys)
+                for (const auto & query_key : origin_view_based_query_keys)
                 {
-                    auto rewrite = rewriteExpression(query_key, view_output_columns_map, view_outputs);
+                    auto rewrite = rewriteExpression(query_key->clone(), view_output_columns_map, view_outputs);
                     if (!rewrite)
                     {
                         add_failure_message("group by column `" + query_key->getColumnName() + "` rewrite fail.");
@@ -603,7 +641,7 @@ protected:
                     }
                     rollup_keys.emplace_back(*rewrite);
                 }
-                if (rollup_keys.size() != view_based_query_keys.size())
+                if (rollup_keys.size() != origin_view_based_query_keys.size())
                     continue; // bail out, rollup agg group by column rewrite fail.
             }
 
@@ -658,7 +696,7 @@ protected:
                     if (select_query.prewhere())
                     {
                         // rewrite base table column to mv table column
-                        auto normalized_prewhere = AddTableInputRefRewriter::rewrite(select_query.getPrewhere() /* clone */, view_table_ref.storage);
+                        auto normalized_prewhere = AddTableInputRefRewriter::rewrite(select_query.getPrewhere() /* clone */, view_table_ref.storage.get());
                         auto rewritten_prewhere = rewriteExpression(normalized_prewhere, view_output_columns_map, view_outputs);
                         if (rewritten_prewhere)
                             query_prewhere_expr = *rewritten_prewhere;
@@ -875,9 +913,9 @@ protected:
      * Extracts const expression .eg, a = 1.
      * Const expression can be eliminated from group by keys.
      */
-    static std::unordered_set<ASTPtr, ASTEquality::ASTHash, ASTEquality::ASTEquals> extractConstExpressions(const ASTPtr & predicates)
+    static EqualityASTSet extractConstExpressions(const ASTPtr & predicates)
     {
-        std::unordered_set<ASTPtr, ASTEquality::ASTHash, ASTEquality::ASTEquals> result;
+        EqualityASTSet result;
         for (auto & predicate : PredicateUtils::extractConjuncts(predicates))
         {
             if (const auto * equal = predicate->as<ASTFunction>())
@@ -906,7 +944,7 @@ protected:
      */
     static std::optional<ASTPtr> rewriteExpressionContainsAggregates(
         ASTPtr expression,
-        const std::unordered_map<ConstASTPtr, ConstASTPtr, ASTEquality::ASTHash, ASTEquality::ASTEquals> & view_output_columns_map,
+        const EqualityASTMap<ConstASTPtr> & view_output_columns_map,
         const std::unordered_set<String> & output_columns,
         bool need_rollup,
         bool & enforce_agg_node)
@@ -915,7 +953,7 @@ protected:
         {
         public:
             ExpressionWithAggregateRewriter(
-                const std::unordered_map<ConstASTPtr, ConstASTPtr, ASTEquality::ASTHash, ASTEquality::ASTEquals> & view_output_columns_map_,
+                const EqualityASTMap<ConstASTPtr> & view_output_columns_map_,
                 const std::unordered_set<String> & output_columns_,
                 bool need_rollup_,
                 bool & enforce_agg_node_)
@@ -1009,7 +1047,7 @@ protected:
                 return {};
             }
 
-            const std::unordered_map<ConstASTPtr, ConstASTPtr, ASTEquality::ASTHash, ASTEquality::ASTEquals> & view_output_columns_map;
+            const EqualityASTMap<ConstASTPtr> & view_output_columns_map;
             const std::unordered_set<String> & output_columns;
             bool need_rollup;
             bool & enforce_agg_node;
@@ -1028,7 +1066,7 @@ protected:
      */
     static std::optional<ASTPtr> rewriteExpression(
         ASTPtr expression,
-        const std::unordered_map<ConstASTPtr, ConstASTPtr, ASTEquality::ASTHash, ASTEquality::ASTEquals> & view_output_columns_map,
+        const EqualityASTMap<ConstASTPtr> & view_output_columns_map,
         const std::unordered_set<String> & output_columns,
         bool allow_aggregate = false)
     {
@@ -1092,7 +1130,7 @@ public:
     const bool verbose;
 };
 
-using ASTToStringMap = std::unordered_map<ConstASTPtr, String, ASTEquality::ASTHash, ASTEquality::ASTEquals>;
+using ASTToStringMap = EqualityASTMap<String>;
 
 class CostBasedMaterializedViewRewriter : public SimplePlanRewriter<Void>
 {
@@ -1159,6 +1197,10 @@ protected:
         SelectQueryInfo query_info;
         const auto generated_query = std::make_shared<ASTSelectQuery>();
         generated_query->setExpression(ASTSelectQuery::Expression::SELECT, select_expression_list);
+
+        if (query_prewhere_expr)
+            generated_query->setExpression(ASTSelectQuery::Expression::PREWHERE, std::move(query_prewhere_expr));
+
         query_info.query = generated_query;
 
         if (query_prewhere_expr)
@@ -1168,7 +1210,6 @@ protected:
         if (!max_block_size)
             throw Exception("Setting 'max_block_size' cannot be zero", ErrorCodes::PARAMETER_OUT_OF_BOUND);
 
-        QueryProcessingStage::Enum processing_stage = QueryProcessingStage::Enum::FetchColumns;
         return PlanNodeBase::createPlanNode(
             context->nextNodeId(),
             std::make_shared<TableScanStep>(
@@ -1176,7 +1217,6 @@ protected:
                 target_database_and_table_name,
                 columns_with_aliases,
                 query_info,
-                processing_stage,
                 max_block_size));
     }
 
@@ -1231,7 +1271,7 @@ protected:
 
             plan = PlanNodeBase::createPlanNode(
                 context->nextNodeId(),
-                std::make_shared<AggregatingStep>(plan->getCurrentDataStream(), keys, agg_rewriter.aggregates, GroupingSetsParamsList{}, true, GroupingDescriptions{}, false, false),
+                std::make_shared<AggregatingStep>(plan->getCurrentDataStream(), keys, agg_rewriter.aggregates, GroupingSetsParamsList{}, true),
                 {plan});
         }
         return std::make_pair(plan, rewrite_arguments);
@@ -1255,46 +1295,52 @@ private:
             if (!AggregateFunctionFactory::instance().isAggregateFunctionName(function.name))
                 return visitNode(node, c);
 
-            std::vector<String> agg_arguments;
-            DataTypes agg_argument_types;
-            for (auto & argument : function.arguments->children)
+            auto agg_it = aggregates_map.find(node);
+            if (agg_it == aggregates_map.end())
             {
-                auto it = arguments_map.find(argument);
-                if (it == arguments_map.end())
+                std::vector<String> agg_arguments;
+                DataTypes agg_argument_types;
+                for (auto & argument : function.arguments->children)
                 {
-                    auto new_symbol = context->getSymbolAllocator()->newSymbol(argument);
-                    auto type = TypeAnalyzer::getType(argument, context, input_types);
-                    it = arguments_map.emplace(argument, new_symbol).first;
-                    arguments_types.emplace(new_symbol, type);
-                    arguments.emplace_back(new_symbol, argument);
+                    auto it = arguments_map.find(argument);
+                    if (it == arguments_map.end())
+                    {
+                        auto new_symbol = context->getSymbolAllocator()->newSymbol(argument);
+                        auto type = TypeAnalyzer::getType(argument, context, input_types);
+                        it = arguments_map.emplace(argument, new_symbol).first;
+                        arguments_types.emplace(new_symbol, type);
+                        arguments.emplace_back(new_symbol, argument);
+                    }
+                    auto & name = it->second;
+                    agg_arguments.emplace_back(name);
+                    agg_argument_types.emplace_back(arguments_types.at(name));
                 }
-                auto & name = it->second;
-                agg_arguments.emplace_back(name);
-                agg_argument_types.emplace_back(arguments_types.at(name));
+                Array parameters;
+                if (function.parameters)
+                    for (auto & argument : function.parameters->children)
+                        parameters.emplace_back(argument->as<ASTLiteral &>().value);
+                auto output_column = context->getSymbolAllocator()->newSymbol(node);
+                AggregateDescription aggregate_description;
+                AggregateFunctionProperties properties;
+                aggregate_description.function = AggregateFunctionFactory::instance().get(
+                    function.name, agg_argument_types, parameters, properties);
+                aggregate_description.argument_names = agg_arguments;
+                aggregate_description.parameters = parameters;
+                aggregate_description.column_name = output_column;
+                aggregates.emplace_back(aggregate_description);
+                agg_it = aggregates_map.emplace(node, output_column).first;
             }
-            Array parameters;
-            if (function.parameters)
-                for (auto & argument : function.parameters->children)
-                    parameters.emplace_back(argument->as<ASTLiteral &>().value);
-            auto output_column = context->getSymbolAllocator()->newSymbol(node);
-            AggregateDescription aggregate_description;
-            AggregateFunctionProperties properties;
-            aggregate_description.function = AggregateFunctionFactory::instance().get(
-                function.name, agg_argument_types, parameters, properties);
-            aggregate_description.argument_names = agg_arguments;
-            aggregate_description.parameters = parameters;
-            aggregate_description.column_name = output_column;
-            aggregates.emplace_back(aggregate_description);
-            return std::make_shared<ASTIdentifier>(output_column);
+            return std::make_shared<ASTIdentifier>(agg_it->second);
         }
 
         ContextMutablePtr context;
         const NamesAndTypes & input_types;
         Assignments & arguments;
         NameToType & arguments_types;
-
-        std::unordered_map<ConstASTPtr, String, ASTEquality::ASTHash, ASTEquality::ASTEquals> arguments_map;
         AggregateDescriptions aggregates;
+
+        EqualityASTMap<String> arguments_map;
+        EqualityASTMap<String> aggregates_map;
     };
 
     class GroupByKeyRewrite : public SimpleExpressionRewriter<ASTToStringMap>
@@ -1336,12 +1382,23 @@ MaterializedViewRewriter::getRelatedMaterializedViews(QueryPlan & plan, ContextM
     std::map<String, std::vector<MaterializedViewStructurePtr>> table_based_mview_structures;
     auto & cache = MaterializedViewMemoryCache::instance();
 
-    auto table_based_materialized_views = RelatedMaterializedViewExtractor::extract(plan, context);
-    for (const auto & views : table_based_materialized_views)
+    auto result = RelatedMaterializedViewExtractor::extract(plan, context);
+    for (const auto & views : result.table_based_materialized_views)
     {
         std::vector<MaterializedViewStructurePtr> structures;
         for (const auto & view : views.second)
-            if (auto structure = cache.getMaterializedViewStructure(view, context))
+            if (auto structure = cache.getMaterializedViewStructure(view, context, false, result.local_table_to_distributed_table))
+                structures.push_back(*structure);
+        if (structures.empty())
+            continue;
+        table_based_mview_structures.emplace(views.first, std::move(structures));
+    }
+
+    for (const auto & views : result.table_based_local_materialized_views)
+    {
+        std::vector<MaterializedViewStructurePtr> structures;
+        for (const auto & view : views.second)
+            if (auto structure = cache.getMaterializedViewStructure(view, context, true, result.local_table_to_distributed_table))
                 structures.push_back(*structure);
         if (structures.empty())
             continue;

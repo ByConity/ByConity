@@ -31,6 +31,7 @@
 #include <Parsers/ParserSelectQuery.h>
 #include <Parsers/ParserTablesInSelectQuery.h>
 #include <Parsers/ParserWithElement.h>
+#include <Parsers/ParserHints.h>
 
 
 namespace DB
@@ -87,6 +88,7 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserExpressionWithOptionalAlias exp_elem(false, dt);
     ParserOrderByExpressionList order_list(dt);
     ParserGroupingSetsExpressionList grouping_sets_list(dt);
+    ParserHints query_hints;
 
     ParserToken open_bracket(TokenType::OpeningRoundBracket);
     ParserToken close_bracket(TokenType::ClosingRoundBracket);
@@ -126,6 +128,8 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         bool has_all = false;
         if (!s_select.ignore(pos, expected))
             return false;
+
+        query_hints.parse(pos, select_query->hints, expected);
 
         if (s_all.ignore(pos, expected))
             has_all = true;

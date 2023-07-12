@@ -30,13 +30,20 @@
 
 namespace DB
 {
+
+CTERefStep::CTERefStep(DataStream output_, CTEId id_, std::unordered_map<String, String> output_columns_, bool has_filter_)
+        : ISourceStep(std::move(output_)), id(id_), output_columns(std::move(output_columns_)), has_filter(has_filter_)
+{
+}
+
 std::shared_ptr<IQueryPlanStep> CTERefStep::copy(ContextPtr) const
 {
-    return std::make_shared<CTERefStep>(output_stream.value(), id, output_columns, filter);
+    return std::make_shared<CTERefStep>(output_stream.value(), id, output_columns, has_filter);
 }
 
 void CTERefStep::serialize(WriteBuffer & buffer) const
 {
+    serializeDataStream(output_stream.value(), buffer);
     writeBinary(id, buffer);
 
     writeVarUInt(output_columns.size(), buffer);
@@ -46,8 +53,34 @@ void CTERefStep::serialize(WriteBuffer & buffer) const
         writeStringBinary(item.second, buffer);
     }
 
-    serializeAST(filter->clone(), buffer);
+    writeBinary(has_filter, buffer);
 }
+
+QueryPlanStepPtr CTERefStep::deserialize(ReadBuffer & buffer, ContextPtr)
+{
+    DataStream output_tmp = deserializeDataStream(buffer);
+    
+    CTEId id_tmp;
+    readBinary(id_tmp, buffer);
+
+    UInt64 output_columns_num;
+    readVarUInt(output_columns_num, buffer);
+    
+    std::unordered_map<String, String> output_columns_tmp;
+    for (size_t i = 0 ; i < output_columns_num ; ++i)
+    {
+        String elem1, elem2;
+        readStringBinary(elem1, buffer);
+        readStringBinary(elem2, buffer);
+        output_columns_tmp[elem1] = elem2;
+    }
+
+    bool has_filter;
+    readBinary(has_filter, buffer);
+
+    return std::make_shared<CTERefStep>(output_tmp, id_tmp, output_columns_tmp, has_filter);
+}
+
 
 std::shared_ptr<ProjectionStep> CTERefStep::toProjectionStep() const
 {
@@ -66,18 +99,15 @@ std::shared_ptr<ProjectionStep> CTERefStep::toProjectionStep() const
     return std::make_shared<ProjectionStep>(DataStream{inputs}, assignments, name_to_type);
 }
 
-PlanNodePtr CTERefStep::toInlinedPlanNode(CTEInfo & cte_info, ContextMutablePtr & context, bool with_filter) const
+PlanNodePtr CTERefStep::toInlinedPlanNode(CTEInfo & cte_info, ContextMutablePtr & context) const
 {
     std::unordered_map<SymbolMapper::Symbol, SymbolMapper::Symbol> mapping;
     auto with_clause_plan = PlanCopier::copy(cte_info.getCTEDef(id), context, mapping);
     SymbolMapper mapper = SymbolMapper::symbolReallocator(mapping, *(context->getSymbolAllocator()), context);
-    if (with_filter)
-    {  
-        auto filter_step = mapper.map(*std::make_shared<FilterStep>(with_clause_plan->getStep()->getOutputStream(), filter));
-        with_clause_plan = PlanNodeBase::createPlanNode(context->nextNodeId(), filter_step, {with_clause_plan});
-    }
-    return PlanNodeBase::createPlanNode(context->nextNodeId(), toProjectionStepWithNewSymbols(mapper), {with_clause_plan});
+    auto node = PlanNodeBase::createPlanNode(context->nextNodeId(), toProjectionStepWithNewSymbols(mapper), {with_clause_plan});
+    return node;
 }
+
 std::shared_ptr<ProjectionStep> CTERefStep::toProjectionStepWithNewSymbols(SymbolMapper & mapper) const 
 {
     NamesAndTypes inputs;

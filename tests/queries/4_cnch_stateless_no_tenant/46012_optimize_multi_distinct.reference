@@ -1,0 +1,36 @@
+1	3	4	1
+2	4	5	1
+3	4	5	1
+1	3	4
+2	8	5
+Projection Est. ? rows
+│     Expressions: [a], count():=`expr#count()`, sumDistinct(b):=`expr#sumDistinct(b)`, sumDistinct(c):=`expr#sumDistinct(c)`
+└─ Gather Exchange Est. ? rows
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {a}
+         └─ Aggregating Est. ? rows
+            │     Group by: {a}
+            │     Aggregates: expr#sumDistinct(b):=AggNull(sumIf)(b,b$distinct), expr#sumDistinct(c):=AggNull(sumIf)(c,c$distinct), expr#count():=AggNull(count)()
+            └─ MarkDistinct Est. ? rows
+               └─ Repartition Exchange Est. ? rows
+                  │     Partition by: {a, c}
+                  └─ MarkDistinct Est. ? rows
+                     └─ Repartition Exchange Est. ? rows
+                        │     Partition by: {a, b}
+                        └─ TableScan test.multi_dist Est. ? rows
+                                 Outputs: [a, b, c]
+Projection Est. ? rows
+│     Expressions: [c], sum(b):=`expr#sum(b)`, uniqExact(a):=`expr#uniqExact(a)`
+└─ Gather Exchange Est. ? rows
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {c}
+         └─ Aggregating Est. ? rows
+            │     Group by: {c}
+            │     Aggregates: expr#uniqExact(a):=AggNull(countIf)(a,a$distinct), expr#sum(b):=AggNull(sum)(b)
+            └─ MarkDistinct Est. ? rows
+               └─ Repartition Exchange Est. ? rows
+                  │     Partition by: {a, c}
+                  └─ TableScan test.multi_dist Est. ? rows
+                           Outputs: [a, b, c]

@@ -39,6 +39,7 @@ public:
     virtual void invalidateClusterStatsCache(const StatsTableIdentifier & table) = 0;
     // const because it should use ConstContext
     virtual void invalidateServerStatsCache(const StatsTableIdentifier & table) const = 0;
+    virtual void invalidateAllServerStatsCache() const = 0;
 
     virtual std::vector<StatsTableIdentifier> getAllTablesID(const String & database_name) const = 0;
     virtual std::optional<StatsTableIdentifier> getTableIdByName(const String & database_name, const String & table) const = 0;
