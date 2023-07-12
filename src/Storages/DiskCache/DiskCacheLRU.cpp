@@ -298,7 +298,7 @@ void DiskCacheLRU::afterEvictSegment([[maybe_unused]]const std::vector<std::pair
     if (shutdown_called)
         return;
 
-    auto& thread_pool = IDiskCache::getThreadPool();
+    auto& thread_pool = IDiskCache::getEvictPool();
     for (auto iter = updated_elements.begin(); iter != updated_elements.end(); ++iter)
     {
         DiskPtr disk = iter->second->disk;

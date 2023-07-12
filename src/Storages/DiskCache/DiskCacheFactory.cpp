@@ -45,9 +45,11 @@ void DiskCacheFactory::init(Context & context)
 
 void DiskCacheFactory::shutdown() const
 {
-    IDiskCache::close();
-
+    /// shutdown disk caches to prevent scheduling new tasks
     default_cache.first->shutdown();
+
+    /// close shared thread pool
+    IDiskCache::close();
 }
 
 }
