@@ -124,7 +124,8 @@ void ORCBlockInputFormat::prepareReader()
     stripe_total = file_reader->NumberOfStripes();
     if(read_stripe)
         stripe_current = format_settings.orc.current_stripe;
-    stripe_current = 0;
+    else 
+        stripe_current = 0;
 
     auto schema_status = file_reader->ReadSchema();
     if(!schema_status.ok())
