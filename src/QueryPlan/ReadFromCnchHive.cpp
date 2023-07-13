@@ -81,7 +81,7 @@ void ReadFromCnchHive::initializePipeline(QueryPipeline & pipeline, const BuildQ
                 const auto & sub_minmax_idxes = part->getSubMinMaxIndexes();
                 for (size_t i = 0; i < sub_minmax_idxes.size(); ++i)
                 {
-                    if (!key_condition.checkInHyperrectangle(sub_minmax_idxes[i]->hyperrectangle, hive_datapart_name_types.getTypes())
+                    if (!minmax_index_condition->checkInHyperrectangle(sub_minmax_idxes[i]->hyperrectangle, hive_datapart_name_types.getTypes())
                              .can_be_true)
                     {
                         LOG_TRACE(
