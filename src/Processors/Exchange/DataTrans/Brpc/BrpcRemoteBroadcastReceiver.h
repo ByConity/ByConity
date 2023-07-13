@@ -24,6 +24,7 @@
 #include <Processors/Exchange/DataTrans/BoundedDataQueue.h>
 #include <Processors/Exchange/DataTrans/IBroadcastReceiver.h>
 #include <Processors/Exchange/DataTrans/Brpc/AsyncRegisterResult.h>
+#include <Processors/Exchange/DataTrans/MultiPathBoundedQueue.h>
 
 #include <atomic>
 #include <vector>
@@ -44,32 +45,28 @@ struct BrpcRecvMetric
 class BrpcRemoteBroadcastReceiver : public std::enable_shared_from_this<BrpcRemoteBroadcastReceiver>, public IBroadcastReceiver
 {
 public:
-    BrpcRemoteBroadcastReceiver(
-        ExchangeDataKeyPtr trans_key_,
-        String registry_address_,
-        ContextPtr context_,
-        Block header_,
-        bool keep_order_,
-        const String &name_);
+    BrpcRemoteBroadcastReceiver(ExchangeDataKeyPtr trans_key_, String registry_address_, ContextPtr context_, Block header_, bool keep_order_, const String &name_);
+    BrpcRemoteBroadcastReceiver(ExchangeDataKeyPtr trans_key_, String registry_address_, ContextPtr context_, Block header_, MultiPathQueuePtr collator, bool keep_order_, const String &name_);
+
     ~BrpcRemoteBroadcastReceiver() override;
 
     void registerToSenders(UInt32 timeout_ms) override;
     RecvDataPacket recv(UInt32 timeout_ms) noexcept override;
     BroadcastStatus finish(BroadcastStatusCode status_code_, String message) override;
     String getName() const override;
-    void pushReceiveQueue(Chunk chunk);
+    void pushReceiveQueue(MultiPathDataPacket packet);
     void setSendDoneFlag() { send_done_flag.test_and_set(std::memory_order_release); }
 
     static String generateName(
-        String &query_id, size_t exchange_id, size_t write_segment_id, size_t read_segment_id, size_t parallel_index)
+        size_t exchange_id, size_t write_segment_id, size_t read_segment_id, size_t parallel_index, String& co_host_port)
     {
         return fmt::format(
             "BrpcReciver[{}_{}_{}_{}_{}]",
-            query_id,
             write_segment_id,
             read_segment_id,
             parallel_index,
-            exchange_id
+            exchange_id,
+            co_host_port
         );
     }
 
@@ -92,8 +89,7 @@ private:
     Block header;
     std::atomic<BroadcastStatusCode> finish_status_code{BroadcastStatusCode::RUNNING};
     std::atomic_flag send_done_flag = ATOMIC_FLAG_INIT;
-    BoundedDataQueue<Chunk> queue;
-    String data_key;
+    MultiPathQueuePtr queue;
     brpc::StreamId stream_id{brpc::INVALID_STREAM_ID};
 
     bool keep_order;
