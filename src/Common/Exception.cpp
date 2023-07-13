@@ -630,11 +630,4 @@ bool ExceptionHandler::hasException() const
     std::unique_lock lock(mutex);
     return first_exception != nullptr;
 }
-
-void ExceptionHandlerWithFailedInfo::setFailedRpc(const DB::WorkerId & worker_id, int32_t error_code)
-{
-    std::unique_lock lock(mutex);
-    failed_rpc_info.emplace(worker_id, error_code);
-}
-
 }
