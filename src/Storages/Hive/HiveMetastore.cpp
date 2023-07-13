@@ -333,7 +333,7 @@ HiveDataPartsCNCHVector HiveMetastoreClient::getDataPartsInPartition(
             {
                 /// Load file level minmax index and apply
                 orc_file->loadFileMinMaxIndex();
-                if (!key_condition.checkInHyperrectangle(orc_file->getMinMaxIndex()->hyperrectangle, hive_datapart_name_types.getTypes())
+                if (!minmax_index_condition.checkInHyperrectangle(orc_file->getMinMaxIndex()->hyperrectangle, hive_datapart_name_types.getTypes())
                         .can_be_true)
                 {
                     LOG_TRACE(
@@ -391,7 +391,7 @@ HiveDataPartsCNCHVector HiveMetastoreClient::getDataPartsInTable(
             {
                 /// Load file level minmax index and apply
                 orc_file->loadFileMinMaxIndex();
-                if (!key_condition.checkInHyperrectangle(orc_file->getMinMaxIndex()->hyperrectangle, hive_datapart_name_types.getTypes())
+                if (!minmax_index_condition.checkInHyperrectangle(orc_file->getMinMaxIndex()->hyperrectangle, hive_datapart_name_types.getTypes())
                         .can_be_true)
                 {
                     LOG_TRACE(
