@@ -12,7 +12,6 @@ SELECT '_hello' NOT LIKE '\_hello';
 SELECT '%hello' NOT LIKE '\%hello';
 
 set enable_optimizer=1;
-set enable_optimizer_white_list=0;
 set rewrite_like_function=1;
 EXPLAIN SYNTAX SELECT arrayJoin(['hello', 'world']) LIKE 'hello';
 EXPLAIN SYNTAX SELECT arrayJoin(['hello', 'world']) LIKE '%hello%';

@@ -5,7 +5,6 @@ create table test.test_insert_optimizer_local (id Int32) engine = MergeTree orde
 create table test.test_insert_optimizer as test.test_insert_optimizer_local engine = Distributed(test_shard_localhost, test, test_insert_optimizer_local, rand());
 
 set enable_optimizer = 1;
-set enable_optimizer_white_list = 0;
 
 insert into test.test_insert_optimizer select number from numbers(10);
 

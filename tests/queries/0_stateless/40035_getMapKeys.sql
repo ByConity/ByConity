@@ -1,5 +1,4 @@
 SET enable_optimizer=1;
-SET enable_optimizer_white_list=0;
 
 DROP TABLE IF EXISTS aeolus_data_table_177956_prod_local;
 DROP TABLE IF EXISTS aeolus_data_table_177956_prod;

@@ -18,7 +18,6 @@ INSERT INTO t40034_t2_local VALUES (200, 'str2', {'x': 30, 'y': 40, 'z': 90, 'p'
 INSERT INTO t40034_t3_local VALUES (300, 'str3', {'a': 100, 'b': 200, 'c': 500, 'd': 600, 'e': 700, 'f': 800}, {'x': 300, 'y': 400, 'z': 900, 'p': 1000, 'q': 1100});
 
 SET enable_optimizer=1;
-SET enable_optimizer_white_list=0;
 
 EXPLAIN SELECT mapElement(map1, 'a') FROM t40034_t1;
 SELECT mapElement(map1, 'a') FROM t40034_t1;

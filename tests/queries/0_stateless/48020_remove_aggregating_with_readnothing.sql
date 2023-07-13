@@ -1,4 +1,3 @@
-set enable_optimizer_white_list = 0;
 use test;
 
 drop table if exists t48020_local;

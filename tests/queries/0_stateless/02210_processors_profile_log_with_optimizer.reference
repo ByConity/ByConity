@@ -1,6 +1,5 @@
 -- { echo }
 set enable_optimizer = 1;
-set enable_optimizer_white_list=0;
 EXPLAIN PIPELINE SELECT sleep(1);
 
 Segment[ 0 ] :

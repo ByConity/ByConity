@@ -1,5 +1,4 @@
 SET dialect_type='ANSI';
-set enable_optimizer_white_list=0;
 
 DROP TABLE IF EXISTS code_md;
 CREATE TABLE code_md ON CLUSTER test_shard_localhost (

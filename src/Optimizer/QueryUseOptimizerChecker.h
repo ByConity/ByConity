@@ -54,20 +54,4 @@ private:
     String reason;
 };
 
-class QuerySupportOptimizerVisitor : public ASTVisitor<bool, ContextMutablePtr>
-{
-public:
-    bool visitNode(ASTPtr & node, ContextMutablePtr &) override;
-    bool visitASTSelectQuery(ASTPtr & node, ContextMutablePtr &) override;
-    bool visitASTSelectIntersectExceptQuery(ASTPtr & node, ContextMutablePtr &) override;
-    bool visitASTSelectWithUnionQuery(ASTPtr & node, ContextMutablePtr &) override;
-    bool visitASTTableJoin(ASTPtr & node, ContextMutablePtr &) override;
-    bool visitASTFunction(ASTPtr & node, ContextMutablePtr &) override;
-    bool visitASTQuantifiedComparison(ASTPtr & node, ContextMutablePtr &) override;
-    bool visitASTSubquery(ASTPtr & node, ContextMutablePtr &) override;
-    bool visitASTTableExpression(ASTPtr & node, ContextMutablePtr &) override;
-
-private:
-};
-
 }

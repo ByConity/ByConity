@@ -166,21 +166,6 @@ bool QueryUseOptimizerChecker::check(ASTPtr node, ContextMutablePtr context, boo
             //            support = false;
         }
 
-
-        if (support && (context->getSettingsRef().enable_optimizer_white_list || insert_select_from_table))
-        {
-            QuerySupportOptimizerVisitor support_checker;
-            try
-            {
-                support = ASTVisitorUtil::accept(node, support_checker, context);
-            }
-            catch (Exception &)
-            {
-                //            if (e.code() != ErrorCodes::NOT_IMPLEMENTED)
-                throw;
-                //            support = false;
-            }
-        }
         if (!support)
             LOG_INFO(&Poco::Logger::get("QueryUseOptimizerChecker"), "query is unsupported for optimizer, reason: " + checker.getReason());
     }
@@ -199,6 +184,10 @@ bool QueryUseOptimizerChecker::check(ASTPtr node, ContextMutablePtr context, boo
             if (!checkDatabaseAndTable(database, insert_query->table_id.getTableName(), context, {}))
                 support = false;
         }
+
+        // only disable optimizer when insert
+        if (context->getSettingsRef().enable_interactive_transaction)
+            support = false;
 
         LOG_DEBUG(
             &Poco::Logger::get("QueryUseOptimizerChecker"),
@@ -323,123 +312,4 @@ void QueryUseOptimizerVisitor::collectWithTableNames(ASTSelectQuery & query, Nam
     }
 }
 
-bool QuerySupportOptimizerVisitor::visitNode(ASTPtr & node, ContextMutablePtr & context)
-{
-    for (auto & child : node->children)
-    {
-        if (ASTVisitorUtil::accept(child, *this, context))
-        {
-            return true;
-        }
-    }
-    return false;
-}
-
-bool QuerySupportOptimizerVisitor::visitASTTableJoin(ASTPtr &, ContextMutablePtr &)
-{
-    return true;
-}
-
-bool QuerySupportOptimizerVisitor::visitASTSelectQuery(ASTPtr & node, ContextMutablePtr & context)
-{
-    auto * select = node->as<ASTSelectQuery>();
-
-    if (select->groupBy())
-        return true;
-
-    return visitNode(node, context);
-}
-
-bool QuerySupportOptimizerVisitor::visitASTSelectIntersectExceptQuery(ASTPtr & node, ContextMutablePtr & context)
-{
-    auto & intersect_or_except = node->as<ASTSelectIntersectExceptQuery &>();
-    switch (intersect_or_except.final_operator)
-    {
-        case ASTSelectIntersectExceptQuery::Operator::INTERSECT_ALL:
-        case ASTSelectIntersectExceptQuery::Operator::INTERSECT_DISTINCT:
-        case ASTSelectIntersectExceptQuery::Operator::EXCEPT_ALL:
-        case ASTSelectIntersectExceptQuery::Operator::EXCEPT_DISTINCT:
-            return true;
-        default:
-            break;
-    }
-    return visitNode(node, context);
-}
-
-bool QuerySupportOptimizerVisitor::visitASTSelectWithUnionQuery(ASTPtr & node, ContextMutablePtr & context)
-{
-    auto * select = node->as<ASTSelectWithUnionQuery>();
-
-    switch (select->union_mode)
-    {
-        case ASTSelectWithUnionQuery::Mode::INTERSECT_ALL:
-        case ASTSelectWithUnionQuery::Mode::INTERSECT_DISTINCT:
-        case ASTSelectWithUnionQuery::Mode::EXCEPT_ALL:
-        case ASTSelectWithUnionQuery::Mode::EXCEPT_DISTINCT:
-            return true;
-        case ASTSelectWithUnionQuery::Mode::UNION_ALL:
-        case ASTSelectWithUnionQuery::Mode::UNION_DISTINCT:
-        default:
-            break;
-    }
-    return visitNode(node, context);
-}
-
-
-bool QuerySupportOptimizerVisitor::visitASTFunction(ASTPtr & node, ContextMutablePtr & context)
-{
-    auto & fun = node->as<ASTFunction &>();
-    static const std::set<String> distinct_func{"uniqexact", "countdistinct"};
-    if (distinct_func.contains(Poco::toLower(fun.name)))
-    {
-        return true;
-    }
-    if (fun.is_window_function && context->getSettingsRef().enable_optimizer_support_window)
-    {
-        return true;
-    }
-    return visitNode(node, context);
-}
-
-bool QuerySupportOptimizerVisitor::visitASTQuantifiedComparison(ASTPtr &, ContextMutablePtr &)
-{
-    return true;
-}
-
-// don't turn off optimizer if subquery expression exists
-bool QuerySupportOptimizerVisitor::visitASTSubquery(ASTPtr &, ContextMutablePtr &)
-{
-    return true;
-}
-
-// skip subquery in FROM
-bool QuerySupportOptimizerVisitor::visitASTTableExpression(ASTPtr & node, ContextMutablePtr & context)
-{
-    auto & table_expr = node->as<ASTTableExpression &>();
-    if (table_expr.database_and_table_name)
-    {
-        /// If the database is not specified - use the current database.
-        auto db_and_table = DatabaseAndTableWithAlias(table_expr.database_and_table_name);
-        auto table_id = context->tryResolveStorageID(StorageID(db_and_table.database, db_and_table.table));
-        auto storage_table = DatabaseCatalog::instance().tryGetTable(table_id, context);
-        if (storage_table != nullptr && dynamic_cast<const StorageView *>(storage_table.get()))
-        {
-            auto table_metadata_snapshot = storage_table->getInMemoryMetadataPtr();
-            auto subquery = table_metadata_snapshot->getSelectQuery().inner_query->clone();
-            return ASTVisitorUtil::accept(subquery, *this, context);
-        }
-    }
-
-    for (auto child : table_expr.children)
-    {
-        if (child == table_expr.subquery)
-            child = table_expr.subquery->children.at(0);
-
-        if (ASTVisitorUtil::accept(child, *this, context))
-        {
-            return true;
-        }
-    }
-    return false;
-}
 }

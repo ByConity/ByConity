@@ -15,7 +15,6 @@ INSERT INTO t2 (x, s) VALUES (2, 'b1'), (2, 'b2'), (4, 'b3'), (4, 'b4'), (4, 'b5
 
 SET enable_optimizer = 1;
 SET join_use_nulls = 0;
-SET enable_optimizer_white_list = 0;
 
 SELECT 'semi and anti join';
 SELECT 'anti left';
