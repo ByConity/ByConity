@@ -1,17 +1,19 @@
 #pragma once
 
-#include <DataTypes/DataTypeArray.h>
-#include <DataTypes/DataTypeFunction.h>
-#include <DataTypes/DataTypeLowCardinality.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnFunction.h>
-#include <Common/typeid_cast.h>
-#include <Common/assert_cast.h>
-#include <Functions/IFunction.h>
+#include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeFunction.h>
+#include <DataTypes/DataTypeLowCardinality.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
+#include <Functions/IFunction.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Context_fwd.h>
+#include <Common/assert_cast.h>
+#include <Common/typeid_cast.h>
 
 
 namespace DB
@@ -105,7 +107,7 @@ public:
 
             DataTypePtr nested_type = array_type->getNestedType();
 
-            if (Impl::needBoolean() && !WhichDataType(nested_type).isUInt8())
+            if (Impl::needBoolean() && !isUInt8(nested_type))
                 throw Exception("The only argument for function " + getName() + " must be array of UInt8. Found "
                                 + arguments[0].type->getName() + " instead.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
@@ -126,9 +128,17 @@ public:
             /// The types of the remaining arguments are already checked in getLambdaArgumentTypes.
 
             DataTypePtr return_type = removeLowCardinality(data_type_function->getReturnType());
-            if (Impl::needBoolean() && !WhichDataType(return_type).isUInt8())
-                throw Exception("Expression for function " + getName() + " must return UInt8, found "
-                                + return_type->getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            /// Special cases when we need boolean lambda result:
+            ///  - lambda may return Nullable(UInt8) column, in this case after lambda execution we will
+            ///    replace all NULLs with 0 and return nested UInt8 column.
+            ///  - lambda may return Nothing or Nullable(Nothing) because of default implementation of functions
+            ///    for these types. In this case we will just create UInt8 const column full of 0.
+            if (Impl::needBoolean() && !isUInt8(removeNullable(return_type)) && !isNothing(removeNullable(return_type)))
+                throw Exception(
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                    "Expression for function {} must return UInt8 or Nullable(UInt8), found {}",
+                    getName(),
+                    return_type->getName());
 
             const auto * first_array_type = checkAndGetDataType<DataTypeArray>(arguments[1].type.get());
 
@@ -226,11 +236,37 @@ public:
             auto * replicated_column_function = typeid_cast<ColumnFunction *>(replicated_column_function_ptr.get());
             replicated_column_function->appendArguments(arrays);
 
-            auto lambda_result = replicated_column_function->reduce().column;
-            if (lambda_result->lowCardinality())
-                lambda_result = lambda_result->convertToFullColumnIfLowCardinality();
+            auto lambda_result = replicated_column_function->reduce();
+            if (lambda_result.column->lowCardinality())
+                lambda_result.column = lambda_result.column->convertToFullColumnIfLowCardinality();
 
-            return Impl::execute(*column_first_array, lambda_result);
+            if (Impl::needBoolean())
+            {
+                /// If result column is Nothing or Nullable(Nothing), just create const UInt8 column with 0 value.
+                if (isNothing(removeNullable(lambda_result.type)))
+                {
+                    auto result_type = std::make_shared<DataTypeUInt8>();
+                    lambda_result.column = result_type->createColumnConst(lambda_result.column->size(), 0);
+                }
+                /// If result column is Nullable(UInt8), then extract nested column and write 0 in all rows
+                /// when we have NULL.
+                else if (lambda_result.column->isNullable())
+                {
+                    auto result_column = IColumn::mutate(std::move(lambda_result.column));
+                    auto * column_nullable = assert_cast<ColumnNullable *>(result_column.get());
+                    auto & null_map = column_nullable->getNullMapData();
+                    auto nested_column = IColumn::mutate(std::move(column_nullable->getNestedColumnPtr()));
+                    auto & nested_data = assert_cast<ColumnUInt8 *>(nested_column.get())->getData();
+                    for (size_t i = 0; i != nested_data.size(); ++i)
+                    {
+                        if (null_map[i])
+                            nested_data[i] = 0;
+                    }
+                    lambda_result.column = std::move(nested_column);
+                }
+            }
+
+            return Impl::execute(*column_first_array, lambda_result.column);
         }
     }
 };

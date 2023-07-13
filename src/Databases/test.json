@@ -1,0 +1,19 @@
+"S18": {
+    "fe": {
+        "meta_vol": "data08",
+        "medium": "SSD",
+    },
+    "be": {
+        "storage_page_cache_limit": "336G",
+        "medium": "SSD",
+        "disk_list": [f"data{i:02}" for i in range(1,
+            8)
+        ]
+    },
+    "broker": {
+        "disk_list": [
+            "data06",
+            "data07"
+        ]
+    },
+},
