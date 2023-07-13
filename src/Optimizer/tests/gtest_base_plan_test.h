@@ -20,6 +20,8 @@
 #include <Optimizer/tests/test_config.h>
 #include <QueryPlan/QueryPlan.h>
 
+#include <boost/asio.hpp>
+
 #include <filesystem>
 #include <memory>
 
@@ -91,6 +93,7 @@ public:
     void loadTableStatistics();
 
     static bool enforce_regenerate();
+    static int regenerate_task_thread_size();
 
 protected:
     virtual std::vector<std::filesystem::path> getTableDDLFiles() = 0;
@@ -101,4 +104,32 @@ protected:
     static std::vector<std::string> loadFile(const std::filesystem::path & path, char sep = {});
 };
 
+#define DECLARE_GENERATE_TEST(TEST_SUITE_NAME) \
+    TEST_F(TEST_SUITE_NAME, generate) \
+    { \
+        if (!AbstractPlanTestSuite::enforce_regenerate()) \
+            GTEST_SKIP() << "skip generate. set env REGENERATE=1 to regenerate explains."; \
+\
+        int thread_size = AbstractPlanTestSuite::regenerate_task_thread_size(); \
+        std::cout << "use " << thread_size << " threads for generate task" << std::endl; \
+        boost::asio::thread_pool pool(thread_size); \
+\
+        for (auto & query : tester->loadQueries()) \
+        { \
+            boost::asio::post(pool, [&, query]() { \
+                try \
+                { \
+                    std::cout << " try generate for " + query + "." << std::endl; \
+                    tester->saveExplain(query, explain(query)); \
+                } \
+                catch (...) \
+                { \
+                    std::cerr << " generate for " + query + " failed." << std::endl; \
+                    tester->saveExplain(query, ""); \
+                } \
+            }); \
+        } \
+\
+        pool.join(); \
+    }
 }

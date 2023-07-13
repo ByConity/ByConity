@@ -1329,6 +1329,12 @@ void StorageCnchMergeTree::waitForStagedPartsToPublish(ContextPtr local_context)
         "There are still " + toString(staged_parts_cnt) + " staged parts to be published after " + toString(wait_timeout_seconds) + "s.");
 }
 
+void StorageCnchMergeTree::allocateParts(ContextPtr local_context, ServerDataPartsVector & parts)
+{
+    String local_table_name = getCloudTableName(local_context);
+    collectResource(local_context, parts, local_table_name);
+}
+
 void StorageCnchMergeTree::collectResource(
     ContextPtr local_context,
     ServerDataPartsVector & parts,

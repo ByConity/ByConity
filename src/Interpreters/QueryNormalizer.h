@@ -81,6 +81,7 @@ public:
         ConstStoragePtr storage;
         const StorageMetadataPtr metadata_snapshot;
         bool rewrite_map_col;
+        bool aliases_rewrite_scope; /// 0 - full query; 1 - exclude SELECT/JOIN USING, used for ANSI
 
         Data(
             const Aliases & aliases_,
@@ -91,7 +92,8 @@ public:
             ContextPtr context_ = {},
             ConstStoragePtr storage_ = nullptr,
             const StorageMetadataPtr & metadata_snapshot_ = {},
-            bool rewrite_map_col_ = true)
+            bool rewrite_map_col_ = true,
+            bool aliases_rewrite_scope_ = false)
             : aliases(aliases_)
             , source_columns_set(source_columns_set_)
             , settings(settings_)
@@ -102,6 +104,7 @@ public:
             , storage(storage_)
             , metadata_snapshot(metadata_snapshot_)
             , rewrite_map_col(rewrite_map_col_)
+            , aliases_rewrite_scope(aliases_rewrite_scope_)
         {
         }
     };

@@ -77,7 +77,7 @@ struct TimeEvent
 };
 
 template <typename ParamType, typename PropType>
-struct TimeEventWithproInd
+struct TimeEventWithProInd
 {
     UInt64 ctime; // Client time
     UInt32 event;
@@ -86,10 +86,10 @@ struct TimeEventWithproInd
     bool is_null; // used when PropType is numeric
     ParamType param; // Event param for funnel compute
 
-    TimeEventWithproInd() = default;
-    TimeEventWithproInd(UInt64 _ctime, UInt32 _event, UInt32 _stime, PropType _prop, bool _is_null, ParamType _param) : ctime(_ctime), event(_event)
+    TimeEventWithProInd() = default;
+    TimeEventWithProInd(UInt64 _ctime, UInt32 _event, UInt32 _stime, PropType _prop, bool _is_null, ParamType _param) : ctime(_ctime), event(_event)
             , stime(_stime), pro_ind(_prop), is_null(_is_null), param(std::move(_param)){}
-    TimeEventWithproInd(UInt64 _ctime, UInt32 _event, UInt32 _stime, PropType _prop, bool _is_null) : ctime(_ctime), event(_event)
+    TimeEventWithProInd(UInt64 _ctime, UInt32 _event, UInt32 _stime, PropType _prop, bool _is_null) : ctime(_ctime), event(_event)
             , stime(_stime), pro_ind(_prop), is_null(_is_null) {}
 };
 
@@ -103,32 +103,64 @@ struct AggregateFunctionFinderFunnelData
     std::vector<Times> intervals;
     bool sorted = true;
 
-    void add(UInt32 stime, UInt64 ctime, UInt32 flag, ParamType &attr)
+    template<bool need_order = false>
+    void add(UInt32 stime, UInt64 ctime, UInt64 flag, ParamType &attr)
     {
-        if (sorted && event_lists.size() > 0 &&
-            (event_lists.back().ctime > ctime ||
-             (event_lists.back().ctime == ctime && event_lists.back().event > flag)))
+        if constexpr (need_order)
         {
-            sorted = false;
+            if (sorted && event_lists.size() > 0 &&
+                (event_lists.back().ctime > ctime ||
+                 (event_lists.back().ctime == ctime && event_lists.back().event > flag) ||
+                 (event_lists.back().ctime == ctime && event_lists.back().event == flag && event_lists.back().stime > stime)))
+            {
+                sorted = false;
+            }
+        }
+        else
+        {
+            if (sorted && event_lists.size() > 0 &&
+                (event_lists.back().ctime > ctime ||
+                 (event_lists.back().ctime == ctime && event_lists.back().event > flag)))
+            {
+                sorted = false;
+            }
         }
 
         if (event_lists.size() == 0)
+        {
             event_lists.reserve(INIT_VECTOR_SIZE);
+        }
 
         event_lists.template emplace_back(ctime, flag, stime, attr);
     }
 
-    void add(UInt32 stime, UInt64 ctime, UInt32 flag)
+    template<bool need_order = false>
+    void add(UInt32 stime, UInt64 ctime, UInt64 flag)
     {
-        if (sorted && event_lists.size() > 0 &&
-            (event_lists.back().ctime > ctime ||
-             (event_lists.back().ctime == ctime && event_lists.back().event > flag)))
+        if constexpr (need_order)
         {
-            sorted = false;
+            if (sorted && event_lists.size() > 0 &&
+                (event_lists.back().ctime > ctime ||
+                 (event_lists.back().ctime == ctime && event_lists.back().event > flag) ||
+                 (event_lists.back().ctime == ctime && event_lists.back().event == flag && event_lists.back().stime > stime)))
+            {
+                sorted = false;
+            }
+        }
+        else
+        {
+            if (sorted && event_lists.size() > 0 &&
+                (event_lists.back().ctime > ctime ||
+                 (event_lists.back().ctime == ctime && event_lists.back().event > flag)))
+            {
+                sorted = false;
+            }
         }
 
         if (event_lists.size() == 0)
+        {
             event_lists.reserve(INIT_VECTOR_SIZE);
+        }
 
         event_lists.template emplace_back(ctime, flag, stime);
     }
@@ -139,12 +171,16 @@ struct AggregateFunctionFinderFunnelData
         sorted = false;
     }
 
+    template<bool need_order = false>
     void sort()
     {
         if (!sorted)
         {
             auto compare = [](const TimeEvent<ParamType> &left, const TimeEvent<ParamType> &right) {
-                return (left.ctime < right.ctime) || (left.ctime == right.ctime && left.event < right.event);
+                if constexpr (need_order)
+                    return (left.ctime < right.ctime) || (left.ctime == right.ctime && left.event < right.event) || (left.ctime == right.ctime && left.event == right.event && left.stime < right.stime);
+                else
+                    return (left.ctime < right.ctime) || (left.ctime == right.ctime && left.event < right.event);
             };
 
             std::sort(std::begin(event_lists), std::end(event_lists), compare);
@@ -223,7 +259,7 @@ struct AggregateFunctionFinderFunnelData
 };
 
 template<typename ParamType, typename Numeric>
-using EventLists = std::vector<TimeEventWithproInd<ParamType, Numeric>, TrackAllocator<TimeEventWithproInd<ParamType, Numeric>>>;
+using EventLists = std::vector<TimeEventWithProInd<ParamType, Numeric>, TrackAllocator<TimeEventWithProInd<ParamType, Numeric>>>;
 
 /**
  * Numeric group data
@@ -248,12 +284,16 @@ struct AggregateFunctionFinderFunnelNumericGroupData
         groups.emplace(p, index);
     }
 
+    template<bool need_order = false>
     void sort()
     {
         if (!sorted)
         {
-            auto compare = [](const TimeEventWithproInd<ParamType, Numeric> &left, const TimeEventWithproInd<ParamType, Numeric> &right) {
-                return (left.ctime < right.ctime) || (left.ctime == right.ctime && left.event < right.event);
+            auto compare = [](const TimeEventWithProInd<ParamType, Numeric> &left, const TimeEventWithProInd<ParamType, Numeric> &right) {
+                if constexpr (need_order)
+                    return (left.ctime < right.ctime) || (left.ctime == right.ctime && left.event < right.event) || (left.ctime == right.ctime && left.event == right.event && left.stime < right.stime);
+                else
+                    return (left.ctime < right.ctime) || (left.ctime == right.ctime && left.event < right.event);
             };
 
             std::sort(std::begin(event_lists), std::end(event_lists), compare);
@@ -261,13 +301,27 @@ struct AggregateFunctionFinderFunnelNumericGroupData
         }
     }
 
-    void add(UInt32 stime, UInt64 ctime, UInt32 flag, Numeric &p, bool is_null, ParamType &attr)
+    template<bool need_order = false>
+    void add(UInt32 stime, UInt64 ctime, UInt64 flag, Numeric &p, bool is_null, ParamType &attr)
     {
-        if (sorted && event_lists.size() > 0 &&
-            (event_lists.back().ctime > ctime ||
-            (event_lists.back().ctime == ctime && event_lists.back().event > flag)))
+        if constexpr (need_order)
         {
-            sorted = false;
+            if (sorted && event_lists.size() > 0 &&
+                (event_lists.back().ctime > ctime ||
+                 (event_lists.back().ctime == ctime && event_lists.back().event > flag) ||
+                 (event_lists.back().ctime == ctime && event_lists.back().event == flag && event_lists.back().stime > stime)))
+            {
+                sorted = false;
+            }
+        }
+        else
+        {
+            if (sorted && event_lists.size() > 0 &&
+                (event_lists.back().ctime > ctime ||
+                 (event_lists.back().ctime == ctime && event_lists.back().event > flag)))
+            {
+                sorted = false;
+            }
         }
 
         if (is_null)
@@ -276,18 +330,34 @@ struct AggregateFunctionFinderFunnelNumericGroupData
             addProp(p);
 
         if (event_lists.size() == 0)
+        {
             event_lists.reserve(INIT_VECTOR_SIZE);
+        }
 
         event_lists.template emplace_back(ctime, flag, stime, p, is_null, attr);
     }
 
-    void add(UInt32 stime, UInt64 ctime, UInt32 flag, Numeric& p, bool is_null)
+    template<bool need_order = false>
+    void add(UInt32 stime, UInt64 ctime, UInt64 flag, Numeric& p, bool is_null)
     {
-        if (sorted && event_lists.size() > 0 &&
-            (event_lists.back().ctime > ctime ||
-            (event_lists.back().ctime == ctime && event_lists.back().event > flag)))
+        if constexpr (need_order)
         {
-            sorted = false;
+            if (sorted && event_lists.size() > 0 &&
+                (event_lists.back().ctime > ctime ||
+                 (event_lists.back().ctime == ctime && event_lists.back().event > flag) ||
+                 (event_lists.back().ctime == ctime && event_lists.back().event == flag && event_lists.back().stime > stime)))
+            {
+                sorted = false;
+            }
+        }
+        else
+        {
+            if (sorted && event_lists.size() > 0 &&
+                (event_lists.back().ctime > ctime ||
+                 (event_lists.back().ctime == ctime && event_lists.back().event > flag)))
+            {
+                sorted = false;
+            }
         }
 
         if (is_null)
@@ -296,7 +366,9 @@ struct AggregateFunctionFinderFunnelNumericGroupData
             addProp(p);
 
         if (event_lists.size() == 0)
+        {
             event_lists.reserve(INIT_VECTOR_SIZE);
+        }
 
         event_lists.template emplace_back(ctime, flag, stime, p, is_null);
     }
@@ -360,7 +432,7 @@ struct AggregateFunctionFinderFunnelNumericGroupData
         event_lists.reserve(size);
         for (size_t i = 0; i < size; ++i)
         {
-            TimeEventWithproInd<ParamType, Numeric> event;
+            TimeEventWithProInd<ParamType, Numeric> event;
             readBinary(event.ctime, buf);
             readBinary(event.event, buf);
             readBinary(event.stime, buf);
@@ -432,12 +504,16 @@ struct AggregateFunctionFinderFunnelStringGroupData
         return index;
     }
 
+    template<bool need_order = false>
     void sort()
     {
         if (!sorted)
         {
-            auto compare = [](const TimeEventWithproInd<ParamType, Int32> &left, const TimeEventWithproInd<ParamType, Int32> &right) {
-                return (left.ctime < right.ctime) || (left.ctime == right.ctime && left.event < right.event);
+            auto compare = [](const TimeEventWithProInd<ParamType, Int32> &left, const TimeEventWithProInd<ParamType, Int32> &right) {
+                if constexpr (need_order)
+                    return (left.ctime < right.ctime) || (left.ctime == right.ctime && left.event < right.event) || (left.ctime == right.ctime && left.event == right.event && left.stime < right.stime);
+                else
+                    return (left.ctime < right.ctime) || (left.ctime == right.ctime && left.event < right.event);
             };
 
             std::sort(std::begin(event_lists), std::end(event_lists), compare);
@@ -445,17 +521,33 @@ struct AggregateFunctionFinderFunnelStringGroupData
         }
     }
 
-    void add(UInt32 stime, UInt64 ctime, UInt32 flag, StringRef &p, bool is_null, ParamType &attr, Arena *arena)
+    template<bool need_order = false>
+    void add(UInt32 stime, UInt64 ctime, UInt64 flag, StringRef &p, bool is_null, ParamType &attr, Arena *arena)
     {
-        if (sorted && event_lists.size() > 0 &&
-            (event_lists.back().ctime > ctime ||
-            (event_lists.back().ctime == ctime && event_lists.back().event > flag)))
+        if constexpr (need_order)
         {
-            sorted = false;
+            if (sorted && event_lists.size() > 0 &&
+                (event_lists.back().ctime > ctime ||
+                 (event_lists.back().ctime == ctime && event_lists.back().event > flag) ||
+                 (event_lists.back().ctime == ctime && event_lists.back().event == flag && event_lists.back().stime > stime)))
+            {
+                sorted = false;
+            }
+        }
+        else
+        {
+            if (sorted && event_lists.size() > 0 &&
+                (event_lists.back().ctime > ctime ||
+                 (event_lists.back().ctime == ctime && event_lists.back().event > flag)))
+            {
+                sorted = false;
+            }
         }
 
         if (event_lists.size() == 0)
+        {
             event_lists.reserve(INIT_VECTOR_SIZE);
+        }
 
         if (is_null)
         {
@@ -466,17 +558,33 @@ struct AggregateFunctionFinderFunnelStringGroupData
             event_lists.template emplace_back(ctime, flag, stime, addProp(p, arena), false, attr);
     }
 
-    void add(UInt32 stime, UInt64 ctime, UInt32 flag, StringRef& p, bool is_null, Arena *arena)
+    template<bool need_order = false>
+    void add(UInt32 stime, UInt64 ctime, UInt64 flag, StringRef& p, bool is_null, Arena *arena)
     {
-        if (sorted && event_lists.size() > 0 &&
-            (event_lists.back().ctime > ctime ||
-            (event_lists.back().ctime == ctime && event_lists.back().event > flag)))
+        if constexpr (need_order)
         {
-            sorted = false;
+            if (sorted && event_lists.size() > 0 &&
+                (event_lists.back().ctime > ctime ||
+                 (event_lists.back().ctime == ctime && event_lists.back().event > flag) ||
+                 (event_lists.back().ctime == ctime && event_lists.back().event == flag && event_lists.back().stime > stime)))
+            {
+                sorted = false;
+            }
+        }
+        else
+        {
+            if (sorted && event_lists.size() > 0 &&
+                (event_lists.back().ctime > ctime ||
+                 (event_lists.back().ctime == ctime && event_lists.back().event > flag)))
+            {
+                sorted = false;
+            }
         }
 
         if (event_lists.size() == 0)
+        {
             event_lists.reserve(INIT_VECTOR_SIZE);
+        }
 
         if (is_null)
         {
@@ -572,7 +680,7 @@ struct AggregateFunctionFinderFunnelStringGroupData
         event_lists.reserve(size);
         for (size_t i = 0; i < size; ++i)
         {
-            TimeEventWithproInd<ParamType, Int32> event;
+            TimeEventWithProInd<ParamType, Int32> event;
             readBinary(event.ctime, buf);
             readBinary(event.event, buf);
             readBinary(event.stime, buf);

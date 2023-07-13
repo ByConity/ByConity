@@ -3,14 +3,14 @@ Projection est. 100 rows
 └─ Limit est. 100 rows
    │     Limit: 100
    └─ Sorting est. ? rows
-      │     Order by: {expr#plus(grouping(i_category), grouping(i_class)) desc nulls_last, expr#multiIf(equals(lochierarchy, 0), i_category, NULL) asc, expr#rank() OVER (PARTITION BY grouping(i_category) + grouping(i_class), multiIf(grouping(i_class) = 0, i_category, NULL) ORDER BY sum(ss_net_profit) / sum(ss_ext_sales_price) ASC) asc}
+      │     Order by: {expr#plus(grouping(i_category), grouping(i_class)) desc nulls_last, expr#multiIf(equals(plus(grouping(i_category), grouping(i_class)), 0), i_category, NULL) asc, expr#rank() OVER (PARTITION BY grouping(i_category) + grouping(i_class), multiIf(grouping(i_class) = 0, i_category, NULL) ORDER BY sum(ss_net_profit) / sum(ss_ext_sales_price) ASC) asc}
       │     Limit: 100
       └─ Gather Exchange est. ? rows
          └─ Sorting est. ? rows
-            │     Order by: {expr#plus(grouping(i_category), grouping(i_class)) desc nulls_last, expr#multiIf(equals(lochierarchy, 0), i_category, NULL) asc, expr#rank() OVER (PARTITION BY grouping(i_category) + grouping(i_class), multiIf(grouping(i_class) = 0, i_category, NULL) ORDER BY sum(ss_net_profit) / sum(ss_ext_sales_price) ASC) asc}
+            │     Order by: {expr#plus(grouping(i_category), grouping(i_class)) desc nulls_last, expr#multiIf(equals(plus(grouping(i_category), grouping(i_class)), 0), i_category, NULL) asc, expr#rank() OVER (PARTITION BY grouping(i_category) + grouping(i_class), multiIf(grouping(i_class) = 0, i_category, NULL) ORDER BY sum(ss_net_profit) / sum(ss_ext_sales_price) ASC) asc}
             │     Limit: 100
             └─ Projection est. ? rows
-               │     Expressions: [expr#divide(sum(ss_net_profit), sum(ss_ext_sales_price)), expr#plus(grouping(i_category), grouping(i_class)), expr#rank() OVER (PARTITION BY grouping(i_category) + grouping(i_class), multiIf(grouping(i_class) = 0, i_category, NULL) ORDER BY sum(ss_net_profit) / sum(ss_ext_sales_price) ASC), i_category, i_class], expr#multiIf(equals(lochierarchy, 0), i_category, NULL):=multiIf(`expr#plus(grouping(i_category), grouping(i_class))` = 0, i_category, NULL)
+               │     Expressions: [expr#divide(sum(ss_net_profit), sum(ss_ext_sales_price)), expr#plus(grouping(i_category), grouping(i_class)), expr#rank() OVER (PARTITION BY grouping(i_category) + grouping(i_class), multiIf(grouping(i_class) = 0, i_category, NULL) ORDER BY sum(ss_net_profit) / sum(ss_ext_sales_price) ASC), i_category, i_class], expr#multiIf(equals(plus(grouping(i_category), grouping(i_class)), 0), i_category, NULL):=multiIf(`expr#plus(grouping(i_category), grouping(i_class))` = 0, i_category, NULL)
                └─ Window est. ? rows
                   └─ Repartition Exchange est. ? rows
                      │     Partition by: {expr#multiIf(equals(grouping(i_class), 0), i_category, NULL), expr#plus(grouping(i_category), grouping(i_class))}

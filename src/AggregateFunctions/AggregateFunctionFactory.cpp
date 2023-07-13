@@ -100,6 +100,9 @@ AggregateFunctionPtr AggregateFunctionFactory::get(
             return nested_function;
         }
 
+        if (nested_function && nested_function->handleNullItSelf())
+            return getImpl(name, type_without_low_cardinality, parameters, out_properties, true, true);
+
         return combinator->transformAggregateFunction(nested_function, out_properties, type_without_low_cardinality, parameters);
     }
 
@@ -115,7 +118,8 @@ AggregateFunctionPtr AggregateFunctionFactory::getImpl(
     const DataTypes & argument_types,
     const Array & parameters,
     AggregateFunctionProperties & out_properties,
-    bool has_null_arguments) const
+    bool has_null_arguments,
+    bool handle_null_itself) const
 {
     String name = getAliasToOrName(name_param);
     bool is_case_insensitive = false;
@@ -146,7 +150,7 @@ AggregateFunctionPtr AggregateFunctionFactory::getImpl(
                     Context::QueryLogFactories::AggregateFunction, is_case_insensitive ? Poco::toLower(name) : name);
 
         /// The case when aggregate function should return NULL on NULL arguments. This case is handled in "get" method.
-        if (!out_properties.returns_default_when_only_null && has_null_arguments)
+        if (!out_properties.returns_default_when_only_null && has_null_arguments && !handle_null_itself)
             return nullptr;
 
         const Settings * settings = query_context ? &query_context->getSettingsRef() : nullptr;

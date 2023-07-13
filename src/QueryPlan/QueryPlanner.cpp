@@ -1241,11 +1241,13 @@ void QueryPlannerVisitor::planWindow(PlanBuilder & builder, ASTSelectQuery & sel
 
     auto & window_analysis = analysis.getWindowAnalysisOfSelectQuery(select_query);
 
+    auto uniq_windows = deduplicateByAst(window_analysis, analysis, std::mem_fn(&WindowAnalysis::expression));
+
     // add projections for window function params, partition by keys, sorting keys
     {
         ASTs window_inputs;
 
-        for (auto & window_item: window_analysis)
+        for (auto & window_item : uniq_windows)
         {
             append(window_inputs, window_item->expression->arguments->children);
 
@@ -1265,7 +1267,7 @@ void QueryPlannerVisitor::planWindow(PlanBuilder & builder, ASTSelectQuery & sel
     // build window description
     WindowDescriptions window_descriptions;
 
-    for (auto & window_item: window_analysis)
+    for (auto & window_item : uniq_windows)
     {
         if (window_descriptions.find(window_item->window_name) == window_descriptions.end())
         {
@@ -1346,21 +1348,6 @@ void QueryPlannerVisitor::planSelect(PlanBuilder & builder, ASTSelectQuery & sel
     auto & select_expressions = analysis.getSelectExpressions(select_query);
     planSubqueryExpression(builder, select_query, select_expressions);
     builder.appendProjection(select_expressions);
-
-    // if order by scope exists, update scope & field_symbols
-    if (const auto * order_by_scope = analysis.getScope(select_query); order_by_scope != builder.getScope())
-    {
-        FieldSymbolInfos field_symbols;
-        append(field_symbols, builder.getFieldSymbolInfos());
-        append(field_symbols, select_expressions, [&](ASTPtr & expr) -> FieldSymbolInfo
-               {
-                   if (auto col_ref = analysis.tryGetColumnReference(expr))
-                       return builder.getGlobalFieldSymbolInfo(*col_ref);
-                   else
-                       return {builder.translateToSymbol(expr)};
-               });
-        builder.withScope(order_by_scope, field_symbols, false);
-    }
 }
 
 void QueryPlannerVisitor::planDistinct(PlanBuilder & builder, ASTSelectQuery & select_query)

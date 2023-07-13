@@ -80,7 +80,7 @@ private:
     ContextPtr context;
 };
 
-void registerFunctionParseUrlf(FunctionFactory & factory)
+void registerFunctionParseUrl(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionParseUrl>();
 }
