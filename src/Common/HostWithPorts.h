@@ -22,6 +22,7 @@
 #include <fmt/core.h>
 #include <common/getFQDNOrHostName.h>
 #include <Interpreters/Context_fwd.h>
+#include <Common/WorkerId.h>
 
 namespace DB
 {
@@ -231,5 +232,4 @@ struct equal_to<DB::HostWithPorts>
         return DB::HostWithPorts::IsSameEndpoint{}(lhs, rhs);
     }
 };
-
 }

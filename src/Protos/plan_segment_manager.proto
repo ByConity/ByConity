@@ -1,6 +1,8 @@
 syntax = "proto2";
 package DB.Protos;
 
+import "data_models.proto";
+
 option cc_generic_services = true;
 
 message CancelQueryRequest {
@@ -78,6 +80,9 @@ message ExecutePlanSegmentRequest {
 
 message ExecutePlanSegmentResponse {
   optional string message = 1;
+  optional WorkerNodeResourceData worker_resource_data = 2;
+  optional string address = 3;
+  optional string exception = 4;
 }
 
 message ReportProcessorProfileMetricRequest {

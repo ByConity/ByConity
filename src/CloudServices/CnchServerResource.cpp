@@ -23,7 +23,7 @@
 #include <brpc/controller.h>
 #include <Common/Exception.h>
 #include "Catalog/DataModelPartWrapper_fwd.h"
-
+#include <Interpreters/WorkerStatusManager.h>
 #include <Storages/Hive/HiveDataPart.h>
 #include <Storages/StorageCnchHive.h>
 #include <Storages/StorageCnchMergeTree.h>
@@ -116,7 +116,8 @@ static std::vector<brpc::CallId> processSend(
     const ContextPtr & context,
     CnchWorkerClientPtr & client,
     const std::vector<AssignedResource> & resource_to_send,
-    ExceptionHandler & handler)
+    ExceptionHandlerWithFailedInfo & handler,
+    DB::WorkerId worker_id)
 {
     bool is_local = context->getServerType() == ServerType::cnch_server
         && client->getHostWithPorts().getRPCAddress() == context->getHostWithPorts().getRPCAddress();
@@ -144,7 +145,7 @@ static std::vector<brpc::CallId> processSend(
             auto data_parts = std::move(resource.server_parts);
             CnchPartsHelper::flattenPartsVector(data_parts);
             call_id = client->sendQueryDataParts(
-                context, resource.storage, resource.worker_table_name, data_parts, resource.bucket_numbers, handler);
+                context, resource.storage, resource.worker_table_name, data_parts, resource.bucket_numbers, handler, worker_id);
         }
         else if (!resource.hive_parts.empty())
             call_id = client->sendCnchHiveDataParts(context, resource.storage, resource.worker_table_name, resource.hive_parts, handler);
@@ -178,9 +179,10 @@ void CnchServerResource::sendResource(const ContextPtr & context, const HostWith
         assigned_worker_resource.erase(it);
     }
 
-    ExceptionHandler handler;
+    ExceptionHandlerWithFailedInfo handler;
     auto worker_client = worker_group->getWorkerClient(worker);
-    auto call_ids = processSend(context, worker_client, resource_to_send, handler);
+    auto full_worker_id = WorkerStatusManager::getWorkerId(worker_group->getVWName(), worker_group->getID(), worker.id);
+    auto call_ids = processSend(context, worker_client, resource_to_send, handler, full_worker_id);
 
     for (auto & call_id : call_ids)
         brpc::Join(call_id);
@@ -191,7 +193,7 @@ void CnchServerResource::sendResource(const ContextPtr & context, const HostWith
 
 void CnchServerResource::sendResource(const ContextPtr & context)
 {
-    ExceptionHandler handler;
+    ExceptionHandlerWithFailedInfo handler;
     std::vector<brpc::CallId> call_ids;
     {
         auto lock = getLock();
@@ -203,7 +205,8 @@ void CnchServerResource::sendResource(const ContextPtr & context)
         for (const auto & [host_ports, resource] : assigned_worker_resource)
         {
             auto worker_client = worker_group->getWorkerClient(host_ports);
-            auto curr_ids = processSend(context, worker_client, resource, handler);
+            auto full_worker_id = WorkerStatusManager::getWorkerId(worker_group->getVWName(), worker_group->getID(), host_ports.id);
+            auto curr_ids = processSend(context, worker_client, resource, handler, full_worker_id);
             call_ids.insert(call_ids.end(), curr_ids.begin(), curr_ids.end());
         }
         assigned_worker_resource.clear();
@@ -211,6 +214,20 @@ void CnchServerResource::sendResource(const ContextPtr & context)
 
     for (auto & call_id : call_ids)
         brpc::Join(call_id);
+
+    auto worker_group_status = context->getWorkerGroupStatusPtr();
+    if (worker_group_status)
+    {
+        auto rpc_infos = handler.getFailedRpcInfo();
+        for (const auto & [worker_id, error_code] : rpc_infos)
+            context->getWorkerStatusManager()->setWorkerNodeDead(worker_id, error_code);
+        for (auto & worker_id : worker_group_status->getHalfOpenWorkers())
+        {
+            if (rpc_infos.count(worker_id) == 0)
+                context->getWorkerStatusManager()->CloseCircuitBreaker(worker_id);
+        }
+        worker_group_status->clearHalfOpenWorkers();
+    }
 
     handler.throwIfException();
 }

@@ -20,6 +20,7 @@
 #include <Interpreters/Context_fwd.h>
 #include <ResourceManagement/CommonData.h>
 #include <ResourceManagement/VWScheduleAlgo.h>
+#include <ServiceDiscovery/IServiceDiscovery.h>
 
 #include <atomic>
 #include <memory>
@@ -108,6 +109,8 @@ public:
     WorkerGroupHandle pickLocally(const VWScheduleAlgo & algo, const Requirement & requirement = {});
     WorkerGroupHandle randomWorkerGroup() const;
     std::optional<HostWithPorts> tryPickWorkerFromRM(VWScheduleAlgo algo, const Requirement & requirement = {});
+    void updateWorkerStatusFromRM(const std::vector<WorkerGroupData> & groups_data);
+    void updateWorkerStatusFromPSM(const IServiceDiscovery::WorkerGroupMap & groups_data, const std::string & vw_name);
 
     bool addWorkerGroup(const WorkerGroupHandle & worker_group);
 

@@ -74,7 +74,8 @@ public:
         const String & local_table_name,
         const ServerDataPartsVector & parts,
         const std::set<Int64> & required_bucket_numbers,
-        ExceptionHandler & handler);
+        ExceptionHandlerWithFailedInfo & handler,
+        const WorkerId & worker_id = WorkerId{});
 
     brpc::CallId sendCnchHiveDataParts(
         const ContextPtr & context,

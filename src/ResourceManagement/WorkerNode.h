@@ -84,6 +84,7 @@ struct WorkerNode
 
     time_t register_time = 0;
     time_t last_update_time = 0;
+    std::atomic<UInt64> last_status_create_time;
 
     bool assigned = false;
 

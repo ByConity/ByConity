@@ -436,6 +436,7 @@ message WorkerNodeResourceData
     optional uint32 reserved_cpu_cores = 14;
     optional uint32 register_time = 15;
     optional uint32 state = 16;
+    optional uint64 last_status_create_time = 17;
 }
 
 message WorkerGroupData
@@ -451,6 +452,7 @@ message WorkerGroupData
   optional WorkerGroupMetrics metrics = 9;
   optional bool is_auto_linked = 10;
   optional string linked_vw_name = 11;
+  repeated WorkerNodeResourceData worker_node_resource_vec = 12;
 }
 
 message WorkerGroupMetrics

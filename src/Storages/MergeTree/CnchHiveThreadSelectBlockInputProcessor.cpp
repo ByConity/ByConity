@@ -149,6 +149,8 @@ bool CnchHiveThreadSelectBlockInputProcessor::getNewTask()
     else if (part_format.find("Orc") != String::npos)
     {
         format_settings.orc.partition_kv = part->getInfo().getPartition();
+        format_settings.orc.current_stripe = current_row_group;
+        format_settings.orc.read_stripe = true;
 
         auto orc_format = FormatFactory::instance().getInput(
             "ORC", *read_buf, getHeader(), context, context->getSettingsRef().max_block_size, format_settings);

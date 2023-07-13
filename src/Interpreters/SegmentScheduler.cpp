@@ -51,6 +51,63 @@ namespace ErrorCodes
     extern const int UNKNOWN_EXCEPTION;
 }
 
+std::vector<size_t> AdaptiveScheduler::getRandomWorkerRank() 
+{
+    std::vector<size_t> rank_worker_ids;
+    auto worker_group = query_context->tryGetCurrentWorkerGroup();
+    if (worker_group)
+    {
+        const auto & worker_hosts = worker_group->getHostWithPortsVec();
+        rank_worker_ids.resize(worker_hosts.size(), 0);
+        std::iota(rank_worker_ids.begin(), rank_worker_ids.end(), 0);
+        thread_local std::random_device rd;
+        std::shuffle(rank_worker_ids.begin(), rank_worker_ids.end(), rd);
+    }
+    return rank_worker_ids;
+}
+
+std::vector<size_t> AdaptiveScheduler::getHealthWorkerRank() 
+{
+    std::vector<size_t> rank_worker_ids;
+    auto worker_group = query_context->tryGetCurrentWorkerGroup();
+    auto worker_group_status = query_context->getWorkerGroupStatusPtr();
+    if (!worker_group_status)
+        return getRandomWorkerRank();
+    const auto & hostports = worker_group->getHostWithPortsVec();
+    size_t numOfWorker = hostports.size();
+    rank_worker_ids.reserve(numOfWorker);
+    for (size_t i = 0; i < numOfWorker; i++)
+        rank_worker_ids.push_back(i);
+
+    auto & workers_status = worker_group_status->getWorkersStatus();
+    std::stable_sort(rank_worker_ids.begin(), rank_worker_ids.end(), [&](size_t lidx, size_t ridx) {
+        auto lid = WorkerStatusManager::getWorkerId(worker_group->getVWName(), worker_group->getID(), hostports[lidx].id);
+        auto rid = WorkerStatusManager::getWorkerId(worker_group->getVWName(), worker_group->getID(), hostports[ridx].id);
+        auto liter = workers_status.find(lid);
+        auto riter = workers_status.find(rid);
+        if (liter == workers_status.end())
+            return true;
+        if (riter == workers_status.end())
+            return false;
+        return liter->second->compare(*riter->second);
+    });
+
+    if (log->trace()) 
+    {
+        for (auto & idx : rank_worker_ids)
+        {
+            auto worker_id = WorkerStatusManager::getWorkerId(worker_group->getVWName(), worker_group->getID(), hostports[idx].id);
+            if (auto iter = workers_status.find(worker_id); iter != workers_status.end())
+                LOG_TRACE(log, iter->second->toDebugString());
+        }
+    }
+
+    thread_local std::random_device rd;
+    //only shuffle health worker
+    std::shuffle(rank_worker_ids.begin(), rank_worker_ids.begin() + worker_group_status->getHealthWorkerSize(), rd);
+    return rank_worker_ids;
+}
+
 AddressInfo getLocalAddress(ContextPtr & query_context)
 {
     const auto & host = getHostIPFromEnv();
@@ -552,17 +609,9 @@ bool SegmentScheduler::scheduler(const String & query_id, ContextPtr query_conte
         UInt64 total_send_time_ms = 0;
         Stopwatch watch;
         /// random pick workers
-        const auto & worker_group = query_context->tryGetCurrentWorkerGroup();
-        std::vector<size_t> random_worker_ids;
-
-        if (worker_group)
-        {
-            const auto & worker_hosts = worker_group->getHostWithPortsVec();
-            random_worker_ids.resize(worker_hosts.size(), 0);
-            std::iota(random_worker_ids.begin(), random_worker_ids.end(), 0);
-            thread_local std::random_device rd;
-            std::shuffle(random_worker_ids.begin(), random_worker_ids.end(), rd);
-        }
+        AdaptiveScheduler adaptive_scheduler(query_context);
+        std::vector<size_t> rank_worker_ids = query_context->getSettingsRef().enable_adaptive_scheduler ? 
+            adaptive_scheduler.getHealthWorkerRank() : adaptive_scheduler.getRandomWorkerRank();
 
         // scheduler source
         for (auto segment_id : dag_graph_ptr->sources)
@@ -575,7 +624,7 @@ bool SegmentScheduler::scheduler(const String & query_id, ContextPtr query_conte
                 throw Exception("Logical error: source segment can not be found", ErrorCodes::LOGICAL_ERROR);
             AddressInfos address_infos;
             // TODO dongyifeng support send plansegment parallel
-            address_infos = sendPlanSegment(it->second, true, query_context, dag_graph_ptr, random_worker_ids);
+            address_infos = sendPlanSegment(it->second, true, query_context, dag_graph_ptr, rank_worker_ids);
             dag_graph_ptr->id_to_address.emplace(std::make_pair(segment_id, std::move(address_infos)));
             dag_graph_ptr->scheduler_segments.emplace(segment_id);
         }
@@ -627,7 +676,7 @@ bool SegmentScheduler::scheduler(const String & query_id, ContextPtr query_conte
                 {
                     AddressInfos address_infos;
                     watch.restart();
-                    address_infos = sendPlanSegment(it->second, false, query_context, dag_graph_ptr, random_worker_ids);
+                    address_infos = sendPlanSegment(it->second, false, query_context, dag_graph_ptr, rank_worker_ids);
                     total_send_time_ms += watch.elapsedMilliseconds();
                     dag_graph_ptr->id_to_address.emplace(std::make_pair(it->first, std::move(address_infos)));
                     dag_graph_ptr->scheduler_segments.emplace(it->first);
@@ -704,11 +753,12 @@ void sendPlanSegmentToRemote(
     AddressInfo & addressinfo,
     ContextPtr query_context,
     PlanSegment * plan_segment_ptr,
-    std::shared_ptr<DAGGraph> dag_graph_ptr)
+    std::shared_ptr<DAGGraph> dag_graph_ptr,
+    const WorkerId& worker_id = WorkerId{})
 {
     plan_segment_ptr->setCurrentAddress(addressinfo);
 
-    executePlanSegmentRemotely(*plan_segment_ptr, query_context, true);
+    executePlanSegmentRemotely(*plan_segment_ptr, query_context, true, worker_id);
     if (dag_graph_ptr)
     {
         std::unique_lock<bthread::Mutex> lock(dag_graph_ptr->status_mutex);
@@ -721,7 +771,7 @@ AddressInfos SegmentScheduler::sendPlanSegment(
     bool  /*is_source*/,
     ContextPtr query_context,
     std::shared_ptr<DAGGraph> dag_graph_ptr,
-    std::vector<size_t> random_worker_ids)
+    std::vector<size_t> rank_worker_ids)
 {
     LOG_TRACE(
         &Poco::Logger::get("SegmentScheduler::sendPlanSegment"),
@@ -765,7 +815,7 @@ AddressInfos SegmentScheduler::sendPlanSegment(
         const auto & worker_endpoints = worker_group->getHostWithPortsVec();
         size_t parallel_index_id_index = 0;
         // set ParallelIndexId and source address
-        for (auto i : random_worker_ids)
+        for (auto i : rank_worker_ids)
         {
             parallel_index_id_index++;
             if (parallel_index_id_index > plan_segment_ptr->getParallelSize())
@@ -794,7 +844,8 @@ AddressInfos SegmentScheduler::sendPlanSegment(
                 }
             }
             auto worker_address = getRemoteAddress(worker_endpoint, query_context);
-            sendPlanSegmentToRemote(worker_address, query_context, plan_segment_ptr, dag_graph_ptr);
+            sendPlanSegmentToRemote(worker_address, query_context, plan_segment_ptr, dag_graph_ptr,
+                WorkerStatusManager::getWorkerId(worker_group->getVWName(), worker_group->getID(), worker_endpoint.id));
             addresses.emplace_back(std::move(worker_address));
 
 #if defined(TASK_ASSIGN_DEBUG)

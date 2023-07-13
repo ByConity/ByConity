@@ -30,6 +30,7 @@
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/DistributedStages/PlanSegmentExecutor.h>
+#include <Interpreters/WorkerStatusManager.h>
 #include <Parsers/IAST_fwd.h>
 #include <Processors/Exchange/DataTrans/ConcurrentShardMap.h>
 #include <Protos/plan_segment_manager.pb.h>
@@ -45,6 +46,18 @@
 
 namespace DB
 {
+
+class AdaptiveScheduler 
+{
+public:
+    AdaptiveScheduler(const ContextPtr & context) : query_context(context), log(&Poco::Logger::get("AdaptiveScheduler")) {}
+    std::vector<size_t> getRandomWorkerRank();
+    std::vector<size_t> getHealthWorkerRank();
+   
+private:
+    const ContextPtr query_context;
+    Poco::Logger * log;
+};
 
 struct PlanSegmentsStatus
 {
@@ -149,7 +162,7 @@ private:
     bool scheduler(const String & query_id, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph);
 
 protected:
-    virtual AddressInfos sendPlanSegment(PlanSegment * plan_segment_ptr, bool is_source, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph, std::vector<size_t> random_worker_ids);
+    virtual AddressInfos sendPlanSegment(PlanSegment * plan_segment_ptr, bool is_source, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph, std::vector<size_t> rank_worker_ids);
 };
 
 using SegmentSchedulerPtr = std::shared_ptr<SegmentScheduler>;

@@ -205,6 +205,7 @@ struct WorkerNodeResourceData
     UInt64 reserved_memory_bytes;
     UInt32 reserved_cpu_cores;
     WorkerState state;
+    UInt64 last_status_create_time {0};
 
     std::string serializeAsString() const;
     void parseFromString(const std::string & s);
@@ -215,6 +216,8 @@ struct WorkerNodeResourceData
         res.parseFromString(s);
         return res;
     }
+    WorkerNodeResourceData() = default;
+    WorkerNodeResourceData(const Protos::WorkerNodeResourceData & resource_info);
 
     void fillProto(Protos::WorkerNodeResourceData & resource_info) const;
     static WorkerNodeResourceData createFromProto(const Protos::WorkerNodeResourceData & resource_info);
@@ -360,6 +363,7 @@ struct WorkerGroupData
     std::vector<HostWithPorts> host_ports_vec;
     size_t num_workers{};
 
+    std::vector<WorkerNodeResourceData> worker_node_resource_vec;
     /// For query scheduler
     WorkerGroupMetrics metrics;
 

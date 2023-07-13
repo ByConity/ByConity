@@ -101,6 +101,7 @@
 #include <ResourceGroup/IResourceGroupManager.h>
 #include <Interpreters/SystemLog.h>
 #include <Interpreters/CnchSystemLog.h>
+#include <Interpreters/WorkerStatusManager.h>
 #include <Interpreters/CnchQueryMetrics/QueryMetricLog.h>
 #include <Interpreters/CnchQueryMetrics/QueryWorkerMetricLog.h>
 #include <Interpreters/SegmentScheduler.h>
@@ -208,6 +209,13 @@ namespace ProfileEvents
 {
     extern const Event ContextLock;
     extern const Event CompiledCacheSizeBytes;
+    extern const Event AllWorkerSize;
+    extern const Event HealthWorkerSize;
+    extern const Event HeavyLoadWorkerSize;
+    extern const Event SourceOnlyWorkerSize;
+    extern const Event UnhealthWorkerSize;
+    extern const Event NotConnectedWorkerSize;
+    extern const Event SelectHealthWorkerMilliSeconds;
 }
 
 namespace CurrentMetrics
@@ -382,6 +390,7 @@ struct ContextSharedPart
     /// Cache of primary indexes.
     mutable PrimaryIndexCachePtr primary_index_cache;
 
+    WorkerStatusManagerPtr worker_status_manager;
     mutable ServiceDiscoveryClientPtr sd;
     mutable PartCacheManagerPtr cache_manager;           /// Manage cache of parts for cnch tables.
     mutable CnchStorageCachePtr storage_cache;          /// Storage cache used in cnch.
@@ -649,6 +658,55 @@ void Context::copyFrom(const ContextPtr & other)
 }
 
 Context::~Context() = default;
+
+WorkerStatusManagerPtr Context::getWorkerStatusManager()
+{
+    if (!shared->worker_status_manager)
+        shared->worker_status_manager = std::make_shared<WorkerStatusManager>();
+    return shared->worker_status_manager;
+}
+
+void Context::updateAdaptiveSchdulerConfig(const ConfigurationPtr & config)
+{
+    auto worker_status_manager = getWorkerStatusManager();
+    worker_status_manager->updateConfig(*config);
+}
+
+WorkerStatusManagerPtr Context::getWorkerStatusManager() const
+{
+    if (!shared->worker_status_manager)
+        shared->worker_status_manager = std::make_shared<WorkerStatusManager>();
+    return shared->worker_status_manager;
+}
+
+void Context::selectWorkerNodesWithMetrics()
+{
+    if (tryGetCurrentWorkerGroup())
+    {
+        Stopwatch sw;
+        worker_group_status = getWorkerStatusManager()->getWorkerGroupStatus(this,
+            current_worker_group->getHostWithPortsVec(), current_worker_group->getVWName(),  current_worker_group->getID());
+        
+        auto indices = worker_group_status->selectHealthNode(current_worker_group->getHostWithPortsVec());
+        if (indices)
+        {
+            health_worker_group.reset(new WorkerGroupHandleImpl(*current_worker_group, *indices));
+            setCurrentWorkerGroup(health_worker_group);
+        }
+        ProfileEvents::increment(ProfileEvents::AllWorkerSize, worker_group_status->getAllWorkerSize());    
+        ProfileEvents::increment(ProfileEvents::HeavyLoadWorkerSize, worker_group_status->getHeavyLoadWorkerSize());    
+        ProfileEvents::increment(ProfileEvents::SourceOnlyWorkerSize, worker_group_status->getOnlySourceWorkerSize());    
+        ProfileEvents::increment(ProfileEvents::UnhealthWorkerSize, worker_group_status->getUnhealthWorkerSize());    
+        ProfileEvents::increment(ProfileEvents::HealthWorkerSize, worker_group_status->getHealthWorkerSize());    
+        ProfileEvents::increment(ProfileEvents::NotConnectedWorkerSize, worker_group_status->getNotConnectedWorkerSize());    
+        ProfileEvents::increment(ProfileEvents::SelectHealthWorkerMilliSeconds, sw.elapsedMilliseconds());    
+    }
+}
+
+WorkerGroupHandle Context::tryGetHealthWorkerGroup() const
+{
+    return health_worker_group;
+}
 
 InterserverIOHandler & Context::getInterserverIOHandler() { return shared->interserver_io_handler; }
 
