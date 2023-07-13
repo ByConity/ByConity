@@ -139,7 +139,7 @@ struct FormatSettings
         std::map<String, String> partition_kv = {};
         std::unordered_set<Int64> skip_stripes = {};
         UInt64 current_stripe = 0;
-        bool read_stripe = false;
+        bool read_one_stripe = false;
     } orc;
 
     struct Pretty

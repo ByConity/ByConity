@@ -98,9 +98,19 @@ public:
         shrinkToIncludedIfPossible();
     }
 
-    static Range createRightBounded(const FieldRef & right_point, bool right_included)
+        static Range createWholeUniverse()
     {
-        Range r;
+        return Range(NegativeInfinity{}, true, PositiveInfinity{}, true);
+    }
+
+    static Range createWholeUniverseWithoutNull()
+    {
+        return Range(NegativeInfinity{}, false, PositiveInfinity{}, false);
+    }
+
+    static Range createRightBounded(const FieldRef & right_point, bool right_included, bool with_null = false)
+    {
+        Range r = with_null ? createWholeUniverse() : createWholeUniverseWithoutNull();
         r.right = right_point;
         r.right_included = right_included;
         r.shrinkToIncludedIfPossible();
@@ -110,9 +120,9 @@ public:
         return r;
     }
 
-    static Range createLeftBounded(const FieldRef & left_point, bool left_included)
+    static Range createLeftBounded(const FieldRef & left_point, bool left_included, bool with_null = false)
     {
-        Range r;
+        Range r = with_null ? createWholeUniverse() : createWholeUniverseWithoutNull();
         r.left = left_point;
         r.left_included = left_included;
         r.shrinkToIncludedIfPossible();

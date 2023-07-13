@@ -24,8 +24,9 @@
 #include <boost/algorithm/string.hpp>
 #include <Common/StringUtils/StringUtils.h>
 #include <Storages/HDFS/HDFSCommon.h>
+#include <Storages/MergeTree/CnchHiveSettings.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
-
+#include <arrow/adapters/orc/adapter.h>
 
 namespace orc
 {
@@ -45,7 +46,7 @@ namespace arrow
 }
 namespace arrow::adapters::orc
 {
-class ORCFileReader;
+//class ORCFileReader;
 class Statistics;
 class ColumnStatistics;
 }
@@ -141,6 +142,7 @@ public:
         const String & relative_path_,
         const String & format_name_,
         const DiskPtr & disk_,
+        const CnchHiveSettings & settings_,
         const HivePartInfo & info_,
         std::unordered_set<Int64> skip_splits_ = {},
         NamesAndTypesList index_names_and_types_ = {});
@@ -158,7 +160,9 @@ public:
 
     const std::unordered_set<Int64> & getSkipSplits() const { return skip_splits; }
     void setSkipSplits(const std::unordered_set<Int64> & skip_splits_) { skip_splits = skip_splits_; }
+    MinMaxIndexPtr getMinMaxIndex() const { return file_minmax_idx; }
     const std::vector<MinMaxIndexPtr> & getSubMinMaxIndexes() const { return split_minmax_idxes; }
+    void setIndexNamesAndTypes(const NamesAndTypesList & index_names_and_types_) { index_names_and_types = index_names_and_types_; }
 
     String describeMinMaxIndex(const MinMaxIndexPtr & idx) const
     {
@@ -174,7 +178,10 @@ public:
 
     virtual FileFormat getFormat() const = 0;
 
+    virtual bool useFileMinMaxIndex() const { return false; }
     void loadFileMinMaxIndex();
+
+    virtual bool useSplitMinMaxIndex() const { return false; }
     void loadSplitMinMaxIndexes();
 
 protected:
@@ -193,15 +200,22 @@ protected:
     String relative_path;
     String format_name;
     DiskPtr disk;
+    const CnchHiveSettings settings;
     HivePartInfo info;
 
     std::unordered_set<Int64> skip_splits = {};
     NamesAndTypesList index_names_and_types = {};
 
+    MinMaxIndexPtr file_minmax_idx;
+    std::atomic<bool> file_minmax_idx_loaded{false};
+
     mutable std::vector<MinMaxIndexPtr> split_minmax_idxes;
     std::atomic<bool> split_minmax_idxes_loaded{false};
 
     mutable std::atomic<bool> initialized{false};
+
+    /// IHiveFile would be shared among multi threads, need lock's protection to update min/max indexes.
+    std::mutex mutex;
 };
 
 class HiveORCFile : public HiveDataPart
@@ -213,22 +227,35 @@ public:
         const String & relative_path_,
         const String & format_name_,
         const DiskPtr & disk_,
+	const CnchHiveSettings & settings_,
         const HivePartInfo & info_,
         std::unordered_set<Int64> skip_splits_ = {},
         NamesAndTypesList index_names_and_types_ = {})
-        : HiveDataPart(name_, hdfs_uri_, relative_path_, format_name_, disk_, info_, skip_splits_, index_names_and_types_)
+        : HiveDataPart(name_, hdfs_uri_, relative_path_, format_name_, disk_, settings_, info_, skip_splits_, index_names_and_types_)
     {
+        prepareReader();
+        prepareColumnMapping();
     }
 
     FileFormat getFormat() const override { return FileFormat::ORC; }
-    arrow::Status tryGetTotalStripes(size_t & res) const;
+
+    bool useFileMinMaxIndex() const override;
+    bool useSplitMinMaxIndex() const override;
+
     size_t getTotalStripes() const;
 
 private:
+    static Range buildRange(const orc::ColumnStatistics * col_stats);
+
     void loadFileMinMaxIndexImpl() override;
     void loadSplitMinMaxIndexesImpl() override;
+    std::unique_ptr<MinMaxIndex> buildMinMaxIndex(const orc::Statistics * statistics);
+    void prepareReader();
+    void prepareColumnMapping();
 
     mutable size_t total_stripes = 0;
+    std::unique_ptr<arrow::adapters::orc::ORCFileReader> reader;
+    std::map<String, size_t> orc_column_positions;
 };
 
 class HiveParquetFile : public HiveDataPart
@@ -240,14 +267,17 @@ public:
         const String & relative_path_,
         const String & format_name_,
         const DiskPtr & disk_,
+        const CnchHiveSettings & settings_,
         const HivePartInfo & info_,
         std::unordered_set<Int64> skip_splits_ = {},
         NamesAndTypesList index_names_and_types_ = {})
-        : HiveDataPart(name_, hdfs_uri_, relative_path_, format_name_, disk_, info_, skip_splits_, index_names_and_types_)
+        : HiveDataPart(name_, hdfs_uri_, relative_path_, format_name_, disk_, settings_, info_, skip_splits_, index_names_and_types_)
     {
     }
 
     FileFormat getFormat() const override { return FileFormat::PARQUET; }
+    bool useSplitMinMaxIndex() const override;
+
     size_t getTotalRowGroups() const;
     arrow::Status tryGetTotalRowGroups(size_t & num_row_groups) const;
 

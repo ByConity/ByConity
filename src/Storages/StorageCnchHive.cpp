@@ -127,12 +127,39 @@ StorageCnchHive::StorageCnchHive(
         setInMemoryMetadata(metadata);
     }
 
-
+    initMinMaxIndexExpression();
     auto hms_client = HiveMetastoreClientFactory::instance().getOrCreate(remote_psm, settings);
     auto table = getHiveTable();
     const String format = table->sd.outputFormat;
     if ((format.find("parquet") == String::npos) && (format.find("orc") == String::npos))
         throw Exception("CnchHive only support parquet/orc format. Current format is " + format + " .", ErrorCodes::BAD_ARGUMENTS);
+}
+
+void StorageCnchHive::initMinMaxIndexExpression()
+{
+    auto metadata_snapshot = getInMemoryMetadataPtr();
+    ASTPtr partition_key_expr_list = extractKeyExpressionList(partition_by_ast);
+    if (!partition_key_expr_list->children.empty())
+    {
+        auto syntax_result = TreeRewriter(getContext()).analyze(partition_key_expr_list, metadata_snapshot->getColumns().getAllPhysical());
+        partition_key_expr = ExpressionAnalyzer(partition_key_expr_list, syntax_result, getContext()).getActions(false);
+
+        /// Add all columns used in the partition key to the min-max index.
+        partition_name_types = partition_key_expr->getRequiredColumnsWithTypes();
+        partition_names = partition_name_types.getNames();
+        partition_types = partition_name_types.getTypes();
+        partition_minmax_idx_expr = std::make_shared<ExpressionActions>(
+            std::make_shared<ActionsDAG>(partition_name_types), ExpressionActionsSettings::fromContext(getContext()));
+    }
+
+    NamesAndTypesList all_name_types = metadata_snapshot->getColumns().getAllPhysical();
+    for (const auto & column : all_name_types)
+    {
+        if (!partition_name_types.contains(column.name))
+            hivefile_name_types.push_back(column);
+    }
+    hivefile_minmax_idx_expr = std::make_shared<ExpressionActions>(
+        std::make_shared<ActionsDAG>(hivefile_name_types), ExpressionActionsSettings::fromContext(getContext()));
 }
 
 /// Get basic select query to read from prepared pipe: remove prewhere, sampling, offset, final
@@ -421,6 +448,10 @@ HiveDataPartsCNCHVector StorageCnchHive::getDataPartsInPartitions(
 
     LOG_TRACE(log, " num_streams size = {} partitions size = {}", num_streams, partitions.size());
 
+    std::optional<KeyCondition> minmax_index_condition;
+    if (query_info.query)
+        minmax_index_condition.emplace(query_info, getContext(), hivefile_name_types.getNames(), hivefile_minmax_idx_expr);
+
     if (!partitions.empty())
     {
         ThreadPool thread_pool(num_streams);
@@ -429,7 +460,7 @@ HiveDataPartsCNCHVector StorageCnchHive::getDataPartsInPartitions(
         {
             thread_pool.scheduleOrThrow([&] {
                 auto hive_files_in_partition
-                    = collectHiveFilesFromPartition(hms_client, partition, local_context, query_info, required_bucket_numbers);
+                    = collectHiveFilesFromPartition(hms_client, partition, local_context, query_info, required_bucket_numbers, minmax_index_condition);
                 if (!hive_files_in_partition.empty())
                 {
                     std::lock_guard<std::mutex> lock(hive_files_mutex);
@@ -443,7 +474,7 @@ HiveDataPartsCNCHVector StorageCnchHive::getDataPartsInPartitions(
     {
         LOG_TRACE(log, "Read Hive table with No partition.");
         auto table = getHiveTable();
-        hive_files = collectHiveFilesFromTable(hms_client, table, local_context, query_info, required_bucket_numbers);
+        hive_files = collectHiveFilesFromTable(hms_client, table, local_context, query_info, required_bucket_numbers, minmax_index_condition);
     }
 
     // exception_handler.throwIfException();
@@ -458,10 +489,11 @@ HiveDataPartsCNCHVector StorageCnchHive::collectHiveFilesFromPartition(
     HivePartitionPtr & partition,
     ContextPtr local_context,
     const SelectQueryInfo & /*query_info*/,
-    const std::set<Int64> & required_bucket_numbers)
+    const std::set<Int64> & required_bucket_numbers,
+    const std::optional<KeyCondition> & minmax_index_condition)
 {
     return hms_client->getDataPartsInPartition(
-        shared_from_this(), partition, local_context->getHdfsConnectionParams(), required_bucket_numbers);
+        shared_from_this(), partition, local_context->getHdfsConnectionParams(), hivefile_name_types, minmax_index_condition, required_bucket_numbers);
 }
 
 HiveDataPartsCNCHVector StorageCnchHive::collectHiveFilesFromTable(
@@ -469,10 +501,11 @@ HiveDataPartsCNCHVector StorageCnchHive::collectHiveFilesFromTable(
     HiveTablePtr & table,
     ContextPtr local_context,
     const SelectQueryInfo & /*query_info*/,
-    const std::set<Int64> & required_bucket_numbers)
+    const std::set<Int64> & required_bucket_numbers,
+    const std::optional<KeyCondition> &  minmax_index_condition)
 {
     return hms_client->getDataPartsInTable(
-        shared_from_this(), *table, local_context->getHdfsConnectionParams(), required_bucket_numbers);
+        shared_from_this(), *table, local_context->getHdfsConnectionParams(), hivefile_name_types, minmax_index_condition,required_bucket_numbers);
 }
 
 void StorageCnchHive::collectResource(ContextPtr local_context, const HiveDataPartsCNCHVector & parts, const String & local_table_name)

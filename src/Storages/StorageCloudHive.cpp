@@ -104,7 +104,7 @@ void StorageCloudHive::read(
 //     throw Exception("write is not supported now", ErrorCodes::NOT_IMPLEMENTED);
 // }
 
-void StorageCloudHive::loadDataParts(HiveDataPartsCNCHVector & data_parts, UInt64 /*worker_topology_hash*/)
+void StorageCloudHive::loadDataParts(MutableHiveDataPartsCNCHVector & data_parts, UInt64 /*worker_topology_hash*/)
 {
     // auto current_topology_hash = getContext()->getWorkerTopologyHash(getStorageUUID());
     // if (worker_topology_hash && current_topology_hash && worker_topology_hash != current_topology_hash)

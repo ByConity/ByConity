@@ -9,6 +9,7 @@
 #include <arrow/io/memory.h>
 #include "ArrowBufferedStreams.h"
 #include "ArrowColumnToCHColumn.h"
+#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -34,12 +35,21 @@ ORCBlockInputFormat::ORCBlockInputFormat(
     : IInputFormat(std::move(header_), in_)
     , format_settings(format_settings_)
     , partition_kv{partition_kv_}
-    , read_stripe(format_settings_.orc.read_stripe)
+    , read_one_stripe(format_settings_.orc.read_one_stripe)
+    , skip_stripes(format_settings_.orc.skip_stripes)
  {
+    if(read_one_stripe)
+        stripe_current = format_settings.orc.current_stripe;
  }
 
 Chunk ORCBlockInputFormat::generate()
 {
+    if (read_one_stripe && skip_stripes.contains(static_cast<Int64>(stripe_current)))
+    {
+        LOG_TRACE(&Poco::Logger::get("ORCBlockInputFormat"), "skip stripe is {}", stripe_current);
+        return {};
+    }
+
     Chunk res;
 
     if (!file_reader)
@@ -122,10 +132,6 @@ void ORCBlockInputFormat::prepareReader()
         throw Exception(reader_status.ToString(), ErrorCodes::BAD_ARGUMENTS); 
     }
     stripe_total = file_reader->NumberOfStripes();
-    if(read_stripe)
-        stripe_current = format_settings.orc.current_stripe;
-    else 
-        stripe_current = 0;
 
     auto schema_status = file_reader->ReadSchema();
     if(!schema_status.ok())

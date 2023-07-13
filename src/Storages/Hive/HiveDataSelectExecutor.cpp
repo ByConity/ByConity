@@ -71,11 +71,29 @@ QueryPlanPtr HiveDataSelectExecutor::read(
     NamesAndTypesList available_real_columns = metadata_snapshot->getColumns().getAllPhysical();
     if (real_column_names.empty())
         real_column_names.push_back(ExpressionActions::getSmallestColumn(available_real_columns));
-
+   
     metadata_snapshot->check(real_column_names, data.getVirtuals(), data.getStorageID());
 
-    auto read_from_cnch_hive = std::make_unique<ReadFromCnchHive>(
-        data_parts, real_column_names, data, query_info, metadata_snapshot, context, max_block_size, num_streams, log);
+    NamesAndTypesList hivefile_name_types;
+    Names partition_names;
+    if (metadata_snapshot->hasPartitionKey())
+    {
+        partition_names = metadata_snapshot->getColumnsRequiredForPartitionKey();
+    }
+    for (const auto & column : available_real_columns)
+    {
+        if (partition_names.empty() || std::count(partition_names.begin(), partition_names.end(), column.name) == 0)
+            hivefile_name_types.push_back(column);
+    }
+    ExpressionActionsPtr hivefile_minmax_idx_expr = std::make_shared<ExpressionActions>(
+        std::make_shared<ActionsDAG>(hivefile_name_types), ExpressionActionsSettings::fromContext(data.getContext()));
+
+    std::optional<KeyCondition> minmax_index_condition;
+    if (query_info.query)
+        minmax_index_condition.emplace(query_info, context, hivefile_name_types.getNames(), hivefile_minmax_idx_expr);
+
+    auto read_from_cnch_hive = std::make_unique<ReadFromCnchHive>(data_parts, real_column_names, data, query_info, 
+            hivefile_name_types, minmax_index_condition, metadata_snapshot, context, max_block_size, num_streams, log);
 
 
     QueryPlanPtr plan = std::make_unique<QueryPlan>();

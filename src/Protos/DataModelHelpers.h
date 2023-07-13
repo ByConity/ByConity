@@ -259,6 +259,6 @@ IMergeTreeDataPartsVector createPartVectorFromServerParts(
     const std::optional<std::string> & relative_path = std::nullopt);
 
 void fillCnchHivePartsModel(const HiveDataPartsCNCHVector & parts, pb::RepeatedPtrField<Protos::CnchHivePartModel> & parts_model);
-HiveDataPartsCNCHVector createCnchHiveDataParts(const ContextPtr & context, const pb::RepeatedPtrField<Protos::CnchHivePartModel> & parts_model);
+MutableHiveDataPartsCNCHVector createCnchHiveDataParts(const ContextPtr & context, const pb::RepeatedPtrField<Protos::CnchHivePartModel> & parts_model);
 
 }

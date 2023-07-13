@@ -29,10 +29,12 @@ namespace ErrorCodes
 }
 
 ReadFromCnchHive::ReadFromCnchHive(
-    HiveDataPartsCNCHVector parts_,
+    const MutableHiveDataPartsCNCHVector & parts_,
     Names real_column_names_,
     const StorageCloudHive & data_,
     const SelectQueryInfo & query_info_,
+    const NamesAndTypesList & hive_datapart_name_types_,
+    const std::optional<KeyCondition> & minmax_index_condition_,
     StorageMetadataPtr metadata_snapshot_,
     ContextPtr context_,
     size_t max_block_size_,
@@ -44,6 +46,8 @@ ReadFromCnchHive::ReadFromCnchHive(
     , real_column_names(std::move(real_column_names_))
     , data(data_)
     , query_info(query_info_)
+    , hive_datapart_name_types(hive_datapart_name_types_)
+    , minmax_index_condition(minmax_index_condition_)
     , metadata_snapshot(std::move(metadata_snapshot_))
     , context(std::move(context_))
     , max_block_size(max_block_size_)
@@ -68,6 +72,30 @@ void ReadFromCnchHive::initializePipeline(QueryPipeline & pipeline, const BuildQ
 
     auto process = [&](BlocksInDataParts data_parts_with_row_groups, int part_index) {
         const auto & part = data_parts[part_index];
+        if (minmax_index_condition && part->useSplitMinMaxIndex())
+        {
+            /// Load sub-file level minmax index and apply
+                std::unordered_set<Int64> skip_splits;
+                part->setIndexNamesAndTypes(hive_datapart_name_types);
+                part->loadSplitMinMaxIndexes();
+                const auto & sub_minmax_idxes = part->getSubMinMaxIndexes();
+                for (size_t i = 0; i < sub_minmax_idxes.size(); ++i)
+                {
+                    if (!key_condition.checkInHyperrectangle(sub_minmax_idxes[i]->hyperrectangle, hive_datapart_name_types.getTypes())
+                             .can_be_true)
+                    {
+                        LOG_TRACE(
+                            log,
+                            "Skip split {} of hive file {} by index {}",
+                            i,
+                            part->getFullDataPartPath(),
+                            part->describeMinMaxIndex(sub_minmax_idxes[i]));
+
+                        skip_splits.insert(static_cast<Int64>(i));
+                    }
+                }
+                part->setSkipSplits(skip_splits);
+        }
         data_parts_with_row_groups[part_index].total_blocks = part->getTotalBlockNumber();
     };
 

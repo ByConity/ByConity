@@ -94,6 +94,7 @@ public:
 
 private:
     void setProperties();
+    void initMinMaxIndexExpression();
 
     std::set<Int64> getSelectedBucketNumbers(const SelectQueryInfo & query_info, ContextPtr & context);
 
@@ -113,14 +114,16 @@ private:
         HivePartitionPtr & partition,
         ContextPtr context,
         const SelectQueryInfo & query_info,
-        const std::set<Int64> & required_bucket_numbers);
+        const std::set<Int64> & required_bucket_numbers,
+	    const std::optional<KeyCondition> & minmax_index_condition);
 
     HiveDataPartsCNCHVector collectHiveFilesFromTable(
         std::shared_ptr<HiveMetastoreClient> & hms_client,
         HiveTablePtr & table,
         ContextPtr local_context,
         const SelectQueryInfo & query_info,
-        const std::set<Int64> & required_bucket_numbers);
+        const std::set<Int64> & required_bucket_numbers,
+	    const std::optional<KeyCondition> & minmax_index_condition);
 
     void collectResource(ContextPtr context, const HiveDataPartsCNCHVector & parts, const String & local_table_name);
 
@@ -129,9 +132,15 @@ private:
 
     String remote_psm;
 
-    ExpressionActionsPtr minmax_idx_expr;
-    Names minmax_idx_columns;
-    DataTypes minmax_idx_column_types;
+    const ASTPtr partition_by_ast;
+    NamesAndTypesList partition_name_types;
+    Names partition_names;
+    DataTypes partition_types;
+    ExpressionActionsPtr partition_key_expr;
+    ExpressionActionsPtr partition_minmax_idx_expr;
+
+    NamesAndTypesList hivefile_name_types;
+    ExpressionActionsPtr hivefile_minmax_idx_expr;
 
     // ContextMutablePtr global_context;
     Poco::Logger * log;

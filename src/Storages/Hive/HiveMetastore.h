@@ -104,12 +104,16 @@ public:
         const StoragePtr & storage,
         HivePartitionPtr & partition,
         const HDFSConnectionParams & hdfs_paras,
+        const NamesAndTypesList & hive_datapart_name_types,
+        const std::optional<KeyCondition> & minmax_index_condition,
         const std::set<Int64> & required_bucket_numbers = {});
 
     HiveDataPartsCNCHVector getDataPartsInTable(
         const StoragePtr & storage,
         Table & table,
         const HDFSConnectionParams & hdfs_paras,
+        const NamesAndTypesList & hive_datapart_name_types,
+        const std::optional<KeyCondition> & minmax_index_condition,
         const std::set<Int64> & required_bucket_numbers = {});
 
     //schema check

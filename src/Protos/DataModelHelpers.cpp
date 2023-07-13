@@ -455,10 +455,10 @@ void fillCnchHivePartsModel(const HiveDataPartsCNCHVector & parts, pb::RepeatedP
     }
 }
 
-HiveDataPartsCNCHVector
+MutableHiveDataPartsCNCHVector
 createCnchHiveDataParts(const ContextPtr & context, const pb::RepeatedPtrField<Protos::CnchHivePartModel> & parts_model)
 {
-    HiveDataPartsCNCHVector res;
+    MutableHiveDataPartsCNCHVector res;
     res.reserve(parts_model.size());
 
     /// share the disk configuration
@@ -489,21 +489,23 @@ createCnchHiveDataParts(const ContextPtr & context, const pb::RepeatedPtrField<P
 
 
         if (format_name.find("Orc") != String::npos)
-            res.emplace_back(std::make_shared<const HiveORCFile>(
+            res.emplace_back(std::make_shared<HiveORCFile>(
                 part_name,
                 part.relative_path(),
                 part.has_hdfs_uri() ? part.hdfs_uri() : context->getHdfsNNProxy(),
                 format_name,
                 disk,
+                context->getCnchHiveSettings(),
                 HivePartInfo(part_name, partition_id),
                 required_skip_lists));
         else if (format_name.find("Parquet") != String::npos)
-            res.emplace_back(std::make_shared<const HiveParquetFile>(
+            res.emplace_back(std::make_shared<HiveParquetFile>(
                 part_name,
                 part.relative_path(),
                 part.has_hdfs_uri() ? part.hdfs_uri() : context->getHdfsNNProxy(),
                 format_name,
                 disk,
+		context->getCnchHiveSettings(),
                 HivePartInfo(part_name, partition_id),
                 required_skip_lists));
     }

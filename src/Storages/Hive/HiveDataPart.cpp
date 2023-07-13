@@ -68,12 +68,35 @@ Range createRangeFromParquetStatistics(std::shared_ptr<parquet::ByteArrayStatist
     return Range(min_val, true, max_val, true);
 }
 
+template <class FieldType, class StatisticsType>
+Range createRangeFromOrcStatistics(const StatisticsType * stats)
+{
+    /// Null values or NaN/Inf values of double type.
+    if (stats->hasMinimum() && stats->hasMaximum())
+    {
+        return Range(FieldType(stats->getMinimum()), true, FieldType(stats->getMaximum()), true);
+    }
+    else if (stats->hasMinimum())
+    {
+        return Range::createLeftBounded(FieldType(stats->getMinimum()), true);
+    }
+    else if (stats->hasMaximum())
+    {
+        return Range::createRightBounded(FieldType(stats->getMaximum()), true);
+    }
+    else
+    {
+        return Range::createWholeUniverseWithoutNull();
+    }
+}
+
 HiveDataPart::HiveDataPart(
     const String & name_,
     const String & hdfs_uri_,
     const String & relative_path_,
     const String & format_name_,
     const DiskPtr & disk_,
+    const CnchHiveSettings & settings_,
     const HivePartInfo & info_,
     std::unordered_set<Int64> skip_splits_,
     NamesAndTypesList index_names_and_types_)
@@ -82,6 +105,7 @@ HiveDataPart::HiveDataPart(
     , relative_path(relative_path_)
     , format_name(format_name_)
     , disk(disk_)
+    , settings(settings_)
     , info(info_)
     , skip_splits(skip_splits_)
     , index_names_and_types(index_names_and_types_)
@@ -146,8 +170,22 @@ size_t HiveDataPart::getTotalBlockNumber() const
     return res;
 }
 
+void HiveDataPart::loadFileMinMaxIndex()
+{
+    if (file_minmax_idx_loaded)
+        return;
+    std::lock_guard lock(mutex);
+    if (file_minmax_idx_loaded)
+        return;
+    loadFileMinMaxIndexImpl();
+    file_minmax_idx_loaded = true;
+}
+
 void HiveDataPart::loadSplitMinMaxIndexes()
 {
+    if (split_minmax_idxes_loaded)
+        return;
+    std::lock_guard lock(mutex);
     if (split_minmax_idxes_loaded)
         return;
     loadSplitMinMaxIndexesImpl();
@@ -190,6 +228,11 @@ size_t HiveParquetFile::getTotalRowGroups() const
     LOG_TRACE(&Poco::Logger::get("HiveDataPart"), " num_row_groups: {} total_row_groups: {}", res, total_row_groups);
 
     return res;
+}
+
+bool HiveParquetFile::useSplitMinMaxIndex() const
+{
+    return settings.enable_parquet_rowgroup_minmax_index;
 }
 
 void HiveParquetFile::loadSplitMinMaxIndexesImpl()
@@ -268,34 +311,13 @@ void HiveParquetFile::loadSplitMinMaxIndexesImpl()
     }
 }
 
-arrow::Status HiveORCFile::tryGetTotalStripes(size_t & res) const
-{
-    if (!disk)
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Hive disk is not set");
-
-    std::unique_ptr<ReadBuffer> in = disk->readFile(getFullDataPartPath());
-    auto read_result = arrow::adapters::orc::ORCFileReader::Open(asArrowFile(*in), arrow::default_memory_pool());
-    if (read_result.ok())
-    {
-        res = (*read_result)->NumberOfStripes();
-    }
-    else
-        res = 0;
-
-    return read_result.status();
-}
-
-
 size_t HiveORCFile::getTotalStripes() const
 {
     if (total_stripes != 0)
         return total_stripes;
 
-    size_t res = 0;
-    arrow::Status read_status = tryGetTotalStripes(res);
-    if (!read_status.ok())
-        throw Exception("Unexpected error of getTotalStripes. because of meta is NULL", ErrorCodes::LOGICAL_ERROR);
-
+    size_t res = reader->NumberOfStripes();
+    
     total_stripes = res;
 
     LOG_TRACE(&Poco::Logger::get("HiveDataPart"), "res = {} total_stripes = {}", res, total_stripes);
@@ -303,14 +325,136 @@ size_t HiveORCFile::getTotalStripes() const
     return res;
 }
 
+bool HiveORCFile::useFileMinMaxIndex() const
+{
+    return settings.enable_orc_file_minmax_index;
+}
+
+bool HiveORCFile::useSplitMinMaxIndex() const
+{
+    return settings.enable_orc_stripe_minmax_index;
+}
+
+void HiveORCFile::prepareReader()
+{
+    std::unique_ptr<ReadBuffer> in = disk->readFile(getFullDataPartPath());
+    auto result = arrow::adapters::orc::ORCFileReader::Open(asArrowFile(*in), arrow::default_memory_pool());
+    THROW_ARROW_NOT_OK(result.status());
+    reader = std::move(result).ValueOrDie();
+}
+
+void HiveORCFile::prepareColumnMapping()
+{
+    const orc::Type & type = reader->GetRawORCReader()->getType();
+    size_t count = type.getSubtypeCount();
+    for (size_t pos = 0; pos < count; pos++)
+    {
+        /// Column names in hive is case-insensitive.
+        String column{type.getFieldName(pos)};
+        boost::to_lower(column);
+        orc_column_positions[column] = pos;
+    }
+}
+
+
+Range HiveORCFile::buildRange(const orc::ColumnStatistics * col_stats)
+{
+    if (!col_stats || col_stats->hasNull())
+        return Range::createWholeUniverseWithoutNull();
+
+    if (const auto * int_stats = dynamic_cast<const orc::IntegerColumnStatistics *>(col_stats))
+    {
+        return createRangeFromOrcStatistics<Int64>(int_stats);
+    }
+    else if (const auto * double_stats = dynamic_cast<const orc::DoubleColumnStatistics *>(col_stats))
+    {
+        return createRangeFromOrcStatistics<Float64>(double_stats);
+    }
+    else if (const auto * string_stats = dynamic_cast<const orc::StringColumnStatistics *>(col_stats))
+    {
+        return createRangeFromOrcStatistics<String>(string_stats);
+    }
+    else if (const auto * bool_stats = dynamic_cast<const orc::BooleanColumnStatistics *>(col_stats))
+    {
+        auto false_cnt = bool_stats->getFalseCount();
+        auto true_cnt = bool_stats->getTrueCount();
+        if (false_cnt && true_cnt)
+        {
+            return Range(UInt8(0), true, UInt8(1), true);
+        }
+        else if (false_cnt)
+        {
+            return Range::createLeftBounded(UInt8(0), true);
+        }
+        else if (true_cnt)
+        {
+            return Range::createRightBounded(UInt8(1), true);
+        }
+    }
+    else if (const auto * timestamp_stats = dynamic_cast<const orc::TimestampColumnStatistics *>(col_stats))
+    {
+        return createRangeFromOrcStatistics<UInt32>(timestamp_stats);
+    }
+    else if (const auto * date_stats = dynamic_cast<const orc::DateColumnStatistics *>(col_stats))
+    {
+        return createRangeFromOrcStatistics<UInt16>(date_stats);
+    }
+    return Range::createWholeUniverseWithoutNull();
+}
+
+std::unique_ptr<IMergeTreeDataPart::MinMaxIndex> HiveORCFile::buildMinMaxIndex(const orc::Statistics * statistics)
+{
+    if (!statistics)
+        return nullptr;
+
+    size_t range_num = index_names_and_types.size();
+    auto idx = std::make_unique<IMergeTreeDataPart::MinMaxIndex>();
+    idx->hyperrectangle.resize(range_num, Range::createWholeUniverseWithoutNull());
+
+    size_t i = 0;
+    for (const auto & name_type : index_names_and_types)
+    {
+        String column{name_type.name};
+        boost::to_lower(column);
+        auto it = orc_column_positions.find(column);
+        if (it == orc_column_positions.end())
+        {
+            idx->hyperrectangle[i] = buildRange(nullptr);
+        }
+        else
+        {
+            size_t pos = it->second;
+            /// Attention: column statistics start from 1. 0 has special purpose.
+            const orc::ColumnStatistics * col_stats = statistics->getColumnStatistics(static_cast<unsigned>(pos + 1));
+            idx->hyperrectangle[i] = buildRange(col_stats);
+        }
+        ++i;
+    }
+    idx->initialized = true;
+    return idx;
+}
+
 void HiveORCFile::loadFileMinMaxIndexImpl()
 {
-    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Unsupported currently");
+    auto statistics = reader->GetRawORCReader()->getStatistics();
+    file_minmax_idx = buildMinMaxIndex(statistics.get());
 }
 
 void HiveORCFile::loadSplitMinMaxIndexesImpl()
 {
-    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Unsupported currently");
+    auto * raw_reader = reader->GetRawORCReader();
+    auto stripe_num = raw_reader->getNumberOfStripes();
+    auto stripe_stats_num = raw_reader->getNumberOfStripeStatistics();
+    if (stripe_num != stripe_stats_num)
+        throw Exception(ErrorCodes::BAD_ARGUMENTS,
+            "orc file:{} has different strip num {} and strip statistics num {}", getFullDataPartPath(), stripe_num, stripe_stats_num);
+
+    split_minmax_idxes.resize(stripe_num);
+    for (size_t i = 0; i < stripe_num; ++i)
+    {
+        auto stripe_stats = raw_reader->getStripeStatistics(i);
+        split_minmax_idxes[i] = buildMinMaxIndex(stripe_stats.get());
+    }
 }
 
 }

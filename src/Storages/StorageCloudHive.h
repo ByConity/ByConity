@@ -67,14 +67,14 @@ public:
 
     // BlockOutputStreamPtr write(const ASTPtr & query, const Context & query_context) override;
 
-    void loadDataParts(HiveDataPartsCNCHVector & parts, UInt64 worker_topology_hash = 0);
+    void loadDataParts(MutableHiveDataPartsCNCHVector & parts, UInt64 worker_topology_hash = 0);
 
     // const String & getCnchDatabase() const { return cnch_database_name; }
     // const String & getCnchTable() const { return cnch_table_name; }
 
     // const String & getLogName() const { return log_name; }
 
-    HiveDataPartsCNCHVector getDataPartsVector() const { return parts; }
+    MutableHiveDataPartsCNCHVector getDataPartsVector() const { return parts; }
 
 private:
     String cnch_database_name;

@@ -299,6 +299,8 @@ HiveDataPartsCNCHVector HiveMetastoreClient::getDataPartsInPartition(
     const StoragePtr & /*storage*/,
     HivePartitionPtr & partition,
     const HDFSConnectionParams &,
+    const NamesAndTypesList & hive_datapart_name_types,
+    const std::optional<KeyCondition> & minmax_index_condition,
     const std::set<Int64> & required_bucket_numbers)
 {
     //if no cache
@@ -324,9 +326,29 @@ HiveDataPartsCNCHVector HiveMetastoreClient::getDataPartsInPartition(
         LOG_TRACE(&Poco::Logger::get("HiveMetastoreClient"), " getDataPartsInPartition format_name = {}", format_name);
 
         if (format_name.find("Orc") != String::npos)
-            res.push_back(std::make_shared<HiveORCFile>(part_name, partition->getHDFSUri(), table_path, format_name, nullptr, *info, skip_list));
+        {
+            auto orc_file = std::make_shared<HiveORCFile>(
+                    part_name, partition->getHDFSUri(), table_path, format_name, nullptr, settings, *info, skip_list, hive_datapart_name_types);
+            if (minmax_index_condition && orc_file->useFileMinMaxIndex())
+            {
+                /// Load file level minmax index and apply
+                orc_file->loadFileMinMaxIndex();
+                if (!key_condition.checkInHyperrectangle(orc_file->getMinMaxIndex()->hyperrectangle, hive_datapart_name_types.getTypes())
+                        .can_be_true)
+                {
+                    LOG_TRACE(
+                        &Poco::Logger::get("HiveMetastoreClient"),
+                        "Skip hive file {} by index {}",
+                        orc_file->getFullDataPartPath(),
+                        orc_file->describeMinMaxIndex(orc_file->getMinMaxIndex()));
+                    continue;
+                }
+            }
+            res.push_back(orc_file);
+        }
         else if (format_name.find("Parquet") != String::npos)
-            res.push_back(std::make_shared<HiveParquetFile>(part_name, partition->getHDFSUri(), table_path, format_name, nullptr, *info, skip_list));
+            res.push_back(std::make_shared<HiveParquetFile>(
+                    part_name, partition->getHDFSUri(), table_path, format_name, nullptr, settings, *info, skip_list, hive_datapart_name_types));
     }
 
     return res;
@@ -336,6 +358,8 @@ HiveDataPartsCNCHVector HiveMetastoreClient::getDataPartsInTable(
     const StoragePtr & storage,
     Table & table,
     const HDFSConnectionParams &,
+    const NamesAndTypesList & hive_datapart_name_types,
+    const std::optional<KeyCondition> & minmax_index_condition,
     const std::set<Int64> & required_bucket_numbers)
 {
     HiveDataPartsCNCHVector res;
@@ -360,9 +384,29 @@ HiveDataPartsCNCHVector HiveMetastoreClient::getDataPartsInTable(
         LOG_TRACE(&Poco::Logger::get("HiveMetastoreClient"), " getDataPartsInTable format_name = {}", format_name);
 
         if (format_name.find("Orc") != String::npos)
-            res.push_back(std::make_shared<HiveORCFile>(part_name, disk->getName(), table_path, format_name, nullptr, *info, skip_list));
+        {
+            auto orc_file = std::make_shared<HiveORCFile>(
+                    part_name, disk->getName(), table_path, format_name, nullptr, settings, *info, skip_list, hive_datapart_name_types);
+            if (minmax_index_condition && orc_file->useFileMinMaxIndex())
+            {
+                /// Load file level minmax index and apply
+                orc_file->loadFileMinMaxIndex();
+                if (!key_condition.checkInHyperrectangle(orc_file->getMinMaxIndex()->hyperrectangle, hive_datapart_name_types.getTypes())
+                        .can_be_true)
+                {
+                    LOG_TRACE(
+                        &Poco::Logger::get("HiveMetastoreClient"),
+                        "Skip hive file {} by index {}",
+                        orc_file->getFullDataPartPath(),
+                        orc_file->describeMinMaxIndex(orc_file->getMinMaxIndex()));
+                    continue;
+                }
+            }
+            res.push_back(orc_file);
+        }
         else if (format_name.find("Parquet") != String::npos)
-            res.push_back(std::make_shared<HiveParquetFile>(part_name, disk->getName(), table_path, format_name, nullptr, *info, skip_list));
+            res.push_back(std::make_shared<HiveParquetFile>(
+                    part_name, disk->getName(), table_path, format_name, nullptr, settings, *info, skip_list, hive_datapart_name_types));
     }
 
     return res;

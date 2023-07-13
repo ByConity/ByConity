@@ -45,8 +45,10 @@ private:
     const FormatSettings format_settings;
 
     std::map<String, String> partition_kv;
+    
+    bool read_one_stripe;
 
-    bool read_stripe;
+    const std::unordered_set<Int64> skip_stripes;
 
     void prepareReader();
 };

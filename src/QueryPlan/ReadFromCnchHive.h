@@ -28,10 +28,12 @@ class ReadFromCnchHive final : public ISourceStep
 {
 public:
     ReadFromCnchHive(
-        HiveDataPartsCNCHVector parts_,
+        const MutableHiveDataPartsCNCHVector & parts_,
         Names real_column_names_,
         const StorageCloudHive & data_,
         const SelectQueryInfo & query_info_,
+        const NamesAndTypesList & hive_datapart_name_types_,
+        const std::optional<KeyCondition> & minmax_index_condition_,
         StorageMetadataPtr metadata_snapshot_,
         ContextPtr context_,
         size_t max_block_size_,
@@ -47,11 +49,14 @@ public:
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
 
 private:
-    HiveDataPartsCNCHVector data_parts;
+    MutableHiveDataPartsCNCHVector data_parts;
     Names real_column_names;
 
     const StorageCloudHive & data;
     SelectQueryInfo query_info;
+
+    NamesAndTypesList hive_datapart_name_types;
+    std::optional<KeyCondition> minmax_index_condition;
 
     StorageMetadataPtr metadata_snapshot;
 

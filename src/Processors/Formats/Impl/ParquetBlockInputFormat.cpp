@@ -76,13 +76,19 @@ ParquetBlockInputFormat::ParquetBlockInputFormat(
 
 Chunk ParquetBlockInputFormat::generate()
 {
+    if (read_one_group && skip_row_groups.contains(static_cast<Int64>(row_group_current)))
+    {
+        LOG_TRACE(&Poco::Logger::get("ParquetBlockInputStream"), "skip row index is {}", row_group_current);
+        return {};
+    }
+
     Chunk res;
 
     if (!file_reader)
         prepareReader();
 
-    LOG_TRACE(&Poco::Logger::get("ParquetBlockInputStream"), "readimpl skip_row_groups size: {}", skip_row_groups.size());
-    for(; row_group_current < row_group_total && skip_row_groups.contains(row_group_current); ++row_group_current);
+    // LOG_TRACE(&Poco::Logger::get("ParquetBlockInputStream"), "readimpl skip_row_groups size: {}", skip_row_groups.size());
+    // for(; row_group_current < row_group_total && skip_row_groups.contains(row_group_current); ++row_group_current);
 
     if (row_group_current >= row_group_total)
         return res;
@@ -136,7 +142,6 @@ void ParquetBlockInputFormat::prepareReader()
 {
     THROW_ARROW_NOT_OK(parquet::arrow::OpenFile(asArrowFile(in), arrow::default_memory_pool(), &file_reader));
     row_group_total = file_reader->num_row_groups();
-    row_group_current = 0;
 
     std::shared_ptr<arrow::Schema> schema;
     THROW_ARROW_NOT_OK(file_reader->GetSchema(&schema));
