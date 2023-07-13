@@ -84,7 +84,7 @@ void PlanSegmentExecutor::prepareSegmentInfo() const
     query_log_element->segment_parallel_index = plan_segment->getParallelIndex();
     query_log_element->type = QueryLogElementType::QUERY_START;
     query_log_element->event_time = time(nullptr);
-    query_log_element->query_start_time = time(nullptr); branch 'merge_multipath_receiver_baiyang.cby' into 'cnch-ce-merge')
+    query_log_element->query_start_time = time(nullptr);
 }
 
 PlanSegmentExecutor::PlanSegmentExecutor(PlanSegmentPtr plan_segment_, ContextMutablePtr context_)
