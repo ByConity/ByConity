@@ -101,6 +101,17 @@ BroadcastStatus LocalBroadcastChannel::send(Chunk chunk)
         return *broadcast_status.load(std::memory_order_acquire);
     }
 
+    // finished in other thread, receive_queue is closed.
+    if(receive_queue->closed())
+    {
+        BroadcastStatus * current_status_ptr = broadcast_status.load(std::memory_order_acquire);
+        if(current_status_ptr->code != BroadcastStatusCode::RUNNING)
+            return *current_status_ptr; 
+        else
+            /// queue is closed but status not set yet
+            return BroadcastStatus(BroadcastStatusCode::SEND_UNKNOWN_ERROR, "Send operation was interrupted");
+    }
+
     BroadcastStatus current_status = finish(
         BroadcastStatusCode::SEND_TIMEOUT,
         "Send to channel " + name + " timeout after ms: " + std::to_string(options.max_timeout_ms));

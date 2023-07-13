@@ -153,10 +153,16 @@ void BrpcRemoteBroadcastReceiver::pushReceiveQueue(MultiPathDataPacket packet)
     if (queue->closed())
         return;
     if (!queue->tryEmplace(context->getSettingsRef().exchange_timeout_ms, std::move(packet)))
+    {
+        if(queue->closed())
+        {
+            return;
+        }
         throw Exception(
             "Push exchange data to receiver for " + getName() + " timeout for "
                 + std::to_string(context->getSettingsRef().exchange_timeout_ms) + " ms.",
             ErrorCodes::DISTRIBUTE_STAGE_QUERY_EXCEPTION);
+    }
 }
 
 RecvDataPacket BrpcRemoteBroadcastReceiver::recv(UInt32 timeout_ms) noexcept

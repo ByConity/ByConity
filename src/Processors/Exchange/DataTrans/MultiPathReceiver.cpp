@@ -321,7 +321,7 @@ BroadcastStatus MultiPathReceiver::finish(BroadcastStatusCode status_code, Strin
     BroadcastStatus * current_status_ptr = &init_fin_status;
     BroadcastStatus * new_status_ptr = new BroadcastStatus(status_code, false, message);
 
-    if (fin_status.compare_exchange_strong(current_status_ptr, new_status_ptr, std::memory_order_acq_rel, std::memory_order_relaxed))
+    if (fin_status.compare_exchange_strong(current_status_ptr, new_status_ptr, std::memory_order_acq_rel, std::memory_order_acquire))
     {
         bool is_modifer = false;
         BroadcastStatus old_status(BroadcastStatusCode::RUNNING);
