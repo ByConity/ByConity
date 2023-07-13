@@ -1833,7 +1833,6 @@ enum PreloadLevelSettings : UInt64
 \
     /** Optimizer relative settings */ \
     M(Bool, enable_optimizer, false, "Whether enable query optimizer", 0) \
-    M(Bool, enable_optimizer_white_list, false, "Whether enable query optimizer whilte list inorder to only support join and agg", 0) \
     M(Bool, log_optimizer_run_time, false, "Whether Log optimizer runtime", 0) \
     M(UInt64, query_queue_size, 100, "Max query queue size", 0) \
     M(Bool, enable_query_queue, false, "Whether enable query queue", 0) \

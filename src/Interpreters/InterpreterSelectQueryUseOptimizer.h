@@ -93,6 +93,7 @@ public:
     explicit ClusterInfoFinder(CTEInfo & cte_info_) : cte_helper(cte_info_) { }
     std::optional<PlanSegmentContext> visitPlanNode(PlanNodeBase & node, ClusterInfoContext & cluster_info_context) override;
     std::optional<PlanSegmentContext> visitTableScanNode(TableScanNode & node, ClusterInfoContext & cluster_info_context) override;
+    std::optional<PlanSegmentContext> visitTableWriteNode(TableWriteNode & node, ClusterInfoContext & cluster_info_context) override;
     std::optional<PlanSegmentContext> visitCTERefNode(CTERefNode & node, ClusterInfoContext & cluster_info_context) override;
 private:
     SimpleCTEVisitHelper<std::optional<PlanSegmentContext>> cte_helper;
