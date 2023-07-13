@@ -149,6 +149,25 @@ namespace DB::RPCHelpers
         }
     }
 
+    template <typename Resp>
+    void onAsyncCallDoneWithFailedInfo(Resp * response, brpc::Controller * cntl, ExceptionHandlerWithFailedInfo * handler, const DB::WorkerId worker_id)
+    {
+        int32_t error_code = 0;
+        try
+        {
+            std::unique_ptr<Resp> response_guard(response);
+            std::unique_ptr<brpc::Controller> cntl_guard(cntl);
+            error_code = cntl->ErrorCode();
+            RPCHelpers::assertController(*cntl);
+            RPCHelpers::checkResponse(*response);
+        }
+        catch (...)
+        {
+            handler->setFailedRpc(worker_id, error_code);
+            handler->setException(std::current_exception());
+        }
+    }
+
     template <typename Resp, typename Func>
     void serviceHandler(google::protobuf::Closure * done, Resp * resp, Func && f)
     {

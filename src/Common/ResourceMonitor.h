@@ -14,7 +14,8 @@
  */
 
 #pragma once
-
+#include <string>
+#include <optional>
 #include <Core/Types.h>
 #include <Interpreters/Context_fwd.h>
 
@@ -31,28 +32,45 @@ using WorkerNodeResourceData = ResourceManagement::WorkerNodeResourceData;
 class CPUMonitor
 {
     static constexpr auto filename = "/proc/stat";
+    static constexpr auto cfs_quota_us_fs = "/sys/fs/cgroup/cpu,cpuacct/cpu.cfs_quota_us";
+    static constexpr auto cfs_period_us_fs = "/sys/fs/cgroup/cpu,cpuacct/cpu.cfs_period_us";
+    static constexpr auto cpu_usage_fs = "/sys/fs/cgroup/cpu,cpuacct/cpuacct.usage";
 
 public:
-    struct Data
+    struct CommonData
+    {
+        double cpu_usage;
+    };
+    struct Data : public CommonData
     {
         UInt64 total_ticks;
         UInt64 active_ticks;
-        double cpu_usage;
+    };
+    struct ContainerData : public CommonData
+    {
+        std::chrono::system_clock::time_point last_time;
+        UInt64 last_cpu_time;
     };
 
     CPUMonitor();
     ~CPUMonitor();
 
-    Data get();
+    Data getPhysicalMachineData();
+    std::optional<ContainerData> getContainerData();
+    CPUMonitor::CommonData get();
 
 private:
     int fd;
     Data data{};
+    ContainerData container_data{};
+    bool in_container {false};
 };
 
 class MemoryMonitor
 {
     static constexpr auto filename = "/proc/meminfo";
+    static constexpr auto mem_usage_fs = "/sys/fs/cgroup/memory/memory.usage_in_bytes";
+    static constexpr auto mem_limit_fs = "/sys/fs/cgroup/memory/memory.limit_in_bytes";
 
 public:
     struct Data
@@ -66,8 +84,12 @@ public:
     ~MemoryMonitor();
 
     Data get() const;
+    std::optional<Data> getContainerData() const;
+    Data getPhysicalMachineData() const;
+
 private:
     int fd;
+    bool in_container {false};
 };
 
 class ResourceMonitor : protected WithContext

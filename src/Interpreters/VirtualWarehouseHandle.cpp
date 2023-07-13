@@ -20,6 +20,7 @@
 #include <Interpreters/WorkerGroupHandle.h>
 #include <ResourceManagement/ResourceManagerClient.h>
 #include <ServiceDiscovery/IServiceDiscovery.h>
+#include <Interpreters/WorkerStatusManager.h>
 
 namespace DB
 {
@@ -66,6 +67,36 @@ VirtualWarehouseHandleImpl::Container VirtualWarehouseHandleImpl::getAll(UpdateM
     return worker_groups;
 }
 
+void VirtualWarehouseHandleImpl::updateWorkerStatusFromRM(const std::vector<WorkerGroupData>& groups_data)
+{
+    auto worker_status_manager = getContext()->getWorkerStatusManager(); 
+    auto unhealth_workers = worker_status_manager->getWorkersNeedUpdateFromRM();
+    if (log->trace())
+    {
+        LOG_TRACE(log, "adaptive updateWorkerStatusFromRM");
+        for (const auto & [id, _] : unhealth_workers)
+            LOG_TRACE(log, "adaptive unhealth worker : {}", id.ToString());
+    }
+
+
+    if (unhealth_workers.size() > 0)
+    {
+        for (const auto & group_data : groups_data)
+        {
+            for (const auto & worker_resource_data : group_data.worker_node_resource_vec)
+            {
+                auto worker_id = WorkerStatusManager::getWorkerId(group_data.vw_name, group_data.id, worker_resource_data.id);
+                auto iter = unhealth_workers.find(worker_id);
+                if (iter != unhealth_workers.end())
+                {
+                    Protos::WorkerNodeResourceData resource_info;
+                    worker_resource_data.fillProto(resource_info);
+                    worker_status_manager->updateWorkerNode(resource_info, WorkerStatusManager::UpdateSource::ComeFromRM, iter->second.status);
+                }
+            }
+        }
+    }
+}
 
 WorkerGroupHandle VirtualWarehouseHandleImpl::getWorkerGroup(const String & worker_group_id, UpdateMode update_mode)
 {
@@ -181,7 +212,7 @@ bool VirtualWarehouseHandleImpl::updateWorkerGroupsFromRM()
             LOG_DEBUG(log, "No worker group found in VW {} from RM", name);
             return false;
         }
-
+        updateWorkerStatusFromRM(groups_data);
         std::lock_guard lock(state_mutex);
 
         Container old_groups;
@@ -209,6 +240,30 @@ bool VirtualWarehouseHandleImpl::updateWorkerGroupsFromRM()
     }
 }
 
+void VirtualWarehouseHandleImpl::updateWorkerStatusFromPSM(const IServiceDiscovery::WorkerGroupMap & groups_data, const std::string & vw_name)
+{
+    auto worker_status_manager = getContext()->getWorkerStatusManager(); 
+    auto unhealth_workers = worker_status_manager->getWorkersNeedUpdateFromRM();
+    for (const auto & [id, _] : unhealth_workers)
+        LOG_TRACE(log, "adaptive unhealth worker : {}", id.ToString());
+
+    if (unhealth_workers.size() > 0)
+    {
+        for (const auto & [wg_name, host_ports_vec] : groups_data)
+        {
+            for (const auto & host_ports : host_ports_vec)
+            {
+                auto worker_id = WorkerStatusManager::getWorkerId(vw_name, wg_name, host_ports.id);
+                auto iter = unhealth_workers.find(worker_id);
+                if (iter != unhealth_workers.end())
+                {
+                    worker_status_manager->restoreWorkerNode(worker_id);
+                }
+            }
+        }
+    }   
+}
+
 bool VirtualWarehouseHandleImpl::updateWorkerGroupsFromPSM()
 {
     try
@@ -222,7 +277,7 @@ bool VirtualWarehouseHandleImpl::updateWorkerGroupsFromPSM()
             LOG_DEBUG(log, "No worker group found in VW {} from PSM {}", name, psm);
             return false;
         }
-
+        updateWorkerStatusFromPSM(groups_map, name);
         std::lock_guard lock(state_mutex);
 
         Container old_groups;

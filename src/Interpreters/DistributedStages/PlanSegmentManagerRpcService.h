@@ -32,6 +32,26 @@
 
 namespace DB
 {
+class Context;
+
+class ResourceMonitorTimer : public RepeatedTimerTask {
+public:
+    ResourceMonitorTimer(ContextMutablePtr & global_context_, UInt64 interval_, const std::string& name_, Poco::Logger* log_) : 
+        RepeatedTimerTask(global_context_->getSchedulePool(), interval_, name_), resource_monitor(global_context_) {
+        log = log_;
+    }
+    virtual ~ResourceMonitorTimer() override {}
+    virtual void run() override;
+    WorkerNodeResourceData getResourceData() const;
+    void updateResourceData();
+
+private:
+    ResourceMonitor resource_monitor;
+    WorkerNodeResourceData cached_resource_data;
+    mutable std::mutex resource_data_mutex;
+    Poco::Logger * log;
+};
+
 class PlanSegmentManagerRpcService : public Protos::PlanSegmentManagerService
 {
 public:
@@ -39,8 +59,23 @@ public:
         : context(context_)
         , log(&Poco::Logger::get("PlanSegmentManagerRpcService"))
     {
+        report_metrics_timer = std::make_unique<ResourceMonitorTimer>(context, 1000, "ResourceMonitorTimer", log);
+        report_metrics_timer->start();
     }
 
+    ~PlanSegmentManagerRpcService() override
+    {
+        try
+        {
+            LOG_DEBUG(log, "Waiting report metrics timer finishing");
+            report_metrics_timer->stop();
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+        }
+
+    }
     /// execute query described by plan segment
     void executeQuery(
         ::google::protobuf::RpcController * controller,
@@ -124,6 +159,7 @@ public:
 
 private:
     ContextMutablePtr context;
+    std::unique_ptr<ResourceMonitorTimer> report_metrics_timer;
     Poco::Logger * log;
 };
 }

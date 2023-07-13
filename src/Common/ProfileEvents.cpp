@@ -741,6 +741,14 @@
     M(UniqueKeyIndexMetaCacheMiss, "Total number of times to miss the unique key index cache") \
     M(UniqueKeyIndexBlockCacheHit, "Total number of times to hit the unique key index block cache") \
     M(UniqueKeyIndexBlockCacheMiss, "Total number of times to miss the unique key index block cache") \
+    \
+    M(AllWorkerSize, "Total worker size of worker group") \
+    M(HealthWorkerSize, "Number of worker which can execute any type plan segment") \
+    M(HeavyLoadWorkerSize, "Number of worker which can only execute source plan segment") \
+    M(SourceOnlyWorkerSize, "Number of worker which can only execute source plan segment") \
+    M(UnhealthWorkerSize, "Number of unhealth worker") \
+    M(NotConnectedWorkerSize, "Number of not connected worker size") \
+    M(SelectHealthWorkerMilliSeconds, "Total time for select health worker") \
 
 namespace ProfileEvents
 {
