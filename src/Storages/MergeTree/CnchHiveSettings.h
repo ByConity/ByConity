@@ -55,7 +55,7 @@ struct Settings;
     M(Bool, cnch_temporary_table, 0, "", 0) \
     /** minmax index for file/stripe*/ \
     M(Bool, enable_orc_stripe_minmax_index, false, "Enable using ORC stripe level minmax index.", 0) \
-    M(Bool, enable_parquet_rowgroup_minmax_index, false, "Enable using Parquet row-group level minmax index.", 0) \
+    M(Bool, enable_parquet_rowgroup_minmax_index, true, "Enable using Parquet row-group level minmax index.", 0) \
     M(Bool, enable_orc_file_minmax_index, true, "Enable using ORC file level minmax index.", 0) \
     /** HMS kerberos settings **/ \
     M(Bool, hive_metastore_client_kerberos_auth, 0, "Enable hms auth with Kerberos", 0) \
