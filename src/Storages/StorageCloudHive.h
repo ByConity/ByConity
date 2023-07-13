@@ -91,7 +91,7 @@ private:
 
     // DiskPtr disk;
 
-    HiveDataPartsCNCHVector parts;
+    MutableHiveDataPartsCNCHVector parts;
 
 public:
     StorageCloudHive(
