@@ -127,14 +127,19 @@ inline void fillTopologyVersions(const std::list<CnchServerTopology> & topologie
     {
         auto & topology_version = *topology_versions.Add();
         topology_version.set_expiration(topology.getExpiration());
-        for (const auto & host_with_port : topology.getServerList())
+        for (const auto & [k,v] : topology.getVwTopologies())
         {
-            auto & server = *topology_version.add_servers();
-            server.set_hostname(host_with_port.id);
-            server.set_host(host_with_port.getHost());
-            server.set_rpc_port(host_with_port.rpc_port);
-            server.set_tcp_port(host_with_port.tcp_port);
-            server.set_http_port(host_with_port.http_port);
+            auto & vw_topology = *topology_version.add_vw_topologies();
+            vw_topology.set_server_vw_name(k);
+            for (const auto & host_with_port : v.getServerList())
+            {
+                auto & server = *vw_topology.add_servers();
+                server.set_hostname(host_with_port.id);
+                server.set_host(host_with_port.getHost());
+                server.set_rpc_port(host_with_port.rpc_port);
+                server.set_tcp_port(host_with_port.tcp_port);
+                server.set_http_port(host_with_port.http_port);
+            }
         }
     });
 }
@@ -145,17 +150,22 @@ inline std::list<CnchServerTopology> createTopologyVersionsFromModel(const pb::R
     std::for_each(topology_versions.begin(), topology_versions.end(), [&](const auto & model)
     {
         UInt64 expiration = model.expiration();
-        HostWithPortsVec servers;
-        for (const auto & server : model.servers())
+        auto topology = CnchServerTopology();
+        topology.setExpiration(expiration);
+        for (const auto & vw_topology : model.vw_topologies())
         {
-            HostWithPorts host_with_port{server.host()};
-            host_with_port.rpc_port = server.rpc_port();
-            host_with_port.tcp_port = server.tcp_port();
-            host_with_port.http_port = server.http_port();
-            host_with_port.id = server.hostname();
-            servers.push_back(host_with_port);
+            String vw_name = vw_topology.server_vw_name();
+            for (const auto & server : vw_topology.servers())
+            {
+                HostWithPorts host_with_port{server.host()};
+                host_with_port.rpc_port = server.rpc_port();
+                host_with_port.tcp_port = server.tcp_port();
+                host_with_port.http_port = server.http_port();
+                host_with_port.id = server.hostname();
+                topology.addServer(host_with_port, vw_name);
+            }
         }
-        res.push_back(CnchServerTopology(expiration, std::move(servers)));
+        res.push_back(topology);
     });
     return res;
 }
@@ -260,5 +270,8 @@ IMergeTreeDataPartsVector createPartVectorFromServerParts(
 
 void fillCnchHivePartsModel(const HiveDataPartsCNCHVector & parts, pb::RepeatedPtrField<Protos::CnchHivePartModel> & parts_model);
 HiveDataPartsCNCHVector createCnchHiveDataParts(const ContextPtr & context, const pb::RepeatedPtrField<Protos::CnchHivePartModel> & parts_model);
+
+String getServerVwNameFrom(const Protos::DataModelTable & model);
+String getServerVwNameFrom(const Protos::TableIdentifier & model);
 
 }

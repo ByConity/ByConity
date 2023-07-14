@@ -4280,13 +4280,13 @@ DaemonManagerClientPtr Context::getDaemonManagerClient() const
     return shared->daemon_manager_pool->get();
 }
 
-void Context::setCnchServerManager()
+void Context::setCnchServerManager(const Poco::Util::AbstractConfiguration & config)
 {
     auto lock = getLock();
     if (shared->server_manager)
         throw Exception("Server manager has been already created.", ErrorCodes::LOGICAL_ERROR);
 
-    shared->server_manager = std::make_shared<CnchServerManager>(shared_from_this());
+    shared->server_manager = std::make_shared<CnchServerManager>(shared_from_this(), config);
 }
 
 std::shared_ptr<CnchServerManager> Context::getCnchServerManager() const
@@ -4296,6 +4296,17 @@ std::shared_ptr<CnchServerManager> Context::getCnchServerManager() const
         throw Exception("Server manager is not initiailized.", ErrorCodes::LOGICAL_ERROR);
 
     return shared->server_manager;
+}
+
+void Context::updateServerVirtualWarehouses(const ConfigurationPtr & config)
+{
+    std::shared_ptr<CnchServerManager> server_manager;
+    {
+        auto lock = getLock();
+        server_manager = shared->server_manager;
+    }
+    if (server_manager)
+        server_manager->updateServerVirtualWarehouses(*config);
 }
 
 void Context::setCnchTopologyMaster()

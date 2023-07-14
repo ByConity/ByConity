@@ -1003,6 +1003,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->setExternalAuthenticatorsConfig(*config);
             global_context->setExternalModelsConfig(config);
 
+            global_context->updateServerVirtualWarehouses(config);
+
             /// Setup protection to avoid accidental DROP for big tables (that are greater than 50 GB by default)
             if (config->has("max_table_size_to_drop"))
                 global_context->setMaxTableSizeToDrop(config->getUInt64("max_table_size_to_drop"));
@@ -1276,7 +1278,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
 
         /// only server need start up server manager
-        global_context->setCnchServerManager();
+        global_context->setCnchServerManager(config());
 
         // size_t masking_policy_cache_size = config().getUInt64("mark_cache_size", 128);
         // size_t masking_policy_cache_lifetime = config().getUInt64("mark_cache_size_lifetime", 10000);

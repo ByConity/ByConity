@@ -1837,7 +1837,7 @@ Pipe StorageCnchMergeTree::alterPartition(
     if (unlikely(!query_context->getCurrentTransaction()))
         throw Exception("Transaction is not set", ErrorCodes::LOGICAL_ERROR);
 
-    if (forwardQueryToServerIfNeeded(query_context, getStorageUUID()))
+    if (query_context->getSettingsRef().enable_sql_forwarding && forwardQueryToServerIfNeeded(query_context, getStorageID()))
         return {};
 
     auto current_query_context = Context::createCopy(query_context);
@@ -1932,7 +1932,7 @@ void StorageCnchMergeTree::alter(const AlterCommands & commands, ContextPtr loca
     StorageInMemoryMetadata old_metadata = getInMemoryMetadata();
 
     TransactionCnchPtr txn = local_context->getCurrentTransaction();
-    auto action = txn->createAction<DDLAlterAction>(shared_from_this());
+    auto action = txn->createAction<DDLAlterAction>(shared_from_this(), local_context->getSettingsRef());
     auto & alter_act = action->as<DDLAlterAction &>();
     alter_act.setMutationCommands(commands.getMutationCommands(old_metadata, false, local_context));
 
@@ -1971,6 +1971,7 @@ void StorageCnchMergeTree::checkAlterSettings(const AlterCommands & commands) co
         "cnch_vw_read",
         "cnch_vw_write",
         "cnch_vw_task",
+        "cnch_server_vw",
 
         /// Setting for memory buffer
         "cnch_enable_memory_buffer",
@@ -2671,7 +2672,7 @@ void StorageCnchMergeTree::mutate(const MutationCommands & commands, ContextPtr 
         return;
 
     auto txn = query_context->getCurrentTransaction();
-    auto action = txn->createAction<DDLAlterAction>(shared_from_this());
+    auto action = txn->createAction<DDLAlterAction>(shared_from_this(), query_context->getSettingsRef());
     auto & alter_act = action->as<DDLAlterAction &>();
     alter_act.setMutationCommands(commands);
     txn->appendAction(std::move(action));
