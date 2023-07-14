@@ -17,23 +17,47 @@
 
 #include <Storages/DiskCache/DiskCache_fwd.h>
 #include <common/singleton.h>
+#include <unordered_map>
+#include <Poco/Exception.h>
+
+namespace ErrorCodes
+{
+extern const int BAD_ARGUMENTS;
+extern const int LOGICAL_ERROR;
+}
 
 namespace DB
 {
 class Context;
 
+enum DiskCacheType {
+    File, // for generic file disk cache
+    MergeTree,
+    Hive
+};
+
+std::string diskCacheTypeToString(const DiskCacheType type);
+DiskCacheType stringToDiskCacheType(const std::string & type);
+
 class DiskCacheFactory : public ext::singleton<DiskCacheFactory>
 {
 public:
-    using CacheEntry = std::pair<IDiskCachePtr, IDiskCacheStrategyPtr>;
+    void init(Context & context);
 
-    void init(Context & global_context);
-    void shutdown() const;
+    /// not thread-safe, you must call it when server startup
+    void registerDiskCaches(Context & global_context);
 
-    CacheEntry getDefault() const { return default_cache; }
+    void shutdown();
+
+    IDiskCachePtr get(DiskCacheType type)
+    {
+        auto it = caches.find(type);
+        if (it == caches.end())
+            throw Poco::Exception("Unknown disk cache " + diskCacheTypeToString(type), ErrorCodes::BAD_ARGUMENTS);
+        return it->second;
+    }
 
 private:
-    // std::unordered_map<String, CacheEntry> caches;
-    CacheEntry default_cache;
+    std::unordered_map<DiskCacheType, IDiskCachePtr> caches;
 };
 }

@@ -21,6 +21,10 @@
 #include <Storages/Hive/ParquetBlockInputStream.h>
 #include <Storages/Hive/ORCBlockInputStream.h>
 #include <Storages/MergeTree/CnchHiveThreadSelectBlockInputProcessor.h>
+#include <Storages/DiskCache/FileDiskCacheSegment.h>
+#include <Storages/DiskCache/DiskCacheSimpleStrategy.h>
+#include <Storages/DiskCache/DiskCacheFactory.h>
+#include <Core/Defines.h>
 
 namespace DB
 {
@@ -30,11 +34,11 @@ class ORCBlockInputFormat;
 CnchHiveThreadSelectBlockInputProcessor::CnchHiveThreadSelectBlockInputProcessor(
     const size_t & thread_,
     const std::shared_ptr<CnchHiveReadPool> & pool_,
-    const StorageCloudHive & /*storage_*/,
+    const StorageCloudHive & storage_,
     const StorageMetadataPtr & metadata_snapshot_,
     ContextPtr & context_,
     const UInt64 & /*max_block_size_*/)
-    : SourceWithProgress(pool_->getHeader()), thread(thread_), pool(pool_), metadata_snapshot(metadata_snapshot_), context(context_)
+    : SourceWithProgress(pool_->getHeader()), thread(thread_), pool(pool_), storage(storage_), metadata_snapshot(metadata_snapshot_), context(context_)
 {
 }
 
@@ -92,13 +96,42 @@ bool CnchHiveThreadSelectBlockInputProcessor::getNewTask()
     size_t current_row_group = task->current_row_group;
     const String part_path = part->getFullDataPartPath();
     const String part_format = part->getFormatName();
+    const String uuid = UUIDHelpers::UUIDToString(storage.getStorageUUID());
+
+    if (storage.settings.enable_local_disk_cache)
+    {
+        auto disk_cache = DiskCacheFactory::instance().get(DiskCacheType::Hive);
+
+        auto key = ParquetFileDiskCacheSegment::getSegmentKey(uuid, part_path);
+        auto [cache_disk, parquet_path] = disk_cache->get(key);
+
+        if (cache_disk && cache_disk->exists(parquet_path))
+        {
+            read_buf = cache_disk->readFile(parquet_path, {.buffer_size = std::min(cache_disk->getFileSize(parquet_path), static_cast<size_t>(DBMS_DEFAULT_BUFFER_SIZE))});
+        }
+        else
+        {
+            read_buf = std::make_unique<ReadBufferFromByteHDFS>(part_path, true, context->getHdfsConnectionParams());
+            auto cache = DiskCacheFactory::instance().get(DiskCacheType::Hive);
+            auto strategy = cache->getStrategy();
+
+            ParquetRanges all_parquet_ranges{FileRange()};
+            auto parquet_segments = strategy->getCacheSegments(strategy->transferRangesToSegments<ParquetFileDiskCacheSegment>(
+                all_parquet_ranges, uuid, part_path, context->getHdfsConnectionParams()));
+
+            cache->cacheSegmentsToLocalDisk(parquet_segments);
+        }
+    }
+    else
+    {
+        read_buf = std::make_unique<ReadBufferFromByteHDFS>(part_path, true, context->getHdfsConnectionParams());
+    }
 
     LOG_TRACE(
         &Poco::Logger::get("CnchHiveThreadSelectBlockInputStream"),
         "getNewTask current_row_group: {} part is {} ",
         current_row_group,
         part_path);
-    read_buf = std::make_unique<ReadBufferFromByteHDFS>(part_path, true, context->getHdfsConnectionParams());
 
     FormatSettings format_settings;
     if (part_format.find("Parquet") != String::npos)

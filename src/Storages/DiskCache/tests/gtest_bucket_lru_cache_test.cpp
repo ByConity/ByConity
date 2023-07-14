@@ -41,7 +41,7 @@ public:
     static void insertToCache(BucketLRUCache<Key, Value, HashFunction>& cache,
             int begin, int end) {
         for (int i = begin; i < end; i++) {
-            cache.set(std::to_string(i), std::make_shared<String>(std::to_string(i)));
+            cache.insert(std::to_string(i), std::make_shared<String>(std::to_string(i)));
         }
     }
 
@@ -86,7 +86,7 @@ public:
     template<typename Key, typename Value, typename HashFunction>
     static void removeFromCache(BucketLRUCache<Key, Value, HashFunction>& cache,
             const Key& key) {
-        cache.remove(key);
+        cache.erase(key);
     }
 
     static std::vector<String> generateRangeStr(int begin, int end) {
@@ -115,9 +115,13 @@ public:
     ASSERT_NO_FATAL_FAILURE(verifyCacheCount(cache, count))
 
 TEST_F(BucketLRUCacheTest, Simple) {
-    int cache_size = 5;
+    size_t cache_size = 5;
     // Set lru refresh interval to 24h, so it shouldn't refresh lru list
-    BucketLRUCache<String, String> cache(cache_size, 24 * 60 * 60, 2);
+    BucketLRUCache<String, String> cache(BucketLRUCache<String, String>::Options {
+        .lru_update_interval = 24 * 60 * 60,
+        .mapping_bucket_size = 2,
+        .max_size = cache_size
+    });
 
     insertToCache(cache, 0, cache_size);
 
@@ -129,7 +133,7 @@ TEST_F(BucketLRUCacheTest, Simple) {
     VERIFY_CACHE_RANGE_NOT_EXIST(cache, cache_size, cache_size + round);
 
     for (int i = cache_size; i < cache_size + round; i++) {
-        cache.set(std::to_string(i), std::make_shared<String>(std::to_string(i)));
+        cache.insert(std::to_string(i), std::make_shared<String>(std::to_string(i)));
 
         VERIFY_CACHE_COUNT(cache, cache_size);
         VERIFY_CACHE_WEIGHT(cache, cache_size);
@@ -139,8 +143,12 @@ TEST_F(BucketLRUCacheTest, Simple) {
 }
 
 TEST_F(BucketLRUCacheTest, Evict) {
-    int cache_size = 5;
-    BucketLRUCache<String, String> cache(cache_size, 0, 2);
+    size_t cache_size = 5;
+    BucketLRUCache<String, String> cache(BucketLRUCache<String, String>::Options {
+        .lru_update_interval = 0,
+        .mapping_bucket_size = 2,
+        .max_size = cache_size
+    });
 
     insertToCache(cache, 0, cache_size);
     std::this_thread::sleep_for(std::chrono::seconds(2));
@@ -158,8 +166,12 @@ TEST_F(BucketLRUCacheTest, Evict) {
 }
 
 TEST_F(BucketLRUCacheTest, EvictWithSkipInterval) {
-    int cache_size = 5;
-    BucketLRUCache<String, String> cache(cache_size, 1, 2);
+    size_t cache_size = 5;
+    BucketLRUCache<String, String> cache(BucketLRUCache<String, String>::Options {
+        .lru_update_interval = 1,
+        .mapping_bucket_size = 2,
+        .max_size = cache_size
+    });
 
     insertToCache(cache, 0, cache_size);
     VERIFY_CACHE_COUNT(cache, cache_size);
@@ -183,8 +195,12 @@ TEST_F(BucketLRUCacheTest, EvictWithSkipInterval) {
 }
 
 TEST_F(BucketLRUCacheTest, InorderEvict) {
-    int cache_size = 10;
-    BucketLRUCache<String, String> cache(cache_size, 1, 2);
+    size_t cache_size = 10;
+    BucketLRUCache<String, String> cache(BucketLRUCache<String, String>::Options {
+        .lru_update_interval = 1,
+        .mapping_bucket_size = 2,
+        .max_size = cache_size
+    });
 
     int total_size = 10000;
     insertToCache(cache, 0, total_size);
@@ -197,8 +213,12 @@ TEST_F(BucketLRUCacheTest, InorderEvict) {
 }
 
 TEST_F(BucketLRUCacheTest, SetInsert) {
-    int cache_size = 5;
-    BucketLRUCache<String, String> cache(cache_size, 1, 2);
+    size_t cache_size = 5;
+    BucketLRUCache<String, String> cache(BucketLRUCache<String, String>::Options {
+        .lru_update_interval = 1,
+        .mapping_bucket_size = 2,
+        .max_size = std::max(static_cast<size_t>(std::numeric_limits<size_t>::max()), cache_size)
+    });
 
     insertToCache(cache, 0, cache_size - 1);
     VERIFY_CACHE_COUNT(cache, cache_size - 1);
@@ -215,8 +235,12 @@ TEST_F(BucketLRUCacheTest, SetInsert) {
 }
 
 TEST_F(BucketLRUCacheTest, SetUpdate) {
-    int cache_size = 3;
-    BucketLRUCache<String, String> cache(cache_size, 1, 2);
+    size_t cache_size = 3;
+    BucketLRUCache<String, String> cache(BucketLRUCache<String, String>::Options {
+        .lru_update_interval = 1,
+        .mapping_bucket_size = 2,
+        .max_size = cache_size
+    });
 
     insertToCache(cache, 0, cache_size);
     VERIFY_CACHE_COUNT(cache, cache_size);
@@ -225,7 +249,7 @@ TEST_F(BucketLRUCacheTest, SetUpdate) {
     VERIFY_CACHE_RANGE_EXIST(cache, 0, cache_size);
     VERIFY_CACHE_LRU_ORDER(cache, generateRangeStr(0, cache_size));
 
-    cache.set("0", std::make_shared<String>("3"));
+    cache.update("0", std::make_shared<String>("3"));
     ASSERT_EQ(*cache.get("0"), "3");
     VERIFY_CACHE_COUNT(cache, cache_size);
     VERIFY_CACHE_WEIGHT(cache, cache_size);
@@ -233,8 +257,11 @@ TEST_F(BucketLRUCacheTest, SetUpdate) {
 }
 
 TEST_F(BucketLRUCacheTest, Remove) {
-    BucketLRUCache<String, String> cache(5, 1, 1);
-
+    BucketLRUCache<String, String> cache(BucketLRUCache<String, String>::Options {
+        .lru_update_interval = 1,
+        .mapping_bucket_size = 1,
+        .max_size = static_cast<size_t>(5)
+    });
     insertToCache(cache, 0, 5);
     VERIFY_CACHE_COUNT(cache, 5);
     VERIFY_CACHE_WEIGHT(cache, 5);
@@ -273,15 +300,20 @@ TEST_F(BucketLRUCacheTest, Remove) {
 }
 
 TEST_F(BucketLRUCacheTest, Fuzzy) {
-    int cache_size = 10;
-    int mapping_bucket_size = 2;
-    int lru_update_interval = 1;
+    size_t cache_size = 10;
+    UInt32 mapping_bucket_size = 2;
+    UInt32 lru_update_interval = 1;
     int worker_num = 10;
     int range_begin = 0;
     int range_end = 100;
     int per_thread_op_count = 100000;
 
-    BucketLRUCache<String, String> cache(cache_size, lru_update_interval, mapping_bucket_size);
+    BucketLRUCache<String, String> cache(BucketLRUCache<String, String>::Options {
+        .lru_update_interval = lru_update_interval,
+        .mapping_bucket_size = mapping_bucket_size,
+        .max_size = cache_size
+    });
+
     auto worker = [=, &cache]() {
         std::default_random_engine re;
         std::uniform_int_distribution<int> num_dist(range_begin, range_end);
@@ -297,7 +329,7 @@ TEST_F(BucketLRUCacheTest, Fuzzy) {
             } else {
                 // Set op
                 String key = std::to_string(num_dist(re));
-                cache.set(key, std::make_shared<String>(key));
+                cache.emplace(key, std::make_shared<String>(key));
             }
         }
     };
@@ -306,12 +338,8 @@ TEST_F(BucketLRUCacheTest, Fuzzy) {
     for (int i = 0; i < worker_num; i++) {
         workers.emplace_back(worker);
     }
-    for (auto& worker : workers) {
-        worker.join();
+    for (auto& thread : workers) {
+        thread.join();
     }
 }
 
-int main(int argc, char** argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
-}

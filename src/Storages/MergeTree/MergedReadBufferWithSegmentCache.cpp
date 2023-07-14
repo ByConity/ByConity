@@ -15,10 +15,10 @@
 
 #include <memory>
 #include <optional>
-#include <Storages/MergeTree/MergedReadBufferWithSegmentCache.h>
-#include <Storages/DiskCache/DiskCacheSegment.h>
-#include <Storages/MergeTree/MergeTreeSuffix.h>
 #include <IO/createReadBufferFromFileBase.h>
+#include <Storages/DiskCache/PartFileDiskCacheSegment.h>
+#include <Storages/MergeTree/MergeTreeSuffix.h>
+#include <Storages/MergeTree/MergedReadBufferWithSegmentCache.h>
 #include "Compression/CachedCompressedReadBuffer.h"
 #include "Compression/CompressedReadBufferFromFile.h"
 
@@ -286,7 +286,7 @@ bool MergedReadBufferWithSegmentCache::seekToMarkInSegmentCache(size_t segment_i
         return false;
     }
 
-    String segment_key = DiskCacheSegment::getSegmentKey(storage_id, part_name,
+    String segment_key = PartFileDiskCacheSegment::getSegmentKey(storage_id, part_name,
         stream_name, segment_idx, DATA_FILE_EXTENSION);
     std::pair<DiskPtr, String> cache_entry = segment_cache->get(segment_key);
     if (cache_entry.first == nullptr)

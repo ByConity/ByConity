@@ -24,7 +24,8 @@ namespace DB
 String IDiskCacheSegment::formatSegmentName(
     const String & uuid, const String & part_name, const String & column_name, UInt32 segment_number, const String & extension)
 {
-    WriteBufferFromOwnString wb;
+    String seg_name;
+    WriteBufferFromString wb(seg_name);
 
     writeString(uuid, wb);
     writeChar('/', wb);
@@ -35,6 +36,7 @@ String IDiskCacheSegment::formatSegmentName(
     writeIntText(segment_number, wb);
     writeString(extension, wb);
 
-    return wb.str();
+    boost::replace_all(seg_name, "//", "/");
+    return seg_name;
 }
 }

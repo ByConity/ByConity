@@ -62,8 +62,7 @@ struct Settings;
     M(String, hive_metastore_client_service_fqdn, "", "The fqdn for auth server", 0) \
     M(String, hive_metastore_client_keytab_path, "/etc/krb5.keytab", "The path of Kerberos keytab for hms auth", 0) \
     M(String, hive_metastore_client_principal, "hive", "The Kerberos principal for hms auth", 0) \
-
-
+    M(Bool, enable_local_disk_cache, true, "", 0)  \
 
 /// Settings that should not change after the creation of a table.
 #define APPLY_FOR_IMMUTABLE_CNCH_HIVE_SETTINGS(M) M(index_granularity)
