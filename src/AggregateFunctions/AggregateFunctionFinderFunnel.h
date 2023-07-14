@@ -37,8 +37,7 @@ namespace DB
 {
 
 template <typename ParamType>
-class AggregateFunctionFinderFunnel final : public IAggregateFunctionDataHelper<AggregateFunctionFinderFunnelData<ParamType>,
-                                                                                AggregateFunctionFinderFunnel<ParamType>>
+class AggregateFunctionFinderFunnel final : public IAggregateFunctionDataHelper<AggregateFunctionFinderFunnelData<ParamType>, AggregateFunctionFinderFunnel<ParamType>>
 {
 private:
     // Parameters got from agg function
@@ -56,6 +55,7 @@ private:
     UInt32 related_num;
 
     bool time_interval = false;
+    bool need_order = false;
     mutable bool is_step = false;
 
     /*
@@ -65,9 +65,13 @@ private:
      */
     template<bool is_step, bool with_time, bool with_attr>
     void calculateFunnel(const AggregateFunctionFinderFunnelData<ParamType> & data,  LEVELType * levels, std::vector<Times>& intervals,
-                         [[maybe_unused]] size_t start_step_num = 0, [[maybe_unused]] size_t end_step_num = 0) const
+            [[maybe_unused]] size_t start_step_num = 0, [[maybe_unused]] size_t end_step_num = 0) const
     {
-        const_cast<AggregateFunctionFinderFunnelData<ParamType>&>(data).sort();
+        if (need_order)
+            const_cast<AggregateFunctionFinderFunnelData<ParamType>&>(data).template sort<true>();
+        else
+            const_cast<AggregateFunctionFinderFunnelData<ParamType>&>(data).template sort<false>();
+
         auto const & events = data.event_lists;
         size_t num_events = events.size();
 
@@ -236,6 +240,12 @@ private:
                                         attr_set[next_seq] = true;
                                     }
                                 }
+
+                                if (!is_legal && funnel_index[next_seq].size() == 1)
+                                {
+                                    if (last_start == -1)
+                                        last_start = i;
+                                }
                             }
 
                             if (is_legal)
@@ -250,6 +260,12 @@ private:
                         }
                         else if (event > 1 && !funnel_index[next_seq].empty())
                         {
+                            if ((stime / m_watch_step) > slot_idx)
+                            {
+                                // for the case A->B->A, the new A should be treated as new start event for the next slot
+                                if (last_start == -1)
+                                    last_start = i;
+                            }
                             // for A->A->A ..., only use one seq
                             ++i;
                             continue;
@@ -478,20 +494,23 @@ public:
 
     AggregateFunctionFinderFunnel(UInt64 window, UInt64 watchStart, UInt64 watchStep,
                                   UInt64 watchNumbers, UInt64 window_type, String time_zone_,
-                                  UInt64 numVirts, UInt32 attr_related_, bool time_interval_,
+                                  UInt64 numVirts, UInt32 attr_related_, bool time_interval_, bool need_order_,
                                   const DataTypes & arguments, const Array & params) :
-        IAggregateFunctionDataHelper<AggregateFunctionFinderFunnelData<ParamType>,
-                                     AggregateFunctionFinderFunnel<ParamType> >(arguments, params),
-        m_watch_start(watchStart), m_watch_step(watchStep), m_watch_numbers(watchNumbers),
-        m_window(window), m_window_type(window_type), time_zone(time_zone_), m_num_events(numVirts),
-        date_lut(DateLUT::instance(time_zone_)), attr_related(attr_related_), time_interval(time_interval_)
+     IAggregateFunctionDataHelper<AggregateFunctionFinderFunnelData<ParamType>,
+             AggregateFunctionFinderFunnel<ParamType> >(arguments, params),
+     m_watch_start(watchStart), m_watch_step(watchStep), m_watch_numbers(watchNumbers),
+     m_window(window), m_window_type(window_type), time_zone(time_zone_), m_num_events(numVirts),
+     date_lut(DateLUT::instance(time_zone_)), attr_related(attr_related_), time_interval(time_interval_), need_order(need_order_)
     {
         related_num = attr_related ? __builtin_popcount(attr_related) + 2 : 2;
     }
 
     String getName() const override
     {
-        return "finderFunnel";
+        if (need_order)
+            return "finderFunnelStable";
+        else
+            return "finderFunnel";
     }
 
     void create(const AggregateDataPtr place) const override
@@ -502,7 +521,7 @@ public:
     DataTypePtr getReturnTypeWithTimeInterval() const
     {
         DataTypes types;
-        types.emplace_back(std::make_shared<DataTypeArray>(std::make_shared<DataTypeNumber<UInt8>>()));
+        types.emplace_back(std::make_shared<DataTypeArray>(std::make_shared<DataTypeNumber<LEVELType>>()));
         types.emplace_back(std::make_shared<DataTypeArray>(std::make_shared<DataTypeArray>(std::make_shared<DataTypeNumber<UInt64>>())));
         return std::make_shared<DataTypeTuple>(types);
     }
@@ -512,7 +531,7 @@ public:
         if (time_interval)
             return getReturnTypeWithTimeInterval();
 
-        return std::make_shared<DataTypeArray>(std::make_shared<DataTypeNumber<UInt8> >());
+        return std::make_shared<DataTypeArray>(std::make_shared<DataTypeNumber<LEVELType> >());
     }
 
     void add(AggregateDataPtr place, const IColumn ** columns, size_t row_num, Arena *) const override
@@ -542,11 +561,17 @@ public:
             int index = __builtin_popcount(((flag_event & attr_related) -1) & attr_related);
             // get correspond param column
             ParamType attr = getAttribution<ParamType>(columns, row_num, index + 2);
-            this->data(place).add(stime, c_time, flag_event, attr);
+            if (need_order)
+                this->data(place).template add<true>(stime, c_time, flag_event, attr);
+            else
+                this->data(place).template add<false>(stime, c_time, flag_event, attr);
         }
         else
         {
-            this->data(place).add(stime, c_time, flag_event);
+            if (need_order)
+                this->data(place).template add<true>(stime, c_time, flag_event);
+            else
+                this->data(place).template add<false>(stime, c_time, flag_event);
         }
     }
 

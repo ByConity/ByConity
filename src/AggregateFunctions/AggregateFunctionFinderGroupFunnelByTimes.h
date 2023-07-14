@@ -79,8 +79,9 @@ void calculateFunnelByTimes(std::function<UInt32(UInt32)> && getGroup, EventList
     // Group is aligned like this  [ordinary][unreadh][null]
     const size_t num_ordinary_group = num_sub_group - 1 - has_null;
     std::vector<bool> reached_flag_for_each_slot(m_watch_numbers + 1, false); // need reset unreach
+    std::unordered_map<Numeric, std::set<size_t>> checked_groups; // to keep group's events
 
-    auto countFunnel = [&](std::vector<size_t> &current_window_funnel, UInt32 slot_idx)
+    auto count_funnel = [&](std::vector<size_t> &current_window_funnel, UInt32 slot_idx)
     {
         auto funnel  = current_window_funnel.size();
         if (funnel > 0)
@@ -102,17 +103,25 @@ void calculateFunnelByTimes(std::function<UInt32(UInt32)> && getGroup, EventList
             size_t ind;
             if (is_reached)
             {
+                // for bypass the group's following events
+                for (size_t i = 0; i < current_window_funnel.size(); ++i)
+                {
+                    if ((i + 1) > m_user_pro_idx)
+                    {
+                        checked_groups[group].insert(current_window_funnel[i]);
+                    }
+                }
                 if (is_null)
-                    ind = (num_sub_group - 1) * (m_watch_numbers + 1) * m_num_events + slot_idx; // null
+                    ind = (num_sub_group - 1) * (m_watch_numbers + 1) * m_num_events; // null
                 else
                 {
-                    ind = getGroup(group) * (m_watch_numbers + 1) * m_num_events + slot_idx;
+                    ind = getGroup(group) * (m_watch_numbers + 1) * m_num_events;
                     reached_flag_for_each_slot[slot_idx] = true;
                 }
             }
             else
             {
-                ind = num_ordinary_group * (m_watch_numbers + 1) * m_num_events + slot_idx; // unreached
+                ind = num_ordinary_group * (m_watch_numbers + 1) * m_num_events; // unreached
             }
 
             // count total group level funnel
@@ -122,7 +131,9 @@ void calculateFunnelByTimes(std::function<UInt32(UInt32)> && getGroup, EventList
             // count total slot group level funnel
             size_t offset = ind + (slot_idx + 1) * m_num_events;
             for (size_t e = 0; e < m_num_events; e++)
+            {
                 levels[offset + e] += (funnel > e);
+            }
 
             if constexpr (with_time)
             {
@@ -151,10 +162,9 @@ void calculateFunnelByTimes(std::function<UInt32(UInt32)> && getGroup, EventList
                 if (target_step > 0 && funnel > target_step)
                 {
                     UInt64 interval = events[current_window_funnel[target_step]].ctime - events[current_window_funnel[target_step-1]].ctime;
-                    intervals[ind].push_back(interval);
+                    intervals[idx].push_back(interval);
                 }
             }
-
             current_window_funnel.resize(0);
         }
     };
@@ -168,11 +178,10 @@ void calculateFunnelByTimes(std::function<UInt32(UInt32)> && getGroup, EventList
         // attribute related
         [[maybe_unused]] ParamType attr_check= {};
         [[maybe_unused]] bool      attr_set = {false};
-        
-        // coverity[use_after_move]
+
         if (unlikely(!reuse_funnel_index.empty()))
         {
-            funnel_index = std::move(reuse_funnel_index);
+            funnel_index = reuse_funnel_index;
             window_start = reuse_window_start;
             window_end = reuse_window_end;
             slot_idx = events[funnel_index.front()].stime / m_watch_step;
@@ -185,7 +194,7 @@ void calculateFunnelByTimes(std::function<UInt32(UInt32)> && getGroup, EventList
             if (unlikely(i == num_events)) // finish loop
             {
                 if (last_start == -1) ++i; // no start event in new slot
-                countFunnel(funnel_index, slot_idx);
+                count_funnel(funnel_index, slot_idx);
                 break;
             }
 
@@ -255,21 +264,25 @@ void calculateFunnelByTimes(std::function<UInt32(UInt32)> && getGroup, EventList
                                     attr_set = true;
                                 }
                             }
+
+                            if (!is_legal && funnel_index.size() == 1)
+                            {
+                                if (last_start == -1)
+                                    last_start = i;
+                            }
                         }
 
                         if (is_legal)
                         {
                             if (funnel_index.size() == 1)
-                            {
                                 if (last_start == -1) last_start = i;
-                            }
 
                             funnel_index.push_back(i);
                         }
                         ++i;
                         continue;
                     }
-                    else if (event > 1 && !funnel_index.empty())
+                    else if (event > 1 && funnel_index.size())
                     {
                         // for A->A->A ..., only use one seq
                         ++i;
@@ -331,28 +344,37 @@ void calculateFunnelByTimes(std::function<UInt32(UInt32)> && getGroup, EventList
                     }
                 }
                 funnel_index.push_back(i);
-            }
-            else if (m_user_pro_idx > 1 && funnel_index.size() >= m_user_pro_idx)
-            {
-                if (isNextLevel(event, m_user_pro_idx - 1)) // for left events group check if need save it
+                if (funnel_index.size() >= m_user_pro_idx)
                 {
-                    if (reuse_funnel_index.empty() && last_start == -1)
+                    auto group = events[funnel_index[m_user_pro_idx-1]].pro_ind;
+                    if (checked_groups.count(group) && checked_groups.at(group).count(i))
                     {
-                        // here need reuse the fronts event
-                        for (size_t ii = 0; ii < m_user_pro_idx - 1; ++ii)
-                            reuse_funnel_index.push_back(funnel_index[ii]);
-
-                        reuse_funnel_index.push_back(i);
-                        last_start = i + 1;
-                        reuse_window_start = window_start;
-                        reuse_window_end = window_end;
+                        funnel_index.pop_back();
                     }
                 }
             }
+            // cause logic error in times check
+            // else if (m_user_pro_idx > 1 && funnel_index.size() >= m_user_pro_idx)
+            // {
+            //     if (isNextLevel(event, m_user_pro_idx - 1)) // for left events group check if need save it
+            //     {
+            //         if (reuse_funnel_index.size() == 0 && last_start == -1)
+            //         {
+            //             // here need reuse the fronts event
+            //             for (size_t i = 0; i < m_user_pro_idx - 1; ++i)
+            //                 reuse_funnel_index.push_back(funnel_index[i]);
+
+            //             reuse_funnel_index.push_back(i);
+            //             last_start = i + 1;
+            //             reuse_window_start = window_start;
+            //             reuse_window_end = window_end;
+            //         }
+            //     }
+            // }
             ++i;
         }
 
-        countFunnel(funnel_index, slot_idx);
+        count_funnel(funnel_index, slot_idx);
 
         // start new round
         if (last_start != -1)
@@ -360,9 +382,8 @@ void calculateFunnelByTimes(std::function<UInt32(UInt32)> && getGroup, EventList
 
         if (i >= num_events)
         {
-             // coverity[use_after_move]
             if (unlikely(!reuse_funnel_index.empty()))
-                countFunnel(reuse_funnel_index, slot_idx);
+                count_funnel(reuse_funnel_index, slot_idx);
             break;
         }
     }
@@ -374,6 +395,9 @@ void calculateFunnelByTimes(std::function<UInt32(UInt32)> && getGroup, EventList
     }
 }
 
+/**
+ * for numeric group key
+ */
 template <typename Numeric, typename ParamType>
 class AggregateFunctionFinderGroupNumFunnelByTimes final :
         public IAggregateFunctionDataHelper<AggregateFunctionFinderFunnelNumericGroupData<ParamType, Numeric>,
@@ -517,7 +541,7 @@ public:
         return !this->data(place).event_lists.empty();
     }
 
-    void calculateStepResult(AggregateDataPtr place, size_t start_step_num, size_t end_step_num, bool lastStep, Arena * arena) const override
+    void calculateStepResult(AggregateDataPtr place, size_t start_step_num, size_t end_step_num, bool last_step, Arena * arena) const override
     {
         is_step = true;
 
@@ -561,7 +585,7 @@ public:
         auto &data_ref = const_cast<AggregateFunctionFinderFunnelNumericGroupData<ParamType, Numeric>&>(this->data(place));
         data_ref.sort();
 
-        auto getGroup = [&](UInt32 g){ return data_ref.groups[g];};
+        auto get_group = [&](UInt32 g){ return data_ref.groups[g];};
 
         if (time_interval)
         {
@@ -584,28 +608,28 @@ public:
             }
 
             if (attr_related > 0)
-                calculateFunnelByTimes<ParamType, Numeric, true, true, true>(getGroup, data_ref.event_lists, &(this->data(place).levels[0]), this->data(place).intervals,
+                calculateFunnelByTimes<ParamType, Numeric, true, true, true>(get_group, data_ref.event_lists, &(this->data(place).levels[0]), this->data(place).intervals,
                                                                        is_relative_window, m_window, m_num_events, m_watch_step,
                                                                        attr_related, m_watch_numbers, m_user_pro_idx, date_lut, num_sub_group, has_null, target_step,
-                                                                       start_step_num, end_step_num, lastStep);
+                                                                       start_step_num, end_step_num, last_step);
             else
-                calculateFunnelByTimes<ParamType, Numeric, true, true, false>(getGroup, data_ref.event_lists, &(this->data(place).levels[0]), this->data(place).intervals,
+                calculateFunnelByTimes<ParamType, Numeric, true, true, false>(get_group, data_ref.event_lists, &(this->data(place).levels[0]), this->data(place).intervals,
                                                                         is_relative_window, m_window, m_num_events, m_watch_step,
                                                                         attr_related, m_watch_numbers, m_user_pro_idx, date_lut, num_sub_group, has_null, target_step,
-                                                                        start_step_num, end_step_num, lastStep);
+                                                                        start_step_num, end_step_num, last_step);
         }
         else
         {
             if (attr_related > 0)
-                calculateFunnelByTimes<ParamType, Numeric, true, false, true>(getGroup, data_ref.event_lists, &(this->data(place).levels[0]), this->data(place).intervals,
+                calculateFunnelByTimes<ParamType, Numeric, true, false, true>(get_group, data_ref.event_lists, &(this->data(place).levels[0]), this->data(place).intervals,
                                                                        is_relative_window, m_window, m_num_events, m_watch_step,
                                                                        attr_related, m_watch_numbers, m_user_pro_idx, date_lut, num_sub_group, has_null, target_step,
-                                                                       start_step_num, end_step_num, lastStep);
+                                                                       start_step_num, end_step_num, last_step);
             else
-                calculateFunnelByTimes<ParamType, Numeric, true, false, false>(getGroup, data_ref.event_lists, &(this->data(place).levels[0]), this->data(place).intervals,
+                calculateFunnelByTimes<ParamType, Numeric, true, false, false>(get_group, data_ref.event_lists, &(this->data(place).levels[0]), this->data(place).intervals,
                                                                         is_relative_window, m_window, m_num_events, m_watch_step,
                                                                         attr_related, m_watch_numbers, m_user_pro_idx, date_lut, num_sub_group, has_null, target_step,
-                                                                        start_step_num, end_step_num, lastStep);
+                                                                        start_step_num, end_step_num, last_step);
         }
     }
 
@@ -623,7 +647,7 @@ public:
         auto& offsets_to = arr_to.getOffsets();
 
         // Record last pos
-        size_t prev_offset = (offsets_to.size() == 0 ? 0 : offsets_to.back());
+        size_t prev_offset = (offsets_to.empty() ? 0 : offsets_to.back());
         // Set how many tuples will be insert into result array
         offsets_to.push_back(prev_offset + num_sub_group);
 
@@ -646,8 +670,8 @@ public:
         auto prev_pos = user_pro_data_to.size();
         user_pro_data_to.insert_nzero(num_sub_group);
 
-        for (auto& dictIdx : dict_index)
-            user_pro_data_to[prev_pos + dictIdx.second] = dictIdx.first;
+        for (auto& dict_idx : dict_index)
+            user_pro_data_to[prev_pos + dict_idx.second] = dict_idx.first;
 
         //The user_pro property for unreached group will set as MAX_VAL of TUSRPRO
         user_pro_data_to[prev_pos + num_sub_group -1 - has_null] = std::numeric_limits<Numeric>::max();
@@ -655,7 +679,7 @@ public:
         auto& tuple_funnel_arr_to = static_cast<ColumnArray &>(tuple_arr_to.getColumn(1));
         auto& f_data_to = static_cast<ColumnVector<LEVELType> &>(tuple_funnel_arr_to.getData()).getData();
         ColumnArray::Offsets& f_offsets_to = tuple_funnel_arr_to.getOffsets();
-        size_t orig_prev_f_offset =  (f_offsets_to.size() == 0 ? 0 : f_offsets_to.back());
+        size_t orig_prev_f_offset = (f_offsets_to.empty() ? 0 : f_offsets_to.back());
         size_t prev_f_offset = orig_prev_f_offset;
 
         for(size_t i = 0; i < num_sub_group; i++)
@@ -693,7 +717,7 @@ public:
             bool is_relative_window = m_window_type != 0;
             data_ref.sort();
 
-            auto getGroup = [&](UInt32 g){ return data_ref.groups[g];};
+            auto get_group = [&](UInt32 g){ return data_ref.groups[g];};
 
             if (time_interval)
             {
@@ -701,10 +725,10 @@ public:
                 intervals.resize((m_watch_numbers  + 1) * num_sub_group);
 
                 if (attr_related > 0)
-                    calculateFunnelByTimes<ParamType, Numeric, false, true, true>(getGroup, data_ref.event_lists, levels, intervals, is_relative_window, m_window, m_num_events, m_watch_step,
+                    calculateFunnelByTimes<ParamType, Numeric, false, true, true>(get_group, data_ref.event_lists, levels, intervals, is_relative_window, m_window, m_num_events, m_watch_step,
                                                                            attr_related, m_watch_numbers, m_user_pro_idx, date_lut, num_sub_group, has_null, target_step);
                 else
-                    calculateFunnelByTimes<ParamType, Numeric, false, true, false>(getGroup, data_ref.event_lists, levels, intervals, is_relative_window, m_window, m_num_events, m_watch_step,
+                    calculateFunnelByTimes<ParamType, Numeric, false, true, false>(get_group, data_ref.event_lists, levels, intervals, is_relative_window, m_window, m_num_events, m_watch_step,
                                                                             attr_related, m_watch_numbers, m_user_pro_idx, date_lut, num_sub_group, has_null, target_step);
 
                 for (size_t i = 0; i < num_sub_group; i++)
@@ -719,10 +743,10 @@ public:
             else
             {
                 if (attr_related > 0)
-                    calculateFunnelByTimes<ParamType, Numeric, false, false, true>(getGroup, data_ref.event_lists, levels, intervals, is_relative_window, m_window, m_num_events, m_watch_step,
+                    calculateFunnelByTimes<ParamType, Numeric, false, false, true>(get_group, data_ref.event_lists, levels, intervals, is_relative_window, m_window, m_num_events, m_watch_step,
                                                                             attr_related, m_watch_numbers, m_user_pro_idx, date_lut, num_sub_group, has_null, target_step);
                 else
-                    calculateFunnelByTimes<ParamType, Numeric, false, false, false>(getGroup, data_ref.event_lists, levels, intervals, is_relative_window, m_window, m_num_events, m_watch_step,
+                    calculateFunnelByTimes<ParamType, Numeric, false, false, false>(get_group, data_ref.event_lists, levels, intervals, is_relative_window, m_window, m_num_events, m_watch_step,
                                                                              attr_related, m_watch_numbers, m_user_pro_idx, date_lut, num_sub_group, has_null, target_step);
             }
         }
@@ -894,7 +918,7 @@ public:
         return !this->data(place).event_lists.empty();
     }
 
-    void calculateStepResult(AggregateDataPtr place, size_t start_step_num, size_t end_step_num, bool lastStep, Arena * arena) const override
+    void calculateStepResult(AggregateDataPtr place, size_t start_step_num, size_t end_step_num, bool last_step, Arena * arena) const override
     {
         is_step = true;
 
@@ -938,7 +962,7 @@ public:
         auto &data_ref = const_cast<AggregateFunctionFinderFunnelStringGroupData<ParamType>&>(this->data(place));
         data_ref.sort();
 
-        auto getGroup = [&](UInt32 g){ return g; };
+        auto get_group = [&](UInt32 g){ return g;};
 
         if (time_interval)
         {
@@ -961,37 +985,37 @@ public:
             }
 
             if (attr_related > 0)
-                calculateFunnelByTimes<ParamType, Int32, true, true, true>(getGroup, data_ref.event_lists, &(data_ref.levels[0]), data_ref.intervals,
+                calculateFunnelByTimes<ParamType, Int32, true, true, true>(get_group, data_ref.event_lists, &(data_ref.levels[0]), data_ref.intervals,
                                                                       is_relative_window, m_window, m_num_events, m_watch_step,
                                                                       attr_related, m_watch_numbers, m_user_pro_idx, date_lut, num_sub_group, has_null, target_step,
-                                                                      start_step_num, end_step_num, lastStep);
+                                                                      start_step_num, end_step_num, last_step);
             else
-                calculateFunnelByTimes<ParamType, Int32, true, true, false>(getGroup, data_ref.event_lists, &(data_ref.levels[0]), data_ref.intervals,
+                calculateFunnelByTimes<ParamType, Int32, true, true, false>(get_group, data_ref.event_lists, &(data_ref.levels[0]), data_ref.intervals,
                                                                        is_relative_window, m_window, m_num_events, m_watch_step,
                                                                        attr_related, m_watch_numbers, m_user_pro_idx, date_lut, num_sub_group, has_null, target_step,
-                                                                       start_step_num, end_step_num, lastStep);
+                                                                       start_step_num, end_step_num, last_step);
         }
         else
         {
             if (attr_related > 0)
-                calculateFunnelByTimes<ParamType, Int32, true, false, true>(getGroup, data_ref.event_lists, &(data_ref.levels[0]), data_ref.intervals,
+                calculateFunnelByTimes<ParamType, Int32, true, false, true>(get_group, data_ref.event_lists, &(data_ref.levels[0]), data_ref.intervals,
                                                                        is_relative_window, m_window, m_num_events, m_watch_step,
                                                                        attr_related, m_watch_numbers, m_user_pro_idx, date_lut, num_sub_group, has_null, target_step,
-                                                                       start_step_num, end_step_num, lastStep);
+                                                                       start_step_num, end_step_num, last_step);
             else
-                calculateFunnelByTimes<ParamType, Int32, true, false, false>(getGroup, data_ref.event_lists, &(data_ref.levels[0]), data_ref.intervals,
+                calculateFunnelByTimes<ParamType, Int32, true, false, false>(get_group, data_ref.event_lists, &(data_ref.levels[0]), data_ref.intervals,
                                                                         is_relative_window, m_window, m_num_events, m_watch_step,
                                                                         attr_related, m_watch_numbers, m_user_pro_idx, date_lut, num_sub_group, has_null, target_step,
-                                                                        start_step_num, end_step_num, lastStep);
+                                                                        start_step_num, end_step_num, last_step);
         }
     }
 
-    void insertSubGroupKey(ColumnString& sub_group_column, const StringMapDict<UInt32>& dict_index, bool has_null) const
+    void insertSubGroupKey(ColumnString& subgroupColumn, const StringMapDict<UInt32>& dict_index, bool has_null) const
     {
         size_t num_bytes = 0;
-        auto& chars = sub_group_column.getChars();
-        auto& offsets = sub_group_column.getOffsets();
-        for (const auto& dict_ind : dict_index.getRawBuf())
+        auto& chars = subgroupColumn.getChars();
+        auto& offsets = subgroupColumn.getOffsets();
+        for (const auto & dict_ind : dict_index.getRawBuf())
             num_bytes += (dict_ind.first.size + 1); // last 1 byte is for null terminate char
         num_bytes += (m_unreach_str_size + 1 + has_null);
 
@@ -1035,9 +1059,9 @@ public:
         }
     }
 
-    void insertSubGroupKey(ColumnFixedString& sub_group_column, const StringMapDict<UInt32>& dict_index, size_t n, bool has_null) const
+    void insertSubGroupKey(ColumnFixedString& subgroupColumn, const StringMapDict<UInt32>& dict_index, size_t n, bool has_null) const
     {
-        auto& chars = sub_group_column.getChars();
+        auto& chars = subgroupColumn.getChars();
         size_t num_bytes = (dict_index.size() + 1 + has_null) * n;
 
         // use num_bytes as cursor pos now
@@ -1108,8 +1132,7 @@ public:
         if (typeid_cast<const DataTypeString*>(user_pro_type.get()))
             insertSubGroupKey(static_cast<ColumnString&>(*user_pro_column), data_ref.dict_index, has_null);
         else
-            insertSubGroupKey(static_cast<ColumnFixedString&>(*user_pro_column), data_ref.dict_index,
-                              typeid_cast<const DataTypeFixedString*>(user_pro_type.get())->getN(), has_null);
+            insertSubGroupKey(static_cast<ColumnFixedString&>(*user_pro_column), data_ref.dict_index, typeid_cast<const DataTypeFixedString*>(user_pro_type.get())->getN(), has_null);
 
         auto& tuple_funnel_arr_to =  static_cast<ColumnArray &>(tuple_arr_to.getColumn(1));
         auto& f_data_to = static_cast<ColumnVector<LEVELType> &>(tuple_funnel_arr_to.getData()).getData();
@@ -1149,7 +1172,7 @@ public:
         else
         {
             data_ref.sort();
-            auto getGroup = [](UInt32 g) { return g; };
+            auto get_group = [](UInt32 g) {return g;};
 
             bool is_relative_window = m_window_type != 0;
 
@@ -1160,10 +1183,10 @@ public:
                 intervals.resize((m_watch_numbers  + 1) * num_sub_group);
 
                 if (attr_related > 0)
-                    calculateFunnelByTimes<ParamType, Int32, false, true, true>(getGroup, data_ref.event_lists, levels, intervals, is_relative_window, m_window, m_num_events, m_watch_step,
+                    calculateFunnelByTimes<ParamType, Int32, false, true, true>(get_group, data_ref.event_lists, levels, intervals, is_relative_window, m_window, m_num_events, m_watch_step,
                                                                          attr_related, m_watch_numbers, m_user_pro_idx, date_lut, num_sub_group, has_null, target_step);
                 else
-                    calculateFunnelByTimes<ParamType, Int32, false, true, false>(getGroup, data_ref.event_lists, levels, intervals, is_relative_window, m_window, m_num_events, m_watch_step,
+                    calculateFunnelByTimes<ParamType, Int32, false, true, false>(get_group, data_ref.event_lists, levels, intervals, is_relative_window, m_window, m_num_events, m_watch_step,
                                                                           attr_related, m_watch_numbers, m_user_pro_idx, date_lut, num_sub_group, has_null, target_step);
 
                 for (size_t i = 0; i < num_sub_group; i++)
@@ -1178,10 +1201,10 @@ public:
             else
             {
                 if (attr_related > 0)
-                    calculateFunnelByTimes<ParamType, Int32, false, false, true>(getGroup, data_ref.event_lists, levels, intervals, is_relative_window, m_window, m_num_events, m_watch_step,
+                    calculateFunnelByTimes<ParamType, Int32, false, false, true>(get_group, data_ref.event_lists, levels, intervals, is_relative_window, m_window, m_num_events, m_watch_step,
                                                                           attr_related, m_watch_numbers, m_user_pro_idx, date_lut, num_sub_group, has_null, target_step);
                 else
-                    calculateFunnelByTimes<ParamType, Int32, false, false, false>(getGroup, data_ref.event_lists, levels, intervals, is_relative_window, m_window, m_num_events, m_watch_step,
+                    calculateFunnelByTimes<ParamType, Int32, false, false, false>(get_group, data_ref.event_lists, levels, intervals, is_relative_window, m_window, m_num_events, m_watch_step,
                                                                            attr_related, m_watch_numbers, m_user_pro_idx, date_lut, num_sub_group, has_null, target_step);
             }
         }

@@ -130,7 +130,6 @@ private:
     void analyzeGroupBy(ASTSelectQuery & select_query, ASTs & select_expressions, ScopePtr source_scope);
     // void analyzeInterestEvents(ASTSelectQuery & select_query);
     void analyzeHaving(ASTSelectQuery & select_query, ScopePtr source_scope);
-    ScopePtr buildOrderByScope(ASTSelectQuery & select_query, ScopePtr source_scope);
     void analyzeOrderBy(ASTSelectQuery & select_query, ASTs & select_expressions, ScopePtr output_scope);
     void analyzeLimitBy(ASTSelectQuery & select_query, ScopePtr output_scope);
     void analyzeLimitAndOffset(ASTSelectQuery & select_query);
@@ -141,7 +140,6 @@ private:
     void verifyNoAggregateWindowOrGroupingOperations(ASTPtr & expression, const String & statement_name);
     void verifyAggregate(ASTSelectQuery & select_query, ScopePtr source_scope);
     void verifyNoFreeReferencesToLambdaArgument(ASTSelectQuery & select_query);
-    void verifyNoReferenceToOrderByScopeInsideAggregateOrWindow(ASTSelectQuery & select_query, ScopePtr order_by_scope);
     UInt64 analyzeUIntConstExpression(const ASTPtr & expression);
 };
 
@@ -205,15 +203,11 @@ Void QueryAnalyzerVisitor::visitASTSelectQuery(ASTPtr & node, const Void &)
     analyzeGroupBy(select_query, select_expression, source_scope);
     // analyzeInterestEvents(select_query);
     analyzeHaving(select_query, source_scope);
-    ScopePtr order_by_scope = buildOrderByScope(select_query, source_scope);
-    analyzeOrderBy(select_query, select_expression, order_by_scope);
-    analyzeLimitBy(select_query, order_by_scope);
+    analyzeOrderBy(select_query, select_expression, source_scope);
+    analyzeLimitBy(select_query, source_scope);
     analyzeLimitAndOffset(select_query);
     verifyAggregate(select_query, source_scope);
     verifyNoFreeReferencesToLambdaArgument(select_query);
-    if (order_by_scope != source_scope)
-        verifyNoReferenceToOrderByScopeInsideAggregateOrWindow(select_query, order_by_scope);
-    // TODO: check useless ORDER BY in subquery(ANSI sql)
     return {};
 }
 
@@ -1332,23 +1326,6 @@ void QueryAnalyzerVisitor::analyzeHaving(ASTSelectQuery & select_query, ScopePtr
     ExprAnalyzer::analyze(select_query.having(), source_scope, context, analysis, expr_options);
 }
 
-ScopePtr QueryAnalyzerVisitor::buildOrderByScope(ASTSelectQuery & select_query, ScopePtr source_scope)
-{
-    ScopePtr order_by_scope;
-
-    if (use_ansi_semantic)
-    {
-        order_by_scope = createScope(analysis.getOutputDescription(select_query), source_scope);
-    }
-    else
-    {
-        order_by_scope = source_scope;
-    }
-
-    analysis.setScope(select_query, order_by_scope);
-    return order_by_scope;
-}
-
 void QueryAnalyzerVisitor::analyzeOrderBy(ASTSelectQuery & select_query, ASTs & select_expressions, ScopePtr output_scope)
 {
     if (select_query.orderBy())
@@ -1490,22 +1467,6 @@ void QueryAnalyzerVisitor::verifyNoAggregateWindowOrGroupingOperations(ASTPtr & 
 {
     VerifyNoAggregateWindowOrGroupingOperationsVisitor visitor {statement_name, context};
     traverseExpressionTree(expression, visitor, {}, analysis, context);
-}
-
-void QueryAnalyzerVisitor::verifyNoReferenceToOrderByScopeInsideAggregateOrWindow(ASTSelectQuery & select_query, ScopePtr order_by_scope)
-{
-    auto verifyNoReferenceToOrderByScope = [&](const ASTPtr & expr, const String & error_msg, int error_code)
-    {
-        auto violations = extractReferencesToScope(context, analysis, expr, order_by_scope);
-        if (!violations.empty())
-            throw Exception(error_msg + serializeAST(*violations[0]) + " must not have reference to query output columns", error_code);
-    };
-
-    for (const auto & aggregate: analysis.getAggregateAnalysis(select_query))
-        verifyNoReferenceToOrderByScope(aggregate.expression, "Aggregate function ", ErrorCodes::ILLEGAL_AGGREGATION);
-
-    for (const auto & window: analysis.getWindowAnalysisOfSelectQuery(select_query))
-        verifyNoReferenceToOrderByScope(window->expression, "Window function ", ErrorCodes::ILLEGAL_AGGREGATION);
 }
 
 namespace

@@ -22,26 +22,28 @@ namespace DB
 {
 namespace
 {
-    AggregateFunctionPtr createAggregateFunctionFinderFunnelHelper(const std::string & name, const DataTypes & argument_types, const Array & params, bool is_by_times = false)
+    template <bool need_order>
+    AggregateFunctionPtr createAggregateFunctionFinderFunnelHelper(
+        const std::string & name, const DataTypes & argument_types, const Array & params, bool is_by_times = false)
     {
-        if (argument_types.size() < 3 || argument_types.size() > 9)
-            throw Exception("Incorrect number of arguments for aggregate function " + name + ", requires " +
-                                "(windows_in_seconds, start_time, check_granularity, number_check, [related_num], [relative_window_type, time_zone], [time_interval [count_group]] should be at least 3",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        if (params.size() < 3 || params.size() > 9)
+            throw Exception(
+                "Incorrect number of arguments for aggregate function " + name + ", requires "
+                    + "(windows_in_seconds, start_time, check_granularity, number_check, [related_num], [relative_window_type, time_zone], "
+                      "[time_interval [count_group]] should be at least 3",
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         if (!argument_types[0]->equals(*argument_types[1]))
-            throw Exception("First two columns should be the same type for aggregate function " + name,
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception("First two columns should be the same type for aggregate function " + name, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         if (!typeid_cast<const DataTypeUInt64 *>(argument_types[0].get()))
-            throw Exception("First two columns should be the same type as UInt64 " + name,
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception("First two columns should be the same type as UInt64 " + name, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         UInt64 attr_related = 0;
-        if (params.size() == 5 || params.size() == 7 || params.size() == 8)
+        if (params.size() == 5 || params.size() == 7 || params.size() == 8 || params.size() == 9)
             attr_related = params[4].safeGet<UInt64>();
 
-        size_t v = attr_related ?  __builtin_popcount(attr_related) + 2 : 2;
+        size_t v = attr_related ? __builtin_popcount(attr_related) + 2 : 2;
         bool event_check = v < argument_types.size();
         for (size_t i = v; i < argument_types.size(); i++)
         {
@@ -99,7 +101,7 @@ namespace
             attr_type = argument_types[2];
             for (int i = 1; i < __builtin_popcount(attr_related); i++)
             {
-                if (argument_types[i+2]->getTypeId() != attr_type->getTypeId())
+                if (argument_types[i + 2]->getTypeId() != attr_type->getTypeId())
                     throw Exception("Inconsistent types of associated attributes", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
             }
         }
@@ -107,22 +109,27 @@ namespace
         if (is_by_times)
         {
             if (time_interval && params.size() != 9)
-                throw Exception("Need set target calculate interval step on by times funnel" + name,
-                                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                throw Exception("Need set target calculate interval step on by times funnel" + name, ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
             UInt64 target_step = NUMBER_STEPS + 1;
-            if (time_interval) {
+            if (time_interval)
                 target_step = params[8].safeGet<UInt64>();
-            }
 
             res.reset(createWithSingleTypeLastKnown<AggregateFunctionFinderFunnelByTimes>(
                 *attr_type, window, watch_start, watch_step,
                 watch_numbers, window_type, time_zone, num_virts, attr_related, time_interval, target_step, argument_types, params));
         }
         else
-            res.reset(createWithSingleTypeLastKnown<AggregateFunctionFinderFunnel>(
-                *attr_type, window, watch_start, watch_step,
-                watch_numbers, window_type, time_zone, num_virts, attr_related, time_interval, argument_types, params));
+        {
+            if constexpr (need_order)
+                res.reset(createWithSingleTypeLastKnown<AggregateFunctionFinderFunnel>(
+                    *attr_type, window, watch_start, watch_step, 
+                    watch_numbers, window_type, time_zone, num_virts, attr_related, time_interval, true, argument_types, params));
+            else
+                res.reset(createWithSingleTypeLastKnown<AggregateFunctionFinderFunnel>(
+                    *attr_type, window, watch_start, watch_step, 
+                    watch_numbers, window_type, time_zone, num_virts, attr_related, time_interval, false, argument_types, params));
+        }
 
         if (!res)
             throw Exception("Illegal type for aggregate function " + name, ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -130,21 +137,28 @@ namespace
         return res;
     }
 
+    template <bool need_order>
     AggregateFunctionPtr createAggregateFunctionFinderFunnel(const std::string & name, const DataTypes & argument_types, const Array & params, const Settings *)
     {
-        return createAggregateFunctionFinderFunnelHelper(name, argument_types, params);
+        if constexpr (need_order)
+            return createAggregateFunctionFinderFunnelHelper<true>(name, argument_types, params);
+        else
+            return createAggregateFunctionFinderFunnelHelper<false>(name, argument_types, params);
     }
 
     AggregateFunctionPtr createAggregateFunctionFinderFunnelByTimes(const std::string & name, const DataTypes & argument_types, const Array & params, const Settings *)
     {
-        return createAggregateFunctionFinderFunnelHelper(name, argument_types, params, true);
+        return createAggregateFunctionFinderFunnelHelper<false>(name, argument_types, params, true);
     }
 
 }
 
 void registerAggregateFunctionFinderFunnel(AggregateFunctionFactory & factory)
 {
-    factory.registerFunction("finderFunnel", createAggregateFunctionFinderFunnel, AggregateFunctionFactory::CaseInsensitive);
+    factory.registerFunction("finderFunnel", createAggregateFunctionFinderFunnel<false>, AggregateFunctionFactory::CaseInsensitive);
     factory.registerFunction("finderFunnelByTimes", createAggregateFunctionFinderFunnelByTimes, AggregateFunctionFactory::CaseInsensitive);
+
+    // For finderFunnel & groupFinderFunnel: guarantee the stability of results
+    factory.registerFunction("finderFunnelStable", createAggregateFunctionFinderFunnel<true>, AggregateFunctionFactory::CaseInsensitive);
 }
 }

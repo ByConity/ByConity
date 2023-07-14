@@ -22,7 +22,7 @@ namespace DB
 {
 struct DiskCacheSettings
 {
-    static constexpr auto prefix = "disk_cache";
+    static constexpr auto root = "disk_cache_strategies";
     void loadFromConfig(const Poco::Util::AbstractConfiguration & conf, const std::string & disk_cache_name);
 
     size_t lru_max_size {std::numeric_limits<size_t>::max()};
@@ -42,17 +42,15 @@ struct DiskCacheSettings
     size_t cache_loader_per_disk {2};
     int cache_load_dispatcher_drill_down_level {1};
     size_t cache_set_rate_limit {0};
-};
-
-struct DiskCacheStrategySettings
-{
-    static constexpr auto prefix = "disk_cache_strategy";
-    void loadFromConfig(const Poco::Util::AbstractConfiguration & conf, const std::string & disk_cache_strategy_name);
 
     size_t segment_size {8192};
     size_t hits_to_cache {2};
     // Size of disk cache statistics bucket size
     size_t stats_bucket_size {10000};
+
+    // load previous folder cached data if it's not empty for compatible when data dir config is changed
+    std::string previous_disk_cache_dir{};
+    std::string latest_disk_cache_dir{"disk_cache_v1"};
 };
 
 }

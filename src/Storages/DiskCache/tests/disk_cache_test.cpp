@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <iostream>
 #include <filesystem>
 #include <Disks/DiskLocal.h>
 #include <Disks/SingleDiskVolume.h>
@@ -27,6 +28,16 @@
 #include "IO/LimitReadBuffer.h"
 #include "IO/ReadBufferFromFile.h"
 #include "IO/copyData.h"
+#include <Poco/Util/XMLConfiguration.h>
+#include <Storages/DiskCache/FileDiskCacheSegment.h>
+#include <Storages/DiskCache/DiskCacheFactory.h>
+#include <Common/tests/gtest_global_context.h>
+#include <Poco/ConsoleChannel.h>
+#include <Poco/FormattingChannel.h>
+#include <Poco/Logger.h>
+#include <Poco/PatternFormatter.h>
+#include <Poco/Util/XMLConfiguration.h>
+#include <Disks/registerDisks.h>
 
 namespace fs = std::filesystem;
 
@@ -45,7 +56,7 @@ void generateData(const DiskPtr & disk, int depth, int num_per_level, Strings & 
             cache_name = fmt::format("{}.{}", fmt::join(partial_key, "/"), "bin");
             if constexpr (IS_V1_FORMAT)
             {
-                rel_path = DiskCacheLRU::getRelativePath(DiskCacheLRU::hash(cache_name));
+                rel_path = DiskCacheLRU::getPath(DiskCacheLRU::hash(cache_name), "disk_cache_v1");
             }
             else
             {
@@ -103,9 +114,35 @@ DB::VolumePtr newDualDiskVolume()
 }
 // TODO: more volume
 
+using namespace DB;
+
 class DiskCacheTest : public testing::Test
 {
 public:
+    static void SetUpTestCase() {
+        Poco::AutoPtr<Poco::PatternFormatter> formatter(new Poco::PatternFormatter("%Y.%m.%d %H:%M:%S.%F <%p> %s: %t"));
+        Poco::AutoPtr<Poco::ConsoleChannel> console_chanel(new Poco::ConsoleChannel);
+        Poco::AutoPtr<Poco::FormattingChannel> channel(new Poco::FormattingChannel(formatter, console_chanel));
+        Poco::Logger::root().setLevel("trace");
+        Poco::Logger::root().setChannel(channel);
+
+        ctx = getContext().context;
+
+        fs::create_directories("./disks/");
+
+        fs::create_directory("./disk_cache/");
+        fs::create_directory("./disk_cache_v1/");
+        fs::create_directory("/tmp/disk_cache/");
+        fs::create_directory("/tmp/disk_cache_v1/");
+        registerDisks();
+    }
+
+    static void TearDownTestCase() {
+        ctx->shutdown();
+        // ctx->getLocalDiskCacheThreadPool().finalize();
+        // ctx->getLocalDiskCacheEvictThreadPool().finalize();
+    }
+
     void SetUp() override
     {
         fs::remove_all("tmp/");
@@ -120,8 +157,11 @@ public:
         DB::IDiskCache::close();
     }
 
+    static std::shared_ptr<Context> ctx;
     static constexpr const UInt32 segment_size = 8192;
 };
+
+std::shared_ptr<Context> DiskCacheTest::ctx = nullptr;
 
 TEST_F(DiskCacheTest, Collect)
 {
@@ -144,9 +184,68 @@ TEST_F(DiskCacheTest, Collect)
         auto disk = meta_in_disk.first;
         for (const String & name : meta_in_disk.second) {
             auto [cache_disk, cached_file] = cache.get(name);
+            std::cout << "cur cached_file: " << cached_file << std::endl;
             ASSERT_TRUE(!cached_file.empty());
             ASSERT_TRUE(cache_disk->getName() == disk->getName());
             ASSERT_TRUE(cache_disk->exists(cached_file));
         }
     }
 }
+
+/*
+
+TEST_F(DiskCacheTest, CompatibleConfig)
+{
+
+    DB::IDiskCache::close();
+    Poco::AutoPtr<Poco::Util::XMLConfiguration> config = new Poco::Util::XMLConfiguration("disk_cache_test_old_config.xml");
+    ctx->setConfig(config);
+    DiskCacheFactory::instance().init(*ctx);
+    ASSERT_TRUE(DiskCacheFactory::instance().get(DiskCacheType::MergeTree));
+    ASSERT_TRUE(DiskCacheFactory::instance().get(DiskCacheType::Hive));
+}
+/// todo(jiashuo): not pass
+TEST_F(DiskCacheTest, File)
+{
+    DB::IDiskCache::close();
+    Poco::AutoPtr<Poco::Util::XMLConfiguration> config = new Poco::Util::XMLConfiguration("disk_cache_test_new_config.xml");
+    auto ctx = getContext().context;
+    ctx->setConfig(config);
+    DiskCacheFactory::instance().init(*ctx);
+    ASSERT_TRUE(DiskCacheFactory::instance().get(DiskCacheType::MergeTree));
+    ASSERT_TRUE(DiskCacheFactory::instance().get(DiskCacheType::Hive));
+
+    auto disk_cache = DiskCacheFactory::instance().get(DiskCacheType::File);
+    ASSERT_TRUE(disk_cache);
+
+    const auto & test_file = "/home/byte_dp_cnch_lf/titan/ci/cnch-disk-cache-test";
+
+    const auto & key1 = FileDiskCacheSegment::getSegmentKey("test_file_uuid", "part_name");
+    const auto & localFilePathEmpty = disk_cache->get(key1);
+    ASSERT_TRUE(localFilePathEmpty.second.empty());
+
+    HDFSConnectionParams hdfs_params = HDFSConnectionParams::parseHdfsFromConfig(*config);
+    hdfs_params.conn_type = HDFSConnectionParams::HDFSConnectionType::CONN_NNPROXY;
+    hdfs_params.lookupOnNeed();
+    ctx->setHdfsConnectionParams(hdfs_params);
+    registerDefaultHdfsFileSystem(hdfs_params, 100000, 100, 10);
+    if (!HDFSCommon::exists(test_file))
+    {
+        HDFSCommon::createFile(test_file);
+    }
+
+    FileRanges all_file_ranges{FileRange()};
+    const auto & parquet_segments = disk_cache->getStrategy()->transferRangesToSegments<FileDiskCacheSegment>(
+        all_file_ranges, "uuid", test_file, ctx->getHdfsConnectionParams());
+    ASSERT_EQ(parquet_segments.size(), 1);
+    disk_cache->cacheSegmentsToLocalDisk(parquet_segments);
+    // ctx->getLocalDiskCacheThreadPool().wait();
+    Poco::File dir(disk_cache->getDataDir());
+    ASSERT_TRUE(dir.exists());
+    const auto & key2 = FileDiskCacheSegment::getSegmentKey("uuid", test_file);
+    const auto & localParquetPath = disk_cache->get(key2);
+    ASSERT_FALSE(localParquetPath.second.empty());
+
+    Poco::File(disk_cache->getDataDir()).remove(true);
+}
+*/

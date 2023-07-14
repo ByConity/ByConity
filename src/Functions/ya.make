@@ -269,6 +269,7 @@ SRCS(
     formatReadableTimeDelta.cpp
     formatRow.cpp
     formatString.cpp
+    fromDaysAndToDays.cpp
     fromModifiedJulianDay.cpp
     fromUnixTimestamp64Micro.cpp
     fromUnixTimestamp64Milli.cpp

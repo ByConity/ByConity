@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-#include "DiskCacheSegment.h"
+#include "PartFileDiskCacheSegment.h"
 
 #include <IO/LimitReadBuffer.h>
 #include <Storages/DiskCache/IDiskCache.h>
@@ -25,7 +25,7 @@
 
 namespace DB
 {
-DiskCacheSegment::DiskCacheSegment(
+PartFileDiskCacheSegment::PartFileDiskCacheSegment(
     UInt32 segment_number_,
     UInt32 segment_size_,
     const IMergeTreeDataPartPtr & data_part_,
@@ -55,20 +55,20 @@ DiskCacheSegment::DiskCacheSegment(
 {
 }
 
-String DiskCacheSegment::getSegmentKey(
+String PartFileDiskCacheSegment::getSegmentKey(
     const StorageID & storage_id, const String & part_name, const String & stream_name, UInt32 segment_index, const String & extension)
 {
     return IDiskCacheSegment::formatSegmentName(
         UUIDHelpers::UUIDToString(storage_id.uuid), part_name, stream_name, segment_index, extension);
 }
 
-String DiskCacheSegment::getSegmentName() const
+String PartFileDiskCacheSegment::getSegmentName() const
 {
     return formatSegmentName(
         UUIDHelpers::UUIDToString(storage->getStorageUUID()), data_part->getUniquePartName(), stream_name, segment_number, extension);
 }
 
-void DiskCacheSegment::cacheToDisk(IDiskCache & disk_cache)
+void PartFileDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache)
 {
     Poco::Logger * log = disk_cache.getLogger();
 

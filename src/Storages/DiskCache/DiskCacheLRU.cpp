@@ -14,6 +14,7 @@
  */
 
 #include <Storages/DiskCache/DiskCacheLRU.h>
+#include <Storages/DiskCache/DiskCacheSimpleStrategy.h>
 #include <sys/stat.h>
 #include <atomic>
 #include <filesystem>
@@ -53,10 +54,6 @@ namespace ErrorCodes
 
 static constexpr auto DISK_CACHE_TEMP_FILE_SUFFIX = ".temp";
 static constexpr auto TMP_SUFFIX_LEN = std::char_traits<char>::length(DISK_CACHE_TEMP_FILE_SUFFIX);
-/// backward compatibility
-/// background load thread to migrate from old to new format
-static constexpr auto PREV_DISK_CACHE_DIR_NAME = "disk_cache";
-static constexpr auto DISK_CACHE_DIR_NAME = "disk_cache_v1";
 
 namespace
 {
@@ -91,6 +88,7 @@ namespace
 DiskCacheLRU::DiskCacheLRU(const VolumePtr & volume_, const ThrottlerPtr & throttler_, const DiskCacheSettings & settings_)
     : IDiskCache(volume_, throttler_, settings_)
     , set_rate_throttler(settings_.cache_set_rate_limit == 0 ? nullptr : std::make_shared<Throttler>(settings_.cache_set_rate_limit))
+    , strategy(std::make_shared<DiskCacheSimpleStrategy>(settings_))
     , containers(
           settings.cache_shard_num,
           BucketLRUCache<KeyType, DiskCacheMeta, UInt128Hash, DiskCacheWeightFunction>::Options{
@@ -161,14 +159,14 @@ std::optional<DiskCacheLRU::KeyType> DiskCacheLRU::unhexKey(const String & hex_k
 // disk_cache_v1/uuid_part_name[:3]/uuid_part_name/stream_name
 // e.g. disk_cache_v1/752/752573bf0b591cd/de3e88c72ced6c3d
 // files belongs to the same part will be placed under the same path
-fs::path DiskCacheLRU::getRelativePath(const DiskCacheLRU::KeyType & hash_key)
+fs::path DiskCacheLRU::getPath(const DiskCacheLRU::KeyType & hash_key, const String & path)
 {
     String hex_key = hexKey(hash_key);
     std::string_view view(hex_key);
     std::string_view hex_key_low = view.substr(0, HEX_KEY_LEN / 2);
     std::string_view hex_key_high = view.substr(HEX_KEY_LEN / 2, HEX_KEY_LEN);
 
-    return fs::path(DISK_CACHE_DIR_NAME) / hex_key_high.substr(0, 3) / hex_key_high / hex_key_low;
+    return fs::path(path) / hex_key_high.substr(0, 3) / hex_key_high / hex_key_low;
 }
 
 void DiskCacheLRU::set(const String& seg_name, ReadBuffer& value, size_t weight_hint)
@@ -298,7 +296,7 @@ void DiskCacheLRU::afterEvictSegment([[maybe_unused]]const std::vector<std::pair
     if (shutdown_called)
         return;
 
-    auto& thread_pool = IDiskCache::getThreadPool();
+    auto& thread_pool = IDiskCache::getEvictPool();
     for (auto iter = updated_elements.begin(); iter != updated_elements.end(); ++iter)
     {
         DiskPtr disk = iter->second->disk;
@@ -357,17 +355,21 @@ void DiskCacheLRU::load()
                 [this, disk] {
                     auto loader = std::make_unique<DiskCacheLoader>(
                         *this, disk, settings.cache_loader_per_disk, 1, 1);
-                    loader->exec(fs::path(DISK_CACHE_DIR_NAME) / "");
+                    loader->exec(fs::path(latest_disk_cache_dir) / "");
                 },
                 except_handler));
 
-            dispatcher_pool.scheduleOrThrowOnError(createExceptionHandledJob(
-                [this, disk] {
-                    auto migrator = std::make_unique<DiskCacheMigrator>(
-                        *this, disk, settings.cache_loader_per_disk, 1, 1);
-                    migrator->exec(fs::path(PREV_DISK_CACHE_DIR_NAME) / "");
-                },
-                except_handler));
+            if (!previous_disk_cache_dir.empty())
+            {
+                dispatcher_pool.scheduleOrThrowOnError(createExceptionHandledJob(
+                    [this, disk] {
+                        auto migrator = std::make_unique<DiskCacheMigrator>(
+                            *this, disk, settings.cache_loader_per_disk, 1, 1);
+                        migrator->exec(fs::path(previous_disk_cache_dir) / "");
+                    },
+                    except_handler));
+            }
+
         }
         dispatcher_pool.wait();
         except_handler.throwIfException();
@@ -379,13 +381,16 @@ void DiskCacheLRU::load()
         for (const DiskPtr & disk : disks)
         {
             auto loader = std::make_unique<DiskCacheLoader>(*this, disk, settings.cache_loader_per_disk, 1, 1);
-            loader->exec(fs::path(DISK_CACHE_DIR_NAME) / "");
+            loader->exec(fs::path(latest_disk_cache_dir) / "");
         }
 
-        for (const DiskPtr & disk : disks)
+        if (!previous_disk_cache_dir.empty())
         {
-            auto migrator = std::make_unique<DiskCacheMigrator>(*this, disk, settings.cache_loader_per_disk, 1, 1);
-            migrator->exec(fs::path(PREV_DISK_CACHE_DIR_NAME) / "");
+            for (const DiskPtr & disk : disks)
+            {
+                auto migrator = std::make_unique<DiskCacheMigrator>(*this, disk, settings.cache_loader_per_disk, 1, 1);
+                migrator->exec(fs::path(previous_disk_cache_dir) / "");
+            }
         }
     }
 }

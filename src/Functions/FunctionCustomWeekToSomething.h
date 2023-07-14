@@ -46,7 +46,15 @@ class FunctionCustomWeekToSomething : public IFunction
 {
 public:
     static constexpr auto name = Transform::name;
-    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionCustomWeekToSomething>(); }
+
+    explicit FunctionCustomWeekToSomething(ContextPtr context_) : context(context_)
+    {
+    }
+
+    static FunctionPtr create(ContextPtr context)
+    {
+        return std::make_shared<FunctionCustomWeekToSomething>(context);
+    }
 
     String getName() const override { return name; }
 
@@ -57,17 +65,17 @@ public:
     {
         if (arguments.size() == 1)
         {
-            if (!isDate(arguments[0].type) && !isDate32(arguments[0].type)
-                && !isDateTime(arguments[0].type) && !isDateTime64(arguments[0].type))
+            if (!isDate(arguments[0].type) && !isDate32(arguments[0].type) && !isDateTime(arguments[0].type)
+                && !isDateTime64(arguments[0].type) && !isStringOrFixedString(arguments[0].type))
                 throw Exception(
                     "Illegal type " + arguments[0].type->getName() + " of argument of function " + getName()
-                        + ". Must be Date, Date32, DateTime or DateTime64.",
+                        + ". Must be Date, Date32, DateTime, DateTime64 or String.",
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
         else if (arguments.size() == 2)
         {
-            if (!isDate(arguments[0].type) && !isDate32(arguments[0].type)
-                && !isDateTime(arguments[0].type) && !isDateTime64(arguments[0].type))
+            if (!isDate(arguments[0].type) && !isDate32(arguments[0].type) && !isDateTime(arguments[0].type)
+                && !isDateTime64(arguments[0].type) && !isStringOrFixedString(arguments[0].type))
                 throw Exception(
                     "Illegal type " + arguments[0].type->getName() + " of 1st argument of function " + getName()
                         + ". Must be Date, Date32, DateTime or DateTime64.",
@@ -80,8 +88,8 @@ public:
         }
         else if (arguments.size() == 3)
         {
-            if (!isDate(arguments[0].type) && !isDate32(arguments[0].type)
-                && !isDateTime(arguments[0].type) && !isDateTime64(arguments[0].type))
+            if (!isDate(arguments[0].type) && !isDate32(arguments[0].type) && !isDateTime(arguments[0].type)
+                && !isDateTime64(arguments[0].type) && !isStringOrFixedString(arguments[0].type))
                 throw Exception(
                     "Illegal type " + arguments[0].type->getName() + " of argument of function " + getName()
                         + ". Must be Date, Date32, DateTime or DateTime64.",
@@ -133,6 +141,20 @@ public:
                 arguments, result_type, input_rows_count,
                 TransformDateTime64<Transform>{assert_cast<const DataTypeDateTime64 *>(from_type)->getScale()});
         }
+        else if (which.isStringOrFixedString())
+        {
+            ColumnsWithTypeAndName converted;
+            ColumnsWithTypeAndName temp{arguments[0]};
+            auto to_int = FunctionFactory::instance().get("toDateTime", context);
+            auto col = to_int->build(temp)->execute(temp, arguments[0].type, input_rows_count);
+            ColumnWithTypeAndName converted_col(col, std::make_shared<DataTypeDateTime64>(0), "unixtime");
+            converted.emplace_back(converted_col);
+            for (int i = 1; i < arguments.size(); i++)
+            {
+                converted.emplace_back(arguments[i]);
+            }
+            return CustomWeekTransformImpl<DataTypeDateTime, ToDataType>::execute(converted, result_type, input_rows_count, Transform{});
+        }
         else
             throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
                 "Illegal type {} of argument of function {}",
@@ -182,6 +204,9 @@ public:
                 : is_not_monotonic;
         }
     }
+
+private:
+    ContextPtr context;
 };
 
 }

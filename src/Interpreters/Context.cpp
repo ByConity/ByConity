@@ -199,6 +199,7 @@
 #include <Transaction/CnchWorkerTransaction.h>
 #include <Statistics/StatisticsMemoryStore.h>
 #include <Common/HostWithPorts.h>
+#include <Storages/DiskCache/DiskCacheFactory.h>
 
 #include <Interpreters/TemporaryDataOnDisk.h>
 
@@ -2056,7 +2057,7 @@ void Context::setProcessorProfileElementConsumer(
 std::shared_ptr<ProfileElementConsumer<ProcessorProfileLogElement>> Context::getProcessorProfileElementConsumer() const
 {
     auto lock = getLock();
-    
+
     if (!shared->processor_log_element_consumer)
         return {};
     return shared->processor_log_element_consumer;
@@ -2071,7 +2072,7 @@ void Context::setIsExplainQuery(const bool & is_explain_query_)
 bool Context::isExplainQuery() const
 {
     auto lock = getLock();
-    
+
     return shared->is_explain_query;
 }
 
@@ -4132,7 +4133,10 @@ std::shared_ptr<TSO::TSOClient> Context::getCnchTSOClient() const
     if (host_port.empty())
         updateTSOLeaderHostPort();
 
-    return shared->tso_client_pool->get(host_port);
+    if (auto updated_host_port = getTSOLeaderHostPort(); !updated_host_port.empty())
+        return shared->tso_client_pool->get(updated_host_port);
+    else
+        throw Exception(ErrorCodes::NOT_A_LEADER, "Get an empty tso leader from keeper");
 }
 
 String Context::getTSOLeaderHostPort() const
@@ -4154,6 +4158,7 @@ void Context::updateTSOLeaderHostPort() const
         /// leader election maybe disabled, there should be one tso-server
         std::lock_guard lock(shared->tso_mutex);
         shared->tso_leader_host_port = "";
+        LOG_WARNING(&Poco::Logger::get("Context::updateTSO"), "TSO leader election path {} doesn't exists in keeper", tso_election_path);
         return;
     }
 

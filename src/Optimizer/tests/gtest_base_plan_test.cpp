@@ -35,6 +35,7 @@
 #include <QueryPlan/QueryPlanner.h>
 #include <Statistics/CacheManager.h>
 #include <Statistics/CatalogAdaptor.h>
+#include <Poco/NumberParser.h>
 #include <Poco/Util/MapConfiguration.h>
 #include <Common/tests/gtest_global_context.h>
 #include <Common/tests/gtest_global_register.h>
@@ -529,4 +530,16 @@ bool AbstractPlanTestSuite::enforce_regenerate()
     return std::getenv("REGENERATE") != nullptr;
 }
 
+int AbstractPlanTestSuite::regenerate_task_thread_size()
+{
+    if (auto * str = std::getenv("REGENERATE_TASK_THREAD_SIZE"))
+    {
+        int value;
+        if (Poco::NumberParser::tryParse(String{str}, value) && value > 0 && value < 100)
+        {
+            return value;
+        }
+    }
+    return 8;
+}
 }

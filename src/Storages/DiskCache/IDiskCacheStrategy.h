@@ -28,7 +28,7 @@ namespace DB
 class IDiskCacheStrategy : public std::enable_shared_from_this<IDiskCacheStrategy>
 {
 public:
-    explicit IDiskCacheStrategy(const DiskCacheStrategySettings & settings_): segment_size(settings_.segment_size) {}
+    explicit IDiskCacheStrategy(const DiskCacheSettings & settings_): segment_size(settings_.segment_size) {}
     virtual ~IDiskCacheStrategy() = default;
 
     IDiskCacheStrategy(const IDiskCacheStrategy &) = delete;

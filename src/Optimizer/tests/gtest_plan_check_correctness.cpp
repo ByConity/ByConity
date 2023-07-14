@@ -13,14 +13,14 @@
  * limitations under the License.
  */
 
+#include <Optimizer/tests/gtest_base_correctness_plan_test.h>
 #include <QueryPlan/PlanPrinter.h>
-#include <Optimizer/tests/gtest_correctness_plan_test.h>
 
 #include <gtest/gtest.h>
 
 using namespace DB;
 
-class CorrectnessPlanTesting : public ::testing::Test
+class PlanCheckCorrectness : public ::testing::Test
 {
 public:
     static void SetUpTestSuite()
@@ -51,49 +51,31 @@ public:
     static std::shared_ptr<DB::CorrectnessPlanTest> tester;
 };
 
-std::shared_ptr<DB::CorrectnessPlanTest> CorrectnessPlanTesting::tester;
+std::shared_ptr<DB::CorrectnessPlanTest> PlanCheckCorrectness::tester;
 
-TEST_F(CorrectnessPlanTesting, generate)
-{
-    if (!AbstractPlanTestSuite::enforce_regenerate())
-        GTEST_SKIP() << "skip generate. set env REGENERATE=1 to regenerate explains.";
+DECLARE_GENERATE_TEST(PlanCheckCorrectness)
 
-    for (auto & query : tester->loadQueries())
-    {
-        try
-        {
-            std::cout << " try generate for " + query + "." << std::endl;
-            tester->saveExplain(query, explain(query));
-        }
-        catch (...)
-        {
-            std::cerr << " generate for " + query + " failed." << std::endl;
-            tester->saveExplain(query, "");
-        }
-    }
-}
-
-TEST_F(CorrectnessPlanTesting, q1)
+TEST_F(PlanCheckCorrectness, q1)
 {
     EXPECT_TRUE(equals(explain("q1"), expected("q1")));
 }
 
-TEST_F(CorrectnessPlanTesting, q2)
+TEST_F(PlanCheckCorrectness, q2)
 {
     EXPECT_TRUE(equals(explain("q2"), expected("q2")));
 }
 
-TEST_F(CorrectnessPlanTesting, q3)
+TEST_F(PlanCheckCorrectness, q3)
 {
     EXPECT_TRUE(equals(explain("q3"), expected("q3")));
 }
 
-TEST_F(CorrectnessPlanTesting, q4)
+TEST_F(PlanCheckCorrectness, q4)
 {
     EXPECT_TRUE(equals(explain("q4"), expected("q4")));
 }
 
-TEST_F(CorrectnessPlanTesting, q5)
+TEST_F(PlanCheckCorrectness, q5)
 {
     EXPECT_TRUE(equals(explain("q5"), expected("q5")));
 }
