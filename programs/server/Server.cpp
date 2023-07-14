@@ -1091,13 +1091,16 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setUncompressedCache(uncompressed_cache_size);
 
     /// Load global settings from default_profile and system_profile.
-    if (global_context->getServerType() == ServerType::cnch_server && global_context->getSettingsRef().enable_vw_customized_setting)
+    if (global_context->getServerType() == ServerType::cnch_server)
     {
         auto vw_customized_settings_ptr = std::make_shared<VWCustomizedSettings>(config());
-        vw_customized_settings_ptr->loadCustomizedSettings();
-        global_context->setVWCustomizedSettings(vw_customized_settings_ptr);
+        if (!vw_customized_settings_ptr->isEmpty())
+        {
+            vw_customized_settings_ptr->loadCustomizedSettings();
+            global_context->setVWCustomizedSettings(vw_customized_settings_ptr);
+        }
     }
-
+    
     global_context->setDefaultProfiles(config());
     const Settings & settings = global_context->getSettingsRef();
 

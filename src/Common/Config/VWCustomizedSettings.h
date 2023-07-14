@@ -29,6 +29,7 @@ public:
     void loadCustomizedSettings();
 
     String toString();
+    bool isEmpty();
 
 private:
     using RawConfigKeys = std::unordered_map<String, std::unordered_map<String, String>>;

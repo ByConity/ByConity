@@ -565,6 +565,14 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
         /// TODO: parser should fail early when max_query_size limit is reached.
         ast = parseQuery(parser, begin, end, "", max_query_size, settings.max_parser_depth);
+        if (context->getServerType() == ServerType::cnch_server && context->getVWCustomizedSettings())
+        {
+            auto vw_name = tryGetVirtualWarehouseName(ast, context);
+            if (vw_name != EMPTY_VIRTUAL_WAREHOUSE_NAME)
+            {
+                context->getVWCustomizedSettings()->overwriteDefaultSettings(vw_name, context->getSettingsRef());
+            }
+        }
 
         if (context->getServerType() == ServerType::cnch_server && context->getSettingsRef().enable_auto_query_forwarding)
         {
@@ -662,11 +670,6 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     if (txn && context->getServerType() == ServerType::cnch_server)
     {
         trySetVirtualWarehouseAndWorkerGroup(ast, context);
-        if (context->getSettingsRef().enable_vw_customized_setting)
-        {
-            auto current_vw = context->tryGetCurrentVW();
-            context->getVWCustomizedSettings()->overwriteDefaultSettings(current_vw->getName(), context->getSettingsRef());
-        }
         context->initCnchServerResource(txn->getTransactionID());
     }
 
