@@ -27,6 +27,10 @@ protected:
     }
 
     bool useDefaultImplementationForNulls() const final { return function->useDefaultImplementationForNulls(); }
+    bool useDefaultImplementationForNothing() const final
+    {
+        return function->useDefaultImplementationForNothing();
+    }
     bool useDefaultImplementationForConstants() const final { return function->useDefaultImplementationForConstants(); }
     bool useDefaultImplementationForLowCardinalityColumns() const final { return function->useDefaultImplementationForLowCardinalityColumns(); }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const final { return function->getArgumentsThatAreAlwaysConstant(); }
@@ -119,6 +123,10 @@ public:
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override { return function->getReturnTypeImpl(arguments); }
 
     bool useDefaultImplementationForNulls() const override { return function->useDefaultImplementationForNulls(); }
+    bool useDefaultImplementationForNothing() const override
+    {
+        return function->useDefaultImplementationForNothing();
+    }
     bool useDefaultImplementationForLowCardinalityColumns() const override { return function->useDefaultImplementationForLowCardinalityColumns(); }
     bool canBeExecutedOnLowCardinalityDictionary() const override { return function->canBeExecutedOnLowCardinalityDictionary(); }
 
