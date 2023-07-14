@@ -216,7 +216,7 @@ int mainEntryClickhouseS3RenameTool(int argc, char ** argv)
         ("need_delete", po::value<bool>()->default_value(true), "whether delete origin file, default true")
         ("uuid_check", po::value<bool>()->default_value(true), "whether check uuid is valid or not, default true")
         ("enable_logging", "Enable logging output")
-        ("logging_level", po::value<String>()->default_value("debug"), "logging level")
+        ("logging_level", po::value<String>()->default_value("info"), "logging level")
     ;
 
     po::variables_map vm;
