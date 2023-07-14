@@ -4,6 +4,7 @@
 #include <string>
 #include <IO/S3Common.h>
 #include <IO/ReadHelpers.h>
+#include <IO/ReadBufferFromString.h>
 #include <aws/s3/S3Client.h>
 #include <aws/s3/model/Object.h>
 #include <aws/s3/model/ListObjectsRequest.h>
@@ -16,6 +17,12 @@
 #include <boost/asio/thread_pool.hpp>
 #include <boost/asio/post.hpp>
 #include <boost/program_options.hpp>
+#include <Poco/AutoPtr.h>
+#include <Poco/ConsoleChannel.h>
+#include <Poco/FormattingChannel.h>
+#include <Poco/Logger.h>
+#include <Poco/Path.h>
+#include <Poco/PatternFormatter.h>
 
 #define MAX_OBJECT_SIZE 5368709120
 
@@ -90,7 +97,6 @@ bool UploadPartCopy(const String &fromBucket, const String &fromKey, const Strin
         completed_multipart.AddParts(completed_part);
         byte_position += part_size;
         part_num++;
-        std::cout << "one part success" << std::endl;
     }
 
     // Complete the upload request to concatenate all uploaded parts and make the copied object available.
@@ -135,7 +141,7 @@ bool DeleteObject(const String &objectKey, const String &fromBucket, const S3::S
 }
 
 bool ListAndRenameObjects(const String &fromBucket, const String &rootPrefix, const String& toBucket,
-                const bool needDelete, const S3::S3Client &client, const int threadNum) {
+                const bool needDelete, const bool checkUUid, const S3::S3Client &client, const int threadNum) {
     S3::Model::ListObjectsRequest request;
     request.WithBucket(fromBucket);
     if (!rootPrefix.empty()) {
@@ -160,8 +166,16 @@ bool ListAndRenameObjects(const String &fromBucket, const String &rootPrefix, co
             boost::split(split_parts, from_key, boost::is_any_of("/"));
 
             if (split_parts.size() == 4) {
+                if (checkUUid) {
+                    DB::UUID uuid;
+                    DB::ReadBufferFromString read_buffer(split_parts[1]);
+                    if (!DB::tryReadUUIDText(uuid, read_buffer)) {
+                        continue;
+                    }
+                }
                 String to_key = split_parts[0] + "/" + split_parts[2] + "/" + split_parts[3];
                 int64_t object_size = object.GetSize();
+                // submit copy task
                 boost::asio::post(thread_pool, [=, &client]() {
                     bool copy_result = false;
                     if (object_size >= MAX_OBJECT_SIZE) {
@@ -199,7 +213,10 @@ int mainEntryClickhouseS3RenameTool(int argc, char ** argv)
         ("root_prefix", po::value<String>()->default_value(""), "files that need to be renamed start with. If not specified, all files in bucket will be renamed")
         ("to_bucket", po::value<String>(), "bucket name that files need to be moved to, default from_bucket")
         ("thread_number", po::value<int>()->default_value(1), "using how many threads, default 1")
-        ("need_delete", po::value<bool>()->default_value(true), "whether delete origin file, default true.")
+        ("need_delete", po::value<bool>()->default_value(true), "whether delete origin file, default true")
+        ("uuid_check", po::value<bool>()->default_value(true), "whether check uuid is valid or not, default true")
+        ("enable_logging", "Enable logging output")
+        ("logging_level", po::value<String>()->default_value("debug"), "logging level")
     ;
 
     po::variables_map vm;
@@ -221,6 +238,15 @@ int mainEntryClickhouseS3RenameTool(int argc, char ** argv)
         return 1;
     }
 
+    if (vm.count("enable_logging"))
+    {
+        Poco::AutoPtr<Poco::PatternFormatter> formatter(new Poco::PatternFormatter("%Y.%m.%d %H:%M:%S.%F <%p> %s: %t"));
+        Poco::AutoPtr<Poco::ConsoleChannel> console_chanel(new Poco::ConsoleChannel);
+        Poco::AutoPtr<Poco::FormattingChannel> channel(new Poco::FormattingChannel(formatter, console_chanel));
+        Poco::Logger::root().setLevel(vm["logging_level"].as<String>());
+        Poco::Logger::root().setChannel(channel);
+    }
+
     DB::S3::S3Config s3_config(vm["s3_endpoint"].as<String>(), vm["s3_region"].as<String>(), 
                                 vm["from_bucket"].as<String>(), vm["s3_ak_id"].as<String>(), 
                                 vm["s3_ak_secret"].as<String>(), vm["root_prefix"].as<String>());
@@ -235,6 +261,7 @@ int mainEntryClickhouseS3RenameTool(int argc, char ** argv)
         vm["root_prefix"].as<String>(), 
         to_bucket,
         vm["need_delete"].as<bool>(), 
+        vm["uuid_check"].as<bool>(), 
         *s3_config.create(), 
         vm["thread_number"].as<int>());
     
