@@ -18,9 +18,9 @@
 #include <Catalog/Catalog.h>
 // #include <Storages/MergeTree/CnchMergeTreeMutationEntry.h>
 // #include <Storages/StorageCnchMergeTree.h>
-#include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Storages/MergeTree/CnchMergeTreeMutationEntry.h>
 #include <Storages/StorageCnchMergeTree.h>
+#include <Transaction/TransactionCoordinatorRcCnch.h>
 
 namespace DB
 {
@@ -64,13 +64,12 @@ void DDLAlterAction::executeV1(TxnTimestamp commit_time)
             mutation_entry.commands = mutation_commands;
             mutation_entry.columns_commit_time = mutation_commands.changeSchema() ? commit_time : table->commit_time;
             catalog->createMutation(table->getStorageID(), mutation_entry.txn_id.toString(), mutation_entry.toString());
-            
+
             // Don't create mutation task for reclustering. It will manually triggered by user
             is_recluster = table->isBucketTable() && mutation_entry.isReclusterMutation();
             if (!is_recluster)
                 catalog->createMutation(table->getStorageID(), mutation_entry.txn_id.toString(), mutation_entry.toString());
             LOG_DEBUG(log, "Successfully create mutation for alter query.");
-
         }
 
         // auto cache = global_context.getMaskingPolicyCache();
@@ -79,7 +78,15 @@ void DDLAlterAction::executeV1(TxnTimestamp commit_time)
         updateTsCache(table->getStorageUUID(), commit_time);
         if (!new_schema.empty())
         {
-            catalog->alterTable(global_context, query_settings, table, new_schema, static_cast<StorageCnchMergeTree &>(*table).commit_time, txn_id, commit_time);
+            catalog->alterTable(
+                global_context,
+                query_settings,
+                table,
+                new_schema,
+                static_cast<StorageCnchMergeTree &>(*table).commit_time,
+                txn_id,
+                commit_time,
+                is_recluster);
             LOG_DEBUG(log, "Successfully change schema in catalog.");
         }
     }
