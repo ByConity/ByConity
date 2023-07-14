@@ -26,7 +26,7 @@ namespace DB
 class DiskCacheSimpleStrategy : public IDiskCacheStrategy
 {
 public:
-    explicit DiskCacheSimpleStrategy(const DiskCacheStrategySettings & settings_)
+    explicit DiskCacheSimpleStrategy(const DiskCacheSettings & settings_)
         : IDiskCacheStrategy(settings_)
         , cache_statistics(settings_.stats_bucket_size)
         , segment_hits_to_cache(settings_.hits_to_cache)

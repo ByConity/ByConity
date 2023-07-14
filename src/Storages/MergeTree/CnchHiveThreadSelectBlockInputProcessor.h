@@ -20,6 +20,7 @@
 #include <Processors/Sources/SourceWithProgress.h>
 #include <Storages/MergeTree/CnchHiveReadPool.h>
 #include <Storages/StorageCloudHive.h>
+#include <Storages/DiskCache/FileDiskCacheSegment.h>
 
 namespace DB
 {
@@ -51,7 +52,8 @@ private:
 
     std::shared_ptr<CnchHiveReadPool> pool;
 
-    // const StorageCloudHive & storage;
+    const StorageCloudHive & storage;
+
     StorageMetadataPtr metadata_snapshot;
 
     ContextPtr context;

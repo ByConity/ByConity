@@ -20,12 +20,23 @@
 #include <Disks/IVolume.h>
 #include <Storages/DiskCache/DiskCacheSettings.h>
 #include <Storages/DiskCache/IDiskCacheSegment.h>
+#include <Storages/DiskCache/IDiskCacheStrategy.h>
+#include <Common/Exception.h>
 #include <Common/Throttler.h>
 #include <common/logger_useful.h>
 
 namespace DB
 {
 class Context;
+class ReadBuffer;
+class WriteBuffer;
+class Throttler;
+class IVolume;
+class IDisk;
+
+using ThrottlerPtr = std::shared_ptr<Throttler>;
+using VolumePtr = std::shared_ptr<IVolume>;
+using DiskPtr = std::shared_ptr<IDisk>;
 
 class IDiskCache
 {
@@ -57,17 +68,23 @@ public:
     /// get segment from cache and return local path if exists.
     virtual std::pair<DiskPtr, String> get(const String & key) = 0;
 
+    /// initialize disk cache from local disk
+    virtual void load() = 0;
+
     /// get number of keys
     virtual size_t getKeyCount() const = 0;
 
     /// get cached files size
     virtual size_t getCachedSize() const = 0;
 
+    virtual IDiskCacheStrategyPtr getStrategy() const = 0;
+
     void cacheSegmentsToLocalDisk(IDiskCacheSegmentsVector hit_segments);
 
     VolumePtr getStorageVolume() const { return volume; }
     ThrottlerPtr getDiskCacheThrottler() const { return disk_cache_throttler; }
     Poco::Logger * getLogger() const { return log; }
+    String getDataDir() const {return latest_disk_cache_dir;}
 
 protected:
     VolumePtr volume;
@@ -75,6 +92,9 @@ protected:
     DiskCacheSettings settings;
 
     std::atomic<bool> shutdown_called {false};
+    BackgroundSchedulePool::TaskHolder sync_task;
+    String previous_disk_cache_dir;// load previous folder cached data for compatible if data dir config is changed
+    String latest_disk_cache_dir;
 
 private:
     bool scheduleCacheTask(const std::function<void()> & task);

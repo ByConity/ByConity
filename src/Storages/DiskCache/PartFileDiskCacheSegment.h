@@ -30,7 +30,7 @@ namespace DB
 class IDiskCache;
 class MergeTreeReaderStream;
 
-class DiskCacheSegment : public IDiskCacheSegment
+class PartFileDiskCacheSegment : public IDiskCacheSegment
 {
 public:
     struct FileOffsetAndSize
@@ -38,7 +38,7 @@ public:
         off_t file_offset;
         size_t file_size;
     };
-    DiskCacheSegment(
+    PartFileDiskCacheSegment(
         UInt32 segment_number_,
         UInt32 segment_size_,
         const IMergeTreeDataPartPtr & data_part_,

@@ -74,12 +74,15 @@ public:
 
     size_t getKeyCount() const override { return containers.count(); }
     size_t getCachedSize() const override { return containers.weight(); }
+    IDiskCacheStrategyPtr getStrategy() const override { return strategy;}
+    std::filesystem::path getRelativePath(const KeyType & key) { return getPath(key, latest_disk_cache_dir);}
+
+    static std::filesystem::path getPath(const KeyType & key, const String & path);
 
     /// for test
     static KeyType hash(const String & seg_name);
     static String hexKey(const KeyType & key);
     static std::optional<KeyType> unhexKey(const String & hex);
-    static std::filesystem::path getRelativePath(const KeyType & key);
 
 private:
     size_t writeSegment(const String& seg_name, ReadBuffer& buffer, ReservationPtr& reservation);
@@ -140,6 +143,7 @@ private:
     };
 
     ThrottlerPtr set_rate_throttler;
+    IDiskCacheStrategyPtr strategy;
     Poco::Logger * log {&Poco::Logger::get("DiskCacheLRU")};
     ShardCache<KeyType, UInt128Hash, BucketLRUCache<KeyType, DiskCacheMeta, UInt128Hash, DiskCacheWeightFunction>> containers;
 };

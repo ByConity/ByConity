@@ -25,8 +25,10 @@ namespace ProfileEvents
 extern const Event DiskCacheScheduleCacheTaskMicroSeconds;
 }
 
+
 namespace DB
 {
+
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
@@ -35,6 +37,7 @@ namespace ErrorCodes
 
 std::unique_ptr<ThreadPool> IDiskCache::local_disk_cache_thread_pool;
 std::unique_ptr<ThreadPool> IDiskCache::local_disk_cache_evict_thread_pool;
+
 
 void IDiskCache::init(const Context & global_context)
 {
@@ -80,6 +83,7 @@ ThreadPool & IDiskCache::getEvictPool()
     return *local_disk_cache_evict_thread_pool;
 }
 
+
 IDiskCache::IDiskCache(const VolumePtr & volume_, const ThrottlerPtr & throttler_, const DiskCacheSettings & settings_)
     : volume(volume_), disk_cache_throttler(throttler_), settings(settings_)
 {
@@ -88,6 +92,8 @@ IDiskCache::IDiskCache(const VolumePtr & volume_, const ThrottlerPtr & throttler
 void IDiskCache::shutdown()
 {
     shutdown_called = true;
+    if (sync_task)
+        sync_task->deactivate();
 }
 
 void IDiskCache::cacheSegmentsToLocalDisk(IDiskCacheSegmentsVector hit_segments)
