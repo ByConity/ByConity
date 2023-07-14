@@ -1,15 +1,23 @@
+#include <algorithm>
+#include <cstdint>
 #include <iostream>
 #include <string>
 #include <IO/S3Common.h>
+#include <IO/ReadHelpers.h>
 #include <aws/s3/S3Client.h>
 #include <aws/s3/model/Object.h>
 #include <aws/s3/model/ListObjectsRequest.h>
+#include <aws/s3/model/CreateMultipartUploadRequest.h>
+#include <aws/s3/model/UploadPartCopyRequest.h>
+#include <aws/s3/model/CompleteMultipartUploadRequest.h>
 #include <aws/s3/model/CopyObjectRequest.h>
 #include <aws/s3/model/DeleteObjectRequest.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/asio/thread_pool.hpp>
 #include <boost/asio/post.hpp>
 #include <boost/program_options.hpp>
+
+#define MAX_OBJECT_SIZE 5368709120
 
 using namespace Aws;
 
@@ -24,16 +32,87 @@ bool CopyObject(const String &fromBucket, const String &fromKey, const String &t
     S3::Model::CopyObjectOutcome outcome = client.CopyObject(request);
     if (!outcome.IsSuccess()) {
         const S3::S3Error &err = outcome.GetError();
-        std::cerr << "Error: CopyObject: " <<
-                  err.GetExceptionName() << ": " << err.GetMessage() << std::endl;
-
+        LOG_WARNING(&Poco::Logger::get("RenameS3Tool"), "Error: CopyObject: {}: {}", 
+            err.GetExceptionName() , err.GetMessage());
     }
     else {
-        std::cout << "Successfully copy " << fromKey << " in bucket " << fromBucket 
-            <<  " to " << toKey << " in bucket " << toBucket << "." << std::endl;
+        LOG_INFO(&Poco::Logger::get("RenameS3Tool"), "Successfully copy {} in bucket {} to {} in bucket {}", 
+            fromKey, fromBucket, toKey, toBucket);
     }
 
     return outcome.IsSuccess();
+}
+
+bool UploadPartCopy(const String &fromBucket, const String &fromKey, const String &toBucket, 
+                    const String &toKey, const int64_t & objectSize, const S3::S3Client & client) {
+    // Initiate the multipart upload.
+    S3::Model::CreateMultipartUploadRequest init_request;
+    init_request.WithBucket(toBucket).WithKey(toKey);
+    S3::Model::CreateMultipartUploadOutcome init_outcome = client.CreateMultipartUpload(init_request);
+
+    if (!init_outcome.IsSuccess()) {
+        const S3::S3Error &err = init_outcome.GetError();
+        std::cout << "Error: CopyObject: " << err.GetExceptionName() << err.GetMessage() << std::endl;
+        LOG_WARNING(&Poco::Logger::get("RenameS3Tool"), "Error: CopyObject: {}: {}", 
+            err.GetExceptionName() , err.GetMessage());
+        return false;
+    }
+
+    // Copy the objec tusing 1GB parts.
+    int64_t part_size = 1024 * 1024 * 1024;
+    int64_t byte_position = 0;
+    int16_t part_num = 1;
+    S3::Model::CompletedMultipartUpload completed_multipart;
+    while (byte_position < objectSize) {
+        // The last part might be smaller than partSize, so check to make sure
+        // that lastByte isn't beyond the end of the object.
+        int64_t last_byte = std::min(byte_position + part_size - 1, objectSize - 1);
+        String source_range = "bytes=" + std::to_string(byte_position) + "-" + std::to_string(last_byte);
+
+        // Copy this part.
+        S3::Model::UploadPartCopyRequest copy_request;
+        copy_request.WithCopySource(fromBucket + "/" + fromKey)
+                .WithBucket(toBucket)
+                .WithKey(toKey)
+                .WithUploadId(init_outcome.GetResult().GetUploadId())
+                .WithCopySourceRange(source_range)
+                .WithPartNumber(part_num);
+        S3::Model::UploadPartCopyOutcome copy_outcome = client.UploadPartCopy(copy_request);
+        if (!copy_outcome.IsSuccess()) {
+            const S3::S3Error &err = init_outcome.GetError();
+            std::cout << "Error: CopyObject: " << err.GetExceptionName() << err.GetMessage() << std::endl;
+            LOG_WARNING(&Poco::Logger::get("RenameS3Tool"), "Error: CopyObject: {}: {}", 
+                err.GetExceptionName() , err.GetMessage());
+            return false;
+        }
+        S3::Model::CompletedPart completed_part;
+        completed_part.WithPartNumber(part_num).WithETag(copy_outcome.GetResult().GetCopyPartResult().GetETag());
+        completed_multipart.AddParts(completed_part);
+        byte_position += part_size;
+        part_num++;
+        std::cout << "one part success" << std::endl;
+    }
+
+    // Complete the upload request to concatenate all uploaded parts and make the copied object available.
+    S3::Model::CompleteMultipartUploadRequest complete_request;
+    complete_request.WithBucket(toBucket)
+                    .WithKey(toKey)
+                    .WithUploadId(init_outcome.GetResult().GetUploadId())
+                    .WithMultipartUpload(completed_multipart);
+    auto complete_outcome = client.CompleteMultipartUpload(complete_request);
+
+    if (!complete_outcome.IsSuccess()) {
+        const S3::S3Error &err = complete_outcome.GetError();
+        std::cout << "Error: CopyObject: " << err.GetExceptionName() << err.GetMessage() << std::endl;
+        LOG_WARNING(&Poco::Logger::get("RenameS3Tool"), "Error: CopyObject: {}: {}", 
+            err.GetExceptionName() , err.GetMessage());
+    }
+    else {
+        LOG_INFO(&Poco::Logger::get("RenameS3Tool"), "Successfully copy {} in bucket {} to {} in bucket {}", 
+            fromKey, fromBucket, toKey, toBucket);
+    }
+
+    return complete_outcome.IsSuccess();
 }
 
 bool DeleteObject(const String &objectKey, const String &fromBucket, const S3::S3Client & client) {
@@ -45,11 +124,11 @@ bool DeleteObject(const String &objectKey, const String &fromBucket, const S3::S
 
     if (!outcome.IsSuccess()) {
         const S3::S3Error &err = outcome.GetError();
-        std::cerr << "Error: DeleteObject: " <<
-                  err.GetExceptionName() << ": " << err.GetMessage() << std::endl;
+        LOG_WARNING(&Poco::Logger::get("RenameS3Tool"), "Error: DeleteObject: {}: {}", 
+            err.GetExceptionName() , err.GetMessage());
     }
     else {
-        std::cout << "Successfully deleted the object." << objectKey << std::endl;
+        LOG_INFO(&Poco::Logger::get("RenameS3Tool"), "Successfully deleted the object {}.", objectKey);
     }
 
     return outcome.IsSuccess();
@@ -66,8 +145,9 @@ bool ListAndRenameObjects(const String &fromBucket, const String &rootPrefix, co
     auto outcome = client.ListObjects(request);
 
     if (!outcome.IsSuccess()) {
-        std::cerr << "Error: ListObjects: " <<
-                  outcome.GetError().GetMessage() << std::endl;
+        const S3::S3Error &err = outcome.GetError();
+        LOG_WARNING(&Poco::Logger::get("RenameS3Tool"), "Error: ListObjects: {}: {}", 
+            err.GetExceptionName() , err.GetMessage());
         return false;
     }
     else {
@@ -76,14 +156,19 @@ bool ListAndRenameObjects(const String &fromBucket, const String &rootPrefix, co
         for (S3::Model::Object &object: objects) {
             // root_prefix/table_uuid/part_uuid/name
             String from_key = object.GetKey();
-            std::cout << "Get object " + from_key << std::endl;
             Vector<String> split_parts;
             boost::split(split_parts, from_key, boost::is_any_of("/"));
 
             if (split_parts.size() == 4) {
                 String to_key = split_parts[0] + "/" + split_parts[2] + "/" + split_parts[3];
+                int64_t object_size = object.GetSize();
                 boost::asio::post(thread_pool, [=, &client]() {
-                    bool copy_result = CopyObject(fromBucket, from_key, toBucket, to_key, client); 
+                    bool copy_result = false;
+                    if (object_size >= MAX_OBJECT_SIZE) {
+                        copy_result = UploadPartCopy(fromBucket, from_key, toBucket, to_key, object_size, client);
+                    } else {
+                        copy_result = CopyObject(fromBucket, from_key, toBucket, to_key, client); 
+                    }
                     if (copy_result && needDelete) {
                         DeleteObject(from_key, fromBucket, client);
                     }
