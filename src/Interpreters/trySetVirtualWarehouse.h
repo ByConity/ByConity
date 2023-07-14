@@ -32,11 +32,8 @@ class WorkerGroupHandleImpl;
 using WorkerGroupHandle = std::shared_ptr<WorkerGroupHandleImpl>;
 using VirtualWarehouseType = ResourceManagement::VirtualWarehouseType;
 
-const static std::string EMPTY_VIRTUAL_WAREHOUSE_NAME;
-
 bool trySetVirtualWarehouse(const ASTPtr & ast, ContextMutablePtr & context);
 bool trySetVirtualWarehouseAndWorkerGroup(const ASTPtr & ast, ContextMutablePtr & context);
-std::string tryGetVirtualWarehouseName(const ASTPtr & ast, ContextMutablePtr & context);
 
 /// Won't set virtual warehouse
 VirtualWarehouseHandle getVirtualWarehouseForTable(const MergeTreeMetaBase & storage, const ContextPtr & context);

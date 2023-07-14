@@ -76,12 +76,4 @@ void VWCustomizedSettings::overwriteDefaultSettings(const String & vw_name, Sett
     }
 }
 
-bool VWCustomizedSettings::isEmpty()
-{
-    Poco::Util::AbstractConfiguration::Keys config_keys;
-    config_holder->keys(config_keys);
-    
-    return config_keys.empty();
-}
-
 }
