@@ -75,7 +75,13 @@ void executePlanSegmentInternal(PlanSegmentPtr plan_segment, ContextMutablePtr c
     executor->execute();
 }
 
-static void OnSendPlanSegmentCallback(Protos::ExecutePlanSegmentResponse * response, brpc::Controller * cntl, std::shared_ptr<RpcClient> rpc_channel, WorkerStatusManagerPtr worker_status_manager, WorkerId worker_id)
+static void OnSendPlanSegmentCallback(
+    Protos::ExecutePlanSegmentResponse * response,
+    brpc::Controller * cntl,
+    std::shared_ptr<RpcClient> rpc_channel,
+    WorkerStatusManagerPtr worker_status_manager,
+    AsyncContextPtr async_context,
+    WorkerId worker_id)
 {
     std::unique_ptr<brpc::Controller> cntl_guard(cntl);
     std::unique_ptr<Protos::ExecutePlanSegmentResponse> response_guard(response);
@@ -86,19 +92,31 @@ static void OnSendPlanSegmentCallback(Protos::ExecutePlanSegmentResponse * respo
         worker_status_manager->updateWorkerNode(response->worker_resource_data(), WorkerStatusManager::UpdateSource::ComeFromWorker);
 
     rpc_channel->checkAliveWithController(*cntl);
+    AsyncContext::AsyncResult result;
     if (cntl->Failed())
+    {
         LOG_ERROR(
             &Poco::Logger::get("executePlanSegment"),
             "send plansegment to {} failed, error: {},  msg: {}",
             butil::endpoint2str(cntl->remote_side()).c_str(),
             cntl->ErrorText(),
             response->message());
+        result.error_text = cntl->ErrorText();
+        result.error_code = cntl->ErrorCode();
+        result.is_success = false;
+        result.failed_worker = butil::endpoint2str(cntl->remote_side()).c_str();
+        async_context->asyncComplete(cntl->call_id(), result);
+    }
     else
+    {
         LOG_TRACE(
             &Poco::Logger::get("executePlanSegment"), "send plansegment to {} success", butil::endpoint2str(cntl->remote_side()).c_str());
+        async_context->asyncComplete(cntl->call_id(), result);
+    }
 }
 
-void executePlanSegmentRemotely(const PlanSegment & plan_segment, ContextPtr context, bool async, const WorkerId & worker_id)
+void executePlanSegmentRemotely(
+    const PlanSegment & plan_segment, ContextPtr context, bool async, AsyncContextPtr & async_context, const WorkerId & worker_id)
 {
     auto execute_address = extractExchangeStatusHostPort(plan_segment.getCurrentAddress());
     auto rpc_channel = RpcChannelPool::getInstance().getClient(execute_address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
@@ -156,9 +174,11 @@ void executePlanSegmentRemotely(const PlanSegment & plan_segment, ContextPtr con
         /// async call
         brpc::Controller * cntl = new brpc::Controller();
         Protos::ExecutePlanSegmentResponse * response = new Protos::ExecutePlanSegmentResponse();
+        auto call_id = cntl->call_id();
         cntl->request_attachment().append(iobuf.movable());
-        google::protobuf::Closure * done = brpc::NewCallback(&OnSendPlanSegmentCallback, response, cntl, rpc_channel,
-            context->getWorkerStatusManager(), worker_id);
+        google::protobuf::Closure * done = brpc::NewCallback(
+            &OnSendPlanSegmentCallback, response, cntl, rpc_channel, context->getWorkerStatusManager(), async_context, worker_id);
+        async_context->addCallId(call_id);
         manager_stub.executeQuery(cntl, &request, response, done);
     }
     else

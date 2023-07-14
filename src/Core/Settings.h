@@ -1609,6 +1609,8 @@ class IColumn;
     M(Bool, fallback_to_simple_query, false, "Enable fallback if there is any syntax error", 0)\
     M(Bool, debug_plan_generation, false, "Enable complex query mode to split plan to distributed stages", 0)\
     M(Bool, send_plan_segment_by_brpc, true, "Whether to send plan segment by BRPC", 0)\
+    M(Bool, send_plan_segment_by_brpc_join_per_stage, false, "Whether to send plan segment by BRPC and join async rpc request per stage", 0)\
+    M(Bool, send_plan_segment_by_brpc_join_at_last, false, "Whether to send plan segment by BRPC and join async rpc request at last", 0)\
     \
     /** Brpc config **/\
     M(Bool, enable_brpc_builtin_services, true, "Whether to enable brpc builtin services", 0)\

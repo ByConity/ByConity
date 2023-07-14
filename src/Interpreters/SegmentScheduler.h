@@ -30,6 +30,7 @@
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/DistributedStages/PlanSegmentExecutor.h>
+#include <Interpreters/DistributedStages/executePlanSegment.h>
 #include <Interpreters/WorkerStatusManager.h>
 #include <Parsers/IAST_fwd.h>
 #include <Processors/Exchange/DataTrans/ConcurrentShardMap.h>
@@ -85,7 +86,7 @@ using SegmentStatusMap = std::map<String, std::map<size_t, RuntimeSegmentsStatus
 enum class OverflowMode;
 
 struct DAGGraph {
-    DAGGraph(){}
+    DAGGraph() { async_context = std::make_shared<AsyncContext>(); }
     DAGGraph(const DAGGraph & other)
     {
         std::unique_lock lock(other.status_mutex);
@@ -97,7 +98,12 @@ struct DAGGraph {
         plan_segment_status_ptr = std::move(other.plan_segment_status_ptr);
         query_context = other.query_context;
         segment_paralle_size_map = std::move(other.segment_paralle_size_map);
+        async_context = std::move(other.async_context);
     }
+    void joinAsyncRpcWithThrow();
+    void joinAsyncRpcPerStage(const Context * query_context);
+    void joinAsyncRpcAtLast(const Context * query_context);
+
     Source sources;
     size_t final = std::numeric_limits<size_t>::max();
     std::set<size_t> scheduler_segments;
@@ -111,6 +117,7 @@ struct DAGGraph {
 #endif
     mutable bthread::Mutex status_mutex;
     std::unordered_map<size_t, UInt64> segment_paralle_size_map;
+    AsyncContextPtr async_context;
 };
 
 using DAGGraphPtr = std::shared_ptr<DAGGraph>;
