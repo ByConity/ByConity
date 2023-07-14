@@ -45,7 +45,7 @@ AggregateFunctionPtr createAggregateFunctionPathSplit(const String & name, const
     if (!max_seesion_size || !max_session_depth)
         throw Exception("Aggregate function " + name + "(>0, >0)(...).", ErrorCodes::BAD_ARGUMENTS);
 
-    return std::make_shared<AggregateFunctionPathSplit<UInt16, is_terminating_event>>(
+    return std::make_shared<AggregateFunctionPathSplit<UInt16, is_terminating_event, deduplicate>>(
         max_seesion_size, max_session_depth, argument_types, params);
 }
 

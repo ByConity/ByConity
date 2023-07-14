@@ -51,6 +51,7 @@ void registerFunctionStartsWith(FunctionFactory &);
 void registerFunctionEndsWith(FunctionFactory &);
 void registerFunctionTrim(FunctionFactory &);
 void registerFunctionPadString(FunctionFactory &);
+void registerFunctionParseUrl(FunctionFactory &);
 void registerFunctionRegexpQuoteMeta(FunctionFactory &);
 void registerFunctionNormalizeQuery(FunctionFactory &);
 void registerFunctionNormalizedQueryHash(FunctionFactory &);
@@ -109,6 +110,7 @@ void registerFunctionsString(FunctionFactory & factory)
     registerFunctionEndsWith(factory);
     registerFunctionTrim(factory);
     registerFunctionPadString(factory);
+    registerFunctionParseUrl(factory);
     registerFunctionRegexpQuoteMeta(factory);
     registerFunctionNormalizeQuery(factory);
     registerFunctionNormalizedQueryHash(factory);

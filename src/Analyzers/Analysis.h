@@ -207,7 +207,6 @@ struct Analysis
     //     ASTTableExpression::table_function -> table function scope
     //     ASTTableJoin -> joined scope
     //     ASTTablesInSelectQuery -> source scope
-    //     ASTSelectQuery -> order-by scope
     //     ASTFunction for lambda expression -> lambda scope
     std::unordered_map<IAST *, ScopePtr> scopes;
     void setScope(IAST &, ScopePtr);

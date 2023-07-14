@@ -127,7 +127,7 @@ public:
     void waitForStagedPartsToPublish(ContextPtr context);
 
     // Allocate parts to workers before we want to do some calculation on the parts, support non-select query.
-    void allocateParts(ContextPtr local_context, ServerDataPartsVector & parts, WorkerGroupHandle & worker_group);
+    void allocateParts(ContextPtr local_context, ServerDataPartsVector & parts);
 
     UInt64 getTimeTravelRetention();
 

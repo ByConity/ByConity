@@ -641,7 +641,12 @@ bool ParserWindowReference::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     // Variant 2:
     // function_name ( * ) OVER ( window_definition )
     ParserWindowDefinition parser_definition(dt);
-    return parser_definition.parse(pos, function.window_definition, expected);
+    if (parser_definition.parse(pos, function.window_definition, expected))
+    {
+        function.children.push_back(function.window_definition);
+        return true;
+    }
+    return false;
 }
 
 static bool tryParseFrameDefinition(ASTWindowDefinition * node, IParser::Pos & pos,

@@ -68,4 +68,31 @@ SELECT uid, finderFunnel(5, 86400, 1, 14, 0, 0, 'Asia/Shanghai', 1)(timestamp, t
 
 DROP TABLE funnel_test;
 
+DROP TABLE IF EXISTS tob_apps_test;
+CREATE TABLE tob_apps_test
+(
+    `app_id` UInt32,
+    `app_name` String DEFAULT '',
+    `app_version` String DEFAULT '',
+    `hash_uid` UInt64,
+    `server_time` UInt64,
+    `time` UInt64,
+    `event` String,
+    `user_unique_id` String,
+    `event_date` Date,
+    `age` String,
+    `tea_app_id` UInt32
+)
+ENGINE = CnchMergeTree()
+PARTITION BY (tea_app_id, event_date)
+ORDER BY (tea_app_id, event, event_date, hash_uid, user_unique_id)
+SAMPLE BY hash_uid
+SETTINGS index_granularity = 8192;
+insert into tob_apps_test FORMAT JSONEachRow {"app_id":237094,"app_name":"rangers_11363_manmanbuy","app_version":"4.2.11","hash_uid":6424789042916211101,"server_time":1668124421,"time":1668124410851,"event":"ChaResultPage_Page_Ex","user_unique_id":"73ac252e-79cb-491e-ba55-4e7f6f0ea07e","event_date":"2022-11-11","tea_app_id":317923} {"app_id":237094,"app_name":"rangers_11363_manmanbuy","app_version":"4.2.11","hash_uid":6424789042916211101,"server_time":1668180107,"time":1668180062220,"event":"ChaResultPage_Page_Ex","user_unique_id":"73ac252e-79cb-491e-ba55-4e7f6f0ea07e","event_date":"2022-11-11","tea_app_id":317923} {"app_id":237094,"app_name":"rangers_11363_manmanbuy","app_version":"4.2.11","hash_uid":6424789042916211101,"server_time":1667837016,"time":1667836997455,"event":"ChaResultPage_Page_Ex","user_unique_id":"73ac252e-79cb-491e-ba55-4e7f6f0ea07e","event_date":"2022-11-08","tea_app_id":317923} {"app_id":237094,"app_name":"rangers_11363_manmanbuy","app_version":"4.2.11","hash_uid":6424789042916211101,"server_time":1667775720,"time":1667775685578,"event":"ChaResultPage_Page_Ex","user_unique_id":"73ac252e-79cb-491e-ba55-4e7f6f0ea07e","event_date":"2022-11-07","tea_app_id":317923} {"app_id":237094,"app_name":"rangers_11363_manmanbuy","app_version":"4.2.11","hash_uid":6424789042916211101,"server_time":1667836567,"time":1667836540094,"event":"ChaResultPage_Page_Ex","user_unique_id":"73ac252e-79cb-491e-ba55-4e7f6f0ea07e","event_date":"2022-11-07","tea_app_id":317923} {"app_id":237094,"app_name":"rangers_11363_manmanbuy","app_version":"4.2.11","hash_uid":6424789042916211101,"server_time":1667775847,"time":1667775822677,"event":"ChaResultPage_Page_Ex","user_unique_id":"73ac252e-79cb-491e-ba55-4e7f6f0ea07e","event_date":"2022-11-07","tea_app_id":317923};
+SELECT     hash_uid,     finderFunnel(600000, 1667750400, 86400, 7, 0, 0, 'Asia/Shanghai')(multiIf(server_time < 1609948800, server_time, time > 2000000000, toUInt32(time / 1000), time), multiIf(time <= 2000000000, time * 1000, time), unifyNull(event = 'ChaResultPage_Page_Ex'), unifyNull(event = 'ChaResultPage_Bashou_Click'), unifyNull(event = 'ChaResultPage_Page_Ex')) AS funnel_tmp_res FROM tob_apps_test AS et WHERE (tea_app_id = 317923) AND ((event = 'ChaResultPage_Page_Ex') OR (event = 'ChaResultPage_Bashou_Click') OR (event = 'ChaResultPage_Page_Ex')) AND (hash_uid = 6424789042916211101) GROUP BY hash_uid;
+insert into tob_apps_test FORMAT JSONEachRow {"event":"REPORT_ACTION","tea_app_id":8000931,"time":1671521325899,"age":"1"} {"event":"REPORT_ACTION","tea_app_id":8000931,"time":1671521347366,"age":"2"} {"event":"REPORT_ACTION","tea_app_id":8000931,"time":1671522622879,"age":"3"} {"event":"REPORT_ACTION","tea_app_id":8000931,"time":1671522625000,"age":"3"};
+SELECT finderFunnel(8640000, 1671408000, 86400, 3, 3, 0, 'UTC')(if(time > 2000000000, toUInt32(time / 1000), time), multiIf(time <= 2000000000, time * 100, time > 2000000000, toUInt64(time / 10), time), assumeNotNull(age), assumeNotNull(age), unifyNull(event = 'REPORT_ACTION'), unifyNull(event = 'REPORT_ACTION')) AS funnel_tmp_res     FROM tob_apps_test AS et     WHERE tea_app_id = 8000931     GROUP BY hash_uid;
+SELECT finderFunnel(60000, 1671408000, 86400, 3, 3, 0, 'UTC')(if(time > 2000000000, toUInt32(time / 1000), time), multiIf(time <= 2000000000, time * 100, time > 2000000000, toUInt64(time / 10), time), assumeNotNull(age), assumeNotNull(age), unifyNull(event = 'REPORT_ACTION'), unifyNull(event = 'REPORT_ACTION')) AS funnel_tmp_res     FROM tob_apps_test AS et     WHERE tea_app_id = 8000931     GROUP BY hash_uid;
+DROP TABLE tob_apps_test;
+
 -- for step execute

@@ -34,6 +34,37 @@ using UInt256 = wide::integer<256, unsigned>;
 using Int512 = wide::integer<512, signed>;
 using UInt512 = wide::integer<512, unsigned>;
 
+struct PairInt64
+{
+    /// This naming assumes little endian.
+    UInt64 low;
+    UInt64 high;
+
+    PairInt64() = default;
+    explicit PairInt64(const UInt64 low_, const UInt64 high_) : low(low_), high(high_) {}
+    explicit PairInt64(const UInt64 rhs) : low(rhs), high() {}
+
+    auto tuple() const { return std::tie(high, low); }
+
+    bool inline operator== (const PairInt64 rhs) const { return tuple() == rhs.tuple(); }
+    bool inline operator!= (const PairInt64 rhs) const { return tuple() != rhs.tuple(); }
+    bool inline operator<  (const PairInt64 rhs) const { return tuple() < rhs.tuple(); }
+    bool inline operator<= (const PairInt64 rhs) const { return tuple() <= rhs.tuple(); }
+    bool inline operator>  (const PairInt64 rhs) const { return tuple() > rhs.tuple(); }
+    bool inline operator>= (const PairInt64 rhs) const { return tuple() >= rhs.tuple(); }
+
+    template <typename T> bool inline operator== (T rhs) const { return *this == PairInt64(rhs); }
+    template <typename T> bool inline operator!= (T rhs) const { return *this != PairInt64(rhs); }
+    template <typename T> bool inline operator>= (T rhs) const { return *this >= PairInt64(rhs); }
+    template <typename T> bool inline operator>  (T rhs) const { return *this >  PairInt64(rhs); }
+    template <typename T> bool inline operator<= (T rhs) const { return *this <= PairInt64(rhs); }
+    template <typename T> bool inline operator<  (T rhs) const { return *this <  PairInt64(rhs); }
+
+    template <typename T> explicit operator T() const { return static_cast<T>(low); }
+
+    PairInt64 & operator= (const UInt64 rhs) { low = rhs; high = 0; return *this; }
+};
+
 static_assert(sizeof(Int256) == 32);
 static_assert(sizeof(UInt256) == 32);
 
@@ -147,4 +178,15 @@ template <> struct is_big_int<UInt512> { static constexpr bool value = true; };
 
 template <typename T>
 inline constexpr bool is_big_int_v = is_big_int<T>::value;
+
+template <typename T>
+struct is_pair_int64
+{
+    static constexpr bool value = false;
+};
+
+template <> struct is_pair_int64<PairInt64> { static constexpr bool value = true; };
+
+template <typename T>
+inline constexpr bool is_pair_int64_v = is_pair_int64<T>::value;
 

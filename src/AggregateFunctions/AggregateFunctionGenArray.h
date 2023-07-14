@@ -247,6 +247,11 @@ public:
         }
     }
 
+    bool handleNullItSelf() const override
+    {
+        return true;
+    }
+
     bool allocatesMemoryInArena() const override
     {
         return true;
@@ -497,6 +502,11 @@ public:
         offsets_to.push_back((offsets_to.empty() ? 0 : offsets_to.back()) + m_number_steps);
         typename ColumnVector<GAType>::Container & data_to = static_cast<ColumnVector<GAType> &>(arr_to.getData()).getData();
         data_to.insert(value, value+m_number_steps);
+    }
+
+    bool handleNullItSelf() const override
+    {
+        return true;
     }
 
     bool allocatesMemoryInArena() const override
