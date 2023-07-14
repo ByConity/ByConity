@@ -112,15 +112,14 @@ void executePlanSegmentRemotely(const PlanSegment & plan_segment, ContextPtr con
     auto settings = context->getSettingsRef().dumpToMap();
     request.mutable_settings()->insert(settings.begin(), settings.end());
 
-    const auto & current_address = plan_segment.getCurrentAddress();
-    request.set_user(current_address.getUser());
-    request.set_password(current_address.getPassword());
-    request.set_current_host(current_address.getHostName());
-    request.set_current_port(current_address.getPort());
-    request.set_current_exchange_port(current_address.getExchangePort());
-    request.set_current_exchange_status_port(current_address.getExchangeStatusPort());
-
     const auto & coordinator_address = plan_segment.getCoordinatorAddress();
+    request.set_user(coordinator_address.getUser());
+    request.set_password(coordinator_address.getPassword());
+    request.set_current_host(coordinator_address.getHostName());
+    request.set_current_port(coordinator_address.getPort());
+    request.set_current_exchange_port(coordinator_address.getExchangePort());
+    request.set_current_exchange_status_port(coordinator_address.getExchangeStatusPort());
+
     request.set_coordinator_host(coordinator_address.getHostName());
     request.set_coordinator_port(coordinator_address.getPort());
     request.set_coordinator_exchange_port(coordinator_address.getExchangePort());
