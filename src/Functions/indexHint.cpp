@@ -39,11 +39,6 @@ public:
 
     bool useDefaultImplementationForNulls() const override { return false; }
 
-    bool useDefaultImplementationForNothing() const override
-    {
-        return false;
-    }
-
     bool isSuitableForConstantFolding() const override { return false; }
 
     String getName() const override
