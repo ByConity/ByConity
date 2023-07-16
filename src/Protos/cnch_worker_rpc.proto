@@ -385,6 +385,33 @@ message SendOffloadingResp
   optional string exception = 1;
 }
 
+message TableDataParts
+{
+  required string database = 1;
+  required string table = 2;
+  repeated DataModelPart server_parts = 3;
+  repeated DataModelDeleteBitmap server_part_bitmaps = 4;
+  repeated CnchHivePartModel hive_parts = 5;
+  repeated int64 bucket_numbers = 6;
+}
+
+message SendResourcesReq
+{
+  required uint64 txn_id = 1;
+  required uint64 primary_txn_id = 2;
+  required uint64 timeout = 3;
+  /// create queries
+  repeated string create_queries = 4;
+  /// data parts
+  repeated TableDataParts data_parts = 5;
+  optional string disk_cache_mode = 6;
+}
+
+message SendResourcesResp
+{
+  optional string exception = 1;
+}
+
 message RemoveWorkerResourceReq
 {
   required uint64 txn_id = 1;
@@ -429,6 +456,7 @@ service CnchWorkerService
   rpc sendCnchHiveDataParts(SendCnchHiveDataPartsReq) returns (SendCnchHiveDataPartsResp);
   rpc checkDataParts(CheckDataPartsReq) returns (CheckDataPartsResp);
   rpc sendOffloading(SendOffloadingReq) returns (SendOffloadingResp);
+  rpc sendResources(SendResourcesReq) returns (SendResourcesResp);
   rpc removeWorkerResource(RemoveWorkerResourceReq) returns (RemoveWorkerResourceResp);
   rpc preloadDataParts(PreloadDataPartsReq) returns (PreloadDataPartsResp);
 }
