@@ -28,6 +28,7 @@
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxyRegistry.h>
 #include <Processors/Exchange/DataTrans/Brpc/AsyncRegisterResult.h>
 #include <Processors/Exchange/DataTrans/Brpc/BrpcRemoteBroadcastReceiver.h>
+#include <Processors/Exchange/DataTrans/MultiPathReceiver.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/Exchange/DataTrans/Local/LocalBroadcastChannel.h>
 #include <Processors/Exchange/DataTrans/Local/LocalChannelOptions.h>
@@ -553,6 +554,7 @@ void PlanSegmentExecutor::registerAllExchangeReceivers(const QueryPipeline & pip
     const Processors & procesors = pipeline.getProcessors();
     std::vector<AsyncRegisterResult> async_results;
     std::vector<LocalBroadcastChannel *> local_receivers;
+    std::vector<MultiPathReceiver *> multi_receivers;
     std::exception_ptr exception;
 
     try
@@ -563,20 +565,26 @@ void PlanSegmentExecutor::registerAllExchangeReceivers(const QueryPipeline & pip
             if (!exchange_source_ptr)
                 continue;
             auto * receiver_ptr = exchange_source_ptr->getReceiver().get();
-            auto * local_receiver = dynamic_cast<LocalBroadcastChannel *>(receiver_ptr);
-            if (local_receiver)
-                local_receivers.push_back(local_receiver);
-            else
-            {
-                auto * brpc_receiver = dynamic_cast<BrpcRemoteBroadcastReceiver *>(receiver_ptr);
-                if (unlikely(!brpc_receiver))
-                    throw Exception("Unexpected SubReceiver Type: " + std::string(typeid(receiver_ptr).name()), ErrorCodes::LOGICAL_ERROR);
+            if (auto * brpc_receiver = dynamic_cast<BrpcRemoteBroadcastReceiver *>(receiver_ptr))
                 async_results.emplace_back(brpc_receiver->registerToSendersAsync(register_timeout_ms));
+            else if (auto * local_receiver = dynamic_cast<LocalBroadcastChannel *>(receiver_ptr))
+                local_receivers.push_back(local_receiver);
+            else if (auto * multi_receiver = dynamic_cast<MultiPathReceiver *>(receiver_ptr))
+            {
+                multi_receiver->registerToSendersAsync(register_timeout_ms);
+                multi_receivers.push_back(multi_receiver);
             }
+            else
+                throw Exception("Unexpected SubReceiver Type: " + std::string(typeid(receiver_ptr).name()), ErrorCodes::LOGICAL_ERROR);
         }
+        
+        for (auto * receiver_ptr : local_receivers)
+            receiver_ptr->registerToSenders(register_timeout_ms);
+        for (auto * receiver_ptr : multi_receivers)
+            receiver_ptr->registerToLocalSenders(register_timeout_ms);
 
-        for (auto * local_receiver : local_receivers)
-            local_receiver->registerToSenders(register_timeout_ms);
+        for (auto * receiver_ptr : multi_receivers)
+            receiver_ptr->registerToSendersJoin();
     }
     catch (...)
     {

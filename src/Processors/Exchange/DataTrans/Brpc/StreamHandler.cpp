@@ -32,6 +32,7 @@
 
 namespace DB
 {
+
 int StreamHandler::on_received_messages([[maybe_unused]] brpc::StreamId stream_id, butil::IOBuf * const messages[], size_t size) noexcept
 {
     BrpcRemoteBroadcastReceiverShardPtr receiver_ptr = receiver.lock();
@@ -83,7 +84,7 @@ int StreamHandler::on_received_messages([[maybe_unused]] brpc::StreamId stream_i
                 msg.size(),
                 chunk.getNumRows());
 #endif
-            receiver_ptr->pushReceiveQueue(std::move(chunk));
+            receiver_ptr->pushReceiveQueue(MultiPathDataPacket(std::move(chunk)));
         }
     }
     catch (...)
@@ -132,7 +133,7 @@ void StreamHandler::on_closed(brpc::StreamId stream_id)
             {
                 LOG_DEBUG(log, "{} will close gracefully ", receiver_ptr->getName());
                 // Push an empty as finish to close receiver gracefully
-                receiver_ptr->pushReceiveQueue(Chunk());
+                receiver_ptr->pushReceiveQueue(MultiPathDataPacket(receiver_ptr->getName()));
             }
         }
     }

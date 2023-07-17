@@ -257,11 +257,17 @@ protected:
     mutable std::mutex mutex;
 };
 
-class ExceptionHandlerWithFailedInfo : public ExceptionHandler {
-public:
+class ExceptionHandlerWithFailedInfo : public ExceptionHandler
+{
     using ErrorCode = int32_t;
     using WorkerIdErrorCodeMap = std::unordered_map<DB::WorkerId, ErrorCode, DB::WorkerIdHash, DB::WorkerIdEqual>;
-    void setFailedRpc(const DB::WorkerId & worker_id, int32_t error_code);
+
+public:
+    void addFailedRpc(const DB::WorkerId & worker_id, int32_t error_code)
+    {
+        std::unique_lock lock(mutex);
+        failed_rpc_info.emplace(worker_id, error_code);
+    }
 
     const WorkerIdErrorCodeMap & getFailedRpcInfo() { return failed_rpc_info; }
 
@@ -270,5 +276,6 @@ private:
 };
 
 using ExceptionHandlerWithFailedInfoPtr = std::shared_ptr<ExceptionHandlerWithFailedInfo>;
+using ExceptionHandlerPtr = std::shared_ptr<ExceptionHandler>;
 
 }
