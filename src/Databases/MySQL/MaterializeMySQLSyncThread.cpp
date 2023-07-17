@@ -167,7 +167,7 @@ void MaterializeMySQLSyncThread::synchronization()
     try
     {
         MaterializeMetadata metadata(
-            DatabaseCatalog::instance().getDatabase(database_name)->getMetadataPath() + "/.metadata", getContext()->getSettingsRef());
+            DatabaseCatalog::instance().getDatabase(database_name, getContext())->getMetadataPath() + "/.metadata", getContext()->getSettingsRef());
         bool need_reconnect = true;
 
         Stopwatch watch;
@@ -263,7 +263,7 @@ static inline void cleanOutdatedTables(const String & database_name, ContextPtr 
     try
     {
         auto ddl_guard = DatabaseCatalog::instance().getDDLGuard(database_name, "");
-        const DatabasePtr & clean_database = DatabaseCatalog::instance().getDatabase(database_name);
+        const DatabasePtr & clean_database = DatabaseCatalog::instance().getDatabase(database_name, context);
 
         for (auto iterator = clean_database->getTablesIterator(context); iterator->isValid(); iterator->next())
         {
@@ -758,7 +758,7 @@ bool MaterializeMySQLSyncThread::isMySQLSyncThread()
 
 void MaterializeMySQLSyncThread::setSynchronizationThreadException(const std::exception_ptr & exception)
 {
-    auto db = DatabaseCatalog::instance().getDatabase(database_name);
+    auto db = DatabaseCatalog::instance().getDatabase(database_name, getContext());
     DB::setSynchronizationThreadException(db, exception);
 }
 

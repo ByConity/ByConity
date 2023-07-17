@@ -160,8 +160,8 @@ public:
     std::unique_lock<std::shared_mutex> getExclusiveDDLGuardForDatabase(const String & database);
 
 
-    void assertDatabaseExists(const String & database_name) const;
-    void assertDatabaseDoesntExist(const String & database_name) const;
+    void assertDatabaseExists(const String & database_name, ContextPtr local_context) const;
+    void assertDatabaseDoesntExist(const String & database_name, ContextPtr local_context) const;
 
     DatabasePtr getDatabaseForTemporaryTables() const;
     DatabasePtr getSystemDatabase() const;
@@ -171,17 +171,13 @@ public:
     void updateDatabaseName(const String & old_name, const String & new_name);
 
     /// database_name must be not empty
-    DatabasePtr getDatabase(const String & database_name) const;
+    DatabasePtr getDatabase(const String & database_name, ContextPtr local_context) const;
     DatabasePtr tryGetDatabase(const String & database_name, ContextPtr local_context) const;
-    DatabasePtr tryGetDatabase(const String & database_name) const;
-    DatabasePtr getDatabase(const UUID & uuid) const;
-    DatabasePtr tryGetDatabase(const UUID & uuid) const;
-    bool isDatabaseExist(const String & database_name) const;
-    Databases getDatabases() const;
+    bool isDatabaseExist(const String & database_name, ContextPtr local_context) const;
+    Databases getDatabases(ContextPtr local_context) const;
     Databases getNonCnchDatabases() const;
 
     /// Same as getDatabase(const String & database_name), but if database_name is empty, current database of local_context is used
-    DatabasePtr getDatabase(const String & database_name, ContextPtr local_context) const;
 
     /// For all of the following methods database_name in table_id must be not empty (even for temporary tables).
     void assertTableDoesntExist(const StorageID & table_id, ContextPtr context) const;
@@ -242,6 +238,10 @@ private:
     explicit DatabaseCatalog(ContextMutablePtr global_context_);
     void assertDatabaseExistsUnlocked(const String & database_name) const;
     void assertDatabaseDoesntExistUnlocked(const String & database_name) const;
+    DatabasePtr getDatabase(const String & database_name) const;
+    DatabasePtr tryGetDatabase(const String & database_name) const;
+    DatabasePtr getDatabase(const UUID & uuid) const;
+    DatabasePtr tryGetDatabase(const UUID & uuid) const;
 
     DatabasePtr tryGetDatabaseCnch(const String & database_name) const;
     DatabasePtr tryGetDatabaseCnch(const String & database_name, ContextPtr context) const;
@@ -265,7 +265,7 @@ private:
         return uuid.toUnderType().items[0] >> (64 - bits_for_first_level);
     }
 
-    inline bool preferCnchCatalog(const ContextPtr & context) const;
+    inline bool preferCnchCatalog(const Context & context) const;
 
     struct TableMarkedAsDropped
     {

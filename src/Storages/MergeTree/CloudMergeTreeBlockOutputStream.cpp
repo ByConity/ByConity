@@ -264,6 +264,15 @@ void CloudMergeTreeBlockOutputStream::writeSuffixForInsert()
             LOG_TRACE(
                 storage.getLogger(), "Committed Kafka transaction {} elapsed {} ms", txn->getTransactionID(), watch.elapsedMilliseconds());
         }
+        else if (context->getClientInfo().query_kind == ClientInfo::QueryKind::INITIAL_QUERY)
+        {
+            /// INITIAL_QUERY means the query is sent from client (and to worker directly), so commit it instantly.
+            Stopwatch watch;
+            txn->commitV2();
+            LOG_TRACE(
+                storage.getLogger(),
+                "Committed transaction {} elapsed {} ms.", txn->getTransactionID(), watch.elapsedMilliseconds());
+        }
         else
         {
             /// TODO: I thought the multiple branches should be unified.

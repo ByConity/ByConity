@@ -211,7 +211,7 @@ void InterpreterSystemQuery::startStopAction(StorageActionBlockType action_type,
     else
     {
         auto access = getContext()->getAccess();
-        for (auto & elem : DatabaseCatalog::instance().getDatabases())
+        for (auto & elem : DatabaseCatalog::instance().getDatabases(getContext()))
         {
             for (auto iterator = elem.second->getTablesIterator(getContext()); iterator->isValid(); iterator->next())
             {
@@ -820,7 +820,7 @@ void InterpreterSystemQuery::restartReplicas(ContextMutablePtr system_context)
     std::vector<StorageID> replica_names;
     auto & catalog = DatabaseCatalog::instance();
 
-    for (auto & elem : catalog.getDatabases())
+    for (auto & elem : catalog.getDatabases(getContext()))
         for (auto it = elem.second->getTablesIterator(getContext()); it->isValid(); it->next())
             if (dynamic_cast<const StorageReplicatedMergeTree *>(it->table().get()))
                 replica_names.emplace_back(it->databaseName(), it->name());
@@ -862,7 +862,7 @@ void InterpreterSystemQuery::dropReplica(ASTSystemQuery & query)
     else if (!query.database.empty())
     {
         getContext()->checkAccess(AccessType::SYSTEM_DROP_REPLICA, query.database);
-        DatabasePtr database = DatabaseCatalog::instance().getDatabase(query.database);
+        DatabasePtr database = DatabaseCatalog::instance().getDatabase(query.database, getContext());
         for (auto iterator = database->getTablesIterator(getContext()); iterator->isValid(); iterator->next())
             dropReplicaImpl(query, iterator->table());
         LOG_TRACE(log, "Dropped replica {} from database {}", query.replica, backQuoteIfNeed(database->getDatabaseName()));
@@ -870,7 +870,7 @@ void InterpreterSystemQuery::dropReplica(ASTSystemQuery & query)
     else if (query.is_drop_whole_replica)
     {
         getContext()->checkAccess(AccessType::SYSTEM_DROP_REPLICA);
-        auto databases = DatabaseCatalog::instance().getDatabases();
+        auto databases = DatabaseCatalog::instance().getDatabases(getContext());
 
         for (auto & elem : databases)
         {
@@ -886,7 +886,7 @@ void InterpreterSystemQuery::dropReplica(ASTSystemQuery & query)
         String remote_replica_path = fs::path(query.replica_zk_path)  / "replicas" / query.replica;
 
         /// This check is actually redundant, but it may prevent from some user mistakes
-        for (auto & elem : DatabaseCatalog::instance().getDatabases())
+        for (auto & elem : DatabaseCatalog::instance().getDatabases(getContext()))
         {
             DatabasePtr & database = elem.second;
             for (auto iterator = database->getTablesIterator(getContext()); iterator->isValid(); iterator->next())
@@ -1091,7 +1091,7 @@ void InterpreterSystemQuery::dropChecksumsCache(const StorageID & table_id) cons
 
 void InterpreterSystemQuery::clearBrokenTables(ContextMutablePtr & ) const
 {
-    const auto databases = DatabaseCatalog::instance().getDatabases();
+    const auto databases = DatabaseCatalog::instance().getDatabases(getContext());
 
     for (const auto & elem : databases)
         elem.second->clearBrokenTables();

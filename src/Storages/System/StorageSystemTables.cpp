@@ -87,7 +87,7 @@ static ColumnPtr getFilteredDatabases(const SelectQueryInfo & query_info, Contex
 {
     MutableColumnPtr column = ColumnString::create();
 
-    const auto databases = DatabaseCatalog::instance().getDatabases();
+    const auto databases = DatabaseCatalog::instance().getDatabases(context);
     for (const auto & database_name : databases | boost::adaptors::map_keys)
     {
         if (database_name == DatabaseCatalog::TEMPORARY_DATABASE)
@@ -154,7 +154,7 @@ protected:
             while (database_idx < databases->size() && (!tables_it || !tables_it->isValid()))
             {
                 database_name = databases->getDataAt(database_idx).toString();
-                database = DatabaseCatalog::instance().tryGetDatabase(database_name);
+                database = DatabaseCatalog::instance().tryGetDatabase(database_name, context);
 
                 if (!database)
                 {

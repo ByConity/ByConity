@@ -28,6 +28,7 @@
 #include <IO/ReadBufferFromString.h>
 #include <Poco/Net/NetException.h>
 #include <common/logger_useful.h>
+#include "Interpreters/Context_fwd.h"
 #include <Parsers/ParserQuery.h>
 #include <Parsers/parseQuery.h>
 #include <Parsers/ASTQueryWithOnCluster.h>
@@ -429,9 +430,9 @@ void ZooKeeperMetadataTransaction::commit()
     state = COMMITTED;
 }
 
-ClusterPtr tryGetReplicatedDatabaseCluster(const String & cluster_name)
+ClusterPtr tryGetReplicatedDatabaseCluster(const String & cluster_name, ContextPtr context)
 {
-    if (const auto * replicated_db = dynamic_cast<const DatabaseReplicated *>(DatabaseCatalog::instance().tryGetDatabase(cluster_name).get()))
+    if (const auto * replicated_db = dynamic_cast<const DatabaseReplicated *>(DatabaseCatalog::instance().tryGetDatabase(cluster_name, context).get()))
         return replicated_db->getCluster();
     return {};
 }

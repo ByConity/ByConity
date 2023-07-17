@@ -81,7 +81,7 @@ StoragesInfoStream::StoragesInfoStream(const SelectQueryInfo & query_info, Conte
     const bool check_access_for_tables = !access->isGranted(AccessType::SHOW_TABLES);
 
     {
-        Databases databases = DatabaseCatalog::instance().getDatabases();
+        Databases databases = DatabaseCatalog::instance().getDatabases(context);
 
         /// Add column 'database'.
         MutableColumnPtr database_column_mut = ColumnString::create();

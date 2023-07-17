@@ -44,7 +44,7 @@ BlockIO InterpreterDeleteQuery::execute()
     auto table_id = getContext()->resolveStorageID(delete_query, Context::ResolveOrdinary);
     getContext()->checkAccess(AccessType::ALTER_DELETE, table_id);
     query_ptr->as<ASTDeleteQuery &>().database = table_id.database_name;
-    DatabasePtr database = DatabaseCatalog::instance().getDatabase(table_id.database_name);
+    DatabasePtr database = DatabaseCatalog::instance().getDatabase(table_id.database_name, getContext());
 
     StoragePtr table = DatabaseCatalog::instance().getTable(table_id, getContext());
 

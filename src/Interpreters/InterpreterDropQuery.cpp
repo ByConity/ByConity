@@ -62,9 +62,9 @@ namespace ErrorCodes
 }
 
 
-static DatabasePtr tryGetDatabase(const String & database_name, bool if_exists)
+static DatabasePtr tryGetDatabase(const String & database_name, bool if_exists, ContextPtr local_context)
 {
-    return if_exists ? DatabaseCatalog::instance().tryGetDatabase(database_name) : DatabaseCatalog::instance().getDatabase(database_name);
+    return if_exists ? DatabaseCatalog::instance().tryGetDatabase(database_name, local_context) : DatabaseCatalog::instance().getDatabase(database_name, local_context);
 }
 
 
@@ -334,7 +334,7 @@ BlockIO InterpreterDropQuery::executeToDatabaseImpl(const ASTDropQuery & query, 
     auto ddl_guard = DatabaseCatalog::instance().getDDLGuard(database_name, "");
     IntentLockPtr db_lock;
 
-    database = tryGetDatabase(database_name, query.if_exists);
+    database = tryGetDatabase(database_name, query.if_exists, getContext());
 
     if (database)
     {

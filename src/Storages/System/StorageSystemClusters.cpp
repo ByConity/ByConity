@@ -34,7 +34,7 @@ void StorageSystemClusters::fillData(MutableColumns & res_columns, ContextPtr co
     for (const auto & name_and_cluster : context->getClusters()->getContainer())
         writeCluster(res_columns, name_and_cluster);
 
-    const auto databases = DatabaseCatalog::instance().getDatabases();
+    const auto databases = DatabaseCatalog::instance().getDatabases(context);
     for (const auto & name_and_database : databases)
     {
         if (const auto * replicated = typeid_cast<const DatabaseReplicated *>(name_and_database.second.get()))

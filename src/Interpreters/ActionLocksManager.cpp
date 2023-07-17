@@ -52,7 +52,7 @@ ActionLocksManager::ActionLocksManager(ContextPtr context_) : WithContext(contex
 template <typename F>
 inline void forEachTable(F && f, ContextPtr context)
 {
-    for (auto & elem : DatabaseCatalog::instance().getDatabases())
+    for (auto & elem : DatabaseCatalog::instance().getDatabases(context))
         for (auto iterator = elem.second->getTablesIterator(context); iterator->isValid(); iterator->next())
             if (auto table = iterator->table())
                 f(table);

@@ -29,6 +29,7 @@
 #include <Parsers/ASTRenameQuery.h>
 #include <Storages/IStorage.h>
 #include <Transaction/ICnchTransaction.h>
+#include "Common/tests/gtest_global_context.h"
 #include <Common/typeid_cast.h>
 
 
@@ -102,7 +103,7 @@ BlockIO InterpreterRenameQuery::executeToTables(const ASTRenameQuery & rename, c
         if (!rename.exchange)
             database_catalog.assertTableDoesntExist(StorageID(elem.to_database_name, elem.to_table_name), getContext());
 
-        DatabasePtr database = database_catalog.getDatabase(elem.from_database_name);
+        DatabasePtr database = database_catalog.getDatabase(elem.from_database_name, getContext());
         if (typeid_cast<DatabaseReplicated *>(database.get())
             && !getContext()->getClientInfo().is_replicated_database_internal)
         {
@@ -121,7 +122,7 @@ BlockIO InterpreterRenameQuery::executeToTables(const ASTRenameQuery & rename, c
             database->renameTable(
                 getContext(),
                 elem.from_table_name,
-                *database_catalog.getDatabase(elem.to_database_name),
+                *database_catalog.getDatabase(elem.to_database_name, getContext()),
                 elem.to_table_name,
                 rename.exchange,
                 rename.dictionary);
@@ -145,7 +146,7 @@ BlockIO InterpreterRenameQuery::executeToDatabase(const ASTRenameQuery &, const 
     IntentLockPtr old_db_lock;
     IntentLockPtr new_db_lock;
 
-    auto db = catalog.getDatabase(old_name);
+    auto db = catalog.getDatabase(old_name, getContext());
     if (db->getEngineName().starts_with("Cnch"))
     {
         auto txn = getContext()->getCurrentTransaction();
@@ -155,7 +156,7 @@ BlockIO InterpreterRenameQuery::executeToDatabase(const ASTRenameQuery &, const 
         new_db_lock = txn->createIntentLock(IntentLock::DB_LOCK_PREFIX, new_name);
         std::lock(*old_db_lock, *new_db_lock);
     }
-    catalog.assertDatabaseDoesntExist(new_name);
+    catalog.assertDatabaseDoesntExist(new_name, getContext());
     db->renameDatabase(getContext(), new_name);
     return {};
 }

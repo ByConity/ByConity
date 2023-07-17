@@ -28,6 +28,7 @@
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Transaction/LockManager.h>
+#include "Common/tests/gtest_global_context.h"
 #include <Common/Exception.h>
 #include <CloudServices/CnchMergeMutateThread.h>
 #include <CloudServices/CnchDataWriter.h>
@@ -801,6 +802,7 @@ void CnchServerServiceImpl::reportCnchLockHeartBeat(
         }
     });
 }
+
 void CnchServerServiceImpl::getServerStartTime(
     google::protobuf::RpcController * cntl,
     const Protos::GetServerStartTimeReq * request,
@@ -863,6 +865,7 @@ void CnchServerServiceImpl::getNumOfTablesCanSendForGlobalGC(
         response->set_num_of_tables_can_send(0);
     }
 }
+
 void CnchServerServiceImpl::getDeletingTablesInGlobalGC(
     google::protobuf::RpcController * cntl,
     const Protos::GetDeletingTablesInGlobalGCReq * request,
@@ -893,13 +896,13 @@ void CnchServerServiceImpl::handleRedirectCommitRequest(
     [[maybe_unused]] google::protobuf::Closure * done,
     bool final_commit)
 {
-    RPCHelpers::serviceHandler(done, response, [request = request, response = response, done = done, final_commit=final_commit, &global_context = *getContext(), log = log] {
+    RPCHelpers::serviceHandler(done, response, [request = request, response = response, done = done, final_commit=final_commit, global_context = getContext(), log = log] {
         brpc::ClosureGuard done_guard(done);
         try
         {
             String table_uuid = UUIDHelpers::UUIDToString(RPCHelpers::createUUID(request->uuid()));
-            StoragePtr storage = global_context.getCnchCatalog()->tryGetTableByUUID(
-                global_context, table_uuid, TxnTimestamp::maxTS());
+            StoragePtr storage = global_context->getCnchCatalog()->tryGetTableByUUID(
+                *global_context, table_uuid, TxnTimestamp::maxTS());
 
             if (!storage)
                 throw Exception("Table with uuid " + table_uuid + " not found.", ErrorCodes::UNKNOWN_TABLE);
@@ -919,13 +922,13 @@ void CnchServerServiceImpl::handleRedirectCommitRequest(
             if (!final_commit)
             {
                 TxnTimestamp txnID{request->txn_id()};
-                global_context.getCnchCatalog()->writeParts(storage, txnID,
+                global_context->getCnchCatalog()->writeParts(storage, txnID,
                     Catalog::CommitItems{parts, delete_bitmaps, staged_parts}, request->from_merge_task(), request->preallocate_mode());
             }
             else
             {
                 TxnTimestamp commitTs {request->commit_ts()};
-                global_context.getCnchCatalog()->setCommitTime(storage, Catalog::CommitItems{parts, delete_bitmaps, staged_parts},
+                global_context->getCnchCatalog()->setCommitTime(storage, Catalog::CommitItems{parts, delete_bitmaps, staged_parts},
                     commitTs, request->txn_id());
             }
         }
@@ -938,18 +941,19 @@ void CnchServerServiceImpl::handleRedirectCommitRequest(
 }
 
 void CnchServerServiceImpl::redirectCommitParts(
-    google::protobuf::RpcController * controller,
-    const Protos::RedirectCommitPartsReq * request,
-    Protos::RedirectCommitPartsResp * response,
-    google::protobuf::Closure * done)
+    [[maybe_unused]] google::protobuf::RpcController* controller,
+    [[maybe_unused]] const Protos::RedirectCommitPartsReq * request,
+    [[maybe_unused]] Protos::RedirectCommitPartsResp * response,
+    [[maybe_unused]] google::protobuf::Closure * done)
 {
     handleRedirectCommitRequest(controller, request, response, done, false);
 }
+
 void CnchServerServiceImpl::redirectSetCommitTime(
-    google::protobuf::RpcController * controller,
-    const Protos::RedirectCommitPartsReq * request,
-    Protos::RedirectCommitPartsResp * response,
-    google::protobuf::Closure * done)
+    [[maybe_unused]] google::protobuf::RpcController* controller,
+    [[maybe_unused]] const Protos::RedirectCommitPartsReq * request,
+    [[maybe_unused]] Protos::RedirectCommitPartsResp * response,
+    [[maybe_unused]] google::protobuf::Closure * done)
 {
     handleRedirectCommitRequest(controller, request, response, done, true);
 }

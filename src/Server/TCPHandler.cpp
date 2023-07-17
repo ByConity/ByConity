@@ -189,7 +189,7 @@ void TCPHandler::runImpl()
             else                                     /// {tenant_id}`
                 default_database.clear();
         }
-        if ((!default_database.empty()) && (!DatabaseCatalog::instance().isDatabaseExist(default_database)))
+        if ((!default_database.empty()) && (!DatabaseCatalog::instance().isDatabaseExist(default_database, connection_context)))
         {
             Exception e("Database " + backQuote(default_database) + " doesn't exist", ErrorCodes::UNKNOWN_DATABASE);
             LOG_ERROR(log, "Code: {}, e.displayText() = {}, Stack trace:\n\n{}", e.code(), e.displayText(), e.getStackTraceString());
