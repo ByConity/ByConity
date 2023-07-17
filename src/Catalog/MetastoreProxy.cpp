@@ -22,6 +22,9 @@
 #include <string.h>
 #include <DaemonManager/BGJobStatusInCatalog.h>
 #include <IO/ReadHelpers.h>
+#include <Protos/DataModelHelpers.h>
+#include "common/types.h"
+#include "Catalog/MetastoreByteKVImpl.h"
 
 namespace DB::ErrorCodes
 {
@@ -1822,6 +1825,28 @@ UInt64 MetastoreProxy::getMergeMutateThreadStartTime(const String & name_space, 
         return 0;
     else
         return std::stoull(meta_str);
+}
+
+// TODO(WangTao): For bytekv we use TTL to expire the async query status, while for other metastore we need a background job to clean the expired status.
+void MetastoreProxy::setAsyncQueryStatus(
+    const String & name_space, const String & id, const Protos::AsyncQueryStatus & status, UInt64 ttl) const
+{
+    if (auto * bytekv = dynamic_cast<MetastoreByteKVImpl *>(metastore_ptr.get()))
+    {
+        bytekv->putTTL(asyncQueryStatusKey(name_space, id), status.SerializeAsString(), ttl);
+        return;
+    }
+    metastore_ptr->put(asyncQueryStatusKey(name_space, id), status.SerializeAsString());
+}
+
+bool MetastoreProxy::tryGetAsyncQueryStatus(const String & name_space, const String & id, Protos::AsyncQueryStatus & status) const
+{
+    String value;
+    metastore_ptr->get(asyncQueryStatusKey(name_space, id), value);
+    if (value.empty())
+        return false;
+    status.ParseFromString(value);
+    return true;
 }
 
 } /// end of namespace DB::Catalog

@@ -590,8 +590,8 @@ class IColumn;
     M(Bool, log_queries_with_partition_ids, 0, "Log requests partition ids and write the log to the system table.", 0) \
     \
     M(Bool, log_processors_profiles, false, "Log Processors profile events.", 0) \
-    M(Bool, report_processors_profiles, false, "Report processors profile to coordinator.", 0)\
-    M(UInt64, report_processors_profiles_timeout_millseconds, 10, "Report processors profile to coordinator timeout millseconds.", 0)\
+    M(Bool, report_processors_profiles, false, "Report processors profile to coordinator.", 0) \
+    M(UInt64, report_processors_profiles_timeout_millseconds, 10, "Report processors profile to coordinator timeout millseconds.", 0) \
     M(DistributedProductMode, distributed_product_mode, DistributedProductMode::DENY, "How are distributed subqueries performed inside IN or JOIN sections?", IMPORTANT) \
     \
     M(UInt64, max_concurrent_queries_for_all_users, 0, "The maximum number of concurrent requests for all users.", 0) \
@@ -1570,6 +1570,7 @@ class IColumn;
     M(Bool, enable_async_preload_parts, true, "Allow to preload data parts asynchronously", 0) \
     M(DiskCacheMode, disk_cache_mode, DiskCacheMode::AUTO, "Whether to use local disk cache", 0) \
     M(Bool, enable_vw_customized_setting, false, "Allow vw customized overwrite profile settings", 0) \
+    M(Bool, enable_async_execution, false, "Whether to enable async execution", 0) \
     /** Settings for Unique Table */ \
     M(Bool, enable_unique_partial_update, true, "Whether to use partial column update for INSERT", 0) \
     M(Milliseconds, dedup_worker_heartbeat_ms, 3000, "Dedup worker heartbeat interval time", 0) \

@@ -20,50 +20,54 @@
  */
 
 #include <iomanip>
-#include <common/scope_guard.h>
-#include <Poco/Net/NetException.h>
-#include <Poco/Util/LayeredConfiguration.h>
-#include <Common/CurrentThread.h>
-#include <Common/Stopwatch.h>
-#include <Common/NetException.h>
-#include <Common/setThreadName.h>
-#include <Common/OpenSSLHelpers.h>
-#include <IO/Progress.h>
+#include <memory>
 #include <Compression/CompressedReadBuffer.h>
 #include <Compression/CompressedWriteBuffer.h>
-#include <IO/ReadBufferFromPocoSocket.h>
-#include <IO/WriteBufferFromPocoSocket.h>
-#include <IO/LimitReadBuffer.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
-#include <IO/copyData.h>
+#include <Compression/CompressionFactory.h>
+#include <Core/ExternalTable.h>
 #include <DataStreams/AsynchronousBlockInputStream.h>
 #include <DataStreams/NativeBlockInputStream.h>
 #include <DataStreams/NativeBlockOutputStream.h>
-#include <Interpreters/executeQuery.h>
-#include <Interpreters/TablesStatus.h>
-#include <Interpreters/NamedSession.h>
-#include <Interpreters/InternalTextLogsQueue.h>
-#include <Interpreters/OpenTelemetrySpanLog.h>
-#include <Interpreters/DistributedStages/PlanSegment.h>
-#include <Interpreters/DistributedStages/executePlanSegment.h>
+#include <DataTypes/DataTypeLowCardinality.h>
+#include <IO/LimitReadBuffer.h>
+#include <IO/Progress.h>
+#include <IO/ReadBufferFromPocoSocket.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteBufferFromPocoSocket.h>
+#include <IO/WriteHelpers.h>
+#include <IO/copyData.h>
 #include <Interpreters/CnchQueryMetrics/QueryWorkerMetricLog.h>
 #include <Interpreters/DistributedStages/MPPQueryCoordinator.h>
 #include <Interpreters/DistributedStages/MPPQueryStatus.h>
+#include <Interpreters/DistributedStages/PlanSegment.h>
+#include <Interpreters/DistributedStages/executePlanSegment.h>
+#include <Interpreters/InternalTextLogsQueue.h>
+#include <Interpreters/NamedSession.h>
+#include <Interpreters/OpenTelemetrySpanLog.h>
 #include <Interpreters/ProcessList.h>
-#include <Storages/StorageReplicatedMergeTree.h>
-#include <Storages/MergeTree/MergeTreeDataPartUUID.h>
-#include <Storages/StorageS3Cluster.h>
-#include <Core/ExternalTable.h>
+#include <Interpreters/TablesStatus.h>
+#include <Interpreters/executeQuery.h>
 #include <Storages/ColumnDefault.h>
-#include <DataTypes/DataTypeLowCardinality.h>
-#include <Compression/CompressionFactory.h>
+#include <Storages/MergeTree/MergeTreeDataPartUUID.h>
+#include <Storages/StorageReplicatedMergeTree.h>
+#include <Storages/StorageS3Cluster.h>
+#include <Poco/Net/NetException.h>
+#include <Poco/Util/LayeredConfiguration.h>
+#include "Common/tests/gtest_global_context.h"
+#include <Common/CurrentThread.h>
+#include <Common/NetException.h>
+#include <Common/OpenSSLHelpers.h>
+#include <Common/Stopwatch.h>
+#include <Common/setThreadName.h>
 #include <common/logger_useful.h>
+#include <common/scope_guard.h>
 
 #include <Processors/Executors/PullingAsyncPipelineExecutor.h>
 #include <QueryPlan/GraphvizPrinter.h>
 
+#include "AsyncQueryManager.h"
 #include "Core/Protocol.h"
+#include "Server/TCPQuery.h"
 #include "TCPHandler.h"
 
 #if !defined(ARCADIA_BUILD)
@@ -92,13 +96,194 @@ namespace ErrorCodes
     extern const int TIMEOUT_EXCEEDED;
 }
 
-TCPHandler::TCPHandler(IServer & server_, const Poco::Net::StreamSocket & socket_, bool parse_proxy_protocol_, std::string server_display_name_)
+TCPQuery::TCPQuery(
+    IServer & server_,
+    Poco::Net::StreamSocket & socket_,
+    ClientVersionInfo client_info_,
+    InterServerInfo server_info_,
+    std::shared_ptr<ReadBuffer> in_,
+    std::shared_ptr<WriteBuffer> out_,
+    ContextMutablePtr conn_context_)
+    : server(server_)
+    , socket(socket_)
+    , log(&Poco::Logger::get("TCPHandler"))
+    , client_info(client_info_)
+    , server_info(server_info_)
+    , in(in_)
+    , out(out_)
+    , query_context(Context::createCopy(conn_context_))
+{
+}
+
+TCPQuery::~TCPQuery()
+{
+    /// QueryState should be cleared before QueryScope, since otherwise
+    /// the MemoryTracker will be wrong for possible deallocations.
+    /// (i.e. deallocations from the Aggregator with two-level aggregation)
+    state.reset();
+    query_scope.reset();
+    query_context.reset();
+}
+
+bool TCPQuery::init()
+{
+    /// If a user passed query-local timeouts, reset socket to initial state at the end of the query
+    SCOPE_EXIT({ state.timeout_setter.reset(); });
+
+    /** If Query - process it. If Ping or Cancel - go back to the beginning.
+             *  There may come settings for a separate query that modify `query_context`.
+             *  It's possible to receive part uuids packet before the query, so then receivePacket has to be called twice.
+             */
+    if (!receivePacket())
+        return false;
+
+    /** If Query received, then settings in query_context has been updated
+             *  So, update some other connection settings, for flexibility.
+             */
+    // TODO(WangTao): update this to connections
+    // {
+    //     const Settings & settings = query_context->getSettingsRef();
+    //     idle_connection_timeout = settings.idle_connection_timeout;
+    //     poll_interval = settings.poll_interval;
+    // }
+
+    /** If part_uuids got received in previous packet, trying to read again.
+              */
+    if (state.empty() && state.part_uuids && !receivePacket())
+        return false;
+
+    query_scope.emplace(query_context);
+
+    /// Should we send internal logs to client?
+    const auto client_logs_level = query_context->getSettingsRef().send_logs_level;
+    if (client_info.client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_SERVER_LOGS && client_logs_level != LogsLevel::none)
+    {
+        state.logs_queue = std::make_shared<InternalTextLogsQueue>();
+        state.logs_queue->max_priority = Poco::Logger::parseLevel(client_logs_level.toString());
+        CurrentThread::attachInternalTextLogsQueue(state.logs_queue, client_logs_level);
+        CurrentThread::setFatalErrorCallback([this] { sendLogs(); });
+    }
+
+    std::tie(poll_interval, receive_timeout) = getReadTimeouts(query_context->getSettingsRef());
+
+    query_context->setExternalTablesInitializer([this](ContextPtr context) {
+        if (context != query_context)
+            throw Exception("Unexpected context in external tables initializer", ErrorCodes::LOGICAL_ERROR);
+
+        /// Get blocks of temporary tables
+        readData(query_context->getSettingsRef());
+
+        /// Reset the input stream, as we received an empty block while receiving external table data.
+        /// So, the stream has been marked as cancelled and we can't read from it anymore.
+        state.block_in.reset();
+        state.maybe_compressed_in.reset(); /// For more accurate accounting by MemoryTracker.
+
+        state.temporary_tables_read = true;
+    });
+
+    /// Send structure of columns to client for function input()
+    query_context->setInputInitializer([this](ContextPtr context, const StoragePtr & input_storage) {
+        if (context != query_context)
+            throw Exception("Unexpected context in Input initializer", ErrorCodes::LOGICAL_ERROR);
+
+        auto metadata_snapshot = input_storage->getInMemoryMetadataPtr();
+        state.need_receive_data_for_input = true;
+
+        /// Send ColumnsDescription for input storage.
+        if (client_info.client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_COLUMN_DEFAULTS_METADATA
+            && query_context->getSettingsRef().input_format_defaults_for_omitted_fields)
+        {
+            sendTableColumns(metadata_snapshot->getColumns());
+        }
+
+        /// Send block to the client - input storage structure.
+        state.input_header = metadata_snapshot->getSampleBlock();
+        sendData(state.input_header);
+    });
+
+    query_context->setInputBlocksReaderCallback([this](ContextPtr context) -> Block {
+        if (context != query_context)
+            throw Exception("Unexpected context in InputBlocksReader", ErrorCodes::LOGICAL_ERROR);
+
+        if (!readDataNext())
+        {
+            state.block_in.reset();
+            state.maybe_compressed_in.reset();
+            return Block();
+        }
+        return state.block_for_input;
+    });
+
+    customizeContext(query_context);
+
+    /// This callback is needed for requesting read tasks inside pipeline for distributed processing
+    query_context->setReadTaskCallback([this]() -> String {
+        std::lock_guard lock(task_callback_mutex);
+        sendReadTaskRequestAssumeLocked();
+        return receiveReadTaskResponseAssumeLocked();
+    });
+    return true;
+}
+
+void TCPQuery::prepare()
+{
+    bool may_have_embedded_data = client_info.client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_CLIENT_SUPPORT_EMBEDDED_DATA;
+    /// Processing Query
+    if (state.plan_segment)
+        executePlanSegmentInternal(std::move(state.plan_segment), query_context, true);
+    else
+        state.io = executeQuery(state.query, query_context, false, state.stage, may_have_embedded_data);
+}
+
+bool TCPQuery::run()
+{
+    unknown_packet_in_send_data = query_context->getSettingsRef().unknown_packet_in_send_data;
+
+    after_check_cancelled.restart();
+    after_send_progress.restart();
+
+    state.io.watch.start();
+
+    if (state.io.out) /// `INSERT VALUES` in server side
+    {
+        state.need_receive_data_for_insert = true;
+        processInsertQuery(query_context->getSettings());
+    }
+    else if (state.need_receive_data_for_input) // It implies pipeline execution
+    {
+        /// It is special case for input(), all works for reading data from client will be done in callbacks.
+        auto executor = state.io.pipeline.execute();
+        executor->execute(state.io.pipeline.getNumThreads());
+    }
+    else if (state.io.pipeline.initialized()) /// `SELECT` in both server and worker sides or `INSERT SELECT` in write worker
+    {
+        processOrdinaryQueryWithProcessors();
+    }
+    else if (state.io.in) /// `INSERT INFILE` in worker side
+    {
+        processOrdinaryQuery();
+    }
+
+    state.io.onFinish();
+
+    /// Do it before sending end of stream, to have a chance to show log message in client.
+    query_scope->logPeakMemoryUsage();
+
+    if (state.is_connection_closed)
+        return false;
+
+    sendLogs();
+    sendQueryWorkerMetrics();
+    return true;
+}
+
+TCPHandler::TCPHandler(
+    IServer & server_, const Poco::Net::StreamSocket & socket_, bool parse_proxy_protocol_, std::string server_display_name_)
     : Poco::Net::TCPServerConnection(socket_)
     , server(server_)
     , parse_proxy_protocol(parse_proxy_protocol_)
     , log(&Poco::Logger::get("TCPHandler"))
     , connection_context(Context::createCopy(server.context()))
-    , query_context(Context::createCopy(server.context()))
     , server_display_name(std::move(server_display_name_))
 {
 }
@@ -106,7 +291,6 @@ TCPHandler::~TCPHandler()
 {
     try
     {
-        state.reset();
         if (out)
             out->next();
     }
@@ -170,7 +354,9 @@ void TCPHandler::runImpl()
             /// We try to send error information to the client.
             sendException(e, connection_context->getSettingsRef().calculate_text_stack_trace);
         }
-        catch (...) {}
+        catch (...)
+        {
+        }
 
         throw;
     }
@@ -184,9 +370,9 @@ void TCPHandler::runImpl()
         {
             connection_context->setSetting("tenant_id", String(default_database.c_str(), pos)); /// {tenant_id}`*
             connection_context->setTenantId(String(default_database.c_str(), pos));
-            if (pos + 1 != default_database.size())  ///multi-tenant default database storage pattern: {tenant_id}.{default_database}
+            if (pos + 1 != default_database.size()) ///multi-tenant default database storage pattern: {tenant_id}.{default_database}
                 default_database[pos] = '.';
-            else                                     /// {tenant_id}`
+            else /// {tenant_id}`
                 default_database.clear();
         }
         if ((!default_database.empty()) && (!DatabaseCatalog::instance().isDatabaseExist(default_database, connection_context)))
@@ -205,7 +391,7 @@ void TCPHandler::runImpl()
 
     sendHello();
 
-    connection_context->setProgressCallback([this] (const Progress & value) { return this->updateProgress(value); });
+    connection_context->setProgressCallback([this](const Progress & value) { return this->current_query->updateProgress(value); });
 
     while (true)
     {
@@ -227,14 +413,8 @@ void TCPHandler::runImpl()
         if (server.isCancelled() || in->eof())
             break;
 
-        /// Set context of request.
-        query_context = Context::createCopy(connection_context);
 
         Stopwatch watch;
-        state.reset();
-
-        /// Initialized later.
-        std::optional<CurrentThread::QueryScope> query_scope;
 
         /** An exception during the execution of request (it must be sent over the network to the client).
          *  The client will be able to accept it, if it did not happen while sending another packet and the client has not disconnected yet.
@@ -242,168 +422,43 @@ void TCPHandler::runImpl()
         std::optional<DB::Exception> exception;
         bool network_error = false;
 
-        bool send_exception_with_stack_trace = true;
+        auto query = std::make_shared<TCPQuery>(server, socket(), client_info, server_info, in, out, connection_context);
+        current_query = query;
 
         try
         {
-            /// If a user passed query-local timeouts, reset socket to initial state at the end of the query
-            SCOPE_EXIT({state.timeout_setter.reset();});
-
-            /** If Query - process it. If Ping or Cancel - go back to the beginning.
-             *  There may come settings for a separate query that modify `query_context`.
-             *  It's possible to receive part uuids packet before the query, so then receivePacket has to be called twice.
-             */
-            if (!receivePacket())
+            if (!query->init())
                 continue;
 
-            /** If Query received, then settings in query_context has been updated
-             *  So, update some other connection settings, for flexibility.
-             */
             {
-                const Settings & settings = query_context->getSettingsRef();
+                const Settings & settings = current_query->getContext()->getSettingsRef();
                 idle_connection_timeout = settings.idle_connection_timeout;
                 poll_interval = settings.poll_interval;
             }
 
-            /** If part_uuids got received in previous packet, trying to read again.
-              */
-            if (state.empty() && state.part_uuids && !receivePacket())
-                continue;
+            query->prepare();
 
-            query_scope.emplace(query_context);
-
-            send_exception_with_stack_trace = query_context->getSettingsRef().calculate_text_stack_trace;
-
-            /// Should we send internal logs to client?
-            const auto client_logs_level = query_context->getSettingsRef().send_logs_level;
-            if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_SERVER_LOGS
-                && client_logs_level != LogsLevel::none)
+            if (isAsyncMode() && !query->getState().io.out)
             {
-                state.logs_queue = std::make_shared<InternalTextLogsQueue>();
-                state.logs_queue->max_priority = Poco::Logger::parseLevel(client_logs_level.toString());
-                CurrentThread::attachInternalTextLogsQueue(state.logs_queue, client_logs_level);
-                CurrentThread::setFatalErrorCallback([this]{ sendLogs(); });
+                connection_context->getAsyncQueryManager()->insertAndRun(query, [](std::shared_ptr<TCPQuery> query_ptr) {
+                    query_ptr->updateQueryScope();
+                    query_ptr->run();
+                });
             }
-
-            query_context->setExternalTablesInitializer([&connection_settings, this] (ContextPtr context)
-            {
-                if (context != query_context)
-                    throw Exception("Unexpected context in external tables initializer", ErrorCodes::LOGICAL_ERROR);
-
-                /// Get blocks of temporary tables
-                readData(connection_settings);
-
-                /// Reset the input stream, as we received an empty block while receiving external table data.
-                /// So, the stream has been marked as cancelled and we can't read from it anymore.
-                state.block_in.reset();
-                state.maybe_compressed_in.reset(); /// For more accurate accounting by MemoryTracker.
-
-                state.temporary_tables_read = true;
-            });
-
-            /// Send structure of columns to client for function input()
-            query_context->setInputInitializer([this] (ContextPtr context, const StoragePtr & input_storage)
-            {
-                if (context != query_context)
-                    throw Exception("Unexpected context in Input initializer", ErrorCodes::LOGICAL_ERROR);
-
-                auto metadata_snapshot = input_storage->getInMemoryMetadataPtr();
-                state.need_receive_data_for_input = true;
-
-                /// Send ColumnsDescription for input storage.
-                if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_COLUMN_DEFAULTS_METADATA
-                    && query_context->getSettingsRef().input_format_defaults_for_omitted_fields)
-                {
-                    sendTableColumns(metadata_snapshot->getColumns());
-                }
-
-                /// Send block to the client - input storage structure.
-                state.input_header = metadata_snapshot->getSampleBlock();
-                sendData(state.input_header);
-            });
-
-            query_context->setInputBlocksReaderCallback([&connection_settings, this] (ContextPtr context) -> Block
-            {
-                if (context != query_context)
-                    throw Exception("Unexpected context in InputBlocksReader", ErrorCodes::LOGICAL_ERROR);
-
-                size_t poll_interval_ms;
-                int receive_timeout;
-                std::tie(poll_interval_ms, receive_timeout) = getReadTimeouts(connection_settings);
-                if (!readDataNext(poll_interval_ms, receive_timeout))
-                {
-                    state.block_in.reset();
-                    state.maybe_compressed_in.reset();
-                    return Block();
-                }
-                return state.block_for_input;
-            });
-
-            customizeContext(query_context);
-
-            /// This callback is needed for requesting read tasks inside pipeline for distributed processing
-            query_context->setReadTaskCallback([this]() -> String
-            {
-                std::lock_guard lock(task_callback_mutex);
-                sendReadTaskRequestAssumeLocked();
-                return receiveReadTaskResponseAssumeLocked();
-            });
-
-            bool may_have_embedded_data = client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_CLIENT_SUPPORT_EMBEDDED_DATA;
-            /// Processing Query
-            if (state.plan_segment)
-                executePlanSegmentInternal(std::move(state.plan_segment), query_context, true);
             else
-                state.io = executeQuery(state.query, query_context, false, state.stage, may_have_embedded_data);
-
-            unknown_packet_in_send_data = query_context->getSettingsRef().unknown_packet_in_send_data;
-
-            after_check_cancelled.restart();
-            after_send_progress.restart();
-
-            state.io.watch.start();
-
-            if (state.io.out)  /// `INSERT VALUES` in server side
             {
-                state.need_receive_data_for_insert = true;
-                processInsertQuery(connection_settings);
+                if (!query->run())
+                    break;
             }
-            else if (state.need_receive_data_for_input) // It implies pipeline execution
-            {
-                /// It is special case for input(), all works for reading data from client will be done in callbacks.
-                auto executor = state.io.pipeline.execute();
-                executor->execute(state.io.pipeline.getNumThreads());
-            }
-            else if (state.io.pipeline.initialized())  /// `SELECT` in both server and worker sides or `INSERT SELECT` in write worker
-                processOrdinaryQueryWithProcessors();
-            else if (state.io.in)  /// `INSERT INFILE` in worker side
-                processOrdinaryQuery();
 
-            state.io.onFinish();
-
-            /// Do it before sending end of stream, to have a chance to show log message in client.
-            query_scope->logPeakMemoryUsage();
-
-            if (state.is_connection_closed)
-                break;
-
-            sendLogs();
-            sendQueryWorkerMetrics();
             sendEndOfStream();
-
-            /// QueryState should be cleared before QueryScope, since otherwise
-            /// the MemoryTracker will be wrong for possible deallocations.
-            /// (i.e. deallocations from the Aggregator with two-level aggregation)
-            state.reset();
-            query_scope.reset();
         }
         catch (const Exception & e)
         {
-
-            state.io.onException();
-            if (state.io.coordinator && isAmbiguosError(e.code()))
+            current_query->getState().io.onException();
+            if (current_query->getState().io.coordinator && isAmbiguosError(e.code()))
             {
-                auto query_status =state.io.coordinator->waitUntilFinish(e.code(), e.message());
+                auto query_status = current_query->getState().io.coordinator->waitUntilFinish(e.code(), e.message());
                 exception.emplace(query_status.summarized_error_msg, query_status.error_code);
             }
             else
@@ -430,12 +485,12 @@ void TCPHandler::runImpl()
              *  Although in one of them, we have to send exception to the client, but in the other - we can not.
              *  We will try to send exception to the client in any case - see below.
              */
-            state.io.onException();
+            current_query->getState().io.onException();
             exception.emplace(Exception::CreateFromPocoTag{}, e);
         }
         catch (const Poco::Exception & e)
         {
-            state.io.onException();
+            current_query->getState().io.onException();
             exception.emplace(Exception::CreateFromPocoTag{}, e);
         }
 // Server should die on std logic errors in debug, like with assert()
@@ -444,20 +499,20 @@ void TCPHandler::runImpl()
 #ifndef NDEBUG
         catch (const std::logic_error & e)
         {
-            state.io.onException();
+            current_query->getState().io.onException();
             exception.emplace(Exception::CreateFromSTDTag{}, e);
-            sendException(*exception, send_exception_with_stack_trace);
+            sendException(*exception, connection_context->getSettingsRef().calculate_text_stack_trace);
             std::abort();
         }
 #endif
         catch (const std::exception & e)
         {
-            state.io.onException();
+            current_query->getState().io.onException();
             exception.emplace(Exception::CreateFromSTDTag{}, e);
         }
         catch (...)
         {
-            state.io.onException();
+            current_query->getState().io.onException();
             exception.emplace("Unknown exception", ErrorCodes::UNKNOWN_EXCEPTION);
         }
 
@@ -469,8 +524,8 @@ void TCPHandler::runImpl()
                 {
                     /// Try to send logs to client, but it could be risky too
                     /// Assume that we can't break output here
-                    sendLogs();
-                    sendQueryWorkerMetrics();
+                    current_query->sendLogs();
+                    current_query->sendQueryWorkerMetrics();
                 }
                 catch (...)
                 {
@@ -479,7 +534,7 @@ void TCPHandler::runImpl()
 
                 const auto & e = *exception;
                 LOG_ERROR(log, "Code: {}, e.displayText() = {}, Stack trace:\n\n{}", e.code(), e.displayText(), e.getStackTraceString());
-                sendException(*exception, send_exception_with_stack_trace);
+                sendException(*exception, connection_context->getSettingsRef().calculate_text_stack_trace);
             }
         }
         catch (...)
@@ -491,8 +546,8 @@ void TCPHandler::runImpl()
 
         try
         {
-            if (exception && !state.temporary_tables_read)
-                query_context->initializeExternalTablesIfSet();
+            if (exception && !current_query->getState().temporary_tables_read)
+                current_query->getContext()->initializeExternalTablesIfSet();
         }
         catch (...)
         {
@@ -500,30 +555,9 @@ void TCPHandler::runImpl()
             LOG_WARNING(log, "Can't read external tables after query failure.");
         }
 
-
-        try
-        {
-            /// QueryState should be cleared before QueryScope, since otherwise
-            /// the MemoryTracker will be wrong for possible deallocations.
-            /// (i.e. deallocations from the Aggregator with two-level aggregation)
-            state.reset();
-            query_scope.reset();
-        }
-        catch (...)
-        {
-            /** During the processing of request, there was an exception that we caught and possibly sent to client.
-             *  When destroying the request pipeline execution there was a second exception.
-             *  For example, a pipeline could run in multiple threads, and an exception could occur in each of them.
-             *  Ignore it.
-             */
-        }
-
         watch.stop();
 
         LOG_DEBUG(log, "Processed in {} sec.", watch.elapsedSeconds());
-
-        /// It is important to destroy query context here. We do not want it to live arbitrarily longer than the query.
-        query_context.reset();
 
         if (network_error)
             break;
@@ -531,7 +565,7 @@ void TCPHandler::runImpl()
 }
 
 
-bool TCPHandler::readDataNext(size_t poll_interval, time_t receive_timeout)
+bool TCPQuery::readDataNext()
 {
     Stopwatch watch(CLOCK_MONOTONIC_COARSE);
 
@@ -552,9 +586,11 @@ bool TCPHandler::readDataNext(size_t poll_interval, time_t receive_timeout)
         Float64 elapsed = watch.elapsedSeconds();
         if (elapsed > static_cast<Float64>(receive_timeout))
         {
-            throw Exception(ErrorCodes::SOCKET_TIMEOUT,
-                            "Timeout exceeded while receiving data from client. Waited for {} seconds, timeout is {} seconds.",
-                            static_cast<size_t>(elapsed), receive_timeout);
+            throw Exception(
+                ErrorCodes::SOCKET_TIMEOUT,
+                "Timeout exceeded while receiving data from client. Waited for {} seconds, timeout is {} seconds.",
+                static_cast<size_t>(elapsed),
+                receive_timeout);
         }
     }
 
@@ -575,7 +611,7 @@ bool TCPHandler::readDataNext(size_t poll_interval, time_t receive_timeout)
 }
 
 
-std::tuple<size_t, int> TCPHandler::getReadTimeouts(const Settings & connection_settings)
+std::tuple<size_t, int> TCPQuery::getReadTimeouts(const Settings & connection_settings)
 {
     const auto receive_timeout = query_context->getSettingsRef().receive_timeout.value;
 
@@ -589,17 +625,16 @@ std::tuple<size_t, int> TCPHandler::getReadTimeouts(const Settings & connection_
 }
 
 
-void TCPHandler::readData(const Settings & connection_settings)
+void TCPQuery::readData(const Settings & connection_settings)
 {
-    auto [poll_interval, receive_timeout] = getReadTimeouts(connection_settings);
     sendLogs();
 
-    while (readDataNext(poll_interval, receive_timeout))
+    while (readDataNext())
         ;
 }
 
 
-void TCPHandler::processInsertQuery(const Settings & connection_settings)
+void TCPQuery::processInsertQuery(const Settings & connection_settings)
 {
     /** Made above the rest of the lines, so that in case of `writePrefix` function throws an exception,
       *  client receive exception before sending data.
@@ -607,7 +642,7 @@ void TCPHandler::processInsertQuery(const Settings & connection_settings)
     state.io.out->writePrefix();
 
     /// Send ColumnsDescription for insertion table
-    if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_COLUMN_DEFAULTS_METADATA)
+    if (client_info.client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_COLUMN_DEFAULTS_METADATA)
     {
         const auto & table_id = query_context->getInsertionTable();
         if (query_context->getSettingsRef().input_format_defaults_for_omitted_fields)
@@ -637,14 +672,13 @@ void TCPHandler::processInsertQuery(const Settings & connection_settings)
 }
 
 
-void TCPHandler::processOrdinaryQuery()
+void TCPQuery::processOrdinaryQuery()
 {
     OpenTelemetrySpanHolder span(__PRETTY_FUNCTION__);
 
     /// Pull query execution result, if exists, and send it to network.
     if (state.io.in)
     {
-
         if (query_context->getSettingsRef().allow_experimental_query_deduplication)
             sendPartUUIDs();
 
@@ -708,7 +742,7 @@ void TCPHandler::processOrdinaryQuery()
 }
 
 
-void TCPHandler::processOrdinaryQueryWithProcessors()
+void TCPQuery::processOrdinaryQueryWithProcessors()
 {
     auto & pipeline = state.io.pipeline;
 
@@ -756,7 +790,8 @@ void TCPHandler::processOrdinaryQueryWithProcessors()
         }
 
         if (auto pipline_executor = executor.getPipelineExecutor())
-            GraphvizPrinter::printPipeline(pipline_executor->getProcessors(), pipline_executor->getExecutingGraph(), query_context, 0, "coordinator");
+            GraphvizPrinter::printPipeline(
+                pipline_executor->getProcessors(), pipline_executor->getExecutingGraph(), query_context, 0, "coordinator");
 
         /** If data has run out, we will send the profiling data and total values to
           * the last zero block to be able to use
@@ -784,16 +819,16 @@ void TCPHandler::processOrdinaryQueryWithProcessors()
 }
 
 
-void TCPHandler::processTablesStatusRequest()
+void TCPQuery::processTablesStatusRequest()
 {
     TablesStatusRequest request;
-    request.read(*in, client_tcp_protocol_version);
+    request.read(*in, client_info.client_tcp_protocol_version);
 
     TablesStatusResponse response;
-    for (const QualifiedTableName & table_name: request.tables)
+    for (const QualifiedTableName & table_name : request.tables)
     {
-        auto resolved_id = connection_context->tryResolveStorageID({table_name.database, table_name.table});
-        StoragePtr table = DatabaseCatalog::instance().tryGetTable(resolved_id, connection_context);
+        auto resolved_id = query_context->tryResolveStorageID({table_name.database, table_name.table});
+        StoragePtr table = DatabaseCatalog::instance().tryGetTable(resolved_id, query_context);
         if (!table)
             continue;
 
@@ -801,7 +836,7 @@ void TCPHandler::processTablesStatusRequest()
         if (auto * replicated_table = dynamic_cast<StorageReplicatedMergeTree *>(table.get()))
         {
             status.is_replicated = true;
-             // coverity[store_truncates_time_t:FALSE]
+            // coverity[store_truncates_time_t:FALSE]
             status.absolute_delay = replicated_table->getAbsoluteDelay();
         }
         else
@@ -822,18 +857,18 @@ void TCPHandler::processTablesStatusRequest()
         std::this_thread::sleep_for(ms);
     }
 
-    response.write(*out, client_tcp_protocol_version);
+    response.write(*out, client_info.client_tcp_protocol_version);
 }
 
-void TCPHandler::receiveUnexpectedTablesStatusRequest()
+void TCPQuery::receiveUnexpectedTablesStatusRequest()
 {
     TablesStatusRequest skip_request;
-    skip_request.read(*in, client_tcp_protocol_version);
+    skip_request.read(*in, client_info.client_tcp_protocol_version);
 
     throw NetException("Unexpected packet TablesStatusRequest received from client", ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
 }
 
-void TCPHandler::sendPartUUIDs()
+void TCPQuery::sendPartUUIDs()
 {
     auto uuids = query_context->getPartUUIDs()->get();
     if (!uuids.empty())
@@ -848,24 +883,24 @@ void TCPHandler::sendPartUUIDs()
 }
 
 
-void TCPHandler::sendReadTaskRequestAssumeLocked()
+void TCPQuery::sendReadTaskRequestAssumeLocked()
 {
     writeVarUInt(Protocol::Server::ReadTaskRequest, *out);
     out->next();
 }
 
-void TCPHandler::sendProfileInfo(const BlockStreamProfileInfo & info)
+void TCPQuery::sendProfileInfo(const BlockStreamProfileInfo & info)
 {
     writeVarUInt(Protocol::Server::ProfileInfo, *out);
     info.write(*out);
     out->next();
 }
 
-void TCPHandler::sendQueryWorkerMetrics()
+void TCPQuery::sendQueryWorkerMetrics()
 {
     /// The 'QueryMetrics' packets are only allowed to be sent to cnch worker or cnch server.
     /// plan segment cannot receive worker metrics currently
-    if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_QUERY_METRICS
+    if (client_info.client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_QUERY_METRICS
         && query_context->getSettingsRef().enable_query_level_profiling
         && query_context->getClientInfo().client_type != ClientInfo::ClientType::UNKNOWN
         /*&& !state->plan_segment*/)
@@ -882,7 +917,7 @@ void TCPHandler::sendQueryWorkerMetrics()
     }
 }
 
-void TCPHandler::sendTotals(const Block & totals)
+void TCPQuery::sendTotals(const Block & totals)
 {
     if (totals)
     {
@@ -898,7 +933,7 @@ void TCPHandler::sendTotals(const Block & totals)
 }
 
 
-void TCPHandler::sendExtremes(const Block & extremes)
+void TCPQuery::sendExtremes(const Block & extremes)
 {
     if (extremes)
     {
@@ -913,6 +948,14 @@ void TCPHandler::sendExtremes(const Block & extremes)
     }
 }
 
+void TCPQuery::sendAsyncQueryId(const String & id)
+{
+    MutableColumnPtr table_column_mut = ColumnString::create();
+    table_column_mut->insert(id);
+    Block res;
+    res.insert(ColumnWithTypeAndName(std::move(table_column_mut), std::make_shared<DataTypeString>(), "async_query_id"));
+    sendData(res);
+}
 
 bool TCPHandler::receiveProxyHeader()
 {
@@ -1001,9 +1044,13 @@ void TCPHandler::receiveHello()
           */
         if (packet_type == 'G' || packet_type == 'P')
         {
-            writeString("HTTP/1.0 400 Bad Request\r\n\r\n"
-                "Port " + server.config().getString("tcp_port") + " is for clickhouse-client program.\r\n"
-                "You must use port " + server.config().getString("http_port") + " for HTTP.\r\n",
+            writeString(
+                "HTTP/1.0 400 Bad Request\r\n\r\n"
+                "Port "
+                    + server.config().getString("tcp_port")
+                    + " is for clickhouse-client program.\r\n"
+                      "You must use port "
+                    + server.config().getString("http_port") + " for HTTP.\r\n",
                 *out);
 
             throw Exception("Client has connected to wrong port", ErrorCodes::CLIENT_HAS_CONNECTED_TO_WRONG_PORT);
@@ -1012,28 +1059,31 @@ void TCPHandler::receiveHello()
             throw NetException("Unexpected packet from client", ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
     }
 
-    readStringBinary(client_name, *in);
-    readVarUInt(client_version_major, *in);
-    readVarUInt(client_version_minor, *in);
+    readStringBinary(client_info.client_name, *in);
+    readVarUInt(client_info.client_version_major, *in);
+    readVarUInt(client_info.client_version_minor, *in);
     // NOTE For backward compatibility of the protocol, client cannot send its version_patch.
-    readVarUInt(client_tcp_protocol_version, *in);
+    readVarUInt(client_info.client_tcp_protocol_version, *in);
     readStringBinary(default_database, *in);
     readStringBinary(user, *in);
     readStringBinary(password, *in);
-    if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_PLAN_SEGMENT_VERSION)
-        readVarUInt(client_plan_segment_version, *in);
+    if (client_info.client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_PLAN_SEGMENT_VERSION)
+        readVarUInt(client_info.client_plan_segment_version, *in);
 
     if (user.empty())
         throw NetException("Unexpected packet from client (no user in Hello package)", ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
 
-    LOG_DEBUG(log, "Connected {} version {}.{}.{}, plansegment verison:{}, revision: {}{}{}.",
-        client_name,
-        client_version_major, client_version_minor, client_version_patch,
-        client_plan_segment_version,
-        client_tcp_protocol_version,
+    LOG_DEBUG(
+        log,
+        "Connected {} version {}.{}.{}, plansegment verison:{}, revision: {}{}{}.",
+        client_info.client_name,
+        client_info.client_version_major,
+        client_info.client_version_minor,
+        client_info.client_version_patch,
+        client_info.client_plan_segment_version,
+        client_info.client_tcp_protocol_version,
         (!default_database.empty() ? ", database: " + default_database : ""),
-        (!user.empty() ? ", user: " + user : "")
-    );
+        (!user.empty() ? ", user: " + user : ""));
 
     if (user != USER_INTERSERVER_MARKER)
     {
@@ -1046,7 +1096,7 @@ void TCPHandler::receiveHello()
 }
 
 
-void TCPHandler::receiveUnexpectedHello()
+void TCPQuery::receiveUnexpectedHello()
 {
     UInt64 skip_uint_64;
     String skip_string;
@@ -1070,19 +1120,19 @@ void TCPHandler::sendHello()
     writeVarUInt(DBMS_VERSION_MAJOR, *out);
     writeVarUInt(DBMS_VERSION_MINOR, *out);
     writeVarUInt(DBMS_TCP_PROTOCOL_VERSION, *out);
-    if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_SERVER_TIMEZONE)
+    if (client_info.client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_SERVER_TIMEZONE)
         writeStringBinary(DateLUT::instance().getTimeZone(), *out);
-    if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_SERVER_DISPLAY_NAME)
+    if (client_info.client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_SERVER_DISPLAY_NAME)
         writeStringBinary(server_display_name, *out);
-    if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_VERSION_PATCH)
+    if (client_info.client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_VERSION_PATCH)
         writeVarUInt(DBMS_VERSION_PATCH, *out);
-    if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_PLAN_SEGMENT_VERSION)
+    if (client_info.client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_PLAN_SEGMENT_VERSION)
         writeVarUInt(DBMS_PLAN_SEGMENT_VERSION, *out);
     out->next();
 }
 
 
-bool TCPHandler::receivePacket()
+bool TCPQuery::receivePacket()
 {
     UInt64 packet_type = 0;
     readVarUInt(packet_type, *in);
@@ -1136,7 +1186,7 @@ bool TCPHandler::receivePacket()
     }
 }
 
-void TCPHandler::receiveIgnoredPartUUIDs()
+void TCPQuery::receiveIgnoredPartUUIDs()
 {
     state.part_uuids = true;
     std::vector<UUID> uuids;
@@ -1147,7 +1197,7 @@ void TCPHandler::receiveIgnoredPartUUIDs()
 }
 
 
-String TCPHandler::receiveReadTaskResponseAssumeLocked()
+String TCPQuery::receiveReadTaskResponseAssumeLocked()
 {
     UInt64 packet_type = 0;
     readVarUInt(packet_type, *in);
@@ -1160,8 +1210,9 @@ String TCPHandler::receiveReadTaskResponseAssumeLocked()
         }
         else
         {
-            throw Exception(fmt::format("Received {} packet after requesting read task",
-                    Protocol::Client::toString(packet_type)), ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
+            throw Exception(
+                fmt::format("Received {} packet after requesting read task", Protocol::Client::toString(packet_type)),
+                ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
         }
     }
     UInt64 version;
@@ -1176,15 +1227,15 @@ String TCPHandler::receiveReadTaskResponseAssumeLocked()
 
 void TCPHandler::receiveClusterNameAndSalt()
 {
-    readStringBinary(cluster, *in);
-    readStringBinary(salt, *in, 32);
+    readStringBinary(server_info.cluster, *in);
+    readStringBinary(server_info.salt, *in, 32);
 
     try
     {
-        if (salt.empty())
+        if (server_info.salt.empty())
             throw NetException("Empty salt is not allowed", ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
 
-        cluster_secret = query_context->getCluster(cluster)->getSecret();
+        server_info.cluster_secret = connection_context->getCluster(server_info.cluster)->getSecret();
     }
     catch (const Exception & e)
     {
@@ -1193,13 +1244,15 @@ void TCPHandler::receiveClusterNameAndSalt()
             /// We try to send error information to the client.
             sendException(e, connection_context->getSettingsRef().calculate_text_stack_trace);
         }
-        catch (...) {}
+        catch (...)
+        {
+        }
 
         throw;
     }
 }
 
-void TCPHandler::receiveQuery()
+void TCPQuery::receiveQuery()
 {
     UInt64 stage = 0;
     UInt64 compression = 0;
@@ -1208,23 +1261,23 @@ void TCPHandler::receiveQuery()
     readStringBinary(state.query_id, *in);
 
     /// Client info
-    ClientInfo & client_info = query_context->getClientInfo();
-    if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_CLIENT_INFO)
-        client_info.read(*in, client_tcp_protocol_version);
+    ClientInfo & client_info_in_context = query_context->getClientInfo();
+    if (client_info.client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_CLIENT_INFO)
+        client_info_in_context.read(*in, client_info.client_tcp_protocol_version);
 
     /// For better support of old clients, that does not send ClientInfo.
-    if (client_info.query_kind == ClientInfo::QueryKind::NO_QUERY)
+    if (client_info_in_context.query_kind == ClientInfo::QueryKind::NO_QUERY)
     {
-        client_info.query_kind = ClientInfo::QueryKind::INITIAL_QUERY;
-        client_info.client_name = client_name;
-        client_info.client_version_major = client_version_major;
-        client_info.client_version_minor = client_version_minor;
-        client_info.client_version_patch = client_version_patch;
-        client_info.client_tcp_protocol_version = client_tcp_protocol_version;
+        client_info_in_context.query_kind = ClientInfo::QueryKind::INITIAL_QUERY;
+        client_info_in_context.client_name = client_info.client_name;
+        client_info_in_context.client_version_major = client_info.client_version_major;
+        client_info_in_context.client_version_minor = client_info.client_version_minor;
+        client_info_in_context.client_version_patch = client_info.client_version_patch;
+        client_info_in_context.client_tcp_protocol_version = client_info.client_tcp_protocol_version;
     }
 
     /// Set fields, that are known apriori.
-    client_info.interface = ClientInfo::Interface::TCP;
+    client_info_in_context.interface = ClientInfo::Interface::TCP;
 
     /** @aeolus
      *  Make the current_user and initial_user identical so that any INITIAL_QUERY
@@ -1238,14 +1291,14 @@ void TCPHandler::receiveQuery()
      *  NOTE: query_context will be restored to connection_context before received
      *  a new query. The only thing modified is the current_user of this (current) query.
      */
-    if (client_info.query_kind == ClientInfo::QueryKind::SECONDARY_QUERY)
+    if (client_info_in_context.query_kind == ClientInfo::QueryKind::SECONDARY_QUERY)
     {
-        client_info.current_user = client_info.initial_user;
+        client_info_in_context.current_user = client_info_in_context.initial_user;
     }
 
     /// Per query settings are also passed via TCP.
     /// We need to check them before applying due to they can violate the settings constraints.
-    auto settings_format = (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_SETTINGS_SERIALIZED_AS_STRINGS)
+    auto settings_format = (client_info.client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_SETTINGS_SERIALIZED_AS_STRINGS)
         ? SettingsWriteFormat::STRINGS_WITH_FLAGS
         : SettingsWriteFormat::BINARY;
     Settings passed_settings;
@@ -1253,7 +1306,7 @@ void TCPHandler::receiveQuery()
 
     /// Interserver secret.
     std::string received_hash;
-    if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_INTERSERVER_SECRET)
+    if (client_info.client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_INTERSERVER_SECRET)
     {
         readStringBinary(received_hash, *in, 32);
     }
@@ -1268,14 +1321,14 @@ void TCPHandler::receiveQuery()
 
     /// It is OK to check only when query != INITIAL_QUERY,
     /// since only in that case the actions will be done.
-    if (!cluster.empty() && client_info.query_kind != ClientInfo::QueryKind::INITIAL_QUERY)
+    if (!server_info.cluster.empty() && client_info_in_context.query_kind != ClientInfo::QueryKind::INITIAL_QUERY)
     {
 #if USE_SSL
-        std::string data(salt);
-        data += cluster_secret;
+        std::string data(server_info.salt);
+        data += server_info.cluster_secret;
         data += state.query;
         data += state.query_id;
-        data += client_info.initial_user;
+        data += client_info_in_context.initial_user;
 
         if (received_hash.size() != 32)
             throw NetException("Unexpected hash received from client", ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
@@ -1288,16 +1341,15 @@ void TCPHandler::receiveQuery()
 
         /// initial_user can be empty in case of Distributed INSERT via Buffer/Kafka,
         /// i.e. when the INSERT is done with the global context (w/o user).
-        if (!client_info.initial_user.empty())
+        if (!client_info_in_context.initial_user.empty())
         {
-            query_context->setUserWithoutCheckingPassword(client_info.initial_user, client_info.initial_address);
+            query_context->setUserWithoutCheckingPassword(client_info_in_context.initial_user, client_info_in_context.initial_address);
             LOG_DEBUG(log, "User (initial): {}", query_context->getUserName());
         }
         /// No need to update connection_context, since it does not requires user (it will not be used for query execution)
 #else
         throw Exception(
-            "Inter-server secret support is disabled, because ClickHouse was built without SSL library",
-            ErrorCodes::SUPPORT_IS_DISABLED);
+            "Inter-server secret support is disabled, because ClickHouse was built without SSL library", ErrorCodes::SUPPORT_IS_DISABLED);
 #endif
     }
     else
@@ -1309,7 +1361,7 @@ void TCPHandler::receiveQuery()
     /// Settings
     ///
     auto settings_changes = passed_settings.changes();
-    if (client_info.query_kind == ClientInfo::QueryKind::INITIAL_QUERY)
+    if (client_info_in_context.query_kind == ClientInfo::QueryKind::INITIAL_QUERY)
     {
         /// Throw an exception if the passed settings violate the constraints.
         query_context->checkSettingsConstraints(settings_changes);
@@ -1324,7 +1376,7 @@ void TCPHandler::receiveQuery()
     /// Disable function name normalization when it's a secondary query, because queries are either
     /// already normalized on initiator node, or not normalized and should remain unnormalized for
     /// compatibility.
-    if (client_info.query_kind == ClientInfo::QueryKind::SECONDARY_QUERY)
+    if (client_info_in_context.query_kind == ClientInfo::QueryKind::SECONDARY_QUERY)
     {
         // for distributed_perfect_shard, it will send original query, so that we want remote node optimize the query itself.
         if (!query_context->getSettingsRef().distributed_perfect_shard)
@@ -1343,12 +1395,12 @@ void TCPHandler::receiveQuery()
     query_context->setCurrentQueryId(state.query_id);
 
     // Set parameters of initial query.
-    if (client_info.query_kind == ClientInfo::QueryKind::INITIAL_QUERY)
+    if (client_info_in_context.query_kind == ClientInfo::QueryKind::INITIAL_QUERY)
     {
         /// 'Current' fields was set at receiveHello.
-        client_info.initial_user = client_info.current_user;
-        client_info.initial_query_id = client_info.current_query_id;
-        client_info.initial_address = client_info.current_address;
+        client_info_in_context.initial_user = client_info_in_context.current_user;
+        client_info_in_context.initial_query_id = client_info_in_context.current_query_id;
+        client_info_in_context.initial_address = client_info_in_context.current_address;
     }
 
     /// Sync timeouts on client and server during current query to avoid dangling queries on server
@@ -1356,10 +1408,10 @@ void TCPHandler::receiveQuery()
     ///  because settings.send_timeout is client-side setting which has opposite meaning on the server side.
     /// NOTE: these settings are applied only for current connection (not for distributed tables' connections)
     const Settings & settings = query_context->getSettingsRef();
-    state.timeout_setter = std::make_unique<TimeoutSetter>(socket(), settings.receive_timeout, settings.send_timeout);
+    state.timeout_setter = std::make_unique<TimeoutSetter>(socket, settings.receive_timeout, settings.send_timeout);
 }
 
-void TCPHandler::receiveCnchQuery()
+void TCPQuery::receiveCnchQuery()
 {
     UInt64 stage = 0;
     UInt64 compression = 0;
@@ -1370,26 +1422,26 @@ void TCPHandler::receiveCnchQuery()
     auto named_session = query_context->acquireNamedCnchSession(txn_id, {}, false);
     query_context = Context::createCopy(named_session->context);
     query_context->setSessionContext(named_session->context);
-    query_context->setProgressCallback([this] (const Progress & value) { return this->updateProgress(value); });
+    query_context->setProgressCallback([this](const Progress & value) { return this->updateProgress(value); });
 
     readStringBinary(state.query_id, *in);
     /// Client info
-    ClientInfo & client_info = query_context->getClientInfo();
-    client_info.read(*in, client_tcp_protocol_version, /*cnch_query*/ true);
+    ClientInfo & client_info_in_context = query_context->getClientInfo();
+    client_info_in_context.read(*in, client_info.client_tcp_protocol_version, /*cnch_query*/ true);
 
     /// For better support of old clients, that does not send ClientInfo.
-    if (client_info.query_kind == ClientInfo::QueryKind::NO_QUERY)
+    if (client_info_in_context.query_kind == ClientInfo::QueryKind::NO_QUERY)
     {
-        client_info.query_kind = ClientInfo::QueryKind::INITIAL_QUERY;
-        client_info.client_name = client_name;
-        client_info.client_version_major = client_version_major;
-        client_info.client_version_minor = client_version_minor;
-        client_info.client_version_patch = client_version_patch;
-        client_info.client_tcp_protocol_version = client_tcp_protocol_version;
+        client_info_in_context.query_kind = ClientInfo::QueryKind::INITIAL_QUERY;
+        client_info_in_context.client_name = client_info.client_name;
+        client_info_in_context.client_version_major = client_info.client_version_major;
+        client_info_in_context.client_version_minor = client_info.client_version_minor;
+        client_info_in_context.client_version_patch = client_info.client_version_patch;
+        client_info_in_context.client_tcp_protocol_version = client_info.client_tcp_protocol_version;
     }
 
     /// Set fields, that are known apriori.
-    client_info.interface = ClientInfo::Interface::TCP;
+    client_info_in_context.interface = ClientInfo::Interface::TCP;
 
     /// Per query settings are also passed via TCP.
     /// We need to check them before applying due to they can violate the settings constraints.
@@ -1410,14 +1462,14 @@ void TCPHandler::receiveCnchQuery()
 
     /// It is OK to check only when query != INITIAL_QUERY,
     /// since only in that case the actions will be done.
-    if (!cluster.empty() && client_info.query_kind != ClientInfo::QueryKind::INITIAL_QUERY)
+    if (!server_info.cluster.empty() && client_info_in_context.query_kind != ClientInfo::QueryKind::INITIAL_QUERY)
     {
 #if USE_SSL
-        std::string data(salt);
-        data += cluster_secret;
+        std::string data(server_info.salt);
+        data += server_info.cluster_secret;
         data += state.query;
         data += state.query_id;
-        data += client_info.initial_user;
+        data += client_info_in_context.initial_user;
 
         if (received_hash.size() != 32)
             throw NetException("Unexpected hash received from client", ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
@@ -1430,16 +1482,15 @@ void TCPHandler::receiveCnchQuery()
 
         /// initial_user can be empty in case of Distributed INSERT via Buffer/Kafka,
         /// i.e. when the INSERT is done with the global context (w/o user).
-        if (!client_info.initial_user.empty())
+        if (!client_info_in_context.initial_user.empty())
         {
-            query_context->setUserWithoutCheckingPassword(client_info.initial_user, client_info.initial_address);
+            query_context->setUserWithoutCheckingPassword(client_info_in_context.initial_user, client_info_in_context.initial_address);
             LOG_DEBUG(log, "User (initial): {}", query_context->getUserName());
         }
         /// No need to update connection_context, since it does not requires user (it will not be used for query execution)
 #else
         throw Exception(
-            "Inter-server secret support is disabled, because ClickHouse was built without SSL library",
-            ErrorCodes::SUPPORT_IS_DISABLED);
+            "Inter-server secret support is disabled, because ClickHouse was built without SSL library", ErrorCodes::SUPPORT_IS_DISABLED);
 #endif
     }
     else
@@ -1456,7 +1507,7 @@ void TCPHandler::receiveCnchQuery()
 
     /// Disable function name normalization when it's a secondary query, because queries are either
     /// already normalized on initiator node, or not normalized and should remain denormalized for compatibility.
-    if (client_info.query_kind == ClientInfo::QueryKind::SECONDARY_QUERY)
+    if (client_info_in_context.query_kind == ClientInfo::QueryKind::SECONDARY_QUERY)
     {
         query_context->setSetting("normalize_function_names", Field(0));
     }
@@ -1479,10 +1530,10 @@ void TCPHandler::receiveCnchQuery()
     ///  because settings.send_timeout is client-side setting which has opposite meaning on the server side.
     /// NOTE: these settings are applied only for current connection (not for distributed tables' connections)
     const Settings & settings = query_context->getSettingsRef();
-    state.timeout_setter = std::make_unique<TimeoutSetter>(socket(), settings.receive_timeout, settings.send_timeout);
+    state.timeout_setter = std::make_unique<TimeoutSetter>(socket, settings.receive_timeout, settings.send_timeout);
 }
 
-void TCPHandler::receiveUnexpectedQuery()
+void TCPQuery::receiveUnexpectedQuery()
 {
     UInt64 skip_uint_64;
     String skip_string;
@@ -1490,17 +1541,17 @@ void TCPHandler::receiveUnexpectedQuery()
     readStringBinary(skip_string, *in);
 
     ClientInfo skip_client_info;
-    if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_CLIENT_INFO)
-        skip_client_info.read(*in, client_tcp_protocol_version);
+    if (client_info.client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_CLIENT_INFO)
+        skip_client_info.read(*in, client_info.client_tcp_protocol_version);
 
     Settings skip_settings;
-    auto settings_format = (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_SETTINGS_SERIALIZED_AS_STRINGS)
+    auto settings_format = (client_info.client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_SETTINGS_SERIALIZED_AS_STRINGS)
         ? SettingsWriteFormat::STRINGS_WITH_FLAGS
         : SettingsWriteFormat::BINARY;
     skip_settings.read(*in, settings_format);
 
     std::string skip_hash;
-    bool interserver_secret = client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_INTERSERVER_SECRET;
+    bool interserver_secret = client_info.client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_INTERSERVER_SECRET;
     if (interserver_secret)
         readStringBinary(skip_hash, *in, 32);
 
@@ -1511,24 +1562,27 @@ void TCPHandler::receiveUnexpectedQuery()
     throw NetException("Unexpected packet Query received from client", ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
 }
 
-void TCPHandler::receivePlanSegment()
+void TCPQuery::receivePlanSegment()
 {
     // check planSegment version, received in receivehello
-    if (client_plan_segment_version != DBMS_PLAN_SEGMENT_VERSION)
+    if (client_info.client_plan_segment_version != DBMS_PLAN_SEGMENT_VERSION)
     {
-        throw Exception("Logical error: receive segment version " + toString(client_plan_segment_version) + ", server segment version " + toString(DBMS_PLAN_SEGMENT_VERSION), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "Logical error: receive segment version " + toString(client_info.client_plan_segment_version) + ", server segment version "
+                + toString(DBMS_PLAN_SEGMENT_VERSION),
+            ErrorCodes::LOGICAL_ERROR);
     }
 
     state.is_empty = false;
 
     /// Client info
-    ClientInfo & client_info = query_context->getClientInfo();
-    if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_CLIENT_INFO)
-        client_info.read(*in, client_tcp_protocol_version);
+    ClientInfo & client_info_in_context = query_context->getClientInfo();
+    if (client_info.client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_CLIENT_INFO)
+        client_info_in_context.read(*in, client_info.client_tcp_protocol_version);
 
     /// Set fields, that are known apriori.
-    client_info.interface = ClientInfo::Interface::TCP;
-    client_info.query_kind = ClientInfo::QueryKind::SECONDARY_QUERY;
+    client_info_in_context.interface = ClientInfo::Interface::TCP;
+    client_info_in_context.query_kind = ClientInfo::QueryKind::SECONDARY_QUERY;
 
 
     /** @aeolus
@@ -1543,11 +1597,11 @@ void TCPHandler::receivePlanSegment()
      *  NOTE: query_context will be restored to connection_context before received
      *  a new query. The only thing modified is the current_user of this (current) query.
      */
-    client_info.current_user = client_info.initial_user;
+    client_info_in_context.current_user = client_info_in_context.initial_user;
 
     /// Per query settings are also passed via TCP.
     /// We need to check them before applying due to they can violate the settings constraints.
-    auto settings_format = (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_SETTINGS_SERIALIZED_AS_STRINGS)
+    auto settings_format = (client_info.client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_SETTINGS_SERIALIZED_AS_STRINGS)
         ? SettingsWriteFormat::STRINGS_WITH_FLAGS
         : SettingsWriteFormat::BINARY;
     Settings passed_settings;
@@ -1581,20 +1635,20 @@ void TCPHandler::receivePlanSegment()
     const String & query_id = plan_segment->getQueryId();
     const String & segment_id = std::to_string(plan_segment->getPlanSegmentId());
 
-    client_info.initial_query_id = query_id;
-    client_info.current_query_id = query_id + "_" + segment_id;
+    client_info_in_context.initial_query_id = query_id;
+    client_info_in_context.current_query_id = query_id + "_" + segment_id;
 
     /// Sync timeouts on client and server during current query to avoid dangling queries on server
     /// NOTE: We use settings.send_timeout for the receive timeout and vice versa (change arguments ordering in TimeoutSetter),
     ///  because settings.send_timeout is client-side setting which has opposite meaning on the server side.
     /// NOTE: these settings are applied only for current connection (not for distributed tables' connections)
     const Settings & settings = query_context->getSettingsRef();
-    state.timeout_setter = std::make_unique<TimeoutSetter>(socket(), settings.receive_timeout, settings.send_timeout);
+    state.timeout_setter = std::make_unique<TimeoutSetter>(socket, settings.receive_timeout, settings.send_timeout);
 
     state.plan_segment = std::move(plan_segment);
 }
 
-bool TCPHandler::receiveData(bool scalar)
+bool TCPQuery::receiveData(bool scalar)
 {
     initBlockInput();
 
@@ -1635,7 +1689,6 @@ bool TCPHandler::receiveData(bool scalar)
             auto temporary_table_out = storage->write(ASTPtr(), metadata_snapshot, query_context);
             temporary_table_out->write(block);
             temporary_table_out->writeSuffix();
-
         }
         else if (state.need_receive_data_for_input)
         {
@@ -1653,7 +1706,7 @@ bool TCPHandler::receiveData(bool scalar)
         return false;
 }
 
-void TCPHandler::receiveUnexpectedData()
+void TCPQuery::receiveUnexpectedData()
 {
     String skip_external_table_name;
     readStringBinary(skip_external_table_name, *in);
@@ -1665,16 +1718,14 @@ void TCPHandler::receiveUnexpectedData()
     else
         maybe_compressed_in = in;
 
-    auto skip_block_in = std::make_shared<NativeBlockInputStream>(
-            *maybe_compressed_in,
-            last_block_in.header,
-            client_tcp_protocol_version);
+    auto skip_block_in
+        = std::make_shared<NativeBlockInputStream>(*maybe_compressed_in, last_block_in.header, client_info.client_tcp_protocol_version);
 
     skip_block_in->read();
     throw NetException("Unexpected packet Data received from client", ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
 }
 
-void TCPHandler::initBlockInput()
+void TCPQuery::initBlockInput()
 {
     if (!state.block_in)
     {
@@ -1695,15 +1746,13 @@ void TCPHandler::initBlockInput()
         last_block_in.header = header;
         last_block_in.compression = state.compression;
 
-        state.block_in = std::make_shared<NativeBlockInputStream>(
-            *state.maybe_compressed_in,
-            header,
-            client_tcp_protocol_version);
+        state.block_in
+            = std::make_shared<NativeBlockInputStream>(*state.maybe_compressed_in, header, client_info.client_tcp_protocol_version);
     }
 }
 
 
-void TCPHandler::initBlockOutput(const Block & block)
+void TCPQuery::initBlockOutput(const Block & block)
 {
     if (!state.block_out)
     {
@@ -1718,10 +1767,11 @@ void TCPHandler::initBlockOutput(const Block & block)
 
             if (state.compression == Protocol::Compression::Enable)
             {
-                CompressionCodecFactory::instance().validateCodec(method, level, !query_settings.allow_suspicious_codecs, query_settings.allow_experimental_codecs);
+                CompressionCodecFactory::instance().validateCodec(
+                    method, level, !query_settings.allow_suspicious_codecs, query_settings.allow_experimental_codecs);
 
-                state.maybe_compressed_out = std::make_shared<CompressedWriteBuffer>(
-                    *out, CompressionCodecFactory::instance().get(method, level));
+                state.maybe_compressed_out
+                    = std::make_shared<CompressedWriteBuffer>(*out, CompressionCodecFactory::instance().get(method, level));
             }
             else
                 state.maybe_compressed_out = out;
@@ -1729,27 +1779,27 @@ void TCPHandler::initBlockOutput(const Block & block)
 
         state.block_out = std::make_shared<NativeBlockOutputStream>(
             *state.maybe_compressed_out,
-            client_tcp_protocol_version,
+            client_info.client_tcp_protocol_version,
             block.cloneEmpty(),
-            !connection_context->getSettingsRef().low_cardinality_allow_in_native_format);
+            !query_context->getSettingsRef().low_cardinality_allow_in_native_format);
     }
 }
 
-void TCPHandler::initLogsBlockOutput(const Block & block)
+void TCPQuery::initLogsBlockOutput(const Block & block)
 {
     if (!state.logs_block_out)
     {
         /// Use uncompressed stream since log blocks usually contain only one row
         state.logs_block_out = std::make_shared<NativeBlockOutputStream>(
             *out,
-            client_tcp_protocol_version,
+            client_info.client_tcp_protocol_version,
             block.cloneEmpty(),
-            !connection_context->getSettingsRef().low_cardinality_allow_in_native_format);
+            !query_context->getSettingsRef().low_cardinality_allow_in_native_format);
     }
 }
 
 
-bool TCPHandler::isQueryCancelled()
+bool TCPQuery::isQueryCancelled()
 {
     if (state.is_cancelled || state.sent_all_data)
         return true;
@@ -1758,6 +1808,10 @@ bool TCPHandler::isQueryCancelled()
         return false;
 
     after_check_cancelled.restart();
+
+    /// For async queries, we don't check eof of `in` as the connection might be lost.
+    if (!getContext()->getAsyncQueryId().empty())
+        return false;
 
     /// During request execution the only packet that can come from the client is stopping the query.
     if (static_cast<ReadBufferFromPocoSocket &>(*in).poll(0))
@@ -1791,7 +1845,7 @@ bool TCPHandler::isQueryCancelled()
 }
 
 
-void TCPHandler::sendData(const Block & block)
+void TCPQuery::sendData(const Block & block)
 {
     initBlockOutput(block);
 
@@ -1849,7 +1903,7 @@ void TCPHandler::sendData(const Block & block)
 }
 
 
-void TCPHandler::sendLogData(const Block & block)
+void TCPQuery::sendLogData(const Block & block)
 {
     initLogsBlockOutput(block);
 
@@ -1861,7 +1915,7 @@ void TCPHandler::sendLogData(const Block & block)
     out->next();
 }
 
-void TCPHandler::sendTableColumns(const ColumnsDescription & columns)
+void TCPQuery::sendTableColumns(const ColumnsDescription & columns)
 {
     writeVarUInt(Protocol::Server::TableColumns, *out);
 
@@ -1882,28 +1936,31 @@ void TCPHandler::sendException(const Exception & e, bool with_stack_trace)
 
 void TCPHandler::sendEndOfStream()
 {
-    state.sent_all_data = true;
+    if (!isAsyncMode())
+    {
+        current_query->getState().sent_all_data = true;
+    }
     writeVarUInt(Protocol::Server::EndOfStream, *out);
     out->next();
 }
 
 
-void TCPHandler::updateProgress(const Progress & value)
+void TCPQuery::updateProgress(const Progress & value)
 {
     state.progress.incrementPiecewiseAtomically(value);
 }
 
 
-void TCPHandler::sendProgress()
+void TCPQuery::sendProgress()
 {
     writeVarUInt(Protocol::Server::Progress, *out);
     auto increment = state.progress.fetchAndResetPiecewiseAtomically();
-    increment.write(*out, client_tcp_protocol_version);
+    increment.write(*out, client_info.client_tcp_protocol_version);
     out->next();
 }
 
 
-void TCPHandler::sendLogs()
+void TCPQuery::sendLogs()
 {
     if (!state.logs_queue)
         return;
@@ -1933,6 +1990,11 @@ void TCPHandler::sendLogs()
     }
 }
 
+bool TCPHandler::isAsyncMode()
+{
+    return connection_context->getServerType() == ServerType::cnch_server && connection_context->getSettingsRef().enable_async_execution;
+}
+
 
 void TCPHandler::run()
 {
@@ -1947,7 +2009,13 @@ void TCPHandler::run()
         /// Timeout - not an error.
         if (!strcmp(e.what(), "Timeout"))
         {
-            LOG_DEBUG(log, "Poco::Exception. Code: {}, e.code() = {}, e.displayText() = {}, e.what() = {}", ErrorCodes::POCO_EXCEPTION, e.code(), e.displayText(), e.what());
+            LOG_DEBUG(
+                log,
+                "Poco::Exception. Code: {}, e.code() = {}, e.displayText() = {}, e.what() = {}",
+                ErrorCodes::POCO_EXCEPTION,
+                e.code(),
+                e.displayText(),
+                e.what());
         }
         else
             throw;

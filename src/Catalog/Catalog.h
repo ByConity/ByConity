@@ -19,14 +19,15 @@
 #include <set>
 #include <Catalog/CatalogConfig.h>
 #include <Catalog/CatalogUtils.h>
-#include <Catalog/MetastoreProxy.h>
 #include <Catalog/DataModelPartWrapper.h>
-#include <Core/Types.h>
+#include <Catalog/MetastoreProxy.h>
 #include <CloudServices/Checkpoint.h>
+#include <Core/Types.h>
 #include <Protos/DataModelHelpers.h>
+#include <Protos/cnch_common.pb.h>
 #include <Protos/cnch_server_rpc.pb.h>
-#include <Statistics/StatisticsBase.h>
 #include <Statistics/ExportSymbols.h>
+#include <Statistics/StatisticsBase.h>
 // #include <Transaction/ICnchTransaction.h>
 #include <Transaction/TxnTimestamp.h>
 #include <cppkafka/cppkafka.h>
@@ -508,6 +509,11 @@ public:
     void setMergeMutateThreadStartTime(const StorageID & storage_id, const UInt64 & startup_time) const;
 
     UInt64 getMergeMutateThreadStartTime(const StorageID & storage_id) const;
+
+    void setAsyncQueryStatus(const String & id, const Protos::AsyncQueryStatus & status) const;
+
+    /// TODO(WangTao): consider add some scan/delete interfaces for ops.
+    bool tryGetAsyncQueryStatus(const String & id, Protos::AsyncQueryStatus & status) const;
 
 private:
     Poco::Logger * log = &Poco::Logger::get("Catalog");

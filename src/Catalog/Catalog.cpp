@@ -4886,6 +4886,16 @@ namespace Catalog
         return meta_proxy->getMergeMutateThreadStartTime(name_space, UUIDHelpers::UUIDToString(storage_id.uuid));
     }
 
+    void Catalog::setAsyncQueryStatus(const String & id, const Protos::AsyncQueryStatus & status) const
+    {
+        meta_proxy->setAsyncQueryStatus(name_space, id, status);
+    }
+
+    bool Catalog::tryGetAsyncQueryStatus(const String & id, Protos::AsyncQueryStatus & status) const
+    {
+        return meta_proxy->tryGetAsyncQueryStatus(name_space, id, status);
+    }
+
     void fillUUIDForDictionary(DB::Protos::DataModelDictionary & d)
     {
         UUID final_uuid = UUIDHelpers::Nil;

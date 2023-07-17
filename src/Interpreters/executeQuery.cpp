@@ -118,6 +118,10 @@
 #include <Transaction/ICnchTransaction.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 
+#include <Protos/cnch_common.pb.h>
+
+using AsyncQueryStatus = DB::Protos::AsyncQueryStatus;
+
 namespace ProfileEvents
 {
 extern const Event QueryMaskingRulesMatch;
@@ -1278,6 +1282,11 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                     opentelemetry_span_log->add(span);
                 }
 
+                if (const String & async_query_id = context->getAsyncQueryId(); !async_query_id.empty())
+                {
+                    updateAsyncQueryStatus(context, async_query_id, query_id, AsyncQueryStatus::Finished);
+                }
+
                 // cancel coordinator itself
                 context->getPlanSegmentProcessList().tryCancelPlanSegmentGroup(query_id);
                 SegmentSchedulerPtr scheduler = context->getSegmentScheduler();
@@ -1366,6 +1375,11 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 else if (ast->as<ASTInsertQuery>())
                 {
                     ProfileEvents::increment(ProfileEvents::FailedInsertQuery);
+                }
+
+                if (const String & async_query_id = context->getAsyncQueryId(); !async_query_id.empty())
+                {
+                    updateAsyncQueryStatus(context, async_query_id, query_id, AsyncQueryStatus::Failed, elem.exception);
                 }
 
                 auto coodinator = MPPQueryManager::instance().getCoordinator(query_id);
@@ -1730,4 +1744,29 @@ void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server
     res.pipeline.addInterpreterContext(context);
 }
 
+void updateAsyncQueryStatus(
+    ContextMutablePtr context,
+    const String & async_query_id,
+    const String & query_id,
+    const AsyncQueryStatus::Status & status,
+    const String & error_msg)
+{
+    AsyncQueryStatus async_query_status;
+    if (!context->getCnchCatalog()->tryGetAsyncQueryStatus(async_query_id, async_query_status))
+    {
+        LOG_WARNING(
+            &Poco::Logger::get("executeQuery"), "async query status not found, insert new one with async_query_id: {}", async_query_id);
+        async_query_status.set_id(async_query_id);
+        async_query_status.set_query_id(query_id);
+    }
+    async_query_status.set_status(status);
+    async_query_status.set_update_time(time(nullptr));
+
+    if (!error_msg.empty() && status == AsyncQueryStatus::Failed)
+    {
+        async_query_status.set_error_msg(error_msg);
+    }
+
+    context->getCnchCatalog()->setAsyncQueryStatus(async_query_id, async_query_status);
+}
 }
