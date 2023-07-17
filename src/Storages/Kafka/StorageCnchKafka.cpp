@@ -111,7 +111,7 @@ void StorageCnchKafka::alter(const AlterCommands & commands, ContextPtr local_co
     if (local_context->getSettings().enable_sql_forwarding)
     {
         auto cnch_table_helper = CnchStorageCommonHelper(getStorageID(), getDatabaseName(), getTableName());
-        if (cnch_table_helper.forwardQueryToServerIfNeeded(local_context, getStorageUUID()))
+        if (cnch_table_helper.forwardQueryToServerIfNeeded(local_context, getStorageID()))
             return;
     }
 
@@ -147,7 +147,7 @@ void StorageCnchKafka::alter(const AlterCommands & commands, ContextPtr local_co
     StorageInMemoryMetadata old_metadata = getInMemoryMetadata();
 
     TransactionCnchPtr txn = local_context->getCurrentTransaction();
-    auto action = txn->createAction<DDLAlterAction>(shared_from_this());
+    auto action = txn->createAction<DDLAlterAction>(shared_from_this(), local_context->getSettingsRef());
     auto & alter_act = action->as<DDLAlterAction &>();
     alter_act.setMutationCommands(commands.getMutationCommands(
         old_metadata, false, local_context));

@@ -25,28 +25,28 @@ void DDLCreateAction::executeV1(TxnTimestamp commit_time)
 {
     Catalog::CatalogPtr cnch_catalog = global_context.getCnchCatalog();
 
-    if (!params.database.empty() && params.table.empty())
+    if (params.is_database)
     {
         /// create database
         assert(!params.attach);
-        cnch_catalog->createDatabase(params.database, params.uuid, txn_id, commit_time);
+        cnch_catalog->createDatabase(params.storage_id.database_name, params.storage_id.uuid, txn_id, commit_time);
     }
     else if (!params.is_dictionary)
     {
         /// create table
-        updateTsCache(params.uuid, commit_time);
+        updateTsCache(params.storage_id.uuid, commit_time);
         if (params.attach)
-            cnch_catalog->attachTable(params.database, params.table, commit_time);
+            cnch_catalog->attachTable(params.storage_id.database_name, params.storage_id.table_name, commit_time);
         else
-            cnch_catalog->createTable(StorageID{params.database, params.table, params.uuid}, params.statement, "", txn_id, commit_time);
+            cnch_catalog->createTable(params.storage_id, params.statement, "", txn_id, commit_time);
     }
     else
     {
         /// for dictionary
         if (params.attach)
-            cnch_catalog->attachDictionary(params.database, params.table);
+            cnch_catalog->attachDictionary(params.storage_id.database_name, params.storage_id.table_name);
         else
-            cnch_catalog->createDictionary(StorageID{params.database, params.table, params.uuid}, params.statement);
+            cnch_catalog->createDictionary(params.storage_id, params.statement);
     }
 }
 

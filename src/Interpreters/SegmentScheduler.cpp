@@ -27,10 +27,11 @@
 #include <Interpreters/DistributedStages/executePlanSegment.h>
 #include <Interpreters/SegmentScheduler.h>
 #include <Parsers/queryToString.h>
-#include <Processors/Exchange/DataTrans/RpcClient.h>
 #include <Processors/Exchange/DataTrans/RpcChannelPool.h>
+#include <Processors/Exchange/DataTrans/RpcClient.h>
 #include <Protos/plan_segment_manager.pb.h>
 #include <Storages/StorageReplicatedMergeTree.h>
+#include <butil/endpoint.h>
 #include <Common/HostWithPorts.h>
 #include <Common/Macros.h>
 #include <Common/ProfileEvents.h>
@@ -49,6 +50,33 @@ namespace ErrorCodes
     extern const int UNKNOWN_PACKET_FROM_SERVER;
     extern const int QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING;
     extern const int UNKNOWN_EXCEPTION;
+    extern const int BRPC_EXCEPTION;
+}
+
+void DAGGraph::joinAsyncRpcPerStage(const Context * query_context)
+{
+    if (query_context->getSettingsRef().send_plan_segment_by_brpc_join_at_last || query_context->getSettingsRef().send_plan_segment_by_brpc)
+        return;
+    if (query_context->getSettingsRef().send_plan_segment_by_brpc_join_per_stage)
+        joinAsyncRpcWithThrow();
+}
+
+void DAGGraph::joinAsyncRpcWithThrow()
+{
+    auto async_ret = async_context->wait();
+    if (async_ret.status == AsyncContext::AsyncStats::FAILED)
+        throw Exception(
+            "send plan segment async failed error code : " + toString(async_ret.error_code) + " error worker : " + async_ret.failed_worker
+                + " error text : " + async_ret.error_text,
+            ErrorCodes::BRPC_EXCEPTION);
+}
+
+void DAGGraph::joinAsyncRpcAtLast(const Context * query_context)
+{
+    if (query_context->getSettingsRef().send_plan_segment_by_brpc)
+        return;
+    if (query_context->getSettingsRef().send_plan_segment_by_brpc_join_at_last)
+        joinAsyncRpcWithThrow();
 }
 
 std::vector<size_t> AdaptiveScheduler::getRandomWorkerRank() 
@@ -71,7 +99,7 @@ std::vector<size_t> AdaptiveScheduler::getHealthWorkerRank()
     std::vector<size_t> rank_worker_ids;
     auto worker_group = query_context->tryGetCurrentWorkerGroup();
     auto worker_group_status = query_context->getWorkerGroupStatusPtr();
-    if (!worker_group_status)
+    if (!worker_group_status || !worker_group)
         return getRandomWorkerRank();
     const auto & hostports = worker_group->getHostWithPortsVec();
     size_t numOfWorker = hostports.size();
@@ -625,6 +653,7 @@ bool SegmentScheduler::scheduler(const String & query_id, ContextPtr query_conte
             AddressInfos address_infos;
             // TODO dongyifeng support send plansegment parallel
             address_infos = sendPlanSegment(it->second, true, query_context, dag_graph_ptr, rank_worker_ids);
+            dag_graph_ptr->joinAsyncRpcPerStage(query_context.get());
             dag_graph_ptr->id_to_address.emplace(std::make_pair(segment_id, std::move(address_infos)));
             dag_graph_ptr->scheduler_segments.emplace(segment_id);
         }
@@ -678,11 +707,13 @@ bool SegmentScheduler::scheduler(const String & query_id, ContextPtr query_conte
                     watch.restart();
                     address_infos = sendPlanSegment(it->second, false, query_context, dag_graph_ptr, rank_worker_ids);
                     total_send_time_ms += watch.elapsedMilliseconds();
+                    dag_graph_ptr->joinAsyncRpcPerStage(query_context.get());
                     dag_graph_ptr->id_to_address.emplace(std::make_pair(it->first, std::move(address_infos)));
                     dag_graph_ptr->scheduler_segments.emplace(it->first);
                 }
             }
         }
+        dag_graph_ptr->joinAsyncRpcAtLast(query_context.get());
         LOG_DEBUG(log, "SegmentScheduler send plansegments takes:{}", total_send_time_ms);
 
         auto final_it = dag_graph_ptr->id_to_segment.find(dag_graph_ptr->final);
@@ -741,7 +772,7 @@ void sendPlanSegmentToLocal(PlanSegment * plan_segment_ptr, ContextPtr query_con
 
     /// FIXME: deserializePlanSegment is heavy task, using executePlanSegmentRemotely can deserialize plansegment asynchronous
     // executePlanSegmentLocally(*plan_segment_ptr, query_context);
-    executePlanSegmentRemotely(*plan_segment_ptr, query_context, true);
+    executePlanSegmentRemotely(*plan_segment_ptr, query_context, true, dag_graph_ptr->async_context);
     if (dag_graph_ptr)
     {
         std::unique_lock<bthread::Mutex> lock(dag_graph_ptr->status_mutex);
@@ -754,11 +785,11 @@ void sendPlanSegmentToRemote(
     ContextPtr query_context,
     PlanSegment * plan_segment_ptr,
     std::shared_ptr<DAGGraph> dag_graph_ptr,
-    const WorkerId& worker_id = WorkerId{})
+    const WorkerId & worker_id)
 {
     plan_segment_ptr->setCurrentAddress(addressinfo);
 
-    executePlanSegmentRemotely(*plan_segment_ptr, query_context, true, worker_id);
+    executePlanSegmentRemotely(*plan_segment_ptr, query_context, true, dag_graph_ptr->async_context, worker_id);
     if (dag_graph_ptr)
     {
         std::unique_lock<bthread::Mutex> lock(dag_graph_ptr->status_mutex);

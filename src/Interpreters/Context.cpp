@@ -62,6 +62,7 @@
 #include <Disks/DiskLocal.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Interpreters/ActionLocksManager.h>
+#include <Interpreters/QueueManager.h>
 #include <Interpreters/ExternalLoaderXMLConfigRepository.h>
 #include <Core/Settings.h>
 #include <Core/SettingsQuirks.h>
@@ -237,7 +238,6 @@ namespace CurrentMetrics
     extern const Metric BackgroundCNCHTopologySchedulePoolTask;
 }
 
-
 namespace DB
 {
 
@@ -357,6 +357,7 @@ struct ContextSharedPart
     mutable MMappedFileCachePtr mmap_cache; /// Cache of mmapped files to avoid frequent open/map/unmap/close and to reuse from several threads.
     ProcessList process_list;                               /// Executing queries at the moment.
     SegmentSchedulerPtr segment_scheduler;
+    QueueManagerPtr queue_manager;
     MergeList merge_list;                                   /// The list of executable merge (for (Replicated)?MergeTree)
     ManipulationList manipulation_list;
     PlanSegmentProcessList plan_segment_process_list;       /// The list of running plansegments in the moment;
@@ -685,7 +686,10 @@ void Context::selectWorkerNodesWithMetrics()
     {
         Stopwatch sw;
         worker_group_status = getWorkerStatusManager()->getWorkerGroupStatus(this,
-            current_worker_group->getHostWithPortsVec(), current_worker_group->getVWName(),  current_worker_group->getID());
+            current_worker_group->getHostWithPortsVec(), current_worker_group->getVWName(),  current_worker_group->getID(),
+            [](const String & vw, const String & wg, const HostWithPorts & host_ports){
+                return WorkerStatusManager::getWorkerId(vw, wg, host_ports.id);
+            });
         
         auto indices = worker_group_status->selectHealthNode(current_worker_group->getHostWithPortsVec());
         if (indices)
@@ -740,6 +744,14 @@ SegmentSchedulerPtr Context::getSegmentScheduler() const
     if (!shared->segment_scheduler)
         shared->segment_scheduler = std::make_shared<SegmentScheduler>();
     return shared->segment_scheduler;
+}
+
+QueueManagerPtr Context::getQueueManager() const
+{
+    auto lock = getLock();
+    if (!shared->queue_manager)
+        shared->queue_manager = std::make_shared<QueueManager>(global_context);
+    return shared->queue_manager;
 }
 
 void Context::enableNamedSessions()
@@ -4083,6 +4095,11 @@ std::shared_ptr<ChecksumsCache> Context::getChecksumsCache() const
     return shared->checksums_cache;
 }
 
+void Context::updateQueueManagerConfig()
+{
+    getQueueManager()->loadConfig(getRootConfig().queue_manager);
+}
+
 void Context::setCpuSetScaleManager(const Poco::Util::AbstractConfiguration & config)
 {
     if (config.has("enable_cpu_scale") && config.getBool("enable_cpu_scale"))
@@ -4280,13 +4297,13 @@ DaemonManagerClientPtr Context::getDaemonManagerClient() const
     return shared->daemon_manager_pool->get();
 }
 
-void Context::setCnchServerManager()
+void Context::setCnchServerManager(const Poco::Util::AbstractConfiguration & config)
 {
     auto lock = getLock();
     if (shared->server_manager)
         throw Exception("Server manager has been already created.", ErrorCodes::LOGICAL_ERROR);
 
-    shared->server_manager = std::make_shared<CnchServerManager>(shared_from_this());
+    shared->server_manager = std::make_shared<CnchServerManager>(shared_from_this(), config);
 }
 
 std::shared_ptr<CnchServerManager> Context::getCnchServerManager() const
@@ -4296,6 +4313,17 @@ std::shared_ptr<CnchServerManager> Context::getCnchServerManager() const
         throw Exception("Server manager is not initiailized.", ErrorCodes::LOGICAL_ERROR);
 
     return shared->server_manager;
+}
+
+void Context::updateServerVirtualWarehouses(const ConfigurationPtr & config)
+{
+    std::shared_ptr<CnchServerManager> server_manager;
+    {
+        auto lock = getLock();
+        server_manager = shared->server_manager;
+    }
+    if (server_manager)
+        server_manager->updateServerVirtualWarehouses(*config);
 }
 
 void Context::setCnchTopologyMaster()

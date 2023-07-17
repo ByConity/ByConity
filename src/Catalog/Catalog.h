@@ -123,6 +123,8 @@ public:
     bool isTableExists(const String & db, const String & name, const TxnTimestamp & ts = 0);
 
     void alterTable(
+        const Context & query_context,
+        const Settings & query_settings,
         const StoragePtr & storage,
         const String & new_create,
         const TxnTimestamp & previous_version,

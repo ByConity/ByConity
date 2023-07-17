@@ -94,16 +94,26 @@ struct SDConfiguration final : public SDConfigurationData
 
 DECLARE_CONFIG_DATA(RootConfigurationData, ROOT_CONFIG_FIELDS_LIST)
 
+#define QM_CONFIG_FIELDS_LIST(M) \
+    M(MutableUInt64, max_vw_parallelize_size, "max_vw_parallelize_size", 20, ConfigFlag::Default, "")  \
+    M(MutableUInt64, batch_size, "batch_size", 2, ConfigFlag::Default, "") 
+
+DECLARE_CONFIG_DATA(QMConfigurationData, QM_CONFIG_FIELDS_LIST)
+struct QMConfiguration final : public QMConfigurationData
+{
+};
 
 struct RootConfiguration final : public RootConfigurationData
 {
     RMConfiguration resource_manager;
     SDConfiguration service_discovery;
+    QMConfiguration queue_manager;
 
     RootConfiguration()
     {
         sub_configs.push_back(&resource_manager);
         sub_configs.push_back(&service_discovery);
+        sub_configs.push_back(&queue_manager);
     }
 
     void loadFromPocoConfigImpl(const PocoAbstractConfig & config, const String & current_prefix) override;

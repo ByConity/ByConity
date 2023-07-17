@@ -507,7 +507,7 @@ void CnchServerServiceImpl::fetchDataParts(
                 = gc->getCnchCatalog()->getTable(*gc, request->database(), request->table(), TxnTimestamp{request->table_commit_time()});
 
             auto calculated_host
-                = gc->getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(storage->getStorageUUID()), true).getRPCAddress();
+                = gc->getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(storage->getStorageUUID()), storage->getServerVwName(), true).getRPCAddress();
             if (request->remote_host() != calculated_host)
                 throw Exception(
                     "Fetch parts failed because of inconsistent view of topology in remote server, remote_host: " + request->remote_host()

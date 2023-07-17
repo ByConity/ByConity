@@ -210,7 +210,6 @@ public:
 };
 
 std::ostream & operator<<(std::ostream & os, const HostWithPorts & host_ports);
-
 }
 
 namespace std

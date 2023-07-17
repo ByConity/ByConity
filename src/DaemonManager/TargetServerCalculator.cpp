@@ -39,7 +39,7 @@ CnchServerClientPtr TargetServerCalculator::getTargetServer(const StorageID & st
 CnchServerClientPtr TargetServerCalculator::getTargetServerForCnchMergeTree(const StorageID & storage_id, UInt64 ts) const
 {
     ts = (ts == 0) ? context.getTimestamp() : ts;
-    auto target_server = context.getCnchTopologyMaster()->getTargetServer(toString(storage_id.uuid), ts, true);
+    auto target_server = context.getCnchTopologyMaster()->getTargetServer(toString(storage_id.uuid), storage_id.server_vw_name, ts, true);
     if (target_server.empty())
         return nullptr;
     return context.getCnchServerClientPool().get(target_server);
@@ -90,7 +90,7 @@ CnchServerClientPtr TargetServerCalculator::getTargetServerForCnchKafka(const St
         return nullptr;
     }
     /// TODO: refactor this function
-    auto target_server = context.getCnchTopologyMaster()->getTargetServer(toString(cnch_storage->getStorageUUID()), true);
+    auto target_server = context.getCnchTopologyMaster()->getTargetServer(toString(cnch_storage->getStorageUUID()), cnch_storage->getServerVwName(), true);
     if (target_server.empty())
         return nullptr;
 

@@ -77,7 +77,6 @@ BlockIO InterpreterSelectQueryUseOptimizer::execute()
     QueryPlan plan = PlanNodeToNodeVisitor::convert(*query_plan);
 
     LOG_DEBUG(log, "optimizer stage run time: plan normalize, {} ms", stage_watch.elapsedMillisecondsAsDouble());
- 
     stage_watch.restart();
 
     PlanSegmentTreePtr plan_segment_tree = std::make_unique<PlanSegmentTree>();

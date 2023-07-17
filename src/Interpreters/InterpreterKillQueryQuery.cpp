@@ -28,6 +28,7 @@
 #include <Interpreters/executeQuery.h>
 #include <Interpreters/CancellationCode.h>
 #include <Interpreters/InterpreterAlterQuery.h>
+#include <Interpreters/QueueManager.h>
 #include <Parsers/ASTAlterQuery.h>
 #include <Parsers/ParserAlterQuery.h>
 #include <Parsers/parseQuery.h>
@@ -47,6 +48,35 @@
 
 namespace DB
 {
+
+class QueryIdExtractor : public ConstASTVisitor<void, String>
+{
+public:
+    void visitNode(const ConstASTPtr & node, String & context) override;
+    void visitASTFunction(const ConstASTPtr & node, String & context) override;
+};
+
+void QueryIdExtractor::visitNode(const ConstASTPtr & node, String & context)
+{
+    for (ConstASTPtr child : node->children)
+    {
+        ASTVisitorUtil::accept(child, *this, context);
+    }
+}
+
+void QueryIdExtractor::visitASTFunction(const ConstASTPtr & node, String & context)
+{
+    auto & function = node->as<ASTFunction &>();
+    if (function.name == "equals" && function.arguments->children.size() == 2
+        && function.arguments->children[0]->getType() == ASTType::ASTIdentifier
+        && function.arguments->children[1]->getType() == ASTType::ASTLiteral)
+    {
+        auto id = function.arguments->children[0]->as<ASTIdentifier &>();
+        auto literal = function.arguments->children[1]->as<ASTLiteral &>();
+        if (id.name() == "query_id")
+            literal.value.tryGet(context);
+    }
+}
 
 namespace ErrorCodes
 {
@@ -223,6 +253,11 @@ BlockIO InterpreterKillQueryQuery::execute()
     {
     case ASTKillQueryQuery::Type::Query:
     {
+        QueryIdExtractor query_id_extractor;
+        String query_id;
+        ASTVisitorUtil::accept(query.where_expression, query_id_extractor, query_id);
+        if (!query_id.empty())
+            getContext()->getQueueManager()->cancel(query_id);
         Block processes_block = getSelectResult("query_id, user, query", "system.processes");
         if (!processes_block)
             return res_io;

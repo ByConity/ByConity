@@ -960,6 +960,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         main_config_zk_changed_event,
         [&](ConfigurationPtr config, bool initial_loading)
         {
+            global_context->reloadRootConfig(*config);
             Settings::checkNoSettingNamesAtTopLevel(*config, config_path);
 
             /// Limit on total memory usage
@@ -1003,6 +1004,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->setExternalAuthenticatorsConfig(*config);
             global_context->setExternalModelsConfig(config);
 
+            global_context->updateServerVirtualWarehouses(config);
+
             /// Setup protection to avoid accidental DROP for big tables (that are greater than 50 GB by default)
             if (config->has("max_table_size_to_drop"))
                 global_context->setMaxTableSizeToDrop(config->getUInt64("max_table_size_to_drop"));
@@ -1033,6 +1036,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->setMergeSchedulerSettings(*config);
             CGroupManagerFactory::loadFromConfig(*config);
             global_context->setCpuSetScaleManager(*config);
+            global_context->updateQueueManagerConfig();
         },
         /* already_loaded = */ false);  /// Reload it right now (initial loading)
 
@@ -1089,13 +1093,16 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setUncompressedCache(uncompressed_cache_size);
 
     /// Load global settings from default_profile and system_profile.
-    if (global_context->getServerType() == ServerType::cnch_server && global_context->getSettingsRef().enable_vw_customized_setting)
+    if (global_context->getServerType() == ServerType::cnch_server)
     {
         auto vw_customized_settings_ptr = std::make_shared<VWCustomizedSettings>(config());
-        vw_customized_settings_ptr->loadCustomizedSettings();
-        global_context->setVWCustomizedSettings(vw_customized_settings_ptr);
+        if (!vw_customized_settings_ptr->isEmpty())
+        {
+            vw_customized_settings_ptr->loadCustomizedSettings();
+            global_context->setVWCustomizedSettings(vw_customized_settings_ptr);
+        }
     }
-
+    
     global_context->setDefaultProfiles(config());
     const Settings & settings = global_context->getSettingsRef();
 
@@ -1276,7 +1283,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
 
         /// only server need start up server manager
-        global_context->setCnchServerManager();
+        global_context->setCnchServerManager(config());
 
         // size_t masking_policy_cache_size = config().getUInt64("mark_cache_size", 128);
         // size_t masking_policy_cache_lifetime = config().getUInt64("mark_cache_size_lifetime", 10000);

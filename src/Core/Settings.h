@@ -1536,11 +1536,8 @@ class IColumn;
       "Whether to enable write on non-host server if host server is not available. Directly commit from non-host server.", \
       0) \
     M(Bool, enable_write_non_host_server, true, "Whether to eable write on non-host server. Will root write request to host server.", 0) \
-    M(UInt64, \
-      cnch_clear_parts_timeout, \
-      10, \
-      "Wait for actions to clear the parts in workers within the specified number of seconds. 0 - wait unlimited time.", \
-      0) \
+    M(Bool, force_execute_alter, false, "Force the Alter Query to be executed ignore the host server.", 0) \
+    M(UInt64, cnch_clear_parts_timeout, 10, "Wait for actions to clear the parts in workers within the specified number of seconds. 0 - wait unlimited time.", 0) \
     M(Seconds, cnch_fetch_parts_timeout, 60, "The timeout for gettting parts from metastore. 0 - wait unlimited time.", 0) \
     M(UInt64, \
       cnch_sync_parts_timeout, \
@@ -1609,6 +1606,8 @@ class IColumn;
     M(Bool, fallback_to_simple_query, false, "Enable fallback if there is any syntax error", 0)\
     M(Bool, debug_plan_generation, false, "Enable complex query mode to split plan to distributed stages", 0)\
     M(Bool, send_plan_segment_by_brpc, true, "Whether to send plan segment by BRPC", 0)\
+    M(Bool, send_plan_segment_by_brpc_join_per_stage, false, "Whether to send plan segment by BRPC and join async rpc request per stage", 0)\
+    M(Bool, send_plan_segment_by_brpc_join_at_last, false, "Whether to send plan segment by BRPC and join async rpc request at last", 0)\
     \
     /** Brpc config **/\
     M(Bool, enable_brpc_builtin_services, true, "Whether to enable brpc builtin services", 0)\
@@ -1648,6 +1647,9 @@ class IColumn;
 \
     /** Optimizer relative settings */ \
     M(Bool, enable_optimizer, false, "Whether enable query optimizer", 0) \
+    M(Bool, enable_query_queue, true, "Whether enable query queue", 0) \
+    M(UInt64, query_queue_size, 100, "Max query queue size", 0) \
+    M(UInt64, query_queue_timeout_ms, 100000, "Max queue pending time in ms", 0) \
     M(Bool, enable_optimizer_fallback, true, "Whether enable query optimizer fallback to clickhouse origin when failed", 0) \
     M(Bool, enable_memory_catalog, false, "Enable memory catalog for unittest", 0) \
     M(UInt64, memory_catalog_worker_size, 8, "Memory catalog work size for unittest", 0) \

@@ -16,10 +16,13 @@ String WorkerStatus::toDebugString() const
 
 WorkerGroupStatus::~WorkerGroupStatus()
 {
-    for (const auto & half_open_id : half_open_workers)
+    if (global_context)
     {
-        global_context.getWorkerStatusManager()->restoreWorkerNode(half_open_id);
-        LOG_DEBUG(&Poco::Logger::get("WorkerStatusManager"), "restore half open worker {}", half_open_id.ToString());
+        for (const auto & half_open_id : half_open_workers)
+        {
+            global_context->getWorkerStatusManager()->restoreWorkerNode(half_open_id);
+            LOG_DEBUG(&Poco::Logger::get("WorkerStatusManager"), "restore half open worker {}", half_open_id.ToString());
+        }
     }
 }
 
@@ -204,74 +207,15 @@ void WorkerStatusManager::CloseCircuitBreaker(const WorkerId & key)
     });
 }
 
-std::shared_ptr<WorkerGroupStatus> WorkerStatusManager::getWorkerGroupStatus(
-    Context * global_context, const HostWithPortsVec & host_ports, const String & vw_name, const String & wg_name)
+std::shared_ptr<WorkerGroupStatus> WorkerStatusManager::getWorkerGroupStatus(const String & vw_name, const String & wg_name)
 {
-    auto worker_group_status = std::make_unique<WorkerGroupStatus>(global_context);
-    auto now = std::chrono::system_clock::now();
-    WorkerNodeSet need_reset_workers;
-    worker_group_status->filter_indices.reserve(host_ports.size());
-
-    for (size_t idx = 0; idx < host_ports.size(); ++idx)
-    {
-        const auto & host = host_ports[idx];
-        auto id = getWorkerId(vw_name, wg_name, host.id);
-        bool exist = false;
-        global_extra_workers_status.update(
-            id, [idx, &need_reset_workers, &now, this, id, &exist, &worker_group_status](WorkerStatusExtra & val) {
-                exist = true;
-                auto worker_scheduler_status = val.worker_status->getStatus();
-                if ((worker_scheduler_status == WorkerSchedulerStatus::Unhealth
-                     || worker_scheduler_status == WorkerSchedulerStatus::NotConnected)
-                    && std::chrono::duration_cast<std::chrono::seconds>(now - val.server_last_update_time).count()
-                        > adaptive_scheduler_config.NEED_RESET_SECONDS)
-                    need_reset_workers.emplace(id);
-
-                LOG_TRACE(log, val.toDebugString());
-                if (likely(val.circuit_break.breaker_status == WorkerCircuitBreakerStatus::Close))
-                {
-                    if (val.worker_status->getStatus() <= WorkerSchedulerStatus::OnlySource)
-                    {
-                        worker_group_status->filter_indices.emplace_back(idx);
-                        worker_group_status->workers_status.emplace(id, val.worker_status);
-                    }
-                    else
-                        worker_group_status->unhealth_worker_size++;
-                }
-                else if (val.circuit_break.breaker_status == WorkerCircuitBreakerStatus::HalfOpen)
-                {
-                    if (val.circuit_break.is_checking)
-                    {
-                        LOG_TRACE(log, "half open worker {} is checking", id.ToString());
-                        worker_group_status->half_open_workers_checking_size++;
-                    }
-                    else
-                    {
-                        LOG_TRACE(log, "check half open worker ", id.ToString());
-                        val.circuit_break.is_checking = true;
-                        worker_group_status->half_open_workers_size++;
-                        worker_group_status->half_open_workers.emplace(id);
-                        worker_group_status->workers_status.emplace(id, val.worker_status);
-                        worker_group_status->filter_indices.emplace_back(idx);
-                    }
-                }
-            });
-        if (!exist)
-        {
-            worker_group_status->unknown_worker_size++;
-            worker_group_status->filter_indices.emplace_back(idx);
-            LOG_DEBUG(log, "can't find worker node : {}'s status", id.ToString());
-        }
-    }
-    worker_group_status->calculateStatus();
-    for (const auto & id : need_reset_workers)
-    {
-        LOG_DEBUG(log, "restore worker ", id.ToString());
-        restoreWorkerNode(id);
-    }
-
-    return worker_group_status;
+    auto worker_id_vec = vw_worker_list_map.get(vw_name + "." + wg_name);
+    if (!worker_id_vec)
+        return nullptr;
+    return getWorkerGroupStatus(
+        nullptr, **worker_id_vec, vw_name, wg_name, [](const String &, const String &, const WorkerId & id) { return id; }, false);
 }
+
 
 void WorkerStatusManager::updateConfig(const Poco::Util::AbstractConfiguration & config)
 {

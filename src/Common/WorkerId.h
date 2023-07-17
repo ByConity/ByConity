@@ -5,6 +5,8 @@ namespace DB
 using String = std::string;
 struct WorkerId 
 {
+    WorkerId(const String & vw_name_, const String & wg_name_, const String & id_) : vw_name(vw_name_), wg_name(wg_name_), id(id_) { }
+    WorkerId() = default;
     String vw_name;
     String wg_name;
     String id;

@@ -35,6 +35,7 @@ namespace DB
 
 class CnchDataPartCache;
 using CnchDataPartCachePtr = std::shared_ptr<CnchDataPartCache>;
+class CnchServerTopology;
 
 struct TableMetaEntry
 {
@@ -80,6 +81,7 @@ struct TableMetaEntry
     std::atomic_bool need_invalid_cache {false};
 
     ScanWaitFreeMap<String, PartitionInfoPtr> partitions;
+    String server_vw_name;
 
     Catalog::PartitionMap getPartitions(const Strings & wanted_partition_ids);
     Strings getPartitionIDs();
@@ -121,7 +123,7 @@ public:
 
     void invalidPartCache(const UUID & uuid);
 
-    void invalidCacheWithNewTopology(const HostWithPortsVec & servers);
+    void invalidCacheWithNewTopology(const CnchServerTopology & topology);
 
     void invalidPartCacheWithoutLock(const UUID & uuid, std::unique_lock<std::mutex> & lock);
 
