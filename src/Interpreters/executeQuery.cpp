@@ -73,6 +73,7 @@
 #include <Interpreters/NormalizeSelectWithUnionQueryVisitor.h>
 #include <Interpreters/OpenTelemetrySpanLog.h>
 #include <Interpreters/ProcessList.h>
+#include <Interpreters/QueueManager.h>
 #include <Interpreters/ProcessorsProfileLog.h>
 #include <Interpreters/QueryLog.h>
 #include <Interpreters/ReplaceQueryParameterVisitor.h>
@@ -88,7 +89,6 @@
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/NamedSession.h>
 #include <Interpreters/VirtualWarehouseHandle.h>
-#include <Interpreters/trySetVirtualWarehouse.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <Parsers/ASTSystemQuery.h>
 #include <Storages/StorageCloudMergeTree.h>
@@ -135,9 +135,39 @@ namespace ErrorCodes
     extern const int INTO_OUTFILE_NOT_ALLOWED;
     extern const int QUERY_WAS_CANCELLED;
     extern const int ILLEGAL_OUTPUT_PATH;
-
+    extern const int CNCH_QUEUE_QUERY_FAILURE;
 }
 
+void tryQueueQuery(ContextMutablePtr context)
+{
+    auto worker_group_handler = context->tryGetCurrentWorkerGroup();
+    if (worker_group_handler)
+    {
+        Stopwatch queue_watch;
+        queue_watch.start();
+        auto query_queue = context->getQueueManager();
+        auto query_id = context->getCurrentQueryId();
+        const auto & vw_name = worker_group_handler->getVWName();
+        const auto & wg_name = worker_group_handler->getID();
+        context->getWorkerStatusManager()->updateVWWorkerList(worker_group_handler->getHostWithPortsVec(), vw_name, wg_name);
+        auto queue_info = std::make_shared<QueueInfo>(query_id, vw_name, wg_name, context);
+        auto queue_result = query_queue->enqueue(queue_info, context->getSettingsRef().query_queue_timeout_ms);
+        if (queue_result == QueueResultStatus::QueueSuccess)
+        {
+            auto current_vw = context->tryGetCurrentVW();
+            if (current_vw)
+            {
+                context->setCurrentWorkerGroup(current_vw->getWorkerGroup(wg_name));
+            }
+            LOG_DEBUG(&Poco::Logger::get("executeQuery"), "query queue run time : {} ms", queue_watch.elapsedMilliseconds());
+        }
+        else
+        {
+            LOG_ERROR(&Poco::Logger::get("executeQuery"), "query queue result : {}", queue_info->result.load());
+            throw Exception(ErrorCodes::CNCH_QUEUE_QUERY_FAILURE, "query queue failed for query_id {}", query_id);
+        }
+    }
+}
 
 static void checkASTSizeLimits(const IAST & ast, const Settings & settings)
 {
@@ -671,6 +701,8 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     {
         trySetVirtualWarehouseAndWorkerGroup(ast, context);
         context->initCnchServerResource(txn->getTransactionID());
+        if (!internal && !ast->as<ASTShowProcesslistQuery>() && context->getSettingsRef().enable_query_queue)
+            tryQueueQuery(context);
     }
 
     /// Copy query into string. It will be written to log and presented in processlist. If an INSERT query, string will not include data to insertion.

@@ -960,6 +960,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         main_config_zk_changed_event,
         [&](ConfigurationPtr config, bool initial_loading)
         {
+            global_context->reloadRootConfig(*config);
             Settings::checkNoSettingNamesAtTopLevel(*config, config_path);
 
             /// Limit on total memory usage
@@ -1035,6 +1036,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->setMergeSchedulerSettings(*config);
             CGroupManagerFactory::loadFromConfig(*config);
             global_context->setCpuSetScaleManager(*config);
+            global_context->updateQueueManagerConfig();
         },
         /* already_loaded = */ false);  /// Reload it right now (initial loading)
 

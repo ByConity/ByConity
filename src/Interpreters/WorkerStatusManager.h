@@ -84,7 +84,7 @@ struct WorkerCircuitBreaker
     }
 };
 
-template <typename KEY, typename VALUE, typename HASH, typename EQUAL, uint32_t MAP_COUNT = 23>
+template <typename KEY, typename VALUE, typename HASH = std::hash<KEY>, typename EQUAL = std::equal_to<KEY>, uint32_t MAP_COUNT = 23>
 class ThreadSafeMap
 {
     static_assert(MAP_COUNT > 0, "Invalid MAP_COUNT parameters.");
@@ -234,7 +234,8 @@ class WorkerGroupStatus
 {
 public:
     friend class WorkerStatusManager;
-    WorkerGroupStatus(Context * context) : global_context(*context) { }
+    WorkerGroupStatus(Context * context) : global_context(context) { }
+    WorkerGroupStatus() = default;
     ~WorkerGroupStatus();
     void calculateStatus();
 
@@ -263,7 +264,7 @@ public:
 
 private:
     WorkerNodeStatusContainer workers_status;
-    WorkerGroupHealthStatus status;
+    WorkerGroupHealthStatus status{WorkerGroupHealthStatus::Health};
     WorkerNodeSet half_open_workers;
     size_t health_worker_size{0};
     size_t unhealth_worker_size{0};
@@ -275,7 +276,7 @@ private:
     size_t half_open_workers_size{0};
     size_t heavy_load_worker_size{0};
     std::vector<size_t> filter_indices;
-    Context & global_context;
+    Context * global_context{nullptr};
 };
 
 using WorkerGroupStatusPtr = std::shared_ptr<WorkerGroupStatus>;
@@ -289,6 +290,11 @@ public:
         ComeFromRM = 1,
         ComeFromWorker = 2
     };
+
+    // vw_name.wg_name
+    using VWType = String;
+    using WorkerList = std::vector<WorkerId>;
+    using WorkerListPtr = std::shared_ptr<WorkerList>;
 
     constexpr static const size_t CIRCUIT_BREAKER_THRESHOLD = 20;
 
@@ -307,8 +313,16 @@ public:
 
     UnhealthWorkerStatusMap getWorkersNeedUpdateFromRM();
 
-    std::shared_ptr<WorkerGroupStatus>
-    getWorkerGroupStatus(Context * global_context, const HostWithPortsVec & host_ports, const String & vw_name, const String & wg_name);
+    template <class WorkersVecType, class GetWorkerFunc>
+    std::shared_ptr<WorkerGroupStatus> getWorkerGroupStatus(
+        Context * global_context,
+        const WorkersVecType & host_ports,
+        const String & vw_name,
+        const String & wg_name,
+        GetWorkerFunc && func,
+        bool can_check = true);
+
+    std::shared_ptr<WorkerGroupStatus> getWorkerGroupStatus(const String & vw_name, const String & wg_name);
 
     void updateConfig(const Poco::Util::AbstractConfiguration & config);
 
@@ -322,12 +336,113 @@ public:
         return WorkerId{resource_info.vw_name(), resource_info.worker_group_id(), resource_info.id()};
     }
 
+    template <class WorkerVecType>
+    void updateVWWorkerList(const WorkerVecType & host_ports, const String & vw_name, const String & wg_name)
+    {
+        if constexpr (std::is_same_v<WorkerVecType, HostWithPortsVec>)
+        {
+            String vw_wg_name = vw_name + '.' + wg_name;
+            LOG_TRACE(log, "update {} worker list.", vw_wg_name);
+            auto worker_list = std::make_shared<WorkerList>();
+            for (const auto & host : host_ports)
+            {
+                worker_list->emplace_back(vw_name, wg_name, host.id);
+            }
+            vw_worker_list_map.set(vw_wg_name, worker_list);
+        }
+    }
+
 private:
     ThreadSafeMap<WorkerId, WorkerStatusExtra, WorkerIdHash, WorkerIdEqual> global_extra_workers_status;
     ThreadSafeMap<WorkerId, UnhealthWorkerStatus, WorkerIdHash, WorkerIdEqual> unhealth_workers_status;
+    ThreadSafeMap<VWType, WorkerListPtr> vw_worker_list_map;
 
     AdaptiveSchedulerConfig adaptive_scheduler_config;
     mutable bthread::Mutex map_mutex;
     Poco::Logger * log;
 };
+
+template <class WorkersVecType, class GetWorkerFunc>
+std::shared_ptr<WorkerGroupStatus> WorkerStatusManager::getWorkerGroupStatus(
+    Context * global_context,
+    const WorkersVecType & host_ports,
+    const String & vw_name,
+    const String & wg_name,
+    GetWorkerFunc && func,
+    bool can_check)
+{
+    auto worker_group_status = std::make_unique<WorkerGroupStatus>(global_context);
+    auto now = std::chrono::system_clock::now();
+    WorkerNodeSet need_reset_workers;
+    worker_group_status->filter_indices.reserve(host_ports.size());
+
+    updateVWWorkerList(host_ports, vw_name, wg_name);
+    for (size_t idx = 0; idx < host_ports.size(); ++idx)
+    {
+        const auto & host = host_ports[idx];
+        auto id = func(vw_name, wg_name, host);
+        bool exist = false;
+        global_extra_workers_status.update(
+            id, [idx, &need_reset_workers, &now, this, id, &exist, &worker_group_status, can_check](WorkerStatusExtra & val) {
+                exist = true;
+                auto worker_scheduler_status = val.worker_status->getStatus();
+                if ((worker_scheduler_status == WorkerSchedulerStatus::Unhealth
+                     || worker_scheduler_status == WorkerSchedulerStatus::NotConnected)
+                    && std::chrono::duration_cast<std::chrono::seconds>(now - val.server_last_update_time).count()
+                        > adaptive_scheduler_config.NEED_RESET_SECONDS)
+                    need_reset_workers.emplace(id);
+
+                LOG_TRACE(log, val.toDebugString());
+                if (likely(val.circuit_break.breaker_status == WorkerCircuitBreakerStatus::Close))
+                {
+                    if (val.worker_status->getStatus() <= WorkerSchedulerStatus::OnlySource)
+                    {
+                        worker_group_status->filter_indices.emplace_back(idx);
+                        worker_group_status->workers_status.emplace(id, val.worker_status);
+                    }
+                    else
+                        worker_group_status->unhealth_worker_size++;
+                }
+                else if (val.circuit_break.breaker_status == WorkerCircuitBreakerStatus::HalfOpen)
+                {
+                    if (val.circuit_break.is_checking)
+                    {
+                        LOG_TRACE(log, "half open worker {} is checking", id.ToString());
+                        worker_group_status->half_open_workers_checking_size++;
+                    }
+                    else
+                    {
+                        if (can_check)
+                        {
+                            LOG_TRACE(log, "check half open worker ", id.ToString());
+                            val.circuit_break.is_checking = true;
+                            worker_group_status->half_open_workers_size++;
+                            worker_group_status->half_open_workers.emplace(id);
+                            worker_group_status->workers_status.emplace(id, val.worker_status);
+                            worker_group_status->filter_indices.emplace_back(idx);
+                        }
+                        else
+                        {
+                            LOG_TRACE(log, "half open worker {} is checking", id.ToString());
+                            worker_group_status->half_open_workers_checking_size++;
+                        }
+                    }
+                }
+            });
+        if (!exist)
+        {
+            worker_group_status->unknown_worker_size++;
+            worker_group_status->filter_indices.emplace_back(idx);
+            LOG_DEBUG(log, "can't find worker node : {}'s status", id.ToString());
+        }
+    }
+    worker_group_status->calculateStatus();
+    for (const auto & id : need_reset_workers)
+    {
+        LOG_DEBUG(log, "restore worker ", id.ToString());
+        restoreWorkerNode(id);
+    }
+
+    return worker_group_status;
+}
 }

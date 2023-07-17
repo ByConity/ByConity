@@ -99,7 +99,7 @@ std::vector<size_t> AdaptiveScheduler::getHealthWorkerRank()
     std::vector<size_t> rank_worker_ids;
     auto worker_group = query_context->tryGetCurrentWorkerGroup();
     auto worker_group_status = query_context->getWorkerGroupStatusPtr();
-    if (!worker_group_status)
+    if (!worker_group_status || !worker_group)
         return getRandomWorkerRank();
     const auto & hostports = worker_group->getHostWithPortsVec();
     size_t numOfWorker = hostports.size();

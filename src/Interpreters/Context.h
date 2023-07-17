@@ -246,6 +246,9 @@ class TransactionCoordinatorRcCnch;
 class ICnchTransaction;
 using TransactionCnchPtr = std::shared_ptr<ICnchTransaction>;
 
+class QueueManager;
+using QueueManagerPtr = std::shared_ptr<QueueManager>; 
+
 class VirtualWarehousePool;
 class VirtualWarehouseHandleImpl;
 using VirtualWarehouseHandle = std::shared_ptr<VirtualWarehouseHandleImpl>;
@@ -263,6 +266,8 @@ using WorkerStatusManagerPtr = std::shared_ptr<WorkerStatusManager>;
 
 class WorkerGroupStatus;
 using WorkerGroupStatusPtr = std::shared_ptr<WorkerGroupStatus>;
+struct QeueueThrottlerDeleter;
+using QueueThrottlerDeleterPtr = std::shared_ptr<QeueueThrottlerDeleter>;
 
 enum class ServerType
 {
@@ -480,6 +485,7 @@ private:
     TemporaryDataOnDiskScopePtr temp_data_on_disk;
 
     std::weak_ptr<PlanSegmentProcessListEntry> segment_process_list_entry;
+    QueueThrottlerDeleterPtr queue_throttler_ptr;
 public:
     // Top-level OpenTelemetry trace context for the query. Makes sense only for a query context.
     OpenTelemetryTraceContext query_trace_context;
@@ -941,9 +947,15 @@ public:
     SegmentSchedulerPtr getSegmentScheduler();
     SegmentSchedulerPtr getSegmentScheduler() const;
 
+    QueueManagerPtr getQueueManager() const;
+
     MergeList & getMergeList();
     const MergeList & getMergeList() const;
 
+    void setQueueDeleter(QueueThrottlerDeleterPtr ptr)
+    {
+        queue_throttler_ptr = ptr;
+    }
     ManipulationList & getManipulationList();
     const ManipulationList & getManipulationList() const;
 
@@ -1305,6 +1317,7 @@ public:
     void setCnchTopologyMaster();
     std::shared_ptr<CnchTopologyMaster> getCnchTopologyMaster() const;
 
+    void updateQueueManagerConfig();
     void setServerType(const String & type_str);
     ServerType getServerType() const;
 

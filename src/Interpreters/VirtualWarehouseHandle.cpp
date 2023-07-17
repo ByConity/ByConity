@@ -77,8 +77,6 @@ void VirtualWarehouseHandleImpl::updateWorkerStatusFromRM(const std::vector<Work
         for (const auto & [id, _] : unhealth_workers)
             LOG_TRACE(log, "adaptive unhealth worker : {}", id.ToString());
     }
-
-
     if (unhealth_workers.size() > 0)
     {
         for (const auto & group_data : groups_data)
