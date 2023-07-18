@@ -36,7 +36,6 @@
 #include <Transaction/TxnTimestamp.h>
 #include <cppkafka/cppkafka.h>
 #include <google/protobuf/repeated_field.h>
-#include <Common/Config/MetastoreConfig.h>
 #include <common/types.h>
 
 namespace DB::Catalog
