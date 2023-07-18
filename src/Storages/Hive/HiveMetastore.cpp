@@ -422,7 +422,7 @@ void HiveMetastoreClient::tryCallHiveClient(std::function<void(ThriftHiveMetasto
         break;
     }
 
-    if (i > settings.max_hive_metastore_client_retry)
+    if (i >= settings.max_hive_metastore_client_retry)
         throw Exception("Hive Metastore expired because " + err_msg, ErrorCodes::NETWORK_ERROR);
 }
 
