@@ -72,7 +72,7 @@ BasePlanTest::BasePlanTest(const String & database_name_, const std::unordered_m
 
     session_context->applySettingsChanges(setting_changes);
 
-    if (DatabaseCatalog::instance().tryGetDatabase(database_name))
+    if (DatabaseCatalog::instance().tryGetDatabase(database_name, session_context))
         DatabaseCatalog::instance().detachDatabase(session_context, database_name, true, false);
 
     auto database = std::make_shared<DatabaseMemory>(database_name, session_context);
@@ -470,7 +470,7 @@ void AbstractPlanTestSuite::createClusterInfo(const String & path)
     session_context->setSetting("memory_catalog_worker_size", others_object.get("memory_catalog_worker_size").toString());
     String database_name = others_object.get("CurrentDatabase").toString();
 
-    if (DatabaseCatalog::instance().tryGetDatabase(database_name))
+    if (DatabaseCatalog::instance().tryGetDatabase(database_name, session_context))
         DatabaseCatalog::instance().detachDatabase(session_context, database_name, true, false);
 
     auto database = std::make_shared<DatabaseMemory>(database_name, session_context);

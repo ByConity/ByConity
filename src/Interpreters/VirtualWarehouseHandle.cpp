@@ -108,42 +108,8 @@ WorkerGroupHandle VirtualWarehouseHandleImpl::getWorkerGroup(const String & work
     return it->second;
 }
 
-WorkerGroupHandle VirtualWarehouseHandleImpl::pickWorkerGroup(VWScheduleAlgo algo, const Requirement & requirement, UpdateMode update_mode)
+WorkerGroupHandle VirtualWarehouseHandleImpl::pickWorkerGroup([[maybe_unused]] VWScheduleAlgo algo, [[maybe_unused]] const Requirement & requirement, [[maybe_unused]] UpdateMode update_mode)
 {
-    tryUpdateWorkerGroups(update_mode);
-
-    if (!algo)
-        algo = settings.vw_schedule_algo;
-
-    // All LOCAL_* algorithms use local scheduler.
-    if (algo < VWScheduleAlgo::GlobalRoundRobin)
-        return pickLocally(algo, requirement);
-
-    // GLOBAL_* algorithms use RM service.
-    auto rm_client = getContext()->getResourceManagerClient();
-    if (!rm_client)
-    {
-        LOG_WARNING(log, "RM client is invalid, pick a worker group randomly for {}.", name);
-        return randomWorkerGroup();
-    }
-
-    try
-    {
-        auto worker_group_data = rm_client->pickWorkerGroup(name, algo, {});
-
-        {
-            std::lock_guard lock(state_mutex);
-            auto it = worker_groups.find(worker_group_data.id);
-            if (it != worker_groups.end())
-                return it->second;
-        }
-        LOG_WARNING(log, "Worker group returned from RM is not found locally, pick a worker group randomly.");
-    }
-    catch (const Exception & e)
-    {
-        LOG_WARNING(log, "Failed to connect to RM, pick a worker group randomly: {}", e.displayText());
-    }
-
     return randomWorkerGroup();
 }
 
@@ -421,8 +387,10 @@ std::vector<CnchWorkerClientPtr> VirtualWarehouseHandleImpl::getAllWorkers()
     return res;
 }
 
-WorkerGroupHandle VirtualWarehouseHandleImpl::randomWorkerGroup() const
+WorkerGroupHandle VirtualWarehouseHandleImpl::randomWorkerGroup(UpdateMode mode)
 {
+    tryUpdateWorkerGroups(mode);
+
     std::uniform_int_distribution dist;
 
     {

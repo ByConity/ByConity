@@ -106,23 +106,24 @@
 #endif
 
 #include <Storages/System/StorageSystemBGThreads.h>
-#include <Storages/System/StorageSystemCnchParts.h>
-#include <Storages/System/StorageSystemCnchPartsInfoLocal.h>
-#include <Storages/System/StorageSystemCnchPartsInfo.h>
-#include <Storages/System/StorageSystemCnchPartsColumns.h>
-#include <Storages/System/StorageSystemCnchTableInfo.h>
-#include <Storages/System/StorageSystemCnchTablesHistory.h>
-#include <Storages/System/StorageSystemCnchDatabases.h>
+#include <Storages/System/StorageSystemCnchAsyncQueries.h>
 #include <Storages/System/StorageSystemCnchColumns.h>
-#include <Storages/System/StorageSystemCnchDictionaries.h>
-#include <Storages/System/StorageSystemCnchTables.h>
+#include <Storages/System/StorageSystemCnchDatabases.h>
 #include <Storages/System/StorageSystemCnchDatabasesHistory.h>
 #include <Storages/System/StorageSystemCnchDedupWorkers.h>
+#include <Storages/System/StorageSystemCnchDictionaries.h>
 #include <Storages/System/StorageSystemCnchManipulations.h>
-#include <Storages/System/StorageSystemGlobalGCManager.h>
+#include <Storages/System/StorageSystemCnchParts.h>
+#include <Storages/System/StorageSystemCnchPartsColumns.h>
+#include <Storages/System/StorageSystemCnchPartsInfo.h>
+#include <Storages/System/StorageSystemCnchPartsInfoLocal.h>
+#include <Storages/System/StorageSystemCnchTableInfo.h>
+#include <Storages/System/StorageSystemCnchTables.h>
+#include <Storages/System/StorageSystemCnchTablesHistory.h>
 #include <Storages/System/StorageSystemDMBGJobs.h>
-#include <Storages/System/StorageSystemPersistentBGJobStatus.h>
+#include <Storages/System/StorageSystemGlobalGCManager.h>
 #include <Storages/System/StorageSystemLockMap.h>
+#include <Storages/System/StorageSystemPersistentBGJobStatus.h>
 
 #include <Storages/System/StorageSystemWorkers.h>
 #include <Storages/System/StorageSystemWorkerGroups.h>
@@ -243,6 +244,7 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
     attach<StorageSystemCnchStagedParts>(system_database, "cnch_staged_parts");
     attach<StorageSystemCnchTableHost>(system_database, "cnch_table_host");
     attach<StorageSystemCnchDedupWorkers>(system_database, "cnch_dedup_workers");
+    attach<StorageSystemCnchAsyncQueries>(system_database, "cnch_async_queries");
 }
 
 void attachSystemTablesAsync(IDatabase & system_database, AsynchronousMetrics & async_metrics)

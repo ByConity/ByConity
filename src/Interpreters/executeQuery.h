@@ -26,6 +26,10 @@
 #include <Processors/QueryPipeline.h>
 #include <Interpreters/SegmentScheduler.h>
 
+#include <Protos/cnch_common.pb.h>
+
+using AsyncQueryStatus = DB::Protos::AsyncQueryStatus;
+
 namespace DB
 {
 
@@ -83,4 +87,10 @@ HostWithPorts getTargetServer(ContextPtr context, ASTPtr & ast);
 /// Execute the query on the target server.
 void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server, const ASTPtr & ast, BlockIO & res);
 
+void updateAsyncQueryStatus(
+    ContextMutablePtr context,
+    const String & async_query_id,
+    const String & query_id,
+    const AsyncQueryStatus::Status & status,
+    const String & error_msg = "");
 }

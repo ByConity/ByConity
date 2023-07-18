@@ -103,3 +103,17 @@ message QueryWorkerMetricElement
   required uint32 revision = 27;
   required string version_scm = 28;
 }
+
+message AsyncQueryStatus {
+  enum Status {
+    NotStarted = 0;
+    Running = 1;
+    Finished = 2;
+    Failed = 3;
+  };
+  required string id = 1;
+  required string query_id = 2;
+  required Status status = 3;
+  optional string error_msg = 4;
+  required uint64 update_time = 5;
+}

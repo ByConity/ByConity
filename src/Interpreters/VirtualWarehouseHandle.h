@@ -107,7 +107,7 @@ public:
     WorkerGroupHandle getWorkerGroup(const String & worker_group_id, UpdateMode mode = TryUpdate);
     WorkerGroupHandle pickWorkerGroup(VWScheduleAlgo query_algo, const Requirement & requirement = {}, UpdateMode mode = TryUpdate);
     WorkerGroupHandle pickLocally(const VWScheduleAlgo & algo, const Requirement & requirement = {});
-    WorkerGroupHandle randomWorkerGroup() const;
+    WorkerGroupHandle randomWorkerGroup(UpdateMode mode = TryUpdate);
     std::optional<HostWithPorts> tryPickWorkerFromRM(VWScheduleAlgo algo, const Requirement & requirement = {});
     void updateWorkerStatusFromRM(const std::vector<WorkerGroupData> & groups_data);
     void updateWorkerStatusFromPSM(const IServiceDiscovery::WorkerGroupMap & groups_data, const std::string & vw_name);

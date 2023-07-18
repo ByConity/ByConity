@@ -53,7 +53,7 @@ void StorageSystemReplicationQueue::fillData(MutableColumns & res_columns, Conte
     const bool check_access_for_databases = !access->isGranted(AccessType::SHOW_TABLES);
 
     std::map<String, std::map<String, StoragePtr>> replicated_tables;
-    for (const auto & db : DatabaseCatalog::instance().getDatabases())
+    for (const auto & db : DatabaseCatalog::instance().getDatabases(context))
     {
         /// Check if database can contain replicated tables
         if (!db.second->canContainMergeTreeTables())

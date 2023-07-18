@@ -22,19 +22,22 @@
 #pragma once
 
 #include <Access/RowPolicy.h>
+#include <CloudServices/CnchBGThreadCommon.h>
+#include <CloudServices/CnchBGThreadPartitionSelector.h>
 #include <Core/Block.h>
 #include <Core/NamesAndTypes.h>
 #include <Core/Settings.h>
 #include <Core/UUID.h>
-#include <CloudServices/CnchBGThreadCommon.h>
 #include <DataStreams/IBlockStream_fwd.h>
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/DatabaseCatalog.h>
+#include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
 #include <Parsers/IAST_fwd.h>
-#include <QueryPlan/SymbolAllocator.h>
 #include <QueryPlan/PlanNodeIdAllocator.h>
+#include <QueryPlan/SymbolAllocator.h>
 #include <Storages/IStorage_fwd.h>
+#include <Transaction/TxnTimestamp.h>
 #include <Common/CGroup/CGroupManager.h>
 #include <Common/MultiVersion.h>
 #include <Common/OpenTelemetryTraceContext.h>
@@ -42,13 +45,11 @@
 #include <Common/ThreadPool.h>
 #include <Common/isLocalAddress.h>
 #include <common/types.h>
-#include <CloudServices/CnchBGThreadPartitionSelector.h>
-#include <Transaction/TxnTimestamp.h>
-#include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
+#include "Server/AsyncQueryManager.h"
 // #include <Storages/HDFS/HDFSCommon.h>
-#include <Storages/HDFS/HDFSFileSystem.h>
 #include <DaemonManager/DaemonManagerClient_fwd.h>
 #include <DataStreams/BlockStreamProfileInfo.h>
+#include <Storages/HDFS/HDFSFileSystem.h>
 
 #if !defined(ARCADIA_BUILD)
 #    include "config_core.h"
@@ -64,9 +65,18 @@
 #include <thread>
 
 
-namespace Poco::Net { class IPAddress; }
-namespace DB::Statistics { struct StatisticsMemoryStore; }
-namespace zkutil { class ZooKeeper; }
+namespace Poco::Net
+{
+class IPAddress;
+}
+namespace DB::Statistics
+{
+struct StatisticsMemoryStore;
+}
+namespace zkutil
+{
+class ZooKeeper;
+}
 
 
 namespace DB
@@ -249,6 +259,8 @@ using TransactionCnchPtr = std::shared_ptr<ICnchTransaction>;
 class QueueManager;
 using QueueManagerPtr = std::shared_ptr<QueueManager>; 
 
+using AsyncQueryManagerPtr = std::shared_ptr<AsyncQueryManager>;
+
 class VirtualWarehousePool;
 class VirtualWarehouseHandleImpl;
 using VirtualWarehouseHandle = std::shared_ptr<VirtualWarehouseHandleImpl>;
@@ -329,21 +341,22 @@ private:
     std::unique_ptr<ContextSharedPart> shared;
 };
 
-template<class T>
+template <class T>
 class CopyableAtomic : public std::atomic<T>
 {
 public:
     CopyableAtomic() = default;
 
-    constexpr CopyableAtomic(T desired) :
-        std::atomic<T>(desired)
-    {}
+    constexpr CopyableAtomic(T desired) : std::atomic<T>(desired)
+    {
+    }
 
-    constexpr CopyableAtomic(const CopyableAtomic<T>& other) :
-        CopyableAtomic(other.load(std::memory_order_acquire))
-    {}
+    constexpr CopyableAtomic(const CopyableAtomic<T> & other) : CopyableAtomic(other.load(std::memory_order_acquire))
+    {
+    }
 
-    CopyableAtomic& operator=(const CopyableAtomic<T>& other) {
+    CopyableAtomic & operator=(const CopyableAtomic<T> & other)
+    {
         this->store(other.load(std::memory_order_acquire), std::memory_order_relaxed);
         return *this;
     }
@@ -355,7 +368,7 @@ public:
   *
   * Everything is encapsulated for all sorts of checks and locks.
   */
-class Context: public std::enable_shared_from_this<Context>
+class Context : public std::enable_shared_from_this<Context>
 {
 private:
     ContextSharedPart * shared;
@@ -371,28 +384,28 @@ private:
     bool use_default_roles = false;
     std::shared_ptr<const ContextAccess> access;
     std::shared_ptr<const EnabledRowPolicies> initial_row_policy;
-    CopyableAtomic<IResourceGroup*> resource_group{nullptr}; /// Current resource group.
+    CopyableAtomic<IResourceGroup *> resource_group{nullptr}; /// Current resource group.
     String current_database;
-    Settings settings;  /// Setting for query execution.
+    Settings settings; /// Setting for query execution.
 
     using ProgressCallback = std::function<void(const Progress & progress)>;
-    ProgressCallback progress_callback;  /// Callback for tracking progress of query execution.
+    ProgressCallback progress_callback; /// Callback for tracking progress of query execution.
 
     using FileProgressCallback = std::function<void(const FileProgress & progress)>;
     FileProgressCallback file_progress_callback; /// Callback for tracking progress of file loading.
 
-    QueryStatus * process_list_elem = nullptr;  /// For tracking total resource usage for query.
+    QueryStatus * process_list_elem = nullptr; /// For tracking total resource usage for query.
     std::weak_ptr<ProcessListEntry> process_list_entry;
-    StorageID insertion_table = StorageID::createEmpty();  /// Saved insertion table in query context
+    StorageID insertion_table = StorageID::createEmpty(); /// Saved insertion table in query context
 
-    String default_format;  /// Format, used when server formats data by itself and if query does not have FORMAT specification.
-                            /// Thus, used in HTTP interface. If not specified - then some globally default format is used.
+    String default_format; /// Format, used when server formats data by itself and if query does not have FORMAT specification.
+        /// Thus, used in HTTP interface. If not specified - then some globally default format is used.
     TemporaryTablesMapping external_tables_mapping;
     Scalars scalars;
     String pipeline_log_path;
 
     /// write ha related. manage the non host update time for tables during query execution.
-    std::unordered_map<UUID, UInt64> session_nhuts {};
+    std::unordered_map<UUID, UInt64> session_nhuts{};
     std::shared_ptr<std::mutex> nhut_mutex = std::make_shared<std::mutex>();
 
     /// Fields for distributed s3 function
@@ -461,11 +474,11 @@ private:
     std::unordered_set<String> partition_ids;
 
     ContextWeakMutablePtr query_context;
-    ContextWeakMutablePtr session_context;  /// Session context or nullptr. Could be equal to this.
-    ContextWeakMutablePtr global_context;   /// Global context. Could be equal to this.
+    ContextWeakMutablePtr session_context; /// Session context or nullptr. Could be equal to this.
+    ContextWeakMutablePtr global_context; /// Global context. Could be equal to this.
 
     /// XXX: move this stuff to shared part instead.
-    ContextMutablePtr buffer_context;  /// Buffer context. Could be equal to this.
+    ContextMutablePtr buffer_context; /// Buffer context. Could be equal to this.
 
     /// A flag, used to distinguish between user query and internal query to a database engine (MaterializePostgreSQL).
     bool is_internal_query = false;
@@ -499,20 +512,20 @@ private:
     PartUUIDsPtr part_uuids; /// set of parts' uuids, is used for query parts deduplication
     PartUUIDsPtr ignored_part_uuids; /// set of parts' uuids are meant to be excluded from query processing
 
-    NameToNameMap query_parameters;   /// Dictionary with query parameters for prepared statements.
-                                                     /// (key=name, value)
+    NameToNameMap query_parameters; /// Dictionary with query parameters for prepared statements.
+        /// (key=name, value)
 
-    IHostContextPtr host_context;  /// Arbitrary object that may used to attach some host specific information to query context,
-                                   /// when using ClickHouse as a library in some project. For example, it may contain host
-                                   /// logger, some query identification information, profiling guards, etc. This field is
-                                   /// to be customized in HTTP and TCP servers by overloading the customizeContext(DB::ContextPtr)
-                                   /// methods.
+    IHostContextPtr host_context; /// Arbitrary object that may used to attach some host specific information to query context,
+        /// when using ClickHouse as a library in some project. For example, it may contain host
+        /// logger, some query identification information, profiling guards, etc. This field is
+        /// to be customized in HTTP and TCP servers by overloading the customizeContext(DB::ContextPtr)
+        /// methods.
 
-    ZooKeeperMetadataTransactionPtr metadata_transaction;    /// Distributed DDL context. I'm not sure if it's a suitable place for this,
-                                                    /// but it's the easiest way to pass this through the whole stack from executeQuery(...)
-                                                    /// to DatabaseOnDisk::commitCreateTable(...) or IStorage::alter(...) without changing
-                                                    /// thousands of signatures.
-                                                    /// And I hope it will be replaced with more common Transaction sometime.
+    ZooKeeperMetadataTransactionPtr metadata_transaction; /// Distributed DDL context. I'm not sure if it's a suitable place for this,
+        /// but it's the easiest way to pass this through the whole stack from executeQuery(...)
+        /// to DatabaseOnDisk::commitCreateTable(...) or IStorage::alter(...) without changing
+        /// thousands of signatures.
+        /// And I hope it will be replaced with more common Transaction sometime.
 
 
     /// VirtualWarehouse for each query, session level
@@ -527,6 +540,8 @@ private:
 
     /// The extended profile info is from workers and mainly for INSERT operations
     mutable ExtendedProfileInfo extended_profile_info;
+
+    String async_query_id;
 
     Context();
     Context(const Context &);
@@ -575,7 +590,7 @@ public:
     void setReadyForQuery();
     bool isReadyForQuery() const;
 
-        /// HDFS user
+    /// HDFS user
     void setHdfsUser(const String & name);
     String getHdfsUser() const;
 
@@ -647,9 +662,18 @@ public:
     void checkAccess(const AccessFlags & flags) const;
     void checkAccess(const AccessFlags & flags, const std::string_view & database) const;
     void checkAccess(const AccessFlags & flags, const std::string_view & database, const std::string_view & table) const;
-    void checkAccess(const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const std::string_view & column) const;
-    void checkAccess(const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const std::vector<std::string_view> & columns) const;
-    void checkAccess(const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const Strings & columns) const;
+    void checkAccess(
+        const AccessFlags & flags,
+        const std::string_view & database,
+        const std::string_view & table,
+        const std::string_view & column) const;
+    void checkAccess(
+        const AccessFlags & flags,
+        const std::string_view & database,
+        const std::string_view & table,
+        const std::vector<std::string_view> & columns) const;
+    void checkAccess(
+        const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const Strings & columns) const;
     void checkAccess(const AccessFlags & flags, const StorageID & table_id) const;
     void checkAccess(const AccessFlags & flags, const StorageID & table_id, const std::string_view & column) const;
     void checkAccess(const AccessFlags & flags, const StorageID & table_id, const std::vector<std::string_view> & columns) const;
@@ -699,8 +723,8 @@ public:
     const std::unordered_set<String> & getPartitionIds() const { return partition_ids;}
 
     void initResourceGroupManager(const ConfigurationPtr & config);
-    void setResourceGroup(const IAST *ast);
-    IResourceGroup* tryGetResourceGroup() const;
+    void setResourceGroup(const IAST * ast);
+    IResourceGroup * tryGetResourceGroup() const;
     IResourceGroupManager * tryGetResourceGroupManager();
     IResourceGroupManager * tryGetResourceGroupManager() const;
     void startResourceGroup();
@@ -708,12 +732,12 @@ public:
 
     enum StorageNamespace
     {
-         ResolveGlobal = 1u,                                           /// Database name must be specified
-         ResolveCurrentDatabase = 2u,                                  /// Use current database
-         ResolveOrdinary = ResolveGlobal | ResolveCurrentDatabase,     /// If database name is not specified, use current database
-         ResolveExternal = 4u,                                         /// Try get external table
-         ResolveAll = ResolveExternal | ResolveOrdinary                /// If database name is not specified, try get external table,
-                                                                       ///    if external table not found use current database.
+        ResolveGlobal = 1u, /// Database name must be specified
+        ResolveCurrentDatabase = 2u, /// Use current database
+        ResolveOrdinary = ResolveGlobal | ResolveCurrentDatabase, /// If database name is not specified, use current database
+        ResolveExternal = 4u, /// Try get external table
+        ResolveAll = ResolveExternal | ResolveOrdinary /// If database name is not specified, try get external table,
+        ///    if external table not found use current database.
     };
 
     String resolveDatabase(const String & database_name) const;
@@ -776,7 +800,7 @@ public:
     void setInsertionTable(StorageID db_and_table) { insertion_table = std::move(db_and_table); }
     const StorageID & getInsertionTable() const { return insertion_table; }
 
-    String getDefaultFormat() const;    /// If default_format is not specified, some global default format is returned.
+    String getDefaultFormat() const; /// If default_format is not specified, some global default format is returned.
     void setDefaultFormat(const String & name);
 
     MultiVersion<Macros>::Version getMacros() const;
@@ -868,8 +892,10 @@ public:
 
     void enableNamedCnchSessions();
 
-    std::shared_ptr<NamedSession> acquireNamedSession(const String & session_id, std::chrono::steady_clock::duration timeout, bool session_check) const;
-    std::shared_ptr<NamedCnchSession> acquireNamedCnchSession(const UInt64 & txn_id, std::chrono::steady_clock::duration timeout, bool session_check) const;
+    std::shared_ptr<NamedSession>
+    acquireNamedSession(const String & session_id, std::chrono::steady_clock::duration timeout, bool session_check) const;
+    std::shared_ptr<NamedCnchSession>
+    acquireNamedCnchSession(const UInt64 & txn_id, std::chrono::steady_clock::duration timeout, bool session_check) const;
 
     void initCnchServerResource(const TxnTimestamp & txn_id);
     CnchServerResourcePtr getCnchServerResource() const;
@@ -901,7 +927,11 @@ public:
 
     void makeQueryContext() { query_context = shared_from_this(); }
     void makeSessionContext() { session_context = shared_from_this(); }
-    void makeGlobalContext() { initGlobal(); global_context = shared_from_this(); }
+    void makeGlobalContext()
+    {
+        initGlobal();
+        global_context = shared_from_this();
+    }
 
     const Settings & getSettingsRef() const { return settings; }
     Settings & getSettingsRef() { return settings; }
@@ -948,6 +978,7 @@ public:
     SegmentSchedulerPtr getSegmentScheduler() const;
 
     QueueManagerPtr getQueueManager() const;
+    AsyncQueryManagerPtr getAsyncQueryManager() const;
 
     MergeList & getMergeList();
     const MergeList & getMergeList() const;
@@ -1106,9 +1137,10 @@ public:
 
     void initializeCnchSystemLogs();
     std::shared_ptr<QueryMetricLog> getQueryMetricsLog() const;
-    void insertQueryMetricsElement(const QueryMetricElement & element);  /// Add the metrics element to the background thread for flushing
+    void insertQueryMetricsElement(const QueryMetricElement & element); /// Add the metrics element to the background thread for flushing
     std::shared_ptr<QueryWorkerMetricLog> getQueryWorkerMetricsLog() const;
-    void insertQueryWorkerMetricsElement(const QueryWorkerMetricElement & element);  /// Add the metrics element to the background thread for flushing
+    void insertQueryWorkerMetricsElement(
+        const QueryWorkerMetricElement & element); /// Add the metrics element to the background thread for flushing
 
     const MergeTreeSettings & getMergeTreeSettings() const;
     const MergeTreeSettings & getReplicatedMergeTreeSettings() const;
@@ -1153,11 +1185,11 @@ public:
 
     enum class ApplicationType
     {
-        SERVER,         /// The program is run as clickhouse-server daemon (default behavior)
-        CLIENT,         /// clickhouse-client
-        LOCAL,          /// clickhouse-local
-        KEEPER,         /// clickhouse-keeper (also daemon)
-        TSO,            /// clickhouse-tso-server
+        SERVER, /// The program is run as clickhouse-server daemon (default behavior)
+        CLIENT, /// clickhouse-client
+        LOCAL, /// clickhouse-local
+        KEEPER, /// clickhouse-keeper (also daemon)
+        TSO, /// clickhouse-tso-server
     };
 
     ApplicationType getApplicationType() const;
@@ -1220,7 +1252,7 @@ public:
     UInt32 nextNodeId() { return id_allocator->nextId(); }
     void createPlanNodeIdAllocator();
 
-        int step_id = 2000;
+    int step_id = 2000;
     int getStepId() const { return step_id; }
     void setStepId(int step_id_) { step_id = step_id_; }
     int getAndIncStepId() { return ++step_id; }
@@ -1232,8 +1264,14 @@ public:
 
     String graphviz_sub_query_path;
     void setExecuteSubQueryPath(String path) { graphviz_sub_query_path = std::move(path); }
-    String getExecuteSubQueryPath() const { return graphviz_sub_query_path;  }
-    void removeExecuteSubQueryPath() { graphviz_sub_query_path = "";  }
+    String getExecuteSubQueryPath() const
+    {
+        return graphviz_sub_query_path;
+    }
+    void removeExecuteSubQueryPath()
+    {
+        graphviz_sub_query_path = "";
+    }
 
     int sub_query_id = 0;
     int incAndGetSubQueryId() { return ++sub_query_id; }
@@ -1260,7 +1298,7 @@ public:
         return true;
     }
 
-    const String &getTenantId() const
+    const String & getTenantId() const
     {
         if (!tenant_id.empty())
             return tenant_id;
@@ -1268,7 +1306,7 @@ public:
             return settings.tenant_id.toString();
     }
 
-    void setTenantId(const String &id)
+    void setTenantId(const String & id)
     {
         tenant_id = id;
     }
@@ -1359,7 +1397,8 @@ public:
     void initCnchTransactionCoordinator();
     TransactionCoordinatorRcCnch & getCnchTransactionCoordinator() const;
     void setCurrentTransaction(TransactionCnchPtr txn, bool finish_txn = true);
-    TransactionCnchPtr setTemporaryTransaction(const TxnTimestamp & txn_id, const TxnTimestamp & primary_txn_id = 0, bool with_check = true);
+    TransactionCnchPtr
+    setTemporaryTransaction(const TxnTimestamp & txn_id, const TxnTimestamp & primary_txn_id = 0, bool with_check = true);
     TransactionCnchPtr getCurrentTransaction() const;
     TxnTimestamp getCurrentTransactionID() const;
     TxnTimestamp getCurrentCnchStartTime() const;
@@ -1392,6 +1431,15 @@ public:
 
     String getDefaultCnchPolicyName() const;
     String getCnchAuxilityPolicyName() const;
+
+    void setAsyncQueryId(String id)
+    {
+        async_query_id = id;
+    }
+    String & getAsyncQueryId()
+    {
+        return async_query_id;
+    }
 
 private:
     String tenant_id;

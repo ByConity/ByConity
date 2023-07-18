@@ -236,6 +236,7 @@ void CnchWorkerServiceImpl::getManipulationTasksStatus(
                 task_info->set_partition_id(e.partition_id);
                 task_info->set_total_size_bytes_compressed(e.total_size_bytes_compressed);
                 task_info->set_total_size_marks(e.total_size_marks);
+                task_info->set_total_rows_count(e.total_rows_count);
                 task_info->set_progress(e.progress.load(std::memory_order_relaxed));
                 task_info->set_bytes_read_uncompressed(e.bytes_read_uncompressed.load(std::memory_order_relaxed));
                 task_info->set_bytes_written_uncompressed(e.bytes_written_uncompressed.load(std::memory_order_relaxed));

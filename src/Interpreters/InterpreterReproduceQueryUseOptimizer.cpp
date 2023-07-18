@@ -145,7 +145,7 @@ void InterpreterReproduceQueryUseOptimizer::createTablesFromJson(const String & 
         auto * create = ast->as<ASTCreateQuery>();
         String create_table = create->table;
         String create_database = create->database.empty() ? context->getCurrentDatabase() : create->database;
-        DatabasePtr database_ptr = DatabaseCatalog::instance().getDatabase(create_database);
+        DatabasePtr database_ptr = DatabaseCatalog::instance().getDatabase(create_database, context);
         if (database_ptr->isTableExist(create_table, context))
         {
             continue;
@@ -181,7 +181,7 @@ void InterpreterReproduceQueryUseOptimizer::createClusterInfo(const String & pat
     //    context->getSettings().enable_memory_catalog = true;
 
     String database_name = others_object.get("CurrentDatabase").toString();
-    if (DatabaseCatalog::instance().isDatabaseExist(database_name))
+    if (DatabaseCatalog::instance().isDatabaseExist(database_name, context))
     {
         context->setCurrentDatabase(database_name);
         return;

@@ -46,6 +46,7 @@
 #include <CloudServices/CnchWorkerResource.h>
 #include <Databases/DatabaseCnch.h>
 #include <Common/Status.h>
+#include "Interpreters/Context_fwd.h"
 #include <Protos/RPCHelpers.h>
 
 #include <Parsers/formatTenantDatabaseName.h>
@@ -172,7 +173,7 @@ StoragePtr TemporaryTableHolder::getTable() const
 
 void DatabaseCatalog::initializeAndLoadTemporaryDatabase()
 {
-    if (isDatabaseExist(TEMPORARY_DATABASE))
+    if (isDatabaseExist(TEMPORARY_DATABASE, getContext()))
         return;
     // coverity[store_truncates_time_t]
     drop_delay_sec = getContext()->getConfigRef().getInt("database_atomic_delay_before_drop_table_sec", default_drop_delay_sec);
@@ -241,7 +242,7 @@ void DatabaseCatalog::shutdownImpl()
 
 DatabaseAndTable DatabaseCatalog::tryGetByUUID(const UUID & uuid, const ContextPtr & local_context) const
 {
-    if (use_cnch_catalog && local_context->getCurrentTransaction())
+    if (preferCnchCatalog(*local_context) && local_context->getCurrentTransaction())
     {
         StoragePtr storage = getContext()->getCnchCatalog()->tryGetTableByUUID(*local_context, UUIDHelpers::UUIDToString(uuid), local_context->getCurrentTransactionID().toUInt64(), false);
         if (storage && !storage->is_dropped && !storage->is_detached)
@@ -334,7 +335,7 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
 
     DatabasePtr database{};
 
-    if (preferCnchCatalog(context_))
+    if (preferCnchCatalog(*context_))
         database = tryGetDatabaseCnch(table_id.getDatabaseName(), context_);
 
     if (!database)
@@ -360,11 +361,11 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
     return {database, table};
 }
 
-void DatabaseCatalog::assertDatabaseExists(const String & database_name) const
+void DatabaseCatalog::assertDatabaseExists(const String & database_name, ContextPtr local_context) const
 {
-    if (use_cnch_catalog)
+    if (preferCnchCatalog(*local_context))
     {
-        DatabasePtr database_cnch = tryGetDatabaseCnch(database_name);
+        DatabasePtr database_cnch = tryGetDatabaseCnch(database_name, local_context);
         if (database_cnch)
             return;
     }
@@ -376,7 +377,7 @@ void DatabaseCatalog::assertDatabaseExists(const String & database_name) const
     }
 }
 
-void DatabaseCatalog::assertDatabaseDoesntExist(const String & database_name) const
+void DatabaseCatalog::assertDatabaseDoesntExist(const String & database_name, ContextPtr local_context) const
 {
     {
         String tenant_db = formatTenantDatabaseName(database_name);
@@ -384,7 +385,7 @@ void DatabaseCatalog::assertDatabaseDoesntExist(const String & database_name) co
         assertDatabaseDoesntExistUnlocked(tenant_db);
     }
 
-    if (use_cnch_catalog)
+    if (preferCnchCatalog(*local_context))
     {
         DatabasePtr database_cnch = tryGetDatabaseCnch(database_name);
         if (database_cnch)
@@ -429,7 +430,7 @@ DatabasePtr DatabaseCatalog::detachDatabase(ContextPtr local_context, const Stri
 
     DatabasePtr db{};
 
-    if (preferCnchCatalog(local_context))
+    if (preferCnchCatalog(*local_context))
         db = tryGetDatabaseCnch(database_name, local_context);
 
     String tenant_db = formatTenantDatabaseName(database_name);
@@ -488,13 +489,6 @@ void DatabaseCatalog::updateDatabaseName(const String & old_name, const String &
 
 DatabasePtr DatabaseCatalog::getDatabase(const String & database_name) const
 {
-    if (use_cnch_catalog)
-    {
-        DatabasePtr database_cnch = tryGetDatabaseCnch(database_name);
-        if (database_cnch)
-            return database_cnch;
-    }
-
     String tenant_db = formatTenantDatabaseName(database_name);
     std::lock_guard lock{databases_mutex};
     assertDatabaseExistsUnlocked(tenant_db);
@@ -505,13 +499,13 @@ DatabasePtr DatabaseCatalog::tryGetDatabase(const String & database_name, Contex
 {
     assert(!database_name.empty());
 
-    if (preferCnchCatalog(local_context))
+    if (preferCnchCatalog(*local_context))
     {
         DatabasePtr database_cnch = tryGetDatabaseCnch(database_name, local_context);
         if (database_cnch)
             return database_cnch;
     }
-    
+
     String tenant_db = formatTenantDatabaseName(database_name);
     std::lock_guard lock{databases_mutex};
     auto it = databases.find(tenant_db);
@@ -524,12 +518,6 @@ DatabasePtr DatabaseCatalog::tryGetDatabase(const String & database_name) const
 {
     assert(!database_name.empty());
 
-    if (use_cnch_catalog)
-    {
-        DatabasePtr database_cnch = tryGetDatabaseCnch(database_name);
-        if (database_cnch)
-            return database_cnch;
-    }
     String tenant_db = formatTenantDatabaseName(database_name);
     std::lock_guard lock{databases_mutex};
     auto it = databases.find(tenant_db);
@@ -540,13 +528,6 @@ DatabasePtr DatabaseCatalog::tryGetDatabase(const String & database_name) const
 
 DatabasePtr DatabaseCatalog::getDatabase(const UUID & uuid) const
 {
-    if (use_cnch_catalog)
-    {
-        DatabasePtr database_cnch = tryGetDatabaseCnch(uuid);
-        if (database_cnch)
-            return database_cnch;
-    }
-
     std::lock_guard lock{databases_mutex};
     auto it = db_uuid_map.find(uuid);
     if (it == db_uuid_map.end())
@@ -556,13 +537,6 @@ DatabasePtr DatabaseCatalog::getDatabase(const UUID & uuid) const
 
 DatabasePtr DatabaseCatalog::tryGetDatabase(const UUID & uuid) const
 {
-    if (use_cnch_catalog)
-    {
-        DatabasePtr database_cnch = tryGetDatabaseCnch(uuid);
-        if (database_cnch)
-            return database_cnch;
-    }
-
     assert(uuid != UUIDHelpers::Nil);
     std::lock_guard lock{databases_mutex};
     auto it = db_uuid_map.find(uuid);
@@ -571,11 +545,11 @@ DatabasePtr DatabaseCatalog::tryGetDatabase(const UUID & uuid) const
     return it->second;
 }
 
-bool DatabaseCatalog::isDatabaseExist(const String & database_name) const
+bool DatabaseCatalog::isDatabaseExist(const String & database_name, ContextPtr local_context) const
 {
     assert(!database_name.empty());
 
-    if (use_cnch_catalog)
+    if (preferCnchCatalog(*local_context))
     {
         DatabasePtr cnch_database = tryGetDatabaseCnch(database_name);
         if (cnch_database)
@@ -587,7 +561,7 @@ bool DatabaseCatalog::isDatabaseExist(const String & database_name) const
     return databases.end() != databases.find(tenant_db);
 }
 
-Databases DatabaseCatalog::getDatabases() const
+Databases DatabaseCatalog::getDatabases(ContextPtr local_context) const
 {
     Databases res;
     {
@@ -595,7 +569,7 @@ Databases DatabaseCatalog::getDatabases() const
         res = databases;
     }
 
-    if (use_cnch_catalog)
+    if (preferCnchCatalog(*local_context))
     {
         Databases cnch_databases = getDatabaseCnchs();
         std::move(cnch_databases.begin(), cnch_databases.end(), std::inserter(res, res.end()));
@@ -769,7 +743,7 @@ DatabasePtr DatabaseCatalog::getDatabase(const String & database_name, ContextPt
         }
     }
 
-    if (preferCnchCatalog(local_context))
+    if (preferCnchCatalog(*local_context))
     {
         DatabasePtr res = tryGetDatabaseCnch(database_name, local_context);
         if (res)
@@ -1288,8 +1262,8 @@ DDLGuard::~DDLGuard()
     releaseTableLock();
 }
 
-inline bool DatabaseCatalog::preferCnchCatalog(const ContextPtr & local_context) const
+inline bool DatabaseCatalog::preferCnchCatalog(const Context & local_context) const
 {
-    return use_cnch_catalog || local_context->getSettingsRef().prefer_cnch_catalog;
+    return use_cnch_catalog || local_context.getSettingsRef().prefer_cnch_catalog;
 }
 }

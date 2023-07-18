@@ -22,20 +22,21 @@
 #include <Protos/data_models.pb.h>
 #include <Storages/MergeTree/DeleteBitmapMeta.h>
 // #include <Transaction/ICnchTransaction.h>
-#include <Transaction/TxnTimestamp.h>
-#include <Transaction/TransactionCommon.h>
-#include <google/protobuf/repeated_field.h>
-#include <unordered_set>
 #include <sstream>
-#include <Core/UUID.h>
-#include <Protos/RPCHelpers.h>
-#include <cppkafka/cppkafka.h>
-#include <MergeTreeCommon/InsertionLabel.h>
-#include <Statistics/ExportSymbols.h>
-#include <Statistics/StatisticsBase.h>
-#include <ResourceManagement/CommonData.h>
+#include <unordered_set>
 #include <Catalog/IMetastore.h>
 #include <CloudServices/CnchBGThreadCommon.h>
+#include <Core/UUID.h>
+#include <MergeTreeCommon/InsertionLabel.h>
+#include <Protos/RPCHelpers.h>
+#include <ResourceManagement/CommonData.h>
+#include <Statistics/ExportSymbols.h>
+#include <Statistics/StatisticsBase.h>
+#include <Transaction/TransactionCommon.h>
+#include <Transaction/TxnTimestamp.h>
+#include <cppkafka/cppkafka.h>
+#include <google/protobuf/repeated_field.h>
+#include <common/types.h>
 
 namespace DB::Catalog
 {
@@ -534,14 +535,21 @@ public:
         return escapeString(name_space) + "_" + RM_WG_PREFIX + worker_group_id;
     }
 
-    static String filesysLockKey(const String & name_sapce, const String hdfs_path)
+    static String filesysLockKey(const String & name_space, const String hdfs_path)
     {
-        return escapeString(name_sapce) + '_' + FILESYS_LOCK_PREFIX + escapeString(hdfs_path);
+        return escapeString(name_space) + '_' + FILESYS_LOCK_PREFIX + escapeString(hdfs_path);
     }
 
-    static String mergeMutateThreadStartTimeKey(const String & name_sapce, const String & uuid)
+    static String mergeMutateThreadStartTimeKey(const String & name_space, const String & uuid)
     {
-        return escapeString(name_sapce) + '_' + MERGEMUTATE_THREAD_START_TIME + uuid;
+        return escapeString(name_space) + '_' + MERGEMUTATE_THREAD_START_TIME + uuid;
+    }
+
+    inline static String AYSNC_QUERY_STATUS_PREFIX = "ASYNC_QUERY_STATUS_";
+
+    static String asyncQueryStatusKey(const String & name_space, const String & id)
+    {
+        return escapeString(name_space) + '_' + AYSNC_QUERY_STATUS_PREFIX + id;
     }
 
     /// end of Metastore Proxy keying schema
@@ -764,6 +772,10 @@ public:
         const String & name_space, const String & uuid, const String & column, const std::unordered_set<StatisticsTag> & tags);
     void setMergeMutateThreadStartTime(const String & name_space, const String & uuid, const UInt64 & start_time);
     UInt64 getMergeMutateThreadStartTime(const String & name_space, const String & uuid);
+
+    void setAsyncQueryStatus(
+        const String & name_space, const String & id, const Protos::AsyncQueryStatus & status, UInt64 ttl /* 1 day */ = 86400) const;
+    bool tryGetAsyncQueryStatus(const String & name_space, const String & id, Protos::AsyncQueryStatus & status) const;
 
 private:
 

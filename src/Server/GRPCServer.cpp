@@ -763,7 +763,7 @@ namespace
         /// Set the current database if specified.
         if (!query_info.database().empty())
         {
-            if (!DatabaseCatalog::instance().isDatabaseExist(query_info.database()))
+            if (!DatabaseCatalog::instance().isDatabaseExist(query_info.database(), query_context))
                 throw Exception("Database " + query_info.database() + " doesn't exist", ErrorCodes::UNKNOWN_DATABASE);
             query_context->setCurrentDatabase(query_info.database());
         }

@@ -89,6 +89,7 @@
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/NamedSession.h>
 #include <Interpreters/VirtualWarehouseHandle.h>
+#include "Interpreters/DatabaseCatalog.h"
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <Parsers/ASTSystemQuery.h>
 #include <Storages/StorageCloudMergeTree.h>
@@ -116,6 +117,10 @@
 
 #include <Transaction/ICnchTransaction.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
+
+#include <Protos/cnch_common.pb.h>
+
+using AsyncQueryStatus = DB::Protos::AsyncQueryStatus;
 
 namespace ProfileEvents
 {
@@ -503,14 +508,11 @@ static TransactionCnchPtr prepareCnchTransaction(ContextMutablePtr context, [[ma
             if (database.empty())
                 database = context->getCurrentDatabase();
 
-            /// XXX:
-            if (auto local_storage = context->getCnchCatalog()->tryGetTable(*context, database, table);
-                local_storage && !dynamic_cast<StorageCloudMergeTree *>(local_storage.get()))
+            auto storage = DatabaseCatalog::instance().getTable(StorageID(database, table), context);
+             if (!dynamic_cast<StorageCnchMergeTree *>(storage.get()) && !dynamic_cast<StorageCloudMergeTree *>(storage.get()))
                 return {};
 
-            auto storage = context->getCnchCatalog()->getTable(*context, database, table, TxnTimestamp::maxTS());
-            auto host_ports = context->getCnchTopologyMaster()->getTargetServer(
-                UUIDHelpers::UUIDToString(storage->getStorageUUID()), storage->getServerVwName(), true);
+            auto host_ports = context->getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(storage->getStorageUUID()), storage->getServerVwName(), true);
             auto server_client
                 = host_ports.empty() ? context->getCnchServerClientPool().get() : context->getCnchServerClientPool().get(host_ports);
             auto txn = std::make_shared<CnchWorkerTransaction>(context->getGlobalContext(), server_client);
@@ -697,12 +699,15 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
     setQuerySpecificSettings(ast, context);
     auto txn = prepareCnchTransaction(context, ast);
-    if (txn && context->getServerType() == ServerType::cnch_server)
+    if (txn)
     {
         trySetVirtualWarehouseAndWorkerGroup(ast, context);
-        context->initCnchServerResource(txn->getTransactionID());
-        if (!internal && !ast->as<ASTShowProcesslistQuery>() && context->getSettingsRef().enable_query_queue)
-            tryQueueQuery(context);
+        if (context->getServerType() == ServerType::cnch_server)
+        {
+            context->initCnchServerResource(txn->getTransactionID());
+            if (!internal && !ast->as<ASTShowProcesslistQuery>() && context->getSettingsRef().enable_query_queue)
+                tryQueueQuery(context);
+        }
     }
 
     /// Copy query into string. It will be written to log and presented in processlist. If an INSERT query, string will not include data to insertion.
@@ -1277,6 +1282,11 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                     opentelemetry_span_log->add(span);
                 }
 
+                if (const String & async_query_id = context->getAsyncQueryId(); !async_query_id.empty())
+                {
+                    updateAsyncQueryStatus(context, async_query_id, query_id, AsyncQueryStatus::Finished);
+                }
+
                 // cancel coordinator itself
                 context->getPlanSegmentProcessList().tryCancelPlanSegmentGroup(query_id);
                 SegmentSchedulerPtr scheduler = context->getSegmentScheduler();
@@ -1365,6 +1375,11 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 else if (ast->as<ASTInsertQuery>())
                 {
                     ProfileEvents::increment(ProfileEvents::FailedInsertQuery);
+                }
+
+                if (const String & async_query_id = context->getAsyncQueryId(); !async_query_id.empty())
+                {
+                    updateAsyncQueryStatus(context, async_query_id, query_id, AsyncQueryStatus::Failed, elem.exception);
                 }
 
                 auto coodinator = MPPQueryManager::instance().getCoordinator(query_id);
@@ -1729,4 +1744,29 @@ void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server
     res.pipeline.addInterpreterContext(context);
 }
 
+void updateAsyncQueryStatus(
+    ContextMutablePtr context,
+    const String & async_query_id,
+    const String & query_id,
+    const AsyncQueryStatus::Status & status,
+    const String & error_msg)
+{
+    AsyncQueryStatus async_query_status;
+    if (!context->getCnchCatalog()->tryGetAsyncQueryStatus(async_query_id, async_query_status))
+    {
+        LOG_WARNING(
+            &Poco::Logger::get("executeQuery"), "async query status not found, insert new one with async_query_id: {}", async_query_id);
+        async_query_status.set_id(async_query_id);
+        async_query_status.set_query_id(query_id);
+    }
+    async_query_status.set_status(status);
+    async_query_status.set_update_time(time(nullptr));
+
+    if (!error_msg.empty() && status == AsyncQueryStatus::Failed)
+    {
+        async_query_status.set_error_msg(error_msg);
+    }
+
+    context->getCnchCatalog()->setAsyncQueryStatus(async_query_id, async_query_status);
+}
 }

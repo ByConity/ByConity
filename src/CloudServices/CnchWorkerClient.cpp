@@ -131,6 +131,8 @@ std::vector<ManipulationInfo> CnchWorkerClient::getManipulationTasksStatus()
     RPCHelpers::checkResponse(response);
 
     std::vector<ManipulationInfo> res;
+    res.reserve(response.tasks_size());
+
     for (const auto & task : response.tasks())
     {
         ManipulationInfo info(RPCHelpers::createStorageID(task.storage_id()));
@@ -145,6 +147,7 @@ std::vector<ManipulationInfo> CnchWorkerClient::getManipulationTasksStatus()
         info.partition_id = task.partition_id();
         info.total_size_bytes_compressed = task.total_size_bytes_compressed();
         info.total_size_marks = task.total_size_marks();
+        info.total_rows_count = task.total_rows_count();
         info.progress = task.progress();
         info.bytes_read_uncompressed = task.bytes_read_uncompressed();
         info.bytes_written_uncompressed = task.bytes_written_uncompressed();

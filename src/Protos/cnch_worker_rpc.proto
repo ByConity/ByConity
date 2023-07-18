@@ -134,6 +134,7 @@ message ManipulationTask
   optional int64 columns_written = 16;
   optional int64 memory_usage = 17;
   optional int64 thread_id = 18;
+  optional int64 total_rows_count = 19;
 }
 
 message GetManipulationTasksStatusReq

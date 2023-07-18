@@ -44,7 +44,7 @@ BlockIO InterpreterDropStatsQuery::execute()
     if (query->target_all)
     {
         std::vector<StatsTableIdentifier> tables;
-        if (!DatabaseCatalog::instance().isDatabaseExist(db))
+        if (!DatabaseCatalog::instance().isDatabaseExist(db, getContext()))
         {
             auto msg = fmt::format(FMT_STRING("Unknown database ({})"), db);
             throw Exception(msg, ErrorCodes::UNKNOWN_DATABASE);
