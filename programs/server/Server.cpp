@@ -30,6 +30,7 @@
 #include <Access/AccessControlManager.h>
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Catalog/Catalog.h>
+#include <Catalog/CatalogConfig.h>
 #include <CloudServices/CnchServerServiceImpl.h>
 #include <CloudServices/CnchWorkerClientPools.h>
 #include <CloudServices/CnchWorkerServiceImpl.h>
@@ -86,7 +87,6 @@
 #include <Common/CGroup/CGroupManagerFactory.h>
 #include <Common/ClickHouseRevision.h>
 #include <Common/Config/ConfigReloader.h>
-#include <Common/Config/MetastoreConfig.h>
 #include <Common/Config/VWCustomizedSettings.h>
 #include <Common/Configurations.h>
 #include <Common/CurrentMetrics.h>
@@ -118,7 +118,6 @@
 #include <common/phdr_cache.h>
 #include <common/scope_guard.h>
 #include "MetricsTransmitter.h"
-#include <Catalog/CatalogConfig.h>
 
 #include <CloudServices/CnchServerClientPool.h>
 
