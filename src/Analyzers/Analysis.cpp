@@ -161,6 +161,28 @@ std::optional<ResolvedField> Analysis::tryGetColumnReference(const ASTPtr & ast)
     return std::nullopt;
 }
 
+void Analysis::addUsedColumn(const IAST * table_ast, size_t field_index)
+{
+    used_columns[table_ast].emplace(field_index);
+}
+
+void Analysis::addUsedColumn(const ResolvedField & resolved_field)
+{
+    const auto & field_desc = resolved_field.getFieldDescription();
+    if (!field_desc.origin_columns.empty())
+    {
+        auto origin_column = field_desc.origin_columns.front();
+        if (origin_column.table_ast)
+            addUsedColumn(origin_column.table_ast, origin_column.index_of_scope);
+    }
+}
+
+const std::set<size_t> & Analysis::getUsedColumns(const IAST & table_ast)
+{
+    return used_columns[&table_ast];
+}
+
+
 void Analysis::setLambdaArgumentReference(const ASTPtr & ast, const ResolvedField & resolved)
 {
     lambda_argument_references[ast] = resolved;
@@ -357,6 +379,11 @@ const std::vector<SubColumnIDSet> & Analysis::getUsedSubColumns(const IAST & tab
 void Analysis::addNonDeterministicFunctions(IAST & ast)
 {
     non_deterministic_functions.insert(&ast);
+}
+
+ArrayJoinAnalysis & Analysis::getArrayJoinAnalysis(ASTSelectQuery & select_query)
+{
+    return array_join_analysis[&select_query];
 }
 
 }

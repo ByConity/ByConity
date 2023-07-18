@@ -159,4 +159,10 @@ IMPLEMENT_SETTING_ENUM(DiskCacheMode, ErrorCodes::BAD_ARGUMENTS,
      {"USE_DISK_CACHE", DiskCacheMode::USE_DISK_CACHE},
      {"SKIP_DISK_CACHE", DiskCacheMode::SKIP_DISK_CACHE},
      {"FORCE_CHECKSUMS_DISK_CACHE", DiskCacheMode::FORCE_CHECKSUMS_DISK_CACHE}})
-}
+
+IMPLEMENT_SETTING_ENUM(StatisticsCachePolicy, ErrorCodes::BAD_ARGUMENTS,
+    {{"default", StatisticsCachePolicy::Default},
+     {"cache", StatisticsCachePolicy::Cache},
+     {"catalog", StatisticsCachePolicy::Catalog}})
+
+} // namespace DB

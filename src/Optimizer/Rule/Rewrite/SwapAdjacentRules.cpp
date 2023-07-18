@@ -122,9 +122,9 @@ TransformResult SwapAdjacentWindows::transformImpl(PlanNodePtr node, const Captu
             }
         }
 
-        QueryPlanStepPtr new_child_step = std::make_shared<WindowStep>(child_step.getInputStreams()[0], step.getWindow(), step.needSort());
+        QueryPlanStepPtr new_child_step = std::make_shared<WindowStep>(child_step.getInputStreams()[0], step.getWindow(), step.needSort(), step.getPrefixDescription());
         QueryPlanStepPtr new_step
-            = std::make_shared<WindowStep>(new_child_step->getOutputStream(), child_step.getWindow(), child_step.needSort());
+            = std::make_shared<WindowStep>(new_child_step->getOutputStream(), child_step.getWindow(), child_step.needSort(), child_step.getPrefixDescription());
 
         auto new_child_node
             = PlanNodeBase::createPlanNode(context.context->nextNodeId(), std::move(new_child_step), child_ptr->getChildren());

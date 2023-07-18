@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <type_traits>
 #include <QueryPlan/ApplyStep.h>
 
 #include <DataTypes/DataTypesNumber.h>
@@ -20,12 +21,13 @@
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Core/Block.h>
+#include "Core/Names.h"
 
 namespace DB
 {
 ApplyStep::ApplyStep(
-    DataStreams input_streams_, Names correlation_, ApplyType apply_type_, SubqueryType subquery_type_, Assignment assignment_)
-    : correlation(std::move(correlation_)), apply_type(apply_type_), subquery_type(subquery_type_), assignment(std::move(assignment_))
+    DataStreams input_streams_, Names correlation_, ApplyType apply_type_, SubqueryType subquery_type_, Assignment assignment_, NameSet outer_columns_)
+    : correlation(std::move(correlation_)), apply_type(apply_type_), subquery_type(subquery_type_), assignment(std::move(assignment_)), outer_columns(std::move(outer_columns_))
 {
     setInputStreams(input_streams_);
 }
@@ -87,6 +89,6 @@ QueryPipelinePtr ApplyStep::updatePipeline(QueryPipelines, const BuildQueryPipel
 
 std::shared_ptr<IQueryPlanStep> ApplyStep::copy(ContextPtr) const
 {
-    return std::make_shared<ApplyStep>(input_streams, correlation, apply_type, subquery_type, assignment);
+    return std::make_shared<ApplyStep>(input_streams, correlation, apply_type, subquery_type, assignment, outer_columns);
 }
 }

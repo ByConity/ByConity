@@ -33,7 +33,7 @@ public:
     {
         col_name = col_desc.name;
         data_type = decayDataType(col_desc.type);
-        config = get_column_config(handler_context.settings, data_type);
+        config = getColumnConfig(handler_context.settings, data_type);
     }
 
     std::vector<String> getSqls() override
@@ -65,9 +65,9 @@ public:
         // count(col)
         auto nonnull_count = static_cast<double>(getSingleValue<UInt64>(block, index_offset + 0));
         // cpc(col)
-        auto ndv_b64 = getSingleValue<std::string_view>(block, index_offset + 1);
+        auto ndv_blob = getSingleValue<std::string_view>(block, index_offset + 1);
         // kll(col)
-        auto histogram_b64 = getSingleValue<std::string_view>(block, index_offset + 2);
+        auto histogram_blob = getSingleValue<std::string_view>(block, index_offset + 2);
 
         // select count(*)
         double full_count = handler_context.full_count;
@@ -77,12 +77,12 @@ public:
         // algorithm requires block_ndv as sample_nonnull
         if (nonnull_count != 0)
         {
-            double ndv = getNdvFromBase64(ndv_b64);
+            double ndv = getNdvFromSketchBinary(ndv_blob);
             result.nonnull_count = nonnull_count;
             result.ndv_value_opt = std::min(ndv, nonnull_count);
-            if (!histogram_b64.empty())
+            if (!histogram_blob.empty())
             {
-                auto histogram = createStatisticsTyped<StatsKllSketch>(StatisticsTag::KllSketch, base64Decode(histogram_b64));
+                auto histogram = createStatisticsTyped<StatsKllSketch>(StatisticsTag::KllSketch, histogram_blob);
                 result.min_as_double = histogram->minAsDouble().value_or(std::nan(""));
                 result.max_as_double = histogram->maxAsDouble().value_or(std::nan(""));
 
@@ -131,7 +131,7 @@ public:
     {
         col_name = col_desc.name;
         data_type = decayDataType(col_desc.type);
-        config = get_column_config(handler_context.settings, data_type);
+        config = getColumnConfig(handler_context.settings, data_type);
     }
 
     std::vector<String> getSqls() override
@@ -150,7 +150,7 @@ public:
 
     void parse(const Block & block, size_t index_offset) override
     {
-        auto ndv_buckets_b64 = getSingleValue<std::string_view>(block, index_offset + 0);
+        auto ndv_buckets_blob = getSingleValue<std::string_view>(block, index_offset + 0);
 
         if (!handler_context.columns_data.count(col_name))
         {
@@ -158,7 +158,7 @@ public:
         }
 
         // write result to context
-        auto ndv_buckets = createStatisticsTyped<StatsNdvBuckets>(StatisticsTag::NdvBuckets, base64Decode(ndv_buckets_b64));
+        auto ndv_buckets = createStatisticsTyped<StatsNdvBuckets>(StatisticsTag::NdvBuckets, ndv_buckets_blob);
 
         auto result = ndv_buckets->asResult();
 
@@ -225,12 +225,17 @@ public:
 
 
     // exported symbol
-    void collect(const ColumnDescVector & cols_desc) override
+    void collect(const ColumnDescVector & all_cols_desc) override
     {
-        // TODO: split them into several columns step
         collectTable();
-        collectFirstStep(cols_desc);
-        collectSecondStep(cols_desc);
+
+        auto cols_desc_groups = split(all_cols_desc, context->getSettingsRef().statistics_batch_max_columns);
+
+        for (auto & cols_desc_group : cols_desc_groups)
+        {
+            collectFirstStep(cols_desc_group);
+            collectSecondStep(cols_desc_group);
+        }
     }
 };
 

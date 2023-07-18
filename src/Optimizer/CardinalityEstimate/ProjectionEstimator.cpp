@@ -19,6 +19,7 @@
 #include <Parsers/ASTVisitor.h>
 #include <Common/FieldVisitorConvertToNumber.h>
 #include <Common/FieldVisitors.h>
+#include <Statistics/StringHash.h>
 
 namespace DB
 {
@@ -112,7 +113,7 @@ ScalarStatsCalculator::visitASTLiteral(const ConstASTPtr & node, std::unordered_
     if (tmp_type->getTypeId() == TypeIndex::String || type->getTypeId() == TypeIndex::FixedString)
     {
         String str = literal->value.safeGet<String>();
-        double value = CityHash_v1_0_2::CityHash64(str.data(), str.size());
+        double value = Statistics::stringHash64(str);
         return std::make_shared<SymbolStatistics>(
             1, value, value, 0, 8, Histogram{Buckets{Bucket(value, value, 1, total_rows, true, true)}}, type, "unknown", false);
     }

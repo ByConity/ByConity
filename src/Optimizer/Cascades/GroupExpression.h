@@ -89,13 +89,13 @@ private:
 class GroupExpression
 {
 public:
-    GroupExpression(ConstQueryPlanStepPtr step_, std::vector<GroupId> child_groups_,
+    GroupExpression(QueryPlanStepPtr step_, std::vector<GroupId> child_groups_,
                     RuleType produce_rule_ = RuleType::UNDEFINED, GroupId group_id_ = UNDEFINED_GROUP)
         : step(std::move(step_)), group_id(group_id_), child_groups(std::move(child_groups_)), produce_rule(produce_rule_)
     {
     }
 
-    ConstQueryPlanStepPtr & getStep() { return step; }
+    QueryPlanStepPtr & getStep() { return step; }
 
     void setGroupId(GroupId group_id_) { group_id = group_id_; }
     GroupId getGroupId() const { return group_id; }
@@ -142,7 +142,7 @@ public:
     }
 
 private:
-    ConstQueryPlanStepPtr step;
+    QueryPlanStepPtr step;
     GroupId group_id;
 
     /**
@@ -213,7 +213,7 @@ public:
      * @param id_ ID of the Group for binding
      * @param pattern_ Pattern to bind
      */
-    GroupBindingIterator(const Memo & memo_, GroupId id_, PatternPtr pattern_, OptContextPtr context_);
+    GroupBindingIterator(const Memo & memo_, GroupId id_, PatternRawPtr pattern_, OptContextPtr context_);
 
     /**
      * Virtual function for whether a binding exists
@@ -236,7 +236,7 @@ private:
     /**
      * Pattern to try binding to
      */
-    PatternPtr pattern;
+    PatternRawPtr pattern;
 
     /**
      * Pointer to the group with GroupID group_id_
@@ -272,7 +272,7 @@ public:
      * @param group_expr_ GroupExpression to bind to
      * @param pattern_ Pattern to bind
      */
-    GroupExprBindingIterator(const Memo & memo, GroupExprPtr group_expr_, const PatternPtr & pattern_, OptContextPtr context_);
+    GroupExprBindingIterator(const Memo & memo, GroupExprPtr group_expr_, PatternRawPtr pattern_, OptContextPtr context_);
 
     /**
      * Virtual function for whether a binding exists
@@ -317,6 +317,8 @@ private:
      * Position indicators tracking progress within children_bindings
      */
     std::vector<size_t> children_bindings_pos;
+
+    static PatternPtr any;
 };
 
 /**

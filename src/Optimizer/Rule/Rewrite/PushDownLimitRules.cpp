@@ -15,15 +15,17 @@
 
 #include <Optimizer/Rule/Rewrite/PushDownLimitRules.h>
 
+#include <Core/SortDescription.h>
 #include <Optimizer/PlanNodeCardinality.h>
 #include <Optimizer/Rule/Patterns.h>
 #include <Optimizer/Utils.h>
+#include <QueryPlan/IQueryPlanStep.h>
 #include <QueryPlan/JoinStep.h>
 #include <QueryPlan/LimitStep.h>
+#include <QueryPlan/WindowStep.h>
 
 namespace DB
 {
-
 static bool isLimitNeeded(const LimitStep & limit, const PlanNodePtr & node)
 {
     auto range = PlanNodeCardinality::extractCardinality(*node);
@@ -32,7 +34,7 @@ static bool isLimitNeeded(const LimitStep & limit, const PlanNodePtr & node)
 
 PatternPtr PushLimitIntoDistinct::getPattern() const
 {
-    return Patterns::limit()->withSingle(Patterns::distinct());
+    return Patterns::limit().withSingle(Patterns::distinct()).result();
 }
 
 TransformResult PushLimitIntoDistinct::transformImpl(PlanNodePtr node, const Captures &, RuleContext &)
@@ -65,7 +67,7 @@ TransformResult PushLimitIntoDistinct::transformImpl(PlanNodePtr node, const Cap
 
 PatternPtr PushLimitThroughProjection::getPattern() const
 {
-    return Patterns::limit()->withSingle(Patterns::project());
+    return Patterns::limit().withSingle(Patterns::project()).result();
 }
 
 TransformResult PushLimitThroughProjection::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_ctx)
@@ -85,6 +87,8 @@ TransformResult PushLimitThroughProjection::transformImpl(PlanNodePtr node, cons
             limit_step->getLimit(),
             limit_step->getOffset(),
             limit_step->isAlwaysReadTillEnd(),
+            limit_step->withTies(),
+            limit_step->getSortDescription(),
             limit_step->isPartial()),
         {source});
 
@@ -95,7 +99,7 @@ TransformResult PushLimitThroughProjection::transformImpl(PlanNodePtr node, cons
 
 PatternPtr PushLimitThroughExtremesStep::getPattern() const
 {
-    return Patterns::limit()->withSingle(Patterns::extremes());
+    return Patterns::limit().withSingle(Patterns::extremes()).result();
 }
 
 TransformResult PushLimitThroughExtremesStep::transformImpl(PlanNodePtr node, const Captures &, RuleContext &)
@@ -110,7 +114,7 @@ TransformResult PushLimitThroughExtremesStep::transformImpl(PlanNodePtr node, co
 
 PatternPtr PushLimitThroughUnion::getPattern() const
 {
-    return Patterns::limit()->withSingle(Patterns::unionn());
+    return Patterns::limit().withSingle(Patterns::unionn()).result();
 }
 
 TransformResult PushLimitThroughUnion::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
@@ -131,9 +135,15 @@ TransformResult PushLimitThroughUnion::transformImpl(PlanNodePtr node, const Cap
                     limit_step->getLimit() + limit_step->getOffset(),
                     0,
                     limit_step->isAlwaysReadTillEnd(),
+                    limit_step->withTies(),
+                    limit_step->getSortDescription(),
                     true),
                 {child}));
             should_apply = true;
+        }
+        else
+        {
+            children.emplace_back(child);
         }
     }
 
@@ -147,9 +157,9 @@ TransformResult PushLimitThroughUnion::transformImpl(PlanNodePtr node, const Cap
 
 PatternPtr PushLimitThroughOuterJoin::getPattern() const
 {
-    return Patterns::limit()->withSingle(Patterns::join()->matchingStep<JoinStep>([](const auto & join_step) {
+    return Patterns::limit().withSingle(Patterns::join().matchingStep<JoinStep>([](const auto & join_step) {
         return join_step.getKind() == ASTTableJoin::Kind::Left || join_step.getKind() == ASTTableJoin::Kind::Right;
-    }));
+    })).result();
 }
 
 TransformResult PushLimitThroughOuterJoin::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
@@ -170,6 +180,8 @@ TransformResult PushLimitThroughOuterJoin::transformImpl(PlanNodePtr node, const
                 limit_step->getLimit() + limit_step->getOffset(),
                 0,
                 limit_step->isAlwaysReadTillEnd(),
+                limit_step->withTies(),
+                limit_step->getSortDescription(),
                 true),
             {left});
         join->replaceChildren({left, right});
@@ -184,6 +196,8 @@ TransformResult PushLimitThroughOuterJoin::transformImpl(PlanNodePtr node, const
                 limit_step->getLimit() + limit_step->getOffset(),
                 0,
                 limit_step->isAlwaysReadTillEnd(),
+                limit_step->withTies(),
+                limit_step->getSortDescription(),
                 true),
             {right});
         join->replaceChildren({left, right});
@@ -191,6 +205,76 @@ TransformResult PushLimitThroughOuterJoin::transformImpl(PlanNodePtr node, const
     }
 
     return {};
+}
+
+PatternPtr LimitZeroToReadNothing::getPattern() const
+{
+    return Patterns::limit().matchingStep<LimitStep>([](const LimitStep & step) { return step.getLimit() == 0; }).result();
+}
+
+TransformResult LimitZeroToReadNothing::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
+{
+    auto limit_node = dynamic_cast<LimitNode *>(node.get());
+    if (!limit_node)
+        return {};
+
+    const auto & step = *limit_node->getStep();
+    if (step.getLimit() == 0)
+    {
+        auto read_nothing_step = std::make_shared<ReadNothingStep>(step.getOutputStream().header);
+        auto read_nothing_node = PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(read_nothing_step), {});
+        return {read_nothing_node};
+    }
+
+    return {};
+}
+
+PatternPtr PushdownLimitIntoWindow::getPattern() const
+{
+    return Patterns::limit().withSingle(Patterns::window().matchingStep<WindowStep>([](const WindowStep & window_step) {
+        bool all_row_number = true;
+        for (const auto & func : window_step.getFunctions())
+        {
+            all_row_number &= func.aggregate_function->getName() == "row_number";
+        }
+        return all_row_number && !window_step.getWindow().order_by.empty();
+    })).result();
+}
+
+TransformResult PushdownLimitIntoWindow::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
+{
+    auto window = node->getChildren()[0];
+    const auto * window_step = dynamic_cast<const WindowStep *>(window->getStep().get());
+    const auto * limit_step = dynamic_cast<const LimitStep *>(node->getStep().get());
+    auto source = window->getChildren()[0];
+
+    if (source->getStep()->getType() == IQueryPlanStep::Type::Limit || window_step->getWindow().order_by.empty())
+    {
+        return {};
+    }
+
+
+    auto new_sort = PlanNodeBase::createPlanNode(
+        context.context->nextNodeId(),
+        std::make_shared<SortingStep>(
+            source->getStep()->getOutputStream(), window_step->getWindow().order_by, limit_step->getLimit(), false, SortDescription{}),
+        {source});
+
+    auto new_limit = PlanNodeBase::createPlanNode(
+        context.context->nextNodeId(),
+        std::make_shared<LimitStep>(
+            source->getStep()->getOutputStream(),
+            limit_step->getLimit(),
+            limit_step->getOffset(),
+            limit_step->isAlwaysReadTillEnd(),
+            limit_step->withTies(),
+            limit_step->getSortDescription(),
+            limit_step->isPartial()),
+        {new_sort});
+
+    window->replaceChildren({new_limit});
+    node->replaceChildren({window});
+    return {node};
 }
 
 }

@@ -185,6 +185,7 @@ public:
         Statistics::CacheManager::invalidate(context, table);
     }
 
+    void invalidateAllServerStatsCache() const override { Statistics::CacheManager::reset(); }
 
     std::vector<StatsTableIdentifier> getAllTablesID(const String & database_name) const override
     {

@@ -23,8 +23,8 @@ namespace DB
 PatternPtr InnerJoinCommutation::getPattern() const
 {
     return Patterns::join()
-        ->matchingStep<JoinStep>([&](const JoinStep & s) { return supportSwap(s); })
-        ->with({Patterns::any(), Patterns::any()});
+        .matchingStep<JoinStep>([&](const JoinStep & s) { return supportSwap(s) && !s.isOrdered(); })
+        .with(Patterns::any(), Patterns::any()).result();
 }
 
 TransformResult InnerJoinCommutation::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -53,7 +53,11 @@ PlanNodePtr InnerJoinCommutation::swap(JoinNode & node, RuleContext & rule_conte
         step.isHasUsing(),
         step.getRequireRightKeys(),
         ASOF::Inequality::GreaterOrEquals,
-        DistributionType::UNKNOWN);
+        DistributionType::UNKNOWN,
+        JoinAlgorithm::AUTO,
+        false,
+        step.isOrdered(),
+        step.getHints());
     return std::make_shared<JoinNode>(
         rule_context.context->nextNodeId(), std::move(join_step), PlanNodes{node.getChildren()[1], node.getChildren()[0]});
 }

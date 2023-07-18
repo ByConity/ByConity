@@ -18,7 +18,7 @@
 #include <Interpreters/DistributedStages/PlanSegmentSplitter.h>
 #include <Optimizer/Cascades/Task.h>
 #include <Optimizer/Rule/Implementation/SetJoinDistribution.h>
-#include <Optimizer/Rule/Rewrite/InlineProjections.h>
+#include <Optimizer/Rule/Rewrite/PushAggThroughJoinRules.h>
 #include <Optimizer/Rule/Transformation/InlineCTE.h>
 #include <Optimizer/Rule/Transformation/InnerJoinCommutation.h>
 #include <Optimizer/Rule/Transformation/JoinEnumOnGraph.h>
@@ -26,9 +26,9 @@
 #include <Optimizer/Rule/Transformation/MagicSetForAggregation.h>
 #include <Optimizer/Rule/Transformation/MagicSetPushDown.h>
 #include <Optimizer/Rule/Transformation/PullOuterJoin.h>
+#include <QueryPlan/AnyStep.h>
 #include <QueryPlan/CTERefStep.h>
 #include <QueryPlan/GraphvizPrinter.h>
-#include <QueryPlan/AnyStep.h>
 #include <QueryPlan/PlanPattern.h>
 #include <QueryPlan/ReadNothingStep.h>
 #include <QueryPlan/ValuesStep.h>
@@ -43,6 +43,7 @@ namespace ErrorCodes
 
 void CascadesOptimizer::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
+    int id = context->getRuleId();
     CascadesContext cascades_context{
         context, plan.getCTEInfo(), WorkerSizeFinder::find(plan, *context), PlanPattern::maxJoinSize(plan, context)};
 
@@ -54,8 +55,8 @@ void CascadesOptimizer::rewrite(QueryPlan & plan, ContextMutablePtr context) con
 
     auto actual_property = optimize(root_id, cascades_context, single);
     LOG_DEBUG(cascades_context.getLog(), cascades_context.getInfo());
-    GraphvizPrinter::printMemo(cascades_context.getMemo(), context, GraphvizPrinter::MEMO_PATH);
-    GraphvizPrinter::printMemo(cascades_context.getMemo(), root_id, context, GraphvizPrinter::MEMO_GRAPH_PATH);
+    GraphvizPrinter::printMemo(cascades_context.getMemo(), context, std::to_string(id) + "_CascadesOptimizer-Memo");
+    GraphvizPrinter::printMemo(cascades_context.getMemo(), root_id, context, std::to_string(id) + "_CascadesOptimizer-Memo-Graph");
 
     auto result = buildPlanNode(root_id, cascades_context, single);
     for (auto & item : actual_property.getCTEDescriptions())
@@ -76,7 +77,7 @@ void CascadesOptimizer::rewrite(QueryPlan & plan, ContextMutablePtr context) con
 
 Property CascadesOptimizer::optimize(GroupId root_group_id, CascadesContext & context, const Property & required_prop)
 {
-    auto root_context = std::make_shared<OptimizationContext>(context, required_prop);
+    auto root_context = std::make_shared<OptimizationContext>(context, required_prop, std::numeric_limits<double>::max());
     auto root_group = context.getMemo().getGroupById(root_group_id);
     context.getTaskStack().push(std::make_shared<OptimizeGroup>(root_group, root_context));
 
@@ -91,7 +92,7 @@ Property CascadesOptimizer::optimize(GroupId root_group_id, CascadesContext & co
         // timeout limit
         auto now = std::chrono::system_clock::now();
         UInt64 elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - start_time).count();
-        if (elapsed >= context.getTaskExecutionTimeout())
+        if (elapsed >= context.getTaskExecutionTimeout() || context.getTaskStack().size() > 100000)
         {
             GraphvizPrinter::printMemo(context.getMemo(), root_group->getId(), context.getContext(), GraphvizPrinter::MEMO_GRAPH_PATH);
             throw Exception(
@@ -104,7 +105,8 @@ Property CascadesOptimizer::optimize(GroupId root_group_id, CascadesContext & co
 }
 
 
-PlanNodePtr CascadesOptimizer::buildPlanNode(GroupId root, CascadesContext & context, const Property & required_prop) // NOLINT(misc-no-recursion)
+PlanNodePtr
+CascadesOptimizer::buildPlanNode(GroupId root, CascadesContext & context, const Property & required_prop) // NOLINT(misc-no-recursion)
 {
     auto group = context.getMemo().getGroupById(root);
     auto winner = group->getBestExpression(required_prop);
@@ -198,14 +200,13 @@ CascadesContext::CascadesContext(ContextMutablePtr context_, CTEInfo & cte_info_
     : context(context_)
     , cte_info(cte_info_)
     , worker_size(worker_size_)
-    , max_join_size(max_join_size_)
-    , support_filter(max_join_size_ <= context->getSettingsRef().max_graph_reorder_size)
+    , support_filter(context->getSettingsRef().enable_join_graph_support_filter)
     , task_execution_timeout(context->getSettingsRef().cascades_optimizer_timeout)
     , log(&Poco::Logger::get("CascadesOptimizer"))
 {
     implementation_rules.emplace_back(std::make_shared<SetJoinDistribution>());
 
-    if (max_join_size <= 10)
+    if (max_join_size_ <= context->getSettingsRef().max_graph_reorder_size)
     {
         transformation_rules.emplace_back(std::make_shared<JoinEnumOnGraph>(support_filter));
     }
@@ -227,9 +228,12 @@ CascadesContext::CascadesContext(ContextMutablePtr context_, CTEInfo & cte_info_
     transformation_rules.emplace_back(std::make_shared<MagicSetPushThroughFilter>());
     transformation_rules.emplace_back(std::make_shared<MagicSetPushThroughAggregating>());
 
-    transformation_rules.emplace_back(std::make_shared<InlineProjections>());
-
     transformation_rules.emplace_back(std::make_shared<InlineCTE>());
+    transformation_rules.emplace_back(std::make_shared<InlineCTEWithFilter>());
+
+    // transformation_rules.emplace_back(std::make_shared<PushAggThroughInnerJoin>());
+
+    enable_pruning = cte_info.empty() && context->getSettingsRef().enable_cascades_pruning;
 }
 
 size_t WorkerSizeFinder::find(QueryPlan & query_plan, const Context & context)
@@ -237,7 +241,7 @@ size_t WorkerSizeFinder::find(QueryPlan & query_plan, const Context & context)
     if (context.getSettingsRef().enable_memory_catalog)
         return context.getSettingsRef().memory_catalog_worker_size;
 
-    WorkerSizeFinder visitor {query_plan.getCTEInfo()};
+    WorkerSizeFinder visitor{query_plan.getCTEInfo()};
     Void c{};
 
     // default schedule to worker cluster
@@ -261,7 +265,7 @@ std::optional<size_t> WorkerSizeFinder::visitPlanNode(PlanNodeBase & node, Void 
 std::optional<size_t> WorkerSizeFinder::visitTableScanNode(TableScanNode & node, Void &)
 {
     const auto * source_step = node.getStep().get();
-    auto *distributed_table = dynamic_cast<StorageDistributed *>(source_step->getStorage().get());
+    auto * distributed_table = dynamic_cast<StorageDistributed *>(source_step->getStorage().get());
     if (distributed_table)
         return std::make_optional<size_t>(distributed_table->getShardCount());
     return std::nullopt;

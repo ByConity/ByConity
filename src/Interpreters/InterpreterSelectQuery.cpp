@@ -27,7 +27,6 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
-#include <Parsers/ASTOrderByElement.h>
 #include <Parsers/ASTSampleRatio.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
@@ -58,6 +57,7 @@
 #include <Interpreters/OpenTelemetrySpanLog.h>
 #include <Interpreters/QueryAliasesVisitor.h>
 #include <Interpreters/replaceAliasColumnsInQuery.h>
+#include <Interpreters/RewriteCountDistinctVisitor.h>
 #include <Interpreters/InterpreterPerfectShard.h>
 #include <Interpreters/ProcessList.h>
 
@@ -341,6 +341,12 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         if (context->getSettingsRef().enable_global_with_statement)
             ApplyWithAliasVisitor().visit(query_ptr);
         ApplyWithSubqueryVisitor().visit(query_ptr);
+    }
+
+    if (settings.count_distinct_optimization)
+    {
+        RewriteCountDistinctFunctionMatcher::Data data_rewrite_countdistinct;
+        RewriteCountDistinctFunctionVisitor(data_rewrite_countdistinct).visit(query_ptr);
     }
 
     JoinedTables joined_tables(getSubqueryContext(context), getSelectQuery(), options.with_all_cols);
@@ -826,7 +832,7 @@ static Field getWithFillFieldValue(const ASTPtr & node, ContextPtr context)
     return field;
 }
 
-static FillColumnDescription getWithFillDescription(const ASTOrderByElement & order_by_elem, ContextPtr context)
+FillColumnDescription InterpreterSelectQuery::getWithFillDescription(const ASTOrderByElement & order_by_elem, ContextPtr context)
 {
     FillColumnDescription descr;
     if (order_by_elem.fill_from)
@@ -888,7 +894,7 @@ static SortDescription getSortDescription(const ASTSelectQuery & query, ContextP
 
         if (order_by_elem.with_fill)
         {
-            FillColumnDescription fill_desc = getWithFillDescription(order_by_elem, context);
+            FillColumnDescription fill_desc = InterpreterSelectQuery::getWithFillDescription(order_by_elem, context);
             order_descr.emplace_back(name, order_by_elem.direction, order_by_elem.nulls_direction, collator, true, fill_desc);
         }
         else

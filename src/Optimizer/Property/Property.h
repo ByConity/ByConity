@@ -15,21 +15,14 @@
 
 #pragma once
 
-#include <Core/Names.h>
-#include <Core/SortDescription.h>
-#include <Core/Types.h>
-#include <Optimizer/Equivalences.h>
-
-#include <map>
-#include <utility>
-#include <vector>
+#include <Analyzers/ASTEquals.h>
 #include <Core/Names.h>
 #include <Core/SortDescription.h>
 #include <Core/Types.h>
 #include <Functions/FunctionsHashing.h>
+#include <Optimizer/Equivalences.h>
 #include <Optimizer/FunctionInvoker.h>
 #include <Parsers/IAST_fwd.h>
-#include <Analyzers/ASTEquals.h>
 
 namespace DB
 {
@@ -111,6 +104,8 @@ public:
             && enforce_round_robin == other.enforce_round_robin && ASTEquality::compareTree(sharding_expr, other.sharding_expr);
     }
     String toString() const;
+    void serialize(WriteBuffer & buf) const;
+    void deserialize(ReadBuffer & buf);
 
 private:
     enum Handle handle;
@@ -126,33 +121,83 @@ enum class SortOrder : UInt8
     ASC_NULLS_FIRST,
     ASC_NULLS_LAST,
     DESC_NULLS_FIRST,
-    DESC_NULLS_LAST
+    DESC_NULLS_LAST,
+    ANY, // for tablescan
+    UNKNOWN
 };
 
 class SortColumn
 {
 public:
+    static SortOrder directionToSortOrder(int direction, int nulls_direction)
+    {
+        if (direction == 1)
+        {
+            if (nulls_direction == 1)
+                return SortOrder::ASC_NULLS_LAST;
+            else if (nulls_direction == -1)
+                return SortOrder::ASC_NULLS_FIRST;
+        }
+        else if (direction == -1)
+        {
+            if (nulls_direction == 1)
+                return SortOrder::DESC_NULLS_LAST;
+            else if (nulls_direction == -1)
+                return SortOrder::DESC_NULLS_FIRST;
+        }
+        return SortOrder::UNKNOWN;
+    }
+
     SortColumn(String name_, SortOrder order_) : name(std::move(name_)), order(order_) { }
     explicit SortColumn(const SortColumnDescription & sort_column_description) : name(sort_column_description.column_name)
     {
-        if (sort_column_description.direction == 1)
-        {
-            if (sort_column_description.nulls_direction == 1)
-                order = SortOrder::ASC_NULLS_LAST;
-            else
-                order = SortOrder::ASC_NULLS_FIRST;
-        }
-        else
-        {
-            if (sort_column_description.nulls_direction == 1)
-                order = SortOrder::DESC_NULLS_FIRST;
-            else
-                order = SortOrder::DESC_NULLS_LAST;
-        }
+        order = directionToSortOrder(sort_column_description.direction, sort_column_description.nulls_direction);
     }
 
     const String & getName() const { return name; }
     SortOrder getOrder() const { return order; }
+
+    SortColumnDescription toSortColumnDesc() const
+    {
+        int direction;
+        int nulls_direction;
+        switch (order)
+        {
+            case SortOrder::ASC_NULLS_FIRST: {
+                direction = 1;
+                nulls_direction = -1;
+                break;
+            }
+            case SortOrder::ASC_NULLS_LAST: {
+                direction = 1;
+                nulls_direction = 1;
+                break;
+            }
+            case SortOrder::DESC_NULLS_FIRST: {
+                direction = -1;
+                nulls_direction = -1;
+                break;
+            }
+            case SortOrder::DESC_NULLS_LAST: {
+                direction = -1;
+                nulls_direction = 1;
+                break;
+            }
+            case SortOrder::ANY: {
+                direction = 0;
+                nulls_direction = 0;
+                break;
+            }
+            case SortOrder::UNKNOWN: {
+                direction = 2;
+                nulls_direction = 2;
+                break;
+            }
+        }
+
+
+        return SortColumnDescription{name, direction, nulls_direction};
+    }
 
     bool operator==(const SortColumn & other) const { return name == other.name && order == other.order; }
     size_t hash() const;
@@ -174,6 +219,17 @@ public:
     }
 
     Sorting translate(const std::unordered_map<String, String> & identities) const;
+    Sorting normalize(const SymbolEquivalences & symbol_equivalences) const;
+    SortDescription toSortDesc() const
+    {
+        SortDescription res;
+        for (const auto & item : *this)
+        {
+            res.emplace_back(item.toSortColumnDesc());
+        }
+        return res;
+    }
+
     size_t hash() const;
     String toString() const;
 };
@@ -295,8 +351,7 @@ public:
     bool operator==(const Property & other) const
     {
         return preferred == other.preferred && node_partitioning == other.node_partitioning
-            && stream_partitioning == other.stream_partitioning && sorting == other.sorting
-            && cte_descriptions == other.cte_descriptions;
+            && stream_partitioning == other.stream_partitioning && sorting == other.sorting && cte_descriptions == other.cte_descriptions;
     }
 
     bool operator!=(const Property & other) const { return !(*this == other); }
@@ -339,7 +394,6 @@ struct PropertyHash
  */
 struct CTEDescriptionHash
 {
-
     /**
      * Hashes a CTEDescription
      * @param cte_description CTEDescription to hash

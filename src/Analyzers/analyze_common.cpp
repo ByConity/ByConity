@@ -114,7 +114,7 @@ namespace
         explicit ExtractExpressionContext(const std::function<bool(const ASTPtr &)> & expr_filter_): expr_filter(expr_filter_) {}
     };
 
-    class ExtractExpressionVisitor: public ExpressionVisitor<ExtractExpressionContext>
+    class ExtractAnalyzerExpressionVisitor: public AnalyzerExpressionVisitor<ExtractExpressionContext>
     {
     protected:
         void visitExpression(ASTPtr & node, IAST &, ExtractExpressionContext & ctx) override
@@ -123,7 +123,7 @@ namespace
                 ctx.result.push_back(node);
         }
     public:
-        using ExpressionVisitor<ExtractExpressionContext>::ExpressionVisitor;
+        using AnalyzerExpressionVisitor<ExtractExpressionContext>::AnalyzerExpressionVisitor;
     };
 }
 
@@ -131,7 +131,7 @@ std::vector<ASTPtr> extractExpressions(ContextPtr context, Analysis & analysis, 
                                        const std::function<bool(const ASTPtr &)> & filter)
 {
     ExtractExpressionContext extractor_context {filter};
-    ExtractExpressionVisitor extractor_visitor {context};
+    ExtractAnalyzerExpressionVisitor extractor_visitor {context};
 
     if (include_subquery)
         traverseExpressionTree<ExtractExpressionContext, ExpressionTraversalIncludeSubqueryVisitor>(root, extractor_visitor, extractor_context, analysis, context);

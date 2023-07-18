@@ -38,25 +38,29 @@ public:
     /**
      * Builds JoinGraph containing plan node.
      */
-    static JoinGraph build(const PlanNodePtr & plan_ptr, ContextMutablePtr & context, bool support_cross_join = true, bool use_equality = false, bool ignore_columns_not_join_condition = false);
+    static JoinGraph build(
+        const PlanNodePtr & plan_ptr,
+        ContextMutablePtr & context,
+        bool support_cross_join = true,
+        bool use_equality = false,
+        bool ignore_filter_and_projection = false,
+        bool support_ordered_join = true);
 
     JoinGraph(
         PlanNodes nodes_,
         std::map<PlanNodeId, std::vector<Edge>> edges_,
         std::vector<ConstASTPtr> filter_,
         PlanNodeId root_,
-        bool contains_cross_join_,
-        std::unordered_map<PlanNodeId, PlanNodePtr> original_node_)
+        bool contains_cross_join_)
         : nodes(std::move(nodes_))
         , edges(std::move(edges_))
         , filter(std::move(filter_))
         , root(root_)
         , contains_cross_join(contains_cross_join_)
-        , original_node(std::move(original_node_))
     {
     }
 
-    explicit JoinGraph(PlanNodes nodes_ = {}) : JoinGraph(std::move(nodes_), {}, {}, {}, false, {}) { }
+    explicit JoinGraph(PlanNodes nodes_ = {}) : JoinGraph(std::move(nodes_), {}, {}, {}, false) { }
 
     JoinGraph withFilter(const ConstASTPtr & expression);
     JoinGraph withJoinGraph(
@@ -75,8 +79,6 @@ public:
     std::vector<Edge> & getEdges(const PlanNodePtr & node) { return edges[node->getId()]; }
     const std::map<PlanNodeId, std::vector<Edge>> & getEdges() const { return edges; }
     bool isContainsCrossJoin() const { return contains_cross_join; }
-    std::unordered_map<PlanNodeId, PlanNodePtr> & getOriginalNode() { return original_node; }
-    void setOriginalNode(PlanNodeId id, const PlanNodePtr & node) { original_node[id] = node; }
 
     String toString();
 
@@ -86,7 +88,6 @@ private:
     std::vector<ConstASTPtr> filter;
     PlanNodeId root;
     bool contains_cross_join;
-    std::unordered_map<PlanNodeId, PlanNodePtr> original_node;
 };
 
 class Edge
@@ -121,17 +122,17 @@ struct JoinGraphContext
     std::unordered_map<String, PlanNodePtr> symbol_sources = {};
     UnionFind<String> union_find = {};
     bool use_equality;
-    bool ignore_columns_not_join_condition;
     ContextMutablePtr & context;
+    bool support_ordered_join = true;
 };
 
 class JoinGraphVisitor : public PlanNodeVisitor<JoinGraph, NameSet>
 {
 public:
-    explicit JoinGraphVisitor(JoinGraphContext & join_graph_context_, bool support_cross_join_, bool ignore_columns_not_join_condition_)
+    explicit JoinGraphVisitor(JoinGraphContext & join_graph_context_, bool support_cross_join_, bool ignore_filter_and_projection_)
         : join_graph_context(join_graph_context_)
         , support_cross_join(support_cross_join_)
-        , ignore_columns_not_join_condition(ignore_columns_not_join_condition_)
+        , ignore_filter_and_projection(ignore_filter_and_projection_)
     {
     }
     JoinGraph visitPlanNode(PlanNodeBase &, NameSet &) override;
@@ -142,7 +143,7 @@ public:
 private:
     JoinGraphContext & join_graph_context;
     const bool support_cross_join;
-    const bool ignore_columns_not_join_condition;
+    const bool ignore_filter_and_projection;
 };
 
 }

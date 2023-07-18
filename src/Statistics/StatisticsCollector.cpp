@@ -61,14 +61,14 @@ void StatisticsCollector::writeToCatalog()
     {
         data.column_stats[name] = stats.writeToCollection();
     }
-    auto proxy = createCachedStatsProxy(catalog);
+    auto proxy = createCachedStatsProxy(catalog, settings.cache_policy);
     proxy->put(table_info, std::move(data));
     catalog->invalidateClusterStatsCache(table_info);
 }
 
 void StatisticsCollector::readAllFromCatalog()
 {
-    auto proxy = createCachedStatsProxy(catalog);
+    auto proxy = createCachedStatsProxy(catalog, settings.cache_policy);
     auto data = proxy->get(table_info);
     table_stats.readFromCollection(data.table_stats);
     for (auto & [name, stats] : data.column_stats)
@@ -85,7 +85,7 @@ void StatisticsCollector::readFromCatalog(const std::vector<String> & cols_name)
 
 void StatisticsCollector::readFromCatalogImpl(const ColumnDescVector & cols_desc)
 {
-    auto proxy = createCachedStatsProxy(catalog);
+    auto proxy = createCachedStatsProxy(catalog, settings.cache_policy);
     auto data = proxy->get(table_info, true, cols_desc);
     if (data.table_stats.empty() && data.column_stats.empty())
     {

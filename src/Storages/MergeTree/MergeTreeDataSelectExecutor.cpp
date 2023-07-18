@@ -941,7 +941,13 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
 
             if (use_sampling && (settings.enable_sample_by_range || settings.enable_deterministic_sample_by_range))
             {
-                MarkRanges sampled_ranges = sampleByRange(part, ranges.ranges, relative_sample_size, settings.enable_deterministic_sample_by_range);
+                MarkRanges sampled_ranges = sampleByRange(
+                    part,
+                    ranges.ranges,
+                    relative_sample_size,
+                    settings.enable_deterministic_sample_by_range,
+                    settings.uniform_sample_by_range
+                    );
                 ranges.ranges = std::move(sampled_ranges);
             }
 
@@ -1067,14 +1073,74 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
     return parts_with_ranges;
 }
 
+// high quality uniform sampling is required by sample algorithm of statistics
+MarkRanges uniformSampleByRange(const MarkRange & range, UInt64 sample_size, UInt64 random_seed)
+{
+    if (range.end <= range.begin)
+    {
+        return {};
+    }
+
+    MarkRanges results;
+    size_t marks_size = range.end - range.begin;
+
+    if (sample_size >= marks_size)
+    {
+        results.emplace_back(range);
+        return results;
+    }
+
+    std::default_random_engine eng(random_seed);
+
+    // to minimize impact on performance, use int
+    std::vector<int> candidates;
+    candidates.reserve(marks_size);
+
+    for (size_t i = 0; i < marks_size; i++)
+    {
+        candidates.push_back(i);
+    }
+
+    // do random shuffle, but just for sample_size elements
+    // profiling suggests random number generator is the bottleneck
+    // so we don't want to shuffle all elements
+    for (size_t i = 0; i < sample_size; i++)
+    {
+        int random_index = eng() % (marks_size - i) + i;
+        std::swap(candidates[random_index], candidates[i]);
+    }
+
+    std::sort(candidates.begin(), candidates.begin() + sample_size);
+
+    UInt64 last_mark_index = range.end; // never occurs
+    for (size_t i = 0; i < sample_size; i++)
+    {
+        auto new_mark_index = range.begin + candidates[i];
+        // compress adjacent marks
+        if (last_mark_index == new_mark_index)
+        {
+            ++results.back().end;
+        }
+        else
+        {
+            results.emplace_back(MarkRange{new_mark_index, new_mark_index + 1});
+        }
+        last_mark_index = new_mark_index;
+    }
+
+    return results;
+}
+
 MarkRanges MergeTreeDataSelectExecutor::sampleByRange(
-    const MergeTreeMetaBase::DataPartPtr& part,
+    const MergeTreeMetaBase::DataPartPtr & part,
     const MarkRanges & ranges,
     const RelativeSize & relative_sample_size,
-    bool deterministic)
+    bool deterministic,
+    bool uniform)
 {
     MarkRanges new_ranges;
     auto stable_seed = std::hash<String>{}(part->name);
+
     for (const MarkRange & range : ranges)
     {
         // Compute sampled size
@@ -1082,16 +1148,12 @@ MarkRanges MergeTreeDataSelectExecutor::sampleByRange(
         RelativeSize total_size = RelativeSize(marks_size);
         UInt64 sampled_size = boost::rational_cast<ASTSampleRatio::BigNum>((relative_sample_size * total_size + RelativeSize(1)));
 
-        // Slice the range via a computed step length
-        MarkRanges sliced_ranges = sliceRange(range, sampled_size);
-
-        RelativeSize sliced_ranges_size = RelativeSize(sliced_ranges.size());
-        UInt64 sampled_ranges_size
-            = boost::rational_cast<ASTSampleRatio::BigNum>((relative_sample_size * sliced_ranges_size + RelativeSize(1)));
-
         UInt64 random_seed = 0;
         if (deterministic)
         {
+            // to ensure identical but maybe-unordered <part, range>
+            // will generate the same sampled sliced_ranges
+            // make random_seed a combination of part.name and range
             random_seed = stable_seed ^ std::hash<UInt64>{}(range.end);
         }
         else
@@ -1100,21 +1162,35 @@ MarkRanges MergeTreeDataSelectExecutor::sampleByRange(
             random_seed = std::random_device{}();
         }
 
-        // Sample sliced ranges
-        MarkRanges sampled_ranges;
-        std::sample(
-            sliced_ranges.begin(),
-            sliced_ranges.end(),
-            std::back_inserter(sampled_ranges),
-            sampled_ranges_size,
-            std::mt19937{random_seed});
-        std::sort(sampled_ranges.begin(), sampled_ranges.end(), [](const MarkRange & lhs, const MarkRange & rhs) {
-            return lhs.begin < rhs.begin;
-        });
-        // Construct new ranges
-        for (const MarkRange & sampled_range : sampled_ranges)
+        if (uniform)
         {
-            new_ranges.push_back(sampled_range);
+            auto sampled_ranges = uniformSampleByRange(range, sampled_size, random_seed);
+            new_ranges.insert(new_ranges.end(), sampled_ranges.begin(), sampled_ranges.end());
+        }
+        else
+        {
+            // Slice the range via a computed step length
+            MarkRanges sliced_ranges = sliceRange(range, sampled_size);
+            RelativeSize sliced_ranges_size = RelativeSize(sliced_ranges.size());
+            UInt64 sampled_ranges_size
+                = boost::rational_cast<ASTSampleRatio::BigNum>((relative_sample_size * sliced_ranges_size + RelativeSize(1)));
+
+            // Sample sliced ranges
+            MarkRanges sampled_ranges;
+            std::sample(
+                sliced_ranges.begin(),
+                sliced_ranges.end(),
+                std::back_inserter(sampled_ranges),
+                sampled_ranges_size,
+                std::mt19937{random_seed});
+            std::sort(sampled_ranges.begin(), sampled_ranges.end(), [](const MarkRange & lhs, const MarkRange & rhs) {
+                return lhs.begin < rhs.begin;
+            });
+            // Construct new ranges
+            for (const MarkRange & sampled_range : sampled_ranges)
+            {
+                new_ranges.push_back(sampled_range);
+            }
         }
     }
 

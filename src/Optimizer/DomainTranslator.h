@@ -105,6 +105,7 @@ public:
     ASTPtr toPredicate(const TupleDomain & tuple_domain);
     ASTPtr toPredicate(const ASTPtr & symbol, const Domain & domain);
     ExtractionResult getExtractionResult(ASTPtr predicate, NamesAndTypes types);
+    ExtractionResult getExtractionResult(ASTPtr predicate, NameToType types);
     bool isIgnored() { return is_ignored; }
 private:
     ContextMutablePtr context;

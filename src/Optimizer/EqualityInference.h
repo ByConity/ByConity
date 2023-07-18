@@ -23,15 +23,17 @@
 #include <Optimizer/ExpressionExtractor.h>
 #include <Optimizer/PredicateUtils.h>
 #include <Optimizer/SymbolsExtractor.h>
+#include <Optimizer/EqualityASTMap.h>
 #include <Optimizer/Utils.h>
 #include <Parsers/IAST_fwd.h>
+#include "ConstHashAST.h"
 
 namespace DB
 {
 struct DisjointSet;
 struct EqualityPartition;
-using ConstASTMap = ASTMap<ConstASTPtr, ConstASTPtr>;
-using ConstASTSet = ASTSet<ConstASTPtr>;
+using ConstASTMap = EqualityASTMap<ConstHashAST>;
+using ConstASTSet = EqualityASTSet;
 /**
  * Makes equality based inferences to rewrite Expressions and
  * generate equality sets in terms of specified symbol scopes.
@@ -52,9 +54,9 @@ public:
      */
     static bool isInferenceCandidate(const ConstASTPtr & predicate, ContextMutablePtr & context);
     static bool mayReturnNullOnNonNullInput(const ASTFunction & predicate);
-    static std::unordered_map<ConstASTPtr, ConstASTSet, ASTEquality::ASTHash, ASTEquality::ASTEquals>
+    static EqualityASTMap<ConstASTSet>
     makeEqualitySets(DisjointSet equalities);
-    static ConstASTPtr getMin(ConstASTSet & equivalence);
+    static ConstHashAST getMin(ConstASTSet & equivalence);
 
     /**
      * Provides a convenience Iterable of Expression conjuncts which have not been added to the inference
@@ -65,17 +67,17 @@ public:
      * Attempts to rewrite an Expression in terms of the symbols allowed by the symbol scope
      * given the known equalities. Returns null if unsuccessful.
      */
-    ASTPtr rewrite(const ConstASTPtr & expression, std::set<String> & scope);
-    ASTPtr rewrite(const ConstASTPtr & expression, std::set<String> & scope, bool contains, bool allow_full_replacement);
-    ConstASTPtr getScopedCanonical(const ConstASTPtr & expression, std::set<String> & scope, bool contains);
-    static ConstASTPtr getCanonical(ConstASTSet & equivalence);
-    static bool isScoped(const ConstASTPtr & expression, std::set<String> & scope);
-    static bool isNotScoped(const ConstASTPtr & expression, std::set<String> & scope);
-    EqualityPartition partitionedBy(std::set<String> scope);
+    ASTPtr rewrite(const ConstASTPtr & expression, const std::set<String> & scope);
+    ASTPtr rewrite(const ConstASTPtr & expression, const std::set<String> & scope, bool contains, bool allow_full_replacement);
+    ConstHashAST getScopedCanonical(const ConstHashAST & expression, const std::set<String> & scope, bool contains);
+    static ConstHashAST getCanonical(ConstASTSet & equivalence);
+    static bool isScoped(const ConstASTPtr & expression, const std::set<String> & scope);
+    static bool isNotScoped(const ConstASTPtr & expression, const std::set<String> & scope);
+    EqualityPartition partitionedBy(const std::set<String>& scope);
 
 private:
     EqualityInference(
-        std::unordered_map<ConstASTPtr, ConstASTSet, ASTEquality::ASTHash, ASTEquality::ASTEquals> equality_sets_,
+        EqualityASTMap<ConstASTSet> equality_sets_,
         ConstASTMap canonical_map_,
         ConstASTSet derived_expressions_)
         : equality_sets(std::move(equality_sets_))
@@ -84,7 +86,7 @@ private:
     {
     }
     // Indexed by canonical expression
-    std::unordered_map<ConstASTPtr, ConstASTSet, ASTEquality::ASTHash, ASTEquality::ASTEquals> equality_sets;
+    EqualityASTMap<ConstASTSet> equality_sets;
     // Map each known expression to canonical expression
     ConstASTMap canonical_map;
     ConstASTSet derived_expressions;
@@ -94,17 +96,17 @@ private:
 struct DisjointSet
 {
 public:
-    bool findAndUnion(const ConstASTPtr & element_1, const ConstASTPtr & element_2);
-    ConstASTPtr find(ConstASTPtr element);
+    bool findAndUnion(const ConstHashAST & element_1, const ConstHashAST & element_2);
+    ConstHashAST find(ConstHashAST element);
     std::vector<ConstASTSet> getEquivalentClasses();
 
 private:
     class Entry
     {
     public:
-        explicit Entry(ConstASTPtr predicate = {}, int rank_ = 0) : parent(std::move(predicate)), rank(rank_) { }
-        ConstASTPtr getParent() { return parent; }
-        void setParent(ConstASTPtr predicate)
+        explicit Entry(ConstHashAST predicate = {}, int rank_ = 0) : parent(std::move(predicate)), rank(rank_) { }
+        ConstHashAST getParent() { return parent; }
+        void setParent(ConstHashAST predicate)
         {
             parent = std::move(predicate);
             rank = -1;
@@ -119,13 +121,14 @@ private:
         }
 
     private:
-        ConstASTPtr parent;
+        ConstHashAST parent;
         int rank;
     };
 
-    std::unordered_map<ConstASTPtr, Entry, ASTEquality::ASTHash, ASTEquality::ASTEquals> map;
-    bool union_(ConstASTPtr & element_1, ConstASTPtr & element_2);
-    ConstASTPtr findInternal(const ConstASTPtr & element);
+    EqualityASTMap<Entry> map;
+
+    bool union_(ConstHashAST & element_1, ConstHashAST & element_2);
+    ConstHashAST findInternal(const ConstHashAST & element);
 };
 
 /**

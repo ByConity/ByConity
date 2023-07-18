@@ -19,11 +19,19 @@
 #include <Optimizer/Cascades/CascadesOptimizer.h>
 #include <Optimizer/Cascades/Memo.h>
 #include <Optimizer/Rule/Patterns.h>
-#include <QueryPlan/IQueryPlanStep.h>
 #include <QueryPlan/AnyStep.h>
+#include <QueryPlan/IQueryPlanStep.h>
+#include <Common/Exception.h>
 
 namespace DB
 {
+
+namespace ErrorCodes
+{
+    extern const int LOGICAL_ERROR;
+}
+PatternPtr GroupExprBindingIterator::any = Patterns::any().result();
+
 size_t GroupExpression::hash()
 {
     size_t hash = step->hash();
@@ -35,10 +43,10 @@ size_t GroupExpression::hash()
     return hash;
 }
 
-GroupBindingIterator::GroupBindingIterator(const Memo & memo_, GroupId id_, PatternPtr pattern_, OptContextPtr context_)
+GroupBindingIterator::GroupBindingIterator(const Memo & memo_, GroupId id_, PatternRawPtr pattern_, OptContextPtr context_)
     : BindingIterator(memo_, std::move(context_))
     , group_id(id_)
-    , pattern(std::move(pattern_))
+    , pattern(pattern_)
     , target_group(memo.getGroupById(id_))
     , num_group_items(target_group->getLogicalExpressions().size())
     , current_item_index(0)
@@ -85,7 +93,7 @@ PlanNodePtr GroupBindingIterator::next()
 {
     if (pattern->getTargetType() == IQueryPlanStep::Type::Any || pattern->getTargetType() == IQueryPlanStep::Type::Tree)
     {
-        current_item_index = num_group_items;
+        current_item_index = num_group_items + 1;
         PlanNodes children;
         const auto & statistics = memo.getGroupById(group_id)->getStatistics();
         return PlanNodeBase::createPlanNode(
@@ -99,7 +107,7 @@ PlanNodePtr GroupBindingIterator::next()
 }
 
 GroupExprBindingIterator::GroupExprBindingIterator(
-    const Memo & memo_, GroupExprPtr group_expr_, const PatternPtr & pattern, OptContextPtr context_)
+    const Memo & memo_, GroupExprPtr group_expr_, PatternRawPtr pattern, OptContextPtr context_)
     : BindingIterator(memo_, std::move(context_))
     , group_expr(std::move(group_expr_))
     , first(true)
@@ -122,7 +130,7 @@ GroupExprBindingIterator::GroupExprBindingIterator(
 
     if (child_patterns.empty())
     {
-        child_patterns.resize(child_groups.size(), Patterns::any());
+        child_patterns.resize(child_groups.size(), any.get());
     }
 
     // Find all bindings for children
@@ -218,6 +226,10 @@ bool GroupExprBindingIterator::hasNext()
 
 PlanNodePtr Winner::buildPlanNode(CascadesContext & context, PlanNodes & children)
 {
+    if (!group_expr)
+    {
+        throw Exception("Can not build cascades plan", ErrorCodes::LOGICAL_ERROR);
+    }
     auto stats = context.getMemo().getGroupById(group_expr->getGroupId())->getStatistics();
     auto plan_node = PlanNodeBase::createPlanNode(context.getContext()->nextNodeId(), group_expr->getStep(), children);
     plan_node->setStatistics(stats);

@@ -66,7 +66,7 @@ public:
 
     SymbolStatisticsPtr copy() const
     {
-        return std::make_shared<SymbolStatistics>(ndv, min, max, null_counts, avg_len, histogram, type, db_table_column, unknown);
+        return std::make_shared<SymbolStatistics>(ndv, min, max, null_counts, avg_len, histogram.copy(), type, db_table_column, unknown);
     }
 
     SymbolStatistics & operator+(const SymbolStatistics & other)

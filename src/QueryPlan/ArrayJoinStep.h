@@ -15,6 +15,7 @@
 
 #pragma once
 #include <QueryPlan/ITransformingStep.h>
+#include <Interpreters/ArrayJoinAction.h>
 
 namespace DB
 {
@@ -44,6 +45,10 @@ public:
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
     ArrayJoinActionPtr getArrayJoinAction() const { return array_join; }
     void setInputStreams(const DataStreams & input_streams_) override;
+
+    NameSet & getResultNameSet() const { return array_join->columns; }
+
+    bool isLeft() const { return array_join->is_left; }
 
 private:
     ArrayJoinActionPtr array_join;

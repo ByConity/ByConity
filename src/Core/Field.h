@@ -683,6 +683,44 @@ public:
     String dump() const;
     static Field restoreFromDump(const std::string_view & dump_);
 
+    /**
+     * Covert field value to string, can be used to visualize the field value.
+     *
+     * @return Empty string if the field type is not supported.
+     *
+     * TODO: add unit test!
+     */
+    [[nodiscard]] String toString() const
+    {
+        switch (which)
+        {
+            case Types::UInt64:
+                return std::to_string(get<UInt64>());
+            case Types::Int64:
+                return std::to_string(get<Int64>());
+            case Types::Float64:
+                return std::to_string(get<Float64>());
+            case Types::UInt128:
+            {
+                uint64_t high = get<UInt128>() << 64;
+                uint64_t low = get<UInt128>() << 128;
+                return fmt::format("{}{}", high, low);
+            }
+            case Types::Int128:
+            {
+                int64_t high = get<Int128>() << 64;
+                uint64_t low = get<UInt128>() << 128;
+                return fmt::format("{}{}", high, low);
+            }
+            case Types::String:
+                return get<String>();
+
+            default:
+                // Other types are not currently supported
+                return "";
+        }
+    }
+
 private:
     std::aligned_union_t<DBMS_MIN_FIELD_SIZE - sizeof(Types::Which),
         Null, UInt64, UInt128, UInt256, Int64, Int128, Int256, UUID, Float64, String, Array, Tuple, Map,

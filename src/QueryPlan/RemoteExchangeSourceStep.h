@@ -43,6 +43,7 @@ public:
 
     void setPlanSegment(PlanSegment * plan_segment_);
     PlanSegment * getPlanSegment() const { return plan_segment; }
+    size_t getPlanSegmentId() const { return plan_segment_id; }
 
     void serialize(WriteBuffer & buf) const override;
     static QueryPlanStepPtr deserialize(ReadBuffer & buf, ContextPtr);

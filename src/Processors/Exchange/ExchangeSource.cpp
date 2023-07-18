@@ -65,6 +65,11 @@ String ExchangeSource::getName() const
     return "ExchangeSource: " + receiver->getName();
 }
 
+String ExchangeSource::getClassName() const
+{
+    return "ExchangeSource";
+}
+
 IProcessor::Status ExchangeSource::prepare()
 {
     const auto & status = SourceWithProgress::prepare();

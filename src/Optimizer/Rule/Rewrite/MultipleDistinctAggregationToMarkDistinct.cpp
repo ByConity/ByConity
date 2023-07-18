@@ -57,9 +57,9 @@ bool MultipleDistinctAggregationToMarkDistinct::hasMixedDistinctAndNonDistincts(
 
 PatternPtr MultipleDistinctAggregationToMarkDistinct::getPattern() const
 {
-    return Patterns::aggregating()->matchingStep<AggregatingStep>([&](const AggregatingStep & s) {
+    return Patterns::aggregating().matchingStep<AggregatingStep>([&](const AggregatingStep & s) {
         return hasNoDistinctWithFilterOrMask(s) && (hasMultipleDistincts(s) || hasMixedDistinctAndNonDistincts(s));
-    });
+    }).result();
 }
 
 TransformResult MultipleDistinctAggregationToMarkDistinct::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)

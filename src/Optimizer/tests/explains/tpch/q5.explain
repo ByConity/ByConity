@@ -1,72 +1,54 @@
-Projection est. 25 rows
+Projection Est. 2 rows
 │     Expressions: [n_name], revenue:=`expr#sum(multiply(l_extendedprice, minus(1, l_discount)))`
-└─ Sorting est. 25 rows
+└─ Sorting Est. 2 rows
    │     Order by: {expr#sum(multiply(l_extendedprice, minus(1, l_discount))) desc nulls_last}
-   └─ Gather Exchange est. 25 rows
-      └─ Sorting est. 25 rows
+   └─ Gather Exchange Est. 2 rows
+      └─ Sorting Est. 2 rows
          │     Order by: {expr#sum(multiply(l_extendedprice, minus(1, l_discount))) desc nulls_last}
-         └─ MergingAggregated est. 25 rows
-            └─ Repartition Exchange est. 25 rows
+         └─ MergingAggregated Est. 2 rows
+            └─ Repartition Exchange Est. 2 rows
                │     Partition by: {n_name}
-               └─ Aggregating est. 25 rows
+               └─ Aggregating Est. 2 rows
                   │     Group by: {n_name}
                   │     Aggregates: expr#sum(multiply(l_extendedprice, minus(1, l_discount))):=AggNull(sum)(expr#multiply(l_extendedprice, minus(1, l_discount)))
-                  └─ Projection est. 90930 rows
+                  └─ Projection Est. 70866 rows
                      │     Expressions: [n_name], expr#multiply(l_extendedprice, minus(1, l_discount)):=l_extendedprice * (1 - l_discount)
-                     └─ Inner Join est. 90930 rows
-                        │     Condition: c_nationkey == s_nationkey, l_suppkey == s_suppkey
-                        ├─ Repartition Exchange est. 90930 rows
-                        │  │     Partition by: {c_nationkey, l_suppkey}
-                        │  └─ Inner Join est. 90929 rows
-                        │     │     Condition: l_orderkey == o_orderkey
-                        │     ├─ Local Exchange est. 6001215 rows
-                        │     │  └─ Filter est. 6001215 rows
-                        │     │     │     Dynamic Filters: {l_orderkey:bloomfilter,l_orderkey:range}
-                        │     │     └─ TableScan tpch.lineitem est. 6001215 rows
-                        │     │              Outputs: [l_discount, l_extendedprice, l_orderkey, l_suppkey]
-                        │     └─ Broadcast Exchange est. 87777 rows
-                        │        └─ Projection est. 87777 rows
-                        │           │     Expressions: [c_nationkey, n_name, o_orderkey]
-                        │           │     Dynamic Filters Builder: {o_orderkey}
-                        │           └─ Inner Join est. 87777 rows
-                        │              │     Condition: o_custkey == c_custkey
-                        │              ├─ Repartition Exchange est. 227563 rows
-                        │              │  │     Partition by: {o_custkey}
-                        │              │  └─ Filter est. 227563 rows
-                        │              │     │     Condition: (o_orderdate < cast(9131, 'Date')) AND (o_orderdate >= cast(8766, 'Date'))
-                        │              │     │     Dynamic Filters: {o_custkey:bloomfilter,o_custkey:range}
-                        │              │     └─ TableScan tpch.orders est. 1500000 rows
-                        │              │              Outputs: [o_custkey, o_orderdate, o_orderkey]
-                        │              └─ Repartition Exchange est. 6000 rows
-                        │                 │     Partition by: {c_custkey}
-                        │                 └─ Projection est. 6000 rows
-                        │                    │     Expressions: [c_custkey, c_nationkey, n_name]
-                        │                    │     Dynamic Filters Builder: {c_custkey}
-                        │                    └─ Inner Join est. 6000 rows
-                        │                       │     Condition: c_nationkey == n_nationkey
-                        │                       ├─ Local Exchange est. 150000 rows
-                        │                       │  └─ Filter est. 150000 rows
-                        │                       │     │     Dynamic Filters: {c_nationkey:bloomfilter,c_nationkey:range}
-                        │                       │     └─ TableScan tpch.customer est. 150000 rows
-                        │                       │              Outputs: [c_custkey, c_nationkey]
-                        │                       └─ Broadcast Exchange est. 5 rows
-                        │                          └─ Projection est. 5 rows
-                        │                             │     Expressions: [n_name, n_nationkey]
-                        │                             │     Dynamic Filters Builder: {n_nationkey}
-                        │                             └─ Inner Join est. 5 rows
-                        │                                │     Condition: n_regionkey == r_regionkey
-                        │                                ├─ Repartition Exchange est. 25 rows
-                        │                                │  │     Partition by: {n_regionkey}
-                        │                                │  └─ TableScan tpch.nation est. 25 rows
-                        │                                │           Outputs: [n_name, n_nationkey, n_regionkey]
-                        │                                └─ Repartition Exchange est. 1 rows
-                        │                                   │     Partition by: {r_regionkey}
-                        │                                   └─ Filter est. 1 rows
-                        │                                      │     Condition: r_name = 'ASIA'
-                        │                                      └─ TableScan tpch.region est. 5 rows
-                        │                                               Outputs: [r_name, r_regionkey]
-                        └─ Repartition Exchange est. 10000 rows
-                           │     Partition by: {s_nationkey, s_suppkey}
-                           └─ TableScan tpch.supplier est. 10000 rows
-                                    Outputs: [s_nationkey, s_suppkey]
-note: Dynamic Filter is applied for 6 times.
+                     └─ Inner Join Est. 70866 rows
+                        │     Condition: c_custkey == o_custkey, s_suppkey == l_suppkey
+                        ├─ Inner Join Est. 60000000 rows
+                        │  │     Condition: c_nationkey == n_nationkey
+                        │  ├─ TableScan tpch.customer Est. 150000 rows
+                        │  │        Outputs: [c_custkey, c_nationkey]
+                        │  └─ Broadcast Exchange Est. 400 rows
+                        │     └─ Inner Join Est. 400 rows
+                        │        │     Condition: s_nationkey == n_nationkey
+                        │        ├─ TableScan tpch.supplier Est. 10000 rows
+                        │        │        Outputs: [s_nationkey, s_suppkey]
+                        │        └─ Broadcast Exchange Est. 2 rows
+                        │           └─ Inner Join Est. 2 rows
+                        │              │     Condition: n_regionkey == r_regionkey
+                        │              ├─ Repartition Exchange Est. 25 rows
+                        │              │  │     Partition by: {n_regionkey}
+                        │              │  └─ TableScan tpch.nation Est. 25 rows
+                        │              │           Outputs: [n_name, n_nationkey, n_regionkey]
+                        │              └─ Repartition Exchange Est. 1 rows
+                        │                 │     Partition by: {r_regionkey}
+                        │                 └─ Filter Est. 1 rows
+                        │                    │     Condition: r_name = 'ASIA'
+                        │                    └─ TableScan tpch.region Est. 5 rows
+                        │                             Condition : r_name = 'ASIA'.
+                        │                             Outputs: [r_name, r_regionkey]
+                        └─ Broadcast Exchange Est. 454651 rows
+                           └─ Inner Join Est. 454651 rows
+                              │     Condition: l_orderkey == o_orderkey
+                              ├─ Repartition Exchange Est. 6001215 rows
+                              │  │     Partition by: {l_orderkey}
+                              │  └─ TableScan tpch.lineitem Est. 6001215 rows
+                              │           Outputs: [l_discount, l_extendedprice, l_orderkey, l_suppkey]
+                              └─ Repartition Exchange Est. 227563 rows
+                                 │     Partition by: {o_orderkey}
+                                 └─ Filter Est. 227563 rows
+                                    │     Condition: (o_orderdate >= cast(8766, 'Date')) AND (o_orderdate < cast(9131, 'Date'))
+                                    └─ TableScan tpch.orders Est. 1500000 rows
+                                             Condition : (o_orderdate >= cast(8766, 'Date')) AND (o_orderdate < cast(9131, 'Date')).
+                                             Outputs: [o_custkey, o_orderdate, o_orderkey]

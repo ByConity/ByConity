@@ -33,7 +33,8 @@ public:
         Assignments assignments_,
         NameToType name_to_type_,
         bool final_project_ = false,
-        std::unordered_map<String, DynamicFilterBuildInfo> dynamic_filters_ = {});
+        std::unordered_map<String, DynamicFilterBuildInfo> dynamic_filters_ = {},
+        PlanHints hints_ = {});
 
     String getName() const override { return "Projection"; }
     Type getType() const override { return Type::Projection; }

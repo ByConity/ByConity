@@ -14,6 +14,8 @@
  */
 
 #include <Optimizer/DomainTranslator.h>
+#include <Optimizer/EqualityASTMap.h>
+#include <Common/Exception.h>
 
 namespace DB::Predicate
 {
@@ -69,6 +71,13 @@ ExtractionResult DomainTranslator::getExtractionResult(ASTPtr predicate, NamesAn
         column_types.emplace(type.name, type.type);
 
     return DomainVisitor(context, type_analyzer, std::move(column_types), is_ignored).process(predicate, false);
+}
+
+ExtractionResult DomainTranslator::getExtractionResult(ASTPtr predicate, NameToType types)
+{
+    TypeAnalyzer type_analyzer = TypeAnalyzer::create(context, types);
+
+    return DomainVisitor(context, type_analyzer, std::move(types), is_ignored).process(predicate, false);
 }
 
 //Note: ranges should be sorted before!
@@ -218,10 +227,7 @@ bool DomainTranslator::anyRangeIsAll(const Ranges & ranges)
 //todo update name
 ASTPtr DomainTranslator::literalEncodeWithType(const DataTypePtr & type, const Field & field)
 {
-    if (isNumber(removeNullable(type)) || isStringOrFixedString(removeNullable(type)))
-        return std::make_shared<ASTLiteral>(field);
-
-    return LiteralEncoder::encode(field, removeNullable(type), context);
+    return LiteralEncoder::encodeForComparisonExpr(field, type, context);
 }
 
 Ranges DomainTranslator::pickOutSingleValueRanges(const SortedRangeSet & sorted_range_set)
@@ -264,8 +270,8 @@ ExtractionResult DomainVisitor::visitASTFunction(ASTPtr & node, const bool & com
         return visitLogicalFunction(node, complement, fun_name);
     if (fun_name == "not")
         return visitNotFunction(node, complement);
-    //    if (fun_name == "in")
-    //        return visitInFunction(node, complement);
+    if (fun_name == "in")
+        return visitInFunction(node, complement);
     if (fun_name == "isNotNull")
         return visitIsNotNullFunction(node, complement);
     if (fun_name == "isNull")
@@ -337,7 +343,7 @@ ExtractionResult DomainVisitor::visitLogicalFunction(ASTPtr & node, const bool &
         // some of these cases, we won't have to double-check the bounds unnecessarily at execution time.
 
         // We can only make inferences if the remaining expressions on all terms are equal and deterministic
-        if (ASTSet<ConstASTPtr>(residuals.begin(), residuals.end()).size() == 1
+        if (EqualityASTSet(residuals.begin(), residuals.end()).size() == 1
             && ExpressionDeterminism::isDeterministic(residuals[0], context))
         {
             // NONE are no-op for the purpose of OR
@@ -525,8 +531,11 @@ bool DomainVisitor::allTupleDomainsAreSameSingleColumn(const std::vector<TupleDo
     return true;
 }
 
-std::optional<Field> DomainVisitor::canImplicitCoerceValue(Field & value, DataTypePtr & from_type, DataTypePtr & to_type) const
+std::optional<Field> DomainVisitor::canImplicitCoerceValue(Field & value, DataTypePtr & from_type_origin, DataTypePtr & to_type_origin) const
 {
+    auto from_type = removeNullable(recursiveRemoveLowCardinality(from_type_origin));
+    auto to_type = removeNullable(recursiveRemoveLowCardinality(to_type_origin));
+
     if (from_type->equals(*to_type))
         return value;
 
@@ -562,7 +571,7 @@ std::optional<Field> DomainVisitor::canImplicitCoerceValue(Field & value, DataTy
     }
     else if (from_id == TypeIndex::String)
     {
-        if (to_id == TypeIndex::Date || to_id == TypeIndex::DateTime /*|| to_id == TypeIndex::Date32*/ || to_id == TypeIndex::DateTime64
+        if (to_id == TypeIndex::Date || to_id == TypeIndex::DateTime || to_id == TypeIndex::Date32 || to_id == TypeIndex::DateTime64
             || to_id == TypeIndex::Time)
         {
             return getConvertFieldToType(value, from_type, to_type);
@@ -574,7 +583,14 @@ std::optional<Field> DomainVisitor::canImplicitCoerceValue(Field & value, DataTy
 
 std::optional<Field> DomainVisitor::getConvertFieldToType(Field & value, DataTypePtr & from_type, DataTypePtr & to_type) const
 {
-    Field to_value = convertFieldToType(value, *to_type, from_type.get());
+    Field to_value = Null{};
+    try {
+        to_value = convertFieldToType(value, *to_type, from_type.get());
+    } catch (const Exception & e) {
+        if (e.code() != ErrorCodes::TYPE_MISMATCH)
+            throw;
+    }
+
     if (to_value.isNull())
         return std::nullopt;
     return to_value;
@@ -613,13 +629,13 @@ std::optional<ExtractionResult> DomainVisitor::createComparisonExtractionResult(
         if (!temp.has_value())
             return std::nullopt;
 
-        return ExtractionResult(TupleDomain(std::unordered_map<String, Domain>{{symbol, temp.value()}}), PredicateConst::TRUE_VALUE);
+        return ExtractionResult(TupleDomain(DomainMap{{symbol, temp.value()}}), PredicateConst::TRUE_VALUE);
     }
 
     if (isTypeComparable(type))
     {
         Domain domain = extractDiscreteDomain(operator_name, type, value, complement);
-        return ExtractionResult(TupleDomain(std::unordered_map<String, Domain>{{symbol, domain}}), PredicateConst::TRUE_VALUE);
+        return ExtractionResult(TupleDomain(DomainMap{{symbol, domain}}), PredicateConst::TRUE_VALUE);
     }
 
     return visitNode(node, complement);

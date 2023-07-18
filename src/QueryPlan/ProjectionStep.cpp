@@ -31,8 +31,9 @@ ProjectionStep::ProjectionStep(
     Assignments assignments_,
     NameToType name_to_type_,
     bool final_project_,
-    std::unordered_map<String, DynamicFilterBuildInfo> dynamic_filters_)
-    : ITransformingStep(input_stream_, {}, {})
+    std::unordered_map<String, DynamicFilterBuildInfo> dynamic_filters_,
+    PlanHints hints_)
+    : ITransformingStep(input_stream_, {}, {}, true, hints_)
     , assignments(std::move(assignments_))
     , name_to_type(std::move(name_to_type_))
     , final_project(final_project_)
@@ -40,6 +41,8 @@ ProjectionStep::ProjectionStep(
 {
     for (const auto & item : assignments)
     {
+        if (unlikely(!name_to_type[item.first]))
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "ProjectionStep miss type info for column " + item.first);
         output_stream->header.insert(ColumnWithTypeAndName{name_to_type[item.first], item.first});
     }
 }

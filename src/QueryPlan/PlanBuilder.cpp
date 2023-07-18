@@ -16,6 +16,7 @@
 #include <QueryPlan/PlanBuilder.h>
 #include <QueryPlan/planning_common.h>
 #include <QueryPlan/ProjectionStep.h>
+#include <Optimizer/makeCastFunction.h>
 
 namespace DB
 {
@@ -46,6 +47,26 @@ Names PlanBuilder::translateToUniqueSymbols(ASTs & expressions) const
     return symbols;
 }
 
+Names PlanBuilder::applyProjection(ASTs & expressions)
+{
+    Names output_symbols;
+    Assignments assignments;
+    NameToType types;
+    putIdentities(getOutputNamesAndTypes(), assignments, types);
+
+    for (auto & expr : expressions)
+    {
+        String symbol = symbol_allocator->newSymbol(expr);
+        assignments.emplace_back(symbol, translate(expr));
+        types[symbol] = analysis.getExpressionType(expr);
+        output_symbols.push_back(symbol);
+    }
+
+    auto project = std::make_shared<ProjectionStep>(getCurrentDataStream(), assignments, types);
+    addStep(std::move(project));
+    return output_symbols;
+}
+
 void PlanBuilder::appendProjection(ASTs & expressions)
 {
     Assignments assignments;
@@ -73,4 +94,47 @@ void PlanBuilder::appendProjection(ASTs & expressions)
         withAdditionalMappings(expression_to_symbols);
     }
 }
+
+Names PlanBuilder::projectExpressionsWithCoercion(const ExpressionsAndTypes & expression_and_types)
+{
+    Assignments assignments;
+    NameToType output_types;
+    Names output_symbols;
+    bool do_project = false;
+
+    putIdentities(getCurrentDataStream().header, assignments, output_types);
+
+    for (const auto & [expr, cast_type]: expression_and_types)
+    {
+        auto rewritten_expr = translation->translate(expr);
+
+        // if an expression has been translated and no type coercion happens, just skip it
+        if (!cast_type && rewritten_expr->as<ASTIdentifier>())
+        {
+            output_symbols.push_back(rewritten_expr->as<ASTIdentifier>()->name());
+            continue;
+        }
+
+        if (cast_type)
+        {
+            rewritten_expr = makeCastFunction(rewritten_expr, cast_type);
+        }
+
+        auto output_symbol = symbol_allocator->newSymbol(rewritten_expr);
+
+        assignments.emplace_back(output_symbol, rewritten_expr);
+        output_types[output_symbol] = cast_type ? cast_type : analysis.getExpressionType(expr);
+        output_symbols.push_back(output_symbol);
+        do_project = true;
+    }
+
+    if (do_project)
+    {
+        auto casting_step = std::make_shared<ProjectionStep>(getCurrentDataStream(), assignments, output_types);
+        addStep(std::move(casting_step));
+    }
+
+    return output_symbols;
+}
+
 }

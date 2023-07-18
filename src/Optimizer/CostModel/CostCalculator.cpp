@@ -52,7 +52,7 @@ PlanCostMap CostCalculator::calculate(QueryPlan & plan, const Context & context)
 }
 
 PlanNodeCost CostCalculator::calculate(
-    ConstQueryPlanStepPtr & step,
+    QueryPlanStepPtr & step,
     const PlanNodeStatisticsPtr & stats,
     const std::vector<PlanNodeStatisticsPtr> & children_stats,
     const Context & context,
@@ -82,6 +82,11 @@ PlanNodeCost CostVisitor::visitFilterStep(const FilterStep & step, CostContext &
 PlanNodeCost CostVisitor::visitJoinStep(const JoinStep & step, CostContext & cost_context)
 {
     return JoinCost::calculate(step, cost_context);
+}
+
+PlanNodeCost CostVisitor::visitArrayJoinStep(const ArrayJoinStep & step, CostContext & context)
+{
+    return visitStep(step, context);
 }
 
 PlanNodeCost CostVisitor::visitAggregatingStep(const AggregatingStep & step, CostContext & context)
@@ -199,7 +204,17 @@ PlanNodeCost CostVisitor::visitCTERefStep(const CTERefStep & step, CostContext &
     return CTECost::calculate(step, context);
 }
 
+PlanNodeCost CostVisitor::visitExplainAnalyzeStep(const ExplainAnalyzeStep & step, CostContext & context)
+{
+    return visitStep(step, context);
+}
+
 PlanNodeCost CostVisitor::visitTopNFilteringStep(const TopNFilteringStep & step, CostContext & context)
+{
+    return visitStep(step, context);
+}
+
+PlanNodeCost CostVisitor::visitFillingStep(const FillingStep & step, CostContext & context)
 {
     return visitStep(step, context);
 }

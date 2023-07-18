@@ -17,8 +17,14 @@
 
 #include <IO/Operators.h>
 #include <Interpreters/ExpressionActions.h>
+#include <Processors/Merges/MergingSortedTransform.h>
 #include <Processors/QueryPipeline.h>
+#include <Processors/ResizeProcessor.h>
 #include <Processors/Transforms/ExpressionTransform.h>
+#include <Processors/Transforms/FinishSortingTransform.h>
+#include <Processors/Transforms/LimitsCheckingTransform.h>
+#include <Processors/Transforms/MergeSortingTransform.h>
+#include <Processors/Transforms/PartialSortingTransform.h>
 #include <Processors/Transforms/WindowTransform.h>
 #include <QueryPlan/MergeSortingStep.h>
 #include <QueryPlan/MergingSortedStep.h>
@@ -27,25 +33,19 @@
 
 namespace DB
 {
-
 static ITransformingStep::Traits getTraits()
 {
-    return ITransformingStep::Traits
-    {
+    return ITransformingStep::Traits{
         {
             .preserves_distinct_columns = true,
             .returns_single_stream = false,
             .preserves_number_of_streams = true,
             .preserves_sorting = true,
         },
-        {
-            .preserves_number_of_rows = true
-        }
-    };
+        {.preserves_number_of_rows = true}};
 }
 
-static Block addWindowFunctionResultColumns(const Block & block,
-    std::vector<WindowFunctionDescription> window_functions)
+static Block addWindowFunctionResultColumns(const Block & block, std::vector<WindowFunctionDescription> window_functions)
 {
     auto result = block;
 
@@ -62,29 +62,29 @@ static Block addWindowFunctionResultColumns(const Block & block,
     return result;
 }
 
-WindowStep::WindowStep(const DataStream & input_stream_, const WindowDescription & window_description_, bool need_sort_)
-    : WindowStep(input_stream_, window_description_, window_description_.window_functions, need_sort_)
-{}
+WindowStep::WindowStep(
+    const DataStream & input_stream_, const WindowDescription & window_description_, bool need_sort_, SortDescription prefix_description_)
+    : WindowStep(input_stream_, window_description_, window_description_.window_functions, need_sort_, prefix_description_)
+{
+}
 
-WindowStep::WindowStep(const DataStream & input_stream_,
-        const WindowDescription & window_description_,
-        const std::vector<WindowFunctionDescription> & window_functions_,
-        bool need_sort_)
-    : ITransformingStep(
-        input_stream_,
-            addWindowFunctionResultColumns(input_stream_.header,
-                window_functions_),
-        getTraits())
+WindowStep::WindowStep(
+    const DataStream & input_stream_,
+    const WindowDescription & window_description_,
+    const std::vector<WindowFunctionDescription> & window_functions_,
+    bool need_sort_,
+    SortDescription prefix_description_)
+    : ITransformingStep(input_stream_, addWindowFunctionResultColumns(input_stream_.header, window_functions_), getTraits())
     , window_description(window_description_)
     , window_functions(window_functions_)
     , input_header(input_stream_.header)
     , need_sort(need_sort_)
+    , prefix_description(prefix_description_)
 {
     // We don't remove any columns, only add, so probably we don't have to update
     // the output DataStream::distinct_columns.
 
     window_description.checkValid();
-
 }
 
 void WindowStep::setInputStreams(const DataStreams & input_streams_)
@@ -93,18 +93,59 @@ void WindowStep::setInputStreams(const DataStreams & input_streams_)
     output_stream->header = addWindowFunctionResultColumns(input_streams_[0].header, window_functions);
 }
 
-void WindowStep::transformPipeline(QueryPipeline & pipeline,
-                                   const BuildQueryPipelineSettings &s)
+void WindowStep::transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings & s)
 {
+    // TODO: re-enable WINDOW PARALLEL
+    auto enable_windows_parallel = false;
     if (need_sort && !window_description.full_sort_description.empty())
     {
-        DataStream input_stream {input_header};
-        PartialSortingStep partial_sorting_step{input_stream, window_description.full_sort_description, 0};
-        partial_sorting_step.transformPipeline(pipeline, s);
-        MergeSortingStep merge_sorting_step{input_stream, window_description.full_sort_description, 0};
-        merge_sorting_step.transformPipeline(pipeline, s);
-        MergingSortedStep merging_sorted_step{input_stream, window_description.full_sort_description, s.context->getSettingsRef().max_block_size, 0};
-        merging_sorted_step.transformPipeline(pipeline, s);
+        // finish sorting
+        DataStream input_stream{input_header};
+        if (!prefix_description.empty() && !enable_windows_parallel)
+        {
+            bool need_finish_sorting = (prefix_description.size() < window_description.full_sort_description.size());
+            if (pipeline.getNumStreams() > 1)
+            {
+                auto transform = std::make_shared<MergingSortedTransform>(
+                    pipeline.getHeader(), pipeline.getNumStreams(), prefix_description, s.context->getSettingsRef().max_block_size, 0);
+
+                pipeline.addTransform(std::move(transform));
+            }
+
+            if (need_finish_sorting)
+            {
+                pipeline.addSimpleTransform([&](const Block & header, QueryPipeline::StreamType stream_type) -> ProcessorPtr {
+                    if (stream_type != QueryPipeline::StreamType::Main)
+                        return nullptr;
+
+                    return std::make_shared<PartialSortingTransform>(header, window_description.full_sort_description, 0);
+                });
+
+                /// NOTE limits are not applied to the size of temporary sets in FinishSortingTransform
+                pipeline.addSimpleTransform([&](const Block & header) -> ProcessorPtr {
+                    return std::make_shared<FinishSortingTransform>(
+                        header,
+                        prefix_description,
+                        window_description.full_sort_description,
+                        s.context->getSettingsRef().max_block_size,
+                        0);
+                });
+            }
+        }
+        else
+        {
+            PartialSortingStep partial_sorting_step{input_stream, window_description.full_sort_description, 0};
+            partial_sorting_step.transformPipeline(pipeline, s);
+
+            MergeSortingStep merge_sorting_step{input_stream, window_description.full_sort_description, 0};
+            merge_sorting_step.transformPipeline(pipeline, s);
+        }
+        if (!enable_windows_parallel || window_description.partition_by.empty())
+        {
+            MergingSortedStep merging_sorted_step{
+                input_stream, window_description.full_sort_description, s.context->getSettingsRef().max_block_size, 0};
+            merging_sorted_step.transformPipeline(pipeline, s);
+        }
     }
 
     // This resize is needed for cases such as `over ()` when we don't have a
@@ -112,15 +153,13 @@ void WindowStep::transformPipeline(QueryPipeline & pipeline,
     // have resized it.
     pipeline.resize(1);
 
-    pipeline.addSimpleTransform([&](const Block & /*header*/)
-    {
-        return std::make_shared<WindowTransform>(input_header,
-            output_stream->header, window_description, window_functions,
-            s.actions_settings.dialect_type);
+    pipeline.addSimpleTransform([&](const Block & /*header*/) {
+        return std::make_shared<WindowTransform>(
+            input_header, output_stream->header, window_description, window_functions, s.actions_settings.dialect_type);
     });
 
-    assertBlocksHaveEqualStructure(pipeline.getHeader(), output_stream->header,
-        "WindowStep transform for '" + window_description.window_name + "'");
+    assertBlocksHaveEqualStructure(
+        pipeline.getHeader(), output_stream->header, "WindowStep transform for '" + window_description.window_name + "'");
 }
 
 void WindowStep::describeActions(FormatSettings & settings) const
@@ -140,22 +179,19 @@ void WindowStep::describeActions(FormatSettings & settings) const
             settings.out << window_description.partition_by[i].column_name;
         }
     }
-    if (!window_description.partition_by.empty()
-        && !window_description.order_by.empty())
+    if (!window_description.partition_by.empty() && !window_description.order_by.empty())
     {
         settings.out << " ";
     }
     if (!window_description.order_by.empty())
     {
-        settings.out << "ORDER BY "
-            << dumpSortDescription(window_description.order_by);
+        settings.out << "ORDER BY " << dumpSortDescription(window_description.order_by);
     }
     settings.out << ")\n";
 
     for (size_t i = 0; i < window_functions.size(); ++i)
     {
-        settings.out << prefix << (i == 0 ? "Functions: "
-                                          : "           ");
+        settings.out << prefix << (i == 0 ? "Functions: " : "           ");
         settings.out << window_functions[i].column_name << "\n";
     }
 }
@@ -193,6 +229,7 @@ void WindowStep::serialize(WriteBuffer & buffer) const
     for (const auto & item : window_functions)
         item.serialize(buffer);
     writeBinary(need_sort, buffer);
+    serializeItemVector<SortColumnDescription>(prefix_description, buffer);
 }
 
 QueryPlanStepPtr WindowStep::deserialize(ReadBuffer & buf, ContextPtr)
@@ -215,9 +252,10 @@ QueryPlanStepPtr WindowStep::deserialize(ReadBuffer & buf, ContextPtr)
     }
     bool need_sort;
     readBinary(need_sort, buf);
-    auto step = std::make_shared<WindowStep>(input_stream, window_description, window_functions, need_sort);
+    SortDescription prefix_description;
+    prefix_description = deserializeItemVector<SortColumnDescription>(buf);
+    auto step = std::make_shared<WindowStep>(input_stream, window_description, window_functions, need_sort, prefix_description);
     step->setStepDescription(step_description);
     return step;
 }
-
 }

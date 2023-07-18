@@ -22,13 +22,14 @@
 #include <QueryPlan/AggregatingStep.h>
 #include <QueryPlan/QueryPlan.h>
 #include <Storages/StorageMaterializedView.h>
+#include <Optimizer/EqualityASTMap.h>
 
 namespace DB
 {
 struct MaterializedViewStructure;
 using MaterializedViewStructurePtr = std::shared_ptr<MaterializedViewStructure>;
 
-using ExpressionEquivalences = Equivalences<ConstASTPtr, ASTEquality::ASTHash, ASTEquality::ASTEquals>;
+using ExpressionEquivalences = Equivalences<ConstASTPtr, EqualityASTMap>;
 
 /**
  * Structural information extracted from materialized view, used for materialized view rewriting.
@@ -36,12 +37,16 @@ using ExpressionEquivalences = Equivalences<ConstASTPtr, ASTEquality::ASTHash, A
 struct MaterializedViewStructure
 {
     /**
-     * @param view storage of materialized view
+     * @param view_storage_id name of materialized view
+     * @param target_storage_id name of materialized view storage table
      * @param query create table query statement after optimizer RBO ruls of materialized view
      * @return structure info if it support materialized view rewriting, empty otherwise.
      */
     static std::optional<MaterializedViewStructurePtr> buildFrom(
-        StorageMaterializedView & view, PlanNodePtr & query, ContextMutablePtr context);
+        const StorageID & view_storage_id,
+        const StorageID & target_storage_id,
+        PlanNodePtr & query,
+        ContextMutablePtr context);
 
     const StorageID view_storage_id;
     const StorageID target_storage_id;

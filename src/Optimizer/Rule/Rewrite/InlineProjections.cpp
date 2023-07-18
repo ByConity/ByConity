@@ -27,7 +27,7 @@ namespace DB
 {
 PatternPtr InlineProjections::getPattern() const
 {
-    return Patterns::project()->withSingle(Patterns::project());
+    return Patterns::project().withSingle(Patterns::project()).result();
 }
 
 TransformResult InlineProjections::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -274,7 +274,7 @@ ASTPtr InlineProjections::inlineReferences(const ConstASTPtr & expression, Assig
 
 PatternPtr InlineProjectionIntoJoin::getPattern() const
 {
-    return Patterns::join();
+    return Patterns::join().result();
 }
 
 TransformResult InlineProjectionIntoJoin::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
@@ -324,7 +324,10 @@ TransformResult InlineProjectionIntoJoin::transformImpl(PlanNodePtr node, const 
         join_step.getRequireRightKeys(),
         join_step.getAsofInequality(),
         join_step.getDistributionType(),
-        join_step.isMagic());
+        join_step.getJoinAlgorithm(),
+        join_step.isMagic(),
+        join_step.isOrdered(),
+        join_step.getHints());
     PlanNodePtr new_join_node = std::make_shared<JoinNode>(context.context->nextNodeId(), std::move(new_join_step), PlanNodes{left, right});
     return new_join_node;
 }
@@ -332,8 +335,8 @@ TransformResult InlineProjectionIntoJoin::transformImpl(PlanNodePtr node, const 
 PatternPtr InlineProjectionOnJoinIntoJoin::getPattern() const
 {
     return Patterns::project()
-        ->matchingStep<ProjectionStep>([](const auto & step) { return Utils::isIdentity(step); })
-        ->withSingle(Patterns::join());
+        .matchingStep<ProjectionStep>([](const auto & step) { return Utils::isIdentity(step); })
+        .withSingle(Patterns::join()).result();
 }
 
 TransformResult InlineProjectionOnJoinIntoJoin::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
@@ -355,7 +358,10 @@ TransformResult InlineProjectionOnJoinIntoJoin::transformImpl(PlanNodePtr node, 
         join_step->getRequireRightKeys(),
         join_step->getAsofInequality(),
         join_step->getDistributionType(),
-        join_step->isMagic());
+        join_step->getJoinAlgorithm(),
+        join_step->isMagic(),
+        join_step->isOrdered(),
+        join_step->getHints());
 
     return {PlanNodeBase::createPlanNode(context.context->nextNodeId(), new_join_step, node->getChildren()[0]->getChildren())};
 }

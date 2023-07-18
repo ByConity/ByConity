@@ -160,12 +160,12 @@ public:
     const SizeLimits & sizeLimits() const { return size_limits; }
     VolumePtr getTemporaryVolume() { return tmp_volume; }
     bool allowMergeJoin() const;
-    bool allowParallelHashJoin() const;
     bool allowDictJoin(const String & dict_key, const Block & sample_block, Names &, NamesAndTypesList &) const;
     void setJoinAlgorithm(JoinAlgorithm join_algorithm_) { join_algorithm = join_algorithm_; }
     bool preferMergeJoin() const { return join_algorithm == JoinAlgorithm::PREFER_PARTIAL_MERGE; }
     bool forceMergeJoin() const { return join_algorithm == JoinAlgorithm::PARTIAL_MERGE; }
     bool forceNestedLoopJoin() const { return join_algorithm == JoinAlgorithm::NESTED_LOOP_JOIN; }
+    bool allowParallelHashJoin() const;
     bool forceGraceHashLoopJoin() const { return join_algorithm == JoinAlgorithm::GRACE_HASH; }
     bool forceHashJoin() const
     {
@@ -243,6 +243,9 @@ public:
     void setRightKeys(const Names & keys) { key_names_right = keys; }
 
     bool isSpecialStorage() const {return !!joined_storage; }
+    // The communary introduced support for "The 'OR' operator in 'ON' section for join",
+    // but in our scenario, there only one disjunct at a time yet
+    bool oneDisjunct() const { return true; }
 
     /// Split key and other columns by keys name list
     void splitAdditionalColumns(const Block & sample_block, Block & block_keys, Block & block_others) const;
@@ -253,10 +256,6 @@ public:
     void serialize(WriteBuffer & buf) const;
     void deserializeImpl(ReadBuffer & buf, ContextPtr context);
     static std::shared_ptr<TableJoin> deserialize(ReadBuffer & buf, ContextPtr context);
-
-    // The communary introduced support for "The 'OR' operator in 'ON' section for join",
-    // but in our scenario, there only one disjunct at a time yet
-    bool oneDisjunct() const { return true; }
 };
 
 }

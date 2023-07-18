@@ -34,6 +34,9 @@
 #include <Columns/ColumnString.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypeSketchBinary.h>
+#include <Columns/ColumnSketchBinary.h>
+
 namespace DB
 {
 /// DataTypeCtor Example:
@@ -124,7 +127,7 @@ public:
     using Data = DataTypeCtor<EmbededType>;
     using ParentHelper = IAggregateFunctionDataHelper<Data, Self>;
 
-    using ResultDataType = DataTypeString;
+    using ResultDataType = DataTypeSketchBinary;
 
     // TODO: support string and decimal
     using ColVecType = typename Utils::ColVecType;
@@ -143,7 +146,7 @@ public:
         (void)data_type;
     }
 
-    DataTypePtr getReturnType() const override { return std::make_shared<DataTypeString>(); }
+    DataTypePtr getReturnType() const override { return std::make_shared<ResultDataType>(); }
 
     void create(AggregateDataPtr place) const override
     {
@@ -195,7 +198,7 @@ public:
     using Self = AggregateFunctionCboFamilyForString;
     using ParentHelper = IAggregateFunctionDataHelper<Data, Self>;
 
-    using ResultDataType = DataTypeString;
+    using ResultDataType = DataTypeSketchBinary;
 
     using ColVecResult = ColumnString;
 
@@ -214,7 +217,7 @@ public:
         (void)data_type;
     }
 
-    DataTypePtr getReturnType() const override { return std::make_shared<DataTypeString>(); }
+    DataTypePtr getReturnType() const override { return std::make_shared<ResultDataType>(); }
 
     void create(AggregateDataPtr place) const override
     {

@@ -32,6 +32,7 @@ public:
 #endif
         settings.emplace("enable_materialized_view_join_rewriting", "1");
         settings.emplace("enable_materialized_view_rewrite_verbose_log", "1");
+        settings.emplace("enable_single_distinct_to_group_by", "0");
 
         tester = std::make_shared<BaseMaterializedViewTest>(settings);
     }
@@ -135,6 +136,7 @@ TEST_F(MaterializedViewRewriteTest, testFilterQueryOnProjectView5)
                                     "   └─ Filter\n"
                                     "      │     Condition: x = 2\n"
                                     "      └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "               Condition : x = 2.\n"
                                     "               Outputs: [ee, name, x]")
         .ok();
 }
@@ -202,6 +204,7 @@ TEST_F(MaterializedViewRewriteTest, testFilterQueryOnFilterView3)
                                     "   └─ Filter\n"
                                     "      │     Condition: deptno = 10\n"
                                     "      └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "               Condition : deptno = 10.\n"
                                     "               Outputs: [deptno, empid, name]")
         .ok();
 }
@@ -1120,6 +1123,7 @@ TEST_F(MaterializedViewRewriteTest, testConstantFilterInAgg)
                                     "   └─ Filter\n"
                                     "      │     Condition: name = 'hello'\n"
                                     "      └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "               Condition : name = 'hello'.\n"
                                     "               Outputs: [cnt, name]")
         .ok();
 }
@@ -1141,6 +1145,7 @@ TEST_F(MaterializedViewRewriteTest, testConstantFilterInAgg2)
                                     "   └─ Filter\n"
                                     "      │     Condition: name = 'hello'\n"
                                     "      └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "               Condition : name = 'hello'.\n"
                                     "               Outputs: [cnt, deptno, name]")
         .ok();
 }
@@ -1162,6 +1167,7 @@ TEST_F(MaterializedViewRewriteTest, testConstantFilterInAgg3)
                                     "   └─ Filter\n"
                                     "      │     Condition: (name = 'hello') AND (deptno = 1)\n"
                                     "      └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "               Condition : (name = 'hello') AND (deptno = 1).\n"
                                     "               Outputs: [cnt, deptno, name]")
         .ok();
 }

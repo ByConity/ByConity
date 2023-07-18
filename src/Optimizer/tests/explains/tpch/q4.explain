@@ -1,54 +1,54 @@
-Projection est. 1 rows
+Projection Est. 1 rows
 │     Expressions: [o_orderpriority], order_count:=`expr#count()`
-└─ Sorting est. 1 rows
+└─ Sorting Est. 1 rows
    │     Order by: {o_orderpriority asc}
-   └─ Gather Exchange est. 1 rows
-      └─ Sorting est. 1 rows
+   └─ Gather Exchange Est. 1 rows
+      └─ Sorting Est. 1 rows
          │     Order by: {o_orderpriority asc}
-         └─ MergingAggregated est. 1 rows
-            └─ Repartition Exchange est. 1 rows
+         └─ MergingAggregated Est. 1 rows
+            └─ Repartition Exchange Est. 1 rows
                │     Partition by: {o_orderpriority}
-               └─ Aggregating est. 1 rows
+               └─ Aggregating Est. 1 rows
                   │     Group by: {o_orderpriority}
                   │     Aggregates: expr#count():=AggNull(count)()
-                  └─ Inner Join est. 57430 rows
+                  └─ Inner Join Est. 57656 rows
                      │     Condition: l_orderkey == o_orderkey
-                     ├─ MergingAggregated est. 57304 rows
-                     │  └─ Repartition Exchange est. 57304 rows
+                     ├─ MergingAggregated Est. 57304 rows
+                     │  └─ Repartition Exchange Est. 57304 rows
                      │     │     Partition by: {l_orderkey}
-                     │     └─ Aggregating est. 57304 rows
+                     │     └─ Aggregating Est. 57304 rows
                      │        │     Group by: {l_orderkey}
-                     │        └─ Inner Join est. 228976 rows
+                     │        └─ Inner Join Est. 228976 rows
                      │           │     Condition: l_orderkey == o_orderkey_1
-                     │           ├─ Local Exchange est. 6001215 rows
-                     │           │  └─ Filter est. 6001215 rows
+                     │           ├─ Local Exchange Est. 6001215 rows
+                     │           │  └─ Filter Est. 6001215 rows
                      │           │     │     Condition: l_commitdate < l_receiptdate
-                     │           │     │     Dynamic Filters: {l_orderkey:bloomfilter,l_orderkey:bloomfilter,l_orderkey:range,l_orderkey:range}
-                     │           │     └─ TableScan tpch.lineitem est. 6001215 rows
+                     │           │     │     Dynamic Filters: {l_orderkey:bloomfilter,l_orderkey:range}
+                     │           │     └─ TableScan tpch.lineitem Est. 6001215 rows
+                     │           │              Condition : l_commitdate < l_receiptdate.Dynamic Filters : {l_orderkey:range}.
                      │           │              Outputs: [l_commitdate, l_orderkey, l_receiptdate]
-                     │           └─ Broadcast Exchange est. 57304 rows
-                     │              └─ Projection est. 57304 rows
+                     │           └─ Broadcast Exchange Est. 57304 rows
+                     │              └─ Projection Est. 57304 rows
                      │                 │     Expressions: [o_orderkey_1]
                      │                 │     Dynamic Filters Builder: {o_orderkey_1}
-                     │                 └─ MergingAggregated est. 57304 rows
-                     │                    └─ Repartition Exchange est. 57304 rows
+                     │                 └─ MergingAggregated Est. 57304 rows
+                     │                    └─ Repartition Exchange Est. 57304 rows
                      │                       │     Partition by: {o_orderkey_1}
-                     │                       └─ Aggregating est. 57304 rows
+                     │                       └─ Aggregating Est. 57304 rows
                      │                          │     Group by: {o_orderkey_1}
-                     │                          └─ Projection est. 57304 rows
+                     │                          └─ Projection Est. 57304 rows
                      │                             │     Expressions: o_orderkey_1:=o_orderkey
-                     │                             └─ Filter est. 57304 rows
+                     │                             └─ Filter Est. 57304 rows
                      │                                │     Condition: (o_orderdate >= cast(8582, 'Date')) AND (o_orderdate < cast(8674, 'Date'))
-                     │                                └─ TableScan tpch.orders est. 1500000 rows
+                     │                                └─ TableScan tpch.orders Est. 1500000 rows
+                     │                                         Condition : (o_orderdate >= cast(8582, 'Date')) AND (o_orderdate < cast(8674, 'Date')).
                      │                                         Outputs: [o_orderdate, o_orderkey]
-                     └─ Repartition Exchange est. 57304 rows
+                     └─ Repartition Exchange Est. 57304 rows
                         │     Partition by: {o_orderkey}
-                        └─ Projection est. 57304 rows
-                           │     Expressions: [o_orderdate, o_orderkey, o_orderpriority]
-                           │     Dynamic Filters Builder: {o_orderkey}
-                           └─ Filter est. 57304 rows
-                              │     Condition: (o_orderdate >= cast(8582, 'Date')) AND (o_orderdate < cast(8674, 'Date'))
-                              └─ TableScan tpch.orders est. 1500000 rows
-                                       Outputs: [o_orderdate, o_orderkey, o_orderpriority]
+                        └─ Filter Est. 57304 rows
+                           │     Condition: (o_orderdate >= cast(8582, 'Date')) AND (o_orderdate < cast(8674, 'Date'))
+                           └─ TableScan tpch.orders Est. 1500000 rows
+                                    Condition : (o_orderdate >= cast(8582, 'Date')) AND (o_orderdate < cast(8674, 'Date')).
+                                    Outputs: [o_orderdate, o_orderkey, o_orderpriority]
 note: Magic Set is applied for 1 parts.
-note: Dynamic Filter is applied for 4 times.
+note: Dynamic Filter is applied for 2 times.

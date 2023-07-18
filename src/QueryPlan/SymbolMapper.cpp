@@ -95,13 +95,6 @@ SymbolMapper SymbolMapper::symbolReallocator(std::unordered_map<Symbol, Symbol> 
     }, std::move(context));
 }
 
-Names SymbolMapper::map(const Names & symbols)
-{
-    Names ret;
-    std::transform(symbols.begin(), symbols.end(), std::back_inserter(ret), mapping_function);
-    return ret;
-}
-
 NameSet SymbolMapper::mapToDistinct(const Names & symbols)
 {
     NameSet ret;
@@ -169,14 +162,6 @@ Block SymbolMapper::map(const Block & name_and_types)
     return ret;
 }
 
-DataStreams SymbolMapper::map(const DataStreams & data_streams)
-{
-    DataStreams ret;
-    std::transform(
-        data_streams.begin(), data_streams.end(), std::back_inserter(ret), [this](const auto & data_stream) { return map(data_stream); });
-    return ret;
-}
-
 DataStream SymbolMapper::map(const DataStream & data_stream)
 {   
     DataStream output{map(data_stream.header)};
@@ -233,7 +218,10 @@ std::shared_ptr<JoinStep> SymbolMapper::map(const JoinStep & join)
         join.getRequireRightKeys(),
         join.getAsofInequality(),
         join.getDistributionType(),
-        join.isMagic());
+        join.getJoinAlgorithm(),
+        join.isMagic(),
+        join.isOrdered(),
+        join.getHints());
 }
 
 
@@ -261,6 +249,8 @@ WindowDescription SymbolMapper::map(const WindowDescription & desc)
         SortDescription{map(desc.partition_by)},
         SortDescription{map(desc.order_by)},
         SortDescription{map(desc.full_sort_description)},
+        // desc.partition_by_actions,
+        // desc.order_by_actions,
         desc.frame,
         map(desc.window_functions)
     };
@@ -339,6 +329,7 @@ std::shared_ptr<AggregatingStep> SymbolMapper::map(const AggregatingStep & agg)
         map(agg.getAggregates()),
         map(agg.getGroupingSetsParams()),
         agg.isFinal(),
+        SortDescription{map(agg.getGroupBySortDescription())},
         map(agg.getGroupings()),
         false,
         agg.shouldProduceResultsInOrderOfBucketNumber());
@@ -351,7 +342,8 @@ std::shared_ptr<ApplyStep> SymbolMapper::map(const ApplyStep & apply)
         map(apply.getCorrelation()),
         apply.getApplyType(),
         apply.getSubqueryType(),
-        map(apply.getAssignment()));
+        map(apply.getAssignment()),
+        map(apply.getOuterColumns()));
 }
 
 std::shared_ptr<ArrayJoinStep> SymbolMapper::map(const ArrayJoinStep & array_join)
@@ -378,7 +370,7 @@ std::shared_ptr<CubeStep> SymbolMapper::map(const CubeStep & cube)
 {
     return std::make_shared<CubeStep>(
             map(cube.getInputStreams()[0]),
-            cube.getAggParams());
+            map(cube.getAggParams()));
 }
 
 std::shared_ptr<DistinctStep> SymbolMapper::map(const DistinctStep & distinct)
@@ -480,8 +472,9 @@ std::shared_ptr<TableScanStep> SymbolMapper::map(const TableScanStep & scan)
         scan.getStorageID(),
         map(scan.getColumnAlias()),
         scan.getQueryInfo(),
-        scan.getProcessedStage(),
-        scan.getMaxBlockSize());
+        scan.getMaxBlockSize(),
+        scan.getTableAlias(),
+        scan.getHints());
 
     // order matters as symbol mapper should traverse plan nodes bottom-up
     if (const auto * step = scan.getPushdownFilterCast())
@@ -593,11 +586,24 @@ std::shared_ptr<PartialSortingStep> SymbolMapper::map(const PartialSortingStep &
 
 std::shared_ptr<ProjectionStep> SymbolMapper::map(const ProjectionStep & projection)
 {
+    std::unordered_map<String, DynamicFilterBuildInfo> dynamic_filters;
+    for(auto & [name, info] : projection.getDynamicFilters())
+    {
+        dynamic_filters.emplace(map(name), DynamicFilterBuildInfo{info.id, map(info.original_symbol), info.types});
+    }
     return std::make_shared<ProjectionStep> (
             map(projection.getInputStreams()[0]),
             map(projection.getAssignments()),
             map(projection.getNameToType()),
-            projection.isFinalProject());
+            projection.isFinalProject(),
+            std::move(dynamic_filters),
+            projection.getHints());
+}
+
+std::shared_ptr<ReadNothingStep> SymbolMapper::map(const ReadNothingStep & read_nothing)
+{
+    return std::make_shared<ReadNothingStep>(
+        map(read_nothing.getOutputStream()).header);
 }
 
 std::shared_ptr<RemoteExchangeSourceStep> SymbolMapper::map(const RemoteExchangeSourceStep & remote_exchange)
@@ -607,11 +613,6 @@ std::shared_ptr<RemoteExchangeSourceStep> SymbolMapper::map(const RemoteExchange
         map(remote_exchange.getInputStreams()[0]));
 }
 
-std::shared_ptr<ReadNothingStep> SymbolMapper::map(const ReadNothingStep & read_nothing)
-{
-    return std::make_shared<ReadNothingStep>(
-        map(read_nothing.getOutputStream()).header);
-}
 
 std::shared_ptr<SortingStep> SymbolMapper::map(const SortingStep & sorting)
 {
@@ -619,7 +620,8 @@ std::shared_ptr<SortingStep> SymbolMapper::map(const SortingStep & sorting)
         map(sorting.getInputStreams()[0]),
         SortDescription{map(sorting.getSortDescription())},
         sorting.getLimit(),
-        sorting.isPartial());
+        sorting.isPartial(),
+        SortDescription{map(sorting.getPrefixDescription())});
 }
 
 std::shared_ptr<TotalsHavingStep> SymbolMapper::map(const TotalsHavingStep & totals_having)
@@ -672,9 +674,11 @@ std::shared_ptr<WindowStep> SymbolMapper::map(const WindowStep & window)
 {
     return std::make_shared<WindowStep>(
         map(window.getInputStreams()[0]),
-        map(window.getWindow()),
+        map(window.getWindowDescription()),
         map(window.getFunctions()),
-        window.needSort());
+        window.needSort(),
+        SortDescription{map(window.getPrefixDescription())}
+    );
 }
 
 }

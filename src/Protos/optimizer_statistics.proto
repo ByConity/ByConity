@@ -24,7 +24,7 @@ message StatsNdvBucketsExtend {
   required bytes bounds_blob = 1;
   repeated int64 counts = 3;           // size = num_buckets
   repeated bytes cpc_sketch_blobs = 4; // size = num_buckets
-  repeated bytes block_cpc_sketch_blobs = 5; // size = num_buckets
+  repeated double block_ndv_counts = 6; // size = num_buckets
 }
 
 message StatsNdvBucketsResult {
@@ -60,6 +60,7 @@ enum StatisticsType {
   NdvBuckets = 4;
   NdvBucketsResult = 5;
   ColumnBasic = 6;
+  NdvBucketsExtend = 7;
   DummyAlpha = 2000;
   DummyBeta = 2001;
 }

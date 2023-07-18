@@ -116,5 +116,28 @@ public:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 };
 
+
+class LimitZeroToReadNothing : public Rule
+{
+public:
+    RuleType getType() const override { return RuleType::LIMIT_ZERO_TO_READNOTHING; }
+    String getName() const override { return "LIMIT_ZERO_TO_READNOTHING"; }
+    PatternPtr getPattern() const override;
+
+    TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
+};
+
+
+class PushdownLimitIntoWindow: public Rule
+{
+public:
+    RuleType getType() const override { return RuleType::PUSH_LIMIT_INTO_WINDOW; }
+    String getName() const override { return "PUSH_LIMIT_INTO_WINDOW"; }
+
+    PatternPtr getPattern() const override;
+
+    TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
+};
+
 }
 

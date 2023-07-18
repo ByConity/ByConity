@@ -23,9 +23,9 @@
 namespace DB
 {
 
-/// Since the ASTFunction is heavily reused, the ExpressionVisitor is used for providing more fine-grained visiting methods.
+/// Since the ASTFunction is heavily reused, the AnalyzerExpressionVisitor is used for providing more fine-grained visiting methods.
 template <typename C, typename R = void>
-class ExpressionVisitor : public ASTVisitor<R, C>
+class AnalyzerExpressionVisitor : public ASTVisitor<R, C>
 {
 private:
     ContextPtr context;
@@ -48,7 +48,7 @@ protected:
     virtual R visitQuantifiedComparisonSubquery(ASTPtr & node, ASTQuantifiedComparison & ast, C & visitor_context) { return visitExpression(node, ast, visitor_context); }
 
 public:
-    explicit ExpressionVisitor(ContextPtr context_): context(context_) {}
+    explicit AnalyzerExpressionVisitor(ContextPtr context_): context(context_) {}
 
     virtual R process(ASTPtr & node, C & visitor_context)
     {
@@ -109,11 +109,11 @@ public:
 
 /// ExpressionTreeVisitor is used to provide default traversal logic for expression asts. (used for analyzed expr)
 template <typename UserContext>
-class ExpressionTraversalIncludeSubqueryVisitor: public ExpressionVisitor<const Void>
+class ExpressionTraversalIncludeSubqueryVisitor: public AnalyzerExpressionVisitor<const Void>
 {
 private:
     Analysis & analysis;
-    ExpressionVisitor<UserContext> & user_visitor;
+    AnalyzerExpressionVisitor<UserContext> & user_visitor;
     UserContext & user_context;
 
 protected:
@@ -171,8 +171,8 @@ protected:
     }
 
 public:
-    ExpressionTraversalIncludeSubqueryVisitor(ExpressionVisitor<UserContext> & user_visitor_, UserContext & user_context_, Analysis & analysis_, ContextPtr context_):
-        ExpressionVisitor(context_), analysis(analysis_), user_visitor(user_visitor_), user_context(user_context_) {}
+    ExpressionTraversalIncludeSubqueryVisitor(AnalyzerExpressionVisitor<UserContext> & user_visitor_, UserContext & user_context_, Analysis & analysis_, ContextPtr context_):
+        AnalyzerExpressionVisitor(context_), analysis(analysis_), user_visitor(user_visitor_), user_context(user_context_) {}
 
     void process(ASTPtr & node, const Void & traversal_context) override
     {
@@ -272,7 +272,7 @@ public:
 };
 
 template<typename UserContext, template<typename> typename TraversalVisitor = ExpressionTraversalVisitor>
-void traverseExpressionTree(ASTPtr & node, ExpressionVisitor<UserContext> & user_visitor, UserContext & user_context, Analysis & analysis, ContextPtr context)
+void traverseExpressionTree(ASTPtr & node, AnalyzerExpressionVisitor<UserContext> & user_visitor, UserContext & user_context, Analysis & analysis, ContextPtr context)
 {
     TraversalVisitor<UserContext> visitor {user_visitor, user_context, analysis, context};
     visitor.process(node);

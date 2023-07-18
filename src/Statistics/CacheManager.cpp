@@ -23,6 +23,7 @@ namespace DB::Statistics
 
 std::unique_ptr<CacheManager::CacheType> CacheManager::cache;
 
+
 void CacheManager::initialize(ContextPtr context)
 {
     if (cache)
@@ -41,6 +42,11 @@ void CacheManager::initialize(UInt64 max_size, std::chrono::seconds expire_time)
 {
     Poco::Timestamp::TimeDiff the_time = expire_time.count() * 1000;
     cache = std::make_unique<CacheType>(max_size, the_time);
+}
+
+void CacheManager::reset()
+{
+    cache->clear();
 }
 
 void CacheManager::invalidate(ContextPtr context, const StatsTableIdentifier & table)

@@ -4902,6 +4902,35 @@ String Context::getDefaultCnchPolicyName() const
     return getConfigRef().getString("storage_configuration.cnch_default_policy", "cnch_default_hdfs");
 }
 
+String Context::getOptimizerProfile(bool print_rule)
+{
+    if (optimizer_profile)
+    {
+        String profile = optimizer_profile->getOptimizerProfile(print_rule);
+        clearOptimizerProfile();
+        return profile;
+    }
+    else
+        throw Exception("OptimizerProfile is not initialized", ErrorCodes::LOGICAL_ERROR);
+}
+
+void Context::clearOptimizerProfile()
+{
+    if (!optimizer_profile)
+        return;
+    optimizer_profile->clear();
+    optimizer_profile = nullptr;
+}
+
+void Context::logOptimizerProfile(Poco::Logger * log, String prefix, String name, String time, bool is_rule)
+{
+    if (settings.log_optimizer_run_time && log)
+        LOG_DEBUG(log, prefix + name + " " + time);
+
+    if (optimizer_profile)
+        optimizer_profile->setTime(name, time, is_rule);
+}
+
 String Context::getCnchAuxilityPolicyName() const
 {
     return getConfigRef().getString("storage_configuration.cnch_auxility_policy", "default");

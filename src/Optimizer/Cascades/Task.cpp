@@ -27,13 +27,20 @@
 
 namespace DB
 {
+namespace ErrorCodes
+{
+    extern const int OPTIMIZER_TIMEOUT;
+}
 void OptimizeGroup::execute()
 {
     //    LOG_DEBUG(context->getOptimizerContext().getLog(), "Optimize Group " << group->getId());
 
     if (group->getCostLowerBound() > context->getCostUpperBound() || // Cost LB > Cost UB
         group->hasWinner(context->getRequiredProp())) // Has optimized given the context
+    {
+        // LOG_DEBUG(context->getOptimizerContext().getLog(), "Pruned");
         return;
+    }
 
     // Push explore task first for logical expressions if the group has not been explored
     if (!group->hasExplored())
@@ -65,7 +72,7 @@ void OptimizeExpression::execute()
     auto logical_rules = getTransformationRules();
     auto phys_rules = getImplementationRules();
     // If there are no stats, we won't enum plan
-    if (context->getMemo().getGroupById(group_expr->getGroupId())->getStatistics())
+    if (group_expr->getChildrenGroups().empty() || context->getMemo().getGroupById(group_expr->getChildrenGroups()[0])->getStatistics())
     {
         constructValidRules(group_expr, logical_rules, valid_rules);
     }
@@ -77,7 +84,8 @@ void OptimizeExpression::execute()
     {
         pushTask(std::make_shared<ApplyRule>(group_expr, r, context));
         int child_group_idx = 0;
-        for (const auto & child_pattern : r->getPattern()->getChildrenPatterns())
+        auto pattern = r->getPattern();
+        for (const auto * child_pattern : pattern->getChildrenPatterns())
         {
             // If child_pattern has any more children (i.e non-leaf), then we will explore the
             // child before applying the rule. (assumes task pool is effectively a stack)
@@ -117,7 +125,7 @@ void ExploreExpression::execute()
     // Construct valid transformation rules from rule set
     auto logical_rules = getTransformationRules();
     // If there are no stats, we won't enum plan
-    if (context->getMemo().getGroupById(group_expr->getGroupId())->getStatistics())
+    if (group_expr->getChildrenGroups().empty() || context->getMemo().getGroupById(group_expr->getChildrenGroups()[0])->getStatistics())
     {
         constructValidRules(group_expr, logical_rules, valid_rules);
     }
@@ -128,7 +136,8 @@ void ExploreExpression::execute()
     {
         pushTask(std::make_shared<ApplyRule>(group_expr, r, context, true));
         int child_group_idx = 0;
-        for (const auto & child_pattern : r->getPattern()->getChildrenPatterns())
+        auto pattern = r->getPattern();
+        for (const auto * child_pattern : pattern->getChildrenPatterns())
         {
             // Only need to explore non-leaf children before applying rule to the
             // current group. this condition is important for early-pruning
@@ -150,7 +159,8 @@ void ApplyRule::execute()
     if (group_expr->hasRuleExplored(rule->getType()))
         return;
 
-    GroupExprBindingIterator iterator(context->getMemo(), group_expr, rule->getPattern(), context);
+    auto pattern = rule->getPattern();
+    GroupExprBindingIterator iterator(context->getMemo(), group_expr, pattern.get(), context);
 
     RuleContext rule_context{
         context->getOptimizerContext().getContext(), context->getOptimizerContext().getCTEInfo(), context, group_expr->getGroupId()};
@@ -229,12 +239,16 @@ void OptimizeInput::execute()
         cur_total_cost = 0;
 
         // Pruning
+        // LOG_DEBUG(context->getOptimizerContext().getLog(), "Group {} Lower Cost: {} Upper Bound: {}", group_expr->getGroupId(), cur_total_cost, context->getCostUpperBound());
         if (cur_total_cost > context->getCostUpperBound())
+        {
+            // LOG_DEBUG(context->getOptimizerContext().getLog(), "Pruned");
             return;
+        }
 
         if (group_expr->getStep()->getType() == IQueryPlanStep::Type::CTERef)
         {
-            const auto cte_step = dynamic_cast<const CTERefStep *>(group_expr->getStep().get());
+            const auto * const cte_step = dynamic_cast<const CTERefStep *>(group_expr->getStep().get());
             CTEId cte_id = cte_step->getId();
             auto cte_def_group = context->getMemo().getCTEDefGroupByCTEId(cte_id);
 
@@ -255,7 +269,8 @@ void OptimizeInput::execute()
                     return; // We have optimized cte group but there is still no valid plan.
                 wait_cte_optimization = true;
                 pushTask(this->shared_from_this());
-                auto ctx = std::make_shared<OptimizationContext>(context->getOptimizerContext(), cte_description_property);
+                auto ctx = std::make_shared<OptimizationContext>(
+                    context->getOptimizerContext(), cte_description_property, context->getCostUpperBound());
                 pushTask(std::make_shared<OptimizeGroup>(cte_def_group, ctx));
                 return;
             }
@@ -282,6 +297,10 @@ void OptimizeInput::execute()
     // (3) Update Group/Context metadata of expression + cost
     for (; cur_prop_pair_idx < static_cast<int>(input_properties.size()); cur_prop_pair_idx++)
     {
+        if (cur_prop_pair_idx > 100)
+        {
+            throw Exception("Property bug, too many input property pair", ErrorCodes::OPTIMIZER_TIMEOUT);
+        }
         auto & input_props = input_properties[cur_prop_pair_idx];
         auto group_stats = context->getMemo().getGroupById(group_expr->getGroupId())->getStatistics().value_or(nullptr);
 
@@ -315,17 +334,20 @@ void OptimizeInput::execute()
             { // Directly get back the best expr if the child group is optimized
                 auto child_best_expr = child_group->getBestExpression(i_prop);
                 cur_total_cost += child_best_expr->getCost();
-                // todo mt prune
-                //                if (cur_total_cost > context->getCostUpperBound())
-                //                    break;
+                // LOG_DEBUG(context->getOptimizerContext().getLog(), "Group {} Lower Cost: {} Upper Bound: {}", group_expr->getGroupId(), cur_total_cost, context->getCostUpperBound());
+                if (cur_total_cost > context->getCostUpperBound())
+                {
+                    // LOG_DEBUG(context->getOptimizerContext().getLog(), "Pruned");
+                    break;
+                }
             }
             else if (prev_child_idx != cur_child_idx)
             { // We haven't optimized child group
                 prev_child_idx = cur_child_idx;
                 pushTask(this->shared_from_this());
 
-                // todo mt prune
                 auto cost_high = context->getCostUpperBound() - cur_total_cost;
+                // LOG_DEBUG(context->getOptimizerContext().getLog(), "Create Group {} Upper Bound: {} from up {} cur {}", child_group->getId(), cost_high, context->getCostUpperBound(), cur_total_cost);
                 auto ctx = std::make_shared<OptimizationContext>(context->getOptimizerContext(), i_prop, cost_high);
                 pushTask(std::make_shared<OptimizeGroup>(child_group, ctx));
                 return;
@@ -361,7 +383,7 @@ void OptimizeInput::execute()
                     auto left_equivalences = context->getMemo().getGroupById(group_expr->getChildrenGroups()[0])->getEquivalences();
                     auto right_equivalences = context->getMemo().getGroupById(group_expr->getChildrenGroups()[1])->getEquivalences();
                     NameToNameSetMap right_join_key_to_left;
-                    if (auto join_step = dynamic_cast<const JoinStep *>(group_expr->getStep().get()))
+                    if (const auto * join_step = dynamic_cast<const JoinStep *>(group_expr->getStep().get()))
                     {
                         auto left_rep_map = left_equivalences->representMap();
                         auto right_rep_map = right_equivalences->representMap();
@@ -511,8 +533,11 @@ void OptimizeInput::execute()
                         double cost = cte_best_expr->getCost();
 
                         // todo: remove this, add cost for join build side. dirty hack for cte.
-                        if (group_expr->getStep()->getType() == IQueryPlanStep::Type::Join) {
-                            cost *= context->getOptimizerContext().getContext()->getSettingsRef()
+                        if (group_expr->getStep()->getType() == IQueryPlanStep::Type::Join)
+                        {
+                            cost *= context->getOptimizerContext()
+                                        .getContext()
+                                        ->getSettingsRef()
                                         .cost_calculator_cte_weight_for_join_build_side;
                         }
                         cur_total_cost += cost;
@@ -522,10 +547,16 @@ void OptimizeInput::execute()
 
             // todo mt prune
             // If the cost is smaller than the winner, update the context upper bound
-            //            context->setCostUpperBound(context->getCostUpperBound() - cur_total_cost);
+            if (context->getCostUpperBound() > cur_total_cost)
+            {
+                // LOG_DEBUG(context->getOptimizerContext().getLog(), "Update Group {} Upper Bound to : {}", group_expr->getGroupId(), cur_total_cost);
+                context->setCostUpperBound(cur_total_cost);
+            }
             auto cur_group = context->getMemo().getGroupById(group_expr->getGroupId());
             if (!context->getOptimizerContext().getContext()->getSettingsRef().enable_cbo)
                 cur_total_cost = 0;
+
+            actual = actual.normalize(*equivalences);
             cur_group->setExpressionCost(
                 std::make_shared<Winner>(group_expr, remote_exchange, local_exchange, input_props, actual, cur_total_cost),
                 context->getRequiredProp());
@@ -539,6 +570,21 @@ void OptimizeInput::execute()
         // Explore and derive all possible input properties
         if (cur_prop_pair_idx + 1 == static_cast<int>(input_properties.size()))
             exploreInputProperties();
+
+        // Search is done
+        if (cur_prop_pair_idx + 1 == static_cast<int>(input_properties.size()))
+        {
+            // If can search winner, set the empty winner( because of pruning)
+            if (!context->getMemo().getGroupById(group_expr->getGroupId())->hasWinner(context->getRequiredProp()))
+            {
+                context->getMemo()
+                    .getGroupById(group_expr->getGroupId())
+                    ->setExpressionCost(
+                        std::make_shared<Winner>(
+                            nullptr, nullptr, nullptr, input_props, context->getRequiredProp(), context->getCostUpperBound() + 1),
+                        context->getRequiredProp());
+            }
+        }
     }
 }
 

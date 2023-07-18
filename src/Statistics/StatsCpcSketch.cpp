@@ -20,7 +20,7 @@ namespace DB::Statistics
 String StatsCpcSketch::serialize() const
 {
     std::ostringstream ss;
-    data.serialize(ss);
+    getFullResult().serialize(ss);
     return ss.str();
 }
 

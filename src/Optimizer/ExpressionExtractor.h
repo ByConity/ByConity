@@ -19,10 +19,11 @@
 #include <Parsers/ASTVisitor.h>
 #include <QueryPlan/PlanVisitor.h>
 #include <Optimizer/Utils.h>
+#include <Optimizer/EqualityASTMap.h>
 
 namespace DB
 {
-using ConstASTSet = ASTSet<ConstASTPtr>;
+using ConstASTSet = EqualityASTSet;
 
 class ExpressionExtractor
 {

@@ -29,20 +29,16 @@ class CTEInfo;
 /**
  * CTE is model as two parts: CTERef and CTEDef.
  * CTERefStep is a source node reference to CTEDef by id.
- * CTEDef is a virtual node, the plan is stored in QueryInfo.
+ * CTEDef is a virtual node, the plan is stored in CTEInfo.
  */
 class CTERefStep : public ISourceStep
 {
 public:
-    CTERefStep(DataStream output_, CTEId id_, std::unordered_map<String, String> output_columns_, ConstASTPtr filter_)
-        : ISourceStep(std::move(output_)), id(id_), output_columns(std::move(output_columns_)), filter(std::move(filter_))
-    {
-    }
+    CTERefStep(DataStream output_, CTEId id_, std::unordered_map<String, String> output_columns_, bool has_filter_);
 
     CTEId getId() const { return id; }
     const std::unordered_map<String, String> & getOutputColumns() const { return output_columns; }
     std::unordered_map<String, String> getReverseOutputColumns() const;
-    const ConstASTPtr & getFilter() const { return filter; }
 
     void initializePipeline(QueryPipeline &, const BuildQueryPipelineSettings &) override
     {
@@ -51,11 +47,14 @@ public:
     String getName() const override { return "CTERef"; }
     Type getType() const override { return Type::CTERef; }
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr context) const override;
+    bool hasFilter() const { return has_filter; }
+    void setFilter(bool has_filter_) { has_filter = has_filter_;}
     void serialize(WriteBuffer &) const override;
+    static QueryPlanStepPtr deserialize(ReadBuffer & buffer, ContextPtr context);
 
     std::shared_ptr<ProjectionStep> toProjectionStep() const;
     std::shared_ptr<ProjectionStep> toProjectionStepWithNewSymbols(SymbolMapper & mapper) const;
-    PlanNodePtr toInlinedPlanNode(CTEInfo & cte_info, ContextMutablePtr & context, bool with_filter = false) const;
+    PlanNodePtr toInlinedPlanNode(CTEInfo & cte_info, ContextMutablePtr & context) const;
 
 private:
     /**
@@ -69,9 +68,8 @@ private:
     std::unordered_map<String, String> output_columns;
 
     /**
-     * Filter pushed into CTE plan.
-     * This is a hint used for generate inlined plan as there is a filter above CTERefStep.
+     * CTE follows a filter.
      */
-    ConstASTPtr filter;
+    bool has_filter;
 };
 }

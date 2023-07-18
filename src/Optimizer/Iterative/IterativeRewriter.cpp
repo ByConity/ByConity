@@ -23,6 +23,22 @@ namespace ErrorCodes
     extern const int OPTIMIZER_TIMEOUT;
 }
 
+// #define TEST_RECORD_RULE_CALL_TIMES
+
+#ifdef TEST_RECORD_RULE_CALL_TIMES
+static std::map<std::underlying_type_t<RuleType>, size_t> rule_call_times {};
+#endif
+
+std::map<std::underlying_type_t<RuleType>, size_t> IterativeRewriter::getRuleCallTimes()
+{
+#ifdef TEST_RECORD_RULE_CALL_TIMES
+    return rule_call_times;
+#else
+    std::map<std::underlying_type_t<RuleType>, size_t> empty;
+    return empty;
+#endif
+}
+
 IterativeRewriter::IterativeRewriter(const std::vector<RulePtr> & rules_, std::string names_) : names(std::move(names_))
 {
     for (const auto & rule : rules_)
@@ -51,6 +67,7 @@ void IterativeRewriter::rewrite(QueryPlan & plan, ContextMutablePtr ctx) const
         .start_time = std::chrono::system_clock::now(),
         .optimizer_timeout = ctx->getSettingsRef().iterative_optimizer_timeout};
 
+    context.excluded_rules_map = &ctx->getExcludedRulesMap();
     for (auto & item : plan.getCTEInfo().getCTEs())
         explorePlan(item.second, context);
     explorePlan(plan.getPlanNode(), context);
@@ -90,19 +107,34 @@ bool IterativeRewriter::exploreNode(PlanNodePtr & node, IterativeRewriterContext
                  ++iter)
             {
                 const auto & rule = *iter;
+                auto node_id = node->getId();
+                auto rule_id = static_cast<std::underlying_type_t<RuleType>>(rule->getType());
                 if (!rule->isEnabled(ctx.globalContext))
+                    continue;
+
+                if (ctx.excluded_rules_map->operator[](node_id).count(rule_id))
                     continue;
 
                 checkTimeoutNotExhausted(rule->getName(), ctx);
 
                 RuleContext rule_context{.context = ctx.globalContext, .cte_info = ctx.cte_info};
+#ifdef TEST_RECORD_RULE_CALL_TIMES
+                rule_call_times[rule_id]++;
+#endif
                 auto rewrite_result = rule->transform(node, rule_context);
 
                 if (!rewrite_result.empty())
                 {
+                    if (rule->excludeIfTransformSuccess())
+                        ctx.excluded_rules_map->operator[](node_id).emplace(rule_id);
                     node = rewrite_result.getPlans()[0];
                     done = false;
                     progress = true;
+                }
+                else
+                {
+                    if (rule->excludeIfTransformFailure())
+                        ctx.excluded_rules_map->operator[](node_id).emplace(rule_id);
                 }
             }
         }
@@ -132,9 +164,7 @@ bool IterativeRewriter::exploreChildren(PlanNodePtr & plan, IterativeRewriterCon
     if (progress)
     {
         plan->replaceChildren(children);
-        auto new_step = plan->getStep()->copy(ctx.globalContext);
-        new_step->setInputStreams(inputs);
-        plan->setStep(new_step);
+        plan->getStep()->setInputStreams(inputs);
     }
 
     return progress;

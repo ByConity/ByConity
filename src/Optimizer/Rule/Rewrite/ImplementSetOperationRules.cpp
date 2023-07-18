@@ -33,12 +33,16 @@ namespace ErrorCodes
 
 PatternPtr ImplementExceptRule::getPattern() const
 {
-    return Patterns::except();
+    return Patterns::except().result();
 }
 
 TransformResult ImplementExceptRule::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
 {
     auto & context = *rule_context.context;
+    if (!context.getSettingsRef().enable_setoperation_to_agg)
+    {
+        return {};
+    }
     SetOperationNodeTranslator translator{context};
 
     const auto * step = dynamic_cast<const ExceptStep *>(node->getStep().get());
@@ -89,6 +93,7 @@ TransformResult ImplementExceptRule::transformImpl(PlanNodePtr node, const Captu
         PlanNodePtr filter_node = std::make_shared<FilterNode>(context.nextNodeId(), std::move(filter_step), children);
         return filter_node;
     }
+
 
     /**
      * Implement EXCEPT ALL using union, window and filter.
@@ -200,12 +205,16 @@ TransformResult ImplementExceptRule::transformImpl(PlanNodePtr node, const Captu
 
 PatternPtr ImplementIntersectRule::getPattern() const
 {
-    return Patterns::intersect();
+    return Patterns::intersect().result();
 }
 
 TransformResult ImplementIntersectRule::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
 {
     auto & context = *rule_context.context;
+    if (!context.getSettingsRef().enable_setoperation_to_agg)
+    {
+        return {};
+    }
     SetOperationNodeTranslator translator{context};
 
     const auto * step = dynamic_cast<const IntersectStep *>(node->getStep().get());
@@ -253,6 +262,7 @@ TransformResult ImplementIntersectRule::transformImpl(PlanNodePtr node, const Ca
         PlanNodePtr filter_node = std::make_shared<FilterNode>(context.nextNodeId(), std::move(filter_step), children);
         return filter_node;
     }
+
 
     /**
      * Implement INTERSECT ALL using union, window and filter.
