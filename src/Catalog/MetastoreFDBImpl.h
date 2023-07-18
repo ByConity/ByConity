@@ -70,8 +70,6 @@ public:
 
     void put(const String & key, const String & value, bool if_not_exists = false) override;
 
-    void putTTL(const String & key, const String & value, UInt64 ttl);
-
     std::pair<bool, String> putCAS(const String & key, const String & value, const String & expected, bool with_old_value = false) override;
 
     uint64_t get(const String & key, String & value) override;

@@ -13,17 +13,18 @@
  * limitations under the License.
  */
 
+#include <Catalog/MetastoreProxy.h>
+#include <Protos/DataModelHelpers.h>
 #include <cstddef>
 #include <random>
 #include <sstream>
 #include <vector>
 #include <string.h>
-#include <Catalog/MetastoreProxy.h>
 #include <DaemonManager/BGJobStatusInCatalog.h>
 #include <IO/ReadHelpers.h>
 #include <Protos/DataModelHelpers.h>
 #include "common/types.h"
-#include "Catalog/MetastoreFDBImpl.h"
+#include "Catalog/MetastoreByteKVImpl.h"
 
 namespace DB::ErrorCodes
 {
@@ -1830,9 +1831,9 @@ UInt64 MetastoreProxy::getMergeMutateThreadStartTime(const String & name_space, 
 void MetastoreProxy::setAsyncQueryStatus(
     const String & name_space, const String & id, const Protos::AsyncQueryStatus & status, UInt64 ttl) const
 {
-    if (auto * fdkv = dynamic_cast<MetastoreFDBImpl *>(metastore_ptr.get()))
+    if (auto * bytekv = dynamic_cast<MetastoreByteKVImpl *>(metastore_ptr.get()))
     {
-        fdkv->putTTL(asyncQueryStatusKey(name_space, id), status.SerializeAsString(), ttl);
+        bytekv->putTTL(asyncQueryStatusKey(name_space, id), status.SerializeAsString(), ttl);
         return;
     }
     metastore_ptr->put(asyncQueryStatusKey(name_space, id), status.SerializeAsString());

@@ -49,18 +49,6 @@ void MetastoreFDBImpl::put(const String & key, const String & value, bool if_not
     check_fdb_op(fdb_client->Put(tr, put_req));
 }
 
-void MetastoreFDBImpl::putTTL(const String & key, const String & value, UInt64 ttl)
-{
-    FDB::PutRequest put_req;
-    put_req.key = StringRef(key);
-    put_req.value = StringRef(value);
-    put_req.ttl = ttl;
-
-    FDB::FDBTransactionPtr tr = std::make_shared<FDB::FDBTransactionRAII>();
-    check_fdb_op(fdb_client->CreateTransaction(tr));
-    check_fdb_op(fdb_client->Put(tr, put_req));
-}
-
 std::pair<bool, String> MetastoreFDBImpl::putCAS(const String & key, const String & value, const String & expected, bool with_old_value)
 {
     FDB::PutRequest put_req;
