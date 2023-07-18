@@ -354,7 +354,6 @@ struct ContextSharedPart
     /// Cache of primary indexes.
     mutable PrimaryIndexCachePtr primary_index_cache;
 
-    WorkerStatusManagerPtr worker_status_manager;
     mutable ServiceDiscoveryClientPtr sd;
     mutable PartCacheManagerPtr cache_manager; /// Manage cache of parts for cnch tables.
     mutable CnchStorageCachePtr storage_cache; /// Storage cache used in cnch.
