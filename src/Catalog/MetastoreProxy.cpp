@@ -1831,11 +1831,11 @@ UInt64 MetastoreProxy::getMergeMutateThreadStartTime(const String & name_space, 
 void MetastoreProxy::setAsyncQueryStatus(
     const String & name_space, const String & id, const Protos::AsyncQueryStatus & status, UInt64 ttl) const
 {
-    if (auto * bytekv = dynamic_cast<MetastoreByteKVImpl *>(metastore_ptr.get()))
-    {
-        bytekv->putTTL(asyncQueryStatusKey(name_space, id), status.SerializeAsString(), ttl);
-        return;
-    }
+    // if (auto * bytekv = dynamic_cast<MetastoreByteKVImpl *>(metastore_ptr.get()))
+    // {
+    //     bytekv->putTTL(asyncQueryStatusKey(name_space, id), status.SerializeAsString(), ttl);
+    //     return;
+    // }
     metastore_ptr->put(asyncQueryStatusKey(name_space, id), status.SerializeAsString());
 }
 
