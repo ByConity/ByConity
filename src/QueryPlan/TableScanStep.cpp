@@ -788,7 +788,7 @@ void TableScanStep::makeSetsForIndex(const ASTPtr & node, ContextPtr context, Pr
 }
 
 TableScanStep::TableScanStep(
-    ContextPtr  /*context*/,
+    ContextPtr /*context*/,
     StoragePtr storage_,
     const NamesWithAliases & column_alias_,
     const SelectQueryInfo & query_info_,
@@ -799,7 +799,8 @@ TableScanStep::TableScanStep(
     QueryPlanStepPtr projection_,
     QueryPlanStepPtr filter_)
     : ISourceStep(DataStream{}, hints_)
-    , storage_id(storage_id_)
+    , storage(storage_)
+    , storage_id(storage->getStorageID())
     , column_alias(column_alias_)
     , query_info(query_info_)
     , max_block_size(max_block_size_)
