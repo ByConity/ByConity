@@ -862,16 +862,29 @@ TableScanStep::TableScanStep(
 }
 
 TableScanStep::TableScanStep(
-    ContextPtr  context,
+    ContextPtr context,
     StorageID storage_id_,
     const NamesWithAliases & column_alias_,
     const SelectQueryInfo & query_info_,
-    QueryProcessingStage::Enum processing_stage_,
     size_t max_block_size_,
+    String alias_,
+    PlanHints hints_,
     QueryPlanStepPtr aggregation_,
     QueryPlanStepPtr projection_,
     QueryPlanStepPtr filter_)
-    : TableScanStep(context, DatabaseCatalog::instance().getTable(storage_id_, context), column_alias_, query_info_, processing_stage_, max_block_size_, aggregation_, projection_, filter_) { }
+    : TableScanStep(
+        context,
+        DatabaseCatalog::instance().getTable(storage_id_, context),
+        column_alias_,
+        query_info_,
+        max_block_size_,
+        alias_,
+        hints_,
+        aggregation_,
+        projection_,
+        filter_)
+{
+}
 
 void TableScanStep::formatOutputStream()
 {
