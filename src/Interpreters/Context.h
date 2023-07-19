@@ -290,9 +290,7 @@ using QueueThrottlerDeleterPtr = std::shared_ptr<QeueueThrottlerDeleter>;
 class VWCustomizedSettings;
 using VWCustomizedSettingsPtr = std::shared_ptr<VWCustomizedSettings>;
 
-#if USE_VE_TOS
 class VETosConnectionParams;
-#endif
 
 enum class ServerType
 {
@@ -631,13 +629,10 @@ public:
     void setHdfsConnectionParams(const HDFSConnectionParams & hdfs_params);
     HDFSConnectionParams getHdfsConnectionParams() const;
 
-
     void setLasfsConnectionParams(const Poco::Util::AbstractConfiguration & config);
 
-    #if USE_VE_TOS
-        void setVETosConnectParams(const VETosConnectionParams & connect_params);
-        const VETosConnectionParams & getVETosConnectParams() const;
-    #endif
+    void setVETosConnectParams(const VETosConnectionParams & connect_params);
+    const VETosConnectionParams & getVETosConnectParams() const;
 
     /// create backgroud task to synchronize metadata table by table
     void setMetaChecker();

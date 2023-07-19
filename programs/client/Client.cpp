@@ -69,6 +69,14 @@
 #include <Core/Types.h>
 #include <Core/QueryProcessingStage.h>
 #include <Core/ExternalTable.h>
+#include <DataStreams/InternalTextLogsRowOutputStream.h>
+#include <DataStreams/NullBlockOutputStream.h>
+#include <Formats/FormatFactory.h>
+#include <Formats/registerFormats.h>
+#include <Functions/registerFunctions.h>
+#include <IO/Operators.h>
+#include <IO/VETosCommon.h>
+#include <IO/OutfileCommon.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/ReadBufferFromFileDescriptor.h>
 #include <IO/WriteBufferFromFileDescriptor.h>
@@ -336,6 +344,8 @@ private:
         HDFSConnectionParams hdfs_params = HDFSConnectionParams::parseHdfsFromConfig(context->getCnchConfigRef());
         context->setHdfsConnectionParams(hdfs_params);
 #endif
+        auto vetos_params = VETosConnectionParams::parseVeTosFromConfig(config());
+        context->setVETosConnectParams(vetos_params);
     }
 
 

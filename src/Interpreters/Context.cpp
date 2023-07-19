@@ -171,9 +171,7 @@
 #include <Storages/RemoteFile/CnchFileSettings.h>
 #include <Storages/StorageS3Settings.h>
 
-#if USE_VE_TOS
 #include <IO/VETosCommon.h>
-#endif
 
 namespace fs = std::filesystem;
 
@@ -312,9 +310,9 @@ struct ContextSharedPart
     String hdfs_nn_proxy; // libhdfs3 namenode proxy
     HDFSConnectionParams hdfs_connection_params;
     mutable std::optional<EmbeddedDictionaries> embedded_dictionaries; /// Metrica's dictionaries. Have lazy initialization.
-#if USE_VE_TOS
+    
     VETosConnectionParams vetos_connection_params;
-#endif
+
     mutable std::optional<CnchCatalogDictionaryCache> cnch_catalog_dict_cache;
     mutable std::optional<ExternalDictionariesLoader> external_dictionaries_loader;
     mutable std::optional<ExternalModelsLoader> external_models_loader;
@@ -4133,19 +4131,17 @@ void Context::setLasfsConnectionParams(const Poco::Util::AbstractConfiguration &
     }
 }
 
-#if USE_VE_TOS
 void Context::setVETosConnectParams(const VETosConnectionParams & connect_params)
 {
     auto lock = getLock();
-    shared-> vetos_connection_params = connect_params;
+    shared->vetos_connection_params = connect_params;
 }
 
 const VETosConnectionParams & Context::getVETosConnectParams() const
 {
     auto lock = getLock();
-    return shared-> vetos_connection_params;
+    return shared->vetos_connection_params;
 }
-#endif
 
 void Context::setUniqueKeyIndexBlockCache(size_t cache_size_in_bytes)
 {

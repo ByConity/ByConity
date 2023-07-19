@@ -1949,7 +1949,7 @@ void executeQuery(
                 executor->execute(pipeline.getNumThreads());
             }
 
-            if(outfile_target!=nullptr)
+            if (outfile_target != nullptr)
                 outfile_target->flushFile();
         }
     }
