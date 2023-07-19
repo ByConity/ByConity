@@ -54,6 +54,11 @@ std::vector<RulePtr> Rules::normalizeExpressionRules()
     return {std::make_shared<CommonPredicateRewriteRule>(), std::make_shared<SwapPredicateRewriteRule>()};
 }
 
+std::vector<RulePtr> Rules::swapPredicateRules()
+{
+    return {std::make_shared<SwapPredicateRewriteRule>()};
+}
+
 std::vector<RulePtr> Rules::simplifyExpressionRules()
 {
     return {

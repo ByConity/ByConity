@@ -687,8 +687,8 @@ PlanNodePtr ColumnPruningVisitor::visitCTERefNode(CTERefNode & node, NameSet & r
         if (required.contains(item.first))
             output_columns.emplace(item);
 
-    auto exchange_step
-        = std::make_shared<CTERefStep>(DataStream{std::move(result_columns)}, with_step->getId(), std::move(output_columns), with_step->getFilter());
+    auto exchange_step = std::make_shared<CTERefStep>(
+        DataStream{std::move(result_columns)}, with_step->getId(), std::move(output_columns), with_step->hasFilter());
     return CTERefNode::createPlanNode(context->nextNodeId(), std::move(exchange_step), {}, node.getStatistics());
 }
 
