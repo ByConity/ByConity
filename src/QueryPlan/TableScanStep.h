@@ -36,8 +36,9 @@ public:
         StoragePtr storage_,
         const NamesWithAliases & column_alias_,
         const SelectQueryInfo & query_info_,
-        QueryProcessingStage::Enum processing_stage_,
         size_t max_block_size_,
+        String alias_ = "",
+        PlanHints hints_ = {},
         QueryPlanStepPtr aggregation_ = nullptr,
         QueryPlanStepPtr projection_ = nullptr,
         QueryPlanStepPtr filter_ = nullptr);
