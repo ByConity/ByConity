@@ -26,4 +26,3 @@
 #cmakedefine01 USE_JEMALLOC
 #cmakedefine01 USE_BZIP2
 #cmakedefine01 USE_JAVA_EXTENSIONS
-#cmakedefine01 USE_VE_TOS

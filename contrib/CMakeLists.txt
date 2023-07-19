@@ -1,4 +1,3 @@
-
 # Put all targets defined here and in added subfolders under "contrib/" folder in GUI-based IDEs by default.
 # Some of third-party projects may override CMAKE_FOLDER or FOLDER property of their targets, so they will
 # appear not in "contrib/" as originally planned here.
@@ -370,7 +369,3 @@ if (ENABLE_BENCHMARK)
 endif()
 
 add_subdirectory(hivemetastore-cmake)
-
-if (ENABLE_VE_TOS)
-    add_subdirectory(ve-tos-cpp-sdk-cmake)
-endif()

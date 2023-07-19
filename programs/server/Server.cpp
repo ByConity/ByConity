@@ -166,10 +166,7 @@
 #    include <jemalloc/jemalloc.h>
 #endif
 
-#if USE_VE_TOS
-    #include <TosClientV2.h>
-    #include <IO/VETosCommon.h>
-#endif
+#include <IO/VETosCommon.h>
 
 namespace CurrentMetrics
 {
@@ -1149,11 +1146,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     HDFSConnectionParams hdfs_params = HDFSConnectionParams::parseHdfsFromConfig(global_context->getCnchConfigRef());
     global_context->setHdfsConnectionParams(hdfs_params);
 #endif
-#if USE_VE_TOS
-        auto vetos_params = VETosConnectionParams::parseVeTosFromConfig(config());
-        global_context->setVETosConnectParams(vetos_params);
-        VETosConnectionParams::initializeTOSClient(config());
-#endif
+    auto vetos_params = VETosConnectionParams::parseVeTosFromConfig(config());
+    global_context->setVETosConnectParams(vetos_params);
 
     // Clear old store data in the background
     ThreadFromGlobalPool clear_old_data;
