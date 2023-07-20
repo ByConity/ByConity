@@ -41,5 +41,6 @@ public:
 
 private:
     bool distinct;
+    Processors processors;
 };
 }

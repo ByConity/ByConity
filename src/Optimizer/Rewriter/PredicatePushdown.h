@@ -25,13 +25,13 @@ namespace DB
 class PredicatePushdown : public Rewriter
 {
 public:
-    explicit PredicatePushdown(bool dynamic_filtering_ = false) : dynamic_filtering(dynamic_filtering_) { }
+    explicit PredicatePushdown(bool pushdown_filter_into_cte_ = false) : pushdown_filter_into_cte(pushdown_filter_into_cte_) { }
 
     void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     String name() const override { return "PredicatePushdown"; }
 
 private:
-    const bool dynamic_filtering;
+    const bool pushdown_filter_into_cte;
 };
 
 struct PredicateContext
@@ -48,11 +48,11 @@ class PredicateVisitor : public PlanNodeVisitor<PlanNodePtr, PredicateContext>
 {
 public:
     PredicateVisitor(
-        bool dynamic_filtering_,
+        bool pushdown_filter_into_cte_,
         ContextMutablePtr context_,
         CTEInfo & cte_info_,
         const std::unordered_map<CTEId, UInt64> & cte_reference_counts_)
-        : dynamic_filtering(dynamic_filtering_)
+        : pushdown_filter_into_cte(pushdown_filter_into_cte_)
         , context(context_)
         , cte_info(cte_info_)
         , cte_reference_counts(cte_reference_counts_)
@@ -75,11 +75,11 @@ public:
     PlanNodePtr visitCTERefNode(CTERefNode & node, PredicateContext & context) override;
 
 private:
-    const bool dynamic_filtering;
+    const bool pushdown_filter_into_cte;
     ContextMutablePtr context;
     CTEInfo & cte_info;
     const std::unordered_map<CTEId, UInt64> & cte_reference_counts;
-    std::unordered_map<CTEId, std::vector<ConstASTPtr>> cte_common_filters{};
+    std::unordered_map<CTEId, std::vector<std::pair<const CTERefStep *, ConstASTPtr>>> cte_predicates{};
 
     PlanNodePtr process(PlanNodeBase &, PredicateContext &);
     PlanNodePtr processChild(PlanNodeBase &, PredicateContext &);
@@ -143,8 +143,8 @@ struct OuterJoinResult
 class EffectivePredicateExtractor
 {
 public:
-    static ASTPtr extract(PlanNodePtr & node, CTEInfo & cte_info, ContextMutablePtr & context);
-    static ASTPtr extract(PlanNodeBase & node, CTEInfo & cte_info, ContextMutablePtr & context);
+    static ASTPtr extract(PlanNodePtr & node, ContextMutablePtr & context);
+    static ASTPtr extract(PlanNodeBase & node, ContextMutablePtr & context);
 };
 
 class EffectivePredicateVisitor : public PlanNodeVisitor<ASTPtr, ContextMutablePtr>
@@ -168,13 +168,11 @@ public:
     ASTPtr visitAssignUniqueIdNode(AssignUniqueIdNode &, ContextMutablePtr &) override;
     ASTPtr visitCTERefNode(CTERefNode & node, ContextMutablePtr & context) override;
 
-    explicit EffectivePredicateVisitor(CTEInfo & cte_info_) : cte_info(cte_info_) {}
+    explicit EffectivePredicateVisitor() {}
 
 private:
     ASTPtr process(PlanNodeBase & node, ContextMutablePtr & context);
     static ASTPtr pullExpressionThroughSymbols(ASTPtr & expression, std::vector<String> symbols, ContextMutablePtr & context);
-
-    CTEInfo & cte_info;
 };
 
 }

@@ -193,6 +193,23 @@ struct ColumnWithType
     ColumnWithType(const DataTypePtr & type_) : type(type_){}
 };
 
+struct HintAnalysis
+{
+    size_t leading_hint_count = 0;
+};
+
+struct ArrayJoinDescription
+{
+    ASTPtr expr;
+    bool create_new_field = false;
+};
+using ArrayJoinDescriptions = std::vector<ArrayJoinDescription>;
+struct ArrayJoinAnalysis
+{
+    bool is_left_array_join;
+    ArrayJoinDescriptions descriptions;
+};
+
 template<typename Key, typename Val>
 using ListMultimap = std::unordered_map<Key, std::vector<Val>>;
 
@@ -243,6 +260,10 @@ struct Analysis
     std::unordered_map<ASTPtr, ResolvedField> column_references;
     void setColumnReference(const ASTPtr & ast, const ResolvedField & resolved);
     std::optional<ResolvedField> tryGetColumnReference(const ASTPtr & ast);
+    std::unordered_map<const IAST *, std::set<size_t>> used_columns;
+    void addUsedColumn(const IAST * table_ast, size_t field_index);
+    void addUsedColumn(const ResolvedField & resolved_field);
+    const std::set<size_t> & getUsedColumns(const IAST & table_ast);
 
     // ASTIdentifier
     std::unordered_map<ASTPtr, ResolvedField> lambda_argument_references;
@@ -357,6 +378,13 @@ struct Analysis
     /// Non-deterministic functions
     std::unordered_set<IAST *> non_deterministic_functions;
     void addNonDeterministicFunctions(IAST & ast);
+
+    /// record hints info
+    HintAnalysis hint_analysis;
+    HintAnalysis & getHintInfo() { return hint_analysis; }
+
+    std::unordered_map<ASTSelectQuery *, ArrayJoinAnalysis> array_join_analysis;
+    ArrayJoinAnalysis & getArrayJoinAnalysis(ASTSelectQuery & select_query);
 };
 
 }

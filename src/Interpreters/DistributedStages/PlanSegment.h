@@ -204,6 +204,28 @@ using PlanSegmentOutputs = std::vector<PlanSegmentOutputPtr>;
 class PlanSegment;
 using PlanSegmentPtr = std::unique_ptr<PlanSegment>;
 
+struct PlanSegmentDescription
+{
+    size_t segment_id;
+    String query_id;
+
+    PlanNodeId root_id;
+    PlanNodeId root_child_id;
+    PlanNodePtr plan_node = nullptr;
+
+    String cluster_name;
+    size_t parallel;
+    size_t exchange_parallel_size;
+    UInt32 shard_num;
+    ExchangeMode mode;
+    Names shuffle_keys;
+    bool is_source = false;
+    std::unordered_map<PlanNodeId, size_t> exchange_to_segment;
+};
+
+using PlanSegmentDescriptionPtr = std::shared_ptr<PlanSegmentDescription>;
+using PlanSegmentDescriptions = std::vector<PlanSegmentDescriptionPtr>;
+
 class PlanSegment
 {
 public:
@@ -290,6 +312,8 @@ public:
 
     std::vector<DynamicFilterId> & getRuntimeFilters() { return runtime_filters; }
 
+    PlanSegmentDescriptionPtr getPlanSegmentDescription();
+    static void getRemoteSegmentId(const QueryPlan::Node * node, std::unordered_map<PlanNodeId, size_t> & exchange_to_segment);
     size_t getParallelIndex() const;
 
 private:
@@ -342,6 +366,11 @@ public:
     void setRoot(Node && node_) {
         nodes.push_front(std::move(node_));
         root = &nodes.front();
+    }
+
+    void replaceRoot(Node && node_) {
+        nodes.pop_back();
+        nodes.push_front(std::move(node_));
     }
 
     void setRoot(Node * root_) { root = root_; }

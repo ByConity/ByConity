@@ -20,6 +20,7 @@
 #include <Analyzers/ExecutePrewhereSubqueryVisitor.h>
 #include <Analyzers/ImplementFunctionVisitor.h>
 #include <Analyzers/ReplaceViewWithSubqueryVisitor.h>
+#include <Analyzers/SimpleFunctionVisitor.h>
 #include <Analyzers/RewriteAliasesVisitor.h>
 #include <Interpreters/ApplyWithAliasVisitor.h>
 #include <Interpreters/ApplyWithSubqueryVisitor.h>
@@ -50,8 +51,6 @@ namespace DB
 
 namespace
 {
-    thread_local int graphviz_index;
-
     template <char const * func_name>
     struct CustomizeFunctionsData
     {
@@ -176,13 +175,13 @@ namespace
     using CustomizeAggregateFunctionsOrNullVisitor = InDepthNodeVisitor<OneTypeMatcher<CustomizeAggregateFunctionsSuffixData>, true>;
     using CustomizeAggregateFunctionsMoveOrNullVisitor = InDepthNodeVisitor<OneTypeMatcher<CustomizeAggregateFunctionsMoveSuffixData>, true>;
 
-    void expandCte(ASTPtr & query, ContextMutablePtr context)
+    void expandCte(ASTPtr & query, ContextMutablePtr context, int & graphviz_index)
     {
         ApplyWithSubqueryVisitor::visit(query);
         GraphvizPrinter::printAST(query, context, std::to_string(graphviz_index++) + "-AST-expand-cte");
     }
 
-    void rewriteAliases(ASTPtr & query, ContextMutablePtr context)
+    void rewriteAliases(ASTPtr & query, ContextMutablePtr context, int & graphviz_index)
     {
         RewriteAliasesVisitor::Data data{context};
         RewriteAliasesVisitor(data).visit(query);
@@ -194,7 +193,13 @@ namespace
         CheckAliasVisitor().visit(query);
     }
 
-    void expandView(ASTPtr & query, ContextMutablePtr context)
+    void simpleFunctions(ASTPtr & query, ContextMutablePtr context)
+    {
+        if (context->getSettingsRef().rewrite_like_function)
+            SimpleFunctionVisitor().visit(query);
+    }
+
+    void expandView(ASTPtr & query, ContextMutablePtr context, int & graphviz_index)
     {
         ReplaceViewWithSubquery data{context};
         ReplaceViewWithSubqueryVisitor(data).visit(query);
@@ -214,7 +219,7 @@ namespace
         }
     }
 
-    void normalizeFunctions(ASTPtr & query, ContextMutablePtr context)
+    void normalizeFunctions(ASTPtr & query, ContextMutablePtr context, int & graphviz_index)
     {
         const auto & settings = context->getSettingsRef();
 
@@ -260,7 +265,7 @@ namespace
         GraphvizPrinter::printAST(query, context, std::to_string(graphviz_index++) + "-AST-normal-functions");
     }
 
-    void implementFunctions(ASTPtr & query, ContextMutablePtr context)
+    void implementFunctions(ASTPtr & query, ContextMutablePtr context, int & graphviz_index)
     {
         ImplementFunction data{context};
         ImplementFunctionVisitor(data).visit(query);
@@ -354,7 +359,7 @@ namespace
         RewriteInTableExpressionVisitor(data).visit(query);
     }
 
-    void applyWithAlias(ASTPtr & query, ContextMutablePtr context)
+    void applyWithAlias(ASTPtr & query, ContextMutablePtr context, int & graphviz_index)
     {
         if (context->getSettingsRef().enable_global_with_statement)
         {
@@ -364,7 +369,8 @@ namespace
     }
 
     void normalizeNameAndAliases(ASTPtr & query, Aliases & aliases, const NameSet & source_columns_set, const Settings & settings,
-                                 ContextMutablePtr context, ConstStoragePtr /*storage*/, const StorageMetadataPtr & metadata_snapshot)
+                                 ContextMutablePtr context, ConstStoragePtr /*storage*/, const StorageMetadataPtr & metadata_snapshot,
+                                 int & graphviz_index)
     {
         /// Creates a dictionary `aliases`: alias -> ASTPtr
         QueryAliasesVisitor(aliases).visit(query);
@@ -399,7 +405,7 @@ namespace
         JoinToSubqueryTransformVisitor(join_to_subs_data).visit(query);
     }
 
-    void rewriteSelectQuery(ASTPtr & node, ContextMutablePtr context)
+    void rewriteSelectQuery(ASTPtr & node, ContextMutablePtr context, int & graphviz_index)
     {
         /// InterpreterSelectQuery logics:
         JoinedTables joined_tables(context, node->as<ASTSelectQuery &>(), false);
@@ -461,7 +467,7 @@ namespace
 
         // 4. Normalize
         {
-            normalizeFunctions(node, context);
+            normalizeFunctions(node, context, graphviz_index);
 
             NameSet all_source_columns_set = result.source_columns_set;
             if (result.analyzed_join)
@@ -470,7 +476,7 @@ namespace
                     all_source_columns_set.insert(col.name);
             }
             normalizeNameAndAliases(node, result.aliases, all_source_columns_set, settings, context, result.storage,
-                                    result.metadata_snapshot);
+                                    result.metadata_snapshot, graphviz_index);
         }
 
         // 5. Call `TreeOptimizer` since some optimizations will change the query result
@@ -518,25 +524,27 @@ ASTPtr QueryRewriter::rewrite(ASTPtr query, ContextMutablePtr context, bool enab
     if (context->getSettingsRef().dialect_type != DialectType::CLICKHOUSE)
     {
         /// Statement rewriting
-        expandCte(query, context);
-        expandView(query, context);
+        expandCte(query, context, graphviz_index);
+        expandView(query, context, graphviz_index);
         normalizeUnion(query, context); // queries in union may not be normalized, hence normalize them here
         checkAlias(query);
+        simpleFunctions(query, context);
 
         /// Expression rewriting
-        rewriteAliases(query, context);
+        rewriteAliases(query, context, graphviz_index);
         markTupleLiteralsAsLegacy(query, context);
         markTableIdentifiers(query);
         rewriteInTableExpression(query);
-        normalizeFunctions(query, context);
-        implementFunctions(query, context);
+        normalizeFunctions(query, context, graphviz_index);
+        implementFunctions(query, context, graphviz_index);
     }
     else
     {
-        applyWithAlias(query, context);
-        expandCte(query, context);
-        expandView(query, context);
+        applyWithAlias(query, context, graphviz_index);
+        expandCte(query, context, graphviz_index);
+        expandView(query, context, graphviz_index);
         normalizeUnion(query, context);
+        simpleFunctions(query, context);
 
         markTupleLiteralsAsLegacy(query, context);
 
@@ -544,7 +552,7 @@ ASTPtr QueryRewriter::rewrite(ASTPtr query, ContextMutablePtr context, bool enab
         std::function<void(ASTPtr &)> rewrite_query = [&](ASTPtr & ast) {
             if (ast->as<ASTSelectQuery>())
             {
-                rewriteSelectQuery(ast, context);
+                rewriteSelectQuery(ast, context, graphviz_index);
                 GraphvizPrinter::printAST(ast, context, std::to_string(graphviz_index++) + "-AST");
             }
 
@@ -554,6 +562,12 @@ ASTPtr QueryRewriter::rewrite(ASTPtr query, ContextMutablePtr context, bool enab
         };
 
         rewrite_query(query);
+    }
+
+    if (query->as<ASTExplainQuery>())
+    {
+        auto & explain = query->as<ASTExplainQuery &>();
+        explain.getExplainedQuery() = explain.children[0];
     }
 
     GraphvizPrinter::printAST(query, context, std::to_string(graphviz_index++) + "-AST-done");

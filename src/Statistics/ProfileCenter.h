@@ -84,7 +84,7 @@ public:
         }
     }
 
-    String get_summary()
+    String getSummary()
     {
         String result;
         for (auto & [key, time] : records)

@@ -28,6 +28,8 @@
 #include <Processors/Transforms/FilterTransform.h>
 #include <Processors/Transforms/JoiningTransform.h>
 #include <QueryPlan/JoinStep.h>
+#include <Interpreters/ConcurrentHashJoin.h>
+#include <Core/SettingsEnums.h>
 
 namespace DB
 {
@@ -116,7 +118,7 @@ JoinPtr JoinStep::makeJoin(ContextPtr context)
         return std::make_shared<NestedLoopJoin>(table_join, sample_block, context);
     else if (table_join->forceHashJoin() || (table_join->preferMergeJoin() && !allow_merge_join))
     {
-        if (table_join->allowParallelHashJoin())
+        if (table_join->allowParallelHashJoin() && join_algorithm == JoinAlgorithm::PARALLEL_HASH)
         {
             LOG_TRACE(&Poco::Logger::get("JoinStep::makeJoin"), "will use ConcurrentHashJoin");
             return std::make_shared<ConcurrentHashJoin>(table_join, context->getSettings().max_threads, sample_block);
@@ -130,13 +132,14 @@ JoinPtr JoinStep::makeJoin(ContextPtr context)
     return std::make_shared<JoinSwitcher>(table_join, sample_block);
 }
 
-JoinStep::JoinStep(const DataStream & left_stream_, const DataStream & right_stream_, JoinPtr join_, size_t max_block_size_, size_t max_streams_, bool keep_left_read_in_order_)
-    : join(std::move(join_)), max_block_size(max_block_size_), max_streams(max_streams_), keep_left_read_in_order(keep_left_read_in_order_)
+JoinStep::JoinStep(const DataStream & left_stream_, const DataStream & right_stream_, JoinPtr join_, size_t max_block_size_, size_t max_streams_, bool keep_left_read_in_order_, bool is_ordered_, PlanHints hints_)
+    : join(std::move(join_)), max_block_size(max_block_size_), max_streams(max_streams_), keep_left_read_in_order(keep_left_read_in_order_), is_ordered(is_ordered_)
 {
     input_streams = {left_stream_, right_stream_};
     output_stream = DataStream{
         .header = JoiningTransform::transformHeader(left_stream_.header, join),
     };
+    hints = std::move(hints_);
 }
 
 JoinStep::JoinStep(
@@ -153,7 +156,10 @@ JoinStep::JoinStep(
     std::optional<std::vector<bool>> require_right_keys_,
     ASOF::Inequality asof_inequality_,
     DistributionType distribution_type_,
-    bool is_magic_)
+    JoinAlgorithm join_algorithm_,
+    bool is_magic_,
+    bool is_ordered_,
+    PlanHints hints_)
     : kind(kind_)
     , strictness(strictness_)
     , max_streams(max_streams_)
@@ -165,10 +171,13 @@ JoinStep::JoinStep(
     , require_right_keys(std::move(require_right_keys_))
     , asof_inequality(asof_inequality_)
     , distribution_type(distribution_type_)
+    , join_algorithm(join_algorithm_)
     , is_magic(is_magic_)
+    , is_ordered(is_ordered_)
 {
     input_streams = std::move(input_streams_);
     output_stream = std::move(output_stream_);
+    hints = std::move(hints_);
 }
 
 void JoinStep::setInputStreams(const DataStreams & input_streams_)
@@ -187,7 +196,7 @@ QueryPipelinePtr JoinStep::updatePipeline(QueryPipelines pipelines, const BuildQ
         max_block_size = settings.context->getSettingsRef().max_block_size;
     }
 
-    auto pipeline = QueryPipeline::joinPipelines(std::move(pipelines[0]), std::move(pipelines[1]), join, max_block_size, settings.context->getSettingsRef().join_parallel_left_right, max_streams, keep_left_read_in_order, &processors);
+    auto pipeline = QueryPipeline::joinPipelines(std::move(pipelines[0]), std::move(pipelines[1]), join, max_block_size, max_streams, keep_left_read_in_order, settings.context->getSettingsRef().join_parallel_left_right, &processors);
 
     // if NestLoopJoin is choose, no need to add filter stream.
     if (filter && !PredicateUtils::isTruePredicate(filter) && join->getType() != JoinType::NestedLoop)
@@ -305,6 +314,7 @@ void JoinStep::serialize(WriteBuffer & buf, bool with_output) const
         }
         SERIALIZE_ENUM(asof_inequality, buf)
         SERIALIZE_ENUM(distribution_type, buf)
+        SERIALIZE_ENUM(join_algorithm, buf)
 
         writeBinary(is_magic, buf);
     }
@@ -401,6 +411,7 @@ QueryPlanStepPtr JoinStep::deserialize(ReadBuffer & buf, ContextPtr context)
 
         DESERIALIZE_ENUM(ASOF::Inequality, asof_inequality, buf)
         DESERIALIZE_ENUM(DistributionType, distribution_type, buf)
+        DESERIALIZE_ENUM(JoinAlgorithm, join_algorithm, buf)
 
         bool is_magic;
         readBinary(is_magic, buf);
@@ -421,6 +432,7 @@ QueryPlanStepPtr JoinStep::deserialize(ReadBuffer & buf, ContextPtr context)
             require_right_keys,
             asof_inequality,
             distribution_type,
+            join_algorithm,
             is_magic);
     }
 
@@ -553,8 +565,28 @@ std::shared_ptr<IQueryPlanStep> JoinStep::copy(ContextPtr) const
         require_right_keys,
         asof_inequality,
         distribution_type,
-        is_magic);
+        join_algorithm,
+        is_magic,
+        is_ordered,
+        hints);
 }
+
+
+bool JoinStep::mustReplicate() const
+{
+    if (left_keys.empty() && (kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::Left || kind == ASTTableJoin::Kind::Cross))
+    {
+        // There is nothing to partition on
+        return true;
+    }
+    return false;
+}
+
+bool JoinStep::mustRepartition() const
+{
+    return kind == ASTTableJoin::Kind::Right || kind == ASTTableJoin::Kind::Full;
+}
+
 
 std::shared_ptr<IQueryPlanStep> FilledJoinStep::copy(ContextPtr) const
 {

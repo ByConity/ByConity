@@ -31,7 +31,7 @@ template <class StatsType>
 std::shared_ptr<StatsType> createStatisticsUntyped(StatisticsTag tag, std::string_view blob)
 {
     static_assert(std::is_base_of_v<StatisticsBase, StatsType>);
-    CheckTag<StatsType>(tag);
+    checkTag<StatsType>(tag);
     std::shared_ptr<StatsType> ptr = std::make_shared<StatsType>();
     ptr->deserialize(blob);
     return ptr;
@@ -41,7 +41,7 @@ template <class StatsType, typename T>
 std::shared_ptr<StatsType> createStatisticsTypedImpl(StatisticsTag tag, std::string_view blob)
 {
     static_assert(std::is_base_of_v<StatisticsBase, StatsType>);
-    CheckTag<StatsType>(tag);
+    checkTag<StatsType>(tag);
     using ImplType = typename StatsType::template Impl<T>;
     auto ptr = std::make_shared<ImplType>();
     ptr->deserialize(blob);
@@ -91,7 +91,7 @@ template <class StatsType>
 std::shared_ptr<StatsType> createStatisticsUntypedJson(StatisticsTag tag, std::string_view blob)
 {
     static_assert(std::is_base_of_v<StatisticsBase, StatsType>);
-    CheckTag<StatsType>(tag);
+    checkTag<StatsType>(tag);
     std::shared_ptr<StatsType> ptr = std::make_shared<StatsType>();
     ptr->deserializeFromJson(blob);
     return ptr;
@@ -100,7 +100,7 @@ template <class StatsType, typename T>
 std::shared_ptr<StatsType> createStatisticsTypedJsonImpl(StatisticsTag tag, std::string_view blob)
 {
     static_assert(std::is_base_of_v<StatisticsBase, StatsType>);
-    CheckTag<StatsType>(tag);
+    checkTag<StatsType>(tag);
     using ImplType = typename StatsType::template Impl<T>;
     auto ptr = std::make_shared<ImplType>();
     ptr->deserializeFromJson(blob);

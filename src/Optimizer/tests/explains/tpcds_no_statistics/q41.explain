@@ -1,42 +1,44 @@
-Projection est. 100 rows
+Projection Est. 100 rows
 │     Expressions: [i_product_name]
-└─ Limit est. 100 rows
+└─ Limit Est. 100 rows
    │     Limit: 100
-   └─ Sorting est. ? rows
+   └─ Sorting Est. ? rows
       │     Order by: {i_product_name asc}
-      └─ Gather Exchange est. ? rows
-         └─ Sorting est. ? rows
+      └─ Gather Exchange Est. ? rows
+         └─ Sorting Est. ? rows
             │     Order by: {i_product_name asc}
-            └─ MergingAggregated est. ? rows
-               └─ Repartition Exchange est. ? rows
+            └─ MergingAggregated Est. ? rows
+               └─ Repartition Exchange Est. ? rows
                   │     Partition by: {i_product_name}
-                  └─ Aggregating est. ? rows
+                  └─ Aggregating Est. ? rows
                      │     Group by: {i_product_name}
-                     └─ Inner Join est. ? rows
+                     └─ Inner Join Est. ? rows
                         │     Condition: 
                         │     Filter: coalesce(`expr#count()`, countIf) > 0
-                        ├─ Left Join est. ? rows
+                        ├─ Left Join Est. ? rows
                         │  │     Condition: i_manufact == i_manufact_1
-                        │  ├─ Repartition Exchange est. ? rows
+                        │  ├─ Repartition Exchange Est. ? rows
                         │  │  │     Partition by: {i_manufact}
-                        │  │  └─ Filter est. ? rows
-                        │  │     │     Condition: (i_manufact_id <= 778) AND (i_manufact_id >= 738)
-                        │  │     └─ TableScan tpcds.item est. ? rows
+                        │  │  └─ Filter Est. ? rows
+                        │  │     │     Condition: (i_manufact_id >= 738) AND (i_manufact_id <= 778)
+                        │  │     └─ TableScan tpcds.item Est. ? rows
+                        │  │              Condition : (i_manufact_id >= 738) AND (i_manufact_id <= 778).
                         │  │              Outputs: [i_manufact, i_manufact_id, i_product_name]
-                        │  └─ MergingAggregated est. ? rows
-                        │     └─ Repartition Exchange est. ? rows
+                        │  └─ MergingAggregated Est. ? rows
+                        │     └─ Repartition Exchange Est. ? rows
                         │        │     Partition by: {i_manufact_1}
-                        │        └─ Aggregating est. ? rows
+                        │        └─ Aggregating Est. ? rows
                         │           │     Group by: {i_manufact_1}
                         │           │     Aggregates: expr#count():=AggNull(countIf)(build_side_non_null_symbol)
-                        │           └─ Projection est. ? rows
+                        │           └─ Projection Est. ? rows
                         │              │     Expressions: [i_manufact_1], build_side_non_null_symbol:=1
-                        │              └─ Filter est. ? rows
-                        │                 │     Condition: (((i_size_1 = 'extra large') OR (i_size_1 = 'medium')) AND ((i_color_1 = 'forest') OR (i_color_1 = 'ghost')) AND (i_category_1 = 'Men') AND ((i_units_1 = 'Lb') OR (i_units_1 = 'Bundle'))) OR (((i_size_1 = 'extra large') OR (i_size_1 = 'medium')) AND ((i_units_1 = 'Box') OR (i_units_1 = 'Pound')) AND ((i_color_1 = 'cornflower') OR (i_color_1 = 'light')) AND (i_category_1 = 'Men')) OR ((i_category_1 = 'Men') AND ((i_units_1 = 'N/A') OR (i_units_1 = 'Dozen')) AND ((i_size_1 = 'large') OR (i_size_1 = 'petite')) AND ((i_color_1 = 'deep') OR (i_color_1 = 'floral'))) OR ((i_category_1 = 'Women') AND ((i_color_1 = 'papaya') OR (i_color_1 = 'cyan')) AND ((i_size_1 = 'N/A') OR (i_size_1 = 'small')) AND ((i_units_1 = 'Cup') OR (i_units_1 = 'Dram'))) OR (((i_units_1 = 'Ton') OR (i_units_1 = 'Bunch')) AND (i_category_1 = 'Women') AND ((i_color_1 = 'brown') OR (i_color_1 = 'honeydew')) AND ((i_size_1 = 'N/A') OR (i_size_1 = 'small'))) OR (((i_color_1 = 'khaki') OR (i_color_1 = 'powder')) AND (i_category_1 = 'Women') AND ((i_size_1 = 'extra large') OR (i_size_1 = 'medium')) AND ((i_units_1 = 'Oz') OR (i_units_1 = 'Ounce'))) OR ((i_category_1 = 'Women') AND ((i_size_1 = 'extra large') OR (i_size_1 = 'medium')) AND ((i_color_1 = 'midnight') OR (i_color_1 = 'snow')) AND ((i_units_1 = 'Gross') OR (i_units_1 = 'Pallet'))) OR (((i_units_1 = 'Tbl') OR (i_units_1 = 'Each')) AND (i_category_1 = 'Men') AND ((i_size_1 = 'large') OR (i_size_1 = 'petite')) AND ((i_color_1 = 'orange') OR (i_color_1 = 'frosted')))
-                        │                 └─ TableScan tpcds.item est. ? rows
-                        │                          Outputs: i_category_1:=i_category, i_color_1:=i_color, i_manufact_1:=i_manufact, i_size_1:=i_size, i_units_1:=i_units
-                        └─ Broadcast Exchange est. 1 rows
-                           └─ Aggregating est. 1 rows
+                        │              └─ Filter Est. ? rows
+                        │                 │     Condition: ((i_category = 'Women') AND ((i_color = 'powder') OR (i_color = 'khaki')) AND ((i_units = 'Ounce') OR (i_units = 'Oz')) AND ((i_size = 'medium') OR (i_size = 'extra large'))) OR ((i_category = 'Women') AND ((i_color = 'brown') OR (i_color = 'honeydew')) AND ((i_units = 'Bunch') OR (i_units = 'Ton')) AND ((i_size = 'N/A') OR (i_size = 'small'))) OR ((i_category = 'Men') AND ((i_color = 'floral') OR (i_color = 'deep')) AND ((i_units = 'N/A') OR (i_units = 'Dozen')) AND ((i_size = 'petite') OR (i_size = 'large'))) OR ((i_category = 'Men') AND ((i_color = 'light') OR (i_color = 'cornflower')) AND ((i_units = 'Box') OR (i_units = 'Pound')) AND ((i_size = 'medium') OR (i_size = 'extra large'))) OR ((i_category = 'Women') AND ((i_color = 'midnight') OR (i_color = 'snow')) AND ((i_units = 'Pallet') OR (i_units = 'Gross')) AND ((i_size = 'medium') OR (i_size = 'extra large'))) OR ((i_category = 'Women') AND ((i_color = 'cyan') OR (i_color = 'papaya')) AND ((i_units = 'Cup') OR (i_units = 'Dram')) AND ((i_size = 'N/A') OR (i_size = 'small'))) OR ((i_category = 'Men') AND ((i_color = 'orange') OR (i_color = 'frosted')) AND ((i_units = 'Each') OR (i_units = 'Tbl')) AND ((i_size = 'petite') OR (i_size = 'large'))) OR ((i_category = 'Men') AND ((i_color = 'forest') OR (i_color = 'ghost')) AND ((i_units = 'Lb') OR (i_units = 'Bundle')) AND ((i_size = 'medium') OR (i_size = 'extra large')))
+                        │                 └─ TableScan tpcds.item Est. ? rows
+                        │                          Condition : ((i_category = 'Women') AND ((i_color = 'powder') OR (i_color = 'khaki')) AND ((i_units = 'Ounce') OR (i_units = 'Oz')) AND ((i_size = 'medium') OR (i_size = 'extra large'))) OR ((i_category = 'Women') AND ((i_color = 'brown') OR (i_color = 'honeydew')) AND ((i_units = 'Bunch') OR (i_units = 'Ton')) AND ((i_size = 'N/A') OR (i_size = 'small'))) OR ((i_category = 'Men') AND ((i_color = 'floral') OR (i_color = 'deep')) AND ((i_units = 'N/A') OR (i_units = 'Dozen')) AND ((i_size = 'petite') OR (i_size = 'large'))) OR ((i_category = 'Men') AND ((i_color = 'light') OR (i_color = 'cornflower')) AND ((i_units = 'Box') OR (i_units = 'Pound')) AND ((i_size = 'medium') OR (i_size = 'extra large'))) OR ((i_category = 'Women') AND ((i_color = 'midnight') OR (i_color = 'snow')) AND ((i_units = 'Pallet') OR (i_units = 'Gross')) AND ((i_size = 'medium') OR (i_size = 'extra large'))) OR ((i_category = 'Women') AND ((i_color = 'cyan') OR (i_color = 'papaya')) AND ((i_units = 'Cup') OR (i_units = 'Dram')) AND ((i_size = 'N/A') OR (i_size = 'small'))) OR ((i_category = 'Men') AND ((i_color = 'orange') OR (i_color = 'frosted')) AND ((i_units = 'Each') OR (i_units = 'Tbl')) AND ((i_size = 'petite') OR (i_size = 'large'))) OR ((i_category = 'Men') AND ((i_color = 'forest') OR (i_color = 'ghost')) AND ((i_units = 'Lb') OR (i_units = 'Bundle')) AND ((i_size = 'medium') OR (i_size = 'extra large'))).
+                        │                          Outputs: [i_category, i_color, i_size, i_units], i_manufact_1:=i_manufact
+                        └─ Broadcast Exchange Est. 1 rows
+                           └─ Aggregating Est. 1 rows
                               │     Group by: {}
-                              │     Aggregates: countIf:=AggNull(countIf)(null_5)
-                              └─ Values est. 1 rows
+                              │     Aggregates: countIf:=AggNull(countIf)(null_1)
+                              └─ Values Est. 1 rows

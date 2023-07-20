@@ -32,7 +32,19 @@ public:
 struct MappedAggregationInfo
 {
     PlanNodePtr aggregation_node;
-    std::unordered_map<String, String> symbolMapping;
+    std::unordered_map<String, String> symbol_mapping;
+};
+
+
+class PushAggThroughInnerJoin : public Rule
+{
+public:
+    RuleType getType() const override { return RuleType::PUSH_AGG_THROUGH_INNER_JOIN; }
+    String getName() const override { return "PUSH_AGG_THROUGH_INNER_JOIN"; }
+
+    PatternPtr getPattern() const override;
+
+    TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 };
 
 }

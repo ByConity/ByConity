@@ -90,6 +90,8 @@ protected:
     HandlerContext handler_context;
 };
 
+
+std::vector<ColumnDescVector> split(const ColumnDescVector & origin, UInt64 max_columns);
 std::unique_ptr<CollectStep> createStatisticsCollectorStepSample(StatisticsCollector & core);
 std::unique_ptr<CollectStep> createStatisticsCollectorStepFull(StatisticsCollector & core);
 }

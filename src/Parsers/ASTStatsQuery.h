@@ -45,6 +45,7 @@ class ASTStatsQueryBase : public ASTQueryWithTableAndOutput, public ASTQueryWith
 {
 public:
     StatsQueryKind kind = StatsQueryKind::ALL_STATS;
+    StatisticsCachePolicy cache_policy = StatisticsCachePolicy::Default;
     // whether this query target at a single table or all tables
     bool target_all = false;
     std::vector<String> columns;
@@ -70,6 +71,16 @@ public:
                 res << delim << col;
             }
         }
+
+
+        if (cache_policy != StatisticsCachePolicy::Default)
+        {
+            if (cache_policy == StatisticsCachePolicy::Cache)
+                res << delim << "cache";
+            else if (cache_policy == StatisticsCachePolicy::Catalog)
+                res << delim << "catalog";
+        }
+
 
         return res.str();
     }
@@ -118,11 +129,27 @@ protected:
         formatOnCluster(settings);
     }
 
+    // postfix only for show/drop stats
+    void formatQueryPostfix(const FormatSettings & settings, FormatState &, FormatStateStacked) const
+    {
+        if (cache_policy != StatisticsCachePolicy::Default)
+        {
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << " IN " << (settings.hilite ? hilite_none : "");
+            if (cache_policy == StatisticsCachePolicy::Cache)
+                settings.ostr << (settings.hilite ? hilite_keyword : "") << "CACHE" << (settings.hilite ? hilite_none : "");
+            else if (cache_policy == StatisticsCachePolicy::Catalog)
+                settings.ostr << (settings.hilite ? hilite_keyword : "") << "CATALOG" << (settings.hilite ? hilite_none : "");
+            else
+                throw Exception("Unknown cache policy", ErrorCodes::SYNTAX_ERROR);
+        }
+    }
+
     // maybe override if this is not sufficient
     void formatQueryImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override
     {
         formatQueryPrefix(settings, state, frame);
         formatQueryMiddle(settings, state, frame);
+        formatQueryPostfix(settings, state, frame);
     }
 };
 

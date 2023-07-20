@@ -26,24 +26,43 @@ namespace DB
 {
 PatternPtr InlineCTE::getPattern() const
 {
-    return Patterns::cte();
+    return Patterns::cte().result();
 }
 
 TransformResult InlineCTE::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
 {
-    const auto * with_step = dynamic_cast<const CTERefStep *>(node->getStep().get());
-    auto inlined_plan = with_step->toInlinedPlanNode(context.cte_info, context.context, true);
-    return {rewriteSubPlan(inlined_plan, context.cte_info, context.context)};
+    const auto * cte_step = dynamic_cast<const CTERefStep *>(node->getStep().get());
+    if (cte_step->hasFilter())
+        return {}; // InlineCTEWithFilter
+    return {cte_step->toInlinedPlanNode(context.cte_info, context.context)};
 }
 
-PlanNodePtr InlineCTE::rewriteSubPlan(const PlanNodePtr & node, CTEInfo & cte_info, ContextMutablePtr & context)
+PatternPtr InlineCTEWithFilter::getPattern() const
+{
+    return Patterns::filter().withSingle(Patterns::cte()).result();
+}
+
+TransformResult InlineCTEWithFilter::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
+{
+    auto cte = node->getChildren()[0];
+    const auto * cte_step = dynamic_cast<const CTERefStep *>(cte->getStep().get());
+    if (!cte_step->hasFilter())
+        return {}; // InlineCTE
+
+    auto inlined_plan
+        = PlanNodeBase::createPlanNode(node->getId(), node->getStep(), {cte_step->toInlinedPlanNode(context.cte_info, context.context)});
+    return {predicatePushDown(inlined_plan, context.cte_info, context.context)};
+}
+
+PlanNodePtr InlineCTEWithFilter::predicatePushDown(const PlanNodePtr & node, CTEInfo & cte_info, ContextMutablePtr & context)
 {
     static Rewriters rewriters
         = {std::make_shared<PredicatePushdown>(),
-           std::make_shared<IterativeRewriter>(Rules::simplifyExpressionRules(), "SimplifyExpression"),
-           std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
            std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
-           std::make_shared<IterativeRewriter>(Rules::normalizeExpressionRules(), "NormalizeExpression")};
+           std::make_shared<IterativeRewriter>(Rules::normalizeExpressionRules(), "NormalizeExpression"),
+           std::make_shared<IterativeRewriter>(Rules::swapPredicateRules(), "SwapPredicate"),
+           std::make_shared<IterativeRewriter>(Rules::simplifyExpressionRules(), "SimplifyExpression"),
+           std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant")};
 
     QueryPlan sub_plan{node, cte_info, context->getPlanNodeIdAllocator()};
     for (auto & rewriter : rewriters)
@@ -51,4 +70,3 @@ PlanNodePtr InlineCTE::rewriteSubPlan(const PlanNodePtr & node, CTEInfo & cte_in
     return sub_plan.getPlanNode();
 }
 }
-

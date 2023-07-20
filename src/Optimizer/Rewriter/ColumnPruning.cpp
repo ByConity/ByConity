@@ -48,6 +48,57 @@ void ColumnPruning::rewrite(QueryPlan & plan, ContextMutablePtr context) const
     plan.update(result);
 }
 
+void ColumnPruning::selectColumnWithMinSize(NamesAndTypesList source_columns, StoragePtr storage, NameSet & required)
+{
+    /// You need to read at least one column to find the number of rows.
+    /// We will find a column with minimum <compressed_size, type_size, uncompressed_size>.
+    /// Because it is the column that is cheapest to read.
+    struct ColumnSizeTuple
+    {
+        size_t compressed_size;
+        size_t type_size;
+        size_t uncompressed_size;
+        String name;
+
+        bool operator<(const ColumnSizeTuple & that) const
+        {
+            return std::tie(compressed_size, type_size, uncompressed_size)
+                < std::tie(that.compressed_size, that.type_size, that.uncompressed_size);
+        }
+    };
+
+    std::vector<ColumnSizeTuple> columns;
+    if (storage)
+    {
+        auto column_sizes = storage->getColumnSizes();
+        for (auto & source_column : source_columns)
+        {
+            auto c = column_sizes.find(source_column.name);
+            if (c == column_sizes.end())
+                continue;
+            size_t type_size = source_column.type->haveMaximumSizeOfValue() ? source_column.type->getMaximumSizeOfValueInMemory() : 100;
+            columns.emplace_back(
+                ColumnSizeTuple{c->second.data_compressed, type_size, c->second.data_uncompressed, source_column.name});
+        }
+    }
+
+    if (!columns.empty())
+        required.insert(std::min_element(columns.begin(), columns.end())->name);
+    else if (!source_columns.empty())
+    {
+        if (storage)
+        {
+            // DO NOT choose Virtuals column, when try get smallest column.
+            for (const auto & column : storage->getVirtuals())
+            {
+                source_columns.remove(column);
+            }
+        }
+        /// If we have no information about columns sizes, choose a column of minimum size of its data type.
+        required.insert(ExpressionActions::getSmallestColumn(source_columns));
+    }
+}
+
 PlanNodePtr ColumnPruningVisitor::visitLimitByNode(LimitByNode & node, NameSet & require)
 {
     const auto * step = node.getStep().get();
@@ -89,7 +140,7 @@ PlanNodePtr ColumnPruningVisitor::visitWindowNode(WindowNode & node, NameSet & r
     if (window_functions.empty())
         return child;
 
-    auto window_step = std::make_shared<WindowStep>(child->getStep()->getOutputStream(), step->getWindow(), window_functions, step->needSort());
+    auto window_step = std::make_shared<WindowStep>(child->getStep()->getOutputStream(), step->getWindow(), window_functions, step->needSort(), step->getPrefixDescription());
 
     PlanNodes children{child};
     return WindowNode::createPlanNode(context->nextNodeId(), std::move(window_step), children, node.getStatistics());
@@ -113,6 +164,18 @@ PlanNodePtr ColumnPruningVisitor::visitFilterNode(FilterNode & node, NameSet & r
     PlanNodes children{child};
     auto expr_node = FilterNode::createPlanNode(context->nextNodeId(), std::move(expr_step), children, node.getStatistics());
     return expr_node;
+}
+
+PlanNodePtr ColumnPruningVisitor::visitArrayJoinNode(ArrayJoinNode & node, NameSet & require)
+{
+    const auto * step = node.getStep().get();
+    NameSet child_require = require;
+    for (const auto & item : step->getResultNameSet())
+        child_require.insert(item);
+
+    auto child = VisitorUtil::accept(node.getChildren()[0], *this, child_require);
+    auto array_join_step = std::make_shared<ArrayJoinStep>(child->getCurrentDataStream(), step->arrayJoin());
+    return ArrayJoinNode::createPlanNode(context->nextNodeId(), std::move(array_join_step), {child}, node.getStatistics());
 }
 
 PlanNodePtr ColumnPruningVisitor::visitProjectionNode(ProjectionNode & node, NameSet & require)
@@ -196,7 +259,7 @@ PlanNodePtr ColumnPruningVisitor::visitApplyNode(ApplyNode & node, NameSet & req
 
     DataStreams input{left->getStep()->getOutputStream(), right->getStep()->getOutputStream()};
 
-    auto apply_step = std::make_shared<ApplyStep>(input, correlation, step->getApplyType(), step->getSubqueryType(), step->getAssignment());
+    auto apply_step = std::make_shared<ApplyStep>(input, correlation, step->getApplyType(), step->getSubqueryType(), step->getAssignment(), step->getOuterColumns());
     PlanNodes children{left, right};
     auto apply_node = ApplyNode::createPlanNode(context->nextNodeId(), std::move(apply_step), children, node.getStatistics());
     return apply_node;
@@ -206,22 +269,6 @@ PlanNodePtr ColumnPruningVisitor::visitTableScanNode(TableScanNode & node, NameS
 {
     const auto * step = node.getStep().get();
 
-    /// You need to read at least one column to find the number of rows.
-    /// We will find a column with minimum <compressed_size, type_size, uncompressed_size>.
-    /// Because it is the column that is cheapest to read.
-    struct ColumnSizeTuple
-    {
-        size_t compressed_size;
-        size_t type_size;
-        size_t uncompressed_size;
-        String name;
-        //        bool operator<(const ColumnSizeTuple & that) const
-        //        {
-        //            return std::tie(compressed_size, type_size, uncompressed_size)
-        //                < std::tie(that.compressed_size, that.type_size, that.uncompressed_size);
-        //        }
-    };
-
     NameSet required;
     for (const auto & item : step->getColumnAlias())
         if (require.contains(item.second))
@@ -229,65 +276,25 @@ PlanNodePtr ColumnPruningVisitor::visitTableScanNode(TableScanNode & node, NameS
 
     if (required.empty())
     {
-        auto source_columns = step->getOutputStream().header.getNamesAndTypesList();
-
-        /// You need to read at least one column to find the number of rows.
-        /// We will find a column with minimum <compressed_size, type_size, uncompressed_size>.
-        /// Because it is the column that is cheapest to read.
-        struct ColumnSizeTuple
-        {
-            size_t compressed_size;
-            size_t type_size;
-            size_t uncompressed_size;
-            String name;
-
-            bool operator<(const ColumnSizeTuple & that) const
-            {
-                return std::tie(compressed_size, type_size, uncompressed_size)
-                    < std::tie(that.compressed_size, that.type_size, that.uncompressed_size);
-            }
-        };
-
-        std::vector<ColumnSizeTuple> columns;
-        auto storage = step->getStorage();
-        if (storage)
-        {
-            auto column_sizes = storage->getColumnSizes();
-            for (auto & source_column : source_columns)
-            {
-                auto c = column_sizes.find(source_column.name);
-                if (c == column_sizes.end())
-                    continue;
-                size_t type_size = source_column.type->haveMaximumSizeOfValue() ? source_column.type->getMaximumSizeOfValueInMemory() : 100;
-                columns.emplace_back(
-                    ColumnSizeTuple{c->second.data_compressed, type_size, c->second.data_uncompressed, source_column.name});
-            }
-        }
-
-        if (!columns.empty())
-            required.insert(std::min_element(columns.begin(), columns.end())->name);
-        else if (!source_columns.empty())
-        {
-            if (storage)
-            {
-                // DO NOT choose Virtuals column, when try get smallest column.
-                for (const auto & column : storage->getVirtuals())
-                {
-                    source_columns.remove(column);
-                }
-            }
-            /// If we have no information about columns sizes, choose a column of minimum size of its data type.
-            required.insert(ExpressionActions::getSmallestColumn(source_columns));
-        }
+        ColumnPruning::selectColumnWithMinSize(step->getOutputStream().header.getNamesAndTypesList(),
+                                               step->getStorage(), required);
     }
 
+    bool contains_all_columns = true;
     NamesWithAliases column_names;
     for (const auto & item : step->getColumnAlias())
+    {
         if (required.contains(item.second))
             column_names.emplace_back(item);
+        else
+            contains_all_columns = false;
+    }
+
+    if (contains_all_columns)
+        return node.shared_from_this();
 
     auto read_step = std::make_shared<TableScanStep>(
-        context, step->getStorageID(), std::move(column_names), step->getQueryInfo(), step->getProcessedStage(), step->getMaxBlockSize());
+        context, step->getStorageID(), std::move(column_names), step->getQueryInfo(), step->getMaxBlockSize(), step->getTableAlias(), step->getHints());
     auto read_node = PlanNodeBase::createPlanNode(context->nextNodeId(), std::move(read_step), {}, node.getStatistics());
     return read_node;
 }
@@ -321,7 +328,7 @@ PlanNodePtr ColumnPruningVisitor::visitAggregatingNode(AggregatingNode & node, N
     }
 
     auto agg_step = std::make_shared<AggregatingStep>(
-        child->getStep()->getOutputStream(), step->getKeys(), std::move(aggs), step->getGroupingSetsParams(), step->isFinal(), step->getGroupings()
+        child->getStep()->getOutputStream(), step->getKeys(), std::move(aggs), step->getGroupingSetsParams(), step->isFinal(), step->getGroupBySortDescription(), step->getGroupings()
         , false, step->shouldProduceResultsInOrderOfBucketNumber()
         //        step->getHaving(),
         //        step->getInteresteventsInfoList()
@@ -351,7 +358,7 @@ PlanNodePtr ColumnPruningVisitor::visitSortingNode(SortingNode & node, NameSet &
         require.insert(item.column_name);
     }
     auto child = VisitorUtil::accept(node.getChildren()[0], *this, require);
-    auto sort_step = std::make_shared<SortingStep>(child->getStep()->getOutputStream(), step->getSortDescription(), step->getLimit(), step->isPartial());
+    auto sort_step = std::make_shared<SortingStep>(child->getStep()->getOutputStream(), step->getSortDescription(), step->getLimit(), step->isPartial(), step->getPrefixDescription());
     return SortingNode::createPlanNode(context->nextNodeId(), std::move(sort_step), PlanNodes{child}, node.getStatistics());
 }
 
@@ -481,7 +488,10 @@ PlanNodePtr ColumnPruningVisitor::visitJoinNode(JoinNode & node, NameSet & requi
         step->getRequireRightKeys(),
         step->getAsofInequality(),
         step->getDistributionType(),
-        step->isMagic());
+        step->getJoinAlgorithm(),
+        step->isMagic(),
+        step->isOrdered(),
+        step->getHints());
 
     PlanNodes children{left, right};
     auto join_node = JoinNode::createPlanNode(context->nextNodeId(), std::move(join_step), children, node.getStatistics());
@@ -677,9 +687,20 @@ PlanNodePtr ColumnPruningVisitor::visitCTERefNode(CTERefNode & node, NameSet & r
         if (required.contains(item.first))
             output_columns.emplace(item);
 
-    auto exchange_step
-        = std::make_shared<CTERefStep>(DataStream{std::move(result_columns)}, with_step->getId(), std::move(output_columns), with_step->getFilter());
+    auto exchange_step = std::make_shared<CTERefStep>(
+        DataStream{std::move(result_columns)}, with_step->getId(), std::move(output_columns), with_step->hasFilter());
     return CTERefNode::createPlanNode(context->nextNodeId(), std::move(exchange_step), {}, node.getStatistics());
+}
+
+PlanNodePtr ColumnPruningVisitor::visitExplainAnalyzeNode(ExplainAnalyzeNode & node, NameSet &)
+{
+    NameSet require;
+    PlanNodePtr child = node.getChildren()[0];
+    for (const auto & item : child->getCurrentDataStream().header)
+        require.insert(item.name);
+    PlanNodePtr new_child = VisitorUtil::accept(*child, *this, require);
+    node.replaceChildren({new_child});
+    return node.shared_from_this();
 }
 
 PlanNodePtr ColumnPruningVisitor::visitTopNFilteringNode(TopNFilteringNode & node, NameSet & require)
@@ -693,6 +714,18 @@ PlanNodePtr ColumnPruningVisitor::visitTopNFilteringNode(TopNFilteringNode & nod
     auto child = VisitorUtil::accept(*node.getChildren()[0], *this, require);
     auto topn_filter_step = std::make_shared<TopNFilteringStep>(child->getStep()->getOutputStream(), step->getSortDescription(), step->getSize(), step->getModel());
     return TopNFilteringNode::createPlanNode(context->nextNodeId(), std::move(topn_filter_step), PlanNodes{child}, node.getStatistics());
+}
+
+PlanNodePtr ColumnPruningVisitor::visitFillingNode(FillingNode & node, NameSet & require)
+{
+    const auto * step = node.getStep().get();
+    for (const auto & item : step->getSortDescription())
+    {
+        require.insert(item.column_name);
+    }
+    auto child = VisitorUtil::accept(node.getChildren()[0], *this, require);
+    auto fill_step = std::make_shared<FillingStep>(child->getStep()->getOutputStream(), step->getSortDescription());
+    return FillingNode::createPlanNode(context->nextNodeId(), std::move(fill_step), PlanNodes{child}, node.getStatistics());
 }
 
 }

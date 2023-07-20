@@ -25,6 +25,7 @@ GROUP BY n
 ORDER BY n
 LIMIT 10;
 
+CREATE DATABASE IF NOT EXISTS test;
 DROP TABLE IF EXISTS test.polygon_tx_v87;
 CREATE TABLE test.polygon_tx_v87
 (

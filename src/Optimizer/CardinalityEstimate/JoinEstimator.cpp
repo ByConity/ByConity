@@ -15,6 +15,7 @@
 
 #include <Core/Types.h>
 #include <Optimizer/CardinalityEstimate/JoinEstimator.h>
+#include <Optimizer/PredicateUtils.h>
 
 namespace DB
 {
@@ -23,7 +24,6 @@ PlanNodeStatisticsPtr JoinEstimator::estimate(
     PlanNodeStatisticsPtr & opt_right_stats,
     const JoinStep & join_step,
     Context & context,
-    bool enable_pk_fk,
     bool is_left_base_table,
     bool is_right_base_table)
 {
@@ -40,7 +40,7 @@ PlanNodeStatisticsPtr JoinEstimator::estimate(
 
     ASTTableJoin::Kind kind = join_step.getKind();
 
-    return computeCardinality(left_stats, right_stats, left_keys, right_keys, kind, context, enable_pk_fk, is_left_base_table, is_right_base_table);
+    return computeCardinality(left_stats, right_stats, left_keys, right_keys, kind, context, is_left_base_table, is_right_base_table, join_step.getFilter());
 }
 
 PlanNodeStatisticsPtr JoinEstimator::computeCardinality(
@@ -50,9 +50,9 @@ PlanNodeStatisticsPtr JoinEstimator::computeCardinality(
     const Names & right_keys,
     ASTTableJoin::Kind kind,
     Context & context,
-    bool enable_pk_fk,
     bool is_left_base_table,
-    bool is_right_base_table)
+    bool is_right_base_table,
+    ConstASTPtr filter)
 {
     UInt64 left_rows = left_stats.getRowCount();
     UInt64 right_rows = right_stats.getRowCount();
@@ -110,6 +110,7 @@ PlanNodeStatisticsPtr JoinEstimator::computeCardinality(
         // join output cardinality and join output column statistics for every join key
         UInt64 pre_key_join_card;
         std::unordered_map<String, SymbolStatisticsPtr> pre_key_join_output_statistics;
+        bool enable_pk_fk = context.getSettingsRef().enable_pk_fk;
 
         // case 1 : left join key equals to right join key. (self-join)
         if (left_db_table_column == right_db_table_column)
@@ -177,7 +178,8 @@ PlanNodeStatisticsPtr JoinEstimator::computeCardinality(
         }
     }
 
-    if (all_unknown_stat)
+    // not cross join and can't estimate
+    if (all_unknown_stat && !left_keys.empty())
         return nullptr;
 
     // Adjust the number of output rows by join kind.
@@ -208,6 +210,14 @@ PlanNodeStatisticsPtr JoinEstimator::computeCardinality(
     }
 
     // TODO@lichengxian update statistics for join filters.
+    if (context.getSettingsRef().stats_estimator_join_filter_selectivity != 1 && filter && !PredicateUtils::isTruePredicate(filter))
+    {
+        join_card *= context.getSettingsRef().stats_estimator_join_filter_selectivity;
+        for (auto & col : join_output_statistics)
+        {
+            col.second = col.second->applySelectivity(context.getSettingsRef().stats_estimator_join_filter_selectivity);
+        }
+    }
 
     return std::make_shared<PlanNodeStatistics>(join_card, join_output_statistics);
 }

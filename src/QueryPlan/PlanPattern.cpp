@@ -108,14 +108,18 @@ Void OuterJoinPlanPatternVisitor::visitJoinNode(JoinNode & node, Void & context)
     return Void{};
 }
 
-Void GetMaxJoinSizeVisitor::visitJoinNode(JoinNode & node, Void & v)
+size_t GetMaxJoinSizeVisitor::visitJoinNode(JoinNode & node, Void & v)
 {
-    visitPlanNode(node, v);
-    JoinGraph join_graph = JoinGraph::build(node.shared_from_this(), context);
-    if (join_graph.size() > max_size)
+    const auto & step = *node.getStep();
+    auto left = VisitorUtil::accept(node.getChildren()[0], *this, v);
+    auto right = VisitorUtil::accept(node.getChildren()[1], *this, v);
+    if (step.supportReorder(true, false))
     {
-        max_size = join_graph.size();
+        auto size = left + right;
+        if (size > max_size)
+            max_size = size;
+        return size;
     }
-    return Void{};
+    return 1;
 }
 }

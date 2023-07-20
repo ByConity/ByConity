@@ -44,6 +44,9 @@ public:
 
     ASTPtr clone() const override { return std::make_shared<ASTQueryParameter>(*this); }
 
+    void serialize(WriteBuffer & buf) const override;
+    static ASTPtr deserialize(ReadBuffer & buf);
+
 protected:
     void formatImplWithoutAlias(const FormatSettings & settings, FormatState &, FormatStateStacked) const override;
     void appendColumnNameImpl(WriteBuffer & ostr) const override;

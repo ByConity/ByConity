@@ -25,8 +25,8 @@ public:
     static std::vector<RulePtr> mergeSetRules();
     static std::vector<RulePtr> implementSetRules();
     static std::vector<RulePtr> normalizeExpressionRules();
+    static std::vector<RulePtr> swapPredicateRules();
     static std::vector<RulePtr> simplifyExpressionRules();
-    static std::vector<RulePtr> mergePredicatesRules();
     static std::vector<RulePtr> inlineProjectionRules();
     static std::vector<RulePtr> pushPartialStepRules();
     static std::vector<RulePtr> pushAggRules();
@@ -38,6 +38,8 @@ public:
     static std::vector<RulePtr> distinctToAggregateRules();
     static std::vector<RulePtr> pushIntoTableScanRules();
     static std::vector<RulePtr> swapAdjacentRules();
+    static std::vector<RulePtr> explainAnalyzeRules();
+    static std::vector<RulePtr> pushApplyRules();
 };
 
 }

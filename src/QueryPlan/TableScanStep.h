@@ -15,6 +15,7 @@
 
 #pragma once
 #include <Core/QueryProcessingStage.h>
+#include <Core/SortDescription.h>
 #include <QueryPlan/ISourceStep.h>
 #include <QueryPlan/AggregatingStep.h>
 #include <QueryPlan/FilterStep.h>
@@ -35,8 +36,9 @@ public:
         StoragePtr storage_,
         const NamesWithAliases & column_alias_,
         const SelectQueryInfo & query_info_,
-        QueryProcessingStage::Enum processing_stage_,
         size_t max_block_size_,
+        String alias_ = "",
+        PlanHints hints_ = {},
         QueryPlanStepPtr aggregation_ = nullptr,
         QueryPlanStepPtr projection_ = nullptr,
         QueryPlanStepPtr filter_ = nullptr);
@@ -46,8 +48,9 @@ public:
         StorageID storage_id_,
         const NamesWithAliases & column_alias_,
         const SelectQueryInfo & query_info_,
-        QueryProcessingStage::Enum processing_stage_,
         size_t max_block_size_,
+        String alias_ = "",
+        PlanHints hints_ = {},
         QueryPlanStepPtr aggregation_ = nullptr,
         QueryPlanStepPtr projection_ = nullptr,
         QueryPlanStepPtr filter_ = nullptr);
@@ -61,26 +64,27 @@ public:
         Names column_names_,
         NamesWithAliases column_alias_,
         SelectQueryInfo query_info_,
-        QueryProcessingStage::Enum processing_stage_,
         size_t max_block_size_,
+        String alias_,
+        PlanHints hints_,
         QueryPlanStepPtr aggregation_,
         QueryPlanStepPtr projection_,
         QueryPlanStepPtr filter_,
         DataStream table_output_stream_)
-        : ISourceStep(std::move(output))
+        : ISourceStep(std::move(output), hints_)
         , storage(storage_)
         , storage_id(storage_id_)
         , original_table(std::move(original_table_))
         , column_names(std::move(column_names_))
         , column_alias(std::move(column_alias_))
         , query_info(std::move(query_info_))
-        , processing_stage(processing_stage_)
         , max_block_size(max_block_size_)
         , pushdown_aggregation(std::move(aggregation_))
         , pushdown_projection(std::move(projection_))
         , pushdown_filter(std::move(filter_))
         , table_output_stream(std::move(table_output_stream_))
         , log(&Poco::Logger::get("TableScanStep"))
+        , alias(alias_)
     {
     }
 
@@ -93,8 +97,10 @@ public:
 
     const String & getDatabase() const { return storage_id.database_name; }
     const String & getTable() const { return storage_id.table_name; }
-//    void setTable(const String & table_);
+    const String & getTableAlias() const { return alias; }
+    //    void setTable(const String & table_);
     void setOriginalTable(const String & original_table_) { original_table = original_table_; }
+    const String & getOriginalTable() const { return original_table.empty() ? storage_id.table_name : original_table; }
     const Names & getColumnNames() const { return column_names; }
     const NamesWithAliases & getColumnAlias() const { return column_alias; }
     QueryProcessingStage::Enum getProcessedStage() const;
@@ -114,6 +120,8 @@ public:
     FilterStep * getPushdownFilterCast() { return dynamic_cast<FilterStep *>(pushdown_filter.get()); }
     const DataStream & getTableOutputStream() const { return table_output_stream; }
 
+
+    void setReadOrder(SortDescription read_order);
 
     void formatOutputStream();
 
@@ -144,7 +152,6 @@ private:
     Names column_names;
     NamesWithAliases column_alias;
     SelectQueryInfo query_info;
-    QueryProcessingStage::Enum processing_stage;
     size_t max_block_size;
 
     // Pushdown steps. Now TableScanStep is not like a single step anymore, but more like a sub plan
@@ -159,6 +166,7 @@ private:
     // just for cascades, in order to distinguish between the same tables.
     Int32 unique_id{0};
     Poco::Logger * log;
+    String alias;
 
     // Optimises the where clauses for a bucket table by rewriting the IN clause and hence reducing the IN set size
     void rewriteInForBucketTable(ContextPtr context) const;

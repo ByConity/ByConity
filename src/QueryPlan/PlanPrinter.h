@@ -17,6 +17,8 @@
 
 #include <QueryPlan/PlanVisitor.h>
 #include <Optimizer/CostModel/PlanNodeCost.h>
+#include <Interpreters/DistributedStages/PlanSegment.h>
+#include <Interpreters/ProcessorProfile.h>
 
 #include <Poco/JSON/Object.h>
 
@@ -29,11 +31,27 @@ class PlanPrinter
 public:
     PlanPrinter() = delete;
 
-    static std::string textLogicalPlan(QueryPlan & plan, ContextMutablePtr context, bool print_stats, bool verbose, PlanCostMap costs = {});
-    static std::string jsonLogicalPlan(QueryPlan & plan, bool print_stats, bool verbose, const PlanNodeCost & plan_cost = {});
+    static String textLogicalPlan(
+        QueryPlan & plan,
+        ContextMutablePtr context,
+        bool print_stats,
+        bool verbose,
+        PlanCostMap costs = {},
+        const StepAggregatedOperatorProfiles & profiles = {});
+    static String jsonLogicalPlan(QueryPlan & plan, bool print_stats, bool verbose, const PlanNodeCost & plan_cost = {});
+    static String textDistributedPlan(
+        PlanSegmentDescriptions & segments_desc,
+        bool print_stats,
+        bool verbose,
+        const std::unordered_map<PlanNodeId, double> & costs = {},
+        const StepAggregatedOperatorProfiles & profiles = {},
+        const QueryPlan & query_plan = {});
+    static void getPlanNodes(const PlanNodePtr & parent, std::unordered_map<PlanNodeId, PlanNodePtr> & id_to_node);
+    static std::unordered_map<PlanNodeId, PlanNodePtr>  getPlanNodeMap(const QueryPlan & query_plan);
+    static void getRemoteSegmentId(const QueryPlan::Node * node, std::unordered_map<PlanNodeId, size_t> & exchange_to_segment);
 
-private:
     class TextPrinter;
+private:
     class JsonPrinter;
 };
 
@@ -46,36 +64,51 @@ public:
     static constexpr auto EMPTY_PREFIX = "   ";
 
     TextPrinterIntent() = default;
-    TextPrinterIntent forChild(bool last, bool hasChildren) const;
-    std::string print() const { return current_lines_prefix; }
-    std::string detailIntent() const;
+    explicit TextPrinterIntent(size_t prefix, bool has_children_)
+        : current_lines_prefix(std::string(prefix, ' '))
+        , next_lines_prefix(std::string(prefix, ' '))
+        , hasChildren(has_children_)
+    {
+    }
+
+    TextPrinterIntent forChild(bool last, bool has_children_) const;
+    String print() const { return current_lines_prefix; }
+    String detailIntent() const;
 
 private:
-    TextPrinterIntent(std::string current_lines_prefix_, std::string next_lines_prefix_, bool hasChildren);
+    TextPrinterIntent(String current_lines_prefix_, String next_lines_prefix_, bool hasChildren);
 
-    std::string current_lines_prefix;
-    std::string next_lines_prefix;
+    String current_lines_prefix;
+    String next_lines_prefix;
     bool hasChildren{true};
 };
 
 class PlanPrinter::TextPrinter
 {
 public:
-    TextPrinter(bool print_stats_, bool verbose_, const std::unordered_map<PlanNodeId, double> & costs_)
-        : print_stats(print_stats_), verbose(verbose_), costs(costs_)
+    TextPrinter(bool print_stats_, bool verbose_, const std::unordered_map<PlanNodeId, double> & costs_, bool is_distributed_ = false, const std::unordered_map<PlanNodeId, size_t> & exchange_to_segment_ = {})
+        : print_stats(print_stats_), verbose(verbose_), costs(costs_), is_distributed(is_distributed_), exchange_to_segment(exchange_to_segment_)
     {
     }
-    std::string printLogicalPlan(PlanNodeBase & plan, const TextPrinterIntent & intent = {});
+    static String printOutputColumns(PlanNodeBase & plan_node, const TextPrinterIntent & intent = {});
+    String printLogicalPlan(PlanNodeBase & plan, const TextPrinterIntent & intent = {}, const StepAggregatedOperatorProfiles & profiles = {});
 
+    static String prettyNum(size_t num);
+    static String prettyBytes(size_t bytes);
 private:
-    static std::string printPrefix(PlanNodeBase & plan);
-    static std::string printSuffix(PlanNodeBase & plan);
-    std::string printDetail(ConstQueryPlanStepPtr plan, const TextPrinterIntent & intent) const;
-    std::string printStatistics(const PlanNodeBase & plan) const;
+    static String prettySeconds(size_t seconds);
+    static String printPrefix(PlanNodeBase & plan);
+    String printSuffix(PlanNodeBase & plan);
+    static String printQError(PlanNodeBase & plan, const TextPrinterIntent & intent, const StepAggregatedOperatorProfiles & profiles);
+    String printDetail(QueryPlanStepPtr plan, const TextPrinterIntent & intent) const;
+    String printStatistics(const PlanNodeBase & plan, const TextPrinterIntent & intent = {}) const;
+    static String printOperatorProfiles(PlanNodeBase & plan, const TextPrinterIntent & intent = {}, const StepAggregatedOperatorProfiles & profiles = {}) ;
 
     const bool print_stats;
     const bool verbose;
     const std::unordered_map<PlanNodeId, double> & costs;
+    bool is_distributed;
+    const std::unordered_map<PlanNodeId, size_t> & exchange_to_segment;
 };
 
 class PlanPrinter::JsonPrinter
@@ -85,7 +118,7 @@ public:
     Poco::JSON::Object::Ptr printLogicalPlan(PlanNodeBase & plan);
 
 private:
-    static void detail(Poco::JSON::Object::Ptr & json, ConstQueryPlanStepPtr plan);
+    static void detail(Poco::JSON::Object::Ptr & json, QueryPlanStepPtr plan);
 
     const bool print_stats;
 };

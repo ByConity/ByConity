@@ -36,8 +36,8 @@ namespace
 
 PatternPtr PushQueryInfoFilterIntoTableScan::getPattern() const
 {
-    return Patterns::filter()->withSingle(
-        Patterns::tableScan()->matchingStep<TableScanStep>([](const auto & step) { return !step.hasQueryInfoFilter(); }));
+    return Patterns::filter().withSingle(
+        Patterns::tableScan().matchingStep<TableScanStep>([](const auto & step) { return !step.hasQueryInfoFilter(); })).result();
 }
 
 TransformResult PushQueryInfoFilterIntoTableScan::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -145,9 +145,9 @@ std::vector<ConstASTPtr> PushQueryInfoFilterIntoTableScan::removeStorageFilter(c
 PatternPtr PushLimitIntoTableScan::getPattern() const
 {
     return Patterns::limit()
-        ->matchingStep<LimitStep>([](auto const & limit_step) { return !limit_step.isAlwaysReadTillEnd(); })
-        ->withSingle(Patterns::tableScan()->matchingStep<TableScanStep>(
-            [](const auto & step) { return !step.getPushdownAggregation() && !step.getPushdownFilter() && !step.hasQueryInfoFilter(); }));
+        .matchingStep<LimitStep>([](auto const & limit_step) { return !limit_step.isAlwaysReadTillEnd(); })
+        .withSingle(Patterns::tableScan().matchingStep<TableScanStep>(
+            [](const auto & step) { return !step.getPushdownAggregation() && !step.getPushdownFilter() && !step.hasQueryInfoFilter(); })).result();
 }
 
 TransformResult PushLimitIntoTableScan::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -171,8 +171,8 @@ TransformResult PushLimitIntoTableScan::transformImpl(PlanNodePtr node, const Ca
 PatternPtr PushAggregationIntoTableScan::getPattern() const
 {
     return Patterns::aggregating()
-               ->matchingStep<AggregatingStep>([](auto & step) { return step.isPartial() && !step.isGroupingSet(); })
-               ->withSingle(Patterns::tableScan());
+               .matchingStep<AggregatingStep>([](auto & step) { return step.isPartial() && !step.isGroupingSet(); })
+               .withSingle(Patterns::tableScan()).result();
 }
 
 TransformResult PushAggregationIntoTableScan::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -196,9 +196,9 @@ TransformResult PushAggregationIntoTableScan::transformImpl(PlanNodePtr node, co
 
 PatternPtr PushProjectionIntoTableScan::getPattern() const
 {
-    return Patterns::project()->withSingle(
-               Patterns::tableScan()->matchingStep<TableScanStep>(
-                   [](const auto & step) { return !step.getPushdownAggregation(); }));
+    return Patterns::project().withSingle(
+               Patterns::tableScan().matchingStep<TableScanStep>(
+                   [](const auto & step) { return !step.getPushdownAggregation(); })).result();
 }
 
 TransformResult PushProjectionIntoTableScan::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -222,9 +222,9 @@ TransformResult PushProjectionIntoTableScan::transformImpl(PlanNodePtr node, con
 
 PatternPtr PushFilterIntoTableScan::getPattern() const
 {
-    return Patterns::filter()->withSingle(
-               Patterns::tableScan()->matchingStep<TableScanStep>(
-                   [](const auto & step) { return !step.getPushdownProjection() && !step.getPushdownAggregation(); }));
+    return Patterns::filter().withSingle(
+               Patterns::tableScan().matchingStep<TableScanStep>(
+                   [](const auto & step) { return !step.getPushdownProjection() && !step.getPushdownAggregation(); })).result();
 }
 
 TransformResult PushFilterIntoTableScan::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)

@@ -51,13 +51,17 @@ TypeAnalyzer TypeAnalyzer::create(ContextMutablePtr context, const NamesAndTypes
 DataTypePtr TypeAnalyzer::getType(const ConstASTPtr & expr) const
 {
     Analysis analysis;
-    return ExprAnalyzer::analyze(REMOVE_CONST(expr), &scope, context, analysis);
+    ExprAnalyzerOptions options;
+    options.expandUntuple(false);
+    return ExprAnalyzer::analyze(REMOVE_CONST(expr), &scope, context, analysis, options);
 }
 
 ExpressionTypes TypeAnalyzer::getExpressionTypes(const ConstASTPtr & expr) const
 {
     Analysis analysis;
-    ExprAnalyzer::analyze(REMOVE_CONST(expr), &scope, context, analysis);
+    ExprAnalyzerOptions options;
+    options.expandUntuple(false);
+    ExprAnalyzer::analyze(REMOVE_CONST(expr), &scope, context, analysis, options);
     return analysis.getExpressionTypes();
 }
 

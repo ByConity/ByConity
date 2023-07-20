@@ -30,8 +30,8 @@ namespace DB
 PatternPtr JoinEnumOnGraph::getPattern() const
 {
     return Patterns::join()
-        ->matchingStep<JoinStep>([&](const JoinStep & s) { return s.supportReorder(support_filter); })
-        ->with({Patterns::tree(), Patterns::tree()});
+        .matchingStep<JoinStep>([&](const JoinStep & s) { return s.supportReorder(support_filter) && !s.isOrdered(); })
+        .with(Patterns::tree(), Patterns::tree()).result();
 }
 
 static std::pair<Names, Names> createJoinCondition(UnionFind<String> & union_find, const std::vector<std::pair<String, String>> & edges)

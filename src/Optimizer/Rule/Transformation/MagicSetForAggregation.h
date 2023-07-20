@@ -128,4 +128,16 @@ protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 };
 
+// class MagicSetForJoinAggregation : public MagicSetRule
+// {
+// public:
+//     RuleType getType() const override { return RuleType::MAGIC_SET_FOR_JOIN_AGGREGATION; }
+//     String getName() const override { return "MAGIC_SET_FOR_JOIN_AGGREGATION"; }
+
+//     PatternPtr getPattern() const override;
+
+// protected:
+//     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
+// };
+
 }

@@ -1,0 +1,164 @@
+1.test projection rewrite
+Projection Est. ? rows
+│     Expressions: [sum(k)], divide(sum(salary), 100):=`sum(salary)` / 100, plus(deptno, 1):=deptno + 1
+└─ Gather Exchange Est. ? rows
+   └─ Filter Est. ? rows
+      │     Condition: 1
+      └─ TableScan test.mv_data Est. ? rows
+               Outputs: [deptno, sum(k), sum(salary)]
+note: Materialized Views is applied for 1 times: test.mv_define.
+11	285	300
+21	80	100
+1.2 test duplicate names
+Projection Est. ? rows
+│     Expressions: [deptno], commission:=`expr#sum(commission)`, salary:=`expr#sum(salary)`
+└─ Gather Exchange Est. ? rows
+   └─ Projection Est. ? rows
+      │     Expressions: [deptno], expr#sum(commission):=`sum(commission)`, expr#sum(salary):=`sum(salary)`
+      └─ Filter Est. ? rows
+         │     Condition: 1
+         └─ TableScan test.mv_data Est. ? rows
+                  Outputs: [deptno, sum(commission), sum(salary)]
+note: Materialized Views is applied for 1 times: test.mv_define.
+2-1. test filter rewrite
+Projection Est. ? rows
+│     Expressions: [name], x:=empid
+└─ Gather Exchange Est. ? rows
+   └─ Filter Est. ? rows
+      │     Condition: deptno = 10
+      └─ TableScan test.mv_data Est. ? rows
+               Condition : deptno = 10.
+               Outputs: [deptno, empid, name]
+note: Materialized Views is applied for 1 times: test.mv_define.
+100	Bill
+110	Theodore
+150	Sebastian
+2-2. test filter rewrite
+Projection Est. ? rows
+│     Expressions: [name], x:=empid
+└─ Gather Exchange Est. ? rows
+   └─ Filter Est. ? rows
+      │     Condition: empid > 120
+      └─ TableScan test.mv_data Est. ? rows
+               Condition : empid > 120.
+               Outputs: [empid, name]
+note: Materialized Views is applied for 1 times: test.mv_define.
+150	Sebastian
+200	Eric
+3. test rollup aggregate rewrite
+Projection Est. ? rows
+│     Expressions: c:=`expr#sum(c)` + 1, deptno:=`expr#deptno`
+└─ Gather Exchange Est. ? rows
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {expr#deptno}
+         └─ Aggregating Est. ? rows
+            │     Group by: {expr#deptno}
+            │     Aggregates: expr#sum(c):=AggNull(sum)(expr#c)
+            └─ Projection Est. ? rows
+               │     Expressions: expr#c:=c, expr#deptno:=deptno
+               └─ Filter Est. ? rows
+                  │     Condition: 1
+                  └─ TableScan test.mv_data Est. ? rows
+                           Outputs: [c, deptno]
+note: Materialized Views is applied for 1 times: test.mv_define.
+4	10
+2	20
+3.1 test rollup redundant aggregate
+Projection Est. ? rows
+│     Expressions: c:=`expr#sum(c)` + 1, d:=`expr#sum(c)` + 2, deptno:=`expr#deptno`, e:=`expr#sum(c)` + 3
+└─ Gather Exchange Est. ? rows
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {expr#deptno}
+         └─ Aggregating Est. ? rows
+            │     Group by: {expr#deptno}
+            │     Aggregates: expr#sum(c):=AggNull(sum)(expr#c)
+            └─ Projection Est. ? rows
+               │     Expressions: expr#c:=c, expr#deptno:=deptno
+               └─ Filter Est. ? rows
+                  │     Condition: 1
+                  └─ TableScan test.mv_data Est. ? rows
+                           Outputs: [c, deptno]
+note: Materialized Views is applied for 1 times: test.mv_define.
+4	5	6	10
+2	3	4	20
+4. test rollup aggregate rewrite
+Projection Est. ? rows
+│     Expressions: c:=`expr#countMerge(c)`, deptno:=`expr#deptno`
+└─ Gather Exchange Est. ? rows
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {expr#deptno}
+         └─ Aggregating Est. ? rows
+            │     Group by: {expr#deptno}
+            │     Aggregates: expr#countMerge(c):=AggNull(countMerge)(expr#c)
+            └─ Projection Est. ? rows
+               │     Expressions: expr#c:=c, expr#deptno:=deptno
+               └─ Filter Est. ? rows
+                  │     Condition: 1
+                  └─ TableScan test.mv_data Est. ? rows
+                           Outputs: [c, deptno]
+note: Materialized Views is applied for 1 times: test.mv_define.
+3	10
+1	20
+5. test rollup aggregate rewrite with filter
+Projection Est. ? rows
+│     Expressions: [c, deptno, empid], a:=finalizeAggregation(a)
+└─ Gather Exchange Est. ? rows
+   └─ Filter Est. ? rows
+      │     Condition: empid = 150
+      └─ TableScan test.mv_data Est. ? rows
+               Condition : empid = 150.
+               Outputs: [a, c, deptno, empid]
+note: Materialized Views is applied for 1 times: test.mv_define.
+1	7000	150	10
+5.1 test rollup aggregate eliminate const grouping key
+Projection Est. ? rows
+│     Expressions: [c, deptno], a:=finalizeAggregation(a)
+└─ Gather Exchange Est. ? rows
+   └─ Filter Est. ? rows
+      │     Condition: empid = 150
+      └─ TableScan test.mv_data Est. ? rows
+               Condition : empid = 150.
+               Outputs: [a, c, deptno, empid]
+note: Materialized Views is applied for 1 times: test.mv_define.
+1	7000	10
+5.2 test rollup aggregate have at least 1 grouping key
+Projection Est. ? rows
+│     Expressions: a:=`expr#avgMerge(a)`, c:=`expr#sum(c)`, empid:=`expr#empid`
+└─ Gather Exchange Est. ? rows
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {expr#empid}
+         └─ Aggregating Est. ? rows
+            │     Group by: {expr#empid}
+            │     Aggregates: expr#sum(c):=AggNull(sum)(expr#c), expr#avgMerge(a):=AggNull(avgMerge)(expr#a)
+            └─ Projection Est. ? rows
+               │     Expressions: expr#a:=a, expr#c:=c, expr#empid:=empid
+               └─ Filter Est. ? rows
+                  │     Condition: empid = 150
+                  └─ TableScan test.mv_data Est. ? rows
+                           Condition : empid = 150.
+                           Outputs: [a, c, empid]
+note: Materialized Views is applied for 1 times: test.mv_define.
+1	7000	150
+6. test distributed table on local mv
+Projection Est. ? rows
+│     Expressions: c:=`expr#sum(c)`, deptno:=`expr#deptno`
+└─ Gather Exchange Est. ? rows
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {expr#deptno}
+         └─ Aggregating Est. ? rows
+            │     Group by: {expr#deptno}
+            │     Aggregates: expr#sum(c):=AggNull(sum)(expr#c)
+            └─ Projection Est. ? rows
+               │     Expressions: expr#c:=c, expr#deptno:=deptno
+               └─ Filter Est. ? rows
+                  │     Condition: 1
+                  └─ TableScan test.mv_data Est. ? rows
+                           Outputs: [c, deptno]
+note: Materialized Views is applied for 1 times: test.mv_define_local.
+3	10
+1	20

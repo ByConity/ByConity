@@ -40,9 +40,9 @@ BlockIO InterpreterDumpInfoQueryUseOptimizer::execute()
     ASTPtr query_body = query_body_ptr->as<ASTDumpInfoQuery>()->dump_query;
     dumpQuery(query_body_ptr->as<ASTDumpInfoQuery>()->dump_string, context);
 
-    query_body = QueryRewriter::rewrite(query_body, context);
+    query_body = QueryRewriter().rewrite(query_body, context);
     AnalysisPtr analysis = QueryAnalyzer::analyze(query_body, context);
-    QueryPlanPtr query_plan = QueryPlanner::plan(query_body, *analysis, context);
+    QueryPlanPtr query_plan = QueryPlanner().plan(query_body, *analysis, context);
     dumpDdlStats(*query_plan, context);
     dumpClusterInfo(context, WorkerSizeFinder::find(*query_plan, *context));
 

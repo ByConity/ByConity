@@ -118,6 +118,14 @@
 #include <common/phdr_cache.h>
 #include <common/scope_guard.h>
 #include "MetricsTransmitter.h"
+#include <QueryPlan/PlanCache.h>
+#include <DataTypes/MapHelpers.h>
+#include <Statistics/CacheManager.h>
+#include <CloudServices/CnchServerServiceImpl.h>
+#include <CloudServices/CnchWorkerServiceImpl.h>
+#include <CloudServices/CnchWorkerClientPools.h>
+#include <Catalog/Catalog.h>
+#include <QueryPlan/Hints/registerHints.h>
 
 #include <CloudServices/CnchServerClientPool.h>
 
@@ -582,6 +590,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     MainThreadStatus::getInstance();
 
     registerFunctions();
+    registerHints();
     registerAggregateFunctions();
     registerTableFunctions();
     /// Init cgroup
@@ -1753,6 +1762,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
         if (global_context->getComplexQueryActive())
         {
             Statistics::CacheManager::initialize(global_context);
+            PlanCacheManager::initialize(global_context);
+            /// Brpc data trans registry service
+            rpc_servers.emplace_back(std::make_unique<brpc::Server>());
+            rpc_servers.emplace_back(std::make_unique<brpc::Server>());
+            rpc_services.emplace_back(std::make_unique<BrpcExchangeReceiverRegistryService>(global_context->getSettingsRef().exchange_stream_max_buf_size));
+            rpc_services.emplace_back(std::make_unique<PlanSegmentManagerRpcService>(global_context));
+            rpc_services.emplace_back(std::make_unique<RuntimeFilterService>(global_context));
 
             for (size_t i = 0; i < listen_hosts.size(); i++)
             {

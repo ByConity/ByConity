@@ -13,9 +13,12 @@
  * limitations under the License.
  */
 
+#include <optional>
 #include <Optimizer/Property/PropertyMatcher.h>
 
+#include <Core/SortDescription.h>
 #include <Interpreters/Context.h>
+#include <Optimizer/Property/Property.h>
 
 namespace DB
 {
@@ -42,6 +45,118 @@ bool PropertyMatcher::matchStreamPartitioning(
         return true;
     return required.normalize(equivalences) == actual.normalize(equivalences);
 }
+
+
+Sorting PropertyMatcher::matchSorting(
+    const Context & context, const Sorting & required, const Sorting & actual, const SymbolEquivalences & equivalences)
+{
+    return matchSorting(context, required.toSortDesc(), actual, equivalences);
+}
+
+
+/// Optimize in case of exact match with order key element
+/// or in some simple cases when order key element is wrapped into monotonic function.
+/// Returns on of {-1, 0, 1} - direction of the match. 0 means - doesn't match.
+std::optional<SortOrder> matchSortDescription(const SortColumnDescription & require, const SortColumnDescription & actual)
+{
+    /// If required order depend on collation, it cannot be matched with primary key order.
+    /// Because primary keys cannot have collations.
+    if (require.collator)
+        return {};
+
+    if (actual.collator)
+        return {};
+
+    auto match_direction = [&](int require_dir, int actual_dir) {
+        int current_direction = 0;
+        switch (require_dir)
+        {
+            case 1: {
+                if (actual_dir == 0 || actual_dir == 1)
+                {
+                    current_direction = 1;
+                }
+                break;
+            }
+            case -1: {
+                if (actual_dir == 0 || actual_dir == -1)
+                {
+                    current_direction = -1;
+                }
+                break;
+            }
+            case 0: {
+                if (actual_dir != 0)
+                {
+                    current_direction = actual_dir;
+                }
+                else
+                {
+                    current_direction = 1;
+                }
+            }
+        }
+        return current_direction;
+    };
+
+    int direction = match_direction(require.direction, actual.direction);
+    int null_direction = match_direction(require.nulls_direction, actual.nulls_direction);
+
+
+    /// For the path: order by (sort_column, ...)
+    if (require.column_name == actual.column_name)
+        return SortColumn::directionToSortOrder(direction, null_direction);
+
+    return {};
+}
+
+Sorting PropertyMatcher::matchSorting(const Context &, const SortDescription & required, const Sorting & actual, const SymbolEquivalences &)
+{
+    if (!actual.empty())
+    {
+        SortOrder read_direction = SortOrder::UNKNOWN;
+
+        // todo@jingpeng.mt constant
+        // auto fixed_sorting_columns = getFixedSortingColumns(query, sorting_key_columns, context);
+
+        SortDescription sort_description_for_merging;
+        sort_description_for_merging.reserve(required.size());
+
+        size_t desc_pos = 0;
+        size_t key_pos = 0;
+
+        while (desc_pos < required.size() && key_pos < actual.size())
+        {
+            auto match = matchSortDescription(required[desc_pos], actual[key_pos].toSortColumnDesc());
+            bool is_matched = match && (desc_pos == 0 || match == read_direction);
+
+            if (!is_matched)
+            {
+                /// If one of the sorting columns is constant after filtering,
+                /// skip it, because it won't affect order anymore.
+                // if (fixed_sorting_columns.contains(sorting_key_columns[key_pos]))
+                // {
+                //     ++key_pos;
+                //     continue;
+                // }
+
+                break;
+            }
+
+            if (desc_pos == 0)
+                read_direction = match.value();
+
+            sort_description_for_merging.push_back(required[desc_pos]);
+
+            ++desc_pos;
+            ++key_pos;
+        }
+
+        return Sorting{sort_description_for_merging};
+    }
+    return {};
+}
+
 
 Property PropertyMatcher::compatibleCommonRequiredProperty(const std::unordered_set<Property, PropertyHash> & required_properties)
 {

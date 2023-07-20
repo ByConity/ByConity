@@ -116,14 +116,14 @@ Float64 getValueFromNumberLiteral(const ASTPtr & node)
         throw Exception("Not a literal node", ErrorCodes::SYNTAX_ERROR);
 }
 
-bool ParserCreateStatsQuery::parseSuffix(Pos & pos, Expected & expected, IAST & ast)
+bool ParserCreateStatsQuery::parseSuffix(Pos & pos, QueryAst & node, Expected & expected)
 {
     ParserKeyword s_partition("PARTITION");
     ParserKeyword s_with("WITH");
     ParserPartition partition_p;
     ParserNothing dummy_p;
 
-    auto & create_stats_ast = dynamic_cast<ASTCreateStatsQuery &>(ast);
+    auto & create_stats_ast = node;
 
     if (s_partition.ignore(pos, expected))
     {

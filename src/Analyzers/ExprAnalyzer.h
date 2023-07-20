@@ -53,6 +53,7 @@ struct ExprAnalyzerOptions
     AggregateSupport aggregate_support = AggregateSupport::DISALLOWED;
     WindowSupport window_support = WindowSupport::DISALLOWED;
     SubquerySupport subquery_support = SubquerySupport::DISALLOWED;
+    bool expand_untuple = true;
 
     // constructor
     ExprAnalyzerOptions(String statement_name_ = ""): statement_name(std::move(statement_name_)) // NOLINT(google-explicit-constructor)
@@ -82,6 +83,12 @@ struct ExprAnalyzerOptions
         subquery_support = arg;
         return *this;
     }
+
+    ExprAnalyzerOptions & expandUntuple(bool arg)
+    {
+        expand_untuple = arg;
+        return *this;
+    }
 };
 
 class ExprAnalyzer
@@ -104,6 +111,8 @@ public:
      * 5. Register subquery expressions.
      * 6. Register aggregate functions.
      * 7. Register window functions.
+     *
+     * !! Caution: expression will be modified in these cases: `untuple` function
      */
     static DataTypePtr analyze(ASTPtr expression,
                                ScopePtr scope,

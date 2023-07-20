@@ -67,7 +67,7 @@ private:
 
 void registerFunctionCheckSubQueryReturnSingleRow(FunctionFactory & factory)
 {
-    factory.registerFunction<FunctionCheckSubQueryReturnSingleRow>();
+    factory.registerFunction<FunctionCheckSubQueryReturnSingleRow>(FunctionFactory::CaseInsensitive);
 }
 
 

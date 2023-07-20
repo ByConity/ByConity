@@ -45,13 +45,16 @@
 #include <Common/ThreadPool.h>
 #include <Common/isLocalAddress.h>
 #include <common/types.h>
-#include "Server/AsyncQueryManager.h"
-// #include <Storages/HDFS/HDFSCommon.h>
+#include <CloudServices/CnchBGThreadPartitionSelector.h>
+#include <Transaction/TxnTimestamp.h>
+#include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
+#include <Storages/HDFS/HDFSFileSystem.h>
 #include <DaemonManager/DaemonManagerClient_fwd.h>
 #include <DataStreams/BlockStreamProfileInfo.h>
-#include <Storages/HDFS/HDFSFileSystem.h>
-
+#include <Optimizer/OptimizerProfile.h>
+#include <Server/AsyncQueryManager.h>
 #if !defined(ARCADIA_BUILD)
+#    include <Common/config.h>
 #    include "config_core.h"
 #endif
 
@@ -314,6 +317,9 @@ using ResourceManagerClientPtr = std::shared_ptr<ResourceManagement::ResourceMan
 class OptimizerMetrics;
 using OptimizerMetricsPtr = std::shared_ptr<OptimizerMetrics>;
 
+using ExcludedRules = std::unordered_set<UInt32>;
+using ExcludedRulesMap = std::unordered_map<PlanNodeId, ExcludedRules>;
+
 /// An empty interface for an arbitrary object that may be attached by a shared pointer
 /// to query context, when using ClickHouse as a library.
 struct IHostContext
@@ -490,10 +496,12 @@ private:
     std::shared_ptr<SymbolAllocator> symbol_allocator = nullptr;
     std::shared_ptr<Statistics::StatisticsMemoryStore> stats_memory_store = nullptr;
     std::shared_ptr<OptimizerMetrics> optimizer_metrics = nullptr;
+    ExcludedRulesMap exclude_rules_map;
 
     std::unordered_map<std::string, bool> function_deterministic;
 
     WorkerGroupStatusPtr worker_group_status;
+    std::shared_ptr<OptimizerProfile> optimizer_profile =  nullptr;
     /// Temporary data for query execution accounting.
     TemporaryDataOnDiskScopePtr temp_data_on_disk;
 
@@ -1277,6 +1285,7 @@ public:
     int incAndGetSubQueryId() { return ++sub_query_id; }
 
     SymbolAllocatorPtr & getSymbolAllocator() { return symbol_allocator; }
+    ExcludedRulesMap & getExcludedRulesMap() { return exclude_rules_map; }
 
     void createSymbolAllocator();
     std::shared_ptr<Statistics::StatisticsMemoryStore> getStatisticsMemoryStore();
@@ -1298,8 +1307,17 @@ public:
         return true;
     }
 
+    void initOptimizerProfile() { optimizer_profile = std::make_unique<OptimizerProfile>(); }
+
+    String getOptimizerProfile(bool print_rule = false);
+
+    void clearOptimizerProfile();
+
+    void logOptimizerProfile(Poco::Logger * log, String prefix, String name, String time, bool is_rule = false);
+
     const String & getTenantId() const
     {
+
         if (!tenant_id.empty())
             return tenant_id;
         else

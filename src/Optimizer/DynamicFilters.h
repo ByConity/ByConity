@@ -88,6 +88,7 @@ public:
 
     /* dynamic_filters, static_filters */
     static std::pair<std::vector<ConstASTPtr>, std::vector<ConstASTPtr>> extractDynamicFilters(const ConstASTPtr & conjuncts);
+    static bool containsDynamicFilters(const ConstASTPtr & filter);
 
     static bool isDynamicFilter(const ConstASTPtr & expr);
     static bool isSupportedForTableScan(const DynamicFilterDescription & description);

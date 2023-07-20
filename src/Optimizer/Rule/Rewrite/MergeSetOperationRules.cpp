@@ -21,7 +21,7 @@ namespace DB
 {
 PatternPtr MergeUnionRule::getPattern() const
 {
-    return Patterns::unionn();
+    return Patterns::unionn().result();
 }
 
 TransformResult MergeUnionRule::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -37,11 +37,16 @@ TransformResult MergeUnionRule::transformImpl(PlanNodePtr node, const Captures &
 
 PatternPtr MergeExceptRule::getPattern() const
 {
-    return Patterns::except();
+    return Patterns::except().result();
 }
 
 TransformResult MergeExceptRule::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
 {
+    auto & context = *rule_context.context;
+    if (!context.getSettingsRef().enable_setoperation_to_agg)
+    {
+        return {};
+    }
     SetOperationMerge merge_operation(node, *rule_context.context);
     auto result = merge_operation.mergeFirstSource();
 
@@ -53,11 +58,16 @@ TransformResult MergeExceptRule::transformImpl(PlanNodePtr node, const Captures 
 
 PatternPtr MergeIntersectRule::getPattern() const
 {
-    return Patterns::intersect();
+    return Patterns::intersect().result();
 }
 
 TransformResult MergeIntersectRule::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
 {
+    auto & context = *rule_context.context;
+    if (!context.getSettingsRef().enable_setoperation_to_agg)
+    {
+        return {};
+    }
     SetOperationMerge merge_operation(node, *rule_context.context);
     auto result = merge_operation.merge();
 

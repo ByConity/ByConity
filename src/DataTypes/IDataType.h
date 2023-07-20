@@ -401,8 +401,8 @@ struct WhichDataType
     constexpr bool isTime() const { return idx == TypeIndex::Time; }
     constexpr bool isDateTime() const { return idx == TypeIndex::DateTime; }
     constexpr bool isDateTime64() const { return idx == TypeIndex::DateTime64; }
-    bool isDateOrDateTime() const { return isDate() || isDateTime() || isDateTime64(); }
     constexpr bool isDateOrDate32() const { return isDate() || isDate32(); }
+    constexpr bool isDateOrDateTime() const { return isDate() || isDate32() || isDateTime() || isDateTime64(); }
 
     constexpr bool isString() const { return idx == TypeIndex::String; }
     constexpr bool isFixedString() const { return idx == TypeIndex::FixedString; }

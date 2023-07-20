@@ -20,7 +20,7 @@
 namespace DB::Statistics
 {
 template <class StatsDerived>
-inline void CheckTag(StatisticsTag tag)
+inline void checkTag(StatisticsTag tag)
 {
     if (StatsDerived::tag != tag)
     {

@@ -14,28 +14,25 @@
  */
 
 #pragma once
-#include <QueryPlan/ITransformingStep.h>
 #include <Core/SortDescription.h>
 #include <DataStreams/SizeLimits.h>
 #include <Disks/IVolume.h>
+#include <QueryPlan/ITransformingStep.h>
 
 namespace DB
 {
-
 /// Sorts stream of data. See MergeSortingTransform.
 class SortingStep : public ITransformingStep
 {
 public:
-    explicit SortingStep(
-            const DataStream & input_stream,
-            const SortDescription & description_,
-            UInt64 limit_,
-            bool partial_);
+    explicit SortingStep(const DataStream & input_stream, SortDescription description_, UInt64 limit_, bool partial_, SortDescription prefix_description_ = {});
 
     String getName() const override { return "Sorting"; }
 
     Type getType() const override { return Type::Sorting; }
-    const SortDescription & getSortDescription() const { return description; }
+    const SortDescription & getSortDescription() const { return result_description; }
+    const SortDescription & getPrefixDescription() const { return prefix_description; }
+    void setPrefixDescription(const SortDescription & prefix_description_) { prefix_description = prefix_description_; }
     UInt64 getLimit() const { return limit; }
     bool isPartial() const { return partial; }
 
@@ -53,7 +50,8 @@ public:
     void setInputStreams(const DataStreams & input_streams_) override;
 
 private:
-    SortDescription description;
+    SortDescription prefix_description;
+    const SortDescription result_description;
     UInt64 limit;
     bool partial;
 };

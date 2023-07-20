@@ -99,18 +99,22 @@ ActionsDAGPtr FilterStep::createActions(ContextPtr context, const ASTPtr & rewri
 
 void FilterStep::transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings & settings)
 {
+    ConstASTPtr rewrite_filter = filter;
     if (!actions_dag)
     {
-        auto rewrite_filter = rewriteDynamicFilter(filter, pipeline, settings);
+        rewrite_filter = rewriteDynamicFilter(filter, pipeline, settings);
         actions_dag = createActions(settings.context, rewrite_filter->clone());
         filter_column_name = rewrite_filter->getColumnName();
+
     }
 
+    bool contains_dynamic_filter = DynamicFilters::containsDynamicFilters(rewrite_filter);
     auto expression = std::make_shared<ExpressionActions>(actions_dag, settings.getActionsSettings());
 
     pipeline.addSimpleTransform([&](const Block & header, QueryPipeline::StreamType stream_type) {
         bool on_totals = stream_type == QueryPipeline::StreamType::Totals;
-        return std::make_shared<FilterTransform>(header, expression, filter_column_name, remove_filter_column, on_totals);
+        return std::make_shared<FilterTransform>(
+            header, expression, filter_column_name, remove_filter_column, on_totals, contains_dynamic_filter);
     });
 
     if (!blocksHaveEqualStructure(pipeline.getHeader(), output_stream->header))

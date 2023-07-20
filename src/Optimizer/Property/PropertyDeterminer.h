@@ -25,10 +25,10 @@ namespace DB
 class PropertyDeterminer
 {
 public:
-    static PropertySets determineRequiredProperty(ConstQueryPlanStepPtr step, const Property & property);
+    static PropertySets determineRequiredProperty(QueryPlanStepPtr step, const Property & property);
 
     static PropertySets determineRequiredProperty(
-        ConstQueryPlanStepPtr step,
+        QueryPlanStepPtr step,
         const Property & property,
         const std::vector<std::unordered_set<CTEId>> & child_with_clause);
 };
@@ -50,6 +50,7 @@ public:
     PropertySets visitProjectionStep(const ProjectionStep & step, DeterminerContext & ctx) override;
     PropertySets visitFilterStep(const FilterStep &, DeterminerContext & context) override;
     PropertySets visitJoinStep(const JoinStep & step, DeterminerContext &) override;
+    PropertySets visitArrayJoinStep(const ArrayJoinStep & step, DeterminerContext & context) override;
     PropertySets visitAggregatingStep(const AggregatingStep & step, DeterminerContext &) override;
     PropertySets visitMarkDistinctStep(const MarkDistinctStep & step, DeterminerContext &) override;
     PropertySets visitMergingAggregatedStep(const MergingAggregatedStep & step, DeterminerContext &) override;
@@ -74,7 +75,9 @@ public:
     PropertySets visitEnforceSingleRowStep(const EnforceSingleRowStep &, DeterminerContext &) override;
     PropertySets visitAssignUniqueIdStep(const AssignUniqueIdStep & node, DeterminerContext & context) override;
     PropertySets visitCTERefStep(const CTERefStep &, DeterminerContext &) override;
+    PropertySets visitExplainAnalyzeStep(const ExplainAnalyzeStep &, DeterminerContext &) override;
     PropertySets visitTopNFilteringStep(const TopNFilteringStep &, DeterminerContext & context) override;
+    PropertySets visitFillingStep(const FillingStep &, DeterminerContext &) override;
 
 private:
     static PropertySet single()

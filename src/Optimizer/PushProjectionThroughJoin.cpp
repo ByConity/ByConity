@@ -221,7 +221,10 @@ std::optional<PlanNodePtr> PushProjectionThroughJoin::pushProjectionThroughJoin(
         join_step.getRequireRightKeys(),
         join_step.getAsofInequality(),
         join_step.getDistributionType(),
-        join_step.isMagic());
+        join_step.getJoinAlgorithm(),
+        join_step.isMagic(),
+        join_step.isOrdered(),
+        join_step.getHints());
     PlanNodePtr new_join_node = std::make_shared<JoinNode>(
         context->nextNodeId(), std::move(new_join_step), PlanNodes{left_expression_step_inline, right_expression_step_inline});
 

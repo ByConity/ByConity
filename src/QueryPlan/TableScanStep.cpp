@@ -381,7 +381,6 @@ TableScanExecutor::TableScanExecutor(TableScanStep & step, ContextPtr context_)
             step.getStorageID(),
             step.getColumnAlias(),
             step.getQueryInfo(),
-            step.getProcessedStage(),
             step.getMaxBlockSize());
         node = PlanNodeBase::createPlanNode(node_id++, table_scan_without_pushdown_steps);
 
@@ -789,22 +788,23 @@ void TableScanStep::makeSetsForIndex(const ASTPtr & node, ContextPtr context, Pr
 }
 
 TableScanStep::TableScanStep(
-    ContextPtr  /*context*/,
+    ContextPtr /*context*/,
     StoragePtr storage_,
     const NamesWithAliases & column_alias_,
     const SelectQueryInfo & query_info_,
-    QueryProcessingStage::Enum processing_stage_,
     size_t max_block_size_,
+    String alias_,
+    PlanHints hints_,
     QueryPlanStepPtr aggregation_,
     QueryPlanStepPtr projection_,
     QueryPlanStepPtr filter_)
-    : ISourceStep(DataStream{})
+    : ISourceStep(DataStream{}, hints_)
     , storage(storage_)
     , storage_id(storage->getStorageID())
     , column_alias(column_alias_)
     , query_info(query_info_)
-    , processing_stage(processing_stage_)
     , max_block_size(max_block_size_)
+    , alias(alias_)
     , pushdown_aggregation(std::move(aggregation_))
     , pushdown_projection(std::move(projection_))
     , pushdown_filter(std::move(filter_))
@@ -833,10 +833,9 @@ TableScanStep::TableScanStep(
 
     auto header = storage->getInMemoryMetadataPtr()->getSampleBlockForColumns(require_column_list, storage->getVirtuals());
 
-
     // init query_info.syntax_analyzer
     auto tree_rewriter_result
-        = std::make_shared<TreeRewriterResult>(header.getNamesAndTypesList(), storage, storage->getInMemoryMetadataPtr());
+            = std::make_shared<TreeRewriterResult>(header.getNamesAndTypesList(), storage, storage->getInMemoryMetadataPtr());
     tree_rewriter_result->required_source_columns = header.getNamesAndTypesList();
     tree_rewriter_result->analyzed_join = std::make_shared<TableJoin>();
     query_info.syntax_analyzer_result = tree_rewriter_result;
@@ -863,16 +862,29 @@ TableScanStep::TableScanStep(
 }
 
 TableScanStep::TableScanStep(
-    ContextPtr  context,
+    ContextPtr context,
     StorageID storage_id_,
     const NamesWithAliases & column_alias_,
     const SelectQueryInfo & query_info_,
-    QueryProcessingStage::Enum processing_stage_,
     size_t max_block_size_,
+    String alias_,
+    PlanHints hints_,
     QueryPlanStepPtr aggregation_,
     QueryPlanStepPtr projection_,
     QueryPlanStepPtr filter_)
-    : TableScanStep(context, DatabaseCatalog::instance().getTable(storage_id_, context), column_alias_, query_info_, processing_stage_, max_block_size_, aggregation_, projection_, filter_) { }
+    : TableScanStep(
+        context,
+        DatabaseCatalog::instance().getTable(storage_id_, context),
+        column_alias_,
+        query_info_,
+        max_block_size_,
+        alias_,
+        hints_,
+        aggregation_,
+        projection_,
+        filter_)
+{
+}
 
 void TableScanStep::formatOutputStream()
 {
@@ -1043,7 +1055,7 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
     if (execute_plan.empty())
     {
         auto pipe = storage->read(
-            interpreter->getRequiredColumns(), storage->getInMemoryMetadataPtr(), query_info, build_context.context, processing_stage, max_block_size, max_streams);
+            interpreter->getRequiredColumns(), storage->getInMemoryMetadataPtr(), query_info, build_context.context, QueryProcessingStage::Enum::FetchColumns, max_block_size, max_streams);
 
         QueryPlanStepPtr step;
         if (pipe.empty())
@@ -1422,10 +1434,10 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
                 : static_cast<size_t>(settings.max_threads);
 
             pipe.addSimpleTransform([&](const Block & header)
-                                    {
-                                        return std::make_shared<AggregatingTransform>(
-                                            header, transform_params, many_data, counter++, merge_threads, temporary_data_merge_threads);
-                                    });
+            {
+                return std::make_shared<AggregatingTransform>(
+                    header, transform_params, many_data, counter++, merge_threads, temporary_data_merge_threads);
+            });
         }
     }
 
@@ -1462,7 +1474,7 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
     }
     setStepDescription(step_desc.str());
 
-    LOG_DEBUG(log, "init pipeline total run time: {} ms", total_watch.elapsedMillisecondsAsDouble());
+    LOG_DEBUG(log, "init pipeline total run time: {} ms, table scan descriptiion: {}", total_watch.elapsedMillisecondsAsDouble(), step_desc.str());
 }
 
 void TableScanStep::serialize(WriteBuffer & buffer) const
@@ -1474,7 +1486,6 @@ void TableScanStep::serialize(WriteBuffer & buffer) const
     query_info.serialize(buffer);
     serializeStrings(column_names, buffer);
     writeBinary(column_alias, buffer);
-    writeBinary(static_cast<UInt8>(processing_stage), buffer);
     writeBinary(max_block_size, buffer);
 
     writeBinary(pushdown_aggregation != nullptr, buffer);
@@ -1500,14 +1511,11 @@ QueryPlanStepPtr TableScanStep::deserialize(ReadBuffer & buffer, ContextPtr cont
     StorageID storage_id = StorageID::deserialize(buffer, context);
     query_info.deserialize(buffer);
 
-    UInt8 binary_stage;
     size_t max_block_size;
 
     Names column_names = deserializeStrings(buffer);
     NamesWithAliases columns;
     readBinary(columns, buffer);
-    readBinary(binary_stage, buffer);
-    auto processed_stage = static_cast<QueryProcessingStage::Enum>(binary_stage);
     readBinary(max_block_size, buffer);
 
     bool has_aggregation;
@@ -1528,8 +1536,8 @@ QueryPlanStepPtr TableScanStep::deserialize(ReadBuffer & buffer, ContextPtr cont
     if (has_filter)
         filter = deserializePlanStep(buffer, context);
 
-    return std::make_unique<TableScanStep>(context, storage_id, columns, query_info, processed_stage, max_block_size,
-                                           aggregation, projection, filter);
+    return std::make_unique<TableScanStep>(context, storage_id, columns, query_info, max_block_size,
+                                           String{}/*alias*/, PlanHints{}, aggregation, projection, filter);
 }
 
 std::shared_ptr<IQueryPlanStep> TableScanStep::copy(ContextPtr /*context*/) const
@@ -1546,8 +1554,9 @@ std::shared_ptr<IQueryPlanStep> TableScanStep::copy(ContextPtr /*context*/) cons
         column_names,
         column_alias,
         copy_query_info,
-        processing_stage,
         max_block_size,
+        alias,
+        hints,
         pushdown_aggregation,
         pushdown_projection,
         pushdown_filter,
@@ -1686,11 +1695,6 @@ bool TableScanStep::setLimit(size_t limit, const ContextMutablePtr & context)
     return true;
 }
 
-QueryProcessingStage::Enum TableScanStep::getProcessedStage() const
-{
-    return processing_stage;
-}
-
 size_t TableScanStep::getMaxBlockSize() const
 {
     return max_block_size;
@@ -1797,6 +1801,14 @@ void TableScanStep::setQuotaAndLimits(QueryPipeline & pipeline, const SelectQuer
 
     for (const auto & processor : pipeline.getProcessors())
         processors.emplace_back(processor);
+}
+
+void TableScanStep::setReadOrder(SortDescription read_order)
+{
+    if (!read_order.empty())
+    {
+        query_info.input_order_info = std::make_shared<InputOrderInfo>(read_order, read_order[0].direction);
+    }
 }
 
 }

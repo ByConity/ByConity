@@ -1,48 +1,50 @@
-Projection est. 1 rows
+Projection Est. 1 rows
 │     Expressions: [s_address, s_name, s_phone, s_suppkey], total_revenue:=`expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_1`
-└─ Sorting est. 1 rows
+└─ Sorting Est. 1 rows
    │     Order by: {s_suppkey asc}
-   └─ Gather Exchange est. 1 rows
-      └─ Sorting est. 1 rows
+   └─ Gather Exchange Est. 1 rows
+      └─ Sorting Est. 1 rows
          │     Order by: {s_suppkey asc}
-         └─ Inner Join est. 0 rows
+         └─ Inner Join Est. 1 rows
             │     Condition: s_suppkey == l_suppkey_1
-            ├─ TableScan tpch.supplier est. 10000 rows
+            ├─ TableScan tpch.supplier Est. 10000 rows
             │        Outputs: [s_address, s_name, s_phone, s_suppkey]
-            └─ Broadcast Exchange est. 1 rows
-               └─ Inner Join est. 1 rows
+            └─ Broadcast Exchange Est. 1 rows
+               └─ Inner Join Est. 1 rows
                   │     Condition: expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_1 == expr#max(total_revenue)
-                  ├─ Projection est. 375 rows
-                  │  │     Expressions: expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_1:=`expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_6`, l_suppkey_1:=l_suppkey_6
-                  │  └─ MergingAggregated est. 375 rows
-                  │     └─ Repartition Exchange est. 375 rows
-                  │        │     Partition by: {l_suppkey_6}
-                  │        └─ Aggregating est. 375 rows
-                  │           │     Group by: {l_suppkey_6}
-                  │           │     Aggregates: expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_6:=AggNull(sum)(expr#multiply(l_extendedprice, minus(1, l_discount))_4)
-                  │           └─ Projection est. 226119 rows
-                  │              │     Expressions: [l_suppkey_6], expr#multiply(l_extendedprice, minus(1, l_discount))_4:=l_extendedprice_4 * (1 - l_discount_4)
-                  │              └─ Filter est. 226119 rows
-                  │                 │     Condition: (l_shipdate_4 >= cast(9496, 'Date')) AND (l_shipdate_4 < cast(9587, 'Date'))
-                  │                 └─ TableScan tpch.lineitem est. 6001215 rows
-                  │                          Outputs: l_discount_4:=l_discount, l_extendedprice_4:=l_extendedprice, l_shipdate_4:=l_shipdate, l_suppkey_6:=l_suppkey
-                  └─ Broadcast Exchange est. 1 rows
-                     └─ MergingAggregated est. 1 rows
-                        └─ Gather Exchange est. 1 rows
-                           └─ Aggregating est. 1 rows
+                  ├─ Projection Est. 375 rows
+                  │  │     Expressions: expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_1:=`expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_3`, l_suppkey_1:=l_suppkey_3
+                  │  └─ MergingAggregated Est. 375 rows
+                  │     └─ Repartition Exchange Est. 375 rows
+                  │        │     Partition by: {l_suppkey_3}
+                  │        └─ Aggregating Est. 375 rows
+                  │           │     Group by: {l_suppkey_3}
+                  │           │     Aggregates: expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_3:=AggNull(sum)(expr#multiply(l_extendedprice, minus(1, l_discount))_1)
+                  │           └─ Projection Est. 226119 rows
+                  │              │     Expressions: [l_suppkey_3], expr#multiply(l_extendedprice, minus(1, l_discount))_1:=l_extendedprice_1 * (1 - l_discount_1)
+                  │              └─ Filter Est. 226119 rows
+                  │                 │     Condition: (l_shipdate_1 >= cast(9496, 'Date')) AND (l_shipdate_1 < cast(9587, 'Date'))
+                  │                 └─ TableScan tpch.lineitem Est. 6001215 rows
+                  │                          Condition : (l_shipdate >= cast(9496, 'Date')) AND (l_shipdate < cast(9587, 'Date')).
+                  │                          Outputs: l_discount_1:=l_discount, l_extendedprice_1:=l_extendedprice, l_shipdate_1:=l_shipdate, l_suppkey_3:=l_suppkey
+                  └─ Broadcast Exchange Est. 1 rows
+                     └─ MergingAggregated Est. 1 rows
+                        └─ Gather Exchange Est. 1 rows
+                           └─ Aggregating Est. 1 rows
                               │     Group by: {}
                               │     Aggregates: expr#max(total_revenue):=AggNull(max)(expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_2)
-                              └─ Projection est. 375 rows
-                                 │     Expressions: expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_2:=`expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_7`
-                                 └─ MergingAggregated est. 375 rows
-                                    └─ Repartition Exchange est. 375 rows
-                                       │     Partition by: {l_suppkey_7}
-                                       └─ Aggregating est. 375 rows
-                                          │     Group by: {l_suppkey_7}
-                                          │     Aggregates: expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_7:=AggNull(sum)(expr#multiply(l_extendedprice, minus(1, l_discount))_5)
-                                          └─ Projection est. 226119 rows
-                                             │     Expressions: [l_suppkey_7], expr#multiply(l_extendedprice, minus(1, l_discount))_5:=l_extendedprice_5 * (1 - l_discount_5)
-                                             └─ Filter est. 226119 rows
-                                                │     Condition: (l_shipdate_5 >= cast(9496, 'Date')) AND (l_shipdate_5 < cast(9587, 'Date'))
-                                                └─ TableScan tpch.lineitem est. 6001215 rows
-                                                         Outputs: l_discount_5:=l_discount, l_extendedprice_5:=l_extendedprice, l_shipdate_5:=l_shipdate, l_suppkey_7:=l_suppkey
+                              └─ Projection Est. 375 rows
+                                 │     Expressions: expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_2:=`expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_4`
+                                 └─ MergingAggregated Est. 375 rows
+                                    └─ Repartition Exchange Est. 375 rows
+                                       │     Partition by: {l_suppkey_4}
+                                       └─ Aggregating Est. 375 rows
+                                          │     Group by: {l_suppkey_4}
+                                          │     Aggregates: expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_4:=AggNull(sum)(expr#multiply(l_extendedprice, minus(1, l_discount))_2)
+                                          └─ Projection Est. 226119 rows
+                                             │     Expressions: [l_suppkey_4], expr#multiply(l_extendedprice, minus(1, l_discount))_2:=l_extendedprice_2 * (1 - l_discount_2)
+                                             └─ Filter Est. 226119 rows
+                                                │     Condition: (l_shipdate_2 >= cast(9496, 'Date')) AND (l_shipdate_2 < cast(9587, 'Date'))
+                                                └─ TableScan tpch.lineitem Est. 6001215 rows
+                                                         Condition : (l_shipdate >= cast(9496, 'Date')) AND (l_shipdate < cast(9587, 'Date')).
+                                                         Outputs: l_discount_2:=l_discount, l_extendedprice_2:=l_extendedprice, l_shipdate_2:=l_shipdate, l_suppkey_4:=l_suppkey

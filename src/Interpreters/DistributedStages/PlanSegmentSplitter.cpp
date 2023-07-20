@@ -63,6 +63,7 @@ void PlanSegmentSplitter::split(QueryPlan & query_plan, PlanSegmentContext & pla
     }
 
     // 2. set output parallel the same to segment parallel
+    PlanSegmentDescriptions plan_segment_descriptions;
     for (auto & node : plan_segment_context.plan_segment_tree->getNodes())
     {
         auto inputs = node.plan_segment->getPlanSegmentInputs();
@@ -96,6 +97,14 @@ void PlanSegmentSplitter::split(QueryPlan & query_plan, PlanSegmentContext & pla
                 }
             }
         }
+        plan_segment_descriptions.emplace_back(node.plan_segment->getPlanSegmentDescription());
+    }
+
+    auto * final_segment = plan_segment_context.plan_segment_tree->getRoot()->getPlanSegment();
+    if (final_segment->getQueryPlan().getRoot())
+    {
+        ExplainAnalyzeVisitor explain_visitor;
+        VisitorUtil::accept(final_segment->getQueryPlan().getRoot(), explain_visitor, plan_segment_descriptions);
     }
 }
 
@@ -141,7 +150,7 @@ PlanSegmentResult PlanSegmentVisitor::visitExchangeNode(QueryPlan::Node * node, 
     QueryPlanStepPtr remote_step = std::make_unique<RemoteExchangeSourceStep>(inputs, step->getOutputStream());
     remote_step->setStepDescription(step->getStepDescription());
     QueryPlan::Node remote_node{
-        .step = std::move(remote_step), .children = {}, .id = plan_segment_context.context->getPlanNodeIdAllocator() ? plan_segment_context.context->getPlanNodeIdAllocator()->nextId() : 1};
+        .step = std::move(remote_step), .children = {}, .id = node->id};
     plan_segment_context.query_plan.addNode(std::move(remote_node));
     return plan_segment_context.query_plan.getLastNode();
 }
@@ -193,7 +202,7 @@ PlanSegmentResult PlanSegmentVisitor::visitCTERefNode(QueryPlan::Node * node, Pl
         .step = std::move(remote_step),
         .children = {},
         .id
-        = plan_segment_context.context->getPlanNodeIdAllocator() ? plan_segment_context.context->getPlanNodeIdAllocator()->nextId() : 1};
+        = node->id};
     plan_segment_context.query_plan.addNode(std::move(remote_node));
 
     // add projection to rename symbol
@@ -446,6 +455,20 @@ std::optional<Partitioning::Handle> SourceNodeFinder::visitRemoteExchangeSourceN
         }
     }
     return {};
+}
+
+void ExplainAnalyzeVisitor::visitExplainAnalyzeNode(QueryPlan::Node * node, PlanSegmentDescriptions & descs)
+{
+    auto * explain = dynamic_cast<ExplainAnalyzeStep *>(node->step.get());
+    explain->setPlanSegmentDescriptions(descs);
+}
+
+void ExplainAnalyzeVisitor::visitNode(QueryPlan::Node * node, PlanSegmentDescriptions & descs)
+{
+    for (const auto & child : node->children)
+    {
+        VisitorUtil::accept(child, *this, descs);
+    }
 }
 
 }

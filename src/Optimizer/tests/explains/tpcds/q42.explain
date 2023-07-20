@@ -1,43 +1,35 @@
-Projection est. 1 rows
+Projection Est. 1 rows
 │     Expressions: [d_year, i_category, i_category_id], sum(ss_ext_sales_price):=`expr#sum(ss_ext_sales_price)`
-└─ Limit est. 1 rows
+└─ Limit Est. 1 rows
    │     Limit: 100
-   └─ Sorting est. 1 rows
+   └─ Sorting Est. 1 rows
       │     Order by: {expr#sum(ss_ext_sales_price) desc nulls_last, d_year asc, i_category_id asc, i_category asc}
       │     Limit: 100
-      └─ Gather Exchange est. 1 rows
-         └─ Sorting est. 1 rows
+      └─ Gather Exchange Est. 1 rows
+         └─ Sorting Est. 1 rows
             │     Order by: {expr#sum(ss_ext_sales_price) desc nulls_last, d_year asc, i_category_id asc, i_category asc}
             │     Limit: 100
-            └─ MergingAggregated est. 1 rows
-               └─ Repartition Exchange est. 1 rows
+            └─ MergingAggregated Est. 1 rows
+               └─ Repartition Exchange Est. 1 rows
                   │     Partition by: {d_year, i_category, i_category_id}
-                  └─ Aggregating est. 1 rows
+                  └─ Aggregating Est. 1 rows
                      │     Group by: {d_year, i_category, i_category_id}
                      │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price)
-                     └─ Inner Join est. 421678 rows
+                     └─ Inner Join Est. 421678 rows
                         │     Condition: ss_item_sk == i_item_sk
-                        ├─ Inner Join est. 23338638 rows
+                        ├─ Inner Join Est. 23338638 rows
                         │  │     Condition: ss_sold_date_sk == d_date_sk
-                        │  ├─ Local Exchange est. 2879987999 rows
-                        │  │  └─ Filter est. 2879987999 rows
-                        │  │     │     Dynamic Filters: {ss_item_sk:bloomfilter,ss_item_sk:range,ss_sold_date_sk:bloomfilter,ss_sold_date_sk:range}
-                        │  │     └─ TableScan tpcds.store_sales est. 2879987999 rows
-                        │  │              Outputs: [ss_ext_sales_price, ss_item_sk, ss_sold_date_sk]
-                        │  └─ Broadcast Exchange est. 30 rows
-                        │     └─ Projection est. 30 rows
-                        │        │     Expressions: [d_date_sk, d_moy, d_year]
-                        │        │     Dynamic Filters Builder: {d_date_sk}
-                        │        └─ Filter est. 30 rows
-                        │           │     Condition: (d_moy = 11) AND (d_year = 2000)
-                        │           └─ TableScan tpcds.date_dim est. 73049 rows
-                        │                    Outputs: [d_date_sk, d_moy, d_year]
-                        └─ Broadcast Exchange est. 5420 rows
-                           └─ Projection est. 5420 rows
-                              │     Expressions: [i_category, i_category_id, i_item_sk, i_manager_id]
-                              │     Dynamic Filters Builder: {i_item_sk}
-                              └─ Filter est. 5420 rows
-                                 │     Condition: i_manager_id = 1
-                                 └─ TableScan tpcds.item est. 300000 rows
-                                          Outputs: [i_category, i_category_id, i_item_sk, i_manager_id]
-note: Dynamic Filter is applied for 4 times.
+                        │  ├─ TableScan tpcds.store_sales Est. 2879987999 rows
+                        │  │        Outputs: [ss_ext_sales_price, ss_item_sk, ss_sold_date_sk]
+                        │  └─ Broadcast Exchange Est. 30 rows
+                        │     └─ Filter Est. 30 rows
+                        │        │     Condition: (d_year = 2000) AND (d_moy = 11)
+                        │        └─ TableScan tpcds.date_dim Est. 73049 rows
+                        │                 Condition : (d_year = 2000) AND (d_moy = 11).
+                        │                 Outputs: [d_date_sk, d_moy, d_year]
+                        └─ Broadcast Exchange Est. 5420 rows
+                           └─ Filter Est. 5420 rows
+                              │     Condition: i_manager_id = 1
+                              └─ TableScan tpcds.item Est. 300000 rows
+                                       Condition : i_manager_id = 1.
+                                       Outputs: [i_category, i_category_id, i_item_sk, i_manager_id]

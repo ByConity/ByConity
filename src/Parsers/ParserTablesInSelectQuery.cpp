@@ -28,6 +28,7 @@
 #include <Parsers/ParserSelectQuery.h>
 #include <Parsers/ParserSampleRatio.h>
 #include <Parsers/ParserTablesInSelectQuery.h>
+#include <Parsers/ParserHints.h>
 
 
 namespace DB
@@ -147,11 +148,14 @@ void ParserTablesInSelectQueryElement::parseJoinStrictness(Pos & pos, ASTTableJo
 bool ParserTablesInSelectQueryElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     auto res = std::make_shared<ASTTablesInSelectQueryElement>();
+    ParserHints table_hints;
 
     if (is_first)
     {
         if (!ParserTableExpression(dt).parse(pos, res->table_expression, expected))
             return false;
+
+        table_hints.parse(pos, res->table_expression->hints, expected);
     }
     else if (ParserArrayJoin(dt).parse(pos, res->array_join, expected))
     {
@@ -222,10 +226,14 @@ bool ParserTablesInSelectQueryElement::parseImpl(Pos & pos, ASTPtr & node, Expec
 
             if (!ParserKeyword("JOIN").ignore(pos, expected))
                 return false;
+
+            table_hints.parse(pos, table_join->hints, expected);
         }
 
         if (!ParserTableExpression(dt).parse(pos, res->table_expression, expected))
             return false;
+
+        table_hints.parse(pos, res->table_expression->hints, expected);
 
         if (table_join->kind != ASTTableJoin::Kind::Comma
             && table_join->kind != ASTTableJoin::Kind::Cross)
@@ -286,6 +294,8 @@ bool ParserTablesInSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & e
     auto res = std::make_shared<ASTTablesInSelectQuery>();
 
     ASTPtr child;
+    ParserHints tables_hints;
+    tables_hints.parse(pos, res->hints, expected);
 
     if (ParserTablesInSelectQueryElement(true, dt).parse(pos, child, expected))
         res->children.emplace_back(child);

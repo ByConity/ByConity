@@ -17,6 +17,10 @@
 
 #include <Functions/FunctionsHashing.h>
 #include <Optimizer/SymbolEquivalencesDeriver.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
+#include <Parsers/ASTSerDerHelper.h>
+#include <QueryPlan/PlanSerDerHelper.h>
 
 namespace DB
 {
@@ -106,6 +110,27 @@ Partitioning Partitioning::translate(const std::unordered_map<String, String> & 
     return Partitioning{handle, translate_columns, require_handle, buckets, sharding_expr, enforce_round_robin};
 }
 
+
+void Partitioning::serialize(WriteBuffer & buf) const
+{
+    serializeEnum(handle, buf);
+    serializeStrings(columns, buf);
+    writeBinary(require_handle, buf);
+    writeBinary(buckets, buf);
+    serializeAST(sharding_expr, buf);
+    writeBinary(enforce_round_robin, buf);
+}
+
+void Partitioning::deserialize(ReadBuffer & buf)
+{
+    deserializeEnum(handle, buf);
+    columns = deserializeStrings(buf);
+    readBinary(require_handle, buf);
+    readBinary(buckets, buf);
+    sharding_expr = deserializeAST(buf);
+    readBinary(enforce_round_robin, buf);
+}
+
 String Partitioning::toString() const
 {
     switch (handle)
@@ -166,6 +191,10 @@ String SortColumn::toString() const
             return name + "↓↑";
         case SortOrder::DESC_NULLS_LAST:
             return name + "↓↓";
+        case SortOrder::ANY:
+            return name + "any";
+        case SortOrder::UNKNOWN:
+            return name + "unknown";
     }
     return "unknown";
 }
@@ -181,13 +210,25 @@ size_t Sorting::hash() const
 Sorting Sorting::translate(const std::unordered_map<String, String> & identities) const
 {
     Sorting result;
-    result.reserve(this->size());
-    for (auto & item : *this)
+    for (const auto & item : *this)
         if (identities.contains(item.getName()))
             result.emplace_back(SortColumn{identities.at(item.getName()), item.getOrder()});
         else
             result.emplace_back(item);
     return result;
+}
+
+Sorting Sorting::normalize(const SymbolEquivalences & symbol_equivalences) const
+{
+    auto mapping = symbol_equivalences.representMap();
+    for (const auto & item : *this)
+    {
+        if (!mapping.contains(item.getName()))
+        {
+            mapping[item.getName()] = item.getName();
+        }
+    }
+    return translate(mapping);
 }
 
 String Sorting::toString() const
@@ -364,7 +405,7 @@ CTEDescription CTEDescription::translate(const std::unordered_map<String, String
 CTEDescriptions CTEDescriptions::translate(const std::unordered_map<String, String> & identities) const
 {
     CTEDescriptions result;
-    for (auto & item : *this)
+    for (const auto & item : *this)
         result.emplace(item.first, item.second.translate(identities));
     return result;
 }

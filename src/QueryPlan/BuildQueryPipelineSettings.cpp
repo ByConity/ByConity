@@ -38,10 +38,11 @@ BuildQueryPipelineSettings BuildQueryPipelineSettings::fromContext(ContextPtr fr
     return settings;
 }
 
-BuildQueryPipelineSettings BuildQueryPipelineSettings::fromPlanSegment(PlanSegment * plan_segment, ContextPtr context)
+BuildQueryPipelineSettings BuildQueryPipelineSettings::fromPlanSegment(PlanSegment * plan_segment, ContextPtr context, bool is_explain)
 {
     auto settings = fromContext(context);
     settings.distributed_settings = DistributedPipelineSettings::fromPlanSegment(plan_segment);
+    settings.distributed_settings.is_explian = is_explain;
     settings.context = context;
     return settings;
 }

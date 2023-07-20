@@ -19,7 +19,7 @@
 namespace DB
 {
 SymbolEquivalencesPtr
-SymbolEquivalencesDeriver::deriveEquivalences(ConstQueryPlanStepPtr step, std::vector<SymbolEquivalencesPtr> children_equivalences)
+SymbolEquivalencesDeriver::deriveEquivalences(QueryPlanStepPtr step, std::vector<SymbolEquivalencesPtr> children_equivalences)
 {
     static SymbolEquivalencesDeriverVisitor derive;
     return VisitorUtil::accept(step, derive, children_equivalences);
@@ -61,7 +61,7 @@ SymbolEquivalencesDeriverVisitor::visitProjectionStep(const ProjectionStep & ste
         revert_identifies[item.second] = item.first;
     }
 
-    return context[0]->translate(identities);
+    return context[0]->translate(revert_identifies);
 }
 
 SymbolEquivalencesPtr

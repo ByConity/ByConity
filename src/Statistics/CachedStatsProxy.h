@@ -34,6 +34,6 @@ public:
 };
 
 using CachedStatsProxyPtr = std::unique_ptr<CachedStatsProxy>;
-CachedStatsProxyPtr createCachedStatsProxy(const CatalogAdaptorPtr & catalog);
+CachedStatsProxyPtr createCachedStatsProxy(const CatalogAdaptorPtr & catalog, StatisticsCachePolicy policy);
 
 } // namespace DB;

@@ -15,7 +15,7 @@
 
 #include <QueryPlan/PlanPrinter.h>
 #include <Optimizer/tests/gtest_base_tpcds_plan_test.h>
-
+#include <Optimizer/Iterative/IterativeRewriter.h>
 #include <gtest/gtest.h>
 
 using namespace DB;
@@ -35,7 +35,6 @@ public:
 #ifndef NDEBUG
         // debug mode may time out.
         settings.emplace("cascades_optimizer_timeout", "300000");
-        settings.emplace("enable_execute_uncorrelated_subquery", 0);
 #endif
 
         settings.emplace("cte_mode", "AUTO");
@@ -561,4 +560,11 @@ TEST_F(PlanCheckTpcdsWihtoutStatistics, q98)
 TEST_F(PlanCheckTpcdsWihtoutStatistics, q99)
 {
     EXPECT_TRUE(equals(explain("q99"), expected("q99")));
+}
+
+TEST_F(PlanCheckTpcdsWihtoutStatistics, summary)
+{
+    std::cout << "rule call times:" << std::endl;
+    for (const auto & x: IterativeRewriter::getRuleCallTimes())
+        std::cout << x.first << ": " << x.second << std::endl;
 }

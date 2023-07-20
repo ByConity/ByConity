@@ -23,4 +23,20 @@ void ASTQueryParameter::appendColumnNameImpl(WriteBuffer & ostr) const
     writeString(name, ostr);
 }
 
+void ASTQueryParameter::serialize(WriteBuffer & buf) const
+{
+    writeBinary(name, buf);
+}
+
+ASTPtr ASTQueryParameter::deserialize(ReadBuffer & buf)
+{
+    String name;
+    readBinary(name, buf);
+    String type;
+    readBinary(type, buf);
+    auto ast = std::make_shared<ASTQueryParameter>(name, type);
+    ast->deserializeImpl(buf);
+    return ast;
+}
+
 }

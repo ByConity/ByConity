@@ -235,7 +235,7 @@ static const char * toXXXFunctionPrefixes[]
        "toUUID",
        "toFixedString",
        "toDate",
-       // "toDate32", // TODO: date32
+       "toDate32",
        "toDateTime",
        "toDateTime32", // alias to toDateTime
        // "toDateTime64",  // TODO: not implemented since it requires decimal scale

@@ -1,4 +1,5 @@
-CREATE DATABASE IF NOT EXISTS test;
+DROP database if exists test;
+create database test;
 
 use test;
 DROP TABLE IF EXISTS test.multi_dist;

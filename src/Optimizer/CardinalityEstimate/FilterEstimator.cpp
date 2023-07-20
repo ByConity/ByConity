@@ -18,6 +18,7 @@
 #include <Optimizer/CardinalityEstimate/FilterEstimator.h>
 #include <Optimizer/PredicateUtils.h>
 #include <Parsers/ASTFunction.h>
+#include <Statistics/StringHash.h>
 
 namespace DB
 {
@@ -223,7 +224,13 @@ FilterEstimator::estimateOrFilter(PlanNodeStatistics & stats, ConstASTPtr & pred
     }
     selectivity = sum_selectivity - multiply_selectivity;
 
+
     std::unordered_map<String, std::vector<SymbolStatisticsPtr>> combined_symbol_statistics = combineSymbolStatistics(results);
+    if (combined_symbol_statistics.size() > 1) {
+        // if we have more than one symbol statistics, we can't estimate the symbol statistics.
+        return {selectivity, {}};
+    }
+
     std::unordered_map<String, SymbolStatisticsPtr> symbol_statistics;
     for (auto & result : combined_symbol_statistics)
     {
@@ -415,7 +422,7 @@ FilterEstimator::estimateEqualityFilter(PlanNodeStatistics & stats, ConstASTPtr 
     else if (symbol_statistics.isString())
     {
         String str = symbol_statistics.toString(literal);
-        double value = CityHash_v1_0_2::CityHash64(str.data(), str.size());
+        double value = Statistics::stringHash64(str);
         selectivity = symbol_statistics.estimateEqualFilter(value);
         std::unordered_map<std::string, SymbolStatisticsPtr> filtered_symbol_statistics
             = {{symbol, symbol_statistics.createEqualFilter(value)}};
@@ -484,7 +491,7 @@ FilterEstimator::estimateNotEqualityFilter(PlanNodeStatistics & stats, ConstASTP
     else if (symbol_statistics.isString())
     {
         String str = symbol_statistics.toString(literal);
-        double value = CityHash_v1_0_2::CityHash64(str.data(), str.size());
+        double value = Statistics::stringHash64(str);
         selectivity = symbol_statistics.estimateNotEqualFilter(value);
         std::unordered_map<std::string, SymbolStatisticsPtr> filtered_symbol_statistics
             = {{symbol, symbol_statistics.createNotEqualFilter(value)}};
@@ -648,7 +655,7 @@ FilterEstimator::estimateInFilter(PlanNodeStatistics & stats, ConstASTPtr & pred
             if (auto eval_res = context.calculateConstantExpression(child))
             {
                 String str = symbol_statistics.toString(*eval_res);
-                double value = CityHash_v1_0_2::CityHash64(str.data(), str.size());
+                double value = Statistics::stringHash64(str);
                 str_values.insert(value);
             }
             else
@@ -742,7 +749,7 @@ FilterEstimator::estimateNotInFilter(PlanNodeStatistics & stats, ConstASTPtr & p
                 if (!eval_res->isNull())
                 {
                     String str = symbol_statistics.toString(*eval_res);
-                    double value = CityHash_v1_0_2::CityHash64(str.data(), str.size());
+                    double value = Statistics::stringHash64(str);
                     str_values.insert(value);
                 }
                 else

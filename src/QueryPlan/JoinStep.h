@@ -43,7 +43,9 @@ public:
         JoinPtr join_,
         size_t max_block_size_,
         size_t max_streams_,
-        bool keep_left_read_in_order_);
+        bool keep_left_read_in_order_,
+        bool is_ordered_ = false,
+        PlanHints hints_ = {});
     
     JoinStep(
         DataStreams input_streams_,
@@ -59,8 +61,11 @@ public:
         std::optional<std::vector<bool>> require_right_keys_ = std::nullopt,
         ASOF::Inequality asof_inequality_ = ASOF::Inequality::GreaterOrEquals,
         DistributionType distribution_type_ = DistributionType::UNKNOWN,
-        bool magic_set_ = false);
-
+        JoinAlgorithm join_algorithm = JoinAlgorithm::AUTO,
+        bool magic_set_ = false,
+        bool is_ordered_ = false,
+        PlanHints hints_ = {});
+    
 
     String getName() const override { return "Join"; }
 
@@ -99,6 +104,13 @@ public:
     bool isMagic() const { return is_magic; }
     void setMagic(bool is_magic_) { is_magic = is_magic_; }
 
+    bool isOrdered() const { return is_ordered; }
+    void setOrdered(bool is_ordered_) { is_ordered = is_ordered_; }
+
+    bool mustReplicate() const;
+    bool mustRepartition() const;
+
+
     bool supportReorder(bool support_filter, bool support_cross = false) const;
 
     bool supportSwap() const
@@ -111,13 +123,24 @@ public:
         if (require_right_keys || has_using)
             return false;
 
-        return !isMagic() && !getLeftKeys().empty();
+        return !isMagic();
     }
+
+    void setJoinAlgorithm(JoinAlgorithm join_algorithm_) { join_algorithm = join_algorithm_; }
+    JoinAlgorithm getJoinAlgorithm() const { return join_algorithm; }
 
     /**
      * Hash Join don't support non-equivalent filter yet, so we must use nest loop join.
      */
     bool enforceNestLoopJoin() const;
+
+    bool needStreamWithNonJoinedRows() const
+    {
+        if (strictness == ASTTableJoin::Strictness::Asof ||
+            strictness == ASTTableJoin::Strictness::Semi)
+            return false;
+        return isRightOrFull(kind);
+    }
 
     JoinPtr makeJoin(ContextPtr context);
 
@@ -174,9 +197,10 @@ private:
     ASOF::Inequality asof_inequality;
 
     DistributionType distribution_type = DistributionType::UNKNOWN;
-
+    JoinAlgorithm join_algorithm = JoinAlgorithm::AUTO;
     bool is_magic;
     Processors processors;
+    bool is_ordered;
 };
 
 /// Special step for the case when Join is already filled.
