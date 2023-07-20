@@ -1,4 +1,4 @@
-set enable_optimizer=1, enable_optimizer_fallback=0, enable_optimizer_white_list=0;
+set enable_optimizer=1;
 
 CREATE DATABASE IF NOT EXISTS test;
 USE test;

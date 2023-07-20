@@ -1,6 +1,4 @@
 set enable_optimizer=1;
-set enable_optimizer_fallback=0;
-set enable_optimizer_white_list=0;
 set create_stats_time_output=0;
 
 drop table if exists test_explain_stats_local;

@@ -1,5 +1,4 @@
 USE test;
-SET enable_optimizer_fallback=0, enable_optimizer_white_list=0;
 DROP TABLE IF EXISTS test.enum_nested_alter;
 CREATE TABLE test.enum_nested_alter(d Date DEFAULT '2000-01-01', x UInt64, n Nested(a String, e Enum8('Hello' = 1), b UInt8)) ENGINE = CnchMergeTree() PARTITION BY toYYYYMM(d) ORDER BY x SETTINGS index_granularity=1;
 
