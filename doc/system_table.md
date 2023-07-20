@@ -4,7 +4,9 @@ common column:
 - database: the database name of the table
 - table: the table name of the table
 - uuid: the uuid value of the table
+
 **cnch_databases**
+
 ```
 ┌─name─────────────┬─type─────┬
 │ name             │ String   │
@@ -17,7 +19,9 @@ common column:
 - txn_id: the last transaction id that applied to the database (create/rename).
 - previous_version: the commit timestamp of the previous version of the database
 - commit time: the last commit timestamp in human readable form.
+
 **cnch_databases_history**
+
 Contains information about the databases that have just been dropped. When a database is dropped, its information won't be cleaned immediately. It remains for a period of time (currently the default value is 3 days). While it is still remains, its information can be queried from this table
 ```
 ┌─name────────┬─type─────┬
@@ -28,7 +32,9 @@ Contains information about the databases that have just been dropped. When a dat
 
 name: database name
 delete_time: the time it got dropped
+
 **cnch_tables**
+
 Contains information about all cnch tables in the cluster
 ```
 ┌─name──────────────┬─type─────┬
@@ -63,7 +69,9 @@ sorting_key: sorting key of the CnchMergeTree engine
 primary_key: primary key of the CnchMergeTree engine
 sampling_key: sampling key of the CnchMergeTree engine
 cluster_key: cluster key for the bucket table
+
 **cnch_table_info**
+
 ```
 ┌─name───────────────────┬─type─────┬
 │ database               │ String   │
@@ -75,7 +83,9 @@ cluster_key: cluster key for the bucket table
 
 last_modification_time: timestamp when last data ingestion or removal happens to this table; initialized with current time when the PartCacheManager manage this table. Probably unused at the moment
 cluster_status: for bucket table, if all the parts of the table have been clustered. Have no meaning for normal table.
+
 **cnch_tables_history**
+
 Contains information about the tables that have just been dropped. When a table is dropped, its information won't be cleaned immediately. It remains for a period of time (currently the default value is 3 days). While it is still remains, its information can be queried from this table
 ```
 ┌─name─────────────┬─type─────┬
@@ -93,7 +103,9 @@ definition: the CREATE query of the table
 current_version: the transaction id of the drop action
 previous_version: the timestamp of the previous version of the table (not the commit time of the table before drop)
 delete_time: the timestamp of the drop action
+
 **cnch_vw**
+
 This usually don't contain data until preallocate mode is used with some query or table.
 ```
 ┌─name─┬─type───┬
@@ -101,7 +113,9 @@ This usually don't contain data until preallocate mode is used with some query o
 └──────┴────────┴
 ```
 name: virtual warehouse name
+
 **cnch_parts**
+
 Select * from system.cnch_parts where database = 'abc' and table = 'dummy';
 For parts, we need to atleast specify database and table name for each query
 ```
@@ -141,7 +155,9 @@ For parts, we need to atleast specify database and table name for each query
 - visible: if the part is visible to the query with latest timestamp or not
 - bucket_number: the bucket number of the part (it is -1 if the part is not bucketed) 
 - has_bitmap: whether or not the part has bitmap
+
 **cnch_preallocated_topology**
+
 Can be used to get worker side topology for preallocated table
 Select * from system.cnch_preallocated_topology where database='x' and table='y'
 we need to atleast specify database and table name
@@ -155,7 +171,9 @@ we need to atleast specify database and table name
 ```
 vw_name: the virtual warehouse that the worker belongs to
 worker_address: Worker's host ip address with TCP and RPC ports
+
 **cnch_kafka_log**
+
 A separated document about system table for Cnch Kafka is here
 ```
 ┌─name──────────┬─type───────────────────────────────────────────────────────────────────────────────────────────────────────────────┬
@@ -176,6 +194,7 @@ A separated document about system table for Cnch Kafka is here
 ```
 
 **cnch_kafka_tables**
+
 A separated document about system table for Cnch Kafka is here
 Contains information about all the Kafka tables in the cluster
 ```
@@ -195,6 +214,7 @@ Contains information about all the Kafka tables in the cluster
 ```
 
 **cnch_kafka_tasks**
+
 A separate document about the system table for Cnch Kafka is here
 ```
 ┌─name────────────────┬─type──────────┬
@@ -210,6 +230,7 @@ A separate document about the system table for Cnch Kafka is here
 ```
 
 **resource_groups**
+
 name = resource_group name. This is identical to the virtual_warehouse name in the current Virtual Warehouse Queue implementation
 ```
 ─name───────────────────┬─type──────┬─flags─┬─default_type─┬─default_expression─┬─comment─┬─codec_expression─┐
@@ -237,7 +258,9 @@ query_metrics
 A separate document is here
 query_worker_metrics
 A separate document is here
+
 **cnch_parts_info**
+
 ```
 ┌─name───────────────┬─type───┬
 │ database           │ String │
@@ -260,7 +283,9 @@ total_rows_count: the total rows count of the partition
 
 Notes
 1. This table is implemented by the partCache so not all tables will appear in this table.
+
 **cnch_columns**
+
 Clickhouse document
 ```
 ┌─name────────────────────┬─type───┬
@@ -299,6 +324,7 @@ is_in_sampling_key: if the column is in sampling key
 compression_codec: the compression codec name
 
 **cnch_transactions**
+
 Contains information about transaction records for non read-only transaction.
 ```
 ┌─name────────┬─type─────┬
@@ -319,7 +345,9 @@ status: the status of the transaction: Running, Finished, Aborted, Inactive, Unk
 priority: the priority of the transaction: Low or High
 location: location of transaction initiator, format: ip:rpc_port 10.130.48.166:19542
 initiator: the string that identifies the transaction's initiator, for example Kafka, Worker, Merge
+
 **cnch_dictionaries**
+
 Contains information about cnch dictionaries
 ```
 ┌─name────────┬─type───┬
@@ -333,7 +361,9 @@ Contains information about cnch dictionaries
 
 definition: the CREATE query of the dictionary
 is_detached: if the dictionary is detached or not
+
 **mutations**
+
 Contains information about the status of running mutations in the MergeTree tables and CnchMergeTree tables
 ```
 ┌─name───────────────────────┬─type──────────┬
@@ -364,7 +394,9 @@ is_done: if the mutation job is done
 latest_failed_part: empty for now
 latest_fail_time: empty for now
 latest_fail_reason: empty for now
+
 **manipulation**
+
 Contain information about manipulation list. Each of manipulation list represent a Merge or Mutate task
 ```
 ┌─name────────────────────────┬─type──────────┬
@@ -412,7 +444,9 @@ rows_written:
 columns_written: 
 memory_usage: 
 thread_number:   the poco Thread number of the merge mutate thread
+
 **bg_threads**
+
 Contains information about CnchBackGroundThread
 ```
 ┌─name─────────┬─type─────┬
@@ -430,7 +464,9 @@ type: type of background thread: PartGCThread, MergeSelectThread, MemoryBufferMa
 status: status of thread Running...
 startup_time: startup time of thread
 num_wakeup: the number of times the thread wakes up (run() method is called)
+
 **cnch_table_host**
+
 Contains info of server a query should be routed to based on table name
 ```
 ┌─name──────┬─type───┬
@@ -450,6 +486,7 @@ http_port: http port of host
 rpc_port: rpc port of host
 
 **global_gc_manager**
+
 Contains uuid of the table that are schedule to global_gc (drop meta data, drop datapath... and everything related to a table)
 ```
 ┌─name──────────┬─type─┬
@@ -459,7 +496,9 @@ Contains uuid of the table that are schedule to global_gc (drop meta data, drop 
 
 deleting_uuid: the uuid of table that are scheduled to delete in local server
 Inorder to have other information like database and name, it can be joined with system.cnch_table_history
+
 **dm_bg_jobs**
+
 Contains the info of jobs that are managed by DaemonManager, used for debugging purpose
 ```
 ┌─name────────────┬─type─────┬
@@ -478,7 +517,9 @@ type: jobs type includes MergeMutateThread, PartGCThread, ConsumerManager, Memor
 status: status of the job, could be Running, Stopped, Removed
 expected_status: the expected status of the job. As the job sometimes can transition from one status to another. At the transition time, the status is different than expected status
 last_start_time: the timestamp of the last time the start method on the job is called
+
 **virtual_warehouses**
+
 Contains the information about virtual warehouse
 ```
 ┌─name───────────────────┬─type───┬
@@ -508,7 +549,9 @@ max_worker_groups: the maximal number of worker groups of the vw.
 max_concurrent_queries: the number of maximal concurrent running queries. 
 max_queued_queries: the number of maximal queued queries in the vw.
 vw_schedule_algo: not used in cnch yet.
+
 **workers**
+
 ```
 ┌─name─────────────────┬─type─────┬
 │ worker_id            │ String   │
@@ -536,6 +579,7 @@ memory_usage: the current memory usage of the worker
 last_update_time: the latest heartbeat timestamp of the worker
 
 **system.query_log**
+
 This system table originally was a community system table, containing events happening while executing a query
 ```
 ┌─name────────────────────────────┬─type────────────┬
