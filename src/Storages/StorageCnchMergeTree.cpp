@@ -2123,6 +2123,27 @@ void StorageCnchMergeTree::dropPartsImpl(
                 }
                 local_context->getCnchCatalog()->writeUndoBuffer(
                     UUIDHelpers::UUIDToString(getStorageUUID()), txn->getTransactionID(), undo_resources);
+
+                if (metadata_snapshot->hasUniqueKey() && !local_context->getSettingsRef().enable_unique_table_detach_ignore_delete_bitmap)
+                    getDeleteBitmapMetaForParts(
+                        parts_to_drop, local_context, local_context->getCurrentCnchStartTime(), /*force_found*/ false);
+
+                ThreadPool pool(std::min(parts_to_drop.size(), max_threads));
+                auto callback = [&pool, &metadata_snapshot, &local_context](const DataPartPtr & part) {
+                    bool create_delete_bitmap = metadata_snapshot->hasUniqueKey()
+                        && !local_context->getSettingsRef().enable_unique_table_detach_ignore_delete_bitmap;
+                    pool.scheduleOrThrowOnError([part, create_delete_bitmap]() {
+                        part->renameToDetached("");
+                        if (create_delete_bitmap)
+                            part->createDeleteBitmapForDetachedPart();
+                    });
+                };
+                for (const auto & part : parts_to_drop)
+                {
+                    part->enumeratePreviousParts(callback);
+                }
+                pool.wait();
+                /// NOTE: we still need create DROP_RANGE part for detached parts,
                 break;
             }
             case DiskType::Type::ByteS3: {
@@ -2137,7 +2158,6 @@ void StorageCnchMergeTree::dropPartsImpl(
                         {
                             throw Exception("Unexpected part type when detach", ErrorCodes::LOGICAL_ERROR);
                         }
-
                         UndoResource ub(txn->getTransactionID(), UndoResourceType::S3DetachPart, part->info.getPartName());
                         resources.push_back(ub);
 
@@ -2157,25 +2177,6 @@ void StorageCnchMergeTree::dropPartsImpl(
                 throw Exception(
                     fmt::format("Unknown storage type {} when detach", DiskType::toString(remote_storage_type)), ErrorCodes::LOGICAL_ERROR);
         }
-        if (metadata_snapshot->hasUniqueKey() && !local_context->getSettingsRef().enable_unique_table_detach_ignore_delete_bitmap)
-            getDeleteBitmapMetaForParts(parts_to_drop, local_context, local_context->getCurrentCnchStartTime(), /*force_found*/ false);
-
-        ThreadPool pool(std::min(parts_to_drop.size(), max_threads));
-        auto callback = [&pool, &metadata_snapshot, &local_context](const DataPartPtr & part) {
-            bool create_delete_bitmap
-                = metadata_snapshot->hasUniqueKey() && !local_context->getSettingsRef().enable_unique_table_detach_ignore_delete_bitmap;
-            pool.scheduleOrThrowOnError([part, create_delete_bitmap]() {
-                part->renameToDetached("");
-                if (create_delete_bitmap)
-                    part->createDeleteBitmapForDetachedPart();
-            });
-        };
-        for (const auto & part : parts_to_drop)
-        {
-            part->enumeratePreviousParts(callback);
-        }
-        pool.wait();
-        /// NOTE: we still need create DROP_RANGE part for detached parts,
     }
 
     MutableDataPartsVector drop_ranges;
