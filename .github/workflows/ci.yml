@@ -81,6 +81,7 @@ jobs:
         run: |
           mkdir -p ci_clickhouse_sql
           cd ci_clickhouse_sql
+          export EXTRA_OPTIONS='enable_optimizer_fallback=0 enable_optimizer_white_list=0'
           cp -r $GITHUB_WORKSPACE/docker/test/stateless/process_functional_tests_result.py ./
           cp -r $GITHUB_WORKSPACE/tests/clickhouse-test ./
           mkdir queries
