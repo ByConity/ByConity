@@ -1,4 +1,4 @@
-SET enable_optimizer = 1;
+set enable_optimizer=1, enable_optimizer_fallback=0, enable_optimizer_white_list=0;
 
 DROP TABLE IF EXISTS t;
 CREATE TABLE t (a Int32, b Int32) ENGINE = CnchMergeTree() ORDER BY a;
