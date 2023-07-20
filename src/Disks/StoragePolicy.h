@@ -110,7 +110,7 @@ public:
     /// Get volume by index.
     VolumePtr getVolume(size_t index) const override;
 
-    VolumePtr getVolumeByName(const String & volume_name) const override;
+    VolumePtr getVolumeByName(const String & volume_name, bool throw_when_not_exist) const override;
 
     /// Checks if storage policy can be replaced by another one.
     void checkCompatibleWith(const StoragePolicyPtr & new_storage_policy) const override;

@@ -276,7 +276,7 @@ BlockIO InterpreterSystemQuery::execute()
 
     volume_ptr = {};
     if (!query.storage_policy.empty() && !query.volume.empty())
-        volume_ptr = getContext()->getStoragePolicy(query.storage_policy)->getVolumeByName(query.volume);
+        volume_ptr = getContext()->getStoragePolicy(query.storage_policy)->getVolumeByName(query.volume, true);
 
     /// Common system command
     switch (query.type)

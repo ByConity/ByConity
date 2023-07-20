@@ -100,7 +100,7 @@ public:
 
     virtual void removeFileIfExists(const String& path) override;
 
-    virtual void removeDirectory(const String& ) override { throw Exception("RemoveDirectory is not implemnted in DiskByteS3", ErrorCodes::NOT_IMPLEMENTED);}
+    virtual void removeDirectory(const String& path) override { removeRecursive(path); }
 
     virtual void removeRecursive(const String & path) override;
 
