@@ -1862,8 +1862,8 @@ public:
 
     void addDelete(const String& key)
     {
-        const String& delete_reuqest(key);
-        
+        SingleDeleteRequest delete_reuqest(key);
+
         batch_commit_request.AddDelete(delete_reuqest);
 
         ++current_batch_size;
