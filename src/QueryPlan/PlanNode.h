@@ -50,7 +50,6 @@
 #include <QueryPlan/PartitionTopNStep.h>
 #include <QueryPlan/PlanSegmentSourceStep.h>
 #include <QueryPlan/ProjectionStep.h>
-#include <QueryPlan/QueryCacheStep.h>
 #include <QueryPlan/ReadFromMergeTree.h>
 #include <QueryPlan/MarkDistinctStep.h>
 #include <QueryPlan/ReadFromPreparedSource.h>

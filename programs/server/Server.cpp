@@ -1090,15 +1090,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setPrimaryIndexCache(mark_cache_size);
     global_context->setChecksumsCache(config().getUInt64("checksum_cache_size", 10737418240)); // 10GB
 
-    /// Size of cache for query. It is not necessary.
-    size_t query_cache_size = config().getUInt64("query_cache_size", 0);
-    if (query_cache_size)
-        global_context->setQueryCache(query_cache_size);
-
     /// A cache for mmapped files.
     size_t mmap_cache_size = config().getUInt64("mmap_cache_size", 1000);   /// The choice of default is arbitrary.
     if (mmap_cache_size)
         global_context->setMMappedFileCache(mmap_cache_size);
+
+    /// A cache for query results.
+    if (global_context->getServerType() == ServerType::cnch_server)
+        global_context->setQueryCache(config());
 
     /// Size of delete bitmap for HaMergeTree engine to be cached in memory; default is 1GB
     size_t delete_bitmap_cache_size = config().getUInt64("delete_bitmap_cache_size", 1073741824);

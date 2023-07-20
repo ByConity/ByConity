@@ -47,7 +47,6 @@
 #include <QueryPlan/PlanNode.h>
 #include <QueryPlan/PlanSegmentSourceStep.h>
 #include <QueryPlan/ProjectionStep.h>
-#include <QueryPlan/QueryCacheStep.h>
 #include <QueryPlan/ReadFromMergeTree.h>
 #include <QueryPlan/ReadFromPreparedSource.h>
 #include <QueryPlan/ReadNothingStep.h>

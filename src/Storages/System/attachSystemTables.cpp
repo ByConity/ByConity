@@ -96,6 +96,7 @@
 #include <Storages/System/StorageSystemQuotasUsage.h>
 #include <Storages/System/StorageSystemUserDirectories.h>
 #include <Storages/System/StorageSystemPrivileges.h>
+#include <Storages/System/StorageSystemQueryCache.h>
 #include <Storages/System/StorageSystemMetastore.h>
 #include <Storages/System/StorageSystemBrokenTables.h>
 #include <Storages/System/StorageSystemVirtualWarehouses.h>
@@ -169,6 +170,7 @@ void attachSystemTablesLocal(IDatabase & system_database)
     attach<StorageSystemSettingsProfiles>(system_database, "settings_profiles");
     attach<StorageSystemSettingsProfileElements>(system_database, "settings_profile_elements");
     attach<StorageSystemRowPolicies>(system_database, "row_policies");
+    attach<StorageSystemQueryCache>(system_database, "query_cache");
     attach<StorageSystemQuotas>(system_database, "quotas");
     attach<StorageSystemQuotaLimits>(system_database, "quota_limits");
     attach<StorageSystemQuotaUsage>(system_database, "quota_usage");
