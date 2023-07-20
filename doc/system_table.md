@@ -30,8 +30,8 @@ Contains information about the databases that have just been dropped. When a dat
 └─────────────┴──────────┴
 ```
 
-name: database name
-delete_time: the time it got dropped
+- name: database name
+- delete_time: the time it got dropped
 
 **cnch_tables**
 
@@ -56,19 +56,19 @@ Contains information about all cnch tables in the cluster
 │ cluster_key       │ String   │
 └───────────────────┴──────────┴
 ```
-vw_name: virtual warehouse name, contain vw name for preallocated table.
-definition: the CREATE query of the table
-txn_id: transaction id of the last action on the table(action include modify table schema, create table)
-previous_version: the previous value of commit timestamp of the table
-current_version: the commit timestamp of the last action on the table
-modification_time: commit timestamp in human readable form
-is_preallocated: whether or not the table is in preallocated mode
-is_detached: whether or not the table is currently detached
-partition_key: partition key of the CnchMergeTree engine
-sorting_key: sorting key of the CnchMergeTree engine
-primary_key: primary key of the CnchMergeTree engine
-sampling_key: sampling key of the CnchMergeTree engine
-cluster_key: cluster key for the bucket table
+- vw_name: virtual warehouse name, contain vw name for preallocated table.
+- definition: the CREATE query of the table
+- txn_id: transaction id of the last action on the table(action include modify table schema, create table)
+- previous_version: the previous value of commit timestamp of the table
+- current_version: the commit timestamp of the last action on the table
+- modification_time: commit timestamp in human readable form
+- is_preallocated: whether or not the table is in preallocated mode
+- is_detached: whether or not the table is currently detached
+- partition_key: partition key of the CnchMergeTree engine
+- sorting_key: sorting key of the CnchMergeTree engine
+- primary_key: primary key of the CnchMergeTree engine
+- sampling_key: sampling key of the CnchMergeTree engine
+- cluster_key: cluster key for the bucket table
 
 **cnch_table_info**
 
@@ -81,8 +81,8 @@ cluster_key: cluster key for the bucket table
 └────────────────────────┴──────────┴
 ```
 
-last_modification_time: timestamp when last data ingestion or removal happens to this table; initialized with current time when the PartCacheManager manage this table. Probably unused at the moment
-cluster_status: for bucket table, if all the parts of the table have been clustered. Have no meaning for normal table.
+- last_modification_time: timestamp when last data ingestion or removal happens to this table;
+- cluster_status: for bucket table, if all the parts of the table have been clustered. Have no meaning for normal table.
 
 **cnch_tables_history**
 
@@ -99,10 +99,10 @@ Contains information about the tables that have just been dropped. When a table 
 └──────────────────┴──────────┴
 ```
 
-definition: the CREATE query of the table
-current_version: the transaction id of the drop action
-previous_version: the timestamp of the previous version of the table (not the commit time of the table before drop)
-delete_time: the timestamp of the drop action
+- definition: the CREATE query of the table
+- current_version: the transaction id of the drop action
+- previous_version: the timestamp of the previous version of the table (not the commit time of the table before drop)
+- delete_time: the timestamp of the drop action
 
 **cnch_vw**
 
@@ -112,7 +112,7 @@ This usually don't contain data until preallocate mode is used with some query o
 │ name │ String │
 └──────┴────────┴
 ```
-name: virtual warehouse name
+- name: virtual warehouse name
 
 **cnch_parts**
 
@@ -169,8 +169,8 @@ we need to atleast specify database and table name
 │ worker_address │ String │
 └────────────────┴────────┴
 ```
-vw_name: the virtual warehouse that the worker belongs to
-worker_address: Worker's host ip address with TCP and RPC ports
+- vw_name: the virtual warehouse that the worker belongs to
+- worker_address: Worker's host ip address with TCP and RPC ports
 
 **cnch_kafka_log**
 
@@ -231,7 +231,7 @@ A separate document about the system table for Cnch Kafka is here
 
 **resource_groups**
 
-name = resource_group name. This is identical to the virtual_warehouse name in the current Virtual Warehouse Queue implementation
+- name = resource_group name. This is identical to the virtual_warehouse name in the current Virtual Warehouse Queue implementation
 ```
 ─name───────────────────┬─type──────┬─flags─┬─default_type─┬─default_expression─┬─comment─┬─codec_expression─┐
 │ name                   │ String   │       │              │                    │         │                  │
@@ -254,11 +254,6 @@ name = resource_group name. This is identical to the virtual_warehouse name in t
 └────────────────────────┴──────────┴───────┴──────────────┴────────────────────┴─────────┴──────────────────
 ```
 
-query_metrics
-A separate document is here
-query_worker_metrics
-A separate document is here
-
 **cnch_parts_info**
 
 ```
@@ -274,12 +269,12 @@ A separate document is here
 └────────────────────┴────────┴
 ```
 
-partition_id: the partition_id string 20210404
-partition: the partition name '2021-04-04'
-first_partition: the value of first partition column '2021-04-04' (partition expression can contain multiple columns)
-total_parts_number: the total number of parts in partition
-total_parts_size: the total size in byte of the partition
-total_rows_count: the total rows count of the partition
+- partition_id: the partition_id string 20210404
+- partition: the partition name '2021-04-04'
+- first_partition: the value of first partition column '2021-04-04' (partition expression can contain multiple columns)
+- total_parts_number: the total number of parts in partition
+- total_parts_size: the total size in byte of the partition
+- total_rows_count: the total rows count of the partition
 
 Notes
 1. This table is implemented by the partCache so not all tables will appear in this table.
@@ -309,19 +304,19 @@ Clickhouse document
 └─────────────────────────┴────────┴
 ```
 
-type: type of the column
-flags: B if the column is BloomSet() otherwise empty refer to StorageSystemCnchColumns.cpp:90
-default_kind: if the column has default expression, its value could be default, materialized, alias
-default_expression: the default expression of the column in case the column has a default expression
-data_compressed_bytes: the compressed size of the column in byte
-data_uncompressed_bytes: the uncompressed size of the column in byte
-marks_bytes: the size of marks in byte
-comment: the comment of the column if defined
-is_in_partition_key: if the column is in partition key
-is_in_sorting_key: if the column is in sorting key
-is_in_primary_key: if the column is in primary key
-is_in_sampling_key: if the column is in sampling key
-compression_codec: the compression codec name
+- type: type of the column
+- flags: B if the column is BloomSet() otherwise empty refer to StorageSystemCnchColumns.cpp:90
+- default_kind: if the column has default expression, its value could be default, materialized, alias
+- default_expression: the default expression of the column in case the column has a default expression
+- data_compressed_bytes: the compressed size of the column in byte
+- data_uncompressed_bytes: the uncompressed size of the column in byte
+- marks_bytes: the size of marks in byte
+- comment: the comment of the column if defined
+- is_in_partition_key: if the column is in partition key
+- is_in_sorting_key: if the column is in sorting key
+- is_in_primary_key: if the column is in primary key
+- is_in_sampling_key: if the column is in sampling key
+- compression_codec: the compression codec name
 
 **cnch_transactions**
 
@@ -338,13 +333,13 @@ Contains information about transaction records for non read-only transaction.
 └─────────────┴──────────┴
 ```
 
-txn_id: transaction id of the transaction
-create_time: the creation time of the transaction in human readable format 
-commit_ts: the commit timestamp of the transaction
-status: the status of the transaction: Running, Finished, Aborted, Inactive, Unknown
-priority: the priority of the transaction: Low or High
-location: location of transaction initiator, format: ip:rpc_port 10.130.48.166:19542
-initiator: the string that identifies the transaction's initiator, for example Kafka, Worker, Merge
+- txn_id: transaction id of the transaction
+- create_time: the creation time of the transaction in human readable format 
+- commit_ts: the commit timestamp of the transaction
+- status: the status of the transaction: Running, Finished, Aborted, Inactive, Unknown
+- priority: the priority of the transaction: Low or High
+- location: location of transaction initiator, format: ip:rpc_port 10.130.48.166:19542
+- initiator: the string that identifies the transaction's initiator, for example Kafka, Worker, Merge
 
 **cnch_dictionaries**
 
@@ -359,8 +354,8 @@ Contains information about cnch dictionaries
 └─────────────┴────────┴
 ```
 
-definition: the CREATE query of the dictionary
-is_detached: if the dictionary is detached or not
+- definition: the CREATE query of the dictionary
+- is_detached: if the dictionary is detached or not
 
 **mutations**
 
@@ -383,17 +378,17 @@ Contains information about the status of running mutations in the MergeTree tabl
 └────────────────────────────┴───────────────┴
 ```
 
-mutation_id: transaction id of the mutation
-command: mutation command
-create_time: create time of the mutation
-cnch: 1 if the table is CnchTable
-block_numbers.partition_id: empty for now
-block_numbers.number: empty for now
-parts_to_do: number of parts that haven't been mutated in mutation job
-is_done: if the mutation job is done
-latest_failed_part: empty for now
-latest_fail_time: empty for now
-latest_fail_reason: empty for now
+- mutation_id: transaction id of the mutation
+- command: mutation command
+- create_time: create time of the mutation
+- cnch: 1 if the table is CnchTable
+- block_numbers.partition_id: empty for now
+- block_numbers.number: empty for now
+- parts_to_do: number of parts that haven't been mutated in mutation job
+- is_done: if the mutation job is done
+- latest_failed_part: empty for now
+- latest_fail_time: empty for now
+- latest_fail_reason: empty for now
 
 **manipulation**
 
@@ -425,25 +420,25 @@ Contain information about manipulation list. Each of manipulation list represent
 └─────────────────────────────┴───────────────┴
 ```
 
-type: the type of manipulation. Mutate/Merge/Clustering...
-task_id: the task id of manipulation task
-related_node: the worker where the task is executed
-elapsed: the elapse time in second since the time the Manipulation is created
-progress: 
-num_parts: the number of source part
-source_part_names: the name of source part that manipulation will work on
-result_part_names: the name of result part that manipulation will create
-partition_id: the partition id for the first source part
-total_size_bytes_compressed: the total bytes of source part on disk
-total_size_marks: the total mark count of the source part
-total_rows_count: the total row count of the source part
-bytes_read_uncompressed: 
-bytes_written_uncompressed: 
-rows_read: 
-rows_written: 
-columns_written: 
-memory_usage: 
-thread_number:   the poco Thread number of the merge mutate thread
+- type: the type of manipulation. Mutate/Merge/Clustering...
+- task_id: the task id of manipulation task
+- related_node: the worker where the task is executed
+- elapsed: the elapse time in second since the time the Manipulation is created
+- progress: 
+- num_parts: the number of source part
+- source_part_names: the name of source part that manipulation will work on
+- result_part_names: the name of result part that manipulation will create
+- partition_id: the partition id for the first source part
+- total_size_bytes_compressed: the total bytes of source part on disk
+- total_size_marks: the total mark count of the source part
+- total_rows_count: the total row count of the source part
+- bytes_read_uncompressed: 
+- bytes_written_uncompressed: 
+- rows_read: 
+- rows_written: 
+- columns_written: 
+- memory_usage: 
+- thread_number:   the poco Thread number of the merge mutate thread
 
 **bg_threads**
 
@@ -460,10 +455,10 @@ Contains information about CnchBackGroundThread
 └──────────────┴──────────┴
 ```
 
-type: type of background thread: PartGCThread, MergeSelectThread, MemoryBufferManager ...
-status: status of thread Running...
-startup_time: startup time of thread
-num_wakeup: the number of times the thread wakes up (run() method is called)
+- type: type of background thread: PartGCThread, MergeSelectThread, MemoryBufferManager ...
+- status: status of thread Running...
+- startup_time: startup time of thread
+- num_wakeup: the number of times the thread wakes up (run() method is called)
 
 **cnch_table_host**
 
@@ -480,10 +475,10 @@ Contains info of server a query should be routed to based on table name
 └───────────┴────────┴
 ```
 
-host : host address, 127.0.0.1
-tcp_port: tcp port of host
-http_port: http port of host
-rpc_port: rpc port of host
+- host : host address, 127.0.0.1
+- tcp_port: tcp port of host
+- http_port: http port of host
+- rpc_port: rpc port of host
 
 **global_gc_manager**
 
@@ -494,7 +489,7 @@ Contains uuid of the table that are schedule to global_gc (drop meta data, drop 
 └───────────────┴──────┴
 ```
 
-deleting_uuid: the uuid of table that are scheduled to delete in local server
+- deleting_uuid: the uuid of table that are scheduled to delete in local server
 Inorder to have other information like database and name, it can be joined with system.cnch_table_history
 
 **dm_bg_jobs**
@@ -513,10 +508,10 @@ Contains the info of jobs that are managed by DaemonManager, used for debugging 
 └─────────────────┴──────────┴
 ```
 
-type: jobs type includes MergeMutateThread, PartGCThread, ConsumerManager, MemoryBuffer
-status: status of the job, could be Running, Stopped, Removed
-expected_status: the expected status of the job. As the job sometimes can transition from one status to another. At the transition time, the status is different than expected status
-last_start_time: the timestamp of the last time the start method on the job is called
+- type: jobs type includes MergeMutateThread, PartGCThread, ConsumerManager, MemoryBuffer
+- status: status of the job, could be Running, Stopped, Removed
+- expected_status: the expected status of the job. As the job sometimes can transition from one status to another. At the transition time, the status is different than expected status
+- last_start_time: the timestamp of the last time the start method on the job is called
 
 **virtual_warehouses**
 
@@ -540,15 +535,15 @@ Contains the information about virtual warehouse
 └────────────────────────┴────────┴
 ```
 
-active_worker_groups: the number of current running worker groups.
-active_workers: the total number of current running workers.
-auto_suspend: not used in cnch yet.
-auto_resume: not used in cnch yet.
-min_worker_groups: the minimum number of worker groups of the vw.
-max_worker_groups: the maximal number of worker groups of the vw.
-max_concurrent_queries: the number of maximal concurrent running queries. 
-max_queued_queries: the number of maximal queued queries in the vw.
-vw_schedule_algo: not used in cnch yet.
+- active_worker_groups: the number of current running worker groups.
+- active_workers: the total number of current running workers.
+- auto_suspend: not used in cnch yet.
+- auto_resume: not used in cnch yet.
+- min_worker_groups: the minimum number of worker groups of the vw.
+- max_worker_groups: the maximal number of worker groups of the vw.
+- max_concurrent_queries: the number of maximal concurrent running queries. 
+- max_queued_queries: the number of maximal queued queries in the vw.
+- vw_schedule_algo: not used in cnch yet.
 
 **workers**
 
@@ -573,77 +568,8 @@ vw_schedule_algo: not used in cnch yet.
 ```
 
 Info about worker fetch from Resource Manager
-worker_id: id of worker
-cpu_usage: the current cpu usage of the worker
-memory_usage: the current memory usage of the worker
-last_update_time: the latest heartbeat timestamp of the worker
+- worker_id: id of worker
+- cpu_usage: the current cpu usage of the worker
+- memory_usage: the current memory usage of the worker
+- last_update_time: the latest heartbeat timestamp of the worker
 
-**system.query_log**
-
-This system table originally was a community system table, containing events happening while executing a query
-```
-┌─name────────────────────────────┬─type────────────┬
-│ type                            │ UInt8           │
-│ event_date                      │ Date            │
-│ event_time                      │ DateTime        │
-│ query_start_time                │ DateTime        │
-│ query_duration_ms               │ UInt64          │
-│ read_rows                       │ UInt64          │
-│ disk_cache_read_bytes           │ UInt64          │
-│ read_bytes                      │ UInt64          │
-│ written_rows                    │ UInt64          │
-│ written_bytes                   │ UInt64          │
-│ result_rows                     │ UInt64          │
-│ result_bytes                    │ UInt64          │
-│ memory_usage                    │ UInt64          │
-│ total_cpu_seconds               │ Float64         │
-│ io_wait_seconds                 │ Float64         │
-│ query                           │ String          │
-│ query_rewrited_by_view          │ String          │
-│ exception                       │ String          │
-│ stack_trace                     │ String          │
-│ is_initial_query                │ UInt8           │
-│ user                            │ String          │
-│ query_id                        │ String          │
-│ address                         │ FixedString(16) │
-│ port                            │ UInt16          │
-│ initial_user                    │ String          │
-│ initial_query_id                │ String          │
-│ initial_address                 │ FixedString(16) │
-│ initial_port                    │ UInt16          │
-│ interface                       │ UInt8           │
-│ os_user                         │ String          │
-│ client_hostname                 │ String          │
-│ client_name                     │ String          │
-│ client_revision                 │ UInt32          │
-│ client_version_major            │ UInt32          │
-│ client_version_minor            │ UInt32          │
-│ client_version_patch            │ UInt32          │
-│ http_method                     │ UInt8           │
-│ http_user_agent                 │ String          │
-│ quota_key                       │ String          │
-│ virtual_warehouse               │ String          │
-│ worker_group                    │ String          │
-│ revision                        │ UInt32          │
-│ thread_numbers                  │ Array(UInt32)   │
-│ max_io_thread_name              │ String          │
-│ max_io_thread_query_ms          │ UInt64          │
-│ ProfileEvents.Names             │ Array(String)   │
-│ ProfileEvents.Values            │ Array(UInt64)   │
-│ MaxIOThreadProfileEvents.Names  │ Array(String)   │
-│ MaxIOThreadProfileEvents.Values │ Array(UInt64)   │
-│ Settings.Names                  │ Array(String)   │
-│ Settings.Values                 │ Array(String)   │
-│ tables                          │ Array(String)   │
-│ segment_id                      │ Int64           │
-│ segment_parallel                │ Int64           │
-│ segment_parallel_index          │ Int64           │
-└─────────────────────────────────┴─────────────────┴
-```
-
-type: 1 for START QUERY, 2 for FINISH QUERY
-event_time: the time where event happen
-query_duration_ms: the wall clock time of query duration
-disk_cache_read_bytes: at the moment always 0
-read_rows: just the number of rows read on server side
-read_bytes: just the number of bytes read on server side
