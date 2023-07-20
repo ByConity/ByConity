@@ -114,6 +114,10 @@ public:
 
     virtual DiskType::Type getType() const override { return DiskType::Type::ByteS3; }
 
+    virtual bool supportRenameTo() override { return false; }
+
+    virtual String getTableRelativePathOnDisk(const String &) override {return "";}
+
     // Non virtual functions
     const String& getS3Bucket() const { return s3_util.getBucket(); }
     std::shared_ptr<Aws::S3::S3Client> getS3Client() const { return s3_util.getClient(); }

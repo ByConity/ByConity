@@ -19,21 +19,28 @@
 #include <CloudServices/CnchMergeMutateThread.h>
 #include <CloudServices/CnchServerClient.h>
 #include <CloudServices/CnchServerClientPool.h>
-#include <Core/Types.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/PartLog.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Storages/MergeTree/MergeTreeCNCHDataDumper.h>
+#include <Storages/MergeTree/S3PartsAttachMeta.h>
 #include <Transaction/Actions/DDLAlterAction.h>
 #include <Transaction/Actions/DropRangeAction.h>
 #include <Transaction/Actions/InsertAction.h>
 #include <Transaction/Actions/MergeMutateAction.h>
 #include <Transaction/CnchWorkerTransaction.h>
+#include <Transaction/Actions/S3AttachMetaAction.h>
+#include <Transaction/Actions/S3DetachMetaAction.h>
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Transaction/TxnTimestamp.h>
 #include <common/strong_typedef.h>
-#include "Disks/IDisk.h"
+#include <Disks/DiskType.h>
+#include <Disks/IDisk.h>
+#include <Disks/IVolume.h>
+#include <WorkerTasks/ManipulationType.h>
+#include <Core/Types.h>
+#include <Core/UUID.h>
 
 namespace ProfileEvents
 {
@@ -482,7 +489,7 @@ void CnchDataWriter::finalize()
     handler.throwIfException();
 }
 
-TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_data)
+TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_data, const std::unique_ptr<S3AttachPartsInfo> & s3_parts_info)
 {
     Stopwatch watch;
 
@@ -593,6 +600,18 @@ TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_d
                         watch.elapsedMilliseconds());
                 });
             }
+        }
+        else if (type == ManipulationType::Attach)
+        {
+            if (s3_parts_info == nullptr || s3_parts_info->parts.empty())
+            {
+                LOG_INFO(storage.getLogger(), "Nothing to commit, skip");
+                return commit_time;
+            }
+
+            auto action = txn->createAction<S3AttachMetaAction>(storage_ptr, *s3_parts_info);
+            txn->appendAction(action);
+            action->executeV2();
         }
         else
         {

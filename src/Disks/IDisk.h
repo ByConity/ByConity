@@ -250,6 +250,12 @@ public:
     /// Applies new settings for disk in runtime.
     virtual void applyNewSettings(const Poco::Util::AbstractConfiguration &, ContextPtr) {}
 
+    // return ‘true’ if disk support renameTo.
+    virtual bool supportRenameTo() { return true; }
+
+    // Get table relative_data_path from disk 
+    virtual String getTableRelativePathOnDisk(const String & uuid){ return uuid;}
+
 protected:
     friend class DiskDecorator;
 
