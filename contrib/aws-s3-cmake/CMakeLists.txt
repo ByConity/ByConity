@@ -19,7 +19,6 @@ file(GLOB AWS_CORE_SOURCES
     "${AWS_CORE_LIBRARY_DIR}/source/http/*.cpp"
     "${AWS_CORE_LIBRARY_DIR}/source/http/standard/*.cpp"
     "${AWS_CORE_LIBRARY_DIR}/source/config/*.cpp"
-    "${AWS_CORE_LIBRARY_DIR}/source/external/cjson/*.cpp"
     "${AWS_CORE_LIBRARY_DIR}/source/external/tinyxml2/*.cpp"
     "${AWS_CORE_LIBRARY_DIR}/source/internal/*.cpp"
     "${AWS_CORE_LIBRARY_DIR}/source/monitoring/*.cpp"
@@ -39,6 +38,7 @@ file(GLOB AWS_CORE_SOURCES
     "${AWS_CORE_LIBRARY_DIR}/source/utils/stream/*.cpp"
     "${AWS_CORE_LIBRARY_DIR}/source/utils/threading/*.cpp"
     "${AWS_CORE_LIBRARY_DIR}/source/utils/xml/*.cpp"
+    ${CJSON_SRC_FILE}
 )
 
 file(GLOB AWS_S3_SOURCES

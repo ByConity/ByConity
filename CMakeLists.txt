@@ -577,6 +577,7 @@ include (cmake/find/brpc.cmake)
 include (cmake/find/breakpad.cmake)
 include (cmake/find/benchmark.cmake)
 include (cmake/find/hivemetastore.cmake)
+include (cmake/find/cjson.cmake)
 
 set (USE_INTERNAL_CITYHASH_LIBRARY ON CACHE INTERNAL "")
 find_contrib_lib(cityhash)
@@ -644,3 +645,5 @@ add_subdirectory (utils)
 include (cmake/print_include_directories.cmake)
 
 include (cmake/sanitize_target_link_libraries.cmake)
+
+
