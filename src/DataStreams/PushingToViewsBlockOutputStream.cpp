@@ -43,6 +43,10 @@
 #include <Storages/StorageView.h>
 #include <common/logger_useful.h>
 
+#if USE_RDKAFKA
+#include <Storages/Kafka/StorageCloudKafka.h>
+#endif
+
 namespace DB
 {
  
@@ -488,6 +492,21 @@ void PushingToViewsBlockOutputStream::process(const Block & block, ViewInfo & vi
             auto local_context = Context::createCopy(select_context);
             local_context->addViewSource(
                 StorageValues::create(storage->getStorageID(), metadata_snapshot->getColumns(), block, storage->getVirtuals()));
+
+#if USE_RDKAFKA
+            /// Set the limits for Kafka specially as Kafka stream may need long time to write a block with many map keys;
+            /// If write data timeout, throw exception to trigger re-consumption
+            if (auto * kafka = dynamic_cast<StorageCloudKafka *>(storage.get()))
+            {
+                auto settings = local_context->getSettingsRef();
+                settings.max_execution_time = kafka->getSettings().max_write_execution_second;
+                settings.timeout_overflow_mode = OverflowMode::THROW;
+                local_context->setSettings(settings);
+                LOG_TRACE(log, "Set max execution limit for reading from {} to write view with {} s",
+                          storage->getStorageID().getNameForLogs(), local_context->getSettings().max_execution_time.totalSeconds());
+            }
+#endif
+
             if (auto * select = view.query->as<ASTSelectWithUnionQuery>())
             {
                 InterpreterSelectWithUnionQuery interepter_select(view.query, local_context, SelectQueryOptions());
