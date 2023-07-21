@@ -324,7 +324,7 @@ String CnchStorageCommonHelper::getCreateQueryForCloudTable(
     engine->arguments->children.emplace_back(std::make_shared<ASTIdentifier>(cnch_storage_id.value_or(table_id).getTableName()));
     for (const auto & arg : storage->engine->arguments->children)
     {
-        engine->arguments->children.emplace_back(std::make_shared<ASTIdentifier>(arg));
+        engine->arguments->children.push_back(arg);
     }
 
     /// NOTE: Used to pass the version column for unique table here.
