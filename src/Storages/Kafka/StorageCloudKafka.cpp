@@ -228,6 +228,47 @@ cppkafka::Configuration StorageCloudKafka::createConsumerConfiguration()
 {
     /// Create consumer conf
     cppkafka::Configuration conf = Kafka::createConsumerConfiguration(getContext(), getStorageID(), topics, settings);
+
+    /// Set error callback
+    conf.set_error_callback([this] (cppkafka::KafkaHandleBase &, int error, const std::string & reason)
+    {
+        String error_msg;
+#if USE_BYTEDANCE_RDKAFKA
+        ///  Special logic for Bytedance-Kafka: DC_CHANGE, which needs to re-create consumer
+        if (error == RD_KAFKA_RESP_ERR__CONSUMER_DC_CHANGE)
+        {
+            error_msg = "[CONSUMER_DC_CHANGE] DC of Kafka cluster is changed which consumers should be destroyed and recreated: " + reason;
+
+            consumer_context.error_event = true;
+        }
+#endif
+
+        if (error_msg.empty())
+            error_msg = ("[RDKAFKA Exception] error code: " + std::to_string(error) + ", reason: " + reason);
+
+        LOG_ERROR(log, error_msg);
+
+        if (auto kafka_log = getContext()->getKafkaLog())
+        {
+            try
+            {
+                auto kafka_error_log = createKafkaLog(KafkaLogElement::EXCEPTION, assigned_consumer_index);
+                kafka_error_log.has_error = true;
+                kafka_error_log.last_exception = error_msg;
+                kafka_log->add(kafka_error_log);
+                if (auto cloud_kafka_log = getContext()->getCloudKafkaLog())
+                    cloud_kafka_log->add(kafka_error_log);
+
+                std::lock_guard lock(table_status_mutex);
+                last_exception = kafka_error_log.last_exception;
+            }
+            catch (...)
+            {
+                tryLogCurrentException(log);
+            }
+        }
+    }); /// End conf.set_error_callback
+
     return conf;
 }
 
