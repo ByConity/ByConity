@@ -322,6 +322,10 @@ String CnchStorageCommonHelper::getCreateQueryForCloudTable(
     engine->arguments = std::make_shared<ASTExpressionList>();
     engine->arguments->children.emplace_back(std::make_shared<ASTIdentifier>(cnch_storage_id.value_or(table_id).getDatabaseName()));
     engine->arguments->children.emplace_back(std::make_shared<ASTIdentifier>(cnch_storage_id.value_or(table_id).getTableName()));
+    for (const auto & arg : storage->engine->arguments->children)
+    {
+        engine->arguments->children.emplace_back(std::make_shared<ASTIdentifier>(arg));
+    }
 
     /// NOTE: Used to pass the version column for unique table here.
     if (storage->unique_key && storage->engine->arguments && !storage->engine->arguments->children.empty())
@@ -377,6 +381,8 @@ String CnchStorageCommonHelper::getCreateQueryForCloudTable(
     WriteBufferFromOwnString statement_buf;
     formatAST(create_query, statement_buf, false);
     writeChar('\n', statement_buf);
+    LOG_DEBUG(
+        &Poco::Logger::get("getCreateQueryForCloudTable"), "cloud table is {}", statement_buf.str());
     return statement_buf.str();
 }
 
