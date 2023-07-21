@@ -272,7 +272,7 @@ int mainEntryClickHouseServer(int argc, char ** argv)
         {
             std::cerr << DB::getCurrentExceptionMessage(true) << "\n";
             auto code = DB::getCurrentExceptionCode();
-            return code ? code : 1;    
+            return code ? code : 1;
         }
     }
     catch (...)
@@ -1107,7 +1107,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->setVWCustomizedSettings(vw_customized_settings_ptr);
         }
     }
-    
+
     global_context->setDefaultProfiles(config());
     const Settings & settings = global_context->getSettingsRef();
 
@@ -1345,6 +1345,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         /// After loading validate that default database exists
         database_catalog.assertDatabaseExists(default_database, global_context);
 
+#if 0
         if (global_context->getServerType() == ServerType::cnch_server)
         {
             /// Load digest information from system.server_part_log for partition selector.
@@ -1352,6 +1353,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 server_part_log->prepareTable();
             global_context->initBGPartitionSelector();
         }
+#endif
     }
     catch (...)
     {
