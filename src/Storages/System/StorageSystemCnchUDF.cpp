@@ -34,8 +34,6 @@ void StorageSystemCnchUDF::fillData(MutableColumns & res_columns, ContextPtr con
     std::map<String, String> columnToValue;
     String database_name, function_name;
 
-    //DB::collectWhereClausePredicate(where_expression, columnToValue);
-    // check for required structure of WHERE clause for cnch_parts
     auto database_it = columnToValue.find("database");
     if (database_it != columnToValue.end())
     {
@@ -72,20 +70,6 @@ void StorageSystemCnchUDF::fillData(MutableColumns & res_columns, ContextPtr con
         formatAST(*(ast->function_core), buf, false);
         String body = buf.str();
         res_columns[col_num++]->insert(body);
-
-        // switch(language) {
-        //     case UDF::UDFLanguage::Sql: {
-        //         WriteBufferFromOwnString buf;
-        //         formatAST(*(ast->function_core), buf, false);
-        //         String body = buf.str();
-        //         res_columns[col_num++]->insert(body);
-        //         break;
-        //     }
-        //     case UDF::UDFLanguage::Python:
-        //         res_columns[col_num++]->insert(ast->function_body);
-        //         break;
-        // }
-
 
         res_columns[col_num++]->insert(ast->version);
         res_columns[col_num++]->insert(ast->or_replace);
