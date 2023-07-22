@@ -36,13 +36,14 @@ class ASTIdentifier;
 class ASTFunction : public ASTWithAlias
 {
 public:
+    String database;
     String name;
     ASTPtr arguments;
     /// parameters - for parametric aggregate function. Example: quantile(0.9)(x) - what in first parens are 'parameters'.
     ASTPtr parameters;
-
+    uint64_t version{0}; // For UDF.
     bool is_window_function = false;
-
+    bool is_udf = false;
     bool compute_after_window_functions = false;
 
     // We have to make these fields ASTPtr because this is what the visitors
@@ -100,6 +101,23 @@ std::shared_ptr<ASTFunction> makeASTFunction(const String & name, Args &&... arg
     function->arguments->children = { std::forward<Args>(args)... };
 
     return function;
+}
+
+String getFunctionName(const IAST * ast);
+std::optional<String> tryGetFunctionName(const IAST * ast);
+bool tryGetFunctionNameInto(const IAST * ast, String & name);
+
+inline String getFunctionName(const ASTPtr & ast)
+{
+    return getFunctionName(ast.get());
+}
+inline std::optional<String> tryGetFunctionName(const ASTPtr & ast)
+{
+    return tryGetFunctionName(ast.get());
+}
+inline bool tryGetFunctionNameInto(const ASTPtr & ast, String & name)
+{
+    return tryGetFunctionNameInto(ast.get(), name);
 }
 
 }

@@ -21,6 +21,7 @@
 #include <IO/ReadBufferFromString.h>
 #include <CloudServices/DedupWorkerStatus.h>
 #include <CloudServices/CloudMergeTreeDedupWorker.h>
+#include <Functions/UserDefined/IUserDefinedSQLObjectsLoader.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/executeQuery.h>
 #include <Interpreters/InterpreterCreateQuery.h>
@@ -337,11 +338,12 @@ void CnchWorkerServiceImpl::sendQueryDataParts(
 
         cloud_merge_tree.setRequiredBucketNumbers(required_bucket_numbers);
 
-        // std::map<String, UInt64> udf_infos;
-        // for (const auto & udf_info: request->udf_infos())
-        //     udf_infos.emplace(udf_info.function_name(), udf_info.version());
+        std::unordered_map<String, UInt64> udf_infos;
+        for (const auto & udf_info: request->udf_infos())
+            udf_infos.emplace(udf_info.function_name(), udf_info.version());
 
-        // UserDefinedObjectsLoader::instance().checkAndLoadUDFFromStorage(query_context, udf_infos, true);
+        auto & loader = query_context->getUserDefinedSQLObjectsLoader();
+        loader.checkAndLoadUDFFromStorage(udf_infos, query_context);
     }
     catch (...)
     {

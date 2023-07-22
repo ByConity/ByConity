@@ -1,0 +1,6 @@
+3	2.1	5.1	5	4.1	2	abcdef	def	abc_all_good
+1	4.5	5.5	3	6.5	4	abccdefs	defs	abcc_all_good
+1	4.5	5.5	3	6.5	4	adcfdew	dew	adcf_all_good
+2	5	7	4	7	3	abwcdefv	defv	abwc_all_good
+5	9	14	7	11	0	abdcdeqf	deqf	abdc_all_good
+5	99	104	7	101	0	abcdef	def	abc_all_good

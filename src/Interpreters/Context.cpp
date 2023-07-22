@@ -21,6 +21,7 @@
 
 #include <filesystem>
 #include <map>
+#include <unordered_map>
 #include <memory>
 #include <optional>
 #include <set>
@@ -57,6 +58,8 @@
 #include <Dictionaries/Embedded/GeoDictionariesLoader.h>
 #include <Disks/DiskLocal.h>
 #include <Formats/FormatFactory.h>
+#include <Functions/UserDefined/IUserDefinedSQLObjectsLoader.h>
+#include <Functions/UserDefined/createUserDefinedSQLObjectsLoader.h>
 #include <IO/MMappedFileCache.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/UncompressedCache.h>
@@ -300,6 +303,7 @@ struct ContextSharedPart
     mutable std::optional<CnchCatalogDictionaryCache> cnch_catalog_dict_cache;
     mutable std::optional<ExternalDictionariesLoader> external_dictionaries_loader;
     mutable std::optional<ExternalModelsLoader> external_models_loader;
+    mutable std::unique_ptr<IUserDefinedSQLObjectsLoader> user_defined_sql_objects_loader;
     ConfigurationPtr external_models_config;
     scope_guard models_repository_guard;
 
@@ -466,6 +470,9 @@ struct ContextSharedPart
             return;
         shutdown_called = true;
 
+        if (user_defined_sql_objects_loader)
+            user_defined_sql_objects_loader->stopWatching();
+
         /**  After system_logs have been shut down it is guaranteed that no system table gets created or written to.
           *  Note that part changes at shutdown won't be logged to part log.
           */
@@ -483,6 +490,7 @@ struct ContextSharedPart
 
         std::unique_ptr<SystemLogs> delete_system_logs;
         std::unique_ptr<CnchSystemLogs> delete_cnch_system_logs;
+        std::unique_ptr<IUserDefinedSQLObjectsLoader> delete_user_defined_sql_objects_loader;
         {
             auto lock = std::lock_guard(mutex);
 
@@ -522,6 +530,7 @@ struct ContextSharedPart
 
             delete_system_logs = std::move(system_logs);
             delete_cnch_system_logs = std::move(cnch_system_logs);
+            delete_user_defined_sql_objects_loader = std::move(user_defined_sql_objects_loader);
             embedded_dictionaries.reset();
             external_dictionaries_loader.reset();
             cnch_catalog_dict_cache.reset();
@@ -547,6 +556,7 @@ struct ContextSharedPart
         /// Can be removed w/o context lock
         delete_system_logs.reset();
         delete_cnch_system_logs.reset();
+        delete_user_defined_sql_objects_loader.reset();
     }
 
     bool hasTraceCollector() const
@@ -1924,6 +1934,21 @@ void Context::killCurrentQuery()
         process_list_elem->cancelQuery(true);
     }
 };
+
+void Context::setExternalUDFMap(std::unordered_map<String, uint64_t> &&udfMap)
+{
+    External_UDFMap = std::move(udfMap);
+}
+
+void Context::setExternalUDFMapEntry(String &name, uint64_t ver)
+{
+    External_UDFMap[name] = ver;
+}
+
+const std::unordered_map<String, uint64_t> & Context::getExternalUDFMap() const
+{
+    return External_UDFMap;
+}
 
 String Context::getDefaultFormat() const
 {
@@ -4912,6 +4937,14 @@ void Context::logOptimizerProfile(Poco::Logger * log, String prefix, String name
 String Context::getCnchAuxilityPolicyName() const
 {
     return getConfigRef().getString("storage_configuration.cnch_auxility_policy", "default");
+}
+
+IUserDefinedSQLObjectsLoader & Context::getUserDefinedSQLObjectsLoader()
+{
+    auto lock = getLock();
+    if (!shared->user_defined_sql_objects_loader)
+        shared->user_defined_sql_objects_loader = createUserDefinedSQLObjectsLoader(getGlobalContext());
+    return *shared->user_defined_sql_objects_loader;
 }
 
 }

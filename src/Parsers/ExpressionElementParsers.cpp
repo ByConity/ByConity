@@ -316,6 +316,14 @@ namespace
     }
 }
 
+void static separateVersionInfo(String &name, size_t &version) {
+    size_t pos = name.find_last_of('#');
+    if (pos == String::npos) {
+        return;
+    }
+    version = strtoul(name.c_str() + pos + 1, nullptr, 10);
+    name.assign(name, 0, pos);
+}
 
 bool ParserFunction::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
@@ -325,10 +333,11 @@ bool ParserFunction::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserExpressionList contents(false, dt, is_table_function);
     ParserSelectWithUnionQuery select(dt);
     ParserKeyword over("OVER");
+    ParserToken s_dot(TokenType::Dot);
 
     bool has_all = false;
     bool has_distinct = false;
-
+    ASTPtr database_name;
     ASTPtr identifier;
     ASTPtr query;
     ASTPtr expr_list_args;
@@ -342,6 +351,15 @@ bool ParserFunction::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
     if (!id_parser.parse(pos, identifier, expected))
         return false;
+
+    if (s_dot.ignore(pos, expected))
+    {
+        const String &database = getIdentifierName(identifier);
+        if (!id_parser.parse(pos, identifier, expected))
+            return false;
+
+        identifier = std::make_shared<ASTIdentifier>(database + '.' + getIdentifierName(identifier));
+    }
 
     if (pos->type != TokenType::OpeningRoundBracket)
         return false;
@@ -513,6 +531,16 @@ bool ParserFunction::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
     auto function_node = std::make_shared<ASTFunction>();
     tryGetIdentifierNameInto(identifier, function_node->name);
+    tryGetIdentifierNameInto(database_name, function_node->database);
+
+    // UDF functions can have version info associated with them.
+    if (!function_node->name.empty()) {
+        separateVersionInfo(function_node->name, function_node->version);
+    }
+
+    if (!function_node->database.empty() && !function_node->name.empty()) {
+        function_node->name = function_node->database + "." + function_node->name;
+    }
 
     /// func(DISTINCT ...) is equivalent to funcDistinct(...)
     if (has_distinct)
@@ -2641,7 +2669,6 @@ bool ParserFunctionWithKeyValueArguments::parseImpl(Pos & pos, ASTPtr & node, Ex
 {
     ParserIdentifier id_parser;
     ParserKeyValuePairsList pairs_list_parser(dt);
-
     ASTPtr identifier;
     ASTPtr expr_list_args;
     if (!id_parser.parse(pos, identifier, expected))

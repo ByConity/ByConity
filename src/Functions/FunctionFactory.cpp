@@ -31,6 +31,7 @@
 #include <IO/WriteHelpers.h>
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
+#include <Functions/UserDefined/UserDefinedExternalFunctionFactory.h>
 
 
 namespace DB
@@ -120,10 +121,14 @@ FunctionOverloadResolverPtr FunctionFactory::tryGetImpl(
         res = it->second(context);
     else
     {
-        name = Poco::toLower(name);
-        it = case_insensitive_functions.find(name);
-        if (case_insensitive_functions.end() != it)
-            res = it->second(context);
+        res = UserDefinedExternalFunctionFactory::instance().tryGet(name);
+        if (!res)
+        {
+            name = Poco::toLower(name);
+            it = case_insensitive_functions.find(name);
+            if (case_insensitive_functions.end() != it)
+                res = it->second(context);
+        }
     }
 
     if (!res)

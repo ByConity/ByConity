@@ -277,6 +277,10 @@ if (ENABLE_CLICKHOUSE_LIBRARY_BRIDGE)
     add_subdirectory (library-bridge)
 endif ()
 
+if (ENABLE_PYUDF)
+    add_subdirectory(udf)
+endif()
+
 if (CLICKHOUSE_ONE_SHARED)
   add_library(clickhouse-lib SHARED
     ${CLICKHOUSE_SERVER_SOURCES}

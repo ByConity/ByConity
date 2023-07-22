@@ -555,11 +555,10 @@ message DataModelUDF
 {
     optional string database = 1;
     required string function_name = 2;
-    optional string function_definition = 3;  // create query
-    optional string argument_name_and_type = 4;
-    optional string return_data_type = 5;
-    optional UdfLanguageType function_language = 6;
-    optional UdfTypeEnum udf_type = 7; // scalar, UDAF, UDTF, Window UDF.
-    optional int64 udf_flags = 8; // bitmap of enum UDFFlags
-    optional uint64 version = 9;
+    optional string function_core = 3;
+    optional string function_definition = 4;
+    optional uint64 version = 5;
+    optional bool or_replace = 6;
+    optional bool if_not_exists = 7;
+    optional bool is_lambda = 8;
 }

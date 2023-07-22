@@ -281,8 +281,12 @@ using WorkerStatusManagerPtr = std::shared_ptr<WorkerStatusManager>;
 
 class WorkerGroupStatus;
 using WorkerGroupStatusPtr = std::shared_ptr<WorkerGroupStatus>;
+<<<<<<< HEAD
 struct QeueueThrottlerDeleter;
 using QueueThrottlerDeleterPtr = std::shared_ptr<QeueueThrottlerDeleter>;
+=======
+class IUserDefinedSQLObjectsLoader;
+>>>>>>> 6a91de6389 (sql udf init commit)
 
 enum class ServerType
 {
@@ -393,6 +397,8 @@ private:
     CopyableAtomic<IResourceGroup *> resource_group{nullptr}; /// Current resource group.
     String current_database;
     Settings settings; /// Setting for query execution.
+
+    std::unordered_map<String, uint64_t> External_UDFMap;
 
     using ProgressCallback = std::function<void(const Progress & progress)>;
     ProgressCallback progress_callback; /// Callback for tracking progress of query execution.
@@ -1456,6 +1462,12 @@ public:
     {
         return async_query_id;
     }
+    IUserDefinedSQLObjectsLoader & getUserDefinedSQLObjectsLoader();
+    void setNonSqlUdfVersionMap(std::unordered_map<String, uint64_t> &&udfMap);
+    const std::unordered_map<String, uint64_t> & getNonSqlUdfVersionMap() const;
+    void setExternalUDFMap(std::unordered_map<String, uint64_t> &&udfMap);
+    void setExternalUDFMapEntry(String &name, uint64_t ver);
+    const std::unordered_map<String, uint64_t> & getExternalUDFMap() const;
 
 private:
     String tenant_id;

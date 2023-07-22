@@ -256,14 +256,16 @@ brpc::CallId CnchWorkerClient::sendQueryDataParts(
     for (const auto & bucket_num : required_bucket_numbers)
         *request.mutable_bucket_numbers()->Add() = bucket_num;
 
-    // TODO:
-    // auto udf_info = context.getNonSqlUdfVersionMap();
-    // for (const auto & [name, version]: udf_info)
-    // {
-    //     auto & new_info = *request.mutable_udf_infos()->Add();
-    //     new_info.set_function_name(name);
-    //     new_info.set_version(version);
-    // }
+    if (context->hasQueryContext())
+    {
+        auto &udf_info = context->getQueryContext()->getExternalUDFMap();
+        for (const auto & [name, version]: udf_info)
+        {
+            auto & new_info = *request.mutable_udf_infos()->Add();
+            new_info.set_function_name(name);
+            new_info.set_version(version);
+        }
+    }
 
 
     auto * cntl = new brpc::Controller();

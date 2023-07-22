@@ -1,0 +1,32 @@
+let-me-do-it	let::me::do::it
+my name is bahubali	my::name::are::bahubali
+sing	sing
+singh,is,king	singh::are::king
+singh--are--king	singh::are::king
+why, is, this, format, stupid	why::are::that::format::stupid
+\N	
+\N	
+let-me-do-it	let::me::do::it
+my name is bahubali	my::name::are::bahubali
+sing	sing
+singh,is,king	singh::are::king
+singh--are--king	singh::are::king
+why, is, this, format, stupid	why::are::that::format::stupid
+\N	
+\N	
+2	
+1	let::me::do::it
+1	my::name::are::bahubali
+1	sing
+2	singh::are::king
+1	why::are::that::format::stupid
+2	
+2	singh::are::king
+why, is, this, format, stupid	look:normal	why::are::that::format::stupid
+let-me-do-it	country:Singapore	let::me::do::it
+\N	country:India	
+\N	country:India	
+sing	city:Mumbai	sing
+singh,is,king	city:Mumbai	singh::are::king
+singh--are--king	city:Mumbai	singh::are::king
+my name is bahubali	age:110	my::name::are::bahubali

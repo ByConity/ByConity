@@ -269,6 +269,7 @@ add_object_library(clickhouse_optimizer_property Optimizer/Property)
 add_object_library(clickhouse_optimizer_rewriter Optimizer/Rewriter)
 add_object_library(clickhouse_optimizer_dump Optimizer/Dump)
 add_object_library(clickhouse_statistics Statistics)
+add_object_library(clickhouse_user_defined_functions Functions/UserDefined)
 
 
 if (USE_NURAFT)

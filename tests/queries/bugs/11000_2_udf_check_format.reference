@@ -1,0 +1,20 @@
+8	8
+8	8
+9	9
+9	9
+10	10
+10	10
+11	11
+12	12
+13	13
+13	13
+0	-5	abc	8	0	-4	8	-2	2018-12-31 21:00:03	6	77	abcdef_cool_nested	def	abc_all_good	abcdef_py_in_lambda	abcdef_lambda_in_py
+0	0	\N	1	0	1	8	3	2019-01-01 00:00:03	1	67	def_cool_nested	def	_all_good	def_py_in_lambda	def_lambda_in_py
+2	1	abc	\N	0	4	10	4	2019-01-31 21:00:03	4	73	abcdef_cool_nested	def	abc_all_good	abcdef_py_in_lambda	abcdef_lambda_in_py
+4	1	abc	\N	0	6	12	4	2019-01-01 00:00:03	6	77	abcdef_cool_nested	def	abc_all_good	abcdef_py_in_lambda	abcdef_lambda_in_py
+3	2.1	abc	\N	0	6.1	11	5.1	2019-01-01 00:00:13	6.1	77.2	abcdef_cool_nested	def	abc_all_good	abcdef_py_in_lambda	abcdef_lambda_in_py
+1	4.5	abcc	\N	0	6.5	9	7.5	2019-12-31 21:00:03	6.5	78	abccdefs_cool_nested	defs	abcc_all_good	abccdefs_py_in_lambda	abccdefs_lambda_in_py
+1	4.5	adcf	2	0	6.5	9	7.5	2019-01-10 21:00:03	6.5	78	adcfdew_cool_nested	dew	adcf_all_good	adcfdew_py_in_lambda	adcfdew_lambda_in_py
+2	5	abwc	6	0	8	10	8	2019-01-05 21:00:03	8	81	abwcdefv_cool_nested	defv	abwc_all_good	abwcdefv_py_in_lambda	abwcdefv_lambda_in_py
+5	9	abdc	\N	0	15	13	12	2019-04-30 22:00:03	15	95	abdcdeqf_cool_nested	deqf	abdc_all_good	abdcdeqf_py_in_lambda	abdcdeqf_lambda_in_py
+5	99	abc	7	0	105	13	102	2019-01-01 02:30:03	105	275	abcdef_cool_nested	def	abc_all_good	abcdef_py_in_lambda	abcdef_lambda_in_py

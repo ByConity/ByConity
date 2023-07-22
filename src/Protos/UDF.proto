@@ -1,0 +1,37 @@
+syntax = "proto2";
+package DB;
+import "google/protobuf/empty.proto";
+
+option cc_generic_services = true;
+
+message ScalarReq {
+    /* function name, including account name and database name */
+    required string f_name = 1;
+    /* metas count */
+    required uint32 cnt = 2;
+    /* byte array of metas */
+    required bytes metas = 3;
+    /* prefix to be added when creating shared memory file */
+    required uint64 prefix = 4;
+    /* column extra info stored in compact byte array
+    e.g. scale for decimal, N of fixstring */
+    optional bytes extras = 5;
+    /* row count */
+    required uint64 rows = 6;
+    /* function version
+    UDF server will reload the module if version changed */
+    optional uint64 version = 7;
+}
+
+message AggregateReq {
+    required ScalarReq scalar_params = 1;
+    /* batch function type id values declared in Proto.h */
+    required uint32 method = 2;
+    /* No. of unique states in state column. As No. of unique states will be similar to unique GROUP BY key values */
+    required uint64 unique_states_count = 3;
+}
+
+service UDF {
+    rpc ScalarCall(ScalarReq) returns (google.protobuf.Empty);
+    rpc AggregateCall(AggregateReq) returns (google.protobuf.Empty);
+};
