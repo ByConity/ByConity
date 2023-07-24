@@ -129,7 +129,6 @@
 #include <Poco/Util/Application.h>
 #include "common/types.h"
 #include <Common/CGroup/CGroupManagerFactory.h>
-#include <Common/CGroup/CpuSetScaleManager.h>
 #include <Common/Config/AbstractConfigurationComparison.h>
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/Config/VWCustomizedSettings.h>
@@ -408,8 +407,6 @@ struct ContextSharedPart
     mutable UniqueKeyIndexFileCachePtr unique_key_index_file_cache; /// Shared file cache of unique key indexes
     mutable UniqueKeyIndexCachePtr unique_key_index_cache; /// Shared object cache of unique key indexes
 
-    CpuSetScaleManagerPtr cpu_set_scale_manager;
-
     bool shutdown_called = false;
 
     Stopwatch uptime_watch;
@@ -658,20 +655,20 @@ void Context::selectWorkerNodesWithMetrics()
             [](const String & vw, const String & wg, const HostWithPorts & host_ports){
                 return WorkerStatusManager::getWorkerId(vw, wg, host_ports.id);
             });
-        
+
         auto indices = worker_group_status->selectHealthNode(current_worker_group->getHostWithPortsVec());
         if (indices)
         {
             health_worker_group.reset(new WorkerGroupHandleImpl(*current_worker_group, *indices));
             setCurrentWorkerGroup(health_worker_group);
         }
-        ProfileEvents::increment(ProfileEvents::AllWorkerSize, worker_group_status->getAllWorkerSize());    
-        ProfileEvents::increment(ProfileEvents::HeavyLoadWorkerSize, worker_group_status->getHeavyLoadWorkerSize());    
-        ProfileEvents::increment(ProfileEvents::SourceOnlyWorkerSize, worker_group_status->getOnlySourceWorkerSize());    
-        ProfileEvents::increment(ProfileEvents::UnhealthWorkerSize, worker_group_status->getUnhealthWorkerSize());    
-        ProfileEvents::increment(ProfileEvents::HealthWorkerSize, worker_group_status->getHealthWorkerSize());    
-        ProfileEvents::increment(ProfileEvents::NotConnectedWorkerSize, worker_group_status->getNotConnectedWorkerSize());    
-        ProfileEvents::increment(ProfileEvents::SelectHealthWorkerMilliSeconds, sw.elapsedMilliseconds());    
+        ProfileEvents::increment(ProfileEvents::AllWorkerSize, worker_group_status->getAllWorkerSize());
+        ProfileEvents::increment(ProfileEvents::HeavyLoadWorkerSize, worker_group_status->getHeavyLoadWorkerSize());
+        ProfileEvents::increment(ProfileEvents::SourceOnlyWorkerSize, worker_group_status->getOnlySourceWorkerSize());
+        ProfileEvents::increment(ProfileEvents::UnhealthWorkerSize, worker_group_status->getUnhealthWorkerSize());
+        ProfileEvents::increment(ProfileEvents::HealthWorkerSize, worker_group_status->getHealthWorkerSize());
+        ProfileEvents::increment(ProfileEvents::NotConnectedWorkerSize, worker_group_status->getNotConnectedWorkerSize());
+        ProfileEvents::increment(ProfileEvents::SelectHealthWorkerMilliSeconds, sw.elapsedMilliseconds());
     }
 }
 
@@ -4182,25 +4179,6 @@ std::shared_ptr<ChecksumsCache> Context::getChecksumsCache() const
 void Context::updateQueueManagerConfig()
 {
     getQueueManager()->loadConfig(getRootConfig().queue_manager);
-}
-
-void Context::setCpuSetScaleManager(const Poco::Util::AbstractConfiguration & config)
-{
-    if (config.has("enable_cpu_scale") && config.getBool("enable_cpu_scale"))
-    {
-        if (nullptr != shared->cpu_set_scale_manager)
-            return;
-        LOG_INFO(&Poco::Logger::get("CpuSetScaleManager"), "Init CpuSetScaleManager");
-        BackgroundSchedulePool & schedule_pool = getSchedulePool();
-        shared->cpu_set_scale_manager = std::make_shared<CpuSetScaleManager>(schedule_pool);
-        shared->cpu_set_scale_manager->loadCpuSetFromConfig(config);
-        shared->cpu_set_scale_manager->run();
-    }
-    else
-    {
-        if (nullptr != shared->cpu_set_scale_manager)
-            shared->cpu_set_scale_manager = nullptr;
-    }
 }
 
 void Context::initServiceDiscoveryClient()

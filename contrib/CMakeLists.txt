@@ -357,5 +357,4 @@ if (ENABLE_BENCHMARK)
     add_subdirectory(benchmark)
 endif()
 
-add_subdirectory(numactl-cmake)
 add_subdirectory(hivemetastore-cmake)

@@ -33,22 +33,6 @@
 #include <common/logger_useful.h>
 #include <boost/algorithm/string.hpp>
 
-#if defined(__linux__)
-    #ifdef __clang__
-        #pragma clang diagnostic push
-        #pragma clang diagnostic ignored "-Wreserved-id-macro"
-        #pragma clang diagnostic ignored "-Wold-style-cast"
-        #pragma clang diagnostic ignored "-Wcast-qual"
-    #endif
-
-    #include <numa.h>
-
-    #ifdef __clang__
-        #pragma clang diagnostic pop
-    #endif
-#endif
-
-
 namespace DB
 {
 namespace ErrorCodes
@@ -58,6 +42,8 @@ namespace ErrorCodes
     extern const int CANNOT_WRITE_TO_FILE_DESCRIPTOR;
     extern const int CANNOT_READ_ALL_DATA;
 }
+
+extern size_t max_numa_node;
 
 struct CpuUsageInfo
 {
@@ -159,7 +145,7 @@ public:
     static size_t getMaxNumaNode()
     {
         #if defined(__linux__)
-        return numa_max_node();
+        return max_numa_node;
         #endif
         return 0;
     }

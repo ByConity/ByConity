@@ -272,7 +272,7 @@ int mainEntryClickHouseServer(int argc, char ** argv)
         {
             std::cerr << DB::getCurrentExceptionMessage(true) << "\n";
             auto code = DB::getCurrentExceptionCode();
-            return code ? code : 1;    
+            return code ? code : 1;
         }
     }
     catch (...)
@@ -1040,7 +1040,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
             global_context->setMergeSchedulerSettings(*config);
             CGroupManagerFactory::loadFromConfig(*config);
-            global_context->setCpuSetScaleManager(*config);
             global_context->updateQueueManagerConfig();
         },
         /* already_loaded = */ false);  /// Reload it right now (initial loading)
@@ -1107,7 +1106,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->setVWCustomizedSettings(vw_customized_settings_ptr);
         }
     }
-    
+
     global_context->setDefaultProfiles(config());
     const Settings & settings = global_context->getSettingsRef();
 
