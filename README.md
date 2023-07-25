@@ -33,7 +33,7 @@ ByConity is built from [ClickHouse](https://github.com/ClickHouse/ClickHouse) an
 
 ## Build ByConity
 
-The easiest way to build ByConity is built in [docker](https://github.com/ByConity/ByConity/tree/master/docker/builder). ByConity executable file depend on Foundation DB library `libfdb_c.so`. So in order to run it, we need to install the FoundationDB client package. This [link](https://apple.github.io/foundationdb/getting-started-linux.html) tells how to install. We can download client package from FoundationDB GitHub release pages, for example [here](https://github.com/apple/foundationdb/releases/tag/7.1.0).
+The easiest way to build ByConity is built in [docker](https://github.com/ByConity/ByConity/tree/master/docker/builder). ByConity executable file depend on Foundation DB library `libfdb_c.so`. So in order to run it, we need to install the FoundationDB client package. This [link](https://apple.github.io/foundationdb/getting-started-linux.html) tells how to install. We can download client package from FoundationDB GitHub release pages, for example [here][foundationdb-client-library].
 
 It can also be built through the following operating systems in physical machine:
 
@@ -47,7 +47,7 @@ The following packages are required:
 - Ninja
 - C++ compiler: clang-11 or clang-12
 - Linker: lld
-- FoundationDB client [library](https://github.com/apple/foundationdb/releases/tag/7.1.0)
+- FoundationDB client [library][foundationdb-client-library]
 
 ```sh
 sudo apt-get update
@@ -88,3 +88,5 @@ daemon_manager       # byconity daemon manager
 resource_manager     # byconity resource manager
 ```
 
+
+[foundationdb-client-library]: https://github.com/apple/foundationdb/releases/tag/7.1.3
