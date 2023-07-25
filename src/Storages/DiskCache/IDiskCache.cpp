@@ -85,7 +85,7 @@ ThreadPool & IDiskCache::getEvictPool()
 
 
 IDiskCache::IDiskCache(const VolumePtr & volume_, const ThrottlerPtr & throttler_, const DiskCacheSettings & settings_)
-    : volume(volume_), disk_cache_throttler(throttler_), settings(settings_)
+    : volume(volume_), disk_cache_throttler(throttler_), settings(settings_), previous_disk_cache_dir(settings_.previous_disk_cache_dir),latest_disk_cache_dir(settings_.latest_disk_cache_dir)
 {
 }
 
