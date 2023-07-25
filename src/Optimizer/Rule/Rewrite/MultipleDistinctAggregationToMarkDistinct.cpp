@@ -31,12 +31,12 @@ bool MultipleDistinctAggregationToMarkDistinct::hasNoDistinctWithFilterOrMask(co
 
 bool MultipleDistinctAggregationToMarkDistinct::hasMultipleDistincts(const AggregatingStep & step)
 {
-    std::set<String> multiple_distinct_aggs;
+    std::set<Names> multiple_distinct_aggs;
     const AggregateDescriptions & agg_descs = step.getAggregates();
     for (const auto & agg_desc : agg_descs)
     {
         if (distinct_func.contains(Poco::toLower(agg_desc.function->getName())))
-            multiple_distinct_aggs.emplace(agg_desc.function->getName());
+            multiple_distinct_aggs.emplace(agg_desc.argument_names);
     }
     return multiple_distinct_aggs.size() > 1;
 }
