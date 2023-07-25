@@ -30,6 +30,7 @@ namespace ErrorCodes
 {
     extern const int TSO_TIMESTAMP_NOT_FOUND_ERROR;
     extern const int TSO_TIMESTAMPS_SIZE_TOO_LARGE;
+    extern const int TSO_INTERNAL_ERROR;
 }
 
 namespace TSO
@@ -55,7 +56,10 @@ void TSOImpl::setPhysicalTime(UInt64 physical_time)
 UInt64 TSOImpl::fetchAddLogical(UInt32 to_add)
 {
     UInt64 timestamp = ts.fetch_add(to_add, std::memory_order_acquire);
+    UInt32 next_logical = ts_to_logical(timestamp) + to_add;
+    checkLogicalClock(next_logical);
     return timestamp;
+
 }
 
 void TSOImpl::GetTimestamp(
@@ -123,6 +127,41 @@ void TSOImpl::GetTimestamps(::google::protobuf::RpcController *,
         tryLogCurrentException(log, __PRETTY_FUNCTION__);
         RPCHelpers::handleException(response->mutable_exception());
     }
+}
+
+void TSOImpl::checkLogicalClock(UInt32 logical_value)
+{
+    if (likely(logical_value < MAX_LOGICAL)) return;
+
+    bool old_value = false;
+    if (logical_clock_checking.compare_exchange_strong(old_value, true, std::memory_order_seq_cst, std::memory_order_relaxed))
+    {
+        /// Launch another thread to check whether updateTSO() is dead
+        ThreadFromGlobalPool([this] {
+            try
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(TSO_UPDATE_INTERVAL));
+                /// Check the leader result in case the node yielded the leadership during sleeping
+                TSOClock cur_ts = getClock();
+                if (exitLeaderElection && is_leader.load(std::memory_order_acquire) && cur_ts.logical >= MAX_LOGICAL)
+                {
+                    // Failback to leader election if an overflow issue happens even after sleep_for(TSO_UPDATE_INTERVAL).
+                    setIsLeader(false);
+                    exitLeaderElection(); // yield leadership as updateTSO thread stopped functioning
+                    LOG_DEBUG(log, "Resign leader. TSO logical clock overflow. Physical: {} | Logical: {}", cur_ts.physical, cur_ts.logical);
+                }
+                logical_clock_checking.store(false, std::memory_order_relaxed);
+            }
+            catch (...)
+            {
+                logical_clock_checking.store(false, std::memory_order_relaxed);
+                tryLogCurrentException(log);
+            }
+        }).detach();
+    }
+
+    TSOClock cur_ts = getClock();
+    throw Exception("GetTimestamp: TSO logical clock overflow. Physical: " + std::to_string(cur_ts.physical) + " | Logical: " + std::to_string(cur_ts.logical), ErrorCodes::TSO_INTERNAL_ERROR);
 }
 
 }

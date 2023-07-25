@@ -470,6 +470,7 @@ int TSOServer::main(const std::vector<std::string> &)
     if (enable_leader_election)
     {
         startLeaderElection(global_context->getSchedulePool());
+        tso_service->setExitLeaderElectionFunction(std::bind(&TSOServer::exitLeaderElection, this));
     }
     else
     {
