@@ -1074,12 +1074,12 @@ ClusterTaskProgress CnchMergeMutateThread::getReclusteringTaskProgress()
     ClusterTaskProgress cluster_task_progress;
     if (!current_mutate_entry->isReclusterMutation())
         return cluster_task_progress;
-    
+
     auto istorage = getStorageFromCatalog();
     auto partition_list = catalog->getPartitionList(istorage, nullptr);
     if (partition_list.size() == 0)
         return cluster_task_progress;
-    
+
     if (scheduled_mutation_partitions.size() != 0)
         cluster_task_progress.progress = (scheduled_mutation_partitions.size() / static_cast<double>(partition_list.size())) * 100;
     else if (finish_mutation_partitions.size() != 0)
@@ -1138,7 +1138,7 @@ bool CnchMergeMutateThread::tryMutateParts([[maybe_unused]] StoragePtr & istorag
             {
                 ServerDataPartsVector parts_to_mutate;
                 for (const auto & part : visible_parts)
-                {   
+                {
                     if (part->part_model().table_definition_hash() != storage.getTableHashForClusterBy())
                         parts_to_mutate.push_back(part);
                 }
@@ -1163,7 +1163,7 @@ bool CnchMergeMutateThread::tryMutateParts([[maybe_unused]] StoragePtr & istorag
                 if (merging_mutating_parts_snapshot.count(part->name()))
                     continue;
 
-                if (type == ManipulationType::Clustering 
+                if (type == ManipulationType::Clustering
                     && command_partition_id != part->partition().getID(storage))
                     continue;
 
