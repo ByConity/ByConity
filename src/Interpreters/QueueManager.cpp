@@ -11,6 +11,28 @@ namespace CurrentMetrics
 
 namespace DB
 {
+
+
+const char * queueResultStatusToString(QueueResultStatus status)
+{
+    switch (status)
+    {
+        case QueueResultStatus::QueueSuccess:
+            return "QueueSuccess";
+        case QueueResultStatus::QueueCancel:
+            return "QueueCancel";
+        case QueueResultStatus::QueueFailed:
+            return "QueueFailed";
+        case QueueResultStatus::QueueOverSize:
+            return "QueueOverSize";
+        case QueueResultStatus::QueueStop:
+            return "QueueStop";
+        case QueueResultStatus::QueueTimeOut:
+            return "QueueTimeOut";
+        default:
+            return "QueueUnkown";
+    }
+}
 QueueManagerTriggerTask::~QueueManagerTriggerTask()
 {
     stop();
@@ -42,12 +64,17 @@ bool ResourceQeueueThrottler::isThrottling(QueueInfo * queue_info)
     auto worker_status = context->getWorkerStatusManager()->getWorkerGroupStatus(queue_info->vw_name, queue_info->wg_name);
     if (worker_status == nullptr)
     {
-        LOG_TRACE(&Poco::Logger::get("QueueManager"), "ResourceQeueueThrottler {}.{} is nullptr", queue_info->vw_name, queue_info->wg_name);
+        LOG_DEBUG(
+            &Poco::Logger::get("QueueManager"),
+            "{} ResourceQeueueThrottler {}.{} is nullptr",
+            queue_info->query_id,
+            queue_info->vw_name,
+            queue_info->wg_name);
         return false;
     }
     if (worker_status->getWorkerGroupHealth() == WorkerGroupHealthStatus::Critical)
     {
-        LOG_DEBUG(&Poco::Logger::get("QueueManager"), "ResourceQeueueThrottler throttle");
+        LOG_TRACE(&Poco::Logger::get("QueueManager"), "{} ResourceQeueueThrottler throttle", queue_info->query_id);
         return true;
     }
     return false;
@@ -70,11 +97,12 @@ bool VWConcurrencyQeueueThrottler::isThrottling(QueueInfo * queue_info)
     std::unique_lock lk(mutex);
     if (vw_parallel_map[queue_info->vw] >= queue_manager->getVWParallelizeSize())
     {
-        LOG_DEBUG(&Poco::Logger::get("QueueManager"), "VWConcurrencyQeueueThrottler throttle");
+        LOG_TRACE(&Poco::Logger::get("QueueManager"), "VWConcurrencyQeueueThrottler throttle");
         return true;
     }
 
-    LOG_TRACE(&Poco::Logger::get("QueueManager"), "VWConcurrencyQeueueThrottler add {} parallel size", queue_info->vw);
+    LOG_TRACE(
+        &Poco::Logger::get("QueueManager"), "{} VWConcurrencyQeueueThrottler add {} parallel size", queue_info->query_id, queue_info->vw);
     vw_parallel_map[queue_info->vw]++;
     queue_info->context->setQueueDeleter(getDeleter(getWorkerGroupName(queue_info->vw_name, queue_info->wg_name)));
     return false;
@@ -86,7 +114,7 @@ QueueResultStatus QueueManager::enqueue(QueueInfoPtr queue_info_ptr, UInt64 time
         return QueueResultStatus::QueueStop;
     std::unique_lock lk(mutex);
     auto & current_vw_queue = query_queues[queue_info_ptr->vw];
-    if (current_vw_queue.size() > queue_size)
+    if (current_vw_queue.size() > query_queue_size)
     {
         return QueueResultStatus::QueueOverSize;
     }
@@ -123,7 +151,6 @@ void QueueManager::cancel(const String & query_id)
 QueueManager::QueueManager(ContextWeakMutablePtr context_) : WithContext(context_), log(&Poco::Logger::get("QueueManager"))
 {
     LOG_DEBUG(log, "Start QueueManager");
-    queue_size = getContext()->getSettingsRef().query_queue_size;
     schedule_pool.emplace(1, CurrentMetrics::BackgroundQueueManagerSchedulePoolTask, "QueuePool");
     queue_manager_trigger_task = std::make_unique<QueueManagerTriggerTask>(*schedule_pool, this, 100, "QueueTask");
     queue_manager_trigger_task->start();
@@ -138,7 +165,7 @@ QueueManager::~QueueManager()
     for (auto & [vw, vw_queue] : query_queues)
     {
         LOG_TRACE(log, "going to trigger vw {}", vw);
-        triggerVW(vw_queue, QueueResultStatus::QueueStop, queue_size);
+        triggerVW(vw_queue, QueueResultStatus::QueueStop, query_queue_size);
     }
 }
 
@@ -174,5 +201,6 @@ void QueueManager::loadConfig(const QMConfiguration & qm_config)
 {
     vw_parallelize_size = qm_config.max_vw_parallelize_size.safeGet();
     batch_size = qm_config.batch_size.safeGet();
+    query_queue_size = qm_config.query_queue_size.safeGet();
 }
 } // DB

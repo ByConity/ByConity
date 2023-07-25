@@ -171,7 +171,7 @@ void WorkerStatusManager::setWorkerNodeDead(const WorkerId & key, int error_code
         });
 }
 
-UnhealthWorkerStatusMap WorkerStatusManager::getWorkersNeedUpdateFromRM()
+UnhealthWorkerStatusMap WorkerStatusManager::getWorkersCannotUpdateFromRM()
 {
     UnhealthWorkerStatusMap ret;
     auto now = std::chrono::system_clock::now();
@@ -179,11 +179,9 @@ UnhealthWorkerStatusMap WorkerStatusManager::getWorkersNeedUpdateFromRM()
         if (worker_info.status == WorkerSchedulerStatus::NotConnected)
         {
             if (std::chrono::duration_cast<std::chrono::seconds>(now - worker_info.update_time).count()
-                > adaptive_scheduler_config.UNHEALTH_RECHECK_SECONDS)
+                < adaptive_scheduler_config.UNHEALTH_RECHECK_SECONDS)
                 ret.emplace(key, worker_info);
         }
-        else
-            ret.emplace(key, worker_info);
     });
 
     return ret;

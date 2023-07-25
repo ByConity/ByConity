@@ -143,9 +143,15 @@ namespace ErrorCodes
     extern const int CNCH_QUEUE_QUERY_FAILURE;
 }
 
-void tryQueueQuery(ContextMutablePtr context)
+void tryQueueQuery(ContextMutablePtr context, ASTType ast_type)
 {
     auto worker_group_handler = context->tryGetCurrentWorkerGroup();
+    if (ast_type != ASTType::ASTSelectQuery && ast_type != ASTType::ASTSelectWithUnionQuery && ast_type != ASTType::ASTInsertQuery
+        && ast_type != ASTType::ASTDeleteQuery && ast_type != ASTType::ASTUpdateQuery)
+    {
+        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "only queue dml query");
+        return;
+    }
     if (worker_group_handler)
     {
         Stopwatch queue_watch;
@@ -168,8 +174,12 @@ void tryQueueQuery(ContextMutablePtr context)
         }
         else
         {
-            LOG_ERROR(&Poco::Logger::get("executeQuery"), "query queue result : {}", queue_info->result.load());
-            throw Exception(ErrorCodes::CNCH_QUEUE_QUERY_FAILURE, "query queue failed for query_id {}", query_id);
+            LOG_ERROR(&Poco::Logger::get("executeQuery"), "query queue result : {}", queueResultStatusToString(queue_result));
+            throw Exception(
+                ErrorCodes::CNCH_QUEUE_QUERY_FAILURE,
+                "query queue failed for query_id {}: {}",
+                query_id,
+                queueResultStatusToString(queue_result));
         }
     }
 }
@@ -706,7 +716,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         {
             context->initCnchServerResource(txn->getTransactionID());
             if (!internal && !ast->as<ASTShowProcesslistQuery>() && context->getSettingsRef().enable_query_queue)
-                tryQueueQuery(context);
+                tryQueueQuery(context, ast->getType());
         }
     }
 

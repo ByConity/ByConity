@@ -1640,8 +1640,8 @@ class IColumn;
     M(Bool, enable_optimizer, false, "Whether enable query optimizer", 0) \
     M(Bool, enable_optimizer_white_list, true, "Whether enable query optimizer whilte list inorder to only support join and agg", 0) \
     M(Bool, log_optimizer_run_time, false, "Whether Log optimizer runtime", 0) \
-    M(Bool, enable_query_queue, true, "Whether enable query queue", 0) \
     M(UInt64, query_queue_size, 100, "Max query queue size", 0) \
+    M(Bool, enable_query_queue, false, "Whether enable query queue", 0) \
     M(UInt64, query_queue_timeout_ms, 100000, "Max queue pending time in ms", 0) \
     M(Bool, enable_optimizer_fallback, true, "Whether enable query optimizer fallback to clickhouse origin when failed", 0) \
     M(Bool, enable_plan_cache, false, "Whether enable plan cache", 0) \

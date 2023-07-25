@@ -311,7 +311,7 @@ public:
 
     void CloseCircuitBreaker(const WorkerId & key);
 
-    UnhealthWorkerStatusMap getWorkersNeedUpdateFromRM();
+    UnhealthWorkerStatusMap getWorkersCannotUpdateFromRM();
 
     template <class WorkersVecType, class GetWorkerFunc>
     std::shared_ptr<WorkerGroupStatus> getWorkerGroupStatus(
