@@ -14,6 +14,7 @@
  */
 
 #include <iostream>
+#include <string>
 
 #include <gtest/gtest.h>
 
@@ -51,4 +52,13 @@ TEST(CGroup, Flow)
     {
         thread.join();
     }
+}
+
+TEST(CGroup, ParseNumaInfo)
+{
+    std::string s1 = "12345";
+    std::string s2 = "0-2";
+
+    ASSERT_EQ(std::stoul(s1.substr(s1.find('-') + 1)), 12345);
+    ASSERT_EQ(std::stoul(s2.substr(s2.find('-') + 1)), 2);
 }
