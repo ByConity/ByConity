@@ -462,6 +462,16 @@ static void onExceptionBeforeStart(const String & query_for_logging, ContextMuta
     }
 }
 
+static void doSomeReplacementForSettings(ContextMutablePtr context)
+{
+    const Settings & settings = context->getSettingsRef();
+    if (settings.enable_distributed_stages)
+    {
+        context->setSetting("enable_optimizer", Field(1));
+        context->setSetting("enable_distributed_stages", Field(0));
+    }
+}
+
 static void setQuerySpecificSettings(ASTPtr & ast, ContextMutablePtr context)
 {
     if (auto * ast_insert_into = dynamic_cast<ASTInsertQuery *>(ast.get()))
@@ -564,13 +574,9 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     assert(internal || CurrentThread::get().getQueryContext()->getCurrentQueryId() == CurrentThread::getQueryId());
 #endif
 
-    const Settings & settings = context->getSettingsRef();
+    doSomeReplacementForSettings(context);
 
-    if (settings.enable_distributed_stages)
-    {
-        context->setSetting("enable_optimizer", Field(1));
-        context->setSetting("enable_distributed_stages", Field(0));
-    }
+    const Settings & settings = context->getSettingsRef();
 
     /// FIXME: Use global join for cnch join works for sql mode first.
     /// Will be replaced by distributed query after @youzhiyuan add query plan runtime.
@@ -653,13 +659,6 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 if (last_select && last_select->settings())
                 {
                     InterpreterSetQuery(last_select->settings(), context).executeForCurrentContext();
-                }
-
-
-                if (settings.enable_distributed_stages)
-                {
-                    context->setSetting("enable_optimizer", Field(1));
-                    context->setSetting("enable_distributed_stages", Field(0));
                 }
             }
         }
