@@ -28,7 +28,7 @@
 #include <Functions/IFunction.h>
 #include <Functions/TransformDateTime64.h>
 #include <IO/WriteHelpers.h>
-
+#include <Interpreters/Context.h>
 
 namespace DB
 {
@@ -46,14 +46,13 @@ class FunctionCustomWeekToSomething : public IFunction
 {
 public:
     static constexpr auto name = Transform::name;
-
-    explicit FunctionCustomWeekToSomething(ContextPtr context_) : context(context_)
-    {
-    }
+    ContextPtr context_ptr;
+    bool mysql_mode = false;
+    explicit FunctionCustomWeekToSomething(ContextPtr context, bool is_mysql_mode) : context_ptr(context), mysql_mode(is_mysql_mode) { }
 
     static FunctionPtr create(ContextPtr context)
     {
-        return std::make_shared<FunctionCustomWeekToSomething>(context);
+        return std::make_shared<FunctionCustomWeekToSomething>(context, context->getSettingsRef().dialect_type == DialectType::MYSQL);
     }
 
     String getName() const override { return name; }
@@ -128,32 +127,36 @@ public:
 
         if (which.isDate())
             return CustomWeekTransformImpl<DataTypeDate, ToDataType>::execute(
-                arguments, result_type, input_rows_count, Transform{});
+                arguments, result_type, input_rows_count, Transform{}, mysql_mode);
         else if (which.isDate32())
             return CustomWeekTransformImpl<DataTypeDate32, ToDataType>::execute(
-                arguments, result_type, input_rows_count, Transform{});
+                arguments, result_type, input_rows_count, Transform{}, mysql_mode);
         else if (which.isDateTime())
             return CustomWeekTransformImpl<DataTypeDateTime, ToDataType>::execute(
-                arguments, result_type, input_rows_count, Transform{});
+                arguments, result_type, input_rows_count, Transform{}, mysql_mode);
         else if (which.isDateTime64())
         {
             return CustomWeekTransformImpl<DataTypeDateTime64, ToDataType>::execute(
-                arguments, result_type, input_rows_count,
-                TransformDateTime64<Transform>{assert_cast<const DataTypeDateTime64 *>(from_type)->getScale()});
+                arguments,
+                result_type,
+                input_rows_count,
+                TransformDateTime64<Transform>{assert_cast<const DataTypeDateTime64 *>(from_type)->getScale()},
+                mysql_mode);
         }
         else if (which.isStringOrFixedString())
         {
             ColumnsWithTypeAndName converted;
             ColumnsWithTypeAndName temp{arguments[0]};
-            auto to_int = FunctionFactory::instance().get("toDateTime", context);
-            auto col = to_int->build(temp)->execute(temp, arguments[0].type, input_rows_count);
+            auto to_datetime = FunctionFactory::instance().get("toDateTime", context_ptr);
+            auto col = to_datetime->build(temp)->execute(temp, arguments[0].type, input_rows_count);
             ColumnWithTypeAndName converted_col(col, std::make_shared<DataTypeDateTime64>(0), "unixtime");
             converted.emplace_back(converted_col);
             for (int i = 1; i < arguments.size(); i++)
             {
                 converted.emplace_back(arguments[i]);
             }
-            return CustomWeekTransformImpl<DataTypeDateTime, ToDataType>::execute(converted, result_type, input_rows_count, Transform{});
+            return CustomWeekTransformImpl<DataTypeDateTime, ToDataType>::execute(
+                converted, result_type, input_rows_count, Transform{}, mysql_mode);
         }
         else
             throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
@@ -204,9 +207,6 @@ public:
                 : is_not_monotonic;
         }
     }
-
-private:
-    ContextPtr context;
 };
 
 }

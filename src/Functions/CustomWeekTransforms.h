@@ -21,19 +21,22 @@
 
 #pragma once
 
+#include <iostream>
 #include <Columns/ColumnVector.h>
 #include <Columns/ColumnsNumber.h>
-#include <common/types.h>
 #include <Core/DecimalFunctions.h>
 #include <Functions/DateTimeTransforms.h>
 #include <Functions/FunctionHelpers.h>
-#include <Functions/extractTimeZoneFromFunctionArguments.h>
 #include <Functions/IFunction.h>
+#include <Functions/extractTimeZoneFromFunctionArguments.h>
 #include <Common/Exception.h>
 #include <common/DateLUTImpl.h>
+#include <common/types.h>
 
 /// The default mode value to use for the WEEK() function
 #define DEFAULT_WEEK_MODE 0
+#define DEFAULT_WEEK_MODE_MYSQL 3
+#define DEFAULT_DAY_WEEK_MODE_MYSQL 1
 
 
 namespace DB
@@ -174,11 +177,21 @@ template <typename FromDataType, typename ToDataType, bool is_extended_result = 
 struct CustomWeekTransformImpl
 {
     template <typename Transform>
-    static ColumnPtr execute(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t /*input_rows_count*/, Transform transform = {})
+    static ColumnPtr execute(
+        const ColumnsWithTypeAndName & arguments,
+        const DataTypePtr &,
+        size_t /*input_rows_count*/,
+        Transform transform = {},
+        bool mysql_mode_ = false)
     {
         const auto op = WeekTransformer<typename FromDataType::FieldType, typename ToDataType::FieldType, Transform, is_extended_result>{std::move(transform)};
 
-        UInt8 week_mode = DEFAULT_WEEK_MODE;
+        UInt8 week_mode = mysql_mode_ ? DEFAULT_WEEK_MODE_MYSQL : DEFAULT_WEEK_MODE;
+        if (strcmp(transform.name, "toDayOfWeekMySQL") == 0 && mysql_mode_)
+        {
+            week_mode = DEFAULT_DAY_WEEK_MODE_MYSQL;
+        }
+
         if (arguments.size() > 1)
         {
             if (const auto * week_mode_column = checkAndGetColumnConst<ColumnUInt8>(arguments[1].column.get()))

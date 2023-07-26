@@ -95,8 +95,10 @@ protected:
                     "Illegal type {} of 1st argument of function {}. Must be Date, Date32, DateTime or DateTime64.",
                     arguments[0].type->getName(), getName());
             if (!isUInt8(arguments[1].type))
-                throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                    "Illegal type of 2nd (optional) argument of function {}. Must be constant UInt8 (week mode).",
+                throw Exception(
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                    "Illegal type {} of 2nd (optional) argument of function {}. Must be constant UInt8 (week mode).",
+                    arguments[1].type->getName(),
                     getName());
         }
         else if (arguments.size() == 3)
@@ -106,12 +108,16 @@ protected:
                     "Illegal type {} of argument of function {}. Must be Date, Date32, DateTime or DateTime64",
                     arguments[0].type->getName(), getName());
             if (!isUInt8(arguments[1].type))
-                throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                    "Illegal type of 2nd (optional) argument of function {}. Must be constant UInt8 (week mode).",
+                throw Exception(
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                    "Illegal type {} of 2nd (optional) argument of function {}. Must be constant UInt8 (week mode).",
+                    arguments[1].type->getName(),
                     getName());
             if (!isString(arguments[2].type))
-                throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                    "Illegal type of 3rd (optional) argument of function {}. Must be constant string (timezone name).",
+                throw Exception(
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                    "Illegal type {} of 3rd (optional) argument of function {}. Must be constant string (timezone name).",
+                    arguments[2].type->getName(),
                     getName());
             if ((isDate(arguments[0].type) || isDate32(arguments[0].type)) && is_result_type_date_or_date32)
                 throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,

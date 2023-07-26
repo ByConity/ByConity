@@ -52,6 +52,26 @@ SELECT toStartOfMonth(toDate(16433));
 SELECT toStartOfMonth(toDate(16433));
 SELECT toStartOfMonth(toDate(16433));
 
+/* toStartOfBiMonth */
+
+SELECT 'toStartOfBiMonth';
+SELECT toStartOfBiMonth(toDateTime('2021-06-30 23:30:00', 'UTC'), 'Asia/Shanghai');
+SELECT toStartOfBiMonth(toDateTime('2021-06-30 23:30:00', 'UTC'), 'UTC');
+SELECT toStartOfBiMonth(toDateTime(1419800400), 'Europe/Moscow');
+SELECT toStartOfBiMonth(toDateTime(1419800400), 'Europe/Paris');
+SELECT toStartOfBiMonth(toDateTime(1419800400), 'Europe/London');
+SELECT toStartOfBiMonth(toDateTime(1419800400), 'Asia/Tokyo');
+SELECT toStartOfBiMonth(toDateTime(1419800400), 'Pacific/Pitcairn');
+SELECT toStartOfBiMonth(toDate(16343));
+SELECT toStartOfBiMonth(toDate(16433));
+SELECT toStartOfBiMonth(toDate(17933));
+SELECT toStartOfBiMonth('2021-01-02');
+SELECT toStartOfBiMonth('2021-02-02');
+SELECT toStartOfBiMonth('2021-07-02');
+SELECT toStartOfBiMonth('2021-08-02');
+SELECT toStartOfBiMonth('2021-11-02');
+SELECT toStartOfBiMonth('2021-12-02');
+
 /* toStartOfQuarter */
 
 SELECT 'toStartOfQuarter';
@@ -119,11 +139,11 @@ SELECT toDayOfMonth(toDateTime(1412106600), 'Pacific/Pitcairn');
 /* toDayOfWeek */
 
 SELECT 'toDayOfWeek';
-SELECT toDayOfWeek(toDateTime(1412106600), 'Europe/Moscow');
-SELECT toDayOfWeek(toDateTime(1412106600), 'Europe/Paris');
-SELECT toDayOfWeek(toDateTime(1412106600), 'Europe/London');
-SELECT toDayOfWeek(toDateTime(1412106600), 'Asia/Tokyo');
-SELECT toDayOfWeek(toDateTime(1412106600), 'Pacific/Pitcairn');
+SELECT toDayOfWeek(toDateTime(1412106600), 0, 'Europe/Moscow');
+SELECT toDayOfWeek(toDateTime(1412106600), 0, 'Europe/Paris');
+SELECT toDayOfWeek(toDateTime(1412106600), 0, 'Europe/London');
+SELECT toDayOfWeek(toDateTime(1412106600), 0, 'Asia/Tokyo');
+SELECT toDayOfWeek(toDateTime(1412106600), 0, 'Pacific/Pitcairn');
 
 /* toHour */
 
@@ -287,7 +307,7 @@ SELECT toRelativeHourNum(toDateTime(1412106600), 'Europe/Moscow') - toRelativeHo
 SELECT toRelativeHourNum(toDateTime(1412106600), 'Europe/Paris') - toRelativeHourNum(toDateTime(0), 'Europe/Paris');
 SELECT toRelativeHourNum(toDateTime(1412106600), 'Europe/London') - toRelativeHourNum(toDateTime(0), 'Europe/London');
 SELECT toRelativeHourNum(toDateTime(1412106600), 'Asia/Tokyo') - toRelativeHourNum(toDateTime(0), 'Asia/Tokyo');
--- known wrong result: SELECT toRelativeHourNum(toDateTime(1412106600), 'Pacific/Pitcairn') - toRelativeHourNum(toDateTime(0), 'Pacific/Pitcairn');
+SELECT toRelativeHourNum(toDateTime(1412106600), 'Pacific/Pitcairn') - toRelativeHourNum(toDateTime(0), 'Pacific/Pitcairn');
 
 /* toRelativeMinuteNum */
 
@@ -321,6 +341,8 @@ SELECT toDate(1412106600, 'Europe/Paris');
 SELECT toDate(1412106600, 'Europe/London');
 SELECT toDate(1412106600, 'Asia/Tokyo');
 SELECT toDate(1412106600, 'Pacific/Pitcairn');
+
+SELECT toDate(16343);
 
 /* toString */
 

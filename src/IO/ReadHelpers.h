@@ -1050,10 +1050,35 @@ inline ReturnType readDateTimeTextImpl(DateTime64 & datetime64, UInt32 scale, Re
 inline bool readTimeTextImpl(time_t & t, ReadBuffer & buf)
 {
     static constexpr auto TimeStringInputSize = 8;
-    const char * s = buf.position();
-    if (buf.buffer().end() < s + TimeStringInputSize) {
+    static constexpr auto DateTimeMinSize = 18;
+    static constexpr auto DateTimeMaxSize = 30;
+    static constexpr auto DateSize = 10;
+
+    const char * begin_pos = buf.position();
+    auto * const end_pos = buf.buffer().end();
+    if (end_pos < begin_pos + TimeStringInputSize)
+    {
         return false;
     }
+    if (end_pos >= begin_pos + DateSize && begin_pos[4] == '-' && begin_pos[7] == '-')
+    {
+        if (end_pos <= begin_pos + DateTimeMinSize)
+        {
+            // In date format yyyy-mm-dd. Ignore remaining characters
+            // return 00:00:00
+            t = 0;
+            buf.position() += end_pos - begin_pos;
+            return true;
+        }
+        else if (end_pos > begin_pos + DateTimeMinSize && end_pos < begin_pos + DateTimeMaxSize)
+        {
+            // Give a minor effort to parse date time string
+            // yyyy-mm-dd HH:MM:SS.NNNNNNNNN 11 chars to skip
+            buf.ignore(DateSize + 1);
+        }
+    }
+
+    const char * s = buf.position();
     if (s[2] != ':' && s[5] != ':') {
         return false;
     }

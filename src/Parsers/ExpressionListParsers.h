@@ -321,13 +321,27 @@ public:
     using IParserDialectBase::IParserDialectBase;
 };
 
-/// TIMESTAMP operator. "TIMESTAMP '2001-01-01 12:34:56'" would be parsed as "toDateTime('2001-01-01 12:34:56')".
-class ParserTimestampOperatorExpression : public IParserDialectBase
+/// TIMESTAMP/DATETIME operator. "TIMESTAMP/DATETIME '2001-01-01 12:34:56'" would be parsed as "toDateTime('2001-01-01 12:34:56')".
+class ParserTimestampDatetimeOperatorExpression : public IParserDialectBase
 {
 protected:
     ParserDateOperatorExpression next_parser{dt};
 
-    const char * getName() const  override { return "TIMESTAMP operator expression"; }
+    const char * getName() const override { return "TIMESTAMP/DATETIME operator expression"; }
+
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+
+public:
+    using IParserDialectBase::IParserDialectBase;
+};
+
+/// TIME operator. "TIME '12:34:56'" would be parsed as "toTimeType('12:34:56', 0)".
+class ParserTimeOperatorExpression : public IParserDialectBase
+{
+protected:
+    ParserTimestampDatetimeOperatorExpression next_parser{dt};
+
+    const char * getName() const override { return "TIME operator expression"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 public:
     using IParserDialectBase::IParserDialectBase;
@@ -337,7 +351,7 @@ public:
 class ParserIntervalOperatorExpression : public IParserDialectBase
 {
 protected:
-    ParserTimestampOperatorExpression next_parser{dt};
+    ParserTimeOperatorExpression next_parser{dt};
 
     const char * getName() const  override { return "INTERVAL operator expression"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;

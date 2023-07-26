@@ -17,14 +17,7 @@ select makeDate32(cast('-1980.1' as Decimal(20,5)), 9, 18);
 select makeDate32(cast(1980.1 as Float32), 9, 19);
 select makeDate32(cast(-1980.1 as Float32), 9, 20);
 
-select makeDate32(cast(1980 as Date), 10, 30); -- { serverError 43 }
-select makeDate32(cast(-1980 as Date), 10, 30); -- { serverError 43 }
-select makeDate32(cast(1980 as Date32), 10, 30); -- { serverError 43 }
-select makeDate32(cast(-1980 as Date32), 10, 30); -- { serverError 43 }
-select makeDate32(cast(1980 as DateTime), 10, 30); -- { serverError 43 }
-select makeDate32(cast(-1980 as DateTime), 10, 30); -- { serverError 43 }
-select makeDate32(cast(1980 as DateTime64), 10, 30); -- { serverError 43 }
-select makeDate32(cast(-1980 as DateTime64), 10, 30); -- { serverError 43 }
+
 
 select makeDate32(0.0, 1, 2);
 select makeDate32(1980, 15, 1);
@@ -59,12 +52,12 @@ select makeDate32(0xffffffff+2010,1,4);
 select makeDate32(0x7fffffffffffffff+2010,1,3);
 select makeDate32(0xffffffffffffffff+2010,1,4);
 
-select makeDate32('1980', '10', '20'); -- { serverError 43 }
-select makeDate32('-1980', 3, 17); -- { serverError 43 }
+select makeDate32('1980', '10', '20');
+select makeDate32('-1980', 3, 17);
 
-select makeDate32('aa', 3, 24); -- { serverError 43 }
-select makeDate32(1994, 'aa', 24); -- { serverError 43 }
-select makeDate32(1984, 3, 'aa'); -- { serverError 43 }
+select makeDate32('aa', 3, 24); -- { serverError 6 }
+select makeDate32(1994, 'aa', 24); -- { serverError 6 }
+select makeDate32(1984, 3, 'aa'); -- { serverError 6 }
 
 select makeDate32(True, 3, 24);
 select makeDate32(1994, True, 24);

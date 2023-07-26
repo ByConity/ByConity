@@ -10,7 +10,7 @@ using FunctionSubtractYears = FunctionDateOrDateTimeAddInterval<SubtractYearsImp
 
 void registerFunctionSubtractYears(FunctionFactory & factory)
 {
-    factory.registerFunction<FunctionSubtractYears>();
+    factory.registerFunction<FunctionSubtractYears>(FunctionFactory::CaseInsensitive);
 }
 
 }

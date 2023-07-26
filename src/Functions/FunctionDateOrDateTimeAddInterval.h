@@ -175,6 +175,39 @@ struct AddHoursImpl
     }
 };
 
+struct AddTimeImpl
+{
+    static constexpr auto name = "addTime";
+
+    static inline NO_SANITIZE_UNDEFINED DecimalUtils::DecimalComponents<DateTime64>
+    execute(DecimalUtils::DecimalComponents<DateTime64> t, Int64 delta, const DateLUTImpl &)
+    {
+        return {t.whole + delta, t.fractional};
+    }
+
+    static inline NO_SANITIZE_UNDEFINED DecimalUtils::DecimalComponents<Decimal64>
+    executeTime(DecimalUtils::DecimalComponents<Decimal64> t, Int64 delta, const DateLUTImpl &)
+    {
+        Int64 x = (t.whole + delta) % 86400;
+        if (x < 0)
+        {
+            x += 86400;
+        }
+        return {x, t.fractional};
+    }
+
+    static inline NO_SANITIZE_UNDEFINED UInt32 execute(UInt32 t, Int64 delta, const DateLUTImpl &) { return t + delta; }
+    static inline NO_SANITIZE_UNDEFINED Int64 execute(Int32 d, Int64 delta, const DateLUTImpl & time_zone)
+    {
+        // use default datetime64 scale
+        return (time_zone.fromDayNum(ExtendedDayNum(d)) + delta) * 1000;
+    }
+    static inline NO_SANITIZE_UNDEFINED UInt32 execute(UInt16 d, Int64 delta, const DateLUTImpl & time_zone)
+    {
+        return time_zone.fromDayNum(DayNum(d)) + delta;
+    }
+};
+
 struct AddDaysImpl
 {
     static constexpr auto name = "addDays";
@@ -388,6 +421,10 @@ struct SubtractIntervalImpl : public Transform
 struct SubtractSecondsImpl : SubtractIntervalImpl<AddSecondsImpl> { static constexpr auto name = "subtractSeconds"; };
 struct SubtractMinutesImpl : SubtractIntervalImpl<AddMinutesImpl> { static constexpr auto name = "subtractMinutes"; };
 struct SubtractHoursImpl : SubtractIntervalImpl<AddHoursImpl> { static constexpr auto name = "subtractHours"; };
+struct SubtractTimeImpl : SubtractIntervalImpl<AddTimeImpl>
+{
+    static constexpr auto name = "subtractTime";
+};
 struct SubtractDaysImpl : SubtractIntervalImpl<AddDaysImpl> { static constexpr auto name = "subtractDays"; };
 struct SubtractWeeksImpl : SubtractIntervalImpl<AddWeeksImpl> { static constexpr auto name = "subtractWeeks"; };
 struct SubtractMonthsImpl : SubtractIntervalImpl<AddMonthsImpl> { static constexpr auto name = "subtractMonths"; };
@@ -474,7 +511,6 @@ struct DateTimeAddIntervalImpl
 {
     static ColumnPtr execute(Transform transform, const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type)
     {
-        using FromValueType = typename FromDataType::FieldType;
         using FromColumnType = typename FromDataType::ColumnType;
         using ToColumnType = typename ToDataType::ColumnType;
 
@@ -486,13 +522,39 @@ struct DateTimeAddIntervalImpl
         auto result_col = result_type->createColumn();
         auto col_to = assert_cast<ToColumnType *>(result_col.get());
 
-        if (checkAndGetColumn<ColumnString>(source_col.get()))
-        {
-            source_col = ConvertImpl<DataTypeString, DataTypeDate, NameToDate>::execute(arguments, std::make_shared<DataTypeDate>(), source_col->size());
-        }
-
         const IColumn & delta_column = *arguments[1].column;
-        if (const auto * sources = checkAndGetColumn<FromColumnType>(source_col.get()))
+
+        if constexpr (std::is_same_v<DataTypeString, FromDataType> || std::is_same_v<DataTypeFixedString, FromDataType>)
+        {
+            if (const auto * src_const = checkAndGetColumnConst<FromColumnType>(source_col.get()))
+            {
+                String str_val = src_const->template getValue<String>();
+                ReadBufferFromMemory read_buffer(str_val.c_str(), str_val.size());
+                DateTime64 dt_val = 0;
+                readDateTime64Text(dt_val, 0, read_buffer);
+
+                op.constantVector(dt_val, col_to->getData(), delta_column, time_zone);
+            }
+            else
+            {
+                const ColumnPtr dt_col = ConvertThroughParsing<
+                    FromDataType,
+                    DataTypeDateTime64,
+                    NameToDateTime64,
+                    ConvertFromStringExceptionMode::Throw,
+                    ConvertFromStringParsingMode::Normal>::
+                    execute({arguments[0]}, std::make_shared<DataTypeDateTime64>(0), source_col->size(), 0);
+                const auto * datetime64_input = checkAndGetColumn<ColumnDecimal<DateTime64>>(dt_col.get());
+                if (!datetime64_input)
+                    throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Illegal string input column {}", source_col->getName());
+
+                if (const auto * delta_const_column = typeid_cast<const ColumnConst *>(&delta_column))
+                    op.vectorConstant(datetime64_input->getData(), col_to->getData(), delta_const_column->getInt(0), time_zone);
+                else
+                    op.vectorVector(datetime64_input->getData(), col_to->getData(), delta_column, time_zone);
+            }
+        }
+        else if (const auto * sources = checkAndGetColumn<FromColumnType>(source_col.get()))
         {
             if (const auto * delta_const_column = typeid_cast<const ColumnConst *>(&delta_column))
                 op.vectorConstant(sources->getData(), col_to->getData(), delta_const_column->getInt(0), time_zone);
@@ -502,18 +564,7 @@ struct DateTimeAddIntervalImpl
         else if (const auto * sources_const = checkAndGetColumnConst<FromColumnType>(source_col.get()))
         {
             op.constantVector(
-                sources_const->template getValue<FromValueType>(),
-                col_to->getData(),
-                delta_column, time_zone);
-        }
-        else if (const auto * sources_const_string = checkAndGetColumnConst<ColumnString>(source_col.get()))
-        {
-            auto value = sources_const_string->template getValue<DataTypeString::FieldType>();
-
-            op.constantVector(
-                LocalDate(value).getDayNum(),
-                col_to->getData(),
-                *arguments[1].column, time_zone);
+                sources_const->template getValue<typename FromDataType::FieldType>(), col_to->getData(), delta_column, time_zone);
         }
         else
         {
@@ -559,21 +610,21 @@ public:
                 + toString(arguments.size()) + ", should be 2 or 3",
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-        if (!isNativeNumber(arguments[1].type))
-            throw Exception("Second argument for function " + getName() + " (delta) must be number",
+        if (!isNativeNumber(arguments[1].type) && !isStringOrFixedString(arguments[1].type) && !isTime(arguments[1].type))
+            throw Exception(
+                "Second argument for function " + getName() + " (delta) must be number, string or time",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (arguments.size() == 2)
         {
-            if (!isDate(arguments[0].type) && !isDate32(arguments[0].type)
-                && !isDateTime(arguments[0].type) && !isDateTime64(arguments[0].type)
-                && !isString(arguments[0].type) && !isTime(arguments[0].type))
+            if (!isDate(arguments[0].type) && !isDate32(arguments[0].type) && !isDateTime(arguments[0].type)
+                && !isDateTime64(arguments[0].type) && !isStringOrFixedString(arguments[0].type) && !isTime(arguments[0].type))
                 throw Exception{"Illegal type " + arguments[0].type->getName() + " of first argument of function " + getName() +
                     ". Should be a date or a date with time", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
         }
         else
         {
-            if (!(WhichDataType(arguments[0].type).isDateTime())
+            if (!(WhichDataType(arguments[0].type).isDateTime() || WhichDataType(arguments[0].type).isString())
                 || !WhichDataType(arguments[2].type).isString())
             {
                 throw Exception(
@@ -590,13 +641,14 @@ public:
         switch (arguments[0].type->getTypeId())
         {
             case TypeIndex::Date:
-            case TypeIndex::String:
                 return resolveReturnType<DataTypeDate>(arguments);
             case TypeIndex::Date32:
                 return resolveReturnType<DataTypeDate32>(arguments);
             case TypeIndex::DateTime:
                 return resolveReturnType<DataTypeDateTime>(arguments);
             case TypeIndex::DateTime64:
+            case TypeIndex::String:
+            case TypeIndex::FixedString:
                 return resolveReturnType<DataTypeDateTime64>(arguments);
             case TypeIndex::Time:
             {
@@ -653,7 +705,9 @@ public:
             }
             else
             {
-                return std::make_shared<DataTypeDateTime64>(DataTypeDateTime64::default_scale, extractTimeZoneNameFromFunctionArguments(arguments, 2, 0));
+                WhichDataType which(arguments[0].type.get());
+                const auto scale = which.isStringOrFixedString() ? 0 : DataTypeDateTime64::default_scale;
+                return std::make_shared<DataTypeDateTime64>(scale, extractTimeZoneNameFromFunctionArguments(arguments, 2, 0));
             }
         }
         else
@@ -668,41 +722,75 @@ public:
     bool useDefaultImplementationForConstants() const override { return true; }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {2}; }
 
-    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t /*input_rows_count*/) const override
+    ColumnPtr executeImpl(
+        const ColumnsWithTypeAndName & arguments,
+        const DataTypePtr & result_type,
+        size_t input_rows_count /*input_rows_count*/) const override
     {
         const IDataType * from_type = arguments[0].type.get();
         WhichDataType which(from_type);
 
-        if (which.isDate() || which.isString())
+        ColumnsWithTypeAndName converted_arguments;
+        if (std::is_same_v<Transform, AddTimeImpl> || std::is_same_v<Transform, SubtractTimeImpl>)
+        {
+            auto to_time = FunctionFactory::instance().get("toTimeType", nullptr);
+            auto to_time_col = to_time->build({arguments[1]})->execute({arguments[1]}, std::make_shared<DataTypeTime>(0), input_rows_count);
+            ColumnWithTypeAndName time_col(to_time_col, std::make_shared<DataTypeTime>(0), "unixtime");
+
+            auto to_int = FunctionFactory::instance().get("toInt64", nullptr);
+            auto to_int_col = to_int->build({time_col})->execute({time_col}, std::make_shared<DataTypeInt64>(), input_rows_count);
+            ColumnWithTypeAndName int_col(to_int_col, std::make_shared<DataTypeInt64>(), "unixtime_int");
+            converted_arguments.emplace_back(arguments[0]);
+            converted_arguments.emplace_back(int_col);
+        }
+        else
+        {
+            converted_arguments = arguments;
+        }
+
+        if (which.isDate())
         {
             return DateTimeAddIntervalImpl<DataTypeDate, TransformResultDataType<DataTypeDate>, Transform>::execute(
-                Transform{}, arguments, result_type);
+                Transform{}, converted_arguments, result_type);
         }
         else if (which.isDate32())
         {
             return DateTimeAddIntervalImpl<DataTypeDate32, TransformResultDataType<DataTypeDate32>, Transform>::execute(
-                Transform{}, arguments, result_type);
+                Transform{}, converted_arguments, result_type);
         }
         else if (which.isDateTime())
         {
             return DateTimeAddIntervalImpl<DataTypeDateTime, TransformResultDataType<DataTypeDateTime>, Transform>::execute(
-                Transform{}, arguments, result_type);
+                Transform{}, converted_arguments, result_type);
         }
         else if (which.isTime())
         {
             const auto * time_type = assert_cast<const DataTypeTime *>(from_type);
             using WrappedTransformType = TransformTime<Transform>;
             return DateTimeAddIntervalImpl<DataTypeTime, DataTypeTime, WrappedTransformType>::execute(
-                    WrappedTransformType{time_type->getScale()}, arguments, result_type);
+                WrappedTransformType{time_type->getScale()}, converted_arguments, result_type);
+        }
+        else if (which.isString())
+        {
+            using WrappedTransformType = TransformType<typename DataTypeDateTime64::FieldType>;
+            return DateTimeAddIntervalImpl<DataTypeString, TransformResultDataType<DataTypeDateTime64>, WrappedTransformType>::execute(
+                WrappedTransformType{0}, converted_arguments, result_type);
+        }
+        else if (which.isFixedString())
+        {
+            using WrappedTransformType = TransformType<typename DataTypeDateTime64::FieldType>;
+            return DateTimeAddIntervalImpl<DataTypeFixedString, TransformResultDataType<DataTypeDateTime64>, WrappedTransformType>::execute(
+                WrappedTransformType{0}, converted_arguments, result_type);
         }
         else if (const auto * datetime64_type = assert_cast<const DataTypeDateTime64 *>(from_type))
         {
             using WrappedTransformType = TransformType<typename DataTypeDateTime64::FieldType>;
             return DateTimeAddIntervalImpl<DataTypeDateTime64, TransformResultDataType<DataTypeDateTime64>, WrappedTransformType>::execute(
-                    WrappedTransformType{datetime64_type->getScale()}, arguments, result_type);
+                WrappedTransformType{datetime64_type->getScale()}, converted_arguments, result_type);
         }
         else
-            throw Exception("Illegal type " + arguments[0].type->getName() + " of first argument of function " + getName(),
+            throw Exception(
+                "Illegal type " + converted_arguments[0].type->getName() + " of first argument of function " + getName(),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 };

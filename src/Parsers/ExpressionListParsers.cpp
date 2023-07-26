@@ -880,12 +880,12 @@ bool ParserDateOperatorExpression::parseImpl(Pos & pos, ASTPtr & node, Expected 
     return true;
 }
 
-bool ParserTimestampOperatorExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserTimestampDatetimeOperatorExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     auto begin = pos;
 
-    /// If no TIMESTAMP keyword, go to the nested parser.
-    if (!ParserKeyword("TIMESTAMP").ignore(pos, expected))
+    /// If no TIMESTAMP/DATETIME keyword, go to the nested parser.
+    if (!ParserKeyword("TIMESTAMP").ignore(pos, expected) && !ParserKeyword("DATETIME").ignore(pos, expected))
         return next_parser.parse(pos, node, expected);
 
     ASTPtr expr;
@@ -907,6 +907,41 @@ bool ParserTimestampOperatorExpression::parseImpl(Pos & pos, ASTPtr & node, Expe
     function->children.push_back(exp_list);
 
     exp_list->children.push_back(expr);
+
+    node = function;
+    return true;
+}
+
+bool ParserTimeOperatorExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+{
+    auto begin = pos;
+
+    /// If no TIME keyword, go to the nested parser.
+    if (!ParserKeyword("TIME").ignore(pos, expected))
+        return next_parser.parse(pos, node, expected);
+
+    ASTPtr expr;
+    if (!ParserStringLiteral().parse(pos, expr, expected))
+    {
+        pos = begin;
+        return next_parser.parse(pos, node, expected);
+    }
+
+    /// the function corresponding to the operator
+    auto function = std::make_shared<ASTFunction>();
+
+    /// function arguments
+    auto exp_list = std::make_shared<ASTExpressionList>();
+
+    /// the first argument of the function is the previous element, the second is the next one
+    function->name = "toTimeType";
+    function->arguments = exp_list;
+    function->children.push_back(exp_list);
+
+    exp_list->children.push_back(expr);
+
+    /// the second argument of toTimeType is scale and it is set to 0
+    exp_list->children.push_back(std::make_shared<ASTLiteral>(UInt8(0)));
 
     node = function;
     return true;

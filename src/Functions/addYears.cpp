@@ -9,7 +9,7 @@ using FunctionAddYears = FunctionDateOrDateTimeAddInterval<AddYearsImpl>;
 
 void registerFunctionAddYears(FunctionFactory & factory)
 {
-    factory.registerFunction<FunctionAddYears>();
+    factory.registerFunction<FunctionAddYears>(FunctionFactory::CaseInsensitive);
 }
 
 }

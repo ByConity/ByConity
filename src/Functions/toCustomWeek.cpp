@@ -41,6 +41,7 @@ void registerFunctionToCustomWeek(FunctionFactory & factory)
 
     /// Compatibility aliases for mysql.
     factory.registerAlias("week", "toWeek", FunctionFactory::CaseInsensitive);
+    factory.registerAlias("weekofyear", "toWeek", FunctionFactory::CaseInsensitive);
     factory.registerAlias("yearweek", "toYearWeek", FunctionFactory::CaseInsensitive);
 }
 

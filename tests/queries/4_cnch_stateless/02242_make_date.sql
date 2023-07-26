@@ -60,12 +60,12 @@ select makeDate(0xffffffff+2010,1,4);
 select makeDate(0x7fffffffffffffff+2010,1,3);
 select makeDate(0xffffffffffffffff+2010,1,4);
 
-select makeDate('1980', '10', '20'); -- { serverError 43 }
-select makeDate('-1980', 3, 17); -- { serverError 43 }
+select makeDate('1980', '10', '20');
+select makeDate('-1980', 3, 17);
 
-select makeDate('aa', 3, 24); -- { serverError 43 }
-select makeDate(1994, 'aa', 24); -- { serverError 43 }
-select makeDate(1984, 3, 'aa'); -- { serverError 43 }
+select makeDate('aa', 3, 24); -- { serverError 6 }
+select makeDate(1994, 'aa', 24); -- { serverError 6 }
+select makeDate(1984, 3, 'aa'); -- { serverError 6 }
 
 select makeDate(True, 3, 24);
 select makeDate(1994, True, 24);

@@ -10,7 +10,7 @@ using FunctionSubtractWeeks = FunctionDateOrDateTimeAddInterval<SubtractWeeksImp
 
 void registerFunctionSubtractWeeks(FunctionFactory & factory)
 {
-    factory.registerFunction<FunctionSubtractWeeks>();
+    factory.registerFunction<FunctionSubtractWeeks>(FunctionFactory::CaseInsensitive);
 }
 
 }

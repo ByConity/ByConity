@@ -10,7 +10,7 @@ using FunctionSubtractQuarters = FunctionDateOrDateTimeAddInterval<SubtractQuart
 
 void registerFunctionSubtractQuarters(FunctionFactory & factory)
 {
-    factory.registerFunction<FunctionSubtractQuarters>();
+    factory.registerFunction<FunctionSubtractQuarters>(FunctionFactory::CaseInsensitive);
 }
 
 }

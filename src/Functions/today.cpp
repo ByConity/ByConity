@@ -110,6 +110,7 @@ void registerFunctionToday(FunctionFactory & factory)
 {
     factory.registerFunction<TodayOverloadResolver>();
     factory.registerAlias("CURRENT_DATE", TodayOverloadResolver::name, FunctionFactory::CaseInsensitive);
+    factory.registerAlias("CURDATE", TodayOverloadResolver::name, FunctionFactory::CaseInsensitive);
 }
 
 }

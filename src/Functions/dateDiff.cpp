@@ -26,6 +26,8 @@
 #include <Columns/ColumnsNumber.h>
 #include <Columns/ColumnDecimal.h>
 
+#include <Interpreters/Context.h>
+
 #include <Functions/IFunction.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionFactory.h>
@@ -68,7 +70,13 @@ class FunctionDateDiff : public IFunction
     using ColumnDateTime64 = ColumnDecimal<DateTime64>;
 public:
     static constexpr auto name = "dateDiff";
-    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionDateDiff>(); }
+
+    explicit FunctionDateDiff(ContextPtr context_, bool mysql_mode_) : context(context_), mysql_mode(mysql_mode_) { }
+
+    static FunctionPtr create(ContextPtr context_)
+    {
+        return std::make_shared<FunctionDateDiff>(context_, (context_->getSettingsRef().dialect_type == DialectType::MYSQL));
+    }
 
     String getName() const override
     {
@@ -87,6 +95,21 @@ public:
 
         auto is_date_or_datetime = [](const DataTypePtr & type) { return isDate(type) || isDateTime(type) || isDateTime64(type); };
 
+        // MySQL datediff(date, date)
+        if (mysql_mode && arguments.size() == 2)
+        {
+            if (!(isStringOrFixedString(arguments[0]) || is_date_or_datetime(arguments[0])))
+                throw Exception(
+                    "First argument for function " + getName() + " must be Date, DateTime or String", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+            if (!(isStringOrFixedString(arguments[1]) || is_date_or_datetime(arguments[1])))
+                throw Exception(
+                    "Second argument for function " + getName() + " must be Date, DateTime or String",
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+            return std::make_shared<DataTypeInt64>();
+        }
+
         // format hive
         if (is_date_or_datetime(arguments[0]) && is_date_or_datetime(arguments[1]))
         {
@@ -98,21 +121,22 @@ public:
         }
 
         if (arguments.size() != 3 && arguments.size() != 4)
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
-                + toString(arguments.size()) + ", should be 3 or 4",
+            throw Exception(
+                "Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
+                    + ", should be 3 or 4",
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         if (!isString(arguments[0]))
             throw Exception("First argument for function " + getName() + " (unit) must be String",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if (!is_date_or_datetime(arguments[1]))
-            throw Exception("Second argument for function " + getName() + " must be Date or DateTime",
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        if (!(isStringOrFixedString(arguments[1]) || is_date_or_datetime(arguments[1])))
+            throw Exception(
+                "Second argument for function " + getName() + " must be Date, DateTime or String", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if (!is_date_or_datetime(arguments[2]))
-            throw Exception("Third argument for function " + getName() + " must be Date or DateTime",
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        if (!(isStringOrFixedString(arguments[2]) || is_date_or_datetime(arguments[2])))
+            throw Exception(
+                "Third argument for function " + getName() + " must be Date, DateTime or String", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (arguments.size() == 4 && !isString(arguments[3]))
             throw Exception("Fourth argument for function " + getName() + " (timezone) must be String",
@@ -127,35 +151,69 @@ public:
     {
         if (format_hive)
             return {2};
-        else
+        else if (!mysql_mode)
             return {0, 3};
+        else
+            return {3};
     }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
     {
         String unit = "day";
 
-        if (!format_hive)
+        auto get_datetime_column = [&](const ColumnWithTypeAndName & input) {
+            if (!isStringOrFixedString(input.type))
+                return input;
+            ColumnsWithTypeAndName temp{input};
+            auto to_datetime = FunctionFactory::instance().get("toDateTime", context);
+            auto col = to_datetime->build(temp)->execute(temp, temp[0].type, input_rows_count);
+            ColumnWithTypeAndName converted_col(col, std::make_shared<DataTypeDateTime>(), "datetime");
+            return converted_col;
+        };
+
+        ColumnsWithTypeAndName converted;
+        if (format_hive)
         {
-            const auto * unit_column = checkAndGetColumnConst<ColumnString>(arguments[0].column.get());
+            converted = arguments;
+        }
+        else if (mysql_mode && arguments.size() == 2) // MySQL datediff(date, date)
+        {
+            // swap order of arguments
+            converted.emplace_back(get_datetime_column(arguments[1]));
+            converted.emplace_back(get_datetime_column(arguments[0]));
+        }
+        else
+        {
+            converted.emplace_back(arguments[0]);
+            converted.emplace_back(get_datetime_column(arguments[1]));
+            converted.emplace_back(get_datetime_column(arguments[2]));
+            if (arguments.size() == 4)
+                converted.emplace_back(arguments[3]);
+        }
+
+        if (!format_hive && !mysql_mode)
+        {
+            const auto * unit_column = checkAndGetColumnConst<ColumnString>(converted[0].column.get());
             if (!unit_column)
                 throw Exception("First argument for function " + getName() + " must be constant String", ErrorCodes::ILLEGAL_COLUMN);
 
             unit = Poco::toLower(unit_column->getValue<String>());
         }
 
-        size_t x_idx = 1 - format_hive;
-        size_t y_idx = 2 - format_hive;
-        size_t zone_idx = 3 - format_hive;
+        // MySQL mode and hive format are different. The two booleans cannot both be true
+        chassert(!(format_hive && mysql_mode));
+        size_t x_idx = 1 - (format_hive || mysql_mode);
+        size_t y_idx = 2 - (format_hive || mysql_mode);
+        size_t zone_idx = 3 - (format_hive || mysql_mode);
 
-        const IColumn & x = *arguments[x_idx].column;
-        const IColumn & y = *arguments[y_idx].column;
+        const IColumn & x = *converted[x_idx].column;
+        const IColumn & y = *converted[y_idx].column;
 
         size_t rows = input_rows_count;
         auto res = ColumnInt64::create(rows);
 
-        const auto & timezone_x = extractTimeZoneFromFunctionArguments(arguments, zone_idx, x_idx);
-        const auto & timezone_y = extractTimeZoneFromFunctionArguments(arguments, zone_idx, y_idx);
+        const auto & timezone_x = extractTimeZoneFromFunctionArguments(converted, zone_idx, x_idx);
+        const auto & timezone_y = extractTimeZoneFromFunctionArguments(converted, zone_idx, y_idx);
 
         if (unit == "year" || unit == "yy" || unit == "yyyy")
             dispatchForColumns<ToRelativeYearNumImpl>(x, y, timezone_x, timezone_y, res->getData());
@@ -314,6 +372,9 @@ private:
     /// support dateDiff format like hive
     /// dateDiff(Date/DateTime, Date/DateTime [, TimeZone])
     mutable bool format_hive = false;
+
+    ContextPtr context;
+    bool mysql_mode;
 };
 
 }
@@ -321,6 +382,9 @@ private:
 void registerFunctionDateDiff(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionDateDiff>(FunctionFactory::CaseInsensitive);
+    factory.registerAlias("date_diff", "datediff", FunctionFactory::CaseInsensitive);
+    factory.registerAlias("timestampdiff", "datediff", FunctionFactory::CaseInsensitive);
+    factory.registerAlias("timestamp_diff", "datediff", FunctionFactory::CaseInsensitive);
 }
 
 }

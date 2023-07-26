@@ -9,7 +9,7 @@ using FunctionAddQuarters = FunctionDateOrDateTimeAddInterval<AddQuartersImpl>;
 
 void registerFunctionAddQuarters(FunctionFactory & factory)
 {
-    factory.registerFunction<FunctionAddQuarters>();
+    factory.registerFunction<FunctionAddQuarters>(FunctionFactory::CaseInsensitive);
 }
 
 }
