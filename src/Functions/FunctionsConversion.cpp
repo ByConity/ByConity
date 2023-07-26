@@ -64,6 +64,7 @@ void registerFunctionsConversion(FunctionFactory & factory)
     registerFunctionFixedString(factory);
 
     factory.registerFunction<FunctionToUnixTimestamp>();
+    factory.registerAlias("unix_timestamp", NameToUnixTimestamp::name, FunctionFactory::CaseInsensitive);
 
     factory.registerFunction<CastOverloadResolver<CastType::nonAccurate>>(FunctionFactory::CaseInsensitive);
     factory.registerFunction<CastOverloadResolver<CastType::accurate>>();

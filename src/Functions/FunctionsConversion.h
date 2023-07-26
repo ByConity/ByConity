@@ -154,13 +154,6 @@ struct ConvertImpl
         using ColVecFrom = typename FromDataType::ColumnType;
         using ColVecTo = typename ToDataType::ColumnType;
 
-        if (std::is_same_v<Name, NameToUnixTimestamp>)
-        {
-            if (isDateOrDate32(named_from.type))
-                throw Exception("Illegal type " + named_from.type->getName() + " of first argument of function " + Name::name,
-                    ErrorCodes::ILLEGAL_COLUMN);
-        }
-
         if constexpr ((IsDataTypeDecimal<FromDataType> || IsDataTypeDecimal<ToDataType>)
             && !(std::is_same_v<DataTypeDateTime64, FromDataType> || std::is_same_v<DataTypeDateTime64, ToDataType>))
         {
@@ -297,7 +290,10 @@ struct ConvertImpl
                         }
                         else
                         {
-                            vec_to[i] = static_cast<ToFieldType>(vec_from[i]);
+                            if constexpr (std::is_same_v<Name, NameToUnixTimestamp> && (std::is_same_v<FromDataType, DataTypeDate> || std::is_same_v<FromDataType, DataTypeDate32>))
+                                vec_to[i] = static_cast<ToFieldType>(vec_from[i] * DATE_SECONDS_PER_DAY);
+                            else
+                                vec_to[i] = static_cast<ToFieldType>(vec_from[i]);
                         }
                     }
                 }

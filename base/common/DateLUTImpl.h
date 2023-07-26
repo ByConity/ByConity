@@ -49,6 +49,8 @@
 /// If we treat "remainder of division" operation in the sense of modular arithmetic (not like in C++).
 #define DATE_LUT_ADD ((1970 - DATE_LUT_MIN_YEAR) * 366L * 86400)
 
+#define DATE_SECONDS_PER_DAY 86400 /// Number of seconds in a day, 60 * 60 * 24
+
 
 #if defined(__PPC__)
 #if !defined(__clang__)
