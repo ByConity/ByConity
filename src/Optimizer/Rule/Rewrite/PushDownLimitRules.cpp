@@ -277,4 +277,37 @@ TransformResult PushdownLimitIntoWindow::transformImpl(PlanNodePtr node, const C
     return {node};
 }
 
+PatternPtr PushLimitIntoSorting::getPattern() const
+{
+    return Patterns::limit()
+        .matchingStep<LimitStep>([](const LimitStep & step) { return step.getLimit() != 0; })
+        .withSingle(
+            Patterns::sorting().matchingStep<SortingStep>([](const auto & sorting_step) { return sorting_step.getLimit() == 0; })).result();
+}
+
+TransformResult PushLimitIntoSorting::transformImpl(PlanNodePtr node, const Captures &, RuleContext &)
+{
+    const auto *limit_step = dynamic_cast<const LimitStep *>(node->getStep().get());
+    auto sorting = node->getChildren()[0];
+    const auto *sorting_step = dynamic_cast<const SortingStep *>(sorting->getStep().get());
+
+    // when limit 0, we skip this rule since another rule will delete the whole node
+    auto limit_value = limit_step->getLimit();
+    if (limit_value == 0)
+        return {};
+
+    if (!isLimitNeeded(*limit_step, sorting))
+        return {};
+
+    auto new_sorting = PlanNodeBase::createPlanNode(
+        sorting->getId(),
+        std::make_shared<SortingStep>(
+            sorting_step->getInputStreams()[0],
+            sorting_step->getSortDescription(),
+            limit_step->getLimit() + limit_step->getOffset(),
+            sorting_step->isPartial()),
+        sorting->getChildren());
+    node->replaceChildren({new_sorting});
+    return TransformResult{node};
+}
 }
