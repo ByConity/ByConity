@@ -260,7 +260,7 @@ class ICnchTransaction;
 using TransactionCnchPtr = std::shared_ptr<ICnchTransaction>;
 
 class QueueManager;
-using QueueManagerPtr = std::shared_ptr<QueueManager>; 
+using QueueManagerPtr = std::shared_ptr<QueueManager>;
 
 using AsyncQueryManagerPtr = std::shared_ptr<AsyncQueryManager>;
 
@@ -978,7 +978,7 @@ public:
     void setProcessorProfileElementConsumer(
         std::shared_ptr<ProfileElementConsumer<ProcessorProfileLogElement>> processor_log_element_consumer_);
     std::shared_ptr<ProfileElementConsumer<ProcessorProfileLogElement>> getProcessorProfileElementConsumer() const;
-    
+
     void setIsExplainQuery(const bool & is_explain_query_);
     bool isExplainQuery() const;
 
@@ -1331,8 +1331,6 @@ public:
 
     void setChecksumsCache(size_t cache_size_in_bytes);
     std::shared_ptr<ChecksumsCache> getChecksumsCache() const;
-
-    void setCpuSetScaleManager(const Poco::Util::AbstractConfiguration & config);
 
     /// client for service discovery
     void initServiceDiscoveryClient();
