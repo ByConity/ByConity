@@ -281,12 +281,9 @@ using WorkerStatusManagerPtr = std::shared_ptr<WorkerStatusManager>;
 
 class WorkerGroupStatus;
 using WorkerGroupStatusPtr = std::shared_ptr<WorkerGroupStatus>;
-<<<<<<< HEAD
 struct QeueueThrottlerDeleter;
 using QueueThrottlerDeleterPtr = std::shared_ptr<QeueueThrottlerDeleter>;
-=======
 class IUserDefinedSQLObjectsLoader;
->>>>>>> 6a91de6389 (sql udf init commit)
 
 enum class ServerType
 {

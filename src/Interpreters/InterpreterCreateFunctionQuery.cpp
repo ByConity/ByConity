@@ -63,7 +63,7 @@ BlockIO InterpreterCreateFunctionQuery::executeForHostServer(const ASTCreateFunc
     auto & database_name = create_function_query.database_name;
 
     if (!is_internal)
-        DatabaseCatalog::instance().assertDatabaseExists(database_name);
+        DatabaseCatalog::instance().assertDatabaseExists(database_name, current_context);
 
     IntentLockPtr udf_lock;
     TransactionCnchPtr txn = current_context->getCurrentTransaction();

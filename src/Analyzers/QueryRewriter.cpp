@@ -195,16 +195,13 @@ namespace
         CheckAliasVisitor().visit(query);
     }
 
-<<<<<<< HEAD
     void simpleFunctions(ASTPtr & query, ContextMutablePtr context)
     {
         if (context->getSettingsRef().rewrite_like_function)
             SimpleFunctionVisitor().visit(query);
     }
 
-    void expandView(ASTPtr & query, ContextMutablePtr context, int & graphviz_index)
-=======
-    void expandUdf(ASTPtr & query, ContextMutablePtr context)
+    void expandUdf(ASTPtr & query, ContextMutablePtr context, int & graphviz_index)
     {
         if (!UserDefinedSQLFunctionFactory::instance().empty())
         {
@@ -214,8 +211,7 @@ namespace
         }
     }
 
-    void expandView(ASTPtr & query, ContextMutablePtr context)
->>>>>>> 6a91de6389 (sql udf init commit)
+    void expandView(ASTPtr & query, ContextMutablePtr context, int & graphviz_index)
     {
         ReplaceViewWithSubquery data{context};
         ReplaceViewWithSubqueryVisitor(data).visit(query);
@@ -553,7 +549,7 @@ ASTPtr QueryRewriter::rewrite(ASTPtr query, ContextMutablePtr context, bool enab
         rewriteInTableExpression(query);
         normalizeFunctions(query, context, graphviz_index);
         implementFunctions(query, context, graphviz_index);
-        expandUdf(query, context);
+        expandUdf(query, context, graphviz_index);
     }
     else
     {
@@ -563,7 +559,7 @@ ASTPtr QueryRewriter::rewrite(ASTPtr query, ContextMutablePtr context, bool enab
         normalizeUnion(query, context);
         simpleFunctions(query, context);
 
-        expandUdf(query, context);
+        expandUdf(query, context, graphviz_index);
         markTupleLiteralsAsLegacy(query, context);
 
         // select query level rewriter, top down rewrite each subquery.
