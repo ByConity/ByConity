@@ -253,7 +253,8 @@ bool compareASTPtr(ASTPtr & left, ASTPtr & right)
     return MurmurHash3Impl64::apply(left_name.c_str(), left_name.size()) < MurmurHash3Impl64::apply(right_name.c_str(), right_name.size());
 }
 
-ASTPtr PredicateUtils::combineConjuncts(const std::vector<ConstASTPtr> & predicates)
+template <typename T, enable_if_ast<T>>
+ASTPtr PredicateUtils::combineConjuncts(const std::vector<T> & predicates)
 {
     if (predicates.empty())
     {
@@ -296,12 +297,14 @@ ASTPtr PredicateUtils::combineConjuncts(const std::vector<ConstASTPtr> & predica
     return makeASTFunction(PredicateConst::AND, conjuncts);
 }
 
-ASTPtr PredicateUtils::combineDisjuncts(const std::vector<ConstASTPtr> & predicates)
+template <typename T, enable_if_ast<T>>
+ASTPtr PredicateUtils::combineDisjuncts(const std::vector<T> & predicates)
 {
     return combineDisjunctsWithDefault(predicates, PredicateConst::FALSE_VALUE);
 }
 
-ASTPtr PredicateUtils::combineDisjunctsWithDefault(const std::vector<ConstASTPtr> & predicates, const ASTPtr & default_ast)
+template <typename T, enable_if_ast<T>>
+ASTPtr PredicateUtils::combineDisjunctsWithDefault(const std::vector<T> & predicates, const ASTPtr & default_ast)
 {
     if (predicates.empty())
         return default_ast;
@@ -324,7 +327,8 @@ ASTPtr PredicateUtils::combineDisjunctsWithDefault(const std::vector<ConstASTPtr
     return makeASTFunction(PredicateConst::OR, args);
 }
 
-ASTPtr PredicateUtils::combinePredicates(const String & fun, std::vector<ConstASTPtr> predicates)
+template <typename T, enable_if_ast<T>>
+ASTPtr PredicateUtils::combinePredicates(const String & fun, std::vector<T> predicates)
 {
     if (fun == PredicateConst::AND)
     {
@@ -333,9 +337,10 @@ ASTPtr PredicateUtils::combinePredicates(const String & fun, std::vector<ConstAS
     return combineDisjuncts(predicates);
 }
 
-bool PredicateUtils::isTruePredicate(const ConstASTPtr & predicate)
+template <typename T, enable_if_ast<T>>
+bool PredicateUtils::isTruePredicate(const T & predicate)
 {
-    if (const auto * literal = predicate->as<const ASTLiteral>())
+    if (const auto * literal = predicate->template as<const ASTLiteral>())
     {
         if (literal->getColumnName() == "1")
         {
@@ -345,9 +350,10 @@ bool PredicateUtils::isTruePredicate(const ConstASTPtr & predicate)
     return false;
 }
 
-bool PredicateUtils::isFalsePredicate(const ConstASTPtr & predicate)
+template <typename T, enable_if_ast<T>>
+bool PredicateUtils::isFalsePredicate(const T & predicate)
 {
-    if (const auto * literal = predicate->as<const ASTLiteral>())
+    if (const auto * literal = predicate->template as<const ASTLiteral>())
     {
         if (literal->value.isNull() || literal->getColumnName() == "0")
         {
@@ -658,4 +664,18 @@ PredicateUtils::extractEqualPredicates(const std::vector<ConstASTPtr> & predicat
     }
     return {equal_predicates, other_predicates};
 }
+
+template ASTPtr PredicateUtils::combineConjuncts<ASTPtr>(const std::vector<ASTPtr> & predicates);
+template ASTPtr PredicateUtils::combineConjuncts<ConstASTPtr>(const std::vector<ConstASTPtr> & predicates);
+template ASTPtr PredicateUtils::combineDisjuncts<ASTPtr>(const std::vector<ASTPtr> & predicates);
+template ASTPtr PredicateUtils::combineDisjuncts<ConstASTPtr>(const std::vector<ConstASTPtr> & predicates);
+template ASTPtr PredicateUtils::combineDisjunctsWithDefault<ASTPtr>(const std::vector<ASTPtr> & predicates, const ASTPtr & default_ast);
+template ASTPtr
+PredicateUtils::combineDisjunctsWithDefault<ConstASTPtr>(const std::vector<ConstASTPtr> & predicates, const ASTPtr & default_ast);
+template ASTPtr PredicateUtils::combinePredicates<ASTPtr>(const String & fun, std::vector<ASTPtr> predicates);
+template ASTPtr PredicateUtils::combinePredicates<ConstASTPtr>(const String & fun, std::vector<ConstASTPtr> predicates);
+template bool PredicateUtils::isTruePredicate<ASTPtr>(const ASTPtr & predicate);
+template bool PredicateUtils::isTruePredicate<ConstASTPtr>(const ConstASTPtr & predicate);
+template bool PredicateUtils::isFalsePredicate<ASTPtr>(const ASTPtr & predicate);
+template bool PredicateUtils::isFalsePredicate<ConstASTPtr>(const ConstASTPtr & predicate);
 }

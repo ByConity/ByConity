@@ -242,7 +242,7 @@ TransformResult PushFilterIntoTableScan::transformImpl(PlanNodePtr node, const C
         const auto & old_pushdown_filter = pushdown_filter_step->getFilter();
         const auto & filter_step_filter = dynamic_cast<const FilterStep *>(node->getStep().get())->getFilter();
 
-        auto new_pushdown_filter = PredicateUtils::combineConjuncts({old_pushdown_filter, filter_step_filter});
+        auto new_pushdown_filter = PredicateUtils::combineConjuncts(ConstASTs{old_pushdown_filter, filter_step_filter});
         copy_table_step->setPushdownFilter(std::make_shared<FilterStep>(pushdown_filter_step->getInputStreams()[0], new_pushdown_filter));
     }
     else

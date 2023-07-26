@@ -76,7 +76,7 @@ PlanNodePtr PredicateVisitor::visitPlanNode(PlanNodeBase & node, PredicateContex
         if (!domain_translator.isIgnored() && remaining_filter->getColumnName() != extract_result.remaining_expression->getColumnName())
         {
             ASTPtr combine_extraction_result = PredicateUtils::combineConjuncts(
-                {domain_translator.toPredicate(extract_result.tuple_domain), extract_result.remaining_expression});
+                ASTs{domain_translator.toPredicate(extract_result.tuple_domain), extract_result.remaining_expression});
 
             // the processed predicate is simpler than the original predicate
             if (combine_extraction_result->getColumnName().size() < remaining_filter->getColumnName().size())

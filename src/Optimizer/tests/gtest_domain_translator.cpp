@@ -1622,7 +1622,7 @@ ASTPtr DomainTranslatorTest::betweenF(const String & symbol, ASTPtr ast1, ASTPtr
 {
     ASTPtr identifier_sym = std::make_shared<ASTIdentifier>(symbol);
     return PredicateUtils::combineConjuncts(
-        {makeASTFunction("greaterOrEquals", identifier_sym, ast1), makeASTFunction("lessOrEquals", identifier_sym, ast2)});
+        ASTs{makeASTFunction("greaterOrEquals", identifier_sym, ast1), makeASTFunction("lessOrEquals", identifier_sym, ast2)});
 }
 
 ASTPtr DomainTranslatorTest::isNotNullF(const String & symbol)

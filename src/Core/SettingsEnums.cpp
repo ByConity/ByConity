@@ -165,4 +165,7 @@ IMPLEMENT_SETTING_ENUM(StatisticsCachePolicy, ErrorCodes::BAD_ARGUMENTS,
      {"cache", StatisticsCachePolicy::Cache},
      {"catalog", StatisticsCachePolicy::Catalog}})
 
+IMPLEMENT_SETTING_ENUM(MaterializedViewConsistencyCheckMethod, ErrorCodes::BAD_ARGUMENTS,
+    {{"NONE", MaterializedViewConsistencyCheckMethod::NONE},
+     {"PARTITION", MaterializedViewConsistencyCheckMethod::PARTITION}})
 } // namespace DB

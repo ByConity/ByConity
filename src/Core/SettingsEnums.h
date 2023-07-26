@@ -43,7 +43,7 @@ enum class LoadBalancing
     FIRST_OR_RANDOM,
     // round robin across replicas with the same number of errors.
     ROUND_ROBIN,
-    // pick replica in reverse order. 
+    // pick replica in reverse order.
     REVERSE_ORDER,
 };
 
@@ -277,4 +277,11 @@ enum class StatisticsCachePolicy
 };
 DECLARE_SETTING_ENUM(StatisticsCachePolicy)
 
+enum class MaterializedViewConsistencyCheckMethod
+{
+    NONE,
+    PARTITION,
+};
+
+DECLARE_SETTING_ENUM(MaterializedViewConsistencyCheckMethod)
 }

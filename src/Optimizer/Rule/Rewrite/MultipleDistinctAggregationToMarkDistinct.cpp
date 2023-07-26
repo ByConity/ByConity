@@ -43,7 +43,7 @@ bool MultipleDistinctAggregationToMarkDistinct::hasMultipleDistincts(const Aggre
 
 bool MultipleDistinctAggregationToMarkDistinct::hasMixedDistinctAndNonDistincts(const AggregatingStep & step)
 {
-    int distinct_aggs = 0;
+    size_t distinct_aggs = 0;
     const AggregateDescriptions & agg_descs = step.getAggregates();
     for (const auto & agg_desc : agg_descs)
     {
@@ -153,5 +153,4 @@ TransformResult MultipleDistinctAggregationToMarkDistinct::transformImpl(PlanNod
     auto count_agg_node = PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(count_agg_step), {child});
     return count_agg_node;
 }
-
 }

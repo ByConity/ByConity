@@ -212,7 +212,7 @@ DomainTranslator::combineRangeWithExcludedPoints(const DataTypePtr & type, ASTPt
     else
         excluded_points_ast = makeASTFunction("notIn", symbol, makeASTFunction("tuple", std::move(excluded_points)));
 
-    return PredicateUtils::combineConjuncts({processRange(type, range, symbol), excluded_points_ast});
+    return PredicateUtils::combineConjuncts(ASTs{processRange(type, range, symbol), excluded_points_ast});
 }
 
 bool DomainTranslator::anyRangeIsAll(const Ranges & ranges)
