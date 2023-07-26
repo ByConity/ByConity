@@ -136,6 +136,7 @@ private:
     ColumnWithTypeAndName analyzeInSubquery(ASTFunctionPtr & function);
     ColumnWithTypeAndName analyzeExistsSubquery(ASTFunctionPtr & function);
     ColumnWithTypeAndName analyzeOrdinaryFunction(ASTFunctionPtr & function);
+    void expandAsterisk(ASTs & nodes);
 
     std::tuple<AggregateFunctionPtr, Array, String> resolveAggregateFunction(ASTFunction & function);
     DataTypePtr handleSubquery(const ASTPtr & subquery);
@@ -235,6 +236,7 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::visitASTFunction(ASTPtr & node, const
 {
     ASTFunctionPtr function_ptr = std::dynamic_pointer_cast<ASTFunction>(node);
     expandUntuple(function_ptr->arguments->children);
+    expandAsterisk(function_ptr->arguments->children);
     auto function_type = getFunctionType(*function_ptr, context);
 
     if (function_type == FunctionType::WINDOW_FUNCTION)
@@ -509,12 +511,14 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeWindowFunction(ASTFunctionPtr 
     if (resolved_window->partition_by)
     {
         expandUntuple(resolved_window->partition_by->children);
+        expandAsterisk(resolved_window->partition_by->children);
         processNodes(resolved_window->partition_by->children);
     }
 
     if (resolved_window->order_by)
     {
         expandUntuple(resolved_window->order_by->children);
+        expandAsterisk(resolved_window->order_by->children);
         processNodes(resolved_window->order_by->children);
     }
 
@@ -711,6 +715,59 @@ String ExprAnalyzerVisitor::getFunctionColumnName(const String & func_name, cons
     for (const auto & arg: arguments)
         arg_result_names.emplace_back(arg.name);
     return getFunctionResultName(func_name, arg_result_names);
+}
+
+void ExprAnalyzerVisitor::expandAsterisk(ASTs & nodes) 
+{
+    if (!options.expand_asterisk) 
+        return;
+
+    ASTs new_nodes;
+    new_nodes.reserve(nodes.size());
+    bool has_asterisk = false;
+    
+    for (auto & node: nodes) 
+    {
+        if (auto * asterisk = node->as<ASTAsterisk>()) 
+        {
+            has_asterisk = true;
+            for (size_t field_index = 0; field_index < baseScope()->size(); ++field_index)
+            {
+                if (baseScope()->at(field_index).substituted_by_asterisk)
+                {
+                    auto field_reference = std::make_shared<ASTFieldReference>(field_index);
+                    field_reference->setFieldName(baseScope()->at(field_index).name);
+                    new_nodes.push_back(field_reference);
+                }
+            }
+         }
+        else if (auto * qualified_asterisk = node->as<ASTQualifiedAsterisk>()) 
+        {   
+            if (qualified_asterisk->children.empty() || !qualified_asterisk->getChildren()[0]->as<ASTTableIdentifier>())
+                throw Exception("Unable to resolve qualified asterisk", ErrorCodes::UNKNOWN_IDENTIFIER);
+
+            has_asterisk = true;    
+            ASTIdentifier& astidentifier = qualified_asterisk->getChildren()[0]->as<ASTTableIdentifier&>();
+            auto prefix = QualifiedName::extractQualifiedName(astidentifier);
+            bool matched = false;
+            for (size_t field_index = 0; field_index < baseScope()->size(); ++field_index)
+            {
+                if (baseScope()->at(field_index).substituted_by_asterisk && baseScope()->at(field_index).prefix.hasSuffix(prefix))
+                {
+                    matched = true;
+                    auto field_reference = std::make_shared<ASTFieldReference>(field_index);
+                    field_reference->setFieldName(baseScope()->at(field_index).name);
+                    new_nodes.push_back(field_reference);
+                }
+            }
+            if (!matched)
+                throw Exception("Can not find column of " + prefix.toString() + " in Scope", ErrorCodes::UNKNOWN_IDENTIFIER);
+        }
+        else 
+            new_nodes.push_back(node);
+    }
+    if (has_asterisk)
+        nodes.swap(new_nodes);
 }
 
 }
