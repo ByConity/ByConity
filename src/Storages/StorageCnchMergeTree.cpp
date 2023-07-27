@@ -312,7 +312,7 @@ Strings StorageCnchMergeTree::selectPartitionsByPredicate(
 
     /// (1) Prune partition by partition level TTL
     TTLTableDescription table_ttl = getInMemoryMetadata().getTableTTLs();
-    if (table_ttl.definition_ast)
+    if (getInMemoryMetadata().hasPartitionLevelTTL() && table_ttl.definition_ast)
     {
         TxnTimestamp start_ts = local_context->getCurrentTransactionID();
         time_t query_time = start_ts.toSecond();
