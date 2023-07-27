@@ -14,12 +14,13 @@
  */
 
 #include <Analyzers/function_utils.h>
-#include <QueryPlan/TranslationMap.h>
-#include <QueryPlan/planning_common.h>
-#include <QueryPlan/Void.h>
-#include <Parsers/ASTVisitor.h>
-#include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTFunction.h>
+#include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTLiteral.h>
+#include <Parsers/ASTVisitor.h>
+#include <QueryPlan/TranslationMap.h>
+#include <QueryPlan/Void.h>
+#include <QueryPlan/planning_common.h>
 
 namespace DB
 {
@@ -137,7 +138,9 @@ private:
     {
         const auto & expression_symbols = translation_map.expression_symbols;
 
-        if (expression_symbols.find(node) != expression_symbols.end())
+        // don't translate literals into calculated expressions, a counter example is: SELECT round(100, 0) GROUP BY 0
+        // translating round(100, 0) to round(100, expr#0) will cause exception: Argument at index 1 for function round must be constant
+        if (expression_symbols.find(node) != expression_symbols.end() && !node->as<ASTLiteral>())
             return toSymbolRef(expression_symbols.at(node));
 
         return translate_func(node);
@@ -161,6 +164,10 @@ String TranslationMap::translateToSymbol(const ASTPtr & expression) const
 
         if (auto * iden = translated->as<ASTIdentifier>())
             return iden->name();
+
+        // since literals won't be translated
+        if (auto it = expression_symbols.find(expression); it != expression_symbols.end())
+            return it->second;
     }
 
     throw Exception("Expression " + expression->getColumnName() + " can not be translated to symbol" , ErrorCodes::LOGICAL_ERROR);
