@@ -46,6 +46,7 @@
 #include <QueryPlan/ISourceStep.h>
 #include <QueryPlan/ITransformingStep.h>
 #include <QueryPlan/IntersectStep.h>
+#include <QueryPlan/IntersectOrExceptStep.h>
 #include <QueryPlan/JoinStep.h>
 #include <QueryPlan/LimitByStep.h>
 #include <QueryPlan/LimitStep.h>

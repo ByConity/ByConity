@@ -344,8 +344,8 @@ bool QuerySupportOptimizerVisitor::visitASTSelectWithUnionQuery(ASTPtr & node, Q
         case ASTSelectWithUnionQuery::Mode::EXCEPT_ALL:
         case ASTSelectWithUnionQuery::Mode::EXCEPT_DISTINCT:
             return true;
-        case ASTSelectWithUnionQuery::Mode::ALL:
-        case ASTSelectWithUnionQuery::Mode::DISTINCT:
+        case ASTSelectWithUnionQuery::Mode::UNION_ALL:
+        case ASTSelectWithUnionQuery::Mode::UNION_DISTINCT:
         default:
             break;
     }

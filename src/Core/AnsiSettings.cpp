@@ -30,8 +30,8 @@ void onSettingChanged(Settings *s)
     s->join_use_nulls = ansi;
     s->cast_keep_nullable = ansi;
     s->union_default_mode = ansi ? "DISTINCT" : "";
-    s->intersect_default_mode = ansi ? UnionMode::DISTINCT : UnionMode::ALL;
-    s->except_default_mode = ansi ? UnionMode::DISTINCT : UnionMode::ALL;
+    s->intersect_default_mode = ansi ? SetOperationMode::DISTINCT : SetOperationMode::ALL;
+    s->except_default_mode = ansi ? SetOperationMode::DISTINCT : SetOperationMode::ALL;
     s->prefer_column_name_to_alias = ansi;
     s->data_type_default_nullable = ansi;
     s->enable_replace_group_by_literal_to_symbol = ansi;

@@ -2157,8 +2157,8 @@ RelationPlan QueryPlannerVisitor::planSetOperation(ASTs & selects, ASTSelectWith
     QueryPlanStepPtr set_operation_step;
     switch (union_mode)
     {
-        case ASTSelectWithUnionQuery::Mode::ALL:
-        case ASTSelectWithUnionQuery::Mode::DISTINCT:
+        case ASTSelectWithUnionQuery::Mode::UNION_ALL:
+        case ASTSelectWithUnionQuery::Mode::UNION_DISTINCT:
             set_operation_step = std::make_shared<UnionStep>(input_streams, output_stream, false);
             break;
         case ASTSelectWithUnionQuery::Mode::INTERSECT_ALL:
@@ -2179,7 +2179,7 @@ RelationPlan QueryPlannerVisitor::planSetOperation(ASTs & selects, ASTSelectWith
 
     auto set_operation_node = sub_plans[0].getRoot()->addStep(context->nextNodeId(), std::move(set_operation_step), source_nodes);
 
-    if (union_mode == ASTSelectWithUnionQuery::Mode::DISTINCT)
+    if (union_mode == ASTSelectWithUnionQuery::Mode::UNION_DISTINCT)
     {
         // this logic depends on how `projectFieldSymbols` handle subcolumns
         Names distinct_columns;

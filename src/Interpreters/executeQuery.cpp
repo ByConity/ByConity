@@ -139,7 +139,7 @@ namespace ErrorCodes
 {
     extern const int INTO_OUTFILE_NOT_ALLOWED;
     extern const int QUERY_WAS_CANCELLED;
-    extern const int ILLEGAL_OUTPUT_PATH;
+    extern const int CANNOT_PARSE_DOMAIN_VALUE_FROM_STRING;
     extern const int CNCH_QUEUE_QUERY_FAILURE;
 }
 
@@ -747,13 +747,15 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         }
 
         {
-            SelectIntersectExceptQueryVisitor::Data data{context->getSettingsRef()};
+            SelectIntersectExceptQueryVisitor::Data data{settings.intersect_default_mode, settings.except_default_mode};
             SelectIntersectExceptQueryVisitor{data}.visit(ast);
         }
 
-        /// Normalize SelectWithUnionQuery
-        NormalizeSelectWithUnionQueryVisitor::Data data{context->getSettingsRef().union_default_mode};
-        NormalizeSelectWithUnionQueryVisitor{data}.visit(ast);
+        {
+            /// Normalize SelectWithUnionQuery
+            NormalizeSelectWithUnionQueryVisitor::Data data{settings.union_default_mode};
+            NormalizeSelectWithUnionQueryVisitor{data}.visit(ast);
+        }
 
         /// Check the limits.
         checkASTSizeLimits(*ast, settings);
@@ -1574,7 +1576,7 @@ void executeQuery(
                 {
                     throw Exception(
                         "Path: " + *out_path + " is illegal, only support write query result to local file or tos",
-                        ErrorCodes::ILLEGAL_OUTPUT_PATH);
+                        ErrorCodes::CANNOT_PARSE_DOMAIN_VALUE_FROM_STRING);
                 }
             }
 

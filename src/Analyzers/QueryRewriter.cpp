@@ -209,7 +209,7 @@ namespace
     void normalizeUnion(ASTPtr & query, ContextMutablePtr context)
     {
         {
-            SelectIntersectExceptQueryVisitor::Data data{context->getSettingsRef()};
+            SelectIntersectExceptQueryVisitor::Data data{context->getSettingsRef().intersect_default_mode, context->getSettingsRef().except_default_mode};
             SelectIntersectExceptQueryVisitor{data}.visit(query);
         }
 

@@ -159,58 +159,38 @@ bool ParserUnionList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         return true;
     };
 
-    /// Parse UNION type
+    /// Parse UNION / INTERSECT / EXCEPT mode
+    /// The mode can be DEFAULT (unspecified) / DISTINCT / ALL
     auto parse_separator = [&]
     {
         if (s_union_parser.ignore(pos, expected))
         {
-            // SELECT ... UNION ALL SELECT ...
             if (s_all_parser.check(pos, expected))
-            {
-                union_modes.push_back(ASTSelectWithUnionQuery::Mode::ALL);
-            }
-            // SELECT ... UNION DISTINCT SELECT ...
+                union_modes.push_back(SelectUnionMode::UNION_ALL);
             else if (s_distinct_parser.check(pos, expected))
-            {
-                union_modes.push_back(ASTSelectWithUnionQuery::Mode::DISTINCT);
-            }
-            // SELECT ... UNION SELECT ...
+                union_modes.push_back(SelectUnionMode::UNION_DISTINCT);
             else
-                union_modes.push_back(ASTSelectWithUnionQuery::Mode::Unspecified);
+                union_modes.push_back(SelectUnionMode::UNION_DEFAULT);
             return true;
         }
         else if (s_except_parser.check(pos, expected))
         {
-            // SELECT ... EXCEPT ALL SELECT ...
             if (s_all_parser.check(pos, expected))
-            {
-                union_modes.push_back(ASTSelectWithUnionQuery::Mode::EXCEPT_ALL);
-            }
-            // SELECT ... EXCEPT DISTINCT SELECT ...
+                union_modes.push_back(SelectUnionMode::EXCEPT_ALL);
             else if (s_distinct_parser.check(pos, expected))
-            {
-                union_modes.push_back(ASTSelectWithUnionQuery::Mode::EXCEPT_DISTINCT);
-            }
-            // SELECT ... EXCEPT SELECT ...
+                union_modes.push_back(SelectUnionMode::EXCEPT_DISTINCT);
             else
-                union_modes.push_back(ASTSelectWithUnionQuery::Mode::EXCEPT_UNSPECIFIED);
+                union_modes.push_back(SelectUnionMode::EXCEPT_DEFAULT);
             return true;
         }
         else if (s_intersect_parser.check(pos, expected))
         {
-            // SELECT ... INTERSECT ALL SELECT ...
             if (s_all_parser.check(pos, expected))
-            {
-                union_modes.push_back(ASTSelectWithUnionQuery::Mode::INTERSECT_ALL);
-            }
-            // SELECT ... INTERSECT DISTINCT SELECT ...
+                union_modes.push_back(SelectUnionMode::INTERSECT_ALL);
             else if (s_distinct_parser.check(pos, expected))
-            {
-                union_modes.push_back(ASTSelectWithUnionQuery::Mode::INTERSECT_DISTINCT);
-            }
-            // SELECT ... INTERSECT SELECT ...
+                union_modes.push_back(SelectUnionMode::INTERSECT_DISTINCT);
             else
-                union_modes.push_back(ASTSelectWithUnionQuery::Mode::INTERSECT_UNSPECIFIED);
+                union_modes.push_back(SelectUnionMode::INTERSECT_DEFAULT);
             return true;
         }
         return false;

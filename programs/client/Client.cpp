@@ -145,7 +145,7 @@ namespace ErrorCodes
     extern const int UNRECOGNIZED_ARGUMENTS;
     extern const int SYNTAX_ERROR;
     extern const int TOO_DEEP_RECURSION;
-    extern const int ILLEGAL_OUTPUT_PATH;
+    extern const int CANNOT_PARSE_DOMAIN_VALUE_FROM_STRING;
 }
 
 
@@ -2286,7 +2286,7 @@ private:
 #endif
                     else
                     {
-                        throw Exception("Path: " + *out_path + " is illegal, only support write query result to local file or tos", ErrorCodes::ILLEGAL_OUTPUT_PATH);
+                        throw Exception("Path: " + *out_path + " is illegal, only support write query result to local file or tos", ErrorCodes::CANNOT_PARSE_DOMAIN_VALUE_FROM_STRING);
                     }
                     // We are writing to file, so default format is the same as in non-interactive mode.
                     if (is_interactive && is_default_format)

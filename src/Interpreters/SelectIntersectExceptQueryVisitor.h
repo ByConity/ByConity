@@ -21,6 +21,7 @@
 #include <Interpreters/InDepthNodeVisitor.h>
 
 #include <Parsers/ASTSelectIntersectExceptQuery.h>
+#include <Core/SettingsEnums.h>
 
 
 namespace DB
@@ -34,13 +35,8 @@ class SelectIntersectExceptQueryMatcher
 public:
     struct Data
     {
-        UnionMode intersect_default_mode;
-        UnionMode except_default_mode;
-
-        explicit Data(const Settings & settings) :
-            intersect_default_mode(settings.intersect_default_mode),
-            except_default_mode(settings.except_default_mode)
-        {}
+        const SetOperationMode intersect_default_mode;
+        const SetOperationMode except_default_mode;
     };
 
     static bool needChildVisit(const ASTPtr &, const ASTPtr &) { return true; }

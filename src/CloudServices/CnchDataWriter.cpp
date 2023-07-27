@@ -47,7 +47,6 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
     extern const int BRPC_TIMEOUT;
     extern const int BAD_DATA_PART_NAME;
-    extern const int NULL_POINTER_DEREFERENCE;
     extern const int BUCKET_TABLE_ENGINE_MISMATCH;
 }
 
@@ -499,7 +498,7 @@ TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_d
 
     auto storage_ptr = storage.shared_from_this();
     if (!storage_ptr)
-        throw Exception("storage_ptr is nullptr and invalid for use", ErrorCodes::NULL_POINTER_DEREFERENCE);
+        throw Exception("storage_ptr is nullptr and invalid for use", ErrorCodes::LOGICAL_ERROR);
 
     do
     {
