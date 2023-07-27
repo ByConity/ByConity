@@ -71,8 +71,11 @@ void registerAggregateFunctionsStatisticsSimple(AggregateFunctionFactory & facto
     /// Synonims for compatibility.
     factory.registerAlias("VAR_SAMP", "varSamp", AggregateFunctionFactory::CaseInsensitive);
     factory.registerAlias("VAR_POP", "varPop", AggregateFunctionFactory::CaseInsensitive);
+    factory.registerAlias("VARIANCE", "varPop", AggregateFunctionFactory::CaseInsensitive);
     factory.registerAlias("STDDEV_SAMP", "stddevSamp", AggregateFunctionFactory::CaseInsensitive);
     factory.registerAlias("STDDEV_POP", "stddevPop", AggregateFunctionFactory::CaseInsensitive);
+    factory.registerAlias("STDDEV", "stddevPop", AggregateFunctionFactory::CaseInsensitive);
+    factory.registerAlias("STD", "stddevPop", AggregateFunctionFactory::CaseInsensitive);
     factory.registerAlias("COVAR_SAMP", "covarSamp", AggregateFunctionFactory::CaseInsensitive);
     factory.registerAlias("COVAR_POP", "covarPop", AggregateFunctionFactory::CaseInsensitive);
 }
