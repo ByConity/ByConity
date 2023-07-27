@@ -810,6 +810,13 @@ std::optional<ExtractionResult> DomainVisitor::processSimpleInPredicate(ASTPtr &
 
     String symbol = fun_left->name();
     DataTypePtr sym_type = type_analyzer.getType(in_fun->arguments->children[0]);
+
+    if (!isTypeOrderable(sym_type) && !isTypeComparable(sym_type))
+    {
+        // unsupported type
+        return std::nullopt;
+    }
+
     const ASTs & value_list = fun_right->arguments->children;
     Array in_values;
     ASTs excluded_expressions;

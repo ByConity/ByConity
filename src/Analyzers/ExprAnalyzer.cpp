@@ -36,6 +36,7 @@
 #include <IO/WriteHelpers.h>
 #include <Parsers/ASTVisitor.h>
 #include <QueryPlan/Void.h>
+#include <DataTypes/DataTypeMap.h>
 
 #include <Poco/String.h>
 
@@ -391,15 +392,18 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeOrdinaryFunction(ASTFunctionPt
         if (auto column_reference = analysis.tryGetColumnReference(function->arguments->children[0]))
         {
             const auto & resolved_field = column_reference->getFieldDescription();
-            if (resolved_field.hasOriginInfo() &&
-                !resolved_field.type->isMapKVStore() &&
-                check_subcolumn(resolved_field, [](const auto & origin_col) { return origin_col.storage->supportsMapImplicitColumn(); }))
+            if (const auto map_type = std::dynamic_pointer_cast<const DataTypeMap>(resolved_field.type))
             {
-                if (auto * key_lit = function->arguments->children[1]->as<ASTLiteral>())
+                if (resolved_field.hasOriginInfo() && !resolved_field.type->isMapKVStore()
+                    && check_subcolumn(
+                        resolved_field, [](const auto & origin_col) { return origin_col.storage->supportsMapImplicitColumn(); }))
                 {
-                    auto key_name = key_lit->getColumnName();
-                    auto column_id = SubColumnID::mapElement(key_name);
-                    register_subcolumn(function, *column_reference, column_id);
+                    if (auto * key_lit = function->arguments->children[1]->as<ASTLiteral>())
+                    {
+                        auto key_name = key_lit->getColumnName();
+                        auto column_id = SubColumnID::mapElement(key_name);
+                        register_subcolumn(function, *column_reference, column_id);
+                    }
                 }
             }
         }

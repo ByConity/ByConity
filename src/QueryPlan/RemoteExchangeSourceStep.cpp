@@ -113,7 +113,7 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
     Pipe pipe;
 
     size_t source_num = 0;
-    bool keep_order = context->getSettingsRef().exchange_enable_force_keep_order;
+    bool keep_order = context->getSettingsRef().exchange_enable_force_keep_order || context->getSettingsRef().enable_shuffle_with_order;
     if (!keep_order)
     {
         for (const auto & input : inputs)
