@@ -29,6 +29,7 @@
 
 namespace DB
 {
+class ColumnFixedString;
 
 namespace ErrorCodes
 {
@@ -42,6 +43,8 @@ private:
     size_t n;
 
 public:
+    using ColumnType = ColumnFixedString;
+
     static constexpr bool is_parametric = true;
 
     DataTypeFixedString(size_t n_) : n(n_)

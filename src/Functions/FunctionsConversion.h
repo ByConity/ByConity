@@ -154,15 +154,18 @@ struct ConvertImpl
         using ColVecFrom = typename FromDataType::ColumnType;
         using ColVecTo = typename ToDataType::ColumnType;
 
-        if (std::is_same_v<Name, NameToUnixTimestamp>)
-        {
-            if (isDateOrDate32(named_from.type))
-                throw Exception("Illegal type " + named_from.type->getName() + " of first argument of function " + Name::name,
-                    ErrorCodes::ILLEGAL_COLUMN);
-        }
+        // Just for compatible, maybe we can restore it after several months
+        // if (std::is_same_v<Name, NameToUnixTimestamp>)
+        // {
+        //     if (isDateOrDate32(named_from.type))
+        //         throw Exception("Illegal type " + named_from.type->getName() + " of first argument of function " + Name::name,
+        //             ErrorCodes::ILLEGAL_COLUMN);
+        // }
 
-        if constexpr ((IsDataTypeDecimal<FromDataType> || IsDataTypeDecimal<ToDataType>)
-            && !(std::is_same_v<DataTypeDateTime64, FromDataType> || std::is_same_v<DataTypeDateTime64, ToDataType>))
+        constexpr bool IsDecimal = IsDataTypeDecimal<FromDataType> || IsDataTypeDecimal<ToDataType>;
+        constexpr bool IsDateTime64 = std::is_same_v<DataTypeDateTime64, FromDataType> || std::is_same_v<DataTypeDateTime64, ToDataType>;
+        constexpr bool IsTime = std::is_same_v<DataTypeTime, FromDataType> || std::is_same_v<DataTypeTime, ToDataType>;
+        if constexpr (IsDecimal && !IsDateTime64 && !IsTime)
         {
             if constexpr (!IsDataTypeDecimalOrNumber<FromDataType> || !IsDataTypeDecimalOrNumber<ToDataType>)
             {
@@ -219,6 +222,13 @@ struct ConvertImpl
                 if constexpr (std::is_same_v<FromDataType, DataTypeUUID> != std::is_same_v<ToDataType, DataTypeUUID>)
                 {
                     throw Exception("Conversion between numeric types and UUID is not supported", ErrorCodes::NOT_IMPLEMENTED);
+                }
+                else if constexpr (
+                    std::is_same_v<
+                        ToDataType,
+                        DataTypeTime> && (std::is_same_v<FromDataType, DataTypeDate> || std::is_same_v<FromDataType, DataTypeDate32>))
+                {
+                    vec_to[i] = static_cast<ToFieldType>(0);
                 }
                 else
                 {
@@ -297,7 +307,10 @@ struct ConvertImpl
                         }
                         else
                         {
-                            vec_to[i] = static_cast<ToFieldType>(vec_from[i]);
+                            if constexpr (std::is_same_v<Name, NameToUnixTimestamp> && (std::is_same_v<FromDataType, DataTypeDate> || std::is_same_v<FromDataType, DataTypeDate32>))
+                                vec_to[i] = static_cast<ToFieldType>(vec_from[i] * DATE_SECONDS_PER_DAY);
+                            else
+                                vec_to[i] = static_cast<ToFieldType>(vec_from[i]);
                         }
                     }
                 }
@@ -1676,10 +1689,16 @@ public:
             mandatory_args.push_back({"scale", &isNativeInteger, &isColumnConst, "const Integer"});
         }
 
-        if (!to_decimal && (isDateTime64<Name, ToDataType>(arguments) || to_time))
+        if (!to_decimal && (isDateTime64<Name, ToDataType>(arguments)))
         {
             mandatory_args.push_back({"scale", &isNativeInteger, &isColumnConst, "const Integer"});
         }
+
+        if (!to_decimal && (to_time))
+        {
+            optional_args.push_back({"scale", &isNativeInteger, &isColumnConst, "const Integer"});
+        }
+
 
         // toString(DateTime or DateTime64, [timezone: String])
         if ((std::is_same_v<Name, NameToString> && !arguments.empty() && (isDateTime64(arguments[0].type) || isDateTime(arguments[0].type)))
@@ -1738,7 +1757,9 @@ public:
             }
 
             if constexpr (to_time) {
-                scale = static_cast<UInt32>(arguments[1].column->get64(0));
+                scale = 0;
+                if (arguments.size() > 1)
+                    scale = static_cast<UInt32>(arguments[1].column->get64(0));
                 return std::make_shared<DataTypeTime>(scale);
             }
 
@@ -1840,14 +1861,25 @@ private:
                         throw Exception{"Function " + getName() + " expects 2 or 3 arguments for DateTime64.",
                             ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION};
                 }
+                else if constexpr (std::is_same_v<RightDataType, DataTypeTime>)
+                {
+                    if (arguments.size() != 1 && arguments.size() != 2)
+                        throw Exception{
+                            "Function " + getName() + " expects 1 or 2 arguments for DateTime64.",
+                            ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION};
+                }
                 else if (arguments.size() != 2)
                 {
                     throw Exception{"Function " + getName() + " expects 2 arguments for Decimal.",
                         ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION};
                 }
 
-                const ColumnWithTypeAndName & scale_column = arguments[1];
-                UInt32 scale = extractToDecimalScale(scale_column);
+                UInt32 scale = 0;
+                if (arguments.size() > 1)
+                {
+                    const ColumnWithTypeAndName & scale_column = arguments[1];
+                    scale = extractToDecimalScale(scale_column);
+                }
 
                 result_column = ConvertImpl<LeftDataType, RightDataType, Name, SpecialTag>::execute(arguments, result_type, input_rows_count, scale);
             }

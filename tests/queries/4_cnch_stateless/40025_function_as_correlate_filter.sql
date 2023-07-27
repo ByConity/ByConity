@@ -6,8 +6,9 @@ USE test;
 drop table if exists tt1_;
 drop table if exists tt2_;
 
-create table tt1_(a Int8) engine = CnchMergeTree() order by tuple();
-create table tt2_(b Int8) engine = CnchMergeTree() order by tuple();
+create table tt1_(a Int8) engine = CnchMergeTree() order by a;
+create table tt2_(b Int8) engine = CnchMergeTree() order by b;
+
 
 insert into tt1_ values (1) (3) (5);
 insert into tt2_ values (1) (2) (4) (6);

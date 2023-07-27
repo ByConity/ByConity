@@ -1,12 +1,11 @@
 drop table if exists tt1;
 drop table if exists tt2;
 
-create table tt1(a Int8) engine = CnchMergeTree() order by tuple();
-create table tt2(b Int8) engine = CnchMergeTree() order by tuple();
+create table tt1(a Int8) engine = CnchMergeTree() order by a;
+create table tt2(b Int8) engine = CnchMergeTree() order by b;
 
-insert into tt1 values (1);
-insert into tt2 values (1);
-
+insert into tt1 values (2)(3);
+insert into tt2 values (3)(4);
 -- { echoOn }
 
 select count(*) from tt1, tt2 where a = b;

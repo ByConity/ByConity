@@ -226,12 +226,12 @@ public:
 
         static void dayOfWeek(char * target, Time source, const DateLUTImpl & timezone)
         {
-            *target += ToDayOfWeekImpl::execute(source, timezone);
+            *target += ToDayOfWeekImpl::execute(source, 0, timezone);
         }
 
         static void dayOfWeek0To6(char * target, Time source, const DateLUTImpl & timezone)
         {
-            auto day = ToDayOfWeekImpl::execute(source, timezone);
+            auto day = ToDayOfWeekImpl::execute(source, 0, timezone);
             *target += (day == 7 ? 0 : day);
         }
 
@@ -305,6 +305,60 @@ public:
         {
             *target += ToQuarterImpl::execute(source, timezone);
         }
+
+        // /// Extra actions to keep align with MySQL (ANSI SQL)
+        // static void hhmmss12AMPM(char * target, Time source, const DateLUTImpl & timezone)
+        // {
+        //     auto hh = ToHourImpl::execute(source, timezone);
+        //     writeNumber2(target, hh == 0 ? 12 : (hh > 12 ? hh - 12 : hh));
+        //     writeNumber2(target + 3, ToMinuteImpl::execute(source, timezone));
+        //     writeNumber2(target + 6, ToSecondImpl::execute(source, timezone));
+        //     if (hh >= 12)
+        //         *(target + 9) = 'P';
+        // }
+
+        // static void weekMode0(char * target, Time source, const DateLUTImpl & timezone)
+        // {
+        //     writeNumber2(target, ToWeekImpl::execute(source, 0, timezone));
+        // }
+
+        // static void weekMode1(char * target, Time source, const DateLUTImpl & timezone)
+        // {
+        //     writeNumber2(target, ToWeekImpl::execute(source, 1, timezone));
+        // }
+
+        // static void weekMode2(char * target, Time source, const DateLUTImpl & timezone)
+        // {
+        //     writeNumber2(target, ToWeekImpl::execute(source, 2, timezone));
+        // }
+
+        // static void yearForFirstDayOfWeekSunday(char * target, Time source, const DateLUTImpl & timezone)
+        // {
+        //     const auto year = ToISOYearImpl::execute(ToStartOfWeekImpl::execute(source, 2, timezone), timezone);
+        //     writeNumber4(target, year);
+        // }
+
+        // static void yearForFirstDayOfWeekMonday(char * target, Time source, const DateLUTImpl & timezone)
+        // {
+        //     const auto year = ToISOYearImpl::execute(ToStartOfWeekImpl::execute(source, 3, timezone), timezone);
+        //     writeNumber4(target, year);
+        // }
+
+        // static void dayOfWeekSunToSat(char * target, Time source, const DateLUTImpl & timezone)
+        // {
+        //     constexpr std::array lut = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+
+        //     const UInt8 index = ToDayOfWeekImpl::execute(source, 0, timezone);
+        //     memcpy(target, lut[index], 3);
+        // }
+
+        // static void monthPrefix(char * target, Time source, const DateLUTImpl & timezone)
+        // {
+        //     constexpr std::array lut = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+
+        //     const UInt8 index = ToMonthImpl::execute(source, timezone) - 1;
+        //     memcpy(target, lut[index], 3);
+        // }
     };
 
 private:

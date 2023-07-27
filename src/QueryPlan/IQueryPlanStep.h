@@ -157,8 +157,9 @@ public:
         M(Window) \
         M(CTERef) \
         M(TopNFiltering) \
-        M(MarkDistinct)
-        
+        M(MarkDistinct) \
+        M(IntersectOrExcept)
+
 #define ENUM_DEF(ITEM) ITEM,
 
     enum class Type

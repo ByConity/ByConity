@@ -116,7 +116,6 @@ public:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 };
 
-
 class LimitZeroToReadNothing : public Rule
 {
 public:
@@ -139,5 +138,14 @@ public:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 };
 
-}
+class PushLimitIntoSorting: public Rule
+{
+public:
+    RuleType getType() const override { return RuleType::PUSH_LIMIT_INTO_SORTING; }
+    String getName() const override { return "PUSH_LIMIT_INTO_SORTING"; }
 
+    PatternPtr getPattern() const override;
+
+    TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
+};
+}

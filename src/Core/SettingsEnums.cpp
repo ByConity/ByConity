@@ -124,10 +124,10 @@ IMPLEMENT_SETTING_MULTI_ENUM(MySQLDataTypesSupport, ErrorCodes::UNKNOWN_MYSQL_DA
     {{"decimal",    MySQLDataTypesSupport::DECIMAL},
      {"datetime64", MySQLDataTypesSupport::DATETIME64}})
 
-IMPLEMENT_SETTING_ENUM(UnionMode, ErrorCodes::UNKNOWN_UNION,
-    {{"",         UnionMode::Unspecified},
-     {"ALL",      UnionMode::ALL},
-     {"DISTINCT", UnionMode::DISTINCT}})
+IMPLEMENT_SETTING_ENUM(SetOperationMode, ErrorCodes::UNKNOWN_UNION,
+    {{"",         SetOperationMode::Unspecified},
+     {"ALL",      SetOperationMode::ALL},
+     {"DISTINCT", SetOperationMode::DISTINCT}})
 
 IMPLEMENT_SETTING_ENUM(DistributedDDLOutputMode, ErrorCodes::BAD_ARGUMENTS,
     {{"none",         DistributedDDLOutputMode::NONE},
@@ -165,4 +165,7 @@ IMPLEMENT_SETTING_ENUM(StatisticsCachePolicy, ErrorCodes::BAD_ARGUMENTS,
      {"cache", StatisticsCachePolicy::Cache},
      {"catalog", StatisticsCachePolicy::Catalog}})
 
+IMPLEMENT_SETTING_ENUM(MaterializedViewConsistencyCheckMethod, ErrorCodes::BAD_ARGUMENTS,
+    {{"NONE", MaterializedViewConsistencyCheckMethod::NONE},
+     {"PARTITION", MaterializedViewConsistencyCheckMethod::PARTITION}})
 } // namespace DB

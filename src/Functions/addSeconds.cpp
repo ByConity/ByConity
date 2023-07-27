@@ -9,7 +9,7 @@ using FunctionAddSeconds = FunctionDateOrDateTimeAddInterval<AddSecondsImpl>;
 
 void registerFunctionAddSeconds(FunctionFactory & factory)
 {
-    factory.registerFunction<FunctionAddSeconds>();
+    factory.registerFunction<FunctionAddSeconds>(FunctionFactory::CaseInsensitive);
 }
 
 }

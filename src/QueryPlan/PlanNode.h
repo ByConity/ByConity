@@ -37,6 +37,7 @@
 #include <QueryPlan/FinishSortingStep.h>
 #include <QueryPlan/IQueryPlanStep.h>
 #include <QueryPlan/IntersectStep.h>
+#include <QueryPlan/IntersectOrExceptStep.h>
 #include <QueryPlan/JoinStep.h>
 #include <QueryPlan/LimitByStep.h>
 #include <QueryPlan/LimitStep.h>

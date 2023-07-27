@@ -18,6 +18,13 @@ struct IntervalKind
         Month,
         Quarter,
         Year,
+        MinuteSecond,
+        HourSecond,
+        HourMinute,
+        DaySecond,
+        DayMinute,
+        DayHour,
+        YearMonth,
     };
     Kind kind = Second;
 

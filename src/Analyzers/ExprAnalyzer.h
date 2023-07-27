@@ -54,6 +54,7 @@ struct ExprAnalyzerOptions
     WindowSupport window_support = WindowSupport::DISALLOWED;
     SubquerySupport subquery_support = SubquerySupport::DISALLOWED;
     bool expand_untuple = true;
+    bool expand_asterisk = true;
 
     // constructor
     ExprAnalyzerOptions(String statement_name_ = ""): statement_name(std::move(statement_name_)) // NOLINT(google-explicit-constructor)
@@ -87,6 +88,11 @@ struct ExprAnalyzerOptions
     ExprAnalyzerOptions & expandUntuple(bool arg)
     {
         expand_untuple = arg;
+        return *this;
+    }
+    ExprAnalyzerOptions & expandAsterisk(bool arg)
+    {
+        expand_asterisk = arg;
         return *this;
     }
 };

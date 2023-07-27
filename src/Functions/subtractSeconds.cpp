@@ -10,7 +10,7 @@ using FunctionSubtractSeconds = FunctionDateOrDateTimeAddInterval<SubtractSecond
 
 void registerFunctionSubtractSeconds(FunctionFactory & factory)
 {
-    factory.registerFunction<FunctionSubtractSeconds>();
+    factory.registerFunction<FunctionSubtractSeconds>(FunctionFactory::CaseInsensitive);
 }
 
 }

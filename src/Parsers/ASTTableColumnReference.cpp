@@ -36,4 +36,11 @@ void ASTTableColumnReference::appendColumnName(WriteBuffer & buffer) const
 {
     writeString(getID('.'), buffer);
 }
+
+ASTPtr ASTTableColumnReference::clone() const
+{
+    auto res = std::make_shared<ASTTableColumnReference>(storage, column_name);
+    res->setStep(this->getStep());
+    return res;
+}
 }

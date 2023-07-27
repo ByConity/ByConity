@@ -34,7 +34,10 @@ void ASTFieldReference::formatImplWithoutAlias(const FormatSettings & settings, 
 
 void ASTFieldReference::appendColumnNameImpl(WriteBuffer & ostr) const
 {
-    writeString("@" + std::to_string(field_index), ostr);
+    if (!field_name.empty()) 
+        writeString(field_name, ostr);
+    else    
+        writeString("@" + std::to_string(field_index), ostr);
 }
 
 }

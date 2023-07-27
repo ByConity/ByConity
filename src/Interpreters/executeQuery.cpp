@@ -139,13 +139,19 @@ namespace ErrorCodes
 {
     extern const int INTO_OUTFILE_NOT_ALLOWED;
     extern const int QUERY_WAS_CANCELLED;
-    extern const int ILLEGAL_OUTPUT_PATH;
+    extern const int CANNOT_PARSE_DOMAIN_VALUE_FROM_STRING;
     extern const int CNCH_QUEUE_QUERY_FAILURE;
 }
 
-void tryQueueQuery(ContextMutablePtr context)
+void tryQueueQuery(ContextMutablePtr context, ASTType ast_type)
 {
     auto worker_group_handler = context->tryGetCurrentWorkerGroup();
+    if (ast_type != ASTType::ASTSelectQuery && ast_type != ASTType::ASTSelectWithUnionQuery && ast_type != ASTType::ASTInsertQuery
+        && ast_type != ASTType::ASTDeleteQuery && ast_type != ASTType::ASTUpdateQuery)
+    {
+        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "only queue dml query");
+        return;
+    }
     if (worker_group_handler)
     {
         Stopwatch queue_watch;
@@ -168,8 +174,12 @@ void tryQueueQuery(ContextMutablePtr context)
         }
         else
         {
-            LOG_ERROR(&Poco::Logger::get("executeQuery"), "query queue result : {}", queue_info->result.load());
-            throw Exception(ErrorCodes::CNCH_QUEUE_QUERY_FAILURE, "query queue failed for query_id {}", query_id);
+            LOG_ERROR(&Poco::Logger::get("executeQuery"), "query queue result : {}", queueResultStatusToString(queue_result));
+            throw Exception(
+                ErrorCodes::CNCH_QUEUE_QUERY_FAILURE,
+                "query queue failed for query_id {}: {}",
+                query_id,
+                queueResultStatusToString(queue_result));
         }
     }
 }
@@ -452,6 +462,16 @@ static void onExceptionBeforeStart(const String & query_for_logging, ContextMuta
     }
 }
 
+static void doSomeReplacementForSettings(ContextMutablePtr context)
+{
+    const Settings & settings = context->getSettingsRef();
+    if (settings.enable_distributed_stages)
+    {
+        context->setSetting("enable_optimizer", Field(1));
+        context->setSetting("enable_distributed_stages", Field(0));
+    }
+}
+
 static void setQuerySpecificSettings(ASTPtr & ast, ContextMutablePtr context)
 {
     if (auto * ast_insert_into = dynamic_cast<ASTInsertQuery *>(ast.get()))
@@ -554,13 +574,9 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     assert(internal || CurrentThread::get().getQueryContext()->getCurrentQueryId() == CurrentThread::getQueryId());
 #endif
 
-    const Settings & settings = context->getSettingsRef();
+    doSomeReplacementForSettings(context);
 
-    if (settings.enable_distributed_stages)
-    {
-        context->setSetting("enable_optimizer", Field(1));
-        context->setSetting("enable_distributed_stages", Field(0));
-    }
+    const Settings & settings = context->getSettingsRef();
 
     /// FIXME: Use global join for cnch join works for sql mode first.
     /// Will be replaced by distributed query after @youzhiyuan add query plan runtime.
@@ -644,13 +660,6 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 {
                     InterpreterSetQuery(last_select->settings(), context).executeForCurrentContext();
                 }
-
-
-                if (settings.enable_distributed_stages)
-                {
-                    context->setSetting("enable_optimizer", Field(1));
-                    context->setSetting("enable_distributed_stages", Field(0));
-                }
             }
         }
         else if (const auto * query_with_output = dynamic_cast<const ASTQueryWithOutput *>(ast.get()))
@@ -706,7 +715,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         {
             context->initCnchServerResource(txn->getTransactionID());
             if (!internal && !ast->as<ASTShowProcesslistQuery>() && context->getSettingsRef().enable_query_queue)
-                tryQueueQuery(context);
+                tryQueueQuery(context, ast->getType());
         }
     }
 
@@ -738,13 +747,15 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         }
 
         {
-            SelectIntersectExceptQueryVisitor::Data data{context->getSettingsRef()};
+            SelectIntersectExceptQueryVisitor::Data data{settings.intersect_default_mode, settings.except_default_mode};
             SelectIntersectExceptQueryVisitor{data}.visit(ast);
         }
 
-        /// Normalize SelectWithUnionQuery
-        NormalizeSelectWithUnionQueryVisitor::Data data{context->getSettingsRef().union_default_mode};
-        NormalizeSelectWithUnionQueryVisitor{data}.visit(ast);
+        {
+            /// Normalize SelectWithUnionQuery
+            NormalizeSelectWithUnionQueryVisitor::Data data{settings.union_default_mode};
+            NormalizeSelectWithUnionQueryVisitor{data}.visit(ast);
+        }
 
         /// Check the limits.
         checkASTSizeLimits(*ast, settings);
@@ -1565,7 +1576,7 @@ void executeQuery(
                 {
                     throw Exception(
                         "Path: " + *out_path + " is illegal, only support write query result to local file or tos",
-                        ErrorCodes::ILLEGAL_OUTPUT_PATH);
+                        ErrorCodes::CANNOT_PARSE_DOMAIN_VALUE_FROM_STRING);
                 }
             }
 

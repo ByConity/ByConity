@@ -159,58 +159,38 @@ bool ParserUnionList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         return true;
     };
 
-    /// Parse UNION type
+    /// Parse UNION / INTERSECT / EXCEPT mode
+    /// The mode can be DEFAULT (unspecified) / DISTINCT / ALL
     auto parse_separator = [&]
     {
         if (s_union_parser.ignore(pos, expected))
         {
-            // SELECT ... UNION ALL SELECT ...
             if (s_all_parser.check(pos, expected))
-            {
-                union_modes.push_back(ASTSelectWithUnionQuery::Mode::ALL);
-            }
-            // SELECT ... UNION DISTINCT SELECT ...
+                union_modes.push_back(SelectUnionMode::UNION_ALL);
             else if (s_distinct_parser.check(pos, expected))
-            {
-                union_modes.push_back(ASTSelectWithUnionQuery::Mode::DISTINCT);
-            }
-            // SELECT ... UNION SELECT ...
+                union_modes.push_back(SelectUnionMode::UNION_DISTINCT);
             else
-                union_modes.push_back(ASTSelectWithUnionQuery::Mode::Unspecified);
+                union_modes.push_back(SelectUnionMode::UNION_DEFAULT);
             return true;
         }
         else if (s_except_parser.check(pos, expected))
         {
-            // SELECT ... EXCEPT ALL SELECT ...
             if (s_all_parser.check(pos, expected))
-            {
-                union_modes.push_back(ASTSelectWithUnionQuery::Mode::EXCEPT_ALL);
-            }
-            // SELECT ... EXCEPT DISTINCT SELECT ...
+                union_modes.push_back(SelectUnionMode::EXCEPT_ALL);
             else if (s_distinct_parser.check(pos, expected))
-            {
-                union_modes.push_back(ASTSelectWithUnionQuery::Mode::EXCEPT_DISTINCT);
-            }
-            // SELECT ... EXCEPT SELECT ...
+                union_modes.push_back(SelectUnionMode::EXCEPT_DISTINCT);
             else
-                union_modes.push_back(ASTSelectWithUnionQuery::Mode::EXCEPT_UNSPECIFIED);
+                union_modes.push_back(SelectUnionMode::EXCEPT_DEFAULT);
             return true;
         }
         else if (s_intersect_parser.check(pos, expected))
         {
-            // SELECT ... INTERSECT ALL SELECT ...
             if (s_all_parser.check(pos, expected))
-            {
-                union_modes.push_back(ASTSelectWithUnionQuery::Mode::INTERSECT_ALL);
-            }
-            // SELECT ... INTERSECT DISTINCT SELECT ...
+                union_modes.push_back(SelectUnionMode::INTERSECT_ALL);
             else if (s_distinct_parser.check(pos, expected))
-            {
-                union_modes.push_back(ASTSelectWithUnionQuery::Mode::INTERSECT_DISTINCT);
-            }
-            // SELECT ... INTERSECT SELECT ...
+                union_modes.push_back(SelectUnionMode::INTERSECT_DISTINCT);
             else
-                union_modes.push_back(ASTSelectWithUnionQuery::Mode::INTERSECT_UNSPECIFIED);
+                union_modes.push_back(SelectUnionMode::INTERSECT_DEFAULT);
             return true;
         }
         return false;
@@ -880,12 +860,12 @@ bool ParserDateOperatorExpression::parseImpl(Pos & pos, ASTPtr & node, Expected 
     return true;
 }
 
-bool ParserTimestampOperatorExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserTimestampDatetimeOperatorExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     auto begin = pos;
 
-    /// If no TIMESTAMP keyword, go to the nested parser.
-    if (!ParserKeyword("TIMESTAMP").ignore(pos, expected))
+    /// If no TIMESTAMP/DATETIME keyword, go to the nested parser.
+    if (!ParserKeyword("TIMESTAMP").ignore(pos, expected) && !ParserKeyword("DATETIME").ignore(pos, expected))
         return next_parser.parse(pos, node, expected);
 
     ASTPtr expr;
@@ -907,6 +887,41 @@ bool ParserTimestampOperatorExpression::parseImpl(Pos & pos, ASTPtr & node, Expe
     function->children.push_back(exp_list);
 
     exp_list->children.push_back(expr);
+
+    node = function;
+    return true;
+}
+
+bool ParserTimeOperatorExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+{
+    auto begin = pos;
+
+    /// If no TIME keyword, go to the nested parser.
+    if (!ParserKeyword("TIME").ignore(pos, expected))
+        return next_parser.parse(pos, node, expected);
+
+    ASTPtr expr;
+    if (!ParserStringLiteral().parse(pos, expr, expected))
+    {
+        pos = begin;
+        return next_parser.parse(pos, node, expected);
+    }
+
+    /// the function corresponding to the operator
+    auto function = std::make_shared<ASTFunction>();
+
+    /// function arguments
+    auto exp_list = std::make_shared<ASTExpressionList>();
+
+    /// the first argument of the function is the previous element, the second is the next one
+    function->name = "toTimeType";
+    function->arguments = exp_list;
+    function->children.push_back(exp_list);
+
+    exp_list->children.push_back(expr);
+
+    /// the second argument of toTimeType is scale and it is set to 0
+    exp_list->children.push_back(std::make_shared<ASTLiteral>(UInt8(0)));
 
     node = function;
     return true;

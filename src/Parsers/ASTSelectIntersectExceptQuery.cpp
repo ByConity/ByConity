@@ -39,25 +39,12 @@ void ASTSelectIntersectExceptQuery::formatImpl(const FormatSettings & settings, 
 {
     std::string indent_str = settings.one_line ? "" : std::string(4 * frame.indent, ' ');
 
-    auto operator_to_str = [&](auto op)
-    {
-        if (op == Operator::INTERSECT_ALL)
-            return "INTERSECT ALL";
-        else if (op == Operator::INTERSECT_DISTINCT)
-            return "INTERSECT DISTINCT";
-        else if (op == Operator::EXCEPT_ALL)
-            return "EXCEPT ALL";
-        else if (op == Operator::EXCEPT_DISTINCT)
-            return "EXCEPT DISTINCT";
-        return "";
-    };
-
     for (ASTs::const_iterator it = children.begin(); it != children.end(); ++it)
     {
         if (it != children.begin())
         {
             settings.ostr << settings.nl_or_ws << indent_str << (settings.hilite ? hilite_keyword : "")
-                          << operator_to_str(final_operator)
+                          << fromOperator(final_operator)
                           << (settings.hilite ? hilite_none : "")
                           << settings.nl_or_ws;
         }
@@ -112,4 +99,20 @@ ASTPtr ASTSelectIntersectExceptQuery::deserialize(ReadBuffer & buf)
     return select_intersect_except;
 }
 
+const char * ASTSelectIntersectExceptQuery::fromOperator(Operator op)
+{
+    switch (op)
+    {
+        case Operator::EXCEPT_ALL:
+            return "EXCEPT ALL";
+        case Operator::EXCEPT_DISTINCT:
+            return "EXCEPT DISTINCT";
+        case Operator::INTERSECT_ALL:
+            return "INTERSECT ALL";
+        case Operator::INTERSECT_DISTINCT:
+            return "INTERSECT DISTINCT";
+        default:
+            return "";
+    }
+}
 }

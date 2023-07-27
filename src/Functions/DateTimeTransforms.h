@@ -677,6 +677,33 @@ struct ToMonthImpl
     using FactorTransform = ToStartOfYearImpl;
 };
 
+struct ToYearMonthImpl
+{
+    static constexpr auto name = "toYearMonth";
+
+    static ToMonthImpl toMonth;
+    static ToYearImpl toYear;
+
+    static inline UInt32 execute(Int64 t, const DateLUTImpl & time_zone)
+    {
+        return toYear.execute(t, time_zone) * 100 + toMonth.execute(t, time_zone);
+    }
+    static inline UInt32 execute(UInt32 t, const DateLUTImpl & time_zone)
+    {
+        return toYear.execute(t, time_zone) * 100 + toMonth.execute(t, time_zone);
+    }
+    static inline UInt32 execute(Int32 d, const DateLUTImpl & time_zone)
+    {
+        return toYear.execute(d, time_zone) * 100 + toMonth.execute(d, time_zone);
+    }
+    static inline UInt32 execute(UInt16 d, const DateLUTImpl & time_zone)
+    {
+        return toYear.execute(d, time_zone) * 100 + toMonth.execute(d, time_zone);
+    }
+
+    using FactorTransform = ZeroTransform; // Todo: check this
+};
+
 struct ToDayOfMonthImpl
 {
     static constexpr auto name = "toDayOfMonth";
@@ -705,22 +732,28 @@ struct ToDayOfWeekImpl
 {
     static constexpr auto name = "toDayOfWeek";
 
-    static inline UInt8 execute(Int64 t, const DateLUTImpl & time_zone)
+    static inline UInt8 execute(Int64 t, UInt8 mode, const DateLUTImpl & time_zone) { return time_zone.toDayOfWeek(t, mode); }
+    static inline UInt8 execute(UInt32 t, UInt8 mode, const DateLUTImpl & time_zone) { return time_zone.toDayOfWeek(t, mode); }
+    static inline UInt8 execute(Int32 d, UInt8 mode, const DateLUTImpl & time_zone)
     {
-        return time_zone.toDayOfWeek(t);
+        return time_zone.toDayOfWeek(ExtendedDayNum(d), mode);
     }
-    static inline UInt8 execute(UInt32 t, const DateLUTImpl & time_zone)
+    static inline UInt8 execute(UInt16 d, UInt8 mode, const DateLUTImpl & time_zone) { return time_zone.toDayOfWeek(DayNum(d), mode); }
+
+    using FactorTransform = ToMondayImpl;
+};
+
+struct ToDayOfWeekMySQLImpl
+{
+    static constexpr auto name = "toDayOfWeekMySQL";
+
+    static inline UInt8 execute(Int64 t, UInt8 mode, const DateLUTImpl & time_zone) { return time_zone.toDayOfWeek(t, mode); }
+    static inline UInt8 execute(UInt32 t, UInt8 mode, const DateLUTImpl & time_zone) { return time_zone.toDayOfWeek(t, mode); }
+    static inline UInt8 execute(Int32 d, UInt8 mode, const DateLUTImpl & time_zone)
     {
-        return time_zone.toDayOfWeek(t);
+        return time_zone.toDayOfWeek(ExtendedDayNum(d), mode);
     }
-    static inline UInt8 execute(Int32 d, const DateLUTImpl & time_zone)
-    {
-        return time_zone.toDayOfWeek(ExtendedDayNum(d));
-    }
-    static inline UInt8 execute(UInt16 d, const DateLUTImpl & time_zone)
-    {
-        return time_zone.toDayOfWeek(DayNum(d));
-    }
+    static inline UInt8 execute(UInt16 d, UInt8 mode, const DateLUTImpl & time_zone) { return time_zone.toDayOfWeek(DayNum(d), mode); }
 
     using FactorTransform = ToMondayImpl;
 };
@@ -865,6 +898,203 @@ struct ToSecondImpl
     }
 
     using FactorTransform = ToStartOfMinuteImpl;
+};
+
+struct ToMinuteSecondImpl
+{
+    static constexpr auto name = "toMinuteSecond";
+
+    static ToMinuteImpl toMinute;
+    static ToSecondImpl toSecond;
+
+    static inline UInt16 execute(Int64 t, const DateLUTImpl & time_zone)
+    {
+        return toMinute.execute(t, time_zone) * 100 + toSecond.execute(t, time_zone);
+    }
+    static inline UInt16 execute(UInt32 t, const DateLUTImpl & time_zone)
+    {
+        return toMinute.execute(t, time_zone) * 100 + toSecond.execute(t, time_zone);
+    }
+    static inline UInt16 execute(Int32 t, const DateLUTImpl & time_zone)
+    {
+        return toMinute.execute(t, time_zone) * 100 + toSecond.execute(t, time_zone);
+    }
+    static inline UInt16 execute(UInt16 t, const DateLUTImpl & time_zone)
+    {
+        return toMinute.execute(t, time_zone) * 100 + toSecond.execute(t, time_zone);
+    }
+    static inline UInt16 executeTime(Decimal64 t, UInt32 scale_multiplier, const DateLUTImpl & date_lut)
+    {
+        return toMinute.executeTime(t, scale_multiplier, date_lut) * 100 + toSecond.executeTime(t, scale_multiplier, date_lut);
+    }
+
+    using FactorTransform = ZeroTransform; // Todo: check this
+};
+
+struct ToHourMinuteImpl
+{
+    static constexpr auto name = "toHourMinute";
+
+    static ToHourImpl toHour;
+    static ToMinuteImpl toMinute;
+
+    static inline UInt16 execute(Int64 t, const DateLUTImpl & time_zone)
+    {
+        return toHour.execute(t, time_zone) * 100 + toMinute.execute(t, time_zone);
+    }
+    static inline UInt16 execute(UInt32 t, const DateLUTImpl & time_zone)
+    {
+        return toHour.execute(t, time_zone) * 100 + toMinute.execute(t, time_zone);
+    }
+    static inline UInt16 execute(Int32 t, const DateLUTImpl & time_zone)
+    {
+        return toHour.execute(t, time_zone) * 100 + toMinute.execute(t, time_zone);
+    }
+    static inline UInt16 execute(UInt16 t, const DateLUTImpl & time_zone)
+    {
+        return toHour.execute(t, time_zone) * 100 + toMinute.execute(t, time_zone);
+    }
+    static inline UInt16 executeTime(Decimal64 t, UInt32 scale_multiplier, const DateLUTImpl & date_lut)
+    {
+        return toHour.executeTime(t, scale_multiplier, date_lut) * 100 + toMinute.executeTime(t, scale_multiplier, date_lut);
+    }
+
+    using FactorTransform = ZeroTransform; // Todo: check this
+};
+
+struct ToHourSecondImpl
+{
+    static constexpr auto name = "toHourSecond";
+
+    static ToHourImpl toHour;
+    static ToMinuteSecondImpl toMinuteSecond;
+
+    static inline UInt32 execute(Int64 t, const DateLUTImpl & time_zone)
+    {
+        return toHour.execute(t, time_zone) * 10000 + toMinuteSecond.execute(t, time_zone);
+    }
+    static inline UInt32 execute(UInt32 t, const DateLUTImpl & time_zone)
+    {
+        return toHour.execute(t, time_zone) * 10000 + toMinuteSecond.execute(t, time_zone);
+    }
+    static inline UInt32 execute(Int32 d, const DateLUTImpl & time_zone)
+    {
+        return toHour.execute(d, time_zone) * 10000 + toMinuteSecond.execute(d, time_zone);
+    }
+    static inline UInt32 execute(UInt16 d, const DateLUTImpl & time_zone)
+    {
+        return toHour.execute(d, time_zone) * 10000 + toMinuteSecond.execute(d, time_zone);
+    }
+    static inline UInt32 executeTime(Decimal64 t, UInt32 scale_multiplier, const DateLUTImpl & date_lut)
+    {
+        return toHour.executeTime(t, scale_multiplier, date_lut) * 10000 + toMinuteSecond.executeTime(t, scale_multiplier, date_lut);
+    }
+
+    using FactorTransform = ZeroTransform; // Todo: check this
+};
+
+struct ToDaySecondImpl
+{
+    static constexpr auto name = "toDaySecond";
+
+    static ToDayOfMonthImpl toDay;
+    static ToHourSecondImpl toHourSecond;
+
+    static inline UInt32 execute(Int64 t, const DateLUTImpl & time_zone)
+    {
+        return toDay.execute(t, time_zone) * 1000000 + toHourSecond.execute(t, time_zone);
+    }
+    static inline UInt32 execute(UInt32 t, const DateLUTImpl & time_zone)
+    {
+        return toDay.execute(t, time_zone) * 1000000 + toHourSecond.execute(t, time_zone);
+    }
+    static inline UInt32 execute(Int32 d, const DateLUTImpl & time_zone)
+    {
+        return toDay.execute(d, time_zone) * 1000000 + toHourSecond.execute(d, time_zone);
+    }
+    static inline UInt32 execute(UInt16 d, const DateLUTImpl & time_zone)
+    {
+        return toDay.execute(d, time_zone) * 1000000 + toHourSecond.execute(d, time_zone);
+    }
+
+    /* Commented because ToDayOfMonth does not have executeTime
+    static inline UInt32 executeTime(Decimal64 t, UInt32 scale_multiplier, const DateLUTImpl & date_lut)
+    {
+        return toHour.executeTime(t, scale_multiplier, date_lut) * 10000 + toMinuteSecond.executeTime(t, scale_multiplier, date_lut);
+    }
+    */
+
+    using FactorTransform = ZeroTransform; // Todo: check this
+};
+
+struct ToDayMinuteImpl
+{
+    static constexpr auto name = "toDayMinute";
+
+    static ToDayOfMonthImpl toDay;
+    static ToHourMinuteImpl toHourMinute;
+
+    static inline UInt32 execute(Int64 t, const DateLUTImpl & time_zone)
+    {
+        return toDay.execute(t, time_zone) * 10000 + toHourMinute.execute(t, time_zone);
+    }
+    static inline UInt32 execute(UInt32 t, const DateLUTImpl & time_zone)
+    {
+        return toDay.execute(t, time_zone) * 10000 + toHourMinute.execute(t, time_zone);
+    }
+    static inline UInt32 execute(Int32 d, const DateLUTImpl & time_zone)
+    {
+        return toDay.execute(d, time_zone) * 10000 + toHourMinute.execute(d, time_zone);
+    }
+    static inline UInt32 execute(UInt16 d, const DateLUTImpl & time_zone)
+    {
+        return toDay.execute(d, time_zone) * 10000 + toHourMinute.execute(d, time_zone);
+    }
+
+    /* Commented because ToDayOfMonth does not have executeTime
+    // Todo: check return type
+    static inline UInt8 executeTime(Decimal64 t, UInt32 scale_multiplier, const DateLUTImpl & date_lut)
+    {
+        return toHour.executeTime(t, scale_multiplier, date_lut) * 10000 + toMinuteSecond.executeTime(t, scale_multiplier, date_lut);
+    }
+    */
+
+    using FactorTransform = ZeroTransform; // Todo: check this
+};
+
+struct ToDayHourImpl
+{
+    static constexpr auto name = "toDayHour";
+
+    static ToDayOfMonthImpl toDay;
+    static ToHourImpl toHour;
+
+    static inline UInt16 execute(Int64 t, const DateLUTImpl & time_zone)
+    {
+        return toDay.execute(t, time_zone) * 100 + toHour.execute(t, time_zone);
+    }
+    static inline UInt16 execute(UInt32 t, const DateLUTImpl & time_zone)
+    {
+        return toDay.execute(t, time_zone) * 100 + toHour.execute(t, time_zone);
+    }
+    static inline UInt16 execute(Int32 t, const DateLUTImpl & time_zone)
+    {
+        return toDay.execute(t, time_zone) * 100 + toHour.execute(t, time_zone);
+    }
+    static inline UInt16 execute(UInt16 t, const DateLUTImpl & time_zone)
+    {
+        return toDay.execute(t, time_zone) * 100 + toHour.execute(t, time_zone);
+    }
+
+    /* Commented because ToDayOfMonth does not have executeTime
+    // Todo: check return type
+    static inline UInt8 executeTime(Decimal64 t, UInt32 scale_multiplier, const DateLUTImpl & date_lut)
+    {
+        return toHour.executeTime(t, scale_multiplier, date_lut) * 10000 + toMinuteSecond.executeTime(t, scale_multiplier, date_lut);
+    }
+    */
+
+    using FactorTransform = ZeroTransform; // Todo: check this
 };
 
 struct ToISOYearImpl

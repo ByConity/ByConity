@@ -9,7 +9,9 @@ using FunctionAddDays = FunctionDateOrDateTimeAddInterval<AddDaysImpl>;
 
 void registerFunctionAddDays(FunctionFactory & factory)
 {
-    factory.registerFunction<FunctionAddDays>();
+    factory.registerFunction<FunctionAddDays>(FunctionFactory::CaseInsensitive);
+    factory.registerAlias("date_add", AddDaysImpl::name, FunctionFactory::CaseInsensitive);
+    factory.registerAlias("adddate", AddDaysImpl::name, FunctionFactory::CaseInsensitive);
 }
 
 }

@@ -122,6 +122,7 @@ std::vector<RulePtr> Rules::pushDownLimitRules()
         std::make_shared<PushLimitThroughUnion>(),
         std::make_shared<PushdownLimitIntoWindow>(),
         std::make_shared<PushTopNThroughProjection>(),
+        std::make_shared<PushLimitIntoSorting>()
     };
 }
 

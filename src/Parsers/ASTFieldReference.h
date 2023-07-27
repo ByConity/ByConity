@@ -26,6 +26,7 @@ class ASTFieldReference : public ASTWithAlias
 {
 public:
     size_t field_index;
+    String field_name;
 
     explicit ASTFieldReference(size_t field_index_): field_index(field_index_)
     {}
@@ -36,6 +37,7 @@ public:
 
     ASTPtr clone() const override;
 
+    void setFieldName(String field_name_) { field_name = field_name_; }
 protected:
     void formatImplWithoutAlias(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
     void appendColumnNameImpl(WriteBuffer & ostr) const override;

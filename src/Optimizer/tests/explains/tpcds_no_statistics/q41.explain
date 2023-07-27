@@ -2,11 +2,13 @@ Projection Est. 100 rows
 │     Expressions: [i_product_name]
 └─ Limit Est. 100 rows
    │     Limit: 100
-   └─ Sorting Est. ? rows
+   └─ Sorting Est. 100 rows
       │     Order by: {i_product_name asc}
+      │     Limit: 100
       └─ Gather Exchange Est. ? rows
-         └─ Sorting Est. ? rows
+         └─ Sorting Est. 100 rows
             │     Order by: {i_product_name asc}
+            │     Limit: 100
             └─ MergingAggregated Est. ? rows
                └─ Repartition Exchange Est. ? rows
                   │     Partition by: {i_product_name}

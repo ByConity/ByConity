@@ -126,6 +126,8 @@ public:
 void registerFunctionNow(FunctionFactory & factory)
 {
     factory.registerFunction<NowOverloadResolver>(FunctionFactory::CaseInsensitive);
+    factory.registerAlias("LOCALTIMESTAMP", "now", FunctionFactory::CaseInsensitive);
+    factory.registerAlias("sysdate", "now", FunctionFactory::CaseInsensitive);
 }
 
 }

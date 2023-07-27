@@ -100,6 +100,7 @@
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/InterpreterSelectQueryUseOptimizer.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
+#include <Interpreters/InterpreterSelectIntersectExceptQuery.h>
 #include <Interpreters/InterpreterSetQuery.h>
 #include <Interpreters/InterpreterSetRoleQuery.h>
 #include <Interpreters/InterpreterShowAccessEntitiesQuery.h>
@@ -192,7 +193,7 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
         if (QueryUseOptimizerChecker::check(query, context)) {
             return std::make_unique<InterpreterSelectQueryUseOptimizer>(query, context, options);
         }
-        throw Exception("Intersect & except requires optimizer enabled.(SET enable_optimizer=1)", ErrorCodes::NOT_IMPLEMENTED);
+        return std::make_unique<InterpreterSelectIntersectExceptQuery>(query, context, options);
     }
     else if (query->as<ASTInsertQuery>())
     {

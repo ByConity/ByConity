@@ -16,7 +16,7 @@ SELECT 'num parts', count(1) FROM system.cnch_parts WHERE database=currentDataba
 
 SELECT '# test rollback of multi-block txn';
 -- set k1 to 'kkkkk' so that the total key size will exceed max_string_size_for_unique_key for the last block
-INSERT INTO u10103_mb SELECT 'kkkkk', toString(number), number FROM system.numbers LIMIT 10240; -- { serverError 651 }
+INSERT INTO u10103_mb SELECT 'kkkkk', toString(number), number FROM system.numbers LIMIT 10240; -- { serverError 7200 }
 SELECT count(1), sum(v) FROM u10103_mb;
 SELECT 'num parts', count(1) FROM system.cnch_parts WHERE database=currentDatabase() and table='u10103_mb' and active;
 

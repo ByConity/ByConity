@@ -71,12 +71,11 @@ namespace
 
         ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
         {
-            // TODO: move conversion to Parser if possible
             ColumnPtr col = arguments[0].column;
             if (WhichDataType(col->getDataType()).isStringOrFixedString())
             {
                 auto to_int = FunctionFactory::instance().get("toInt64", context);
-                col = to_int->build(arguments)->execute(arguments, arguments[0].type, input_rows_count);
+                col = to_int->build(arguments)->execute(arguments, std::make_shared<DataTypeInt64>(), input_rows_count);
             }
             const TypeIndex & col_type = col->getDataType();
 
@@ -146,23 +145,13 @@ namespace
     public:
         static constexpr auto name = "to_days";
 
-        static FunctionPtr create(ContextPtr)
-        {
-            return std::make_shared<FunctionToDaysImpl>();
-        }
+        explicit FunctionToDaysImpl(ContextPtr context_) : context(context_) { }
 
-        String getName() const override
-        {
-            return name;
-        }
-        bool useDefaultImplementationForConstants() const override
-        {
-            return true;
-        }
-        size_t getNumberOfArguments() const override
-        {
-            return 1;
-        }
+        static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionToDaysImpl>(context); }
+
+        String getName() const override { return name; }
+        bool useDefaultImplementationForConstants() const override { return true; }
+        size_t getNumberOfArguments() const override { return 1; }
 
         DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
         {
@@ -176,17 +165,32 @@ namespace
             WhichDataType which_first(arguments[0]->getTypeId());
 
             /// TODO: support Time type
-            if (!which_first.isDateOrDate32() && !which_first.isDateTime() && !which_first.isDateTime64())
-                throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "The argument of function {} must be Date or DateTime", getName());
+            if (!which_first.isDateOrDate32() && !which_first.isDateTime() && !which_first.isDateTime64()
+                && !which_first.isStringOrFixedString())
+                throw Exception(
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "The argument of function {} must be Date, or DateTime or String", getName());
 
             return std::make_shared<DataTypeInt32>();
         }
 
-        ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t) const override
+        ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
         {
             ColumnPtr col = arguments[0].column;
-            const DataTypePtr & from_type = arguments[0].type;
+            DataTypePtr from_type = arguments[0].type;
             WhichDataType which(from_type);
+
+            if (which.isStringOrFixedString())
+            {
+                auto to_datetime = FunctionFactory::instance().get("toDateTime64", context);
+                const auto scale_type = std::make_shared<DataTypeUInt8>();
+                const auto scale_col = scale_type->createColumnConst(input_rows_count, Field(0));
+                ColumnWithTypeAndName scale_arg{std::move(scale_col), std::move(scale_type), "scale"};
+                ColumnsWithTypeAndName args{arguments[0], std::move(scale_arg)};
+                col = to_datetime->build(args)->execute(args, std::make_shared<DataTypeDateTime64>(0), input_rows_count);
+                from_type = std::make_shared<DataTypeDateTime64>(0);
+                which.idx = TypeIndex::DateTime64;
+            }
+
 
             MutableColumnPtr res_ptr = ColumnVector<Int32>::create();
             auto & res_data = dynamic_cast<ColumnVector<Int32> *>(res_ptr.get())->getData();
@@ -194,7 +198,10 @@ namespace
             if (which.isDateTime64())
             {
                 /// DateTime64 is backed by Decimal rather than pure integer, we need to take care of the scale.
-                auto scale = dynamic_cast<const DataTypeDateTime64 *>(from_type.get())->getScale();
+                auto type = dynamic_cast<const DataTypeDateTime64 *>(from_type.get());
+                chassert(type != nullptr);
+                auto scale = type->getScale();
+                // coverity[var_deref_model]
                 const auto transform = TransformDateTime64<ToDate32Impl>(scale);
                 executeType<ColumnDecimal<DateTime64>>(res_data, *col, transform);
             }
@@ -205,12 +212,15 @@ namespace
             else if (which.isDateTime())
                 executeType<ColumnVector<UInt32>>(res_data, *col, ToDate32Impl{});
             else
-                throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "The argument of function {} must be Date or DateTime", getName());
+                throw Exception(
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "The argument of function {} must be Date, DateTime or String", getName());
 
             return res_ptr;
         }
 
     private:
+        ContextPtr context;
+
         template <typename ColType, typename Transform>
         void executeType(PaddedPODArray<Int32> & res_data, const IColumn & src, Transform transform) const
         {

@@ -30,6 +30,8 @@ enum class QueueResultStatus : uint8_t
     QueueTimeOut
 };
 
+const char * queueResultStatusToString(QueueResultStatus status);
+
 class QueueManager;
 struct QueueInfo
 {
@@ -129,7 +131,7 @@ public:
 
 private:
     bthread::Mutex mutex;
-    size_t queue_size{100};
+    size_t query_queue_size{100};
     std::atomic<size_t> vw_parallelize_size{20};
     std::atomic<size_t> batch_size{2};
     std::atomic<bool> is_stop{false};

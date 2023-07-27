@@ -69,6 +69,7 @@ public:
         for (const auto & item : table_step->getColumnAlias())
         {
             auto column_reference = std::make_shared<ASTTableColumnReference>(table_step->getStorage().get(), item.first);
+            column_reference->setStep(table_step);
             addSymbolExpressionMapping(item.second, column_reference);
         }
         return Void{};

@@ -392,6 +392,8 @@ struct WhichDataType
     constexpr bool isFloat64() const { return idx == TypeIndex::Float64; }
     constexpr bool isFloat() const { return isFloat32() || isFloat64(); }
 
+    constexpr bool isNumber() const { return isInt() || isUInt() || isFloat() || isDecimal(); }
+
     constexpr bool isEnum8() const { return idx == TypeIndex::Enum8; }
     constexpr bool isEnum16() const { return idx == TypeIndex::Enum16; }
     constexpr bool isEnum() const { return isEnum8() || isEnum16(); }
@@ -539,6 +541,13 @@ template <typename T>
 inline bool isStringOrFixedString(const T & data_type)
 {
     return WhichDataType(data_type).isStringOrFixedString();
+}
+
+template <typename T>
+inline bool isNumberOrString(const T & data_type)
+{
+    WhichDataType which(data_type);
+    return which.isNumber() || which.isStringOrFixedString();
 }
 
 template <typename T>

@@ -23,6 +23,8 @@ namespace DB
 {
 class ConstHashAST;
 
+template <typename T>
+using enable_if_ast = typename std::enable_if_t<std::is_same_v<T, ASTPtr> || std::is_same_v<T, ConstASTPtr>, bool>;
 class PredicateUtils
 {
 public:
@@ -81,13 +83,19 @@ public:
      */
     static ConstASTPtr distributePredicate(ConstASTPtr or_predicate, ContextMutablePtr & context);
 
-    static ASTPtr combineConjuncts(const std::vector<ConstASTPtr> & predicates);
-    static ASTPtr combineDisjuncts(const std::vector<ConstASTPtr> & predicates);
-    static ASTPtr combineDisjunctsWithDefault(const std::vector<ConstASTPtr> & predicates, const ASTPtr & default_ast);
-    static ASTPtr combinePredicates(const String & fun, std::vector<ConstASTPtr> predicates);
+    template <typename T, enable_if_ast<T> = true>
+    static ASTPtr combineConjuncts(const std::vector<T> & predicates);
+    template <typename T, enable_if_ast<T> = true>
+    static ASTPtr combineDisjuncts(const std::vector<T> & predicates);
+    template <typename T, enable_if_ast<T> = true>
+    static ASTPtr combineDisjunctsWithDefault(const std::vector<T> & predicates, const ASTPtr & default_ast);
+    template <typename T, enable_if_ast<T> = true>
+    static ASTPtr combinePredicates(const String & fun, std::vector<T> predicates);
 
-    static bool isTruePredicate(const ConstASTPtr & predicate);
-    static bool isFalsePredicate(const ConstASTPtr & predicate);
+    template <typename T, enable_if_ast<T> = true>
+    static bool isTruePredicate(const T & predicate);
+    template <typename T, enable_if_ast<T> = true>
+    static bool isFalsePredicate(const T & predicate);
 
     static bool containsAll(const Strings & partition_symbols, const std::set<String> & unique_symbols);
 

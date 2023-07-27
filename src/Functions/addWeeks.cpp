@@ -9,7 +9,7 @@ using FunctionAddWeeks = FunctionDateOrDateTimeAddInterval<AddWeeksImpl>;
 
 void registerFunctionAddWeeks(FunctionFactory & factory)
 {
-    factory.registerFunction<FunctionAddWeeks>();
+    factory.registerFunction<FunctionAddWeeks>(FunctionFactory::CaseInsensitive);
 }
 
 }

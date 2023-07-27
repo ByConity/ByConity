@@ -307,7 +307,7 @@ TransformResult MergePredicatesUsingDomainTranslator::transformImpl(PlanNodePtr 
     if (domain_translator.isIgnored() || predicate->getColumnName() == rewritten.remaining_expression->getColumnName())
         return {};
 
-    ASTPtr combine_extraction_result = PredicateUtils::combineConjuncts({
+    ASTPtr combine_extraction_result = PredicateUtils::combineConjuncts(ASTs{
         domain_translator.toPredicate(rewritten.tuple_domain),
         rewritten.remaining_expression});
 

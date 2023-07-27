@@ -6,6 +6,8 @@
 #include <DataTypes/DataTypeDate32.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDateTime64.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeTime.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
@@ -100,16 +102,16 @@ namespace
             if (is_year_month_day_variant)
             {
                 FunctionArgumentDescriptors args{
-                    {mandatory_argument_names_year_month_day[0], &isNumber<IDataType>, nullptr, "Number"},
-                    {mandatory_argument_names_year_month_day[1], &isNumber<IDataType>, nullptr, "Number"},
-                    {mandatory_argument_names_year_month_day[2], &isNumber<IDataType>, nullptr, "Number"}};
+                    {mandatory_argument_names_year_month_day[0], &isNumberOrString<IDataType>, nullptr, "Number or String"},
+                    {mandatory_argument_names_year_month_day[1], &isNumberOrString<IDataType>, nullptr, "Number or String"},
+                    {mandatory_argument_names_year_month_day[2], &isNumberOrString<IDataType>, nullptr, "Number or String"}};
                 validateFunctionArgumentTypes(*this, arguments, args);
             }
             else
             {
                 FunctionArgumentDescriptors args{
-                    {mandatory_argument_names_year_dayofyear[0], &isNumber<IDataType>, nullptr, "Number"},
-                    {mandatory_argument_names_year_dayofyear[1], &isNumber<IDataType>, nullptr, "Number"}};
+                    {mandatory_argument_names_year_dayofyear[0], &isNumberOrString<IDataType>, nullptr, "Number or String"},
+                    {mandatory_argument_names_year_dayofyear[1], &isNumberOrString<IDataType>, nullptr, "Number or String"}};
                 validateFunctionArgumentTypes(*this, arguments, args);
             }
 
@@ -492,6 +494,72 @@ namespace
             return precision;
         }
     };
+
+    class FunctionMakeTime : public FunctionWithNumericParamsBase
+    {
+    protected:
+        static constexpr std::array mandatory_argument_names = {"hour", "minute", "second"};
+
+        template <typename T>
+        static Int64 Time(T hour, T minute, T second, const DateLUTImpl & lut)
+        {
+            if unlikely (
+                std::isnan(hour) || std::isnan(minute) || std::isnan(second) || hour < 0 || minute < 0 || second < 0 || hour > 23
+                || minute > 59 || second > 59)
+            {
+                return lut.makeTime(0, 0, 0);
+            }
+            return lut.makeTime(static_cast<UInt8>(hour), static_cast<UInt8>(minute), static_cast<UInt8>(second));
+        }
+
+    public:
+        static constexpr auto name = "makeTime";
+
+        static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionMakeTime>(); }
+
+        String getName() const override { return name; }
+
+        DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
+        {
+            FunctionArgumentDescriptors mandatory_args{
+                {mandatory_argument_names[0], &isNumberOrString<IDataType>, nullptr, "Number or String"},
+                {mandatory_argument_names[1], &isNumberOrString<IDataType>, nullptr, "Number or String"},
+                {mandatory_argument_names[2], &isNumberOrString<IDataType>, nullptr, "Number or String"}};
+
+            FunctionArgumentDescriptors optional_args{};
+
+            validateFunctionArgumentTypes(*this, arguments, mandatory_args, optional_args);
+
+            return std::make_shared<DataTypeTime>(0);
+        }
+
+        ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
+        {
+            Columns converted_arguments = convertMandatoryArguments(arguments, mandatory_argument_names);
+
+            auto res_column = ColumnTime::create(input_rows_count, 0);
+            auto & result_data = res_column->getData();
+
+            const auto & hour_data = typeid_cast<const ColumnFloat32 &>(*converted_arguments[0]).getData();
+            const auto & minute_data = typeid_cast<const ColumnFloat32 &>(*converted_arguments[1]).getData();
+            const auto & second_data = typeid_cast<const ColumnFloat32 &>(*converted_arguments[2]).getData();
+
+            const auto & date_lut = DateLUT::instance();
+
+            for (size_t i = 0; i < input_rows_count; ++i)
+            {
+                const auto hour = hour_data[i];
+                const auto minute = minute_data[i];
+                const auto second = second_data[i];
+
+                auto time = Time(hour, minute, second, date_lut);
+
+                result_data[i] = DecimalUtils::decimalFromComponents<Decimal64>(time, 0, 0);
+            }
+
+            return res_column;
+        }
+    };
 }
 
 void registerFunctionMakeDate(FunctionFactory & factory)
@@ -500,6 +568,6 @@ void registerFunctionMakeDate(FunctionFactory & factory)
     factory.registerFunction<FunctionMakeDate<MakeDate32Traits>>(FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionMakeDateTime>(FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionMakeDateTime64>(FunctionFactory::CaseInsensitive);
+    factory.registerFunction<FunctionMakeTime>(FunctionFactory::CaseInsensitive);
 }
-
 }

@@ -31,19 +31,19 @@ bool MultipleDistinctAggregationToMarkDistinct::hasNoDistinctWithFilterOrMask(co
 
 bool MultipleDistinctAggregationToMarkDistinct::hasMultipleDistincts(const AggregatingStep & step)
 {
-    std::set<String> multiple_distinct_aggs;
+    std::set<Names> multiple_distinct_aggs;
     const AggregateDescriptions & agg_descs = step.getAggregates();
     for (const auto & agg_desc : agg_descs)
     {
         if (distinct_func.contains(Poco::toLower(agg_desc.function->getName())))
-            multiple_distinct_aggs.emplace(agg_desc.function->getName());
+            multiple_distinct_aggs.emplace(agg_desc.argument_names);
     }
     return multiple_distinct_aggs.size() > 1;
 }
 
 bool MultipleDistinctAggregationToMarkDistinct::hasMixedDistinctAndNonDistincts(const AggregatingStep & step)
 {
-    int distinct_aggs = 0;
+    size_t distinct_aggs = 0;
     const AggregateDescriptions & agg_descs = step.getAggregates();
     for (const auto & agg_desc : agg_descs)
     {
@@ -153,5 +153,4 @@ TransformResult MultipleDistinctAggregationToMarkDistinct::transformImpl(PlanNod
     auto count_agg_node = PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(count_agg_step), {child});
     return count_agg_node;
 }
-
 }

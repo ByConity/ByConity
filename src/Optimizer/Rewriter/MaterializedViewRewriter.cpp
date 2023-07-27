@@ -17,26 +17,36 @@
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <Analyzers/TypeAnalyzer.h>
+#include <Core/SettingsEnums.h>
 #include <Optimizer/CardinalityEstimate/TableScanEstimator.h>
 #include <Optimizer/JoinGraph.h>
-#include <Optimizer/OptimizerMetrics.h>
 #include <Optimizer/MaterializedView/MaterializeViewChecker.h>
 #include <Optimizer/MaterializedView/MaterializedViewMemoryCache.h>
 #include <Optimizer/MaterializedView/MaterializedViewStructure.h>
+#include <Optimizer/OptimizerMetrics.h>
 #include <Optimizer/PredicateUtils.h>
+#include <Optimizer/SelectQueryInfoHelper.h>
 #include <Optimizer/SimpleExpressionRewriter.h>
 #include <Optimizer/SymbolsExtractor.h>
+#include <Parsers/ASTExpressionList.h>
+#include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTTableColumnReference.h>
 #include <QueryPlan/SimplePlanRewriter.h>
 #include <QueryPlan/SimplePlanVisitor.h>
 #include <QueryPlan/TableScanStep.h>
 #include <Storages/IStorage.h>
+#include <Storages/SelectQueryInfo.h>
 #include <Storages/StorageDistributed.h>
 #include <common/logger_useful.h>
 #include <Optimizer/EqualityASTMap.h>
 
 #include <map>
+#include <memory>
+#include <optional>
 #include <utility>
+#include <fmt/core.h>
+#include <fmt/format.h>
 
 namespace DB
 {
@@ -181,6 +191,197 @@ public:
     {
     }
 };
+
+class ColumnReferenceRewriter : public SimpleExpressionRewriter<const Void>
+{
+public:
+    ASTPtr visitASTTableColumnReference(ASTPtr & node, const Void &) override
+    {
+        auto & column_ref = node->as<ASTTableColumnReference &>();
+        if (!belonging.has_value())
+            belonging = column_ref.step;
+        else if (*belonging != column_ref.step)
+            belonging = nullptr;
+        return std::make_shared<ASTIdentifier>(column_ref.column_name);
+    }
+
+    std::optional<const TableScanStep *> belonging;
+};
+
+std::tuple<const TableScanStep *, ASTPtr>
+rewritePredicateForPartitionCheck(const ConstASTPtr & expression, const SymbolTransformMap & query_transform_map)
+{
+    ColumnReferenceRewriter rewriter;
+    auto rewritten = ASTVisitorUtil::accept(query_transform_map.inlineReferences(expression), rewriter, {});
+    return {rewriter.belonging.has_value() ? *rewriter.belonging : nullptr, rewritten};
+}
+
+/// Return whether the first is a subset of the second
+bool subset(const std::unordered_set<String> & first, const std::unordered_set<String> & second)
+{
+    if (first.empty() && !second.empty())
+        return false;
+
+    for (const auto & element : first)
+    {
+        if (!second.count(element))
+            return false;
+    }
+
+    return true;
+}
+
+bool checkMVConsistencyByPartition(
+    const std::unordered_map<TableInputRef, const TableScanStep *, TableInputRefHash, TableInputRefEqual> & query_table_scans,
+    const ConstASTs & query_predicates,
+    const SymbolTransformMap & query_transform_map,
+    const StorageID & mv_target_table,
+    ContextPtr context,
+    const std::function<void(const String &)> & add_failure_message,
+    Poco::Logger * logger)
+{
+    // inline query predicates & determine belonging base table
+    std::unordered_map<const TableScanStep *, ASTs> predicates_by_table;
+    for (const auto & pred : query_predicates)
+    {
+        auto [step, new_pred] = rewritePredicateForPartitionCheck(pred, query_transform_map);
+        LOG_DEBUG(
+            logger,
+            "mv check partition: inline query predicate {} to {}, belonging table: {}",
+            serializeAST(*pred),
+            serializeAST(*new_pred),
+            step ? step->getStorageID().getFullTableName() + "__" + std::to_string(reinterpret_cast<std::uintptr_t>(step)) : "null");
+        if (step)
+            predicates_by_table[step].emplace_back(new_pred);
+    }
+
+    // check base table partition schema & collect query required partitions
+    // TODO: now the partition schema check is by checking key size, it's better to also check key's expression
+    std::unordered_set<String> required_part_name_set;
+    std::optional<DataTypes> first_partition_key_types;
+    String first_partition_table;
+    auto check_partition_schema = [&](const auto & key_description, const auto & storage_id) -> bool {
+        if (!first_partition_key_types)
+        {
+            first_partition_key_types = key_description.data_types;
+            first_partition_table = storage_id.getFullTableName();
+            return true;
+        }
+
+        const auto & partition_key_types = key_description.data_types;
+        return partition_key_types.size() == first_partition_key_types->size();
+    };
+
+    auto get_local_storage = [&](const StorageID & storage_id) -> StoragePtr {
+        auto storage = DatabaseCatalog::instance().getTable(storage_id, context);
+        if (const auto * distributed = dynamic_cast<StorageDistributed *>(storage.get()))
+        {
+            auto remote_db = distributed->getRemoteDatabaseName();
+            auto remote_table = distributed->getRemoteTableName();
+            storage = DatabaseCatalog::instance().getTable(StorageID{remote_db, remote_table}, context);
+        }
+
+        return storage;
+    };
+
+    for (const auto & [_, table_step] : query_table_scans)
+    {
+        auto storage = get_local_storage(table_step->getStorageID());
+        auto * merge_tree = dynamic_cast<MergeTreeData *>(storage.get());
+        if (!merge_tree || merge_tree->getSettings()->disable_block_output)
+            continue;
+
+        auto storage_metadata = storage->getInMemoryMetadataPtr();
+        const auto & key_description = storage_metadata->getPartitionKey();
+        // ignore non-partitioned tables
+        if (key_description.data_types.empty())
+            continue;
+
+        if (!check_partition_schema(key_description, storage->getStorageID()))
+        {
+            add_failure_message(
+                "table " + storage->getStorageID().getFullTableName() + " has a inconsistent partition schema with table "
+                + first_partition_table);
+            return false;
+        }
+
+        auto select_query = std::make_shared<ASTSelectQuery>();
+        auto select_expr = std::make_shared<ASTExpressionList>();
+        for (const auto & col_name : table_step->getColumnNames())
+            select_expr->children.push_back(std::make_shared<ASTIdentifier>(col_name));
+        select_query->setExpression(ASTSelectQuery::Expression::SELECT, std::move(select_expr));
+        select_query->replaceDatabaseAndTable(storage->getStorageID());
+        auto & table_preds = predicates_by_table[table_step];
+        if (!table_preds.empty())
+            select_query->setExpression(ASTSelectQuery::Expression::WHERE, PredicateUtils::combineConjuncts(table_preds));
+
+        SelectQueryInfo query_info = buildSelectQueryInfoForQuery(select_query, context);
+        auto required_partitions = merge_tree->getRequiredPartitions(query_info, context);
+        std::unordered_set<String> required_part_name_set_for_this_table;
+        for (const auto & part : required_partitions)
+        {
+            String partition_id = part->partition.getID(*merge_tree);
+            required_part_name_set_for_this_table.emplace(partition_id);
+        }
+
+        LOG_DEBUG(
+            logger,
+            "Get table {} required partition set: {} by query {}",
+            storage->getStorageID().getFullTableName(),
+            fmt::join(required_part_name_set_for_this_table, ", "),
+            serializeAST(*select_query));
+
+        required_part_name_set.insert(required_part_name_set_for_this_table.begin(), required_part_name_set_for_this_table.end());
+    }
+
+    if (required_part_name_set.empty())
+        return true;
+
+    // check mv partition schema
+    auto mv_target_storage = get_local_storage(mv_target_table);
+    const auto * mv_target_merge_tree = dynamic_cast<MergeTreeData *>(mv_target_storage.get());
+    if (!mv_target_merge_tree)
+        return true;
+
+    auto mv_target_storage_metadata = mv_target_storage->getInMemoryMetadataPtr();
+    if (!check_partition_schema(mv_target_storage_metadata->getPartitionKey(), mv_target_table))
+    {
+        add_failure_message(
+            "mv target table " + mv_target_table.getFullTableName() + " has a inconsistent partition schema with table "
+            + first_partition_table);
+        return false;
+    }
+
+    // check mv partitions
+    auto view_partitions = mv_target_merge_tree->getDataPartsVector();
+    std::unordered_set<String> view_part_name_set;
+    for (const auto & part : view_partitions)
+    {
+        String partition_id = part->partition.getID(*mv_target_merge_tree);
+        view_part_name_set.emplace(partition_id);
+    }
+    LOG_DEBUG(
+        logger,
+        "Get mv target table {} owned partition set: {}",
+        mv_target_storage->getStorageID().getFullTableName(),
+        fmt::join(view_part_name_set, ", "));
+
+    if (!subset(required_part_name_set, view_part_name_set))
+    {
+        String required_partitions_str;
+        for (const auto & require_partition : required_part_name_set)
+            required_partitions_str.append(require_partition).append(",");
+        String owned_partitions_str;
+        for (const auto & own_partition : view_part_name_set)
+            owned_partitions_str.append(own_partition).append(",");
+        add_failure_message(
+            "checkPartitions - require partitions-" + required_partitions_str + " owned partitions-" + owned_partitions_str
+            + " match fail.");
+        return false;
+    }
+
+    return true;
+}
 
 /**
  * Extract materialized views related into the query tables.
@@ -661,7 +862,24 @@ protected:
                 continue;
             }
 
-            // 5. construct candidate
+            // 5. check data consistency
+            auto consistency_check_method = context->getSettingsRef().materialized_view_consistency_check_method;
+            if (consistency_check_method == MaterializedViewConsistencyCheckMethod::PARTITION)
+            {
+                if (!checkMVConsistencyByPartition(
+                        join_graph_match_result->query_table_scans,
+                        query_join_graph.getFilters(),
+                        *query_map,
+                        target_storage_id,
+                        context,
+                        add_failure_message,
+                        &Poco::Logger::get("CandidatesExplorer")))
+                {
+                    continue; // bail out
+                }
+            }
+
+            // 6. construct candidate
             auto it_stats = materialized_views_stats.find(target_storage_id.getFullTableName());
             if (it_stats == materialized_views_stats.end())
             {

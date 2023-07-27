@@ -21,10 +21,10 @@ select makeDate32(cast(1980 as DateTime), 10); -- { serverError 43 }
 select makeDate32(cast(-1980 as DateTime), 10); -- { serverError 43 }
 select makeDate32(cast(1980 as DateTime64), 10); -- { serverError 43 }
 select makeDate32(cast(-1980 as DateTime64), 10); -- { serverError 43 }
-select makeDate32('1980', '10'); -- { serverError 43 }
-select makeDate32('-1980', 3); -- { serverError 43 }
-select makeDate32('aa', 3); -- { serverError 43 }
-select makeDate32(1994, 'aa'); -- { serverError 43 }
+select makeDate32('1980', '10');
+select makeDate32('-1980', 3);
+select makeDate32('aa', 3); -- { serverError 6 }
+select makeDate32(1994, 'aa'); -- { serverError 6 }
 
 select makeDate32(0, 1);
 select makeDate32(19800, 12);

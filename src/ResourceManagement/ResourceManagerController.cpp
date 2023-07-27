@@ -31,11 +31,11 @@
 
 namespace DB::ErrorCodes
 {
-    extern const int KNOWN_WORKER_GROUP;
-    extern const int RESOURCE_MANAGER_ILLEGAL_CONFIG;
-    extern const int RESOURCE_MANAGER_REMOVE_WORKER_ERROR;
-    extern const int VIRTUAL_WAREHOUSE_NOT_INITIALIZED;
-    extern const int WORKER_GROUP_NOT_FOUND;
+extern const int UNKNOWN_WORKER_GROUP;
+extern const int RESOURCE_MANAGER_ILLEGAL_CONFIG;
+extern const int RESOURCE_MANAGER_REMOVE_WORKER_ERROR;
+extern const int VIRTUAL_WAREHOUSE_NOT_INITIALIZED;
+extern const int WORKER_GROUP_NOT_FOUND;
 }
 
 namespace DB::ResourceManagement
@@ -261,7 +261,7 @@ void ResourceManagerController::initialize()
 void ResourceManagerController::registerWorkerNode(const WorkerNodeResourceData & data)
 {
     if (data.worker_group_id.empty())
-        throw Exception("The group_id of node must not be empty", ErrorCodes::KNOWN_WORKER_GROUP);
+        throw Exception("The group_id of node must not be empty", ErrorCodes::UNKNOWN_WORKER_GROUP);
 
     auto [outdated, worker_node] = resource_tracker->registerNode(data);
 

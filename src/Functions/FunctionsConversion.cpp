@@ -55,8 +55,11 @@ void registerFunctionsConversion(FunctionFactory & factory)
     factory.registerFunction<FunctionToDate>("DATE", FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionToDate32>();
     factory.registerFunction<FunctionToTime>();
+    /// MysQL compatibility alias.
+    factory.registerFunction<FunctionToTime>("TIME", FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionToDateTime>();
     factory.registerFunction<FunctionToDateTime32>();
+    factory.registerFunction<FunctionToDateTime32>("timestamp", FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionToDateTime64>();
     factory.registerFunction<FunctionToUUID>();
     factory.registerFunction<FunctionToString>();
@@ -64,6 +67,7 @@ void registerFunctionsConversion(FunctionFactory & factory)
     registerFunctionFixedString(factory);
 
     factory.registerFunction<FunctionToUnixTimestamp>();
+    factory.registerAlias("unix_timestamp", NameToUnixTimestamp::name, FunctionFactory::CaseInsensitive);
 
     factory.registerFunction<CastOverloadResolver<CastType::nonAccurate>>(FunctionFactory::CaseInsensitive);
     factory.registerFunction<CastOverloadResolver<CastType::accurate>>();

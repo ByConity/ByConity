@@ -7,6 +7,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int SYNTAX_ERROR;
+    extern const int UNSUPPORTED_METHOD;
 }
 
 const char * IntervalKind::toString() const
@@ -21,6 +22,20 @@ const char * IntervalKind::toString() const
         case IntervalKind::Month: return "Month";
         case IntervalKind::Quarter: return "Quarter";
         case IntervalKind::Year: return "Year";
+        case IntervalKind::MinuteSecond:
+            return "MinuteSecond";
+        case IntervalKind::HourSecond:
+            return "HourSecond";
+        case IntervalKind::HourMinute:
+            return "HourMinute";
+        case IntervalKind::DaySecond:
+            return "DaySecond";
+        case IntervalKind::DayMinute:
+            return "DayMinute";
+        case IntervalKind::DayHour:
+            return "DayHour";
+        case IntervalKind::YearMonth:
+            return "YearMonth";
     }
     __builtin_unreachable();
 }
@@ -38,6 +53,14 @@ Int32 IntervalKind::toAvgSeconds() const
         case IntervalKind::Month: return 2629746;   /// Exactly 1/12 of a year.
         case IntervalKind::Quarter: return 7889238; /// Exactly 1/4 of a year.
         case IntervalKind::Year: return 31556952;   /// The average length of a Gregorian year is equal to 365.2425 days
+        case IntervalKind::MinuteSecond:
+        case IntervalKind::HourSecond:
+        case IntervalKind::HourMinute:
+        case IntervalKind::DaySecond:
+        case IntervalKind::DayMinute:
+        case IntervalKind::DayHour:
+        case IntervalKind::YearMonth:
+            throw Exception("The method toAvgSeconds is not supported for {}", kind, ErrorCodes::UNSUPPORTED_METHOD);
     }
     __builtin_unreachable();
 }
@@ -78,6 +101,20 @@ const char * IntervalKind::toKeyword() const
         case IntervalKind::Month: return "MONTH";
         case IntervalKind::Quarter: return "QUARTER";
         case IntervalKind::Year: return "YEAR";
+        case IntervalKind::MinuteSecond:
+            return "MINUTE_SECOND";
+        case IntervalKind::HourSecond:
+            return "HOUR_SECOND";
+        case IntervalKind::HourMinute:
+            return "HOURM_INUTE";
+        case IntervalKind::DaySecond:
+            return "DAY_SECOND";
+        case IntervalKind::DayMinute:
+            return "DAYM_INUTE";
+        case IntervalKind::DayHour:
+            return "DAY_HOUR";
+        case IntervalKind::YearMonth:
+            return "YEAR_MONTH";
     }
     __builtin_unreachable();
 }
@@ -95,6 +132,20 @@ const char * IntervalKind::toLowercasedKeyword() const
         case IntervalKind::Month: return "month";
         case IntervalKind::Quarter: return "quarter";
         case IntervalKind::Year: return "year";
+        case IntervalKind::MinuteSecond:
+            return "minute_second";
+        case IntervalKind::HourSecond:
+            return "hour_second";
+        case IntervalKind::HourMinute:
+            return "hour_minute";
+        case IntervalKind::DaySecond:
+            return "day_second";
+        case IntervalKind::DayMinute:
+            return "day_minute";
+        case IntervalKind::DayHour:
+            return "day_hour";
+        case IntervalKind::YearMonth:
+            return "year_month";
     }
     __builtin_unreachable();
 }
@@ -120,6 +171,20 @@ const char * IntervalKind::toDateDiffUnit() const
             return "quarter";
         case IntervalKind::Year:
             return "year";
+        case IntervalKind::MinuteSecond:
+            return "minute_second";
+        case IntervalKind::HourSecond:
+            return "hour_second";
+        case IntervalKind::HourMinute:
+            return "hour_minute";
+        case IntervalKind::DaySecond:
+            return "day_second";
+        case IntervalKind::DayMinute:
+            return "day_minute";
+        case IntervalKind::DayHour:
+            return "day_hour";
+        case IntervalKind::YearMonth:
+            return "year_month";
     }
     __builtin_unreachable();
 }
@@ -145,6 +210,20 @@ const char * IntervalKind::toNameOfFunctionToIntervalDataType() const
             return "toIntervalQuarter";
         case IntervalKind::Year:
             return "toIntervalYear";
+        case IntervalKind::MinuteSecond:
+            return "toIntervalMinuteSecond";
+        case IntervalKind::HourSecond:
+            return "toIntervalHourSecond";
+        case IntervalKind::HourMinute:
+            return "toIntervalHourMinute";
+        case IntervalKind::DaySecond:
+            return "toIntervalDaySecond";
+        case IntervalKind::DayMinute:
+            return "toIntervalDay_Minute";
+        case IntervalKind::DayHour:
+            return "toIntervalDay_Hour";
+        case IntervalKind::YearMonth:
+            return "toIntervalYear_Month";
     }
     __builtin_unreachable();
 }
@@ -173,6 +252,20 @@ const char * IntervalKind::toNameOfFunctionExtractTimePart() const
             return "toQuarter";
         case IntervalKind::Year:
             return "toYear";
+        case IntervalKind::MinuteSecond:
+            return "toMinuteSecond";
+        case IntervalKind::HourSecond:
+            return "toHourSecond";
+        case IntervalKind::HourMinute:
+            return "toHourMinute";
+        case IntervalKind::DaySecond:
+            return "toDaySecond";
+        case IntervalKind::DayMinute:
+            return "toDayMinute";
+        case IntervalKind::DayHour:
+            return "toDayHour";
+        case IntervalKind::YearMonth:
+            return "toYearMonth";
     }
     __builtin_unreachable();
 }
@@ -218,6 +311,41 @@ bool IntervalKind::tryParseString(const std::string & kind, IntervalKind::Kind &
     if ("year" == kind)
     {
         result = IntervalKind::Year;
+        return true;
+    }
+    if ("minute_second" == kind)
+    {
+        result = IntervalKind::MinuteSecond;
+        return true;
+    }
+    if ("hour_second" == kind)
+    {
+        result = IntervalKind::HourSecond;
+        return true;
+    }
+    if ("hour_minute" == kind)
+    {
+        result = IntervalKind::HourMinute;
+        return true;
+    }
+    if ("day_second" == kind)
+    {
+        result = IntervalKind::DaySecond;
+        return true;
+    }
+    if ("day_minute" == kind)
+    {
+        result = IntervalKind::DayMinute;
+        return true;
+    }
+    if ("day_hour" == kind)
+    {
+        result = IntervalKind::DayHour;
+        return true;
+    }
+    if ("year_month" == kind)
+    {
+        result = IntervalKind::YearMonth;
         return true;
     }
     return false;

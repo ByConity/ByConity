@@ -81,7 +81,7 @@ message DataModelPart
     required DataModelPartInfo part_info = 1;  // part info
     required uint64 size = 2;  // part size in bytes
     required uint64 rows_count = 3;  // rows count in the part
-    required string partition_minmax = 4; // partition and minmax index info
+    required bytes partition_minmax = 4; // partition and minmax index info
     optional uint64 marks_count = 5;
     optional string columns = 6;  // columns definition; same as columns.txt
     optional uint64 txnID = 7;

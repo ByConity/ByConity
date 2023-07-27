@@ -63,6 +63,55 @@ bool parseIntervalKind(IParser::Pos & pos, Expected & expected, IntervalKind & r
         return true;
     }
 
+    if (ParserKeyword("MINUTE_SECOND").ignore(pos, expected) /*|| ParserKeyword("SQL_TSI_YEAR").ignore(pos, expected)
+        || ParserKeyword("YYYY").ignore(pos, expected) || ParserKeyword("YY").ignore(pos, expected)*/)
+    {
+        result = IntervalKind::MinuteSecond;
+        return true;
+    }
+
+    if (ParserKeyword("HOUR_SECOND").ignore(pos, expected) /*|| ParserKeyword("SQL_TSI_YEAR").ignore(pos, expected)
+        || ParserKeyword("YYYY").ignore(pos, expected) || ParserKeyword("YY").ignore(pos, expected)*/)
+    {
+        result = IntervalKind::HourSecond;
+        return true;
+    }
+
+    if (ParserKeyword("HOUR_MINUTE").ignore(pos, expected) /*|| ParserKeyword("SQL_TSI_YEAR").ignore(pos, expected)
+        || ParserKeyword("YYYY").ignore(pos, expected) || ParserKeyword("YY").ignore(pos, expected)*/)
+    {
+        result = IntervalKind::HourMinute;
+        return true;
+    }
+
+    if (ParserKeyword("DAY_SECOND").ignore(pos, expected) /*|| ParserKeyword("SQL_TSI_YEAR").ignore(pos, expected)
+        || ParserKeyword("YYYY").ignore(pos, expected) || ParserKeyword("YY").ignore(pos, expected)*/)
+    {
+        result = IntervalKind::DaySecond;
+        return true;
+    }
+
+    if (ParserKeyword("DAY_MINUTE").ignore(pos, expected) /*|| ParserKeyword("SQL_TSI_YEAR").ignore(pos, expected)
+        || ParserKeyword("YYYY").ignore(pos, expected) || ParserKeyword("YY").ignore(pos, expected)*/)
+    {
+        result = IntervalKind::DayMinute;
+        return true;
+    }
+
+    if (ParserKeyword("DAY_HOUR").ignore(pos, expected) /*|| ParserKeyword("SQL_TSI_YEAR").ignore(pos, expected)
+        || ParserKeyword("YYYY").ignore(pos, expected) || ParserKeyword("YY").ignore(pos, expected)*/)
+    {
+        result = IntervalKind::DayHour;
+        return true;
+    }
+
+    if (ParserKeyword("YEAR_MONTH").ignore(pos, expected) /*|| ParserKeyword("SQL_TSI_YEAR").ignore(pos, expected)
+        || ParserKeyword("YYYY").ignore(pos, expected) || ParserKeyword("YY").ignore(pos, expected)*/)
+    {
+        result = IntervalKind::YearMonth;
+        return true;
+    }
+
     return false;
 }
 }

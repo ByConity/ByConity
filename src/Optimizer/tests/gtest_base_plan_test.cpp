@@ -97,7 +97,7 @@ QueryPlanPtr BasePlanTest::plan(const String & query, ContextMutablePtr query_co
     auto ast = parse(query, query_context);
 
     {
-        SelectIntersectExceptQueryVisitor::Data data{query_context->getSettingsRef()};
+        SelectIntersectExceptQueryVisitor::Data data{query_context->getSettingsRef().intersect_default_mode, query_context->getSettingsRef().except_default_mode};
         SelectIntersectExceptQueryVisitor{data}.visit(ast);
     }
 
