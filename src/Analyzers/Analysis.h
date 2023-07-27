@@ -15,20 +15,21 @@
 
 #pragma once
 
+#include <AggregateFunctions/IAggregateFunction.h>
 #include <Analyzers/ASTEquals.h>
+#include <Analyzers/ResolvedWindow.h>
 #include <Analyzers/Scope.h>
 #include <Analyzers/SubColumnID.h>
-#include <Analyzers/ResolvedWindow.h>
-#include <AggregateFunctions/IAggregateFunction.h>
 #include <Interpreters/asof.h>
 #include <Optimizer/Utils.h>
-#include <Parsers/ASTSubquery.h>
 #include <Parsers/ASTFunction.h>
-#include <Parsers/ASTWindowDefinition.h>
-#include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/ASTOrderByElement.h>
 #include <Parsers/ASTSelectQuery.h>
+#include <Parsers/ASTSubquery.h>
+#include <Parsers/ASTTablesInSelectQuery.h>
+#include <Parsers/ASTWindowDefinition.h>
 #include <Storages/IStorage_fwd.h>
+#include "Interpreters/StorageID.h"
 
 #include <utility>
 #include <vector>
@@ -210,6 +211,13 @@ struct ArrayJoinAnalysis
     ArrayJoinDescriptions descriptions;
 };
 
+struct InsertAnalysis
+{
+    StoragePtr storage;
+    StorageID storage_id;
+    NamesAndTypes columns;
+};
+
 template<typename Key, typename Val>
 using ListMultimap = std::unordered_map<Key, std::vector<Val>>;
 
@@ -385,6 +393,13 @@ struct Analysis
 
     std::unordered_map<ASTSelectQuery *, ArrayJoinAnalysis> array_join_analysis;
     ArrayJoinAnalysis & getArrayJoinAnalysis(ASTSelectQuery & select_query);
+    
+    /// Insert
+    std::optional<InsertAnalysis> insert_analysis;
+    std::optional<InsertAnalysis> & getInsert()
+    {
+        return insert_analysis;
+    }
 };
 
 }

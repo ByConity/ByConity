@@ -80,6 +80,8 @@ static std::unordered_map<IQueryPlanStep::Type, std::string> NODE_COLORS = {
     {IQueryPlanStep::Type::Exchange, "gold"},
     {IQueryPlanStep::Type::RemoteExchangeSource, "gold"},
     {IQueryPlanStep::Type::TableScan, "deepskyblue"},
+    {IQueryPlanStep::Type::TableWrite, "cyan"},
+    {IQueryPlanStep::Type::TableFinish, "cyan"},
     {IQueryPlanStep::Type::ReadNothing, "deepskyblue"},
     {IQueryPlanStep::Type::Values, "deepskyblue"},
     {IQueryPlanStep::Type::Limit, "gray83"},
@@ -265,6 +267,24 @@ Void PlanNodePrinter::visitTableScanNode(TableScanNode & node, PrinterContext & 
     String label{"TableScanNode"};
     printNode(node, label, StepPrinter::printTableScanStep(step), color, context);
     return Void{};
+}
+
+Void PlanNodePrinter::visitTableWriteNode(TableWriteNode & node, PrinterContext & context)
+{
+    auto step = *node.getStep();
+    String color{NODE_COLORS[step.getType()]};
+    String label{"TableWriteNode"};
+    printNode(node, label, StepPrinter::printTableWriteStep(step), color, context);
+    return visitChildren(node, context);
+}
+
+Void PlanNodePrinter::visitTableFinishNode(TableFinishNode & node, PrinterContext & context)
+{
+    auto step = *node.getStep();
+    String color{NODE_COLORS[step.getType()]};
+    String label{"TableFinishNode"};
+    printNode(node, label, StepPrinter::printTableFinishStep(step), color, context);
+    return visitChildren(node, context);
 }
 
 Void PlanNodePrinter::visitReadNothingNode(ReadNothingNode & node, PrinterContext & context)
@@ -736,6 +756,26 @@ Void PlanSegmentNodePrinter::visitTableScanNode(QueryPlan::Node * node, PrinterC
     String label{"TableScanNode"};
     String color{NODE_COLORS[step_ptr->getType()]};
     printNode(node, label, StepPrinter::printTableScanStep(step), color, context);
+    return Void{};
+}
+
+Void PlanSegmentNodePrinter::visitTableWriteNode(QueryPlan::Node * node, PrinterContext & context)
+{
+    auto & step_ptr = node->step;
+    auto & step = dynamic_cast<const TableWriteStep &>(*step_ptr);
+    String label{"TableWriteNode"};
+    String color{NODE_COLORS[step_ptr->getType()]};
+    printNode(node, label, StepPrinter::printTableWriteStep(step), color, context);
+    return Void{};
+}
+
+Void PlanSegmentNodePrinter::visitTableFinishNode(QueryPlan::Node * node, PrinterContext & context)
+{
+    auto & step_ptr = node->step;
+    auto & step = dynamic_cast<const TableFinishStep &>(*step_ptr);
+    String label{"TableFinishNode"};
+    String color{NODE_COLORS[step_ptr->getType()]};
+    printNode(node, label, StepPrinter::printTableFinishStep(step), color, context);
     return Void{};
 }
 
@@ -1541,6 +1581,49 @@ String StepPrinter::printRemoteExchangeSourceStep(const RemoteExchangeSourceStep
     details << "|";
     details << "Output \\n";
     for (const auto & column : step.getOutputStream().header)
+    {
+        details << column.name << ":";
+        details << column.type->getName() << "\\n";
+    }
+    return details.str();
+}
+
+String StepPrinter::printTableWriteStep(const TableWriteStep & step)
+{
+    String label{"TableWriteNode"};
+
+    std::stringstream details;
+    details << "Targe \\n";
+    details << step.getTarget()->toString() << "\\n";
+    // details << "|";
+    // details << "TableColumnToInputColumn \\n";
+    // for (auto & item : step.getTableColumnToInputColumnMap())
+    // {
+    //     details << item.first << " : ";
+    //     details << item.second << "\\n";
+    // }
+
+    details << "|";
+    details << "Output \\n";
+    for (auto & column : step.getOutputStream().header)
+    {
+        details << column.name << ":";
+        details << column.type->getName() << "\\n";
+    }
+    return details.str();
+}
+
+String StepPrinter::printTableFinishStep(const TableFinishStep & step)
+{
+    String label{"TableFinishNode"};
+
+    std::stringstream details;
+    details << "Targe \\n";
+    details << step.getTarget()->toString() << "\\n";
+
+    details << "|";
+    details << "Output \\n";
+    for (auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
         details << column.type->getName() << "\\n";

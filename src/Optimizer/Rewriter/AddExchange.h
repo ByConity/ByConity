@@ -96,6 +96,7 @@ public:
     ExchangeResult visitAssignUniqueIdNode(AssignUniqueIdNode & node, ExchangeContext & cxt) override;
     ExchangeResult visitCTERefNode(CTERefNode & node, ExchangeContext &) override;
     ExchangeResult visitTopNFilteringNode(TopNFilteringNode & node, ExchangeContext & cxt) override;
+    ExchangeResult visitTableWriteNode(TableWriteNode & node, ExchangeContext & cxt) override;
 
 private:
     /**

@@ -104,7 +104,12 @@ public:
 
     ~CnchServerResource();
 
-    void addCreateQuery(const ContextPtr & context, const StoragePtr & storage, const String & create_query, const String & worker_table_name);
+    void addCreateQuery(
+        const ContextPtr & context,
+        const StoragePtr & storage,
+        const String & create_query,
+        const String & worker_table_name,
+        bool create_local_table = true);
     void setAggregateWorker(HostWithPorts aggregate_worker_)
     {
         aggregate_worker = std::move(aggregate_worker_);

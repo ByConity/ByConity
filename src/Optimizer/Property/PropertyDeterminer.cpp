@@ -365,4 +365,13 @@ PropertySets DeterminerVisitor::visitFillingStep(const FillingStep & , Determine
     return {{Property{Partitioning{Partitioning::Handle::SINGLE}}}};
 }
 
+PropertySets DeterminerVisitor::visitTableWriteStep(const TableWriteStep &, DeterminerContext &)
+{
+    return {{Property{Partitioning{Partitioning::Handle::FIXED_ARBITRARY}}}};
+}
+
+PropertySets DeterminerVisitor::visitTableFinishStep(const TableFinishStep &, DeterminerContext &)
+{
+    return {{Property{Partitioning{Partitioning::Handle::SINGLE}}}};
+}
 }

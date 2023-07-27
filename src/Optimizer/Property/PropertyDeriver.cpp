@@ -543,4 +543,16 @@ Property DeriverVisitor::visitFillingStep(const FillingStep &, DeriverContext & 
 {
     return context.getInput()[0];
 }
+
+Property DeriverVisitor::visitTableWriteStep(const TableWriteStep &, DeriverContext & context)
+{
+    Property output = context.getInput()[0];
+    output.setNodePartitioning(Partitioning{Partitioning::Handle::FIXED_ARBITRARY});
+    return output;
+}
+
+Property DeriverVisitor::visitTableFinishStep(const TableFinishStep &, DeriverContext & context)
+{
+    return context.getInput()[0];
+}
 }

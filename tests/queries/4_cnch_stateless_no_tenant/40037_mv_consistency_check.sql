@@ -124,3 +124,5 @@ EXPLAIN SELECT
 FROM base40037
 WHERE event_date = '2023-01-01'
 GROUP BY server_time_hour, event_date, uid;
+
+DROP TABLE IF EXISTS mv40037_2;

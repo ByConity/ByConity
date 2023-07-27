@@ -300,6 +300,11 @@ ExchangeResult ExchangeVisitor::visitTopNFilteringNode(TopNFilteringNode & node,
     return visitPlanNode(node, cxt);
 }
 
+ExchangeResult ExchangeVisitor::visitTableWriteNode(TableWriteNode & node, ExchangeContext & cxt)
+{
+    return enforceNodeAndStream(node, cxt);
+}
+
 ExchangeResult ExchangeVisitor::visitChild(PlanNodePtr node, ExchangeContext & cxt)
 {
     return VisitorUtil::accept(node, *this, cxt);

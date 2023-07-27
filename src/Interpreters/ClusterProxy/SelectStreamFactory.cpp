@@ -274,7 +274,10 @@ void SelectStreamFactory::createForShard(
 
     const auto & settings = context->getSettingsRef();
 
-    if (settings.prefer_localhost_replica && shard_info.isLocal())
+    /**
+        prefer_localost_replica in cnch is useless and is buggy.
+    */
+    if (main_table && settings.prefer_localhost_replica && shard_info.isLocal())
     {
         StoragePtr main_table_storage;
 
@@ -285,7 +288,7 @@ void SelectStreamFactory::createForShard(
         }
         else
         {
-            auto resolved_id = context->resolveStorageID(main_table);
+            auto resolved_id = context->tryResolveStorageID(main_table);
             main_table_storage = DatabaseCatalog::instance().tryGetTable(resolved_id, context);
         }
 

@@ -796,6 +796,11 @@ void QueryPlan::allocateLocalTable(ContextPtr context)
             auto * table_scan = dynamic_cast<TableScanStep *>(node.step.get());
             table_scan->allocate(context);
         }
+        else if (node.step->getType() == IQueryPlanStep::Type::TableWrite)
+        {
+            auto write_step = dynamic_cast<TableWriteStep *>(node.step.get());
+            write_step->allocate(context);
+        }
     }
 }
 

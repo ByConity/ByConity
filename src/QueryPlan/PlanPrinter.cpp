@@ -688,7 +688,7 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
         if (limit->getLimit())
             out << "Limit: " << limit->getLimit();
         if (limit->getOffset())
-            out << "Offset: " << limit->getOffset();
+            out << " Offset: " << limit->getOffset();
     }
 
     if (verbose && plan->getType() == IQueryPlanStep::Type::Aggregating)

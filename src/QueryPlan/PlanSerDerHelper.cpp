@@ -50,7 +50,6 @@
 #include <QueryPlan/JoinStep.h>
 #include <QueryPlan/LimitByStep.h>
 #include <QueryPlan/LimitStep.h>
-#include <QueryPlan/SortingStep.h>
 #include <QueryPlan/MarkDistinctStep.h>
 #include <QueryPlan/MergeSortingStep.h>
 #include <QueryPlan/MergingAggregatedStep.h>
@@ -67,12 +66,15 @@
 #include <QueryPlan/RemoteExchangeSourceStep.h>
 #include <QueryPlan/RollupStep.h>
 #include <QueryPlan/SettingQuotaAndLimitsStep.h>
+#include <QueryPlan/SortingStep.h>
+#include <QueryPlan/TableFinishStep.h>
 #include <QueryPlan/TableScanStep.h>
+#include <QueryPlan/TableWriteStep.h>
+#include <QueryPlan/TopNFilteringStep.h>
 #include <QueryPlan/TotalsHavingStep.h>
 #include <QueryPlan/UnionStep.h>
 #include <QueryPlan/ValuesStep.h>
 #include <QueryPlan/WindowStep.h>
-#include <QueryPlan/TopNFilteringStep.h>
 #include <Common/ClickHouseRevision.h>
 
 namespace DB
