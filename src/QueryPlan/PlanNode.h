@@ -16,6 +16,7 @@
 #pragma once
 #include <Core/Types.h>
 #include <Optimizer/CardinalityEstimate/PlanNodeStatisticsEstimate.h>
+#include <Parsers/IAST_fwd.h>
 #include <QueryPlan/AggregatingStep.h>
 #include <QueryPlan/AnyStep.h>
 #include <QueryPlan/ApplyStep.h>
@@ -41,7 +42,7 @@
 #include <QueryPlan/JoinStep.h>
 #include <QueryPlan/LimitByStep.h>
 #include <QueryPlan/LimitStep.h>
-#include <QueryPlan/SortingStep.h>
+#include <QueryPlan/MarkDistinctStep.h>
 #include <QueryPlan/MergeSortingStep.h>
 #include <QueryPlan/MergingAggregatedStep.h>
 #include <QueryPlan/MergingSortedStep.h>
@@ -51,22 +52,23 @@
 #include <QueryPlan/PlanSegmentSourceStep.h>
 #include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/ReadFromMergeTree.h>
-#include <QueryPlan/MarkDistinctStep.h>
 #include <QueryPlan/ReadFromPreparedSource.h>
 #include <QueryPlan/ReadStorageRowCountStep.h>
 #include <QueryPlan/ReadNothingStep.h>
 #include <QueryPlan/RemoteExchangeSourceStep.h>
 #include <QueryPlan/RollupStep.h>
 #include <QueryPlan/SettingQuotaAndLimitsStep.h>
+#include <QueryPlan/SortingStep.h>
 #include <QueryPlan/SymbolAllocator.h>
+#include <QueryPlan/TableFinishStep.h>
 #include <QueryPlan/TableScanStep.h>
+#include <QueryPlan/TableWriteStep.h>
+#include <QueryPlan/TopNFilteringStep.h>
 #include <QueryPlan/TotalsHavingStep.h>
 #include <QueryPlan/UnionStep.h>
 #include <QueryPlan/ValuesStep.h>
 #include <QueryPlan/Void.h>
 #include <QueryPlan/WindowStep.h>
-#include <QueryPlan/TopNFilteringStep.h>
-#include <Parsers/IAST_fwd.h>
 
 #include <memory>
 #include <utility>

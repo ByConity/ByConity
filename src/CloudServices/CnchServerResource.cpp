@@ -108,11 +108,15 @@ CnchServerResource::~CnchServerResource()
 }
 
 void CnchServerResource::addCreateQuery(
-    const ContextPtr & context, const StoragePtr & storage, const String & create_query, const String & worker_table_name)
+    const ContextPtr & context,
+    const StoragePtr & storage,
+    const String & create_query,
+    const String & worker_table_name,
+    bool create_local_table)
 {
     /// table should exists in SelectStreamFactory::createForShard
     /// so we create table in worker in advance
-    if (context->getServerType() == ServerType::cnch_worker)
+    if (context->getServerType() == ServerType::cnch_worker && create_local_table)
     {
         auto temp_context = Context::createCopy(context);
         auto worker_resource = context->getCnchWorkerResource();

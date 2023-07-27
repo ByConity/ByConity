@@ -736,53 +736,15 @@ Names StorageCnchMergeTree::genViewDependencyCreateQueries(
     return create_view_sqls;
 }
 
-BlockOutputStreamPtr
-StorageCnchMergeTree::write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr local_context)
+String StorageCnchMergeTree::createLocalTableForWrite(
+    ASTInsertQuery * insert_query, ContextPtr local_context, bool enable_staging_area, bool send_query)
 {
-    bool enable_staging_area = metadata_snapshot->hasUniqueKey() && bool(local_context->getSettingsRef().enable_staging_area_for_write);
-    if (enable_staging_area)
-        LOG_DEBUG(log, "enable staging area for write");
-
-    auto modified_query_ast = query->clone();
-    auto & insert_query = modified_query_ast->as<ASTInsertQuery &>();
-
-    if (insert_query.table_id.database_name.empty())
-        insert_query.table_id.database_name = local_context->getCurrentDatabase();
-
-    return std::make_shared<CloudMergeTreeBlockOutputStream>(*this, metadata_snapshot, local_context, enable_staging_area);
-}
-
-/// for insert select and insert infile
-BlockInputStreamPtr
-StorageCnchMergeTree::writeInWorker(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr local_context)
-{
-    bool enable_staging_area = metadata_snapshot->hasUniqueKey() && bool(local_context->getSettingsRef().enable_staging_area_for_write);
-    if (enable_staging_area)
-        LOG_DEBUG(log, "enable staging area for write");
-
-    auto modified_query_ast = query->clone();
-    auto & insert_query = modified_query_ast->as<ASTInsertQuery &>();
-
-    if (insert_query.table_id.database_name.empty())
-        insert_query.table_id.database_name = local_context->getCurrentDatabase();
-
-    if (insert_query.select)
-        touchActiveTimestampForInsertSelectQuery(insert_query, local_context);
-
-    if (insert_query.select && local_context->getSettingsRef().restore_table_expression_in_distributed)
-    {
-        RestoreTableExpressionsVisitor::Data data;
-        data.database = local_context->getCurrentDatabase();
-        RestoreTableExpressionsVisitor(data).visit(insert_query.select);
-    }
-
     auto generated_tb_name = getCloudTableName(local_context);
     auto local_table_name = generated_tb_name + "_write";
-    insert_query.table_id.table_name = local_table_name;
+    if (insert_query)
+        insert_query->table_id.table_name = local_table_name;
 
     auto create_local_tb_query = getCreateQueryForCloudTable(getCreateTableSql(), local_table_name, local_context, enable_staging_area);
-
-    String query_statement = queryToString(insert_query);
 
     WorkerGroupHandle worker_group = local_context->getCurrentWorkerGroup();
 
@@ -848,9 +810,60 @@ StorageCnchMergeTree::writeInWorker(const ASTPtr & query, const StorageMetadataP
         session_resource->setWorkerGroup(std::make_shared<WorkerGroupHandleImpl>(*worker_group, index_values));
     }
 
-    LOG_DEBUG(log, "Prepare execute insert query: {}", query_statement);
-    /// TODO: send insert query by rpc.
-    return sendQueryPerShard(local_context, query_statement, *write_shard_ptr, true);
+    if (insert_query && send_query)
+    {
+        String query_statement = queryToString(*insert_query);
+
+        LOG_DEBUG(log, "Prepare execute insert query: {}", query_statement);
+        /// TODO: send insert query by rpc.
+        sendQueryPerShard(local_context, query_statement, *write_shard_ptr, true);
+    }
+
+    return local_table_name;
+}
+
+BlockOutputStreamPtr
+StorageCnchMergeTree::write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr local_context)
+{
+    bool enable_staging_area = metadata_snapshot->hasUniqueKey() && bool(local_context->getSettingsRef().enable_staging_area_for_write);
+    if (enable_staging_area)
+        LOG_DEBUG(log, "enable staging area for write");
+
+    auto modified_query_ast = query->clone();
+    auto & insert_query = modified_query_ast->as<ASTInsertQuery &>();
+
+    if (insert_query.table_id.database_name.empty())
+        insert_query.table_id.database_name = local_context->getCurrentDatabase();
+
+    return std::make_shared<CloudMergeTreeBlockOutputStream>(*this, metadata_snapshot, local_context, enable_staging_area);
+}
+
+/// for insert select and insert infile
+BlockInputStreamPtr
+StorageCnchMergeTree::writeInWorker(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr local_context)
+{
+    bool enable_staging_area = metadata_snapshot->hasUniqueKey() && bool(local_context->getSettingsRef().enable_staging_area_for_write);
+    if (enable_staging_area)
+        LOG_DEBUG(log, "enable staging area for write");
+
+    auto modified_query_ast = query->clone();
+    auto & insert_query = modified_query_ast->as<ASTInsertQuery &>();
+
+    if (insert_query.table_id.database_name.empty())
+        insert_query.table_id.database_name = local_context->getCurrentDatabase();
+
+    if (insert_query.select)
+        touchActiveTimestampForInsertSelectQuery(insert_query, local_context);
+
+    if (insert_query.select && local_context->getSettingsRef().restore_table_expression_in_distributed)
+    {
+        RestoreTableExpressionsVisitor::Data data;
+        data.database = local_context->getCurrentDatabase();
+        RestoreTableExpressionsVisitor(data).visit(insert_query.select);
+    }
+
+    createLocalTableForWrite(&insert_query, local_context, enable_staging_area, true);
+    return nullptr;
 }
 
 HostWithPortsVec StorageCnchMergeTree::getWriteWorkers(const ASTPtr & /**/, ContextPtr local_context)
@@ -1345,7 +1358,7 @@ void StorageCnchMergeTree::collectResource(
     auto cnch_resource = local_context->getCnchServerResource();
     auto create_table_query = getCreateQueryForCloudTable(getCreateTableSql(), local_table_name, local_context);
 
-    cnch_resource->addCreateQuery(local_context, shared_from_this(), create_table_query, local_table_name);
+    cnch_resource->addCreateQuery(local_context, shared_from_this(), create_table_query, local_table_name, false);
 
     // if (local_context.getSettingsRef().enable_virtual_part)
     //     setVirtualPartSize(local_context, parts, worker_group->getReadWorkers().size());
