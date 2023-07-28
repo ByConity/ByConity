@@ -82,15 +82,6 @@ ResolvedWindowPtr resolveWindow(const ASTPtr & node,
     if (definition.order_by)
         resolved_window->order_by = definition.order_by;
 
-    if (definition.frame_type != WindowFrame::FrameType::Rows
-        && definition.frame_type != WindowFrame::FrameType::Range)
-    {
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED,
-                        "Window frame '{}' is not implemented (while processing '{}')",
-                        WindowFrame::toString(definition.frame_type),
-                        definition.formatForErrorMessage());
-    }
-
     resolved_window->frame.is_default = definition.frame_is_default;
     resolved_window->frame.type = definition.frame_type;
     resolved_window->frame.begin_type = definition.frame_begin_type;
