@@ -149,17 +149,6 @@ CnchWorkerClientPtr WorkerGroupHandleImpl::getWorkerClientByHash(const String & 
     return worker_clients[index];
 }
 
-CnchWorkerClientPtr WorkerGroupHandleImpl::getWorkerClient() const
-{
-    if (worker_clients.empty())
-        throw Exception("No available worker for " + id, ErrorCodes::RESOURCE_MANAGER_NO_AVAILABLE_WORKER);
-    if (worker_clients.size() == 1)
-            return worker_clients[0];
-
-    std::uniform_int_distribution dist;
-    auto index = dist(thread_local_rng) % worker_clients.size();
-    return worker_clients[index];
-}
 static std::unordered_set<UInt64> getBusyWorkerIndexes(double ratio, const WorkerGroupMetrics & metrics)
 {
     if (metrics.worker_metrics_vec.empty())
