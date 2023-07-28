@@ -9,6 +9,15 @@ function run_tso() {
     --name byconity-tso byconity/byconity-server:stable tso-server --config-file /root/app/config/tso.xml
 }
 
+function run_rm() {
+    docker run -d --restart=on-failure \
+    --mount type=bind,source="$(pwd)"/config,target=/root/app/config \
+    --mount type=bind,source="$(pwd)"/logs,target=/root/app/logs \
+    --expose 18702 \
+    --network host \
+    --name byconity-rm byconity/byconity-server:stable resource-manager --config-file /root/app/config/rm.xml
+}
+
 function run_server() {
     docker run -d --restart=on-failure \
     --mount type=bind,source="$(pwd)"/config,target=/root/app/config \
@@ -123,6 +132,8 @@ mkdir -p logs/
 
 if [ "$1" = "tso" ]; then
     run_tso
+elif [ "$1" = "rm" ]; then
+    run_rm
 elif [ "$1" = "server" ]; then
     run_server
 elif [ "$1" = "read_worker" ]; then

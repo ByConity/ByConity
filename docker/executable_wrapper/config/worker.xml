@@ -14,6 +14,9 @@
         <count>10</count>
     </logger>
 
+    <WORKER_ID></WORKER_ID>
+    <WORKER_GROUP_ID>vw_default_A</WORKER_GROUP_ID>
+    <VIRTUAL_WAREHOUSE_ID>vw_default</VIRTUAL_WAREHOUSE_ID>
     <http_port>18691</http_port>
     <rpc_port>18692</rpc_port>
     <tcp_port>18690</tcp_port>
