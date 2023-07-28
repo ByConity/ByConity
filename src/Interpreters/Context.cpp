@@ -4697,16 +4697,22 @@ ClusterTaskProgress Context::getTableReclusterTaskProgress(const StorageID & sto
 
 void Context::startResourceReport()
 {
+    if (getServerType() != ServerType::cnch_worker)
+        return;
     shared->cnch_bg_threads_array->startResourceReport();
 }
 
 void Context::stopResourceReport()
 {
+    if (getServerType() != ServerType::cnch_worker)
+        return;
     shared->cnch_bg_threads_array->stopResourceReport();
 }
 
 bool Context::isResourceReportRegistered()
 {
+    if (getServerType() != ServerType::cnch_worker)
+        return false;
     return shared->cnch_bg_threads_array->isResourceReportRegistered();
 }
 
