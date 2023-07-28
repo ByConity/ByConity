@@ -1962,10 +1962,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 global_context->getConfigRef(), graphite_key, async_metrics));
         }
 
-        /// Start worker's heartbeat task when it's fully ready.
-        if (global_context->getServerType() == ServerType::cnch_worker && global_context->getResourceManagerClient())
-            global_context->startResourceReport();
-
         waitForTerminationRequest();
     }
 
