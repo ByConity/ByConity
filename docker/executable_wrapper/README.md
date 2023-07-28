@@ -22,3 +22,15 @@ Step 2:
 - edit the Makefile to update `tag` if necessary
 - execute `make image`
 - execute `make image_push`
+
+## How to use
+- Execute following commands in order to bring up corresponding component:
+```
+./run.sh tso
+./run.sh rm
+./run.sh server
+./run.sh read_worker
+./run.sh writer_worker
+./run.sh dm
+./run.sh cli
+```
