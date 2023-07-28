@@ -31,14 +31,15 @@ public:
     RpcLeaderClientBase(const String & log_prefix,
                         const String & host_port,
                         brpc::ChannelOptions * options_ = nullptr)
-        :RpcClientBase(log_prefix, host_port, options_)
-        ,options(options_)
+        : RpcClientBase(log_prefix, host_port, options_)
+        , leader_host_port(host_port)
+        , options(options_)
     {}
 
     RpcLeaderClientBase(const String & log_prefix,
                         HostWithPorts host_ports_,
                         brpc::ChannelOptions * options_ = nullptr)
-        :RpcClientBase(log_prefix, host_ports_, options_)
+        : RpcClientBase(log_prefix, host_ports_, options_)
         , options(options_)
     {}
 

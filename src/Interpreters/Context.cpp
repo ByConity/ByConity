@@ -4695,6 +4695,21 @@ ClusterTaskProgress Context::getTableReclusterTaskProgress(const StorageID & sto
     return merge_mutate_thread->getReclusteringTaskProgress();
 }
 
+void Context::startResourceReport()
+{
+    shared->cnch_bg_threads_array->startResourceReport();
+}
+
+void Context::stopResourceReport()
+{
+    shared->cnch_bg_threads_array->stopResourceReport();
+}
+
+bool Context::isResourceReportRegistered()
+{
+    return shared->cnch_bg_threads_array->isResourceReportRegistered();
+}
+
 CnchBGThreadPtr Context::tryGetDedupWorkerManager(const StorageID & storage_id) const
 {
     return tryGetCnchBGThread(CnchBGThreadType::DedupWorker, storage_id);

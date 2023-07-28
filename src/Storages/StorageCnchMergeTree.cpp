@@ -866,7 +866,7 @@ HostWithPortsVec StorageCnchMergeTree::getWriteWorkers(const ASTPtr & /**/, Cont
     // No fixed workers for insertion, pick one randomly from worker pool
     auto vw_handle = local_context->getVirtualWarehousePool().get(vw_name);
     HostWithPortsVec res;
-    for (const auto & [_, wg] : vw_handle->getAll())
+    for (const auto & [_, wg] : vw_handle->getAll(VirtualWarehouseHandleImpl::TryUpdate))
     {
         auto wg_hosts = wg->getHostWithPortsVec();
         res.insert(res.end(), wg_hosts.begin(), wg_hosts.end());

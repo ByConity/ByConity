@@ -102,7 +102,7 @@ void ResourceReporterTask::sendRegister()
     auto resource_manager = getContext()->getResourceManagerClient();
     auto data = resource_monitor->createResourceData(true);
 
-    LOG_TRACE(log, "Register Node in RM: {} self: {}", resource_manager->leader_host_port, data.host_ports.toDebugString());
+    LOG_DEBUG(log, "Register Node in RM: {} self: {}", resource_manager->leader_host_port, data.host_ports.toDebugString());
 
     ContextPtr context = getContext();
     data.id = getWorkerID(context);
@@ -114,6 +114,9 @@ void ResourceReporterTask::sendRegister()
 void ResourceReporterTask::sendRemove()
 {
     auto resource_manager = getContext()->getResourceManagerClient();
+    const auto & id = getContext()->getHostWithPorts().id;
+    LOG_DEBUG(log, "Unregister Node in RM: {}, self: {}", resource_manager->leader_host_port, id);
+
     try
     {
         ContextPtr context = getContext();
@@ -127,15 +130,22 @@ void ResourceReporterTask::sendRemove()
 
 void ResourceReporterTask::start()
 {
-    LOG_TRACE(log, "Start ResourceReporterTask.");
+    LOG_DEBUG(log, "Start ResourceReporterTask.");
     background_task->activateAndSchedule();
 }
 
 void ResourceReporterTask::stop()
 {
-    LOG_TRACE(log, "Stop ResourceReporterTask.");
+    LOG_DEBUG(log, "Stop ResourceReporterTask.");
     background_task->deactivate();
     sendRemove();
+}
+
+/// Return true if the worker is registered to RM.
+bool ResourceReporterTask::registered()
+{
+    LOG_DEBUG(log, "ResourceReporterTask registered: {}", !init_request);
+    return !init_request;
 }
 
 }

@@ -51,7 +51,7 @@ public:
     std::vector<HostWithPorts> pickWorkers(const VWScheduleAlgo & algo = VWScheduleAlgo::Random, const Requirement & requirement = {});
 
 private:
-    void filterGroup(const Requirement & requirement, std::vector<WorkerGroupAndMetrics> & out_available_groups) const;
+    void filterGroup(const Requirement & requirement, std::vector<WorkerGroupAndMetrics> & res) const;
     WorkerGroupPtr selectGroup(const VWScheduleAlgo & algo, const std::vector<WorkerGroupAndMetrics> & available_groups);
 
     void filterWorker(const Requirement & requirement, std::vector<WorkerNodePtr> & out_available_workers);

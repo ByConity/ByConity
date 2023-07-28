@@ -1427,6 +1427,9 @@ public:
     bool removeMergeMutateTasksOnPartitions(const StorageID &, const std::unordered_set<String> &);
     bool getTableReclusterTaskStatus(const StorageID & storage_id) const;
     ClusterTaskProgress getTableReclusterTaskProgress(const StorageID & storage_id) const;
+    void startResourceReport();
+    void stopResourceReport();
+    bool isResourceReportRegistered();
 
     CnchBGThreadPtr tryGetDedupWorkerManager(const StorageID & storage_id) const;
 
