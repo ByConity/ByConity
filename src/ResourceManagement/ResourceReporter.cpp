@@ -36,15 +36,16 @@ ResourceReporterTask::ResourceReporterTask(ContextPtr global_context_)
     , resource_monitor(std::make_unique<ResourceMonitor>(global_context_))
     , background_task(global_context_->getSchedulePool().createTask("ResourceReporterTask", [&](){ run(); }))
 {
-    LOG_TRACE(log, "Create ResourceReporterTask.");
-    background_task->activateAndSchedule();
+    LOG_DEBUG(log, "Create ResourceReporterTask.");
+    /// Don't activate the heartbeat task here,
+    /// or servers might send queries to the worker before the worker is ready.
 }
 
 ResourceReporterTask::~ResourceReporterTask()
 {
     try
     {
-        LOG_TRACE(log, "Remove ResourceReporterTask.");
+        LOG_DEBUG(log, "Remove ResourceReporterTask.");
         background_task->deactivate();
         sendRemove();
     }

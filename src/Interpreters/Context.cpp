@@ -156,11 +156,11 @@
 #include <WorkerTasks/ManipulationList.h>
 
 #include <Statistics/StatisticsMemoryStore.h>
+#include <Storages/DiskCache/DiskCacheFactory.h>
 #include <Transaction/CnchServerTransaction.h>
 #include <Transaction/CnchWorkerTransaction.h>
-#include <Common/HostWithPorts.h>
-#include <Storages/DiskCache/DiskCacheFactory.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
+#include <Common/HostWithPorts.h>
 
 #include <Interpreters/TemporaryDataOnDisk.h>
 
@@ -200,7 +200,6 @@ extern const Metric BackgroundCNCHTopologySchedulePoolTask;
 
 namespace DB
 {
-
 namespace SchedulePool
 {
     enum Type
@@ -275,18 +274,19 @@ struct ContextSharedPart
     UInt16 interserver_io_port = 0; /// and port.
     String interserver_scheme; /// http or https
 
-    bool complex_query_active {false};
+    bool complex_query_active{false};
 
     MultiVersion<InterserverCredentials> interserver_io_credentials;
 
-    String path;                                            /// Path to the data directory, with a slash at the end.
-    String flags_path;                                      /// Path to the directory with some control flags for server maintenance.
-    String user_files_path;                                 /// Path to the directory with user provided files, usable by 'file' table function.
-    String dictionaries_lib_path;                           /// Path to the directory with user provided binaries and libraries for external dictionaries.
-    String metastore_path;                                  /// Path to metastore. We use a seperate path to hold all metastore to make it more easier to manage the metadata on server.
-    ConfigurationPtr config;                                /// Global configuration settings.
-    ConfigurationPtr cnch_config;                           /// Config used in cnch.
-    RootConfiguration root_config;                          /// Predefined global configuration settings.
+    String path; /// Path to the data directory, with a slash at the end.
+    String flags_path; /// Path to the directory with some control flags for server maintenance.
+    String user_files_path; /// Path to the directory with user provided files, usable by 'file' table function.
+    String dictionaries_lib_path; /// Path to the directory with user provided binaries and libraries for external dictionaries.
+    String
+        metastore_path; /// Path to metastore. We use a seperate path to hold all metastore to make it more easier to manage the metadata on server.
+    ConfigurationPtr config; /// Global configuration settings.
+    ConfigurationPtr cnch_config; /// Config used in cnch.
+    RootConfiguration root_config; /// Predefined global configuration settings.
 
     String tmp_path; /// Path to the temporary files that occur when processing the request.
     mutable VolumePtr tmp_volume; /// Volume for the the temporary files that occur when processing the request.
@@ -324,15 +324,19 @@ struct ContextSharedPart
     ManipulationList manipulation_list;
     PlanSegmentProcessList plan_segment_process_list; /// The list of running plansegments in the moment;
     ReplicatedFetchList replicated_fetch_list;
-    ConfigurationPtr users_config;                          /// Config with the users, profiles and quotas sections.
-    InterserverIOHandler interserver_io_handler;            /// Handler for interserver communication.
+    ConfigurationPtr users_config; /// Config with the users, profiles and quotas sections.
+    InterserverIOHandler interserver_io_handler; /// Handler for interserver communication.
 
-    mutable std::optional<BackgroundSchedulePool> buffer_flush_schedule_pool; /// A thread pool that can do background flush for Buffer tables.
-    mutable std::optional<BackgroundSchedulePool> schedule_pool;    /// A thread pool that can run different jobs in background (used in replicated tables)
-    mutable std::optional<BackgroundSchedulePool> distributed_schedule_pool; /// A thread pool that can run different jobs in background (used for distributed sends)
-    mutable std::optional<BackgroundSchedulePool> message_broker_schedule_pool; /// A thread pool that can run different jobs in background (used for message brokers, like RabbitMQ and Kafka)
+    mutable std::optional<BackgroundSchedulePool>
+        buffer_flush_schedule_pool; /// A thread pool that can do background flush for Buffer tables.
+    mutable std::optional<BackgroundSchedulePool>
+        schedule_pool; /// A thread pool that can run different jobs in background (used in replicated tables)
+    mutable std::optional<BackgroundSchedulePool>
+        distributed_schedule_pool; /// A thread pool that can run different jobs in background (used for distributed sends)
+    mutable std::optional<BackgroundSchedulePool>
+        message_broker_schedule_pool; /// A thread pool that can run different jobs in background (used for message brokers, like RabbitMQ and Kafka)
 
-    std::optional<ThreadPool> part_cache_manager_thread_pool;  /// A thread pool to collect partition metrics in background.
+    std::optional<ThreadPool> part_cache_manager_thread_pool; /// A thread pool to collect partition metrics in background.
     mutable ThrottlerPtr disk_cache_throttler;
 
     mutable std::array<std::optional<BackgroundSchedulePool>, SchedulePool::Size> extra_schedule_pools;
@@ -398,8 +402,8 @@ struct ContextSharedPart
     /// Clusters for distributed tables
     /// Initialized on demand (on distributed storages initialization) since Settings should be initialized
     std::shared_ptr<Clusters> clusters;
-    ConfigurationPtr clusters_config;                        /// Stores updated configs
-    mutable std::mutex clusters_mutex;                       /// Guards clusters and clusters_config
+    ConfigurationPtr clusters_config; /// Stores updated configs
+    mutable std::mutex clusters_mutex; /// Guards clusters and clusters_config
     WorkerStatusManagerPtr worker_status_manager;
 
     mutable DeleteBitmapCachePtr delete_bitmap_cache; /// Cache of delete bitmaps
@@ -431,8 +435,7 @@ struct ContextSharedPart
     std::shared_ptr<ProfileElementConsumer<ProcessorProfileLogElement>> processor_log_element_consumer;
     bool is_explain_query;
 
-    ContextSharedPart()
-        : macros(std::make_unique<Macros>())
+    ContextSharedPart() : macros(std::make_unique<Macros>())
     {
         /// TODO: make it singleton (?)
         static std::atomic<size_t> num_calls{0};
@@ -549,10 +552,7 @@ struct ContextSharedPart
         delete_cnch_system_logs.reset();
     }
 
-    bool hasTraceCollector() const
-    {
-        return trace_collector.has_value();
-    }
+    bool hasTraceCollector() const { return trace_collector.has_value(); }
 
     void initializeTraceCollector(std::shared_ptr<TraceLog> trace_log)
     {
@@ -650,9 +650,12 @@ void Context::selectWorkerNodesWithMetrics()
     if (tryGetCurrentWorkerGroup())
     {
         Stopwatch sw;
-        worker_group_status = getWorkerStatusManager()->getWorkerGroupStatus(this,
-            current_worker_group->getHostWithPortsVec(), current_worker_group->getVWName(),  current_worker_group->getID(),
-            [](const String & vw, const String & wg, const HostWithPorts & host_ports){
+        worker_group_status = getWorkerStatusManager()->getWorkerGroupStatus(
+            this,
+            current_worker_group->getHostWithPortsVec(),
+            current_worker_group->getVWName(),
+            current_worker_group->getID(),
+            [](const String & vw, const String & wg, const HostWithPorts & host_ports) {
                 return WorkerStatusManager::getWorkerId(vw, wg, host_ports.id);
             });
 
@@ -1906,9 +1909,7 @@ void Context::setCurrentQueryId(const String & query_id)
         /// Use protected constructor.
         struct QueryUUID : Poco::UUID
         {
-            QueryUUID(const char * bytes, Poco::UUID::Version version) : Poco::UUID(bytes, version)
-            {
-            }
+            QueryUUID(const char * bytes, Poco::UUID::Version version) : Poco::UUID(bytes, version) { }
         };
 
         query_id_to_set = QueryUUID(random.bytes, Poco::UUID::UUID_RANDOM).toString();
@@ -2576,7 +2577,6 @@ zkutil::ZooKeeperPtr Context::getZooKeeper() const
 
 namespace
 {
-
     bool checkZooKeeperConfigIsLocal(const Poco::Util::AbstractConfiguration & config, const std::string & config_name)
     {
         Poco::Util::AbstractConfiguration::Keys keys;
@@ -2933,8 +2933,7 @@ UInt16 Context::getPortFromEnvForConsul(const char * key) const
 
 HostWithPorts Context::getHostWithPorts() const
 {
-    auto get_host_with_port = [this] ()
-    {
+    auto get_host_with_port = [this]() {
         String host = getHostIPFromEnv();
         String id = getWorkerID(shared_from_this());
         if (id.empty())
@@ -4693,6 +4692,27 @@ ClusterTaskProgress Context::getTableReclusterTaskProgress(const StorageID & sto
     if (!merge_mutate_thread)
         throw Exception("Fail to cast to CnchMergeMutateThread", ErrorCodes::LOGICAL_ERROR);
     return merge_mutate_thread->getReclusteringTaskProgress();
+}
+
+void Context::startResourceReport()
+{
+    if (getServerType() != ServerType::cnch_worker)
+        return;
+    shared->cnch_bg_threads_array->startResourceReport();
+}
+
+void Context::stopResourceReport()
+{
+    if (getServerType() != ServerType::cnch_worker)
+        return;
+    shared->cnch_bg_threads_array->stopResourceReport();
+}
+
+bool Context::isResourceReportRegistered()
+{
+    if (getServerType() != ServerType::cnch_worker)
+        return false;
+    return shared->cnch_bg_threads_array->isResourceReportRegistered();
 }
 
 CnchBGThreadPtr Context::tryGetDedupWorkerManager(const StorageID & storage_id) const
