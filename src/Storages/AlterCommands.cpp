@@ -403,6 +403,14 @@ std::optional<AlterCommand> AlterCommand::parse(const ASTAlterCommand * command_
         command.map_keys = command_ast->map_keys;
         return command;
     }
+    else if (command_ast->type == ASTAlterCommand::CHANGE_ENGINE)
+    {
+        AlterCommand command;
+        command.ast = command_ast->clone();
+        command.type = AlterCommand::CHANGE_ENGINE;
+        command.engine = command_ast->engine;
+        return command;
+    }
     else
         return {};
 }
@@ -717,6 +725,10 @@ void AlterCommand::apply(StorageInMemoryMetadata & metadata, ContextPtr context)
 
         for (auto & index : metadata.secondary_indices)
             rename_visitor.visit(index.definition_ast);
+    }
+    else if (type == CHANGE_ENGINE)
+    {
+        throw Exception("CHANGE_ENGINE command is only supported in StorageMySQL", ErrorCodes::NOT_IMPLEMENTED);
     }
     else
         throw Exception("Wrong parameter type in ALTER query", ErrorCodes::LOGICAL_ERROR);

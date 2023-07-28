@@ -62,7 +62,7 @@ public:
     void detachTablePermanently(ContextPtr local_context, const String & name) override;
     /// No need to be empty when drop cnch database. Catalog is responsible for deleting tables under current db.
     bool shouldBeEmptyOnDetach() const override { return false; }
-    void renameDatabase(ContextPtr local_cotnext, const String & new_name) override;
+    void renameDatabase(ContextPtr local_context, const String & new_name) override;
     void renameTable(
         ContextPtr context,
         const String & table_name,

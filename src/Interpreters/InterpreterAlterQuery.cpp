@@ -443,6 +443,10 @@ AccessRightsElements InterpreterAlterQuery::getRequiredAccessForCommand(const AS
             required_access.emplace_back(AccessType::ALTER_MODIFY_COLUMN, database, table, column_name_from_col_decl());
             break;
         }
+        case ASTAlterCommand::CHANGE_ENGINE:
+        {
+            break;
+        }
     }
 
     return required_access;

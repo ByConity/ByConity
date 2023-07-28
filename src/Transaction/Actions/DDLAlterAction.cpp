@@ -78,15 +78,7 @@ void DDLAlterAction::executeV1(TxnTimestamp commit_time)
         updateTsCache(table->getStorageUUID(), commit_time);
         if (!new_schema.empty())
         {
-            catalog->alterTable(
-                global_context,
-                query_settings,
-                table,
-                new_schema,
-                static_cast<StorageCnchMergeTree &>(*table).commit_time,
-                txn_id,
-                commit_time,
-                is_recluster);
+            catalog->alterTable(global_context, query_settings, table, new_schema, table->commit_time, txn_id, commit_time, is_recluster);
             LOG_DEBUG(log, "Successfully change schema in catalog.");
         }
     }
