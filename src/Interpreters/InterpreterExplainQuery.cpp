@@ -355,6 +355,8 @@ BlockInputStreamPtr InterpreterExplainQuery::executeImpl()
     // if query is not supported by optimizer, settings `settings.enable_optimizer` in context will be disabled.
     if (QueryUseOptimizerChecker::check(query, getContext()))
     {
+        if (ast.getKind() == ASTExplainQuery::Analysis)
+            return explainAnalysis(query);
         explainUsingOptimizer(query, buf, single_line);
     }
     else if (ast.getKind() == ASTExplainQuery::ParsedAST)
@@ -877,7 +879,6 @@ BlockInputStreamPtr InterpreterExplainQuery::explainAnalysis(const ASTPtr & ast)
     for (auto & it : table_storage_scopes)
     {
         Array columns_array;
-        auto & db_and_table = it.first->as<ASTTableIdentifier &>();
         auto storage = analysis->getStorageAnalysis(*it.first);
         tables_array.push_back(storage.table);
         databases_array.push_back(storage.database);

@@ -130,10 +130,14 @@ bool QueryUseOptimizerChecker::check(ASTPtr node, ContextMutablePtr context, boo
     {
         bool explain_plan = explain->getKind() == ASTExplainQuery::ExplainKind::OptimizerPlan
             || explain->getKind() == ASTExplainQuery::ExplainKind::QueryPlan
-            || explain->getKind() == ASTExplainQuery::ExplainKind::QueryPipeline || explain->getKind() == ASTExplainQuery::AnalyzedSyntax
-            || explain->getKind() == ASTExplainQuery::DistributedAnalyze || explain->getKind() == ASTExplainQuery::LogicalAnalyze
-            || explain->getKind() == ASTExplainQuery::Distributed || explain->getKind() == ASTExplainQuery::TraceOptimizerRule
-            || explain->getKind() == ASTExplainQuery::TraceOptimizer;
+            || explain->getKind() == ASTExplainQuery::ExplainKind::QueryPipeline
+            || explain->getKind() ==  ASTExplainQuery::AnalyzedSyntax
+            || explain->getKind() ==  ASTExplainQuery::DistributedAnalyze
+            || explain->getKind() ==  ASTExplainQuery::LogicalAnalyze
+            || explain->getKind() ==  ASTExplainQuery::Distributed
+            || explain->getKind() ==  ASTExplainQuery::TraceOptimizerRule
+            || explain->getKind() ==  ASTExplainQuery::TraceOptimizer
+            || explain->getKind() ==  ASTExplainQuery::Analysis;
         return explain_plan && check(explain->getExplainedQuery(), context);
     }
 
@@ -235,6 +239,12 @@ bool QueryUseOptimizerVisitor::visitASTSelectQuery(ASTPtr & node, QueryUseOptimi
 {
     auto * select = node->as<ASTSelectQuery>();
 
+    if (select->limit_with_ties)
+    {
+        reason = "LIMIT/OFFSET FETCH WITH TIES not implemented";
+        return false;
+    }
+
     if (select->group_by_with_totals)
     {
         reason = "group by with totals";
@@ -263,6 +273,13 @@ bool QueryUseOptimizerVisitor::visitASTSelectQuery(ASTPtr & node, QueryUseOptimi
 
 bool QueryUseOptimizerVisitor::visitASTTableJoin(ASTPtr & node, QueryUseOptimizerContext & context)
 {
+    auto & table_join = node->as<ASTTableJoin &>();
+    if (table_join.strictness == ASTTableJoin::Strictness::Any)
+        if (table_join.kind == ASTTableJoin::Kind::Full)
+        {
+            reason = "Any Full join";
+            return false;
+        }
     return visitNode(node, context);
 }
 
