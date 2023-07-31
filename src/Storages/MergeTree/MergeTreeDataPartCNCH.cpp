@@ -206,9 +206,49 @@ String MergeTreeDataPartCNCH::getFileNameForColumn(const NameAndTypePair & colum
     return filename;
 }
 
-bool MergeTreeDataPartCNCH::hasColumnFiles(const NameAndTypePair &) const
+bool MergeTreeDataPartCNCH::hasColumnFiles(const NameAndTypePair & column) const
 {
-    return true;
+    if (hasOnlyOneCompactedMapColumnNotKV())
+        return true;
+    auto check_stream_exists = [this] (const String & stream_name)
+    {
+        auto checksums = getChecksums();
+        auto bin_checksum = checksums->files.find(stream_name + DATA_FILE_EXTENSION);
+        auto mrk_checksum = checksums->files.find(stream_name + index_granularity_info.marks_file_extension);
+
+        return bin_checksum != checksums->files.end() && mrk_checksum != checksums->files.end();
+    };
+
+    if (column.type->isMap() && !column.type->isMapKVStore())
+    {
+        for (auto & [file, _] : getChecksums()->files)
+        {
+            if (versions->enable_compact_map_data)
+            {
+                if (isMapCompactFileNameOfSpecialMapName(file, column.name))
+                    return true;
+            }
+            else
+            {
+                if (isMapImplicitFileNameOfSpecialMapName(file, column.name))
+                    return true;
+            }
+        }
+        return false;
+    }
+    else
+    {
+        bool res = true;
+        auto serialization = IDataType::getSerialization(column, check_stream_exists);
+        serialization->enumerateStreams([&](const ISerialization::SubstreamPath & substream_path)
+        {
+            String file_name = ISerialization::getFileNameForStream(column, substream_path);
+            if (!check_stream_exists(file_name))
+                res = false;
+        });
+
+        return res;
+    }
 };
 
 void MergeTreeDataPartCNCH::loadIndexGranularity(size_t marks_count, [[maybe_unused]] const std::vector<size_t> & index_granularities)

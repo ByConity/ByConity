@@ -67,6 +67,7 @@ struct AlterCommand
         REMOVE_TTL,
         CLEAR_MAP_KEY,
         MATERIALIZE_PROJECTION,
+        CHANGE_ENGINE,
     };
 
     /// Which property user wants to remove from column
@@ -170,6 +171,9 @@ struct AlterCommand
 
     /// For CLEAR MAP KEYS
     ASTPtr map_keys;
+
+    /// For change engine
+    ASTPtr engine;
 
     /// What to remove from column (or TTL)
     RemoveProperty to_remove = RemoveProperty::NO_PROPERTY;

@@ -118,6 +118,8 @@ public:
         LIVE_VIEW_REFRESH,
 
         SAMPLE_PARTITION_WHERE,
+
+        CHANGE_ENGINE,
     };
 
     Type type = NO_TYPE;
@@ -217,6 +219,9 @@ public:
 
     /// For sample / split / resharding expression
     ASTPtr with_sharding_exp;
+
+    /// For Engine = EngineName(...), the name with optional parameters is stored here.
+    ASTPtr engine;
 
     bool detach = false;        /// true for DETACH PARTITION
 

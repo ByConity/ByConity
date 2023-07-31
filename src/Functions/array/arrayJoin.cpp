@@ -12,6 +12,7 @@ namespace ErrorCodes
 {
     extern const int FUNCTION_IS_SPECIAL;
     extern const int ILLEGAL_TYPE_OF_ARGUMENT;
+    extern const int TYPE_MISMATCH;
 }
 
 /** arrayJoin(arr) - a special function - it can not be executed directly;
@@ -52,7 +53,7 @@ public:
     {
         const auto arr = getArrayJoinDataType(arguments[0]);
         if (!arr)
-            throw Exception("Argument for function " + getName() + " must be Array.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception("Argument for function " + getName() + " must be Array.", ErrorCodes::TYPE_MISMATCH);
 
         return arr->getNestedType();
     }

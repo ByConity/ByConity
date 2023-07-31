@@ -19,6 +19,7 @@
 #include <ResourceManagement/IWorkerGroup.h>
 #include <Common/ConcurrentMapForCreating.h>
 
+#include <bthread/mutex.h>
 #include <common/logger_useful.h>
 
 namespace DB::ResourceManagement
@@ -34,8 +35,8 @@ public:
     void loadWorkerGroups();
     void clearWorkerGroups();
 
-    WorkerGroupPtr tryGetWorkerGroup(const std::string & group_id, std::lock_guard<std::mutex> * vw_lock = nullptr);
-    WorkerGroupPtr getWorkerGroup(const std::string & group_id, std::lock_guard<std::mutex> * vw_lock = nullptr);
+    WorkerGroupPtr tryGetWorkerGroup(const std::string & group_id, std::lock_guard<bthread::Mutex> * vw_lock = nullptr);
+    WorkerGroupPtr getWorkerGroup(const std::string & group_id, std::lock_guard<bthread::Mutex> * vw_lock = nullptr);
 
     std::unordered_map<String, WorkerGroupPtr> getAllWorkerGroups();
 
@@ -45,7 +46,8 @@ private:
     ResourceManagerController & rm_controller;
     Poco::Logger * log{nullptr};
     std::atomic_bool need_sync_with_catalog{false};
-    mutable std::mutex wg_mgr_mutex;
+    /// Use bthread::Mutex but not std::mutex to avoid deadlock issue as we call other rpc API (catalog) in the lock scope.
+    mutable bthread::Mutex wg_mgr_mutex;
 
     auto & getMutex() const
     {
@@ -54,24 +56,24 @@ private:
 
     auto getLock() const
     {
-        return std::lock_guard<std::mutex>(wg_mgr_mutex);
+        return std::lock_guard<bthread::Mutex>(wg_mgr_mutex);
     }
 
-    void loadWorkerGroupsImpl(std::lock_guard<std::mutex> * wg_lock);
-    void clearWorkerGroupsImpl(std::lock_guard<std::mutex> * wg_lock);
+    void loadWorkerGroupsImpl(std::lock_guard<bthread::Mutex> * wg_lock);
+    void clearWorkerGroupsImpl(std::lock_guard<bthread::Mutex> * wg_lock);
 
-    WorkerGroupPtr tryGetWorkerGroupImpl(const std::string & group_id, std::lock_guard<std::mutex> * vw_lock, std::lock_guard<std::mutex> * wg_lock);
-    WorkerGroupPtr getWorkerGroupImpl(const std::string & group_id, std::lock_guard<std::mutex> * vw_lock, std::lock_guard<std::mutex> * wg_lock);
+    WorkerGroupPtr tryGetWorkerGroupImpl(const std::string & group_id, std::lock_guard<bthread::Mutex> * vw_lock, std::lock_guard<bthread::Mutex> * wg_lock);
+    WorkerGroupPtr getWorkerGroupImpl(const std::string & group_id, std::lock_guard<bthread::Mutex> * vw_lock, std::lock_guard<bthread::Mutex> * wg_lock);
 
-    std::unordered_map<String, WorkerGroupPtr> getAllWorkerGroupsImpl(std::lock_guard<std::mutex> * wg_lock);
+    std::unordered_map<String, WorkerGroupPtr> getAllWorkerGroupsImpl(std::lock_guard<bthread::Mutex> * wg_lock);
 
     // Creation and deletion of worker groups should be done via ResourceManagerController
     WorkerGroupPtr createWorkerGroup(
-        const std::string & group_id, bool if_not_exists, const std::string & vw_name, WorkerGroupData data, std::lock_guard<std::mutex> * vw_lock = nullptr);
+        const std::string & group_id, bool if_not_exists, const std::string & vw_name, WorkerGroupData data, std::lock_guard<bthread::Mutex> * vw_lock = nullptr);
     WorkerGroupPtr createWorkerGroupImpl(
-        const std::string & group_id, bool if_not_exists, const std::string & vw_name, WorkerGroupData data, std::lock_guard<std::mutex> * vw_lock, std::lock_guard<std::mutex> * wg_lock);
+        const std::string & group_id, bool if_not_exists, const std::string & vw_name, WorkerGroupData data, std::lock_guard<bthread::Mutex> * vw_lock, std::lock_guard<bthread::Mutex> * wg_lock);
     void dropWorkerGroup(const std::string & group_id);
-    void dropWorkerGroupImpl(const std::string & group_id, std::lock_guard<std::mutex> * wg_lock);
+    void dropWorkerGroupImpl(const std::string & group_id, std::lock_guard<bthread::Mutex> * wg_lock);
 
     friend class ResourceManagerController;
     friend class WorkerGroupResourceCoordinator;

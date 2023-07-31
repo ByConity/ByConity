@@ -1087,6 +1087,18 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
 
             command->type = ASTAlterCommand::SAMPLE_PARTITION_WHERE;
         }
+        else if (ParserKeyword{"ENGINE"}.ignore(pos, expected))
+        {
+            if (pos->type != TokenType::Equals)
+                return false;
+            ++pos;
+
+            if (!ParserIdentifierWithOptionalParameters().parse(pos, command->engine, expected))
+                return false;
+
+            command->type = ASTAlterCommand::CHANGE_ENGINE;
+        }
+
         else
             return false;
     }
@@ -1127,6 +1139,8 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
         command->children.push_back(command->select);
     if (command->rename_to)
         command->children.push_back(command->rename_to);
+    if (command->engine)
+        command->children.push_back(command->engine);
 
     return true;
 }

@@ -18,6 +18,7 @@
 #include <boost/lexical_cast.hpp>
 #include <Common/ResourceMonitor.h>
 
+#include <Common/CurrentMetrics.h>
 #include <Common/filesystemHelpers.h>
 #include <common/getFQDNOrHostName.h>
 #include <common/getMemoryAmount.h>
@@ -75,6 +76,12 @@ bool inContainer()
     return false;
 }
 }
+
+namespace CurrentMetrics
+{
+    extern const Metric Consumer;
+}
+
 namespace DB
 {
 
@@ -123,6 +130,11 @@ std::optional<CPUMonitor::ContainerData> CPUMonitor::getContainerData()
         if (all_cpu_wall_time == 0)
             return std::nullopt;
         container_data.cpu_usage = (cpu_time_diff / 10.0) / (all_cpu_wall_time);
+
+        cpu_usage_accumulate += likely(buffer.full()) ? data.cpu_usage - buffer.front() : data.cpu_usage;
+        buffer.push_back(data.cpu_usage);
+        data.cpu_usage_avg_1min = cpu_usage_accumulate / buffer.size();
+
         return container_data;
     }
     return std::nullopt;
@@ -191,6 +203,10 @@ CPUMonitor::Data CPUMonitor::getPhysicalMachineData()
     uint64_t active_ticks_in_interval = data.active_ticks - prev_active_ticks;
     uint64_t total_ticks_in_interval = data.total_ticks - prev_total_ticks;
     data.cpu_usage = 100.00 * active_ticks_in_interval / total_ticks_in_interval;
+    
+    cpu_usage_accumulate += likely(buffer.full()) ? data.cpu_usage - buffer.front() : data.cpu_usage;
+    buffer.push_back(data.cpu_usage);
+    data.cpu_usage_avg_1min = cpu_usage_accumulate / buffer.size();
 
     return data;
 }
@@ -213,7 +229,7 @@ MemoryMonitor::~MemoryMonitor()
         tryLogCurrentException(__PRETTY_FUNCTION__);
 }
 
-std::optional<MemoryMonitor::Data> MemoryMonitor::getContainerData() const
+std::optional<MemoryMonitor::Data> MemoryMonitor::getContainerData()
 {
     Data data{};
     auto mem_usage_val = getNumberFromFile<UInt64>(mem_usage_fs);
@@ -223,12 +239,17 @@ std::optional<MemoryMonitor::Data> MemoryMonitor::getContainerData() const
         data.memory_total = *mem_limit_val;
         data.memory_available = data.memory_total - *mem_usage_val;
         data.memory_usage = 100.00 * static_cast<double>(data.memory_total - data.memory_available) / data.memory_total;
+
+        memory_usage_accumulate += likely(buffer.full()) ? data.memory_usage - buffer.front() : data.memory_usage;
+        buffer.push_back(data.memory_usage);
+        data.memory_usage_avg_1min = memory_usage_accumulate / buffer.size();
+
         return data;
     }
     return std::nullopt;
 }
 
-MemoryMonitor::Data MemoryMonitor::get() const
+MemoryMonitor::Data MemoryMonitor::get()
 {
     if (in_container)
     {
@@ -239,7 +260,7 @@ MemoryMonitor::Data MemoryMonitor::get() const
     return getPhysicalMachineData();
 }
 
-MemoryMonitor::Data MemoryMonitor::getPhysicalMachineData() const
+MemoryMonitor::Data MemoryMonitor::getPhysicalMachineData()
 {
     Data data{};
 
@@ -291,6 +312,10 @@ MemoryMonitor::Data MemoryMonitor::getPhysicalMachineData() const
         throw Exception("Total memory is 0", ErrorCodes::LOGICAL_ERROR);
 
     data.memory_usage = 100.00 * static_cast<double>(data.memory_total - data.memory_available) / data.memory_total;
+    
+    memory_usage_accumulate += likely(buffer.full()) ? data.memory_usage - buffer.front() : data.memory_usage;
+    buffer.push_back(data.memory_usage);
+    data.memory_usage_avg_1min = memory_usage_accumulate / buffer.size();
 
     return data;
 }
@@ -322,9 +347,14 @@ UInt64 ResourceMonitor::getQueryCount()
     return getContext()->getProcessList().size(); /// TODO: remove system_query.
 }
 
-UInt64 ResourceMonitor::getBackgroundTaskCount()
+UInt64 ResourceMonitor::getManipulationTaskCount()
 {
     return getContext()->getManipulationList().size();
+}
+
+UInt64 ResourceMonitor::getConsumerCount()
+{
+    return CurrentMetrics::values[CurrentMetrics::Consumer];
 }
 
 WorkerNodeResourceData ResourceMonitor::createResourceData(bool init)
@@ -342,6 +372,8 @@ WorkerNodeResourceData ResourceMonitor::createResourceData(bool init)
     data.disk_space = getDiskSpace();
     data.query_num = getQueryCount();
     data.last_status_create_time = time(nullptr);
+    data.manipulation_num = getManipulationTaskCount();
+    data.consumer_num = getConsumerCount();
 
     if (init)
     {

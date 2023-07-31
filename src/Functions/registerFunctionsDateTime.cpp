@@ -100,6 +100,7 @@ void registerFunctionDateDiff(FunctionFactory &);
 void registerFunctionDateName(FunctionFactory &);
 void registerFunctionDayName(FunctionFactory &);
 void registerFunctionToTimeZone(FunctionFactory &);
+void registerFunctionToSeconds(FunctionFactory &);
 void registerFunctionFormatDateTime(FunctionFactory &);
 void registerFunctionFromModifiedJulianDay(FunctionFactory &);
 void registerFunctionDateTrunc(FunctionFactory &);
@@ -195,6 +196,7 @@ void registerFunctionsDateTime(FunctionFactory & factory)
     registerFunctionDateName(factory);
     registerFunctionDayName(factory);
     registerFunctionToTimeZone(factory);
+    registerFunctionToSeconds(factory);
     registerFunctionFormatDateTime(factory);
     registerFunctionFromModifiedJulianDay(factory);
     registerFunctionDateTrunc(factory);

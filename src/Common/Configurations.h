@@ -27,8 +27,8 @@ namespace DB
     M(UInt64, max_retry_times, "", 3, ConfigFlag::Default, "") \
     M(UInt64, check_leader_info_interval_ms, "", 1000, ConfigFlag::Default, "") \
     M(UInt64, wait_before_become_leader_ms, "", 3000, ConfigFlag::Default, "") \
-    M(Bool, enable_auto_resource_sharing, "", false, ConfigFlag::Default, "") \
-    M(UInt64, auto_resource_sharing_task_interval_ms, "", 5000, ConfigFlag::Default, "") \
+    M(String, resource_coordinate_mode, "", "None", ConfigFlag::Default, "None, Sharing, Scaling.") \
+    M(UInt64, resource_coordinate_task_interval_ms, "", 5000, ConfigFlag::Default, "") \
     M(UInt64, worker_register_visible_granularity_sec, "", 5, ConfigFlag::Default, "change workers' state from Registering to Running every N seconds to avoid changing worker topology frequently.") \
     M(UInt64, lost_worker_timeout_seconds, "", 10, ConfigFlag::Default, "") \
 

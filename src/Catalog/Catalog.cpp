@@ -1006,30 +1006,30 @@ namespace Catalog
             ProfileEvents::SetWorkerGroupForTableFailed);
     }
 
-    StoragePtr Catalog::getTable(const Context & query_context, const String & db, const String & name, const TxnTimestamp & ts)
+    StoragePtr Catalog::getTable(const Context & query_context, const String & database, const String & name, const TxnTimestamp & ts)
     {
-        StoragePtr outRes = nullptr;
+        StoragePtr out_res = nullptr;
         runWithMetricSupport(
             [&] {
-                String table_uuid = meta_proxy->getTableUUID(name_space, db, name);
+                String table_uuid = meta_proxy->getTableUUID(name_space, database, name);
 
                 if (table_uuid.empty())
-                    throw Exception("Table not found: " + db + "." + name, ErrorCodes::UNKNOWN_TABLE);
+                    throw Exception("Table not found: " + database + "." + name, ErrorCodes::UNKNOWN_TABLE);
 
 
                 auto storage_cache = context.getCnchStorageCache();
                 if (storage_cache)
                 {
-                    if (auto storage = storage_cache->get(db, name))
+                    if (auto storage = storage_cache->get(database, name))
                     {
                         /// Compare the table uuid to make sure we get the correct storage cache. Remove outdated cache if necessary.
                         if (UUIDHelpers::UUIDToString(storage->getStorageID().uuid) == table_uuid)
                         {
-                            outRes = storage;
+                            out_res = storage;
                             return;
                         }
                         else
-                            storage_cache->remove(db, name);
+                            storage_cache->remove(database, name);
                     }
                 }
 
@@ -1037,7 +1037,7 @@ namespace Catalog
 
                 if (!table)
                     throw Exception(
-                        "Cannot get metadata of table " + db + "." + name + " by UUID : " + table_uuid,
+                        "Cannot get metadata of table " + database + "." + name + " by UUID : " + table_uuid,
                         ErrorCodes::CATALOG_SERVICE_INTERNAL_ERROR);
 
                 auto res = createTableFromDataModel(query_context, *table);
@@ -1047,13 +1047,13 @@ namespace Catalog
                 {
                     auto server = context.getCnchTopologyMaster()->getTargetServer(table_uuid, res->getServerVwName(), true);
                     if (!server.empty() && isLocalServer(server.getRPCAddress(), std::to_string(context.getRPCPort())))
-                        storage_cache->insert(db, name, table->commit_time(), res);
+                        storage_cache->insert(database, name, table->commit_time(), res);
                 }
-                outRes = res;
+                out_res = res;
             },
             ProfileEvents::GetTableSuccess,
             ProfileEvents::GetTableFailed);
-        return outRes;
+        return out_res;
     }
 
     StoragePtr Catalog::tryGetTable(const Context & query_context, const String & database, const String & name, const TxnTimestamp & ts)
@@ -1384,7 +1384,6 @@ namespace Catalog
                 }
                 auto res = getServerDataPartsInPartitions(table, getPartitionIDs(table, session_context), ts, session_context);
                 outRes = res;
-                return;
             },
             ProfileEvents::GetAllServerDataPartsSuccess,
             ProfileEvents::GetAllServerDataPartsFailed);

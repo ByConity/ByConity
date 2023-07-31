@@ -636,6 +636,21 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
 
     /// TODO: support checkpoints
 
+    /// If selecting nonadjacent parts is allowed,
+    /// we will filter out all merging parts firstly and then only check part's columns_commit_time in MergePredicate.
+    if (storage.getSettings()->cnch_merge_select_nonadjacent_parts)
+    {
+        visible_parts.erase(
+            std::remove_if(
+                visible_parts.begin(),
+                visible_parts.end(),
+                [&merging_mutating_parts_snapshot](const auto & p) {
+                    return merging_mutating_parts_snapshot.erase(p->name());
+                }),
+            visible_parts.end()
+        );
+    }
+
     /// Step 3: selection
     std::vector<ServerDataPartsVector> res;
     [[maybe_unused]] auto decision = selectPartsToMerge(

@@ -15,6 +15,7 @@
 
 #include <ResourceManagement/ResourceTracker.h>
 
+#include "common/logger_useful.h"
 #include <Common/Configurations.h>
 #include <Common/Exception.h>
 #include <Interpreters/Context.h>
@@ -80,7 +81,7 @@ void ResourceTracker::clearLostWorkers()
             }
             catch (...)
             {
-                LOG_ERROR(log, "Remove node from controller error! {}", it->second->toDebugString());
+                LOG_WARNING(log, "Remove node from controller error! {}", it->second->toDebugString());
             }
             it = worker_nodes.erase(it);
         }
@@ -115,15 +116,12 @@ std::vector<WorkerNodePtr> ResourceTracker::loadWorkerNode(const String & vw_nam
 }
 
 /// If the first value is True, that means the outdated work_node should be removed from work_group.
-std::pair<bool, WorkerNodePtr> ResourceTracker::registerNodeImpl(const WorkerNodeResourceData & data, std::lock_guard<std::mutex> &)
+std::pair<bool, WorkerNodePtr> ResourceTracker::registerNodeImpl(const WorkerNodeResourceData & data, std::lock_guard<bthread::Mutex> &)
 {
     auto worker_id = data.id;
 
     if (auto it = worker_nodes.find(worker_id); it != worker_nodes.end())
     {
-        if (!it->second->assigned)
-            return {false, it->second};
-
         if (it->second->worker_group_id != data.worker_group_id)
         {
             LOG_WARNING(log, "The work_group_id {} of Node {} is different from the previous {}",
@@ -137,6 +135,9 @@ std::pair<bool, WorkerNodePtr> ResourceTracker::registerNodeImpl(const WorkerNod
                             data.vw_name, data.id, it->second->vw_name);
             return {true, it->second};
         }
+
+        if (!it->second->assigned)
+            return {false, it->second};
 
         if (!it->second->host.isSameEndpoint(data.host_ports))
         {

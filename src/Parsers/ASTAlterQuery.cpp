@@ -98,6 +98,11 @@ ASTPtr ASTAlterCommand::clone() const
         res->columns = columns->clone();
         res->children.push_back(res->columns);
     }
+    if (engine)
+    {
+        res->engine = engine->clone();
+        res->children.push_back(res->engine);
+    }
 
     return res;
 }
@@ -583,6 +588,11 @@ void ASTAlterCommand::formatImpl(
                           << (settings.hilite ? hilite_none : "") << ".";
         }
         settings.ostr << (settings.hilite ? hilite_identifier : "") << backQuoteIfNeed(from_table) << (settings.hilite ? hilite_none : "");
+    }
+    else if (type == ASTAlterCommand::CHANGE_ENGINE)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "ENGINE " << (settings.hilite ? hilite_none : "") << "= ";
+        engine->formatImpl(settings, state, frame);
     }
     else
         throw Exception("Unexpected type of ALTER", ErrorCodes::UNEXPECTED_AST_STRUCTURE);

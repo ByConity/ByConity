@@ -266,17 +266,6 @@ bool VirtualWarehouseHandleImpl::updateWorkerGroupsFromPSM()
     }
 }
 
-using WorkerGroupAndMetrics = std::pair<WorkerGroupHandle, WorkerGroupMetrics>;
-static inline bool cmp_group_cpu(const WorkerGroupAndMetrics  & a, const WorkerGroupAndMetrics & b)
-{
-    return a.second.avg_cpu_usage < b.second.avg_cpu_usage;
-}
-
-static inline bool cmp_group_mem(const WorkerGroupAndMetrics & a, const WorkerGroupAndMetrics & b)
-{
-    return a.second.avg_mem_usage < b.second.avg_mem_usage;
-}
-
 /// pickLocally stage 1: filter worker groups by requirement.
 void VirtualWarehouseHandleImpl::filterGroup(const Requirement & requirement, std::vector<WorkerGroupAndMetrics> & res)
 {
@@ -293,65 +282,70 @@ void VirtualWarehouseHandleImpl::filterGroup(const Requirement & requirement, st
 }
 
 /// pickLocally stage 2: select one group by algo.
-WorkerGroupHandle VirtualWarehouseHandleImpl::selectGroup(const VWScheduleAlgo & algo, std::vector<WorkerGroupAndMetrics> & available_groups)
+WorkerGroupHandle VirtualWarehouseHandleImpl::selectGroup([[maybe_unused]] const VWScheduleAlgo & algo, [[maybe_unused]] std::vector<WorkerGroupAndMetrics> & available_groups)
 {
-    if (available_groups.size() == 1)
-        return available_groups[0].first;
+    return available_groups[0].first;
 
-    auto comparator = cmp_group_cpu;
-    switch (algo)
-    {
-        case VWScheduleAlgo::Unknown:
-        case VWScheduleAlgo::Random:
-        {
-            std::uniform_int_distribution dist;
-            auto index = dist(thread_local_rng) % available_groups.size();
-            return available_groups[index].first;
-        }
+    // if (available_groups.size() == 1)
+    //     return available_groups[0].first;
 
-        case VWScheduleAlgo::LocalRoundRobin:
-        {
-            size_t index = pick_group_sequence.fetch_add(1, std::memory_order_relaxed) % available_groups.size();
-            return available_groups[index].first;
-        }
-        case VWScheduleAlgo::LocalLowCpu:
-            break;
-        case VWScheduleAlgo::LocalLowMem:
-            comparator = cmp_group_mem;
-            break;
-        default:
-            const auto & s = std::string(ResourceManagement::toString(algo));
-            throw Exception("Wrong vw_schedule_algo for local scheduler: " + s, ErrorCodes::RESOURCE_MANAGER_WRONG_VW_SCHEDULE_ALGO);
-    }
+    // auto comparator = cmp_group_cpu;
+    // switch (algo)
+    // {
+    //     case VWScheduleAlgo::Unknown:
+    //     case VWScheduleAlgo::Random:
+    //     {
+    //         std::uniform_int_distribution dist;
+    //         auto index = dist(thread_local_rng) % available_groups.size();
+    //         return available_groups[index].first;
+    //     }
 
-    /// Choose from the two lowest CPU worker groups but not the lowest one as the metrics on server may be outdated.
-    if (available_groups.size() >= 3)
-    {
-        std::partial_sort(available_groups.begin(), available_groups.begin() + 2, available_groups.end(), comparator);
-        std::uniform_int_distribution dist;
-        auto index = (dist(thread_local_rng) % 3) >> 1; /// prefer index 0 than 1.
-        return available_groups[index].first;
-    }
-    else
-    {
-        auto it = std::min_element(available_groups.begin(), available_groups.end(), comparator);
-        return it->first;
-    }
+    //     case VWScheduleAlgo::LocalRoundRobin:
+    //     {
+    //         size_t index = pick_group_sequence.fetch_add(1, std::memory_order_relaxed) % available_groups.size();
+    //         return available_groups[index].first;
+    //     }
+    //     case VWScheduleAlgo::LocalLowCpu:
+    //         break;
+    //     case VWScheduleAlgo::LocalLowMem:
+    //         comparator = cmp_group_mem;
+    //         break;
+    //     default:
+    //         const auto & s = std::string(ResourceManagement::toString(algo));
+    //         throw Exception("Wrong vw_schedule_algo for local scheduler: " + s, ErrorCodes::RESOURCE_MANAGER_WRONG_VW_SCHEDULE_ALGO);
+    // }
+
+    // /// Choose from the two lowest CPU worker groups but not the lowest one as the metrics on server may be outdated.
+    // if (available_groups.size() >= 3)
+    // {
+    //     std::partial_sort(available_groups.begin(), available_groups.begin() + 2, available_groups.end(), comparator);
+    //     std::uniform_int_distribution dist;
+    //     auto index = (dist(thread_local_rng) % 3) >> 1; /// prefer index 0 than 1.
+    //     return available_groups[index].first;
+    // }
+    // else
+    // {
+    //     auto it = std::min_element(available_groups.begin(), available_groups.end(), comparator);
+    //     return it->first;
+    // }
 }
 
 /// Picking a worker group from local cache. Two stages:
 /// - 1. filter worker groups by requirement.
 /// - 2. select one group by algo.
-WorkerGroupHandle VirtualWarehouseHandleImpl::pickLocally(const VWScheduleAlgo & algo, const Requirement & requirement)
+WorkerGroupHandle VirtualWarehouseHandleImpl::pickLocally([[maybe_unused]] const VWScheduleAlgo & algo, [[maybe_unused]] const Requirement & requirement)
 {
-    std::vector<WorkerGroupAndMetrics> available_groups;
-    filterGroup(requirement, available_groups);
-    if (available_groups.empty())
-    {
-        LOG_WARNING(log, "No available worker groups for requirement: {}, choose one randomly.", requirement.toDebugString());
-        return randomWorkerGroup();
-    }
-    return selectGroup(algo, available_groups);
+    return randomWorkerGroup();
+    /// TODO: (zuochuang.zema) refactor after multi worker groups is enabled.
+
+//     std::vector<WorkerGroupAndMetrics> available_groups;
+//     filterGroup(requirement, available_groups);
+//     if (available_groups.empty())
+//     {
+//         LOG_WARNING(log, "No available worker groups for requirement: {}, choose one randomly.", requirement.toDebugString());
+//         return randomWorkerGroup();
+//     }
+//     return selectGroup(algo, available_groups);
 }
 
 CnchWorkerClientPtr VirtualWarehouseHandleImpl::getWorkerByHash(const String & key)
@@ -397,7 +391,7 @@ WorkerGroupHandle VirtualWarehouseHandleImpl::randomWorkerGroup(UpdateMode mode)
             for (size_t i = 0; i < size; i++)
             {
                 auto index = (begin + i) % size;
-                auto & group = std::next(worker_groups.begin(), index)->second;
+                const auto & group = std::next(worker_groups.begin(), index)->second;
                 if (!group->getHostWithPortsVec().empty())
                     return group;
             }
@@ -421,6 +415,23 @@ std::optional<HostWithPorts> VirtualWarehouseHandleImpl::tryPickWorkerFromRM(VWS
         }
     }
     return {};
+}
+
+CnchWorkerClientPtr VirtualWarehouseHandleImpl::pickWorker(const String & worker_group_id, bool skip_busy_worker)
+{
+    if (!worker_group_id.empty())
+        return getWorkerGroup(worker_group_id)->getWorkerClient(skip_busy_worker);
+
+    return randomWorkerGroup()->getWorkerClient(skip_busy_worker);
+
+}
+
+std::pair<UInt64, CnchWorkerClientPtr> VirtualWarehouseHandleImpl::pickWorker(const String & worker_group_id, UInt64 sequence, bool skip_busy_worker)
+{
+    if (!worker_group_id.empty())
+        return getWorkerGroup(worker_group_id)->getWorkerClient(sequence, skip_busy_worker);
+
+    return randomWorkerGroup()->getWorkerClient(sequence, skip_busy_worker);
 }
 
 }

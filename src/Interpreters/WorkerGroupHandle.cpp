@@ -16,6 +16,7 @@
 #include <Interpreters/WorkerGroupHandle.h>
 
 #include <ResourceManagement/CommonData.h>
+#include <Common/Configurations.h>
 #include <Common/parseAddress.h>
 #include <Interpreters/Context.h>
 #include <IO/ConnectionTimeouts.h>
@@ -148,16 +149,72 @@ CnchWorkerClientPtr WorkerGroupHandleImpl::getWorkerClientByHash(const String & 
     return worker_clients[index];
 }
 
-CnchWorkerClientPtr WorkerGroupHandleImpl::getWorkerClient() const
+static std::unordered_set<UInt64> getBusyWorkerIndexes(double ratio, const WorkerGroupMetrics & metrics)
+{
+    if (metrics.worker_metrics_vec.empty())
+        return {};
+    auto size = metrics.worker_metrics_vec.size();
+
+    /// Mapping from #task to worker index list.
+    std::map<UInt64, std::unordered_set<UInt64>> order_by_tasks;
+    double avg = 0;
+    for (size_t i = 0; i < size; ++i)
+    {
+        const auto & worker_metrics = metrics.worker_metrics_vec[i];
+        auto num_tasks = worker_metrics.numTasks();
+        order_by_tasks[num_tasks].insert(i);
+        avg += num_tasks;
+    }
+
+    if (order_by_tasks.size() <= 1)
+        return {};
+
+    avg /= size;
+
+    std::unordered_set<UInt64> res;
+    for (auto it = order_by_tasks.rbegin(); it != order_by_tasks.rend(); ++it)
+    {
+        if (it->first >= ratio * avg)
+            res.insert(it->second.begin(), it->second.end());
+        else
+            break;
+    }
+    return res;
+}
+
+CnchWorkerClientPtr WorkerGroupHandleImpl::getWorkerClient(bool skip_busy_worker) const
+{
+    std::uniform_int_distribution dist;
+    size_t sequence = dist(thread_local_rng);
+    return getWorkerClient(sequence, skip_busy_worker).second;
+}
+
+std::pair<UInt64, CnchWorkerClientPtr> WorkerGroupHandleImpl::getWorkerClient(UInt64 sequence, bool skip_busy_worker) const
 {
     if (worker_clients.empty())
         throw Exception("No available worker for " + id, ErrorCodes::RESOURCE_MANAGER_NO_AVAILABLE_WORKER);
     if (worker_clients.size() == 1)
-        return worker_clients[0];
+        return {0, worker_clients[0]};
+    
 
-    std::uniform_int_distribution dist;
-    auto index = dist(thread_local_rng) % worker_clients.size();
-    return worker_clients[index];
+    auto start_index = sequence % worker_clients.size();
+    if (!skip_busy_worker)
+        return {start_index, worker_clients[start_index]};
+    
+    auto ratio = getContext()->getRootConfig().vw_ratio_of_busy_worker.value;
+    auto busy_worker_indexes = getBusyWorkerIndexes(ratio, getMetrics());
+    for (size_t i = 0; i < worker_clients.size(); ++i)
+    {
+        start_index %= worker_clients.size();
+        if (busy_worker_indexes.contains(start_index))
+        {
+            start_index++;
+            continue;
+        }
+        return {start_index, worker_clients[start_index]};
+    }
+    start_index %= worker_clients.size();
+    return {start_index, worker_clients[start_index]};
 }
 
 CnchWorkerClientPtr WorkerGroupHandleImpl::getWorkerClient(const HostWithPorts & host_ports) const

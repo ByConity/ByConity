@@ -51,6 +51,8 @@ void registerFunctionsConversion(FunctionFactory & factory)
     factory.registerFunction<FunctionToDecimal256>();
 
     factory.registerFunction<FunctionToDate>();
+    /// Hive compatibility alias.
+    factory.registerFunction<FunctionToDate>("to_date", FunctionFactory::CaseInsensitive);
     /// MysQL compatibility alias.
     factory.registerFunction<FunctionToDate>("DATE", FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionToDate32>();
