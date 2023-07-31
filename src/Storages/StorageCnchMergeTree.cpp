@@ -250,12 +250,7 @@ void StorageCnchMergeTree::read(
     const Scalars & scalars = local_context->hasQueryContext() ? local_context->getQueryContext()->getScalars() : Scalars{};
 
     ClusterProxy::SelectStreamFactory select_stream_factory = ClusterProxy::SelectStreamFactory(
-        header,
-        processed_stage,
-        StorageID::createEmpty(), /// Don't check whether table exists in cnch-worker
-        scalars,
-        false,
-        local_context->getExternalTables());
+        header, processed_stage, StorageID{"system", "one"}, scalars, false, local_context->getExternalTables());
 
     ClusterProxy::executeQuery(query_plan, select_stream_factory, log, modified_query_ast, local_context, worker_group);
 
@@ -2202,7 +2197,7 @@ StorageCnchMergeTree::createDropRangesFromParts(ContextPtr query_context, const 
     partition_lock->setUUID(getStorageUUID());
     if (partitions.size() == 1)
         partition_lock->setPartition(*partitions.begin());
-    
+
     Stopwatch lock_watch;
     auto cnch_lock = cur_txn->createLockHolder({std::move(partition_lock)});
     cnch_lock->lock();
@@ -2231,7 +2226,7 @@ StorageCnchMergeTree::createDropRangesFromParts(ContextPtr query_context, const 
 
             throw Exception(msg, ErrorCodes::SYSTEM_ERROR);
         }
-    } 
+    }
 
     return createDropRangesFromPartitions(partition_infos, txn);
 }
