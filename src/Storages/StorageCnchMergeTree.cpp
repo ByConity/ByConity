@@ -2028,9 +2028,21 @@ void StorageCnchMergeTree::checkAlterSettings(const AlterCommands & commands) co
             if (getInMemoryMetadataPtr()->hasUniqueKey() && change.name == "cnch_enable_memory_buffer" && change.value.get<Int64>() == 1)
                 throw Exception("Table with UNIQUE KEY doesn't support memory buffer", ErrorCodes::SUPPORT_IS_DISABLED);
 
+            if (change.name.find("cnch_vw_") == 0)
+                checkAlterVW(change.value.get<String>());
+
             settings_copy.set(change.name, change.value);
         }
     }
+}
+
+void StorageCnchMergeTree::checkAlterVW(const String & vw_name) const
+{
+    if (vw_name == "vw_default" || vw_name == "vw_write")
+        return;
+    
+    /// Will throw VIRTUAL_WAREHOUSE_NOT_FOUND if vw not found.
+    getContext()->getVirtualWarehousePool().get(vw_name);
 }
 
 void StorageCnchMergeTree::truncate(
