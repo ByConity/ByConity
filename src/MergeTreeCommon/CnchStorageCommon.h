@@ -109,16 +109,8 @@ public:
         const ContextPtr & context = nullptr,
         bool enable_staging_area = false,
         const std::optional<StorageID> & cnch_storage_id = std::nullopt,
-        const Strings & engine_args = {}) const;
-
-    String getCreateQueryForCloudTable(
-        const String & query,
-        const String & local_table_name,
-        const String & local_database_name,
-        const ContextPtr & context = nullptr,
-        bool enable_staging_area = false,
-        const std::optional<StorageID> & cnch_storage_id = std::nullopt,
-        const Strings & engine_args = {}) const;
+        const Strings & engine_args = {},
+        const String & local_database_name = {}) const;
 
     static void rewritePlanSegmentQueryImpl(ASTPtr & query, const std::string & database, const std::string & table);
 
