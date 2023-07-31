@@ -187,8 +187,7 @@ bool QueryUseOptimizerChecker::check(ASTPtr & node, const ContextMutablePtr & co
     }
     else if (node->as<ASTInsertQuery>())
     {
-        // ToDo
-        support = false;
+        support = true;
         auto * insert_query = node->as<ASTInsertQuery>();
         if (insert_query->in_file || insert_query->table_function || !insert_query->select)
             support = false;
@@ -206,7 +205,7 @@ bool QueryUseOptimizerChecker::check(ASTPtr & node, const ContextMutablePtr & co
             &Poco::Logger::get("QueryUseOptimizerChecker"),
             fmt::format("support: {}, check: {}", support, check(insert_query->select, context)));
         if (support)
-            support = check(insert_query->select, context, true);
+            support = check(insert_query->select, context, false);
     }
 
     if (!support)
