@@ -42,6 +42,8 @@ public:
     ElectionController(ResourceManagerController & rm_controller_);
     ~ElectionController() override;
 
+    bool isLeader() const { return is_leader; }
+
 private:
     void shutDown();
 
