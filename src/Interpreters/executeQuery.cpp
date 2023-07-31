@@ -19,6 +19,7 @@
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
+#include <memory>
 #include <Client/Connection.h>
 #include "common/logger_useful.h"
 #include <Common/Config/VWCustomizedSettings.h>
@@ -73,9 +74,9 @@
 #include <Interpreters/NormalizeSelectWithUnionQueryVisitor.h>
 #include <Interpreters/OpenTelemetrySpanLog.h>
 #include <Interpreters/ProcessList.h>
-#include <Interpreters/QueueManager.h>
 #include <Interpreters/ProcessorsProfileLog.h>
 #include <Interpreters/QueryLog.h>
+#include <Interpreters/QueueManager.h>
 #include <Interpreters/ReplaceQueryParameterVisitor.h>
 #include <Interpreters/SelectIntersectExceptQueryVisitor.h>
 #include <Interpreters/SelectQueryOptions.h>
@@ -89,7 +90,6 @@
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/NamedSession.h>
 #include <Interpreters/VirtualWarehouseHandle.h>
-#include "Interpreters/DatabaseCatalog.h"
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <Parsers/ASTSystemQuery.h>
 #include <Storages/StorageCloudMergeTree.h>
@@ -97,6 +97,15 @@
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Common/SensitiveDataMasker.h>
+#include "DataStreams/IBlockStream_fwd.h"
+#include "DataStreams/NullBlockOutputStream.h"
+#include "IO/WriteBuffer.h"
+#include "IO/WriteBufferFromString.h"
+#include "Interpreters/Cluster.h"
+#include "Interpreters/Context_fwd.h"
+#include "Interpreters/DatabaseCatalog.h"
+#include "Interpreters/Set.h"
+#include "Parsers/IAST_fwd.h"
 
 #include <Interpreters/DistributedStages/MPPQueryCoordinator.h>
 #include <Interpreters/DistributedStages/MPPQueryManager.h>
@@ -529,10 +538,11 @@ static TransactionCnchPtr prepareCnchTransaction(ContextMutablePtr context, [[ma
                 database = context->getCurrentDatabase();
 
             auto storage = DatabaseCatalog::instance().getTable(StorageID(database, table), context);
-             if (!dynamic_cast<StorageCnchMergeTree *>(storage.get()) && !dynamic_cast<StorageCloudMergeTree *>(storage.get()))
+            if (!dynamic_cast<StorageCnchMergeTree *>(storage.get()) && !dynamic_cast<StorageCloudMergeTree *>(storage.get()))
                 return {};
 
-            auto host_ports = context->getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(storage->getStorageUUID()), storage->getServerVwName(), true);
+            auto host_ports = context->getCnchTopologyMaster()->getTargetServer(
+                UUIDHelpers::UUIDToString(storage->getStorageUUID()), storage->getServerVwName(), true);
             auto server_client
                 = host_ports.empty() ? context->getCnchServerClientPool().get() : context->getCnchServerClientPool().get(host_ports);
             auto txn = std::make_shared<CnchWorkerTransaction>(context->getGlobalContext(), server_client);
@@ -1522,6 +1532,12 @@ void executeQuery(
 
     std::tie(ast, streams) = executeQueryImpl(begin, end, context, internal, QueryProcessingStage::Complete, may_have_tail, &istr);
 
+    if (!streams.out && isAsyncMode(context))
+    {
+        executeHttpQueryInAsyncMode(std::move(streams), ast, context, ostr, output_format_settings, set_result_details);
+        return;
+    }
+
     auto & pipeline = streams.pipeline;
 
     try
@@ -1757,31 +1773,157 @@ void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server
     res.pipeline = std::move(
         *plan->buildQueryPipeline(QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context)));
     res.pipeline.addInterpreterContext(context);
-}
 
-void updateAsyncQueryStatus(
-    ContextMutablePtr context,
-    const String & async_query_id,
-    const String & query_id,
-    const AsyncQueryStatus::Status & status,
-    const String & error_msg)
-{
-    AsyncQueryStatus async_query_status;
-    if (!context->getCnchCatalog()->tryGetAsyncQueryStatus(async_query_id, async_query_status))
+    bool isAsyncMode(ContextMutablePtr context)
     {
-        LOG_WARNING(
-            &Poco::Logger::get("executeQuery"), "async query status not found, insert new one with async_query_id: {}", async_query_id);
-        async_query_status.set_id(async_query_id);
-        async_query_status.set_query_id(query_id);
-    }
-    async_query_status.set_status(status);
-    async_query_status.set_update_time(time(nullptr));
-
-    if (!error_msg.empty() && status == AsyncQueryStatus::Failed)
-    {
-        async_query_status.set_error_msg(error_msg);
+        return context->getClientInfo().query_kind == ClientInfo::QueryKind::INITIAL_QUERY
+            && context->getServerType() == ServerType::cnch_server && context->getSettings().enable_async_execution;
     }
 
-    context->getCnchCatalog()->setAsyncQueryStatus(async_query_id, async_query_status);
-}
+    void updateAsyncQueryStatus(
+        ContextMutablePtr context,
+        const String & async_query_id,
+        const String & query_id,
+        const AsyncQueryStatus::Status & status,
+        const String & error_msg)
+    {
+        AsyncQueryStatus async_query_status;
+        if (!context->getCnchCatalog()->tryGetAsyncQueryStatus(async_query_id, async_query_status))
+        {
+            LOG_WARNING(
+                &Poco::Logger::get("executeQuery"), "async query status not found, insert new one with async_query_id: {}", async_query_id);
+            async_query_status.set_id(async_query_id);
+            async_query_status.set_query_id(query_id);
+        }
+        async_query_status.set_status(status);
+        async_query_status.set_update_time(time(nullptr));
+
+        if (!error_msg.empty() && status == AsyncQueryStatus::Failed)
+        {
+            async_query_status.set_error_msg(error_msg);
+        }
+
+        context->getCnchCatalog()->setAsyncQueryStatus(async_query_id, async_query_status);
+    }
+
+    void executeHttpQueryInAsyncMode(
+        BlockIO s,
+        ASTPtr ast,
+        ContextMutablePtr c,
+        WriteBuffer & ostr,
+        const std::optional<FormatSettings> & f,
+        std::function<void(const String &, const String &, const String &, const String &)> set_result_details)
+    {
+        const auto * ast_query_with_output = dynamic_cast<const ASTQueryWithOutput *>(ast.get());
+        String format_name = ast_query_with_output && (ast_query_with_output->format != nullptr)
+            ? getIdentifierName(ast_query_with_output->format)
+            : c->getDefaultFormat();
+        if (set_result_details)
+            set_result_details(
+                c->getClientInfo().current_query_id, "text/plain; charset=UTF-8", format_name, DateLUT::instance().getTimeZone());
+
+        c->getAsyncQueryManager()->insertAndRun(
+            std::move(s),
+            ast,
+            c,
+            ostr,
+            f,
+            [](BlockIO streams, ASTPtr ast, ContextMutablePtr context, const std::optional<FormatSettings> & output_format_settings) {
+                auto & pipeline = streams.pipeline;
+                try
+                {
+                    if (streams.in)
+                    {
+                        const auto * ast_query_with_output = dynamic_cast<const ASTQueryWithOutput *>(ast.get());
+
+                        std::shared_ptr<WriteBuffer> out_buf;
+                        std::optional<String> out_path;
+                        bool write_to_hdfs = false;
+#if USE_HDFS
+                        std::unique_ptr<WriteBufferFromHDFS> out_hdfs_raw;
+                        std::optional<ZlibDeflatingWriteBuffer> out_hdfs_buf;
+#endif
+                        if (ast_query_with_output && ast_query_with_output->out_file)
+                        {
+                            out_path.emplace(
+                                typeid_cast<const ASTLiteral &>(*ast_query_with_output->out_file).value.safeGet<std::string>());
+                            const Poco::URI out_uri(*out_path);
+                            const String & scheme = out_uri.getScheme();
+
+                            if (scheme.empty())
+                            {
+                                throw Exception("INTO OUTFILE is not allowed", ErrorCodes::INTO_OUTFILE_NOT_ALLOWED);
+                            }
+#if USE_HDFS
+                            else if (DB::isHdfsOrCfsScheme(scheme))
+                            {
+                                out_hdfs_raw = std::make_unique<WriteBufferFromHDFS>(
+                                    *out_path, context->getHdfsConnectionParams(), context->getSettingsRef().max_hdfs_write_buffer_size);
+                                out_buf = std::make_shared<ZlibDeflatingWriteBuffer>(
+                                    std::move(out_hdfs_raw), CompressionMethod::Gzip, Z_DEFAULT_COMPRESSION);
+                                write_to_hdfs = true;
+                            }
+#endif
+                            else
+                            {
+                                throw Exception(
+                                    "Path: " + *out_path + " is illegal, only support write query result to local file or tos",
+                                    ErrorCodes::CANNOT_PARSE_DOMAIN_VALUE_FROM_STRING);
+                            }
+                        }
+
+                        String format_name = ast_query_with_output && (ast_query_with_output->format != nullptr)
+                            ? getIdentifierName(ast_query_with_output->format)
+                            : context->getDefaultFormat();
+
+                        BlockOutputStreamPtr out = write_to_hdfs ? FormatFactory::instance().getOutputStreamParallelIfPossible(
+                                                       format_name, *out_buf, streams.in->getHeader(), context, {}, output_format_settings)
+                                                                 : std::make_shared<NullBlockOutputStream>(Block{});
+
+                        copyData(
+                            *streams.in, *out, []() { return false; }, [&out](const Block &) { out->flush(); });
+                    }
+                    else if (pipeline.initialized())
+                    {
+                        const ASTQueryWithOutput * ast_query_with_output = dynamic_cast<const ASTQueryWithOutput *>(ast.get());
+
+                        if (ast_query_with_output && ast_query_with_output->out_file)
+                        {
+                            throw Exception("INTO OUTFILE is not allowed in http async mode", ErrorCodes::INTO_OUTFILE_NOT_ALLOWED);
+                        }
+
+                        String format_name = ast_query_with_output && (ast_query_with_output->format != nullptr)
+                            ? getIdentifierName(ast_query_with_output->format)
+                            : context->getDefaultFormat();
+
+                        if (!pipeline.isCompleted())
+                        {
+                            pipeline.addSimpleTransform(
+                                [](const Block & header) { return std::make_shared<MaterializingTransform>(header); });
+
+                            auto out = FormatFactory::instance().getOutputFormatParallelIfPossible(
+                                "Null", *new WriteBuffer(nullptr, 0), pipeline.getHeader(), context, {}, output_format_settings);
+
+                            pipeline.setOutputFormat(std::move(out));
+                        }
+                        else
+                        {
+                            pipeline.setProgressCallback(context->getProgressCallback());
+                        }
+
+                        {
+                            auto executor = pipeline.execute();
+                            executor->execute(pipeline.getNumThreads());
+                        }
+                    }
+                }
+                catch (...)
+                {
+                    streams.onException();
+                    throw;
+                }
+
+                streams.onFinish();
+            });
+    }
 }

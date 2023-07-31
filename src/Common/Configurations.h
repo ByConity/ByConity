@@ -78,7 +78,7 @@ struct SDConfiguration final : public SDConfigurationData
     M(UInt64, cnch_task_heartbeat_max_retries, "", 5, ConfigFlag::Default, "") \
     M(Float32, max_ratio_of_cnch_tasks_to_threads, "", 1.5, ConfigFlag::Default, "") \
     M(Float32, vw_ratio_of_busy_worker, "", 1.2, ConfigFlag::Default, "The ratio for detecting busy worker in the VW.") \
-    M(UInt64, max_async_query_threads, "", 5000, ConfigFlag::Default, "Maximum threads that async queries use") \
+    M(UInt64, max_async_query_threads, "", 5000, ConfigFlag::Default, "Maximum threads that async queries use.") \
     /**
      * Mutable */ \
     M(MutableUInt64, max_server_memory_usage, "", 0, ConfigFlag::Default, "") \
