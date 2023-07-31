@@ -176,7 +176,7 @@ protected:
             throw Exception("config-file can not be empty.", ErrorCodes::BAD_ARGUMENTS);
         std::cout << "laod config from file : " << conf_path << std::endl;
         if (config().has("namespace"))
-            name_space = config().getString("namespace") + "_";
+            name_space = config().getString("namespace");
         loadConfiguration(conf_path);
         initializeMetastore();
 
@@ -258,7 +258,7 @@ private:
         try
         {
             MetaCommand cmd = MetaCommand::parse(command);
-            std::string full_key = Catalog::escapeString(name_space) + cmd.key;
+            std::string full_key = Catalog::escapeString(name_space) + '_' + cmd.key;
             switch (cmd.type)
             {
                 case MetaCommandType::HELP:
@@ -282,7 +282,7 @@ private:
                     while(it->next())
                     {
                         if (need_print)
-                            std::cout << it->key().substr(name_space.size(), std::string::npos) << std::endl;
+                            std::cout << it->key().substr(name_space.size() + 1, std::string::npos) << std::endl;
                         counter++;
                     }
                     std::cout << "Total: " << counter << std::endl;
