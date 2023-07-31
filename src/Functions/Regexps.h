@@ -54,17 +54,22 @@ namespace Regexps
         return {likePatternToRegexp(pattern), flags};
     }
 
+    inline Regexp createRegexpWithEscape(const std::string & pattern, int flags, const char escape_char)
+    {
+        return {likePatternToRegexp(pattern, escape_char), flags};
+    }
+
     /** Returns holder of an object from Pool.
       * You must hold the ownership while using the object.
       * In destructor, it returns the object back to the Pool for further reuse.
       */
     template <bool like, bool no_capture, bool case_insensitive = false>
-    inline Pool::Pointer get(const std::string & pattern)
+    inline Pool::Pointer get(const std::string & pattern, const char escape_char = '\\')
     {
         /// C++11 has thread-safe function-local statics on most modern compilers.
         static Pool known_regexps; /// Different variables for different pattern parameters.
 
-        return known_regexps.get(pattern, [&pattern]
+        return known_regexps.get(pattern, [&pattern, &escape_char]
         {
             int flags = OptimizedRegularExpression::RE_DOT_NL;
 
@@ -75,6 +80,9 @@ namespace Regexps
                 flags |= Regexps::Regexp::RE_CASELESS;
 
             ProfileEvents::increment(ProfileEvents::RegexpCreated);
+
+            if (like && escape_char != '\\')
+                return new Regexp{createRegexpWithEscape(pattern, flags, escape_char)};
             return new Regexp{createRegexp<like>(pattern, flags)};
         });
     }

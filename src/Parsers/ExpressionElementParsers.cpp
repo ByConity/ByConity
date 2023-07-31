@@ -21,6 +21,7 @@
 
 #include <errno.h>
 #include <cstdlib>
+#include <string>
 #include <type_traits>
 #include <errno.h>
 
@@ -2838,6 +2839,25 @@ bool ParserAssignment::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     tryGetIdentifierNameInto(column, assignment->column_name);
     if (expression)
         assignment->children.push_back(expression);
+
+    return true;
+}
+
+bool ParserEscapeExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+{
+    ParserStringLiteral escape_exp;
+    if(!escape_exp.parse(pos, node, expected))
+        return false;
+
+    const auto * literal = node->as<ASTLiteral>();
+    String escape_char;
+
+    if (!literal || !literal->value.tryGet(escape_char))
+        return false;
+
+    // We only accept escape chars of length 1. Only exception is '\\'.
+    if (escape_char != "\\\\" && escape_char.size() != 1)
+        return false;
 
     return true;
 }
