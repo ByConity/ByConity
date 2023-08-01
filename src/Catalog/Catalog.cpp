@@ -4887,7 +4887,7 @@ namespace Catalog
 
     void Catalog::setAsyncQueryStatus(const String & id, const Protos::AsyncQueryStatus & status) const
     {
-        meta_proxy->setAsyncQueryStatus(name_space, id, status);
+        meta_proxy->setAsyncQueryStatus(name_space, id, status, context.getRootConfig().async_query_status_ttl);
     }
 
     bool Catalog::tryGetAsyncQueryStatus(const String & id, Protos::AsyncQueryStatus & status) const
