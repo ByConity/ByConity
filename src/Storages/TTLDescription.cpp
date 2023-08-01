@@ -297,6 +297,59 @@ TTLDescription TTLDescription::getTTLFromAST(
     return result;
 }
 
+void TTLDescription::tryRewriteTTLWithPartitionKey(TTLDescription & ttl_description, const ColumnsDescription & columns, const KeyDescription & partition_key, const KeyDescription & primary_key, ContextPtr context)
+{
+    /// no need to rewrite if partition columns is empty
+    if (partition_key.column_names.empty())
+        return;
+
+    bool has_rewritten = false;
+    std::function<void(ASTPtr &,const NameSet &)> replace_func_with_partition_column = [&replace_func_with_partition_column, &has_rewritten](ASTPtr & definition_ast, const NameSet & partition_columns)
+    {
+        if (!definition_ast)
+            return;
+
+        if (ASTFunction * func = definition_ast->as<ASTFunction>())
+        {
+            String column_name = func->getColumnName();
+            if (partition_columns.count(column_name))
+            {
+                auto identifier = std::make_shared<ASTIdentifier>(column_name);
+                definition_ast = identifier;
+                has_rewritten = true;
+            }
+            else
+            {
+                for (auto & child : func->arguments->children)
+                    replace_func_with_partition_column(child, partition_columns);
+            }
+        }
+        else
+        {
+            for (auto & child : definition_ast->children)
+                replace_func_with_partition_column(child, partition_columns);
+        }
+    };
+
+    NameSet partition_names;
+    for (auto column_name : partition_key.column_names)
+        partition_names.insert(column_name);
+
+    replace_func_with_partition_column(ttl_description.expression_ast, partition_names);
+
+    if (!has_rewritten)
+        return;
+
+    ColumnsDescription full_columns = ColumnsDescription(partition_key.sample_block.getNamesAndTypesList());
+    for (auto it=columns.begin(); it!=columns.end(); it++)
+    {
+        if (!full_columns.has(it->name))
+            full_columns.add(*it);
+    }
+
+    /// update the ttl_description based on new definition AST.
+    ttl_description = getTTLFromAST(ttl_description.expression_ast, full_columns, context, primary_key);
+}
 
 TTLTableDescription::TTLTableDescription(const TTLTableDescription & other)
  : definition_ast(other.definition_ast ? other.definition_ast->clone() : nullptr)
