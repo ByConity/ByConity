@@ -34,7 +34,6 @@
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/TxnTimestamp.h>
 #include <cppkafka/cppkafka.h>
-#include <Common/Config/MetastoreConfig.h>
 #include <Common/Configurations.h>
 #include <Common/DNSResolver.h>
 #include <Common/HostWithPorts.h>
