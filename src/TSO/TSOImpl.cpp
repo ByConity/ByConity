@@ -72,6 +72,11 @@ void TSOImpl::GetTimestamp(
 
     try
     {
+        if (unlikely(getIsKvDown()))
+        {
+            throw Exception("KV Storage is unreachable at the moment. It may have crashed. Timestamps will not be returned until KV has recovered.", ErrorCodes::TSO_INTERNAL_ERROR);
+        }
+
         if (!is_leader.load(std::memory_order_acquire))
         {
             response->set_is_leader(false);
@@ -80,11 +85,10 @@ void TSOImpl::GetTimestamp(
 
         UInt64 cur_ts = fetchAddLogical(1);
         if (ts_to_physical(cur_ts) == 0)
-            throw Exception("Timestamp has not been initialized yet. Please retry request in a few seconds.", ErrorCodes::TSO_TIMESTAMP_NOT_FOUND_ERROR);
+            throw Exception("Timestamp has not been initialized in TSO yet. Timestamp will initialized in a few seconds. Please retry request in a few seconds.", ErrorCodes::TSO_TIMESTAMP_NOT_FOUND_ERROR);
 
         response->set_timestamp(cur_ts);
         response->set_is_leader(true);
-        LOG_TRACE(log, "Request received by TSO Node. Physical: {} | Logical: {}", ts_to_physical(cur_ts), ts_to_logical(cur_ts));
     }
     catch (...)
     {
@@ -102,6 +106,11 @@ void TSOImpl::GetTimestamps(::google::protobuf::RpcController *,
 
     try
     {
+        if (unlikely(getIsKvDown()))
+        {
+            throw Exception("KV Storage is unreachable at the moment. It may have crashed. Timestamps will not be returned until KV has recovered.", ErrorCodes::TSO_INTERNAL_ERROR);
+        }
+
         if (!is_leader.load(std::memory_order_acquire))
         {
             response->set_is_leader(false);
@@ -122,7 +131,6 @@ void TSOImpl::GetTimestamps(::google::protobuf::RpcController *,
         UInt64 max_ts = physical_logical_to_ts(physical, logical);
         response->set_max_timestamp(max_ts);
         response->set_is_leader(true);
-        LOG_TRACE(log, "Request received by TSO Node. Physical: {} | Logical: {}", ts_to_physical(cur_ts), ts_to_logical(cur_ts));
     }
     catch (...)
     {
@@ -143,15 +151,15 @@ void TSOImpl::checkLogicalClock(UInt32 logical_value)
             try
             {
                 std::this_thread::sleep_for(std::chrono::milliseconds(TSO_UPDATE_INTERVAL));
-                /// Check the leader result in case the node yielded the leadership during sleeping
-                TSOClock cur_ts = getClock();
-                LOG_DEBUG(log, "Checking for TSO logical clock overflow. is_leader: {} |  Physical: {} | Logical: {}", std::to_string(exitLeaderElection && is_leader.load(std::memory_order_acquire)), cur_ts.physical, cur_ts.logical);
-                if (exitLeaderElection && is_leader.load(std::memory_order_acquire) && cur_ts.logical >= MAX_LOGICAL - 1)
+                UInt64 ts_now = ts.load(std::memory_order_acquire);
+                UInt64 machine_time_now = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+                // Check the leader result in case the node yielded the leadership during sleeping
+                // Timestamp stored in TSO is at least 10 seconds away from machine time
+                if (exitLeaderElection && is_leader.load(std::memory_order_acquire) && (machine_time_now - ts_now) >= 10000) 
                 {
-                    // Failback to leader election if an overflow issue happens even after sleep_for(TSO_UPDATE_INTERVAL).
-                    setIsLeader(false);
+                    // Fallback to leader election if an overflow issue happens even after sleep_for(TSO_UPDATE_INTERVAL).
                     exitLeaderElection(); // yield leadership as updateTSO thread stopped functioning
-                    LOG_DEBUG(log, "Resign leader. TSO logical clock overflow. Physical: {} | Logical: {}", cur_ts.physical, cur_ts.logical);
+                    LOG_INFO(log, "Resign leader. TSO update timestamp thread has stopped functioning. Machine Time: {} | TSO Timestamp: {}", machine_time_now, ts_now);
                 }
                 logical_clock_checking.store(false, std::memory_order_relaxed);
             }
