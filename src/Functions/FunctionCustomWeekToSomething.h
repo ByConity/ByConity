@@ -148,10 +148,10 @@ public:
             ColumnsWithTypeAndName converted;
             ColumnsWithTypeAndName temp{arguments[0]};
             auto to_datetime = FunctionFactory::instance().get("toDateTime", context_ptr);
-            auto col = to_datetime->build(temp)->execute(temp, arguments[0].type, input_rows_count);
+            auto col = to_datetime->build(temp)->execute(temp, std::make_shared<DataTypeDateTime64>(0), input_rows_count);
             ColumnWithTypeAndName converted_col(col, std::make_shared<DataTypeDateTime64>(0), "unixtime");
             converted.emplace_back(converted_col);
-            for (int i = 1; i < arguments.size(); i++)
+            for (size_t i = 1; i < arguments.size(); i++)
             {
                 converted.emplace_back(arguments[i]);
             }

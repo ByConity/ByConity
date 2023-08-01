@@ -62,7 +62,7 @@ constexpr bool isEscapeMatchImpl()
                     || std::is_same_v<Impl, EscapeMatchImpl<false, true, true>>
                     || std::is_same_v<Impl, EscapeMatchImpl<false, false, true>>);
 }
-struct NameInstr;
+// struct NameInstr; HIJOEYCHANCE
 
 template <typename Impl, typename Name>
 class FunctionsStringSearch : public IFunction
@@ -78,11 +78,11 @@ public:
 
     String getName() const override { return name; }
 
-    bool isVariadic() const override { return Impl::supports_start_pos; }
+    bool isVariadic() const override { return (Impl::supports_start_pos || isEscapeMatchImpl<Impl>()); }
 
     size_t getNumberOfArguments() const override
     {
-        if (Impl::supports_start_pos)
+        if (Impl::supports_start_pos || isEscapeMatchImpl<Impl>())
             return 0;
         return 2;
     }
@@ -113,7 +113,7 @@ public:
             throw Exception(
                 "Illegal type " + arguments[1]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if (arguments.size() >= 3)
+        if (arguments.size() >= 3 && !isEscapeMatchImpl<Impl>())
         {
             if (!isUnsignedInteger(arguments[2]))
                 throw Exception(
@@ -145,8 +145,25 @@ public:
         const ColumnPtr & column_needle = arguments[column_needle_index].column;
 
         ColumnPtr column_start_pos = nullptr;
+        std::string escape_seq;
+        char escape_char = '\\';
+
         if (arguments.size() >= 3)
-            column_start_pos = arguments[2].column;
+        {
+            if (!isEscapeMatchImpl<Impl>())
+                column_start_pos = arguments[2].column;
+            else
+            {
+                escape_seq = typeid_cast<const ColumnConst *>(&*arguments[2].column)->getValue<String>();
+                if (!escape_seq.empty())
+                {
+                    if (escape_seq.size() != 1)
+                        throw Exception(
+                            "Illegal size of escape character " +  escape_seq + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                    escape_char = escape_seq.front();
+                }
+            }
+        }
 
         const ColumnConst * col_haystack_const = typeid_cast<const ColumnConst *>(&*column_haystack);
         const ColumnConst * col_needle_const = typeid_cast<const ColumnConst *>(&*column_needle);
@@ -182,39 +199,82 @@ public:
         const ColumnFixedString * col_haystack_vector_fixed = checkAndGetColumn<ColumnFixedString>(&*column_haystack);
         const ColumnString * col_needle_vector = checkAndGetColumn<ColumnString>(&*column_needle);
 
-        if (col_haystack_vector && col_needle_vector)
-            Impl::vectorVector(
-                col_haystack_vector->getChars(),
-                col_haystack_vector->getOffsets(),
-                col_needle_vector->getChars(),
-                col_needle_vector->getOffsets(),
-                column_start_pos,
-                vec_res);
-        else if (col_haystack_vector && col_needle_const)
-            Impl::vectorConstant(
-                col_haystack_vector->getChars(),
-                col_haystack_vector->getOffsets(),
-                col_needle_const->getValue<String>(),
-                column_start_pos,
-                vec_res);
-        else if (col_haystack_vector_fixed && col_needle_const)
-            Impl::vectorFixedConstant(
-                col_haystack_vector_fixed->getChars(),
-                col_haystack_vector_fixed->getN(),
-                col_needle_const->getValue<String>(),
-                vec_res);
-        else if (col_haystack_const && col_needle_vector)
-            Impl::constantVector(
-                col_haystack_const->getValue<String>(),
-                col_needle_vector->getChars(),
-                col_needle_vector->getOffsets(),
-                column_start_pos,
-                vec_res);
+        if constexpr (isEscapeMatchImpl<Impl>())
+        {
+            if (col_haystack_vector && col_needle_vector)
+                Impl::vectorVector(
+                    col_haystack_vector->getChars(),
+                    col_haystack_vector->getOffsets(),
+                    col_needle_vector->getChars(),
+                    col_needle_vector->getOffsets(),
+                    escape_char,
+                    column_start_pos,
+                    vec_res);
+            else if (col_haystack_vector && col_needle_const)
+                Impl::vectorConstant(
+                    col_haystack_vector->getChars(),
+                    col_haystack_vector->getOffsets(),
+                    col_needle_const->getValue<String>(),
+                    escape_char,
+                    column_start_pos,
+                    vec_res);
+            else if (col_haystack_vector_fixed && col_needle_const)
+                Impl::vectorFixedConstant(
+                    col_haystack_vector_fixed->getChars(),
+                    col_haystack_vector_fixed->getN(),
+                    col_needle_const->getValue<String>(),
+                    escape_char,
+                    vec_res);
+            else if (col_haystack_const && col_needle_vector)
+                Impl::constantVector(
+                    col_haystack_const->getValue<String>(),
+                    col_needle_vector->getChars(),
+                    col_needle_vector->getOffsets(),
+                    escape_char,
+                    column_start_pos,
+                    vec_res);
+            else
+                throw Exception(
+                    "Illegal columns " + arguments[0].column->getName() + " and "
+                        + arguments[1].column->getName() + " of arguments of function " + getName(),
+                    ErrorCodes::ILLEGAL_COLUMN);
+        }
         else
-            throw Exception(
-                "Illegal columns " + arguments[0].column->getName() + " and "
-                    + arguments[1].column->getName() + " of arguments of function " + getName(),
-                ErrorCodes::ILLEGAL_COLUMN);
+        {
+            if (col_haystack_vector && col_needle_vector)
+                Impl::vectorVector(
+                    col_haystack_vector->getChars(),
+                    col_haystack_vector->getOffsets(),
+                    col_needle_vector->getChars(),
+                    col_needle_vector->getOffsets(),
+                    column_start_pos,
+                    vec_res);
+            else if (col_haystack_vector && col_needle_const)
+                Impl::vectorConstant(
+                    col_haystack_vector->getChars(),
+                    col_haystack_vector->getOffsets(),
+                    col_needle_const->getValue<String>(),
+                    column_start_pos,
+                    vec_res);
+            else if (col_haystack_vector_fixed && col_needle_const)
+                Impl::vectorFixedConstant(
+                    col_haystack_vector_fixed->getChars(),
+                    col_haystack_vector_fixed->getN(),
+                    col_needle_const->getValue<String>(),
+                    vec_res);
+            else if (col_haystack_const && col_needle_vector)
+                Impl::constantVector(
+                    col_haystack_const->getValue<String>(),
+                    col_needle_vector->getChars(),
+                    col_needle_vector->getOffsets(),
+                    column_start_pos,
+                    vec_res);
+            else
+                throw Exception(
+                    "Illegal columns " + arguments[0].column->getName() + " and "
+                        + arguments[1].column->getName() + " of arguments of function " + getName(),
+                    ErrorCodes::ILLEGAL_COLUMN);
+        }
 
         return col_res;
     }

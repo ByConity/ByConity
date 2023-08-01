@@ -1,4 +1,5 @@
 set enable_positional_arguments = 1;
+set enable_optimizer=0;
 
 drop table if exists test;
 drop table if exists test2;

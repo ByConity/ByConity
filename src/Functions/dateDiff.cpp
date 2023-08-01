@@ -166,7 +166,7 @@ public:
                 return input;
             ColumnsWithTypeAndName temp{input};
             auto to_datetime = FunctionFactory::instance().get("toDateTime", context);
-            auto col = to_datetime->build(temp)->execute(temp, temp[0].type, input_rows_count);
+            auto col = to_datetime->build(temp)->execute(temp, std::make_shared<DataTypeDateTime>(), input_rows_count);
             ColumnWithTypeAndName converted_col(col, std::make_shared<DataTypeDateTime>(), "datetime");
             return converted_col;
         };

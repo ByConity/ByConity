@@ -19,7 +19,7 @@ NamesAndTypesList StorageSystemCnchAsyncQueries::getNamesAndTypes()
         {"query_id", std::make_shared<DataTypeString>()},
         {"status", std::make_shared<DataTypeString>()},
         {"error_msg", std::make_shared<DataTypeString>()},
-        {"upate_time", std::make_shared<DataTypeDateTime>()},
+        {"update_time", std::make_shared<DataTypeDateTime>()},
     };
 }
 

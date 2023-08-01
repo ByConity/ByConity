@@ -14,6 +14,7 @@
  */
 
 #pragma once
+#include <Poco/Logger.h>
 #include <Protos/resource_manager_rpc.pb.h>
 
 #include <memory>
@@ -138,6 +139,7 @@ public:
         ::google::protobuf::Closure * done) override;
 
 private:
+    Poco::Logger * log = &Poco::Logger::get("ResourceManagerServiceImpl");
     ResourceManagerController & rm_controller;
     VirtualWarehouseManager & vw_manager;
     WorkerGroupManager & group_manager;

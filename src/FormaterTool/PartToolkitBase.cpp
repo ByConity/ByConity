@@ -15,12 +15,13 @@
 
 #include <FormaterTool/PartToolkitBase.h>
 #include <FormaterTool/ZipHelper.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/InterpreterCreateQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTPartToolKit.h>
-#include <Interpreters/InterpreterCreateQuery.h>
-#include <Interpreters/Context.h>
 #include <Storages/StorageFactory.h>
 #include <Storages/StorageMergeTree.h>
+#include <Poco/JSON/Template.h>
 
 namespace DB
 {
@@ -30,10 +31,30 @@ namespace ErrorCodes
     extern const int INCORRECT_QUERY;
 }
 
+const std::string default_config = "<yandex>\n"
+                                   "<storage_configuration>\n"
+                                   "<disks>\n"
+                                   "    <hdfs>\n"
+                                   "        <path><?= source-path ?></path>\n"
+                                   "        <type>hdfs</type>\n"
+                                   "    </hdfs>\n"
+                                   "</disks>\n"
+                                   "<policies>\n"
+                                   "    <cnch_default_hdfs>\n"
+                                   "        <volumes>\n"
+                                   "            <hdfs>\n"
+                                   "                <default>hdfs</default>\n"
+                                   "                <disk>hdfs</disk>\n"
+                                   "            </hdfs>\n"
+                                   "        </volumes>\n"
+                                   "    </cnch_default_hdfs>\n"
+                                   "</policies>\n"
+                                   "</storage_configuration>\n"
+                                   "</yandex>";
+
 PartToolkitBase::PartToolkitBase(const ASTPtr & query_ptr_, ContextMutablePtr context_)
     : WithMutableContext(context_), query_ptr(query_ptr_)
 {
-
 }
 
 PartToolkitBase::~PartToolkitBase()
@@ -74,6 +95,24 @@ void PartToolkitBase::applySettings()
                 user_settings.emplace(change.name, change.value);
         }
     }
+
+    /// Init HDFS params.
+    HDFSConnectionParams hdfs_params
+        = HDFSConnectionParams(HDFSConnectionParams::CONN_NNPROXY, getContext()->getHdfsUser(), getContext()->getHdfsNNProxy());
+    getContext()->setHdfsConnectionParams(hdfs_params);
+    /// Renders default config to initialize storage configurations.
+    Poco::JSON::Object::Ptr params = new Poco::JSON::Object();
+    params->set("source-path", pw_query.source_path->as<ASTLiteral &>().value.safeGet<String>());
+    Poco::JSON::Template tpl;
+    tpl.parse(default_config);
+    std::stringstream out;
+    tpl.render(params, out);
+    std::string default_xml_config = "<?xml version=\"1.0\"?>";
+    default_xml_config = default_xml_config + out.str();
+
+    DB::ConfigProcessor config_processor("", false, false);
+    auto config = config_processor.loadConfig(default_xml_config).configuration;
+    getContext()->setConfig(config);
 }
 
 StoragePtr PartToolkitBase::getTable()

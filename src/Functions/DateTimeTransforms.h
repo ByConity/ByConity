@@ -797,6 +797,11 @@ struct ToHourImpl
         return components.whole / 3600;
     }
 
+    static inline UInt8 executeTime(Int64 t, const DateLUTImpl &)
+    {
+        return t / 3600;
+    }
+
     static inline UInt8 execute(UInt32 t, const DateLUTImpl & time_zone)
     {
         return time_zone.toHour(t);
@@ -868,6 +873,11 @@ struct ToMinuteImpl
         return (components.whole / 60) % 60;
     }
 
+    static inline UInt8 executeTime(Int64 t, const DateLUTImpl &)
+    {
+        return (t / 60) % 60;
+    }
+
     using FactorTransform = ToStartOfHourImpl;
 };
 
@@ -895,6 +905,11 @@ struct ToSecondImpl
     {
         auto components = DecimalUtils::splitWithScaleMultiplier(t, scale_multiplier);
         return components.whole % 60;
+    }
+
+    static inline UInt8 executeTime(Int64 t, const DateLUTImpl &)
+    {
+        return t % 60;
     }
 
     using FactorTransform = ToStartOfMinuteImpl;

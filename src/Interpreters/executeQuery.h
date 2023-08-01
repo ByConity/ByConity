@@ -23,8 +23,8 @@
 
 #include <Core/QueryProcessingStage.h>
 #include <DataStreams/BlockIO.h>
-#include <Processors/QueryPipeline.h>
 #include <Interpreters/SegmentScheduler.h>
+#include <Processors/QueryPipeline.h>
 
 #include <Protos/cnch_common.pb.h>
 
@@ -32,19 +32,20 @@ using AsyncQueryStatus = DB::Protos::AsyncQueryStatus;
 
 namespace DB
 {
-
 class ReadBuffer;
 class WriteBuffer;
 
 
 /// Parse and execute a query.
 void executeQuery(
-    ReadBuffer & istr,                  /// Where to read query from (and data for INSERT, if present).
-    WriteBuffer & ostr,                 /// Where to write query output to.
-    bool allow_into_outfile,            /// If true and the query contains INTO OUTFILE section, redirect output to that file.
-    ContextMutablePtr context,                 /// DB, tables, data types, storage engines, functions, aggregate functions...
-    std::function<void(const String &, const String &, const String &, const String &)> set_result_details, /// If a non-empty callback is passed, it will be called with the query id, the content-type, the format, and the timezone.
-    const std::optional<FormatSettings> & output_format_settings = std::nullopt, /// Format settings for output format, will be calculated from the context if not set.
+    ReadBuffer & istr, /// Where to read query from (and data for INSERT, if present).
+    WriteBuffer & ostr, /// Where to write query output to.
+    bool allow_into_outfile, /// If true and the query contains INTO OUTFILE section, redirect output to that file.
+    ContextMutablePtr context, /// DB, tables, data types, storage engines, functions, aggregate functions...
+    std::function<void(const String &, const String &, const String &, const String &)>
+        set_result_details, /// If a non-empty callback is passed, it will be called with the query id, the content-type, the format, and the timezone.
+    const std::optional<FormatSettings> & output_format_settings
+    = std::nullopt, /// Format settings for output format, will be calculated from the context if not set.
     bool internal = false /// If a query is a internal which cannot be inserted into processlist.
 );
 
@@ -64,10 +65,10 @@ void executeQuery(
 /// Correctly formatting the results (according to INTO OUTFILE and FORMAT sections)
 /// must be done separately.
 BlockIO executeQuery(
-    const String & query,     /// Query text without INSERT data. The latter must be written to BlockIO::out.
-    ContextMutablePtr context,       /// DB, tables, data types, storage engines, functions, aggregate functions...
-    bool internal = false,    /// If true, this query is caused by another query and thus needn't be registered in the ProcessList.
-    QueryProcessingStage::Enum stage = QueryProcessingStage::Complete,    /// To which stage the query must be executed.
+    const String & query, /// Query text without INSERT data. The latter must be written to BlockIO::out.
+    ContextMutablePtr context, /// DB, tables, data types, storage engines, functions, aggregate functions...
+    bool internal = false, /// If true, this query is caused by another query and thus needn't be registered in the ProcessList.
+    QueryProcessingStage::Enum stage = QueryProcessingStage::Complete, /// To which stage the query must be executed.
     bool may_have_embedded_data = false /// If insert query may have embedded data
 );
 
@@ -86,6 +87,16 @@ HostWithPorts getTargetServer(ContextPtr context, ASTPtr & ast);
 
 /// Execute the query on the target server.
 void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server, const ASTPtr & ast, BlockIO & res);
+
+bool isAsyncMode(ContextMutablePtr context);
+
+void executeHttpQueryInAsyncMode(
+    BlockIO s,
+    ASTPtr ast,
+    ContextMutablePtr c,
+    WriteBuffer & ostr,
+    const std::optional<FormatSettings> & f,
+    std::function<void(const String &, const String &, const String &, const String &)> set_result_details);
 
 void updateAsyncQueryStatus(
     ContextMutablePtr context,

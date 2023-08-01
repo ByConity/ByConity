@@ -105,6 +105,34 @@ struct MergeSelectionMetrics
     size_t elapsed_calc_visible_parts = 0;
     size_t elapsed_calc_merge_parts = 0;
     size_t elapsed_select_parts = 0;
+
+    /// #partition returned from partition selector
+    size_t num_partitions = 0;
+    /// #partition without locked partitions.
+    size_t num_unlock_partitions = 0;
+    /// total number of parts of above partitions.
+    size_t num_source_parts = 0;
+    /// #part after calcVisibleParts
+    size_t num_visible_parts = 0;
+    /// #part without illegal parts (merging part or big part)
+    size_t num_legal_visible_parts = 0;
+
+    size_t totalElapsed() const { return elapsed_get_data_parts + elapsed_calc_visible_parts + elapsed_calc_merge_parts + elapsed_select_parts; }
+
+    String toDebugString() const
+    {
+        WriteBufferFromOwnString wb;
+        wb << '{'
+            << "elapsed_get_data_parts(us):" << elapsed_get_data_parts
+            << ", elapsed_calc_visible_parts:" << elapsed_calc_visible_parts
+            << ", elapsed_select_parts:" << elapsed_select_parts
+            << "; num_partitions:" << num_partitions
+            << ", num_unlock_partitions:" << num_unlock_partitions
+            << ", num_visible_parts:" << num_visible_parts
+            << ", num_legal_visible_parts:" << num_legal_visible_parts
+            << '}';
+        return wb.str();
+    }
 };
 
 struct ClusterTaskProgress

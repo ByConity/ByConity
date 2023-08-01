@@ -161,6 +161,12 @@ void ASTSelectQuery::formatImpl(const FormatSettings & s, FormatState & state, F
         where()->formatImpl(s, state, frame);
     }
 
+    if (escape())
+    {
+        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "ESCAPE " << (s.hilite ? hilite_none : "");
+        escape()->formatImpl(s, state, frame);
+    }
+
     if (groupBy())
     {
         s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "GROUP BY" << (s.hilite ? hilite_none : "");

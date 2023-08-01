@@ -610,4 +610,12 @@ public:
     using IParserDialectBase::IParserDialectBase;
 };
 
+class ParserEscapeExpression : public IParserDialectBase
+{
+    const char * getName() const override { return "ESCAPE clause"; }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
+};
+
 }

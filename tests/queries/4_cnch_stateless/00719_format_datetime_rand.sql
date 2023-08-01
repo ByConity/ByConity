@@ -1,8 +1,11 @@
 -- We add 1, because function toString has special behaviour for zero datetime
-SELECT count() FROM numbers(1000000) WHERE formatDateTime(toDateTime(1 + rand() % 0xFFFFFFFF), '%F %T') != toString(toDateTime(1 + rand() % 0xFFFFFFFF));
-SELECT count() FROM numbers(1000000) WHERE formatDateTime(toDateTime(1 + rand() % 0xFFFFFFFF), '%Y-%m-%d %H:%M:%S') != toString(toDateTime(1 + rand() % 0xFFFFFFFF));
-SELECT count() FROM numbers(1000000) WHERE formatDateTime(toDateTime(1 + rand() % 0xFFFFFFFF), '%Y-%m-%d %R:%S') != toString(toDateTime(1 + rand() % 0xFFFFFFFF));
-SELECT count() FROM numbers(1000000) WHERE formatDateTime(toDateTime(1 + rand() % 0xFFFFFFFF), '%F %R:%S') != toString(toDateTime(1 + rand() % 0xFFFFFFFF));
+WITH toDateTime(1 + rand() % 0xFFFFFFFF) AS t SELECT count() FROM numbers(1000000) WHERE formatDateTime(t, '%F %T') != toString(t);
+WITH toDateTime(1 + rand() % 0xFFFFFFFF) AS t SELECT count() FROM numbers(1000000) WHERE formatDateTime(t, '%Y-%m-%d %H:%i:%S') != toString(t);
+WITH toDateTime(1 + rand() % 0xFFFFFFFF) AS t SELECT count() FROM numbers(1000000) WHERE formatDateTime(t, '%Y-%m-%d %R:%S') != toString(t);
+WITH toDateTime(1 + rand() % 0xFFFFFFFF) AS t SELECT count() FROM numbers(1000000) WHERE formatDateTime(t, '%F %R:%S') != toString(t);
 
-SELECT count() FROM numbers(1000000) WHERE formatDateTime(toDate(today() + rand() % 4096), '%F') != toString(toDate(today() + rand() % 4096));
-SELECT count() FROM numbers(1000000) WHERE formatDateTime(toDate(today() + rand() % 4096), '%F %T') != toString(toDateTime(toDate(today() + rand() % 4096)));
+WITH toDate(today() + rand() % 4096) AS t SELECT count() FROM numbers(1000000) WHERE formatDateTime(t, '%F') != toString(t);
+
+-- Note: in some other timezones, daylight saving time change happens in midnight, so the first time of day is 01:00:00 instead of 00:00:00.
+-- Stick to Moscow timezone to avoid this issue.
+WITH toDate(today() + rand() % 4096) AS t SELECT count() FROM numbers(1000000) WHERE formatDateTime(t, '%F %T', 'Asia/Istanbul') != toString(toDateTime(t, 'Asia/Istanbul'));

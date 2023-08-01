@@ -1,6 +1,7 @@
 #include "PartMergerImpl.h"
 #include "CloudServices/CnchPartsHelper.h"
 #include "Core/UUID.h"
+#include "Storages/HDFS/HDFSCommon.h"
 #include "Storages/MergeTree/MergeTreeReaderCompact.h"
 
 namespace DB
@@ -78,8 +79,8 @@ PartMergerImpl::PartMergerImpl(ContextMutablePtr context_, Poco::Util::AbstractC
 
     /// Check source path.
     Poco::URI uri_in(params.source_path);
-    if (!isHdfsScheme(uri_in.getScheme()))
-        throw Exception("Source path should be a hdfs path.", ErrorCodes::BAD_ARGUMENTS);
+    if (!isHdfsOrCfsScheme(uri_in.getScheme()))
+        throw Exception("Source path should be a HDFS or CFS path.", ErrorCodes::BAD_ARGUMENTS);
 
     if (!DB::HDFSCommon::exists(uri_in.getPath()))
         throw Exception("Source path " + uri_in.getPath() + " doesn't exists.", ErrorCodes::BAD_ARGUMENTS);
@@ -88,13 +89,13 @@ PartMergerImpl::PartMergerImpl(ContextMutablePtr context_, Poco::Util::AbstractC
 
     /// Check output path
     Poco::URI uri_out(params.output_path);
-    if (!isHdfsScheme(uri_out.getScheme()))
-        throw Exception("Output path should be a hdfs path.", ErrorCodes::BAD_ARGUMENTS);
+    if (!isHdfsOrCfsScheme(uri_out.getScheme()))
+        throw Exception("Output path should be a HDFS or CFS path.", ErrorCodes::BAD_ARGUMENTS);
 
     params.output_path = uri_out.getPath();
     if (DB::HDFSCommon::exists(params.output_path))
     {
-        LOG_WARNING(log, "Output path {} already exists on hdfs. Will remove it.", params.output_path);
+        LOG_WARNING(log, "Output path {} already exists on target. Will remove it.", params.output_path);
         DB::HDFSCommon::remove(params.output_path, true);
     }
 

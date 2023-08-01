@@ -140,6 +140,7 @@ public:
     void checkAlterIsPossible(const AlterCommands & commands, ContextPtr local_context) const override;
     void alter(const AlterCommands & commands, ContextPtr local_context, TableLockHolder & table_lock_holder) override;
     void checkAlterSettings(const AlterCommands & commands) const;
+    void checkAlterVW(const String & vw_name) const;
 
     void checkAlterPartitionIsPossible(
         const PartitionCommands & commands, const StorageMetadataPtr & metadata_snapshot, const Settings & settings) const override;

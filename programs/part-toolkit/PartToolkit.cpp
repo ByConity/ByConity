@@ -133,19 +133,9 @@ int mainEntryClickhousePartToolkit(int argc, char ** argv)
         std::string sql = argv[1];
         run(sql, log);
     }
-    catch (const Poco::Exception & e)
-    {
-        LOG_ERROR(log, "Interupted by Poco::exception: {}", e.what());
-        return -1;
-    }
-    catch (const std::exception & e)
-    {
-        LOG_ERROR(log, "Interupted by std::exception: {}", e.what());
-        return -1;
-    }
     catch (...)
     {
-        LOG_ERROR(log, "Unknown exception occurs.");
+        DB::tryLogCurrentException(log);
         return -1;
     }
 

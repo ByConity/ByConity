@@ -316,8 +316,15 @@ bool MergeTreeWhereOptimizer::isPrimaryKeyAtom(const ASTPtr & ast) const
             return false;
 
         const auto & args = func->arguments->children;
-        if (args.size() != 2)
-            return false;
+        if (functionIsEscapeLikeOperator(func->name))
+        {
+            if (args.size() != 3)
+                return false;
+        }
+        else {
+            if (args.size() != 2)
+                return false;
+        }
 
         const auto & first_arg_name = args.front()->getColumnName();
         const auto & second_arg_name = args.back()->getColumnName();

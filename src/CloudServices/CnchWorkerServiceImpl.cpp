@@ -280,7 +280,7 @@ void CnchWorkerServiceImpl::sendCreateQuery(
         for (const auto & create_query: request->create_queries())
         {
             /// store cloud tables in cnch_session_resource.
-            worker_resource->executeCreateQuery(create_context, create_query);
+            worker_resource->executeCreateQuery(create_context, create_query, true);
         }
 
         LOG_TRACE(log, "Successfully create {} queries for Session: {}", request->create_queries_size(), request->txn_id());
@@ -525,7 +525,7 @@ void CnchWorkerServiceImpl::sendResources(
             /// create a copy of session_context to avoid modify settings in SessionResource
             auto context_for_create = Context::createCopy(query_context);
             for (const auto & create_query: request->create_queries())
-                worker_resource->executeCreateQuery(context_for_create, create_query);
+                worker_resource->executeCreateQuery(context_for_create, create_query, true);
 
             LOG_DEBUG(log, "Successfully create {} queries for Session: {}", request->create_queries_size(), request->txn_id());
         }

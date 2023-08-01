@@ -69,7 +69,7 @@ public:
         {
             ColumnsWithTypeAndName tmp{arguments[0]};
             auto to_dt = FunctionFactory::instance().get("toDateTime", context_ptr);
-            auto col = to_dt->build(tmp)->execute(tmp, arguments[0].type, input_rows_count);
+            auto col = to_dt->build(tmp)->execute(tmp, std::make_shared<DataTypeDateTime64>(0), input_rows_count);
             ColumnWithTypeAndName converted_col(col, std::make_shared<DataTypeDateTime64>(0), "unixtime");
             input_col.emplace_back(converted_col);
         }
@@ -136,7 +136,7 @@ public:
         {
             ColumnsWithTypeAndName tmp{arguments[0]};
             auto to_dt = FunctionFactory::instance().get("toDateTime", context_ptr);
-            auto col = to_dt->build(tmp)->execute(tmp, arguments[0].type, input_rows_count);
+            auto col = to_dt->build(tmp)->execute(tmp, std::make_shared<DataTypeDateTime64>(0), input_rows_count);
             ColumnWithTypeAndName converted_col(col, std::make_shared<DataTypeDateTime64>(0), "unixtime");
             input_col.emplace_back(converted_col);
         }
