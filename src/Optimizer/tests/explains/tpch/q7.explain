@@ -16,14 +16,15 @@ Projection Est. 482500 rows
                      └─ Inner Join Est. 1825841 rows
                         │     Condition: l_orderkey == o_orderkey
                         │     Filter: ((n_name = 'FRANCE') AND (n_name_1 = 'GERMANY')) OR ((n_name = 'GERMANY') AND (n_name_1 = 'FRANCE'))
+                        │     Runtime Filters Builder: {o_orderkey}
                         ├─ Repartition Exchange Est. 1825841 rows
                         │  │     Partition by: {l_orderkey}
                         │  └─ Inner Join Est. 1825841 rows
                         │     │     Condition: l_suppkey == s_suppkey
                         │     ├─ Filter Est. 1825841 rows
-                        │     │  │     Condition: (l_shipdate >= cast(9131, 'Date')) AND (l_shipdate <= cast(9861, 'Date'))
+                        │     │  │     Condition: (l_shipdate >= cast(9131, 'Date')) AND (l_shipdate <= cast(9861, 'Date')) Runtime Filters: {l_orderkey}
                         │     │  └─ TableScan tpch.lineitem Est. 6001215 rows
-                        │     │           Condition : (l_shipdate >= cast(9131, 'Date')) AND (l_shipdate <= cast(9861, 'Date')).
+                        │     │           Where: (l_shipdate >= cast(9131, 'Date')) AND (l_shipdate <= cast(9861, 'Date')) Runtime Filters: {l_orderkey}
                         │     │           Outputs: [l_discount, l_extendedprice, l_orderkey, l_shipdate, l_suppkey]
                         │     └─ Broadcast Exchange Est. 10000 rows
                         │        └─ Inner Join Est. 10000 rows
@@ -33,9 +34,9 @@ Projection Est. 482500 rows
                         │           └─ Broadcast Exchange Est. 25 rows
                         │              └─ TableScan tpch.nation Est. 25 rows
                         │                       Outputs: [n_name, n_nationkey]
-                        └─ Repartition Exchange Est. 1500000 rows
+                        └─ Repartition Exchange Est. 750000 rows
                            │     Partition by: {o_orderkey}
-                           └─ Inner Join Est. 1500000 rows
+                           └─ Inner Join Est. 750000 rows
                               │     Condition: o_custkey == c_custkey
                               ├─ Repartition Exchange Est. 1500000 rows
                               │  │     Partition by: {o_custkey}
@@ -50,3 +51,4 @@ Projection Est. 482500 rows
                                     └─ Broadcast Exchange Est. 25 rows
                                        └─ TableScan tpch.nation Est. 25 rows
                                                 Outputs: n_name_1:=n_name, n_nationkey_1:=n_nationkey
+note: Runtime Filter is applied for 1 times.

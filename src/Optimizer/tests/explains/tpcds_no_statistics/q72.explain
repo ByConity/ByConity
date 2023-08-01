@@ -75,31 +75,25 @@ Projection Est. 100 rows
                            │     │     │     │     │     │     │                 Outputs: [i_item_desc, i_item_sk]
                            │     │     │     │     │     │     └─ Repartition Exchange Est. ? rows
                            │     │     │     │     │     │        │     Partition by: {cd_demo_sk}
-                           │     │     │     │     │     │        └─ Projection Est. ? rows
-                           │     │     │     │     │     │           │     Expressions: [cd_demo_sk]
-                           │     │     │     │     │     │           └─ Filter Est. ? rows
-                           │     │     │     │     │     │              │     Condition: cd_marital_status = 'D'
-                           │     │     │     │     │     │              └─ TableScan tpcds.customer_demographics Est. ? rows
-                           │     │     │     │     │     │                       Condition : cd_marital_status = 'D'.
-                           │     │     │     │     │     │                       Outputs: [cd_demo_sk, cd_marital_status]
+                           │     │     │     │     │     │        └─ Filter Est. ? rows
+                           │     │     │     │     │     │           │     Condition: cd_marital_status = 'D'
+                           │     │     │     │     │     │           └─ TableScan tpcds.customer_demographics Est. ? rows
+                           │     │     │     │     │     │                    Where: cd_marital_status = 'D'
+                           │     │     │     │     │     │                    Outputs: [cd_demo_sk, cd_marital_status]
                            │     │     │     │     │     └─ Repartition Exchange Est. ? rows
                            │     │     │     │     │        │     Partition by: {hd_demo_sk}
-                           │     │     │     │     │        └─ Projection Est. ? rows
-                           │     │     │     │     │           │     Expressions: [hd_demo_sk]
-                           │     │     │     │     │           └─ Filter Est. ? rows
-                           │     │     │     │     │              │     Condition: hd_buy_potential = '>10000'
-                           │     │     │     │     │              └─ TableScan tpcds.household_demographics Est. ? rows
-                           │     │     │     │     │                       Condition : hd_buy_potential = '>10000'.
-                           │     │     │     │     │                       Outputs: [hd_buy_potential, hd_demo_sk]
+                           │     │     │     │     │        └─ Filter Est. ? rows
+                           │     │     │     │     │           │     Condition: hd_buy_potential = '>10000'
+                           │     │     │     │     │           └─ TableScan tpcds.household_demographics Est. ? rows
+                           │     │     │     │     │                    Where: hd_buy_potential = '>10000'
+                           │     │     │     │     │                    Outputs: [hd_buy_potential, hd_demo_sk]
                            │     │     │     │     └─ Repartition Exchange Est. ? rows
                            │     │     │     │        │     Partition by: {d_date_sk}
-                           │     │     │     │        └─ Projection Est. ? rows
-                           │     │     │     │           │     Expressions: [d_date, d_date_sk, d_week_seq]
-                           │     │     │     │           └─ Filter Est. ? rows
-                           │     │     │     │              │     Condition: d_year = 1999
-                           │     │     │     │              └─ TableScan tpcds.date_dim Est. ? rows
-                           │     │     │     │                       Condition : d_year = 1999.
-                           │     │     │     │                       Outputs: [d_date, d_date_sk, d_week_seq, d_year]
+                           │     │     │     │        └─ Filter Est. ? rows
+                           │     │     │     │           │     Condition: d_year = 1999
+                           │     │     │     │           └─ TableScan tpcds.date_dim Est. ? rows
+                           │     │     │     │                    Where: d_year = 1999
+                           │     │     │     │                    Outputs: [d_date, d_date_sk, d_week_seq, d_year]
                            │     │     │     └─ Repartition Exchange Est. ? rows
                            │     │     │        │     Partition by: {d_date_sk_1, d_week_seq_1}
                            │     │     │        └─ TableScan tpcds.date_dim Est. ? rows

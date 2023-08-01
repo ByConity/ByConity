@@ -19,12 +19,13 @@ Projection Est. 20 rows
                         │     Expressions: [c_acctbal, c_address, c_comment, c_custkey, c_name, c_phone, n_name], expr#multiply(l_extendedprice, minus(1, l_discount)):=l_extendedprice * (1 - l_discount)
                         └─ Inner Join Est. 227958 rows
                            │     Condition: l_orderkey == o_orderkey
+                           │     Runtime Filters Builder: {o_orderkey}
                            ├─ Repartition Exchange Est. 1478870 rows
                            │  │     Partition by: {l_orderkey}
                            │  └─ Filter Est. 1478870 rows
-                           │     │     Condition: l_returnflag = 'R'
+                           │     │     Condition: l_returnflag = 'R' Runtime Filters: {l_orderkey}
                            │     └─ TableScan tpch.lineitem Est. 6001215 rows
-                           │              Condition : l_returnflag = 'R'.
+                           │              Where: l_returnflag = 'R' Runtime Filters: {l_orderkey}
                            │              Outputs: [l_discount, l_extendedprice, l_orderkey, l_returnflag]
                            └─ Repartition Exchange Est. 57049 rows
                               │     Partition by: {o_orderkey}
@@ -32,17 +33,22 @@ Projection Est. 20 rows
                                  │     Condition: c_nationkey == n_nationkey
                                  ├─ Inner Join Est. 57049 rows
                                  │  │     Condition: c_custkey == o_custkey
+                                 │  │     Runtime Filters Builder: {o_custkey}
                                  │  ├─ Repartition Exchange Est. 150000 rows
                                  │  │  │     Partition by: {c_custkey}
-                                 │  │  └─ TableScan tpch.customer Est. 150000 rows
-                                 │  │           Outputs: [c_acctbal, c_address, c_comment, c_custkey, c_name, c_nationkey, c_phone]
+                                 │  │  └─ Filter Est. 150000 rows
+                                 │  │     │     Condition: Runtime Filters: {c_custkey}
+                                 │  │     └─ TableScan tpch.customer Est. 150000 rows
+                                 │  │              Where: Runtime Filters: {c_custkey}
+                                 │  │              Outputs: [c_acctbal, c_address, c_comment, c_custkey, c_name, c_nationkey, c_phone]
                                  │  └─ Repartition Exchange Est. 57049 rows
                                  │     │     Partition by: {o_custkey}
                                  │     └─ Filter Est. 57049 rows
                                  │        │     Condition: (o_orderdate >= cast(8674, 'Date')) AND (o_orderdate < cast(8766, 'Date'))
                                  │        └─ TableScan tpch.orders Est. 1500000 rows
-                                 │                 Condition : (o_orderdate >= cast(8674, 'Date')) AND (o_orderdate < cast(8766, 'Date')).
+                                 │                 Where: (o_orderdate >= cast(8674, 'Date')) AND (o_orderdate < cast(8766, 'Date'))
                                  │                 Outputs: [o_custkey, o_orderdate, o_orderkey]
                                  └─ Broadcast Exchange Est. 25 rows
                                     └─ TableScan tpch.nation Est. 25 rows
                                              Outputs: [n_name, n_nationkey]
+note: Runtime Filter is applied for 2 times.

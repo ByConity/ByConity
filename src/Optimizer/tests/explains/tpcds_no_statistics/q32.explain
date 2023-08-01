@@ -27,14 +27,14 @@ Projection Est. 100 rows
                │     │        └─ Filter Est. ? rows
                │     │           │     Condition: i_manufact_id = 977
                │     │           └─ TableScan tpcds.item Est. ? rows
-               │     │                    Condition : i_manufact_id = 977.
+               │     │                    Where: i_manufact_id = 977
                │     │                    Outputs: [i_item_sk, i_manufact_id]
                │     └─ Repartition Exchange Est. ? rows
                │        │     Partition by: {d_date_sk}
                │        └─ Filter Est. ? rows
                │           │     Condition: (d_date >= cast(10983, 'Date')) AND (d_date <= cast(11073, 'Date'))
                │           └─ TableScan tpcds.date_dim Est. ? rows
-               │                    Condition : (d_date >= cast(10983, 'Date')) AND (d_date <= cast(11073, 'Date')).
+               │                    Where: (d_date >= cast(10983, 'Date')) AND (d_date <= cast(11073, 'Date'))
                │                    Outputs: [d_date, d_date_sk]
                └─ MergingAggregated Est. ? rows
                   └─ Repartition Exchange Est. ? rows
@@ -55,5 +55,5 @@ Projection Est. 100 rows
                                  └─ Filter Est. ? rows
                                     │     Condition: (d_date_1 >= cast(10983, 'Date')) AND (d_date_1 <= cast(11073, 'Date'))
                                     └─ TableScan tpcds.date_dim Est. ? rows
-                                             Condition : (d_date >= cast(10983, 'Date')) AND (d_date <= cast(11073, 'Date')).
+                                             Where: (d_date >= cast(10983, 'Date')) AND (d_date <= cast(11073, 'Date'))
                                              Outputs: d_date_1:=d_date, d_date_sk_1:=d_date_sk

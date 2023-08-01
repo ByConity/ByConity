@@ -44,7 +44,7 @@ Projection Est. 100 rows
                │  │           │        └─ Filter Est. ? rows
                │  │           │           │     Condition: isNotNull(d_date)
                │  │           │           └─ TableScan tpcds.date_dim Est. ? rows
-               │  │           │                    Condition : isNotNull(d_date).
+               │  │           │                    Where: isNotNull(d_date)
                │  │           │                    Outputs: [d_date, d_date_sk]
                │  │           └─ MergingAggregated Est. ? rows
                │  │              └─ Repartition Exchange Est. ? rows
@@ -58,7 +58,7 @@ Projection Est. 100 rows
                │  │                       │  └─ Filter Est. ? rows
                │  │                       │     │     Condition: isNotNull(d_date_1)
                │  │                       │     └─ TableScan tpcds.date_dim Est. ? rows
-               │  │                       │              Condition : isNotNull(d_date).
+               │  │                       │              Where: isNotNull(d_date)
                │  │                       │              Outputs: [d_week_seq], d_date_1:=d_date
                │  │                       └─ Repartition Exchange Est. ? rows
                │  │                          │     Partition by: {d_week_seq_1}
@@ -70,7 +70,7 @@ Projection Est. 100 rows
                │  │                                      └─ Filter Est. ? rows
                │  │                                         │     Condition: d_date_2 = cast(10959, 'Date')
                │  │                                         └─ TableScan tpcds.date_dim Est. ? rows
-               │  │                                                  Condition : d_date = cast(10959, 'Date').
+               │  │                                                  Where: d_date = cast(10959, 'Date')
                │  │                                                  Outputs: d_date_2:=d_date, d_week_seq_1:=d_week_seq
                │  └─ MergingAggregated Est. ? rows
                │     └─ Repartition Exchange Est. ? rows
@@ -101,7 +101,7 @@ Projection Est. 100 rows
                │              │        └─ Filter Est. ? rows
                │              │           │     Condition: isNotNull(d_date_3)
                │              │           └─ TableScan tpcds.date_dim Est. ? rows
-               │              │                    Condition : isNotNull(d_date).
+               │              │                    Where: isNotNull(d_date)
                │              │                    Outputs: d_date_3:=d_date, d_date_sk_1:=d_date_sk
                │              └─ MergingAggregated Est. ? rows
                │                 └─ Repartition Exchange Est. ? rows
@@ -115,7 +115,7 @@ Projection Est. 100 rows
                │                          │  └─ Filter Est. ? rows
                │                          │     │     Condition: isNotNull(d_date_4)
                │                          │     └─ TableScan tpcds.date_dim Est. ? rows
-               │                          │              Condition : isNotNull(d_date).
+               │                          │              Where: isNotNull(d_date)
                │                          │              Outputs: d_date_4:=d_date, d_week_seq_2:=d_week_seq
                │                          └─ Repartition Exchange Est. ? rows
                │                             │     Partition by: {d_week_seq_3}
@@ -127,7 +127,7 @@ Projection Est. 100 rows
                │                                         └─ Filter Est. ? rows
                │                                            │     Condition: d_date_5 = cast(10959, 'Date')
                │                                            └─ TableScan tpcds.date_dim Est. ? rows
-               │                                                     Condition : d_date = cast(10959, 'Date').
+               │                                                     Where: d_date = cast(10959, 'Date')
                │                                                     Outputs: d_date_5:=d_date, d_week_seq_3:=d_week_seq
                └─ MergingAggregated Est. ? rows
                   └─ Repartition Exchange Est. ? rows
@@ -158,7 +158,7 @@ Projection Est. 100 rows
                            │        └─ Filter Est. ? rows
                            │           │     Condition: isNotNull(d_date_6)
                            │           └─ TableScan tpcds.date_dim Est. ? rows
-                           │                    Condition : isNotNull(d_date).
+                           │                    Where: isNotNull(d_date)
                            │                    Outputs: d_date_6:=d_date, d_date_sk_2:=d_date_sk
                            └─ MergingAggregated Est. ? rows
                               └─ Repartition Exchange Est. ? rows
@@ -172,7 +172,7 @@ Projection Est. 100 rows
                                        │  └─ Filter Est. ? rows
                                        │     │     Condition: isNotNull(d_date_7)
                                        │     └─ TableScan tpcds.date_dim Est. ? rows
-                                       │              Condition : isNotNull(d_date).
+                                       │              Where: isNotNull(d_date)
                                        │              Outputs: d_date_7:=d_date, d_week_seq_4:=d_week_seq
                                        └─ Repartition Exchange Est. ? rows
                                           │     Partition by: {d_week_seq_5}
@@ -184,5 +184,5 @@ Projection Est. 100 rows
                                                       └─ Filter Est. ? rows
                                                          │     Condition: d_date_8 = cast(10959, 'Date')
                                                          └─ TableScan tpcds.date_dim Est. ? rows
-                                                                  Condition : d_date = cast(10959, 'Date').
+                                                                  Where: d_date = cast(10959, 'Date')
                                                                   Outputs: d_date_8:=d_date, d_week_seq_5:=d_week_seq

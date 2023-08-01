@@ -35,7 +35,7 @@ Projection Est. 100 rows
                   │     │     │        └─ Filter Est. ? rows
                   │     │     │           │     Condition: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date'))
                   │     │     │           └─ TableScan tpcds.date_dim Est. ? rows
-                  │     │     │                    Condition : (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date')).
+                  │     │     │                    Where: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date'))
                   │     │     │                    Outputs: [d_date, d_date_sk]
                   │     │     └─ Repartition Exchange Est. ? rows
                   │     │        │     Partition by: {s_store_sk}
@@ -59,7 +59,7 @@ Projection Est. 100 rows
                   │           │        └─ Filter Est. ? rows
                   │           │           │     Condition: (d_date_1 >= cast(11192, 'Date')) AND (d_date_1 <= cast(11222, 'Date'))
                   │           │           └─ TableScan tpcds.date_dim Est. ? rows
-                  │           │                    Condition : (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date')).
+                  │           │                    Where: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date'))
                   │           │                    Outputs: d_date_1:=d_date, d_date_sk_1:=d_date_sk
                   │           └─ Repartition Exchange Est. ? rows
                   │              │     Partition by: {s_store_sk_1}
@@ -86,7 +86,7 @@ Projection Est. 100 rows
                   │     │              └─ Filter Est. ? rows
                   │     │                 │     Condition: (d_date_2 >= cast(11192, 'Date')) AND (d_date_2 <= cast(11222, 'Date'))
                   │     │                 └─ TableScan tpcds.date_dim Est. ? rows
-                  │     │                          Condition : (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date')).
+                  │     │                          Where: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date'))
                   │     │                          Outputs: d_date_2:=d_date, d_date_sk_2:=d_date_sk
                   │     └─ Broadcast Exchange Est. ? rows
                   │        └─ MergingAggregated Est. ? rows
@@ -106,7 +106,7 @@ Projection Est. 100 rows
                   │                       └─ Filter Est. ? rows
                   │                          │     Condition: (d_date_3 >= cast(11192, 'Date')) AND (d_date_3 <= cast(11222, 'Date'))
                   │                          └─ TableScan tpcds.date_dim Est. ? rows
-                  │                                   Condition : (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date')).
+                  │                                   Where: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date'))
                   │                                   Outputs: d_date_3:=d_date, d_date_sk_3:=d_date_sk
                   └─ Projection Est. ? rows
                      │     Expressions: [expr#sum(ws_ext_sales_price), wp_web_page_sk], expr#'web channel':='web channel', expr#coalesce(returns, 0)_1:=cast(coalesce(`expr#sum(wr_return_amt)`, 0), 'Nullable(Float64)'), expr#minus(profit, coalesce(profit_loss, 0))_1:=`expr#sum(ws_net_profit)` - coalesce(`expr#sum(wr_net_loss)`, 0)
@@ -130,7 +130,7 @@ Projection Est. 100 rows
                         │     │        └─ Filter Est. ? rows
                         │     │           │     Condition: (d_date_4 >= cast(11192, 'Date')) AND (d_date_4 <= cast(11222, 'Date'))
                         │     │           └─ TableScan tpcds.date_dim Est. ? rows
-                        │     │                    Condition : (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date')).
+                        │     │                    Where: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date'))
                         │     │                    Outputs: d_date_4:=d_date, d_date_sk_4:=d_date_sk
                         │     └─ Repartition Exchange Est. ? rows
                         │        │     Partition by: {wp_web_page_sk}
@@ -154,7 +154,7 @@ Projection Est. 100 rows
                               │        └─ Filter Est. ? rows
                               │           │     Condition: (d_date_5 >= cast(11192, 'Date')) AND (d_date_5 <= cast(11222, 'Date'))
                               │           └─ TableScan tpcds.date_dim Est. ? rows
-                              │                    Condition : (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date')).
+                              │                    Where: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date'))
                               │                    Outputs: d_date_5:=d_date, d_date_sk_5:=d_date_sk
                               └─ Repartition Exchange Est. ? rows
                                  │     Partition by: {wp_web_page_sk_1}

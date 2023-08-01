@@ -103,6 +103,7 @@ private:
     String printDetail(QueryPlanStepPtr plan, const TextPrinterIntent & intent) const;
     String printStatistics(const PlanNodeBase & plan, const TextPrinterIntent & intent = {}) const;
     static String printOperatorProfiles(PlanNodeBase & plan, const TextPrinterIntent & intent = {}, const StepAggregatedOperatorProfiles & profiles = {}) ;
+    static String printFilter(ConstASTPtr filter);
 
     const bool print_stats;
     const bool verbose;

@@ -46,7 +46,7 @@ Projection Est. 100 rows
                      │  │              └─ Filter Est. ? rows
                      │  │                 │     Condition: d_year = 2000
                      │  │                 └─ TableScan tpcds.date_dim Est. ? rows
-                     │  │                          Condition : d_year = 2000.
+                     │  │                          Where: d_year = 2000
                      │  │                          Outputs: [d_date_sk, d_year]
                      │  └─ MergingAggregated Est. ? rows
                      │     └─ Repartition Exchange Est. ? rows
@@ -77,7 +77,7 @@ Projection Est. 100 rows
                      │                 └─ Filter Est. ? rows
                      │                    │     Condition: d_year_1 = 2000
                      │                    └─ TableScan tpcds.date_dim Est. ? rows
-                     │                             Condition : d_year = 2000.
+                     │                             Where: d_year = 2000
                      │                             Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year
                      └─ MergingAggregated Est. ? rows
                         └─ Repartition Exchange Est. ? rows
@@ -108,5 +108,5 @@ Projection Est. 100 rows
                                     └─ Filter Est. ? rows
                                        │     Condition: d_year_2 = 2000
                                        └─ TableScan tpcds.date_dim Est. ? rows
-                                                Condition : d_year = 2000.
+                                                Where: d_year = 2000
                                                 Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year

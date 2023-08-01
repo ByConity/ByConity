@@ -36,5 +36,5 @@ Projection Est. 100 rows
                               └─ Filter Est. ? rows
                                  │     Condition: r_reason_desc = 'reason 28'
                                  └─ TableScan tpcds.reason Est. ? rows
-                                          Condition : r_reason_desc = 'reason 28'.
+                                          Where: r_reason_desc = 'reason 28'
                                           Outputs: [r_reason_desc, r_reason_sk]

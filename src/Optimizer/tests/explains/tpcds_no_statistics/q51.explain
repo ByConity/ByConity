@@ -34,14 +34,14 @@ Projection Est. 100 rows
                            │                 │  └─ Filter Est. ? rows
                            │                 │     │     Condition: isNotNull(ws_item_sk)
                            │                 │     └─ TableScan tpcds.web_sales Est. ? rows
-                           │                 │              Condition : isNotNull(ws_item_sk).
+                           │                 │              Where: isNotNull(ws_item_sk)
                            │                 │              Outputs: [ws_item_sk, ws_sales_price, ws_sold_date_sk]
                            │                 └─ Repartition Exchange Est. ? rows
                            │                    │     Partition by: {d_date_sk}
                            │                    └─ Filter Est. ? rows
                            │                       │     Condition: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
                            │                       └─ TableScan tpcds.date_dim Est. ? rows
-                           │                                Condition : (d_month_seq >= 1200) AND (d_month_seq <= 1211).
+                           │                                Where: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
                            │                                Outputs: [d_date, d_date_sk, d_month_seq]
                            └─ Window Est. ? rows
                               └─ Repartition Exchange Est. ? rows
@@ -59,12 +59,12 @@ Projection Est. 100 rows
                                              │  └─ Filter Est. ? rows
                                              │     │     Condition: isNotNull(ss_item_sk)
                                              │     └─ TableScan tpcds.store_sales Est. ? rows
-                                             │              Condition : isNotNull(ss_item_sk).
+                                             │              Where: isNotNull(ss_item_sk)
                                              │              Outputs: [ss_item_sk, ss_sales_price, ss_sold_date_sk]
                                              └─ Repartition Exchange Est. ? rows
                                                 │     Partition by: {d_date_sk_1}
                                                 └─ Filter Est. ? rows
                                                    │     Condition: (d_month_seq_1 >= 1200) AND (d_month_seq_1 <= 1211)
                                                    └─ TableScan tpcds.date_dim Est. ? rows
-                                                            Condition : (d_month_seq >= 1200) AND (d_month_seq <= 1211).
+                                                            Where: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
                                                             Outputs: d_date_1:=d_date, d_date_sk_1:=d_date_sk, d_month_seq_1:=d_month_seq

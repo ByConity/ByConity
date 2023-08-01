@@ -144,7 +144,7 @@ TEST_F(MaterializedViewRewriteTest, testFilterQueryOnProjectView5)
                                     "   └─ Filter\n"
                                     "      │     Condition: x = 2\n"
                                     "      └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "               Condition : x = 2.\n"
+                                    "               Where: x = 2\n"
                                     "               Outputs: [ee, name, x]")
         .ok();
 }
@@ -213,7 +213,7 @@ TEST_F(MaterializedViewRewriteTest, testFilterQueryOnFilterView3)
                                     "   └─ Filter\n"
                                     "      │     Condition: deptno = 10\n"
                                     "      └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "               Condition : deptno = 10.\n"
+                                    "               Where: deptno = 10\n"
                                     "               Outputs: [deptno, empid, name]")
         .ok();
 }
@@ -975,7 +975,7 @@ TEST_F(MaterializedViewRewriteTest, testSingleMaterializationMultiUsage)
             "      │  └─ Filter\n"
             "      │     │     Condition: empid < 300\n"
             "      │     └─ TableScan test_mview.MV0_MV_DATA\n"
-            "      │              Condition : empid < 300.\n"
+            "      │              Where: empid < 300\n"
             "      │              Outputs: [commission, deptno, empid, name, salary]\n"
             "      └─ Repartition Exchange\n"
             "         │     Partition by: {empid_1}\n"
@@ -984,7 +984,7 @@ TEST_F(MaterializedViewRewriteTest, testSingleMaterializationMultiUsage)
             "            └─ Filter\n"
             "               │     Condition: empid < 200\n"
             "               └─ TableScan test_mview.MV0_MV_DATA\n"
-            "                        Condition : empid < 200.\n"
+            "                        Where: empid < 200\n"
             "                        Outputs: [commission, deptno, empid, name, salary]")
         .ok();
 }
@@ -1142,7 +1142,7 @@ TEST_F(MaterializedViewRewriteTest, testConstantFilterInAgg)
                                     "   └─ Filter\n"
                                     "      │     Condition: name = 'hello'\n"
                                     "      └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "               Condition : name = 'hello'.\n"
+                                    "               Where: name = 'hello'\n"
                                     "               Outputs: [cnt, name]")
         .ok();
 }
@@ -1165,7 +1165,7 @@ TEST_F(MaterializedViewRewriteTest, testConstantFilterInAgg2)
                                     "   └─ Filter\n"
                                     "      │     Condition: name = 'hello'\n"
                                     "      └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "               Condition : name = 'hello'.\n"
+                                    "               Where: name = 'hello'\n"
                                     "               Outputs: [cnt, deptno, name]")
         .ok();
 }
@@ -1188,7 +1188,7 @@ TEST_F(MaterializedViewRewriteTest, testConstantFilterInAgg3)
                                     "   └─ Filter\n"
                                     "      │     Condition: (name = 'hello') AND (deptno = 1)\n"
                                     "      └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "               Condition : (name = 'hello') AND (deptno = 1).\n"
+                                    "               Where: (name = 'hello') AND (deptno = 1)\n"
                                     "               Outputs: [cnt, deptno, name]")
         .ok();
 }

@@ -37,7 +37,7 @@ Projection Est. 100 rows
                                     │        └─ Filter Est. ? rows
                                     │           │     Condition: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
                                     │           └─ TableScan tpcds.date_dim Est. ? rows
-                                    │                    Condition : (d_month_seq >= 1200) AND (d_month_seq <= 1211).
+                                    │                    Where: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
                                     │                    Outputs: [d_date_sk, d_month_seq]
                                     └─ Repartition Exchange Est. ? rows
                                        │     Partition by: {i_item_sk}

@@ -38,21 +38,21 @@ Projection Est. 100 rows
                         │     │     │        └─ Filter Est. ? rows
                         │     │     │           │     Condition: (cd_education_status = 'College') AND (cd_gender = 'M') AND (cd_marital_status = 'S')
                         │     │     │           └─ TableScan tpcds.customer_demographics Est. ? rows
-                        │     │     │                    Condition : (cd_education_status = 'College') AND (cd_gender = 'M') AND (cd_marital_status = 'S').
+                        │     │     │                    Where: (cd_education_status = 'College') AND (cd_gender = 'M') AND (cd_marital_status = 'S')
                         │     │     │                    Outputs: [cd_demo_sk, cd_education_status, cd_gender, cd_marital_status]
                         │     │     └─ Repartition Exchange Est. ? rows
                         │     │        │     Partition by: {d_date_sk}
                         │     │        └─ Filter Est. ? rows
                         │     │           │     Condition: d_year = 2002
                         │     │           └─ TableScan tpcds.date_dim Est. ? rows
-                        │     │                    Condition : d_year = 2002.
+                        │     │                    Where: d_year = 2002
                         │     │                    Outputs: [d_date_sk, d_year]
                         │     └─ Repartition Exchange Est. ? rows
                         │        │     Partition by: {s_store_sk}
                         │        └─ Filter Est. ? rows
                         │           │     Condition: s_state = 'TN'
                         │           └─ TableScan tpcds.store Est. ? rows
-                        │                    Condition : s_state = 'TN'.
+                        │                    Where: s_state = 'TN'
                         │                    Outputs: [s_state, s_store_sk]
                         └─ Repartition Exchange Est. ? rows
                            │     Partition by: {i_item_sk}

@@ -73,7 +73,7 @@ Projection Est. 100 rows
                            │                          └─ Filter Est. ? rows
                            │                             │     Condition: (d_year = 2001) AND (d_moy = 1)
                            │                             └─ TableScan tpcds.date_dim Est. ? rows
-                           │                                      Condition : (d_year = 2001) AND (d_moy = 1).
+                           │                                      Where: (d_year = 2001) AND (d_moy = 1)
                            │                                      Outputs: [d_moy, d_year], d_month_seq_1:=d_month_seq
                            └─ MergingAggregated Est. ? rows
                               └─ Repartition Exchange Est. ? rows

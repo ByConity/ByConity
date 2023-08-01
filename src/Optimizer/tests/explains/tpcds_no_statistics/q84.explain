@@ -36,7 +36,7 @@ Projection Est. 100 rows
                │     │     │     │        └─ Filter Est. ? rows
                │     │     │     │           │     Condition: ca_city = 'Edgewood'
                │     │     │     │           └─ TableScan tpcds.customer_address Est. ? rows
-               │     │     │     │                    Condition : ca_city = 'Edgewood'.
+               │     │     │     │                    Where: ca_city = 'Edgewood'
                │     │     │     │                    Outputs: [ca_address_sk, ca_city]
                │     │     │     └─ Repartition Exchange Est. ? rows
                │     │     │        │     Partition by: {cd_demo_sk}
@@ -51,7 +51,7 @@ Projection Est. 100 rows
                │        └─ Filter Est. ? rows
                │           │     Condition: (ib_lower_bound >= 38128) AND (ib_upper_bound <= 88128)
                │           └─ TableScan tpcds.income_band Est. ? rows
-               │                    Condition : (ib_lower_bound >= 38128) AND (ib_upper_bound <= 88128).
+               │                    Where: (ib_lower_bound >= 38128) AND (ib_upper_bound <= 88128)
                │                    Outputs: [ib_income_band_sk, ib_lower_bound, ib_upper_bound]
                └─ Repartition Exchange Est. ? rows
                   │     Partition by: {sr_cdemo_sk}

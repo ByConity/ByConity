@@ -44,21 +44,21 @@ Projection Est. 100 rows
                │     │        │     │     │        └─ Filter Est. ? rows
                │     │        │     │     │           │     Condition: (d_dow IN (0, 6)) AND (d_year IN (1999, 2000, 2001))
                │     │        │     │     │           └─ TableScan tpcds.date_dim Est. ? rows
-               │     │        │     │     │                    Condition : (d_dow IN (0, 6)) AND (d_year IN (1999, 2000, 2001)).
+               │     │        │     │     │                    Where: (d_dow IN (0, 6)) AND (d_year IN (1999, 2000, 2001))
                │     │        │     │     │                    Outputs: [d_date_sk, d_dow, d_year]
                │     │        │     │     └─ Repartition Exchange Est. ? rows
                │     │        │     │        │     Partition by: {s_store_sk}
                │     │        │     │        └─ Filter Est. ? rows
                │     │        │     │           │     Condition: s_city IN (' Fairview', 'Fairview', 'Midway')
                │     │        │     │           └─ TableScan tpcds.store Est. ? rows
-               │     │        │     │                    Condition : s_city IN (' Fairview', 'Fairview', 'Midway').
+               │     │        │     │                    Where: s_city IN (' Fairview', 'Fairview', 'Midway')
                │     │        │     │                    Outputs: [s_city, s_store_sk]
                │     │        │     └─ Repartition Exchange Est. ? rows
                │     │        │        │     Partition by: {hd_demo_sk}
                │     │        │        └─ Filter Est. ? rows
                │     │        │           │     Condition: (hd_dep_count = 4) OR (hd_vehicle_count = 3)
                │     │        │           └─ TableScan tpcds.household_demographics Est. ? rows
-               │     │        │                    Condition : (hd_dep_count = 4) OR (hd_vehicle_count = 3).
+               │     │        │                    Where: (hd_dep_count = 4) OR (hd_vehicle_count = 3)
                │     │        │                    Outputs: [hd_demo_sk, hd_dep_count, hd_vehicle_count]
                │     │        └─ Repartition Exchange Est. ? rows
                │     │           │     Partition by: {ca_address_sk}

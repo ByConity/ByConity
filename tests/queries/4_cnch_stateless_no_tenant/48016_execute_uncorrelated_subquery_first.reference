@@ -66,7 +66,7 @@ Projection Est. ? rows
          └─ Filter Est. ? rows
             │     Condition: a < 5
             └─ TableScan test.uncorrelated Est. ? rows
-                     Condition : a < 5.
+                     Where: a < 5
                      Outputs: [a, b]
 Projection Est. ? rows
 │     Expressions: [a, b]
@@ -78,7 +78,7 @@ Projection Est. ? rows
          └─ Filter Est. ? rows
             │     Condition: a < 10
             └─ TableScan test.uncorrelated Est. ? rows
-                     Condition : a < 10.
+                     Where: a < 10
                      Outputs: [a, b]
 Projection Est. ? rows
 │     Expressions: [a, b]
@@ -90,7 +90,7 @@ Projection Est. ? rows
          └─ Filter Est. ? rows
             │     Condition: a < 11
             └─ TableScan test.uncorrelated Est. ? rows
-                     Condition : a < 11.
+                     Where: a < 11
                      Outputs: [a, b]
 Projection Est. ? rows
 │     Expressions: [a]
@@ -128,7 +128,7 @@ Projection Est. 1000 rows, cost 1.481600e+02
                └─ Filter Est. ? rows, cost 0.000000e+00
                   │     Condition: date = cast(19551, \'Date\')
                   └─ TableScan test.dm_mint_crm_creator_stats_df Est. ? rows, cost 0.000000e+00
-                           Condition : date = cast(19551, \'Date\').
+                           Where: date = cast(19551, \'Date\')
                            Outputs: [date, followed_counter_td, user_id]
 Projection Est. 1000 rows, cost 7.496000e+01
 │     Expressions: [user_id]

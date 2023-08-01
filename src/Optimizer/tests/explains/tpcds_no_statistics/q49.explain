@@ -35,21 +35,21 @@ Projection Est. 100 rows
             │                                │     │  └─ Filter Est. ? rows
             │                                │     │     │     Condition: (ws_net_profit > 1.) AND (ws_net_paid > 0.) AND (ws_quantity > 0)
             │                                │     │     └─ TableScan tpcds.web_sales Est. ? rows
-            │                                │     │              Condition : (ws_net_profit > 1.) AND (ws_net_paid > 0.) AND (ws_quantity > 0).
+            │                                │     │              Where: (ws_net_profit > 1.) AND (ws_net_paid > 0.) AND (ws_quantity > 0)
             │                                │     │              Outputs: [ws_item_sk, ws_net_paid, ws_net_profit, ws_order_number, ws_quantity, ws_sold_date_sk]
             │                                │     └─ Repartition Exchange Est. ? rows
             │                                │        │     Partition by: {wr_item_sk, wr_order_number}
             │                                │        └─ Filter Est. ? rows
             │                                │           │     Condition: wr_return_amt > 10000.
             │                                │           └─ TableScan tpcds.web_returns Est. ? rows
-            │                                │                    Condition : wr_return_amt > 10000..
+            │                                │                    Where: wr_return_amt > 10000.
             │                                │                    Outputs: [wr_item_sk, wr_order_number, wr_return_amt, wr_return_quantity]
             │                                └─ Repartition Exchange Est. ? rows
             │                                   │     Partition by: {d_date_sk}
             │                                   └─ Filter Est. ? rows
             │                                      │     Condition: (d_moy = 12) AND (d_year = 2001)
             │                                      └─ TableScan tpcds.date_dim Est. ? rows
-            │                                               Condition : (d_moy = 12) AND (d_year = 2001).
+            │                                               Where: (d_moy = 12) AND (d_year = 2001)
             │                                               Outputs: [d_date_sk, d_moy, d_year]
             ├─ Projection Est. ? rows
             │  │     Expressions: [cs_item_sk, expr#divide(CAST(sum(coalesce(cr.cr_return_quantity, 0)), 'decimal(15, 4)'), CAST(sum(coalesce(cs.cs_quantity, 0)), 'decimal(15, 4)')), expr#rank() OVER (ORDER BY currency_ratio ASC)_1, expr#rank() OVER (ORDER BY return_ratio ASC)_1], expr#'catalog':='catalog'
@@ -79,21 +79,21 @@ Projection Est. 100 rows
             │                                │     │  └─ Filter Est. ? rows
             │                                │     │     │     Condition: (cs_net_profit > 1.) AND (cs_net_paid > 0.) AND (cs_quantity > 0)
             │                                │     │     └─ TableScan tpcds.catalog_sales Est. ? rows
-            │                                │     │              Condition : (cs_net_profit > 1.) AND (cs_net_paid > 0.) AND (cs_quantity > 0).
+            │                                │     │              Where: (cs_net_profit > 1.) AND (cs_net_paid > 0.) AND (cs_quantity > 0)
             │                                │     │              Outputs: [cs_item_sk, cs_net_paid, cs_net_profit, cs_order_number, cs_quantity, cs_sold_date_sk]
             │                                │     └─ Repartition Exchange Est. ? rows
             │                                │        │     Partition by: {cr_item_sk, cr_order_number}
             │                                │        └─ Filter Est. ? rows
             │                                │           │     Condition: cr_return_amount > 10000.
             │                                │           └─ TableScan tpcds.catalog_returns Est. ? rows
-            │                                │                    Condition : cr_return_amount > 10000..
+            │                                │                    Where: cr_return_amount > 10000.
             │                                │                    Outputs: [cr_item_sk, cr_order_number, cr_return_amount, cr_return_quantity]
             │                                └─ Repartition Exchange Est. ? rows
             │                                   │     Partition by: {d_date_sk_1}
             │                                   └─ Filter Est. ? rows
             │                                      │     Condition: (d_year_1 = 2001) AND (d_moy_1 = 12)
             │                                      └─ TableScan tpcds.date_dim Est. ? rows
-            │                                               Condition : (d_year = 2001) AND (d_moy = 12).
+            │                                               Where: (d_year = 2001) AND (d_moy = 12)
             │                                               Outputs: d_date_sk_1:=d_date_sk, d_moy_1:=d_moy, d_year_1:=d_year
             └─ Projection Est. ? rows
                │     Expressions: [expr#divide(CAST(sum(coalesce(sr.sr_return_quantity, 0)), 'decimal(15, 4)'), CAST(sum(coalesce(sts.ss_quantity, 0)), 'decimal(15, 4)')), expr#rank() OVER (ORDER BY currency_ratio ASC)_2, expr#rank() OVER (ORDER BY return_ratio ASC)_2, ss_item_sk], expr#'store':='store'
@@ -123,19 +123,19 @@ Projection Est. 100 rows
                                              │     │  └─ Filter Est. ? rows
                                              │     │     │     Condition: (ss_net_profit > 1.) AND (ss_net_paid > 0.) AND (ss_quantity > 0)
                                              │     │     └─ TableScan tpcds.store_sales Est. ? rows
-                                             │     │              Condition : (ss_net_profit > 1.) AND (ss_net_paid > 0.) AND (ss_quantity > 0).
+                                             │     │              Where: (ss_net_profit > 1.) AND (ss_net_paid > 0.) AND (ss_quantity > 0)
                                              │     │              Outputs: [ss_item_sk, ss_net_paid, ss_net_profit, ss_quantity, ss_sold_date_sk, ss_ticket_number]
                                              │     └─ Repartition Exchange Est. ? rows
                                              │        │     Partition by: {sr_item_sk, sr_ticket_number}
                                              │        └─ Filter Est. ? rows
                                              │           │     Condition: sr_return_amt > 10000.
                                              │           └─ TableScan tpcds.store_returns Est. ? rows
-                                             │                    Condition : sr_return_amt > 10000..
+                                             │                    Where: sr_return_amt > 10000.
                                              │                    Outputs: [sr_item_sk, sr_return_amt, sr_return_quantity, sr_ticket_number]
                                              └─ Repartition Exchange Est. ? rows
                                                 │     Partition by: {d_date_sk_2}
                                                 └─ Filter Est. ? rows
                                                    │     Condition: (d_moy_2 = 12) AND (d_year_2 = 2001)
                                                    └─ TableScan tpcds.date_dim Est. ? rows
-                                                            Condition : (d_moy = 12) AND (d_year = 2001).
+                                                            Where: (d_moy = 12) AND (d_year = 2001)
                                                             Outputs: d_date_sk_2:=d_date_sk, d_moy_2:=d_moy, d_year_2:=d_year

@@ -15,63 +15,63 @@
 
 #include <Optimizer/Rule/Rewrite/PushThroughExchangeRules.h>
 
+#include <Common/LinkedHashMap.h>
 #include <QueryPlan/PlanNode.h>
 #include <Optimizer/Rule/Pattern.h>
 #include <Optimizer/Rule/Patterns.h>
 #include <Optimizer/SymbolUtils.h>
 #include <Optimizer/Utils.h>
-#include <QueryPlan/ExchangeStep.h>
 
 namespace DB
 {
-PatternPtr PushDynamicFilterBuilderThroughExchange::getPattern() const
-{
-    return Patterns::project()
-        .matchingStep<ProjectionStep>([](const auto & project) { return !project.getDynamicFilters().empty(); })
-        .withSingle(Patterns::exchange()).result();
-}
-
-TransformResult PushDynamicFilterBuilderThroughExchange::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
-{
-    const auto * project_step = dynamic_cast<const ProjectionStep *>(node->getStep().get());
-    const auto & exchange = node->getChildren()[0];
-
-    std::unordered_map<String, DynamicFilterBuildInfo> pushdown_dynamic_filter;
-    std::unordered_map<String, DynamicFilterBuildInfo> remaining_dynamic_filter;
-    for (const auto & dynamic_filter : project_step->getDynamicFilters())
-        if (Utils::isIdentity(dynamic_filter.first, project_step->getAssignments().at(dynamic_filter.first)))
-            pushdown_dynamic_filter.emplace(dynamic_filter);
-        else
-            remaining_dynamic_filter.emplace(dynamic_filter);
-
-    Assignments assignments;
-    NameToType name_to_type;
-    for (const auto & name_and_type : project_step->getInputStreams()[0].header)
-    {
-        assignments.emplace_back(name_and_type.name, std::make_shared<ASTIdentifier>(name_and_type.name));
-        name_to_type.emplace(name_and_type.name, name_and_type.type);
-    }
-
-    auto plan = PlanNodeBase::createPlanNode(
-        exchange->getId(),
-        exchange->getStep(),
-        {PlanNodeBase::createPlanNode(
-            context.context->nextNodeId(),
-            std::make_shared<ProjectionStep>(
-                project_step->getInputStreams()[0], assignments, name_to_type, false, pushdown_dynamic_filter),
-            exchange->getChildren())});
-
-    if (project_step->isFinalProject() || !Utils::isIdentity(project_step->getAssignments())) {
-        return PlanNodeBase::createPlanNode(
-            node->getId(),
-            std::make_shared<ProjectionStep>(
-                project_step->getInputStreams()[0],
-                project_step->getAssignments(),
-                project_step->getNameToType(),
-                project_step->isFinalProject(),
-                remaining_dynamic_filter),
-            {plan});
-    }
-    return plan;
-}
+//PatternPtr PushRuntimeFilterBuilderThroughExchange::getPattern() const
+//{
+//    return Patterns::project()
+//        ->matchingStep<ProjectionStep>([](const auto & project) { return !project.getRuntimeFilters().empty(); })
+//        ->withSingle(Patterns::exchange());
+//}
+//
+//TransformResult PushRuntimeFilterBuilderThroughExchange::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
+//{
+//    const auto * project_step = dynamic_cast<const ProjectionStep *>(node->getStep().get());
+//    const auto & exchange = node->getChildren()[0];
+//
+//    LinkedHashMap<String, RuntimeFilterBuildInfos> pushdown_runtime_filter;
+//    LinkedHashMap<String, RuntimeFilterBuildInfos> remaining_runtime_filter;
+//    for (const auto & runtime_filter : project_step->getRuntimeFilters())
+//        if (Utils::isIdentity(runtime_filter.first, project_step->getAssignments().at(runtime_filter.first)))
+//            pushdown_runtime_filter.emplace_back(runtime_filter);
+//        else
+//            remaining_runtime_filter.emplace_back(runtime_filter);
+//
+//    Assignments assignments;
+//    NameToType name_to_type;
+//    for (const auto & name_and_type : project_step->getInputStreams()[0].header)
+//    {
+//        assignments.emplace_back(name_and_type.name, std::make_shared<ASTIdentifier>(name_and_type.name));
+//        name_to_type.emplace(name_and_type.name, name_and_type.type);
+//    }
+//
+//    auto plan = PlanNodeBase::createPlanNode(
+//        exchange->getId(),
+//        exchange->getStep(),
+//        {PlanNodeBase::createPlanNode(
+//            context.context->nextNodeId(),
+//            std::make_shared<ProjectionStep>(
+//                project_step->getInputStreams()[0], assignments, name_to_type, false, pushdown_runtime_filter),
+//            exchange->getChildren())});
+//
+//    if (project_step->isFinalProject() || !Utils::isIdentity(project_step->getAssignments())) {
+//        return PlanNodeBase::createPlanNode(
+//            node->getId(),
+//            std::make_shared<ProjectionStep>(
+//                project_step->getInputStreams()[0],
+//                project_step->getAssignments(),
+//                project_step->getNameToType(),
+//                project_step->isFinalProject(),
+//                remaining_runtime_filter),
+//            {plan});
+//    }
+//    return plan;
+//}
 }

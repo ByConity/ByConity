@@ -96,7 +96,7 @@ bool isIdentity(const Assignments & assignments)
 
 bool isIdentity(const ProjectionStep & step)
 {
-    return !step.isFinalProject() && step.getDynamicFilters().empty() && Utils::isIdentity(step.getAssignments());
+    return !step.isFinalProject() && Utils::isIdentity(step.getAssignments());
 }
 
 NameToNameMap extractIdentities(const ProjectionStep & project)

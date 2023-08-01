@@ -41,32 +41,38 @@ Projection Est. 100 rows
                                     │                 ├─ AssignUniqueId Est. 116584 rows
                                     │                 │  └─ Inner Join Est. 116584 rows
                                     │                 │     │     Condition: o_orderkey == l_orderkey
+                                    │                 │     │     Runtime Filters Builder: {l_orderkey}
                                     │                 │     ├─ Repartition Exchange Est. 729413 rows
                                     │                 │     │  │     Partition by: {o_orderkey}
                                     │                 │     │  └─ Filter Est. 729413 rows
-                                    │                 │     │     │     Condition: o_orderstatus = 'F'
+                                    │                 │     │     │     Condition: o_orderstatus = 'F' Runtime Filters: {o_orderkey}
                                     │                 │     │     └─ TableScan tpch.orders Est. 1500000 rows
-                                    │                 │     │              Condition : o_orderstatus = 'F'.
+                                    │                 │     │              Where: o_orderstatus = 'F' Runtime Filters: {o_orderkey}
                                     │                 │     │              Outputs: [o_orderkey, o_orderstatus]
                                     │                 │     └─ Repartition Exchange Est. 240048 rows
                                     │                 │        │     Partition by: {l_orderkey}
                                     │                 │        └─ Inner Join Est. 240048 rows
                                     │                 │           │     Condition: l_suppkey == s_suppkey
+                                    │                 │           │     Runtime Filters Builder: {s_suppkey}
                                     │                 │           ├─ Filter Est. 6001215 rows
-                                    │                 │           │  │     Condition: l_receiptdate > l_commitdate
+                                    │                 │           │  │     Condition: l_receiptdate > l_commitdate Runtime Filters: {l_suppkey}
                                     │                 │           │  └─ TableScan tpch.lineitem Est. 6001215 rows
-                                    │                 │           │           Condition : l_receiptdate > l_commitdate.
+                                    │                 │           │           Where: l_receiptdate > l_commitdate Runtime Filters: {l_suppkey}
                                     │                 │           │           Outputs: [l_commitdate, l_orderkey, l_receiptdate, l_suppkey]
                                     │                 │           └─ Broadcast Exchange Est. 200 rows
                                     │                 │              └─ Inner Join Est. 200 rows
                                     │                 │                 │     Condition: s_nationkey == n_nationkey
-                                    │                 │                 ├─ TableScan tpch.supplier Est. 10000 rows
-                                    │                 │                 │        Outputs: [s_name, s_nationkey, s_suppkey]
+                                    │                 │                 │     Runtime Filters Builder: {n_nationkey}
+                                    │                 │                 ├─ Filter Est. 10000 rows
+                                    │                 │                 │  │     Condition: Runtime Filters: {s_nationkey}
+                                    │                 │                 │  └─ TableScan tpch.supplier Est. 10000 rows
+                                    │                 │                 │           Where: Runtime Filters: {s_nationkey}
+                                    │                 │                 │           Outputs: [s_name, s_nationkey, s_suppkey]
                                     │                 │                 └─ Broadcast Exchange Est. 1 rows
                                     │                 │                    └─ Filter Est. 1 rows
                                     │                 │                       │     Condition: n_name = 'SAUDI ARABIA'
                                     │                 │                       └─ TableScan tpch.nation Est. 25 rows
-                                    │                 │                                Condition : n_name = 'SAUDI ARABIA'.
+                                    │                 │                                Where: n_name = 'SAUDI ARABIA'
                                     │                 │                                Outputs: [n_name, n_nationkey]
                                     │                 └─ Repartition Exchange Est. 6001215 rows
                                     │                    │     Partition by: {l_orderkey_1}
@@ -81,5 +87,6 @@ Projection Est. 100 rows
                                           └─ Filter Est. 6001215 rows
                                              │     Condition: l_receiptdate_2 > l_commitdate_2
                                              └─ TableScan tpch.lineitem Est. 6001215 rows
-                                                      Condition : l_receiptdate > l_commitdate.
+                                                      Where: l_receiptdate > l_commitdate
                                                       Outputs: l_commitdate_2:=l_commitdate, l_orderkey_2:=l_orderkey, l_receiptdate_2:=l_receiptdate, l_suppkey_2:=l_suppkey
+note: Runtime Filter is applied for 3 times.

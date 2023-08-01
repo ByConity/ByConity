@@ -44,7 +44,7 @@ Projection Est. 100 rows
                               │     │  │     │        └─ Filter Est. ? rows
                               │     │  │     │           │     Condition: ca_state IN ('GA', 'KY', 'NM')
                               │     │  │     │           └─ TableScan tpcds.customer_address Est. ? rows
-                              │     │  │     │                    Condition : ca_state IN ('GA', 'KY', 'NM').
+                              │     │  │     │                    Where: ca_state IN ('GA', 'KY', 'NM')
                               │     │  │     │                    Outputs: [ca_address_sk, ca_state]
                               │     │  │     └─ Repartition Exchange Est. ? rows
                               │     │  │        │     Partition by: {cd_demo_sk}
@@ -66,7 +66,7 @@ Projection Est. 100 rows
                               │     │                 └─ Filter Est. ? rows
                               │     │                    │     Condition: (d_year = 2001) AND (d_moy >= 4) AND (d_moy <= 6)
                               │     │                    └─ TableScan tpcds.date_dim Est. ? rows
-                              │     │                             Condition : (d_year = 2001) AND (d_moy >= 4) AND (d_moy <= 6).
+                              │     │                             Where: (d_year = 2001) AND (d_moy >= 4) AND (d_moy <= 6)
                               │     │                             Outputs: [d_date_sk, d_moy, d_year]
                               │     └─ Projection Est. ? rows
                               │        │     Expressions: [ws_bill_customer_sk], build_side_non_null_symbol_1:=1
@@ -86,7 +86,7 @@ Projection Est. 100 rows
                               │                       └─ Filter Est. ? rows
                               │                          │     Condition: (d_year_1 = 2001) AND (d_moy_1 >= 4) AND (d_moy_1 <= 6)
                               │                          └─ TableScan tpcds.date_dim Est. ? rows
-                              │                                   Condition : (d_year = 2001) AND (d_moy >= 4) AND (d_moy <= 6).
+                              │                                   Where: (d_year = 2001) AND (d_moy >= 4) AND (d_moy <= 6)
                               │                                   Outputs: d_date_sk_1:=d_date_sk, d_moy_1:=d_moy, d_year_1:=d_year
                               └─ Projection Est. ? rows
                                  │     Expressions: [cs_ship_customer_sk], build_side_non_null_symbol_2:=1
@@ -106,5 +106,5 @@ Projection Est. 100 rows
                                                 └─ Filter Est. ? rows
                                                    │     Condition: (d_year_2 = 2001) AND (d_moy_2 >= 4) AND (d_moy_2 <= 6)
                                                    └─ TableScan tpcds.date_dim Est. ? rows
-                                                            Condition : (d_year = 2001) AND (d_moy >= 4) AND (d_moy <= 6).
+                                                            Where: (d_year = 2001) AND (d_moy >= 4) AND (d_moy <= 6)
                                                             Outputs: d_date_sk_2:=d_date_sk, d_moy_2:=d_moy, d_year_2:=d_year

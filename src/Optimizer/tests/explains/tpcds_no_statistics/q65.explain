@@ -44,13 +44,11 @@ Projection Est. 100 rows
                │     │                          │           Outputs: [ss_item_sk, ss_sales_price, ss_sold_date_sk, ss_store_sk]
                │     │                          └─ Repartition Exchange Est. ? rows
                │     │                             │     Partition by: {d_date_sk}
-               │     │                             └─ Projection Est. ? rows
-               │     │                                │     Expressions: [d_date_sk]
-               │     │                                └─ Filter Est. ? rows
-               │     │                                   │     Condition: (d_month_seq >= 1176) AND (d_month_seq <= 1187)
-               │     │                                   └─ TableScan tpcds.date_dim Est. ? rows
-               │     │                                            Condition : (d_month_seq >= 1176) AND (d_month_seq <= 1187).
-               │     │                                            Outputs: [d_date_sk, d_month_seq]
+               │     │                             └─ Filter Est. ? rows
+               │     │                                │     Condition: (d_month_seq >= 1176) AND (d_month_seq <= 1187)
+               │     │                                └─ TableScan tpcds.date_dim Est. ? rows
+               │     │                                         Where: (d_month_seq >= 1176) AND (d_month_seq <= 1187)
+               │     │                                         Outputs: [d_date_sk, d_month_seq]
                │     └─ Repartition Exchange Est. ? rows
                │        │     Partition by: {ss_store_sk_1}
                │        └─ MergingAggregated Est. ? rows
@@ -67,13 +65,11 @@ Projection Est. 100 rows
                │                    │           Outputs: ss_item_sk_1:=ss_item_sk, ss_sales_price_1:=ss_sales_price, ss_sold_date_sk_1:=ss_sold_date_sk, ss_store_sk_1:=ss_store_sk
                │                    └─ Repartition Exchange Est. ? rows
                │                       │     Partition by: {d_date_sk_1}
-               │                       └─ Projection Est. ? rows
-               │                          │     Expressions: [d_date_sk_1]
-               │                          └─ Filter Est. ? rows
-               │                             │     Condition: (d_month_seq_1 >= 1176) AND (d_month_seq_1 <= 1187)
-               │                             └─ TableScan tpcds.date_dim Est. ? rows
-               │                                      Condition : (d_month_seq >= 1176) AND (d_month_seq <= 1187).
-               │                                      Outputs: d_date_sk_1:=d_date_sk, d_month_seq_1:=d_month_seq
+               │                       └─ Filter Est. ? rows
+               │                          │     Condition: (d_month_seq_1 >= 1176) AND (d_month_seq_1 <= 1187)
+               │                          └─ TableScan tpcds.date_dim Est. ? rows
+               │                                   Where: (d_month_seq >= 1176) AND (d_month_seq <= 1187)
+               │                                   Outputs: d_date_sk_1:=d_date_sk, d_month_seq_1:=d_month_seq
                └─ Repartition Exchange Est. ? rows
                   │     Partition by: {i_item_sk}
                   └─ TableScan tpcds.item Est. ? rows

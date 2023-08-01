@@ -1912,13 +1912,6 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_distinct_to_aggregate, true, "Whether enable convert distinct to group by", 0) \
     M(Bool, enable_single_distinct_to_group_by, true, "Whether enable convert single count distinct to group by", 0) \
     M(Bool, enable_magic_set, true, "Whether enable magic set rewriting for join aggregation", 0) \
-    M(Bool, enable_dynamic_filter, true, "Whether enable dynamic filter for join", 0) \
-    M(UInt64, dynamic_filter_min_filter_rows, 10000, "Set minimum row to enable dynamic filter", 0) \
-    M(Float, dynamic_filter_max_filter_factor, 0.7, "Set maximal filter factor to enable dynamic filter", 0) \
-    M(Bool, enable_dynamic_filter_for_bloom_filter, true, "Whether enable dynamic filter for bloom filter", 0) \
-    M(Bool, enable_dynamic_filter_for_join, true, "Whether enable dynamic filter for join", 0) \
-    M(UInt64, dynamic_filter_default_bytes, 1024 * 256, "Whether enable dynamic filter for join", 0) \
-    M(UInt64, dynamic_filter_default_hashes, 4, "Whether enable dynamic filter for join", 0) \
     M(CTEMode, cte_mode, CTEMode::INLINED, "CTE mode: SHARED|INLINED|AUTO", 0) \
     M(Bool, enable_cte_property_enum, false, "Whether enumerate all possible properties for cte", 0) \
     M(Bool, enable_cte_common_property, true, "Whether search common property for cte", 0) \
@@ -1987,12 +1980,20 @@ enum PreloadLevelSettings : UInt64
     M(Bool, exchange_force_use_buffer, false, "Force exchange use buffer as possible", 0) \
     M(UInt64, distributed_query_wait_exception_ms, 1000, "Wait final planSegment exception from segmentScheduler.", 0) \
     M(UInt64, distributed_max_parallel_size, false, "Max distributed execution parallel size", 0) \
-\
-    /** Dynamic Filter settings */ \
-    M(UInt64, wait_runtime_filter_timeout, 1000, "Execute filter wait for runtime filter timeout ms", 0) \
-    M(UInt64, wait_runtime_filter_timeout_for_filter, 0, "Execute filter wait for runtime filter timeout ms", 0) \
-    M(Bool, runtime_filter_dynamic_mode, false, "Whether enable bloom runtime filter", 0) \
-\
+    \
+    /** Runtime Filter settings */ \
+    M(UInt64, wait_runtime_filter_timeout, 500, "Execute filter wait for runtime filter timeout ms", 0) \
+    M(Bool, enable_runtime_filter, true, "Whether enable runtime filter for join", 0) \
+    M(Bool, enable_runtime_filter_cost, false, "Whether enable runtime filter cost", 0) \
+    M(Bool, enable_local_runtime_filter, true, "Whether enable runtime filter in local mode", 0) \
+    M(UInt64, runtime_filter_min_filter_rows, 10000, "Set minimum row to enable runtime filter", 0) \
+    M(Float, runtime_filter_min_filter_factor, 0.3, "Set minimum filter factor to enable runtime filter", 0) \
+    M(Bool, enable_range_cover, true, "Whether use range rather than bloom or values set for runtime filter", 0) \
+    M(Bool, runtime_filter_rewrite_bloom_filter_into_prewhere, true, "Whether enable pushdown runtime filter to prewhere for join", 0) \
+    M(UInt64, runtime_filter_bloom_build_threshold, 2048000, "The threshold of right table to build bloom filter", 0) \
+    M(UInt64, runtime_filter_in_build_threshold, 1024, "The threshold of right table to build value set filter", 0) \
+    M(Bool, enable_runtime_filter_pipeline_poll, true, "No additional segment needed for the left side during broadcast join, polling time bounded", 0) \
+    \
     /** ip2geo settings */ \
     M(String, ip2geo_local_path, "/data01/clickhouse/data/geo_db/", "Local path for IP Database files", 0) \
     M(String, ip2geo_local_path_oversea, "/data01/clickhouse/data/geo_db/oversea/", "Local path for IP Database files for oversea", 0) \

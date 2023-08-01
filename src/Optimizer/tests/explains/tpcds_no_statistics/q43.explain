@@ -28,7 +28,7 @@ Projection Est. 100 rows
                            │     │  └─ Filter Est. ? rows
                            │     │     │     Condition: d_year = 2000
                            │     │     └─ TableScan tpcds.date_dim Est. ? rows
-                           │     │              Condition : d_year = 2000.
+                           │     │              Where: d_year = 2000
                            │     │              Outputs: [d_date_sk, d_day_name, d_year]
                            │     └─ Repartition Exchange Est. ? rows
                            │        │     Partition by: {ss_sold_date_sk}
@@ -39,5 +39,5 @@ Projection Est. 100 rows
                               └─ Filter Est. ? rows
                                  │     Condition: s_gmt_offset = -5.
                                  └─ TableScan tpcds.store Est. ? rows
-                                          Condition : s_gmt_offset = -5..
+                                          Where: s_gmt_offset = -5.
                                           Outputs: [s_gmt_offset, s_store_id, s_store_name, s_store_sk]

@@ -18,7 +18,7 @@
 #include <Optimizer/Cascades/CascadesOptimizer.h>
 #include <Optimizer/Iterative/IterativeRewriter.h>
 #include <Optimizer/PlanCheck.h>
-#include <Optimizer/Rewriter/AddDynamicFilters.h>
+#include <Optimizer/Rewriter/AddRuntimeFilters.h>
 #include <Optimizer/Rewriter/AddExchange.h>
 #include <Optimizer/Rewriter/ColumnPruning.h>
 #include <Optimizer/Rewriter/MaterializedViewRewriter.h>
@@ -216,7 +216,7 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         std::make_shared<RemoveUnusedCTE>(),
 
         // add runtime filters
-        std::make_shared<AddDynamicFilters>(),
+        std::make_shared<AddRuntimeFilters>(),
 
         // final UnifyNullableType, make sure type is correct.
         std::make_shared<ColumnPruning>(),

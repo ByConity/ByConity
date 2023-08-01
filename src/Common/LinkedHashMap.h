@@ -77,7 +77,7 @@ public:
     }
 
     template<typename KeyArg>
-    bool contains(const KeyArg & key_arg)
+    bool contains(const KeyArg & key_arg) const
     {
         return mapping.count(key_arg);
     }

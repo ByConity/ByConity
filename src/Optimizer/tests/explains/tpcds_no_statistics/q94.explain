@@ -47,21 +47,21 @@ Projection Est. 100 rows
                         │           │        │     │        └─ Filter Est. ? rows
                         │           │        │     │           │     Condition: (d_date >= cast(10623, 'Date')) AND (d_date <= cast(10683, 'Date'))
                         │           │        │     │           └─ TableScan tpcds.date_dim Est. ? rows
-                        │           │        │     │                    Condition : (d_date >= cast(10623, 'Date')) AND (d_date <= cast(10683, 'Date')).
+                        │           │        │     │                    Where: (d_date >= cast(10623, 'Date')) AND (d_date <= cast(10683, 'Date'))
                         │           │        │     │                    Outputs: [d_date, d_date_sk]
                         │           │        │     └─ Repartition Exchange Est. ? rows
                         │           │        │        │     Partition by: {ca_address_sk}
                         │           │        │        └─ Filter Est. ? rows
                         │           │        │           │     Condition: ca_state = 'IL'
                         │           │        │           └─ TableScan tpcds.customer_address Est. ? rows
-                        │           │        │                    Condition : ca_state = 'IL'.
+                        │           │        │                    Where: ca_state = 'IL'
                         │           │        │                    Outputs: [ca_address_sk, ca_state]
                         │           │        └─ Repartition Exchange Est. ? rows
                         │           │           │     Partition by: {web_site_sk}
                         │           │           └─ Filter Est. ? rows
                         │           │              │     Condition: web_company_name = 'pri'
                         │           │              └─ TableScan tpcds.web_site Est. ? rows
-                        │           │                       Condition : web_company_name = 'pri'.
+                        │           │                       Where: web_company_name = 'pri'
                         │           │                       Outputs: [web_company_name, web_site_sk]
                         │           └─ Repartition Exchange Est. ? rows
                         │              │     Partition by: {ws_order_number_1}

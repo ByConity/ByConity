@@ -64,7 +64,7 @@ private:
     String filter_column_name;
     bool remove_filter_column;
 
-    static ConstASTPtr rewriteDynamicFilter(const ConstASTPtr & filter, QueryPipeline & pipeline, const BuildQueryPipelineSettings & build_context);
+    static ConstASTPtr rewriteRuntimeFilter(const ConstASTPtr & filter, QueryPipeline & pipeline, const BuildQueryPipelineSettings & build_context);
 };
 
 }

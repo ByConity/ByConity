@@ -52,21 +52,21 @@ Projection Est. 100 rows
                      │                 │     │        └─ Filter Est. ? rows
                      │                 │     │           │     Condition: d_year = 2001
                      │                 │     │           └─ TableScan tpcds.date_dim Est. ? rows
-                     │                 │     │                    Condition : d_year = 2001.
+                     │                 │     │                    Where: d_year = 2001
                      │                 │     │                    Outputs: [d_date_sk, d_moy, d_year]
                      │                 │     └─ Repartition Exchange Est. ? rows
                      │                 │        │     Partition by: {t_time_sk}
                      │                 │        └─ Filter Est. ? rows
                      │                 │           │     Condition: (t_time >= 30838) AND (t_time <= 59638)
                      │                 │           └─ TableScan tpcds.time_dim Est. ? rows
-                     │                 │                    Condition : (t_time >= 30838) AND (t_time <= 59638).
+                     │                 │                    Where: (t_time >= 30838) AND (t_time <= 59638)
                      │                 │                    Outputs: [t_time, t_time_sk]
                      │                 └─ Repartition Exchange Est. ? rows
                      │                    │     Partition by: {sm_ship_mode_sk}
                      │                    └─ Filter Est. ? rows
                      │                       │     Condition: sm_carrier IN ('BARIAN', 'DHL')
                      │                       └─ TableScan tpcds.ship_mode Est. ? rows
-                     │                                Condition : sm_carrier IN ('BARIAN', 'DHL').
+                     │                                Where: sm_carrier IN ('BARIAN', 'DHL')
                      │                                Outputs: [sm_carrier, sm_ship_mode_sk]
                      └─ Projection Est. ? rows
                         │     Expressions: [d_year_1, expr#sum(multiIf(equals(d_moy, 1), multiply(cs_net_paid_inc_tax, cs_quantity), 0)), expr#sum(multiIf(equals(d_moy, 1), multiply(cs_sales_price, cs_quantity), 0)), expr#sum(multiIf(equals(d_moy, 10), multiply(cs_net_paid_inc_tax, cs_quantity), 0)), expr#sum(multiIf(equals(d_moy, 10), multiply(cs_sales_price, cs_quantity), 0)), expr#sum(multiIf(equals(d_moy, 11), multiply(cs_net_paid_inc_tax, cs_quantity), 0)), expr#sum(multiIf(equals(d_moy, 11), multiply(cs_sales_price, cs_quantity), 0)), expr#sum(multiIf(equals(d_moy, 12), multiply(cs_net_paid_inc_tax, cs_quantity), 0)), expr#sum(multiIf(equals(d_moy, 12), multiply(cs_sales_price, cs_quantity), 0)), expr#sum(multiIf(equals(d_moy, 2), multiply(cs_net_paid_inc_tax, cs_quantity), 0)), expr#sum(multiIf(equals(d_moy, 2), multiply(cs_sales_price, cs_quantity), 0)), expr#sum(multiIf(equals(d_moy, 3), multiply(cs_net_paid_inc_tax, cs_quantity), 0)), expr#sum(multiIf(equals(d_moy, 3), multiply(cs_sales_price, cs_quantity), 0)), expr#sum(multiIf(equals(d_moy, 4), multiply(cs_net_paid_inc_tax, cs_quantity), 0)), expr#sum(multiIf(equals(d_moy, 4), multiply(cs_sales_price, cs_quantity), 0)), expr#sum(multiIf(equals(d_moy, 5), multiply(cs_net_paid_inc_tax, cs_quantity), 0)), expr#sum(multiIf(equals(d_moy, 5), multiply(cs_sales_price, cs_quantity), 0)), expr#sum(multiIf(equals(d_moy, 6), multiply(cs_net_paid_inc_tax, cs_quantity), 0)), expr#sum(multiIf(equals(d_moy, 6), multiply(cs_sales_price, cs_quantity), 0)), expr#sum(multiIf(equals(d_moy, 7), multiply(cs_net_paid_inc_tax, cs_quantity), 0)), expr#sum(multiIf(equals(d_moy, 7), multiply(cs_sales_price, cs_quantity), 0)), expr#sum(multiIf(equals(d_moy, 8), multiply(cs_net_paid_inc_tax, cs_quantity), 0)), expr#sum(multiIf(equals(d_moy, 8), multiply(cs_sales_price, cs_quantity), 0)), expr#sum(multiIf(equals(d_moy, 9), multiply(cs_net_paid_inc_tax, cs_quantity), 0)), expr#sum(multiIf(equals(d_moy, 9), multiply(cs_sales_price, cs_quantity), 0)), w_city_1, w_country_1, w_county_1, w_state_1, w_warehouse_name_1, w_warehouse_sq_ft_1], expr#concat('DHL', ',', 'BARIAN')_1:='DHL,BARIAN'
@@ -105,19 +105,19 @@ Projection Est. 100 rows
                                        │     │        └─ Filter Est. ? rows
                                        │     │           │     Condition: d_year_1 = 2001
                                        │     │           └─ TableScan tpcds.date_dim Est. ? rows
-                                       │     │                    Condition : d_year = 2001.
+                                       │     │                    Where: d_year = 2001
                                        │     │                    Outputs: d_date_sk_1:=d_date_sk, d_moy_1:=d_moy, d_year_1:=d_year
                                        │     └─ Repartition Exchange Est. ? rows
                                        │        │     Partition by: {t_time_sk_1}
                                        │        └─ Filter Est. ? rows
                                        │           │     Condition: (t_time_1 >= 30838) AND (t_time_1 <= 59638)
                                        │           └─ TableScan tpcds.time_dim Est. ? rows
-                                       │                    Condition : (t_time >= 30838) AND (t_time <= 59638).
+                                       │                    Where: (t_time >= 30838) AND (t_time <= 59638)
                                        │                    Outputs: t_time_1:=t_time, t_time_sk_1:=t_time_sk
                                        └─ Repartition Exchange Est. ? rows
                                           │     Partition by: {sm_ship_mode_sk_1}
                                           └─ Filter Est. ? rows
                                              │     Condition: sm_carrier_1 IN ('BARIAN', 'DHL')
                                              └─ TableScan tpcds.ship_mode Est. ? rows
-                                                      Condition : sm_carrier IN ('BARIAN', 'DHL').
+                                                      Where: sm_carrier IN ('BARIAN', 'DHL')
                                                       Outputs: sm_carrier_1:=sm_carrier, sm_ship_mode_sk_1:=sm_ship_mode_sk

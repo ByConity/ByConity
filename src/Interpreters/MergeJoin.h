@@ -47,6 +47,8 @@ public:
     JoinType getType() const override { return JoinType::Merge; }
 
     const TableJoin & getTableJoin() const override { return *table_join; }
+    TableJoin & getTableJoin() override { return *table_join; }
+
     bool addJoinedBlock(const Block & block, bool check_limits) override;
     void joinBlock(Block &, ExtraBlockPtr & not_processed) override;
 

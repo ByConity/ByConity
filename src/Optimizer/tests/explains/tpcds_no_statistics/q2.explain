@@ -39,7 +39,7 @@ Projection Est. ? rows
                │     └─ Filter Est. ? rows
                │        │     Condition: d_year = 2001
                │        └─ TableScan tpcds.date_dim Est. ? rows
-               │                 Condition : d_year = 2001.
+               │                 Where: d_year = 2001
                │                 Outputs: [d_year], d_week_seq_2:=d_week_seq
                └─ Repartition Exchange Est. ? rows
                   │     Partition by: {minus(d_week_seq_3, 53)}
@@ -75,5 +75,5 @@ Projection Est. ? rows
                            └─ Filter Est. ? rows
                               │     Condition: d_year_1 = 2002
                               └─ TableScan tpcds.date_dim Est. ? rows
-                                       Condition : d_year = 2002.
+                                       Where: d_year = 2002
                                        Outputs: d_week_seq_4:=d_week_seq, d_year_1:=d_year

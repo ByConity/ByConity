@@ -236,6 +236,7 @@ TransformResult SimplifyJoinFilterRewriteRule::transformImpl(PlanNodePtr node, c
         JoinAlgorithm::AUTO,
         false,
         step.isOrdered(),
+        step.getRuntimeFilterBuilders(),
         step.getHints());
     PlanNodePtr join_node = PlanNodeBase::createPlanNode(node->getId(), std::move(join_step), node->getChildren());
     return join_node;
@@ -278,8 +279,7 @@ TransformResult SimplifyExpressionRewriteRule::transformImpl(PlanNodePtr node, c
             node->getChildren()[0]->getStep()->getOutputStream(),
             assignments,
             name_to_type,
-            project->isFinalProject(),
-            project->getDynamicFilters()),
+            project->isFinalProject()),
         PlanNodes{node->getChildren()[0]});
 }
 

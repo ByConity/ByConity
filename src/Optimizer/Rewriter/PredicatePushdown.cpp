@@ -17,16 +17,18 @@
 #include <Optimizer/Rewriter/PredicatePushdown.h>
 
 #include <Analyzers/TypeAnalyzer.h>
-#include <DataTypes/getLeastSupertype.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/getLeastSupertype.h>
 #include <Interpreters/join_common.h>
-#include <Optimizer/DynamicFilters.h>
 #include <Optimizer/EqualityInference.h>
 #include <Optimizer/ExpressionDeterminism.h>
 #include <Optimizer/ExpressionEquivalence.h>
 #include <Optimizer/ExpressionInliner.h>
 #include <Optimizer/ExpressionInterpreter.h>
+#include <Optimizer/ProjectionPlanner.h>
+#include <Optimizer/RuntimeFilterUtils.h>
 #include <Optimizer/SymbolUtils.h>
+#include <Optimizer/SimplifyExpressions.h>
 #include <Optimizer/Utils.h>
 #include <Optimizer/makeCastFunction.h>
 #include <Optimizer/PredicateConst.h>
@@ -37,6 +39,7 @@
 #include <QueryPlan/FilterStep.h>
 #include <QueryPlan/JoinStep.h>
 #include <QueryPlan/ProjectionStep.h>
+#include <QueryPlan/SymbolMapper.h>
 #include <QueryPlan/UnionStep.h>
 #include <Common/FieldVisitorConvertToNumber.h>
 #include <QueryPlan/SymbolMapper.h>
@@ -52,7 +55,7 @@ namespace ErrorCodes
 void PredicatePushdown::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     auto cte_reference_counts = plan.getCTEInfo().collectCTEReferenceCounts(plan.getPlanNode());
-    PredicateVisitor visitor{pushdown_filter_into_cte, context, plan.getCTEInfo(), cte_reference_counts};
+    PredicateVisitor visitor{pushdown_filter_into_cte, simplify_common_filter, context, plan.getCTEInfo(), cte_reference_counts};
     PredicateContext predicate_context{
         .predicate = PredicateConst::TRUE_VALUE, .extra_predicate_for_simplify_outer_join = PredicateConst::TRUE_VALUE, .context = context};
     auto result = VisitorUtil::accept(plan.getPlanNode(), visitor, predicate_context);
@@ -181,7 +184,10 @@ PlanNodePtr PredicateVisitor::visitFilterNode(FilterNode & node, PredicateContex
 {
     const auto & step = *node.getStep();
     auto predicates = std::vector<ConstASTPtr>{step.getFilter(), predicate_context.predicate};
-    auto predicate = PredicateUtils::combineConjuncts(predicates);
+    ConstASTPtr predicate = PredicateUtils::combineConjuncts(predicates);
+    if (simplify_common_filter) {
+        predicate = CommonPredicatesRewriter::rewrite(predicate, context);
+    }
     PredicateContext filter_context{
         .predicate = predicate,
         .extra_predicate_for_simplify_outer_join = predicate_context.extra_predicate_for_simplify_outer_join,
@@ -476,17 +482,6 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
             right_implicit_filter = build_implicit_filter(step->getRightKeys());
     }
 
-    // create dynamic filters if enabled
-    // add dynamic filter predicates to left side of join
-    // add dynamic filter build expressions to right side projection of join
-    auto dynamic_filters_results = createDynamicFilters(*step);
-    if (!dynamic_filters_results.executors.empty())
-    {
-        std::vector<ConstASTPtr> predicates = std::move(dynamic_filters_results.executors);
-        predicates.emplace_back(left_predicate);
-        left_predicate = PredicateUtils::combineConjuncts(predicates);
-    }
-
     // TODO: combine join implicit filter with inherited extra_predicate_for_simplify_outer_join
     PredicateContext left_context{.predicate = left_predicate, .extra_predicate_for_simplify_outer_join = left_implicit_filter, .context = predicate_context.context};
     PredicateContext right_context{.predicate = right_predicate, .extra_predicate_for_simplify_outer_join = right_implicit_filter, .context = predicate_context.context};
@@ -527,7 +522,7 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
     }
 
     auto right_source_expression_step = std::make_shared<ProjectionStep>(
-        right_source->getStep()->getOutputStream(), right_assignments, right_types, false, dynamic_filters_results.dynamic_filters);
+        right_source->getStep()->getOutputStream(), right_assignments, right_types, false);
     PlanNodePtr right_source_expression_node
         = std::make_shared<ProjectionNode>(context->nextNodeId(), std::move(right_source_expression_step), PlanNodes{right_source});
 
@@ -578,7 +573,7 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
             right_keys.emplace_back(right_key);
         }
 
-        // TODO: without `need_project`, addDynamicFilter have a different result for ssb q10
+        // TODO: without `need_project`, addRuntimeFilter have a different result for ssb q10
         if (need_project)
         {
             left_source_expression_node = left_planner.build();
@@ -621,6 +616,7 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
             step->getJoinAlgorithm(),
             step->isMagic(),
             step->isOrdered(),
+            step->getRuntimeFilterBuilders(),
             step->getHints());
     }
     else
@@ -642,6 +638,7 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
             step->getJoinAlgorithm(),
             step->isMagic(),
             step->isOrdered(),
+            step->getRuntimeFilterBuilders(),
             step->getHints());
     }
 
@@ -671,6 +668,7 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
             join_step->getJoinAlgorithm(),
             join_step->isMagic(),
             step->isOrdered(),
+            step->getRuntimeFilterBuilders(),
             step->getHints());
         join_node = std::make_shared<JoinNode>(
             context->nextNodeId(), join_step, PlanNodes{right_source_expression_node, left_source_expression_node});
@@ -706,40 +704,6 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
         output_node = output_expression_node;
     }
     return output_node;
-}
-
-PredicateVisitor::DynamicFilterResult PredicateVisitor::createDynamicFilters(const JoinStep & join) const
-{
-    if (join.getKind() != ASTTableJoin::Kind::Inner && join.getKind() != ASTTableJoin::Kind::Right)
-        return {};
-
-    std::unordered_map<std::string, DataTypePtr> right_name_to_types;
-    for (const auto & item : join.getInputStreams()[1].header)
-        right_name_to_types.emplace(item.name, item.type);
-
-    std::vector<ConstASTPtr> executors;
-    std::unordered_map<String, DynamicFilterBuildInfo> dynamic_filters;
-
-    for (auto left = join.getLeftKeys().begin(), right = join.getRightKeys().begin(); left != join.getLeftKeys().end(); left++, right++)
-    {
-        // generate unique id
-        auto id = context->nextNodeId();
-        DynamicFilterTypes types;
-        if (context->getSettingsRef().enable_dynamic_filter_for_bloom_filter)
-        {
-            executors.emplace_back(DynamicFilters::createDynamicFilterExpression(id, *left, DynamicFilterType::BloomFilter));
-            types.emplace(DynamicFilterType::BloomFilter);
-        }
-        if (right_name_to_types.at(*right)->isComparable())
-        {
-            executors.emplace_back(DynamicFilters::createDynamicFilterExpression(id, *left, DynamicFilterType::Range));
-            types.emplace(DynamicFilterType::Range);
-        }
-        if (!types.empty())
-            dynamic_filters.emplace(*right, DynamicFilterBuildInfo{id, *left, types});
-    }
-    // todo@kaixi: generate for any join filters
-    return DynamicFilterResult{dynamic_filters, executors};
 }
 
 PlanNodePtr PredicateVisitor::visitExchangeNode(ExchangeNode & node, PredicateContext & predicate_context)
@@ -875,9 +839,13 @@ PlanNodePtr PredicateVisitor::visitAssignUniqueIdNode(AssignUniqueIdNode & node,
 
 PlanNodePtr PredicateVisitor::visitCTERefNode(CTERefNode & node, PredicateContext & predicate_context)
 {
-    auto * cte_step = dynamic_cast<CTERefStep *>(node.getStep().get());
-    if (!cte_step->hasFilter() && !PredicateUtils::isTruePredicate(predicate_context.predicate))
-        cte_step->setFilter(true);
+    const auto * cte_step = dynamic_cast<CTERefStep *>(node.getStep().get());
+    auto mapper = SymbolMapper::symbolMapper(cte_step->getOutputColumns());
+
+    // remove runtime Filters, which don't support appears in OR.
+    // todo: support runtime Filter.
+    auto filters = RuntimeFilterUtils::extractRuntimeFilters(predicate_context.predicate);
+    ConstASTPtr mapped_filter = mapper.map(PredicateUtils::combineConjuncts(filters.second));
 
     auto & cte_refs = cte_predicates[cte_step->getId()];
     cte_refs.emplace_back(std::make_pair(cte_step, predicate_context.predicate));
@@ -1458,7 +1426,7 @@ ASTPtr EffectivePredicateVisitor::visitFilterNode(FilterNode & node, ContextMuta
     std::vector<ConstASTPtr> removed_dynamic_filters;
     for (auto & pre : predicates)
     {
-        if (!DynamicFilters::isDynamicFilter(pre))
+        if (!RuntimeFilterUtils::isInternalRuntimeFilter(pre))
         {
             removed_dynamic_filters.emplace_back(pre);
         }

@@ -1146,32 +1146,6 @@ String StepPrinter::printProjectionStep(const ProjectionStep & step, bool includ
         details << "|"
                 << "final";
 
-    if (!step.getDynamicFilters().empty())
-    {
-        details << "|"
-                << "Dynamic Filters \\n";
-
-        auto f = [](DynamicFilterType type) {
-            switch (type)
-            {
-                case DynamicFilterType::Range:
-                    return "Range";
-                case DynamicFilterType::BloomFilter:
-                    return "BloomFilter";
-            }
-            return "Unknown";
-        };
-
-        for (const auto & item : step.getDynamicFilters())
-        {
-            details << std::to_string(item.second.id) << " : " << item.first << " ";
-            for (auto type : item.second.types)
-            {
-                details << f(type) << " ";
-            }
-            details << "\\n";
-        }
-    }
     return details.str();
 }
 String StepPrinter::printFilterStep(const FilterStep & step, bool include_output)
@@ -1297,6 +1271,17 @@ String StepPrinter::printJoinStep(const JoinStep & step)
     if (step.isOrdered())
     {
         details << "isOrdered:" << step.isOrdered() << "|";
+    }
+
+    if (!step.getRuntimeFilterBuilders().empty())
+    {
+        details << "Runtime Filters \\n";
+        for (const auto & runtime_filter : step.getRuntimeFilterBuilders())
+            details << runtime_filter.first << ": "
+                << runtime_filter.second.id << " "
+                << (runtime_filter.second.distribution == RuntimeFilterDistribution::Distributed ? "Distributed " : "Local ")
+                <<"\\n";
+        details << "|";
     }
 
     details << "Output: \\n";

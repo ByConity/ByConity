@@ -60,7 +60,7 @@ CTEDef [1]
                      │        └─ Filter Est. ? rows
                      │           │     Condition: (d_year = 1999) OR ((d_year = cast(1998, 'Int32')) AND (d_moy = 12)) OR ((d_year = cast(2000, 'UInt32')) AND (d_moy = 1))
                      │           └─ TableScan tpcds.date_dim Est. ? rows
-                     │                    Condition : (d_year = 1999) OR ((d_year = cast(1998, 'Int32')) AND (d_moy = 12)) OR ((d_year = cast(2000, 'UInt32')) AND (d_moy = 1)).
+                     │                    Where: (d_year = 1999) OR ((d_year = cast(1998, 'Int32')) AND (d_moy = 12)) OR ((d_year = cast(2000, 'UInt32')) AND (d_moy = 1))
                      │                    Outputs: [d_date_sk, d_moy, d_year]
                      └─ Repartition Exchange Est. ? rows
                         │     Partition by: {cc_call_center_sk}

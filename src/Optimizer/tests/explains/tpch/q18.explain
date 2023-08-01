@@ -19,7 +19,7 @@ Projection Est. 100 rows
                   │  └─ Filter Est. 6001215 rows
                   │     │     Condition: isNotNull(l_orderkey)
                   │     └─ TableScan tpch.lineitem Est. 6001215 rows
-                  │              Condition : isNotNull(l_orderkey).
+                  │              Where: isNotNull(l_orderkey)
                   │              Outputs: [l_orderkey, l_quantity]
                   └─ Inner Join Est. 1504316 rows
                      │     Condition: l_orderkey_1 == o_orderkey
@@ -38,7 +38,7 @@ Projection Est. 100 rows
                      │                 └─ Filter Est. 6001215 rows
                      │                    │     Condition: isNotNull(l_orderkey_1)
                      │                    └─ TableScan tpch.lineitem Est. 6001215 rows
-                     │                             Condition : isNotNull(l_orderkey).
+                     │                             Where: isNotNull(l_orderkey)
                      │                             Outputs: l_orderkey_1:=l_orderkey, l_quantity_1:=l_quantity
                      └─ Repartition Exchange Est. 1500000 rows
                         │     Partition by: {o_orderkey}
@@ -49,7 +49,7 @@ Projection Est. 100 rows
                            │  └─ Filter Est. 1500000 rows
                            │     │     Condition: isNotNull(o_orderkey)
                            │     └─ TableScan tpch.orders Est. 1500000 rows
-                           │              Condition : isNotNull(o_orderkey).
+                           │              Where: isNotNull(o_orderkey)
                            │              Outputs: [o_custkey, o_orderdate, o_orderkey, o_totalprice]
                            └─ Repartition Exchange Est. 150000 rows
                               │     Partition by: {c_custkey}

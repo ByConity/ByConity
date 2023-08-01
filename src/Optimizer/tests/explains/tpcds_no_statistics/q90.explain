@@ -33,21 +33,21 @@ Projection Est. 100 rows
             │           │     │        └─ Filter Est. ? rows
             │           │     │           │     Condition: hd_dep_count = 6
             │           │     │           └─ TableScan tpcds.household_demographics Est. ? rows
-            │           │     │                    Condition : hd_dep_count = 6.
+            │           │     │                    Where: hd_dep_count = 6
             │           │     │                    Outputs: [hd_demo_sk, hd_dep_count]
             │           │     └─ Repartition Exchange Est. ? rows
             │           │        │     Partition by: {t_time_sk}
             │           │        └─ Filter Est. ? rows
             │           │           │     Condition: (t_hour >= 8) AND (t_hour <= 9)
             │           │           └─ TableScan tpcds.time_dim Est. ? rows
-            │           │                    Condition : (t_hour >= 8) AND (t_hour <= 9).
+            │           │                    Where: (t_hour >= 8) AND (t_hour <= 9)
             │           │                    Outputs: [t_hour, t_time_sk]
             │           └─ Repartition Exchange Est. ? rows
             │              │     Partition by: {wp_web_page_sk}
             │              └─ Filter Est. ? rows
             │                 │     Condition: (wp_char_count >= 5000) AND (wp_char_count <= 5200)
             │                 └─ TableScan tpcds.web_page Est. ? rows
-            │                          Condition : (wp_char_count >= 5000) AND (wp_char_count <= 5200).
+            │                          Where: (wp_char_count >= 5000) AND (wp_char_count <= 5200)
             │                          Outputs: [wp_char_count, wp_web_page_sk]
             └─ Broadcast Exchange Est. ? rows
                └─ MergingAggregated Est. ? rows
@@ -74,19 +74,19 @@ Projection Est. 100 rows
                            │     │        └─ Filter Est. ? rows
                            │     │           │     Condition: hd_dep_count_1 = 6
                            │     │           └─ TableScan tpcds.household_demographics Est. ? rows
-                           │     │                    Condition : hd_dep_count = 6.
+                           │     │                    Where: hd_dep_count = 6
                            │     │                    Outputs: hd_demo_sk_1:=hd_demo_sk, hd_dep_count_1:=hd_dep_count
                            │     └─ Repartition Exchange Est. ? rows
                            │        │     Partition by: {t_time_sk_1}
                            │        └─ Filter Est. ? rows
                            │           │     Condition: (t_hour_1 >= 19) AND (t_hour_1 <= 20)
                            │           └─ TableScan tpcds.time_dim Est. ? rows
-                           │                    Condition : (t_hour >= 19) AND (t_hour <= 20).
+                           │                    Where: (t_hour >= 19) AND (t_hour <= 20)
                            │                    Outputs: t_hour_1:=t_hour, t_time_sk_1:=t_time_sk
                            └─ Repartition Exchange Est. ? rows
                               │     Partition by: {wp_web_page_sk_1}
                               └─ Filter Est. ? rows
                                  │     Condition: (wp_char_count_1 >= 5000) AND (wp_char_count_1 <= 5200)
                                  └─ TableScan tpcds.web_page Est. ? rows
-                                          Condition : (wp_char_count >= 5000) AND (wp_char_count <= 5200).
+                                          Where: (wp_char_count >= 5000) AND (wp_char_count <= 5200)
                                           Outputs: wp_char_count_1:=wp_char_count, wp_web_page_sk_1:=wp_web_page_sk

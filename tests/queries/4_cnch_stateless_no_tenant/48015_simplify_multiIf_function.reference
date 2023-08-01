@@ -18,7 +18,7 @@ Projection Est. ? rows
          └─ Filter Est. ? rows
             │     Condition: multiIf(a = 6, a + a, b + a) > 10
             └─ TableScan test.multiIf Est. ? rows
-                     Condition : multiIf(a = 6, a + a, b + a) > 10.
+                     Where: multiIf(a = 6, a + a, b + a) > 10
                      Outputs: [a, b]
 Projection Est. ? rows
 │     Expressions: [a, b]
@@ -30,7 +30,7 @@ Projection Est. ? rows
          └─ Filter Est. ? rows
             │     Condition: multiIf(a = 3, b + b, a * a) > 10
             └─ TableScan test.multiIf Est. ? rows
-                     Condition : multiIf(a = 3, b + b, a * a) > 10.
+                     Where: multiIf(a = 3, b + b, a * a) > 10
                      Outputs: [a, b]
 5	6
 6	7
@@ -50,7 +50,7 @@ Projection Est. ? rows
          └─ Filter Est. ? rows
             │     Condition: (a + 2) < 10
             └─ TableScan test.multiIf Est. ? rows
-                     Condition : (a + 2) < 10.
+                     Where: (a + 2) < 10
                      Outputs: [a, b]
 Projection Est. ? rows
 │     Expressions: [a, b]
@@ -77,7 +77,7 @@ Projection Est. ? rows
          └─ Filter Est. ? rows
             │     Condition: (a + 4) < 10
             └─ TableScan test.multiIf Est. ? rows
-                     Condition : (a + 4) < 10.
+                     Where: (a + 4) < 10
                      Outputs: [a, b]
 Projection Est. ? rows
 │     Expressions: [a, b]

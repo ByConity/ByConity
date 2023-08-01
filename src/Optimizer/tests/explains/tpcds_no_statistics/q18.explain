@@ -48,14 +48,14 @@ Projection Est. 100 rows
                            │     │     │     │     │        └─ Filter Est. ? rows
                            │     │     │     │     │           │     Condition: (cd_gender = 'F') AND (cd_education_status = 'Unknown')
                            │     │     │     │     │           └─ TableScan tpcds.customer_demographics Est. ? rows
-                           │     │     │     │     │                    Condition : (cd_gender = 'F') AND (cd_education_status = 'Unknown').
+                           │     │     │     │     │                    Where: (cd_gender = 'F') AND (cd_education_status = 'Unknown')
                            │     │     │     │     │                    Outputs: [cd_demo_sk, cd_dep_count, cd_education_status, cd_gender]
                            │     │     │     │     └─ Repartition Exchange Est. ? rows
                            │     │     │     │        │     Partition by: {c_customer_sk}
                            │     │     │     │        └─ Filter Est. ? rows
                            │     │     │     │           │     Condition: c_birth_month IN (1, 2, 6, 8, 9, 12)
                            │     │     │     │           └─ TableScan tpcds.customer Est. ? rows
-                           │     │     │     │                    Condition : c_birth_month IN (1, 2, 6, 8, 9, 12).
+                           │     │     │     │                    Where: c_birth_month IN (1, 2, 6, 8, 9, 12)
                            │     │     │     │                    Outputs: [c_birth_month, c_birth_year, c_current_addr_sk, c_current_cdemo_sk, c_customer_sk]
                            │     │     │     └─ Repartition Exchange Est. ? rows
                            │     │     │        │     Partition by: {cd_demo_sk_1}
@@ -66,14 +66,14 @@ Projection Est. 100 rows
                            │     │        └─ Filter Est. ? rows
                            │     │           │     Condition: ca_state IN ('IN', 'MS', 'ND', 'NM', 'OK', 'VA')
                            │     │           └─ TableScan tpcds.customer_address Est. ? rows
-                           │     │                    Condition : ca_state IN ('IN', 'MS', 'ND', 'NM', 'OK', 'VA').
+                           │     │                    Where: ca_state IN ('IN', 'MS', 'ND', 'NM', 'OK', 'VA')
                            │     │                    Outputs: [ca_address_sk, ca_country, ca_county, ca_state]
                            │     └─ Repartition Exchange Est. ? rows
                            │        │     Partition by: {d_date_sk}
                            │        └─ Filter Est. ? rows
                            │           │     Condition: d_year = 1998
                            │           └─ TableScan tpcds.date_dim Est. ? rows
-                           │                    Condition : d_year = 1998.
+                           │                    Where: d_year = 1998
                            │                    Outputs: [d_date_sk, d_year]
                            └─ Repartition Exchange Est. ? rows
                               │     Partition by: {i_item_sk}

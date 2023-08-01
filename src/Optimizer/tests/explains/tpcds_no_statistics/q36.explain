@@ -41,7 +41,7 @@ Projection Est. 100 rows
                                     │     │        └─ Filter Est. ? rows
                                     │     │           │     Condition: d_year = 2001
                                     │     │           └─ TableScan tpcds.date_dim Est. ? rows
-                                    │     │                    Condition : d_year = 2001.
+                                    │     │                    Where: d_year = 2001
                                     │     │                    Outputs: [d_date_sk, d_year]
                                     │     └─ Repartition Exchange Est. ? rows
                                     │        │     Partition by: {i_item_sk}
@@ -52,5 +52,5 @@ Projection Est. 100 rows
                                        └─ Filter Est. ? rows
                                           │     Condition: s_state = 'TN'
                                           └─ TableScan tpcds.store Est. ? rows
-                                                   Condition : s_state = 'TN'.
+                                                   Where: s_state = 'TN'
                                                    Outputs: [s_state, s_store_sk]

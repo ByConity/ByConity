@@ -27,7 +27,7 @@
 
 namespace DB
 {
-using DynamicFilterId = UInt32;
+using RuntimeFilterId = UInt32;
 
 /**
  * SOURCE means the plan is the leaf of a plan segment tree, i.g. TableScan Node.
@@ -308,9 +308,9 @@ public:
 
     void update();
 
-    void addRuntimeFilter(DynamicFilterId id) { runtime_filters.emplace_back(id); }
-
-    std::vector<DynamicFilterId> & getRuntimeFilters() { return runtime_filters; }
+    // register runtime filters for resource release
+    void addRuntimeFilter(RuntimeFilterId id) { runtime_filters.emplace(id); }
+    const std::unordered_set<RuntimeFilterId> & getRuntimeFilters() const { return runtime_filters; }
 
     PlanSegmentDescriptionPtr getPlanSegmentDescription();
     static void getRemoteSegmentId(const QueryPlan::Node * node, std::unordered_map<PlanNodeId, size_t> & exchange_to_segment);
@@ -330,7 +330,7 @@ private:
     size_t parallel;
     size_t exchange_parallel_size;
 
-    std::vector<DynamicFilterId> runtime_filters;
+    std::unordered_set<RuntimeFilterId> runtime_filters;
 
     ContextMutablePtr context;
 };

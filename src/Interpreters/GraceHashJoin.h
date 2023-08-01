@@ -62,7 +62,7 @@ public:
     ~GraceHashJoin() override;
 
     const TableJoin & getTableJoin() const override { return *table_join; }
-    // TableJoin & getTableJoin() override { return *table_join; }
+    TableJoin & getTableJoin() override { return *table_join; }
 
     void initialize(const Block & sample_block) override;
 

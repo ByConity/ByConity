@@ -190,7 +190,7 @@ BlockIO MPPQueryCoordinator::execute()
 
     if (plan_segment_tree->getNodes().size() > 1)
     {
-        RuntimeFilterManager::getInstance().registerQuery(query_id, *plan_segment_tree);
+        RuntimeFilterManager::getInstance().registerQuery(query_id, *plan_segment_tree, query_context);
         scheduler_status = query_context->getSegmentScheduler()->insertPlanSegments(query_id, plan_segment_tree.get(), query_context);
     }
     else

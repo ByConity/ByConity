@@ -57,7 +57,7 @@ Projection Est. 100 rows
                      │                    │     │     │        └─ Filter Est. ? rows
                      │                    │     │     │           │     Condition: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date'))
                      │                    │     │     │           └─ TableScan tpcds.date_dim Est. ? rows
-                     │                    │     │     │                    Condition : (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date')).
+                     │                    │     │     │                    Where: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date'))
                      │                    │     │     │                    Outputs: [d_date, d_date_sk]
                      │                    │     │     └─ Repartition Exchange Est. ? rows
                      │                    │     │        │     Partition by: {s_store_sk}
@@ -68,14 +68,14 @@ Projection Est. 100 rows
                      │                    │        └─ Filter Est. ? rows
                      │                    │           │     Condition: i_current_price > 50.
                      │                    │           └─ TableScan tpcds.item Est. ? rows
-                     │                    │                    Condition : i_current_price > 50..
+                     │                    │                    Where: i_current_price > 50.
                      │                    │                    Outputs: [i_current_price, i_item_sk]
                      │                    └─ Repartition Exchange Est. ? rows
                      │                       │     Partition by: {p_promo_sk}
                      │                       └─ Filter Est. ? rows
                      │                          │     Condition: p_channel_tv = 'N'
                      │                          └─ TableScan tpcds.promotion Est. ? rows
-                     │                                   Condition : p_channel_tv = 'N'.
+                     │                                   Where: p_channel_tv = 'N'
                      │                                   Outputs: [p_channel_tv, p_promo_sk]
                      ├─ Aggregating Est. ? rows
                      │  │     Group by: {expr#'catalog channel', expr#concat('catalog_page', catalog_page_id)}
@@ -121,7 +121,7 @@ Projection Est. 100 rows
                      │                    │     │     │        └─ Filter Est. ? rows
                      │                    │     │     │           │     Condition: (d_date_1 >= cast(11192, 'Date')) AND (d_date_1 <= cast(11222, 'Date'))
                      │                    │     │     │           └─ TableScan tpcds.date_dim Est. ? rows
-                     │                    │     │     │                    Condition : (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date')).
+                     │                    │     │     │                    Where: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date'))
                      │                    │     │     │                    Outputs: d_date_1:=d_date, d_date_sk_1:=d_date_sk
                      │                    │     │     └─ Repartition Exchange Est. ? rows
                      │                    │     │        │     Partition by: {cp_catalog_page_sk}
@@ -132,14 +132,14 @@ Projection Est. 100 rows
                      │                    │        └─ Filter Est. ? rows
                      │                    │           │     Condition: i_current_price_1 > 50.
                      │                    │           └─ TableScan tpcds.item Est. ? rows
-                     │                    │                    Condition : i_current_price > 50..
+                     │                    │                    Where: i_current_price > 50.
                      │                    │                    Outputs: i_current_price_1:=i_current_price, i_item_sk_1:=i_item_sk
                      │                    └─ Repartition Exchange Est. ? rows
                      │                       │     Partition by: {p_promo_sk_1}
                      │                       └─ Filter Est. ? rows
                      │                          │     Condition: p_channel_tv_1 = 'N'
                      │                          └─ TableScan tpcds.promotion Est. ? rows
-                     │                                   Condition : p_channel_tv = 'N'.
+                     │                                   Where: p_channel_tv = 'N'
                      │                                   Outputs: p_channel_tv_1:=p_channel_tv, p_promo_sk_1:=p_promo_sk
                      └─ Aggregating Est. ? rows
                         │     Group by: {expr#'web channel', expr#concat('web_site', web_site_id)}
@@ -185,7 +185,7 @@ Projection Est. 100 rows
                                           │     │     │        └─ Filter Est. ? rows
                                           │     │     │           │     Condition: (d_date_2 >= cast(11192, 'Date')) AND (d_date_2 <= cast(11222, 'Date'))
                                           │     │     │           └─ TableScan tpcds.date_dim Est. ? rows
-                                          │     │     │                    Condition : (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date')).
+                                          │     │     │                    Where: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date'))
                                           │     │     │                    Outputs: d_date_2:=d_date, d_date_sk_2:=d_date_sk
                                           │     │     └─ Repartition Exchange Est. ? rows
                                           │     │        │     Partition by: {web_site_sk}
@@ -196,12 +196,12 @@ Projection Est. 100 rows
                                           │        └─ Filter Est. ? rows
                                           │           │     Condition: i_current_price_2 > 50.
                                           │           └─ TableScan tpcds.item Est. ? rows
-                                          │                    Condition : i_current_price > 50..
+                                          │                    Where: i_current_price > 50.
                                           │                    Outputs: i_current_price_2:=i_current_price, i_item_sk_2:=i_item_sk
                                           └─ Repartition Exchange Est. ? rows
                                              │     Partition by: {p_promo_sk_2}
                                              └─ Filter Est. ? rows
                                                 │     Condition: p_channel_tv_2 = 'N'
                                                 └─ TableScan tpcds.promotion Est. ? rows
-                                                         Condition : p_channel_tv = 'N'.
+                                                         Where: p_channel_tv = 'N'
                                                          Outputs: p_channel_tv_2:=p_channel_tv, p_promo_sk_2:=p_promo_sk

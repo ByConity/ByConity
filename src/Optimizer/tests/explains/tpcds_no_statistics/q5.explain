@@ -50,7 +50,7 @@ Projection Est. 100 rows
                      │                 │        └─ Filter Est. ? rows
                      │                 │           │     Condition: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11206, 'Date'))
                      │                 │           └─ TableScan tpcds.date_dim Est. ? rows
-                     │                 │                    Condition : (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11206, 'Date')).
+                     │                 │                    Where: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11206, 'Date'))
                      │                 │                    Outputs: [d_date, d_date_sk]
                      │                 └─ Repartition Exchange Est. ? rows
                      │                    │     Partition by: {s_store_sk}
@@ -93,7 +93,7 @@ Projection Est. 100 rows
                      │                 │        └─ Filter Est. ? rows
                      │                 │           │     Condition: (d_date_1 >= cast(11192, 'Date')) AND (d_date_1 <= cast(11206, 'Date'))
                      │                 │           └─ TableScan tpcds.date_dim Est. ? rows
-                     │                 │                    Condition : (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11206, 'Date')).
+                     │                 │                    Where: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11206, 'Date'))
                      │                 │                    Outputs: d_date_1:=d_date, d_date_sk_1:=d_date_sk
                      │                 └─ Repartition Exchange Est. ? rows
                      │                    │     Partition by: {cp_catalog_page_sk}
@@ -144,7 +144,7 @@ Projection Est. 100 rows
                                        │        └─ Filter Est. ? rows
                                        │           │     Condition: (d_date_2 >= cast(11192, 'Date')) AND (d_date_2 <= cast(11206, 'Date'))
                                        │           └─ TableScan tpcds.date_dim Est. ? rows
-                                       │                    Condition : (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11206, 'Date')).
+                                       │                    Where: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11206, 'Date'))
                                        │                    Outputs: d_date_2:=d_date, d_date_sk_2:=d_date_sk
                                        └─ Repartition Exchange Est. ? rows
                                           │     Partition by: {web_site_sk}

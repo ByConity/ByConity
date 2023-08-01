@@ -42,12 +42,12 @@ Projection Est. 100 rows
                               │        └─ Filter Est. ? rows
                               │           │     Condition: (i_current_price >= 0.99) AND (i_current_price <= 1.49)
                               │           └─ TableScan tpcds.item Est. ? rows
-                              │                    Condition : (i_current_price >= 0.99) AND (i_current_price <= 1.49).
+                              │                    Where: (i_current_price >= 0.99) AND (i_current_price <= 1.49)
                               │                    Outputs: [i_current_price, i_item_id, i_item_sk]
                               └─ Repartition Exchange Est. ? rows
                                  │     Partition by: {d_date_sk}
                                  └─ Filter Est. ? rows
                                     │     Condition: (d_date >= cast(10997, 'Date')) AND (d_date <= cast(11057, 'Date'))
                                     └─ TableScan tpcds.date_dim Est. ? rows
-                                             Condition : (d_date >= cast(10997, 'Date')) AND (d_date <= cast(11057, 'Date')).
+                                             Where: (d_date >= cast(10997, 'Date')) AND (d_date <= cast(11057, 'Date'))
                                              Outputs: [d_date, d_date_sk]

@@ -50,7 +50,7 @@ Projection Est. 100 rows
                │        └─ Filter Est. ? rows
                │           │     Condition: (d_month_seq >= 1212) AND (d_month_seq <= 1223)
                │           └─ TableScan tpcds.date_dim Est. ? rows
-               │                    Condition : (d_month_seq >= 1212) AND (d_month_seq <= 1223).
+               │                    Where: (d_month_seq >= 1212) AND (d_month_seq <= 1223)
                │                    Outputs: [d_month_seq], d_week_seq_2:=d_week_seq
                └─ Repartition Exchange Est. ? rows
                   │     Partition by: {minus(d_week_seq_3, 52), s_store_id_1}
@@ -93,5 +93,5 @@ Projection Est. 100 rows
                            └─ Filter Est. ? rows
                               │     Condition: (d_month_seq_1 >= 1224) AND (d_month_seq_1 <= 1235)
                               └─ TableScan tpcds.date_dim Est. ? rows
-                                       Condition : (d_month_seq >= 1224) AND (d_month_seq <= 1235).
+                                       Where: (d_month_seq >= 1224) AND (d_month_seq <= 1235)
                                        Outputs: d_month_seq_1:=d_month_seq, d_week_seq_4:=d_week_seq

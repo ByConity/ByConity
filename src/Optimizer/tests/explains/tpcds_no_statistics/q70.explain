@@ -38,14 +38,14 @@ Projection Est. 100 rows
                               │     │        └─ Filter Est. ? rows
                               │     │           │     Condition: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
                               │     │           └─ TableScan tpcds.date_dim Est. ? rows
-                              │     │                    Condition : (d_month_seq >= 1200) AND (d_month_seq <= 1211).
+                              │     │                    Where: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
                               │     │                    Outputs: [d_date_sk, d_month_seq]
                               │     └─ Repartition Exchange Est. ? rows
                               │        │     Partition by: {s_store_sk}
                               │        └─ Filter Est. ? rows
                               │           │     Condition: isNotNull(s_state)
                               │           └─ TableScan tpcds.store Est. ? rows
-                              │                    Condition : isNotNull(s_state).
+                              │                    Where: isNotNull(s_state)
                               │                    Outputs: [s_county, s_state, s_store_sk]
                               └─ Aggregating Est. ? rows
                                  │     Group by: {s_state_1}
@@ -75,12 +75,12 @@ Projection Est. 100 rows
                                                       │        └─ Filter Est. ? rows
                                                       │           │     Condition: isNotNull(s_state_1)
                                                       │           └─ TableScan tpcds.store Est. ? rows
-                                                      │                    Condition : isNotNull(s_state).
+                                                      │                    Where: isNotNull(s_state)
                                                       │                    Outputs: s_state_1:=s_state, s_store_sk_1:=s_store_sk
                                                       └─ Repartition Exchange Est. ? rows
                                                          │     Partition by: {d_date_sk_1}
                                                          └─ Filter Est. ? rows
                                                             │     Condition: (d_month_seq_1 >= 1200) AND (d_month_seq_1 <= 1211)
                                                             └─ TableScan tpcds.date_dim Est. ? rows
-                                                                     Condition : (d_month_seq >= 1200) AND (d_month_seq <= 1211).
+                                                                     Where: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
                                                                      Outputs: d_date_sk_1:=d_date_sk, d_month_seq_1:=d_month_seq

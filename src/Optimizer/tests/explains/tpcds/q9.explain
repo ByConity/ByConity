@@ -34,7 +34,7 @@ Gather Exchange Est. 1 rows
       │  │  │  │  │  │  │  │  │  │  │  │  │  │  ├─ Filter Est. 1 rows
       │  │  │  │  │  │  │  │  │  │  │  │  │  │  │  │     Condition: r_reason_sk = 1
       │  │  │  │  │  │  │  │  │  │  │  │  │  │  │  └─ TableScan tpcds.reason Est. 65 rows
-      │  │  │  │  │  │  │  │  │  │  │  │  │  │  │           Condition : r_reason_sk = 1.
+      │  │  │  │  │  │  │  │  │  │  │  │  │  │  │           Where: r_reason_sk = 1
       │  │  │  │  │  │  │  │  │  │  │  │  │  │  │           Outputs: [r_reason_sk]
       │  │  │  │  │  │  │  │  │  │  │  │  │  │  └─ Broadcast Exchange Est. 1 rows
       │  │  │  │  │  │  │  │  │  │  │  │  │  │     └─ Projection Est. 1 rows
@@ -47,7 +47,7 @@ Gather Exchange Est. 1 rows
       │  │  │  │  │  │  │  │  │  │  │  │  │  │                 └─ Filter Est. 576030837 rows
       │  │  │  │  │  │  │  │  │  │  │  │  │  │                    │     Condition: (ss_quantity >= 1) AND (ss_quantity <= 20)
       │  │  │  │  │  │  │  │  │  │  │  │  │  │                    └─ TableScan tpcds.store_sales Est. 2879987999 rows
-      │  │  │  │  │  │  │  │  │  │  │  │  │  │                             Condition : (ss_quantity >= 1) AND (ss_quantity <= 20).
+      │  │  │  │  │  │  │  │  │  │  │  │  │  │                             Where: (ss_quantity >= 1) AND (ss_quantity <= 20)
       │  │  │  │  │  │  │  │  │  │  │  │  │  │                             Outputs: [ss_quantity]
       │  │  │  │  │  │  │  │  │  │  │  │  │  └─ Broadcast Exchange Est. 1 rows
       │  │  │  │  │  │  │  │  │  │  │  │  │     └─ MergingAggregated Est. 1 rows
@@ -58,7 +58,7 @@ Gather Exchange Est. 1 rows
       │  │  │  │  │  │  │  │  │  │  │  │  │              └─ Filter Est. 576030837 rows
       │  │  │  │  │  │  │  │  │  │  │  │  │                 │     Condition: (ss_quantity_1 >= 1) AND (ss_quantity_1 <= 20)
       │  │  │  │  │  │  │  │  │  │  │  │  │                 └─ TableScan tpcds.store_sales Est. 2879987999 rows
-      │  │  │  │  │  │  │  │  │  │  │  │  │                          Condition : (ss_quantity >= 1) AND (ss_quantity <= 20).
+      │  │  │  │  │  │  │  │  │  │  │  │  │                          Where: (ss_quantity >= 1) AND (ss_quantity <= 20)
       │  │  │  │  │  │  │  │  │  │  │  │  │                          Outputs: [ss_ext_discount_amt], ss_quantity_1:=ss_quantity
       │  │  │  │  │  │  │  │  │  │  │  │  └─ Broadcast Exchange Est. 1 rows
       │  │  │  │  │  │  │  │  │  │  │  │     └─ MergingAggregated Est. 1 rows
@@ -69,7 +69,7 @@ Gather Exchange Est. 1 rows
       │  │  │  │  │  │  │  │  │  │  │  │              └─ Filter Est. 576030837 rows
       │  │  │  │  │  │  │  │  │  │  │  │                 │     Condition: (ss_quantity_2 >= 1) AND (ss_quantity_2 <= 20)
       │  │  │  │  │  │  │  │  │  │  │  │                 └─ TableScan tpcds.store_sales Est. 2879987999 rows
-      │  │  │  │  │  │  │  │  │  │  │  │                          Condition : (ss_quantity >= 1) AND (ss_quantity <= 20).
+      │  │  │  │  │  │  │  │  │  │  │  │                          Where: (ss_quantity >= 1) AND (ss_quantity <= 20)
       │  │  │  │  │  │  │  │  │  │  │  │                          Outputs: [ss_net_paid], ss_quantity_2:=ss_quantity
       │  │  │  │  │  │  │  │  │  │  │  └─ Broadcast Exchange Est. 1 rows
       │  │  │  │  │  │  │  │  │  │  │     └─ Projection Est. 1 rows
@@ -82,7 +82,7 @@ Gather Exchange Est. 1 rows
       │  │  │  │  │  │  │  │  │  │  │                 └─ Filter Est. 575978660 rows
       │  │  │  │  │  │  │  │  │  │  │                    │     Condition: (ss_quantity_3 >= 21) AND (ss_quantity_3 <= 40)
       │  │  │  │  │  │  │  │  │  │  │                    └─ TableScan tpcds.store_sales Est. 2879987999 rows
-      │  │  │  │  │  │  │  │  │  │  │                             Condition : (ss_quantity >= 21) AND (ss_quantity <= 40).
+      │  │  │  │  │  │  │  │  │  │  │                             Where: (ss_quantity >= 21) AND (ss_quantity <= 40)
       │  │  │  │  │  │  │  │  │  │  │                             Outputs: ss_quantity_3:=ss_quantity
       │  │  │  │  │  │  │  │  │  │  └─ Broadcast Exchange Est. 1 rows
       │  │  │  │  │  │  │  │  │  │     └─ MergingAggregated Est. 1 rows
@@ -93,7 +93,7 @@ Gather Exchange Est. 1 rows
       │  │  │  │  │  │  │  │  │  │              └─ Filter Est. 575978660 rows
       │  │  │  │  │  │  │  │  │  │                 │     Condition: (ss_quantity_4 >= 21) AND (ss_quantity_4 <= 40)
       │  │  │  │  │  │  │  │  │  │                 └─ TableScan tpcds.store_sales Est. 2879987999 rows
-      │  │  │  │  │  │  │  │  │  │                          Condition : (ss_quantity >= 21) AND (ss_quantity <= 40).
+      │  │  │  │  │  │  │  │  │  │                          Where: (ss_quantity >= 21) AND (ss_quantity <= 40)
       │  │  │  │  │  │  │  │  │  │                          Outputs: ss_ext_discount_amt_1:=ss_ext_discount_amt, ss_quantity_4:=ss_quantity
       │  │  │  │  │  │  │  │  │  └─ Broadcast Exchange Est. 1 rows
       │  │  │  │  │  │  │  │  │     └─ MergingAggregated Est. 1 rows
@@ -104,7 +104,7 @@ Gather Exchange Est. 1 rows
       │  │  │  │  │  │  │  │  │              └─ Filter Est. 575978660 rows
       │  │  │  │  │  │  │  │  │                 │     Condition: (ss_quantity_5 >= 21) AND (ss_quantity_5 <= 40)
       │  │  │  │  │  │  │  │  │                 └─ TableScan tpcds.store_sales Est. 2879987999 rows
-      │  │  │  │  │  │  │  │  │                          Condition : (ss_quantity >= 21) AND (ss_quantity <= 40).
+      │  │  │  │  │  │  │  │  │                          Where: (ss_quantity >= 21) AND (ss_quantity <= 40)
       │  │  │  │  │  │  │  │  │                          Outputs: ss_net_paid_1:=ss_net_paid, ss_quantity_5:=ss_quantity
       │  │  │  │  │  │  │  │  └─ Broadcast Exchange Est. 1 rows
       │  │  │  │  │  │  │  │     └─ Projection Est. 1 rows
@@ -117,7 +117,7 @@ Gather Exchange Est. 1 rows
       │  │  │  │  │  │  │  │                 └─ Filter Est. 576008001 rows
       │  │  │  │  │  │  │  │                    │     Condition: (ss_quantity_6 >= 41) AND (ss_quantity_6 <= 60)
       │  │  │  │  │  │  │  │                    └─ TableScan tpcds.store_sales Est. 2879987999 rows
-      │  │  │  │  │  │  │  │                             Condition : (ss_quantity >= 41) AND (ss_quantity <= 60).
+      │  │  │  │  │  │  │  │                             Where: (ss_quantity >= 41) AND (ss_quantity <= 60)
       │  │  │  │  │  │  │  │                             Outputs: ss_quantity_6:=ss_quantity
       │  │  │  │  │  │  │  └─ Broadcast Exchange Est. 1 rows
       │  │  │  │  │  │  │     └─ MergingAggregated Est. 1 rows
@@ -128,7 +128,7 @@ Gather Exchange Est. 1 rows
       │  │  │  │  │  │  │              └─ Filter Est. 576008001 rows
       │  │  │  │  │  │  │                 │     Condition: (ss_quantity_7 >= 41) AND (ss_quantity_7 <= 60)
       │  │  │  │  │  │  │                 └─ TableScan tpcds.store_sales Est. 2879987999 rows
-      │  │  │  │  │  │  │                          Condition : (ss_quantity >= 41) AND (ss_quantity <= 60).
+      │  │  │  │  │  │  │                          Where: (ss_quantity >= 41) AND (ss_quantity <= 60)
       │  │  │  │  │  │  │                          Outputs: ss_ext_discount_amt_2:=ss_ext_discount_amt, ss_quantity_7:=ss_quantity
       │  │  │  │  │  │  └─ Broadcast Exchange Est. 1 rows
       │  │  │  │  │  │     └─ MergingAggregated Est. 1 rows
@@ -139,7 +139,7 @@ Gather Exchange Est. 1 rows
       │  │  │  │  │  │              └─ Filter Est. 576008001 rows
       │  │  │  │  │  │                 │     Condition: (ss_quantity_8 >= 41) AND (ss_quantity_8 <= 60)
       │  │  │  │  │  │                 └─ TableScan tpcds.store_sales Est. 2879987999 rows
-      │  │  │  │  │  │                          Condition : (ss_quantity >= 41) AND (ss_quantity <= 60).
+      │  │  │  │  │  │                          Where: (ss_quantity >= 41) AND (ss_quantity <= 60)
       │  │  │  │  │  │                          Outputs: ss_net_paid_2:=ss_net_paid, ss_quantity_8:=ss_quantity
       │  │  │  │  │  └─ Broadcast Exchange Est. 1 rows
       │  │  │  │  │     └─ Projection Est. 1 rows
@@ -152,7 +152,7 @@ Gather Exchange Est. 1 rows
       │  │  │  │  │                 └─ Filter Est. 575996220 rows
       │  │  │  │  │                    │     Condition: (ss_quantity_9 >= 61) AND (ss_quantity_9 <= 80)
       │  │  │  │  │                    └─ TableScan tpcds.store_sales Est. 2879987999 rows
-      │  │  │  │  │                             Condition : (ss_quantity >= 61) AND (ss_quantity <= 80).
+      │  │  │  │  │                             Where: (ss_quantity >= 61) AND (ss_quantity <= 80)
       │  │  │  │  │                             Outputs: ss_quantity_9:=ss_quantity
       │  │  │  │  └─ Broadcast Exchange Est. 1 rows
       │  │  │  │     └─ MergingAggregated Est. 1 rows
@@ -163,7 +163,7 @@ Gather Exchange Est. 1 rows
       │  │  │  │              └─ Filter Est. 575996220 rows
       │  │  │  │                 │     Condition: (ss_quantity_10 >= 61) AND (ss_quantity_10 <= 80)
       │  │  │  │                 └─ TableScan tpcds.store_sales Est. 2879987999 rows
-      │  │  │  │                          Condition : (ss_quantity >= 61) AND (ss_quantity <= 80).
+      │  │  │  │                          Where: (ss_quantity >= 61) AND (ss_quantity <= 80)
       │  │  │  │                          Outputs: ss_ext_discount_amt_3:=ss_ext_discount_amt, ss_quantity_10:=ss_quantity
       │  │  │  └─ Broadcast Exchange Est. 1 rows
       │  │  │     └─ MergingAggregated Est. 1 rows
@@ -174,7 +174,7 @@ Gather Exchange Est. 1 rows
       │  │  │              └─ Filter Est. 575996220 rows
       │  │  │                 │     Condition: (ss_quantity_11 >= 61) AND (ss_quantity_11 <= 80)
       │  │  │                 └─ TableScan tpcds.store_sales Est. 2879987999 rows
-      │  │  │                          Condition : (ss_quantity >= 61) AND (ss_quantity <= 80).
+      │  │  │                          Where: (ss_quantity >= 61) AND (ss_quantity <= 80)
       │  │  │                          Outputs: ss_net_paid_3:=ss_net_paid, ss_quantity_11:=ss_quantity
       │  │  └─ Broadcast Exchange Est. 1 rows
       │  │     └─ Projection Est. 1 rows
@@ -187,7 +187,7 @@ Gather Exchange Est. 1 rows
       │  │                 └─ Filter Est. 575974279 rows
       │  │                    │     Condition: (ss_quantity_12 >= 81) AND (ss_quantity_12 <= 100)
       │  │                    └─ TableScan tpcds.store_sales Est. 2879987999 rows
-      │  │                             Condition : (ss_quantity >= 81) AND (ss_quantity <= 100).
+      │  │                             Where: (ss_quantity >= 81) AND (ss_quantity <= 100)
       │  │                             Outputs: ss_quantity_12:=ss_quantity
       │  └─ Broadcast Exchange Est. 1 rows
       │     └─ MergingAggregated Est. 1 rows
@@ -198,7 +198,7 @@ Gather Exchange Est. 1 rows
       │              └─ Filter Est. 575974279 rows
       │                 │     Condition: (ss_quantity_13 >= 81) AND (ss_quantity_13 <= 100)
       │                 └─ TableScan tpcds.store_sales Est. 2879987999 rows
-      │                          Condition : (ss_quantity >= 81) AND (ss_quantity <= 100).
+      │                          Where: (ss_quantity >= 81) AND (ss_quantity <= 100)
       │                          Outputs: ss_ext_discount_amt_4:=ss_ext_discount_amt, ss_quantity_13:=ss_quantity
       └─ Broadcast Exchange Est. 1 rows
          └─ MergingAggregated Est. 1 rows
@@ -209,5 +209,5 @@ Gather Exchange Est. 1 rows
                   └─ Filter Est. 575974279 rows
                      │     Condition: (ss_quantity_14 >= 81) AND (ss_quantity_14 <= 100)
                      └─ TableScan tpcds.store_sales Est. 2879987999 rows
-                              Condition : (ss_quantity >= 81) AND (ss_quantity <= 100).
+                              Where: (ss_quantity >= 81) AND (ss_quantity <= 100)
                               Outputs: ss_net_paid_4:=ss_net_paid, ss_quantity_14:=ss_quantity

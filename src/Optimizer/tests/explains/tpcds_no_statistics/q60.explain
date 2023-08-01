@@ -39,21 +39,21 @@ Projection Est. 100 rows
                   │     │     │     │        └─ Filter Est. ? rows
                   │     │     │     │           │     Condition: (d_year = 1998) AND (d_moy = 9)
                   │     │     │     │           └─ TableScan tpcds.date_dim Est. ? rows
-                  │     │     │     │                    Condition : (d_year = 1998) AND (d_moy = 9).
+                  │     │     │     │                    Where: (d_year = 1998) AND (d_moy = 9)
                   │     │     │     │                    Outputs: [d_date_sk, d_moy, d_year]
                   │     │     │     └─ Repartition Exchange Est. ? rows
                   │     │     │        │     Partition by: {ca_address_sk}
                   │     │     │        └─ Filter Est. ? rows
                   │     │     │           │     Condition: ca_gmt_offset = -5.
                   │     │     │           └─ TableScan tpcds.customer_address Est. ? rows
-                  │     │     │                    Condition : ca_gmt_offset = -5..
+                  │     │     │                    Where: ca_gmt_offset = -5.
                   │     │     │                    Outputs: [ca_address_sk, ca_gmt_offset]
                   │     │     └─ Repartition Exchange Est. ? rows
                   │     │        │     Partition by: {i_item_sk}
                   │     │        └─ Filter Est. ? rows
                   │     │           │     Condition: isNotNull(i_item_id)
                   │     │           └─ TableScan tpcds.item Est. ? rows
-                  │     │                    Condition : isNotNull(i_item_id).
+                  │     │                    Where: isNotNull(i_item_id)
                   │     │                    Outputs: [i_item_id, i_item_sk]
                   │     └─ MergingAggregated Est. ? rows
                   │        └─ Repartition Exchange Est. ? rows
@@ -65,7 +65,7 @@ Projection Est. 100 rows
                   │                 └─ Filter Est. ? rows
                   │                    │     Condition: (i_category = 'Music') AND isNotNull(i_item_id_1)
                   │                    └─ TableScan tpcds.item Est. ? rows
-                  │                             Condition : (i_category = 'Music') AND isNotNull(i_item_id).
+                  │                             Where: (i_category = 'Music') AND isNotNull(i_item_id)
                   │                             Outputs: [i_category], i_item_id_1:=i_item_id
                   ├─ Aggregating Est. ? rows
                   │  │     Group by: {i_item_id_2}
@@ -93,21 +93,21 @@ Projection Est. 100 rows
                   │     │     │     │        └─ Filter Est. ? rows
                   │     │     │     │           │     Condition: (d_moy_1 = 9) AND (d_year_1 = 1998)
                   │     │     │     │           └─ TableScan tpcds.date_dim Est. ? rows
-                  │     │     │     │                    Condition : (d_moy = 9) AND (d_year = 1998).
+                  │     │     │     │                    Where: (d_moy = 9) AND (d_year = 1998)
                   │     │     │     │                    Outputs: d_date_sk_1:=d_date_sk, d_moy_1:=d_moy, d_year_1:=d_year
                   │     │     │     └─ Repartition Exchange Est. ? rows
                   │     │     │        │     Partition by: {ca_address_sk_1}
                   │     │     │        └─ Filter Est. ? rows
                   │     │     │           │     Condition: ca_gmt_offset_1 = -5.
                   │     │     │           └─ TableScan tpcds.customer_address Est. ? rows
-                  │     │     │                    Condition : ca_gmt_offset = -5..
+                  │     │     │                    Where: ca_gmt_offset = -5.
                   │     │     │                    Outputs: ca_address_sk_1:=ca_address_sk, ca_gmt_offset_1:=ca_gmt_offset
                   │     │     └─ Repartition Exchange Est. ? rows
                   │     │        │     Partition by: {i_item_sk_1}
                   │     │        └─ Filter Est. ? rows
                   │     │           │     Condition: isNotNull(i_item_id_2)
                   │     │           └─ TableScan tpcds.item Est. ? rows
-                  │     │                    Condition : isNotNull(i_item_id).
+                  │     │                    Where: isNotNull(i_item_id)
                   │     │                    Outputs: i_item_id_2:=i_item_id, i_item_sk_1:=i_item_sk
                   │     └─ MergingAggregated Est. ? rows
                   │        └─ Repartition Exchange Est. ? rows
@@ -119,7 +119,7 @@ Projection Est. 100 rows
                   │                 └─ Filter Est. ? rows
                   │                    │     Condition: (i_category_1 = 'Music') AND isNotNull(i_item_id_3)
                   │                    └─ TableScan tpcds.item Est. ? rows
-                  │                             Condition : (i_category = 'Music') AND isNotNull(i_item_id).
+                  │                             Where: (i_category = 'Music') AND isNotNull(i_item_id)
                   │                             Outputs: i_category_1:=i_category, i_item_id_3:=i_item_id
                   └─ Aggregating Est. ? rows
                      │     Group by: {i_item_id_4}
@@ -147,21 +147,21 @@ Projection Est. 100 rows
                         │     │     │        └─ Filter Est. ? rows
                         │     │     │           │     Condition: (d_moy_2 = 9) AND (d_year_2 = 1998)
                         │     │     │           └─ TableScan tpcds.date_dim Est. ? rows
-                        │     │     │                    Condition : (d_moy = 9) AND (d_year = 1998).
+                        │     │     │                    Where: (d_moy = 9) AND (d_year = 1998)
                         │     │     │                    Outputs: d_date_sk_2:=d_date_sk, d_moy_2:=d_moy, d_year_2:=d_year
                         │     │     └─ Repartition Exchange Est. ? rows
                         │     │        │     Partition by: {ca_address_sk_2}
                         │     │        └─ Filter Est. ? rows
                         │     │           │     Condition: ca_gmt_offset_2 = -5.
                         │     │           └─ TableScan tpcds.customer_address Est. ? rows
-                        │     │                    Condition : ca_gmt_offset = -5..
+                        │     │                    Where: ca_gmt_offset = -5.
                         │     │                    Outputs: ca_address_sk_2:=ca_address_sk, ca_gmt_offset_2:=ca_gmt_offset
                         │     └─ Repartition Exchange Est. ? rows
                         │        │     Partition by: {i_item_sk_2}
                         │        └─ Filter Est. ? rows
                         │           │     Condition: isNotNull(i_item_id_4)
                         │           └─ TableScan tpcds.item Est. ? rows
-                        │                    Condition : isNotNull(i_item_id).
+                        │                    Where: isNotNull(i_item_id)
                         │                    Outputs: i_item_id_4:=i_item_id, i_item_sk_2:=i_item_sk
                         └─ MergingAggregated Est. ? rows
                            └─ Repartition Exchange Est. ? rows
@@ -173,5 +173,5 @@ Projection Est. 100 rows
                                     └─ Filter Est. ? rows
                                        │     Condition: (i_category_2 = 'Music') AND isNotNull(i_item_id_5)
                                        └─ TableScan tpcds.item Est. ? rows
-                                                Condition : (i_category = 'Music') AND isNotNull(i_item_id).
+                                                Where: (i_category = 'Music') AND isNotNull(i_item_id)
                                                 Outputs: i_category_2:=i_category, i_item_id_5:=i_item_id

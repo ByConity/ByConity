@@ -189,9 +189,6 @@ PlanNodePtr ColumnPruningVisitor::visitProjectionNode(ProjectionNode & node, Nam
             require.insert(item.first);
     }
 
-    for (const auto & dynamic_filter : step->getDynamicFilters())
-        require.insert(dynamic_filter.first);
-
     NameSet child_require;
 
     Assignments assignments;
@@ -215,7 +212,7 @@ PlanNodePtr ColumnPruningVisitor::visitProjectionNode(ProjectionNode & node, Nam
         return child;
 
     auto expr_step = std::make_shared<ProjectionStep>(
-    child->getStep()->getOutputStream(), std::move(assignments), std::move(name_to_type), step->isFinalProject(), step->getDynamicFilters());
+        child->getStep()->getOutputStream(), assignments, name_to_type, step->isFinalProject());
     PlanNodes children{child};
     auto expr_node = ProjectionNode::createPlanNode(context->nextNodeId(), std::move(expr_step), children, node.getStatistics());
     return expr_node;
@@ -405,6 +402,8 @@ PlanNodePtr ColumnPruningVisitor::visitJoinNode(JoinNode & node, NameSet & requi
 
     auto filter = step->getFilter()->clone();
     std::set<String> symbols = SymbolsExtractor::extract(filter);
+    for (const auto & runtime_filter : step->getRuntimeFilterBuilders())
+        symbols.insert(runtime_filter.first);
 
     NameSet left_require = require;
     left_require.insert(step->getLeftKeys().begin(), step->getLeftKeys().end());
@@ -491,6 +490,7 @@ PlanNodePtr ColumnPruningVisitor::visitJoinNode(JoinNode & node, NameSet & requi
         step->getJoinAlgorithm(),
         step->isMagic(),
         step->isOrdered(),
+        step->getRuntimeFilterBuilders(),
         step->getHints());
 
     PlanNodes children{left, right};

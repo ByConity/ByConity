@@ -37,7 +37,7 @@ Projection Est. 100 rows
                                     │     │     │  └─ Filter Est. ? rows
                                     │     │     │     │     Condition: ((i_category IN ('Books', 'Children', 'Electronics')) AND (i_class IN ('personal', 'portable', 'reference', 'self-help')) AND (i_brand IN ('scholaramalgamalg #14', 'scholaramalgamalg #7', 'exportiunivamalg #9', 'scholaramalgamalg #9'))) OR ((i_category IN ('Women', 'Music', 'Men')) AND (i_class IN ('accessories', 'classical', 'fragrances', 'pants')) AND (i_brand IN ('amalgimporto #1', 'edu packscholar #1', 'exportiimporto #1', 'importoamalg #1')))
                                     │     │     │     └─ TableScan tpcds.item Est. ? rows
-                                    │     │     │              Condition : ((i_category IN ('Books', 'Children', 'Electronics')) AND (i_class IN ('personal', 'portable', 'reference', 'self-help')) AND (i_brand IN ('scholaramalgamalg #14', 'scholaramalgamalg #7', 'exportiunivamalg #9', 'scholaramalgamalg #9'))) OR ((i_category IN ('Women', 'Music', 'Men')) AND (i_class IN ('accessories', 'classical', 'fragrances', 'pants')) AND (i_brand IN ('amalgimporto #1', 'edu packscholar #1', 'exportiimporto #1', 'importoamalg #1'))).
+                                    │     │     │              Where: ((i_category IN ('Books', 'Children', 'Electronics')) AND (i_class IN ('personal', 'portable', 'reference', 'self-help')) AND (i_brand IN ('scholaramalgamalg #14', 'scholaramalgamalg #7', 'exportiunivamalg #9', 'scholaramalgamalg #9'))) OR ((i_category IN ('Women', 'Music', 'Men')) AND (i_class IN ('accessories', 'classical', 'fragrances', 'pants')) AND (i_brand IN ('amalgimporto #1', 'edu packscholar #1', 'exportiimporto #1', 'importoamalg #1')))
                                     │     │     │              Outputs: [i_brand, i_category, i_class, i_item_sk, i_manufact_id]
                                     │     │     └─ Repartition Exchange Est. ? rows
                                     │     │        │     Partition by: {ss_item_sk}
@@ -48,7 +48,7 @@ Projection Est. 100 rows
                                     │        └─ Filter Est. ? rows
                                     │           │     Condition: d_month_seq IN (1200, 1201, 1202, 1203, 1204, 1205, 1206, 1207, 1208, 1209, 1210, 1211)
                                     │           └─ TableScan tpcds.date_dim Est. ? rows
-                                    │                    Condition : d_month_seq IN (1200, 1201, 1202, 1203, 1204, 1205, 1206, 1207, 1208, 1209, 1210, 1211).
+                                    │                    Where: d_month_seq IN (1200, 1201, 1202, 1203, 1204, 1205, 1206, 1207, 1208, 1209, 1210, 1211)
                                     │                    Outputs: [d_date_sk, d_month_seq, d_qoy]
                                     └─ Repartition Exchange Est. ? rows
                                        │     Partition by: {s_store_sk}

@@ -35,7 +35,7 @@ CTEDef [0]
       ├─ Projection Est. ? rows
       │  │     Expressions: [c_customer_id, c_first_name, c_last_name, c_preferred_cust_flag, d_year, expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))], expr#'s':='s'
       │  └─ Filter Est. ? rows
-      │     │     Condition: ((d_year = 2002) OR (`expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))` > 0.)) AND ((('s' = 's') AND (d_year = 2001) AND (`expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))` > 0.)) OR (('s' = 's') AND (d_year = 2002)) OR (('s' = 'w') AND (d_year = 2001) AND (`expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))` > 0.)) OR ((d_year = 2002) AND ('s' = 'w')))
+      │     │     Condition: (d_year = 2002) OR (`expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))` > 0.)
       │     └─ MergingAggregated Est. ? rows
       │        └─ Repartition Exchange Est. ? rows
       │           │     Partition by: {c_birth_country, c_customer_id, c_email_address, c_first_name, c_last_name, c_login, c_preferred_cust_flag, d_year}
@@ -63,12 +63,12 @@ CTEDef [0]
       │                       └─ Filter Est. ? rows
       │                          │     Condition: d_year IN (2001, 2002)
       │                          └─ TableScan tpcds.date_dim Est. ? rows
-      │                                   Condition : d_year IN (2001, 2002).
+      │                                   Where: d_year IN (2001, 2002)
       │                                   Outputs: [d_date_sk, d_year]
       └─ Projection Est. ? rows
          │     Expressions: [c_customer_id_1, c_first_name_1, c_last_name_1, c_preferred_cust_flag_1, d_year_1, expr#sum(minus(ws_ext_list_price, ws_ext_discount_amt))], expr#'w':='w'
          └─ Filter Est. ? rows
-            │     Condition: ((d_year_1 = 2002) OR (`expr#sum(minus(ws_ext_list_price, ws_ext_discount_amt))` > 0.)) AND ((('w' = 's') AND (d_year_1 = 2001) AND (`expr#sum(minus(ws_ext_list_price, ws_ext_discount_amt))` > 0.)) OR (('w' = 's') AND (d_year_1 = 2002)) OR (('w' = 'w') AND (d_year_1 = 2001) AND (`expr#sum(minus(ws_ext_list_price, ws_ext_discount_amt))` > 0.)) OR ((d_year_1 = 2002) AND ('w' = 'w')))
+            │     Condition: (d_year_1 = 2002) OR (`expr#sum(minus(ws_ext_list_price, ws_ext_discount_amt))` > 0.)
             └─ MergingAggregated Est. ? rows
                └─ Repartition Exchange Est. ? rows
                   │     Partition by: {c_birth_country_1, c_customer_id_1, c_email_address_1, c_first_name_1, c_last_name_1, c_login_1, c_preferred_cust_flag_1, d_year_1}
@@ -96,6 +96,6 @@ CTEDef [0]
                               └─ Filter Est. ? rows
                                  │     Condition: d_year_1 IN (2001, 2002)
                                  └─ TableScan tpcds.date_dim Est. ? rows
-                                          Condition : d_year IN (2001, 2002).
+                                          Where: d_year IN (2001, 2002)
                                           Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year
 note: CTE(Common Table Expression) is applied for 4 times.

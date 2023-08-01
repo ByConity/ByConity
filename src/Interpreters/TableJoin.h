@@ -24,10 +24,13 @@
 #include <Core/Names.h>
 #include <Core/NamesAndTypes.h>
 #include <Core/SettingsEnums.h>
-#include <Parsers/ASTTablesInSelectQuery.h>
 #include <Interpreters/IJoin.h>
-#include <Interpreters/join_common.h>
+#include <Interpreters/RuntimeFilter/RuntimeFilterBuilder.h>
+#include <Interpreters/RuntimeFilter/RuntimeFilterConsumer.h>
 #include <Interpreters/asof.h>
+#include <Interpreters/join_common.h>
+#include <Parsers/ASTTablesInSelectQuery.h>
+
 #include <DataStreams/IBlockStream_fwd.h>
 #include <DataStreams/SizeLimits.h>
 #include <DataTypes/getLeastSupertype.h>
@@ -53,6 +56,8 @@ struct Settings;
 
 class IVolume;
 using VolumePtr = std::shared_ptr<IVolume>;
+
+class RuntimeFilterConsumer;
 
 class TableJoin
 {
@@ -87,6 +92,9 @@ private:
     const size_t max_files_to_merge = 0;
     const String temporary_files_codec = "LZ4";
     const bool allow_extended_conversion = false;
+    const size_t runtime_filter_bloom_build_threshold = 1024000;
+    const size_t runtime_filter_in_build_threshold = 1024;
+    std::shared_ptr<RuntimeFilterConsumer> runtimeFilterConsumer = nullptr;
 
     Names key_names_left;
     Names key_names_right; /// Duplicating names are qualified.
@@ -256,6 +264,13 @@ public:
     void serialize(WriteBuffer & buf) const;
     void deserializeImpl(ReadBuffer & buf, ContextPtr context);
     static std::shared_ptr<TableJoin> deserialize(ReadBuffer & buf, ContextPtr context);
+    void fixRFParallel(size_t parallel) {runtimeFilterConsumer->fixParallel(parallel);}
+
+    std::shared_ptr<RuntimeFilterConsumer> getRuntimeFilterConsumer() const { return runtimeFilterConsumer; }
+    size_t getBloomBuildThreshold() const { return runtime_filter_bloom_build_threshold;}
+    size_t getInBuildThreshold() const { return runtime_filter_in_build_threshold;}
+
+    void setRuntimeFilterConsumer(std::shared_ptr<RuntimeFilterConsumer> && filterConsumer) { runtimeFilterConsumer = std::move(filterConsumer); }
 };
 
 }

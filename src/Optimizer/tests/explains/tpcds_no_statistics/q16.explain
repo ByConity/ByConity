@@ -47,21 +47,21 @@ Projection Est. 100 rows
                         │           │        │     │        └─ Filter Est. ? rows
                         │           │        │     │           │     Condition: (d_date >= cast(11719, 'Date')) AND (d_date <= cast(11779, 'Date'))
                         │           │        │     │           └─ TableScan tpcds.date_dim Est. ? rows
-                        │           │        │     │                    Condition : (d_date >= cast(11719, 'Date')) AND (d_date <= cast(11779, 'Date')).
+                        │           │        │     │                    Where: (d_date >= cast(11719, 'Date')) AND (d_date <= cast(11779, 'Date'))
                         │           │        │     │                    Outputs: [d_date, d_date_sk]
                         │           │        │     └─ Repartition Exchange Est. ? rows
                         │           │        │        │     Partition by: {ca_address_sk}
                         │           │        │        └─ Filter Est. ? rows
                         │           │        │           │     Condition: ca_state = 'GA'
                         │           │        │           └─ TableScan tpcds.customer_address Est. ? rows
-                        │           │        │                    Condition : ca_state = 'GA'.
+                        │           │        │                    Where: ca_state = 'GA'
                         │           │        │                    Outputs: [ca_address_sk, ca_state]
                         │           │        └─ Repartition Exchange Est. ? rows
                         │           │           │     Partition by: {cc_call_center_sk}
                         │           │           └─ Filter Est. ? rows
                         │           │              │     Condition: cc_county = 'Williamson County'
                         │           │              └─ TableScan tpcds.call_center Est. ? rows
-                        │           │                       Condition : cc_county = 'Williamson County'.
+                        │           │                       Where: cc_county = 'Williamson County'
                         │           │                       Outputs: [cc_call_center_sk, cc_county]
                         │           └─ Repartition Exchange Est. ? rows
                         │              │     Partition by: {cs_order_number_1}

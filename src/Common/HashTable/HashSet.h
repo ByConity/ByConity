@@ -139,6 +139,15 @@ template <
     typename Allocator = HashTableAllocator>
 using HashSet = HashSetTable<Key, HashTableCell<Key, Hash>, Hash, Grower, Allocator>;
 
+template
+    <
+        typename Key,
+        typename Hash = DefaultHash<Key>,
+        typename Grower = HashTableGrower<>,
+        typename Allocator = HashTableAllocator
+        >
+using HashSetNoZero = HashSetTable<Key, HashTableCellNoZero<Key, Hash>, Hash, Grower, Allocator>;
+
 template <
     typename Key,
     typename Hash = DefaultHash<Key>,

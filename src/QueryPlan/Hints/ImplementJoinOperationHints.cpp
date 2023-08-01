@@ -101,6 +101,7 @@ void JoinOperationHintsVisitor::visitJoinNode(JoinNode & node, Void & v)
             step.getJoinAlgorithm(),
             step.isMagic(),
             true,
+            step.getRuntimeFilterBuilders(),
             step.getHints());
 
         if (step.getKind() == ASTTableJoin::Kind::Left)
@@ -148,6 +149,7 @@ void JoinOperationHintsVisitor::visitJoinNode(JoinNode & node, Void & v)
                 step.getJoinAlgorithm(),
                 step.isMagic(),
                 true,
+                step.getRuntimeFilterBuilders(),
                 step.getHints());
 
             if (step.getKind() == ASTTableJoin::Kind::Left)

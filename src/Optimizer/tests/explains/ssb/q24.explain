@@ -16,5 +16,5 @@ Projection Est. 38 rows
                      └─ Filter Est. 95890902 rows
                         │     Condition: (C_REGION = 'AMERICA') AND (S_REGION = 'AMERICA') AND (P_MFGR IN ('MFGR#1', 'MFGR#2'))
                         └─ TableScan ssb.lineorder_flat Est. 5999989813 rows
-                                 Condition : (C_REGION = 'AMERICA') AND (S_REGION = 'AMERICA') AND (P_MFGR IN ('MFGR#1', 'MFGR#2')).
+                                 Where: (C_REGION = 'AMERICA') AND (S_REGION = 'AMERICA') AND (P_MFGR IN ('MFGR#1', 'MFGR#2'))
                                  Outputs: [C_NATION, C_REGION, LO_ORDERDATE, LO_REVENUE, LO_SUPPLYCOST, P_MFGR, S_REGION]

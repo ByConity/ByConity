@@ -27,24 +27,24 @@ namespace DB
 /**
  * internal function for optimizer
  */
-class InternalFunctionDynamicFilter : public IFunction
+class InternalFunctionRuntimeFilter : public IFunction
 {
 public:
-    static constexpr auto name = "$dynamicFilter";
+    static constexpr auto name = "$runtimeFilter";
 
-    static FunctionPtr create(ContextPtr /*context*/) { return std::make_shared<InternalFunctionDynamicFilter>(); }
+    static FunctionPtr create(ContextPtr /*context*/) { return std::make_shared<InternalFunctionRuntimeFilter>(); }
 
     String getName() const override { return name; }
 
     ColumnPtr executeImpl(
         const ColumnsWithTypeAndName & /*arguments*/, const DataTypePtr & /*result_type*/, size_t /*input_rows_count*/) const override
     {
-        throw Exception("Unexpected internal function: dynamic filter", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception("Unexpected internal function: runtime Filter", ErrorCodes::NOT_IMPLEMENTED);
     }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & /*arguments*/) const override { return std::make_shared<DataTypeUInt8>(); }
 
-    size_t getNumberOfArguments() const override { return 4; }
+    size_t getNumberOfArguments() const override { return 3; }
 };
 
 void registerInternalFunctionDynamicFilter(FunctionFactory &);

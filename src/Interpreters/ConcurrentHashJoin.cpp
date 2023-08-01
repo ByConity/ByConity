@@ -238,4 +238,34 @@ JoinPtr ConcurrentHashJoin::deserialize(ReadBuffer & buf, ContextPtr context)
     return std::make_shared<ConcurrentHashJoin>(table_join, slots, right_sample_block);
 }
 
+void ConcurrentHashJoin::tryBuildRuntimeFilters(size_t total_rows) const
+{
+    total_rows = 0;
+    for (const auto & hash_join : hash_joins)
+    {
+        total_rows += hash_join->data->getTotalRowCount();
+    }
+
+    if (total_rows == 0)
+    {
+        // need bypass
+        hash_joins.front()->data->bypassRuntimeFilters(BypassType::BYPASS_EMPTY_HT);
+        return ;
+    }
+
+    if (total_rows > table_join->getInBuildThreshold() && total_rows > table_join->getBloomBuildThreshold())
+    {
+        // need bypass
+        hash_joins.front()->data->bypassRuntimeFilters(BypassType::BYPASS_LARGE_HT);
+        return ;
+    }
+
+    table_join->fixRFParallel(hash_joins.size());
+
+    for (const auto & hash_join : hash_joins)
+    {
+        hash_join->data->tryBuildRuntimeFilters(total_rows);
+    }
+}
+
 }

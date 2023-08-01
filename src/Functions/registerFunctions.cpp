@@ -34,7 +34,7 @@ void registerFunctionsTuple(FunctionFactory &);
 void registerFunctionsMap(FunctionFactory &);
 void registerFunctionsByteMap(FunctionFactory &);
 void registerFunctionsBitmap(FunctionFactory &);
-void registerFunctionsBloomFilter(FunctionFactory &);
+void registerFunctionsRuntimeFilter(FunctionFactory &);
 void registerFunctionsCoding(FunctionFactory &);
 void registerFunctionsComparison(FunctionFactory &);
 void registerFunctionsConditional(FunctionFactory &);
@@ -90,7 +90,7 @@ void registerFunctionAESDecryptMysql(FunctionFactory & factory);
 
 #endif
 
-void registerInternalFunctionDynamicFilter(FunctionFactory &);
+void registerInternalFunctionRuntimeFilter(FunctionFactory &);
 void registerFunctionBucketBoundsSearch(FunctionFactory & factory);
 void registerFunctionGetHostWithPorts(FunctionFactory & factory);
 void registerFunctionGetWriteWorker(FunctionFactory & factory);
@@ -112,7 +112,7 @@ void registerFunctions()
 #if !defined(ARCADIA_BUILD)
     registerFunctionsBitmap(factory);
 #endif
-    registerFunctionsBloomFilter(factory);
+    registerFunctionsRuntimeFilter(factory);
     registerFunctionsCoding(factory);
     registerFunctionsComparison(factory);
     registerFunctionsConditional(factory);
@@ -166,7 +166,7 @@ void registerFunctions()
     registerFunctionTid(factory);
     registerFunctionLogTrace(factory);
     registerFunctionTopoFindDown(factory);
-    registerInternalFunctionDynamicFilter(factory);
+    registerInternalFunctionRuntimeFilter(factory);
     registerFunctionBucketBoundsSearch(factory);
     registerFunctionGetHostWithPorts(factory);
     registerFunctionGetWriteWorker(factory);

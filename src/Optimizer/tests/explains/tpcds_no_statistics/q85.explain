@@ -70,14 +70,14 @@ Projection Est. 100 rows
                            │     │        └─ Filter Est. ? rows
                            │     │           │     Condition: ca_country = 'United States'
                            │     │           └─ TableScan tpcds.customer_address Est. ? rows
-                           │     │                    Condition : ca_country = 'United States'.
+                           │     │                    Where: ca_country = 'United States'
                            │     │                    Outputs: [ca_address_sk, ca_country, ca_state]
                            │     └─ Repartition Exchange Est. ? rows
                            │        │     Partition by: {d_date_sk}
                            │        └─ Filter Est. ? rows
                            │           │     Condition: d_year = 2000
                            │           └─ TableScan tpcds.date_dim Est. ? rows
-                           │                    Condition : d_year = 2000.
+                           │                    Where: d_year = 2000
                            │                    Outputs: [d_date_sk, d_year]
                            └─ Repartition Exchange Est. ? rows
                               │     Partition by: {r_reason_sk}

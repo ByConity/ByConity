@@ -29,19 +29,19 @@ Projection Est. 100 rows
                   │     │        └─ Filter Est. ? rows
                   │     │           │     Condition: hd_dep_count = 7
                   │     │           └─ TableScan tpcds.household_demographics Est. ? rows
-                  │     │                    Condition : hd_dep_count = 7.
+                  │     │                    Where: hd_dep_count = 7
                   │     │                    Outputs: [hd_demo_sk, hd_dep_count]
                   │     └─ Repartition Exchange Est. ? rows
                   │        │     Partition by: {t_time_sk}
                   │        └─ Filter Est. ? rows
                   │           │     Condition: (t_hour = 20) AND (t_minute >= 30)
                   │           └─ TableScan tpcds.time_dim Est. ? rows
-                  │                    Condition : (t_hour = 20) AND (t_minute >= 30).
+                  │                    Where: (t_hour = 20) AND (t_minute >= 30)
                   │                    Outputs: [t_hour, t_minute, t_time_sk]
                   └─ Repartition Exchange Est. ? rows
                      │     Partition by: {s_store_sk}
                      └─ Filter Est. ? rows
                         │     Condition: s_store_name = 'ese'
                         └─ TableScan tpcds.store Est. ? rows
-                                 Condition : s_store_name = 'ese'.
+                                 Where: s_store_name = 'ese'
                                  Outputs: [s_store_name, s_store_sk]

@@ -22,7 +22,6 @@
 #pragma once
 
 #include <Processors/IProcessor.h>
-#include <Interpreters/RuntimeFilter/RuntimeFilterHolder.h>
 #include <QueryPlan/QueryIdHolder.h>
 #include <QueryPlan/QueryPlan.h>
 #include <Access/EnabledQuota.h>
@@ -144,7 +143,6 @@ public:
     //void addStorageHolder(StoragePtr storage) { holder.storage_holders.emplace_back(std::move(storage)); }
     void addStorageHolder(StoragePtr storage);
     void addQueryIdHolder(std::shared_ptr<QueryIdHolder> query_id_holder) { holder.query_id_holder = std::move(query_id_holder); }
-    void addRuntimeFilterHolder(RuntimeFilterHolder rf_holder) { holder.runtime_filters.emplace_back(std::move(rf_holder)); }
     /// For queries with nested interpreters (i.e. StorageDistributed)
     void addQueryPlan(std::unique_ptr<QueryPlan> plan) { holder.query_plans.emplace_back(std::move(plan)); }
 
@@ -166,7 +164,6 @@ private:
         std::vector<TableLockHolder> table_locks;
         std::vector<std::unique_ptr<QueryPlan>> query_plans;
         std::shared_ptr<QueryIdHolder> query_id_holder;
-        std::vector<RuntimeFilterHolder> runtime_filters;
     };
 
     Holder holder;

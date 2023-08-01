@@ -16,5 +16,5 @@ Gather Exchange Est. ? rows
                └─ Filter Est. ? rows
                   │     Condition: (app_id_1 = 20000696) AND (last_active_date >= cast(19431, \'Date\'))
                   └─ TableScan uba_production_default.users Est. ? rows
-                           Condition : (app_id = 20000696) AND (last_active_date >= cast(19431, \'Date\')).
+                           Where: (app_id = 20000696) AND (last_active_date >= cast(19431, \'Date\'))
                            Outputs: [__int_profiles__\'first_event_time\', last_active_date], app_id_1:=app_id, hash_uid_1:=hash_uid

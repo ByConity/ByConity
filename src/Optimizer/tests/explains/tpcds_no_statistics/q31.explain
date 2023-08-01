@@ -59,9 +59,9 @@ CTEDef [1]
                │     └─ Repartition Exchange Est. ? rows
                │        │     Partition by: {d_date_sk_1}
                │        └─ Filter Est. ? rows
-               │           │     Condition: (d_year_4 = 2000) AND (d_qoy_4 IN (1, 2, 3)) AND (((d_qoy_4 = 1) AND (d_year_4 = 2000)) OR ((d_qoy_4 = 2) AND (d_year_4 = 2000)) OR ((d_year_4 = 2000) AND (d_qoy_4 = 3)))
+               │           │     Condition: (d_year_4 = 2000) AND (d_qoy_4 IN (1, 2, 3))
                │           └─ TableScan tpcds.date_dim Est. ? rows
-               │                    Condition : (d_year = 2000) AND (d_qoy IN (1, 2, 3)) AND (((d_qoy = 1) AND (d_year = 2000)) OR ((d_qoy = 2) AND (d_year = 2000)) OR ((d_year = 2000) AND (d_qoy = 3))).
+               │                    Where: (d_year = 2000) AND (d_qoy IN (1, 2, 3))
                │                    Outputs: d_date_sk_1:=d_date_sk, d_qoy_4:=d_qoy, d_year_4:=d_year
                └─ Repartition Exchange Est. ? rows
                   │     Partition by: {ca_address_sk_1}
@@ -89,9 +89,9 @@ CTEDef [0]
                │     └─ Repartition Exchange Est. ? rows
                │        │     Partition by: {d_date_sk}
                │        └─ Filter Est. ? rows
-               │           │     Condition: (d_year = 2000) AND (d_qoy IN (1, 2, 3)) AND (((d_year = 2000) AND (d_qoy = 1)) OR ((d_year = 2000) AND (d_qoy = 2)) OR ((d_qoy = 3) AND (d_year = 2000)))
+               │           │     Condition: (d_year = 2000) AND (d_qoy IN (1, 2, 3))
                │           └─ TableScan tpcds.date_dim Est. ? rows
-               │                    Condition : (d_year = 2000) AND (d_qoy IN (1, 2, 3)) AND (((d_year = 2000) AND (d_qoy = 1)) OR ((d_year = 2000) AND (d_qoy = 2)) OR ((d_qoy = 3) AND (d_year = 2000))).
+               │                    Where: (d_year = 2000) AND (d_qoy IN (1, 2, 3))
                │                    Outputs: [d_date_sk, d_qoy, d_year]
                └─ Repartition Exchange Est. ? rows
                   │     Partition by: {ca_address_sk}

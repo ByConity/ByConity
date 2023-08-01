@@ -16,5 +16,5 @@ Projection Est. 3 rows
                      └─ Filter Est. 9559194 rows
                         │     Condition: (S_NATION = 'UNITED STATES') AND ((toYear(LO_ORDERDATE) = 1997) OR (toYear(LO_ORDERDATE) = 1998)) AND (P_CATEGORY = 'MFGR#14')
                         └─ TableScan ssb.lineorder_flat Est. 5999989813 rows
-                                 Condition : (S_NATION = 'UNITED STATES') AND ((toYear(LO_ORDERDATE) = 1997) OR (toYear(LO_ORDERDATE) = 1998)) AND (P_CATEGORY = 'MFGR#14').
+                                 Where: (S_NATION = 'UNITED STATES') AND ((toYear(LO_ORDERDATE) = 1997) OR (toYear(LO_ORDERDATE) = 1998)) AND (P_CATEGORY = 'MFGR#14')
                                  Outputs: [LO_ORDERDATE, LO_REVENUE, LO_SUPPLYCOST, P_BRAND, P_CATEGORY, S_CITY, S_NATION]

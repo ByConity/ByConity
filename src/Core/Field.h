@@ -444,7 +444,13 @@ public:
     Field & operator= (const std::string_view & str);
     Field & operator= (const String & str) { return *this = std::string_view{str}; }
     Field & operator= (String && str);
-    Field & operator= (const char * str) { return *this = std::string_view{str}; }
+    Field & operator= (const char * str)
+    {
+        if (!str)
+            return *this = Null{};
+        else
+            return *this = std::string_view{str};
+    }
 
     ~Field()
     {
