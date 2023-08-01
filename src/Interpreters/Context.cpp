@@ -157,6 +157,7 @@
 #include <Storages/IndexFile/IndexFileWriter.h>
 #include <WorkerTasks/ManipulationList.h>
 
+#include <Interpreters/SQLBinding/SQLBindingCache.h>
 #include <Statistics/StatisticsMemoryStore.h>
 #include <Transaction/CnchServerTransaction.h>
 #include <Transaction/CnchWorkerTransaction.h>
@@ -418,6 +419,7 @@ struct ContextSharedPart
     ConfigurationPtr clusters_config;                        /// Stores updated configs
     mutable std::mutex clusters_mutex;                       /// Guards clusters and clusters_config
     WorkerStatusManagerPtr worker_status_manager;
+    BindingCacheManagerPtr global_binding_cache_manager;
 
     mutable DeleteBitmapCachePtr delete_bitmap_cache; /// Cache of delete bitmaps
     mutable UniqueKeyIndexBlockCachePtr unique_key_index_block_cache; /// Shared block cache of unique key indexes
@@ -516,6 +518,9 @@ struct ContextSharedPart
 
             if (topology_master)
                 topology_master.reset();
+
+            if (global_binding_cache_manager)
+                global_binding_cache_manager.reset();
 
             if (cache_manager)
                 cache_manager.reset();
@@ -803,6 +808,41 @@ SegmentSchedulerPtr Context::getSegmentScheduler() const
     if (!shared->segment_scheduler)
         shared->segment_scheduler = std::make_shared<SegmentScheduler>();
     return shared->segment_scheduler;
+}
+
+BindingCacheManagerPtr Context::getGlobalBindingCacheManager() const
+{
+    auto lock = getLock();
+    if (this->shared->global_binding_cache_manager)
+        return this->shared->global_binding_cache_manager;
+    return nullptr;
+}
+
+BindingCacheManagerPtr Context::getGlobalBindingCacheManager()
+{
+    auto lock = getLock();
+    if (this->shared->global_binding_cache_manager)
+        return this->shared->global_binding_cache_manager;
+    return nullptr;
+}
+
+void Context::setGlobalBindingCacheManager(std::shared_ptr<BindingCacheManager> && manager)
+{
+    auto lock = getLock();
+    if (shared->global_binding_cache_manager)
+        throw Exception("Global binding cache has been already created.", ErrorCodes::LOGICAL_ERROR);
+    shared->global_binding_cache_manager = std::move(manager);
+}
+
+std::shared_ptr<BindingCacheManager> Context::getSessionBindingCacheManager() const
+{
+    auto lock = getLock();
+    if (!this->session_binding_cache_manager)
+    {
+        this->session_binding_cache_manager = std::make_shared<BindingCacheManager>();
+        this->session_binding_cache_manager->initializeSessionBinding();
+    }
+    return session_binding_cache_manager;
 }
 
 QueueManagerPtr Context::getQueueManager() const

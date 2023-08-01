@@ -59,6 +59,7 @@
 #include <Interpreters/RuntimeFilter/RuntimeFilterService.h>
 #include <Interpreters/ServerPartLog.h>
 #include <Interpreters/loadMetadata.h>
+#include <Interpreters/SQLBinding/SQLBindingCache.h>
 #include <Processors/Exchange/DataTrans/Brpc/BrpcExchangeReceiverRegistryService.h>
 #include <QueryPlan/Hints/registerHints.h>
 #include <QueryPlan/PlanCache.h>
@@ -1753,6 +1754,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         if (global_context->getComplexQueryActive())
         {
             Statistics::CacheManager::initialize(global_context);
+            BindingCacheManager::initializeGlobalBinding(global_context);
             PlanCacheManager::initialize(global_context);
         }
 

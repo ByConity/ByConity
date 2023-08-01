@@ -32,6 +32,7 @@
 #include <Parsers/ASTCreateUserQuery.h>
 #include <Parsers/ASTCreateWarehouseQuery.h>
 #include <Parsers/ASTCreateWorkerGroupQuery.h>
+#include <Parsers/ASTSQLBinding.h>
 #include <Parsers/ASTDeleteQuery.h>
 #include <Parsers/ASTDropAccessEntityQuery.h>
 #include <Parsers/ASTDropQuery.h>
@@ -125,6 +126,9 @@
 #include <Interpreters/PlanSegmentHelper.h>
 #include <Parsers/ASTAlterDiskCacheQuery.h>
 #include <Interpreters/InterpreterAlterDiskCacheQuery.h>
+#include <Interpreters/InterpreterCreateBinding.h>
+#include <Interpreters/InterpreterShowBindings.h>
+#include <Interpreters/InterpreterDropBinding.h>
 
 #include <Parsers/ASTSystemQuery.h>
 
@@ -466,6 +470,18 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     else if (query->as<ASTDeleteQuery>())
     {
         return std::make_unique<InterpreterDeleteQuery>(query, context);
+    }
+    else if (query->as<ASTCreateBinding>())
+    {
+        return std::make_unique<InterpreterCreateBinding>(query, context);
+    }
+    else if (query->as<ASTShowBindings>())
+    {
+        return std::make_unique<InterpreterShowBindings>(query, context);
+    }
+    else if (query->as<ASTDropBinding>())
+    {
+        return std::make_unique<InterpreterDropBinding>(query, context);
     }
     else
     {

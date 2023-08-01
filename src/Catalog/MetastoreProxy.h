@@ -39,6 +39,7 @@
 #include <common/types.h>
 #include <Access/IAccessEntity.h>
 #include <Parsers/formatTenantDatabaseName.h>
+#include <Interpreters/SQLBinding/SQLBinding.h>
 
 namespace DB::ErrorCodes
 {
@@ -97,6 +98,7 @@ namespace DB::Catalog
 #define TABLE_STATISTICS_TAG_PREFIX "TST_"
 #define COLUMN_STATISTICS_PREFIX "CS_"
 #define COLUMN_STATISTICS_TAG_PREFIX "CST_"
+#define SQL_BINDING_PREFIX "SBI_"
 #define FILESYS_LOCK_PREFIX "FSLK_"
 #define UDF_STORE_PREFIX "UDF_"
 #define MERGEMUTATE_THREAD_START_TIME "MTST_"
@@ -537,6 +539,27 @@ public:
         return ss.str();
     }
 
+    static String SQLBindingKey(const String name_space, const String & uuid, const bool & is_re)
+    {
+        std::stringstream ss;
+        ss << escapeString(name_space) << '_' << SQL_BINDING_PREFIX << is_re << '_' << uuid;
+        return ss.str();
+    }
+
+    static String SQLBindingRePrefix(const String name_space, const bool & is_re)
+    {
+        std::stringstream ss;
+        ss << escapeString(name_space) << '_' << SQL_BINDING_PREFIX << is_re;
+        return ss.str();
+    }
+
+    static String SQLBindingPrefix(const String name_space)
+    {
+        std::stringstream ss;
+        ss << escapeString(name_space) << '_' << SQL_BINDING_PREFIX;
+        return ss.str();
+    }
+
     static String tableStatisticKey(const String name_space, const String & uuid, const StatisticsTag & tag)
     {
         std::stringstream ss;
@@ -648,7 +671,7 @@ public:
     {
         return escapeString(name_space) + "_" + DATA_ITEM_TRASH_PREFIX + uuid + "_";
     }
-    
+
     static std::string accessEntityPrefix(EntityType type, const std::string & name_space)
     {
         return fmt::format("{}_{}", escapeString(name_space), formatTenantEntityPrefix(getEntityMetastorePrefix(type).prefix));
@@ -878,6 +901,12 @@ public:
     UInt64 getNonHostUpdateTimeStamp(const String & name_space, const String & table_uuid);
     void setNonHostUpdateTimeStamp(const String & name_space, const String & table_uuid, const UInt64 pts);
 
+    void updateSQLBinding(const String & name_space, const SQLBindingItemPtr& data);
+    SQLBindings getSQLBindings(const String & name_space);
+    SQLBindings getReSQLBindings(const String & name_space, const bool & is_re_expression);
+    SQLBindingItemPtr getSQLBinding(const String & name_space, const String & uuid, const bool & is_re_expression);
+    void removeSQLBinding(const String & name_space, const String & uuid, const bool & is_re_expression);
+
     void updateTableStatistics(
         const String & name_space, const String & uuid, const std::unordered_map<StatisticsTag, StatisticsBasePtr> & data);
     std::unordered_map<StatisticsTag, StatisticsBasePtr>
@@ -934,7 +963,7 @@ public:
      * @param limit Limit the results, disabled by passing 0.
      */
     IMetaStore::IteratorPtr getItemsInTrash(const String & name_space, const String & table_uuid, const size_t & limit);
-    
+
     // Access Entities
     String getAccessEntity(EntityType type, const String & name_space, const String & name) const;
     Strings getAllAccessEntities(EntityType type, const String & name_space) const;

@@ -85,6 +85,14 @@ namespace ProfileEvents
     extern const Event GetAvailableColumnStatisticsTagsFailed;
     extern const Event RemoveColumnStatisticsSuccess;
     extern const Event RemoveColumnStatisticsFailed;
+    extern const Event UpdateSQLBindingSuccess;
+    extern const Event UpdateSQLBindingFailed;
+    extern const Event GetSQLBindingSuccess;
+    extern const Event GetSQLBindingFailed;
+    extern const Event GetSQLBindingsSuccess;
+    extern const Event GetSQLBindingsFailed;
+    extern const Event RemoveSQLBindingSuccess;
+    extern const Event RemoveSQLBindingFailed;
     extern const Event CreateDatabaseSuccess;
     extern const Event CreateDatabaseFailed;
     extern const Event GetDatabaseSuccess;
@@ -5066,6 +5074,52 @@ namespace Catalog
             [&] { meta_proxy->removeColumnStatistics(name_space, uuid, column, tags); },
             ProfileEvents::RemoveColumnStatisticsSuccess,
             ProfileEvents::RemoveColumnStatisticsFailed);
+    }
+
+    void Catalog::updateSQLBinding(const SQLBindingItemPtr data)
+    {
+        runWithMetricSupport(
+            [&] { meta_proxy->updateSQLBinding(name_space, data); },
+            ProfileEvents::UpdateSQLBindingSuccess,
+            ProfileEvents::UpdateSQLBindingFailed);
+    }
+
+    SQLBindings Catalog::getSQLBindings()
+    {
+        SQLBindings res;
+        runWithMetricSupport(
+            [&] { res = meta_proxy->getSQLBindings(name_space); },
+            ProfileEvents::GetSQLBindingsSuccess,
+            ProfileEvents::GetSQLBindingsFailed);
+        return res;
+    }
+
+    SQLBindings Catalog::getReSQLBindings(const bool & is_re_expression)
+    {
+        SQLBindings res;
+        runWithMetricSupport(
+            [&] { res = meta_proxy->getReSQLBindings(name_space, is_re_expression); },
+            ProfileEvents::GetSQLBindingsSuccess,
+            ProfileEvents::GetSQLBindingsFailed);
+        return res;
+    }
+
+    SQLBindingItemPtr Catalog::getSQLBinding(const String & uuid, const bool & is_re_expression)
+    {
+        SQLBindingItemPtr res;
+        runWithMetricSupport(
+            [&] { res = meta_proxy->getSQLBinding(name_space, uuid, is_re_expression); },
+            ProfileEvents::GetSQLBindingSuccess,
+            ProfileEvents::GetSQLBindingFailed);
+        return res;
+    }
+
+    void Catalog::removeSQLBinding(const String & uuid, const bool & is_re_expression)
+    {
+        runWithMetricSupport(
+            [&] { meta_proxy->removeSQLBinding(name_space, uuid, is_re_expression); },
+            ProfileEvents::RemoveSQLBindingSuccess,
+            ProfileEvents::RemoveSQLBindingFailed);
     }
 
     void Catalog::setMergeMutateThreadStartTime(const StorageID & storage_id, const UInt64 & startup_time) const

@@ -88,13 +88,14 @@
 #include <Interpreters/executeQuery.h>
 #include <Interpreters/trySetVirtualWarehouse.h>
 #include <Interpreters/Cache/QueryCache.h>
+#include <Interpreters/SQLBinding/SQLBindingUtils.h>
 
 #include <Common/ProfileEvents.h>
 #include <Common/RpcClientPool.h>
 
 #include <DataStreams/IBlockStream_fwd.h>
 #include <DataStreams/NullBlockOutputStream.h>
-#include <DataStreams/RemoteQueryExecutor.h>
+#include <DataStreams/OneBlockInputStream.h>
 #include <IO/ReadBuffer.h>
 #include <IO/WriteBuffer.h>
 #include <IO/WriteBufferFromString.h>
@@ -675,8 +676,24 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             ParserQuery parser(end, ParserSettings::valueOf(context->getSettings()));
             parser.setContext(context.get());
 
-            /// TODO: parser should fail early when max_query_size limit is reached.
-            ast = parseQuery(parser, begin, end, "", max_query_size, context->getSettings().max_parser_depth);
+            if (settings.use_sql_binding && !internal)
+            {
+                try
+                {
+                    ast = SQLBindingUtils::getASTFromBindings(begin, end, context);
+                }
+                catch (...)
+                {
+                    LOG_INFO(&Poco::Logger::get("SQL Binding"), "SQL binding match error");
+                }
+            }
+
+            if (!ast)
+            {
+                /// TODO Parser should fail early when max_query_size limit is reached.
+                ast = parseQuery(parser, begin, end, "", max_query_size, context->getSettings().max_parser_depth);
+            }
+            parser_span->End();
         }
         else
         {
@@ -914,7 +931,16 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             OpenTelemetrySpanHolder span("IInterpreter::execute()");
             try
             {
-                res = interpreter->execute();
+                if (!settings.enable_execute_query)
+                {
+                    Block block;
+                    auto warning_column = ColumnString::create();
+                    warning_column->insert("Do not execute this query.");
+                    block.insert({std::move(warning_column), std::make_shared<DataTypeString>(), ""});
+                    res.in = std::make_shared<OneBlockInputStream>(block);
+                }
+                else
+                    res = interpreter->execute();
             }
             catch (...)
             {
