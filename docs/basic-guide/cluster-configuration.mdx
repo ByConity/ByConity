@@ -212,25 +212,35 @@ Example:
 
 ### hdfs_ha_nameservice
 
-The name of the hdfs service needs to be configured in advance in the configuration file of libhdfs3
-
+If the user's HDFS cluster supports High Avaliability feature,  the namespace needs to be configured in advance in the configuration file, and the addresses of the namespace need to be configured in [libhdfs3
+config](markdown-header-hdfs3_config). 
 Example:
 
 ```
 <hdfs_ha_nameservice>hdfs_service</hdfs_ha_nameservice>
 
 ```
-
-### ~~hdfs_nnproxy~~
-
-~~The name of nnproxy used by default when accessing ~~~~HDFS~~~~, default nnproxy~~
-
-~~Example:~~
-
+and in libhdfs3 config:
 ```
-~~<hdfs_nnproxy>nnproxy</hdfs_nnproxy>~~
-
+<property>
+<name>dfs.nameservices</name>
+<value>my-hadoop</value>
+</property>
+<property>
+<name>dfs.ha.namenodes.my-hadoop</name>
+<value>machine1, machine2</value>
+</property>
+<property>
+<name>dfs.namenode.rpc-address.my-hadoop.machine1</name>
+<value>master:65212</value>
+</property>
+<property>
+<name>dfs.namenode.rpc-address.my-hadoop.machine2</name>
+<value>standby:65212</value>
+</property>
 ```
+
+
 
 ### storage_configuration
 
