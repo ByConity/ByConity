@@ -1902,6 +1902,8 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, max_replicate_shuffle_size, 50000000, "Max join build size, when enum replicate", 0) \
     M(UInt64, parallel_join_threshold, 2000000, "Parallel join right source rows threshold", 0) \
     M(Bool, add_parallel_before_agg, false, "Add parallel before agg", 0) \
+    M(Bool, enable_adaptive_scheduler, false, "Whether enable adaptive scheduler", 0) \
+    M(Bool, enable_wait_cancel_rpc, false, "Whether wait rpcs of cancel worker to finish", 0) \
     M(Bool, add_parallel_after_join, false, "Add parallel after join", 0) \
     M(Bool, enforce_round_robin, false, "Whether add round robin exchange node", 0) \
     M(Bool, enable_pk_fk, true, "Whether enable PK-FK join estimation", 0) \
@@ -1935,7 +1937,6 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_push_partial_agg, true, "Whether enable push partial agg", 0) \
     M(Bool, enforce_all_join_to_any_join, false, "Whether enforce all join to any join", 0) \
     M(Bool, enable_implicit_type_conversion, true, "Whether enable implicit type conversion for JOIN, Set operation, IN subquery", 0) \
-    M(Bool, enable_adaptive_scheduler, false, "Whether enable adaptive scheduler", 0) \
     M(Bool, enable_redundant_sort_removal, true, "Whether enable ignore redundant sort in subquery", 0) \
     M(Bool, enable_materialized_view_rewrite, false, "Whether enable materialized view based rewriter for query", 0) \
     M(Bool, enable_materialized_view_ast_rewrite, false, "Whether enable materialized view based rewriter for query", 0) \
