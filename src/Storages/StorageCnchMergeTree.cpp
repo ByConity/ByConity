@@ -460,13 +460,6 @@ time_t StorageCnchMergeTree::getTTLForPartition(const MergeTreePartition & parti
 
     /// Construct a block consists of partition keys then compute ttl values according to this block
     const auto & partition_key_sample = metadata_snapshot->getPartitionKey().sample_block;
-    /// We can only compute ttl at this point if partition key expression includes all columns in TTL expression
-    const auto & required_columns = metadata_snapshot->table_ttl.rows_ttl.expression->getRequiredColumns();
-    if (std::any_of(required_columns.begin(), required_columns.end(), [&partition_key_sample](const auto & name) {
-            return !partition_key_sample.has(name);
-        }))
-        return 0;
-
     MutableColumns columns = partition_key_sample.cloneEmptyColumns();
     /// This can happen when ALTER query is implemented improperly; finish ALTER query should bypass this check.
     if (columns.size() != partition.value.size())
