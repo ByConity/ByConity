@@ -82,14 +82,6 @@ BlockIO executeQuery(
     bool allow_processors /// If can use processors pipeline
 );
 
-/// Get target server for a query, can be localhost
-HostWithPorts getTargetServer(ContextPtr context, ASTPtr & ast);
-
-/// Execute the query on the target server.
-void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server, const ASTPtr & ast, BlockIO & res);
-
-bool isAsyncMode(ContextMutablePtr context);
-
 void executeHttpQueryInAsyncMode(
     BlockIO s,
     ASTPtr ast,

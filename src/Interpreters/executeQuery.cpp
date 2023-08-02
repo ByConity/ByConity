@@ -1532,7 +1532,7 @@ void executeQuery(
 
     std::tie(ast, streams) = executeQueryImpl(begin, end, context, internal, QueryProcessingStage::Complete, may_have_tail, &istr);
 
-    if (!streams.out && isAsyncMode(context))
+    if (!streams.out && context->isAsyncMode())
     {
         executeHttpQueryInAsyncMode(std::move(streams), ast, context, ostr, output_format_settings, set_result_details);
         return;
@@ -1684,103 +1684,6 @@ void executeQuery(
     streams.onFinish();
 }
 
-HostWithPorts getTargetServer(ContextPtr context, ASTPtr & ast)
-{
-    /// Only get target server for main table
-    String database, table;
-
-    if (const auto * alter = ast->as<ASTAlterQuery>())
-    {
-        database = alter->database;
-        table = alter->table;
-    }
-    else if (const auto * select = ast->as<ASTSelectWithUnionQuery>())
-    {
-        ASTs tables;
-        bool has_table_func = false;
-        select->collectAllTables(tables, has_table_func);
-        if (!has_table_func && !tables.empty())
-        {
-            // simplily use the first table if there are multiple tables used
-            DatabaseAndTableWithAlias db_and_table(tables[0]);
-            LOG_DEBUG(
-                &Poco::Logger::get("executeQuery"),
-                "Extract db and table {}.{} from the query.",
-                db_and_table.database,
-                db_and_table.table);
-            database = db_and_table.database;
-            table = db_and_table.table;
-        }
-        else
-            return {};
-    }
-    else
-        return {};
-
-    if (database.empty())
-        database = context->getCurrentDatabase();
-
-    if (database == "system")
-        return {};
-
-    auto table_id = context->getCnchCatalog()->getTableIDByName(database, table);
-    if (!table_id)
-        throw Exception("Table " + database + "." + table + " not found in catalog", ErrorCodes::UNKNOWN_TABLE);
-
-    auto topology_master = context->getCnchTopologyMaster();
-    auto storage = context->getCnchCatalog()->getTable(*context, database, table, TxnTimestamp::maxTS());
-    return topology_master->getTargetServer(table_id->uuid(), storage->getServerVwName(), context->getTimestamp(), false);
-}
-
-void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server, const ASTPtr & ast, BlockIO & res)
-{
-    // Todo: support explicit transaction
-    res.finish_callback = [&](IBlockInputStream *, IBlockOutputStream *, QueryPipeline *, UInt64) {
-        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query success on remote server");
-    };
-    res.exception_callback = [&](int) { LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query failed on remote server"); };
-
-    /// Create connection to host
-    const auto & query_client_info = context->getClientInfo();
-    auto settings = context->getSettingsRef();
-    res.remote_execution_conn = std::make_shared<Connection>(
-        server.getHost(),
-        server.tcp_port,
-        context->getCurrentDatabase(), /*default_database_*/
-        query_client_info.current_user,
-        query_client_info.current_password,
-        "", /*cluster_*/
-        "", /*cluster_secret*/
-        "server", /*client_name_*/
-        Protocol::Compression::Enable,
-        Protocol::Secure::Disable);
-
-    String query = queryToString(ast);
-    LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Sending query as ordinary query");
-    Block header;
-    if (ast->as<ASTSelectWithUnionQuery>())
-        header = InterpreterSelectWithUnionQuery(ast, context, SelectQueryOptions(QueryProcessingStage::Complete)).getSampleBlock();
-    Pipes remote_pipes;
-    auto remote_query_executor = std::make_shared<RemoteQueryExecutor>(*res.remote_execution_conn, query, header, context);
-    remote_query_executor->setPoolMode(PoolMode::GET_ONE);
-    remote_pipes.emplace_back(createRemoteSourcePipe(remote_query_executor, true, false, false, true));
-    remote_pipes.back().addInterpreterContext(context);
-
-    auto plan = std::make_unique<QueryPlan>();
-    auto read_from_remote = std::make_unique<ReadFromPreparedSource>(Pipe::unitePipes(std::move(remote_pipes)));
-    read_from_remote->setStepDescription("Read from remote server");
-    plan->addStep(std::move(read_from_remote));
-    res.pipeline = std::move(
-        *plan->buildQueryPipeline(QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context)));
-    res.pipeline.addInterpreterContext(context);
-}
-
-bool isAsyncMode(ContextMutablePtr context)
-{
-    return context->getClientInfo().query_kind == ClientInfo::QueryKind::INITIAL_QUERY
-        && context->getServerType() == ServerType::cnch_server && context->getSettings().enable_async_execution;
-}
-
 void updateAsyncQueryStatus(
     ContextMutablePtr context,
     const String & async_query_id,
@@ -1827,9 +1730,18 @@ void executeHttpQueryInAsyncMode(
         std::move(s),
         ast,
         c,
-        ostr,
-        f,
-        [](BlockIO streams, ASTPtr ast, ContextMutablePtr context, const std::optional<FormatSettings> & output_format_settings) {
+        [c, &ostr, &f](const String & id) {
+            MutableColumnPtr table_column_mut = ColumnString::create();
+            table_column_mut->insert(id);
+            Block res;
+            res.insert(ColumnWithTypeAndName(std::move(table_column_mut), std::make_shared<DataTypeString>(), "async_query_id"));
+
+            auto out = FormatFactory::instance().getOutputFormatParallelIfPossible(c->getDefaultFormat(), ostr, res, c, {}, f);
+
+            out->write(res);
+            out->flush();
+        },
+        [f](BlockIO streams, ASTPtr ast, ContextMutablePtr context) {
             auto & pipeline = streams.pipeline;
             try
             {
@@ -1877,7 +1789,7 @@ void executeHttpQueryInAsyncMode(
                         : context->getDefaultFormat();
 
                     BlockOutputStreamPtr out = write_to_hdfs ? FormatFactory::instance().getOutputStreamParallelIfPossible(
-                                                   format_name, *out_buf, streams.in->getHeader(), context, {}, output_format_settings)
+                                                   format_name, *out_buf, streams.in->getHeader(), context, {}, f)
                                                              : std::make_shared<NullBlockOutputStream>(Block{});
 
                     copyData(
@@ -1901,7 +1813,7 @@ void executeHttpQueryInAsyncMode(
                         pipeline.addSimpleTransform([](const Block & header) { return std::make_shared<MaterializingTransform>(header); });
 
                         auto out = FormatFactory::instance().getOutputFormatParallelIfPossible(
-                            "Null", *new WriteBuffer(nullptr, 0), pipeline.getHeader(), context, {}, output_format_settings);
+                            "Null", *new WriteBuffer(nullptr, 0), pipeline.getHeader(), context, {}, f);
 
                         pipeline.setOutputFormat(std::move(out));
                     }
