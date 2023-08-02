@@ -146,7 +146,8 @@ function(protobuf_generate)
   else()
     set(_protobuf_include_path -I ${CMAKE_CURRENT_SOURCE_DIR})
   endif()
-
+  list(APPEND _protobuf_include_path -I ${ClickHouse_SOURCE_DIR}/contrib/protobuf/src)
+  
   foreach(DIR ${protobuf_generate_IMPORT_DIRS})
     get_filename_component(ABS_PATH ${DIR} ABSOLUTE)
     list(FIND _protobuf_include_path ${ABS_PATH} _contains_already)

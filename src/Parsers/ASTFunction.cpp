@@ -36,7 +36,7 @@
 #include <Parsers/ASTSubquery.h>
 #include <Parsers/ASTWithAlias.h>
 #include <Parsers/ASTSerDerHelper.h>
-
+#include <Parsers/queryToString.h>
 
 namespace DB
 {
@@ -44,6 +44,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int UNEXPECTED_EXPRESSION;
+    extern const int UNEXPECTED_AST_STRUCTURE;
 }
 
 void ASTFunction::appendColumnNameImpl(WriteBuffer & ostr) const
@@ -187,6 +188,55 @@ ASTPtr ASTFunction::toLiteral() const
         return createLiteral<Tuple>(arguments->children);
 
     return {};
+}
+
+// Function name for UDF is
+// "database_name"."function_name#function_version"
+static String resolveFunctionName(const String &db_name, const String &name, const uint64_t &version) {
+
+    size_t db_separator = name.find_last_of('.');
+    size_t version_separator = name.find_last_of('#');
+    size_t start = 0, end = name.length();
+    if (db_separator != String::npos) {
+        start = db_separator + 1;
+    }
+
+    if ((version_separator != String::npos &&
+        (db_separator == String::npos || version_separator > db_separator))) {
+        end = version_separator;
+    } else {
+        version_separator = String::npos;
+    }
+
+    String resolved_name(name, start, end-start);
+    uint64_t v = version;
+
+    if (v == 0 && version_separator != String::npos) {
+        v = strtoul(name.c_str() + version_separator + 1, nullptr, 10);
+    }
+
+    if (v) {
+        resolved_name = "`" + resolved_name + "#" + std::to_string(v) + "`";
+    }
+
+    String db = db_name;
+
+    if (db.empty() && db_separator != String::npos) {
+        db.assign(name, 0, db_separator);
+    }
+
+    if (!db.empty()) {
+        char separator = '`';
+        for (const char & c : db) {
+            if (c == '`') {
+                separator = '"';
+                break;
+            }
+        }
+        resolved_name = separator + db + separator + "." + resolved_name;
+    }
+
+    return resolved_name;
 }
 
 
@@ -567,7 +617,8 @@ void ASTFunction::formatImplWithoutAlias(const FormatSettings & settings, Format
         return finishFormatWithWindow(settings, state, frame);
     }
 
-    settings.ostr << (settings.hilite ? hilite_function : "") << name;
+    const String resolved_name = resolveFunctionName(database, name, version);
+    settings.ostr << (settings.hilite ? hilite_function : "") << resolved_name;
 
     if (parameters)
     {
@@ -612,6 +663,8 @@ void ASTFunction::serialize(WriteBuffer & buf) const
     ASTWithAlias::serialize(buf);
 
     writeBinary(name, buf);
+    writeBinary(database, buf);
+    writeBinary(std::to_string(version), buf);
     serializeAST(arguments, buf);
     serializeAST(parameters, buf);
     writeBinary(is_window_function, buf);
@@ -625,6 +678,10 @@ void ASTFunction::deserializeImpl(ReadBuffer & buf)
     ASTWithAlias::deserializeImpl(buf);
 
     readBinary(name, buf);
+    readBinary(database, buf);
+    String ver;
+    readBinary(ver, buf);
+    version = std::stoull(ver);
     arguments = deserializeASTWithChildren(children, buf);
     parameters = deserializeASTWithChildren(children, buf);
     readBinary(is_window_function, buf);
@@ -638,6 +695,35 @@ ASTPtr ASTFunction::deserialize(ReadBuffer & buf)
     auto function = std::make_shared<ASTFunction>();
     function->deserializeImpl(buf);
     return function;
+}
+
+String resolveFunctionName(const IAST * ast)
+{
+    String res;
+    if (tryGetFunctionNameInto(ast, res))
+        return res;
+    throw Exception(ast ? queryToString(*ast) + " is not an function" : "AST node is nullptr", ErrorCodes::UNEXPECTED_AST_STRUCTURE);
+}
+
+std::optional<String> tryGetFunctionName(const IAST * ast)
+{
+    String res;
+    if (tryGetFunctionNameInto(ast, res))
+        return res;
+    return {};
+}
+
+bool tryGetFunctionNameInto(const IAST * ast, String & name)
+{
+    if (ast)
+    {
+        if (const auto * node = ast->as<ASTFunction>())
+        {
+            name = node->name;
+            return true;
+        }
+    }
+    return false;
 }
 
 }

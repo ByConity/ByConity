@@ -857,6 +857,7 @@ class IColumn;
       "keyword. It's also useful to reduce the need to access the external sources joining external tables.", \
       0) \
     M(Bool, enable_query_cache, false, "Whether to enable query cache", 0) \
+    M(UInt64, udf_ddl_pool_size, 16, "Number of threads for creating/dropping udf", 0) \
     M(UInt64, connection_check_pool_size, 16, "Number of thread for connection check", 0) \
     M(Bool, \
       query_worker_fault_tolerance, \

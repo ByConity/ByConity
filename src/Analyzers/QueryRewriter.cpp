@@ -22,6 +22,8 @@
 #include <Analyzers/ReplaceViewWithSubqueryVisitor.h>
 #include <Analyzers/SimpleFunctionVisitor.h>
 #include <Analyzers/RewriteAliasesVisitor.h>
+#include <Functions/UserDefined/UserDefinedSQLFunctionFactory.h>
+#include <Functions/UserDefined/UserDefinedSQLFunctionVisitor.h>
 #include <Interpreters/ApplyWithAliasVisitor.h>
 #include <Interpreters/ApplyWithSubqueryVisitor.h>
 #include <Interpreters/CollectJoinOnKeysVisitor.h>
@@ -197,6 +199,16 @@ namespace
     {
         if (context->getSettingsRef().rewrite_like_function)
             SimpleFunctionVisitor().visit(query);
+    }
+
+    void expandUdf(ASTPtr & query, ContextMutablePtr context, int & graphviz_index)
+    {
+        if (!UserDefinedSQLFunctionFactory::instance().empty())
+        {
+            UserDefinedSQLFunctionVisitor::Data data_user_defined_functions_visitor{WithContext{context}};
+            UserDefinedSQLFunctionVisitor(data_user_defined_functions_visitor).visit(query);
+            GraphvizPrinter::printAST(query, context, std::to_string(graphviz_index++) + "-AST-expand-udf");
+        }
     }
 
     void expandView(ASTPtr & query, ContextMutablePtr context, int & graphviz_index)
@@ -537,6 +549,7 @@ ASTPtr QueryRewriter::rewrite(ASTPtr query, ContextMutablePtr context, bool enab
         rewriteInTableExpression(query);
         normalizeFunctions(query, context, graphviz_index);
         implementFunctions(query, context, graphviz_index);
+        expandUdf(query, context, graphviz_index);
     }
     else
     {
@@ -546,6 +559,7 @@ ASTPtr QueryRewriter::rewrite(ASTPtr query, ContextMutablePtr context, bool enab
         normalizeUnion(query, context);
         simpleFunctions(query, context);
 
+        expandUdf(query, context, graphviz_index);
         markTupleLiteralsAsLegacy(query, context);
 
         // select query level rewriter, top down rewrite each subquery.

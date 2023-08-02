@@ -130,6 +130,8 @@
 #include <Storages/System/StorageSystemVirtualWarehouses.h>
 #include <Storages/System/StorageSystemCnchTableHost.h>
 
+#include <Storages/System/StorageSystemCnchUDF.h>
+
 namespace DB
 {
 
@@ -245,6 +247,7 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
     attach<StorageSystemCnchTableHost>(system_database, "cnch_table_host");
     attach<StorageSystemCnchDedupWorkers>(system_database, "cnch_dedup_workers");
     attach<StorageSystemCnchAsyncQueries>(system_database, "cnch_async_queries");
+    attach<StorageSystemCnchUDF>(system_database, "cnch_user_defined_functions");
 }
 
 void attachSystemTablesAsync(IDatabase & system_database, AsynchronousMetrics & async_metrics)

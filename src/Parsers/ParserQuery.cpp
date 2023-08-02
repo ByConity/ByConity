@@ -47,7 +47,8 @@
 #include <Parsers/ParserUseQuery.h>
 #include <Parsers/ParserExternalDDLQuery.h>
 #include <Parsers/ParserUpdateQuery.h>
-
+#include <Parsers/ParserDropFunctionQuery.h>
+#include <Parsers/ParserCreateFunctionQuery.h>
 
 namespace DB
 {
@@ -65,6 +66,8 @@ bool ParserQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserCreateQuotaQuery create_quota_p;
     ParserCreateRowPolicyQuery create_row_policy_p(dt);
     ParserCreateSettingsProfileQuery create_settings_profile_p;
+    ParserCreateFunctionQuery create_function_p;
+    ParserDropFunctionQuery drop_function_p;
     ParserDropAccessEntityQuery drop_access_entity_p;
     ParserGrantQuery grant_p;
     ParserSetRoleQuery set_role_p;
@@ -89,6 +92,8 @@ bool ParserQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         || create_quota_p.parse(pos, node, expected)
         || create_row_policy_p.parse(pos, node, expected)
         || create_settings_profile_p.parse(pos, node, expected)
+        || create_function_p.parse(pos, node, expected)
+        || drop_function_p.parse(pos, node, expected)
         || drop_access_entity_p.parse(pos, node, expected)
         || grant_p.parse(pos, node, expected)
         || external_ddl_p.parse(pos, node, expected)

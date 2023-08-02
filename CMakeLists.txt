@@ -170,6 +170,7 @@ endif ()
 # If turned `ON`, assumes the user has either the system GTest library or the bundled one.
 option(ENABLE_TESTS "Provide unit_test_dbms target with Google.Test unit tests" ON)
 option(ENABLE_EXAMPLES "Build all example programs in 'examples' subdirectories" OFF)
+option(ENABLE_PYUDF "Enables Python UDF Server" OFF)
 
 if (OS_LINUX AND (ARCH_AMD64 OR ARCH_AARCH64) AND NOT UNBUNDLED AND MAKE_STATIC_LIBRARIES AND NOT SPLIT_SHARED_LIBRARIES AND CMAKE_VERSION VERSION_GREATER "3.9.0")
     # Only for Linux, x86_64 or aarch64.
@@ -616,7 +617,7 @@ macro (add_executable target)
     endif ()
 
     get_target_property (type ${target} TYPE)
-    if (${type} STREQUAL EXECUTABLE)
+    if (${type} STREQUAL EXECUTABLE AND NOT ${ARGV1} STREQUAL "IMPORTED")
         # disabled for TSAN and gcc since libtsan.a provides overrides too
         if (TARGET clickhouse_new_delete)
             # operator::new/delete for executables (MemoryTracker stuff)

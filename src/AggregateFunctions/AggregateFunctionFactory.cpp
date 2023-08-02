@@ -19,7 +19,7 @@
 #include <Poco/String.h>
 
 #include <Functions/FunctionFactory.h>
-
+#include <Functions/UserDefined/UserDefinedExternalFunctionFactory.h>
 
 namespace DB
 {
@@ -176,7 +176,10 @@ AggregateFunctionPtr AggregateFunctionFactory::getImpl(
         AggregateFunctionPtr nested_function = get(nested_name, nested_types, nested_parameters, out_properties);
         return combinator->transformAggregateFunction(nested_function, out_properties, argument_types, parameters);
     }
-
+    auto udaf = UserDefinedExternalFunctionFactory::instance().tryGet(name, argument_types, parameters);
+    if (udaf)
+        return udaf;
+    
 
     String extra_info;
     if (FunctionFactory::instance().hasNameOrAlias(name))
@@ -251,6 +254,9 @@ bool AggregateFunctionFactory::isAggregateFunctionName(const String & name) cons
     if (case_insensitive_aggregate_functions.count(name_lowercase) || isAlias(name_lowercase))
         return true;
 
+    if (UserDefinedExternalFunctionFactory::instance().has(name, UDFFunctionType::Aggregate))
+        return true;
+        
     if (AggregateFunctionCombinatorPtr combinator = AggregateFunctionCombinatorFactory::instance().tryFindSuffix(name))
         return isAggregateFunctionName(name.substr(0, name.size() - combinator->getName().size()));
 
