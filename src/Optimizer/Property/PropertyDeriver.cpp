@@ -56,16 +56,7 @@ Property PropertyDeriver::deriveProperty(QueryPlanStepPtr step, PropertySet & in
 {
     DeriverContext deriver_context{input_properties, context};
     static DeriverVisitor visitor{};
-    auto result = VisitorUtil::accept(step, visitor, deriver_context);
-
-    CTEDescriptions cte_descriptions;
-    for (auto & property : input_properties)
-        for (auto & item : property.getCTEDescriptions())
-            cte_descriptions.emplace(item);
-    if (!cte_descriptions.empty())
-        result.setCTEDescriptions(cte_descriptions);
-
-    return result;
+    return VisitorUtil::accept(step, visitor, deriver_context);
 }
 
 Property PropertyDeriver::deriveStorageProperty(const StoragePtr & storage, ContextMutablePtr & context)
@@ -516,16 +507,6 @@ Property DeriverVisitor::visitAssignUniqueIdStep(const AssignUniqueIdStep &, Der
 
 Property DeriverVisitor::visitCTERefStep(const CTERefStep &, DeriverContext &)
 {
-    //    // CTERefStep output property can not be determined locally, it has been determined globally,
-    //    //  Described in CTEDescription of property. If They don't match, we just ignore required property.
-    //    // eg, input required property: <Repartition[B], CTE(0)=Repartition[A]> don't match,
-    //    //    we ignore local required property Repartition[B] and prefer global property Repartition[A].
-    //    CTEId cte_id = step.getId();
-    //    Property cte_required_property = context.getRequiredProperty().getCTEDescriptions().at(cte_id).toProperty();
-    //
-    //    auto output_prop = cte_required_property.translate(step.getReverseOutputColumns());
-    //    output_prop.getCTEDescriptions().emplace(cte_id, cte_required_property);
-    //    return output_prop;
     throw Exception("CTERefStep is not supported", ErrorCodes::OPTIMIZER_NONSUPPORT);
 }
 

@@ -26,11 +26,6 @@ class PropertyDeterminer
 {
 public:
     static PropertySets determineRequiredProperty(QueryPlanStepPtr step, const Property & property);
-
-    static PropertySets determineRequiredProperty(
-        QueryPlanStepPtr step,
-        const Property & property,
-        const std::vector<std::unordered_set<CTEId>> & child_with_clause);
 };
 
 class DeterminerContext

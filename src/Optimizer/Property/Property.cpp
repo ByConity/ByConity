@@ -74,7 +74,7 @@ bool Partitioning::isPartitionOn(const Partitioning & requirement, const Constan
     {
         if (constants.contains(actual_column))
             continue ;
-        
+
         if (!required_columns_set.count(actual_column))
         {
             return false;
@@ -100,12 +100,12 @@ Partitioning Partitioning::normalize(const SymbolEquivalences & symbol_equivalen
 Partitioning Partitioning::translate(const std::unordered_map<String, String> & identities) const
 {
     Names translate_columns;
-    for (const auto & column : columns) 
+    for (const auto & column : columns)
     {
         if (identities.contains(column))
             translate_columns.emplace_back(identities.at(column));
         else // note: don't discard column
-            translate_columns.emplace_back(column); 
+            translate_columns.emplace_back(column);
     }
     return Partitioning{handle, translate_columns, require_handle, buckets, sharding_expr, enforce_round_robin};
 }
@@ -263,12 +263,15 @@ Constants Constants::normalize(const SymbolEquivalences & symbol_equivalences) c
 
 size_t CTEDescriptions::hash() const
 {
-    size_t hash = IntHash64Impl::apply(this->size());
-    for (const auto & item : *this)
+    size_t hash = IntHash64Impl::apply(cte_descriptions.size());
+    for (const auto & item : cte_descriptions)
     {
         hash = MurmurHash3Impl64::combineHashes(hash, IntHash64Impl::apply(item.first));
         hash = MurmurHash3Impl64::combineHashes(hash, item.second.hash());
     }
+    hash = MurmurHash3Impl64::combineHashes(hash, explored.size());
+    for (const auto & item : explored)
+        hash = MurmurHash3Impl64::combineHashes(hash, item);
     return hash;
 }
 
@@ -285,14 +288,19 @@ String CTEDescription::toString() const
 
 String CTEDescriptions::toString() const
 {
-    auto it = begin();
-    if (it == end())
+    if (explored.empty())
         return "";
+    size_t count = 0;
     std::stringstream output;
-    output << "CTE(" << it->first << ")=" << it->second.toString();
-    while (++it != end())
-        output << ","
-               << "CTE(" << it->first << ")=" << it->second.toString();
+    for (const auto & cte_id : explored)
+    {
+        if (count++ > 0)
+            output << " ";
+        if (cte_descriptions.contains(cte_id))
+            output << "CTE(" << cte_id << ")=" << cte_descriptions.at(cte_id).toString();
+        else
+            output << "CTE(" << cte_id << ")=inlined";
+    }
     return output.str();
 }
 
@@ -338,13 +346,18 @@ String Property::toString() const
     return output.str();
 }
 
-CTEDescriptions CTEDescriptions::filter(const std::unordered_set<CTEId> & allowed) const
+void CTEDescriptions::filter(const std::unordered_set<CTEId> & allowed)
 {
-    CTEDescriptions res;
-    for (const auto & item : *this)
-        if (allowed.count(item.first))
-            res.emplace(item);
-    return res;
+    std::map<CTEId, CTEDescription> filter_cte_descriptions;
+    std::set<CTEId> filter_explored;
+    for (const auto & item : cte_descriptions)
+        if (allowed.contains(item.first))
+            filter_cte_descriptions.emplace(item);
+    for (const auto & item : explored)
+        if (allowed.contains(item))
+            filter_explored.emplace(item);
+    cte_descriptions.swap(filter_cte_descriptions);
+    explored.swap(filter_explored);
 }
 
 size_t CTEDescription::hash() const
@@ -367,23 +380,18 @@ bool CTEDescription::operator==(const CTEDescription & other) const
 
 Property CTEDescription::createCTEDefGlobalProperty(const Property & property, CTEId cte_id)
 {
-    auto cte_description = property.getCTEDescriptions().at(cte_id);
+    if (!property.getCTEDescriptions().isShared(cte_id)) {
+        Property any;
+        any.setCTEDescriptions(property.getCTEDescriptions());
+        any.getCTEDescriptions().erase(cte_id);
+        return any;
+    }
+
+    const auto & cte_description = property.getCTEDescriptions().getSharedDescription(cte_id);
     // no need to translate.
     Property res{cte_description.node_partitioning, cte_description.stream_partitioning, cte_description.sorting};
     // copy other cte descriptions.
     res.setCTEDescriptions(property.getCTEDescriptions());
-    res.getCTEDescriptions().erase(cte_id);
-    return res;
-}
-
-Property
-CTEDescription::createCTEDefGlobalProperty(const Property & property, CTEId cte_id, const std::unordered_set<CTEId> & contains_cte_ids)
-{
-    auto cte_description = property.getCTEDescriptions().at(cte_id);
-    // no need to translate.
-    Property res{cte_description.node_partitioning, cte_description.stream_partitioning, cte_description.sorting};
-    // copy other cte descriptions.
-    res.setCTEDescriptions(property.getCTEDescriptions().filter(contains_cte_ids));
     res.getCTEDescriptions().erase(cte_id);
     return res;
 }
@@ -405,9 +413,17 @@ CTEDescription CTEDescription::translate(const std::unordered_map<String, String
 CTEDescriptions CTEDescriptions::translate(const std::unordered_map<String, String> & identities) const
 {
     CTEDescriptions result;
-    for (const auto & item : *this)
-        result.emplace(item.first, item.second.translate(identities));
+    for (const auto & item : cte_descriptions)
+        result.cte_descriptions.emplace(item.first, item.second.translate(identities));
+    for (const auto & item : explored)
+        result.explored.emplace(item);
     return result;
 }
+
+bool CTEDescriptions::operator==(const CTEDescriptions & rhs) const
+{
+    return cte_descriptions == rhs.cte_descriptions && explored == rhs.explored;
+}
+
 
 }

@@ -246,6 +246,7 @@ void OptimizeInput::execute()
             return;
         }
 
+        // Explore cte
         if (group_expr->getStep()->getType() == IQueryPlanStep::Type::CTERef)
         {
             const auto * const cte_step = dynamic_cast<const CTERefStep *>(group_expr->getStep().get());
@@ -253,16 +254,21 @@ void OptimizeInput::execute()
             auto cte_def_group = context->getMemo().getCTEDefGroupByCTEId(cte_id);
 
             // 1. Check whether request property for this group_expr is invalid.
-            if (!context->getRequiredProp().getCTEDescriptions().contains(cte_id))
+            if (context->getRequiredProp().getCTEDescriptions().contains(cte_id)
+                && !context->getRequiredProp().getCTEDescriptions().isShared(cte_id))
                 return;
+
+            // 1-1. CTE may have not been explored in common ancestor if it is reference only once.
+            if (!context->getRequiredProp().getCTEDescriptions().contains(cte_id))
+                cte_common_ancestor.emplace(cte_id);
 
             // 2. CTERefStep output property can not be determined locally, it has been determined globally,
             //  Described in CTEDescription of property. If They don't match, we just ignore required property.
             // eg, input required property: <Repartition[B], CTE(0)=Repartition[A]> don't match,
             //    we ignore local required property Repartition[B] and prefer global property Repartition[A]
             // see more DeriverVisitor::visitCTERefStep
-            // 2-1. if CTEDef group hasn't been optimized for global determined property, we submit it here.
             auto cte_description_property = CTEDescription::createCTEDefGlobalProperty(context->getRequiredProp(), cte_id);
+            // 2-1. if CTEDef group hasn't been optimized for global determined property, we submit it here.
             if (!cte_def_group->hasWinner(cte_description_property))
             {
                 if (wait_cte_optimization)
@@ -275,18 +281,27 @@ void OptimizeInput::execute()
                 return;
             }
 
-            // 2-2. We save local required property, as we could re-optimize cte common property later.
+            // 3. We save local required property, as we could re-optimize cte common property later.
             auto local_required_property
                 = CTEDescription::createCTEDefLocalProperty(context->getRequiredProp(), cte_id, cte_step->getOutputColumns());
             context->getOptimizerContext().getCTEDefPropertyRequirements()[cte_id].emplace(local_required_property);
         }
 
         // Calc the CTEs that the children contains
+        std::unordered_set<CTEId> visited_cte;
         for (auto child_group_id : group_expr->getChildrenGroups())
-            input_cte_ids.emplace_back(context->getMemo().getGroupById(child_group_id)->getCTESet());
+        {
+            const auto & cte_set = context->getMemo().getGroupById(child_group_id)->getCTESet();
+            input_cte_ids.emplace_back(cte_set);
+
+            // Check Whether this group is common ancestor of cte.
+            for (const auto & cte_id : cte_set)
+                if (!visited_cte.emplace(cte_id).second && !context->getRequiredProp().getCTEDescriptions().contains(cte_id))
+                    cte_common_ancestor.emplace(cte_id);
+        }
 
         // Derive input properties
-        exploreInputProperties();
+        initInputProperties();
 
         cur_child_idx = 0;
     }
@@ -362,13 +377,18 @@ void OptimizeInput::execute()
         if (cur_child_idx == static_cast<int>(group_expr->getChildrenGroups().size()))
         {
             PropertySet actual_input_props;
+            std::map<CTEId, std::pair<Property, double>> cte_actual_props;
             bool all_fix_hash = true;
             for (size_t index = 0; index < group_expr->getChildrenGroups().size(); index++)
             {
                 auto & i_prop = input_props[index];
                 auto child_group = context->getOptimizerContext().getMemo().getGroupById(group_expr->getChildrenGroups()[index]);
                 auto child_best_expr = child_group->getBestExpression(i_prop);
+
                 actual_input_props.emplace_back(child_best_expr->getActualProperty());
+                for (const auto & item : child_best_expr->getCTEActualProperties())
+                    cte_actual_props.emplace(item);
+
                 all_fix_hash &= i_prop.getNodePartitioning().getPartitioningHandle() == Partitioning::Handle::FIXED_HASH;
             }
 
@@ -454,7 +474,7 @@ void OptimizeInput::execute()
                 auto cte_global_property = CTEDescription::createCTEDefGlobalProperty(context->getRequiredProp(), cte_id);
                 auto cte_def_best_expr = cte_def_group->getBestExpression(cte_global_property);
                 output_prop = cte_def_best_expr->getActualProperty().translate(cte_step->getReverseOutputColumns());
-                output_prop.getCTEDescriptions().emplace(cte_id, cte_global_property);
+                cte_actual_props.emplace(cte_id, std::make_pair(cte_global_property, cte_def_best_expr->getCost()));
             }
             else
             {
@@ -516,33 +536,17 @@ void OptimizeInput::execute()
             }
 
             // Add cost for cte
-            for (auto & cte : actual.getCTEDescriptions())
+            std::vector<CTEId> cte_ancestor;
+            for (const auto & cte_id : cte_common_ancestor)
             {
-                CTEId cte_id = cte.first;
-                if (!require.getCTEDescriptions().contains(cte_id))
-                {
-                    bool contains = std::any_of(input_props.begin(), input_props.end(), [&](const Property & prop) {
-                        return prop.getCTEDescriptions().contains(cte_id);
-                    });
-                    // if cte don't exist in required property but exists both in input_props and actual, we add the cost of cte plan.
-                    if (contains)
-                    {
-                        auto cte_def_group = context->getOptimizerContext().getMemo().getCTEDefGroupByCTEId(cte_id);
-                        auto cte_global_property = CTEDescription::createCTEDefGlobalProperty(actual, cte_id, cte_def_group->getCTESet());
-                        auto cte_best_expr = cte_def_group->getBestExpression(cte_global_property);
-                        double cost = cte_best_expr->getCost();
-
-                        // todo: remove this, add cost for join build side. dirty hack for cte.
-                        if (group_expr->getStep()->getType() == IQueryPlanStep::Type::Join)
-                        {
-                            cost *= context->getOptimizerContext()
-                                        .getContext()
-                                        ->getSettingsRef()
-                                        .cost_calculator_cte_weight_for_join_build_side;
-                        }
-                        cur_total_cost += cost;
-                    }
-                }
+                if (!cte_actual_props.contains(cte_id))
+                    continue; // cte is inlined
+                cte_ancestor.emplace_back(cte_id);
+                double cost = cte_actual_props.at(cte_id).second;
+                // todo: remove this, add cost for join build side. dirty hack for cte.
+                if (group_expr->getStep()->getType() == IQueryPlanStep::Type::Join)
+                    cost *= context->getOptimizerContext().getContext()->getSettingsRef().cost_calculator_cte_weight_for_join_build_side;
+                cur_total_cost += cost;
             }
 
             // todo mt prune
@@ -558,7 +562,8 @@ void OptimizeInput::execute()
 
             actual = actual.normalize(*equivalences);
             cur_group->setExpressionCost(
-                std::make_shared<Winner>(group_expr, remote_exchange, local_exchange, input_props, actual, cur_total_cost),
+                std::make_shared<Winner>(
+                    group_expr, remote_exchange, local_exchange, input_props, actual, cur_total_cost, cte_actual_props, cte_ancestor),
                 context->getRequiredProp());
         }
 
@@ -581,77 +586,65 @@ void OptimizeInput::execute()
                     .getGroupById(group_expr->getGroupId())
                     ->setExpressionCost(
                         std::make_shared<Winner>(
-                            nullptr, nullptr, nullptr, input_props, context->getRequiredProp(), context->getCostUpperBound() + 1),
+                            nullptr, nullptr, nullptr, input_props, context->getRequiredProp(), context->getCostUpperBound() + 1,
+                            std::map<CTEId, std::pair<Property, double>>{}, std::vector<CTEId>{}),
                         context->getRequiredProp());
             }
         }
     }
 }
 
-void OptimizeInput::exploreInputProperties()
+void OptimizeInput::initInputProperties()
 {
     // initialize input properties with default required property.
-    if (input_properties.empty())
+    auto required_properties = PropertyDeterminer::determineRequiredProperty(group_expr->getStep(), context->getRequiredProp());
+    for (auto & properties : required_properties)
     {
-        explored_properties.emplace_back(context->getRequiredProp());
-        input_properties = PropertyDeterminer::determineRequiredProperty(group_expr->getStep(), context->getRequiredProp(), input_cte_ids);
-    }
-
-    // explore cte properties.
-    if (input_cte_ids.size() > 1 && !is_cte_property_enumerated)
-    {
-        std::map<CTEId, size_t> cte_id_counts; // use map ensure that the optimization order.
-        for (auto & cte_ids : input_cte_ids)
-            for (auto cte_id : cte_ids)
-                ++cte_id_counts[cte_id];
-
-        for (auto & item : cte_id_counts)
+        for (size_t i = 0; i < properties.size(); ++i)
         {
-            auto cte_id = item.first;
+            auto & cte_descriptions = properties[i].getCTEDescriptions();
+            cte_descriptions.registerCTE(cte_common_ancestor); // inline all cte
+            cte_descriptions.filter(input_cte_ids[i]);
+        }
+    }
+    input_properties = std::move(required_properties);
+}
 
-            // Check Whether this group is common ancestor of cte.
-            if (item.second < 2 || context->getRequiredProp().getCTEDescriptions().contains(cte_id))
-                continue;
-
-            // If there is no statistics or config `enable_cte_no_statistics` is not set, we don't explore share cte.
-            // if (!context->getOptimizerContext().getContext().getSettingsRef().enable_cte_no_statistics)
-            // {
-            //     auto cte_def_group = context->getOptimizerContext().getMemo().getCTEDefGroupByCTEId(cte_id);
-            //     if (!cte_def_group->getStatistics())
-            //         continue;
-            // }
-
-            // Explore shared cte as input properties requirements.
-            auto & cte_def_required_properties = context->getOptimizerContext().getCTEDefPropertyRequirements()[cte_id];
-            if (cte_def_required_properties.empty())
+void OptimizeInput::exploreInputProperties()
+{
+    // explore shared cte as input properties requirements.
+    for (const auto & cte_id : cte_common_ancestor)
+    {
+        auto & cte_def_required_properties = context->getOptimizerContext().getCTEDefPropertyRequirements()[cte_id];
+        if (!cte_def_required_properties.empty() && !cte_property_enumerated.contains(cte_id))
+        {
+            cte_property_enumerated.emplace(cte_id);
+            if (context->getOptimizerContext().getContext()->getSettingsRef().enable_cte_property_enum)
             {
-                // If we don't know any required property for CTEDef, we request ARBITRARY distribution.
-                // It allows the CTERefs to enforce any missing requirements if needed.
-                addInputPropertiesForCTE(cte_id, CTEDescription{});
+                // CTERef may require identical properties. These properties can be enforced in the CTEDef to
+                // avoid repeated work.
+                for (const auto & winner : cte_def_required_properties)
+                    addInputPropertiesForCTE(cte_id, CTEDescription{winner});
             }
-            else
+            if (context->getOptimizerContext().getContext()->getSettingsRef().enable_cte_common_property)
             {
-                if (context->getOptimizerContext().getContext()->getSettingsRef().enable_cte_property_enum)
-                {
-                    // CTERef may require identical properties. These properties can be enforced in the CTEDef to
-                    // avoid repeated work.
-                    for (auto & winner : cte_def_required_properties)
-                        addInputPropertiesForCTE(cte_id, CTEDescription{winner});
-                }
-                if (context->getOptimizerContext().getContext()->getSettingsRef().enable_cte_common_property)
-                {
-                    // It is too expensive to enumerate all possible properties, especially if there are lots CTERef.
-                    // We can only optimize for common property instead.
-                    auto common_property = PropertyMatcher::compatibleCommonRequiredProperty(cte_def_required_properties);
-                    addInputPropertiesForCTE(cte_id, CTEDescription{common_property});
-                }
-                is_cte_property_enumerated = true;
+                // It is too expensive to enumerate all possible properties, especially if there are lots CTERef.
+                // We can only optimize for common property instead.
+                auto common_property = PropertyMatcher::compatibleCommonRequiredProperty(cte_def_required_properties);
+                addInputPropertiesForCTE(cte_id, CTEDescription{common_property});
             }
+        }
+
+        if (explored_cte_properties[cte_id].empty())
+        {
+            // If we don't know any required property for CTEDef, we request ARBITRARY distribution.
+            // It allows the CTERefs to enforce any missing requirements if needed.
+            addInputPropertiesForCTE(cte_id, CTEDescription{});
         }
     }
 }
 
-void OptimizeInput::addInputPropertiesForCTE(size_t cte_id, CTEDescription cte_description)
+void OptimizeInput::addInputPropertiesForCTE(CTEId cte_id, CTEDescription cte_description)
 {
     //  bucket_table satisfy repartition requirement, we can't get the common property if we allow bucket table. see tpcds-q11.
     if (cte_description.getNodePartitioning().getPartitioningHandle() == Partitioning::Handle::FIXED_HASH)
@@ -661,20 +654,22 @@ void OptimizeInput::addInputPropertiesForCTE(size_t cte_id, CTEDescription cte_d
         return;
     explored_cte_properties[cte_id].emplace(cte_description);
 
-    std::vector<Property> new_properties;
-    for (auto & explored_property : explored_properties)
+    PropertySets new_properties;
+    for (auto & children_properties : input_properties)
     {
-        if (!explored_property.getCTEDescriptions().contains(cte_id))
-        {
-            auto new_property = explored_property;
-            new_property.getCTEDescriptions().emplace(cte_id, cte_description);
-            new_properties.emplace_back(new_property);
-            auto new_required_properties
-                = PropertyDeterminer::determineRequiredProperty(group_expr->getStep(), new_property, input_cte_ids);
-            input_properties.insert(input_properties.end(), new_required_properties.begin(), new_required_properties.end());
-        }
+        bool is_shared = std::any_of(children_properties.begin(), children_properties.end(), [&](const auto & property) {
+            return property.getCTEDescriptions().isShared(cte_id);
+        });
+        if (is_shared)
+            continue;
+
+        auto copy_children_properties = children_properties;
+        for (size_t i = 0; i < copy_children_properties.size(); i++)
+            if (input_cte_ids[i].contains(cte_id))
+                copy_children_properties[i].getCTEDescriptions().addSharedDescription(cte_id, cte_description);
+        new_properties.emplace_back(std::move(copy_children_properties));
     }
-    explored_properties.insert(explored_properties.end(), new_properties.begin(), new_properties.end());
+    input_properties.insert(input_properties.end(), new_properties.begin(), new_properties.end());
 }
 
 void OptimizerTask::pushTask(const OptimizerTaskPtr & task)

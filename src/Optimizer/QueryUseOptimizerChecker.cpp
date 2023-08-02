@@ -26,7 +26,6 @@
 #include <Parsers/ASTExplainQuery.h>
 #include <Parsers/ASTSelectIntersectExceptQuery.h>
 #include <Parsers/ASTWithElement.h>
-#include <QueryPlan/QueryPlan.h>
 #include <Storages/StorageDistributed.h>
 #include <Storages/StorageView.h>
 #include <Storages/StorageCnchHive.h>
@@ -34,22 +33,22 @@
 
 namespace DB
 {
-void changeDistributedStages(ASTPtr & node)
+static void changeDistributedStages(ASTPtr & node)
 {
     if (!node)
         return;
 
     if (auto * select = node->as<ASTSelectQuery>())
     {
-        auto & settings_ptr = select->settings();
+        const auto & settings_ptr = select->settings();
         if (!settings_ptr)
             return;
         auto & ast = settings_ptr->as<ASTSetQuery &>();
-        for (auto it = ast.changes.begin(); it != ast.changes.end(); ++it)
+        for (auto & change : ast.changes)
         {
-            if (it->name == "enable_distributed_stages")
+            if (change.name == "enable_distributed_stages")
             {
-                it->value = Field(false);
+                change.value = Field(false);
                 return;
             }
         }
@@ -60,6 +59,7 @@ void changeDistributedStages(ASTPtr & node)
             changeDistributedStages(child);
     }
 }
+
 void turnOffOptimizer(ContextMutablePtr context, ASTPtr & node)
 {
     SettingsChanges setting_changes;
@@ -70,7 +70,39 @@ void turnOffOptimizer(ContextMutablePtr context, ASTPtr & node)
     changeDistributedStages(node);
 }
 
-bool QueryUseOptimizerChecker::check(ASTPtr & node, const ContextMutablePtr & context, bool use_distributed_stages)
+static bool checkDatabaseAndTable(String database_name, String table_name, ContextMutablePtr context, const NameSet & ctes)
+{
+    /// not with table
+    if (database_name.empty() && ctes.contains(table_name))
+        return true;
+
+    /// If the database is not specified - use the current database.
+    auto table_id = context->tryResolveStorageID(StorageID(database_name, table_name));
+    auto storage_table = DatabaseCatalog::instance().tryGetTable(table_id, context);
+    if (database_name.empty() && !storage_table)
+        database_name = context->getCurrentDatabase();
+
+    if (!storage_table)
+        return false;
+
+    if (database_name == "system")
+        return true;
+
+    if (dynamic_cast<const StorageView *>(storage_table.get()))
+    {
+        auto table_metadata_snapshot = storage_table->getInMemoryMetadataPtr();
+        auto subquery = table_metadata_snapshot->getSelectQuery().inner_query;
+
+        QueryUseOptimizerVisitor checker;
+        QueryUseOptimizerContext check_context {.context = context};
+        return ASTVisitorUtil::accept(subquery, checker, check_context);
+    }
+
+    return dynamic_cast<const MergeTreeMetaBase *>(storage_table.get()) || dynamic_cast<const StorageCnchHive *>(storage_table.get())
+        || dynamic_cast<const StorageMaterializedView *>(storage_table.get()) || dynamic_cast<const IStorageCnchFile *>(storage_table.get());
+}
+
+bool QueryUseOptimizerChecker::check(ASTPtr node, ContextMutablePtr context, bool insert_select_from_table)
 {
     if (!node || (!context->getSettingsRef().enable_optimizer && !use_distributed_stages))
     {
@@ -113,12 +145,11 @@ bool QueryUseOptimizerChecker::check(ASTPtr & node, const ContextMutablePtr & co
         // disable system query, array join, table function, no merge tree table
         NameSet with_tables;
 
-        QueryUseOptimizerContext query_with_plan_context{
-            .context = context, .with_tables = with_tables, .external_tables = context->getExternalTables()};
         QueryUseOptimizerVisitor checker;
+        QueryUseOptimizerContext check_context{.context = context};
         try
         {
-            support = ASTVisitorUtil::accept(node, checker, query_with_plan_context);
+            support = ASTVisitorUtil::accept(node, checker, check_context);
         }
         catch (Exception &)
         {
@@ -133,7 +164,7 @@ bool QueryUseOptimizerChecker::check(ASTPtr & node, const ContextMutablePtr & co
             QuerySupportOptimizerVisitor support_checker;
             try
             {
-                support = ASTVisitorUtil::accept(node, support_checker, query_with_plan_context);
+                support = ASTVisitorUtil::accept(node, support_checker, context);
             }
             catch (Exception &)
             {
@@ -166,49 +197,19 @@ bool QueryUseOptimizerVisitor::visitNode(ASTPtr & node, QueryUseOptimizerContext
 }
 
 static bool
-checkDatabaseAndTable(const ASTTableExpression & table_expression, const ContextMutablePtr & context, const NameSet & with_tables)
+checkDatabaseAndTable(const ASTTableExpression & table_expression, const ContextMutablePtr & context, const NameSet & ctes)
 {
     if (table_expression.database_and_table_name)
     {
         auto db_and_table = DatabaseAndTableWithAlias(table_expression.database_and_table_name);
-
-        auto table_name = db_and_table.table;
-        auto database_name = db_and_table.database;
-
-        /// not with table
-        if (!(database_name.empty() && with_tables.find(table_name) != with_tables.end()))
-        {
-            /// If the database is not specified - use the current database.
-            auto table_id = context->tryResolveStorageID(table_expression.database_and_table_name);
-            auto storage_table = DatabaseCatalog::instance().tryGetTable(table_id, context);
-            if (database_name.empty() && !storage_table)
-                database_name = context->getCurrentDatabase();
-
-            if (!storage_table)
-                return false;
-
-            if (database_name == "system")
-                return true;
-
-            if (dynamic_cast<const StorageView *>(storage_table.get()))
-            {
-                auto table_metadata_snapshot = storage_table->getInMemoryMetadataPtr();
-                auto subquery = table_metadata_snapshot->getSelectQuery().inner_query->clone();
-                return QueryUseOptimizerChecker::check(subquery, context);
-            }
-
-            if (!dynamic_cast<const MergeTreeMetaBase *>(storage_table.get())
-                && !dynamic_cast<const StorageCnchHive *>(storage_table.get()))
-                return false;
-        }
+        return checkDatabaseAndTable(db_and_table.database, db_and_table.table, context, ctes);
     }
     return true;
 }
 
-bool QueryUseOptimizerVisitor::visitASTSelectQuery(ASTPtr & node, QueryUseOptimizerContext & query_with_plan_context)
+bool QueryUseOptimizerVisitor::visitASTSelectQuery(ASTPtr & node, QueryUseOptimizerContext & context)
 {
     auto * select = node->as<ASTSelectQuery>();
-    const ContextMutablePtr & context = query_with_plan_context.context;
 
     if (select->group_by_with_totals)
     {
@@ -216,12 +217,12 @@ bool QueryUseOptimizerVisitor::visitASTSelectQuery(ASTPtr & node, QueryUseOptimi
         return false;
     }
 
-    NameSet old_with_tables = query_with_plan_context.with_tables;
-    collectWithTableNames(*select, query_with_plan_context.with_tables);
+    QueryUseOptimizerContext child_context {.context = context.context, .ctes = context.ctes};
+    collectWithTableNames(*select, child_context.ctes);
 
     for (const auto * table_expression : getTableExpressions(*select))
     {
-        if (!checkDatabaseAndTable(*table_expression, context, query_with_plan_context.with_tables))
+        if (!checkDatabaseAndTable(*table_expression, child_context.context, child_context.ctes))
         {
             reason = "unsupported storage";
             return false;
@@ -233,25 +234,23 @@ bool QueryUseOptimizerVisitor::visitASTSelectQuery(ASTPtr & node, QueryUseOptimi
         }
     }
 
-    bool result = visitNode(node, query_with_plan_context);
-    query_with_plan_context.with_tables = std::move(old_with_tables);
-    return result;
+    return visitNode(node, child_context);
 }
 
-bool QueryUseOptimizerVisitor::visitASTTableJoin(ASTPtr & node, QueryUseOptimizerContext & query_with_plan_context)
+bool QueryUseOptimizerVisitor::visitASTTableJoin(ASTPtr & node, QueryUseOptimizerContext & context)
 {
-    return visitNode(node, query_with_plan_context);
+    return visitNode(node, context);
 }
 
 bool QueryUseOptimizerVisitor::visitASTIdentifier(ASTPtr & node, QueryUseOptimizerContext & context)
 {
-    bool support = !context.external_tables.contains(node->as<ASTIdentifier>()->name());
+    bool support = !context.context->getExternalTables().contains(node->as<ASTIdentifier>()->name());
     if (!support)
         reason = "external table";
     return support;
 }
 
-bool QueryUseOptimizerVisitor::visitASTFunction(ASTPtr & node, QueryUseOptimizerContext & query_with_plan_context)
+bool QueryUseOptimizerVisitor::visitASTFunction(ASTPtr & node, QueryUseOptimizerContext & context)
 {
     auto & fun = node->as<ASTFunction &>();
     if (fun.name == "untuple")
@@ -265,19 +264,19 @@ bool QueryUseOptimizerVisitor::visitASTFunction(ASTPtr & node, QueryUseOptimizer
         {
             ASTTableExpression table_expression;
             table_expression.database_and_table_name = std::make_shared<ASTTableIdentifier>(identifier->name());
-            if (!checkDatabaseAndTable(table_expression, query_with_plan_context.context, query_with_plan_context.with_tables))
+            if (!checkDatabaseAndTable(table_expression, context.context, context.ctes))
             {
                 reason = "unsupported storage";
                 return false;
             }
         }
     }
-    return visitNode(node, query_with_plan_context);
+    return visitNode(node, context);
 }
 
-bool QueryUseOptimizerVisitor::visitASTQuantifiedComparison(ASTPtr & node, QueryUseOptimizerContext & query_with_plan_context)
+bool QueryUseOptimizerVisitor::visitASTQuantifiedComparison(ASTPtr & node, QueryUseOptimizerContext & context)
 {
-    return visitNode(node, query_with_plan_context);
+    return visitNode(node, context);
 }
 
 void QueryUseOptimizerVisitor::collectWithTableNames(ASTSelectQuery & query, NameSet & with_tables)
@@ -290,7 +289,7 @@ void QueryUseOptimizerVisitor::collectWithTableNames(ASTSelectQuery & query, Nam
     }
 }
 
-bool QuerySupportOptimizerVisitor::visitNode(ASTPtr & node, QueryUseOptimizerContext & context)
+bool QuerySupportOptimizerVisitor::visitNode(ASTPtr & node, ContextMutablePtr & context)
 {
     for (auto & child : node->children)
     {
@@ -302,22 +301,22 @@ bool QuerySupportOptimizerVisitor::visitNode(ASTPtr & node, QueryUseOptimizerCon
     return false;
 }
 
-bool QuerySupportOptimizerVisitor::visitASTTableJoin(ASTPtr &, QueryUseOptimizerContext &)
+bool QuerySupportOptimizerVisitor::visitASTTableJoin(ASTPtr &, ContextMutablePtr &)
 {
     return true;
 }
 
-bool QuerySupportOptimizerVisitor::visitASTSelectQuery(ASTPtr & node, QueryUseOptimizerContext & query_with_plan_context)
+bool QuerySupportOptimizerVisitor::visitASTSelectQuery(ASTPtr & node, ContextMutablePtr & context)
 {
     auto * select = node->as<ASTSelectQuery>();
 
     if (select->groupBy())
         return true;
 
-    return visitNode(node, query_with_plan_context);
+    return visitNode(node, context);
 }
 
-bool QuerySupportOptimizerVisitor::visitASTSelectIntersectExceptQuery(ASTPtr & node, QueryUseOptimizerContext & query_with_plan_context)
+bool QuerySupportOptimizerVisitor::visitASTSelectIntersectExceptQuery(ASTPtr & node, ContextMutablePtr & context)
 {
     auto & intersect_or_except = node->as<ASTSelectIntersectExceptQuery &>();
     switch (intersect_or_except.final_operator)
@@ -330,10 +329,10 @@ bool QuerySupportOptimizerVisitor::visitASTSelectIntersectExceptQuery(ASTPtr & n
         default:
             break;
     }
-    return visitNode(node, query_with_plan_context);
+    return visitNode(node, context);
 }
 
-bool QuerySupportOptimizerVisitor::visitASTSelectWithUnionQuery(ASTPtr & node, QueryUseOptimizerContext & query_with_plan_context)
+bool QuerySupportOptimizerVisitor::visitASTSelectWithUnionQuery(ASTPtr & node, ContextMutablePtr & context)
 {
     auto * select = node->as<ASTSelectWithUnionQuery>();
 
@@ -349,11 +348,11 @@ bool QuerySupportOptimizerVisitor::visitASTSelectWithUnionQuery(ASTPtr & node, Q
         default:
             break;
     }
-    return visitNode(node, query_with_plan_context);
+    return visitNode(node, context);
 }
 
 
-bool QuerySupportOptimizerVisitor::visitASTFunction(ASTPtr & node, QueryUseOptimizerContext & query_with_plan_context)
+bool QuerySupportOptimizerVisitor::visitASTFunction(ASTPtr & node, ContextMutablePtr & context)
 {
     auto & fun = node->as<ASTFunction &>();
     static const std::set<String> distinct_func{"uniqexact", "countdistinct"};
@@ -361,16 +360,52 @@ bool QuerySupportOptimizerVisitor::visitASTFunction(ASTPtr & node, QueryUseOptim
     {
         return true;
     }
-    if (fun.is_window_function && query_with_plan_context.context->getSettingsRef().enable_optimizer_support_window)
+    if (fun.is_window_function && context->getSettingsRef().enable_optimizer_support_window)
     {
         return true;
     }
-    return visitNode(node, query_with_plan_context);
+    return visitNode(node, context);
 }
 
-bool QuerySupportOptimizerVisitor::visitASTQuantifiedComparison(ASTPtr &, QueryUseOptimizerContext &)
+bool QuerySupportOptimizerVisitor::visitASTQuantifiedComparison(ASTPtr &, ContextMutablePtr &)
 {
     return true;
 }
 
+// don't turn off optimizer if subquery expression exists
+bool QuerySupportOptimizerVisitor::visitASTSubquery(ASTPtr &, ContextMutablePtr &)
+{
+    return true;
+}
+
+// skip subquery in FROM
+bool QuerySupportOptimizerVisitor::visitASTTableExpression(ASTPtr & node, ContextMutablePtr & context)
+{
+    auto & table_expr = node->as<ASTTableExpression &>();
+    if (table_expr.database_and_table_name)
+    {
+        /// If the database is not specified - use the current database.
+        auto db_and_table = DatabaseAndTableWithAlias(table_expr.database_and_table_name);
+        auto table_id = context->tryResolveStorageID(StorageID(db_and_table.database, db_and_table.table));
+        auto storage_table = DatabaseCatalog::instance().tryGetTable(table_id, context);
+        if (storage_table != nullptr && dynamic_cast<const StorageView *>(storage_table.get()))
+        {
+            auto table_metadata_snapshot = storage_table->getInMemoryMetadataPtr();
+            auto subquery = table_metadata_snapshot->getSelectQuery().inner_query->clone();
+            return ASTVisitorUtil::accept(subquery, *this, context);
+        }
+    }
+
+    for (auto child : table_expr.children)
+    {
+        if (child == table_expr.subquery)
+            child = table_expr.subquery->children.at(0);
+
+        if (ASTVisitorUtil::accept(child, *this, context))
+        {
+            return true;
+        }
+    }
+    return false;
+}
 }

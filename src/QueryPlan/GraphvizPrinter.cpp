@@ -22,7 +22,6 @@
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/convertFieldToType.h>
 #include <Parsers/formatAST.h>
-#include <Processors/Transforms/AggregatingTransform.h>
 #include <Processors/printPipeline.h>
 #include <QueryPlan/AggregatingStep.h>
 #include <QueryPlan/ApplyStep.h>
@@ -60,8 +59,6 @@
 
 namespace DB
 {
-const String GraphvizPrinter::MEMO_PATH = "3998_CascadesOptimizer-Memo"; // NOLINT(cert-err58-cpp)
-const String GraphvizPrinter::MEMO_GRAPH_PATH = "3999_CascadesOptimizer-Memo-Graph"; // NOLINT(cert-err58-cpp)
 const String GraphvizPrinter::PIPELINE_PATH = "5000_pipeline";
 
 static std::unordered_map<IQueryPlanStep::Type, std::string> NODE_COLORS = {
@@ -2127,13 +2124,13 @@ Void PlanNodeEdgePrinter::visitCTERefNode(CTERefNode & node, Void & c)
 void cleanDotFiles(const ContextMutablePtr & context)
 {
     // when in the processing of sub query, DO NOT clean graphviz files.
-    if (context->getExecuteSubQueryPath() != "") 
+    if (context->getExecuteSubQueryPath() != "")
     {
         return ;
     }
-    
+
     std::filesystem::path graphviz_path(context->getSettingsRef().graphviz_path.toString());
-    
+
     try
     {
         if (!std::filesystem::exists(graphviz_path))
@@ -2164,7 +2161,7 @@ void cleanDotFiles(const ContextMutablePtr & context)
 void cleanDotFiles(const ContextPtr & context)
 {
      // when in the processing of sub query, DO NOT clean graphviz files.
-    if (context->getExecuteSubQueryPath() != "") 
+    if (context->getExecuteSubQueryPath() != "")
     {
         return ;
     }
@@ -2200,7 +2197,7 @@ void cleanDotFiles(const ContextPtr & context)
 
 void GraphvizPrinter::printAST(const ASTPtr & astPtr, ContextMutablePtr & context, const String & visitor)
 {
-    if (context->getSettingsRef().print_graphviz)
+    if (context->getSettingsRef().print_graphviz && context->getSettingsRef().print_graphviz_ast)
     {
         std::stringstream path;
         path << context->getSettingsRef().graphviz_path.toString();
@@ -2944,50 +2941,26 @@ void GraphvizPrinter::appendPlanSegmentNode(std::stringstream & out, const PlanS
     out << "}\n";
 }
 
-static String printGroupEdges(const Memo & memo, GroupId root)
+static String printGroupEdges(
+    const Memo & memo,
+    const std::unordered_map<GroupId, std::unordered_set<GroupId>> & edge_winner,
+    const std::unordered_map<GroupId, std::unordered_set<GroupId>> & cte_edge_winner)
 {
     std::stringstream out;
 
-    std::unordered_map<GroupId, std::unordered_set<GroupId>> edge_winner;
-
-    std::function<void(GroupId, const Property &)> findGroupWinner = [&](GroupId group_id, const Property & required_prop) {
-        auto group = memo.getGroupById(group_id);
-        auto winner = group->getBestExpression(required_prop);
-
-        auto required_properties = winner->getRequireChildren();
-        for (size_t index = 0; index < required_properties.size(); ++index)
-        {
-            if (winner->getGroupExpr())
-            {
-                auto & children_id = winner->getGroupExpr()->getChildrenGroups()[index];
-                edge_winner[children_id].emplace(group_id);
-                findGroupWinner(children_id, required_properties[index]);
-            }
-        }
-    };
-    try
-    {
-        findGroupWinner(root, Property{Partitioning{Partitioning::Handle::SINGLE}});
-    }
-    catch (...)
-    {
-    }
-
     std::unordered_map<GroupId, std::unordered_set<GroupId>> edge_exists;
-    for (auto & group : memo.getGroups())
+    for (const auto & group : memo.getGroups())
     {
         GroupId father_id = group->getId();
-        for (auto & expr : group->getLogicalExpressions())
+        for (const auto & expr : group->getLogicalExpressions())
         {
             for (GroupId children_id : expr->getChildrenGroups())
             {
                 if (!edge_exists[children_id].contains(father_id))
                 {
                     out << "group_" << children_id << "-> group_" << father_id;
-                    if (edge_winner[children_id].contains(father_id))
-                    {
+                    if (edge_winner.contains(children_id) && edge_winner.at(children_id).contains(father_id))
                         out << " [penwidth = 4.0, color = red]";
-                    }
                     out << ";\n";
                     edge_exists[children_id].emplace(father_id);
                 }
@@ -2995,16 +2968,20 @@ static String printGroupEdges(const Memo & memo, GroupId root)
         }
     }
 
-    for (auto & group : memo.getGroups())
+    for (const auto & group : memo.getGroups())
     {
-        for (auto & expr : group->getLogicalExpressions())
+        for (const auto & expr : group->getLogicalExpressions())
         {
             if (expr->getStep()->getType() == IQueryPlanStep::Type::CTERef)
             {
-                auto cte_step = dynamic_cast<const CTERefStep *>(expr->getStep().get());
+                const auto * cte_step = dynamic_cast<const CTERefStep *>(expr->getStep().get());
                 auto cte_group = memo.getCTEDefGroupByCTEId(cte_step->getId());
                 out << "group_" << cte_group->getId() << "-> group_" << group->getId();
-                out << " [style=dashed];\n";
+                if (cte_edge_winner.contains(cte_group->getId()) && cte_edge_winner.at(cte_group->getId()).contains(group->getId()))
+                    out << " [style=dashed, penwidth = 4.0, color = red, label = shared]";
+                else
+                    out << " [style=dashed]";
+                out << ";\n";
             }
         }
     }
@@ -3019,33 +2996,57 @@ String GraphvizPrinter::printMemo(const Memo & memo, GroupId root)
     out << "node[style=\"filled\", shape=record]\n";
     out << "subgraph {\n";
 
-    for (auto & group : memo.getGroups())
-    {
-        out << printGroup(*group);
-    }
+    std::unordered_map<GroupId, WinnerPtr> group_winner;
+    std::unordered_map<GroupId, std::unordered_set<GroupId>> edge_winner;
+    std::unordered_map<GroupId, std::unordered_set<GroupId>> cte_edge_winner;
 
-    out << "}\n";
+    std::function<void(GroupId, const Property &)> find_group_winner = [&](GroupId group_id, const Property & required_prop) {
+        auto group = memo.getGroupById(group_id);
+        auto winner = group->getBestExpression(required_prop);
 
+        if (winner->getGroupExpr() == nullptr)
+            return;
+
+        group_winner[group_id] = winner;
+
+        const auto & required_properties = winner->getRequireChildren();
+        for (size_t index = 0; index < required_properties.size(); ++index)
+        {
+            const auto & children_id = winner->getGroupExpr()->getChildrenGroups()[index];
+            edge_winner[children_id].emplace(group_id);
+            find_group_winner(children_id, required_properties[index]);
+        }
+
+        if (winner->getGroupExpr()->getStep()->getType() == IQueryPlanStep::Type::CTERef)
+        {
+            const auto & cte_ref = dynamic_cast<const CTERefStep *>(winner->getGroupExpr()->getStep().get());
+            auto cte_id = cte_ref->getId();
+            auto cte_group_id = memo.getCTEDefGroupId(cte_id);
+            cte_edge_winner[cte_group_id].emplace(group_id);
+            find_group_winner(cte_group_id, winner->getCTEActualProperties().at(cte_id).first);
+        }
+    };
     if (root != UNDEFINED_GROUP)
     {
-        out << printGroupEdges(memo, root);
-    }
-    else if (!memo.getGroups().empty())
-    {
-        GroupId pre_id = memo.getGroups()[0]->getId();
-        for (size_t index = 1; index < memo.getGroups().size(); index++)
+        try
         {
-            auto now_id = memo.getGroups()[index]->getId();
-            out << "group_" << pre_id << "-> group_" << now_id << " [style=invis];\n";
-            pre_id = now_id;
+            find_group_winner(root, Property{Partitioning{Partitioning::Handle::SINGLE}});
+        }
+        catch (...)
+        {
         }
     }
 
+    for (const auto & group : memo.getGroups())
+        out << printGroup(*group, group_winner);
+
+    out << "}\n";
+    out << printGroupEdges(memo, edge_winner, cte_edge_winner);
     out << "}\n";
     return out.str();
 }
 
-String GraphvizPrinter::printGroup(const Group & group)
+String GraphvizPrinter::printGroup(const Group & group, const std::unordered_map<GroupId, WinnerPtr> & group_winner)
 {
     std::stringstream out;
     const IQueryPlanStep * head_step;
@@ -3212,15 +3213,7 @@ String GraphvizPrinter::printGroup(const Group & group)
         if (property.isPreferred())
             ss << "?";
         ss << " ";
-        ss << join(
-            property.getCTEDescriptions(),
-            [&](const auto & cte) {
-                std::stringstream string_stream;
-                string_stream << "CTE(" << cte.first << ")=" << partition_str(cte.second.getNodePartitioning());
-                return string_stream.str();
-            },
-            ",",
-            " ");
+        ss << property.getCTEDescriptions().toString();
         return ss.str();
     };
 
@@ -3230,17 +3223,28 @@ String GraphvizPrinter::printGroup(const Group & group)
         for (auto & pair : group.getLowestCostExpressions())
         {
             auto & winner = pair.second;
+            bool is_winner = group_winner.contains(group.getId()) && group_winner.at(group.getId()) == winner;
             out << "<TR>";
 
             // property
             out << "<TD>";
+            if (is_winner)
+                out << "<B>";
             out << "cost: " << winner->getCost() << "<BR/>";
+
+            for (auto cte_id : winner->getCTEAncestors())
+                out << "CTE(" + std::to_string(cte_id) + ") cost: " << winner->getCTEActualProperties().at(cte_id).second << "<BR/>";
+
             out << "require: " << property_str(pair.first);
+            if (is_winner)
+                out << "<BR/>winner</B>";
             out << "</TD>";
             // property end
 
             // winner
             out << "<TD>";
+            if (is_winner)
+                out << "<B>";
 
             if (winner->getRemoteExchange())
             {
@@ -3261,6 +3265,8 @@ String GraphvizPrinter::printGroup(const Group & group)
             out << join(
                 winner->getRequireChildren(), [&](const auto & item) { return property_str(item); }, ", ", "child: ")
                 << "\n";
+            if (is_winner)
+                out << "</B>";
             out << "</TD>";
             // winner end
 

@@ -74,7 +74,8 @@ namespace ErrorCodes
 #define PRINT_PLAN(plan, NAME) \
     do \
     { \
-        GraphvizPrinter::printLogicalPlan(*(plan), context, std::to_string(context->getAndIncStepId()) + "_" + #NAME); \
+        if (context->getSettingsRef().print_graphviz_planner) \
+            GraphvizPrinter::printLogicalPlan(*(plan), context, std::to_string(context->getAndIncStepId()) + "_" + #NAME); \
     } while (false)
 
 class QueryPlannerVisitor : public ASTVisitor<RelationPlan, const Void>
@@ -799,7 +800,7 @@ QueryPlannerVisitor::prepareJoinOnKeys(ASTTableJoin & table_join, PlanBuilder & 
 
 DataStream QueryPlannerVisitor::getJoinOutputStream(ASTTableJoin & , PlanBuilder & left_builder, PlanBuilder & right_builder)
 {
-    
+
     DataStream output_stream;
 
     // columns will be pruned further in optimizing phase
@@ -810,7 +811,7 @@ DataStream QueryPlannerVisitor::getJoinOutputStream(ASTTableJoin & , PlanBuilder
         output_stream.header.insert({x.type, x.name});
 
     return output_stream;
-    
+
 }
 
 RelationPlan QueryPlannerVisitor::planReadFromStorage(const IAST & table_ast, ScopePtr table_scope, ASTSelectQuery & origin_query, SqlHints & hints)
