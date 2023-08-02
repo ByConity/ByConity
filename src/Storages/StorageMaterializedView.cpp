@@ -39,6 +39,7 @@
 #include <Interpreters/QueryNormalizer.h>
 #include <Interpreters/predicateExpressionsUtils.h>
 #include <Interpreters/TreeRewriter.h>
+#include <Interpreters/executeQuery.h>
 
 #include <Access/AccessFlags.h>
 #include <DataStreams/IBlockInputStream.h>
@@ -51,6 +52,7 @@
 
 #include <Common/typeid_cast.h>
 #include <Common/checkStackSize.h>
+#include <Databases/DatabasesCommon.h>
 #include <Processors/Sources/SourceFromInputStream.h>
 #include <QueryPlan/SettingQuotaAndLimitsStep.h>
 #include <QueryPlan/ExpressionStep.h>
@@ -73,13 +75,7 @@ namespace ErrorCodes
     extern const int NOT_IMPLEMENTED;
     extern const int INCORRECT_QUERY;
     extern const int QUERY_IS_NOT_SUPPORTED_IN_MATERIALIZED_VIEW;
-}
-
-static inline String generateInnerTableName(const StorageID & view_id)
-{
-    if (view_id.hasUUID())
-        return ".inner_id." + toString(view_id.uuid);
-    return ".inner." + view_id.getTableName();
+    extern const int CYCLIC_MATERIALIZED_VIEW_CHAIN;
 }
 
 /// Remove columns from target_header that does not exists in src_header
@@ -128,7 +124,7 @@ StorageMaterializedView::StorageMaterializedView(
                                                     && query.to_table_id.table_name == table_id_.table_name;
     if (point_to_itself_by_uuid || point_to_itself_by_name)
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "Materialized view {} cannot point to itself", table_id_.getFullTableName());
-
+    
     if (!has_inner_table)
     {
         target_table_id = query.to_table_id;
@@ -152,20 +148,15 @@ StorageMaterializedView::StorageMaterializedView(
 
         manual_create_query->set(manual_create_query->columns_list, new_columns_list);
         manual_create_query->set(manual_create_query->storage, query.storage->ptr());
-
-        InterpreterCreateQuery create_interpreter(manual_create_query, create_context);
-        create_interpreter.setInternal(true);
-        create_interpreter.execute();
+        
+        create_context->setCurrentTransaction(nullptr, false);
+        executeQuery(serializeAST(*manual_create_query), create_context, true);
 
         target_table_id = DatabaseCatalog::instance().getTable({manual_create_query->database, manual_create_query->table}, getContext())->getStorageID();
     }
 
     if (!select.select_table_id.empty())
         DatabaseCatalog::instance().addDependency(select.select_table_id, getStorageID());
-
-    /// Add memory table dependency
-    if (!target_table_id.empty() && !select.select_table_id.empty())
-        DatabaseCatalog::instance().addMemoryTableDependency(target_table_id, select.select_table_id);
 }
 
 QueryProcessingStage::Enum StorageMaterializedView::getQueryProcessingStage(
@@ -277,7 +268,6 @@ BlockOutputStreamPtr StorageMaterializedView::write(const ASTPtr & query, const 
     return stream;
 }
 
-
 void StorageMaterializedView::drop()
 {
     auto table_id = getStorageID();
@@ -285,7 +275,6 @@ void StorageMaterializedView::drop()
     if (!select_query.select_table_id.empty())
         DatabaseCatalog::instance().removeDependency(select_query.select_table_id, table_id);
 
-    DatabaseCatalog::instance().removeMemoryTableDependency(target_table_id);
     dropInnerTableIfAny(true, getContext());
 }
 
@@ -305,7 +294,7 @@ void StorageMaterializedView::checkStatementCanBeForwarded() const
 {
     if (!has_inner_table)
         throw Exception(
-            "MATERIALIZED VIEW targets existing table " + target_table_id.getNameForLogs() + ". "
+            "MATERIALIZED VIEW targets existing table " + target_table_id.getFullTableName() + ". "
             + "Execute the statement directly on it.", ErrorCodes::INCORRECT_QUERY);
 }
 
@@ -450,8 +439,6 @@ void StorageMaterializedView::shutdown()
     /// Make sure the dependency is removed after DETACH TABLE
     if (!select_query.select_table_id.empty())
         DatabaseCatalog::instance().removeDependency(select_query.select_table_id, getStorageID());
-
-    DatabaseCatalog::instance().removeMemoryTableDependency(target_table_id);
 }
 
 StoragePtr StorageMaterializedView::getTargetTable() const
@@ -575,53 +562,58 @@ bool StorageMaterializedView::isRefreshable(bool cascading) const
 
 /// TODO: Async mode is useless when atomic parameter refreshing ensure only one refresh task to execute.
 ///       Temporarily only support sync refresh mode later provide parallel solution.
-void StorageMaterializedView::refresh(const ASTPtr & partition,  ContextPtr local_context, bool async)
+void StorageMaterializedView::refresh(const ASTPtr & partition,  ContextPtr local_context, bool /*async*/)
 {
+    if (local_context->getServerType() == ServerType::cnch_server)
+    {
+        if (!partition)
+           throw Exception("Refresh materialized view need with partition parameter example: refresh materialized view mv.events_aggregate_view partition '2022-06-14'", ErrorCodes::LOGICAL_ERROR);
+        StoragePtr select_table = DatabaseCatalog::instance().getTable(getInMemoryMetadataPtr()->select.select_table_id, local_context);
+        StoragePtr target_table = DatabaseCatalog::instance().getTable(target_table_id, local_context);
+        if (target_table && select_table)
+        {
+            auto * cnch_target_table = dynamic_cast<StorageCnchMergeTree*>(target_table.get());
+            auto * cnch_select_table = dynamic_cast<StorageCnchMergeTree*>(select_table.get());
+            if (cnch_target_table && cnch_select_table)
+            {
+                refreshCnchImpl(partition, local_context);
+                return;
+            }
+        }
+    }
+
     if (!partition)
     {
         if (!getTargetTable()->getInMemoryMetadataPtr()->getPartitionKeyAST())
         {
-            try
+            String refreshing_partition_id = "all";
+
+            /// Truncate target table
+            auto target_table = getTargetTable();
+            auto metadata_snapshot = target_table->getInMemoryMetadataPtr();
             {
-                bool old_val = false;
-                if (!refreshing.compare_exchange_strong(old_val, true, std::memory_order_seq_cst, std::memory_order_relaxed))
-                    throw Exception("only one ongoing refreshing task is accepted, please wait for the current task to complete.", ErrorCodes::LOGICAL_ERROR);
-                refreshing_partition_id = "all";
-
-                /// Truncate target table
-                auto target_table = getTargetTable();
-                auto metadata_snapshot = target_table->getInMemoryMetadataPtr();
-                {
-                     auto table_lock = target_table->lockExclusively(local_context->getCurrentQueryId(), local_context->getSettingsRef().lock_acquire_timeout);
-                     ASTPtr invalid_ast;
-                     target_table->truncate(invalid_ast, metadata_snapshot, local_context, table_lock);
-                }
-
-                /// Refresh all table
-
-                BlockOutputStreamPtr out;
-                auto view_context = Context::createCopy(local_context);
-                bool cascading = local_context->getSettingsRef().cascading_refresh_materialized_view;
-                if (cascading)
-                    out = std::make_shared<PushingToViewsBlockOutputStream>(target_table, metadata_snapshot, view_context, ASTPtr());
-                else
-                    out = write(ASTPtr(), metadata_snapshot, local_context);
-                InterpreterSelectQuery select(getInnerQuery(), local_context, SelectQueryOptions());
-                BlockInputStreamPtr in = std::make_shared<MaterializingBlockInputStream>(select.execute().in);
-                in = std::make_shared<SquashingBlockInputStream>(
-                    in, local_context->getSettingsRef().min_insert_block_size_rows, local_context->getSettingsRef().min_insert_block_size_bytes);
-                in = std::make_shared<ConvertingBlockInputStream>(in, out->getHeader(), ConvertingBlockInputStream::MatchColumnsMode::Name);
-                out->writePrefix();
-                copyData(*in, *out);
-                out->writeSuffix();
-                refreshing = false;
-                refreshing_partition_id = "";
+                 auto table_lock = target_table->lockExclusively(local_context->getCurrentQueryId(), local_context->getSettingsRef().lock_acquire_timeout);
+                 ASTPtr invalid_ast;
+                 target_table->truncate(invalid_ast, metadata_snapshot, local_context, table_lock);
             }
-            catch (...)
-            {
-                refreshing = false;
-                refreshing_partition_id = "";
-            }
+
+            /// Refresh all table
+
+            BlockOutputStreamPtr out;
+            auto view_context = Context::createCopy(local_context);
+            bool cascading = local_context->getSettingsRef().cascading_refresh_materialized_view;
+            if (cascading)
+                out = std::make_shared<PushingToViewsBlockOutputStream>(target_table, metadata_snapshot, view_context, ASTPtr());
+            else
+                out = write(ASTPtr(), metadata_snapshot, local_context);
+            InterpreterSelectQuery select(getInnerQuery(), local_context, SelectQueryOptions());
+            BlockInputStreamPtr in = std::make_shared<MaterializingBlockInputStream>(select.execute().in);
+            in = std::make_shared<SquashingBlockInputStream>(
+                in, local_context->getSettingsRef().min_insert_block_size_rows, local_context->getSettingsRef().min_insert_block_size_bytes);
+            in = std::make_shared<ConvertingBlockInputStream>(in, out->getHeader(), ConvertingBlockInputStream::MatchColumnsMode::Name);
+            out->writePrefix();
+            copyData(*in, *out);
+            out->writeSuffix();
         }
         else
         {
@@ -647,145 +639,199 @@ void StorageMaterializedView::refresh(const ASTPtr & partition,  ContextPtr loca
                     bool parse_res = ParserPartition(ParserSettings::valueOf(local_context->getSettingsRef().dialect_type)).parse(token_iterator, part_ast, expected);
                     if (!parse_res)
                         continue;
-                    refreshImpl(part_ast, local_context, async);
+                    refreshImpl(part_ast, local_context);
                 }
             }
         }
     }
     else
-        refreshImpl(partition, local_context, async);
+        refreshImpl(partition, local_context);
 }
 
-void StorageMaterializedView::refreshImpl(const ASTPtr & partition, ContextPtr local_context, bool async)
+void StorageMaterializedView::refreshCnchImpl(const ASTPtr & partition, ContextPtr local_context)
 {
+    /** Compose the operation into a sequence of command within an interactive transaction session
+        - BEGIN
+        - ALTER TABLE <target> DROP PARTITION <target partition>
+        - INSERT INTO <target> SELECT ...
+        - COMMIT
+    */
+
+    /// BEGIN
+    auto & txn_coordinator = local_context->getCnchTransactionCoordinator();
+    auto explicit_txn = txn_coordinator.createTransaction(CreateTransactionOption().setType(CnchTransactionType::Explicit));
+    
+    const_cast<Context &>(*local_context).setCurrentTransaction(explicit_txn, true);
+
+    auto create_command_context = [local_context]() {
+        auto command_context = Context::createCopy(local_context);
+        command_context->setCurrentTransaction(nullptr, false);
+        command_context->setCurrentVW(nullptr);
+        command_context->setCurrentWorkerGroup(nullptr);
+        command_context->makeSessionContext();
+        command_context->setQueryContext(command_context);
+        return command_context;
+    };
+
+    /// DROP
+    auto drop_context = create_command_context();
+    bool cascading = drop_context->getSettingsRef().cascading_refresh_materialized_view;
+    PartitionCommand drop_command;
+    drop_command.type = PartitionCommand::DROP_PARTITION;
+    drop_command.partition = partition;
+    drop_command.detach = false;
+    drop_command.cascading = cascading;
+
+    PartitionCommands drop_commands;
+    drop_commands.emplace_back(std::move(drop_command));
+    auto target_table = DatabaseCatalog::instance().getTable(target_table_id, local_context);
+    std::stringstream alter_query_ss;
+    alter_query_ss << "ALTER TABLE " << target_table_id.getFullTableName()
+                   << (cascading ? " CASCADING " : " ") << "DROP " << "PARTITION " << serializeAST(*partition, true);
+
+    LOG_DEBUG(&Poco::Logger::get("refreshCnchImpl"), "Drop partition query: {}", alter_query_ss.str());
+    BlockIO drop_io;
     try
     {
-        bool old_val = false;
-        if (!refreshing.compare_exchange_strong(old_val, true, std::memory_order_seq_cst, std::memory_order_relaxed))
-            throw Exception("only one ongoing refreshing task is accepted, please wait for the current task to complete.", ErrorCodes::LOGICAL_ERROR);
-
-        bool cascading = local_context->getSettingsRef().cascading_refresh_materialized_view;
-        if (!isRefreshable(cascading))
-            throw Exception("Materialized view" + backQuoteIfNeed(getStorageID().getDatabaseName()) + "." + backQuoteIfNeed(getStorageID().getTableName()) +
-                                " is not refreshable.", ErrorCodes::LOGICAL_ERROR);
-
-        auto select_table = DatabaseCatalog::instance().getTable(getInMemoryMetadataPtr()->select.select_table_id, local_context);
-
-        auto * merge_tree = dynamic_cast<MergeTreeData *>(select_table.get());
-        if (!merge_tree)
-            throw Exception("Select table " + backQuoteIfNeed(select_table->getStorageID().getDatabaseName()) + "." + backQuoteIfNeed(select_table->getStorageID().getTableName()) +
-                                " is not merge tree engine.", ErrorCodes::LOGICAL_ERROR);
-        refreshing_partition_id = merge_tree->getPartitionIDFromQuery(partition, local_context);
-
-        MergeTreeData::DataPartsVector parts;
-        parts = merge_tree->getDataPartsVectorInPartition(MergeTreeDataPartState::Committed, refreshing_partition_id);
-        size_t rows = 0;
-        for (auto & part : parts)
-            rows += part->rows_count;
-        if (rows == 0)
-            throw Exception("There is no data of this partition in the base table. So no data can be used to refresh the view.", ErrorCodes::LOGICAL_ERROR);
-
-        /// First drop the old partition
-        PartitionCommand drop_command;
-        drop_command.type = PartitionCommand::DROP_PARTITION;
-        drop_command.partition = partition;
-        drop_command.detach = false;
-        drop_command.cascading = cascading;
-
-        PartitionCommands drop_commands;
-        drop_commands.emplace_back(std::move(drop_command));
-
-        auto target_table = getTargetTable();
-        auto metadata_snapshot = target_table->getInMemoryMetadataPtr();
-        // construct the alter query string
-        std::stringstream alter_query_ss;
-        alter_query_ss << "ALTER TABLE " << backQuoteIfNeed(target_table->getStorageID().getDatabaseName()) << "." << backQuoteIfNeed(target_table->getStorageID().getTableName())
-                       << (cascading ? " CASCADING " : " ") << "DROP " << "PARTITION " << serializeAST(*partition, true);
-
-        const String alter_query_str = alter_query_ss.str();
-
-        LOG_DEBUG(&Poco::Logger::get("refreshImpl"), "drop partition command: {}", alter_query_str);
-
-        const char * begin = alter_query_str.data();
-        const char * end = alter_query_str.data() + alter_query_str.size();
-
-        ParserQuery parser(end, ParserSettings::CLICKHOUSE);
-        auto ast = parseQuery(parser, begin, end, "", 0, 0);
-        target_table->alterPartition(metadata_snapshot, drop_commands, local_context);
-
-        /// Then write new data
-        // We need special context for materialized view insertions
-        bool disable_deduplication_for_children = select_table->supportsDeduplication();
-        auto view_context = Context::createCopy(local_context);
-        if (disable_deduplication_for_children)
-            view_context->setSetting("insert_deduplicate", false);
-
-        BlockOutputStreamPtr out;
-        if (cascading)
-            out = std::make_shared<PushingToViewsBlockOutputStream>(target_table, metadata_snapshot, view_context, ASTPtr());
-        else
-            out = write(ASTPtr(), metadata_snapshot, local_context);
-
-        if (rows <= local_context->getSettingsRef().max_rows_to_refresh_by_partition)
-        {
-            auto in = generateInput(getInnerQuery(), out->getHeader(), "_partition_id", refreshing_partition_id, local_context);
-
-            out->writePrefix();
-            copyData(*in, *out);
-            out->writeSuffix();
-            LOG_DEBUG(&Poco::Logger::get("refreshImpl"), "write view table from original table partition-{}, with rows-{}" , refreshing_partition_id,  std::to_string(rows));
-        }
-        else
-        {
-            out->writePrefix();
-
-            for (auto & part : parts)
-            {
-                auto in = generateInput(getInnerQuery(), out->getHeader(), "_part", part->name, local_context);
-                copyData(*in, *out);
-                LOG_DEBUG(&Poco::Logger::get("refreshImpl"), "write view table from original table partition-{} with max_rows_to_refresh_by_partition-{} < {} rows" ,
-                          part->name, std::to_string(local_context->getSettingsRef().max_rows_to_refresh_by_partition), std::to_string(rows));
-            }
-
-            out->writeSuffix();
-        }
-
-        /// After complete refreshing, reset the values
-        refreshing = false;
-        refreshing_partition_id = "";
-    }
-    catch (const Exception & e)
-    {
-        refreshing = false;
-        refreshing_partition_id = "";
-        if (async)
-            LOG_ERROR(&Poco::Logger::get("refreshImpl"), e.message());
-        else
-            throw;
+        drop_io = executeQuery(alter_query_ss.str(), drop_context, true);
+        drop_io.onFinish();
     }
     catch (...)
     {
-        refreshing = false;
-        refreshing_partition_id = "";
-
-        if (!async)
-            throw;
+        drop_io.onException();
+        throw;
     }
+
+    // INSERT
+    auto insert_context = create_command_context();
+    auto select_table = DatabaseCatalog::instance().getTable(getInMemoryMetadataPtr()->select.select_table_id, local_context);
+    if (!select_table)
+        throw Exception("Materialized view select table " + getInMemoryMetadataPtr()->select.select_table_id.getFullTableName() +
+                         " is not exist.", ErrorCodes::LOGICAL_ERROR);
+    auto * merge_tree = dynamic_cast<MergeTreeMetaBase *>(select_table.get());
+    if (!merge_tree)
+        throw Exception("Select table " + select_table->getStorageID().getFullTableName() + " is not merge tree engine.", ErrorCodes::LOGICAL_ERROR);
+    String partition_id = merge_tree->getPartitionIDFromQuery(partition, local_context);
+    ASTPtr equals_identifier = std::make_shared<ASTIdentifier>("_partition_id");
+    ASTPtr equals_literal = std::make_shared<ASTLiteral>(partition_id);
+    ASTPtr equals_function = makeASTFunction("equals", equals_identifier, equals_literal);
+
+    auto query = getInnerQuery();
+    auto & select_query = query->as<ASTSelectQuery &>();
+    if (select_query.where())
+        select_query.setExpression(ASTSelectQuery::Expression::WHERE, makeASTFunction("and", select_query.where(), std::move(equals_function)));
+    else
+        select_query.setExpression(ASTSelectQuery::Expression::WHERE, std::move(equals_function));
+
+    auto insert_query = std::make_shared<ASTInsertQuery>();
+    insert_query->table_id = target_table_id;
+    insert_query->select = select_query.clone();
+    insert_query->children.push_back(insert_query->select);
+
+    LOG_DEBUG(&Poco::Logger::get("refreshCnchImpl"), "Refresh insert query: {}",  queryToString(insert_query));
+    BlockIO insert_io;
+    try
+    {
+        insert_io = executeQuery(serializeAST(*insert_query), insert_context, true);
+        insert_io.onFinish();
+    }
+    catch (...)
+    {
+        insert_io.onException();
+        throw;
+    }
+
+    /// COMMIT
+    txn_coordinator.commitV2(explicit_txn);
 }
 
-ASTPtr StorageMaterializedView::normalizeInnerQuery()
+void StorageMaterializedView::refreshImpl(const ASTPtr & partition, ContextPtr local_context)
 {
-    std::unique_lock lock(inner_query_mutex);
-    if (normalized_inner_query)
-        return normalized_inner_query;
-    normalized_inner_query = getInMemoryMetadataPtr()->select.inner_query->clone();
-    StoragePtr select_storage_ptr = DatabaseCatalog::instance().getTable(getInMemoryMetadataPtr()->select.select_table_id, getContext());
-    TreeRewriter(getContext()).analyzeSelect(normalized_inner_query,
-                                              TreeRewriterResult({}, select_storage_ptr,
-                                              select_storage_ptr->getInMemoryMetadataPtr()),
-                                              SelectQueryOptions().analyze());
-    LOG_DEBUG(&Poco::Logger::get("normalizeInnerQuery"), "normalize query-{}", queryToString(normalized_inner_query));
-    return normalized_inner_query;
+    bool cascading = local_context->getSettingsRef().cascading_refresh_materialized_view;
+    if (!isRefreshable(cascading))
+        throw Exception("Materialized view" + backQuoteIfNeed(getStorageID().getDatabaseName()) + "." + backQuoteIfNeed(getStorageID().getTableName()) +
+                            " is not refreshable.", ErrorCodes::LOGICAL_ERROR);
+
+    auto select_table = DatabaseCatalog::instance().getTable(getInMemoryMetadataPtr()->select.select_table_id, local_context);
+
+    auto * merge_tree = dynamic_cast<MergeTreeData *>(select_table.get());
+    if (!merge_tree)
+        throw Exception("Select table " + backQuoteIfNeed(select_table->getStorageID().getDatabaseName()) + "." + backQuoteIfNeed(select_table->getStorageID().getTableName()) +
+                            " is not merge tree engine.", ErrorCodes::LOGICAL_ERROR);
+    String refreshing_partition_id = merge_tree->getPartitionIDFromQuery(partition, local_context);
+
+    MergeTreeData::DataPartsVector parts;
+    parts = merge_tree->getDataPartsVectorInPartition(MergeTreeDataPartState::Committed, refreshing_partition_id);
+    size_t rows = 0;
+    for (auto & part : parts)
+        rows += part->rows_count;
+    if (rows == 0)
+        throw Exception("There is no data of this partition in the base table. So no data can be used to refresh the view.", ErrorCodes::LOGICAL_ERROR);
+
+    /// First drop the old partition
+    PartitionCommand drop_command;
+    drop_command.type = PartitionCommand::DROP_PARTITION;
+    drop_command.partition = partition;
+    drop_command.detach = false;
+    drop_command.cascading = cascading;
+
+    PartitionCommands drop_commands;
+    drop_commands.emplace_back(std::move(drop_command));
+
+    auto target_table = getTargetTable();
+    auto metadata_snapshot = target_table->getInMemoryMetadataPtr();
+    // construct the alter query string
+    std::stringstream alter_query_ss;
+    alter_query_ss << "ALTER TABLE " << backQuoteIfNeed(target_table->getStorageID().getDatabaseName()) << "." << backQuoteIfNeed(target_table->getStorageID().getTableName())
+                   << (cascading ? " CASCADING " : " ") << "DROP " << "PARTITION " << serializeAST(*partition, true);
+
+    const String alter_query_str = alter_query_ss.str();
+
+    LOG_DEBUG(&Poco::Logger::get("refreshImpl"), "drop partition command: {}", alter_query_str);
+
+    const char * begin = alter_query_str.data();
+    const char * end = alter_query_str.data() + alter_query_str.size();
+
+    ParserQuery parser(end, ParserSettings::CLICKHOUSE);
+    auto ast = parseQuery(parser, begin, end, "", 0, 0);
+    target_table->alterPartition(metadata_snapshot, drop_commands, local_context);
+
+    /// Then write new data
+    // We need special context for materialized view insertions
+    bool disable_deduplication_for_children = select_table->supportsDeduplication();
+    auto view_context = Context::createCopy(local_context);
+    if (disable_deduplication_for_children)
+        view_context->setSetting("insert_deduplicate", false);
+
+    BlockOutputStreamPtr out;
+    if (cascading)
+        out = std::make_shared<PushingToViewsBlockOutputStream>(target_table, metadata_snapshot, view_context, ASTPtr());
+    else
+        out = write(ASTPtr(), metadata_snapshot, local_context);
+
+    if (rows <= local_context->getSettingsRef().max_rows_to_refresh_by_partition)
+    {
+        auto in = generateInput(getInnerQuery(), out->getHeader(), "_partition_id", refreshing_partition_id, local_context);
+
+        out->writePrefix();
+        copyData(*in, *out);
+        out->writeSuffix();
+        LOG_DEBUG(&Poco::Logger::get("refreshImpl"), "write view table from original table partition-{}, with rows-{}" , refreshing_partition_id,  std::to_string(rows));
+    }
+    else
+    {
+        out->writePrefix();
+
+        for (auto & part : parts)
+        {
+            auto in = generateInput(getInnerQuery(), out->getHeader(), "_part", part->name, local_context);
+            copyData(*in, *out);
+            LOG_DEBUG(&Poco::Logger::get("refreshImpl"), "write view table from original table partition-{} with max_rows_to_refresh_by_partition-{} < {} rows" ,
+                      part->name, std::to_string(local_context->getSettingsRef().max_rows_to_refresh_by_partition), std::to_string(rows));
+        }
+
+        out->writeSuffix();
+    }
 }
 
 }

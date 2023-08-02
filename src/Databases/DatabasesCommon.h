@@ -80,4 +80,6 @@ protected:
 
 std::vector<StoragePtr> getViews(const StorageID & storage_id, const ContextPtr & context);
 
+String generateInnerTableName(const StorageID & view_id);
+
 }

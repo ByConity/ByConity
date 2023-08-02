@@ -174,7 +174,7 @@ FROM hive_ad_local_abtest_board_overwrite_daily_slice_8192
     PREWHERE vid IN ('4724668', '4724669', '4724670', '4724671')
 WHERE (p_date >= '2022-09-09') AND (p_date < '2022-09-16') AND (system_origin NOT IN ('1', '5', '6', '15', '17', '22', '26')) AND ((pricing_type = '7') OR (pricing_type = '8') OR (pricing_type = '9') OR (pricing_type = '11')) AND (rit IN ('80008'))
 GROUP BY p_date, vid
-    settings enable_optimizer = 1,enable_materialized_view_rewrite=0,enable_view_based_query_rewrite=0,optimizer_projection_support = 1;
+    settings enable_optimizer = 1,enable_materialized_view_rewrite=0,optimizer_projection_support = 1;
 
 DROP TABLE IF EXISTS hive_ad_local_abtest_board_overwrite_daily_slice_8192_local;
 DROP TABLE IF EXISTS hive_ad_local_abtest_board_overwrite_daily_slice_8192;

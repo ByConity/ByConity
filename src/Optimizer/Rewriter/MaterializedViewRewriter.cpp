@@ -40,6 +40,7 @@
 #include <Storages/StorageDistributed.h>
 #include <common/logger_useful.h>
 #include <Optimizer/EqualityASTMap.h>
+#include <Catalog/Catalog.h>
 
 #include <map>
 #include <memory>
@@ -406,19 +407,25 @@ protected:
 
     Void visitTableScanNode(TableScanNode & node, Void &) override
     {
-        const auto * table_scan = dynamic_cast<const TableScanStep *>(node.getStep().get());
-        if (auto * distributed = table_scan->getStorage()->as<StorageDistributed>()) {
-            StorageID storage_id{distributed->getRemoteDatabaseName(), distributed->getRemoteTableName()};
-            auto dependencies = DatabaseCatalog::instance().getDependencies(storage_id);
-            if (!dependencies.empty()) {
-                table_based_local_materialized_views.emplace(table_scan->getStorageID().getFullTableName(), std::move(dependencies));
-                local_table_to_distributed_table.emplace(
-                    storage_id.getFullTableName(), table_scan->getStorageID());
+        auto table_scan = dynamic_cast<const TableScanStep *>(node.getStep().get());
+        auto catalog_client = context->tryGetCnchCatalog();
+        if (catalog_client)
+        {
+            auto start_time = context->getTimestamp();
+            auto views = catalog_client->getAllViewsOn(*context, table_scan->getStorage(), start_time);
+            if (!views.empty())
+            {
+                Dependencies dependencies;
+                for (const auto & view : views)
+                    dependencies.emplace_back(view->getStorageID());
+                table_based_materialized_views.emplace(table_scan->getStorageID().getFullTableName(), std::move(dependencies));
             }
         }
-        auto dependencies = DatabaseCatalog::instance().getDependencies(table_scan->getStorageID());
-        if (!dependencies.empty()) {
-            table_based_materialized_views.emplace(table_scan->getStorageID().getFullTableName(), std::move(dependencies));
+        else
+        {
+            auto dependencies = DatabaseCatalog::instance().getDependencies(table_scan->getStorageID());
+            if (!dependencies.empty())
+                table_based_materialized_views.emplace(table_scan->getStorageID().getFullTableName(), std::move(dependencies));
         }
         return Void{};
     }

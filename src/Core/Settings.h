@@ -1444,12 +1444,41 @@ class IColumn;
       0) \
     M(DistributedDDLOutputMode, distributed_ddl_output_mode, DistributedDDLOutputMode::THROW, "Format of distributed DDL query result", 0) \
     M(UInt64, distributed_ddl_entry_format_version, 2, "Version of DDL entry to write into ZooKeeper", 0) \
-    M(UInt64, external_storage_max_read_rows, 0, "Limit maximum number of rows when table with external engine should flush history data. Now supported only for MySQL table engine, database engine, dictionary and MaterializeMySQL. If equal to 0, this setting is disabled", 0) \
-    M(UInt64, external_storage_max_read_bytes, 0, "Limit maximum number of bytes when table with external engine should flush history data. Now supported only for MySQL table engine, database engine, dictionary and MaterializeMySQL. If equal to 0, this setting is disabled", 0)  \
-    M(SetOperationMode, union_default_mode, SetOperationMode::DISTINCT, "Set default mode in UNION query. Possible values: empty string, 'ALL', 'DISTINCT'. If empty, query without mode will throw exception.", 0) \
-    M(SetOperationMode, intersect_default_mode, SetOperationMode::DISTINCT, "Set default mode in INTERSECT query. Possible values: empty string, 'ALL', 'DISTINCT'. If empty, query without mode will throw exception.", 0) \
-    M(SetOperationMode, except_default_mode, SetOperationMode::DISTINCT, "Set default mode in EXCEPT query. Possible values: empty string, 'ALL', 'DISTINCT'. If empty, query without mode will throw exception.", 0) \
-    M(Bool, optimize_aggregators_of_group_by_keys, true, "Eliminates min/max/any/anyLast aggregators of GROUP BY keys in SELECT section", 0) \
+    M(UInt64, \
+      external_storage_max_read_rows, \
+      0, \
+      "Limit maximum number of rows when table with external engine should flush history data. Now supported only for MySQL table " \
+      "engine, database engine, dictionary and MaterializeMySQL. If equal to 0, this setting is disabled", \
+      0) \
+    M(UInt64, \
+      external_storage_max_read_bytes, \
+      0, \
+      "Limit maximum number of bytes when table with external engine should flush history data. Now supported only for MySQL table " \
+      "engine, database engine, dictionary and MaterializeMySQL. If equal to 0, this setting is disabled", \
+      0) \
+    M(SetOperationMode, \
+      union_default_mode, \
+      SetOperationMode::DISTINCT, \
+      "Set default mode in UNION query. Possible values: empty string, 'ALL', 'DISTINCT'. If empty, query without mode will throw " \
+      "exception.", \
+      0) \
+    M(SetOperationMode, \
+      intersect_default_mode, \
+      SetOperationMode::DISTINCT, \
+      "Set default mode in INTERSECT query. Possible values: empty string, 'ALL', 'DISTINCT'. If empty, query without mode will throw " \
+      "exception.", \
+      0) \
+    M(SetOperationMode, \
+      except_default_mode, \
+      SetOperationMode::DISTINCT, \
+      "Set default mode in EXCEPT query. Possible values: empty string, 'ALL', 'DISTINCT'. If empty, query without mode will throw " \
+      "exception.", \
+      0) \
+    M(Bool, \
+      optimize_aggregators_of_group_by_keys, \
+      true, \
+      "Eliminates min/max/any/anyLast aggregators of GROUP BY keys in SELECT section", \
+      0) \
     M(Bool, optimize_group_by_function_keys, true, "Eliminates functions of other keys in GROUP BY section", 0) \
     M(Bool, \
       legacy_column_name_of_tuple_literal, \
@@ -1492,9 +1521,8 @@ class IColumn;
       "A blacklist for merge task, to prevent the generation of MergeTasks for some tables.", \
       0) \
     M(Bool, ignore_leader_check, 0, "Ignore leader check while executing some ALTER queries", 0) \
-    M(Bool, enable_view_based_query_rewrite, false, "Whether to enable view-based query rewriting.", 0) \
-    M(Bool, enable_mv_estimate_read_cost, false, "Enable materialized view estimate with read cost", 0) \
     M(Bool, cascading_refresh_materialized_view, true, "Whether cascading refresh the materialized view", 0) \
+    M(Bool, enable_element_mv_rows, false, "Whether enable element query calculate base rows and view rows", 0) \
     M(UInt64, \
       max_rows_to_refresh_by_partition, \
       100000000, \
@@ -1534,12 +1562,25 @@ class IColumn;
       0) \
     M(DialectType, dialect_type, DialectType::CLICKHOUSE, "Dialect type, e.g. CLICKHOUSE, ANSI, MYSQL", 0) \
     M(Bool, adaptive_type_cast, false, "Performs type cast operations adaptively, according to the value", 0) \
-    M(Bool, formatdatetime_f_prints_single_zero, false, "Formatter '%f' in function 'formatDateTime()' produces a single zero instead of six zeros if the formatted value has no fractional seconds.", 0) \
-    M(Bool, formatdatetime_parsedatetime_m_is_month_name, true, "Formatter '%M' in functions 'formatDateTime()' and 'parseDateTime()' produces the month name instead of minutes.", 0) \
-    M(Bool, tealimit_order_keep, false, "Whether tealimit output keep order by clause", 0)\
-    M(UInt64, early_limit_for_map_virtual_columns, 0, "Enable early limit while quering _map_column_keys column", 0)\
-    M(Bool, skip_nullinput_notnull_col, false, "Skip null value in JSON for not null column", 0)\
-    M(Milliseconds, meta_sync_task_interval_ms, 1*60*60*1000, "Interval of background schedule task for metasore synchronization", 0)\
+    M(Bool, \
+      formatdatetime_f_prints_single_zero, \
+      false, \
+      "Formatter '%f' in function 'formatDateTime()' produces a single zero instead of six zeros if the formatted value has no " \
+      "fractional seconds.", \
+      0) \
+    M(Bool, \
+      formatdatetime_parsedatetime_m_is_month_name, \
+      true, \
+      "Formatter '%M' in functions 'formatDateTime()' and 'parseDateTime()' produces the month name instead of minutes.", \
+      0) \
+    M(Bool, tealimit_order_keep, false, "Whether tealimit output keep order by clause", 0) \
+    M(UInt64, early_limit_for_map_virtual_columns, 0, "Enable early limit while quering _map_column_keys column", 0) \
+    M(Bool, skip_nullinput_notnull_col, false, "Skip null value in JSON for not null column", 0) \
+    M(Milliseconds, \
+      meta_sync_task_interval_ms, \
+      1 * 60 * 60 * 1000, \
+      "Interval of background schedule task for metasore synchronization", \
+      0) \
     M(Bool, enable_fetch_part_incrementally, true, "Whether to enable fetching part incrementally", 0) \
     M(String, \
       blocklist_for_merge_thread_regex, \

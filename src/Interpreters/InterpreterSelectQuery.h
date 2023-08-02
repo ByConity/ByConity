@@ -29,7 +29,6 @@
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/IInterpreterUnionOrSelectQuery.h>
 #include <Interpreters/StorageID.h>
-#include <Interpreters/MaterializedViewSubstitutionOptimizer.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Storages/ReadInOrderOptimizer.h>
 #include <Storages/SelectQueryInfo.h>
@@ -136,9 +135,8 @@ public:
 
     Names getRequiredColumns() { return required_columns; }
 
-    MaterializedViewOptimizerResultPtr getMaterializeViewMatchResult() { return mv_optimizer_result; }
-
     static FillColumnDescription getWithFillDescription(const ASTOrderByElement & order_by_elem, ContextPtr context);
+    
 private:
     friend class InterpreterPerfectShard;
 
@@ -243,8 +241,6 @@ private:
 
     Poco::Logger * log;
     StorageMetadataPtr metadata_snapshot;
-
-    MaterializedViewOptimizerResultPtr mv_optimizer_result;
 };
 
 }

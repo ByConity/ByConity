@@ -117,7 +117,7 @@ public:
         if (!symbol_to_expressions.count(name))
             throw Exception("Unknown column " + name + " in SymbolTransformMap", ErrorCodes::LOGICAL_ERROR);
         ASTPtr rewrite = ASTVisitorUtil::accept(symbol_to_expressions.at(name)->clone(), *this, context);
-        expression_lineage[name] = rewrite;
+        expression_lineage[name] = rewrite->clone();
         return rewrite->clone();
     }
 

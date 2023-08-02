@@ -128,6 +128,7 @@
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 
 #include <Protos/cnch_common.pb.h>
+#include <Optimizer/OptimizerMetrics.h>
 
 using AsyncQueryStatus = DB::Protos::AsyncQueryStatus;
 
@@ -977,6 +978,14 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                     elem.query_tables = info.tables;
                     elem.query_columns = info.columns;
                     elem.query_projections = info.projections;
+                    /// Optimizer match materialized views
+                    if (context->getOptimizerMetrics())
+                    {
+                        for (const auto & view_id : context->getOptimizerMetrics()->getUsedMaterializedViews())
+                        {
+                            elem.query_materialized_views.emplace(view_id.getFullNameNotQuoted());
+                        }
+                    }
                 }
 
                 interpreter->extendQueryLogElem(elem, ast, context, query_database, query_table);

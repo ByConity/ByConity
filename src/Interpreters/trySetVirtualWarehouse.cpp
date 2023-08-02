@@ -87,11 +87,11 @@ static bool trySetVirtualWarehouseFromTable(const String & database, const Strin
         if (trySetVirtualWarehouseFromAST(view_table->getInnerQuery(), context))
             return true;
     }
-    // else if (auto mv_table = dynamic_cast<StorageMaterializedView *>(storage.get()))
-    // {
-    //     if (trySetVirtualWarehouseFromAST(mv_table->getInnerQuery(), context))
-    //         return true;
-    // }
+    else if (auto * mv_table = dynamic_cast<StorageMaterializedView *>(storage.get()))
+    {
+        if (trySetVirtualWarehouseFromAST(mv_table->getInnerQuery(), context))
+            return true;
+    }
 
     return false;
 }

@@ -255,6 +255,9 @@ void CloudMergeTreeBlockOutputStream::writeSuffixForInsert()
     }
     else if (auto worker_txn = dynamic_pointer_cast<CnchWorkerTransaction>(txn))
     {
+        if (worker_txn->hasEnableExplicitCommit())
+            return;
+
         auto kafka_table_id = txn->getKafkaTableID();
         if (!kafka_table_id.empty() && !worker_txn->hasEnableExplicitCommit())
         {

@@ -24,10 +24,12 @@
 #include <DataStreams/SquashingBlockInputStream.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <DataStreams/MaterializingBlockInputStream.h>
+#include <Storages/MergeTree/CloudMergeTreeBlockOutputStream.h>
 #include <DataStreams/copyData.h>
 #include <DataTypes/NestedUtils.h>
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/InterpreterInsertQuery.h>
+#include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Common/CurrentThread.h>
@@ -38,11 +40,12 @@
 #include <Storages/StorageValues.h>
 #include <Storages/LiveView/StorageLiveView.h>
 #include <Storages/StorageMaterializedView.h>
+#include <Storages/StorageView.h>
 #include <common/logger_useful.h>
 
 namespace DB
 {
-
+ 
 PushingToViewsBlockOutputStream::PushingToViewsBlockOutputStream(
     const StoragePtr & storage_,
     const StorageMetadataPtr & metadata_snapshot_,
@@ -71,7 +74,28 @@ PushingToViewsBlockOutputStream::PushingToViewsBlockOutputStream(
         disable_deduplication_for_children = !no_destination && storage->supportsDeduplication();
 
     auto table_id = storage->getStorageID();
-    Dependencies dependencies = DatabaseCatalog::instance().getDependencies(table_id);
+
+    /// TODO: In order to execute insert values in cnch server view dependencies should be
+    /// get from catalog service rather than in local context, because each query will destroy
+    /// database object and remove view dependency in local context. There should be a local cache.
+    Dependencies dependencies;
+    if (getContext()->getServerType() == ServerType::cnch_server)
+    {
+        auto start_time = getContext()->getTimestamp();
+        auto catalog_client = getContext()->getCnchCatalog();
+        if (!catalog_client)
+           throw Exception("get catalog client failed", ErrorCodes::LOGICAL_ERROR);
+
+        auto all_views_from_catalog = catalog_client->getAllViewsOn(*getContext(), storage, start_time);
+        for (auto & view : all_views_from_catalog)
+        {
+            dependencies.emplace_back(view->getDatabaseName(), view->getTableName());
+            auto & mutable_context = const_cast<Context &>(*getContext());
+            mutable_context.addSessionView({view->getDatabaseName(), view->getTableName()}, view);
+        }
+    }
+    else
+        dependencies = DatabaseCatalog::instance().getDependencies(table_id);
 
     /// We need special context for materialized views insertions
     if (!dependencies.empty())
@@ -94,55 +118,84 @@ PushingToViewsBlockOutputStream::PushingToViewsBlockOutputStream(
 
     for (const auto & database_table : dependencies)
     {
-        auto dependent_table = DatabaseCatalog::instance().getTable(database_table, getContext());
-        auto dependent_metadata_snapshot = dependent_table->getInMemoryMetadataPtr();
+        StoragePtr view_table;
+        if (getContext()->getServerType() == ServerType::cnch_server)
+        {
+            auto & mutable_context = const_cast<Context &>(*getContext());
+            view_table = mutable_context.getSessionView(StorageID(database_table.getDatabaseName(), database_table.getTableName()));
+        }
+        else
+            view_table = DatabaseCatalog::instance().getTable(database_table, getContext());
+        
+        if(!view_table)
+           continue;
+         
+        auto dependent_metadata_snapshot = view_table->getInMemoryMetadataPtr();
 
         ASTPtr query;
         BlockOutputStreamPtr out;
-        String implicit_column;
-
-        if (auto * materialized_view = dynamic_cast<StorageMaterializedView *>(dependent_table.get()))
+        query = dependent_metadata_snapshot->getSelectQuery().inner_query;
+        if (auto * materialized_view = dynamic_cast<StorageMaterializedView *>(view_table.get()))
         {
             addTableLock(
                 materialized_view->lockForShare(getContext()->getInitialQueryId(), getContext()->getSettingsRef().lock_acquire_timeout));
 
-            StoragePtr inner_table = materialized_view->getTargetTable();
-            auto inner_table_id = inner_table->getStorageID();
-            auto inner_metadata_snapshot = inner_table->getInMemoryMetadataPtr();
-            query = dependent_metadata_snapshot->getSelectQuery().inner_query;
-
-            std::unique_ptr<ASTInsertQuery> insert = std::make_unique<ASTInsertQuery>();
-            insert->table_id = inner_table_id;
-
-            /// Get list of columns we get from select query.
-            auto header = InterpreterSelectQuery(query, select_context, SelectQueryOptions().analyze())
-                .getSampleBlock();
-
-            /// Insert only columns returned by select.
-            auto list = std::make_shared<ASTExpressionList>();
-            const auto & inner_table_columns = inner_metadata_snapshot->getColumns();
-            for (const auto & column : header)
+            StoragePtr target_table;
+            if (getContext()->getServerType() == ServerType::cnch_server)
             {
-                /// But skip columns which storage doesn't have.
-                if (inner_table_columns.hasPhysical(column.name))
-                    list->children.emplace_back(std::make_shared<ASTIdentifier>(column.name));
+                auto & mutable_context = const_cast<Context &>(*getContext());
+                target_table = mutable_context.getSessionView(materialized_view->getTargetTableId());
             }
+            else
+                target_table = DatabaseCatalog::instance().getTable(materialized_view->getTargetTableId(), getContext());
+            
+            if(!target_table)
+               continue;
+            
+            auto * cnch_target_table = dynamic_cast<StorageCnchMergeTree*>(target_table.get());
+            if (cnch_target_table && getContext()->getServerType() == ServerType::cnch_server)
+            {
+                auto target_metadata_snapshot = cnch_target_table->getInMemoryMetadataPtr();
+                bool enable_staging_area = target_metadata_snapshot->hasUniqueKey() && bool(getContext()->getSettingsRef().enable_staging_area_for_write);
+                out = std::make_shared<CloudMergeTreeBlockOutputStream>(*cnch_target_table, target_metadata_snapshot, insert_context, enable_staging_area);
+            }
+            else
+            {
+                auto target_table_id = target_table->getStorageID();
+                auto target_metadata_snapshot = target_table->getInMemoryMetadataPtr();
+                
+                std::unique_ptr<ASTInsertQuery> insert = std::make_unique<ASTInsertQuery>();
+                insert->table_id = target_table_id;
 
-            insert->columns = std::move(list);
+                /// Get list of columns we get from select query.
+                auto header = InterpreterSelectQuery(query, select_context, SelectQueryOptions().analyze())
+                    .getSampleBlock();
 
-            ASTPtr insert_query_ptr(insert.release());
-            InterpreterInsertQuery interpreter(insert_query_ptr, insert_context);
-            BlockIO io = interpreter.execute();
-            out = io.out;
+                /// Insert only columns returned by select.
+                auto list = std::make_shared<ASTExpressionList>();
+                const auto & target_table_columns = target_metadata_snapshot->getColumns();
+                for (const auto & column : header)
+                {
+                    /// But skip columns which storage doesn't have.
+                    if (target_table_columns.hasPhysical(column.name))
+                        list->children.emplace_back(std::make_shared<ASTIdentifier>(column.name));
+                }
+
+                insert->columns = std::move(list);
+                ASTPtr insert_query_ptr(insert.release());
+                InterpreterInsertQuery interpreter(insert_query_ptr, insert_context);
+                BlockIO io = interpreter.execute();
+                out = io.out;
+            }
         }
-        else if (dynamic_cast<const StorageLiveView *>(dependent_table.get()))
+        else if (dynamic_cast<const StorageLiveView *>(view_table.get()) || dynamic_cast<const StorageView *>(view_table.get()))
             out = std::make_shared<PushingToViewsBlockOutputStream>(
-                dependent_table, dependent_metadata_snapshot, insert_context, ASTPtr(), true);
+                view_table, dependent_metadata_snapshot, insert_context, ASTPtr(), true);
         else
             out = std::make_shared<PushingToViewsBlockOutputStream>(
-                dependent_table, dependent_metadata_snapshot, insert_context, ASTPtr());
+                view_table, dependent_metadata_snapshot, insert_context, ASTPtr());
 
-        views.emplace_back(ViewInfo{std::move(query), database_table, std::move(out), nullptr, 0, implicit_column});
+        views.emplace_back(ViewInfo{std::move(query), database_table, std::move(out), nullptr, 0});
     }
 
     /// Do not push to destination table if the flag is set
@@ -150,6 +203,39 @@ PushingToViewsBlockOutputStream::PushingToViewsBlockOutputStream(
     {
         output = storage->write(query_ptr, storage->getInMemoryMetadataPtr(), getContext());
         replicated_output = dynamic_cast<ReplicatedMergeTreeBlockOutputStream *>(output.get());
+    }
+
+    /// Insert values query execute in server side in order to commit server transaction once
+    /// disable destination table transaction commit , related views to commit transactions
+    /// TODO: find better solution, this implementation is a little trick
+    if (getContext()->getServerType() == ServerType::cnch_server && !views.empty())
+    {
+        bool all_cloud_output = true;
+        for (const auto & view_info : views)
+        {
+            auto * cloud_output_stream = dynamic_cast<CloudMergeTreeBlockOutputStream *>(view_info.out.get());
+            if (!cloud_output_stream)
+                all_cloud_output = all_cloud_output && false;
+        }
+
+        if (output)
+        {
+            auto * dest_output_stream = dynamic_cast<CloudMergeTreeBlockOutputStream *>(output.get());
+            if (!dest_output_stream)
+                all_cloud_output = all_cloud_output && false;
+        }
+
+        if (all_cloud_output)
+        {
+            auto * dest_output_stream = dynamic_cast<CloudMergeTreeBlockOutputStream *>(output.get());
+            dest_output_stream->disableTransactionCommit();
+            for(const auto & view: views)
+            {
+                auto * cloud_output_stream = dynamic_cast<CloudMergeTreeBlockOutputStream *>(view.out.get());
+                cloud_output_stream->disableTransactionCommit();
+            }
+            explicit_commit_txn = true;
+        }
     }
 }
 
@@ -337,6 +423,18 @@ void PushingToViewsBlockOutputStream::writeSuffix()
             milliseconds);
     }
 
+    /// explicit_commit_txn is true finally commit transaction after all write actions complete
+    /// TODO: find better solution, this implementation is a little trick
+    if (explicit_commit_txn)
+    {
+        auto txn = getContext()->getCurrentTransaction();
+        if (dynamic_pointer_cast<CnchServerTransaction>(txn))
+        {
+            txn->setMainTableUUID(storage->getStorageUUID());
+            txn->commitV2();
+        }
+    }
+
     /// A trick way to commit insert transaction for multi MVs
     /// Implicit commit is used in kafka consumer and insert values executed in worker
     /// TODO: it should be changed into interactive transaction when it is ready
@@ -344,7 +442,7 @@ void PushingToViewsBlockOutputStream::writeSuffix()
     {
         auto txn = getContext()->getCurrentTransaction();
         if (auto worker_txn = dynamic_pointer_cast<CnchWorkerTransaction>(txn);
-            worker_txn && worker_txn->hasEnableExplicitCommit() &&
+            worker_txn && worker_txn->hasEnableExplicitCommit() && 
             worker_txn->getExplicitCommitStorageID() == storage->getStorageID())
         {
             txn->commitV2();
@@ -367,8 +465,6 @@ void PushingToViewsBlockOutputStream::process(const Block & block, ViewInfo & vi
 
     try
     {
-        String implicit_column;
-        Block output_header = view.out->getHeader();
         BlockInputStreamPtr in;
 
         /// We need keep InterpreterSelectQuery, until the processing will be finished, since:
@@ -382,7 +478,6 @@ void PushingToViewsBlockOutputStream::process(const Block & block, ViewInfo & vi
         ///   (the problem raises only when function uses context from the
         ///    execute*() method, like FunctionDictGet do)
         /// - These objects live inside query pipeline (DataStreams) and the reference become dangling.
-        std::optional<InterpreterSelectQuery> select;
 
         if (view.query)
         {
@@ -393,9 +488,17 @@ void PushingToViewsBlockOutputStream::process(const Block & block, ViewInfo & vi
             auto local_context = Context::createCopy(select_context);
             local_context->addViewSource(
                 StorageValues::create(storage->getStorageID(), metadata_snapshot->getColumns(), block, storage->getVirtuals()));
-            select.emplace(view.query, local_context, SelectQueryOptions());
-            in = std::make_shared<MaterializingBlockInputStream>(select->execute().getInputStream());
-
+            if (auto * select = view.query->as<ASTSelectWithUnionQuery>())
+            {
+                InterpreterSelectWithUnionQuery interepter_select(view.query, local_context, SelectQueryOptions());
+                in = std::make_shared<MaterializingBlockInputStream>(interepter_select.execute().getInputStream());
+            }
+            else
+            {
+                InterpreterSelectQuery interepter_select(view.query, local_context, SelectQueryOptions());
+                in = std::make_shared<MaterializingBlockInputStream>(interepter_select.execute().getInputStream());
+            }
+            
             /// Squashing is needed here because the materialized view query can generate a lot of blocks
             /// even when only one block is inserted into the parent table (e.g. if the query is a GROUP BY
             /// and two-level aggregation is triggered).

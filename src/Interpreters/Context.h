@@ -417,6 +417,13 @@ private:
     /// Fields for distributed s3 function
     std::optional<ReadTaskCallback> next_task_callback;
 
+    /// This session view cache is used when executing insert actions in cnch server side
+    /// and this host is not the master of this table with view dependencies catalog service
+    /// will not cache storage instances.
+    /// This cache is used during session context when query complete execution this cache
+    /// will be deconstructed. TODO: Try to find better solution.
+    std::map<StorageID, StoragePtr> session_views_cache;
+
     /// Record entities accessed by current query, and store this information in system.query_log.
     struct QueryAccessInfo
     {
@@ -562,6 +569,9 @@ public:
     static ContextMutablePtr createCopy(const ContextMutablePtr & other);
     static ContextMutablePtr createCopy(const ContextPtr & other);
     static SharedContextHolder createShared();
+
+    void addSessionView(StorageID view_table_id, StoragePtr view_storage);
+    StoragePtr getSessionView(StorageID view_table_id);
 
     void copyFrom(const ContextPtr & other);
 
@@ -910,6 +920,7 @@ public:
     CnchServerResourcePtr tryGetCnchServerResource() const;
     CnchWorkerResourcePtr getCnchWorkerResource() const;
     CnchWorkerResourcePtr tryGetCnchWorkerResource() const;
+    void initCnchWorkerResource();
 
     /// For methods below you may need to acquire the context lock by yourself.
 

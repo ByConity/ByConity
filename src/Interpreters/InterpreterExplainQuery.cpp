@@ -46,38 +46,16 @@
 #include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <QueryPlan/BuildQueryPipelineSettings.h>
 #include <Processors/printPipeline.h>
-#include <Storages/StorageMaterializedView.h>
 #include <Common/JSONBuilder.h>
 #include <IO/WriteBufferFromString.h>
 #include <QueryPlan/GraphvizPrinter.h>
 #include <Interpreters/SegmentScheduler.h>
 #include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
 #include <Analyzers/QueryRewriter.h>
+#include <Interpreters/GetAggregatesVisitor.h>
 
 namespace DB
 {
-
-static int fls(int x)
-{
-    int position;
-    int i;
-    if(0 != x)
-    {
-        for (i = (x >> 1), position = 0; i != 0; ++position)
-            i >>= 1;
-    }
-    else
-        position = -1;
-    return position+1;
-}
-
-static unsigned int roundup_pow_of_two(unsigned int x)
-{
-    if (x <= 1)
-        return 2;
-    else
-        return 1UL << fls(x - 1);
-}
 
 namespace ErrorCodes
 {
@@ -475,86 +453,6 @@ BlockInputStreamPtr InterpreterExplainQuery::executeImpl()
             plan.explainPipeline(buf, settings.query_pipeline_options);
         }
     }
-    else if (ast.getKind() == ASTExplainQuery::MaterializedView)
-    {
-        /// rewrite distributed table to local table
-        ASTPtr explain_query = ast.getExplainedQuery()->clone();
-        rewriteDistributedToLocal(explain_query);
-        ASTSelectWithUnionQuery * select_union_query = explain_query->as<ASTSelectWithUnionQuery>();
-        if (select_union_query && !select_union_query->list_of_selects->children.empty())
-        {
-            Block block;
-            auto view_table_column = ColumnString::create();
-            auto hit_view = ColumnUInt8::create();
-            auto match_cost = ColumnInt64::create();
-            auto read_cost = ColumnUInt64::create();
-            auto view_inner_query = ColumnString::create();
-            auto miss_match_reason = ColumnString::create();
-
-            /// Enable enable_view_based_query_rewrite setting to get view match result
-            ContextMutablePtr context = Context::createCopy(getContext());
-            context->setSetting("enable_view_based_query_rewrite", 1);
-            for (const auto & element : select_union_query->list_of_selects->children)
-            {
-                InterpreterSelectQuery interpreter{element, context, SelectQueryOptions(QueryProcessingStage::FetchColumns)};
-                std::shared_ptr<const MaterializedViewOptimizerResult> mv_optimizer_result = interpreter.getMaterializeViewMatchResult();
-                int MAX = std::numeric_limits<int>::max();
-                if (!mv_optimizer_result->validate_info.empty())
-                {
-                    view_table_column->insertDefault();
-                    hit_view->insert(0);
-                    match_cost->insertDefault();
-                    read_cost->insert(0);
-                    view_inner_query->insertDefault();
-                    miss_match_reason->insert(mv_optimizer_result->validate_info);
-                }
-                else
-                {
-                    for (auto iter = mv_optimizer_result->views_match_info.begin(); iter != mv_optimizer_result->views_match_info.end();
-                         iter++)
-                    {
-                        MatchResult::ResultPtr result = *iter;
-                        if (!result->view_table)
-                            continue;
-
-                        /// insert view name
-                        view_table_column->insert(result->view_table->getStorageID().getFullNameNotQuoted());
-
-                        /// insert view match result
-                        if (result->cost != MAX && iter == mv_optimizer_result->views_match_info.begin())
-                            hit_view->insert(1);
-                        else
-                            hit_view->insert(0);
-
-                        /// insert cost value
-                        match_cost->insert(result->cost);
-
-                        /// insert read cost
-                        read_cost->insert(result->read_cost);
-
-                        /// insert view inner query
-                        auto * materialized_view = dynamic_cast<StorageMaterializedView *>(result->view_table.get());
-                        if (materialized_view)
-                        {
-                            ASTPtr view_query = materialized_view->getInnerQuery();
-                            view_inner_query->insert(queryToString(view_query));
-                        }
-                        else
-                            view_inner_query->insertDefault();
-
-                        miss_match_reason->insert(result->view_match_info);
-                    }
-                }
-            }
-            block.insert({std::move(view_table_column), std::make_shared<DataTypeString>(), "view_table"});
-            block.insert({std::move(hit_view), std::make_shared<DataTypeUInt8>(), "match_result"});
-            block.insert({std::move(match_cost), std::make_shared<DataTypeInt64>(), "match_cost"});
-            block.insert({std::move(read_cost), std::make_shared<DataTypeUInt64>(), "read_cost"});
-            block.insert({std::move(view_inner_query), std::make_shared<DataTypeString>(), "view_query"});
-            block.insert({std::move(miss_match_reason), std::make_shared<DataTypeString>(), "miss_reason"});
-            return std::make_shared<OneBlockInputStream>(block);
-        }
-    }
     else if (ast.getKind() == ASTExplainQuery::ExplainKind::QueryElement)
     {
         ASTPtr explain_query = ast.getExplainedQuery()->clone();
@@ -646,103 +544,99 @@ void InterpreterExplainQuery::listPartitionKeys(StoragePtr & storage, WriteBuffe
  */
 void InterpreterExplainQuery::listRowsOfOnePartition(StoragePtr & storage, const ASTPtr & group_by, const ASTPtr & where, WriteBuffer & buffer)
 {
-    auto partition_condition = getActivePartCondition(storage);
-    if (partition_condition)
+    UInt64 base_rows = 0;
+    UInt64 view_rows = 0;
+    if (getContext()->getSettingsRef().enable_element_mv_rows)
     {
-        UInt64 base_rows = 0;
+        auto partition_condition = getActivePartCondition(storage);
+        if (partition_condition)
         {
-            WriteBufferFromOwnString query_buffer;
-            query_buffer << "select count() as count from " << backQuoteIfNeed(storage->getStorageID().getDatabaseName()) << "."
-                     << backQuoteIfNeed(storage->getStorageID().getTableName()) << " where " << *partition_condition;
-
-            const String query_str = query_buffer.str();
-            const char * begin = query_str.data();
-            const char * end = query_str.data() + query_str.size();
-
-            ParserQuery parser(end, ParserSettings::valueOf(getContext()->getSettingsRef().dialect_type));
-            auto query_ast = parseQuery(parser, begin, end, "", 0, 0);
-
-            InterpreterSelectWithUnionQuery select(query_ast, getContext(), SelectQueryOptions());
-            BlockInputStreamPtr in = select.execute().getInputStream();
-
-            in->readPrefix();
-            Block block = in->read();
-            in->readSuffix();
-
-            auto & column = block.getByName("count").column;
-            if (column->size() == 1)
-                base_rows = column->getUInt(0);
-        }
-
-        UInt64 view_rows = 0;
-        {
-            WriteBufferFromOwnString query_ss;
-            query_ss << "select";
-            if(group_by)
             {
-                query_ss << " uniq(";
-                auto & expression_list = group_by->as<ASTExpressionList &>();
-                for (size_t i = 0, size = expression_list.children.size(); i < size; ++i)
+                WriteBufferFromOwnString query_buffer;
+                query_buffer << "select count() as count from " << storage->getStorageID().getFullTableName() << " where " << *partition_condition;
+
+                const String query_str = query_buffer.str();
+                const char * begin = query_str.data();
+                const char * end = query_str.data() + query_str.size();
+
+                ParserQuery parser(end, ParserSettings::valueOf(getContext()->getSettingsRef().dialect_type));
+                auto query_ast = parseQuery(parser, begin, end, "", 0, 0);
+
+                InterpreterSelectWithUnionQuery select(query_ast, getContext(), SelectQueryOptions());
+                BlockInputStreamPtr in = select.execute().getInputStream();
+
+                in->readPrefix();
+                Block block = in->read();
+                in->readSuffix();
+
+                auto & column = block.getByName("count").column;
+                if (column->size() == 1)
+                    base_rows = column->getUInt(0);
+            }
+            
+            {
+                WriteBufferFromOwnString query_ss;
+                query_ss << "select";
+                if(group_by)
                 {
-                    expression_list.children[i]->format(IAST::FormatSettings(query_ss, true, true));
-                    query_ss << (i + 1 != size ? ", " : ")");
-                }
-                query_ss << " as count";
-            }
-            else
-            {
-                query_ss << " count() as count";
-            }
-
-            query_ss << " from " << backQuoteIfNeed(storage->getStorageID().getDatabaseName()) << "."
-                     << backQuoteIfNeed(storage->getStorageID().getTableName()) << " where " << *partition_condition;
-
-            if (where)
-            {
-                query_ss << " and (";
-                where->format(IAST::FormatSettings(query_ss, true));
-                query_ss << ")";
-            }
-
-            String query_str = query_ss.str();
-
-            LOG_DEBUG(log, "element view rows query-{}",  query_str);
-            const char * begin = query_str.data();
-            const char * end = query_str.data() + query_str.size();
-
-            ParserQuery parser(end, ParserSettings::valueOf(getContext()->getSettingsRef().dialect_type));
-            auto query_ast = parseQuery(parser, begin, end, "", 0, 0);
-
-            InterpreterSelectWithUnionQuery select(query_ast, getContext(), SelectQueryOptions());
-            BlockInputStreamPtr in = select.execute().getInputStream();
-
-            in->readPrefix();
-            Block block = in->read();
-            in->readSuffix();
-
-            auto & column = block.getByName("count").column;
-            if (column->size() == 1)
-            {
-                if (isColumnNullable(*column))
-                {
-                    const auto * nullable_column = static_cast<const ColumnNullable *>(column.get());
-                    view_rows = nullable_column->isNullAt(0) ? 0 : nullable_column->getNestedColumnPtr()->getUInt(0);
+                    query_ss << " uniq(";
+                    auto & expression_list = group_by->as<ASTExpressionList &>();
+                    for (size_t i = 0, size = expression_list.children.size(); i < size; ++i)
+                    {
+                        expression_list.children[i]->format(IAST::FormatSettings(query_ss, true, true));
+                        query_ss << (i + 1 != size ? ", " : ")");
+                    }
+                    query_ss << " as count";
                 }
                 else
                 {
-                    view_rows = column->getUInt(0);
+                    query_ss << " count() as count";
                 }
-                LOG_DEBUG(log, "view query count column-{}, result-{}", column->dumpStructure(), view_rows);
+
+                query_ss << " from " << backQuoteIfNeed(storage->getStorageID().getDatabaseName()) << "."
+                         << backQuoteIfNeed(storage->getStorageID().getTableName()) << " where " << *partition_condition;
+
+                if (where)
+                {
+                    query_ss << " and (";
+                    where->format(IAST::FormatSettings(query_ss, true));
+                    query_ss << ")";
+                }
+
+                String query_str = query_ss.str();
+
+                LOG_DEBUG(log, "element view rows query-{}",  query_str);
+                const char * begin = query_str.data();
+                const char * end = query_str.data() + query_str.size();
+
+                ParserQuery parser(end, ParserSettings::valueOf(getContext()->getSettingsRef().dialect_type));
+                auto query_ast = parseQuery(parser, begin, end, "", 0, 0);
+
+                InterpreterSelectWithUnionQuery select(query_ast, getContext(), SelectQueryOptions());
+                BlockInputStreamPtr in = select.execute().getInputStream();
+
+                in->readPrefix();
+                Block block = in->read();
+                in->readSuffix();
+
+                auto & column = block.getByName("count").column;
+                if (column->size() == 1)
+                {
+                    if (isColumnNullable(*column))
+                    {
+                        const auto * nullable_column = static_cast<const ColumnNullable *>(column.get());
+                        view_rows = nullable_column->isNullAt(0) ? 0 : nullable_column->getNestedColumnPtr()->getUInt(0);
+                    }
+                    else
+                    {
+                        view_rows = column->getUInt(0);
+                    }
+                    LOG_DEBUG(log, "view query count column-{}, result-{}", column->dumpStructure(), view_rows);
+                }
             }
         }
-
-        buffer << "\"base_rows\": " << base_rows << ", " << "\"view_rows\": " << view_rows << ", ";
-        auto * merge_tree_data = dynamic_cast<MergeTreeData *>(storage.get());
-        size_t mv_index_granularity = merge_tree_data->getSettings()->index_granularity;
-        if (view_rows != 0 && base_rows != 0 && merge_tree_data->getSettings()->index_granularity!= 0)
-            mv_index_granularity = roundup_pow_of_two(static_cast<unsigned int>(merge_tree_data->getSettings()->index_granularity / (base_rows / view_rows)));
-        buffer << "\"base_rows\": " << base_rows << ", " << "\"view_rows\": " << view_rows << ", " << "\"recommend_mv_index_granularity\": " << mv_index_granularity << ", ";
     }
+    buffer << "\"base_rows\": " << base_rows << ", " << "\"view_rows\": " << view_rows << ", ";
 }
 
 
@@ -779,16 +673,20 @@ void InterpreterExplainQuery::elementMetrics(const ASTPtr & select, WriteBuffer 
         bool first_metric = true;
         for (auto & child : expression_list.children)
         {
-            auto * func = child->as<ASTFunction>();
-            if (func && AggregateFunctionFactory::instance().isAggregateFunctionName(func->name))
+            if (child->as<ASTFunction>())
             {
-                if(!first_metric)
-                    buffer << ", ";
-                buffer << "\"";
-                child->format(IAST::FormatSettings(buffer, true, true));
-                buffer << "\"";
-                metric_aliases.push_back(child->tryGetAlias());
-                first_metric = false;
+                GetAggregatesVisitor::Data data = {};
+                GetAggregatesVisitor(data).visit(child);
+                if (!data.aggregates.empty())
+                {
+                    if(!first_metric)
+                        buffer << ", ";
+                    buffer << "\"";
+                    child->format(IAST::FormatSettings(buffer, true, true));
+                    buffer << "\"";
+                    metric_aliases.push_back(child->tryGetAlias());
+                    first_metric = false;
+                }
             }
         }
     }
@@ -810,9 +708,15 @@ void InterpreterExplainQuery::elementDimensions(const ASTPtr & select, WriteBuff
         bool first_dimension = true;
         for (auto & child : expression_list.children)
         {
-            auto * func = child->as<ASTFunction>();
+            bool not_aggregate_func = false;
+            if (child->as<ASTFunction>())
+            {
+                GetAggregatesVisitor::Data data = {};
+                GetAggregatesVisitor(data).visit(child);
+                not_aggregate_func = data.aggregates.empty();
+            }
             auto * identifier = child->as<ASTIdentifier>();
-            if (identifier || (func && !AggregateFunctionFactory::instance().isAggregateFunctionName(func->name)))
+            if (identifier || not_aggregate_func)
             {
                 if (!first_dimension)
                     buffer << ", ";
