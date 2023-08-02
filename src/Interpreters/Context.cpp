@@ -4935,9 +4935,4 @@ String Context::getCnchAuxilityPolicyName() const
     return getConfigRef().getString("storage_configuration.cnch_auxility_policy", "default");
 }
 
-bool Context::isAsyncMode() const
-{
-    return getClientInfo().query_kind == ClientInfo::QueryKind::INITIAL_QUERY && getServerType() == ServerType::cnch_server
-        && getSettingsRef().enable_async_execution;
-}
 }

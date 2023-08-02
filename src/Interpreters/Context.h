@@ -1459,7 +1459,6 @@ public:
     {
         return async_query_id;
     }
-    bool isAsyncMode() const;
 
 private:
     String tenant_id;

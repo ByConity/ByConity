@@ -4,30 +4,32 @@
 #include <unordered_map>
 #include <Formats/FormatFactory.h>
 #include <Processors/Formats/IOutputFormat.h>
-
 #include "Common/ThreadPool.h"
 #include "common/types.h"
-#include "DataStreams/BlockIO.h"
+
 #include "DataStreams/IBlockStream_fwd.h"
-#include "Interpreters/Context_fwd.h"
-#include "Parsers/IAST_fwd.h"
+#include "TCPQuery.h"
 
 namespace DB
 {
-using AsyncQueryHandlerFunc = std::function<void(BlockIO, ASTPtr, ContextMutablePtr)>;
-using SendAsyncQueryIdCallback = std::function<void(const String &)>;
+using TCPQueryHandleFunc = std::function<void(std::shared_ptr<TCPQuery>)>;
+using HttpQueryHandlerFunc = std::function<void(BlockIO, ASTPtr, ContextMutablePtr, const std::optional<FormatSettings> &)>;
 
 class AsyncQueryManager : public WithContext
 {
 public:
     explicit AsyncQueryManager(ContextWeakMutablePtr context_);
 
+    void insertAndRun(std::shared_ptr<TCPQuery> info, TCPQueryHandleFunc && func);
     void insertAndRun(
         BlockIO streams,
         ASTPtr ast,
         ContextMutablePtr context,
-        SendAsyncQueryIdCallback send_async_query_id,
-        AsyncQueryHandlerFunc && async_query_handle_func);
+        WriteBuffer & ostr,
+        const std::optional<FormatSettings> & output_format_settings,
+        HttpQueryHandlerFunc && func);
+    static void sendAsyncQueryId(
+        const String & id, ContextMutablePtr context, WriteBuffer & ostr, const std::optional<FormatSettings> & output_format_settings);
     void cancelQuery(String id);
 
 private:
