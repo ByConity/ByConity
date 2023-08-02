@@ -278,6 +278,7 @@ public:
     Partitioning & getNodePartitioningRef() { return node_partitioning; }
 
     static Property createCTEDefGlobalProperty(const Property & property, CTEId cte_id);
+    static Property createCTEDefGlobalProperty(const Property & property, CTEId cte_id, const std::unordered_set<CTEId> & contains_cte_ids);
     static Property
     createCTEDefLocalProperty(const Property & property, CTEId cte_id, const std::unordered_map<String, String> & identities_mapping);
 
@@ -297,41 +298,14 @@ private:
     Sorting sorting;
 };
 
-class CTEDescriptions
+class CTEDescriptions : public std::map<CTEId, CTEDescription>
 {
 public:
+    using std::map<CTEId, CTEDescription>::map;
     size_t hash() const;
     CTEDescriptions translate(const std::unordered_map<String, String> & identities) const;
+    CTEDescriptions filter(const std::unordered_set<CTEId> & allowed) const;
     String toString() const;
-
-    bool contains(CTEId cte_id) const { return explored.contains(cte_id); }
-
-    bool isShared(CTEId cte_id) const { return cte_descriptions.contains(cte_id); }
-    const CTEDescription & getSharedDescription(CTEId cte_id) const { return cte_descriptions.at(cte_id); }
-
-    void filter(const std::unordered_set<CTEId> & allowed);
-    void registerCTE(const std::set<CTEId> & cte_ids) { explored.insert(cte_ids.begin(), cte_ids.end()); }
-    void addSharedDescription(CTEId cte_id, const CTEDescription & cte_description)
-    {
-        cte_descriptions.emplace(cte_id, cte_description);
-        explored.emplace(cte_id);
-    }
-    bool empty() const { return explored.empty(); }
-    void erase(CTEId cte_id)
-    {
-        cte_descriptions.erase(cte_id);
-        explored.erase(cte_id);
-    }
-
-    bool operator==(const CTEDescriptions & rhs) const;
-
-private:
-    std::map<CTEId, CTEDescription> cte_descriptions;
-
-    /**
-     * if cte_id is in explored and not exists in cte_descriptions, it means cte is inlined.
-     */
-    std::set<CTEId> explored;
 };
 
 class Property

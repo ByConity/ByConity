@@ -106,6 +106,7 @@ const Rewriters & PlanOptimizer::getFullRewriters()
 {
     // the order of rules matters, DO NOT change.
     static Rewriters full_rewrites = {
+
         std::make_shared<HintsPropagator>(),
         std::make_shared<ColumnPruning>(),
         std::make_shared<UnifyNullableType>(),
@@ -121,6 +122,7 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         // Simplify expression, like, expression interpret, unwrap cast. these rules require type analyzer.
         std::make_shared<IterativeRewriter>(Rules::normalizeExpressionRules(), "NormalizeExpression"),
         std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
+
         // removeRedundantRules may remove cte, so we need to remove unused cte after RemoveRedundant.
         std::make_shared<RemoveUnusedCTE>(),
 
@@ -190,9 +192,6 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
         std::make_shared<IterativeRewriter>(Rules::normalizeExpressionRules(), "NormalizeExpression"),
         std::make_shared<UnifyJoinOutputs>(),
-
-        // remove unused CTE before cascades
-        std::make_shared<RemoveUnusedCTE>(),
 
         //add reorder adjacent windows
         std::make_shared<IterativeRewriter>(Rules::swapAdjacentRules(), "SwapAdjacent"),

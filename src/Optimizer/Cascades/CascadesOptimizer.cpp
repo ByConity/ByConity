@@ -30,6 +30,8 @@
 #include <QueryPlan/CTERefStep.h>
 #include <QueryPlan/GraphvizPrinter.h>
 #include <QueryPlan/PlanPattern.h>
+#include <QueryPlan/ReadNothingStep.h>
+#include <QueryPlan/ValuesStep.h>
 #include <Storages/StorageDistributed.h>
 
 namespace DB
@@ -51,26 +53,18 @@ void CascadesOptimizer::rewrite(QueryPlan & plan, ContextMutablePtr context) con
     auto root_id = root->getGroupId();
     auto single = Property{Partitioning{Partitioning::Handle::SINGLE}};
 
-    WinnerPtr winner;
-    try
-    {
-        winner = optimize(root_id, cascades_context, single);
-    }
-    catch (...)
-    {
-        LOG_DEBUG(cascades_context.getLog(), cascades_context.getInfo());
-        GraphvizPrinter::printMemo(cascades_context.getMemo(), root_id, context, std::to_string(id) + "_CascadesOptimizer-Memo-Graph");
-        throw;
-    }
+    auto actual_property = optimize(root_id, cascades_context, single);
     LOG_DEBUG(cascades_context.getLog(), cascades_context.getInfo());
+    GraphvizPrinter::printMemo(cascades_context.getMemo(), context, std::to_string(id) + "_CascadesOptimizer-Memo");
     GraphvizPrinter::printMemo(cascades_context.getMemo(), root_id, context, std::to_string(id) + "_CascadesOptimizer-Memo-Graph");
 
     auto result = buildPlanNode(root_id, cascades_context, single);
-    for (const auto & item : winner->getCTEActualProperties())
+    for (auto & item : actual_property.getCTEDescriptions())
     {
         auto cte_id = item.first;
         auto cte_def_group = cascades_context.getMemo().getCTEDefGroupByCTEId(cte_id);
-        auto cte = buildPlanNode(cte_def_group->getId(), cascades_context, item.second.first);
+        auto cte_property = CTEDescription::createCTEDefGlobalProperty(actual_property, cte_id, cte_def_group->getCTESet());
+        auto cte = buildPlanNode(cte_def_group->getId(), cascades_context, cte_property);
         plan.getCTEInfo().update(cte_id, cte);
     }
 
@@ -81,7 +75,7 @@ void CascadesOptimizer::rewrite(QueryPlan & plan, ContextMutablePtr context) con
     plan.update(result);
 }
 
-WinnerPtr CascadesOptimizer::optimize(GroupId root_group_id, CascadesContext & context, const Property & required_prop)
+Property CascadesOptimizer::optimize(GroupId root_group_id, CascadesContext & context, const Property & required_prop)
 {
     auto root_context = std::make_shared<OptimizationContext>(context, required_prop, std::numeric_limits<double>::max());
     auto root_group = context.getMemo().getGroupById(root_group_id);
@@ -100,13 +94,14 @@ WinnerPtr CascadesOptimizer::optimize(GroupId root_group_id, CascadesContext & c
         UInt64 elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - start_time).count();
         if (elapsed >= context.getTaskExecutionTimeout() || context.getTaskStack().size() > 100000)
         {
+            GraphvizPrinter::printMemo(context.getMemo(), root_group->getId(), context.getContext(), GraphvizPrinter::MEMO_GRAPH_PATH);
             throw Exception(
                 "Cascades exhausted the time limit of " + std::to_string(context.getTaskExecutionTimeout()) + " ms",
                 ErrorCodes::OPTIMIZER_TIMEOUT);
         }
     }
 
-    return root_group->getBestExpression(required_prop);
+    return root_group->getBestExpression(required_prop)->getActual();
 }
 
 

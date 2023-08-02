@@ -54,17 +54,13 @@ public:
         GroupExprPtr local_exchange_,
         PropertySet require_children_,
         Property actual_,
-        double cost_,
-        std::map<CTEId, std::pair<Property, double>> cte_actual_props_,
-        std::vector<CTEId> cte_ancestor_)
+        double cost_)
         : group_expr(std::move(group_expr_))
         , remote_exchange(std::move(remote_exchange_))
         , local_exchange(std::move(local_exchange_))
         , require_children(std::move(require_children_))
         , actual(std::move(actual_))
         , cost(cost_)
-        , cte_actual_props(std::move(cte_actual_props_))
-        , cte_ancestor(std::move(cte_ancestor_))
     {
     }
 
@@ -78,9 +74,6 @@ public:
 
     double getCost() const { return cost; }
 
-    const std::map<CTEId, std::pair<Property, double>> & getCTEActualProperties() const { return cte_actual_props; }
-    const std::vector<CTEId> & getCTEAncestors() const { return cte_ancestor; }
-
     PlanNodePtr buildPlanNode(CascadesContext & context, PlanNodes & children);
 
 private:
@@ -91,12 +84,6 @@ private:
     PropertySet require_children;
     Property actual;
     double cost;
-
-    std::map<CTEId, std::pair<Property, double>> cte_actual_props;
-    /**
-     * This group expressions is ancestor node of these CTEs. Only used for debug now.
-     */
-    std::vector<CTEId> cte_ancestor;
 };
 
 class GroupExpression

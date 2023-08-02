@@ -211,6 +211,7 @@ public:
     const static int PRINT_AST_INDEX = 1000;
     const static int PRINT_PLAN_BUILD_INDEX = 2000;
     const static int PRINT_PLAN_OPTIMIZE_INDEX = 3000;
+    const static String MEMO_PATH;
     const static String MEMO_GRAPH_PATH;
     const static String PIPELINE_PATH;
 
@@ -237,7 +238,7 @@ private:
     static void appendPlanSegmentNode(std::stringstream & out, const PlanSegmentPtr & segment_ptr);
 
     static String printMemo(const Memo & memo, GroupId root_id);
-    static String printGroup(const Group & group, const std::unordered_map<GroupId, WinnerPtr> & group_winner);
+    static String printGroup(const Group & group);
 
     static String printPipeline(const Processors & processors, const ExecutingGraphPtr & graph);
     static String printGroupedPipeline(const Processors & processors, const ExecutingGraphPtr & graph);

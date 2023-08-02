@@ -27,13 +27,14 @@ class Context;
 class QueryUseOptimizerChecker
 {
 public:
-    static bool check(ASTPtr node, ContextMutablePtr context, bool insert_select_from_table = false);
+    static bool check(ASTPtr & node, const ContextMutablePtr & context, bool use_distributed_stages = false);
 };
 
 struct QueryUseOptimizerContext
 {
-    ContextMutablePtr context;
-    NameSet ctes;
+    const ContextMutablePtr & context;
+    NameSet & with_tables;
+    Tables external_tables;
 };
 
 class QueryUseOptimizerVisitor : public ASTVisitor<bool, QueryUseOptimizerContext>
@@ -48,22 +49,20 @@ public:
     const String & getReason() const { return reason; }
 
 private:
-    static void collectWithTableNames(ASTSelectQuery & query, NameSet & with_tables);
+    void collectWithTableNames(ASTSelectQuery & query, NameSet & with_tables);
     String reason;
 };
 
-class QuerySupportOptimizerVisitor : public ASTVisitor<bool, ContextMutablePtr>
+class QuerySupportOptimizerVisitor : public ASTVisitor<bool, QueryUseOptimizerContext>
 {
 public:
-    bool visitNode(ASTPtr & node, ContextMutablePtr &) override;
-    bool visitASTSelectQuery(ASTPtr & node, ContextMutablePtr &) override;
-    bool visitASTSelectIntersectExceptQuery(ASTPtr & node, ContextMutablePtr &) override;
-    bool visitASTSelectWithUnionQuery(ASTPtr & node, ContextMutablePtr &) override;
-    bool visitASTTableJoin(ASTPtr & node, ContextMutablePtr &) override;
-    bool visitASTFunction(ASTPtr & node, ContextMutablePtr &) override;
-    bool visitASTQuantifiedComparison(ASTPtr & node, ContextMutablePtr &) override;
-    bool visitASTSubquery(ASTPtr & node, ContextMutablePtr &) override;
-    bool visitASTTableExpression(ASTPtr & node, ContextMutablePtr &) override;
+    bool visitNode(ASTPtr & node, QueryUseOptimizerContext &) override;
+    bool visitASTSelectQuery(ASTPtr & node, QueryUseOptimizerContext &) override;
+    bool visitASTSelectIntersectExceptQuery(ASTPtr & node, QueryUseOptimizerContext &) override;
+    bool visitASTSelectWithUnionQuery(ASTPtr & node, QueryUseOptimizerContext &) override;
+    bool visitASTTableJoin(ASTPtr & node, QueryUseOptimizerContext &) override;
+    bool visitASTFunction(ASTPtr & node, QueryUseOptimizerContext &) override;
+    bool visitASTQuantifiedComparison(ASTPtr & node, QueryUseOptimizerContext &) override;
 
 private:
 };
