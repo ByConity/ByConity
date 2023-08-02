@@ -94,6 +94,8 @@ public:
                 return "LIMIT LENGTH";
             case Expression::SETTINGS:
                 return "SETTINGS";
+            case Expression::ESCAPE:
+                return "ESCAPE";
         }
         return "";
     }
