@@ -29,13 +29,15 @@
 #include <Statistics/ExportSymbols.h>
 #include <Statistics/StatisticsBase.h>
 // #include <Transaction/ICnchTransaction.h>
+#include <ResourceManagement/CommonData.h>
+#include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
+#include <Transaction/TransactionCommon.h>
 #include <Transaction/TxnTimestamp.h>
 #include <cppkafka/cppkafka.h>
+#include <Common/Configurations.h>
 #include <Common/DNSResolver.h>
 #include <Common/HostWithPorts.h>
 #include <common/getFQDNOrHostName.h>
-#include <Transaction/TransactionCommon.h>
-#include <ResourceManagement/CommonData.h>
 // #include <Access/MaskingPolicyDataModel.h>
 
 namespace DB::ErrorCodes

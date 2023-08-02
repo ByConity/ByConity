@@ -72,8 +72,8 @@ PartWriter::PartWriter(const ASTPtr & query_ptr_, ContextMutablePtr context_)
 
     Poco::URI uri(dest_path);
 
-    if (!(uri.getScheme() == "hdfs"))
-        throw Exception("Target path must be hdfs directory.", ErrorCodes::LOGICAL_ERROR);
+    if (!isHdfsOrCfsScheme(uri.getScheme()))
+        throw Exception("Target path must be a HDFS or CFS directory.", ErrorCodes::LOGICAL_ERROR);
 
     dest_path = uri.getPath();
     if (!endsWith(dest_path, "/"))

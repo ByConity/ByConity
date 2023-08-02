@@ -112,7 +112,7 @@ message AsyncQueryStatus {
     Failed = 3;
   };
   required string id = 1;
-  required string query_id = 2;
+  optional string query_id = 2;
   required Status status = 3;
   optional string error_msg = 4;
   required uint64 update_time = 5;

@@ -83,6 +83,14 @@ struct TTLDescription
     /// TTLs.
     static TTLDescription getTTLFromAST(const ASTPtr & definition_ast, const ColumnsDescription & columns, ContextPtr context, const KeyDescription & primary_key);
 
+    /// Previously, HaMergeTree storages calculate partition level TTL for each part to decide whether
+    /// need to remove the data part. For those tables that partition key contains function like 'toDate(xxx)',
+    /// the function also need to be evaluated when calculate the partition level TTL. However, if we directly
+    /// execute the ttl_expression, it will throw required column 'xxx' not found exception because we construct the source block
+    /// from partition value, which only contains column 'toDate(xxx)'. To fix this, we can replace the ASTFunction in
+    /// the TTL with ASTIdentifier when the function shows up in partition definition.
+    static void tryRewriteTTLWithPartitionKey(TTLDescription & ttl_description, const ColumnsDescription & columns, const KeyDescription & partition_key, const KeyDescription & primary_key, ContextPtr context);
+
     TTLDescription() = default;
     TTLDescription(const TTLDescription & other);
     TTLDescription & operator=(const TTLDescription & other);

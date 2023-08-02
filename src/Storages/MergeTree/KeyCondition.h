@@ -360,9 +360,12 @@ private:
     using ColumnIndices = std::map<String, size_t>;
 
     using AtomMap = std::unordered_map<std::string, bool(*)(RPNElement & out, const Field & value)>;
+    using FunctionWithEscape = bool(*)(RPNElement & out, const Field & value, const Field & escape_value);
 
 public:
     static const AtomMap atom_map;
+    static FunctionWithEscape like_with_escape;
+    static FunctionWithEscape not_like_with_escape;
 
 private:
     BoolMask checkInRange(

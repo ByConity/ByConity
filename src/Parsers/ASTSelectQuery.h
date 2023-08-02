@@ -54,7 +54,8 @@ public:
         LIMIT_BY,
         LIMIT_OFFSET,
         LIMIT_LENGTH,
-        SETTINGS
+        SETTINGS,
+        ESCAPE
     };
 
     static String expressionToString(Expression expr)
@@ -138,6 +139,7 @@ public:
     const ASTPtr limitOffset()    const { return getExpression(Expression::LIMIT_OFFSET); }
     const ASTPtr limitLength()    const { return getExpression(Expression::LIMIT_LENGTH); }
     const ASTPtr settings()       const { return getExpression(Expression::SETTINGS); }
+    const ASTPtr escape()       const { return getExpression(Expression::ESCAPE); }
 
     ASTPtr getWith()            { return getExpression(Expression::WITH, true); }
     ASTPtr getSelect()          { return getExpression(Expression::SELECT, true); }

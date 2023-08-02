@@ -438,11 +438,18 @@ void TCPHandler::runImpl()
 
             query->prepare();
 
-            if (isAsyncMode() && !query->getState().io.out)
+            if (isAsyncMode(query->getContext()) && !query->getState().io.out)
             {
                 connection_context->getAsyncQueryManager()->insertAndRun(query, [](std::shared_ptr<TCPQuery> query_ptr) {
-                    query_ptr->updateQueryScope();
-                    query_ptr->run();
+                    try
+                    {
+                        query_ptr->updateQueryScope();
+                        query_ptr->run();
+                    }
+                    catch (...)
+                    {
+                        query_ptr->getState().io.onException();
+                    }
                 });
             }
             else
@@ -1936,7 +1943,7 @@ void TCPHandler::sendException(const Exception & e, bool with_stack_trace)
 
 void TCPHandler::sendEndOfStream()
 {
-    if (!isAsyncMode())
+    if (!isAsyncMode(current_query->getContext()))
     {
         current_query->getState().sent_all_data = true;
     }
@@ -1990,9 +1997,10 @@ void TCPQuery::sendLogs()
     }
 }
 
-bool TCPHandler::isAsyncMode()
+bool TCPHandler::isAsyncMode(ContextMutablePtr context)
 {
-    return connection_context->getServerType() == ServerType::cnch_server && connection_context->getSettingsRef().enable_async_execution;
+    return context->getClientInfo().query_kind == ClientInfo::QueryKind::INITIAL_QUERY
+        && context->getServerType() == ServerType::cnch_server && context->getSettingsRef().enable_async_execution;
 }
 
 

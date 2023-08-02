@@ -49,7 +49,6 @@
 #include <stack>
 #include <limits>
 
-
 namespace DB
 {
 
@@ -103,6 +102,30 @@ static String extractFixedPrefixFromLikePattern(const String & like_pattern)
     return fixed_prefix;
 }
 
+static String extractFixedPrefixFromLikePattern(const String & like_pattern, const char escape_char)
+{
+    String fixed_prefix;
+
+    const char * pos = like_pattern.data();
+    const char * end = pos + like_pattern.size();
+    while (pos < end)
+    {
+        if (*pos == '%' || *pos == '_')
+            return fixed_prefix;
+        else if (*pos == escape_char)
+        {
+            ++pos;
+            if (pos != end)
+                fixed_prefix += *pos;
+        }
+        else
+            fixed_prefix += *pos;
+
+        ++pos;
+    }
+
+    return fixed_prefix;
+}
 
 /** For a given string, get a minimum string that is strictly greater than all strings with this prefix,
   *  or return an empty string if there are no such strings.
@@ -129,6 +152,63 @@ static String firstStringThatIsGreaterThanAllStringsWithPrefix(const String & pr
     return res;
 }
 
+KeyCondition::FunctionWithEscape KeyCondition::like_with_escape = [] (RPNElement & out, const Field & value, const Field & escape_value)->bool
+{
+    if (value.getType() != Field::Types::String)
+        return false;
+
+    std::string escape_seq = escape_value.get<const String &>();
+    if (escape_seq.size() != 1)
+        return false;
+    const char escape_char = escape_seq.front();
+
+    String prefix;
+    if (escape_char == '\\')
+        prefix = extractFixedPrefixFromLikePattern(value.get<const String &>());
+    else
+        prefix = extractFixedPrefixFromLikePattern(value.get<const String &>(), escape_char);
+
+    if (prefix.empty())
+        return false;
+
+    String right_bound = firstStringThatIsGreaterThanAllStringsWithPrefix(prefix);
+
+    out.function = RPNElement::FUNCTION_IN_RANGE;
+    out.range = !right_bound.empty()
+        ? Range(prefix, true, right_bound, false)
+        : Range::createLeftBounded(prefix, true);
+
+    return true;
+};
+
+KeyCondition::FunctionWithEscape KeyCondition::not_like_with_escape = [] (RPNElement & out, const Field & value, const Field & escape_value)->bool
+{
+    if (value.getType() != Field::Types::String)
+        return false;
+
+    std::string escape_seq = escape_value.get<const String &>();
+    if (escape_seq.size() != 1)
+        return false;
+    const char escape_char = escape_seq.front();
+
+    String prefix;
+    if (escape_char == '\\')
+        prefix = extractFixedPrefixFromLikePattern(value.get<const String &>());
+    else
+        prefix = extractFixedPrefixFromLikePattern(value.get<const String &>(), escape_char);
+
+    if (prefix.empty())
+        return false;
+
+    String right_bound = firstStringThatIsGreaterThanAllStringsWithPrefix(prefix);
+
+    out.function = RPNElement::FUNCTION_IN_RANGE;
+    out.range = !right_bound.empty()
+        ? Range(prefix, true, right_bound, false)
+        : Range::createLeftBounded(prefix, true);
+
+    return true;
+};
 
 /// A dictionary containing actions to the corresponding functions to turn them into `RPNElement`
 const KeyCondition::AtomMap KeyCondition::atom_map
@@ -1234,6 +1314,9 @@ bool KeyCondition::tryParseAtomFromAST(const ASTPtr & node, ContextPtr context, 
       */
     Field const_value;
     DataTypePtr const_type;
+    Field const_escape_value = "\\";
+    DataTypePtr const_escape_type;
+
     if (const auto * func = node->as<ASTFunction>())
     {
         const ASTs & args = func->arguments->children;
@@ -1254,7 +1337,7 @@ bool KeyCondition::tryParseAtomFromAST(const ASTPtr & node, ContextPtr context, 
             if (key_column_num == static_cast<size_t>(-1))
                 throw Exception("`key_column_num` wasn't initialized. It is a bug.", ErrorCodes::LOGICAL_ERROR);
         }
-        else if (args.size() == 2)
+        else if (args.size() == 2 || (args.size() == 3 && functionIsEscapeLikeOperator(func_name)))
         {
             size_t key_arg_pos;           /// Position of argument with key column (non-const argument)
             bool is_set_const = false;
@@ -1336,6 +1419,12 @@ bool KeyCondition::tryParseAtomFromAST(const ASTPtr & node, ContextPtr context, 
             else
                 return false;
 
+            if (args.size() == 3 && functionIsEscapeLikeOperator(func_name))
+            {
+                if (!getConstant(args[2], block_with_constants, const_escape_value, const_escape_type))
+                    return false;
+            }
+
             if (key_column_num == static_cast<size_t>(-1))
                 throw Exception("`key_column_num` wasn't initialized. It is a bug.", ErrorCodes::LOGICAL_ERROR);
 
@@ -1416,6 +1505,14 @@ bool KeyCondition::tryParseAtomFromAST(const ASTPtr & node, ContextPtr context, 
 
         out.key_column = key_column_num;
         out.monotonic_functions_chain = std::move(chain);
+
+        if (args.size() == 3 && functionIsEscapeLikeOperator(func_name))
+        {
+            if (func_name == "escapeLike")
+                return like_with_escape(out, const_value, const_escape_value);
+            else if (func_name == "escapeNotLike")
+                return not_like_with_escape(out, const_value, const_escape_value);
+        }
 
         return atom_it->second(out, const_value);
     }

@@ -110,6 +110,6 @@ private:
     void sendException(const Exception & e, bool with_stack_trace);
     void sendEndOfStream();
 
-    bool isAsyncMode();
+    static bool isAsyncMode(ContextMutablePtr context);
 };
 }
