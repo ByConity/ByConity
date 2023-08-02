@@ -3,12 +3,12 @@ title: FoundationDB Installation
 tags:
   - Docs
 ---
-In this guideline, I will set up a Foundation DB cluster on 3 physical machines. They are all using debian OS. I refer to two official guidelines here [Getting Started on Linux](https://apple.github.io/foundationdb/getting-started-linux.html) and [Building a Cluster](https://apple.github.io/foundationdb/building-cluster.html). 
+In this guideline, I will set up a Foundation DB cluster on 3 physical machines. They are all using debian OS. I refer to two official guidelines here [Getting Started on Linux](https://apple.github.io/foundationdb/getting-started-linux.html) and [Building a Cluster](https://apple.github.io/foundationdb/building-cluster.html).
 
 Firstly, we need to download the binary for the installation in [here](https://github.com/apple/foundationdb/releases/). We need to download the __server__, __monitor__ and __cli__ binaries, and those corresponding __sha256__ checksum files. I will choose version __7.1.25__ as it is the latest at the time.\
 In your directory, let's create a folder `foundationdb`.\
 Then, create a subfolder `bin` inside `foundationdb`. \
-In this `foundationdb/bin` folder, download with the following command: 
+In this `foundationdb/bin` folder, download with the following command:
 
 ```sh
 curl -L -o fdbserver.x86_64 https://github.com/apple/foundationdb/releases/download/7.1.25/fdbserver.x86_64
@@ -38,7 +38,7 @@ mv fdbcli.x86_64 fdbcli
 mv fdbmonitor.x86_64 fdbmonitor
 mv fdbserver.x86_64 fdbserver
 chmod ug+x fdbcli fdbmonitor fdbserver
-``` 
+```
 
 Next we will create some folder to store the config, data and log:
 ```sh
@@ -127,7 +127,7 @@ $ systemctl status fdb.service
 
 Now I have install fdb service in 1 machine, I will repeat the same for the other 2 machines
 
-After it's installed on all 3 machines, we need to connect them to form a cluster. Now go back to the first node, connect to FDB using fdbcli 
+After it's installed on all 3 machines, we need to connect them to form a cluster. Now go back to the first node, connect to FDB using fdbcli
 
 ```sh
 $ ./foundationdb/bin/fdbcli -C fdb_runtime/config/fdb.cluster
@@ -142,7 +142,7 @@ execute this to init a database
 ```sh
 configure new single ssd
 ```
-Next, execute this to from 2 other nodes to a cluster, replace the address with your machine address 
+Next, set all three nodes as coordinators, replace the address with your machine address
 ```sh
 coordinators <node_1_ip_address>:4500 <node_2_ip_address>:4500 <node_3_ip_address>:4500
 ```

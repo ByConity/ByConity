@@ -1,5 +1,5 @@
 ---
-title: 安装 FoundationDB 
+title: 安装 FoundationDB
 tags:
   - Docs
 ---
@@ -40,7 +40,7 @@ mv fdbcli.x86_64 fdbcli
 mv fdbmonitor.x86_64 fdbmonitor
 mv fdbserver.x86_64 fdbserver
 chmod ug+x fdbcli fdbmonitor fdbserver
-``` 
+```
 
 接下来我们将创建一些文件夹来存储配置、数据和日志：
 ```sh
@@ -154,7 +154,7 @@ fdb>
 configure new single ssd
 ```
 
-接下来，从另外两个节点上执行以下命令来加入集群，并将地址替换为你的机器地址：
+接下来，将三个机器都设置为coordinator，并将地址替换为你的机器地址：
 
 ```sh
 coordinators <node_1_ip_address>:4500 <node_2_ip_address>:4500 <node_3_ip_address>:4500
