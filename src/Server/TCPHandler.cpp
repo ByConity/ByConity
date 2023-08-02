@@ -1170,8 +1170,6 @@ bool TCPHandler::receivePacket()
     UInt64 packet_type = 0;
     readVarUInt(packet_type, *in);
 
-    LOG_INFO(log, "WANGTAO received packet type {}", packet_type);
-
     switch (packet_type)
     {
         case Protocol::Client::IgnoredPartUUIDs:
