@@ -105,6 +105,10 @@ namespace DB
             {
                 auto target_table = materialized_view->getTargetTable();
                 auto status = getPartitionStatus(target_table, partition_id);
+
+                if (materialized_view->isRefreshing())
+                    return materialized_view->getRefreshingPartition() == partition_id ? "Refreshing" : status;
+
                 return status;
             }
             else

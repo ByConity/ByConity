@@ -40,6 +40,7 @@ bool ParserExplainQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserKeyword s_syntax("SYNTAX");
     ParserKeyword s_pipeline("PIPELINE");
     ParserKeyword s_plan("PLAN");
+    ParserKeyword s_view("VIEW");
     ParserKeyword s_element("ELEMENT");
     ParserKeyword s_plansegment("PLANSEGMENT");
     ParserKeyword s_opt_plan("OPT_PLAN");
@@ -60,6 +61,8 @@ bool ParserExplainQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
             kind = ASTExplainQuery::ExplainKind::QueryPipeline;
         else if (s_plan.ignore(pos, expected))
             kind = ASTExplainQuery::ExplainKind::QueryPlan; //-V1048
+        else if (s_view.ignore(pos, expected))
+            kind = ASTExplainQuery::ExplainKind::MaterializedView;
         else if (s_element.ignore(pos, expected))
             kind = ASTExplainQuery::ExplainKind::QueryElement;
         else if (s_plansegment.ignore(pos, expected))

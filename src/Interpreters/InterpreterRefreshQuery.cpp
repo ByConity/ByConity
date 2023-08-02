@@ -32,17 +32,17 @@ namespace DB
         const auto & refresh = query_ptr->as<ASTRefreshQuery &>();
         if (refresh.settings_ast)
             InterpreterSetQuery(refresh.settings_ast, getContext()).executeForCurrentContext();
-        StoragePtr storage_ptr = DatabaseCatalog::instance().getTable({refresh.database, refresh.table}, getContext());
-        if (auto * view = dynamic_cast<StorageMaterializedView *>(storage_ptr.get()))
-        {
-            view->refresh(refresh.partition, getContext(), refresh.async);
-        }
-        else
+
+        auto * materialized_view = dynamic_cast<StorageMaterializedView *>(DatabaseCatalog::instance().getTable({refresh.database, refresh.table}, getContext()).get());
+        if (!materialized_view)
         {
             String db_str = refresh.database.empty() ? "" : backQuoteIfNeed(refresh.database) + ".";
             throw Exception("Table " + db_str + backQuoteIfNeed(refresh.table) +
                             " isn't a materialized view, can't be refreshed.", ErrorCodes::LOGICAL_ERROR);
         }
+
+        materialized_view->refresh(refresh.partition, getContext(), refresh.async);
+
         return {};
     }
 }

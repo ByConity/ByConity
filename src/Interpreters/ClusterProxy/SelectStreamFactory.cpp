@@ -287,7 +287,7 @@ void SelectStreamFactory::createForShard(
             TableFunctionPtr table_function_ptr = TableFunctionFactory::instance().get(table_func_ptr, context);
             main_table_storage = table_function_ptr->execute(table_func_ptr, context, table_function_ptr->getName());
         }
-        else if(main_table)
+        else
         {
             auto resolved_id = context->resolveStorageID(main_table);
             main_table_storage = DatabaseCatalog::instance().tryGetTable(resolved_id, context);

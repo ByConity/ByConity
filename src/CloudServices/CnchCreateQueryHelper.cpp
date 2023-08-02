@@ -33,10 +33,7 @@ std::shared_ptr<ASTCreateQuery> getASTCreateQueryFromString(const String & query
 {
     ParserCreateQuery parser_create;
     const auto & settings = context->getSettingsRef();
-    auto create_ast = std::dynamic_pointer_cast<ASTCreateQuery>(parseQuery(parser_create, query, settings.max_query_size, settings.max_parser_depth));
-    create_ast->attach = true;
-    create_ast->create = false;
-    return create_ast;
+    return std::dynamic_pointer_cast<ASTCreateQuery>(parseQuery(parser_create, query, settings.max_query_size, settings.max_parser_depth));
 }
 
 std::shared_ptr<ASTCreateQuery> getASTCreateQueryFromStorage(const IStorage & storage, const ContextPtr & context)

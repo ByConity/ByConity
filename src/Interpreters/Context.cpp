@@ -600,29 +600,6 @@ SharedContextHolder Context::createShared()
     return SharedContextHolder(std::make_unique<ContextSharedPart>());
 }
 
-void Context::addSessionView(StorageID view_table_id, StoragePtr view_storage)
-{
-    auto lock = getLock();
-    if (session_views_cache.find(view_table_id) != session_views_cache.end())
-       return;
-    session_views_cache.emplace(view_table_id, view_storage);
-}
-
-StoragePtr Context::getSessionView(StorageID view_table_id)
-{
-    auto lock = getLock();
-    auto it = session_views_cache.find(view_table_id);
-    if (it != session_views_cache.end())
-       return it->second;
-    else
-    {
-        StoragePtr view_storage =  DatabaseCatalog::instance().tryGetTable(view_table_id, shared_from_this());
-        if (view_storage)
-           session_views_cache.emplace(view_table_id, view_storage);
-        return view_storage;
-    }
-}
-
 ContextMutablePtr Context::createCopy(const ContextPtr & other)
 {
     return std::shared_ptr<Context>(new Context(*other));
@@ -853,11 +830,6 @@ CnchWorkerResourcePtr Context::getCnchWorkerResource() const
 CnchWorkerResourcePtr Context::tryGetCnchWorkerResource() const
 {
     return worker_resource;
-}
-
-void Context::initCnchWorkerResource()
-{
-    worker_resource = std::make_shared<CnchWorkerResource>();
 }
 
 void Context::setExtendedProfileInfo(const ExtendedProfileInfo & source) const

@@ -241,6 +241,7 @@ private:
 
     /// Generate view dependency create queries for materialized view writing
     Names genViewDependencyCreateQueries(const StorageID & storage_id, ContextPtr local_context, const String & table_suffix);
+    String extractTableSuffix(const String & gen_table_name);
     std::set<Int64> getRequiredBucketNumbers(const SelectQueryInfo & query_info, ContextPtr context) const;
 
     Pipe ingestPartition(const struct PartitionCommand & command, const ContextPtr local_context);

@@ -308,11 +308,4 @@ std::vector<StoragePtr> getViews(const StorageID & storage_id, const ContextPtr 
     return views;
 }
 
-String generateInnerTableName(const StorageID & view_id)
-{
-    if (view_id.hasUUID())
-        return ".inner_id." + toString(view_id.uuid);
-    return ".inner." + view_id.getTableName();
-}
-
 }

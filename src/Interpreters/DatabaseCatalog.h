@@ -196,6 +196,10 @@ public:
     void removeDependency(const StorageID & from, const StorageID & where);
     Dependencies getDependencies(const StorageID & from) const;
 
+    void addMemoryTableDependency(const StorageID & local_table_id, const StorageID & memory_table_id);
+    void removeMemoryTableDependency(const StorageID & local_table_id);
+    std::optional<MemoryTableInfo> tryGetDependencyMemoryTable(const StorageID & local_table_id, ContextPtr local_context) const;
+
     /// For Materialized and Live View
     void updateDependency(const StorageID & old_from, const StorageID & old_where,const StorageID & new_from, const StorageID & new_where);
 
@@ -284,6 +288,7 @@ private:
     mutable std::mutex databases_mutex;
 
     ViewDependencies view_dependencies;
+    MemoryTableDependencies memory_table_dependencies;
 
     Databases databases;
     UUIDToDatabaseMap db_uuid_map;
