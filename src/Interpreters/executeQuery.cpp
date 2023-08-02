@@ -1532,7 +1532,7 @@ void executeQuery(
 
     std::tie(ast, streams) = executeQueryImpl(begin, end, context, internal, QueryProcessingStage::Complete, may_have_tail, &istr);
 
-    if (!streams.out && isAsyncMode(context))
+    if (!streams.out && context->isAsyncMode())
     {
         executeHttpQueryInAsyncMode(std::move(streams), ast, context, ostr, output_format_settings, set_result_details);
         return;
@@ -1781,6 +1781,7 @@ bool isAsyncMode(ContextMutablePtr context)
         && context->getServerType() == ServerType::cnch_server && context->getSettings().enable_async_execution;
 }
 
+
 void updateAsyncQueryStatus(
     ContextMutablePtr context,
     const String & async_query_id,
@@ -1827,9 +1828,18 @@ void executeHttpQueryInAsyncMode(
         std::move(s),
         ast,
         c,
-        ostr,
-        f,
-        [](BlockIO streams, ASTPtr ast, ContextMutablePtr context, const std::optional<FormatSettings> & output_format_settings) {
+        [c, &ostr, &f](const String & id) {
+            MutableColumnPtr table_column_mut = ColumnString::create();
+            table_column_mut->insert(id);
+            Block res;
+            res.insert(ColumnWithTypeAndName(std::move(table_column_mut), std::make_shared<DataTypeString>(), "async_query_id"));
+
+            auto out = FormatFactory::instance().getOutputFormatParallelIfPossible(c->getDefaultFormat(), ostr, res, c, {}, f);
+
+            out->write(res);
+            out->flush();
+        },
+        [f](BlockIO streams, ASTPtr ast, ContextMutablePtr context) {
             auto & pipeline = streams.pipeline;
             try
             {
@@ -1877,7 +1887,7 @@ void executeHttpQueryInAsyncMode(
                         : context->getDefaultFormat();
 
                     BlockOutputStreamPtr out = write_to_hdfs ? FormatFactory::instance().getOutputStreamParallelIfPossible(
-                                                   format_name, *out_buf, streams.in->getHeader(), context, {}, output_format_settings)
+                                                   format_name, *out_buf, streams.in->getHeader(), context, {}, f)
                                                              : std::make_shared<NullBlockOutputStream>(Block{});
 
                     copyData(
@@ -1901,7 +1911,7 @@ void executeHttpQueryInAsyncMode(
                         pipeline.addSimpleTransform([](const Block & header) { return std::make_shared<MaterializingTransform>(header); });
 
                         auto out = FormatFactory::instance().getOutputFormatParallelIfPossible(
-                            "Null", *new WriteBuffer(nullptr, 0), pipeline.getHeader(), context, {}, output_format_settings);
+                            "Null", *new WriteBuffer(nullptr, 0), pipeline.getHeader(), context, {}, f);
 
                         pipeline.setOutputFormat(std::move(out));
                     }
