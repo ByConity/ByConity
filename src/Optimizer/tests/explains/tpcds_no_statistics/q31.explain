@@ -21,13 +21,16 @@ Projection Est. ? rows
                │  │  │  │  │     Condition: ca_county_1 == ca_county_2
                │  │  │  │  ├─ Filter Est. ? rows
                │  │  │  │  │  │     Condition: (d_year_1 = 2000) AND (d_qoy_1 = 1)
-               │  │  │  │  │  └─ CTERef[0] Est. ? rows
+               │  │  │  │  │  └─ Buffer Est. ? rows
+               │  │  │  │  │     └─ CTERef[0] Est. ? rows
                │  │  │  │  └─ Filter Est. ? rows
                │  │  │  │     │     Condition: (d_year_2 = 2000) AND (d_qoy_2 = 2)
-               │  │  │  │     └─ CTERef[0] Est. ? rows
+               │  │  │  │     └─ Buffer Est. ? rows
+               │  │  │  │        └─ CTERef[0] Est. ? rows
                │  │  │  └─ Filter Est. ? rows
                │  │  │     │     Condition: (d_qoy_3 = 3) AND (d_year_3 = 2000)
-               │  │  │     └─ CTERef[0] Est. ? rows
+               │  │  │     └─ Buffer Est. ? rows
+               │  │  │        └─ CTERef[0] Est. ? rows
                │  │  └─ Filter Est. ? rows
                │  │     │     Condition: (d_qoy_5 = 1) AND (d_year_5 = 2000)
                │  │     └─ CTERef[1] Est. ? rows

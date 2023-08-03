@@ -48,7 +48,7 @@ public:
     PlanNodePtr visitCTERefNode(CTERefNode & node, Void & c) override
     {
         const auto * with_step = dynamic_cast<const CTERefStep *>(node.getStep().get());
-        if (common_table_expression_ref_counts[with_step->getId()] >= 2)
+        if (common_table_expression_ref_counts[with_step->getId()] >= 2 || context->getSettingsRef().cte_mode == CTEMode::ENFORCED)
         {
             cte_helper.acceptAndUpdate(with_step->getId(), *this, c);
             return node.shared_from_this();
@@ -56,6 +56,7 @@ public:
 
         auto inlined_plan = with_step->toInlinedPlanNode(cte_helper.getCTEInfo(), context);
         auto res = VisitorUtil::accept(inlined_plan, *this, c);
+        common_table_expression_ref_counts[with_step->getId()]--;
         return res;
     }
 
@@ -68,7 +69,7 @@ static void removeUnusedCTEFromCTEInfo(CTEInfo & cte_info, std::unordered_map<CT
     auto & cte_map = cte_info.getCTEs();
     for (auto it = cte_map.begin(); it != cte_map.end();)
     {
-        if (cte_reference_counts[it->first] < 2)
+        if (!cte_reference_counts.count(it->first) || cte_reference_counts[it->first] < 1)
             it = cte_map.erase(it);
         else
             ++it;

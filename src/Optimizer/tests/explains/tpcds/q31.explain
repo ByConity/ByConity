@@ -21,13 +21,16 @@ Projection Est. 449948 rows
                │  │  │  │  │     Condition: ca_county_7 == ca_county_6
                │  │  │  │  ├─ Filter Est. 1319392 rows
                │  │  │  │  │  │     Condition: (d_year_7 = 2000) AND (d_qoy_7 = 3)
-               │  │  │  │  │  └─ CTERef[1] Est. 1465992 rows
+               │  │  │  │  │  └─ Buffer Est. 1465992 rows
+               │  │  │  │  │     └─ CTERef[1] Est. 1465992 rows
                │  │  │  │  └─ Filter Est. 1319392 rows
                │  │  │  │     │     Condition: (d_qoy_6 = 2) AND (d_year_6 = 2000)
-               │  │  │  │     └─ CTERef[1] Est. 1465992 rows
+               │  │  │  │     └─ Buffer Est. 1465992 rows
+               │  │  │  │        └─ CTERef[1] Est. 1465992 rows
                │  │  │  └─ Filter Est. 1319392 rows
                │  │  │     │     Condition: (d_qoy_5 = 1) AND (d_year_5 = 2000)
-               │  │  │     └─ CTERef[1] Est. 1465992 rows
+               │  │  │     └─ Buffer Est. 1465992 rows
+               │  │  │        └─ CTERef[1] Est. 1465992 rows
                │  │  └─ Filter Est. 1319392 rows
                │  │     │     Condition: (d_qoy_3 = 3) AND (d_year_3 = 2000)
                │  │     └─ CTERef[0] Est. 1465992 rows

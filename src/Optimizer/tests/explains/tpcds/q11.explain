@@ -17,18 +17,22 @@ Projection Est. 100 rows
                │  │     Condition: c_customer_id_4 == c_customer_id_5
                │  ├─ Filter Est. 1134903511 rows
                │  │  │     Condition: (`expr#'s'_3` = 's') AND (d_year_4 = 2002) Runtime Filters: {c_customer_id_4}
-               │  │  └─ CTERef[0] Est. 1261003902 rows
+               │  │  └─ Buffer Est. 1261003902 rows
+               │  │     └─ CTERef[0] Est. 1261003902 rows
                │  └─ Filter Est. 1134903511 rows
                │     │     Condition: (`expr#'s'_4` = 'w') AND (d_year_5 = 2001) AND (`expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))_4` > 0.) Runtime Filters: {c_customer_id_5}
-               │     └─ CTERef[0] Est. 1261003902 rows
+               │     └─ Buffer Est. 1261003902 rows
+               │        └─ CTERef[0] Est. 1261003902 rows
                └─ Inner Join Est. 8315699833 rows
                   │     Condition: c_customer_id_3 == c_customer_id_6
                   ├─ Filter Est. 1134903511 rows
                   │  │     Condition: (`expr#'s'_2` = 's') AND (d_year_3 = 2001) AND (`expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))_2` > 0.)
-                  │  └─ CTERef[0] Est. 1261003902 rows
+                  │  └─ Buffer Est. 1261003902 rows
+                  │     └─ CTERef[0] Est. 1261003902 rows
                   └─ Filter Est. 1134903511 rows
                      │     Condition: (d_year_6 = 2002) AND (`expr#'s'_5` = 'w')
-                     └─ CTERef[0] Est. 1261003902 rows
+                     └─ Buffer Est. 1261003902 rows
+                        └─ CTERef[0] Est. 1261003902 rows
 CTEDef [0]
    Repartition Exchange Est. 1261003902 rows
    │     Partition by: {c_customer_id_2}

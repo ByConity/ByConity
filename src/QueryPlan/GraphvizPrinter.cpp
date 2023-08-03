@@ -44,18 +44,20 @@
 #include <QueryPlan/PlanVisitor.h>
 #include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/QueryPlan.h>
+#include <QueryPlan/ReadStorageRowCountStep.h>
 #include <QueryPlan/SortingStep.h>
 #include <QueryPlan/UnionStep.h>
 #include <QueryPlan/WindowStep.h>
 #include <Storages/StorageDistributed.h>
 #include <boost/algorithm/string/replace.hpp>
-#include <QueryPlan/Hints/Leading.h>
-#include <QueryPlan/ReadStorageRowCountStep.h>
+#include <fmt/format.h>
+#include <Common/HashTable/Hash.h>
 
 #include <filesystem>
 #include <iostream>
 #include <memory>
 #include <numeric>
+#include <type_traits>
 #include <typeinfo>
 
 namespace DB
@@ -135,9 +137,13 @@ static std::string join(const V & v, Func && to_string, const String & sep = ", 
     return out.str();
 }
 
-Void PlanNodePrinter::visitPlanNode(PlanNodeBase & node, PrinterContext &)
+Void PlanNodePrinter::visitPlanNode(PlanNodeBase & node, PrinterContext & context)
 {
-    throw Exception("PlanNode " + node.getStep()->getName() + " does not have a graphviz printer", ErrorCodes::NOT_IMPLEMENTED);
+    auto step = node.getStep();
+    String label = step->getName() + "Node";
+    String color = GraphvizPrinter::getColor(step->getType());
+    printNode(node, label, StepPrinter::printStep(*step), color, context);
+    return visitChildren(node, context);
 }
 
 Void PlanNodePrinter::visitProjectionNode(ProjectionNode & node, PrinterContext & context)
@@ -623,15 +629,19 @@ Void PlanNodeEdgePrinter::visitPlanNode(PlanNodeBase & node, Void & context)
     return Void{};
 }
 
-void PlanNodeEdgePrinter::printEdge(PlanNodeBase & from, PlanNodeBase & to)
+void PlanNodeEdgePrinter::printEdge(PlanNodeBase & from, PlanNodeBase & to, std::string_view format)
 {
     out << "plannode_" << from.getId() << " -> "
-        << "plannode_" << to.getId() << ";" << std::endl;
+        << "plannode_" << to.getId() << format << ";" << std::endl;
 }
 
-Void PlanSegmentNodePrinter::visitNode(QueryPlan::Node * node, PrinterContext &)
+Void PlanSegmentNodePrinter::visitNode(QueryPlan::Node * node, PrinterContext & context)
 {
-    throw Exception("PlanNode " + node->step->getName() + " does not have a graphviz printer", ErrorCodes::NOT_IMPLEMENTED);
+    auto & step = node->step;
+    String label = step->getName() + "Node";
+    String color = GraphvizPrinter::getColor(step->getType());
+    printNode(node, label, StepPrinter::printStep(*step), color, context);
+    return visitChildren(node, context);
 }
 
 Void PlanSegmentNodePrinter::visitProjectionNode(QueryPlan::Node * node, PrinterContext & context)
@@ -1090,6 +1100,21 @@ void PlanSegmentEdgePrinter::printEdge(QueryPlan::Node * from, QueryPlan::Node *
         << "plannode_" << to->id << ";" << std::endl;
 }
 
+String StepPrinter::printStep(const IQueryPlanStep & step, bool include_output)
+{
+    std::stringstream details;
+    if (include_output)
+    {
+        details << "Output \\n";
+        for (const auto & column : step.getOutputStream().header)
+        {
+            details << column.name << ":";
+            details << column.type->getName() << "\\n";
+        }
+    }
+    return details.str();
+}
+
 String StepPrinter::printProjectionStep(const ProjectionStep & step, bool include_output)
 {
     std::stringstream details;
@@ -1267,7 +1292,7 @@ String StepPrinter::printJoinStep(const JoinStep & step)
             details << "broadcast";
         details << "|";
     }
-    
+
     if (step.isOrdered())
     {
         details << "isOrdered:" << step.isOrdered() << "|";
@@ -2307,6 +2332,16 @@ Void PlanNodeEdgePrinter::visitCTERefNode(CTERefNode & node, Void & c)
             << "plannode_" << node.getId() << "[style=dashed];" << std::endl;
         cte_helper->accept(step.getId(), *this, c);
     }
+    return Void{};
+}
+
+Void PlanNodeEdgePrinter::visitJoinNode(JoinNode & node, Void & context)
+{
+    auto children = node.getChildren();
+    printEdge(*children.at(0), node);
+    VisitorUtil::accept(*children.at(0), *this, context);
+    printEdge(*children.at(1), node, "[color=green]");
+    VisitorUtil::accept(*children.at(1), *this, context);
     return Void{};
 }
 
@@ -3472,5 +3507,11 @@ String GraphvizPrinter::printGroup(const Group & group, const std::unordered_map
     return out.str();
 }
 
-
+String GraphvizPrinter::getColor(IQueryPlanStep::Type step)
+{
+    if (NODE_COLORS.count(step))
+        return NODE_COLORS.at(step);
+    auto step_id = static_cast<typename std::underlying_type<IQueryPlanStep::Type>::type>(step);
+    return fmt::format("\"#{:06x}\"", intHash64(step_id) & ((1U << 24) - 1));
+}
 }

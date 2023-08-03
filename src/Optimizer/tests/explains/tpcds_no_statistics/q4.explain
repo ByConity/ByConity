@@ -23,22 +23,28 @@ Projection Est. 100 rows
                │  │  │  │  │     Condition: c_customer_id_4 == c_customer_id_5
                │  │  │  │  ├─ Filter Est. ? rows
                │  │  │  │  │  │     Condition: (`expr#'s'_2` = 's') AND (d_year_4 = 2001) AND (`expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_2` > 0.)
-               │  │  │  │  │  └─ CTERef[0] Est. ? rows
+               │  │  │  │  │  └─ Buffer Est. ? rows
+               │  │  │  │  │     └─ CTERef[0] Est. ? rows
                │  │  │  │  └─ Filter Est. ? rows
                │  │  │  │     │     Condition: (d_year_5 = 2002) AND (`expr#'s'_3` = 's')
-               │  │  │  │     └─ CTERef[0] Est. ? rows
+               │  │  │  │     └─ Buffer Est. ? rows
+               │  │  │  │        └─ CTERef[0] Est. ? rows
                │  │  │  └─ Filter Est. ? rows
                │  │  │     │     Condition: (d_year_6 = 2001) AND (`expr#'s'_4` = 'c') AND (`expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_4` > 0.)
-               │  │  │     └─ CTERef[0] Est. ? rows
+               │  │  │     └─ Buffer Est. ? rows
+               │  │  │        └─ CTERef[0] Est. ? rows
                │  │  └─ Filter Est. ? rows
                │  │     │     Condition: (d_year_7 = 2002) AND (`expr#'s'_5` = 'c')
-               │  │     └─ CTERef[0] Est. ? rows
+               │  │     └─ Buffer Est. ? rows
+               │  │        └─ CTERef[0] Est. ? rows
                │  └─ Filter Est. ? rows
                │     │     Condition: (d_year_8 = 2001) AND (`expr#'s'_6` = 'w') AND (`expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_6` > 0.)
-               │     └─ CTERef[0] Est. ? rows
+               │     └─ Buffer Est. ? rows
+               │        └─ CTERef[0] Est. ? rows
                └─ Filter Est. ? rows
                   │     Condition: (d_year_9 = 2002) AND (`expr#'s'_7` = 'w')
-                  └─ CTERef[0] Est. ? rows
+                  └─ Buffer Est. ? rows
+                     └─ CTERef[0] Est. ? rows
 CTEDef [0]
    Repartition Exchange Est. ? rows
    │     Partition by: {c_customer_id_3}

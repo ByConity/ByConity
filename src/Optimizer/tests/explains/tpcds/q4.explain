@@ -30,31 +30,37 @@ Projection Est. 100 rows
                │  │  │  │  │  │     Partition by: {c_customer_id_8}
                │  │  │  │  │  └─ Filter Est. 4028115083 rows
                │  │  │  │  │     │     Condition: (d_year_8 = 2001) AND (`expr#'s'_6` = 'w') AND (`expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_6` > 0.) Runtime Filters: {c_customer_id_8}
-               │  │  │  │  │     └─ CTERef[0] Est. 4475683426 rows
+               │  │  │  │  │     └─ Buffer Est. 4475683426 rows
+               │  │  │  │  │        └─ CTERef[0] Est. 4475683426 rows
                │  │  │  │  └─ Repartition Exchange Est. 1187611 rows
                │  │  │  │     │     Partition by: {c_customer_id_9}
                │  │  │  │     └─ Filter Est. 4028115083 rows
                │  │  │  │        │     Condition: (d_year_9 = 2002) AND (`expr#'s'_7` = 'w') Runtime Filters: {c_customer_id_9}
-               │  │  │  │        └─ CTERef[0] Est. 4475683426 rows
+               │  │  │  │        └─ Buffer Est. 4475683426 rows
+               │  │  │  │           └─ CTERef[0] Est. 4475683426 rows
                │  │  │  └─ Repartition Exchange Est. 2365562 rows
                │  │  │     │     Partition by: {c_customer_id_7}
                │  │  │     └─ Filter Est. 4028115083 rows
                │  │  │        │     Condition: (d_year_7 = 2002) AND (`expr#'s'_5` = 'c') Runtime Filters: {c_customer_id_7}
-               │  │  │        └─ CTERef[0] Est. 4475683426 rows
+               │  │  │        └─ Buffer Est. 4475683426 rows
+               │  │  │           └─ CTERef[0] Est. 4475683426 rows
                │  │  └─ Repartition Exchange Est. 7096687 rows
                │  │     │     Partition by: {c_customer_id_6}
                │  │     └─ Filter Est. 4028115083 rows
                │  │        │     Condition: (d_year_6 = 2001) AND (`expr#'s'_4` = 'c') AND (`expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_4` > 0.) Runtime Filters: {c_customer_id_6}
-               │  │        └─ CTERef[0] Est. 4475683426 rows
+               │  │        └─ Buffer Est. 4475683426 rows
+               │  │           └─ CTERef[0] Est. 4475683426 rows
                │  └─ Repartition Exchange Est. 4729568 rows
                │     │     Partition by: {c_customer_id_5}
                │     └─ Filter Est. 4028115083 rows
                │        │     Condition: (d_year_5 = 2002) AND (`expr#'s'_3` = 's') Runtime Filters: {c_customer_id_5}
-               │        └─ CTERef[0] Est. 4475683426 rows
+               │        └─ Buffer Est. 4475683426 rows
+               │           └─ CTERef[0] Est. 4475683426 rows
                └─ Broadcast Exchange Est. 14188706 rows
                   └─ Filter Est. 4028115083 rows
                      │     Condition: (`expr#'s'_2` = 's') AND (d_year_4 = 2001) AND (`expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_2` > 0.)
-                     └─ CTERef[0] Est. 4475683426 rows
+                     └─ Buffer Est. 4475683426 rows
+                        └─ CTERef[0] Est. 4475683426 rows
 CTEDef [0]
    Union Est. 1761879197 rows
    ├─ Projection Est. 1007913280 rows

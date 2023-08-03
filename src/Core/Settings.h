@@ -1912,12 +1912,13 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_distinct_to_aggregate, true, "Whether enable convert distinct to group by", 0) \
     M(Bool, enable_single_distinct_to_group_by, true, "Whether enable convert single count distinct to group by", 0) \
     M(Bool, enable_magic_set, true, "Whether enable magic set rewriting for join aggregation", 0) \
-    M(CTEMode, cte_mode, CTEMode::INLINED, "CTE mode: SHARED|INLINED|AUTO", 0) \
+    M(CTEMode, cte_mode, CTEMode::INLINED, "CTE mode: SHARED|INLINED|AUTO|ENFORCED", 0) \
     M(Bool, enable_cte_property_enum, false, "Whether enumerate all possible properties for cte", 0) \
     M(Bool, enable_cte_common_property, true, "Whether search common property for cte", 0) \
     M(UInt64, max_graph_reorder_size, 4, "Max tables join order enum on graph", 0) \
     M(Bool, enable_join_graph_support_filter, true, "Whether enable join graph support filter", 0) \
-    M(Float, enable_partial_aggregate_ratio, 0.9, "Enable partial aggregate ratio : group by keys ndv / total row count", 0) \
+    M(Bool, enable_join_reorder, true, "Whether enable join reorder", 0) \
+    M(Float, enable_partial_aggregate_ratio , 0.9, "Enable partial aggregate ratio : group by keys ndv / total row count", 0) \
     M(Bool, enable_simplify_expression, true, "Whether enable simplify predicates", 0) \
     M(Bool, enable_unwarp_cast_in, true, "Whether enable unwrap cast function", 0) \
     M(Bool, enable_common_predicate_rewrite, true, "Whether enable common predicate rewrite", 0) \
@@ -1952,6 +1953,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, use_sql_binding, false, "Whether use SQL binding", 0) \
     M(UInt64, global_bindings_update_time, 60*60, "Interval to update global binding cache from catalog, in seconds.", 0) \
     M(Bool, enable_execute_query, true, "Whether to execute this query", 0) \
+    M(Bool, enable_buffer_for_deadlock_cte, true, "Whether to buffer data for deadlock cte", 0) \
     /** Exchange settings */ \
     M(Bool, exchange_enable_multipath_reciever, true, "Whether enable exchange new mode ", 0) \
     M(UInt64, exchange_parallel_size, 1, "Exchange parallel size", 0) \

@@ -147,7 +147,8 @@ IMPLEMENT_SETTING_ENUM(DialectType, ErrorCodes::BAD_ARGUMENTS,
 IMPLEMENT_SETTING_ENUM(CTEMode, ErrorCodes::BAD_ARGUMENTS,
     {{"INLINED", CTEMode::INLINED},
      {"SHARED", CTEMode::SHARED},
-     {"AUTO", CTEMode::AUTO}})
+     {"AUTO", CTEMode::AUTO},
+     {"ENFORCED", CTEMode::ENFORCED}})
 
 IMPLEMENT_SETTING_ENUM(StatisticsAccurateSampleNdvMode, ErrorCodes::BAD_ARGUMENTS,
     {{"NEVER", StatisticsAccurateSampleNdvMode::NEVER},

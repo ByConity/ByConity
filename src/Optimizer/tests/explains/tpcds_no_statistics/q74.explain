@@ -18,16 +18,20 @@ Projection Est. 100 rows
                │  │  │     Condition: c_customer_id_3 == c_customer_id_4
                │  │  ├─ Filter Est. ? rows
                │  │  │  │     Condition: (`expr#'s'_2` = 's') AND (d_year_3 = 2001) AND (`expr#sum(ss_net_paid)_2` > 0.)
-               │  │  │  └─ CTERef[0] Est. ? rows
+               │  │  │  └─ Buffer Est. ? rows
+               │  │  │     └─ CTERef[0] Est. ? rows
                │  │  └─ Filter Est. ? rows
                │  │     │     Condition: (`expr#'s'_3` = 's') AND (d_year_4 = 2002)
-               │  │     └─ CTERef[0] Est. ? rows
+               │  │     └─ Buffer Est. ? rows
+               │  │        └─ CTERef[0] Est. ? rows
                │  └─ Filter Est. ? rows
                │     │     Condition: (`expr#'s'_4` = 'w') AND (d_year_5 = 2001) AND (`expr#sum(ss_net_paid)_4` > 0.)
-               │     └─ CTERef[0] Est. ? rows
+               │     └─ Buffer Est. ? rows
+               │        └─ CTERef[0] Est. ? rows
                └─ Filter Est. ? rows
                   │     Condition: (d_year_6 = 2002) AND (`expr#'s'_5` = 'w')
-                  └─ CTERef[0] Est. ? rows
+                  └─ Buffer Est. ? rows
+                     └─ CTERef[0] Est. ? rows
 CTEDef [0]
    Repartition Exchange Est. ? rows
    │     Partition by: {c_customer_id_2}
