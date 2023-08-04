@@ -1,4 +1,3 @@
-#if 0
 #include <Processors/Transforms/ExplainAnalyzeTransform.h>
 #include <DataTypes/DataTypeString.h>
 #include <Interpreters/InterpreterExplainQuery.h>
@@ -61,13 +60,11 @@ void ExplainAnalyzeTransform::transform(Chunk & chunk)
     std::unordered_map<PlanNodeId, double> costs = CostCalculator::calculate(*query_plan_ptr, *context);
 
     String explain;
-    // TODO explain analyze
-    // if (kind == ASTExplainQuery::ExplainKind::LogicalAnalyze)
-    // {
-    //     explain = PlanPrinter::textLogicalPlan(*query_plan_ptr, context, true, true, costs, step_agg_operator_profiles);
-    // }
-    // else 
-    if (kind == ASTExplainQuery::ExplainKind::DistributedAnalyze)
+    if (kind == ASTExplainQuery::ExplainKind::LogicalAnalyze)
+    {
+        explain = PlanPrinter::textLogicalPlan(*query_plan_ptr, context, true, true, costs, step_agg_operator_profiles);
+    }
+    else if (kind == ASTExplainQuery::ExplainKind::DistributedAnalyze)
     {
         explain = PlanPrinter::textDistributedPlan(segment_descriptions, true, true, costs, step_agg_operator_profiles, *query_plan_ptr);
     }
@@ -177,8 +174,4 @@ void ExplainAnalyzeTransform::getProcessorProfiles(ProcessorsSet & processors_se
         }
     }
 }
-
-
 }
-
-#endif

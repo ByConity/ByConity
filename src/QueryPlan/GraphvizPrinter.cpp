@@ -2039,11 +2039,11 @@ String StepPrinter::printExplainAnalyzeStep(const ExplainAnalyzeStep & step)
 {
     std::stringstream details;
 
-    // details << "ExplainAnalyzeKind: ";
-    // if (step.getKind() == ASTExplainQuery::ExplainKind::LogicalAnalyze)
-    //     details << "LogicalAnalyze";
-    // else
-    //     details << "DistributedAnalyze";
+    details << "ExplainAnalyzeKind: ";
+    if (step.getKind() == ASTExplainQuery::ExplainKind::LogicalAnalyze)
+        details << "LogicalAnalyze";
+    else
+        details << "DistributedAnalyze";
 
     details << "|";
 

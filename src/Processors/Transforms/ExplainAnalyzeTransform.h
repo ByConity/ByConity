@@ -1,5 +1,4 @@
 #pragma once
-#if 0
 #include <Processors/ISimpleTransform.h>
 #include <QueryPlan/ExplainAnalyzeStep.h>
 #include <Interpreters/ProcessorProfile.h>
@@ -35,6 +34,4 @@ private:
     PlanSegmentDescriptions segment_descriptions;
     bool has_final_transform = false;
 };
-
 }
-#endif
