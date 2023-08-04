@@ -429,10 +429,12 @@ public:
     /// Sets new configurations for all the objects.
     void setConfiguration(const ObjectConfigsPtr & new_configs)
     {
+        LOG_TRACE(log, "calling setConfiguration");
         std::lock_guard lock{mutex};
         if (configs == new_configs)
             return;
 
+        LOG_TRACE(log, "new config is different");
         configs = new_configs;
 
         std::vector<String> removed_names;
@@ -467,6 +469,7 @@ public:
             if (infos.find(name) == infos.end())
             {
                 Info & info = infos.emplace(name, Info{name, config}).first->second;
+                LOG_TRACE(log, "add {} because config is added", name);
                 if (always_load_everything)
                 {
                     LOG_TRACE(log, "Will load '{}' because always_load_everything flag is set.", name);
@@ -480,6 +483,7 @@ public:
         {
             if (auto it = infos.find(name); it != infos.end())
             {
+                LOG_TRACE(log, "remove {} because config is removed", name);
                 const auto & info = it->second;
                 if (info.loaded() || info.isLoading())
                     LOG_TRACE(log, "Unloading '{}' because its configuration has been removed or detached", name);
@@ -1242,6 +1246,7 @@ private:
         while (!event.wait_for(lock, std::chrono::seconds(check_period_sec), pred))
         {
             lock.unlock();
+            LOG_TRACE(&Poco::Logger::get("PeriodicUpdater"), "do periodic update");
             loading_dispatcher.setConfiguration(config_files_reader.read());
             loading_dispatcher.reloadOutdated();
             lock.lock();
