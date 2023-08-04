@@ -4173,7 +4173,7 @@ namespace Catalog
         {
             ASTs tables;
             bool has_table_func = false;
-            create_ast->select->collectAllTables(tables, has_table_func);
+            ASTSelectQuery::collectAllTables(create_ast->select, tables, has_table_func);
             if (!tables.empty())
             {
                 std::unordered_set<String> table_set{};

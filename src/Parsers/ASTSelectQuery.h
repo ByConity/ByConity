@@ -107,7 +107,7 @@ public:
 
     ASTPtr clone() const override;
 
-    void collectAllTables(std::vector<ASTPtr> &, bool &) const;
+    static void collectAllTables(const IAST * ast, std::vector<ASTPtr> &, bool &);
 
     bool distinct = false;
     bool group_by_with_totals = false;
