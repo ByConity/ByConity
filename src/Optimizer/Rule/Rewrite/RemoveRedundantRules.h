@@ -143,6 +143,17 @@ protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 };
 
+class RemoveRedundantAggregateWithReadNothing: public Rule
+{
+public:
+    RuleType getType() const override { return RuleType::REMOVE_REDUNDANT_AGGREGATE_WITH_READ_NOTHING; }
+    String getName() const override { return "REMOVE_REDUNDANT_AGGREGATE_WITH_READ_NOTHING"; }
+
+    PatternPtr getPattern() const override;
+protected:
+    TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
+};
+
 class RemoveRedundantTwoApply: public Rule
 {
 public:

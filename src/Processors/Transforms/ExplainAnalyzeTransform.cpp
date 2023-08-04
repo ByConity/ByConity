@@ -69,10 +69,7 @@ void ExplainAnalyzeTransform::transform(Chunk & chunk)
         explain = PlanPrinter::textDistributedPlan(segment_descriptions, true, true, costs, step_agg_operator_profiles, *query_plan_ptr);
     }
 
-    if (context->getSettingsRef().print_explain_analyze_graphviz)
-    {
-        GraphvizPrinter::printLogicalPlan(*query_plan_ptr, context, "3999_explain_analyze", step_agg_operator_profiles);
-    }
+    GraphvizPrinter::printLogicalPlan(*query_plan_ptr, context, "3999_explain_analyze", step_agg_operator_profiles);
 
     MutableColumns cols(1);
     auto type = std::make_shared<DataTypeString>();

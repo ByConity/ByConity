@@ -136,7 +136,8 @@ BlockIO InterpreterExplainQuery::execute()
     {
         if (!getContext()->getSettingsRef().log_processors_profiles || !getContext()->getSettingsRef().report_processors_profiles)
         {
-            throw Exception("log_processors_profiles=1 and report_processors_profiles=1 must be set when using Explain Analyze", ErrorCodes::NOT_IMPLEMENTED);
+            getContext()->setSetting("log_processors_profiles", true);
+            getContext()->setSetting("report_processors_profiles", true);
         }
         std::shared_ptr<ProfileElementConsumer<ProcessorProfileLogElement>> consumer
             = std::make_shared<ExplainConsumer>(getContext()->getCurrentQueryId());

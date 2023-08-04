@@ -1757,7 +1757,6 @@ class IColumn;
     M(Float, cost_calculator_projection_weight, 0.1, "CTE output weight for cost calculator", 0) \
     M(Float, stats_estimator_join_filter_selectivity, 1, "Join filter selectivity", 0) \
     M(Bool, print_graphviz, false, "Whether print graphviz", 0) \
-    M(Bool, print_explain_analyze_graphviz, false, "Whether print explain analyze graphviz", 0) \
     M(String, graphviz_path, "/tmp/plan/", "The path of graphviz plan", 0) \
     M(Bool, eliminate_cross_joins, true, "Whether eliminate cross joins", 0) \
     M(UInt64, iterative_optimizer_timeout, 10000, "Max running time of a single iterative optimizer in ms", 0) \

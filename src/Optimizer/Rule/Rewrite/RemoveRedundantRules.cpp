@@ -316,6 +316,20 @@ TransformResult RemoveRedundantAggregate::transformImpl(PlanNodePtr, const Captu
     return {};
 }
 
+PatternPtr RemoveRedundantAggregateWithReadNothing::getPattern() const
+{
+    return Patterns::aggregating().matchingStep<AggregatingStep>([&](const AggregatingStep & s) { return !s.getKeys().empty(); })
+        .withSingle(Patterns::readNothing()).result();
+}
+
+TransformResult RemoveRedundantAggregateWithReadNothing::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
+{
+    auto * step = dynamic_cast<AggregatingStep *>(node->getStep().get());
+    auto read_nothing_step = std::make_shared<ReadNothingStep>(step->getOutputStream().header);
+    auto read_nothing_node = PlanNodeBase::createPlanNode(context.context->nextNodeId(), std::move(read_nothing_step), {});
+    return {read_nothing_node};
+}
+
 PatternPtr RemoveRedundantTwoApply::getPattern() const
 {
     return Patterns::filter()
