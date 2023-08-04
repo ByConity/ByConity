@@ -38,7 +38,8 @@ static std::unordered_map<std::string, std::string> configurable_brpc_gflags /* 
      /// Maximum size of a single message body in all protocols
      {"max_body_size", "671088640"},
      /// Print Controller.ErrorText() when server is about to respond a failed RPC
-     {"log_error_text", ""}};
+     {"log_error_text", ""},
+     {"bvar_enable_sampling", "true"}};
 
 
 static std::unordered_set<std::string> reconfigurable_brpc_gflags /* NOLINT */
@@ -47,7 +48,8 @@ static std::unordered_set<std::string> reconfigurable_brpc_gflags /* NOLINT */
      "socket_send_buffer_size",
      "defer_close_second",
      "free_memory_to_system_interval",
-     "log_error_text"};
+     "log_error_text",
+     "bvar_enable_sampling"};
 
 void BrpcGflagsConfigHolder::afterInit(const RawConfig * config_ptr)
 {
