@@ -1,4 +1,5 @@
 #include "PartMergerImpl.h"
+#include "Poco/Format.h"
 #include "CloudServices/CnchPartsHelper.h"
 #include "Core/UUID.h"
 #include "Storages/HDFS/HDFSCommon.h"
@@ -266,6 +267,8 @@ void PartMergerImpl::execute()
     {
         ManipulationTaskParams merge_task_params(cloud_trees[0]);
         merge_task_params.type = ManipulationType::Merge;
+        /// Manually construct id for tasks.
+        merge_task_params.task_id = Poco::format("task-{%s}", future_part.name);
         IMergeTreeDataPartsVector source_parts;
         LOG_DEBUG(log, "Future part's name: {}, type: {}", future_part.name, future_part.type.toString());
         for (auto & server_part : future_part.parts)
