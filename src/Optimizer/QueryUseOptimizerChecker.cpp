@@ -273,13 +273,6 @@ bool QueryUseOptimizerVisitor::visitASTSelectQuery(ASTPtr & node, QueryUseOptimi
 
 bool QueryUseOptimizerVisitor::visitASTTableJoin(ASTPtr & node, QueryUseOptimizerContext & context)
 {
-    auto & table_join = node->as<ASTTableJoin &>();
-    if (table_join.strictness == ASTTableJoin::Strictness::Any)
-        if (table_join.kind == ASTTableJoin::Kind::Full)
-        {
-            reason = "Any Full join";
-            return false;
-        }
     return visitNode(node, context);
 }
 

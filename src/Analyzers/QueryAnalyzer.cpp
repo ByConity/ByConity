@@ -676,12 +676,6 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoin(ASTTableJoin & table_join, ScopePtr l
         if (table_join.strictness == ASTTableJoin::Strictness::Any)
             table_join.strictness = ASTTableJoin::Strictness::RightAny;
     }
-    // else
-    // {
-    //     if (table_join.strictness == ASTTableJoin::Strictness::Any)
-    //         if (table_join.kind == ASTTableJoin::Kind::Full)
-    //             throw Exception("ANY FULL JOINs are not implemented.", ErrorCodes::NOT_IMPLEMENTED);
-    // }
 
     {
         if (isCrossJoin(table_join))

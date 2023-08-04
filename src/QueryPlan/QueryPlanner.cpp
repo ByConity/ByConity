@@ -549,6 +549,10 @@ PlanBuilder QueryPlannerVisitor::planTableSubquery(ASTSubquery & subquery, ASTPt
 
 void QueryPlannerVisitor::planJoin(ASTTableJoin & table_join, PlanBuilder & left_builder, PlanBuilder & right_builder)
 {
+    if (table_join.strictness == ASTTableJoin::Strictness::Any)
+        if (table_join.kind == ASTTableJoin::Kind::Full)
+            throw Exception("ANY FULL JOINs are not implemented.", ErrorCodes::NOT_IMPLEMENTED);
+
     if (isCrossJoin(table_join))
         planCrossJoin(table_join, left_builder, right_builder);
     else if (table_join.using_expression_list)
