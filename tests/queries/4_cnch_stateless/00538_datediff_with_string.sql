@@ -39,6 +39,8 @@ SELECT id, dateDiff('year', date1, date2) FROM test.test_datediff ORDER BY id;
 SET enable_optimizer=1;
 SET dialect_type='MYSQL';
 
+SELECT datediff('day', '2017-12-31', '2018-01-01'); -- { serverError 42 }
+SELECT timestampdiff('second', '2017-12-31', '2018-01-01');
 select datediff('2022-01-22 23:59:59','2022-01-21');
 select datediff(datetime '2022-01-22 23:59:59','2022-01-21');
 select datediff(datetime '2022-01-22 23:59:59',datetime '2022-01-21');
@@ -48,3 +50,4 @@ select datediff(timestamp '2022-01-22 23:59:59',timestamp '2022-01-21');
 select datediff('2022-01-22 23:59:59',date '2022-01-21');
 
 SELECT id, dateDiff(date1, date2) FROM test.test_datediff ORDER BY id;
+SELECT id, timestampdiff('day', date1, date2) FROM test.test_datediff ORDER BY id;
