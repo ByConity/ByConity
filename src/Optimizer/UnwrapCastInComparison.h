@@ -37,7 +37,6 @@ struct UnwrapCastInComparisonContext
 {
     ContextMutablePtr context;
     NameToType column_types;
-    const TypeAnalyzer & type_analyzer;
 };
 
 class UnwrapCastInComparisonVisitor: public ASTVisitor<ASTPtr, UnwrapCastInComparisonContext>
