@@ -178,7 +178,8 @@ void PartMergerImpl::execute()
     LOG_DEBUG(log, "Get total {} parts.", parts.size());
 
     /// Init remote_disk & target_disk.
-    HDFSConnectionParams hdfs_params{HDFSConnectionParams::CONN_NNPROXY, getContext()->getHdfsUser(), getContext()->getHdfsNNProxy()};
+    HDFSConnectionParams hdfs_params
+        = HDFSConnectionParams::parseFromMisusedNNProxyStr(getContext()->getHdfsNNProxy(), getContext()->getHdfsUser());
     std::shared_ptr<DiskByteHDFS> remote_disk = std::make_shared<DiskByteHDFS>("hdfs", params.source_path, hdfs_params);
 
     DiskPtr target_disk = std::make_shared<DiskByteHDFS>("target", params.output_path, hdfs_params);
@@ -326,7 +327,8 @@ void PartMergerImpl::executeMergeTask(MergeTreeMetaBase & merge_tree, DiskPtr & 
 
 IMergeTreeDataPartsVector PartMergerImpl::collectSourceParts(const std::vector<StorageCloudMergeTreePtr> & merge_trees)
 {
-    HDFSConnectionParams hdfs_params{HDFSConnectionParams::CONN_NNPROXY, getContext()->getHdfsUser(), getContext()->getHdfsNNProxy()};
+    HDFSConnectionParams hdfs_params
+        = HDFSConnectionParams::parseFromMisusedNNProxyStr(getContext()->getHdfsNNProxy(), getContext()->getHdfsUser());
     std::shared_ptr<DiskByteHDFS> remote_disk = std::make_shared<DiskByteHDFS>("hdfs", params.source_path, hdfs_params);
     auto volume = std::make_shared<SingleDiskVolume>("volume_single", remote_disk, 0);
     IMergeTreeDataPartsVector parts{};

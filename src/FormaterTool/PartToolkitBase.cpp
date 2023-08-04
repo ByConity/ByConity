@@ -81,7 +81,7 @@ void PartToolkitBase::applySettings()
     if (pw_query.settings)
     {
         const ASTSetQuery & set_ast = pw_query.settings->as<ASTSetQuery &>();
-        for (auto & change : set_ast.changes)
+        for (const auto & change : set_ast.changes)
         {
             if (settings.has(change.name))
                 settings.set(change.name, change.value);
@@ -97,8 +97,10 @@ void PartToolkitBase::applySettings()
     }
 
     /// Init HDFS params.
+    ///
+    /// User can bypass nnproxy by passing a string to `hdfs_nnproxy` with prefixs like `hdfs://` or `cfs://`.
     HDFSConnectionParams hdfs_params
-        = HDFSConnectionParams(HDFSConnectionParams::CONN_NNPROXY, getContext()->getHdfsUser(), getContext()->getHdfsNNProxy());
+        = HDFSConnectionParams::parseFromMisusedNNProxyStr(getContext()->getHdfsNNProxy(), getContext()->getHdfsUser());
     getContext()->setHdfsConnectionParams(hdfs_params);
     /// Renders default config to initialize storage configurations.
     Poco::JSON::Object::Ptr params = new Poco::JSON::Object();
