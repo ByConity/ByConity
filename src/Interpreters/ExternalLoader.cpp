@@ -1247,8 +1247,19 @@ private:
         {
             lock.unlock();
             LOG_TRACE(&Poco::Logger::get("PeriodicUpdater"), "do periodic update");
-            loading_dispatcher.setConfiguration(config_files_reader.read());
-            loading_dispatcher.reloadOutdated();
+            try
+            {
+                loading_dispatcher.setConfiguration(config_files_reader.read());
+                loading_dispatcher.reloadOutdated();
+            }
+            catch (const Exception & e)
+            {
+                LOG_WARNING(&Poco::Logger::get("PeriodicUpdater"), "Failed to run PeriodicUpdater job, error: {}", e.what());
+            }
+            catch (...)
+            {
+                LOG_WARNING(&Poco::Logger::get("PeriodicUpdater"), getCurrentExceptionMessage(false));
+            }
             lock.lock();
         }
     }
