@@ -142,6 +142,24 @@ PartMergerImpl::PartMergerImpl(ContextMutablePtr context_, Poco::Util::AbstractC
                 user_settings.emplace(change.name, change.value);
         }
     }
+
+    /// Init HDFS params.
+    ///
+    /// User can bypass nnproxy by passing a string to `hdfs_nnproxy` with prefixs like `hdfs://` or `cfs://`.
+    HDFSConnectionParams hdfs_params
+        = HDFSConnectionParams::parseFromMisusedNNProxyStr(getContext()->getHdfsNNProxy(), getContext()->getHdfsUser());
+    getContext()->setHdfsConnectionParams(hdfs_params);
+
+    /// Register default HDFS file system as well in case of
+    /// lower level logic call `getDefaultHdfsFileSystem`.
+    /// Default values are the same as those on the ClickHouse server.
+    {
+        const int hdfs_max_fd_num = user_settings.count("hdfs_max_fd_num") ? user_settings["hdfs_max_fd_num"].safeGet<int>() : 100000;
+        const int hdfs_skip_fd_num = user_settings.count("hdfs_skip_fd_num") ? user_settings["hdfs_skip_fd_num"].safeGet<int>() : 100;
+        const int hdfs_io_error_num_to_reconnect
+            = user_settings.count("hdfs_io_error_num_to_reconnect") ? user_settings["hdfs_io_error_num_to_reconnect"].safeGet<int>() : 10;
+        registerDefaultHdfsFileSystem(hdfs_params, hdfs_max_fd_num, hdfs_skip_fd_num, hdfs_io_error_num_to_reconnect);
+    }
 }
 
 void PartMergerImpl::execute()
@@ -178,8 +196,7 @@ void PartMergerImpl::execute()
     LOG_DEBUG(log, "Get total {} parts.", parts.size());
 
     /// Init remote_disk & target_disk.
-    HDFSConnectionParams hdfs_params
-        = HDFSConnectionParams::parseFromMisusedNNProxyStr(getContext()->getHdfsNNProxy(), getContext()->getHdfsUser());
+    HDFSConnectionParams hdfs_params = getContext()->getHdfsConnectionParams();
     std::shared_ptr<DiskByteHDFS> remote_disk = std::make_shared<DiskByteHDFS>("hdfs", params.source_path, hdfs_params);
 
     DiskPtr target_disk = std::make_shared<DiskByteHDFS>("target", params.output_path, hdfs_params);
@@ -327,8 +344,7 @@ void PartMergerImpl::executeMergeTask(MergeTreeMetaBase & merge_tree, DiskPtr & 
 
 IMergeTreeDataPartsVector PartMergerImpl::collectSourceParts(const std::vector<StorageCloudMergeTreePtr> & merge_trees)
 {
-    HDFSConnectionParams hdfs_params
-        = HDFSConnectionParams::parseFromMisusedNNProxyStr(getContext()->getHdfsNNProxy(), getContext()->getHdfsUser());
+    HDFSConnectionParams hdfs_params = getContext()->getHdfsConnectionParams();
     std::shared_ptr<DiskByteHDFS> remote_disk = std::make_shared<DiskByteHDFS>("hdfs", params.source_path, hdfs_params);
     auto volume = std::make_shared<SingleDiskVolume>("volume_single", remote_disk, 0);
     IMergeTreeDataPartsVector parts{};
