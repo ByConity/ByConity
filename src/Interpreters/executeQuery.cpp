@@ -1698,7 +1698,7 @@ HostWithPorts getTargetServer(ContextPtr context, ASTPtr & ast)
     {
         ASTs tables;
         bool has_table_func = false;
-        ASTSelectQuery::collectAllTables(create_ast->select, tables, has_table_func);
+        ASTSelectQuery::collectAllTables(select, tables, has_table_func);
         if (!has_table_func && !tables.empty())
         {
             // simplily use the first table if there are multiple tables used
