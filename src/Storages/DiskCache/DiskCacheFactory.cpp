@@ -20,6 +20,7 @@
 #include <Storages/DiskCache/DiskCacheLRU.h>
 #include <Storages/DiskCache/DiskCacheSettings.h>
 #include <Storages/DiskCache/DiskCacheSimpleStrategy.h>
+#include "common/logger_useful.h"
 
 namespace DB
 {
@@ -36,14 +37,7 @@ void DiskCacheFactory::init(Context & context)
 
     /// init pool
     IDiskCache::init(context);
-
-
-    // create default cache for all DiskCacheType
-    for(auto type : std::vector<DB::DiskCacheType>{DiskCacheType::File,DiskCacheType::Hive,DiskCacheType::MergeTree}){
-        DiskCacheSettings cache_settings;
-        auto disk_cache = std::make_shared<DiskCacheLRU>(disk_cache_volume,throttler,cache_settings);
-        caches.emplace(type, disk_cache);
-    }
+    Poco::Logger * log {&Poco::Logger::get("DiskCacheFactory")};
 
     // build disk cache for each type
     if (config.has(DiskCacheSettings::root))
@@ -54,9 +48,19 @@ void DiskCacheFactory::init(Context & context)
         {
             DiskCacheSettings cache_settings;
             cache_settings.loadFromConfig(config, key);
+            LOG_TRACE(log,fmt::format("Creating DiskCache of {} kind by setting: {}",key,cache_settings.toString()));
             auto disk_cache = std::make_shared<DiskCacheLRU>(disk_cache_volume, throttler, cache_settings);
             caches.emplace(stringToDiskCacheType(key), disk_cache);
         }
+    }
+
+    // create dafault cache for MergeTree Diskcache
+    DiskCacheSettings cache_settings;
+    if (caches.find(DiskCacheType::MergeTree) == caches.end())
+    {
+        LOG_TRACE(log,fmt::format("Creating DiskCache of {} kind by setting: {}",diskCacheTypeToString(DiskCacheType::MergeTree),cache_settings.toString()));
+        auto disk_cache = std::make_shared<DiskCacheLRU>(disk_cache_volume, throttler, cache_settings);
+        caches.emplace(DiskCacheType::MergeTree, disk_cache);
     }
 }
 

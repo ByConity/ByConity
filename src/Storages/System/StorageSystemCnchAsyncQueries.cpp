@@ -15,7 +15,7 @@ namespace DB
 NamesAndTypesList StorageSystemCnchAsyncQueries::getNamesAndTypes()
 {
     return {
-        {"id", std::make_shared<DataTypeString>()},
+        {"async_query_id", std::make_shared<DataTypeString>()},
         {"query_id", std::make_shared<DataTypeString>()},
         {"status", std::make_shared<DataTypeString>()},
         {"error_msg", std::make_shared<DataTypeString>()},
@@ -32,7 +32,7 @@ void StorageSystemCnchAsyncQueries::fillData(MutableColumns & res_columns, Conte
     if (value_by_column_names.size() == 1)
     {
         const auto value_by_column_name = value_by_column_names.at(0);
-        auto it = value_by_column_name.find("id");
+        auto it = value_by_column_name.find("async_query_id");
         if (it != value_by_column_name.end())
         {
             String selected_id = it->second;
@@ -48,7 +48,7 @@ void StorageSystemCnchAsyncQueries::fillData(MutableColumns & res_columns, Conte
             }
             else
             {
-                LOG_TRACE(&Poco::Logger::get(getName()), "return empty result with id {}", selected_id);
+                LOG_TRACE(&Poco::Logger::get(getName()), "return empty result with async_query_id {}", selected_id);
             }
         }
         else

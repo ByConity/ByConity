@@ -610,10 +610,8 @@ static void touchActiveTimestampForInsertSelectQuery(const ASTInsertQuery & inse
 
     ASTs related_tables;
     bool has_table_func = false;
-    if (auto * select_query = insert_query.select->as<ASTSelectQuery>())
-        select_query->collectAllTables(related_tables, has_table_func);
-    else if (auto * select_with_union = insert_query.select->as<ASTSelectWithUnionQuery>())
-        select_with_union->collectAllTables(related_tables, has_table_func);
+    if (const auto * select = insert_query.select.get())
+        ASTSelectQuery::collectAllTables(select, related_tables, has_table_func);
 
     for (auto & db_and_table_ast : related_tables)
     {

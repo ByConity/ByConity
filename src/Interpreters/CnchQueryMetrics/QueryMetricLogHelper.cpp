@@ -127,7 +127,7 @@ void extractDatabaseAndTableNames(const ContextPtr & context, const ASTPtr & ast
     {
         ASTs all_tables;
         bool dummy = false;
-        select_union->collectAllTables(all_tables, dummy);
+        ASTSelectQuery::collectAllTables(select_union, all_tables, dummy);
         bool first = true;
         for (const auto & db_table : all_tables)
         {
@@ -159,10 +159,10 @@ void extractDatabaseAndTableNames(const ContextPtr & context, const ASTPtr & ast
 
         if (insert->select)
         {
-            const auto & select_ast = insert->select->as<ASTSelectWithUnionQuery &>();
+            const auto * select_ast = insert->select->as<ASTSelectWithUnionQuery>();
             ASTs all_tables;
             bool dummy = false;
-            select_ast.collectAllTables(all_tables, dummy);
+            ASTSelectQuery::collectAllTables(select_ast, all_tables, dummy);
             for (const auto & db_table : all_tables)
             {
                 auto table_id = context->resolveStorageID(db_table);
@@ -191,7 +191,7 @@ static bool checkSelectForFilteredTables(const ASTPtr & ast, const ContextPtr & 
     {
         std::vector<ASTPtr> all_base_tables;
         bool dummy = false;
-        select_ast->collectAllTables(all_base_tables, dummy);
+        ASTSelectQuery::collectAllTables(select_ast, all_base_tables, dummy);
         for (auto & table_ast : all_base_tables)
         {
             DatabaseAndTableWithAlias database_table(table_ast);

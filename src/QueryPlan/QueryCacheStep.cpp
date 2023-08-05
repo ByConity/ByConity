@@ -209,7 +209,7 @@ bool QueryCacheStep::checkViableQuery()
 
     std::vector<ASTPtr> tables;
     bool dummy = false;
-    query->collectAllTables(tables, dummy);
+    ASTSelectQuery::collectAllTables(query, tables, dummy);
 
     // If there is no target table, do not use query cache
     if (tables.empty())

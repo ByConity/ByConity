@@ -106,11 +106,11 @@ const char * IntervalKind::toKeyword() const
         case IntervalKind::HourSecond:
             return "HOUR_SECOND";
         case IntervalKind::HourMinute:
-            return "HOURM_INUTE";
+            return "HOUR_MINUTE";
         case IntervalKind::DaySecond:
             return "DAY_SECOND";
         case IntervalKind::DayMinute:
-            return "DAYM_INUTE";
+            return "DAY_MINUTE";
         case IntervalKind::DayHour:
             return "DAY_HOUR";
         case IntervalKind::YearMonth:

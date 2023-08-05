@@ -99,6 +99,8 @@ void registerFunctionConnectionId(FunctionFactory & factory);
 void registerFunctionPartitionId(FunctionFactory & factory);
 void registerFunctionPartitionStatus(FunctionFactory & factory);
 void registerFunctionIsIPAddressContainedIn(FunctionFactory &);
+void registerFunctionGetEnv(FunctionFactory &);
+void registerFunctionPodName(FunctionFactory &);
 
 #if USE_ICU
 void registerFunctionConvertCharset(FunctionFactory &);
@@ -177,6 +179,8 @@ void registerFunctionsMiscellaneous(FunctionFactory & factory)
     registerFunctionPartitionId(factory);
     registerFunctionPartitionStatus(factory);
     registerFunctionIsIPAddressContainedIn(factory);
+    registerFunctionGetEnv(factory);
+    registerFunctionPodName(factory);
 
 #if USE_ICU
     registerFunctionConvertCharset(factory);

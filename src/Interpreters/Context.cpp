@@ -4213,7 +4213,10 @@ std::shared_ptr<TSO::TSOClient> Context::getCnchTSOClient() const
         updateTSOLeaderHostPort();
 
     if (auto updated_host_port = getTSOLeaderHostPort(); !updated_host_port.empty())
+    {
+        LOG_TRACE(&Poco::Logger::get("Context::getCnchTSOClient"), "TSO Leader host-port is: {} ", updated_host_port);
         return shared->tso_client_pool->get(updated_host_port);
+    }
     else
         throw Exception(ErrorCodes::NOT_A_LEADER, "Get an empty tso leader from keeper");
 }
@@ -4252,6 +4255,7 @@ void Context::updateTSOLeaderHostPort() const
         throw Exception(
             ErrorCodes::LOGICAL_ERROR, "Can't get current tso-leader, leader_node `{}` in keeper is empty.", current_leader_node);
 
+    LOG_TRACE(&Poco::Logger::get("Context::updateTSO"), "Upated TSO Leader host-port to: {} ", current_leader);
     {
         std::lock_guard lock(shared->tso_mutex);
         shared->tso_leader_host_port = std::move(current_leader);
@@ -4935,4 +4939,9 @@ String Context::getCnchAuxilityPolicyName() const
     return getConfigRef().getString("storage_configuration.cnch_auxility_policy", "default");
 }
 
+bool Context::isAsyncMode() const
+{
+    return getClientInfo().query_kind == ClientInfo::QueryKind::INITIAL_QUERY && getServerType() == ServerType::cnch_server
+        && getSettingsRef().enable_async_execution;
+}
 }
