@@ -30,7 +30,6 @@
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include <Storages/PartitionCommands.h>
 #include <Storages/StorageMaterializedView.h>
-#include <Transaction/Actions/S3AttachMetaFileAction.h>
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/TxnTimestamp.h>
 
