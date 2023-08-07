@@ -18,6 +18,7 @@
 #include <numeric>
 #include <filesystem>
 #include <set>
+#include <thread>
 #include <utility>
 #include <Databases/DatabasesCommon.h>
 #include <CloudServices/CnchDataWriter.h>
@@ -28,7 +29,11 @@
 #include <Storages/PartitionCommands.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include <Storages/MergeTree/MergeTreeCNCHDataDumper.h>
-
+#include <Interpreters/executeQuery.h>
+#include <Storages/MergeTree/S3PartsAttachMeta.h>
+#include <Transaction/TransactionCommon.h>
+#include <Transaction/TxnTimestamp.h>
+#include <Transaction/Actions/S3AttachMetaFileAction.h>
 
 namespace ProfileEvents
 {
@@ -238,6 +243,11 @@ void AttachContext::commit()
     {
         query_ctx.getCnchTransactionCoordinator().finishTransaction(new_txn);
     }
+
+    /// If we're not in the interactive transaction session, at this point it's safe
+    /// to remove the directory lock
+    if (!src_directory.empty() && !isQueryInInteractiveSession(query_ctx.shared_from_this()) && !query_ctx.getSettingsRef().force_clean_transaction_by_dm)
+        query_ctx.getCnchCatalog()->clearFilesysLock(src_directory);
 
     if (!meta_files_to_delete.empty())
     {
@@ -464,8 +474,38 @@ std::pair<AttachFilter, CnchAttachProcessor::PartsFromSources> CnchAttachProcess
         }
         else
         {
-            chained_parts_from_sources = collectPartsFromPath(command.from_zookeeper_path,
-                filter, attach_ctx);
+            if (query_ctx->getSettingsRef().cnch_atomic_attach_part)
+            {
+                /// Attach parts from directory, lock the directory
+                int retries = 3;
+                while (true)
+                {
+                    auto hold_txn_id = query_ctx->getCnchCatalog()->writeFilesysLock(
+                        query_ctx->getCurrentTransactionID(),
+                        command.from_zookeeper_path,
+                        target_tbl.getDatabaseName(),
+                        target_tbl.getTableName());
+
+                    if (hold_txn_id == query_ctx->getCurrentTransactionID())
+                        break;
+
+                    if (!query_ctx->getSettingsRef().cnch_atomic_attach_part_preemtive_lock_acquire || retries == 1)
+                        throw Exception(
+                            fmt::format(
+                                "Cannot lock directory {} because it's currently locked by transaction {}, retries count: {}", command.from_zookeeper_path, hold_txn_id.toUInt64(), retries),
+                            ErrorCodes::LOGICAL_ERROR);
+
+                    /// Try to clean the lock if it's not hold by current transaction
+                    String clean_txn_query = fmt::format("SYSTEM CLEAN TRANSACTION {}", hold_txn_id.toString());
+                    auto ctx = Context::createCopy(query_ctx);
+                    ctx->setCurrentTransaction(nullptr, false);
+                    executeQuery(clean_txn_query, ctx, true);
+                    std::this_thread::sleep_for(std::chrono::milliseconds(3000));
+                    retries--;
+                }
+                attach_ctx.setSourceDirectory(command.from_zookeeper_path);
+            }
+            chained_parts_from_sources = collectPartsFromPath(command.from_zookeeper_path, filter, attach_ctx);
         }
     }
 
@@ -561,6 +601,8 @@ std::vector<CollectSource> CnchAttachProcessor::discoverCollectSources(
         std::vector<String> next_level;
         for (const String& path : current_level)
         {
+            if (!disk->exists(path))
+                continue;
             for (auto iter = disk->iterateDirectory(path); iter->isValid(); iter->next())
             {
                 String current_path = std::filesystem::path(path) / iter->name();

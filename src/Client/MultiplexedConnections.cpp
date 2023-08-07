@@ -23,6 +23,7 @@
 #include <IO/ConnectionTimeouts.h>
 #include <IO/Operators.h>
 #include <Common/thread_local_rng.h>
+#include "Transaction/ICnchTransaction.h"
 #include <Interpreters/Context.h>
 #include <CloudServices/CnchServerResource.h>
 
@@ -188,7 +189,9 @@ void MultiplexedConnections::sendQuery(
     {
         if (is_cnch_query)
         {
-            auto txn_id = current_context->getCurrentTransactionID();
+            auto txn = current_context->getCurrentTransaction();
+            auto primary_txn_id = txn->isSecondary() ? txn->getPrimaryTransactionID().toUInt64() : 0;
+            auto txn_id = txn->getTransactionID().toUInt64();
             auto client_type = (current_context->getServerType() == ServerType::cnch_server) ?
                 ClientInfo::ClientType::CNCH_SERVER : ClientInfo::ClientType::CNCH_WORKER;
             auto rpc_port = (current_context->getServerType() == ServerType::cnch_worker)
@@ -196,7 +199,7 @@ void MultiplexedConnections::sendQuery(
                 : current_context->getRPCPort();
 
             replica_states[0].connection->sendCnchQuery(
-                txn_id, timeouts, query, query_id, stage, &modified_settings, &client_info, with_pending_data, client_type, rpc_port);
+                primary_txn_id, txn_id, timeouts, query, query_id, stage, &modified_settings, &client_info, with_pending_data, client_type, rpc_port);
         }
         else
         {

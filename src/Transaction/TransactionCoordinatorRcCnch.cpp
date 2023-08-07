@@ -159,7 +159,7 @@ void TransactionCoordinatorRcCnch::finishTransaction(const TransactionCnchPtr & 
             if (auto it = active_txn_list.find(cur->getTransactionID()); it != active_txn_list.end())
             {
                 active_txn_list.erase(it);
-                LOG_DEBUG(log, "Deleted txn {}\n", cur->getTransactionID());
+                LOG_DEBUG(log, "Deleted txn {}", cur->getTransactionID());
             }
         }
         eraseActiveTimestamp(cur);
@@ -350,4 +350,13 @@ void TransactionCoordinatorRcCnch::scanActiveTransactions()
         scan_active_txns_task->scheduleAfter(scan_interval);
     }
 }
+
+void TransactionCoordinatorRcCnch::addTransaction(const TransactionCnchPtr & txn)
+{
+    std::lock_guard<std::mutex> lock(list_mutex);
+    const auto & txn_id = txn->getTransactionID();
+    if (!active_txn_list.emplace(txn_id, txn).second)
+        throw Exception("Transaction (txn_id: " + txn_id.toString() + ") has been created", ErrorCodes::LOGICAL_ERROR);
+}
+
 }

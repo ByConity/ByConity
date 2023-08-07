@@ -154,7 +154,7 @@ void StorageSystemCnchParts::fillData(MutableColumns & res_columns, ContextPtr c
 
     ASTPtr where_expression = query_info.query->as<ASTSelectQuery &>().where();
 
-    const std::vector<std::map<String,String>> value_by_column_names = collectWhereORClausePredicate(where_expression, context);
+    const std::vector<std::map<String,Field>> value_by_column_names = collectWhereORClausePredicate(where_expression, context);
     bool enable_filter_by_table = false;
     bool enable_filter_by_partition = false;
     String only_selected_db;
@@ -169,8 +169,8 @@ void StorageSystemCnchParts::fillData(MutableColumns & res_columns, ContextPtr c
         auto partition_it = value_by_column_name.find("partition_id");
         if ((db_it != value_by_column_name.end()) && (table_it != value_by_column_name.end()))
         {
-            only_selected_db = db_it->second;
-            only_selected_table = table_it->second;
+            only_selected_db = db_it->second.getType() == Field::Types::String ? db_it->second.get<String>() : "";
+            only_selected_table = table_it->second.getType() == Field::Types::String ? table_it->second.get<String>() : "";
             enable_filter_by_table = true;
 
             LOG_TRACE(&Poco::Logger::get("StorageSystemCnchParts"),
@@ -180,7 +180,7 @@ void StorageSystemCnchParts::fillData(MutableColumns & res_columns, ContextPtr c
 
         if (partition_it != value_by_column_name.end())
         {
-            only_selected_partition_id = partition_it->second;
+            only_selected_partition_id = partition_it->second.getType() == Field::Types::String ? partition_it->second.get<String>() : "";
             enable_filter_by_partition = true;
 
             LOG_TRACE(&Poco::Logger::get("StorageSystemCnchParts"),

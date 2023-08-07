@@ -82,11 +82,22 @@ BlockIO executeQuery(
     bool allow_processors /// If can use processors pipeline
 );
 
+/// For interactive transaction
+
+/// Return true if current query is in an interactive transaction session
+bool isQueryInInteractiveSession(const ContextPtr & context, [[maybe_unused]] const ASTPtr & query = nullptr);
+
+/// Return true if query is ddl
+bool isDDLQuery(const ContextPtr & context, const ASTPtr & query);
+
 /// Get target server for a query, can be localhost
-HostWithPorts getTargetServer(ContextPtr context, ASTPtr & ast);
+HostWithPorts getTargetServer(const ContextPtr & context, ASTPtr & ast);
 
 /// Execute the query on the target server.
 void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server, const ASTPtr & ast, BlockIO & res);
+
+
+/// Async query execution
 
 bool isAsyncMode(ContextMutablePtr context);
 

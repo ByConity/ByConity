@@ -47,7 +47,7 @@ void StorageSystemCnchTableHost::fillData(MutableColumns & res_columns, ContextP
     ASTPtr where_expression = query_info.query->as<ASTSelectQuery>()->where();
     std::map<String, String> columnToValue;
 
-    const std::vector<std::map<String,String>> value_by_column_names = DB::collectWhereORClausePredicate(where_expression, context);
+    const std::vector<std::map<String,Field>> value_by_column_names = DB::collectWhereORClausePredicate(where_expression, context);
     bool enable_filter_by_db = false;
     bool enable_filter_by_database_and_table = false;
     String only_selected_database;
@@ -62,8 +62,8 @@ void StorageSystemCnchTableHost::fillData(MutableColumns & res_columns, ContextP
             (table_it != value_by_column_name.end())
             )
         {
-            only_selected_database = db_it->second;
-            only_selected_table = table_it->second;
+            only_selected_database = db_it->second.getType() == Field::Types::String ? db_it->second.get<String>() : "";
+            only_selected_table = table_it->second.getType() == Field::Types::String ? table_it->second.get<String>() : "";
             enable_filter_by_database_and_table = true;
             LOG_TRACE(&Poco::Logger::get("StorageSystemCnchTableHost"),
                     "filtering by db and table with db name {} and table name {}",
@@ -71,7 +71,7 @@ void StorageSystemCnchTableHost::fillData(MutableColumns & res_columns, ContextP
         }
         else if (db_it != value_by_column_name.end())
         {
-            only_selected_database = db_it->second;
+            only_selected_database = db_it->second.getType() == Field::Types::String ? db_it->second.get<String>() : "";
             enable_filter_by_db = true;
             LOG_TRACE(&Poco::Logger::get("StorageSystemCnchTableHost"),
                     "filtering by db with db name {}", only_selected_database);

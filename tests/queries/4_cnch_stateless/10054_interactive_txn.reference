@@ -1,0 +1,65 @@
+----INSERT TEST----
+interactive_txn_0	42
+Test 0: insert values rollback
+interactive_txn_0	1
+interactive_txn_0	42
+interactive_txn_1	2
+After rollback
+interactive_txn_0	42
+Test 1: insert values commit
+interactive_txn_0	3
+interactive_txn_0	42
+interactive_txn_1	4
+After commit
+interactive_txn_0	3
+interactive_txn_0	42
+interactive_txn_1	4
+Test 2: insert select rollback
+interactive_txn_0	3
+interactive_txn_0	5
+interactive_txn_0	42
+interactive_txn_0	3
+interactive_txn_1	4
+interactive_txn_0	5
+interactive_txn_0	42
+After rollback
+interactive_txn_0	3
+interactive_txn_0	42
+interactive_txn_1	4
+Test 3: insert select commit
+interactive_txn_0	3
+interactive_txn_0	6
+interactive_txn_0	42
+interactive_txn_0	3
+interactive_txn_1	4
+interactive_txn_0	6
+interactive_txn_0	42
+After commit
+interactive_txn_0	3
+interactive_txn_0	6
+interactive_txn_0	42
+interactive_txn_0	3
+interactive_txn_1	4
+interactive_txn_0	6
+interactive_txn_0	42
+----TRUNCATE TEST----
+interactive_txn_2_1	42
+interactive_txn_2_2	43
+Test 4: truncate rollback
+After rollback
+interactive_txn_2_1	42
+interactive_txn_2_2	43
+Test 5: truncate commit
+After commit
+----ATTACH TEST----
+interactive_txn_3	42
+interactive_txn_3	43
+Test 6: drop + attach rollback
+interactive_txn_3	42
+After rollback
+interactive_txn_3	43
+interactive_txn_3	42
+Test 7: drop + attach commit
+interactive_txn_3	42
+After commit
+interactive_txn_3	42

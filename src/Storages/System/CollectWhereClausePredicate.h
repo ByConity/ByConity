@@ -23,5 +23,5 @@
 
 namespace DB
 {
-    std::vector<std::map<String,String>> collectWhereORClausePredicate(const ASTPtr & ast, const ContextPtr & context);
+    std::vector<std::map<String,Field>> collectWhereORClausePredicate(const ASTPtr & ast, const ContextPtr & context);
 }

@@ -49,6 +49,7 @@
 #include <Parsers/ParserDumpInfoQuery.h>
 #include <Parsers/ParserReproduceQuery.h>
 #include <Parsers/ParserUndropQuery.h>
+#include <Parsers/ParserTransaction.h>
 
 namespace DB
 {
@@ -81,6 +82,11 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     ParserCreateStatsQuery create_stats_p;
     ParserShowStatsQuery show_stats_p;
     ParserDropStatsQuery drop_stats_p;
+    ParserShowStatementsQuery show_statements_p;
+    ParserBeginTransactionQuery begin_transaction_p;
+    ParserBeginQuery begin_p;
+    ParserCommitQuery commit_p;
+    ParserRollbackQuery rollback_p;
 
     ASTPtr query;
 
@@ -110,7 +116,12 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
         || refresh_p.parse(pos, query, expected)
         || create_stats_p.parse(pos, query, expected)
         || show_stats_p.parse(pos, query, expected)
-        || drop_stats_p.parse(pos, query, expected);
+        || drop_stats_p.parse(pos, query, expected)
+        || show_statements_p.parse(pos, query, expected)
+        || begin_transaction_p.parse(pos, query, expected)
+        || begin_p.parse(pos, query, expected)
+        || commit_p.parse(pos, query, expected)
+        || rollback_p.parse(pos, query, expected);
 
     if (!parsed)
         return false;

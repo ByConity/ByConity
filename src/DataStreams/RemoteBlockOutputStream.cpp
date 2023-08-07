@@ -26,6 +26,7 @@
 
 #include <Common/NetException.h>
 #include <Common/CurrentThread.h>
+#include <Transaction/ICnchTransaction.h>
 #include <Interpreters/InternalTextLogsQueue.h>
 #include <IO/ConnectionTimeouts.h>
 #include <Parsers/ASTInsertQuery.h>
@@ -61,7 +62,10 @@ RemoteBlockOutputStream::RemoteBlockOutputStream(Connection & connection_,
     /** Send query and receive "header", that describes table structure.
       * Header is needed to know, what structure is required for blocks to be passed to 'write' method.
       */
-    connection.sendQuery(timeouts, query, "", QueryProcessingStage::Complete, &settings_, &modified_client_info);
+    if (auto txn = context->getCurrentTransaction(); txn->isSecondary())
+        connection.sendCnchQuery(txn->getPrimaryTransactionID(), txn->getTransactionID(), timeouts, query, context->getCurrentQueryId(), QueryProcessingStage::Complete, &settings_, &modified_client_info, false, ClientInfo::ClientType::CNCH_SERVER);
+    else
+        connection.sendQuery(timeouts, query, "", QueryProcessingStage::Complete, &settings_, &modified_client_info);
 
     while (true)
     {

@@ -20,6 +20,7 @@
 #include <Poco/Net/TCPServerParams.h>
 #include <Poco/Util/HelpFormatter.h>
 #include <brpc/server.h>
+#include "Common/Config/ConfigProcessor.h"
 #include <Common/Exception.h>
 #include <common/LocalDateTime.h>
 #include <common/logger_useful.h>

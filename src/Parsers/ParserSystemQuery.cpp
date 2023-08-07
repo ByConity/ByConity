@@ -104,6 +104,14 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
     if (!found)
         return false;
 
+    // Parse integer
+    auto parse_uint = [](IParser::Pos & pos_, Expected & expected_, UInt64 & res_)
+    {
+        ASTPtr ast;
+        if (!ParserUnsignedInteger().parse(pos_, ast, expected_)) return false;
+        res_ = safeGet<UInt64>(ast->as<ASTLiteral>()->value);
+        return true;
+    };
     ParserPartition parser_partition;
     switch (res->type)
     {
@@ -352,6 +360,13 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
         case Type::RESET_CONSUME_OFFSET:
         {
             if (!parseIdentifierOrStringLiteral(pos, expected, res->string_data))
+                return false;
+            break;
+        }
+
+        case Type::CLEAN_TRANSACTION:
+        {
+            if (!parse_uint(pos, expected, res->txn_id))
                 return false;
             break;
         }

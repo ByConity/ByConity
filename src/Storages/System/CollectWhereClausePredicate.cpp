@@ -19,12 +19,13 @@
 #include <Interpreters/evaluateConstantExpression.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTWithAlias.h>
+#include "Core/Field.h"
 
 namespace DB
 {
-    std::pair<String,String> collectWhereEqualClausePredicate(const ASTPtr & ast, const ContextPtr & context)
+    std::pair<String,Field> collectWhereEqualClausePredicate(const ASTPtr & ast, const ContextPtr & context)
     {
-        std::pair<String,String> res;
+        std::pair<String,Field> res;
         if (!ast)
             return res;
 
@@ -44,22 +45,19 @@ namespace DB
         if (function_value && function_value->name == "currentDatabase")
         {
             ASTPtr db_ast = evaluateConstantExpressionForDatabaseName(ast_value , context);
-            return std::make_pair(column_name->name(), db_ast->as<const ASTLiteral &>().value.get<String>());
+            return std::make_pair(column_name->name(), db_ast->as<const ASTLiteral &>().value);
         }
 
         const auto * column_value = ast_value->as<ASTLiteral>();
         if (!column_value)
             return res;
 
-        if (column_value->value.getType() != Field::Types::String)
-            return std::make_pair(column_name->name(), "");
-
-        return std::make_pair(column_name->name(), column_value->value.get<String>());
+        return std::make_pair(column_name->name(), column_value->value);
     }
 
-    std::map<String,String> collectWhereANDClausePredicate(const ASTPtr & ast, const ContextPtr & context)
+    std::map<String,Field> collectWhereANDClausePredicate(const ASTPtr & ast, const ContextPtr & context)
     {
-        std::map<String,String> res;
+        std::map<String,Field> res;
         if (!ast)
             return res;
 
@@ -71,7 +69,7 @@ namespace DB
         {
             const auto children = func->arguments->children;
             std::for_each(children.begin(), children.end(), [& res, & context] (const auto & child) {
-                std::pair<String, String> p = collectWhereEqualClausePredicate(child, context);
+                std::pair<String, Field> p = collectWhereEqualClausePredicate(child, context);
                 if (!p.first.empty())
                     res.insert(p);
             });
@@ -89,9 +87,9 @@ namespace DB
     // collects columns and values for WHERE condition with OR, AND and EQUALS (case insesitive)
     // e.g for query "select ... where ((db = 'db') AND (name = 'name1')) OR ((db = 'db') AND (name = 'name2')) ", method will return a vector {'name':'name1', 'db':'db'}, {'db' : 'db', 'name':'name2'}
     // if a value of column is not a string, it will has value as an empty string
-    std::vector<std::map<String,String>> collectWhereORClausePredicate(const ASTPtr & ast, const ContextPtr & context)
+    std::vector<std::map<String,Field>> collectWhereORClausePredicate(const ASTPtr & ast, const ContextPtr & context)
     {
-        std::vector<std::map<String,String>> res;
+        std::vector<std::map<String,Field>> res;
         if (!ast)
             return res;
 
@@ -103,14 +101,14 @@ namespace DB
         {
             const auto children = func->arguments->children;
             std::for_each(children.begin(), children.end(), [& res, & context] (const auto & child) {
-                std::map<String,String> m = collectWhereANDClausePredicate(child, context);
+                std::map<String,Field> m = collectWhereANDClausePredicate(child, context);
                 if (!m.empty())
                     res.push_back(m);
             });
         }
         else if (func->name == "and")
         {
-            std::map<String,String> m = collectWhereANDClausePredicate(ast, context);
+            std::map<String,Field> m = collectWhereANDClausePredicate(ast, context);
             if (!m.empty())
                 res.push_back(m);
         }
@@ -118,7 +116,7 @@ namespace DB
         {
             auto p = collectWhereEqualClausePredicate(ast, context);
             if (!p.first.empty())
-                res.push_back(std::map<String, String>{p});
+                res.push_back(std::map<String, Field>{p});
         }
 
         return res;

@@ -337,7 +337,7 @@ public:
     /// (that will eventualy fail). **NOTES: it DOES NOT belong to general cnch lock system, don't confuse.
 
     /// write a directory lock
-    bool writeFilesysLock(TxnTimestamp txn_id, const String & dir, const String & db, const String & table);
+    TxnTimestamp writeFilesysLock(TxnTimestamp txn_id, const String & dir, const String & db, const String & table);
     /// check if a directory is lock
     std::optional<FilesysLock> getFilesysLock(const String & dir);
     /// clean a directory lock
