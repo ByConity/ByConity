@@ -623,6 +623,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     };
     String query_database;
     String query_table;
+    BlockIO res;
 
     try
     {
@@ -724,7 +725,6 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         throw;
     }
 
-    BlockIO res;
 
     /// NOTES: Interactive transaction session
     /// 0. if query is ddl, commit the active transaction
