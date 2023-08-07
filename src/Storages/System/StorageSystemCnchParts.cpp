@@ -140,6 +140,7 @@ static std::vector<std::pair<String, String>> filterTables(const ContextPtr & co
     for (size_t i = 0; i < database_column_res->size(); ++i)
         res.emplace_back((*database_column_res)[i].get<String>(), (*table_name_column_res)[i].get<String>());
 
+    LOG_DEBUG(&Poco::Logger::get("SystemCnchParts"), "Got {} tables from catalog after filter", res.size());
     return res;
 }
 
@@ -151,7 +152,7 @@ void StorageSystemCnchParts::fillData(MutableColumns & res_columns, ContextPtr c
 
     std::vector<std::pair<String, String>> tables;
 
-    ASTPtr where_expression = query_info.query->as<ASTSelectQuery>()->where();
+    ASTPtr where_expression = query_info.query->as<ASTSelectQuery &>().where();
 
     const std::vector<std::map<String,String>> value_by_column_names = collectWhereORClausePredicate(where_expression, context);
     bool enable_filter_by_table = false;
@@ -166,9 +167,7 @@ void StorageSystemCnchParts::fillData(MutableColumns & res_columns, ContextPtr c
         auto db_it = value_by_column_name.find("database");
         auto table_it = value_by_column_name.find("table");
         auto partition_it = value_by_column_name.find("partition_id");
-        if ((db_it != value_by_column_name.end()) &&
-             (table_it != value_by_column_name.end())
-            )
+        if ((db_it != value_by_column_name.end()) && (table_it != value_by_column_name.end()))
         {
             only_selected_db = db_it->second;
             only_selected_table = table_it->second;
@@ -191,7 +190,7 @@ void StorageSystemCnchParts::fillData(MutableColumns & res_columns, ContextPtr c
     }
 
     if (!(enable_filter_by_partition || enable_filter_by_table))
-        LOG_TRACE(&Poco::Logger::get("StorageSystemCnchParts"), "doesn't do any filtering from catalog");
+        LOG_TRACE(&Poco::Logger::get("StorageSystemCnchParts"), "No explicitly table and partition provided in where expression");
 
     // check for required structure of WHERE clause for cnch_parts
     if (!enable_filter_by_table)
@@ -209,12 +208,18 @@ void StorageSystemCnchParts::fillData(MutableColumns & res_columns, ContextPtr c
         const String & database_name = it.first;
         const String & table_name = it.second;
         auto table = cnch_catalog->tryGetTable(*context, database_name, table_name, start_time);
-        if (!table)
-            continue;
 
         auto * cnch_merge_tree = dynamic_cast<StorageCnchMergeTree *>(table.get());
         if (!cnch_merge_tree)
-            throw Exception("Table system.cnch_parts only support CnchMergeTree engine", ErrorCodes::LOGICAL_ERROR);
+        {
+            if (enable_filter_by_table)
+                throw Exception(
+                    ErrorCodes::NOT_IMPLEMENTED,
+                    "Table system.cnch_parts only support CnchMergeTree engine, but got `{}`",
+                    table ? table->getName(): "unknown engine");
+            else
+                continue;
+        }
 
         auto all_parts = enable_filter_by_partition
             ? cnch_catalog->getServerDataPartsInPartitions(table, {only_selected_partition_id}, start_time, nullptr)
@@ -301,6 +306,5 @@ void StorageSystemCnchParts::fillData(MutableColumns & res_columns, ContextPtr c
             add_parts(part, PartType::DroppedPart, false);
     }
 }
-
 
 }
