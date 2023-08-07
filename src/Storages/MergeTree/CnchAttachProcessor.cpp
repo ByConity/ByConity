@@ -13,27 +13,26 @@
  * limitations under the License.
  */
 
-#include <Storages/MergeTree/CnchAttachProcessor.h>
+#include <filesystem>
 #include <memory>
 #include <numeric>
-#include <filesystem>
 #include <set>
 #include <thread>
 #include <utility>
-#include <Databases/DatabasesCommon.h>
 #include <CloudServices/CnchDataWriter.h>
 #include <CloudServices/CnchPartsHelper.h>
+#include <Databases/DatabasesCommon.h>
+#include <Interpreters/executeQuery.h>
 #include <Interpreters/trySetVirtualWarehouse.h>
 #include <Parsers/ASTLiteral.h>
-#include <Storages/StorageMaterializedView.h>
-#include <Storages/PartitionCommands.h>
-#include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
+#include <Storages/MergeTree/CnchAttachProcessor.h>
 #include <Storages/MergeTree/MergeTreeCNCHDataDumper.h>
-#include <Interpreters/executeQuery.h>
-#include <Storages/MergeTree/S3PartsAttachMeta.h>
+#include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
+#include <Storages/PartitionCommands.h>
+#include <Storages/StorageMaterializedView.h>
+#include <Transaction/Actions/S3AttachMetaFileAction.h>
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/TxnTimestamp.h>
-#include <Transaction/Actions/S3AttachMetaFileAction.h>
 
 namespace ProfileEvents
 {
