@@ -1264,57 +1264,53 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 elem.used_table_functions = factories_info.table_functions;
                 elem.partition_ids = context->getPartitionIds();
 
-                        if (log_processors_profiles)
+                if (log_processors_profiles)
+                {
+                    auto processors_profile_log = context->getProcessorsProfileLog();
+                    if (query_pipeline && processors_profile_log)
+                    {
+                        ProcessorProfileLogElement processor_elem;
+                        processor_elem.event_time = time_in_seconds(finish_time);
+                        processor_elem.event_time_microseconds = time_in_microseconds(finish_time);
+                        processor_elem.query_id = elem.client_info.current_query_id;
+
+                        auto get_proc_id = [](const IProcessor & proc) -> UInt64 { return reinterpret_cast<std::uintptr_t>(&proc); };
+                        for (const auto & processor : query_pipeline->getProcessors())
                         {
-                            auto processors_profile_log = context->getProcessorsProfileLog();
-                            if (query_pipeline && processors_profile_log)
+                            std::vector<UInt64> parents;
+                            for (const auto & port : processor->getOutputs())
                             {
-                                ProcessorProfileLogElement processor_elem;
-                                processor_elem.event_time = time_in_seconds(finish_time);
-                                processor_elem.event_time_microseconds = time_in_microseconds(finish_time);
-                                processor_elem.query_id = elem.client_info.current_query_id;
-
-                                auto get_proc_id = [](const IProcessor & proc) -> UInt64
-                                {
-                                    return reinterpret_cast<std::uintptr_t>(&proc);
-                                };
-                                for (const auto & processor : query_pipeline->getProcessors())
-                                {
-                                    std::vector<UInt64> parents;
-                                    for (const auto & port : processor->getOutputs())
-                                    {
-                                        if (!port.isConnected())
-                                            continue;
-                                        const IProcessor & next = port.getInputPort().getProcessor();
-                                        parents.push_back(get_proc_id(next));
-                                    }
-
-                                    processor_elem.id = get_proc_id(*processor);
-                                    processor_elem.parent_ids = std::move(parents);
-                                    processor_elem.plan_step = reinterpret_cast<std::uintptr_t>(processor->getQueryPlanStep());
-                                    /// plan_group is set differently to community CH,
-                                    /// which is processor->getQueryPlanStepGroup();
-                                    /// here, it is combined with the segment_id
-                                    /// for visualizing processors in the profiling website
-                                    processor_elem.plan_group = processor->getQueryPlanStepGroup();
-
-                                    processor_elem.processor_name = processor->getName();
-
-                                    processor_elem.elapsed_us = processor->getElapsedUs();
-                                    processor_elem.input_wait_elapsed_us = processor->getInputWaitElapsedUs();
-                                    processor_elem.output_wait_elapsed_us = processor->getOutputWaitElapsedUs();
-                                    auto stats = processor->getProcessorDataStats();
-                                    processor_elem.input_rows = stats.input_rows;
-                                    processor_elem.input_bytes = stats.input_bytes;
-                                    processor_elem.output_rows = stats.output_rows;
-                                    processor_elem.output_bytes = stats.output_bytes;
-
-                                    processors_profile_log->add(processor_elem);
-                                }
+                                if (!port.isConnected())
+                                    continue;
+                                const IProcessor & next = port.getInputPort().getProcessor();
+                                parents.push_back(get_proc_id(next));
                             }
+
+                            processor_elem.id = get_proc_id(*processor);
+                            processor_elem.parent_ids = std::move(parents);
+                            processor_elem.plan_step = reinterpret_cast<std::uintptr_t>(processor->getQueryPlanStep());
+                            /// plan_group is set differently to community CH,
+                            /// which is processor->getQueryPlanStepGroup();
+                            /// here, it is combined with the segment_id
+                            /// for visualizing processors in the profiling website
+                            processor_elem.plan_group = processor->getQueryPlanStepGroup();
+
+                            processor_elem.processor_name = processor->getName();
+
+                            processor_elem.elapsed_us = processor->getElapsedUs();
+                            processor_elem.input_wait_elapsed_us = processor->getInputWaitElapsedUs();
+                            processor_elem.output_wait_elapsed_us = processor->getOutputWaitElapsedUs();
+                            auto stats = processor->getProcessorDataStats();
+                            processor_elem.input_rows = stats.input_rows;
+                            processor_elem.input_bytes = stats.input_bytes;
+                            processor_elem.output_rows = stats.output_rows;
+                            processor_elem.output_bytes = stats.output_bytes;
+
+                            processors_profile_log->add(processor_elem);
                         }
                     }
                 }
+
 
                 if (auto opentelemetry_span_log = context->getOpenTelemetrySpanLog();
                     context->query_trace_context.trace_id != UUID() && opentelemetry_span_log)
