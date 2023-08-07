@@ -628,7 +628,7 @@ Context::~Context() = default;
 WorkerStatusManagerPtr Context::getWorkerStatusManager()
 {
     if (!shared->worker_status_manager)
-        shared->worker_status_manager = std::make_shared<WorkerStatusManager>();
+        shared->worker_status_manager = std::make_shared<WorkerStatusManager>(global_context);
     return shared->worker_status_manager;
 }
 
@@ -641,7 +641,7 @@ void Context::updateAdaptiveSchdulerConfig(const ConfigurationPtr & config)
 WorkerStatusManagerPtr Context::getWorkerStatusManager() const
 {
     if (!shared->worker_status_manager)
-        shared->worker_status_manager = std::make_shared<WorkerStatusManager>();
+        shared->worker_status_manager = std::make_shared<WorkerStatusManager>(global_context);
     return shared->worker_status_manager;
 }
 
