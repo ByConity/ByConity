@@ -513,18 +513,12 @@ static TransactionCnchPtr prepareCnchTransaction(ContextMutablePtr context, [[ma
         auto session_txn = isQueryInInteractiveSession(context,ast) ? context->getSessionContext()->getCurrentTransaction()->as<CnchExplicitTransaction>() : nullptr;
         TxnTimestamp primary_txn_id = session_txn ? session_txn->getTransactionID() : TxnTimestamp{0};
         auto txn = context->getCnchTransactionCoordinator().createTransaction(
-<<<<<<< HEAD
-            CreateTransactionOption().setContext(context).setReadOnly(read_only).setAsyncPostCommit(
-                context->getSettingsRef().async_post_commit));
-=======
             CreateTransactionOption()
                 .setContext(context)
                 .setReadOnly(read_only)
                 .setForceCleanByDM(context->getSettingsRef().force_clean_transaction_by_dm)
                 .setAsyncPostCommit(context->getSettingsRef().async_post_commit)
-                .setPrimaryTransactionId(primary_txn_id)
-        );
->>>>>>> 64bf3930ba3 (Merge branch 'cnch_ce_interactive_txn' into 'cnch-ce-merge')
+                .setPrimaryTransactionId(primary_txn_id));
         context->setCurrentTransaction(txn);
         if (session_txn && !read_only) session_txn->addStatement(queryToString(ast));
         return txn;
@@ -1271,23 +1265,6 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 elem.used_table_functions = factories_info.table_functions;
                 elem.partition_ids = context->getPartitionIds();
 
-<<<<<<< HEAD
-                if (log_queries && elem.type >= log_queries_min_type && Int64(elem.query_duration_ms) >= log_queries_min_query_duration_ms)
-                {
-                    if (auto query_log = context->getQueryLog())
-                        query_log->add(elem);
-                }
-
-                if (log_processors_profiles)
-                {
-                    auto processors_profile_log = context->getProcessorsProfileLog();
-                    if (query_pipeline && processors_profile_log)
-                    {
-                        ProcessorProfileLogElement processor_elem;
-                        processor_elem.event_time = time_in_seconds(finish_time);
-                        processor_elem.event_time_microseconds = time_in_microseconds(finish_time);
-                        processor_elem.query_id = elem.client_info.current_query_id;
-=======
                         if (log_processors_profiles)
                         {
                             auto processors_profile_log = context->getProcessorsProfileLog();
@@ -1337,7 +1314,6 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                                 }
                             }
                         }
->>>>>>> 64bf3930ba3 (Merge branch 'cnch_ce_interactive_txn' into 'cnch-ce-merge')
 
                         auto get_proc_id = [](const IProcessor & proc) -> UInt64 { return reinterpret_cast<std::uintptr_t>(&proc); };
                         for (const auto & processor : query_pipeline->getProcessors())
@@ -1782,54 +1758,6 @@ void executeQuery(
     streams.onFinish();
 }
 
-<<<<<<< HEAD
-HostWithPorts getTargetServer(ContextPtr context, ASTPtr & ast)
-{
-    /// Only get target server for main table
-    String database, table;
-
-    if (const auto * alter = ast->as<ASTAlterQuery>())
-    {
-        database = alter->database;
-        table = alter->table;
-    }
-    else if (const auto * select = ast->as<ASTSelectWithUnionQuery>())
-    {
-        ASTs tables;
-        bool has_table_func = false;
-        ASTSelectQuery::collectAllTables(select, tables, has_table_func);
-        if (!has_table_func && !tables.empty())
-        {
-            // simplily use the first table if there are multiple tables used
-            DatabaseAndTableWithAlias db_and_table(tables[0]);
-            LOG_DEBUG(
-                &Poco::Logger::get("executeQuery"),
-                "Extract db and table {}.{} from the query.",
-                db_and_table.database,
-                db_and_table.table);
-            database = db_and_table.database;
-            table = db_and_table.table;
-        }
-        else
-            return {};
-    }
-    else
-        return {};
-
-    if (database.empty())
-        database = context->getCurrentDatabase();
-
-    if (database == "system")
-        return {};
-
-    auto table_id = context->getCnchCatalog()->getTableIDByName(database, table);
-    if (!table_id)
-        throw Exception("Table " + database + "." + table + " not found in catalog", ErrorCodes::UNKNOWN_TABLE);
-
-    auto topology_master = context->getCnchTopologyMaster();
-    auto storage = context->getCnchCatalog()->getTable(*context, database, table, TxnTimestamp::maxTS());
-    return topology_master->getTargetServer(table_id->uuid(), storage->getServerVwName(), context->getTimestamp(), false);
-=======
 bool isQueryInInteractiveSession(const ContextPtr & context, [[maybe_unused]] const ASTPtr & query)
 {
     return context->hasSessionContext() && (context->getSessionContext().get() != context.get())
@@ -1901,52 +1829,10 @@ HostWithPorts getTargetServer(const ContextPtr & context, ASTPtr &ast)
     auto topology_master = context->getCnchTopologyMaster();
 
     return topology_master->getTargetServer(UUIDHelpers::UUIDToString(table->getStorageUUID()), table_id.server_vw_name, false);
->>>>>>> 64bf3930ba3 (Merge branch 'cnch_ce_interactive_txn' into 'cnch-ce-merge')
 }
 
 void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server, const ASTPtr & ast, BlockIO & res)
 {
-<<<<<<< HEAD
-    // Todo: support explicit transaction
-    res.finish_callback = [&](IBlockInputStream *, IBlockOutputStream *, QueryPipeline *, UInt64) {
-        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query success on remote server");
-    };
-    res.exception_callback = [&](int) { LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query failed on remote server"); };
-
-    /// Create connection to host
-    const auto & query_client_info = context->getClientInfo();
-    auto settings = context->getSettingsRef();
-    res.remote_execution_conn = std::make_shared<Connection>(
-        server.getHost(),
-        server.tcp_port,
-        context->getCurrentDatabase(), /*default_database_*/
-        query_client_info.current_user,
-        query_client_info.current_password,
-        "", /*cluster_*/
-        "", /*cluster_secret*/
-        "server", /*client_name_*/
-        Protocol::Compression::Enable,
-        Protocol::Secure::Disable);
-
-    String query = queryToString(ast);
-    LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Sending query as ordinary query");
-    Block header;
-    if (ast->as<ASTSelectWithUnionQuery>())
-        header = InterpreterSelectWithUnionQuery(ast, context, SelectQueryOptions(QueryProcessingStage::Complete)).getSampleBlock();
-    Pipes remote_pipes;
-    auto remote_query_executor = std::make_shared<RemoteQueryExecutor>(*res.remote_execution_conn, query, header, context);
-    remote_query_executor->setPoolMode(PoolMode::GET_ONE);
-    remote_pipes.emplace_back(createRemoteSourcePipe(remote_query_executor, true, false, false, true));
-    remote_pipes.back().addInterpreterContext(context);
-
-    auto plan = std::make_unique<QueryPlan>();
-    auto read_from_remote = std::make_unique<ReadFromPreparedSource>(Pipe::unitePipes(std::move(remote_pipes)));
-    read_from_remote->setStepDescription("Read from remote server");
-    plan->addStep(std::move(read_from_remote));
-    res.pipeline = std::move(
-        *plan->buildQueryPipeline(QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context)));
-    res.pipeline.addInterpreterContext(context);
-=======
     /// Create a proxy transaction for insert/alter query
     auto & coordinator = context->getCnchTransactionCoordinator();
     auto primary_txn_id = context->getSessionContext()->getCurrentTransaction()->getTransactionID();
@@ -2001,7 +1887,6 @@ void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server
         context->setExtendedProfileInfo(remote_stream->getExtendedProfileInfo());
         res.in = std::move(remote_stream);
     }
->>>>>>> 64bf3930ba3 (Merge branch 'cnch_ce_interactive_txn' into 'cnch-ce-merge')
 }
 
 bool isAsyncMode(ContextMutablePtr context)
@@ -2010,10 +1895,6 @@ bool isAsyncMode(ContextMutablePtr context)
         && context->getServerType() == ServerType::cnch_server && context->getSettings().enable_async_execution;
 }
 
-<<<<<<< HEAD
-
-=======
->>>>>>> 64bf3930ba3 (Merge branch 'cnch_ce_interactive_txn' into 'cnch-ce-merge')
 void updateAsyncQueryStatus(
     ContextMutablePtr context,
     const String & async_query_id,
