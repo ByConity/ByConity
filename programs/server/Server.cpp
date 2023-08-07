@@ -1762,13 +1762,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         {
             Statistics::CacheManager::initialize(global_context);
             PlanCacheManager::initialize(global_context);
+            bool exchange_server_started = false;
             /// Brpc data trans registry service
-            rpc_servers.emplace_back(std::make_unique<brpc::Server>());
-            rpc_servers.emplace_back(std::make_unique<brpc::Server>());
-            rpc_services.emplace_back(std::make_unique<BrpcExchangeReceiverRegistryService>(global_context->getSettingsRef().exchange_stream_max_buf_size));
-            rpc_services.emplace_back(std::make_unique<PlanSegmentManagerRpcService>(global_context));
-            rpc_services.emplace_back(std::make_unique<RuntimeFilterService>(global_context));
-
             for (size_t i = 0; i < listen_hosts.size(); i++)
             {
                 auto& listen_host = listen_hosts[i];
@@ -1802,11 +1797,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 {
                     if (listen_try)
                     {
-                        LOG_ERROR(log, "Fail to start BrpcExchangeReceiverRegistryService {}\n", host_exchange_port);
+                        LOG_WARNING(log, "Failed to start exchange server on {}\n", host_exchange_port);
+                        continue;
                     }
                     else
                     {
-                        throw Exception("Fail to start BrpcExchangeReceiverRegistryService", ErrorCodes::LOGICAL_ERROR) ;
+                        throw Exception("Fail to start exchange server", ErrorCodes::BRPC_EXCEPTION);
                     }
                 }
 
@@ -1819,14 +1815,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 cmd_options.has_builtin_services = enable_brpc_builtin_services;
                 if (exchange_status_server->Start(host_exchange_status_port.c_str(), &cmd_options) != 0)
                 {
-                    if (listen_try)
-                    {
-                        LOG_ERROR(log, "Fail to start PlanSegmentManagerRpcService {}\n", host_exchange_status_port);
-                    }
-                    else
-                    {
-                        throw Exception("Fail to start PlanSegmentManagerRpcService", ErrorCodes::LOGICAL_ERROR) ;
-                    }
+                    throw Exception("Fail to start exchange status server", ErrorCodes::BRPC_EXCEPTION);
                 }
 
                 rpc_servers.emplace_back(std::move(exchange_server));
@@ -1836,8 +1825,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 rpc_services.emplace_back(std::move(plan_segment_service));
                 rpc_services.emplace_back(std::move(runtime_filter_service));
 
+                exchange_server_started = true;
                 LOG_INFO(log, "start BrpcExchangeReceiverRegistryService listening :: {}", host_exchange_port);
                 LOG_INFO(log, "start PlanSegmentManagerRpcService listening :: {}", host_exchange_status_port);
+            }
+
+            if (!exchange_server_started)
+            {
+                throw Exception("Exchange server not started!", ErrorCodes::LOGICAL_ERROR);
             }
         }
 
