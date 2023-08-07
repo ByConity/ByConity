@@ -32,6 +32,7 @@ public:
         const UInt16 port;
         const bool is_local;
         const bool secure;
+        std::string tenant_id;
     };
 
     ClickHouseDictionarySource(
