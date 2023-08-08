@@ -489,14 +489,15 @@ void TCPHandler::runImpl()
         }
         catch (const Exception & e)
         {
-            state.io.onException();
-            if (state.io.coordinator && isAmbiguosError(e.code()))
+            try
             {
-                auto query_status = state.io.coordinator->waitUntilFinish(e.code(), e.message());
-                exception.emplace(query_status.summarized_error_msg, query_status.error_code);
-            }
-            else
+                state.io.onException();
                 exception.emplace(e);
+            }
+            catch (...)
+            {
+                exception.emplace(getCurrentExceptionMessage(false), getCurrentExceptionCode());
+            }
 
             if (e.code() == ErrorCodes::UNKNOWN_PACKET_FROM_CLIENT)
                 throw;
