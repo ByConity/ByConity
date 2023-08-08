@@ -74,6 +74,10 @@ Projection Est. 10 rows, cost 2.820000e+00
                            │     Size: 10
                            └─ Filter Est. ? rows, cost 0.000000e+00
                               │     Condition: (block_number > 10000000) AND (block_number < 20000000)
+<<<<<<< HEAD
                               └─ TableScan test.polygon_tx_v87 Est. ? rows, cost 0.000000e+00
                                        Condition : (block_number > 10000000) AND (block_number < 20000000).
+=======
+                              └─ TableScan ${TENANT_DB_PREFIX}test.polygon_tx_v87 est. ? rows, cost 0.000000e+00
+>>>>>>> 2df04fa9bac (Merge branch 'yz_cnch_gateway_1' into 'cnch-ce-merge')
                                        Outputs: [block_number, gas, gas_price]

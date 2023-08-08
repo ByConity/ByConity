@@ -17,7 +17,7 @@ Projection est. ? rows
          │     Order by: {a asc}
          └─ Filter est. ? rows
             │     Condition: multiIf(a = 6, a + a, b + a) > 10
-            └─ TableScan test.multiIf est. ? rows
+            └─ TableScan ${TENANT_DB_PREFIX}test.multiIf est. ? rows
                      Outputs: [a, b]
 Projection est. ? rows
 │     Expressions: [a, b]
@@ -28,7 +28,7 @@ Projection est. ? rows
          │     Order by: {a asc}
          └─ Filter est. ? rows
             │     Condition: multiIf(a = 3, b + b, a * a) > 10
-            └─ TableScan test.multiIf est. ? rows
+            └─ TableScan ${TENANT_DB_PREFIX}test.multiIf est. ? rows
                      Outputs: [a, b]
 5	6
 6	7
@@ -47,7 +47,7 @@ Projection est. ? rows
          │     Order by: {a asc}
          └─ Filter est. ? rows
             │     Condition: (a + 2) < 10
-            └─ TableScan test.multiIf est. ? rows
+            └─ TableScan ${TENANT_DB_PREFIX}test.multiIf est. ? rows
                      Outputs: [a, b]
 Projection est. ? rows
 │     Expressions: [a, b]
@@ -56,7 +56,7 @@ Projection est. ? rows
    └─ Gather Exchange est. ? rows
       └─ Sorting est. ? rows
          │     Order by: {a asc}
-         └─ TableScan test.multiIf est. ? rows
+         └─ TableScan ${TENANT_DB_PREFIX}test.multiIf est. ? rows
                   Outputs: [a, b]
 5	6
 5	6
@@ -73,7 +73,7 @@ Projection est. ? rows
          │     Order by: {a asc}
          └─ Filter est. ? rows
             │     Condition: (a + 4) < 10
-            └─ TableScan test.multiIf est. ? rows
+            └─ TableScan ${TENANT_DB_PREFIX}test.multiIf est. ? rows
                      Outputs: [a, b]
 Projection est. ? rows
 │     Expressions: [a, b]
@@ -82,5 +82,5 @@ Projection est. ? rows
    └─ Gather Exchange est. ? rows
       └─ Sorting est. ? rows
          │     Order by: {a asc}
-         └─ TableScan test.multiIf est. ? rows
+         └─ TableScan ${TENANT_DB_PREFIX}test.multiIf est. ? rows
                   Outputs: [a, b]

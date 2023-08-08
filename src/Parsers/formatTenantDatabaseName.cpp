@@ -1,6 +1,7 @@
 #include <Common/CurrentThread.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DatabaseCatalog.h>
+#include <Interpreters/SystemLog.h>
 #include <Parsers/formatTenantDatabaseName.h>
 
 namespace DB
@@ -24,6 +25,7 @@ static const Context* getQueryContext()
 static String internal_databases[] = {
     DatabaseCatalog::SYSTEM_DATABASE,
     DatabaseCatalog::TEMPORARY_DATABASE,
+    CNCH_SYSTEM_LOG_DB_NAME,
     "default"
 };
 
@@ -55,6 +57,23 @@ static String formatTenantDatabaseNameImpl(const String & database_name, char se
     return database_name;
 }
 
+//Format pattern {tenant_id}.{username}
+static String formatTenantUserNameImpl(const String & user_name, char separator = '.')
+{
+    auto query_context = getQueryContext();
+    if (!query_context)
+        return user_name;
+    const String *tenant_id = &query_context->getTenantId();
+    if (!tenant_id->empty() && user_name.find(*tenant_id) != 0)
+    {
+        String result = *tenant_id;
+        result += separator;
+        result += user_name;
+        return result;
+    }
+    return user_name;
+}
+
 //Format pattern {tenant_id}.{database_name}
 String formatTenantDatabaseName(const String & database_name)
 {
@@ -62,9 +81,15 @@ String formatTenantDatabaseName(const String & database_name)
 }
 
 //Format pattern {tenant_id}`{database_name}
-String formatTenantDefaultDatabaseName(const String & database_name)
+String formatTenantDefaultDatabaseOrName(const String & database_name)
 {
     return formatTenantDatabaseNameImpl(database_name, '`');
+}
+
+//Format pattern {tenant_id}`{user_name}
+String formatTenantConnectUserName(const String & user_name)
+{
+    return formatTenantUserNameImpl(user_name, '`');
 }
 
 // {tenant_id}.{original_database_name}

@@ -10,6 +10,8 @@ String formatTenantDatabaseName(const String & database_name);
 
 String formatTenantDefaultDatabaseName(const String & database_name);
 
+String formatTenantConnectUserName(const String & database_name);
+
 String getOriginalDatabaseName(const String & tenant_database_name);
 
 }

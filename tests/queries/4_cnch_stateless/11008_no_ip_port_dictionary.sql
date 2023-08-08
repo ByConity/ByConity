@@ -13,7 +13,7 @@ INSERT INTO test.interger_col VALUES (1), (2), (3), (4), (5), (6);
 DROP DICTIONARY IF EXISTS test.dict_flat_no_ip_port;
 CREATE DICTIONARY test.dict_flat_no_ip_port(id UInt64, a UInt64 DEFAULT 0, b Int32 DEFAULT -1, c String DEFAULT 'none') PRIMARY KEY id SOURCE(CLICKHOUSE(USER 'default' TABLE 'table_for_no_ip_port_dict' PASSWORD '' DB 'test')) LIFETIME(MIN 1000 MAX 2000) LAYOUT(FLAT());
 
-SELECT status FROM system.dictionaries where (database = 'test') AND (name = 'dict_flat_no_ip_port');
+SELECT status FROM system.dictionaries where (database = '${TENANT_DB_PREFIX}test') AND (name = 'dict_flat_no_ip_port');
 
 SELECT '-- select from table column b';
 SELECT id, dictGetInt32('test.dict_flat_no_ip_port', 'b', id) from test.interger_col ORDER BY id;
@@ -28,7 +28,7 @@ SELECT dictGetUInt64('test.dict_flat_no_ip_port', 'a', toUInt64(5));
 SELECT dictGetUInt64('test.dict_flat_no_ip_port', 'a', toUInt64(6));
 SELECT dictGetString('test.dict_flat_no_ip_port', 'c', toUInt64(2));
 SELECT dictGetString('test.dict_flat_no_ip_port', 'c', toUInt64(3));
-SELECT status FROM system.dictionaries where (database = 'test') AND (name = 'dict_flat_no_ip_port');
+SELECT status FROM system.dictionaries where (database = '${TENANT_DB_PREFIX}test') AND (name = 'dict_flat_no_ip_port');
 
 DROP DICTIONARY IF EXISTS test.dict_flat_no_ip_port;
 DROP TABLE IF EXISTS test.interger_col;

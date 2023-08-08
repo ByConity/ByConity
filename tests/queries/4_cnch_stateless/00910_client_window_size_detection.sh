@@ -6,5 +6,5 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 set -e
 set -o pipefail
 
-${CLICKHOUSE_CLIENT} --help </dev/null | wc -L
-script -e -q -c "${CLICKHOUSE_CLIENT} --help" /dev/null </dev/null >/dev/null
+${CLICKHOUSE_CLIENT_BINARY} --help </dev/null | wc -L
+script -e -q -c "${CLICKHOUSE_CLIENT_BINARY} --help" /dev/null </dev/null >/dev/null

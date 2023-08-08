@@ -232,10 +232,10 @@ bool ParserDictionary::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
                 for (auto &kv : ele->children)
                 {
                     auto kv_pair = kv->as<ASTPair>();
-                    if (kv_pair->first == "db")
+                    if (kv_pair->first == "user")
                     {
                         auto & value = kv_pair->second->as<ASTLiteral>()->value;
-                        value = formatTenantDefaultDatabaseName(value.get<String>());
+                        value = formatTenantConnectUserName(value.get<String>());
                     }
                 }
             }
