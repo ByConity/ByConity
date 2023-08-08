@@ -202,6 +202,8 @@ void TSOServer::updateTSO(Poco::Timer &)
         TSOClock cur_ts = tso_service->getClock();
         bool is_leader = tso_service->getIsLeader();
 
+        LOG_TRACE(log, "This node ({}) has retrieved values of atomic variables. Current status: [is_leader = {}], [t_now = {}]", host_port, is_leader, t_now);
+
         if (t_now > t_next + 1)  /// machine time is larger than physical time, keep physical time close to machine time
         {
             t_next = t_now;
@@ -222,7 +224,9 @@ void TSOServer::updateTSO(Poco::Timer &)
         {
             t_last = t_next + tso_window;
             /// save to KV
+            LOG_TRACE(log, "This node ({}) is about to call proxy_ptr->setTimestamp(t_last). Current status: [is_leader = {}], [t_now = {}]", host_port, is_leader, t_now);
             proxy_ptr->setTimestamp(t_last);
+            LOG_TRACE(log, "This node ({}) has called proxy_ptr->setTimestamp(t_last) successfully. Current status: [is_leader = {}], [t_now = {}]", host_port, is_leader, t_now);
         }
         tso_service->setPhysicalTime(t_next);
         LOG_TRACE(log, "This node ({}) has called updateTSO. Current status: [is_leader = {}], [t_now = {}], [t_next = {}], [t_last = {}], [cur_ts.physical = {}], [cur_ts.logical = {}]", host_port, is_leader, t_now, t_next, t_last, cur_ts.physical, cur_ts.logical);
