@@ -70,6 +70,8 @@
 #include <Storages/System/StorageSystemDDLWorkerQueue.h>
 #include <Storages/System/StorageSystemKafkaTables.h>
 #include <Storages/System/StorageSystemCnchKafkaTables.h>
+#include <Storages/System/StorageSystemCnchTransactions.h>
+#include <Storages/System/StorageSystemCnchFilesystemLock.h>
 
 #if !defined(ARCADIA_BUILD)
     #include <Storages/System/StorageSystemLicenses.h>
@@ -113,6 +115,8 @@
 #include <Storages/System/StorageSystemCnchDedupWorkers.h>
 #include <Storages/System/StorageSystemCnchDictionaries.h>
 #include <Storages/System/StorageSystemCnchManipulations.h>
+#include <Storages/System/StorageSystemCnchTransactions.h>
+#include <Storages/System/StorageSystemGlobalGCManager.h>
 #include <Storages/System/StorageSystemCnchParts.h>
 #include <Storages/System/StorageSystemCnchPartsColumns.h>
 #include <Storages/System/StorageSystemCnchPartsInfo.h>
@@ -222,6 +226,8 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
     attach<StorageSystemBrokenTables>(system_database, "broken_tables");
     attach<StorageSystemBGThreads>(system_database, "bg_threads");
     attach<StorageSystemCnchParts>(system_database, "cnch_parts");
+    attach<StorageSystemCnchTransactions>(system_database, "cnch_transactions");
+    attach<StorageSystemCnchFilesystemLock>(system_database, "cnch_fs_lock");
     attach<StorageSystemCnchPartsColumns>(system_database, "cnch_parts_columns");
     attach<StorageSystemCnchPartsInfoLocal>(system_database, "cnch_parts_info_local");
     attach<StorageSystemCnchPartsInfo>(system_database, "cnch_parts_info");

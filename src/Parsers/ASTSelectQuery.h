@@ -68,10 +68,10 @@ public:
                 return "SELECT";
             case Expression::TABLES:
                 return "TABLES";
+            case Expression::IMPLICITWHERE:
+                return "IMPLICIT WHERE";
             case Expression::PREWHERE:
                 return "PREWHERE";
-            case Expression::IMPLICITWHERE:
-                return "IMPLICITWHERE";
             case Expression::WHERE:
                 return "WHERE";
             case Expression::GROUP_BY:

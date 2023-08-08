@@ -18,7 +18,7 @@
 #include <Catalog/Catalog.h>
 #include <Common/serverLocality.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
-// #include <MergeTreeCommon/CnchServerClientPool.h>
+#include <CloudServices/CnchServerClientPool.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Transaction/TxnTimestamp.h>
@@ -51,8 +51,19 @@ void TransactionCleaner::cleanTransaction(const TransactionCnchPtr & txn)
         return;
 
     if (!txn_record.ended())
-        txn->abort();
-
+    {
+        try
+        {
+            txn->abort();
+        }
+        catch (...)
+        {
+            /// if abort transaction failed (e.g., bytekv is not stable at this moment), 
+            /// we are not 100% sure how is the status going, we let dm to make the correct decision.
+            txn->force_clean_by_dm = true;
+            throw;
+        }
+    }
     if (!txn->async_post_commit)
     {
         TxnCleanTask task(txn->getTransactionID(), CleanTaskPriority::HIGH, txn_record.status());
@@ -110,7 +121,7 @@ void TransactionCleaner::cleanCommittedTxn(const TransactionRecord & txn_record)
             {
                 // TODO: need to fix for multi-table txn
                 LOG_DEBUG(log, "Forward clean task for txn {} to server {}", txn_record.txnID().toUInt64(), rpc_address);
-                // global_context.getCnchServerClientPool().get(rpc_address)->cleanTransaction(txn_record);
+                global_context.getCnchServerClientPool().get(rpc_address)->cleanTransaction(txn_record);
                 return;
             }
 
@@ -123,7 +134,6 @@ void TransactionCleaner::cleanCommittedTxn(const TransactionRecord & txn_record)
                 std::lock_guard lock(task.mutex);
                 task.undo_size = intermediate_parts.size() + undo_bitmaps.size();
             }
-
             catalog->setCommitTime(table, Catalog::CommitItems{intermediate_parts, undo_bitmaps, staged_parts}, txn_record.commitTs(), txn_record.txnID());
         }
 

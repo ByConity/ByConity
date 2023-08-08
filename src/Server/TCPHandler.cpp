@@ -20,6 +20,16 @@
  */
 
 #include <iomanip>
+#include "common/types.h"
+#include <common/scope_guard.h>
+#include <Poco/Net/NetException.h>
+#include <Poco/Util/LayeredConfiguration.h>
+#include <Common/CurrentThread.h>
+#include <Common/Stopwatch.h>
+#include <Common/NetException.h>
+#include <Common/setThreadName.h>
+#include <Common/OpenSSLHelpers.h>
+#include <IO/Progress.h>
 #include <memory>
 #include <Compression/CompressedReadBuffer.h>
 #include <Compression/CompressedWriteBuffer.h>
@@ -69,6 +79,7 @@
 #include "Core/Protocol.h"
 #include "Interpreters/Context_fwd.h"
 #include "TCPHandler.h"
+#include "Transaction/CnchWorkerTransaction.h"
 
 #if !defined(ARCADIA_BUILD)
 #    include <Common/config_version.h>
@@ -236,6 +247,7 @@ void TCPHandler::runImpl()
 
         /// Set context of request.
         query_context = Context::createCopy(connection_context);
+        query_context->setCurrentTransaction(nullptr, false);
 
         Stopwatch watch;
         state.reset();
@@ -1450,12 +1462,47 @@ void TCPHandler::receiveCnchQuery()
     UInt64 compression = 0;
 
     state.is_empty = false;
+    UInt64 primary_txn_id;
     UInt64 txn_id;
+    readIntBinary(primary_txn_id, *in);
     readIntBinary(txn_id, *in);
-    auto named_session = query_context->acquireNamedCnchSession(txn_id, {}, false);
-    query_context = Context::createCopy(named_session->context);
-    query_context->setSessionContext(named_session->context);
-    query_context->setProgressCallback([this](const Progress & value) { return this->updateProgress(value); });
+    if (server.context()->getServerType() == ServerType::cnch_server)
+    {
+        LOG_DEBUG(log, "Receive query in cnch_server. txn_id is {}, primary_txn_id is {}", txn_id, primary_txn_id);
+
+        auto & txn_coordinator = query_context->getCnchTransactionCoordinator();
+        if (txn_id && primary_txn_id)
+        {
+            /// This is secondary write query in interactive transaction forwarded from coordinator
+            /// The transaction must be ready
+            auto txn = txn_coordinator.getTransaction(txn_id);
+            if (!txn || !txn->isSecondary())
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Query forwarded from coordinator in interactive transaction session, but secondary transaction {} is not active on the server", txn_id);
+
+            query_context->setCurrentTransaction(txn);
+        }
+        else if (primary_txn_id)
+        {
+            auto txn = txn_coordinator.createTransaction(CreateTransactionOption().setPrimaryTransactionId(primary_txn_id));
+            query_context->setCurrentTransaction(txn);
+        }
+        else
+        {
+            auto txn = query_context->setTemporaryTransaction(txn_id);
+            /// For forwarded write query, we should add it to txn coordinator to make sure query executes and commit correctly in the new server.
+            /// The added txn is cleaned by finishCurrentTransaction after the query is executed in the new server.
+            if (!txn->isReadOnly())
+                txn_coordinator.addTransaction(txn);
+        }
+    }
+    else
+    {
+        auto named_session = query_context->acquireNamedCnchSession(txn_id, {}, false);
+        query_context = Context::createCopy(named_session->context);
+        query_context->setSessionContext(named_session->context);
+        query_context->setTemporaryTransaction(txn_id, primary_txn_id);
+        query_context->setProgressCallback([this] (const Progress & value) { return this->updateProgress(value); });
+    }
 
     readStringBinary(state.query_id, *in);
     /// Client info
@@ -1555,8 +1602,6 @@ void TCPHandler::receiveCnchQuery()
     // controls when we start a new trace. It can be changed via Native protocol,
     // so we have to apply the changes first.
     query_context->setCurrentQueryId(state.query_id);
-
-    query_context->setTemporaryTransaction(txn_id);
 
     /// Sync timeouts on client and server during current query to avoid dangling queries on server
     /// NOTE: We use settings.send_timeout for the receive timeout and vice versa (change arguments ordering in TimeoutSetter),

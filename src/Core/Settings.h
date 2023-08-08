@@ -1893,6 +1893,27 @@ class IColumn;
     M(Bool, ignore_duplicate_insertion_label, true, "Throw an exception if false", 0) \
     M(Bool, bypass_ddl_db_lock, true, "Bypass locking database while creating tables", 0) \
     M(Bool, prefer_cnch_catalog, false, "Force using cnch catalog to get table first when resolving database and table", 0) \
+    M(Bool, enable_interactive_transaction, true, "Enable interactive transaction", 0) \
+    M(Bool, force_clean_transaction_by_dm, false, "Force clean transaction by dm, can be used for testing purpose", 0) \
+    M(Bool, cnch_atomic_attach_part, true, "Whether to ATTACH PARTITION/PARTS in atomic way", 0) \
+    M(Bool, cnch_atomic_attach_part_preemtive_lock_acquire, false, "Whether to acquire lock preemptively during atomic attach part", 0) \
+    M(Bool, allow_full_scan_txn_records, false, "Whether to allow full scan of all transaction records on catalog", 0) \
+    \
+    /* Outfile related Settings */ \
+    M(UInt64, outfile_buffer_size_in_mb, 1, "Out file buffer size in 'OUT FILE'", 0) \
+    M(String, tos_access_key, "", "The access_key set by user when accessing ve tos.", 0) \
+    M(String, tos_secret_key, "", "The secret_key set by user when accessing ve tos.", 0) \
+    M(String, tos_region, "", "The region set by user when accessing ve tos.", 0) \
+    M(String, tos_security_token, "", "The security_key set by user when accessing ve tos with assume role.", 0) \
+    M(String, lasfs_session_token, "", "the session_token set by user when accessing lasfs", 0) \
+    M(String, lasfs_identity_id, "", "the identity_id set by user when accessing lasfs", 0) \
+    M(String, lasfs_identity_type, "", "the identity_type set by user when accessing lasfs", 0) \
+    M(String, lasfs_access_key, "", "the access_key set by user when accessing lasfs", 0) \
+    M(String, lasfs_secret_key, "", "the secret_key set by user when accessing lasfs", 0) \
+    M(String, lasfs_service_name, "", "the service_name set by user when accessing lasfs", 0) \
+    M(String, lasfs_endpoint, "", "the endpoint set by user when accessing lasfs", 0) \
+    M(String, lasfs_region, "", "the region set by user when accessing lasfs", 0) \
+    M(String, lasfs_overwrite, "false" ,"pass true if user want to overwrite when the file exists", 0) \
     /** The section above is for obsolete settings. Do not add anything there. */ \
     M(Bool, count_distinct_optimization, false, "Rewrite count distinct to subquery of group by", 0)
 

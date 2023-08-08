@@ -34,6 +34,7 @@
 #include <MergeTreeCommon/CnchServerManager.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <CloudServices/CnchBGThreadCommon.h>
+#include <CloudServices/CnchServerClientPool.h>
 #include <DaemonManager/DaemonManagerClient.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DatabaseCatalog.h>
@@ -490,6 +491,11 @@ BlockIO InterpreterSystemQuery::executeCnchCommand(ASTSystemQuery & query, Conte
         case Type::SYNC_DEDUP_WORKER:
             executeSyncDedupWorker(system_context);
             break;
+        case Type::CLEAN_TRANSACTION:
+            cleanTransaction(query.txn_id);
+            break;
+        case Type::CLEAN_FILESYSTEM_LOCK:
+            cleanFilesystemLock();
         case Type::LOCK_MEMORY_LOCK:
             lockMemoryLock(query, table_id, system_context);
             break;
@@ -1414,6 +1420,82 @@ void InterpreterSystemQuery::executeActionOnCNCHLog(const String & table_name, A
             CNCH_SYSTEM_LOG_KAFKA_LOG_TABLE_NAME,
             CNCH_SYSTEM_LOG_QUERY_METRICS_TABLE_NAME,
             CNCH_SYSTEM_LOG_QUERY_WORKER_METRICS_TABLE_NAME);
+}
+
+void InterpreterSystemQuery::cleanTransaction(UInt64 txn_id)
+{
+    /// similar to daemon manager implementation
+    TxnTimestamp current_time = getContext()->getTimestamp();
+    auto catalog = getContext()->getCnchCatalog();
+    auto & server_pool = getContext()->getCnchServerClientPool();
+    const UInt64 safe_remove_interval = getContext()->getConfigRef().getInt("cnch_txn_safe_remove_seconds", 5 * 60); // default 5 min
+    auto txn_record = catalog->getTransactionRecord(txn_id);
+    try
+    {
+        auto client = server_pool.tryGetByRPCAddress(txn_record.location());
+        bool server_exists = static_cast<bool>(client);
+        if (!client)
+            client = server_pool.get();
+
+        LOG_TRACE(
+            log,
+            "Select server ({}) for txn {}, stats: {}, coordinator location: {}", client->getRPCAddress(), txn_record.txnID(), txnStatusToString(txn_record.status()), txn_record.location());
+
+        switch (txn_record.status())
+        {
+            case CnchTransactionStatus::Aborted:
+            {
+                client->cleanTransaction(txn_record);
+                break;
+            }
+            case CnchTransactionStatus::Finished:
+            {
+                if (!txn_record.cleanTs())
+                {
+                    if (txn_record.hasMainTableUUID())
+                    {
+                        auto table = getContext()->getCnchCatalog()->tryGetTableByUUID(*getContext(), UUIDHelpers::UUIDToString(txn_record.mainTableUUID()), txn_record.txnID());
+                        auto server_vw_name = table ? table->getStorageID().server_vw_name : "server_vw_default";
+                        auto host_port = getContext()->getCnchTopologyMaster()->getTargetServer(
+                            UUIDHelpers::UUIDToString(txn_record.mainTableUUID()), server_vw_name, false);
+                        client = server_pool.get(host_port);
+                    }
+                    client->cleanTransaction(txn_record);
+                }
+                else if (current_time.toSecond() - txn_record.cleanTs().toSecond() > safe_remove_interval) {
+                    catalog->removeTransactionRecord(txn_record);
+                }
+                break;
+            }
+            case CnchTransactionStatus::Running:
+            {
+                if (!server_exists)
+                {
+                    client->cleanTransaction(txn_record);
+                }
+                else if (client->getTransactionStatus(txn_record.txnID()) == CnchTransactionStatus::Inactive)
+                {
+                    client->cleanTransaction(txn_record);
+                }
+                break;
+            }
+            default:
+                throw Exception("Invalid status received", ErrorCodes::LOGICAL_ERROR);
+        }
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+    }
+}
+
+void InterpreterSystemQuery::cleanFilesystemLock()
+{
+    auto lock_records = getContext()->getCnchCatalog()->getAllFilesysLock();
+    for (const auto & record : lock_records)
+    {
+        cleanTransaction(record.txn_id());
+    }
 }
 
 void InterpreterSystemQuery::lockMemoryLock(const ASTSystemQuery & query, const StorageID & table_id, ContextPtr local_context)

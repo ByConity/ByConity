@@ -127,7 +127,8 @@ MergeTreeMutableDataPartsVector CloudMergeTreeBlockOutputStream::convertBlockInt
     IMutableMergeTreeDataPartsVector parts;
     LOG_DEBUG(storage.getLogger(), "size of part_blocks {}", part_blocks.size());
 
-    auto txn_id = context->getCurrentTransactionID();
+    const auto & txn = context->getCurrentTransaction();
+    auto primary_txn_id = txn->getPrimaryTransactionID();
 
     // Get all blocks of partition by expression
     for (auto & block_with_partition : part_blocks)
@@ -135,7 +136,6 @@ MergeTreeMutableDataPartsVector CloudMergeTreeBlockOutputStream::convertBlockInt
         Row original_partition{block_with_partition.partition};
         auto bucketed_part_blocks = writer.splitBlockPartitionIntoPartsByClusterKey(block_with_partition, context->getSettingsRef().max_partitions_per_insert_block, metadata_snapshot, context);
         LOG_TRACE(storage.getLogger(), "size of bucketed_part_blocks {}", bucketed_part_blocks.size());
-        const auto & txn = context->getCurrentTransaction();
 
         for (auto & bucketed_block_with_partition : bucketed_part_blocks)
         {
@@ -170,7 +170,7 @@ MergeTreeMutableDataPartsVector CloudMergeTreeBlockOutputStream::convertBlockInt
             auto block_id = use_inner_block_id ? increment.get() : context->getTimestamp();
 
             MergeTreeMutableDataPartPtr temp_part
-                = writer.writeTempPart(bucketed_block_with_partition, metadata_snapshot, context, block_id, txn_id);
+                = writer.writeTempPart(bucketed_block_with_partition, metadata_snapshot, context, block_id, primary_txn_id);
 
             /// Only add delete bitmap if it's not empty.
             if (bitmap->cardinality())

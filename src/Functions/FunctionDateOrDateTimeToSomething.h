@@ -98,6 +98,44 @@ public:
                 arguments[0].type->getName(), this->getName());
     }
 
+    bool hasInformationAboutMonotonicity() const override
+    {
+        return true;
+    }
+
+    IFunction::Monotonicity getMonotonicityForRange(const IDataType & type, const Field & left, const Field & right) const override
+    {
+        IFunction::Monotonicity is_monotonic { true };
+        IFunction::Monotonicity is_not_monotonic;
+
+        if (std::is_same_v<typename Transform::FactorTransform, ZeroTransform>)
+        {
+            is_monotonic.is_always_monotonic = true;
+            return is_monotonic;
+        }
+
+        /// This method is called only if the function has one argument. Therefore, we do not care about the non-local time zone.
+        const DateLUTImpl * date_lut = &DateLUT::instance();
+        if (const auto * timezone = dynamic_cast<const TimezoneMixin *>(&type))
+            date_lut = &timezone->getTimeZone();
+        if (left.isNull() || right.isNull())
+            return is_not_monotonic;
+
+        /// The function is monotonous on the [left, right] segment, if the factor transformation returns the same values for them.
+
+        if (checkAndGetDataType<DataTypeDate>(&type))
+        {
+            return Transform::FactorTransform::execute(UInt16(left.get<UInt64>()), *date_lut)
+                == Transform::FactorTransform::execute(UInt16(right.get<UInt64>()), *date_lut)
+                ? is_monotonic : is_not_monotonic;
+        }
+        else
+        {
+            return Transform::FactorTransform::execute(UInt32(left.get<UInt64>()), *date_lut)
+                == Transform::FactorTransform::execute(UInt32(right.get<UInt64>()), *date_lut)
+                ? is_monotonic : is_not_monotonic;
+        }
+    }
 };
 
 }

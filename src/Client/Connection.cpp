@@ -33,6 +33,7 @@
 #include <DataStreams/NativeBlockInputStream.h>
 #include <DataStreams/NativeBlockOutputStream.h>
 #include <Client/Connection.h>
+#include "common/types.h"
 #include <Common/ClickHouseRevision.h>
 #include <Common/Exception.h>
 #include <Common/NetException.h>
@@ -556,6 +557,7 @@ void Connection::sendQuery(
 }
 
 void Connection::sendCnchQuery(
+    UInt64 primary_txn_id,
     UInt64 txn_id,
     const ConnectionTimeouts & timeouts,
     const String & query,
@@ -593,6 +595,7 @@ void Connection::sendCnchQuery(
     query_id = query_id_;
 
     writeVarUInt(Protocol::Client::CnchQuery, *out);
+    writeIntBinary(primary_txn_id, *out);
     writeIntBinary(txn_id, *out);
     writeStringBinary(query_id, *out);
 

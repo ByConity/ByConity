@@ -110,6 +110,10 @@ private:
 
     void executeActionOnCNCHLog(const String & table, ASTSystemQuery::Type type);
 
+    void cleanTransaction(UInt64 txn_id);
+
+    void cleanFilesystemLock();
+
     /// a command to test MemoryLock
     void lockMemoryLock(const ASTSystemQuery & query, const StorageID & table_id, ContextPtr local_context);
 };

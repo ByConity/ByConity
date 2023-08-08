@@ -54,7 +54,7 @@ void StorageSystemCnchPartsColumns::fillData(MutableColumns & res_columns, Conte
 
     ASTPtr where_expression = query_info.query->as<ASTSelectQuery>()->where();
 
-    const std::vector<std::map<String,String>> value_by_column_names = DB::collectWhereORClausePredicate(where_expression, context);
+    const std::vector<std::map<String,Field>> value_by_column_names = DB::collectWhereORClausePredicate(where_expression, context);
 
     bool enable_filter_by_partition = false;
     String selected_database;
@@ -63,7 +63,7 @@ void StorageSystemCnchPartsColumns::fillData(MutableColumns & res_columns, Conte
 
     if (value_by_column_names.size() == 1)
     {
-        const auto value_by_column_name = value_by_column_names.at(0);
+        const auto & value_by_column_name = value_by_column_names.at(0);
         auto db_it = value_by_column_name.find("database");
         auto table_it = value_by_column_name.find("table");
         auto partition_it = value_by_column_name.find("partition_id");
@@ -71,14 +71,14 @@ void StorageSystemCnchPartsColumns::fillData(MutableColumns & res_columns, Conte
             (table_it != value_by_column_name.end())
             )
         {
-            selected_database = db_it->second;
-            selected_table = table_it->second;
+            selected_database = db_it->second.safeGet<String>();
+            selected_table = table_it->second.safeGet<String>();
             LOG_TRACE(log, "filtering by db and table with db name {} and table name {}", selected_database, selected_table);
         }
 
         if (partition_it != value_by_column_name.end())
         {
-            selected_partition_id = partition_it->second;
+            selected_partition_id = partition_it->second.safeGet<String>();
             enable_filter_by_partition = true;
 
             LOG_TRACE(log, "filtering from catalog by partition with partition name {}", selected_partition_id);
@@ -100,7 +100,7 @@ void StorageSystemCnchPartsColumns::fillData(MutableColumns & res_columns, Conte
         auto * cloud = dynamic_cast<StorageCloudMergeTree *>(storage.get());
         if (!cloud)
             throw Exception("Wrong storage type for parts columns request", ErrorCodes::BAD_ARGUMENTS);
-        
+
         auto columns = storage->getInMemoryMetadataPtr()->getColumns().getAllPhysical();
         auto parts = cloud->getDataPartsVector();
 

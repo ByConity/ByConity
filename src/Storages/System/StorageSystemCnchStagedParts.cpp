@@ -79,7 +79,7 @@ void StorageSystemCnchStagedParts::fillData(MutableColumns & res_columns, Contex
 
     // check for required structure of WHERE clause for cnch_staged_parts
     ASTPtr where_expression = query_info.query->as<ASTSelectQuery>()->where();
-    const std::vector<std::map<String,String>> value_by_column_names = collectWhereORClausePredicate(where_expression, context);
+    const std::vector<std::map<String,Field>> value_by_column_names = collectWhereORClausePredicate(where_expression, context);
 
     String only_selected_db;
     String only_selected_table;
@@ -93,8 +93,8 @@ void StorageSystemCnchStagedParts::fillData(MutableColumns & res_columns, Contex
         if ((db_it != value_by_column_name.end()) &&
             (table_it != value_by_column_name.end()))
         {
-            only_selected_db = db_it->second;
-            only_selected_table = table_it->second;
+            only_selected_db = db_it->second.getType() == Field::Types::String ? db_it->second.get<String>() : "";
+            only_selected_table = table_it->second.getType() == Field::Types::String ? table_it->second.get<String>() : "";
             enable_filter_by_table = true;
             LOG_TRACE(&Poco::Logger::get("StorageSystemCnchStagedParts"),
                     "filtering from catalog by table with db name {} and table name {}",
