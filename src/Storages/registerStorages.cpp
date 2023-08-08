@@ -96,6 +96,10 @@ void registerStorageExternalDistributed(StorageFactory & factory);
 void registerStorageCnchHive(StorageFactory & factory);
 void registerStorageCloudHive(StorageFactory & factory);
 
+#if USE_JAVA_EXTENSIONS
+void registerStorageHudi(StorageFactory & factory);
+#endif
+
 void registerStorages()
 {
     auto & factory = StorageFactory::instance();
@@ -164,6 +168,10 @@ void registerStorages()
 
     #if USE_MYSQL || USE_LIBPQXX
     registerStorageExternalDistributed(factory);
+    #endif
+
+    #if USE_JAVA_EXTENSIONS
+    registerStorageHudi(factory);
     #endif
 }
 

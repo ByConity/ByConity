@@ -93,10 +93,20 @@ std::pair<String, StoragePtr> createTableFromAST(
         /// - the database has not been loaded yet;
         /// - the code is simpler, since the query is already brought to a suitable form.
         if (!ast_create_query.columns_list || !ast_create_query.columns_list->columns)
-            throw Exception("Missing definition of columns.", ErrorCodes::EMPTY_LIST_OF_COLUMNS_PASSED);
+        {
+            if (!ast_create_query.storage || !ast_create_query.storage->engine)
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Invalid storage definition in metadata file: "
+                                                           "it's a bug or result of manual intervention in metadata files");
 
-        columns = InterpreterCreateQuery::getColumnsDescription(*ast_create_query.columns_list->columns, context, true);
-        constraints = InterpreterCreateQuery::getConstraintsDescription(ast_create_query.columns_list->constraints);
+            if (!StorageFactory::instance().checkIfStorageSupportsSchemaInference(ast_create_query.storage->engine->name))
+                throw Exception(ErrorCodes::EMPTY_LIST_OF_COLUMNS_PASSED, "Missing definition of columns.");
+            /// Leave columns empty.
+        }
+        else
+        {
+            columns = InterpreterCreateQuery::getColumnsDescription(*ast_create_query.columns_list->columns, context, true);
+            constraints = InterpreterCreateQuery::getConstraintsDescription(ast_create_query.columns_list->constraints);
+        }
     }
 
     return
