@@ -233,12 +233,17 @@ kubectl edit statefulset.apps/my-new-vw-default
 把配置"replicas: 1" 变更为 "replicas: 2"
 
 ```yaml
-defaultWorker: &defaultWorker
-    replicas: 2
-    image: ""
-    podAnnotations: { }
-    resources: { }
-    hostNetwork: false
+spec:
+  podManagementPolicy: OrderedReady
+  replicas: 2   #由1变更为2 
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: byconity
+      app.kubernetes.io/name: byconity
+      byconity-role: worker
+      byconity-vw: vw_default
+  serviceName: my-new-vw-default
 ```
 
 更新完后使用kubectl可以查看VirtualWarehouse已经扩容包含2个woker
