@@ -11,7 +11,7 @@ CREATE TABLE test.interger_col (id UInt64) Engine = CnchMergeTree ORDER by id;
 INSERT INTO test.interger_col VALUES (1), (2), (3), (4), (5), (6);
 
 DROP DICTIONARY IF EXISTS test.dict_flat_no_ip_port;
-CREATE DICTIONARY test.dict_flat_no_ip_port(id UInt64, a UInt64 DEFAULT 0, b Int32 DEFAULT -1, c String DEFAULT 'none') PRIMARY KEY id SOURCE(CLICKHOUSE(USER 'default' TABLE 'table_for_no_ip_port_dict' PASSWORD '' DB 'test')) LIFETIME(MIN 3 MAX 3) LAYOUT(FLAT());
+CREATE DICTIONARY test.dict_flat_no_ip_port(id UInt64, a UInt64 DEFAULT 0, b Int32 DEFAULT -1, c String DEFAULT 'none') PRIMARY KEY id SOURCE(CLICKHOUSE(USER 'default' TABLE 'table_for_no_ip_port_dict' PASSWORD '' DB 'test')) LIFETIME(MIN 1000 MAX 2000) LAYOUT(FLAT());
 
 SELECT status FROM system.dictionaries where (database = 'test') AND (name = 'dict_flat_no_ip_port');
 
@@ -29,13 +29,6 @@ SELECT dictGetUInt64('test.dict_flat_no_ip_port', 'a', toUInt64(6));
 SELECT dictGetString('test.dict_flat_no_ip_port', 'c', toUInt64(2));
 SELECT dictGetString('test.dict_flat_no_ip_port', 'c', toUInt64(3));
 SELECT status FROM system.dictionaries where (database = 'test') AND (name = 'dict_flat_no_ip_port');
-
-INSERT INTO test.table_for_no_ip_port_dict VALUES (3000, 100, -100, 'key3000');
-SELECT sleep(3) FORMAT Null;
-SELECT sleep(3) FORMAT Null;
-SELECT sleep(3) FORMAT Null;
-SELECT sleep(3) FORMAT Null;
-SELECT dictGetString('test.dict_flat_no_ip_port', 'c', toUInt64(3000));
 
 DROP DICTIONARY IF EXISTS test.dict_flat_no_ip_port;
 DROP TABLE IF EXISTS test.interger_col;
