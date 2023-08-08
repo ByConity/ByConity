@@ -249,7 +249,7 @@ spec:
 After updating, you can use 'kubectl' to check that the VirtualWarehouse has been scaled up and now includes 2 workers.
 
 ## Configure ByConity high availability cluster (optional)
-To enable high availability in the ByConity cluster, you need to enable the zookeeper configuration for all components. Please refer to the [server.yaml] (https://github.com/ByConity/byconity-deploy/blob/master/chart/byconity/files/server.yaml#L96)
+To enable high availability in the ByConity cluster, you need to enable the zookeeper configuration for all components. Please refer to the [server.yaml](https://github.com/ByConity/byconity-deploy/blob/master/chart/byconity/files/server.yaml#L96)
 
 To enable zookeeper:
 ```yaml  
@@ -260,7 +260,7 @@ To enable zookeeper:
   cnch_config: /etc/byconity/cnch-config.yaml
 ```
 
-The official provides a Helm configuration YAML file [value_HA_example.yaml](https://github.com/ByConity/byconity-deploy/blob/master/exampes/k8s/value_HA_example.yml) ffor high availability.
+The official provides a Helm configuration YAML file [value_HA_example.yaml](https://github.com/ByConity/byconity-deploy/blob/master/examples/k8s/value_HA_example.yaml) for high availability.
 
 Use helm upgrade to update cluster：
 
