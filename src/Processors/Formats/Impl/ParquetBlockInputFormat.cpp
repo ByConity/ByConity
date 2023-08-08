@@ -74,10 +74,18 @@ ParquetBlockInputFormat::ParquetBlockInputFormat(
     , skip_row_groups(format_settings.parquet.skip_row_groups)
     , max_decoding_threads(max_decoding_threads_)
     , min_bytes_for_seek(min_bytes_for_seek_)
+<<<<<<< HEAD
     , pending_chunks(PendingChunk::Compare{.row_group_first = format_settings_.parquet.preserve_order})
 {
     if (max_decoding_threads > 1 && format_settings.parquet.file_size > 0)
         pool = std::make_unique<ThreadPool>(max_decoding_threads);
+=======
+    , pending_chunks(PendingChunk::Compare{.row_group_first = format_settings_.parquet.preserve_order})
+{
+    if (max_decoding_threads > 1 && format_settings.parquet.file_size > 0)
+        pool = std::make_unique<ThreadPool>(
+            CurrentMetrics::ParquetDecoderThreads, CurrentMetrics::ParquetDecoderThreadsActive, max_decoding_threads);
+>>>>>>> c7ae7d6540 (Merge branch 'http-parquet-reader-backup' into 'cnch-ce-merge')
 }
 
 ParquetBlockInputFormat::~ParquetBlockInputFormat()
