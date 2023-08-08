@@ -39,8 +39,8 @@ arrow::Status ArrowBufferedOutputStream::Write(const void * data, int64_t length
     return arrow::Status::OK();
 }
 
-RandomAccessFileFromSeekableReadBuffer::RandomAccessFileFromSeekableReadBuffer(SeekableReadBuffer & in_, off_t file_size_)
-    : in{in_}, file_size{file_size_}, is_open{true}
+RandomAccessFileFromSeekableReadBuffer::RandomAccessFileFromSeekableReadBuffer(SeekableReadBuffer & in_, off_t file_size_, bool avoid_buffering_ = false)
+    : in{in_}, file_size{file_size_}, is_open{true}, avoid_buffering(avoid_buffering_)
 {
 }
 
@@ -62,6 +62,10 @@ arrow::Result<int64_t> RandomAccessFileFromSeekableReadBuffer::Tell() const
 
 arrow::Result<int64_t> RandomAccessFileFromSeekableReadBuffer::Read(int64_t nbytes, void * out)
 {
+    if (avoid_buffering)
+    {
+        in.setReadUntilPosition(in.getPosition() + nbytes);
+    }
     return in.readBig(reinterpret_cast<char *>(out), nbytes);
 }
 
@@ -78,6 +82,12 @@ arrow::Result<std::shared_ptr<arrow::Buffer>> RandomAccessFileFromSeekableReadBu
 
 arrow::Status RandomAccessFileFromSeekableReadBuffer::Seek(int64_t position)
 {
+    if (avoid_buffering)
+    {
+        // Seeking to a position above a previous setReadUntilPosition() confuses some of the
+        // ReadBuffer implementations.
+        in.setReadUntilEnd();
+    }
     in.seek(position, SEEK_SET);
     return arrow::Status::OK();
 }
@@ -186,12 +196,12 @@ arrow::Result<int64_t> RandomAccessFileFromRandomAccessReadBuffer::Tell() const 
 arrow::Result<int64_t> RandomAccessFileFromRandomAccessReadBuffer::Read(int64_t, void*) { return arrow::Status::NotImplemented(""); }
 arrow::Result<std::shared_ptr<arrow::Buffer>> RandomAccessFileFromRandomAccessReadBuffer::Read(int64_t) { return arrow::Status::NotImplemented(""); }
 
-std::shared_ptr<arrow::io::RandomAccessFile> asArrowFile(SeekableReadBuffer & in, size_t file_size)
+std::shared_ptr<arrow::io::RandomAccessFile> asArrowFile(SeekableReadBuffer & in, size_t file_size, bool avoid_buffering)
 {
     if (in.supportsReadAt())
         return std::make_shared<RandomAccessFileFromRandomAccessReadBuffer>(in, file_size);
     else
-        return std::make_shared<RandomAccessFileFromSeekableReadBuffer>(in, file_size);
+        return std::make_shared<RandomAccessFileFromSeekableReadBuffer>(in, file_size, avoid_buffering);
 }
 
 }

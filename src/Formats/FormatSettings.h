@@ -50,7 +50,7 @@ struct FormatSettings
     bool write_statistics = true;
     bool import_nested_json = false;
     bool null_as_default = true;
-
+    bool defaults_for_omitted_fields = true;
     enum class DateTimeInputFormat
     {
         Basic, /// Default format for fast parsing: YYYY-MM-DD hh:mm:ss (ISO-8601 without fractional part and timezone) or NNNNNNNNNN unix timestamp.
@@ -127,8 +127,13 @@ struct FormatSettings
     struct
     {
         UInt64 row_group_size = 1000000;
+        bool import_nested = false;
         bool allow_missing_columns = false;
-        std::vector<bool> skip_row_groups;
+        std::unordered_set<int> skip_row_groups;
+        bool preserve_order = false;
+        size_t file_size = 0 ;
+        bool case_insensitive_column_matching = false;
+        UInt64 max_block_size = 8192;
     } parquet;
 
     struct Orc

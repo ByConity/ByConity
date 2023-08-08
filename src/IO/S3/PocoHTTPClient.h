@@ -14,6 +14,7 @@
 #include <aws/core/http/HttpClient.h> // Y_IGNORE
 #include <aws/core/http/HttpRequest.h> // Y_IGNORE
 #include <aws/core/http/standard/StandardHttpResponse.h> // Y_IGNORE
+#include <aws/core/utils/stream/ResponseStream.h>
 
 namespace Aws::Http::Standard
 {
@@ -58,6 +59,7 @@ class PocoHTTPResponse : public Aws::Http::Standard::StandardHttpResponse
 {
 public:
     using SessionPtr = HTTPSessionPtr;
+    using PooledSessionPtr = PooledHTTPSessionPtr;
 
     PocoHTTPResponse(const std::shared_ptr<const Aws::Http::HttpRequest> request)
         : Aws::Http::Standard::StandardHttpResponse(request)

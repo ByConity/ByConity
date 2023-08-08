@@ -1,4 +1,5 @@
 #include "Storages/Hive/HiveFile/HiveParquetFile.h"
+#include <memory>
 #if USE_HIVE
 
 #include "Processors/Formats/Impl/ArrowBufferedStreams.h"
@@ -143,6 +144,24 @@ void HiveParquetFile::loadSplitMinMaxIndex(const NamesAndTypesList & index_names
 
 SourcePtr HiveParquetFile::getReader(const Block & block, const std::shared_ptr<IHiveFile::ReadParams> & params)
 {
+    if (params->read_settings.parquet_parallel_read) 
+    {
+        if (!params->read_buf)
+        {
+            params->read_buf = readFile(params->read_settings);
+        }
+        params->format_settings.parquet.file_size = file_size;
+
+        auto parquet_format = std::make_unique<ParquetBlockInputFormat>(
+            *params->read_buf,
+            block,
+            params->format_settings,
+            params->read_settings.parquet_decode_threads,
+            params->read_settings.remote_read_min_bytes_for_seek);
+
+        return parquet_format;
+    }    
+
     openFile();
 
     auto arrow_column_to_ch_column = std::make_unique<ArrowColumnToCHColumn>(

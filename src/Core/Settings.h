@@ -2063,6 +2063,9 @@ enum PreloadLevelSettings : UInt64
 \
     M(Bool, enable_io_scheduler, false, "Enable io scheduler", 0) \
     M(Bool, enable_io_pfra, false, "Enable prefetch and read ahead for remote read", 0)
+    M(UInt64, max_download_thread, 48, "threads for reading parquet in parallel",0) \
+    M(Bool,   parquet_parallel_read, false, "whether to read parquet in parallel",0) \
+    \
 
 // End of COMMON_SETTINGS
 // Please add settings related to formats into the FORMAT_FACTORY_SETTINGS below.
@@ -2185,6 +2188,7 @@ enum PreloadLevelSettings : UInt64
       "Charset for printing grid borders. Available charsets: ASCII, UTF-8 (default one).", \
       0) \
     M(UInt64, output_format_parquet_row_group_size, 1000000, "Row group size in rows.", 0) \
+    M(Bool, input_format_parquet_case_insensitive_column_matching, false, "Ignore case when matching Parquet columns with CH columns.", 0) \
     M(Bool, input_format_orc_allow_missing_columns, false, "Allow missing columns while reading ORC input formats", 0) \
     M(Bool, input_format_parquet_allow_missing_columns, false, "Allow missing columns while reading Parquet input formats", 0) \
     M(Bool, input_format_arrow_allow_missing_columns, false, "Allow missing columns while reading Arrow input formats", 0) \
