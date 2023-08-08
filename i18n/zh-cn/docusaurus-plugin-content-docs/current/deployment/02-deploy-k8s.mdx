@@ -214,3 +214,31 @@ SETTINGS cnch_vw_default = 'my-new-vw-default', cnch_vw_write = 'my-new-vw-write
 -- Check if the table has the new settings
 SHOW CREATE TABLE test.lc2;
 ```
+
+### 在原有的VirtualWareHouse扩缩容 
+
+假设您有一个my-new-vw-default，希望扩容增加2个worker，可以直接更新Kubernetes的资源对象statefulset：
+
+首先使用如下命令，获取当前 Kubernetes 集群中所有 StatefulSet 资源的名称
+```bash
+kubectl get statefulset
+```
+
+然后，找到并打开该配置，做如下修改
+
+```bash
+kubectl edit statefulset.apps/my-new-vw-default
+```
+
+把配置"replicas: 1" 变更为 "replicas: 2"
+
+```yaml
+defaultWorker: &defaultWorker
+    replicas: 2
+    image: ""
+    podAnnotations: { }
+    resources: { }
+    hostNetwork: false
+```
+
+更新完后使用kubectl可以查看VirtualWarehouse已经扩容包含2个woker
