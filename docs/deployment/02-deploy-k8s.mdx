@@ -214,3 +214,36 @@ SETTINGS cnch_vw_default = 'my-new-vw-default', cnch_vw_write = 'my-new-vw-write
 -- Check if the table has the new settings
 SHOW CREATE TABLE test.lc2;
 ```
+
+### Scaling up and down the existing VirtualWareHouse 
+
+Assuming you have a 'my-new-vw-default' and you want to scale up by adding 2 workers, you can directly update the Kubernetes resource object 'StatefulSet'.
+
+First, use the following command to retrieve the names of all StatefulSet resources in the current Kubernetes cluster:
+```bash
+kubectl get statefulset
+```
+
+Then, locate and open the configuration file, and make the following modifications:
+
+```bash
+kubectl edit statefulset.apps/my-new-vw-default
+```
+
+Change the configuration from 'replicas: 1' to 'replicas: 2'.
+
+```yaml
+spec:
+  podManagementPolicy: OrderedReady
+  replicas: 2   #change 1 to 2 
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: byconity
+      app.kubernetes.io/name: byconity
+      byconity-role: worker
+      byconity-vw: vw_default
+  serviceName: my-new-vw-default
+```
+
+After updating, you can use 'kubectl' to check that the VirtualWarehouse has been scaled up and now includes 2 workers.
