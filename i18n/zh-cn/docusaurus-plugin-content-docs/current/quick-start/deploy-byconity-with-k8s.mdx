@@ -249,9 +249,10 @@ spec:
 更新完后使用kubectl可以查看VirtualWarehouse已经扩容包含2个woker
 
 ## 配置 Byconity 高可用集群（可选）
-高可用的ByConity集群功能开启需要打开所有组件的zookeeper配置，参考server.yaml
-https://github.com/ByConity/byconity-deploy/blob/master/chart/byconity/files/server.yaml#L96，
-打开zookeeper：
+高可用的ByConity集群功能开启需要打开所有组件的zookeeper配置，参考[server.yaml](https://github.com/ByConity/byconity-deploy/blob/master/chart/byconity/files/server.yaml#L96)
+
+打开zookeeper配置：
+
 ```yaml
   partition_by: event_date
   flush_interval_milliseconds: 15000
@@ -259,7 +260,9 @@ https://github.com/ByConity/byconity-deploy/blob/master/chart/byconity/files/ser
   zookeeper: {} # enable zookeeper
   cnch_config: /etc/byconity/cnch-config.yaml
 ```
-官方提供了高可用的helm配置yaml文件，供参考：https://github.com/ByConity/byconity-deploy/blob/master/examples/k8s/value_HA_example.yaml。
+
+官方提供了高可用的helm配置yaml文件[value_HA_example.yaml](https://github.com/ByConity/byconity-deploy/blob/master/examples/k8s/value_HA_example.yaml)供参考。
+
 使用helm更新集群：
 ```bash
 helm upgrade --install --create-namespace --namespace byconity -f ./your/custom/values.yaml byconity ./chart/byconity
