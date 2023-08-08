@@ -233,12 +233,17 @@ kubectl edit statefulset.apps/my-new-vw-default
 Change the configuration from 'replicas: 1' to 'replicas: 2'.
 
 ```yaml
-defaultWorker: &defaultWorker
-    replicas: 2
-    image: ""
-    podAnnotations: { }
-    resources: { }
-    hostNetwork: false
+spec:
+  podManagementPolicy: OrderedReady
+  replicas: 2   #change 1 to 2 
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: byconity
+      app.kubernetes.io/name: byconity
+      byconity-role: worker
+      byconity-vw: vw_default
+  serviceName: my-new-vw-default
 ```
 
 After updating, you can use 'kubectl' to check that the VirtualWarehouse has been scaled up and now includes 2 workers.
