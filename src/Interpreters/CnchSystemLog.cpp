@@ -86,14 +86,14 @@ String prepareEngineClause(const Poco::Util::AbstractConfiguration & config, con
     else if (std::is_same_v<LogElement, QueryWorkerMetricElement>)
         engine += " ORDER BY (`initial_query_id`, `current_query_id`, `worker_id`) ";
 
-    String partition_by = config.getString(config_prefix + ".partition_by", "toDate(event_time)");
+    String partition_by = config.getString(config_prefix + ".partition_by", "toStartOfDay(event_time)");
     if (!partition_by.empty())
         engine += " PARTITION BY (" + partition_by + ")";
 
     /// be consistent with cnch1.4, in which ttl field just configures the duration, e.g., 31 DAY, instead of the full ttl expression
     String ttl = config.getString(config_prefix + ".ttl", "31 DAY");
     if (!ttl.empty())
-        engine += " TTL toDate(event_time) + INTERVAL " + ttl;
+        engine += " TTL toStartOfDay(event_time) + INTERVAL " + ttl;
 
     engine += " SETTINGS index_granularity = 8192, enable_addition_bg_task = 1";
     return engine;
