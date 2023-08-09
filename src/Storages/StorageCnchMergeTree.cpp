@@ -1412,7 +1412,7 @@ void StorageCnchMergeTree::removeCheckpoint(const Protos::Checkpoint & checkpoin
 }
 
 void StorageCnchMergeTree::sendPreloadTasks(
-    ContextPtr local_context, ServerDataPartsVector parts, bool enable_parts_sync_preload, UInt64 parts_preload_level)
+    ContextPtr local_context, ServerDataPartsVector parts, bool enable_parts_sync_preload, UInt64 parts_preload_level, UInt64 ts)
 {
     auto worker_group = getWorkerGroupForTable(*this, local_context);
     local_context->setCurrentWorkerGroup(worker_group);
@@ -1448,17 +1448,58 @@ void StorageCnchMergeTree::sendPreloadTasks(
                     resource.server_parts,
                     handler,
                     enable_parts_sync_preload,
-                    parts_preload_level);
+                    parts_preload_level,
+                    ts);
                 ids.emplace_back(id);
                 LOG_TRACE(
                     log,
-                    "send preload data parts size = {}, enable_parts_sync_preload = {}, enable_parts_sync_preload = {}",
+                    "send preload data parts size = {}, enable_parts_sync_preload = {}, enable_parts_sync_preload = {}, submit_ts = {}",
                     resource.server_parts.size(),
                     enable_parts_sync_preload,
-                    parts_preload_level);
+                    parts_preload_level,
+                    ts);
             }
             return ids;
         });
+}
+
+void StorageCnchMergeTree::sendDropDiskCacheTasks(
+    ContextPtr context, const ServerDataPartsVector & parts, bool sync, bool drop_vw_disk_cache)
+{
+    TxnTimestamp txn_id = context->getCurrentTransactionID();
+    String create_table_query = genCreateTableQueryForWorker(txn_id.toString());
+
+    auto worker_group = getWorkerGroupForTable(*this, context);
+    context->setCurrentWorkerGroup(worker_group);
+
+    /// reuse server resource for part allocation
+    /// no worker session context is created
+    auto server_resource = std::make_shared<CnchServerResource>(txn_id);
+    server_resource->skipCleanWorker();
+    /// all bucket numbers are required
+    std::set<Int64> bucket_numbers;
+    if (isBucketTable())
+    {
+        std::transform(parts.begin(), parts.end(), std::inserter(bucket_numbers, bucket_numbers.end()), [](const auto & part) {
+            return part->part_model().bucket_number();
+        });
+    }
+    server_resource->addCreateQuery(context, shared_from_this(), create_table_query, "");
+    server_resource->addDataParts(getStorageUUID(), parts, bucket_numbers);
+    /// TODO: async rpc?
+    auto worker_action = [&](const CnchWorkerClientPtr & client,
+                             const std::vector<AssignedResource> & resources,
+                             const ExceptionHandlerPtr &) -> std::vector<brpc::CallId> {
+        std::vector<brpc::CallId> ids;
+        for (const auto & resource : resources)
+        {
+            auto data_parts = std::move(resource.server_parts);
+            CnchPartsHelper::flattenPartsVector(data_parts);
+            ids.emplace_back(client->dropPartDiskCache(context, txn_id, *this, create_table_query, data_parts, sync, drop_vw_disk_cache));
+        }
+        return ids;
+    };
+    server_resource->sendResources(context, worker_action);
 }
 
 Strings StorageCnchMergeTree::getPrunedPartitions(
@@ -2064,6 +2105,8 @@ void StorageCnchMergeTree::checkAlterSettings(const AlterCommands & commands) co
         "enable_preload_parts",
         "enable_parts_sync_preload",
         "parts_preload_level",
+        "cnch_parallel_prefetching",
+        "enable_prefetch_checksums",
 
         "enable_addition_bg_task",
         "max_addition_bg_task_num",

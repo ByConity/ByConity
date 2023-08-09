@@ -15,6 +15,7 @@
 
 #include "MergeTreeDataPartCNCH.h"
 
+#include <DataTypes/MapHelpers.h>
 #include <IO/LimitReadBuffer.h>
 #include <Storages/DiskCache/DiskCacheFactory.h>
 #include <Storages/DiskCache/MetaFileDiskCacheSegment.h>
@@ -25,6 +26,7 @@
 #include <Storages/MergeTree/MergeTreeReaderCNCH.h>
 #include <Storages/UUIDAndPartName.h>
 #include <Storages/UniqueKeyIndexCache.h>
+#include "common/logger_useful.h"
 #include <Common/Exception.h>
 #include <Common/StringUtils/StringUtils.h>
 #include "Core/Settings.h"
@@ -1028,11 +1030,43 @@ void MergeTreeDataPartCNCH::projectionRemove(const String & parent_to, bool) con
     }
 }
 
+void MergeTreeDataPartCNCH::fillProjectionNamesFromChecksums(const MergeTreeDataPartChecksum & checksum_file)
+{
+    projection_parts_names.clear();
+    String data_rel_path = fs::path(getFullRelativePath()) / DATA_FILE;
+    if (checksum_file.file_size == 0 /* && isDeleted() */)
+        throw Exception(ErrorCodes::NO_FILE_IN_DATA_PART, "The size of checksums in part {} under path {} is zero", name, data_rel_path);
 
-void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool) const
+    auto data_file = openForReading(volume->getDisk(), data_rel_path, checksum_file.file_size);
+    LimitReadBuffer buf = readPartFile(*data_file, checksum_file.file_offset, checksum_file.file_size);
+
+    ChecksumsPtr checksums = std::make_shared<Checksums>();
+    checksums->storage_type = StorageType::ByteHDFS;
+
+    if (checksums->read(buf))
+    {
+        assertEOF(buf);
+    }
+
+    // remove deleted files in checksums
+    for (auto it = checksums->files.begin(); it != checksums->files.end();)
+    {
+        const auto & name = it->first;
+        const auto & file = it->second;
+        if (endsWith(name, ".proj") && !file.is_deleted)
+        {
+            projection_parts_names.insert(name.substr(0, name.find(".proj")));
+        }
+        ++it;
+    }
+}
+
+void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool, UInt64 submit_ts) const
 {
     if (isPartial())
         throw Exception("Preload partial parts in invalid", ErrorCodes::LOGICAL_ERROR);
+
+    LOG_TRACE(storage.log, "Start preload part: {}", name);
 
     Stopwatch watch;
 
@@ -1042,30 +1076,42 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool) con
     MarkRanges all_mark_ranges{MarkRange(0, getMarksCount())};
     IDiskCacheSegmentsVector segments;
 
-    auto add_segments = [&, this, strategy = cache_strategy](const NameAndTypePair & col) {
+    auto add_segments = [&, this, strategy = cache_strategy](
+                            const NameAndTypePair & real_column,
+                            const std::function<String(const String &, const ISerialization::SubstreamPath &)> & file_name_getter) {
         ISerialization::StreamCallback callback = [&](const ISerialization::SubstreamPath & substream_path) {
-            String stream_name = ISerialization::getFileNameForStream(col.name, substream_path);
+            String stream_name = ISerialization::getFileNameForStream(real_column, substream_path);
+            String file_name = file_name_getter(stream_name, substream_path);
             ChecksumsPtr checksums = getChecksums();
-            if (!checksums->files.count(stream_name + DATA_FILE_EXTENSION))
+            if (!checksums->files.count(file_name + DATA_FILE_EXTENSION))
+            {
+                LOG_WARNING(
+                    storage.log,
+                    "Can't find {} in checksum info and skip cache it: column = {}, stream = {}",
+                    real_column.name,
+                    stream_name,
+                    file_name + DATA_FILE_EXTENSION);
                 return;
+            }
 
             String mark_file_name = index_granularity_info.getMarksFilePath(stream_name);
             String data_file_name = stream_name + DATA_FILE_EXTENSION;
 
+            IMergeTreeDataPartPtr source_data_part
+                = isProjectionPart() ? shared_from_this() : getMvccDataPart(stream_name + DATA_FILE_EXTENSION);
             auto seg = strategy->transferRangesToSegments<PartFileDiskCacheSegment>(
                 all_mark_ranges,
-                shared_from_this(),
+                source_data_part,
                 PartFileDiskCacheSegment::FileOffsetAndSize{getFileOffsetOrZero(mark_file_name), getFileSizeOrZero(mark_file_name)},
                 getMarksCount(),
                 stream_name,
                 DATA_FILE_EXTENSION,
                 PartFileDiskCacheSegment::FileOffsetAndSize{getFileOffsetOrZero(data_file_name), getFileSizeOrZero(data_file_name)},
-                true,
                 preload_level);
             segments.insert(segments.end(), std::make_move_iterator(seg.begin()), std::make_move_iterator(seg.end()));
         };
         ISerialization::SubstreamPath substream_path;
-        auto serialization = getSerializationForColumn(col);
+        auto serialization = getSerializationForColumn(real_column);
         serialization->enumerateStreams(callback, substream_path);
     };
 
@@ -1073,11 +1119,37 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool) con
     {
         if (column.type->isMap() && !column.type->isMapKVStore())
         {
-            /// TODO: map
+            // Scan the directory to get all implicit columns(stream) for the map type
+            const DataTypeByteMap & type_map = typeid_cast<const DataTypeByteMap &>(*column.type);
+            for (auto & file : getChecksums()->files)
+            {
+                // Try to get keys, and form the stream, its bin file name looks like "NAME__xxxxx.bin"
+                const String & file_name = file.first;
+                if (isMapImplicitDataFileNameNotBaseOfSpecialMapName(file_name, column.name))
+                {
+                    auto key_name = parseKeyNameFromImplicitFileName(file_name, column.name);
+                    String impl_key_name = getImplicitColNameForMapKey(column.name, key_name);
+                    add_segments(
+                        {impl_key_name, type_map.getValueTypeForImplicitColumn()},
+                        [map_column_name = column.name,
+                         this](const String & stream_name, const ISerialization::SubstreamPath & substream_path) -> String {
+                            return versions->enable_compact_map_data ? ISerialization::getFileNameForStream(map_column_name, substream_path)
+                                                                     : stream_name;
+                        });
+                }
+            }
         }
-        else
+        else if (isMapImplicitKeyNotKV(column.name)) // check if it's an implicit key and not KV
         {
-            add_segments(column);
+            String map_column_name = parseMapNameFromImplicitColName(column.name);
+            add_segments(column, [map_column_name, this](const String & stream_name, const ISerialization::SubstreamPath & substream_path) {
+                return versions->enable_compact_map_data ? ISerialization::getFileNameForStream(map_column_name, substream_path)
+                                                         : stream_name;
+            });
+        }
+        else if (column.name != "_part_row_number")
+        {
+            add_segments(column, [](const String & stream_name, const ISerialization::SubstreamPath &) { return stream_name; });
         }
     }
 
@@ -1085,20 +1157,23 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool) con
     /// ChecksumsCache and PrimaryIndexCache will be set during caching to disk
     if ((preload_level & PreloadLevelSettings::MetaPreload) == PreloadLevelSettings::MetaPreload)
     {
-        segments.emplace_back(std::make_shared<ChecksumsDiskCacheSegment>(shared_from_this()));
-        segments.emplace_back(std::make_shared<PrimaryIndexDiskCacheSegment>(shared_from_this()));
+        segments.emplace_back(std::make_shared<ChecksumsDiskCacheSegment>(shared_from_this(), preload_level));
+        segments.emplace_back(std::make_shared<PrimaryIndexDiskCacheSegment>(shared_from_this(), preload_level));
     }
 
     IDiskCache::CacheSegmentsCallback callback;
+
     if (auto part_log = storage.getContext()->getPartLog(storage.getDatabaseName()))
     {
-        callback = [w = watch, part_log, part = shared_from_this()](const String & exception) {
-            part_log->add(PartLog::createElement(PartLogElement::PRELOAD_PART, part, w.elapsedNanoseconds(), exception));
+        callback = [w = watch, part_log, part = shared_from_this(), submit_ts](const String & exception, const int & segments_count) {
+            part_log->add(
+                PartLog::createElement(PartLogElement::PRELOAD_PART, part, w.elapsedNanoseconds(), exception, submit_ts, segments_count));
         };
     }
 
-    pool.scheduleOrThrow([level = preload_level, segments = std::move(segments), cb = std::move(callback), disk_cache = cache] {
+    pool.scheduleOrThrow([this, level = preload_level, segments = std::move(segments), cb = std::move(callback), disk_cache = cache] {
         String last_exception{};
+        int real_cache_segments_count = 0;
         for (const auto & segment : segments)
         {
             try
@@ -1110,23 +1185,35 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool) con
                     if (level == PreloadLevelSettings::MetaPreload)
                     {
                         if (disk_cache->get(mark_key).second.empty())
+                        {
                             segment->cacheToDisk(*disk_cache);
+                            real_cache_segments_count++;
+                        }
                     }
                     else if (level == PreloadLevelSettings::DataPreload)
                     {
                         if (disk_cache->get(seg_key).second.empty())
+                        {
                             segment->cacheToDisk(*disk_cache);
+                            real_cache_segments_count++;
+                        }
                     }
                     else
                     {
                         if (disk_cache->get(seg_key).second.empty() || disk_cache->get(mark_key).second.empty())
+                        {
                             segment->cacheToDisk(*disk_cache);
+                            real_cache_segments_count++;
+                        }
                     }
                 }
                 else // means this is ChecksumsDiskCacheSegment or PrimaryIndexDiskCacheSegment
                 {
                     if (disk_cache->get(seg_key).second.empty())
+                    {
                         segment->cacheToDisk(*disk_cache);
+                        real_cache_segments_count++;
+                    }
                 }
             }
             catch (const Exception & e)
@@ -1137,7 +1224,15 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool) con
         }
 
         if (cb)
-            cb(last_exception);
+            cb(last_exception, real_cache_segments_count);
+
+        LOG_TRACE(
+            storage.log,
+            "Preloaded part: {}, marks_count: {}, segments_count: {}, cached_count: {} ",
+            name,
+            getMarksCount(),
+            segments.size(),
+            real_cache_segments_count);
     });
 }
 void MergeTreeDataPartCNCH::fillProjectionNamesFromChecksums(const MergeTreeDataPartChecksum & checksum_file)
@@ -1171,48 +1266,46 @@ void MergeTreeDataPartCNCH::fillProjectionNamesFromChecksums(const MergeTreeData
     }
 }
 
-void MergeTreeDataPartCNCH::prefetchIndex() const
+void MergeTreeDataPartCNCH::dropDiskCache(ThreadPool & pool, bool drop_vw_disk_cache) const
 {
-    getIndex();
-
-    if (enableDiskCache())
+    String part_base_path;
+    // get the target table part path if disable drop_vw_disk_cache
+    if (!drop_vw_disk_cache)
     {
-        auto segment = std::make_shared<PrimaryIndexDiskCacheSegment>(getBasePart());
-        auto disk_cache = DiskCacheFactory::instance().get(DiskCacheType::MergeTree);
-
-        String disk_path = disk_cache->get(segment->getSegmentName()).second;
-
-        if (disk_path.empty())
-        {
-            disk_cache->cacheSegmentsToLocalDisk({std::move(segment)});
-        }
+        WriteBufferFromString wb(part_base_path);
+        writeString(UUIDHelpers::UUIDToString(storage.getStorageUUID()), wb);
+        writeChar('/', wb);
+        writeString(name, wb);
     }
-}
 
-void MergeTreeDataPartCNCH::prefetchChecksums() const
-{
-    getChecksums();
+    auto part_log = storage.getContext()->getPartLog(storage.getDatabaseName());
+    auto disk_cache = DiskCacheFactory::instance().get(DiskCacheType::MergeTree);
+    auto cache_strategy = disk_cache->getStrategy();
 
-    /// store in disk cache
-    if (enableDiskCache())
-    {
-        auto segment = std::make_shared<ChecksumsDiskCacheSegment>(shared_from_this());
-        auto disk_cache = DiskCacheFactory::instance().get(DiskCacheType::MergeTree);
-        String disk_path = disk_cache->get(segment->getSegmentName()).second;
+    auto impl = [part_log, part = shared_from_this(), part_base_path, disk_cache] {
+        auto log_elem = PartLog::createElement(PartLogElement::DROPCACHE_PART, part);
+        log_elem.path_on_disk = part_base_path;
 
-        if (disk_path.empty())
+        Stopwatch watch;
+        try
         {
-            disk_cache->cacheSegmentsToLocalDisk({std::move(segment)});
-
-            /// schedule the cache task before doing the force_disk_cache check
-            if (disk_cache_mode == DiskCacheMode::FORCE_CHECKSUMS_DISK_CACHE)
-            {
-                throw Exception(
-                    fmt::format("Checksums {} of part has no disk cache and 'force_disk_cache' is set", name),
-                    ErrorCodes::DISK_CACHE_NOT_USED);
-            }
+            size_t dropped_size = disk_cache->drop(part_base_path);
+            log_elem.bytes_compressed_on_disk = dropped_size;
         }
-    }
+        catch (Exception & e)
+        {
+            log_elem.exception = e.message();
+        }
+
+        log_elem.duration_ms = watch.elapsedMilliseconds();
+
+        if (part_log)
+        {
+            part_log->add(log_elem);
+        }
+    };
+
+    pool.scheduleOrThrow(impl);
 }
 
 std::unique_ptr<ReadBufferFromFileBase> MergeTreeDataPartCNCH::openForReading(const DiskPtr & disk, const String & path, size_t file_size) const

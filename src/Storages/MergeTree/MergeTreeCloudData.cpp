@@ -250,7 +250,7 @@ void MergeTreeCloudData::unloadOldPartsByTimestamp(Int64 expired_ts)
 
 void MergeTreeCloudData::loadDataPartsInParallel(MutableDataPartsVector & parts)
 {
-    if (parts.empty())
+    if (parts.empty() || !getSettings()->enable_prefetch_checksums)
         return;
 
     auto cnch_parallel_prefetching = getSettings()->cnch_parallel_prefetching ? getSettings()->cnch_parallel_prefetching : 16;

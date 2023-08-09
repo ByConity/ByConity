@@ -188,13 +188,15 @@ brpc::CallId CnchWorkerClient::preloadDataParts(
     const ServerDataPartsVector & parts,
     const ExceptionHandlerPtr & handler,
     bool enable_parts_sync_preload,
-    UInt64 parts_preload_level)
+    UInt64 parts_preload_level,
+    UInt64 submit_ts)
 {
     Protos::PreloadDataPartsReq request;
     request.set_txn_id(txn_id);
     request.set_create_table_query(create_local_table_query);
     request.set_sync(enable_parts_sync_preload);
     request.set_preload_level(parts_preload_level);
+    request.set_submit_ts(submit_ts);
     fillPartsModelForSend(storage, parts, *request.mutable_parts());
 
     auto * cntl = new brpc::Controller();
@@ -207,6 +209,36 @@ brpc::CallId CnchWorkerClient::preloadDataParts(
     auto call_id = cntl->call_id();
     stub->preloadDataParts(cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDone, response, cntl, handler));
     return call_id;
+}
+
+brpc::CallId CnchWorkerClient::dropPartDiskCache(
+    const ContextPtr & context,
+    const TxnTimestamp & txn_id,
+    const IStorage & storage,
+    const String & create_local_table_query,
+    const ServerDataPartsVector & parts,
+    bool sync,
+    bool drop_vw_disk_cache)
+{
+    brpc::Controller cntl;
+    Protos::DropPartDiskCacheReq request;
+    Protos::DropPartDiskCacheResp response;
+
+    const auto & settings = context->getSettingsRef();
+    auto send_timeout = std::max(settings.max_execution_time.value.totalMilliseconds() >> 1, 30 * 1000L);
+    cntl.set_timeout_ms(send_timeout);
+
+    request.set_txn_id(txn_id);
+    request.set_create_table_query(create_local_table_query);
+    request.set_sync(sync);
+    request.set_drop_vw_disk_cache(drop_vw_disk_cache);
+
+    fillPartsModelForSend(storage, parts, *request.mutable_parts());
+    stub->dropPartDiskCache(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+    return cntl.call_id();
 }
 
 brpc::CallId CnchWorkerClient::sendQueryDataParts(

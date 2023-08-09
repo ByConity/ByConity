@@ -96,7 +96,8 @@ public:
 
     virtual void projectionRemove(const String & parent_to, bool keep_shared_data) const override;
 
-    void preload(UInt64 preload_level, ThreadPool & pool) const;
+    void preload(UInt64 preload_level, ThreadPool & pool, UInt64 submit_ts) const;
+    void dropDiskCache(ThreadPool & pool, bool drop_vw_disk_cache = false) const;
 
 private:
 
@@ -104,16 +105,12 @@ private:
 
     void checkConsistency(bool require_part_metadata) const override;
 
-    IndexPtr loadIndex() override;
-    /// speed up next get. store index into disk cache
-    void prefetchIndex() const override;
+    void loadIndex() override;
 
     MergeTreeDataPartChecksums::FileChecksums loadPartDataFooter() const;
 
     ChecksumsPtr loadChecksums(bool require) override;
     ChecksumsPtr loadChecksumsForPart(bool follow_part_chain);
-    /// spped up next get. store checksums into disk cache
-    void prefetchChecksums() const override;
 
     UniqueKeyIndexPtr loadUniqueKeyIndex() override;
 

@@ -17,6 +17,7 @@
 
 #include <Storages/DiskCache/IDiskCacheSegment.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
+#include "common/types.h"
 #include "Storages/IStorage_fwd.h"
 
 namespace DB
@@ -26,43 +27,46 @@ class IDiskCache;
 class ChecksumsDiskCacheSegment : public IDiskCacheSegment
 {
 public:
-    explicit ChecksumsDiskCacheSegment(IMergeTreeDataPartPtr data_part_);
+    explicit ChecksumsDiskCacheSegment(IMergeTreeDataPartPtr data_part_, UInt64 preload_level_ = 0);
 
     String getSegmentName() const override;
-    void cacheToDisk(IDiskCache & diskcache) override;
+    void cacheToDisk(IDiskCache & diskcache, bool throw_exception) override;
 
 private:
     IMergeTreeDataPartPtr data_part;
     ConstStoragePtr storage;
     String segment_name;
+    UInt64 preload_level;
 };
 
 class PrimaryIndexDiskCacheSegment : public IDiskCacheSegment
 {
 public:
-    explicit PrimaryIndexDiskCacheSegment(IMergeTreeDataPartPtr data_part_);
+    explicit PrimaryIndexDiskCacheSegment(IMergeTreeDataPartPtr data_part_, UInt64 preload_level_ = 0);
 
     String getSegmentName() const override;
-    void cacheToDisk(IDiskCache & diskcache) override;
+    void cacheToDisk(IDiskCache & diskcache, bool throw_exception) override;
 
 private:
     IMergeTreeDataPartPtr data_part;
     ConstStoragePtr storage;
     String segment_name;
+    UInt64 preload_level;
 };
 
 class MetaInfoDiskCacheSegment : public IDiskCacheSegment
 {
 public:
-    explicit MetaInfoDiskCacheSegment(IMergeTreeDataPartPtr data_part_);
+    explicit MetaInfoDiskCacheSegment(IMergeTreeDataPartPtr data_part_, UInt64 preload_level_ = 0);
 
     String getSegmentName() const override;
-    void cacheToDisk(IDiskCache & diskcache) override;
+    void cacheToDisk(IDiskCache & diskcache, bool throw_exception) override;
 
 private:
     IMergeTreeDataPartPtr data_part;
     ConstStoragePtr storage;
     String segment_name;
+    UInt64 preload_level;
 };
 
 }

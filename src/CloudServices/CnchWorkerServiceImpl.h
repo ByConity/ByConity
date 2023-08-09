@@ -192,6 +192,12 @@ public:
         Protos::PreloadDataPartsResp * response,
         google::protobuf::Closure * done) override;
 
+    void dropPartDiskCache(
+        google::protobuf::RpcController * cntl,
+        const Protos::DropPartDiskCacheReq * request,
+        Protos::DropPartDiskCacheResp * response,
+        google::protobuf::Closure * done) override;
+
     void sendOffloading(
         google::protobuf::RpcController * cntl,
         const Protos::SendOffloadingReq * request,
