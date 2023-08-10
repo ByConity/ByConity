@@ -30,12 +30,14 @@ void AddExchange::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     ExchangeVisitor visitor{};
     Property required{Partitioning{Partitioning::Handle::SINGLE}};
+    if (context->getSettingsRef().offloading_with_query_plan)
+        required.setEnforceNotMatch(true);
     ExchangeContext cxt{context, required};
     ExchangeResult result = VisitorUtil::accept(plan.getPlanNode(), visitor, cxt);
 
     PlanNodePtr node = result.getNodePtr();
     Property output = result.getOutputProperty();
-    if (!PropertyMatcher::matchNodePartitioning(*context, required.getNodePartitioningRef(), output.getNodePartitioning()))
+    if (!PropertyMatcher::matchNodePartitioning(*context, required.getNodePartitioningRef(), output.getNodePartitioning()) || required.isEnforceNotMatch())
     {
         Utils::checkArgument(node->getChildren().size() == 1, "Output node has more than 1 child");
 
