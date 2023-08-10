@@ -91,8 +91,8 @@ PropertySets DeterminerVisitor::visitJoinStep(const JoinStep & step, DeterminerC
             right_keys_asof.emplace_back(right_keys[i]);
         }
 
-        Property left{Partitioning{Partitioning::Handle::FIXED_HASH, left_keys_asof, false, 0, true}};
-        Property right{Partitioning{Partitioning::Handle::FIXED_HASH, right_keys_asof, false, 0, false}};
+        Property left{Partitioning{Partitioning::Handle::FIXED_HASH, left_keys_asof, false, 0, nullptr, true}};
+        Property right{Partitioning{Partitioning::Handle::FIXED_HASH, right_keys_asof, false, 0, nullptr, false}};
         PropertySet set;
         set.emplace_back(left);
         set.emplace_back(right);
@@ -114,8 +114,8 @@ PropertySets DeterminerVisitor::visitJoinStep(const JoinStep & step, DeterminerC
         return {set};
     }
 
-    Property left{Partitioning{Partitioning::Handle::FIXED_HASH, left_keys, false, 0, true}};
-    Property right{Partitioning{Partitioning::Handle::FIXED_HASH, right_keys, false, 0, false}};
+    Property left{Partitioning{Partitioning::Handle::FIXED_HASH, left_keys, false, 0, nullptr, true}};
+    Property right{Partitioning{Partitioning::Handle::FIXED_HASH, right_keys, false, 0, nullptr, false}};
     PropertySet set;
     set.emplace_back(left);
     set.emplace_back(right);
@@ -365,17 +365,4 @@ PropertySets DeterminerVisitor::visitFillingStep(const FillingStep & , Determine
     return {{Property{Partitioning{Partitioning::Handle::SINGLE}}}};
 }
 
-PropertySets DeterminerVisitor::visitTableWriteStep(const TableWriteStep &, DeterminerContext &)
-{
-    auto node = Partitioning{Partitioning::Handle::FIXED_ARBITRARY};
-    node.setComponent(Partitioning::Component::WORKER);
-    return {{Property{node}}};
-}
-
-PropertySets DeterminerVisitor::visitTableFinishStep(const TableFinishStep &, DeterminerContext &)
-{
-    auto node = Partitioning{Partitioning::Handle::SINGLE};
-    node.setComponent(Partitioning::Component::WORKER);
-    return {{Property{node}}};
-}
 }

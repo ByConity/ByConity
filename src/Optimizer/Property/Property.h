@@ -57,13 +57,12 @@ public:
         UNKNOWN
     };
 
-    enum class Component : UInt8
+    enum class Type : UInt8
     {
-        ANY,
-        COORDINATOR,
-        WORKER,
+        UNKNOWN = 0,
+        LOCAL,
+        DISTRIBUTED,
     };
-
 
     Partitioning(const Names & columns_) : Partitioning(Handle::FIXED_HASH, columns_) { }
 
@@ -72,29 +71,26 @@ public:
         Names columns_ = {},
         bool require_handle_ = false,
         UInt64 buckets_ = 0,
-        bool enforce_round_robin_ = true,
-        Component component_ = Component::ANY)
+        ASTPtr sharding_expr_ = nullptr,
+        bool enforce_round_robin_ = true)
         : handle(handle_)
         , columns(std::move(columns_))
         , require_handle(require_handle_)
         , buckets(buckets_)
+        , sharding_expr(sharding_expr_)
         , enforce_round_robin(enforce_round_robin_)
-        , component(component_)
     {
     }
-    bool operator==(const Partitioning & other) const;
-
     void setHandle(Handle handle_) { handle = handle_; }
     enum Handle getPartitioningHandle() const { return handle; }
     const Names & getPartitioningColumns() const { return columns; }
     UInt64 getBuckets() const { return buckets; }
+    ASTPtr getSharingExpr() const { return sharding_expr; }
     bool isEnforceRoundRobin() const { return enforce_round_robin; }
     void setEnforceRoundRobin(bool enforce_round_robin_) { enforce_round_robin = enforce_round_robin_; }
     bool isRequireHandle() const { return require_handle; }
     void setRequireHandle(bool require_handle_) { require_handle = require_handle_; }
-    Component getComponent() const { return component; }
-    void setComponent(Component component_) { component = component_; }
-
+    ASTPtr getSharingExpr() { return sharding_expr; }
 
     Partitioning translate(const std::unordered_map<String, String> & identities) const;
     Partitioning normalize(const SymbolEquivalences & symbol_equivalences) const;
@@ -102,6 +98,11 @@ public:
     bool isPartitionOn(const Partitioning &, const Constants & constants) const;
 
     size_t hash() const;
+    bool operator==(const Partitioning & other) const
+    {
+        return handle == other.handle && columns == other.columns && require_handle == other.require_handle && buckets == other.buckets
+            && enforce_round_robin == other.enforce_round_robin && ASTEquality::compareTree(sharding_expr, other.sharding_expr);
+    }
     String toString() const;
     void serialize(WriteBuffer & buf) const;
     void deserialize(ReadBuffer & buf);
@@ -111,8 +112,8 @@ private:
     Names columns;
     bool require_handle;
     UInt64 buckets;
+    ASTPtr sharding_expr;
     bool enforce_round_robin;
-    Component component;
 };
 
 enum class SortOrder : UInt8
