@@ -1,3 +1,4 @@
+use test;
 drop table if exists test_array_associated;
 CREATE TABLE test_array_associated
 (
@@ -195,6 +196,46 @@ FROM
         float_item_profiles['F'] AS fin
     FROM test_array_associated
     ORDER BY time ASC
+);
+
+SELECT attributionCorrelationFuse(10)(inner)
+FROM
+(
+    SELECT attributionAnalysis('tar', ['launch', 'pro'], [''], 5000, 3, 1, [0], 'Asia/Shanghai', 0.05, 0.8, 0.15)(time, name, assumeNotNull(p), assumeNotNull(params)) AS inner
+    FROM
+    (
+        SELECT
+            time,
+            name,
+            int_params['P'] AS p,
+            int_item_profiles['I'] AS arr,
+            string_item_profiles['S'] AS str,
+            string_params['M'] AS params,
+            float_params['A'] AS flo,
+            float_item_profiles['F'] AS fin
+        FROM test_array_associated
+        ORDER BY time ASC
+    )
+);
+
+SELECT attributionAnalysisFuse(10)(inner)
+FROM
+(
+    SELECT attributionAnalysis('tar', ['launch', 'pro'], [''], 5000, 3, 1, [0], 'Asia/Shanghai', 0.05, 0.8, 0.15)(time, name, assumeNotNull(p), assumeNotNull(params)) AS inner
+    FROM
+    (
+        SELECT
+            time,
+            name,
+            int_params['P'] AS p,
+            int_item_profiles['I'] AS arr,
+            string_item_profiles['S'] AS str,
+            string_params['M'] AS params,
+            float_params['A'] AS flo,
+            float_item_profiles['F'] AS fin
+        FROM test_array_associated
+        ORDER BY time ASC
+    )
 );
 
 DROP TABLE test_array_associated;
