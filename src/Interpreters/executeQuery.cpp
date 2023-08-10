@@ -22,7 +22,6 @@
 #include <memory>
 #include <Client/Connection.h>
 #include "common/logger_useful.h"
-#include "common/types.h"
 #include <Common/Config/VWCustomizedSettings.h>
 #include <Common/Exception.h>
 #include <Common/PODArray.h>
@@ -103,6 +102,7 @@
 #include <Common/SensitiveDataMasker.h>
 #include <DataStreams/IBlockStream_fwd.h>
 #include <DataStreams/NullBlockOutputStream.h>
+#include <IO/ReadBuffer.h>
 #include <IO/WriteBuffer.h>
 #include <IO/WriteBufferFromString.h>
 #include <Interpreters/Cluster.h>
@@ -565,9 +565,43 @@ static TransactionCnchPtr prepareCnchTransaction(ContextMutablePtr context, [[ma
     return {};
 }
 
+void interpretSettings(ASTPtr ast, ContextMutablePtr context)
+{
+    if (const auto * select_query = ast->as<ASTSelectQuery>())
+    {
+        if (auto new_settings = select_query->settings())
+            InterpreterSetQuery(new_settings, context).executeForCurrentContext();
+    }
+    else if (const auto * select_with_union_query = ast->as<ASTSelectWithUnionQuery>())
+    {
+        if (!select_with_union_query->list_of_selects->children.empty())
+        {
+            // We might have an arbitrarily complex UNION tree, so just give
+            // up if the last first-order child is not a plain SELECT.
+            // It is flattened later, when we process UNION ALL/DISTINCT.
+            const auto * last_select = select_with_union_query->list_of_selects->children.back()->as<ASTSelectQuery>();
+            if (last_select && last_select->settings())
+            {
+                InterpreterSetQuery(last_select->settings(), context).executeForCurrentContext();
+            }
+        }
+    }
+    else if (const auto * query_with_output = dynamic_cast<const ASTQueryWithOutput *>(ast.get()))
+    {
+        if (query_with_output->settings_ast)
+            InterpreterSetQuery(query_with_output->settings_ast, context).executeForCurrentContext();
+    }
+    else if (const auto * insert_query = ast->as<ASTInsertQuery>())
+    {
+        if (insert_query->settings_ast)
+            InterpreterSetQuery(insert_query->settings_ast, context).executeForCurrentContext();
+    }
+}
+
 static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     const char * begin,
     const char * end,
+    ASTPtr input_ast,
     ContextMutablePtr context,
     bool internal,
     QueryProcessingStage::Enum stage,
@@ -629,11 +663,18 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
     try
     {
-        ParserQuery parser(end, ParserSettings::valueOf(settings.dialect_type));
-        parser.setContext(context.get());
+        if (input_ast == nullptr)
+        {
+            ParserQuery parser(end, ParserSettings::valueOf(context->getSettings().dialect_type));
+            parser.setContext(context.get());
 
-        /// TODO: parser should fail early when max_query_size limit is reached.
-        ast = parseQuery(parser, begin, end, "", max_query_size, settings.max_parser_depth);
+            /// TODO: parser should fail early when max_query_size limit is reached.
+            ast = parseQuery(parser, begin, end, "", max_query_size, context->getSettings().max_parser_depth);
+        }
+        else
+        {
+            ast = input_ast;
+        }
         if (context->getServerType() == ServerType::cnch_server && context->getVWCustomizedSettings())
         {
             auto vw_name = tryGetVirtualWarehouseName(ast, context);
@@ -664,30 +705,8 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
         /// Interpret SETTINGS clauses as early as possible (before invoking the corresponding interpreter),
         /// to allow settings to take effect.
-        if (const auto * select_query = ast->as<ASTSelectQuery>())
-        {
-            if (auto new_settings = select_query->settings())
-                InterpreterSetQuery(new_settings, context).executeForCurrentContext();
-        }
-        else if (const auto * select_with_union_query = ast->as<ASTSelectWithUnionQuery>())
-        {
-            if (!select_with_union_query->list_of_selects->children.empty())
-            {
-                // We might have an arbitrarily complex UNION tree, so just give
-                // up if the last first-order child is not a plain SELECT.
-                // It is flattened later, when we process UNION ALL/DISTINCT.
-                const auto * last_select = select_with_union_query->list_of_selects->children.back()->as<ASTSelectQuery>();
-                if (last_select && last_select->settings())
-                {
-                    InterpreterSetQuery(last_select->settings(), context).executeForCurrentContext();
-                }
-            }
-        }
-        else if (const auto * query_with_output = dynamic_cast<const ASTQueryWithOutput *>(ast.get()))
-        {
-            if (query_with_output->settings_ast)
-                InterpreterSetQuery(query_with_output->settings_ast, context).executeForCurrentContext();
-        }
+        if (input_ast == nullptr)
+            interpretSettings(ast, context);
 
         if (const auto * query_with_table_output = dynamic_cast<const ASTQueryWithTableAndOutput *>(ast.get()))
         {
@@ -696,9 +715,6 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         }
 
         auto * insert_query = ast->as<ASTInsertQuery>();
-
-        if (insert_query && insert_query->settings_ast)
-            InterpreterSetQuery(insert_query->settings_ast, context).executeForCurrentContext();
 
         if (insert_query && insert_query->data)
         {
@@ -852,6 +868,8 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         else
             /// reset Input callbacks if query is not INSERT SELECT
             context->resetInputCallbacks();
+
+        context->markReadFromClientFinished();
 
         auto interpreter = InterpreterFactory::get(ast, context, SelectQueryOptions(stage).setInternal(internal));
 
@@ -1089,25 +1107,27 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
             auto query_id = context->getCurrentQueryId();
             /// Also make possible for caller to log successful query finish and exception during execution.
-            auto finish_callback = [elem,
-                                    context,
-                                    query,
-                                    ast,
-                                    log_queries,
-                                    log_queries_min_type = settings.log_queries_min_type,
-                                    log_queries_min_query_duration_ms = settings.log_queries_min_query_duration_ms.totalMilliseconds(),
-                                    log_processors_profiles = settings.log_processors_profiles,
-                                    status_info_to_query_log,
-                                    query_id,
-                                    finish_current_transaction,
-                                    complex_query,
-                                    init_time](
-                                       IBlockInputStream * stream_in,
-                                       IBlockOutputStream * stream_out,
-                                       QueryPipeline * query_pipeline,
-                                       UInt64 runtime_latency) mutable {
-                finish_current_transaction(context);
-                QueryStatus * process_list_elem = context->getProcessListElement();
+            auto finish_callback
+                =
+                    [elem,
+                     context,
+                     query,
+                     ast,
+                     log_queries,
+                     log_queries_min_type = settings.log_queries_min_type,
+                     log_queries_min_query_duration_ms = settings.log_queries_min_query_duration_ms.totalMilliseconds(),
+                     log_processors_profiles = settings.log_processors_profiles,
+                     status_info_to_query_log,
+                     query_id,
+                     finish_current_transaction,
+                     complex_query,
+                     init_time](
+                        IBlockInputStream * stream_in,
+                        IBlockOutputStream * stream_out,
+                        QueryPipeline * query_pipeline,
+                        UInt64 runtime_latency) mutable {
+                        finish_current_transaction(context);
+                        QueryStatus * process_list_elem = context->getProcessListElement();
 
                 if (!process_list_elem)
                     return;
@@ -1513,7 +1533,30 @@ executeQuery(const String & query, ContextMutablePtr context, bool internal, Que
     ASTPtr ast;
     BlockIO streams;
     std::tie(ast, streams)
-        = executeQueryImpl(query.data(), query.data() + query.size(), context, internal, stage, !may_have_embedded_data, nullptr);
+        = executeQueryImpl(query.data(), query.data() + query.size(), nullptr, context, internal, stage, !may_have_embedded_data, nullptr);
+
+    if (const auto * ast_query_with_output = dynamic_cast<const ASTQueryWithOutput *>(ast.get()))
+    {
+        String format_name = ast_query_with_output->format ? getIdentifierName(ast_query_with_output->format) : context->getDefaultFormat();
+
+        if (format_name == "Null")
+            streams.null_format = true;
+    }
+
+    return streams;
+}
+
+BlockIO executeQuery(
+    const String & query,
+    ASTPtr ast,
+    ContextMutablePtr context,
+    bool internal,
+    QueryProcessingStage::Enum stage,
+    bool may_have_embedded_data)
+{
+    BlockIO streams;
+    std::tie(ast, streams)
+        = executeQueryImpl(query.data(), query.data() + query.size(), ast, context, internal, stage, !may_have_embedded_data, nullptr);
 
     if (const auto * ast_query_with_output = dynamic_cast<const ASTQueryWithOutput *>(ast.get()))
     {
@@ -1590,12 +1633,24 @@ void executeQuery(
     ASTPtr ast;
     BlockIO streams;
 
-    std::tie(ast, streams) = executeQueryImpl(begin, end, context, internal, QueryProcessingStage::Complete, may_have_tail, &istr);
+    ParserQuery parser(end, ParserSettings::valueOf(context->getSettings().dialect_type));
+    parser.setContext(context.get());
 
-    if (!streams.out && context->isAsyncMode())
+    /// TODO: parser should fail early when max_query_size limit is reached.
+    ast = parseQuery(parser, begin, end, "", max_query_size, context->getSettings().max_parser_depth);
+    interpretSettings(ast, context);
+
+    auto * insert_query = ast->as<ASTInsertQuery>();
+
+    if (!(insert_query && insert_query->data) && context->isAsyncMode())
     {
-        executeHttpQueryInAsyncMode(std::move(streams), ast, context, ostr, output_format_settings, set_result_details);
+        String query(begin, end);
+        executeHttpQueryInAsyncMode(query, ast, context, ostr, &istr, may_have_tail, output_format_settings, set_result_details);
         return;
+    }
+    else
+    {
+        std::tie(ast, streams) = executeQueryImpl(begin, end, ast, context, internal, QueryProcessingStage::Complete, may_have_tail, &istr);
     }
 
     auto & pipeline = streams.pipeline;
@@ -1921,10 +1976,12 @@ void updateAsyncQueryStatus(
 }
 
 void executeHttpQueryInAsyncMode(
-    BlockIO s,
+    String & query,
     ASTPtr ast,
     ContextMutablePtr c,
     WriteBuffer & ostr,
+    ReadBuffer * istr,
+    bool has_query_tail,
     const std::optional<FormatSettings> & f,
     std::function<void(const String &, const String &, const String &, const String &)> set_result_details)
 {
@@ -1937,9 +1994,10 @@ void executeHttpQueryInAsyncMode(
             c->getClientInfo().current_query_id, "text/plain; charset=UTF-8", format_name, DateLUT::instance().getTimeZone());
 
     c->getAsyncQueryManager()->insertAndRun(
-        std::move(s),
+        query,
         ast,
         c,
+        istr,
         [c, &ostr, &f](const String & id) {
             MutableColumnPtr table_column_mut = ColumnString::create();
             table_column_mut->insert(id);
@@ -1951,7 +2009,11 @@ void executeHttpQueryInAsyncMode(
             out->write(res);
             out->flush();
         },
-        [f](BlockIO streams, ASTPtr ast, ContextMutablePtr context) {
+        [f, has_query_tail](String & query, ASTPtr ast, ContextMutablePtr context, ReadBuffer * istr) {
+            ASTPtr ast_output;
+            BlockIO streams;
+            std::tie(ast_output, streams) = executeQueryImpl(
+                query.data(), query.data() + query.size(), ast, context, false, QueryProcessingStage::Complete, has_query_tail, istr);
             auto & pipeline = streams.pipeline;
             try
             {

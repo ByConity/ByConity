@@ -551,6 +551,8 @@ private:
 
     String async_query_id;
 
+    bool read_from_client_finished = false;
+
     Context();
     Context(const Context &);
     Context & operator=(const Context &);
@@ -1460,6 +1462,8 @@ public:
         return async_query_id;
     }
     bool isAsyncMode() const;
+    void markReadFromClientFinished();
+    void waitReadFromClientFinished() const;
 
 private:
     String tenant_id;

@@ -72,6 +72,14 @@ BlockIO executeQuery(
     bool may_have_embedded_data = false /// If insert query may have embedded data
 );
 
+BlockIO executeQuery(
+    const String & query,
+    ASTPtr ast,
+    ContextMutablePtr context,
+    bool internal,
+    QueryProcessingStage::Enum stage,
+    bool may_have_embedded_data);
+
 /// Old interface with allow_processors flag. For compatibility.
 BlockIO executeQuery(
     const String & query,
@@ -102,10 +110,12 @@ void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server
 bool isAsyncMode(ContextMutablePtr context);
 
 void executeHttpQueryInAsyncMode(
-    BlockIO s,
+    String & query,
     ASTPtr ast,
     ContextMutablePtr c,
     WriteBuffer & ostr,
+    ReadBuffer * istr,
+    bool has_query_tail,
     const std::optional<FormatSettings> & f,
     std::function<void(const String &, const String &, const String &, const String &)> set_result_details);
 
@@ -115,4 +125,6 @@ void updateAsyncQueryStatus(
     const String & query_id,
     const AsyncQueryStatus::Status & status,
     const String & error_msg = "");
+
+void interpretSettings(ASTPtr ast, ContextMutablePtr context);
 }

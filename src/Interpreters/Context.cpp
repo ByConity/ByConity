@@ -19,6 +19,8 @@
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
+#include <chrono>
+#include <condition_variable>
 #include <filesystem>
 #include <map>
 #include <memory>
@@ -259,6 +261,9 @@ struct ContextSharedPart
     mutable std::mutex storage_policies_mutex;
     /// Separate mutex for re-initialization of zookeeper session. This operation could take a long time and must not interfere with another operations.
     mutable std::mutex zookeeper_mutex;
+    /// Shared mutex and cv for reading data from clients.
+    mutable std::mutex read_mutex;
+    std::condition_variable read_cv;
 
     mutable zkutil::ZooKeeperPtr zookeeper; /// Client for ZooKeeper.
     ConfigurationPtr zookeeper_config; /// Stores zookeeper configs
@@ -4943,5 +4948,22 @@ bool Context::isAsyncMode() const
 {
     return getClientInfo().query_kind == ClientInfo::QueryKind::INITIAL_QUERY && getServerType() == ServerType::cnch_server
         && getSettingsRef().enable_async_execution;
+}
+
+void Context::markReadFromClientFinished()
+{
+    {
+        std::lock_guard lk(shared->read_mutex);
+        read_from_client_finished = true;
+    }
+    shared->read_cv.notify_all();
+}
+
+void Context::waitReadFromClientFinished() const
+{
+    int64_t timeout = getSettingsRef().receive_timeout.totalMilliseconds();
+    std::unique_lock lk(shared->read_mutex);
+    if (!shared->read_cv.wait_for(lk, std::chrono::milliseconds(timeout), [this] { return read_from_client_finished; }))
+        throw Exception("Timeout exceeded while reading data from client.", ErrorCodes::TIMEOUT_EXCEEDED);
 }
 }
