@@ -33,6 +33,7 @@
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <butil/endpoint.h>
 #include <Common/HostWithPorts.h>
+#include <Common/Exception.h>
 #include <Common/Macros.h>
 #include <Common/ProfileEvents.h>
 #include <common/getFQDNOrHostName.h>
@@ -266,9 +267,21 @@ void SegmentScheduler::cancelWorkerPlanSegments(const String & query_id, const D
         request.set_coordinator_address(coordinator_addr);
         //TODO: parallel cancel
         manager.cancelQuery(&cntl, &request, &response, nullptr);
-        //FIXME 
-        rpc_client->assertController(cntl);
-        LOG_INFO(log, "Cancel plan segment query_id-{} on host-{}, ret_code-{}", query_id, extractExchangeHostPort(addr), response.ret_code());
+        //FIXME
+        try
+        {
+            rpc_client->assertController(cntl);
+            LOG_INFO(
+                log,
+                "Cancel plan segment query_id-{} on host-{}, ret_code-{}",
+                query_id,
+                extractExchangeHostPort(addr),
+                response.ret_code());
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, "cancelWorkerPlanSegments");
+        }
     }
 }
 

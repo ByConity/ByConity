@@ -24,6 +24,7 @@
 #include "common/logger_useful.h"
 #include "common/types.h"
 #include <Common/Config/VWCustomizedSettings.h>
+#include <Common/Exception.h>
 #include <Common/PODArray.h>
 #include <Common/ThreadProfileEvents.h>
 #include <Common/formatReadable.h>
@@ -116,6 +117,7 @@
 #include <Interpreters/DistributedStages/MPPQueryManager.h>
 #include <Interpreters/DistributedStages/PlanSegmentExecutor.h>
 #include <Interpreters/InterpreterPerfectShard.h>
+
 
 #include <Processors/Formats/IOutputFormat.h>
 #include <Processors/Sources/SinkToOutputStream.h>
@@ -1397,6 +1399,26 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
                 if (current_settings.calculate_text_stack_trace)
                     setExceptionStackTrace(elem);
+
+                bool throw_root_cause = false;
+                auto coordinator = MPPQueryManager::instance().getCoordinator(query_id);
+                if (coordinator)
+                {
+                    coordinator->updateSegmentInstanceStatus(RuntimeSegmentsStatus{
+                        .query_id = query_id,
+                        .segment_id = 0,
+                        .is_succeed = false,
+                        .message = elem.exception,
+                        .code = elem.exception_code});
+                    if (isAmbiguosError(elem.exception_code))
+                    {
+                        auto query_status = coordinator->waitUntilFinish(elem.exception_code, elem.exception);
+                        throw_root_cause = query_status.error_code != elem.exception_code;
+                        elem.exception_code = query_status.error_code;
+                        elem.exception = query_status.summarized_error_msg;
+                    }
+                }
+
                 logException(context, elem);
 
                 /// In case of exception we log internal queries also
@@ -1449,6 +1471,10 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                         .is_succeed = false,
                         .message = elem.exception,
                         .code = elem.exception_code});
+                if (throw_root_cause)
+                {
+                    throw Exception(elem.exception, elem.exception_code);
+                }
             };
 
             res.finish_callback = std::move(finish_callback);
@@ -1574,6 +1600,7 @@ void executeQuery(
 
     auto & pipeline = streams.pipeline;
 
+    std::exception_ptr exception;
     try
     {
         if (streams.out)
@@ -1711,8 +1738,20 @@ void executeQuery(
     }
     catch (...)
     {
-        streams.onException();
-        throw;
+        try
+        {
+            streams.onException();
+            exception = std::current_exception();
+        }
+        catch (...)
+        {
+            exception = std::current_exception();
+        }
+    }
+
+    if (exception)
+    {
+        std::rethrow_exception(exception);
     }
 
     streams.onFinish();

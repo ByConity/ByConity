@@ -17,6 +17,7 @@
 #include <Interpreters/CnchSystemLogHelper.h>
 #include <Interpreters/CnchQueryMetrics/QueryMetricLog.h>
 #include <Interpreters/CnchQueryMetrics/QueryWorkerMetricLog.h>
+#include <Interpreters/KafkaLog.h>
 #include <algorithm>
 
 namespace DB
@@ -77,6 +78,51 @@ std::shared_ptr<CloudLog> createCnchLog(
 }
 
 template <typename LogElement>
+String prepareEngineClause(const Poco::Util::AbstractConfiguration & config, const String & config_prefix)
+{
+    String engine = "ENGINE = CnchMergeTree() ";
+    if (std::is_same_v<LogElement, QueryMetricElement>)
+        engine += " ORDER BY (`query_id`, `server_id`) ";
+    else if (std::is_same_v<LogElement, QueryWorkerMetricElement>)
+        engine += " ORDER BY (`initial_query_id`, `current_query_id`, `worker_id`) ";
+
+    String partition_by = config.getString(config_prefix + ".partition_by", "toStartOfDay(event_time)");
+    if (!partition_by.empty())
+        engine += " PARTITION BY (" + partition_by + ")";
+
+    /// be consistent with cnch1.4, in which ttl field just configures the duration, e.g., 31 DAY, instead of the full ttl expression
+    String ttl = config.getString(config_prefix + ".ttl", "31 DAY");
+    if (!ttl.empty())
+        engine += " TTL toStartOfDay(event_time) + INTERVAL " + ttl;
+
+    engine += " SETTINGS index_granularity = 8192, enable_addition_bg_task = 1";
+    return engine;
+}
+
+template String prepareEngineClause<QueryMetricElement>(const Poco::Util::AbstractConfiguration &, const String &);
+template String prepareEngineClause<QueryWorkerMetricElement>(const Poco::Util::AbstractConfiguration &, const String &);
+
+template <>
+String prepareEngineClause<KafkaLogElement>(const Poco::Util::AbstractConfiguration & config, const String & config_prefix)
+{
+    String engine = "ENGINE = CnchMergeTree() ";
+    engine += " ORDER BY (event_date, event_time)";
+
+    String partition_by = config.getString(config_prefix + ".partition_by", "event_date");
+    if (!partition_by.empty())
+        engine += " PARTITION BY (" + partition_by + ")";
+
+    /// be consistent with cnch1.4, in which ttl field just configures the duration, e.g., 31 DAY, instead of the full ttl expression
+    String ttl = config.getString(config_prefix + ".ttl", "31 DAY");
+    if (!ttl.empty())
+        engine += " TTL event_date + INTERVAL " + ttl;
+
+    engine += " SETTINGS index_granularity = 8192";
+
+    return engine;
+}
+
+template <typename LogElement>
 bool prepareDatabaseAndTable(
     const ContextPtr & context,
     const String & database_name,
@@ -117,14 +163,7 @@ bool prepareDatabaseAndTable(
     }
     else
     {
-        String partition_by = config.getString(config_prefix + ".partition_by", "event_date");
-        engine = "ENGINE = CnchMergeTree";
-        if (!partition_by.empty())
-            engine += " PARTITION BY (" + partition_by + ")";
-        String ttl = config.getString(config_prefix + ".ttl", "event_date + INTERVAL 31 DAY");
-        if (!ttl.empty())
-            engine += " TTL " + ttl;
-        engine += " ORDER BY event_time";
+        engine = prepareEngineClause<LogElement>(config, config_prefix);
     }
 
     ASTPtr create_query = constructCreateTableQuery<LogElement>(database_name, table_name, engine);
@@ -221,19 +260,29 @@ bool CnchSystemLogs::initInServerForSingleLog(ContextPtr & global_context,
         {
             std::shared_ptr<CloudLog> temp_log =
                 createCnchLog<CloudLog>(global_context, db, tb, config, config_prefix);
+            bool actual_init = true;
+            if (temp_log)
             {
                 std::lock_guard<std::mutex> g(mutex);
                 cloud_log = std::move(temp_log);
                 logs.emplace_back(cloud_log.get());
                 cloud_log->startup();
             }
+            else
+                actual_init = false;
 
-            LOG_INFO(log, "Initializing CNCH System log on server for {}.{} successfully", db, tb);
+            if (actual_init)
+                LOG_INFO(log, "Initializing CNCH System log on server for {}.{} successfully", db, tb);
+            else
+                LOG_INFO(log, "Skip initializing CNCH System log on server for {}.{}", db, tb);
         }
     }
     catch (...)
     {
-        cloud_log.reset();
+        {
+            std::lock_guard<std::mutex> g(mutex);
+            cloud_log.reset();
+        }
         ret = false;
         tryLogCurrentException(log, __PRETTY_FUNCTION__);
     }
@@ -260,24 +309,21 @@ bool CnchSystemLogs::initInServer(ContextPtr global_context)
             config,
             cloud_kafka_log);
 
-    if (global_context->getSettingsRef().enable_query_level_profiling)
-    {
-        if (config.has(QUERY_METRICS_CONFIG_PREFIX))
-            query_metrics_ret = initInServerForSingleLog<QueryMetricLog>(global_context,
-                CNCH_SYSTEM_LOG_DB_NAME,
-                CNCH_SYSTEM_LOG_QUERY_METRICS_TABLE_NAME,
-                QUERY_METRICS_CONFIG_PREFIX,
-                config,
-                query_metrics);
+    if (config.has(QUERY_METRICS_CONFIG_PREFIX))
+        query_metrics_ret = initInServerForSingleLog<QueryMetricLog>(global_context,
+            CNCH_SYSTEM_LOG_DB_NAME,
+            CNCH_SYSTEM_LOG_QUERY_METRICS_TABLE_NAME,
+            QUERY_METRICS_CONFIG_PREFIX,
+            config,
+            query_metrics);
 
-        if (config.has(QUERY_METRICS_CONFIG_PREFIX))
-            query_worker_metrics_ret = initInServerForSingleLog<QueryWorkerMetricLog>(global_context,
-                CNCH_SYSTEM_LOG_DB_NAME,
-                CNCH_SYSTEM_LOG_QUERY_WORKER_METRICS_TABLE_NAME,
-                QUERY_WORKER_METRICS_CONFIG_PREFIX,
-                config,
-                query_worker_metrics);
-    }
+    if (config.has(QUERY_WORKER_METRICS_CONFIG_PREFIX))
+        query_worker_metrics_ret = initInServerForSingleLog<QueryWorkerMetricLog>(global_context,
+            CNCH_SYSTEM_LOG_DB_NAME,
+            CNCH_SYSTEM_LOG_QUERY_WORKER_METRICS_TABLE_NAME,
+            QUERY_WORKER_METRICS_CONFIG_PREFIX,
+            config,
+            query_worker_metrics);
 
     return (kafka_ret && query_metrics_ret && query_worker_metrics_ret);
 }
@@ -301,12 +347,15 @@ bool CnchSystemLogs::initInWorker(ContextPtr global_context)
             cloud_kafka_log->startup();
         }
 
-        LOG_INFO(log, "Initializing CNCH System log on server for {}.{} successfully", CNCH_SYSTEM_LOG_DB_NAME, CNCH_SYSTEM_LOG_KAFKA_LOG_TABLE_NAME);
+        LOG_INFO(log, "Initializing CNCH System log on worker for {}.{} successfully", CNCH_SYSTEM_LOG_DB_NAME, CNCH_SYSTEM_LOG_KAFKA_LOG_TABLE_NAME);
         ret = true;
     }
     catch (...)
     {
-        cloud_kafka_log.reset();
+        {
+            std::lock_guard<std::mutex> g(mutex);
+            cloud_kafka_log.reset();
+        }
         tryLogCurrentException(log, __PRETTY_FUNCTION__);
     }
 
